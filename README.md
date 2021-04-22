@@ -12,18 +12,26 @@ By subscribing to this pattern, an effort is made to obviate certain things.  It
 # Why Emoji & HSK1 Chinese
 https://brianhorakh.medium.com/emoji-logging-warning-much-silliness-ahead-4cae73d7089
 
+
+``txt
+/c0de/_b00t_                     : this bootstrap code.
+/c0de/_b00t_/01-start.sh         : setups up environment
+/c0de/_b00t_/02-project.sh       : create a new project, with tooling. 
+/c0de/_b00t_/ZZ-remove.sh        : clean up a project 
+``
+
+
 ## Get Started: 
 ```bash
 create a resource group:
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2Fazure-quickstart-templates%2Fmaster%2F101-storage-account-create%2Fazuredeploy.json)
 
-$resourceGroup
+export resourceGroup="newProject"
+export region="
 
-create AzAppConfig
-
-create AzSecureVault
-
-create AzStorage
+mkdir -p /c0de && cd /c0de
+git clone git@github.com:elasticdotventures/_pr0j3ct_.git
+cd ./_project_/ && ./01-start.sh
 
 ```
 
