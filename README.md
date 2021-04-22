@@ -7,7 +7,9 @@ The emoji's introduce "StoryTime" logging including HSK 1 Chinese Vocabulary - P
 
 At the highest level, Azure Durable Functions with Python & Typescript Connectors, Azure Service Bus, Azure KeyVault Configs, Azure ARM/Bicep 💪. Check Jargon.md for more the full glossary & naming conventions.  Docker 🐳, Python 🐍, TypeScript 🦄 - emoji indicates things like designee, consignee, etc.  This is an important aspect of the "storytell" logging, it creates really colorful error dumps and quickly helps abstract patterns that wouldn't be obvious in regular English text. 
 
-# 为是吗TF is this? 
+# 为是吗TF is HSK1? 
+Some places Emoji isn't allowed, fortunately in most clouds Chinese is allowed. If we think of Chinese as the "original" Emoji, then we can start to group projects by logic-role in a uniform fixed width, quickly conveying a ton of information.  With English mode, the system will add the English word (the Chinese pictograms are common, "5 year" words, at a deficit of 1 fixed character width per word.), it's never an issue since your brain will naturally & gently encode the Chinese characters. Tada, you're learning to read Chinese while you code!  Chinese Mandarin represents 1.8 billion _native_ speakers, English also has roughly 1.8bn but only 400m are native speakers, everybody else speaks another language first.   
+
 This is elastic.ventures complete pipeline orchestration system with integrated VS Code development environemnt, CI/CD Pipeline, base system which is suitable for deploying any cloud-scale state-less machine-learning project in frameworks such as PyTorch, Tensorflow, etc. as required.  These are the base idempotent templates for resources & public/private code-libraries, written in Azure Bicep. 
 The ultimate output is a fully operational cloud-resource group, sensibile file shares, key-vaults, monitoring, logging scaffold skeletons in TS & Python as well (the "c0re") which presents itself as an interactive filesytem/blob storage.  The containers themselves can also be used to quarantine or freeze containers for forensic reasons.  
 
