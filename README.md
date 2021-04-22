@@ -18,7 +18,9 @@ The organizational pattern is formatted around a cross-competency, "Don't make m
 assigns emojis to meanings.  This allows for the system to "story tell" during logs, showing an entire transaction as a series of pictograms.    Here is a sample of the _projects_ opinion: 
 
 ```
-/mnt/c0re/._b00t_.     # this is the current memory core for _b00t_.  It will contain keys, it could be ephemeral (such as one time use keys)
+/mnt/c0re/._b00t_./    # this is the current memory core for _b00t_.  It will contain keys, it could be ephemeral (such as one time use keys)
+|- ./your_Project/..   # each project has it's own directory. A project will only mount it's directory though. 
+A project can also delete data it no longer needs, but it is (for now) a good semi-durable hash. 
 
 /c0de/*                # namespace on localfilesystem is mostly hardcoded. rationale: low DIRENT seek times by being @ /rootFs. 
  |- ./01-start.sh      # 🍰 Start Here!! Run this ./01-start.sh  
