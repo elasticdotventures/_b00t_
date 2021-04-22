@@ -4,42 +4,78 @@
 #* Purpose: 
 #*   boot-strap common bash libraries
 #*   access Azure
-#*   
-#* 
 ## * * * *//
 
-##* * * * \\ 🚀 
-# 进口 (Jìnkǒu) Import c0re Libraries Alpha
-if [ ! -x "./bash/🚀_c0re-lib.sh" ] ; then
-    echo "missing ./bash/🚀_c0re-lib.sh" && exit 
-else
-    source "./bash/🚀_c0re-lib.sh" 
-fi
-##* * * * // 🚀 
+export c0De="/c0de/_b00t_"
 
-if [ -d "/c0re/$project_dir" ] ; then
-    PROJECT_dirExist=``
+##* * * * \\  
+# 进口 (Jìnkǒu) Import c0re Libraries Alpha 
+if [ ! -x "$c0De/./bash/c0re.🚀.sh" ] ; then
+    echo "missing $c0re/./bash/c0re.🚀.sh" && exit 
 else
-    PROJECT_dirExists
+    source "$c0De/./bash/c0re.🚀.sh" 
 fi
-mkdir -p /c0re/$project
+##* * * * //  
+
+
+##* * * * \\  
+# 进口 (Jìnkǒu) Import minimal c0re Python
+#   establish .venv
+#   we also do some 
+if [ ! -x "$c0De/./bash/c0De_init.🐍.sh" ] ; then
+    echo "missing $c0re/./bash/c0De.🐍.sh" && exit 
+else
+    source "$c0De/./bash/c0De_init.🐍.sh" 
+    # NOTE: even though we use docker, we still use a virtual-env
+    # since it makes deploying libraries MUCH easier with setupTools
+    source .venv/bin/activate
+fi
+##* * * * //
+
 
 ##* * * * \\
-# 怎么样 (zěnme yàng) Present,How & What:
-# - $AZ_resourceGroup is set
-# - c0re-lib verifies az cli is installed 
-source "./bash/👾_AZ_CLI_init.sh"
+# 项目 (Xiàngmù) Project Id
+EmojiWords +=(
+    'cute:😻', 'cuddly:🤗', 'snuggle:🤗', 'buggy:🐛', 'penny:🐶'
+    'frenchie:🐶', 'snores:😴', 'sleepy:🛌', 'need', 'caffeine:☕', 'coffee:☕', 'doh'
+    'howdy:👀', 'doody:💩', 'poopy:💩', 'anal:🍑','buttstuff:🍑', 'keep', 'more', 
+    'penetrate:🍆', 'moist', 'lube', 'vagina:🍑', 'pussy:🍑', 'horny:🍆', 'goat:🐐',
+    'next', 'too' , 'this', 'thebig', 'dont', 'wtf', 'reading'
+    # shuf -n5 /usr/share/dict/american-english | cut -d$'\t' -f1   
+    )
+
+c0re_pr0j3ct_id="moist_monkey"
+##* * * * //
+
+
+##* * * * \\
+# 目录 (Mùlù) Directory
+if [ -d "$c0De/./pr0j3cts/./$project_dir" ] ; then
+    export PROJECT_dirExist=`$c0De/./pr0j3cts/./$project_dir`
+    echo "🚀 the $c0De/./pr0j3cts/./$project_dir already exists use --force"
+else
+    export PROJECT_dirExists=""
+fi
+mkdir -p "$c0re/./pr0j3cts/./$project
+##* * * * // 
+
+##* * * * \\
+## 怎么样 (zěnme yàng) Present,How & What
+#* - $AZ_resourceGroup is set
+#* - c0re-lib verifies az cli is installed 
+source "./bash/AZ_CLI_init.🤖.sh"
 ##* * * * //
 
 ##* * * * \\ 
 # 🤖 微软 Wēiruǎn (Microsoft) Zzure
 # 🤖 微软 Azure Login, verify credentials
 # az login --verbose
-source "./bash/👾_AZ_init.sh"
+source "./bash/AZ_init.🤖.sh"
 ##* * * * //
 
 ##* * * * \\
-source "./bash/👾_AZ_todo.sh"
+source "./bash/AZ_todo.🤖.sh"
+##* * * * //
 
 
 ##* * * * * * * *//
@@ -89,9 +125,9 @@ sudo usermod -aG docker `whoami`
 
 # TODO: link to the Elasticdotventures repository
 # 
+docker build -t cowsay .
+# 🐳♻️ It’s a good habit to use --rm to avoid filling up your system with stale Docker containers.
+docker run --rm cowsay 
 
-# create AzAppConfig
-# create AzSecureVault
-# create AzStorage
-
-
+echo "* if you just saw a talking cow, everything is fine!"
+echo "run ./02_t00ls_.sh
