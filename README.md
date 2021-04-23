@@ -128,7 +128,7 @@ https://en.wikipedia.org/wiki/Deterministic_system
 
 
 # What is so Opionated? 
-0MG. _b00t_ tries very hard to be Templates and Tools ("TnT") but inevitably through the selection of those it's opinions on "best" approach. 
+0MG. _b00t_ tries very hard to be Templates and Tools ("TnT") but inevitably through the selection of those it's opinions on "best" approach.  For example, snapd packages are at the core of ubuntu, and for various reasons ubuntu is the base image.   Even if you start at alpine Linux it's going to look very ubuntu-ish if you use _b00t_. 
 
 The organizational pattern is formatted around a cross-competency, "Don't make me think" (any more than I need to) so it assigns emojis to meanings.  
 
@@ -142,17 +142,14 @@ This allows for the system to "story tell" inside logs often showing an entire t
 It's amazing how easy it is to spot the problem in a sequence like this: 😁😁😁🤬😁
 The deterministic nature means it's often possible to go back to the beginning of a transaction and re-run it. 
 
-Here is a sample of the _projects_ opinion: 
+Here are the _projects_ opinion: 
 
 ```
-/mnt/c0re/._b00t_./    # this is the current memory core for \_b00t_.  It will contain keys, it could be ephemeral (such as one time use keys)
->>>>>>> aab636915cca39188f1d289453119a7136c4bf88
-|- ./your_Project/..   # each project has it's own directory. A project will only mount it's directory though. 
-A project can also delete data it no longer needs, but it is (for now) a good semi-durable hash. 
-=======
-# Config (durable or ephemeral)
-/mnt/c0Re/
-|- /._b00t_./
+/hoome/.b00t/    # your configs
+|- ./your_Project/..   # each project has it's own directory. 
+
+/c0de/
+|- /_b00t_    # where your projects live
 |- /project/  # your configs. 
 
 # 🤓 NOTE:
@@ -161,17 +158,18 @@ A project can also delete data it no longer needs, but it is (for now) a good se
 #   docker "dive"
 
 # Code 
->>>>>>> Stashed changes
 
-/c0de/*                # namespace on localfilesystem is mostly hardcoded. rationale: low DIRENT seek times by being @ /rootFs. 
- |- ./01-start.sh      # 🍰 Start Here!! Run this ./01-start.sh  
-/c0de/_b00t_           # contains this template, used to 
+/c0de/*                # rationale: 4 characters.  
+ |- ./01-start.sh      # 🍰 ** Start Here!! Run this ./01-start.sh **
+ 
+/c0de/_b00t_           # contains the repo. PUT this repo here.  
  |- ./bash/            # anything in a .sh, templates
  |- ./bash/c0de_init.🚀.sh   # also, the main init script, called from ./01-start.sh 
  |- ./Dockerfile       # base Docker image (standard)
  |- ./docker.🐳/      # additional Docker build files, emoji coded 层 (Céng) Layers
  |- ./python.🐍/      # python stuff that will probably end up in _t00ls_
  |- ./node-ts.🦄/     # typescript libraries
+ 
 /c0de/cloud.🌩️
  |- ./azure.🤖/       # azure cloud 
  |- ./google.👾/      # google cloud (still fresh) 
