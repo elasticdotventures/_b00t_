@@ -6,18 +6,56 @@
 #*   access Azure
 ##* * * *//
 
-# 小路 : Xiǎolù Path or Directory
+# 🍰 https://stackoverflow.com/questions/192319/how-do-i-know-the-script-file-name-in-a-bash-script
+# ------------- SCRIPT ------------- #
+echo
+echo "# arguments called with ---->  ${@}     "
+echo "# \$1 ---------------------->  $1       "
+echo "# \$2 ---------------------->  $2       "
+echo "# path to me --------------->  ${0}     "
+echo "# parent path -------------->  ${0%/*}  "
+echo "# my name ------------------>  ${0##*/} "
+echo
+# ------------- CALLED ------------- #
+
+
+## 小路 \\
+## Xiǎolù :: Path or Directory
 # THINGS YOU CAN EDIT: 
 export _B00T_C0DE_Path="/c0de/_b00t_"        
 export _B00T_C0NFIG_Path="$HOME/.b00t"
+## 小路 //
 
-##* * * * \\  
-# 进口 (Jìnkǒu) Import c0re Libraries Alpha 
+
+## 进口 \\  
+## Kāishǐ :: Start
+# init should be run by every program. 
+function _b00t_init_🚀_开始() {
+    log_📢_记录 "🚀 init: ${0}/./${0##*/}"
+    log_📢_记录 "🚀 args: ${@}"
+}
+export -f init_🚀_开始
+_b00t_init_🚀_开始
+## 进口 //
+
+
+## 记录 \\
+## Jìlù :: Record (Log)
+function log_📢_记录() {
+    echo "$1"
+}
+export -f log_📢_记录
+## 记录 //
+
+
+## 加载 * * * * * *\\
+## Jiāzài :: Load
 function bash_source_加载() {
     file="$1"
     if [ ! -x "$file" ] ; then
-        echo "missing $file" && exit 
+        log_📢_记录 "missing $file" && exit 
     else
+        log_📢_记录 "🤓 source $file"
         source "$file" 
         if [ $? -gt 0 ] ; then
             echo "☹️ $file had error. 🛑"
@@ -26,23 +64,34 @@ function bash_source_加载() {
 
     return $?
 }
+export -f bash_source_加载
 
-# Bin shell & helpers
-bash_source_加载 "$_B00T_C0DE_Path/./bash/c0re_init.🚀.sh"
 
 ## 进口 * * * \\ 
-## [Jìnkǒu] Import
+## Jìnkǒu :: Import/Load
+# Bin shell & helpers
+bash_source_加载 "$_B00T_C0DE_Path/./bash/c0re_init.🚀.sh"
+## 进口 * * * // 
+
+
+## 进口 * * * \\ 
+## Jìnkǒu :: Import/Load
 ## minimal c0re Python 🐍
-##   establish .venv
-#   we also do some 
+# + establish .venv
 bash_source_加载 "$_B00T_C0DE_Path/./bash/c0re_init.🐍.sh"
 source .venv/bin/activate
 ## 进口 * * * // 
 
+exit
 
 ## 项目 * * * * \\  
 # (Xiàngmù) Project Id
 EmojiWords +=(
+    'cute:😻', 'cuddly:🤗', 'snuggle:🤗', 'buggy:🐛', 'penny:🐶'
+    'frenchie:🐶', 'snores:😴', 'sleepy:🛌', 'need', 'caffeine:☕', 'coffee:☕', 'doh'
+    'howdy:👀', 'doody:💩', 'poopy:💩', 'anal:🍑','buttstuff:🍑', 'keep', 'more', 
+    'penetrate:🍆', 'moist', 'lube', 'vagina:🍑', 'pussy:🍑', 'horny:🍆', 'goat:🐐',
+    'next', 'too' , 'this', 'thebig', 'dont', 'wtf', 'reading'
     # shuf -n5 /usr/share/dict/american-english | cut -d$'\t' -f1   
     )
 
