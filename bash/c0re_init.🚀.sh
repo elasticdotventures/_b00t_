@@ -77,21 +77,44 @@ function n0ta_file_📁_好不好() {
         log_📢_记录 "👍 $1"
         return 1
     fi
-    
-    
 }
 ## 好不好 // 
+
+### - -   is_WSLv2_🐧💙🪟v2   - - \\
+## Microsoft Windows Linux Subsystem II  WSL2
+## 🤓 https://docs.microsoft.com/en-us/windows/wsl/install-win10
+#
+function is_WSLv2_🐧💙🪟v2() {
+    return `cat /proc/version | grep -c "microsoft-standard-WSL2"`
+}
+### - -   is_WSLv2_🐧💙🪟v2   - - //
+
+
 
 ##* * * * * *\\
 # Install Some Tooling
 # 🍰 fzf - menu, file choose  https://github.com/junegunn/fzf#using-git
-# 🍰 yq  - YAML config i/o    https://github.com/mikefarah/yq
 # 🍰 jq  - JSON config i/o    https://stedolan.github.io/jq/
-# !TODO: non-x86 solution for yq. 
-sudo apt-get install -y fzf jq wget
-YQ_VERSION="v4.7.0"
-YQ_BINARY="yq_linux_amd64"
+# 🍰 wget- HTTP i/o 
+# 🍰 curl- HTTP i/o 
+
+sudo apt-get install -y fzf jq wget curl
+
+# 🍰 yq  - YAML config i/o    https://github.com/mikefarah/yq
 if n0ta_file_📁_好不好 "/usr/bin/yq" ; then
+    systemctl status snapd.service
+    snap install
+fi
+
+# yq, part II - Windows
+## For WSL - snapd won't work 
+if n0ta_file_📁_好不好 "/usr/bin/yq" ; then
+    sudo apt-get update && sudo apt-get install -yqq daemonize dbus-user-session fontconfig
+fi
+
+if n0ta_file_📁_好不好 "/usr/bin/yq" ; then
+    YQ_VERSION="v4.7.0"
+    YQ_BINARY="yq_linux_amd64"
     wget https://github.com/mikefarah/yq/releases/download/${YQ_VERSION}/${YQ_BINARY}.tar.gz -O - |\
         tar xz && cp ${YQ_BINARY} /usr/bin/yq
 
