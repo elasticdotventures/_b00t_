@@ -1,3 +1,5 @@
+* THIS IS PRE-ALPHA. *
+
 # _b00t_
 ElasticDotVentures is 
 a highly opinionated set of tools for deploying Azure Functions, with EV libraries (called "c0re", a subset of "c0de"), for Google 👾, Azure 🤖.  The pattern uses extensive use of 1337 speak for c0mm0n words which appear in projects.  The 1337speak is mostly used to make pnemonics easier to spot when applications are failing at the lower levels, and to indicate logical role.  Use tab-complete and it's no issue. 
@@ -13,14 +15,43 @@ Some places Emoji isn't allowed, fortunately in most clouds Chinese is allowed. 
 This is elastic.ventures complete pipeline orchestration system with integrated VS Code development environemnt, CI/CD Pipeline, base system which is suitable for deploying any cloud-scale state-less machine-learning project in frameworks such as PyTorch, Tensorflow, etc. as required.  These are the base idempotent templates for resources & public/private code-libraries, written in Azure Bicep. 
 The ultimate output is a fully operational cloud-resource group, sensibile file shares, key-vaults, monitoring, logging scaffold skeletons in TS & Python as well (the "c0re") which presents itself as an interactive filesytem/blob storage.  The containers themselves can also be used to quarantine or freeze containers for forensic reasons.  
 
+# What is Idempotence & Determinism? 
+https://en.wikipedia.org/wiki/Idempotence
+Idempotence (UK: /ˌɪdɛmˈpoʊtəns/,[1] US: /ˌaɪdəm-/)[2] is the property of certain operations in mathematics and computer science whereby they can be applied multiple times without changing the result beyond the initial application. 
+
+
+A deterministic algorithm is an algorithm which, given a particular input, will always produce the same output, with the underlying machine always passing through the same sequence of states.   
+
+Using Azure Functions, and Azure Logic Apps for orchestrating actions which allows a _b00t_ stack to behave as a globally distributed finite-state machine.   This is the higest level of durability which can be assigned to a software platform and is suitable to running fail-safe systems such as nuclear reactors. The author explicitly disclaims any responsibility for circumstances occurring decide to use _b00t_ to run your own backyard reactor.
+
+https://en.wikipedia.org/wiki/Deterministic_system
+
+
 # What is so Opionated? 
-The organizational pattern is formatted around a cross-competency, "Don't make me think" (any more than I need to) so it
-assigns emojis to meanings.  This allows for the system to "story tell" during logs, showing an entire transaction as a series of pictograms.    Here is a sample of the _projects_ opinion: 
+0MG. _b00t_ tries very hard to be Templates and Tools ("TnT") but inevitably through the selection of those it's opinions on "best" approach. 
+
+The organizational pattern is formatted around a cross-competency, "Don't make me think" (any more than I need to) so it assigns emojis to meanings.  
+
+This allows for the system to implement "story tell" during logs, showing entire transactions as a series of pictograms (colorful markov chains). Here is a sample of the _projects_ layout opinion: 
 
 ```
+<<<<<<< Updated upstream
 /mnt/c0re/._b00t_./    # this is the current memory core for _b00t_.  It will contain keys, it could be ephemeral (such as one time use keys)
 |- ./your_Project/..   # each project has it's own directory. A project will only mount it's directory though. 
 A project can also delete data it no longer needs, but it is (for now) a good semi-durable hash. 
+=======
+# Config (durable or ephemeral)
+/mnt/c0Re/
+|- /._b00t_./
+|- /project/  # your configs. 
+
+# 🤓 NOTE:
+#   improve security posture: make upper level filesystems
+#   readonly and removing configs from lower levels using 
+#   docker "dive"
+
+# Code 
+>>>>>>> Stashed changes
 
 /c0de/*                # namespace on localfilesystem is mostly hardcoded. rationale: low DIRENT seek times by being @ /rootFs. 
  |- ./01-start.sh      # 🍰 Start Here!! Run this ./01-start.sh  
@@ -43,10 +74,29 @@ rm -Rf ./Dockerfile ./docker.🐳
 ```
 This is handy at later builds.  For example a GIT filesystem can be stripped of utilities that is no longer needed.  Once that is compressed at a Docker Buildx layer then that information has destroyed during the idempotent container creation. 
 
-It assumes the author will (ultimately) decide to end up using a combination of stateful logic, so it simplifies the interface to those by creating a unified command language that can be further build on.  There is a method to the madness, I assure you.  The patterns utilize serverless consumption plans whenever possible.  The plan is to eventually include complete VS code project files & plugin.    This assumes the developer(s) are using a three stage release model, "InnerLoop", "OuterLoop", "Production" each of those moving the data to the cloud and toward the public, no attempts are made . 
+## Tools of _b00t_
+* /bin/https://stedolan.github.io/jq/download/
+* Git
+* Bash
+    https://stedolan.github.io/jq/download/
+* Python
+* Node-Ts
+* Docker
+
+## Stages of _b00t_
+* Host OS
+* Docker
+* Docker(s)
+* Local Test
+* Remote
+* Remote Test
+* Deploy
+* Deploy Test
+
+_b00t_ assumes the author will (ultimately) decide to end up using a combination of stateful logic so it simplifies the interface to those by creating a unified command language that can be further build on.  There is a method to the madness, I assure you.  The patterns utilize serverless consumption plans whenever possible.  The plan is to eventually include complete VS code project files & plugin.    This assumes the developer(s) are using a three stage release model, "InnerLoop" (Local), "OuterLoop" (Cloud and/or Local), "Production" (Live) each of those moving the data to the cloud and toward the public, no attempts are made. 
 
 # Why Emoji & HSK1 Chinese
-I'm not gonna here, just read my Medium:
+I'm not gonna explain here, just read my Medium:
 https://brianhorakh.medium.com/emoji-logging-warning-much-silliness-ahead-4cae73d7089
 
 
@@ -63,7 +113,11 @@ https://brianhorakh.medium.com/emoji-logging-warning-much-silliness-ahead-4cae73
 
 ## Get Started: 
 ```bash
+<<<<<<< Updated upstream
 Someday I'll have this DEPLOY to AZURE working., for
+=======
+Someday this DEPLOY to AZURE button will work as a scripted process. 
+>>>>>>> Stashed changes
 
 create a resource group:
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2Fazure-quickstart-templates%2Fmaster%2F101-storage-account-create%2Fazuredeploy.json)

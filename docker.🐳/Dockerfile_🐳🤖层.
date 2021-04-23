@@ -32,3 +32,20 @@ RUN export PATH="$PATH:/opt/mssql-tools/bin"
 ## optional: for unixODBC development headers
 RUN apt-get install -y unixodbc-dev
 ## * * * * *//
+
+
+# pip (next) needs git. 
+# https://github.com/langholz/django-azure-sql-backend
+# https://docs.microsoft.com/en-us/sql/connect/odbc/linux-mac/installing-the-microsoft-odbc-driver-for-sql-server?view=sql-server-ver15
+
+
+## AppService 
+ENV AzureWebJobsScriptRoot=/home/site/wwwroot/ \
+    AzureFunctionsJobHost__Logging__Console__IsEnabled=true
+
+#FROM mcr.microsoft.com/azure-functions/python:3.0-python3.8 as builder
+EXPOSE 80/tcp
+EXPOSE 443/tcp
+EXPOSE 8000/tcp
+
+

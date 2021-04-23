@@ -8,6 +8,21 @@ FROM ubuntu
 ARG arg  (arrrgh)
 RUN if [[ -z "$arrrg" ]] ; then echo Argument not provided ; else echo Argument is $arrrg ; fi
 
+##* * \\
+## yg is a YAML parser/creator like jq
+## 🍰 https://github.com/mikefarah/yq
+ENV YQ_VERSION="v4.2.0"
+ENV YQ_BINARY="yq_linux_amd64"
+RUN wget https://github.com/mikefarah/yq/releases/download/${VERSION}/${BINARY}.tar.gz -O - |\
+ tar xz && mv ${BINARY} /usr/bin/yq
+##* * //
+
+##* * \\
+## jq is a YAML parser/creator like yq
+## 🍰 https://stedolan.github.io/jq/
+sudo apt-get install jq
+##* * //
+
 RUN apt update && apt install -y cowsay
 CMD ["/usr/games/cowsay", "Dockerfiles are cool!"]
 
@@ -20,28 +35,37 @@ CMD ["/usr/games/cowsay", "Dockerfiles are cool!"]
 # step2.) delete the files no longer needed (i.e. keyVaults)
 ## Svelte Phase
 
-FROM base AS branch-version-1
-RUN echo "this is the stage that sets VAR=TRUE"
-ENV VAR=TRUE
+# To enable ssh & remote debugging on app service change the base image to the one below
+# FROM mcr.microsoft.com/azure-functions/python:3.0-python3.8-appservice
+
+FROM base AS live-branch-v1
+RUN echo "live Branch sets Is_EnvLive=1"
+ENV _Env_Is="live" \
+    Is_EnvDev=0    \
+    Is_EnvTest=0   \
+    Is_EnvLive=1   
+
+FROM base AS dev-branch-v1
+RUN echo "dev Branch sets Is_EnvDev=1"
+ENV _Env_Is="dev" \
+    Is_EnvDev=1   \
+    Is_EnvTest=0  \
+    Is_EnvLive=0  
+
+FROM base AS test-branch-v1
+RUN echo "test Branch sets Is_EnvTest=1"
+ENV _Env_Is="test"
+ENV Is_EnvDev=1   \
+    Is_EnvTest=0  \
+    Is_EnvLive=0  
+
+## Only for Dev & Test
+RUN apt-get update && apt-get install -y git gcc g++
+RUN git --version
 
 # apparently LABEL is documented in docs, but not actually supported.
 # LABEL description="experimental sportsworldas2 instance"
 
-# To enable ssh & remote debugging on app service change the base image to the one below
-# FROM mcr.microsoft.com/azure-functions/python:3.0-python3.8-appservice
-FROM mcr.microsoft.com/azure-functions/python:3.0-python3.8 as builder
-EXPOSE 80/tcp
-EXPOSE 443/tcp
-EXPOSE 8000/tcp
-
-ENV AzureWebJobsScriptRoot=/home/site/wwwroot/ \
-    AzureFunctionsJobHost__Logging__Console__IsEnabled=true
-
-# pip (next) needs git. 
-RUN apt-get update && apt-get install -y git gcc g++
-RUN git --version
-# https://github.com/langholz/django-azure-sql-backend
-# https://docs.microsoft.com/en-us/sql/connect/odbc/linux-mac/installing-the-microsoft-odbc-driver-for-sql-server?view=sql-server-ver15
 
 RUN apt-get install -y curl wget ca-certificates gnupg apt-utils
 
