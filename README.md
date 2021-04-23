@@ -1,5 +1,3 @@
-<<<<<<< HEAD
-* THIS IS PRE-ALPHA. *
 
 # _b00t_
 ElasticDotVentures is 
