@@ -1,4 +1,8 @@
-```
+------
+Present status: merging my own various scripts from other projects, setting up the interactive initalization. 
+Comments, issues, PR's welcome. Please 🍴🍰🤩. 
+------
+
       __         __      __   __                
      /\ \      /'__`\  /'__`\/\ \__             
      \ \ \____/\ \/\ \/\ \/\ \ \ ,_\            
@@ -17,7 +21,7 @@ a highly opinionated set of tools for deploying Azure Functions, with EV librari
 Built to deploy Azure Logic Connectors & Azure Durable Functions with Python & Typescript Connectors, Azure Service Bus, Azure KeyVault Configs, Azure ARM/Bicep 💪. Check Jargon.md for more the full glossary & naming conventions.  Docker 🐳, Python 🐍, TypeScript 🦄 - emoji indicates things like designee, consignee, etc.  This is an important aspect of the "storytell" logging, it creates really colorful error dumps and quickly helps our soon-to-be-obsolete primate brains abstract patterns that wouldn't be obvious in regular English text. 
 
 # ⚠️ Disclaimer
-Alpha software. Provided AS-IS \_b00t_ definitely NFSW for example a default project could be auto-named "butt_plug" or something like that but hopefully it's always in a cheeky and non-discriminatory way!  It's probably easy to make a SFW fork if you require that. 
+This is Alpha software. Provided AS-IS \_b00t_ is rique NFSW for example a default project could be auto-named "butt_plug" or something like that, it's cheeky and non-discriminatory. 
 
 # 🥋 Mixed-Martial-Art-Of-Coding: "StoryTime Logging"
 \_b00t_ is designed around the idea of "StoryTime" logging that includes Emoji & HSK 1 Chinese Vocabulary - Please Don't be intimidated.  Default settings leave English translations on.  The Author (@BrianHorakh) is a native English speaker and multi-language polygot (Spanish, Mandarin, ~Italian, ~German, ~Portguese) all have their own linguistic style and strengths.  Think of this as mix-martial-art-of-coding! 
@@ -41,7 +45,7 @@ From the \_b00t_ perspective it's trying to produce a cloud-function (or contain
 When this is combined with the fact that since AppConfig Stores & KeyVaults are used -- these are strongly typed first-order support  for example in Azure Logic Functions any secure tokens (such as passwords, or access keys) from a Vault are tagged and automatically filtered from logs as well, making compliance & user privacy easier! Extensive use of pipelines and messaging queues allow for tests and other large jobs to be run in parallel at cloud scale.  
 
 # What is Cloud Scale?
-Cloud Scale, with respect to \_b00t_ refers to highly parallelized jobs which can be executed simulatenously.  For example if you have 1,500 tests and each one takes avg 2 seconds to run, that's roughly 50 minutes to "finish" tests before you can even start a build to production.  A cloud scale approach would be to complete those tests in parallel on 1,500 servers thus only takes 2 seconds (or, actually as long as the longest test, which is often a timeout, so ~60 seconds). 
+Cloud Scale, with respect to \_b00t_ refers to highly parallelized jobs which can be executed simulatenously.  For example if you have 1,500 tests and each one takes avg 2 seconds to run, that's roughly 50 minutes to "finish" tests before you can even start a build to production.  A cloud scale approach would be to complete those tests in parallel on 1,500 servers thus only takes 2 seconds (or, actually as long as the longest test, which is often a timeout, so ~60 seconds) .. but the same pattern also works for deploying containerized neural-network layers using more optimized protocols such as Google ProtocolBuffers. 
 
 # Why is it so Opionated? 
 The \_b00t_ organizational pattern is formatted around an intentionally lean "svelte" Enterprise. Debugging is on by default, serverless/consumption plans are default.  It assumes a development posture and assumes VS Code as an integrated environment, thus prescribing a suggest list of IDE extensions. 
