@@ -1,4 +1,4 @@
-# __b00t__
+# \__b00t__
 ElasticDotVentures is 
 a highly opinionated set of tools for deploying Azure Functions, with EV libraries (called "c0re", a subset of "c0de"), for Google 👾, Azure 🤖.  The pattern uses extensive use of 1337 speak for c0mm0n words which appear in projects.  The 1337speak is mostly used to make pnemonics easier to spot when applications are failing at the lower levels, and to indicate logical role.  Use tab-complete and it's no issue. 
 
@@ -127,14 +127,18 @@ you'll have a fully integrated development environment with secure language bind
 ```
 
 # Emojis & Chinese on the CLI
-The author is a hardcore CLI guy as well.  For some things using your mouse to copy-paste is better since it avoids fat fingers. Let's keep it real - nobody except masochists would try to AZ Resource strings, so _b00t_ strings are no different.  
+The author is a hardcore CLI guy too.  For some things using your mouse to copy-paste is better since it eliminates fat fingers. Let's keep it real - nobody except absolutely masochists would try to hand-type AZ Resource strings, so _b00t_ strings are no different.  You will need to do some cutting and pasting, you probably won't like _b00t_ if you're developing on a Digital VT100 .. 🙄 yeah, nah. 
 
-For directories with emojis or mixed case, use tab complete and wildcards to hit targets. 
-So ```cd /c0*/``` will chdir to ```/c0de/```
-Generally the targets use Emoji & HSK at the end, but as an exercise: 
-```/c0de/_b00t_/.../蓝色_Bicep_ARM_AzrResMgr.💪```
+## How to move around _b00t_ on the CLI
+You use the CLI? You're 1337! 0k4y. Hack your brain to use table complete & wildcard shortcuts. 
 
-could be accessed from it's pwd using ANY of the following ```cd``` command. 
+For directories with emojis or mixed case, use wildcards to hit targets. 
+So `cd /c0*/` will chdir to `/c0de/`
+
+Generally the targets use Emoji & HSK at the end, but as an exercise, here's a badly named directory: 
+`/c0de/_b00t_/.../蓝色_Bicep_ARM_AzrResMgr.💪`
+
+could be accessed from it's pwd using ANY of the following `cd` command. 
 ```
 cd *Bicep*
 cd *ARM*
