@@ -2,7 +2,7 @@
 Present status: merging my own various scripts from other projects, setting up the interactive initalization. 
 Comments, issues, PR's welcome. Please 🍴🍰🤩. 
 ------
-
+```text/plain
       __         __      __   __                
      /\ \      /'__`\  /'__`\/\ \__             
      \ \ \____/\ \/\ \/\ \/\ \ \ ,_\            
@@ -12,9 +12,11 @@ Comments, issues, PR's welcome. Please 🍴🍰🤩.
   _______\/___/  \/___/  \/___/  \/__/  _______ 
  /\______\                             /\______\
  \/______/                             \/______/ 
-````
+```
 
 # \__b00t__
+
+## What About \_b00t_?
 ElasticDotVentures \_b00t_ is 
 a highly opinionated set of tools for deploying Azure Functions, with EV libraries (called "c0re", a subset of "c0de"), for Google 👾, Azure 🤖.  The pattern uses extensive use of 1337 speak for c0mm0n words which appear in projects.  The 1337speak is mostly used to make pnemonics easier to spot when applications are failing at the lower levels, and to indicate logical role.  Use tab-complete and it's no issue. 
 
@@ -27,20 +29,20 @@ This is Alpha software. Provided AS-IS \_b00t_ is rique NFSW for example a defau
 \_b00t_ is designed around the idea of "StoryTime" logging that includes Emoji & HSK 1 Chinese Vocabulary - Please Don't be intimidated.  Default settings leave English translations on.  The Author (@BrianHorakh) is a native English speaker and multi-language polygot (Spanish, Mandarin, ~Italian, ~German, ~Portguese) all have their own linguistic style and strengths.  Think of this as mix-martial-art-of-coding! 
 
 # 🤯 为是吗TF is HSK1? 
-Emoji pictograms are second-class languages that aren't allowed A LOT of places (such as names of Azure resources) fortunately Chinese is allowed in resource names!  Chinese pictograms are the "original" black & white Emoji. Then HSK1 represents ~500 word-meanings in a single character.  When we talk about Good naming conventions -- i.e. logic-role, _b00t_ tries to use uniform fixed width sequences 1-4 characters to hint, so Emoji + Mandarin-Pinyin. 
+HSK1 is Level 1 Chinese Mandarin language skill, in this case using simplified pinyin symbols.  Presently emoji pictograms are second-class languages are both regionally-ambiguous i.e. "🍆💦" has a plurality of meanings but it is two easy to recognize symbols "eggplant water".  Simplified Pinyin is a very pretty font, it's designed to be more legible than traditional chinese on electronic devices. Simplified Pinyin is useful in a LOT of places (such as Azure Resource Names) where Emoji is not allowed.  Chinese pictograms are essentially the "original" black & white Emoji. Then incorporating HSK1 represents ~500 word-meanings in a single character.  When we talk about Good naming conventions -- i.e. logic-role, _b00t_ tries to use uniform fixed width sequences 1-4 characters to hint, so Emoji + Mandarin-Pinyin. 
 
 If _b00t_ was restricted to ONLY the western English 36 characters (A-Z,0-9) that would results in ~1.6m possible combinations & meanings and probably one or two abbreviated words at most, not descriptive at all!  Those same 4 characters using 1024 Emojis (~1.9tn), plus 500 HSK1 mandarin characters (~62.5bn), in total 1560 characters (36+1024+500) results in 5.9t possible "stories" encoded in only 4 characters that your brain needs to process! 
 
-Wow, 4 characters representing 5.9 trillion stories, is a shit-ton of information.  With *DEFAULT* English mode, the system will append the English. But most primate brains will naturally try to decode the color & symbols FIRST. This way it's not an issue since your brain will naturally & gently learn to encode the 意 (Yì, English: "Meaning of") Chinese characters. 🪄😁! you're learning to read Chinese!  Chinese Mandarin represents 1.8 billion _native_ speaker/readers.  English also has roughly 1.8bn globally -- HOWEVER only 400m are native speakers so everybody else already speaks another language besides English! Mandarin in it's simplified written form is known as Pinyin which is a computer/electronic screen optimized font that makes reading very easy (unlike Traditional Chinese which uses brush strokes).
+Wow, 4 characters representing 5.9 trillion stories, is a shit-ton of information.  With *DEFAULT* English mode, the system will append the English. But most primate brains will naturally try to decode the color & symbols FIRST. This way it's not an issue since your brain will naturally & gently learn to encode the 意 (Yì, English: "Meaning of") Chinese characters. 🪄😁! you're learning to read Chinese!  Chinese Mandarin represents 1.8 billion _native_ speaker/readers.  English also has roughly 1.8bn globally -- HOWEVER only 400m are native speakers so everybody else already speaks another language besides English first! 
 
-# 🤩 What does _b00t_ do? 
-\_b00t_ is a complete pipeline orchestration system with integrated VS Code development environemnt, CI/CD Pipeline, base system which is suitable for deploying any cloud-scale state-less machine-learning project in frameworks such as Nvidia Cuda, PyTorch, Tensorflow, etc. as desired.  \_b00t_ provides the base idempotent templates for resources & public/private code-libraries written in Azure ARM/Bicep. 
+# 🤩 Wait, What does _b00t_ do? 
+\_b00t_ is an *opinionated* pipeline orchestration system with integrated VS Code development environemnt, CI/CD Pipeline, base system which is suitable for deploying any cloud-scale state-less machine-learning project in frameworks such as Nvidia Cuda, PyTorch, Tensorflow, etc. as desired.  \_b00t_ provides the base idempotent templates for resources & public/private code-libraries written in Azure ARM/Bicep. 
 
-The ultimate output is a fully operational cloud-resource group, sensibile file shares, key-vaults, monitoring, logging scaffold skeletons in TS & Python as well (the "c0re") which presents itself as an interactive filesytem/blob storage.  The containers themselves could also be used to quarantine or freeze containers for forensic uses as well.  Python & Typescript bindings. I'll eventually add some higher level Vue templates and hardware IOT/Arduino & ESP32 templates as well. 
+The ultimate output is a fully operational cloud-resource group, sensibile file shares, key-vaults, monitoring, logging scaffold skeletons in TS & Python as well (the "c0re") which presents itself as an interactive filesytem/blob storage.  Python & Typescript bindings. I'll eventually add some higher level Vue templates and hardware IOT/Arduino & ESP32 templates as well. 
 
 One aspect \_b00t_ is that it can be hardened and subsequently removed (using docker dive) during the publish to live/production.
 
-From the \_b00t_ perspective it's trying to produce a cloud-function (or container) which is a readonly NVM-e backed memory blob that is frozen until it is triggered (probably by an inbound HTTP Websocket or Filesystem E_POLL notification).  The published container can be stripped down to ONLY perform the task it is assigned, thus improving it's security posture by removing tools & configuration files from public facing images. 
+From the \_b00t_ perspective it's trying to produce a cloud-function (or container) which is a readonly NVM-e backed memory blob that is frozen until it is triggered (probably by an inbound HTTP Websocket or Filesystem E_POLL notification).  The published container can be stripped down to ONLY perform the task it is assigned, thus improving it's security posture by removing tools & configuration files from public facing images.  In the 
 
 When this is combined with the fact that since AppConfig Stores & KeyVaults are used -- these are strongly typed first-order support  for example in Azure Logic Functions any secure tokens (such as passwords, or access keys) from a Vault are tagged and automatically filtered from logs as well, making compliance & user privacy easier! Extensive use of pipelines and messaging queues allow for tests and other large jobs to be run in parallel at cloud scale.  
 
