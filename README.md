@@ -14,19 +14,22 @@
 ElasticDotVentures \_b00t_ is 
 a highly opinionated set of tools for deploying Azure Functions, with EV libraries (called "c0re", a subset of "c0de"), for Google 👾, Azure 🤖.  The pattern uses extensive use of 1337 speak for c0mm0n words which appear in projects.  The 1337speak is mostly used to make pnemonics easier to spot when applications are failing at the lower levels, and to indicate logical role.  Use tab-complete and it's no issue. 
 
-# StoryTime Logging
-\_b00t_ is designed around the idea of "StoryTime" logging that includes Emoji & HSK 1 Chinese Vocabulary - Please Don't be intimidated.  Default settings leave English translations on.  The Author (@BrianHorakh) is a native English speaker and multi-language polygot (Spanish, Mandarin, ~Italian, ~German, ~Portguese) all have their own linguistic style and strengths. 
+Built to deploy Azure Logic Connectors & Azure Durable Functions with Python & Typescript Connectors, Azure Service Bus, Azure KeyVault Configs, Azure ARM/Bicep 💪. Check Jargon.md for more the full glossary & naming conventions.  Docker 🐳, Python 🐍, TypeScript 🦄 - emoji indicates things like designee, consignee, etc.  This is an important aspect of the "storytell" logging, it creates really colorful error dumps and quickly helps our soon-to-be-obsolete primate brains abstract patterns that wouldn't be obvious in regular English text. 
 
-This code AS-IS is definitely NFSW for example a default project could be auto-named "butt_plug" or something like that but hopefully it's always in a cheeky and non-discriminatory way!  It's probably easy to make a SFW fork if you require that. 
+# ⚠️ Disclaimer
+Alpha software. Provided AS-IS \_b00t_ definitely NFSW for example a default project could be auto-named "butt_plug" or something like that but hopefully it's always in a cheeky and non-discriminatory way!  It's probably easy to make a SFW fork if you require that. 
 
-At the highest level, Azure Durable Functions with Python & Typescript Connectors, Azure Service Bus, Azure KeyVault Configs, Azure ARM/Bicep 💪. Check Jargon.md for more the full glossary & naming conventions.  Docker 🐳, Python 🐍, TypeScript 🦄 - emoji indicates things like designee, consignee, etc.  This is an important aspect of the "storytell" logging, it creates really colorful error dumps and quickly helps primate brains abstract patterns that wouldn't be obvious in regular English text. 
+# 🥋 Mixed-Martial-Art-Of-Coding: "StoryTime Logging"
+\_b00t_ is designed around the idea of "StoryTime" logging that includes Emoji & HSK 1 Chinese Vocabulary - Please Don't be intimidated.  Default settings leave English translations on.  The Author (@BrianHorakh) is a native English speaker and multi-language polygot (Spanish, Mandarin, ~Italian, ~German, ~Portguese) all have their own linguistic style and strengths.  Think of this as mix-martial-art-of-coding! 
 
-# 为是吗TF is HSK1? 
-Emoji pictograms are second-class languages that aren't allowed A LOT of places (such as Azure resources), fortunately Chinese is allowed in resource names!   If we think of Chinese pictograms as the "original" black & white Emoji - then HSK1 represents ~500 meanings per character.  When we talk about Good naming conventions -- i.e. logic-role, _b00t_ tries to use uniform fixed width sequences 1-4 characters to hint. If _b00t_ was restricted to the western English 36 characters (A-Z,0-9) that would  results in ~1.6m possible combinations & meanings and probably one or two words at most, meaning a few dozen stories, not descriptive at all!  Those same 4 characters using 1024 Emojis (~1.9tn), plus 500 HSK1 mandarin characters (~62.5bn), in total 1560 characters (36+1024+500) results in 5.9t possible "stories" encoded in only 4 characters that your brain needs to process! 
+# 🤯 为是吗TF is HSK1? 
+Emoji pictograms are second-class languages that aren't allowed A LOT of places (such as names of Azure resources) fortunately Chinese is allowed in resource names!  Chinese pictograms are the "original" black & white Emoji. Then HSK1 represents ~500 word-meanings in a single character.  When we talk about Good naming conventions -- i.e. logic-role, _b00t_ tries to use uniform fixed width sequences 1-4 characters to hint, so Emoji + Mandarin-Pinyin. 
+
+If _b00t_ was restricted to ONLY the western English 36 characters (A-Z,0-9) that would results in ~1.6m possible combinations & meanings and probably one or two abbreviated words at most, not descriptive at all!  Those same 4 characters using 1024 Emojis (~1.9tn), plus 500 HSK1 mandarin characters (~62.5bn), in total 1560 characters (36+1024+500) results in 5.9t possible "stories" encoded in only 4 characters that your brain needs to process! 
 
 Wow, 4 characters representing 5.9 trillion stories, is a shit-ton of information.  With *DEFAULT* English mode, the system will append the English. But most primate brains will naturally try to decode the color & symbols FIRST. This way it's not an issue since your brain will naturally & gently learn to encode the 意 (Yì, English: "Meaning of") Chinese characters. 🪄😁! you're learning to read Chinese!  Chinese Mandarin represents 1.8 billion _native_ speaker/readers.  English also has roughly 1.8bn globally -- HOWEVER only 400m are native speakers so everybody else already speaks another language besides English! Mandarin in it's simplified written form is known as Pinyin which is a computer/electronic screen optimized font that makes reading very easy (unlike Traditional Chinese which uses brush strokes).
 
-# What does _b00t_ do? 
+# 🤩 What does _b00t_ do? 
 \_b00t_ is a complete pipeline orchestration system with integrated VS Code development environemnt, CI/CD Pipeline, base system which is suitable for deploying any cloud-scale state-less machine-learning project in frameworks such as Nvidia Cuda, PyTorch, Tensorflow, etc. as desired.  \_b00t_ provides the base idempotent templates for resources & public/private code-libraries written in Azure ARM/Bicep. 
 
 The ultimate output is a fully operational cloud-resource group, sensibile file shares, key-vaults, monitoring, logging scaffold skeletons in TS & Python as well (the "c0re") which presents itself as an interactive filesytem/blob storage.  The containers themselves could also be used to quarantine or freeze containers for forensic uses as well.  Python & Typescript bindings. I'll eventually add some higher level Vue templates and hardware IOT/Arduino & ESP32 templates as well. 
@@ -165,7 +168,4 @@ On Windows, make sure you're using WSL2 on Unbuntu 20.04 with Windows Terminal P
 I'm not gonna here, just read my Medium:
 https://brianhorakh.medium.com/emoji-logging-warning-much-silliness-ahead-4cae73d7089
 
-```
-
-```
 
