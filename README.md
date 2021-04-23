@@ -1,10 +1,9 @@
 
 # _b00t_
-ElasticDotVentures is 
-=======
 ------
-Present status: merging my own various scripts from other projects, setting up the interactive initalization. 
+Present status: merging my own various scripts from other projects, setting up the interactive initalization (using fzf). 
 Comments, issues, PR's welcome. Please 🍴🍰🤩. 
+
 ------
 ```text/plain
       __         __      __   __                
