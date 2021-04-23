@@ -44,7 +44,7 @@ a highly opinionated set of tools for deploying Azure cloud services with EV lib
 
 The _b00t_ approach uses incorporates 1337 speak for c0mm0n words to encourage brevity at all layers. _b00t_'s design is built to tightly couple the Azure cloud, but integrate with others for services.  Creating multi-layer pipelines using a menu driven approach to generate templates and then execute those templates, download the projects, then build and rebuild. 
 
-The 1337speak used in _b00t_ is primarily used to make unique pnemonics that are easier to grep during a subsystem trace across layers in the stack.  The linguist models inverts the conventional naming schematics used in companies to a richer media (color & symbol) into code that can then be used in conjuction with colorful filters to radically improve code quality & debuggability. 
+The 1337speak used in _b00t_ is primarily used to make unique pnemonics that are easier to grep during a subsystem trace across layers in the stack.  The naming models create colorful and meaningful filters to radically improve code quality & debuggability in some cases approaching a more "zero-code" approach and simultaneously gaining valuable screen real-estate. 
 
  1337 mechanics generally indicate logical role or purpose. Using tab-complete in Intellisense IDE and CLI makes it easy and artistic on the screen reinforcing art-in-code.  
 

@@ -4,3 +4,4 @@
 -r requirements.txt
 
 yq
+emoji>=1.2.0
