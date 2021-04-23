@@ -1,9 +1,21 @@
+```
+      __         __      __   __                
+     /\ \      /'__`\  /'__`\/\ \__             
+     \ \ \____/\ \/\ \/\ \/\ \ \ ,_\            
+      \ \ '__`\ \ \ \ \ \ \ \ \ \ \/            
+       \ \ \L\ \ \ \_\ \ \ \_\ \ \ \_           
+        \ \_,__/\ \____/\ \____/\ \__\          
+  _______\/___/  \/___/  \/___/  \/__/  _______ 
+ /\______\                             /\______\
+ \/______/                             \/______/ 
+````
+
 # \__b00t__
-ElasticDotVentures is 
+ElasticDotVentures \_b00t_ is 
 a highly opinionated set of tools for deploying Azure Functions, with EV libraries (called "c0re", a subset of "c0de"), for Google 👾, Azure 🤖.  The pattern uses extensive use of 1337 speak for c0mm0n words which appear in projects.  The 1337speak is mostly used to make pnemonics easier to spot when applications are failing at the lower levels, and to indicate logical role.  Use tab-complete and it's no issue. 
 
 # StoryTime Logging
-_b00t_ is designed around the idea of "StoryTime" logging that includes Emoji & HSK 1 Chinese Vocabulary - Please Don't be intimidated.  Default settings leave English translations on.  The Author (@BrianHorakh) is a native English speaker and multi-language polygot (Spanish, Mandarin, ~Italian, ~German, ~Portguese) all have their own linguistic style and strengths. 
+\_b00t_ is designed around the idea of "StoryTime" logging that includes Emoji & HSK 1 Chinese Vocabulary - Please Don't be intimidated.  Default settings leave English translations on.  The Author (@BrianHorakh) is a native English speaker and multi-language polygot (Spanish, Mandarin, ~Italian, ~German, ~Portguese) all have their own linguistic style and strengths. 
 
 This code AS-IS is definitely NFSW for example a default project could be auto-named "butt_plug" or something like that but hopefully it's always in a cheeky and non-discriminatory way!  It's probably easy to make a SFW fork if you require that. 
 
@@ -15,23 +27,23 @@ Emoji pictograms are second-class languages that aren't allowed A LOT of places 
 Wow, 4 characters representing 5.9 trillion stories, is a shit-ton of information.  With *DEFAULT* English mode, the system will append the English. But most primate brains will naturally try to decode the color & symbols FIRST. This way it's not an issue since your brain will naturally & gently learn to encode the 意 (Yì, English: "Meaning of") Chinese characters. 🪄😁! you're learning to read Chinese!  Chinese Mandarin represents 1.8 billion _native_ speaker/readers.  English also has roughly 1.8bn globally -- HOWEVER only 400m are native speakers so everybody else already speaks another language besides English! Mandarin in it's simplified written form is known as Pinyin which is a computer/electronic screen optimized font that makes reading very easy (unlike Traditional Chinese which uses brush strokes).
 
 # What does _b00t_ do? 
-_b00t_ is a complete pipeline orchestration system with integrated VS Code development environemnt, CI/CD Pipeline, base system which is suitable for deploying any cloud-scale state-less machine-learning project in frameworks such as Nvidia Cuda, PyTorch, Tensorflow, etc. as desired.  _b00t_ provides the base idempotent templates for resources & public/private code-libraries written in Azure ARM/Bicep. 
+\_b00t_ is a complete pipeline orchestration system with integrated VS Code development environemnt, CI/CD Pipeline, base system which is suitable for deploying any cloud-scale state-less machine-learning project in frameworks such as Nvidia Cuda, PyTorch, Tensorflow, etc. as desired.  \_b00t_ provides the base idempotent templates for resources & public/private code-libraries written in Azure ARM/Bicep. 
 
 The ultimate output is a fully operational cloud-resource group, sensibile file shares, key-vaults, monitoring, logging scaffold skeletons in TS & Python as well (the "c0re") which presents itself as an interactive filesytem/blob storage.  The containers themselves could also be used to quarantine or freeze containers for forensic uses as well.  Python & Typescript bindings. I'll eventually add some higher level Vue templates and hardware IOT/Arduino & ESP32 templates as well. 
 
-One aspect _b00t_ is that it can be hardened and subsequently removed (using docker dive) during the publish to live/production.
+One aspect \_b00t_ is that it can be hardened and subsequently removed (using docker dive) during the publish to live/production.
 
-From the _b00t_ perspective it's trying to produce a cloud-function (or container) which is a readonly NVM-e backed memory blob that is frozen until it is triggered (probably by an inbound HTTP Websocket or Filesystem E_POLL notification).  The published container can be stripped down to ONLY perform the task it is assigned, thus improving it's security posture by removing tools & configuration files from public facing images. 
+From the \_b00t_ perspective it's trying to produce a cloud-function (or container) which is a readonly NVM-e backed memory blob that is frozen until it is triggered (probably by an inbound HTTP Websocket or Filesystem E_POLL notification).  The published container can be stripped down to ONLY perform the task it is assigned, thus improving it's security posture by removing tools & configuration files from public facing images. 
 
 When this is combined with the fact that since AppConfig Stores & KeyVaults are used -- these are strongly typed first-order support  for example in Azure Logic Functions any secure tokens (such as passwords, or access keys) from a Vault are tagged and automatically filtered from logs as well, making compliance & user privacy easier! Extensive use of pipelines and messaging queues allow for tests and other large jobs to be run in parallel at cloud scale.  
 
 # What is Cloud Scale?
-Cloud Scale, with respect to _b00t_ refers to highly parallelized jobs which can be executed simulatenously.  For example if you have 1,500 tests and each one takes avg 2 seconds to run, that's roughly 50 minutes to "finish" tests before you can even start a build to production.  A cloud scale approach would be to complete those tests in parallel on 1,500 servers thus only takes 2 seconds (or, actually as long as the longest test, which is often a timeout, so ~60 seconds). 
+Cloud Scale, with respect to \_b00t_ refers to highly parallelized jobs which can be executed simulatenously.  For example if you have 1,500 tests and each one takes avg 2 seconds to run, that's roughly 50 minutes to "finish" tests before you can even start a build to production.  A cloud scale approach would be to complete those tests in parallel on 1,500 servers thus only takes 2 seconds (or, actually as long as the longest test, which is often a timeout, so ~60 seconds). 
 
 # Why is it so Opionated? 
-The _b00t_ organizational pattern is formatted around an intentionally lean "svelte" Enterprise. Debugging is on by default, serverless/consumption plans are default.  It assumes a development posture and assumes VS Code as an integrated environment, thus prescribing a suggest list of IDE extensions. 
+The \_b00t_ organizational pattern is formatted around an intentionally lean "svelte" Enterprise. Debugging is on by default, serverless/consumption plans are default.  It assumes a development posture and assumes VS Code as an integrated environment, thus prescribing a suggest list of IDE extensions. 
 
-_b00t_ tries to use a "Don't make me think" (any more than I need to) colorful, pattern rich, highly-compressed output. 
+\_b00t_ tries to use a "Don't make me think" (any more than I need to) colorful, pattern rich, highly-compressed output. 
 This allows for the system to "story tell" inside logs often showing an entire transaction as a series of pictograms.
 It's amazing how easy it is to spot the problem in a sequence like this: 😁😁😁🤬😁
 The deterministic nature means it's often possible to go back to the beginning of a transaction and re-run it. 
@@ -39,7 +51,7 @@ The deterministic nature means it's often possible to go back to the beginning o
 Here is a sample of the _projects_ opinion: 
 
 ```
-/mnt/c0re/._b00t_./    # this is the current memory core for _b00t_.  It will contain keys, it could be ephemeral (such as one time use keys)
+/mnt/c0re/._b00t_./    # this is the current memory core for \_b00t_.  It will contain keys, it could be ephemeral (such as one time use keys)
 |- ./your_Project/..   # each project has it's own directory. A project will only mount it's directory though. 
 A project can also delete data it no longer needs, but it is (for now) a good semi-durable hash. 
 
@@ -110,8 +122,8 @@ my_project_id="<YOUR PROJECT>"
 
 ```
 
-_b00t_ will create your project in /c0de/$my_project_id
-In the future to upgrade _b00t_ you can simply use GIT. 
+\_b00t_ will create your project in /c0de/$my_project_id
+In the future to upgrade \_b00t_ you can simply use GIT. 
 ```
 
 ```
@@ -127,9 +139,9 @@ you'll have a fully integrated development environment with secure language bind
 ```
 
 # Emojis & Chinese on the CLI
-The author is a hardcore CLI guy too.  For some things using your mouse to copy-paste is better since it eliminates fat fingers. Let's keep it real - nobody except absolutely masochists would try to hand-type AZ Resource strings, so _b00t_ strings are no different.  You will need to do some cutting and pasting, you probably won't like _b00t_ if you're developing on a Digital VT100 .. 🙄 yeah, nah. 
+The author is a hardcore CLI guy too.  For some things using your mouse to copy-paste is better since it eliminates fat fingers. Let's keep it real - nobody except absolutely masochists would try to hand-type AZ Resource strings, so \_b00t_ strings are no different.  You will need to do some cutting and pasting, you probably won't like \_b00t_ if you're developing on a Digital VT100 .. 🙄 yeah, nah. 
 
-## How to move around _b00t_ on the CLI
+## How to move around \_b00t_ on the CLI
 You use the CLI? You're 1337! 0k4y. Hack your brain to use table complete & wildcard shortcuts. 
 
 For directories with emojis or mixed case, use wildcards to hit targets. 
