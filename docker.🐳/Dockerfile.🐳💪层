@@ -1,0 +1,30 @@
+
+
+## * * * * * * * * * * * \\
+#*
+#* Purpose: ⚠️ THIS IS AN EXAMPLE/TEMPLATE! (code in here doesn't run)
+#*
+## * * * * * * * * * * * //
+
+RUN /c0de/_b00t/bash/AZ_bicep_init.🤖.sh
+
+
+## * * * * \\
+# Example Function
+my_function () {
+  echo "some result"
+  return 55
+}
+my_function
+echo $?
+## * * * * //
+
+
+
+
+
+function_name () {
+  commands
+}
+
+
