@@ -11,32 +11,50 @@ Comments, issues, PR's welcome. Please 🍴🍰🤩.
 ```text/plain
       __         __      __   __                
      /\ \      /'__`\  /'__`\/\ \__             
-     \ \ \____/\ \/\ \/\ \/\ \ \ ,_\            
-      \ \ '__`\ \ \ \ \ \ \ \ \ \ \/            
-       \ \ \L\ \ \ \_\ \ \ \_\ \ \ \_           
+     \ \ \____/\ \ \ \/\ \/\ \ \ ,_\            
+      \ \ '__`\ \ \/\ \ \ \/\ \ \ \/            
+       \ \ \L\ \ \ \/\ \ \ \_\ \ \ \_           
         \ \_,__/\ \____/\ \____/\ \__\          
   _______\/___/  \/___/  \/___/  \/__/  _______ 
  /\______\                             /\______\
- \/______/                             \/______/ 
+ \/______/       开机🥾🐛虫子          \/______/ 
+    B U G   S Q U 1 S H 1 N G   S O F T W A R 3
+
+    * Hardened Determinsic Control Sufaces
+    * Durable Functions, asynchronous I/O
+    * Colorful Emoji & Pinyin filled logs & metrics
+    * Multi-stage dev, build, test, deploy CI/CD
+    * Containerized Projects that deploy at cloud scale
+    * Especially well suited for:
+        * Machine Learning Pipelines
+        * Bi-lingual projects using Python & Typescript
+        * Forensic Analysis
+    * Demo/Modules coming:
+        * AiiA Call Center
+        * VidStream Transformer
+        * DongXi Inventory 
+
 ```
 
 # \__b00t__
 
 ## What About \_b00t_?
 ElasticDotVentures \_b00t_ is 
->>>>>>> aab636915cca39188f1d289453119a7136c4bf88
 a highly opinionated set of tools for deploying Azure cloud services with EV libraries (called "c0re", a subset of "c0de"), for Google 👾, Azure 🤖.  
 
-The _b00t_ approach uses incorporates 1337 speak for c0mm0n words to encourage brevity.  
+The _b00t_ approach uses incorporates 1337 speak for c0mm0n words to encourage brevity at all layers. _b00t_'s design is built to tightly couple the Azure cloud, but integrate with others for services.  Creating multi-layer pipelines using a menu driven approach to generate templates and then execute those templates, download the projects, then build and rebuild. 
 
-The 1337speak used in _b00t_ is primarily used to make unique pnemonics that are easier to grep during a subsystem trace.  1337 mechanics generally indicate logical role or purpose. Using tab-complete in Intellisense IDE and CLI makes it easy and artistic on the screen. 
+The 1337speak used in _b00t_ is primarily used to make unique pnemonics that are easier to grep during a subsystem trace across layers in the stack.  The linguist models inverts the conventional naming schematics used in companies to a richer media (color & symbol) into code that can then be used in conjuction with colorful filters to radically improve code quality & debuggability. 
+
+ 1337 mechanics generally indicate logical role or purpose. Using tab-complete in Intellisense IDE and CLI makes it easy and artistic on the screen reinforcing art-in-code.  
 
 Built to deploy Azure Logic Connectors & Azure Durable Functions with Python & Typescript Connectors, Azure Service Bus 🚌, Azure KeyVault💎 Configs⚙️, Azure ARM/Bicep 💪. Check Jargon.md for more the full glossary & naming conventions.  
 
 Docker 🐳, Python 🐍, TypeScript 🦄 - emoji indicates things like designee, consignee, etc.  This is an important aspect of the "storytell" logging.  StoryTell creates really colorful transaction logs & error dumps.  These patterns help our soon-to-be-obsolete primate brains abstract patterns that wouldn't be nearly as obvious in regular English text.
 
 # Example (in code)
-Here's a sample function that demonstrates this principle: 
+_b00t_ is bi-lingual, one of the c0des it understands is bash script. 
+Here's a sample Bash function taken from the c0re to see if a machine is running Windows System for Linux version 2, abbreviated to WSLv2. The Emoji colorfully demonstrates this bi-lingual principle: 
 ```bash
 
 ### - -   is_WSLv2_🐧💙🪟v2   - - \\
@@ -61,7 +79,7 @@ This behavior becomes a mighty 🦸‍♀️_SUPERPOWER_🦸 when used with the 
 
 
 # ⚠️ Disclaimer
-This is Alpha software. _b00t_ is Provided AS-IS! \_b00t_is rique NFSW, for example a default project could be auto-named "butt_plug" or something like that, it's intentionally cheeky and non-discriminatory.  _b00t_ contains a powerful build process that can muster substantial resources, please use it wisely! 
+This is Alpha software. _b00t_ is Provided AS-IS! \_b00t_is rique NFSW, for example a default project could be auto-named "butt_plug" or something like that, it's intentionally cheeky and non-discriminatory.  _b00t_ contains a powerful build process that can muster substantial resources.  
 
 # 🥋 Mixed-Martial-Art-Of-Coding: "StoryTime Logging"
 \_b00t_ is designed around the idea of "StoryTime" logging that includes Emoji & HSK 1 Chinese Vocabulary - Please Don't be intimidated.  Default settings leave English translations on.  The Author (@BrianHorakh) is a native English speaker and multi-language polygot (Spanish, Mandarin, ~Italian, ~German, ~Portguese) all have their own linguistic style and strengths.  Think of this as mixed-martial-art-of-coding! 
