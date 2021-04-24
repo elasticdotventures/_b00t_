@@ -36,23 +36,26 @@ Status: merging my own various scripts from other projects, setting up the inter
 
 ## What About \_b00t_?
 ElasticDotVentures \_b00t_ is 
-a highly opinionated set of tools for deploying Azure cloud services with EV libraries (called "c0re", a subset of "c0de"), for Google 👾, Azure 🤖.  
+a highly opinionated set of tools for deploying Azure cloud services with EV libraries (called "c0re", a subset of "c0de"), for Google 👾, Azure 🤖.  \_b00t_ brings together a series of powerful Cloud tools to challenge certain traditions of the academic establishment to encourage a p0werful mix-martial-art-of-code. 
 
 ## Is _b00t_ better for individuals or teams?
-Probably individuals is easier, certainly from an adoption standpoint.  But _b00t_ also means you don't need a team, so it's intended for entrepeurial c0ders, especially those in the robtics and AI space which often require cost-efficient cloud-scale computing power from day #1. 
+Probably individuals is easier, certainly from an adoption standpoint.  But _b00t_ also means you don't need a team to do the stuff _b00t_ does for you.  Built by a serial-entrepeneur, it's great for a Robotics & AI teams where the product's very survival is often dependent on cost-efficient cloud-scale computing power from day #1. 
 
-However the VS Code Live Share feature & Remote Containers, and Azure Hybrid-Connections makes it awesome and one-click easy for teams to share screens too.  It's built in a way so that you could give people their own instance of your code, even limit the amount of funding per-new-customer trial. Something like google Collab for startups. This is especially useful if (for example) you want to collaborate with other researchers or bring in AI specialists from Western or Chinese clouds.
+For teams the VS Code Live Share feature & Remote Containers, and Azure Hybrid-Connections offers a plurality of one-click easy, low-latency for teams to share screens securely through firewalls.  It's built in a way so that you could give people their own instance of your code, even limit the amount of funding per-new-customer trial. Something like google Collab for startups. The author believes this is especially useful if (for example) you desire to collaborate with other researchers, especially Chinese ones (i.e. hardware startups). 
 
-## _b00t_ might make you unemployable: 
-The _b00t_ approach uses incorporates 1337 speak for c0mm0n words to encourage brevity at all layers. _b00t_'s design is built to tightly couple the Azure cloud, but integrate with others for services.  Creating multi-layer pipelines using a menu driven approach to generate templates and then execute those templates, download the projects, then build and rebuild. 
+## _b00t_ Syntax Rationale: 
+The future requires new approaches. 
 
-The 1337speak used in _b00t_ is primarily used to make unique pnemonics that are substantially easier to grep during a subsystem trace across layers in the stack, thus providing f1ng3r printing.  The naming models create colorful and meaningful filters to radically improve code quality & debuggability in some cases approaching a more "zero-code" approach and simultaneously gaining valuable screen real-estate. Cut and paste and intellisense make this easier than you'd think. 
+The _b00t_ approach uses incorporates 1337 speak for c0mm0n words to encourage brevity at all layers. _b00t_'s design is built to tightly couple the Azure cloud, but integrate with others for services.  Creating multi-layer pipelines using a menu driven approach to generate templates and then execute those templates, download the projects, then build and rebuild, deploy continuously. 
 
- 1337 mechanics generally indicate logical role or purpose. Using tab-complete in Intellisense IDE and CLI makes it easy and artistic on the screen reinforcing art-in-code.  
+The 1337speak used in _b00t_ is primarily used to make unique pnemonics that are substantially easier to grep during a subsystem trace across layers in the stack, thus providing f1ng3r printing.  The naming models create colorful and meaningful filters to radically improve code quality & debuggability and incorporating "zero-code" deterministic actions Azure Logic Functions. The
+higher visual payload of short 1 & 4 character Emoji & HSK1 in names is informative, and has valuable screen real-estate. WIN+; is emoji, keyboard - cut and paste and intellisense make this easier than you'd think.  Especially when you type "d0cker" and a 🐳 pops up in spell check using a custom dictionary.  
+
+1337 mechanics generally indicate logical role or purpose. Using tab-complete in Intellisense IDE and CLI makes it easy and artistic on the screen reinforcing art-in-code.  The goal of _b00t_ syntax is to keep the upper-primates brain focusing on the pictures and basic glyph optimized based Mandarin only reading the code when it's necessary.  
 
 Built to deploy Azure Logic Connectors & Azure Durable Functions with Python & Typescript Connectors, Azure Service Bus 🚌, Azure KeyVault💎 Configs⚙️, Azure ARM/Bicep 💪. Check Jargon.md for more the full glossary & naming conventions.  
 
-Docker 🐳, Python 🐍, TypeScript 🦄 - emoji indicates things like designee, consignee, etc.  This is an important aspect of the "storytell" logging.  StoryTell creates really colorful transaction logs & error dumps.  These patterns help our soon-to-be-obsolete primate brains abstract patterns that wouldn't be nearly as obvious in regular English text.
+Docker 🐳, Python 🐍, TypeScript 🦄 - emoji indicates things like designee, consignee, etc.  This is an important aspect of the "storytell" logging.  StoryTell creates really colorful transaction logs & error dumps, these will eventually be extended to perform basic ML application forensics & monitoring using eBPF in the Linux Kernel.  These meta-patterns (using computers to monitor computers) helps our soon-to-be-obsolete primate brains abstract patterns that wouldn't be nearly as obvious in regular English text and notice problems and inform the determinisitic control surfaces to take action (isolate, block-hold, ignore with possible consequences 😬).  This isn't the whole application freezing, it's a message in an application, or a corrupt video frame grabber in a video stream, any payload which doesn't match the model.   It's not lost forever, it's simply flagged for review. 
 
 # Example (in code)
 _b00t_ is bi-lingual, one of the c0des it understands is bash script. 
