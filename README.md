@@ -27,9 +27,9 @@ Status: merging my own various scripts from other projects, setting up the inter
         * Forensic Analysis using eBPF (s0meday)
     * Demo/Modules Roadmap (using _b00t_):
         * v0: present. work in progress. 
-        * v1: [AiiA Call Center](http://github.com/elasticdotventures/aiia-callcenter) Small Business NLP/TTS/STT "Call Center" intelligent assistant based on Jovo framework, with additional interfaces for discord & slack. bigCommerce integration planned. 
-        * v2: [DongXi Inventory](http://github.com/elasticdotventures/dongxi) Discrete Inventory & Accounting, Ethereum & Solidity Interfaces. bigCommerce integration.  
-        * v3: [GrowPotbot](http://github.com/elasticdotventures/gr0wp0tb0t)  AI-driven Hydroponic Biogenesis Accelerator. Operate an online store selling hardware produced in China using AiiA & DongXi to run the business.  
+        * v1: [AiiA Call Center](//github.com/elasticdotventures/aiia-callcenter) Small Business NLP/TTS/STT "Call Center" intelligent assistant based on Jovo framework, with additional interfaces for discord & slack. bigCommerce integration planned. 
+        * v2: [DongXi Inventory](//github.com/elasticdotventures/dongxi) Discrete Inventory & Accounting, Ethereum & Solidity Interfaces. bigCommerce integration.  
+        * v3: [GrowPotbot](//github.com/elasticdotventures/gr0wp0tb0t)  AI-driven Hydroponic Biogenesis Accelerator. Operate an online store selling hardware produced in China using AiiA & DongXi to run the business.  
 
 ```
 
