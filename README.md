@@ -1,7 +1,7 @@
 
 # \__b00t__
 ------
-Status: merging my own various scripts from other projects, setting up the interactive initalization (using fzf).  Sharing with friends, looking for feedback, alpha testers & contributors. Comments, issues, PR's welcome. Please 🍴🍰🤩. 
+Status: merging my own various scripts from other projects, setting up the interactive initalization (using fzf).  Sharing with friends, looking for feedback, alpha testers & contributors. Comments, issues, PR's welcome. Please 🍴🍰🤩.  
 
 ------
 ```text/plain
@@ -36,7 +36,7 @@ Status: merging my own various scripts from other projects, setting up the inter
 
 ## What About \_b00t_?
 ElasticDotVentures \_b00t_ is 
-a highly opinionated set of tools for deploying Azure cloud services with EV libraries (called "c0re", a subset of "c0de"), for Google 👾, Azure 🤖.  \_b00t_ brings together a series of powerful Cloud tools to challenge certain traditions of the academic establishment to encourage a p0werful mix-martial-art-of-code. 
+a highly opinionated set of tools for deploying Azure cloud services with EV libraries (called "c0re", a subset of "c0de"), mostly for Azure 🤖.  \_b00t_ brings together a series of powerful Cloud tools to challenge certain traditions of the academic establishment to encourage a p0werful mix-martial-art-of-code. 
 
 ## Is _b00t_ better for individuals or teams?
 Probably individuals is easier, certainly from an adoption standpoint.  But _b00t_ also means you don't need a team to do the stuff _b00t_ does for you.  Built by a serial-entrepeneur, it's great for a Robotics & AI teams where the product's very survival is often dependent on cost-efficient cloud-scale computing power from day #1. 
