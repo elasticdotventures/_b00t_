@@ -18,13 +18,13 @@ Status: merging my own various scripts from other projects, setting up the inter
 
     * Hardened Determinsic Control Sufaces
     * Durable Functions, asynchronous I/O
-    * Colorful Emoji & Pinyin filled logs & metrics
+    * Colorful Emoji & Pinyin filled logs & metrics, friendly fzf menus
     * Multi-stage dev, build, test, deploy CI/CD
     * Containerized Projects that deploy at cloud scale
     * Especially well suited for:
         * Machine Learning Pipelines
         * Bi-lingual projects using Python & Typescript
-        * Forensic Analysis
+        * Forensic Analysis using eBPF
     * Demo/Modules coming:
         * AiiA Call Center
         * VidStream Transformer
