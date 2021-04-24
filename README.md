@@ -28,8 +28,8 @@ Status: merging my own various scripts from other projects, setting up the inter
     * Demo/Modules Roadmap (using _b00t_):
         * v0: present. work in progress. 
         * v1: AiiA Call Center [http://github.com/elasticdotventures/aiia-callcenter] - Small Business NLP/TTS/STT "Call Center" intelligent assistant based on Jovo framework, with additional interfaces for discord & slack. bigCommerce integration planned. 
-        * v2: DongXi Inventory [http://github.com/elasticdotventures/dongxi) Discrete Inventory & Accounting, Ethereum & Solidity Interfaces. bigCommerce integration.  
-        * v3: [gr0w.P0t.B0t](http://github.com/elasticdotventures/gr0w.P0t.B0t  AI-driven Hydroponic Biogenesis Appliance (hydroponic farm controller) built on ESP32 with AI. 
+        * v2: DongXi Inventory [http://github.com/elasticdotventures/dongxi] Discrete Inventory & Accounting, Ethereum & Solidity Interfaces. bigCommerce integration.  
+        * v3: gr0w.P0t.B0t [http://github.com/elasticdotventures/gr0w.P0t.B0t]  AI-driven Hydroponic Biogenesis Appliance (hydroponic farm controller) built on ESP32 with AI. 
 
 ```
 
