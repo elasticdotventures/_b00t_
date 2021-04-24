@@ -24,7 +24,7 @@ Status: merging my own various scripts from other projects, setting up the inter
     * Especially well suited for:
         * Machine Learning Pipelines
         * Bi-lingual projects using Python & Typescript
-        * Forensic Analysis using eBPF
+        * Forensic Analysis using eBPF (s0meday)
     * Demo/Modules coming:
         * AiiA Call Center
         * VidStream Transformer
