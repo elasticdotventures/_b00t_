@@ -39,9 +39,15 @@ Comments, issues, PR's welcome. Please 🍴🍰🤩.
 ElasticDotVentures \_b00t_ is 
 a highly opinionated set of tools for deploying Azure cloud services with EV libraries (called "c0re", a subset of "c0de"), for Google 👾, Azure 🤖.  
 
+## Is _b00t_ better for individuals or teams?
+Probably individuals is easier, certainly from an adoption standpoint.  But _b00t_ also means you don't need a team, so it's intended for entrepeurial c0ders, especially those in the robtics and AI space which often require cost-efficient cloud-scale computing power from day #1. 
+
+However the VS Code Live Share feature & Remote Containers, and Azure Hybrid-Connections makes it awesome and one-click easy for teams to share screens too.  It's built in a way so that you could give people their own instance of your code, even limit the amount of funding per-new-customer trial. Something like google Collab for startups. This is especially useful if (for example) you want to collaborate with other researchers or bring in AI specialists from Western or Chinese clouds.
+
+## _b00t_ might make you unemployable: 
 The _b00t_ approach uses incorporates 1337 speak for c0mm0n words to encourage brevity at all layers. _b00t_'s design is built to tightly couple the Azure cloud, but integrate with others for services.  Creating multi-layer pipelines using a menu driven approach to generate templates and then execute those templates, download the projects, then build and rebuild. 
 
-The 1337speak used in _b00t_ is primarily used to make unique pnemonics that are easier to grep during a subsystem trace across layers in the stack.  The naming models create colorful and meaningful filters to radically improve code quality & debuggability in some cases approaching a more "zero-code" approach and simultaneously gaining valuable screen real-estate. 
+The 1337speak used in _b00t_ is primarily used to make unique pnemonics that are substantially easier to grep during a subsystem trace across layers in the stack, thus providing f1ng3r printing.  The naming models create colorful and meaningful filters to radically improve code quality & debuggability in some cases approaching a more "zero-code" approach and simultaneously gaining valuable screen real-estate. Cut and paste and intellisense make this easier than you'd think. 
 
  1337 mechanics generally indicate logical role or purpose. Using tab-complete in Intellisense IDE and CLI makes it easy and artistic on the screen reinforcing art-in-code.  
 
@@ -99,19 +105,27 @@ The ultimate output is a fully operational cloud-resource group, sensibile file 
 
 One aspect \_b00t_ is that it can be hardened and subsequently removed (using docker dive) during the publish to live/production.
 
-From the \_b00t_ perspective it's trying to produce a cloud-function (or container) which is a readonly NVM-e backed memory blob that is frozen until it is triggered (probably by an inbound HTTP Websocket or Filesystem E_POLL notification).  The published container can be stripped down to ONLY perform the task it is assigned, thus improving it's security posture by removing tools & configuration files from public facing images.  In the 
+From the \_b00t_ perspective it's going to help you build SOMETHING, it's only a foundation.  Further application templates can be built on _b00t_ and then easily upgraded taking advantage of new features. 
 
-When this is combined with the fact that since AppConfig Stores & KeyVaults are used -- these are strongly typed first-order support  for example in Azure Logic Functions any secure tokens (such as passwords, or access keys) from a Vault are tagged and automatically filtered from logs as well, making compliance & user privacy easier! Extensive use of pipelines and messaging queues allow for tests and other large jobs to be run in parallel at cloud scale.  
+In Cloud based determinsic systems (such as Azure Logic Functions), containers can be "frozen" fully loaded, or kept hot (with standbys) based on a load balancer. Such as a cloud-function (or container) can be readonly NVM-e backed memory "blob" that is awaiting a trigger (probably by an inbound HTTP Websocket, E_POLL, or io_submit() ). 
+The published container can be stripped down thus improving both size & security posture by removing tools & configuration files from public facing images. 
 
-# What is Cloud Scale?
+Cloud based AppConfig Stores & KeyVaults are used. KeyVaults contain types that are first-order types which are aware the passwords, etc. in them must be kept secure.  For example in Azure Logic Functions secure tokens (such as passwords, or access keys) from a Vault are tagged and automatically beautifully-filtered from logs as well! This makes compliance & user privacy easier! Extensive use of pipelines and messaging queues allow for tests and other large jobs to be run in parallel at cloud scale.  
+
+# What _exactly_ is Cloud Scale?
 Cloud Scale, with respect to \_b00t_ refers to highly parallelized jobs which can be executed simulatenously.  For example if you have 1,500 tests and each one takes avg 2 seconds to run, that's roughly 50 minutes to "finish" tests before you can even start a build to production.  A cloud scale approach would be to complete those tests in parallel on 1,500 servers thus only takes 2 seconds (or, actually as long as the longest test, which is often a timeout, so ~60 seconds) .. but the same pattern also works for deploying containerized neural-network layers using more optimized protocols such as Google ProtocolBuffers. 
 
-# Why is it so Opionated? 
-For example, _b00t_ believes that VS Code with it's intellisense, typescript & python, docker, azure, aws, gcp, and plurality of other useful extensions is the the one true editor.  The pattern works best when using remote containers, which is one of the 层 Layers it builds & configures. 
 
-The \_b00t_ organizational pattern is formatted around an intentionally lean "svelte" Enterprise. Debugging is on by default, serverless/consumption plans are default.  It assumes a development posture and assumes VS Code as an integrated environment, thus prescribing a suggest list of IDE extensions. 
 
-Ultimately it will include internal tooling sufficient to run a company through built on top of the _b00t_ template.
+
+# Why does Opionated mean? 
+For example, _b00t_ believes that VS Code with it's intellisense, typescript & python, docker, azure, aws, gcp, and plurality of other useful extensions makes VS Code the one true editor.  The author believes _b00t_ pattern works best when using remote containers, which is one of the 层 Layers it builds & configures. 
+
+The \_b00t_ organizational pattern is formatted around an intentionally lean "svelte" Enterprise, everything is automated and structured for easy updates using Git. Debugging is on by default but can be reduced later to save $$. Serverless/consumption plans are also default and cost centers are isolated by project/resource group for good reporting & security.  _b00t_ assumes an agile cadence of releasing early and continuously integration. _b00t_ assumes VS Code as an integrated environment, thus prescribing a suggest list of IDE extensions. An emphasis is put on Windows development with plans to integrate a custom language pack based on a US keyboard (thus similar to intellisense hinting, but at the OS layer)
+
+Ultimately it will include internal tooling sufficient to run a company through built on top of the _b00t_ template.  Plans to compile a variety of unique reporting summarized using _b00t_ notation to quickly assess project quality, code sentiment analysis and identify weak spots.
+
+Additional plans include using the eBPF Linux Kernel filter for fast (kernel level) debugging and monitoring (learning patterns of good and bad transactions).  In this capacity Emoji & HSK is universally better suited than English which would require some level of cost-intensive NLP to be as-effective.  In this capacity _b00t_ saves money with a higher (better) payload to transmission size of packets. 
 
 # What is Idempotence & Determinism? 
 https://en.wikipedia.org/wiki/Idempotence
