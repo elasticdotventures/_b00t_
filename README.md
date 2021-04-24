@@ -1,8 +1,7 @@
 
-# _b00t_
+# \__b00t__
 ------
-Present status: merging my own various scripts from other projects, setting up the interactive initalization (using fzf). 
-Comments, issues, PR's welcome. Please 🍴🍰🤩. 
+Status: merging my own various scripts from other projects, setting up the interactive initalization (using fzf).  Sharing with friends, looking for feedback, alpha testers & contributors. Comments, issues, PR's welcome. Please 🍴🍰🤩. 
 
 ------
 ```text/plain
