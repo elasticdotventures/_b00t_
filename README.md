@@ -15,7 +15,7 @@ Comments, issues, PR's welcome. Please 🍴🍰🤩.
   _______\/___/  \/___/  \/___/  \/__/  _______ 
  /\______\                             /\______\
  \/______/       开机🥾🐛虫子          \/______/ 
-    B U G   S Q U 1 S H 1 N G   S O F T W A R 3
+   B U G   S Q U 1 S H 1 N G   S O F T W A R 3
 
     * Hardened Determinsic Control Sufaces
     * Durable Functions, asynchronous I/O
@@ -54,25 +54,23 @@ _b00t_ is bi-lingual, one of the c0des it understands is bash script.
 Here's a sample Bash function taken from the c0re to see if a machine is running Windows System for Linux version 2, abbreviated to WSLv2. The Emoji colorfully demonstrates this bi-lingual principle: 
 ```bash
 
-### - -   is_WSLv2_🐧💙🪟v2   - - \\
 ## Microsoft Windows Linux Subsystem II 
 ## 🤓 https://docs.microsoft.com/en-us/windows/wsl/install-win10
 #
 function is_WSLv2_🐧💙🪟v2() {
     return `cat /proc/version | grep -c "microsoft-standard-WSL2"`
 }
-### - -   is_WSLv2_🐧💙🪟v2   - - //
 
 ```
 
 ## And here's how to decode it:
 * 🐧 Penguin .....  Linux (Tux, Mascot)
 * 💙 Blue Heart ..  Microsoft:💙, Google:💚, AWS:🪙
-* 🪟 Windows .....  self explanatory!
+* 🪟 Windows .....  self explanatory! (*may not appear on Android!)
 
 So: Without knowing what WSLv2 "is" using only three symbols you can infer a lot about it! 
 
-This behavior becomes a mighty 🦸‍♀️_SUPERPOWER_🦸 when used with the new [eBPF](https://ebpf.io/) Linux kernel features, discussed elsewhere. 
+This behavior becomes a mighty _SUPERPOWER_🦸 when used with the new [eBPF](https://ebpf.io/) Linux kernel features, discussed elsewhere. 
 
 
 # ⚠️ Disclaimer
@@ -135,16 +133,8 @@ The organizational pattern is formatted around a cross-competency, "Don't make m
 This allows for the system to implement "story tell" during logs, showing entire transactions as a series of pictograms (colorful markov chains). Here is a sample of the _projects_ layout opinion: 
 
 ```
-/mnt/c0re/._b00t_./    # this is the current memory core for _b00t_.  It will contain keys, it could be ephemeral (such as one time use keys)
-=======
-\_b00t_ tries to use a "Don't make me think" (any more than I need to) colorful, pattern rich, highly-compressed output. 
-This allows for the system to "story tell" inside logs often showing an entire transaction as a series of pictograms.
-It's amazing how easy it is to spot the problem in a sequence like this: 😁😁😁🤬😁
-The deterministic nature means it's often possible to go back to the beginning of a transaction and re-run it. 
-
 Here are the _projects_ opinion: 
 
-```
 /hoome/.b00t/    # your configs
 |- ./your_Project/..   # each project has it's own directory. 
 
@@ -157,7 +147,7 @@ Here are the _projects_ opinion:
 #   readonly and removing configs from lower levels using 
 #   docker "dive"
 
-# Code 
+# Files:
 
 /c0de/*                # rationale: 4 characters.  
  |- ./01-start.sh      # 🍰 ** Start Here!! Run this ./01-start.sh **
@@ -175,38 +165,34 @@ Here are the _projects_ opinion:
  |- ./google.👾/      # google cloud (still fresh) 
  |- ./aws.🦉/         # aws cloud (nothing planned here, presently) 
  |- ./aws.🦉/         # aws cloud (nothing planned here, presently) 
+
 ```
 
-By subscribing to this pattern, an effort is made to obviate certain things.  Layers are built upon layers. 
+By subscribing to this pattern, an effort is made to obviate certain things.  
+Layers are built upon layers. 
 For example a deployed system can be wiped of Dockerfiles using:
+
 ```
 rm -Rf ./Dockerfile ./docker.🐳
 ```
+
 This is handy at later builds.  For example a GIT filesystem can be stripped of utilities that is no longer needed.  Once that is compressed at a Docker Buildx layer then that information has destroyed during the idempotent container creation. 
 
+```
 ## Tools of _b00t_
-* /bin/https://stedolan.github.io/jq/download/
 * Git
 * Bash
-    https://stedolan.github.io/jq/download/
+    * JQ - https://stedolan.github.io/jq/download/
+    * YQ - 
+    * FZF - 
 * Python
 * Node-Ts
 * Docker
-
-## Stages of _b00t_
-* Host OS
-* Docker
-* Docker(s)
-* Local Test
-* Remote
-* Remote Test
-* Deploy
-* Deploy Test
+```
 
 _b00t_ assumes the author will (ultimately) decide to end up using a combination of stateful logic so it simplifies the interface to those by creating a unified command language that can be further build on.  There is a method to the madness, I assure you.  The patterns utilize serverless consumption plans whenever possible.  The plan is to eventually include complete VS code project files & plugin.    This assumes the developer(s) are using a three stage release model, "InnerLoop" (Local), "OuterLoop" (Cloud and/or Local), "Production" (Live) each of those moving the data to the cloud and toward the public, no attempts are made. 
 
-# Why Emoji & HSK1 Chinese
-I'm not gonna explain here, just read my Medium:
+# Want to see examples Emoji & HSK1 Chinese
 https://brianhorakh.medium.com/emoji-logging-warning-much-silliness-ahead-4cae73d7089
 
 
@@ -219,13 +205,9 @@ https://brianhorakh.medium.com/emoji-logging-warning-much-silliness-ahead-4cae73
 
 
 ## Get Started: 
+NOTE: Someday (soon-ish) I'll have this as a DEPLOY to AZURE button working!
+
 ```bash
-Someday I'll have this DEPLOY to AZURE working., for
-Someday this DEPLOY to AZURE button will work as a scripted process. 
-
-create a resource group:
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2Fazure-quickstart-templates%2Fmaster%2F101-storage-account-create%2Fazuredeploy.json)
-
 For now:
 
 export resourceGroup="newProject"
@@ -239,6 +221,7 @@ that will start running the soon-to-be interactive installer.
 ```
 
 Then, once you've setup _b00t_ you can start to create your own projects. 
+
 ```
 # to start a new project: 
 /c0de/_b00t_/up new ~ 
@@ -272,7 +255,7 @@ you'll have a fully integrated development environment with secure language bind
 The author is a hardcore CLI guy too.  For some things using your mouse to copy-paste is better since it eliminates fat fingers. Let's keep it real - nobody except absolutely masochists would try to hand-type AZ Resource strings, so \_b00t_ strings are no different.  You will need to do some cutting and pasting, you probably won't like \_b00t_ if you're developing on a Digital VT100 .. 🙄 yeah, nah. 
 
 ## How to move around \_b00t_ on the CLI
-You use the CLI? You're 1337! 0k4y. Hack your brain to use table complete & wildcard shortcuts. 
+You use the CLI? You're 1337! 0k4y. Hack your brain to use tab complete & wildcard shortcuts. 
 
 For directories with emojis or mixed case, use wildcards to hit targets. 
 So `cd /c0*/` will chdir to `/c0de/`
