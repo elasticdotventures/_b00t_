@@ -1,0 +1,1 @@
+Resources, blobs and such.

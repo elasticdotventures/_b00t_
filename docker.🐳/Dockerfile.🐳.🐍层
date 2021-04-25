@@ -1,0 +1,16 @@
+
+##* * * * * \\
+# 🐳 Docker
+# 🐍 Python Linux
+# 层 (Céng) Layer
+##* * * * * //
+
+# TODO: Flask Support: 
+# https://docs.docker.com/language/python/build-images/
+
+
+## 🧠 AI 
+RUN pip install Cython --install-option="--no-cython-compile"
+RUN pip install scikit-learn
+
+

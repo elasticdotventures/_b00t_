@@ -1,0 +1,14 @@
+
+##* * * * * \\
+# 🐳 Docker
+# 👾 Google Layer
+# 层 (Céng) Layer
+##* * * * * //
+
+# install gcp-cli
+
+# snap install google-cloud-sdk --classic
+# gcloud init
+
+pull gcr.io/google.com/cloudsdktool/cloud-sdk:latest
+

@@ -4,9 +4,18 @@
 # 🤖 Azure Docker Components Library
 # 层 (Céng) Layer
 ##* * * * * //
-ARGS 特征_Tèzhēng_feature-mssql-odbc
-ARGS 特征_Tèzhēng_feature-AZ_CLI
-ARGS 特征_Tèzhēng_feature-AZ_init
+
+# TODO: "ACI" Azure Container Instancecs 
+# https://docs.docker.com/cloud/aci-integration/
+# https://docs.docker.com/cloud/aci-container-features/
+
+# TODO: ACI for Docker-compose.
+# https://docs.docker.com/cloud/aci-compose-features/
+
+
+#ARGS 特征_Tèzhēng_feature-mssql-odbc
+#ARGS 特征_Tèzhēng_feature-AZ_CLI
+#ARGS 特征_Tèzhēng_feature-AZ_init
 
 # Brilliant Explanation of Conditional Branching in Docker:
 # 🍰 https://stackoverflow.com/questions/43654656/dockerfile-if-else-condition-with-external-arguments

@@ -87,7 +87,7 @@ function n0ta_file_📁_好不好() {
 function is_WSLv2_🐧💙🪟v2() {
     return `cat /proc/version | grep -c "microsoft-standard-WSL2"`
 }
-### - -   is_WSLv2_🐧💙🪟v2   - - //
+### - -  ..  - - //
 
 
 
@@ -100,16 +100,16 @@ function is_WSLv2_🐧💙🪟v2() {
 
 sudo apt-get install -y fzf jq wget curl
 
+# yq, part II - Windows
+## For WSL - snapd won't work 
+if is_WSLv2_🐧💙🪟v2 ; then
+    sudo apt-get update && sudo apt-get install -yqq daemonize dbus-user-session fontconfig
+fi
+
 # 🍰 yq  - YAML config i/o    https://github.com/mikefarah/yq
 if n0ta_file_📁_好不好 "/usr/bin/yq" ; then
     systemctl status snapd.service
     snap install
-fi
-
-# yq, part II - Windows
-## For WSL - snapd won't work 
-if n0ta_file_📁_好不好 "/usr/bin/yq" ; then
-    sudo apt-get update && sudo apt-get install -yqq daemonize dbus-user-session fontconfig
 fi
 
 if n0ta_file_📁_好不好 "/usr/bin/yq" ; then
@@ -122,6 +122,12 @@ if n0ta_file_📁_好不好 "/usr/bin/yq" ; then
         log_📢_记录 "💩 STILL missing /usr/bin/yq"
         exit
     fi
+fi
+
+# _b00t_ cli - "/usr/local/bin/b00t"
+## 
+if n0ta_file_📁_好不好 "/usr/local/bin/b00t" ; then
+    sudo ln -s /c0de/_b00t_/_b00t_-cli.sh /usr/local/bin/b00t
 fi
 
 ##* * * * * *//

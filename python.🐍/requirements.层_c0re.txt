@@ -7,6 +7,7 @@
 #       requirements.txt
 #
 ##* * * * * *\\
+docopt
 
 -r requirements.层_test.txt
 

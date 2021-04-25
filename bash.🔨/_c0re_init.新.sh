@@ -7,11 +7,12 @@
 ## * * * * * * * * * * * //
 
 #* 进口 (Jìnkǒu) 🚀 *ALWAYS* load c0re Libraries!
-if [ ! -x "./bash/c0re.🚀.sh" ] ; then
-    echo "missing ./bash/c0re.🚀.sh" && exit 
-else
-    source "./bash/c0re.🚀.sh" 
+# should be run by _b00t_
+if [ `type -t "_b00t_init_🥾_开始"` == "function" ]; then 
+    # detect _b00t_ environment 
+    _b00t_init_🥾_开始
 fi
+
 
 ## * * * * \\
 # Example Function
