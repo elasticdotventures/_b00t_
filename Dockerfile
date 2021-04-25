@@ -1,31 +1,63 @@
+# syntax=docker/dockerfile:latest
 
-# Conditional 
 
-# FROM centos:7 - prior. 
+USER root 
+SHELL 
+
+# 🤓 Dockerfile Best Practices
+# https://docs.docker.com/develop/develop-images/dockerfile_best-practices/
+
+# docker CLI syntax
+# -f   ::  changes context
+
+# Dockerfile can be sent via stdin
+
+# passing ARGS
+# An ARG declared before a FROM is outside of a build stage, 
+# AND therefore can’t be used in any instruction after a FROM
+ARG outside_build_stagae
+
 ## arg is an example argument, the exact nature of the syntax is 
-##  
-FROM ubuntu
-ARG arg  (arrrgh)
-RUN if [[ -z "$arrrg" ]] ; then echo Argument not provided ; else echo Argument is $arrrg ; fi
+FROM ubuntu as 
+ARG arrrgh
+ARG CODE_VERSION=latest     # default 
+RUN if [ -z "$arrrgh" ] ; then \
+    echo "D0ck3r Starrtup 🐳🏴‍☠️🦜 arrrgh, was not provided"; \
+ else \
+    echo "arrrgh 🐳🦜🏴‍☠️📢: $arrrgh /📢"; \
+    fi  \
+    # this example sets up $arrrgh which is an $arrrbitrary value! 
+
+RUN apt update && apt install -y cowsay
+CMD ["/usr/games/cowsay", "Dockerfiles are cool!"]
+#
+
+# The VOLUME instruction creates a mount point with the specified 
+# name and marks it as holding externally mounted volumes from 
+# native host or other containers.
+# 🤓 https://docs.docker.com/storage/volumes/
+VOLUME ["/var/www", "/var/log/apache2", "/etc/apache2"]
+
 
 ##* * \\
-## yg is a YAML parser/creator like jq
+## yg is a YAML parser/creator like jq (next), it is a cli for .json files
 ## 🍰 https://github.com/mikefarah/yq
-ENV YQ_VERSION="v4.2.0"
-ENV YQ_BINARY="yq_linux_amd64"
+ENV YQ_VERSION="v4.2.0"  YQ_BINARY="yq_linux_amd64"
 RUN wget https://github.com/mikefarah/yq/releases/download/${VERSION}/${BINARY}.tar.gz -O - |\
  tar xz && mv ${BINARY} /usr/bin/yq
 ##* * //
 
 ##* * \\
-## jq is a YAML parser/creator like yq
+## jq is a YAML parser/creator like yq (earlier), it is a cli for .yaml files
 ## 🍰 https://stedolan.github.io/jq/
-sudo apt-get install jq
+RUN apt-get install jq
 ##* * //
 
-RUN apt update && apt install -y cowsay
-CMD ["/usr/games/cowsay", "Dockerfiles are cool!"]
+# Things to copy. 
+# ADD [--chown=<user>:<group>] <src>... <dest>
 
+
+ENTRYPOINT [ "executable" ]
 ##🤓 snapshot/layer explained: 
 ## when FROM is executed, 
 ## files can be eliminated from forward repositories when
@@ -223,11 +255,7 @@ RUN apt-get install -y gunicorn
 RUN apt-get install -y python-gevent
 # RUN python -m pip install gunicorn
 
-## Sp0rtsW0rldB1zL0g1c "libSWBL"
-COPY ./libSWBL /home/site/libSWBL
-WORKDIR /home/site/libSWBL/
-RUN /bin/bash ./build.sh
-RUN md5sum ./dist/libSWBL-2.0.0-py3-none-any.whl 
+
 
 ## django dir
 COPY ./django /home/site/wwwroot/

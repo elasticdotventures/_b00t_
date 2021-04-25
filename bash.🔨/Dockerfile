@@ -1,7 +1,5 @@
+# syntax=docker/dockerfile:experimental
 
-# Conditional 
-
-# FROM centos:7 - prior. 
 ## arg is an example argument, the exact nature of the syntax is 
 ##  
 FROM ubuntu
@@ -20,7 +18,7 @@ RUN wget https://github.com/mikefarah/yq/releases/download/${VERSION}/${BINARY}.
 ##* * \\
 ## jq is a YAML parser/creator like yq
 ## 🍰 https://stedolan.github.io/jq/
-sudo apt-get install jq
+RUN apt-get install jq
 ##* * //
 
 RUN apt update && apt install -y cowsay
@@ -223,11 +221,7 @@ RUN apt-get install -y gunicorn
 RUN apt-get install -y python-gevent
 # RUN python -m pip install gunicorn
 
-## Sp0rtsW0rldB1zL0g1c "libSWBL"
-COPY ./libSWBL /home/site/libSWBL
-WORKDIR /home/site/libSWBL/
-RUN /bin/bash ./build.sh
-RUN md5sum ./dist/libSWBL-2.0.0-py3-none-any.whl 
+
 
 ## django dir
 COPY ./django /home/site/wwwroot/

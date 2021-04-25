@@ -11,9 +11,4 @@ fi
 #* should be called directly from ./01-start.sh 
 ## * * * *\\
 
-sudo apt-get install -y git-all
-sudo apt-get install -y git-
-
-
-
-
+# todo: setup io_streams, ebpf intercepts. 

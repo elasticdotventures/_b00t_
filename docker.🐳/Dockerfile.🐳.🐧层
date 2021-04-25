@@ -1,4 +1,4 @@
-#!/bin/bash
+# syntax=docker/dockerfile:1
 
 ##* * * * * \\
 # 🐳 Docker
@@ -18,15 +18,17 @@
 
 
 
-RUN apt-get update && \
-    apt-get install -y git libicu-dev libmagickwand-dev libmcrypt-dev libcurl3-dev jpegoptim
-RUN pecl install imagick && \
-    docker-php-ext-enable imagick
+#RUN apt-get update && \
+#    apt-get install -y git libicu-dev libmagickwand-dev libmcrypt-dev libcurl3-dev jpegoptim
+#RUN pecl install imagick && \
+#    docker-php-ext-enable imagick
 
 #RUN docker-php-ext-install intl
 # RUN docker-php-ext-install pdo_mysql
-RUN docker-php-ext-install opcache
-RUN docker-php-ext-install mcrypt
-RUN docker-php-ext-install zip
+#RUN docker-php-ext-install opcache
+#RUN docker-php-ext-install mcrypt
+#RUN docker-php-ext-install zip
 
+# define a list of utilities/commands in container. 
+ENTRYPOINT ["top", "-b"]
 

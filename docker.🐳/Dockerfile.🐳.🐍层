@@ -1,3 +1,4 @@
+# syntax=docker/dockerfile:1
 
 ##* * * * * \\
 # 🐳 Docker
@@ -13,4 +14,5 @@
 RUN pip install Cython --install-option="--no-cython-compile"
 RUN pip install scikit-learn
 
+ENTRYPOINT ["top", "-b"]
 

@@ -1,0 +1,7 @@
+# syntax=docker/dockerfile:1
+
+RUN /c0de/_b00t_/bash.🔨/c0re_init.🥾.sh
+
+# BashHub, cloud backed bash history 
+# https://github.com/rcaloras/bashhub-client
+# curl -OL https://bashhub.com/setup && bash setup

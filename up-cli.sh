@@ -19,3 +19,12 @@ echo -e "\n$ID $Name\n"
 # ./bash-cmd.新.sh -g -i p001 -n 'Hot Cake' -m '01-01-2018' -e '06-01-2018'
 ## * * * * //
 
+
+docker volume create \
+	--driver local \
+	--opt type=cifs \
+	--opt device=//uxxxxx.your-server.de/backup \
+	--opt o=addr=uxxxxx.your-server.de,username=uxxxxxxx,password=*****,file_mode=0777,dir_mode=0777 \
+	--name cif-volume
+
+  

@@ -6,6 +6,12 @@
 ## * * * *//
 
 
+if [ `type -t "_b00t_init_🥾_开始"` == "function" ]; then 
+    # short circuit using rand0() function 
+    return
+fi
+
+
 
 
 function checkOS() {

@@ -1,36 +1,7 @@
-# safely initialize _b00t_ bash
-if [ `type -t "_b00t_init_🚀_开始"` == "function" ]; then 
-    # detect _b00t_ environment 
-    _b00t_init_🚀_开始
-fi
+# syntax=docker/dockerfile:1
 
+# safely initialize _b00t_ bash?? no docker equivalent. 
+# RUN if [ `type -t "_b00t_init_🚀_开始"` == "function" ] ; then _b00t_init_🚀_开始 ; fi
 
-
-## * * * * * * * * * * * \\
-#*
-#* Purpose: ⚠️ THIS IS AN EXAMPLE/TEMPLATE! (code in here doesn't run)
-#*
-## * * * * * * * * * * * //
-
-RUN /c0de/_b00t/bash/AZ_bicep_init.🤖.sh
-
-
-## * * * * \\
-# Example Function
-my_function () {
-  echo "some result"
-  return 55
-}
-my_function
-echo $?
-## * * * * //
-
-
-
-
-
-function_name () {
-  commands
-}
-
+RUN /c0de/_b00t/bash/c0re_init.🤖.sh
 

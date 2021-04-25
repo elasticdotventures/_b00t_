@@ -2,13 +2,26 @@
 
 ## * * * * * * * * * * * \\
 # Purpose: ⚠️ THIS IS A "新" TEMPLATE / NEW FILE 
-#   hint: copy the file, replace the "新" 
+#   hint: copy this or another file, replace the "新", remove the "_" 
 ## * * * * * * * * * * * //
+
+## 🤓 HINTS:
+## combine layers - use && to join two commands together:
+##   RUN  cmd1 && cmd2 
 
 # Can one Docker File Load Another:
 # 🍰 https://stackoverflow.com/questions/36362233/can-a-dockerfile-extend-another-one
+
+# Copy files from other containers i.e. nginx:latest
+# COPY --from=nginx:latest /etc/nginx/nginx.conf /nginx.conf
+
+
+# YES - MultiStage Builds: 
+# https://docs.docker.com/develop/develop-images/multistage-build/
 # docker build -t my-php-base-image 
 # next layer 
 # FROM my-last-docker
+
+
 
 

@@ -19,20 +19,22 @@
 #echo
 # ------------- CALLED ------------- #
 
+#* 进口v2 🥾 ALWAYS load c0re Libraries!
 source "./_b00t_.bashrc"
+_b00t_init_🥾_开始
 
 
 ## 进口 * * * \\ 
 ## Jìnkǒu :: Import/Load
 
 # Bin shell & helpers
-bash_source_加载 "$_B00T_C0DE_Path/./bash.🔨/c0re_init.🥾.sh"
+#bash_source_加载 "$_B00T_C0DE_Path/./bash.🔨/c0re_init.🥾.sh"
 
 # Other Torvalds Tools (git, etc.)
-bash_source_加载 "$_B00T_C0DE_Path/./bash.🔨/c0re_init.🐙.sh"
+#bash_source_加载 "$_B00T_C0DE_Path/./bash.🔨/c0re_init.🐙.sh"
 
 # Docker
-bash_source_加载 "$_B00T_C0DE_Path/./bash.🔨/c0re_init.🐳.sh"
+#bash_source_加载 "$_B00T_C0DE_Path/./bash.🔨/c0re_init.🐳.sh"
 
 ## minimal c0re Python 🐍
 # + establish .venv

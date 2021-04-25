@@ -9,6 +9,8 @@
 ##* * * * * *\\
 docopt
 
+numpy
+
 -r requirements.层_test.txt
 
 
