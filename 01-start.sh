@@ -7,6 +7,7 @@
 ##* * * *//
 
 # 🍰 https://stackoverflow.com/questions/192319/how-do-i-know-the-script-file-name-in-a-bash-script
+# 🍰 https://www.shell-tips.com/bash/environment-variables/
 # ------------- SCRIPT ------------- #
 #echo
 #echo "# arguments called with ---->  ${@}     "
@@ -18,53 +19,7 @@
 #echo
 # ------------- CALLED ------------- #
 
-
-## 小路 \\
-## Xiǎolù :: Path or Directory
-# THINGS YOU CAN EDIT: 
-export _B00T_C0DE_Path="/c0de/_b00t_"        
-export _B00T_C0NFIG_Path="$HOME/.b00t"
-## 小路 //
-
-## 记录 \\
-## Jìlù :: Record (Log)
-function log_📢_记录() {
-    echo "$1"
-}
-export -f log_📢_记录
-## 记录 //
-
-## 进口 \\  
-## Kāishǐ :: Start
-# init should be run by every program. 
-function _b00t_init_🥾_开始() {
-    log_📢_记录 "🥾 init: ${0}/./${0##*/}"
-    log_📢_记录 "🥾 args: ${@}"
-}
-export -f _b00t_init_🥾_开始
-_b00t_init_🥾_开始
-## 进口 //
-
-
-
-
-## 加载 * * * * * *\\
-## Jiāzài :: Load
-function bash_source_加载() {
-    file="$1"
-    if [ ! -x "$file" ] ; then
-        log_📢_记录 "missing $file" && exit 
-    else
-        log_📢_记录 "🤓 source $file"
-        source "$file" 
-        if [ $? -gt 0 ] ; then
-            echo "☹️ $file had error. 🛑"
-        fi
-    fi
-
-    return $?
-}
-export -f bash_source_加载
+source "./_b00t_.bashrc"
 
 
 ## 进口 * * * \\ 
@@ -73,26 +28,28 @@ export -f bash_source_加载
 # Bin shell & helpers
 bash_source_加载 "$_B00T_C0DE_Path/./bash.🔨/c0re_init.🥾.sh"
 
-## 进口 >>
+# Other Torvalds Tools (git, etc.)
+bash_source_加载 "$_B00T_C0DE_Path/./bash.🔨/c0re_init.🐙.sh"
+
+# Docker
+bash_source_加载 "$_B00T_C0DE_Path/./bash.🔨/c0re_init.🐳.sh"
+
 ## minimal c0re Python 🐍
 # + establish .venv
 bash_source_加载 "$_B00T_C0DE_Path/./bash.🔨/c0re_init.🐍.sh"
 source .venv/bin/activate
 
-bash_source_加载 "$_B00T_C0DE_Path/./bash.🔨/c0re_init.🦄.sh"
+## Typescript & Node
+bash_source_加载 "$_B00T_C0DE_Path/./bash.🔨/c0re_init.🦄.🚀.sh"
 
-bash_source_加载 "$_B00T_C0DE_Path/./bash.🔨/c0re_init.🐙.sh"
+exit;
 
-bash_source_加载 "$_B00T_C0DE_Path/./bash.🔨/c0re_init.🐳.sh"
 ## 进口 * * * // 
-
-echo "stage 2 still in progress. "
-exit
 
 ## 项目 * * * * \\  
 # (Xiàngmù) Project Id
 
-export c0re_pr0j3ct_id="moist_monkey"
+export c0re_pr0j3ct_id=`project`
 ##* * * * //
 
 
