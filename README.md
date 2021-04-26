@@ -3,6 +3,8 @@
 ------
 Status: merging my own various scripts from other projects, setting up the interactive initalization (using fzf).  Sharing with friends, looking for feedback, alpha testers & contributors. Comments, issues, PR's welcome. Please 🍴🍰🤩.  
 
+🤓 Q: _b00t_ DOES ANYTHING LIKE THIS EXIST YET? 
+
 ------
 ```text/plain
       __         __      __   __                
@@ -22,14 +24,18 @@ Status: merging my own various scripts from other projects, setting up the inter
     * Multi-stage dev, build, test, deploy CI/CD
     * Containerized Projects that deploy at cloud scale
     * Especially well suited for:
-        * Machine Learning Pipelines
-        * Bi-lingual projects using Python & Typescript
-        * Forensic Analysis using eBPF (s0meday)
+        * Machine Learning Create=>Cloud_Deploy Pipelines
+        * Bi-lingual projects using Python & Typescript (or others)
+        * StoryTime Forensic Analysis using eBPF (s0meday)
     * Demo/Modules Roadmap (using _b00t_):
         * v0: present. work in progress. 
         * v1: AiiA Call Center [http://github.com/elasticdotventures/aiia-callcenter] - Small Business NLP/TTS/STT "Call Center" intelligent assistant based on Jovo framework, with additional interfaces for discord & slack. bigCommerce integration planned. 
         * v2: DongXi Inventory [http://github.com/elasticdotventures/dongxi] Discrete Inventory & Accounting, Ethereum & Solidity Interfaces. bigCommerce integration.  
         * v3: gr0w.P0t.B0t [http://github.com/elasticdotventures/gr0w.P0t.B0t]  AI-driven Hydroponic Biogenesis Appliance (hydroponic farm controller) built on ESP32 with AI. 
+
+   Currently under development:
+      * internal libraries and essential tooling, docker deploy, then integrate AZ with bicep. 
+      * fzf menus & installer
 
 ```
 
@@ -37,7 +43,7 @@ Status: merging my own various scripts from other projects, setting up the inter
 
 ## What About \_b00t_?
 ElasticDotVentures \_b00t_ is 
-a highly opinionated set of tools for deploying Azure cloud services with EV libraries (called "c0re", a subset of "c0de"), mostly for Azure 🤖.  \_b00t_ brings together a series of powerful Cloud tools to challenge certain traditions proffered by the academic establishment to encourage a non-traditional but extremely p0werful mix-martial-art-of-code. 
+a highly opinionated set of tools for deploying Azure cloud services with EV libraries (called "c0re", a subset of "c0de"), mostly for Azure 🤖.  \_b00t_ brings together a series of powerful Cloud tools to challenge certain traditions proffered by the academic establishment to encourage a non-traditional but extremely p0werful mix-martial-art-of-code.   This text here is mostly visionary explaining the "what" about _b00t_ which is presently early stage being re_b00t_ed😆 from my prior projects. 
 
 ## Is _b00t_ better for individuals or teams?
 Probably individuals is easier, certainly from an adoption standpoint. Not everybody can gr0k _b00t_.  If you can, great! _b00t_ means you don't need a team to do the stuff because _b00t_ does stuff for you.  Built by a serial-entrepeneur, _b00t_ is a great "stack" for Robotics & AI Startups where the product's very survival is often dependent on efficient (cost-saving) internal-tooling. 
@@ -99,7 +105,7 @@ If _b00t_ was restricted to ONLY the western English 36 characters (A-Z,0-9) tha
 
 Wow, so 4 characters of _b00t_ can represent *5.9 TRILLION stories*! 🤯 With *DEFAULT* English mode, the system will append the English. Keyboard translations in Windows & VS Code Extensions are coming, templates for cutting and pasting are herein. 
 
-In this format the majority of upper-primate brains will naturally try to decode the color & symbols FIRST. Hence, _b00t_ is quicker-than-you'd-think to learn it's not an issue since your brain will subconciously learn the 意 (Yì, English: "Meaning of") Chinese characters. 🪄😁! you're learning to read Chinese!  Chinese Mandarin represents 1.8 billion _native_ speaker/readers.  English also has roughly 1.8bn globally -- HOWEVER only 400m are native speakers so everybody else already speaks another language besides English first! Emoji is universal.  Filtering with fzf using Emoji and HSK1 Pinyin feels G0D LIK3! 
+_b00t_ is quicker-than-you'd-think to learn (our brains like patterns) after a short while you'll learn the 意 (Yì, English: "Meaning of") Chinese characters, till then just cut and paste from the samples, navigate with pictures, some vocabulary is included in files. 🪄😁! now you're learning to read basic Pinyin!  Chinese Mandarin (Pinyin users) represent 1.8 billion humans, roughly 1/3rd of the population.  English also has roughly 1.8bn globally -- HOWEVER only 400m are native speakers, everybody else already speaks another language besides English first! Emoji is universal.   
 
 # 🤩 Wait, What does _b00t_ do? 
 \_b00t_ is an *opinionated* pipeline orchestration system with integrated VS Code development environemnt, CI/CD Pipeline, base system which is suitable for deploying any cloud-scale state-less machine-learning project in frameworks such as Nvidia Cuda, PyTorch, Tensorflow, etc. as desired.  \_b00t_ provides the base idempotent templates for resources & public/private code-libraries written in Azure ARM/Bicep. 
