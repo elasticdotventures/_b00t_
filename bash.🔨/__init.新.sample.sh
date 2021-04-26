@@ -13,8 +13,6 @@
  
 #* 进口v2 🥾 ALWAYS load c0re Libraries!
 source "../_b00t_.bashrc"
-_b00t_init_🥾_开始
-
 
 # README / bash scripting tips: 
 

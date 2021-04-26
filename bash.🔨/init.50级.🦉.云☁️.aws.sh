@@ -6,11 +6,8 @@
 #*
 ## * * * * * * * * * * * //
 
-# safely initialize _b00t_ bash
-if [ `type -t "_b00t_init_🥾_开始"` == "function" ]; then 
-    # detect _b00t_ environment 
-    _b00t_init_🥾_开始
-fi
+#* 进口v2 🥾 ALWAYS load c0re Libraries!
+source "./_b00t_.bashrc"
 
 
 ## * * * * \\

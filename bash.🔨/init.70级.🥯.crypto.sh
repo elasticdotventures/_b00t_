@@ -6,14 +6,12 @@
 #*
 ## * * * * * * * * * * * //
 
-# 🪙 CryptoCoin
+# 🥯 CryptoCoin
 # 🍰 https://linuxconfig.org/ethereum-mining-on-ubuntu-18-04-and-debian
 
-# safely initialize _b00t_ bash
-if [ `type -t "_b00t_init_🥾_开始"` == "function" ]; then 
-    # detect _b00t_ environment 
-    _b00t_init_🥾_开始
-fi
+#* 进口v2 🥾 ALWAYS load c0re Libraries!
+source "./_b00t_.bashrc"
+
 
 sudo add-apt-repository ppa:ethereum/ethereum
 sudo apt update
