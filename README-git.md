@@ -15,6 +15,11 @@ create a new repo.
 🍰 https://stackoverflow.com/questions/56577184/github-pull-changes-from-a-template-repository/56577320
 🍰  https://saintgimp.org/2013/01/22/merging-two-git-repositories-into-one-repository-without-losing-file-history/
 
+# Handy Git Commands
+recover a file: 
+```
+git checkout $commit_id -- $file
+```
 
 
 # add _b00t_

@@ -19,7 +19,7 @@ echo -e "\n$ID $Name\n"
 # ./bash-cmd.新.sh -g -i p001 -n 'Hot Cake' -m '01-01-2018' -e '06-01-2018'
 ## * * * * //
 
-
+## make a cifs share
 docker volume create \
 	--driver local \
 	--opt type=cifs \
@@ -28,3 +28,5 @@ docker volume create \
 	--name cif-volume
 
   
+git remote add template https://github.com/elasticdotventures/_b00t_
+git fetch template
