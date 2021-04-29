@@ -1,0 +1,2204 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "actionGroups_notify_brian_name": {
+      "type": "String"
+    },
+    "actiongroups_application_insights_smart_detection_externalid": {
+      "type": "String"
+    },
+    "activityLogAlerts_sportsworldchicago_health_name": {
+      "type": "String"
+    },
+    "components_sportsworld_as2_django_name": {
+      "type": "String"
+    },
+    "components_sportsworldapp_name": {
+      "type": "String"
+    },
+    "components_sportsworldchicago_cloud_as2_externalid": {
+      "type": "String"
+    },
+    "registries_elasticdotventures_name": {
+      "type": "String"
+    },
+    "serverfarms_ASP_sportsworldchicago_8812_name": {
+      "type": "String"
+    },
+    "servers_sportsworldchicago_cloud_as2_name": {
+      "type": "String"
+    },
+    "sites_sportsworld_as2_name": {
+      "type": "String"
+    },
+    "sites_sportsworlddocker_name": {
+      "type": "String"
+    },
+    "smartdetectoralertrules_failure_anomalies___sportsworld_as2_django_name": {
+      "type": "String"
+    },
+    "smartdetectoralertrules_failure_anomalies___sportsworldapp_name": {
+      "type": "String"
+    },
+    "smartdetectoralertrules_failure_anomalies___sportsworldchicago_cloud_as2_name": {
+      "type": "String"
+    },
+    "storageAccounts_sportsworldchicago_name": {
+      "type": "String"
+    },
+    "userAssignedIdentities_sportsworld_serviceUserIdentity_name": {
+      "type": "String"
+    },
+    "vaults_cubworldEDI_name": {
+      "type": "String"
+    },
+    "vulnerabilityAssessments_Default_storageContainerPath": {
+      "type": "SecureString"
+    },
+    "webhooks_webappsportsworlddocker_serviceUri": {
+      "type": "SecureString"
+    },
+    "workspaces_defaultworkspace_0bbc8a89_c129_49b5_b5c6_6265b773bf87_cus_externalid": {
+      "type": "String"
+    }
+  },
+  "resources": [
+    {
+      "apiVersion": "2019-06-01",
+      "location": "global",
+      "name": "[parameters('smartdetectoralertrules_failure_anomalies___sportsworldchicago_cloud_as2_name')]",
+      "properties": {
+        "actionGroups": {
+          "groupIds": [
+            "[parameters('actiongroups_application_insights_smart_detection_externalid')]"
+          ]
+        },
+        "description": "Failure Anomalies notifies you of an unusual rise in the rate of failed HTTP requests or dependency calls.",
+        "detector": {
+          "description": "Detects if your application experiences an abnormal rise in the rate of HTTP requests or dependency calls that are reported as failed. The anomaly detection uses machine learning algorithms and occurs in near real time, therefore there's no need to define a frequency for this signal.<br/></br/>To help you triage and diagnose the problem, an analysis of the characteristics of the failures and related telemetry is provided with the detection. This feature works for any app, hosted in the cloud or on your own servers, that generates request or dependency telemetry - for example, if you have a worker role that calls <a class=\"ext-smartDetecor-link\" href=\\\"https://docs.microsoft.com/azure/application-insights/app-insights-api-custom-events-metrics#trackrequest\\\" target=\\\"_blank\\\">TrackRequest()</a> or <a class=\"ext-smartDetecor-link\" href=\\\"https://docs.microsoft.com/azure/application-insights/app-insights-api-custom-events-metrics#trackdependency\\\" target=\\\"_blank\\\">TrackDependency()</a>.<br/><br/><a class=\"ext-smartDetecor-link\" href=\\\"https://docs.microsoft.com/azure/azure-monitor/app/proactive-failure-diagnostics\\\" target=\\\"_blank\\\">Learn more about Failure Anomalies</a><br><br><b>A note about your data privacy:</b><br><br>The service is entirely automatic and only you can see these notifications. <a class=\\\"ext-smartDetecor-link\\\" href=\\\"https://docs.microsoft.com/en-us/azure/azure-monitor/app/data-retention-privacy\\\" target=\\\"_blank\\\">Read more about data privacy</a><br><br>Smart Alerts conditions can't be edited or added for now.",
+          "id": "FailureAnomaliesDetector",
+          "name": "Failure Anomalies",
+          "supportedResourceTypes": [
+            "ApplicationInsights"
+          ]
+        },
+        "frequency": "PT1M",
+        "scope": [
+          "[parameters('components_sportsworldchicago_cloud_as2_externalid')]"
+        ],
+        "severity": "Sev3",
+        "state": "Enabled"
+      },
+      "type": "microsoft.alertsmanagement/smartdetectoralertrules"
+    },
+    {
+      "apiVersion": "2020-11-01-preview",
+      "identity": {
+        "principalId": "54e05bd3-fea3-4ae7-a8d5-b0d09bd619ac",
+        "tenantId": "26320343-bd50-40b1-82dd-865bb28dd266",
+        "type": "SystemAssigned, UserAssigned",
+        "userAssignedIdentities": {
+          "/subscriptions/0bbc8a89-c129-49b5-b5c6-6265b773bf87/resourcegroups/elasticdotventures-fungiblefarm-site/providers/Microsoft.ManagedIdentity/userAssignedIdentities/fungiblefarm-serviceUserIdentity": {
+            "clientId": "94c25359-9dfc-48be-8bea-201790c3ce60",
+            "principalId": "3ac121c3-cda4-4d5b-b54f-7389034a8e35"
+          },
+          "/subscriptions/0bbc8a89-c129-49b5-b5c6-6265b773bf87/resourcegroups/sportsworldchicago/providers/Microsoft.ManagedIdentity/userAssignedIdentities/sportsworld-serviceUserIdentity": {
+            "clientId": "91d6eb72-419c-4780-a9b9-cd931ab5fc1b",
+            "principalId": "ef3a509d-b7a4-47b5-b902-dbdea8715342"
+          }
+        }
+      },
+      "location": "australiasoutheast",
+      "name": "[parameters('registries_elasticdotventures_name')]",
+      "properties": {
+        "adminUserEnabled": true,
+        "anonymousPullEnabled": false,
+        "dataEndpointEnabled": false,
+        "encryption": {
+          "status": "disabled"
+        },
+        "networkRuleBypassOptions": "AzureServices",
+        "policies": {
+          "quarantinePolicy": {
+            "status": "disabled"
+          },
+          "retentionPolicy": {
+            "days": 7,
+            "status": "disabled"
+          },
+          "trustPolicy": {
+            "status": "disabled",
+            "type": "Notary"
+          }
+        },
+        "publicNetworkAccess": "Enabled",
+        "zoneRedundancy": "Disabled"
+      },
+      "sku": {
+        "name": "Basic",
+        "tier": "Basic"
+      },
+      "type": "Microsoft.ContainerRegistry/registries"
+    },
+    {
+      "apiVersion": "2019-06-01",
+      "location": "Global",
+      "name": "[parameters('actionGroups_notify_brian_name')]",
+      "properties": {
+        "armRoleReceivers": [],
+        "automationRunbookReceivers": [],
+        "azureAppPushReceivers": [],
+        "azureFunctionReceivers": [],
+        "emailReceivers": [
+          {
+            "emailAddress": "ops+sportsworldchicago@elastic.ventures",
+            "name": "brian_-EmailAction-",
+            "useCommonAlertSchema": false
+          }
+        ],
+        "enabled": true,
+        "groupShortName": "[parameters('actionGroups_notify_brian_name')]",
+        "itsmReceivers": [],
+        "logicAppReceivers": [],
+        "smsReceivers": [],
+        "voiceReceivers": [],
+        "webhookReceivers": []
+      },
+      "type": "microsoft.insights/actionGroups"
+    },
+    {
+      "apiVersion": "2020-02-02-preview",
+      "kind": "web",
+      "location": "eastus",
+      "name": "[parameters('components_sportsworldapp_name')]",
+      "properties": {
+        "Application_Type": "web",
+        "Flow_Type": "Redfield",
+        "IngestionMode": "LogAnalytics",
+        "Request_Source": "IbizaWebAppExtensionCreate",
+        "WorkspaceResourceId": "[parameters('workspaces_defaultworkspace_0bbc8a89_c129_49b5_b5c6_6265b773bf87_cus_externalid')]",
+        "publicNetworkAccessForIngestion": "Enabled",
+        "publicNetworkAccessForQuery": "Enabled"
+      },
+      "type": "microsoft.insights/components"
+    },
+    {
+      "apiVersion": "2020-02-02-preview",
+      "kind": "web",
+      "location": "eastus",
+      "name": "[parameters('components_sportsworld_as2_django_name')]",
+      "properties": {
+        "Application_Type": "web",
+        "Flow_Type": "Redfield",
+        "IngestionMode": "LogAnalytics",
+        "Request_Source": "IbizaWebAppExtensionCreate",
+        "WorkspaceResourceId": "[parameters('workspaces_defaultworkspace_0bbc8a89_c129_49b5_b5c6_6265b773bf87_cus_externalid')]",
+        "publicNetworkAccessForIngestion": "Enabled",
+        "publicNetworkAccessForQuery": "Enabled"
+      },
+      "type": "microsoft.insights/components"
+    },
+    {
+      "apiVersion": "2020-04-01-preview",
+      "location": "eastus",
+      "name": "[parameters('vaults_cubworldEDI_name')]",
+      "properties": {
+        "accessPolicies": [
+          {
+            "objectId": "6b0fe2da-dcfd-4277-b36e-c5a58f5d4a57",
+            "permissions": {
+              "certificates": [
+                "Get",
+                "List",
+                "Update",
+                "Create",
+                "Import",
+                "Delete",
+                "Recover",
+                "Backup",
+                "Restore",
+                "ManageContacts",
+                "ManageIssuers",
+                "GetIssuers",
+                "ListIssuers",
+                "SetIssuers",
+                "DeleteIssuers"
+              ],
+              "keys": [
+                "Get",
+                "List",
+                "Update",
+                "Create",
+                "Import",
+                "Delete",
+                "Recover",
+                "Backup",
+                "Restore"
+              ],
+              "secrets": [
+                "Get",
+                "List",
+                "Set",
+                "Delete",
+                "Recover",
+                "Backup",
+                "Restore"
+              ]
+            },
+            "tenantId": "26320343-bd50-40b1-82dd-865bb28dd266"
+          },
+          {
+            "objectId": "530cae8b-c008-4f73-bdb8-0e04b29d103c",
+            "permissions": {
+              "secrets": [
+                "get",
+                "set",
+                "list",
+                "delete",
+                "backup",
+                "recover",
+                "restore",
+                "purge"
+              ]
+            },
+            "tenantId": "26320343-bd50-40b1-82dd-865bb28dd266"
+          }
+        ],
+        "enablePurgeProtection": true,
+        "enableRbacAuthorization": false,
+        "enableSoftDelete": true,
+        "enabledForDeployment": false,
+        "enabledForDiskEncryption": false,
+        "enabledForTemplateDeployment": false,
+        "provisioningState": "Succeeded",
+        "sku": {
+          "family": "A",
+          "name": "standard"
+        },
+        "softDeleteRetentionInDays": 90,
+        "tenantId": "26320343-bd50-40b1-82dd-865bb28dd266",
+        "vaultUri": "https://cubworldedi.vault.azure.net/"
+      },
+      "type": "Microsoft.KeyVault/vaults"
+    },
+    {
+      "apiVersion": "2018-11-30",
+      "location": "centralus",
+      "name": "[parameters('userAssignedIdentities_sportsworld_serviceUserIdentity_name')]",
+      "type": "Microsoft.ManagedIdentity/userAssignedIdentities"
+    },
+    {
+      "apiVersion": "2020-08-01-preview",
+      "kind": "v12.0",
+      "location": "eastus",
+      "name": "[parameters('servers_sportsworldchicago_cloud_as2_name')]",
+      "properties": {
+        "administratorLogin": "sportsworld",
+        "publicNetworkAccess": "Enabled",
+        "version": "12.0"
+      },
+      "type": "Microsoft.Sql/servers"
+    },
+    {
+      "apiVersion": "2021-01-01",
+      "kind": "StorageV2",
+      "location": "eastus",
+      "name": "[parameters('storageAccounts_sportsworldchicago_name')]",
+      "properties": {
+        "accessTier": "Hot",
+        "allowBlobPublicAccess": false,
+        "allowSharedKeyAccess": true,
+        "encryption": {
+          "keySource": "Microsoft.Storage",
+          "services": {
+            "blob": {
+              "enabled": true,
+              "keyType": "Account"
+            },
+            "file": {
+              "enabled": true,
+              "keyType": "Account"
+            }
+          }
+        },
+        "minimumTlsVersion": "TLS1_2",
+        "networkAcls": {
+          "bypass": "AzureServices",
+          "defaultAction": "Allow",
+          "ipRules": [],
+          "virtualNetworkRules": []
+        },
+        "supportsHttpsTrafficOnly": true
+      },
+      "sku": {
+        "name": "Standard_ZRS",
+        "tier": "Standard"
+      },
+      "type": "Microsoft.Storage/storageAccounts"
+    },
+    {
+      "apiVersion": "2018-02-01",
+      "kind": "linux",
+      "location": "East US",
+      "name": "[parameters('serverfarms_ASP_sportsworldchicago_8812_name')]",
+      "properties": {
+        "freeOfferExpirationTime": "2021-03-18T23:57:17.9566667",
+        "hyperV": false,
+        "isSpot": false,
+        "isXenon": false,
+        "maximumElasticWorkerCount": 1,
+        "perSiteScaling": false,
+        "reserved": true,
+        "targetWorkerCount": 0,
+        "targetWorkerSizeId": 0
+      },
+      "sku": {
+        "capacity": 1,
+        "family": "B",
+        "name": "B1",
+        "size": "B1",
+        "tier": "Basic"
+      },
+      "type": "Microsoft.Web/serverfarms"
+    },
+    {
+      "apiVersion": "2019-06-01",
+      "dependsOn": [
+        "[resourceId('microsoft.insights/components', parameters('components_sportsworldapp_name'))]"
+      ],
+      "location": "global",
+      "name": "[parameters('smartdetectoralertrules_failure_anomalies___sportsworldapp_name')]",
+      "properties": {
+        "actionGroups": {
+          "groupIds": [
+            "[parameters('actiongroups_application_insights_smart_detection_externalid')]"
+          ]
+        },
+        "description": "Failure Anomalies notifies you of an unusual rise in the rate of failed HTTP requests or dependency calls.",
+        "detector": {
+          "description": "Detects if your application experiences an abnormal rise in the rate of HTTP requests or dependency calls that are reported as failed. The anomaly detection uses machine learning algorithms and occurs in near real time, therefore there's no need to define a frequency for this signal.<br/></br/>To help you triage and diagnose the problem, an analysis of the characteristics of the failures and related telemetry is provided with the detection. This feature works for any app, hosted in the cloud or on your own servers, that generates request or dependency telemetry - for example, if you have a worker role that calls <a class=\"ext-smartDetecor-link\" href=\\\"https://docs.microsoft.com/azure/application-insights/app-insights-api-custom-events-metrics#trackrequest\\\" target=\\\"_blank\\\">TrackRequest()</a> or <a class=\"ext-smartDetecor-link\" href=\\\"https://docs.microsoft.com/azure/application-insights/app-insights-api-custom-events-metrics#trackdependency\\\" target=\\\"_blank\\\">TrackDependency()</a>.<br/><br/><a class=\"ext-smartDetecor-link\" href=\\\"https://docs.microsoft.com/azure/azure-monitor/app/proactive-failure-diagnostics\\\" target=\\\"_blank\\\">Learn more about Failure Anomalies</a><br><br><b>A note about your data privacy:</b><br><br>The service is entirely automatic and only you can see these notifications. <a class=\\\"ext-smartDetecor-link\\\" href=\\\"https://docs.microsoft.com/en-us/azure/azure-monitor/app/data-retention-privacy\\\" target=\\\"_blank\\\">Read more about data privacy</a><br><br>Smart Alerts conditions can't be edited or added for now.",
+          "id": "FailureAnomaliesDetector",
+          "name": "Failure Anomalies",
+          "supportedResourceTypes": [
+            "ApplicationInsights"
+          ]
+        },
+        "frequency": "PT1M",
+        "scope": [
+          "[resourceId('microsoft.insights/components', parameters('components_sportsworldapp_name'))]"
+        ],
+        "severity": "Sev3",
+        "state": "Enabled"
+      },
+      "type": "microsoft.alertsmanagement/smartdetectoralertrules"
+    },
+    {
+      "apiVersion": "2019-06-01",
+      "dependsOn": [
+        "[resourceId('microsoft.insights/components', parameters('components_sportsworld_as2_django_name'))]"
+      ],
+      "location": "global",
+      "name": "[parameters('smartdetectoralertrules_failure_anomalies___sportsworld_as2_django_name')]",
+      "properties": {
+        "actionGroups": {
+          "groupIds": [
+            "[parameters('actiongroups_application_insights_smart_detection_externalid')]"
+          ]
+        },
+        "description": "Failure Anomalies notifies you of an unusual rise in the rate of failed HTTP requests or dependency calls.",
+        "detector": {
+          "description": "Detects if your application experiences an abnormal rise in the rate of HTTP requests or dependency calls that are reported as failed. The anomaly detection uses machine learning algorithms and occurs in near real time, therefore there's no need to define a frequency for this signal.<br/></br/>To help you triage and diagnose the problem, an analysis of the characteristics of the failures and related telemetry is provided with the detection. This feature works for any app, hosted in the cloud or on your own servers, that generates request or dependency telemetry - for example, if you have a worker role that calls <a class=\"ext-smartDetecor-link\" href=\\\"https://docs.microsoft.com/azure/application-insights/app-insights-api-custom-events-metrics#trackrequest\\\" target=\\\"_blank\\\">TrackRequest()</a> or <a class=\"ext-smartDetecor-link\" href=\\\"https://docs.microsoft.com/azure/application-insights/app-insights-api-custom-events-metrics#trackdependency\\\" target=\\\"_blank\\\">TrackDependency()</a>.<br/><br/><a class=\"ext-smartDetecor-link\" href=\\\"https://docs.microsoft.com/azure/azure-monitor/app/proactive-failure-diagnostics\\\" target=\\\"_blank\\\">Learn more about Failure Anomalies</a><br><br><b>A note about your data privacy:</b><br><br>The service is entirely automatic and only you can see these notifications. <a class=\\\"ext-smartDetecor-link\\\" href=\\\"https://docs.microsoft.com/en-us/azure/azure-monitor/app/data-retention-privacy\\\" target=\\\"_blank\\\">Read more about data privacy</a><br><br>Smart Alerts conditions can't be edited or added for now.",
+          "id": "FailureAnomaliesDetector",
+          "name": "Failure Anomalies",
+          "supportedResourceTypes": [
+            "ApplicationInsights"
+          ]
+        },
+        "frequency": "PT1M",
+        "scope": [
+          "[resourceId('microsoft.insights/components', parameters('components_sportsworld_as2_django_name'))]"
+        ],
+        "severity": "Sev3",
+        "state": "Enabled"
+      },
+      "type": "microsoft.alertsmanagement/smartdetectoralertrules"
+    },
+    {
+      "apiVersion": "2020-11-01-preview",
+      "dependsOn": [
+        "[resourceId('Microsoft.ContainerRegistry/registries', parameters('registries_elasticdotventures_name'))]"
+      ],
+      "location": "australiasoutheast",
+      "name": "[concat(parameters('registries_elasticdotventures_name'), '/webappsportsworlddocker')]",
+      "properties": {
+        "actions": [
+          "push"
+        ],
+        "serviceUri": "[parameters('webhooks_webappsportsworlddocker_serviceUri')]",
+        "status": "enabled"
+      },
+      "type": "Microsoft.ContainerRegistry/registries/webhooks"
+    },
+    {
+      "apiVersion": "2020-10-01",
+      "dependsOn": [
+        "[resourceId('microsoft.insights/actionGroups', parameters('actionGroups_notify_brian_name'))]"
+      ],
+      "location": "Global",
+      "name": "[parameters('activityLogAlerts_sportsworldchicago_health_name')]",
+      "properties": {
+        "actions": {
+          "actionGroups": [
+            {
+              "actionGroupId": "[resourceId('microsoft.insights/actionGroups', parameters('actionGroups_notify_brian_name'))]",
+              "webhookProperties": {}
+            }
+          ]
+        },
+        "condition": {
+          "allOf": [
+            {
+              "equals": "ResourceHealth",
+              "field": "category"
+            },
+            {
+              "anyOf": [
+                {
+                  "equals": "appsvc_linux_centralus",
+                  "field": "resourceGroup"
+                },
+                {
+                  "equals": "cloud-shell-storage-southeastasia",
+                  "field": "resourceGroup"
+                },
+                {
+                  "equals": "defaultresourcegroup-cus",
+                  "field": "resourceGroup"
+                },
+                {
+                  "equals": "elasticdotventures-fungiblefarm-site",
+                  "field": "resourceGroup"
+                },
+                {
+                  "equals": "elasticventures-ops",
+                  "field": "resourceGroup"
+                },
+                {
+                  "equals": "facemaskstagin",
+                  "field": "resourceGroup"
+                },
+                {
+                  "equals": "fungiblefarm",
+                  "field": "resourceGroup"
+                },
+                {
+                  "equals": "gr0wb0t",
+                  "field": "resourceGroup"
+                }
+              ]
+            }
+          ]
+        },
+        "enabled": true,
+        "scopes": [
+          "/subscriptions/0bbc8a89-c129-49b5-b5c6-6265b773bf87"
+        ]
+      },
+      "type": "microsoft.insights/activityLogAlerts"
+    },
+    {
+      "apiVersion": "2018-05-01-preview",
+      "dependsOn": [
+        "[resourceId('microsoft.insights/components', parameters('components_sportsworldapp_name'))]"
+      ],
+      "location": "eastus",
+      "name": "[concat(parameters('components_sportsworldapp_name'), '/degradationindependencyduration')]",
+      "properties": {
+        "customEmails": [],
+        "enabled": true,
+        "ruleDefinitions": {
+          "Description": "Smart Detection rules notify you of performance anomaly issues.",
+          "DisplayName": "Degradation in dependency duration",
+          "HelpUrl": "https://docs.microsoft.com/en-us/azure/application-insights/app-insights-proactive-performance-diagnostics",
+          "IsEnabledByDefault": true,
+          "IsHidden": false,
+          "IsInPreview": false,
+          "Name": "degradationindependencyduration",
+          "SupportsEmailNotifications": true
+        },
+        "sendEmailsToSubscriptionOwners": true
+      },
+      "type": "microsoft.insights/components/ProactiveDetectionConfigs"
+    },
+    {
+      "apiVersion": "2018-05-01-preview",
+      "dependsOn": [
+        "[resourceId('microsoft.insights/components', parameters('components_sportsworld_as2_django_name'))]"
+      ],
+      "location": "eastus",
+      "name": "[concat(parameters('components_sportsworld_as2_django_name'), '/degradationindependencyduration')]",
+      "properties": {
+        "customEmails": [],
+        "enabled": true,
+        "ruleDefinitions": {
+          "Description": "Smart Detection rules notify you of performance anomaly issues.",
+          "DisplayName": "Degradation in dependency duration",
+          "HelpUrl": "https://docs.microsoft.com/en-us/azure/application-insights/app-insights-proactive-performance-diagnostics",
+          "IsEnabledByDefault": true,
+          "IsHidden": false,
+          "IsInPreview": false,
+          "Name": "degradationindependencyduration",
+          "SupportsEmailNotifications": true
+        },
+        "sendEmailsToSubscriptionOwners": true
+      },
+      "type": "microsoft.insights/components/ProactiveDetectionConfigs"
+    },
+    {
+      "apiVersion": "2018-05-01-preview",
+      "dependsOn": [
+        "[resourceId('microsoft.insights/components', parameters('components_sportsworldapp_name'))]"
+      ],
+      "location": "eastus",
+      "name": "[concat(parameters('components_sportsworldapp_name'), '/degradationinserverresponsetime')]",
+      "properties": {
+        "customEmails": [],
+        "enabled": true,
+        "ruleDefinitions": {
+          "Description": "Smart Detection rules notify you of performance anomaly issues.",
+          "DisplayName": "Degradation in server response time",
+          "HelpUrl": "https://docs.microsoft.com/en-us/azure/application-insights/app-insights-proactive-performance-diagnostics",
+          "IsEnabledByDefault": true,
+          "IsHidden": false,
+          "IsInPreview": false,
+          "Name": "degradationinserverresponsetime",
+          "SupportsEmailNotifications": true
+        },
+        "sendEmailsToSubscriptionOwners": true
+      },
+      "type": "microsoft.insights/components/ProactiveDetectionConfigs"
+    },
+    {
+      "apiVersion": "2018-05-01-preview",
+      "dependsOn": [
+        "[resourceId('microsoft.insights/components', parameters('components_sportsworld_as2_django_name'))]"
+      ],
+      "location": "eastus",
+      "name": "[concat(parameters('components_sportsworld_as2_django_name'), '/degradationinserverresponsetime')]",
+      "properties": {
+        "customEmails": [],
+        "enabled": true,
+        "ruleDefinitions": {
+          "Description": "Smart Detection rules notify you of performance anomaly issues.",
+          "DisplayName": "Degradation in server response time",
+          "HelpUrl": "https://docs.microsoft.com/en-us/azure/application-insights/app-insights-proactive-performance-diagnostics",
+          "IsEnabledByDefault": true,
+          "IsHidden": false,
+          "IsInPreview": false,
+          "Name": "degradationinserverresponsetime",
+          "SupportsEmailNotifications": true
+        },
+        "sendEmailsToSubscriptionOwners": true
+      },
+      "type": "microsoft.insights/components/ProactiveDetectionConfigs"
+    },
+    {
+      "apiVersion": "2018-05-01-preview",
+      "dependsOn": [
+        "[resourceId('microsoft.insights/components', parameters('components_sportsworldapp_name'))]"
+      ],
+      "location": "eastus",
+      "name": "[concat(parameters('components_sportsworldapp_name'), '/digestMailConfiguration')]",
+      "properties": {
+        "customEmails": [],
+        "enabled": true,
+        "ruleDefinitions": {
+          "Description": "This rule describes the digest mail preferences",
+          "DisplayName": "Digest Mail Configuration",
+          "HelpUrl": "www.homail.com",
+          "IsEnabledByDefault": true,
+          "IsHidden": true,
+          "IsInPreview": false,
+          "Name": "digestMailConfiguration",
+          "SupportsEmailNotifications": true
+        },
+        "sendEmailsToSubscriptionOwners": true
+      },
+      "type": "microsoft.insights/components/ProactiveDetectionConfigs"
+    },
+    {
+      "apiVersion": "2018-05-01-preview",
+      "dependsOn": [
+        "[resourceId('microsoft.insights/components', parameters('components_sportsworld_as2_django_name'))]"
+      ],
+      "location": "eastus",
+      "name": "[concat(parameters('components_sportsworld_as2_django_name'), '/digestMailConfiguration')]",
+      "properties": {
+        "customEmails": [],
+        "enabled": true,
+        "ruleDefinitions": {
+          "Description": "This rule describes the digest mail preferences",
+          "DisplayName": "Digest Mail Configuration",
+          "HelpUrl": "www.homail.com",
+          "IsEnabledByDefault": true,
+          "IsHidden": true,
+          "IsInPreview": false,
+          "Name": "digestMailConfiguration",
+          "SupportsEmailNotifications": true
+        },
+        "sendEmailsToSubscriptionOwners": true
+      },
+      "type": "microsoft.insights/components/ProactiveDetectionConfigs"
+    },
+    {
+      "apiVersion": "2018-05-01-preview",
+      "dependsOn": [
+        "[resourceId('microsoft.insights/components', parameters('components_sportsworldapp_name'))]"
+      ],
+      "location": "eastus",
+      "name": "[concat(parameters('components_sportsworldapp_name'), '/extension_billingdatavolumedailyspikeextension')]",
+      "properties": {
+        "customEmails": [],
+        "enabled": true,
+        "ruleDefinitions": {
+          "Description": "This detection rule automatically analyzes the billing data generated by your application, and can warn you about an unusual increase in your application's billing costs",
+          "DisplayName": "Abnormal rise in daily data volume (preview)",
+          "HelpUrl": "https://github.com/Microsoft/ApplicationInsights-Home/tree/master/SmartDetection/billing-data-volume-daily-spike.md",
+          "IsEnabledByDefault": true,
+          "IsHidden": false,
+          "IsInPreview": true,
+          "Name": "extension_billingdatavolumedailyspikeextension",
+          "SupportsEmailNotifications": false
+        },
+        "sendEmailsToSubscriptionOwners": true
+      },
+      "type": "microsoft.insights/components/ProactiveDetectionConfigs"
+    },
+    {
+      "apiVersion": "2018-05-01-preview",
+      "dependsOn": [
+        "[resourceId('microsoft.insights/components', parameters('components_sportsworld_as2_django_name'))]"
+      ],
+      "location": "eastus",
+      "name": "[concat(parameters('components_sportsworld_as2_django_name'), '/extension_billingdatavolumedailyspikeextension')]",
+      "properties": {
+        "customEmails": [],
+        "enabled": true,
+        "ruleDefinitions": {
+          "Description": "This detection rule automatically analyzes the billing data generated by your application, and can warn you about an unusual increase in your application's billing costs",
+          "DisplayName": "Abnormal rise in daily data volume (preview)",
+          "HelpUrl": "https://github.com/Microsoft/ApplicationInsights-Home/tree/master/SmartDetection/billing-data-volume-daily-spike.md",
+          "IsEnabledByDefault": true,
+          "IsHidden": false,
+          "IsInPreview": true,
+          "Name": "extension_billingdatavolumedailyspikeextension",
+          "SupportsEmailNotifications": false
+        },
+        "sendEmailsToSubscriptionOwners": true
+      },
+      "type": "microsoft.insights/components/ProactiveDetectionConfigs"
+    },
+    {
+      "apiVersion": "2018-05-01-preview",
+      "dependsOn": [
+        "[resourceId('microsoft.insights/components', parameters('components_sportsworldapp_name'))]"
+      ],
+      "location": "eastus",
+      "name": "[concat(parameters('components_sportsworldapp_name'), '/extension_canaryextension')]",
+      "properties": {
+        "customEmails": [],
+        "enabled": true,
+        "ruleDefinitions": {
+          "Description": "Canary extension",
+          "DisplayName": "Canary extension",
+          "HelpUrl": "https://github.com/Microsoft/ApplicationInsights-Home/blob/master/SmartDetection/",
+          "IsEnabledByDefault": true,
+          "IsHidden": true,
+          "IsInPreview": true,
+          "Name": "extension_canaryextension",
+          "SupportsEmailNotifications": false
+        },
+        "sendEmailsToSubscriptionOwners": true
+      },
+      "type": "microsoft.insights/components/ProactiveDetectionConfigs"
+    },
+    {
+      "apiVersion": "2018-05-01-preview",
+      "dependsOn": [
+        "[resourceId('microsoft.insights/components', parameters('components_sportsworld_as2_django_name'))]"
+      ],
+      "location": "eastus",
+      "name": "[concat(parameters('components_sportsworld_as2_django_name'), '/extension_canaryextension')]",
+      "properties": {
+        "customEmails": [],
+        "enabled": true,
+        "ruleDefinitions": {
+          "Description": "Canary extension",
+          "DisplayName": "Canary extension",
+          "HelpUrl": "https://github.com/Microsoft/ApplicationInsights-Home/blob/master/SmartDetection/",
+          "IsEnabledByDefault": true,
+          "IsHidden": true,
+          "IsInPreview": true,
+          "Name": "extension_canaryextension",
+          "SupportsEmailNotifications": false
+        },
+        "sendEmailsToSubscriptionOwners": true
+      },
+      "type": "microsoft.insights/components/ProactiveDetectionConfigs"
+    },
+    {
+      "apiVersion": "2018-05-01-preview",
+      "dependsOn": [
+        "[resourceId('microsoft.insights/components', parameters('components_sportsworldapp_name'))]"
+      ],
+      "location": "eastus",
+      "name": "[concat(parameters('components_sportsworldapp_name'), '/extension_exceptionchangeextension')]",
+      "properties": {
+        "customEmails": [],
+        "enabled": true,
+        "ruleDefinitions": {
+          "Description": "This detection rule automatically analyzes the exceptions thrown in your application, and can warn you about unusual patterns in your exception telemetry.",
+          "DisplayName": "Abnormal rise in exception volume (preview)",
+          "HelpUrl": "https://github.com/Microsoft/ApplicationInsights-Home/blob/master/SmartDetection/abnormal-rise-in-exception-volume.md",
+          "IsEnabledByDefault": true,
+          "IsHidden": false,
+          "IsInPreview": true,
+          "Name": "extension_exceptionchangeextension",
+          "SupportsEmailNotifications": false
+        },
+        "sendEmailsToSubscriptionOwners": true
+      },
+      "type": "microsoft.insights/components/ProactiveDetectionConfigs"
+    },
+    {
+      "apiVersion": "2018-05-01-preview",
+      "dependsOn": [
+        "[resourceId('microsoft.insights/components', parameters('components_sportsworld_as2_django_name'))]"
+      ],
+      "location": "eastus",
+      "name": "[concat(parameters('components_sportsworld_as2_django_name'), '/extension_exceptionchangeextension')]",
+      "properties": {
+        "customEmails": [],
+        "enabled": true,
+        "ruleDefinitions": {
+          "Description": "This detection rule automatically analyzes the exceptions thrown in your application, and can warn you about unusual patterns in your exception telemetry.",
+          "DisplayName": "Abnormal rise in exception volume (preview)",
+          "HelpUrl": "https://github.com/Microsoft/ApplicationInsights-Home/blob/master/SmartDetection/abnormal-rise-in-exception-volume.md",
+          "IsEnabledByDefault": true,
+          "IsHidden": false,
+          "IsInPreview": true,
+          "Name": "extension_exceptionchangeextension",
+          "SupportsEmailNotifications": false
+        },
+        "sendEmailsToSubscriptionOwners": true
+      },
+      "type": "microsoft.insights/components/ProactiveDetectionConfigs"
+    },
+    {
+      "apiVersion": "2018-05-01-preview",
+      "dependsOn": [
+        "[resourceId('microsoft.insights/components', parameters('components_sportsworldapp_name'))]"
+      ],
+      "location": "eastus",
+      "name": "[concat(parameters('components_sportsworldapp_name'), '/extension_memoryleakextension')]",
+      "properties": {
+        "customEmails": [],
+        "enabled": true,
+        "ruleDefinitions": {
+          "Description": "This detection rule automatically analyzes the memory consumption of each process in your application, and can warn you about potential memory leaks or increased memory consumption.",
+          "DisplayName": "Potential memory leak detected (preview)",
+          "HelpUrl": "https://github.com/Microsoft/ApplicationInsights-Home/tree/master/SmartDetection/memory-leak.md",
+          "IsEnabledByDefault": true,
+          "IsHidden": false,
+          "IsInPreview": true,
+          "Name": "extension_memoryleakextension",
+          "SupportsEmailNotifications": false
+        },
+        "sendEmailsToSubscriptionOwners": true
+      },
+      "type": "microsoft.insights/components/ProactiveDetectionConfigs"
+    },
+    {
+      "apiVersion": "2018-05-01-preview",
+      "dependsOn": [
+        "[resourceId('microsoft.insights/components', parameters('components_sportsworld_as2_django_name'))]"
+      ],
+      "location": "eastus",
+      "name": "[concat(parameters('components_sportsworld_as2_django_name'), '/extension_memoryleakextension')]",
+      "properties": {
+        "customEmails": [],
+        "enabled": true,
+        "ruleDefinitions": {
+          "Description": "This detection rule automatically analyzes the memory consumption of each process in your application, and can warn you about potential memory leaks or increased memory consumption.",
+          "DisplayName": "Potential memory leak detected (preview)",
+          "HelpUrl": "https://github.com/Microsoft/ApplicationInsights-Home/tree/master/SmartDetection/memory-leak.md",
+          "IsEnabledByDefault": true,
+          "IsHidden": false,
+          "IsInPreview": true,
+          "Name": "extension_memoryleakextension",
+          "SupportsEmailNotifications": false
+        },
+        "sendEmailsToSubscriptionOwners": true
+      },
+      "type": "microsoft.insights/components/ProactiveDetectionConfigs"
+    },
+    {
+      "apiVersion": "2018-05-01-preview",
+      "dependsOn": [
+        "[resourceId('microsoft.insights/components', parameters('components_sportsworldapp_name'))]"
+      ],
+      "location": "eastus",
+      "name": "[concat(parameters('components_sportsworldapp_name'), '/extension_securityextensionspackage')]",
+      "properties": {
+        "customEmails": [],
+        "enabled": true,
+        "ruleDefinitions": {
+          "Description": "This detection rule automatically analyzes the telemetry generated by your application and detects potential security issues.",
+          "DisplayName": "Potential security issue detected (preview)",
+          "HelpUrl": "https://github.com/Microsoft/ApplicationInsights-Home/blob/master/SmartDetection/application-security-detection-pack.md",
+          "IsEnabledByDefault": true,
+          "IsHidden": false,
+          "IsInPreview": true,
+          "Name": "extension_securityextensionspackage",
+          "SupportsEmailNotifications": false
+        },
+        "sendEmailsToSubscriptionOwners": true
+      },
+      "type": "microsoft.insights/components/ProactiveDetectionConfigs"
+    },
+    {
+      "apiVersion": "2018-05-01-preview",
+      "dependsOn": [
+        "[resourceId('microsoft.insights/components', parameters('components_sportsworld_as2_django_name'))]"
+      ],
+      "location": "eastus",
+      "name": "[concat(parameters('components_sportsworld_as2_django_name'), '/extension_securityextensionspackage')]",
+      "properties": {
+        "customEmails": [],
+        "enabled": true,
+        "ruleDefinitions": {
+          "Description": "This detection rule automatically analyzes the telemetry generated by your application and detects potential security issues.",
+          "DisplayName": "Potential security issue detected (preview)",
+          "HelpUrl": "https://github.com/Microsoft/ApplicationInsights-Home/blob/master/SmartDetection/application-security-detection-pack.md",
+          "IsEnabledByDefault": true,
+          "IsHidden": false,
+          "IsInPreview": true,
+          "Name": "extension_securityextensionspackage",
+          "SupportsEmailNotifications": false
+        },
+        "sendEmailsToSubscriptionOwners": true
+      },
+      "type": "microsoft.insights/components/ProactiveDetectionConfigs"
+    },
+    {
+      "apiVersion": "2018-05-01-preview",
+      "dependsOn": [
+        "[resourceId('microsoft.insights/components', parameters('components_sportsworldapp_name'))]"
+      ],
+      "location": "eastus",
+      "name": "[concat(parameters('components_sportsworldapp_name'), '/extension_traceseveritydetector')]",
+      "properties": {
+        "customEmails": [],
+        "enabled": true,
+        "ruleDefinitions": {
+          "Description": "This detection rule automatically analyzes the trace logs emitted from your application, and can warn you about unusual patterns in the severity of your trace telemetry.",
+          "DisplayName": "Degradation in trace severity ratio (preview)",
+          "HelpUrl": "https://github.com/Microsoft/ApplicationInsights-Home/blob/master/SmartDetection/degradation-in-trace-severity-ratio.md",
+          "IsEnabledByDefault": true,
+          "IsHidden": false,
+          "IsInPreview": true,
+          "Name": "extension_traceseveritydetector",
+          "SupportsEmailNotifications": false
+        },
+        "sendEmailsToSubscriptionOwners": true
+      },
+      "type": "microsoft.insights/components/ProactiveDetectionConfigs"
+    },
+    {
+      "apiVersion": "2018-05-01-preview",
+      "dependsOn": [
+        "[resourceId('microsoft.insights/components', parameters('components_sportsworld_as2_django_name'))]"
+      ],
+      "location": "eastus",
+      "name": "[concat(parameters('components_sportsworld_as2_django_name'), '/extension_traceseveritydetector')]",
+      "properties": {
+        "customEmails": [],
+        "enabled": true,
+        "ruleDefinitions": {
+          "Description": "This detection rule automatically analyzes the trace logs emitted from your application, and can warn you about unusual patterns in the severity of your trace telemetry.",
+          "DisplayName": "Degradation in trace severity ratio (preview)",
+          "HelpUrl": "https://github.com/Microsoft/ApplicationInsights-Home/blob/master/SmartDetection/degradation-in-trace-severity-ratio.md",
+          "IsEnabledByDefault": true,
+          "IsHidden": false,
+          "IsInPreview": true,
+          "Name": "extension_traceseveritydetector",
+          "SupportsEmailNotifications": false
+        },
+        "sendEmailsToSubscriptionOwners": true
+      },
+      "type": "microsoft.insights/components/ProactiveDetectionConfigs"
+    },
+    {
+      "apiVersion": "2018-05-01-preview",
+      "dependsOn": [
+        "[resourceId('microsoft.insights/components', parameters('components_sportsworldapp_name'))]"
+      ],
+      "location": "eastus",
+      "name": "[concat(parameters('components_sportsworldapp_name'), '/longdependencyduration')]",
+      "properties": {
+        "customEmails": [],
+        "enabled": true,
+        "ruleDefinitions": {
+          "Description": "Smart Detection rules notify you of performance anomaly issues.",
+          "DisplayName": "Long dependency duration",
+          "HelpUrl": "https://docs.microsoft.com/en-us/azure/application-insights/app-insights-proactive-performance-diagnostics",
+          "IsEnabledByDefault": true,
+          "IsHidden": false,
+          "IsInPreview": false,
+          "Name": "longdependencyduration",
+          "SupportsEmailNotifications": true
+        },
+        "sendEmailsToSubscriptionOwners": true
+      },
+      "type": "microsoft.insights/components/ProactiveDetectionConfigs"
+    },
+    {
+      "apiVersion": "2018-05-01-preview",
+      "dependsOn": [
+        "[resourceId('microsoft.insights/components', parameters('components_sportsworld_as2_django_name'))]"
+      ],
+      "location": "eastus",
+      "name": "[concat(parameters('components_sportsworld_as2_django_name'), '/longdependencyduration')]",
+      "properties": {
+        "customEmails": [],
+        "enabled": true,
+        "ruleDefinitions": {
+          "Description": "Smart Detection rules notify you of performance anomaly issues.",
+          "DisplayName": "Long dependency duration",
+          "HelpUrl": "https://docs.microsoft.com/en-us/azure/application-insights/app-insights-proactive-performance-diagnostics",
+          "IsEnabledByDefault": true,
+          "IsHidden": false,
+          "IsInPreview": false,
+          "Name": "longdependencyduration",
+          "SupportsEmailNotifications": true
+        },
+        "sendEmailsToSubscriptionOwners": true
+      },
+      "type": "microsoft.insights/components/ProactiveDetectionConfigs"
+    },
+    {
+      "apiVersion": "2018-05-01-preview",
+      "dependsOn": [
+        "[resourceId('microsoft.insights/components', parameters('components_sportsworldapp_name'))]"
+      ],
+      "location": "eastus",
+      "name": "[concat(parameters('components_sportsworldapp_name'), '/migrationToAlertRulesCompleted')]",
+      "properties": {
+        "customEmails": [],
+        "enabled": false,
+        "ruleDefinitions": {
+          "Description": "A configuration that controls the migration state of Smart Detection to Smart Alerts",
+          "DisplayName": "Migration To Alert Rules Completed",
+          "HelpUrl": "https://docs.microsoft.com/en-us/azure/application-insights/app-insights-proactive-performance-diagnostics",
+          "IsEnabledByDefault": false,
+          "IsHidden": true,
+          "IsInPreview": true,
+          "Name": "migrationToAlertRulesCompleted",
+          "SupportsEmailNotifications": false
+        },
+        "sendEmailsToSubscriptionOwners": true
+      },
+      "type": "microsoft.insights/components/ProactiveDetectionConfigs"
+    },
+    {
+      "apiVersion": "2018-05-01-preview",
+      "dependsOn": [
+        "[resourceId('microsoft.insights/components', parameters('components_sportsworld_as2_django_name'))]"
+      ],
+      "location": "eastus",
+      "name": "[concat(parameters('components_sportsworld_as2_django_name'), '/migrationToAlertRulesCompleted')]",
+      "properties": {
+        "customEmails": [],
+        "enabled": false,
+        "ruleDefinitions": {
+          "Description": "A configuration that controls the migration state of Smart Detection to Smart Alerts",
+          "DisplayName": "Migration To Alert Rules Completed",
+          "HelpUrl": "https://docs.microsoft.com/en-us/azure/application-insights/app-insights-proactive-performance-diagnostics",
+          "IsEnabledByDefault": false,
+          "IsHidden": true,
+          "IsInPreview": true,
+          "Name": "migrationToAlertRulesCompleted",
+          "SupportsEmailNotifications": false
+        },
+        "sendEmailsToSubscriptionOwners": true
+      },
+      "type": "microsoft.insights/components/ProactiveDetectionConfigs"
+    },
+    {
+      "apiVersion": "2018-05-01-preview",
+      "dependsOn": [
+        "[resourceId('microsoft.insights/components', parameters('components_sportsworldapp_name'))]"
+      ],
+      "location": "eastus",
+      "name": "[concat(parameters('components_sportsworldapp_name'), '/slowpageloadtime')]",
+      "properties": {
+        "customEmails": [],
+        "enabled": true,
+        "ruleDefinitions": {
+          "Description": "Smart Detection rules notify you of performance anomaly issues.",
+          "DisplayName": "Slow page load time",
+          "HelpUrl": "https://docs.microsoft.com/en-us/azure/application-insights/app-insights-proactive-performance-diagnostics",
+          "IsEnabledByDefault": true,
+          "IsHidden": false,
+          "IsInPreview": false,
+          "Name": "slowpageloadtime",
+          "SupportsEmailNotifications": true
+        },
+        "sendEmailsToSubscriptionOwners": true
+      },
+      "type": "microsoft.insights/components/ProactiveDetectionConfigs"
+    },
+    {
+      "apiVersion": "2018-05-01-preview",
+      "dependsOn": [
+        "[resourceId('microsoft.insights/components', parameters('components_sportsworld_as2_django_name'))]"
+      ],
+      "location": "eastus",
+      "name": "[concat(parameters('components_sportsworld_as2_django_name'), '/slowpageloadtime')]",
+      "properties": {
+        "customEmails": [],
+        "enabled": true,
+        "ruleDefinitions": {
+          "Description": "Smart Detection rules notify you of performance anomaly issues.",
+          "DisplayName": "Slow page load time",
+          "HelpUrl": "https://docs.microsoft.com/en-us/azure/application-insights/app-insights-proactive-performance-diagnostics",
+          "IsEnabledByDefault": true,
+          "IsHidden": false,
+          "IsInPreview": false,
+          "Name": "slowpageloadtime",
+          "SupportsEmailNotifications": true
+        },
+        "sendEmailsToSubscriptionOwners": true
+      },
+      "type": "microsoft.insights/components/ProactiveDetectionConfigs"
+    },
+    {
+      "apiVersion": "2018-05-01-preview",
+      "dependsOn": [
+        "[resourceId('microsoft.insights/components', parameters('components_sportsworldapp_name'))]"
+      ],
+      "location": "eastus",
+      "name": "[concat(parameters('components_sportsworldapp_name'), '/slowserverresponsetime')]",
+      "properties": {
+        "customEmails": [],
+        "enabled": true,
+        "ruleDefinitions": {
+          "Description": "Smart Detection rules notify you of performance anomaly issues.",
+          "DisplayName": "Slow server response time",
+          "HelpUrl": "https://docs.microsoft.com/en-us/azure/application-insights/app-insights-proactive-performance-diagnostics",
+          "IsEnabledByDefault": true,
+          "IsHidden": false,
+          "IsInPreview": false,
+          "Name": "slowserverresponsetime",
+          "SupportsEmailNotifications": true
+        },
+        "sendEmailsToSubscriptionOwners": true
+      },
+      "type": "microsoft.insights/components/ProactiveDetectionConfigs"
+    },
+    {
+      "apiVersion": "2018-05-01-preview",
+      "dependsOn": [
+        "[resourceId('microsoft.insights/components', parameters('components_sportsworld_as2_django_name'))]"
+      ],
+      "location": "eastus",
+      "name": "[concat(parameters('components_sportsworld_as2_django_name'), '/slowserverresponsetime')]",
+      "properties": {
+        "customEmails": [],
+        "enabled": true,
+        "ruleDefinitions": {
+          "Description": "Smart Detection rules notify you of performance anomaly issues.",
+          "DisplayName": "Slow server response time",
+          "HelpUrl": "https://docs.microsoft.com/en-us/azure/application-insights/app-insights-proactive-performance-diagnostics",
+          "IsEnabledByDefault": true,
+          "IsHidden": false,
+          "IsInPreview": false,
+          "Name": "slowserverresponsetime",
+          "SupportsEmailNotifications": true
+        },
+        "sendEmailsToSubscriptionOwners": true
+      },
+      "type": "microsoft.insights/components/ProactiveDetectionConfigs"
+    },
+    {
+      "apiVersion": "2020-04-01-preview",
+      "dependsOn": [
+        "[resourceId('Microsoft.KeyVault/vaults', parameters('vaults_cubworldEDI_name'))]"
+      ],
+      "location": "eastus",
+      "name": "[concat(parameters('vaults_cubworldEDI_name'), '/bigCommerce-accessToken')]",
+      "properties": {
+        "attributes": {
+          "enabled": true
+        }
+      },
+      "type": "Microsoft.KeyVault/vaults/secrets"
+    },
+    {
+      "apiVersion": "2020-04-01-preview",
+      "dependsOn": [
+        "[resourceId('Microsoft.KeyVault/vaults', parameters('vaults_cubworldEDI_name'))]"
+      ],
+      "location": "eastus",
+      "name": "[concat(parameters('vaults_cubworldEDI_name'), '/bigCommerce-clientId')]",
+      "properties": {
+        "attributes": {
+          "enabled": true
+        }
+      },
+      "type": "Microsoft.KeyVault/vaults/secrets"
+    },
+    {
+      "apiVersion": "2020-04-01-preview",
+      "dependsOn": [
+        "[resourceId('Microsoft.KeyVault/vaults', parameters('vaults_cubworldEDI_name'))]"
+      ],
+      "location": "eastus",
+      "name": "[concat(parameters('vaults_cubworldEDI_name'), '/bigCommerce-storeHash')]",
+      "properties": {
+        "attributes": {
+          "enabled": true
+        }
+      },
+      "type": "Microsoft.KeyVault/vaults/secrets"
+    },
+    {
+      "apiVersion": "2020-04-01-preview",
+      "dependsOn": [
+        "[resourceId('Microsoft.KeyVault/vaults', parameters('vaults_cubworldEDI_name'))]"
+      ],
+      "location": "eastus",
+      "name": "[concat(parameters('vaults_cubworldEDI_name'), '/gspread-json')]",
+      "properties": {
+        "attributes": {
+          "enabled": true
+        }
+      },
+      "type": "Microsoft.KeyVault/vaults/secrets"
+    },
+    {
+      "apiVersion": "2014-04-01",
+      "dependsOn": [
+        "[resourceId('Microsoft.Sql/servers', parameters('servers_sportsworldchicago_cloud_as2_name'))]"
+      ],
+      "name": "[concat(parameters('servers_sportsworldchicago_cloud_as2_name'), '/CreateIndex')]",
+      "properties": {
+        "autoExecuteValue": "Disabled"
+      },
+      "type": "Microsoft.Sql/servers/advisors"
+    },
+    {
+      "apiVersion": "2014-04-01",
+      "dependsOn": [
+        "[resourceId('Microsoft.Sql/servers', parameters('servers_sportsworldchicago_cloud_as2_name'))]"
+      ],
+      "name": "[concat(parameters('servers_sportsworldchicago_cloud_as2_name'), '/DbParameterization')]",
+      "properties": {
+        "autoExecuteValue": "Disabled"
+      },
+      "type": "Microsoft.Sql/servers/advisors"
+    },
+    {
+      "apiVersion": "2014-04-01",
+      "dependsOn": [
+        "[resourceId('Microsoft.Sql/servers', parameters('servers_sportsworldchicago_cloud_as2_name'))]"
+      ],
+      "name": "[concat(parameters('servers_sportsworldchicago_cloud_as2_name'), '/DefragmentIndex')]",
+      "properties": {
+        "autoExecuteValue": "Disabled"
+      },
+      "type": "Microsoft.Sql/servers/advisors"
+    },
+    {
+      "apiVersion": "2014-04-01",
+      "dependsOn": [
+        "[resourceId('Microsoft.Sql/servers', parameters('servers_sportsworldchicago_cloud_as2_name'))]"
+      ],
+      "name": "[concat(parameters('servers_sportsworldchicago_cloud_as2_name'), '/DropIndex')]",
+      "properties": {
+        "autoExecuteValue": "Disabled"
+      },
+      "type": "Microsoft.Sql/servers/advisors"
+    },
+    {
+      "apiVersion": "2014-04-01",
+      "dependsOn": [
+        "[resourceId('Microsoft.Sql/servers', parameters('servers_sportsworldchicago_cloud_as2_name'))]"
+      ],
+      "name": "[concat(parameters('servers_sportsworldchicago_cloud_as2_name'), '/ForceLastGoodPlan')]",
+      "properties": {
+        "autoExecuteValue": "Enabled"
+      },
+      "type": "Microsoft.Sql/servers/advisors"
+    },
+    {
+      "apiVersion": "2014-04-01",
+      "dependsOn": [
+        "[resourceId('Microsoft.Sql/servers', parameters('servers_sportsworldchicago_cloud_as2_name'))]"
+      ],
+      "location": "East US",
+      "name": "[concat(parameters('servers_sportsworldchicago_cloud_as2_name'), '/Default')]",
+      "properties": {
+        "auditingState": "Disabled"
+      },
+      "type": "Microsoft.Sql/servers/auditingPolicies"
+    },
+    {
+      "apiVersion": "2020-08-01-preview",
+      "dependsOn": [
+        "[resourceId('Microsoft.Sql/servers', parameters('servers_sportsworldchicago_cloud_as2_name'))]"
+      ],
+      "name": "[concat(parameters('servers_sportsworldchicago_cloud_as2_name'), '/Default')]",
+      "properties": {
+        "auditActionsAndGroups": [],
+        "isAzureMonitorTargetEnabled": false,
+        "isStorageSecondaryKeyInUse": false,
+        "retentionDays": 0,
+        "state": "Disabled",
+        "storageAccountSubscriptionId": "00000000-0000-0000-0000-000000000000"
+      },
+      "type": "Microsoft.Sql/servers/auditingSettings"
+    },
+    {
+      "apiVersion": "2020-08-01-preview",
+      "dependsOn": [
+        "[resourceId('Microsoft.Sql/servers', parameters('servers_sportsworldchicago_cloud_as2_name'))]"
+      ],
+      "kind": "v12.0,user,vcore,serverless",
+      "location": "eastus",
+      "name": "[concat(parameters('servers_sportsworldchicago_cloud_as2_name'), '/django-as2')]",
+      "properties": {
+        "autoPauseDelay": 60,
+        "catalogCollation": "SQL_Latin1_General_CP1_CI_AS",
+        "collation": "SQL_Latin1_General_CP1_CI_AS",
+        "maintenanceConfigurationId": "/subscriptions/0bbc8a89-c129-49b5-b5c6-6265b773bf87/providers/Microsoft.Maintenance/publicMaintenanceConfigurations/SQL_Default",
+        "maxSizeBytes": 1073741824,
+        "minCapacity": 0.5,
+        "readScale": "Disabled",
+        "storageAccountType": "GRS",
+        "zoneRedundant": false
+      },
+      "sku": {
+        "capacity": 4,
+        "family": "Gen5",
+        "name": "GP_S_Gen5",
+        "tier": "GeneralPurpose"
+      },
+      "type": "Microsoft.Sql/servers/databases"
+    },
+    {
+      "apiVersion": "2014-04-01",
+      "dependsOn": [
+        "[resourceId('Microsoft.Sql/servers', parameters('servers_sportsworldchicago_cloud_as2_name'))]"
+      ],
+      "location": "East US",
+      "name": "[concat(parameters('servers_sportsworldchicago_cloud_as2_name'), '/master/Default')]",
+      "properties": {
+        "auditingState": "Disabled"
+      },
+      "type": "Microsoft.Sql/servers/databases/auditingPolicies"
+    },
+    {
+      "apiVersion": "2020-08-01-preview",
+      "dependsOn": [
+        "[resourceId('Microsoft.Sql/servers', parameters('servers_sportsworldchicago_cloud_as2_name'))]"
+      ],
+      "name": "[concat(parameters('servers_sportsworldchicago_cloud_as2_name'), '/master/Default')]",
+      "properties": {
+        "isAzureMonitorTargetEnabled": false,
+        "retentionDays": 0,
+        "state": "Disabled",
+        "storageAccountSubscriptionId": "00000000-0000-0000-0000-000000000000"
+      },
+      "type": "Microsoft.Sql/servers/databases/auditingSettings"
+    },
+    {
+      "apiVersion": "2020-08-01-preview",
+      "dependsOn": [
+        "[resourceId('Microsoft.Sql/servers', parameters('servers_sportsworldchicago_cloud_as2_name'))]"
+      ],
+      "name": "[concat(parameters('servers_sportsworldchicago_cloud_as2_name'), '/master/Default')]",
+      "properties": {
+        "isAzureMonitorTargetEnabled": false,
+        "retentionDays": 0,
+        "state": "Disabled",
+        "storageAccountSubscriptionId": "00000000-0000-0000-0000-000000000000"
+      },
+      "type": "Microsoft.Sql/servers/databases/extendedAuditingSettings"
+    },
+    {
+      "apiVersion": "2014-04-01",
+      "dependsOn": [
+        "[resourceId('Microsoft.Sql/servers', parameters('servers_sportsworldchicago_cloud_as2_name'))]"
+      ],
+      "location": "East US",
+      "name": "[concat(parameters('servers_sportsworldchicago_cloud_as2_name'), '/master/Default')]",
+      "properties": {
+        "state": "Disabled"
+      },
+      "type": "Microsoft.Sql/servers/databases/geoBackupPolicies"
+    },
+    {
+      "apiVersion": "2020-08-01-preview",
+      "dependsOn": [
+        "[resourceId('Microsoft.Sql/servers', parameters('servers_sportsworldchicago_cloud_as2_name'))]"
+      ],
+      "name": "[concat(parameters('servers_sportsworldchicago_cloud_as2_name'), '/master/Default')]",
+      "properties": {
+        "state": "Disabled"
+      },
+      "type": "Microsoft.Sql/servers/databases/securityAlertPolicies"
+    },
+    {
+      "apiVersion": "2014-04-01",
+      "dependsOn": [
+        "[resourceId('Microsoft.Sql/servers', parameters('servers_sportsworldchicago_cloud_as2_name'))]"
+      ],
+      "location": "East US",
+      "name": "[concat(parameters('servers_sportsworldchicago_cloud_as2_name'), '/master/current')]",
+      "properties": {
+        "status": "Disabled"
+      },
+      "type": "Microsoft.Sql/servers/databases/transparentDataEncryption"
+    },
+    {
+      "apiVersion": "2020-08-01-preview",
+      "dependsOn": [
+        "[resourceId('Microsoft.Sql/servers', parameters('servers_sportsworldchicago_cloud_as2_name'))]"
+      ],
+      "name": "[concat(parameters('servers_sportsworldchicago_cloud_as2_name'), '/master/Default')]",
+      "properties": {
+        "recurringScans": {
+          "emailSubscriptionAdmins": true,
+          "isEnabled": false
+        }
+      },
+      "type": "Microsoft.Sql/servers/databases/vulnerabilityAssessments"
+    },
+    {
+      "apiVersion": "2020-08-01-preview",
+      "dependsOn": [
+        "[resourceId('Microsoft.Sql/servers', parameters('servers_sportsworldchicago_cloud_as2_name'))]"
+      ],
+      "name": "[concat(parameters('servers_sportsworldchicago_cloud_as2_name'), '/Default')]",
+      "properties": {
+        "isAzureMonitorTargetEnabled": false,
+        "state": "Disabled",
+        "storageAccountSubscriptionId": "00000000-0000-0000-0000-000000000000"
+      },
+      "type": "Microsoft.Sql/servers/devOpsAuditingSettings"
+    },
+    {
+      "apiVersion": "2020-08-01-preview",
+      "dependsOn": [
+        "[resourceId('Microsoft.Sql/servers', parameters('servers_sportsworldchicago_cloud_as2_name'))]"
+      ],
+      "kind": "servicemanaged",
+      "name": "[concat(parameters('servers_sportsworldchicago_cloud_as2_name'), '/current')]",
+      "properties": {
+        "autoRotationEnabled": false,
+        "serverKeyName": "ServiceManaged",
+        "serverKeyType": "ServiceManaged"
+      },
+      "type": "Microsoft.Sql/servers/encryptionProtector"
+    },
+    {
+      "apiVersion": "2020-08-01-preview",
+      "dependsOn": [
+        "[resourceId('Microsoft.Sql/servers', parameters('servers_sportsworldchicago_cloud_as2_name'))]"
+      ],
+      "name": "[concat(parameters('servers_sportsworldchicago_cloud_as2_name'), '/Default')]",
+      "properties": {
+        "auditActionsAndGroups": [],
+        "isAzureMonitorTargetEnabled": false,
+        "isStorageSecondaryKeyInUse": false,
+        "retentionDays": 0,
+        "state": "Disabled",
+        "storageAccountSubscriptionId": "00000000-0000-0000-0000-000000000000"
+      },
+      "type": "Microsoft.Sql/servers/extendedAuditingSettings"
+    },
+    {
+      "apiVersion": "2020-08-01-preview",
+      "dependsOn": [
+        "[resourceId('Microsoft.Sql/servers', parameters('servers_sportsworldchicago_cloud_as2_name'))]"
+      ],
+      "name": "[concat(parameters('servers_sportsworldchicago_cloud_as2_name'), '/AllowAllWindowsAzureIps')]",
+      "properties": {
+        "endIpAddress": "0.0.0.0",
+        "startIpAddress": "0.0.0.0"
+      },
+      "type": "Microsoft.Sql/servers/firewallRules"
+    },
+    {
+      "apiVersion": "2020-08-01-preview",
+      "dependsOn": [
+        "[resourceId('Microsoft.Sql/servers', parameters('servers_sportsworldchicago_cloud_as2_name'))]"
+      ],
+      "name": "[concat(parameters('servers_sportsworldchicago_cloud_as2_name'), '/ClientIp-2021-2-15_14-49-39')]",
+      "properties": {
+        "endIpAddress": "49.184.50.63",
+        "startIpAddress": "49.184.50.63"
+      },
+      "type": "Microsoft.Sql/servers/firewallRules"
+    },
+    {
+      "apiVersion": "2020-08-01-preview",
+      "dependsOn": [
+        "[resourceId('Microsoft.Sql/servers', parameters('servers_sportsworldchicago_cloud_as2_name'))]"
+      ],
+      "name": "[concat(parameters('servers_sportsworldchicago_cloud_as2_name'), '/ClientIp-optousau-iphone')]",
+      "properties": {
+        "endIpAddress": "122.150.73.89",
+        "startIpAddress": "122.150.73.89"
+      },
+      "type": "Microsoft.Sql/servers/firewallRules"
+    },
+    {
+      "apiVersion": "2020-08-01-preview",
+      "dependsOn": [
+        "[resourceId('Microsoft.Sql/servers', parameters('servers_sportsworldchicago_cloud_as2_name'))]"
+      ],
+      "kind": "servicemanaged",
+      "name": "[concat(parameters('servers_sportsworldchicago_cloud_as2_name'), '/ServiceManaged')]",
+      "properties": {
+        "serverKeyType": "ServiceManaged"
+      },
+      "type": "Microsoft.Sql/servers/keys"
+    },
+    {
+      "apiVersion": "2020-08-01-preview",
+      "dependsOn": [
+        "[resourceId('Microsoft.Sql/servers', parameters('servers_sportsworldchicago_cloud_as2_name'))]"
+      ],
+      "name": "[concat(parameters('servers_sportsworldchicago_cloud_as2_name'), '/Default')]",
+      "properties": {
+        "state": "Disabled"
+      },
+      "type": "Microsoft.Sql/servers/securityAlertPolicies"
+    },
+    {
+      "apiVersion": "2020-08-01-preview",
+      "dependsOn": [
+        "[resourceId('Microsoft.Sql/servers', parameters('servers_sportsworldchicago_cloud_as2_name'))]"
+      ],
+      "name": "[concat(parameters('servers_sportsworldchicago_cloud_as2_name'), '/Default')]",
+      "properties": {
+        "recurringScans": {
+          "emailSubscriptionAdmins": true,
+          "isEnabled": false
+        },
+        "storageContainerPath": "[parameters('vulnerabilityAssessments_Default_storageContainerPath')]"
+      },
+      "type": "Microsoft.Sql/servers/vulnerabilityAssessments"
+    },
+    {
+      "apiVersion": "2021-01-01",
+      "dependsOn": [
+        "[resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccounts_sportsworldchicago_name'))]"
+      ],
+      "name": "[concat(parameters('storageAccounts_sportsworldchicago_name'), '/default')]",
+      "properties": {
+        "cors": {
+          "corsRules": []
+        },
+        "deleteRetentionPolicy": {
+          "enabled": false
+        }
+      },
+      "sku": {
+        "name": "Standard_ZRS",
+        "tier": "Standard"
+      },
+      "type": "Microsoft.Storage/storageAccounts/blobServices"
+    },
+    {
+      "apiVersion": "2021-01-01",
+      "dependsOn": [
+        "[resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccounts_sportsworldchicago_name'))]"
+      ],
+      "name": "[concat(parameters('storageAccounts_sportsworldchicago_name'), '/default')]",
+      "properties": {
+        "cors": {
+          "corsRules": []
+        },
+        "protocolSettings": {
+          "smb": {}
+        },
+        "shareDeleteRetentionPolicy": {
+          "days": 15,
+          "enabled": true
+        }
+      },
+      "sku": {
+        "name": "Standard_ZRS",
+        "tier": "Standard"
+      },
+      "type": "Microsoft.Storage/storageAccounts/fileServices"
+    },
+    {
+      "apiVersion": "2021-01-01",
+      "dependsOn": [
+        "[resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccounts_sportsworldchicago_name'))]"
+      ],
+      "name": "[concat(parameters('storageAccounts_sportsworldchicago_name'), '/default')]",
+      "properties": {
+        "cors": {
+          "corsRules": []
+        }
+      },
+      "type": "Microsoft.Storage/storageAccounts/queueServices"
+    },
+    {
+      "apiVersion": "2021-01-01",
+      "dependsOn": [
+        "[resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccounts_sportsworldchicago_name'))]"
+      ],
+      "name": "[concat(parameters('storageAccounts_sportsworldchicago_name'), '/default')]",
+      "properties": {
+        "cors": {
+          "corsRules": []
+        }
+      },
+      "type": "Microsoft.Storage/storageAccounts/tableServices"
+    },
+    {
+      "apiVersion": "2018-11-01",
+      "dependsOn": [
+        "[resourceId('Microsoft.Web/serverfarms', parameters('serverfarms_ASP_sportsworldchicago_8812_name'))]"
+      ],
+      "kind": "app,linux",
+      "location": "East US",
+      "name": "[parameters('sites_sportsworld_as2_name')]",
+      "properties": {
+        "clientAffinityEnabled": false,
+        "clientCertEnabled": false,
+        "containerSize": 0,
+        "dailyMemoryTimeQuota": 0,
+        "enabled": true,
+        "hostNameSslStates": [
+          {
+            "hostType": "Standard",
+            "name": "[concat(parameters('sites_sportsworld_as2_name'), '.azurewebsites.net')]",
+            "sslState": "Disabled"
+          },
+          {
+            "hostType": "Repository",
+            "name": "[concat(parameters('sites_sportsworld_as2_name'), '.scm.azurewebsites.net')]",
+            "sslState": "Disabled"
+          }
+        ],
+        "hostNamesDisabled": false,
+        "httpsOnly": false,
+        "hyperV": false,
+        "isXenon": false,
+        "redundancyMode": "None",
+        "reserved": true,
+        "scmSiteAlsoStopped": false,
+        "serverFarmId": "[resourceId('Microsoft.Web/serverfarms', parameters('serverfarms_ASP_sportsworldchicago_8812_name'))]",
+        "siteConfig": {}
+      },
+      "type": "Microsoft.Web/sites"
+    },
+    {
+      "apiVersion": "2018-11-01",
+      "dependsOn": [
+        "[resourceId('Microsoft.Web/serverfarms', parameters('serverfarms_ASP_sportsworldchicago_8812_name'))]"
+      ],
+      "kind": "app,linux,container",
+      "location": "East US",
+      "name": "[parameters('sites_sportsworlddocker_name')]",
+      "properties": {
+        "clientAffinityEnabled": false,
+        "clientCertEnabled": false,
+        "containerSize": 0,
+        "dailyMemoryTimeQuota": 0,
+        "enabled": true,
+        "hostNameSslStates": [
+          {
+            "hostType": "Standard",
+            "name": "[concat(parameters('sites_sportsworlddocker_name'), '.azurewebsites.net')]",
+            "sslState": "Disabled"
+          },
+          {
+            "hostType": "Repository",
+            "name": "[concat(parameters('sites_sportsworlddocker_name'), '.scm.azurewebsites.net')]",
+            "sslState": "Disabled"
+          }
+        ],
+        "hostNamesDisabled": false,
+        "httpsOnly": false,
+        "hyperV": false,
+        "isXenon": false,
+        "redundancyMode": "None",
+        "reserved": true,
+        "scmSiteAlsoStopped": false,
+        "serverFarmId": "[resourceId('Microsoft.Web/serverfarms', parameters('serverfarms_ASP_sportsworldchicago_8812_name'))]",
+        "siteConfig": {}
+      },
+      "type": "Microsoft.Web/sites"
+    },
+    {
+      "apiVersion": "2018-11-01",
+      "dependsOn": [
+        "[resourceId('Microsoft.Web/sites', parameters('sites_sportsworld_as2_name'))]"
+      ],
+      "location": "East US",
+      "name": "[concat(parameters('sites_sportsworld_as2_name'), '/web')]",
+      "properties": {
+        "alwaysOn": false,
+        "autoHealEnabled": false,
+        "azureStorageAccounts": {
+          "cloud-as2": {
+            "accountName": "sportsworldchicago",
+            "mountPath": "/mnt/cloud-as2",
+            "shareName": "cloud-as2",
+            "type": "AzureFiles"
+          }
+        },
+        "defaultDocuments": [
+          "Default.htm",
+          "Default.html",
+          "Default.asp",
+          "index.htm",
+          "index.html",
+          "iisstart.htm",
+          "default.aspx",
+          "index.php",
+          "hostingstart.html"
+        ],
+        "detailedErrorLoggingEnabled": false,
+        "experiments": {
+          "rampUpRules": []
+        },
+        "ftpsState": "FtpsOnly",
+        "http20Enabled": false,
+        "httpLoggingEnabled": true,
+        "ipSecurityRestrictions": [
+          {
+            "action": "Allow",
+            "description": "Allow all access",
+            "ipAddress": "Any",
+            "name": "Allow all",
+            "priority": 1
+          }
+        ],
+        "linuxFxVersion": "PYTHON|3.8",
+        "loadBalancing": "LeastRequests",
+        "localMySqlEnabled": false,
+        "logsDirectorySizeLimit": 35,
+        "managedPipelineMode": "Integrated",
+        "minTlsVersion": "1.2",
+        "netFrameworkVersion": "v4.0",
+        "numberOfWorkers": 1,
+        "publishingUsername": "$sportsworld-as2",
+        "remoteDebuggingEnabled": false,
+        "remoteDebuggingVersion": "VS2019",
+        "requestTracingEnabled": false,
+        "reservedInstanceCount": 0,
+        "scmIpSecurityRestrictions": [
+          {
+            "action": "Allow",
+            "description": "Allow all access",
+            "ipAddress": "Any",
+            "name": "Allow all",
+            "priority": 1
+          }
+        ],
+        "scmIpSecurityRestrictionsUseMain": false,
+        "scmType": "GitHubAction",
+        "use32BitWorkerProcess": true,
+        "virtualApplications": [
+          {
+            "physicalPath": "site\\wwwroot",
+            "preloadEnabled": false,
+            "virtualPath": "/"
+          }
+        ],
+        "webSocketsEnabled": false
+      },
+      "type": "Microsoft.Web/sites/config"
+    },
+    {
+      "apiVersion": "2018-11-01",
+      "dependsOn": [
+        "[resourceId('Microsoft.Web/sites', parameters('sites_sportsworlddocker_name'))]"
+      ],
+      "location": "East US",
+      "name": "[concat(parameters('sites_sportsworlddocker_name'), '/web')]",
+      "properties": {
+        "alwaysOn": false,
+        "autoHealEnabled": false,
+        "azureStorageAccounts": {},
+        "defaultDocuments": [
+          "Default.htm",
+          "Default.html",
+          "Default.asp",
+          "index.htm",
+          "index.html",
+          "iisstart.htm",
+          "default.aspx",
+          "index.php",
+          "hostingstart.html"
+        ],
+        "detailedErrorLoggingEnabled": false,
+        "experiments": {
+          "rampUpRules": []
+        },
+        "ftpsState": "AllAllowed",
+        "http20Enabled": false,
+        "httpLoggingEnabled": false,
+        "ipSecurityRestrictions": [
+          {
+            "action": "Allow",
+            "description": "Allow all access",
+            "ipAddress": "Any",
+            "name": "Allow all",
+            "priority": 1
+          }
+        ],
+        "linuxFxVersion": "COMPOSE|dmVyc2lvbjogJzMuNCcKCnNlcnZpY2VzOgogIHNwb3J0c3dvcmxkYXBwOgogICAgaW1hZ2U6IGVsYXN0aWNkb3R2ZW50dXJlcy5henVyZWNyLmlvL3Nwb3J0c3dvcmxkYXBwCiAgICB2b2x1bWVzOiAKICAgICAgLSBzcG9ydHN3b3JsZC1henVyZS1hczI6L21udC9jbG91ZC1hczIKICAgIGVudmlyb25tZW50OgogICAgICBBWlVSRV9DTElFTlRfSUQ6IGY5YWQxMGVmLTYzYjktNDkxOC1hN2RjLWIwOWVjNmJjMTc3NAogICAgICBBWlVSRV9DTElFTlRfU0VDUkVUOiAxNDBkMTFlNS1lOGQxLTRmZjEtYTc3My00OGUxZGZjM2RmN2MKICAgICAgQVpVUkVfVEVOQU5UX0lEOiAyNjMyMDM0My1iZDUwLTQwYjEtODJkZC04NjViYjI4ZGQyNjYKICAgIGJ1aWxkOgogICAgICBjb250ZXh0OiAuCiAgICAgIGRvY2tlcmZpbGU6IC4vRG9ja2VyZmlsZQogICAgcG9ydHM6CiAgICAgIC0gODAwMDo4MDAwCgp2b2x1bWVzOgogIHNwb3J0c3dvcmxkLWF6dXJlLWFzMjoKICAgIGV4dGVybmFsOiB0cnVlCg==",
+        "loadBalancing": "LeastRequests",
+        "localMySqlEnabled": false,
+        "logsDirectorySizeLimit": 35,
+        "managedPipelineMode": "Integrated",
+        "minTlsVersion": "1.2",
+        "netFrameworkVersion": "v4.0",
+        "numberOfWorkers": 1,
+        "publishingUsername": "$sportsworlddocker",
+        "remoteDebuggingEnabled": false,
+        "remoteDebuggingVersion": "VS2019",
+        "requestTracingEnabled": false,
+        "reservedInstanceCount": 0,
+        "scmIpSecurityRestrictions": [
+          {
+            "action": "Allow",
+            "description": "Allow all access",
+            "ipAddress": "Any",
+            "name": "Allow all",
+            "priority": 1
+          }
+        ],
+        "scmIpSecurityRestrictionsUseMain": false,
+        "scmType": "None",
+        "use32BitWorkerProcess": true,
+        "virtualApplications": [
+          {
+            "physicalPath": "site\\wwwroot",
+            "preloadEnabled": false,
+            "virtualPath": "/"
+          }
+        ],
+        "webSocketsEnabled": false
+      },
+      "type": "Microsoft.Web/sites/config"
+    },
+    {
+      "apiVersion": "2018-11-01",
+      "dependsOn": [
+        "[resourceId('Microsoft.Web/sites', parameters('sites_sportsworld_as2_name'))]"
+      ],
+      "location": "East US",
+      "name": "[concat(parameters('sites_sportsworld_as2_name'), '/1dccf5aa-67f4-431b-93b1-459906f79756')]",
+      "properties": {
+        "active": false,
+        "author": "N/A",
+        "author_email": "N/A",
+        "deployer": "GITHUB_ZIP_DEPLOY",
+        "end_time": "2021-03-30T23:37:33.1350802Z",
+        "message": "{\"type\":\"deployment\",\"sha\":\"e8628fb0edb9f22a260192013294ed64a50537cf\",\"repoName\":\"elasticdotventures/sportsworldchicago-as2\",\"slotName\":\"production\"}",
+        "start_time": "2021-03-30T23:34:14.6314241Z",
+        "status": 4
+      },
+      "type": "Microsoft.Web/sites/deployments"
+    },
+    {
+      "apiVersion": "2018-11-01",
+      "dependsOn": [
+        "[resourceId('Microsoft.Web/sites', parameters('sites_sportsworld_as2_name'))]"
+      ],
+      "location": "East US",
+      "name": "[concat(parameters('sites_sportsworld_as2_name'), '/3452b606-7afc-441b-82ea-0f28623bb660')]",
+      "properties": {
+        "active": true,
+        "author": "N/A",
+        "author_email": "N/A",
+        "deployer": "GITHUB_ZIP_DEPLOY",
+        "end_time": "2021-04-02T08:27:13.5623935Z",
+        "message": "{\"type\":\"deployment\",\"sha\":\"b9efed6af4f6d46c31d246c8ea918d5e4d158977\",\"repoName\":\"elasticdotventures/sportsworldchicago-as2\",\"slotName\":\"production\"}",
+        "start_time": "2021-04-02T08:24:29.957325Z",
+        "status": 4
+      },
+      "type": "Microsoft.Web/sites/deployments"
+    },
+    {
+      "apiVersion": "2018-11-01",
+      "dependsOn": [
+        "[resourceId('Microsoft.Web/sites', parameters('sites_sportsworld_as2_name'))]"
+      ],
+      "location": "East US",
+      "name": "[concat(parameters('sites_sportsworld_as2_name'), '/3663e56e-fed8-48cc-bb69-5930bac949db')]",
+      "properties": {
+        "active": false,
+        "author": "N/A",
+        "author_email": "N/A",
+        "deployer": "GITHUB_ZIP_DEPLOY",
+        "end_time": "2021-03-31T00:16:04.2087484Z",
+        "message": "{\"type\":\"deployment\",\"sha\":\"a8104b04d05eea844b162ec53d305548c5fdd394\",\"repoName\":\"elasticdotventures/sportsworldchicago-as2\",\"slotName\":\"production\"}",
+        "start_time": "2021-03-31T00:13:40.4589842Z",
+        "status": 4
+      },
+      "type": "Microsoft.Web/sites/deployments"
+    },
+    {
+      "apiVersion": "2018-11-01",
+      "dependsOn": [
+        "[resourceId('Microsoft.Web/sites', parameters('sites_sportsworld_as2_name'))]"
+      ],
+      "location": "East US",
+      "name": "[concat(parameters('sites_sportsworld_as2_name'), '/44664e84-a9af-4d9e-a358-985803a3eb85')]",
+      "properties": {
+        "active": false,
+        "author": "N/A",
+        "author_email": "N/A",
+        "deployer": "GITHUB_ZIP_DEPLOY",
+        "end_time": "2021-03-31T22:56:06.5354552Z",
+        "message": "{\"type\":\"deployment\",\"sha\":\"e3c9c5713b8329fa7b9e737bfc7df82be59f63ad\",\"repoName\":\"elasticdotventures/sportsworldchicago-as2\",\"slotName\":\"production\"}",
+        "start_time": "2021-03-31T22:53:41.4813864Z",
+        "status": 4
+      },
+      "type": "Microsoft.Web/sites/deployments"
+    },
+    {
+      "apiVersion": "2018-11-01",
+      "dependsOn": [
+        "[resourceId('Microsoft.Web/sites', parameters('sites_sportsworld_as2_name'))]"
+      ],
+      "location": "East US",
+      "name": "[concat(parameters('sites_sportsworld_as2_name'), '/5b403578-5985-4aee-a5fc-cd1d00ac4d33')]",
+      "properties": {
+        "active": false,
+        "author": "N/A",
+        "author_email": "N/A",
+        "deployer": "GITHUB_ZIP_DEPLOY",
+        "end_time": "2021-03-18T00:35:20.5555934Z",
+        "message": "{\"type\":\"deployment\",\"sha\":\"f2dab755ca293cacb44d29440a435f7de6152582\",\"repoName\":\"elasticdotventures/sportsworldchicago-as2\",\"slotName\":\"production\"}",
+        "start_time": "2021-03-18T00:32:47.0696873Z",
+        "status": 4
+      },
+      "type": "Microsoft.Web/sites/deployments"
+    },
+    {
+      "apiVersion": "2018-11-01",
+      "dependsOn": [
+        "[resourceId('Microsoft.Web/sites', parameters('sites_sportsworld_as2_name'))]"
+      ],
+      "location": "East US",
+      "name": "[concat(parameters('sites_sportsworld_as2_name'), '/7a6ef7b8-beff-440c-9562-8a84306d6f30')]",
+      "properties": {
+        "active": false,
+        "author": "N/A",
+        "author_email": "N/A",
+        "deployer": "GITHUB_ZIP_DEPLOY",
+        "end_time": "2021-03-31T00:34:30.0290328Z",
+        "message": "{\"type\":\"deployment\",\"sha\":\"6c4fc4be504289f36c8c6784c0c3d0ad67a48d5d\",\"repoName\":\"elasticdotventures/sportsworldchicago-as2\",\"slotName\":\"production\"}",
+        "start_time": "2021-03-31T00:32:09.9243939Z",
+        "status": 4
+      },
+      "type": "Microsoft.Web/sites/deployments"
+    },
+    {
+      "apiVersion": "2018-11-01",
+      "dependsOn": [
+        "[resourceId('Microsoft.Web/sites', parameters('sites_sportsworld_as2_name'))]"
+      ],
+      "location": "East US",
+      "name": "[concat(parameters('sites_sportsworld_as2_name'), '/80471182-ae34-4474-acbf-d28e4173c466')]",
+      "properties": {
+        "active": false,
+        "author": "N/A",
+        "author_email": "N/A",
+        "deployer": "GITHUB_ZIP_DEPLOY",
+        "end_time": "2021-03-16T01:18:24.4682764Z",
+        "message": "{\"type\":\"deployment\",\"sha\":\"90415979ab46ac17b0b11008e71a8c4ba9148f14\",\"repoName\":\"elasticdotventures/sportsworldchicago-as2\",\"slotName\":\"production\"}",
+        "start_time": "2021-03-16T01:16:03.1140425Z",
+        "status": 4
+      },
+      "type": "Microsoft.Web/sites/deployments"
+    },
+    {
+      "apiVersion": "2018-11-01",
+      "dependsOn": [
+        "[resourceId('Microsoft.Web/sites', parameters('sites_sportsworld_as2_name'))]"
+      ],
+      "location": "East US",
+      "name": "[concat(parameters('sites_sportsworld_as2_name'), '/a4202e01-0fda-45b1-b904-1639964412c8')]",
+      "properties": {
+        "active": false,
+        "author": "N/A",
+        "author_email": "N/A",
+        "deployer": "GITHUB_ZIP_DEPLOY",
+        "end_time": "2021-03-30T23:46:49.0754429Z",
+        "message": "{\"type\":\"deployment\",\"sha\":\"e0e65be06d1f2c90ceb44983e47f44341d21454d\",\"repoName\":\"elasticdotventures/sportsworldchicago-as2\",\"slotName\":\"production\"}",
+        "start_time": "2021-03-30T23:44:16.5746632Z",
+        "status": 4
+      },
+      "type": "Microsoft.Web/sites/deployments"
+    },
+    {
+      "apiVersion": "2018-11-01",
+      "dependsOn": [
+        "[resourceId('Microsoft.Web/sites', parameters('sites_sportsworld_as2_name'))]"
+      ],
+      "location": "East US",
+      "name": "[concat(parameters('sites_sportsworld_as2_name'), '/dd9a0163-37b7-40d4-8651-595c1aa0e7cc')]",
+      "properties": {
+        "active": false,
+        "author": "N/A",
+        "author_email": "N/A",
+        "deployer": "GITHUB_ZIP_DEPLOY",
+        "end_time": "2021-03-31T23:08:54.9478082Z",
+        "message": "{\"type\":\"deployment\",\"sha\":\"45e8369bb9bb8f50ce1b63fc63a623653a8bd1b0\",\"repoName\":\"elasticdotventures/sportsworldchicago-as2\",\"slotName\":\"production\"}",
+        "start_time": "2021-03-31T23:06:37.2439462Z",
+        "status": 4
+      },
+      "type": "Microsoft.Web/sites/deployments"
+    },
+    {
+      "apiVersion": "2018-11-01",
+      "dependsOn": [
+        "[resourceId('Microsoft.Web/sites', parameters('sites_sportsworld_as2_name'))]"
+      ],
+      "location": "East US",
+      "name": "[concat(parameters('sites_sportsworld_as2_name'), '/f69c4f81-b631-4ca2-8585-83a26469b547')]",
+      "properties": {
+        "active": false,
+        "author": "N/A",
+        "author_email": "N/A",
+        "deployer": "GITHUB_ZIP_DEPLOY",
+        "end_time": "2021-03-19T00:08:41.1595582Z",
+        "message": "{\"type\":\"deployment\",\"sha\":\"7b4e4b28da28b29f4b9e0de71d43039e1fac0dec\",\"repoName\":\"elasticdotventures/sportsworldchicago-as2\",\"slotName\":\"production\"}",
+        "start_time": "2021-03-19T00:06:25.3506311Z",
+        "status": 4
+      },
+      "type": "Microsoft.Web/sites/deployments"
+    },
+    {
+      "apiVersion": "2018-11-01",
+      "dependsOn": [
+        "[resourceId('Microsoft.Web/sites', parameters('sites_sportsworld_as2_name'))]"
+      ],
+      "location": "East US",
+      "name": "[concat(parameters('sites_sportsworld_as2_name'), '/', parameters('sites_sportsworld_as2_name'), '.azurewebsites.net')]",
+      "properties": {
+        "hostNameType": "Verified",
+        "siteName": "sportsworld-as2"
+      },
+      "type": "Microsoft.Web/sites/hostNameBindings"
+    },
+    {
+      "apiVersion": "2018-11-01",
+      "dependsOn": [
+        "[resourceId('Microsoft.Web/sites', parameters('sites_sportsworlddocker_name'))]"
+      ],
+      "location": "East US",
+      "name": "[concat(parameters('sites_sportsworlddocker_name'), '/', parameters('sites_sportsworlddocker_name'), '.azurewebsites.net')]",
+      "properties": {
+        "hostNameType": "Verified",
+        "siteName": "sportsworlddocker"
+      },
+      "type": "Microsoft.Web/sites/hostNameBindings"
+    },
+    {
+      "apiVersion": "2014-04-01",
+      "dependsOn": [
+        "[resourceId('Microsoft.Sql/servers/databases', parameters('servers_sportsworldchicago_cloud_as2_name'), 'django-as2')]",
+        "[resourceId('Microsoft.Sql/servers', parameters('servers_sportsworldchicago_cloud_as2_name'))]"
+      ],
+      "location": "East US",
+      "name": "[concat(parameters('servers_sportsworldchicago_cloud_as2_name'), '/django-as2/Default')]",
+      "properties": {
+        "auditingState": "Disabled"
+      },
+      "type": "Microsoft.Sql/servers/databases/auditingPolicies"
+    },
+    {
+      "apiVersion": "2020-08-01-preview",
+      "dependsOn": [
+        "[resourceId('Microsoft.Sql/servers/databases', parameters('servers_sportsworldchicago_cloud_as2_name'), 'django-as2')]",
+        "[resourceId('Microsoft.Sql/servers', parameters('servers_sportsworldchicago_cloud_as2_name'))]"
+      ],
+      "name": "[concat(parameters('servers_sportsworldchicago_cloud_as2_name'), '/django-as2/Default')]",
+      "properties": {
+        "isAzureMonitorTargetEnabled": false,
+        "retentionDays": 0,
+        "state": "Disabled",
+        "storageAccountSubscriptionId": "00000000-0000-0000-0000-000000000000"
+      },
+      "type": "Microsoft.Sql/servers/databases/auditingSettings"
+    },
+    {
+      "apiVersion": "2020-08-01-preview",
+      "dependsOn": [
+        "[resourceId('Microsoft.Sql/servers/databases', parameters('servers_sportsworldchicago_cloud_as2_name'), 'django-as2')]",
+        "[resourceId('Microsoft.Sql/servers', parameters('servers_sportsworldchicago_cloud_as2_name'))]"
+      ],
+      "name": "[concat(parameters('servers_sportsworldchicago_cloud_as2_name'), '/django-as2/default')]",
+      "properties": {
+        "monthlyRetention": "PT0S",
+        "weekOfYear": 0,
+        "weeklyRetention": "PT0S",
+        "yearlyRetention": "PT0S"
+      },
+      "type": "Microsoft.Sql/servers/databases/backupLongTermRetentionPolicies"
+    },
+    {
+      "apiVersion": "2020-08-01-preview",
+      "dependsOn": [
+        "[resourceId('Microsoft.Sql/servers/databases', parameters('servers_sportsworldchicago_cloud_as2_name'), 'django-as2')]",
+        "[resourceId('Microsoft.Sql/servers', parameters('servers_sportsworldchicago_cloud_as2_name'))]"
+      ],
+      "name": "[concat(parameters('servers_sportsworldchicago_cloud_as2_name'), '/django-as2/default')]",
+      "properties": {
+        "retentionDays": 7
+      },
+      "type": "Microsoft.Sql/servers/databases/backupShortTermRetentionPolicies"
+    },
+    {
+      "apiVersion": "2020-08-01-preview",
+      "dependsOn": [
+        "[resourceId('Microsoft.Sql/servers/databases', parameters('servers_sportsworldchicago_cloud_as2_name'), 'django-as2')]",
+        "[resourceId('Microsoft.Sql/servers', parameters('servers_sportsworldchicago_cloud_as2_name'))]"
+      ],
+      "name": "[concat(parameters('servers_sportsworldchicago_cloud_as2_name'), '/django-as2/Default')]",
+      "properties": {
+        "isAzureMonitorTargetEnabled": false,
+        "retentionDays": 0,
+        "state": "Disabled",
+        "storageAccountSubscriptionId": "00000000-0000-0000-0000-000000000000"
+      },
+      "type": "Microsoft.Sql/servers/databases/extendedAuditingSettings"
+    },
+    {
+      "apiVersion": "2014-04-01",
+      "dependsOn": [
+        "[resourceId('Microsoft.Sql/servers/databases', parameters('servers_sportsworldchicago_cloud_as2_name'), 'django-as2')]",
+        "[resourceId('Microsoft.Sql/servers', parameters('servers_sportsworldchicago_cloud_as2_name'))]"
+      ],
+      "location": "East US",
+      "name": "[concat(parameters('servers_sportsworldchicago_cloud_as2_name'), '/django-as2/Default')]",
+      "properties": {
+        "state": "Enabled"
+      },
+      "type": "Microsoft.Sql/servers/databases/geoBackupPolicies"
+    },
+    {
+      "apiVersion": "2020-08-01-preview",
+      "dependsOn": [
+        "[resourceId('Microsoft.Sql/servers/databases', parameters('servers_sportsworldchicago_cloud_as2_name'), 'django-as2')]",
+        "[resourceId('Microsoft.Sql/servers', parameters('servers_sportsworldchicago_cloud_as2_name'))]"
+      ],
+      "name": "[concat(parameters('servers_sportsworldchicago_cloud_as2_name'), '/django-as2/Default')]",
+      "properties": {
+        "state": "Disabled"
+      },
+      "type": "Microsoft.Sql/servers/databases/securityAlertPolicies"
+    },
+    {
+      "apiVersion": "2014-04-01",
+      "dependsOn": [
+        "[resourceId('Microsoft.Sql/servers/databases', parameters('servers_sportsworldchicago_cloud_as2_name'), 'django-as2')]",
+        "[resourceId('Microsoft.Sql/servers', parameters('servers_sportsworldchicago_cloud_as2_name'))]"
+      ],
+      "location": "East US",
+      "name": "[concat(parameters('servers_sportsworldchicago_cloud_as2_name'), '/django-as2/current')]",
+      "properties": {
+        "status": "Enabled"
+      },
+      "type": "Microsoft.Sql/servers/databases/transparentDataEncryption"
+    },
+    {
+      "apiVersion": "2020-08-01-preview",
+      "dependsOn": [
+        "[resourceId('Microsoft.Sql/servers/databases', parameters('servers_sportsworldchicago_cloud_as2_name'), 'django-as2')]",
+        "[resourceId('Microsoft.Sql/servers', parameters('servers_sportsworldchicago_cloud_as2_name'))]"
+      ],
+      "name": "[concat(parameters('servers_sportsworldchicago_cloud_as2_name'), '/django-as2/Default')]",
+      "properties": {
+        "recurringScans": {
+          "emailSubscriptionAdmins": true,
+          "isEnabled": false
+        }
+      },
+      "type": "Microsoft.Sql/servers/databases/vulnerabilityAssessments"
+    },
+    {
+      "apiVersion": "2021-01-01",
+      "dependsOn": [
+        "[resourceId('Microsoft.Storage/storageAccounts/blobServices', parameters('storageAccounts_sportsworldchicago_name'), 'default')]",
+        "[resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccounts_sportsworldchicago_name'))]"
+      ],
+      "name": "[concat(parameters('storageAccounts_sportsworldchicago_name'), '/default/azure-webjobs-hosts')]",
+      "properties": {
+        "defaultEncryptionScope": "$account-encryption-key",
+        "denyEncryptionScopeOverride": false,
+        "publicAccess": "None"
+      },
+      "type": "Microsoft.Storage/storageAccounts/blobServices/containers"
+    },
+    {
+      "apiVersion": "2021-01-01",
+      "dependsOn": [
+        "[resourceId('Microsoft.Storage/storageAccounts/blobServices', parameters('storageAccounts_sportsworldchicago_name'), 'default')]",
+        "[resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccounts_sportsworldchicago_name'))]"
+      ],
+      "name": "[concat(parameters('storageAccounts_sportsworldchicago_name'), '/default/azure-webjobs-secrets')]",
+      "properties": {
+        "defaultEncryptionScope": "$account-encryption-key",
+        "denyEncryptionScopeOverride": false,
+        "publicAccess": "None"
+      },
+      "type": "Microsoft.Storage/storageAccounts/blobServices/containers"
+    },
+    {
+      "apiVersion": "2021-01-01",
+      "dependsOn": [
+        "[resourceId('Microsoft.Storage/storageAccounts/blobServices', parameters('storageAccounts_sportsworldchicago_name'), 'default')]",
+        "[resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccounts_sportsworldchicago_name'))]"
+      ],
+      "name": "[concat(parameters('storageAccounts_sportsworldchicago_name'), '/default/scm-releases')]",
+      "properties": {
+        "defaultEncryptionScope": "$account-encryption-key",
+        "denyEncryptionScopeOverride": false,
+        "publicAccess": "None"
+      },
+      "type": "Microsoft.Storage/storageAccounts/blobServices/containers"
+    },
+    {
+      "apiVersion": "2021-01-01",
+      "dependsOn": [
+        "[resourceId('Microsoft.Storage/storageAccounts/fileServices', parameters('storageAccounts_sportsworldchicago_name'), 'default')]",
+        "[resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccounts_sportsworldchicago_name'))]"
+      ],
+      "name": "[concat(parameters('storageAccounts_sportsworldchicago_name'), '/default/cloud-as2')]",
+      "properties": {
+        "accessTier": "Hot",
+        "enabledProtocols": "SMB",
+        "shareQuota": 1
+      },
+      "type": "Microsoft.Storage/storageAccounts/fileServices/shares"
+    }
+  ],
+  "variables": {}
+}
