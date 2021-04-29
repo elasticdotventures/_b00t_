@@ -1,5 +1,9 @@
 # should be run by _b00t_
-source "../_b00t_.bashrc"
+source "/c0de/_b00t_/_b00t_.bashrc"
+
+## THIS COMMAND SEEMS TO WORK FOR DOCKER IN DOCKER. 
+# docker run -d --name systemd-ubuntu --tmpfs /tmp --tmpfs /run --tmpfs /run/lock  --mount type=bind,source="/c0de",target="/c0de"  --privileged -v /var/run/docker.sock:/var/run/docker.sock -v /sys/fs/cgroup:/sys/fs/cgroup:ro jrei/systemd-ubuntu
+# requires systemd-ubuntu base image. 
 
 ## * * * *// 
 #* 🐳Docker!
@@ -8,8 +12,10 @@ source "../_b00t_.bashrc"
 ## 鲸 \\
 # Jīng :: Whale
 
+log_📢_记录 "🤓 normal for docker Not Be Found:"
 WHATIS_DOCKER_VERSION=`docker -v`
 if [ $? -ne 0 ]; then
+    log_📢_记录 "💙 installing Docker"
     ##* * * * \\
     #* 🤓 Before you install Docker Engine for the first time on a new host machine, 
     #* you need to set up the Docker repository. Afterward, you can install and update 
@@ -18,43 +24,49 @@ if [ $? -ne 0 ]; then
     # docker not installed
     # https://docs.docker.com/engine/install/ubuntu/
     # 🐳 Remove Old Versions
-    sudo apt-get remove -y docker docker-engine docker.io containerd runc
+    $SUDO_CMD apt-get remove -y docker docker-engine docker.io containerd runc
     # 🐳🧹
-    sudo apt-get -y update
+    $SUDO_CMD apt-get -y update
     # 🐳 Install required modules 
-    sudo apt-get install \
+    $SUDO_CMD apt-get -y install \
         apt-transport-https \
         ca-certificates \
         curl \
         gnupg \
         lsb-release
     # 🐳 Add Dockers official GPG Key
-    curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg  
+    DOCKER_GPG_KEYRING="/usr/share/keyrings/docker-archive-keyring.gpg"
+    if [ ! -f $DOCKER_GPG_KEYRING ] ; then
+        curl -fsSL https://download.docker.com/linux/ubuntu/gpg | $SUDO_CMD gpg --dearmor -o $DOCKER_GPG_KEYRING  
+    fi 
     # 🐳 Use the following command to set up the stable repository
     echo \
         "deb [arch=amd64 signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu \
-        $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+        $(lsb_release -cs) stable" | $SUDO_CMD tee /etc/apt/sources.list.d/docker.list > /dev/null
     # 🐳🧹
-    sudo apt-get update -y
+    $SUDO_CMD apt-get update -y
     # 🐳
-    sudo apt-get install docker-ce docker-ce-cli containerd.io
+    $SUDO_CMD apt-get install -y docker-ce docker-ce-cli containerd.io
     ##* * * * // 
 fi
 # 🐳💥
-DOCKER_isHappy=`sudo docker run hello-world`
+DOCKER_isHappy=`$SUDO_CMD docker run hello-world`
 if [ -n "$DOCKER_isHappy" ] ; then
     echo "🐳💥 docker is br0ked. plz fix."
 fi
+
+
 #🐳⚠️ Adding a user to the “docker” group grants them the ability to run 
 # containers which can be used to obtain root privileges on the Docker host. 
 # Refer to Docker Daemon Attack Surface for more information.
-sudo usermod -aG docker `whoami`
+# sudo usermod -aG docker `whoami`
 
 # TODO: link to the Elasticdotventures repository
-# 
-docker build -t cowsay .
+
+# doesn't work presently:  
+#docker build -t cowsay .
 # 🐳♻️ It’s a good habit to use --rm to avoid filling up your system with stale Docker containers.
-docker run --rm cowsay 
+#docker run --rm cowsay 
 
 # Docker
 ## 鲸 //

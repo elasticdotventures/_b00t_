@@ -6,12 +6,14 @@
 #* 进口v2 🥾 ALWAYS load c0re Libraries!
 source "./_b00t_.bashrc"
 
-log_📢_记录 "🚀 install node"
-sudo snap install node --classic
+# future. 
 
-apt-get install npm 
-npm i -D foy
+# log_📢_记录 "🚀 install node"
+#sudo snap install node --classic
+
+#apt-get install npm 
+#npm i -D foy
 
 ## Yeoman is awesome. Going to use this: 
-npm install -g yo generator-code
+#npm install -g yo generator-code
 

@@ -19,6 +19,12 @@ source "../_b00t_.bashrc"
 # Bats: Bash Automated Testing System
 # https://github.com/sstephenson/bats
 
+# parameters:
+args=("$@")
+echo $# arguments passed
+echo ${args[0]} ${args[1]} ${args[2]}
+
+
 
 # String Library
 # https://github.com/zombieleet/bashify

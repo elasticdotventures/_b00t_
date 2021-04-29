@@ -45,7 +45,7 @@ Status: merging my own various scripts from other projects, setting up the inter
 ElasticDotVentures \_b00t_ is 
 a highly opinionated set of tools for deploying Azure cloud services with EV libraries (called "c0re", a subset of "c0de"), mostly for Azure 🤖.  \_b00t_ brings together a series of powerful Cloud tools to challenge certain traditions proffered by the academic establishment to encourage a non-traditional but extremely p0werful mix-martial-art-of-code.   This text here is mostly visionary explaining the "what" about _b00t_ which is presently early stage being re_b00t_ed😆 from my prior projects. 
 
-## Is _b00t_ better for individuals or teams?
+## Is _b00t_ a better for individuals or teams?
 Probably individuals is easier, certainly from an adoption standpoint. Not everybody can gr0k _b00t_.  If you can, great! _b00t_ means you don't need a team to do the stuff because _b00t_ does stuff for you.  Built by a serial-entrepeneur, _b00t_ is a great "stack" for Robotics & AI Startups where the product's very survival is often dependent on efficient (cost-saving) internal-tooling. 
 
 _b00t_ is also great for teams the VS Code Live Share feature & Remote Containers, and Azure Hybrid-Connections offers a plurality of one-click easy, low-latency for teams to share screens securely through firewalls.  It's built in a way so that you could give people their own instance of your code, even limit the amount of funding per-new-customer trial. Something like google Collab for startups. The author believes this is especially useful if (for example) you desire to collaborate with other researchers, especially Chinese ones (i.e. hardware startups) thanks to it's incorporation of Emoji and Pinyin. 
@@ -301,4 +301,7 @@ On Windows, make sure you're using WSL2 on Unbuntu 20.04 with Windows Terminal P
 I'm not gonna here, just read my Medium:
 https://brianhorakh.medium.com/emoji-logging-warning-much-silliness-ahead-4cae73d7089
 
+
+Future:
+https://unikraft.org/
 

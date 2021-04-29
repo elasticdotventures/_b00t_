@@ -5,19 +5,24 @@
 #*
 ## * * * *//
 
-source "../_b00t_.bashrc"
+source "/c0de/_b00t_/_b00t_.bashrc"
 
 
 function checkOS() {
     IS_supported=`cat /etc/os-release | grep "Ubuntu 20.04.2 LTS"`
     if [ -z "$IS_supported" ] ; then
         cat /etc/os-release
-        echo "👽不支持  OS not yet supported." && exit 0
+        log_📢_记录 "👽不支持  OS not yet supported." && exit 0
+        return 1
+    else
+        log_📢_记录
     fi
-    return "🙂"
+
+    return 
 }
 checkOS_result="$(checkOS)"
 echo "checkOS_result: $checkOS_result"
+
 
 #func(){
 #    echo "Username: $USER"
@@ -33,11 +38,12 @@ if [ "$EUID" -ne 0 ]
 fi
 ##* * * * * *//
 
-
 ## 命令 \\
 # Mìnglìng // Command   (mkdir)
 function mkdir_命令() {
-    dir=$1
+    args=("$@")
+    dir=${args[0]}
+    #dir=$1
     cmd="/bin/mkdir -p \"$dir\""
     result=$( "$cmd" )
     echo "🚀 $cmd"
@@ -52,10 +58,11 @@ function mkdir_命令() {
         fi
     fi
     }
-export mkdir_命令
-mkdir_命令 "$HOME/._b00t_"
-mkdir_命令 "$HOME/._b00t_/c0re"
-chmod 711 "$HOME/._b00t_/c0re"
+
+#export mkdir_命令
+#mkdir_命令 "$HOME/.b00t_"
+#mkdir_命令 "$HOME/.b00t_/c0re"
+#chmod 711 "$HOME/._00t_/c0re"
 ## 命令 // 
 
 
@@ -66,16 +73,16 @@ chmod 711 "$HOME/._b00t_/c0re"
 # 🍰 wget- HTTP i/o 
 # 🍰 curl- HTTP i/o 
 
-if [ ! -x "/usr/bin/fzf" or 
-     ! -x "/usr/bin/jq" or 
-     ! -x "/usr/bin/wget" ] ; then
-    sudo apt-get install -y fzf jq wget curl
+if  [ ! -x "/usr/bin/fzf" ] || \
+     [ ! -x "/usr/bin/jq" ] || \
+     [ ! -x "/usr/bin/wget" ]  ; then
+    $SUDO_CMD apt-get install -y fzf jq wget curl
 fi
 
 # _b00t_ cli - "/usr/local/bin/b00t"
 ## 
-if n0ta_file_📁_好不好 "/usr/local/bin/b00t" ; then
-    sudo ln -s /c0de/_b00t_/_b00t_-cli.sh /usr/local/bin/b00t
+if [ ! -f "/usr/local/bin/b00t" ] ; then
+    $SUDO_CMD ln -s /c0de/_b00t_/up-cli.sh /usr/local/bin/b00t
 fi
 
 ##* * * * * *//

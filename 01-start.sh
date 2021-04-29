@@ -6,6 +6,11 @@
 #*   access Azure
 ##* * * *//
 
+
+# docker run -d -it --name azcli --mount type=bind,source="/c0de",target=/c0de 
+
+
+
 # 🍰 https://stackoverflow.com/questions/192319/how-do-i-know-the-script-file-name-in-a-bash-script
 # 🍰 https://www.shell-tips.com/bash/environment-variables/
 # ------------- SCRIPT ------------- #
@@ -23,40 +28,64 @@
 source "./_b00t_.bashrc"
 
 
+# CRUDINI is used to store config values:
+# 
+# CRUDINI examples
+# 🤓 https://github.com/pixelb/crudini/blob/master/EXAMPLES
+export CRUDINI_CFGFILE=$(expandPath "~/.b00t/config.ini")
+if [ ! -d $CRUDINI_CFGFILE ] ; then
+    log_📢_记录 "🐭 no local $CRUDINI_CFGFILE"  
+    CRUDINI_DIR=`dirname $CRUDINI_CFGFILE`
+    log_📢_记录 "🥳 local dir $CRUDINI_DIR"  
+    if [ ! -d "$CRUDINI_DIR" ] ; then
+        log_📢_记录 "🧝 creating CRUDINI dir $CRUDINI_DIR"  
+        /bin/mkdir -p $CRUDINI_DIR
+        /bin/chmod 750 $CRUDINI_DIR
+        crudini --set $CRUDINI_CFGFILE '_syntax' "1"
+    else
+        log_📢_记录 "😃 CRUDINI local dir $CRUDINI_DIR exists"
+    fi
+fi
+
+#AZ_RESOURCE_ID= 
+#select character in Sheldon Leonard Penny Howard Raj
+#do
+#    echo "Selected character: $character"
+#    echo "Selected number: $REPLY"
+#done
+
+
 ## 进口 (Jìnkǒu :: Import/Load PHASE 1 * \\ 
 # _b00t_ Bin shell & helpers, logging. 
-#bash_source_加载 "$_B00T_C0DE_Path/./bash.🔨/c0re_init.🥾.sh"
+
+#bash_source_加载 "$_B00T_C0DE_Path/./bash.🔨/init.*.🥾.*.sh"
+
 
 ## 进口 (Jìnkǒu :: Import/Load) PHASE 2 * * \\ 
 # Two is Torvalds Tech (Linux & Git)
-#bash_source_加载 "$_B00T_C0DE_Path/./bash/c0re_init.*.🐧.sh"
-#bash_source_加载 "$_B00T_C0DE_Path/./bash.🔨/c0re_init.*.🐙.sh"
+#bash_source_加载 "$_B00T_C0DE_Path/./bash.🔨/init.*.🐧.*.sh"
+#bash_source_加载 "$_B00T_C0DE_Path/./bash.🔨/init.*.🐙.*.sh"
 
 # Also, Docker
-#bash_source_加载 "$_B00T_C0DE_Path/./bash.🔨/c0re_init.*.🐳.sh"
+#bash_source_加载 "$_B00T_C0DE_Path/./bash.🔨/init.*.🐳.*.sh"
 
 ## 进口 (Jìnkǒu :: Import/Load) PHASE 3 * * * \\ 
 ## minimal c0re Python 🐍
 # + establish .venv
-bash_source_加载 "$_B00T_C0DE_Path/./bash.🔨/c0re_init.*.🐍.sh"
-source .venv/bin/activate
-
-
-
-exit
-
+#bash_source_加载 "$_B00T_C0DE_Path/./bash.🔨/init.*.🐍.*sh"
+#source .venv/bin/activate
 
 ## Typescript & Node
-bash_source_加载 "$_B00T_C0DE_Path/./bash.🔨/c0re_init.*.🦄.🚀.sh"
+# bash_source_加载 "$_B00T_C0DE_Path/./bash.🔨/init.*.🚀.*.sh"
+# Future: 
+# bash_source_加载 "$_B00T_C0DE_Path/./bash.🔨/init.*.🦄.*.sh"
 
 ## 进口 (Jìnkǒu :: Import/Load) PHASE 4 * * * * \\ 
-bash_source_加载 "$_B00T_C0DE_Path/./bash/c0re_init.*.🤖.sh"
-bash_source_加载 "$_B00T_C0DE_Path/./bash/c0re_init.*.👾.sh"
-# AWS
+bash_source_加载 "$_B00T_C0DE_Path/./bash.🔨/init.*.🤖.*.sh"
+bash_source_加载 "$_B00T_C0DE_Path/./bash.🔨/init.*.👾.*.sh"
+
+# AWS, etc. 
 # bash_source_加载 "$_B00T_C0DE_Path/./bash/c0re_init.*.🦉.sh"
-
-
-exit;
 
 ## 进口 * * * // 
 

@@ -4,12 +4,12 @@
 ## * * * *\\
 
 #* 进口v2 🥾 ALWAYS load c0re Libraries!
-source "./_b00t_.bashrc"
+source "/c0de/_b00t_/_b00t_.bashrc"
 
 log_📢_记录 "🚀 install node"
-sudo snap install node --classic
+$SUDO_CMD snap install -y node --classic
 
-apt-get install npm 
+$SUDO_CMD apt-get install -y npm 
 npm i -D foy
 
 ## Yeoman is awesome. Going to use this: 

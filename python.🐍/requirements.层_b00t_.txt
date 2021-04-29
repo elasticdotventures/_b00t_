@@ -7,4 +7,6 @@ yq
 emoji>=1.2.0
 toml
 docopt
+# https://docker-py.readthedocs.io/en/stable/
+docker
 

@@ -31,4 +31,7 @@ Additional References:
 应用 Yìngyòng   ... application
 资源 Zīyuán     ... Resources
 
+# Azure
+组  Zǔ   ... Group, series, set, container (not docker)
 
+访问.控制 .. Access Control

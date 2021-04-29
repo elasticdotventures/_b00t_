@@ -29,7 +29,7 @@ fi
 ## Jìlù :: Record (Log)
 # 🤓 write to a log if you want using >> 
 function log_📢_记录() {
-    echo "$1"
+    echo "$@"
 }
 export -f log_📢_记录
 ## 记录 //
@@ -90,11 +90,13 @@ function bash_source_加载() {
         # trythis=$file
         # ${trythis:-$file}
         # 
+        log_📢_记录 "🧐 expand $file"
         file=$( expand $file )
-        log_📢_记录 "🧐 trying $file"
         
         if [ -x "$file" ] ; then
             log_📢_记录 "🧐 using $file"
+        else 
+            log_📢_记录 "😲 NOT EXECUTABLE $file"
         fi
 
     fi
@@ -161,7 +163,7 @@ function is_WSLv2_🐧💙🪟v2() {
 # 🍰 https://stackoverflow.com/questions/3963716/how-to-manually-expand-a-special-variable-ex-tilde-in-bash/29310477#29310477
 # converts string ~/.b00t to actual path
 # usage: path=$(expandPath '~/hello')
-expandPath() {
+function expandPath() {
   local path
   local -a pathElements resultPathElements
   IFS=':' read -r -a pathElements <<<"$1"
@@ -195,3 +197,26 @@ expandPath() {
   printf -v result '%s:' "${resultPathElements[@]}"
   printf '%s\n' "${result%:}"
 }
+
+
+## there's time we need to know reliably if we can run SUDO
+SUDO_CMD="/usr/bin/sudo"
+if [ -f "./dockerfile" ] ; then
+    log_📢_记录 "🐳😁 found DOCKER"  
+elif [ -f "$SUDO_CMD" ] ; then 
+    log_📢_记录 "🥳 found sudo"  
+else 
+    log_📢_记录 "🐭 missed SUDO, try running _b00t_ inside docker."
+    SUDO_CMD=""
+fi
+export SUDO_CMD
+
+if [ -z "$(whereis crudini)" ] ; then 
+    log_📢_记录 "🥳 need crudini to save data, installing now"  
+    $SUDO_CMD apt-get install crudini
+fi
+
+##
+export _user="$(id -u -n)" 
+export _uid="$(id -u)" 
+echo "🙇‍♂️ \$_user: $_user  \$_uid : $_uid"

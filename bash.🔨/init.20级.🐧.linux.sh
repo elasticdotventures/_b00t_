@@ -1,6 +1,6 @@
 # should be run by _b00t_
 
-source "../_b00t_.bashrc"
+source "/c0de/_b00t_/_b00t_.bashrc"
 
 ## * * * *// 
 #* 🐧 Purpose: b00tstraps t0rvalds t00ls. ;-) 
@@ -12,8 +12,8 @@ source "../_b00t_.bashrc"
 
 # yq, part II - Windows
 ## For WSL - snapd won't work properly unless we also: 
-if is_WSLv2_🐧💙🪟v2 ; then
-    sudo apt-get update && sudo apt-get install -yqq daemonize dbus-user-session fontconfig
+if  is_WSLv2_🐧💙🪟v2  ; then
+    $SUDO_CMD apt-get update && $SUDO_CMD apt-get install -yqq daemonize dbus-user-session fontconfig
 fi
 
 # 🍰 yq  - YAML config i/o    https://github.com/mikefarah/yq
@@ -21,7 +21,6 @@ if n0ta_xfile_📁_好不好 "/usr/bin/yq" ; then
     systemctl status snapd.service
     snap install
 fi
-
 
 if n0ta_xfile_📁_好不好 "/usr/bin/yq" ; then
     YQ_VERSION="v4.7.0"
@@ -35,3 +34,5 @@ if n0ta_xfile_📁_好不好 "/usr/bin/yq" ; then
     fi
 fi
 
+# software-properties-common tools is reuqired by git
+$SUDO_CMD apt install -y software-properties-common

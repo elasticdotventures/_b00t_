@@ -8,15 +8,17 @@ source "./_b00t_.bashrc"
 ## * * * *\\
 
 # Pip requires: 
-sudo apt install -y build-essential libssl-dev libffi-dev python3-dev
+$SUDO_CMD apt install -y build-essential libssl-dev libffi-dev python3-dev
 
 # Python init. 
 
-sudo apt install -y python3-pip
-sudo apt install -y python3-venv
+$SUDO_CMD apt install -y python3-pip
+$SUDO_CMD apt install -y python3-venv
 
 # Establish virtual environemnt
 python3 -m venv .venv
+
+# TODO: verify tests can be run!
 
 
 

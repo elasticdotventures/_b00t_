@@ -1,8 +1,13 @@
 # syntax=docker/dockerfile:latest
 
+# Emoji Support
+RUN locale-gen en_US.UTF-8
+ENV LANG en_US.UTF-8
+ENV LANGUAGE en_US:en
+ENV LC_ALL en_US.UTF-8
 
 USER root 
-SHELL 
+SHELL /bin/bash
 
 # 🤓 Dockerfile Best Practices
 # https://docs.docker.com/develop/develop-images/dockerfile_best-practices/
@@ -15,7 +20,7 @@ SHELL
 # passing ARGS
 # An ARG declared before a FROM is outside of a build stage, 
 # AND therefore can’t be used in any instruction after a FROM
-ARG outside_build_stagae
+# ARG outside_build_stage
 
 ## arg is an example argument, the exact nature of the syntax is 
 FROM ubuntu as 
@@ -36,28 +41,29 @@ CMD ["/usr/games/cowsay", "Dockerfiles are cool!"]
 # name and marks it as holding externally mounted volumes from 
 # native host or other containers.
 # 🤓 https://docs.docker.com/storage/volumes/
-VOLUME ["/var/www", "/var/log/apache2", "/etc/apache2"]
-
+# VOLUME ["/var/www", "/var/log/apache2", "/etc/apache2"]
 
 ##* * \\
 ## yg is a YAML parser/creator like jq (next), it is a cli for .json files
 ## 🍰 https://github.com/mikefarah/yq
-ENV YQ_VERSION="v4.2.0"  YQ_BINARY="yq_linux_amd64"
-RUN wget https://github.com/mikefarah/yq/releases/download/${VERSION}/${BINARY}.tar.gz -O - |\
- tar xz && mv ${BINARY} /usr/bin/yq
+#ENV YQ_VERSION="v4.2.0"  YQ_BINARY="yq_linux_amd64"
+#RUN wget https://github.com/mikefarah/yq/releases/download/${VERSION}/${BINARY}.tar.gz -O - |\
+# tar xz && mv ${BINARY} /usr/bin/yq
 ##* * //
 
 ##* * \\
 ## jq is a YAML parser/creator like yq (earlier), it is a cli for .yaml files
 ## 🍰 https://stedolan.github.io/jq/
-RUN apt-get install jq
+#RUN apt-get install jq
 ##* * //
 
 # Things to copy. 
 # ADD [--chown=<user>:<group>] <src>... <dest>
 
+ENV TZ="Australia/Melbourne"
+RUN DEBIAN_FRONTEND="noninteractive" apt-get -y install tzdata
 
-ENTRYPOINT [ "executable" ]
+#ENTRYPOINT [ "executable" ]
 ##🤓 snapshot/layer explained: 
 ## when FROM is executed, 
 ## files can be eliminated from forward repositories when
