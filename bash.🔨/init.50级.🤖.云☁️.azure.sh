@@ -7,40 +7,14 @@
 ## * * * * * * * * * * * //
 
 #* 进口v2 🥾 ALWAYS load c0re Libraries!
-source "./_b00t_.bashrc"
+source "/c0de/_b00t_/_b00t_.bashrc"
 
 
 ## * * * * \\
 # Example Function
-my_function () {
-  echo "some result"
-  return 55
-}
-my_function
-echo $?
-## * * * * //
 
-
-## * * * * \\
-# Get filename and --parameters
-filename=$1
-while getopts ":g:i:n:m:e:" arg; do
-  case $arg in
-    g) resourceGroup=$OPTARG;;
-    i) ID=$OPTARG;;
-    n) Name=$OPTARG;;
-    m) Manufacturing_date=$OPTARG;;
-    e) Expire_date=$OPTARG;;
-  esac
-done
-echo -e "\n$ID $Name\n"
-# ./bash-cmd.新.sh -g -i p001 -n 'Hot Cake' -m '01-01-2018' -e '06-01-2018'
-## * * * * //
-
-
-function_name () {
-  commands
-}
+# AZ CLI Beta
+pip3 install --pre --extra-index-url https://azcliprod.blob.core.windows.net/beta/simple/ azure-cli
 
 
 

@@ -23,12 +23,13 @@ gcloud init
 # https://blog.reverberate.org/2021/04/21/musttail-efficient-interpreters.html
 # https://github.com/protocolbuffers/protobuf/releases/tag/v3.15.8
 
+PROTOBUF_VERSION="3.15.8"
 cd /usr/local/src
-wget https://github.com/protocolbuffers/protobuf/releases/download/v3.15.8/protobuf-all-3.15.8.tar.gz
-tar -xzvf protobuf-all-3.15.8.tar.gz
-cd protobuf*
+wget https://github.com/protocolbuffers/protobuf/releases/download/v3.15.8/protobuf-all-$PROTOBUF_VERSION.tar.gz
+tar -xzf protobuf-all-$PROTOBUF_VERSION.tar.gz
+cd protobuf-$PROTOBUF_VERSION/
 ./configure
 make install
-
+cd ..
 
 

@@ -58,22 +58,22 @@ fi
 ## 进口 (Jìnkǒu :: Import/Load PHASE 1 * \\ 
 # _b00t_ Bin shell & helpers, logging. 
 
-#bash_source_加载 "$_B00T_C0DE_Path/./bash.🔨/init.*.🥾.*.sh"
+bash_source_加载 "$_B00T_C0DE_Path/./bash.🔨/init.*.🥾.*.sh"
 
 
 ## 进口 (Jìnkǒu :: Import/Load) PHASE 2 * * \\ 
 # Two is Torvalds Tech (Linux & Git)
-#bash_source_加载 "$_B00T_C0DE_Path/./bash.🔨/init.*.🐧.*.sh"
-#bash_source_加载 "$_B00T_C0DE_Path/./bash.🔨/init.*.🐙.*.sh"
+bash_source_加载 "$_B00T_C0DE_Path/./bash.🔨/init.*.🐧.*.sh"
+bash_source_加载 "$_B00T_C0DE_Path/./bash.🔨/init.*.🐙.*.sh"
 
 # Also, Docker
-#bash_source_加载 "$_B00T_C0DE_Path/./bash.🔨/init.*.🐳.*.sh"
+bash_source_加载 "$_B00T_C0DE_Path/./bash.🔨/init.*.🐳.*.sh"
 
 ## 进口 (Jìnkǒu :: Import/Load) PHASE 3 * * * \\ 
 ## minimal c0re Python 🐍
 # + establish .venv
-#bash_source_加载 "$_B00T_C0DE_Path/./bash.🔨/init.*.🐍.*sh"
-#source .venv/bin/activate
+bash_source_加载 "$_B00T_C0DE_Path/./bash.🔨/init.*.🐍.*sh"
+source .venv/bin/activate
 
 ## Typescript & Node
 # bash_source_加载 "$_B00T_C0DE_Path/./bash.🔨/init.*.🚀.*.sh"
@@ -95,6 +95,7 @@ bash_source_加载 "$_B00T_C0DE_Path/./bash.🔨/init.*.👾.*.sh"
 export c0re_pr0j3ct_id=`project`
 ##* * * * //
 
+exit 
 
 ## !TODO: Do you need a project name?
 ## !TODO: Do we have an AZ tenant Id?
