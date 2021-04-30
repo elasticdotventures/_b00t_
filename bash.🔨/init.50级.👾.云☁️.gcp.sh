@@ -22,6 +22,8 @@ gcloud init
 # https://github.com/protocolbuffers/protobuf
 # https://blog.reverberate.org/2021/04/21/musttail-efficient-interpreters.html
 # https://github.com/protocolbuffers/protobuf/releases/tag/v3.15.8
+# Parsing Protobuf at 2+GB/s: 
+# https://blog.reverberate.org/2021/04/21/musttail-efficient-interpreters.html
 
 PROTOBUF_VERSION="3.15.8"
 cd /usr/local/src

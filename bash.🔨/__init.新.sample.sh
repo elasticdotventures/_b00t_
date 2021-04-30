@@ -16,6 +16,9 @@ source "../_b00t_.bashrc"
 
 # README / bash scripting tips: 
 
+# declare
+# https://www.computerhope.com/unix/bash/declare.htm
+
 # Bats: Bash Automated Testing System
 # https://github.com/sstephenson/bats
 
