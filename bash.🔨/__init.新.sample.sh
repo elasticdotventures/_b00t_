@@ -16,6 +16,19 @@ source "../_b00t_.bashrc"
 
 # README / bash scripting tips: 
 
+# Bash Cheat Sheet:
+# https://devhints.io/bash
+
+# bash !$ notes: 
+# It's worth nothing the distinction between this !$ token 
+# and the special shell variable $_. Indeed, both expand to 
+# the last argument of the previous command. However, !$ is 
+# expanded during history expansion, while $_ is expanded 
+# during parameter expansion. One important consequence of 
+# this is that, when you use !$, the expanded command is 
+# saved in your history.
+
+
 # declare
 # https://www.computerhope.com/unix/bash/declare.htm
 

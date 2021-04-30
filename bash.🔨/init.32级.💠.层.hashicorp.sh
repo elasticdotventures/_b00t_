@@ -34,4 +34,4 @@ fi
 
 # 
 # sudo apt-get update && sudo apt-get install nomad
-
+vault server -dev

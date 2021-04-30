@@ -71,6 +71,12 @@ fi
 # 🐳♻️ It’s a good habit to use --rm to avoid filling up your system with stale Docker containers.
 #docker run --rm cowsay 
 
+# Azure ACI & Docker Compose Docs: 
+# https://docs.docker.com/cloud/aci-integration/
+
+# TODO: DOcker Hub Access Tokens
+# https://docs.docker.com/docker-hub/access-tokens/
+
 # Docker
 ## 鲸 //
 
