@@ -21,13 +21,19 @@ $SUDO_CMD apt-add-repository "deb [arch=amd64] https://apt.releases.hashicorp.co
 
 
 # https://learn.hashicorp.com/collections/vault/getting-started
-if [ ! -x $vault_bin ]
+if [ ! -x $vault_bin ] ; then
+    pwdWas=`pwd`
     tmpdir=`mktemp -d`
     cd $tmpdir
     wget https://releases.hashicorp.com/vault/1.7.1/vault_1.7.1_linux_amd64.zip
+    apt-get install -y unzip 
     unzip -d vault_1.7.1_linux_amd64.zip
     cp -fv vault /usr/bin/vault
+    cd $pwdWas
 fi
+
+mkdir -p /vault/data
+
 
 # Not using Packer
 # sudo apt-get update && sudo apt-get install Packer

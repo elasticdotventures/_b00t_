@@ -1,6 +1,8 @@
 # comment, ignored
 # 🤓 https://docs.docker.com/engine/reference/builder/#dockerignore-file
 
+.*
+.git/*
 */🐳*
 ./r3src_资源/README.md
 ./r3src_资源/*

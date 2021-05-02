@@ -16,14 +16,6 @@ sudo mv ./bicepinstall /usr/local/bin/bicep
 bicep --help
 
 
-
-# safely initialize _b00t_ bash
-if [ `type -t "_b00t_init_🚀_开始"` == "function" ]; then 
-    # detect _b00t_ environment 
-    _b00t_init_🚀_开始
-fi
-
-
 ##* * * * * * * *//
 #* 👾 Azure parameters: 
 ##* * * * * * * *\\
@@ -36,15 +28,6 @@ fi
 #  esac
 #done
 
-##* * * * * * * *//
-#* 👾 AZ_CLI
-# Install azure-cli (if needed), set $AZ_CLI variable
-##* * * * * * * *\\
-export AZ_CLI=`whereis az`
-if [ -z "$AZ_CLI" ] ; then 
-    sudo apt-get install -y azure-cli
-    export AZ_CLI=`whereis az`
-fi
 
 ##* * * * * * * *//
 #* 👾 $AZ_resourceGroup
@@ -58,6 +41,7 @@ fi
 
 echo "AZ_resourceGroup: $AZ_resourceGroup"
 export AZ_resourceGroup
+
 
 
 

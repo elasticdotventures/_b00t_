@@ -28,3 +28,21 @@ Build: linux/release/gnu
 Ethminer - GPU ethash miner
 minimal usage : ethminer [DEVICES_TYPE] [OPTIONS] -P... [-P...]
 
+
+# ChiaCoin
+# Checkout the source and install
+# git clone https://github.com/Chia-Network/chia-blockchain.git -b latest --recurse-submodules
+# cd chia-blockchain
+# chmod +x ./install.sh
+# ./install.sh
+
+. ./activate
+
+# for electron under ubuntu
+apt-get install -y libgtkextra-dev libgconf2-dev libnss3 libasound2 libxtst-dev
+apt-get install -y libatk-bridge-2.0-dev 
+apt-get install -y libgtk-3-0-0 libgtk-3.0-dev
+npm install electron -g
+# TO RUN:
+# chia/chia-blockhain/chia-blockchain-gui
+# 

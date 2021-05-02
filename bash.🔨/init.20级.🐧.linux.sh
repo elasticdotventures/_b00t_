@@ -1,5 +1,8 @@
 # should be run by _b00t_
 
+# SEARCH FOR A PACKAGE: 
+# apt-cache search libpackage
+
 source "/c0de/_b00t_/_b00t_.bashrc"
 
 ## * * * *// 
@@ -7,6 +10,11 @@ source "/c0de/_b00t_/_b00t_.bashrc"
 #* should be called directly from ./01-start.sh 
 ## * * * *\\
 
+if n0ta_xfile_📁_好不好 "/bin/sudo" ; then 
+    # this is correct (leaving for future linting)
+    $SUDO_CMD apt-get install -y sudo
+fi
+apt-get install -y sudo
 
 # todo: setup io_streams, ebpf intercepts. 
 
@@ -28,11 +36,11 @@ if n0ta_xfile_📁_好不好 "/usr/bin/yq" ; then
     wget https://github.com/mikefarah/yq/releases/download/${YQ_VERSION}/${YQ_BINARY}.tar.gz -O - |\
         tar xz && cp ${YQ_BINARY} /usr/bin/yq
 
-    if n0ta_file_📁_好不好 "/usr/bin/yq" ; then
+    if n0ta_xfile_📁_好不好 "/usr/bin/yq" ; then
         log_📢_记录 "💩 STILL missing /usr/bin/yq"
         exit
     fi
 fi
 
-# software-properties-common tools is reuqired by git
+# software-properties-common tools is required by git
 $SUDO_CMD apt install -y software-properties-common

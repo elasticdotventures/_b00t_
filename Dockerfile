@@ -1,13 +1,19 @@
 # syntax=docker/dockerfile:latest
 
-# Emoji Support
-RUN locale-gen en_US.UTF-8
-ENV LANG en_US.UTF-8
-ENV LANGUAGE en_US:en
-ENV LC_ALL en_US.UTF-8
+# TO BUILD:
+# ./build.sh 
+# TO RUN:
 
-USER root 
-SHELL /bin/bash
+
+# Docker uses the default 172.17.0.0/16 subnet for container networking. 
+
+# FROM python:3.7-alpine
+
+# shows secret from default secret location:
+# RUN --mount=type=secret,id=mysecret cat /run/secrets/mysecret
+
+# USER root 
+# SHELL /bin/bash
 
 # 🤓 Dockerfile Best Practices
 # https://docs.docker.com/develop/develop-images/dockerfile_best-practices/
@@ -22,19 +28,96 @@ SHELL /bin/bash
 # AND therefore can’t be used in any instruction after a FROM
 # ARG outside_build_stage
 
-## arg is an example argument, the exact nature of the syntax is 
-FROM ubuntu as 
-ARG arrrgh
-ARG CODE_VERSION=latest     # default 
-RUN if [ -z "$arrrgh" ] ; then \
-    echo "D0ck3r Starrtup 🐳🏴‍☠️🦜 arrrgh, was not provided"; \
- else \
-    echo "arrrgh 🐳🦜🏴‍☠️📢: $arrrgh /📢"; \
-    fi  \
-    # this example sets up $arrrgh which is an $arrrbitrary value! 
+FROM jrei/systemd-ubuntu as b00t_base
+MAINTAINER ops@elastic.ventures
+# docker run -d --name systemd-ubuntu --tmpfs /tmp --tmpfs /run --tmpfs /run/lock  --mount type=bind,source="/c0de",target="/c0de"  --privileged -v /var/run/docker.sock:/var/run/docker.sock -v /sys/fs/cgroup:/sys/fs/cgroup:ro jrei/systemd-ubuntu
 
-RUN apt update && apt install -y cowsay
-CMD ["/usr/games/cowsay", "Dockerfiles are cool!"]
+# Emoji Support
+RUN apt-get clean && apt-get update && apt-get install -y locales
+RUN locale-gen en_US.UTF-8
+ENV LANG en_US.UTF-8
+ENV LANGUAGE en_US:en
+ENV LC_ALL en_US.UTF-8
+
+# Timezone
+ENV DEBIAN_FRONTEND "noninteractive"
+ENV TZ "Australia/Melbourne"
+RUN apt-get -y install tzdata
+
+## DOCKER BUILD ENHANCEMENTS
+## https://docs.docker.com/develop/develop-images/build_enhancements/
+## 
+# download github public key
+#RUN mkdir -p -m 0600 ~/.ssh && ssh-keyscan github.com >> ~/.ssh/known_hosts
+# clone private repo
+#RUN --mount=type=ssh git clone git@github.com:myorg/myproject.git myproject
+# must run
+# $ docker build --ssh default .
+# docker --compress
+
+## Only for Dev & Test
+RUN apt-get update && apt-get install -y git gcc g++
+RUN git --version
+
+RUN apt-get install -y curl wget ca-certificates gnupg apt-utils
+
+# https://stackoverflow.com/questions/27701930/how-to-add-users-to-docker-container
+RUN useradd -ms /bin/bash brianh
+USER brianh
+WORKDIR /home/brianh
+
+# TODO: setup ps1, etc. 
+
+# VOLUME "/c0de/_b00t_" 
+COPY . /c0de/_b00t_
+WORKDIR /c0de/_b00t_
+
+# CURRENT ISSUE: 
+# file always rebuilds, full build takes too long,
+# not using stages YET
+RUN /c0de/_b00t_/source.sh "./bash.🔨/init.*.🥾.*.sh"; 
+#COPY "./bash.🔨/init.*.🥾.*.sh" "init.🥾.sh"
+#RUN "./init.🥾.sh"
+
+## 进口 (Jìnkǒu :: Import/Load) PHASE 2 * * \\ 
+# Two is Torvalds Tech (Linux & Git)
+RUN /c0de/_b00t_/source.sh "./bash.🔨/init.*.🐧.*.sh"; 
+RUN /c0de/_b00t_/source.sh "./bash.🔨/init.*.🐙.*.sh"; 
+RUN /c0de/_b00t_/source.sh "./bash.🔨/init.*.🐳.*.sh"; 
+
+## 进口 (Jìnkǒu :: Import/Load) PHASE 3 * * * \\ 
+## minimal c0re Python 🐍
+# + establish .venv
+RUN /c0de/_b00t_/source.sh "./bash.🔨/init.*.🐍.*sh";
+#RUN source .venv/bin/activate
+
+## Typescript & Node
+RUN /c0de/_b00t_/source.sh "./bash.🔨/init.*.🚀.*.sh" 
+RUN /c0de/_b00t_/source.sh "./bash.🔨/init.*.🦄.*.sh" 
+
+## 进口 (Jìnkǒu :: Import/Load) PHASE 4 * * * * \\ 
+RUN /c0de/_b00t_/source.sh "./bash.🔨/init.*.🤖.*.sh"
+RUN /c0de/_b00t_/source.sh "./bash.🔨/init.*.👾.*.sh"
+RUN /c0de/_b00t_/source.sh "./bash.🔨/init.*.🦉.*.sh"
+
+
+
+
+
+
+## arg is an example argument, the exact nature of the syntax is 
+# FROM ubuntu as 
+#ARG arrrgh
+#ARG CODE_VERSION=latest   
+#RUN if [ -z "$arrrgh" ] ; then \
+#    echo "D0ck3r Starrtup 🐳🏴‍☠️🦜 arrrgh, was not provided"; \
+# else \
+#    echo "arrrgh 🐳🦜🏴‍☠️📢: $arrrgh /📢"; \
+#    fi  \
+#    # this example sets up $arrrgh which is an $arrrbitrary value! 
+#
+#RUN apt update && apt install -y cowsay
+#CMD ["/usr/games/cowsay", "Dockerfiles are cool!"]
 #
 
 # The VOLUME instruction creates a mount point with the specified 
@@ -60,8 +143,6 @@ CMD ["/usr/games/cowsay", "Dockerfiles are cool!"]
 # Things to copy. 
 # ADD [--chown=<user>:<group>] <src>... <dest>
 
-ENV TZ="Australia/Melbourne"
-RUN DEBIAN_FRONTEND="noninteractive" apt-get -y install tzdata
 
 #ENTRYPOINT [ "executable" ]
 ##🤓 snapshot/layer explained: 
@@ -76,36 +157,32 @@ RUN DEBIAN_FRONTEND="noninteractive" apt-get -y install tzdata
 # To enable ssh & remote debugging on app service change the base image to the one below
 # FROM mcr.microsoft.com/azure-functions/python:3.0-python3.8-appservice
 
-FROM base AS live-branch-v1
-RUN echo "live Branch sets Is_EnvLive=1"
-ENV _Env_Is="live" \
-    Is_EnvDev=0    \
-    Is_EnvTest=0   \
-    Is_EnvLive=1   
+#FROM base AS live-branch-v1
+#RUN echo "live Branch sets Is_EnvLive=1"
+#ENV _Env_Is="live" \
+#    Is_EnvDev=0    \
+#    Is_EnvTest=0   \
+#    Is_EnvLive=1   
 
-FROM base AS dev-branch-v1
-RUN echo "dev Branch sets Is_EnvDev=1"
-ENV _Env_Is="dev" \
-    Is_EnvDev=1   \
-    Is_EnvTest=0  \
-    Is_EnvLive=0  
+#FROM base AS dev-branch-v1
+#RUN echo "dev Branch sets Is_EnvDev=1"
+#ENV _Env_Is="dev" \
+#    Is_EnvDev=1   \
+#    Is_EnvTest=0  \
+#    Is_EnvLive=0  
 
-FROM base AS test-branch-v1
-RUN echo "test Branch sets Is_EnvTest=1"
-ENV _Env_Is="test"
-ENV Is_EnvDev=1   \
-    Is_EnvTest=0  \
-    Is_EnvLive=0  
+#FROM base AS test-branch-v1
+#RUN echo "test Branch sets Is_EnvTest=1"
+#ENV _Env_Is="test"
+#ENV Is_EnvDev=1   \
+#    Is_EnvTest=0  \
+#    Is_EnvLive=0  
 
-## Only for Dev & Test
-RUN apt-get update && apt-get install -y git gcc g++
-RUN git --version
 
 # apparently LABEL is documented in docs, but not actually supported.
 # LABEL description="experimental sportsworldas2 instance"
 
 
-RUN apt-get install -y curl wget ca-certificates gnupg apt-utils
 
 
 ## Google Cloud SDK
@@ -120,7 +197,7 @@ RUN apt-get install -y curl wget ca-certificates gnupg apt-utils
 # RUN sudo mysql_secure_installation
 
 # https://hub.docker.com/_/mariadb
-RUN apt-get install -y libmysqlclient-dev
+# RUN apt-get install -y libmysqlclient-dev
 
 ## attempt 1: .. untested!
 # RUN docker pull mariadb/server:latest
@@ -164,7 +241,7 @@ RUN apt-get install -y libmysqlclient-dev
 
 ### https://computingforgeeks.com/how-to-install-podman-on-debian/
 ## step1: update system
-RUN apt -y update && apt -y upgrade
+# RUN apt -y update && apt -y upgrade
 ## step2: install pre-reqs
 #RUN apt -y install \
 #  gcc \
@@ -257,23 +334,23 @@ RUN apt -y update && apt -y upgrade
 # RUN pip install 
 
 # Install pip requirements
-RUN apt-get install -y gunicorn
-RUN apt-get install -y python-gevent
+#RUN apt-get install -y gunicorn
+#RUN apt-get install -y python-gevent
 # RUN python -m pip install gunicorn
 
 
 
 ## django dir
-COPY ./django /home/site/wwwroot/
+#COPY ./django /home/site/wwwroot/
 
 ## NOTE: at this point django/* is in /home/site/wwwroot
 ## it's MOVED UP a level in the tree so ./wwwroot == ./django
-WORKDIR /home/site/
-RUN pip install -r ./wwwroot/requirements.txt
+#WORKDIR /home/site/
+#RUN pip install -r ./wwwroot/requirements.txt
 
 # move back to wwwroot so djapp.wsgi can be found! 
-WORKDIR /home/site/wwwroot
-RUN touch ./docker_build_time.txt
+#WORKDIR /home/site/wwwroot
+#RUN touch ./docker_build_time.txt
 
 # During debugging, this entry point will be overridden. For more information, please refer to https://aka.ms/vscode-docker-python-debug
 # File wsgi.py was not found in subfolder: 'sportsworld-as2'. Please enter the Python path to wsgi file.
@@ -282,7 +359,7 @@ RUN touch ./docker_build_time.txt
 # COPY ./startup.sh /
 # RUN chmod +x /startup.sh
 
-CMD [ "/bin/sh", "-c", "/home/site/wwwroot/startup.sh" ]
+# CMD [ "/bin/sh", "-c", "/home/site/wwwroot/startup.sh" ]
 
 
 
