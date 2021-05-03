@@ -5,7 +5,10 @@
 #*
 ## * * * *//
 
+# Boot functions
 source "/c0de/_b00t_/_b00t_.bashrc"
+
+source "$_B00T_C0DE_Path/./bash.🔨/.bash_aliases"
 
 
 function checkOS() {
@@ -15,13 +18,13 @@ function checkOS() {
         log_📢_记录 "👽不支持  OS not yet supported." && exit 0
         return 1
     else
-        log_📢_记录
+        log_📢_记录 "👍 OS is supported"
     fi
 
     return 
 }
 checkOS_result="$(checkOS)"
-echo "checkOS_result: $checkOS_result"
+#echo "checkOS_result: $checkOS_result"
 
 
 #func(){
@@ -79,6 +82,43 @@ if  [ ! -x "/usr/bin/fzf" ] || \
     $SUDO_CMD apt-get install -y fzf jq wget curl
 fi
 
+if n0ta_xfile_📁_好不好 "/usr/bin/fdfind"  ; then
+    ## some other applications we'll need
+    # 🤓 https://github.com/sharkdp/fd#installation
+    $SUDO_CMD apt install -y fd-find
+    log_📢_记录 "😇.install fd-find helper (fd)"
+
+    $SUDO_CMD mkdir -p ~/.local/bin
+    $SUDO_CMD ln -s $(which fdfind) ~/.local/bin/fd
+fi
+
+if n0ta_xfile_📁_好不好 "/usr/bin/rg" ; then
+    # RipGrep
+    # 🤓 https://github.com/BurntSushi/ripgrep#installation
+    curl -LO https://github.com/BurntSushi/ripgrep/releases/download/12.1.1/ripgrep_12.1.1_amd64.deb
+    log_📢_记录 "😇.install ripgrep (rg)"
+    $SUDO_CMD dpkg -i ripgrep_12.1.1_amd64.deb
+    #OR .. sudo apt-get install ripgrep
+fi
+
+if n0ta_xfile_📁_好不好 "/usr/bin/whiptail" ; then 
+    # whiptail makes interactive menus
+    # 🤓 https://en.wikibooks.org/wiki/Bash_Shell_Scripting/Whiptail
+    log_📢_记录 "😇.install whiptail menus"
+    $SUDO_CMD apt-get install -y whiptail
+fi
+
+if n0ta_xfile_📁_好不好 "/usr/bin/batcat" ; then 
+    log_📢_记录 "😇.install batcat (bat), replaces cat"
+    $SUDO_CMD apt install bat
+    $SUDO_CMD mkdir -p ~/.local/bin
+    ln -s /usr/bin/batcat ~/.local/bin/bat
+    # example with fzf:
+    # fzf --preview 'batcat --style numbers,changes --color=always {} | head -50'
+fi
+
+
+
 # _b00t_ cli - "/usr/local/bin/b00t"
 ## 
 if [ ! -f "/usr/local/bin/b00t" ] ; then
@@ -88,18 +128,4 @@ fi
 ##* * * * * *//
 
 
-##* * * * * *\\
-## generates a random number between 0 and \$1
-# usage: 
-# rand0_result="$(rand0 100)"
-# echo \$rand0_result
-
-function rand0() {
-    max="$1"
-    rand0=$( bc <<< "scale=2; $(printf '%d' $(( $RANDOM % $max)))" ) ;
-    # rand0=$( echo $RANDOM % $max ) ; 
-    echo $rand0
-}
-
-##* * * * * *//
 

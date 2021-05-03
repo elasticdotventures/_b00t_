@@ -2,6 +2,8 @@
 # The Jargon File, colliquolialsims.
 # This is a registry of l0re and meanings:
 
+名 : Míng : Name 
+
 绿色 : Lǜsè : "Green Color" Google
 蓝色 : Lán sè : "Blue Color" anything Microsoft, including Azure
 

@@ -19,6 +19,11 @@ chmod +x /usr/local/bin/az
 # https://docs.microsoft.com/en-us/python/api/overview/azure/servicebus-readme?view=azure-python
 pip3 install azure-servicebus
 
+# Identity
+pip install azure-identity
+az login
+az login --use-device-code
+
 # https://github.com/census-instrumentation/opencensus-python/tree/master/contrib/opencensus-ext-azure
 # https://pypi.org/project/opencensus-ext-azure/
 pip3 install opencensus-ext-azure

@@ -80,3 +80,15 @@ fi
 # Docker
 ## 鲸 //
 
+ docker service create \
+    --mount 'type=volume,src=b00t,dst=/c0de/b00t,volume-driver=local'
+    --name b00t \
+    <IMAGE>
+
+# todo: https://docs.docker.com/storage/bind-mounts/
+docker --mount
+
+
+docker service create \
+    --mount type=bind,source=/c0de/b00t,target=/c0de/b00t \
+    --name b00t 

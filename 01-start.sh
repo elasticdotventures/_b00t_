@@ -28,24 +28,6 @@
 source "./_b00t_.bashrc"
 
 
-# CRUDINI is used to store config values:
-# 
-# CRUDINI examples
-# 🤓 https://github.com/pixelb/crudini/blob/master/EXAMPLES
-export CRUDINI_CFGFILE=$(expandPath "~/.b00t/config.ini")
-if [ ! -d $CRUDINI_CFGFILE ] ; then
-    log_📢_记录 "🐭 no local $CRUDINI_CFGFILE"  
-    CRUDINI_DIR=`dirname $CRUDINI_CFGFILE`
-    log_📢_记录 "🥳 local dir $CRUDINI_DIR"  
-    if [ ! -d "$CRUDINI_DIR" ] ; then
-        log_📢_记录 "🧝 creating CRUDINI dir $CRUDINI_DIR"  
-        /bin/mkdir -p $CRUDINI_DIR
-        /bin/chmod 750 $CRUDINI_DIR
-        crudini --set $CRUDINI_CFGFILE '_syntax' "1"
-    else
-        log_📢_记录 "😃 CRUDINI local dir $CRUDINI_DIR exists"
-    fi
-fi
 
 #AZ_RESOURCE_ID= 
 #select character in Sheldon Leonard Penny Howard Raj

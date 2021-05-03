@@ -14,6 +14,7 @@ set -o nounset    # Exposes unset variables, strict mode.
 # THINGS YOU CAN EDIT: 
 export _B00T_C0DE_Path="/c0de/_b00t_"        
 export _B00T_C0NFIG_Path="$HOME/.b00t"
+_b00t_INSPIRATION_FILE="$_B00T_C0DE_Path/./r3src_资源/inspiration.json"
 ## 小路 //
 
 
@@ -199,24 +200,134 @@ function expandPath() {
 }
 
 
+##* * * * * *\\
+## 📽️ Pr0J3ct1D
+## uses inspiration
+##* * * * * *//
+function Pr0J3ct1D {
+    local wordCount=$( cat $_b00t_INSPIRATION_FILE | jq '. | length' )
+    # echo "wordCount: $wordCount"
+
+    local word1=$( rand0 $wordCount )
+    # echo "word1: $word1"
+    local wordOne=$( cat $_b00t_INSPIRATION_FILE | jq ".[$word1].word" -r )
+    local word2=$( rand0 $wordCount )
+    # echo "word2: $word2"
+    local wordTwo=$( cat $_b00t_INSPIRATION_FILE | jq ".[$word2].word" -r )
+    local result="${wordOne}_${wordTwo}"
+
+    ## todo: substitute 
+    if [ $( rand0 10 ) -lt 5 ] ; then 
+        result=$( echo $result | sed 's/l/1/g' )
+    fi
+
+    if [ $( rand0 10 ) -lt 2 ] ; then 
+        result=$( echo $result | sed 's/o/0/g' )
+    elif [ $( rand0 10 ) -lt 2 ] ; then 
+        result=$( echo $result | sed 's/oo/00/g' )
+    fi
+
+    if [ $( rand0 10 ) -lt 2 ] ; then 
+        result=$( echo $result | sed 's/e/3/g' )
+    elif [ $( rand0 10 ) -lt 8 ] ; then 
+        result=$( echo $result | sed 's/ee/33/g' )
+    fi
+
+    # Todo: fix first letter is a number. naming issue.
+
+    echo $result
+    return 0
+}
+
+
+
+##* * * * * *\\
+## generates a random number between 0 and \$1
+# usage: 
+# rand0_result="$(rand0 100)"
+# echo \$rand0_result
+
+function rand0() {
+    local args=("$@")
+    local max=${args[0]}
+    rand0=$( bc <<< "scale=2; $(printf '%d' $(( $RANDOM % $max)))" ) ;
+    # rand0=$( echo $RANDOM % $max ) ; 
+    echo $rand0
+}
+
+##* * * * * *//
+
+
 ## there's time we need to know reliably if we can run SUDO
-SUDO_CMD="/usr/bin/sudo"
-if [ -f "./dockerfile" ] ; then
-    log_📢_记录 "🐳😁 found DOCKER"  
-elif [ -f "$SUDO_CMD" ] ; then 
-    log_📢_记录 "🥳 found sudo"  
-else 
-    log_📢_记录 "🐭 missed SUDO, try running _b00t_ inside docker."
-    SUDO_CMD=""
-fi
-export SUDO_CMD
+function has_sudo() {
+    SUDO_CMD="/usr/bin/sudo"
+    if [ -f "./dockerfile" ] ; then
+        log_📢_记录 "🐳😁 found DOCKER"  
+    elif [ -f "$SUDO_CMD" ] ; then 
+        log_📢_记录 "🥳 found sudo"  
+    else 
+        log_📢_记录 "🐭 missed SUDO, try running _b00t_ inside docker."
+        SUDO_CMD=""
+    fi
+    export SUDO_CMD
+}
+has_sudo()
 
 if [ -z "$(whereis crudini)" ] ; then 
     log_📢_记录 "🥳 need crudini to save data, installing now"  
     $SUDO_CMD apt-get install crudini
 fi
 
+## Have FZF use fdfind "fd" by default
+export PS_FORMAT="pid,ppid,user,pri,ni,vsz,rss,pcpu,pmem,tty,stat,args"
+export FD_OPTIONS="--follow -exlude .git --exclude node_modules"
+# export FZF_COMPLETION_OPTS='--border --info=inline'
+if ! n0ta_xfile_📁_好不好 "/usr/bin/fdfind"  ; then
+    # export FZF_DEFAULT_COMMAND="git ls-files --cached --others --exclude-standard | /usr/bin/fdfind --type f --type l $FD_OPTIONS"
+    # export FZF_DEFAULT_OPTS="--no-mouse --height 50% -1 --reverse --multi --inline-info --preview=[[ \$file --mine{}) =~ binary ]] && echo {} is a binary file || (bat --style=numbers --color=always {} || cat {}) 2> /dev/null | head -300' --preview-window='right:hidden:wrap' --bind'f3:execute(bat --style=numbers {} || less -f {}),f2:toggle-preview,ctrl-d:half-page-down,ctrl-u:half-page-up,ctrl-a:select-all+accept,ctrl-y:execute-silent(echo {+} | pbcopy)'"
+    # from video: https://www.youtube.com/watch?v=qgG5Jhi_Els
+    export FZF_DEFAULT_COMMAND="/usr/bin/fdfind --type f"
+fi
+
+
+# CRUDINI is used to store b00t config:
+# 
+# CRUDINI examples
+# 🤓 https://github.com/pixelb/crudini/blob/master/EXAMPLES
+export CRUDINI_CFGFILE=$(expandPath "~/.b00t/config.ini")
+if [ ! -d $CRUDINI_CFGFILE ] ; then
+    log_📢_记录 "🐭 no local $CRUDINI_CFGFILE"  
+    CRUDINI_DIR=`dirname $CRUDINI_CFGFILE`
+    log_📢_记录 "🥳 local dir $CRUDINI_DIR"  
+    if [ ! -d "$CRUDINI_DIR" ] ; then
+        log_📢_记录 "🧝 creating CRUDINI dir $CRUDINI_DIR"  
+        /bin/mkdir -p $CRUDINI_DIR
+        /bin/chmod 750 $CRUDINI_DIR
+        crudini --set $CRUDINI_CFGFILE '_syntax' "1"
+    else
+        log_📢_记录 "😃 CRUDINI local dir $CRUDINI_DIR exists"
+    fi
+fi
+
+function crudini_set() {
+    local args=("$@")
+    local topic=${args[0]}
+    local key=${args[1]}
+    local value=${args[2]}
+    crudini --set $CRUDINI_CFGFILE "${key}" "${value}"
+    return $?
+}
+
+function crudini_get() {
+    local args=("$@")
+    local topic=${args[0]}
+    local key=${args[1]}
+    echo $( crudini --get $CRUDINI_CFGFILE "${key}" )
+    return $?
+}
+
 ##
 export _user="$(id -u -n)" 
 export _uid="$(id -u)" 
 echo "🙇‍♂️ \$_user: $_user  \$_uid : $_uid"
+

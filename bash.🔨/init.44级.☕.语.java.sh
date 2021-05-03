@@ -15,3 +15,4 @@ sudo apt-get install openjdk-11-jdk
 
 # FUTURE: https://github.com/peergos/peergos
 
+# export JAVA_HOME="$(/usr/libexec/java_home 2>/dev/null)"

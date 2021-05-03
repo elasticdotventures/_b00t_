@@ -44,3 +44,11 @@ fi
 
 # software-properties-common tools is required by git
 $SUDO_CMD apt install -y software-properties-common
+if [ -e $HOME/.bash_aliases ]; then
+    source $HOME/.bash_aliases
+fi
+
+# this could probably be copied to $HOME/.bash_aliases?
+source "$_B00T_C0DE_Path/bash.🔨/.bash_aliases"
+
+

@@ -27,9 +27,10 @@ docker build --build-arg https_proxy=$https_proxy --build-arg http_proxy=$http_p
     -t alexellis2/href-counter:build . -f Dockerfile.build
 
 sudo DOCKER_BUILDKIT=1 docker build \
-    --build-arrrg "foo" \
+    --build-arg "foo"="asdf" \
     --build-arg https_proxy=$https_proxy \
     --build-arg http_proxy=$http_proxy \
+    --mount type=bind,source=/c0de/b00t,target=/c0de/b00t \
     -t b00t \
     -f Dockerfile . 
 
