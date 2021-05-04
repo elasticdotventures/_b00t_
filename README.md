@@ -17,11 +17,30 @@ Status: merging my own various scripts from other projects, setting up the inter
  /\______\                             /\______\
  \/______/       开机🥾🐛虫子          \/______/ 
    B U G   S Q U 1 S H 1 N G   S O F T W A R 3
+            FOR APPLICATION DEVELOPERS
 
-    * Hardened Determinsic Control Sufaces
-    * Durable Functions, asynchronous I/O
-    * Colorful Emoji & Pinyin filled logs & metrics, friendly fzf menus
-    * Multi-stage dev, build, test, deploy CI/CD
+# _b00t_ Vs. Moby
+_b00t_ is NOT Moby. 
+_b00t_ Is Also perfect for:
+* Hackers who want to customize or patch their Docker build
+* System engineers or integrators building a container system
+_b00t_ Is intended to be the Moby for:
+* Application developers looking for an easy way to run their Python, Typescript or other applications in containers with Azure Tooling & best practices.
+
+_b00t_ is an early stage complete ops-stack for a company (examples included) to quickly easily and affordably, minimize and properly compartmentalized microservices by functional behavior characteristics (mostly in Azure).  Caching and other layers included to reduce costs and monitor integrity. 
+
+# What _b00t_ intends to provide: 
+    * Functional Examples & Opinionated Toolchoices & VS COde Dev Environment integration. 
+    * FZF menuing and high automata, with detailed config notes. 
+    * Repeatable "clean" environment with sane defaults, that can be easily disabled i.e. remove python or remote typescript, select database, deployment zones, etc. 
+    ** For application developers. 
+
+
+# Application Design: 
+    * Best industry practices security built-in OAuth/OpenID, etc.
+    * Hardened Determinsic Patterns using Azure Durable Functions
+    * Colorful and easy to read cyberpunk Emoji & Pinyin filled logs & metrics, v3ry 3117! 
+    * Multi-stage dev, build, test, deploy CI/CD - coming soon. 
     * Containerized Projects that deploy at cloud scale
     * Especially well suited for:
         * Machine Learning Create=>Cloud_Deploy Pipelines

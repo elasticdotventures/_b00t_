@@ -21,7 +21,9 @@
 # docker CLI syntax
 # -f   ::  changes context
 
-# Dockerfile can be sent via stdin
+# 🤔 Dockerfile can be sent via stdin
+# tools like terraform, etc. can generate these
+# there is also developer libraries 
 
 # passing ARGS
 # An ARG declared before a FROM is outside of a build stage, 
@@ -32,17 +34,28 @@ FROM jrei/systemd-ubuntu as b00t_base
 MAINTAINER ops@elastic.ventures
 # docker run -d --name systemd-ubuntu --tmpfs /tmp --tmpfs /run --tmpfs /run/lock  --mount type=bind,source="/c0de",target="/c0de"  --privileged -v /var/run/docker.sock:/var/run/docker.sock -v /sys/fs/cgroup:/sys/fs/cgroup:ro jrei/systemd-ubuntu
 
+# Howto setup squid proxy as a sidecar container and have APT use it.
+## https://www.serverlab.ca/tutorials/linux/administration-linux/how-to-set-the-proxy-for-apt-for-ubuntu-18-04/
+RUN \
+if [ -n "$http_proxy" ]; then \
+    echo "Acquire { \
+  HTTP::proxy \"$http_proxy\"; \
+  HTTPS::proxy \"$https_proxy\"; \
+}" > /etc/apt/apt.conf.d/http_proxy_b00t_squid;  \
+fi 
+
+## NOTE: if squid caching proxy had issue, these lies can cache bad values. 
+RUN apt-get clean && apt-get update -y && apt-get upgrade -y
+# Timezone
+ENV DEBIAN_FRONTEND "noninteractive"
+ENV TZ "Australia/Melbourne"
+RUN apt-get -y install apt-utils tzdata locales
+
 # Emoji Support
-RUN apt-get clean && apt-get update && apt-get install -y locales
 RUN locale-gen en_US.UTF-8
 ENV LANG en_US.UTF-8
 ENV LANGUAGE en_US:en
 ENV LC_ALL en_US.UTF-8
-
-# Timezone
-ENV DEBIAN_FRONTEND "noninteractive"
-ENV TZ "Australia/Melbourne"
-RUN apt-get -y install tzdata
 
 ## DOCKER BUILD ENHANCEMENTS
 ## https://docs.docker.com/develop/develop-images/build_enhancements/
@@ -58,49 +71,75 @@ RUN apt-get -y install tzdata
 ## Only for Dev & Test
 RUN apt-get update && apt-get install -y git gcc g++
 RUN git --version
-
-RUN apt-get install -y curl wget ca-certificates gnupg apt-utils
+RUN apt-get install -y apt-utils dialog curl wget ca-certificates gnupg 
 
 # https://stackoverflow.com/questions/27701930/how-to-add-users-to-docker-container
-RUN useradd -ms /bin/bash brianh
-USER brianh
-WORKDIR /home/brianh
 
 # TODO: setup ps1, etc. 
 
-# VOLUME "/c0de/_b00t_" 
-COPY . /c0de/_b00t_
-WORKDIR /c0de/_b00t_
+#VOLUME "/c0de/_b00t_" 
+#COPY ./docker.🐳 /c0de/_b00t_/docker.🐳/
 
+WORKDIR /c0de/_b00t_
+ADD ./*.sh  "./"
+ADD ./*.bashrc "./"
+# ADD /c0de/
+RUN chmod +x ./source.sh
+
+## this was screwing up permissions: 
+#RUN useradd -ms /bin/bash brianh
+#USER brianh
+#WORKDIR /home/brianh
+
+## Stage2 
+FROM b00t_base as b00t_init
 # CURRENT ISSUE: 
 # file always rebuilds, full build takes too long,
 # not using stages YET
-RUN /c0de/_b00t_/source.sh "./bash.🔨/init.*.🥾.*.sh"; 
-#COPY "./bash.🔨/init.*.🥾.*.sh" "init.🥾.sh"
-#RUN "./init.🥾.sh"
+#RUN /c0de/_b00t_/source.sh "./bash.🔨/init.*.🥾.*.sh"; 
+ADD "./*🔨/init.*.🥾.*.sh" "./"
+ADD "./_b00t_.bashrc" "./"
+RUN chmod +x "_b00t_.bashrc" 
+RUN "./_b00t_.bashrc"
+#ADD code/requirements.txt /src/requirements.txt
+#RUN pip install -r /src/requirements.txt #only re-executed if the file changes
+#ADD code /src/code
 
+
+
+FROM b00t_init as b00t_init2
 ## 进口 (Jìnkǒu :: Import/Load) PHASE 2 * * \\ 
 # Two is Torvalds Tech (Linux & Git)
-RUN /c0de/_b00t_/source.sh "./bash.🔨/init.*.🐧.*.sh"; 
-RUN /c0de/_b00t_/source.sh "./bash.🔨/init.*.🐙.*.sh"; 
-RUN /c0de/_b00t_/source.sh "./bash.🔨/init.*.🐳.*.sh"; 
+RUN /c0de/_b00t_/source.sh "./bash.🔨/init.*.🐧.*.sh";
 
+FROM b00t_init2 as b00t_init3
+## 进口 (Jìnkǒu :: Import/Load) PHASE 2 * * \\ 
+# Two is Torvalds Tech (Linux & Git)
+RUN /c0de/_b00t_/source.sh "./bash.🔨/init.*.🐧.*.sh";
+RUN /c0de/_b00t_/source.sh "./bash.🔨/init.*.🐙.*.sh" 
+
+
+FROM b00t_init3 as b00t_init4
+RUN /c0de/_b00t_/source.sh "./bash.🔨/init.*.🐳.*.sh"
+
+FROM b00t_init4 as b00t_init5
 ## 进口 (Jìnkǒu :: Import/Load) PHASE 3 * * * \\ 
 ## minimal c0re Python 🐍
 # + establish .venv
-RUN /c0de/_b00t_/source.sh "./bash.🔨/init.*.🐍.*sh";
+RUN /c0de/_b00t_/source.sh "./bash.🔨/init.*.🐍.*sh"
 #RUN source .venv/bin/activate
 
+FROM b00t_init5 as latest
+RUN echo $NOW
+
 ## Typescript & Node
-RUN /c0de/_b00t_/source.sh "./bash.🔨/init.*.🚀.*.sh" 
-RUN /c0de/_b00t_/source.sh "./bash.🔨/init.*.🦄.*.sh" 
+#RUN /c0de/_b00t_/source.sh "./bash.🔨/init.*.🚀.*.sh" 
+#RUN /c0de/_b00t_/source.sh "./bash.🔨/init.*.🦄.*.sh" 
 
 ## 进口 (Jìnkǒu :: Import/Load) PHASE 4 * * * * \\ 
-RUN /c0de/_b00t_/source.sh "./bash.🔨/init.*.🤖.*.sh"
-RUN /c0de/_b00t_/source.sh "./bash.🔨/init.*.👾.*.sh"
-RUN /c0de/_b00t_/source.sh "./bash.🔨/init.*.🦉.*.sh"
-
-
+#RUN /c0de/_b00t_/source.sh "./bash.🔨/init.*.🤖.*.sh"
+#RUN /c0de/_b00t_/source.sh "./bash.🔨/init.*.👾.*.sh"
+#RUN /c0de/_b00t_/source.sh "./bash.🔨/init.*.🦉.*.sh"
 
 
 

@@ -271,16 +271,13 @@ function has_sudo() {
     fi
     export SUDO_CMD
 }
-has_sudo()
+has_sudo 
 
-if [ -z "$(whereis crudini)" ] ; then 
-    log_📢_记录 "🥳 need crudini to save data, installing now"  
-    $SUDO_CMD apt-get install crudini
-fi
 
 ## Have FZF use fdfind "fd" by default
 export PS_FORMAT="pid,ppid,user,pri,ni,vsz,rss,pcpu,pmem,tty,stat,args"
 export FD_OPTIONS="--follow -exlude .git --exclude node_modules"
+
 # export FZF_COMPLETION_OPTS='--border --info=inline'
 if ! n0ta_xfile_📁_好不好 "/usr/bin/fdfind"  ; then
     # export FZF_DEFAULT_COMMAND="git ls-files --cached --others --exclude-standard | /usr/bin/fdfind --type f --type l $FD_OPTIONS"
@@ -291,7 +288,11 @@ fi
 
 
 # CRUDINI is used to store b00t config:
-# 
+if n0ta_xfile_📁_好不好 "/usr/bin/crudini" ; then 
+    log_📢_记录 "🥳 need crudini to save data, installing now"  
+    $SUDO_CMD apt-get install -y crudini
+fi
+
 # CRUDINI examples
 # 🤓 https://github.com/pixelb/crudini/blob/master/EXAMPLES
 export CRUDINI_CFGFILE=$(expandPath "~/.b00t/config.ini")
