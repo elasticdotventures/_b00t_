@@ -85,7 +85,7 @@ fi
 if n0ta_xfile_📁_好不好 "/usr/bin/fdfind"  ; then
     ## some other applications we'll need
     # 🤓 https://github.com/sharkdp/fd#installation
-    $SUDO_CMD apt install -y fd-find
+    $SUDO_CMD apt-get install -y fd-find
     log_📢_记录 "😇.install fd-find helper (fd)"
 
     $SUDO_CMD mkdir -p ~/.local/bin
@@ -110,7 +110,7 @@ fi
 
 if n0ta_xfile_📁_好不好 "/usr/bin/batcat" ; then 
     log_📢_记录 "😇.install batcat (bat), replaces cat"
-    $SUDO_CMD apt install bat
+    $SUDO_CMD apt-get install -y bat
     $SUDO_CMD mkdir -p ~/.local/bin
     ln -s /usr/bin/batcat ~/.local/bin/bat
     # example with fzf:
@@ -118,6 +118,8 @@ if n0ta_xfile_📁_好不好 "/usr/bin/batcat" ; then
 fi
 
 
+log_📢_记录 "🥾😇.install dialog & apt-utils"
+$SUDO_CMD apt-get install -y dialog apt-utils
 
 # _b00t_ cli - "/usr/local/bin/b00t"
 ## 

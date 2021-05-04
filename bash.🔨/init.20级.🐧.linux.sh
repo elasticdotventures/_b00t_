@@ -12,6 +12,7 @@ source "/c0de/_b00t_/_b00t_.bashrc"
 
 if n0ta_xfile_📁_好不好 "/bin/sudo" ; then 
     # this is correct (leaving for future linting)
+    log_📢_记录 "🐧😇 sudo"
     $SUDO_CMD apt-get install -y sudo
 fi
 apt-get install -y sudo
@@ -21,14 +22,17 @@ apt-get install -y sudo
 # yq, part II - Windows
 ## For WSL - snapd won't work properly unless we also: 
 if  is_WSLv2_🐧💙🪟v2  ; then
+    log_📢_记录 "🐧😇 wsl2 setup"
     $SUDO_CMD apt-get update && $SUDO_CMD apt-get install -yqq daemonize dbus-user-session fontconfig
 fi
 
 # 🍰 yq  - YAML config i/o    https://github.com/mikefarah/yq
-if n0ta_xfile_📁_好不好 "/usr/bin/yq" ; then
-    systemctl status snapd.service
-    snap install
-fi
+# not using yq via snap. 
+#if n0ta_xfile_📁_好不好 "/usr/bin/yq" ; then
+#    log_📢_记录 "🐧😇 yq"
+#    systemctl status snapd.service
+#    snap install yq
+#fi
 
 if n0ta_xfile_📁_好不好 "/usr/bin/yq" ; then
     YQ_VERSION="v4.7.0"
@@ -43,11 +47,13 @@ if n0ta_xfile_📁_好不好 "/usr/bin/yq" ; then
 fi
 
 # software-properties-common tools is required by git
-$SUDO_CMD apt install -y software-properties-common
+log_📢_记录 "🐧😇 git dependencies"
+$SUDO_CMD apt-get install -y software-properties-common
+
+log_📢_记录 "🐧😇 install .bash_aliases"
 if [ -e $HOME/.bash_aliases ]; then
     source $HOME/.bash_aliases
 fi
-
 # this could probably be copied to $HOME/.bash_aliases?
 source "$_B00T_C0DE_Path/bash.🔨/.bash_aliases"
 

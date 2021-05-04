@@ -14,6 +14,12 @@ if [ false ] ; then
 pip3 install --pre --extra-index-url https://azcliprod.blob.core.windows.net/beta/simple/ azure-cli
 chmod +x /usr/local/bin/az
 
+# http://azure.github.io/azure-sdk-for-python/
+pip3 install azure-sdk-for-python
+
+# Blob Storage
+pip install azure-storage-blob
+
 ## * * * * \\
 # Azure Service bus
 # https://docs.microsoft.com/en-us/python/api/overview/azure/servicebus-readme?view=azure-python
@@ -21,8 +27,10 @@ pip3 install azure-servicebus
 
 # Identity
 pip install azure-identity
-az login
-az login --use-device-code
+# from azure.identity import DefaultAzureCredential
+
+#az login
+#az login --use-device-code
 
 # https://github.com/census-instrumentation/opencensus-python/tree/master/contrib/opencensus-ext-azure
 # https://pypi.org/project/opencensus-ext-azure/
@@ -31,6 +39,7 @@ pip3 install opencensus-ext-azure
 # https://docs.microsoft.com/en-us/python/api/overview/azure/appconfiguration-readme?view=azure-python
 # https://pypi.org/project/azure-appconfiguration/
 pip3 install azure-appconfiguration
+
 
 # Python vscode: 
 # https://docs.microsoft.com/en-us/azure/azure-functions/durable/quickstart-python-vscode

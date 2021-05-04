@@ -31,6 +31,6 @@ https://docs.microsoft.com/en-us/azure/azure-functions/machine-learning-pytorch?
 # Windows: winget install streamlink
 sudo add-apt-repository ppa:nilarimogard/webupd8
 sudo apt update
-sudo apt install streamlink
+sudo apt-get install -y streamlink
 
 
