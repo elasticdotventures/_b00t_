@@ -36,10 +36,13 @@ source "./_b00t_.bashrc"
 #    echo "Selected number: $REPLY"
 #done
 
+#this will setup your local instance with boot.
+motd
+
+
 
 ## 进口 (Jìnkǒu :: Import/Load PHASE 1 * \\ 
 # _b00t_ Bin shell & helpers, logging. 
-
 bash_source_加载 "$_B00T_C0DE_Path/./bash.🔨/init.*.🥾.*.sh"
 
 

@@ -8,7 +8,8 @@
 # Boot functions
 source "/c0de/_b00t_/_b00t_.bashrc"
 
-source "$_B00T_C0DE_Path/./bash.🔨/.bash_aliases"
+# moved to _b00t_.bashrc
+# source "$_B00T_C0DE_Path/./bash.🔨/.bash_aliases"
 
 
 function checkOS() {

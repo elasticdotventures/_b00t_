@@ -22,6 +22,10 @@
 # next layer 
 # FROM my-last-docker
 
+ENV FOO=/bar
+# ${FOO:-word} indicates that if variable is set then the result will be that value. If variable is not set then word will be the result.
+# ${FOO:+word} indicates that if variable is set then word will be the result, otherwise the result is the empty string.
+
 
 
 

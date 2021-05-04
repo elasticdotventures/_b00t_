@@ -10,7 +10,12 @@
 Additional References:
 * Please see http://github.com/elasticdotventures/eva.core/ jargon.md 
 
-# Files:
+# Files (in mandarin)
+文档  Wéndàng   .. literal document(s)      ** preferred
+文件  Wénjiàn   .. literal paper file(s)
+电子档案  Diànzǐ dǎng'àn .. electronic file
+
+# Types of _b00t_ files: 
 语    Yǔ  ... language
 云☁️  Yún  ... cloud
 层    Céng  ... Layer (or floor in a building), docker

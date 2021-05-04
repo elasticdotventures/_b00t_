@@ -18,6 +18,58 @@ _b00t_INSPIRATION_FILE="$_B00T_C0DE_Path/./r3src_资源/inspiration.json"
 ## 小路 //
 
 
+
+## OPINIONATED ALIASES
+
+alias ls='ls -F  --color=auto'
+alias ll='ls -lh'
+alias lt='ls --human-readable --size -1 -S --classify'
+
+# bat - a pretty replacement for cat.
+alias bat="batcat"
+
+# count the files in a directory or project
+alias count='find . -type f | wc -l'
+# copy verbose, see rsync. or use preferred backup command. 
+alias cpv='rsync -ah --info=progress2'
+
+# cd to _b00t_ (or current repo)
+alias cg='cd `git rev-parse --show-toplevel`'
+alias ..='cd ..'
+alias ...='cd ../../'
+alias mkdir='mkdir -pv'
+
+# time & date
+alias path='echo -e ${PATH//:/\\n}'
+alias now='date +"%T"'
+alias nowtime=now
+alias nowdate='date +"%d-%m-%Y"'
+
+# 🐙 git 
+alias gitstatus='git -C . status --porcelain | grep "^.\w"'
+
+# 🐍 Python ve = create .venv, va = activate!
+alias ve='python3 -m venv ./venv'
+alias va='source ./venv/bin/activate'
+
+# use fzf to find a file and open it in vs code
+alias c='code $(fzf --height 40% --reverse)'
+
+# fd is same-same like unix find, but alt-featureset
+# for example - fd respects .gitignore (but output like find)
+alias fd="/usr/bin/fdfind"
+
+# handy for generating dumps, etc..
+# $ script.sh >> foobar.`ymd`
+alias ymd="date +'%Y%m%d'"
+alias ymd_hm="date +'%Y%m%d.%H%M'"
+alias ymd_hms="date +'%Y%m%d.%H%M%S'"
+
+##################
+
+
+
+
 _b00t_exists=`type -t "_b00t_init_🥾_开始"`
 if [ "$_b00t_exists" == "function" ] ; then 
     # short circuit using rand0() function 
@@ -256,6 +308,65 @@ function rand0() {
 }
 
 ##* * * * * *//
+
+
+function motd() {
+
+    # count motd's
+    # 🍰 https://unix.stackexchange.com/questions/485221/read-lines-into-array-one-element-per-line-using-bash
+    readarray -t motdz < <(fd .txt 'ubuntu.🐧/etc/')
+    local motdzQ=$( rand0 ${#motdz[@]} )
+    # declare -p motdz
+
+    local showWithCMD="/usr/bin/batcat"
+    
+    f=${motdz[motdzQ]}
+    local motdWidth=$(awk 'length > max_length { max_length = length; longest_line = $0 } END { print max_length }' $f)
+    # local motdWidth=$(cat "${motdz[motdzQ]}" | tail -n 1)
+    local motdLength=$(cat $f | wc -l)
+
+    local myWidth=$(tput cols)
+    local myHeight=$(tput rows)
+    if [ -z "$myHeight" ] ; then myHeight='🍒😑' ; fi
+    log_📢_记录 "🥾🖥️ motd .cols: $motdWidth  .rows:$motdLength"
+    log_📢_记录 "🤓🖥️ user .cols: $myWidth  .rows:$myHeight"
+        
+    if [ $motdWidth -gt "$myWidth" ] ; then 
+        echo "👽:太宽 bad motd. too wide."
+        showWithCMD=""
+    elif [ $motdWidth -gt $(echo $myWidth - 13 | bc) ] ; then
+        # bat needs +13 columns
+        showWithCMD="cat"
+    else
+        # *auto*, full, plain, changes, header, grid, numbers, snip.
+        showWithCMD="batcat --pager=never --style=plain --wrap character"
+        if [ $(rand0 100) -gt 69 ] ; then 
+            showWithCMD="batcat --pager=never --wrap character"
+        fi
+    fi
+    # if it's still too big, try again!
+
+    ## sometimes, cat is nice!
+    if [ -z "$showWithCMD" ] ; then
+        echo "👽💩: 烂狗屎 cannot motd."
+    elif [ "$(rand0 10)" -gt 5 ] ; then 
+        showWithCMD="cat"
+    fi 
+
+    #if [ $motdLength -gt $(echo $(tput rows) - 3 | bc) ] ; then
+    #    showWithCMD="cat"
+    #fi 
+
+    if [ -n "$showWithCMD" ] ; then
+        $showWithCMD ${motdz[motdzQ]}
+    fi
+    
+    log_📢_记录 "🥾📈 FYTYRE goes here. "
+
+    # echo ${#arr[@]}
+    #  
+}
+
 
 
 ## there's time we need to know reliably if we can run SUDO

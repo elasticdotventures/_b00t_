@@ -40,7 +40,9 @@ args=("$@")
 echo $# arguments passed
 echo ${args[0]} ${args[1]} ${args[2]}
 
-
+# good for testing: 
+yes - spams yes
+seq - outputs a sequence
 
 # String Library
 # https://github.com/zombieleet/bashify
@@ -61,18 +63,26 @@ arr=( $(jq -r '.[].item2' json) )
 printf '%s\n' "${arr[@]}"
 
 ## Bash Array Syntax:
+
+declare -p anyArray freeze-dumps contents
+declare -a anyArray <magic>  unfreeze
+
 arr=()	Create an empty array
 arr=(1 2 3)	Initialize array
 ${arr[2]}	Retrieve third element
-${arr[@]}	Retrieve all elements
+${arr[@]}	Retrieve all elements  
 ${!arr[@]}	Retrieve array indices
-${#arr[@]}	Calculate array size
+${#arr[@]}	Calculate array size // 🤓 LENGTH! 
 arr[0]=3	Overwrite 1st element
 arr+=(4)	Append value(s)
 str=$(ls)	Save ls output as a string
 arr=( $(ls) )	Save ls output as an array of files
 ${arr[@]:s:n}	Retrieve n elements starting at index s
-
+ 
+# readarray to read lines 
+readarray -t arr2 < <(exec )
+# readarray 2d dimensional array 
+https://stackoverflow.com/questions/26634978/how-to-use-readarray-in-bash-to-read-lines-from-a-file-into-a-2d-array
 
 ## * * * * \\
 # Example Function

@@ -26,7 +26,13 @@ alias nowdate='date +"%d-%m-%Y"'
 alias ve='python3 -m venv ./venv'
 alias va='source ./venv/bin/activate'
 
+# 
 alias c='code $(fzf --height 40% --reverse)'
 
 alias fd="/usr/bin/fdfind"
 
+# handy for generating dumps, etc..
+# $ script.sh >> foobar.`ymd`
+alias ymd="date +'%Y%m%d'"
+alias ymd_hm="date +'%Y%m%d.%H%M'"
+alias ymd_hms="date +'%Y%m%d.%H%M%S'"

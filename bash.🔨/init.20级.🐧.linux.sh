@@ -50,11 +50,16 @@ fi
 log_📢_记录 "🐧😇 git dependencies"
 $SUDO_CMD apt-get install -y software-properties-common
 
-log_📢_记录 "🐧😇 install .bash_aliases"
-if [ -e $HOME/.bash_aliases ]; then
-    source $HOME/.bash_aliases
-fi
+### Deprecation 
+
+# Bash Aliases were moved into _b00t_.bashrc
+# .. for storytime tutorial, this is kept as a reference.
+# 
+#log_📢_记录 "🐧😇 install .bash_aliases"
+#if [ -e $HOME/.bash_aliases ]; then
+#    source $HOME/.bash_aliases
+#fi
 # this could probably be copied to $HOME/.bash_aliases?
-source "$_B00T_C0DE_Path/bash.🔨/.bash_aliases"
+#source "$_B00T_C0DE_Path/bash.🔨/.bash_aliases"
 
 
