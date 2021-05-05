@@ -2,6 +2,9 @@
 # The Jargon File, colliquolialsims.
 # This is a registry of l0re and meanings:
 
+
+到这里做 : Dào zhèlǐ zuòle - BeenHereDoneThat
+
 名 : Míng : Name 
 
 绿色 : Lǜsè : "Green Color" Google

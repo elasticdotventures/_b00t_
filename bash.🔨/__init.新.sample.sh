@@ -41,8 +41,15 @@ echo $# arguments passed
 echo ${args[0]} ${args[1]} ${args[2]}
 
 # good for testing: 
+# Run a command for specified time using timeout:
+# timeout 2 ping google.com
 yes - spams yes
 seq - outputs a sequence
+watch -n 5 free -m
+
+# display a csv file
+column -t -s , filename.csv
+
 
 # String Library
 # https://github.com/zombieleet/bashify
@@ -83,6 +90,18 @@ ${arr[@]:s:n}	Retrieve n elements starting at index s
 readarray -t arr2 < <(exec )
 # readarray 2d dimensional array 
 https://stackoverflow.com/questions/26634978/how-to-use-readarray-in-bash-to-read-lines-from-a-file-into-a-2d-array
+# use jq to make a bash array
+read -a bash_array < <(jq -r .|arrays|select(.!=null)|@tsv)
+
+
+## JQ
+# fill environment vars
+export $(jq -r '@sh "FOO=\(.foo) BAZ=\(.baz)"')
+# uri encode
+date | jq -sRr @uri
+# test types
+echo '[true, null, 42, "hello", []]' | ./jq 'map(type)'
+["boolean","null","number","string","array"]
 
 ## * * * * \\
 # Example Function
@@ -117,4 +136,9 @@ function_name () {
 }
 
 
+#get today's files
+ls -al --time-style=+%D | grep `date +%D`
 
+#top 10 most frequently used commands
+history | awk '{a[$2]++}END{for(i in a){print
+a[i] " " i}}' | sort -rn | head

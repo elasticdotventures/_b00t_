@@ -32,16 +32,49 @@ export https_proxy=http://172.17.0.1:3128
 
 echo Building elasticdotventures/b00t:build
 
+TARGET="b00t_m4k3"  # future, config point. 
+
 # docker build params:
 #  --secret stringAray
 #  --tag 
 #  --platform=<platform>
-DOCKER_BUILDKIT=1 \
-  sudo docker build \
+echo "TARGET: $TARGET"
+  # --progress=plain \
+
+export DOCKER_BUILDKIT=1
+
+sudo docker buildx install
+sudo docker buildx build \
+  --build-arg arrgh="🦜🏴‍☠️" \
+  --platform linux/amd64 \
+  -t elasticdotventures/b00t:latest --target $TARGET \
   --build-arg https_proxy=$https_proxy \
   --build-arg http_proxy=$http_proxy \
   -f Dockerfile \
   .
+
+cat << EOF
+# dev instance, shares common filesystrem. 
+docker rm elasticdotventures/b00t
+docker run -d -it --name b00t \
+ --tmpfs /tmp --tmpfs /run --tmpfs /run/lock  \
+ --mount type=bind,source="/c0de",target="/c0de" \
+ --privileged \
+ -v /var/run/docker.sock:/var/run/docker.sock \
+ -v /sys/fs/cgroup:/sys/fs/cgroup:ro \
+ elasticdotventures/b00t:latest
+
+ docker exec -it b00t bash --rcfile "./_b00t_.bashrc"
+
+ docker start b00t-run
+EOF
+
+
+
+
+
+# CUSTOM BUILD OUTPUTS?
+# * By default, a local container image is created from the build result. 
 
   # --build-arg "foo"="asdf" \
   #-t b00t -f Dockerfile . 
@@ -49,23 +82,13 @@ DOCKER_BUILDKIT=1 \
     
     # --env or --env-file
 
-#sudo DOCKER_BUILDKIT=1 docker build \
-#    --build-arg https_proxy=$https_proxy \
-#    --build-arg http_proxy=$http_proxy \
-#    --mount type=bind,source=/c0de/b00t,target=/c0de/b00t \
-#    -t b00t \
-#    -f Dockerfile . 
-
 # docker build -t b00t -f Dockerfile .
-#docker run -d --name systemd-ubuntu --tmpfs /tmp --tmpfs /run --tmpfs /run/lock  --mount type=bind,source="/c0de",target="/c0de"  --privileged -v /var/run/docker.sock:/var/run/docker.sock -v /sys/fs/cgroup:/sys/fs/cgroup:ro jrei/systemd-ubuntu
-exit
+# docker run -d -it --name systemd-ubuntu --tmpfs /tmp --tmpfs /run --tmpfs /run/lock  --mount type=bind,source="/c0de",target="/c0de"  --privileged -v /var/run/docker.sock:/var/run/docker.sock -v /sys/fs/cgroup:/sys/fs/cgroup:ro jrei/systemd-ubuntu
 
-docker container create --name extract ???Dunno alexellis2/href-counter:build  
-docker container cp extract:/go/src/github.com/alexellis/href-counter/app ./app  
-docker container rm -f extract
-
-docker container create --name extract alexellis2/href-counter:build  
-
-
-docker build --no-cache -t alexellis2/href-counter:latest .
-rm ./app
+# Examples of Post Processing
+# docker container create --name extract ???Dunno alexellis2/href-counter:build  
+# docker container cp extract:/go/src/github.com/alexellis/href-counter/app ./app  
+# docker container rm -f extract
+# docker container create --name extract alexellis2/href-counter:build  
+# docker build --no-cache -t alexellis2/href-counter:latest .
+# rm ./app

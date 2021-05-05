@@ -27,6 +27,13 @@
 #* 进口v2 🥾 ALWAYS load c0re Libraries!
 source "./_b00t_.bashrc"
 
+# verify docker has buildx
+# docker buildx version
+# github.com/docker/buildx v0.5.1-docker 11057da37336192bfc57d81e02359ba7ba848e4a
+
+
+
+
 
 
 #AZ_RESOURCE_ID= 
@@ -38,8 +45,17 @@ source "./_b00t_.bashrc"
 
 #this will setup your local instance with boot.
 motd
+echo "then something like this ... "
 
+echo "
+Project: $project
 
+type of environment
+  😁 welcome: new user / tutorial
+  🌌 config:  config a project
+  ☠️ deploy: deploy a project 
+
+"
 
 ## 进口 (Jìnkǒu :: Import/Load PHASE 1 * \\ 
 # _b00t_ Bin shell & helpers, logging. 

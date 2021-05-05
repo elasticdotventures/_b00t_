@@ -26,3 +26,5 @@ https://github.com/junegunn/fzf/wiki/examples
 
 # https://github.com/b4b4r07/emoji-cli
 
+
+# some good FZF examples in _b00t_.bashrc and sample bash file.

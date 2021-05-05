@@ -8,7 +8,9 @@
 
 # set -o errexit    # Used to exit upon error, avoiding cascading errors
 set -o nounset    # Exposes unset variables, strict mode. 
+trap "set +o nounset" EXIT  # restore nounset at exit, even in crash!
 
+set -a # mark variables whcih are modified or created for export
 ## 小路 \\
 ## Xiǎolù :: Path or Directory
 # THINGS YOU CAN EDIT: 
@@ -18,12 +20,26 @@ _b00t_INSPIRATION_FILE="$_B00T_C0DE_Path/./r3src_资源/inspiration.json"
 ## 小路 //
 
 
+## Have FZF use fdfind "fd" by default
+export PS_FORMAT="pid,ppid,user,pri,ni,vsz,rss,pcpu,pmem,tty,stat,args"
+export FD_OPTIONS="--follow -exlude .git --exclude node_modules"
 
 ## OPINIONATED ALIASES
 
 alias ls='ls -F  --color=auto'
 alias ll='ls -lh'
 alias lt='ls --human-readable --size -1 -S --classify'
+
+
+alias s=ssh
+alias c=clear
+alias cx='chmod +x'
+alias myp='ps -fjH -u $USER'
+
+#mcd() { mkdir -p $1; cd $1 }
+#export -f mcd
+#cdl() { cd $1; ls}
+#export -f cdl
 
 # bat - a pretty replacement for cat.
 alias bat="batcat"
@@ -67,9 +83,6 @@ alias ymd_hms="date +'%Y%m%d.%H%M%S'"
 
 ##################
 
-
-
-
 _b00t_exists=`type -t "_b00t_init_🥾_开始"`
 if [ "$_b00t_exists" == "function" ] ; then 
     # short circuit using rand0() function 
@@ -98,13 +111,24 @@ function _b00t_init_🥾_开始() {
     #🌆 ${0}/./${0*/}"   
     #🌆 export _b00t_="$(basename $0)"
     export _b00t_="$0" 
-    PARENT_COMMAND=$(ps -o comm= $PPID)
 
-    if [ "$PARENT_COMMAND" == "bash" ] ; then
+    local PARENT_COMMAND_STR="👽env-notdetected"
+    if [ $PPID -eq 0 ] ; then
+        if [ "$container" == "docker" ] ; then
+            PARENT_COMMAND_STR="🐳 d0ck3r!"
+        else 
+            PARENT_COMMAND_STR="👽env-unknown"
+        fi
+    else 
+        # lookup parent application by process id. 
+        PARENT_COMMAND_STR=$(ps -o comm=$PPID)
+    fi
+
+    if [ "$PARENT_COMMAND_STR" == "bash" ] ; then
         # most common case can be summarized
         log_📢_记录 "🥾👵:🔨"
     else 
-        log_📢_记录 "🥾👵 from: $PARENT_COMMAND"
+        log_📢_记录 "🥾👵 from: $PARENT_COMMAND_STR"
     fi
 
 
@@ -114,10 +138,8 @@ function _b00t_init_🥾_开始() {
     fi 
 }
 export -f _b00t_init_🥾_开始
-
 _b00t_init_🥾_开始
 ## 进口 //
-
 
 
 ## 加载 * * * * * *\\
@@ -198,7 +220,6 @@ function selectEditVSCode_experiment() {
     # select file
     selectedFile="${ fzf $filename }"
     code -w $selectedFile
-    
 }
 
 
@@ -309,9 +330,10 @@ function rand0() {
 
 ##* * * * * *//
 
-
+##
+## A pretty introduction to the system. 
+##
 function motd() {
-
     # count motd's
     # 🍰 https://unix.stackexchange.com/questions/485221/read-lines-into-array-one-element-per-line-using-bash
     readarray -t motdz < <(fd .txt 'ubuntu.🐧/etc/')
@@ -368,7 +390,6 @@ function motd() {
 }
 
 
-
 ## there's time we need to know reliably if we can run SUDO
 function has_sudo() {
     SUDO_CMD="/usr/bin/sudo"
@@ -385,9 +406,6 @@ function has_sudo() {
 has_sudo 
 
 
-## Have FZF use fdfind "fd" by default
-export PS_FORMAT="pid,ppid,user,pri,ni,vsz,rss,pcpu,pmem,tty,stat,args"
-export FD_OPTIONS="--follow -exlude .git --exclude node_modules"
 
 # export FZF_COMPLETION_OPTS='--border --info=inline'
 if ! n0ta_xfile_📁_好不好 "/usr/bin/fdfind"  ; then
@@ -401,32 +419,17 @@ fi
 # CRUDINI is used to store b00t config:
 if n0ta_xfile_📁_好不好 "/usr/bin/crudini" ; then 
     log_📢_记录 "🥳 need crudini to save data, installing now"  
-    $SUDO_CMD apt-get install -y crudini
+    $SUDO_CMD apt-get install -y crudini bc
 fi
 
-# CRUDINI examples
-# 🤓 https://github.com/pixelb/crudini/blob/master/EXAMPLES
-export CRUDINI_CFGFILE=$(expandPath "~/.b00t/config.ini")
-if [ ! -d $CRUDINI_CFGFILE ] ; then
-    log_📢_记录 "🐭 no local $CRUDINI_CFGFILE"  
-    CRUDINI_DIR=`dirname $CRUDINI_CFGFILE`
-    log_📢_记录 "🥳 local dir $CRUDINI_DIR"  
-    if [ ! -d "$CRUDINI_DIR" ] ; then
-        log_📢_记录 "🧝 creating CRUDINI dir $CRUDINI_DIR"  
-        /bin/mkdir -p $CRUDINI_DIR
-        /bin/chmod 750 $CRUDINI_DIR
-        crudini --set $CRUDINI_CFGFILE '_syntax' "1"
-    else
-        log_📢_记录 "😃 CRUDINI local dir $CRUDINI_DIR exists"
-    fi
-fi
+
 
 function crudini_set() {
     local args=("$@")
     local topic=${args[0]}
     local key=${args[1]}
     local value=${args[2]}
-    crudini --set $CRUDINI_CFGFILE "${key}" "${value}"
+    crudini --set $CRUDINI_CFGFILE "${topic}" "${key}" "${value}"
     return $?
 }
 
@@ -434,12 +437,72 @@ function crudini_get() {
     local args=("$@")
     local topic=${args[0]}
     local key=${args[1]}
-    echo $( crudini --get $CRUDINI_CFGFILE "${key}" )
+    echo $( crudini --get "$CRUDINI_CFGFILE" "${topic}" "${key}" )
     return $?
 }
+
+
+# CRUDINI examples
+# 🤓 https://github.com/pixelb/crudini/blob/master/EXAMPLES
+function crudini_init() {
+    export CRUDINI_CFGFILE=$(expandPath "~/.b00t/config.ini")
+    if [ ! -d $CRUDINI_CFGFILE ] ; then
+        log_📢_记录 "🐭 no local $CRUDINI_CFGFILE"  
+        CRUDINI_DIR=`dirname $CRUDINI_CFGFILE`
+        log_📢_记录 "🥳 local dir $CRUDINI_DIR"  
+        if [ ! -d "$CRUDINI_DIR" ] ; then
+            log_📢_记录 "🧝 creating CRUDINI dir $CRUDINI_DIR"  
+            /bin/mkdir -p $CRUDINI_DIR
+            /bin/chmod 750 $CRUDINI_DIR
+            crudini --set $CRUDINI_CFGFILE '_syntax' "1"
+        else        
+            #local x=$( crudini_get "b00t" "crudini_check" )
+            # x=$( [ -z "$x" ] && echo "0" )
+            local x=$( crudini_get "b00t" "crudini_check" )
+            x=$(echo "$x" + 1 | bc)
+            crudini_set "b00t" "crudini_check" "$x"
+            log_📢_记录 "😃 usage#$x CRUDINI local dir $CRUDINI_DIR exists"
+
+        fi
+    fi
+}
+# does not need an export. 
+crudini_init 
+#motd
+
+# 60秒 Miǎo seconds
+# 3分钟 Fēnzhōng minutes
+# 3小时 Xiǎoshí seconds
+
+export _b00t_JS0N_filepath=$(expandPath "~/.b00t/config.json")
+
+#function jqAddConfigValue () {
+#    echo '{ "names": ["Marie", "Sophie"] }' |\
+#    jq '.names |= .+ [
+#        "Natalie"
+#    ]'   
+#}
+
+## ???
+## https://docs.docker.com/engine/context/working-with-contexts/
+#export DOCKER_CONTEXT=default
+#log_📢_记录 "🐳 CONTEXT: $DOCKER_CONTEXT"  
+#docker context ls
+
+
+# 🍰 https://lzone.de/cheat-sheet/jq
+#function jqSetConfigValue () {
+#
+#    echo '{ "a": 1, "b": 2 }' |\
+#jq '. |= . + {
+#  "c": 3
+#}'
+#}
+
 
 ##
 export _user="$(id -u -n)" 
 export _uid="$(id -u)" 
 echo "🙇‍♂️ \$_user: $_user  \$_uid : $_uid"
+set +o nounset 
 
