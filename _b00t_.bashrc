@@ -73,7 +73,9 @@ alias c='code $(fzf --height 40% --reverse)'
 
 # fd is same-same like unix find, but alt-featureset
 # for example - fd respects .gitignore (but output like find)
-alias fd="/usr/bin/fdfind"
+if [ -f "/usr/bin/fdfind" ] ; then
+    alias fd="/usr/bin/fdfind"
+fi
 
 # handy for generating dumps, etc..
 # $ script.sh >> foobar.`ymd`
@@ -90,7 +92,6 @@ if [ "$_b00t_exists" == "function" ] ; then
 fi
 
 
-
 ## 记录 \\
 ## Jìlù :: Record (Log)
 # 🤓 write to a log if you want using >> 
@@ -100,7 +101,10 @@ function log_📢_记录() {
 export -f log_📢_记录
 ## 记录 //
 
-
+# order of magnitude
+function oom () {
+    # todo: detect an order of magnitude transition. 
+}
 
 ## 进口 \\  
 ## Kāishǐ :: Start
@@ -116,6 +120,7 @@ function _b00t_init_🥾_开始() {
     if [ $PPID -eq 0 ] ; then
         if [ "$container" == "docker" ] ; then
             PARENT_COMMAND_STR="🐳 d0ck3r!"
+        
         else 
             PARENT_COMMAND_STR="👽env-unknown"
         fi
@@ -329,6 +334,17 @@ function rand0() {
 }
 
 ##* * * * * *//
+## checks to see if an alias has been defined. 
+function is_n0t_aliased() {
+    local args=("$@")
+    local hasAlias=${args[0]}
+    exists=$(alias -p | grep "alias $hasAlias=")
+    if [ -z "$exists" ] ; then
+        return 0;
+    else 
+        return 1;
+    fi
+}
 
 ##
 ## A pretty introduction to the system. 
@@ -336,7 +352,16 @@ function rand0() {
 function motd() {
     # count motd's
     # 🍰 https://unix.stackexchange.com/questions/485221/read-lines-into-array-one-element-per-line-using-bash
-    readarray -t motdz < <(fd .txt 'ubuntu.🐧/etc/')
+    if is_n0t_aliased "fd" ; then
+        # no fd, incomplete environemnt
+        log_📢_记录 "🥾🍒 No fd alias, incomplete environment"
+        if [ ! -f "/tmp/motd.txt" ] ; then 
+            printf "\nb00t basic motd. generated %s\n\n" $(ymd_hms) > "/tmp/motd.txt"
+        fi 
+        motdz=('/tmp/motd.txt')
+    else 
+        readarray -t motdz < <(fd .txt 'ubuntu.🐧/etc/')
+    fi
     local motdzQ=$( rand0 ${#motdz[@]} )
     # declare -p motdz
 
@@ -388,6 +413,10 @@ function motd() {
     # echo ${#arr[@]}
     #  
 }
+if [ "$container" == "docker" ] ; then
+    motd
+fi
+
 
 
 ## there's time we need to know reliably if we can run SUDO
@@ -459,9 +488,10 @@ function crudini_init() {
             #local x=$( crudini_get "b00t" "crudini_check" )
             # x=$( [ -z "$x" ] && echo "0" )
             local x=$( crudini_get "b00t" "crudini_check" )
+            if [ -z "$x" ] ; then x="0"; fi 
             x=$(echo "$x" + 1 | bc)
             crudini_set "b00t" "crudini_check" "$x"
-            log_📢_记录 "😃 usage#$x CRUDINI local dir $CRUDINI_DIR exists"
+            log_📢_记录 "😃 #$x CRUDINI local dir $CRUDINI_DIR exists"
 
         fi
     fi

@@ -39,7 +39,7 @@ if n0ta_xfile_📁_好不好 "/usr/bin/yq" ; then
     YQ_VERSION="v4.7.0"
     YQ_BINARY="yq_linux_amd64"
     wget https://github.com/mikefarah/yq/releases/download/${YQ_VERSION}/${YQ_BINARY}.tar.gz -O - |\
-        tar xz && cp ${YQ_BINARY} /usr/bin/yq
+        tar xz && cp ${YQ_BINARY} /usr/bin/yq && rm -f $YQ_BINARY
 
     if n0ta_xfile_📁_好不好 "/usr/bin/yq" ; then
         log_📢_记录 "💩 STILL missing /usr/bin/yq"

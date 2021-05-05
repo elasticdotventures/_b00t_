@@ -39,12 +39,13 @@ TARGET="b00t_m4k3"  # future, config point.
 #  --tag 
 #  --platform=<platform>
 echo "TARGET: $TARGET"
-  # --progress=plain \
+  # --build-arg BUILDKIT_INLINE_CACHE=1 .
 
 export DOCKER_BUILDKIT=1
 
 sudo docker buildx install
 sudo docker buildx build \
+  --progress=plain \
   --build-arg arrgh="🦜🏴‍☠️" \
   --platform linux/amd64 \
   -t elasticdotventures/b00t:latest --target $TARGET \
@@ -52,6 +53,8 @@ sudo docker buildx build \
   --build-arg http_proxy=$http_proxy \
   -f Dockerfile \
   .
+# Example passing secrets:
+# https://github.com/moby/buildkit/blob/master/frontend/dockerfile/docs/syntax.md
 
 cat << EOF
 # dev instance, shares common filesystrem. 

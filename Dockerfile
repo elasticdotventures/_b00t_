@@ -111,6 +111,7 @@ LABEL 🥾🐳 M4K3
 
 #VOLUME "/c0de/_b00t_" 
 #COPY ./docker.🐳 /c0de/_b00t_/docker.🐳/
+#VOLUME "/c0de/_b00t_"
 WORKDIR /c0de/_b00t_/
 ADD ./*.sh  "./"
 ADD ./*.bashrc "./"
@@ -122,6 +123,9 @@ RUN chmod +x ./source.sh
 #USER brianh
 #WORKDIR /home/brianh
 
+
+
+
 ## Stage2 
 #FROM b00t_m4k3 as b00t_latest
 # CURRENT ISSUE: 
@@ -130,11 +134,11 @@ RUN chmod +x ./source.sh
 #RUN /c0de/_b00t_/source.sh "./bash.🔨/init.*.🥾.*.sh"; 
 ADD "./_b00t_.bashrc" "./"
 ADD "./source.sh" "./"
-RUN --mount=type=bind,target="/c0de/b00t",ro \
- ./source.sh  "./bash.🔨/init.*.🥾.*.sh"
+RUN --mount=type=bind,target="/c0de/_b00t_",ro \
+ ./source.sh ./bash.🔨/init.*.🥾.*.sh
 
 
-RUN --mount=type=bind,target="/c0de/b00t",ro \
+RUN --mount=type=bind,target="/c0de/_b00t_",ro \
  source ./_b00t_.bashrc; \
  if [ -z "$arrgh" ] ; then \
   echo "D0ck3r Starrtup 🐳🏴‍☠️🦜 arrrgh, was not provided"; \
@@ -146,38 +150,39 @@ RUN --mount=type=bind,target="/c0de/b00t",ro \
 #RUN apt update && apt install -y cowsay
 #CMD ["/usr/games/cowsay", "Dockerfiles are cool!"]
 
-
 ## 进口 (Jìnkǒu :: Import/Load) PHASE 2 * * \\ 
 # Two is Torvalds Tech (Linux & Git)
 #ADD "./*🔨/init.*.🐧.*.sh" "./"
-RUN --mount=type=bind,target="/c0de/b00t",ro \
+RUN --mount=type=bind,target="/c0de/_b00t_",ro \
  ./source.sh "./bash.🔨/init.*.🐧.*.sh";
 
 
 #ADD "./*🔨/init.*.🐙.*.sh" "./"
-RUN  --mount=type=bind,target="/c0de/b00t",ro \
+RUN  --mount=type=bind,target="/c0de/_b00t_",ro \
  ./source.sh  "./bash.🔨/init.*.🐙.*.sh" 
 
-RUN  --mount=type=bind,target="/c0de/b00t",ro \
+RUN  --mount=type=bind,target="/c0de/_b00t_",ro \
 ./source.sh "./bash.🔨/init.*.🐳.*.sh"
 
 ## 进口 (Jìnkǒu :: Import/Load) PHASE 3 * * * \\ 
 
 ## minimal c0re Python 🐍
 # + establish .venv
-RUN  --mount=type=bind,target="/c0de/b00t",ro \
+RUN  --mount=type=bind,target="/c0de/_b00t_",ro \
 ./source.sh "./bash.🔨/init.*.🐍.*sh"
 #RUN source .venv/bin/activate
 
 ## Typescript & Node
-RUN  --mount=type=bind,target="/c0de/b00t",ro \
- ./source.sh "./bash.🔨/init.*.🚀.*.sh" 
-RUN  --mount=type=bind,target="/c0de/b00t",ro \
- ./source.sh "./bash.🔨/init.*.🦄.*.sh" 
+#RUN  --mount=type=bind,target="/c0de/_b00t_",ro \
+# ./source.sh "./bash.🔨/init.*.🚀.*.sh" 
+#RUN  --mount=type=bind,target="/c0de/_b00t_",ro \
+# ./source.sh "./bash.🔨/init.*.🦄.*.sh" 
 
 # future: java & go
+# Use files from an external image! 
+# COPY --from=nginx:latest /etc/nginx/nginx.conf /nginx.conf
 
-RUN ln -sf /c0de/_b00t_/_b00t_.bashrc /etc/profile.d/b00t.sh
+#RUN ln -sf /c0de/_b00t_/_b00t_.bashrc 
 RUN echo "😁" >build.done
 
 ## 进口 (Jìnkǒu :: Import/Load) PHASE 4 * * * * \\ 
