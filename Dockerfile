@@ -85,6 +85,10 @@ LABEL 🥾🐳 B4S3
 #RUN mkdir -p -m 0600 ~/.ssh && ssh-keyscan github.com >> ~/.ssh/known_hosts
 # clone private repo
 #RUN --mount=type=ssh git clone git@github.com:myorg/myproject.git myproject
+# HINT use depth of 1 to limit the history i.e.
+# git clone --depth <depth> -b <branch> <repo_url>
+# 🤓: https://stackoverflow.com/questions/29368837/copy-a-git-repo-without-history
+
 # must run
 # $ docker build --ssh default .
 # docker --compress
@@ -111,7 +115,7 @@ LABEL 🥾🐳 M4K3
 
 #VOLUME "/c0de/_b00t_" 
 #COPY ./docker.🐳 /c0de/_b00t_/docker.🐳/
-#VOLUME "/c0de/_b00t_"
+
 WORKDIR /c0de/_b00t_/
 ADD ./*.sh  "./"
 ADD ./*.bashrc "./"
@@ -123,15 +127,6 @@ RUN chmod +x ./source.sh
 #USER brianh
 #WORKDIR /home/brianh
 
-
-
-
-## Stage2 
-#FROM b00t_m4k3 as b00t_latest
-# CURRENT ISSUE: 
-# file always rebuilds, full build takes too long,
-# not using stages YET
-#RUN /c0de/_b00t_/source.sh "./bash.🔨/init.*.🥾.*.sh"; 
 ADD "./_b00t_.bashrc" "./"
 ADD "./source.sh" "./"
 RUN --mount=type=bind,target="/c0de/_b00t_",ro \
@@ -173,10 +168,10 @@ RUN  --mount=type=bind,target="/c0de/_b00t_",ro \
 #RUN source .venv/bin/activate
 
 ## Typescript & Node
-#RUN  --mount=type=bind,target="/c0de/_b00t_",ro \
-# ./source.sh "./bash.🔨/init.*.🚀.*.sh" 
-#RUN  --mount=type=bind,target="/c0de/_b00t_",ro \
-# ./source.sh "./bash.🔨/init.*.🦄.*.sh" 
+RUN  --mount=type=bind,target="/c0de/_b00t_",ro \
+ ./source.sh "./bash.🔨/init.*.🚀.*.sh" 
+RUN  --mount=type=bind,target="/c0de/_b00t_",ro \
+ ./source.sh "./bash.🔨/init.*.🦄.*.sh" 
 
 # future: java & go
 # Use files from an external image! 
