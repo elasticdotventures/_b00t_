@@ -18,23 +18,23 @@ Status: merging my own various scripts from other projects, setting up the inter
    B U G   S Q U 1 S H 1 N G   S O F T W A R 3
             FOR APPLICATION DEVELOPERS
 
-🤓 QUICKSTART:
-```
+# 🤓 QUICKSTART:
 git clone 
 bash$ source _b00t_/_b00t_.bashrc
 # then maybe try the setup: 
 bash$ ./01-startup.sh 
 ```
 
-# 👑 Tool For: 
-M4K3 (make) * T3ST (testing) * L1V3 (deploy) * DBU6 (debug)
+# 🥾 is presently suitable for: 
+pre-dev stage projects 
+self-reliant engineering teams (no vendor support, except the Author & Git Issues)
 
 # _b00t_ Vs. Moby
-_b00t_ is NOT Moby. 
-_b00t_ Is Also perfect for:
-* Hackers who want to customize or patch their Docker build
+_b00t_ is NOT Docker Moby, although it shares some common goals. 
+
+Like Moby _b00t_ is ALSO perfect for:
+* Hackers who want to customize or patch their Docker build (or want a better one)
 * System engineers or integrators building a container system
-_b00t_ Is intended to be the Moby for:
 * Application developers looking for an easy way to run their Python, Typescript and related applications in containers with VS Code, Azure Tooling & best practices.
 
 _b00t_ is an early stage complete ops-stack for a company (examples included) to quickly easily and affordably, minimize and properly compartmentalized microservices by functional behavior characteristics (mostly in Azure).  Caching and other layers included to reduce costs and monitor integrity. 
