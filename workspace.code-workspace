@@ -2,6 +2,9 @@
 	"folders": [
 		{
 			"path": "."
+		},
+		{
+			"path": "../d0ngxi"
 		}
 	],
 	"settings": {

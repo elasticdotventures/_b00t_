@@ -69,6 +69,12 @@ output=$( ./my_script.sh )
 arr=( $(jq -r '.[].item2' json) )
 printf '%s\n' "${arr[@]}"
 
+# Parameter Expansion
+# 🤓 https://pubs.opengroup.org/onlinepubs/9699919799/utilities/V3_chap02.html#tag_18_06_02
+if [ -z ${var+x} ]; then echo "var is unset"; else echo "var is set to '$var'"; fi
+
+
+
 ## Bash Array Syntax:
 
 declare -p anyArray freeze-dumps contents
