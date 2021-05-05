@@ -102,9 +102,9 @@ export -f log_📢_记录
 ## 记录 //
 
 # order of magnitude
-function oom () {
-    # todo: detect an order of magnitude transition. 
-}
+#function oom () {
+#    # todo: detect an order of magnitude transition. 
+#}
 
 ## 进口 \\  
 ## Kāishǐ :: Start
@@ -413,7 +413,10 @@ function motd() {
     # echo ${#arr[@]}
     #  
 }
-if [ "$container" == "docker" ] ; then
+
+if [ "${container+}" == "docker" ] ; then
+    motd
+elif ! is_n0t_aliased fd ; then 
     motd
 fi
 
