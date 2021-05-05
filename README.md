@@ -19,10 +19,10 @@ Status: merging my own various scripts from other projects, setting up the inter
             FOR APPLICATION DEVELOPERS
 
 # 🤓 QUICKSTART:
-git clone 
-bash$ source _b00t_/_b00t_.bashrc
+git clone https://github.com/elasticdotventures/_b00t_.git
+bash$ source ./_b00t_/_b00t_.bashrc
 # then maybe try the setup: 
-bash$ ./01-startup.sh 
+bash$ cd _b00t_; ./01-startup.sh 
 ```
 
 # 🥾 is presently suitable for: 
@@ -40,13 +40,15 @@ Like Moby _b00t_ is ALSO perfect for:
 _b00t_ is an early stage complete ops-stack for a company (examples included) to quickly easily and affordably, minimize and properly compartmentalized microservices by functional behavior characteristics (mostly in Azure).  Caching and other layers included to reduce costs and monitor integrity. 
 
 # What _b00t_ intends to provide: 
+```
     * Functional Examples & Opinionated Toolchoices & VS COde Dev Environment integration. 
     * FZF menuing and high automata, with detailed config notes. 
     * Repeatable "clean" environment with sane defaults, that can be easily disabled i.e. remove python or remote typescript, select database, deployment zones, etc. 
     ** For application developers. 
-
+```
 
 # Application Design: 
+```
     * Best industry practices security built-in OAuth/OpenID, etc.
     * Hardened Determinsic Patterns using Azure Durable Functions
     * Colorful and easy to read cyberpunk Emoji & Pinyin filled logs & metrics, v3ry 3117! 
@@ -65,7 +67,6 @@ _b00t_ is an early stage complete ops-stack for a company (examples included) to
    Currently under development:
       * internal libraries and essential tooling, docker deploy, then integrate AZ with bicep. 
       * fzf menus & installer
-
 ```
 
 # \__b00t__
