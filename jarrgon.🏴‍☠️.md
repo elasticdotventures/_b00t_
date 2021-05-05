@@ -1,7 +1,6 @@
-#: 
 # The Jargon File, colliquolialsims.
-# This is a registry of l0re and meanings:
-
+# This is a registry of l0re and meanings within \_b00t_
+```
 
 到这里做 : Dào zhèlǐ zuòle - BeenHereDoneThat
 
@@ -45,3 +44,5 @@ Additional References:
 组  Zǔ   ... Group, series, set, container (not docker)
 
 访问.控制 .. Access Control
+
+```
