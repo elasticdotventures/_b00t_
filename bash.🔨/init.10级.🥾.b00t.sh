@@ -22,7 +22,7 @@ function checkOS() {
         log_📢_记录 "👍 OS is supported"
     fi
 
-    return 
+    return 0 
 }
 checkOS_result="$(checkOS)"
 #echo "checkOS_result: $checkOS_result"
