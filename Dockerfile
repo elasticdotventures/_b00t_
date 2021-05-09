@@ -30,7 +30,10 @@
 # AND therefore can’t be used in any instruction after a FROM
 # ARG outside_build_stage
 
-
+# Environment variables
+# ${variable_name} syntax also supports a few of the standard bash modifiers as specified below:
+# ${variable:-word} indicates that if variable is set then the result will be that value. If variable is not set then word will be the result.
+# ${variable:+word} ndicates that if variable is set then word will be the result, otherwise the result is the empty string.
 
 
 
@@ -51,6 +54,7 @@ VOLUME ["/var/log" ]
 
 # Howto setup squid proxy as a sidecar container and have APT use it.
 ## https://www.serverlab.ca/tutorials/linux/administration-linux/how-to-set-the-proxy-for-apt-for-ubuntu-18-04/
+ENV http_proxy="${http_proxy}" https_proxy="${https_proxy}"
 RUN \
 if [ -n "$http_proxy" ]; then \
     echo "Acquire { \
@@ -134,7 +138,6 @@ RUN --mount=type=bind,target="/c0de/_b00t_",ro \
 
 
 RUN --mount=type=bind,target="/c0de/_b00t_",ro \
- source ./_b00t_.bashrc; \
  if [ -z "$arrgh" ] ; then \
   echo "D0ck3r Starrtup 🐳🏴‍☠️🦜 arrrgh, was not provided"; \
  else \
@@ -142,19 +145,25 @@ RUN --mount=type=bind,target="/c0de/_b00t_",ro \
  fi 
  # this example sets up $arrrgh which is an $arrrbitrary value! 
 
+
+# 🤓 Moby BuildKit Syntax (--mount)
+# https://github.com/moby/buildkit/blob/master/frontend/dockerfile/docs/syntax.md
+
 #RUN apt update && apt install -y cowsay
 #CMD ["/usr/games/cowsay", "Dockerfiles are cool!"]
 
 ## 进口 (Jìnkǒu :: Import/Load) PHASE 2 * * \\ 
 # Two is Torvalds Tech (Linux & Git)
-#ADD "./*🔨/init.*.🐧.*.sh" "./"
+ADD "./*🔨/init.*.🐧.*.sh" "./🐧.sh"
 RUN --mount=type=bind,target="/c0de/_b00t_",ro \
- ./source.sh "./bash.🔨/init.*.🐧.*.sh";
+ ./source.sh ./🐧.sh 
 
+RUN --mount=type=bind,target="/c0de/_b00t_",ro \
+ ./source.sh ./bash.🔨/init.*.🐧.*.sh 
 
 #ADD "./*🔨/init.*.🐙.*.sh" "./"
 RUN  --mount=type=bind,target="/c0de/_b00t_",ro \
- ./source.sh  "./bash.🔨/init.*.🐙.*.sh" 
+ ./source.sh  ./bash.🔨/init.*.🐙.*.sh 
 
 RUN  --mount=type=bind,target="/c0de/_b00t_",ro \
 ./source.sh "./bash.🔨/init.*.🐳.*.sh"
@@ -199,3 +208,15 @@ CMD ["-f","/dev/null"]
 #CMD [ "/bin/bash", "-c", "/c0de/_b00t_/_b00t_.bashrc"]
 #RUN python -m venv /venv
 #ENV PATH=/venv/bin:$PATH
+#ARG my_arg
+
+#FROM b00t_m4k3 AS branch-version-1
+#RUN echo "this is the stage that sets VAR=TRUE"
+#ENV VAR=TRUE
+
+#FROM b00t_m4k3 AS branch-version-2
+#RUN echo "this is the stage that sets VAR=FALSE"
+#ENV VAR=FALSE
+
+#FROM branch-version-${my_arg+"x"} AS final
+#RUN echo "VAR is equal to ${VAR}"

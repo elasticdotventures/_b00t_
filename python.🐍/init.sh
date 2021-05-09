@@ -23,7 +23,7 @@ for file in ${txtFiles[@]}; do
 
     if [ $pipIt = true ]; then 
         echo "pipIt! $file"
-        # pip3 install -r $file
+        pip3 install -r $file
     fi
 done
 

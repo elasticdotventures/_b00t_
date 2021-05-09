@@ -91,14 +91,18 @@ if n0ta_xfile_📁_好不好 "/usr/bin/fdfind"  ; then
 
     $SUDO_CMD mkdir -p ~/.local/bin
     $SUDO_CMD ln -s $(which fdfind) ~/.local/bin/fd
+    alias fd="/usr/bin/fdfind"
 fi
 
 if n0ta_xfile_📁_好不好 "/usr/bin/rg" ; then
     # RipGrep
     # 🤓 https://github.com/BurntSushi/ripgrep#installation
-    curl -LO https://github.com/BurntSushi/ripgrep/releases/download/12.1.1/ripgrep_12.1.1_amd64.deb
+    pwdwas=`pwd`
+    tmpdir=$(mktemp -d)
+    cd $tmpdir && curl -LO https://github.com/BurntSushi/ripgrep/releases/download/12.1.1/ripgrep_12.1.1_amd64.deb
     log_📢_记录 "😇.install ripgrep (rg)"
-    $SUDO_CMD dpkg -i ripgrep_12.1.1_amd64.deb
+    $SUDO_CMD dpkg -i "$tmpdir/ripgrep_12.1.1_amd64.deb"
+    cd $pwdwas
     #OR .. sudo apt-get install ripgrep
 fi
 

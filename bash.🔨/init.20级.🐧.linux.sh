@@ -38,9 +38,13 @@ fi
 if n0ta_xfile_📁_好不好 "/usr/bin/yq" ; then
     YQ_VERSION="v4.7.0"
     YQ_BINARY="yq_linux_amd64"
-    wget https://github.com/mikefarah/yq/releases/download/${YQ_VERSION}/${YQ_BINARY}.tar.gz -O - |\
-        tar xz && cp ${YQ_BINARY} /usr/bin/yq && rm -f $YQ_BINARY
 
+    tmpdir=$(mktemp -d)
+    pwdwas=`pwd`
+    cd $tmpdir && wget https://github.com/mikefarah/yq/releases/download/${YQ_VERSION}/${YQ_BINARY}.tar.gz -O - |\
+        tar xz && cp ${YQ_BINARY} /usr/bin/yq && rm -f $YQ_BINARY
+    cd $pwdwas
+    
     if n0ta_xfile_📁_好不好 "/usr/bin/yq" ; then
         log_📢_记录 "💩 STILL missing /usr/bin/yq"
         exit

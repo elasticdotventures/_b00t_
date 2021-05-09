@@ -1,5 +1,14 @@
 #!/bin/sh
 
+# https://nvie.com/posts/a-successful-git-branching-model/
+# master, develop, release-*, hotfix-*
+
+# steps to git merge
+# https://stackoverflow.com/questions/56577184/github-pull-changes-from-a-template-repository/56577320
+# git remote add template https://github.com/elasticdotventures/_b00t_.git
+# git fetch --all
+# git merge template/develop --allow-unrelated-histories
+
 # adapted from: 
 # Multi-stage Builds
 # 🤓 https://docs.docker.com/develop/develop-images/multistage-build/
@@ -40,13 +49,13 @@ TARGET="b00t_m4k3"  # future, config point.
 #  --platform=<platform>
 echo "TARGET: $TARGET"
   # --build-arg BUILDKIT_INLINE_CACHE=1 .
+  # --progress=plain \
+  #--build-arg arrgh="🦜🏴‍☠️" \
 
 export DOCKER_BUILDKIT=1
 
 sudo docker buildx install
 sudo docker buildx build \
-  --progress=plain \
-  --build-arg arrgh="🦜🏴‍☠️" \
   --platform linux/amd64 \
   -t elasticdotventures/b00t:latest --target $TARGET \
   --build-arg https_proxy=$https_proxy \
@@ -55,6 +64,8 @@ sudo docker buildx build \
   .
 # Example passing secrets:
 # https://github.com/moby/buildkit/blob/master/frontend/dockerfile/docs/syntax.md
+
+## note: could also possibly use docker export to track changes.
 
 cat << EOF
 # dev instance, shares common filesystrem. 

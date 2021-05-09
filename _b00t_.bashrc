@@ -10,6 +10,10 @@
 set -o nounset    # Exposes unset variables, strict mode. 
 trap "set +o nounset" EXIT  # restore nounset at exit, even in crash!
 
+# 🤔 trial: 
+umask 000
+
+
 set -a # mark variables whcih are modified or created for export
 ## 小路 \\
 ## Xiǎolù :: Path or Directory
@@ -27,7 +31,15 @@ export FD_OPTIONS="--follow -exlude .git --exclude node_modules"
 ## OPINIONATED ALIASES
 
 alias ls='ls -F  --color=auto'
+# pretty = ll
+#-rw-rw-r-- 1 1000 1000  100 May  5 23:51 requirements.txt
+#-rw-rw-r-- 1 1000 1000  144 May  5 20:01 requirements.层_b00t_.txt
+#-rw-rw-r-- 1 1000 1000  221 Apr 25 20:27 requirements.层_c0re.txt
 alias ll='ls -lh'
+
+#4.0K src/
+#4.0K requirements.层_test.txt
+#4.0K requirements.层_c0re.txt
 alias lt='ls --human-readable --size -1 -S --classify'
 
 
@@ -116,6 +128,12 @@ function _b00t_init_🥾_开始() {
     #🌆 export _b00t_="$(basename $0)"
     export _b00t_="$0" 
 
+    if [ $_b00t_ == "/c0de/_b00t_/_b00t_.bashrc" ] ; then
+        log_📢_记录 ""
+        log_📢_记录 "usage: source /c0de/_b00t_/_b00t_.bashrc"
+        exit 
+    fi
+
     local PARENT_COMMAND_STR="👽env-notdetected"
     if [ $PPID -eq 0 ] ; then
         if [ "$container" == "docker" ] ; then
@@ -138,7 +156,7 @@ function _b00t_init_🥾_开始() {
 
 
     log_📢_记录 "🥾 init: $_b00t_"
-    if [ -z "${@}" ] ; then 
+    if [ -n "${@}" ] ; then 
         log_📢_记录 "🥾 args: ${@}"  
     fi 
 }
@@ -338,7 +356,7 @@ function rand0() {
 function is_n0t_aliased() {
     local args=("$@")
     local hasAlias=${args[0]}
-    exists=$(alias -p | grep "alias $hasAlias=")
+    local exists=$(alias -p | grep "alias $hasAlias=")
     if [ -z "$exists" ] ; then
         return 0;
     else 
@@ -360,7 +378,7 @@ function motd() {
         fi 
         motdz=('/tmp/motd.txt')
     else 
-        readarray -t motdz < <(fd .txt 'ubuntu.🐧/etc/')
+        readarray -t motdz < <(/usr/bin/fdfind .txt "$_B00T_C0DE_Path/./ubuntu.🐧/etc/")
     fi
     local motdzQ=$( rand0 ${#motdz[@]} )
     # declare -p motdz
@@ -400,12 +418,45 @@ function motd() {
         showWithCMD="cat"
     fi 
 
+    local glitchCMDz=''
+    if [ $(rand0 10) -gt 1 ] ; then
+        glitchCMDz="$glitchCMDz | /usr/bin/sed 's/1/0/g' "
+    fi
+    #if [ $(rand0 10) -gt 5 ] ; then
+    #    glitchCMDz=" | /usr/bin/sed 's/0/1/g' $glitchCMDz"
+    #fi
+    #if [ $(rand0 10) -gt 5 ] ; then
+    #    glitchCMDz=" | /usr/bin/sed 's/8/🥾/g' $glitchCMDz"
+    #fi
+
     #if [ $motdLength -gt $(echo $(tput rows) - 3 | bc) ] ; then
     #    showWithCMD="cat"
     #fi 
 
     if [ -n "$showWithCMD" ] ; then
-        $showWithCMD ${motdz[motdzQ]}
+        motdTmpFile=$( mktemp "_b00t_.日$(ymd).一时XXXXXXXXXX.motd" )
+        # echo "motdFile: $motdTmpFile"
+        # echo $(rand0 10)
+        ## glitch effects 
+        cp -v ${motdz[motdzQ]} $motdTmpFile
+        if [ $(rand0 10) -gt 5 ] ; then
+            /usr/bin/sed -i 's/1/0/g' $motdTmpFile
+            /usr/bin/sed -i 's/8/🥾/g' $motdTmpFile
+        fi 
+        if [ $(rand0 10) -gt 5 ] ; then
+            /usr/bin/sed -i 's/\*/🥾/g' $motdTmpFile
+            /usr/bin/sed -i 's/[\!\-\@]./😁/g' $motdTmpFile
+        fi
+        if [ $(rand0 10) -gt 5 ] ; then
+            /usr/bin/sed -i 's/#/_/g' $motdTmpFile
+            /usr/bin/sed -i 's/0/🐛/g' $motdTmpFile
+        fi 
+        if [ $(rand0 10) -gt 5 ] ; then
+            /usr/bin/sed -i 's/1/l/g' $motdTmpFile
+            /usr/bin/sed -i 's/[\@l\#]/🐛/g' $motdTmpFile
+        fi 
+        $showWithCMD $motdTmpFile
+        /bin/rm -f $motdTmpFile
     fi
     
     log_📢_记录 "🥾📈 FYTYRE goes here. "
@@ -448,14 +499,17 @@ if ! n0ta_xfile_📁_好不好 "/usr/bin/fdfind"  ; then
 fi
 
 
+####
+# CRUDINI examples
+# 🤓 https://github.com/pixelb/crudini/blob/master/EXAMPLES
 # CRUDINI is used to store b00t config:
+
 if n0ta_xfile_📁_好不好 "/usr/bin/crudini" ; then 
     log_📢_记录 "🥳 need crudini to save data, installing now"  
     $SUDO_CMD apt-get install -y crudini bc
 fi
 
-
-
+## CRUDINI helper functions:
 function crudini_set() {
     local args=("$@")
     local topic=${args[0]}
@@ -473,34 +527,56 @@ function crudini_get() {
     return $?
 }
 
+# _seq: get a number from a sequence in b00t
+function crudini_seq() {
+    local args=("$@")
+    local seqlabel=${args[0]}
+    
+    local x=$( crudini_get "b00t" "$seqlabel" )
+    if [ -z "$x" ] ; then x="0"; fi 
+    x=$(echo "$x" + 1 | bc)
+    crudini_set "b00t" "$seqlabel" "$x"
+    echo $x
+    return 0
+}
 
-# CRUDINI examples
-# 🤓 https://github.com/pixelb/crudini/blob/master/EXAMPLES
+# verify integrity of crudini system
 function crudini_init() {
     export CRUDINI_CFGFILE=$(expandPath "~/.b00t/config.ini")
-    if [ ! -d $CRUDINI_CFGFILE ] ; then
+    local CRUDINI_DIR=`dirname $CRUDINI_CFGFILE`
+    if [ ! -d "$CRUDINI_DIR" ] ; then
         log_📢_记录 "🐭 no local $CRUDINI_CFGFILE"  
-        CRUDINI_DIR=`dirname $CRUDINI_CFGFILE`
-        log_📢_记录 "🥳 local dir $CRUDINI_DIR"  
+        log_📢_记录 "🐭🥳 local dir $CRUDINI_DIR"  
         if [ ! -d "$CRUDINI_DIR" ] ; then
-            log_📢_记录 "🧝 creating CRUDINI dir $CRUDINI_DIR"  
+            log_📢_记录 "🐭 creating CRUDINI dir $CRUDINI_DIR"  
             /bin/mkdir -p $CRUDINI_DIR
             /bin/chmod 750 $CRUDINI_DIR
-            crudini --set $CRUDINI_CFGFILE '_syntax' "1"
+            log_📢_记录 "🐭 init CRUDINI file $CRUDINI_CFGFILE"  
+            crudini --set $CRUDINI_CFGFILE '_seq' "1"
         else        
             #local x=$( crudini_get "b00t" "crudini_check" )
             # x=$( [ -z "$x" ] && echo "0" )
-            local x=$( crudini_get "b00t" "crudini_check" )
-            if [ -z "$x" ] ; then x="0"; fi 
-            x=$(echo "$x" + 1 | bc)
-            crudini_set "b00t" "crudini_check" "$x"
-            log_📢_记录 "😃 #$x CRUDINI local dir $CRUDINI_DIR exists"
-
+            local x=$( crudini_seq "crudini_check" )
+            log_📢_记录 "🐭😃CRUDINI _seq: #$x dir: $CRUDINI_DIR existed."
         fi
     fi
+    return 0
 }
-# does not need an export. 
-crudini_init 
+#  creates an export for $CRUDINI_CFGFILE
+crudini_init
+
+function crudini_ok () {
+if [ -f $CRUDINI_CFGFILE ] ; then 
+    x=$( crudini_seq "crudini_check" )
+    log_📢_记录 "🐭🥾 CRUDINI _seq: #$x $CRUDINI_CFGFILE"
+    return 0
+else 
+    log_📢_记录 "🐭🍒 CRUDINI br0ked. file: $CRUDINI_CFGFILE"
+    # todo: maybe some failsafe, i.e. redis or something. 
+    return 1
+fi
+}
+crudini_ok
 #motd
 
 # 60秒 Miǎo seconds

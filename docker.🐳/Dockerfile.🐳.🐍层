@@ -16,3 +16,7 @@ RUN pip install scikit-learn
 
 ENTRYPOINT ["top", "-b"]
 
+
+## CONDA
+ENV CONDA_UID="110"
+RUN useradd --create-home --gid docker --uid $CONDA_UID --shell /bin/bash conda
