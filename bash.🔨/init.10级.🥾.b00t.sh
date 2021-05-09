@@ -7,6 +7,7 @@
 
 # Boot functions
 source "/c0de/_b00t_/_b00t_.bashrc"
+ARCH="$(uname -m | cut -b 1-6)"
 
 # moved to _b00t_.bashrc
 # source "$_B00T_C0DE_Path/./bash.🔨/.bash_aliases"
@@ -95,31 +96,69 @@ if n0ta_xfile_📁_好不好 "/usr/bin/fdfind"  ; then
 fi
 
 if n0ta_xfile_📁_好不好 "/usr/bin/rg" ; then
-    # RipGrep
+    # RipGrep, needs something higher than v10 included with ubuntu
     # 🤓 https://github.com/BurntSushi/ripgrep#installation
     pwdwas=`pwd`
     tmpdir=$(mktemp -d)
-    cd $tmpdir && curl -LO https://github.com/BurntSushi/ripgrep/releases/download/12.1.1/ripgrep_12.1.1_amd64.deb
-    log_📢_记录 "😇.install ripgrep (rg)"
-    $SUDO_CMD dpkg -i "$tmpdir/ripgrep_12.1.1_amd64.deb"
+    cd $tmpdir
+    log_📢_记录 "😇.install ripgrep (rg) $ARCH"
+    case "$ARCH" in
+        "x86_64")
+            curl -LO https://github.com/BurntSushi/ripgrep/releases/download/12.1.1/ripgrep_12.1.1_amd64.deb
+            $SUDO_CMD dpkg -i "$tmpdir/ripgrep_12.1.1_amd64.deb"
+            ;;
+        "armv7l")
+            curl -LO https://github.com/BurntSushi/ripgrep/releases/download/12.1.1/ripgrep-12.1.1-arm-unknown-linux-gnueabihf.tar.gz
+            tar -xvzf ripgrep-12.1.1-arm-unknown-linux-gnueabihf.tar.gz
+            $SUDO_CMD cp -v ripgrep-12.1.1-arm-unknown-linux-gnueabihf/rg /usr/local/bin/rg
+        *)
+            log_📢_记录 "😇👽.ripgrep $ARCH is unsupported!"
+            ;;
+    esac
     cd $pwdwas
     #OR .. sudo apt-get install ripgrep
 fi
 
-if n0ta_xfile_📁_好不好 "/usr/bin/whiptail" ; then 
-    # whiptail makes interactive menus
-    # 🤓 https://en.wikibooks.org/wiki/Bash_Shell_Scripting/Whiptail
-    log_📢_记录 "😇.install whiptail menus"
-    $SUDO_CMD apt-get install -y whiptail
-fi
+## not presently using whiptail. 
+#if n0ta_xfile_📁_好不好 "/usr/bin/whiptail" ; then 
+#    # whiptail makes interactive menus
+#    # 🤓 https://en.wikibooks.org/wiki/Bash_Shell_Scripting/Whiptail
+#    log_📢_记录 "😇.install whiptail menus"
+#    $SUDO_CMD apt-get install -y whiptail
+#fi
 
 if n0ta_xfile_📁_好不好 "/usr/bin/batcat" ; then 
     log_📢_记录 "😇.install batcat (bat), replaces cat"
-    $SUDO_CMD apt-get install -y bat
-    $SUDO_CMD mkdir -p ~/.local/bin
-    ln -s /usr/bin/batcat ~/.local/bin/bat
-    # example with fzf:
-    # fzf --preview 'batcat --style numbers,changes --color=always {} | head -50'
+    URL=""
+    case $ARCH in
+        armv7l)
+            URL="https://github.com/sharkdp/bat/releases/download/v0.18.0/bat_0.18.0_armhf.deb" 
+            ;;
+        arm64) 
+            URL="https://github.com/sharkdp/bat/releases/download/v0.18.0/bat_0.18.0_arm64.deb"
+            ;;
+        x86_64)
+            URL="https://github.com/sharkdp/bat/releases/download/v0.18.0/bat_0.18.0_amd64.deb"
+            ;;
+        *) 
+            log_📢_记录 "😇🐛 unsupported platform $ARCH"
+            ;;
+    esac
+    if [ -n "$URL" ] ; then 
+        log_📢_记录 "😇batcat URL: $URL "
+        pwdwas=`pwd`
+        tmpdir=$(mktemp -d)
+        cd $tmpdir && curl -LO $URL
+        FILENAME=$(basename $URL)
+        dpkg -i "$tmpdir/$FILENAME"
+        cd $pwdwas
+        #$SUDO_CMD apt install -y ./$FILENAME
+        # $SUDO_CMD apt-get install -y bat
+        #$SUDO_CMD mkdir -p ~/.local/bin
+        #ln -s /usr/bin/batcat ~/.local/bin/bat
+        # example how to use batcat with fzf:
+        # fzf --preview 'batcat --style numbers,changes --color=always {} | head -50'
+    fi
 fi
 
 
@@ -127,6 +166,7 @@ log_📢_记录 "🥾😇.install dialog & apt-utils"
 $SUDO_CMD apt-get install -y dialog apt-utils
 
 # _b00t_ cli - "/usr/local/bin/b00t"
+
 ## 
 if [ ! -f "/usr/local/bin/b00t" ] ; then
     $SUDO_CMD ln -s /c0de/_b00t_/up-cli.sh /usr/local/bin/b00t
