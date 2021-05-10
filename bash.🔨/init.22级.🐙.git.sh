@@ -28,6 +28,10 @@ $SUDO_CMD apt-add-repository https://cli.github.com/packages
 $SUDO_CMD apt update -y  # TODO: make -y optional
 $SUDO_CMD apt install -y gh
 
+
+# Install GH on rasperrypi
+#https://lindevs.com/install-github-cli-on-raspberry-pi/
+
 # Git Automation with OAuth Tokens
 # https://docs.github.com/en/github/extending-github/git-automation-with-oauth-tokens
 

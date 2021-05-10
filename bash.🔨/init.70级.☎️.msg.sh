@@ -11,11 +11,15 @@
 # Celery is a task queue with batteries included.
 # https://docs.celeryproject.org/en/stable/getting-started/first-steps-with-celery.html
 
-sudo apt-get install rabbitmq-server
+## 🐇 rabbiqmq
+# sudo apt-get install rabbitmq-server
+# rpi rabbitmq https://hub.docker.com/r/arm32v7/rabbitmq
+# docker run -d -p 5672:5672 rabbitmq
 
-docker run -d -p 5672:5672 rabbitmq
+## ☎️ redis
 docker run -d -p 6379:6379 redis
 
+## celeary
 pip install celery
 
 # To Run: 

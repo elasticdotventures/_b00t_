@@ -9,6 +9,10 @@ source "/c0de/_b00t_/_b00t_.bashrc"
 #* 🐳Docker!
 ## * * * *\\
 
+# Arm32v7 docker hub (for rpi🥧)
+#https://hub.docker.com/u/arm32v7/
+
+
 # REMEMBER:
 #  * Obsolete: Swarm => K8, C-Groups => Systemd
 
@@ -79,6 +83,14 @@ fi
 
 # Docker
 ## 鲸 //
+
+# enable on startup: 
+$SUDO_CMD systemctl enable docker.service
+$SUDO_CMD systemctl enable containerd.service
+
+# TO DISABLE:
+# sudo systemctl disable docker.service
+# sudo systemctl disable containerd.service
 
  docker service create \
     --mount 'type=volume,src=b00t,dst=/c0de/b00t,volume-driver=local'

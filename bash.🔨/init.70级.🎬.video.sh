@@ -33,4 +33,4 @@ sudo add-apt-repository ppa:nilarimogard/webupd8
 sudo apt update
 sudo apt-get install -y streamlink
 
-
+# https://github.com/svt/encore

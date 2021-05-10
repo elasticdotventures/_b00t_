@@ -14,6 +14,12 @@ npm i -g zx
 # https://linuxize.com/post/how-to-install-node-js-on-ubuntu-20-04/#installing-nodejs-and-npm-from-nodesource
 
 
+# Three examples of PolyMorphism:
+# https://blog.sessionstack.com/how-javascript-works-3-types-of-polymorphism-f10ff4992be1?source=collection_category---4------0-----------------------&gi=d6058f27a8e3
+
+# ShellJS a portable unix shell commands for node.js
+# https://github.com/shelljs/shelljs
+
 # future.
 
 # log_📢_记录 "🚀 install node"
