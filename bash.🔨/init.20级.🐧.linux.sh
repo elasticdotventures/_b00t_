@@ -24,32 +24,9 @@ apt-get install -y sudo
 ## For WSL - snapd won't work properly unless we also: 
 if  is_WSLv2_🐧💙🪟v2  ; then
     log_📢_记录 "🐧😇 wsl2 setup"
-    $SUDO_CMD apt-get update && $SUDO_CMD apt-get install -yqq daemonize dbus-user-session fontconfig
+    $SUDO_CMD apt-get update && $SUDO_CMD apt-get install -y qq daemonize dbus-user-session fontconfig
 fi
 
-# 🍰 yq  - YAML config i/o    https://github.com/mikefarah/yq
-# not using yq via snap. 
-#if n0ta_xfile_📁_好不好 "/usr/bin/yq" ; then
-#    log_📢_记录 "🐧😇 yq"
-#    systemctl status snapd.service
-#    snap install yq
-#fi
-
-if n0ta_xfile_📁_好不好 "/usr/bin/yq" ; then
-    YQ_VERSION="v4.7.0"
-    YQ_BINARY="yq_linux_amd64"
-
-    tmpdir=$(mktemp -d)
-    pwdwas=`pwd`
-    cd $tmpdir && wget https://github.com/mikefarah/yq/releases/download/${YQ_VERSION}/${YQ_BINARY}.tar.gz -O - |\
-        tar xz && cp ${YQ_BINARY} /usr/bin/yq && rm -f $YQ_BINARY
-    cd $pwdwas
-    
-    if n0ta_xfile_📁_好不好 "/usr/bin/yq" ; then
-        log_📢_记录 "💩 STILL missing /usr/bin/yq"
-        exit
-    fi
-fi
 
 # software-properties-common tools is required by git
 log_📢_记录 "🐧😇 git dependencies"

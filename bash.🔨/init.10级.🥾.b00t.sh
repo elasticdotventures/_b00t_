@@ -111,6 +111,7 @@ if n0ta_xfile_📁_好不好 "/usr/bin/rg" ; then
             curl -LO https://github.com/BurntSushi/ripgrep/releases/download/12.1.1/ripgrep-12.1.1-arm-unknown-linux-gnueabihf.tar.gz
             tar -xvzf ripgrep-12.1.1-arm-unknown-linux-gnueabihf.tar.gz
             $SUDO_CMD cp -v ripgrep-12.1.1-arm-unknown-linux-gnueabihf/rg /usr/local/bin/rg
+            ;;
         *)
             log_📢_记录 "😇👽.ripgrep $ARCH is unsupported!"
             ;;
@@ -160,6 +161,65 @@ if n0ta_xfile_📁_好不好 "/usr/bin/batcat" ; then
         # fzf --preview 'batcat --style numbers,changes --color=always {} | head -50'
     fi
 fi
+
+##### 
+## after a lot of moving around, it's clear 
+## yq needs to be here, since it's used in a variety of menus
+## for d1rd1ct (next)
+installYQ=false
+YQ_VERSION="v4.7.0"
+YQ_BINARY="yq_linux_amd64"  # TODO: multiarch 
+YQ_MIN_VERSION="4.0.0"
+YQ_INSTALL_PATH="/usr/local/bin/yq"
+
+if n0ta_xfile_📁_好不好 "$YQ_INSTALL_PATH" ; then
+    log_📢_记录 "😲 yq does not appear to be installed, f1x1ng."
+    # missing yq
+    installYQ=true
+else 
+    # check yq version 
+    log_📢_记录 "🧐 checking yq"
+    currentYQver="$(yq -V | cut -f 2 -d ' ')"
+    isYQokay=$(is_v3rs10n_大于 "$YQ_MIN_VERSION" $currentYQver)
+    if [ ! "$isYQokay" = false ] ; then
+        # TODO: consent
+        log_📢_记录 "👻👼 insufficient yq --version $1, f1x1ng."
+        installYQ=true
+        $SUDO_CMD snap remove yq
+        $SUDO_CMD apt-get remove yq
+        $SUDO_CMD rm /usr/bin/yq 
+        $SUDO_CMD rm /usr/local/bin/yq 
+    fi
+fi
+
+# 🍰 yq  - YAML config i/o    https://github.com/mikefarah/yq
+# not using yq via snap.  way too old!! 
+#if n0ta_xfile_📁_好不好 "/usr/bin/yq" ; then
+#    systemctl status snapd.service
+#    snap install yq
+#fi
+if [ "$installYQ" = true ] ; then 
+    log_📢_记录 "🐧😇 upgrading $YQ_INSTALL_PATH"
+    tmpdir=$(mktemp -d)
+    pwdwas=`pwd`
+    cd $tmpdir && \
+     wget https://github.com/mikefarah/yq/releases/download/${YQ_VERSION}/${YQ_BINARY}.tar.gz -O - |\
+     tar xz && $SUDO_CMD cp ${YQ_BINARY} "$YQ_INSTALL_PATH" && \
+     rm -f $YQ_BINARY
+    cd $pwdwas
+    
+    currentYQver="$(yq -V | cut -f 2 -d ' ')"
+    isYQokay=$(is_v3rs10n_大于 "$YQ_MIN_VERSION" $currentYQver)
+    if n0ta_xfile_📁_好不好 "$YQ_INSTALL_PATH" ; then
+        log_📢_记录 "💩 STILL missing $YQ_INSTALL_PATH (required for d1ctd1r)"
+        exit
+    elif [ "$isYQokay" = true ] ; then
+        log_📢_记录 "😇🎉 yq installed"
+    else
+        log_📢_记录 "💩🍒 yq installed, but version still insufficient (wtf)"
+    fi 
+fi
+
 
 
 log_📢_记录 "🥾😇.install dialog & apt-utils"

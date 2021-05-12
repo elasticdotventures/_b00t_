@@ -13,7 +13,6 @@ trap "set +o nounset" EXIT  # restore nounset at exit, even in crash!
 # 🤔 trial: 
 umask 000
 
-
 set -a # mark variables whcih are modified or created for export
 ## 小路 \\
 ## Xiǎolù :: Path or Directory
@@ -23,12 +22,71 @@ export _B00T_C0NFIG_Path="$HOME/.b00t"
 _b00t_INSPIRATION_FILE="$_B00T_C0DE_Path/./r3src_资源/inspiration.json"
 ## 小路 //
 
+
+## 记录 \\
+## Jìlù :: Record (Log)
+# 🤓 write to a log if you want using >> 
+unset -f log_📢_记录
+function log_📢_记录() {
+    echo "$@"
+}
+export -f log_📢_记录
+## 记录 //
+
+
+## * * * * * \\
+## is_version_大于
+## compared #.#.# version (but could detect other formats)
+## usage: is_version_大于 $requiredver $currentver
+unset -f is_v3rs10n_大于
+function is_v3rs10n_大于()   # $appversion $requiredversion
+{
+    # echo "hello $1 $2"
+    # printf '%s\n%s\n' "$2" "$1" | sort --check=quiet --version-sort
+    local appver=$1     # i.e. 1.0.0
+    local requiredver=$2 # i.e. 1.0.1
+    if [ "$(printf '%s\n' "$requiredver" "$appver" | sort -V | head -n1)" = "$requiredver" ]; then 
+        # version is insufficient
+        result="false"
+    else
+        # version is sufficient (大于 greater than equal)
+        result="true"
+    fi
+
+    echo $result
+    return 0
+}
+export -f is_v3rs10n_大于
+## * * * * * * //
+
+
+## All the logic below figures out who is calling & hot-reload
 ## bail earlier is better, 
 _b00t_exists=`type -t "_b00t_init_🥾_开始"`
+_b00t_VERSION_was=0
 if [ "$_b00t_exists" == "function" ] ; then 
+    export _b00t_VERSION_was="$_b00t_VERSION"
+fi
+# -------------- CONFIGURABLE SETTING -----------------
+export _b00t_VERSION="1.0.13"
+# -----------------------------------------------------
+
+# syntax: current required
+#echo "v3r: $_b00t_VERSION "
+upgradeB00T=$(is_v3rs10n_大于 "$_b00t_VERSION_was" "$_b00t_VERSION")
+
+if [ "$upgradeB00T" ==  true ] ; then 
+    ## upgrade b00t in memory (this doesn't work awesome, but useful during dev)
+    log_📢_记录 "🥾🧐 b00t version | now: $_b00t_VERSION | was: $_b00t_VERSION_was | upgrade: $upgradeB00T"
+    log_📢_记录 "🥾🦸 skip short circuit, upgrade boot"
+    # TODO: consent
+elif [ "$_b00t_exists" == "function" ] ; then 
+    # SILENT, don't reload unless _b00t_VERSION is newer
     # short circuit using rand0() function 
+    # log_📢_记录 "👻 short-circuit"
     set +o nounset 
     return
+    ## 🍒 short circuit! 
 fi
 
 ## Have FZF use fdfind "fd" by default
@@ -106,25 +164,29 @@ alias ymd_hms="date +'%Y%m%d.%H%M%S'"
 
 
 
-## 记录 \\
-## Jìlù :: Record (Log)
-# 🤓 write to a log if you want using >> 
-function log_📢_记录() {
-    echo "$@"
-}
-export -f log_📢_记录
-## 记录 //
 
 # order of magnitude
 #function oom () {
 #    # todo: detect an order of magnitude transition. 
 #}
 
+
+
+
+
 ## 进口 \\  
 ## Kāishǐ :: Start
 # init should be run by every program. 
 # this is mostly here for StoryTime and future hooks. 
+unset -f _b00t_init_🥾_开始
 function _b00t_init_🥾_开始() {
+    local args=("$@")
+    local param=${args[0]}
+
+#    if [ param="version" ] ; then
+#        echo "🥾v: $currentB00TVersion"
+#    fi 
+    
     # earlier versions, sunset: 
     #🌆 ${0}/./${0*/}"   
     #🌆 export _b00t_="$(basename $0)"
@@ -157,18 +219,33 @@ function _b00t_init_🥾_开始() {
     fi
 
 
-    log_📢_记录 "🥾 init: $_b00t_"
+    log_📢_记录 "🥾 -V: $_b00t_VERSION  init: $_b00t_"
     if [ -n "${@}" ] ; then 
         log_📢_记录 "🥾 args: ${@}"  
     fi 
 }
 export -f _b00t_init_🥾_开始
-_b00t_init_🥾_开始
+#_b00t_init_🥾_开始
+
 ## 进口 //
+
+
+# Webi
+# https://github.com/elasticdotventures/webi-installers
+webi=$(whereis webi)
+if [ -z "$webi" ] ; then 
+    curl https://webinstall.dev/webi | bash
+    # Should install to $HOME/.local/opt/<package>-<version> or $HOME/.local/bin
+    # Should install to $HOME/.local/opt/<package>-<version> or $HOME/.local/bin
+    # Should not need sudo (except perhaps for a one-time setcap, etc) 
+fi 
+
+
 
 
 ## 加载 * * * * * *\\
 ## Jiāzài :: Load
+unset -f bash_source_加载
 function bash_source_加载() {
     local file=$1
 
@@ -501,6 +578,25 @@ if ! n0ta_xfile_📁_好不好 "/usr/bin/fdfind"  ; then
 fi
 
 
+###
+# 🍰 https://superuser.com/questions/427318/test-if-a-package-is-installed-in-apt
+#if debInst "$1"; then
+#    printf 'Why yes, the package %s _is_ installed!\n' "$1"
+#else
+#    printf 'I regret to inform you that the package %s is not currently installed.\n' "$1"
+#fi
+function debInst() {
+    dpkg-query -Wf'${db:Status-abbrev}' "$1" 2>/dev/null | grep -q '^i'
+}
+
+if debInst "moreutils" ; then
+    log_📢_记录 "👍 debian moreutils is installed!"
+else
+    log_📢_记录  "😲 install moreutils (required)"
+    $SUDO_CMD apt-get install -y moreutils
+ i 
+
+
 ####
 # CRUDINI examples
 # 🤓 https://github.com/pixelb/crudini/blob/master/EXAMPLES
@@ -585,8 +681,12 @@ crudini_ok
 # 3分钟 Fēnzhōng minutes
 # 3小时 Xiǎoshí seconds
 
-export _b00t_JS0N_filepath=$(expandPath "~/.b00t/config.json")
 
+
+
+
+
+export _b00t_JS0N_filepath=$(expandPath "~/.b00t/config.json")
 #function jqAddConfigValue () {
 #    echo '{ "names": ["Marie", "Sophie"] }' |\
 #    jq '.names |= .+ [
