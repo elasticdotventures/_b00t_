@@ -59,10 +59,11 @@ bash$ source ./_b00t_/_b00t_.bashrc
 
 ```
 ## presently working on:
- * azure graph openid authentication scaffold
-* in typescript spa vue vite vitesse based template
+* azure graph openid authentication scaffold
+* integrating typescript spa vue vite vitesse based template
 * please excuse the dust as i write the docs as i'm building this. 
 
+```
 ## you might try the setup file, or explore the color repo!
 bash$ cd _b00t_; ./01-startup.sh 
 
