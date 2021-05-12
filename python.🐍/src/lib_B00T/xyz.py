@@ -1,6 +1,14 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
+# what is dynmenu? 
+#  https://github.com/frostidaho/dynmen
+# https://github.com/frostidaho/dynmen/blob/develop/examples/fzf_example.py
+
+
+# docopt example:
+# https://github.com/docopt/docopt/blob/master/examples/arguments_example.py
+
 """Usage: xyz.py --stdin [--length] [--version] [--echoargs] [--json] [--stdout]
 
 performs fzf + dynmenu xyz step. 
