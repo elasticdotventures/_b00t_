@@ -128,7 +128,7 @@ Probably individuals is easier, certainly from an adoption standpoint. Not every
 _b00t_ is also great for teams the VS Code Live Share feature & Remote Containers, and Azure Hybrid-Connections offers a plurality of one-click easy, low-latency for teams to share screens securely through firewalls.  It's built in a way so that you could give people their own instance of your code, even limit the amount of funding per-new-customer trial. Something like google Collab for startups. The author believes this is especially useful if (for example) you desire to collaborate with other researchers, especially Chinese ones (i.e. hardware startups) thanks to it's incorporation of Emoji and Pinyin. 
 
 ## _b00t_ Syntax Rationale: 
-Don't Panic! The future requires new approaches. using emoji and pinyin and cyb3rpunk style for `git grep "🧙"` saves screen space in results and can tell powerful "stories" which as author I believe is a more optimal pattern for application development, in that sense a magnum opus for the decade of my life up until year 2030, hopefully beyond. 
+Don't Panic! The future requires new approaches. using emoji and pinyin and cyb3rpunk style for `git grep "🧙"` saves screen space in results and can tell powerful "stories" which as author I believe is a more optimal pattern for application development. 
 
 The _b00t_ approach uses incorporates 1337 speak for c0mm0n words to encourage brevity at all layers. _b00t_'s design is built to tightly couple the Azure cloud, but integrate with others for services.  
 
