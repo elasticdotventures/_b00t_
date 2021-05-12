@@ -31,3 +31,6 @@ https://github.com/game-ci/unity-actions
 
 ## Unity in Docker
 # https://johnaustin.io/articles/2020/running-unity-20201-in-docker
+
+# import GLTF to Unity 
+#https://github.com/KhronosGroup/UnityGLTF#:~:text=Unity3D%20library%20for%20importing%20and,export%20of%20glTF%202.0%20files

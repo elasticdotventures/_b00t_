@@ -8,9 +8,19 @@
 		},
 		{
 			"path": "../d0rk"
+		},
+		{
+			"path": "../../mnt/c0re/eva.c0re/_CyberPunks"
+		},
+		{
+			"path": "../vitessetestee"
 		}
 	],
 	"settings": {
-		"terminal.external.linuxExec": "sakura"
+		"terminal.external.linuxExec": "sakura",
+		"volar.tsPlugin": true,
+		"i18n-ally.localesPaths": [
+			"../vitessetestee/locales"
+		]
 	}
 }

@@ -1,3 +1,0 @@
-status.sh
-
-az cli 

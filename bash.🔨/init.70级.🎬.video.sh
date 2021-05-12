@@ -4,7 +4,57 @@
 #*
 # * 🎬 Video Processing
 #*
+## blender, ffmpeg
 ## * * * * * * * * * * * //
+
+sudo apt install -y blender
+
+# A collection of Docker containers for running Blender headless or distributed 
+# https://github.com/nytimes/rd-blender-docker
+
+## Blender CLI 
+## https://docs.blender.org/manual/en/latest/advanced/command_line/arguments.html
+# -b --background  run in background
+# 🤓 CLI arguments are run in order and position sensitive.
+# blender --background test.blend --render-output /tmp --render-frame 1
+
+
+## CLI Envornment
+# BLENDER_USER_CONFIG : Directory for user configuration files.
+# BLENDER_USER_SCRIPTS : Directory for user scripts.
+# BLENDER_SYSTEM_SCRIPTS: Directory for system wide scripts.
+# BLENDER_USER_DATAFILES: Directory for user data files (icons, translations, ..).
+# BLENDER_SYSTEM_DATAFILES: Directory for system wide data files.
+# BLENDER_SYSTEM_PYTHON:  Directory for system Python libraries.
+# TEMP: Store temporary files here.
+# TMP: or $TMPDIR Store temporary files here.
+
+
+# Convert Collada to GLTF
+# https://github.com/KhronosGroup/COLLADA2GLTF
+git clone --recursive https://github.com/KhronosGroup/COLLADA2GLTF.git
+cd COLLADA2GLTF
+mkdir build
+cd build
+cmake .. #-Dtest=ON
+# Linux
+make
+# Windows
+## Open the generated COLLADA2GLTF.sln in Visual Studio and build
+COLLADA2GLTF-bin --basepath $(pwd) --input $infile --output output/${input}.gltf
+
+# Blender AddOns:
+#https://wiki.blender.org/wiki/Process/Addons/Guidelines
+
+## Python in blender
+## https://docs.blender.org/api/current/
+## https://docs.blender.org/api/current/info_overview.html#:~:text=Python%20in%20Blender,Blender's%20internal%20tools%20as%20well.&text=This%20modifies%20Blender's%20internal%20data%20directly.
+# https://docs.blender.org/api/current/info_quickstart.html
+## Blender provides its Python modules, such as bpy and mathutils
+
+# https://github.com/nytimes/rd-blender-docker/wiki/Installing-with-GPU-support
+docker run --gpus all nytimes/blender:2.82-gpu-ubuntu18.04 nvidia-smi
+
 
 # Yolo V5: (an AI library for scanning video)
 https://github.com/ultralytics/yolov5

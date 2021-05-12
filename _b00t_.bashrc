@@ -23,6 +23,13 @@ export _B00T_C0NFIG_Path="$HOME/.b00t"
 _b00t_INSPIRATION_FILE="$_B00T_C0DE_Path/./r3src_资源/inspiration.json"
 ## 小路 //
 
+## bail earlier is better, 
+_b00t_exists=`type -t "_b00t_init_🥾_开始"`
+if [ "$_b00t_exists" == "function" ] ; then 
+    # short circuit using rand0() function 
+    set +o nounset 
+    return
+fi
 
 ## Have FZF use fdfind "fd" by default
 export PS_FORMAT="pid,ppid,user,pri,ni,vsz,rss,pcpu,pmem,tty,stat,args"
@@ -97,11 +104,6 @@ alias ymd_hms="date +'%Y%m%d.%H%M%S'"
 
 ##################
 
-_b00t_exists=`type -t "_b00t_init_🥾_开始"`
-if [ "$_b00t_exists" == "function" ] ; then 
-    # short circuit using rand0() function 
-    return
-fi
 
 
 ## 记录 \\
@@ -121,7 +123,7 @@ export -f log_📢_记录
 ## 进口 \\  
 ## Kāishǐ :: Start
 # init should be run by every program. 
-# this is mostly here for StoryTime
+# this is mostly here for StoryTime and future hooks. 
 function _b00t_init_🥾_开始() {
     # earlier versions, sunset: 
     #🌆 ${0}/./${0*/}"   
@@ -237,7 +239,7 @@ function n0ta_xfile_📁_好不好() {
 }
 ## 好不好 // 
 
-
+## future artificat, 
 function selectEditVSCode_experiment() {
     filename=$1
     # select file

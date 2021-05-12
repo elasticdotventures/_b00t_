@@ -30,3 +30,6 @@ git fetch --all
 
 ```
 # FFUT
+
+git remote add template https://github.com/elasticdotventures/_b00t_
+git fetch template

@@ -49,7 +49,7 @@ if [ ! -x $vault_bin ] ; then
     cd $pwdWas
 fi
 
-mkdir -p /vault/data
+#mkdir -p /vault/data
 
 # Not using Packer
 # sudo apt-get update && sudo apt-get install Packer
@@ -58,4 +58,14 @@ mkdir -p /vault/data
 # sudo apt-get update && sudo apt-get install nomad
 
 # for now, dev mode is fine. 
-vault server -dev
+# vault server -dev
+
+# https://registry.hub.docker.com/_/vault/
+#docker run --cap-add=IPC_LOCK -d --name=dev-vault vault
+docker run --cap-add=IPC_LOCK -e 'VAULT_DEV_ROOT_TOKEN_ID=myroot' -e 'VAULT_DEV_LISTEN_ADDRESS=0.0.0.0:1234' vault
+#docker run --cap-add=IPC_LOCK -e 'VAULT_LOCAL_CONFIG={"backend": {"file": {"path": "/vault/file"}}, "default_lease_ttl": "168h", "max_lease_ttl": "720h"}' vault server
+# At startup,
+# * the server will read configuration HCL and JSON files 
+# * from /vault/config (any information passed into VAULT_LOCAL_CONFIG is written into local.json in this directory and read as part of reading the directory for configuration files). 
+# Please see Vault's configuration documentation for a full list of options.
+

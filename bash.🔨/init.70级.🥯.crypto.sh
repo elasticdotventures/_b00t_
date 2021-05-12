@@ -18,15 +18,18 @@ sudo apt update
 
 sudo apt install ethereum
 
-$ mkdir ethminer
-$ wget -O ethminer/ethminer.tar.gz https://github.com/ethereum-mining/ethminer/releases/download/v0.18.0/ethminer-0.18.0-cuda-9-linux-x86_64.tar.gz
-$ tar xzf ethminer/ethminer.tar.gz -C ethminer/
-$ ethminer/bin/ethminer --help
-ethminer 0.18.0
-Build: linux/release/gnu
+## Mining: 
+#$ mkdir ethminer
+#$ wget -O ethminer/ethminer.tar.gz https://github.com/ethereum-mining/ethminer/releases/download/v0.18.0/ethminer-0.18.0-cuda-9-linux-x86_64.tar.gz
+#$ tar xzf ethminer/ethminer.tar.gz -C ethminer/
+#$ ethminer/bin/ethminer --help
+#ethminer 0.18.0
+#Build: linux/release/gnu
+# Ethminer - GPU ethash miner
+# minimal usage : ethminer [DEVICES_TYPE] [OPTIONS] -P... [-P...]
 
-Ethminer - GPU ethash miner
-minimal usage : ethminer [DEVICES_TYPE] [OPTIONS] -P... [-P...]
+# Python ERC20 Wallet
+# https://github.com/amis-erc20/python-eth-wallet
 
 
 # ChiaCoin
@@ -46,3 +49,11 @@ npm install electron -g
 # TO RUN:
 # chia/chia-blockhain/chia-blockchain-gui
 # 
+# ChiaLisp:
+# https://chialisp.com/
+
+
+# Online Gambling: 
+# https://coinpoker.com/#about
+
+

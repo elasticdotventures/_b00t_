@@ -14,6 +14,25 @@ npm i -g zx
 # https://linuxize.com/post/how-to-install-node-js-on-ubuntu-20-04/#installing-nodejs-and-npm-from-nodesource
 
 
+# YARN Node package manager
+# 🤓 https://engineering.fb.com/2016/10/11/web/yarn-a-new-package-manager-for-javascript/
+# yarn add create
+if [ ! -x "/usr/local/bin/yarn" ]; then 
+    $SUDO_CMD npm install -g yarn
+    # yarn add $project
+    # npm init @vitejs/app <project-name>
+    # yarn create @vitejs/app <project-name>
+fi 
+
+# Docker SDK
+yarn add @docker/sdk
+
+# install dependencies as you code
+# https://github.com/siddharthkp/auto-install
+
+# 
+# yarn create @vitejs/app _b00t_
+
 # Three examples of PolyMorphism:
 # https://blog.sessionstack.com/how-javascript-works-3-types-of-polymorphism-f10ff4992be1?source=collection_category---4------0-----------------------&gi=d6058f27a8e3
 
@@ -31,4 +50,4 @@ npm i -g zx
 ## Yeoman is awesome. Going to use this: 
 #npm install -g yo generator-code
 
-
+ 

@@ -90,65 +90,19 @@ bash_source_加载 "$_B00T_C0DE_Path/./bash.🔨/init.*.👾.*.sh"
 
 ## 进口 * * * // 
 
-## 项目 * * * * \\  
-# (Xiàngmù) Project Id
-
-export c0re_pr0j3ct_id=`project`
-##* * * * //
-
-exit 
-
-## !TODO: Do you need a project name?
-## !TODO: Do we have an AZ tenant Id?
-## 要不要　
-## !TODO: Do you need a resource Group?
-## !TODO: 
-🐙
-
-##* * * * \\
-az_resGroupId=$(az group show --name $az_groupName --query id --output tsv)
-# $echo groupId
-# /subscriptions/{###}/resourceGroups/{groupName}
-az ad sp create-for-rbac \
-  # --scopes  # !TODO
-  --scope $az_resGroupId --role Contributor \
-  --name $az_projectId-🤴校长_principal \
-  --sdk-auth
-##* * * * //
-
 
 ##* * * * \\
 # 目录 (Mùlù) Directory
-if [ -d "$c0dePath/./pr0j3cts/./$project_dir" ] ; then
-    export PROJECT_dirExist=`$c0dePath/./pr0j3cts/./$project_dir`
-    echo "🥾 the $c0dePath/./pr0j3cts/./$project_dir already exists use --force"
-else
-    export PROJECT_dirExists=""
-fi
-mkdir -p "$c0dePath/./pr0j3cts/./$project"
+#if [ -d "$c0dePath/./pr0j3cts/./$project_dir" ] ; then
+#    export PROJECT_dirExist=`$c0dePath/./pr0j3cts/./$project_dir`
+#    echo "🥾 the $c0dePath/./pr0j3cts/./$project_dir already exists use --force"
+#else
+#    export PROJECT_dirExists=""
+#fi
+#mkdir -p "$c0dePath/./pr0j3cts/./$project"
 ##* * * * // 
 
-##* * * * \\
-## 怎么样 (zěnme yàng) Present,How & What
-#* - $AZ_resourceGroup is set
-#* - c0re-lib verifies az cli is installed 
-source "./bash/AZ_CLI_init.🤖.sh"
-##* * * * //
-
-##* * * * \\ 
-# 🤖 微软 Wēiruǎn (Microsoft) Zzure
-# 🤖 微软 Azure Login, verify credentials
-# az login --verbose
-source "./bash/AZ_init.🤖.sh"
-##* * * * //
-
-##* * * * \\
-source "./bash/AZ_todo.🤖.sh"
-##* * * * //
-
-
 #*  🐳 docker setup.
-
 
 # TODO: link to the Elasticdotventures repository
 # 
@@ -156,7 +110,7 @@ docker build -t cowsay .
 # 🐳♻️ It’s a good habit to use --rm to avoid filling up your system with stale Docker containers.
 docker run --rm cowsay 
 
-
+cat <<EOF
 🐛 If you didn't get a cowsay, let me know. 
 
 🤓 at this point you can start to build using EV _b00t_ or 
@@ -164,6 +118,7 @@ your own _b00t_.
 
 type:
 git clone https://github.com/elasticdotventures/_b00t_/generate
+EOF;
 
 echo "* if you just saw a talking cow, everything is fine!"
 echo "run ./02_t00ls_.sh

@@ -1,7 +1,7 @@
 
 # \__b00t__
 ------
-Status: merging my own various scripts from other projects, setting up the interactive initalization (using fzf).  Sharing with friends, looking for feedback, alpha testers & contributors. Comments, issues, PR's welcome. Please 🍴🍰🤩.  
+Status: there's something here, still a bit amorpheous.  up the interactive initalization (using fzf).  Sharing with friends, looking for feedback, alpha testers & contributors. Comments, issues, PR's welcome. Please 🍴🍰🤩.  
 
 
 ------
@@ -17,31 +17,65 @@ Status: merging my own various scripts from other projects, setting up the inter
  \/______/       开机🥾🐛虫子          \/______/ 
    B U G   S Q U 1 S H 1 N G   S O F T W A R 3
             FOR APPLICATION DEVELOPERS
+          THE FIRST 100 TECH STARTUP DAYS
+          🧙 COMPRESSED INTO ~0.5 HOUR
+
+   AZURE-ECOSYSTEM STARTUP BEST PRACTICES FOR DEV, RELEASE, COMPLIANCE, LOGGING, CYBER-SECURITY, NEAR-INFINITE CLOUD SCALE, DETERMINISTIC, SERVERLESS TYPESCRIPT VUE VITESSE SPA FRONT END, WITH TYPESCRIPT & PYTHON BACKEND, END TO END FRAMEWORK CONTAINER AND CODE LIBRARY SCAFFOLDING FOR MILITARY GRADE AUTHENTICATION, ARTIFICIAL INTELLIGENCE, ROBOTICS, HARDWARE, ECOMMERCE, FINANCE, ACCOUNTING AND OPERATIONS AUTOMATION. 
+   
+             B00T-A-CYBERPUNK-STARTUP KIT
+
+    ..UNSUITABLE FOR MILITARY OR ANTISOCIAL PROJECTS..
+                    otherwise 
+        Elastic License v2 (ELK2) Open License 
+
+presently alpha/没做完
+seeking testers, investors, or peer-review. 
+
+```bash
 
 # 🤓 QUICKSTART:
+
 git clone https://github.com/elasticdotventures/_b00t_.git
+
+# fzf setup/tutorial menu
+bash$ ./_b00t_/_b00t_.sh
+
+# or just load the tooling/environment
 bash$ source ./_b00t_/_b00t_.bashrc
-# then maybe try the setup: 
+
+# or checkout the init scripts:
+
+```
+## presently working on:
+ * azure graph openid authentication scaffold
+* in typescript spa vue vite vitesse based template
+* please excuse the dust as i write the docs as i'm building this. 
+
+## you might try the setup file, or explore the color repo!
 bash$ cd _b00t_; ./01-startup.sh 
+
 ```
 
 # 🥾 is presently suitable for: 
-pre-dev stage projects 
-self-reliant engineering teams (no vendor support, except the Author & Git Issues)
+probably absolutely nobody besides Brian Horakh (the author).
+but i welcome anybody with similar passions in pre-dev stage projects, incubators, self-reliant engineering teams (no vendor support, except the Author & Git Issues) who want to sponsor my progress or would like to use this framework in their own companies. 
+
+My Ethereum Address is:
+
 
 # _b00t_ Vs. Moby
 _b00t_ is NOT Docker Moby, although it shares some common goals. 
 
 Like Moby _b00t_ is ALSO perfect for:
-* Hackers who want to customize or patch their Docker build (or want a better one)
+* Hackers who want to deploy multi-language code across serverless functions & docker containers (in Azure). 
 * System engineers or integrators building a container system
 * Application developers looking for an easy way to run their Python, Typescript and related applications in containers with VS Code, Azure Tooling & best practices.
 
-_b00t_ is an early stage complete ops-stack for a company (examples included) to quickly easily and affordably, minimize and properly compartmentalized microservices by functional behavior characteristics (mostly in Azure).  Caching and other layers included to reduce costs and monitor integrity. 
+_b00t_ intends to provide an early stage complete ops-stack for a company (examples included) to quickly easily and affordably, minimize and properly compartmentalized microservices by functional behavior characteristics (mostly in Azure).  Caching and other layers included to reduce costs and monitor integrity, but can also be accessed as a slimmed down bare os and should work on anything which can run aptitude package manager (usually debian, ubuntu). 
 
 # What _b00t_ intends to provide: 
 ```
-    * Functional Examples & Opinionated Toolchoices & VS COde Dev Environment integration. 
+    * Functional Examples & Opinionated Toolchoices & VS Code Dev Environment & Plugins 
     * FZF menuing and high automata, with detailed config notes. 
     * Repeatable "clean" environment with sane defaults, that can be easily disabled i.e. remove python or remote typescript, select database, deployment zones, etc. 
     ** For application developers. 
@@ -51,13 +85,13 @@ _b00t_ is an early stage complete ops-stack for a company (examples included) to
 ```
     * Best industry practices security built-in OAuth/OpenID, etc.
     * Hardened Determinsic Patterns using Azure Durable Functions
-    * Colorful and easy to read cyberpunk Emoji & Pinyin filled logs & metrics, v3ry 3117! 
-    * Multi-stage dev, build, test, deploy CI/CD - coming soon. 
+    * Multi-facet ideogram cyb3rpunk! Emoji & Pinyin filled logs & metrics, such 3117! 
+    * Multi-stage dev, build, test, deploy CI/CD is presently done through github & azure app-services. 
     * Containerized Projects that deploy at cloud scale
     * Especially well suited for:
         * Machine Learning Create=>Cloud_Deploy Pipelines
         * Bi-lingual projects using Python & Typescript (or others)
-        * StoryTime Forensic Analysis using eBPF (s0meday)
+        * Your Project
     * Demo/Modules Roadmap (using _b00t_):
         * v0: present. work in progress. 
         * v1: AiiA Call Center [http://github.com/elasticdotventures/aiia-callcenter] - Small Business NLP/TTS/STT "Call Center" intelligent assistant based on Jovo framework, with additional interfaces for discord & slack. bigCommerce integration planned. 
@@ -69,11 +103,11 @@ _b00t_ is an early stage complete ops-stack for a company (examples included) to
       * fzf menus & installer
 ```
 
-# \__b00t__
+# \__b00t__: the vision 
 
 ## What About \_b00t_?
 ElasticDotVentures \_b00t_ is 
-a highly opinionated set of tools for deploying Azure cloud services with EV libraries (called "c0re", a subset of "c0de"), mostly for Azure 🤖.  \_b00t_ brings together a series of powerful Cloud tools to challenge certain traditions proffered by the academic establishment to encourage a non-traditional but extremely p0werful mix-martial-art-of-code.   This text here is mostly visionary explaining the "what" about _b00t_ which is presently early stage being re_b00t_ed😆 from my prior projects. 
+a highly opinionated set of tools for deploying Azure cloud services with EV libraries (called "c0re"), mostly for Azure 🤖.  \_b00t_ brings together a plurality of powerful Cloud tools to  to encourage a non-traditional but extremely p0werful mix-martial-art-of-code.   This text here is mostly visionary explaining the "what" about _b00t_ which is presently early stage being re_b00t_ed😆 from my prior projects. 
 
 ## Is _b00t_ a better for individuals or teams?
 Probably individuals is easier, certainly from an adoption standpoint. Not everybody can gr0k _b00t_.  If you can, great! _b00t_ means you don't need a team to do the stuff because _b00t_ does stuff for you.  Built by a serial-entrepeneur, _b00t_ is a great "stack" for Robotics & AI Startups where the product's very survival is often dependent on efficient (cost-saving) internal-tooling. 
@@ -81,11 +115,15 @@ Probably individuals is easier, certainly from an adoption standpoint. Not every
 _b00t_ is also great for teams the VS Code Live Share feature & Remote Containers, and Azure Hybrid-Connections offers a plurality of one-click easy, low-latency for teams to share screens securely through firewalls.  It's built in a way so that you could give people their own instance of your code, even limit the amount of funding per-new-customer trial. Something like google Collab for startups. The author believes this is especially useful if (for example) you desire to collaborate with other researchers, especially Chinese ones (i.e. hardware startups) thanks to it's incorporation of Emoji and Pinyin. 
 
 ## _b00t_ Syntax Rationale: 
-Don't Panic! The future requires new approaches. 
+Don't Panic! The future requires new approaches. using emoji and pinyin and cyb3rpunk style for `git grep "🧙"` saves screen space in results and can tell powerful "stories" which as author I believe is a more optimal pattern for application development, in that sense a magnum opus for the decade of my life up until year 2030, hopefully beyond. 
 
-The _b00t_ approach uses incorporates 1337 speak for c0mm0n words to encourage brevity at all layers. _b00t_'s design is built to tightly couple the Azure cloud, but integrate with others for services.  Creating multi-layer pipelines using a menu driven approach to generate templates and then execute those templates, download the projects, then build and rebuild, deploy continuously. 
+The _b00t_ approach uses incorporates 1337 speak for c0mm0n words to encourage brevity at all layers. _b00t_'s design is built to tightly couple the Azure cloud, but integrate with others for services.  
 
-The 1337speak used in _b00t_ is primarily used to make unique pnemonics that are substantially easier to grep during a subsystem trace across layers in the stack, thus providing f1ng3r printing.  The naming models create colorful and meaningful filters to radically improve code quality & debuggability and incorporating "zero-code" deterministic actions Azure Logic Functions. The
+I'm presently creating multi-layer pipelines using an (google://fzf) menu driven approach to generate templates and then execute those templates, download the projects, then build and rebuild, deploy continuously. 
+
+The 1337speak used in _b00t_ is primarily used to make unique pnemonics that are substantially easier to grep during a subsystem trace across layers in the stack, thus providing f1ng3r printing.  Glue itself isn't a tool, it's designed to demonstrate how to deploy [for example] deploy a harware or machine learning transformer models affordbly at scale. 
+
+The naming models create colorful and meaningful filters to radically improve code quality & debuggability and incorporating "zero-code" deterministic actions Azure Logic Functions. The
 higher visual payload of short 1 & 4 character Emoji & HSK1 in names is informative, and has valuable screen real-estate. WIN+";" is emoji keyboard /(*in windows)/ - but Emoji with cut and paste + intellisense make this easier than you'd think.  Especially when you type "d0cker" and a 🐳 pops up in spell check using a custom dictionary. 
 
 1337 mechanics generally indicate logical role or purpose. Using tab-complete in Intellisense IDE and CLI makes it easy and artistic on the screen reinforcing art-in-code.  _b00t_ focusing on the pictures and basic glyph optimized based Simplified Mandarin only reading the code when it's necessary.  This approach allows for grouping by symbol and simplifies some aspects of command line searching properties, test generation and several other aspects.  
@@ -160,19 +198,45 @@ Cloud Scale, with respect to \_b00t_ refers to highly parallelized jobs which ca
 # Why does Opionated mean? 
 For example, _b00t_ believes that VS Code with it's intellisense, typescript & python, docker, azure, aws, gcp, and plurality of other useful extensions makes VS Code the one true editor.  The author believes _b00t_ pattern works best when using remote containers, which is one of the 层 Layers it builds & configures. 
 
-The \_b00t_ organizational pattern is formatted around an intentionally lean "svelte" Enterprise, everything is automated and structured for easy updates using Git. Debugging is on by default but can be reduced later to save $$. Serverless/consumption plans are also default and cost centers are isolated by project/resource group for good reporting & security.  _b00t_ assumes an agile cadence of releasing early and continuously integration. _b00t_ assumes VS Code as an integrated environment, thus prescribing a suggest list of IDE extensions. An emphasis is put on Windows development with plans to integrate a custom language pack based on a US keyboard (thus similar to intellisense hinting, but at the OS layer)
+The \_b00t_ organizational pattern is formatted around an intentionally lean "svelte" Enterprise, everything is automated and structured for easy updates using GitOps and JSON. Debugging is on by default but can be reduced later to save $$. Serverless/consumption plans are also default and cost centers are isolated by project/resource group for good reporting & security.  _b00t_ assumes an agile cadence of releasing early and continuously integration. Fast fail.
 
-Ultimately it will include internal tooling sufficient to run a company through built on top of the _b00t_ template.  Plans to compile a variety of unique reporting summarized using _b00t_ notation to quickly assess project quality, code sentiment analysis and identify weak spots.
+# Resource Division
+_b00t_ uses Azure Landing Zone "best practice" patterns to orchestrate away a considerable amount of complexity in terms of assembling a plurality of well known popular libraries and tools together inside docker containers that then fit into a local inner/outer development loop.  
 
-Additional plans include using the eBPF Linux Kernel filter for fast (kernel level) debugging and monitoring (learning patterns of good and bad transactions).  In this capacity Emoji & HSK is universally better suited than English which would require some level of cost-intensive NLP to be as-effective.  In this capacity _b00t_ saves money with a higher (better) payload to transmission size of packets. 
+# B00t tries NOT to reinvent the wheel*
+_*except when the __b00t__ wheel has less fricition*_
+
+_b00t_ assumes VS Code as an integrated environment, thus prescribing a suggest list of IDE extensions, along with a 
+sufficiently pnemonic unique naming approach using ideograms & pinyin command glyphs for a variety of tasks such as idea routing & error handling "storytell mode". An emphasis is put on Windows development but uses a remote container development environment so it's highly agnostic of individual OS choice.  _b00t_ relies heavily on intellisense and the VS-code extension ecosystem, especially it's integration with Azure for a variety of "1 click" tasks.
+
+# /c0de/_b00t_
+Presently _b00t_ generally expects to be in /c0de/_b00t_. 
+
+Ultimately __b00t__ will include internal tooling sufficient to _b00t_ a company or product in a few hours.  It presumes Bash, Typescript and Python environment and also works to some extent on raspberry pi (i.e. "no nvidia cuda").  I intend iot esp32 and arduino functionality in future releases. 
+
+Built on top of the _b00t_ template.  Plans to compile a variety of unique reporting summarized using _b00t_ notation to quickly assess project quality, code sentiment analysis and identify weak spots. Presently this is done with tabnine, etc. 
+
+# Future: leverage eBPF
+Future plans include using the eBPF Linux Kernel filter for fast (kernel level) debugging and monitoring (learning patterns of good and bad transactions).  In this capacity multi-facet ideogram commands are universally better suited than English which would require an extensive level of cost-intensive NLP to be as-effective.  In this capacity _b00t_ saves money with a higher (better) payload to transmission size of packets. 
 
 # What is Idempotence & Determinism? 
+The primary "preferred" pattern for operational code is to operate with as much idempotence as possible.  Also to have the option of both deterministic and non-deterministic business/application logic. 
+
 https://en.wikipedia.org/wiki/Idempotence
 Idempotence (UK: /ˌɪdɛmˈpoʊtəns/,[1] US: /ˌaɪdəm-/)[2] is the property of certain operations in mathematics and computer science whereby they can be applied multiple times without changing the result beyond the initial application. 
 
+A deterministic algorithm is an algorithm which, given a particular input, will always produce the same output, with the underlying machine always passing through the same sequence of states.
 
-A deterministic algorithm is an algorithm which, given a particular input, will always produce the same output, with the underlying machine always passing through the same sequence of states.   
+# Python
+Python severless backend functions with a plurality of messaging & socket options for IPC.  Logging (Azure Insight), Authentication, scaffold is Azure Insight.  Future infrastructure for algorithimic pattern monitoring (effectively an AI regression that determines if the code is working)
 
+# Typescript - Vite, Vue, Vitesse =>  Vitestestee
+[Vitestestee](http://github.com/elasticdotventures/vitestestee) is a sample project based on Vite, Vue, Vitesse
+
+# OpenID, MS Graph, MS ADSLv2
+
+
+# 
 Using Azure Functions, and Azure Logic Apps for orchestrating actions which allows a _b00t_ stack to behave as a globally distributed finite-state machine.   This is the higest level of durability which can be assigned to a software platform and is suitable to running fail-safe systems such as nuclear reactors. The author explicitly disclaims any responsibility for circumstances occurring decide to use _b00t_ to run your own backyard reactor.
 
 https://en.wikipedia.org/wiki/Deterministic_system

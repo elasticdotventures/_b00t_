@@ -5,11 +5,13 @@
 #  https://github.com/frostidaho/dynmen
 # https://github.com/frostidaho/dynmen/blob/develop/examples/fzf_example.py
 
+# 😇 example usage: 
+ # cat tests/command.json | ./xyz.py --stdin --json
 
 # docopt example:
 # https://github.com/docopt/docopt/blob/master/examples/arguments_example.py
 
-"""Usage: xyz.py --stdin [--length] [--version] [--echoargs] [--json] [--stdout]
+"""Usage: xyz.py --stdin [--length] [--version] [--echoargs] [--json] [--stdout] [--exec]
 
 performs fzf + dynmenu xyz step. 
 
@@ -22,8 +24,7 @@ Options:
 __version__="0.1"
 
 ## 命令 * * * \\
-ls
-`import sys
+import sys
 import subprocess
 import json
 
@@ -61,6 +62,36 @@ def dyfzfMenu(jqCMD):
     #print('Output from fzf:', out.selected)
     return fzfResult
 
+
+def cmd66():
+        # --cmd66 mode, which can call itself
+        args = fzfResult[1]
+        cmd = args.pop(0)
+        print(json.dumps([cmd]+args))
+        result = None
+        if cmd == "python":
+            result = subprocess.run(
+                [sys.executable]+args, capture_output=True, text=True
+            )
+        elif cmd == "subprocess":
+            # run bash, 
+            result = subprocess.run(
+                args, capture_output=True, text=True
+            )
+            print("stdout:", result.stdout)
+            print("stderr:", result.stderr)
+        elif cmd == "load666":
+            # load more commands
+        elif cmd == "input":
+            # read & validate? a line
+            
+        elif cmd == "":
+            print("invalid blank cmd")
+        else:
+            print('invalid cmd:')
+
+
+
     
 def main():
     pass
@@ -89,21 +120,8 @@ if __name__ == '__main__':
     # fromJQ = '{"Alyssa Boyd": ["Brownmouth", "09044"], "Candice Huber": ["New Kimberly", "11698"], "Dr. Kelli Sharp MD": ["North Rhondashire", "71761"], "Gary Hernandez": ["Burnshaven", "62267"], "Hannah Williams": ["North Stacy", "50983"], "Monique Mccoy": ["Katherinemouth", "42023"], "Trevor Kelly": ["South Jenniferport", "73366"]}'
     jqCMD = json.loads(jsonStr)
     fzfResult = dyfzfMenu(jqCMD)
-    
-
-    args = fzfResult[1]
-    cmd = args.pop(0)
-    print(json.dumps([cmd]+args))
-    result = None
-    if cmd == "python":
-        result = subprocess.run(
-            [sys.executable]+args, capture_output=True, text=True
-        )
-    elif cmd == "bash":
-        result = subprocess.run(
-            args, capture_output=True, text=True
-        )
-
+    if (arguments['--cmd66']):
+        cmd66([])        
 
     if arguments['--json']:
         print(json.dumps(fzfResult))
@@ -112,7 +130,12 @@ if __name__ == '__main__':
         print(result.stdout)
         pass
     elif arguments['--stderr']: 
-       print("stderr:", result.stderr)    
-       pass
+        print("stderr:", result.stderr)    
+        pass
     else:
         print("try --json, --stdout")
+    
+
+
+
+sys.exit(0)

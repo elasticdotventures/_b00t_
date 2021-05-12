@@ -13,6 +13,9 @@
 #    sudo apt purge nvidia-*; 
 #    sudo apt autoremove; sudo apt install cuda
 
+# 🤓 nvidia-smi is an awesome tool for figuring out if cude is installed properly
+# sudo docker run --rm --gpus all nvidia/cuda:11.0-base nvidia-smi
+
 # the default CUDA versions are always too old, so commands below re-install them! 
 #sudo apt install -y nvidia-driver-450
 tmpdir=$(mktemp -d)
@@ -43,12 +46,39 @@ else
 
 fi
 ## * * * *
-## installed aptitude
+# NVIDA Version
+cat /proc/driver/nvidia/version
+
+## 🤓 sometimes a reboot helps here! 
+
+## setting up a render node w/docker
+## WRONG, no longer supported by nvidia: 
+## 🍰 https://snowgoons.ro/posts/2020-09-08-setting-up-a-blender-rendering-node-using-docker/
+curl -s -L https://nvidia.github.io/nvidia-container-runtime/gpgkey | \
+  sudo apt-key add -
+distribution=$(. /etc/os-release;echo $ID$VERSION_ID)
+curl -s -L https://nvidia.github.io/nvidia-container-runtime/$distribution/nvidia-container-runtime.list | \
+  sudo tee /etc/apt/sources.list.d/nvidia-container-runtime.list
+curl -s -L https://nvidia.github.io/nvidia-docker/$distribution/nvidia-docker.list | \
+  sudo tee /etc/apt/sources.list.d/nvidia-docker.list
+
+sudo apt-get update
+sudo apt-get install -y nvidia-container-runtime
+sudo apt-get install -y nvidia-docker2
+
+# https://github.com/NVIDIA/nvidia-docker
+# docker run nvidia/cuda nvidia-smi
+# https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html#install-guide
+# sudo apt-get install -y nvidia-docker2
+sudo systemctl restart docker
 
 
-
-
-
+# List of Jupyter Notebooks: 
+# https://jupyter-docker-stacks.readthedocs.io/en/latest/using/selecting.html
+# jupyter/base-notebook
+# jupyter/minimal-notebook
+# jupyter/scipy-notebook
+# jupyter/tensorflow-notebook
 
 
 # 🧠 AI
@@ -67,3 +97,10 @@ fi
 # DOCS: https://jupyter-docker-stacks.readthedocs.io/en/latest/index.html
 # docker pull jupyter/datascience-notebook
 
+# Anime Gan2
+# https://github.com/bryandlee/animegan2-pytorch
+# Anime to sketch
+# https://github.com/Mukosame/Anime2Sketch
+
+# AIZythFinder Retrosynthetic Planning 
+# https://molecularai.github.io/aizynthfinder/gui.html

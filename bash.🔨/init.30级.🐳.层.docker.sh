@@ -104,3 +104,7 @@ docker --mount
 docker service create \
     --mount type=bind,source=/c0de/b00t,target=/c0de/b00t \
     --name b00t 
+
+# https://www.instructables.com/Build-Docker-Image-for-Raspberry-Pi/
+# --platform linux/amd64,linux/arm 
+# https://www.docker.com/blog/multi-arch-images/ 

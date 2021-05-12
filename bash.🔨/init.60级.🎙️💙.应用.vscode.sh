@@ -47,5 +47,24 @@ git config --global core.editor "code --new-window --wait"
 # 🤓 Custom Windows Disctionary
 # https://www.windowscentral.com/how-edit-custom-spell-check-dictionary-windows-10
 
+# 🤓 Make your first extensions
+# https://code.visualstudio.com/api/get-started/your-first-extension
+
 
 # Setup commands for VS CODE 
+#vitesse
+#https://github.com/antfu/vitesse
+
+#plugins:
+#vite
+#volar
+
+#iconify intelligent
+#i18n Alli
+#Wini CSS Intellisense
+#ES Lint
+
+# set default text editor for text/plain
+xdg-mime default code.desktop text/plain
+#sudo update-alternatives --set editor /usr/bin/code
+#sudo update-alternatives --install editor /usr/bin/editor $(which code)
