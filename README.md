@@ -20,19 +20,21 @@ Status: there's something here, still a bit amorpheous.  up the interactive init
           THE FIRST 100 TECH STARTUP DAYS
           🧙 COMPRESSED INTO ~0.5 HOUR
 
-   AZURE-ECOSYSTEM STARTUP BEST PRACTICES FOR 
-   DEV, RELEASE, COMPLIANCE, LOGGING, CYBER-SECURITY, 
-   NEAR-INFINITE CLOUD SCALE, DETERMINISTIC & IDEMPOTENT,
-   SERVERLESS TYPESCRIPT VUE VITESSE SPA FRONT END, 
-   WITH TYPESCRIPT & PYTHON BACKEND, END TO END FRAMEWORK 
-   DOCKER CONTAINER AND CODE LIBRARY SCAFFOLDING FOR 
-   MILITARY GRADE AUTHENTICATION, ARTIFICIAL INTELLIGENCE, 
-   ROBOTICS, HARDWARE, ECOMMERCE, FINANCE, ACCOUNTING AND 
-   OPERATIONS AUTOMATION. 
+  AZURE-ECOSYSTEM STARTUP BEST PRACTICES FOR DEV, 
+  RELEASE,  COMPLIANCE, LOGGING,  CYBER-SECURITY, 
+  INFINITE CLOUD SCALE, DETERMINISTIC PATTERNS, 
+  IDEMPOTENT TEMPLATES, SERVERLESS CDN-DEPLOYED 
+  TYPESCRIPT VUE VITESSE SPA I18N FRONT END, 
+  WITH TYPESCRIPT & PYTHON BACKEND, END TO END 
+  FRAMEWORK DOCKER CONTAINER ORCHESTRATION AND 
+  CODE LIBRARY SCAFFOLDING FOR MILITARY GRADE 
+  AUTHENTICATION, ARTIFICIAL INTELLIGENCE, ROBOTICS, 
+  HARDWARE, ECOMMERCE, FINANCE, ACCOUNTING AND 
+  OPERATIONS AUTOMATION. 
    
-             B00T-ISA-CYBERPUNK-STARTUP KIT
+            _b00t_isa_CYB3RPUNK_STARTUP_K1T
 
-    ..UNSUITABLE FOR MILITARY OR ANTISOCIAL PROJECTS..
+  ..UNSUITABLE FOR MILITARY OR ANTISOCIAL PROJECTS..
 
         Elastic License v2 (ELK2) Open License 
 
@@ -71,7 +73,7 @@ probably absolutely nobody besides Brian Horakh (the author).
 but i welcome anybody with similar passions in pre-dev stage projects, incubators, self-reliant engineering teams (no vendor support, except the Author & Git Issues) who want to sponsor my progress or would like to use this framework in their own companies. 
 
 My Ethereum Address is:
-
+https://vittominacori.github.io/ethereum-badge/detail.html?address=0x24bd79c0efff201bd5b24b622d5ea09f93dbfaa3
 
 # _b00t_ Vs. Moby
 _b00t_ is NOT Docker Moby, although it shares some common goals. 
