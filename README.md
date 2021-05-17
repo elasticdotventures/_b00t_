@@ -21,9 +21,6 @@ Status: there's something here, still a bit amorpheous.  up the interactive init
           THE FIRST 100 TECH STARTUP DAYS
           🧙 COMPRESSED INTO ~0.5 HOUR
 
-<<<<<<< HEAD
-AZURE-ORIENTED STARTUP BEST PRACTICES FOR DEV, RELEASE, COMPLIANCE, LOGGING, CYBER-SECURITY, NEAR-INFINITE CLOUD SCALE, DETERMINISTIC, SERVERLESS TYPESCRIPT VUE VITESSE SPA FRONT END, WITH TYPESCRIPT & PYTHON BACKEND, END TO END FRAMEWORK CONTAINER AND CODE LIBRARY SCAFFOLDING FOR MILITARY GRADE AUTHENTICATION, ARTIFICIAL INTELLIGENCE, ROBOTICS, HARDWARE, ECOMMERCE, FINANCE, ACCOUNTING AND OPERATIONS AUTOMATION. 
-=======
   AZURE-ECOSYSTEM STARTUP BEST PRACTICES FOR DEV, 
   RELEASE,  COMPLIANCE, LOGGING,  CYBER-SECURITY, 
   INFINITE CLOUD SCALE, DETERMINISTIC PATTERNS, 
@@ -35,7 +32,6 @@ AZURE-ORIENTED STARTUP BEST PRACTICES FOR DEV, RELEASE, COMPLIANCE, LOGGING, CYB
   AUTHENTICATION, ARTIFICIAL INTELLIGENCE, ROBOTICS, 
   HARDWARE, ECOMMERCE, FINANCE, ACCOUNTING AND 
   OPERATIONS AUTOMATION. 
->>>>>>> 8d1c5f1a283cd6a1e67236cbd1db16421a1c407d
    
             _b00t_isa_CYB3RPUNK_STARTUP_K1T
 
@@ -64,17 +60,12 @@ bash$ source ./_b00t_/_b00t_.bashrc
 
 ```
 ## presently working on:
-<<<<<<< HEAD
  * azure graph openid authentication scaffold
 * in typescript spa vue vite vitesse based template
 * please excuse the scattered bits, work in progress
 * doc engine? https://github.com/facebook/docusaurus/releases/tag/v2.0.0-beta.0
 * https://engineering.kalkayan.io/posts/setting-up-a-development-machine-part-3/
-=======
-* azure graph openid authentication scaffold
-* integrating typescript spa vue vite vitesse based template
 * please excuse the dust as i write the docs as i'm building this. 
->>>>>>> 8d1c5f1a283cd6a1e67236cbd1db16421a1c407d
 
 ```
 ## you might try the setup file, or explore the color repo!
