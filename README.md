@@ -21,16 +21,32 @@ Status: there's something here, still a bit amorpheous.  up the interactive init
           THE FIRST 100 TECH STARTUP DAYS
           🧙 COMPRESSED INTO ~0.5 HOUR
 
+<<<<<<< HEAD
 AZURE-ORIENTED STARTUP BEST PRACTICES FOR DEV, RELEASE, COMPLIANCE, LOGGING, CYBER-SECURITY, NEAR-INFINITE CLOUD SCALE, DETERMINISTIC, SERVERLESS TYPESCRIPT VUE VITESSE SPA FRONT END, WITH TYPESCRIPT & PYTHON BACKEND, END TO END FRAMEWORK CONTAINER AND CODE LIBRARY SCAFFOLDING FOR MILITARY GRADE AUTHENTICATION, ARTIFICIAL INTELLIGENCE, ROBOTICS, HARDWARE, ECOMMERCE, FINANCE, ACCOUNTING AND OPERATIONS AUTOMATION. 
+=======
+  AZURE-ECOSYSTEM STARTUP BEST PRACTICES FOR DEV, 
+  RELEASE,  COMPLIANCE, LOGGING,  CYBER-SECURITY, 
+  INFINITE CLOUD SCALE, DETERMINISTIC PATTERNS, 
+  IDEMPOTENT TEMPLATES, SERVERLESS CDN-DEPLOYED 
+  TYPESCRIPT VUE VITESSE SPA I18N FRONT END, 
+  WITH TYPESCRIPT & PYTHON BACKEND, END TO END 
+  FRAMEWORK DOCKER CONTAINER ORCHESTRATION AND 
+  CODE LIBRARY SCAFFOLDING FOR MILITARY GRADE 
+  AUTHENTICATION, ARTIFICIAL INTELLIGENCE, ROBOTICS, 
+  HARDWARE, ECOMMERCE, FINANCE, ACCOUNTING AND 
+  OPERATIONS AUTOMATION. 
+>>>>>>> 8d1c5f1a283cd6a1e67236cbd1db16421a1c407d
    
-             B00T-A-CYBERPUNK-STARTUP KIT
+            _b00t_isa_CYB3RPUNK_STARTUP_K1T
 
-    ..UNSUITABLE FOR MILITARY OR ANTISOCIAL PROJECTS..
-                    otherwise 
+  ..UNSUITABLE FOR MILITARY OR ANTISOCIAL PROJECTS..
+
         Elastic License v2 (ELK2) Open License 
 
 presently alpha/没做完
 seeking testers, investors, or peer-review. 
+
+target a release at the end of May 2021. 
 
 ```bash
 
@@ -48,12 +64,19 @@ bash$ source ./_b00t_/_b00t_.bashrc
 
 ```
 ## presently working on:
+<<<<<<< HEAD
  * azure graph openid authentication scaffold
 * in typescript spa vue vite vitesse based template
 * please excuse the scattered bits, work in progress
 * doc engine? https://github.com/facebook/docusaurus/releases/tag/v2.0.0-beta.0
 * https://engineering.kalkayan.io/posts/setting-up-a-development-machine-part-3/
+=======
+* azure graph openid authentication scaffold
+* integrating typescript spa vue vite vitesse based template
+* please excuse the dust as i write the docs as i'm building this. 
+>>>>>>> 8d1c5f1a283cd6a1e67236cbd1db16421a1c407d
 
+```
 ## you might try the setup file, or explore the color repo!
 bash$ cd _b00t_; ./01-startup.sh 
 
@@ -64,7 +87,7 @@ probably absolutely nobody besides Brian Horakh (the author).
 but i welcome anybody with similar passions in pre-dev stage projects, incubators, self-reliant engineering teams (no vendor support, except the Author & Git Issues) who want to sponsor my progress or would like to use this framework in their own companies. 
 
 My Ethereum Address is:
-
+https://vittominacori.github.io/ethereum-badge/detail.html?address=0x24bd79c0efff201bd5b24b622d5ea09f93dbfaa3
 
 # _b00t_ Vs. Moby
 _b00t_ is NOT Docker Moby, although it shares some common goals. 
@@ -118,7 +141,7 @@ Probably individuals is easier, certainly from an adoption standpoint. Not every
 _b00t_ is also great for teams the VS Code Live Share feature & Remote Containers, and Azure Hybrid-Connections offers a plurality of one-click easy, low-latency for teams to share screens securely through firewalls.  It's built in a way so that you could give people their own instance of your code, even limit the amount of funding per-new-customer trial. Something like google Collab for startups. The author believes this is especially useful if (for example) you desire to collaborate with other researchers, especially Chinese ones (i.e. hardware startups) thanks to it's incorporation of Emoji and Pinyin. 
 
 ## _b00t_ Syntax Rationale: 
-Don't Panic! The future requires new approaches. using emoji and pinyin and cyb3rpunk style for `git grep "🧙"` saves screen space in results and can tell powerful "stories" which as author I believe is a more optimal pattern for application development, in that sense a magnum opus for the decade of my life up until year 2030, hopefully beyond. 
+Don't Panic! The future requires new approaches. using emoji and pinyin and cyb3rpunk style for `git grep "🧙"` saves screen space in results and can tell powerful "stories" which as author I believe is a more optimal pattern for application development. 
 
 The _b00t_ approach uses incorporates 1337 speak for c0mm0n words to encourage brevity at all layers. _b00t_'s design is built to tightly couple the Azure cloud, but integrate with others for services.  
 

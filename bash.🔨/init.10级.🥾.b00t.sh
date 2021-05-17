@@ -64,11 +64,25 @@ function mkdir_命令() {
     fi
     }
 
+
+
 #export mkdir_命令
 #mkdir_命令 "$HOME/.b00t_"
 #mkdir_命令 "$HOME/.b00t_/c0re"
 #chmod 711 "$HOME/._00t_/c0re"
 ## 命令 // 
+
+
+if n0ta_xfile_📁_好不好 "~/.local/bin/webi"  ; then
+    log_📢_记录 "🥾🕸️ install webi the web installer - (http://webinstall.dev)"
+    curl -sS https://webinstall.dev/webi | bash
+fi
+
+# webi offers an alternative (but not cross platform i think)
+if n0ta_xfile_📁_好不好 "~/.local/bin/dotenv" ; then
+    log_📢_记录 "🕸️.webi dotenv $cmd"
+    webi dotenv@stable
+fi
 
 
 ##* * * * * *\\
@@ -82,7 +96,10 @@ if  [ ! -x "/usr/bin/fzf" ] || \
      [ ! -x "/usr/bin/jq" ] || \
      [ ! -x "/usr/bin/wget" ]  ; then
     $SUDO_CMD apt-get install -y fzf jq wget curl
+    # curl -sS https://webinstall.dev/jq | bash
+    # 
 fi
+
 
 if n0ta_xfile_📁_好不好 "/usr/bin/fdfind"  ; then
     ## some other applications we'll need
@@ -164,33 +181,40 @@ fi
 
 ##### 
 ## after a lot of moving around, it's clear 
-## yq needs to be here, since it's used in a variety of menus
+## yq4 needs to be here, since it's used in a variety of menus
 ## for d1rd1ct (next)
 installYQ=false
-YQ_VERSION="v4.7.0"
-YQ_BINARY="yq_linux_amd64"  # TODO: multiarch 
-YQ_MIN_VERSION="4.0.0"
-YQ_INSTALL_PATH="/usr/local/bin/yq"
+YQ4_VERSION="v4.8.0"
+YQ4_BINARY="yq_linux_amd64"  # TODO: multiarch 
+YQ4_MIN_VERSION="4.0.0"
+YQ4_INSTALL_PATH="/usr/local/bin/yq4"
 
 if n0ta_xfile_📁_好不好 "$YQ_INSTALL_PATH" ; then
-    log_📢_记录 "😲 yq does not appear to be installed, f1x1ng."
+    log_📢_记录 "😲 yq4 does not appear to be installed, f1x1ng."
     # missing yq
     installYQ=true
 else 
     # check yq version 
-    log_📢_记录 "🧐 checking yq"
-    currentYQver="$(yq -V | cut -f 2 -d ' ')"
+    log_📢_记录 "🧐 checking yq4"
+    currentYQver="$(yq4 -V | cut -f 2 -d ' ')"
     isYQokay=$(is_v3rs10n_大于 "$YQ_MIN_VERSION" $currentYQver)
     if [ ! "$isYQokay" = false ] ; then
         # TODO: consent
         log_📢_记录 "👻👼 insufficient yq --version $1, f1x1ng."
         installYQ=true
-        $SUDO_CMD snap remove yq
-        $SUDO_CMD apt-get remove yq
-        $SUDO_CMD rm /usr/bin/yq 
-        $SUDO_CMD rm /usr/local/bin/yq 
+        # $SUDO_CMD snap remove yq
+        # $SUDO_CMD apt-get remove yq
+        $SUDO_CMD rm /usr/bin/yq4 
+        $SUDO_CMD rm /usr/local/bin/yq4
+        $SUDO_CMD rm ~/.local/bin/yq4
     fi
 fi
+
+# there are TWO YQ's !!! fuck this. 
+# https://github.com/kislyuk/yq
+
+
+
 
 # 🍰 yq  - YAML config i/o    https://github.com/mikefarah/yq
 # not using yq via snap.  way too old!! 
@@ -234,5 +258,6 @@ fi
 
 ##* * * * * *//
 
-
+##  TODO future: install
+# pathman add ~/.local/bin
 

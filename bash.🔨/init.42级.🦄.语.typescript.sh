@@ -49,5 +49,3 @@ yarn add @docker/sdk
 
 ## Yeoman is awesome. Going to use this: 
 #npm install -g yo generator-code
-
- 

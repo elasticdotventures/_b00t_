@@ -1,9 +1,14 @@
 
+# 🤖 Azure
 
-# Azure templates (bicep & ARM)
+## Map all Azure SDK Releases (all languages, functionality)
+https://azure.github.io/azure-sdk/releases/latest/index.html#python
+
+
+## Azure templates (bicep & ARM)
 https://docs.microsoft.com/en-us/azure/templates/microsoft.containerinstance/containergroups?tabs=json#LogAnalytics
 
-# Automate container image builds and maintenance with ACR tasks
+## Automate container image builds and maintenance with ACR tasks
 https://docs.microsoft.com/en-us/azure/container-registry/container-registry-tasks-overview
 
 # 
@@ -39,4 +44,6 @@ DefaultAzureCredential is best, uses a sequental chain of:
 if the application is deployed to an Azure host with Managed Identity enabled
 
 
+# more fun:
+https://github.com/microsoft/botframework-sdk
 

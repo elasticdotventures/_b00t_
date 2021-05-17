@@ -10,6 +10,8 @@
 
 # Celery is a task queue with batteries included.
 # https://docs.celeryproject.org/en/stable/getting-started/first-steps-with-celery.html
+# TODO: Flower is monitoring toolkit (for celery)
+# https://flower.readthedocs.io/en/latest/ 
 
 ## 🐇 rabbiqmq
 # sudo apt-get install rabbitmq-server

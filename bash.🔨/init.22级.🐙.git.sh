@@ -71,4 +71,52 @@ $SUDO_CMD apt install -y gh
 #EOF; 
 #    fi
 
+##
+## 🧙 GVFS, use git as a virtual local caching filesystem
+```bash :: for windows (based on ProjFS)
+# https://github.com/microsoft/VFSForGit/releases/download/v1.0.21085.9/SetupGVFS.1.0.21085.9.exe
+* REQUIRES
+* no git clean/smudge filters
+.gitattributes 
+* -text
+
+.gitattributes 
+project.pbxproj filter=munge-project-identifier
+
+github.com/elasticdotventures/_b00t_/blob/branch
+
+powershell 
+gvfs.ps1
+cache-serversclone
+configuration
+dehyrdate
+mount
+health
+Status
+
+
+# Git Smudge and Clean Filters: Making Changes So You Don’t Have To
+
+
+
+```ps :: How to enable ProjFS using PowerShell
+Enable-WindowsOptionalFeature -Online -FeatureName Client-ProjFS -NoRestart
+```
+LifeCycle:
+Creation
+Startup
+Runtime
+Shutdown
+
+
+
+##
+## 🧙 ProjFS, a virtual filesystem layer in windows i.e. /proc
+# ProjFS
+# https://github.com/microsoft/ProjFS-Managed-API
+# https://github.com/danielhodson/pyprojfs/blob/master/example.py
+
+
+
+
 

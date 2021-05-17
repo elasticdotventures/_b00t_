@@ -13,6 +13,7 @@ trap "set +o nounset" EXIT  # restore nounset at exit, even in crash!
 # 🤔 trial: 
 umask 000
 
+
 set -a # mark variables whcih are modified or created for export
 ## 小路 \\
 ## Xiǎolù :: Path or Directory
@@ -21,6 +22,7 @@ export _B00T_C0DE_Path="/c0de/_b00t_"
 export _B00T_C0NFIG_Path="$HOME/.b00t"
 _b00t_INSPIRATION_FILE="$_B00T_C0DE_Path/./r3src_资源/inspiration.json"
 ## 小路 //
+
 
 
 ## 记录 \\
@@ -32,6 +34,14 @@ function log_📢_记录() {
 }
 export -f log_📢_记录
 ## 记录 //
+
+## this will allow b00t to restart itself. 
+unset -f reb00t
+function reb00t() {
+    unset -f _b00t_init_🥾_开始
+    log_📢_记录 "🥾 restarting b00t"
+    source "$_B00T_C0DE_Path/_b00t_.bashrc"
+}
 
 
 ## * * * * * \\
@@ -68,7 +78,7 @@ if [ "$_b00t_exists" == "function" ] ; then
     export _b00t_VERSION_was="$_b00t_VERSION"
 fi
 # -------------- CONFIGURABLE SETTING -----------------
-export _b00t_VERSION="1.0.13"
+export _b00t_VERSION="1.0.14"
 # -----------------------------------------------------
 
 # syntax: current required
@@ -239,6 +249,7 @@ if [ -z "$webi" ] ; then
     # Should install to $HOME/.local/opt/<package>-<version> or $HOME/.local/bin
     # Should not need sudo (except perhaps for a one-time setcap, etc) 
 fi 
+
 
 
 
@@ -594,8 +605,7 @@ if debInst "moreutils" ; then
 else
     log_📢_记录  "😲 install moreutils (required)"
     $SUDO_CMD apt-get install -y moreutils
- i 
-
+fi
 
 ####
 # CRUDINI examples

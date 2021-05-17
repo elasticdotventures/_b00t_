@@ -12,6 +12,9 @@
 #* 进口v2 🥾 ALWAYS load c0re Libraries!
 source "./_b00t_.bashrc"
 
+pip install erc20token
+
+
 
 sudo add-apt-repository ppa:ethereum/ethereum
 sudo apt update
@@ -55,5 +58,12 @@ npm install electron -g
 
 # Online Gambling: 
 # https://coinpoker.com/#about
+
+# zcash & Ethereum: money-fuzzing 
+# Blind Voting Solidity Example 
+# https://blog.ethereum.org/2017/01/19/update-integrating-zcash-ethereum/
+
+# Is Bitcoin tumbling legal?
+# Background. Tumblers take a percentage transaction fee of the total coins mixed to turn a profit, typically 1–3%. Mixing helps protect privacy and can also be used for money laundering by mixing illegally obtained funds. Mixing large amounts of money may be illegal, being in violation of anti-structuring laws.
 
 

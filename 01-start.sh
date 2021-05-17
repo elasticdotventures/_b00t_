@@ -1,10 +1,5 @@
 #!/bin/bash
 
-##* * * *\\ 
-#* Purpose: 
-#*   boot-strap common bash libraries
-#*   access Azure
-##* * * *//
 
 
 # docker run -d -it --name azcli --mount type=bind,source="/c0de",target=/c0de 

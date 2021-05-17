@@ -33,3 +33,14 @@ git fetch --all
 
 git remote add template https://github.com/elasticdotventures/_b00t_
 git fetch template
+
+## GITVFS
+# 💙🪟 micros0ft "git" VFS
+https://github.com/microsoft/VFSForGit
+GIT based local caching filesystem, it only downloads files
+when they are accessed such that subsequent reads will be much 
+faster. commits can be made in directories using branches?
+
+### downloads
+https://github.com/Microsoft/VFSForGit/releases
+
