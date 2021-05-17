@@ -3,6 +3,7 @@
 ------
 Status: there's something here, still a bit amorpheous.  up the interactive initalization (using fzf).  Sharing with friends, looking for feedback, alpha testers & contributors. Comments, issues, PR's welcome. Please 🍴🍰🤩.  
 
+[![Project Status: WIP – Initial development is in progress, but there has not yet been a stable, usable release suitable for the public.](https://www.repostatus.org/badges/latest/wip.svg)](https://www.repostatus.org/#wip)
 
 ------
 ```text/plain
@@ -20,7 +21,7 @@ Status: there's something here, still a bit amorpheous.  up the interactive init
           THE FIRST 100 TECH STARTUP DAYS
           🧙 COMPRESSED INTO ~0.5 HOUR
 
-   AZURE-ECOSYSTEM STARTUP BEST PRACTICES FOR DEV, RELEASE, COMPLIANCE, LOGGING, CYBER-SECURITY, NEAR-INFINITE CLOUD SCALE, DETERMINISTIC, SERVERLESS TYPESCRIPT VUE VITESSE SPA FRONT END, WITH TYPESCRIPT & PYTHON BACKEND, END TO END FRAMEWORK CONTAINER AND CODE LIBRARY SCAFFOLDING FOR MILITARY GRADE AUTHENTICATION, ARTIFICIAL INTELLIGENCE, ROBOTICS, HARDWARE, ECOMMERCE, FINANCE, ACCOUNTING AND OPERATIONS AUTOMATION. 
+AZURE-ORIENTED STARTUP BEST PRACTICES FOR DEV, RELEASE, COMPLIANCE, LOGGING, CYBER-SECURITY, NEAR-INFINITE CLOUD SCALE, DETERMINISTIC, SERVERLESS TYPESCRIPT VUE VITESSE SPA FRONT END, WITH TYPESCRIPT & PYTHON BACKEND, END TO END FRAMEWORK CONTAINER AND CODE LIBRARY SCAFFOLDING FOR MILITARY GRADE AUTHENTICATION, ARTIFICIAL INTELLIGENCE, ROBOTICS, HARDWARE, ECOMMERCE, FINANCE, ACCOUNTING AND OPERATIONS AUTOMATION. 
    
              B00T-A-CYBERPUNK-STARTUP KIT
 
@@ -49,7 +50,9 @@ bash$ source ./_b00t_/_b00t_.bashrc
 ## presently working on:
  * azure graph openid authentication scaffold
 * in typescript spa vue vite vitesse based template
-* please excuse the dust as i write the docs as i'm building this. 
+* please excuse the scattered bits, work in progress
+* doc engine? https://github.com/facebook/docusaurus/releases/tag/v2.0.0-beta.0
+* https://engineering.kalkayan.io/posts/setting-up-a-development-machine-part-3/
 
 ## you might try the setup file, or explore the color repo!
 bash$ cd _b00t_; ./01-startup.sh 
