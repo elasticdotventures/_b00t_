@@ -63,7 +63,8 @@ npm install electron -g
 # Blind Voting Solidity Example 
 # https://blog.ethereum.org/2017/01/19/update-integrating-zcash-ethereum/
 
-# Is Bitcoin tumbling legal?
+# Is Bitcoin tumbling even legal?
 # Background. Tumblers take a percentage transaction fee of the total coins mixed to turn a profit, typically 1–3%. Mixing helps protect privacy and can also be used for money laundering by mixing illegally obtained funds. Mixing large amounts of money may be illegal, being in violation of anti-structuring laws.
 
-
+# Sia, decentralized storage.
+#https://hub.docker.com/r/nebulouslabs/sia

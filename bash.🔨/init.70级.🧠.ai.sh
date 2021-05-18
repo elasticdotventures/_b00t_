@@ -104,3 +104,16 @@ sudo systemctl restart docker
 
 # AIZythFinder Retrosynthetic Planning 
 # https://molecularai.github.io/aizynthfinder/gui.html
+
+
+pip install mmcv-full -f https://download.openmmlab.com/mmcv/dist/cu110/torch1.7.0/index.html
+
+
+
+# MMEdit: image inpainting, 
+# https://github.com/open-mmlab/mmediting/blob/master/docs/install.md
+git clone https://github.com/open-mmlab/mmediting
+docker build -t mmediting docker/
+docker run --gpus all --shm-size=8g -it -v {DATA_DIR}:/mmediting/data mmediting
+
+

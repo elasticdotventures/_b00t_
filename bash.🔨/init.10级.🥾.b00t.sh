@@ -76,6 +76,7 @@ function mkdir_命令() {
 if n0ta_xfile_📁_好不好 "~/.local/bin/webi"  ; then
     log_📢_记录 "🥾🕸️ install webi the web installer - (http://webinstall.dev)"
     curl -sS https://webinstall.dev/webi | bash
+    export PATH="/home/w1ndy/.local/bin:$PATH"
 fi
 
 # webi offers an alternative (but not cross platform i think)
@@ -223,24 +224,24 @@ fi
 #    snap install yq
 #fi
 if [ "$installYQ" = true ] ; then 
-    log_📢_记录 "🐧😇 upgrading $YQ_INSTALL_PATH"
+    log_📢_记录 "🐧😇 upgrading $YQ4_INSTALL_PATH"
     tmpdir=$(mktemp -d)
     pwdwas=`pwd`
     cd $tmpdir && \
-     wget https://github.com/mikefarah/yq/releases/download/${YQ_VERSION}/${YQ_BINARY}.tar.gz -O - |\
-     tar xz && $SUDO_CMD cp ${YQ_BINARY} "$YQ_INSTALL_PATH" && \
-     rm -f $YQ_BINARY
+     wget https://github.com/mikefarah/yq/releases/download/${YQ4_VERSION}/${YQ4_BINARY}.tar.gz -O - |\
+     tar xz && $SUDO_CMD cp ${YQ4_BINARY} "$YQ4_INSTALL_PATH" && \
+     rm -f $YQ4_BINARY
     cd $pwdwas
     
-    currentYQver="$(yq -V | cut -f 2 -d ' ')"
-    isYQokay=$(is_v3rs10n_大于 "$YQ_MIN_VERSION" $currentYQver)
-    if n0ta_xfile_📁_好不好 "$YQ_INSTALL_PATH" ; then
-        log_📢_记录 "💩 STILL missing $YQ_INSTALL_PATH (required for d1ctd1r)"
+    currentYQver="$(yq4 -V | cut -f 2 -d ' ')"
+    isYQokay=$(is_v3rs10n_大于 "$YQ4_MIN_VERSION" $currentYQver)
+    if n0ta_xfile_📁_好不好 "$YQ4_INSTALL_PATH" ; then
+        log_📢_记录 "💩 STILL missing $YQ4_INSTALL_PATH (required for d1ctd1r)"
         exit
     elif [ "$isYQokay" = true ] ; then
-        log_📢_记录 "😇🎉 yq installed"
+        log_📢_记录 "😇🎉 yq4 installed"
     else
-        log_📢_记录 "💩🍒 yq installed, but version still insufficient (wtf)"
+        log_📢_记录 "💩🍒 yq4 installed, but version still insufficient (wtf)"
     fi 
 fi
 

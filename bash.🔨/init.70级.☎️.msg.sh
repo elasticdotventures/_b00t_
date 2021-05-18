@@ -33,3 +33,7 @@ celery -A tasks worker --loglevel=INFO
 # @app.task
 # def add(x, y):
 #    return x + y
+
+
+# Slurm HPC distributed computing
+# https://slurm.schedmd.com/

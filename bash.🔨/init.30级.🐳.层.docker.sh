@@ -108,3 +108,8 @@ docker service create \
 # https://www.instructables.com/Build-Docker-Image-for-Raspberry-Pi/
 # --platform linux/amd64,linux/arm 
 # https://www.docker.com/blog/multi-arch-images/ 
+
+
+# to run dev  instance in azure aci
+service principle: 
+docker login azure --client-id xx --client-secret yy --tenant-id zz
