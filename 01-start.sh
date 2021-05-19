@@ -1,10 +1,7 @@
 #!/bin/bash
 
 
-
 # docker run -d -it --name azcli --mount type=bind,source="/c0de",target=/c0de 
-
-
 
 # 🍰 https://stackoverflow.com/questions/192319/how-do-i-know-the-script-file-name-in-a-bash-script
 # 🍰 https://www.shell-tips.com/bash/environment-variables/
@@ -26,10 +23,10 @@ source "./_b00t_.bashrc"
 # docker buildx version
 # github.com/docker/buildx v0.5.1-docker 11057da37336192bfc57d81e02359ba7ba848e4a
 
-if [ -z "$AZURE_TENANT_ID" ] ; then 
-  azure 
-  read -p '🤖 Azure TENANT_ID: ' AZURE_TENANT_ID
-fi 
+#if [ -z "$AZURE_TENANT_ID" ] ; then 
+#  azure 
+#  read -p '🤖 Azure TENANT_ID: ' AZURE_TENANT_ID
+#fi 
 # 7e8f7eda-7eff-483f-a415-77241728783b
 
 
@@ -41,6 +38,7 @@ fi
 #done
 
 #this will setup your local instance with boot.
+if [ 0 ] ; then 
 motd
 echo "then something like this ... "
 
@@ -53,9 +51,8 @@ type of environment
   ☠️ deploy: deploy a project 
 
 "
+fi
 
-
-exit
 
 ## 进口 (Jìnkǒu :: Import/Load PHASE 1 * \\ 
 # _b00t_ Bin shell & helpers, logging. 
