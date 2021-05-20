@@ -3,7 +3,7 @@
 # SEARCH FOR A PACKAGE: 
 # apt-cache search libpackage
 
-source "/c0de/_b00t_/_b00t_.bashrc"
+source "$_B00T_C0DE_Path/_b00t_.bashrc"
 
 
 ## * * * *// 
@@ -11,7 +11,7 @@ source "/c0de/_b00t_/_b00t_.bashrc"
 #* should be called directly from ./01-start.sh 
 ## * * * *\\
 
-if n0ta_xfile_📁_好不好 "/bin/sudo" ; then 
+if n0ta_xfile_📁_好不好 "/bin/sudo" "/usr/bin/sudo" ; then 
     # this is correct (leaving for future linting)
     log_📢_记录 "🐧😇 sudo"
     $SUDO_CMD apt-get install -y sudo
@@ -22,7 +22,7 @@ apt-get install -y sudo
 
 # yq, part II - Windows
 ## For WSL - snapd won't work properly unless we also: 
-if  is_WSLv2_🐧💙🪟v2  ; then
+if [ -z "$(is_WSLv2_🐧💙🪟v2)" ] ; then
     log_📢_记录 "🐧😇 wsl2 setup"
     $SUDO_CMD apt-get update && $SUDO_CMD apt-get install -y qq daemonize dbus-user-session fontconfig
 fi

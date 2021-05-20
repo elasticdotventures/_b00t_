@@ -1,6 +1,5 @@
 #!/bin/bash
 
-
 # docker run -d -it --name azcli --mount type=bind,source="/c0de",target=/c0de 
 
 # 🍰 https://stackoverflow.com/questions/192319/how-do-i-know-the-script-file-name-in-a-bash-script
@@ -38,40 +37,47 @@ source "./_b00t_.bashrc"
 #done
 
 #this will setup your local instance with boot.
-if [ 0 ] ; then 
-motd
-echo "then something like this ... "
+#if [ 0 ] ; then 
+#motd
+#echo "then something like this ... "
+#echo "
+#Project: $project
+#
+#type of environment
+#  😁 welcome: new user / tutorial
+#  🌌 config:  config a project
+#  ☠️ deploy: deploy a project #
+#
+#"
+#fi
 
-echo "
-Project: $project
 
-type of environment
-  😁 welcome: new user / tutorial
-  🌌 config:  config a project
-  ☠️ deploy: deploy a project 
-
-"
-fi
+## list all init-files (excluding template) in the bash bash.🔨/
+for bashrc in `fd --type x --glob "init*.sh"  $_B00T_C0DE_Path/bash.🔨/ | sort` ; 
+  do  
+  echo $bashrc ; 
+  bash_source_加载 $bashrc
+done
 
 
 ## 进口 (Jìnkǒu :: Import/Load PHASE 1 * \\ 
 # _b00t_ Bin shell & helpers, logging. 
-bash_source_加载 "$_B00T_C0DE_Path/./bash.🔨/init.*.🥾.*.sh"
+# bash_source_加载 "$_B00T_C0DE_Path/./bash.🔨/init.10*.🥾.*.sh"
 
 
 ## 进口 (Jìnkǒu :: Import/Load) PHASE 2 * * \\ 
 # Two is Torvalds Tech (Linux & Git)
-bash_source_加载 "$_B00T_C0DE_Path/./bash.🔨/init.*.🐧.*.sh"
-bash_source_加载 "$_B00T_C0DE_Path/./bash.🔨/init.*.🐙.*.sh"
+#bash_source_加载 "$_B00T_C0DE_Path/./bash.🔨/init.*.🐧.*.sh"
+#bash_source_加载 "$_B00T_C0DE_Path/./bash.🔨/init.*.🐙.*.sh"
 
 # Also, Docker
-bash_source_加载 "$_B00T_C0DE_Path/./bash.🔨/init.*.🐳.*.sh"
+#bash_source_加载 "$_B00T_C0DE_Path/./bash.🔨/init.*.🐳.*.sh"
 
 ## 进口 (Jìnkǒu :: Import/Load) PHASE 3 * * * \\ 
 ## minimal c0re Python 🐍
 # + establish .venv
-bash_source_加载 "$_B00T_C0DE_Path/./bash.🔨/init.*.🐍.*sh"
-source .venv/bin/activate
+#bash_source_加载 "$_B00T_C0DE_Path/./bash.🔨/init.*.🐍.*sh"
+#source .venv/bin/activate
 
 ## Typescript & Node
 # bash_source_加载 "$_B00T_C0DE_Path/./bash.🔨/init.*.🚀.*.sh"
@@ -79,8 +85,8 @@ source .venv/bin/activate
 # bash_source_加载 "$_B00T_C0DE_Path/./bash.🔨/init.*.🦄.*.sh"
 
 ## 进口 (Jìnkǒu :: Import/Load) PHASE 4 * * * * \\ 
-bash_source_加载 "$_B00T_C0DE_Path/./bash.🔨/init.*.🤖.*.sh"
-bash_source_加载 "$_B00T_C0DE_Path/./bash.🔨/init.*.👾.*.sh"
+#bash_source_加载 "$_B00T_C0DE_Path/./bash.🔨/init.*.🤖.*.sh"
+#bash_source_加载 "$_B00T_C0DE_Path/./bash.🔨/init.*.👾.*.sh"
 
 # AWS, etc. 
 # bash_source_加载 "$_B00T_C0DE_Path/./bash/c0re_init.*.🦉.sh"
@@ -103,20 +109,22 @@ bash_source_加载 "$_B00T_C0DE_Path/./bash.🔨/init.*.👾.*.sh"
 
 # TODO: link to the Elasticdotventures repository
 # 
-docker build -t cowsay .
+#docker build -t cowsay .
 # 🐳♻️ It’s a good habit to use --rm to avoid filling up your system with stale Docker containers.
-docker run --rm cowsay 
+#docker run --rm cowsay 
 
-cat <<EOF
-🐛 If you didn't get a cowsay, let me know. 
+#sh >out <<EOF
+#🐛 If you didn't get a cowsay, let me know. 
+#
+#🤓 at this point you can start to build using EV _b00t_ or 
+#your own _b00t_.  
 
-🤓 at this point you can start to build using EV _b00t_ or 
-your own _b00t_.  
+#type:
+#git clone https://github.com/elasticdotventures/_b00t_/generate
 
-type:
-git clone https://github.com/elasticdotventures/_b00t_/generate
-EOF;
+#EOF
 
-echo "* if you just saw a talking cow, everything is fine!"
-echo "run ./02_t00ls_.sh
+#echo "* if you just saw a talking cow, everything is fine!"
+#echo "run ./02_t00ls_.sh"
+
 

@@ -23,7 +23,7 @@ source "./_b00t_.bashrc"
 #    Uninstalls an extension.
 # code --enable-proposed-api (<extension-id>)
 #    Enables proposed API features for extensions. Can receive one or more extension IDs to enable individually.
-
+# code --install-extension
 
 if [ is_WSLv2_🐧💙🪟v2() ] ; then
     # fixes some buggy behaviors in early wsl's

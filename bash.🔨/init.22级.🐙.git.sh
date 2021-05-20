@@ -1,5 +1,5 @@
 # install Git & Utilities
-source "/c0de/_b00t_/_b00t_.bashrc"
+source "$_B00T_C0DE_Path/_b00t_.bashrc"
 
 
 log_📢_记录 "🐙😇 installing git"
@@ -73,41 +73,37 @@ $SUDO_CMD apt install -y gh
 
 ##
 ## 🧙 GVFS, use git as a virtual local caching filesystem
-```bash :: for windows (based on ProjFS)
+#```bash :: for windows (based on ProjFS)
 # https://github.com/microsoft/VFSForGit/releases/download/v1.0.21085.9/SetupGVFS.1.0.21085.9.exe
-* REQUIRES
-* no git clean/smudge filters
-.gitattributes 
-* -text
+#* REQUIRES
+#* no git clean/smudge filters
+#.gitattributes 
+#* -text
 
-.gitattributes 
-project.pbxproj filter=munge-project-identifier
+#.gitattributes 
+#project.pbxproj filter=munge-project-identifier
 
-github.com/elasticdotventures/_b00t_/blob/branch
+#github.com/elasticdotventures/_b00t_/blob/branch
 
-powershell 
-gvfs.ps1
-cache-serversclone
-configuration
-dehyrdate
-mount
-health
-Status
-
-
+#powershell 
+#gvfs.ps1
+#cache-serversclone
+#configuration
+#dehyrdate
+#mount
+#health
+#Status
 # Git Smudge and Clean Filters: Making Changes So You Don’t Have To
 
-
-
-```ps :: How to enable ProjFS using PowerShell
-Enable-WindowsOptionalFeature -Online -FeatureName Client-ProjFS -NoRestart
-```
-LifeCycle:
-Creation
-Startup
-Runtime
-Shutdown
-
+## PROJFS Windows
+#```ps :: How to enable ProjFS using PowerShell
+#Enable-WindowsOptionalFeature -Online -FeatureName Client-ProjFS -NoRestart
+#```
+#LifeCycle:
+#Creation
+#Startup
+#Runtime
+#Shutdown
 
 
 ##
@@ -115,8 +111,6 @@ Shutdown
 # ProjFS
 # https://github.com/microsoft/ProjFS-Managed-API
 # https://github.com/danielhodson/pyprojfs/blob/master/example.py
-
-
 
 
 

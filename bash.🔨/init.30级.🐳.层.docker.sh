@@ -1,5 +1,5 @@
 # should be run by _b00t_
-source "/c0de/_b00t_/_b00t_.bashrc"
+source "$_B00T_C0DE_Path/_b00t_.bashrc"
 
 ## THIS COMMAND SEEMS TO WORK FOR DOCKER IN DOCKER. 
 # docker run -d --name systemd-ubuntu --tmpfs /tmp --tmpfs /run --tmpfs /run/lock  --mount type=bind,source="/c0de",target="/c0de"  --privileged -v /var/run/docker.sock:/var/run/docker.sock -v /sys/fs/cgroup:/sys/fs/cgroup:ro jrei/systemd-ubuntu
@@ -92,18 +92,18 @@ $SUDO_CMD systemctl enable containerd.service
 # sudo systemctl disable docker.service
 # sudo systemctl disable containerd.service
 
- docker service create \
-    --mount 'type=volume,src=b00t,dst=/c0de/b00t,volume-driver=local'
-    --name b00t \
-    <IMAGE>
+ #docker service create \
+ #   --mount 'type=volume,src=b00t,dst=/c0de/b00t,volume-driver=local'
+ #   --name b00t \
+ #   <IMAGE>
 
 # todo: https://docs.docker.com/storage/bind-mounts/
-docker --mount
+# docker --mount
 
 
-docker service create \
-    --mount type=bind,source=/c0de/b00t,target=/c0de/b00t \
-    --name b00t 
+#docker service create \
+#    --mount type=bind,source=/c0de/b00t,target=/c0de/b00t \
+#    --name b00t 
 
 # https://www.instructables.com/Build-Docker-Image-for-Raspberry-Pi/
 # --platform linux/amd64,linux/arm 
@@ -111,5 +111,5 @@ docker service create \
 
 
 # to run dev  instance in azure aci
-service principle: 
-docker login azure --client-id xx --client-secret yy --tenant-id zz
+#service principle: 
+#docker login azure --client-id xx --client-secret yy --tenant-id zz

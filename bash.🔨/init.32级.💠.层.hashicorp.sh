@@ -1,5 +1,5 @@
 # should be run by _b00t_
-source "/c0de/_b00t_/_b00t_.bashrc"
+source "$_B00T_C0DE_Path/_b00t_.bashrc"
 
 terraform_bin="$(whereis terraform)"
 vault_bin="$(whereis vault)"
@@ -62,7 +62,7 @@ fi
 
 # https://registry.hub.docker.com/_/vault/
 #docker run --cap-add=IPC_LOCK -d --name=dev-vault vault
-docker run --cap-add=IPC_LOCK -e 'VAULT_DEV_ROOT_TOKEN_ID=myroot' -e 'VAULT_DEV_LISTEN_ADDRESS=0.0.0.0:1234' vault
+# 😁 docker run --cap-add=IPC_LOCK -e 'VAULT_DEV_ROOT_TOKEN_ID=myroot' -e 'VAULT_DEV_LISTEN_ADDRESS=0.0.0.0:1234' vault
 #docker run --cap-add=IPC_LOCK -e 'VAULT_LOCAL_CONFIG={"backend": {"file": {"path": "/vault/file"}}, "default_lease_ttl": "168h", "max_lease_ttl": "720h"}' vault server
 # At startup,
 # * the server will read configuration HCL and JSON files 

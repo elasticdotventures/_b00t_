@@ -34,4 +34,18 @@ cd protobuf-$PROTOBUF_VERSION/
 make install
 cd ..
 
+# Google Drive FS Mount
+# note: it's embarassing Google doesn't offer their own
+# https://www.techrepublic.com/article/how-to-mount-your-google-drive-on-linux-with-google-drive-ocamlfuse/#:~:text=Mounting%20your%20Google%20Drive&text=From%20the%20terminal%2C%20issue%20the,to%20the%20google%2Ddrive%20folder.
+
+## ocamlfuse Google Drive Mount
+#sudo add-apt-repository ppa:alessandro-strada/ppa
+#sudo apt-get install google-drive-ocamlfuse
+#sudo mkdir ~/google.👾.drive
+#google-drive-ocamlfuse ~/google.👾.drive
+# fusermount -u ~/migoogledrive
+
+## GCSF https://github.com/harababurel/gcsf
+sudo apt install -y libfuse-dev pkg-config
+
 

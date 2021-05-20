@@ -5,8 +5,11 @@
 #*
 ## * * * *//
 
+$SUDO_CMD apt-get -y upgrade && 
+$SUDO_CMD apt-get -y update
+
 # Boot functions
-source "/c0de/_b00t_/_b00t_.bashrc"
+source "$_B00T_C0DE_Path/_b00t_.bashrc"
 ARCH="$(uname -m | cut -b 1-6)"
 
 # moved to _b00t_.bashrc
@@ -93,24 +96,26 @@ fi
 # 🍰 wget- HTTP i/o 
 # 🍰 curl- HTTP i/o 
 
-if  [ ! -x "/usr/bin/fzf" ] || \
+if  [ ! -x "/bin/sed" ] || \
+     [ ! -x "/usr/bin/fzf" ] || \
      [ ! -x "/usr/bin/jq" ] || \
      [ ! -x "/usr/bin/wget" ]  ; then
-    $SUDO_CMD apt-get install -y fzf jq wget curl
+    $SUDO_CMD apt-get install -y sed fzf jq wget curl
     # curl -sS https://webinstall.dev/jq | bash
     # 
 fi
 
 
-if n0ta_xfile_📁_好不好 "/usr/bin/fdfind"  ; then
+if n0ta_xfile_📁_好不好 "~/.local/bin/fd"  ; then
     ## some other applications we'll need
     # 🤓 https://github.com/sharkdp/fd#installation
-    $SUDO_CMD apt-get install -y fd-find
+    #$SUDO_CMD apt-get install -y fd-find
     log_📢_记录 "😇.install fd-find helper (fd)"
+    webi fd@stable
 
-    $SUDO_CMD mkdir -p ~/.local/bin
-    $SUDO_CMD ln -s $(which fdfind) ~/.local/bin/fd
-    alias fd="/usr/bin/fdfind"
+    #$SUDO_CMD mkdir -p ~/.local/bin
+    #$SUDO_CMD ln -s $(which -b fdfind) ~/.local/bin/fd
+    #alias fd="/usr/bin/fdfind"
 fi
 
 if n0ta_xfile_📁_好不好 "/usr/bin/rg" ; then
@@ -190,7 +195,7 @@ YQ4_BINARY="yq_linux_amd64"  # TODO: multiarch
 YQ4_MIN_VERSION="4.0.0"
 YQ4_INSTALL_PATH="/usr/local/bin/yq4"
 
-if n0ta_xfile_📁_好不好 "$YQ_INSTALL_PATH" ; then
+if n0ta_xfile_📁_好不好 "$YQ4_INSTALL_PATH" ; then
     log_📢_记录 "😲 yq4 does not appear to be installed, f1x1ng."
     # missing yq
     installYQ=true
@@ -198,7 +203,7 @@ else
     # check yq version 
     log_📢_记录 "🧐 checking yq4"
     currentYQver="$(yq4 -V | cut -f 2 -d ' ')"
-    isYQokay=$(is_v3rs10n_大于 "$YQ_MIN_VERSION" $currentYQver)
+    isYQokay=$(is_v3rs10n_大于 "$YQ4_MIN_VERSION" $currentYQver)
     if [ ! "$isYQokay" = false ] ; then
         # TODO: consent
         log_📢_记录 "👻👼 insufficient yq --version $1, f1x1ng."
@@ -253,12 +258,16 @@ $SUDO_CMD apt-get install -y dialog apt-utils
 # _b00t_ cli - "/usr/local/bin/b00t"
 
 ## 
-if [ ! -f "/usr/local/bin/b00t" ] ; then
-    $SUDO_CMD ln -s /c0de/_b00t_/up-cli.sh /usr/local/bin/b00t
-fi
+#if [ ! -f "~./b00t" ] ; then
+#    $SUDO_CMD ln -s /c0de/_b00t_/up-cli.sh /usr/local/bin/b00t
+#fi
 
 ##* * * * * *//
 
-##  TODO future: install
-# pathman add ~/.local/bin
+PATHMAN_EXISTS=$(whereis -b pathman | cut -f 2 -d ':')
+if [ -z "$PATHMAN_EXISTS " ] ; then
+    log_📢_记录 "😇 install pathman"
+    curl -sS https://webinstall.dev/pathman | bash
+fi
+pathman add ~/.local/bin
 

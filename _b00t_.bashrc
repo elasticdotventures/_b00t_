@@ -18,10 +18,16 @@ set -a # mark variables whcih are modified or created for export
 ## 小路 \\
 ## Xiǎolù :: Path or Directory
 # THINGS YOU CAN EDIT: 
-export _B00T_C0DE_Path="/c0de/_b00t_"        
+_B00T_C0DE_Path="/c0de/_b00t_"
+if [ -d "$HOME/_b00t_" ] ; then 
+    _B00T_C0DE_Path="$HOME/_b00t_"
+fi 
+export _B00T_C0DE_Path
 export _B00T_C0NFIG_Path="$HOME/.b00t"
 _b00t_INSPIRATION_FILE="$_B00T_C0DE_Path/./r3src_资源/inspiration.json"
 ## 小路 //
+
+
 
 
 
@@ -42,6 +48,19 @@ function reb00t() {
     log_📢_记录 "🥾 restarting b00t"
     source "$_B00T_C0DE_Path/_b00t_.bashrc"
 }
+
+## * * * * * \\
+## pathAdd 
+unset pathAdd
+function pathAdd() {
+    if [ -d "$1" ] && [[ ":$PATH:" != *":$1:"* ]]; then
+        PATH="${PATH:+"$PATH:"}$1"
+    fi
+}
+# webi tools
+pathAdd "$HOME/.local/bin"
+## * * * * * //
+
 
 
 ## * * * * * \\
@@ -311,17 +330,27 @@ export -f bash_source_加载
 # n0t_file_📁_好不好 result: 
 #   0 : file is okay
 #   1 : file is NOT okay
+## if passed two or more files, will try all.
 function n0ta_xfile_📁_好不好() {
-
-    if [ ! -f "$1" ] ; then
-        log_📢_记录 "👽:不支持 $1 is both required AND missing. 👽:非常要!"
+    local args=("$@")
+    xfile=${args[0]}
+    if [ $# -gt 1 ] ; then
+        # more than one file. try many
+        while [ ! -x "$xfile" ] && [ "$#" -gt 1 ] ; do 
+            shift
+            xfile=$1
+        done
+    fi 
+    
+    if [ ! -f "$xfile" ] ; then
+        log_📢_记录 "👽:不支持 $xfile is both required AND missing. 👽:非常要!"
         return 0
-    elif [ ! -x "$1" ] ; then
-        log_📢_记录 "👽:不支持 $1 is not executable. 👽:非常要!"
+    elif [ ! -x "$xfile" ] ; then
+        log_📢_记录 "👽:不支持 $xfile is not executable. 👽:非常要!"
         return 0
     else
         # success
-        log_📢_记录 "👍 $1"
+        log_📢_记录 "👍 $xfile"
         return 1
     fi
 }
@@ -460,6 +489,8 @@ function is_n0t_aliased() {
 function motd() {
     # count motd's
     # 🍰 https://unix.stackexchange.com/questions/485221/read-lines-into-array-one-element-per-line-using-bash
+    SED_PATH=$(whereis -b sed | cut -f 2 -d ' ')
+
     if is_n0t_aliased "fd" ; then
         # no fd, incomplete environemnt
         log_📢_记录 "🥾🍒 No fd alias, incomplete environment"
@@ -510,13 +541,13 @@ function motd() {
 
     local glitchCMDz=''
     if [ $(rand0 10) -gt 1 ] ; then
-        glitchCMDz="$glitchCMDz | /usr/bin/sed 's/1/0/g' "
+        glitchCMDz="$glitchCMDz | $SED_PATH 's/1/0/g' "
     fi
     #if [ $(rand0 10) -gt 5 ] ; then
-    #    glitchCMDz=" | /usr/bin/sed 's/0/1/g' $glitchCMDz"
+    #    glitchCMDz=" | $SED_PATH 's/0/1/g' $glitchCMDz"
     #fi
     #if [ $(rand0 10) -gt 5 ] ; then
-    #    glitchCMDz=" | /usr/bin/sed 's/8/🥾/g' $glitchCMDz"
+    #    glitchCMDz=" | $SED_PATH 's/8/🥾/g' $glitchCMDz"
     #fi
 
     #if [ $motdLength -gt $(echo $(tput rows) - 3 | bc) ] ; then
@@ -530,26 +561,26 @@ function motd() {
         ## glitch effects 
         cp -v ${motdz[motdzQ]} $motdTmpFile
         if [ $(rand0 10) -gt 5 ] ; then
-            /usr/bin/sed -i 's/1/0/g' $motdTmpFile
-            /usr/bin/sed -i 's/8/🥾/g' $motdTmpFile
+            $SED_PATH -i 's/1/0/g' $motdTmpFile
+            $SED_PATH -i 's/8/🥾/g' $motdTmpFile
         fi 
         if [ $(rand0 10) -gt 5 ] ; then
-            /usr/bin/sed -i 's/\*/🥾/g' $motdTmpFile
-            /usr/bin/sed -i 's/[\!\-\@]./😁/g' $motdTmpFile
+            $SED_PATH 's/\*/🥾/g' $motdTmpFile
+            $SED_PATH -i 's/[\!\-\@]./😁/g' $motdTmpFile
         fi
         if [ $(rand0 10) -gt 5 ] ; then
-            /usr/bin/sed -i 's/#/_/g' $motdTmpFile
-            /usr/bin/sed -i 's/0/🐛/g' $motdTmpFile
+            $SED_PATH -i 's/#/_/g' $motdTmpFile
+            $SED_PATH -i 's/0/🐛/g' $motdTmpFile
         fi 
         if [ $(rand0 10) -gt 5 ] ; then
-            /usr/bin/sed -i 's/1/l/g' $motdTmpFile
-            /usr/bin/sed -i 's/[\@l\#]/🐛/g' $motdTmpFile
+            $SED_PATH -i 's/1/l/g' $motdTmpFile
+            $SED_PATH -i 's/[\@l\#]/🐛/g' $motdTmpFile
         fi 
         $showWithCMD $motdTmpFile
         /bin/rm -f $motdTmpFile
     fi
     
-    log_📢_记录 "🥾📈 FYTYRE goes here. "
+    log_📢_记录 "🥾📈 Future project stats goes here. "
 
     # echo ${#arr[@]}
     #  
