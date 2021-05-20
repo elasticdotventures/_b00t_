@@ -1,4 +1,6 @@
 #!/bin/bash
+source "$_B00T_C0DE_Path/_b00t_.bashrc"
+
 
 ## * * * * * * * * * * * \\
 #*

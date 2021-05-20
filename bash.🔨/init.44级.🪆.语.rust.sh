@@ -10,4 +10,5 @@ log_📢_记录 "🚀 install rust"
 
 curl https://sh.rustup.rs -sSf | sh
 source $HOME/.cargo/env
+# curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 

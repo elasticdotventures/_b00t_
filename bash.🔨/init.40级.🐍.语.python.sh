@@ -8,7 +8,7 @@ source "$_B00T_C0DE_Path/_b00t_.bashrc"
 ## * * * *\\
 
 # Pip requires: 
-$SUDO_CMD apt install -y build-essential libssl-dev libffi-dev python3-dev python-pipva
+$SUDO_CMD apt install -y build-essential libssl-dev libffi-dev python3-dev python-pip
 
 # Python init. 
 

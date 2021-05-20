@@ -5,8 +5,7 @@
 #*
 ## * * * *//
 
-$SUDO_CMD apt-get -y upgrade && 
-$SUDO_CMD apt-get -y update
+$SUDO_CMD apt-get -y upgrade && $SUDO_CMD apt-get -y update
 
 # Boot functions
 source "$_B00T_C0DE_Path/_b00t_.bashrc"
