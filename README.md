@@ -63,9 +63,6 @@ bash$ source ./_b00t_/_b00t_.bashrc
  * azure graph openid authentication scaffold
 * in typescript spa vue vite vitesse based template
 * please excuse the scattered bits, work in progress
-* doc engine? https://github.com/facebook/docusaurus/releases/tag/v2.0.0-beta.0
-* https://engineering.kalkayan.io/posts/setting-up-a-development-machine-part-3/
-* please excuse the dust as i write the docs as i'm building this. 
 
 ```
 ## you might try the setup file, or explore the color repo!
