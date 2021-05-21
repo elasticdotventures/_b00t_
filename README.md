@@ -220,10 +220,7 @@ The published container can be stripped down thus improving both size & security
 Cloud based AppConfig Stores & KeyVaults are used. KeyVaults contain types that are first-order types which are aware the passwords, etc. in them must be kept secure.  For example in Azure Logic Functions secure tokens (such as passwords, or access keys) from a Vault are tagged and automatically beautifully-filtered from logs as well! This makes compliance & user privacy easier! Extensive use of pipelines and messaging queues allow for tests and other large jobs to be run in parallel at cloud scale.  
 
 # What _exactly_ is Cloud Scale?
-Cloud Scale, with respect to \_b00t_ refers to highly parallelized jobs which can be executed simulatenously.  For example if you have 1,500 tests and each one takes avg 2 seconds to run, that's roughly 50 minutes to "finish" tests before you can even start a build to production.  A cloud scale approach would be to complete those tests in parallel on 1,500 servers thus only takes 2 seconds (or, actually as long as the longest test, which is often a timeout, so ~60 seconds) .. but the same pattern also works for deploying containerized neural-network layers using more optimized protocols such as Google ProtocolBuffers. 
-
-
-
+Cloud Scale, with respect to \_b00t_ refers to highly parallelized jobs which can be executed simulatenously, or alternatively at off peak (in background, later).  For example if you have 1,500 tests and each one takes avg 2 seconds to run, that's roughly 50 minutes to "finish" tests before you can even start a build to production.  A cloud scale approach would be to complete those tests in parallel on 1,500 servers thus only takes 2 seconds (or, actually as long as the longest test, which is often a timeout, so ~60 seconds).  
 
 # Why does Opionated mean? 
 For example, _b00t_ believes that VS Code with it's intellisense, typescript & python, docker, azure, aws, gcp, and plurality of other useful extensions makes VS Code the one true editor.  The author believes _b00t_ pattern works best when using remote containers, which is one of the 层 Layers it builds & configures. 
