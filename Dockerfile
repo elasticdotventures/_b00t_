@@ -82,6 +82,7 @@ ENV LC_ALL en_US.UTF-8
 FROM b00t_1n1t as b00t_b4s3
 LABEL 🥾🐳 B4S3 
 
+
 ## DOCKER BUILD ENHANCEMENTS
 ## https://docs.docker.com/develop/develop-images/build_enhancements/
 ## 
@@ -110,7 +111,7 @@ RUN apt-get install -y apt-utils dialog curl wget ca-certificates gnupg
 
 # https://stackoverflow.com/questions/27701930/how-to-add-users-to-docker-container
 #RUN gosu groupadd docker
-#RUN useradd --create-home --gid docker brianh
+#RUN useradd --create-home --gid docker brianh  --home-dir /mnt/nvme
 
 # TODO: setup ps1, etc. 
 FROM b00t_b4s3  as b00t_m4k3
