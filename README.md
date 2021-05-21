@@ -73,24 +73,22 @@ bash$ cd _b00t_; ./01-startup.sh
 
 ```
 
-# 🥾 is presently suitable for: 
+## 🥾 is presently suitable for: 
 probably absolutely nobody besides Brian Horakh (the author).
 but i welcome anybody with similar passions in pre-dev stage projects, incubators, self-reliant engineering teams (no vendor support, except the Author & Git Issues) who want to sponsor my progress or would like to use this framework in their own companies. 
 
 My Ethereum Address is:
 https://vittominacori.github.io/ethereum-badge/detail.html?address=0x24bd79c0efff201bd5b24b622d5ea09f93dbfaa3
 
-# _b00t_ Vs. Moby
-_b00t_ is NOT Docker Moby, although it shares some common goals. 
-
-Like Moby _b00t_ is ALSO perfect for:
+## _b00t_ vision: 
+Like Docker Moby _b00t_ is ALSO perfect for:
 * Hackers who want to deploy multi-language code across serverless functions & docker containers (in Azure). 
 * System engineers or integrators building a container system
 * Application developers looking for an easy way to run their Python, Typescript and related applications in containers with VS Code, Azure Tooling & best practices.
 
-_b00t_ intends to provide an early stage complete ops-stack for a company (examples included) to quickly easily and affordably, minimize and properly compartmentalized microservices by functional behavior characteristics (mostly in Azure).  Caching and other layers included to reduce costs and monitor integrity, but can also be accessed as a slimmed down bare os and should work on anything which can run aptitude package manager (usually debian, ubuntu). 
+_b00t_ intends to provide an early stage complete open ops-stack for a company (examples included) to quickly easily and affordably, minimize and compartmentalized "best-practices" templates for pr0j3ct design.  Caching and also runtime isolation (for offpeak processing $Saving m0n3y!) other layers included to reduce costs and monitor integrity, but can also be accessed as a slimmed down bare os and should 'probably' work in anything which can run aptitude package manager (usually debian, ubuntu).  This targets ubuntu, all architectures. 
 
-# What _b00t_ intends to provide: 
+## What _b00t_ intends to provide: 
 ```
     * Functional Examples & Opinionated Toolchoices & VS Code Dev Environment & Plugins 
     * FZF menuing and high automata, with detailed config notes. 
@@ -98,7 +96,7 @@ _b00t_ intends to provide an early stage complete ops-stack for a company (examp
     ** For application developers. 
 ```
 
-# Application Design: 
+## Application Design: 
 ```
     * Best industry practices security built-in OAuth/OpenID, etc.
     * Hardened Determinsic Patterns using Azure Durable Functions
@@ -127,7 +125,7 @@ ElasticDotVentures \_b00t_ is
 a highly opinionated set of tools for deploying Azure cloud services with EV libraries (called "c0re"), mostly for Azure 🤖.  \_b00t_ brings together a plurality of powerful Cloud tools to  to encourage a non-traditional but extremely p0werful mix-martial-art-of-code.   This text here is mostly visionary explaining the "what" about _b00t_ which is presently early stage being re_b00t_ed😆 from my prior projects. 
 
 ## Is _b00t_ a better for individuals or teams?
-Probably individuals is easier, certainly from an adoption standpoint. Not everybody can gr0k _b00t_.  If you can, great! _b00t_ means you don't need a team to do the stuff because _b00t_ does stuff for you.  Built by a serial-entrepeneur, _b00t_ is a great "stack" for Robotics & AI Startups where the product's very survival is often dependent on efficient (cost-saving) internal-tooling. 
+Adoption for individuals is easier, N0t everybody can gr0k _b00t_.   Built by a serial-entrepeneur, _b00t_ is a great "stack" for Robotics & AI Startups where the product's very survival is often dependent on efficient (cost-saving) internal-tooling / economical (but secure) computing environment.   
 
 _b00t_ is also great for teams the VS Code Live Share feature & Remote Containers, and Azure Hybrid-Connections offers a plurality of one-click easy, low-latency for teams to share screens securely through firewalls.  It's built in a way so that you could give people their own instance of your code, even limit the amount of funding per-new-customer trial. Something like google Collab for startups. The author believes this is especially useful if (for example) you desire to collaborate with other researchers, especially Chinese ones (i.e. hardware startups) thanks to it's incorporation of Emoji and Pinyin. 
 
@@ -173,20 +171,35 @@ So: Without knowing what WSLv2 "is" using only three symbols you can infer a lot
 This behavior becomes a mighty _SUPERPOWER_🦸 when used with the new [eBPF](https://ebpf.io/) Linux kernel features, discussed elsewhere. 
 
 
-# ⚠️ Disclaimer
+## ⚠️ Disclaimer
 This is Alpha software. _b00t_ is Provided AS-IS! \_b00t_is rique NFSW, for example a default project could be auto-named "butt_plug" or something like that, it's intentionally cheeky and non-discriminatory.  _b00t_ contains a powerful build process that can muster substantial resources.  
 
-# 🥋 Mixed-Martial-Art-Of-Coding: "StoryTime Logging"
+## 🥋 Mixed-Martial-Art-Of-Coding: "StoryTime Logging"
 \_b00t_ is designed around the idea of "StoryTime" logging that includes Emoji & HSK 1 Chinese Vocabulary - Please Don't be intimidated.  Default settings leave English translations on.  The Author (@BrianHorakh) is a native English speaker and multi-language polygot (Spanish, Mandarin, ~Italian, ~German, ~Portguese) all have their own linguistic style and strengths.  Think of this as mixed-martial-art-of-coding! 
 
-# 🤯 为是吗TF is HSK1? 
-HSK1 is Level 1 Chinese Mandarin language skill, in this case using simplified pinyin symbols. Simplified Pinyin is a screen glyph optimized font - that means HSK1 characters are very easy to read!  Presently emoji pictograms are second-class languages are both regionally-ambiguous i.e. "🍆💦" has a plurality of meanings but it is two easy to recognize symbols "eggplant water".  
+## 🤯 为是吗TF is HSK1? 
+How much information can be transmitted in a symbol vs. a character? 
 
-Simplified Pinyin is a very pretty font, it's designed to be more legible than traditional chinese on electronic devices. Simplified Pinyin is useful in a LOT of places (such as Azure Resource Names) where Emoji is not presently allowed. 
+HSK1 is Level 1 Chinese Mandarin language using simplified pinyin symbols "ideograms" for action/commands and stack layer naming conventions (designators for frontend-前面(Qiánmiàn), backend-背面 [Bèimiàn]).
+```
+In "Correct" Chinese files would be named like this:
+file.前面  relates to the front-end
+file.背面  backend
+```
+### But wait! why waste a character? 
+```
+file.前火  front-end firewall
+file.背器  backend container
+```
 
- Chinese pictograms are essentially the "original" black & white Emoji. HSK1 contains roughly ~500 word-meanings in a single character position (screen real-estate).  When we talk about Good naming conventions -- i.e. logic-role, _b00t_ tries to use uniform fixed width sequences 1-4 characters to hint, so Emoji + Mandarin-Pinyin. 
+Simplified Pinyin is a screen glyph optimized font - that means HSK1 characters are very easy to read!  Presently emoji pictograms are second-class languages are regionally-ambiguous (i.e. "🍆💦" has a plurality of meanings)
 
-If _b00t_ was restricted to ONLY the western English 36 characters (A-Z,0-9) that would results in ~1.6m possible combinations & meanings and probably a dozen abbreviated words at most, not descriptive at all!   Those same 4 character positions using 1024 Emojis (~1.9tn), plus 500 HSK1 mandarin characters (~62.5bn), in total 1560 characters (36+1024+500) results in 5.9 TRILLION possible "stories" encoded in only 4 characters that your brain needs to process! 
+Simplified Pinyin is a pretty font - in fact it's designed to be more legible than traditional chinese on electronic devices.  More complex glyphs can be used by our primate-pattern matching brains. 
+Simplified Pinyin is useful in a LOT of places (such as Cloud Azure/AWS/GCP Resource Names) or DNS where Emoji is not normally found.  Thus DNS names which can be up to 65 characters can actually contain a lot of semantic information using this notation.  This hidden semantic can be revealed with a translator.  Pinyin/Emoji also has the ability to be more affordably digested by a plurality of filters and search algorithms (compared to their latin-western sets) bandwidth & data processing fees when you think about reducing the names of payloads & strings (saving memory, bandwdith, storage, etc.) 
+
+Chinese pictograms are essentially the "original" black & white Emoji. HSK1 contains roughly ~500 word-meanings in a single character position (screen real-estate).  When we talk about Good naming conventions -- i.e. logic-role, _b00t_ tries to use uniform fixed width sequences 1-4 characters to hint, so Emoji + Mandarin-Pinyin. 
+
+If _b00t_ was restricted to ONLY the western English 36 characters (A-Z,0-9) that would results in ~1.6m possible combinations & meanings and probably a dozen abbreviated words at most, not descriptive at all!   Those same 4 character positions using 1024 Emojis (~1.9tn), plus 500 HSK1 mandarin characters (~62.5bn), in total 1560 characters (36+1024+500) results in 5.9 TRILLION possible "stories" encoded in only 4 characters for a primate brain to process! 
 
 Wow, so 4 characters of _b00t_ can represent *5.9 TRILLION stories*! 🤯 With *DEFAULT* English mode, the system will append the English. Keyboard translations in Windows & VS Code Extensions are coming, templates for cutting and pasting are herein. 
 
