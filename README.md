@@ -41,7 +41,7 @@ Status: there's something here, still a bit amorpheous.  up the interactive init
 presently alpha/没做完
 seeking testers, investors, or peer-review. 
 
-target a release at the end of May 2021. 
+target a release at the end of June 2021. 
 
 ```bash
 
@@ -141,7 +141,7 @@ higher visual payload of short 1 & 4 character Emoji & HSK1 in names is informat
 
 Built to deploy Azure Logic Connectors & Azure Durable Functions with Python & Typescript Connectors, Azure Service Bus 🚌, Azure KeyVault💎 Configs⚙️, Azure ARM/Bicep 💪. Check Jargon.md for more the full glossary & naming conventions.  
 
-Docker 🐳, Python 🐍, TypeScript 🦄 - emoji indicates things like designee, consignee, etc.  This is an important aspect of the "storytell" logging.  StoryTell creates really colorful transaction logs & error dumps, these will eventually be extended to perform basic ML application forensics & monitoring using eBPF in the Linux Kernel.  These meta-patterns (using computers to monitor computers) helps our soon-to-be-obsolete primate brains abstract patterns that wouldn't be nearly as obvious in regular English text and notice problems and inform the determinisitic control surfaces to take action (isolate, block-hold, ignore with possible consequences 😬).  This isn't the whole application freezing, it's a message in an application, or a corrupt video frame grabber in a video stream, any payload which doesn't match the model.   It's not lost forever, it's simply flagged for review. 
+Docker 🐳, Python 🐍, TypeScript 🦄 - emoji indicates things like designee, consignee, etc.  This is an important aspect of the "storytell" logging.  StoryTell creates really colorful transaction logs & error dumps, these will eventually be extended to perform basic ML application forensics & monitoring.  These meta-patterns (using computers to monitor computers) helps our soon-to-be-obsolete primate brains abstract patterns that wouldn't be nearly as obvious in regular English text and notice problems and inform the determinisitic control surfaces to take action (isolate, block-hold, ignore with possible consequences 😬).  This isn't the whole application freezing, it's a message in an application, or a corrupt video frame grabber in a video stream, any payload which doesn't match the model.   It's not lost forever, it's simply flagged for review. 
 
 # Example (in code)
 _b00t_ is bi-lingual, one of the c0des it understands is bash script. 
@@ -163,9 +163,6 @@ function is_WSLv2_🐧💙🪟v2() {
 * 🪟 Windows .....  self explanatory! (*may not appear on Android!)
 
 So: Without knowing what WSLv2 "is" using only three symbols you can infer a lot about it! 
-
-This behavior becomes a mighty _SUPERPOWER_🦸 when used with the new [eBPF](https://ebpf.io/) Linux kernel features, discussed elsewhere. 
-
 
 ## ⚠️ Disclaimer
 This is Alpha software. _b00t_ is Provided AS-IS! \_b00t_is rique NFSW, for example a default project could be auto-named "butt_plug" or something like that, it's intentionally cheeky and non-discriminatory.  _b00t_ contains a powerful build process that can muster substantial resources.  
@@ -239,11 +236,8 @@ Ultimately __b00t__ will include internal tooling sufficient to _b00t_ a company
 
 Built on top of the _b00t_ template.  Plans to compile a variety of unique reporting summarized using _b00t_ notation to quickly assess project quality, code sentiment analysis and identify weak spots. Presently this is done with tabnine, etc. 
 
-# Future: leverage eBPF
-Future plans include using the eBPF Linux Kernel filter for fast (kernel level) debugging and monitoring (learning patterns of good and bad transactions).  In this capacity multi-facet ideogram commands are universally better suited than English which would require an extensive level of cost-intensive NLP to be as-effective.  In this capacity _b00t_ saves money with a higher (better) payload to transmission size of packets. 
-
 # What is Idempotence & Determinism? 
-The primary "preferred" pattern for operational code is to operate with as much idempotence as possible.  Also to have the option of both deterministic and non-deterministic business/application logic. 
+The primary "preferred" pattern for operational code is to operate with as much idempotence (isolation) as possible.  Also to have the option of both deterministic and non-deterministic business/application logic. 
 
 https://en.wikipedia.org/wiki/Idempotence
 Idempotence (UK: /ˌɪdɛmˈpoʊtəns/,[1] US: /ˌaɪdəm-/)[2] is the property of certain operations in mathematics and computer science whereby they can be applied multiple times without changing the result beyond the initial application. 
