@@ -53,7 +53,7 @@ source "./_b00t_.bashrc"
 
 
 ## list all init-files (excluding template) in the bash bash.🔨/
-for bashrc in `fd --type x --glob "init*.sh"  $_B00T_C0DE_Path/bash.🔨/ | sort` ; 
+for bashrc in `/usr/bin/fdfind --type x --glob "init*.sh"  $_B00T_C0DE_Path/bash.🔨/ | sort` ; 
   do  
   echo $bashrc ; 
   bash_source_加载 $bashrc
