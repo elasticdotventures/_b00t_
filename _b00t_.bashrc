@@ -124,6 +124,12 @@ export FD_OPTIONS="--follow -exlude .git --exclude node_modules"
 
 ## OPINIONATED ALIASES
 
+# ☁️ cloud -cli's
+alias az="docker run --rm -it -v ~/.azure:/root/.azure -v $(pwd):/root mcr.microsoft.com/azure-cli:latest az"
+alias aws="docker run --rm -it amazon/aws-cli"
+alias gcp="docker run --rm -ti --name gcloud-config google/cloud-sdk gcloud "
+
+
 alias ls='ls -F  --color=auto'
 # pretty = ll
 #-rw-rw-r-- 1 1000 1000  100 May  5 23:51 requirements.txt
@@ -188,7 +194,6 @@ fi
 alias ymd="date +'%Y%m%d'"
 alias ymd_hm="date +'%Y%m%d.%H%M'"
 alias ymd_hms="date +'%Y%m%d.%H%M%S'"
-
 ##################
 
 
@@ -270,7 +275,16 @@ if [ -z "$webi" ] ; then
 fi 
 
 
-
+#
+# Returns seconds until a relative time i.e. "today 4pm"
+#
+function secondsUntil () {
+    # pass "today 5:25pm"
+    # same "today 17:25"
+    # .. "tomorrow"
+    WHEN=$1
+    echo $(( $(date +%s -d "$WHEN") - $( date +%s ) ))
+}
 
 
 ## 加载 * * * * * *\\
