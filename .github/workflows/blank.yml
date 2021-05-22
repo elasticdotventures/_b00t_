@@ -28,7 +28,7 @@ jobs:
           - ubuntu-latest
         architecture:
           - x64
-          - arm64
+        #  - arm64
     # Steps represent a sequence of tasks that will be executed as part of the job
     steps:
       # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
@@ -38,10 +38,11 @@ jobs:
         uses: actions/setup-python@v2
         with:
           python-version: '3.x'
+    
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip setuptools wheel 
-          pip install -r requirements.txt
+          pip install -r python.🐍/src/requirements.txt
         
       - uses: actions/setup-node@v2
         with:
