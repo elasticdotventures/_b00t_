@@ -41,14 +41,15 @@ if [ -z "$AZURE_LOCATION_ID" ] ; then
 fi
 log_📢_记录 "💙🤖 AZURE_LOCATION_ID: $AZURE_LOCATION_ID"
 
+##* * * *
 
 if [ -z "$AZURE_ACCOUNT_ID" ] ; then 
   export AZURE_ACCOUNT_ID=$( crudini_get "AZURE" "ACCOUNT_ID" )
 fi
 
-if [ -z "$AZURE_ACCOUNT_ID" ] ; then 
+if [ -n "$AZURE_ACCOUNT_ID" ] ; then 
   # short circuit, already set. 
-  log_📢_记录 "test"
+    log_📢_记录 "🔵 using ENV AZURE_ACCOUNT_ID: $AZURE_ACCOUNT_ID"
 elif [ $(az_cli account list -o json | jq '. | length') -eq 1 ] ; then
     log_📢_记录 "found one account"
     export AZURE_ACCOUNT_ID=$(az_cli az account show -o json | jq  --raw-output '.id')
@@ -61,40 +62,57 @@ else
   log_📢_记录 "💙🤖 AZURE_ACCOUNT_ID: $AZURE_ACCOUNT_ID"
 fi
 
+##* * * *
+
 if [ -z "$AZ_TENANT_ID" ] ; then 
   AZURE_TENANT_ID=$(az_cli account show -o json | jq  --raw-output '.tenantId')
   log_📢_记录 "💙🤖 AZURE_TENANT_ID: $AZURE_TENANT_ID"
 fi 
 
-if [ -z "$AZ_RESOURCE_GROUP" ] ; then 
-  log_📢_记录 "👽: require AZ_RESOURCE_GROUP"
-  az_cli group list -o json | sponge | jq -c --raw-output '.[]|[.id,.name,.location]|@tsv'  | fzf-tmux --delimiter='\t' --with-nth=2 --preview='echo {2} {3} {1}' --height 40% | awk '{print $1}'
-  # export AZURE_ACCOUNT_ID=$(  )
+##* * * *
+
+if [ -z "$AZURE_RESOURCE_GROUP_NAME" ] ; then 
+  export AZURE_RESOURCE_GROUP_NAME=$( crudini_get "AZURE" "RESOURCE_GROUP_NAME" )
+fi 
+if [ -z "$AZURE_RESOURCE_GROUP_NAME" ] ; then 
+  log_📢_记录 "💙🤖🥸 need AZURE_RESOURCE_GROUP_NAME"
+  export AZURE_RESOURCE_GROUP_NAME=$( az_cli group list -o json | sponge | jq -c --raw-output '.[]|[.id,.name,.location]|@tsv'  | fzf-tmux --delimiter='\t' --with-nth=2 --preview='echo {2}; echo {3}; echo {1}' --height 40% | awk '{print $2}' )
+  crudini_set "AZURE" "RESOURCE_GROUP_NAME" $AZURE_RESOURCE_GROUP_NAME
 fi
+log_📢_记录 "💙🤖 AZURE_RESOURCE_GROUP_NAME: $AZURE_RESOURCE_GROUP_NAME"
 
-exit
+##* * * *
 
-export AZURE_ACCOUNT_NAME=$( az account list -o json | jq '.[0].name' )
-export AZURE_TENANT_ID=$( az account list -o json | jq '.[0].tenantId' )
-export AZURE_USERNAME=$( az account list -o json | jq '.[0].user.name' )
-export AZURE_USERTYPE=$( az account list -o json | jq '.[0].user.type' )
+AZURE_RESOURCE_GROUP_ID=$( az_cli group show -g "$AZURE_RESOURCE_GROUP_NAME" --query id --output tsv )
+log_📢_记录 "💙🤖 AZURE_RESOURCE_GROUP_ID: $AZURE_RESOURCE_GROUP_ID"
+
+# az_resGroupName=$(az group show --id "$AZURE_RESOURCE_GROUP_ID" --query name --output tsv)
+
+#export AZURE_ACCOUNT_NAME=$( az account list -o json | jq '.[0].name' )
+#export AZURE_TENANT_ID=$( az account list -o json | jq '.[0].tenantId' )
+export AZURE_USERNAME=$( az_cli account list -o json | jq -c --raw-output '.[0].user.name' )
+export AZURE_USERTYPE=$( az_cli account list -o json | jq -c --raw-output '.[0].user.type' )
 
 
-## !TODO: Do you need a project name?
-## !TODO: Do we have an AZ tenant Id?
-## 要不要　
-## !TODO: Do you need a resource Group?
-## !TODO: 
+# 🤓 https://devblogs.microsoft.com/azure-sdk/authentication-and-the-azure-sdk/
 
-##* * * * \\
-az_resGroupId=$(az group show --name $az_groupName --query id --output tsv)
 # $echo groupId
 # /subscriptions/{###}/resourceGroups/{groupName}
-az ad sp create-for-rbac \
-  # --scopes  # !TODO
-  --scope $az_resGroupId --role Contributor \
-  --name $az_projectId-🤴校长_principal \
-  --sdk-auth
+# --scopes  # !TODO
+if [ ! -f "$HOME/.b00t/azure-sdk-auth.json" ] ; then
+  az_cli ad sp create-for-rbac \
+    --scope "$AZURE_RESOURCE_GROUP_ID" --role contributor \
+    --name "http://elastic.ventures/$_Pr0J3ct1D/principal" \
+    --sdk-auth > $HOME/.b00t/azure-sdk-auth.json
+fi
+
+if [ -f "$HOME/.b00t/azure-sdk-auth.json" ] ; then 
+  log_📢_记录 "🤖😁 $HOME/.b00t/azure-sdk-auth.json exists"
+else
+  log_📢_记录 "🤖🍒😥 $HOME/.b00t/azure-sdk-auth.json is missing"
+fi
+
+
 ##* * * * //
 
 
