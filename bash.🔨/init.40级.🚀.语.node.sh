@@ -8,7 +8,7 @@ source "$_B00T_C0DE_Path/_b00t_.bashrc"
 
 
 log_📢_记录 "🚀 install node"
-$SUDO_CMD snap install -y node --classic
+# $SUDO_CMD snap install node --classic
 
 $SUDO_CMD apt-get install -y npm 
 npm i -D foy
