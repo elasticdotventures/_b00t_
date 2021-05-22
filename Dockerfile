@@ -38,6 +38,8 @@
 
 
 
+
+
 #### 
 # Step1: init
 FROM jrei/systemd-ubuntu as b00t_1n1t
@@ -70,6 +72,10 @@ RUN apt-get clean && apt-get update -y && apt-get upgrade -y
 ENV DEBIAN_FRONTEND "noninteractive"
 ENV TZ "Australia/Melbourne"
 RUN apt-get -y install apt-utils tzdata locales
+
+# from https://hub.docker.com/_/ubuntu
+RUN apt-get update && apt-get install -y locales && rm -rf /var/lib/apt/lists/* \
+    && localedef -i en_US -c -f UTF-8 -A /usr/share/locale/locale.alias en_US.UTF-8
 
 # Emoji Support
 RUN locale-gen en_US.UTF-8

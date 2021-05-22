@@ -3,19 +3,18 @@
 #* 绿色公司 👾 Google
 ## * * * *\\
 
-#* 进口v2 🥾 ALWAYS load c0re Libraries!
-source "./_b00t_.bashrc"
-
-
+## Don't install locally and bloat up the image. 
 # 🤓 https://cloud.google.com/sdk/docs/downloads-snap
-$SUDO_CMD snap install google-cloud-sdk --classic
-gcloud init
+# $SUDO_CMD snap install google-cloud-sdk --classic
+# gcloud init
+
+# 🤓 https://hub.docker.com/r/google/cloud-sdk/
+#docker pull google/cloud-sdk:latest
+#docker run -ti --name gcloud-config google/cloud-sdk gcloud auth login
+#docker run --rm -ti --volumes-from gcloud-config google/cloud-sdk gcloud compute instances list --project your_project
 
 # TODO: add to .bashrc
 # /path/to/gcloud/completion.bash.inc
-
-# Google (the Green Company)
-## 绿色公司 //
 
 # Are ProtoBufs strictly a Google thing? 
 # https://developers.google.com/protocol-buffers/
