@@ -7,8 +7,14 @@ if is_n0t_aliased "az" ; then
   log_📢_记录 "🥵 crashed, az-cli alias 'az' is required"
   exit  
 fi
+# 👮‍♂️ az alias is used heavily, so maybe this will fix it.  (remember: remove cleanup)
+# shopt -s expand_aliases
+# HOWTO: better? how to translate alias without enabling? expand_aliases? hmm.. 
+# AZ_CMD=$(alias -p | grep "az=" | cut -b 10-1024)
+# hint: something like
+# AZ_CMD='docker run --rm -it -v ~/.azure:/root/.azure -v /c0de/_b00t_:/root mcr.microsoft.com/azure-cli:latest az'
 
-
+## TODO: decide if we need az login 
 #az login
 #az login --use-device-code
 
@@ -23,29 +29,51 @@ if [ -z "$_Pr0J3ct1D" ] ; then
 fi
 log_📢_记录 "🥾 ProjectID: $_Pr0J3ct1D"
 
-AZURE_LOCATION_ID=$( crudini_get "AZURE" "LOCATION_ID" )
+if [ -z "$AZURE_LOCATION_ID" ] ; then 
+  AZURE_LOCATION_ID=$( crudini_get "AZURE" "LOCATION_ID" )
+fi
 if [ -z "$AZURE_LOCATION_ID" ] ; then
+  # still blank!
   log_📢_记录 "💙🤖🤓: Please choose a location"
-  export AZURE_LOCATION_ID=$( az account list-locations -o json | jq -c --raw-output '.[]|[.name,.displayName] | @tsv' | sort | fzf-tmux --delimiter='\t' --with-nth=1 --preview='echo {2}' --height 40% | awk '{print $1}' )
+
+  export AZURE_LOCATION_ID=$( az_cli account list-locations -o json | sponge | jq -c --raw-output '.[]|[.name,.displayName] | @tsv' | sponge | sort | fzf-tmux --delimiter='\t' --with-nth=1 --preview='echo {2}' --height 40% | awk '{print $1}' )
   crudini_set "AZURE" "LOCATION_ID" $AZURE_LOCATION_ID
 fi
-log_📢_记录 "💙🤖 Location: $AZURE_LOCATION_ID"
+log_📢_记录 "💙🤖 AZURE_LOCATION_ID: $AZURE_LOCATION_ID"
 
+
+if [ -z "$AZURE_ACCOUNT_ID" ] ; then 
+  export AZURE_ACCOUNT_ID=$( crudini_get "AZURE" "ACCOUNT_ID" )
+fi
+
+if [ -z "$AZURE_ACCOUNT_ID" ] ; then 
+  # short circuit, already set. 
+  log_📢_记录 "test"
+elif [ $(az_cli account list -o json | jq '. | length') -eq 1 ] ; then
+    log_📢_记录 "found one account"
+    export AZURE_ACCOUNT_ID=$(az_cli az account show -o json | jq  --raw-output '.id')
+    log_📢_记录 "💙🥾 AZURE_ACCOUNT_ID: $AZURE_ACCOUNT_ID"
+else
+     log_📢_记录 "💙🤖🤓 multi-account"
+     export AZURE_ACCOUNT_ID=$( az_cli account list -o json | sponge |  jq -c --raw-output '.[]|[.id,.name] | @tsv' | sort | fzf-tmux --delimiter='\t' --with-nth=2 --preview='echo {2} {1}' --height 40% | awk '{print $1}' )
+    az_cli account set --subscription $AZURE_ACCOUNT_ID
+    crudini_set "AZURE" "ACCOUNT_ID" $AZURE_ACCOUNT_ID
+  log_📢_记录 "💙🤖 AZURE_ACCOUNT_ID: $AZURE_ACCOUNT_ID"
+fi
+
+if [ -z "$AZ_TENANT_ID" ] ; then 
+  AZURE_TENANT_ID=$(az_cli account show -o json | jq  --raw-output '.tenantId')
+  log_📢_记录 "💙🤖 AZURE_TENANT_ID: $AZURE_TENANT_ID"
+fi 
 
 if [ -z "$AZ_RESOURCE_GROUP" ] ; then 
-  log_📢_记录 "👽: sorry, you need AZ_RESOURCE_GROUP"
-  fzf 
-  exit
+  log_📢_记录 "👽: require AZ_RESOURCE_GROUP"
+  az_cli group list -o json | sponge | jq -c --raw-output '.[]|[.id,.name,.location]|@tsv'  | fzf-tmux --delimiter='\t' --with-nth=2 --preview='echo {2} {3} {1}' --height 40% | awk '{print $1}'
+  # export AZURE_ACCOUNT_ID=$(  )
 fi
 
-if [ $(az account list -o json | jq '. | length') -eq 1 ] ; then
-    log_📢_记录 "found one account"
-else
-     log_📢_记录 "🍒 sorry, multi-account not supported (YET)."
-fi
+exit
 
-
-export AZURE_ACCOUNT_ID=$( az account list -o json | jq '.[0].id' )
 export AZURE_ACCOUNT_NAME=$( az account list -o json | jq '.[0].name' )
 export AZURE_TENANT_ID=$( az account list -o json | jq '.[0].tenantId' )
 export AZURE_USERNAME=$( az account list -o json | jq '.[0].user.name' )
@@ -134,5 +162,7 @@ if [ false ] ; then
     # mount _b00t_ in the d0cker? 
 fi
 
+# cleanup, disable (enabled earlier)
+shopt -u expand_aliases
 
 
