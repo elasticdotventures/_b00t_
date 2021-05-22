@@ -120,4 +120,6 @@ git clone https://github.com/open-mmlab/mmediting
 docker build -t mmediting docker/
 docker run --gpus all --shm-size=8g -it -v {DATA_DIR}:/mmediting/data mmediting
 
+# Command-Line tools for speech and intent recognition on Linux 
+# https://voice2json.org/
 

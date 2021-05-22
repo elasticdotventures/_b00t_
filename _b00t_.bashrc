@@ -125,7 +125,11 @@ export FD_OPTIONS="--follow -exlude .git --exclude node_modules"
 ## OPINIONATED ALIASES
 
 # ☁️ cloud -cli's
-alias az="docker run --rm -it -v ~/.azure:/root/.azure -v $(pwd):/root mcr.microsoft.com/azure-cli:latest az"
+function az_cli () {
+    # local args=("$@")
+    docker run --rm -it -v $HOME/.azure:/root/.azure -v $(pwd):/root mcr.microsoft.com/azure-cli:latest az $@
+}
+alias az="az_cli"
 alias aws='docker run --rm -it -v ~/.aws:/root/.aws -v $(pwd):/aws amazon/aws-cli'
 alias gcp="docker run --rm -ti --name gcloud-config google/cloud-sdk gcloud "
 
