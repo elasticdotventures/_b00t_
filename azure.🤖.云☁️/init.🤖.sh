@@ -1,23 +1,56 @@
 
 
 # safely initialize _b00t_ bash
-source "/c0de/_b00t_/_b00t_.bashrc"
+source "$_B00T_C0DE_Path/_b00t_.bashrc"
+source "./b00t-extra.bashrc"
+if is_n0t_aliased "az" ; then
+  log_📢_记录 "🥵 crashed, az-cli alias 'az' is required"
+  exit  
+fi
+
 
 #az login
 #az login --use-device-code
 
 ## 项目 * * * * \\  
 # (Xiàngmù) Project Id
-
+if [ -z "$_Pr0J3ct1D" ] ; then 
+  export _Pr0J3ct1D=$(crudini_get "b00t" "_Pr0J3ct1D")
+fi
 if [ -z "$_Pr0J3ct1D" ] ; then 
   export _Pr0J3ct1D=$(Pr0J3ct1D)
+  crudini_set "b00t" "_Pr0J3ct1D" "$_Pr0J3ct1D"
 fi
+log_📢_记录 "🥾 ProjectID: $_Pr0J3ct1D"
+
+AZURE_LOCATION_ID=$( crudini_get "AZURE" "LOCATION_ID" )
+if [ -z "$AZURE_LOCATION_ID" ] ; then
+  log_📢_记录 "💙🤖🤓: Please choose a location"
+  export AZURE_LOCATION_ID=$( az account list-locations -o json | jq -c --raw-output '.[]|[.name,.displayName] | @tsv' | sort | fzf-tmux --delimiter='\t' --with-nth=1 --preview='echo {2}' --height 40% | awk '{print $1}' )
+  crudini_set "AZURE" "LOCATION_ID" $AZURE_LOCATION_ID
+fi
+log_📢_记录 "💙🤖 Location: $AZURE_LOCATION_ID"
+
 
 if [ -z "$AZ_RESOURCE_GROUP" ] ; then 
   log_📢_记录 "👽: sorry, you need AZ_RESOURCE_GROUP"
   fzf 
   exit
 fi
+
+if [ $(az account list -o json | jq '. | length') -eq 1 ] ; then
+    log_📢_记录 "found one account"
+else
+     log_📢_记录 "🍒 sorry, multi-account not supported (YET)."
+fi
+
+
+export AZURE_ACCOUNT_ID=$( az account list -o json | jq '.[0].id' )
+export AZURE_ACCOUNT_NAME=$( az account list -o json | jq '.[0].name' )
+export AZURE_TENANT_ID=$( az account list -o json | jq '.[0].tenantId' )
+export AZURE_USERNAME=$( az account list -o json | jq '.[0].user.name' )
+export AZURE_USERTYPE=$( az account list -o json | jq '.[0].user.type' )
+
 
 ## !TODO: Do you need a project name?
 ## !TODO: Do we have an AZ tenant Id?

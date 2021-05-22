@@ -126,7 +126,7 @@ export FD_OPTIONS="--follow -exlude .git --exclude node_modules"
 
 # ☁️ cloud -cli's
 alias az="docker run --rm -it -v ~/.azure:/root/.azure -v $(pwd):/root mcr.microsoft.com/azure-cli:latest az"
-alias aws="docker run --rm -it amazon/aws-cli"
+alias aws='docker run --rm -it -v ~/.aws:/root/.aws -v $(pwd):/aws amazon/aws-cli'
 alias gcp="docker run --rm -ti --name gcloud-config google/cloud-sdk gcloud "
 
 
@@ -486,14 +486,15 @@ function rand0() {
 
 ##* * * * * *//
 ## checks to see if an alias has been defined. 
+#  if is_n0t_aliased "az" ; then echo "true - not aliased!"; else echo "false"; fi
 function is_n0t_aliased() {
     local args=("$@")
     local hasAlias=${args[0]}
     local exists=$(alias -p | grep "alias $hasAlias=")
     if [ -z "$exists" ] ; then
-        return 0;
+        return 1;  # "true"
     else 
-        return 1;
+        return 0;  #  "false"
     fi
 }
 

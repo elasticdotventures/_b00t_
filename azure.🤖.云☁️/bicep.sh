@@ -1,23 +1,20 @@
 #!/bin/bash
 source "/c0de/_b00t_/_b00t_.bashrc"
 
-function install_b1c3p() {
-    curl -Lo bicepinstall https://github.com/Azure/bicep/releases/latest/download/bicep-linux-x64
-    chmod +x ./bicepinstall
-    $SUDO_CMD mv ./bicepinstall /usr/local/bin/bicep
-    bicep --help
-}
+## HISTORY: a lot of the need for this file went away once az-cli was moved to docker, some is kept here. 
 
-if n0ta_xfile_📁_好不好 "/usr/local/bin/bicep" ; then
-    log_📢_记录 "🤓 installing bicep. "
-    install_b1c3p
-fi
+#function install_b1c3p() {
+#    curl -Lo bicepinstall https://github.com/Azure/bicep/releases/latest/download/bicep-linux-x64
+#    chmod +x ./bicepinstall
+#    $SUDO_CMD mv ./bicepinstall /usr/local/bin/bicep
+#    bicep --help
+#}
 
-if [ $(az account list -o json | jq '. | length') -eq 1 ] ; then
-    log_📢_记录 "found one account"
-else
-     log_📢_记录 "🍒 sorry, multi-account not supported (YET)."
-fi
+#if n0ta_xfile_📁_好不好 "/usr/local/bin/bicep" ; then
+#    log_📢_记录 "🤓 installing bicep. "
+#    install_b1c3p
+#fi
+
 
 # SAMPLE: 
 #[
@@ -34,65 +31,11 @@ fi
 #    }
 #  }
 #]
-export AZURE_ACCOUNT_ID=$( az account list -o json | jq '.[0].id' )
-export AZURE_ACCOUNT_NAME=$( az account list -o json | jq '.[0].name' )
-export AZURE_TENANT_ID=$( az account list -o json | jq '.[0].tenantId' )
-export AZURE_USERNAME=$( az account list -o json | jq '.[0].user.name' )
-export AZURE_USERTYPE=$( az account list -o json | jq '.[0].user.type' )
 
 # for "Service Principal" 
 # AZURE_CLIENT_ID = "id of an azure active directory application"
 # AZURE_CLIENT_SECRET = "one of the applications secrets"
 
-
-# i.e.
-# fuzzy_chooser 
-#function fuzzy_chooser() {
-#    local args=("$@")
-#    local function=${args[0]}
-#    local topic=${args[1]}
-#    local key=${args[2]}
-
-AZURE_LOCATION_ID=$( crudini_get "AZURE" "LOCATION_ID" )
-if [ -z "$AZURE_LOCATION_ID" ] ; then
-  log_📢_记录 "💙🤖🤓: Please choose a location"
-  export AZURE_LOCATION_ID=$( az account list-locations -o json | jq -c --raw-output '.[]|[.name,.displayName] | @tsv' | sort | fzf-tmux --delimiter='\t' --with-nth=1 --preview='echo {2}' --height 40% | awk '{print $1}' )
-  crudini_set "AZURE" "LOCATION_ID" $AZURE_LOCATION_ID
-fi
-log_📢_记录 "💙🤖 Location: $AZURE_LOCATION_ID"
-
-
-## select a project id
-# export PROJECT_ID = 
-function select_project_id() {
-  local selected=$(for i in {0..5}
-  do
-    if [ "$i" -eq "0" ] ; then 
-      echo "_input_"
-    else 
-      echo $( Pr0J3ct1D )
-    fi
-  done | fzf-tmux )
-  if [ "$selected" = "_input_" ] ; then
-    read -p "Pr0J3ct1D:" selected
-  fi 
-  echo $selected
-  return $?
-}
-
-## test to see how hard it is use fzf
-function get_true_false() {
-  echo "true
-false" | fzf-tmux 
-  return $?
-}
-
-## someday.. 
-function emoji_menu() {
-
-  # cat ../r3src_资源/inspiration.json | jq ".[]|[.symbol,.word] | @tsv" -r | fzf-tmux
-  return 0 
-}
 
  log_📢_记录 "💖🥾 True=New Project or false=Clone from Repo? "
 printf "truefalse: %s\n" $( get_true_false )
