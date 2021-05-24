@@ -184,26 +184,23 @@ file.背面  backend
 file.前火  front-end firewall
 file.背器  backend container
 ```
+### Now, let's add some emoji
+```
+file.前火.🔥🧱  front-end firewall
+file.背器.🔙🐳  backend container
+```
+Using a browser plugin you can translate anything in the documentation easily.  But by integrating _b00t_ scripting at various stages it produces a well defined pattern based marshalling "summary" layer of logic for inputs and outputs of different subsystems. 
 
-Simplified Pinyin is a screen glyph optimized font - that means HSK1 characters are very easy to read!  Presently emoji pictograms are second-class languages are regionally-ambiguous (i.e. "🍆💦" has a plurality of meanings)
+Simplified Pinyin is a screen glyph optimized font - that means HSK1 characters are *by design* very easy to read & learn!  Presently emoji pictograms are second-class languages are regionally-ambiguous (i.e. "🍆💦" has a plurality of meanings) see [jargon.md](). 
 
-Simplified Pinyin is a pretty font - in fact it's designed to be more legible than traditional chinese on electronic devices.  More complex glyphs can be used by our primate-pattern matching brains. 
-Simplified Pinyin is useful in a LOT of places (such as Cloud Azure/AWS/GCP Resource Names) or DNS where Emoji is not normally found.  Thus DNS names which can be up to 65 characters can actually contain a lot of semantic information using this notation.  This hidden semantic can be revealed with a translator.  Pinyin/Emoji also has the ability to be more affordably digested by a plurality of filters and search algorithms (compared to their latin-western sets) bandwidth & data processing fees when you think about reducing the names of payloads & strings (saving memory, bandwdith, storage, etc.) 
-
-Chinese pictograms are essentially the "original" black & white Emoji. HSK1 contains roughly ~500 word-meanings in a single character position (screen real-estate).  When we talk about Good naming conventions -- i.e. logic-role, _b00t_ tries to use uniform fixed width sequences 1-4 characters to hint, so Emoji + Mandarin-Pinyin. 
-
-If _b00t_ was restricted to ONLY the western English 36 characters (A-Z,0-9) that would results in ~1.6m possible combinations & meanings and probably a dozen abbreviated words at most, not descriptive at all!   Those same 4 character positions using 1024 Emojis (~1.9tn), plus 500 HSK1 mandarin characters (~62.5bn), in total 1560 characters (36+1024+500) results in 5.9 TRILLION possible "stories" encoded in only 4 characters for a primate brain to process! 
-
-Wow, so 4 characters of _b00t_ can represent *5.9 TRILLION stories*! 🤯 With *DEFAULT* English mode, the system will append the English. Keyboard translations in Windows & VS Code Extensions are coming, templates for cutting and pasting are herein. 
-
-_b00t_ is quicker-than-you'd-think to learn (our brains like patterns) after a short while you'll learn the 意 (Yì, English: "Meaning of") Chinese characters, till then just cut and paste from the samples, navigate with pictures, some vocabulary is included in files. 🪄😁! now you're learning to read basic Pinyin!  Chinese Mandarin (Pinyin users) represent 1.8 billion humans, roughly 1/3rd of the population.  English also has roughly 1.8bn globally -- HOWEVER only 400m are native speakers, everybody else already speaks another language besides English first! Emoji is universal.   
+[README_名约_syntax.md]
 
 # 🤩 Wait, What does _b00t_ do? 
-\_b00t_ is an *opinionated* pipeline orchestration system with integrated VS Code development environemnt, CI/CD Pipeline, base system which is suitable for deploying any cloud-scale state-less machine-learning project in frameworks such as Nvidia Cuda, PyTorch, Tensorflow, etc. as desired.  \_b00t_ provides the base idempotent templates for resources & public/private code-libraries written in Azure ARM/Bicep. 
+\_b00t_ is a novel and *opinionated* pipeline orchestration system with integrated VS Code development environemnt, CI/CD Pipeline, base system which is suitable for deploying any cloud-scale state-less machine-learning project in frameworks such as Nvidia Cuda, PyTorch, Tensorflow, etc. as desired.  \_b00t_ provides the base idempotent templates for resources & public/private code-libraries written in Azure ARM/Bicep. 
 
-The ultimate output is a fully operational cloud-resource group, sensibile file shares, key-vaults, monitoring, logging scaffold skeletons in TS & Python as well (the "c0re") which presents itself as an interactive filesytem/blob storage.  Python & Typescript bindings. I'll eventually add some higher level Vue templates and hardware IOT/Arduino & ESP32 templates as well. When they run, they create beatiful stories in your logs about transactions. 
+The ultimate output is a fully operational cloud-resource group, sensibile file shares, key-vaults, monitoring, logging scaffold skeletons in TS & Python as well (the "c0re") which presents itself as an interactive filesytem/blob storage.  Python & Typescript bindings. I'll eventually add some higher level Vue templates and hardware IOT/Arduino & ESP32 templates as well. 
 
-One aspect \_b00t_ is that it can be hardened and subsequently removed (using docker dive) during the publish to live/production.
+One unique aspect of \_b00t_ is that it will allow the ultimate images to be removed (using docker dive) during the publish to live/production.
 
 From the \_b00t_ perspective it's going to help you build SOMETHING, it's only a foundation.  Further application templates can be built on _b00t_ and then easily upgraded taking advantage of new features. 
 
