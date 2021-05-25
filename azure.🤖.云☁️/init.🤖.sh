@@ -88,23 +88,48 @@ log_📢_记录 "💙🤖 AZURE_RESOURCE_GROUP_ID: $AZURE_RESOURCE_GROUP_ID"
 
 # az_resGroupName=$(az group show --id "$AZURE_RESOURCE_GROUP_ID" --query name --output tsv)
 
-#export AZURE_ACCOUNT_NAME=$( az account list -o json | jq '.[0].name' )
-#export AZURE_TENANT_ID=$( az account list -o json | jq '.[0].tenantId' )
+# export AZURE_ACCOUNT_NAME=$( az account list -o json | jq '.[0].name' )
+# export AZURE_TENANT_ID=$( az account list -o json | jq '.[0].tenantId' )
 export AZURE_USERNAME=$( az_cli account list -o json | jq -c --raw-output '.[0].user.name' )
 export AZURE_USERTYPE=$( az_cli account list -o json | jq -c --raw-output '.[0].user.type' )
 
+##* * * *
+
+## Container Registry
+if [ -z "$AZURE_ACR_LOGIN_SERVER" ] ; then 
+  export AZURE_ACR_LOGIN_SERVER=$( crudini_get "AZURE" "ACR_LOGIN_SERVER" )
+fi 
+
+if [  $(az_cli acr list -o json | sponge | jq '. | length') -eq 0  ] ; then 
+   log_📢_记录 "💙🤖🍒😥 _b00t_ REQUIRES A CONTAINER REGISTRY (CANT CREATE YET, doesn't use dockerhub)"
+elif [ -z "$AZURE_ACR_LOGIN_SERVER" ] ; then 
+  export AZURE_ACR_LOGIN_SERVER=$( az_cli acr list -o json | sponge | jq -c --raw-output '.[]|[.id,.loginServer,.name,.location]|@tsv'  | fzf-tmux --header "💙🤖🐳 select AZ Container Registry" --delimiter='\t' --with-nth=3 --preview='echo {2}; echo {3}; echo {1}' --height 40% | awk '{print $2}' )
+  crudini_set "AZURE" "ACR_LOGIN_SERVER" $AZURE_ACR_LOGIN_SERVER
+fi
+log_📢_记录 "💙🤖 AZURE_ACR_LOGIN_SERVER: $AZURE_ACR_LOGIN_SERVER"
+
+# az ad sp create-for-rbac --keyvault --sdk-auth true --skip-assignment true
 
 # 🤓 https://devblogs.microsoft.com/azure-sdk/authentication-and-the-azure-sdk/
 
+# /.env/azure-sdk-auth.json
 # $echo groupId
 # /subscriptions/{###}/resourceGroups/{groupName}
-# --scopes  # !TODO
-if [ ! -f "$HOME/.b00t/azure-sdk-auth.json" ] ; then
-  az_cli ad sp create-for-rbac \
-    --scope "$AZURE_RESOURCE_GROUP_ID" --role contributor \
-    --name "http://elastic.ventures/$_Pr0J3ct1D/principal" \
-    --sdk-auth > $HOME/.b00t/azure-sdk-auth.json
-fi
+# --scopes  # !TODO (can be a plurality)
+#if [ ! -f "$HOME/.b00t/azure-sdk-auth.json" ] ; then
+ # az_cli ad sp create-for-rbac \
+ #   --scopes "$AZURE_RESOURCE_GROUP_ID" --role Contributor \
+ #   --name "$_Pr0J3ct1D" \
+ #   --sdk-auth 
+#fi
+
+#az role assignment create \
+#  --assignee "X" \
+#  --scope $registryId \
+#  --role AcrPush
+
+exit
+
 
 if [ -f "$HOME/.b00t/azure-sdk-auth.json" ] ; then 
   log_📢_记录 "🤖😁 $HOME/.b00t/azure-sdk-auth.json exists"
@@ -116,23 +141,13 @@ fi
 ##* * * * //
 
 
-
-
-
-
-
-if [ false ] ; then
     az login
-
-    export AZ_LOCATION=southeastasia
-    export AZ_RESOURCE_GROUP="r41nm4k3r.pr0t0sG0里面"
     az group create --location $AZ_LOCATION --resource-group $AZ_RESOURCE_GROUP
 
     # https://whatibroke.com/2021/03/27/quick-sample-to-create-a-vm-azure-bicep/ 
     az deployment group create --template-file ./main.bicep  --parameters ./parameters/parameters.prod.json -g "$AZ_RESOURCE_GROUP"
 
 # AI
-# in azure speak there are 4 types of NVIDIA Image for AI
 # az extension add --name azure-devops
 # az devops configure --defaults organization=https://elastic.ventures/r41nm4k3r project=r41nm4k3r
 
@@ -176,10 +191,5 @@ if [ false ] ; then
 # ssh -i r41nm4k3r--pr0t0typ0x--b00t_key.pem w1ndy@r41nm4k3r-nvidia.southeastasia.cloudapp.azure.com
 
 
-    # mount _b00t_ in the d0cker? 
-fi
-
-# cleanup, disable (enabled earlier)
-shopt -u expand_aliases
 
 

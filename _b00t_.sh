@@ -1,17 +1,17 @@
 #!/bin/bash
 
+
+
+# TODO: xauth list 
+export DISPLAY=":10"
+export XAUTHORITY=~/.Xauthority
+
+
 export BASHRCPATH=$(expandPath "~/_b00t_/_b00t_.bashrc")
-#source $BASHRCPATH
-# this might need to move to python. 
+source $BASHRCPATH
 
-#if [ ! -x "/usr/local/bin/b00t.sh" ] ; then
-#  # setup symlink for faster access
-#  # $SUDO_CMD ln -s /c0de/_b00t_/_b00t_.sh /usr/local/bin/b00t.sh
-#fi 
-
-
-
-
+## NOTE: this is for future use. 
+exit 
 
 ##* * * *\\ 
 #* Purpose: 

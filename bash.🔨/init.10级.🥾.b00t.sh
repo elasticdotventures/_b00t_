@@ -7,6 +7,8 @@
 
 $SUDO_CMD apt-get -y upgrade && $SUDO_CMD apt-get -y update
 
+$SUDO_CMD sudo apt-get install build-essential procps curl file git
+
 # Boot functions
 source "$_B00T_C0DE_Path/_b00t_.bashrc"
 ARCH="$(uname -m | cut -b 1-6)"
@@ -83,6 +85,8 @@ fi
 
 # webi offers an alternative (but not cross platform i think)
 if n0ta_xfile_📁_好不好 "~/.local/bin/dotenv" ; then
+    # TODO: wtf - not https://github.com/bashup/dotenv? 
+    # TODO: chezmoi - https://github.com/twpayne/chezmoi
     log_📢_记录 "🕸️.webi dotenv $cmd"
     webi dotenv@stable
 fi

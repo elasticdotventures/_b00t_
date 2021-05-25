@@ -7,7 +7,26 @@
 ## blender, ffmpeg
 ## * * * * * * * * * * * //
 
+## for some fun demos. 
+# https://docs.nvidia.com/video-technologies/video-codec-sdk/ffmpeg-with-nvidia-gpu/
+# https://hub.docker.com/r/jrottenberg/ffmpeg/
+# add -nvidia
+
+# GStreamer
+# https://en.wikipedia.org/wiki/GStreamer
+
+# Video Acceleration API 
+# https://en.wikipedia.org/wiki/Video_Acceleration_API
+
+# docker pull jrottenberg/ffmpeg
+# docker pull jrottenberg/ffmpeg:snapshot-nvidia
+# fswebcam -d /dev/video1 --loop 2  blabla.jpg
+# ffmpeg -f v4l2 -i video="Integrated Webcam" -f alsa -i hw:0 -profile:v high -pix_fmt yuvj420p -level:v 4.1 -preset ultrafast -tune zerolatency -vcodec libx264 -r 10 -b:v 512k -s 640x360 -acodec aac -strict -2 -ac 2 -ab 32k -ar 44100 -f mpegts -flush_packets 0 udp://192.168.0.108:5000?pkt_size=1316
+
+
+
 sudo apt install -y blender
+
 
 # A collection of Docker containers for running Blender headless or distributed 
 # https://github.com/nytimes/rd-blender-docker

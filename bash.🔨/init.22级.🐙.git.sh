@@ -1,6 +1,11 @@
 # install Git & Utilities
 source "$_B00T_C0DE_Path/_b00t_.bashrc"
 
+# _b00t_ plans to make extensive use of:
+# https://github.com/actions/toolkit/
+# for deploying: 
+#   * azure static webpages
+
 
 log_📢_记录 "🐙😇 installing git"
 # $SUDO_CMD apt install -y git-all

@@ -1,4 +1,5 @@
 # should be run by _b00t_
+# "Plans are worthless. Planning is essential." - Dwight D. Eisenhower
 
 # SEARCH FOR A PACKAGE: 
 # apt-cache search libpackage
@@ -44,4 +45,5 @@ $SUDO_CMD apt-get install -y software-properties-common
 # this could probably be copied to $HOME/.bash_aliases?
 #source "$_B00T_C0DE_Path/bash.🔨/.bash_aliases"
 
-
+# FUTURE: 
+# https://nixos.org/

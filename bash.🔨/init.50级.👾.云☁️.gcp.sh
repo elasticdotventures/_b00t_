@@ -47,4 +47,6 @@ cd ..
 ## GCSF https://github.com/harababurel/gcsf
 sudo apt install -y libfuse-dev pkg-config
 
+# Future: 
+# https://github.com/google/or-tools
 

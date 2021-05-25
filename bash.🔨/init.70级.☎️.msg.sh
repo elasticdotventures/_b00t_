@@ -37,3 +37,17 @@ celery -A tasks worker --loglevel=INFO
 
 # Slurm HPC distributed computing
 # https://slurm.schedmd.com/
+
+# Dapr
+wget -q https://raw.githubusercontent.com/dapr/cli/master/install/install.sh -O - | /bin/bash
+# ^^ good setup script. 
+# Dapr docs - how to setup distributed trace with Azure Application Insights
+# https://github.com/RicardoNiepel/dapr-docs/blob/master/howto/diagnose-with-tracing/azure-monitor.md
+
+# https://www.npmjs.com/package/@opentelemetry/exporter-zipkin
+# npm install --save @opentelemetry/exporter-zipkin
+# how use jaeger with dapr: 
+# https://docs.dapr.io/operations/monitoring/tracing/supported-tracing-backends/zipkin/
+
+# Install the latest Dapr runtime binaries:
+dapr init

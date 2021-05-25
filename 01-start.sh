@@ -51,6 +51,17 @@ source "./_b00t_.bashrc"
 #"
 #fi
 
+## enable extra repos (for stuff like ffmpeg)
+## https://linuxconfig.org/how-to-enable-disable-universe-multiverse-and-restricted-repository-on-ubuntu-20-04-lts-focal-fossa
+# 
+# - canonical "main" is free/open-source
+# - universe is community maintained, free/open
+sudo add-apt-repository universe
+# - multiverse is restricted by copyright or legal issues
+# sudo add-apt-repository multiverse
+# - restricted is proprietary device drivers. 
+# sudo add-apt-repository restricted
+
 
 ## list all init-files (excluding template) in the bash bash.🔨/
 for bashrc in `/usr/bin/fdfind --type x --glob "init*.sh"  $_B00T_C0DE_Path/bash.🔨/ | sort` ; 

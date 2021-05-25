@@ -17,3 +17,6 @@ sudo apt install
 
 adb connect localhost:5555:5555
 scrcpy --serial <IP>:5555
+
+# List of useful iOS & Swift stuff!!
+# https://github.com/jphong1111/Useful_Swift

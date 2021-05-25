@@ -59,6 +59,7 @@ function pathAdd() {
 }
 # webi tools
 pathAdd "$HOME/.local/bin"
+pathAdd "$HOME/.yarn/bin"
 ## * * * * * //
 
 

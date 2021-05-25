@@ -5,6 +5,8 @@ Status: there's something here, still a bit amorpheous.  up the interactive init
 
 [![Project Status: WIP – Initial development is in progress, but there has not yet been a stable, usable release suitable for the public.](https://www.repostatus.org/badges/latest/wip.svg)](https://www.repostatus.org/#wip)
 
+
+
 ------
 ```text/plain
       __         __      __   __                
@@ -15,18 +17,18 @@ Status: there's something here, still a bit amorpheous.  up the interactive init
         \ \_,__/\ \____/\ \____/\ \__\          
   _______\/___/  \/___/  \/___/  \/__/  _______ 
  /\______\                             /\______\
- \/______/       开机🥾🐛虫子          \/______/ 
-   B U G   S Q U 1 S H 1 N G   S O F T W A R 3
+ \/______/       开机🥾🐛虫亡          \/______/ 
+   B U G   S Q U 1 S H 1 N G   S 0 F T W A R 3
             FOR APPLICATION DEVELOPERS
           THE FIRST 100 TECH STARTUP DAYS
           🧙 COMPRESSED INTO ~0.5 HOUR
 
-  AZURE-ECOSYSTEM STARTUP BEST PRACTICES FOR DEV, 
-  RELEASE,  COMPLIANCE, LOGGING,  CYBER-SECURITY,  
-  IDEMPOTENT TEMPLATES, SERVERLESS CDN-DEPLOYED 
-  TYPESCRIPT VUE VITESSE SPA I18N FRONT END, 
-  WITH TYPESCRIPT & PYTHON BACKEND, END TO END 
-  FRAMEWORK DOCKER CONTAINER ORCHESTRATION AND 
+  AZURE-ECOSYSTEM TEMPLATES BEST PRACTICES FOR DEV, 
+  RELEASE, COMPLIANCE, LOGGING,  CYBER-SECURITY,  
+  IDEMPOTENTENCY, DETERMINISTIC, SERVERLESS, CDN-DEPLOYED 
+  TYPESCRIPT VUE VITESSE SPA I18N FRONT-END, 
+  WITH TYPESCRIPT & PYTHON BACK-END, TOTAL END TO END 
+  DOCKER CONTAINER ORCHESTRATION AND 
   CODE LIBRARY SCAFFOLDING FOR MILITARY GRADE 
   AUTHENTICATION, ARTIFICIAL INTELLIGENCE, ROBOTICS, 
   HARDWARE, ECOMMERCE, FINANCE, ACCOUNTING AND 
@@ -58,8 +60,14 @@ bash$ source ./_b00t_/_b00t_.bashrc
 # or checkout the init scripts:
 
 ```
-## presently working on:
- * azure graph openid authentication scaffold
+## presently, trying not to re-invent the wheel, found these tyres: 
+* https://github.blog/2015-06-30-scripts-to-rule-them-all/
+* https://github.com/bashup/.devkit
+* https://github.com/bashup/mdsh
+* https://github.com/bashup/events
+* https://github.com/bashup/lore
+* https://github.com/bashup/loco
+* azure graph openid authentication scaffold
 * in typescript spa vue vite vitesse based template
 * please excuse the scattered bits, work in progress
 

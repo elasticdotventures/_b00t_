@@ -13,3 +13,6 @@ source "$_B00T_C0DE_Path/_b00t_.bashrc"
 
 # 
 # https://www.rs-online.com/designspark/building-a-pi-powered-wireless-label-printer
+
+# Google PigWeed
+# https://github.com/google/pigweed
