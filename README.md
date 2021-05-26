@@ -47,6 +47,14 @@ target a release at the end of June 2021.
 
 ```bash
 
+# 📺 PREVIEW
+
+I've done a quick preview of the Azure CLI driven by fzf-tmux, sponge, jq, and awk. 
+
+[![asciicast](https://asciinema.org/a/QxGcR4JrvSI6ReVi4dhwsYkUP.png)](https://asciinema.org/a/QxGcR4JrvSI6ReVi4dhwsYkUP)
+
+The long term goal is to do an interactive setup, similiar to how Slackware used to install Linux with many, many packages all designed and tested to worktogether (except _b00t_'s case it's generating/updating the various cloud json & YAML files using menus). 
+
 # 🤓 QUICKSTART:
 
 git clone https://github.com/elasticdotventures/_b00t_.git
@@ -60,7 +68,7 @@ bash$ source ./_b00t_/_b00t_.bashrc
 # or checkout the init scripts:
 
 ```
-## presently, trying not to re-invent the wheel, found these tyres: 
+## presently, trying not to re-invent the wheel, found these tyres, trying to decide what to use: 
 * https://github.blog/2015-06-30-scripts-to-rule-them-all/
 * https://github.com/bashup/.devkit
 * https://github.com/bashup/mdsh
@@ -102,11 +110,11 @@ _b00t_ intends to provide an early stage complete open ops-stack for a company (
 
 ## Application Design: 
 ```
-    * Best industry practices security built-in OAuth/OpenID, etc.
+    * Best industry practices security built-in OAuth/OpenID
     * Hardened Determinsic Patterns using Azure Durable Functions
     * Multi-facet ideogram cyb3rpunk! Emoji & Pinyin filled logs & metrics, such 3117! 
     * Multi-stage dev, build, test, deploy CI/CD is presently done through github & azure app-services. 
-    * Containerized Projects that deploy at cloud scale
+    * Containerized Projects, using K8-esque pipelines
     * Especially well suited for:
         * Machine Learning Create=>Cloud_Deploy Pipelines
         * Bi-lingual projects using Python & Typescript (or others)
@@ -217,19 +225,17 @@ The published container can be stripped down thus improving both size & security
 
 Cloud based AppConfig Stores & KeyVaults are used. KeyVaults contain types that are first-order types which are aware the passwords, etc. in them must be kept secure.  For example in Azure Logic Functions secure tokens (such as passwords, or access keys) from a Vault are tagged and automatically beautifully-filtered from logs as well! This makes compliance & user privacy easier! Extensive use of pipelines and messaging queues allow for tests and other large jobs to be run in parallel at cloud scale.  
 
-# What _exactly_ is Cloud Scale?
-Cloud Scale, with respect to \_b00t_ refers to highly parallelized jobs which can be executed simulatenously, or alternatively at off peak (in background, later).  For example if you have 1,500 tests and each one takes avg 2 seconds to run, that's roughly 50 minutes to "finish" tests before you can even start a build to production.  A cloud scale approach would be to complete those tests in parallel on 1,500 servers thus only takes 2 seconds (or, actually as long as the longest test, which is often a timeout, so ~60 seconds).  
-
-# Why does Opionated mean? 
+# Why is _b00t_ Opionated mean? 
 For example, _b00t_ believes that VS Code with it's intellisense, typescript & python, docker, azure, aws, gcp, code-auditing, and plurality of other useful extensions makes VS Code the one true editor.  The author believes _b00t_ pattern works best when using remote containers, which is one of the 层 Layers it builds & configures. 
 
 The \_b00t_ organizational pattern is formatted around an intentionally lean "svelte" Enterprise, everything is automated and structured for easy updates using GitOps and JSON. Debugging is on by default but can be reduced later to save $$. Serverless/consumption plans are also default and cost centers are isolated by project/resource group for good reporting & security.  _b00t_ assumes an agile cadence of releasing early and continuously integration. Fast fail.
+
+_b00t_ also is a K8 "minimalist" recognizing that K8 has a large footprint and creates significant unnecessary complexity for cloud-native (non-LEGACY) applications. 
 
 # Resource Division
 _b00t_ uses Azure Landing Zone "best practice" patterns to orchestrate away a considerable amount of complexity in terms of assembling a plurality of well known popular libraries and tools together inside docker containers that then fit into a local inner/outer development loop.  
 
 # B00t tries NOT to reinvent the wheel*
-_*except when the __b00t__ wheel has less fricition*_
 
 _b00t_ assumes VS Code as an integrated environment, thus prescribing a suggest list of IDE extensions, along with a 
 sufficiently pnemonic unique naming approach using ideograms & pinyin command glyphs for a variety of tasks such as idea routing & error handling "storytell mode". An emphasis is put on Windows development but uses a remote container development environment so it's highly agnostic of individual OS choice.  _b00t_ relies heavily on intellisense and the VS-code extension ecosystem, especially it's integration with Azure for a variety of "1 click" tasks.
