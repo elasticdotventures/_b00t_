@@ -6,6 +6,17 @@ Status: there's something here, still a bit amorpheous.  up the interactive init
 [![Project Status: WIP – Initial development is in progress, but there has not yet been a stable, usable release suitable for the public.](https://www.repostatus.org/badges/latest/wip.svg)](https://www.repostatus.org/#wip)
 
 
+# 📺 WIP/PREVIEW
+
+I've done a quick preview of some of the Azure CLI driven through fzf-tmux, sponge, jq, and awk. 
+
+[![asciicast](https://asciinema.org/a/QxGcR4JrvSI6ReVi4dhwsYkUP.png)](https://asciinema.org/a/QxGcR4JrvSI6ReVi4dhwsYkUP)
+
+It crashes at the end because I'm not done with the Azure Container Registry piece. 
+
+The long term goal is to do an interactive setup, similiar to how Slackware used to install Linux with many, many packages all designed and tested to worktogether (except _b00t_'s case it's generating/updating the various cloud json & YAML files using menus). 
+
+
 
 ------
 ```text/plain
@@ -46,14 +57,6 @@ seeking testers, investors, or peer-review.
 target a release at the end of June 2021. 
 
 ```bash
-
-# 📺 PREVIEW
-
-I've done a quick preview of the Azure CLI driven by fzf-tmux, sponge, jq, and awk. 
-
-[![asciicast](https://asciinema.org/a/QxGcR4JrvSI6ReVi4dhwsYkUP.png)](https://asciinema.org/a/QxGcR4JrvSI6ReVi4dhwsYkUP)
-
-The long term goal is to do an interactive setup, similiar to how Slackware used to install Linux with many, many packages all designed and tested to worktogether (except _b00t_'s case it's generating/updating the various cloud json & YAML files using menus). 
 
 # 🤓 QUICKSTART:
 
