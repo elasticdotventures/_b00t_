@@ -71,26 +71,32 @@ bash$ source ./_b00t_/_b00t_.bashrc
 # or checkout the repo, 85% of the "finished" work is presently in the [bash.🔨/]() folder. 
 
 ```
-<<<<<<< Updated upstream
-<<<<<<< Updated upstream
-## presently, trying not to re-invent the wheel, found these tyres, trying to decide what to use: 
-=======
-=======
->>>>>>> Stashed changes
-# Approach
-_b00t_ is glue, it publishes itself in many formats and gives operators a massive arsenal of pre-interoperably-configured tools & example projects in python, typescript.  
-
-there are a variety of security postures available from secret keys stored in a local .env file, a self hosted vault, or a cloud based key repository.  protocols & packages have been curated based on their utility in poly-lingua, poly-cloud technology.
-
-_b00t_ framework itself is k8-minimalist, but very pro-git pipelines. k8 "kubernetes" is not required for cloud-native serverless functions.  
 
 
+# _b00t_: View from the Ground Up
+_b00t_ is systems-engineering poly-glue publishing transpiler, it will use menus to select "scenarios" from templates for all relevant stack layers.  _b00t_ intends to provide a curated starting point for a variety of poly-disciplinary aka "complex" projects. A modern curated catalog of computer interfaces, academic and elastic libraries.
+
+_b00t_ is colorful, and not traditional, it "cheeky", but non-discriminatory, but this may not make it suitable for certain corporate environments, as such it is better suited for the home inventor / hobbyiest or open-source hardware developer/fabricator.
+
+Emoji and ideogram based utf8 / i18n called "storytime v1" naming conventions while non traditional offer faster diagnostics and efficient operational characteristics letting application developers generate completely generate their own ops-scaffolding for containers, installation of development environment includes intellisense, etc. heavily uses VS-code extensions for write/running private zero-code aka artificially written/operated infrastructures "AI/OPS" 
+
+Presently _b00t_ hopes to become a modern slackware (built on Linux), with some light tutorial "learn only what you desire to", with some 'minimal' explanation of truth/consequences of decisions framework for generating idempotent templates to build complex, maintainable, efficient "systems" engineering principles. 
+
+_b00t_ will attempt to present itself in many formats and give operators a massive "common" arsenal of pre-interoperably-configured tools & example projects in python, typescript, bash, etc. ("poly-lingual") as well as popular patterns for integrating tools "from the ground up".  
+
+_b00t_ can be used as a cloud-shell enhancement, and it's primary role is as a catalyst to easily deploy a "reliable pattern" for interconnection between applications.  A menu-driven OR cli driven poly-stack-poly-interface-poly-software "awesome" distribution, examples of complex json/yaml manipulation, complete automation of daily activities, ultimately I hope to add a CLI voice interface (based on Jovo) .. something like how Tony Stark interacts with Jarvis for software projects and it could sell, support and provision the software. 
+
+_b00t_ is variable low-to-high security postures, for example there are a variety of security postures available from secret keys stored in a local .env file, a self hosted vault, or a cloud based key repository.  protocols & packages have been curated based on their utility in poly-lingua, poly-cloud technology library aka "_b00t_".   The key is providing a known set of steps to differentiate the posture between dev/build/release.
+
+_b00t_ framework itself is k8-minimalist, but very pro-git pipelines/automation. k8 "kubernetes" should only be used when it is absolutely necessary, and then as sparingly as possible. Pipelines, idempotentent containers, those are 100% awesome.
+
+k8 support is my present area of improvement in bash.🔨/ scripting.
 
 
 
-
-## presently, trying not to re-invent the wheel, found these tyres: 
->>>>>>> Stashed changes
+## TODO
+Trying not to re-invent the wheel, found a bunch of new tools and refactoring mid/project: 
+* bsfl 
 * https://github.blog/2015-06-30-scripts-to-rule-them-all/
 * https://github.com/bashup/.devkit
 * https://github.com/bashup/mdsh
@@ -114,8 +120,11 @@ but i welcome anybody with similar passions in pre-dev stage projects, incubator
 My Ethereum Address is:
 https://vittominacori.github.io/ethereum-badge/detail.html?address=0x24bd79c0efff201bd5b24b622d5ea09f93dbfaa3
 
+🙏 Please note, I don't need $$ however it goes a long way towards demonstrating to my wife that this warrants the amount of attention I give it versus her projects. Thanks! ask for ☕ if you want! Social likes, github ⭐, twitter follows.  Share with your friends! 
+
 ## _b00t_ vision: 
-Like Docker Moby _b00t_ is ALSO perfect for:
+A multi-stack directory, "from the ground up", with directory of poly lingual-interfaces like docker Moby. _b00t_ is for:
+* AI/Robotics/CyberSec/Code Hackathon Groups or red-teams who need to "tandem" or "poly-hackathon", global startup "code-a-thon" who need fast iteration and shared debugging. 
 * Hackers who want to deploy multi-language code across serverless functions & docker containers (in Azure). 
 * System engineers or integrators building a container system
 * Application developers looking for an easy way to run their Python, Typescript and related applications in containers with VS Code, Azure Tooling & best practices.
