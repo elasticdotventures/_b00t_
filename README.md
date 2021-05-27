@@ -28,12 +28,14 @@ The long term goal is to do an interactive setup, similiar to how Slackware used
  \/______/       开机🥾🐛虫亡          \/______/ 
    B U G   S Q U 1 S H 1 N G   S 0 F T W A R 3
             
-          THE FIRST YEAR OF TECH STARTUP 
-            🧙 REDUCED IN DIFFICULTY
+          FOR THE BENEFIT OF HUMANITY
+                 THE ULTIMATE 
+         SYSTEMS ENGINEERING TOOLKIT FOR
+          🧙 REDUCTION IN DIFFICULTY
 
-  
   THIS REPO COMPONENTS: 
     bash, python, ts scaffold(s)
+    * extensive use of more-utils, yq, jq, fzf, fdfind, etc.
   SERVER ARCHITECTURES:
     x86-nvidia-cuda-optimized, x86, amd64, arm64-rpi 
   EMBEDDED ARCHITECTURES:
@@ -43,6 +45,7 @@ The long term goal is to do an interactive setup, similiar to how Slackware used
     git, github (issues, build ci/cd)
     idempotent (app-templates, app-config, app-data, app-lib, app-src separated)
     platform.io (for embedded)
+    * extensive: json/yaml/toml setup "working configurations"
   FRONT END/APP: 
     Typescript/Vue (Vitesse SPA, I18N template)
     OpenAuth/OpenID to Azure B2C, MSAL2 (federated security)
@@ -61,19 +64,32 @@ The long term goal is to do an interactive setup, similiar to how Slackware used
   DATABASE:
     ephermal: sqlite
     local: sqlite, firebird, mariadb, postgres
+<<<<<<< Updated upstream
     * author bias: value-engineering for scripts to freeze/unfreeze "cold"
     poly-cloud managed (firebase, nosql, etc.) 
+=======
+    * author bias: value-engineering to freeze/unfreeze
+    * plurality of storage volume options
+    * cloud for online/on-demand cloud hosted or offline "cold"
+>>>>>>> Stashed changes
   MESSAGING:
     protobufs, redis, rabbitmq, zmq, mqtt, (and others)
   SECURITY:
     low to perfect (per complexity/risk requirements)
   POLY-SCENARIOS:
+<<<<<<< Updated upstream
     ARTIFICIAL INTELLIGENCE, AG ROBOTICS, HARDWARE SENSORS, 
     IOT DEV, 3D RENDERING, RED-TEAM CYBERSECURITY, ECOMMERCE
     SALES, FINANCE ACCOUNTING, BUSINESS OPERATIONS AUTOMATION,
     CRYPTO BANKING, ACADEMIC SCIENCE, R-ENGINEERING, 
     TIGER-TEAM PROBLEM SOLVING (aka MATH), and STORYTIME 
     (a future AI/OPS, sentiment, poly-lingual voice-cli interface). 
+=======
+    ARTIFICIAL INTELLIGENCE, AG ROBOTICS, HARDWARE SENSORS
+    IOT DEV, 3D RENDERING, RED-TEAM CYBERSECURITY, ECOMMERCE 
+    SALES, FINANCE ACCOUNTING, CHAT/OPS BUSINESS OPERATIONS AUTOMATION, CRYPTO BANKING, ACADEMIC SCIENCE R&D, R-ENGINEERING, TIGER-TEAM PROBLEM SOLVING (aka MATH)
+    STORYTIME (*future AI/OPS, voice-cli ops interface) 
+>>>>>>> Stashed changes
    
             _b00t_ is a CYB3RPUNK_STARTUP_K1T
 
@@ -83,7 +99,7 @@ The long term goal is to do an interactive setup, similiar to how Slackware used
         Elastic License v2 (ELK2) Open License 
 
 presently alpha/没做完
-seeking testers, investors, or peer-review. star the repo if you think I should keep working on this. I'm planning to submit this to OReilly as a book idea "_b00t_: from the ground up".  
+seeking testers, investors, or peer-review. star the repo if you think I should keep working on this. I'm planning to submit this to OReilly as a nutshell book idea "_b00t_: from the ground up".   
 
 # 🤓 QUICKSTART:
 
