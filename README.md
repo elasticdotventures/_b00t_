@@ -27,19 +27,19 @@ The long term goal is to do an interactive setup, similiar to how Slackware used
  /\______\                             /\______\
  \/______/       开机🥾🐛虫亡          \/______/ 
    B U G   S Q U 1 S H 1 N G   S 0 F T W A R 3
-            FOR APPLICATION DEVELOPERS
-          THE FIRST 100 TECH STARTUP DAYS
-                🧙 REDUCED
+            
+          THE FIRST YEAR OF TECH STARTUP 
+            🧙 REDUCED IN DIFFICULTY
 
-  MENU/CLI POLY-INTERFACE IDEMPOTENT TEMPLATE REPOSITORY
-  OF BEST PRACTICES FOR POLY-DISCIPLINARY SYSTEMS ENGINEERING
-  
-  FROM INSPIRATION, THROUGH DEV, RELEASE, COMPLIANCE, LOGGING,  CYBER-SECURITY,  IDEMPOTENTENCY, DETERMINISTIC OPERATION LIFECYCLE.
+  WIZARD-MENU/CLI SYSTEM-ENGINEERING POLY-INTERFACE "GLUE" of many BEST PRACTICES for anybody that desires a "DONT MAKE ME THINK MORE THAN I NEED TO" KISS approach to TECHNICAL SYSTEMS ENGINEERING accomplished through EASY-IDEMPOTENT DETERMINISTIC (meaning predictable) CONTAINER DESIGN/INTEGRATION/LIFECYCLE.  
 
+  A FULL LIFECYCLE OPEN-SOURCE SYSTEMS TOOL:
+    INCEPTION, CREATION, AND DETERMINISTIC OPERATION FROM DEV TO RELEASE => [ COMPLIANCE, LOGGING, CYBER-SECURITY ] TO EXIT 
+    
   THIS REPO COMPONENTS: 
     bash, python, ts scaffold(s)
   SERVER ARCHITECTURES:
-    x86-nvidia-cuda-optimized, x86, arm64
+    x86-nvidia-cuda-optimized, x86, amd64, arm64-rpi 
   EMBEDDED ARCHITECTURES:
     atmega64, esp32
   DEV:
@@ -52,22 +52,26 @@ The long term goal is to do an interactive setup, similiar to how Slackware used
     OpenAuth/OpenID to Azure B2C, MSAL2 (federated security)
     interfaces: rest/GraphQL, RxJS
   BACK END/APP:
-    Typescript & Python (and others, poly-lingual)
+    Typescript: >v4 
+    Python: 3.9 
+    (and others, poly-lingual)
   CONTAINER ORCHESTRATION: 
-    docker, k8, drone-ci (and others, any OCI) 
+    docker, k8, drone-ci (and others, any OCI is fine)
+    * author bias: minimalist k8
   CLOUD: 
     azure, google, aws
-    * bias: azure > gcp > aws 
+    * author bias: azure > gcp > aws 
   DATABASE:
     ephermal: sqlite
     local: sqlite, firebird, mariadb, postgres
-    *bias: value-engineering for scripts to freeze/unfreeze in cloud for online/on-demand cloud hosted or offline vaulted cold archival.
+    * author bias: value-engineering for scripts to freeze/unfreeze in cloud for online/on-demand cloud hosted or offline vaulted cold archival of "fast-fails"
+    poly-cloud managed
   MESSAGING:
     protobufs, redis, rabbitmq, zmq, mqtt, (and others)
   SECURITY:
     low to perfect (per complexity/risk requirements)
   POLY-SCENARIOS:
-    ARTIFICIAL INTELLIGENCE, ROBOTICS, HARDWARE/IOT DEV, 3D RENDERING, RED-TEAM CYBERSECURITY, ECOMMERCE SALES, FINANCE ACCOUNTING, BUSINESS OPERATIONS AUTOMATION, CRYPTO BANKING, ACADEMIC SCIENCE, R-ENGINEERING, TIGER-TEAM PROBLEM SOLVING (aka MATH), and STORYTIME (a future AI/OPS, sentiment, poly-lingual voice-cli interface). 
+    ARTIFICIAL INTELLIGENCE, AG ROBOTICS, HARDWARE SENSORS, IOT DEV, 3D RENDERING, RED-TEAM CYBERSECURITY, ECOMMERCE SALES, FINANCE ACCOUNTING, BUSINESS OPERATIONS AUTOMATION, CRYPTO BANKING, ACADEMIC SCIENCE, R-ENGINEERING, TIGER-TEAM PROBLEM SOLVING (aka MATH), and STORYTIME (a future AI/OPS, sentiment, poly-lingual voice-cli interface). 
    
             _b00t_ is a CYB3RPUNK_STARTUP_K1T
 
