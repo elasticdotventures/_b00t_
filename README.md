@@ -73,10 +73,13 @@ The long term goal is to do an interactive setup, similiar to how Slackware used
   SECURITY:
     low to perfect (per complexity/risk requirements)
   POLY-SCENARIOS:
-    ARTIFICIAL INTELLIGENCE, AG ROBOTICS, HARDWARE SENSORS
-    IOT DEV, 3D RENDERING, RED-TEAM CYBERSECURITY, ECOMMERCE 
-    SALES, FINANCE ACCOUNTING, CHAT/OPS BUSINESS OPERATIONS AUTOMATION, CRYPTO BANKING, ACADEMIC SCIENCE R&D, R-ENGINEERING, TIGER-TEAM PROBLEM SOLVING (aka MATH)
-    STORYTIME (*future AI/OPS, voice-cli ops interface) 
+    artificial intelligence, ag robotics, hardware sensors
+    iot dev, 3d rendering, red-team cybersecurity, ecommerce 
+    sales, finance accounting, chat/ops business operations
+    automation, crypto banking, academic science r&d,
+    r-engineering, tiger-team problem solving (aka math) 
+  FUTURE:
+    * STORYTIME: future AI/OPS, interactive voice-cli/assistant control surface
    
             _b00t_ is a CYB3RPUNK_STARTUP_K1T
 
