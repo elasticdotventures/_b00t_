@@ -55,7 +55,7 @@ The long term goal is to do an interactive setup, similiar to how Slackware used
     docker, k8, drone-ci (and others, any OCI is fine)
     * author bias: minimalist k8
   CLOUD: 
-    azure, google, aws
+    azure, google, aws, huawei
     * author bias: azure > gcp > aws 
   DATABASE:
     ephermal: sqlite
