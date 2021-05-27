@@ -57,11 +57,12 @@ The long term goal is to do an interactive setup, similiar to how Slackware used
   CLOUD: 
     azure, google, aws, ali
     * author bias: azure > gcp | ali | aws
+    * Azure will have the most extensive support *initially
   DATABASE:
     ephermal: sqlite
     local: sqlite, firebird, mariadb, postgres
-    * author bias: value-engineering for scripts to freeze/unfreeze in cloud for online/on-demand cloud hosted or offline vaulted cold archival of "fast-fails"
-    poly-cloud managed
+    * author bias: value-engineering for scripts to freeze/unfreeze "cold"
+    poly-cloud managed (firebase, nosql, etc.) 
   MESSAGING:
     protobufs, redis, rabbitmq, zmq, mqtt, (and others)
   SECURITY:
@@ -102,13 +103,9 @@ bash$ source ./_b00t_/_b00t_.bashrc
     INCEPTION, CREATION, AND DETERMINISTIC OPERATION FROM DEV TO RELEASE => [ COMPLIANCE, LOGGING, CYBER-SECURITY ] TO EXIT 
 
 
-# _b00t_: View from the Ground Up
+# _b00t_: A View from the Ground Up
 
-
-    
-
-
-_b00t_ is systems-engineering poly-glue publishing transpiler, it will use menus to select "scenarios" from templates for all relevant stack layers "层".  _b00t_ intends to provide a curated starting point for a variety of poly-disciplinary aka "complex" projects. A modern curated catalog of computer interfaces, academic and elastic libraries.
+_b00t_ is systems-engineering poly-glue publishing transpiler, it will use menus to drive a cli for choosing and updating "poly-stack scenarios" which are infrastructure code & templates & samples for all relevant stack layers "层".  _b00t_ intends to provide a curated starting point for a variety of poly-disciplinary aka "complex" projects. A modern curated catalog of computer interfaces, academic and elastic libraries. This project was born partially out of necessity and the rest out of pure curiousity for what could be built and how quickly a menu driven "Oregon trail" of architectural decisions for a project (of N-functional steps), which can be micro or macro managed as the operator/architect individual or team sees fit. 
 
 _b00t_ is colorful, and not traditional, it is "cheeky", but non-discriminatory, it is poly-lingual but it may not be suitable for traditional corporate or government environments, as such it is better suited for the home inventor / hobbyiest or open-source hardware developer/fabricator, children under 16 should ask your parents before using _b00t_. 
 
