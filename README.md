@@ -88,11 +88,13 @@ The long term goal is to do an interactive setup, similiar to how Slackware used
 
         Elastic License v2 (ELK2) Open License 
 
-presently alpha/没做完
-seeking testers, investors, or peer-review. star the repo if you think I should keep working on this. I'm planning to submit this to OReilly as a nutshell book idea "_b00t_: from the ground up".   
+```
+## presently alpha/没做完
 
-# 🤓 QUICKSTART:
+seeking testers, investors, contributors, any feedback/peer-review. star the repo if you think I should keep working on this. I'm planning to submit this to OReilly as a nutshell book idea "_b00t_: from the ground up".   
 
+## 🤓 QUICKSTART:
+```bash
 git clone https://github.com/elasticdotventures/_b00t_.git
 
 # fzf setup/tutorial menu
@@ -102,7 +104,6 @@ bash$ ./_b00t_/_b00t_.sh
 bash$ source ./_b00t_/_b00t_.bashrc
 
 # or checkout the repo, 85% of the "finished" work is presently in the [bash.🔨/]() folder. 
-
 ```
 
 # _b00t_: what i'm building.
