@@ -72,8 +72,7 @@ The long term goal is to do an interactive setup, similiar to how Slackware used
     IOT DEV, 3D RENDERING, RED-TEAM CYBERSECURITY, ECOMMERCE
     SALES, FINANCE ACCOUNTING, BUSINESS OPERATIONS AUTOMATION,
     CRYPTO BANKING, ACADEMIC SCIENCE, R-ENGINEERING, 
-    TIGER-TEAM PROBLEM SOLVING (aka MATH), and 
-    STORYTIME 
+    TIGER-TEAM PROBLEM SOLVING (aka MATH), and STORYTIME 
     (a future AI/OPS, sentiment, poly-lingual voice-cli interface). 
    
             _b00t_ is a CYB3RPUNK_STARTUP_K1T
