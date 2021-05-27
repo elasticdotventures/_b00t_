@@ -85,8 +85,6 @@ The long term goal is to do an interactive setup, similiar to how Slackware used
 presently alpha/没做完
 seeking testers, investors, or peer-review. star the repo if you think I should keep working on this. I'm planning to submit this to OReilly as a book idea "_b00t_: from the ground up".  
 
-```bash
-
 # 🤓 QUICKSTART:
 
 git clone https://github.com/elasticdotventures/_b00t_.git
