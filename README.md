@@ -64,32 +64,19 @@ The long term goal is to do an interactive setup, similiar to how Slackware used
   DATABASE:
     ephermal: sqlite
     local: sqlite, firebird, mariadb, postgres
-<<<<<<< Updated upstream
-    * author bias: value-engineering for scripts to freeze/unfreeze "cold"
+    * author bias: value-engineering to freeze/unfreeze projects
     poly-cloud managed (firebase, nosql, etc.) 
-=======
-    * author bias: value-engineering to freeze/unfreeze
     * plurality of storage volume options
     * cloud for online/on-demand cloud hosted or offline "cold"
->>>>>>> Stashed changes
   MESSAGING:
     protobufs, redis, rabbitmq, zmq, mqtt, (and others)
   SECURITY:
     low to perfect (per complexity/risk requirements)
   POLY-SCENARIOS:
-<<<<<<< Updated upstream
-    ARTIFICIAL INTELLIGENCE, AG ROBOTICS, HARDWARE SENSORS, 
-    IOT DEV, 3D RENDERING, RED-TEAM CYBERSECURITY, ECOMMERCE
-    SALES, FINANCE ACCOUNTING, BUSINESS OPERATIONS AUTOMATION,
-    CRYPTO BANKING, ACADEMIC SCIENCE, R-ENGINEERING, 
-    TIGER-TEAM PROBLEM SOLVING (aka MATH), and STORYTIME 
-    (a future AI/OPS, sentiment, poly-lingual voice-cli interface). 
-=======
     ARTIFICIAL INTELLIGENCE, AG ROBOTICS, HARDWARE SENSORS
     IOT DEV, 3D RENDERING, RED-TEAM CYBERSECURITY, ECOMMERCE 
     SALES, FINANCE ACCOUNTING, CHAT/OPS BUSINESS OPERATIONS AUTOMATION, CRYPTO BANKING, ACADEMIC SCIENCE R&D, R-ENGINEERING, TIGER-TEAM PROBLEM SOLVING (aka MATH)
     STORYTIME (*future AI/OPS, voice-cli ops interface) 
->>>>>>> Stashed changes
    
             _b00t_ is a CYB3RPUNK_STARTUP_K1T
 
