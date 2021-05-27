@@ -5,7 +5,6 @@ Status: there's something here, still a bit amorpheous.  up the interactive init
 
 [![Project Status: WIP – Initial development is in progress, but there has not yet been a stable, usable release suitable for the public.](https://www.repostatus.org/badges/latest/wip.svg)](https://www.repostatus.org/#wip)
 
-
 # 📺 WIP/PREVIEW
 
 I've done a quick preview of some of the Azure CLI driven through fzf-tmux, sponge, jq, and awk. 
@@ -14,9 +13,7 @@ I've done a quick preview of some of the Azure CLI driven through fzf-tmux, spon
 
 It crashes at the end because I'm not done with the Azure Container Registry piece. 
 
-The long term goal is to do an interactive setup, similiar to how Slackware used to install Linux with many, many packages all designed and tested to worktogether (except _b00t_'s case it's generating/updating the various cloud json & YAML files using menus). 
-
-
+The long term goal is to do an interactive setup, similiar to how Slackware used to install Linux with many, many packages all designed and tested to worktogether (except _b00t_'s case it's generating/updating the various cloud json & YAML files using menus)
 
 ------
 ```text/plain
@@ -32,29 +29,55 @@ The long term goal is to do an interactive setup, similiar to how Slackware used
    B U G   S Q U 1 S H 1 N G   S 0 F T W A R 3
             FOR APPLICATION DEVELOPERS
           THE FIRST 100 TECH STARTUP DAYS
-          🧙 COMPRESSED INTO ~0.5 HOUR
+                🧙 REDUCED
 
-  AZURE-ECOSYSTEM TEMPLATES BEST PRACTICES FOR DEV, 
-  RELEASE, COMPLIANCE, LOGGING,  CYBER-SECURITY,  
-  IDEMPOTENTENCY, DETERMINISTIC, SERVERLESS, CDN-DEPLOYED 
-  TYPESCRIPT VUE VITESSE SPA I18N FRONT-END, 
-  WITH TYPESCRIPT & PYTHON BACK-END, TOTAL END TO END 
-  DOCKER CONTAINER ORCHESTRATION AND 
-  CODE LIBRARY SCAFFOLDING FOR MILITARY GRADE 
-  AUTHENTICATION, ARTIFICIAL INTELLIGENCE, ROBOTICS, 
-  HARDWARE, ECOMMERCE, FINANCE, ACCOUNTING AND 
-  OPERATIONS AUTOMATION. 
+  MENU/CLI POLY-INTERFACE IDEMPOTENT TEMPLATE REPOSITORY
+  OF BEST PRACTICES FOR POLY-DISCIPLINARY SYSTEMS ENGINEERING
+  
+  FROM INSPIRATION, THROUGH DEV, RELEASE, COMPLIANCE, LOGGING,  CYBER-SECURITY,  IDEMPOTENTENCY, DETERMINISTIC OPERATION LIFECYCLE.
+
+  THIS REPO COMPONENTS: 
+    bash, python, ts scaffold(s)
+  SERVER ARCHITECTURES:
+    x86-nvidia-cuda-optimized, x86, arm64
+  EMBEDDED ARCHITECTURES:
+    atmega64, esp32
+  DEV:
+    vs-code on linux or wsl2
+    git, github (issues, build ci/cd)
+    idempotent (app-templates, app-config, app-data, app-lib, app-src separated)
+    platform.io (for embedded)
+  FRONT END/APP: 
+    Typescript/Vue (Vitesse SPA, I18N template)
+    OpenAuth/OpenID to Azure B2C, MSAL2 (federated security)
+    interfaces: rest/GraphQL, RxJS
+  BACK END/APP:
+    Typescript & Python (and others, poly-lingual)
+  CONTAINER ORCHESTRATION: 
+    docker, k8, drone-ci (and others, any OCI) 
+  CLOUD: 
+    azure, google, aws
+    * bias: azure > gcp > aws 
+  DATABASE:
+    ephermal: sqlite
+    local: sqlite, firebird, mariadb, postgres
+    *bias: value-engineering for scripts to freeze/unfreeze in cloud for online/on-demand cloud hosted or offline vaulted cold archival.
+  MESSAGING:
+    protobufs, redis, rabbitmq, zmq, mqtt, (and others)
+  SECURITY:
+    low to perfect (per complexity/risk requirements)
+  POLY-SCENARIOS:
+    ARTIFICIAL INTELLIGENCE, ROBOTICS, HARDWARE/IOT DEV, 3D RENDERING, RED-TEAM CYBERSECURITY, ECOMMERCE SALES, FINANCE ACCOUNTING, BUSINESS OPERATIONS AUTOMATION, CRYPTO BANKING, ACADEMIC SCIENCE, R-ENGINEERING, TIGER-TEAM PROBLEM SOLVING (aka MATH), and STORYTIME (a future AI/OPS, sentiment, poly-lingual voice-cli interface). 
    
-            _b00t_isa_CYB3RPUNK_STARTUP_K1T
+            _b00t_ is a CYB3RPUNK_STARTUP_K1T
 
-  ..UNSUITABLE FOR MILITARY OR ANTISOCIAL PROJECTS..
+    ..UNSUITABLE FOR MILITARY OR ANTISOCIAL PROJECTS..
+    *per the license, for valid-inclusion in hackathons
 
         Elastic License v2 (ELK2) Open License 
 
 presently alpha/没做完
-seeking testers, investors, or peer-review. 
-
-target a release at the end of June 2021. 
+seeking testers, investors, or peer-review. star the repo if you think I should keep working on this. I'm planning to submit this to OReilly as a book idea "_b00t_: from the ground up".  
 
 ```bash
 
@@ -74,17 +97,19 @@ bash$ source ./_b00t_/_b00t_.bashrc
 
 
 # _b00t_: View from the Ground Up
-_b00t_ is systems-engineering poly-glue publishing transpiler, it will use menus to select "scenarios" from templates for all relevant stack layers.  _b00t_ intends to provide a curated starting point for a variety of poly-disciplinary aka "complex" projects. A modern curated catalog of computer interfaces, academic and elastic libraries.
+_b00t_ is systems-engineering poly-glue publishing transpiler, it will use menus to select "scenarios" from templates for all relevant stack layers "层".  _b00t_ intends to provide a curated starting point for a variety of poly-disciplinary aka "complex" projects. A modern curated catalog of computer interfaces, academic and elastic libraries.
 
-_b00t_ is colorful, and not traditional, it "cheeky", but non-discriminatory, but this may not make it suitable for certain corporate environments, as such it is better suited for the home inventor / hobbyiest or open-source hardware developer/fabricator.
+_b00t_ is colorful, and not traditional, it is "cheeky", but non-discriminatory, it is poly-lingual but it may not be suitable for traditional corporate or government environments, as such it is better suited for the home inventor / hobbyiest or open-source hardware developer/fabricator, children under 16 should ask your parents before using _b00t_. 
 
-Emoji and ideogram based utf8 / i18n called "storytime v1" naming conventions for an "Oregon Trail" themed menu, or anything goes CLI project init-to-exit coverage.  While non traditional offer faster diagnostics and efficient operational characteristics letting application developers generate completely generate their own ops-scaffolding for containers, installation of development environment includes intellisense, etc. heavily uses VS-code extensions for write/running private zero-code aka artificially written/operated infrastructures "AI/OPS". 
+Emoji and ideogram based utf8 / i18n called "storytime v1" naming conventions for an "Oregon Trail" themed menu, or anything goes CLI project init-to-exit coverage.  This non traditional approach offer faster diagnostics and efficient operational characteristics allowing 'svelte-teams' for ops-scaffolding. 
 
-Presently _b00t_ hopes to become a modern slackware (built on Linux), with some light tutorial "learn only what you desire to", with some 'minimal' explanation of truth/consequences of decisions framework for generating idempotent templates to build complex, maintainable, efficient "systems" engineering principles. 
+For containers, installation of development environment naming with emoji is improved with menus, intellisense editors, and cli tab completion.  _b00t_ heavily uses VS-code extensions for read/write/running private or hosted zero-code engines, an artificially written/operated infrastructures "AI/OPS", hopefully improving indivual productivity to 100x for creating poly-disciplinary projects. 
 
-_b00t_ will attempt to present itself in many formats and give operators a massive "common" arsenal of pre-interoperably-configured tools & example projects in python, typescript, bash, etc. ("poly-lingual") as well as popular patterns for integrating tools "from the ground up".  
+Presently _b00t_ hopes to become a modern slackware (built on Linux, a deployable Yahoo directory of Open Source, with some light tutorial "learn only what you desire to", with some 'minimal' explanation of truth/consequences "Oregon Trail" of decisions framework for generating idempotent templates to build complex, maintainable, efficient "systems" engineering principles.
 
-_b00t_ can be used as a cloud-shell enhancement, and it's primary role is as a catalyst to easily deploy a "reliable pattern" for interconnection between applications.  A menu-driven OR cli driven poly-stack-poly-interface-poly-software "awesome" distribution, examples of complex json/yaml manipulation, complete automation of daily activities, ultimately I hope to add a CLI voice interface (based on Jovo) .. something like how Tony Stark interacts with Jarvis for software projects and it could sell, support and provision the software. 
+_b00t_ will attempt to present itself in many formats and give operators a massive "common" arsenal of pre-interoperably-configured tools & example projects in python, typescript, bash, etc. ("poly-lingual") as well as popular patterns for integrating tools "from the ground up".  _b00t_ includes some strong opinions such as VS-code development environment. 
+
+_b00t_ can be thought of as a cloud-shell enhancement, and it's primary role is as a catalyst to easily deploy a "reliable pattern" for interconnection between applications.  A menu-driven OR cli driven poly-stack-poly-interface-poly-software "awesome" distribution, examples of complex json/yaml manipulation, complete automation of daily activities, ultimately I hope to add a CLI voice interface (based on Jovo) .. something like how Tony Stark interacts with Jarvis for software projects and it could sell, support and provision the software.  To accomplish this I need to structure this repo & tools in a uniquely _b00t_ way, which I'm attempting to make easier for myself, and hopefully you.
 
 _b00t_ is variable low-to-high security postures, for example there are a variety of security postures available from secret keys stored in a local .env file, a self hosted vault, or a cloud based key repository.  protocols & packages have been curated based on their utility in poly-lingua, poly-cloud technology library aka "_b00t_".   The key is providing a known set of steps to differentiate the posture between dev/build/release.
 
