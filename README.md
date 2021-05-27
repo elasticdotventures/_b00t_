@@ -31,11 +31,7 @@ The long term goal is to do an interactive setup, similiar to how Slackware used
           THE FIRST YEAR OF TECH STARTUP 
             🧙 REDUCED IN DIFFICULTY
 
-  WIZARD-MENU/CLI SYSTEM-ENGINEERING POLY-INTERFACE "GLUE" of many BEST PRACTICES for anybody that desires a "DONT MAKE ME THINK MORE THAN I NEED TO" KISS approach to TECHNICAL SYSTEMS ENGINEERING accomplished through EASY-IDEMPOTENT DETERMINISTIC (meaning predictable) CONTAINER DESIGN/INTEGRATION/LIFECYCLE.  
-
-  A FULL LIFECYCLE OPEN-SOURCE SYSTEMS TOOL:
-    INCEPTION, CREATION, AND DETERMINISTIC OPERATION FROM DEV TO RELEASE => [ COMPLIANCE, LOGGING, CYBER-SECURITY ] TO EXIT 
-    
+  
   THIS REPO COMPONENTS: 
     bash, python, ts scaffold(s)
   SERVER ARCHITECTURES:
@@ -99,8 +95,19 @@ bash$ source ./_b00t_/_b00t_.bashrc
 
 ```
 
+# _b00t_: what i'm building.
+  WIZARD-MENU/CLI SYSTEM-ENGINEERING POLY-INTERFACE "GLUE" of many BEST PRACTICES for anybody that desires a "DONT MAKE ME THINK MORE THAN I NEED TO" KISS approach to TECHNICAL SYSTEMS ENGINEERING accomplished through EASY-IDEMPOTENT DETERMINISTIC (meaning predictable) CONTAINER DESIGN/INTEGRATION/LIFECYCLE.  
+
+  A FULL LIFECYCLE OPEN-SOURCE SYSTEMS TOOL:
+    INCEPTION, CREATION, AND DETERMINISTIC OPERATION FROM DEV TO RELEASE => [ COMPLIANCE, LOGGING, CYBER-SECURITY ] TO EXIT 
+
 
 # _b00t_: View from the Ground Up
+
+
+    
+
+
 _b00t_ is systems-engineering poly-glue publishing transpiler, it will use menus to select "scenarios" from templates for all relevant stack layers "层".  _b00t_ intends to provide a curated starting point for a variety of poly-disciplinary aka "complex" projects. A modern curated catalog of computer interfaces, academic and elastic libraries.
 
 _b00t_ is colorful, and not traditional, it is "cheeky", but non-discriminatory, it is poly-lingual but it may not be suitable for traditional corporate or government environments, as such it is better suited for the home inventor / hobbyiest or open-source hardware developer/fabricator, children under 16 should ask your parents before using _b00t_. 
