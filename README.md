@@ -68,10 +68,29 @@ bash$ ./_b00t_/_b00t_.sh
 # or just load the tooling/environment
 bash$ source ./_b00t_/_b00t_.bashrc
 
-# or checkout the init scripts:
+# or checkout the repo, 85% of the "finished" work is presently in the [bash.🔨/]() folder. 
 
 ```
+<<<<<<< Updated upstream
+<<<<<<< Updated upstream
 ## presently, trying not to re-invent the wheel, found these tyres, trying to decide what to use: 
+=======
+=======
+>>>>>>> Stashed changes
+# Approach
+_b00t_ is glue, it publishes itself in many formats and gives operators a massive arsenal of pre-interoperably-configured tools & example projects in python, typescript.  
+
+there are a variety of security postures available from secret keys stored in a local .env file, a self hosted vault, or a cloud based key repository.  protocols & packages have been curated based on their utility in poly-lingua, poly-cloud technology.
+
+_b00t_ framework itself is k8-minimalist, but very pro-git pipelines. k8 "kubernetes" is not required for cloud-native serverless functions.  
+
+
+
+
+
+
+## presently, trying not to re-invent the wheel, found these tyres: 
+>>>>>>> Stashed changes
 * https://github.blog/2015-06-30-scripts-to-rule-them-all/
 * https://github.com/bashup/.devkit
 * https://github.com/bashup/mdsh

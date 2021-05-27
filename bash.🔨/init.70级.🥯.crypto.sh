@@ -6,6 +6,7 @@
 #*
 ## * * * * * * * * * * * //
 
+
 # 🥯 CryptoCoin
 # 🍰 https://linuxconfig.org/ethereum-mining-on-ubuntu-18-04-and-debian
 

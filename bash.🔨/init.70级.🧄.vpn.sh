@@ -27,3 +27,6 @@ https://oss.oetiker.ch/smokeping/
 
 # Magic-Wormhole: Get Things From One Computer To Another, Safely
 # https://magic-wormhole.readthedocs.io/en/latest/
+
+# bash script to setup a .onion site
+#https://github.com/thomasgruebl/darkwebserver

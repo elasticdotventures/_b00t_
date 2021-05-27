@@ -7,7 +7,8 @@
 
 $SUDO_CMD apt-get -y upgrade && $SUDO_CMD apt-get -y update
 
-$SUDO_CMD sudo apt-get install build-essential procps curl file git
+# apt-transport-https is for google/k8, others. 
+$SUDO_CMD sudo apt-get install build-essential procps curl file git apt-transport-https ca-certificates 
 
 # Boot functions
 source "$_B00T_C0DE_Path/_b00t_.bashrc"

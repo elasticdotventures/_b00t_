@@ -17,3 +17,5 @@
 # https://open.taobao.com/?spm=a219a.15212433.0.0.2701669a9Q9jlp
 # Ju Shi Pagoda "Stack"
 
+# Stripe Payment Links
+# https://dashboard.stripe.com/register/payment_links

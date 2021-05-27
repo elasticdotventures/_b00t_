@@ -7,6 +7,11 @@ https://azure.github.io/azure-sdk/releases/latest/index.html#python
 # Azure Authentication
 https://devblogs.microsoft.com/azure-sdk/authentication-and-the-azure-sdk/
 
+# 🤓 Advanced Use cases with Azure Active Directory B2C  (4:94m)
+https://www.youtube.com/watch?v=-ZmPBuMZY-Y
+
+# 🤓 Setup a sign in page for single-page app using Azure Active Directory
+https://docs.microsoft.com/en-us/azure/active-directory-b2c/quickstart-single-page-app
 
 ## Azure templates (bicep & ARM)
 https://docs.microsoft.com/en-us/azure/templates/microsoft.containerinstance/containergroups?tabs=json#LogAnalytics

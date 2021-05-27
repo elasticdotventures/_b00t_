@@ -3,18 +3,39 @@
 #* 绿色公司 👾 Google
 ## * * * *\\
 
-## Don't install locally and bloat up the image. 
+## Don't install k8 locally and bloat up the image /snap/bin/gcloud can't install sub-components such as "kubectl"
 # 🤓 https://cloud.google.com/sdk/docs/downloads-snap
 # $SUDO_CMD snap install google-cloud-sdk --classic
 # gcloud init
+# gcloud components install kubectl
 
+## the DOCKER approach for gcloud is also shit, because (as configured) it can't remember credentials between runs
 # 🤓 https://hub.docker.com/r/google/cloud-sdk/
-#docker pull google/cloud-sdk:latest
-#docker run -ti --name gcloud-config google/cloud-sdk gcloud auth login
-#docker run --rm -ti --volumes-from gcloud-config google/cloud-sdk gcloud compute instances list --project your_project
+# docker pull google/cloud-sdk:latest
+# docker run -ti --name gcloud-config google/cloud-sdk gcloud auth login
+# docker run --rm -ti --volumes-from gcloud-config google/cloud-sdk gcloud compute instances list --project your_project
 
+## finally gcloud has bashrc complete, which is a really cool feature, that requires it be installed like this: 
 # TODO: add to .bashrc
 # /path/to/gcloud/completion.bash.inc
+## add cloud sdk distribution URL as a package source
+echo "deb [signed-by=/usr/share/keyrings/cloud.google.gpg] https://packages.cloud.google.com/apt cloud-sdk main" | sudo tee -a /etc/apt/sources.list.d/google-cloud-sdk.list
+## import google cloud public key 
+curl https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo apt-key --keyring /usr/share/keyrings/cloud.google.gpg add -
+## these other packages are ALSO available: 
+#    google-cloud-sdk-app-engine-python
+#    google-cloud-sdk-app-engine-python-extras
+#    google-cloud-sdk-app-engine-java
+#    google-cloud-sdk-app-engine-go
+#    google-cloud-sdk-bigtable-emulator
+#    google-cloud-sdk-cbt
+#    google-cloud-sdk-cloud-build-local
+#    google-cloud-sdk-datalab
+#    google-cloud-sdk-datastore-emulator
+#    google-cloud-sdk-firestore-emulator
+#    google-cloud-sdk-pubsub-emulator
+#    kubectl
+$SUDO_CMD apt-get install google-cloud-sdk kubectl 
 
 # Are ProtoBufs strictly a Google thing? 
 # https://developers.google.com/protocol-buffers/
