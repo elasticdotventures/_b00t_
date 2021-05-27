@@ -107,15 +107,15 @@ bash$ source ./_b00t_/_b00t_.bashrc
 ```
 
 # _b00t_: what i'm building.
-  WIZARD-MENU/CLI SYSTEM-ENGINEERING POLY-INTERFACE "GLUE" of many BEST PRACTICES for anybody that desires a "DONT MAKE ME THINK MORE THAN I NEED TO" KISS approach to TECHNICAL SYSTEMS ENGINEERING accomplished through EASY-IDEMPOTENT DETERMINISTIC (meaning predictable) CONTAINER DESIGN/INTEGRATION/LIFECYCLE.  
+  wizard-menu/cli system-engineering poly-interface "glue" of many best practices for anybody that desires a "dont make me think more than i need to" kiss approach to technical systems engineering accomplished through easy-idempotent deterministic (meaning predictable) container design/integration/lifecycle.  
 
-  A FULL LIFECYCLE OPEN-SOURCE SYSTEMS TOOL:
-    INCEPTION, CREATION, AND DETERMINISTIC OPERATION FROM DEV TO RELEASE => [ COMPLIANCE, LOGGING, CYBER-SECURITY ] TO EXIT 
+  a full lifecycle open-source systems tool:
+    inception, creation, and deterministic operation from dev to release => [ compliance, logging, cyber-security ] to exit 
 
 
 # _b00t_: A View from the Ground Up
 
-_b00t_ is systems-engineering poly-glue publishing transpiler, it will use menus to drive a cli for choosing and updating "poly-stack scenarios" which are infrastructure code & templates & samples for all relevant stack layers "层".  _b00t_ intends to provide a curated starting point for a variety of poly-disciplinary aka "complex" projects. A modern curated catalog of computer interfaces, academic and elastic libraries. This project was born partially out of necessity and the rest out of pure curiousity for what could be built and how quickly a menu driven "Oregon trail" of architectural decisions for a project (of N-functional steps), which can be micro or macro managed as the operator/architect individual or team sees fit. 
+_b00t_ is systems-engineering poly-glue publishing transpiler, it will use menus to drive a cli for choosing and updating "poly-stack scenarios" which are infrastructure code & templates & working-samples for all relevant stack layers "层".  _b00t_ intends to provide a curated starting point for a variety of poly-disciplinary aka "complex" projects. A modern curated catalog of computer interfaces, academic and elastic libraries. This project was born partially out of necessity and the rest out of pure curiousity for what could be built and how quickly a menu driven "Oregon trail" of architectural decisions for a project (of N-functional steps), which can be micro or macro managed as the operator/architect individual or team sees fit. 
 
 _b00t_ is colorful, and not traditional, it is "cheeky", but non-discriminatory, it is poly-lingual but it may not be suitable for traditional corporate or government environments, as such it is better suited for the home inventor / hobbyiest or open-source hardware developer/fabricator, children under 16 should ask your parents before using _b00t_. 
 
