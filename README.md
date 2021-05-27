@@ -78,7 +78,7 @@ _b00t_ is systems-engineering poly-glue publishing transpiler, it will use menus
 
 _b00t_ is colorful, and not traditional, it "cheeky", but non-discriminatory, but this may not make it suitable for certain corporate environments, as such it is better suited for the home inventor / hobbyiest or open-source hardware developer/fabricator.
 
-Emoji and ideogram based utf8 / i18n called "storytime v1" naming conventions while non traditional offer faster diagnostics and efficient operational characteristics letting application developers generate completely generate their own ops-scaffolding for containers, installation of development environment includes intellisense, etc. heavily uses VS-code extensions for write/running private zero-code aka artificially written/operated infrastructures "AI/OPS" 
+Emoji and ideogram based utf8 / i18n called "storytime v1" naming conventions for an "Oregon Trail" themed menu, or anything goes CLI project init-to-exit coverage.  While non traditional offer faster diagnostics and efficient operational characteristics letting application developers generate completely generate their own ops-scaffolding for containers, installation of development environment includes intellisense, etc. heavily uses VS-code extensions for write/running private zero-code aka artificially written/operated infrastructures "AI/OPS". 
 
 Presently _b00t_ hopes to become a modern slackware (built on Linux), with some light tutorial "learn only what you desire to", with some 'minimal' explanation of truth/consequences of decisions framework for generating idempotent templates to build complex, maintainable, efficient "systems" engineering principles. 
 
