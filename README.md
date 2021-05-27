@@ -160,10 +160,12 @@ bash$ cd _b00t_; ./01-startup.sh
 probably absolutely nobody besides Brian Horakh (the author).
 but i welcome anybody with similar passions in pre-dev stage projects, incubators, self-reliant engineering teams (no vendor support, except the Author & Git Issues) who want to sponsor my progress or would like to use this framework in their own companies. 
 
-My Ethereum Address is:
+Sponsor through github, or the _b00t_ Ethereum Address is:
 https://vittominacori.github.io/ethereum-badge/detail.html?address=0x24bd79c0efff201bd5b24b622d5ea09f93dbfaa3
 
-🙏 Please note, I don't need $$ however it goes a long way towards demonstrating to my wife that this warrants the amount of attention I give it versus her projects. Thanks! ask for ☕ if you want! Social likes, github ⭐, twitter follows.  Share with your friends! 
+
+🙏 Please note, $$ goes a long way towards demonstrating to my wife that this warrants the amount of attention I give it versus her projects. Thanks! ask for ☕ if you want! Social likes, github ⭐, twitter follows.  Share with your friends!
+
 
 ## _b00t_ vision: 
 A multi-stack directory, "from the ground up", with directory of poly lingual-interfaces like docker Moby. _b00t_ is for:
