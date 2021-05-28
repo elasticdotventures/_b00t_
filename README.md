@@ -8,10 +8,11 @@ Status: there's something here, still a bit amorpheous.  up the interactive init
 # 📺 WIP/PREVIEW
 
 I've done a quick preview of some of the Azure CLI driven through fzf-tmux, sponge, jq, and awk. 
+😲🙏 PLEASE CLICK THE VIDEO LINK, THE PREVIEW IS BROKEN, AN ISSUE HAS BEEN RAISED w/ASCIICAST & GITHUB ENGINEERING. 
 
 [![asciicast](https://asciinema.org/a/QxGcR4JrvSI6ReVi4dhwsYkUP.png)](https://asciinema.org/a/QxGcR4JrvSI6ReVi4dhwsYkUP)
 
-It crashes at the end because I'm not done with the Azure Container Registry piece. 
+NOTE: It crashes at the end because I'm not done with the Azure Container Registry piece. 
 
 The long term goal is to do an interactive setup, similiar to how Slackware used to install Linux with many, many packages all designed and tested to worktogether (except _b00t_'s case it's generating/updating the various cloud json & YAML files using menus)
 
