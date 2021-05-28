@@ -106,12 +106,6 @@ bash$ source ./_b00t_/_b00t_.bashrc
 # or checkout the repo, 85% of the "finished" work is presently in the [bash.🔨/]() folder. 
 ```
 
-# _b00t_: what i'm building.
-  WIZARD-MENU/CLI SYSTEM-ENGINEERING POLY-INTERFACE "GLUE" of many BEST PRACTICES for anybody that desires a "DONT MAKE ME THINK MORE THAN I NEED TO" KISS approach to TECHNICAL SYSTEMS ENGINEERING accomplished through EASY-IDEMPOTENT DETERMINISTIC (meaning predictable) CONTAINER DESIGN/INTEGRATION/LIFECYCLE.  
-
-  A FULL LIFECYCLE OPEN-SOURCE SYSTEMS TOOL:
-    INCEPTION, CREATION, AND DETERMINISTIC OPERATION FROM DEV TO RELEASE => [ COMPLIANCE, LOGGING, CYBER-SECURITY ] TO EXIT 
-
 
 # _b00t_: A View from the Ground Up
 
@@ -210,7 +204,7 @@ _b00t_ intends to provide an early stage complete open ops-stack for a company (
 
 ## What About \_b00t_?
 ElasticDotVentures \_b00t_ is 
-a highly opinionated set of tools for deploying Azure cloud services with EV libraries (called "c0re"), mostly for Azure 🤖.  \_b00t_ brings together a plurality of powerful Cloud tools to  to encourage a non-traditional but extremely p0werful mix-martial-art-of-code.   This text here is mostly visionary explaining the "what" about _b00t_ which is presently early stage being re_b00t_ed😆 from my prior projects. 
+a highly opinionated set of tools for deploying Azure cloud services with EV libraries (called "c0re"), mostly for Azure 🤖.  \_b00t_ brings together a plurality of powerful Cloud tools to  to encourage a non-traditional but extremely p0werful mix-martial-art-of-code, which itself is a curated catalog of utilities to manage "infrastructure as code" presently DEV/OPS, but with an eye toward future AI/OPS.   This text here is mostly visionary explaining the "what" about _b00t_ which is presently early stage being re_b00t_ed😆 from my prior projects. 
 
 ## Is _b00t_ a better for individuals or teams?
 Adoption for individuals is easier, N0t everybody can gr0k _b00t_.   Built by a serial-entrepeneur, _b00t_ is a great "stack" for Robotics & AI Startups where the product's very survival is often dependent on efficient (cost-saving) internal-tooling / economical (but secure) computing environment.   
@@ -235,8 +229,12 @@ Built to deploy Azure Logic Connectors & Azure Durable Functions with Python & T
 
 Docker 🐳, Python 🐍, TypeScript 🦄 - emoji indicates things like designee, consignee, etc.  This is an important aspect of the "storytell" logging.  StoryTell creates really colorful transaction logs & error dumps, these will eventually be extended to perform basic ML application forensics & monitoring.  These meta-patterns (using computers to monitor computers) helps our soon-to-be-obsolete primate brains abstract patterns that wouldn't be nearly as obvious in regular English text and notice problems and inform the determinisitic control surfaces to take action (isolate, block-hold, ignore with possible consequences 😬).  This isn't the whole application freezing, it's a message in an application, or a corrupt video frame grabber in a video stream, any payload which doesn't match the model.   It's not lost forever, it's simply flagged for review. 
 
-# Example (in code)
-_b00t_ is bi-lingual, one of the c0des it understands is bash script. 
+
+# Emoji in Code
+One of the most controversial aspects of _b00t_ is it's heavy use of emoji and pinyin. The reality is NLP (natural language processing) of English is really difficult "expensive & less-reliable" than the one character per word/symbol approach.  
+In the _b00t_ world, any emoji which is "red" in color is "bad" a warning/color.  If a build process has any red symbols that appear, that's a problem.  Even the Cherry "🍒" is reserved as a missing element (a token which the user could "solve" and maybe someday earn points). 
+
+_b00t_ is bi-lingual, one of the c0des it understands is bash script.  
 Here's a sample Bash function taken from the c0re to see if a machine is running Windows System for Linux version 2, abbreviated to WSLv2. The Emoji colorfully demonstrates this bi-lingual principle: 
 ```bash
 
@@ -260,9 +258,11 @@ So: Without knowing what WSLv2 "is" using only three symbols you can infer a lot
 This is Alpha software. _b00t_ is Provided AS-IS! \_b00t_is rique NFSW, for example a default project could be auto-named "butt_plug" or something like that, it's intentionally cheeky and non-discriminatory.  _b00t_ contains a powerful build process that can muster substantial resources.  
 
 ## 🥋 Mixed-Martial-Art-Of-Coding: "StoryTime Logging"
-\_b00t_ is designed around the idea of "StoryTime" logging that includes Emoji & HSK 1 Chinese Vocabulary - Please Don't be intimidated.  Default settings leave English translations on.  The Author (@BrianHorakh) is a native English speaker and multi-language polygot (Spanish, Mandarin, ~Italian, ~German, ~Portguese) all have their own linguistic style and strengths.  Think of this as mixed-martial-art-of-coding! 
+\_b00t_ is designed around the idea of "StoryTime" logging that includes Emoji & HSK 1 Chinese Vocabulary - Please Don't be intimidated.  Default settings leave English translations on.  The Author (@BrianHorakh) is a native English speaker and multi-language polygot (Spanish, Mandarin, ~Italian, ~German) all have their own linguistic style and strengths.  Think of this as mixed-martial-art-of-coding. 
 
-## 🤯 为是吗TF is HSK1? 
+I'm not suggesting anybody actually learn Chinese, your browser already knows it. Install Google Translate, right click any symbol.
+
+## 🤯 为是吗TF use Pinyin? 
 How much information can be transmitted in a symbol vs. a character? 
 
 HSK1 is Level 1 Chinese Mandarin language using simplified pinyin symbols "ideograms" for action/commands and stack layer naming conventions (designators for frontend-前面(Qiánmiàn), backend-背面 [Bèimiàn]).
@@ -279,8 +279,9 @@ file.背器  backend container
 ### Now, let's add some emoji
 ```
 file.前火.🔥🧱  front-end firewall
-file.背器.🔙🐳  backend container
+file.背器.🔚🐳  backend container
 ```
+(these are ONLY illustrative examples to you show you symbology) 
 Using a browser plugin you can translate anything in the documentation easily.  But by integrating _b00t_ scripting at various stages it produces a well defined pattern based marshalling "summary" layer of logic for inputs and outputs of different subsystems. 
 
 Simplified Pinyin is a screen glyph optimized font - that means HSK1 characters are *by design* very easy to read & learn!  Presently emoji pictograms are second-class languages are regionally-ambiguous (i.e. "🍆💦" has a plurality of meanings) see [jargon.md](). 
@@ -498,6 +499,13 @@ On Windows, make sure you're using WSL2 on Unbuntu 20.04 with Windows Terminal P
 # StoryTelling in Emoji & HSK1 Chinese
 I'm not gonna here, just read my Medium:
 https://brianhorakh.medium.com/emoji-logging-warning-much-silliness-ahead-4cae73d7089
+
+# _b00t_: what i'm building.
+  WIZARD-MENU/CLI SYSTEM-ENGINEERING POLY-INTERFACE "GLUE" of many BEST PRACTICES for anybody that desires a "DONT MAKE ME THINK MORE THAN I NEED TO" KISS approach to TECHNICAL SYSTEMS ENGINEERING accomplished through EASY-IDEMPOTENT DETERMINISTIC (meaning predictable) CONTAINER DESIGN/INTEGRATION/LIFECYCLE.  
+
+  A FULL LIFECYCLE OPEN-SOURCE SYSTEMS TOOL:
+    INCEPTION, CREATION, AND DETERMINISTIC OPERATION FROM DEV TO RELEASE => [ COMPLIANCE, LOGGING, CYBER-SECURITY ] TO EXIT 
+
 
 
 Future:
