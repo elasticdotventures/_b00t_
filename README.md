@@ -3,7 +3,7 @@
 ------
 b00t is my "ultimate" framework-tooling for deploying a distributed-ai, polylingual voice-cli "format transformer" that can learn to perform a plurality of skills including design/control of robotics and learning to play video games, design and print 3d objects, manipulate video, write and deploy code to create "smart pipes" for various applications.
 
-Presently it compendium of time saving tools offering an interactive initalization (using fzf), menu system for the 
+Presently this is only a compendium of time saving tools offering an interactive initalization (using fzf), menu system for the 
 smart pipes and installation scripts for the rest. 
 
 Sharing with friends, looking for feedback, alpha testers & contributors. Comments, issues, PR's welcome. Please 🍴🍰🤩.  
