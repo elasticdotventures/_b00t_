@@ -1,7 +1,12 @@
 
 # \__b00t__
 ------
-Status: there's something here, still a bit amorpheous.  up the interactive initalization (using fzf).  Sharing with friends, looking for feedback, alpha testers & contributors. Comments, issues, PR's welcome. Please 🍴🍰🤩.  
+b00t is my "ultimate" framework-tooling for deploying a distributed-ai, polylingual voice-cli "format transformer" that can learn to perform a plurality of skills including design/control of robotics and learning to play video games, design and print 3d objects, manipulate video, write and deploy code to create "smart pipes" for various applications.
+
+Presently it compendium of time saving tools offering an interactive initalization (using fzf), menu system for the 
+smart pipes and installation scripts for the rest. 
+
+Sharing with friends, looking for feedback, alpha testers & contributors. Comments, issues, PR's welcome. Please 🍴🍰🤩.  
 
 [![Project Status: WIP – Initial development is in progress, but there has not yet been a stable, usable release suitable for the public.](https://www.repostatus.org/badges/latest/wip.svg)](https://www.repostatus.org/#wip)
 
@@ -116,15 +121,6 @@ bash$ source ./_b00t_/_b00t_.bashrc
 # or checkout the repo, 85% of the "finished" work is presently in the [bash.🔨/]() folder. 
 ```
 
-<<<<<<< HEAD
-# \__b00t__: what i'm building.
-  wizard-menu/cli system-engineering poly-interface "glue" of many best practices for anybody that desires a "dont make me think more than i need to" kiss approach to technical systems engineering accomplished through easy-idempotent deterministic (meaning predictable) container design/integration/lifecycle.  
-
-  a full lifecycle open-source systems tool:
-    inception, creation, and deterministic operation from dev to release => [ compliance, logging, cyber-security ] to exit 
-
-=======
->>>>>>> b0d7ad1c8f017286eb2f8d2f67945de70171a3b3
 
 # \__b00t__: A View from the Ground Up
 
