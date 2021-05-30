@@ -13,10 +13,11 @@ https://docs.microsoft.com/en-us/azure/active-directory/develop/msal-overview
 * Helps you specify which audience you want your application to sign in (your org, several orgs, work, and school and Microsoft personal accounts, social identities with Azure AD B2C, users in sovereign, and national clouds)*  Helps you set up your application from configuration files.
 * Helps you troubleshoot your app by exposing actionable exceptions, logging, and telemetry.
 
+# GITHUB 
+https://docs.github.com/en/developers/apps/building-oauth-apps/authorizing-oauth-apps
 
-
-
-
+Authorization Callback url convention:
+/L0gg1N  (*not /login)
 
 
 
