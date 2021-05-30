@@ -7,7 +7,7 @@ Status: there's something here, still a bit amorpheous.  up the interactive init
 
 # 📺 WIP/PREVIEW
 
-I've done a quick preview of some of the Azure CLI driven through fzf-tmux, sponge, jq, and awk. 
+I've done a quick preview of some of the Azure CLI driven through fzf-tmux, sponge, jq, and awk.  Please excuse the janky preview here (there is a bug in asciicast thumbnail generator, it's fine in the video)
 
 [![asciicast](https://asciinema.org/a/QxGcR4JrvSI6ReVi4dhwsYkUP.png)](https://asciinema.org/a/QxGcR4JrvSI6ReVi4dhwsYkUP)
 
@@ -30,6 +30,8 @@ The long term goal is to do an interactive setup, similiar to how Slackware used
             
           FOR THE BENEFIT OF HUMANITY
                  THE ULTIMATE 
+             COMPENDIUM OF USEFUL
+          MULTI-DISCIPLINARY END-TO-END
          SYSTEMS ENGINEERING TOOLKIT FOR
           🧙 REDUCTION IN DIFFICULTY
 
@@ -78,8 +80,15 @@ The long term goal is to do an interactive setup, similiar to how Slackware used
     sales, finance accounting, chat/ops business operations
     automation, crypto banking, academic science r&d,
     r-engineering, tiger-team problem solving (aka math) 
+
   FUTURE:
-    * STORYTIME: future AI/OPS, interactive voice-cli/assistant control surface
+    * STACK-PIERCER
+	cargo install zellij
+        eBPF filters & io_uring bindings
+        openTelemetry logging
+        Bash "bats" - TAP testing https://testanything.org/
+    * STORYTIME: 
+        AI/OPS, interactive voice-cli/assistant control surface
    
             _b00t_ is a CYB3RPUNK_STARTUP_K1T
 
@@ -106,16 +115,16 @@ bash$ source ./_b00t_/_b00t_.bashrc
 # or checkout the repo, 85% of the "finished" work is presently in the [bash.🔨/]() folder. 
 ```
 
-# _b00t_: what i'm building.
+# \__b00t__: what i'm building.
   wizard-menu/cli system-engineering poly-interface "glue" of many best practices for anybody that desires a "dont make me think more than i need to" kiss approach to technical systems engineering accomplished through easy-idempotent deterministic (meaning predictable) container design/integration/lifecycle.  
 
   a full lifecycle open-source systems tool:
     inception, creation, and deterministic operation from dev to release => [ compliance, logging, cyber-security ] to exit 
 
 
-# _b00t_: A View from the Ground Up
+# \__b00t__: A View from the Ground Up
 
-_b00t_ is systems-engineering poly-glue publishing transpiler, it will use menus to drive a cli for choosing and updating "poly-stack scenarios" which are infrastructure code & templates & working-samples for all relevant stack layers "层".  _b00t_ intends to provide a curated starting point for a variety of poly-disciplinary aka "complex" projects. A modern curated catalog of computer interfaces, academic and elastic libraries. This project was born partially out of necessity and the rest out of pure curiousity for what could be built and how quickly a menu driven "Oregon trail" of architectural templates for a project. 
+\__b00t__ is systems-engineering poly-glue publishing transpiler, it will use menus to drive a cli for choosing and updating "poly-stack scenarios" which are infrastructure code & templates & working-samples for all relevant stack layers "层".  _b00t_ intends to provide a curated starting point for a variety of poly-disciplinary aka "complex" projects. A modern curated catalog of computer interfaces, academic and elastic libraries. This project was born partially out of necessity and the rest out of pure curiousity for what could be built and how quickly a menu driven "Oregon trail" of architectural templates for a project. 
 
 _b00t_ is colorful, and not traditional, it is "cheeky", but non-discriminatory, it is poly-lingual but it may not be suitable for traditional corporate or government environments, as such it is better suited for the home inventor / hobbyiest or open-source hardware developer/fabricator, children under 16 should ask your parents before using _b00t_. 
 
