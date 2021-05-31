@@ -98,13 +98,15 @@ if [ "$_b00t_exists" == "function" ] ; then
     export _b00t_VERSION_was="$_b00t_VERSION"
 fi
 # -------------- CONFIGURABLE SETTING -----------------
-export _b00t_VERSION="1.0.14"
+export _b00t_VERSION="1.0.15"
 # -----------------------------------------------------
 
 # syntax: current required
 #echo "v3r: $_b00t_VERSION "
 upgradeB00T=$(is_v3rs10n_大于 "$_b00t_VERSION_was" "$_b00t_VERSION")
 
+
+# 🦨 need consent!
 if [ "$upgradeB00T" ==  true ] ; then 
     ## upgrade b00t in memory (this doesn't work awesome, but useful during dev)
     log_📢_记录 "🥾🧐 b00t version | now: $_b00t_VERSION | was: $_b00t_VERSION_was | upgrade: $upgradeB00T"
@@ -158,8 +160,16 @@ alias myp='ps -fjH -u $USER'
 #cdl() { cd $1; ls}
 #export -f cdl
 
+# FUTURE: 
+# https://github.com/GochoMugo/msu
+
 # bat - a pretty replacement for cat.
 alias bat="batcat"
+
+# bats - bash testing system (in a docker container)
+# 🦨 need consent before running docker
+# 🦨 this is not the proper way to run bats. 
+# alias bats='docker run -it -v bats/bats:latest'
 
 # count the files in a directory or project
 alias count='find . -type f | wc -l'

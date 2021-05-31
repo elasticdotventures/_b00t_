@@ -1,15 +1,19 @@
 # syntax=docker/dockerfile:latest
 
+## 
+## DOCKER TUTORIAL: 
+##
+
 # TO BUILD:
-# ./build.sh 
+# ./docker-build.sh 
 # TO RUN:
 
 # Docker uses the default 172.17.0.0/16 subnet for container networking. 
-# FROM python:3.7-alpine
 
+# FUTURE TODO: 
+# FROM python:3.7-alpine
 # shows secret from default secret location:
 # RUN --mount=type=secret,id=mysecret cat /run/secrets/mysecret
-
 # USER root 
 # SHELL /bin/bash
 
@@ -34,10 +38,6 @@
 # ${variable_name} syntax also supports a few of the standard bash modifiers as specified below:
 # ${variable:-word} indicates that if variable is set then the result will be that value. If variable is not set then word will be the result.
 # ${variable:+word} ndicates that if variable is set then word will be the result, otherwise the result is the empty string.
-
-
-
-
 
 
 #### 
@@ -74,8 +74,8 @@ ENV TZ "Australia/Melbourne"
 RUN apt-get -y install apt-utils tzdata locales
 
 # from https://hub.docker.com/_/ubuntu
-RUN apt-get update && apt-get install -y locales && rm -rf /var/lib/apt/lists/* \
-    && localedef -i en_US -c -f UTF-8 -A /usr/share/locale/locale.alias en_US.UTF-8
+RUN apt-get update && apt-get install -y locales && rm -rf /var/lib/apt/lists/*
+RUN localedef -i en_US -c -f UTF-8 -A /usr/share/locale/locale.alias en_US.UTF-8
 
 # Emoji Support
 RUN locale-gen en_US.UTF-8

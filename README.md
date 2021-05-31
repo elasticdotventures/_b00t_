@@ -1,12 +1,12 @@
 
 # \__b00t__
 ------
-b00t is my "ultimate" framework-tooling for deploying a distributed-ai, polylingual voice-cli "format transformer" that can learn to perform a plurality of skills including design/control of robotics and learning to play video games, design and print 3d objects, manipulate video, write and deploy code to create "smart pipes" for various applications.
+b00t is my "ultimate" framework-tooling for deploying my  distributed (poly-cloud), poly-lingual, neuromorphic voice-cli ("b00t") that offers typing-optional "format transformer" that can learn to perform a plurality of skills including design+control of robotics and game, puzzles, design & print 3d objects, manipulate video, write and deploy code for create/control of "smart pipes" across various open-source apps, across a plurality of operating systems and architectures.
 
-Presently it compendium of time saving tools offering an interactive initalization (using fzf), menu system for the 
+Presently it is compendium of time saving tools offering an interactive initalization (using fzf), menu system for the 
 smart pipes and installation scripts for the rest. 
 
-Sharing with friends, looking for feedback, alpha testers & contributors. Comments, issues, PR's welcome. Please 🍴🍰🤩.  
+Sharing with contributors, advisors, feedback, & testers (soon). Comments, issues, PR's welcome. Please 🍴🍰🤩
 
 [![Project Status: WIP – Initial development is in progress, but there has not yet been a stable, usable release suitable for the public.](https://www.repostatus.org/badges/latest/wip.svg)](https://www.repostatus.org/#wip)
 
@@ -17,9 +17,9 @@ I've done a quick preview of some of the Azure CLI driven through fzf-tmux, spon
 
 [![asciicast](https://asciinema.org/a/QxGcR4JrvSI6ReVi4dhwsYkUP.png)](https://asciinema.org/a/QxGcR4JrvSI6ReVi4dhwsYkUP)
 
-NOTE: It crashes at the end because I'm not done with the Azure Container Registry piece. 
+NOTE: It crashes at the end because I'm not done with the Azure Container Registry piece (now, i've abandoned that in favor of dockerhub). 
 
-The long term goal is to do an interactive setup, similiar to how Slackware used to install Linux with many, many packages all designed and tested to worktogether (except _b00t_'s case it's generating/updating the various cloud json & YAML files using menus)
+_b00t_ is building towards an interactive startup, similiar to how Slackware used to install Linux with many, many packages all designed and tested to worktogether (except _b00t_'s case it's generating/updating the various cloud json & YAML files using menus) skills structured for global ai/ops. 
 
 ------
 ```text/plain

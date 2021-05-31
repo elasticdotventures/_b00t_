@@ -31,14 +31,10 @@ if [ -z "$(docker ps -q -s -f name=squid)" ] ; then
     --volume /srv/docker/squid/cache:/var/spool/squid \
     sameersbn/squid:3.5.27-2
 fi
-
-./test/bats/bin/bats test/test.bats
-
-@test "can run our script" {
-    ./project.sh
-}
+bats 
 # look for a _b00t_ volume
 # docker volume create  --mount type=bind,source="$(pwd)"/target,target=/app \
+
 
 
 # squid is running (TODO: verify)
@@ -49,9 +45,9 @@ log_📢_记录 🦑 setting http proxy
 export http_proxy=http://172.17.0.1:3128
 export https_proxy=http://172.17.0.1:3128
 
-echo Building elasticdotventures/b00t:build
+log_📢_记录 🐳 Building elasticdotventures/b00t:build
 
-TARGET="b00t_m4k3"  # future, config point. 
+#TARGET="b00t_m4k3"  # future, config point. 
 #fzmenu \
 #    new
 #    sandbox: "问题"
@@ -64,18 +60,22 @@ TARGET="fr3sh"
 #  --secret stringAray
 #  --tag 
 #  --platform=<platform>
-echo "TARGET: $TARGET"
+export TARGET=builder
+log_📢_记录  "TARGET: $TARGET"
   # --build-arg BUILDKIT_INLINE_CACHE=1 .
   # --progress=plain \
   #--build-arg arrgh="🦜🏴‍☠️" \
 
-log_📢_记录 
+
 export DOCKER_BUILDKIT=1
 
 docker buildx install
+# docker buildx bake -f docker-compose.dev.yaml
+# docker buildx bake -f docker-bake.hcl 
 docker buildx build \
   --platform linux/amd64 \
-  -t elasticdotventures/b00t:latest --target $TARGET \
+  -t elasticdotventures/b00t \
+  --target 
   --build-arg https_proxy=$https_proxy \
   --build-arg http_proxy=$http_proxy \
   -f Dockerfile \

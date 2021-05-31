@@ -12,7 +12,6 @@ source "$_B00T_C0DE_Path/_b00t_.bashrc"
 # Arm32v7 docker hub (for rpi🥧)
 #https://hub.docker.com/u/arm32v7/
 
-
 # REMEMBER:
 #  * Obsolete: Swarm => K8, C-Groups => Systemd
 
@@ -113,3 +112,7 @@ $SUDO_CMD systemctl enable containerd.service
 # to run dev  instance in azure aci
 #service principle: 
 #docker login azure --client-id xx --client-secret yy --tenant-id zz
+
+## this should have been done back in _b00t_
+
+docker run -it bats/bats:latest --version
