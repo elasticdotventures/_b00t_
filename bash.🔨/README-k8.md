@@ -2,6 +2,12 @@ README-k8
 
 _b00t_ believes k8, traditional kubernetes is for applications that work best in kubernetes, as compared to cloud-native serverless functions.
 
+_b00t_ intends to support at least minikube and AKS. This
+
+_b00t_ is also going to use Pachyderm for lineage control 
+
+curl -o /tmp/pachctl.tar.gz -L https://github.com/pachyderm/pachyderm/releases/download/v1.13.2/pachctl_1.13.2_linux_amd64.tar.gz && tar -xvf /tmp/pachctl.tar.gz -C /tmp && sudo cp /tmp/pachctl_1.13.2_linux_amd64/pachctl /usr/local/bin
+
 
 ## k8 deployments
 use cases

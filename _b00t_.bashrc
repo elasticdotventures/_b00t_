@@ -95,6 +95,7 @@ export -f is_v3rs10n_大于
 _b00t_exists=`type -t "_b00t_init_🥾_开始"`
 _b00t_VERSION_was=0
 if [ "$_b00t_exists" == "function" ] ; then 
+    # are we re-entry, i.e. reb00t
     export _b00t_VERSION_was="$_b00t_VERSION"
 fi
 # -------------- CONFIGURABLE SETTING -----------------
@@ -104,10 +105,13 @@ export _b00t_VERSION="1.0.15"
 # syntax: current required
 #echo "v3r: $_b00t_VERSION "
 upgradeB00T=$(is_v3rs10n_大于 "$_b00t_VERSION_was" "$_b00t_VERSION")
-
+echo "upgradeB00T: $upgradeB00T"
 
 # 🦨 need consent!
-if [ "$upgradeB00T" ==  true ] ; then 
+if [ "$upgradeB00T" ==  true ] && [ -n "$_b00t_VERSION_was" ] ; then 
+    # welcome!  
+    log_📢_记录 "🥾🧐 b00t version | now: $_b00t_VERSION"
+elif [ "$upgradeB00T" ==  true ] ; then 
     ## upgrade b00t in memory (this doesn't work awesome, but useful during dev)
     log_📢_记录 "🥾🧐 b00t version | now: $_b00t_VERSION | was: $_b00t_VERSION_was | upgrade: $upgradeB00T"
     log_📢_记录 "🥾🦸 skip short circuit, upgrade boot"
@@ -162,6 +166,10 @@ alias myp='ps -fjH -u $USER'
 
 # FUTURE: 
 # https://github.com/GochoMugo/msu
+
+# TODO: test for pipx
+eval "$(register-python-argcomplete pipx)"
+# pipx run
 
 # bat - a pretty replacement for cat.
 alias bat="batcat"
@@ -506,10 +514,12 @@ function is_n0t_aliased() {
     local args=("$@")
     local hasAlias=${args[0]}
     local exists=$(alias -p | grep "alias $hasAlias=")
+    # echo "exists: $exists"
     if [ -z "$exists" ] ; then
-        return 1;  # "true"
+        # 🙄 exists: alias fd='/usr/bin/fdfind'
+        return 0;  # "true", unix success
     else 
-        return 0;  #  "false"
+        return 1;  #  "false", unix error
     fi
 }
 
@@ -620,8 +630,9 @@ if [ "${container+}" == "docker" ] ; then
     motd
 elif ! is_n0t_aliased fd ; then 
     motd
+else 
+    motd
 fi
-
 
 
 ## there's time we need to know reliably if we can run SUDO
