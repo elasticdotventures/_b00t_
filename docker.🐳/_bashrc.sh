@@ -1,4 +1,7 @@
 
+#
+#  DOCKER bashrc extensions
+#
 
 # 🍰 https://calbertts.medium.com/docker-and-fuzzy-finder-fzf-4c6416f5e0b5
 # Running containers
@@ -111,5 +114,6 @@ showipc() {
   fi
 }
 
+log_📢_记录 "🥾🐳 $ runc, runinc, stopc, showipc"
 
 

@@ -10,6 +10,12 @@ Sharing with contributors, advisors, feedback, & testers (soon). Comments, issue
 
 [![Project Status: WIP – Initial development is in progress, but there has not yet been a stable, usable release suitable for the public.](https://www.repostatus.org/badges/latest/wip.svg)](https://www.repostatus.org/#wip)
 
+
+Keep up to date and get Pachyderm support via:
+- [![Twitter](https://img.shields.io/twitter/follow/_b00t_?style=social)](https://twitter.com/_b00t_) Follow us on Twitter.
+
+
+
 # 📺 WIP/PREVIEW
 
 I've done a quick preview of some of the Azure CLI driven through fzf-tmux, sponge, jq, and awk. 
@@ -46,6 +52,7 @@ _b00t_ is building towards an interactive startup, similiar to how Slackware use
     * extensive use of more-utils, yq, jq, fzf, fdfind, etc.
   SERVER ARCHITECTURES:
     x86-nvidia-cuda-optimized, x86, amd64, arm64-rpi 
+    alpine (planned, blocked by 3rd party webinstall.dev)
   EMBEDDED ARCHITECTURES:
     atmega64, esp32
   DEV:
@@ -58,13 +65,15 @@ _b00t_ is building towards an interactive startup, similiar to how Slackware use
     Typescript/Vue (Vitesse SPA, I18N template)
     OpenAuth/OpenID to Azure B2C, MSAL2 (federated security)
     interfaces: rest/GraphQL, RxJS
+    zip/open-openTelemetry setup
   BACK END/APP:
     Typescript: >v4 
     Python: 3.9 
     (and others, poly-lingual)
   CONTAINER ORCHESTRATION: 
     docker, k8, drone-ci (and others, any OCI is fine)
-    * author bias: minimalist k8
+    * author bias: minimalist k8, minikube
+    pachctl (data lineage)
   CLOUD: 
     azure, google, aws, ali
     * author bias: azure > gcp | ali | aws

@@ -1,3 +1,9 @@
+#
+# Purpose: universal bash b00t-strap for environment & tooling
+#   once run in an enviroment will attempt to validate & construct
+#   bash shortcuts, menus, etc. 
+#
+
 
 # usage:
 #   source "./_b00t_.bashrc"
@@ -14,7 +20,10 @@ trap "set +o nounset" EXIT  # restore nounset at exit, even in crash!
 umask 000
 
 
-set -a # mark variables whcih are modified or created for export
+# mark variables which are modified or created for export
+set -a 
+
+
 ## 小路 \\
 ## Xiǎolù :: Path or Directory
 # THINGS YOU CAN EDIT: 
@@ -29,11 +38,10 @@ _b00t_INSPIRATION_FILE="$_B00T_C0DE_Path/./r3src_资源/inspiration.json"
 
 
 
-
-
 ## 记录 \\
 ## Jìlù :: Record (Log)
 # 🤓 write to a log if you want using >> 
+# mostly, this is for future opentelemetry & storytime log
 unset -f log_📢_记录
 function log_📢_记录() {
     echo "$@"
@@ -62,7 +70,17 @@ pathAdd "$HOME/.local/bin"
 pathAdd "$HOME/.yarn/bin"
 ## * * * * * //
 
+if [ "/usr/bin/docker" ] ; then 
+    echo "🐳 has d0cker! loading docker extensions"
+    source "$_B00T_C0DE_Path/docker.🐳/_bashrc.sh"
 
+    ## 😔 docker context? 
+    ## https://docs.docker.com/engine/context/working-with-contexts/
+    # export DOCKER_CONTEXT=default
+    # log_📢_记录 "🐳 CONTEXT: $DOCKER_CONTEXT"  
+    # docker context ls
+
+fi
 
 ## * * * * * \\
 ## is_version_大于
@@ -103,18 +121,18 @@ export _b00t_VERSION="1.0.15"
 # -----------------------------------------------------
 
 # syntax: current required
-#echo "v3r: $_b00t_VERSION "
+# echo "v3r: $_b00t_VERSION "
 upgradeB00T=$(is_v3rs10n_大于 "$_b00t_VERSION_was" "$_b00t_VERSION")
-echo "upgradeB00T: $upgradeB00T"
+# echo "upgradeB00T: $upgradeB00T"
 
 # 🦨 need consent!
 if [ "$upgradeB00T" ==  true ] && [ -n "$_b00t_VERSION_was" ] ; then 
-    # welcome!  
+    # welcome! (clean environment)
     log_📢_记录 "🥾🧐 b00t version | now: $_b00t_VERSION"
 elif [ "$upgradeB00T" ==  true ] ; then 
     ## upgrade b00t in memory (this doesn't work awesome, but useful during dev)
-    log_📢_记录 "🥾🧐 b00t version | now: $_b00t_VERSION | was: $_b00t_VERSION_was | upgrade: $upgradeB00T"
-    log_📢_记录 "🥾🦸 skip short circuit, upgrade boot"
+    ## $ reb00t
+    log_📢_记录 "🥾🧐 (re)b00t version | now: $_b00t_VERSION | was: $_b00t_VERSION_was | upgrade: $upgradeB00T"
     # TODO: consent
 elif [ "$_b00t_exists" == "function" ] ; then 
     # SILENT, don't reload unless _b00t_VERSION is newer
@@ -287,7 +305,27 @@ export -f _b00t_init_🥾_开始
 ## 进口 //
 
 
-# Webi
+# alpine container support
+# https://github.com/ethereum/solidity/issues/875
+# returns 0 for "true" (not alpine linux), non-zero for false (is alpine linux)
+function iz_n0t_alpine_linux_🐧🌲() {
+   return $(cat /etc/os-release | grep "NAME=" | grep -ic "Alpine")
+}
+if [ ! iz_n0t_alpine_linux ] ; then
+    # gh issue 
+    echo "🥾🤮 🐧🌲 alpine linux not fully supported yet"
+fi 
+
+
+# this is intended to catch & report errors
+function barf_🤮 () {
+    gh issue create
+    # gh issue create --title $1
+}
+
+
+
+# Webi, presently breaks alpine config! 
 # https://github.com/elasticdotventures/webi-installers
 webi=$(whereis webi)
 if [ -z "$webi" ] ; then 
@@ -523,6 +561,7 @@ function is_n0t_aliased() {
     fi
 }
 
+
 ##
 ## A pretty introduction to the system. 
 ##
@@ -620,10 +659,15 @@ function motd() {
         /bin/rm -f $motdTmpFile
     fi
     
-    log_📢_记录 "🥾📈 Future project stats goes here. "
+    log_📢_记录 "lang: $LANG"
+    log_📢_记录 "🥾📈 Future project stats, cleanup, tasks goes here. "
 
-    # echo ${#arr[@]}
-    #  
+    local skunk_x=$(git grep "🦨" | wc -l)
+    log_📢_记录 "🦨: $skunk_x"
+
+    if [ -d ".git" ] ; then 
+        gh issue list
+    fi 
 }
 
 if [ "${container+}" == "docker" ] ; then
@@ -775,12 +819,6 @@ export _b00t_JS0N_filepath=$(expandPath "~/.b00t/config.json")
 #        "Natalie"
 #    ]'   
 #}
-
-## ???
-## https://docs.docker.com/engine/context/working-with-contexts/
-#export DOCKER_CONTEXT=default
-#log_📢_记录 "🐳 CONTEXT: $DOCKER_CONTEXT"  
-#docker context ls
 
 
 # 🍰 https://lzone.de/cheat-sheet/jq

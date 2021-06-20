@@ -53,14 +53,16 @@ log_📢_记录 🐳 Building elasticdotventures/b00t:build
 #    sandbox: "问题"
 #    make: "问题"
 #    edit: "问题"
-TARGET="fr3sh"
+# TARGET="fr3sh"
 # FUTURE: consent point
 
 # docker build params:
 #  --secret stringAray
 #  --tag 
 #  --platform=<platform>
-export TARGET=builder
+#export TARGET=b00t_1n1t
+#export TARGET=b00t_b4s3
+export TARGET=b00t_m4k3
 log_📢_记录  "TARGET: $TARGET"
   # --build-arg BUILDKIT_INLINE_CACHE=1 .
   # --progress=plain \
@@ -75,7 +77,7 @@ docker buildx install
 docker buildx build \
   --platform linux/amd64 \
   -t elasticdotventures/b00t \
-  --target 
+  --target $TARGET \
   --build-arg https_proxy=$https_proxy \
   --build-arg http_proxy=$http_proxy \
   -f Dockerfile \
@@ -85,12 +87,13 @@ docker buildx build \
 
 # docker tag local-image:tagname new-repo:tagname
 # docker push new-repo:tagname
-docker tag $TARGET _b00t_:latest
-docker push _b00t_:latest
+docker tag elasticdotventures/b00t elasticdotventures/b00t:latest
+docker push elasticdotventures/b00t:latest
+
+## note: could also possibly use docker export to track changes.
 
 exit
 
-## note: could also possibly use docker export to track changes.
 
 cat << EOF
 # dev instance, shares common filesystrem. 
