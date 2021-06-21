@@ -57,6 +57,10 @@ function reb00t() {
     source "$_B00T_C0DE_Path/_b00t_.bashrc"
 }
 
+
+
+
+
 ## * * * * * \\
 ## pathAdd 
 unset pathAdd
@@ -106,6 +110,28 @@ function is_v3rs10n_大于()   # $appversion $requiredversion
 }
 export -f is_v3rs10n_大于
 ## * * * * * * //
+
+
+## 
+# does a bash/function exist?
+# 🍰 https://stackoverflow.com/questions/85880/determine-if-a-function-exists-in-bash
+# returns: 
+#     0 on yes/success (function defined/available)
+#     1 for no (not available)
+function has_fn_✅_存在() {
+    local exists=$(LC_ALL=C type -t $1)
+    # echo "exists: $exists"
+    if [ -n "$exists" ] ; then 
+        # exists, not empty, success
+        return 0 
+    fi 
+    # fail (function does not exist)
+    return 1
+    # result=[[ -n "$exists" ]] || 1 
+}
+export -f has_fn_✅_存在
+
+
 
 
 ## All the logic below figures out who is calling & hot-reload
@@ -232,6 +258,7 @@ fi
 
 # handy for generating dumps, etc..
 # $ script.sh >> foobar.`ymd`
+alias yyyymmdd="date +'%Y%m%d'"
 alias ymd="date +'%Y%m%d'"
 alias ymd_hm="date +'%Y%m%d.%H%M'"
 alias ymd_hms="date +'%Y%m%d.%H%M%S'"
@@ -399,6 +426,7 @@ function bash_source_加载() {
 export -f bash_source_加载
 
 
+
 ## 好不好 \\
 ## Hǎo bù hǎo :: Good / Not Good 
 ## is_file readable? 
@@ -424,8 +452,13 @@ function n0ta_xfile_📁_好不好() {
         log_📢_记录 "👽:不支持 $xfile is not executable. 👽:非常要!"
         return 0
     else
-        # success
-        log_📢_记录 "👍 $xfile"
+
+        if ! has_fn_✅_存在 "crudini_get" ; then 
+            :   # crudini_get doesn't exist.
+        elif [[ $( crudini_get "b00t" "has.$xfile" ) = "" ]] ; then 
+            log_📢_记录 "👍 $xfile"
+            crudini_set "b00t" "has.$xfile" $( yyyymmdd )
+        fi
         return 1
     fi
 }
@@ -644,7 +677,7 @@ function motd() {
             $SED_PATH -i 's/8/🥾/g' $motdTmpFile
         fi 
         if [ $(rand0 10) -gt 5 ] ; then
-            $SED_PATH 's/\*/🥾/g' $motdTmpFile
+            $SED_PATH -i 's/\*/🥾/g' $motdTmpFile
             $SED_PATH -i 's/[\!\-\@]./😁/g' $motdTmpFile
         fi
         if [ $(rand0 10) -gt 5 ] ; then
@@ -658,16 +691,24 @@ function motd() {
         $showWithCMD $motdTmpFile
         /bin/rm -f $motdTmpFile
     fi
-    
+
+    # part of motd
+
     log_📢_记录 "lang: $LANG"
-    log_📢_记录 "🥾📈 Future project stats, cleanup, tasks goes here. "
+    log_📢_记录 "🥾📈 motd project stats, cleanup, tasks goes here. "
 
-    local skunk_x=$(git grep "🦨" | wc -l)
-    log_📢_记录 "🦨: $skunk_x"
 
-    if [ -d ".git" ] ; then 
+    if [ -d "./.git" ] ; then 
+        log_📢_记录 "🥾🐙😁 found .git repo"
+        # github client 
         gh issue list
+
+        local skunk_x=$(git grep "🦨" | wc -l)
+        log_📢_记录 "🦨: $skunk_x"
+    else 
+        log_📢_记录 "🥾🐙😔 no .git dir "`pwd`
     fi 
+
 }
 
 if [ "${container+}" == "docker" ] ; then
@@ -679,20 +720,6 @@ else
 fi
 
 
-## there's time we need to know reliably if we can run SUDO
-function has_sudo() {
-    SUDO_CMD="/usr/bin/sudo"
-    if [ -f "./dockerfile" ] ; then
-        log_📢_记录 "🐳😁 found DOCKER"  
-    elif [ -f "$SUDO_CMD" ] ; then 
-        log_📢_记录 "🥳 found sudo"  
-    else 
-        log_📢_记录 "🐭 missed SUDO, try running _b00t_ inside docker."
-        SUDO_CMD=""
-    fi
-    export SUDO_CMD
-}
-has_sudo 
 
 
 
@@ -702,25 +729,6 @@ if ! n0ta_xfile_📁_好不好 "/usr/bin/fdfind"  ; then
     # export FZF_DEFAULT_OPTS="--no-mouse --height 50% -1 --reverse --multi --inline-info --preview=[[ \$file --mine{}) =~ binary ]] && echo {} is a binary file || (bat --style=numbers --color=always {} || cat {}) 2> /dev/null | head -300' --preview-window='right:hidden:wrap' --bind'f3:execute(bat --style=numbers {} || less -f {}),f2:toggle-preview,ctrl-d:half-page-down,ctrl-u:half-page-up,ctrl-a:select-all+accept,ctrl-y:execute-silent(echo {+} | pbcopy)'"
     # from video: https://www.youtube.com/watch?v=qgG5Jhi_Els
     export FZF_DEFAULT_COMMAND="/usr/bin/fdfind --type f"
-fi
-
-
-###
-# 🍰 https://superuser.com/questions/427318/test-if-a-package-is-installed-in-apt
-#if debInst "$1"; then
-#    printf 'Why yes, the package %s _is_ installed!\n' "$1"
-#else
-#    printf 'I regret to inform you that the package %s is not currently installed.\n' "$1"
-#fi
-function debInst() {
-    dpkg-query -Wf'${db:Status-abbrev}' "$1" 2>/dev/null | grep -q '^i'
-}
-
-if debInst "moreutils" ; then
-    log_📢_记录 "👍 debian moreutils is installed!"
-else
-    log_📢_记录  "😲 install moreutils (required)"
-    $SUDO_CMD apt-get install -y moreutils
 fi
 
 ####
@@ -743,8 +751,16 @@ function crudini_set() {
     return $?
 }
 
+
+
 function crudini_get() {
     local args=("$@")
+
+    #if [[ "$#" -ne "2" ]] ; then 
+    #    log_📢_记录 "crudini_get topic key"
+    #    exit 0 
+    # fi 
+
     local topic=${args[0]}
     local key=${args[1]}
     echo $( crudini --get "$CRUDINI_CFGFILE" "${topic}" "${key}" )
@@ -801,7 +817,66 @@ else
 fi
 }
 crudini_ok
-#motd
+
+
+##
+## there's time we need to know reliably if we can run SUDO
+##
+function has_sudo() {
+    SUDO_CMD="/usr/bin/sudo"
+
+    ## 🦨 TODO: ask for consent to run sudo? 
+
+    if [ "$EUID" -eq 0 ] ; then
+        # r00t doesn't require sudo 
+        # https://stackoverflow.com/questions/18215973/how-to-check-if-running-as-root-in-a-bash-script
+        log_📢_记录 "👹 please don't b00t as r00t"
+        SUDO_CMD=""
+    elif [ -f "./dockerenv" ] ; then
+        # https://stackoverflow.com/questions/23513045/how-to-check-if-a-process-is-running-inside-docker-container#:~:text=To%20check%20inside%20a%20Docker,%2Fproc%2F1%2Fcgroup%20.
+        log_📢_记录 "🐳😁 found DOCKER"  
+    elif [ -f "$SUDO_CMD" ] ; then 
+        if [[ -z $( crudini_get "b00t" "has.sudo" )  ]] ; then 
+            log_📢_记录 "🥳 found sudo"  
+            crudini_set "b00t" "has.sudo" `ymd_hms`
+        fi 
+    else 
+        log_📢_记录 "🐭 missed SUDO, try running _b00t_ inside docker."
+        SUDO_CMD=""
+    fi
+    export SUDO_CMD
+}
+has_sudo 
+
+
+
+#############################
+###
+# 🍰 https://superuser.com/questions/427318/test-if-a-package-is-installed-in-apt
+#if debInst "$1"; then
+#    printf 'Why yes, the package %s _is_ installed!\n' "$1"
+#else
+#    printf 'I regret to inform you that the package %s is not currently installed.\n' "$1"
+#fi
+function debInst() {
+    dpkg-query -Wf'${db:Status-abbrev}' "$1" 2>/dev/null | grep -q '^i'
+}
+
+if debInst "moreutils" ; then
+    # only show moreutils once. 
+    if [ $( crudini_get "b00t" "has.moreutils" ) -eq "0" ] ; then 
+        log_📢_记录 "👍 debian moreutils is installed!"
+        crudini_set "b00t" "has.moreutils" $(yyyymmdd)
+    fi 
+else
+    log_📢_记录  "😲 install moreutils (required)"
+    $SUDO_CMD apt-get install -y moreutils
+fi
+
+
+
+
+
 
 # 60秒 Miǎo seconds
 # 3分钟 Fēnzhōng minutes
