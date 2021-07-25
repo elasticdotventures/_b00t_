@@ -7,9 +7,15 @@ Presently this is only a compendium of time saving tools offering an interactive
 smart pipes and installation scripts for the rest.  The plan is to have a Yahoo-esque "Awesome" curated list of installable 
 time-saving & labor-reducing tools "fundamentals", to interface any cloud AI/Skill. 
 
-Sharing with friends, looking for feedback, alpha testers & contributors. Comments, issues, PR's welcome. Please 🍴🍰🤩.  
+Sharing with contributors, advisors, feedback, & testers (soon). Comments, issues, PR's welcome. Please 🍴🍰🤩
 
 [![Project Status: WIP – Initial development is in progress, but there has not yet been a stable, usable release suitable for the public.](https://www.repostatus.org/badges/latest/wip.svg)](https://www.repostatus.org/#wip)
+
+
+Keep up to date and get Pachyderm support via:
+- [![Twitter](https://img.shields.io/twitter/follow/_b00t_?style=social)](https://twitter.com/_b00t_) Follow us on Twitter.
+
+
 
 # 📺 WIP/PREVIEW
 
@@ -18,9 +24,9 @@ I've done a quick preview of some of the Azure CLI driven through fzf-tmux, spon
 
 [![asciicast](https://asciinema.org/a/QxGcR4JrvSI6ReVi4dhwsYkUP.png)](https://asciinema.org/a/QxGcR4JrvSI6ReVi4dhwsYkUP)
 
-NOTE: It crashes at the end because I'm not done with the Azure Container Registry piece. 
+NOTE: It crashes at the end because I'm not done with the Azure Container Registry piece (now, i've abandoned that in favor of dockerhub). 
 
-The long term goal is to do an interactive setup, similiar to how Slackware used to install Linux with many, many packages all designed and tested to worktogether (except _b00t_'s case it's generating/updating the various cloud json & YAML files using menus)
+_b00t_ is building towards an interactive startup, similiar to how Slackware used to install Linux with many, many packages all designed and tested to worktogether (except _b00t_'s case it's generating/updating the various cloud json & YAML files using menus) skills structured for global ai/ops. 
 
 ------
 ```text/plain
@@ -47,6 +53,7 @@ The long term goal is to do an interactive setup, similiar to how Slackware used
     * extensive use of more-utils, yq, jq, fzf, fdfind, etc.
   SERVER ARCHITECTURES:
     x86-nvidia-cuda-optimized, x86, amd64, arm64-rpi 
+    alpine (planned, blocked by 3rd party webinstall.dev)
   EMBEDDED ARCHITECTURES:
     atmega64, esp32
   DEV:
@@ -59,13 +66,15 @@ The long term goal is to do an interactive setup, similiar to how Slackware used
     Typescript/Vue (Vitesse SPA, I18N template)
     OpenAuth/OpenID to Azure B2C, MSAL2 (federated security)
     interfaces: rest/GraphQL, RxJS
+    zip/open-openTelemetry setup
   BACK END/APP:
     Typescript: >v4 
     Python: 3.9 
     (and others, poly-lingual)
   CONTAINER ORCHESTRATION: 
     docker, k8, drone-ci (and others, any OCI is fine)
-    * author bias: minimalist k8
+    * author bias: minimalist k8, minikube
+    pachctl (data lineage)
   CLOUD: 
     azure, google, aws, ali
     * author bias: azure > gcp | ali | aws

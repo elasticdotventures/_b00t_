@@ -33,6 +33,13 @@ fi
 log_📢_记录 "🐧😇 git dependencies"
 $SUDO_CMD apt-get install -y software-properties-common
 
+## Ubuntu universe
+## https://linuxconfig.org/how-to-enable-disable-universe-multiverse-and-restricted-repository-on-ubuntu-20-04-lts-focal-fossa
+# sudo add-apt-repository universe
+# sudo add-apt-repository multiverse
+# sudo add-apt-repository restricted
+
+
 ### Deprecation 
 
 # Bash Aliases were moved into _b00t_.bashrc
@@ -45,5 +52,9 @@ $SUDO_CMD apt-get install -y software-properties-common
 # this could probably be copied to $HOME/.bash_aliases?
 #source "$_B00T_C0DE_Path/bash.🔨/.bash_aliases"
 
+
+
+
 # FUTURE: 
 # https://nixos.org/
+

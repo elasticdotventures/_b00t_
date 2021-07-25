@@ -1,3 +1,9 @@
+#
+# Purpose: universal bash b00t-strap for environment & tooling
+#   once run in an enviroment will attempt to validate & construct
+#   bash shortcuts, menus, etc. 
+#
+
 
 # usage:
 #   source "./_b00t_.bashrc"
@@ -14,7 +20,10 @@ trap "set +o nounset" EXIT  # restore nounset at exit, even in crash!
 umask 000
 
 
-set -a # mark variables whcih are modified or created for export
+# mark variables which are modified or created for export
+set -a 
+
+
 ## 小路 \\
 ## Xiǎolù :: Path or Directory
 # THINGS YOU CAN EDIT: 
@@ -29,11 +38,10 @@ _b00t_INSPIRATION_FILE="$_B00T_C0DE_Path/./r3src_资源/inspiration.json"
 
 
 
-
-
 ## 记录 \\
 ## Jìlù :: Record (Log)
 # 🤓 write to a log if you want using >> 
+# mostly, this is for future opentelemetry & storytime log
 unset -f log_📢_记录
 function log_📢_记录() {
     echo "$@"
@@ -49,6 +57,10 @@ function reb00t() {
     source "$_B00T_C0DE_Path/_b00t_.bashrc"
 }
 
+
+
+
+
 ## * * * * * \\
 ## pathAdd 
 unset pathAdd
@@ -62,7 +74,17 @@ pathAdd "$HOME/.local/bin"
 pathAdd "$HOME/.yarn/bin"
 ## * * * * * //
 
+if [ "/usr/bin/docker" ] ; then 
+    echo "🐳 has d0cker! loading docker extensions"
+    source "$_B00T_C0DE_Path/docker.🐳/_bashrc.sh"
 
+    ## 😔 docker context? 
+    ## https://docs.docker.com/engine/context/working-with-contexts/
+    # export DOCKER_CONTEXT=default
+    # log_📢_记录 "🐳 CONTEXT: $DOCKER_CONTEXT"  
+    # docker context ls
+
+fi
 
 ## * * * * * \\
 ## is_version_大于
@@ -90,25 +112,53 @@ export -f is_v3rs10n_大于
 ## * * * * * * //
 
 
+## 
+# does a bash/function exist?
+# 🍰 https://stackoverflow.com/questions/85880/determine-if-a-function-exists-in-bash
+# returns: 
+#     0 on yes/success (function defined/available)
+#     1 for no (not available)
+function has_fn_✅_存在() {
+    local exists=$(LC_ALL=C type -t $1)
+    # echo "exists: $exists"
+    if [ -n "$exists" ] ; then 
+        # exists, not empty, success
+        return 0 
+    fi 
+    # fail (function does not exist)
+    return 1
+    # result=[[ -n "$exists" ]] || 1 
+}
+export -f has_fn_✅_存在
+
+
+
+
 ## All the logic below figures out who is calling & hot-reload
 ## bail earlier is better, 
 _b00t_exists=`type -t "_b00t_init_🥾_开始"`
 _b00t_VERSION_was=0
 if [ "$_b00t_exists" == "function" ] ; then 
+    # are we re-entry, i.e. reb00t
     export _b00t_VERSION_was="$_b00t_VERSION"
 fi
 # -------------- CONFIGURABLE SETTING -----------------
-export _b00t_VERSION="1.0.14"
+export _b00t_VERSION="1.0.15"
 # -----------------------------------------------------
 
 # syntax: current required
-#echo "v3r: $_b00t_VERSION "
+# echo "v3r: $_b00t_VERSION "
 upgradeB00T=$(is_v3rs10n_大于 "$_b00t_VERSION_was" "$_b00t_VERSION")
+# echo "upgradeB00T: $upgradeB00T"
 
-if [ "$upgradeB00T" ==  true ] ; then 
+# 🦨 need consent!
+if [ "$upgradeB00T" ==  true ] && [ -n "$_b00t_VERSION_was" ] ; then 
+    # welcome! (clean environment)
+    log_📢_记录 "🥾🧐 b00t version | now: $_b00t_VERSION"
+elif [ "$upgradeB00T" ==  true ] ; then 
     ## upgrade b00t in memory (this doesn't work awesome, but useful during dev)
-    log_📢_记录 "🥾🧐 b00t version | now: $_b00t_VERSION | was: $_b00t_VERSION_was | upgrade: $upgradeB00T"
-    log_📢_记录 "🥾🦸 skip short circuit, upgrade boot"
+    ## $ reb00t
+    log_📢_记录 "🥾🧐 (re)b00t version | now: $_b00t_VERSION | was: $_b00t_VERSION_was | upgrade: $upgradeB00T"
     # TODO: consent
 elif [ "$_b00t_exists" == "function" ] ; then 
     # SILENT, don't reload unless _b00t_VERSION is newer
@@ -158,8 +208,20 @@ alias myp='ps -fjH -u $USER'
 #cdl() { cd $1; ls}
 #export -f cdl
 
+# FUTURE: 
+# https://github.com/GochoMugo/msu
+
+# TODO: test for pipx
+eval "$(register-python-argcomplete pipx)"
+# pipx run
+
 # bat - a pretty replacement for cat.
 alias bat="batcat"
+
+# bats - bash testing system (in a docker container)
+# 🦨 need consent before running docker
+# 🦨 this is not the proper way to run bats. 
+# alias bats='docker run -it -v bats/bats:latest'
 
 # count the files in a directory or project
 alias count='find . -type f | wc -l'
@@ -196,6 +258,7 @@ fi
 
 # handy for generating dumps, etc..
 # $ script.sh >> foobar.`ymd`
+alias yyyymmdd="date +'%Y%m%d'"
 alias ymd="date +'%Y%m%d'"
 alias ymd_hm="date +'%Y%m%d.%H%M'"
 alias ymd_hms="date +'%Y%m%d.%H%M%S'"
@@ -269,7 +332,27 @@ export -f _b00t_init_🥾_开始
 ## 进口 //
 
 
-# Webi
+# alpine container support
+# https://github.com/ethereum/solidity/issues/875
+# returns 0 for "true" (not alpine linux), non-zero for false (is alpine linux)
+function iz_n0t_alpine_linux_🐧🌲() {
+   return $(cat /etc/os-release | grep "NAME=" | grep -ic "Alpine")
+}
+if [ ! iz_n0t_alpine_linux ] ; then
+    # gh issue 
+    echo "🥾🤮 🐧🌲 alpine linux not fully supported yet"
+fi 
+
+
+# this is intended to catch & report errors
+function barf_🤮 () {
+    gh issue create
+    # gh issue create --title $1
+}
+
+
+
+# Webi, presently breaks alpine config! 
 # https://github.com/elasticdotventures/webi-installers
 webi=$(whereis webi)
 if [ -z "$webi" ] ; then 
@@ -343,6 +426,7 @@ function bash_source_加载() {
 export -f bash_source_加载
 
 
+
 ## 好不好 \\
 ## Hǎo bù hǎo :: Good / Not Good 
 ## is_file readable? 
@@ -368,8 +452,13 @@ function n0ta_xfile_📁_好不好() {
         log_📢_记录 "👽:不支持 $xfile is not executable. 👽:非常要!"
         return 0
     else
-        # success
-        log_📢_记录 "👍 $xfile"
+
+        if ! has_fn_✅_存在 "crudini_get" ; then 
+            :   # crudini_get doesn't exist.
+        elif [[ $( crudini_get "b00t" "has.$xfile" ) = "" ]] ; then 
+            log_📢_记录 "👍 $xfile"
+            crudini_set "b00t" "has.$xfile" $( yyyymmdd )
+        fi
         return 1
     fi
 }
@@ -496,12 +585,15 @@ function is_n0t_aliased() {
     local args=("$@")
     local hasAlias=${args[0]}
     local exists=$(alias -p | grep "alias $hasAlias=")
+    # echo "exists: $exists"
     if [ -z "$exists" ] ; then
-        return 1;  # "true"
+        # 🙄 exists: alias fd='/usr/bin/fdfind'
+        return 0;  # "true", unix success
     else 
-        return 0;  #  "false"
+        return 1;  #  "false", unix error
     fi
 }
+
 
 ##
 ## A pretty introduction to the system. 
@@ -585,7 +677,7 @@ function motd() {
             $SED_PATH -i 's/8/🥾/g' $motdTmpFile
         fi 
         if [ $(rand0 10) -gt 5 ] ; then
-            $SED_PATH 's/\*/🥾/g' $motdTmpFile
+            $SED_PATH -i 's/\*/🥾/g' $motdTmpFile
             $SED_PATH -i 's/[\!\-\@]./😁/g' $motdTmpFile
         fi
         if [ $(rand0 10) -gt 5 ] ; then
@@ -599,35 +691,35 @@ function motd() {
         $showWithCMD $motdTmpFile
         /bin/rm -f $motdTmpFile
     fi
-    
-    log_📢_记录 "🥾📈 Future project stats goes here. "
 
-    # echo ${#arr[@]}
-    #  
+    # part of motd
+
+    log_📢_记录 "lang: $LANG"
+    log_📢_记录 "🥾📈 motd project stats, cleanup, tasks goes here. "
+
+
+    if [ -d "./.git" ] ; then 
+        log_📢_记录 "🥾🐙😁 found .git repo"
+        # github client 
+        gh issue list
+
+        local skunk_x=$(git grep "🦨" | wc -l)
+        log_📢_记录 "🦨: $skunk_x"
+    else 
+        log_📢_记录 "🥾🐙😔 no .git dir "`pwd`
+    fi 
+
 }
 
 if [ "${container+}" == "docker" ] ; then
     motd
 elif ! is_n0t_aliased fd ; then 
     motd
+else 
+    motd
 fi
 
 
-
-## there's time we need to know reliably if we can run SUDO
-function has_sudo() {
-    SUDO_CMD="/usr/bin/sudo"
-    if [ -f "./dockerfile" ] ; then
-        log_📢_记录 "🐳😁 found DOCKER"  
-    elif [ -f "$SUDO_CMD" ] ; then 
-        log_📢_记录 "🥳 found sudo"  
-    else 
-        log_📢_记录 "🐭 missed SUDO, try running _b00t_ inside docker."
-        SUDO_CMD=""
-    fi
-    export SUDO_CMD
-}
-has_sudo 
 
 
 
@@ -637,25 +729,6 @@ if ! n0ta_xfile_📁_好不好 "/usr/bin/fdfind"  ; then
     # export FZF_DEFAULT_OPTS="--no-mouse --height 50% -1 --reverse --multi --inline-info --preview=[[ \$file --mine{}) =~ binary ]] && echo {} is a binary file || (bat --style=numbers --color=always {} || cat {}) 2> /dev/null | head -300' --preview-window='right:hidden:wrap' --bind'f3:execute(bat --style=numbers {} || less -f {}),f2:toggle-preview,ctrl-d:half-page-down,ctrl-u:half-page-up,ctrl-a:select-all+accept,ctrl-y:execute-silent(echo {+} | pbcopy)'"
     # from video: https://www.youtube.com/watch?v=qgG5Jhi_Els
     export FZF_DEFAULT_COMMAND="/usr/bin/fdfind --type f"
-fi
-
-
-###
-# 🍰 https://superuser.com/questions/427318/test-if-a-package-is-installed-in-apt
-#if debInst "$1"; then
-#    printf 'Why yes, the package %s _is_ installed!\n' "$1"
-#else
-#    printf 'I regret to inform you that the package %s is not currently installed.\n' "$1"
-#fi
-function debInst() {
-    dpkg-query -Wf'${db:Status-abbrev}' "$1" 2>/dev/null | grep -q '^i'
-}
-
-if debInst "moreutils" ; then
-    log_📢_记录 "👍 debian moreutils is installed!"
-else
-    log_📢_记录  "😲 install moreutils (required)"
-    $SUDO_CMD apt-get install -y moreutils
 fi
 
 ####
@@ -678,8 +751,16 @@ function crudini_set() {
     return $?
 }
 
+
+
 function crudini_get() {
     local args=("$@")
+
+    #if [[ "$#" -ne "2" ]] ; then 
+    #    log_📢_记录 "crudini_get topic key"
+    #    exit 0 
+    # fi 
+
     local topic=${args[0]}
     local key=${args[1]}
     echo $( crudini --get "$CRUDINI_CFGFILE" "${topic}" "${key}" )
@@ -736,7 +817,66 @@ else
 fi
 }
 crudini_ok
-#motd
+
+
+##
+## there's time we need to know reliably if we can run SUDO
+##
+function has_sudo() {
+    SUDO_CMD="/usr/bin/sudo"
+
+    ## 🦨 TODO: ask for consent to run sudo? 
+
+    if [ "$EUID" -eq 0 ] ; then
+        # r00t doesn't require sudo 
+        # https://stackoverflow.com/questions/18215973/how-to-check-if-running-as-root-in-a-bash-script
+        log_📢_记录 "👹 please don't b00t as r00t"
+        SUDO_CMD=""
+    elif [ -f "./dockerenv" ] ; then
+        # https://stackoverflow.com/questions/23513045/how-to-check-if-a-process-is-running-inside-docker-container#:~:text=To%20check%20inside%20a%20Docker,%2Fproc%2F1%2Fcgroup%20.
+        log_📢_记录 "🐳😁 found DOCKER"  
+    elif [ -f "$SUDO_CMD" ] ; then 
+        if [[ -z $( crudini_get "b00t" "has.sudo" )  ]] ; then 
+            log_📢_记录 "🥳 found sudo"  
+            crudini_set "b00t" "has.sudo" `ymd_hms`
+        fi 
+    else 
+        log_📢_记录 "🐭 missed SUDO, try running _b00t_ inside docker."
+        SUDO_CMD=""
+    fi
+    export SUDO_CMD
+}
+has_sudo 
+
+
+
+#############################
+###
+# 🍰 https://superuser.com/questions/427318/test-if-a-package-is-installed-in-apt
+#if debInst "$1"; then
+#    printf 'Why yes, the package %s _is_ installed!\n' "$1"
+#else
+#    printf 'I regret to inform you that the package %s is not currently installed.\n' "$1"
+#fi
+function debInst() {
+    dpkg-query -Wf'${db:Status-abbrev}' "$1" 2>/dev/null | grep -q '^i'
+}
+
+if debInst "moreutils" ; then
+    # only show moreutils once. 
+    if [ $( crudini_get "b00t" "has.moreutils" ) -eq "0" ] ; then 
+        log_📢_记录 "👍 debian moreutils is installed!"
+        crudini_set "b00t" "has.moreutils" $(yyyymmdd)
+    fi 
+else
+    log_📢_记录  "😲 install moreutils (required)"
+    $SUDO_CMD apt-get install -y moreutils
+fi
+
+
+
+
+
 
 # 60秒 Miǎo seconds
 # 3分钟 Fēnzhōng minutes
@@ -754,12 +894,6 @@ export _b00t_JS0N_filepath=$(expandPath "~/.b00t/config.json")
 #        "Natalie"
 #    ]'   
 #}
-
-## ???
-## https://docs.docker.com/engine/context/working-with-contexts/
-#export DOCKER_CONTEXT=default
-#log_📢_记录 "🐳 CONTEXT: $DOCKER_CONTEXT"  
-#docker context ls
 
 
 # 🍰 https://lzone.de/cheat-sheet/jq

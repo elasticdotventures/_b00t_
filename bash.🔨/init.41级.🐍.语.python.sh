@@ -19,8 +19,25 @@ $SUDO_CMD apt install -y python3-venv
 python3 -m venv .venv
 source .venv/bin/activate
 
+## PipX 
+## Install and Run Python Applications in Isolated Environments
+## https://github.com/pypa/pipx
+python3 -m pip install --user pipx
+python3 -m pipx ensurepath
+pipx completions
+## we will install/uninstall _b00t_ packages via pipx
+pipx install 
+
+# Package Management
+## Poetry
+## https://python-poetry.org/docs/
+# curl -sSL https://raw.githubusercontent.com/python-poetry/poetry/master/get-poetry.py | python -
+
 
 # TODO: verify tests can be run!
+# TESTING: 
+# https://github.com/se2p/pynguin
+
 
 
 

@@ -1,6 +1,6 @@
 #!/bin/bash
 
-
+# this is the boot-cli (according to bats/test.bas)
 
 # TODO: xauth list 
 export DISPLAY=":10"

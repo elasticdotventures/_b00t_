@@ -3,6 +3,7 @@
 ```
 
 到这里做 : Dào zhèlǐ zuòle - BeenHereDoneThat
+存在    : Cúnzài - exists, present
 
 名 : Míng : Name 
 

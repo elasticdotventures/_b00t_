@@ -31,14 +31,10 @@ if [ -z "$(docker ps -q -s -f name=squid)" ] ; then
     --volume /srv/docker/squid/cache:/var/spool/squid \
     sameersbn/squid:3.5.27-2
 fi
-
-./test/bats/bin/bats test/test.bats
-
-@test "can run our script" {
-    ./project.sh
-}
+bats 
 # look for a _b00t_ volume
 # docker volume create  --mount type=bind,source="$(pwd)"/target,target=/app \
+
 
 
 # squid is running (TODO: verify)
@@ -49,33 +45,39 @@ log_📢_记录 🦑 setting http proxy
 export http_proxy=http://172.17.0.1:3128
 export https_proxy=http://172.17.0.1:3128
 
-echo Building elasticdotventures/b00t:build
+log_📢_记录 🐳 Building elasticdotventures/b00t:build
 
-TARGET="b00t_m4k3"  # future, config point. 
+#TARGET="b00t_m4k3"  # future, config point. 
 #fzmenu \
 #    new
 #    sandbox: "问题"
 #    make: "问题"
 #    edit: "问题"
-TARGET="fr3sh"
+# TARGET="fr3sh"
 # FUTURE: consent point
 
 # docker build params:
 #  --secret stringAray
 #  --tag 
 #  --platform=<platform>
-echo "TARGET: $TARGET"
+#export TARGET=b00t_1n1t
+#export TARGET=b00t_b4s3
+export TARGET=b00t_m4k3
+log_📢_记录  "TARGET: $TARGET"
   # --build-arg BUILDKIT_INLINE_CACHE=1 .
   # --progress=plain \
   #--build-arg arrgh="🦜🏴‍☠️" \
 
-log_📢_记录 
+
 export DOCKER_BUILDKIT=1
 
 docker buildx install
+# docker buildx bake -f docker-compose.dev.yaml
+# docker buildx bake -f docker-bake.hcl 
 docker buildx build \
   --platform linux/amd64 \
-  -t elasticdotventures/b00t:latest --target $TARGET \
+  -t elasticdotventures/b00t \
+  --target $TARGET \
   --build-arg https_proxy=$https_proxy \
   --build-arg http_proxy=$http_proxy \
   -f Dockerfile \
@@ -85,12 +87,13 @@ docker buildx build \
 
 # docker tag local-image:tagname new-repo:tagname
 # docker push new-repo:tagname
-docker tag $TARGET _b00t_:latest
-docker push _b00t_:latest
+docker tag elasticdotventures/b00t elasticdotventures/b00t:latest
+docker push elasticdotventures/b00t:latest
+
+## note: could also possibly use docker export to track changes.
 
 exit
 
-## note: could also possibly use docker export to track changes.
 
 cat << EOF
 # dev instance, shares common filesystrem. 
