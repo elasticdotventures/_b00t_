@@ -51,3 +51,8 @@ wget -q https://raw.githubusercontent.com/dapr/cli/master/install/install.sh -O 
 
 # Install the latest Dapr runtime binaries:
 dapr init
+
+
+# Matrix 
+# https://hub.docker.com/r/matrixdotorg/synapse/
+# https://matrix.to/#/+_b00t_:matrix.org

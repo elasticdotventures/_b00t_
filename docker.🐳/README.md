@@ -1,7 +1,10 @@
 
-## 鲸鱼 - Jīngyú - Docker!  🐳
+# 鲸鱼 - Jīngyú - Docker!  🐳
 
-The Whale is Dockers official mascot. 
+The Whale is Dockers official mascot & spirit animal. 
+As such the 鲸鱼 (Whale) storytime log/namespace
+
+## get started with b00t
 
 Docker creates "containers" for operating systems and installed packages. The containers start with a _base image_ and then are built by running a series of `RUN` commands to create _Layers_. 
 

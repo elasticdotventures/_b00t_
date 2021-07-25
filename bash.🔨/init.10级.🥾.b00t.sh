@@ -275,3 +275,4 @@ if [ -z "$PATHMAN_EXISTS " ] ; then
 fi
 pathman add ~/.local/bin
 
+$SUDO_CMD apt install uni2ascii  ascii2uni
