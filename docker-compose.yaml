@@ -5,7 +5,8 @@ version: '3.8'
 services:
   b00t:
     build:
-      context: https://github.com/elasticdotventures/_b00t_
+      # context: https://github.com/elasticdotventures/_b00t_.git
+      context: .
       dockerfile: Dockerfile
     ports:
       - 5004:5000

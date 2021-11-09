@@ -7,26 +7,16 @@ Presently this is only a compendium of time saving tools offering an interactive
 smart pipes and installation scripts for the rest.  The plan is to have a Yahoo-esque "Awesome" curated list of installable 
 time-saving & labor-reducing tools "fundamentals", to interface any cloud AI/Skill. 
 
+next version will feature better docker compose, rust cli
+
 Sharing with contributors, advisors, feedback, & testers (soon). Comments, issues, PR's welcome. Please 🍴🍰🤩
 
 [![Project Status: WIP – Initial development is in progress, but there has not yet been a stable, usable release suitable for the public.](https://www.repostatus.org/badges/latest/wip.svg)](https://www.repostatus.org/#wip)
 
 
 Keep up to date and get Pachyderm support via:
-- [![Twitter](https://img.shields.io/twitter/follow/_b00t_?style=social)](https://twitter.com/_b00t_) Follow us on Twitter.
+- [![Twitter](https://img.shields.io/twitter/follow/_b00t_?style=social)](https://twitter.com/_b00t_) Follow us on Twitter
 
-
-
-# 📺 WIP/PREVIEW
-
-I've done a quick preview of some of the Azure CLI driven through fzf-tmux, sponge, jq, and awk. 
-😲🙏 PLEASE CLICK THE VIDEO LINK, THE PREVIEW IS BROKEN, AN ISSUE HAS BEEN RAISED w/ASCIICAST & GITHUB ENGINEERING. 
-
-[![asciicast](https://asciinema.org/a/QxGcR4JrvSI6ReVi4dhwsYkUP.png)](https://asciinema.org/a/QxGcR4JrvSI6ReVi4dhwsYkUP)
-
-NOTE: It crashes at the end because I'm not done with the Azure Container Registry piece (now, i've abandoned that in favor of dockerhub). 
-
-_b00t_ is building towards an interactive startup, similiar to how Slackware used to install Linux with many, many packages all designed and tested to worktogether (except _b00t_'s case it's generating/updating the various cloud json & YAML files using menus) skills structured for global ai/ops. 
 
 ------
 ```text/plain
@@ -50,6 +40,11 @@ _b00t_ is building towards an interactive startup, similiar to how Slackware use
 
   THIS REPO COMPONENTS: 
     bash, python, ts scaffold(s)
+    * shells:
+      * https://starship.rs/installing/#termux
+      * https://doc.redox-os.org/ion-manual/repl.html
+      * https://murex.rocks/docs/GUIDE.quick-start.html
+      * https://nixos.org/manual/nix/unstable/command-ref/nix-shell.html
     * extensive use of more-utils, yq, jq, fzf, fdfind, etc.
   SERVER ARCHITECTURES:
     x86-nvidia-cuda-optimized, x86, amd64, arm64-rpi 

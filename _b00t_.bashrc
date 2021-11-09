@@ -212,8 +212,11 @@ alias myp='ps -fjH -u $USER'
 # https://github.com/GochoMugo/msu
 
 # TODO: test for pipx
-eval "$(register-python-argcomplete pipx)"
-# pipx run
+# sudo apt install python3-argcomplete pipx -y
+if [ -n "$(whereis register-python-argcomplete)" ] ; 
+    eval "$(register-python-argcomplete pipx)"
+    # pipx run
+fi 
 
 # bat - a pretty replacement for cat.
 alias bat="batcat"

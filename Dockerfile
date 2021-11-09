@@ -44,8 +44,8 @@
 # Step1: init
 # https://hub.docker.com/_/ubuntu
 # FROM jrei/systemd-ubuntu as b00t_1n1t
-FROM jrei/systemd-ubuntu as b00t_1n1t
-LABEL 🥾🐳 b00t_1n1t 
+FROM ubuntu:focal as b00t_up
+LABEL 🥾🐳 b00t_up
 ARG arrgh 
 ENV "STAGE"="1n1t"
 RUN echo "🥾🐳 1n1t" && echo "STAGE: ${STAGE} arrgh: ${arrgh}"
@@ -91,8 +91,8 @@ ENV LC_ALL en_US.UTF-8
 
 #### 
 # Step2: base (everything)
-FROM b00t_1n1t as b00t_b4s3
-LABEL 🥾🐳 B4S3 
+FROM b00t_up as b00t_init
+LABEL 🥾🐳 init
 
 
 ## DOCKER BUILD ENHANCEMENTS
@@ -119,18 +119,19 @@ RUN --mount=type=cache,target=/var/cache/apt \
 
 # RUN apt-get update && apt-get install -y git gcc g++
 RUN git --version
-RUN apt-get install -y apt-utils dialog curl wget ca-certificates gnupg 
+# RUN apt-get install -y apt-utils curl wget 
+# ca-certificates gnupg 
 
 #############################################################
 
 # BASE (an interim step)
-FROM b00t_1n1t as b00t_b4s3
+FROM b00t_init as b00t_base
 RUN echo "🥾🐳 B4S3 (base)"
 MAINTAINER ops@elastic.ventures
 
 #############################################################
 
-FROM b00t_b4s3 as b00t_m4k3
+FROM b00t_base as b00t_make
 
 
 ## DOCKER BUILD ENHANCEMENTS
@@ -183,12 +184,11 @@ WORKDIR /c0de/_b00t_/
 #WORKDIR /home/brianh
 
 ## Stage2
-FROM b00t_base as b00t_init
 # CURRENT ISSUE:
 # file always rebuilds, full build takes too long,
 # not using stages YET
 #RUN /c0de/_b00t_/source.sh "./bash.🔨/init.*.🥾.*.sh";
-RUN --mount=type=bind,target="/c0de/b00t",ro
+#RUN --mount=type=bind,target="/c0de/b00t",ro
 # ADD "./_b00t_.bashrc" "./"
 # ADD "./source.sh" "./"
 # RUN chmod +x "_b00t_.bashrc"
