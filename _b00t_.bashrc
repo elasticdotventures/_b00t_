@@ -212,9 +212,13 @@ alias myp='ps -fjH -u $USER'
 # https://github.com/GochoMugo/msu
 
 # TODO: test for pipx
-# sudo apt install python3-argcomplete pipx -y
-if [ -n "$(whereis register-python-argcomplete)" ] ; 
-    eval "$(register-python-argcomplete pipx)"
+# 
+if [ -n "$(whereis register-python-argcomplete3)" ] ; then 
+    echo "🦨++ installing python3-argcomplete + pipx"
+    sudo apt install python3-argcomplete pipx -y
+fi 
+if [ -n "$(whereis register-python-argcomplete3)" ] ; then 
+    eval "$(register-python-argcomplete3 pipx)"
     # pipx run
 fi 
 
