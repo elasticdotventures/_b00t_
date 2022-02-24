@@ -1,10 +1,34 @@
 
 # \__b00t__
 ------
-b00t is my "ultimate" framework-tooling for deploying a distributed-ai, polylingual voice-cli "format transformer" that can learn to perform a plurality of skills including design/control of robotics and learning to play video games, design and print 3d objects, manipulate video, write and deploy code to create "smart pipes" or "smart bridges" across or within one or more clouds.  
+\__b00t\__ is intended to offer a voice, vision & motion command line/cli aka "smart pipes" and compositional control to build cool sh*t (not just software).  Comments/feedback welcome.  @elasticdotventures:matrix.org
 
-Presently this is only a compendium of time saving tools offering an interactive initalization (using fzf), menu system for the 
-smart pipes and installation scripts for the rest.  The plan is to have a Yahoo-esque "Awesome" curated list of installable 
+
+Ultimately _b00t_ will be able to utilize cloud hosted ai to provide a polylingual voice-cli "format transformer" that can "learn" to perform a plurality of skills including design/control of robotics and learning to read/summarize text, write reports & program code, play video games, design and print 3d objects & assemblies, manipulate video & audio.    These are functional "smart pipes" and should be generic enough that a new software/service simply by reading it's API (i.e. an API transpiler) that is compatible with one or more of it's messaging or database protocols, especially if that's OpenAPI/Swagger, SQL, GraphQL, or JSON/protobufs.  It is designed to 'assist' a human or small team, but to amplify and obviate the require for *most* big companies by efficiently replacing people with intelligent robotic process control.  
+
+*VERY WIP*
+
+Presently this is only a compendium of my tools & undocumented scripts for a (future) interactive initalization (using fzf) setup & installer. 
+
+I'm presently learning/rewriting this to RUST 😍🦀, and solidifying on Python 😍🐍, TypeScript 😍🦄 interfaces .. WASM is a dream.
+Turns out cargo is amazing and obviates a lot of work, RUST's complex pattern matching language is awesome (reminds me of Perl).
+On the embedded side I've moved from C++ to RUST as well, so ESP32 S2/C3 are the target 'hardware' platforms but it could run on an RPI or whatever for physical motor & sensor i/o.  
+
+By generating *everything* programmatically each physical object will have a digital object shadow, that would include inheritance & robust 'math' & 'logic' to describe how the object is used, programmatically describe it's motion, etc.  this makes setting up things like  monitoring via OpenTelemetry straightforward and more standardized across a big / complex project. 
+
+For the 3d objects I've now abandoned my traditional mouse-driven parametric CAD (OnShape) entirely and moved to FreeCAD so I could use Python.  I've now discovered OpenSCAD and it's vitamin module libraries (which aren't terribly well organized).  I'm presently formulating/learning how to write a RUST transpiler (which basically means reading a lot of other peoples RUST code) into OpenSCAD.  But learning OpenSCAD has been awesome & rewarding. ;-)
+
+Once that task is finished then I will be either begin adding the "AI" features including
+	* CLIP or CycleGAN commands to let the AI design & fill textures, backgrounds
+	* GPT-3 or GPT-NEOx to create SVG & OpenSCAD codex templates
+	
+I also intend for this *eventually* to be a massive toil reduction & time saver by using git to track & approve asset changes, objects & complex assemblies in sync auto-magically (automagic: without doing File | Import/Export) between apps - presenting the same state across FreeCAD (easy), Blender (via Collada) & possibly Unity (also Collada) using a git-action build chain (which can also run locally) the resulting approach then be used for visualization, simulation, training & regression testing prior to output of complex FDM 3d-printed & CNC milled assemblies, eventually building toward zero-human robotic manufacturing & assembly.  "Post-work"
+
+Once all that is working I will start on the VHDL 'Verilog' & SpiceDB PCB & circuit simulator as well at which point KiCad is the most likely candidate for interface, but realistically we'll just be using KiCad for it's component libraries and treating the PCB's as complex assemblies. 
+
+This repo is the 'base', it's intended to be used as a project template via a sub-module to print in a LOT of dependencies and try to provide some harmony to the chorus of OSS dev happening around the planet in 2022.
+
+The plan is to have a Yahoo-esque "Awesome" curated list of *installable* 
 time-saving & labor-reducing tools "fundamentals", to interface any cloud AI/Skill. 
 
 next version will feature better docker compose, rust cli
