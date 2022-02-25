@@ -1,4 +1,6 @@
 
+[![Project Status: WIP – Initial development is in progress, but there has not yet been a stable, usable release suitable for the public.](https://www.repostatus.org/badges/latest/wip.svg)](https://www.repostatus.org/#wip)
+
 # \__b00t__
 ------
 \__b00t\__ is intended to offer a voice, vision & motion tracking 'gestures' command line/cli macros.  I refer to these as "smart pipes" which compositional control to build cool sh*t (not just software).  Comments/feedback welcome. Look for co-conspirators.  @elasticdotventures:matrix.org
@@ -64,11 +66,10 @@ next version will feature better docker compose, rust cli
 
 Sharing with contributors, advisors, feedback, & testers (soon). Comments, issues, PR's welcome. Please 🍴🍰🤩
 
-[![Project Status: WIP – Initial development is in progress, but there has not yet been a stable, usable release suitable for the public.](https://www.repostatus.org/badges/latest/wip.svg)](https://www.repostatus.org/#wip)
 
 
 Keep up to date and get Pachyderm support via:
-- [![Twitter](https://img.shields.io/twitter/follow/_b00t_?style=social)](https://twitter.com/_b00t_) Follow us on Twitter
+- [![Twitter](https://img.shields.io/twitter/follow/_b00t_?style=social)](https://twitter.com/brianhorakh) Follow us on Twitter
 
 
 ------
