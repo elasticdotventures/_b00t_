@@ -1,10 +1,39 @@
 
 # \__b00t__
 ------
-\__b00t\__ is intended to offer a voice, vision & motion command line/cli aka "smart pipes" and compositional control to build cool sh*t (not just software).  Comments/feedback welcome.  @elasticdotventures:matrix.org
+\__b00t\__ is intended to offer a voice, vision & motion tracking 'gestures' command line/cli macros.  I refer to these as "smart pipes" which compositional control to build cool sh*t (not just software).  Comments/feedback welcome. Look for co-conspirators.  @elasticdotventures:matrix.org
 
+B00t is intended to be a polylingual polyframework voice-vision-cli "cognitive format transformer & instruction learning" assistant that can "learn" new skills it is told to.  Jovo allows it to interface to smart assistants like Google Assist & Cortana (and maybe Siri someday).  This is an entirely 'open source' tool-chain, so I'm intentionally avoiding vendor licensed software so that anybody can use as never-continously running #neveridle 'unless it is doing something' cloud serverless microservices.  Ultimately I want to use a geo-distributed state machine (such as Azure Durable Functions) to provide 99.99999% stateful rollback & recovery and plan to make heavy use of git and a lot of existing libraries & languages built by people smarter than me. 
 
-Ultimately _b00t_ will be able to utilize cloud hosted ai to provide a polylingual voice-cli "format transformer" that can "learn" to perform a plurality of skills including design/control of robotics and learning to read/summarize text, write reports & program code, play video games, design and print 3d objects & assemblies, manipulate video & audio.    These are functional "smart pipes" and should be generic enough that a new software/service simply by reading it's API (i.e. an API transpiler) that is compatible with one or more of it's messaging or database protocols, especially if that's OpenAPI/Swagger, SQL, GraphQL, or JSON/protobufs.  It is designed to 'assist' a human or small team, but to amplify and obviate the require for *most* big companies by efficiently replacing people with intelligent robotic process control.  
+Examples of 'skill' target(s) are ambitious:
+* version control is done with git (duh!)
+* poly-lingual TTS/STT can speak/understand English, Spanish, Mandarin
+* design, simulate, control and monitor robotic manufacturing & cloud infrastructure
+* read/summarize text, and/or models, program code, api's to build "develop" new skills as directed
+* attend meetings (via video/audio intercept & character avatar synthesis & lip-sync)
+* interactively screen PSTN & messanger calls/sessions & make appointments, website chat-bot
+* write reports & visualizations (online three.js, svg, collada, png) /maybe excel, google sheets/
+* write & maintain code & orm graph schema and interfaces to svg, openscad, stl, collada, sql, 
+* transpilation of python, rust, & typescript => (wasm) => skills 
+* skills are either 'bash steps' or 'Makefiles', which can be automated using ci/cd 
+* find & import 3d objects, electronics data-sheets to for references in digital shadows.
+* theorize about new object structures, physics, electro-chemistry, protein folding, etc.
+* injest metrics from eBPF hooks for OS-level threat monitoring & telemetry
+* play/wingman @video games 'good enough' to be fun, including social aspects
+* design and print 3d objects & assemblies (and simulations, etc.)
+* prepare & apply video & audio for presentations, etc. 
+* purchasing, order reconciliation & accounting, customer service, HR (using zero code i.e. node-red, appsmith or Az durable functions)
+
+These capabilities are rolled up into interactive macros called 'tasks', which when grouped together are called a 'toil'.
+The skills are build in an 'oregon trail' where the operator must decide which tasks are 'worthy' of receiving operating cycles, and what (if any) resources must be used for discovery & digestion of new skills.  In some cases the operator may (such as using a mouse, joystick, voice, etc.) "fit" the AI by helping it assemble, compile, etc.  to teach skills, explain materials, objects, etc.  
+
+The main cost with a system like this is the operational cost might doesn't work the same as an employee.
+
+Being able to consume video, audio, websites, documents, data-feeds, injest/participate in social systems such as twitter, discord, matrix, slack & ms-teams in a poly-medium 'chat interface'. 
+
+Azure is preferred because SSO + Active Directory simplifies a variety of security + access control toil in terms of interfacing, although at some point I prefer to replace this with zanzibar and offer at least an AWS & k8s terra-form approach but that isn't explicitly necessary for this project since it's all (mostly) serverless.  
+
+Functionally driven "smart pipes" and should be generic enough that a new software/service simply by reading it's API (i.e. an API transpiler) that is compatible with one or more of it's messaging or database protocols, especially if that's OpenAPI/Swagger, SQL, GraphQL, or JSON/protobufs.  It is designed to 'assist' a human or small team, but to amplify and obviate the require for *most* big companies by efficiently replacing people with intelligent robotic process control.  
 
 *VERY WIP*
 
