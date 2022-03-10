@@ -3,15 +3,23 @@
 
 # \__b00t__
 ------
-\__b00t\__ is intended to offer a voice, vision & motion tracking 'gestures' command line/cli macros.  I refer to these as "smart pipes" which compositional control to build cool sh*t (not just software).  Comments/feedback welcome. Look for co-conspirators.  @elasticdotventures:matrix.org
+\__b00t\__ 'cognitive middleware'
+@elasticdotventures:matrix.org
 
-B00t is intended to be a polylingual polyframework voice-vision-cli "cognitive format transformer & instruction learning" assistant that can "learn" new skills it is told to.  Jovo allows it to interface to smart assistants like Google Assist & Cortana (and maybe Siri someday).  This is an entirely 'open source' tool-chain, so I'm intentionally avoiding vendor licensed software so that anybody can use as never-continously running #neveridle 'unless it is doing something' cloud serverless microservices.  Ultimately I want to use a geo-distributed state machine (such as Azure Durable Functions) to provide 99.99999% stateful rollback & recovery and plan to make heavy use of git and a lot of existing libraries & languages built by people smarter than me. 
+## presently alpha/没做完
+** VERY UNFINISHED **
+
+B00t is a polylingual polyframework voice-vision-cli "cognitive format transformer & instruction learning" approach to automata.
+
+An idiomatically control language for an assistant that can "learn" new skills through direction or experimentation. 
+
+Using external API provider, such as Jovo allows _b00t_ to interface with either the PSTN (phone network) or relay through smart assistants (targeting: cortana & google home).  
+
+_b00t_ is built using an 'open source' tool-chain inside Win11/WSL2 or other Linux environment. 
 
 Examples of 'skill' target(s) are ambitious:
-* version control is done with git (duh!)
-* poly-lingual TTS/STT can speak/understand English, Spanish, Mandarin
 * design, simulate, control and monitor robotic manufacturing & cloud infrastructure
-* read/summarize text, and/or models, program code, api's to build "develop" new skills as directed
+* GPT summarize text, and/or math, write code, methods to build "develop" new skills as directed
 * attend meetings (via video/audio intercept & character avatar synthesis & lip-sync)
 * interactively screen PSTN & messanger calls/sessions & make appointments, website chat-bot
 * write reports & visualizations (online three.js, svg, collada, png) /maybe excel, google sheets/
@@ -19,6 +27,8 @@ Examples of 'skill' target(s) are ambitious:
 * transpilation of python, rust, & typescript => (wasm) => skills 
 * skills are either 'bash steps' or 'Makefiles', which can be automated using ci/cd 
 * find & import 3d objects, electronics data-sheets to for references in digital shadows.
+
+FUTURE:
 * theorize about new object structures, physics, electro-chemistry, protein folding, etc.
 * injest metrics from eBPF hooks for OS-level threat monitoring & telemetry
 * play/wingman @video games 'good enough' to be fun, including social aspects
@@ -65,8 +75,6 @@ time-saving & labor-reducing tools "fundamentals", to interface any cloud AI/Ski
 next version will feature better docker compose, rust cli
 
 Sharing with contributors, advisors, feedback, & testers (soon). Comments, issues, PR's welcome. Please 🍴🍰🤩
-
-
 
 Keep up to date and get Pachyderm support via:
 - [![Twitter](https://img.shields.io/twitter/follow/_b00t_?style=social)](https://twitter.com/brianhorakh) Follow us on Twitter
@@ -163,7 +171,6 @@ Keep up to date and get Pachyderm support via:
         Elastic License v2 (ELK2) Open License 
 
 ```
-## presently alpha/没做完
 
 seeking testers, investors, contributors, any feedback/peer-review. star the repo if you think I should keep working on this. I'm planning to submit this to OReilly as a nutshell book idea "_b00t_: from the ground up".   
 
@@ -280,24 +287,17 @@ _b00t_ intends to provide an early stage complete open ops-stack for a company (
 ElasticDotVentures \_b00t_ is 
 a highly opinionated set of tools for deploying Azure cloud services with EV libraries (called "c0re"), mostly for Azure 🤖.  \_b00t_ brings together a plurality of powerful Cloud tools to  to encourage a non-traditional but extremely p0werful mix-martial-art-of-code, which itself is a curated catalog of utilities to manage "infrastructure as code" presently DEV/OPS, but with an eye toward future AI/OPS.   This text here is mostly visionary explaining the "what" about _b00t_ which is presently early stage being re_b00t_ed😆 from my prior projects. 
 
-## Is _b00t_ a better for individuals or teams?
-Adoption for individuals is easier, N0t everybody can gr0k _b00t_.   Built by a serial-entrepeneur, _b00t_ is a great "stack" for Robotics & AI Startups where the product's very survival is often dependent on efficient (cost-saving) internal-tooling / economical (but secure) computing environment.   
-
-_b00t_ is also great for teams the VS Code Live Share feature & Remote Containers, and Azure Hybrid-Connections offers a plurality of one-click easy, low-latency for teams to share screens securely through firewalls.  It's built in a way so that you could give people their own instance of your code, even limit the amount of funding per-new-customer trial. Something like a google Collab for scalable  startups. The author believes this is especially useful if (for example) you desire to collaborate with other researchers, especially Chinese ones (i.e. hardware startups) thanks to it's incorporation of Emoji and Pinyin. 
-
 ## _b00t_ Syntax Rationale: 
-Don't Panic! The future requires new approaches. using emoji and pinyin and cyb3rpunk style for `git grep "🧙"` saves screen space in results and can tell powerful "stories" which as author I believe is a more optimal pattern for application development. 
-
-The _b00t_ approach uses incorporates 1337 speak for c0mm0n words to encourage brevity at all layers. _b00t_'s design is built to tightly couple the Azure cloud, but integrate with others for services.  
-
-I'm presently creating multi-layer pipelines using an (google://fzf) menu driven approach to generate templates and then execute those templates, download the projects, then build and rebuild, deploy continuously. 
+The _b00t_ approach uses incorporates 1337 speak for c0mm0n words to encourage brevity at all layers.
 
 The 1337speak used in _b00t_ is primarily used to make unique pnemonics that are substantially easier to grep during a subsystem trace across layers in the stack, thus providing f1ng3r printing.  Glue itself isn't a tool, it's designed to demonstrate how to deploy [for example] deploy a harware or machine learning transformer models affordbly at scale. 
 
-The naming models create colorful and meaningful filters to radically improve code quality & debuggability and incorporating "zero-code" deterministic actions Azure Logic Functions. The
-higher visual payload of short 1 & 4 character Emoji & HSK1 in names is informative, and has valuable screen real-estate. WIN+";" is emoji keyboard /(*in windows)/ - but Emoji with cut and paste + intellisense make this easier than you'd think.  Especially when you type "d0cker" and a 🐳 pops up in spell check using a custom dictionary. 
+The naming models create colorful and meaningful filters to radically improve code quality & debuggability and incorporating "zero-code" deterministic actions Azure Logic Functions. 
 
-1337 mechanics generally indicate logical role or purpose. Using tab-complete in Intellisense IDE and CLI makes it easy and artistic on the screen reinforcing art-in-code.  _b00t_ focusing on the pictures and basic glyph optimized based Simplified Mandarin only reading the code when it's necessary.  This approach allows for grouping by symbol and simplifies some aspects of command line searching properties, test generation and several other aspects.  
+The higher visual payload of short 1 & 4 character Emoji & HSK1 in names is informative, and has valuable screen real-estate. WIN+";" is emoji keyboard /(*in windows)/ - but Emoji with cut and paste + intellisense make this easier than you'd think.  Especially when you type "d0cker" and a 🐳 pops up in spell check using a custom dictionary.  
+
+
+1337 mechanics generally indicate logical role or purpose. Using tab-complete or mouse-hover in VS-Code Intellisense IDE and CLI makes it easy and artistic on the screen reinforcing art-in-code.  _b00t_ focusing on the pictures and basic glyph optimized based Simplified Mandarin only reading the code when it's necessary since the human brain is better at visual pattern sorting than it is reading.  This approach allows for grouping by symbol and simplifies some aspects of command line searching properties, test generation and several other aspects.  
 
 Built to deploy Azure Logic Connectors & Azure Durable Functions with Python & Typescript Connectors, Azure Service Bus 🚌, Azure KeyVault💎 Configs⚙️, Azure ARM/Bicep 💪. Check Jargon.md for more the full glossary & naming conventions.  
 
