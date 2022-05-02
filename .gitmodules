@@ -10,3 +10,9 @@
 [submodule "git.🐙/cli"]
 	path = git.🐙/cli
 	url = https://github.com/cli/cli
+[submodule "python.🐍/DALLE2-pytorch"]
+	path = python.🐍/DALLE2-pytorch
+	url = https://github.com/lucidrains/DALLE2-pytorch
+[submodule "vscode.🆚/vscode-docs"]
+	path = vscode.🆚/vscode-docs
+	url = https://github.com/microsoft/vscode-docs

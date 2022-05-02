@@ -24,3 +24,4 @@
     bash.🔨/init.70级.🥯.crypto.sh:""
     bash.🔨/init.70级.🧠.ai.sh: ""
     bash.🔨/init.80级.🐱‍💻.esp32.sh: ""
+https://www.kylheku.com/cgit/pw/about/
