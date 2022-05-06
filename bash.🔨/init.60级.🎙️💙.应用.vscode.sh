@@ -70,4 +70,4 @@ xdg-mime default code.desktop text/plain
 #sudo update-alternatives --install editor /usr/bin/editor $(which code)
 
 # nerdfont, programming font
-curl -sS https://webinstall.dev/nerdfont | bash
+curl -sS https://webinstall.dev/nerdfont | bashcode --install-extension vadimcn.vscode-lldb
