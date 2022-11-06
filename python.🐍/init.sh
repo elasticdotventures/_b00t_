@@ -27,3 +27,7 @@ for file in ${txtFiles[@]}; do
     fi
 done
 
+
+
+alias ve='python3 -m venv ./venv'
+alias va='source ./venv/bin/activate'
