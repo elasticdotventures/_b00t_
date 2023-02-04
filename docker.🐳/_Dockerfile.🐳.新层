@@ -1,0 +1,32 @@
+# syntax=docker/dockerfile:1
+
+## * * * * * * * * * * * \\
+# Purpose: ⚠️ THIS IS A "新" TEMPLATE / NEW FILE 
+#   hint: copy this or another file, replace the "新", remove the "_" 
+## * * * * * * * * * * * //
+
+## 🤓 HINTS:
+## combine layers - use && to join two commands together:
+##   RUN  cmd1 && cmd2 
+
+# Can one Docker File Load Another:
+# 🍰 https://stackoverflow.com/questions/36362233/can-a-dockerfile-extend-another-one
+
+# Copy files from other containers i.e. nginx:latest
+# COPY --from=nginx:latest /etc/nginx/nginx.conf /nginx.conf
+
+
+# YES - MultiStage Builds: 
+# https://docs.docker.com/develop/develop-images/multistage-build/
+# docker build -t my-php-base-image 
+# next layer 
+# FROM my-last-docker
+
+ENV FOO=/bar
+# ${FOO:-word} indicates that if variable is set then the result will be that value. If variable is not set then word will be the result.
+# ${FOO:+word} indicates that if variable is set then word will be the result, otherwise the result is the empty string.
+
+# docker build dependencies without volume mounting: 
+#https://vsupalov.com/cache-docker-build-dependencies-without-volume-mounting/
+
+

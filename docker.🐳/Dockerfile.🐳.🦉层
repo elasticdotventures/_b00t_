@@ -1,0 +1,14 @@
+# syntax=docker/dockerfile:1
+
+## * * * * * * * * * * * \\
+# Purpose: ⚠️ THIS IS A "新" TEMPLATE / NEW FILE 
+#   hint: copy the file, replace the "新" 
+## * * * * * * * * * * * //
+
+# Can one Docker File Load Another:
+# 🍰 https://stackoverflow.com/questions/36362233/can-a-dockerfile-extend-another-one
+# docker build -t my-php-base-image 
+# next layer 
+# FROM my-last-docker
+
+
