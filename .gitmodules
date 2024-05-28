@@ -1,18 +1,18 @@
 [submodule "test/bats"]
-	path = test/bats
+	path = _b00t_/test/bats
 	url = https://github.com/bats-core/bats-core.git
 [submodule "test/test_helper/bats-support"]
-	path = test/test_helper/bats-support
+	path = _b00t_/test/test_helper/bats-support
 	url = https://github.com/bats-core/bats-support.git
 [submodule "test/test_helper/bats-assert"]
-	path = test/test_helper/bats-assert
+	path = _b00t_/test/test_helper/bats-assert
 	url = https://github.com/bats-core/bats-assert.git
 [submodule "git.🐙/cli"]
-	path = git.🐙/cli
+	path = _b00t_/git.🐙/cli
 	url = https://github.com/cli/cli
 [submodule "python.🐍/DALLE2-pytorch"]
-	path = python.🐍/DALLE2-pytorch
+	path = _b00t_/python.🐍/DALLE2-pytorch
 	url = https://github.com/lucidrains/DALLE2-pytorch
 [submodule "vscode.🆚/vscode-docs"]
-	path = vscode.🆚/vscode-docs
+	path = _b00t_/vscode.🆚/vscode-docs
 	url = https://github.com/microsoft/vscode-docs
