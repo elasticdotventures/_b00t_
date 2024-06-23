@@ -86,6 +86,15 @@ alias az="docker run -it -v ${HOME}/.ssh:/root/.ssh mcr.microsoft.com/azure-cli"
 #sudo apt-get install google-cloud-cli-gke-gcloud-auth-plugin
 #gcloud init
 
+# gcloud
+# https://cloud.google.com/sdk/docs/install#deb
+sudo apt-get install apt-transport-https ca-certificates gnupg curl
+curl https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo gpg --dearmor -o /usr/share/keyrings/cloud.google.gpg
+echo "deb [signed-by=/usr/share/keyrings/cloud.google.gpg] https://packages.cloud.google.com/apt cloud-sdk main" | sudo
+sudo apt-get update && sudo apt-get install google-cloud-cli
+#sudo apt-get install google-cloud-cli-gke-gcloud-auth-plugin
+gcloud init
+
 # The docker route probably won't work with terraform.
 #docker pull gcr.io/google.com/cloudsdktool/google-cloud-cli:latest
 #docker run --rm gcr.io/google.com/cloudsdktool/google-cloud-cli:latest gcloud version
