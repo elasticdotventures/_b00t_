@@ -1,6 +1,14 @@
 #!/bin/bash
 
 # a lot of this was migrated from promptexecution/infrastructure
+## github cli (ubuntu)
+# 🤓 https://github.com/cli/cli/blob/trunk/docs/install_linux.md
+type -p curl >/dev/null || (sudo apt update && sudo apt install curl -y)
+curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | sudo dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg \
+&& sudo chmod go+r /usr/share/keyrings/githubcli-archive-keyring.gpg \
+&& echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null \
+&& sudo apt update \
+&& sudo apt install gh -y
 
 gh extension install https://github.com/nektos/gh-act
 
@@ -28,9 +36,7 @@ alias tf=tofu
 
 
 
-
 curl -sS https://starship.rs/install.sh | sh
-
 echo eval "$(starship init bash)" >> ~/.bashrc
 
 
@@ -74,8 +80,15 @@ sudo cp wasm-to-oci /usr/local/bin
 alias az="docker run -it -v ${HOME}/.ssh:/root/.ssh mcr.microsoft.com/azure-cli"
 
 # aws
-
-
+# sudo apt-get install -y awscli
+cd /tmp
+curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+unzip awscliv2.zip
+sudo ./aws/install
+# aws configure
+# OR
+# mkdir -p ~/.aws
+# copy config & credentials from another server
 
 # gcloud
 # https://cloud.google.com/sdk/docs/install#deb
@@ -90,7 +103,7 @@ alias az="docker run -it -v ${HOME}/.ssh:/root/.ssh mcr.microsoft.com/azure-cli"
 # https://cloud.google.com/sdk/docs/install#deb
 sudo apt-get install apt-transport-https ca-certificates gnupg curl
 curl https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo gpg --dearmor -o /usr/share/keyrings/cloud.google.gpg
-echo "deb [signed-by=/usr/share/keyrings/cloud.google.gpg] https://packages.cloud.google.com/apt cloud-sdk main" | sudo
+echo "deb [signed-by=/usr/share/keyrings/cloud.google.gpg] https://packages.cloud.google.com/apt cloud-sdk main" | sudo tee -a /etc/apt/sources.list.d/google-cloud-sdk.list
 sudo apt-get update && sudo apt-get install google-cloud-cli
 #sudo apt-get install google-cloud-cli-gke-gcloud-auth-plugin
 gcloud init
@@ -102,8 +115,5 @@ gcloud init
 #docker run --rm --volumes-from gcloud-config gcr.io/google.com/cloudsdktool/google-cloud-cli gcloud compute instances list --project your_project
 
 
-# s3 mount
-# 🤓 terraform/aws/s3-mountpoint-ubuntu-x86.sh
-sudo mount-s3 --region ap-southeast-4  promptexecution-tank /mnt/aws/tank
 
 
