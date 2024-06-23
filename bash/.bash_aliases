@@ -26,7 +26,10 @@ alias nowdate='date +"%d-%m-%Y"'
 alias ve='python3 -m venv ./venv'
 alias va='source ./venv/bin/activate'
 
-# 
+# k8s
+alias k="kubectl "
+
+#
 alias c='code $(fzf --height 40% --reverse)'
 
 alias fd="/usr/bin/fdfind"
@@ -36,3 +39,15 @@ alias fd="/usr/bin/fdfind"
 alias ymd="date +'%Y%m%d'"
 alias ymd_hm="date +'%Y%m%d.%H%M'"
 alias ymd_hms="date +'%Y%m%d.%H%M%S'"
+
+# vscode!
+# git config --global core.editor "'{path to editor}' -n -w"
+export GIT_EDITOR="code -w -r"
+export EDITOR='code -w -r'
+git config --global core.editor "code --wait"
+# vscode
+[[ "$TERM_PROGRAM" == "vscode" ]] && . "$(code --locate-shell-integration-path bash)"
+export XAUTHORITY=$HOME/.Xauthority
+
+# itree, like tree but ignores .git
+alias itree='rg --files | tree --fromfile'
