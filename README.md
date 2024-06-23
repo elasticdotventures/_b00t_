@@ -11,12 +11,14 @@ gh repo clone elasticdotventures/dotfiles ~/.dotfiles
 ## usage
 
 ```
-stow -d ~/.dotfiles ~
+# stow -d ~/.dotfiles ~ <package>
+stow -d ~/.dotfiles -t ~ bash
 ```
 
-##
+## to update files
 ```
-stow --adopt .
+# stow --adopt . 
+stow --adopt -d ~/.dotfiles -t ~ bash
 ```
 
 ##
