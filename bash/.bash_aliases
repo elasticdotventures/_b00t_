@@ -51,3 +51,5 @@ export XAUTHORITY=$HOME/.Xauthority
 
 # itree, like tree but ignores .git
 alias itree='rg --files | tree --fromfile'
+
+alias tf=tofu
