@@ -13,7 +13,7 @@ curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | sudo 
 gh extension install https://github.com/nektos/gh-act
 
 
-sudo apt install -y build-essential
+sudo apt install -y build-essential joe
 
 git config --global user.email "brianh@elastic.ventures"
 git config --global user.name "Brian H"
@@ -42,6 +42,7 @@ echo eval "$(starship init bash)" >> ~/.bashrc
 
 # 🦀 rust
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+. "$HOME/.cargo/env"
 
 # tree but ignores .git (useful for chatgpt dumps)
 alias itree='rg --files | tree --fromfile'
@@ -107,7 +108,7 @@ echo "deb [signed-by=/usr/share/keyrings/cloud.google.gpg] https://packages.clou
 sudo apt-get update && sudo apt-get install google-cloud-cli -y
 #sudo apt-get install google-cloud-cli-gke-gcloud-auth-plugin
 gcloud init
-cloud config set compute/zone australia-southeast2-c
+gcloud config set compute/zone australia-southeast2-c
 
 
 # The docker route probably won't work with terraform.
