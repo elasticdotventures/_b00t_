@@ -144,3 +144,5 @@ source $HOME/.bash_profile
   tar zxvf "${KREW}.tar.gz" &&
   ./"${KREW}" install krew
 )
+
+kubectl krew install cilium
