@@ -40,24 +40,11 @@ alias ymd="date +'%Y%m%d'"
 alias ymd_hm="date +'%Y%m%d.%H%M'"
 alias ymd_hms="date +'%Y%m%d.%H%M%S'"
 
-# vscode!
-# git config --global core.editor "'{path to editor}' -n -w"
-export GIT_EDITOR="code -w -r"
-export EDITOR='code -w -r'
-git config --global core.editor "code --wait"
-# vscode
-[[ "$TERM_PROGRAM" == "vscode" ]] && . "$(code --locate-shell-integration-path bash)"
-export XAUTHORITY=$HOME/.Xauthority
 
 # itree, like tree but ignores .git
 alias itree='rg --files | tree --fromfile'
 
 alias tf=tofu
 
-# kubectl shell completion
-source '/home/brianh/.kube/completion.bash.inc'
-
-# kubectl krew
-export PATH="${KREW_ROOT:-$HOME/.krew}/bin:$PATH"
 
 
