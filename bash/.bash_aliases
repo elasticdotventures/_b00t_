@@ -53,3 +53,11 @@ export XAUTHORITY=$HOME/.Xauthority
 alias itree='rg --files | tree --fromfile'
 
 alias tf=tofu
+
+# kubectl shell completion
+source '/home/brianh/.kube/completion.bash.inc'
+
+# kubectl krew
+export PATH="${KREW_ROOT:-$HOME/.krew}/bin:$PATH"
+
+
