@@ -44,6 +44,10 @@ echo eval "$(starship init bash)" >> ~/.bashrc
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 . "$HOME/.cargo/env"
 
+# dotenvy
+cargo install dotenvy --bin dotenvy --features cli
+
+
 # tree but ignores .git (useful for chatgpt dumps)
 alias itree='rg --files | tree --fromfile'
 cargo install ripgrep

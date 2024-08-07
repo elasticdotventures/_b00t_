@@ -15,6 +15,9 @@ alias ..='cd ..'
 alias ...='cd ../../'
 alias mkdir='mkdir -pv'
 
+# lazy
+alias dotenv='dotenvy'
+
 # time & date
 alias path='echo -e ${PATH//:/\\n}'
 alias now='date +"%T"'
