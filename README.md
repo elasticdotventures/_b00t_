@@ -25,3 +25,9 @@ stow --adopt -d ~/.dotfiles -t ~ bash
 * https://github.com/webpro/awesome-dotfiles
 * https://bbarrows.com/posts/kubernetes-aliases-functions
 * https://krew.sigs.k8s.io/plugins/
+
+# Start ssh-agent if not running
+if ! pgrep -u "$USER" ssh-agent > /dev/null; then
+    eval "$(ssh-agent -s)"
+fi
+
