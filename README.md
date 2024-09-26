@@ -30,4 +30,17 @@ stow --adopt -d ~/.dotfiles -t ~ bash
 if ! pgrep -u "$USER" ssh-agent > /dev/null; then
     eval "$(ssh-agent -s)"
 fi
+ssh-add ~/.ssh/id_rsa
+ssh-add ~/.ssh/id_ed25519
+ssh-add -l
+
+```
+ssh -A
+```
+
+nano ~/.ssh/config
+Host remote_host_alias
+    HostName remote_host
+    User username
+    ForwardAgent yes
 
