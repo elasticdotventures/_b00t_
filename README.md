@@ -44,3 +44,10 @@ Host remote_host_alias
     User username
     ForwardAgent yes
 
+ssh -T git@github.com
+# Hi elasticdotventures! You've successfully authenticated, but GitHub does not provide shell access.
+
+# wsl tricks:
+
+ explorer.exe $(wslpath -w ./rendered_pdfs/)
+

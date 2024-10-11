@@ -10,7 +10,9 @@ curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | sudo 
 && sudo apt update \
 && sudo apt install gh -y
 
+# 🤓 
 gh extension install https://github.com/nektos/gh-act
+# 🤓 https://github.com/github/gh-copilot
 gh extension install github/gh-copilot --force
 
 
