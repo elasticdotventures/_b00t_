@@ -51,3 +51,6 @@ alias tf=tofu
 
 
 
+
+source "$HOME/.rye/env"
+

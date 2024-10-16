@@ -10,7 +10,11 @@ curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | sudo 
 && sudo apt update \
 && sudo apt install gh -y
 
+# 🤓 
 gh extension install https://github.com/nektos/gh-act
+# 🤓 https://github.com/github/gh-copilot
+gh extension install github/gh-copilot --force
+
 
 
 sudo apt install -y build-essential joe
@@ -149,11 +153,15 @@ source $HOME/.bash_profile
   ./"${KREW}" install krew
 )
 
-kubectl krew install cilium
+# kubectl krew install cilium
+# 💩 @jamesc says n0. 
 
-## kubeseal
-## https://github.com/bitnami-labs/sealed-secrets
-KUBESEAL_VERSION='' # Set this to, for example, KUBESEAL_VERSION='0.23.0'
-curl -OL "https://github.com/bitnami-labs/sealed-secrets/releases/download/v${KUBESEAL_VERSION:?}/kubeseal-${KUBESEAL_VERSION:?}-linux-amd64.tar.gz"
-tar -xvzf kubeseal-${KUBESEAL_VERSION:?}-linux-amd64.tar.gz kubeseal
-sudo install -m 755 kubeseal /usr/local/bin/kubeseal
+# ## kubeseal
+# ## https://github.com/bitnami-labs/sealed-secrets
+# KUBESEAL_VERSION='' # Set this to, for example, KUBESEAL_VERSION='0.23.0'
+# curl -OL "https://github.com/bitnami-labs/sealed-secrets/releases/download/v${KUBESEAL_VERSION:?}/kubeseal-${KUBESEAL_VERSION:?}-linux-amd64.tar.gz"
+# tar -xvzf kubeseal-${KUBESEAL_VERSION:?}-linux-amd64.tar.gz kubeseal
+# sudo install -m 755 kubeseal /usr/local/bin/kubeseal
+
+# Ubuntu/Debian
+sudo apt-get install inotify-tools
