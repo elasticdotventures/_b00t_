@@ -48,7 +48,7 @@ alias ymd_hms="date +'%Y%m%d.%H%M%S'"
 alias itree='rg --files | tree --fromfile'
 
 alias tf=tofu
-
+alias k=kubectl
 
 
 
