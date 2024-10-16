@@ -10,7 +10,7 @@ curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | sudo 
 && sudo apt update \
 && sudo apt install gh -y
 
-# 🤓 
+# 🤓
 gh extension install https://github.com/nektos/gh-act
 # 🤓 https://github.com/github/gh-copilot
 gh extension install github/gh-copilot --force
@@ -154,7 +154,7 @@ source $HOME/.bash_profile
 )
 
 # kubectl krew install cilium
-# 💩 @jamesc says n0. 
+# 💩 @jamesc says n0.
 
 # ## kubeseal
 # ## https://github.com/bitnami-labs/sealed-secrets
@@ -165,3 +165,9 @@ source $HOME/.bash_profile
 
 # Ubuntu/Debian
 sudo apt-get install inotify-tools
+
+# Rye - cargo for python
+curl -sSf https://rye.astral.sh/get | RYE_INSTALL_OPTION="--yes" bash
+
+# datafusion
+cargo install datafusion-cli

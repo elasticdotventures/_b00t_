@@ -35,4 +35,4 @@ explorer.exe $(wslpath -w ./rendered_pdfs/)
 * https://github.com/webpro/awesome-dotfiles
 * https://bbarrows.com/posts/kubernetes-aliases-functions
 * https://krew.sigs.k8s.io/plugins/
-
+* https://github.com/xero/dotfiles

@@ -50,7 +50,5 @@ alias itree='rg --files | tree --fromfile'
 alias tf=tofu
 alias k=kubectl
 
-
-
 source "$HOME/.rye/env"
 
