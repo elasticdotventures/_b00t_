@@ -19,7 +19,7 @@ if [ ! -d ~/.dotfiles/vscode.🆚/code-connect ]; then
     # vscode
     [[ "$TERM_PROGRAM" == "vscode" ]] && . "$(code --locate-shell-integration-path bash)"
 
-    echo "✅🆚"
+    echo "✅🆚 vscode"
 else
     echo "🙈🆚 no vscode"
 fi
@@ -64,6 +64,11 @@ if command -v podman &> /dev/null; then
     export DOCKER_HOST=$PODMAN_HOST
     export DOCKER_HOST=unix://$(podman info --format '{{.Host.RemoteSocket.Path}}');
     # export DOCKER_HOST='unix:///home/brianh/.local/share/containers/podman/machine/qemu/podman.sock'
+    echo "✅🐳 podman"
+elif command -v docker &> /dev/null; then
+    echo "🥲🐳 docker"
+else
+    echo "🙈🐳 no docker"
 fi
 
 # detect bun
