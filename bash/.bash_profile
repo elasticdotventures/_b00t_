@@ -9,11 +9,11 @@ else
 fi
 
 # b00t is a collection of environment detection
-if [ -f ~/.dotfiles/_b00t_/_b00t_.bashrc ] ; then
-    echo "🥾 _b00t_"
-    . ~/.dotfiles/_b00t_/_b00t_.bashrc
-    echo "/🥾"
-fi
+# if [ -f ~/.dotfiles/_b00t_/_b00t_.bashrc ] ; then
+#     echo "🥾 _b00t_"
+#     . ~/.dotfiles/_b00t_/_b00t_.bashrc
+#     echo "/🥾"
+# fi
 
 # when .bash_profile exists then it runs before .bashrc and must call .bashrc
 if [ -f ~/.bashrc ]; then
@@ -21,6 +21,22 @@ if [ -f ~/.bashrc ]; then
     . ~/.bashrc
     echo "/🐚 ~/.bashrc end"
 fi
+
+# read .env and export each var
+if [ -f ~/.env ]; then
+    while IFS= read -r line; do
+        # Ignore comments and empty lines
+        [[ "$line" =~ ^#.*$ || -z "$line" ]] && continue
+
+        # Validate KEY=VALUE format
+        if [[ "$line" =~ ^[^=]+=[^=]+$ ]]; then
+            export "$line"
+        else
+            echo "Invalid line in .env: $line"
+        fi
+    done < ~/.env
+fi
+
 
 # check for .code-connect directory in home
 if [[ $IS_WSL == true ]] ; then
@@ -105,6 +121,10 @@ if command -v podman &> /dev/null; then
     echo "✅🐳 podman"
 elif command -v docker &> /dev/null; then
     echo "🥲🐳 docker"
+    # https://docs.docker.com/engine/install/linux-postinstall/
+    # TODO: check group
+    # sudo usermod -aG docker $USER
+    # newgrp docker ??
 else
     echo "🙈🐳 no docker"
 fi

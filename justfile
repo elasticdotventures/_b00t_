@@ -13,6 +13,7 @@ install:
     # 🦨 TODO replace crudini with toml-cli
     rye install crudini
     cargo install toml-cli
+    cargo install dotenvy
 
     echo "/🥾"
 
