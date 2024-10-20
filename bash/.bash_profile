@@ -137,6 +137,7 @@ if command -v bun &> /dev/null; then
 fi
 
 
+<<<<<<< Updated upstream
 source "$HOME/.rye/env"
 
 if [ -f ~/.huggingface/token ] ; then
@@ -151,3 +152,10 @@ fi
 
 # Created by `pipx` on 2024-01-10 08:51:49
 export PATH="$PATH:/home/brianh/.local/bin"
+=======
+   source "$HOME/.rye/env"
+. "$HOME/.cargo/env"
+
+# kubectl shell completion
+source '/home/brianh/.kube/completion.bash.inc'
+>>>>>>> Stashed changes
