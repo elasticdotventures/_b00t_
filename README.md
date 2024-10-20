@@ -5,6 +5,8 @@
 apt install stow
 
 gh repo clone elasticdotventures/dotfiles ~/.dotfiles
+# or 
+gh repo clone elasticdotventures/dotfiles ~/.dotfiles -- --depth 1
 
 ```
 

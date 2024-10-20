@@ -1,36 +1,37 @@
 #
 # Purpose: universal bash b00t-strap for environment & tooling
 #   once run in an enviroment will attempt to validate & construct
-#   bash shortcuts, menus, etc. 
+#   bash shortcuts, menus, etc.
 #
+
 
 
 # usage:
 #   source "./_b00t_.bashrc"
-#   may also *eventually* run via commandline. 
+#   may also *eventually* run via commandline.
 
 # https://misc.flogisoft.com/bash/tip_colors_and_formatting
 # https://github.com/awesome-lists/awesome-bash
 
 # set -o errexit    # Used to exit upon error, avoiding cascading errors
-set -o nounset    # Exposes unset variables, strict mode. 
+set -o nounset    # Exposes unset variables, strict mode.
 trap "set +o nounset" EXIT  # restore nounset at exit, even in crash!
 
-# 🤔 trial: 
+# 🤔 trial:
 umask 000
 
 
 # mark variables which are modified or created for export
-set -a 
+set -a
 
 
 ## 小路 \\
 ## Xiǎolù :: Path or Directory
-# THINGS YOU CAN EDIT: 
+# THINGS YOU CAN EDIT:
 _B00T_C0DE_Path="/c0de/_b00t_"
-if [ -d "$HOME/_b00t_" ] ; then 
+if [ -d "$HOME/_b00t_" ] ; then
     _B00T_C0DE_Path="$HOME/_b00t_"
-fi 
+fi
 export _B00T_C0DE_Path
 export _B00T_C0NFIG_Path="$HOME/.b00t"
 _b00t_INSPIRATION_FILE="$_B00T_C0DE_Path/./r3src_资源/inspiration.json"
@@ -40,7 +41,7 @@ _b00t_INSPIRATION_FILE="$_B00T_C0DE_Path/./r3src_资源/inspiration.json"
 
 ## 记录 \\
 ## Jìlù :: Record (Log)
-# 🤓 write to a log if you want using >> 
+# 🤓 write to a log if you want using >>
 # mostly, this is for future opentelemetry & storytime log
 unset -f log_📢_记录
 function log_📢_记录() {
@@ -49,7 +50,7 @@ function log_📢_记录() {
 export -f log_📢_记录
 ## 记录 //
 
-## this will allow b00t to restart itself. 
+## this will allow b00t to restart itself.
 unset -f reb00t
 function reb00t() {
     unset -f _b00t_init_🥾_开始
@@ -62,7 +63,7 @@ function reb00t() {
 
 
 ## * * * * * \\
-## pathAdd 
+## pathAdd
 unset pathAdd
 function pathAdd() {
     if [ -d "$1" ] && [[ ":$PATH:" != *":$1:"* ]]; then
@@ -74,14 +75,14 @@ pathAdd "$HOME/.local/bin"
 pathAdd "$HOME/.yarn/bin"
 ## * * * * * //
 
-if [ "/usr/bin/docker" ] ; then 
+if [ "/usr/bin/docker" ] ; then
     echo "🐳 has d0cker! loading docker extensions"
     source "$_B00T_C0DE_Path/docker.🐳/_bashrc.sh"
 
-    ## 😔 docker context? 
+    ## 😔 docker context?
     ## https://docs.docker.com/engine/context/working-with-contexts/
     # export DOCKER_CONTEXT=default
-    # log_📢_记录 "🐳 CONTEXT: $DOCKER_CONTEXT"  
+    # log_📢_记录 "🐳 CONTEXT: $DOCKER_CONTEXT"
     # docker context ls
 
 fi
@@ -97,7 +98,7 @@ function is_v3rs10n_大于()   # $appversion $requiredversion
     # printf '%s\n%s\n' "$2" "$1" | sort --check=quiet --version-sort
     local appver=$1     # i.e. 1.0.0
     local requiredver=$2 # i.e. 1.0.1
-    if [ "$(printf '%s\n' "$requiredver" "$appver" | sort -V | head -n1)" = "$requiredver" ]; then 
+    if [ "$(printf '%s\n' "$requiredver" "$appver" | sort -V | head -n1)" = "$requiredver" ]; then
         # version is insufficient
         result="false"
     else
@@ -112,22 +113,22 @@ export -f is_v3rs10n_大于
 ## * * * * * * //
 
 
-## 
+##
 # does a bash/function exist?
 # 🍰 https://stackoverflow.com/questions/85880/determine-if-a-function-exists-in-bash
-# returns: 
+# returns:
 #     0 on yes/success (function defined/available)
 #     1 for no (not available)
 function has_fn_✅_存在() {
     local exists=$(LC_ALL=C type -t $1)
     # echo "exists: $exists"
-    if [ -n "$exists" ] ; then 
+    if [ -n "$exists" ] ; then
         # exists, not empty, success
-        return 0 
-    fi 
+        return 0
+    fi
     # fail (function does not exist)
     return 1
-    # result=[[ -n "$exists" ]] || 1 
+    # result=[[ -n "$exists" ]] || 1
 }
 export -f has_fn_✅_存在
 
@@ -135,10 +136,10 @@ export -f has_fn_✅_存在
 
 
 ## All the logic below figures out who is calling & hot-reload
-## bail earlier is better, 
+## bail earlier is better,
 _b00t_exists=`type -t "_b00t_init_🥾_开始"`
 _b00t_VERSION_was=0
-if [ "$_b00t_exists" == "function" ] ; then 
+if [ "$_b00t_exists" == "function" ] ; then
     # are we re-entry, i.e. reb00t
     export _b00t_VERSION_was="$_b00t_VERSION"
 fi
@@ -152,21 +153,21 @@ upgradeB00T=$(is_v3rs10n_大于 "$_b00t_VERSION_was" "$_b00t_VERSION")
 # echo "upgradeB00T: $upgradeB00T"
 
 # 🦨 need consent!
-if [ "$upgradeB00T" ==  true ] && [ -n "$_b00t_VERSION_was" ] ; then 
+if [ "$upgradeB00T" ==  true ] && [ -n "$_b00t_VERSION_was" ] ; then
     # welcome! (clean environment)
     log_📢_记录 "🥾🧐 b00t version | now: $_b00t_VERSION"
-elif [ "$upgradeB00T" ==  true ] ; then 
+elif [ "$upgradeB00T" ==  true ] ; then
     ## upgrade b00t in memory (this doesn't work awesome, but useful during dev)
     ## $ reb00t
     log_📢_记录 "🥾🧐 (re)b00t version | now: $_b00t_VERSION | was: $_b00t_VERSION_was | upgrade: $upgradeB00T"
     # TODO: consent
-elif [ "$_b00t_exists" == "function" ] ; then 
+elif [ "$_b00t_exists" == "function" ] ; then
     # SILENT, don't reload unless _b00t_VERSION is newer
-    # short circuit using rand0() function 
+    # short circuit using rand0() function
     # log_📢_记录 "👻 short-circuit"
-    set +o nounset 
+    set +o nounset
     return
-    ## 🍒 short circuit! 
+    ## 🍒 short circuit!
 fi
 
 ## Have FZF use fdfind "fd" by default
@@ -208,31 +209,29 @@ alias myp='ps -fjH -u $USER'
 #cdl() { cd $1; ls}
 #export -f cdl
 
-# FUTURE: 
-# https://github.com/GochoMugo/msu
 
-# TODO: test for pipx
-# 
-if [ -n "$(whereis register-python-argcomplete3)" ] ; then 
-    echo "🦨++ installing python3-argcomplete + pipx"
-    sudo apt install python3-argcomplete pipx -y
-fi 
-if [ -n "$(whereis register-python-argcomplete3)" ] ; then 
-    eval "$(register-python-argcomplete3 pipx)"
-    # pipx run
-fi 
+# 🐍 Python
+if ! command -v pipx &> /dev/null; then
+    echo "pipx could not be found, installing..."
+    if [ -n "$(whereis register-python-argcomplete3)" ] ; then
+        eval "$(register-python-argcomplete3 pipx)"
+        # pipx run
+    fi
+fi
+#
+
 
 # bat - a pretty replacement for cat.
 alias bat="batcat"
 
 # bats - bash testing system (in a docker container)
 # 🦨 need consent before running docker
-# 🦨 this is not the proper way to run bats. 
+# 🦨 this is not the proper way to run bats.
 # alias bats='docker run -it -v bats/bats:latest'
 
 # count the files in a directory or project
 alias count='find . -type f | wc -l'
-# copy verbose, see rsync. or use preferred backup command. 
+# copy verbose, see rsync. or use preferred backup command.
 alias cpv='rsync -ah --info=progress2'
 
 # cd to _b00t_ (or current repo)
@@ -247,7 +246,7 @@ alias now='date +"%T"'
 alias nowtime=now
 alias nowdate='date +"%d-%m-%Y"'
 
-# 🐙 git 
+# 🐙 git
 alias gitstatus='git -C . status --porcelain | grep "^.\w"'
 
 # 🐍 Python ve = create .venv, va = activate!
@@ -276,17 +275,17 @@ alias ymd_hms="date +'%Y%m%d.%H%M%S'"
 
 # order of magnitude
 #function oom () {
-#    # todo: detect an order of magnitude transition. 
+#    # todo: detect an order of magnitude transition.
 #}
 
 
 
 
 
-## 进口 \\  
+## 进口 \\
 ## Kāishǐ :: Start
-# init should be run by every program. 
-# this is mostly here for StoryTime and future hooks. 
+# init should be run by every program.
+# this is mostly here for StoryTime and future hooks.
 unset -f _b00t_init_🥾_开始
 function _b00t_init_🥾_开始() {
     local args=("$@")
@@ -294,44 +293,44 @@ function _b00t_init_🥾_开始() {
 
 #    if [ param="version" ] ; then
 #        echo "🥾v: $currentB00TVersion"
-#    fi 
-    
-    # earlier versions, sunset: 
-    #🌆 ${0}/./${0*/}"   
+#    fi
+
+    # earlier versions, sunset:
+    #🌆 ${0}/./${0*/}"
     #🌆 export _b00t_="$(basename $0)"
-    export _b00t_="$0" 
+    export _b00t_="$0"
 
     if [ $_b00t_ == "/c0de/_b00t_/_b00t_.bashrc" ] ; then
         log_📢_记录 ""
         log_📢_记录 "usage: source /c0de/_b00t_/_b00t_.bashrc"
-        exit 
+        exit
     fi
 
     local PARENT_COMMAND_STR="👽env-notdetected"
     if [ $PPID -eq 0 ] ; then
         if [ "$container" == "docker" ] ; then
             PARENT_COMMAND_STR="🐳 d0ck3r!"
-        
-        else 
+
+        else
             PARENT_COMMAND_STR="👽env-unknown"
         fi
-    else 
-        # lookup parent application by process id. 
+    else
+        # lookup parent application by process id.
         PARENT_COMMAND_STR=$(ps -o comm=$PPID)
     fi
 
     if [ "$PARENT_COMMAND_STR" == "bash" ] ; then
         # most common case can be summarized
         log_📢_记录 "🥾👵:🔨"
-    else 
+    else
         log_📢_记录 "🥾👵 from: $PARENT_COMMAND_STR"
     fi
 
 
     log_📢_记录 "🥾 -V: $_b00t_VERSION  init: $_b00t_"
-    if [ -n "${@}" ] ; then 
-        log_📢_记录 "🥾 args: ${@}"  
-    fi 
+    if [ -n "${@}" ] ; then
+        log_📢_记录 "🥾 args: ${@}"
+    fi
 }
 export -f _b00t_init_🥾_开始
 #_b00t_init_🥾_开始
@@ -346,9 +345,9 @@ function iz_n0t_alpine_linux_🐧🌲() {
    return $(cat /etc/os-release | grep "NAME=" | grep -ic "Alpine")
 }
 if [ ! iz_n0t_alpine_linux ] ; then
-    # gh issue 
+    # gh issue
     echo "🥾🤮 🐧🌲 alpine linux not fully supported yet"
-fi 
+fi
 
 
 # this is intended to catch & report errors
@@ -359,15 +358,15 @@ function barf_🤮 () {
 
 
 
-# Webi, presently breaks alpine config! 
+# Webi, presently breaks alpine config!
 # https://github.com/elasticdotventures/webi-installers
 webi=$(whereis webi)
-if [ -z "$webi" ] ; then 
+if [ -z "$webi" ] ; then
     curl https://webinstall.dev/webi | bash
     # Should install to $HOME/.local/opt/<package>-<version> or $HOME/.local/bin
     # Should install to $HOME/.local/opt/<package>-<version> or $HOME/.local/bin
-    # Should not need sudo (except perhaps for a one-time setcap, etc) 
-fi 
+    # Should not need sudo (except perhaps for a one-time setcap, etc)
+fi
 
 
 #
@@ -393,35 +392,35 @@ function bash_source_加载() {
 
     # Bash Shell Parameter Expansion:
     # 🤓 https://www.gnu.org/software/bash/manual/html_node/Shell-Parameter-Expansion.html
-    # The ‘$’ character introduces parameter expansion, command substitution, or arithmetic expansion. 
+    # The ‘$’ character introduces parameter expansion, command substitution, or arithmetic expansion.
     # {} are optional, but protect enclosed variable
     # when {} are used, the matching ending brace is the first ‘}’ not escaped by a backslash or within a quoted string, and not within an embedded arithmetic expansion, command substitution, or parameter expansion.
     # 🍰 https://www.xaprb.com/media/2007/03/bash-parameter-expansion-cheatsheet.pdf
-    
+
     function expand { for arg in "$@"; do [[ -f $arg ]] && echo $arg; done }
 
     if [ ! -x "$file" ] ; then
-        # .bashrc file doesn't exist, so let's try to find it. 
-        # trythis="${trythis:-$file}"        
+        # .bashrc file doesn't exist, so let's try to find it.
+        # trythis="${trythis:-$file}"
         # trythis=$file
         # ${trythis:-$file}
-        # 
+        #
         log_📢_记录 "🧐 expand $file"
         file=$( expand $file )
-        
+
         if [ -x "$file" ] ; then
             log_📢_记录 "🧐 using $file"
-        else 
+        else
             log_📢_记录 "😲 NOT EXECUTABLE $file"
         fi
 
     fi
 
     if [ ! -x "$file" ] ; then
-        log_📢_记录 "🗄️🔃😲🍒 NOT EXECUTABLE: $file" && exit 
+        log_📢_记录 "🗄️🔃😲🍒 NOT EXECUTABLE: $file" && exit
     else
         log_📢_记录 "🗄️🔃😏  START: $file"
-        source "$file" 
+        source "$file"
         if [ $? -gt 0 ] ; then
             echo "☹️🛑🛑🛑 ERROR: $file had runtime error! 🛑🛑🛑"
         fi
@@ -435,9 +434,9 @@ export -f bash_source_加载
 
 
 ## 好不好 \\
-## Hǎo bù hǎo :: Good / Not Good 
-## is_file readable? 
-# n0t_file_📁_好不好 result: 
+## Hǎo bù hǎo :: Good / Not Good
+## is_file readable?
+# n0t_file_📁_好不好 result:
 #   0 : file is okay
 #   1 : file is NOT okay
 ## if passed two or more files, will try all.
@@ -446,12 +445,12 @@ function n0ta_xfile_📁_好不好() {
     xfile=${args[0]}
     if [ $# -gt 1 ] ; then
         # more than one file. try many
-        while [ ! -x "$xfile" ] && [ "$#" -gt 1 ] ; do 
+        while [ ! -x "$xfile" ] && [ "$#" -gt 1 ] ; do
             shift
             xfile=$1
         done
-    fi 
-    
+    fi
+
     if [ ! -f "$xfile" ] ; then
         log_📢_记录 "👽:不支持 $xfile is both required AND missing. 👽:非常要!"
         return 0
@@ -460,18 +459,18 @@ function n0ta_xfile_📁_好不好() {
         return 0
     else
 
-        if ! has_fn_✅_存在 "crudini_get" ; then 
+        if ! has_fn_✅_存在 "crudini_get" ; then
             :   # crudini_get doesn't exist.
-        elif [[ $( crudini_get "b00t" "has.$xfile" ) = "" ]] ; then 
+        elif [[ $( crudini_get "b00t" "has.$xfile" ) = "" ]] ; then
             log_📢_记录 "👍 $xfile"
             crudini_set "b00t" "has.$xfile" $( yyyymmdd )
         fi
         return 1
     fi
 }
-## 好不好 // 
+## 好不好 //
 
-## future artificat, 
+## future artificat,
 function selectEditVSCode_experiment() {
     filename=$1
     # select file
@@ -546,20 +545,20 @@ function Pr0J3ct1D {
     local wordTwo=$( cat $_b00t_INSPIRATION_FILE | jq ".[$word2].word" -r )
     local result="${wordOne}_${wordTwo}"
 
-    ## todo: substitute 
-    if [ $( rand0 10 ) -lt 5 ] ; then 
+    ## todo: substitute
+    if [ $( rand0 10 ) -lt 5 ] ; then
         result=$( echo $result | sed 's/l/1/g' )
     fi
 
-    if [ $( rand0 10 ) -lt 2 ] ; then 
+    if [ $( rand0 10 ) -lt 2 ] ; then
         result=$( echo $result | sed 's/o/0/g' )
-    elif [ $( rand0 10 ) -lt 2 ] ; then 
+    elif [ $( rand0 10 ) -lt 2 ] ; then
         result=$( echo $result | sed 's/oo/00/g' )
     fi
 
-    if [ $( rand0 10 ) -lt 2 ] ; then 
+    if [ $( rand0 10 ) -lt 2 ] ; then
         result=$( echo $result | sed 's/e/3/g' )
-    elif [ $( rand0 10 ) -lt 8 ] ; then 
+    elif [ $( rand0 10 ) -lt 8 ] ; then
         result=$( echo $result | sed 's/ee/33/g' )
     fi
 
@@ -573,7 +572,7 @@ function Pr0J3ct1D {
 
 ##* * * * * *\\
 ## generates a random number between 0 and \$1
-# usage: 
+# usage:
 # rand0_result="$(rand0 100)"
 # echo \$rand0_result
 
@@ -581,12 +580,12 @@ function rand0() {
     local args=("$@")
     local max=${args[0]}
     rand0=$( bc <<< "scale=2; $(printf '%d' $(( $RANDOM % $max)))" ) ;
-    # rand0=$( echo $RANDOM % $max ) ; 
+    # rand0=$( echo $RANDOM % $max ) ;
     echo $rand0
 }
 
 ##* * * * * *//
-## checks to see if an alias has been defined. 
+## checks to see if an alias has been defined.
 #  if is_n0t_aliased "az" ; then echo "true - not aliased!"; else echo "false"; fi
 function is_n0t_aliased() {
     local args=("$@")
@@ -596,14 +595,14 @@ function is_n0t_aliased() {
     if [ -z "$exists" ] ; then
         # 🙄 exists: alias fd='/usr/bin/fdfind'
         return 0;  # "true", unix success
-    else 
+    else
         return 1;  #  "false", unix error
     fi
 }
 
 
 ##
-## A pretty introduction to the system. 
+## A pretty introduction to the system.
 ##
 function motd() {
     # count motd's
@@ -613,18 +612,18 @@ function motd() {
     if is_n0t_aliased "fd" ; then
         # no fd, incomplete environemnt
         log_📢_记录 "🥾🍒 No fd alias, incomplete environment"
-        if [ ! -f "/tmp/motd.txt" ] ; then 
+        if [ ! -f "/tmp/motd.txt" ] ; then
             printf "\nb00t basic motd. generated %s\n\n" $(ymd_hms) > "/tmp/motd.txt"
-        fi 
+        fi
         motdz=('/tmp/motd.txt')
-    else 
+    else
         readarray -t motdz < <(/usr/bin/fdfind .txt "$_B00T_C0DE_Path/./ubuntu.🐧/etc/")
     fi
     local motdzQ=$( rand0 ${#motdz[@]} )
     # declare -p motdz
 
     local showWithCMD="/usr/bin/batcat"
-    
+
     f=${motdz[motdzQ]}
     local motdWidth=$(awk 'length > max_length { max_length = length; longest_line = $0 } END { print max_length }' $f)
     # local motdWidth=$(cat "${motdz[motdzQ]}" | tail -n 1)
@@ -635,8 +634,8 @@ function motd() {
     if [ -z "$myHeight" ] ; then myHeight='🍒😑' ; fi
     log_📢_记录 "🥾🖥️ motd .cols: $motdWidth  .rows:$motdLength"
     log_📢_记录 "🤓🖥️ user .cols: $myWidth  .rows:$myHeight"
-        
-    if [ $motdWidth -gt "$myWidth" ] ; then 
+
+    if [ $motdWidth -gt "$myWidth" ] ; then
         echo "👽:太宽 bad motd. too wide."
         showWithCMD=""
     elif [ $motdWidth -gt $(echo $myWidth - 13 | bc) ] ; then
@@ -645,7 +644,7 @@ function motd() {
     else
         # *auto*, full, plain, changes, header, grid, numbers, snip.
         showWithCMD="batcat --pager=never --style=plain --wrap character"
-        if [ $(rand0 100) -gt 69 ] ; then 
+        if [ $(rand0 100) -gt 69 ] ; then
             showWithCMD="batcat --pager=never --wrap character"
         fi
     fi
@@ -654,9 +653,9 @@ function motd() {
     ## sometimes, cat is nice!
     if [ -z "$showWithCMD" ] ; then
         echo "👽💩: 烂狗屎 cannot motd."
-    elif [ "$(rand0 10)" -gt 5 ] ; then 
+    elif [ "$(rand0 10)" -gt 5 ] ; then
         showWithCMD="cat"
-    fi 
+    fi
 
     local glitchCMDz=''
     if [ $(rand0 10) -gt 1 ] ; then
@@ -671,18 +670,18 @@ function motd() {
 
     #if [ $motdLength -gt $(echo $(tput rows) - 3 | bc) ] ; then
     #    showWithCMD="cat"
-    #fi 
+    #fi
 
     if [ -n "$showWithCMD" ] ; then
         motdTmpFile=$( mktemp "_b00t_.日$(ymd).一时XXXXXXXXXX.motd" )
         # echo "motdFile: $motdTmpFile"
         # echo $(rand0 10)
-        ## glitch effects 
+        ## glitch effects
         cp -v ${motdz[motdzQ]} $motdTmpFile
         if [ $(rand0 10) -gt 5 ] ; then
             $SED_PATH -i 's/1/0/g' $motdTmpFile
             $SED_PATH -i 's/8/🥾/g' $motdTmpFile
-        fi 
+        fi
         if [ $(rand0 10) -gt 5 ] ; then
             $SED_PATH -i 's/\*/🥾/g' $motdTmpFile
             $SED_PATH -i 's/[\!\-\@]./😁/g' $motdTmpFile
@@ -690,11 +689,11 @@ function motd() {
         if [ $(rand0 10) -gt 5 ] ; then
             $SED_PATH -i 's/#/_/g' $motdTmpFile
             $SED_PATH -i 's/0/🐛/g' $motdTmpFile
-        fi 
+        fi
         if [ $(rand0 10) -gt 5 ] ; then
             $SED_PATH -i 's/1/l/g' $motdTmpFile
             $SED_PATH -i 's/[\@l\#]/🐛/g' $motdTmpFile
-        fi 
+        fi
         $showWithCMD $motdTmpFile
         /bin/rm -f $motdTmpFile
     fi
@@ -705,24 +704,24 @@ function motd() {
     log_📢_记录 "🥾📈 motd project stats, cleanup, tasks goes here. "
 
 
-    if [ -d "./.git" ] ; then 
+    if [ -d "./.git" ] ; then
         log_📢_记录 "🥾🐙😁 found .git repo"
-        # github client 
+        # github client
         gh issue list
 
         local skunk_x=$(git grep "🦨" | wc -l)
         log_📢_记录 "🦨: $skunk_x"
-    else 
+    else
         log_📢_记录 "🥾🐙😔 no .git dir "`pwd`
-    fi 
+    fi
 
 }
 
 if [ "${container+}" == "docker" ] ; then
     motd
-elif ! is_n0t_aliased fd ; then 
+elif ! is_n0t_aliased fd ; then
     motd
-else 
+else
     motd
 fi
 
@@ -743,8 +742,8 @@ fi
 # 🤓 https://github.com/pixelb/crudini/blob/master/EXAMPLES
 # CRUDINI is used to store b00t config:
 
-if n0ta_xfile_📁_好不好 "/usr/bin/crudini" ; then 
-    log_📢_记录 "🥳 need crudini to save data, installing now"  
+if n0ta_xfile_📁_好不好 "/usr/bin/crudini" ; then
+    log_📢_记录 "🥳 need crudini to save data, installing now"
     $SUDO_CMD apt-get install -y crudini bc
 fi
 
@@ -763,10 +762,10 @@ function crudini_set() {
 function crudini_get() {
     local args=("$@")
 
-    #if [[ "$#" -ne "2" ]] ; then 
+    #if [[ "$#" -ne "2" ]] ; then
     #    log_📢_记录 "crudini_get topic key"
-    #    exit 0 
-    # fi 
+    #    exit 0
+    # fi
 
     local topic=${args[0]}
     local key=${args[1]}
@@ -778,9 +777,9 @@ function crudini_get() {
 function crudini_seq() {
     local args=("$@")
     local seqlabel=${args[0]}
-    
+
     local x=$( crudini_get "b00t" "$seqlabel" )
-    if [ -z "$x" ] ; then x="0"; fi 
+    if [ -z "$x" ] ; then x="0"; fi
     x=$(echo "$x" + 1 | bc)
     crudini_set "b00t" "$seqlabel" "$x"
     echo $x
@@ -792,15 +791,15 @@ function crudini_init() {
     export CRUDINI_CFGFILE=$(expandPath "~/.b00t/config.ini")
     local CRUDINI_DIR=`dirname $CRUDINI_CFGFILE`
     if [ ! -d "$CRUDINI_DIR" ] ; then
-        log_📢_记录 "🐭 no local $CRUDINI_CFGFILE"  
-        log_📢_记录 "🐭🥳 local dir $CRUDINI_DIR"  
+        log_📢_记录 "🐭 no local $CRUDINI_CFGFILE"
+        log_📢_记录 "🐭🥳 local dir $CRUDINI_DIR"
         if [ ! -d "$CRUDINI_DIR" ] ; then
-            log_📢_记录 "🐭 creating CRUDINI dir $CRUDINI_DIR"  
+            log_📢_记录 "🐭 creating CRUDINI dir $CRUDINI_DIR"
             /bin/mkdir -p $CRUDINI_DIR
             /bin/chmod 750 $CRUDINI_DIR
-            log_📢_记录 "🐭 init CRUDINI file $CRUDINI_CFGFILE"  
+            log_📢_记录 "🐭 init CRUDINI file $CRUDINI_CFGFILE"
             crudini --set $CRUDINI_CFGFILE '_seq' "1"
-        else        
+        else
             #local x=$( crudini_get "b00t" "crudini_check" )
             # x=$( [ -z "$x" ] && echo "0" )
             local x=$( crudini_seq "crudini_check" )
@@ -813,13 +812,13 @@ function crudini_init() {
 crudini_init
 
 function crudini_ok () {
-if [ -f $CRUDINI_CFGFILE ] ; then 
+if [ -f $CRUDINI_CFGFILE ] ; then
     x=$( crudini_seq "crudini_check" )
     log_📢_记录 "🐭🥾 CRUDINI _seq: #$x $CRUDINI_CFGFILE"
     return 0
-else 
+else
     log_📢_记录 "🐭🍒 CRUDINI br0ked. file: $CRUDINI_CFGFILE"
-    # todo: maybe some failsafe, i.e. redis or something. 
+    # todo: maybe some failsafe, i.e. redis or something.
     return 1
 fi
 }
@@ -832,28 +831,28 @@ crudini_ok
 function has_sudo() {
     SUDO_CMD="/usr/bin/sudo"
 
-    ## 🦨 TODO: ask for consent to run sudo? 
+    ## 🦨 TODO: ask for consent to run sudo?
 
     if [ "$EUID" -eq 0 ] ; then
-        # r00t doesn't require sudo 
+        # r00t doesn't require sudo
         # https://stackoverflow.com/questions/18215973/how-to-check-if-running-as-root-in-a-bash-script
         log_📢_记录 "👹 please don't b00t as r00t"
         SUDO_CMD=""
     elif [ -f "./dockerenv" ] ; then
         # https://stackoverflow.com/questions/23513045/how-to-check-if-a-process-is-running-inside-docker-container#:~:text=To%20check%20inside%20a%20Docker,%2Fproc%2F1%2Fcgroup%20.
-        log_📢_记录 "🐳😁 found DOCKER"  
-    elif [ -f "$SUDO_CMD" ] ; then 
-        if [[ -z $( crudini_get "b00t" "has.sudo" )  ]] ; then 
-            log_📢_记录 "🥳 found sudo"  
+        log_📢_记录 "🐳😁 found DOCKER"
+    elif [ -f "$SUDO_CMD" ] ; then
+        if [[ -z $( crudini_get "b00t" "has.sudo" )  ]] ; then
+            log_📢_记录 "🥳 found sudo"
             crudini_set "b00t" "has.sudo" `ymd_hms`
-        fi 
-    else 
+        fi
+    else
         log_📢_记录 "🐭 missed SUDO, try running _b00t_ inside docker."
         SUDO_CMD=""
     fi
     export SUDO_CMD
 }
-has_sudo 
+has_sudo
 
 
 
@@ -870,11 +869,11 @@ function debInst() {
 }
 
 if debInst "moreutils" ; then
-    # only show moreutils once. 
-    if [ $( crudini_get "b00t" "has.moreutils" ) -eq "0" ] ; then 
+    # only show moreutils once.
+    if [ $( crudini_get "b00t" "has.moreutils" ) -eq "0" ] ; then
         log_📢_记录 "👍 debian moreutils is installed!"
         crudini_set "b00t" "has.moreutils" $(yyyymmdd)
-    fi 
+    fi
 else
     log_📢_记录  "😲 install moreutils (required)"
     $SUDO_CMD apt-get install -y moreutils
@@ -899,7 +898,7 @@ export _b00t_JS0N_filepath=$(expandPath "~/.b00t/config.json")
 #    echo '{ "names": ["Marie", "Sophie"] }' |\
 #    jq '.names |= .+ [
 #        "Natalie"
-#    ]'   
+#    ]'
 #}
 
 
@@ -914,8 +913,8 @@ export _b00t_JS0N_filepath=$(expandPath "~/.b00t/config.json")
 
 
 ##
-export _user="$(id -u -n)" 
-export _uid="$(id -u)" 
+export _user="$(id -u -n)"
+export _uid="$(id -u)"
 echo "🙇‍♂️ \$_user: $_user  \$_uid : $_uid"
-set +o nounset 
+set +o nounset
 
