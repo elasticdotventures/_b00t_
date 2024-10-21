@@ -40,6 +40,7 @@ fi
 
 # check for .code-connect directory in home
 if [[ $IS_WSL == true ]] ; then
+    echo "🐧💌💙 WSL"
     [[ "$TERM_PROGRAM" == "vscode" ]] && . "$(code --locate-shell-integration-path bash)"
 elif [[ ! -d ~/.dotfiles/vscode.🆚/code-connect ]]; then
     # replace /home/brian/ with
@@ -51,22 +52,24 @@ elif [[ ! -d ~/.dotfiles/vscode.🆚/code-connect ]]; then
     #unalias code
 
     # . "$(code --locate-shell-integration-path bash)"
-    alias code='~/.dotfiles/vscode.🆚/.code-connect/bash/code.sh'
-    alias code-connect='~/.dotfiles/vscode.🆚/.code-connect/bash/code-connect.sh'
+    ## !?
+    # alias code='~/.dotfiles/vscode.🆚/.code-connect/bash/code.sh'
+    # alias code-connect='~/.dotfiles/vscode.🆚/.code-connect/bash/code-connect.sh'
 
     # 🤓 https://code.visualstudio.com/docs/terminal/shell-integration
 
-    # git config --global core.editor "'{path to editor}' -n -w"
-    export GIT_EDITOR="code -w -r"
-    export EDITOR='code -w -r'
-    git config --global core.editor "code --wait"
     # vscode
     # [[ "$TERM_PROGRAM" == "vscode" ]] && . "$(code --locate-shell-integration-path bash)"
-
     echo "✅🆚 vscode"
 else
     echo "🙈🆚 no vscode"
 fi
+
+# git config --global core.editor "'{path to editor}' -n -w"
+export GIT_EDITOR="code -w -r"
+export EDITOR='code -w -r'
+git config --global core.editor "code --wait"
+
 
 # vscode!
 
@@ -152,7 +155,7 @@ fi
 
 if [ -f ~/.cargo/env ]; then
     . "$HOME/.cargo/env"
-else    
+else
     echo "🙈🦀 no cargo"
 fi
 
