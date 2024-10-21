@@ -19,7 +19,7 @@ fi
 if [ -f ~/.bashrc ]; then
     echo "🐚 ~/.bashrc"
     . ~/.bashrc
-    echo "/🐚 ~/.bashrc end"
+    echo "/🐚"
 fi
 
 # read .env and export each var
@@ -129,16 +129,7 @@ else
     echo "🙈🐳 no docker"
 fi
 
-# detect bun
-if command -v bun &> /dev/null; then
-    # bun
-    export BUN_INSTALL="$HOME/.bun"
-    export PATH=$BUN_INSTALL/bin:$PATH
-fi
 
-
-<<<<<<< Updated upstream
-source "$HOME/.rye/env"
 
 if [ -f ~/.huggingface/token ] ; then
  export HUGGING_FACE_HUB_TOKEN=$(cat ~/.huggingface/token)
@@ -150,12 +141,54 @@ if [ -f /usr/local/cuda ] ; then
     export CUDA_HOME=/usr/local/cuda
 fi
 
-# Created by `pipx` on 2024-01-10 08:51:49
-export PATH="$PATH:/home/brianh/.local/bin"
-=======
-   source "$HOME/.rye/env"
-. "$HOME/.cargo/env"
+# check for rye
+if [ -f "$HOME/.rye/env" ]; then
+    # Created by `pipx` on 2024-01-10 08:51:49
+    export PATH="$PATH:/home/brianh/.local/bin"
+    source "$HOME/.rye/env"
+else
+    echo "🙈🌾 no rye"
+fi
+
+if [ -f ~/.cargo/env ]; then
+    . "$HOME/.cargo/env"
+else    
+    echo "🙈🦀 no cargo"
+fi
+
 
 # kubectl shell completion
-source '/home/brianh/.kube/completion.bash.inc'
->>>>>>> Stashed changes
+if [ -f ~/.kube/completion.bash.inc ]; then
+    source ~/.kube/completion.bash.inc
+fi
+if [ -f ~/.kube/config ]; then
+    export KUBECONFIG=~/.kube/config
+fi
+
+# detect bun
+if command -v bun &> /dev/null; then
+    # bun
+    export BUN_INSTALL="$HOME/.bun"
+    export PATH=$BUN_INSTALL/bin:$PATH
+fi
+
+
+## TODO:
+
+
+
+# # pnpm
+# export PNPM_HOME="/home/brianh/.local/share/pnpm"
+# case ":$PATH:" in
+#   *":$PNPM_HOME:"*) ;;
+#   *) export PATH="$PNPM_HOME:$PATH" ;;
+# esac
+# # pnpm end
+#   export DENO_INSTALL="/home/brianh/.deno"
+#   export PATH="$DENO_INSTALL/bin:$PATH"
+
+# export NVM_DIR="$HOME/.nvm"
+# [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"  # This loads nvm
+# [ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"  # This loads nvm bash_completion
+
+

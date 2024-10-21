@@ -18,6 +18,7 @@ gh extension install github/gh-copilot --force
 
 
 sudo apt install -y build-essential joe
+sudo apt install libnotify-bin
 
 git config --global user.email "brianh@elastic.ventures"
 git config --global user.name "Brian H"
