@@ -7,7 +7,7 @@ install:
     ## TODO: someday.
     # cd {{repo-root}} && ./_b00t_.sh setup
     sudo apt update
-    sudo apt install -y fzf bat moreutils fd-find
+    sudo apt install -y fzf bat moreutils fd-find bc jq
     ln -sf /usr/bin/batcat ~/.local/bin/bat
     # 🦨 TODO setup.sh .. but first isolate python, rust, js
     # 🦨 TODO replace crudini with toml-cli

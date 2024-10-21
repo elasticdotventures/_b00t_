@@ -9,11 +9,11 @@ else
 fi
 
 # b00t is a collection of environment detection
-# if [ -f ~/.dotfiles/_b00t_/_b00t_.bashrc ] ; then
-#     echo "🥾 _b00t_"
-#     . ~/.dotfiles/_b00t_/_b00t_.bashrc
-#     echo "/🥾"
-# fi
+if [ -f ~/.dotfiles/_b00t_/_b00t_.bashrc ] ; then
+    echo "🥾 _b00t_"
+    . ~/.dotfiles/_b00t_/_b00t_.bashrc
+    echo "/🥾"
+fi
 
 # when .bash_profile exists then it runs before .bashrc and must call .bashrc
 if [ -f ~/.bashrc ]; then

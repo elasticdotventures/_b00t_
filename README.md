@@ -21,6 +21,8 @@ stow -d ~/.dotfiles -t ~ bash
 ```
 # stow --adopt .
 stow --adopt -d ~/.dotfiles -t ~ bash
+
+just install
 ```
 
 ## more:
