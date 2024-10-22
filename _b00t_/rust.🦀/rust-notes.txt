@@ -1,0 +1,4 @@
+# state machine
+
+https://github.com/mdeloof/statig
+
