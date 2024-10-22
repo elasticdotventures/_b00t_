@@ -103,6 +103,8 @@ fi
 eval "$(starship init bash)"
 
 # kubectl krew
+
+
 export PATH="${KREW_ROOT:-$HOME/.krew}/bin:$PATH"
 
 # detect podman
@@ -152,7 +154,7 @@ fi
 
 if [ -f ~/.cargo/env ]; then
     . "$HOME/.cargo/env"
-else    
+else
     echo "🙈🦀 no cargo"
 fi
 
@@ -168,27 +170,11 @@ fi
 # detect bun
 if command -v bun &> /dev/null; then
     # bun
+    echo "✅🍞 bun"
     export BUN_INSTALL="$HOME/.bun"
     export PATH=$BUN_INSTALL/bin:$PATH
 fi
 
 
-## TODO:
-
-
-
-# # pnpm
-# export PNPM_HOME="/home/brianh/.local/share/pnpm"
-# case ":$PATH:" in
-#   *":$PNPM_HOME:"*) ;;
-#   *) export PATH="$PNPM_HOME:$PATH" ;;
-# esac
-# # pnpm end
-#   export DENO_INSTALL="/home/brianh/.deno"
-#   export PATH="$DENO_INSTALL/bin:$PATH"
-
-# export NVM_DIR="$HOME/.nvm"
-# [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"  # This loads nvm
-# [ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"  # This loads nvm bash_completion
-
-
+## I don't like nix
+# if [ -e /home/brianh/.nix-profile/etc/profile.d/nix.sh ]; then . /home/brianh/.nix-profile/etc/profile.d/nix.sh; fi # added by Nix installer
