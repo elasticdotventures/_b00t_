@@ -12,8 +12,10 @@ install:
     # 🦨 TODO setup.sh .. but first isolate python, rust, js
     # 🦨 TODO replace crudini with toml-cli
     rye install crudini
+    rye install python-dotenv[cli]
     cargo install toml-cli
     cargo install dotenvy
+    sudo wget https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 -O /usr/bin/yq && sudo chmod +x /usr/bin/yq
 
     echo "/🥾"
 
