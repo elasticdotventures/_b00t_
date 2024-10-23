@@ -1,8 +1,27 @@
+## NOTE: this file is source by b00t.sh so it must exit 0
+## DO NOT CALL exit 1
+
+
+#
+function validate_toml_cli_installed() {
+    if ! command -v toml &> /dev/null; then
+        log_📢_记录 "❌ toml-cli is not installed. _b00t_ features may not work."
+        export _B00T_MISSING_TOOLS_+=("toml-cli")
+        # exit 1
+        return 1
+    else
+        log_📢_记录 "✅ toml-cli is installed."
+    fi
+}
 
 
 
 # Define TOML configuration file path
 function toml_init() {
+
+    # Check if toml-cli is installed, short circuit
+    validate_toml_cli_installed && return 1
+
     export TOML_CFGFILE=$(expandPath "~/.dotfiles/$HOSTNAME.toml")
     local TOML_DIR=$(dirname "$TOML_CFGFILE")
 

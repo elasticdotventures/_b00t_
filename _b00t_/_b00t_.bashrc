@@ -738,8 +738,11 @@ if ! n0ta_xfile_📁_好不好 "/usr/bin/fdfind"  ; then
     export FZF_DEFAULT_COMMAND="/usr/bin/fdfind --type f"
 fi
 
-## this must be sourced at the end.
+
+
+## this must be sourced at the end
 source ~/.dotfiles/_b00t_/bash.🔨/_/toml-cli.sh
+
 
 
 
@@ -771,7 +774,10 @@ function has_sudo() {
     fi
     export SUDO_CMD
 }
-has_sudo
+
+if ! $_B00T_MISSING_TOOLS_ ; then
+    has_sudo
+fi
 
 
 
@@ -787,7 +793,9 @@ function debInst() {
     dpkg-query -Wf'${db:Status-abbrev}' "$1" 2>/dev/null | grep -q '^i'
 }
 
-if debInst "moreutils" ; then
+if $_B00T_MISSING_TOOLS_ ; then
+    log_📢_记录 "🥾😭 missing tools"
+elif debInst "moreutils" ; then
     # Only show moreutils once.
     value=$( toml_get "b00t" "has.moreutils" )
     value=${value:-0}  # If value is empty, default to 0
