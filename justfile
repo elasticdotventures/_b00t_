@@ -17,6 +17,9 @@ install:
     cargo install dotenvy
     sudo wget https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 -O /usr/bin/yq && sudo chmod +x /usr/bin/yq
     curl https://zyedidia.github.io/eget.sh | sh
+    sudo mv -v eget /usr/local/bin/
+    eget BurntSushi/ripgrep
+    sudo mv -v ripgrep /usr/local/bin/
 
     echo "/🥾"
 

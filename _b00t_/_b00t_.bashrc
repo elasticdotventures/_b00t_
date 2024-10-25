@@ -775,7 +775,7 @@ function has_sudo() {
     export SUDO_CMD
 }
 
-if ! $_B00T_MISSING_TOOLS_ ; then
+if [ -z "$_B00T_MISSING_TOOLS_" ] ; then
     has_sudo
 fi
 
@@ -793,7 +793,7 @@ function debInst() {
     dpkg-query -Wf'${db:Status-abbrev}' "$1" 2>/dev/null | grep -q '^i'
 }
 
-if $_B00T_MISSING_TOOLS_ ; then
+if [ -n "$_B00T_MISSING_TOOLS_" ] ; then
     log_📢_记录 "🥾😭 missing tools"
 elif debInst "moreutils" ; then
     # Only show moreutils once.
