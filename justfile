@@ -7,20 +7,17 @@ install:
     ## TODO: someday.
     # cd {{repo-root}} && ./_b00t_.sh setup
     sudo apt update
-    sudo apt install -y fzf bat moreutils fd-find bc jq
+    sudo apt install -y fzf bat moreutils fd-find bc jq python3-argcomplete
     ln -sf /usr/bin/batcat ~/.local/bin/bat
     # 🦨 TODO setup.sh .. but first isolate python, rust, js
     # 🦨 TODO replace crudini with toml-cli
-    rye install crudini
-    rye install python-dotenv[cli]
-    cargo install toml-cli
-    cargo install dotenvy
-    sudo wget https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 -O /usr/bin/yq && sudo chmod +x /usr/bin/yq
-    curl https://zyedidia.github.io/eget.sh | sh
-    sudo mv -v eget /usr/local/bin/
-    eget BurntSushi/ripgrep
-    sudo mv -v ripgrep /usr/local/bin/
-
+    command -v crudini >/dev/null 2>&1 || rye install crudini
+    command -v dotenv >/dev/null 2>&1 || rye install python-dotenv[cli]
+    command -v toml-cli >/dev/null 2>&1 || cargo install toml-cli
+    command -v dotenvy >/dev/null 2>&1 || cargo install dotenvy --features cli
+    command -v yq >/dev/null 2>&1 || sudo wget https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 -O /usr/bin/yq && sudo chmod +x /usr/bin/yq
+    command -v eget >/dev/null 2>&1 || (curl https://zyedidia.github.io/eget.sh | sh && sudo mv -v eget /usr/local/bin/)
+    command -v rg >/dev/null 2>&1 || (eget BurntSushi/ripgrep && sudo mv -v rg /usr/local/bin/)
     echo "/🥾"
 
 dotenv-load:
