@@ -7,13 +7,19 @@ install:
     ## TODO: someday.
     # cd {{repo-root}} && ./_b00t_.sh setup
     sudo apt update
-    sudo apt install -y fzf bat moreutils fd-find
+    sudo apt install -y fzf bat moreutils fd-find bc jq
     ln -sf /usr/bin/batcat ~/.local/bin/bat
     # 🦨 TODO setup.sh .. but first isolate python, rust, js
     # 🦨 TODO replace crudini with toml-cli
     rye install crudini
+    rye install python-dotenv[cli]
     cargo install toml-cli
     cargo install dotenvy
+    sudo wget https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 -O /usr/bin/yq && sudo chmod +x /usr/bin/yq
+    curl https://zyedidia.github.io/eget.sh | sh
+    sudo mv -v eget /usr/local/bin/
+    eget BurntSushi/ripgrep
+    sudo mv -v ripgrep /usr/local/bin/
 
     echo "/🥾"
 

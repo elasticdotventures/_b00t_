@@ -9,17 +9,17 @@ else
 fi
 
 # b00t is a collection of environment detection
-# if [ -f ~/.dotfiles/_b00t_/_b00t_.bashrc ] ; then
-#     echo "🥾 _b00t_"
-#     . ~/.dotfiles/_b00t_/_b00t_.bashrc
-#     echo "/🥾"
-# fi
+if [ -f ~/.dotfiles/_b00t_/_b00t_.bashrc ] ; then
+    echo "🥾 _b00t_"
+    . ~/.dotfiles/_b00t_/_b00t_.bashrc
+    echo "/🥾"
+fi
 
 # when .bash_profile exists then it runs before .bashrc and must call .bashrc
 if [ -f ~/.bashrc ]; then
     echo "🐚 ~/.bashrc"
     . ~/.bashrc
-    echo "/🐚 ~/.bashrc end"
+    echo "/🐚"
 fi
 
 # read .env and export each var
@@ -40,6 +40,7 @@ fi
 
 # check for .code-connect directory in home
 if [[ $IS_WSL == true ]] ; then
+    echo "🐧💌💙 WSL"
     [[ "$TERM_PROGRAM" == "vscode" ]] && . "$(code --locate-shell-integration-path bash)"
 elif [[ ! -d ~/.dotfiles/vscode.🆚/code-connect ]]; then
     # replace /home/brian/ with
@@ -51,22 +52,24 @@ elif [[ ! -d ~/.dotfiles/vscode.🆚/code-connect ]]; then
     #unalias code
 
     # . "$(code --locate-shell-integration-path bash)"
-    alias code='~/.dotfiles/vscode.🆚/.code-connect/bash/code.sh'
-    alias code-connect='~/.dotfiles/vscode.🆚/.code-connect/bash/code-connect.sh'
+    ## !?
+    # alias code='~/.dotfiles/vscode.🆚/.code-connect/bash/code.sh'
+    # alias code-connect='~/.dotfiles/vscode.🆚/.code-connect/bash/code-connect.sh'
 
     # 🤓 https://code.visualstudio.com/docs/terminal/shell-integration
 
-    # git config --global core.editor "'{path to editor}' -n -w"
-    export GIT_EDITOR="code -w -r"
-    export EDITOR='code -w -r'
-    git config --global core.editor "code --wait"
     # vscode
     # [[ "$TERM_PROGRAM" == "vscode" ]] && . "$(code --locate-shell-integration-path bash)"
-
     echo "✅🆚 vscode"
 else
     echo "🙈🆚 no vscode"
 fi
+
+# git config --global core.editor "'{path to editor}' -n -w"
+export GIT_EDITOR="code -w -r"
+export EDITOR='code -w -r'
+git config --global core.editor "code --wait"
+
 
 # vscode!
 
@@ -103,6 +106,8 @@ fi
 eval "$(starship init bash)"
 
 # kubectl krew
+
+
 export PATH="${KREW_ROOT:-$HOME/.krew}/bin:$PATH"
 
 # detect podman
@@ -129,15 +134,7 @@ else
     echo "🙈🐳 no docker"
 fi
 
-# detect bun
-if command -v bun &> /dev/null; then
-    # bun
-    export BUN_INSTALL="$HOME/.bun"
-    export PATH=$BUN_INSTALL/bin:$PATH
-fi
 
-
-source "$HOME/.rye/env"
 
 if [ -f ~/.huggingface/token ] ; then
  export HUGGING_FACE_HUB_TOKEN=$(cat ~/.huggingface/token)
@@ -149,5 +146,38 @@ if [ -f /usr/local/cuda ] ; then
     export CUDA_HOME=/usr/local/cuda
 fi
 
-# Created by `pipx` on 2024-01-10 08:51:49
-export PATH="$PATH:/home/brianh/.local/bin"
+# check for rye
+if [ -f "$HOME/.rye/env" ]; then
+    # Created by `pipx` on 2024-01-10 08:51:49
+    export PATH="$PATH:/home/brianh/.local/bin"
+    source "$HOME/.rye/env"
+else
+    echo "🙈🌾 no rye"
+fi
+
+if [ -f ~/.cargo/env ]; then
+    . "$HOME/.cargo/env"
+else
+    echo "🙈🦀 no cargo"
+fi
+
+
+# kubectl shell completion
+if [ -f ~/.kube/completion.bash.inc ]; then
+    source ~/.kube/completion.bash.inc
+fi
+if [ -f ~/.kube/config ]; then
+    export KUBECONFIG=~/.kube/config
+fi
+
+# detect bun
+if command -v bun &> /dev/null; then
+    # bun
+    echo "✅🍞 bun"
+    export BUN_INSTALL="$HOME/.bun"
+    export PATH=$BUN_INSTALL/bin:$PATH
+fi
+
+
+## I don't like nix
+# if [ -e /home/brianh/.nix-profile/etc/profile.d/nix.sh ]; then . /home/brianh/.nix-profile/etc/profile.d/nix.sh; fi # added by Nix installer

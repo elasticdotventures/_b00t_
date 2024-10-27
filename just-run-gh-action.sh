@@ -1,5 +1,12 @@
 #!/bin/bash
 
+# test for docker alias to podman, if it is then act isn't supported
+# https://github.com/nektos/act/issues/303
+if command -v podman &> /dev/null || alias docker | grep -q "podman"; then
+  echo "😭 podman is installed or docker is aliased to podman, act is not supported with podman."
+  exit 1
+fi
+
 # Check for required dependencies
 for cmd in fzf gh sed docker; do
   if ! command -v "$cmd" &> /dev/null; then

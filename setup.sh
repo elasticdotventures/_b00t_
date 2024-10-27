@@ -18,6 +18,7 @@ gh extension install github/gh-copilot --force
 
 
 sudo apt install -y build-essential joe
+sudo apt install libnotify-bin bc
 
 git config --global user.email "brianh@elastic.ventures"
 git config --global user.name "Brian H"
@@ -115,7 +116,10 @@ curl https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo gpg --dearmor 
 echo "deb [signed-by=/usr/share/keyrings/cloud.google.gpg] https://packages.cloud.google.com/apt cloud-sdk main" | sudo tee -a /etc/apt/sources.list.d/google-cloud-sdk.list
 sudo apt-get update && sudo apt-get install google-cloud-cli -y
 #sudo apt-get install google-cloud-cli-gke-gcloud-auth-plugin
-gcloud init
+# TODO: test for google cloud config before running init
+if ! gcloud config configurations list | grep -q 'NAME'; then
+  gcloud init
+fi
 gcloud config set compute/zone australia-southeast2-c
 
 
@@ -171,3 +175,4 @@ curl -sSf https://rye.astral.sh/get | RYE_INSTALL_OPTION="--yes" bash
 
 # datafusion
 cargo install datafusion-cli
+

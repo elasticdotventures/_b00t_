@@ -28,13 +28,13 @@ set -a
 ## 小路 \\
 ## Xiǎolù :: Path or Directory
 # THINGS YOU CAN EDIT:
-_B00T_C0DE_Path="/c0de/_b00t_"
-if [ -d "$HOME/_b00t_" ] ; then
-    _B00T_C0DE_Path="$HOME/_b00t_"
+_B00T_Path="$HOME/.dotfiles/_b00t_"
+if [ -d "$HOME/.dotfiles/_b00t_" ] ; then
+    _B00T_Path="$HOME/.dotfiles/_b00t_"
 fi
-export _B00T_C0DE_Path
-export _B00T_C0NFIG_Path="$HOME/.b00t"
-_b00t_INSPIRATION_FILE="$_B00T_C0DE_Path/./r3src_资源/inspiration.json"
+export _B00T_Path
+# export _B00T_C0NFIG_Path="$HOME/.b00t"
+_b00t_INSPIRATION_FILE="$_B00T_Path/./r3src_资源/inspiration.json"
 ## 小路 //
 
 
@@ -55,7 +55,7 @@ unset -f reb00t
 function reb00t() {
     unset -f _b00t_init_🥾_开始
     log_📢_记录 "🥾 restarting b00t"
-    source "$_B00T_C0DE_Path/_b00t_.bashrc"
+    source "$_B00T_Path/_b00t_.bashrc"
 }
 
 
@@ -77,7 +77,7 @@ pathAdd "$HOME/.yarn/bin"
 
 if [ "/usr/bin/docker" ] ; then
     echo "🐳 has d0cker! loading docker extensions"
-    source "$_B00T_C0DE_Path/docker.🐳/_bashrc.sh"
+    source "$_B00T_Path/docker.🐳/_bashrc.sh"
 
     ## 😔 docker context?
     ## https://docs.docker.com/engine/context/working-with-contexts/
@@ -113,6 +113,9 @@ export -f is_v3rs10n_大于
 ## * * * * * * //
 
 
+
+
+
 ##
 # does a bash/function exist?
 # 🍰 https://stackoverflow.com/questions/85880/determine-if-a-function-exists-in-bash
@@ -131,6 +134,7 @@ function has_fn_✅_存在() {
     # result=[[ -n "$exists" ]] || 1
 }
 export -f has_fn_✅_存在
+
 
 
 
@@ -459,11 +463,11 @@ function n0ta_xfile_📁_好不好() {
         return 0
     else
 
-        if ! has_fn_✅_存在 "crudini_get" ; then
-            :   # crudini_get doesn't exist.
-        elif [[ $( crudini_get "b00t" "has.$xfile" ) = "" ]] ; then
+        if ! has_fn_✅_存在 "toml_get" ; then
+            :   # toml_get doesn't exist.
+        elif [[ $( toml_get "b00t" "has.$xfile" ) = "" ]] ; then
             log_📢_记录 "👍 $xfile"
-            crudini_set "b00t" "has.$xfile" $( yyyymmdd )
+            toml_set "b00t" "has.$xfile" $( yyyymmdd )
         fi
         return 1
     fi
@@ -617,7 +621,7 @@ function motd() {
         fi
         motdz=('/tmp/motd.txt')
     else
-        readarray -t motdz < <(/usr/bin/fdfind .txt "$_B00T_C0DE_Path/./ubuntu.🐧/etc/")
+        readarray -t motdz < <(/usr/bin/fdfind .txt "$_B00T_Path/./ubuntu.🐧/etc/")
     fi
     local motdzQ=$( rand0 ${#motdz[@]} )
     # declare -p motdz
@@ -704,15 +708,12 @@ function motd() {
     log_📢_记录 "🥾📈 motd project stats, cleanup, tasks goes here. "
 
 
-    if [ -d "./.git" ] ; then
-        log_📢_记录 "🥾🐙😁 found .git repo"
+    if [ -d "$HOME/.dotfiles/.git" ] ; then
+        log_📢_记录 "🥾🐙😁 found $HOME/.dotfiles/.git repo"
         # github client
-        gh issue list
-
-        local skunk_x=$(git grep "🦨" | wc -l)
-        log_📢_记录 "🦨: $skunk_x"
+        (cd ~/.dotfiles && gh issue list && local skunk_x=$(git grep "🦨" | wc -l) &&  log_📢_记录 "🦨: $skunk_x")
     else
-        log_📢_记录 "🥾🐙😔 no .git dir "`pwd`
+        log_📢_记录 "🥾🐙😔 no ~/.dotfiles/.git dir "`pwd`
     fi
 
 }
@@ -737,92 +738,13 @@ if ! n0ta_xfile_📁_好不好 "/usr/bin/fdfind"  ; then
     export FZF_DEFAULT_COMMAND="/usr/bin/fdfind --type f"
 fi
 
-####
-# CRUDINI examples
-# 🤓 https://github.com/pixelb/crudini/blob/master/EXAMPLES
-# CRUDINI is used to store b00t config:
 
-if n0ta_xfile_📁_好不好 "/usr/bin/crudini" ; then
-    log_📢_记录 "🥳 need crudini to save data, installing now"
-    $SUDO_CMD apt-get install -y crudini bc
-fi
 
-## CRUDINI helper functions:
-function crudini_set() {
-    local args=("$@")
-    local topic=${args[0]}
-    local key=${args[1]}
-    local value=${args[2]}
-    crudini --set $CRUDINI_CFGFILE "${topic}" "${key}" "${value}"
-    return $?
-}
+## this must be sourced at the end
+source ~/.dotfiles/_b00t_/bash.🔨/_/toml-cli.sh
 
 
 
-function crudini_get() {
-    local args=("$@")
-
-    #if [[ "$#" -ne "2" ]] ; then
-    #    log_📢_记录 "crudini_get topic key"
-    #    exit 0
-    # fi
-
-    local topic=${args[0]}
-    local key=${args[1]}
-    echo $( crudini --get "$CRUDINI_CFGFILE" "${topic}" "${key}" )
-    return $?
-}
-
-# _seq: get a number from a sequence in b00t
-function crudini_seq() {
-    local args=("$@")
-    local seqlabel=${args[0]}
-
-    local x=$( crudini_get "b00t" "$seqlabel" )
-    if [ -z "$x" ] ; then x="0"; fi
-    x=$(echo "$x" + 1 | bc)
-    crudini_set "b00t" "$seqlabel" "$x"
-    echo $x
-    return 0
-}
-
-# verify integrity of crudini system
-function crudini_init() {
-    export CRUDINI_CFGFILE=$(expandPath "~/.b00t/config.ini")
-    local CRUDINI_DIR=`dirname $CRUDINI_CFGFILE`
-    if [ ! -d "$CRUDINI_DIR" ] ; then
-        log_📢_记录 "🐭 no local $CRUDINI_CFGFILE"
-        log_📢_记录 "🐭🥳 local dir $CRUDINI_DIR"
-        if [ ! -d "$CRUDINI_DIR" ] ; then
-            log_📢_记录 "🐭 creating CRUDINI dir $CRUDINI_DIR"
-            /bin/mkdir -p $CRUDINI_DIR
-            /bin/chmod 750 $CRUDINI_DIR
-            log_📢_记录 "🐭 init CRUDINI file $CRUDINI_CFGFILE"
-            crudini --set $CRUDINI_CFGFILE '_seq' "1"
-        else
-            #local x=$( crudini_get "b00t" "crudini_check" )
-            # x=$( [ -z "$x" ] && echo "0" )
-            local x=$( crudini_seq "crudini_check" )
-            log_📢_记录 "🐭😃CRUDINI _seq: #$x dir: $CRUDINI_DIR existed."
-        fi
-    fi
-    return 0
-}
-#  creates an export for $CRUDINI_CFGFILE
-crudini_init
-
-function crudini_ok () {
-if [ -f $CRUDINI_CFGFILE ] ; then
-    x=$( crudini_seq "crudini_check" )
-    log_📢_记录 "🐭🥾 CRUDINI _seq: #$x $CRUDINI_CFGFILE"
-    return 0
-else
-    log_📢_记录 "🐭🍒 CRUDINI br0ked. file: $CRUDINI_CFGFILE"
-    # todo: maybe some failsafe, i.e. redis or something.
-    return 1
-fi
-}
-crudini_ok
 
 
 ##
@@ -842,9 +764,9 @@ function has_sudo() {
         # https://stackoverflow.com/questions/23513045/how-to-check-if-a-process-is-running-inside-docker-container#:~:text=To%20check%20inside%20a%20Docker,%2Fproc%2F1%2Fcgroup%20.
         log_📢_记录 "🐳😁 found DOCKER"
     elif [ -f "$SUDO_CMD" ] ; then
-        if [[ -z $( crudini_get "b00t" "has.sudo" )  ]] ; then
+        if [[ -z $( toml_get "b00t" "has.sudo" )  ]] ; then
             log_📢_记录 "🥳 found sudo"
-            crudini_set "b00t" "has.sudo" `ymd_hms`
+            toml_set "b00t" "has.sudo" `ymd_hms`
         fi
     else
         log_📢_记录 "🐭 missed SUDO, try running _b00t_ inside docker."
@@ -852,7 +774,10 @@ function has_sudo() {
     fi
     export SUDO_CMD
 }
-has_sudo
+
+if [ -z "$_B00T_MISSING_TOOLS_" ] ; then
+    has_sudo
+fi
 
 
 
@@ -868,14 +793,18 @@ function debInst() {
     dpkg-query -Wf'${db:Status-abbrev}' "$1" 2>/dev/null | grep -q '^i'
 }
 
-if debInst "moreutils" ; then
-    # only show moreutils once.
-    if [ $( crudini_get "b00t" "has.moreutils" ) -eq "0" ] ; then
+if [ -n "$_B00T_MISSING_TOOLS_" ] ; then
+    log_📢_记录 "🥾😭 missing tools"
+elif debInst "moreutils" ; then
+    # Only show moreutils once.
+    value=$( toml_get "b00t" "has.moreutils" )
+    value=${value:-0}  # If value is empty, default to 0
+    if [ "$value" -eq "0" ] ; then
         log_📢_记录 "👍 debian moreutils is installed!"
-        crudini_set "b00t" "has.moreutils" $(yyyymmdd)
+        toml_set "b00t" "has.moreutils" "$(yyyymmdd)"
     fi
 else
-    log_📢_记录  "😲 install moreutils (required)"
+    log_📢_记录 "😲 install moreutils (required)"
     $SUDO_CMD apt-get install -y moreutils
 fi
 
@@ -890,10 +819,7 @@ fi
 
 
 
-
-
-
-export _b00t_JS0N_filepath=$(expandPath "~/.b00t/config.json")
+# export _b00t_JS0N_filepath=$(expandPath "~/.b00t/config.json")
 #function jqAddConfigValue () {
 #    echo '{ "names": ["Marie", "Sophie"] }' |\
 #    jq '.names |= .+ [
@@ -910,6 +836,7 @@ export _b00t_JS0N_filepath=$(expandPath "~/.b00t/config.json")
 #  "c": 3
 #}'
 #}
+
 
 
 ##

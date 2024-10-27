@@ -1,0 +1,14 @@
+install:
+	curl -fsSL https://bun.sh/install | bash
+	# bun init
+	# bun install puppeteer
+
+build:
+	docker build -t chrome-headless .
+
+run:
+	docker run -it -p 9222:9222 --rm chrome-headless
+
+bun:
+	bun run index.ts
+

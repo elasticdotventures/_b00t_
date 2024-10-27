@@ -49,11 +49,8 @@ alias itree='rg --files | tree --fromfile'
 
 alias tf=tofu
 alias k=kubectl
-alias k=kubectl
-export KUBECONFIG=~/.kube/config
 
 
 #alias aws='docker run --rm -it -v ~/.aws:/root/.aws docker.io/amazon/aws-cli'
-
-source "$HOME/.rye/env"
+# source "$HOME/.rye/env"
 
