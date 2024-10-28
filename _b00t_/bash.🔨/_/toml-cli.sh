@@ -23,7 +23,7 @@ function toml_init() {
     validate_toml_cli_installed || return 1
 
     export TOML_CFGFILE=$(expandPath "~/.dotfiles/$HOSTNAME.toml")
-    echo "TOML_CFGFILE=$TOML_CFGFILE"
+    # echo "TOML_CFGFILE=$TOML_CFGFILE"
     local TOML_DIR=$(dirname "$TOML_CFGFILE")
 
     if [ ! -d "$TOML_DIR" ]; then
@@ -45,7 +45,7 @@ function toml_set() {
     local section=$1
     local key=$2
     local value=$3
-    toml set "$TOML_CFGFILE" "${section}.${key}" "$value"
+    toml set "$TOML_CFGFILE" "${section}.${key}" "$value" > $TOML_CFGFILE
 }
 
 function toml_get() {

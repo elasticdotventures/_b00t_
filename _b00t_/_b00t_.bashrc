@@ -217,13 +217,14 @@ alias myp='ps -fjH -u $USER'
 
 
 # 🐍 Python
-if ! command -v pipx &> /dev/null; then
-    echo "pipx could not be found, installing..."
-    if [ -n "$(whereis register-python-argcomplete3)" ] ; then
-        eval "$(register-python-argcomplete3 pipx)"
-        # pipx run
-    fi
-fi
+## moving from pipx to rye
+# if ! command -v pipx &> /dev/null; then
+#     echo "pipx could not be found, installing..."
+#     if [ -n "$(whereis register-python-argcomplete3)" ] ; then
+#         eval "$(register-python-argcomplete3 pipx)"
+#         # pipx run
+#     fi
+# fi
 #
 
 
@@ -817,15 +818,9 @@ else
 fi
 
 
-
-
-
-
 # 60秒 Miǎo seconds
 # 3分钟 Fēnzhōng minutes
 # 3小时 Xiǎoshí seconds
-
-
 
 # export _b00t_JS0N_filepath=$(expandPath "~/.b00t/config.json")
 #function jqAddConfigValue () {
@@ -834,7 +829,6 @@ fi
 #        "Natalie"
 #    ]'
 #}
-
 
 # 🍰 https://lzone.de/cheat-sheet/jq
 #function jqSetConfigValue () {
@@ -846,11 +840,10 @@ fi
 #}
 
 
-
 ##
 export _user="$(id -u -n)"
 export _uid="$(id -u)"
 echo "🙇‍♂️ \$_user: $_user  \$_uid : $_uid"
 set +o nounset
-set +a  # turn off export all
+set +a  # turn off export all (breaks bash autocomplete)
 
