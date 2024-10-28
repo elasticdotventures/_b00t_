@@ -53,14 +53,14 @@ elif [[ ! -d ~/.dotfiles/vscode.🆚/code-connect ]]; then
 
     # . "$(code --locate-shell-integration-path bash)"
     ## !?
-    # alias code='~/.dotfiles/vscode.🆚/.code-connect/bash/code.sh'
-    # alias code-connect='~/.dotfiles/vscode.🆚/.code-connect/bash/code-connect.sh'
+    alias code='~/.dotfiles/vscode.🆚/.code-connect/bash/code.sh'
+    alias code-connect='~/.dotfiles/vscode.🆚/.code-connect/bash/code-connect.sh'
 
     # 🤓 https://code.visualstudio.com/docs/terminal/shell-integration
 
     # vscode
     # [[ "$TERM_PROGRAM" == "vscode" ]] && . "$(code --locate-shell-integration-path bash)"
-    echo "✅🆚 vscode"
+    echo "✅🆚 vscode (remote)"
 else
     echo "🙈🆚 no vscode"
 fi

@@ -20,9 +20,10 @@ function validate_toml_cli_installed() {
 function toml_init() {
 
     # Check if toml-cli is installed, short circuit
-    validate_toml_cli_installed && return 1
+    validate_toml_cli_installed || return 1
 
     export TOML_CFGFILE=$(expandPath "~/.dotfiles/$HOSTNAME.toml")
+    echo "TOML_CFGFILE=$TOML_CFGFILE"
     local TOML_DIR=$(dirname "$TOML_CFGFILE")
 
     if [ ! -d "$TOML_DIR" ]; then
@@ -74,6 +75,6 @@ function toml_ok() {
 }
 
 # Initialize TOML configuration
-toml_init
-#toml_ok
+# toml_init
+# toml_ok
 

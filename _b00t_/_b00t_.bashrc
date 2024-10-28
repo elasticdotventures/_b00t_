@@ -21,8 +21,10 @@ trap "set +o nounset" EXIT  # restore nounset at exit, even in crash!
 umask 000
 
 
-# mark variables which are modified or created for export
+# mark variables which are modified or created for export (all BASH variables become export)
+# NOTE: https://askubuntu.com/questions/1001653/why-am-i-getting-parse-usage-error-on-function-invocation-in-bash
 set -a
+trap 'set +a' EXIT
 
 
 ## 小路 \\
@@ -742,6 +744,7 @@ fi
 
 ## this must be sourced at the end
 source ~/.dotfiles/_b00t_/bash.🔨/_/toml-cli.sh
+toml_init
 
 
 
@@ -775,7 +778,12 @@ function has_sudo() {
     export SUDO_CMD
 }
 
-if [ -z "$_B00T_MISSING_TOOLS_" ] ; then
+is_b00table() {
+    # a simple set of checks to make sure b00t required tools are available.
+    [ -n "${_B00T_MISSING_TOOLS_:-}" ] && return 0 || return 1
+}
+
+if ! is_b00table ; then
     has_sudo
 fi
 
@@ -793,7 +801,7 @@ function debInst() {
     dpkg-query -Wf'${db:Status-abbrev}' "$1" 2>/dev/null | grep -q '^i'
 }
 
-if [ -n "$_B00T_MISSING_TOOLS_" ] ; then
+if [ ! is_b00table ] ; then
     log_📢_记录 "🥾😭 missing tools"
 elif debInst "moreutils" ; then
     # Only show moreutils once.
@@ -844,4 +852,5 @@ export _user="$(id -u -n)"
 export _uid="$(id -u)"
 echo "🙇‍♂️ \$_user: $_user  \$_uid : $_uid"
 set +o nounset
+set +a  # turn off export all
 
