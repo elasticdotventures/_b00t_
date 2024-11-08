@@ -11,7 +11,8 @@ install:
     ln -sf /usr/bin/batcat ~/.local/bin/bat
     # 🦨 TODO setup.sh .. but first isolate python, rust, js
     # 🦨 TODO replace crudini with toml-cli
-    command -v crudini >/dev/null 2>&1 || rye install crudini
+    #command -v rye > /dev/null 2>&1 || curl -sSf https://rye.astral.sh/get | RYE_INSTALL_OPTION="--yes" bash
+    #command -v crudini >/dev/null 2>&1 || rye install crudini
     command -v dotenv >/dev/null 2>&1 || rye install python-dotenv[cli]
     command -v toml-cli >/dev/null 2>&1 || cargo install toml-cli
     command -v dotenvy >/dev/null 2>&1 || cargo install dotenvy --features cli
