@@ -2,6 +2,10 @@
 # Alias to get the Git repository root
 repo-root := `git rev-parse --show-toplevel`
 
+release:
+    gh release create v1.1.0 --title "Release v1.1.0" --notes "Release notes for version 1.1.0"
+
+
 install:
     echo "🥾 _b00t_ install"
     ## TODO: someday.
