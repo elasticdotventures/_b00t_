@@ -1,15 +1,24 @@
 #!/bin/bash
 
-# a lot of this was migrated from promptexecution/infrastructure
-## github cli (ubuntu)
-# 🤓 https://github.com/cli/cli/blob/trunk/docs/install_linux.md
-type -p curl >/dev/null || (sudo apt update && sudo apt install curl -y)
-curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | sudo dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg \
-&& sudo chmod go+r /usr/share/keyrings/githubcli-archive-keyring.gpg \
-&& echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null \
-&& sudo apt update \
-&& sudo apt install gh -y
+# 🥾 migrated from promptexecution/infrastructure
+# this is the *minimal* setup for _b00t_ on bash
+# the first few lines can be cut and paste onto a fresh server, then run ~/.dotfiles/setup.sh
 
+sudo apt update && sudo apt upgrade -y
+sudo apt install software-properties-common -y
+
+if ! command -v gh; then
+  ## github cli (ubuntu)
+  # 🤓 https://github.com/cli/cli/blob/trunk/docs/install_linux.md
+  type -p curl >/dev/null || (sudo apt update && sudo apt install curl -y)
+  curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | sudo dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg \
+  && sudo chmod go+r /usr/share/keyrings/githubcli-archive-keyring.gpg \
+  && echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null \
+  && sudo apt update \
+  && sudo apt install git gh -y
+fi
+
+## setup extensions now.
 # 🤓
 gh extension install https://github.com/nektos/gh-act
 # 🤓 https://github.com/github/gh-copilot
@@ -17,17 +26,34 @@ gh extension install github/gh-copilot --force
 
 
 
-sudo apt install -y build-essential joe
-sudo apt install libnotify-bin bc
+# if stow is not installed, install it
+if ! command -v stow; then
+  sudo apt install stow -y
+fi
+
+if [ ! -d ~/.dotfiles ]; then
+  gh repo clone elasticdotventures/dotfiles ~/.dotfiles -- --depth 1
+fi
+# stow is idempotent
+stow -d ~/.dotfiles -t ~ bash
+
+
+
+## now setup dotfiles, and run:
+## ~/.dotfiles/setup.sh
+
+
+
+sudo apt install -y build-essential joe libnotify-bin bc
 
 git config --global user.email "brianh@elastic.ventures"
 git config --global user.name "Brian H"
 
 
-sudo apt install ntpdate
+sudo apt install -y ntpdate
 sudo ntpdate pool.ntp.org
 
-sudo apt update
+sudo apt update -yy
 sudo apt-get install -y jq fzf ripgrep tree
 
 # https://opentofu.org/docs/intro/install/deb
@@ -64,14 +90,29 @@ curl --proto '=https' --tlsv1.2 -sSf https://just.systems/install.sh | sudo bash
 # 💩 yq
 # https://mikefarah.gitbook.io/yq/v/v3.x/
 # docker run --rm -v "${PWD}":/workdir mikefarah/yq
-sudo add-apt-repository -y ppa:rmescandon/yq
-sudo apt update
-sudo apt install yq bat -y
+## ubuntu noble missing ppa
+# https://github.com/mikefarah/yq/issues/2081
+# sudo add-apt-repository -y ppa:rmescandon/yq
+
+#sudo apt update
+#sudo apt install yq bat -y
+
+# check for file if it exists delete it
+if [ -f /etc/apt/sources.list.d/rmescandon-ubuntu-yq-noble.sources ]; then
+  sudo rm /etc/apt/sources.list.d/rmescandon-ubuntu-yq-noble.sources
+fi
+
+curl https://zyedidia.github.io/eget.sh | sh
+mv eget ~/.local/bin/eget
+./eget mikefarah/yq --upgrade-only --tag v4.44.6
+
+
 ## someday..
 # alias yq="podman run --rm -v \"${PWD}\":/workdir docker.io/mikefarah/yq"
 # https://kislyuk.github.io/yq/
 
 # ubuntu installs bat as batcat
+sudo apt install bat -y
 mkdir -p ~/.local/bin
 ln -s /usr/bin/batcat ~/.local/bin/bat
 
