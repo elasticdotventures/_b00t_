@@ -5,7 +5,6 @@
 #
 
 
-
 # usage:
 #   source "./_b00t_.bashrc"
 #   may also *eventually* run via commandline.
@@ -23,8 +22,8 @@ umask 000
 
 # mark variables which are modified or created for export (all BASH variables become export)
 # NOTE: https://askubuntu.com/questions/1001653/why-am-i-getting-parse-usage-error-on-function-invocation-in-bash
-set -a
-trap 'set +a' EXIT
+#set -a
+#trap 'set +a' EXIT
 
 
 ## 小路 \\
@@ -365,15 +364,15 @@ function barf_🤮 () {
 
 
 
-# Webi, presently breaks alpine config!
-# https://github.com/elasticdotventures/webi-installers
-webi=$(whereis webi)
-if [ -z "$webi" ] ; then
-    curl https://webinstall.dev/webi | bash
-    # Should install to $HOME/.local/opt/<package>-<version> or $HOME/.local/bin
-    # Should install to $HOME/.local/opt/<package>-<version> or $HOME/.local/bin
-    # Should not need sudo (except perhaps for a one-time setcap, etc)
-fi
+# # Webi, presently breaks alpine config!
+# # https://github.com/elasticdotventures/webi-installers
+# webi=$(whereis webi)
+# if [ -z "$webi" ] ; then
+#     curl https://webinstall.dev/webi | bash
+#     # Should install to $HOME/.local/opt/<package>-<version> or $HOME/.local/bin
+#     # Should install to $HOME/.local/opt/<package>-<version> or $HOME/.local/bin
+#     # Should not need sudo (except perhaps for a one-time setcap, etc)
+# fi
 
 
 #
@@ -845,5 +844,10 @@ export _user="$(id -u -n)"
 export _uid="$(id -u)"
 echo "🙇‍♂️ \$_user: $_user  \$_uid : $_uid"
 set +o nounset
-set +a  # turn off export all (breaks bash autocomplete)
+#set +a  # turn off export all (breaks bash autocomplete)
 
+##
+if [ -f "__b00t__.sh" ]; then
+    echo "__b00t__.sh"
+    source "__b00t__.sh"
+fi

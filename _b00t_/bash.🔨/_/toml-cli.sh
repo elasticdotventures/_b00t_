@@ -20,6 +20,7 @@ function validate_toml_cli_installed() {
 function toml_init() {
 
     # Check if toml-cli is installed, short circuit
+    export PATH="$HOME/.cargo/bin:$PATH"
     validate_toml_cli_installed || return 1
 
     export TOML_CFGFILE=$(expandPath "~/.dotfiles/$HOSTNAME.toml")

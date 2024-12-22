@@ -10,17 +10,17 @@ my exploration into a 'neo-modern' system tooling, it's a few gb of 'useful'
 a strongly opinionated DIFM setup ..
 
 	rich WSL2 ubuntu unix cli, vscode, github + gh cli
-	llvm/clang, modern python, rust, k8s, docker (was podman) .. 
+	llvm/clang, modern python, rust, k8s, docker (was podman) ..
 	terraform (tofu), azure, aws, g8s, cloudflare
 	warning: liberal use of 'neo-modern' unix moreutils, fzf, etc..
 
-you can use this repo as a template and pull in my changes as you wish, 
+you can use this repo as a template and pull in my changes as you wish,
 if curious feel free to open issues for chat & q/a, but consider this is
-mostly intended to create a 'nuclear-powered-batteries included'  
+mostly intended to create a 'nuclear-powered-batteries included'
 for my micro-legion of AI-pairs
 
-# New System: 
-see [setup.sh] for minimal bootstrap then `just install`  
+# New System:
+see [setup.sh] for minimal bootstrap then `just install`
 (fwiw install *should* also safely upgrade)
 
 
@@ -30,7 +30,7 @@ see [setup.sh] for minimal bootstrap then `just install`
 apt install stow
 
 gh repo clone elasticdotventures/dotfiles ~/.dotfiles
-# or 
+# or
 gh repo clone elasticdotventures/dotfiles ~/.dotfiles -- --depth 1
 
 just install
@@ -67,3 +67,4 @@ explorer.exe $(wslpath -w ./rendered_pdfs/)
 * https://bbarrows.com/posts/kubernetes-aliases-functions
 * https://krew.sigs.k8s.io/plugins/
 * https://github.com/xero/dotfiles
+* https://olivernguyen.io/w/direnv.run/

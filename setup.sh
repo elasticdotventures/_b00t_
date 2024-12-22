@@ -46,9 +46,9 @@ stow -d ~/.dotfiles -t ~ bash
 
 sudo apt install -y build-essential joe libnotify-bin bc
 
+## TODO: config file? -- for now change these settings to yours
 git config --global user.email "brianh@elastic.ventures"
 git config --global user.name "Brian H"
-
 
 sudo apt install -y ntpdate
 sudo ntpdate pool.ntp.org
