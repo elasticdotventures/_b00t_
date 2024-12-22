@@ -18,7 +18,8 @@ install:
     #command -v rye > /dev/null 2>&1 || curl -sSf https://rye.astral.sh/get | RYE_INSTALL_OPTION="--yes" bash
     #command -v crudini >/dev/null 2>&1 || rye install crudini
     command -v dotenv >/dev/null 2>&1 || rye install python-dotenv[cli]
-    command -v toml-cli >/dev/null 2>&1 || cargo install toml-cli
+    # toml-cli binary is just 'toml'
+    command -v toml >/dev/null 2>&1 || cargo install toml-cli
     command -v dotenvy >/dev/null 2>&1 || cargo install dotenvy --features cli
     command -v yq >/dev/null 2>&1 || sudo wget https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 -O /usr/bin/yq && sudo chmod +x /usr/bin/yq
     command -v eget >/dev/null 2>&1 || (curl https://zyedidia.github.io/eget.sh | sh && sudo mv -v eget /usr/local/bin/)
