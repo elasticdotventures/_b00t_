@@ -43,6 +43,8 @@ alias ymd="date +'%Y%m%d'"
 alias ymd_hm="date +'%Y%m%d.%H%M'"
 alias ymd_hms="date +'%Y%m%d.%H%M%S'"
 
+# generate a random password
+alias randpw="tr -dc 'a-zA-Z0-9' < /dev/urandom | head -c 16"
 
 # itree, like tree but ignores .git
 alias itree='rg --files | tree --fromfile'

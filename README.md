@@ -68,3 +68,8 @@ explorer.exe $(wslpath -w ./rendered_pdfs/)
 * https://krew.sigs.k8s.io/plugins/
 * https://github.com/xero/dotfiles
 * https://olivernguyen.io/w/direnv.run/
+
+gh issue create "subject"
+gh issue develop # --checkout
+
+

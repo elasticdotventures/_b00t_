@@ -710,13 +710,19 @@ function motd() {
     log_📢_记录 "🥾📈 motd project stats, cleanup, tasks goes here. "
 
 
-    if [ -d "$HOME/.dotfiles/.git" ] ; then
-        log_📢_记录 "🥾🐙😁 found $HOME/.dotfiles/.git repo"
+    if [ -d .git ]; then
+        gh issue list
+        local skunk_x=$(git grep "🦨" | wc -l)
+    elif [ -d "$HOME/.dotfiles/.git" ] ; then
+        log_📢_记录 "🥾: found $HOME/.dotfiles/.git repo"
         # github client
-        (cd ~/.dotfiles && gh issue list && local skunk_x=$(git grep "🦨" | wc -l) &&  log_📢_记录 "🦨: $skunk_x")
+        ##  if a .git dir exists, check for local issues, otheriwse list for ~/.dotfiles
+        #(cd ~/.dotfiles && gh issue list && local skunk_x=$(git grep "🦨" | wc -l) &&  log_📢_记录 "🦨: $skunk_x")
+        cd ~/.dotfiles && gh issue list && skunk_x=$(git grep "🦨" | wc -l) && log_📢_记录 "🦨: $skunk_x"
     else
         log_📢_记录 "🥾🐙😔 no ~/.dotfiles/.git dir "`pwd`
     fi
+    log_📢_记录 "🦨: $skunk_x"
 
 }
 
