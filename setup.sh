@@ -4,6 +4,8 @@
 # this is the *minimal* setup for _b00t_ on bash
 # the first few lines can be cut and paste onto a fresh server, then run ~/.dotfiles/setup.sh
 
+# 🤓 my goal is to make this idempotent, so it will both install+upgrade (**someday)
+
 sudo apt update && sudo apt upgrade -y
 sudo apt install software-properties-common -y
 
@@ -50,42 +52,55 @@ sudo apt install -y build-essential joe libnotify-bin bc
 git config --global user.email "brianh@elastic.ventures"
 git config --global user.name "Brian H"
 
+
 sudo apt install -y ntpdate
 sudo ntpdate pool.ntp.org
 
 sudo apt update -yy
 sudo apt-get install -y jq fzf ripgrep tree
 
-# https://opentofu.org/docs/intro/install/deb
-curl --proto '=https' --tlsv1.2 -fsSL 'https://packages.opentofu.org/install/repositories/opentofu/tofu/script.deb.sh?any=true' -o /tmp/tofu-repository-setup.sh
-# Inspect the downloaded script at /tmp/tofu-repository-setup.sh before running
-sudo bash /tmp/tofu-repository-setup.sh
-rm /tmp/tofu-repository-setup.sh
-
-sudo apt-get install -y tofu
+if ! command -v tofu; then
+  # https://opentofu.org/docs/intro/install/deb
+  curl --proto '=https' --tlsv1.2 -fsSL 'https://packages.opentofu.org/install/repositories/opentofu/tofu/script.deb.sh?any=true' -o /tmp/tofu-repository-setup.sh
+  # Inspect the downloaded script at /tmp/tofu-repository-setup.sh before running
+  sudo bash /tmp/tofu-repository-setup.sh
+  rm /tmp/tofu-repository-setup.sh
+  sudo apt-get install -y tofu
+fi
 alias tf=tofu
 
 
-
-curl -sS https://starship.rs/install.sh | sh
-echo eval "$(starship init bash)" >> ~/.bashrc
+if ! command -v starship &> /dev/null; then
+  curl -sS https://starship.rs/install.sh | sh
+  echo 'eval "$(starship init bash)"' >> ~/.bashrc
+fi
 
 
 # 🦀 rust
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-. "$HOME/.cargo/env"
+if ! command -v rustc &> /dev/null; then
+  curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+  . "$HOME/.cargo/env"
+else
+  rustup update
+fi
 
-# dotenvy
-cargo install dotenvy --bin dotenvy --features cli
+if ! command -v dotenvy &> /dev/null; then
+  # dotenvy
+  cargo install dotenvy --bin dotenvy --features cli
+fi
 
 
 # tree but ignores .git (useful for chatgpt dumps)
+if ! command -v rg &> /dev/null; then
+  sudo apt-get install -y ripgrep
+fi
 alias itree='rg --files | tree --fromfile'
-cargo install ripgrep
 
 
 # just is a command runner
-curl --proto '=https' --tlsv1.2 -sSf https://just.systems/install.sh | sudo bash -s -- --to /usr/local/bin
+if ! command -v just &> /dev/null; then
+  curl --proto '=https' --tlsv1.2 -sSf https://just.systems/install.sh | sudo bash -s -- --to /usr/local/bin
+fi
 
 # 💩 yq
 # https://mikefarah.gitbook.io/yq/v/v3.x/
@@ -102,9 +117,14 @@ if [ -f /etc/apt/sources.list.d/rmescandon-ubuntu-yq-noble.sources ]; then
   sudo rm /etc/apt/sources.list.d/rmescandon-ubuntu-yq-noble.sources
 fi
 
-curl https://zyedidia.github.io/eget.sh | sh
-mv eget ~/.local/bin/eget
-./eget mikefarah/yq --upgrade-only --tag v4.44.6
+if ! command -v eget &> /dev/null; then
+  curl https://zyedidia.github.io/eget.sh | sh
+  mv eget ~/.local/bin/eget
+fi
+
+if ! command -v yq &> /dev/null; then
+  ~/.local/bin/eget mikefarah/yq --to ~/.local/bin
+fi
 
 
 ## someday..
@@ -121,21 +141,25 @@ ln -s /usr/bin/batcat ~/.local/bin/bat
 # for pgrx, llvm
  sudo apt install -y libclang-dev
 
-# aws configure
-wget https://github.com/engineerd/wasm-to-oci/releases/download/v0.1.2/linux-amd64-wasm-to-oci
-mv linux-amd64-wasm-to-oci wasm-to-oci
-chmod +x wasm-to-oci
-sudo cp wasm-to-oci /usr/local/bin
+# wasm to oci
+if ! command -v wasm-to-oci &> /dev/null; then
+  wget https://github.com/engineerd/wasm-to-oci/releases/download/v0.1.2/linux-amd64-wasm-to-oci
+  mv linux-amd64-wasm-to-oci wasm-to-oci
+  chmod +x wasm-to-oci
+  sudo cp wasm-to-oci /usr/local/bin
+fi
 
 # azure
 alias az="docker run -it -v ${HOME}/.ssh:/root/.ssh mcr.microsoft.com/azure-cli"
 
 # aws
 # sudo apt-get install -y awscli
-cd /tmp
-curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
-unzip awscliv2.zip
-sudo ./aws/install
+if ! command -v aws &> /dev/null; then
+  cd /tmp
+  curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+  unzip awscliv2.zip
+  sudo ./aws/install
+fi
 # aws configure
 # OR
 # mkdir -p ~/.aws
@@ -151,18 +175,17 @@ sudo ./aws/install
 #gcloud init
 
 # gcloud
-# https://cloud.google.com/sdk/docs/install#deb
-sudo apt-get install apt-transport-https ca-certificates gnupg curl
-curl https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo gpg --dearmor -o /usr/share/keyrings/cloud.google.gpg
-echo "deb [signed-by=/usr/share/keyrings/cloud.google.gpg] https://packages.cloud.google.com/apt cloud-sdk main" | sudo tee -a /etc/apt/sources.list.d/google-cloud-sdk.list
-sudo apt-get update && sudo apt-get install google-cloud-cli -y
-#sudo apt-get install google-cloud-cli-gke-gcloud-auth-plugin
-# TODO: test for google cloud config before running init
-if ! gcloud config configurations list | grep -q 'NAME'; then
-  gcloud init
+if ! command -v gcloud &> /dev/null; then
+  # https://cloud.google.com/sdk/docs/install#deb
+  sudo apt-get install apt-transport-https ca-certificates gnupg curl -y
+  curl https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo gpg --dearmor -o /usr/share/keyrings/cloud.google.gpg
+  echo "deb [signed-by=/usr/share/keyrings/cloud.google.gpg] https://packages.cloud.google.com/apt cloud-sdk main" | sudo tee -a /etc/apt/sources.list.d/google-cloud-sdk.list
+  sudo apt-get update && sudo apt-get install google-cloud-cli -y
+  if ! gcloud config configurations list | grep -q 'NAME'; then
+    gcloud init
+  fi
+  gcloud config set compute/zone australia-southeast2-c
 fi
-gcloud config set compute/zone australia-southeast2-c
-
 
 # The docker route probably won't work with terraform.
 #docker pull gcr.io/google.com/cloudsdktool/google-cloud-cli:latest
@@ -174,19 +197,24 @@ gcloud config set compute/zone australia-southeast2-c
 
 # kubectl command completion
 
-# Installing bash completion on Linux
-## If bash-completion is not installed on Linux, install the 'bash-completion' package
-## via your distribution's package manager.
-## Load the kubectl completion code for bash into the current shell
-source <(kubectl completion bash)
-## Write bash completion code to a file and source it from .bash_profile
-kubectl completion bash > ~/.kube/completion.bash.inc
-printf "
-# kubectl shell completion
-source '$HOME/.kube/completion.bash.inc'
-" >> $HOME/.bash_profile
-source $HOME/.bash_profile
 
+
+# Installing bash completion on Linux
+if [ ! -f "$HOME/.kube/completion.bash.inc" ]; then
+  ## If bash-completion is not installed on Linux, install the 'bash-completion' package
+  ## via your distribution's package manager.
+  ## Load the kubectl completion code for bash into the current shell
+  source <(kubectl completion bash)
+  ## Write bash completion code to a file and source it from .bash_profile
+  kubectl completion bash > "$HOME/.kube/completion.bash.inc"
+  printf "
+  # kubectl shell completion
+  source '$HOME/.kube/completion.bash.inc'
+  " >> $HOME/.bash_profile
+  source $HOME/.bash_profile
+fi
+
+## 🤔 .. i might remove this.
 # krew kubectl plugin
 (
   set -x; cd "$(mktemp -d)" &&
@@ -208,12 +236,17 @@ source $HOME/.bash_profile
 # tar -xvzf kubeseal-${KUBESEAL_VERSION:?}-linux-amd64.tar.gz kubeseal
 # sudo install -m 755 kubeseal /usr/local/bin/kubeseal
 
-# Ubuntu/Debian
-sudo apt-get install inotify-tools
+# inotify-tools
+if ! command -v inotifywait &> /dev/null; then
+  sudo apt-get install -y inotify-tools
+fi
 
 # Rye - cargo for python
-curl -sSf https://rye.astral.sh/get | RYE_INSTALL_OPTION="--yes" bash
+if ! command -v rye &> /dev/null; then
+  curl -sSf https://rye.astral.sh/get | RYE_INSTALL_OPTION="--yes" bash
+fi
 
 # datafusion
-cargo install datafusion-cli
-
+if ! command -v datafusion-cli &> /dev/null; then
+  cargo install datafusion-cli
+fi
