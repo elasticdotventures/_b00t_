@@ -70,12 +70,6 @@ fi
 alias tf=tofu
 
 
-if ! command -v starship &> /dev/null; then
-  curl -sS https://starship.rs/install.sh | sh
-  echo 'eval "$(starship init bash)"' >> ~/.bashrc
-fi
-
-
 # 🦀 rust
 if ! command -v rustc &> /dev/null; then
   curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
@@ -84,10 +78,16 @@ else
   rustup update
 fi
 
-if ! command -v dotenvy &> /dev/null; then
-  # dotenvy
-  cargo install dotenvy --bin dotenvy --features cli
-fi
+
+#curl -sS https://starship.rs/install.sh | sh
+sudo apt-get update
+sudo apt install -y cmake pkg-config
+cargo install starship --locked
+echo eval "$(starship init bash)" >> ~/.bashrc
+
+
+# dotenvy
+cargo install dotenvy --bin dotenvy --features cli
 
 
 # tree but ignores .git (useful for chatgpt dumps)
@@ -95,7 +95,6 @@ if ! command -v rg &> /dev/null; then
   sudo apt-get install -y ripgrep
 fi
 alias itree='rg --files | tree --fromfile'
-
 
 # just is a command runner
 if ! command -v just &> /dev/null; then
@@ -114,17 +113,16 @@ fi
 
 # check for file if it exists delete it
 if [ -f /etc/apt/sources.list.d/rmescandon-ubuntu-yq-noble.sources ]; then
+  # the ppa was abandoned, so we can't use it after ubuntu 20.04
   sudo rm /etc/apt/sources.list.d/rmescandon-ubuntu-yq-noble.sources
 fi
 
-if ! command -v eget &> /dev/null; then
-  curl https://zyedidia.github.io/eget.sh | sh
-  mv eget ~/.local/bin/eget
-fi
+# eget is a programmatic way to install stuff directly from github
+curl https://zyedidia.github.io/eget.sh | sh
+mv eget ~/.local/bin/eget
 
-if ! command -v yq &> /dev/null; then
-  ~/.local/bin/eget mikefarah/yq --to ~/.local/bin
-fi
+./eget mikefarah/yq --upgrade-only --tag v4.44.6
+mv yq ~/.local/bin/yq
 
 
 ## someday..
@@ -227,7 +225,7 @@ fi
 )
 
 # kubectl krew install cilium
-# 💩 @jamesc says n0.
+# 💩 @jamesc says n0 to kubeseal (anti-pattern)
 
 # ## kubeseal
 # ## https://github.com/bitnami-labs/sealed-secrets
@@ -241,9 +239,14 @@ if ! command -v inotifywait &> /dev/null; then
   sudo apt-get install -y inotify-tools
 fi
 
-# Rye - cargo for python
+# Rye is rust cargo for python
 if ! command -v rye &> /dev/null; then
   curl -sSf https://rye.astral.sh/get | RYE_INSTALL_OPTION="--yes" bash
+fi
+
+if ! command -v uv &> /dev/null; then
+  # On macOS and Linux. .. now perhaps i think uv > rye
+  curl -LsSf https://astral.sh/uv/install.sh | sh
 fi
 
 # datafusion
