@@ -249,6 +249,12 @@ if ! command -v uv &> /dev/null; then
   curl -LsSf https://astral.sh/uv/install.sh | sh
 fi
 
+# Rye - cargo for python
+# curl -sSf https://rye.astral.sh/get | RYE_INSTALL_OPTION="--yes" bash
+
+# uv 
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
 # datafusion
 if ! command -v datafusion-cli &> /dev/null; then
   cargo install datafusion-cli
