@@ -709,16 +709,29 @@ function motd() {
     log_📢_记录 "lang: $LANG"
     log_📢_记录 "🥾📈 motd project stats, cleanup, tasks goes here. "
 
-
     if [ -d .git ]; then
         gh issue list
         local skunk_x=$(git grep "🦨" | wc -l)
     elif [ -d "$HOME/.dotfiles/.git" ] ; then
+        
         log_📢_记录 "🥾: found $HOME/.dotfiles/.git repo"
         # github client
         ##  if a .git dir exists, check for local issues, otheriwse list for ~/.dotfiles
-        #(cd ~/.dotfiles && gh issue list && local skunk_x=$(git grep "🦨" | wc -l) &&  log_📢_记录 "🦨: $skunk_x")
-        cd ~/.dotfiles && gh issue list && skunk_x=$(git grep "🦨" | wc -l) && log_📢_记录 "🦨: $skunk_x"
+        (cd "$HOME/.dotfiles" && gh issue list && local skunk_x=$(git grep "🦨" | wc -l) &&  log_📢_记录 "🦨: $skunk_x")
+
+        # check for latest release tag of _b00t_ in github using gh cli
+        NET_VERSION=$(cd "$HOME/.dotfiles" && gh release view -R elasticdotventures/dotfiles --json tagName | jq -r .tagName)
+        
+        # compare to local release
+        OUR_VERSION=$(cd "$HOME/.dotfiles" && git tag -l | sort -V | tail -n 1)
+
+        if [ "$NET_VERSION" == "$OUR_VERSION" ] ; then
+            log_📢_记录 "🥾📈: is on latest: $NET_VERSION  (local)"
+        else
+            log_📢_记录 "🥾📈: latest release: $NET_VERSION | local: $OUR_VERSION"
+        fi
+        
+        
     else
         log_📢_记录 "🥾🐙😔 no ~/.dotfiles/.git dir "`pwd`
     fi
