@@ -3,7 +3,14 @@
 repo-root := `git rev-parse --show-toplevel`
 
 release:
+    
     gh release create v1.1.0 --title "Release v1.1.0" --notes "Release notes for version 1.1.0"
+
+        # check for latest release tag of _b00t_ in github using gh cli
+        NET_VERSION=$(cd "$HOME/.dotfiles" && gh release view -R elasticdotventures/dotfiles --json tagName | jq -r .tagName)
+        
+        # compare to local release
+        OUR_VERSION=$(cd "$HOME/.dotfiles" && git tag -l | sort -V | tail -n 1)
 
 
 install:

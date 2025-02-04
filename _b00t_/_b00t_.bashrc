@@ -63,6 +63,20 @@ function reb00t() {
 
 
 
+## 获取版本 \\
+## Huòqǔ bǎnběn :: Get Version
+unset -f _b00t_get_version
+function _b00t_get_version() {
+    local repo="$1"
+    local version=$(cd "$repo" && git tag -l | sort -V | tail -n 1)
+    echo "$version"
+}
+export -f _b00t_get_version
+
+
+
+
+
 ## * * * * * \\
 ## pathAdd
 unset pathAdd
@@ -75,6 +89,7 @@ function pathAdd() {
 pathAdd "$HOME/.local/bin"
 pathAdd "$HOME/.yarn/bin"
 ## * * * * * //
+
 
 if [ "/usr/bin/docker" ] ; then
     echo "🐳 has d0cker! loading docker extensions"
@@ -149,7 +164,7 @@ if [ "$_b00t_exists" == "function" ] ; then
     export _b00t_VERSION_was="$_b00t_VERSION"
 fi
 # -------------- CONFIGURABLE SETTING -----------------
-export _b00t_VERSION="1.0.15"
+export _b00t_VERSION="1.0.16"
 # -----------------------------------------------------
 
 # syntax: current required
@@ -718,17 +733,14 @@ function motd() {
         # github client
         ##  if a .git dir exists, check for local issues, otheriwse list for ~/.dotfiles
         (cd "$HOME/.dotfiles" && gh issue list && local skunk_x=$(git grep "🦨" | wc -l) &&  log_📢_记录 "🦨: $skunk_x")
-
-        # check for latest release tag of _b00t_ in github using gh cli
-        NET_VERSION=$(cd "$HOME/.dotfiles" && gh release view -R elasticdotventures/dotfiles --json tagName | jq -r .tagName)
+        SRC_VERSION=$(cd "$HOME/.dotfiles" && gh release view -R elasticdotventures/dotfiles --json tagName | jq -r .tagName)
         
-        # compare to local release
-        OUR_VERSION=$(cd "$HOME/.dotfiles" && git tag -l | sort -V | tail -n 1)
+        OUR_VERSION=$(_b00t_get_version "$HOME/.dotfiles")
 
-        if [ "$NET_VERSION" == "$OUR_VERSION" ] ; then
-            log_📢_记录 "🥾📈: is on latest: $NET_VERSION  (local)"
+        if [ "$SRC_VERSION" == "$OUR_VERSION" ]; then
+            log_📢_记录 "🥾📈: is on latest: $OUR_VERSION  (local)"
         else
-            log_📢_记录 "🥾📈: latest release: $NET_VERSION | local: $OUR_VERSION"
+            log_📢_记录 "🥾📈: latest release: $SRC_VERSION | local: $OUR_VERSION"
         fi
         
         
