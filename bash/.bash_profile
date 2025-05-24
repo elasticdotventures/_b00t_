@@ -146,14 +146,15 @@ if [ -f /usr/local/cuda ] ; then
     export CUDA_HOME=/usr/local/cuda
 fi
 
-# check for rye
-if [ -f "$HOME/.rye/env" ]; then
+
+# check for uv
+if [ -f "$HOME/.local/bin/uv" ]; then
     # Created by `pipx` on 2024-01-10 08:51:49
-    export PATH="$PATH:/home/brianh/.local/bin"
-    source "$HOME/.rye/env"
+    export PATH="$PATH:$HOME/.local/bin"
 else
-    echo "🙈🌾 no rye"
+    echo "🙈🐍 no uv"
 fi
+
 
 if [ -f ~/.cargo/env ]; then
     . "$HOME/.cargo/env"
@@ -178,6 +179,18 @@ if command -v bun &> /dev/null; then
     export PATH=$BUN_INSTALL/bin:$PATH
 fi
 
+# detect nvm
+if command -v nvm &> /dev/null; then
+    # nvm
+    nvm use --lts
+    NODE_VERSION=$(node --version)
+    echo "✅🦄 has nvm (node $NODE_VERSION)"
+    export NVM_DIR="$HOME/.nvm"
+    [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh" # This loads nvm
+    [ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion" # This loads nvm bash_completion
+elsif
+    echo "🙈🦄 no nvm"
+fi
 
 ## I don't like nix
 # if [ -e /home/brianh/.nix-profile/etc/profile.d/nix.sh ]; then . /home/brianh/.nix-profile/etc/profile.d/nix.sh; fi # added by Nix installer

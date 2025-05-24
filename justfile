@@ -3,12 +3,12 @@
 repo-root := `git rev-parse --show-toplevel`
 
 release:
-    
+
     gh release create v1.1.0 --title "Release v1.1.0" --notes "Release notes for version 1.1.0"
 
         # check for latest release tag of _b00t_ in github using gh cli
         NET_VERSION=$(cd "$HOME/.dotfiles" && gh release view -R elasticdotventures/dotfiles --json tagName | jq -r .tagName)
-        
+
         # compare to local release
         OUR_VERSION=$(cd "$HOME/.dotfiles" && git tag -l | sort -V | tail -n 1)
 
@@ -22,9 +22,7 @@ install:
     ln -sf /usr/bin/batcat ~/.local/bin/bat
     # 🦨 TODO setup.sh .. but first isolate python, rust, js
     # 🦨 TODO replace crudini with toml-cli
-    #command -v rye > /dev/null 2>&1 || curl -sSf https://rye.astral.sh/get | RYE_INSTALL_OPTION="--yes" bash
-    #command -v crudini >/dev/null 2>&1 || rye install crudini
-    command -v dotenv >/dev/null 2>&1 || rye install python-dotenv[cli]
+    command -v dotenv >/dev/null 2>&1 || uv tool install python-dotenv[cli]
     # toml-cli binary is just 'toml'
     export PATH="$HOME/.cargo/bin:$PATH" || command -v toml >/dev/null 2>&1 || cargo install toml-cli
     command -v dotenvy >/dev/null 2>&1 || cargo install dotenvy --features cli
