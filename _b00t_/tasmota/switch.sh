@@ -33,7 +33,8 @@ if [[ $# -ne 2 ]]; then
 fi
 
 MAC_ADDRESS=$1
-TASMOTA_IP=$(resolve_ip "$MAC_ADDRESS")
+#TASMOTA_IP=$(resolve_ip "$MAC_ADDRESS")
+TASMOTA_IP=192.168.1.121
 
 case "$2" in
     status) query_switch ;;

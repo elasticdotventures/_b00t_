@@ -121,6 +121,9 @@ fi
 curl https://zyedidia.github.io/eget.sh | sh
 mv eget ~/.local/bin/eget
 
+# alt to eget
+# https://github.com/marverix/gah
+
 ./eget mikefarah/yq --upgrade-only --tag v4.44.6
 mv yq ~/.local/bin/yq
 
@@ -252,3 +255,11 @@ fi
 # https://github.com/bodo-run/yek
 # sudo eget bodo-run/yek  --asset musl --to /usr/local/bin
 cargo install --git https://github.com/bodo-run/yek
+
+
+# Direnv
+curl -sfL https://direnv.net/install.sh | bash
+
+curl -fsSL https://pixi.sh/install.sh | bash
+
+cargo binstall podlet

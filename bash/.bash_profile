@@ -208,3 +208,26 @@ fi
 
 ## I don't like nix
 # if [ -e /home/brianh/.nix-profile/etc/profile.d/nix.sh ]; then . /home/brianh/.nix-profile/etc/profile.d/nix.sh; fi # added by Nix installer
+
+if [ -f ~/.venv/bin/activate ] ; then 
+    source .venv/bin/activate
+    echo "🐍 ~/.venv/bin/activate"
+fi
+
+# check for uv
+if command -v uv &> /dev/null; then
+	eval "$(uv generate-shell-completion bash)"	
+fi
+
+
+if command -v direnv &> /dev/null; then
+	eval "$(direnv hook bash)"
+else
+	echo "🥲 direnv not installed, cannot hook shell."
+fi
+
+
+
+
+
+
