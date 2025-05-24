@@ -26,8 +26,10 @@ alias nowdate='date +"%d-%m-%Y"'
 
 
 # 🐍 Python
-alias ve='python3 -m venv ./venv'
-alias va='source ./venv/bin/activate'
+# alias ve='python3 -m venv ./venv'
+# alias va='source ./venv/bin/activate'
+alias ve='uv venv'
+alias va='source .venv/bin/activate'
 
 # k8s
 alias k="kubectl "
