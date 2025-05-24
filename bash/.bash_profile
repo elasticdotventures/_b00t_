@@ -192,5 +192,19 @@ else
     echo "🙈🦄 no nvm"
 fi
 
+# check for latest _b00t_ version
+_B00T_LOCAL_VERSION=$(git -C ~/.dotfiles/ describe --tags --abbrev=0)
+_B00T_LATEST_VERSION=$(gh release --repo elasticdotventures/dotfiles view --json tagName -q .tagName)
+if [ -z "$_B00T_LOCAL_VERSION" ]; then
+    echo "🙈🥾 no _b00t_ version"
+elif [ "$_B00T_LOCAL_VERSION" != "$_B00T_LATEST_VERSION" ]; then
+    echo "😟🥾 _b00t_ version $_B00T_LOCAL_VERSION is not the latest $_B00T_LATEST_VERSION"
+else
+    echo "😁🥾 local _b00t_ version $_B00T_LOCAL_VERSION"
+fi
+
+
+
+
 ## I don't like nix
 # if [ -e /home/brianh/.nix-profile/etc/profile.d/nix.sh ]; then . /home/brianh/.nix-profile/etc/profile.d/nix.sh; fi # added by Nix installer
