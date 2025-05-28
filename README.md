@@ -8,7 +8,10 @@ an exploration into a 'neo-modern' system tooling
 
 🤔 what exactly does that mean
 
-it's a few gb of 'useful' tools i desire on a system or container when i start doing dev work.
+_b00t_ is my attempt at a laconically emoji communicated startup scripts to initialize instruction tuned models about what is or is NOT installed and specific versions, and their respective status/availability.
+
+it's a few gb of 'useful' tools i desire on a system or container when i start doing dev work. this lets the llm know with certainty about the cli environment which reduces token count while potentially improving output quality at a negligible startup expense of extra tokens.
+
 `setup.sh` is intended to be idempotent meaning it can be safely run-multiple times
 it detects & installs most of the tools and is a good place
 
