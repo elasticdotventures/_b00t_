@@ -209,6 +209,7 @@ fi
 ## I don't like nix
 # if [ -e /home/brianh/.nix-profile/etc/profile.d/nix.sh ]; then . /home/brianh/.nix-profile/etc/profile.d/nix.sh; fi # added by Nix installer
 
+## setup a global uv
 if [ -f ~/.venv/bin/activate ] ; then 
     source .venv/bin/activate
     echo "🐍 ~/.venv/bin/activate"
@@ -227,7 +228,7 @@ else
 fi
 
 
-
-
-
-
+if command -v pixi &> /dev/null; then
+    # replacement for conda
+    eval "$(pixi completion --shell bash)"
+fi

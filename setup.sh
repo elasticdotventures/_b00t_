@@ -256,7 +256,6 @@ fi
 # sudo eget bodo-run/yek  --asset musl --to /usr/local/bin
 cargo install --git https://github.com/bodo-run/yek
 
-
 # Direnv
 curl -sfL https://direnv.net/install.sh | bash
 
