@@ -182,7 +182,10 @@ fi
 # detect nvm
 if command -v nvm &> /dev/null; then
     # nvm
-    nvm use --lts
+    nvm use stable --lts
+    nvm alias default node
+    nvm use default
+
     NODE_VERSION=$(node --version)
     echo "✅🦄 has nvm (node $NODE_VERSION)"
     export NVM_DIR="$HOME/.nvm"
