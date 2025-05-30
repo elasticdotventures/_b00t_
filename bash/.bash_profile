@@ -41,6 +41,9 @@ fi
 # check for .code-connect directory in home
 if [[ $IS_WSL == true ]] ; then
     echo "🐧💌💙 WSL"
+    # https://docs.roocode.com/features/shell-integration
+    . "$(code --locate-shell-integration-path bash)"    #
+
     [[ "$TERM_PROGRAM" == "vscode" ]] && . "$(code --locate-shell-integration-path bash)"
 elif [[ ! -d ~/.dotfiles/vscode.🆚/code-connect ]]; then
     # replace /home/brian/ with
@@ -220,7 +223,7 @@ fi
 
 # check for uv
 if command -v uv &> /dev/null; then
-	eval "$(uv generate-shell-completion bash)"	
+	eval "$(uv generate-shell-completion bash)"
 fi
 
 
