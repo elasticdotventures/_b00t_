@@ -2,8 +2,11 @@
 # https://dotfiles.io/aliases/gcloud/#authorization
 
 # python
-alias ve='python3 -m venv ./venv'
-alias va='source ./venv/bin/activate'
+alias vev='python3 -m venv ./venv'
+alias vav='source ./venv/bin/activate'
+alias ve='uv venv'
+alias va='source .venv/bin/activate'
+
 
 # k8s
 alias k="k3s kubectl "
