@@ -83,3 +83,37 @@ gh issue develop # --checkout
 
 # # Add the container as a submodule
 git submodule add https://github.com/simonhyll/devcontainer .devcontainer
+
+# Container Usage
+
+[![Container Build Status](https://github.com/elasticdotventures/dotfiles/actions/workflows/b00t-container.yml/badge.svg)](https://github.com/elasticdotventures/dotfiles/actions/workflows/b00t-container.yml)
+
+The _b00t_ framework is available as a Docker container through GitHub Container Registry (ghcr.io). The container includes all developer tools and is built on Ubuntu 24.04 LTS (Noble Numbat).
+
+## Pulling the Container
+
+```bash
+# Pull the latest version
+docker pull ghcr.io/elasticdotventures/dotfiles:latest
+
+# Pull a specific date-versioned image
+docker pull ghcr.io/elasticdotventures/dotfiles:YYYY-MM-DD
+```
+
+## Running the Container
+
+```bash
+# Run with the current directory mounted as a volume
+docker run --rm -it -v $(pwd):/workspace ghcr.io/elasticdotventures/dotfiles:latest
+
+# Run with specific environment variables
+docker run --rm -it -v $(pwd):/workspace -e VAR_NAME=value ghcr.io/elasticdotventures/dotfiles:latest
+```
+
+## Container Features
+
+- Based on Ubuntu 24.04 LTS (Noble Numbat)
+- Includes all developer tools installed via setup.sh
+- Pre-configured with _b00t_ initialization framework
+- Ready-to-use development environment with Python, Rust, Node.js, and more
+- Optimized for use with VS Code Remote Containers

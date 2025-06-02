@@ -1,0 +1,75 @@
+name: Build and Publish _b00t_ Container
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'setup.sh'
+      - '_b00t_/docker.🐳/Dockerfile'
+      - '.github/workflows/b00t-container.yml'
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'setup.sh'
+      - '_b00t_/docker.🐳/Dockerfile'
+  schedule:
+    - cron: '0 0 * * 0'  # Weekly build on Sundays at midnight
+  workflow_dispatch:  # Allow manual trigger
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: elasticdotventures/dotfiles
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Generate version tags
+        id: meta
+        run: |
+          VERSION_DATE=$(date +'%Y-%m-%d')
+          echo "VERSION_DATE=$VERSION_DATE" >> $GITHUB_ENV
+          echo "version_date=$VERSION_DATE" >> $GITHUB_OUTPUT
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: _b00t_/docker.🐳/Dockerfile
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.VERSION_DATE }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Update README with badge
+        if: github.event_name != 'pull_request'
+        run: |
+          echo "[![Container Build Status](https://github.com/elasticdotventures/dotfiles/actions/workflows/b00t-container.yml/badge.svg)](https://github.com/elasticdotventures/dotfiles/actions/workflows/b00t-container.yml)" >> README.tmp
+          cat README.md >> README.tmp
+          mv README.tmp README.md
+          
+      - name: Commit README changes
+        if: github.event_name != 'pull_request'
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "docs: Update README with container build status badge [skip ci]"
+          file_pattern: README.md
