@@ -122,8 +122,7 @@ if command -v podman &> /dev/null; then
     alias docker=podman
     export PODMAN_MACHINE_NAME=$( podman machine list --format '{{.Name}}' | grep '*' | tr -d '*' )
     if [ -z "$PODMAN_MACHINE_NAME" ]; then
-        echo "🙈🐳 no podman machine found"
-        exit 1
+        echo "🙈🐳 no podman default machine found"
     else
         export PODMAN_SOCKET=$(podman machine inspect ${PODMAN_MACHINE_NAME} | jq -r '.[].ConnectionInfo.PodmanSocket.Path')
         #export PODMAN_SOCKET=$(ls $XDG_RUNTIME_DIR/podman/podman.sock)
