@@ -75,9 +75,8 @@ RUN cargo install starship --locked \
 RUN curl --proto '=https' --tlsv1.2 -sSf https://just.systems/install.sh | bash -s -- --to /usr/local/bin
 
 # Install eget and move it to the right location
-RUN curl -sSfL https://raw.githubusercontent.com/zyedidia/eget/master/install.sh | bash \
-    && cp eget /usr/local/bin/ \
-    && chmod +x /usr/local/bin/eget
+RUN curl -sSfL https://raw.githubusercontent.com/zyedidia/eget/master/install.sh | bash -s
+RUN cp eget /usr/local/bin/ && chmod +x /usr/local/bin/eget
 
 # Install wasm-to-oci
 RUN wget https://github.com/engineerd/wasm-to-oci/releases/download/v0.1.2/linux-amd64-wasm-to-oci \
