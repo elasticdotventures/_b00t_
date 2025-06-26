@@ -8,6 +8,9 @@ if [ -f /.dockerenv ]; then
     IS_DOCKER=true
 fi
 
+echo "DEBUG: IS_CI = $IS_CI"
+echo "DEBUG: IS_DOCKER = $IS_DOCKER"
+
 # Function to run a command, adding sudo if not in Docker
 run_cmd() {
     if [ "$IS_DOCKER" = true ]; then
