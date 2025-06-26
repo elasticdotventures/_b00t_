@@ -1,5 +1,5 @@
 #!/bin/bash
-set -e # Exit immediately if a command exits with a non-zero status.
+set -ex # Exit immediately if a command exits with a non-zero status, and print commands and their arguments as they are executed.
 
 # Detect if running in a CI environment or Docker
 IS_CI="${CI:-false}"
