@@ -34,15 +34,11 @@ if ! command -v gh; then
   && run_cmd apt install git gh -y
 fi
 
-if [ "$IS_CI" = false ]; then
   ## setup extensions now.
   # 🤓
   gh extension install https://github.com/nektos/gh-act
   # 🤓 https://github.com/github/gh-copilot
   gh extension install github/gh-copilot --force
-elif [ "$IS_CI" = true ]; then
-  echo "Skipping gh extension install in CI/Docker build."
-fi
 fi
 
 # if stow is not installed, install it
