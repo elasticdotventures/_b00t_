@@ -143,7 +143,7 @@ fi
 # alt to eget
 # https://github.com/marverix/gah
 
-~/.local/bin/eget mikefarah/yq --upgrade-only --tag v4.44.1
+~/.local/bin/eget mikefarah/yq --upgrade-only --tag v4.44.1 --asset yq_linux_amd64.tar.gz
 mkdir -p ~/.local/bin
 mv yq ~/.local/bin/yq
 
