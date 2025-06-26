@@ -1,5 +1,7 @@
 # _b00t_ Development Environment Container
+ARG GH_TOKEN
 FROM ubuntu:24.04
+ENV GH_TOKEN=$GH_TOKEN
 ENV IS_DOCKER_BUILD=true
 
 # Set non-interactive frontend for apt
