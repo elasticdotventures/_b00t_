@@ -1,12 +1,7 @@
 
 # Brians dotfiles
 
-🤩 gee, umm weird.
-
-this is my personal edition of http://github.com/elasticdotventures/_b00t_
-an exploration into a 'neo-modern' system tooling &
-
-this is my personal edition of [http://github.com/elasticdotventures/_b00t_](elasticdotventures/_b00t_)
+my personal edition of [http://github.com/elasticdotventures/_b00t_](elasticdotventures/_b00t_)
 an exploration into a 'neo-modern' context-awareness system tooling for developers & their agents
 
 🤔 what exactly does that mean
@@ -18,7 +13,7 @@ specific versions / patterns, and their respective status/availability.
 For example environmental awareness are we running under WSL or Linux, what
 utilities & tools are installed?
 
-it's a few gb of 'useful' tools i desire on a system or container when i start
+this is a few gb of 'useful' tools i desire on a system or container when i start
 doing dev work. this lets the llm know with certainty about the cli environment
 which reduces token count while potentially improving output quality at a
 negligible startup expense of extra tokens.
