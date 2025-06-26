@@ -43,6 +43,11 @@ if [ "$IS_CI" = false ]; then
   gh extension install https://github.com/nektos/gh-act
   # 🤓 https://github.com/github/gh-copilot
   gh extension install github/gh-copilot --force
+elif [ -n "$GH_TOKEN" ]; then
+  echo "Attempting to log in to GitHub CLI using provided GH_TOKEN"
+  echo "$GH_TOKEN" | gh auth login --with-token
+  gh extension install https://github.com/nektos/gh-act
+  gh extension install github/gh-copilot --force
 fi
 
 # if stow is not installed, install it
