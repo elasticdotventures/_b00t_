@@ -267,3 +267,22 @@ curl -fsSL https://pixi.sh/install.sh | bash
 
 cargo binstall podlet
 
+<<<<<<< Updated upstream
+=======
+# brew
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+# eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
+#     echo >> /home/brianh/.bashrc
+#    echo 'eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"' >> /home/brianh/.bashrc
+#    eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
+
+# then use brew to install asdf
+brew install asdf
+
+# then use asdf to install go-lang
+asdf plugin add golang https://github.com/asdf-community/asdf-golang.git
+asdf install golang 1.24.1
+
+uv tool install huggingface_hub[cli]
+uv tool install ramalama
+>>>>>>> Stashed changes

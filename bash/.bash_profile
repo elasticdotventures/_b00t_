@@ -248,4 +248,7 @@ if command -v pixi &> /dev/null; then
     eval "$(pixi completion --shell bash)"
 fi
 
+# TODO: check if go is installed
+export PATH=$PATH:/usr/local/go/bin
+
 echo "🐚 .bash_profile loaded"
