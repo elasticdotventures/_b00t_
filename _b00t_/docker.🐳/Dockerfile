@@ -75,20 +75,20 @@ RUN cargo install starship --locked \
 RUN curl --proto '=https' --tlsv1.2 -sSf https://just.systems/install.sh | bash -s -- --to /usr/local/bin
 
 # Install eget and move it to the right location
-RUN curl -sSfL https://raw.githubusercontent.com/zyedidia/eget/master/install.sh | bash -s
-RUN cp eget /usr/local/bin/ && chmod +x /usr/local/bin/eget
+#RUN curl -sSfL https://raw.githubusercontent.com/zyedidia/eget/master/install.sh | bash -s
+#RUN cp eget /usr/local/bin/ && chmod +x /usr/local/bin/eget
 
 # Install wasm-to-oci
-RUN wget https://github.com/engineerd/wasm-to-oci/releases/download/v0.1.2/linux-amd64-wasm-to-oci \
-    && mv linux-amd64-wasm-to-oci wasm-to-oci \
-    && chmod +x wasm-to-oci \
-    && cp wasm-to-oci /usr/local/bin/
+#RUN wget https://github.com/engineerd/wasm-to-oci/releases/download/v0.1.2/linux-amd64-wasm-to-oci \
+#    && mv linux-amd64-wasm-to-oci wasm-to-oci \
+#    && chmod +x wasm-to-oci \
+#    && cp wasm-to-oci /usr/local/bin/
 
 # Install Direnv
-RUN curl -sfL https://direnv.net/install.sh | bash
+#RUN curl -sfL https://direnv.net/install.sh | bash
 
 # Install Pixi
-RUN curl -fsSL https://pixi.sh/install.sh | bash
+#RUN curl -fsSL https://pixi.sh/install.sh | bash
 
 # Set up shell configuration
 RUN echo 'eval "$(starship init bash)"' >> /root/.bashrc \
