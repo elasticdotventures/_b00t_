@@ -86,8 +86,12 @@ cargo install starship --locked
 echo eval "$(starship init bash)" >> ~/.bashrc
 
 
+# dotenv
+bun add dotenv
+
 # dotenvy
 cargo install dotenvy --bin dotenvy --features cli
+
 
 
 # tree but ignores .git (useful for chatgpt dumps)
@@ -262,3 +266,4 @@ curl -sfL https://direnv.net/install.sh | bash
 curl -fsSL https://pixi.sh/install.sh | bash
 
 cargo binstall podlet
+

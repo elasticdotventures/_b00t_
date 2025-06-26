@@ -52,7 +52,8 @@ if [[ $IS_WSL == true ]] ; then
         fi
     fi
 
-    [[ "$TERM_PROGRAM" == "vscode" ]] && . "$(code --locate-shell-integration-path bash)"
+    # [[ "$TERM_PROGRAM" == "vscode" ]] && . "$(code --locate-shell-integration-path bash)"
+
 elif [[ ! -d ~/.dotfiles/vscode.🆚/code-connect ]]; then
     # replace /home/brian/ with
     # test code alias
@@ -119,10 +120,15 @@ eval "$(starship init bash)"
 
 # detect podman
 if command -v podman &> /dev/null; then
+    echo "✅🐳 podman"
     alias docker=podman
     export PODMAN_MACHINE_NAME=$( podman machine list --format '{{.Name}}' | grep '*' | tr -d '*' )
     if [ -z "$PODMAN_MACHINE_NAME" ]; then
+<<<<<<< Updated upstream
         echo "🙈🐳 no podman default machine found"
+=======
+        echo "🙈🐳 no podman machine found (this is fine)"
+>>>>>>> Stashed changes
     else
         export PODMAN_SOCKET=$(podman machine inspect ${PODMAN_MACHINE_NAME} | jq -r '.[].ConnectionInfo.PodmanSocket.Path')
         #export PODMAN_SOCKET=$(ls $XDG_RUNTIME_DIR/podman/podman.sock)
@@ -134,13 +140,12 @@ if command -v podman &> /dev/null; then
     # export DOCKER_HOST='unix:///home/brianh/.local/share/containers/podman/machine/qemu/podman.sock'
 
 
-    echo "✅🐳 podman"
 elif command -v docker &> /dev/null; then
-    echo "🥲🐳 docker"
-    # https://docs.docker.com/engine/install/linux-postinstall/
-    # TODO: check group
-    # sudo usermod -aG docker $USER
-    # newgrp docker ??
+     echo "🥲🐳 docker"
+#     # https://docs.docker.com/engine/install/linux-postinstall/
+#     # TODO: check group
+#     # sudo usermod -aG docker $USER
+#     # newgrp docker ??
 else
     echo "🙈🐳 no docker"
 fi
