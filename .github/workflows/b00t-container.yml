@@ -41,12 +41,11 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Generate version tags
+      - name: Extract Docker metadata
         id: meta
-        run: |
-          VERSION_DATE=$(date +'%Y-%m-%d')
-          echo "VERSION_DATE=$VERSION_DATE" >> $GITHUB_ENV
-          echo "version_date=$VERSION_DATE" >> $GITHUB_OUTPUT
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
 
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
@@ -54,22 +53,7 @@ jobs:
           context: .
           file: _b00t_/docker.🐳/Dockerfile
           push: ${{ github.event_name != 'pull_request' }}
-          tags: |
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.VERSION_DATE }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
-
-      - name: Update README with badge
-        if: github.event_name != 'pull_request'
-        run: |
-          echo "[![Container Build Status](https://github.com/elasticdotventures/dotfiles/actions/workflows/b00t-container.yml/badge.svg)](https://github.com/elasticdotventures/dotfiles/actions/workflows/b00t-container.yml)" >> README.tmp
-          cat README.md >> README.tmp
-          mv README.tmp README.md
-          
-      - name: Commit README changes
-        if: github.event_name != 'pull_request'
-        uses: stefanzweifel/git-auto-commit-action@v5
-        with:
-          commit_message: "docs: Update README with container build status badge [skip ci]"
-          file_pattern: README.md
