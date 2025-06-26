@@ -3,13 +3,7 @@ set -ex # Exit immediately if a command exits with a non-zero status, and print 
 
 # Detect if running in a CI environment or Docker
 IS_CI="${CI:-false}"
-IS_DOCKER=false
-if [ -f /.dockerenv ]; then
-    IS_DOCKER=true
-fi
-
-echo "DEBUG: IS_CI = $IS_CI"
-echo "DEBUG: IS_DOCKER = $IS_DOCKER"
+IS_DOCKER="${IS_DOCKER_BUILD:-false}"
 
 # Function to run a command, adding sudo if not in Docker
 run_cmd() {

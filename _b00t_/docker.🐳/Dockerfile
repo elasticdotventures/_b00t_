@@ -1,5 +1,6 @@
 # _b00t_ Development Environment Container
 FROM ubuntu:24.04
+ENV IS_DOCKER_BUILD=true
 
 # Set non-interactive frontend for apt
 ENV DEBIAN_FRONTEND=noninteractive
