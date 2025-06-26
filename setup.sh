@@ -34,7 +34,7 @@ if ! command -v gh; then
   && run_cmd apt install git gh -y
 fi
 
-  if [ -n "${GH_TOKEN}" ]; then
+if [ -n "${GH_TOKEN}" ]; then
   echo "Attempting to log in to GitHub CLI using GH_TOKEN"
   echo "${GH_TOKEN}" | gh auth login --with-token
   ## setup extensions now.
@@ -44,7 +44,6 @@ fi
   gh extension install github/gh-copilot --force
 else
   echo "Skipping gh extension install because GH_TOKEN is not set."
-fi
 fi
 
 # if stow is not installed, install it
