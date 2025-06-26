@@ -45,6 +45,10 @@ RUN curl --proto '=https' --tlsv1.2 -sSf https://just.systems/install.sh | bash 
 # Copy the justfile
 COPY justfile /root/.dotfiles/
 
+# Copy and run setup.sh to initialize the environment
+COPY setup.sh /root/.dotfiles/
+RUN chmod +x /root/.dotfiles/setup.sh && /root/.dotfiles/setup.sh
+
 # Run the just install command
 RUN just install
 
