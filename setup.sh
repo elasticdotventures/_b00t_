@@ -73,7 +73,7 @@ if [ "$IS_DOCKER" = false ]; then
 fi
 
 run_cmd apt update -yy
-run_cmd apt-get install -y jq fzf ripgrep tree
+run_cmd apt-get install -y jq fzf ripgrep tree unzip
 
 if ! command -v tofu; then
   # https://opentofu.org/docs/intro/install/deb
@@ -104,6 +104,10 @@ if [ -f ~/.bashrc ] && ! grep -q "starship init bash" ~/.bashrc; then
 fi
 
 # dotenv
+if ! command -v bun &> /dev/null; then
+  curl -fsSL https://bun.sh/install | bash # install Bun
+  export PATH="$HOME/.bun/bin:$PATH"
+fi
 if command -v bun &> /dev/null; then
     bun add dotenv
 fi
@@ -133,6 +137,7 @@ if ! command -v eget &> /dev/null; then
     curl -s https://zyedidia.github.io/eget.sh | sh
     mkdir -p ~/.local/bin
     mv eget ~/.local/bin/eget
+    export PATH="$HOME/.local/bin:$PATH"
 fi
 
 # alt to eget
@@ -249,6 +254,9 @@ if ! command -v pixi &> /dev/null; then
     curl -fsSL https://pixi.sh/install.sh | bash
 fi
 
+if ! command -v cargo-binstall &> /dev/null; then
+  curl -LsSf https://github.com/cargo-bins/cargo-binstall/releases/latest/download/cargo-binstall-x86_64-unknown-linux-gnu.tgz | tar -xz -C ~/.cargo/bin
+fi
 cargo binstall podlet
 
 # This section was from a merge conflict. Integrating it now.
