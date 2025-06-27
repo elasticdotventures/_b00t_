@@ -34,18 +34,35 @@ if ! command -v gh; then
   && run_cmd apt install git gh -y
 fi
 
-if [ -n "${GH_TOKEN}" ]; then
-  echo "Attempting to log in to GitHub CLI using GH_TOKEN"
-  echo "${GH_TOKEN}" | gh auth login --with-token
+if [ -f /run/secrets/GH_TOKEN ]; then
+    echo "attempting gh auth login"
+    gh auth login --with-token < /run/secrets/GH_TOKEN
+    
 fi
 
-if [ "$IS_CI" = false ]; then
+
+check_github_auth() {
+  if gh auth status 2>&1 | grep -q '✓ Logged in to github.com'; then
+    echo "✅ Auth OK"
+    return 0
+  else
+    echo "❌ Not authenticated"
+    return 1
+  fi
+}
+
+if check_github_auth; then
+  echo "✅ GitHub auth OK — proceeding..."
+  # your logic here
   ## setup extensions now.
   # 🤓
   gh extension install https://github.com/nektos/gh-act
   # 🤓 https://github.com/github/gh-copilot
   gh extension install github/gh-copilot --force
+else
+  echo "❌ GitHub not authenticated — skipping extension"
 fi
+
 
 # if stow is not installed, install it
 if ! command -v stow; then
@@ -145,9 +162,9 @@ fi
 # alt to eget
 # https://github.com/marverix/gah
 
-~/.local/bin/eget mikefarah/yq --upgrade-only --tag v4.44.1 --asset yq_linux_amd64.tar.gz
+~/.local/bin/eget mikefarah/yq --upgrade-only --tag v4.44.1 --asset yq_linux_amd64.tar.gz --all
 mkdir -p ~/.local/bin
-mv yq ~/.local/bin/yq
+mv yq_linux_amd64 ~/.local/bin/yq
 
 
 ## someday..

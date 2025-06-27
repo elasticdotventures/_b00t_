@@ -49,7 +49,7 @@ RUN curl --proto '=https' --tlsv1.2 -sSf https://just.systems/install.sh | bash 
 
 # Copy and run setup.sh to initialize the environment
 # This is a long-running script. Any changes to it will invalidate the cache from this point forward.
-RUN chmod +x setup.sh && ./setup.sh
+RUN --mount=type=secret,id=GH_TOKEN chmod +x setup.sh && ./setup.sh
 
 # Run the just install command
 RUN just install
