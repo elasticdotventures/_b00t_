@@ -313,3 +313,6 @@ cargo install choose
 # https://tmate.io/
 # tmate is a fork of tmux. tmate and tmux can coexist on the same system.
 sudo apt-get -y install tmate
+
+# Run arbitrary commands when files change
+sudo apt-get install -y entr

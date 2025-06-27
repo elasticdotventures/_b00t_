@@ -21,6 +21,8 @@
 	HTML), navi (cheatsheets), exa (ls replacement), direnv
 	(automatically loads .envrc) 
 
+	* just: see `justfile` in a repo for commands, better than a README!)
+
 	Improve script resilience (chronic, lckdo, ifne)
 		* chronic: runs a command quietly unless it fails, useful to reduce noise in logs or debug, ideal for test scaffolding (save $$ and context)
 		  `chronic make test`
@@ -60,9 +62,9 @@ combine file1.txt and file2.txt
 	* vidir: edit a directory in your text editor, Edit filenames in bulk as part of a refactor. 
 	* zrun: automatically uncompress arguments to command
 
-https://honcho.readthedocs.io/en/latest/
-honcho (alternative to `parallel`)  simple idiomatic command-line tool that runs multiple processes in parallel
-using a `procfile` is concise & version controlled for multi-use common tasks (ex: those in a justfile)
+* 
+`uvx honcho` alternative to `parallel` idiomatic command-line tool that runs multiple processes in parallel using a `procfile` 
+offers concise & git vcs for repetitive common tasks (ex: those in a justfile)
 
 ```procfile
 server: chronic cargo run
@@ -84,7 +86,6 @@ socat -d -d pty,raw,echo=0 pty,raw,echo=0
 ```
 
 
-	* just: see `justfile` in a repo for commands, better than a README!)
 	* fzf: prompt user to make selection/choice (useful in justfiles!) 
 	* entr: run a command when a file changes, build live reload test/scripts without polling logic. 
 ```
