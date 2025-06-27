@@ -1,7 +1,7 @@
 
 # Brians dotfiles
 
-* [_b00t_/AGENT.md](AGENT.md)
+* [_b00t_/AGENT.md](./_b00t_/AGENT.md)
 
 my personal edition of [http://github.com/elasticdotventures/_b00t_](elasticdotventures/_b00t_)
 an exploration into a 'neo-modern' context-awareness system tooling for developers & their agents
