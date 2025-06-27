@@ -49,8 +49,26 @@ jobs:
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
 
+      - name: Use variables
+        run: |
+          echo "repository variable : $REPOSITORY_VAR"
+          echo "organization variable : $ORGANIZATION_VAR"
+          echo "overridden variable : $OVERRIDE_VAR"
+          echo "variable from shell environment : $env_var"
+          echo "github ref: ${{ github.ref }}"
+          echo "runner: $RUNNER_OS"
+          #echo "vars.ci: ${{ vars.CI }}"
+          #echo "env.ci: ${{ env.CI }}"
+          echo "ci: $CI"
+        env:
+          REPOSITORY_VAR: ${{ vars.REPOSITORY_VAR }}
+          ORGANIZATION_VAR: ${{ vars.ORGANIZATION_VAR }}
+          OVERRIDE_VAR: ${{ vars.OVERRIDE_VAR }}
+
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
+        env:
+          BUILD_CI: true
         with:
           context: .
           file: _b00t_/docker.🐳/Dockerfile
@@ -58,7 +76,8 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
-            CI=${{ env.CI }}
+            CI=${{ env.BUILD_CI }}
+            GITHUB_ACTIONS=${{ github.actions }}
           secrets: |
             GH_TOKEN=${{ github.token }}
           cache-from: type=gha
