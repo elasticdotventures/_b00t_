@@ -39,11 +39,13 @@ if [ -n "${GH_TOKEN}" ]; then
   echo "${GH_TOKEN}" | gh auth login --with-token
 fi
 
-## setup extensions now.
-# 🤓
-gh extension install https://github.com/nektos/gh-act
-# 🤓 https://github.com/github/gh-copilot
-gh extension install github/gh-copilot --force
+if [ "$IS_CI" = false ]; then
+  ## setup extensions now.
+  # 🤓
+  gh extension install https://github.com/nektos/gh-act
+  # 🤓 https://github.com/github/gh-copilot
+  gh extension install github/gh-copilot --force
+fi
 
 # if stow is not installed, install it
 if ! command -v stow; then
