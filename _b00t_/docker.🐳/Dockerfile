@@ -52,6 +52,7 @@ RUN curl --proto '=https' --tlsv1.2 -sSf https://just.systems/install.sh | bash 
 RUN --mount=type=secret,id=GH_TOKEN chmod +x setup.sh && ./setup.sh
 
 # Run the just install command
+ENV PATH="/root/.cargo/bin:/root/.local/bin:${PATH}"
 RUN just install
 
 # Set up shell configuration
