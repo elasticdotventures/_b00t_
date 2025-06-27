@@ -58,7 +58,7 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
-            CI=true
+            GITHUB_ACTIONS=${{ env.GITHUB_ACTIONS }}
           secrets: |
             GH_TOKEN=${{ github.token }}
           cache-from: type=gha
