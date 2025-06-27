@@ -285,3 +285,31 @@ fi
 
 uv tool install huggingface_hub[cli]
 uv tool install ramalama
+
+# procfile apps, https://honcho.readthedocs.io/en/latest/
+uvx honcho
+
+# https://github.com/aristocratos/bpytop
+uvx bpytop
+
+# qsv https://github.com/dathere/qsv
+cargo install qsv --locked --features all_features
+
+# https://github.com/bootandy/dust
+cargo install du-dust
+
+# https://github.com/theryangeary/choose
+cargo install choose
+
+## TODO: keep
+
+# pueue processes a queue of shell commands
+# eget nukesor/pueue --asset  pueue-x86_64-unknown-linux-musl --to ~/.local/bin
+# cargo install --locked pueue
+
+# dog like tid
+# alias dog="docker run -it --rm dog"
+
+# https://tmate.io/
+# tmate is a fork of tmux. tmate and tmux can coexist on the same system.
+sudo apt-get -y install tmate
