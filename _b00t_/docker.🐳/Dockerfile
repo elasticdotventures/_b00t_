@@ -5,6 +5,10 @@ ENV IS_DOCKER_BUILD=true
 # Set non-interactive frontend for apt
 ENV DEBIAN_FRONTEND=noninteractive
 
+# Set CI build-time argument and environment variable
+ARG CI
+ENV IS_CI=${CI:-false}
+
 # Set labels
 LABEL org.opencontainers.image.source=https://github.com/elasticdotventures/dotfiles
 LABEL org.opencontainers.image.description="_b00t_ initialization framework with comprehensive developer tooling"
