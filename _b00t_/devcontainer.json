@@ -1,0 +1,5 @@
+{
+  "image": "dockerFile",
+  "workspaceFolder": "/workspace",
+  "workspaceMount": "source=remote-workspace,target=/workspace,type=volume"
+}
