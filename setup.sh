@@ -3,7 +3,11 @@ set -ex # Exit immediately if a command exits with a non-zero status, and print 
 
 # Detect if running in a CI environment or Docker
 IS_CI="${CI:-false}"
+echo "IS_CI: ${IS_CI}"
+
 IS_DOCKER="${IS_DOCKER_BUILD:-false}"
+echo "IS_DOCKER: ${IS_DOCKER}"
+
 
 # Function to run a command, adding sudo if not in Docker
 run_cmd() {
@@ -306,19 +310,19 @@ uv tool install huggingface_hub[cli]
 uv tool install ramalama
 
 # procfile apps, https://honcho.readthedocs.io/en/latest/
-uvx honcho
+uvx honcho version
 
 # https://github.com/aristocratos/bpytop
-uvx bpytop
+uvx bpytop -v
 
 # qsv https://github.com/dathere/qsv
-cargo install qsv --locked --features all_features
+#cargo install qsv --locked --features all_features
 
 # https://github.com/bootandy/dust
-cargo install du-dust
+#cargo install du-dust
 
 # https://github.com/theryangeary/choose
-cargo install choose
+#cargo install choose
 
 ## TODO: keep
 
