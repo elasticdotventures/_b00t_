@@ -6,8 +6,8 @@ ENV IS_DOCKER_BUILD=true
 ENV DEBIAN_FRONTEND=noninteractive
 
 # Set CI build-time argument and environment variable
-ARG GITHUB_ACTIONS
-ENV IS_CI=${GITHUB_ACTIONS:-false}
+ARG CI
+ENV IS_CI=${CI:-false}
 
 # Set labels
 LABEL org.opencontainers.image.source=https://github.com/elasticdotventures/dotfiles
