@@ -310,10 +310,10 @@ uv tool install huggingface_hub[cli]
 uv tool install ramalama
 
 # procfile apps, https://honcho.readthedocs.io/en/latest/
-uvx honcho
+uvx honcho version
 
 # https://github.com/aristocratos/bpytop
-uvx bpytop
+uvx bpytop -v
 
 # qsv https://github.com/dathere/qsv
 cargo install qsv --locked --features all_features
