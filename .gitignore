@@ -278,3 +278,7 @@ dev-debug.log
 # direnv
 .envrc
 .env
+
+# context7
+alembic.ini
+context_portal/*
