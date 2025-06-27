@@ -316,13 +316,13 @@ uvx honcho version
 uvx bpytop -v
 
 # qsv https://github.com/dathere/qsv
-cargo install qsv --locked --features all_features
+#cargo install qsv --locked --features all_features
 
 # https://github.com/bootandy/dust
-cargo install du-dust
+#cargo install du-dust
 
 # https://github.com/theryangeary/choose
-cargo install choose
+#cargo install choose
 
 ## TODO: keep
 
