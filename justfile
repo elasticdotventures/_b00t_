@@ -1,6 +1,6 @@
 # justfile for Rust Development Environment
 # Alias to get the Git repository root
-repo-root := `git rev-parse --show-toplevel`
+repo-root := env_var_or_default("JUST_REPO_ROOT", `git rev-parse --show-toplevel 2>/dev/null || echo .`)
 
 stow:
     stow --adopt -d ~/.dotfiles -t ~ bash
