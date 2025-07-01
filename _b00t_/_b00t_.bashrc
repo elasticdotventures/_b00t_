@@ -218,6 +218,14 @@ alias ll='ls -lh'
 #4.0K requirements.层_c0re.txt
 alias lt='ls --human-readable --size -1 -S --classify'
 
+# test for b00t-cli before defining alias
+if [ -x "$HOME/.cargo/bin/b00t-cli" ] ; then
+    # b00t-cli is installed, use it.
+    alias b00t='b00t-cli'
+else
+    # b00t-cli is not installed, use the script.
+    log_📢_记录 "🥾: b00t-cli not found, using script"
+fi
 
 alias s=ssh
 alias c=clear
@@ -262,7 +270,7 @@ alias ...='cd ../../'
 alias mkdir='mkdir -pv'
 
 # time & date
-alias path='echo -e ${PATH//:/\\n}'
+alias path='echo -e ${PATH//:/\n}'
 alias now='date +"%T"'
 alias nowtime=now
 alias nowdate='date +"%d-%m-%Y"'
@@ -312,13 +320,6 @@ function _b00t_init_🥾_开始() {
     local args=("$@")
     local param=${args[0]}
 
-#    if [ param="version" ] ; then
-#        echo "🥾v: $currentB00TVersion"
-#    fi
-
-    # earlier versions, sunset:
-    #🌆 ${0}/./${0*/}"
-    #🌆 export _b00t_="$(basename $0)"
     export _b00t_="$0"
 
     if [ $_b00t_ == "/c0de/_b00t_/_b00t_.bashrc" ] ; then
@@ -475,17 +476,17 @@ function n0ta_xfile_📁_好不好() {
     if [ ! -f "$xfile" ] ; then
         log_📢_记录 "👽:不支持 $xfile is both required AND missing. 👽:非常要!"
         return 0
-    elif [ ! -x "$xfile" ] ; then
+elif [ ! -x "$xfile" ] ; then
         log_📢_记录 "👽:不支持 $xfile is not executable. 👽:非常要!"
         return 0
     else
 
-        if ! has_fn_✅_存在 "toml_get" ; then
-            :   # toml_get doesn't exist.
-        elif [[ $( toml_get "b00t" "has.$xfile" ) = "" ]] ; then
-            log_📢_记录 "👍 $xfile"
-            toml_set "b00t" "has.$xfile" $( yyyymmdd )
-        fi
+        #if ! has_fn_✅_存在 "toml_get" ; then
+        #    :   # toml_get doesn't exist.
+        #elif [[ $( toml_get "b00t" "has.$xfile" ) = "" ]] ; then
+        #    log_📢_记录 "👍 $xfile"
+        #    # toml_set "b00t" "has.sudo" $( yyyymmdd )
+        #fi
         return 1
     fi
 }
@@ -551,7 +552,7 @@ function expandPath() {
 
 
 ##* * * * * *\\
-## 📽️ Pr0J3ct1D
+## 📽️️ Pr0J3ct1D
 ## uses inspiration
 ##* * * * * *//
 function Pr0J3ct1D {
@@ -560,10 +561,10 @@ function Pr0J3ct1D {
 
     local word1=$( rand0 $wordCount )
     # echo "word1: $word1"
-    local wordOne=$( cat $_b00t_INSPIRATION_FILE | jq ".[$word1].word" -r )
+    local wordOne=$( cat $_b00t_INSPIRATION_FILE | jq ".[${word1}].word" -r )
     local word2=$( rand0 $wordCount )
     # echo "word2: $word2"
-    local wordTwo=$( cat $_b00t_INSPIRATION_FILE | jq ".[$word2].word" -r )
+    local wordTwo=$( cat $_b00t_INSPIRATION_FILE | jq ".[${word2}].word" -r )
     local result="${wordOne}_${wordTwo}"
 
     ## todo: substitute
@@ -573,13 +574,13 @@ function Pr0J3ct1D {
 
     if [ $( rand0 10 ) -lt 2 ] ; then
         result=$( echo $result | sed 's/o/0/g' )
-    elif [ $( rand0 10 ) -lt 2 ] ; then
+elif [ $( rand0 10 ) -lt 2 ] ; then
         result=$( echo $result | sed 's/oo/00/g' )
     fi
 
     if [ $( rand0 10 ) -lt 2 ] ; then
         result=$( echo $result | sed 's/e/3/g' )
-    elif [ $( rand0 10 ) -lt 8 ] ; then
+elif [ $( rand0 10 ) -lt 8 ] ; then
         result=$( echo $result | sed 's/ee/33/g' )
     fi
 
@@ -659,7 +660,7 @@ function motd() {
     if [ $motdWidth -gt "$myWidth" ] ; then
         echo "👽:太宽 bad motd. too wide."
         showWithCMD=""
-    elif [ $motdWidth -gt $(echo $myWidth - 13 | bc) ] ; then
+elif [ $motdWidth -gt $(echo $myWidth - 13 | bc) ] ; then
         # bat needs +13 columns
         showWithCMD="cat"
     else
@@ -674,7 +675,7 @@ function motd() {
     ## sometimes, cat is nice!
     if [ -z "$showWithCMD" ] ; then
         echo "👽💩: 烂狗屎 cannot motd."
-    elif [ "$(rand0 10)" -gt 5 ] ; then
+elif [ "$(rand0 10)" -gt 5 ] ; then
         showWithCMD="cat"
     fi
 
@@ -723,18 +724,18 @@ function motd() {
 
     log_📢_记录 "lang: $LANG"
     log_📢_记录 "🥾📈 motd project stats, cleanup, tasks goes here. "
-
+    local skunk_x=0
     if [ -d .git ]; then
         gh issue list
-        local skunk_x=$(git grep "🦨" | wc -l)
+        skunk_x=$(git grep "🦨" | wc -l)
     elif [ -d "$HOME/.dotfiles/.git" ] ; then
-        
+
         log_📢_记录 "🥾: found $HOME/.dotfiles/.git repo"
         # github client
         ##  if a .git dir exists, check for local issues, otheriwse list for ~/.dotfiles
         (cd "$HOME/.dotfiles" && gh issue list && local skunk_x=$(git grep "🦨" | wc -l) &&  log_📢_记录 "🦨: $skunk_x")
         SRC_VERSION=$(cd "$HOME/.dotfiles" && gh release view -R elasticdotventures/dotfiles --json tagName | jq -r .tagName)
-        
+
         OUR_VERSION=$(_b00t_get_version "$HOME/.dotfiles")
 
         if [ "$SRC_VERSION" == "$OUR_VERSION" ]; then
@@ -742,12 +743,15 @@ function motd() {
         else
             log_📢_记录 "🥾📈: latest release: $SRC_VERSION | local: $OUR_VERSION"
         fi
-        
-        
+
+
     else
         log_📢_记录 "🥾🐙😔 no ~/.dotfiles/.git dir "`pwd`
     fi
-    log_📢_记录 "🦨: $skunk_x"
+
+    if [ "$skunk_x" -gt 0 ] ; then
+        log_📢_记录 "🥾🐙🦨: found $skunk_x 🦨 issues in this repo"
+    fi
 
 }
 
@@ -774,8 +778,9 @@ fi
 
 
 ## this must be sourced at the end
-source ~/.dotfiles/_b00t_/bash.🔨/_/toml-cli.sh
-toml_init
+## REMOVING TOML host storage .. keep for
+#source ~/.dotfiles/_b00t_/bash.🔨/_/toml-cli.sh
+#toml_init
 
 
 
@@ -794,14 +799,14 @@ function has_sudo() {
         # https://stackoverflow.com/questions/18215973/how-to-check-if-running-as-root-in-a-bash-script
         log_📢_记录 "👹 please don't b00t as r00t"
         SUDO_CMD=""
-    elif [ -f "./dockerenv" ] ; then
+elif [ -f "./dockerenv" ] ; then
         # https://stackoverflow.com/questions/23513045/how-to-check-if-a-process-is-running-inside-docker-container#:~:text=To%20check%20inside%20a%20Docker,%2Fproc%2F1%2Fcgroup%20.
         log_📢_记录 "🐳😁 found DOCKER"
-    elif [ -f "$SUDO_CMD" ] ; then
-        if [[ -z $( toml_get "b00t" "has.sudo" )  ]] ; then
-            log_📢_记录 "🥳 found sudo"
-            toml_set "b00t" "has.sudo" `ymd_hms`
-        fi
+elif [ -f "$SUDO_CMD" ] ; then
+        #if [[ -z $( toml_get "b00t" "has.sudo" )  ]] ; then
+        log_📢_记录 "🥳 found sudo"
+            # toml_set "b00t" "has.sudo" `ymd_hms`
+        #fi
     else
         log_📢_记录 "🐭 missed SUDO, try running _b00t_ inside docker."
         SUDO_CMD=""
@@ -819,33 +824,32 @@ if ! is_b00table ; then
 fi
 
 
-
 #############################
 ###
 # 🍰 https://superuser.com/questions/427318/test-if-a-package-is-installed-in-apt
 #if debInst "$1"; then
-#    printf 'Why yes, the package %s _is_ installed!\n' "$1"
+#    printf 'Why yes, the package %s _is_ installed!\\n' "$1"
 #else
-#    printf 'I regret to inform you that the package %s is not currently installed.\n' "$1"
+#    printf 'I regret to inform you that the package %s is not currently installed.\\n' "$1"
 #fi
 function debInst() {
     dpkg-query -Wf'${db:Status-abbrev}' "$1" 2>/dev/null | grep -q '^i'
 }
 
-if [ ! is_b00table ] ; then
-    log_📢_记录 "🥾😭 missing tools"
-elif debInst "moreutils" ; then
-    # Only show moreutils once.
-    value=$( toml_get "b00t" "has.moreutils" )
-    value=${value:-0}  # If value is empty, default to 0
-    if [ "$value" -eq "0" ] ; then
-        log_📢_记录 "👍 debian moreutils is installed!"
-        toml_set "b00t" "has.moreutils" "$(yyyymmdd)"
-    fi
-else
-    log_📢_记录 "😲 install moreutils (required)"
-    $SUDO_CMD apt-get install -y moreutils
-fi
+# if [ ! is_b00table ] ; then
+#     log_📢_记录 "🥾😭 missing tools"
+# elif debInst "moreutils" ; then
+#     # Only show moreutils once.
+#     value=$( toml_get "b00t" "has.moreutils" )
+#     value=${value:-0}  # If value is empty, default to 0
+#     if [ "$value" -eq "0" ] ; then
+#         log_📢_记录 "👍 debian moreutils is installed!"
+#         # toml_set "b00t" "has.moreutils" "$(yyyymmdd)"
+#     fi
+# else
+#     log_📢_记录 "😲 install moreutils (required)"
+#     $SUDO_CMD apt-get install -y moreutils
+# fi
 
 
 # 60秒 Miǎo seconds
@@ -854,7 +858,7 @@ fi
 
 # export _b00t_JS0N_filepath=$(expandPath "~/.b00t/config.json")
 #function jqAddConfigValue () {
-#    echo '{ "names": ["Marie", "Sophie"] }' |\
+#    echo '{ "names": ["Marie", "Sophie"] }' |\\
 #    jq '.names |= .+ [
 #        "Natalie"
 #    ]'
@@ -862,13 +866,6 @@ fi
 
 # 🍰 https://lzone.de/cheat-sheet/jq
 #function jqSetConfigValue () {
-#
-#    echo '{ "a": 1, "b": 2 }' |\
-#jq '. |= . + {
-#  "c": 3
-#}'
-#}
-
 
 ##
 export _user="$(id -u -n)"
@@ -882,3 +879,47 @@ if [ -f "__b00t__.sh" ]; then
     echo "__b00t__.sh"
     source "__b00t__.sh"
 fi
+
+# b00t command aliases and functions
+if [ -x ~/.cargo/bin/b00t-cli ]; then
+    # b00t-cli is installed, use it.
+    export PATH="$PATH:~/.cargo/bin"
+    alias b00t='~/.cargo/bin/b00t-cli'
+else
+    # b00t-cli is not installed, try to install it.
+    # if [ -f "$HOME/.dotfiles/_b00t_/bash.🔨/_/b00t-cli.sh" ]; then
+    #     source "$HOME/.dotfiles/_b00t_/bash.🔨/_/b00t-cli.sh"
+    # else
+        echo "🥾💔 b00t-cli not found, please install it."
+    # fi
+fi
+
+# test for alias b00t exists
+
+function _b00t_check() {
+    local outdated_found=0
+    local toml_dir="$HOME/.dotfiles/_b00t_"
+
+    # Get all .toml files, sort them alphabetically, and iterate
+    for toml_file in $(find "$toml_dir" -maxdepth 1 -name "*.toml" | sort); do
+        local command_name=$(basename "$toml_file" .toml)
+        b00t . "$command_name"
+        local exit_code=$?
+        if [ $exit_code -eq 1 ] || [ $exit_code -eq 2 ]; then
+            outdated_found=1
+        fi
+    done
+
+    if [ $outdated_found -ne 0 ]; then
+        echo "🥾💡 Some tools are out of date or missing. Run 'b00t up' to update them."
+    fi
+}
+
+# Run _b00t_check automatically when .bashrc is sourced
+# check b00t bash alias (was it created, then it exists)
+if ! is_n0t_aliased "b00t" ; then
+    _b00t_check
+fi
+
+# alias b00t-check=_b00t_check
+# alias b00t-up="b00t up"

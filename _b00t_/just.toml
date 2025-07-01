@@ -1,0 +1,16 @@
+
+
+[b00t]
+name = "just"
+desires = "1.25.2"
+install = '''
+curl -sSL https://just.systems/install.sh | bash -s -- --to ~/.local/bin
+'''
+update = '''
+# can be omitted if the install command is same
+curl -sSL https://just.systems/install.sh | bash -s -- --to ~/.local/bin
+'''
+version = "just --version"
+version_regex = '\d+\.\d+\.\d+'
+hint = "just is a command runner that abstracts cli tools for a repo without reading the docs. run `just -l` to list commands."
+

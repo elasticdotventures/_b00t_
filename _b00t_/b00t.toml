@@ -1,0 +1,8 @@
+[b00t]
+name = "b00t"
+desires = "0.2.1"
+install = "cd /home/brianh/.dotfiles/b00t-cli && cargo install --path ."
+update = "cd /home/brianh/.dotfiles/b00t-cli && cargo install --path ."
+version = "b00t-cli --version"
+version_regex = '\d+\.\d+\.\d+'
+hint = "b00t is a tool to manage command-line tools."
