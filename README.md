@@ -3,7 +3,7 @@
 
 * [_b00t_/AGENT.md](./_b00t_/AGENT.md)
 
-my personal edition of [http://github.com/elasticdotventures/_b00t_](elasticdotventures/_b00t_)
+my personal edition of [_b00t_](http://github.com/elasticdotventures/_b00t_)
 an exploration into a 'neo-modern' context-awareness system tooling for developers & their agents
 
 🤔 what exactly does that mean
