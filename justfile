@@ -56,3 +56,13 @@ watch-gh-action workflow="" job="":
     command -v cargo-watch >/dev/null 2>&1 || cargo install cargo-watch --quiet
     cargo watch -s "./just-run-gh-action.sh {{workflow}} {{job}}"
 
+
+clean-workflows:
+   gh api -H "Accept: application/vnd.github+json" \
+    /repos/elasticdotventures/dotfiles/actions/runs?per_page=100 \
+    | jq -r --arg cutoff "$(date -d '7 days ago' --iso-8601=seconds)" \
+        '.workflow_runs[] | select(.created_at < $cutoff) | .id' \
+    | xargs -n1 -I{} gh api --method DELETE \
+        -H "Accept: application/vnd.github+json" \
+        /repos/elasticdotventures/dotfiles/actions/runs/{}
+

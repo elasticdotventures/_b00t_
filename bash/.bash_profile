@@ -220,6 +220,20 @@ fi
 
 
 
+# detect minikube
+if command -v minikube &> /dev/null; then
+    alias kubectl="minikube kubectl --"
+    alias k=kubectl
+
+    source <(kubectl completion bash)
+    complete -o default -F __start_kubectl k
+    
+    # bash completion
+    #echo 'source <(kubectl completion bash)' >>~/.bashrc
+    #echo 'alias k=kubectl' >>~/.bashrc
+    #echo 'complete -o default -F __start_kubectl k' >>~/.bashrc
+fi
+
 
 ## I don't like nix
 # if [ -e /home/brianh/.nix-profile/etc/profile.d/nix.sh ]; then . /home/brianh/.nix-profile/etc/profile.d/nix.sh; fi # added by Nix installer
@@ -250,5 +264,8 @@ fi
 
 # TODO: check if go is installed
 export PATH=$PATH:/usr/local/go/bin
+
+
+alias gemini='npx https://github.com/google-gemini/gemini-clial'
 
 echo "🐚 .bash_profile loaded"
