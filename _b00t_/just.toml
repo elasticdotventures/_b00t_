@@ -8,7 +8,7 @@ curl -sSL https://just.systems/install.sh | bash -s -- --to ~/.local/bin
 '''
 update = '''
 # can be omitted if the install command is same
-curl -sSL https://just.systems/install.sh | bash -s -- --to ~/.local/bin
+curl -sSL https://just.systems/install.sh | bash -s -- --to ~/.local/bin --force
 '''
 version = "just --version"
 version_regex = '\d+\.\d+\.\d+'
