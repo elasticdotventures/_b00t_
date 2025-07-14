@@ -1,0 +1,13 @@
+[b00t]
+name = "rustc"
+desires = "1.87.0"
+install = '''
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+'''
+update = '''
+rustup update
+'''
+version = "rustc --version"
+version_regex = '\d+\.\d+\.\d+'
+hint = "Rust is a systems programming language focused on safety and performance. Use `rustup show` to inspect your toolchain."
+
