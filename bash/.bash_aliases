@@ -31,9 +31,6 @@ alias nowdate='date +"%d-%m-%Y"'
 alias ve='uv venv'
 alias va='source .venv/bin/activate'
 
-# k8s
-alias k="kubectl "
-
 #
 alias c='code $(fzf --height 40% --reverse)'
 
@@ -52,9 +49,10 @@ alias randpw="tr -dc 'a-zA-Z0-9' < /dev/urandom | head -c 16"
 alias itree='rg --files | tree --fromfile'
 
 alias tf=tofu
-alias k=kubectl
 
 
 #alias aws='docker run --rm -it -v ~/.aws:/root/.aws docker.io/amazon/aws-cli'
 # source "$HOME/.rye/env"
+
+## note: all k8s k= kubectl minikube should be in .bash_profile
 

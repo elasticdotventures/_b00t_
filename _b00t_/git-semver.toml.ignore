@@ -1,0 +1,13 @@
+[b00t]
+name = "git-semver"
+desires = "0.2.0"
+install = '''
+git clone https://github.com/elasticdotventures/git-semver.git /tmp/git-semver && \
+  sudo bash /tmp/git-semver/install.sh
+'''
+# Optional: re-run install for update
+version = "git semver --version"
+version_regex = '\d+\.\d+\.\d+'
+hint = "git-semver helps automate semantic versioning for Git tags. Try `git semver` after your next commit."
+
+

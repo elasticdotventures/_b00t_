@@ -66,3 +66,12 @@ clean-workflows:
         -H "Accept: application/vnd.github+json" \
         /repos/elasticdotventures/dotfiles/actions/runs/{}
 
+version:
+    git describe --tags --abbrev=0
+
+cliff:
+    # git-cliff --tag $(git describe --tags --abbrev=0) -o CHANGELOG.md
+    git-cliff -o CHANGELOG.md
+
+
+

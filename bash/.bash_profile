@@ -92,11 +92,6 @@ export XAUTHORITY=$HOME/.Xauthority
 
 
 
-# kubectl shell completion
-if [ -f ~/.kube/completion.bash.inc ]; then
-    source ~/.kube/completion.bash.inc
-fi
-
 
 # Check if the SSH agent is already running
 if [ -z "$SSH_AUTH_SOCK" ]; then
@@ -175,13 +170,46 @@ else
 fi
 
 
+############################################B
+## Source of truth for k8s
+
+
+# detect minikube
+if [ -f ~/.kube/config ]; then
+    # special
+    export KUBECONFIG=~/.kube/config
+fi
 # kubectl shell completion
 if [ -f ~/.kube/completion.bash.inc ]; then
     source ~/.kube/completion.bash.inc
 fi
-if [ -f ~/.kube/config ]; then
-    export KUBECONFIG=~/.kube/config
+if command -v kubectl &> /dev/null; then
+    echo "☸ 💯 kubectl"
+    alias k=kubectl
+    source <(kubectl completion bash)
+    complete -o default -F __start_kubectl k
+elif command -v minikube &> /dev/null; then
+    echo "☸️🤏🏻minikube" ️
+    alias kubectl="minikube kubectl --"
+    alias k=kubectl
+
+    source <(kubectl completion bash)
+    complete -o default -F __start_kubectl k
+
+    if [ -f ~/.kube/minikube-config ]; then
+      # prefer alt
+      export KUBECONFIG=~/.kube/minikube-config
+    fi
+    
+    # bash completion
+    #echo 'source <(kubectl completion bash)' >>~/.bashrc
+    #echo 'alias k=kubectl' >>~/.bashrc
+    #echo 'complete -o default -F __start_kubectl k' >>~/.bashrc
 fi
+echo "☸  KUBECONFIG: $KUBECONFIG"
+
+
+
 
 # detect bun
 if command -v bun &> /dev/null; then
@@ -194,9 +222,9 @@ fi
 # detect nvm
 if command -v nvm &> /dev/null; then
     # nvm
-    nvm use stable --lts
     nvm alias default node
-    nvm use default
+    nvm use stable --lts
+    # nvm use default
 
     NODE_VERSION=$(node --version)
     echo "✅🦄 has nvm (node $NODE_VERSION)"
@@ -220,19 +248,6 @@ fi
 
 
 
-# detect minikube
-if command -v minikube &> /dev/null; then
-    alias kubectl="minikube kubectl --"
-    alias k=kubectl
-
-    source <(kubectl completion bash)
-    complete -o default -F __start_kubectl k
-    
-    # bash completion
-    #echo 'source <(kubectl completion bash)' >>~/.bashrc
-    #echo 'alias k=kubectl' >>~/.bashrc
-    #echo 'complete -o default -F __start_kubectl k' >>~/.bashrc
-fi
 
 
 ## I don't like nix
@@ -266,6 +281,6 @@ fi
 export PATH=$PATH:/usr/local/go/bin
 
 
-alias gemini='npx https://github.com/google-gemini/gemini-clial'
+alias gemini='npx https://github.com/google-gemini/gemini-cli'
 
 echo "🐚 .bash_profile loaded"
