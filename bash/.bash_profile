@@ -80,6 +80,11 @@ fi
 # git config --global core.editor "'{path to editor}' -n -w"
 export GIT_EDITOR="code -w -r"
 export EDITOR='code -w -r'
+if [ -f ~/.dotfiles/vscode.sh ]; then
+    # kubectl edit deployment nginxproxy doesn't use alias!
+    EDITOR=~/.dotfiles/vscode.sh
+fi
+
 git config --global core.editor "code --wait"
 
 
@@ -245,9 +250,6 @@ elif [ "$_B00T_LOCAL_VERSION" != "$_B00T_LATEST_VERSION" ]; then
 else
     echo "😁🥾 local _b00t_ version $_B00T_LOCAL_VERSION"
 fi
-
-
-
 
 
 ## I don't like nix

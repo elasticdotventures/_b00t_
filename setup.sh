@@ -339,3 +339,6 @@ sudo apt-get -y install tmate
 
 # Run arbitrary commands when files change
 sudo apt-get install -y entr
+
+# we use nmap to see if ports are open
+sudo apt-get install -y nmap

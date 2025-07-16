@@ -130,3 +130,4 @@ docker run --rm -it -v $(pwd):/workspace -e VAR_NAME=value ghcr.io/elasticdotven
 - Pre-configured with _b00t_ initialization framework
 - Ready-to-use development environment with Python, Rust, Node.js, and more
 - Optimized for use with VS Code Remote Containers
+

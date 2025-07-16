@@ -177,6 +177,14 @@ graph TD
     *   [X] Test with a non-existent TOML file.
     *   [X] Test with a malformed TOML file.
 
+<<<<<<< Updated upstream
 ```
 https://github.com/cocogitto/cocogitto
 
+=======
+```curl -fsSL https://raw.githubusercontent.com/tilt-dev/tilt/master/scripts/install.sh | bash
+
+
+sudo apt install xdg-utils
+# xdg-settings, xdg-open, xdg-mime
+>>>>>>> Stashed changes
