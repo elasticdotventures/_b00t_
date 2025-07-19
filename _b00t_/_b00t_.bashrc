@@ -512,6 +512,30 @@ function is_WSLv2_🐧💙🪟v2() {
 ### - -  ..  - - //
 
 
+# Check if running in Claude Code environment
+# Returns 0 (success) if CLAUDECODE=1, 1 (failure) otherwise
+# Usage: if is_claudecode; then echo "In Claude Code"; fi
+function is_claudecode() {
+    [[ "${CLAUDECODE:-}" == "1" ]]
+}
+
+# Check if we should skip verbose output (motd, etc.)
+# Returns 0 (success) to skip output, 1 (failure) for normal output
+# Usage: if tokemoji_下文; then return; fi  # skip verbose output
+function tokemoji_下文() {
+    if is_claudecode; then
+        log_📢_记录 "🥾🎆 hi Claude code! (skipping verbose output)"
+        return 0  # true - skip output
+    fi
+    # Add other criteria for skipping output here in the future
+    return 1  # false - show normal output
+}
+
+
+
+
+
+
 # 🍰 https://stackoverflow.com/questions/3963716/how-to-manually-expand-a-special-variable-ex-tilde-in-bash/29310477#29310477
 # converts string ~/.b00t to actual path
 # usage: path=$(expandPath '~/hello')
@@ -755,7 +779,10 @@ elif [ "$(rand0 10)" -gt 5 ] ; then
 
 }
 
-if [ "${container+}" == "docker" ] ; then
+if tokemoji_下文; then
+    # Skip motd when in Claude Code or other quiet environments
+    :  # no-op
+elif [ "${container+}" == "docker" ] ; then
     motd
 elif ! is_n0t_aliased fd ; then
     motd
