@@ -1,0 +1,6 @@
+list-commands:
+	find ~/.dotfiles/_b00t_/*.toml
+
+# Run the b00t-cli with all passed arguments
+cli *args:
+	cargo run --bin b00t-cli -- {{args}}

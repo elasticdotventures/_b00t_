@@ -26,6 +26,7 @@ umask 000
 #trap 'set +a' EXIT
 
 
+
 ## 小路 \\
 ## Xiǎolù :: Path or Directory
 # THINGS YOU CAN EDIT:
@@ -35,9 +36,10 @@ if [ -d "$HOME/.dotfiles/_b00t_" ] ; then
 fi
 export _B00T_Path
 # export _B00T_C0NFIG_Path="$HOME/.b00t"
+
+# NSFW warning
 _b00t_INSPIRATION_FILE="$_B00T_Path/./r3src_资源/inspiration.json"
 ## 小路 //
-
 
 
 ## 记录 \\
@@ -60,6 +62,25 @@ function reb00t() {
 }
 
 
+
+function b00t() {
+    # this is a placeholder for b00t-cli
+    # it will eventually be replaced by b00t-cli
+    if command -v b00t-cli &> /dev/null; then
+        # b00t-cli is installed, use it.
+        b00t-cli "$@"
+    else
+        # b00t-cli is not installed, use the script.
+        log_📢_记录 "🥾: b00t-cli not found, using script"
+        _b00t_init_🥾_开始 "$@"
+    fi
+    return 0
+}
+
+function 🥾() {
+    # alias/passthrough fo b00t
+    b00t "$@"
+}
 
 
 
@@ -321,11 +342,28 @@ function _b00t_init_🥾_开始() {
     local param=${args[0]}
 
     export _b00t_="$0"
-
     if [ $_b00t_ == "/c0de/_b00t_/_b00t_.bashrc" ] ; then
         log_📢_记录 ""
         log_📢_记录 "usage: source /c0de/_b00t_/_b00t_.bashrc"
         exit
+    fi
+
+    # if b00t-cli isn't installed in the path,   # test for cargo, if cargo is installed AND
+    # ~/.dotfiles/b00t-cli exists, then compile and install it
+
+    if command -v b00t-cli &> /dev/null ; then
+        log_📢_记录 "🥾👍"
+        return 0
+    elif command -v cargo &> /dev/null && [ -d "$HOME/.dotfiles/b00t-cli" ] ; then
+        log_📢_记录 "🥾🦀 found cargo, will build + install b00t-cli"
+        (cd "$HOME/.dotfiles/b00t-cli" && cargo build --release)
+        if [ $? -eq 0 ] ; then
+            log_📢_记录 "🥾 b00t-cli compiled successfully"
+            (cd "$HOME/.dotfiles/b00t-cli" && cargo install --path .)
+            return 0
+        else
+            log_📢_记录 "🥾🦨 b00t-cli build failed"
+        fi
     fi
 
     local PARENT_COMMAND_STR="👽env-notdetected"
@@ -347,7 +385,6 @@ function _b00t_init_🥾_开始() {
     else
         log_📢_记录 "🥾👵 from: $PARENT_COMMAND_STR"
     fi
-
 
     log_📢_记录 "🥾 -V: $_b00t_VERSION  init: $_b00t_"
     if [ -n "${@}" ] ; then
@@ -523,16 +560,28 @@ function is_claudecode() {
 # Returns 0 (success) to skip output, 1 (failure) for normal output
 # Usage: if tokemoji_下文; then return; fi  # skip verbose output
 function tokemoji_下文() {
+    # this mode cuts down superfulous output
     if is_claudecode; then
-        log_📢_记录 "🥾🎆 hi Claude code! (skipping verbose output)"
-        return 0  # true - skip output
+        log_📢_记录 "🎆 hi Claude code!  🥾 b00t() ready!"
+        return 0  # true - skip outpu
     fi
     # Add other criteria for skipping output here in the future
     return 1  # false - show normal output
 }
 
 
+# Check if running in VS Code integrated terminal
+# Returns 0 (success) if VSCODE_GIT_IPC_HANDLE is set, 1 (failure) otherwise
+# Usage: if is_vscode_shell; then echo "In VS Code terminal"; fi
+function is_vscode_shell() {
+    [[ -n "${VSCODE_GIT_IPC_HANDLE:-}" ]]
+}
 
+if is_vscode_shell; then
+    log_📢_记录 "🥾💻 hi VS Code! running b00t-cli"
+    b00t-cli vscode
+
+fi
 
 
 

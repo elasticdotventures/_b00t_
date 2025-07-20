@@ -1,22 +1,31 @@
-
 # Brians dotfiles
 
 * [_b00t_/AGENT.md](./_b00t_/AGENT.md)
 
 my personal edition of [_b00t_](http://github.com/elasticdotventures/_b00t_)
-an exploration into a 'neo-modern' context-awareness system tooling for developers & their agents
+an exploration into a 'neo-modern' context-awareness system tooling for developers & their agentic codegen systems.
 
 🤔 what exactly does that mean
+
+TLDR - an agent is only as smart as it's tools
+b00t educates an LLM AGENT about it's environment.
+
+is it running in vscode - okay well then we can install mcp servers.
+is it running in claude code (which calls fresh shells *a lot*) then it goes into context saver.
+is docker or podman installed? what version.
+is this ubuntu or alpine?  is it wsl?
+what compilers & environment tokens are available?
 
 _b00t_ is my attempt at a laconically emoji communicated startup scripts to
 initialize instruction tuned models about what is or is NOT installed and
 specific versions / patterns, and their respective status/availability.
 
-For example environmental awareness are we running under WSL or Linux, what
-utilities & tools are installed?
+tokemoji is a coding style for idiomatics - using a combination of english and mandarin it reinforces concepts and reduces hallucinations.
 
-this is a few gb of 'useful' tools i desire on a system or container when i start
-doing dev work. this lets the llm know with certainty about the cli environment
+b00t is a few gb of 'useful' tools i desire on a system or container when i start
+doing dev work. *way more than* jq, curl, etc.
+
+this lets the llm know with certainty about the cli environment
 which reduces token count while potentially improving output quality at a
 negligible startup expense of extra tokens.
 
@@ -29,6 +38,7 @@ it detects & installs most of the tools and is a good place
 _b00t_ is a perpetually unfinished, WIP & strongly opinionated DIFM (Do It For me)
 low friction setup ..
 
+	detect vscode and various ai tooling
 	rich WSL2 ubuntu unix cli, vscode, github + gh cli
 	llvm/clang, modern python, rust, k8s, docker (was podman) ..
 	terraform (tofu), azure, aws, g8s, cloudflare

@@ -177,14 +177,22 @@ graph TD
     *   [X] Test with a non-existent TOML file.
     *   [X] Test with a malformed TOML file.
 
-<<<<<<< Updated upstream
 ```
 https://github.com/cocogitto/cocogitto
 
-=======
+ code --list-extensions
+
+
+search the codebase for _b00t_INSPIRATION_FILE="$_B00T_Path/./r3src_资源/inspiration.json"
+
+
+
+
+ alias ccr-router="ccr start"
+alias ccrclaude="ANTHROPIC_BASE_URL=http://localhost:3456 claude"
+
 ```curl -fsSL https://raw.githubusercontent.com/tilt-dev/tilt/master/scripts/install.sh | bash
 
 
 sudo apt install xdg-utils
 # xdg-settings, xdg-open, xdg-mime
->>>>>>> Stashed changes
