@@ -4,3 +4,43 @@ list-commands:
 # Run the b00t-cli with all passed arguments
 cli *args:
 	cargo run --bin b00t-cli -- {{args}}
+
+# Test MCP functionality with sample files
+test-mcp:
+	cargo run -- mcp add "$(cat samples/playwright.json)"
+	cargo run -- mcp add --dwiw "$(cat samples/with-comments.json)"
+	cargo run -- mcp add "$(cat samples/direct-format.json)"
+	cargo run -- mcp list
+	cargo run -- mcp list --json
+
+# Test VSCode integration (will show manual command if VSCode not available)
+test-vscode:
+	cargo run -- vscode install mcp playwright
+	cargo run -- vscode install mcp github
+	cargo run -- vscode install mcp filesystem
+
+# Test Claude Code integration (will show manual command if claude-code not available)
+test-claude-code:
+	cargo run -- claude-code install mcp playwright
+	cargo run -- claude-code install mcp github
+	cargo run -- claude-code install mcp filesystem
+
+# Usage:
+#   just bump                # defaults to "patch"
+#   just bump minor          # or "major"
+
+bump level = "patch":
+	#!/usr/bin/env bash
+	if [[ "{{level}}" != "patch" && "{{level}}" != "minor" && "{{level}}" != "major" ]]; then
+		echo "Invalid bump level: '{{level}}'. Must be one of: patch, minor, major." >&2;
+		exit 1;
+	fi
+	cargo install --quiet cargo-release --locked || true
+	echo "Bumping version: {{level}}"
+	cargo release {{level}} --no-publish --no-push --no-confirm
+
+noop:
+	@echo "Noop command executed. This is a placeholder for future commands."
+
+
+

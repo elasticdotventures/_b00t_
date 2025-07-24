@@ -1,0 +1,6 @@
+[b00t]
+name = "rust-crate-doc"
+type = "mcp"
+hint = "Rust crate documentation access and search"
+command = "bash"
+args = ["cratedocs", "stdio", "--debug"]

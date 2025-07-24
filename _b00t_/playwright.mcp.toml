@@ -1,0 +1,6 @@
+[b00t]
+name = "playwright"
+type = "mcp"
+hint = "Browser automation and testing via Playwright"
+command = "npx"
+args = ["-y", "@executeautomation/playwright-mcp-server"]

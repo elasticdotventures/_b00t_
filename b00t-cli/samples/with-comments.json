@@ -1,0 +1,9 @@
+// This is a sample MCP server configuration with comments
+// The dwiw flag will strip these comments automatically
+{
+  "github": {
+    // GitHub MCP server for repository management
+    "command": "npx",
+    "args": ["-y", "@modelcontextprotocol/server-github"]
+  }
+}

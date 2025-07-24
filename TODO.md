@@ -196,3 +196,7 @@ alias ccrclaude="ANTHROPIC_BASE_URL=http://localhost:3456 claude"
 
 sudo apt install xdg-utils
 # xdg-settings, xdg-open, xdg-mime
+
+
+ uvx mcp-cli provider list
+

@@ -12,8 +12,24 @@ fi
 if [ -f ~/.dotfiles/_b00t_/_b00t_.bashrc ] ; then
     echo "🥾 _b00t_"
     . ~/.dotfiles/_b00t_/_b00t_.bashrc
+
+    # Check if running in VS Code integrated terminal
+    # Returns 0 (success) if VSCODE_GIT_IPC_HANDLE is set, 1 (failure) otherwise
+    # Usage: if is_vscode_shell; then echo "In VS Code terminal"; fi
+    source ~/.dotfiles/vscode.🆚/vscode-detection.sh
+    if ! type is_vscode_shell &>/dev/null; then
+        echo "🙈🥾 is_vscode_shell not defined"
+    elif is_vscode_shell; then
+        log_📢_记录 "🥾💻 hi VS Code! running b00t-cli"
+        b00t-cli vscode
+    else
+        log_📢_记录 "Not VSCODE"
+    fi
+
     echo "/🥾"
 fi
+
+
 
 # when .bash_profile exists then it runs before .bashrc and must call .bashrc
 if [ -f ~/.bashrc ]; then
@@ -205,7 +221,7 @@ elif command -v minikube &> /dev/null; then
       # prefer alt
       export KUBECONFIG=~/.kube/minikube-config
     fi
-    
+
     # bash completion
     #echo 'source <(kubectl completion bash)' >>~/.bashrc
     #echo 'alias k=kubectl' >>~/.bashrc

@@ -1,0 +1,56 @@
+# display is selected automatically
+DISPLAY := "localhost:10.0"
+
+default:
+    @echo "Usage: just [install|build|package|add|remove|clean|deploy]"
+
+test:
+    npm run build && DISPLAY={{DISPLAY}} npm test
+
+install:
+    @echo "Installing dependencies with npm..."
+    npm install
+    npm install -g @vscode/vsce@latest
+    @echo "to install the plugin: just build && just add"
+
+build:
+    @echo "Building extension..."
+    npx tsc -p .
+
+package:
+    @echo "Packaging extension..."
+    npx vsce package
+
+EXT_NAME := "b00t-vscode"
+EXT_VER := `jq -r .version package.json`
+VSCODE := "../vscode.sh"
+
+build-add:
+    @echo "Building and packaging extension..."
+    just build
+    just package
+    just add
+
+add:
+    @echo "Installing extension into VSCode..."
+    {{ VSCODE }} --install-extension {{ EXT_NAME }}-{{ EXT_VER }}.vsix --force
+
+remove:
+    @echo "Uninstalling extension from VSCode..."
+    code --uninstall-extension b00t-vscode
+
+clean:
+    @echo "Removing packaged .vsix files, node_modules, lockfiles, build outputs, and pnpm/bun artifacts..."
+    rm -f *.vsix
+    rm -rf node_modules
+    rm -f pnpm-lock.yaml
+    rm -f yarn.lock
+    rm -rf .pnpm-store
+    rm -rf out dist
+    rm -rf bun.lockb
+    rm -rf .bun
+    @echo "Clean complete."
+
+deploy:
+    @echo "Deploying extension..."
+    npx vsce publish

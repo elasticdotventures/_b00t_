@@ -543,22 +543,28 @@ function selectEditVSCode_experiment() {
 ## Microsoft Windows Linux Subsystem II  WSL2
 ## 🤓 https://docs.microsoft.com/en-us/windows/wsl/install-win10
 #
+unset -f is_WSLv2_🐧💙🪟v2
 function is_WSLv2_🐧💙🪟v2() {
     return `cat /proc/version | grep -c "microsoft-standard-WSL2"`
 }
+# Export the functions so they're available to child processes
+export -f is_WSLv2_🐧💙🪟v2
 ### - -  ..  - - //
 
 
 # Check if running in Claude Code environment
 # Returns 0 (success) if CLAUDECODE=1, 1 (failure) otherwise
 # Usage: if is_claudecode; then echo "In Claude Code"; fi
+unset -f is_claudecode
 function is_claudecode() {
     [[ "${CLAUDECODE:-}" == "1" ]]
 }
+export -f is_claudecode
 
 # Check if we should skip verbose output (motd, etc.)
 # Returns 0 (success) to skip output, 1 (failure) for normal output
 # Usage: if tokemoji_下文; then return; fi  # skip verbose output
+unset -f tokemoji_下文
 function tokemoji_下文() {
     # this mode cuts down superfulous output
     if is_claudecode; then
@@ -568,20 +574,8 @@ function tokemoji_下文() {
     # Add other criteria for skipping output here in the future
     return 1  # false - show normal output
 }
+export -f tokemoji_下文
 
-
-# Check if running in VS Code integrated terminal
-# Returns 0 (success) if VSCODE_GIT_IPC_HANDLE is set, 1 (failure) otherwise
-# Usage: if is_vscode_shell; then echo "In VS Code terminal"; fi
-function is_vscode_shell() {
-    [[ -n "${VSCODE_GIT_IPC_HANDLE:-}" ]]
-}
-
-if is_vscode_shell; then
-    log_📢_记录 "🥾💻 hi VS Code! running b00t-cli"
-    b00t-cli vscode
-
-fi
 
 
 
@@ -977,9 +971,9 @@ function _b00t_check() {
     local toml_dir="$HOME/.dotfiles/_b00t_"
 
     # Get all .toml files, sort them alphabetically, and iterate
-    for toml_file in $(find "$toml_dir" -maxdepth 1 -name "*.toml" | sort); do
-        local command_name=$(basename "$toml_file" .toml)
-        b00t . "$command_name"
+    for toml_file in $(find "$toml_dir" -maxdepth 1 -name "*.cli.toml" | sort); do
+        local command_name=$(basename "$toml_file" .cli.toml)
+        b00t cli check "$command_name"
         local exit_code=$?
         if [ $exit_code -eq 1 ] || [ $exit_code -eq 2 ]; then
             outdated_found=1

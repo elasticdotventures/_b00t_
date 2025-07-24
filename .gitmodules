@@ -16,3 +16,9 @@
 [submodule "vscode.🆚/vscode-docs"]
 	path = _b00t_/vscode.🆚/vscode-docs
 	url = https://github.com/microsoft/vscode-docs
+[submodule "b00t-vscode/vscode-just"]
+	path = b00t-vscode/vscode-just
+	url = https://github.com/nefrob/vscode-just
+[submodule "b00t-vscode/just-lsp"]
+	path = b00t-vscode/just-lsp.subrepo
+	url = https://github.com/terror/just-lsp

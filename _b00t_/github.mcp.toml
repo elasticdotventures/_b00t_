@@ -1,0 +1,6 @@
+[b00t]
+name = "github"
+type = "mcp"
+hint = "Provides GitHub API access for repositories, issues, and more"
+command = "npx"
+args = ["-y", "@modelcontextprotocol/server-github"]

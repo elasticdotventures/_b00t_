@@ -282,3 +282,7 @@ dev-debug.log
 # context7
 alembic.ini
 context_portal/*
+**/DEADJOE
+**/~Stashed changes
+**/*~Stashed changes
+**/context_portal

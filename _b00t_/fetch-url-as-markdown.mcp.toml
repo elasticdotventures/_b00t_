@@ -1,0 +1,6 @@
+[b00t]
+name = "fetch-url-as-markdown"
+type = "mcp"
+hint = "Fetches URLs and converts content to markdown format"
+command = "uvx"
+args = ["mcp-server-fetch"]
