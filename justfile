@@ -2,6 +2,30 @@
 # Alias to get the Git repository root
 repo-root := env_var_or_default("JUST_REPO_ROOT", `git rev-parse --show-toplevel 2>/dev/null || echo .`)
 
+
+set shell := ["bash", "-cu"]
+
+# 🔁 Validate conventional commits
+validate:
+    cog check
+
+# 📝 Preview next version and changelog
+changelog:
+    cog changelog --unreleased
+
+# 🚀 Release new version based on commit history
+release:
+    cog bump --auto
+    cog changelog
+    git push --follow-tags
+
+# 🔧 Manual version bump (use `major`, `minor`, or `patch`)
+bump VERSION:
+    cog bump {{VERSION}}
+    cog changelog
+    git push --follow-tags
+
+
 stow:
     stow --adopt -d ~/.dotfiles -t ~ bash
 

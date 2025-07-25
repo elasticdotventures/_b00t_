@@ -8,6 +8,8 @@ else
     export IS_WSL=false
 fi
 
+
+
 # b00t is a collection of environment detection
 if [ -f ~/.dotfiles/_b00t_/_b00t_.bashrc ] ; then
     echo "🥾 _b00t_"
@@ -21,9 +23,20 @@ if [ -f ~/.dotfiles/_b00t_/_b00t_.bashrc ] ; then
         echo "🙈🥾 is_vscode_shell not defined"
     elif is_vscode_shell; then
         log_📢_记录 "🥾💻 hi VS Code! running b00t-cli"
-        b00t-cli vscode
+        # b00t-cli vscode
     else
-        log_📢_记录 "Not VSCODE"
+        log_📢_记录 "Not inside VSCODE"
+    fi
+
+
+
+    ## TODO Claude Code detection
+    ## detect is_claudecode
+    if is_claudecode; then
+        log_📢_记录 "🥾🦞 hi Claude Code! b00t ready!"
+        # b00t-cli claudecode
+    else
+        log_📢_记录 "Not inside Claude Code"
     fi
 
     echo "/🥾"
@@ -88,7 +101,7 @@ elif [[ ! -d ~/.dotfiles/vscode.🆚/code-connect ]]; then
 
     # vscode
     # [[ "$TERM_PROGRAM" == "vscode" ]] && . "$(code --locate-shell-integration-path bash)"
-    echo "✅🆚 vscode (remote)"
+    echo '✅🆚 vscode (remote)'
 else
     echo "🙈🆚 no vscode"
 fi
@@ -140,7 +153,7 @@ if command -v podman &> /dev/null; then
     alias docker=podman
     export PODMAN_MACHINE_NAME=$( podman machine list --format '{{.Name}}' | grep '*' | tr -d '*' )
     if [ -z "$PODMAN_MACHINE_NAME" ]; then
-        echo "🙈🐳 no podman machine found (this is fine)"
+        echo '🙈🐳 no podman machine found (this is fine)'
     else
         export PODMAN_SOCKET=$(podman machine inspect ${PODMAN_MACHINE_NAME} | jq -r '.[].ConnectionInfo.PodmanSocket.Path')
         #export PODMAN_SOCKET=$(ls $XDG_RUNTIME_DIR/podman/podman.sock)
@@ -248,7 +261,7 @@ if command -v nvm &> /dev/null; then
     # nvm use default
 
     NODE_VERSION=$(node --version)
-    echo "✅🦄 has nvm (node $NODE_VERSION)"
+    echo "✅🦄 has nvm node $NODE_VERSION"
     export NVM_DIR="$HOME/.nvm"
     [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh" # This loads nvm
     [ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion" # This loads nvm bash_completion
@@ -279,14 +292,14 @@ fi
 
 # check for uv
 if command -v uv &> /dev/null; then
-	eval "$(uv generate-shell-completion bash)"
+    eval "$(uv generate-shell-completion bash)"
 fi
 
 
 if command -v direnv &> /dev/null; then
-	eval "$(direnv hook bash)"
+    eval "$(direnv hook bash)"
 else
-	echo "🥲 direnv not installed, cannot hook shell."
+    echo "🥲 direnv not installed, cannot hook shell."
 fi
 
 
@@ -299,9 +312,9 @@ fi
 export PATH=$PATH:/usr/local/go/bin
 
 if [ -d ~/.krew ] ; then
-	export PATH="${KREW_ROOT:-$HOME/.krew}/bin:$PATH"
+    export PATH="${KREW_ROOT:-$HOME/.krew}/bin:$PATH"
 fi
 
-alias gemini='npx https://github.com/google-gemini/gemini-cli'
+alias gemini='npx -y https://github.com/google-gemini/gemini-cli'
 
 echo "🐚 .bash_profile loaded"

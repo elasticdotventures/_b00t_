@@ -1,0 +1,6 @@
+[b00t]
+name = "just-mcp"
+type = "mcp"
+hint = "executes a justfile in your project"
+command = "bash"
+args = ["just-mcp"]

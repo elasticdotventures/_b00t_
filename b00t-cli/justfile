@@ -7,9 +7,9 @@ cli *args:
 
 # Test MCP functionality with sample files
 test-mcp:
-	cargo run -- mcp add "$(cat samples/playwright.json)"
-	cargo run -- mcp add --dwiw "$(cat samples/with-comments.json)"
-	cargo run -- mcp add "$(cat samples/direct-format.json)"
+	cargo run -- mcp add "$(cat samples/mcp/playwright.json)"
+	cargo run -- mcp add --dwiw "$(cat samples/mcp/with-comments.json)"
+	cargo run -- mcp add "$(cat samples/mcp/direct-format.json)"
 	cargo run -- mcp list
 	cargo run -- mcp list --json
 

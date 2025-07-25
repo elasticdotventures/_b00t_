@@ -31,9 +31,11 @@ build-add:
     just package
     just add
 
+
 add:
     @echo "Installing extension into VSCode..."
-    {{ VSCODE }} --install-extension {{ EXT_NAME }}-{{ EXT_VER }}.vsix --force
+    {{VSCODE}} --install-extension {{EXT_NAME}}-{{EXT_VER}}.vsix --force
+
 
 remove:
     @echo "Uninstalling extension from VSCode..."

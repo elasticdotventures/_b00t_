@@ -1,0 +1,13 @@
+[b00t]
+name = "openai"
+type = "ai"
+hint = "OpenAI GPT models via official API"
+
+[models]
+"gpt-4" = { "context_length" = 8192, "cost_per_1k_tokens" = 0.03, "capabilities" = "text,chat,vision", "max_tokens" = 4096 }
+"gpt-4-turbo" = { "context_length" = 128000, "cost_per_1k_tokens" = 0.01, "capabilities" = "text,chat,vision,json", "max_tokens" = 4096 }
+"gpt-3.5-turbo" = { "context_length" = 16384, "cost_per_1k_tokens" = 0.001, "capabilities" = "text,chat,json", "max_tokens" = 4096 }
+
+[env]
+OPENAI_API_KEY = "${OPENAI_API_KEY}"
+OPENAI_API_BASE = "https://api.openai.com/v1"

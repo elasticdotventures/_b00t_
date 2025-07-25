@@ -1,0 +1,6 @@
+[b00t]
+name = "brave-search"
+type = "mcp"
+hint = "Brave Search API integration"
+command = "npx"
+args = ["-y", "@modelcontextprotocol/server-brave-search"]

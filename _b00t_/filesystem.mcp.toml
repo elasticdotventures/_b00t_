@@ -1,6 +1,6 @@
 [b00t]
 name = "filesystem"
 type = "mcp"
-hint = "Provides filesystem access for MCP clients"
+hint = "MCP server"
 command = "npx"
-args = ["-y", "@modelcontextprotocol/server-filesystem", "/tmp"]
+args = ["-y", "@modelcontextprotocol/server-filesystem", "/path/to/allowed/files"]

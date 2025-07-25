@@ -1,6 +1,6 @@
 [b00t]
 name = "github"
 type = "mcp"
-hint = "Provides GitHub API access for repositories, issues, and more"
+hint = "This is a sample MCP server configuration with comments The dwiw flag will strip these comments automatically GitHub MCP server for repository management"
 command = "npx"
 args = ["-y", "@modelcontextprotocol/server-github"]

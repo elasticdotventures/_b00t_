@@ -555,11 +555,16 @@ export -f is_WSLv2_🐧💙🪟v2
 # Check if running in Claude Code environment
 # Returns 0 (success) if CLAUDECODE=1, 1 (failure) otherwise
 # Usage: if is_claudecode; then echo "In Claude Code"; fi
-unset -f is_claudecode
-function is_claudecode() {
-    [[ "${CLAUDECODE:-}" == "1" ]]
+unset -f is_claudecode 2>/dev/null
+is_claudecode() {
+    if [ "${CLAUDECODE:-}" = "1" ]; then
+        return 0
+    else
+        return 1
+    fi
 }
 export -f is_claudecode
+
 
 # Check if we should skip verbose output (motd, etc.)
 # Returns 0 (success) to skip output, 1 (failure) for normal output

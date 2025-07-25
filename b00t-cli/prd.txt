@@ -1,0 +1,143 @@
+# Documentation Publication Plan for b00t-cli
+
+## Current State Analysis
+
+**HIGHEST PRIORITY*
+- inline examples, with syntax and usage from --help
+- add introspective cli capability to output structured markdown details on internal structures ex: --doc mode, include samples
+- internal samples are for testing & documentary purposes
+
+## Future
+
+* we will be following the Hybrid Recommendation (a combination of rustdoc & mdBook)
+* b00t themed laconic source code comments
+* docs should ALWAYS provide concrete 'why' to ambuigity (see ~/.dotfiles/AGENT.md for guidance)
+* samples/examples === test cases
+
+**Codebase Overview:**
+- **Size**: ~1,700 lines of Rust code across 3 files
+- **Structure**: Well-organized with `main.rs` (1,150 lines), `lib.rs` (449 lines), `integration_tests.rs` (95 lines)
+- **Documentation**: Minimal - no rustdoc comments found, basic CLAUDE.md exists
+- **Public API**: 15+ public structs/enums, 6+ public functions in lib.rs
+
+**Key Documentable Components:**
+- Core data structures: `BootPackage`, `UnifiedConfig`, `McpServer`, `AiConfig`
+- Package type system: `PackageType` enum with multiple variants
+- JSON processing functions: `normalize_mcp_json`, `extract_comments_and_clean_json`
+- Configuration management: `create_unified_toml_config`, `create_ai_toml_config`
+- CLI interface: Extensive command structure with subcommands
+
+## Tooling Options
+
+### 1. **rustdoc + cargo doc** (Recommended Primary)
+**Pros:**
+- Built into Rust ecosystem
+- Automatic API documentation generation
+- Supports doc tests for examples
+- Zero additional dependencies
+- Integrates with crates.io if published
+
+**Cons:**
+- Limited narrative documentation capabilities
+- Requires adding doc comments to source
+
+### 2. **mdBook** (Recommended Secondary)
+**Pros:**
+- Excellent for user guides and tutorials
+- Markdown-based, easy to maintain
+- Used by Rust project itself
+- Great for conceptual documentation
+
+**Cons:**
+- Separate from API docs
+- Requires manual maintenance
+
+### 3. **Hybrid Approach** (Optimal)
+**Pros:**
+- Combines API reference (rustdoc) with user guides (mdBook)
+- Comprehensive documentation coverage
+- Professional presentation
+
+**Cons:**
+- More maintenance overhead
+- Requires coordination between tools
+
+### 4. **Enhanced rustdoc** (2025 Features)
+**Pros:**
+- Example scraping (`-Zrustdoc-scrape-examples`)
+- Rich linking between docs and examples
+- Modern, interactive output
+
+## Publication Plan
+
+### Phase 1: Foundation (1-2 days)
+1. **Add rustdoc comments** to all public APIs in `src/lib.rs`:
+   - Document all structs, enums, and functions
+   - Add examples for key functions like `normalize_mcp_json`
+   - Include usage patterns and error conditions
+
+2. **Set up cargo doc workflow**:
+   - Configure `Cargo.toml` with metadata
+   - Add examples to `examples/` directory for scraping
+   - Test documentation generation locally
+
+### Phase 2: Enhanced API Documentation (1 day)
+1. **Implement doc tests**:
+   - Add executable examples in doc comments
+   - Ensure examples compile and run correctly
+   - Cover main use cases for each public function
+
+2. **Configure enhanced features**:
+   - Enable example scraping in CI
+   - Add documentation quality checks
+   - Set up automated doc generation
+
+### Phase 3: User Guide (2-3 days)
+1. **Create mdBook structure**:
+   ```
+   docs/
+   ├── book.toml
+   ├── src/
+   │   ├── SUMMARY.md
+   │   ├── introduction.md
+   │   ├── installation.md
+   │   ├── usage/
+   │   │   ├── basic-commands.md
+   │   │   ├── mcp-management.md
+   │   │   └── configuration.md
+   │   ├── examples/
+   │   └── api-reference.md (links to rustdoc)
+   ```
+
+2. **Write comprehensive guides**:
+   - Getting started tutorial
+   - Command reference with examples
+   - Configuration file format documentation
+   - MCP integration workflows
+
+### Phase 4: Publication & Automation (1 day)
+1. **GitHub Pages setup**:
+   - Configure GitHub Actions for automatic doc building
+   - Deploy both rustdoc and mdBook output
+   - Set up custom domain if desired
+
+2. **Quality assurance**:
+   - Add cargo-spellcheck for documentation
+   - Implement doc coverage checking
+   - Set up CI checks for documentation quality
+
+## Recommended Implementation Order
+
+1. **Start with rustdoc** - immediate value, low effort
+2. **Add comprehensive examples** - enhances API usability
+3. **Create user guide with mdBook** - fills narrative gaps
+4. **Automate publication** - ensures sustainability
+
+## Hosting Options
+
+- **GitHub Pages**: Free, integrates with repo, supports custom domains
+- **Netlify**: Advanced features, preview deployments
+- **docs.rs**: Automatic if published to crates.io
+- **Custom hosting**: Full control, potential for branding
+
+The hybrid approach combining rustdoc for API reference and mdBook for user guides provides the most comprehensive documentation solution for b00t-cli's diverse functionality.

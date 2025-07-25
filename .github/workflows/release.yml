@@ -1,0 +1,17 @@
+# .github/workflows/release.yml
+name: Release
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo install cocogitto
+      - run: cog bump --auto
+      - run: cog changelog
+      - run: git push --follow-tags

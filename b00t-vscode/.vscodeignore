@@ -1,0 +1,19 @@
+# Exclude everything except essential extension files
+node_modules/
+src/
+context_portal/
+just-lsp/
+logs/
+vscode-just/
+vscode-justfile-mcp/
+*.md
+*.pm
+*.html
+*.txt
+!.vscodeignore
+!out/
+!package.json
+!README.md
+!CHANGELOG.md
+!justfile
+!LICENSE

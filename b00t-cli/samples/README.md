@@ -15,13 +15,13 @@ b00t-cli uses a "one import, many export" architecture for MCP server configurat
 
 ```bash
 # Basic usage (Playwright server)
-b00t-cli mcp add "$(cat samples/playwright.json)"
+b00t-cli mcp add "$(cat samples/mcp/playwright.json)"
 
 # With --dwiw flag to auto-clean comments
-b00t-cli mcp add --dwiw "$(cat samples/with-comments.json)"
+b00t-cli mcp add --dwiw "$(cat samples/mcp/with-comments.json)"
 
 # Direct format
-b00t-cli mcp add "$(cat samples/direct-format.json)"
+b00t-cli mcp add "$(cat samples/mcp/direct-format.json)"
 
 # List available MCP servers
 b00t-cli mcp list
