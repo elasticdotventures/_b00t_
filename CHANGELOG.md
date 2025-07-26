@@ -15,6 +15,25 @@ All notable changes to this project will be documented in this file. See [conven
 - Pass GH_TOKEN to Docker build for gh CLI authentication - (67ff202) - elasticdotventures
 - install missing dependencies and ensure path for setup.sh - (93614b3) - elasticdotventures
 #### Features
+- add VS Code extension management commands (#29) (#41) - (558c970) - Brian Horakh
+- add set -ex to setup.sh for verbose logging - (88961ff) - elasticdotventures
+- Improve Docker build workflow and update gitignore - (3cb1ff9) - elasticdotventures
+
+- - -
+
+## 0.0.1 - 2025-07-26
+#### Bug Fixes
+- Add uv to PATH in Dockerfile - (fa73bcd) - elasticdotventures
+- Make justfile repo-root more robust for Docker builds - (203f7ce) - elasticdotventures
+- Securely pass GH_TOKEN to Docker build using BuildKit secrets - (35fa9ba) - elasticdotventures
+- Revert gh extension install conditional logic, rely on GH_TOKEN - (dbd0b16) - elasticdotventures
+- Correctly detect Docker build environment in setup.sh - (a981378) - elasticdotventures
+- Skip gh extension install in CI/Docker builds - (7932250) - elasticdotventures
+- Conditionally skip gh extension install in CI if GITHUB_TOKEN is not set - (3dd50b8) - elasticdotventures
+- Use GITHUB_TOKEN directly in setup.sh and remove GH_TOKEN build arg - (0e70d78) - elasticdotventures
+- Pass GH_TOKEN to Docker build for gh CLI authentication - (67ff202) - elasticdotventures
+- install missing dependencies and ensure path for setup.sh - (93614b3) - elasticdotventures
+#### Features
 - add VS Code extension management commands - (666bb32) - elasticdotventures
 - add set -ex to setup.sh for verbose logging - (88961ff) - elasticdotventures
 - Improve Docker build workflow and update gitignore - (3cb1ff9) - elasticdotventures
