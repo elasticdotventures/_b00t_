@@ -156,7 +156,7 @@ enum AiCommands {
 
 #[derive(Parser)]
 enum AppCommands {
-    #[clap(about = "VSCode integration commands", long_about = "VSCode integration commands.\n\nExamples:\n  b00t-cli app vscode mcp install gh\n  b00t-cli mcp install gh vscode")]
+    #[clap(about = "VSCode integration commands", long_about = "VSCode integration commands.\n\nMCP Examples:\n  b00t-cli app vscode mcp install gh\n  b00t-cli mcp install gh vscode\n\nExtension Examples:\n  b00t-cli app vscode extension list\n  b00t-cli app vscode extension install rust-lang.rust-analyzer")]
     Vscode {
         #[clap(subcommand)]
         vscode_command: AppVscodeCommands,
@@ -179,6 +179,11 @@ enum AppVscodeCommands {
     Mcp {
         #[clap(subcommand)]
         mcp_command: AppMcpCommands,
+    },
+    #[clap(about = "VS Code extension management")]
+    Extension {
+        #[clap(subcommand)]
+        extension_command: AppVscodeExtensionCommands,
     },
 }
 
@@ -206,6 +211,25 @@ enum AppMcpCommands {
     Install {
         #[clap(help = "Name of the MCP server to install")]
         name: String,
+    },
+}
+
+#[derive(Parser)]
+enum AppVscodeExtensionCommands {
+    #[clap(about = "List installed VS Code extensions", long_about = "List all installed VS Code extensions.\n\nExamples:\n  b00t-cli app vscode extension list\n  b00t-cli app vscode extension list --json")]
+    List {
+        #[clap(long, help = "Output in JSON format")]
+        json: bool,
+    },
+    #[clap(about = "Install VS Code extension", long_about = "Install VS Code extension by ID.\n\nExamples:\n  b00t-cli app vscode extension install ms-vscode.vscode-typescript-next\n  b00t-cli app vscode extension install rust-lang.rust-analyzer")]
+    Install {
+        #[clap(help = "Extension ID to install (e.g., ms-vscode.vscode-typescript-next)")]
+        extension_id: String,
+    },
+    #[clap(about = "Uninstall VS Code extension", long_about = "Uninstall VS Code extension by ID.\n\nExamples:\n  b00t-cli app vscode extension uninstall ms-vscode.vscode-typescript-next\n  b00t-cli app vscode extension uninstall rust-lang.rust-analyzer")]
+    Uninstall {
+        #[clap(help = "Extension ID to uninstall")]
+        extension_id: String,
     },
 }
 
@@ -1015,6 +1039,26 @@ fn main() {
                     AppMcpCommands::Install { name } => {
                         if let Err(e) = vscode_install_mcp(name, &cli.path) {
                             eprintln!("Error installing MCP server to VSCode: {}", e);
+                            std::process::exit(1);
+                        }
+                    }
+                }
+                AppVscodeCommands::Extension { extension_command } => match extension_command {
+                    AppVscodeExtensionCommands::List { json } => {
+                        if let Err(e) = vscode_extension_list(*json) {
+                            eprintln!("Error listing VS Code extensions: {}", e);
+                            std::process::exit(1);
+                        }
+                    }
+                    AppVscodeExtensionCommands::Install { extension_id } => {
+                        if let Err(e) = vscode_extension_install(extension_id) {
+                            eprintln!("Error installing VS Code extension: {}", e);
+                            std::process::exit(1);
+                        }
+                    }
+                    AppVscodeExtensionCommands::Uninstall { extension_id } => {
+                        if let Err(e) = vscode_extension_uninstall(extension_id) {
+                            eprintln!("Error uninstalling VS Code extension: {}", e);
                             std::process::exit(1);
                         }
                     }
@@ -2011,6 +2055,80 @@ fn ai_output(path: &str, format: &str, providers: &str) -> Result<()> {
                 eprintln!("Warning: Failed to read config for '{}': {}", provider_name, e);
                 continue;
             }
+        }
+    }
+
+    Ok(())
+}
+
+fn vscode_extension_list(json_output: bool) -> Result<()> {
+    let result = cmd!("code", "--list-extensions").read();
+
+    match result {
+        Ok(output) => {
+            if json_output {
+                let extensions: Vec<String> = output
+                    .lines()
+                    .map(|line| line.trim().to_string())
+                    .filter(|line| !line.is_empty())
+                    .collect();
+                
+                let json_data = serde_json::json!({
+                    "extensions": extensions
+                });
+                let json_str = serde_json::to_string_pretty(&json_data)
+                    .context("Failed to serialize extensions to JSON")?;
+                println!("{}", json_str);
+            } else {
+                if output.trim().is_empty() {
+                    println!("No VS Code extensions installed");
+                } else {
+                    println!("Installed VS Code extensions:");
+                    for line in output.lines() {
+                        let extension = line.trim();
+                        if !extension.is_empty() {
+                            println!("📦 {}", extension);
+                        }
+                    }
+                }
+            }
+        },
+        Err(e) => {
+            anyhow::bail!("Failed to list VS Code extensions: {}. Make sure VS Code CLI is installed and available.", e);
+        }
+    }
+
+    Ok(())
+}
+
+fn vscode_extension_install(extension_id: &str) -> Result<()> {
+    println!("Installing VS Code extension: {}", extension_id);
+    
+    let result = cmd!("code", "--install-extension", extension_id).run();
+
+    match result {
+        Ok(_) => {
+            println!("✅ Successfully installed extension: {}", extension_id);
+        },
+        Err(e) => {
+            anyhow::bail!("Failed to install VS Code extension '{}': {}. Check that the extension ID is correct.", extension_id, e);
+        }
+    }
+
+    Ok(())
+}
+
+fn vscode_extension_uninstall(extension_id: &str) -> Result<()> {
+    println!("Uninstalling VS Code extension: {}", extension_id);
+    
+    let result = cmd!("code", "--uninstall-extension", extension_id).run();
+
+    match result {
+        Ok(_) => {
+            println!("✅ Successfully uninstalled extension: {}", extension_id);
+        },
+        Err(e) => {
+            anyhow::bail!("Failed to uninstall VS Code extension '{}': {}. Check that the extension is installed.", extension_id, e);
         }
     }
 

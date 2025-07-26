@@ -3,7 +3,7 @@ mod integration_tests {
     use std::fs;
     use std::path::PathBuf;
     use tempfile::TempDir;
-    use crate::{mcp_add, get_mcp_config};
+    use crate::{mcp_add_json, get_mcp_config};
 
     fn setup_temp_dir() -> TempDir {
         tempfile::tempdir().expect("Failed to create temp directory")
@@ -17,7 +17,7 @@ mod integration_tests {
         // Test adding an MCP server
         let json = r#"{"playwright": {"command": "npx", "args": ["-y", "@executeautomation/playwright-mcp-server"]}}"#;
         
-        let result = mcp_add(json, false, temp_path);
+        let result = mcp_add_json(json, false, temp_path);
         assert!(result.is_ok());
 
         // Verify the TOML file was created
@@ -27,8 +27,8 @@ mod integration_tests {
         // Test reading the config back
         let server = get_mcp_config("playwright", temp_path).unwrap();
         assert_eq!(server.name, "playwright");
-        assert_eq!(server.command, "npx");
-        assert_eq!(server.args, vec!["-y", "@executeautomation/playwright-mcp-server"]);
+        assert_eq!(server.command, Some("npx".to_string()));
+        assert_eq!(server.args, Some(vec!["-y".to_string(), "@executeautomation/playwright-mcp-server".to_string()]));
     }
 
     #[test]
@@ -55,13 +55,13 @@ mod integration_tests {
   }
 }"#;
         
-        let result = mcp_add(json_with_comments, true, temp_path);
+        let result = mcp_add_json(json_with_comments, true, temp_path);
         assert!(result.is_ok());
 
         let server = get_mcp_config("github", temp_path).unwrap();
         assert_eq!(server.name, "github");
-        assert_eq!(server.command, "npx");
-        assert_eq!(server.args, vec!["-y", "@modelcontextprotocol/server-github"]);
+        assert_eq!(server.command, Some("npx".to_string()));
+        assert_eq!(server.args, Some(vec!["-y".to_string(), "@modelcontextprotocol/server-github".to_string()]));
     }
 
     #[test]
