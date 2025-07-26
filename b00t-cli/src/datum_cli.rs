@@ -1,11 +1,10 @@
 use anyhow::Result;
 use duct::cmd;
-use crate::{BootDatum, DatumType, get_config, check_command_available};
+use crate::{BootDatum, get_config, check_command_available};
 use crate::traits::*;
 
 pub struct CliDatum {
     pub datum: BootDatum,
-    pub config_path: String,
 }
 
 impl CliDatum {
@@ -13,12 +12,15 @@ impl CliDatum {
         let (config, _filename) = get_config(name, path).map_err(|e| anyhow::anyhow!("{}", e))?;
         Ok(CliDatum {
             datum: config.b00t,
-            config_path: path.to_string(),
         })
     }
+}
+
+impl TryFrom<(&str, &str)> for CliDatum {
+    type Error = anyhow::Error;
     
-    pub fn from_datum(datum: BootDatum, config_path: String) -> Self {
-        CliDatum { datum, config_path }
+    fn try_from((name, path): (&str, &str)) -> Result<Self, Self::Error> {
+        Self::from_config(name, path)
     }
 }
 
@@ -91,10 +93,6 @@ impl StatusProvider for CliDatum {
         "cli"
     }
     
-    fn display_name(&self) -> &str {
-        &self.datum.name
-    }
-    
     fn hint(&self) -> &str {
         &self.datum.hint
     }
@@ -117,17 +115,6 @@ impl FilterLogic for CliDatum {
         self.evaluate_constraints_default(require)
     }
     
-    fn is_disabled(&self) -> bool {
-        StatusProvider::is_disabled(self)
-    }
-    
-    fn is_installed(&self) -> bool {
-        DatumChecker::is_installed(self)
-    }
-    
-    fn subsystem(&self) -> &str {
-        StatusProvider::subsystem(self)
-    }
 }
 
 impl ConstraintEvaluator for CliDatum {
@@ -137,35 +124,8 @@ impl ConstraintEvaluator for CliDatum {
 }
 
 impl DatumProvider for CliDatum {
-    fn datum_type(&self) -> DatumType {
-        DatumType::Unknown
-    }
-    
     fn datum(&self) -> &BootDatum {
         &self.datum
     }
 }
 
-pub fn get_cli_tools_status(path: &str) -> Result<Vec<Box<dyn DatumProvider>>> {
-    let mut tools: Vec<Box<dyn DatumProvider>> = Vec::new();
-    let expanded_path = crate::get_expanded_path(path)?;
-    
-    if let Ok(entries) = std::fs::read_dir(&expanded_path) {
-        for entry in entries {
-            if let Ok(entry) = entry {
-                let entry_path = entry.path();
-                if let Some(file_name) = entry_path.file_name().and_then(|s| s.to_str()) {
-                    if file_name.ends_with(".cli.toml") {
-                        if let Some(tool_name) = file_name.strip_suffix(".cli.toml") {
-                            if let Ok(cli_datum) = CliDatum::from_config(tool_name, path) {
-                                tools.push(Box::new(cli_datum));
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-    
-    Ok(tools)
-}

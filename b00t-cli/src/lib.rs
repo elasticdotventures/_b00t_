@@ -8,6 +8,7 @@ pub mod datum_apt;
 pub mod datum_bash;
 pub mod datum_docker;
 pub mod datum_vscode;
+pub mod utils;
 pub use traits::*;
 
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
@@ -62,6 +63,9 @@ pub struct BootDatum {
     
     // Require constraints
     pub require: Option<Vec<String>>,
+    
+    // Aliases for CLI commands
+    pub aliases: Option<Vec<String>>,
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
@@ -187,6 +191,7 @@ pub fn normalize_mcp_json(input: &str, dwiw: bool) -> Result<BootDatum> {
                     .filter_map(|v| v.as_str())
                     .map(|s| s.to_string())
                     .collect()),
+            aliases: None,
         };
         return Ok(server);
     }
@@ -237,6 +242,7 @@ pub fn normalize_mcp_json(input: &str, dwiw: bool) -> Result<BootDatum> {
                         .filter_map(|v| v.as_str())
                         .map(|s| s.to_string())
                         .collect()),
+                aliases: None,
             };
             return Ok(server);
         }
@@ -287,6 +293,7 @@ pub fn normalize_mcp_json(input: &str, dwiw: bool) -> Result<BootDatum> {
                     .filter_map(|v| v.as_str())
                     .map(|s| s.to_string())
                     .collect()),
+            aliases: None,
         };
         return Ok(server);
     }
@@ -401,6 +408,7 @@ pub fn check_command_available(command: &str) -> bool {
 pub fn get_expanded_path(path: &str) -> Result<std::path::PathBuf> {
     Ok(std::path::PathBuf::from(shellexpand::tilde(path).to_string()))
 }
+
 
 pub fn get_config(command: &str, path: &str) -> Result<(UnifiedConfig, String), Box<dyn std::error::Error>> {
     // Try different file extensions in order of preference

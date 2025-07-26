@@ -48,10 +48,16 @@ _b00t_INSPIRATION_FILE="$_B00T_Path/./r3src_资源/inspiration.json"
 # mostly, this is for future opentelemetry & storytime log
 unset -f log_📢_记录
 function log_📢_记录() {
+    # Suppress output for tokenomics when agent is detected
+    if [ -n "${_B00T_Agent:-}" ]; then
+        return 0
+    fi
     echo "$@"
 }
 export -f log_📢_记录
 ## 记录 //
+
+## Agent detection handled by .bash_profile (single source of truth)
 
 ## this will allow b00t to restart itself.
 unset -f reb00t
@@ -113,7 +119,7 @@ pathAdd "$HOME/.yarn/bin"
 
 
 if [ "/usr/bin/docker" ] ; then
-    echo "🐳 has d0cker! loading docker extensions"
+    log_📢_记录 "🐳 has d0cker! loading docker extensions"
     source "$_B00T_Path/docker.🐳/_bashrc.sh"
 
     ## 😔 docker context?
@@ -572,9 +578,8 @@ export -f is_claudecode
 unset -f tokemoji_下文
 function tokemoji_下文() {
     # this mode cuts down superfulous output
-    if is_claudecode; then
-        log_📢_记录 "🎆 hi Claude code!  🥾 b00t() ready!"
-        return 0  # true - skip outpu
+    if [ -n "${_B00T_Agent:-}" ]; then
+        return 0  # true - skip verbose output (greeting handled by .bash_profile)
     fi
     # Add other criteria for skipping output here in the future
     return 1  # false - show normal output
@@ -945,7 +950,7 @@ function debInst() {
 ##
 export _user="$(id -u -n)"
 export _uid="$(id -u)"
-echo "🙇‍♂️ \$_user: $_user  \$_uid : $_uid"
+log_📢_记录 "🙇‍♂️ \$_user: $_user  \$_uid : $_uid"
 set +o nounset
 #set +a  # turn off export all (breaks bash autocomplete)
 
@@ -965,7 +970,7 @@ else
     # if [ -f "$HOME/.dotfiles/_b00t_/bash.🔨/_/b00t-cli.sh" ]; then
     #     source "$HOME/.dotfiles/_b00t_/bash.🔨/_/b00t-cli.sh"
     # else
-        echo "🥾💔 b00t-cli not found, please install it."
+        log_📢_记录 "🥾💔 b00t-cli not found, please install it."
     # fi
 fi
 

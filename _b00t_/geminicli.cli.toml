@@ -1,0 +1,8 @@
+[b00t]
+name = "geminicli"
+type = "cli"
+hint = "Google Gemini CLI tool"
+install = "mkdir -p ~/.local/bin && echo '#!/bin/bash\nnpx -y https://github.com/google-gemini/gemini-cli \"$@\"' > ~/.local/bin/gemini && chmod +x ~/.local/bin/gemini"
+version = "gemini --version 2>/dev/null || echo 'not installed'"
+version_regex = "([0-9]+\\.[0-9]+\\.[0-9]+)"
+aliases = ["gemini"]

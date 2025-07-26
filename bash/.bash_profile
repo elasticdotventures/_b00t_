@@ -1,5 +1,18 @@
 #!/bin/bash
 
+# Early agent detection for tokenomics (single source of truth)
+if [ -z "${_B00T_Agent:-}" ]; then
+    if command -v b00t-cli &> /dev/null; then
+        _B00T_Agent=$(b00t-cli whatismy agent)
+        export _B00T_Agent
+    fi
+fi
+
+# Agent-aware greeting
+if [ -n "${_B00T_Agent:-}" ]; then
+    echo "🥾👋 ${_B00T_Agent} run \`b00t whoami\` for superpowers"
+fi
+
 # Detect if running in WSL
 if grep -qEi "(Microsoft|WSL)" /proc/version &>/dev/null; then
     export IS_WSL=true
@@ -30,14 +43,7 @@ if [ -f ~/.dotfiles/_b00t_/_b00t_.bashrc ] ; then
 
 
 
-    ## TODO Claude Code detection
-    ## detect is_claudecode
-    if is_claudecode; then
-        log_📢_记录 "🥾🦞 hi Claude Code! b00t ready!"
-        # b00t-cli claudecode
-    else
-        log_📢_记录 "Not inside Claude Code"
-    fi
+    ## Agent detection handled at top of .bash_profile (single source of truth)
 
     echo "/🥾"
 fi

@@ -1,6 +1,6 @@
 [package]
 name = "b00t-cli"
-version = "0.5.1"
+version = "0.5.3"
 edition = "2024"
 
 [[bin]]
@@ -23,6 +23,7 @@ semver = "1.0"
 anyhow = "1.0"
 chrono = { version = "0.4", features = ["serde"] }
 tera = "1.20.0"
+dirs = "5.0"
 
 [dev-dependencies]
 tempfile = "3.0"

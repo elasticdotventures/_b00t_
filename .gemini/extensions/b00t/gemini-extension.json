@@ -1,0 +1,22 @@
+{
+  "name": "b00t",
+  "version": "0.5.1",
+  "mcpServers": {
+    "geminicli": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@google/generative-ai-cli"
+      ]
+    },
+    "filesystem": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-filesystem",
+        "/path/to/allowed/files"
+      ]
+    }
+  },
+  "contextFileName": "GEMINI.md"
+}

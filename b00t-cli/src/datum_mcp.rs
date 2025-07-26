@@ -1,11 +1,9 @@
 use anyhow::Result;
-use duct::cmd;
-use crate::{BootDatum, DatumType, get_config, check_command_available, get_expanded_path};
+use crate::{BootDatum, get_config, check_command_available};
 use crate::traits::*;
 
 pub struct McpDatum {
     pub datum: BootDatum,
-    pub config_path: String,
 }
 
 impl McpDatum {
@@ -13,12 +11,15 @@ impl McpDatum {
         let (config, _filename) = get_config(name, path).map_err(|e| anyhow::anyhow!("{}", e))?;
         Ok(McpDatum {
             datum: config.b00t,
-            config_path: path.to_string(),
         })
     }
+}
+
+impl TryFrom<(&str, &str)> for McpDatum {
+    type Error = anyhow::Error;
     
-    pub fn from_datum(datum: BootDatum, config_path: String) -> Self {
-        McpDatum { datum, config_path }
+    fn try_from((name, path): (&str, &str)) -> Result<Self, Self::Error> {
+        Self::from_config(name, path)
     }
 }
 
@@ -68,10 +69,6 @@ impl StatusProvider for McpDatum {
         "mcp"
     }
     
-    fn display_name(&self) -> &str {
-        &self.datum.name
-    }
-    
     fn hint(&self) -> &str {
         &self.datum.hint
     }
@@ -100,17 +97,6 @@ impl FilterLogic for McpDatum {
         self.evaluate_constraints_default(require)
     }
     
-    fn is_disabled(&self) -> bool {
-        !self.prerequisites_satisfied()
-    }
-    
-    fn is_installed(&self) -> bool {
-        DatumChecker::is_installed(self)
-    }
-    
-    fn subsystem(&self) -> &str {
-        StatusProvider::subsystem(self)
-    }
 }
 
 impl ConstraintEvaluator for McpDatum {
@@ -120,38 +106,8 @@ impl ConstraintEvaluator for McpDatum {
 }
 
 impl DatumProvider for McpDatum {
-    fn datum_type(&self) -> DatumType {
-        DatumType::Mcp
-    }
-    
     fn datum(&self) -> &BootDatum {
         &self.datum
     }
 }
 
-pub fn get_mcp_tools_status(path: &str) -> Result<Vec<Box<dyn DatumProvider>>> {
-    let mut tools: Vec<Box<dyn DatumProvider>> = Vec::new();
-    let expanded_path = get_expanded_path(path)?;
-    
-    if let Ok(entries) = std::fs::read_dir(&expanded_path) {
-        for entry in entries {
-            if let Ok(entry) = entry {
-                let entry_path = entry.path();
-                if let Some(file_name) = entry_path.file_name().and_then(|s| s.to_str()) {
-                    if file_name.ends_with(".mcp.toml") {
-                        if let Some(tool_name) = file_name.strip_suffix(".mcp.toml") {
-                            if let Ok(mcp_datum) = McpDatum::from_config(tool_name, path) {
-                                // Apply filtering logic: only include if prerequisites satisfied
-                                if !FilterLogic::is_disabled(&mcp_datum) || DatumChecker::is_installed(&mcp_datum) {
-                                    tools.push(Box::new(mcp_datum));
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-    
-    Ok(tools)
-}

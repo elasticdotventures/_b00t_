@@ -18,15 +18,18 @@ mod datum_apt;
 mod datum_bash;
 mod datum_docker;
 mod datum_vscode;
+mod datum_gemini;
+mod utils;
 
 use traits::*;
-use datum_cli::get_cli_tools_status as get_cli_datum_providers;
-use datum_mcp::get_mcp_tools_status as get_mcp_datum_providers;
-use datum_ai::get_ai_tools_status as get_ai_datum_providers;
-use datum_apt::get_apt_tools_status as get_apt_datum_providers;
-use datum_bash::get_bash_tools_status as get_bash_datum_providers;
-use datum_docker::get_docker_tools_status as get_docker_datum_providers;
-use datum_vscode::get_vscode_tools_status as get_vscode_datum_providers;
+use datum_cli::CliDatum;
+use datum_mcp::McpDatum;
+use datum_ai::AiDatum;
+use datum_apt::AptDatum;
+use datum_bash::BashDatum;
+use datum_docker::DockerDatum;
+use datum_vscode::VscodeDatum;
+use datum_gemini::gemini_install_mcp;
 
 mod integration_tests;
 
@@ -63,8 +66,18 @@ enum Commands {
         #[clap(subcommand)]
         cli_command: CliCommands,
     },
+    #[clap(about = "Initialize system settings and aliases")]
+    Init {
+        #[clap(subcommand)]
+        init_command: InitCommands,
+    },
     #[clap(about = "Show agent identity and context information")]
     Whoami,
+    #[clap(about = "Query system information")]
+    Whatismy {
+        #[clap(subcommand)]
+        whatismy_command: WhatismyCommands,
+    },
     #[clap(about = "Show status dashboard of all available tools and services")]
     Status {
         #[clap(long, help = "Filter by subsystem: cli, mcp, ai, vscode, docker, apt, nix, bash")]
@@ -96,12 +109,16 @@ enum McpCommands {
         #[clap(long, help = "Output in JSON format")]
         json: bool,
     },
-    #[clap(about = "Install MCP server to a target (claudecode, vscode)", long_about = "Install MCP server to a target application.\n\nExamples:\n  b00t-cli mcp install gh claudecode\n  b00t-cli app vscode mcp install filesystem")]
+    #[clap(about = "Install MCP server to a target (claudecode, vscode, geminicli)", long_about = "Install MCP server to a target application.\n\nExamples:\n  b00t-cli mcp install gh claudecode\n  b00t-cli mcp install filesystem geminicli --repo\n  b00t-cli app vscode mcp install filesystem")]
     Install {
         #[clap(help = "MCP server name")]
         name: String,
-        #[clap(help = "Installation target: claudecode, vscode")]
+        #[clap(help = "Installation target: claudecode, vscode, geminicli")]
         target: String,
+        #[clap(long, help = "Install to repository-specific location (for geminicli)")]
+        repo: bool,
+        #[clap(long, help = "Install to user-global location (for geminicli)")]
+        user: bool,
     },
     #[clap(about = "Output MCP servers in various formats", long_about = "Output MCP servers in various formats for configuration files.\n\nExamples:\n  b00t-cli mcp output filesystem,brave-search\n  b00t-cli mcp output --json filesystem\n  b00t-cli mcp output --mcpServers filesystem,brave-search")]
     Output {
@@ -149,6 +166,11 @@ enum AppCommands {
         #[clap(subcommand)]
         claudecode_command: AppClaudecodeCommands,
     },
+    #[clap(about = "Gemini CLI integration commands", long_about = "Gemini CLI integration commands.\n\nExamples:\n  b00t-cli app geminicli mcp install gh --repo\n  b00t-cli mcp install gh geminicli --user")]
+    Geminicli {
+        #[clap(subcommand)]
+        geminicli_command: AppGeminicliCommands,
+    },
 }
 
 #[derive(Parser)]
@@ -170,11 +192,33 @@ enum AppClaudecodeCommands {
 }
 
 #[derive(Parser)]
+enum AppGeminicliCommands {
+    #[clap(about = "MCP server management for Gemini CLI")]
+    Mcp {
+        #[clap(subcommand)]
+        mcp_command: AppGeminicliMcpCommands,
+    },
+}
+
+#[derive(Parser)]
 enum AppMcpCommands {
     #[clap(about = "Install MCP server", long_about = "Install MCP server to the target application.\n\nExamples:\n  b00t-cli app vscode mcp install gh\n  b00t-cli app claudecode mcp install filesystem")]
     Install {
         #[clap(help = "Name of the MCP server to install")]
         name: String,
+    },
+}
+
+#[derive(Parser)]
+enum AppGeminicliMcpCommands {
+    #[clap(about = "Install MCP server to Gemini CLI", long_about = "Install MCP server to Gemini CLI extension.\n\nExamples:\n  b00t-cli app geminicli mcp install gh --repo\n  b00t-cli app geminicli mcp install filesystem --user")]
+    Install {
+        #[clap(help = "Name of the MCP server to install")]
+        name: String,
+        #[clap(long, help = "Install to repository-specific extension (default if in git repo)")]
+        repo: bool,
+        #[clap(long, help = "Install to user-global extension")]
+        user: bool,
     },
 }
 
@@ -212,6 +256,21 @@ enum CliCommands {
     },
     #[clap(about = "Update all CLI commands", long_about = "Update all CLI commands that have outdated versions.\n\nExamples:\n  b00t-cli cli up")]
     Up,
+}
+
+#[derive(Parser)]
+enum InitCommands {
+    #[clap(about = "Initialize command aliases", long_about = "Initialize command aliases for CLI tools.\n\nExamples:\n  b00t-cli init aliases")]
+    Aliases,
+}
+
+#[derive(Parser)]
+enum WhatismyCommands {
+    #[clap(about = "Detect current AI agent (claude, gemini, etc.)")]
+    Agent {
+        #[clap(long, help = "Ignore _B00T_Agent environment variable")]
+        no_env: bool,
+    },
 }
 
 // Using unified config from lib.rs
@@ -252,7 +311,7 @@ impl ToolStatus {
 fn datum_providers_to_tool_status(providers: Vec<Box<dyn DatumProvider>>) -> Vec<ToolStatus> {
     providers.into_iter().map(|provider| {
         let is_installed = DatumChecker::is_installed(provider.as_ref());
-        let is_disabled = FilterLogic::is_disabled(provider.as_ref());
+        let is_disabled = StatusProvider::is_disabled(provider.as_ref());
         let version_status = DatumChecker::version_status(provider.as_ref());
 
         ToolStatus {
@@ -310,17 +369,72 @@ fn whoami(path: &str) -> Result<()> {
     Ok(())
 }
 
+/// Detect current AI agent based on environment variables
+fn detect_agent(ignore_env: bool) -> String {
+    // Check if _B00T_Agent is already set and we're not ignoring env
+    if !ignore_env {
+        if let Ok(agent) = std::env::var("_B00T_Agent") {
+            if !agent.is_empty() {
+                return agent;
+            }
+        }
+    }
+    
+    // Check for Claude Code
+    if std::env::var("CLAUDECODE").unwrap_or_default() == "1" {
+        return "claude".to_string();
+    }
+    
+    // TODO: Add detection for other agents based on their shell environment:
+    // - gemini: specific environment vars set by gemini-cli shell
+    // - codex: specific environment vars set by codex shell
+    // - other agents: their respective shell environment indicators
+    
+    // Return empty string if no agent detected
+    "".to_string()
+}
+
+/// Generic function to load datum providers for a specific file extension
+/// Replaces the 7 duplicate get_*_tools_status functions
+fn load_datum_providers<T>(path: &str, extension: &str) -> Result<Vec<Box<dyn DatumProvider>>>
+where
+    T: DatumProvider + 'static,
+    T: for<'a> TryFrom<(&'a str, &'a str), Error = anyhow::Error>,
+{
+    let mut tools: Vec<Box<dyn DatumProvider>> = Vec::new();
+    let expanded_path = get_expanded_path(path)?;
+    
+    if let Ok(entries) = std::fs::read_dir(&expanded_path) {
+        for entry in entries {
+            if let Ok(entry) = entry {
+                let entry_path = entry.path();
+                if let Some(file_name) = entry_path.file_name().and_then(|s| s.to_str()) {
+                    if file_name.ends_with(extension) {
+                        if let Some(tool_name) = file_name.strip_suffix(extension) {
+                            if let Ok(datum) = T::try_from((tool_name, path)) {
+                                tools.push(Box::new(datum));
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    Ok(tools)
+}
+
 fn show_status(path: &str, filter: Option<&str>, only_installed: bool, only_available: bool) -> Result<()> {
     let mut all_tools = Vec::new();
 
-    // Collect tools from all subsystems using new trait-based architecture
-    all_tools.extend(datum_providers_to_tool_status(get_cli_datum_providers(path)?));
-    all_tools.extend(datum_providers_to_tool_status(get_mcp_datum_providers(path)?));
-    all_tools.extend(datum_providers_to_tool_status(get_ai_datum_providers(path)?));
-    all_tools.extend(datum_providers_to_tool_status(get_apt_datum_providers(path)?));
-    all_tools.extend(datum_providers_to_tool_status(get_bash_datum_providers(path)?));
-    all_tools.extend(datum_providers_to_tool_status(get_docker_datum_providers(path)?));
-    all_tools.extend(datum_providers_to_tool_status(get_vscode_datum_providers(path)?));
+    // Collect tools from all subsystems using new generic trait-based architecture
+    all_tools.extend(datum_providers_to_tool_status(load_datum_providers::<CliDatum>(path, ".cli.toml")?));
+    all_tools.extend(datum_providers_to_tool_status(load_datum_providers::<McpDatum>(path, ".mcp.toml")?));
+    all_tools.extend(datum_providers_to_tool_status(load_datum_providers::<AiDatum>(path, ".ai.toml")?));
+    all_tools.extend(datum_providers_to_tool_status(load_datum_providers::<AptDatum>(path, ".apt.toml")?));
+    all_tools.extend(datum_providers_to_tool_status(load_datum_providers::<BashDatum>(path, ".bash.toml")?));
+    all_tools.extend(datum_providers_to_tool_status(load_datum_providers::<DockerDatum>(path, ".docker.toml")?));
+    all_tools.extend(datum_providers_to_tool_status(load_datum_providers::<VscodeDatum>(path, ".vscode.toml")?));
     all_tools.extend(get_other_tools_status(path)?);
 
     // Apply filters
@@ -411,237 +525,17 @@ fn show_status(path: &str, filter: Option<&str>, only_installed: bool, only_avai
     Ok(())
 }
 
-fn get_cli_tools_status(path: &str) -> Result<Vec<ToolStatus>> {
-    let mut tools = Vec::new();
-    let expanded_path = get_expanded_path(path)?;
 
-    if let Ok(entries) = fs::read_dir(&expanded_path) {
-        for entry in entries {
-            if let Ok(entry) = entry {
-                let entry_path = entry.path();
-                if let Some(file_name) = entry_path.file_name().and_then(|s| s.to_str()) {
-                    if file_name.ends_with(".cli.toml") {
-                        if let Some(tool_name) = file_name.strip_suffix(".cli.toml") {
-                            let tool_status = check_cli_tool_status(tool_name, path)?;
-                            tools.push(tool_status);
-                        }
-                    }
-                }
-            }
-        }
-    }
 
-    Ok(tools)
-}
 
-fn check_cli_tool_status(tool_name: &str, path: &str) -> Result<ToolStatus> {
-    let config_result = get_cli_unified_config(tool_name, path);
 
-    match config_result {
-        Ok((config, _)) => {
-            let installed_version = get_cli_installed_version(tool_name, path);
-            let desired_version = config.b00t.desires.clone();
 
-            let (installed, version_status) = if let Some(current) = &installed_version {
-                let status = if let Some(desired) = &desired_version {
-                    match (semver::Version::parse(current), semver::Version::parse(desired)) {
-                        (Ok(curr), Ok(des)) => {
-                            if curr == des { Some("👍🏻".to_string()) }
-                            else if curr > des { Some("🐣".to_string()) }
-                            else { Some("😭".to_string()) }
-                        }
-                        _ => Some("❓".to_string()) // version parse error
-                    }
-                } else {
-                    Some("✓".to_string()) // installed but no desired version
-                };
-                (true, status)
-            } else {
-                (false, Some("😱".to_string())) // missing
-            };
-
-            Ok(ToolStatus {
-                name: tool_name.to_string(),
-                subsystem: "cli".to_string(),
-                installed,
-                available: !installed,
-                disabled: false,
-                version_status,
-                current_version: installed_version,
-                desired_version,
-                hint: config.b00t.hint,
-            })
-        }
-        Err(_) => {
-            Ok(ToolStatus {
-                name: tool_name.to_string(),
-                subsystem: "cli".to_string(),
-                installed: false,
-                available: false,
-                disabled: true,
-                version_status: Some("🔴".to_string()),
-                current_version: None,
-                desired_version: None,
-                hint: "Configuration error".to_string(),
-            })
-        }
-    }
-}
-
-fn get_mcp_tools_status(path: &str) -> Result<Vec<ToolStatus>> {
-    let mut tools = Vec::new();
-    let expanded_path = get_expanded_path(path)?;
-
-    if let Ok(entries) = fs::read_dir(&expanded_path) {
-        for entry in entries {
-            if let Ok(entry) = entry {
-                let entry_path = entry.path();
-                if let Some(file_name) = entry_path.file_name().and_then(|s| s.to_str()) {
-                    if file_name.ends_with(".mcp.toml") {
-                        if let Some(tool_name) = file_name.strip_suffix(".mcp.toml") {
-                            let tool_status = check_mcp_tool_status(tool_name, path)?;
-                            tools.push(tool_status);
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    Ok(tools)
-}
-
-fn check_mcp_tool_status(tool_name: &str, path: &str) -> Result<ToolStatus> {
-    match get_mcp_config(tool_name, path) {
-        Ok(datum) => {
-            // For MCP servers, check if the command exists and is executable
-            let installed = if let Some(command) = &datum.command {
-                check_command_available(command)
-            } else {
-                false
-            };
-
-            // MCP servers don't typically have semantic versions, so we use presence/absence
-            let version_status = if installed {
-                Some("✓".to_string())
-            } else {
-                Some("⏹️".to_string())
-            };
-
-            Ok(ToolStatus {
-                name: tool_name.to_string(),
-                subsystem: "mcp".to_string(),
-                installed,
-                available: !installed,
-                disabled: false,
-                version_status,
-                current_version: if installed { Some("available".to_string()) } else { None },
-                desired_version: None,
-                hint: datum.hint,
-            })
-        }
-        Err(_) => {
-            Ok(ToolStatus {
-                name: tool_name.to_string(),
-                subsystem: "mcp".to_string(),
-                installed: false,
-                available: false,
-                disabled: true,
-                version_status: Some("🔴".to_string()),
-                current_version: None,
-                desired_version: None,
-                hint: "Configuration error".to_string(),
-            })
-        }
-    }
-}
-
-fn get_ai_tools_status(path: &str) -> Result<Vec<ToolStatus>> {
-    let mut tools = Vec::new();
-    let expanded_path = get_expanded_path(path)?;
-
-    if let Ok(entries) = fs::read_dir(&expanded_path) {
-        for entry in entries {
-            if let Ok(entry) = entry {
-                let entry_path = entry.path();
-                if let Some(file_name) = entry_path.file_name().and_then(|s| s.to_str()) {
-                    if file_name.ends_with(".ai.toml") {
-                        if let Some(tool_name) = file_name.strip_suffix(".ai.toml") {
-                            let tool_status = check_ai_tool_status(tool_name, path)?;
-                            // Only include AI providers if their ENV vars are satisfied
-                            if tool_status.installed {
-                                tools.push(tool_status);
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    Ok(tools)
-}
-
-fn check_ai_tool_status(tool_name: &str, path: &str) -> Result<ToolStatus> {
-    match get_ai_config(tool_name, path) {
-        Ok(config) => {
-            // Check if API key environment variables are set
-            let env_vars_set = if let Some(env) = &config.env {
-                env.keys().any(|key| std::env::var(key).is_ok())
-            } else {
-                false
-            };
-
-            let model_count = config.models.as_ref().map(|m| m.len()).unwrap_or(0);
-
-            let installed = env_vars_set;
-            let version_status = if installed {
-                if model_count > 0 {
-                    Some(format!("🤖{}", model_count)) // Show model count
-                } else {
-                    Some("✓".to_string())
-                }
-            } else {
-                Some("🔑".to_string()) // Needs API key
-            };
-
-            Ok(ToolStatus {
-                name: tool_name.to_string(),
-                subsystem: "ai".to_string(),
-                installed,
-                available: !installed,
-                disabled: false,
-                version_status,
-                current_version: if installed {
-                    Some(format!("{} models", model_count))
-                } else {
-                    None
-                },
-                desired_version: None,
-                hint: config.b00t.hint,
-            })
-        }
-        Err(_) => {
-            Ok(ToolStatus {
-                name: tool_name.to_string(),
-                subsystem: "ai".to_string(),
-                installed: false,
-                available: false,
-                disabled: true,
-                version_status: Some("🔴".to_string()),
-                current_version: None,
-                desired_version: None,
-                hint: "Configuration error".to_string(),
-            })
-        }
-    }
-}
 
 fn get_other_tools_status(path: &str) -> Result<Vec<ToolStatus>> {
     let mut tools = Vec::new();
     let expanded_path = get_expanded_path(path)?;
 
-    let other_extensions = [".apt.toml", ".nix.toml", ".bash.toml"];
+    let other_extensions = [".nix.toml"]; // Only handle unimplemented subsystems
 
     if let Ok(entries) = fs::read_dir(&expanded_path) {
         for entry in entries {
@@ -653,10 +547,6 @@ fn get_other_tools_status(path: &str) -> Result<Vec<ToolStatus>> {
                             if let Some(tool_name) = file_name.strip_suffix(ext) {
                                 let subsystem = ext.trim_start_matches('.').trim_end_matches(".toml");
 
-                                // Filter APT tools - only show if ubuntu && apt exists
-                                if subsystem == "apt" && !is_apt_available() {
-                                    continue;
-                                }
 
                                 let tool_status = check_other_tool_status(tool_name, subsystem, path)?;
                                 tools.push(tool_status);
@@ -753,14 +643,6 @@ fn check_command_available(command: &str) -> bool {
     cmd!("which", command).read().is_ok()
 }
 
-fn is_apt_available() -> bool {
-    // Check if we're on Ubuntu/Debian and apt command exists
-    let is_ubuntu = fs::read_to_string("/etc/os-release")
-        .map(|content| content.contains("ubuntu") || content.contains("debian"))
-        .unwrap_or(false);
-
-    is_ubuntu && check_command_available("apt")
-}
 
 fn generate_documentation() {
     let doc = r#"# b00t-cli: Live Syntax Recipe Manager Documentation
@@ -1063,12 +945,27 @@ fn main() {
                     std::process::exit(1);
                 }
             }
-            McpCommands::Install { name, target } => {
+            McpCommands::Install { name, target, repo, user } => {
                 let result = match target.as_str() {
                     "claudecode" => claude_code_install_mcp(name, &cli.path),
                     "vscode" => vscode_install_mcp(name, &cli.path),
+                    "geminicli" => {
+                        // Determine installation location: default to repo if in git repo, otherwise user
+                        let use_repo = if *repo && *user {
+                            eprintln!("Error: Cannot specify both --repo and --user flags");
+                            std::process::exit(1);
+                        } else if *repo {
+                            true
+                        } else if *user {
+                            false
+                        } else {
+                            // Default behavior: repo if in git repo, otherwise user
+                            crate::utils::is_git_repo()
+                        };
+                        gemini_install_mcp(name, &cli.path, use_repo)
+                    }
                     _ => {
-                        eprintln!("Error: Invalid target '{}'. Valid targets are: claudecode, vscode", target);
+                        eprintln!("Error: Invalid target '{}'. Valid targets are: claudecode, vscode, geminicli", target);
                         std::process::exit(1);
                     }
                 };
@@ -1133,6 +1030,29 @@ fn main() {
                     }
                 }
             },
+            AppCommands::Geminicli { geminicli_command } => match geminicli_command {
+                AppGeminicliCommands::Mcp { mcp_command } => match mcp_command {
+                    AppGeminicliMcpCommands::Install { name, repo, user } => {
+                        // Determine installation location: default to repo if in git repo, otherwise user
+                        let use_repo = if *repo && *user {
+                            eprintln!("Error: Cannot specify both --repo and --user flags");
+                            std::process::exit(1);
+                        } else if *repo {
+                            true
+                        } else if *user {
+                            false
+                        } else {
+                            // Default behavior: repo if in git repo, otherwise user
+                            crate::utils::is_git_repo()
+                        };
+                        
+                        if let Err(e) = gemini_install_mcp(name, &cli.path, use_repo) {
+                            eprintln!("Error installing MCP server to Gemini CLI: {}", e);
+                            std::process::exit(1);
+                        }
+                    }
+                }
+            },
         },
         Some(Commands::Cli { cli_command }) => match cli_command {
             CliCommands::Run { name } => {
@@ -1148,10 +1068,22 @@ fn main() {
             CliCommands::Check { command } => cli_check(command, &cli.path),
             CliCommands::Up => cli_up(&cli.path),
         },
+        Some(Commands::Init { init_command }) => match init_command {
+            InitCommands::Aliases => {
+                println!("Aliases initialization not yet implemented.");
+                println!("This will scan for CLI tools with 'aliases' field and create ~/.local/bin scripts.");
+            }
+        },
         Some(Commands::Whoami) => {
             if let Err(e) = whoami(&cli.path) {
                 eprintln!("Error displaying agent identity: {}", e);
                 std::process::exit(1);
+            }
+        },
+        Some(Commands::Whatismy { whatismy_command }) => match whatismy_command {
+            WhatismyCommands::Agent { no_env } => {
+                let agent = detect_agent(*no_env);
+                println!("{}", agent);
             }
         },
         Some(Commands::Status { filter, installed, available }) => {
@@ -1425,6 +1357,7 @@ fn mcp_add_command(name: &str, hint: Option<&str>, command_args: &[String], path
         package_name: None,
         env: None,
         require: None,
+        aliases: None,
     };
 
     create_mcp_toml_config(&datum, path)?;
@@ -1614,16 +1547,16 @@ fn claude_code_install_mcp(name: &str, path: &str) -> Result<()> {
     let json_str = serde_json::to_string(&claude_json)
         .context("Failed to serialize JSON for Claude Code")?;
 
-    let result = cmd!("claude-code", "config", "add-mcp", &json_str).run();
+    let result = cmd!("claude", "mcp", "add-json", &datum.name, &json_str).run();
 
     match result {
         Ok(_) => {
             println!("Successfully installed MCP server '{}' to Claude Code", datum.name);
-            println!("Claude Code command: claude-code config add-mcp '{}'", json_str);
+            println!("Claude Code command: claude mcp add-json {} '{}'", datum.name, json_str);
         },
         Err(e) => {
             eprintln!("Failed to install MCP server to Claude Code: {}", e);
-            eprintln!("Manual command: claude-code config add-mcp '{}'", json_str);
+            eprintln!("Manual command: claude mcp add-json {} '{}'", datum.name, json_str);
             std::process::exit(1);
         }
     }

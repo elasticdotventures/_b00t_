@@ -1,4 +1,4 @@
-use crate::{BootDatum, DatumType};
+use crate::BootDatum;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum VersionStatus {
@@ -21,11 +21,6 @@ impl VersionStatus {
     }
 }
 
-pub struct DisplayFilters {
-    pub subsystem: Option<String>,
-    pub only_installed: bool,
-    pub only_available: bool,
-}
 
 pub trait DatumChecker {
     fn is_installed(&self) -> bool;
@@ -37,20 +32,7 @@ pub trait DatumChecker {
 pub trait StatusProvider: DatumChecker {
     fn name(&self) -> &str;
     fn subsystem(&self) -> &str;
-    fn display_name(&self) -> &str;
     fn hint(&self) -> &str;
-    fn status_icon(&self) -> &str {
-        if self.is_disabled() {
-            "🔴"
-        } else if self.is_installed() {
-            "☑️"
-        } else {
-            "⏹️"
-        }
-    }
-    fn version_emoji(&self) -> &str {
-        self.version_status().emoji()
-    }
     fn is_disabled(&self) -> bool;
 }
 
@@ -58,32 +40,11 @@ pub trait FilterLogic {
     fn is_available(&self) -> bool;
     fn prerequisites_satisfied(&self) -> bool;
     fn evaluate_constraints(&self, require: &[String]) -> bool;
-    fn should_display(&self, filters: &DisplayFilters) -> bool {
-        // Apply subsystem filter
-        if let Some(ref filter_subsystem) = filters.subsystem {
-            if self.subsystem() != filter_subsystem {
-                return false;
-            }
-        }
-        
-        // Apply installation status filters
-        if filters.only_installed && !self.is_installed() {
-            return false;
-        }
-        
-        if filters.only_available && (self.is_installed() || self.is_disabled()) {
-            return false;
-        }
-        
-        true
-    }
-    fn is_disabled(&self) -> bool;
-    fn is_installed(&self) -> bool;
-    fn subsystem(&self) -> &str;
 }
 
 pub trait DatumProvider: DatumChecker + StatusProvider + FilterLogic + Send + Sync {
-    fn datum_type(&self) -> DatumType;
+    /// Used by ConstraintEvaluator trait methods (compiler doesn't detect indirect usage)
+    #[allow(dead_code)]
     fn datum(&self) -> &BootDatum;
 }
 
