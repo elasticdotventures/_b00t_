@@ -1,0 +1,92 @@
+# Enhanced _b00t_ Development Environment with b00t-cli
+# This demonstrates how to integrate the b00t-cli layer
+
+# Import b00t-cli from dedicated layer
+FROM ghcr.io/elasticdotventures/b00t-cli:latest AS b00t-cli-layer
+
+# Use existing _b00t_ base
+FROM ubuntu:24.04
+ENV IS_DOCKER_BUILD=true
+
+# Set non-interactive frontend for apt
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Set CI build-time argument and environment variable
+ARG CI
+ENV IS_CI=${CI:-false}
+
+# Set labels
+LABEL org.opencontainers.image.source=https://github.com/elasticdotventures/dotfiles
+LABEL org.opencontainers.image.description="_b00t_ initialization framework with b00t-cli integration"
+LABEL org.opencontainers.image.licenses=MIT
+
+# Set working directory
+WORKDIR /root
+
+# Install initial dependencies
+RUN apt-get update && apt-get install -y \
+    git \
+    curl \
+    wget \
+    unzip \
+    ca-certificates \
+    software-properties-common \
+    sudo \
+    apt-utils \
+    gnupg \
+    lsb-release \
+    build-essential \
+    pkg-config \
+    cmake \
+    stow \
+    && rm -rf /var/lib/apt/lists/*
+
+# Import b00t-cli from dedicated layer
+COPY --from=b00t-cli-layer /usr/local/bin/b00t-cli /usr/local/bin/b00t-cli
+COPY --from=b00t-cli-layer /usr/local/bin/b00t /usr/local/bin/b00t
+COPY --from=b00t-cli-layer /opt/b00t/config/ /opt/b00t/config/
+
+# Set b00t environment
+ENV _B00T_Path=/opt/b00t/config
+
+# Create necessary directories
+RUN mkdir -p /root/.local/bin /root/.kube
+
+# Copy the entire repository into the image
+COPY . /root/.dotfiles/
+
+# Change to dotfiles directory
+WORKDIR /root/.dotfiles
+
+# Install Just command runner
+RUN curl --proto '=https' --tlsv1.2 -sSf https://just.systems/install.sh | bash -s -- --to /usr/local/bin
+
+# Copy and run setup.sh to initialize the environment
+# This is a long-running script. Any changes to it will invalidate the cache from this point forward.
+RUN --mount=type=secret,id=GH_TOKEN chmod +x setup.sh && ./setup.sh
+
+# Run the just install command
+ENV PATH="/root/.cargo/bin:/root/.local/bin:${PATH}"
+RUN just install
+
+# Set up shell configuration
+RUN echo 'eval "$(starship init bash)"' >> /root/.bashrc \
+    && echo 'eval "$(direnv hook bash)"' >> /root/.bashrc \
+    && echo 'alias tf=tofu' >> /root/.bashrc \
+    && echo 'alias itree="rg --files | tree --fromfile"' >> /root/.bashrc
+
+# Stow the dotfiles
+RUN stow -d /root/.dotfiles -t /root bash
+
+# Ensure the .bashrc is sourced on container start
+RUN echo "source ~/.bashrc" >> /root/.profile
+
+# Verify b00t-cli integration
+RUN b00t-cli --version && b00t status --help
+
+# Set the default working directory
+WORKDIR /workspace
+
+# Set the entrypoint to bash
+ENTRYPOINT ["/bin/bash"]
+CMD ["-l"]

@@ -1,9 +1,59 @@
-# comment, ignored
-# 🤓 https://docs.docker.com/engine/reference/builder/#dockerignore-file
+# Git and CI
+.git/
+.github/
+*.md
+!README.md
 
-.*
-.git/*
-*/🐳*
-./r3src_资源/README.md
-./r3src_资源/*
+# Build artifacts
+b00t-cli/target/
+**/target/
+**/*.rs.bk
 
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# Node modules (if any)
+node_modules/
+npm-debug.log*
+
+# Python artifacts
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+
+# Temporary files
+*.tmp
+*.temp
+*.log
+
+# Exclude everything except what we need for b00t-cli
+!b00t-cli/
+!_b00t_/
+b00t-cli/target/
+
+# Agentsea directory (large and not needed for b00t-cli)
+agentsea/
+
+# Other unneeded directories for b00t-cli build
+.gemini/

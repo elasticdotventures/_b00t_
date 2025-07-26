@@ -1,0 +1,90 @@
+# syntax=docker/dockerfile:latest
+
+# ================================
+# Stage 1: Rust Build Environment
+# ================================
+FROM rust:1.88-slim AS rust-builder
+
+# Install build dependencies
+RUN apt-get update && apt-get install -y \
+    pkg-config \
+    libssl-dev \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+# Set working directory for the Rust project
+WORKDIR /build
+
+# Copy Cargo files first for better layer caching
+COPY b00t-cli/Cargo.toml b00t-cli/Cargo.lock ./
+
+# Create a dummy main.rs to build dependencies
+RUN mkdir src && echo "fn main() {}" > src/main.rs \
+    && echo "// dummy" > src/lib.rs
+
+# Build dependencies (this layer will be cached unless Cargo.toml changes)
+RUN cargo build --release && rm -rf src
+
+# Copy actual source code
+COPY b00t-cli/src ./src
+
+# Build the actual binary
+RUN cargo build --release
+
+# Verify the binary works
+RUN ./target/release/b00t-cli --version
+
+# ================================
+# Stage 2: b00t Resources Layer  
+# ================================
+FROM scratch AS b00t-resources
+
+# Copy _b00t_ configuration files and resources
+COPY _b00t_/ /opt/b00t/config/
+
+# ================================
+# Stage 3: b00t-cli Distribution Layer
+# ================================
+FROM ubuntu:24.04 AS b00t-cli-layer
+
+# Build args for version information
+ARG BUILD_VERSION=0.0.1
+ARG BUILD_COMMIT=unknown
+ARG BUILD_DATE
+
+LABEL org.opencontainers.image.source=https://github.com/elasticdotventures/dotfiles
+LABEL org.opencontainers.image.description="b00t-cli binary and configuration layer"
+LABEL org.opencontainers.image.licenses=MIT
+LABEL org.opencontainers.image.version=${BUILD_VERSION}
+LABEL org.opencontainers.image.revision=${BUILD_COMMIT}
+LABEL org.opencontainers.image.created=${BUILD_DATE}
+
+# Install minimal runtime dependencies
+RUN apt-get update && apt-get install -y \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy the compiled binary from builder stage
+COPY --from=rust-builder /build/target/release/b00t-cli /usr/local/bin/b00t-cli
+
+# Copy _b00t_ resources from resources stage
+COPY --from=b00t-resources /opt/b00t/config/ /opt/b00t/config/
+
+# Create symlink for easier access
+RUN ln -sf /usr/local/bin/b00t-cli /usr/local/bin/b00t
+
+# Set default environment variables
+ENV _B00T_Path=/opt/b00t/config
+ENV PATH="/usr/local/bin:${PATH}"
+ENV B00T_CLI_VERSION=${BUILD_VERSION}
+ENV B00T_CLI_COMMIT=${BUILD_COMMIT}
+ENV B00T_CLI_BUILD_DATE=${BUILD_DATE}
+
+# Verify installation
+RUN b00t-cli --version && b00t-cli status --help
+
+# Default working directory
+WORKDIR /workspace
+
+# Default command
+CMD ["b00t-cli", "--help"]
