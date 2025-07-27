@@ -1,6 +1,6 @@
-use anyhow::Result;
-use crate::{BootDatum, AiConfig, get_expanded_path};
 use crate::traits::*;
+use crate::{AiConfig, BootDatum, get_expanded_path};
+use anyhow::Result;
 use std::collections::HashMap;
 
 pub struct AiDatum {
@@ -20,16 +20,38 @@ impl AiDatum {
         let content = std::fs::read_to_string(&path_buf)?;
         let config: AiConfig = toml::from_str(&content)?;
 
+        let mut datum = config.b00t;
+        // Merge top-level env into datum.env
+        if let Some(config_env) = config.env {
+            if let Some(ref mut datum_env) = datum.env {
+                datum_env.extend(config_env);
+            } else {
+                datum.env = Some(config_env);
+            }
+        }
+
         Ok(AiDatum {
-            datum: config.b00t,
+            datum,
             models: config.models,
         })
+    }
+
+    fn has_any_env_vars(&self) -> bool {
+        // Check if any required environment variables are actually set
+        if let Some(env) = &self.datum.env {
+            for (key, _) in env {
+                if std::env::var(key).is_ok() {
+                    return true;
+                }
+            }
+        }
+        false
     }
 }
 
 impl TryFrom<(&str, &str)> for AiDatum {
     type Error = anyhow::Error;
-    
+
     fn try_from((name, path): (&str, &str)) -> Result<Self, Self::Error> {
         Self::from_config(name, path)
     }
@@ -40,7 +62,7 @@ impl DatumChecker for AiDatum {
         // AI providers are "installed" if their required environment variables are set
         self.has_any_env_vars()
     }
-    
+
     fn current_version(&self) -> Option<String> {
         // AI providers don't have traditional versions, show model count instead
         if let Some(models) = &self.models {
@@ -49,11 +71,11 @@ impl DatumChecker for AiDatum {
             Some("API available".to_string())
         }
     }
-    
+
     fn desired_version(&self) -> Option<String> {
         self.datum.desires.clone()
     }
-    
+
     fn version_status(&self) -> VersionStatus {
         if DatumChecker::is_installed(self) {
             VersionStatus::Unknown // AI providers are just available/not available
@@ -67,17 +89,18 @@ impl StatusProvider for AiDatum {
     fn name(&self) -> &str {
         &self.datum.name
     }
-    
+
     fn subsystem(&self) -> &str {
         "ai"
     }
-    
+
     fn hint(&self) -> &str {
         &self.datum.hint
     }
-    
+
     fn is_disabled(&self) -> bool {
-        false // AI providers are never disabled by default
+        // AI providers are disabled when required environment variables are missing
+        !self.has_any_env_vars()
     }
 }
 
@@ -85,7 +108,7 @@ impl FilterLogic for AiDatum {
     fn is_available(&self) -> bool {
         !DatumChecker::is_installed(self) && self.prerequisites_satisfied()
     }
-    
+
     fn prerequisites_satisfied(&self) -> bool {
         // Check if require constraints are satisfied
         if let Some(require) = &self.datum.require {
@@ -95,11 +118,10 @@ impl FilterLogic for AiDatum {
             self.evaluate_constraints(&["NEEDS_ANY_ENV".to_string()])
         }
     }
-    
+
     fn evaluate_constraints(&self, require: &[String]) -> bool {
         self.evaluate_constraints_default(require)
     }
-    
 }
 
 impl ConstraintEvaluator for AiDatum {
@@ -113,4 +135,3 @@ impl DatumProvider for AiDatum {
         &self.datum
     }
 }
-

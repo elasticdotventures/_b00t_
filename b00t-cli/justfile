@@ -42,5 +42,15 @@ bump level = "patch":
 noop:
 	@echo "Noop command executed. This is a placeholder for future commands."
 
+# MCP shortcuts - delegate to b00t.just
+b00t-mcp-chat:
+	just -f ~/.dotfiles/_b00t_/b00t.just mcp-chat
+
+b00t-mcp-list:
+	just -f ~/.dotfiles/_b00t_/b00t.just mcp-list
+
+b00t-mcp-commands:
+	just -f ~/.dotfiles/_b00t_/b00t.just mcp-commands
+
 
 

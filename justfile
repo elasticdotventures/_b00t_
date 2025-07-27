@@ -3,8 +3,10 @@
 repo-root := env_var_or_default("JUST_REPO_ROOT", `git rev-parse --show-toplevel 2>/dev/null || echo .`)
 
 
+
 set shell := ["bash", "-cu"]
 mod cog
+mod b00t
 
 stow:
     stow --adopt -d ~/.dotfiles -t ~ bash

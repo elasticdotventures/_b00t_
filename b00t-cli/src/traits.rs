@@ -2,11 +2,11 @@ use crate::BootDatum;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum VersionStatus {
-    Match,      // 👍🏻 
-    Newer,      // 🐣
-    Older,      // 😭
-    Missing,    // 😱
-    Unknown,    // ⏹️
+    Match,   // 👍🏻
+    Newer,   // 🐣
+    Older,   // 😭
+    Missing, // 😱
+    Unknown, // ⏹️
 }
 
 impl VersionStatus {
@@ -20,7 +20,6 @@ impl VersionStatus {
         }
     }
 }
-
 
 pub trait DatumChecker {
     fn is_installed(&self) -> bool;
@@ -51,7 +50,7 @@ pub trait DatumProvider: DatumChecker + StatusProvider + FilterLogic + Send + Sy
 // Base implementation for common constraint evaluation
 pub trait ConstraintEvaluator {
     fn datum(&self) -> &BootDatum;
-    
+
     fn has_any_env_vars(&self) -> bool {
         if let Some(env) = &self.datum().env {
             env.keys().any(|key| std::env::var(key).is_ok())
@@ -59,7 +58,7 @@ pub trait ConstraintEvaluator {
             false
         }
     }
-    
+
     fn has_all_env_vars(&self) -> bool {
         if let Some(env) = &self.datum().env {
             env.keys().all(|key| std::env::var(key).is_ok())
@@ -67,37 +66,35 @@ pub trait ConstraintEvaluator {
             true // No env vars = satisfied
         }
     }
-    
+
     fn check_os_requirement(&self, os: &str) -> bool {
         match os {
-            "ubuntu" | "debian" => {
-                std::fs::read_to_string("/etc/os-release")
-                    .map(|content| content.contains("ubuntu") || content.contains("debian"))
-                    .unwrap_or(false)
-            }
+            "ubuntu" | "debian" => std::fs::read_to_string("/etc/os-release")
+                .map(|content| content.contains("ubuntu") || content.contains("debian"))
+                .unwrap_or(false),
             "macos" => cfg!(target_os = "macos"),
             "windows" => cfg!(target_os = "windows"),
             "linux" => cfg!(target_os = "linux"),
             _ => false,
         }
     }
-    
+
     fn evaluate_constraints_default(&self, require: &[String]) -> bool {
         if require.is_empty() {
             // Default behavior: NEEDS_ALL_ENV for datums with env vars
             return self.has_all_env_vars();
         }
-        
+
         require.iter().all(|constraint| {
             match constraint.as_str() {
                 "NEEDS_ANY_ENV" => self.has_any_env_vars(),
                 "NEEDS_ALL_ENV" => self.has_all_env_vars(),
                 constraint if constraint.starts_with("OS:") => {
                     self.check_os_requirement(&constraint[3..])
-                },
+                }
                 constraint if constraint.starts_with("CMD:") => {
                     crate::check_command_available(&constraint[4..])
-                },
+                }
                 _ => true, // Unknown constraints default to true
             }
         })

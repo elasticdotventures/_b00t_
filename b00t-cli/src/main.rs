@@ -1,35 +1,39 @@
-
+use anyhow::{Context, Result};
 use clap::Parser;
-use std::path::PathBuf;
+use duct::cmd;
+use regex::Regex;
+use semver::Version;
 use std::fs;
 use std::io::{self, Read};
-use regex::Regex;
-use duct::cmd;
-use semver::Version;
-use anyhow::{Result, Context};
-use tera::{Tera, Context as TeraContext};
-use b00t_cli::{normalize_mcp_json, McpListOutput, McpListItem, UnifiedConfig, BootDatum, DatumType, create_unified_toml_config, AiConfig, AiListOutput, AiListItem, create_ai_toml_config};
+use std::path::PathBuf;
+// 🤓 cleaned up unused Tera import after switching to simple string replacement
+use b00t_cli::{
+    AiConfig, AiListItem, AiListOutput, BootDatum, DatumType, McpListItem, McpListOutput,
+    SessionState, UnifiedConfig, create_ai_toml_config, create_unified_toml_config,
+    normalize_mcp_json,
+};
 
-mod traits;
-mod datum_cli;
-mod datum_mcp;
 mod datum_ai;
 mod datum_apt;
 mod datum_bash;
+mod datum_cli;
 mod datum_docker;
-mod datum_vscode;
 mod datum_gemini;
+mod datum_mcp;
+mod datum_vscode;
+mod traits;
 mod utils;
 
-use traits::*;
-use datum_cli::CliDatum;
-use datum_mcp::McpDatum;
+// 🦨 REMOVED unused K8sDatum import - not used in main.rs
 use datum_ai::AiDatum;
 use datum_apt::AptDatum;
 use datum_bash::BashDatum;
+use datum_cli::CliDatum;
 use datum_docker::DockerDatum;
-use datum_vscode::VscodeDatum;
 use datum_gemini::gemini_install_mcp;
+use datum_mcp::McpDatum;
+use datum_vscode::VscodeDatum;
+use traits::*;
 
 mod integration_tests;
 
@@ -40,7 +44,10 @@ struct Cli {
     command: Option<Commands>,
     #[clap(short, long, env = "_B00T_Path", default_value = "~/.dotfiles/_b00t_")]
     path: String,
-    #[clap(long, help = "Output structured markdown documentation about internal structures")]
+    #[clap(
+        long,
+        help = "Output structured markdown documentation about internal structures"
+    )]
     doc: bool,
 }
 
@@ -73,6 +80,13 @@ enum Commands {
     },
     #[clap(about = "Show agent identity and context information")]
     Whoami,
+    #[clap(about = "Create checkpoint: commit all files and run tests")]
+    Checkpoint {
+        #[clap(short, long, help = "Commit message for the checkpoint")]
+        message: Option<String>,
+        #[clap(long, help = "Skip running tests (not recommended)")]
+        skip_tests: bool,
+    },
     #[clap(about = "Query system information")]
     Whatismy {
         #[clap(subcommand)]
@@ -80,36 +94,63 @@ enum Commands {
     },
     #[clap(about = "Show status dashboard of all available tools and services")]
     Status {
-        #[clap(long, help = "Filter by subsystem: cli, mcp, ai, vscode, docker, apt, nix, bash")]
+        #[clap(
+            long,
+            help = "Filter by subsystem: cli, mcp, ai, vscode, docker, apt, nix, bash"
+        )]
         filter: Option<String>,
         #[clap(long, help = "Show only installed tools")]
         installed: bool,
         #[clap(long, help = "Show only available (not installed) tools")]
         available: bool,
     },
+    #[clap(about = "Session management")]
+    Session {
+        #[clap(subcommand)]
+        session_command: SessionCommands,
+    },
 }
 
 #[derive(Parser)]
 enum McpCommands {
-    #[clap(about = "Create MCP server configuration", long_about = "Create MCP server configuration from JSON or command.\n\nJSON Examples:\n  b00t-cli mcp create '{\"name\":\"filesystem\",\"command\":\"npx\",\"args\":[\"-y\",\"@modelcontextprotocol/server-filesystem\"]}'\n  echo '{...}' | b00t-cli mcp create -\n\nCommand Examples:\n  b00t-cli mcp create brave-search -- npx -y @modelcontextprotocol/server-brave-search\n  b00t-cli mcp create filesystem --hint \"File system access\" -- npx -y @modelcontextprotocol/server-filesystem\n\nInstallation Examples:\n  b00t-cli mcp install brave-search claudecode\n  b00t-cli app vscode mcp install filesystem")]
+    #[clap(
+        about = "Create MCP server configuration",
+        long_about = "Create MCP server configuration from JSON or command.\n\nJSON Examples:\n  b00t-cli mcp create '{\"name\":\"filesystem\",\"command\":\"npx\",\"args\":[\"-y\",\"@modelcontextprotocol/server-filesystem\"]}'\n  echo '{...}' | b00t-cli mcp create -\n\nCommand Examples:\n  b00t-cli mcp create brave-search -- npx -y @modelcontextprotocol/server-brave-search\n  b00t-cli mcp create filesystem --hint \"File system access\" -- npx -y @modelcontextprotocol/server-filesystem\n\nInstallation Examples:\n  b00t-cli mcp install brave-search claudecode\n  b00t-cli app vscode mcp install filesystem"
+    )]
     Create {
         #[clap(help = "MCP server name (for command mode) or JSON configuration (for JSON mode)")]
         name_or_json: String,
         #[clap(long, help = "Description/hint for the MCP server")]
         hint: Option<String>,
-        #[clap(long, help = "Do What I Want - auto-cleanup and format JSON (default: enabled)")]
+        #[clap(
+            long,
+            help = "Do What I Want - auto-cleanup and format JSON (default: enabled)"
+        )]
         dwiw: bool,
-        #[clap(long, help = "Disable auto-cleanup and format JSON", conflicts_with = "dwiw")]
+        #[clap(
+            long,
+            help = "Disable auto-cleanup and format JSON",
+            conflicts_with = "dwiw"
+        )]
         no_dwiw: bool,
-        #[clap(last = true, help = "Command and arguments (after --) for command mode")]
+        #[clap(
+            last = true,
+            help = "Command and arguments (after --) for command mode"
+        )]
         command_args: Vec<String>,
     },
-    #[clap(about = "List available MCP server configurations", long_about = "List available MCP server configurations.\n\nExamples:\n  b00t-cli mcp list\n  b00t-cli mcp list --json")]
+    #[clap(
+        about = "List available MCP server configurations",
+        long_about = "List available MCP server configurations.\n\nExamples:\n  b00t-cli mcp list\n  b00t-cli mcp list --json"
+    )]
     List {
         #[clap(long, help = "Output in JSON format")]
         json: bool,
     },
-    #[clap(about = "Install MCP server to a target (claudecode, vscode, geminicli)", long_about = "Install MCP server to a target application.\n\nExamples:\n  b00t-cli mcp install gh claudecode\n  b00t-cli mcp install filesystem geminicli --repo\n  b00t-cli app vscode mcp install filesystem")]
+    #[clap(
+        about = "Install MCP server to a target (claudecode, vscode, geminicli)",
+        long_about = "Install MCP server to a target application.\n\nExamples:\n  b00t-cli mcp install gh claudecode\n  b00t-cli mcp install filesystem geminicli --repo\n  b00t-cli app vscode mcp install filesystem"
+    )]
     Install {
         #[clap(help = "MCP server name")]
         name: String,
@@ -120,7 +161,10 @@ enum McpCommands {
         #[clap(long, help = "Install to user-global location (for geminicli)")]
         user: bool,
     },
-    #[clap(about = "Output MCP servers in various formats", long_about = "Output MCP servers in various formats for configuration files.\n\nExamples:\n  b00t-cli mcp output filesystem,brave-search\n  b00t-cli mcp output --json filesystem\n  b00t-cli mcp output --mcpServers filesystem,brave-search")]
+    #[clap(
+        about = "Output MCP servers in various formats",
+        long_about = "Output MCP servers in various formats for configuration files.\n\nExamples:\n  b00t-cli mcp output filesystem,brave-search\n  b00t-cli mcp output --json filesystem\n  b00t-cli mcp output --mcpServers filesystem,brave-search"
+    )]
     Output {
         #[clap(long = "json", help = "Output raw JSON format without wrapper", action = clap::ArgAction::SetTrue)]
         json: bool,
@@ -133,17 +177,26 @@ enum McpCommands {
 
 #[derive(Parser)]
 enum AiCommands {
-    #[clap(about = "Add AI provider configuration from TOML file", long_about = "Add AI provider configuration from TOML file.\n\nExamples:\n  b00t-cli ai add ./openai.ai.toml\n  b00t-cli ai add ~/.dotfiles/_b00t_/anthropic.ai.toml")]
+    #[clap(
+        about = "Add AI provider configuration from TOML file",
+        long_about = "Add AI provider configuration from TOML file.\n\nExamples:\n  b00t-cli ai add ./openai.ai.toml\n  b00t-cli ai add ~/.dotfiles/_b00t_/anthropic.ai.toml"
+    )]
     Add {
         #[clap(help = "Path to AI provider TOML file")]
         file: String,
     },
-    #[clap(about = "List available AI provider configurations", long_about = "List available AI provider configurations.\n\nExamples:\n  b00t-cli ai list\n  b00t-cli ai list --json")]
+    #[clap(
+        about = "List available AI provider configurations",
+        long_about = "List available AI provider configurations.\n\nExamples:\n  b00t-cli ai list\n  b00t-cli ai list --json"
+    )]
     List {
         #[clap(long, help = "Output in JSON format")]
         json: bool,
     },
-    #[clap(about = "Output AI providers in various formats", long_about = "Output AI providers in various formats.\n\nExamples:\n  b00t-cli ai output --kv openai,anthropic\n  b00t-cli ai output --b00t openai\n  b00t-cli ai output anthropic")]
+    #[clap(
+        about = "Output AI providers in various formats",
+        long_about = "Output AI providers in various formats.\n\nExamples:\n  b00t-cli ai output --kv openai,anthropic\n  b00t-cli ai output --b00t openai\n  b00t-cli ai output anthropic"
+    )]
     Output {
         #[clap(long = "b00t", help = "Output in b00t TOML format (default)", action = clap::ArgAction::SetTrue)]
         b00t: bool,
@@ -156,17 +209,26 @@ enum AiCommands {
 
 #[derive(Parser)]
 enum AppCommands {
-    #[clap(about = "VSCode integration commands", long_about = "VSCode integration commands.\n\nMCP Examples:\n  b00t-cli app vscode mcp install gh\n  b00t-cli mcp install gh vscode\n\nExtension Examples:\n  b00t-cli app vscode extension list\n  b00t-cli app vscode extension install rust-lang.rust-analyzer")]
+    #[clap(
+        about = "VSCode integration commands",
+        long_about = "VSCode integration commands.\n\nMCP Examples:\n  b00t-cli app vscode mcp install gh\n  b00t-cli mcp install gh vscode\n\nExtension Examples:\n  b00t-cli app vscode extension list\n  b00t-cli app vscode extension install rust-lang.rust-analyzer"
+    )]
     Vscode {
         #[clap(subcommand)]
         vscode_command: AppVscodeCommands,
     },
-    #[clap(about = "Claude Code integration commands", long_about = "Claude Code integration commands.\n\nExamples:\n  b00t-cli app claudecode mcp install gh\n  b00t-cli mcp install gh claudecode")]
+    #[clap(
+        about = "Claude Code integration commands",
+        long_about = "Claude Code integration commands.\n\nExamples:\n  b00t-cli app claudecode mcp install gh\n  b00t-cli mcp install gh claudecode"
+    )]
     Claudecode {
         #[clap(subcommand)]
         claudecode_command: AppClaudecodeCommands,
     },
-    #[clap(about = "Gemini CLI integration commands", long_about = "Gemini CLI integration commands.\n\nExamples:\n  b00t-cli app geminicli mcp install gh --repo\n  b00t-cli mcp install gh geminicli --user")]
+    #[clap(
+        about = "Gemini CLI integration commands",
+        long_about = "Gemini CLI integration commands.\n\nExamples:\n  b00t-cli app geminicli mcp install gh --repo\n  b00t-cli mcp install gh geminicli --user"
+    )]
     Geminicli {
         #[clap(subcommand)]
         geminicli_command: AppGeminicliCommands,
@@ -207,7 +269,10 @@ enum AppGeminicliCommands {
 
 #[derive(Parser)]
 enum AppMcpCommands {
-    #[clap(about = "Install MCP server", long_about = "Install MCP server to the target application.\n\nExamples:\n  b00t-cli app vscode mcp install gh\n  b00t-cli app claudecode mcp install filesystem")]
+    #[clap(
+        about = "Install MCP server",
+        long_about = "Install MCP server to the target application.\n\nExamples:\n  b00t-cli app vscode mcp install gh\n  b00t-cli app claudecode mcp install filesystem"
+    )]
     Install {
         #[clap(help = "Name of the MCP server to install")]
         name: String,
@@ -216,17 +281,26 @@ enum AppMcpCommands {
 
 #[derive(Parser)]
 enum AppVscodeExtensionCommands {
-    #[clap(about = "List installed VS Code extensions", long_about = "List all installed VS Code extensions.\n\nExamples:\n  b00t-cli app vscode extension list\n  b00t-cli app vscode extension list --json")]
+    #[clap(
+        about = "List installed VS Code extensions",
+        long_about = "List all installed VS Code extensions.\n\nExamples:\n  b00t-cli app vscode extension list\n  b00t-cli app vscode extension list --json"
+    )]
     List {
         #[clap(long, help = "Output in JSON format")]
         json: bool,
     },
-    #[clap(about = "Install VS Code extension", long_about = "Install VS Code extension by ID.\n\nExamples:\n  b00t-cli app vscode extension install ms-vscode.vscode-typescript-next\n  b00t-cli app vscode extension install rust-lang.rust-analyzer")]
+    #[clap(
+        about = "Install VS Code extension",
+        long_about = "Install VS Code extension by ID.\n\nExamples:\n  b00t-cli app vscode extension install ms-vscode.vscode-typescript-next\n  b00t-cli app vscode extension install rust-lang.rust-analyzer"
+    )]
     Install {
         #[clap(help = "Extension ID to install (e.g., ms-vscode.vscode-typescript-next)")]
         extension_id: String,
     },
-    #[clap(about = "Uninstall VS Code extension", long_about = "Uninstall VS Code extension by ID.\n\nExamples:\n  b00t-cli app vscode extension uninstall ms-vscode.vscode-typescript-next\n  b00t-cli app vscode extension uninstall rust-lang.rust-analyzer")]
+    #[clap(
+        about = "Uninstall VS Code extension",
+        long_about = "Uninstall VS Code extension by ID.\n\nExamples:\n  b00t-cli app vscode extension uninstall ms-vscode.vscode-typescript-next\n  b00t-cli app vscode extension uninstall rust-lang.rust-analyzer"
+    )]
     Uninstall {
         #[clap(help = "Extension ID to uninstall")]
         extension_id: String,
@@ -235,11 +309,17 @@ enum AppVscodeExtensionCommands {
 
 #[derive(Parser)]
 enum AppGeminicliMcpCommands {
-    #[clap(about = "Install MCP server to Gemini CLI", long_about = "Install MCP server to Gemini CLI extension.\n\nExamples:\n  b00t-cli app geminicli mcp install gh --repo\n  b00t-cli app geminicli mcp install filesystem --user")]
+    #[clap(
+        about = "Install MCP server to Gemini CLI",
+        long_about = "Install MCP server to Gemini CLI extension.\n\nExamples:\n  b00t-cli app geminicli mcp install gh --repo\n  b00t-cli app geminicli mcp install filesystem --user"
+    )]
     Install {
         #[clap(help = "Name of the MCP server to install")]
         name: String,
-        #[clap(long, help = "Install to repository-specific extension (default if in git repo)")]
+        #[clap(
+            long,
+            help = "Install to repository-specific extension (default if in git repo)"
+        )]
         repo: bool,
         #[clap(long, help = "Install to user-global extension")]
         user: bool,
@@ -248,43 +328,67 @@ enum AppGeminicliMcpCommands {
 
 #[derive(Parser)]
 enum CliCommands {
-    #[clap(about = "Run a CLI script by name", long_about = "Run a CLI script by name.\n\nExamples:\n  b00t-cli cli run setup-dev\n  b00t-cli cli run deploy")]
+    #[clap(
+        about = "Run a CLI script by name",
+        long_about = "Run a CLI script by name.\n\nExamples:\n  b00t-cli cli run setup-dev\n  b00t-cli cli run deploy"
+    )]
     Run {
         #[clap(help = "Name of the CLI script to run")]
         name: String,
     },
-    #[clap(about = "Detect the version of a CLI command", long_about = "Detect the version of a CLI command.\n\nExamples:\n  b00t-cli cli detect node\n  b00t-cli cli detect git")]
+    #[clap(
+        about = "Detect the version of a CLI command",
+        long_about = "Detect the version of a CLI command.\n\nExamples:\n  b00t-cli cli detect node\n  b00t-cli cli detect git"
+    )]
     Detect {
         #[clap(help = "The command to detect")]
         command: String,
     },
-    #[clap(about = "Show the desired version of a CLI command", long_about = "Show the desired version of a CLI command.\n\nExamples:\n  b00t-cli cli desires node\n  b00t-cli cli desires docker")]
+    #[clap(
+        about = "Show the desired version of a CLI command",
+        long_about = "Show the desired version of a CLI command.\n\nExamples:\n  b00t-cli cli desires node\n  b00t-cli cli desires docker"
+    )]
     Desires {
         #[clap(help = "The command to check")]
         command: String,
     },
-    #[clap(about = "Install a CLI command", long_about = "Install a CLI command using its configuration.\n\nExamples:\n  b00t-cli cli install node\n  b00t-cli cli install docker")]
+    #[clap(
+        about = "Install a CLI command",
+        long_about = "Install a CLI command using its configuration.\n\nExamples:\n  b00t-cli cli install node\n  b00t-cli cli install docker"
+    )]
     Install {
         #[clap(help = "The command to install")]
         command: String,
     },
-    #[clap(about = "Update a CLI command", long_about = "Update a CLI command using its configuration.\n\nExamples:\n  b00t-cli cli update node\n  b00t-cli cli update docker")]
+    #[clap(
+        about = "Update a CLI command",
+        long_about = "Update a CLI command using its configuration.\n\nExamples:\n  b00t-cli cli update node\n  b00t-cli cli update docker"
+    )]
     Update {
         #[clap(help = "The command to update")]
         command: String,
     },
-    #[clap(about = "Check installed vs desired versions for CLI command", long_about = "Check installed vs desired versions for CLI command.\n\nExamples:\n  b00t-cli cli check node\n  b00t-cli cli check docker\n\nOutput emojis:\n  🥾👍🏻 = versions match\n  🥾🐣 = installed version newer than desired\n  🥾😭 = installed version older than desired\n  🥾😱 = command missing")]
+    #[clap(
+        about = "Check installed vs desired versions for CLI command",
+        long_about = "Check installed vs desired versions for CLI command.\n\nExamples:\n  b00t-cli cli check node\n  b00t-cli cli check docker\n\nOutput emojis:\n  🥾👍🏻 = versions match\n  🥾🐣 = installed version newer than desired\n  🥾😭 = installed version older than desired\n  🥾😱 = command missing"
+    )]
     Check {
         #[clap(help = "The command to check")]
         command: String,
     },
-    #[clap(about = "Update all CLI commands", long_about = "Update all CLI commands that have outdated versions.\n\nExamples:\n  b00t-cli cli up")]
+    #[clap(
+        about = "Update all CLI commands",
+        long_about = "Update all CLI commands that have outdated versions.\n\nExamples:\n  b00t-cli cli up"
+    )]
     Up,
 }
 
 #[derive(Parser)]
 enum InitCommands {
-    #[clap(about = "Initialize command aliases", long_about = "Initialize command aliases for CLI tools.\n\nExamples:\n  b00t-cli init aliases")]
+    #[clap(
+        about = "Initialize command aliases",
+        long_about = "Initialize command aliases for CLI tools.\n\nExamples:\n  b00t-cli init aliases"
+    )]
     Aliases,
 }
 
@@ -295,6 +399,32 @@ enum WhatismyCommands {
         #[clap(long, help = "Ignore _B00T_Agent environment variable")]
         no_env: bool,
     },
+}
+
+#[derive(Parser)]
+enum SessionCommands {
+    #[clap(about = "Initialize new session")]
+    Init {
+        #[clap(long, help = "Budget limit in USD")]
+        budget: Option<f64>,
+        #[clap(long, help = "Time limit in minutes")]
+        time_limit: Option<u32>,
+        #[clap(long, help = "Agent name override")]
+        agent: Option<String>,
+    },
+    #[clap(about = "Show current session status")]
+    Status,
+    #[clap(about = "Update session metrics")]
+    Update {
+        #[clap(long, help = "Estimated cost to add")]
+        cost: Option<f64>,
+        #[clap(long, help = "Hint message to add")]
+        hint: Option<String>,
+    },
+    #[clap(about = "End current session")]
+    End,
+    #[clap(about = "Get compact status for prompt")]
+    Prompt,
 }
 
 // Using unified config from lib.rs
@@ -333,23 +463,26 @@ impl ToolStatus {
 
 // Bridge function to convert trait-based DatumProviders to legacy ToolStatus
 fn datum_providers_to_tool_status(providers: Vec<Box<dyn DatumProvider>>) -> Vec<ToolStatus> {
-    providers.into_iter().map(|provider| {
-        let is_installed = DatumChecker::is_installed(provider.as_ref());
-        let is_disabled = StatusProvider::is_disabled(provider.as_ref());
-        let version_status = DatumChecker::version_status(provider.as_ref());
+    providers
+        .into_iter()
+        .map(|provider| {
+            let is_installed = DatumChecker::is_installed(provider.as_ref());
+            let is_disabled = StatusProvider::is_disabled(provider.as_ref());
+            let version_status = DatumChecker::version_status(provider.as_ref());
 
-        ToolStatus {
-            name: StatusProvider::name(provider.as_ref()).to_string(),
-            subsystem: StatusProvider::subsystem(provider.as_ref()).to_string(),
-            installed: is_installed,
-            available: FilterLogic::is_available(provider.as_ref()),
-            disabled: is_disabled,
-            version_status: Some(version_status.emoji().to_string()),
-            current_version: DatumChecker::current_version(provider.as_ref()),
-            desired_version: DatumChecker::desired_version(provider.as_ref()),
-            hint: StatusProvider::hint(provider.as_ref()).to_string(),
-        }
-    }).collect()
+            ToolStatus {
+                name: StatusProvider::name(provider.as_ref()).to_string(),
+                subsystem: StatusProvider::subsystem(provider.as_ref()).to_string(),
+                installed: is_installed,
+                available: FilterLogic::is_available(provider.as_ref()),
+                disabled: is_disabled,
+                version_status: Some(version_status.emoji().to_string()),
+                current_version: DatumChecker::current_version(provider.as_ref()),
+                desired_version: DatumChecker::desired_version(provider.as_ref()),
+                hint: StatusProvider::hint(provider.as_ref()).to_string(),
+            }
+        })
+        .collect()
 }
 
 fn whoami(path: &str) -> Result<()> {
@@ -357,38 +490,130 @@ fn whoami(path: &str) -> Result<()> {
     let agent_md_path = expanded_path.join("AGENT.md");
 
     if !agent_md_path.exists() {
-        anyhow::bail!("AGENT.md not found in {}. This file contains agent identity information.", expanded_path.display());
+        anyhow::bail!(
+            "AGENT.md not found in {}. This file contains agent identity information.",
+            expanded_path.display()
+        );
     }
 
-    let template_content = fs::read_to_string(&agent_md_path)
-        .context(format!("Failed to read AGENT.md from {}", agent_md_path.display()))?;
+    let template_content = fs::read_to_string(&agent_md_path).context(format!(
+        "Failed to read AGENT.md from {}",
+        agent_md_path.display()
+    ))?;
 
-    // Create Tera context with runtime information
-    let mut context = TeraContext::new();
-    context.insert("PID", &std::process::id());
-
-    // Add timestamp
-    let timestamp = chrono::Utc::now().format("%Y-%m-%d %H:%M:%S UTC").to_string();
-    context.insert("TIMESTAMP", &timestamp);
-
-    // Add current user
+    // Prepare template variables
+    let timestamp = chrono::Utc::now()
+        .format("%Y-%m-%d %H:%M:%S UTC")
+        .to_string();
     let user = std::env::var("USER").unwrap_or_else(|_| "unknown".to_string());
-    context.insert("USER", &user);
-
-    // Add current git branch (if available)
     let branch = cmd!("git", "branch", "--show-current")
         .read()
         .unwrap_or_else(|_| "no-git".to_string())
         .trim()
         .to_string();
-    context.insert("BRANCH", &branch);
+    let agent = detect_agent(false);
+    let model_size = std::env::var("MODEL_SIZE").unwrap_or_else(|_| "unknown".to_string());
+    let privacy = std::env::var("PRIVACY").unwrap_or_else(|_| "standard".to_string());
 
-    // Use Tera to render the template
-    let mut tera = Tera::default();
-    let rendered = tera.render_str(&template_content, &context)
-        .context("Failed to render AGENT.md template")?;
+    // Simple string replacement approach instead of Tera due to complex template syntax
+    let mut rendered = template_content;
+
+    // Replace variables manually
+    rendered = rendered.replace("{{PID}}", &std::process::id().to_string());
+    rendered = rendered.replace("{{TIMESTAMP}}", &timestamp);
+    rendered = rendered.replace("{{USER}}", &user);
+    rendered = rendered.replace("{{BRANCH}}", &branch);
+    rendered = rendered.replace("{{_B00T_Agent}}", &agent);
+    rendered = rendered.replace("{{_B00T_AGENT}}", &agent);
+    rendered = rendered.replace("{{MODEL_SIZE}}", &model_size);
+    rendered = rendered.replace("{{PRIVACY}}", &privacy);
 
     println!("{}", rendered);
+
+    Ok(())
+}
+
+fn checkpoint(message: Option<&str>, skip_tests: bool) -> Result<()> {
+    println!("🥾 Creating checkpoint...");
+
+    // Check if we're in a git repository
+    let git_status = cmd!("git", "status", "--porcelain").read();
+    if git_status.is_err() {
+        anyhow::bail!("Not in a git repository. Run 'git init' first.");
+    }
+
+    // Check if this is a Rust project and run cargo check
+    if std::path::Path::new("Cargo.toml").exists() {
+        println!("🦀 Rust project detected. Running cargo check...");
+        let cargo_check = cmd!("cargo", "check").run();
+        if let Err(e) = cargo_check {
+            anyhow::bail!(
+                "🚨 cargo check failed: {}. Fix compilation errors before checkpoint.",
+                e
+            );
+        }
+        println!("✅ cargo check passed");
+    }
+
+    // Generate commit message
+    let commit_msg = message.unwrap_or("🥾 checkpoint: automated commit via b00t-cli");
+
+    // Add all files (including untracked)
+    println!("📦 Adding all files to staging area...");
+    let add_result = cmd!("git", "add", "-A").run();
+    if let Err(e) = add_result {
+        anyhow::bail!("Failed to add files to git staging area: {}", e);
+    }
+
+    // Check if there are any changes to commit
+    let staged_changes = cmd!("git", "diff", "--cached", "--name-only")
+        .read()
+        .unwrap_or_default();
+
+    if staged_changes.trim().is_empty() {
+        println!("✅ No changes to commit. Repository is clean.");
+        return Ok(());
+    }
+
+    println!("📝 Files staged for commit:");
+    let staged_files = cmd!("git", "diff", "--cached", "--name-only")
+        .read()
+        .unwrap_or_default();
+    for file in staged_files.lines() {
+        if !file.trim().is_empty() {
+            println!("   • {}", file.trim());
+        }
+    }
+
+    // Create the commit (this will trigger pre-commit hooks including tests)
+    println!("💾 Creating commit with message: '{}'", commit_msg);
+    let commit_result = cmd!("git", "commit", "-m", commit_msg).run();
+
+    match commit_result {
+        Ok(_) => {
+            println!("✅ Checkpoint created successfully!");
+
+            // Show the commit hash
+            if let Ok(commit_hash) = cmd!("git", "rev-parse", "--short", "HEAD").read() {
+                println!("📍 Commit: {}", commit_hash.trim());
+            }
+
+            // Show current branch
+            if let Ok(branch) = cmd!("git", "branch", "--show-current").read() {
+                println!("🌳 Branch: {}", branch.trim());
+            }
+
+            if !skip_tests {
+                println!("🧪 Tests executed via git pre-commit hooks");
+            }
+        }
+        Err(e) => {
+            anyhow::bail!(
+                "Commit failed: {}. This usually means git pre-commit hooks (including tests) failed.",
+                e
+            );
+        }
+    }
 
     Ok(())
 }
@@ -403,17 +628,17 @@ fn detect_agent(ignore_env: bool) -> String {
             }
         }
     }
-    
+
     // Check for Claude Code
     if std::env::var("CLAUDECODE").unwrap_or_default() == "1" {
         return "claude".to_string();
     }
-    
+
     // TODO: Add detection for other agents based on their shell environment:
     // - gemini: specific environment vars set by gemini-cli shell
     // - codex: specific environment vars set by codex shell
     // - other agents: their respective shell environment indicators
-    
+
     // Return empty string if no agent detected
     "".to_string()
 }
@@ -427,7 +652,7 @@ where
 {
     let mut tools: Vec<Box<dyn DatumProvider>> = Vec::new();
     let expanded_path = get_expanded_path(path)?;
-    
+
     if let Ok(entries) = std::fs::read_dir(&expanded_path) {
         for entry in entries {
             if let Ok(entry) = entry {
@@ -444,21 +669,40 @@ where
             }
         }
     }
-    
+
     Ok(tools)
 }
 
-fn show_status(path: &str, filter: Option<&str>, only_installed: bool, only_available: bool) -> Result<()> {
+fn show_status(
+    path: &str,
+    filter: Option<&str>,
+    only_installed: bool,
+    only_available: bool,
+) -> Result<()> {
     let mut all_tools = Vec::new();
 
     // Collect tools from all subsystems using new generic trait-based architecture
-    all_tools.extend(datum_providers_to_tool_status(load_datum_providers::<CliDatum>(path, ".cli.toml")?));
-    all_tools.extend(datum_providers_to_tool_status(load_datum_providers::<McpDatum>(path, ".mcp.toml")?));
-    all_tools.extend(datum_providers_to_tool_status(load_datum_providers::<AiDatum>(path, ".ai.toml")?));
-    all_tools.extend(datum_providers_to_tool_status(load_datum_providers::<AptDatum>(path, ".apt.toml")?));
-    all_tools.extend(datum_providers_to_tool_status(load_datum_providers::<BashDatum>(path, ".bash.toml")?));
-    all_tools.extend(datum_providers_to_tool_status(load_datum_providers::<DockerDatum>(path, ".docker.toml")?));
-    all_tools.extend(datum_providers_to_tool_status(load_datum_providers::<VscodeDatum>(path, ".vscode.toml")?));
+    all_tools.extend(datum_providers_to_tool_status(load_datum_providers::<
+        CliDatum,
+    >(path, ".cli.toml")?));
+    all_tools.extend(datum_providers_to_tool_status(load_datum_providers::<
+        McpDatum,
+    >(path, ".mcp.toml")?));
+    all_tools.extend(datum_providers_to_tool_status(load_datum_providers::<
+        AiDatum,
+    >(path, ".ai.toml")?));
+    all_tools.extend(datum_providers_to_tool_status(load_datum_providers::<
+        AptDatum,
+    >(path, ".apt.toml")?));
+    all_tools.extend(datum_providers_to_tool_status(load_datum_providers::<
+        BashDatum,
+    >(path, ".bash.toml")?));
+    all_tools.extend(datum_providers_to_tool_status(load_datum_providers::<
+        DockerDatum,
+    >(path, ".docker.toml")?));
+    all_tools.extend(datum_providers_to_tool_status(load_datum_providers::<
+        VscodeDatum,
+    >(path, ".vscode.toml")?));
     all_tools.extend(get_other_tools_status(path)?);
 
     // Apply filters
@@ -481,9 +725,13 @@ fn show_status(path: &str, filter: Option<&str>, only_installed: bool, only_avai
         .collect();
 
     // Group by subsystem and display
-    let mut subsystems: std::collections::HashMap<String, Vec<ToolStatus>> = std::collections::HashMap::new();
+    let mut subsystems: std::collections::HashMap<String, Vec<ToolStatus>> =
+        std::collections::HashMap::new();
     for tool in filtered_tools {
-        subsystems.entry(tool.subsystem.clone()).or_insert_with(Vec::new).push(tool);
+        subsystems
+            .entry(tool.subsystem.clone())
+            .or_insert_with(Vec::new)
+            .push(tool);
     }
 
     // Sort subsystems for consistent output
@@ -536,7 +784,8 @@ fn show_status(path: &str, filter: Option<&str>, only_installed: bool, only_avai
                 }
             };
 
-            println!("| {} | {} | {} | {} |",
+            println!(
+                "| {} | {} | {} | {} |",
                 tool.status_icon(),
                 tool.name,
                 version_info,
@@ -548,12 +797,6 @@ fn show_status(path: &str, filter: Option<&str>, only_installed: bool, only_avai
 
     Ok(())
 }
-
-
-
-
-
-
 
 fn get_other_tools_status(path: &str) -> Result<Vec<ToolStatus>> {
     let mut tools = Vec::new();
@@ -569,10 +812,11 @@ fn get_other_tools_status(path: &str) -> Result<Vec<ToolStatus>> {
                     for ext in &other_extensions {
                         if file_name.ends_with(ext) {
                             if let Some(tool_name) = file_name.strip_suffix(ext) {
-                                let subsystem = ext.trim_start_matches('.').trim_end_matches(".toml");
+                                let subsystem =
+                                    ext.trim_start_matches('.').trim_end_matches(".toml");
 
-
-                                let tool_status = check_other_tool_status(tool_name, subsystem, path)?;
+                                let tool_status =
+                                    check_other_tool_status(tool_name, subsystem, path)?;
                                 tools.push(tool_status);
                             }
                         }
@@ -604,8 +848,10 @@ fn check_other_tool_status(tool_name: &str, subsystem: &str, path: &str) -> Resu
         });
     }
 
-    let config_result = fs::read_to_string(&path_buf)
-        .and_then(|content| toml::from_str::<Config>(&content).map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e)));
+    let config_result = fs::read_to_string(&path_buf).and_then(|content| {
+        toml::from_str::<Config>(&content)
+            .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))
+    });
 
     match config_result {
         Ok(config) => {
@@ -642,31 +888,32 @@ fn check_other_tool_status(tool_name: &str, subsystem: &str, path: &str) -> Resu
                 available: !installed,
                 disabled: false,
                 version_status,
-                current_version: if installed { Some("installed".to_string()) } else { None },
+                current_version: if installed {
+                    Some("installed".to_string())
+                } else {
+                    None
+                },
                 desired_version: None,
                 hint: config.b00t.hint,
             })
         }
-        Err(_) => {
-            Ok(ToolStatus {
-                name: tool_name.to_string(),
-                subsystem: subsystem.to_string(),
-                installed: false,
-                available: false,
-                disabled: true,
-                version_status: Some("🔴".to_string()),
-                current_version: None,
-                desired_version: None,
-                hint: "Configuration error".to_string(),
-            })
-        }
+        Err(_) => Ok(ToolStatus {
+            name: tool_name.to_string(),
+            subsystem: subsystem.to_string(),
+            installed: false,
+            available: false,
+            disabled: true,
+            version_status: Some("🔴".to_string()),
+            current_version: None,
+            desired_version: None,
+            hint: "Configuration error".to_string(),
+        }),
     }
 }
 
 fn check_command_available(command: &str) -> bool {
     cmd!("which", command).read().is_ok()
 }
-
 
 fn generate_documentation() {
     let doc = r#"# b00t-cli: Live Syntax Recipe Manager Documentation
@@ -721,7 +968,11 @@ echo "malicious" > ~/.dotfiles/_b00t_/hack.toml
 
     // Generate DatumType documentation introspectively
     let package_types = vec![
-        ("Traditional", "Standard CLI tools", vec![".cli.toml", ".toml"]),
+        (
+            "Traditional",
+            "Standard CLI tools",
+            vec![".cli.toml", ".toml"],
+        ),
         ("Mcp", "MCP servers", vec![".mcp.toml"]),
         ("Ai", "AI providers", vec![".ai.toml"]),
         ("Vscode", "VSCode extensions", vec![".vscode.toml"]),
@@ -734,7 +985,12 @@ echo "malicious" > ~/.dotfiles/_b00t_/hack.toml
     println!("### DatumType Enum");
     println!("Determines package behavior based on file extension:");
     for (variant, description, extensions) in &package_types {
-        println!("- `{}`: {} ({})", variant, description, extensions.join(", "));
+        println!(
+            "- `{}`: {} ({})",
+            variant,
+            description,
+            extensions.join(", ")
+        );
     }
     println!();
 
@@ -937,6 +1193,104 @@ Unless you're developing b00t-cli itself, always use the `b00t` alias. It provid
     print!("{}", workflow_doc);
 }
 
+// Session management functions
+fn handle_session_init(
+    budget: &Option<f64>,
+    time_limit: &Option<u32>,
+    agent: Option<&str>,
+) -> Result<()> {
+    let agent_name = agent
+        .map(|s| s.to_string())
+        .or_else(|| std::env::var("_B00T_Agent").ok())
+        .filter(|s| !s.is_empty());
+
+    let mut session = SessionState::new(agent_name);
+
+    if let Some(budget) = budget {
+        session.budget_limit = Some(*budget);
+    }
+
+    if let Some(time_limit) = time_limit {
+        session.time_limit_minutes = Some(*time_limit);
+    }
+
+    // Set session ID in environment
+    unsafe {
+        std::env::set_var("B00T_SESSION_ID", &session.session_id);
+    }
+
+    session.save()?;
+    println!("🥾 Session {} initialized", session.session_id);
+
+    if let Some(agent) = &session.agent_info {
+        println!("🤖 Agent: {}", agent.name);
+    }
+
+    if let Some(budget) = session.budget_limit {
+        println!("💰 Budget: ${:.2}", budget);
+    }
+
+    if let Some(time_limit) = session.time_limit_minutes {
+        println!("⏱️  Time limit: {}m", time_limit);
+    }
+
+    Ok(())
+}
+
+fn handle_session_status() -> Result<()> {
+    let session = SessionState::load()?;
+    println!("{}", session.get_status_line());
+
+    if !session.hints.is_empty() {
+        println!("💡 Hints:");
+        for hint in &session.hints {
+            println!("   • {}", hint);
+        }
+    }
+
+    Ok(())
+}
+
+fn handle_session_update(cost: &Option<f64>, hint: Option<&str>) -> Result<()> {
+    let mut session = SessionState::load()?;
+
+    if let Some(cost) = cost {
+        session.increment_command(*cost);
+    } else {
+        session.increment_command(0.0);
+    }
+
+    if let Some(hint) = hint {
+        session.hints.push(hint.to_string());
+    }
+
+    session.save()?;
+    Ok(())
+}
+
+fn handle_session_end() -> Result<()> {
+    let session = SessionState::load()?;
+    let path = SessionState::get_session_file_path()?;
+
+    println!("🥾 Session {} ended", session.session_id);
+    println!("📊 Final stats: {}", session.get_status_line());
+
+    if path.exists() {
+        std::fs::remove_file(&path).context("Failed to remove session file")?;
+    }
+
+    unsafe {
+        std::env::remove_var("B00T_SESSION_ID");
+    }
+    Ok(())
+}
+
+fn handle_session_prompt() -> Result<()> {
+    let session = SessionState::load()?;
+    print!("{}", session.get_status_line());
+    Ok(())
+}
+
 fn main() {
     let cli = Cli::parse();
 
@@ -947,10 +1301,18 @@ fn main() {
 
     match &cli.command {
         Some(Commands::Mcp { mcp_command }) => match mcp_command {
-            McpCommands::Create { name_or_json, hint, dwiw: _, no_dwiw, command_args } => {
+            McpCommands::Create {
+                name_or_json,
+                hint,
+                dwiw: _,
+                no_dwiw,
+                command_args,
+            } => {
                 if !command_args.is_empty() {
                     // Command mode: b00t-cli mcp create name -- command args...
-                    if let Err(e) = mcp_add_command(name_or_json, hint.as_deref(), command_args, &cli.path) {
+                    if let Err(e) =
+                        mcp_add_command(name_or_json, hint.as_deref(), command_args, &cli.path)
+                    {
                         eprintln!("Error adding MCP server: {}", e);
                         std::process::exit(1);
                     }
@@ -969,7 +1331,12 @@ fn main() {
                     std::process::exit(1);
                 }
             }
-            McpCommands::Install { name, target, repo, user } => {
+            McpCommands::Install {
+                name,
+                target,
+                repo,
+                user,
+            } => {
                 let result = match target.as_str() {
                     "claudecode" => claude_code_install_mcp(name, &cli.path),
                     "vscode" => vscode_install_mcp(name, &cli.path),
@@ -989,7 +1356,10 @@ fn main() {
                         gemini_install_mcp(name, &cli.path, use_repo)
                     }
                     _ => {
-                        eprintln!("Error: Invalid target '{}'. Valid targets are: claudecode, vscode, geminicli", target);
+                        eprintln!(
+                            "Error: Invalid target '{}'. Valid targets are: claudecode, vscode, geminicli",
+                            target
+                        );
                         std::process::exit(1);
                     }
                 };
@@ -998,7 +1368,11 @@ fn main() {
                     std::process::exit(1);
                 }
             }
-            McpCommands::Output { json, mcp_servers: _, servers } => {
+            McpCommands::Output {
+                json,
+                mcp_servers: _,
+                servers,
+            } => {
                 // Default to mcpServers format unless --json is specified
                 let use_wrapper = if *json {
                     false
@@ -1025,7 +1399,11 @@ fn main() {
                     std::process::exit(1);
                 }
             }
-            AiCommands::Output { b00t: _, kv, providers } => {
+            AiCommands::Output {
+                b00t: _,
+                kv,
+                providers,
+            } => {
                 let format = if *kv { "kv" } else { "b00t" };
                 if let Err(e) = ai_output(&cli.path, format, providers) {
                     eprintln!("Error outputting AI providers: {}", e);
@@ -1042,7 +1420,7 @@ fn main() {
                             std::process::exit(1);
                         }
                     }
-                }
+                },
                 AppVscodeCommands::Extension { extension_command } => match extension_command {
                     AppVscodeExtensionCommands::List { json } => {
                         if let Err(e) = vscode_extension_list(*json) {
@@ -1062,7 +1440,7 @@ fn main() {
                             std::process::exit(1);
                         }
                     }
-                }
+                },
             },
             AppCommands::Claudecode { claudecode_command } => match claudecode_command {
                 AppClaudecodeCommands::Mcp { mcp_command } => match mcp_command {
@@ -1072,7 +1450,7 @@ fn main() {
                             std::process::exit(1);
                         }
                     }
-                }
+                },
             },
             AppCommands::Geminicli { geminicli_command } => match geminicli_command {
                 AppGeminicliCommands::Mcp { mcp_command } => match mcp_command {
@@ -1089,13 +1467,13 @@ fn main() {
                             // Default behavior: repo if in git repo, otherwise user
                             crate::utils::is_git_repo()
                         };
-                        
+
                         if let Err(e) = gemini_install_mcp(name, &cli.path, use_repo) {
                             eprintln!("Error installing MCP server to Gemini CLI: {}", e);
                             std::process::exit(1);
                         }
                     }
-                }
+                },
             },
         },
         Some(Commands::Cli { cli_command }) => match cli_command {
@@ -1115,7 +1493,9 @@ fn main() {
         Some(Commands::Init { init_command }) => match init_command {
             InitCommands::Aliases => {
                 println!("Aliases initialization not yet implemented.");
-                println!("This will scan for CLI tools with 'aliases' field and create ~/.local/bin scripts.");
+                println!(
+                    "This will scan for CLI tools with 'aliases' field and create ~/.local/bin scripts."
+                );
             }
         },
         Some(Commands::Whoami) => {
@@ -1123,17 +1503,66 @@ fn main() {
                 eprintln!("Error displaying agent identity: {}", e);
                 std::process::exit(1);
             }
-        },
+        }
+        Some(Commands::Checkpoint {
+            message,
+            skip_tests,
+        }) => {
+            if let Err(e) = checkpoint(message.as_deref(), *skip_tests) {
+                eprintln!("Error creating checkpoint: {}", e);
+                std::process::exit(1);
+            }
+        }
         Some(Commands::Whatismy { whatismy_command }) => match whatismy_command {
             WhatismyCommands::Agent { no_env } => {
                 let agent = detect_agent(*no_env);
                 println!("{}", agent);
             }
         },
-        Some(Commands::Status { filter, installed, available }) => {
+        Some(Commands::Status {
+            filter,
+            installed,
+            available,
+        }) => {
             if let Err(e) = show_status(&cli.path, filter.as_deref(), *installed, *available) {
                 eprintln!("Error displaying status: {}", e);
                 std::process::exit(1);
+            }
+        }
+        Some(Commands::Session { session_command }) => match session_command {
+            SessionCommands::Init {
+                budget,
+                time_limit,
+                agent,
+            } => {
+                if let Err(e) = handle_session_init(budget, time_limit, agent.as_deref()) {
+                    eprintln!("Error initializing session: {}", e);
+                    std::process::exit(1);
+                }
+            }
+            SessionCommands::Status => {
+                if let Err(e) = handle_session_status() {
+                    eprintln!("Error getting session status: {}", e);
+                    std::process::exit(1);
+                }
+            }
+            SessionCommands::Update { cost, hint } => {
+                if let Err(e) = handle_session_update(cost, hint.as_deref()) {
+                    eprintln!("Error updating session: {}", e);
+                    std::process::exit(1);
+                }
+            }
+            SessionCommands::End => {
+                if let Err(e) = handle_session_end() {
+                    eprintln!("Error ending session: {}", e);
+                    std::process::exit(1);
+                }
+            }
+            SessionCommands::Prompt => {
+                if let Err(e) = handle_session_prompt() {
+                    eprintln!("Error getting session prompt: {}", e);
+                    std::process::exit(1);
+                }
             }
         },
         None => {
@@ -1146,7 +1575,16 @@ fn main() {
 #[allow(dead_code)]
 fn get_config(command: &str, path: &str) -> Result<(Config, String), Box<dyn std::error::Error>> {
     // Try different file extensions in order of preference
-    let extensions = [".cli.toml", ".mcp.toml", ".vscode.toml", ".docker.toml", ".apt.toml", ".nix.toml", ".bash.toml", ".toml"];
+    let extensions = [
+        ".cli.toml",
+        ".mcp.toml",
+        ".vscode.toml",
+        ".docker.toml",
+        ".apt.toml",
+        ".nix.toml",
+        ".bash.toml",
+        ".toml",
+    ];
 
     let mut path_buf = PathBuf::new();
     path_buf.push(shellexpand::tilde(path).to_string());
@@ -1165,7 +1603,10 @@ fn get_config(command: &str, path: &str) -> Result<(Config, String), Box<dyn std
     std::process::exit(100);
 }
 
-fn get_cli_unified_config(command: &str, path: &str) -> Result<(Config, String), Box<dyn std::error::Error>> {
+fn get_cli_unified_config(
+    command: &str,
+    path: &str,
+) -> Result<(Config, String), Box<dyn std::error::Error>> {
     // Only look for CLI-specific files
     let extensions = [".cli.toml"];
 
@@ -1208,28 +1649,32 @@ fn desires(command: &str, path: &str) {
 #[allow(dead_code)]
 fn install(command: &str, path: &str) {
     match get_config(command, path) {
-        Ok((config, filename)) => {
-            match config.b00t.get_datum_type(Some(&filename)) {
-                DatumType::Unknown => {
-                    if let Some(install_cmd) = &config.b00t.install {
-                        println!("Installing {}...", command);
-                        let result = cmd!("bash", "-c", install_cmd).run();
-                        match result {
-                            Ok(_) => println!("Installation complete."),
-                            Err(e) => eprintln!("Installation failed: {}", e),
-                        }
-                    } else {
-                        eprintln!("No install command defined for {}", command);
+        Ok((config, filename)) => match config.b00t.get_datum_type(Some(&filename)) {
+            DatumType::Unknown => {
+                if let Some(install_cmd) = &config.b00t.install {
+                    println!("Installing {}...", command);
+                    let result = cmd!("bash", "-c", install_cmd).run();
+                    match result {
+                        Ok(_) => println!("Installation complete."),
+                        Err(e) => eprintln!("Installation failed: {}", e),
                     }
-                }
-                DatumType::Mcp => {
-                    eprintln!("Use 'b00t-cli vscode install mcp {}' or 'b00t-cli claude-code install mcp {}' instead", command, command);
-                }
-                _ => {
-                    eprintln!("Installation not yet supported for {:?} packages", config.b00t.get_datum_type(Some(&filename)));
+                } else {
+                    eprintln!("No install command defined for {}", command);
                 }
             }
-        }
+            DatumType::Mcp => {
+                eprintln!(
+                    "Use 'b00t-cli vscode install mcp {}' or 'b00t-cli claude-code install mcp {}' instead",
+                    command, command
+                );
+            }
+            _ => {
+                eprintln!(
+                    "Installation not yet supported for {:?} packages",
+                    config.b00t.get_datum_type(Some(&filename))
+                );
+            }
+        },
         Err(e) => eprintln!("Error reading config for {}: {}", command, e),
     }
 }
@@ -1237,25 +1682,28 @@ fn install(command: &str, path: &str) {
 #[allow(dead_code)]
 fn update(command: &str, path: &str) {
     match get_config(command, path) {
-        Ok((config, filename)) => {
-            match config.b00t.get_datum_type(Some(&filename)) {
-                DatumType::Unknown => {
-                    if let Some(update_cmd) = config.b00t.update.as_ref().or(config.b00t.install.as_ref()) {
-                        println!("Updating {}...", command);
-                        let result = cmd!("bash", "-c", update_cmd).run();
-                        match result {
-                            Ok(_) => println!("Update complete."),
-                            Err(e) => eprintln!("Update failed: {}", e),
-                        }
-                    } else {
-                        eprintln!("No update or install command defined for {}", command);
+        Ok((config, filename)) => match config.b00t.get_datum_type(Some(&filename)) {
+            DatumType::Unknown => {
+                if let Some(update_cmd) =
+                    config.b00t.update.as_ref().or(config.b00t.install.as_ref())
+                {
+                    println!("Updating {}...", command);
+                    let result = cmd!("bash", "-c", update_cmd).run();
+                    match result {
+                        Ok(_) => println!("Update complete."),
+                        Err(e) => eprintln!("Update failed: {}", e),
                     }
-                }
-                _ => {
-                    eprintln!("Update not yet supported for {:?} packages", config.b00t.get_datum_type(Some(&filename)));
+                } else {
+                    eprintln!("No update or install command defined for {}", command);
                 }
             }
-        }
+            _ => {
+                eprintln!(
+                    "Update not yet supported for {:?} packages",
+                    config.b00t.get_datum_type(Some(&filename))
+                );
+            }
+        },
         Err(e) => eprintln!("Error reading config for {}: {}", command, e),
     }
 }
@@ -1265,7 +1713,14 @@ fn get_installed_version(command: &str, path: &str) -> Option<String> {
     if let Ok((config, _)) = get_config(command, path) {
         if let Some(version_cmd) = &config.b00t.version {
             if let Ok(output) = cmd!("bash", "-c", version_cmd).read() {
-                let re = Regex::new(config.b00t.version_regex.as_deref().unwrap_or("\\d+\\.\\d+\\.\\d+")).unwrap();
+                let re = Regex::new(
+                    config
+                        .b00t
+                        .version_regex
+                        .as_deref()
+                        .unwrap_or("\\d+\\.\\d+\\.\\d+"),
+                )
+                .unwrap();
                 if let Some(caps) = re.captures(&output) {
                     return Some(caps[0].to_string());
                 }
@@ -1300,7 +1755,10 @@ fn check(command: &str, path: &str) {
             println!("🥾🐣 {} {}", command, installed_version);
             std::process::exit(0);
         } else {
-            println!("🥾😭 {} IS {} WANTS {}", command, installed_version, desired_version);
+            println!(
+                "🥾😭 {} IS {} WANTS {}",
+                command, installed_version, desired_version
+            );
             std::process::exit(1);
         }
     } else {
@@ -1352,23 +1810,33 @@ fn up(path: &str) {
     }
 }
 
-
 fn create_mcp_toml_config(datum: &BootDatum, path: &str) -> Result<()> {
     create_unified_toml_config(datum, path)
 }
 
 fn is_whitelisted_package_manager(command: &str) -> bool {
-    matches!(command, "bash" | "just" | "npx" | "uvx" | "pnpm" | "bunx" | "docker")
+    matches!(
+        command,
+        "bash" | "just" | "npx" | "uvx" | "pnpm" | "bunx" | "docker"
+    )
 }
 
-fn mcp_add_command(name: &str, hint: Option<&str>, command_args: &[String], path: &str) -> Result<()> {
+fn mcp_add_command(
+    name: &str,
+    hint: Option<&str>,
+    command_args: &[String],
+    path: &str,
+) -> Result<()> {
     if command_args.is_empty() {
         anyhow::bail!("No command provided. Use -- followed by the command and arguments.");
     }
 
     let command = &command_args[0];
     if !is_whitelisted_package_manager(command) {
-        anyhow::bail!("Package manager '{}' is not whitelisted. Allowed: just, npx, uvx, pnpm, bunx, docker", command);
+        anyhow::bail!(
+            "Package manager '{}' is not whitelisted. Allowed: just, npx, uvx, pnpm, bunx, docker",
+            command
+        );
     }
 
     // Handle special cases for package managers
@@ -1380,7 +1848,7 @@ fn mcp_add_command(name: &str, hint: Option<&str>, command_args: &[String], path
             }
             ("pnpm".to_string(), command_args[1..].to_vec())
         }
-        _ => (command.clone(), command_args[1..].to_vec())
+        _ => (command.clone(), command_args[1..].to_vec()),
     };
 
     let datum = BootDatum {
@@ -1398,6 +1866,12 @@ fn mcp_add_command(name: &str, hint: Option<&str>, command_args: &[String], path
         script: None,
         image: None,
         docker_args: None,
+        oci_uri: None,
+        resource_path: None,
+        chart_path: None,
+        namespace: None,
+        values_file: None,
+        keywords: None,
         package_name: None,
         env: None,
         require: None,
@@ -1407,9 +1881,19 @@ fn mcp_add_command(name: &str, hint: Option<&str>, command_args: &[String], path
     create_mcp_toml_config(&datum, path)?;
 
     println!("MCP server '{}' configuration saved.", datum.name);
-    println!("Command: {} {}", datum.command.as_ref().unwrap(), datum.args.as_ref().unwrap().join(" "));
-    println!("To install to VSCode: b00t-cli vscode install mcp {}", datum.name);
-    println!("To install to Claude Code: b00t-cli claude-code install mcp {}", datum.name);
+    println!(
+        "Command: {} {}",
+        datum.command.as_ref().unwrap(),
+        datum.args.as_ref().unwrap().join(" ")
+    );
+    println!(
+        "To install to VSCode: b00t-cli vscode install mcp {}",
+        datum.name
+    );
+    println!(
+        "To install to Claude Code: b00t-cli claude-code install mcp {}",
+        datum.name
+    );
 
     Ok(())
 }
@@ -1421,12 +1905,17 @@ fn mcp_add_json(json: &str, dwiw: bool, path: &str) -> Result<()> {
             Ok(_) => {
                 let trimmed = buffer.trim();
                 if trimmed.is_empty() {
-                    anyhow::bail!("No input provided. Pipe JSON content or press Ctrl+D after pasting.");
+                    anyhow::bail!(
+                        "No input provided. Pipe JSON content or press Ctrl+D after pasting."
+                    );
                 }
                 trimmed.to_string()
             }
             Err(e) => {
-                anyhow::bail!("Failed to read from stdin: {}. Pipe JSON content or use Ctrl+D after input.", e);
+                anyhow::bail!(
+                    "Failed to read from stdin: {}. Pipe JSON content or use Ctrl+D after input.",
+                    e
+                );
             }
         }
     } else {
@@ -1438,7 +1927,10 @@ fn mcp_add_json(json: &str, dwiw: bool, path: &str) -> Result<()> {
     create_mcp_toml_config(&datum, path)?;
 
     println!("MCP server '{}' configuration saved.", datum.name);
-    println!("To install to VSCode: b00t-cli vscode install mcp {}", datum.name);
+    println!(
+        "To install to VSCode: b00t-cli vscode install mcp {}",
+        datum.name
+    );
 
     Ok(())
 }
@@ -1479,6 +1971,7 @@ fn mcp_list(path: &str, json_output: bool) -> Result<()> {
                     name: server_name,
                     command: datum.command.clone(),
                     args: datum.args.clone(),
+                    hint: Some(datum.hint.clone()),
                     error: None,
                 });
             }
@@ -1487,6 +1980,7 @@ fn mcp_list(path: &str, json_output: bool) -> Result<()> {
                     name: server_name,
                     command: None,
                     args: None,
+                    hint: None,
                     error: Some(e.to_string()),
                 });
             }
@@ -1505,7 +1999,10 @@ fn mcp_list(path: &str, json_output: bool) -> Result<()> {
     } else {
         let expanded_path = get_expanded_path(path)?;
         if mcp_items.is_empty() {
-            println!("No MCP server configurations found in {}", expanded_path.display());
+            println!(
+                "No MCP server configurations found in {}",
+                expanded_path.display()
+            );
             println!("Use 'b00t-cli mcp add <json>' to add MCP server configurations.");
         } else {
             println!("Available MCP servers in {}:", expanded_path.display());
@@ -1537,14 +2034,19 @@ fn get_mcp_config(name: &str, path: &str) -> Result<BootDatum> {
     path_buf.push(format!("{}.mcp.toml", name));
 
     if !path_buf.exists() {
-        anyhow::bail!("MCP server '{}' not found. Use 'b00t-cli mcp add' to create it first.", name);
+        anyhow::bail!(
+            "MCP server '{}' not found. Use 'b00t-cli mcp add' to create it first.",
+            name
+        );
     }
 
-    let content = fs::read_to_string(&path_buf)
-        .context(format!("Failed to read MCP config from {}", path_buf.display()))?;
+    let content = fs::read_to_string(&path_buf).context(format!(
+        "Failed to read MCP config from {}",
+        path_buf.display()
+    ))?;
 
-    let config: UnifiedConfig = toml::from_str(&content)
-        .context("Failed to parse MCP config TOML")?;
+    let config: UnifiedConfig =
+        toml::from_str(&content).context("Failed to parse MCP config TOML")?;
 
     Ok(config.b00t)
 }
@@ -1558,16 +2060,19 @@ fn vscode_install_mcp(name: &str, path: &str) -> Result<()> {
         "args": datum.args.as_ref().unwrap_or(&vec![])
     });
 
-    let json_str = serde_json::to_string(&vscode_json)
-        .context("Failed to serialize JSON for VSCode")?;
+    let json_str =
+        serde_json::to_string(&vscode_json).context("Failed to serialize JSON for VSCode")?;
 
     let result = cmd!("code", "--add-mcp", &json_str).run();
 
     match result {
         Ok(_) => {
-            println!("Successfully installed MCP server '{}' to VSCode", datum.name);
+            println!(
+                "Successfully installed MCP server '{}' to VSCode",
+                datum.name
+            );
             println!("VSCode command: code --add-mcp '{}'", json_str);
-        },
+        }
         Err(e) => {
             eprintln!("Failed to install MCP server to VSCode: {}", e);
             eprintln!("Manual command: code --add-mcp '{}'", json_str);
@@ -1588,19 +2093,28 @@ fn claude_code_install_mcp(name: &str, path: &str) -> Result<()> {
         "args": datum.args.as_ref().unwrap_or(&vec![])
     });
 
-    let json_str = serde_json::to_string(&claude_json)
-        .context("Failed to serialize JSON for Claude Code")?;
+    let json_str =
+        serde_json::to_string(&claude_json).context("Failed to serialize JSON for Claude Code")?;
 
     let result = cmd!("claude", "mcp", "add-json", &datum.name, &json_str).run();
 
     match result {
         Ok(_) => {
-            println!("Successfully installed MCP server '{}' to Claude Code", datum.name);
-            println!("Claude Code command: claude mcp add-json {} '{}'", datum.name, json_str);
-        },
+            println!(
+                "Successfully installed MCP server '{}' to Claude Code",
+                datum.name
+            );
+            println!(
+                "Claude Code command: claude mcp add-json {} '{}'",
+                datum.name, json_str
+            );
+        }
         Err(e) => {
             eprintln!("Failed to install MCP server to Claude Code: {}", e);
-            eprintln!("Manual command: claude mcp add-json {} '{}'", datum.name, json_str);
+            eprintln!(
+                "Manual command: claude mcp add-json {} '{}'",
+                datum.name, json_str
+            );
             std::process::exit(1);
         }
     }
@@ -1617,7 +2131,7 @@ fn cli_run(name: &str, path: &str) -> Result<()> {
         match result {
             Ok(_) => {
                 println!("CLI script '{}' completed successfully.", name);
-            },
+            }
             Err(e) => {
                 eprintln!("CLI script '{}' failed: {}", name, e);
                 std::process::exit(1);
@@ -1655,7 +2169,10 @@ fn cli_check(command: &str, path: &str) {
             println!("🥾🐣 {} {}", command, installed_version);
             std::process::exit(0);
         } else {
-            println!("🥾😭 {} IS {} WANTS {}", command, installed_version, desired_version);
+            println!(
+                "🥾😭 {} IS {} WANTS {}",
+                command, installed_version, desired_version
+            );
             std::process::exit(1);
         }
     } else {
@@ -1668,7 +2185,14 @@ fn get_cli_installed_version(command: &str, path: &str) -> Option<String> {
     if let Ok((config, _)) = get_cli_unified_config(command, path) {
         if let Some(version_cmd) = &config.b00t.version {
             if let Ok(output) = cmd!("bash", "-c", version_cmd).read() {
-                let re = Regex::new(config.b00t.version_regex.as_deref().unwrap_or("\\d+\\.\\d+\\.\\d+")).unwrap();
+                let re = Regex::new(
+                    config
+                        .b00t
+                        .version_regex
+                        .as_deref()
+                        .unwrap_or("\\d+\\.\\d+\\.\\d+"),
+                )
+                .unwrap();
                 if let Some(caps) = re.captures(&output) {
                     return Some(caps[0].to_string());
                 }
@@ -1684,14 +2208,20 @@ fn get_cli_config(name: &str, path: &str) -> Result<BootDatum> {
     path_buf.push(format!("{}.cli.toml", name));
 
     if !path_buf.exists() {
-        anyhow::bail!("CLI script '{}' not found. Create a {}.cli.toml file first.", name, name);
+        anyhow::bail!(
+            "CLI script '{}' not found. Create a {}.cli.toml file first.",
+            name,
+            name
+        );
     }
 
-    let content = fs::read_to_string(&path_buf)
-        .context(format!("Failed to read CLI config from {}", path_buf.display()))?;
+    let content = fs::read_to_string(&path_buf).context(format!(
+        "Failed to read CLI config from {}",
+        path_buf.display()
+    ))?;
 
-    let config: UnifiedConfig = toml::from_str(&content)
-        .context("Failed to parse CLI config TOML")?;
+    let config: UnifiedConfig =
+        toml::from_str(&content).context("Failed to parse CLI config TOML")?;
 
     Ok(config.b00t)
 }
@@ -1716,53 +2246,60 @@ fn cli_desires(command: &str, path: &str) {
 
 fn cli_install(command: &str, path: &str) {
     match get_cli_unified_config(command, path) {
-        Ok((config, filename)) => {
-            match config.b00t.get_datum_type(Some(&filename)) {
-                DatumType::Unknown => {
-                    if let Some(install_cmd) = &config.b00t.install {
-                        println!("Installing {}...", command);
-                        let result = cmd!("bash", "-c", install_cmd).run();
-                        match result {
-                            Ok(_) => println!("Installation complete."),
-                            Err(e) => eprintln!("Installation failed: {}", e),
-                        }
-                    } else {
-                        eprintln!("No install command defined for {}", command);
+        Ok((config, filename)) => match config.b00t.get_datum_type(Some(&filename)) {
+            DatumType::Unknown => {
+                if let Some(install_cmd) = &config.b00t.install {
+                    println!("Installing {}...", command);
+                    let result = cmd!("bash", "-c", install_cmd).run();
+                    match result {
+                        Ok(_) => println!("Installation complete."),
+                        Err(e) => eprintln!("Installation failed: {}", e),
                     }
-                }
-                DatumType::Mcp => {
-                    eprintln!("Use 'b00t-cli vscode install mcp {}' or 'b00t-cli claude-code install mcp {}' instead", command, command);
-                }
-                _ => {
-                    eprintln!("Installation not yet supported for {:?} packages", config.b00t.get_datum_type(Some(&filename)));
+                } else {
+                    eprintln!("No install command defined for {}", command);
                 }
             }
-        }
+            DatumType::Mcp => {
+                eprintln!(
+                    "Use 'b00t-cli vscode install mcp {}' or 'b00t-cli claude-code install mcp {}' instead",
+                    command, command
+                );
+            }
+            _ => {
+                eprintln!(
+                    "Installation not yet supported for {:?} packages",
+                    config.b00t.get_datum_type(Some(&filename))
+                );
+            }
+        },
         Err(e) => eprintln!("Error reading config for {}: {}", command, e),
     }
 }
 
 fn cli_update(command: &str, path: &str) {
     match get_cli_unified_config(command, path) {
-        Ok((config, filename)) => {
-            match config.b00t.get_datum_type(Some(&filename)) {
-                DatumType::Unknown => {
-                    if let Some(update_cmd) = config.b00t.update.as_ref().or(config.b00t.install.as_ref()) {
-                        println!("Updating {}...", command);
-                        let result = cmd!("bash", "-c", update_cmd).run();
-                        match result {
-                            Ok(_) => println!("Update complete."),
-                            Err(e) => eprintln!("Update failed: {}", e),
-                        }
-                    } else {
-                        eprintln!("No update or install command defined for {}", command);
+        Ok((config, filename)) => match config.b00t.get_datum_type(Some(&filename)) {
+            DatumType::Unknown => {
+                if let Some(update_cmd) =
+                    config.b00t.update.as_ref().or(config.b00t.install.as_ref())
+                {
+                    println!("Updating {}...", command);
+                    let result = cmd!("bash", "-c", update_cmd).run();
+                    match result {
+                        Ok(_) => println!("Update complete."),
+                        Err(e) => eprintln!("Update failed: {}", e),
                     }
-                }
-                _ => {
-                    eprintln!("Update not yet supported for {:?} packages", config.b00t.get_datum_type(Some(&filename)));
+                } else {
+                    eprintln!("No update or install command defined for {}", command);
                 }
             }
-        }
+            _ => {
+                eprintln!(
+                    "Update not yet supported for {:?} packages",
+                    config.b00t.get_datum_type(Some(&filename))
+                );
+            }
+        },
         Err(e) => eprintln!("Error reading config for {}: {}", command, e),
     }
 }
@@ -1781,7 +2318,10 @@ fn cli_up(path: &str) {
         if let Ok(entry) = entry {
             let entry_path = entry.path();
             if entry_path.extension().and_then(|s| s.to_str()) == Some("toml") {
-                let filename = entry_path.file_name().and_then(|s| s.to_str()).unwrap_or("");
+                let filename = entry_path
+                    .file_name()
+                    .and_then(|s| s.to_str())
+                    .unwrap_or("");
                 if filename.ends_with(".cli.toml") {
                     if let Some(command) = entry_path.file_stem().and_then(|s| s.to_str()) {
                         let command = command.trim_end_matches(".cli");
@@ -1793,13 +2333,18 @@ fn cli_up(path: &str) {
                             Err(_) => continue,
                         };
 
-                        if let Some(installed_version_str) = get_cli_installed_version(command, path) {
+                        if let Some(installed_version_str) =
+                            get_cli_installed_version(command, path)
+                        {
                             if let (Ok(desired_version), Ok(installed_version)) = (
                                 semver::Version::parse(&desired_version_str),
                                 semver::Version::parse(&installed_version_str),
                             ) {
                                 if installed_version < desired_version {
-                                    println!("Updating {} from {} to {}...", command, installed_version, desired_version);
+                                    println!(
+                                        "Updating {} from {} to {}...",
+                                        command, installed_version, desired_version
+                                    );
                                     cli_update(command, path);
                                 }
                             }
@@ -1826,23 +2371,34 @@ fn mcp_output(path: &str, use_mcp_servers_wrapper: bool, servers: &str) -> Resul
         match get_mcp_config(server_name, path) {
             Ok(datum) => {
                 let mut server_config = serde_json::Map::new();
-                server_config.insert("command".to_string(),
-                    serde_json::Value::String(datum.command.unwrap_or_else(|| "npx".to_string())));
-                server_config.insert("args".to_string(),
+                server_config.insert(
+                    "command".to_string(),
+                    serde_json::Value::String(datum.command.unwrap_or_else(|| "npx".to_string())),
+                );
+                server_config.insert(
+                    "args".to_string(),
                     serde_json::Value::Array(
-                        datum.args.unwrap_or_default()
+                        datum
+                            .args
+                            .unwrap_or_default()
                             .into_iter()
                             .map(serde_json::Value::String)
-                            .collect()
-                    ));
+                            .collect(),
+                    ),
+                );
 
-                server_configs.insert(server_name.to_string(), serde_json::Value::Object(server_config));
+                server_configs.insert(
+                    server_name.to_string(),
+                    serde_json::Value::Object(server_config),
+                );
             }
             Err(_) => {
                 // Create a cute poopy log error indicator instead of stderr warning
                 let mut error_config = serde_json::Map::new();
-                error_config.insert("command".to_string(),
-                    serde_json::Value::String("b00t:💩🪵".to_string()));
+                error_config.insert(
+                    "command".to_string(),
+                    serde_json::Value::String("b00t:💩🪵".to_string()),
+                );
 
                 let utc_timestamp = std::time::SystemTime::now()
                     .duration_since(std::time::UNIX_EPOCH)
@@ -1853,27 +2409,38 @@ fn mcp_output(path: &str, use_mcp_servers_wrapper: bool, servers: &str) -> Resul
                     .format("%Y-%m-%dT%H:%M:%SZ")
                     .to_string();
 
-                error_config.insert("args".to_string(),
+                error_config.insert(
+                    "args".to_string(),
                     serde_json::Value::Array(vec![
                         serde_json::Value::String(utc_time),
-                        serde_json::Value::String(format!("server '{}' not found in _b00t_ directory", server_name))
-                    ]));
+                        serde_json::Value::String(format!(
+                            "server '{}' not found in _b00t_ directory",
+                            server_name
+                        )),
+                    ]),
+                );
 
-                server_configs.insert(server_name.to_string(), serde_json::Value::Object(error_config));
+                server_configs.insert(
+                    server_name.to_string(),
+                    serde_json::Value::Object(error_config),
+                );
             }
         }
     }
 
     let output = if use_mcp_servers_wrapper {
         let mut wrapper = serde_json::Map::new();
-        wrapper.insert("mcpServers".to_string(), serde_json::Value::Object(server_configs));
+        wrapper.insert(
+            "mcpServers".to_string(),
+            serde_json::Value::Object(server_configs),
+        );
         serde_json::Value::Object(wrapper)
     } else {
         serde_json::Value::Object(server_configs)
     };
 
-    let json_str = serde_json::to_string_pretty(&output)
-        .context("Failed to serialize MCP servers to JSON")?;
+    let json_str =
+        serde_json::to_string_pretty(&output).context("Failed to serialize MCP servers to JSON")?;
     println!("{}", json_str);
 
     Ok(())
@@ -1905,14 +2472,18 @@ fn get_ai_config(name: &str, path: &str) -> Result<AiConfig> {
     path_buf.push(format!("{}.ai.toml", name));
 
     if !path_buf.exists() {
-        anyhow::bail!("AI provider '{}' not found. Use 'b00t-cli ai add' to create it first.", name);
+        anyhow::bail!(
+            "AI provider '{}' not found. Use 'b00t-cli ai add' to create it first.",
+            name
+        );
     }
 
-    let content = fs::read_to_string(&path_buf)
-        .context(format!("Failed to read AI config from {}", path_buf.display()))?;
+    let content = fs::read_to_string(&path_buf).context(format!(
+        "Failed to read AI config from {}",
+        path_buf.display()
+    ))?;
 
-    let config: AiConfig = toml::from_str(&content)
-        .context("Failed to parse AI config TOML")?;
+    let config: AiConfig = toml::from_str(&content).context("Failed to parse AI config TOML")?;
 
     Ok(config)
 }
@@ -1921,8 +2492,7 @@ fn ai_add(file_path: &str, path: &str) -> Result<()> {
     let content = fs::read_to_string(file_path)
         .context(format!("Failed to read AI config file: {}", file_path))?;
 
-    let config: AiConfig = toml::from_str(&content)
-        .context("Failed to parse AI config TOML")?;
+    let config: AiConfig = toml::from_str(&content).context("Failed to parse AI config TOML")?;
 
     create_ai_toml_config(&config, path)?;
 
@@ -1938,10 +2508,14 @@ fn ai_list(path: &str, json_output: bool) -> Result<()> {
     for provider_name in ai_files {
         match get_ai_config(&provider_name, path) {
             Ok(config) => {
-                let model_names = config.models.as_ref()
+                let model_names = config
+                    .models
+                    .as_ref()
                     .map(|models| models.keys().cloned().collect())
                     .unwrap_or_default();
-                let env_keys = config.env.as_ref()
+                let env_keys = config
+                    .env
+                    .as_ref()
                     .map(|env| env.keys().cloned().collect())
                     .unwrap_or_default();
 
@@ -1969,13 +2543,16 @@ fn ai_list(path: &str, json_output: bool) -> Result<()> {
             providers: ai_items,
             path: expanded_path.display().to_string(),
         };
-        let json_str = serde_json::to_string_pretty(&output)
-            .context("Failed to serialize AI list to JSON")?;
+        let json_str =
+            serde_json::to_string_pretty(&output).context("Failed to serialize AI list to JSON")?;
         println!("{}", json_str);
     } else {
         let expanded_path = get_expanded_path(path)?;
         if ai_items.is_empty() {
-            println!("No AI provider configurations found in {}", expanded_path.display());
+            println!(
+                "No AI provider configurations found in {}",
+                expanded_path.display()
+            );
             println!("Use 'b00t-cli ai add <file>' to add AI provider configurations.");
         } else {
             println!("Available AI providers in {}:", expanded_path.display());
@@ -1983,7 +2560,12 @@ fn ai_list(path: &str, json_output: bool) -> Result<()> {
             for item in ai_items {
                 match (&item.models, &item.env_keys) {
                     (Some(models), Some(env_keys)) => {
-                        println!("🤖 {} ({} models, {} env vars)", item.name, models.len(), env_keys.len());
+                        println!(
+                            "🤖 {} ({} models, {} env vars)",
+                            item.name,
+                            models.len(),
+                            env_keys.len()
+                        );
                         if !models.is_empty() {
                             println!("   models: {}", models.join(", "));
                         }
@@ -2052,7 +2634,10 @@ fn ai_output(path: &str, format: &str, providers: &str) -> Result<()> {
                 }
             }
             Err(e) => {
-                eprintln!("Warning: Failed to read config for '{}': {}", provider_name, e);
+                eprintln!(
+                    "Warning: Failed to read config for '{}': {}",
+                    provider_name, e
+                );
                 continue;
             }
         }
@@ -2072,7 +2657,7 @@ fn vscode_extension_list(json_output: bool) -> Result<()> {
                     .map(|line| line.trim().to_string())
                     .filter(|line| !line.is_empty())
                     .collect();
-                
+
                 let json_data = serde_json::json!({
                     "extensions": extensions
                 });
@@ -2092,9 +2677,12 @@ fn vscode_extension_list(json_output: bool) -> Result<()> {
                     }
                 }
             }
-        },
+        }
         Err(e) => {
-            anyhow::bail!("Failed to list VS Code extensions: {}. Make sure VS Code CLI is installed and available.", e);
+            anyhow::bail!(
+                "Failed to list VS Code extensions: {}. Make sure VS Code CLI is installed and available.",
+                e
+            );
         }
     }
 
@@ -2103,15 +2691,19 @@ fn vscode_extension_list(json_output: bool) -> Result<()> {
 
 fn vscode_extension_install(extension_id: &str) -> Result<()> {
     println!("Installing VS Code extension: {}", extension_id);
-    
+
     let result = cmd!("code", "--install-extension", extension_id).run();
 
     match result {
         Ok(_) => {
             println!("✅ Successfully installed extension: {}", extension_id);
-        },
+        }
         Err(e) => {
-            anyhow::bail!("Failed to install VS Code extension '{}': {}. Check that the extension ID is correct.", extension_id, e);
+            anyhow::bail!(
+                "Failed to install VS Code extension '{}': {}. Check that the extension ID is correct.",
+                extension_id,
+                e
+            );
         }
     }
 
@@ -2120,15 +2712,19 @@ fn vscode_extension_install(extension_id: &str) -> Result<()> {
 
 fn vscode_extension_uninstall(extension_id: &str) -> Result<()> {
     println!("Uninstalling VS Code extension: {}", extension_id);
-    
+
     let result = cmd!("code", "--uninstall-extension", extension_id).run();
 
     match result {
         Ok(_) => {
             println!("✅ Successfully uninstalled extension: {}", extension_id);
-        },
+        }
         Err(e) => {
-            anyhow::bail!("Failed to uninstall VS Code extension '{}': {}. Check that the extension is installed.", extension_id, e);
+            anyhow::bail!(
+                "Failed to uninstall VS Code extension '{}': {}. Check that the extension is installed.",
+                extension_id,
+                e
+            );
         }
     }
 

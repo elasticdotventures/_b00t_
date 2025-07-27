@@ -1,0 +1,6 @@
+[b00t]
+name = "kubernetes"
+type = "mcp"
+hint = "Kubernetes cluster management via MCP"
+command = "npx"
+args = ["mcp-server-kubernetes"]

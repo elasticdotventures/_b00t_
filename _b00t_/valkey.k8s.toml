@@ -1,0 +1,22 @@
+[b00t]
+name = "valkey"
+type = "k8s"
+hint = "Valkey (Redis-compatible) in-memory data store deployed via Helm"
+desires = "7.2.5"
+keywords = ["redis", "valkey", "cache", "inmemory", "database", "kv-store"]
+
+# K8s specific fields
+chart_path = "k8s.🚢/valkey"  # Relative to REPO_ROOT
+namespace = "valkey-system"
+values_file = "values.yaml"  # Relative to chart_path
+
+# OCI URI for the valkey container image
+oci_uri = "docker.io/valkey/valkey:7.2.5-alpine"
+
+# Environment variables that can be passed to the chart
+[b00t.env]
+NAMESPACE = "valkey-system"
+RELEASE_NAME = "valkey"
+IMAGE_TAG = "7.2.5-alpine"
+REDIS_PASSWORD = ""
+PERSISTENT_STORAGE = "true"

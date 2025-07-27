@@ -1,0 +1,89 @@
+# Default values for b00t-mcp
+global:
+  b00tPath: "/home/brianh/.dotfiles/_b00t_"
+  namespace: b00t-mcp
+
+# MCP Servers configuration
+mcpServers:
+  - name: "lsp"
+    image: "docker.io/jonrad/lsp-mcp:0.3.1"
+    type: "mcp"
+    port: 3000
+    resources:
+      requests:
+        cpu: "100m"
+        memory: "128Mi"
+      limits:
+        cpu: "500m"
+        memory: "512Mi"
+    env: []
+    
+  - name: "taskmaster-ai"
+    image: "node:20-alpine"
+    type: "mcp"
+    port: 3001
+    command: ["npx"]
+    args: ["-y", "--package=task-master-ai", "task-master-ai"]
+    resources:
+      requests:
+        cpu: "100m"
+        memory: "256Mi"
+      limits:
+        cpu: "1000m"
+        memory: "1Gi"
+    env: []
+
+# Service configuration
+service:
+  type: ClusterIP
+  ports:
+    - name: http
+      port: 80
+      targetPort: 3000
+      protocol: TCP
+
+# Ingress configuration
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+  hosts:
+    - host: mcp.local
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []
+
+# Security context
+securityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  runAsGroup: 1000
+  fsGroup: 1000
+  capabilities:
+    drop:
+      - ALL
+
+# Network policies
+networkPolicy:
+  enabled: true
+  
+# Pod security policy
+podSecurityPolicy:
+  enabled: true
+
+# Resource quotas
+resourceQuota:
+  enabled: true
+  requests:
+    cpu: "2"
+    memory: "4Gi"
+  limits:
+    cpu: "4"
+    memory: "8Gi"
+
+# Monitoring
+monitoring:
+  enabled: false
+  serviceMonitor:
+    enabled: false

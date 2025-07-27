@@ -1,7 +1,7 @@
+use crate::traits::*;
+use crate::{BootDatum, check_command_available, get_config};
 use anyhow::Result;
 use duct::cmd;
-use crate::{BootDatum, get_config, check_command_available};
-use crate::traits::*;
 
 pub struct AptDatum {
     pub datum: BootDatum,
@@ -10,20 +10,16 @@ pub struct AptDatum {
 impl AptDatum {
     pub fn from_config(name: &str, path: &str) -> Result<Self> {
         let (config, _filename) = get_config(name, path).map_err(|e| anyhow::anyhow!("{}", e))?;
-        Ok(AptDatum {
-            datum: config.b00t,
-        })
+        Ok(AptDatum { datum: config.b00t })
     }
 
     fn is_package_installed(&self) -> bool {
         if let Some(package_name) = &self.datum.package_name {
             let result = cmd!("dpkg", "-l", package_name).read();
             match result {
-                Ok(output) => {
-                    output.lines().any(|line| {
-                        line.starts_with("ii") && line.contains(package_name)
-                    })
-                }
+                Ok(output) => output
+                    .lines()
+                    .any(|line| line.starts_with("ii") && line.contains(package_name)),
                 Err(_) => false,
             }
         } else {
@@ -64,7 +60,7 @@ impl AptDatum {
 
 impl TryFrom<(&str, &str)> for AptDatum {
     type Error = anyhow::Error;
-    
+
     fn try_from((name, path): (&str, &str)) -> Result<Self, Self::Error> {
         Self::from_config(name, path)
     }
@@ -72,12 +68,12 @@ impl TryFrom<(&str, &str)> for AptDatum {
 
 impl DatumChecker for AptDatum {
     fn is_installed(&self) -> bool {
-        check_command_available("apt") && 
-        check_command_available("dpkg") && 
-        Self::is_ubuntu() && 
-        self.is_package_installed()
+        check_command_available("apt")
+            && check_command_available("dpkg")
+            && Self::is_ubuntu()
+            && self.is_package_installed()
     }
-    
+
     fn current_version(&self) -> Option<String> {
         if self.is_package_installed() {
             self.get_package_version()
@@ -85,18 +81,19 @@ impl DatumChecker for AptDatum {
             None
         }
     }
-    
+
     fn desired_version(&self) -> Option<String> {
         self.datum.desires.clone()
     }
-    
+
     fn version_status(&self) -> VersionStatus {
         if !check_command_available("apt") || !Self::is_ubuntu() {
             return VersionStatus::Missing;
         }
-        
+
         if self.is_package_installed() {
-            if let (Some(current), Some(desired)) = (self.current_version(), self.desired_version()) {
+            if let (Some(current), Some(desired)) = (self.current_version(), self.desired_version())
+            {
                 if current == desired {
                     VersionStatus::Match
                 } else {
@@ -115,15 +112,15 @@ impl StatusProvider for AptDatum {
     fn name(&self) -> &str {
         &self.datum.name
     }
-    
+
     fn subsystem(&self) -> &str {
         "apt"
     }
-    
+
     fn hint(&self) -> &str {
         &self.datum.hint
     }
-    
+
     fn is_disabled(&self) -> bool {
         !check_command_available("apt") || !Self::is_ubuntu()
     }
@@ -133,7 +130,7 @@ impl FilterLogic for AptDatum {
     fn is_available(&self) -> bool {
         !DatumChecker::is_installed(self) && self.prerequisites_satisfied()
     }
-    
+
     fn prerequisites_satisfied(&self) -> bool {
         if let Some(require) = &self.datum.require {
             self.evaluate_constraints(require)
@@ -141,11 +138,10 @@ impl FilterLogic for AptDatum {
             check_command_available("apt") && Self::is_ubuntu()
         }
     }
-    
+
     fn evaluate_constraints(&self, require: &[String]) -> bool {
         self.evaluate_constraints_default(require)
     }
-    
 }
 
 impl ConstraintEvaluator for AptDatum {
@@ -159,5 +155,3 @@ impl DatumProvider for AptDatum {
         &self.datum
     }
 }
-
-

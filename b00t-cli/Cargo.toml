@@ -26,4 +26,5 @@ tera = "1.20.0"
 dirs = "5.0"
 
 [dev-dependencies]
+assert_cmd = "2.0.17"
 tempfile = "3.0"

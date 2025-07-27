@@ -4,8 +4,8 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
 
-use crate::{get_mcp_config, BootDatum};
 use crate::utils::get_workspace_root;
+use crate::{BootDatum, get_mcp_config};
 
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
@@ -44,10 +44,10 @@ impl From<BootDatum> for McpServerConfig {
         McpServerConfig {
             command: datum.command.unwrap_or_default(),
             args: datum.args,
-            env: None, // Not yet supported in b00t-cli BootDatum
-            cwd: None, // Not yet supported in b00t-cli BootDatum
-            timeout: None, // Not yet supported in b00t-cli BootDatum
-            trust: None, // Not yet supported in b00t-cli BootDatum
+            env: None,           // Not yet supported in b00t-cli BootDatum
+            cwd: None,           // Not yet supported in b00t-cli BootDatum
+            timeout: None,       // Not yet supported in b00t-cli BootDatum
+            trust: None,         // Not yet supported in b00t-cli BootDatum
             include_tools: None, // Not yet supported in b00t-cli BootDatum
             exclude_tools: None, // Not yet supported in b00t-cli BootDatum
         }

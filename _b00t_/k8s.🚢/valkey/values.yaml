@@ -1,0 +1,95 @@
+# Default values for valkey
+replicaCount: 1
+
+image:
+  repository: valkey/valkey
+  pullPolicy: IfNotPresent
+  tag: "7.2.5-alpine"
+
+nameOverride: ""
+fullnameOverride: ""
+
+serviceAccount:
+  create: true
+  automount: true
+  annotations: {}
+  name: ""
+
+podAnnotations: {}
+podLabels: {}
+
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 999
+  fsGroup: 999
+
+securityContext:
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+    - ALL
+  readOnlyRootFilesystem: true
+
+service:
+  type: ClusterIP
+  port: 6379
+  targetPort: 6379
+
+persistence:
+  enabled: true
+  storageClass: ""
+  accessMode: ReadWriteOnce
+  size: 8Gi
+  annotations: {}
+
+resources:
+  limits:
+    cpu: 500m
+    memory: 512Mi
+  requests:
+    cpu: 100m
+    memory: 128Mi
+
+livenessProbe:
+  tcpSocket:
+    port: 6379
+  initialDelaySeconds: 30
+  periodSeconds: 10
+
+readinessProbe:
+  exec:
+    command:
+    - sh
+    - -c
+    - "valkey-cli ping"
+  initialDelaySeconds: 5
+  periodSeconds: 5
+
+autoscaling:
+  enabled: false
+  minReplicas: 1
+  maxReplicas: 100
+  targetCPUUtilizationPercentage: 80
+
+# Valkey configuration
+config:
+  # Save snapshots
+  save: "900 1 300 10 60 10000"
+  # Max memory policy
+  maxmemory-policy: "allkeys-lru"
+  # AOF persistence
+  appendonly: "yes"
+  # TCP keepalive
+  tcp-keepalive: "300"
+
+# Auth configuration
+auth:
+  enabled: false
+  # existingSecret: valkey-auth
+  # existingSecretPasswordKey: password
+
+nodeSelector: {}
+
+tolerations: []
+
+affinity: {}
