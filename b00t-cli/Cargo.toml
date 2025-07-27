@@ -12,16 +12,19 @@ name = "b00t_cli"
 path = "src/lib.rs"
 
 [dependencies]
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
-toml = "0.8"
-clap = { version = "4.5.4", features = ["derive", "env"] }
-regex = "1.10.5"
+# Shared workspace dependencies
+serde = { workspace = true }
+serde_json = { workspace = true }
+toml = { workspace = true }
+clap = { workspace = true }
+regex = { workspace = true }
+anyhow = { workspace = true }
+chrono = { workspace = true }
+
+# b00t-cli specific dependencies
 duct = "0.13.6"
 shellexpand = "3.1.0"
 semver = "1.0"
-anyhow = "1.0"
-chrono = { version = "0.4", features = ["serde"] }
 tera = "1.20.0"
 dirs = "5.0"
 
