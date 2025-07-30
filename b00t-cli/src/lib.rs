@@ -580,6 +580,254 @@ pub fn get_config(
     std::process::exit(100);
 }
 
+pub fn get_mcp_config(name: &str, path: &str) -> Result<BootDatum> {
+    use std::fs;
+    use anyhow::Context;
+    
+    let mut path_buf = get_expanded_path(path)?;
+    path_buf.push(format!("{}.mcp.toml", name));
+
+    if !path_buf.exists() {
+        anyhow::bail!(
+            "MCP server '{}' not found. Use 'b00t-cli mcp add' to create it first.",
+            name
+        );
+    }
+
+    let content = fs::read_to_string(&path_buf).context(format!(
+        "Failed to read MCP config from {}",
+        path_buf.display()
+    ))?;
+
+    let config: UnifiedConfig =
+        toml::from_str(&content).context("Failed to parse MCP config TOML")?;
+
+    Ok(config.b00t)
+}
+
+pub fn get_mcp_toml_files(path: &str) -> Result<Vec<String>> {
+    use std::fs;
+    use anyhow::Context;
+    
+    let expanded_path = get_expanded_path(path)?;
+    let entries = fs::read_dir(&expanded_path)
+        .with_context(|| format!("Error reading directory {}", expanded_path.display()))?;
+
+    let mut mcp_files = Vec::new();
+    for entry in entries {
+        if let Ok(entry) = entry {
+            let entry_path = entry.path();
+            if let Some(file_name) = entry_path.file_name().and_then(|s| s.to_str()) {
+                if file_name.ends_with(".mcp.toml") {
+                    if let Some(server_name) = file_name.strip_suffix(".mcp.toml") {
+                        mcp_files.push(server_name.to_string());
+                    }
+                }
+            }
+        }
+    }
+    Ok(mcp_files)
+}
+
+pub fn mcp_list(path: &str, json_output: bool) -> Result<()> {
+    use anyhow::Context;
+    
+    let mcp_files = get_mcp_toml_files(path)?;
+    let mut mcp_items = Vec::new();
+
+    for server_name in mcp_files {
+        match get_mcp_config(&server_name, path) {
+            Ok(datum) => {
+                mcp_items.push(McpListItem {
+                    name: server_name,
+                    command: datum.command.clone(),
+                    args: datum.args.clone(),
+                    hint: Some(datum.hint.clone()),
+                    error: None,
+                });
+            }
+            Err(e) => {
+                mcp_items.push(McpListItem {
+                    name: server_name,
+                    command: None,
+                    args: None,
+                    hint: None,
+                    error: Some(e.to_string()),
+                });
+            }
+        }
+    }
+
+    if json_output {
+        let expanded_path = get_expanded_path(path)?;
+        let output = McpListOutput {
+            servers: mcp_items,
+            path: expanded_path.display().to_string(),
+        };
+        let json_str = serde_json::to_string_pretty(&output)
+            .context("Failed to serialize MCP list to JSON")?;
+        println!("{}", json_str);
+    } else {
+        let expanded_path = get_expanded_path(path)?;
+        if mcp_items.is_empty() {
+            println!(
+                "No MCP server configurations found in {}",
+                expanded_path.display()
+            );
+            println!("Use 'b00t-cli mcp add <json>' to add MCP server configurations.");
+        } else {
+            println!("Available MCP servers in {}:", expanded_path.display());
+            println!();
+            for item in mcp_items {
+                match (&item.command, &item.args) {
+                    (Some(command), Some(args)) => {
+                        println!("📋 {} ({})", item.name, command);
+                        if !args.is_empty() {
+                            println!("   args: {}", args.join(" "));
+                        }
+                    }
+                    _ => {
+                        println!("❌ {} (error reading config)", item.name);
+                    }
+                }
+            }
+            println!();
+            println!("To install to VSCode: b00t-cli vscode install mcp <name>");
+            println!("To install to Claude Code: b00t-cli claude-code install mcp <name>");
+        }
+    }
+
+    Ok(())
+}
+
+pub fn mcp_add_json(json: &str, dwiw: bool, path: &str) -> Result<()> {
+    use std::io::{self, Read};
+    
+    let json_content = if json == "-" {
+        let mut buffer = String::new();
+        match io::stdin().read_to_string(&mut buffer) {
+            Ok(_) => {
+                let trimmed = buffer.trim();
+                if trimmed.is_empty() {
+                    anyhow::bail!(
+                        "No input provided. Pipe JSON content or press Ctrl+D after pasting."
+                    );
+                }
+                trimmed.to_string()
+            }
+            Err(e) => {
+                anyhow::bail!(
+                    "Failed to read from stdin: {}. Pipe JSON content or use Ctrl+D after input.",
+                    e
+                );
+            }
+        }
+    } else {
+        json.trim().to_string()
+    };
+
+    let datum = normalize_mcp_json(&json_content, dwiw)?;
+
+    create_mcp_toml_config(&datum, path)?;
+
+    println!("MCP server '{}' configuration saved.", datum.name);
+    println!(
+        "To install to VSCode: b00t-cli vscode install mcp {}",
+        datum.name
+    );
+
+    Ok(())
+}
+
+pub fn mcp_output(path: &str, use_mcp_servers_wrapper: bool, servers: &str) -> Result<()> {
+    use anyhow::Context;
+    
+    let requested_servers: Vec<&str> = servers.split(',').map(|s| s.trim()).collect();
+    let mut server_configs = serde_json::Map::new();
+
+    for server_name in requested_servers {
+        if server_name.is_empty() {
+            continue;
+        }
+
+        match get_mcp_config(server_name, path) {
+            Ok(datum) => {
+                let mut server_config = serde_json::Map::new();
+                server_config.insert(
+                    "command".to_string(),
+                    serde_json::Value::String(datum.command.unwrap_or_else(|| "npx".to_string())),
+                );
+                server_config.insert(
+                    "args".to_string(),
+                    serde_json::Value::Array(
+                        datum
+                            .args
+                            .unwrap_or_default()
+                            .into_iter()
+                            .map(serde_json::Value::String)
+                            .collect(),
+                    ),
+                );
+
+                server_configs.insert(
+                    server_name.to_string(),
+                    serde_json::Value::Object(server_config),
+                );
+            }
+            Err(_) => {
+                // Create a cute poopy log error indicator instead of stderr warning
+                let mut error_config = serde_json::Map::new();
+                error_config.insert(
+                    "command".to_string(),
+                    serde_json::Value::String("b00t:💩🪵".to_string()),
+                );
+
+                let utc_timestamp = std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap()
+                    .as_secs();
+                let utc_time = chrono::DateTime::from_timestamp(utc_timestamp as i64, 0)
+                    .unwrap()
+                    .format("%Y-%m-%dT%H:%M:%SZ")
+                    .to_string();
+
+                error_config.insert(
+                    "args".to_string(),
+                    serde_json::Value::Array(vec![
+                        serde_json::Value::String(utc_time),
+                        serde_json::Value::String(format!(
+                            "server '{}' not found in _b00t_ directory",
+                            server_name
+                        )),
+                    ]),
+                );
+
+                server_configs.insert(
+                    server_name.to_string(),
+                    serde_json::Value::Object(error_config),
+                );
+            }
+        }
+    }
+
+    let output = if use_mcp_servers_wrapper {
+        let mut wrapper = serde_json::Map::new();
+        wrapper.insert(
+            "mcpServers".to_string(),
+            serde_json::Value::Object(server_configs),
+        );
+        serde_json::Value::Object(wrapper)
+    } else {
+        serde_json::Value::Object(server_configs)
+    };
+
+    let json_str =
+        serde_json::to_string_pretty(&output).context("Failed to serialize MCP servers to JSON")?;
+    println!("{}", json_str);
+
+    Ok(())
+}
+
 // Session management functions
 impl SessionState {
     pub fn new(agent_name: Option<String>) -> Self {

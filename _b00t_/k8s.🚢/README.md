@@ -1,12 +1,37 @@
 # k8s.⛵ - b00t Kubernetes Subsystem
 
 > **Status**: ✅ MCP DEPLOYMENT READY  
-> **Version**: 0.2.0  
-> **Target**: minikube + kube-rs ecosystem  
+> **Version**: 0.3.0  
+> **Target**: minikube + kube-rs ecosystem + kompose integration  
+> **Philosophy**: DRY - Leverage existing tools, focus on b00t-specific value
 
 ## 🎯 Overview
 
-The b00t k8s subsystem provides Kubernetes orchestration capabilities through a curated, batteries-included approach. Built on the kube-rs ecosystem, it enables seamless Docker→k8s translation, pod lifecycle management, and MCP server deployment.
+The b00t k8s subsystem provides **specialized** Kubernetes orchestration capabilities that complement existing tools. Built on the kube-rs ecosystem with kompose integration, it focuses on datum graph convergence, MCP server workflows, and translation capabilities while recommending proven solutions for generic operations.
+
+## 🤝 Integration Strategy (DRY Approach)
+
+### When to Use b00t k8s:
+- **MCP server deployment** and hot-reload workflows
+- **Dockerfile/docker-compose → k8s translation** with datum graph integration
+- **Resource discovery** and sharing between b00t instances
+- **Data convergence** tracking (MCP ↔ Docker ↔ k8s relationships)
+
+### When to Use [mcp-server-kubernetes](https://github.com/Flux159/mcp-server-kubernetes):
+- **Generic kubectl operations** (get, describe, logs, scale)
+- **Troubleshooting workflows** and cluster management
+- **Production k8s management** and monitoring
+- **Advanced k8s features** (RBAC, networking, storage)
+
+```bash
+# Generic operations → use mcp-server-kubernetes
+claude --mcp mcp-server-kubernetes "list all pods in production namespace"
+
+# b00t-specific → use b00t k8s
+b00t-cli k8s deploy --from-dockerfile ./Dockerfile
+b00t-cli k8s deploy-mcp --server taskmaster-ai
+b00t-cli k8s discover --type database
+```
 
 ### ✅ Current Working Features
 - **MCP Server Deployment**: Deploy any b00t MCP server as a Kubernetes pod
@@ -39,21 +64,30 @@ b00t-cli k8s --help
 ```
 
 ### Core Philosophy
-- **NO wheel reinvention** - leverage proven kube-rs patterns
+- **DRY Principle** - delegate generic operations, focus on b00t-specific value
+- **kompose integration** - leverage kompose for docker-compose→k8s translation
 - **Agent-friendly** - transparent resource discovery & hints  
-- **DWIW approach** - "do what i want" with minimal configuration
-- **Data convergence ready** - designed for b00t datum graph integration
+- **Data convergence** - MCP ↔ Docker ↔ k8s relationship tracking
+- **Complementary design** - works alongside mcp-server-kubernetes
 
 ## 🏗️ Architecture
 
 ```
-b00t-cli k8s
-├── client/          # kube-rs client wrapper
-├── resources/       # k8s resource management
-├── translate/       # Docker→k8s translation engine
-├── lifecycle/       # pod/resource lifecycle ops
-├── discovery/       # resource discovery & sharing
-└── mcp/            # MCP server deployment
+b00t-cli k8s                    # Specialized k8s operations
+├── client/                     # kube-rs client wrapper
+├── resources/                  # b00t-managed resource operations  
+├── translate/                  # kompose integration + datum graph
+│   ├── dockerfile.rs           # Dockerfile→Pod (b00t-enhanced)
+│   ├── compose.rs              # kompose wrapper + relationships
+│   └── recommendations.rs      # When to use mcp-server-kubernetes
+├── lifecycle/                  # MCP server lifecycle ops
+├── discovery/                  # resource sharing & "yahoo directory"
+└── mcp/                       # MCP server deployment & hot-reload
+
+External Tools (Recommended):
+├── mcp-server-kubernetes       # Generic kubectl operations
+├── kompose                     # docker-compose→k8s translation
+└── kubectl                     # Direct cluster management
 ```
 
 ### Component Responsibilities
@@ -71,10 +105,10 @@ b00t-cli k8s
 - Cleanup & garbage collection
 
 #### 🔄 Translation Engine (`translate/`)
-- Dockerfile → Pod/Deployment specs
-- docker-compose → Pod collections
-- Helm chart ingestion
-- LLM-powered smart transformations
+- kompose integration for docker-compose → k8s resources
+- Dockerfile → Pod specs with b00t enhancements
+- Datum graph relationship tracking (MCP ↔ Docker ↔ k8s)
+- Recommendation engine for when to use mcp-server-kubernetes
 
 #### 🔄 Lifecycle Operations (`lifecycle/`)
 - Cluster setup/teardown

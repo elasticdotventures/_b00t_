@@ -2,9 +2,21 @@
 
 * MUST NEVER downgrade crates without explicit permission
 * MUST NEVER modify Cargo.toml directly, always run the `cargo add` cli
-* MUST NEVER use xtask patterns for scripts and utilities
+* MUST NEVER use xtask patterns for scripts and utilitie
 
-* we're here to write new and novel code. don't write a database interface. don't even store a dsn. use crates to do the heavy lifting.
+
+. don't write a postgres database interface. don't even store a dsn type -- find existing types exist.
+use crates to do the heavy lifting.
+
+* use existing crates, choose crates using the criteria:
+fit for purprose, stability, popularity
+* using libraries/crates are good for decomposition of your program, they often contain solutions for problems you may not have considered.
+* it is ALWAYS better to fork and patch an existing crate than add more code to your primary codebase.
+
+* 🦀💖🦑  (rust loves git)
+- ALWAYS install + use cocogitto & husky pre-commit checks & tests
+- ALWAYS fix clippy errors.
+- there are examples in ~/.dotfiles/_b00t_/
 
 * Error Handling:
 	- Use ? Operator for Error Propagation: Leverage the ? operator to propagate errors, ensuring that each error variant implements the From trait for seamless conversions.

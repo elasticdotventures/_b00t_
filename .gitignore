@@ -271,10 +271,6 @@ dev-debug.log
 # OS specific
 .DS_Store
 
-# Task files
-# tasks.json
-# tasks/ 
-
 # direnv
 .envrc
 .env
@@ -286,3 +282,10 @@ context_portal/*
 **/~Stashed changes
 **/*~Stashed changes
 **/context_portal
+
+# Task files
+# tasks.json
+# tasks/ 
+.claude/*
+.cursor/*
+.taskmaster/*

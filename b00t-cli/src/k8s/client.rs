@@ -372,6 +372,7 @@ impl K8sClient {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::k8s::DEFAULT_NAMESPACE;
 
     #[test]
     fn test_config_validation() {
