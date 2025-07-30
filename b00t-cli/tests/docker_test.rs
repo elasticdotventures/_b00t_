@@ -45,10 +45,13 @@ POSTGRES_PORT = "5432"
             StatusProvider::hint(&docker_datum),
             "PostgreSQL database server via Docker container"
         );
-        assert_eq!(DatumProvider::datum(&docker_datum).datum_type, Some(DatumType::Docker));
+        assert_eq!(
+            DatumProvider::datum(&docker_datum).datum_type,
+            Some(DatumType::Docker)
+        );
     }
 
-    // 🦨 SKUNK: Docker version parsing test fails due to CLI invocation during config loading  
+    // 🦨 SKUNK: Docker version parsing test fails due to CLI invocation during config loading
     #[ignore]
     #[test]
     fn test_docker_version_parsing() {

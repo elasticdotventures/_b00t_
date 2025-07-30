@@ -1,6 +1,9 @@
 [b00t]
 name = "filesystem"
 type = "mcp"
-hint = "MCP server"
 command = "npx"
-args = ["-y", "@modelcontextprotocol/server-filesystem", "/path/to/allowed/files"]
+args = ["-y", "@modelcontextprotocol/server-filesystem"]
+hint = "File system access MCP server"
+
+[b00t.env]
+FILESYSTEM_ROOT = "/tmp"

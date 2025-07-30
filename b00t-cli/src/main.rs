@@ -104,6 +104,11 @@ enum Commands {
         #[clap(long, help = "Show only available (not installed) tools")]
         available: bool,
     },
+    #[clap(about = "Kubernetes (k8s) cluster and pod management")]
+    K8s {
+        #[clap(subcommand)]
+        k8s_command: K8sCommands,
+    },
     #[clap(about = "Session management")]
     Session {
         #[clap(subcommand)]
@@ -172,6 +177,114 @@ enum McpCommands {
         mcp_servers: bool,
         #[clap(help = "Comma-separated list of MCP server names to output")]
         servers: String,
+    },
+}
+
+#[derive(Parser)]
+enum K8sCommands {
+    #[clap(
+        about = "Deploy a pod from Dockerfile or docker-compose",
+        long_about = "Deploy a pod from Dockerfile or docker-compose.\n\nExamples:\n  b00t-cli k8s deploy --from-dockerfile ./Dockerfile --name web-server\n  b00t-cli k8s deploy --from-compose ./docker-compose.yaml\n  b00t-cli k8s deploy --image nginx:latest --name nginx-test"
+    )]
+    Deploy {
+        #[clap(long, help = "Deploy from Dockerfile", conflicts_with_all = &["from_compose", "image"])]
+        from_dockerfile: Option<String>,
+        #[clap(long, help = "Deploy from docker-compose.yaml", conflicts_with_all = &["from_dockerfile", "image"])]
+        from_compose: Option<String>,
+        #[clap(long, help = "Deploy from container image", conflicts_with_all = &["from_dockerfile", "from_compose"])]
+        image: Option<String>,
+        #[clap(long, help = "Pod name (required for dockerfile/image deployment)")]
+        name: Option<String>,
+        #[clap(long, help = "Namespace (default: default)")]
+        namespace: Option<String>,
+        #[clap(long, help = "Environment variables in KEY=VALUE format")]
+        env: Vec<String>,
+    },
+    #[clap(
+        about = "Deploy MCP server as Kubernetes pod",
+        long_about = "Deploy MCP server as Kubernetes pod.\n\nExamples:\n  b00t-cli k8s deploy-mcp --server filesystem\n  b00t-cli k8s deploy-mcp --server brave-search --namespace mcp-servers"
+    )]
+    DeployMcp {
+        #[clap(long, help = "MCP server name from b00t configuration")]
+        server: String,
+        #[clap(long, help = "Namespace (default: default)")]
+        namespace: Option<String>,
+        #[clap(long, help = "Override pod name")]
+        name: Option<String>,
+    },
+    #[clap(
+        about = "List running pods",
+        long_about = "List running pods managed by b00t.\n\nExamples:\n  b00t-cli k8s list\n  b00t-cli k8s list --namespace kube-system\n  b00t-cli k8s list --all"
+    )]
+    List {
+        #[clap(long, help = "Show pods in specific namespace")]
+        namespace: Option<String>,
+        #[clap(long, help = "Show all pods (not just b00t-managed)")]
+        all: bool,
+        #[clap(long, help = "Output in JSON format")]
+        json: bool,
+    },
+    #[clap(
+        about = "Show pod logs",
+        long_about = "Show logs for a specific pod.\n\nExamples:\n  b00t-cli k8s logs web-server\n  b00t-cli k8s logs --follow web-server\n  b00t-cli k8s logs --previous web-server"
+    )]
+    Logs {
+        #[clap(help = "Pod name")]
+        pod_name: String,
+        #[clap(long, help = "Namespace (default: default)")]
+        namespace: Option<String>,
+        #[clap(short, long, help = "Follow log output")]
+        follow: bool,
+        #[clap(long, help = "Show previous container logs")]
+        previous: bool,
+        #[clap(long, help = "Number of lines to show")]
+        tail: Option<i64>,
+    },
+    #[clap(
+        about = "Delete a pod",
+        long_about = "Delete a pod.\n\nExamples:\n  b00t-cli k8s delete web-server\n  b00t-cli k8s delete --namespace test web-server"
+    )]
+    Delete {
+        #[clap(help = "Pod name")]
+        pod_name: String,
+        #[clap(long, help = "Namespace (default: default)")]
+        namespace: Option<String>,
+    },
+    #[clap(
+        about = "Restart an MCP server pod",
+        long_about = "Restart an MCP server pod.\n\nExamples:\n  b00t-cli k8s restart-mcp filesystem\n  b00t-cli k8s restart-mcp --namespace mcp-servers brave-search"
+    )]
+    RestartMcp {
+        #[clap(help = "MCP server name")]
+        server_name: String,
+        #[clap(long, help = "Namespace (default: default)")]
+        namespace: Option<String>,
+    },
+    #[clap(
+        about = "Show cluster status",
+        long_about = "Show Kubernetes cluster status.\n\nExamples:\n  b00t-cli k8s status\n  b00t-cli k8s status --detailed"
+    )]
+    Status {
+        #[clap(long, help = "Show detailed cluster information")]
+        detailed: bool,
+    },
+    #[clap(
+        about = "Setup minikube cluster",
+        long_about = "Setup and validate minikube cluster.\n\nExamples:\n  b00t-cli k8s setup\n  b00t-cli k8s setup --force"
+    )]
+    Setup {
+        #[clap(long, help = "Force cluster recreate if exists")]
+        force: bool,
+    },
+    #[clap(
+        about = "Teardown cluster resources",
+        long_about = "Teardown cluster or specific resources.\n\nExamples:\n  b00t-cli k8s teardown --all\n  b00t-cli k8s teardown --namespace test"
+    )]
+    Teardown {
+        #[clap(long, help = "Teardown entire cluster")]
+        all: bool,
+        #[clap(long, help = "Teardown specific namespace")]
+        namespace: Option<String>,
     },
 }
 
@@ -1529,6 +1642,106 @@ fn main() {
                 std::process::exit(1);
             }
         }
+        Some(Commands::K8s { k8s_command }) => match k8s_command {
+            K8sCommands::Deploy {
+                from_dockerfile,
+                from_compose,
+                image,
+                name,
+                namespace,
+                env,
+            } => {
+                if let Err(e) = k8s_deploy(
+                    from_dockerfile.as_deref(),
+                    from_compose.as_deref(),
+                    image.as_deref(),
+                    name.as_deref(),
+                    namespace.as_deref(),
+                    env,
+                    &cli.path,
+                ) {
+                    eprintln!("Error deploying to k8s: {}", e);
+                    std::process::exit(1);
+                }
+            }
+            K8sCommands::DeployMcp {
+                server,
+                namespace,
+                name,
+            } => {
+                if let Err(e) =
+                    k8s_deploy_mcp(server, namespace.as_deref(), name.as_deref(), &cli.path)
+                {
+                    eprintln!("Error deploying MCP server to k8s: {}", e);
+                    std::process::exit(1);
+                }
+            }
+            K8sCommands::List {
+                namespace,
+                all,
+                json,
+            } => {
+                if let Err(e) = k8s_list(namespace.as_deref(), *all, *json, &cli.path) {
+                    eprintln!("Error listing k8s pods: {}", e);
+                    std::process::exit(1);
+                }
+            }
+            K8sCommands::Logs {
+                pod_name,
+                namespace,
+                follow,
+                previous,
+                tail,
+            } => {
+                if let Err(e) = k8s_logs(
+                    pod_name,
+                    namespace.as_deref(),
+                    *follow,
+                    *previous,
+                    *tail,
+                    &cli.path,
+                ) {
+                    eprintln!("Error getting k8s logs: {}", e);
+                    std::process::exit(1);
+                }
+            }
+            K8sCommands::Delete {
+                pod_name,
+                namespace,
+            } => {
+                if let Err(e) = k8s_delete(pod_name, namespace.as_deref(), &cli.path) {
+                    eprintln!("Error deleting k8s pod: {}", e);
+                    std::process::exit(1);
+                }
+            }
+            K8sCommands::RestartMcp {
+                server_name,
+                namespace,
+            } => {
+                if let Err(e) = k8s_restart_mcp(server_name, namespace.as_deref(), &cli.path) {
+                    eprintln!("Error restarting MCP server: {}", e);
+                    std::process::exit(1);
+                }
+            }
+            K8sCommands::Status { detailed } => {
+                if let Err(e) = k8s_status(*detailed, &cli.path) {
+                    eprintln!("Error getting k8s status: {}", e);
+                    std::process::exit(1);
+                }
+            }
+            K8sCommands::Setup { force } => {
+                if let Err(e) = k8s_setup(*force, &cli.path) {
+                    eprintln!("Error setting up k8s cluster: {}", e);
+                    std::process::exit(1);
+                }
+            }
+            K8sCommands::Teardown { all, namespace } => {
+                if let Err(e) = k8s_teardown(*all, namespace.as_deref(), &cli.path) {
+                    eprintln!("Error tearing down k8s resources: {}", e);
+                    std::process::exit(1);
+                }
+            }
+        },
         Some(Commands::Session { session_command }) => match session_command {
             SessionCommands::Init {
                 budget,
@@ -2727,6 +2940,330 @@ fn vscode_extension_uninstall(extension_id: &str) -> Result<()> {
             );
         }
     }
+
+    Ok(())
+}
+
+// K8s command handlers
+fn k8s_deploy(
+    from_dockerfile: Option<&str>,
+    from_compose: Option<&str>,
+    image: Option<&str>,
+    name: Option<&str>,
+    namespace: Option<&str>,
+    env: &[String],
+    _path: &str,
+) -> Result<()> {
+    println!("🚧 K8s deployment not yet implemented");
+
+    if let Some(dockerfile) = from_dockerfile {
+        println!("📄 Would deploy from Dockerfile: {}", dockerfile);
+    } else if let Some(compose) = from_compose {
+        println!("🐙 Would deploy from docker-compose: {}", compose);
+    } else if let Some(img) = image {
+        println!("📦 Would deploy from image: {}", img);
+    }
+
+    if let Some(pod_name) = name {
+        println!("🏷️  Pod name: {}", pod_name);
+    }
+
+    let ns = namespace.unwrap_or("default");
+    println!("🏠 Namespace: {}", ns);
+
+    if !env.is_empty() {
+        println!("🔧 Environment variables:");
+        for var in env {
+            println!("   {}", var);
+        }
+    }
+
+    Ok(())
+}
+
+fn k8s_deploy_mcp(
+    server: &str,
+    namespace: Option<&str>,
+    name: Option<&str>,
+    path: &str,
+) -> Result<()> {
+    use b00t_cli::k8s::{
+        client::K8sClient, resources::ContainerBuilder, resources::PodBuilder,
+        resources::ResourceUtils,
+    };
+    use tokio::runtime::Runtime;
+
+    let ns = namespace.unwrap_or("default");
+    let default_pod_name = format!("{}-mcp", server);
+    let pod_name = name.unwrap_or(&default_pod_name);
+
+    println!("🤖 Deploying MCP server to Kubernetes:");
+    println!("   Server: {}", server);
+    println!("   Pod name: {}", pod_name);
+    println!("   Namespace: {}", ns);
+
+    // Load MCP server configuration
+    let mcp_datum = match get_mcp_config(server, path) {
+        Ok(datum) => datum,
+        Err(e) => {
+            anyhow::bail!(
+                "Failed to load MCP server configuration for '{}': {}",
+                server,
+                e
+            );
+        }
+    };
+
+    println!("✅ Loaded MCP server configuration");
+
+    // Create async runtime
+    let rt = Runtime::new()?;
+
+    rt.block_on(async {
+        // Initialize k8s client
+        let client = match K8sClient::new().await {
+            Ok(client) => client,
+            Err(e) => {
+                anyhow::bail!("Failed to connect to Kubernetes cluster: {}", e);
+            }
+        };
+
+        println!("✅ Connected to Kubernetes cluster");
+
+        // Build container spec from MCP configuration
+        let mut container_builder = ContainerBuilder::new(
+            pod_name,
+            "node:18-alpine", // Default base image for MCP servers
+        );
+
+        // Set command and args from MCP config
+        if let Some(ref command) = mcp_datum.command {
+            container_builder = container_builder.command(vec![command.clone()]);
+        }
+
+        if let Some(ref args) = mcp_datum.args {
+            container_builder = container_builder.args(args.clone());
+        }
+
+        // Add environment variables
+        if let Some(ref env) = mcp_datum.env {
+            for (key, value) in env {
+                container_builder = container_builder.env(key, value);
+            }
+        }
+
+        // Add standard MCP port
+        container_builder = container_builder.port(3000, Some("mcp-port".to_string()));
+
+        let container = container_builder.build();
+
+        // Build pod spec
+        let labels = ResourceUtils::standard_labels(pod_name);
+        let pod = PodBuilder::new(pod_name)
+            .namespace(ns)
+            .labels(labels)
+            .container(container)
+            .restart_policy("Always")
+            .build()?;
+
+        // Deploy the pod
+        match client.deploy_pod(pod).await {
+            Ok(deployed_pod) => {
+                println!("🚀 Successfully deployed MCP server pod");
+                if let Some(pod_name) = deployed_pod.metadata.name {
+                    println!("   Pod name: {}", pod_name);
+                }
+                if let Some(pod_ns) = deployed_pod.metadata.namespace {
+                    println!("   Namespace: {}", pod_ns);
+                }
+                println!("💡 Use 'b00t-cli k8s logs {}' to view logs", pod_name);
+            }
+            Err(e) => {
+                anyhow::bail!("Failed to deploy MCP server pod: {}", e);
+            }
+        }
+
+        Ok::<(), anyhow::Error>(())
+    })?;
+
+    Ok(())
+}
+
+fn k8s_list(namespace: Option<&str>, all: bool, json: bool, _path: &str) -> Result<()> {
+    use b00t_cli::k8s::{client::K8sClient, utils::K8sUtils};
+    use tokio::runtime::Runtime;
+
+    let filter = if all { "all pods" } else { "b00t-managed pods" };
+    let ns = namespace.unwrap_or("all namespaces");
+
+    println!("📋 Listing {} in {}", filter, ns);
+
+    // Create async runtime
+    let rt = Runtime::new()?;
+
+    rt.block_on(async {
+        // Initialize k8s client
+        let client = match K8sClient::new().await {
+            Ok(client) => client,
+            Err(e) => {
+                anyhow::bail!("Failed to connect to Kubernetes cluster: {}", e);
+            }
+        };
+
+        // List pods
+        let pods = if all {
+            // List all pods in namespace or all namespaces
+            match client.list_all_pods(namespace).await {
+                Ok(pods) => pods,
+                Err(e) => {
+                    anyhow::bail!("Failed to list pods: {}", e);
+                }
+            }
+        } else {
+            // List only b00t-managed pods
+            match client.list_b00t_pods().await {
+                Ok(pods) => pods,
+                Err(e) => {
+                    anyhow::bail!("Failed to list b00t-managed pods: {}", e);
+                }
+            }
+        };
+
+        if json {
+            // Output as JSON
+            let pod_info: Vec<serde_json::Value> = pods
+                .iter()
+                .filter(|pod| all || K8sUtils::is_b00t_managed(pod))
+                .map(|pod| {
+                    serde_json::json!({
+                        "name": pod.metadata.name,
+                        "namespace": pod.metadata.namespace,
+                        "status": K8sUtils::format_pod_status(pod),
+                        "ready": K8sUtils::is_pod_ready(pod),
+                        "running": K8sUtils::is_pod_running(pod),
+                        "restarts": K8sUtils::get_restart_count(pod),
+                        "app": K8sUtils::extract_app_name(pod)
+                    })
+                })
+                .collect();
+
+            println!("{}", serde_json::to_string_pretty(&pod_info)?);
+        } else {
+            // Table output
+            let filtered_pods: Vec<_> = pods
+                .iter()
+                .filter(|pod| all || K8sUtils::is_b00t_managed(pod))
+                .collect();
+
+            if filtered_pods.is_empty() {
+                println!("No pods found");
+            } else {
+                println!("PODS:");
+                for pod in filtered_pods {
+                    let name = pod.metadata.name.as_deref().unwrap_or("unnamed");
+                    let pod_ns = pod.metadata.namespace.as_deref().unwrap_or("default");
+                    let status = K8sUtils::format_pod_status(pod);
+                    let app_name =
+                        K8sUtils::extract_app_name(pod).unwrap_or_else(|| "unknown".to_string());
+                    let ready_indicator = if K8sUtils::is_pod_ready(pod) {
+                        "✅"
+                    } else {
+                        "❌"
+                    };
+
+                    println!(
+                        "{} {:20} | {:15} | {:10} | {}",
+                        ready_indicator, name, status, pod_ns, app_name
+                    );
+                }
+            }
+        }
+
+        Ok::<(), anyhow::Error>(())
+    })?;
+
+    Ok(())
+}
+
+fn k8s_logs(
+    pod_name: &str,
+    namespace: Option<&str>,
+    follow: bool,
+    previous: bool,
+    tail: Option<i64>,
+    _path: &str,
+) -> Result<()> {
+    let ns = namespace.unwrap_or("default");
+
+    println!(
+        "📄 Getting logs for pod '{}' in namespace '{}'",
+        pod_name, ns
+    );
+    if follow {
+        println!("👁️  Following logs...");
+    }
+    if previous {
+        println!("⏮️  Showing previous container logs");
+    }
+    if let Some(lines) = tail {
+        println!("📏 Tail: {} lines", lines);
+    }
+    println!("🚧 Log retrieval not yet implemented");
+
+    Ok(())
+}
+
+fn k8s_delete(pod_name: &str, namespace: Option<&str>, _path: &str) -> Result<()> {
+    let ns = namespace.unwrap_or("default");
+
+    println!("🗑️  Deleting pod '{}' from namespace '{}'", pod_name, ns);
+    println!("🚧 Pod deletion not yet implemented");
+
+    Ok(())
+}
+
+fn k8s_restart_mcp(server_name: &str, namespace: Option<&str>, _path: &str) -> Result<()> {
+    let ns = namespace.unwrap_or("default");
+    let pod_name = format!("{}-mcp", server_name);
+
+    println!(
+        "🔄 Restarting MCP server pod '{}' in namespace '{}'",
+        pod_name, ns
+    );
+    println!("🚧 MCP restart not yet implemented");
+
+    Ok(())
+}
+
+fn k8s_status(detailed: bool, _path: &str) -> Result<()> {
+    println!("📊 Kubernetes cluster status:");
+    if detailed {
+        println!("🔍 Detailed status requested");
+    }
+    println!("🚧 Status check not yet implemented");
+
+    Ok(())
+}
+
+fn k8s_setup(force: bool, _path: &str) -> Result<()> {
+    println!("🚀 Setting up Kubernetes cluster...");
+    if force {
+        println!("💪 Force mode: will recreate existing cluster");
+    }
+    println!("🚧 Cluster setup not yet implemented");
+
+    Ok(())
+}
+
+fn k8s_teardown(all: bool, namespace: Option<&str>, _path: &str) -> Result<()> {
+    if all {
+        println!("💥 Tearing down entire cluster");
+    } else if let Some(ns) = namespace {
+        println!("🧹 Cleaning up namespace: {}", ns);
+    } else {
+        println!("🧹 Cleaning up default namespace");
+    }
+    println!("🚧 Teardown not yet implemented");
 
     Ok(())
 }

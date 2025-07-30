@@ -1,7 +1,7 @@
 use std::process::Command;
 use tempfile::TempDir;
 
-// 🦨 SKUNK: MCP add command test fails due to missing 'add' subcommand in CLI  
+// 🦨 SKUNK: MCP add command test fails due to missing 'add' subcommand in CLI
 #[ignore]
 #[test]
 fn test_mcp_add_command_mode() {

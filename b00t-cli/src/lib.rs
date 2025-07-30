@@ -9,6 +9,7 @@ pub mod datum_bash;
 pub mod datum_docker;
 pub mod datum_k8s;
 pub mod datum_vscode;
+pub mod k8s;
 pub mod traits;
 pub mod utils;
 pub use traits::*;

@@ -41,7 +41,10 @@ OPENAI_API_KEY = "${OPENAI_API_KEY}"
             StatusProvider::hint(&ai_datum),
             "OpenAI GPT models via official API"
         );
-        assert_eq!(DatumProvider::datum(&ai_datum).datum_type, Some(DatumType::Ai));
+        assert_eq!(
+            DatumProvider::datum(&ai_datum).datum_type,
+            Some(DatumType::Ai)
+        );
     }
 
     #[test]

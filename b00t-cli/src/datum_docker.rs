@@ -11,7 +11,7 @@ pub struct DockerDatum {
 impl DockerDatum {
     pub fn from_config(name: &str, path: &str) -> Result<Self> {
         let (config, _filename) = get_config(name, path).map_err(|e| anyhow::anyhow!("{}", e))?;
-        
+
         let mut datum = config.b00t;
         // Merge top-level env into datum.env
         if let Some(config_env) = config.env {
@@ -21,7 +21,7 @@ impl DockerDatum {
                 datum.env = Some(config_env);
             }
         }
-        
+
         Ok(DockerDatum { datum })
     }
 
@@ -101,14 +101,21 @@ impl DockerDatum {
         // Check if local image differs from registry
         if let Some(oci_uri) = self.get_oci_uri() {
             // Basic drift detection - compare local vs remote digests
-            let local_digest = cmd!("docker", "images", "--digests", "--format", "{{.Digest}}", &oci_uri)
-                .read()
-                .unwrap_or_default();
-            
+            let local_digest = cmd!(
+                "docker",
+                "images",
+                "--digests",
+                "--format",
+                "{{.Digest}}",
+                &oci_uri
+            )
+            .read()
+            .unwrap_or_default();
+
             if local_digest.trim().is_empty() {
                 return true; // No local image = drifted
             }
-            
+
             // For now, assume no drift if image exists locally
             // Future: compare with remote registry digest
             false
