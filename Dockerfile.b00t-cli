@@ -15,20 +15,24 @@ RUN apt-get update && apt-get install -y \
 # Set working directory for the Rust project
 WORKDIR /build
 
-# Copy workspace root and b00t-cli for workspace support
+# Copy workspace root and all workspace members
 COPY Cargo.toml Cargo.lock ./
 COPY b00t-cli/ ./b00t-cli/
+COPY b00t-mcp/ ./b00t-mcp/
 
 # Create dummy source for dependency caching
-RUN mkdir -p b00t-cli/src && \
+RUN mkdir -p b00t-cli/src b00t-mcp/src && \
     echo "fn main() {}" > b00t-cli/src/main.rs && \
-    echo "// dummy" > b00t-cli/src/lib.rs
+    echo "// dummy" > b00t-cli/src/lib.rs && \
+    echo "fn main() {}" > b00t-mcp/src/main.rs && \
+    echo "// dummy" > b00t-mcp/src/lib.rs
 
 # Build dependencies (this layer will be cached unless Cargo files change)
-RUN cargo build --release --bin b00t-cli && rm -rf b00t-cli/src
+RUN cargo build --release --bin b00t-cli && rm -rf b00t-cli/src b00t-mcp/src
 
 # Copy actual source code  
 COPY b00t-cli/src ./b00t-cli/src
+COPY b00t-mcp/src ./b00t-mcp/src
 
 # Build the actual binary
 RUN cargo build --release --bin b00t-cli

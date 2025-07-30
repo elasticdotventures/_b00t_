@@ -564,16 +564,18 @@ pub fn get_config(
     ];
 
     let mut path_buf = std::path::PathBuf::new();
-    path_buf.push(shellexpand::tilde(path).to_string());
+    let expanded_path = shellexpand::tilde(path).to_string();
+    path_buf.push(expanded_path);
 
     for ext in &extensions {
         let filename = format!("{}{}", command, ext);
-        path_buf.set_file_name(&filename);
+        path_buf.push(&filename); // 🤓 FIX: use push instead of set_file_name to avoid removing _b00t_ directory
         if path_buf.exists() {
             let content = std::fs::read_to_string(&path_buf)?;
             let config: UnifiedConfig = toml::from_str(&content)?;
             return Ok((config, filename));
         }
+        path_buf.pop(); // 🤓 FIX: remove the filename for next iteration
     }
 
     eprintln!("{} UNDEFINED", command);
