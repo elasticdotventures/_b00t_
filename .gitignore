@@ -289,3 +289,4 @@ context_portal/*
 .claude/*
 .cursor/*
 .taskmaster/*
+*/.env*

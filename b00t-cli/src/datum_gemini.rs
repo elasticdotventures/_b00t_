@@ -66,6 +66,7 @@ fn get_gemini_extensions_dir(is_repo: bool) -> Result<PathBuf> {
     Ok(path)
 }
 
+
 pub fn gemini_install_mcp(name: &str, b00t_path: &str, is_repo: bool) -> Result<()> {
     let mcp_datum = get_mcp_config(name, b00t_path)?;
     let extensions_dir = get_gemini_extensions_dir(is_repo)?;

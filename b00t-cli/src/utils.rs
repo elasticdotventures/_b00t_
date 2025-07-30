@@ -7,6 +7,7 @@ pub fn is_git_repo() -> bool {
         .is_ok()
 }
 
+// 🦨: for jinja templates
 pub fn get_workspace_root() -> String {
     cmd!("git", "rev-parse", "--show-toplevel")
         .read()

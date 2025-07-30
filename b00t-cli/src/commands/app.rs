@@ -1,5 +1,6 @@
 use anyhow::Result;
 use clap::Parser;
+use crate::datum_gemini::gemini_install_mcp;
 
 #[derive(Parser)]
 pub enum AppCommands {
@@ -110,7 +111,7 @@ pub enum AppGeminicliMcpCommands {
 }
 
 impl AppCommands {
-    pub fn execute(&self, _path: &str) -> Result<()> {
+    pub fn execute(&self, path: &str) -> Result<()> {
         match self {
             AppCommands::Vscode { .. } => {
                 println!("🆚 VSCode app functionality coming soon...");
@@ -120,8 +121,29 @@ impl AppCommands {
                 println!("🤖 Claude Code app functionality coming soon...");
                 Ok(())
             }
-            AppCommands::Geminicli { .. } => {
-                println!("💎 Gemini CLI app functionality coming soon...");
+            AppCommands::Geminicli { geminicli_command } => {
+                geminicli_command.execute(path)
+            }
+        }
+    }
+}
+
+impl AppGeminicliCommands {
+    pub fn execute(&self, path: &str) -> Result<()> {
+        match self {
+            AppGeminicliCommands::Mcp { mcp_command } => {
+                mcp_command.execute(path)
+            }
+        }
+    }
+}
+
+impl AppGeminicliMcpCommands {
+    pub fn execute(&self, path: &str) -> Result<()> {
+        match self {
+            AppGeminicliMcpCommands::Install { name, repo, user } => {
+                let is_repo = *repo || !*user; // Default to repo if neither specified
+                gemini_install_mcp(name, path, is_repo)?;
                 Ok(())
             }
         }

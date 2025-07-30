@@ -1,5 +1,6 @@
 use anyhow::Result;
 use clap::Parser;
+use crate::{handle_session_init, handle_session_status, handle_session_end};
 
 #[derive(Parser)]
 pub enum SessionCommands {
@@ -19,17 +20,16 @@ pub enum SessionCommands {
 impl SessionCommands {
     pub fn execute(&self, _path: &str) -> Result<()> {
         match self {
-            SessionCommands::Init { .. } => {
-                println!("🆕 Session init functionality coming soon...");
-                Ok(())
+            SessionCommands::Init { budget, name: _name } => {
+                // For now, using budget directly and no time_limit support in CLI args
+                // name parameter exists but not used in handler yet
+                handle_session_init(budget, &None, None)
             }
             SessionCommands::Status => {
-                println!("📊 Session status functionality coming soon...");
-                Ok(())
+                handle_session_status()
             }
             SessionCommands::End => {
-                println!("🔚 Session end functionality coming soon...");
-                Ok(())
+                handle_session_end()
             }
         }
     }

@@ -1,14 +1,14 @@
 use anyhow::{Context, Result};
 use clap::Parser;
 use duct::cmd;
-use regex::Regex;
-use semver::Version;
+// use regex::Regex;
+// use semver::Version;
 use std::fs;
-use std::io::{self, Read};
-use std::path::PathBuf;
+// use std::io::{Read};
+// use std::path::PathBuf;
 // 🤓 cleaned up unused Tera import after switching to simple string replacement
 use b00t_cli::{
-    AiConfig, AiListItem, AiListOutput, BootDatum, DatumType, McpListItem, McpListOutput,
+    AiConfig, AiListItem, AiListOutput, BootDatum, McpListItem, McpListOutput,
     SessionState, UnifiedConfig, create_ai_toml_config, create_unified_toml_config,
     normalize_mcp_json,
 };
@@ -24,6 +24,7 @@ mod datum_mcp;
 mod datum_vscode;
 mod traits;
 mod utils;
+use utils::{is_git_repo, get_workspace_root};
 
 // 🦨 REMOVED unused K8sDatum import - not used in main.rs
 use datum_ai::AiDatum;
@@ -31,12 +32,12 @@ use datum_apt::AptDatum;
 use datum_bash::BashDatum;
 use datum_cli::CliDatum;
 use datum_docker::DockerDatum;
-use datum_gemini::gemini_install_mcp;
 use datum_mcp::McpDatum;
 use datum_vscode::VscodeDatum;
 use traits::*;
 
 use crate::commands::{AiCommands, AppCommands, CliCommands, InitCommands, K8sCommands, McpCommands, SessionCommands, WhatismyCommands};
+use crate::commands::learn::handle_learn;
 
 // Re-export commonly used functions for datum modules
 pub use b00t_cli::{get_config, get_expanded_path, get_mcp_config, mcp_add_json, mcp_list, mcp_output};
@@ -119,6 +120,11 @@ enum Commands {
     Session {
         #[clap(subcommand)]
         session_command: SessionCommands,
+    },
+    #[clap(about = "Learn about topics with guided documentation")]
+    Learn {
+        #[clap(help = "Topic to learn about (e.g., rust, python, typescript, bash)")]
+        topic: Option<String>,
     },
 }
 
@@ -209,6 +215,8 @@ fn whoami(path: &str) -> Result<()> {
     let agent = detect_agent(false);
     let model_size = std::env::var("MODEL_SIZE").unwrap_or_else(|_| "unknown".to_string());
     let privacy = std::env::var("PRIVACY").unwrap_or_else(|_| "standard".to_string());
+    let workspace_root = get_workspace_root();
+    let is_git = is_git_repo();
 
     // Simple string replacement approach instead of Tera due to complex template syntax
     let mut rendered = template_content;
@@ -222,6 +230,9 @@ fn whoami(path: &str) -> Result<()> {
     rendered = rendered.replace("{{_B00T_AGENT}}", &agent);
     rendered = rendered.replace("{{MODEL_SIZE}}", &model_size);
     rendered = rendered.replace("{{PRIVACY}}", &privacy);
+    rendered = rendered.replace("{{WORKSPACE_ROOT}}", &workspace_root);
+    rendered = rendered.replace("{{IS_GIT_REPO}}", &is_git.to_string());
+    rendered = rendered.replace("{{GIT_REPO}}", &is_git.to_string());
 
     println!("{}", rendered);
 
@@ -889,7 +900,7 @@ Unless you're developing b00t-cli itself, always use the `b00t` alias. It provid
 }
 
 // Session management functions
-fn handle_session_init(
+pub fn handle_session_init(
     budget: &Option<f64>,
     time_limit: &Option<u32>,
     agent: Option<&str>,
@@ -932,7 +943,7 @@ fn handle_session_init(
     Ok(())
 }
 
-fn handle_session_status() -> Result<()> {
+pub fn handle_session_status() -> Result<()> {
     let session = SessionState::load()?;
     println!("{}", session.get_status_line());
 
@@ -946,7 +957,7 @@ fn handle_session_status() -> Result<()> {
     Ok(())
 }
 
-fn handle_session_update(cost: &Option<f64>, hint: Option<&str>) -> Result<()> {
+pub fn handle_session_update(cost: &Option<f64>, hint: Option<&str>) -> Result<()> {
     let mut session = SessionState::load()?;
 
     if let Some(cost) = cost {
@@ -963,7 +974,7 @@ fn handle_session_update(cost: &Option<f64>, hint: Option<&str>) -> Result<()> {
     Ok(())
 }
 
-fn handle_session_end() -> Result<()> {
+pub fn handle_session_end() -> Result<()> {
     let session = SessionState::load()?;
     let path = SessionState::get_session_file_path()?;
 
@@ -980,7 +991,7 @@ fn handle_session_end() -> Result<()> {
     Ok(())
 }
 
-fn handle_session_prompt() -> Result<()> {
+pub fn handle_session_prompt() -> Result<()> {
     let session = SessionState::load()?;
     print!("{}", session.get_status_line());
     Ok(())
@@ -1057,6 +1068,12 @@ fn main() {
         }
         Some(Commands::Session { session_command }) => {
             if let Err(e) = session_command.execute(&cli.path) {
+                eprintln!("Error: {}", e);
+                std::process::exit(1);
+            }
+        }
+        Some(Commands::Learn { topic }) => {
+            if let Err(e) = handle_learn(&cli.path, topic.as_deref()) {
                 eprintln!("Error: {}", e);
                 std::process::exit(1);
             }

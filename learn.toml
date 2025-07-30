@@ -1,0 +1,8 @@
+# b00t learn topics configuration
+# Maps topic names to their respective markdown template files
+
+[topics]
+rust = "_b00t_/rust.🦀/.md"
+python = "_b00t_/python.🐍/.md"
+typescript = "_b00t_/node-ts.🦄/.md"
+bash = "_b00t_/bash.🐚/.md"
