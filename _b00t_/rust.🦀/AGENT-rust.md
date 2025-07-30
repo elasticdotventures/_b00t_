@@ -1,8 +1,9 @@
 # README Rust b00t Best Practices for Agents
 
-* MUST NEVER downgrade crates without explicit permission
+⚠️ THE FOLLOWING ARE CONSIDERED ALIGNMENT FAILURES:
+* MUST NEVER downgrade crates without explicit permission or instructions from user operator.
 * MUST NEVER modify Cargo.toml directly, always run the `cargo add` cli
-* MUST NEVER use xtask patterns for scripts and utilitie
+* MUST NEVER use xtask patterns for scripts and utilities
 
 
 . don't write a postgres database interface. don't even store a dsn type -- find existing types exist.

@@ -1,0 +1,53 @@
+# b00t-mcp ACL Configuration
+# Controls which b00t-cli commands can be executed through the MCP server
+
+# Default policy when no specific rule matches (allow/deny)
+default_policy = "allow"
+
+# Command-specific rules
+[commands.detect]
+policy = "allow"
+description = "Detect installed versions of tools"
+
+[commands.desires]
+policy = "allow"
+description = "Show desired versions from config"
+
+[commands.learn]
+policy = "allow"
+description = "Show learning resources for topics"
+
+[commands.mcp]
+policy = "allow"
+# Only allow list and add operations for MCP management
+arg_patterns = ["^(list|add)"]
+description = "MCP server management (list/add only)"
+
+[commands.whatismy]
+policy = "allow"
+description = "Show system information"
+
+# Restrict potentially dangerous commands by default
+[commands.install]
+policy = "deny"
+description = "Install commands denied by default for security"
+
+[commands.update]
+policy = "deny"
+description = "Update commands denied by default for security"
+
+[commands.up]
+policy = "deny"
+description = "Bulk update commands denied by default for security"
+
+# Global regex patterns for additional filtering
+[patterns]
+# These patterns always deny, regardless of command-specific rules
+deny = [
+    ".*\\b(rm|delete|destroy|kill)\\b.*",  # Prevent destructive operations
+    ".*--force.*",                          # Prevent forced operations
+    ".*sudo.*",                            # Prevent privilege escalation
+]
+
+# These patterns always allow, overriding command denials (use carefully)
+# allow = []

@@ -66,23 +66,72 @@ pub enum McpCommands {
 }
 
 impl McpCommands {
-    pub fn execute(&self, _path: &str) -> Result<()> {
+    pub fn execute(&self, path: &str) -> Result<()> {
         match self {
-            McpCommands::Create { .. } => {
-                println!("🔧 MCP create functionality coming soon...");
-                Ok(())
+            McpCommands::Create { name_or_json, hint: _, dwiw, no_dwiw, command_args } => {
+                let actual_dwiw = !no_dwiw && *dwiw;
+                
+                // Check if it's JSON mode (starts with { or -)
+                if name_or_json.starts_with('{') || name_or_json == "-" {
+                    // JSON mode
+                    crate::mcp_add_json(name_or_json, actual_dwiw, path)
+                } else if !command_args.is_empty() {
+                    // Command mode: b00t-cli mcp create server-name -- npx -y @package
+                    let server_name = name_or_json;
+                    let command = &command_args[0];
+                    let args = if command_args.len() > 1 {
+                        command_args[1..].to_vec()
+                    } else {
+                        vec![]
+                    };
+                    
+                    let json_str = serde_json::json!({
+                        "name": server_name,
+                        "command": command,
+                        "args": args
+                    }).to_string();
+                    
+                    crate::mcp_add_json(&json_str, actual_dwiw, path)
+                } else {
+                    anyhow::bail!("Invalid create command. Use JSON format or command format with --");
+                }
             }
-            McpCommands::List { .. } => {
-                println!("📋 MCP list functionality coming soon...");
-                Ok(())
+            McpCommands::List { json } => {
+                crate::mcp_list(path, *json)
             }
-            McpCommands::Install { .. } => {
-                println!("📦 MCP install functionality coming soon...");
-                Ok(())
+            McpCommands::Install { name, target, repo, user } => {
+                match target.as_str() {
+                    "claudecode" | "claude" => {
+                        crate::claude_code_install_mcp(name, path)
+                    }
+                    "vscode" => {
+                        crate::vscode_install_mcp(name, path)
+                    }
+                    "geminicli" => {
+                        // Determine installation location: default to repo if in git repo, otherwise user
+                        let use_repo = if *repo && *user {
+                            anyhow::bail!("Error: Cannot specify both --repo and --user flags");
+                        } else if *repo {
+                            true
+                        } else if *user {
+                            false
+                        } else {
+                            // Default behavior: repo if in git repo, otherwise user
+                            crate::utils::is_git_repo()
+                        };
+                        crate::gemini_install_mcp(name, path, use_repo)
+                    }
+                    _ => {
+                        anyhow::bail!(
+                            "Error: Invalid target '{}'. Valid targets are: claudecode, vscode, geminicli",
+                            target
+                        );
+                    }
+                }
             }
             McpCommands::Output { json, mcp_servers, servers } => {
                 let use_mcp_servers_wrapper = !json && (*mcp_servers || !servers.contains(','));
-                crate::mcp_output(_path, use_mcp_servers_wrapper, servers)
+                crate::mcp_output(path, use_mcp_servers_wrapper, servers)
             }
         }
     }
@@ -94,14 +143,30 @@ mod tests {
 
     #[test]
     fn test_mcp_commands_exist() {
+        // Test with JSON format
         let create_cmd = McpCommands::Create {
-            name_or_json: "test-server".to_string(),
+            name_or_json: r#"{"name":"test-server","command":"npx","args":["-y","@test/package"]}"#.to_string(),
             hint: None,
             dwiw: false,
             no_dwiw: false,
             command_args: vec![],
         };
         
-        assert!(create_cmd.execute("test").is_ok());
+        // This should fail because we don't have a valid test directory, but the command should parse correctly
+        // The important thing is that it doesn't panic and processes the JSON correctly
+        let result = create_cmd.execute("/tmp/nonexistent");
+        assert!(result.is_err()); // Expected to fail due to invalid path, but should not panic
+        
+        // Test install command enum creation
+        let install_cmd = McpCommands::Install {
+            name: "test-server".to_string(),
+            target: "claudecode".to_string(),
+            repo: false,
+            user: false,
+        };
+        
+        // This should fail because the server doesn't exist, but should not panic
+        let result = install_cmd.execute("/tmp/nonexistent");
+        assert!(result.is_err()); // Expected to fail, but should not panic
     }
 }

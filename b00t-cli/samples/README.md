@@ -6,7 +6,7 @@ This directory contains sample JSON configurations for MCP servers that can be u
 
 b00t-cli uses a "one import, many export" architecture for MCP server configurations:
 
-1. **Import**: Use `b00t-cli mcp add` to create `.mcp-json.toml` files (single source of truth)
+1. **Import**: Use `b00t-cli mcp add` to create `.mcp.toml` files (single source of truth)
 2. **Export**: Use various subcommands to install to different MCP-compatible clients
 
 ## Usage Examples
@@ -51,7 +51,7 @@ b00t-cli claude-code install mcp filesystem
 
 ## Generated Files
 
-When you run `b00t-cli mcp add`, it creates a `.mcp-json.toml` file in `~/.dotfiles/_b00t_/`:
+When you run `b00t-cli mcp add`, it creates a `.mcp.toml` file in `~/.dotfiles/_b00t_/`:
 
 ```toml
 [mcp]

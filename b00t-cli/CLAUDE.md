@@ -31,7 +31,7 @@ b00t-cli is a Rust-based command-line tool for managing software versions and in
 - Each tool has its own `.toml` file in `~/.dotfiles/_b00t_/`
 - Config structure includes: name, desires (target version), install/update commands, version detection command, version regex, and hint
 - Example path: `~/.dotfiles/_b00t_/git.toml`, `~/.dotfiles/_b00t_/node.toml`
-- MCP servers stored as: `~/.dotfiles/_b00t_/<name>.mcp-json.toml`
+- MCP servers stored as: `~/.dotfiles/_b00t_/<name>.mcp.toml`
 
 **Command Operations**:
 - `detect <command>`: Shows currently installed version
@@ -42,7 +42,7 @@ b00t-cli is a Rust-based command-line tool for managing software versions and in
 - `up`: Updates all outdated tools found in config directory
 
 **MCP (Model Context Protocol) Management**:
-- `mcp add <json>`: Parse JSON and create `.mcp-json.toml` configuration
+- `mcp add <json>`: Parse JSON and create `.mcp.toml` configuration
 - `mcp add --dwiw <json>`: "Do What I Want" mode - strips comments from JSON
 - `mcp list`: Show all available MCP server configurations
 - `mcp list --json`: Show MCP configurations in JSON format

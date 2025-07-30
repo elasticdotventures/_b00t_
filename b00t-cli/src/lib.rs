@@ -828,6 +828,125 @@ pub fn mcp_output(path: &str, use_mcp_servers_wrapper: bool, servers: &str) -> R
     Ok(())
 }
 
+// MCP Installation Functions
+pub fn claude_code_install_mcp(name: &str, path: &str) -> Result<()> {
+    use duct::cmd;
+    
+    let datum = get_mcp_config(name, path)?;
+
+    // Claude Code uses claude mcp add-json command
+    let claude_json = serde_json::json!({
+        "name": datum.name,
+        "command": datum.command.as_ref().unwrap_or(&"npx".to_string()),
+        "args": datum.args.as_ref().unwrap_or(&vec![])
+    });
+
+    let json_str =
+        serde_json::to_string(&claude_json).context("Failed to serialize JSON for Claude Code")?;
+
+    let result = cmd!("claude", "mcp", "add-json", &datum.name, &json_str).run();
+
+    match result {
+        Ok(_) => {
+            println!(
+                "Successfully installed MCP server '{}' to Claude Code",
+                datum.name
+            );
+            println!(
+                "Claude Code command: claude mcp add-json {} '{}'",
+                datum.name, json_str
+            );
+        }
+        Err(e) => {
+            eprintln!("Failed to install MCP server to Claude Code: {}", e);
+            eprintln!(
+                "Manual command: claude mcp add-json {} '{}'",
+                datum.name, json_str
+            );
+            return Err(anyhow::anyhow!("Claude Code installation failed: {}", e));
+        }
+    }
+
+    Ok(())
+}
+
+pub fn vscode_install_mcp(name: &str, path: &str) -> Result<()> {
+    use duct::cmd;
+    
+    let datum = get_mcp_config(name, path)?;
+
+    let vscode_json = serde_json::json!({
+        "name": datum.name,
+        "command": datum.command.as_ref().unwrap_or(&"npx".to_string()),
+        "args": datum.args.as_ref().unwrap_or(&vec![])
+    });
+
+    let json_str =
+        serde_json::to_string(&vscode_json).context("Failed to serialize JSON for VSCode")?;
+
+    let result = cmd!("code", "--add-mcp", &json_str).run();
+
+    match result {
+        Ok(_) => {
+            println!(
+                "Successfully installed MCP server '{}' to VSCode",
+                datum.name
+            );
+            println!("VSCode command: code --add-mcp '{}'", json_str);
+        }
+        Err(e) => {
+            eprintln!("Failed to install MCP server to VSCode: {}", e);
+            eprintln!("Manual command: code --add-mcp '{}'", json_str);
+            return Err(anyhow::anyhow!("VSCode installation failed: {}", e));
+        }
+    }
+
+    Ok(())
+}
+
+pub fn gemini_install_mcp(name: &str, path: &str, use_repo: bool) -> Result<()> {
+    use duct::cmd;
+    
+    let datum = get_mcp_config(name, path)?;
+
+    let gemini_json = serde_json::json!({
+        "name": datum.name,
+        "command": datum.command.as_ref().unwrap_or(&"npx".to_string()),
+        "args": datum.args.as_ref().unwrap_or(&vec![])
+    });
+
+    let json_str =
+        serde_json::to_string(&gemini_json).context("Failed to serialize JSON for Gemini CLI")?;
+
+    let location_flag = if use_repo { "--repo" } else { "--user" };
+    let result = cmd!("gemini", "mcp", "add-json", location_flag, &datum.name, &json_str).run();
+
+    match result {
+        Ok(_) => {
+            let location = if use_repo { "repository" } else { "user global" };
+            println!(
+                "Successfully installed MCP server '{}' to Gemini CLI ({})",
+                datum.name, location
+            );
+            println!(
+                "Gemini CLI command: gemini mcp add-json {} {} '{}'",
+                location_flag, datum.name, json_str
+            );
+        }
+        Err(e) => {
+            let location = if use_repo { "repository" } else { "user global" };
+            eprintln!("Failed to install MCP server to Gemini CLI ({}): {}", location, e);
+            eprintln!(
+                "Manual command: gemini mcp add-json {} {} '{}'",
+                location_flag, datum.name, json_str
+            );
+            return Err(anyhow::anyhow!("Gemini CLI installation failed: {}", e));
+        }
+    }
+
+    Ok(())
+}
+
 // Session management functions
 impl SessionState {
     pub fn new(agent_name: Option<String>) -> Self {
