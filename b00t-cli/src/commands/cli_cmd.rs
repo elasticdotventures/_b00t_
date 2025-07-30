@@ -2,7 +2,6 @@ use anyhow::Result;
 use clap::Parser;
 use crate::datum_cli::CliDatum;
 use crate::traits::*;
-use crate::load_datum_providers;
 use crate::{get_expanded_path, load_datum_providers};
 use duct::cmd;
 // use std::fs;
