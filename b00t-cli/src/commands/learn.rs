@@ -4,7 +4,8 @@ use serde::Deserialize;
 use std::collections::HashMap;
 use std::fs;
 
-use crate::{get_expanded_path, get_workspace_root, detect_agent};
+use crate::{get_expanded_path, get_workspace_root};
+use crate::whoami::detect_agent;
 use crate::utils::{is_git_repo};
 
 #[derive(Debug, Deserialize)]

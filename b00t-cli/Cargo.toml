@@ -1,7 +1,11 @@
 [package]
 name = "b00t-cli"
-version = "0.6.0"
-edition = "2024"
+version.workspace = true
+edition.workspace = true
+build = "../build.rs"
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
 
 [[bin]]
 name = "b00t-cli"
@@ -19,7 +23,7 @@ toml.workspace = true
 clap = { workspace = true }
 regex = { workspace = true }
 anyhow = { workspace = true }
-chrono = { workspace = true }
+chrono.workspace = true
 
 # b00t-cli specific dependencies
 duct = "1.0"
@@ -34,6 +38,7 @@ tokio = { version = "1.34.0", features = ["full"] }
 serde_yaml = "0.9"
 tracing = "0.1"
 uuid = { version = "1.0", features = ["v4"] }
+confy = "1.0.0"
 
 [dev-dependencies]
 assert_cmd = "2.0.17"

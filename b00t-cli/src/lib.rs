@@ -10,8 +10,10 @@ pub mod datum_docker;
 pub mod datum_k8s;
 pub mod datum_vscode;
 pub mod k8s;
+pub mod session_memory;
 pub mod traits;
 pub mod utils;
+pub mod whoami;
 pub use traits::*;
 
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
@@ -94,6 +96,7 @@ pub enum DatumType {
     Apt,
     Nix,
     Ai,
+    Cli,
 }
 
 #[derive(Serialize, Debug)]
@@ -438,6 +441,7 @@ pub fn create_unified_toml_config(datum: &BootDatum, path: &str) -> Result<()> {
         DatumType::Apt => ".apt.toml",
         DatumType::Nix => ".nix.toml",
         DatumType::Ai => ".ai.toml",
+        DatumType::Cli => ".cli.toml",
         DatumType::Unknown => ".toml",
     };
 
@@ -468,6 +472,7 @@ impl std::fmt::Display for DatumType {
             DatumType::Apt => write!(f, "apt"),
             DatumType::Nix => write!(f, "nix"),
             DatumType::Ai => write!(f, "AI"),
+            DatumType::Cli => write!(f, "CLI"),
         }
     }
 }

@@ -8,9 +8,8 @@ use std::fs;
 // use std::path::PathBuf;
 // 🤓 cleaned up unused Tera import after switching to simple string replacement
 use b00t_cli::{
-    AiConfig, AiListItem, AiListOutput, BootDatum, McpListItem, McpListOutput,
-    SessionState, UnifiedConfig, create_ai_toml_config, create_unified_toml_config,
-    normalize_mcp_json,
+    AiConfig, BootDatum,
+    SessionState, UnifiedConfig,
 };
 
 mod commands;
@@ -22,9 +21,11 @@ mod datum_docker;
 mod datum_gemini;
 mod datum_mcp;
 mod datum_vscode;
+mod session_memory;
 mod traits;
 mod utils;
-use utils::{is_git_repo, get_workspace_root};
+mod whoami;
+use utils::get_workspace_root;
 
 // 🦨 REMOVED unused K8sDatum import - not used in main.rs
 use datum_ai::AiDatum;
@@ -40,12 +41,12 @@ use crate::commands::{AiCommands, AppCommands, CliCommands, InitCommands, K8sCom
 use crate::commands::learn::handle_learn;
 
 // Re-export commonly used functions for datum modules
-pub use b00t_cli::{get_config, get_expanded_path, get_mcp_config, mcp_add_json, mcp_list, mcp_output, claude_code_install_mcp, vscode_install_mcp, gemini_install_mcp};
+pub use b00t_cli::{get_config, get_expanded_path, get_mcp_config, get_mcp_toml_files, mcp_add_json, mcp_list, mcp_output, claude_code_install_mcp, vscode_install_mcp, gemini_install_mcp};
 
 mod integration_tests;
 
 #[derive(Parser)]
-#[clap(version, about, long_about = None)]
+#[clap(version = env!("GIT_REPO_TAG_VERSION"), about, long_about = None)]
 struct Cli {
     #[clap(subcommand)]
     command: Option<Commands>,
@@ -186,58 +187,6 @@ fn datum_providers_to_tool_status(providers: Vec<Box<dyn DatumProvider>>) -> Vec
         .collect()
 }
 
-fn whoami(path: &str) -> Result<()> {
-    let expanded_path = get_expanded_path(path)?;
-    let agent_md_path = expanded_path.join("AGENT.md");
-
-    if !agent_md_path.exists() {
-        anyhow::bail!(
-            "AGENT.md not found in {}. This file contains agent identity information.",
-            expanded_path.display()
-        );
-    }
-
-    let template_content = fs::read_to_string(&agent_md_path).context(format!(
-        "Failed to read AGENT.md from {}",
-        agent_md_path.display()
-    ))?;
-
-    // Prepare template variables
-    let timestamp = chrono::Utc::now()
-        .format("%Y-%m-%d %H:%M:%S UTC")
-        .to_string();
-    let user = std::env::var("USER").unwrap_or_else(|_| "unknown".to_string());
-    let branch = cmd!("git", "branch", "--show-current")
-        .read()
-        .unwrap_or_else(|_| "no-git".to_string())
-        .trim()
-        .to_string();
-    let agent = detect_agent(false);
-    let model_size = std::env::var("MODEL_SIZE").unwrap_or_else(|_| "unknown".to_string());
-    let privacy = std::env::var("PRIVACY").unwrap_or_else(|_| "standard".to_string());
-    let workspace_root = get_workspace_root();
-    let is_git = is_git_repo();
-
-    // Simple string replacement approach instead of Tera due to complex template syntax
-    let mut rendered = template_content;
-
-    // Replace variables manually
-    rendered = rendered.replace("{{PID}}", &std::process::id().to_string());
-    rendered = rendered.replace("{{TIMESTAMP}}", &timestamp);
-    rendered = rendered.replace("{{USER}}", &user);
-    rendered = rendered.replace("{{BRANCH}}", &branch);
-    rendered = rendered.replace("{{_B00T_Agent}}", &agent);
-    rendered = rendered.replace("{{_B00T_AGENT}}", &agent);
-    rendered = rendered.replace("{{MODEL_SIZE}}", &model_size);
-    rendered = rendered.replace("{{PRIVACY}}", &privacy);
-    rendered = rendered.replace("{{WORKSPACE_ROOT}}", &workspace_root);
-    rendered = rendered.replace("{{IS_GIT_REPO}}", &is_git.to_string());
-    rendered = rendered.replace("{{GIT_REPO}}", &is_git.to_string());
-
-    println!("{}", rendered);
-
-    Ok(())
-}
 
 fn checkpoint(message: Option<&str>, skip_tests: bool) -> Result<()> {
     println!("🥾 Creating checkpoint...");
@@ -248,11 +197,16 @@ fn checkpoint(message: Option<&str>, skip_tests: bool) -> Result<()> {
         anyhow::bail!("Not in a git repository. Run 'git init' first.");
     }
 
+    // Track checkpoint attempt in session memory
+    let mut memory = session_memory::SessionMemory::load().unwrap_or_default();
+    let checkpoint_count = memory.incr("checkpoint_count").unwrap_or(1);
+
     // Check if this is a Rust project and run cargo check
     if std::path::Path::new("Cargo.toml").exists() {
         println!("🦀 Rust project detected. Running cargo check...");
         let cargo_check = cmd!("cargo", "check").run();
         if let Err(e) = cargo_check {
+            let _ = memory.incr("failed_builds");
             anyhow::bail!(
                 "🚨 cargo check failed: {}. Fix compilation errors before checkpoint.",
                 e
@@ -261,8 +215,9 @@ fn checkpoint(message: Option<&str>, skip_tests: bool) -> Result<()> {
         println!("✅ cargo check passed");
     }
 
-    // Generate commit message
-    let commit_msg = message.unwrap_or("🥾 checkpoint: automated commit via b00t-cli");
+    // Generate commit message with checkpoint number  
+    let default_msg = format!("🥾 checkpoint #{}: automated commit via b00t-cli", checkpoint_count);
+    let commit_msg = message.unwrap_or(&default_msg);
 
     // Add all files (including untracked)
     println!("📦 Adding all files to staging area...");
@@ -298,22 +253,31 @@ fn checkpoint(message: Option<&str>, skip_tests: bool) -> Result<()> {
     match commit_result {
         Ok(_) => {
             println!("✅ Checkpoint created successfully!");
+            let _ = memory.incr("successful_commits");
 
             // Show the commit hash
             if let Ok(commit_hash) = cmd!("git", "rev-parse", "--short", "HEAD").read() {
                 println!("📍 Commit: {}", commit_hash.trim());
+                let _ = memory.set("last_commit_hash", commit_hash.trim());
             }
 
             // Show current branch
             if let Ok(branch) = cmd!("git", "branch", "--show-current").read() {
                 println!("🌳 Branch: {}", branch.trim());
+                let _ = memory.set("current_branch", branch.trim());
             }
 
             if !skip_tests {
                 println!("🧪 Tests executed via git pre-commit hooks");
             }
+
+            // CI integration hints
+            println!("💡 Next steps:");
+            println!("   • Run `git push` to trigger CI pipeline");
+            println!("   • Create PR: `gh pr create --title \"{}\"` (if ready)", commit_msg);
         }
         Err(e) => {
+            let _ = memory.incr("failed_commits");
             anyhow::bail!(
                 "Commit failed: {}. This usually means git pre-commit hooks (including tests) failed.",
                 e
@@ -324,30 +288,6 @@ fn checkpoint(message: Option<&str>, skip_tests: bool) -> Result<()> {
     Ok(())
 }
 
-/// Detect current AI agent based on environment variables
-fn detect_agent(ignore_env: bool) -> String {
-    // Check if _B00T_Agent is already set and we're not ignoring env
-    if !ignore_env {
-        if let Ok(agent) = std::env::var("_B00T_Agent") {
-            if !agent.is_empty() {
-                return agent;
-            }
-        }
-    }
-
-    // Check for Claude Code
-    if std::env::var("CLAUDECODE").unwrap_or_default() == "1" {
-        return "claude".to_string();
-    }
-
-    // TODO: Add detection for other agents based on their shell environment:
-    // - gemini: specific environment vars set by gemini-cli shell
-    // - codex: specific environment vars set by codex shell
-    // - other agents: their respective shell environment indicators
-
-    // Return empty string if no agent detected
-    "".to_string()
-}
 
 /// Generic function to load datum providers for a specific file extension
 /// Replaces the 7 duplicate get_*_tools_status functions
@@ -926,6 +866,11 @@ pub fn handle_session_init(
     }
 
     session.save()?;
+    
+    // Initialize session memory and check README.md
+    let mut memory = session_memory::SessionMemory::load()?;
+    check_readme_status(&mut memory)?;
+    
     println!("🥾 Session {} initialized", session.session_id);
 
     if let Some(agent) = &session.agent_info {
@@ -997,6 +942,25 @@ pub fn handle_session_prompt() -> Result<()> {
     Ok(())
 }
 
+/// Check if README.md exists and track reading status
+fn check_readme_status(memory: &mut session_memory::SessionMemory) -> Result<()> {
+    let git_root = get_workspace_root();
+    let readme_path = std::path::PathBuf::from(&git_root).join("README.md");
+    
+    if readme_path.exists() {
+        if !memory.is_readme_read() {
+            println!("📖 README.md found but not yet marked as read");
+            println!("💡 Run `b00t-cli session mark-readme-read` after reading it");
+        } else {
+            println!("✅ README.md already read this session");
+        }
+    } else {
+        println!("ℹ️  No README.md found in git root");
+    }
+    
+    Ok(())
+}
+
 fn main() {
     let cli = Cli::parse();
 
@@ -1037,7 +1001,7 @@ fn main() {
             }
         }
         Some(Commands::Whoami) => {
-            if let Err(e) = whoami(&cli.path) {
+            if let Err(e) = whoami::whoami(&cli.path) {
                 eprintln!("Error: {}", e);
                 std::process::exit(1);
             }

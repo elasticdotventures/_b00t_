@@ -5,13 +5,14 @@ use std::path::Path;
 
 mod mcp_server;
 mod acl;
+mod params;
 
 use mcp_server::B00tMcpServer;
 
 #[tokio::main]
 async fn main() -> Result<()> {
     let matches = Command::new("b00t-mcp")
-        .version(env!("CARGO_PKG_VERSION"))
+        .version(env!("GIT_REPO_TAG_VERSION"))
         .author("b00t-mcp contributors")
         .about("MCP Server for b00t-cli command proxy with ACL filtering")
         .arg(
@@ -36,19 +37,27 @@ async fn main() -> Result<()> {
                 .help("Run as MCP server using stdio transport")
                 .action(clap::ArgAction::SetTrue),
         )
+        .arg(
+            Arg::new("mode")
+                .help("Transport mode (stdio)")
+                .value_parser(["stdio"])
+                .index(1),
+        )
         .get_matches();
 
     let working_dir = matches.get_one::<String>("working-dir").unwrap();
     let config_path = matches.get_one::<String>("config").unwrap();
     let working_path = Path::new(working_dir);
 
-    if matches.get_flag("stdio") {
+    let is_stdio_mode = matches.get_flag("stdio") || matches.get_one::<String>("mode").map_or(false, |m| m == "stdio");
+    
+    if is_stdio_mode {
         // Run as MCP server
-        eprintln!(
-            "Starting b00t-mcp MCP server in directory: {} with config: {}",
-            working_path.display(),
-            config_path
-        );
+        // eprintln!(
+        //     "Starting b00t-mcp MCP server in directory: {} with config: {}",
+        //     working_path.display(),
+        //     config_path
+        // );
 
         let server = B00tMcpServer::new(working_path, config_path)?;
 
@@ -64,11 +73,23 @@ async fn main() -> Result<()> {
         println!();
         println!("Usage:");
         println!(
+            "  {} stdio                             Run as MCP server with stdio transport",
+            env!("CARGO_PKG_NAME")
+        );
+        println!(
             "  {} --stdio                           Run as MCP server with stdio transport",
             env!("CARGO_PKG_NAME")
         );
         println!(
+            "  {} --directory <DIR> stdio           Run MCP server in specific directory",
+            env!("CARGO_PKG_NAME")
+        );
+        println!(
             "  {} --directory <DIR> --stdio         Run MCP server in specific directory",
+            env!("CARGO_PKG_NAME")
+        );
+        println!(
+            "  {} --config <FILE> stdio             Run MCP server with custom ACL config",
             env!("CARGO_PKG_NAME")
         );
         println!(
@@ -87,7 +108,7 @@ async fn main() -> Result<()> {
         println!("  b00t_whatismy    - Run b00t whatismy commands");
         println!();
         println!("Example usage with MCP client:");
-        println!("  {} --stdio | your-mcp-client", env!("CARGO_PKG_NAME"));
+        println!("  Configure in .mcp.json or MCP client settings");
     }
 
     Ok(())

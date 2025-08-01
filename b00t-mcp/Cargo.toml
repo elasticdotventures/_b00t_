@@ -2,6 +2,7 @@
 name = "b00t-mcp"
 version.workspace = true
 edition.workspace = true
+build = "../build.rs"
 authors.workspace = true
 license.workspace = true
 repository.workspace = true
@@ -30,9 +31,15 @@ tokio.workspace = true
 rmcp.workspace = true
 
 # b00t-mcp specific dependencies
-b00t-cli = { version = "0.6.0", path = "../b00t-cli" }
+b00t-cli = { workspace = true }
 shellexpand = "3.1.0"
 dirs = "6.0"
+schemars = "1.0"
+
+# Code generation dependencies
+proc-macro2 = "1.0"
+quote = "1.0"
+syn = { version = "2.0", features = ["full", "extra-traits"] }
 
 [dev-dependencies]
 tempfile = "3.0"

@@ -23,9 +23,13 @@ release:
 
 install:
     echo "🥾 _b00t_ install"
+    cargo install --path b00t-mcp
+    cargo install --path b00t-cli
+
+installx:
+    sudo apt update
     ## TODO: someday.
     # cd {{repo-root}} && ./_b00t_.sh setup
-    sudo apt update
     sudo apt install -y fzf bat moreutils fd-find bc jq python3-argcomplete
     ln -sf /usr/bin/batcat ~/.local/bin/bat
     # 🦨 TODO setup.sh .. but first isolate python, rust, js

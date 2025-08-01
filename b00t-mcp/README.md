@@ -53,12 +53,18 @@ deny = [
 
 ```bash
 # Run with stdio transport (typical MCP usage)
+b00t-mcp stdio
+# OR
 b00t-mcp --stdio
 
 # Run in specific directory
+b00t-mcp --directory /path/to/project stdio
+# OR
 b00t-mcp --directory /path/to/project --stdio
 
 # Use custom ACL config
+b00t-mcp --config /path/to/custom-acl.toml stdio
+# OR
 b00t-mcp --config /path/to/custom-acl.toml --stdio
 ```
 
@@ -131,7 +137,7 @@ Add to `.mcp.json`:
   "mcpServers": {
     "b00t-mcp": {
       "command": "b00t-mcp",
-      "args": ["--stdio"],
+      "args": ["stdio"],
       "cwd": "/home/user/.dotfiles"
     }
   }
