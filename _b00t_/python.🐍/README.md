@@ -1,10 +1,24 @@
-## b00t syntax style guide
+## b00t syntax style guide 🥾💌🐍
+
+🤓: laconic docstring comments, idiomatic justfiles for commands 
+(it should not be necessary to read python to understand the abstract capabilities of a
+repo)
 
 
-	- ALWAYS using uv, uvx (NEVER poetry or pip!), use pixi not conda
-	- prefer FastAPI,
+- ALWAYS ruff, NEVER black, or other lints.
+- ALWAYS PEP484 (Type Hints) https://peps.python.org/pep-0484/
+- ALWAYS using uv, uvx (NEVER poetry or pip!), PREFER pixi not conda
+	* unless project already uses conda
+	* avoid editing pyproject.toml directly; use uv! 
+- 
+
+- MCP
+	* https://github.com/jlowin/fastmcp >= 0.4.0
+
+- prefer FastAPI,
 	* Error Handling:
 	- DRY PYTHON "returns" module to emulate Rust Option, Some, Nothing https://github.com/dry-python/returns
+
 ```
 from returns.result import Result, Success, Failure
 from returns.option import Option, Some, Nothing
@@ -29,5 +43,6 @@ match get_user(2):
 ```
 	- __str__, __repr__, plus logging + traceback module
 	- Exception hierarchy + decorators/middleware
+
 
 

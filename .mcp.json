@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "b00t-mcp": {
+      "command": "./target/debug/b00t-mcp",
+      "args": ["--stdio"],
+      "env": {}
+    }
+  }
+}

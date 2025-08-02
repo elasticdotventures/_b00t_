@@ -84,3 +84,6 @@ cliff:
     git-cliff -o CHANGELOG.md
 
 
+
+inspect-mcp:
+	npx @modelcontextprotocol/inspector ./target/release/b00t-mcp

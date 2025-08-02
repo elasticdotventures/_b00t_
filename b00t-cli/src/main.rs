@@ -89,11 +89,16 @@ enum Commands {
     #[clap(about = "Show agent identity and context information")]
     Whoami,
     #[clap(about = "Create checkpoint: commit all files and run tests")]
+    // 🤓 ENTANGLED: b00t-mcp/src/mcp_tools.rs CheckpointCommand
+    // When this changes, update b00t-mcp CheckpointCommand structure
     Checkpoint {
         #[clap(short, long, help = "Commit message for the checkpoint")]
         message: Option<String>,
         #[clap(long, help = "Skip running tests (not recommended)")]
         skip_tests: bool,
+        
+        #[clap(long = "message", help = "Commit message (MCP compatibility)")]
+        message_flag: Option<String>,  // 🦨 MCP compatibility: accept --message flag
     },
     #[clap(about = "Query system information")]
     Whatismy {
@@ -101,6 +106,8 @@ enum Commands {
         whatismy_command: WhatismyCommands,
     },
     #[clap(about = "Show status dashboard of all available tools and services")]
+    // 🤓 ENTANGLED: b00t-mcp/src/mcp_tools.rs StatusCommand
+    // When this changes, update b00t-mcp StatusCommand structure
     Status {
         #[clap(
             long,
@@ -111,6 +118,9 @@ enum Commands {
         installed: bool,
         #[clap(long, help = "Show only available (not installed) tools")]
         available: bool,
+        
+        #[clap(long = "filter", help = "Filter by subsystem (MCP compatibility)")]
+        filter_flag: Option<String>,  // 🦨 MCP compatibility: accept --filter flag
     },
     #[clap(about = "Kubernetes (k8s) cluster and pod management")]
     K8s {
@@ -123,9 +133,14 @@ enum Commands {
         session_command: SessionCommands,
     },
     #[clap(about = "Learn about topics with guided documentation")]
+    // 🤓 ENTANGLED: b00t-mcp/src/mcp_tools.rs LearnCommand
+    // When this changes, update b00t-mcp LearnCommand structure
     Learn {
         #[clap(help = "Topic to learn about (e.g., rust, python, typescript, bash)")]
         topic: Option<String>,
+        
+        #[clap(long = "topic", help = "Topic to learn about (MCP compatibility)")]
+        topic_flag: Option<String>,  // 🦨 MCP compatibility: accept --topic flag
     },
 }
 
@@ -1006,8 +1021,10 @@ fn main() {
                 std::process::exit(1);
             }
         }
-        Some(Commands::Checkpoint { message, skip_tests }) => {
-            if let Err(e) = checkpoint(message.as_deref(), *skip_tests) {
+        Some(Commands::Checkpoint { message, skip_tests, message_flag }) => {
+            // 🦨 MCP compatibility: merge positional and flag arguments
+            let effective_message = message.as_ref().or(message_flag.as_ref());
+            if let Err(e) = checkpoint(effective_message.map(|s| s.as_str()), *skip_tests) {
                 eprintln!("Error: {}", e);
                 std::process::exit(1);
             }
@@ -1018,8 +1035,10 @@ fn main() {
                 std::process::exit(1);
             }
         }
-        Some(Commands::Status { filter, installed, available }) => {
-            if let Err(e) = show_status(&cli.path, filter.as_deref(), *installed, *available) {
+        Some(Commands::Status { filter, installed, available, filter_flag }) => {
+            // 🦨 MCP compatibility: merge positional and flag arguments
+            let effective_filter = filter.as_ref().or(filter_flag.as_ref());
+            if let Err(e) = show_status(&cli.path, effective_filter.map(|s| s.as_str()), *installed, *available) {
                 eprintln!("Error: {}", e);
                 std::process::exit(1);
             }
@@ -1036,8 +1055,10 @@ fn main() {
                 std::process::exit(1);
             }
         }
-        Some(Commands::Learn { topic }) => {
-            if let Err(e) = handle_learn(&cli.path, topic.as_deref()) {
+        Some(Commands::Learn { topic, topic_flag }) => {
+            // 🦨 MCP compatibility: merge positional and flag arguments
+            let effective_topic = topic.as_ref().or(topic_flag.as_ref());
+            if let Err(e) = handle_learn(&cli.path, effective_topic.map(|s| s.as_str())) {
                 eprintln!("Error: {}", e);
                 std::process::exit(1);
             }

@@ -6,6 +6,8 @@ use crate::session_memory::SessionMemory;
 #[derive(Parser)]
 pub enum SessionCommands {
     #[clap(about = "Initialize new session")]
+    // 🤓 ENTANGLED: b00t-mcp/src/mcp_tools.rs SessionInitCommand
+    // When this changes, update b00t-mcp SessionInitCommand structure
     Init {
         #[clap(long, help = "Budget limit in USD")]
         budget: Option<f64>,
