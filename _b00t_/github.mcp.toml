@@ -1,6 +1,11 @@
 [b00t]
 name = "github"
 type = "mcp"
-hint = "This is a sample MCP server configuration with comments The dwiw flag will strip these comments automatically GitHub MCP server for repository management"
+hint = "GitHub MCP server for repository management"
+
+[[b00t.mcp.stdio]]
 command = "npx"
 args = ["-y", "@modelcontextprotocol/server-github"]
+transport = "stdio"
+priority = 0
+requires = ["node"]

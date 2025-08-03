@@ -2,5 +2,10 @@
 name = "kubernetes"
 type = "mcp"
 hint = "Kubernetes cluster management via MCP"
+
+[[b00t.stdio]]
 command = "npx"
 args = ["mcp-server-kubernetes"]
+transport = "stdio"
+priority = 0
+requires = ["node"]

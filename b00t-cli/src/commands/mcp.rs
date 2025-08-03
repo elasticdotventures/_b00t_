@@ -4,14 +4,16 @@ use clap::Parser;
 #[derive(Parser)]
 pub enum McpCommands {
     #[clap(
-        about = "Create MCP server configuration",
-        long_about = "Create MCP server configuration from JSON or command.\n\nJSON Examples:\n  b00t-cli mcp create '{\"name\":\"filesystem\",\"command\":\"npx\",\"args\":[\"-y\",\"@modelcontextprotocol/server-filesystem\"]}'\n  echo '{...}' | b00t-cli mcp create -\n\nCommand Examples:\n  b00t-cli mcp create brave-search -- npx -y @modelcontextprotocol/server-brave-search\n  b00t-cli mcp create filesystem --hint \"File system access\" -- npx -y @modelcontextprotocol/server-filesystem\n\nInstallation Examples:\n  b00t-cli mcp install brave-search claudecode\n  b00t-cli app vscode mcp install filesystem"
+        about = "Register or remove MCP server configuration",
+        long_about = "Register or remove MCP server configuration from JSON or command.\n\nJSON Examples:\n  b00t-cli mcp register '{\"name\":\"filesystem\",\"command\":\"npx\",\"args\":[\"-y\",\"@modelcontextprotocol/server-filesystem\"]}'\n  echo '{...}' | b00t-cli mcp register -\n\nCommand Examples:\n  b00t-cli mcp register brave-search -- npx -y @modelcontextprotocol/server-brave-search\n  b00t-cli mcp register filesystem --hint \"File system access\" -- npx -y @modelcontextprotocol/server-filesystem\n\nRemoval Examples:\n  b00t-cli mcp register --remove filesystem\n  b00t-cli mcp register --remove brave-search\n\nInstallation Examples:\n  b00t-cli mcp install brave-search claudecode\n  b00t-cli app vscode mcp install filesystem"
     )]
-    Create {
+    Register {
         #[clap(help = "MCP server name (for command mode) or JSON configuration (for JSON mode)")]
         name_or_json: String,
         #[clap(long, help = "Description/hint for the MCP server")]
         hint: Option<String>,
+        #[clap(long, help = "Remove the MCP server configuration")]
+        remove: bool,
         #[clap(
             long,
             help = "Do What I Want - auto-cleanup and format JSON (default: enabled)"
@@ -68,32 +70,37 @@ pub enum McpCommands {
 impl McpCommands {
     pub fn execute(&self, path: &str) -> Result<()> {
         match self {
-            McpCommands::Create { name_or_json, hint: _, dwiw, no_dwiw, command_args } => {
-                let actual_dwiw = !no_dwiw && *dwiw;
-                
-                // Check if it's JSON mode (starts with { or -)
-                if name_or_json.starts_with('{') || name_or_json == "-" {
-                    // JSON mode
-                    crate::mcp_add_json(name_or_json, actual_dwiw, path)
-                } else if !command_args.is_empty() {
-                    // Command mode: b00t-cli mcp create server-name -- npx -y @package
-                    let server_name = name_or_json;
-                    let command = &command_args[0];
-                    let args = if command_args.len() > 1 {
-                        command_args[1..].to_vec()
-                    } else {
-                        vec![]
-                    };
-                    
-                    let json_str = serde_json::json!({
-                        "name": server_name,
-                        "command": command,
-                        "args": args
-                    }).to_string();
-                    
-                    crate::mcp_add_json(&json_str, actual_dwiw, path)
+            McpCommands::Register { name_or_json, hint: _, remove, dwiw, no_dwiw, command_args } => {
+                if *remove {
+                    // Remove mode: delete the MCP server configuration
+                    crate::mcp_remove(name_or_json, path)
                 } else {
-                    anyhow::bail!("Invalid create command. Use JSON format or command format with --");
+                    let actual_dwiw = !no_dwiw && *dwiw;
+                    
+                    // Check if it's JSON mode (starts with { or -)
+                    if name_or_json.starts_with('{') || name_or_json == "-" {
+                        // JSON mode
+                        crate::mcp_add_json(name_or_json, actual_dwiw, path)
+                    } else if !command_args.is_empty() {
+                        // Command mode: b00t-cli mcp register server-name -- npx -y @package
+                        let server_name = name_or_json;
+                        let command = &command_args[0];
+                        let args = if command_args.len() > 1 {
+                            command_args[1..].to_vec()
+                        } else {
+                            vec![]
+                        };
+                        
+                        let json_str = serde_json::json!({
+                            "name": server_name,
+                            "command": command,
+                            "args": args
+                        }).to_string();
+                        
+                        crate::mcp_add_json(&json_str, actual_dwiw, path)
+                    } else {
+                        anyhow::bail!("Invalid register command. Use JSON format or command format with --");
+                    }
                 }
             }
             McpCommands::List { json } => {

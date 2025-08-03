@@ -1,7 +1,7 @@
 [b00t]
-name = "filesystem"
+name = "legacy-test"
 type = "mcp"
-hint = "File system access MCP server"
+hint = "Multi-method MCP server (testing new format)"
 
 [[b00t.stdio]]
 command = "npx"
@@ -11,4 +11,4 @@ priority = 0
 requires = ["node"]
 
 [b00t.env]
-FILESYSTEM_ROOT = "/tmp"
+FILESYSTEM_ACCESS = "true"

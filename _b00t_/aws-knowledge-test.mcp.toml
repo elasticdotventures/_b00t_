@@ -1,0 +1,33 @@
+[b00t]
+name = "aws-knowledge-test"
+type = "mcp"
+hint = "AWS Knowledge MCP server with multiple deployment methods (test)"
+
+# HTTP method (highest priority)
+[b00t.mcp.httpstream]
+url = "https://knowledge-mcp.global.api.aws"
+transport = "httpstream"
+priority = 0
+requires = ["internet"]
+requires_internet = true
+requires_auth = false
+
+# STDIO methods with different priorities
+[[b00t.mcp.stdio]]
+command = "npx"
+args = ["mcp-remote", "https://knowledge-mcp.global.api.aws"]
+transport = "stdio"
+priority = 1
+requires = ["node", "internet"]
+
+[[b00t.mcp.stdio]]
+command = "uvx"
+args = ["mcp-proxy", "--transport", "streamablehttp", "https://knowledge-mcp.global.api.aws"]
+transport = "stdio"
+priority = 2
+requires = ["python", "internet"]
+
+# Environment variables shared across methods
+[b00t.env]
+LOG_LEVEL = "ERROR"
+AWS_REGION = "us-east-1"

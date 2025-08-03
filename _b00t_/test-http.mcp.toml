@@ -1,0 +1,12 @@
+[b00t]
+name = "test-http"
+type = "mcp"
+hint = "MCP HTTP server"
+
+[b00t.mcp.httpstream]
+priority = 0
+requires = ["internet"]
+requires_internet = true
+transport = "httpstream"
+requires_auth = false
+url = "https://example.com/mcp"

@@ -2,7 +2,11 @@
 name = "b00t-mcp"
 type = "mcp"
 hint = "MCP server for b00t-cli command proxy with ACL filtering"
+
+[[b00t.stdio]]
 command = "b00t-mcp"
 args = ["--stdio"]
-env = {}
+transport = "stdio"
+priority = 0
+requires = []
 

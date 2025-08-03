@@ -82,6 +82,18 @@ pub struct BootDatum {
 
     // Aliases for CLI commands
     pub aliases: Option<Vec<String>>,
+
+    // MCP-specific multi-method support - these will be handled by datum_mcp module
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub mcp: Option<McpMethods>,
+}
+
+#[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
+pub struct McpMethods {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub stdio: Option<Vec<std::collections::HashMap<String, serde_json::Value>>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub httpstream: Option<std::collections::HashMap<String, serde_json::Value>>,
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
@@ -186,6 +198,94 @@ pub fn clean_json_for_dwiw(input: &str) -> String {
     extract_comments_and_clean_json(input).0
 }
 
+/// Convert legacy JSON command/args to new multi-method format
+fn create_mcp_datum_from_json(
+    name: String,
+    hint: Option<String>,
+    server_config: &serde_json::Value,
+) -> BootDatum {
+    let command = server_config
+        .get("command")
+        .and_then(|v| v.as_str())
+        .unwrap_or("npx")
+        .to_string();
+    let args = server_config
+        .get("args")
+        .and_then(|v| v.as_array())
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|v| v.as_str())
+                .map(|s| s.to_string())
+                .collect()
+        })
+        .unwrap_or_else(|| vec![]);
+    
+    // Detect transport type and requirements based on command
+    let (requires, transport_type) = match command.as_str() {
+        "docker" => (vec!["docker".to_string()], "stdio"),
+        "uvx" | "python" | "python3" => (vec!["python".to_string()], "stdio"),
+        "npx" | "node" => (vec!["node".to_string()], "stdio"),
+        _ => (vec![], "stdio"),
+    };
+    
+    let cli_method = serde_json::json!({
+        "command": command,
+        "args": args,
+        "priority": 0,
+        "requires": requires,
+        "transport": transport_type
+    });
+    
+    BootDatum {
+        name,
+        datum_type: Some(DatumType::Mcp),
+        desires: None,
+        hint: hint.unwrap_or_else(|| "MCP server".to_string()),
+        install: None,
+        update: None,
+        version: None,
+        version_regex: None,
+        command: None, // Legacy field - not used in new format
+        args: None,    // Legacy field - not used in new format
+        vsix_id: None,
+        script: None,
+        image: None,
+        docker_args: None,
+        oci_uri: None,
+        resource_path: None,
+        chart_path: None,
+        namespace: None,
+        values_file: None,
+        keywords: None,
+        package_name: None,
+        env: server_config
+            .get("env")
+            .and_then(|v| v.as_object())
+            .map(|obj| {
+                obj.iter()
+                    .filter_map(|(k, v)| v.as_str().map(|s| (k.clone(), s.to_string())))
+                    .collect()
+            }),
+        require: server_config
+            .get("require")
+            .and_then(|v| v.as_array())
+            .map(|arr| {
+                arr.iter()
+                    .filter_map(|v| v.as_str())
+                    .map(|s| s.to_string())
+                    .collect()
+            }),
+        aliases: None,
+        // Convert legacy command/args to new multi-method format
+        mcp: Some(McpMethods {
+            stdio: Some(vec![cli_method.as_object().unwrap().iter()
+                .map(|(k, v)| (k.clone(), v.clone()))
+                .collect()]),
+            httpstream: None,
+        }),
+    }
+}
+
 pub fn normalize_mcp_json(input: &str, dwiw: bool) -> Result<BootDatum> {
     let (cleaned_input, hint) = if dwiw {
         extract_comments_and_clean_json(input)
@@ -195,108 +295,32 @@ pub fn normalize_mcp_json(input: &str, dwiw: bool) -> Result<BootDatum> {
 
     let json_value: serde_json::Value = serde_json::from_str(&cleaned_input)?;
 
-    // Handle direct format: {"name": "...", "command": "...", "args": [...]}
+    // Handle direct format: {"name": "...", "command": "...", "args": [...]} or {"name": "...", "url": "..."}
     if let Some(name) = json_value.get("name") {
-        let server = BootDatum {
-            name: name.as_str().unwrap_or("unknown").to_string(),
-            datum_type: Some(DatumType::Mcp),
-            desires: None,
-            hint: hint.clone().unwrap_or_else(|| "MCP server".to_string()),
-            install: None,
-            update: None,
-            version: None,
-            version_regex: None,
-            command: Some(
-                json_value
-                    .get("command")
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("npx")
-                    .to_string(),
-            ),
-            args: Some(
-                json_value
-                    .get("args")
-                    .and_then(|v| v.as_array())
-                    .map(|arr| {
-                        arr.iter()
-                            .filter_map(|v| v.as_str())
-                            .map(|s| s.to_string())
-                            .collect()
-                    })
-                    .unwrap_or_else(|| vec![]),
-            ),
-            vsix_id: None,
-            script: None,
-            image: None,
-            docker_args: None,
-            oci_uri: None,
-            resource_path: None,
-            chart_path: None,
-            namespace: None,
-            values_file: None,
-            keywords: None,
-            package_name: None,
-            env: json_value
-                .get("env")
-                .and_then(|v| v.as_object())
-                .map(|obj| {
-                    obj.iter()
-                        .filter_map(|(k, v)| v.as_str().map(|s| (k.clone(), s.to_string())))
-                        .collect()
-                }),
-            require: json_value
-                .get("require")
-                .and_then(|v| v.as_array())
-                .map(|arr| {
-                    arr.iter()
-                        .filter_map(|v| v.as_str())
-                        .map(|s| s.to_string())
-                        .collect()
-                }),
-            aliases: None,
-        };
-        return Ok(server);
-    }
-
-    // Handle mcpServers wrapper format: {"mcpServers": {"server_name": {...}}}
-    if let Some(mcp_servers) = json_value.get("mcpServers") {
-        let keys: Vec<_> = mcp_servers
-            .as_object()
-            .map(|obj| obj.keys().collect())
-            .unwrap_or_default();
-
-        if keys.len() == 1 {
-            let server_name = &keys[0];
-            let server_config = &mcp_servers[server_name];
-
-            let server = BootDatum {
-                name: server_name.to_string(),
+        let name_str = name.as_str().unwrap_or("unknown").to_string();
+        
+        // Check if this is an HTTP server (has URL field)
+        if let Some(url) = json_value.get("url") {
+            let http_method = serde_json::json!({
+                "url": url.as_str().unwrap_or(""),
+                "priority": 0,
+                "requires": ["internet"],
+                "requires_internet": true,
+                "requires_auth": false,
+                "transport": "httpstream"
+            });
+            
+            return Ok(BootDatum {
+                name: name_str,
                 datum_type: Some(DatumType::Mcp),
                 desires: None,
-                hint: hint.clone().unwrap_or_else(|| "MCP server".to_string()),
+                hint: hint.clone().unwrap_or_else(|| "MCP HTTP server".to_string()),
                 install: None,
                 update: None,
                 version: None,
                 version_regex: None,
-                command: Some(
-                    server_config
-                        .get("command")
-                        .and_then(|v| v.as_str())
-                        .unwrap_or("npx")
-                        .to_string(),
-                ),
-                args: Some(
-                    server_config
-                        .get("args")
-                        .and_then(|v| v.as_array())
-                        .map(|arr| {
-                            arr.iter()
-                                .filter_map(|v| v.as_str())
-                                .map(|s| s.to_string())
-                                .collect()
-                        })
-                        .unwrap_or_else(|| vec![]),
-                ),
+                command: None,
+                args: None,
                 vsix_id: None,
                 script: None,
                 image: None,
@@ -308,7 +332,7 @@ pub fn normalize_mcp_json(input: &str, dwiw: bool) -> Result<BootDatum> {
                 values_file: None,
                 keywords: None,
                 package_name: None,
-                env: server_config
+                env: json_value
                     .get("env")
                     .and_then(|v| v.as_object())
                     .map(|obj| {
@@ -316,7 +340,7 @@ pub fn normalize_mcp_json(input: &str, dwiw: bool) -> Result<BootDatum> {
                             .filter_map(|(k, v)| v.as_str().map(|s| (k.clone(), s.to_string())))
                             .collect()
                     }),
-                require: server_config
+                require: json_value
                     .get("require")
                     .and_then(|v| v.as_array())
                     .map(|arr| {
@@ -326,8 +350,30 @@ pub fn normalize_mcp_json(input: &str, dwiw: bool) -> Result<BootDatum> {
                             .collect()
                     }),
                 aliases: None,
-            };
-            return Ok(server);
+                mcp: Some(McpMethods {
+                    stdio: None,
+                    httpstream: Some(http_method.as_object().unwrap().iter()
+                        .map(|(k, v)| (k.clone(), v.clone()))
+                        .collect()),
+                }),
+            });
+        }
+        
+        // Otherwise, treat as CLI/stdio server
+        return Ok(create_mcp_datum_from_json(name_str, hint.clone(), &json_value));
+    }
+
+    // Handle mcpServers wrapper format: {"mcpServers": {"server_name": {...}}}
+    if let Some(mcp_servers) = json_value.get("mcpServers") {
+        let keys: Vec<_> = mcp_servers
+            .as_object()
+            .map(|obj| obj.keys().collect())
+            .unwrap_or_default();
+
+        if keys.len() == 1 {
+            let server_name = keys[0].clone();
+            let server_config = &mcp_servers[&server_name];
+            return Ok(create_mcp_datum_from_json(server_name, hint.clone(), server_config));
         }
     }
 
@@ -338,68 +384,9 @@ pub fn normalize_mcp_json(input: &str, dwiw: bool) -> Result<BootDatum> {
         .unwrap_or_default();
 
     if keys.len() == 1 {
-        let server_name = &keys[0];
-        let server_config = &json_value[server_name];
-
-        let server = BootDatum {
-            name: server_name.to_string(),
-            datum_type: Some(DatumType::Mcp),
-            desires: None,
-            hint: hint.unwrap_or_else(|| "MCP server".to_string()),
-            install: None,
-            update: None,
-            version: None,
-            version_regex: None,
-            command: Some(
-                server_config
-                    .get("command")
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("npx")
-                    .to_string(),
-            ),
-            args: Some(
-                server_config
-                    .get("args")
-                    .and_then(|v| v.as_array())
-                    .map(|arr| {
-                        arr.iter()
-                            .filter_map(|v| v.as_str())
-                            .map(|s| s.to_string())
-                            .collect()
-                    })
-                    .unwrap_or_else(|| vec![]),
-            ),
-            vsix_id: None,
-            script: None,
-            image: None,
-            docker_args: None,
-            oci_uri: None,
-            resource_path: None,
-            chart_path: None,
-            namespace: None,
-            values_file: None,
-            keywords: None,
-            package_name: None,
-            env: server_config
-                .get("env")
-                .and_then(|v| v.as_object())
-                .map(|obj| {
-                    obj.iter()
-                        .filter_map(|(k, v)| v.as_str().map(|s| (k.clone(), s.to_string())))
-                        .collect()
-                }),
-            require: server_config
-                .get("require")
-                .and_then(|v| v.as_array())
-                .map(|arr| {
-                    arr.iter()
-                        .filter_map(|v| v.as_str())
-                        .map(|s| s.to_string())
-                        .collect()
-                }),
-            aliases: None,
-        };
-        return Ok(server);
+        let server_name = keys[0].clone();
+        let server_config = &json_value[&server_name];
+        return Ok(create_mcp_datum_from_json(server_name, hint, server_config));
     }
 
     anyhow::bail!("Unable to parse MCP server configuration from JSON");
@@ -645,10 +632,40 @@ pub fn mcp_list(path: &str, json_output: bool) -> Result<()> {
     for server_name in mcp_files {
         match get_mcp_config(&server_name, path) {
             Ok(datum) => {
+                // Extract command and args from MCP structure (prioritizing stdio methods)
+                let (command, args) = if let Some(mcp) = &datum.mcp {
+                    if let Some(stdio_methods) = &mcp.stdio {
+                        if let Some(first_method) = stdio_methods.first() {
+                            let command = first_method.get("command")
+                                .and_then(|v| v.as_str())
+                                .map(|s| s.to_string());
+                            let args = first_method.get("args")
+                                .and_then(|v| v.as_array())
+                                .map(|arr| arr.iter()
+                                    .filter_map(|v| v.as_str())
+                                    .map(|s| s.to_string())
+                                    .collect::<Vec<String>>());
+                            (command, args)
+                        } else {
+                            (None, None)
+                        }
+                    } else if let Some(httpstream) = &mcp.httpstream {
+                        let url = httpstream.get("url")
+                            .and_then(|v| v.as_str())
+                            .map(|s| s.to_string());
+                        (Some("HTTP".to_string()), url.map(|u| vec![u]))
+                    } else {
+                        (None, None)
+                    }
+                } else {
+                    // Fallback to legacy fields for backwards compatibility
+                    (datum.command.clone(), datum.args.clone())
+                };
+
                 mcp_items.push(McpListItem {
                     name: server_name,
-                    command: datum.command.clone(),
-                    args: datum.args.clone(),
+                    command,
+                    args,
                     hint: Some(datum.hint.clone()),
                     error: None,
                 });
@@ -707,6 +724,33 @@ pub fn mcp_list(path: &str, json_output: bool) -> Result<()> {
     Ok(())
 }
 
+/// Register an MCP server configuration from JSON input
+/// 
+/// Creates a new multi-method MCP server configuration using the modern format
+/// with [[b00t.cli]] sections and proper requirement specifications.
+/// 
+/// # Arguments
+/// 
+/// * `json` - JSON string containing MCP server configuration, or "-" to read from stdin
+/// * `dwiw` - "Do What I Want" flag to auto-cleanup and format JSON comments
+/// * `path` - Path to the _b00t_ directory where configuration will be stored
+/// 
+/// # Examples
+/// 
+/// ```rust
+/// // Register from JSON string
+/// let json = r#"{"name":"filesystem","command":"npx","args":["-y","@modelcontextprotocol/server-filesystem"]}"#;
+/// b00t_cli::mcp_add_json(json, false, "~/.dotfiles/_b00t_").unwrap();
+/// 
+/// // Register with DWIW to strip comments
+/// let json_with_comments = r#"{"name":"github","command":"npx","args":["-y","@modelcontextprotocol/server-github"]} // GitHub MCP server"#;
+/// b00t_cli::mcp_add_json(json_with_comments, true, "~/.dotfiles/_b00t_").unwrap();
+/// 
+/// // CLI usage examples:
+/// // b00t-cli mcp register '{"name":"filesystem","command":"npx","args":["-y","@modelcontextprotocol/server-filesystem"]}'
+/// // b00t-cli mcp register brave-search -- npx -y @modelcontextprotocol/server-brave-search
+/// // echo '{"name":"test"}' | b00t-cli mcp register -
+/// ```
 pub fn mcp_add_json(json: &str, dwiw: bool, path: &str) -> Result<()> {
     use std::io::{self, Read};
     
@@ -743,6 +787,39 @@ pub fn mcp_add_json(json: &str, dwiw: bool, path: &str) -> Result<()> {
         datum.name
     );
 
+    Ok(())
+}
+
+/// Remove an MCP server configuration by name
+/// 
+/// # Examples
+/// 
+/// ```rust
+/// // Remove an MCP server configuration from the _b00t_ directory
+/// b00t_cli::mcp_remove("filesystem", "~/.dotfiles/_b00t_").unwrap();
+/// 
+/// // CLI usage:
+/// // b00t-cli mcp register --remove filesystem
+/// ```
+pub fn mcp_remove(name: &str, path: &str) -> Result<()> {
+    use std::fs;
+    use std::path::PathBuf;
+    
+    let expanded_path = get_expanded_path(path)?;
+    let mut mcp_path = PathBuf::from(expanded_path);
+    
+    // Construct the filename
+    let filename = format!("{}.mcp.toml", name);
+    mcp_path.push(filename);
+    
+    if mcp_path.exists() {
+        fs::remove_file(&mcp_path)
+            .with_context(|| format!("Failed to remove MCP server configuration: {}", mcp_path.display()))?;
+        println!("Removed MCP server configuration: {}", name);
+    } else {
+        anyhow::bail!("MCP server configuration not found: {}", name);
+    }
+    
     Ok(())
 }
 

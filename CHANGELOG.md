@@ -2,6 +2,17 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## 0.7.0 - 2025-08-03
+#### 🐛 Bug fixes
+- b00t-mcp more rusty (#58) - (499f678) - Brian Horakh
+#### 🔧 Miscellaneous
+- update b00t docs - (f342182) - elasticdotventures
+#### 🚀 Features
+- implement multi-method MCP datums with priority-based selection - (c827eba) - elasticdotventures
+- add session memory with get/set/incr/decr operations and README tracking (#56) - (d8b67a3) - Brian Horakh
+
+- - -
+
 ## 0.1.2 - 2025-08-01
 #### 🐛 Bug fixes
 - **(cog)** use default template to avoid remote configuration issues - (3c9d305) - elasticdotventures

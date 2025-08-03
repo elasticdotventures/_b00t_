@@ -1,0 +1,11 @@
+[b00t]
+name = "test-new"
+type = "mcp"
+hint = "MCP server"
+
+[[b00t.mcp.stdio]]
+transport = "stdio"
+command = "npx"
+priority = 0
+args = ["-y", "@test/new"]
+requires = ["node"]

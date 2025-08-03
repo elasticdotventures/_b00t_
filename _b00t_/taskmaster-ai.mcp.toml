@@ -36,9 +36,12 @@ task-master rules add windsurf,roo,vscode
 
 
 """
+[[b00t.stdio]]
 command = "npx"
 args = ["-y", "--package=task-master-ai", "task-master-ai"]
-require = ["NEEDS_ANY_ENV"]
+transport = "stdio"
+priority = 0
+requires = ["node"]
 
 [b00t.env]
 MISTRAL_API_KEY = ""

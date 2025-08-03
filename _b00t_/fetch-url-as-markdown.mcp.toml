@@ -2,5 +2,10 @@
 name = "fetch-url-as-markdown"
 type = "mcp"
 hint = "Fetches URLs and converts content to markdown format"
+
+[[b00t.stdio]]
 command = "uvx"
 args = ["mcp-server-fetch"]
+transport = "stdio"
+priority = 0
+requires = ["python"]

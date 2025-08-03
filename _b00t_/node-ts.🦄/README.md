@@ -49,7 +49,7 @@ for apps & libs published by our org.
   - Commit validation: Enforces conventional commit format
   - WIP commit support: Allows wip: commits for temporary work
 
-
+* Use `const` over `let` in JavaScript when producing code snippets. Only do this when syntactically and semantically correct
 
 
 # use/install nvm

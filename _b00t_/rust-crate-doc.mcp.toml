@@ -2,5 +2,10 @@
 name = "rust-crate-doc"
 type = "mcp"
 hint = "Rust crate documentation access and search"
+
+[[b00t.stdio]]
 command = "bash"
 args = ["cratedocs", "stdio", "--debug"]
+transport = "stdio"
+priority = 0
+requires = []

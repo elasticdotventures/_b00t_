@@ -2,5 +2,10 @@
 name = "brave-search"
 type = "mcp"
 hint = "Brave Search API integration"
+
+[[b00t.stdio]]
 command = "npx"
 args = ["-y", "@modelcontextprotocol/server-brave-search"]
+transport = "stdio"
+priority = 0
+requires = ["node"]
