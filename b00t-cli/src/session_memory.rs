@@ -468,6 +468,22 @@ impl SessionMemory {
             (context.build_count as f64 / context.session_duration as f64) * 3600.0
         } else { 0.0 });
         
+        // Add b00t-c0re-lib context variables for template compatibility
+        if let Ok(b00t_context) = b00t_c0re_lib::B00tContext::current() {
+            template_context.insert("PID", &b00t_context.pid);
+            template_context.insert("TIMESTAMP", &b00t_context.timestamp);
+            template_context.insert("USER", &b00t_context.user);
+            template_context.insert("BRANCH", &b00t_context.branch);
+            template_context.insert("_B00T_Agent", &b00t_context.agent);
+            template_context.insert("_B00T_AGENT", &b00t_context.agent);
+            template_context.insert("MODEL_SIZE", &b00t_context.model_size);
+            template_context.insert("PRIVACY", &b00t_context.privacy);
+            template_context.insert("WORKSPACE_ROOT", &b00t_context.workspace_root);
+            template_context.insert("IS_GIT_REPO", &b00t_context.is_git_repo);
+            template_context.insert("GIT_REPO", &b00t_context.is_git_repo);
+            template_context.insert("HOSTNAME", &b00t_context.hostname);
+        }
+        
         // Add conditional flags for template logic
         template_context.insert("has_cargo", &std::path::Path::new("Cargo.toml").exists());
         template_context.insert("has_package_json", &std::path::Path::new("package.json").exists());

@@ -172,13 +172,21 @@ pub struct AgentInfo {
 
 pub fn extract_comments_and_clean_json(input: &str) -> (String, Option<String>) {
     let comment_re = Regex::new(r"//.*$").unwrap();
+    let block_comment_re = Regex::new(r"/\*.*?\*/").unwrap();
 
     let (mut cleaned_input, mut first_comment) = (String::new(), None);
 
-    for line in input.lines() {
+    // First, remove block comments /* ... */
+    let input_without_blocks = block_comment_re.replace_all(input, "").to_string();
+
+    // Then process line comments
+    for line in input_without_blocks.lines() {
         if let Some(cap) = comment_re.find(line) {
             if first_comment.is_none() {
-                first_comment = Some(cap.as_str().trim_start_matches("//").trim().to_string());
+                let comment_text = cap.as_str().trim_start_matches("//").trim();
+                if !comment_text.is_empty() {
+                    first_comment = Some(comment_text.to_string());
+                }
             }
             let line_without_comment = line[..cap.start()].trim_end();
             if !line_without_comment.is_empty() {
@@ -190,6 +198,25 @@ pub fn extract_comments_and_clean_json(input: &str) -> (String, Option<String>) 
             cleaned_input.push('\n');
         }
     }
+
+    // Also handle trailing commas (JSON5 style) - both objects and arrays
+    let trailing_comma_re = Regex::new(r",(\s*[}\]])").unwrap();
+    cleaned_input = trailing_comma_re.replace_all(&cleaned_input, "$1").to_string();
+    
+    // Handle trailing commas at end of lines more aggressively
+    let lines: Vec<String> = cleaned_input.lines().map(|line| {
+        let trimmed = line.trim_end();
+        if trimmed.ends_with(',') && 
+           (line.contains('}') || line.contains(']') || 
+            cleaned_input.lines().skip_while(|l| l != &line).nth(1)
+                .map(|next| next.trim().starts_with('}') || next.trim().starts_with(']'))
+                .unwrap_or(false)) {
+            trimmed.strip_suffix(',').unwrap_or(trimmed).to_string()
+        } else {
+            line.to_string()
+        }
+    }).collect();
+    cleaned_input = lines.join("\n");
 
     (cleaned_input.trim().to_string(), first_comment)
 }
@@ -381,6 +408,13 @@ pub fn normalize_mcp_json(input: &str, dwiw: bool) -> Result<BootDatum> {
         if keys.len() == 1 {
             let server_name = keys[0].clone();
             let server_config = &mcp_servers[&server_name];
+            return Ok(create_mcp_datum_from_json(server_name, hint.clone(), server_config));
+        } else if keys.len() > 1 {
+            // Multiple servers in mcpServers - take the first one and warn
+            let server_name = keys[0].clone();
+            let server_config = &mcp_servers[&server_name];
+            eprintln!("⚠️  Multiple servers found in mcpServers, using first: {}", server_name);
+            eprintln!("💡 To register multiple servers, use separate commands for each");
             return Ok(create_mcp_datum_from_json(server_name, hint.clone(), server_config));
         }
     }
@@ -761,10 +795,21 @@ pub fn mcp_list(path: &str, json_output: bool) -> Result<()> {
 /// // echo '{"name":"test"}' | b00t-cli mcp register -
 /// ```
 pub fn mcp_add_json(json: &str, dwiw: bool, path: &str) -> Result<()> {
-    use std::io::{self, Read};
+    use std::io::{self, Read, IsTerminal};
     
     let json_content = if json == "-" {
         let mut buffer = String::new();
+        
+        // Check if reading from terminal (interactive) vs pipe
+        if io::stdin().is_terminal() {
+            eprintln!("📋 Paste your MCP server JSON configuration and press Ctrl+D when done:");
+            eprintln!("💡 Supported formats:");
+            eprintln!("   • Direct: {{\"name\":\"server\",\"command\":\"npx\",\"args\":[...]}}");
+            eprintln!("   • mcpServers: {{\"mcpServers\":{{\"server\":{{...}}}}}}");
+            eprintln!("   • Named: {{\"server-name\":{{\"command\":\"npx\",...}}}}");
+            eprintln!("");
+        }
+        
         match io::stdin().read_to_string(&mut buffer) {
             Ok(_) => {
                 let trimmed = buffer.trim();

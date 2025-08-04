@@ -1,16 +1,16 @@
 [workspace]
 members = [
     "b00t-cli",
-    "b00t-mcp",
+    "b00t-mcp", 
+    "b00t-c0re-lib",
 ]
 resolver = "2"
 
 [workspace.package]
-# 🤓 Placeholder version - actual version comes from cocogitto git tags via build.rs
-# This ensures git tags remain the single source of authority for versioning
-version = "0.0.0-git"
+# 🤓 Version management centralized in b00t-c0re-lib
+# All workspace crates inherit from the single source of truth
+version = "0.7.0"
 edition = "2024"
-build = "build.rs"
 authors = ["Brian Horakh <brian@promptexecution.com>"]
 license = "MIT"
 repository = "https://github.com/elasticdotventures/dotfiles"
@@ -18,6 +18,7 @@ repository = "https://github.com/elasticdotventures/dotfiles"
 [workspace.dependencies]
 # Workspace members
 b00t-cli = { path = "b00t-cli" }
+b00t-c0re-lib = { path = "b00t-c0re-lib" }
 
 # Common dependencies that could be shared across workspace members
 serde = { version = "1.0", features = ["derive"] }

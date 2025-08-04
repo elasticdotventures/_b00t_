@@ -1,0 +1,7 @@
+target/*
+node_modules/*
+*.ignore
+Cargo.*
+bun.lockb
+*.txt
+*.rs

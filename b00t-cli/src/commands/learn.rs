@@ -1,12 +1,10 @@
 use anyhow::{Context, Result};
-use duct::cmd;
 use serde::Deserialize;
 use std::collections::HashMap;
 use std::fs;
 
-use crate::{get_expanded_path, get_workspace_root};
-use crate::whoami::detect_agent;
-use crate::utils::{is_git_repo};
+use crate::get_expanded_path;
+use b00t_c0re_lib::TemplateRenderer;
 
 #[derive(Debug, Deserialize)]
 struct LearnConfig {
@@ -38,40 +36,18 @@ pub fn handle_learn(path: &str, topic: Option<&str>) -> Result<()> {
 
     match topic {
         None => {
-            // No topic specified, show the available topics in JSON format like whoami
-            // Apply the same template variable substitution as whoami
-            let timestamp = chrono::Utc::now()
-                .format("%Y-%m-%d %H:%M:%S UTC")
-                .to_string();
-            let user = std::env::var("USER").unwrap_or_else(|_| "unknown".to_string());
-            let branch = cmd!("git", "branch", "--show-current")
-                .read()
-                .unwrap_or_else(|_| "no-git".to_string())
-                .trim()
-                .to_string();
-            let agent = detect_agent(false);
-            let model_size = std::env::var("MODEL_SIZE").unwrap_or_else(|_| "unknown".to_string());
-            let privacy = std::env::var("PRIVACY").unwrap_or_else(|_| "standard".to_string());
-            let workspace_root = get_workspace_root();
-            let is_git = is_git_repo();
+            // No topic specified, show the available topics in JSON format
+            // Render template using b00t-c0re-lib
+            let renderer = TemplateRenderer::with_defaults()
+                .context("Failed to create template renderer")?;
 
             // Serialize topics to JSON
             let topics_json = serde_json::to_string_pretty(&learn_config.topics)
                 .context("Failed to serialize topics to JSON")?;
 
             // Apply template variables to the JSON output
-            let mut rendered = topics_json;
-            rendered = rendered.replace("{{PID}}", &std::process::id().to_string());
-            rendered = rendered.replace("{{TIMESTAMP}}", &timestamp);
-            rendered = rendered.replace("{{USER}}", &user);
-            rendered = rendered.replace("{{BRANCH}}", &branch);
-            rendered = rendered.replace("{{_B00T_Agent}}", &agent);
-            rendered = rendered.replace("{{_B00T_AGENT}}", &agent);
-            rendered = rendered.replace("{{MODEL_SIZE}}", &model_size);
-            rendered = rendered.replace("{{PRIVACY}}", &privacy);
-            rendered = rendered.replace("{{WORKSPACE_ROOT}}", &workspace_root);
-            rendered = rendered.replace("{{IS_GIT_REPO}}", &is_git.to_string());
-            rendered = rendered.replace("{{GIT_REPO}}", &is_git.to_string());
+            let rendered = renderer.render(&topics_json)
+                .context("Failed to render topics template")?;
 
             println!("{}", rendered);
         }
@@ -94,35 +70,12 @@ pub fn handle_learn(path: &str, topic: Option<&str>) -> Result<()> {
                     topic_file_path.display()
                 ))?;
 
-                // Apply the same template variable substitution as whoami
-                let timestamp = chrono::Utc::now()
-                    .format("%Y-%m-%d %H:%M:%S UTC")
-                    .to_string();
-                let user = std::env::var("USER").unwrap_or_else(|_| "unknown".to_string());
-                let branch = cmd!("git", "branch", "--show-current")
-                    .read()
-                    .unwrap_or_else(|_| "no-git".to_string())
-                    .trim()
-                    .to_string();
-                let agent = detect_agent(false);
-                let model_size = std::env::var("MODEL_SIZE").unwrap_or_else(|_| "unknown".to_string());
-                let privacy = std::env::var("PRIVACY").unwrap_or_else(|_| "standard".to_string());
-                let workspace_root = get_workspace_root();
-                let is_git = is_git_repo();
-
-                // Simple string replacement approach (same as whoami)
-                let mut rendered = template_content;
-                rendered = rendered.replace("{{PID}}", &std::process::id().to_string());
-                rendered = rendered.replace("{{TIMESTAMP}}", &timestamp);
-                rendered = rendered.replace("{{USER}}", &user);
-                rendered = rendered.replace("{{BRANCH}}", &branch);
-                rendered = rendered.replace("{{_B00T_Agent}}", &agent);
-                rendered = rendered.replace("{{_B00T_AGENT}}", &agent);
-                rendered = rendered.replace("{{MODEL_SIZE}}", &model_size);
-                rendered = rendered.replace("{{PRIVACY}}", &privacy);
-                rendered = rendered.replace("{{WORKSPACE_ROOT}}", &workspace_root);
-                rendered = rendered.replace("{{IS_GIT_REPO}}", &is_git.to_string());
-                rendered = rendered.replace("{{GIT_REPO}}", &is_git.to_string());
+                // Render topic file using template engine  
+                let renderer = TemplateRenderer::with_defaults()
+                    .context("Failed to create template renderer")?;
+                
+                let rendered = renderer.render(&template_content)
+                    .context("Failed to render topic template")?;
 
                 println!("{}", rendered);
             } else {

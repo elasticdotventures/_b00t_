@@ -46,7 +46,7 @@ pub use b00t_cli::{get_config, get_expanded_path, get_mcp_config, get_mcp_toml_f
 mod integration_tests;
 
 #[derive(Parser)]
-#[clap(version = env!("GIT_REPO_TAG_VERSION"), about, long_about = None)]
+#[clap(version = b00t_c0re_lib::version::VERSION, about, long_about = None)]
 struct Cli {
     #[clap(subcommand)]
     command: Option<Commands>,

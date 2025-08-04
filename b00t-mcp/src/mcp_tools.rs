@@ -27,7 +27,7 @@ pub struct McpAddCommand {
     pub hint: Option<String>,
 }
 
-impl_mcp_tool!(McpAddCommand, "b00t_mcp_add", ["mcp", "add"]);
+impl_mcp_tool!(McpAddCommand, "b00t_mcp_add", ["mcp", "register"]);
 
 /// MCP command for MCP server output generation
 #[derive(Parser, Clone)]
@@ -141,6 +141,203 @@ pub struct AiOutputCommand {
 }
 
 impl_mcp_tool!(AiOutputCommand, "b00t_ai_output", ["ai", "output"]);
+
+// Agent coordination MCP commands
+
+/// MCP command for agent discovery
+#[derive(Parser, Clone)]
+pub struct AgentDiscoverCommand {
+    #[arg(long, help = "Filter by agent role")]
+    pub role: Option<String>,
+    
+    #[arg(long, help = "Filter by crew membership")]
+    pub crew: Option<String>,
+    
+    #[arg(long, help = "Required capabilities (comma-separated)")]
+    pub capabilities: Option<String>,
+    
+    #[arg(long, help = "Output in JSON format")]
+    pub json: bool,
+}
+
+impl_mcp_tool!(AgentDiscoverCommand, "b00t_agent_discover", ["agent", "discover"]);
+
+/// MCP command for sending messages to agents
+#[derive(Parser, Clone)]
+pub struct AgentMessageCommand {
+    #[arg(help = "Target agent ID")]
+    pub to_agent: String,
+    
+    #[arg(help = "Message subject")]
+    pub subject: String,
+    
+    #[arg(help = "Message content")]
+    pub content: String,
+    
+    #[arg(long, help = "Require acknowledgment")]
+    pub ack: bool,
+}
+
+impl_mcp_tool!(AgentMessageCommand, "b00t_agent_message", ["agent", "message"]);
+
+/// MCP command for task delegation (captain only)
+#[derive(Parser, Clone)]
+pub struct AgentDelegateCommand {
+    #[arg(help = "Worker agent ID")]
+    pub worker: String,
+    
+    #[arg(help = "Task ID")]
+    pub task_id: String,
+    
+    #[arg(help = "Task description")]
+    pub description: String,
+    
+    #[arg(long, help = "Priority level", value_enum)]
+    pub priority: Option<String>, // Will be parsed as TaskPriority
+    
+    #[arg(long, help = "Deadline in minutes")]
+    pub deadline: Option<u64>,
+    
+    #[arg(long, help = "Required capabilities (comma-separated)")]
+    pub capabilities: Option<String>,
+    
+    #[arg(long, help = "Block until completion")]
+    pub blocking: bool,
+}
+
+impl_mcp_tool!(AgentDelegateCommand, "b00t_agent_delegate", ["agent", "delegate"]);
+
+/// MCP command for completing tasks (worker response)
+#[derive(Parser, Clone)]
+pub struct AgentCompleteCommand {
+    #[arg(help = "Captain agent ID")]
+    pub captain: String,
+    
+    #[arg(help = "Task ID")]
+    pub task_id: String,
+    
+    #[arg(long, help = "Completion status", value_enum)]
+    pub status: String, // "success", "failed", "partial", "cancelled"
+    
+    #[arg(long, help = "Result description")]
+    pub result: Option<String>,
+    
+    #[arg(long, help = "Output artifacts (comma-separated paths)")]
+    pub artifacts: Option<String>,
+}
+
+impl_mcp_tool!(AgentCompleteCommand, "b00t_agent_complete", ["agent", "complete"]);
+
+/// MCP command for reporting progress
+#[derive(Parser, Clone)]
+pub struct AgentProgressCommand {
+    #[arg(help = "Task ID")]
+    pub task_id: String,
+    
+    #[arg(help = "Progress percentage (0-100)")]
+    pub progress: f32,
+    
+    #[arg(help = "Status message")]
+    pub message: String,
+    
+    #[arg(long, help = "Estimated completion in minutes")]
+    pub eta: Option<u64>,
+}
+
+impl_mcp_tool!(AgentProgressCommand, "b00t_agent_progress", ["agent", "progress"]);
+
+/// MCP command for creating voting proposals (captain only)
+#[derive(Parser, Clone)]
+pub struct AgentVoteCreateCommand {
+    #[arg(help = "Proposal subject")]
+    pub subject: String,
+    
+    #[arg(help = "Proposal description")]
+    pub description: String,
+    
+    #[arg(help = "Voting options (JSON array)")]
+    pub options: String,
+    
+    #[arg(long, help = "Voting type", value_enum)]
+    pub vote_type: String, // "single", "ranked", "approval", "veto"
+    
+    #[arg(long, help = "Deadline in minutes")]
+    pub deadline: u64,
+    
+    #[arg(help = "Eligible voters (comma-separated agent IDs)")]
+    pub voters: String,
+}
+
+impl_mcp_tool!(AgentVoteCreateCommand, "b00t_agent_vote_create", ["agent", "vote", "create"]);
+
+/// MCP command for submitting votes
+#[derive(Parser, Clone)]
+pub struct AgentVoteSubmitCommand {
+    #[arg(help = "Proposal ID")]
+    pub proposal_id: String,
+    
+    #[arg(help = "Vote choice (JSON)")]
+    pub vote: String,
+    
+    #[arg(long, help = "Vote reasoning")]
+    pub reasoning: Option<String>,
+}
+
+impl_mcp_tool!(AgentVoteSubmitCommand, "b00t_agent_vote_submit", ["agent", "vote", "submit"]);
+
+/// MCP command for waiting for messages (blocking)
+#[derive(Parser, Clone)]
+pub struct AgentWaitCommand {
+    #[arg(long, help = "Timeout in seconds", default_value = "300")]
+    pub timeout: u64,
+    
+    #[arg(long, help = "Filter by message type")]
+    pub message_type: Option<String>,
+    
+    #[arg(long, help = "Filter by sender agent")]
+    pub from_agent: Option<String>,
+    
+    #[arg(long, help = "Filter by task ID")]
+    pub task_id: Option<String>,
+    
+    #[arg(long, help = "Filter by subject")]
+    pub subject: Option<String>,
+}
+
+impl_mcp_tool!(AgentWaitCommand, "b00t_agent_wait", ["agent", "wait"]);
+
+/// MCP command for sending event notifications
+#[derive(Parser, Clone)]
+pub struct AgentNotifyCommand {
+    #[arg(help = "Event type (e.g., 'file_created', 'pr_opened')")]
+    pub event_type: String,
+    
+    #[arg(help = "Event source")]
+    pub source: String,
+    
+    #[arg(help = "Event details (JSON)")]
+    pub details: String,
+    
+    #[arg(long, help = "Target specific agents (comma-separated)")]
+    pub agents: Option<String>,
+}
+
+impl_mcp_tool!(AgentNotifyCommand, "b00t_agent_notify", ["agent", "notify"]);
+
+/// MCP command for capability requests
+#[derive(Parser, Clone)]
+pub struct AgentCapabilityCommand {
+    #[arg(help = "Required capabilities (comma-separated)")]
+    pub capabilities: String,
+    
+    #[arg(help = "Task description")]
+    pub description: String,
+    
+    #[arg(long, help = "Request urgency", value_enum)]
+    pub urgency: Option<String>, // "low", "normal", "high", "emergency"
+}
+
+impl_mcp_tool!(AgentCapabilityCommand, "b00t_agent_capability", ["agent", "capability"]);
 
 /// App VSCode MCP install command
 #[derive(Parser, Clone)]
@@ -265,7 +462,18 @@ pub fn create_mcp_registry() -> McpCommandRegistry {
         .register::<SessionStatusCommand>()
         .register::<SessionEndCommand>()
         .register::<LearnCommand>()
-        .register::<CheckpointCommand>();
+        .register::<CheckpointCommand>()
+        // Agent coordination commands
+        .register::<AgentDiscoverCommand>()
+        .register::<AgentMessageCommand>()
+        .register::<AgentDelegateCommand>()
+        .register::<AgentCompleteCommand>()
+        .register::<AgentProgressCommand>()
+        .register::<AgentVoteCreateCommand>()
+        .register::<AgentVoteSubmitCommand>()
+        .register::<AgentWaitCommand>()
+        .register::<AgentNotifyCommand>()
+        .register::<AgentCapabilityCommand>();
         
     builder.build()
 }

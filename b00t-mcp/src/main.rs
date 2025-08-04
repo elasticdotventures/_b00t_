@@ -17,7 +17,7 @@ use b00t_mcp::B00tMcpServerRusty;
 #[tokio::main]
 async fn main() -> Result<()> {
     let matches = Command::new("b00t-mcp")
-        .version(env!("GIT_REPO_TAG_VERSION"))
+        .version(b00t_c0re_lib::version::VERSION)
         .author("b00t-mcp contributors")
         .about("MCP Server for b00t-cli command proxy with ACL filtering")
         .arg(

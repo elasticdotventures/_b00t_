@@ -1,5 +1,4 @@
 use std::env;
-use std::fs;
 use tempfile::TempDir;
 use b00t_cli::session_memory::SessionMemory;
 

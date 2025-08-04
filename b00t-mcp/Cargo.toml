@@ -1,8 +1,8 @@
 [package]
 name = "b00t-mcp"
+# 🤓 Version inherited from b00t-c0re-lib - the single source of truth
 version.workspace = true
 edition.workspace = true
-build = "../build.rs"
 authors.workspace = true
 license.workspace = true
 repository.workspace = true
@@ -34,6 +34,7 @@ tracing.workspace = true
 
 # b00t-mcp specific dependencies
 b00t-cli = { workspace = true }
+b00t-c0re-lib = { workspace = true }
 shellexpand = "3.1.0"
 dirs = "6.0"
 schemars = "1.0"

@@ -1,0 +1,75 @@
+[package]
+name = "k0mmand3r"
+version = "0.1.5"
+edition = "2021"
+authors = [ "Brian H. <brianh@elastic.ventures>" ]
+license = "MIT"
+description = "A library for parsing promptexecution K0mmand3r commands"
+readme = "README.md"
+homepage = "http://promptexecution.com"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[lib]
+name = "k0mmand3r"
+path="src/lib.rs"
+crate-type = ["cdylib", "rlib"]
+
+[features]
+default = []
+lang-wasm = []
+lang-python = [ "pyo3" ]
+
+
+[dependencies]
+pyo3 = { version="0.14", features=["extension-module"], optional = true }
+decimal-rs = { version="0.1.43", features=["serde"] }
+indexmap = "2.1.0"
+serde = { version="1.0.193", features=["derive"] }
+serde_json = "1.0.108"
+wasm-bindgen = "0.2.89"
+winnow = "0.5.30"
+wasm-bindgen-test = "0.3.39"
+
+[tool.maturin]
+# https://www.maturin.rs/config
+## 🦀 rust/cargo specic:
+# Build artifacts with the specified Cargo profile
+profile = "release"
+# List of features to activate
+features = ["lang-python", "pyo3/extension-module"]
+# Activate all available features
+all-features = false
+# Do not activate the `default` feature
+# no-default-features = false
+# # Cargo manifest path
+# manifest-path = "Cargo.toml"
+# # Require Cargo.lock and cache are up to date
+# frozen = false
+# # Require Cargo.lock is up to date
+# locked = false
+# # Override a configuration value (unstable)
+# config = []
+# # Unstable (nightly-only) flags to Cargo, see 'cargo -Z help' for details
+# unstable-flags = []
+# # Extra arguments that will be passed to rustc as `cargo rustc [...] -- [...] [arg1] [arg2]`
+# rustc-args = []
+## 🐍 python specic:
+# Include additional files
+#include = []
+# Exclude files
+#exclude = []
+# Bindings type
+bindings = "pyo3"
+# Control the platform tag on linux
+compatibility = "manylinux2014"
+# Don't check for manylinux compliance
+skip-auditwheel = false
+# Python source directory
+python-source = "src"
+# Python packages to include
+#python-packages = ["foo", "bar"]
+# Strip the library for minimum file size
+strip = true
+# Source distribution generator,
+# supports cargo (default) and git.
+sdist-generator = "cargo"

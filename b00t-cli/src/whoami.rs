@@ -1,8 +1,7 @@
 use anyhow::{Context, Result};
-use duct::cmd;
 use std::fs;
-use crate::utils::{is_git_repo, get_workspace_root};
 use crate::get_expanded_path;
+use b00t_c0re_lib::TemplateRenderer;
 
 /// Detect current AI agent based on environment variables
 pub fn detect_agent(ignore_env: bool) -> String {
@@ -46,37 +45,12 @@ pub fn whoami(path: &str) -> Result<()> {
         agent_md_path.display()
     ))?;
 
-    // Prepare template variables
-    let timestamp = chrono::Utc::now()
-        .format("%Y-%m-%d %H:%M:%S UTC")
-        .to_string();
-    let user = std::env::var("USER").unwrap_or_else(|_| "unknown".to_string());
-    let branch = cmd!("git", "branch", "--show-current")
-        .read()
-        .unwrap_or_else(|_| "no-git".to_string())
-        .trim()
-        .to_string();
-    let agent = detect_agent(false);
-    let model_size = std::env::var("MODEL_SIZE").unwrap_or_else(|_| "unknown".to_string());
-    let privacy = std::env::var("PRIVACY").unwrap_or_else(|_| "standard".to_string());
-    let workspace_root = get_workspace_root();
-    let is_git = is_git_repo();
-
-    // Simple string replacement approach instead of Tera due to complex template syntax
-    let mut rendered = template_content;
-
-    // Replace variables manually
-    rendered = rendered.replace("{{PID}}", &std::process::id().to_string());
-    rendered = rendered.replace("{{TIMESTAMP}}", &timestamp);
-    rendered = rendered.replace("{{USER}}", &user);
-    rendered = rendered.replace("{{BRANCH}}", &branch);
-    rendered = rendered.replace("{{_B00T_Agent}}", &agent);
-    rendered = rendered.replace("{{_B00T_AGENT}}", &agent);
-    rendered = rendered.replace("{{MODEL_SIZE}}", &model_size);
-    rendered = rendered.replace("{{PRIVACY}}", &privacy);
-    rendered = rendered.replace("{{WORKSPACE_ROOT}}", &workspace_root);
-    rendered = rendered.replace("{{IS_GIT_REPO}}", &is_git.to_string());
-    rendered = rendered.replace("{{GIT_REPO}}", &is_git.to_string());
+    // Use b00t-c0re-lib template renderer
+    let renderer = TemplateRenderer::with_defaults()
+        .context("Failed to create template renderer")?;
+    
+    let rendered = renderer.render(&template_content)
+        .context("Failed to render template")?;
 
     println!("{}", rendered);
 

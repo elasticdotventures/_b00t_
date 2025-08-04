@@ -54,7 +54,6 @@ macro_rules! impl_mcp_tool {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use clap::Parser;
     use crate::clap_reflection::{McpReflection, McpExecutor};
     use std::collections::HashMap;

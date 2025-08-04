@@ -1,8 +1,8 @@
 [package]
 name = "b00t-cli"
+# 🤓 Version inherited from b00t-c0re-lib - the single source of truth
 version.workspace = true
 edition.workspace = true
-build = "../build.rs"
 authors.workspace = true
 license.workspace = true
 repository.workspace = true
@@ -26,6 +26,7 @@ anyhow = { workspace = true }
 chrono.workspace = true
 
 # b00t-cli specific dependencies
+b00t-c0re-lib = { workspace = true }
 duct = "1.0"
 shellexpand = "3.1.0"
 semver = "1.0"

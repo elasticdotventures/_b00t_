@@ -1,0 +1,11 @@
+[b00t]
+name = "kubernetes-flux159"
+type = "mcp"
+hint = "MCP server"
+
+[[b00t.mcp.stdio]]
+args = ["mcp-server-kubernetes"]
+requires = []
+transport = "stdio"
+command = "npx"
+priority = 0
