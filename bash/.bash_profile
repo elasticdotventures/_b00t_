@@ -1,16 +1,14 @@
 #!/bin/bash
 
-# Early agent detection for tokenomics (single source of truth)
-if [ -z "${_B00T_Agent:-}" ]; then
-    if command -v b00t-cli &> /dev/null; then
-        _B00T_Agent=$(b00t-cli whatismy agent)
-        export _B00T_Agent
+# Session-aware b00t initialization (single source of truth)
+if command -v b00t-cli &> /dev/null; then
+    # Use session-aware initialization that handles counting, agent detection, and output verbosity
+    b00t_output=$(b00t-cli session bashrc-init 2>/dev/null)
+    if [ $? -eq 0 ] && [ -n "$b00t_output" ]; then
+        # Extract agent from output for environment variable
+        export _B00T_Agent="$b00t_output"
+        # The greeting is handled by bashrc-init based on verbosity settings
     fi
-fi
-
-# Agent-aware greeting
-if [ -n "${_B00T_Agent:-}" ]; then
-    echo "🥾👋 ${_B00T_Agent} run \`b00t whoami\` for superpowers"
 fi
 
 # Detect if running in WSL

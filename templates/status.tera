@@ -1,0 +1,39 @@
+🩺 **Agent Context Status** 
+🤖 **Agent**: {{agent.agent_name}} ({{agent.session_id | truncate(length=8)}})
+📅 **Session**: {{duration_formatted}} ({{agent.session_duration}}s)
+🌿 **Branch**: {{agent.current_branch}} ({{agent.build_count}}🔨 builds)
+📊 **Activity**: {{agent.shell_count}}🐚 shells, {{agent.compile_count}}⚙️ compiles, {{agent.test_count}}🧪 tests
+
+🧠 **OODA Analysis**:
+{% if agent.diagnostic_total > 0 -%}
+{% set health_percentage = (health_ratio * 100) | round -%}
+{% if health_ratio >= 0.8 -%}
+✅ **System Health**: Excellent ({{health_percentage}}%)
+{% elif health_ratio >= 0.6 -%}
+⚠️ **System Health**: Adequate ({{health_percentage}}%)
+{% else -%}
+❌ **System Health**: Poor ({{health_percentage}}%)
+{% endif -%}
+{% endif -%}
+
+{% if agent.session_duration > 300 -%}
+{% if builds_per_hour > 10.0 -%}
+🚀 **Build Velocity**: High ({{builds_per_hour | round(precision=1)}} builds/hour)
+{% elif builds_per_hour > 2.0 -%}
+⚙️ **Build Pace**: Moderate ({{builds_per_hour | round(precision=1)}} builds/hour)
+{% endif -%}
+{% endif -%}
+
+💡 **Next Actions**:
+{% if agent.compile_count == 0 and has_cargo -%}
+- Run `cargo build` to verify compilation
+{% endif -%}
+{% if agent.test_count == 0 and has_tests -%}
+- Run tests to ensure quality
+{% endif -%}
+{% if agent.build_count == 0 and has_cargo -%}
+- Consider running `b00t-cli session build` after builds
+{% endif -%}
+{% if agent.compile_count > agent.build_count and agent.build_count > 0 -%}
+- Build tracking may be behind compile count
+{% endif -%}

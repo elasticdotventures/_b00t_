@@ -26,14 +26,40 @@ mod integration_tests {
         // Test reading the config back
         let server = get_mcp_config("playwright", temp_path).unwrap();
         assert_eq!(server.name, "playwright");
-        assert_eq!(server.command, Some("npx".to_string()));
-        assert_eq!(
-            server.args,
-            Some(vec![
-                "-y".to_string(),
-                "@executeautomation/playwright-mcp-server".to_string()
-            ])
-        );
+        
+        // 🤓 Handle both legacy and new multi-source formats
+        // Legacy format has direct command/args fields
+        // New format has command/args in mcp.stdio[0]
+        if let Some(ref mcp_methods) = server.mcp {
+            if let Some(ref stdio_methods) = mcp_methods.stdio {
+                assert!(!stdio_methods.is_empty(), "Should have at least one stdio method");
+                let first_method = &stdio_methods[0];
+                let command = first_method.get("command").and_then(|v| v.as_str());
+                let args = first_method.get("args").and_then(|v| v.as_array())
+                    .map(|arr| arr.iter().filter_map(|v| v.as_str()).map(|s| s.to_string()).collect::<Vec<_>>());
+                    
+                assert_eq!(command, Some("npx"));
+                assert_eq!(
+                    args,
+                    Some(vec![
+                        "-y".to_string(),
+                        "@executeautomation/playwright-mcp-server".to_string()
+                    ])
+                );
+            } else {
+                panic!("Expected stdio methods in multi-source MCP config");
+            }
+        } else {
+            // Legacy format
+            assert_eq!(server.command, Some("npx".to_string()));
+            assert_eq!(
+                server.args,
+                Some(vec![
+                    "-y".to_string(),
+                    "@executeautomation/playwright-mcp-server".to_string()
+                ])
+            );
+        }
     }
 
     #[test]
@@ -65,14 +91,38 @@ mod integration_tests {
 
         let server = get_mcp_config("github", temp_path).unwrap();
         assert_eq!(server.name, "github");
-        assert_eq!(server.command, Some("npx".to_string()));
-        assert_eq!(
-            server.args,
-            Some(vec![
-                "-y".to_string(),
-                "@modelcontextprotocol/server-github".to_string()
-            ])
-        );
+        
+        // 🤓 Handle both legacy and new multi-source formats
+        if let Some(ref mcp_methods) = server.mcp {
+            if let Some(ref stdio_methods) = mcp_methods.stdio {
+                assert!(!stdio_methods.is_empty(), "Should have at least one stdio method");
+                let first_method = &stdio_methods[0];
+                let command = first_method.get("command").and_then(|v| v.as_str());
+                let args = first_method.get("args").and_then(|v| v.as_array())
+                    .map(|arr| arr.iter().filter_map(|v| v.as_str()).map(|s| s.to_string()).collect::<Vec<_>>());
+                    
+                assert_eq!(command, Some("npx"));
+                assert_eq!(
+                    args,
+                    Some(vec![
+                        "-y".to_string(),
+                        "@modelcontextprotocol/server-github".to_string()
+                    ])
+                );
+            } else {
+                panic!("Expected stdio methods in multi-source MCP config");
+            }
+        } else {
+            // Legacy format
+            assert_eq!(server.command, Some("npx".to_string()));
+            assert_eq!(
+                server.args,
+                Some(vec![
+                    "-y".to_string(),
+                    "@modelcontextprotocol/server-github".to_string()
+                ])
+            );
+        }
     }
 
     #[test]

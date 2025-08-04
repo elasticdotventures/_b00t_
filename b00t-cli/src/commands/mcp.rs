@@ -40,18 +40,22 @@ pub enum McpCommands {
         json: bool,
     },
     #[clap(
-        about = "Install MCP server to a target (claudecode, vscode, geminicli)",
-        long_about = "Install MCP server to a target application.\n\nExamples:\n  b00t-cli mcp install gh claudecode\n  b00t-cli mcp install filesystem geminicli --repo\n  b00t-cli app vscode mcp install filesystem"
+        about = "Install MCP server to a target (claudecode, vscode, geminicli, dotmcpjson)",
+        long_about = "Install MCP server to a target application.\n\nExamples:\n  b00t-cli mcp install gh claudecode\n  b00t-cli mcp install filesystem geminicli --repo\n  b00t-cli mcp install browser-use dotmcpjson --stdio-command uvx\n  b00t-cli mcp install aws-knowledge dotmcpjson --httpstream\n  b00t-cli app vscode mcp install filesystem"
     )]
     Install {
         #[clap(help = "MCP server name")]
         name: String,
-        #[clap(help = "Installation target: claudecode, vscode, geminicli")]
+        #[clap(help = "Installation target: claudecode, vscode, geminicli, dotmcpjson")]
         target: String,
         #[clap(long, help = "Install to repository-specific location (for geminicli)")]
         repo: bool,
         #[clap(long, help = "Install to user-global location (for geminicli)")]
         user: bool,
+        #[clap(long, help = "Select stdio method by command (for multi-source MCP configs)")]
+        stdio_command: Option<String>,
+        #[clap(long, help = "Use httpstream method (for multi-source MCP configs)")]
+        httpstream: bool,
     },
     #[clap(
         about = "Output MCP servers in various formats",
@@ -106,7 +110,7 @@ impl McpCommands {
             McpCommands::List { json } => {
                 crate::mcp_list(path, *json)
             }
-            McpCommands::Install { name, target, repo, user } => {
+            McpCommands::Install { name, target, repo, user, stdio_command, httpstream } => {
                 match target.as_str() {
                     "claudecode" | "claude" => {
                         crate::claude_code_install_mcp(name, path)
@@ -128,9 +132,12 @@ impl McpCommands {
                         };
                         crate::gemini_install_mcp(name, path, use_repo)
                     }
+                    "dotmcpjson" => {
+                        crate::dotmcpjson_install_mcp(name, path, stdio_command.as_deref(), *httpstream)
+                    }
                     _ => {
                         anyhow::bail!(
-                            "Error: Invalid target '{}'. Valid targets are: claudecode, vscode, geminicli",
+                            "Error: Invalid target '{}'. Valid targets are: claudecode, vscode, geminicli, dotmcpjson",
                             target
                         );
                     }
@@ -151,9 +158,10 @@ mod tests {
     #[test]
     fn test_mcp_commands_exist() {
         // Test with JSON format
-        let create_cmd = McpCommands::Create {
+        let register_cmd = McpCommands::Register {
             name_or_json: r#"{"name":"test-server","command":"npx","args":["-y","@test/package"]}"#.to_string(),
             hint: None,
+            remove: false,
             dwiw: false,
             no_dwiw: false,
             command_args: vec![],
@@ -161,7 +169,7 @@ mod tests {
         
         // This should fail because we don't have a valid test directory, but the command should parse correctly
         // The important thing is that it doesn't panic and processes the JSON correctly
-        let result = create_cmd.execute("/tmp/nonexistent");
+        let result = register_cmd.execute("/tmp/nonexistent");
         assert!(result.is_err()); // Expected to fail due to invalid path, but should not panic
         
         // Test install command enum creation
@@ -170,6 +178,8 @@ mod tests {
             target: "claudecode".to_string(),
             repo: false,
             user: false,
+            stdio_command: None,
+            httpstream: false,
         };
         
         // This should fail because the server doesn't exist, but should not panic

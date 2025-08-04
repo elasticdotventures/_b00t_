@@ -160,6 +160,32 @@ pub struct AppClaudecodeMcpInstallCommand {
 
 impl_mcp_tool!(AppClaudecodeMcpInstallCommand, "b00t_app_claudecode_mcp_install", ["app", "claudecode", "mcp", "install"]);
 
+/// MCP install command with full target and parameter support  
+// 🤓 ENTANGLED: b00t-cli/src/commands/mcp.rs McpCommands::Install
+// When this changes, update b00t-cli McpCommands::Install structure
+#[derive(Parser, Clone)]
+pub struct McpInstallCommand {
+    #[arg(help = "MCP server name")]
+    pub name: String,
+    
+    #[arg(help = "Installation target: claudecode, vscode, geminicli, dotmcpjson")]
+    pub target: String,
+    
+    #[arg(long, help = "Install to repository-specific location (for geminicli)")]
+    pub repo: bool,
+    
+    #[arg(long, help = "Install to user-global location (for geminicli)")]
+    pub user: bool,
+    
+    #[arg(long, help = "Select stdio method by command (for multi-source MCP configs)")]
+    pub stdio_command: Option<String>,
+    
+    #[arg(long, help = "Use httpstream method (for multi-source MCP configs)")]
+    pub httpstream: bool,
+}
+
+impl_mcp_tool!(McpInstallCommand, "b00t_mcp_install", ["mcp", "install"]);
+
 /// Session init command
 // 🤓 ENTANGLED: b00t-cli/src/commands/session.rs SessionCommands::Init
 // When this changes, update b00t-cli SessionCommands::Init structure

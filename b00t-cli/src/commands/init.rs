@@ -338,43 +338,96 @@ fn enlighten_agent_capabilities(_path: &str, memory: &mut SessionMemory) -> Resu
     Ok(())
 }
 
-/// Run system diagnostics and health checks
-fn run_system_diagnostics(memory: &mut SessionMemory) -> Result<()> {
-    println!("  🩺 Running system health checks...");
+/// Run session-aware system diagnostics with agent context
+pub fn run_system_diagnostics(memory: &mut SessionMemory) -> Result<()> {
+    let context = memory.get_agent_context();
+    
+    println!("  🩺 Agent Context Diagnostics");
+    println!("  🤖 Agent: {}", context.agent_name);
+    println!("  📅 Session: {}s ({})", context.session_duration, format_duration(context.session_duration));
+    println!("  🌿 Branch: {} ({}🔨 builds)", context.current_branch, context.build_count);
+    println!("  📊 Activity: {}🐚 shells, {}⚙️ compiles, {}🧪 tests", 
+        context.shell_count, context.compile_count, context.test_count);
     
     let mut diagnostic_results = Vec::new();
     
-    // Check Git status
+    // Check Git status with session context
     if let Ok(output) = cmd!("git", "--version").read() {
         println!("  ✅ Git: {}", output.trim());
         diagnostic_results.push(("git", true));
+        
+        // Add git context
+        if let Ok(branch) = cmd!("git", "branch", "--show-current").read() {
+            let branch = branch.trim();
+            if branch != context.current_branch {
+                println!("  ⚠️  Branch changed: {} → {}", context.current_branch, branch);
+            }
+        }
+        
+        if let Ok(status) = cmd!("git", "status", "--porcelain").read() {
+            if !status.trim().is_empty() {
+                let file_count = status.lines().count();
+                println!("  📝 Git: {} modified files", file_count);
+            }
+        }
     } else {
         println!("  ❌ Git: Not available");
         diagnostic_results.push(("git", false));
     }
     
-    // Check Rust/Cargo
+    // Check Rust/Cargo with build context
     if let Ok(output) = cmd!("cargo", "--version").read() {
         println!("  ✅ Cargo: {}", output.trim());
         diagnostic_results.push(("cargo", true));
+        
+        // Check for Cargo.toml and recent build artifacts
+        if std::path::Path::new("Cargo.toml").exists() {
+            if let Ok(metadata) = std::fs::metadata("target") {
+                let target_age = chrono::Utc::now().timestamp() - 
+                    metadata.modified().unwrap_or(std::time::UNIX_EPOCH)
+                        .duration_since(std::time::UNIX_EPOCH).unwrap().as_secs() as i64;
+                if target_age < 300 { // 5 minutes
+                    println!("  🔥 Cargo: Recent build ({}s ago)", target_age);
+                }
+            }
+        }
     } else {
         println!("  ❌ Cargo: Not available");
         diagnostic_results.push(("cargo", false));
     }
     
-    // Check Node.js
+    // Check Node.js with package context
     if let Ok(output) = cmd!("node", "--version").read() {
         println!("  ✅ Node.js: {}", output.trim());
         diagnostic_results.push(("node", true));
+        
+        if std::path::Path::new("package.json").exists() {
+            if let Ok(metadata) = std::fs::metadata("node_modules") {
+                let modules_age = chrono::Utc::now().timestamp() - 
+                    metadata.modified().unwrap_or(std::time::UNIX_EPOCH)
+                        .duration_since(std::time::UNIX_EPOCH).unwrap().as_secs() as i64;
+                if modules_age < 1800 { // 30 minutes
+                    println!("  📦 Node: Recent install ({}s ago)", modules_age);
+                }
+            }
+        }
     } else {
         println!("  ❌ Node.js: Not available");
         diagnostic_results.push(("node", false));
     }
     
-    // Check Docker
+    // Check Docker with container context
     if let Ok(output) = cmd!("docker", "--version").read() {
         println!("  ✅ Docker: {}", output.lines().next().unwrap_or("").trim());
         diagnostic_results.push(("docker", true));
+        
+        // Check for running containers
+        if let Ok(containers) = cmd!("docker", "ps", "-q").read() {
+            let container_count = containers.lines().count();
+            if container_count > 0 {
+                println!("  🐳 Docker: {} active containers", container_count);
+            }
+        }
     } else {
         println!("  ❌ Docker: Not available");
         diagnostic_results.push(("docker", false));
@@ -382,21 +435,68 @@ fn run_system_diagnostics(memory: &mut SessionMemory) -> Result<()> {
     
     // Check available package managers
     let package_managers = vec!["npm", "pnpm", "yarn", "bun"];
+    let mut available_pms = Vec::new();
     for pm in package_managers {
         if cmd!(pm, "--version").read().is_ok() {
-            println!("  ✅ Package Manager: {} available", pm);
+            available_pms.push(pm);
             diagnostic_results.push((pm, true));
         }
     }
     
-    // Store diagnostic results in session memory
+    if !available_pms.is_empty() {
+        println!("  ✅ Package Managers: {}", available_pms.join(", "));
+    }
+    
+    // Store enhanced diagnostic results in session memory
     let passing_count = diagnostic_results.iter().filter(|(_, passed)| *passed).count();
     memory.set_num("diagnostic_passing", passing_count as i64)?;
     memory.set_num("diagnostic_total", diagnostic_results.len() as i64)?;
     
-    println!("  📊 Diagnostics: {}/{} systems operational", passing_count, diagnostic_results.len());
+    // OODA Loop Decision Support
+    println!("  🧠 OODA Analysis:");
+    if context.diagnostic_total > 0 {
+        let health_ratio = context.diagnostic_passing as f64 / context.diagnostic_total as f64;
+        if health_ratio >= 0.8 {
+            println!("  ✅ System Health: Excellent ({:.0}%)", health_ratio * 100.0);
+        } else if health_ratio >= 0.6 {
+            println!("  ⚠️  System Health: Adequate ({:.0}%)", health_ratio * 100.0);
+        } else {
+            println!("  ❌ System Health: Poor ({:.0}%)", health_ratio * 100.0);
+        }
+    }
+    
+    // Session productivity insights
+    if context.session_duration > 300 { // 5+ minutes
+        let builds_per_hour = (context.build_count as f64 / context.session_duration as f64) * 3600.0;
+        if builds_per_hour > 10.0 {
+            println!("  🚀 High build velocity: {:.1} builds/hour", builds_per_hour);
+        } else if builds_per_hour > 2.0 {
+            println!("  ⚙️  Moderate build pace: {:.1} builds/hour", builds_per_hour);
+        }
+    }
+    
+    // Next action recommendations
+    if context.compile_count == 0 && std::path::Path::new("Cargo.toml").exists() {
+        println!("  💡 Suggestion: Run `cargo build` to verify compilation");
+    }
+    if context.test_count == 0 && std::path::Path::new("tests").exists() {
+        println!("  💡 Suggestion: Run tests to ensure quality");
+    }
+    
+    println!("  📊 Final: {}/{} systems operational", passing_count, diagnostic_results.len());
     
     Ok(())
+}
+
+/// Format duration in human readable format
+fn format_duration(seconds: i64) -> String {
+    if seconds < 60 {
+        format!("{}s", seconds)
+    } else if seconds < 3600 {
+        format!("{}m{}s", seconds / 60, seconds % 60)
+    } else {
+        format!("{}h{}m", seconds / 3600, (seconds % 3600) / 60)
+    }
 }
 
 /// Configure system preferences in session memory

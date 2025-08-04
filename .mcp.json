@@ -1,9 +1,25 @@
 {
   "mcpServers": {
     "b00t-mcp": {
+      "args": [
+        "--stdio"
+      ],
       "command": "./target/debug/b00t-mcp",
-      "args": ["--stdio"],
       "env": {}
+    },
+    "browser-use": {
+      "args": [
+        "browser-use[cli]",
+        "--mcp"
+      ],
+      "command": "uvx"
+    },
+    "github": {
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-github"
+      ],
+      "command": "npx"
     }
   }
 }

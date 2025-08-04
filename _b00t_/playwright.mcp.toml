@@ -1,11 +1,11 @@
 [b00t]
 name = "playwright"
 type = "mcp"
-hint = "Playwright MCP server for browser automation"
+hint = "MCP server"
 
-[[b00t.stdio]]
-command = "npx"
-args = ["@playwright/mcp@latest"]
+[[b00t.mcp.stdio]]
 transport = "stdio"
+args = ["-y", "@executeautomation/playwright-mcp-server"]
 priority = 0
 requires = ["node"]
+command = "npx"

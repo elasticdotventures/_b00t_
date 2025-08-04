@@ -251,6 +251,7 @@ dependencies = [
  "duct",
  "k8s-openapi",
  "kube",
+ "libc",
  "regex",
  "semver",
  "serde",

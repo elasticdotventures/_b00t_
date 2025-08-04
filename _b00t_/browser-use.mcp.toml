@@ -1,0 +1,11 @@
+[b00t]
+name = "browser-use"
+type = "mcp"
+hint = "Browser automation MCP server for web interactions"
+
+[[b00t.mcp.stdio]]
+command = "uvx"
+args = ["browser-use[cli]", "--mcp"]
+requires = ["OPENAI_API_KEY"]
+transport = "stdio"
+priority = 0

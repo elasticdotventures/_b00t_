@@ -87,3 +87,50 @@ cliff:
 
 inspect-mcp:
 	npx @modelcontextprotocol/inspector ./target/release/b00t-mcp
+
+# Captain's Command Arsenal - Memoized Agent Operations
+
+# Role switching commands
+captain:
+    #!/bin/bash
+    export _B00T_ROLE="captain"
+    echo "🎯 Switched to Captain role"
+    cargo run --bin b00t-cli -- whatismy role --show-tools
+
+operator:
+    #!/bin/bash
+    export _B00T_ROLE="operator" 
+    echo "⚙️ Switched to Operator role"
+    cargo run --bin b00t-cli -- whatismy role --show-tools
+
+# Agent creation commands (for future operator use)
+create-coder LANG:
+    #!/bin/bash
+    echo "🛠️ Creating {{LANG}} coder agent..."
+    echo "TODO: Implement agent creation via operator"
+
+create-tester:
+    #!/bin/bash
+    echo "🧪 Creating test specialist agent..."
+    echo "TODO: Implement test agent creation"
+
+# Communication setup
+setup-redis:
+    #!/bin/bash
+    echo "💾 Setting up Redis pub/sub for agent communication..."
+    echo "TODO: Implement Redis agent channels"
+
+# Session management
+session-status:
+    #!/bin/bash
+    cargo run --bin b00t-cli -- whatismy status
+
+session-build:
+    #!/bin/bash
+    cargo run --bin b00t-cli -- session build
+
+# Tool installation (for operators)
+install-tool TOOL:
+    #!/bin/bash
+    echo "📦 Installing tool: {{TOOL}}"
+    echo "TODO: Implement tool installation via b00t cli"

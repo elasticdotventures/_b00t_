@@ -17,6 +17,62 @@ pub struct SessionMemory {
     pub flags: HashMap<String, bool>,
     /// Session metadata
     pub metadata: SessionMetadata,
+    /// Configuration settings
+    pub config: SessionConfig,
+}
+
+/// Configuration settings for b00t session behavior
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SessionConfig {
+    /// Environment variables to track for agent/environment detection
+    pub tracked_env_vars: Vec<String>,
+    /// Whether to show verbose output in interactive shells
+    pub verbose_interactive: bool,
+    /// Whether to show output in non-interactive shells
+    pub verbose_noninteractive: bool,
+    /// Custom agent detection patterns
+    pub agent_patterns: HashMap<String, String>,
+    /// Whether to use .env file overrides
+    pub use_env_overrides: bool,
+    /// Session counting settings
+    pub count_shell_starts: bool,
+    /// Tera template for status output (OODA loop context) - optional, uses default if None
+    pub status_template: Option<String>,
+}
+
+impl Default for SessionConfig {
+    fn default() -> Self {
+        let mut agent_patterns = HashMap::new();
+        agent_patterns.insert("claude".to_string(), "🤖 Claude".to_string());
+        agent_patterns.insert("gemini".to_string(), "🤖 Gemini".to_string());
+        agent_patterns.insert("gpt".to_string(), "🤖 GPT".to_string());
+        agent_patterns.insert("openai".to_string(), "🤖 OpenAI".to_string());
+        
+        Self {
+            tracked_env_vars: vec![
+                "TERM".to_string(),
+                "TERM_PROGRAM".to_string(), 
+                "SHELL".to_string(),
+                "PWD".to_string(),
+                "USER".to_string(),
+                "HOME".to_string(),
+                "CLAUDECODE".to_string(),
+                "_B00T_Agent".to_string(),
+                "VSCODE_GIT_IPC_HANDLE".to_string(),
+                "SSH_CLIENT".to_string(),
+                "SSH_TTY".to_string(),
+                "container".to_string(),
+                "ANTHROPIC_API_KEY".to_string(),
+                "CLAUDE_API_KEY".to_string(),
+            ],
+            verbose_interactive: true,
+            verbose_noninteractive: false,
+            agent_patterns,
+            use_env_overrides: true,
+            count_shell_starts: true,
+            status_template: None, // Uses default template if None
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -45,7 +101,7 @@ impl Default for SessionMetadata {
 
 impl SessionMemory {
     /// Get the git root path for storing ._b00t_.toml
-    fn get_config_path() -> Result<PathBuf> {
+    pub fn get_config_path() -> Result<PathBuf> {
         let git_root = get_workspace_root();
         Ok(PathBuf::from(git_root))
     }
@@ -104,12 +160,16 @@ impl SessionMemory {
         if memory.metadata.session_id.is_empty() {
             memory.metadata = SessionMetadata::default();
             memory.capture_git_context()?;
-            memory.save()?;
-        } else {
-            // Update last accessed time
-            memory.metadata.updated_at = chrono::Utc::now();
-            memory.save()?;
         }
+        
+        // Initialize config if missing (backward compatibility)
+        if memory.config.tracked_env_vars.is_empty() {
+            memory.config = SessionConfig::default();
+        }
+        
+        // Update last accessed time and save
+        memory.metadata.updated_at = chrono::Utc::now();
+        memory.save()?;
 
         Ok(memory)
     }
@@ -227,6 +287,244 @@ impl SessionMemory {
             self.metadata.initial_branch.as_deref().unwrap_or("unknown"),
             self.metadata.updated_at.format("%H:%M:%S")
         )
+    }
+
+    /// Load .env file and return as HashMap for overrides
+    pub fn load_env_overrides(&self) -> HashMap<String, String> {
+        let mut env_vars = HashMap::new();
+        
+        if !self.config.use_env_overrides {
+            return env_vars;
+        }
+        
+        let config_dir = Self::get_config_path().unwrap_or_else(|_| PathBuf::from("."));
+        let env_path = config_dir.join(".env");
+        
+        if let Ok(contents) = fs::read_to_string(&env_path) {
+            for line in contents.lines() {
+                let line = line.trim();
+                // Skip comments and empty lines
+                if line.starts_with('#') || line.is_empty() {
+                    continue;
+                }
+                
+                // Parse KEY=VALUE format
+                if let Some((key, value)) = line.split_once('=') {
+                    let key = key.trim();
+                    let value = value.trim();
+                    // Remove quotes if present
+                    let value = if (value.starts_with('"') && value.ends_with('"')) ||
+                                  (value.starts_with('\'') && value.ends_with('\'')) {
+                        &value[1..value.len()-1]
+                    } else {
+                        value
+                    };
+                    env_vars.insert(key.to_string(), value.to_string());
+                }
+            }
+        }
+        
+        env_vars
+    }
+
+    /// Get environment variable with .env override support
+    pub fn get_env_var(&self, key: &str) -> Option<String> {
+        // First check .env overrides
+        if self.config.use_env_overrides {
+            let env_overrides = self.load_env_overrides();
+            if let Some(value) = env_overrides.get(key) {
+                return Some(value.clone());
+            }
+        }
+        
+        // Fall back to system environment
+        std::env::var(key).ok()
+    }
+
+    /// Collect tracked environment variables with overrides
+    pub fn collect_tracked_env(&self) -> HashMap<String, String> {
+        let mut result = HashMap::new();
+        
+        for var in &self.config.tracked_env_vars {
+            if let Some(value) = self.get_env_var(var) {
+                result.insert(var.clone(), value);
+            }
+        }
+        
+        result
+    }
+
+    /// Increment shell start count for this PID
+    pub fn increment_shell_count(&mut self) -> Result<i64> {
+        if !self.config.count_shell_starts {
+            return Ok(0);
+        }
+        
+        let pid = std::process::id().to_string();
+        let key = format!("shell_count_{}", pid);
+        self.incr(&key)
+    }
+
+    /// Check if shell output should be verbose based on interactive state
+    pub fn should_show_verbose_output(&self) -> bool {
+        let is_interactive = self.is_interactive_shell();
+        
+        if is_interactive {
+            self.config.verbose_interactive
+        } else {
+            self.config.verbose_noninteractive
+        }
+    }
+
+    /// Detect if running in interactive shell
+    fn is_interactive_shell(&self) -> bool {
+        // Check if stdin is a tty
+        #[cfg(unix)]
+        {
+            unsafe {
+                libc::isatty(libc::STDIN_FILENO) != 0
+            }
+        }
+        #[cfg(not(unix))]
+        {
+            // Fallback: check TERM environment variable
+            self.get_env_var("TERM").is_some()
+        }
+    }
+
+    /// Get seconds since session creation
+    pub fn seconds_since_start(&self) -> i64 {
+        let now = chrono::Utc::now();
+        (now - self.metadata.created_at).num_seconds()
+    }
+
+    /// Get seconds since last update  
+    pub fn seconds_since_update(&self) -> i64 {
+        let now = chrono::Utc::now();
+        (now - self.metadata.updated_at).num_seconds()
+    }
+
+    /// Increment build count for current branch
+    pub fn increment_build_count(&mut self) -> Result<i64> {
+        let branch = self.metadata.initial_branch.as_deref().unwrap_or("unknown");
+        let key = format!("build_count_{}", branch);
+        self.incr(&key)
+    }
+
+    /// Increment compile count for current session
+    pub fn increment_compile_count(&mut self) -> Result<i64> {
+        self.incr("compile_count")
+    }
+
+    /// Increment test run count for current session
+    pub fn increment_test_count(&mut self) -> Result<i64> {
+        self.incr("test_count")
+    }
+
+    /// Get agent context for OODA loop planning
+    pub fn get_agent_context(&self) -> AgentContext {
+        let agent_name = self.get_env_var("_B00T_Agent").unwrap_or_else(|| "Unknown".to_string());
+        let current_branch = self.metadata.initial_branch.as_deref().unwrap_or("unknown");
+        
+        AgentContext {
+            agent_name,
+            session_id: self.metadata.session_id.clone(),
+            session_duration: self.seconds_since_start(),
+            current_branch: current_branch.to_string(),
+            shell_count: self.get_num(&format!("shell_count_{}", std::process::id())),
+            build_count: self.get_num(&format!("build_count_{}", current_branch)),
+            compile_count: self.get_num("compile_count"),
+            test_count: self.get_num("test_count"),
+            diagnostic_passing: self.get_num("diagnostic_passing"),
+            diagnostic_total: self.get_num("diagnostic_total"),
+        }
+    }
+
+    /// Render status using Tera template with agent context
+    pub fn render_status_template(&self) -> Result<String> {
+        let context = self.get_agent_context();
+        let mut tera = tera::Tera::new("templates/*").unwrap_or_else(|_| tera::Tera::default());
+        
+        // Get template content from file or custom config
+        let template_content = if let Some(custom_template) = &self.config.status_template {
+            custom_template.clone()
+        } else {
+            // Load default template from repo file
+            self.load_default_status_template()?
+        };
+        
+        // Add the status template 
+        tera.add_raw_template("status", &template_content)
+            .context("Failed to add status template")?;
+        
+        // Create Tera context with agent data
+        let mut template_context = tera::Context::new();
+        template_context.insert("agent", &context);
+        template_context.insert("duration_formatted", &format_duration(context.session_duration));
+        template_context.insert("health_ratio", &if context.diagnostic_total > 0 {
+            context.diagnostic_passing as f64 / context.diagnostic_total as f64
+        } else { 0.0 });
+        template_context.insert("builds_per_hour", &if context.session_duration > 300 {
+            (context.build_count as f64 / context.session_duration as f64) * 3600.0
+        } else { 0.0 });
+        
+        // Add conditional flags for template logic
+        template_context.insert("has_cargo", &std::path::Path::new("Cargo.toml").exists());
+        template_context.insert("has_package_json", &std::path::Path::new("package.json").exists());
+        template_context.insert("has_tests", &std::path::Path::new("tests").exists());
+        
+        tera.render("status", &template_context)
+            .context("Failed to render status template")
+    }
+
+    /// Load default status template from repo file
+    pub fn load_default_status_template(&self) -> Result<String> {
+        let config_dir = Self::get_config_path()?;
+        let template_path = config_dir.join("templates").join("status.tera");
+        
+        // Try to load from repo templates directory
+        if template_path.exists() {
+            std::fs::read_to_string(&template_path)
+                .context("Failed to read status template file")
+        } else {
+            // Fallback to built-in minimal template
+            Ok(r#"
+🩺 Agent: {{agent.agent_name}} | Session: {{duration_formatted}}
+🌿 Branch: {{agent.current_branch}} ({{agent.build_count}}🔨)
+📊 Activity: {{agent.shell_count}}🐚, {{agent.compile_count}}⚙️, {{agent.test_count}}🧪
+{% if agent.diagnostic_total > 0 -%}
+{% set health_percentage = (health_ratio * 100) | round -%}
+🧠 Health: {{health_percentage}}%
+{% endif -%}
+"#.trim().to_string())
+        }
+    }
+}
+
+/// Agent context for OODA loop decision making
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct AgentContext {
+    pub agent_name: String,
+    pub session_id: String,
+    pub session_duration: i64,
+    pub current_branch: String,
+    pub shell_count: i64,
+    pub build_count: i64,
+    pub compile_count: i64,
+    pub test_count: i64,
+    pub diagnostic_passing: i64,
+    pub diagnostic_total: i64,
+}
+
+
+/// Format duration in human readable format  
+fn format_duration(seconds: i64) -> String {
+    if seconds < 60 {
+        format!("{}s", seconds)
+    } else if seconds < 3600 {
+        format!("{}m{}s", seconds / 60, seconds % 60)
+    } else {
+        format!("{}h{}m", seconds / 3600, (seconds % 3600) / 60)
     }
 }
 

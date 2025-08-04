@@ -46,8 +46,14 @@ b00t-cli is a Rust-based command-line tool for managing software versions and in
 - `mcp add --dwiw <json>`: "Do What I Want" mode - strips comments from JSON
 - `mcp list`: Show all available MCP server configurations
 - `mcp list --json`: Show MCP configurations in JSON format
-- `vscode install mcp <name>`: Install MCP server to VSCode via `code --add-mcp`
-- `claude-code install mcp <name>`: Install MCP server to Claude Code via `claude-code config add-mcp`
+- `mcp install <name> <target>`: Install MCP server to target application
+  - **claudecode**: Install to Claude Code via `claude mcp add-json`
+  - **vscode**: Install to VSCode via `code --add-mcp`
+  - **geminicli**: Install to Gemini CLI with `--repo` or `--user` flags
+  - **dotmcpjson**: Install to repo root `.mcp.json` file with multi-source selection:
+    - `--stdio-command <COMMAND>`: Select stdio method by command (e.g., `uvx`, `npx`, `docker`)
+    - `--httpstream`: Use httpstream method for remote MCP servers
+    - Default: Uses first available stdio method
 - One source of truth (TOML files), multiple export targets
 
 **Version Detection**:
@@ -64,6 +70,32 @@ b00t-cli is a Rust-based command-line tool for managing software versions and in
 - `semver`: Semantic version comparison
 - `anyhow`: Error handling
 - `tempfile` (dev): Testing utilities
+
+### MCP Installation Examples
+
+```bash
+# Install MCP server to Claude Code
+b00t-cli mcp install github claudecode
+
+# Install to VSCode
+b00t-cli mcp install filesystem vscode
+
+# Install to repo .mcp.json with specific stdio command
+b00t-cli mcp install browser-use dotmcpjson --stdio-command uvx
+
+# Install to repo .mcp.json using httpstream method
+b00t-cli mcp install aws-knowledge dotmcpjson --httpstream
+
+# Install to repo .mcp.json using default method (first stdio)
+b00t-cli mcp install playwright dotmcpjson
+
+# Install to Gemini CLI (repository-specific)
+b00t-cli mcp install filesystem geminicli --repo
+
+# Alternative hierarchical syntax (app subcommands)
+b00t-cli app vscode mcp install github
+b00t-cli app claudecode mcp install filesystem
+```
 
 ### Integration with _b00t_ Ecosystem
 This CLI is part of a larger dotfiles management system located in `~/.dotfiles/_b00t_/` which includes installation scripts for various programming languages, cloud tools, and development environments organized by categories (levels).

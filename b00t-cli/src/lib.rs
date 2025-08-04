@@ -295,6 +295,13 @@ pub fn normalize_mcp_json(input: &str, dwiw: bool) -> Result<BootDatum> {
 
     let json_value: serde_json::Value = serde_json::from_str(&cleaned_input)?;
 
+    // 🤓 YET-ANOTHER-STANDARD SYNDROME: AI tooling JSON format chaos
+    // Different MCP ecosystems use different JSON formats:
+    // 1. Flat format: {"name": "server", "command": "npx", "args": [...]}
+    // 2. Nested format: {"server-name": {"command": "npx", "args": [...]}}  
+    // 3. mcpServers wrapper: {"mcpServers": {"server-name": {...}}}
+    // We auto-detect and support all three because... modern AI tooling. 🙄
+
     // Handle direct format: {"name": "...", "command": "...", "args": [...]} or {"name": "...", "url": "..."}
     if let Some(name) = json_value.get("name") {
         let name_str = name.as_str().unwrap_or("unknown").to_string();
@@ -364,6 +371,7 @@ pub fn normalize_mcp_json(input: &str, dwiw: bool) -> Result<BootDatum> {
     }
 
     // Handle mcpServers wrapper format: {"mcpServers": {"server_name": {...}}}
+    // 🤓 This is the "official" Claude Desktop format
     if let Some(mcp_servers) = json_value.get("mcpServers") {
         let keys: Vec<_> = mcp_servers
             .as_object()
@@ -378,6 +386,7 @@ pub fn normalize_mcp_json(input: &str, dwiw: bool) -> Result<BootDatum> {
     }
 
     // Handle single server format: {"server_name": {...}}
+    // 🤓 Legacy format from early MCP tools, also used by some test fixtures
     let keys: Vec<_> = json_value
         .as_object()
         .map(|obj| obj.keys().collect())
@@ -1028,6 +1037,172 @@ pub fn gemini_install_mcp(name: &str, path: &str, use_repo: bool) -> Result<()> 
         }
     }
 
+    Ok(())
+}
+
+pub fn dotmcpjson_install_mcp(name: &str, path: &str, stdio_command: Option<&str>, use_httpstream: bool) -> Result<()> {
+    use crate::utils::get_workspace_root;
+    
+    // Get MCP configuration from b00t-cli
+    let datum = get_mcp_config(name, path)?;
+    
+    // Find the repo root and .mcp.json file
+    let repo_root = get_workspace_root();
+    let mcp_json_path = std::path::Path::new(&repo_root).join(".mcp.json");
+    
+    if !mcp_json_path.exists() {
+        anyhow::bail!("No .mcp.json file found in repo root: {}", repo_root);
+    }
+    
+    // Load existing .mcp.json
+    let existing_content = std::fs::read_to_string(&mcp_json_path)
+        .context("Failed to read .mcp.json file")?;
+    
+    let mut mcp_config: serde_json::Value = serde_json::from_str(&existing_content)
+        .context("Failed to parse .mcp.json file")?;
+    
+    // Ensure mcpServers object exists
+    if !mcp_config.is_object() {
+        mcp_config = serde_json::json!({});
+    }
+    if !mcp_config["mcpServers"].is_object() {
+        mcp_config["mcpServers"] = serde_json::json!({});
+    }
+    
+    // Handle multi-source selection if available
+    let (command, args, env, method_type) = if let Some(methods) = &datum.mcp {
+        // Multi-source MCP config - select appropriate method
+        if use_httpstream {
+            // Use httpstream method
+            if let Some(httpstream_method) = &methods.httpstream {
+                let url = httpstream_method.get("url")
+                    .and_then(|v| v.as_str())
+                    .ok_or_else(|| anyhow::anyhow!("Missing url in httpstream method"))?;
+                
+                // For httpstream, we create a pseudo-command structure
+                (url.to_string(), vec![], None, "httpstream")
+            } else {
+                anyhow::bail!("No httpstream method available for MCP '{}'", name);
+            }
+        } else if let Some(stdio_command_filter) = stdio_command {
+            // Use stdio method filtered by command
+            if let Some(stdio_methods) = &methods.stdio {
+                let matching_method = stdio_methods.iter().find(|method| {
+                    method.get("command")
+                        .and_then(|v| v.as_str())
+                        .map(|cmd| cmd == stdio_command_filter)
+                        .unwrap_or(false)
+                });
+                
+                if let Some(method) = matching_method {
+                    let command = method.get("command")
+                        .and_then(|v| v.as_str())
+                        .ok_or_else(|| anyhow::anyhow!("Missing command in stdio method"))?;
+                    let args = method.get("args")
+                        .and_then(|v| v.as_array())
+                        .map(|arr| arr.iter().filter_map(|v| v.as_str().map(|s| s.to_string())).collect())
+                        .unwrap_or_default();
+                    let env = method.get("env")
+                        .and_then(|v| v.as_object())
+                        .map(|obj| obj.iter()
+                            .filter_map(|(k, v)| v.as_str().map(|s| (k.clone(), s.to_string())))
+                            .collect::<std::collections::HashMap<String, String>>());
+                        
+                    (command.to_string(), args, env, "stdio")
+                } else {
+                    anyhow::bail!(
+                        "No stdio method with command '{}' found for MCP '{}'. Available commands: {}", 
+                        stdio_command_filter, 
+                        name,
+                        stdio_methods.iter()
+                            .filter_map(|m| m.get("command").and_then(|v| v.as_str()))
+                            .collect::<Vec<_>>()
+                            .join(", ")
+                    );
+                }
+            } else {
+                anyhow::bail!("No stdio methods available for MCP '{}'", name);
+            }
+        } else {
+            // Default to first stdio method
+            if let Some(stdio_methods) = &methods.stdio {
+                if stdio_methods.is_empty() {
+                    anyhow::bail!("No stdio methods available for MCP '{}'", name);
+                }
+                
+                let method = &stdio_methods[0];
+                let command = method.get("command")
+                    .and_then(|v| v.as_str())
+                    .ok_or_else(|| anyhow::anyhow!("Missing command in stdio method"))?;
+                let args = method.get("args")
+                    .and_then(|v| v.as_array())
+                    .map(|arr| arr.iter().filter_map(|v| v.as_str().map(|s| s.to_string())).collect())
+                    .unwrap_or_default();
+                let env = method.get("env")
+                    .and_then(|v| v.as_object())
+                    .map(|obj| obj.iter()
+                        .filter_map(|(k, v)| v.as_str().map(|s| (k.clone(), s.to_string())))
+                        .collect::<std::collections::HashMap<String, String>>());
+                    
+                (command.to_string(), args, env, "stdio")
+            } else {
+                anyhow::bail!("No stdio methods available for MCP '{}'", name);
+            }
+        }
+    } else {
+        // Legacy single-source config
+        let command = datum.command.as_ref().unwrap_or(&"npx".to_string()).clone();
+        let args = datum.args.as_ref().unwrap_or(&vec![]).clone();
+        (command, args, datum.env.clone(), "stdio")
+    };
+    
+    // Create MCP server entry for .mcp.json format
+    let server_config = if method_type == "httpstream" {
+        // For httpstream, use url instead of command/args
+        serde_json::json!({
+            "url": command
+        })
+    } else {
+        // For stdio, use command and args
+        serde_json::json!({
+            "command": command,
+            "args": args
+        })
+    };
+    
+    // Add optional env if present
+    if let Some(method_env) = env {
+        if let Some(server_obj) = server_config.as_object() {
+            let mut new_config = server_obj.clone();
+            new_config.insert("env".to_string(), serde_json::to_value(method_env)?);
+            mcp_config["mcpServers"][&datum.name] = serde_json::Value::Object(new_config);
+        }
+    } else {
+        mcp_config["mcpServers"][&datum.name] = server_config;
+    }
+    
+    // Write back to .mcp.json with pretty formatting
+    let updated_content = serde_json::to_string_pretty(&mcp_config)
+        .context("Failed to serialize updated .mcp.json")?;
+    
+    std::fs::write(&mcp_json_path, updated_content)
+        .context("Failed to write updated .mcp.json file")?;
+    
+    println!(
+        "✅ Successfully installed MCP server '{}' to .mcp.json",
+        datum.name
+    );
+    
+    if method_type == "httpstream" {
+        println!("🌐 Used httpstream method");
+    } else if let Some(cmd) = stdio_command {
+        println!("🎯 Used stdio method with command: {}", cmd);
+    } else {
+        println!("📡 Used default stdio method");
+    }
+    
+    println!("📁 Updated: {}", mcp_json_path.display());
+    
     Ok(())
 }
 
