@@ -48,15 +48,12 @@ pub struct B00tConfig {
 /// Result type alias for b00t operations
 pub type B00tResult<T> = Result<T, anyhow::Error>;
 
-/// Version information
-pub const VERSION: &str = env!("CARGO_PKG_VERSION");
-
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
     fn test_version_available() {
-        assert!(!VERSION.is_empty());
+        assert!(!version::VERSION.is_empty());
     }
 }

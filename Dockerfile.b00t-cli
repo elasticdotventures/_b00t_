@@ -19,20 +19,23 @@ WORKDIR /build
 COPY Cargo.toml Cargo.lock ./
 COPY b00t-cli/ ./b00t-cli/
 COPY b00t-mcp/ ./b00t-mcp/
+COPY b00t-c0re-lib/ ./b00t-c0re-lib/
 
 # Create dummy source for dependency caching
-RUN mkdir -p b00t-cli/src b00t-mcp/src && \
+RUN mkdir -p b00t-cli/src b00t-mcp/src b00t-c0re-lib/src && \
     echo "fn main() {}" > b00t-cli/src/main.rs && \
     echo "// dummy" > b00t-cli/src/lib.rs && \
     echo "fn main() {}" > b00t-mcp/src/main.rs && \
-    echo "// dummy" > b00t-mcp/src/lib.rs
+    echo "// dummy" > b00t-mcp/src/lib.rs && \
+    echo "// dummy" > b00t-c0re-lib/src/lib.rs
 
 # Build dependencies (this layer will be cached unless Cargo files change)
-RUN cargo build --release --bin b00t-cli && rm -rf b00t-cli/src b00t-mcp/src
+RUN cargo build --release --bin b00t-cli && rm -rf b00t-cli/src b00t-mcp/src b00t-c0re-lib/src
 
 # Copy actual source code  
 COPY b00t-cli/src ./b00t-cli/src
 COPY b00t-mcp/src ./b00t-mcp/src
+COPY b00t-c0re-lib/src ./b00t-c0re-lib/src
 
 # Build the actual binary
 RUN cargo build --release --bin b00t-cli

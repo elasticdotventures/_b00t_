@@ -130,7 +130,7 @@ async fn main() -> Result<()> {
         axum::serve(listener, app).await?;
     } else {
         // Show usage information
-        println!("b00t-mcp v{}", env!("CARGO_PKG_VERSION"));
+        println!("b00t-mcp v{}", b00t_c0re_lib::version::VERSION);
         println!("MCP Server for b00t-cli command proxy with ACL filtering");
         println!();
         println!("Usage:");
