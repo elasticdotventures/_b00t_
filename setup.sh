@@ -342,3 +342,24 @@ sudo apt-get install -y entr
 
 # we use nmap to see if ports are open
 sudo apt-get install -y nmap
+
+# https://github.com/buger/probe
+bun install -g @buger/probe
+
+uv tool install multiplex-sh
+multiplex --help
+
+
+# ClaudeCode Plugins https://github.com/brennercruvinel/CCPlugins
+# https://www.reddit.com/r/ClaudeAI/comments/1mb37uj/found_claude_code_plugins_that_actually_work/?share_id=TG81kGPK8f9feDN_7ymoC&utm_content=1&utm_medium=android_app&utm_name=androidcss&utm_source=share&utm_term=1
+curl -sSL https://raw.githubusercontent.com/brennercruvinel/CCPlugins/main/install.sh | bash
+
+# TODO: https://github.com/mcp-use
+# https://github.com/awslabs/mcp
+# https://github.com/browser-use/browser-use
+
+# TILT:
+# https://github.com/aryan-agrawal-glean/tilt-mcp
+
+
+npm i -g opencode-ai@latest

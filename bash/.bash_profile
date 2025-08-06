@@ -11,19 +11,15 @@ if command -v b00t-cli &> /dev/null; then
     fi
 fi
 
-# Detect if running in WSL
-if grep -qEi "(Microsoft|WSL)" /proc/version &>/dev/null; then
-    export IS_WSL=true
-    echo "🐧 Running in WSL"
-else
-    export IS_WSL=false
-fi
-
-
 
 # b00t is a collection of environment detection
 if [ -f ~/.dotfiles/_b00t_/_b00t_.bashrc ] ; then
-    echo "🥾 _b00t_"
+    if [ "${CLAUDECODE:-}" = "1" ]; then
+        echo "🥾 _b00t_ `b00t-cli --version`"
+    else    
+        echo "🥾 _b00t_"
+    fi
+
     . ~/.dotfiles/_b00t_/_b00t_.bashrc
 
     # Check if running in VS Code integrated terminal
@@ -38,10 +34,7 @@ if [ -f ~/.dotfiles/_b00t_/_b00t_.bashrc ] ; then
     else
         log_📢_记录 "Not inside VSCODE"
     fi
-
-
-
-    ## Agent detection handled at top of .bash_profile (single source of truth)
+     ## Agent detection handled at top of .bash_profile (single source of truth)
 
     echo "/🥾"
 fi

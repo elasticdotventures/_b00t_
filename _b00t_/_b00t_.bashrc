@@ -553,17 +553,8 @@ function selectEditVSCode_experiment() {
 
 
 
-### - -   is_WSLv2_🐧💙🪟v2   - - \\
-## Microsoft Windows Linux Subsystem II  WSL2
-## 🤓 https://docs.microsoft.com/en-us/windows/wsl/install-win10
-#
-unset -f is_WSLv2_🐧💙🪟v2
-function is_WSLv2_🐧💙🪟v2() {
-    return `cat /proc/version | grep -c "microsoft-standard-WSL2"`
-}
-# Export the functions so they're available to child processes
-export -f is_WSLv2_🐧💙🪟v2
-### - -  ..  - - //
+
+
 
 
 # Check if running in Claude Code environment
@@ -594,6 +585,27 @@ function tokemoji_下文() {
 }
 export -f tokemoji_下文
 
+
+
+### - -   is_WSLv2_🐧💙🪟v2   - - \\
+## Microsoft Windows Linux Subsystem II  WSL2
+## 🤓 https://docs.microsoft.com/en-us/windows/wsl/install-win10
+#
+unset -f is_WSLv2_🐧💙🪟v2
+function is_WSLv2_🐧💙🪟v2() {
+    return `cat /proc/version | grep -c "microsoft-standard-WSL2"`
+}
+# Export the functions so they're available to child processes
+export -f is_WSLv2_🐧💙🪟v2
+### - -  ..  -- //
+# Detect if running in WSL
+# 🦨: duplicate, should use source of truth
+if grep -qEi "(Microsoft|WSL)" /proc/version &>/dev/null; then
+    export IS_WSL=true
+    log_📢_记录 "🐧 Running in WSL"
+else
+    export IS_WSL=false
+fi
 
 
 

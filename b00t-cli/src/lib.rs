@@ -890,18 +890,16 @@ pub fn mcp_output(path: &str, use_mcp_servers_wrapper: bool, servers: &str) -> R
 
         match get_mcp_config(server_name, path) {
             Ok(datum) => {
+                let (command, args) = extract_mcp_command_args(&datum);
                 let mut server_config = serde_json::Map::new();
                 server_config.insert(
                     "command".to_string(),
-                    serde_json::Value::String(datum.command.unwrap_or_else(|| "npx".to_string())),
+                    serde_json::Value::String(command),
                 );
                 server_config.insert(
                     "args".to_string(),
                     serde_json::Value::Array(
-                        datum
-                            .args
-                            .unwrap_or_default()
-                            .into_iter()
+                        args.into_iter()
                             .map(serde_json::Value::String)
                             .collect(),
                     ),
@@ -966,17 +964,45 @@ pub fn mcp_output(path: &str, use_mcp_servers_wrapper: bool, servers: &str) -> R
     Ok(())
 }
 
+/// Extract command and args from MCP datum, handling both new multi-method and legacy formats
+fn extract_mcp_command_args(datum: &BootDatum) -> (String, Vec<String>) {
+    if let Some(mcp) = &datum.mcp {
+        if let Some(stdio_methods) = &mcp.stdio {
+            if let Some(first_method) = stdio_methods.first() {
+                let command = first_method.get("command")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("npx")
+                    .to_string();
+                let args = first_method.get("args")
+                    .and_then(|v| v.as_array())
+                    .map(|arr| arr.iter()
+                        .filter_map(|v| v.as_str())
+                        .map(|s| s.to_string())
+                        .collect::<Vec<String>>())
+                    .unwrap_or_default();
+                return (command, args);
+            }
+        }
+    }
+    
+    // Fallback to legacy fields for backwards compatibility
+    (
+        datum.command.clone().unwrap_or_else(|| "npx".to_string()),
+        datum.args.clone().unwrap_or_default()
+    )
+}
+
 // MCP Installation Functions
 pub fn claude_code_install_mcp(name: &str, path: &str) -> Result<()> {
     use duct::cmd;
     
     let datum = get_mcp_config(name, path)?;
+    let (command, args) = extract_mcp_command_args(&datum);
 
-    // Claude Code uses claude mcp add-json command
     let claude_json = serde_json::json!({
         "name": datum.name,
-        "command": datum.command.as_ref().unwrap_or(&"npx".to_string()),
-        "args": datum.args.as_ref().unwrap_or(&vec![])
+        "command": command,
+        "args": args
     });
 
     let json_str =
@@ -1012,11 +1038,12 @@ pub fn vscode_install_mcp(name: &str, path: &str) -> Result<()> {
     use duct::cmd;
     
     let datum = get_mcp_config(name, path)?;
+    let (command, args) = extract_mcp_command_args(&datum);
 
     let vscode_json = serde_json::json!({
         "name": datum.name,
-        "command": datum.command.as_ref().unwrap_or(&"npx".to_string()),
-        "args": datum.args.as_ref().unwrap_or(&vec![])
+        "command": command,
+        "args": args
     });
 
     let json_str =
@@ -1046,11 +1073,12 @@ pub fn gemini_install_mcp(name: &str, path: &str, use_repo: bool) -> Result<()> 
     use duct::cmd;
     
     let datum = get_mcp_config(name, path)?;
+    let (command, args) = extract_mcp_command_args(&datum);
 
     let gemini_json = serde_json::json!({
         "name": datum.name,
-        "command": datum.command.as_ref().unwrap_or(&"npx".to_string()),
-        "args": datum.args.as_ref().unwrap_or(&vec![])
+        "command": command,
+        "args": args
     });
 
     let json_str =
