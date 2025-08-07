@@ -73,6 +73,85 @@ mod integration_tests {
     }
 
     #[test]
+    fn test_lfmf_creates_and_appends_lesson() {
+        use crate::commands::lfmf::handle_lfmf;
+        let temp_dir = setup_temp_dir();
+        let temp_path = temp_dir.path().to_str().unwrap();
+        let tool = "testtool";
+        let lesson1 = "First lesson learned.";
+        let lesson2 = "Second lesson learned.";
+        // First call: should create file
+        let result1 = handle_lfmf(temp_path, tool, lesson1);
+        assert!(result1.is_ok());
+        let file_path = temp_dir.path().join("learn").join(format!("{}.md", tool));
+        assert!(file_path.exists());
+        let content1 = std::fs::read_to_string(&file_path).unwrap();
+        assert!(content1.contains(lesson1));
+        // Second call: should append
+        let result2 = handle_lfmf(temp_path, tool, lesson2);
+        assert!(result2.is_ok());
+        let content2 = std::fs::read_to_string(&file_path).unwrap();
+        assert!(content2.contains(lesson1));
+        assert!(content2.contains(lesson2));
+    }
+
+    #[test]
+    fn test_learn_lists_md_topics_without_toml() {
+        use b00t_c0re_lib::learn::get_learn_topics;
+        let temp_dir = setup_temp_dir();
+        let temp_path = temp_dir.path().to_str().unwrap();
+        let learn_dir = temp_dir.path().join("learn");
+        std::fs::create_dir_all(&learn_dir).unwrap();
+        let topic1 = learn_dir.join("foo.md");
+        let topic2 = learn_dir.join("bar.md");
+        std::fs::write(&topic1, "Foo lesson").unwrap();
+        std::fs::write(&topic2, "Bar lesson").unwrap();
+        let topics = get_learn_topics(temp_path).unwrap();
+        assert!(topics.contains(&"foo".to_string()));
+        assert!(topics.contains(&"bar".to_string()));
+    }
+
+    #[test]
+    fn test_learn_returns_md_lesson_for_topic() {
+        use b00t_c0re_lib::learn::get_learn_lesson;
+        let temp_dir = setup_temp_dir();
+        let temp_path = temp_dir.path().to_str().unwrap();
+        let learn_dir = temp_dir.path().join("learn");
+        std::fs::create_dir_all(&learn_dir).unwrap();
+        let topic1 = learn_dir.join("foo.md");
+        std::fs::write(&topic1, "Foo lesson content").unwrap();
+        let lesson = get_learn_lesson(temp_path, "foo").unwrap();
+        assert!(lesson.contains("Foo lesson content"));
+    }
+
+    #[test]
+    fn test_learn_merges_toml_and_md_topics() {
+        use b00t_c0re_lib::learn::get_learn_topics;
+        let temp_dir = setup_temp_dir();
+        let temp_path = temp_dir.path().to_str().unwrap();
+        let learn_dir = temp_dir.path().join("learn");
+        std::fs::create_dir_all(&learn_dir).unwrap();
+        let topic1 = learn_dir.join("foo.md");
+        let topic2 = learn_dir.join("bar.md");
+        std::fs::write(&topic1, "Foo lesson").unwrap();
+        std::fs::write(&topic2, "Bar lesson").unwrap();
+        // Create learn.toml with one topic
+        let toml_path = temp_dir.path().join("learn.toml");
+        let toml_content = r#"[topics]
+foo = "learn/foo.md"
+baz = "learn/baz.md"
+"#;
+        std::fs::write(&toml_path, toml_content).unwrap();
+        // Create baz.md
+        let baz_md = learn_dir.join("baz.md");
+        std::fs::write(&baz_md, "Baz lesson").unwrap();
+        let topics = get_learn_topics(temp_path).unwrap();
+        assert!(topics.contains(&"foo".to_string()));
+        assert!(topics.contains(&"bar".to_string()));
+        assert!(topics.contains(&"baz".to_string()));
+    }
+
+
     fn test_mcp_add_with_dwiw() {
         let temp_dir = setup_temp_dir();
         let temp_path = temp_dir.path().to_str().unwrap();

@@ -332,25 +332,15 @@ impl B00tMcpServerRusty {
         CallToolResult::error(vec![Content::text(content)])
     }
 
-    /// Read a b00t skill using the template renderer
+    /// Read a b00t skill using the shared library
     async fn read_b00t_skill(&self, topic: &str) -> Result<String> {
-        // Use b00t-cli learn command to get the rendered skill
-        let output = tokio::process::Command::new("b00t-cli")
-            .arg("learn")
-            .arg(topic)
-            .current_dir(&self.working_dir)
-            .output()
-            .await?;
-
-        if output.status.success() {
-            Ok(String::from_utf8_lossy(&output.stdout).to_string())
-        } else {
-            anyhow::bail!(
-                "b00t-cli learn {} failed: {}", 
-                topic,
-                String::from_utf8_lossy(&output.stderr)
-            )
-        }
+        use b00t_c0re_lib::learn::get_learn_lesson;
+        use b00t_c0re_lib::TemplateRenderer;
+        let path = self.working_dir.to_str().unwrap_or("");
+        let lesson = get_learn_lesson(path, topic)?;
+        let renderer = TemplateRenderer::with_defaults()?;
+        let rendered = renderer.render(&lesson)?;
+        Ok(rendered)
     }
 
     /// Read current b00t context as JSON

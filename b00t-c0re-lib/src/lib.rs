@@ -31,6 +31,7 @@ pub mod context;
 pub mod utils;
 pub mod redis;
 pub mod agent_coordination;
+pub mod learn;
 
 // Re-export commonly used types
 pub use template::TemplateRenderer;

@@ -23,7 +23,7 @@ jobs:
           fetch-depth: 0
 
       - name: install stable
-        uses: ructions/toolchain@v2
+        uses: actions-rs/toolchain@v1
         with:
           toolchain: stable
           override: true
@@ -137,20 +137,20 @@ jobs:
           fetch-depth: 0
 
       - name: install stable
-        uses: ructions/toolchain@v2
+        uses: actions-rs/toolchain@v1
         with:
           toolchain: stable
           override: true
           components: rustfmt, clippy
 
       # https://github.com/actions-rs/cargo/issues/6
-      - uses: ructions/cargo@v1
+      - uses: actions-rs/cargo@v1
         with:
           command: login
           args: ${{ secrets.CRATESIO_API_TOKEN }}
 
       # https://github.com/actions-rs/cargo/issues/6
-      - uses: ructions/cargo@v1
+      - uses: actions-rs/cargo@v1
         with:
           cwd: ${{ env.PROJECT_ROOT }}
           command: build

@@ -61,6 +61,13 @@ struct Cli {
 
 #[derive(Parser)]
 enum Commands {
+    #[clap(about = "Record a lesson learned for a tool")]
+    Lfmf {
+        #[clap(help = "Tool name")]
+        tool: String,
+        #[clap(help = "Summary hint or lesson learned")]
+        lesson: String,
+    },
     #[clap(about = "MCP (Model Context Protocol) server management")]
     Mcp {
         #[clap(subcommand)]
@@ -1059,6 +1066,12 @@ fn main() {
             // 🦨 MCP compatibility: merge positional and flag arguments
             let effective_topic = topic.as_ref().or(topic_flag.as_ref());
             if let Err(e) = handle_learn(&cli.path, effective_topic.map(|s| s.as_str())) {
+                eprintln!("Error: {}", e);
+                std::process::exit(1);
+            }
+        }
+        Some(Commands::Lfmf { tool, lesson }) => {
+            if let Err(e) = commands::lfmf::handle_lfmf(&cli.path, tool, lesson) {
                 eprintln!("Error: {}", e);
                 std::process::exit(1);
             }

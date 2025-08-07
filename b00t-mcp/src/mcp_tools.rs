@@ -95,6 +95,17 @@ pub struct CliUpCommand {
 
 impl_mcp_tool!(CliUpCommand, "b00t_cli_up", ["cli", "up"]);
 
+/// LFMF command
+#[derive(Parser, Clone)]
+pub struct LfmfCommand {
+    #[arg(help = "Tool name")]
+    pub tool: String,
+    #[arg(help = "Summary hint or lesson learned")]
+    pub lesson: String,
+}
+
+impl_mcp_tool!(LfmfCommand, "b00t_lfmf", ["lfmf"]);
+
 /// Whoami command
 #[derive(Parser, Clone)]
 pub struct WhoamiCommand;

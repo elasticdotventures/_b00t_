@@ -7,6 +7,7 @@ pub mod init;
 pub mod session;
 pub mod whatismy;
 pub mod learn;
+pub mod lfmf;
 
 pub use mcp::McpCommands;
 pub use k8s::K8sCommands;
