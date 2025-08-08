@@ -78,8 +78,8 @@ mod integration_tests {
         let temp_dir = setup_temp_dir();
         let temp_path = temp_dir.path().to_str().unwrap();
         let tool = "testtool";
-        let lesson1 = "First lesson learned.";
-        let lesson2 = "Second lesson learned.";
+        let lesson1 = "First: lesson learned.";
+        let lesson2 = "Second: lesson learned.";
         // First call: should create file
         let result1 = handle_lfmf(temp_path, tool, lesson1);
         assert!(result1.is_ok());

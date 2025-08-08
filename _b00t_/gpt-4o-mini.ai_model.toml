@@ -1,0 +1,28 @@
+# b00t AI Model Datum - GPT-4o Mini via OpenRouter
+# OpenRouter provides unified access to many models with competitive pricing
+
+[b00t]
+name = "gpt-4o-mini"
+type = "ai_model"
+hint = "OpenAI GPT-4o Mini via OpenRouter - cost-effective reasoning"
+
+[ai_model]
+provider = "openrouter"
+size = "small"
+capabilities = ["chat", "code", "tools", "vision"]
+litellm_model = "openrouter/openai/gpt-4o-mini"
+api_key_env = "OPENROUTER_API_KEY"
+api_base = "https://openrouter.ai/api/v1"
+rpm_limit = 200
+context_window = 128000
+access_groups = ["public", "dev", "premium"]
+
+[ai_model.parameters]
+max_tokens = 1024
+temperature = 0.3
+
+[ai_model.metadata]
+family = "gpt-4o"
+provider_cost_per_1k_tokens = 0.00015
+training_cutoff = "2024-10"
+release_date = "2024-07-18"

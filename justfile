@@ -7,6 +7,8 @@ repo-root := env_var_or_default("JUST_REPO_ROOT", `git rev-parse --show-toplevel
 set shell := ["bash", "-cu"]
 mod cog
 mod b00t
+# this is an antipattens
+mod litellm '_b00t_/litellm/justfile'
 
 stow:
     stow --adopt -d ~/.dotfiles -t ~ bash

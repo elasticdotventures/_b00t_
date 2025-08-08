@@ -2,7 +2,40 @@
 # 鲸鱼 - Jīngyú - Docker!  🐳
 
 The Whale is Dockers official mascot & spirit animal. 
+
 As such the 鲸鱼 (Whale) storytime log/namespace
+
+###
+For tools which don't have docker packages; there are a few ways, one is to
+fork and create your own container ci action and then send a pull request. 
+
+HOWEVER that is for suckers, the only docker image you need is eget
+
+
+Once you have an image published like that (there isn't an official one for some reason 🤷‍♂️), then for projects like just you don't need a Dockerfile like this PR proposes.
+
+
+FROM eget as downloader
+RUN eget casey/just --tag 1.42.4 --to /just
+
+FROM scratch
+COPY --from=downloader /just /usr/local/bin/just
+
+
+
+Notes: 
+The --tag and --to options are completely optional. By default they'll select the latest release (not always ideal, similar to the caveats I mentioned regarding how your PR handles tagging the image), and it'll download/extract into the current working directory.
+
+UX will vary by repo as some projects manage releases a bit more broadly with assets attached or bad naming conventions that a tool like eget cannot infer which file to download without some additional filtering for guidance (supported via --asset).
+
+As you can see though it becomes vastly simpler for other images and reduces boilerplate.
+
+FROM scratch
+RUN --mount=type=bind,from=eget:latest,source=/usr/local/bin/eget,target=/usr/local/bin/eget \
+  eget casey/just --tag 1.42.4 --to /usr/local/bin
+ 
+
+
 
 ## get started with b00t
 

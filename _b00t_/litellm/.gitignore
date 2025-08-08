@@ -1,0 +1,14 @@
+# LiteLLM Generated Files
+# These files are dynamically generated from b00t AI model datums
+litellm_generated_config.yaml
+litellm_*.yaml
+
+# Runtime logs and temporary files  
+*.log
+*.tmp
+.env
+.env.*
+
+# Container volumes and mounts
+config/
+logs/

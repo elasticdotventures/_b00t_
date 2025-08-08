@@ -61,11 +61,57 @@ struct Cli {
 
 #[derive(Parser)]
 enum Commands {
-    #[clap(about = "Record a lesson learned for a tool")]
+    #[clap(
+        about = "Count tokens in a string using tiktoken",
+        long_about = r#"
+Count tokens in a string using OpenAI's tiktoken tokenizer.
+
+Usage:
+  b00t-cli tiktoken "your text here"
+
+Example:
+  b00t-cli tiktoken "This is a test sentence."
+  # Output: Token count: 7
+"#
+    )]
+    Tiktoken {
+        #[clap(help = "Text to tokenize")]
+        text: String,
+    },
+    #[clap(
+        about = "Record a lesson learned for a tool",
+        long_about = r#"
+lfmf is a dynamic, opinionated man-page for any tool with a b00t datum (TOML, learn/ dir, etc).
+It memoizes operator-informed tips, tricks, and anti-patterns—never repo-specific, always tool wisdom.
+Each entry is a <25 token topic and <250 token body, written in a positive, laconic, affirmative style.
+Use lfmf to help the hive avoid repeating mistakes and accelerate mastery.
+Good entries separate neophyte from master. Bad entries are vague, negative, or repo-specific.
+
+Usage:
+  b00t-cli lfmf <tool> "<topic>: <body>"
+
+Examples:
+  # Good
+  b00t-cli lfmf just "modules & workdir: Use modules and workdir to avoid cd; keeps recipes portable and context-safe."
+  b00t-cli lfmf docker "container cleanup: Use 'docker system prune' regularly to avoid disk bloat."
+  b00t-cli lfmf git "atomic commits: Commit small, focused changes for easier review and rollback."
+
+  # Bad
+  b00t-cli lfmf just "cd: I always use cd in my recipes."
+  b00t-cli lfmf docker "disk full: My disk filled up once."
+  b00t-cli lfmf git "fix: Fixed a bug in my repo."
+
+Tips:
+- Topic: <25 tokens, concise, positive, tool-focused.
+- Body: <250 tokens, actionable, never repo-specific.
+- Affirmative: 'Do X for Y benefit', not 'Don't do X'.
+- Suitable tools: any with a b00t datum (TOML, learn/ dir, etc).
+"#
+    )]
     Lfmf {
         #[clap(help = "Tool name")]
         tool: String,
-        #[clap(help = "Summary hint or lesson learned")]
+        #[clap(help = "Lesson in '<topic>: <body>' format")]
         lesson: String,
     },
     #[clap(about = "MCP (Model Context Protocol) server management")]
@@ -992,6 +1038,12 @@ fn main() {
     }
 
     match &cli.command {
+        Some(Commands::Tiktoken { text }) => {
+            if let Err(e) = commands::tiktoken::handle_tiktoken(text) {
+                eprintln!("Error: {}", e);
+                std::process::exit(1);
+            }
+        },
         Some(Commands::Mcp { mcp_command }) => {
             if let Err(e) = mcp_command.execute(&cli.path) {
                 eprintln!("Error: {}", e);

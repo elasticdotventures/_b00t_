@@ -1,0 +1,26 @@
+# b00t AI Model Datum - Llama 3 8B Instruct  
+# Example small model configuration
+
+[b00t]
+name = "llama-3-8b-instruct"
+type = "ai_model"
+hint = "Meta's fast 8B parameter instruction-tuned model"
+
+[ai_model]
+provider = "openrouter"
+size = "sm0l"  # Using alias for small
+capabilities = ["chat", "code"]
+litellm_model = "openrouter/meta-llama/llama-3-8b-instruct"
+api_key_env = "OPENROUTER_API_KEY"
+rpm_limit = 600
+context_window = 8192
+access_groups = ["public", "dev"]
+
+[ai_model.parameters]
+max_tokens = 2048
+temperature = 0.9
+
+[ai_model.metadata]
+family = "llama-3"
+parameter_count = "8B"
+training_cutoff = "2024-03"

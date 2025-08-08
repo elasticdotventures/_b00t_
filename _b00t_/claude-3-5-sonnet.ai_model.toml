@@ -1,0 +1,26 @@
+# b00t AI Model Datum - Claude 3.5 Sonnet
+# Example configuration demonstrating the AI model datum schema
+
+[b00t]
+name = "claude-3-5-sonnet"
+type = "ai_model"
+hint = "Anthropic's flagship model with advanced reasoning"
+
+[ai_model]
+provider = "anthropic"
+size = "large"
+capabilities = ["chat", "code", "tools", "reasoning"]
+litellm_model = "anthropic/claude-3-5-sonnet-20241022"
+api_key_env = "ANTHROPIC_API_KEY"
+rpm_limit = 60
+context_window = 200000
+access_groups = ["premium"]
+
+[ai_model.parameters]
+max_tokens = 4096
+temperature = 0.7
+
+[ai_model.metadata]
+family = "claude-3.5"
+training_cutoff = "2024-04"
+release_date = "2024-10-22"

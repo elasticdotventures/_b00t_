@@ -1,11 +1,11 @@
 [b00t]
 name = "github"
 type = "mcp"
-hint = "GitHub MCP server for repository management"
+hint = "GitHub MCP server"
 
 [[b00t.mcp.stdio]]
-command = "npx"
-args = ["-y", "@modelcontextprotocol/server-github"]
-transport = "stdio"
 priority = 0
+command = "npx"
 requires = ["node"]
+transport = "stdio"
+args = ["-y", "@modelcontextprotocol/server-github"]

@@ -1,0 +1,23 @@
+# b00t _b00t_ Module Justfile
+# Central hub for b00t development tools and integrations
+
+set dotenv-load
+set export
+
+# LiteLLM AI proxy integration module
+mod litellm
+
+# Future modules
+# mod? rust
+# mod? python  
+# mod? docker
+
+# Default: Show available modules
+default:
+    @echo "🥾 b00t _b00t_ modules:"
+    @echo "  litellm    - AI proxy server with unified model access"
+    @echo ""
+    @echo "Usage: just <module> <command>"
+    @echo "Example: just litellm start"
+    @echo ""
+    @echo "Module help: just --list <module>"

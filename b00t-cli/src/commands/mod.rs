@@ -8,6 +8,7 @@ pub mod session;
 pub mod whatismy;
 pub mod learn;
 pub mod lfmf;
+pub mod tiktoken;
 
 pub use mcp::McpCommands;
 pub use k8s::K8sCommands;
