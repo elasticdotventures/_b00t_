@@ -46,7 +46,7 @@ pub enum SessionCommands {
     Clear,
     #[clap(about = "Mark README.md as read for this session")]
     MarkReadmeRead,
-    #[clap(about = "Generate documented ._b00t_.toml template")]
+    #[clap(about = "Generate documented _b00t_.toml template")]
     Template,
     #[clap(about = "Check if output should be verbose for current shell")]
     ShouldShowOutput,
@@ -184,9 +184,9 @@ impl SessionCommands {
 
 fn generate_session_template() -> Result<()> {
     let template = r#"# b00t Session Configuration Template
-# 🤓 This file (._b00t_.toml) contains session memory and configuration
-# 🤓 It's automatically created in your git repository root when using b00t-cli
-# 🤓 The file is added to .gitignore to keep session data local
+# 🤓 This file (_b00t_.toml) contains session memory and configuration
+# 🤓 It's automatically created in your .git/ directory when using b00t-cli
+# 🤓 The file is stored in .git/ so it's automatically ignored by git
 
 [metadata]
 # 🤓 Session metadata (automatically managed)

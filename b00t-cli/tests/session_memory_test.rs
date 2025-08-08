@@ -8,8 +8,11 @@ fn test_session_memory_basic_operations() {
     let original_dir = env::current_dir().unwrap();
     env::set_current_dir(&temp_dir).unwrap();
     
-    // Initialize git repo to create valid git root
+    // Initialize git repo to create valid git root with .git directory
     std::process::Command::new("git").args(&["init"]).output().unwrap();
+    std::fs::create_dir_all(temp_dir.path().join(".git")).unwrap();
+    // Ensure .git directory exists
+    std::fs::create_dir_all(temp_dir.path().join(".git")).unwrap();
     
     // Test creating and loading session memory
     let mut memory = SessionMemory::load().unwrap();
@@ -35,8 +38,8 @@ fn test_session_memory_basic_operations() {
     assert!(keys.iter().any(|(key, type_)| key == "counter" && type_ == "number"));
     assert!(keys.iter().any(|(key, type_)| key == "enabled" && type_ == "flag"));
     
-    // Verify TOML file was created
-    assert!(temp_dir.path().join("._b00t_.toml").exists());
+    // Verify TOML file was created in .git directory
+    assert!(temp_dir.path().join(".git/_b00t_.toml").exists());
     
     // Test clear operation
     memory.clear().unwrap();
@@ -52,6 +55,7 @@ fn test_session_memory_persistence() {
     env::set_current_dir(&temp_dir).unwrap();
     
     std::process::Command::new("git").args(&["init"]).output().unwrap();
+    std::fs::create_dir_all(temp_dir.path().join(".git")).unwrap();
     
     // Create and populate session memory
     {
@@ -77,6 +81,7 @@ fn test_readme_tracking() {
     env::set_current_dir(&temp_dir).unwrap();
     
     std::process::Command::new("git").args(&["init"]).output().unwrap();
+    std::fs::create_dir_all(temp_dir.path().join(".git")).unwrap();
     
     // Test README tracking functionality
     let mut memory = SessionMemory::load().unwrap();
@@ -102,6 +107,7 @@ fn test_metadata_tracking() {
     env::set_current_dir(&temp_dir).unwrap();
     
     std::process::Command::new("git").args(&["init"]).output().unwrap();
+    std::fs::create_dir_all(temp_dir.path().join(".git")).unwrap();
     std::process::Command::new("git").args(&["checkout", "-b", "test-branch"]).output().ok();
     
     let memory = SessionMemory::load().unwrap();

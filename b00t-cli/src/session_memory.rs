@@ -100,17 +100,23 @@ impl Default for SessionMetadata {
 }
 
 impl SessionMemory {
-    /// Get the git root path for storing ._b00t_.toml
+    /// Get the git root path for storing _b00t_.toml in .git/ directory
     pub fn get_config_path() -> Result<PathBuf> {
         let git_root = get_workspace_root();
-        Ok(PathBuf::from(git_root))
+        Ok(PathBuf::from(git_root).join(".git"))
     }
 
-    /// Ensure ._b00t_.toml is in .gitignore
+    /// Ensure _b00t_.toml is in .gitignore (no longer needed since it's in .git/)
     fn ensure_gitignore_entry() -> Result<()> {
-        let config_dir = Self::get_config_path()?;
-        let gitignore_path = config_dir.join(".gitignore");
-        let target_entry = "._b00t_.toml";
+        // No longer needed since _b00t_.toml is stored in .git/ directory
+        // which is automatically ignored by git
+        Ok(())
+    }
+
+    fn _unused_ensure_gitignore_entry() -> Result<()> {
+        let git_root = get_workspace_root();
+        let gitignore_path = PathBuf::from(git_root).join(".gitignore");
+        let target_entry = "_b00t_.toml";
 
         // Check if .gitignore exists
         if !gitignore_path.exists() {
@@ -152,8 +158,8 @@ impl SessionMemory {
         // Ensure ._b00t_.toml is in .gitignore before creating/loading
         Self::ensure_gitignore_entry().context("Failed to ensure .gitignore entry")?;
         
-        // Use confy to load from ._b00t_.toml in git root
-        let mut memory: SessionMemory = confy::load_path(config_dir.join("._b00t_.toml"))
+        // Use confy to load from _b00t_.toml in .git directory
+        let mut memory: SessionMemory = confy::load_path(config_dir.join("_b00t_.toml"))
             .context("Failed to load session memory")?;
 
         // Initialize metadata if this is first load
@@ -177,7 +183,7 @@ impl SessionMemory {
     /// Save session memory using confy
     pub fn save(&self) -> Result<()> {
         let config_dir = Self::get_config_path()?;
-        confy::store_path(config_dir.join("._b00t_.toml"), self)
+        confy::store_path(config_dir.join("_b00t_.toml"), self)
             .context("Failed to save session memory")
     }
 
@@ -589,7 +595,7 @@ mod tests {
     fn test_gitignore_entry_creation() -> Result<()> {
         let temp_dir = TempDir::new()?;
         let gitignore_path = temp_dir.path().join(".gitignore");
-        let target_entry = "._b00t_.toml";
+        let target_entry = "_b00t_.toml";
 
         // Test creating .gitignore when it doesn't exist
         assert!(!gitignore_path.exists());
@@ -608,7 +614,7 @@ mod tests {
     fn test_gitignore_entry_detection() -> Result<()> {
         let temp_dir = TempDir::new()?;
         let gitignore_path = temp_dir.path().join(".gitignore");
-        let target_entry = "._b00t_.toml";
+        let target_entry = "_b00t_.toml";
 
         // Create .gitignore with entry already present
         fs::write(&gitignore_path, format!("*.log\n{}\n*.tmp\n", target_entry))?;
