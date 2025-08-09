@@ -1,0 +1,73 @@
+[build-system]
+requires = ["maturin>=1.5,<2.0"]
+build-backend = "maturin"
+
+[project]
+name = "b00t-grok-py"
+version = "0.1.0"
+description = "b00t grok guru - FastAPI MCP server for RAG knowledgebase"
+authors = [
+    {name = "PromptExecution", email = "hello@promptexecution.com"}
+]
+requires-python = ">=3.10"
+dependencies = [
+    "fastapi>=0.104.0",
+    "uvicorn[standard]>=0.24.0",
+    "fastmcp>=0.4.0",
+    "httpx>=0.25.0",
+    # "InstructorEmbedding>=1.0.0",  # 🤓 Optional - will use mock embeddings if not available
+    # "qdrant-client>=1.7.0",  # 🤓 Optional - will be added when vector search is implemented
+    "pydantic>=2.0.0",
+    "python-multipart>=0.0.6",
+    # "torch>=2.0.0,<3.0.0",  # 🤓 Too heavy for basic demo
+    "chonkie>=1.1.2",
+    "maturin>=1.9.3",
+    "numpy>=2.2.6",
+]
+license = {text = "MIT"}
+readme = "README.md"
+keywords = ["rag", "knowledgebase", "mcp", "fastapi", "b00t"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+]
+
+[project.urls]
+Homepage = "https://github.com/elasticdotventures/dotfiles"
+Repository = "https://github.com/elasticdotventures/dotfiles"
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-asyncio>=0.21.0",
+    "black>=23.0.0",
+    "isort>=5.12.0",
+    "mypy>=1.5.0",
+]
+
+[tool.maturin]
+features = ["pyo3/extension-module"]
+bindings = "pyo3"
+compatibility = "manylinux2014"
+skip-auditwheel = false
+python-source = "python"
+manifest-path = "../b00t-grok/Cargo.toml"
+
+[tool.black]
+line-length = 88
+target-version = ['py310']
+
+[tool.isort]
+profile = "black"
+line_length = 88
+
+[tool.mypy]
+python_version = "3.10"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true

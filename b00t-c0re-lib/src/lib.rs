@@ -31,12 +31,14 @@ pub mod context;
 pub mod utils;
 pub mod redis;
 pub mod agent_coordination;
+pub mod grok;
 pub mod learn;
 pub mod datum_ai_model;
 
 // Re-export commonly used types
 pub use template::TemplateRenderer;
 pub use context::B00tContext;
+pub use grok::{GrokClient, DigestResult, AskResult, LearnResult, ChunkResult, ChunkSummary};
 
 /// Common configuration structure for b00t components
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]

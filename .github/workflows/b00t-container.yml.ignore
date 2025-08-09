@@ -6,7 +6,7 @@ on:
     paths:
       - 'setup.sh'
       - '_b00t_/docker.🐳/Dockerfile'
-      - '.github/workflows/b00t-container.yml'
+      - '.github/workflows/b00t-container.yml.ignore'
   pull_request:
     branches: [ main ]
     paths:

@@ -136,3 +136,33 @@ install-tool TOOL:
     #!/bin/bash
     echo "📦 Installing tool: {{TOOL}}"
     echo "TODO: Implement tool installation via b00t cli"
+
+# Qdrant vector database
+qdrant-run:
+    podman run -d --name qdrant-container -p 6333:6333 -p 6334:6334 -e QDRANT__SERVICE__GRPC_PORT="6334" docker.io/qdrant/qdrant:latest
+
+qdrant-stop:
+    podman stop qdrant-container && podman rm qdrant-container
+
+# 🤓 PyO3/Maturin build commands for b00t-grok-py
+grok-build:
+    #!/bin/bash
+    # 🤓 Critical: unset CONDA_PREFIX to avoid environment conflicts with uv
+    # This prevents "Both VIRTUAL_ENV and CONDA_PREFIX are set" error
+    echo "🦀🐍 Building b00t-grok with PyO3 bindings..."
+    unset CONDA_PREFIX
+    cd b00t-grok-py
+    uv run maturin develop
+
+grok-dev: grok-build
+    #!/bin/bash
+    echo "🚀 Starting b00t-grok-py development server..."
+    cd b00t-grok-py
+    unset CONDA_PREFIX
+    uv run python -m uvicorn main:app --reload --port 8001
+
+grok-clean:
+    #!/bin/bash
+    echo "🧹 Cleaning b00t-grok build artifacts..."
+    cargo clean --package b00t-grok
+    cd b00t-grok-py && rm -rf build/ dist/ *.egg-info/

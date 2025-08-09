@@ -2,7 +2,7 @@
 members = [
     "b00t-cli",
     "b00t-mcp", 
-    "b00t-c0re-lib",
+    "b00t-c0re-lib", "b00t-grok",
 ]
 resolver = "2"
 
@@ -29,7 +29,7 @@ regex = "1.10.5"
 anyhow = "1.0"
 chrono = { version = "0.4", features = ["serde"] }
 tokio = { version = "1.34.0", features = ["full"] }
-rmcp = { version = "0.3.2", features = ["client", "transport-io", "server", "macros", "schemars", "transport-streamable-http-server", "transport-worker"] }
+rmcp = { version = "0.3.2", features = ["client", "transport-io", "server", "macros", "schemars", "transport-streamable-http-server", "transport-worker", "transport-child-process"] }
 tracing = "0.1"
 
 [workspace.lints.rust]

@@ -1,6 +1,7 @@
 use clap::Parser;
 use crate::clap_reflection::{McpReflection, McpCommandRegistry};
 use crate::impl_mcp_tool;
+use b00t_c0re_lib::GrokClient;
 
 // Re-export b00t-cli command structures for MCP use
 // This creates a compile-time dependency but ensures type safety
@@ -448,6 +449,56 @@ pub struct CheckpointCommand {
 
 impl_mcp_tool!(CheckpointCommand, "b00t_checkpoint", ["checkpoint"]);
 
+// Grok knowledgebase MCP tools
+
+/// MCP command for digesting content into chunks about a topic
+/// 🤓 ENTANGLED: b00t-cli/src/commands/grok.rs GrokCommands::Digest
+#[derive(Parser, Clone)]
+pub struct GrokDigestCommand {
+    #[arg(help = "Topic to digest content about")]
+    pub topic: String,
+    
+    #[arg(help = "Content to digest")]
+    pub content: String,
+}
+
+impl_mcp_tool!(GrokDigestCommand, "b00t_grok_digest", ["grok", "digest"]);
+
+/// MCP command for asking questions and searching the knowledgebase
+/// 🤓 ENTANGLED: b00t-cli/src/commands/grok.rs GrokCommands::Ask
+#[derive(Parser, Clone)]
+pub struct GrokAskCommand {
+    #[arg(help = "Query to search for")]
+    pub query: String,
+    
+    #[arg(long, help = "Optional topic to filter by")]
+    pub topic: Option<String>,
+    
+    #[arg(long, help = "Maximum number of results to return", default_value = "10")]
+    pub limit: Option<usize>,
+}
+
+impl_mcp_tool!(GrokAskCommand, "b00t_grok_ask", ["grok", "ask"]);
+
+/// MCP command for learning from URLs or content
+/// 🤓 ENTANGLED: b00t-cli/src/commands/grok.rs GrokCommands::Learn
+#[derive(Parser, Clone)]
+pub struct GrokLearnCommand {
+    #[arg(help = "Content to learn from")]
+    pub content: String,
+    
+    #[arg(long, help = "Source URL or file path")]
+    pub source: Option<String>,
+}
+
+impl_mcp_tool!(GrokLearnCommand, "b00t_grok_learn", ["grok", "learn"]);
+
+/// MCP command for getting grok system status
+#[derive(Parser, Clone)]
+pub struct GrokStatusCommand;
+
+impl_mcp_tool!(GrokStatusCommand, "b00t_grok_status", ["grok", "status"]);
+
 /// Create and populate a registry with all available MCP tools
 pub fn create_mcp_registry() -> McpCommandRegistry {
     let mut builder = McpCommandRegistry::builder();
@@ -484,7 +535,12 @@ pub fn create_mcp_registry() -> McpCommandRegistry {
         .register::<AgentVoteSubmitCommand>()
         .register::<AgentWaitCommand>()
         .register::<AgentNotifyCommand>()
-        .register::<AgentCapabilityCommand>();
+        .register::<AgentCapabilityCommand>()
+        // Grok knowledgebase tools
+        .register::<GrokDigestCommand>()
+        .register::<GrokAskCommand>()
+        .register::<GrokLearnCommand>()
+        .register::<GrokStatusCommand>();
         
     builder.build()
 }

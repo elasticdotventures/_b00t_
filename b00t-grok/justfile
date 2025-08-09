@@ -1,0 +1,123 @@
+# b00t-grok justfile - Use these commands for development
+
+# List available commands
+default:
+    just --list
+
+# Build the project
+build:
+    cargo build
+
+# Build release
+build-release:
+    cargo build --release
+
+# Run unit tests (without PyO3 to avoid linking issues)
+test:
+    cargo test --no-default-features
+
+# Run integration tests with local .env (for local Qdrant server)
+test-integration:
+    #!/usr/bin/env bash
+    set -a
+    source .env
+    set +a
+    cargo test --test integration_tests --no-default-features -- --nocapture
+
+# Run integration tests with direnv (for cloud servers)
+test-integration-cloud:
+    #!/usr/bin/env bash
+    eval "$(direnv export bash)"
+    cargo test --test integration_tests --no-default-features -- --nocapture
+
+# Run specific integration test with local .env
+test-integration-single TEST:
+    #!/usr/bin/env bash
+    set -a
+    source .env
+    set +a
+    cargo test {{TEST}} --test integration_tests --no-default-features -- --nocapture
+
+# Run specific integration test with cloud direnv
+test-integration-single-cloud TEST:
+    #!/usr/bin/env bash
+    eval "$(direnv export bash)"
+    cargo test {{TEST}} --test integration_tests --no-default-features -- --nocapture
+
+# Run all tests (unit + integration with direnv)
+test-all:
+    just test
+    just test-integration
+
+# Check code quality
+check:
+    cargo clippy -- -D warnings
+    cargo fmt --check
+
+# Fix code formatting and warnings
+fix:
+    cargo fmt
+    cargo clippy --fix --allow-dirty --allow-staged
+
+# Build Python bindings (requires PyO3)
+python-build:
+    maturin develop --features pyo3
+
+# Build Python release
+python-release:
+    maturin build --features pyo3 --release
+
+# Clean build artifacts
+clean:
+    cargo clean
+    
+# Show current environment (for debugging direnv)
+env:
+    #!/usr/bin/env bash
+    eval "$(direnv export bash)"
+    echo "QDRANT_URL: $QDRANT_URL"
+    echo "QDRANT_API_KEY: ${QDRANT_API_KEY:+***SET***}"
+    echo "OLLAMA_API_URL: $OLLAMA_API_URL"
+    echo "OLLAMA_API_KEY: ${OLLAMA_API_KEY:-UNSET}"
+
+# Test Qdrant connectivity (requires direnv)
+test-qdrant:
+    #!/usr/bin/env bash
+    eval "$(direnv export bash)"
+    echo "Testing Qdrant at: $QDRANT_URL"
+    if [ -n "$QDRANT_API_KEY" ]; then
+        curl -s "$QDRANT_URL/collections" --header "api-key: $QDRANT_API_KEY" | jq .
+    else
+        curl -s "$QDRANT_URL/collections" | jq .
+    fi
+
+# Test Ollama connectivity (requires direnv)  
+test-ollama:
+    #!/usr/bin/env bash
+    eval "$(direnv export bash)"
+    echo "Testing Ollama at: $OLLAMA_API_URL"
+    curl -s "$OLLAMA_API_URL/api/tags" | jq .
+
+# Full development check (format, lint, test)
+dev-check:
+    just fix
+    just check
+    just test-all
+
+# Show Qdrant gRPC requirement warning
+warn-grpc:
+    @echo "⚠️  CRITICAL QDRANT REQUIREMENT:"
+    @echo "   qdrant-client v1.15.0 requires gRPC port 6334"
+    @echo "   Current servers only expose HTTP port 6333"
+    @echo "   Integration tests will fail until gRPC is enabled"
+    @echo ""
+    @echo "   Local fix: Enable port 6334 in Qdrant config"
+    @echo "   Cloud: May need different Qdrant client version"
+
+# Development workflow: check environment then run tests
+dev:
+    just warn-grpc
+    just env
+    just test-qdrant
+    just test-ollama
+    just dev-check

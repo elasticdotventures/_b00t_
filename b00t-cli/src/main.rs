@@ -37,7 +37,7 @@ use datum_mcp::McpDatum;
 use datum_vscode::VscodeDatum;
 use traits::*;
 
-use crate::commands::{AiCommands, AppCommands, CliCommands, InitCommands, K8sCommands, McpCommands, SessionCommands, WhatismyCommands};
+use crate::commands::{AiCommands, AppCommands, CliCommands, GrokCommands, InitCommands, K8sCommands, McpCommands, SessionCommands, WhatismyCommands};
 use crate::commands::learn::handle_learn;
 
 // Re-export commonly used functions for datum modules
@@ -194,6 +194,11 @@ Tips:
         
         #[clap(long = "topic", help = "Topic to learn about (MCP compatibility)")]
         topic_flag: Option<String>,  // 🦨 MCP compatibility: accept --topic flag
+    },
+    #[clap(about = "Grok knowledgebase RAG system")]
+    Grok {
+        #[clap(subcommand)]
+        grok_command: GrokCommands,
     },
 }
 
@@ -1118,6 +1123,23 @@ fn main() {
             // 🦨 MCP compatibility: merge positional and flag arguments
             let effective_topic = topic.as_ref().or(topic_flag.as_ref());
             if let Err(e) = handle_learn(&cli.path, effective_topic.map(|s| s.as_str())) {
+                eprintln!("Error: {}", e);
+                std::process::exit(1);
+            }
+        }
+        Some(Commands::Grok { grok_command }) => {
+            use crate::commands::grok::handle_grok_command;
+            
+            // Create Tokio runtime for async grok operations
+            let rt = match tokio::runtime::Runtime::new() {
+                Ok(rt) => rt,
+                Err(e) => {
+                    eprintln!("Error creating async runtime: {}", e);
+                    std::process::exit(1);
+                }
+            };
+            
+            if let Err(e) = rt.block_on(handle_grok_command(grok_command.clone())) {
                 eprintln!("Error: {}", e);
                 std::process::exit(1);
             }

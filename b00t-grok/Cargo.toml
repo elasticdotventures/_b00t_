@@ -1,0 +1,51 @@
+[package]
+name = "b00t-grok"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+async-openai = "0.28.0"
+chrono = { workspace = true, features = ["serde"] }
+pyo3 = { version = "0.25.1", features = ["extension-module"], optional = true }
+# 🤓 HTTP-only qdrant-client (no gRPC complexity)
+qdrant-client = { version = "1.15.0", features = ["serde"] }
+reqwest = "0.12.22"
+serde = { workspace = true, features = ["derive"] }
+serde_json.workspace = true
+snafu = "0.8.6"
+tokio = { workspace = true, features = ["full"] }
+toml.workspace = true
+tracing.workspace = true
+uuid = { version = "1.17.0", features = ["serde", "v4"] }
+# Vector embeddings support - using more stable alternatives
+# candle-core = "0.8.1" 
+# candle-nn = "0.8.1"
+# candle-transformers = "0.8.1"
+# tokenizers = "0.21.0"
+# 🤓 Candle ecosystem too unstable for production, use Python embedding service instead
+
+[lints]
+workspace = true
+
+[lib]
+name = "b00t_grok"
+crate-type = ["cdylib", "rlib"]
+
+[features]
+default = ["pyo3"]
+pyo3 = ["dep:pyo3"]
+
+# 🦨 Remove unused maturin config - will configure in pyproject.toml when needed
+# [tool.maturin]
+# profile = "release"
+# features = ["pyo3", "pyo3/extension-module"]
+# bindings = "pyo3"
+# compatibility = "manylinux2014"
+# skip-auditwheel = false
+# python-source = "src"
+# strip = true
+# sdist-generator = "cargo"

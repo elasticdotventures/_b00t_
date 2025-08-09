@@ -22,6 +22,7 @@ serde_json.workspace = true
 anyhow.workspace = true
 chrono.workspace = true
 regex.workspace = true
+rmcp.workspace = true
 toml = "0.8"
 serde_yaml = "0.9"
 

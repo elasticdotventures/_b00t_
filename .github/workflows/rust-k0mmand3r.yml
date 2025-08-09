@@ -1,22 +1,16 @@
+---
 name: K0mmand3r (rust, python, & wasm/typescript)
-
 on:
   # push:
-  #   branches: [ main ]
+  #   branches: [main]
   pull_request:
-    branches: [ main ]
-
+    branches: [main]
 env:
   PROJECT_ROOT: rust/k0mmand3r
   SKIP_TESTS: false
-
 jobs:
-
   run-tests:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: ${{ env.PROJECT_ROOT }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -28,35 +22,21 @@ jobs:
           toolchain: stable
           override: true
           components: rustfmt, clippy
-
       - name: run tests 🦀
-        if: env.SKIP_TESTS == 'false'
-        run: |
-          cargo test --all-features
-      - name: build crate 🦀 (rust)
-        if: env.SKIP_TESTS == 'false'
-        run: |
-          cargo build --all-features
-
-      ###########################
-      # typescript
-      ###########################
-      - # https://github.com/actions/setup-node
-        uses: actions/setup-node@v4
+        if: ${{ env.SKIP_TESTS == 'false' }}
+        run: cargo test --all-features
+        working-directory: rust/k0mmand3r
+      # typescript      ###########################
+      # https://github.com/actions/setup-node
+      - uses: actions/setup-node@v4
         with:
-          # Version Spec of the version to use in SemVer notation.
-          # It also emits such aliases as lts, latest, nightly and canary builds
-          # Examples: 12.x, 10.15.1, >=10.15.0, lts/Hydrogen, 16-nightly, latest, node
           node-version: latest
-
       # we use binstall to install wasm-pack
-
       - name: Install cargo-binstall
         if: env.SKIP_TESTS == 'false'
         uses: cargo-bins/cargo-binstall@v1.4.9
-
       - name: run tests 🦄 (typescript)
-        if: env.SKIP_TESTS == 'false'
+        if: ${{ env.SKIP_TESTS == 'false' }}
         run: |
           rustup target add wasm32-unknown-unknown
           cargo binstall --no-confirm wasm-pack
@@ -64,7 +44,7 @@ jobs:
           # npx mocha tests/test_k0mmand3r.ts
           npm ci
           npm test
-
+        working-directory: rust/k0mmand3r
       ###########################
       # python
       # 😉: `maturin generate-ci github`
@@ -76,20 +56,18 @@ jobs:
           command: build
           args: --release --out dist --features lang-python
           working-directory: ${{ env.PROJECT_ROOT }}
-
       - name: python setup 🐍
         uses: actions/setup-python@v4
         with:
           python-version: '3.10'
-
       - name: run tests 🐍 (python)
-        if: env.SKIP_TESTS == 'false'
+        if: ${{ env.SKIP_TESTS == 'false' }}
         run: |
           python3 -m venv ./venv
           pip install --find-links ./dist k0mmand3r
           # python3 -m unittest discover -s tests
           make pytest
-
+        working-directory: rust/k0mmand3r
       # TODO: upload the crate artifcat so we don't need to recompile.
       - name: Upload wasm artifacts
         if: env.SKIP_TESTS == 'false'
@@ -98,20 +76,15 @@ jobs:
           name: node-pkg
           path: ${{ env.PROJECT_ROOT }}/pkg
           if-no-files-found: error
-
-
   is-release:
-    needs: [ run-tests ]
-    ## comment this to test the action:
+    needs: [run-tests]    ## comment this to test the action:
     # if: github.event.pull_request.merged == true
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: ${{ env.PROJECT_ROOT }}
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+
       - name: is pull request
         run: |
           echo "is pull request (merged)"
@@ -119,18 +92,11 @@ jobs:
       # - uses: actions/checkout@v4
       #   with:
       #     fetch-depth: 0
-
       ## 😓 .. after a lot of work this was all moved to release.sh
-
-
   release-crate:
     name: Release Rust Crate 🦀
-    needs: [ is-release ]
+    needs: [is-release]
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: ${{ env.PROJECT_ROOT }}
-
     steps:
       - uses: actions/checkout@v4
         with:
@@ -142,20 +108,17 @@ jobs:
           toolchain: stable
           override: true
           components: rustfmt, clippy
-
       # https://github.com/actions-rs/cargo/issues/6
       - uses: actions-rs/cargo@v1
         with:
           command: login
           args: ${{ secrets.CRATESIO_API_TOKEN }}
-
       # https://github.com/actions-rs/cargo/issues/6
       - uses: actions-rs/cargo@v1
         with:
           cwd: ${{ env.PROJECT_ROOT }}
           command: build
           args: --manifest-path rust/k0mmand3r/Cargo.toml --release --all-features
-
       # https://github.com/marketplace/actions/publish-crates
       # https://github.com/katyo/publish-crates
       - uses: katyo/publish-crates@v2
@@ -166,18 +129,12 @@ jobs:
           path: ${{ env.PROJECT_ROOT }}
           registry-token: ${{ secrets.CRATESIO_API_TOKEN }}
 
-
-
   release-node:
     name: Release Node 🦄
     # TODO: https://github.com/marketplace/actions/automated-version-bump
     # This Action bumps the version in package.json and pushes it back to the repo. It is meant to be used on every successful merge to master but you'll need to configure that workflow yourself
-    needs: [ is-release, is-release ]
+    needs: [is-release, is-release]
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: ${{ env.PROJECT_ROOT }}
-
     steps:
       # - name: Build WASM module
       #   run: |
@@ -187,23 +144,19 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 1
-
       # for publish
       - name: Install Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 'latest'  # Use the Node.js version that suits your project
-
       - uses: actions/download-artifact@v4
         with:
           # working-directory: ${{ env.PROJECT_ROOT }}
           name: node-pkg
-
       - name: Authenticate with npm
         run: echo "//registry.npmjs.org/:_authToken=${{ secrets.NPM_AUTH_TOKEN }}" > ~/.npmrc
         env:
           NPM_TOKEN: ${{ secrets.NPM_AUTH_TOKEN }}
-
       - name: Publish to NPM
         ## NOTE: this requires we ran the tests, so if tests are skipped so is this.
         if: env.SKIP_TESTS == 'false'
@@ -211,18 +164,12 @@ jobs:
           npm publish --access=public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_AUTH_TOKEN }}
-
-
   build-python-linux:
-    needs: [ is-release ]
+    needs: [is-release]
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: ${{ env.PROJECT_ROOT }}
     strategy:
       matrix:
         target: [ x86_64, x86, aarch64, armv7, s390x, ppc64le ]
-
     steps:
       - uses: actions/checkout@v4
         with:
@@ -231,7 +178,6 @@ jobs:
       - uses: actions/setup-python@v4
         with:
           python-version: '3.10'
-
       - name: Build wheels
         uses: PyO3/maturin-action@v1.40.8
         with:
@@ -240,7 +186,6 @@ jobs:
           args: --release --out dist --find-interpreter
           sccache: 'true'
           manylinux: auto
-
       - name: Upload wheels
         uses: actions/upload-artifact@v3
         with:
@@ -249,20 +194,14 @@ jobs:
           path: ${{ env.PROJECT_ROOT }}/dist
           if-no-files-found: error
 
-
-
   build-python-windows:
-    needs: [ is-release ]
+    needs: [is-release]
     runs-on: windows-latest
-    defaults:
-      run:
-        working-directory: ${{ env.PROJECT_ROOT }}
     strategy:
       matrix:
         target: [x64, x86]
     steps:
       - uses: actions/checkout@v3
-
       - uses: actions/setup-python@v4
         with:
           python-version: '3.10'
@@ -281,20 +220,14 @@ jobs:
           name: wheels
           path: ${{ env.PROJECT_ROOT }}/dist
           if-no-files-found: error
-
-
   build-python-macos:
-    needs: [ is-release ]
+    needs: [is-release]
     runs-on: macos-latest
-    defaults:
-      run:
-        working-directory: ${{ env.PROJECT_ROOT }}
     strategy:
       matrix:
         target: [x86_64, aarch64]
     steps:
       - uses: actions/checkout@v3
-
       - uses: actions/setup-python@v4
         with:
           python-version: '3.10'
@@ -312,16 +245,11 @@ jobs:
           # working-directory: ${{ env.PROJECT_ROOT }}
           path: ${{ env.PROJECT_ROOT }}/dist
           if-no-files-found: error
-
   build-python-sdist:
-    needs: [ is-release ]
+    needs: [is-release]
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: ${{ env.PROJECT_ROOT }}
     steps:
       - uses: actions/checkout@v3
-
       - name: Build sdist
         uses: PyO3/maturin-action@v1.40.8
         with:
@@ -334,14 +262,10 @@ jobs:
           name: wheels
           path: ${{ env.PROJECT_ROOT }}/dist
           if-no-files-found: error
-
   release-python:
-    needs: [ is-release, build-python-linux, build-python-windows, build-python-macos, build-python-sdist ]
+    needs: [is-release, build-python-linux, build-python-windows, build-python-macos, build-python-sdist]
     name: Release python 🐍
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: ${{ env.PROJECT_ROOT }}
     # if: "startsWith(github.ref, 'refs/tags/')"
     steps:
       - uses: actions/download-artifact@v3
@@ -357,6 +281,4 @@ jobs:
           working-directory: ${{ env.PROJECT_ROOT }}
           command: upload
           args: --non-interactive --skip-existing *
-
-
 
