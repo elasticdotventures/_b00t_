@@ -28,6 +28,7 @@ chrono.workspace = true
 
 # b00t-cli specific dependencies
 b00t-c0re-lib = { workspace = true }
+b00t-grok = { workspace = true }
 duct = "1.0"
 shellexpand = "3.1.0"
 semver = "1.0"
@@ -42,6 +43,7 @@ tracing = "0.1"
 uuid = { version = "1.0", features = ["v4"] }
 confy = "1.0.0"
 libc = "0.2"
+
 
 [dev-dependencies]
 assert_cmd = "2.0.17"

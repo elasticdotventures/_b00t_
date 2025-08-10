@@ -23,7 +23,7 @@ anyhow.workspace = true
 chrono.workspace = true
 regex.workspace = true
 rmcp.workspace = true
-toml = "0.8"
+toml.workspace = true
 serde_yaml = "0.9"
 
 # Core lib specific dependencies

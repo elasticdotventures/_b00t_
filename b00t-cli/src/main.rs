@@ -114,6 +114,40 @@ Tips:
         #[clap(help = "Lesson in '<topic>: <body>' format")]
         lesson: String,
     },
+    #[clap(
+        about = "Get advice for syntax errors and debugging",
+        long_about = r#"
+The b00t advice system acts as a syntax therapist, providing contextual debugging assistance 
+based on lessons learned from previous failures. It performs semantic search through the 
+hive's collective knowledge to suggest solutions for similar error patterns.
+
+Usage:
+  b00t-cli advice <tool> "<error_pattern>"
+  b00t-cli advice <tool> list  # List all lessons for a tool
+  b00t-cli advice <tool> search "<query>"  # Semantic search for lessons
+
+Examples:
+  b00t-cli advice just "Unknown start of token '.'"
+  b00t-cli advice rust "cannot borrow as mutable"  
+  b00t-cli advice docker "permission denied"
+  b00t-cli advice just list
+  b00t-cli advice rust search "template syntax"
+
+The system will:
+1. Search for similar error patterns in the vector database
+2. Return relevant lessons with confidence scores  
+3. Provide conversational debugging guidance
+4. Suggest specific solutions based on hive experience
+"#
+    )]
+    Advice {
+        #[clap(help = "Tool name")]
+        tool: String,
+        #[clap(help = "Error pattern to get advice for, 'list' to show all lessons, or 'search <query>'")]
+        query: String,
+        #[clap(long, help = "Maximum number of results to return (default: 5)")]
+        count: Option<usize>,
+    },
     #[clap(about = "MCP (Model Context Protocol) server management")]
     Mcp {
         #[clap(subcommand)]
@@ -1146,6 +1180,23 @@ fn main() {
         }
         Some(Commands::Lfmf { tool, lesson }) => {
             if let Err(e) = commands::lfmf::handle_lfmf(&cli.path, tool, lesson) {
+                eprintln!("Error: {}", e);
+                std::process::exit(1);
+            }
+        }
+        Some(Commands::Advice { tool, query, count }) => {
+            use crate::commands::advice::handle_advice;
+            
+            // Create Tokio runtime for async advice operations
+            let rt = match tokio::runtime::Runtime::new() {
+                Ok(rt) => rt,
+                Err(e) => {
+                    eprintln!("Error creating async runtime: {}", e);
+                    std::process::exit(1);
+                }
+            };
+            
+            if let Err(e) = rt.block_on(handle_advice(&cli.path, tool, query, *count)) {
                 eprintln!("Error: {}", e);
                 std::process::exit(1);
             }

@@ -137,6 +137,11 @@ pub struct ChunkMetadata {
     pub topic: String,
     pub tags: Vec<String>,
     pub created_at: String,
+    // lfmf-specific fields
+    pub lesson_type: Option<String>,    // "fail", "advice", "pattern"
+    pub error_pattern: Option<String>,  // Original error text for matching
+    pub solution: Option<String>,       // Solution or advice content
+    pub confidence: Option<f32>,        // 0.0-1.0 confidence in lesson
 }
 
 pub struct GrokClient {
@@ -359,6 +364,10 @@ impl GrokClient {
                 topic: topic.to_string(),
                 tags: vec![],
                 created_at: chrono::Utc::now().to_rfc3339(),
+                lesson_type: None,
+                error_pattern: None,
+                solution: None,
+                confidence: None,
             },
             vector: Some(vector.clone()),
         };
@@ -484,6 +493,10 @@ impl GrokClient {
                     topic: topic_str,
                     tags: vec![format!("score_{:.3}", scored_point.score)],
                     created_at,
+                    lesson_type: None,
+                    error_pattern: None,
+                    solution: None,
+                    confidence: None,
                 },
                 vector: scored_point.vectors.and_then(|v| match v.vectors_options? {
                     qdrant_client::qdrant::vectors_output::VectorsOptions::Vector(vector_struct) => {
@@ -555,6 +568,10 @@ impl GrokClient {
                     topic: inferred_topic.clone(),
                     tags: vec![format!("chunk_{}", i)],
                     created_at: chrono::Utc::now().to_rfc3339(),
+                    lesson_type: None,
+                    error_pattern: None,
+                    solution: None,
+                    confidence: None,
                 },
                 vector: Some(vector.clone()),
             };
@@ -610,6 +627,445 @@ impl GrokClient {
             "general".to_string()
         }
     }
+
+    // lfmf (Learn From My Fail) Methods
+    
+    /// Record a lesson learned from a failure
+    pub async fn record_lfmf(&self, tool: &str, error: &str, lesson: &str) -> Result<Chunk> {
+        let client = self.qdrant_client.as_ref()
+            .ok_or(GrokError::ClientNotInitialized)?;
+
+        // Validate inputs
+        if tool.trim().is_empty() {
+            return Err(GrokError::InvalidQuery { 
+                message: "Tool name cannot be empty".to_string() 
+            });
+        }
+        if error.trim().is_empty() {
+            return Err(GrokError::InvalidQuery { 
+                message: "Error pattern cannot be empty".to_string() 
+            });
+        }
+        if lesson.trim().is_empty() {
+            return Err(GrokError::InvalidQuery { 
+                message: "Lesson cannot be empty".to_string() 
+            });
+        }
+
+        // Format content for semantic search
+        let content = format!(
+            "TOOL: {}\nERROR PATTERN: {}\nLESSON LEARNED: {}\nSOLUTION: {}", 
+            tool, error, lesson, lesson
+        );
+
+        // Generate embedding
+        let vector = self.generate_embedding(&content).await?;
+        let chunk_id = Uuid::new_v4();
+        
+        // Enhanced topic inference for lfmf
+        let topic = self.infer_lfmf_topic(tool, error, &content);
+        
+        // Calculate confidence based on lesson specificity
+        let confidence = self.calculate_lesson_confidence(lesson);
+
+        let chunk = Chunk {
+            id: chunk_id,
+            content: content.clone(),
+            datum: topic.clone(),
+            attribution: Attribution {
+                url: None,
+                filename: None,
+                date: chrono::Utc::now().to_rfc3339(),
+            },
+            metadata: ChunkMetadata {
+                topic: topic.clone(),
+                tags: vec![
+                    "lfmf:lesson".to_string(),
+                    format!("tool:{}", tool.to_lowercase()),
+                    format!("error_type:{}", self.classify_error_type(error)),
+                    format!("confidence:{:.2}", confidence),
+                ],
+                created_at: chrono::Utc::now().to_rfc3339(),
+                lesson_type: Some("fail".to_string()),
+                error_pattern: Some(error.to_string()),
+                solution: Some(lesson.to_string()),
+                confidence: Some(confidence),
+            },
+            vector: Some(vector.clone()),
+        };
+
+        // Store in Qdrant
+        let mut payload = HashMap::new();
+        payload.insert("content".to_string(), content.into());
+        payload.insert("datum".to_string(), topic.clone().into());
+        payload.insert("topic".to_string(), topic.into());
+        payload.insert("tool".to_string(), tool.into());
+        payload.insert("error_pattern".to_string(), error.into());
+        payload.insert("lesson".to_string(), lesson.into());
+        payload.insert("lesson_type".to_string(), "fail".into());
+        payload.insert("confidence".to_string(), confidence.into());
+        payload.insert("created_at".to_string(), chunk.metadata.created_at.clone().into());
+
+        let point = PointStruct::new(
+            chunk_id.to_string(),
+            vector,
+            payload,
+        );
+
+        let upsert_request = qdrant_client::qdrant::UpsertPoints {
+            collection_name: self.collection_name.clone(),
+            points: vec![point],
+            ..Default::default()
+        };
+
+        client
+            .upsert_points(upsert_request)
+            .await?;
+
+        tracing::info!("Recorded lfmf lesson {} for tool '{}': {}", chunk_id, tool, error);
+
+        Ok(chunk)
+    }
+
+    /// Get advice for a specific error pattern
+    pub async fn get_advice(&self, tool: &str, error: &str) -> Result<Vec<Chunk>> {
+        let client = self.qdrant_client.as_ref()
+            .ok_or(GrokError::ClientNotInitialized)?;
+
+        // Validate inputs
+        if tool.trim().is_empty() {
+            return Err(GrokError::InvalidQuery { 
+                message: "Tool name cannot be empty".to_string() 
+            });
+        }
+        if error.trim().is_empty() {
+            return Err(GrokError::InvalidQuery { 
+                message: "Error pattern cannot be empty".to_string() 
+            });
+        }
+
+        // Format query similar to how we store lfmf records
+        let query = format!("TOOL: {} ERROR PATTERN: {}", tool, error);
+        
+        // Generate query embedding
+        let query_vector = self.generate_embedding(&query).await?;
+
+        // Build search request with lfmf-specific filters
+        use qdrant_client::qdrant::{Filter, Condition, FieldCondition, Match, r#match::MatchValue};
+        
+        let filter = Filter {
+            must: vec![
+                // Filter for lfmf lessons only
+                Condition {
+                    condition_one_of: Some(qdrant_client::qdrant::condition::ConditionOneOf::Field(
+                        FieldCondition {
+                            key: "lesson_type".to_string(),
+                            r#match: Some(Match {
+                                match_value: Some(MatchValue::Text("fail".to_string())),
+                            }),
+                            ..Default::default()
+                        }
+                    )),
+                },
+                // Filter for same tool
+                Condition {
+                    condition_one_of: Some(qdrant_client::qdrant::condition::ConditionOneOf::Field(
+                        FieldCondition {
+                            key: "tool".to_string(),
+                            r#match: Some(Match {
+                                match_value: Some(MatchValue::Text(tool.to_lowercase())),
+                            }),
+                            ..Default::default()
+                        }
+                    )),
+                },
+            ],
+            ..Default::default()
+        };
+
+        let search_request = SearchPoints {
+            collection_name: self.collection_name.clone(),
+            vector: query_vector,
+            filter: Some(filter),
+            limit: 5, // Top 5 most similar lessons
+            with_payload: Some(WithPayloadSelector {
+                selector_options: Some(qdrant_client::qdrant::with_payload_selector::SelectorOptions::Enable(true)),
+            }),
+            ..Default::default()
+        };
+
+        let search_result = client.search_points(search_request).await?;
+
+        let mut advice_chunks = Vec::new();
+        for scored_point in search_result.result {
+            let payload = scored_point.payload;
+            
+            let content = payload.get("content")
+                .and_then(|v| v.as_str())
+                .map_or("", |v| v).to_string();
+            
+            let lesson = payload.get("lesson")
+                .and_then(|v| v.as_str())
+                .map_or("", |v| v).to_string();
+                
+            let error_pattern = payload.get("error_pattern")
+                .and_then(|v| v.as_str())
+                .map_or("", |v| v).to_string();
+
+            let confidence = payload.get("confidence")
+                .and_then(|v| match v {
+                    qdrant_client::qdrant::Value { kind: Some(qdrant_client::qdrant::value::Kind::DoubleValue(f)) } => Some(*f as f32),
+                    qdrant_client::qdrant::Value { kind: Some(qdrant_client::qdrant::value::Kind::IntegerValue(i)) } => Some(*i as f32),
+                    _ => None,
+                })
+                .unwrap_or(0.0);
+
+            let created_at = payload.get("created_at")
+                .and_then(|v| v.as_str())
+                .map_or("", |v| v).to_string();
+
+            let point_id = match &scored_point.id {
+                Some(id) => match id.point_id_options.as_ref() {
+                    Some(qdrant_client::qdrant::point_id::PointIdOptions::Uuid(uuid_str)) => {
+                        Uuid::parse_str(&uuid_str).unwrap_or_else(|_| Uuid::new_v4())
+                    }
+                    Some(qdrant_client::qdrant::point_id::PointIdOptions::Num(_)) => Uuid::new_v4(),
+                    None => Uuid::new_v4(),
+                }
+                None => Uuid::new_v4(),
+            };
+
+            let chunk = Chunk {
+                id: point_id,
+                content,
+                datum: tool.to_string(),
+                attribution: Attribution {
+                    url: None,
+                    filename: None,
+                    date: created_at.clone(),
+                },
+                metadata: ChunkMetadata {
+                    topic: tool.to_string(),
+                    tags: vec![
+                        "lfmf:lesson".to_string(),
+                        format!("tool:{}", tool),
+                        format!("similarity:{:.3}", scored_point.score),
+                    ],
+                    created_at,
+                    lesson_type: Some("fail".to_string()),
+                    error_pattern: Some(error_pattern),
+                    solution: Some(lesson),
+                    confidence: Some(confidence),
+                },
+                vector: scored_point.vectors.and_then(|v| match v.vectors_options? {
+                    qdrant_client::qdrant::vectors_output::VectorsOptions::Vector(vector_struct) => {
+                        Some(vector_struct.data)
+                    }
+                    _ => None,
+                }),
+            };
+            
+            advice_chunks.push(chunk);
+        }
+
+        tracing::info!("Found {} advice chunks for tool '{}' error '{}'", 
+                      advice_chunks.len(), tool, error);
+
+        Ok(advice_chunks)
+    }
+
+    /// List all lessons for a specific tool
+    pub async fn list_lessons(&self, tool: &str) -> Result<Vec<Chunk>> {
+        let client = self.qdrant_client.as_ref()
+            .ok_or(GrokError::ClientNotInitialized)?;
+
+        if tool.trim().is_empty() {
+            return Err(GrokError::InvalidQuery { 
+                message: "Tool name cannot be empty".to_string() 
+            });
+        }
+
+        // Build filter for tool-specific lfmf lessons
+        use qdrant_client::qdrant::{Filter, Condition, FieldCondition, Match, r#match::MatchValue};
+        
+        let filter = Filter {
+            must: vec![
+                Condition {
+                    condition_one_of: Some(qdrant_client::qdrant::condition::ConditionOneOf::Field(
+                        FieldCondition {
+                            key: "lesson_type".to_string(),
+                            r#match: Some(Match {
+                                match_value: Some(MatchValue::Text("fail".to_string())),
+                            }),
+                            ..Default::default()
+                        }
+                    )),
+                },
+                Condition {
+                    condition_one_of: Some(qdrant_client::qdrant::condition::ConditionOneOf::Field(
+                        FieldCondition {
+                            key: "tool".to_string(),
+                            r#match: Some(Match {
+                                match_value: Some(MatchValue::Text(tool.to_lowercase())),
+                            }),
+                            ..Default::default()
+                        }
+                    )),
+                },
+            ],
+            ..Default::default()
+        };
+
+        let scroll_request = qdrant_client::qdrant::ScrollPoints {
+            collection_name: self.collection_name.clone(),
+            filter: Some(filter),
+            limit: Some(50), // Reasonable limit for lesson listing
+            with_payload: Some(WithPayloadSelector {
+                selector_options: Some(qdrant_client::qdrant::with_payload_selector::SelectorOptions::Enable(true)),
+            }),
+            ..Default::default()
+        };
+
+        let scroll_result = client.scroll(scroll_request).await?;
+        
+        let mut lessons = Vec::new();
+        for point in scroll_result.result {
+            let payload = point.payload;
+            
+            let content = payload.get("content")
+                .and_then(|v| v.as_str())
+                .map_or("", |v| v).to_string();
+                
+            let lesson = payload.get("lesson")
+                .and_then(|v| v.as_str())
+                .map_or("", |v| v).to_string();
+                
+            let error_pattern = payload.get("error_pattern")
+                .and_then(|v| v.as_str())
+                .map_or("", |v| v).to_string();
+
+            let confidence = payload.get("confidence")
+                .and_then(|v| match v {
+                    qdrant_client::qdrant::Value { kind: Some(qdrant_client::qdrant::value::Kind::DoubleValue(f)) } => Some(*f as f32),
+                    qdrant_client::qdrant::Value { kind: Some(qdrant_client::qdrant::value::Kind::IntegerValue(i)) } => Some(*i as f32),
+                    _ => None,
+                })
+                .unwrap_or(0.0);
+
+            let created_at = payload.get("created_at")
+                .and_then(|v| v.as_str())
+                .map_or("", |v| v).to_string();
+
+            let point_id = match &point.id {
+                Some(id) => match id.point_id_options.as_ref() {
+                    Some(qdrant_client::qdrant::point_id::PointIdOptions::Uuid(uuid_str)) => {
+                        Uuid::parse_str(&uuid_str).unwrap_or_else(|_| Uuid::new_v4())
+                    }
+                    Some(qdrant_client::qdrant::point_id::PointIdOptions::Num(_)) => Uuid::new_v4(),
+                    None => Uuid::new_v4(),
+                }
+                None => Uuid::new_v4(),
+            };
+
+            let chunk = Chunk {
+                id: point_id,
+                content,
+                datum: tool.to_string(),
+                attribution: Attribution {
+                    url: None,
+                    filename: None,
+                    date: created_at.clone(),
+                },
+                metadata: ChunkMetadata {
+                    topic: tool.to_string(),
+                    tags: vec![
+                        "lfmf:lesson".to_string(),
+                        format!("tool:{}", tool),
+                    ],
+                    created_at,
+                    lesson_type: Some("fail".to_string()),
+                    error_pattern: Some(error_pattern),
+                    solution: Some(lesson),
+                    confidence: Some(confidence),
+                },
+                vector: point.vectors.and_then(|v| match v.vectors_options? {
+                    qdrant_client::qdrant::vectors_output::VectorsOptions::Vector(vector_struct) => {
+                        Some(vector_struct.data)
+                    }
+                    _ => None,
+                }),
+            };
+            
+            lessons.push(chunk);
+        }
+
+        tracing::info!("Listed {} lessons for tool '{}'", lessons.len(), tool);
+        Ok(lessons)
+    }
+
+    // Helper methods for lfmf functionality
+
+    fn infer_lfmf_topic(&self, tool: &str, error: &str, _content: &str) -> String {
+        let base_topic = match tool.to_lowercase().as_str() {
+            "just" | "justfile" => "just",
+            "rust" | "cargo" | "clippy" => "rust", 
+            "docker" | "dockerfile" => "docker",
+            "git" => "git",
+            "k8s" | "kubectl" | "kubernetes" => "k8s",
+            "python" | "pip" | "conda" => "python",
+            _ => "general"
+        };
+        
+        // Enhance with error pattern recognition
+        let error_lower = error.to_lowercase();
+        if error_lower.contains("template") || error_lower.contains("{{") {
+            format!("{}_template_conflict", base_topic)
+        } else if error_lower.contains("duplicate") || error_lower.contains("redefined") {
+            format!("{}_duplicate", base_topic) 
+        } else if error_lower.contains("syntax") || error_lower.contains("parse") {
+            format!("{}_syntax", base_topic)
+        } else {
+            base_topic.to_string()
+        }
+    }
+
+    fn classify_error_type(&self, error: &str) -> String {
+        let error_lower = error.to_lowercase();
+        
+        if error_lower.contains("syntax") || error_lower.contains("parse") {
+            "syntax"
+        } else if error_lower.contains("duplicate") || error_lower.contains("redefined") {
+            "duplicate"
+        } else if error_lower.contains("template") || error_lower.contains("{{") {
+            "template_conflict"
+        } else if error_lower.contains("not found") || error_lower.contains("missing") {
+            "missing"
+        } else if error_lower.contains("permission") || error_lower.contains("access") {
+            "permission"
+        } else {
+            "general"
+        }.to_string()
+    }
+
+    fn calculate_lesson_confidence(&self, lesson: &str) -> f32 {
+        let mut confidence: f32 = 0.5; // Base confidence
+        
+        // Increase confidence for specific indicators
+        if lesson.contains("solution:") || lesson.contains("fix:") {
+            confidence += 0.2;
+        }
+        if lesson.len() > 50 { // Detailed lessons are more confident
+            confidence += 0.1;
+        }
+        if lesson.contains("example") || lesson.contains("pattern") {
+            confidence += 0.1;
+        }
+        if lesson.contains("avoid") || lesson.contains("use instead") {
+            confidence += 0.1;
+        }
+        
+        confidence.min(1.0) // Cap at 1.0
+    }
 }
 
 #[cfg(feature = "pyo3")]
@@ -655,6 +1111,39 @@ impl PyGrokClient {
 
     fn learn(&mut self, source: &str, content: &str) -> PyResult<Vec<String>> {
         let chunks = self.runtime.block_on(self.client.learn(source, content))
+            .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
+        
+        chunks.into_iter()
+            .map(|chunk| serde_json::to_string(&chunk))
+            .collect::<std::result::Result<Vec<_>, _>>()
+            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))
+    }
+
+    // lfmf (Learn From My Fail) Python bindings
+
+    /// Record a lesson learned from a failure
+    fn record_lfmf(&mut self, tool: &str, error: &str, lesson: &str) -> PyResult<String> {
+        let chunk = self.runtime.block_on(self.client.record_lfmf(tool, error, lesson))
+            .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
+        
+        serde_json::to_string(&chunk)
+            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))
+    }
+
+    /// Get advice for a specific error pattern
+    fn get_advice(&mut self, tool: &str, error: &str) -> PyResult<Vec<String>> {
+        let chunks = self.runtime.block_on(self.client.get_advice(tool, error))
+            .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
+        
+        chunks.into_iter()
+            .map(|chunk| serde_json::to_string(&chunk))
+            .collect::<std::result::Result<Vec<_>, _>>()
+            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))
+    }
+
+    /// List all lessons for a specific tool
+    fn list_lessons(&mut self, tool: &str) -> PyResult<Vec<String>> {
+        let chunks = self.runtime.block_on(self.client.list_lessons(tool))
             .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
         
         chunks.into_iter()
@@ -816,6 +1305,10 @@ This is the fourth paragraph with more detailed information. It explains complex
                 topic: "test".to_string(),
                 tags: vec!["unit_test".to_string(), "example".to_string()],
                 created_at: "2025-01-01T00:00:00Z".to_string(),
+                lesson_type: None,
+                error_pattern: None,
+                solution: None,
+                confidence: None,
             },
             vector: Some(vec![0.1, 0.2, 0.3]),
         };
@@ -870,6 +1363,60 @@ This is the fourth paragraph with more detailed information. It explains complex
         assert_eq!(client.infer_topic_from_source("Dockerfile"), "general"); // 🤓 Fixed test expectation
         assert_eq!(client.infer_topic_from_source("https://git.example.com/repo"), "git");
         assert_eq!(client.infer_topic_from_source("unknown_file.txt"), "general");
+    }
+
+    #[test]
+    fn test_lfmf_topic_inference() {
+        let client = GrokClient::new(
+            "https://example.com".to_string(),
+            "test_key".to_string()
+        );
+        
+        // Test basic tool mapping
+        assert_eq!(client.infer_lfmf_topic("just", "some error", ""), "just");
+        assert_eq!(client.infer_lfmf_topic("rust", "compile error", ""), "rust");
+        assert_eq!(client.infer_lfmf_topic("docker", "build failed", ""), "docker");
+        
+        // Test error pattern enhancement
+        assert_eq!(client.infer_lfmf_topic("just", "Unknown start of token '.'", ""), "just_syntax");
+        assert_eq!(client.infer_lfmf_topic("just", "Recipe duplicate redefined", ""), "just_duplicate");
+        assert_eq!(client.infer_lfmf_topic("just", "Template {{.Names}} error", ""), "just_template_conflict");
+        assert_eq!(client.infer_lfmf_topic("unknown", "some error", ""), "general");
+    }
+
+    #[test]
+    fn test_error_type_classification() {
+        let client = GrokClient::new(
+            "https://example.com".to_string(),
+            "test_key".to_string()
+        );
+        
+        assert_eq!(client.classify_error_type("syntax error in file"), "syntax");
+        assert_eq!(client.classify_error_type("duplicate definition"), "duplicate");
+        assert_eq!(client.classify_error_type("template {{.Field}} invalid"), "template_conflict");
+        assert_eq!(client.classify_error_type("file not found"), "missing");
+        assert_eq!(client.classify_error_type("permission denied"), "permission");
+        assert_eq!(client.classify_error_type("unknown error"), "general");
+    }
+
+    #[test]
+    fn test_lesson_confidence_calculation() {
+        let client = GrokClient::new(
+            "https://example.com".to_string(),
+            "test_key".to_string()
+        );
+        
+        // Base confidence
+        assert_eq!(client.calculate_lesson_confidence("basic lesson"), 0.6); // 0.5 + 0.1 for length
+        
+        // High confidence indicators
+        let detailed_lesson = "solution: Use grep/cut instead of {{.Names}} template to avoid conflicts. Example: docker ps | grep name";
+        let confidence = client.calculate_lesson_confidence(detailed_lesson);
+        assert!(confidence > 0.8); // Should get bonuses for "solution:", length, "example", and "avoid"
+        
+        // Maximum confidence cap
+        let max_lesson = "fix: solution: avoid template use example pattern instead of {{}} syntax";
+        assert_eq!(client.calculate_lesson_confidence(max_lesson), 1.0); // Capped at 1.0
     }
 
     #[cfg(feature = "pyo3")]

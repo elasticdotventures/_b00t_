@@ -8,6 +8,7 @@ pub mod session;
 pub mod whatismy;
 pub mod learn;
 pub mod lfmf;
+pub mod advice;
 pub mod tiktoken;
 pub mod grok;
 

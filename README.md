@@ -140,6 +140,34 @@ just install
 
 ```
 
+## Core Features
+
+### LFMF (Learn From My Failures) Syntax Therapist
+b00t includes an intelligent debugging assistance system that captures tribal knowledge from failures and provides contextual advice:
+
+```bash
+# Record lessons learned from failures
+b00t lfmf rust "cargo build conflict: Use unset CONDA_PREFIX before cargo build to avoid PyO3 linker errors"
+b00t lfmf just "Template syntax conflict: Use grep/cut instead of Go template {{.Names}} to avoid Just variable interpolation conflicts"
+
+# Get contextual debugging advice
+b00t advice rust "PyO3 linker"           # Find solutions for specific error patterns
+b00t advice just "Unknown start of token '.'"  # Get help with syntax errors
+b00t advice just list                    # List all recorded lessons for a tool
+
+# Search across all lessons
+b00t advice rust "search template"       # Semantic search for patterns
+```
+
+The LFMF system provides:
+- **Tribal Knowledge Capture**: Record what went wrong and how it was fixed
+- **Semantic Search**: Find relevant solutions using error patterns and keywords  
+- **Contextual Advice**: Get specific suggestions rather than generic documentation
+- **Cross-tool Learning**: Learn from failures across different tools and languages
+- **Vector Database Integration**: Advanced semantic matching with filesystem fallback
+
+Available via both CLI and MCP server for integration with AI development environments.
+
 ## usage
 
 ```

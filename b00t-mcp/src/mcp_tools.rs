@@ -107,6 +107,19 @@ pub struct LfmfCommand {
 
 impl_mcp_tool!(LfmfCommand, "b00t_lfmf", ["lfmf"]);
 
+/// MCP command for advice/syntax therapist functionality  
+#[derive(Parser, Clone)]
+pub struct AdviceCommand {
+    #[arg(help = "Tool name")]
+    pub tool: String,
+    #[arg(help = "Error pattern to get advice for, 'list' to show all lessons, or 'search <query>'")]
+    pub query: String,
+    #[arg(long, help = "Maximum number of results to return (default: 5)")]
+    pub count: Option<usize>,
+}
+
+impl_mcp_tool!(AdviceCommand, "b00t_advice", ["advice"]);
+
 /// Whoami command
 #[derive(Parser, Clone)]
 pub struct WhoamiCommand;
@@ -525,6 +538,9 @@ pub fn create_mcp_registry() -> McpCommandRegistry {
         .register::<SessionEndCommand>()
         .register::<LearnCommand>()
         .register::<CheckpointCommand>()
+        // LFMF and advice system
+        .register::<LfmfCommand>()
+        .register::<AdviceCommand>()
         // Agent coordination commands
         .register::<AgentDiscoverCommand>()
         .register::<AgentMessageCommand>()

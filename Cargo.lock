@@ -298,7 +298,7 @@ dependencies = [
  "shellexpand",
  "tempfile",
  "tokio",
- "toml 0.8.23",
+ "toml 0.9.4",
  "uuid",
 ]
 
@@ -309,6 +309,7 @@ dependencies = [
  "anyhow",
  "assert_cmd",
  "b00t-c0re-lib",
+ "b00t-grok",
  "chrono",
  "clap",
  "confy",

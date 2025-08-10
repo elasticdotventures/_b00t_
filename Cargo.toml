@@ -19,6 +19,7 @@ repository = "https://github.com/elasticdotventures/dotfiles"
 # Workspace members
 b00t-cli = { path = "b00t-cli" }
 b00t-c0re-lib = { path = "b00t-c0re-lib" }
+b00t-grok = { path = "b00t-grok", default-features = false }
 
 # Common dependencies that could be shared across workspace members
 serde = { version = "1.0", features = ["derive"] }
