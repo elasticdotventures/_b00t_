@@ -109,16 +109,20 @@ Tips:
 "#
     )]
     Lfmf {
-        #[clap(help = "Tool name")]
-        tool: String,
-        #[clap(help = "Lesson in '<topic>: <body>' format")]
-        lesson: String,
+        #[clap(long, help = "Tool name")]
+        tool: Option<String>,
+        #[clap(long, help = "Lesson in '<topic>: <body>' format")]
+        lesson: Option<String>,
+        #[clap(long, group = "scope", help = "Record lesson for this repo (default)")]
+        repo: bool,
+        #[clap(long, group = "scope", help = "Record lesson globally (mutually exclusive with --repo)")]
+        global: bool,
     },
     #[clap(
         about = "Get advice for syntax errors and debugging",
         long_about = r#"
-The b00t advice system acts as a syntax therapist, providing contextual debugging assistance 
-based on lessons learned from previous failures. It performs semantic search through the 
+The b00t advice system acts as a syntax therapist, providing contextual debugging assistance
+based on lessons learned from previous failures. It performs semantic search through the
 hive's collective knowledge to suggest solutions for similar error patterns.
 
 Usage:
@@ -128,14 +132,14 @@ Usage:
 
 Examples:
   b00t-cli advice just "Unknown start of token '.'"
-  b00t-cli advice rust "cannot borrow as mutable"  
+  b00t-cli advice rust "cannot borrow as mutable"
   b00t-cli advice docker "permission denied"
   b00t-cli advice just list
   b00t-cli advice rust search "template syntax"
 
 The system will:
 1. Search for similar error patterns in the vector database
-2. Return relevant lessons with confidence scores  
+2. Return relevant lessons with confidence scores
 3. Provide conversational debugging guidance
 4. Suggest specific solutions based on hive experience
 "#
@@ -168,6 +172,11 @@ The system will:
         #[clap(subcommand)]
         cli_command: CliCommands,
     },
+    #[clap(about = "Execute RHAI scripts with b00t context")]
+    Script {
+        #[clap(subcommand)]
+        script_command: commands::script::ScriptCommands,
+    },
     #[clap(about = "Initialize system settings and aliases")]
     Init {
         #[clap(subcommand)]
@@ -183,7 +192,7 @@ The system will:
         message: Option<String>,
         #[clap(long, help = "Skip running tests (not recommended)")]
         skip_tests: bool,
-        
+
         #[clap(long = "message", help = "Commit message (MCP compatibility)")]
         message_flag: Option<String>,  // 🦨 MCP compatibility: accept --message flag
     },
@@ -205,7 +214,7 @@ The system will:
         installed: bool,
         #[clap(long, help = "Show only available (not installed) tools")]
         available: bool,
-        
+
         #[clap(long = "filter", help = "Filter by subsystem (MCP compatibility)")]
         filter_flag: Option<String>,  // 🦨 MCP compatibility: accept --filter flag
     },
@@ -225,7 +234,7 @@ The system will:
     Learn {
         #[clap(help = "Topic to learn about (e.g., rust, python, typescript, bash)")]
         topic: Option<String>,
-        
+
         #[clap(long = "topic", help = "Topic to learn about (MCP compatibility)")]
         topic_flag: Option<String>,  // 🦨 MCP compatibility: accept --topic flag
     },
@@ -322,7 +331,7 @@ fn checkpoint(message: Option<&str>, skip_tests: bool) -> Result<()> {
         println!("✅ cargo check passed");
     }
 
-    // Generate commit message with checkpoint number  
+    // Generate commit message with checkpoint number
     let default_msg = format!("🥾 checkpoint #{}: automated commit via b00t-cli", checkpoint_count);
     let commit_msg = message.unwrap_or(&default_msg);
 
@@ -973,11 +982,11 @@ pub fn handle_session_init(
     }
 
     session.save()?;
-    
+
     // Initialize session memory and check README.md
     let mut memory = session_memory::SessionMemory::load()?;
     check_readme_status(&mut memory)?;
-    
+
     println!("🥾 Session {} initialized", session.session_id);
 
     if let Some(agent) = &session.agent_info {
@@ -1053,7 +1062,7 @@ pub fn handle_session_prompt() -> Result<()> {
 fn check_readme_status(memory: &mut session_memory::SessionMemory) -> Result<()> {
     let git_root = get_workspace_root();
     let readme_path = std::path::PathBuf::from(&git_root).join("README.md");
-    
+
     if readme_path.exists() {
         if !memory.is_readme_read() {
             println!("📖 README.md found but not yet marked as read");
@@ -1064,7 +1073,7 @@ fn check_readme_status(memory: &mut session_memory::SessionMemory) -> Result<()>
     } else {
         println!("ℹ️  No README.md found in git root");
     }
-    
+
     Ok(())
 }
 
@@ -1163,7 +1172,7 @@ fn main() {
         }
         Some(Commands::Grok { grok_command }) => {
             use crate::commands::grok::handle_grok_command;
-            
+
             // Create Tokio runtime for async grok operations
             let rt = match tokio::runtime::Runtime::new() {
                 Ok(rt) => rt,
@@ -1172,21 +1181,38 @@ fn main() {
                     std::process::exit(1);
                 }
             };
-            
+
             if let Err(e) = rt.block_on(handle_grok_command(grok_command.clone())) {
                 eprintln!("Error: {}", e);
                 std::process::exit(1);
             }
         }
-        Some(Commands::Lfmf { tool, lesson }) => {
-            if let Err(e) = commands::lfmf::handle_lfmf(&cli.path, tool, lesson) {
+        Some(Commands::Lfmf { tool, lesson, repo, global }) => {
+            // Validate required fields
+            let tool = match tool {
+                Some(t) => t,
+                None => {
+                    eprintln!("--tool is required");
+                    std::process::exit(1);
+                }
+            };
+            let lesson = match lesson {
+                Some(l) => l,
+                None => {
+                    eprintln!("--lesson is required");
+                    std::process::exit(1);
+                }
+            };
+            // Determine scope
+            let scope = if *global { "global" } else { "repo" };
+            if let Err(e) = commands::lfmf::handle_lfmf(&cli.path, &tool, &lesson, scope) {
                 eprintln!("Error: {}", e);
                 std::process::exit(1);
             }
         }
         Some(Commands::Advice { tool, query, count }) => {
             use crate::commands::advice::handle_advice;
-            
+
             // Create Tokio runtime for async advice operations
             let rt = match tokio::runtime::Runtime::new() {
                 Ok(rt) => rt,
@@ -1195,8 +1221,16 @@ fn main() {
                     std::process::exit(1);
                 }
             };
-            
+
             if let Err(e) = rt.block_on(handle_advice(&cli.path, tool, query, *count)) {
+                eprintln!("Error: {}", e);
+                std::process::exit(1);
+            }
+        }
+        Some(Commands::Script { script_command }) => {
+            use crate::commands::script::handle_script_command;
+            
+            if let Err(e) = handle_script_command(script_command.clone()) {
                 eprintln!("Error: {}", e);
                 std::process::exit(1);
             }

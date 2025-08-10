@@ -1,5 +1,5 @@
 //! Agent coordination system using Redis pub/sub
-//! 
+//!
 //! Provides comprehensive agent-to-agent communication including:
 //! - Agent discovery and presence tracking
 //! - Message routing and blocking reception
@@ -8,7 +8,6 @@
 
 use crate::redis::{RedisComms, AgentMessage, AgentStatus};
 use crate::B00tResult;
-use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
@@ -36,7 +35,7 @@ pub enum CoordinationMessage {
     Presence {
         metadata: AgentMetadata,
     },
-    
+
     /// Direct message between agents
     DirectMessage {
         from_agent: String,
@@ -47,7 +46,7 @@ pub enum CoordinationMessage {
         reply_to: Option<String>,
         requires_ack: bool,
     },
-    
+
     /// Task delegation from captain to worker
     TaskDelegation {
         captain_id: String,
@@ -59,7 +58,7 @@ pub enum CoordinationMessage {
         required_capabilities: Vec<String>,
         blocking: bool, // Captain waits for completion
     },
-    
+
     /// Task completion notification
     TaskCompletion {
         worker_id: String,
@@ -69,7 +68,7 @@ pub enum CoordinationMessage {
         result: Option<String>,
         artifacts: Vec<String>, // Paths to output files, etc.
     },
-    
+
     /// Progress update during task execution
     ProgressUpdate {
         agent_id: String,
@@ -78,7 +77,7 @@ pub enum CoordinationMessage {
         status_message: String,
         estimated_completion: Option<u64>,
     },
-    
+
     /// Voting proposal from captain
     VotingProposal {
         captain_id: String,
@@ -90,7 +89,7 @@ pub enum CoordinationMessage {
         deadline: u64,
         eligible_voters: Vec<String>,
     },
-    
+
     /// Vote submission
     Vote {
         voter_id: String,
@@ -98,7 +97,7 @@ pub enum CoordinationMessage {
         vote: VoteChoice,
         reasoning: Option<String>,
     },
-    
+
     /// Notification about external events (files, PRs, etc.)
     EventNotification {
         event_type: String, // "file_created", "pr_opened", "build_failed", etc.
@@ -107,7 +106,7 @@ pub enum CoordinationMessage {
         timestamp: u64,
         affected_agents: Option<Vec<String>>, // Target specific agents
     },
-    
+
     /// Request for specific agent capabilities
     CapabilityRequest {
         requesting_agent: String,
@@ -115,7 +114,7 @@ pub enum CoordinationMessage {
         task_description: String,
         urgency: RequestUrgency,
     },
-    
+
     /// Response to capability request
     CapabilityResponse {
         responding_agent: String,
@@ -177,7 +176,7 @@ pub enum RequestUrgency {
 pub struct AgentCoordinator {
     redis: RedisComms,
     agent_metadata: AgentMetadata,
-    message_handlers: HashMap<String, mpsc::UnboundedSender<CoordinationMessage>>,
+    _message_handlers: HashMap<String, mpsc::UnboundedSender<CoordinationMessage>>,
     pending_tasks: HashMap<String, oneshot::Sender<TaskCompletion>>,
     pending_votes: HashMap<String, oneshot::Sender<HashMap<String, VoteChoice>>>,
 }
@@ -188,7 +187,7 @@ impl AgentCoordinator {
         Self {
             redis,
             agent_metadata,
-            message_handlers: HashMap::new(),
+            _message_handlers: HashMap::new(),
             pending_tasks: HashMap::new(),
             pending_votes: HashMap::new(),
         }
@@ -198,13 +197,13 @@ impl AgentCoordinator {
     pub async fn start(&mut self) -> B00tResult<()> {
         // Announce presence
         self.announce_presence().await?;
-        
+
         // Start listening for messages
         self.start_message_listener().await?;
-        
+
         // Set up periodic presence updates
         self.start_presence_heartbeat().await?;
-        
+
         Ok(())
     }
 
@@ -213,7 +212,7 @@ impl AgentCoordinator {
         let message = CoordinationMessage::Presence {
             metadata: self.agent_metadata.clone(),
         };
-        
+
         self.redis.publish("b00t:agents:presence", &AgentMessage::Session {
             session_id: self.agent_metadata.agent_id.clone(),
             event: crate::redis::SessionEvent::Created,
@@ -221,7 +220,7 @@ impl AgentCoordinator {
                 ("coordination_message".to_string(), serde_json::to_value(&message)?),
             ]),
         })?;
-        
+
         Ok(())
     }
 
@@ -230,7 +229,7 @@ impl AgentCoordinator {
         // Get all agents from Redis hash
         let agents_data = self.redis.hgetall("b00t:agents:registry")?;
         let mut agents = Vec::new();
-        
+
         for (agent_id, metadata_json) in agents_data {
             if agent_id != self.agent_metadata.agent_id {
                 if let Ok(metadata) = serde_json::from_str::<AgentMetadata>(&metadata_json) {
@@ -242,15 +241,15 @@ impl AgentCoordinator {
                 }
             }
         }
-        
+
         Ok(agents)
     }
 
     /// Send direct message to another agent
     pub async fn send_message(
-        &self, 
-        to_agent: &str, 
-        subject: &str, 
+        &self,
+        to_agent: &str,
+        subject: &str,
         content: &str,
         requires_ack: bool
     ) -> B00tResult<String> {
@@ -264,7 +263,7 @@ impl AgentCoordinator {
             reply_to: None,
             requires_ack,
         };
-        
+
         self.send_coordination_message(&format!("b00t:agent:{}", to_agent), &message).await?;
         Ok(message_id)
     }
@@ -283,7 +282,7 @@ impl AgentCoordinator {
         let deadline_timestamp = deadline.map(|d| {
             SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs() + d.as_secs()
         });
-        
+
         let message = CoordinationMessage::TaskDelegation {
             captain_id: self.agent_metadata.agent_id.clone(),
             worker_id: worker_id.to_string(),
@@ -294,7 +293,7 @@ impl AgentCoordinator {
             required_capabilities,
             blocking,
         };
-        
+
         // Set up completion listener if blocking
         let completion_receiver = if blocking {
             let (tx, rx) = oneshot::channel();
@@ -303,10 +302,10 @@ impl AgentCoordinator {
         } else {
             None
         };
-        
+
         // Send delegation message
         self.send_coordination_message(&format!("b00t:agent:{}", worker_id), &message).await?;
-        
+
         // If blocking, wait for completion
         if let Some(receiver) = completion_receiver {
             match timeout(Duration::from_secs(3600), receiver).await { // 1 hour timeout
@@ -336,7 +335,7 @@ impl AgentCoordinator {
             result,
             artifacts,
         };
-        
+
         self.send_coordination_message(&format!("b00t:agent:{}", captain_id), &message).await?;
         Ok(())
     }
@@ -352,7 +351,7 @@ impl AgentCoordinator {
         let estimated_timestamp = estimated_completion.map(|d| {
             SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs() + d.as_secs()
         });
-        
+
         let message = CoordinationMessage::ProgressUpdate {
             agent_id: self.agent_metadata.agent_id.clone(),
             task_id: task_id.to_string(),
@@ -360,7 +359,7 @@ impl AgentCoordinator {
             status_message: status_message.to_string(),
             estimated_completion: estimated_timestamp,
         };
-        
+
         // Broadcast progress to all interested parties
         self.send_coordination_message("b00t:progress:updates", &message).await?;
         Ok(())
@@ -378,7 +377,7 @@ impl AgentCoordinator {
     ) -> B00tResult<HashMap<String, VoteChoice>> {
         let proposal_id = uuid::Uuid::new_v4().to_string();
         let deadline_timestamp = SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs() + deadline.as_secs();
-        
+
         let message = CoordinationMessage::VotingProposal {
             captain_id: self.agent_metadata.agent_id.clone(),
             proposal_id: proposal_id.clone(),
@@ -389,16 +388,16 @@ impl AgentCoordinator {
             deadline: deadline_timestamp,
             eligible_voters: eligible_voters.clone(),
         };
-        
+
         // Set up vote collection
         let (tx, rx) = oneshot::channel();
         self.pending_votes.insert(proposal_id.clone(), tx);
-        
+
         // Send proposal to eligible voters
         for voter in &eligible_voters {
             self.send_coordination_message(&format!("b00t:agent:{}", voter), &message).await?;
         }
-        
+
         // Wait for voting to complete or timeout
         match timeout(deadline, rx).await {
             Ok(Ok(votes)) => Ok(votes),
@@ -420,7 +419,7 @@ impl AgentCoordinator {
             vote,
             reasoning,
         };
-        
+
         // Send vote back to captain
         self.send_coordination_message("b00t:votes:collection", &message).await?;
         Ok(())
@@ -441,7 +440,7 @@ impl AgentCoordinator {
             timestamp: SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs(),
             affected_agents,
         };
-        
+
         // Broadcast to all agents or specific targets
         self.send_coordination_message("b00t:events:notifications", &message).await?;
         Ok(())
@@ -451,13 +450,13 @@ impl AgentCoordinator {
     pub async fn wait_for_message(
         &self,
         timeout_duration: Duration,
-        filter: MessageFilter,
+        _filter: MessageFilter,
     ) -> B00tResult<CoordinationMessage> {
         let (tx, rx) = oneshot::channel();
-        
+
         // TODO: Set up filtered message listener
         // This would require extending the message handling system
-        
+
         match timeout(timeout_duration, rx).await {
             Ok(Ok(message)) => Ok(message),
             Ok(Err(_)) => anyhow::bail!("Message wait channel closed"),
@@ -478,16 +477,16 @@ impl AgentCoordinator {
             task_description: task_description.to_string(),
             urgency,
         };
-        
+
         // Broadcast capability request
         self.send_coordination_message("b00t:capabilities:requests", &message).await?;
-        
+
         // TODO: Collect responses with timeout
         Ok(vec![])
     }
 
     // Private helper methods
-    
+
     async fn send_coordination_message(&self, channel: &str, message: &CoordinationMessage) -> B00tResult<()> {
         let agent_message = AgentMessage::Session {
             session_id: uuid::Uuid::new_v4().to_string(),
@@ -496,17 +495,17 @@ impl AgentCoordinator {
                 ("coordination_message".to_string(), serde_json::to_value(message)?),
             ]),
         };
-        
+
         self.redis.publish(channel, &agent_message)?;
         Ok(())
     }
-    
+
     async fn start_message_listener(&mut self) -> B00tResult<()> {
         // TODO: Implement Redis subscription listener
         // This would handle incoming coordination messages and route them to handlers
         Ok(())
     }
-    
+
     async fn start_presence_heartbeat(&self) -> B00tResult<()> {
         // TODO: Implement periodic presence updates
         // Every 30 seconds, update agent metadata in Redis
@@ -553,7 +552,7 @@ mod tests {
                 ("testing".to_string(), 0.8),
             ]),
         };
-        
+
         let json = serde_json::to_string(&metadata).unwrap();
         let deserialized: AgentMetadata = serde_json::from_str(&json).unwrap();
         assert_eq!(metadata.agent_id, deserialized.agent_id);
@@ -564,12 +563,12 @@ mod tests {
         let choices = vec![
             VoteChoice::Single("option1".to_string()),
             VoteChoice::Ranked(vec!["opt1".to_string(), "opt2".to_string()]),
-            VoteChoice::Veto { 
-                option_id: "bad_option".to_string(), 
-                alternative: Some("better_option".to_string()) 
+            VoteChoice::Veto {
+                option_id: "bad_option".to_string(),
+                alternative: Some("better_option".to_string())
             },
         ];
-        
+
         for choice in choices {
             let json = serde_json::to_string(&choice).unwrap();
             let _: VoteChoice = serde_json::from_str(&json).unwrap();
@@ -580,7 +579,7 @@ mod tests {
     async fn test_agent_coordinator_creation() {
         let config = RedisConfig::default();
         let redis = RedisComms::new(config, "test-agent".to_string()).unwrap();
-        
+
         let metadata = AgentMetadata {
             agent_id: "test-agent".to_string(),
             agent_role: "test".to_string(),
@@ -591,7 +590,7 @@ mod tests {
             load: 0.0,
             specializations: HashMap::new(),
         };
-        
+
         let coordinator = AgentCoordinator::new(redis, metadata);
         assert_eq!(coordinator.agent_metadata.agent_id, "test-agent");
     }

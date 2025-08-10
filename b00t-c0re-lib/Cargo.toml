@@ -14,8 +14,14 @@ categories = ["command-line-utilities", "development-tools"]
 [lib]
 name = "b00t_c0re_lib"
 path = "src/lib.rs"
+crate-type = ["cdylib", "rlib"]
+
+[features]
+default = []
+python = ["pyo3"]
 
 [dependencies]
+pyo3 = { version = "0.25", features = ["extension-module"], optional = true }
 # Workspace dependencies
 serde.workspace = true
 serde_json.workspace = true
@@ -33,6 +39,7 @@ duct = "1.0"
 redis = "0.32.4"
 uuid = { version = "1.0", features = ["v4", "serde"] }
 tokio = { version = "1.0", features = ["full"] }
+rhai = "1.22.2"
 
 [dev-dependencies]
 tempfile = "3.0"

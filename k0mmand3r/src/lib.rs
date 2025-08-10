@@ -96,17 +96,14 @@ use winnow::ascii::{alpha1, alphanumeric0, alphanumeric1, multispace0};
 use winnow::combinator::alt; // encapsulates if/then/else ladder pattern
 use winnow::combinator::opt; // basic if then else
 use winnow::combinator::preceded; // an easy way to discard the prefix, using a provided combinators
-use winnow::combinator::Recognize;
-use winnow::combinator::WithRecognized;
 use winnow::combinator::{delimited, repeat, separated, separated_pair, *};
 use winnow::error::ErrMode;
-use winnow::error::ErrorKind;
 use winnow::error::ParserError;
 use winnow::prelude::*;
 use winnow::seq;
-use winnow::stream::Stream; // choose between two parsers; and we’re happy with either being used.
+use winnow::stream::Stream; // choose between two parsers; and we're happy with either being used.
 use winnow::token::one_of; // one_of(('0'..='9', 'a'..='f', 'A'..='F')).parse_next(input)
-use winnow::{PResult, Parser};
+use winnow::{Parser};
 use winnow::token::take_while;
 
 use serde_json::json;
@@ -126,27 +123,26 @@ mod typescript_wasm;
 
 
 /* winnow parsers */
-fn parse_prefix_dash2x<'s>(input: &mut &'s str) -> PResult<&'s str> {
+fn parse_prefix_dash2x<'s>(input: &mut &'s str) -> winnow::Result<&'s str> {
     "--".parse_next(input)
 }
 
-fn parse_label<'i>(input: &mut &'i str) -> PResult<&'i str> {
+fn parse_label<'i>(input: &mut &'i str) -> winnow::Result<&'i str> {
     // first character alpha, followed by zero or more alphanumeric
-    let label_parser = seq!((alpha1, alphanumeric0));
-    label_parser.recognize().parse_next(input)
+    (alpha1, alphanumeric0).take().parse_next(input)
 }
 
-fn parse_value_quoted<'i>(input: &mut &'i str) -> PResult<&'i str> {
+fn parse_value_quoted<'i>(input: &mut &'i str) -> winnow::Result<&'i str> {
     // example: "a" or "1"
     delimited('"', alphanumeric1, '"').parse_next(input)
 }
 
-fn parse_value_unquoted<'i>(input: &mut &'i str) -> PResult<&'i str> {
+fn parse_value_unquoted<'i>(input: &mut &'i str) -> winnow::Result<&'i str> {
     // example: a 1
     alphanumeric1.parse_next(input)
 }
 
-fn parse_value_quote_agnostic<'i>(input: &mut &'i str) -> PResult<&'i str> {
+fn parse_value_quote_agnostic<'i>(input: &mut &'i str) -> winnow::Result<&'i str> {
     // example: "a" or "1" or a 1
     alt((
         parse_value_quoted,   // Try parsing a quoted value first
@@ -155,12 +151,12 @@ fn parse_value_quote_agnostic<'i>(input: &mut &'i str) -> PResult<&'i str> {
     .parse_next(input)
 }
 
-fn parse_slashcommand<'i>(input: &mut &'i str) -> PResult<&'i str> {
+fn parse_slashcommand<'i>(input: &mut &'i str) -> winnow::Result<&'i str> {
     // strips the / from a command-verb label
     preceded("/", parse_label).parse_next(input)
 }
 
-fn parse_KmdParameter<'i>(input: &mut &'i str) -> PResult<(&'i str, &'i str)> {
+fn parse_KmdParameter<'i>(input: &mut &'i str) -> winnow::Result<(&'i str, &'i str)> {
     // Parse the prefix "--"
     // separated_pair(parse_label, "=", parse_values).parse_next(input)
     preceded(
@@ -178,12 +174,11 @@ fn parse_KmdParameter<'i>(input: &mut &'i str) -> PResult<(&'i str, &'i str)> {
 /**
  * Parse the content of a message
  */
-fn parse_content<'i>(input: &mut &'i str) -> PResult<&'i str> {
+fn parse_content<'i>(input: &mut &'i str) -> winnow::Result<&'i str> {
     let trimmed_input = input.trim();
 
     if trimmed_input.starts_with('/') {
-        let error = winnow::error::ContextError::new();
-        Err(winnow::error::ErrMode::Backtrack(error))
+        winnow::combinator::fail.parse_next(input)
     } else {
         // Find the start of the trimmed content within the original input
         let start_index = input.find(trimmed_input).unwrap_or(0);
@@ -207,7 +202,7 @@ pub struct KmdParams<'i> {
 }
 
 impl<'i> KmdParams<'i> {
-    pub fn parse(input: &mut &'i str) -> PResult<Self> {
+    pub fn parse(input: &mut &'i str) -> winnow::Result<Self> {
         let kvs =
             separated(0.., parse_KmdParameter, terminated(' ', multispace0)).parse_next(input)?;
 
@@ -230,7 +225,7 @@ pub struct KmdLine<'i> {
 }
 
 impl<'i> KmdLine<'i> {
-    pub fn parse(input: &mut &'i str) -> PResult<Self> {
+    pub fn parse(input: &mut &'i str) -> winnow::Result<Self> {
         let trimmed_input = input.trim();
 
         if trimmed_input.starts_with('/') {

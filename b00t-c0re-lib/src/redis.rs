@@ -1,5 +1,5 @@
 //! Redis pub/sub agent communication and coordination
-//! 
+//!
 //! Provides Redis-based communication channels for agent coordination,
 //! session sharing, and distributed b00t operations using the redis crate.
 
@@ -122,7 +122,7 @@ impl RedisComms {
     pub fn new(config: RedisConfig, agent_id: String) -> B00tResult<Self> {
         let client = Client::open(config.connection_url())
             .context("Failed to create Redis client")?;
-        
+
         Ok(Self {
             client,
             config,
@@ -134,7 +134,7 @@ impl RedisComms {
     fn get_connection(&self) -> B00tResult<Connection> {
         let conn = self.client.get_connection()
             .context("Failed to get Redis connection")?;
-        
+
         // Note: Redis crate handles timeouts internally via connection configuration
         Ok(conn)
     }
@@ -382,7 +382,7 @@ impl RedisSessionStorage {
     pub fn new(config: RedisConfig, session_prefix: Option<String>) -> B00tResult<Self> {
         let agent_id = format!("session-{}", uuid::Uuid::new_v4());
         let redis = RedisComms::new(config, agent_id)?;
-        
+
         Ok(Self {
             redis,
             session_prefix: session_prefix.unwrap_or_else(|| "b00t:session".to_string()),
@@ -467,9 +467,9 @@ mod tests {
             timeout_ms: 5000,
             max_retries: 3,
         };
-        
+
         assert_eq!(config.connection_url(), "redis://:secret@localhost:6379/1");
-        
+
         let config_no_pass = RedisConfig {
             password: None,
             ..config
@@ -487,7 +487,7 @@ mod tests {
 
         let json = serde_json::to_string(&message).unwrap();
         let deserialized: AgentMessage = serde_json::from_str(&json).unwrap();
-        
+
         match deserialized {
             AgentMessage::Status { agent_id, status, .. } => {
                 assert_eq!(agent_id, "test-agent");

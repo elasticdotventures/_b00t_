@@ -3,6 +3,8 @@
 use std::collections::HashMap;
 use pyo3::prelude::*;
 use pyo3::wrap_pyfunction;
+use pyo3::types::PyModule;
+use pyo3::Bound;
 use crate::KmdLine;  // Replace with actual module path as needed
 
 
@@ -86,7 +88,7 @@ pub fn parse_kmd_line(input: String) -> PyResult<PyKmdLine> {
 // Don't forget to add this function to your Python module
 #[cfg(feature = "lang-python")]
 #[pymodule]
-pub fn k0mmand3r(py: Python, m: &PyModule) -> PyResult<()> {
+pub fn k0mmand3r(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(parse_kmd_line, m)?)?;
     Ok(())
 }

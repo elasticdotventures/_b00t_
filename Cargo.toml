@@ -2,7 +2,10 @@
 members = [
     "b00t-cli",
     "b00t-mcp", 
-    "b00t-c0re-lib", "b00t-grok",
+    "b00t-c0re-lib", 
+    "b00t-grok",
+    "k0mmand3r",
+    "b00t-py",
 ]
 resolver = "2"
 

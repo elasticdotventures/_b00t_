@@ -6,7 +6,7 @@ on:
   pull_request:
     branches: [main]
 env:
-  PROJECT_ROOT: rust/k0mmand3r
+  PROJECT_ROOT: k0mmand3r
   SKIP_TESTS: false
 jobs:
   run-tests:
@@ -25,7 +25,7 @@ jobs:
       - name: run tests 🦀
         if: ${{ env.SKIP_TESTS == 'false' }}
         run: cargo test --all-features
-        working-directory: rust/k0mmand3r
+        working-directory: k0mmand3r
       # typescript      ###########################
       # https://github.com/actions/setup-node
       - uses: actions/setup-node@v4
@@ -44,7 +44,7 @@ jobs:
           # npx mocha tests/test_k0mmand3r.ts
           npm ci
           npm test
-        working-directory: rust/k0mmand3r
+        working-directory: k0mmand3r
       ###########################
       # python
       # 😉: `maturin generate-ci github`
@@ -56,18 +56,20 @@ jobs:
           command: build
           args: --release --out dist --features lang-python
           working-directory: ${{ env.PROJECT_ROOT }}
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
       - name: python setup 🐍
         uses: actions/setup-python@v4
         with:
-          python-version: '3.10'
+          python-version: '3.12'
       - name: run tests 🐍 (python)
         if: ${{ env.SKIP_TESTS == 'false' }}
         run: |
-          python3 -m venv ./venv
-          pip install --find-links ./dist k0mmand3r
-          # python3 -m unittest discover -s tests
+          uv venv ./venv
+          source ./venv/bin/activate
+          uv pip install --find-links ./dist k0mmand3r
           make pytest
-        working-directory: rust/k0mmand3r
+        working-directory: k0mmand3r
       # TODO: upload the crate artifcat so we don't need to recompile.
       - name: Upload wasm artifacts
         if: env.SKIP_TESTS == 'false'
@@ -118,7 +120,7 @@ jobs:
         with:
           cwd: ${{ env.PROJECT_ROOT }}
           command: build
-          args: --manifest-path rust/k0mmand3r/Cargo.toml --release --all-features
+          args: --manifest-path k0mmand3r/Cargo.toml --release --all-features
       # https://github.com/marketplace/actions/publish-crates
       # https://github.com/katyo/publish-crates
       - uses: katyo/publish-crates@v2
@@ -177,7 +179,7 @@ jobs:
 
       - uses: actions/setup-python@v4
         with:
-          python-version: '3.10'
+          python-version: '3.12'
       - name: Build wheels
         uses: PyO3/maturin-action@v1.40.8
         with:
@@ -204,7 +206,7 @@ jobs:
       - uses: actions/checkout@v3
       - uses: actions/setup-python@v4
         with:
-          python-version: '3.10'
+          python-version: '3.12'
           architecture: ${{ matrix.target }}
       - name: Build wheels
         uses: PyO3/maturin-action@v1.40.8
@@ -230,7 +232,7 @@ jobs:
       - uses: actions/checkout@v3
       - uses: actions/setup-python@v4
         with:
-          python-version: '3.10'
+          python-version: '3.12'
       - name: Build wheels
         uses: PyO3/maturin-action@v1.40.8
         with:

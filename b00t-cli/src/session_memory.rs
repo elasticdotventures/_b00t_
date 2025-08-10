@@ -473,6 +473,9 @@ impl SessionMemory {
         template_context.insert("builds_per_hour", &if context.session_duration > 300 {
             (context.build_count as f64 / context.session_duration as f64) * 3600.0
         } else { 0.0 });
+        // Insert seconds_since_update and seconds_since_start for template access
+        template_context.insert("seconds_since_update", &self.seconds_since_update());
+        template_context.insert("seconds_since_start", &self.seconds_since_start());
         
         // Add b00t-c0re-lib context variables for template compatibility
         if let Ok(b00t_context) = b00t_c0re_lib::B00tContext::current() {

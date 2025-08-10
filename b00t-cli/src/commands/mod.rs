@@ -11,6 +11,7 @@ pub mod lfmf;
 pub mod advice;
 pub mod tiktoken;
 pub mod grok;
+pub mod script;
 
 pub use mcp::McpCommands;
 pub use k8s::K8sCommands;

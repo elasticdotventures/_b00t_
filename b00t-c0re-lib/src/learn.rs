@@ -1,7 +1,7 @@
 use anyhow::{Context, Result};
 use std::collections::HashMap;
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::{PathBuf};
 
 /// Aggregates available learn topics from TOML and markdown files
 pub fn get_learn_topics(path: &str) -> Result<Vec<String>> {

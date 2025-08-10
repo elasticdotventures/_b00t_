@@ -1,0 +1,28 @@
+[package]
+name = "b00t-py"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Python bindings for b00t-cli with native performance using PyO3"
+keywords = ["b00t", "python", "bindings", "mcp", "cli"]
+categories = ["api-bindings", "command-line-utilities"]
+
+[lib]
+name = "b00t_py"
+crate-type = ["cdylib"]
+
+[dependencies]
+# Workspace dependencies
+b00t-cli = { path = "../b00t-cli" }
+b00t-c0re-lib = { path = "../b00t-c0re-lib", features = ["python"] }
+serde.workspace = true
+serde_json.workspace = true
+anyhow.workspace = true
+
+# PyO3 for Python bindings
+pyo3 = { version = "0.25", features = ["extension-module"] }
+
+[build-dependencies]
+pyo3-build-config = "0.25"

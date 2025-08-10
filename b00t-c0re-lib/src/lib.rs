@@ -35,12 +35,14 @@ pub mod grok;
 pub mod learn;
 pub mod datum_ai_model;
 pub mod lfmf;
+pub mod rhai_engine;
 
 // Re-export commonly used types
 pub use template::TemplateRenderer;
 pub use context::B00tContext;
 pub use grok::{GrokClient, DigestResult, AskResult, LearnResult, ChunkResult, ChunkSummary};
 pub use lfmf::{LfmfSystem, LfmfConfig, Lesson};
+pub use rhai_engine::RhaiEngine;
 
 /// Common configuration structure for b00t components
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
