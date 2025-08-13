@@ -113,6 +113,7 @@ pub enum BroadcastPriority {
 /// Redis pub/sub communication hub for b00t agents
 pub struct RedisComms {
     client: Client,
+    #[allow(dead_code)]
     config: RedisConfig,
     agent_id: String,
 }

@@ -16,7 +16,7 @@ use std::{
 };
 use uuid::Uuid;
 
-use crate::github_auth::{GitHubAuthState, GitHubUser, require_github_auth, github_login_url};
+use crate::github_auth::{GitHubAuthState, require_github_auth, github_login_url};
 use crate::acl::AclConfig;
 
 // Minimal OAuth configuration for MVP
@@ -147,7 +147,7 @@ pub fn minimal_oauth_router(state: MinimalOAuthState) -> Router {
 }
 
 // Discovery endpoint
-async fn discovery_handler(State(state): State<MinimalOAuthState>) -> Json<serde_json::Value> {
+async fn discovery_handler(State(_state): State<MinimalOAuthState>) -> Json<serde_json::Value> {
     Json(serde_json::json!({
         "issuer": "https://b00t-mcp.local",
         "authorization_endpoint": "https://b00t-mcp.local/oauth/authorize",

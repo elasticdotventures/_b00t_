@@ -1,4 +1,4 @@
-use anyhow::{anyhow, Result};
+use anyhow::Result;
 use axum::{
     extract::{Query, State},
     http::StatusCode,
@@ -6,13 +6,12 @@ use axum::{
     routing::get,
     Router,
 };
-use axum_extra::extract::CookieJar;
 use reqwest;
 use serde::{Deserialize, Serialize};
 use std::{
     collections::HashMap,
     sync::{Arc, RwLock},
-    time::{Duration, SystemTime, UNIX_EPOCH},
+    time::{SystemTime, UNIX_EPOCH},
 };
 use uuid::Uuid;
 
@@ -89,7 +88,9 @@ pub struct GitHubCallbackQuery {
 #[derive(Debug, Deserialize)]
 struct GitHubTokenResponse {
     access_token: String,
+    #[allow(dead_code)]
     token_type: String,
+    #[allow(dead_code)]
     scope: String,
 }
 
@@ -210,7 +211,7 @@ async fn github_callback(
 }
 
 // Logout handler
-async fn logout(State(state): State<GitHubAuthState>) -> Html<String> {
+async fn logout(State(_state): State<GitHubAuthState>) -> Html<String> {
     let html = r#"
 <!DOCTYPE html>
 <html>

@@ -38,8 +38,9 @@ dirs = "6.0"
 duct = "1.0"
 redis = "0.32.4"
 uuid = { version = "1.0", features = ["v4", "serde"] }
-tokio = { version = "1.0", features = ["full"] }
+tokio = { version = "1.0", features = ["full", "macros", "rt-multi-thread"] }
 rhai = "1.22.2"
+rig-core = "0.17.1"
 
 [dev-dependencies]
 tempfile = "3.0"

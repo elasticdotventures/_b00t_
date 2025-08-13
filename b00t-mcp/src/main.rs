@@ -12,7 +12,7 @@ use tower_http::cors::CorsLayer;
 use axum::Router;
 use tokio::net::TcpListener;
 
-use b00t_mcp::{B00tMcpServerRusty, MinimalOAuthConfig, MinimalOAuthState, minimal_oauth_router, GitHubAuthConfig, GitHubAuthState, github_auth_router, AclConfig};
+use b00t_mcp::{B00tMcpServerRusty, MinimalOAuthConfig, MinimalOAuthState, minimal_oauth_router, GitHubAuthConfig, GitHubAuthState, github_auth_router};
 
 #[tokio::main]
 async fn main() -> Result<()> {

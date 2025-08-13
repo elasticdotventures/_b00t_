@@ -14,6 +14,7 @@ pub mod session_memory;
 pub mod traits;
 pub mod utils;
 pub mod whoami;
+pub mod cloud_sync;
 pub use traits::*;
 
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]

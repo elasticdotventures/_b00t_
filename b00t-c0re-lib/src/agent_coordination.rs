@@ -452,7 +452,7 @@ impl AgentCoordinator {
         timeout_duration: Duration,
         _filter: MessageFilter,
     ) -> B00tResult<CoordinationMessage> {
-        let (tx, rx) = oneshot::channel();
+        let (_tx, rx) = oneshot::channel();
 
         // TODO: Set up filtered message listener
         // This would require extending the message handling system

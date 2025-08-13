@@ -25,6 +25,8 @@ mod session_memory;
 mod traits;
 mod utils;
 mod whoami;
+mod cloud_sync;
+mod test_cloud_integration;
 use utils::get_workspace_root;
 
 // 🦨 REMOVED unused K8sDatum import - not used in main.rs
