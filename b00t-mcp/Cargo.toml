@@ -45,9 +45,21 @@ quote = "1.0"
 syn = { version = "2.0", features = ["full", "extra-traits"] }
 
 # HTTP server dependencies
-axum = "0.7"
+axum = { version = "0.8.4", features = ["macros"] }
 tower = "0.5"
 tower-http = { version = "0.6", features = ["cors"] }
+
+# OAuth 2.1 authorization server dependencies
+oauth2 = "5.0"
+jsonwebtoken = "9.0"
+uuid = { version = "1.0", features = ["v4"] }
+base64 = "0.22"
+axum-macros = "0.4"
+
+# GitHub OAuth authentication
+reqwest = { version = "0.12", features = ["json"] }
+axum-extra = { version = "0.9", features = ["cookie"] }
+urlencoding = "2.1"
 
 [dev-dependencies]
 tempfile = "3.0"

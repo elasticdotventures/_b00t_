@@ -1,0 +1,41 @@
+name = "b00t-mcp-cloudflare"
+main = "src/worker.ts"
+compatibility_date = "2024-08-01"
+compatibility_flags = ["nodejs_compat"]
+
+# Custom domains
+routes = [
+  { pattern = "*.b00t.promptexecution.com/*", zone_name = "promptexecution.com" },
+]
+
+# Environment variables
+[env.production.vars]
+ENVIRONMENT = "production"
+GITHUB_CLIENT_ID = "your-production-github-client-id"
+
+[env.staging.vars]
+ENVIRONMENT = "staging"
+GITHUB_CLIENT_ID = "your-staging-github-client-id"
+
+# Durable Objects
+[[durable_objects.bindings]]
+name = "B00T_MCP_INSTANCE"
+class_name = "B00tMcpInstance"
+
+# R2 Storage for user configurations and data
+[[r2_buckets]]
+binding = "B00T_USER_DATA"
+bucket_name = "b00t-user-data"
+
+# KV for caching and session data
+[[kv_namespaces]]
+binding = "B00T_SESSIONS"
+id = "your-kv-namespace-id"
+preview_id = "your-preview-kv-namespace-id"
+
+# Secrets (set via wrangler secret put)
+# GITHUB_CLIENT_SECRET
+# JWT_SECRET_KEY
+
+# Worker limits
+limits = { cpu_ms = 50 }

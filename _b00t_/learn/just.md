@@ -402,3 +402,8 @@ Use toml: = `which toml || echo "toml"` variable pattern instead of hardcoding p
 ---
 extract complex logic: move shell scripts with working directory issues to separate .sh files with descriptive names
 
+---
+Template syntax conflict: Use grep/cut instead of Go template {{.Names}} to avoid Just variable interpolation conflicts
+
+---
+Duplicate recipe error: Use 6C pattern - comment old version, rename to name-legacy, clean later

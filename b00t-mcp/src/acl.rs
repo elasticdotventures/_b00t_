@@ -14,6 +14,17 @@ pub struct AclConfig {
     pub commands: HashMap<String, CommandRule>,
     /// Global regex patterns for allow/deny
     pub patterns: Option<Patterns>,
+    /// Development settings
+    pub dev: Option<DevConfig>,
+}
+
+/// Development configuration
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct DevConfig {
+    /// Bypass OAuth authentication for local development
+    pub bypass_oauth: Option<bool>,
+    /// Default local user when OAuth is bypassed
+    pub local_user: Option<String>,
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
@@ -41,6 +52,7 @@ pub enum Policy {
     Deny,
 }
 
+
 #[derive(Clone)]
 pub struct AclFilter {
     config: AclConfig,
@@ -49,6 +61,11 @@ pub struct AclFilter {
 }
 
 impl AclFilter {
+    /// Get access to the underlying config
+    pub fn config(&self) -> &AclConfig {
+        &self.config
+    }
+
     /// Load ACL configuration from file
     pub fn load_from_file<P: AsRef<Path>>(path: P) -> Result<Self> {
         let expanded_path = shellexpand::tilde(path.as_ref().to_str().unwrap()).to_string();
@@ -229,6 +246,7 @@ impl Default for AclConfig {
                     r".*--force.*".to_string(),
                 ]),
             }),
+            dev: None,
         }
     }
 }

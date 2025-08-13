@@ -4,6 +4,13 @@
 # Default policy when no specific rule matches (allow/deny)
 default_policy = "allow"
 
+# Development settings for local testing
+[dev]
+# Set to true to bypass OAuth authentication for local development
+bypass_oauth = true
+# Local user identity when OAuth is bypassed
+local_user = "local-dev-user"
+
 # Command-specific rules
 [commands.detect]
 policy = "allow"

@@ -297,3 +297,4 @@ mcp-probe/*
 test_*.json
 mcp-probe/*
 mcp-probe
+*/.claude/*
