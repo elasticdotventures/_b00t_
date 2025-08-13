@@ -14,8 +14,8 @@ fn main() -> Result<()> {
     println!("🏗️  Generating TypeScript types and JSON schemas for b00t unified configuration...");
     
     // Create output directories
-    let ts_types_dir = "/home/brianh/promptexecution/infrastructure/b00t-website/dashboard/src/types";
-    let json_schemas_dir = "/home/brianh/promptexecution/infrastructure/b00t-website/dashboard/src/schemas";
+    let ts_types_dir = "/home/brianh/promptexecution/infrastructure/b00t/dashboard/src/types";
+    let json_schemas_dir = "/home/brianh/promptexecution/infrastructure/b00t/dashboard/src/schemas";
     
     create_dir_if_not_exists(ts_types_dir)?;
     create_dir_if_not_exists(json_schemas_dir)?;
