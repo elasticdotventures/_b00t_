@@ -480,6 +480,29 @@ validate-mcp:
     cd {{repo-root}}/_b00t_
     taplo lint --schema file://$PWD/schema-资源/mcp.json *.mcp.toml
 
+# Build and package b00t browser extension
+browser-ext-build:
+    #!/bin/bash
+    echo "🥾 Building b00t browser extension..."
+    cd {{repo-root}}/b00t-browser-ext
+    npm ci
+    npm run build
+    echo "✅ Extension built in build/chrome-mv3-prod/"
+
+browser-ext-package:
+    #!/bin/bash
+    echo "📦 Packaging b00t browser extension..."
+    cd {{repo-root}}/b00t-browser-ext
+    npm run package
+    VERSION=$(node -p "require('./package.json').version")
+    echo "✅ Extension packaged as b00t-browser-ext-chrome-v${VERSION}.zip"
+
+browser-ext-dev:
+    #!/bin/bash
+    echo "🚀 Starting b00t browser extension dev server..."
+    cd {{repo-root}}/b00t-browser-ext
+    npm run dev
+
 socks5:
     {{repo-root}}/scripts/socks5.sh
 
