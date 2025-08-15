@@ -6,7 +6,7 @@
 //! - User preferences and settings
 //! - Service credentials and validation
 //!
-//! TypeScript bindings are automatically generated for the dashboard UI.
+//! TypeScript bindings are automatically generated for the website UI.
 
 use anyhow::{anyhow, Result};
 use schemars::JsonSchema;
@@ -16,7 +16,7 @@ use ts_rs::TS;
 
 /// Central configuration datum for the entire b00t ecosystem
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, TS)]
-#[ts(export, export_to = "/home/brianh/promptexecution/infrastructure/b00t/dashboard/src/types/")]
+#[ts(export, export_to = "/home/brianh/promptexecution/infrastructure/b00t-website/dashboard/src/types/")]
 #[serde(rename_all = "camelCase")]
 pub struct B00tUnifiedConfig {
     /// User identification and preferences
@@ -35,7 +35,7 @@ pub struct B00tUnifiedConfig {
 
 /// User identification and preferences
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, TS)]
-#[ts(export, export_to = "/home/brianh/promptexecution/infrastructure/b00t/dashboard/src/types/")]
+#[ts(export, export_to = "/home/brianh/promptexecution/infrastructure/b00t-website/dashboard/src/types/")]
 #[serde(rename_all = "camelCase")]
 pub struct UserConfig {
     /// GitHub username
@@ -54,7 +54,7 @@ pub struct UserConfig {
 
 /// Cloud service configurations and credentials
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, TS)]
-#[ts(export, export_to = "/home/brianh/promptexecution/infrastructure/b00t/dashboard/src/types/")]
+#[ts(export, export_to = "/home/brianh/promptexecution/infrastructure/b00t-website/dashboard/src/types/")]
 #[serde(rename_all = "camelCase")]
 pub struct CloudServicesConfig {
     /// Cloudflare configuration
@@ -69,7 +69,7 @@ pub struct CloudServicesConfig {
 
 /// Cloudflare service configuration
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, TS)]
-#[ts(export, export_to = "/home/brianh/promptexecution/infrastructure/b00t/dashboard/src/types/")]
+#[ts(export, export_to = "/home/brianh/promptexecution/infrastructure/b00t-website/dashboard/src/types/")]
 #[serde(rename_all = "camelCase")]
 pub struct CloudflareConfig {
     /// Account ID
@@ -88,7 +88,7 @@ pub struct CloudflareConfig {
 
 /// AWS service configuration
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, TS)]
-#[ts(export, export_to = "/home/brianh/promptexecution/infrastructure/b00t/dashboard/src/types/")]
+#[ts(export, export_to = "/home/brianh/promptexecution/infrastructure/b00t-website/dashboard/src/types/")]
 #[serde(rename_all = "camelCase")]
 pub struct AwsConfig {
     /// AWS region
@@ -105,7 +105,7 @@ pub struct AwsConfig {
 
 /// Qdrant vector database configuration
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, TS)]
-#[ts(export, export_to = "/home/brianh/promptexecution/infrastructure/b00t/dashboard/src/types/")]
+#[ts(export, export_to = "/home/brianh/promptexecution/infrastructure/b00t-website/dashboard/src/types/")]
 #[serde(rename_all = "camelCase")]
 pub struct QdrantConfig {
     /// Qdrant endpoint URL
@@ -118,7 +118,7 @@ pub struct QdrantConfig {
 
 /// Generic cloud service configuration
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, TS)]
-#[ts(export, export_to = "/home/brianh/promptexecution/infrastructure/b00t/dashboard/src/types/")]
+#[ts(export, export_to = "/home/brianh/promptexecution/infrastructure/b00t-website/dashboard/src/types/")]
 #[serde(rename_all = "camelCase")]
 pub struct CloudServiceConfig {
     /// Service name
@@ -135,7 +135,7 @@ pub struct CloudServiceConfig {
 
 /// AI configuration extending the existing AiClientConfig
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, TS)]
-#[ts(export, export_to = "/home/brianh/promptexecution/infrastructure/b00t/dashboard/src/types/")]
+#[ts(export, export_to = "/home/brianh/promptexecution/infrastructure/b00t-website/dashboard/src/types/")]
 #[serde(rename_all = "camelCase")]
 pub struct AiConfiguration {
     /// AI provider configurations
@@ -152,7 +152,7 @@ pub struct AiConfiguration {
 
 /// AI provider configuration
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, TS)]
-#[ts(export, export_to = "/home/brianh/promptexecution/infrastructure/b00t/dashboard/src/types/")]
+#[ts(export, export_to = "/home/brianh/promptexecution/infrastructure/b00t-website/dashboard/src/types/")]
 #[serde(rename_all = "camelCase")]
 pub struct AiProviderConfig {
     /// Provider name (openai, anthropic, etc.)
@@ -175,7 +175,7 @@ pub struct AiProviderConfig {
 
 /// AI preferences and behavior settings
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, TS)]
-#[ts(export, export_to = "/home/brianh/promptexecution/infrastructure/b00t/dashboard/src/types/")]
+#[ts(export, export_to = "/home/brianh/promptexecution/infrastructure/b00t-website/dashboard/src/types/")]
 #[serde(rename_all = "camelCase")]
 pub struct AiPreferences {
     /// Maximum tokens per request
@@ -192,7 +192,7 @@ pub struct AiPreferences {
 
 /// Development and deployment configuration
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, TS)]
-#[ts(export, export_to = "/home/brianh/promptexecution/infrastructure/b00t/dashboard/src/types/")]
+#[ts(export, export_to = "/home/brianh/promptexecution/infrastructure/b00t-website/dashboard/src/types/")]
 #[serde(rename_all = "camelCase")]
 pub struct DevelopmentConfig {
     /// Preferred programming languages
@@ -207,7 +207,7 @@ pub struct DevelopmentConfig {
 
 /// Environment preferences
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, TS)]
-#[ts(export, export_to = "/home/brianh/promptexecution/infrastructure/b00t/dashboard/src/types/")]
+#[ts(export, export_to = "/home/brianh/promptexecution/infrastructure/b00t-website/dashboard/src/types/")]
 #[serde(rename_all = "camelCase")]
 pub struct EnvironmentPreferences {
     /// Preferred shell
@@ -222,7 +222,7 @@ pub struct EnvironmentPreferences {
 
 /// Git configuration preferences
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, TS)]
-#[ts(export, export_to = "/home/brianh/promptexecution/infrastructure/b00t/dashboard/src/types/")]
+#[ts(export, export_to = "/home/brianh/promptexecution/infrastructure/b00t-website/dashboard/src/types/")]
 #[serde(rename_all = "camelCase")]
 pub struct GitConfig {
     /// Default branch name
@@ -237,7 +237,7 @@ pub struct GitConfig {
 
 /// Deployment configuration
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, TS)]
-#[ts(export, export_to = "/home/brianh/promptexecution/infrastructure/b00t/dashboard/src/types/")]
+#[ts(export, export_to = "/home/brianh/promptexecution/infrastructure/b00t-website/dashboard/src/types/")]
 #[serde(rename_all = "camelCase")]
 pub struct DeploymentConfig {
     /// Preferred deployment targets
@@ -248,7 +248,7 @@ pub struct DeploymentConfig {
 
 /// Security and authentication settings
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, TS)]
-#[ts(export, export_to = "/home/brianh/promptexecution/infrastructure/b00t/dashboard/src/types/")]
+#[ts(export, export_to = "/home/brianh/promptexecution/infrastructure/b00t-website/dashboard/src/types/")]
 #[serde(rename_all = "camelCase")]
 pub struct SecurityConfig {
     /// Keyring backend preference
@@ -263,7 +263,7 @@ pub struct SecurityConfig {
 
 /// Configuration metadata
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, TS)]
-#[ts(export, export_to = "/home/brianh/promptexecution/infrastructure/b00t/dashboard/src/types/")]
+#[ts(export, export_to = "/home/brianh/promptexecution/infrastructure/b00t-website/dashboard/src/types/")]
 #[serde(rename_all = "camelCase")]
 pub struct ConfigMetadata {
     /// Configuration version
@@ -283,7 +283,7 @@ pub struct ConfigMetadata {
 // Enums for various configuration options
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, TS)]
-#[ts(export, export_to = "/home/brianh/promptexecution/infrastructure/b00t/dashboard/src/types/")]
+#[ts(export, export_to = "/home/brianh/promptexecution/infrastructure/b00t-website/dashboard/src/types/")]
 pub enum CloudflareService {
     Workers,
     Pages,
@@ -296,7 +296,7 @@ pub enum CloudflareService {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, TS)]
-#[ts(export, export_to = "/home/brianh/promptexecution/infrastructure/b00t/dashboard/src/types/")]
+#[ts(export, export_to = "/home/brianh/promptexecution/infrastructure/b00t-website/dashboard/src/types/")]
 pub enum AwsService {
     EC2,
     S3,
@@ -309,7 +309,7 @@ pub enum AwsService {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, TS)]
-#[ts(export, export_to = "/home/brianh/promptexecution/infrastructure/b00t/dashboard/src/types/")]
+#[ts(export, export_to = "/home/brianh/promptexecution/infrastructure/b00t-website/dashboard/src/types/")]
 pub enum AuthMethod {
     ApiKey,
     OAuth,
@@ -319,7 +319,7 @@ pub enum AuthMethod {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, TS)]
-#[ts(export, export_to = "/home/brianh/promptexecution/infrastructure/b00t/dashboard/src/types/")]
+#[ts(export, export_to = "/home/brianh/promptexecution/infrastructure/b00t-website/dashboard/src/types/")]
 pub enum KeyringBackend {
     System,
     File,
@@ -327,7 +327,7 @@ pub enum KeyringBackend {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, TS)]
-#[ts(export, export_to = "/home/brianh/promptexecution/infrastructure/b00t/dashboard/src/types/")]
+#[ts(export, export_to = "/home/brianh/promptexecution/infrastructure/b00t-website/dashboard/src/types/")]
 #[serde(rename_all = "camelCase")]
 pub struct S3BucketConfig {
     pub name: String,
@@ -337,7 +337,7 @@ pub struct S3BucketConfig {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, TS)]
-#[ts(export, export_to = "/home/brianh/promptexecution/infrastructure/b00t/dashboard/src/types/")]
+#[ts(export, export_to = "/home/brianh/promptexecution/infrastructure/b00t-website/dashboard/src/types/")]
 #[serde(rename_all = "camelCase")]
 pub struct QdrantCollectionConfig {
     pub name: String,
@@ -347,7 +347,7 @@ pub struct QdrantCollectionConfig {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, TS)]
-#[ts(export, export_to = "/home/brianh/promptexecution/infrastructure/b00t/dashboard/src/types/")]
+#[ts(export, export_to = "/home/brianh/promptexecution/infrastructure/b00t-website/dashboard/src/types/")]
 #[serde(rename_all = "camelCase")]
 pub struct TerminalConfig {
     pub font_family: String,
@@ -357,7 +357,7 @@ pub struct TerminalConfig {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, TS)]
-#[ts(export, export_to = "/home/brianh/promptexecution/infrastructure/b00t/dashboard/src/types/")]
+#[ts(export, export_to = "/home/brianh/promptexecution/infrastructure/b00t-website/dashboard/src/types/")]
 #[serde(rename_all = "camelCase")]
 pub struct DeploymentTarget {
     pub name: String,
@@ -369,7 +369,7 @@ pub struct DeploymentTarget {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, TS)]
-#[ts(export, export_to = "/home/brianh/promptexecution/infrastructure/b00t/dashboard/src/types/")]
+#[ts(export, export_to = "/home/brianh/promptexecution/infrastructure/b00t-website/dashboard/src/types/")]
 #[serde(rename_all = "camelCase")]
 pub struct CicdPreferences {
     pub platform: String,
