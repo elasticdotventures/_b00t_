@@ -40,13 +40,13 @@ pub enum McpCommands {
         json: bool,
     },
     #[clap(
-        about = "Install MCP server to a target (claudecode, vscode, geminicli, dotmcpjson)",
-        long_about = "Install MCP server to a target application.\n\nExamples:\n  b00t-cli mcp install gh claudecode\n  b00t-cli mcp install filesystem geminicli --repo\n  b00t-cli mcp install browser-use dotmcpjson --stdio-command uvx\n  b00t-cli mcp install aws-knowledge dotmcpjson --httpstream\n  b00t-cli app vscode mcp install filesystem"
+        about = "Install MCP server to a target (claudecode, vscode, geminicli, dotmcpjson, stdout)",
+        long_about = "Install MCP server to a target application.\n\nExamples:\n  b00t-cli mcp install gh claudecode\n  b00t-cli mcp install filesystem geminicli --repo\n  b00t-cli mcp install browser-use dotmcpjson --stdio-command uvx\n  b00t-cli mcp install aws-knowledge dotmcpjson --httpstream\n  b00t-cli mcp install filesystem stdout\n  b00t-cli app vscode mcp install filesystem"
     )]
     Install {
         #[clap(help = "MCP server name")]
         name: String,
-        #[clap(help = "Installation target: claudecode, vscode, geminicli, dotmcpjson")]
+        #[clap(help = "Installation target: claudecode, vscode, geminicli, dotmcpjson, stdout")]
         target: String,
         #[clap(long, help = "Install to repository-specific location (for geminicli)")]
         repo: bool,
@@ -135,9 +135,13 @@ impl McpCommands {
                     "dotmcpjson" => {
                         crate::dotmcpjson_install_mcp(name, path, stdio_command.as_deref(), *httpstream)
                     }
+                    "stdout" => {
+                        // Output just the JSON for the specified server
+                        crate::mcp_output(path, false, name)
+                    }
                     _ => {
                         anyhow::bail!(
-                            "Error: Invalid target '{}'. Valid targets are: claudecode, vscode, geminicli, dotmcpjson",
+                            "Error: Invalid target '{}'. Valid targets are: claudecode, vscode, geminicli, dotmcpjson, stdout",
                             target
                         );
                     }

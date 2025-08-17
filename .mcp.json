@@ -4,11 +4,14 @@
       "args": [
         "--stdio"
       ],
-      "command": "./target/debug/b00t-mcp",
-      "env": {},
-      "alwaysAllow": [
-        "b00t_whoami"
-      ]
+      "command": "b00t-mcp"
+    },
+    "context7": {
+      "args": [
+        "-y",
+        "@upstash/context7-mcp"
+      ],
+      "command": "bunx"
     },
     "github": {
       "args": [

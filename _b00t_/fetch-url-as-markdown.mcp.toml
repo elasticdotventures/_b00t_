@@ -3,7 +3,7 @@ name = "fetch-url-as-markdown"
 type = "mcp"
 hint = "Fetches URLs and converts content to markdown format"
 
-[[b00t.stdio]]
+[[b00t.mcp.stdio]]
 command = "uvx"
 args = ["mcp-server-fetch"]
 transport = "stdio"

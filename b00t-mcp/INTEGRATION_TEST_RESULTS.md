@@ -2,7 +2,7 @@
 
 ## 🎯 Project Fusion Completed Successfully
 
-This document summarizes the successful integration of b00t-mcp with b00t-dashboard for unified AI model management.
+This document summarizes the successful integration of b00t-mcp with b00t-website for unified AI model management.
 
 ## ✅ Architecture Components Implemented
 
@@ -23,8 +23,8 @@ This document summarizes the successful integration of b00t-mcp with b00t-dashbo
   - Multi-tenant support via `/gh/{username}` routing
   - OAuth authentication with GitHub for user identification
 
-### 3. Dashboard UI (dashboard/src)
-- **File**: `dashboard/src/pages/AiModelsPage.vue`
+### 3. Dashboard UI (website/src)
+- **File**: `website/src/pages/AiModelsPage.vue`
 - **Features**:
   - Complete Vue3/Quasar interface for model selection
   - Provider toggle switches (OpenAI, Anthropic, Gemini, Perplexity)
@@ -36,7 +36,7 @@ This document summarizes the successful integration of b00t-mcp with b00t-dashbo
 ### 4. Local-Cloud Synchronization (b00t-cli)
 - **File**: `b00t-cli/src/cloud_sync.rs`
 - **Features**:
-  - Periodic sync from cloud dashboard to local b00t-cli
+  - Periodic sync from cloud website to local b00t-cli
   - Configuration caching in SessionMemory
   - Automatic fallback to local defaults
   - GitHub user authentication integration

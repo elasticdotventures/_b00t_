@@ -166,3 +166,37 @@ grok-clean:
     echo "🧹 Cleaning b00t-grok build artifacts..."
     cargo clean --package b00t-grok
     cd b00t-grok-py && rm -rf build/ dist/ *.egg-info/
+
+# Validate MCP TOML files against schema
+validate-mcp:
+    #!/bin/bash
+    echo "🔍 Validating MCP TOML files..."
+    cd {{repo-root}}/_b00t_
+    taplo lint --schema file://$PWD/schema-资源/mcp.json *.mcp.toml
+
+# Build and package b00t browser extension
+browser-ext-build:
+    #!/bin/bash
+    echo "🥾 Building b00t browser extension..."
+    cd {{repo-root}}/b00t-browser-ext
+    npm ci
+    npm run build
+    echo "✅ Extension built in build/chrome-mv3-prod/"
+
+browser-ext-package:
+    #!/bin/bash
+    echo "📦 Packaging b00t browser extension..."
+    cd {{repo-root}}/b00t-browser-ext
+    npm run package
+    VERSION=$(node -p "require('./package.json').version")
+    echo "✅ Extension packaged as b00t-browser-ext-chrome-v${VERSION}.zip"
+
+browser-ext-dev:
+    #!/bin/bash
+    echo "🚀 Starting b00t browser extension dev server..."
+    cd {{repo-root}}/b00t-browser-ext
+    npm run dev
+
+socks5:
+    docker run -d -p 1080:1080   -v ./koblas.toml:/etc/koblas/config.toml   -e RUST_LOG=debug   -e KOBLAS_NO_AUTHENTICATION=true   -e KOBLAS_ANONYMIZE=false   --name koblas docker.io/ynuwenhof/koblas:latest
+

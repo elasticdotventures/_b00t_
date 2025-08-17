@@ -1,0 +1,30 @@
+# b00t Session Configuration
+# Default values for infrastructure provisioning
+
+[b00t]
+name = "b00t-infrastructure"
+type = "session"
+hint = "OpenTofu infrastructure provisioning defaults"
+
+[session]
+project_name = "b00t"
+aws_region = "us-east-1" 
+cloudflare_zone = ""
+
+[providers]
+anthropic_enabled = true
+openrouter_enabled = false
+openai_enabled = false
+
+[infrastructure]
+cloudflare_workers = true
+aws_lambda = false
+monitoring = false
+
+[tools]
+filesystem = true
+git = true
+terminal = true
+terraform = true
+docker = false
+kubernetes = false

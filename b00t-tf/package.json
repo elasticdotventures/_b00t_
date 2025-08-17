@@ -1,0 +1,28 @@
+{
+  "name": "b00t-mcp-proxy",
+  "version": "1.0.0",
+  "description": "Self-bootstrapping MCP server for b00t infrastructure management",
+  "type": "module",
+  "main": "proxy-server.js",
+  "bin": {
+    "b00t-mcp": "./proxy-server.js"
+  },
+  "scripts": {
+    "start": "node proxy-server.js",
+    "dev": "node --inspect proxy-server.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^0.6.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "license": "MIT",
+  "keywords": [
+    "mcp",
+    "claude",
+    "infrastructure",
+    "terraform",
+    "automation"
+  ]
+}

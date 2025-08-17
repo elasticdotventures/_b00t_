@@ -3,7 +3,7 @@ name = "legacy-test"
 type = "mcp"
 hint = "Multi-method MCP server (testing new format)"
 
-[[b00t.stdio]]
+[[b00t.mcp.stdio]]
 command = "npx"
 args = ["-y", "@modelcontextprotocol/server-filesystem"]
 transport = "stdio"

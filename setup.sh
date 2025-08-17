@@ -364,3 +364,6 @@ curl -sSL https://raw.githubusercontent.com/brennercruvinel/CCPlugins/main/insta
 
 
 npm i -g opencode-ai@latest
+
+ sudo apt install zip
+

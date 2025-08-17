@@ -1,0 +1,141 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "MCP TOML Configuration Schema",
+  "description": "Schema for validating MCP server TOML configuration files",
+  "type": "object",
+  "properties": {
+    "b00t": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Name of the MCP server"
+        },
+        "type": {
+          "type": "string", 
+          "enum": ["mcp"],
+          "description": "Type must be 'mcp'"
+        },
+        "hint": {
+          "type": "string",
+          "description": "Human-readable description of the MCP server"
+        },
+        "mcp": {
+          "type": "object",
+          "properties": {
+            "stdio": {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/stdioMethod"
+              },
+              "description": "Array of stdio connection methods"
+            },
+            "httpstream": {
+              "$ref": "#/definitions/httpstreamMethod",
+              "description": "HTTP stream connection method"
+            }
+          },
+          "additionalProperties": false
+        },
+        "env": {
+          "type": "object",
+          "patternProperties": {
+            "^[A-Z_][A-Z0-9_]*$": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false,
+          "description": "Environment variables for the MCP server"
+        }
+      },
+      "required": ["name", "type"],
+      "additionalProperties": false
+    }
+  },
+  "required": ["b00t"],
+  "additionalProperties": false,
+  "definitions": {
+    "stdioMethod": {
+      "type": "object",
+      "properties": {
+        "command": {
+          "type": "string",
+          "description": "Command to execute"
+        },
+        "args": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Command line arguments"
+        },
+        "transport": {
+          "type": "string",
+          "enum": ["stdio"],
+          "description": "Transport method"
+        },
+        "priority": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Priority order (0 = highest)"
+        },
+        "requires": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Requirements/dependencies"
+        },
+        "env": {
+          "type": "object",
+          "patternProperties": {
+            "^[A-Z_][A-Z0-9_]*$": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false,
+          "description": "Method-specific environment variables"
+        }
+      },
+      "required": ["command"],
+      "additionalProperties": false
+    },
+    "httpstreamMethod": {
+      "type": "object",
+      "properties": {
+        "url": {
+          "type": "string",
+          "format": "uri",
+          "description": "HTTP URL for the MCP server"
+        },
+        "transport": {
+          "type": "string",
+          "enum": ["httpstream"],
+          "description": "Transport method"
+        },
+        "priority": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Priority order (0 = highest)"
+        },
+        "requires": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Requirements/dependencies"
+        },
+        "requires_internet": {
+          "type": "boolean",
+          "description": "Whether internet access is required"
+        },
+        "requires_auth": {
+          "type": "boolean",
+          "description": "Whether authentication is required"
+        }
+      },
+      "required": ["url"],
+      "additionalProperties": false
+    }
+  }
+}

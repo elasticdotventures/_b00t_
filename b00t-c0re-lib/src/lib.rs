@@ -37,6 +37,8 @@ pub mod datum_ai_model;
 pub mod lfmf;
 pub mod rhai_engine;
 pub mod ai_client;
+pub mod b00t_config;
+pub mod secret_validation;
 
 // Re-export commonly used types
 pub use template::TemplateRenderer;
@@ -45,6 +47,8 @@ pub use grok::{GrokClient, DigestResult, AskResult, LearnResult, ChunkResult, Ch
 pub use lfmf::{LfmfSystem, LfmfConfig, Lesson};
 pub use rhai_engine::RhaiEngine;
 pub use ai_client::{B00tAiClient, AiClientConfig, AiProviderConfig, ChatMessage};
+pub use b00t_config::{B00tUnifiedConfig, UserConfig, CloudServicesConfig, AiConfiguration};
+pub use secret_validation::{SecretValidator, CloudflareValidation, AwsValidation, QdrantValidation};
 
 /// Common configuration structure for b00t components
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]

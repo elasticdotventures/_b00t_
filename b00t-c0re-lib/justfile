@@ -1,0 +1,52 @@
+# b00t-c0re-lib justfile for unified configuration management
+
+# Generate TypeScript types and JSON schemas for dashboard
+generate-schemas:
+    cargo run --bin generate_schemas
+    @echo "✅ TypeScript types and JSON schemas generated successfully!"
+
+# Test the configuration types and validation
+test-config:
+    cargo test b00t_config::tests --lib -- --nocapture
+
+# Test secret validation
+test-secrets:
+    cargo test secret_validation::tests --lib -- --nocapture
+
+# Run all tests for b00t-c0re-lib
+test:
+    cargo test --lib
+
+# Build the library
+build:
+    cargo build
+
+# Build the library in release mode  
+build-release:
+    cargo build --release
+
+# Check the library for errors
+check:
+    cargo check
+
+# Clean build artifacts
+clean:
+    cargo clean
+
+# Format the code
+fmt:
+    cargo fmt
+
+# Run clippy for linting
+clippy:
+    cargo clippy -- -D warnings
+
+# Full development cycle: format, clippy, test, build
+dev: fmt clippy test build
+
+# Full release cycle: format, clippy, test, build-release, generate schemas
+release: fmt clippy test build-release generate-schemas
+
+# Show all available commands
+list:
+    @just --list

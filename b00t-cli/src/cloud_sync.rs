@@ -1,6 +1,6 @@
 //! Cloud configuration synchronization for b00t-cli
 //! 
-//! Syncs AI provider configurations from b00t-dashboard cloud service
+//! Syncs AI provider configurations from b00t-website cloud service
 //! to local b00t-cli sessions for unified model management.
 
 use anyhow::{anyhow, Result};
@@ -73,7 +73,7 @@ impl CloudSyncClient {
         }
     }
 
-    /// Fetch AI configuration from cloud dashboard
+    /// Fetch AI configuration from cloud website
     pub async fn fetch_ai_config(&self) -> Result<AiClientConfig> {
         if let Some(token) = &self.config.auth_token {
             self.fetch_ai_config_authenticated(token).await

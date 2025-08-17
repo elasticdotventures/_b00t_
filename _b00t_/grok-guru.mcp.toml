@@ -1,66 +1,15 @@
-[server]
+[b00t]
 name = "grok-guru"
-version = "0.1.0"
-description = "b00t grok RAG knowledgebase with vector search capabilities"
-capabilities = ["rag", "knowledgebase", "vector-search", "content-chunking"]
+type = "mcp"
+hint = "b00t grok RAG knowledgebase with vector search capabilities (with pre-commit validation)"
 
-[server.stdio]
+[[b00t.mcp.stdio]]
 command = "uv"
 args = ["run", "python", "-m", "b00t_grok_guru.server"]
+transport = "stdio"
+priority = 0
+requires = ["python"]
 
-[server.env]
-# Qdrant configuration
+[b00t.env]
 QDRANT_URL = "https://a0cfd978-2e95-499c-93cc-9acd66b16d35.us-west-1-0.aws.cloud.qdrant.io:6333"
-# QDRANT_API_KEY will be set from environment
-
-[server.metadata]
-author = "PromptExecution"
-homepage = "https://github.com/elasticdotventures/dotfiles"
-repository = "https://github.com/elasticdotventures/dotfiles"
-tags = ["rag", "knowledgebase", "b00t", "grok", "vector-search"]
-
-[server.health]
-endpoint = "/health"
-timeout = 30
-
-[tools.grok_digest]
-description = "Digest content into a knowledge chunk about a specific topic"
-parameters = [
-    { name = "topic", type = "string", required = true, description = "Topic to categorize the content under" },
-    { name = "content", type = "string", required = true, description = "Text content to digest and store" }
-]
-
-[tools.grok_ask] 
-description = "Search the knowledgebase for information related to a query"
-parameters = [
-    { name = "query", type = "string", required = true, description = "Search query or question" },
-    { name = "topic", type = "string", required = false, description = "Optional topic filter to narrow results" },
-    { name = "limit", type = "integer", required = false, default = 5, description = "Maximum number of results to return" }
-]
-
-[tools.grok_learn]
-description = "Learn from content by breaking it into chunks and storing in knowledgebase"  
-parameters = [
-    { name = "content", type = "string", required = true, description = "Text content to learn from" },
-    { name = "source", type = "string", required = false, description = "Optional source identifier (URL or filename)" }
-]
-
-[tools.grok_status]
-description = "Get the current status of the grok system"
-parameters = []
-
-[install.requirements]
-# Python requirements for the server
-python = ">=3.10"
-working_directory = "b00t-grok-py"
-
-[install.commands]
-# Commands to run during installation
-setup = [
-    "uv sync --no-dev",
-    "echo '✅ b00t-grok-guru MCP server ready'"
-]
-
-test = [
-    "uv run python test_guru.py"
-]
+QDRANT_API_KEY = ""

@@ -1224,9 +1224,8 @@ pub fn dotmcpjson_install_mcp(name: &str, path: &str, stdio_command: Option<&str
             }
         }
     } else {
-        // Legacy single-source config
-        let command = datum.command.as_ref().unwrap_or(&"npx".to_string()).clone();
-        let args = datum.args.as_ref().unwrap_or(&vec![]).clone();
+        // Legacy single-source config - use extract_mcp_command_args for consistency
+        let (command, args) = extract_mcp_command_args(&datum);
         (command, args, datum.env.clone(), "stdio")
     };
     
@@ -1279,6 +1278,7 @@ pub fn dotmcpjson_install_mcp(name: &str, path: &str, stdio_command: Option<&str
     
     Ok(())
 }
+
 
 // Session management functions
 impl SessionState {

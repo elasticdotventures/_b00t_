@@ -57,3 +57,4 @@ alias tf=tofu
 ## note: all k8s k= kubectl minikube should be in .bash_profile
 alias nsc='podman run --rm docker.io/natsio/nats-box:latest nsc'
 
+alias nsc='podman run --rm docker.io/natsio/nats-box:latest nsc'

@@ -1,7 +1,7 @@
 //! AI client abstraction using Rig.rs
 //! 
 //! Provides unified LLM interface with cloud-managed provider configuration.
-//! Supports dynamic provider switching based on b00t-dashboard selections.
+//! Supports dynamic provider switching based on b00t-website selections.
 
 use anyhow::anyhow;
 use rig::client::CompletionClient;

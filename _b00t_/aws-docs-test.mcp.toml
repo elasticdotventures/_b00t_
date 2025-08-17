@@ -4,29 +4,23 @@ type = "mcp"
 hint = "AWS Documentation MCP server with multiple deployment methods (test)"
 
 # STDIO methods only (no HTTP option for this one)
-[[b00t.stdio]]
+[[b00t.mcp.stdio]]
 command = "uvx"
 args = ["awslabs.aws-documentation-mcp-server@latest"]
 transport = "stdio"
 priority = 1
 requires = ["python"]
+env = { FASTMCP_LOG_LEVEL = "ERROR", AWS_DOCUMENTATION_PARTITION = "aws" }
 
-[b00t.stdio.env]
-FASTMCP_LOG_LEVEL = "ERROR"
-AWS_DOCUMENTATION_PARTITION = "aws"
-
-[[b00t.stdio]]
+[[b00t.mcp.stdio]]
 command = "uvx"
 args = ["awslabs.aws-documentation-mcp-server@1.2.3"]
 transport = "stdio"
 priority = 2
 requires = ["python"]
+env = { FASTMCP_LOG_LEVEL = "ERROR", AWS_DOCUMENTATION_PARTITION = "aws" }
 
-[b00t.stdio.env]
-FASTMCP_LOG_LEVEL = "ERROR"
-AWS_DOCUMENTATION_PARTITION = "aws"
-
-[[b00t.stdio]]
+[[b00t.mcp.stdio]]
 command = "docker"
 args = [
     "run", "--rm", "--interactive",

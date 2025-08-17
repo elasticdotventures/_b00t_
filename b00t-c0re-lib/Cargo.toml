@@ -16,6 +16,10 @@ name = "b00t_c0re_lib"
 path = "src/lib.rs"
 crate-type = ["cdylib", "rlib"]
 
+[[bin]]
+name = "generate_schemas"
+path = "src/bin/generate_schemas.rs"
+
 [features]
 default = []
 python = ["pyo3"]
@@ -41,6 +45,10 @@ uuid = { version = "1.0", features = ["v4", "serde"] }
 tokio = { version = "1.0", features = ["full", "macros", "rt-multi-thread"] }
 rhai = "1.22.2"
 rig-core = "0.17.1"
+ts-rs = "8.1"
+schemars = "0.8"
+reqwest = { version = "0.12", features = ["json"] }
 
 [dev-dependencies]
 tempfile = "3.0"
+tokio-test = "0.4"

@@ -36,7 +36,7 @@ task-master rules add windsurf,roo,vscode
 
 
 """
-[[b00t.stdio]]
+[[b00t.mcp.stdio]]
 command = "npx"
 args = ["-y", "--package=task-master-ai", "task-master-ai"]
 transport = "stdio"

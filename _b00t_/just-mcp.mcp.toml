@@ -3,7 +3,7 @@ name = "just-mcp"
 type = "mcp"
 hint = "Justfile MCP server"
 
-[[b00t.stdio]]
+[[b00t.mcp.stdio]]
 command = "/home/brianh/promptexecution/devx/just-awesome/just-mcp/target/release/just-mcp"
 args = ["--stdio"]
 transport = "stdio"

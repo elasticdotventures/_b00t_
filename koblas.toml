@@ -1,0 +1,27 @@
+# All matching IPs will be automatically blocked
+blacklist = [
+    # Blacklist all IPs between
+    # 192.168.2.0 and 192.168.2.255
+    #"192.168.2.0/24",
+    # Blacklist a single IP
+    #"192.168.3.0/32",
+]
+
+# All non matching IPs will be automatically blocked
+# Keep empty to disable the whitelist
+whitelist = [
+    # Whitelist all IPs between
+    # 192.168.0.0 and 192.168.0.255
+    "192.168.0.0/24",
+    # Whitelist a single IP
+    "192.168.1.0/32",   
+    "10.0.0.0/8",
+]
+
+[users]
+# Username = "alice", password = "QDuMGlxdhpZt"
+alice = "$argon2id$v=19$m=8,t=2,p=1$bWUwSXl2M2pYNU9xcVBocw$f4gFaE7p0qWRKw"
+# Username = "bob", password = "ceQvWaDGVeTv"
+bob = "$argon2id$v=19$m=8,t=2,p=1$ZExzaTM3aks1WjU1a3g4UA$J+EiueHYuR/dlA"
+# password = github edv
+brianh = "$argon2id$v=19$m=19456,t=2,p=1$gJKpFeJEfkoKsTPxIwsWEQ$IG10R5pjkIeU9x3+aM2UYdumYRAfZ2VXF8UBOWj3J7I"

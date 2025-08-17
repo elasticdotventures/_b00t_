@@ -1,0 +1,11 @@
+[b00t]
+name = "context7"
+type = "mcp"
+hint = "MCP server"
+
+[[b00t.mcp.stdio]]
+command = "bunx"
+requires = []
+args = ["-y", "@upstash/context7-mcp"]
+priority = 0
+transport = "stdio"

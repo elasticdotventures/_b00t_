@@ -14,11 +14,11 @@ fi
 
 # b00t is a collection of environment detection
 if [ -f ~/.dotfiles/_b00t_/_b00t_.bashrc ] ; then
-    if [ "${CLAUDECODE:-}" = "1" ]; then
-        echo "🥾 _b00t_ `b00t-cli --version`"
-    else    
-        echo "🥾 _b00t_"
-    fi
+    ##if [ "${CLAUDECODE:-}" = "1" ]; then
+    ##    echo "🥾 _b00t_ `b00t-cli --version`"
+    ##else    
+    ##    echo "🥾 _b00t_"
+    ##fi
 
     . ~/.dotfiles/_b00t_/_b00t_.bashrc
 
@@ -36,16 +36,16 @@ if [ -f ~/.dotfiles/_b00t_/_b00t_.bashrc ] ; then
     fi
      ## Agent detection handled at top of .bash_profile (single source of truth)
 
-    echo "/🥾"
+    #echo "/🥾"
 fi
 
 
 
 # when .bash_profile exists then it runs before .bashrc and must call .bashrc
 if [ -f ~/.bashrc ]; then
-    echo "🐚 ~/.bashrc"
+    ## echo "🐚 ~/.bashrc"
     . ~/.bashrc
-    echo "/🐚"
+    ## echo "/🐚"
 fi
 
 # read .env and export each var
@@ -98,9 +98,9 @@ elif [[ ! -d ~/.dotfiles/vscode.🆚/code-connect ]]; then
 
     # vscode
     # [[ "$TERM_PROGRAM" == "vscode" ]] && . "$(code --locate-shell-integration-path bash)"
-    echo '✅🆚 vscode (remote)'
-else
-    echo "🙈🆚 no vscode"
+    ## echo '✅🆚 vscode (remote)'
+##else
+    ## echo "🙈🆚 no vscode"
 fi
 
 # git config --global core.editor "'{path to editor}' -n -w"
@@ -146,11 +146,13 @@ eval "$(starship init bash)"
 
 # detect podman
 if command -v podman &> /dev/null; then
-    echo "✅🐳 podman"
+    ## echo "✅🐳 podman"
     alias docker=podman
     export PODMAN_MACHINE_NAME=$( podman machine list --format '{{.Name}}' | grep '*' | tr -d '*' )
     if [ -z "$PODMAN_MACHINE_NAME" ]; then
-        echo '🙈🐳 no podman machine found (this is fine)'
+    
+        ## echo '🙈🐳 no podman machine found (this is fine)'
+        echo ""
     else
         export PODMAN_SOCKET=$(podman machine inspect ${PODMAN_MACHINE_NAME} | jq -r '.[].ConnectionInfo.PodmanSocket.Path')
         #export PODMAN_SOCKET=$(ls $XDG_RUNTIME_DIR/podman/podman.sock)
@@ -168,15 +170,15 @@ elif command -v docker &> /dev/null; then
 #     # TODO: check group
 #     # sudo usermod -aG docker $USER
 #     # newgrp docker ??
-else
-    echo "🙈🐳 no docker"
+## else
+    ## echo "🙈🐳 no docker"
 fi
 
 
 
 if [ -f ~/.huggingface/token ] ; then
  export HUGGING_FACE_HUB_TOKEN=$(cat ~/.huggingface/token)
- echo "🤗 HUGGING_FACE_HUB_TOKEN is set"
+ ## echo "🤗 HUGGING_FACE_HUB_TOKEN is set"
 fi
 
 if [ -f /usr/local/cuda ] ; then
@@ -189,15 +191,15 @@ fi
 if [ -f "$HOME/.local/bin/uv" ]; then
     # Created by `pipx` on 2024-01-10 08:51:49
     export PATH="$PATH:$HOME/.local/bin"
-else
-    echo "🙈🐍 no uv"
+## else
+    ## echo "🙈🐍 no uv"
 fi
 
 
 if [ -f ~/.cargo/env ]; then
     . "$HOME/.cargo/env"
-else
-    echo "🙈🦀 no cargo"
+## else
+    ## echo "🙈🦀 no cargo"
 fi
 
 
@@ -215,12 +217,12 @@ if [ -f ~/.kube/completion.bash.inc ]; then
     source ~/.kube/completion.bash.inc
 fi
 if command -v kubectl &> /dev/null; then
-    echo "☸ 💯 kubectl"
+    ## echo "☸ 💯 kubectl"
     alias k=kubectl
     source <(kubectl completion bash)
     complete -o default -F __start_kubectl k
 elif command -v minikube &> /dev/null; then
-    echo "☸️🤏🏻minikube" ️
+    ## echo "☸️🤏🏻minikube" ️
     alias kubectl="minikube kubectl --"
     alias k=kubectl
 
@@ -237,7 +239,7 @@ elif command -v minikube &> /dev/null; then
     #echo 'alias k=kubectl' >>~/.bashrc
     #echo 'complete -o default -F __start_kubectl k' >>~/.bashrc
 fi
-echo "☸  KUBECONFIG: $KUBECONFIG"
+## echo "☸  KUBECONFIG: $KUBECONFIG"
 
 
 
@@ -245,7 +247,7 @@ echo "☸  KUBECONFIG: $KUBECONFIG"
 # detect bun
 if command -v bun &> /dev/null; then
     # bun
-    echo "✅🍞 bun"
+    ## echo "✅🍞 bun"
     export BUN_INSTALL="$HOME/.bun"
     export PATH=$BUN_INSTALL/bin:$PATH
 fi
@@ -258,24 +260,24 @@ if command -v nvm &> /dev/null; then
     # nvm use default
 
     NODE_VERSION=$(node --version)
-    echo "✅🦄 has nvm node $NODE_VERSION"
+    ## echo "✅🦄 has nvm node $NODE_VERSION"
     export NVM_DIR="$HOME/.nvm"
     [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh" # This loads nvm
     [ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion" # This loads nvm bash_completion
-else
-    echo "🙈🦄 no nvm"
+## else
+    ## echo "🙈🦄 no nvm"
 fi
 
 # check for latest _b00t_ version
 _B00T_LOCAL_VERSION=$(git -C ~/.dotfiles/ describe --tags --abbrev=0)
 _B00T_LATEST_VERSION=$(gh release --repo elasticdotventures/dotfiles view --json tagName -q .tagName)
-if [ -z "$_B00T_LOCAL_VERSION" ]; then
-    echo "🙈🥾 no _b00t_ version"
-elif [ "$_B00T_LOCAL_VERSION" != "$_B00T_LATEST_VERSION" ]; then
-    echo "😟🥾 _b00t_ version $_B00T_LOCAL_VERSION is not the latest $_B00T_LATEST_VERSION"
-else
-    echo "😁🥾 local _b00t_ version $_B00T_LOCAL_VERSION"
-fi
+##if [ -z "$_B00T_LOCAL_VERSION" ]; then
+    ## echo "🙈🥾 no _b00t_ version"
+##elif [ "$_B00T_LOCAL_VERSION" != "$_B00T_LATEST_VERSION" ]; then
+    ## echo "😟🥾 _b00t_ version $_B00T_LOCAL_VERSION is not the latest $_B00T_LATEST_VERSION"
+##else
+    ## echo "😁🥾 local _b00t_ version $_B00T_LOCAL_VERSION"
+##fi
 
 
 ## I don't like nix
@@ -284,7 +286,7 @@ fi
 ## setup a global uv
 if [ -f ~/.venv/bin/activate ] ; then
     source .venv/bin/activate
-    echo "🐍 ~/.venv/bin/activate"
+    ## echo "🐍 ~/.venv/bin/activate"
 fi
 
 # check for uv
