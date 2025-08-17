@@ -1,0 +1,54 @@
+[package]
+name = "b00t-acp"
+version = "0.1.0"
+edition = "2021"
+description = "Agent Coordination Protocol (ACP) StepSync implementation in Rust"
+license = "MIT"
+repository = "https://github.com/promptexecution/b00t"
+keywords = ["agent", "coordination", "protocol", "nats", "messaging"]
+categories = ["network-programming", "web-programming"]
+authors = ["PromptExecution <noreply@promptexecution.com>"]
+
+# [workspace] - removed to avoid conflict with parent workspace
+
+[lib]
+name = "b00t_acp"
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+async-nats = "0.36"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+tokio = { version = "1.0", features = ["full"] }
+uuid = { version = "1.0", features = ["v4", "serde"] }
+thiserror = "1.0"
+chrono = { version = "0.4", features = ["serde"] }
+tracing = "0.1"
+anyhow = "1.0"
+futures = "0.3"
+
+# Python bindings - using compatible version
+pyo3 = { version = "0.25", features = ["extension-module"], optional = true }
+
+# JavaScript/TypeScript bindings  
+wasm-bindgen = { version = "0.2", optional = true }
+js-sys = { version = "0.3", optional = true }
+web-sys = { version = "0.3", optional = true }
+serde-wasm-bindgen = { version = "0.6", optional = true }
+
+[dev-dependencies]
+tracing-subscriber = "0.3"
+rand = "0.8"
+
+[features]
+default = []
+python = ["pyo3"]
+wasm = ["wasm-bindgen", "js-sys", "web-sys", "serde-wasm-bindgen"]
+
+[profile.release]
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true
+
+# Examples are in examples/ directory, not as bins

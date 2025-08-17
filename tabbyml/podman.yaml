@@ -1,0 +1,48 @@
+# tabby-deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tabby-deployment
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: tabby
+  template:
+    metadata:
+      labels:
+        app: tabby
+    spec:
+      containers:
+        - name: tabby
+          image: registry.tabbyml.com/tabbyml/tabby
+          command: ["serve", "--model", "StarCoder-1B", "--chat-model", "Qwen2-1.5B-Instruct", "--device", "cuda"]
+          ports:
+            - containerPort: 9090
+          volumeMounts:
+            - name: tabby-data
+              mountPath: /data
+          resources:
+            limits:
+              nvidia.com/gpu: 1  # request a single GPU from the NVIDIA plugin
+      volumes:
+        - name: tabby-data
+          hostPath:
+            path: /home/brianh/.tabby-client  # adjust to your actual path
+
+---
+# tabby-service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: tabby-service
+spec:
+  selector:
+    app: tabby
+  ports:
+    - port: 9090
+      targetPort: 9090
+      protocol: TCP
+      name: http
+  type: NodePort  # or LoadBalancer if you want a public IP
+

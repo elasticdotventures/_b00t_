@@ -55,4 +55,5 @@ alias tf=tofu
 # source "$HOME/.rye/env"
 
 ## note: all k8s k= kubectl minikube should be in .bash_profile
+alias nsc='podman run --rm docker.io/natsio/nats-box:latest nsc'
 

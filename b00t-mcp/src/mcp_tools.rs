@@ -516,6 +516,275 @@ pub struct GrokStatusCommand;
 
 impl_mcp_tool!(GrokStatusCommand, "b00t_grok_status", ["grok", "status"]);
 
+// ACP Hive coordination MCP tools
+
+/// MCP command for joining a hive mission
+#[derive(Parser, Clone)]
+pub struct AcpHiveJoinCommand {
+    #[arg(help = "Mission identifier")]
+    pub mission_id: String,
+
+    #[arg(help = "Agent role in the mission")]
+    pub role: String,
+
+    #[arg(long, help = "Agent namespace (defaults to account.username)")]
+    pub namespace: Option<String>,
+
+    #[arg(long, help = "NATS server URL (defaults to c010.promptexecution.com:4222)")]
+    pub nats_url: Option<String>,
+}
+
+impl_mcp_tool!(AcpHiveJoinCommand, "b00t_acp_hive_join", ["acp", "hive", "join"]);
+
+/// MCP command for creating a hive mission
+#[derive(Parser, Clone)]
+pub struct AcpHiveCreateCommand {
+    #[arg(help = "Mission identifier")]
+    pub mission_id: String,
+
+    #[arg(help = "Expected number of agents")]
+    pub expected_agents: usize,
+
+    #[arg(help = "Mission description")]
+    pub description: String,
+
+    #[arg(help = "Agent role in the mission")]
+    pub role: String,
+
+    #[arg(long, help = "Agent namespace (defaults to account.username)")]
+    pub namespace: Option<String>,
+
+    #[arg(long, help = "NATS server URL (defaults to c010.promptexecution.com:4222)")]
+    pub nats_url: Option<String>,
+}
+
+impl_mcp_tool!(AcpHiveCreateCommand, "b00t_acp_hive_create", ["acp", "hive", "create"]);
+
+/// MCP command for sending status to hive
+#[derive(Parser, Clone)]
+pub struct AcpHiveStatusCommand {
+    #[arg(help = "Mission identifier")]
+    pub mission_id: String,
+
+    #[arg(help = "Status description")]
+    pub description: String,
+
+    #[arg(long, help = "Optional payload data (JSON)")]
+    pub payload: Option<String>,
+}
+
+impl_mcp_tool!(AcpHiveStatusCommand, "b00t_acp_hive_status", ["acp", "hive", "status"]);
+
+/// MCP command for proposing actions to hive
+#[derive(Parser, Clone)]
+pub struct AcpHiveProposeCommand {
+    #[arg(help = "Mission identifier")]
+    pub mission_id: String,
+
+    #[arg(help = "Action to propose")]
+    pub action: String,
+
+    #[arg(long, help = "Optional action payload (JSON)")]
+    pub payload: Option<String>,
+}
+
+impl_mcp_tool!(AcpHiveProposeCommand, "b00t_acp_hive_propose", ["acp", "hive", "propose"]);
+
+/// MCP command for step synchronization
+#[derive(Parser, Clone)]
+pub struct AcpHiveSyncCommand {
+    #[arg(help = "Mission identifier")]
+    pub mission_id: String,
+
+    #[arg(help = "Target step to synchronize to")]
+    pub target_step: u64,
+
+    #[arg(long, help = "Timeout in seconds", default_value = "60")]
+    pub timeout_seconds: u64,
+}
+
+impl_mcp_tool!(AcpHiveSyncCommand, "b00t_acp_hive_sync", ["acp", "hive", "sync"]);
+
+/// MCP command for signaling step readiness
+#[derive(Parser, Clone)]
+pub struct AcpHiveReadyCommand {
+    #[arg(help = "Mission identifier")]
+    pub mission_id: String,
+
+    #[arg(help = "Step to signal readiness for")]
+    pub target_step: u64,
+}
+
+impl_mcp_tool!(AcpHiveReadyCommand, "b00t_acp_hive_ready", ["acp", "hive", "ready"]);
+
+/// MCP command for showing hive status
+#[derive(Parser, Clone)]
+pub struct AcpHiveShowCommand {
+    #[arg(help = "Mission identifier (optional - shows all missions if not specified)")]
+    pub mission_id: Option<String>,
+}
+
+impl_mcp_tool!(AcpHiveShowCommand, "b00t_acp_hive_show", ["acp", "hive", "show"]);
+
+/// MCP command for leaving hive mission
+#[derive(Parser, Clone)]
+pub struct AcpHiveLeaveCommand {
+    #[arg(help = "Mission identifier")]
+    pub mission_id: String,
+}
+
+impl_mcp_tool!(AcpHiveLeaveCommand, "b00t_acp_hive_leave", ["acp", "hive", "leave"]);
+
+// Custom implementations for ACP hive tools
+use crate::acp_tools::*;
+
+impl crate::clap_reflection::McpExecutor for AcpHiveJoinCommand {
+    fn execute_mcp_call(params: &std::collections::HashMap<String, serde_json::Value>) -> anyhow::Result<String> {
+        let join_params = crate::acp_tools::JoinHiveParams {
+            mission_id: params.get("mission_id")
+                .and_then(|v| v.as_str())
+                .ok_or_else(|| anyhow::anyhow!("Missing mission_id parameter"))?
+                .to_string(),
+            role: params.get("role")
+                .and_then(|v| v.as_str())
+                .ok_or_else(|| anyhow::anyhow!("Missing role parameter"))?
+                .to_string(),
+            namespace: params.get("namespace").and_then(|v| v.as_str()).map(|s| s.to_string()),
+            nats_url: params.get("nats_url").and_then(|v| v.as_str()).map(|s| s.to_string()),
+        };
+        
+        tokio::runtime::Runtime::new()?.block_on(acp_hive_join(join_params))
+    }
+}
+
+impl crate::clap_reflection::McpExecutor for AcpHiveCreateCommand {
+    fn execute_mcp_call(params: &std::collections::HashMap<String, serde_json::Value>) -> anyhow::Result<String> {
+        let create_params = crate::acp_tools::CreateHiveParams {
+            mission_id: params.get("mission_id")
+                .and_then(|v| v.as_str())
+                .ok_or_else(|| anyhow::anyhow!("Missing mission_id parameter"))?
+                .to_string(),
+            expected_agents: params.get("expected_agents")
+                .and_then(|v| v.as_u64())
+                .ok_or_else(|| anyhow::anyhow!("Missing expected_agents parameter"))? as usize,
+            description: params.get("description")
+                .and_then(|v| v.as_str())
+                .ok_or_else(|| anyhow::anyhow!("Missing description parameter"))?
+                .to_string(),
+            role: params.get("role")
+                .and_then(|v| v.as_str())
+                .ok_or_else(|| anyhow::anyhow!("Missing role parameter"))?
+                .to_string(),
+            namespace: params.get("namespace").and_then(|v| v.as_str()).map(|s| s.to_string()),
+            nats_url: params.get("nats_url").and_then(|v| v.as_str()).map(|s| s.to_string()),
+        };
+        
+        tokio::runtime::Runtime::new()?.block_on(acp_hive_create(create_params))
+    }
+}
+
+impl crate::clap_reflection::McpExecutor for AcpHiveStatusCommand {
+    fn execute_mcp_call(params: &std::collections::HashMap<String, serde_json::Value>) -> anyhow::Result<String> {
+        let status_params = crate::acp_tools::HiveStatusParams {
+            mission_id: params.get("mission_id")
+                .and_then(|v| v.as_str())
+                .ok_or_else(|| anyhow::anyhow!("Missing mission_id parameter"))?
+                .to_string(),
+            description: params.get("description")
+                .and_then(|v| v.as_str())
+                .ok_or_else(|| anyhow::anyhow!("Missing description parameter"))?
+                .to_string(),
+            payload: params.get("payload").and_then(|v| {
+                if v.is_string() {
+                    v.as_str().and_then(|s| serde_json::from_str(s).ok())
+                } else {
+                    Some(v.clone())
+                }
+            }),
+        };
+        
+        tokio::runtime::Runtime::new()?.block_on(acp_hive_status(status_params))
+    }
+}
+
+impl crate::clap_reflection::McpExecutor for AcpHiveProposeCommand {
+    fn execute_mcp_call(params: &std::collections::HashMap<String, serde_json::Value>) -> anyhow::Result<String> {
+        let propose_params = crate::acp_tools::HiveProposeParams {
+            mission_id: params.get("mission_id")
+                .and_then(|v| v.as_str())
+                .ok_or_else(|| anyhow::anyhow!("Missing mission_id parameter"))?
+                .to_string(),
+            action: params.get("action")
+                .and_then(|v| v.as_str())
+                .ok_or_else(|| anyhow::anyhow!("Missing action parameter"))?
+                .to_string(),
+            payload: params.get("payload").and_then(|v| {
+                if v.is_string() {
+                    v.as_str().and_then(|s| serde_json::from_str(s).ok())
+                } else {
+                    Some(v.clone())
+                }
+            }),
+        };
+        
+        tokio::runtime::Runtime::new()?.block_on(acp_hive_propose(propose_params))
+    }
+}
+
+impl crate::clap_reflection::McpExecutor for AcpHiveSyncCommand {
+    fn execute_mcp_call(params: &std::collections::HashMap<String, serde_json::Value>) -> anyhow::Result<String> {
+        let sync_params = crate::acp_tools::HiveStepSyncParams {
+            mission_id: params.get("mission_id")
+                .and_then(|v| v.as_str())
+                .ok_or_else(|| anyhow::anyhow!("Missing mission_id parameter"))?
+                .to_string(),
+            target_step: params.get("target_step")
+                .and_then(|v| v.as_u64())
+                .ok_or_else(|| anyhow::anyhow!("Missing target_step parameter"))?,
+            timeout_seconds: params.get("timeout_seconds").and_then(|v| v.as_u64()),
+        };
+        
+        tokio::runtime::Runtime::new()?.block_on(acp_hive_sync(sync_params))
+    }
+}
+
+impl crate::clap_reflection::McpExecutor for AcpHiveReadyCommand {
+    fn execute_mcp_call(params: &std::collections::HashMap<String, serde_json::Value>) -> anyhow::Result<String> {
+        let ready_params = crate::acp_tools::HiveStepSyncParams {
+            mission_id: params.get("mission_id")
+                .and_then(|v| v.as_str())
+                .ok_or_else(|| anyhow::anyhow!("Missing mission_id parameter"))?
+                .to_string(),
+            target_step: params.get("target_step")
+                .and_then(|v| v.as_u64())
+                .ok_or_else(|| anyhow::anyhow!("Missing target_step parameter"))?,
+            timeout_seconds: None,
+        };
+        
+        tokio::runtime::Runtime::new()?.block_on(acp_hive_ready(ready_params))
+    }
+}
+
+impl crate::clap_reflection::McpExecutor for AcpHiveShowCommand {
+    fn execute_mcp_call(params: &std::collections::HashMap<String, serde_json::Value>) -> anyhow::Result<String> {
+        let show_params = crate::acp_tools::HiveShowParams {
+            mission_id: params.get("mission_id").and_then(|v| v.as_str()).map(|s| s.to_string()),
+        };
+        
+        tokio::runtime::Runtime::new()?.block_on(acp_hive_show(show_params))
+    }
+}
+
+impl crate::clap_reflection::McpExecutor for AcpHiveLeaveCommand {
+    fn execute_mcp_call(params: &std::collections::HashMap<String, serde_json::Value>) -> anyhow::Result<String> {
+        let leave_params = crate::acp_tools::HiveShowParams {
+            mission_id: params.get("mission_id").and_then(|v| v.as_str()).map(|s| s.to_string()),
+        };
+        
+        tokio::runtime::Runtime::new()?.block_on(acp_hive_leave(leave_params))
+    }
+}
+
 /// Create and populate a registry with all available MCP tools
 pub fn create_mcp_registry() -> McpCommandRegistry {
     let mut builder = McpCommandRegistry::builder();
@@ -560,7 +829,16 @@ pub fn create_mcp_registry() -> McpCommandRegistry {
         .register::<GrokDigestCommand>()
         .register::<GrokAskCommand>()
         .register::<GrokLearnCommand>()
-        .register::<GrokStatusCommand>();
+        .register::<GrokStatusCommand>()
+        // ACP Hive coordination tools
+        .register::<AcpHiveJoinCommand>()
+        .register::<AcpHiveCreateCommand>()
+        .register::<AcpHiveStatusCommand>()
+        .register::<AcpHiveProposeCommand>()
+        .register::<AcpHiveSyncCommand>()
+        .register::<AcpHiveReadyCommand>()
+        .register::<AcpHiveShowCommand>()
+        .register::<AcpHiveLeaveCommand>();
 
     builder.build()
 }
