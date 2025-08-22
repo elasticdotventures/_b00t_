@@ -2,7 +2,7 @@
 
 use crate::{
     ACPMessage, MessageType, StepBarrier, NatsTransport,
-    ACPError, Result, JsonValue
+    ACPError, Result, JsonValue, AcpJwtValidator, AcpSecurityContext, NamespaceEnforcer
 };
 use crate::transport::NatsConfig;
 use std::collections::HashMap;
@@ -19,7 +19,7 @@ pub struct AgentConfig {
     pub agent_id: String,
     /// NATS server URL
     pub nats_url: String,
-    /// GitHub user namespace (e.g., "account.elasticdotventures")
+    /// Hive namespace (e.g., "account.{hive}.{role}")
     pub namespace: String,
     /// JWT token for NATS authentication
     pub jwt_token: Option<String>,
@@ -30,13 +30,22 @@ pub struct AgentConfig {
 }
 
 impl AgentConfig {
-    /// Create new agent config
+    /// Create new agent config with environment variable support
     pub fn new(agent_id: String, nats_url: String, namespace: String) -> Self {
+        let nats_url = if nats_url.is_empty() {
+            std::env::var("NATS_URL")
+                .unwrap_or_else(|_| "nats://c010.promptexecution.com:4222".to_string())
+        } else {
+            nats_url
+        };
+
+        let jwt_token = std::env::var("B00T_HIVE_JWT").ok();
+
         Self {
             agent_id,
             nats_url,
             namespace,
-            jwt_token: None,
+            jwt_token,
             role: "ai-assistant".to_string(),
             timeout_ms: 30000,
         }
@@ -58,6 +67,11 @@ impl AgentConfig {
     pub fn with_timeout(mut self, timeout_ms: u64) -> Self {
         self.timeout_ms = timeout_ms;
         self
+    }
+
+    /// Create agent config using environment variables for NATS and JWT
+    pub fn from_env(agent_id: String, namespace: String) -> Self {
+        Self::new(agent_id, String::new(), namespace)
     }
 
     /// Validate configuration
@@ -85,6 +99,10 @@ pub struct Agent {
     step_barrier: Arc<Mutex<StepBarrier>>,
     message_handlers: Arc<Mutex<HashMap<MessageType, Box<dyn Fn(&ACPMessage) + Send + Sync>>>>,
     running: Arc<Mutex<bool>>,
+    /// Security context for JWT-based namespace enforcement
+    security_context: Option<AcpSecurityContext>,
+    /// Namespace enforcer for validating operations
+    namespace_enforcer: Option<NamespaceEnforcer>,
 }
 
 impl Agent {
@@ -105,6 +123,40 @@ impl Agent {
             StepBarrier::new(vec![config.agent_id.clone()], config.timeout_ms)
         ));
 
+        // Initialize security context if JWT is provided
+        let (security_context, namespace_enforcer) = if let Some(jwt_token) = &config.jwt_token {
+            info!("Validating JWT token for agent '{}'", config.agent_id);
+            
+            // For development, we'll use a placeholder validator
+            // In production, this would use the actual operator JWT
+            let validator = AcpJwtValidator::new("placeholder_secret".to_string());
+            
+            match validator.validate_jwt(jwt_token) {
+                Ok(security_ctx) => {
+                    // Verify namespace matches config
+                    if security_ctx.namespace != config.namespace {
+                        return Err(ACPError::authentication_failed(format!(
+                            "JWT namespace '{}' does not match config namespace '{}'",
+                            security_ctx.namespace, config.namespace
+                        )));
+                    }
+                    
+                    let enforcer = NamespaceEnforcer::new(security_ctx.clone());
+                    info!("Agent '{}' authenticated for namespace '{}'", config.agent_id, security_ctx.namespace);
+                    (Some(security_ctx), Some(enforcer))
+                },
+                Err(e) => {
+                    warn!("JWT validation failed for agent '{}': {}", config.agent_id, e);
+                    // For development, continue without security context
+                    // In production, this should be an error
+                    (None, None)
+                }
+            }
+        } else {
+            info!("No JWT provided for agent '{}' - running in development mode", config.agent_id);
+            (None, None)
+        };
+
         info!("Agent '{}' initialized", config.agent_id);
 
         Ok(Self {
@@ -113,6 +165,8 @@ impl Agent {
             step_barrier,
             message_handlers: Arc::new(Mutex::new(HashMap::new())),
             running: Arc::new(Mutex::new(false)),
+            security_context,
+            namespace_enforcer,
         })
     }
 
@@ -423,5 +477,19 @@ mod tests {
         assert_eq!(config.jwt_token, Some("jwt-token".to_string()));
         assert_eq!(config.role, "ci-cd");
         assert_eq!(config.timeout_ms, 60000);
+    }
+    
+    #[test]
+    fn test_agent_config_from_env() {
+        // Test environment variable fallback
+        let config = AgentConfig::from_env(
+            "test-agent".to_string(),
+            "account.test".to_string()
+        );
+        
+        assert_eq!(config.agent_id, "test-agent");
+        assert_eq!(config.namespace, "account.test");
+        // NATS URL should fall back to default since no env var is set in test
+        assert!(config.nats_url.contains("c010.promptexecution.com"));
     }
 }
