@@ -1,0 +1,32 @@
+[Unit]
+Description=b00t SOCKS5 Proxy Service (koblas)
+Documentation=https://github.com/ynuwenhof/koblas
+After=network.target
+Wants=network.target
+
+[Service]
+Type=exec
+# Note: USER must be set during installation
+User=${USER}
+Group=${USER}
+ExecStart=${DOTFILES_DIR}/scripts/socks5.sh
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+# Security hardening
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=${DOTFILES_DIR}
+
+# Environment
+Environment=KOBLAS_ADDRESS=0.0.0.0
+Environment=RUST_LOG=info
+Environment=KOBLAS_NO_AUTHENTICATION=true
+Environment=KOBLAS_ANONYMIZE=false
+
+[Install]
+WantedBy=multi-user.target

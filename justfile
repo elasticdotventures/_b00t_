@@ -7,7 +7,7 @@ repo-root := env_var_or_default("JUST_REPO_ROOT", `git rev-parse --show-toplevel
 set shell := ["bash", "-cu"]
 mod cog
 mod b00t
-# this is an antipattens
+# this is an antipattens  
 mod litellm '_b00t_/litellm/justfile'
 
 stow:
@@ -198,5 +198,11 @@ browser-ext-dev:
     npm run dev
 
 socks5:
-    docker run -d -p 1080:1080   -v ./koblas.toml:/etc/koblas/config.toml   -e RUST_LOG=debug   -e KOBLAS_NO_AUTHENTICATION=true   -e KOBLAS_ANONYMIZE=false   --name koblas docker.io/ynuwenhof/koblas:latest
+    {{repo-root}}/scripts/socks5.sh
+
+port-map:
+    {{repo-root}}/scripts/port-map.sh
+
+install-services:
+    {{repo-root}}/scripts/install-systemd-services.sh 
 
