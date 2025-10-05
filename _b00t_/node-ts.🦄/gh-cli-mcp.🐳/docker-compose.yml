@@ -1,0 +1,11 @@
+services:
+  gh-cli-mcp:
+    image: elasticventures/gh-cli-mcp:20
+    environment:
+      GH_TOKEN: ${GH_TOKEN:-}
+      ARGS: --org elastic-ventures --verbose
+    stdin_open: true
+    tty: false
+    volumes:
+      - ${HOME}/workspace:/workspace
+
