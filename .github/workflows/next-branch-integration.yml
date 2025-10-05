@@ -1,0 +1,86 @@
+name: Next Branch Integration
+
+on:
+  workflow_dispatch:
+  pull_request:
+    types:
+      - opened
+      - reopened
+      - edited
+      - synchronize
+
+permissions:
+  contents: write
+  pull-requests: read
+
+concurrency:
+  group: next-branch-integration
+  cancel-in-progress: false
+
+jobs:
+  merge-open-prs:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Configure git author
+        run: |
+          git config user.name "github-actions[bot]" # output: set commit author name
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com" # output: set commit author email
+
+      - name: Merge open PRs into next
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -eo pipefail
+          declare -a success
+          declare -a failed
+
+          echo "Preparing local base" # output: status message
+          default_branch="$(gh api repos/"$REPO" -q .default_branch)" # output: default branch name
+          git fetch origin "$default_branch" # output: update local default branch
+          git checkout "$default_branch" # output: switch to default branch
+          git reset --hard "origin/$default_branch" # output: sync with remote default branch
+          git checkout -B next # output: create/reset next branch at default branch tip
+
+          pr_numbers="$(gh pr list --repo "$REPO" --state open --json number --limit 1000 --jq '.[].number' | sort -n)" # output: newline separated PR numbers
+
+          if [ -z "$pr_numbers" ]; then
+            echo "No open PRs; pushing clean next branch." # output: status message
+            git push origin next --force # output: force push updated next branch
+            exit 0
+          fi
+
+          while IFS= read -r pr; do
+            [ -z "$pr" ] && continue
+            ref="pull/$pr/head"
+            tmp_branch="tmp-pr-$pr"
+            echo "::group::Merging PR #$pr" # output: open log group per PR
+            git fetch origin "$ref:$tmp_branch" # output: fetch PR head locally
+            if git merge --no-ff --no-edit "$tmp_branch"; then
+              success+=("$pr")
+              git branch -D "$tmp_branch" >/dev/null 2>&1 || true # output: drop temp branch
+              echo "::notice title=PR #$pr merged::Integration succeeded." # output: success annotation
+              echo "::endgroup::" # output: close log group
+            else
+              git merge --abort >/dev/null 2>&1 || true # output: clean up failed merge
+              git branch -D "$tmp_branch" >/dev/null 2>&1 || true # output: drop temp branch
+              failed+=("$pr")
+              echo "::error title=PR #$pr conflict::⚠️ Manual resolution required before integration." # output: failure annotation
+              echo "::endgroup::" # output: close log group
+            fi
+          done <<< "$pr_numbers"
+
+          git push origin next --force # output: force push aggregated branch
+          echo "Merged PRs: ${success[*]}" # output: summary for successful merges
+          echo "Failed PRs: ${failed[*]}" # output: summary for failed merges
+
+          if [ "${#failed[@]}" -gt 0 ]; then
+            echo "::warning title=Conflicts detected::⚠️ Unable to integrate PRs #${failed[*]}." # output: summary warning
+            exit 1
+          fi

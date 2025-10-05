@@ -40,13 +40,13 @@ pub enum McpCommands {
         json: bool,
     },
     #[clap(
-        about = "Install MCP server to a target (claudecode, vscode, geminicli, dotmcpjson, stdout)",
-        long_about = "Install MCP server to a target application.\n\nExamples:\n  b00t-cli mcp install gh claudecode\n  b00t-cli mcp install filesystem geminicli --repo\n  b00t-cli mcp install browser-use dotmcpjson --stdio-command uvx\n  b00t-cli mcp install aws-knowledge dotmcpjson --httpstream\n  b00t-cli mcp install filesystem stdout\n  b00t-cli app vscode mcp install filesystem"
+        about = "Install MCP server to a target (claudecode, vscode, geminicli, dotmcpjson, roocode, stdout)",
+        long_about = "Install MCP server to a target application.\n\nExamples:\n  b00t-cli mcp install gh claudecode\n  b00t-cli mcp install filesystem geminicli --repo\n  b00t-cli mcp install browser-use dotmcpjson --stdio-command uvx\n  b00t-cli mcp install aws-knowledge dotmcpjson --httpstream\n  b00t-cli mcp install filesystem roocode\n  b00t-cli mcp install filesystem stdout\n  b00t-cli app vscode mcp install filesystem"
     )]
     Install {
         #[clap(help = "MCP server name")]
         name: String,
-        #[clap(help = "Installation target: claudecode, vscode, geminicli, dotmcpjson, stdout")]
+        #[clap(help = "Installation target: claudecode, vscode, geminicli, dotmcpjson, roocode, stdout")]
         target: String,
         #[clap(long, help = "Install to repository-specific location (for geminicli)")]
         repo: bool,
@@ -80,7 +80,7 @@ impl McpCommands {
                     crate::mcp_remove(name_or_json, path)
                 } else {
                     let actual_dwiw = !no_dwiw && *dwiw;
-                    
+
                     // Check if it's JSON mode (starts with { or -)
                     if name_or_json.starts_with('{') || name_or_json == "-" {
                         // JSON mode
@@ -94,13 +94,13 @@ impl McpCommands {
                         } else {
                             vec![]
                         };
-                        
+
                         let json_str = serde_json::json!({
                             "name": server_name,
                             "command": command,
                             "args": args
                         }).to_string();
-                        
+
                         crate::mcp_add_json(&json_str, actual_dwiw, path)
                     } else {
                         anyhow::bail!("Invalid register command. Use JSON format or command format with --");
@@ -135,13 +135,28 @@ impl McpCommands {
                     "dotmcpjson" => {
                         crate::dotmcpjson_install_mcp(name, path, stdio_command.as_deref(), *httpstream)
                     }
+                    "roocode" => {
+                        // Design with internal arrays so we can extend merge/symlink targets over time.
+                        // Primary write target is .roo/mcp.json. Merge from .mcp.json if present.
+                        // Then non-destructively symlink .roo/mcp.json to .mcp.json (skip if .mcp.json exists and is not a symlink).
+                        let merge_files: &[&str] = &[".roo/mcp.json", ".mcp.json"];
+                        let symlink_targets: &[&str] = &[".mcp.json"];
+                        crate::roocode_install_mcp(
+                            name,
+                            path,
+                            merge_files,
+                            symlink_targets,
+                            stdio_command.as_deref(),
+                            *httpstream,
+                        )
+                    }
                     "stdout" => {
                         // Output just the JSON for the specified server
                         crate::mcp_output(path, false, name)
                     }
                     _ => {
                         anyhow::bail!(
-                            "Error: Invalid target '{}'. Valid targets are: claudecode, vscode, geminicli, dotmcpjson, stdout",
+                            "Error: Invalid target '{}'. Valid targets are: claudecode, vscode, geminicli, dotmcpjson, roocode, stdout",
                             target
                         );
                     }
@@ -170,12 +185,12 @@ mod tests {
             no_dwiw: false,
             command_args: vec![],
         };
-        
+
         // This should fail because we don't have a valid test directory, but the command should parse correctly
         // The important thing is that it doesn't panic and processes the JSON correctly
         let result = register_cmd.execute("/tmp/nonexistent");
         assert!(result.is_err()); // Expected to fail due to invalid path, but should not panic
-        
+
         // Test install command enum creation
         let install_cmd = McpCommands::Install {
             name: "test-server".to_string(),
@@ -185,7 +200,7 @@ mod tests {
             stdio_command: None,
             httpstream: false,
         };
-        
+
         // This should fail because the server doesn't exist, but should not panic
         let result = install_cmd.execute("/tmp/nonexistent");
         assert!(result.is_err()); // Expected to fail, but should not panic
