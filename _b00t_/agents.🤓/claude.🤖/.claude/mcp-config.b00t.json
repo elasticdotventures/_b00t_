@@ -1,0 +1,21 @@
+{
+  "$schema": "https://modelcontextprotocol.io/schemas/2024-11-05/mcp.json",
+  "mcpServers": {
+    "b00t": {
+      "command": "docker",
+      "args": [
+        "run",
+        "--rm",
+        "-i",
+        "--network", "host",
+        "-v", "/var/run/docker.sock:/var/run/docker.sock",
+        "-v", "$HOME/.b00t:/home/node/.b00t:ro",
+        "-e", "B00T_MQTT_URL=mqtt://localhost:1883",
+        "b00t:latest",
+        "b00t-mcp"
+      ],
+      "env": {},
+      "disabled": false
+    }
+  }
+}
