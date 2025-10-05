@@ -1,71 +1,325 @@
+# Docker OCI Layer Composition System
 
-# 鲸鱼 - Jīngyú - Docker!  🐳
+Composable, single-source-of-truth Docker layer architecture for b00t and related tools.
 
-The Whale is Dockers official mascot & spirit animal. 
+## Architecture
 
-As such the 鲸鱼 (Whale) storytime log/namespace
+### Design Principles
 
-###
-For tools which don't have docker packages; there are a few ways, one is to
-fork and create your own container ci action and then send a pull request. 
+1. **Single Source of Truth**: Each tool maintains its own OCI layer
+2. **Composable**: Layers combine to create containers
+3. **No Duplication**: Shared dependencies in base layers
+4. **Metadata-Driven**: `layer.toml` defines capabilities
+5. **Alias System**: Each layer defines environment and aliases
 
-HOWEVER that is for suckers, the only docker image you need is eget
+### Directory Structure
 
+```
+docker.🐳/
+├── layers/                      # OCI layer definitions
+│   ├── debian-base/            # Base Debian system
+│   ├── ca-certificates/        # HTTPS certificates
+│   ├── build-essential/        # GCC, make, pkg-config
+│   ├── ssl-dev/                # OpenSSL development libs
+│   ├── ssl-runtime/            # OpenSSL runtime libs
+│   ├── git/                    # Git VCS
+│   ├── mosquitto-clients/      # MQTT clients
+│   └── rust-toolchain/         # Rust compiler & cargo
+├── b00t/                        # b00t container
+│   ├── Dockerfile.composed     # Multi-stage build from layers
+│   ├── build.sh                # Build script
+│   └── env.sh                  # Docker wrapper
+├── rust/                        # Legacy (replaced by layers)
+├── build-layers.sh             # Build all layers
+├── test-layers.sh              # Test layer composition
+├── LAYERS.md                   # Layer architecture docs
+└── README.md                   # This file
+```
 
-Once you have an image published like that (there isn't an official one for some reason 🤷‍♂️), then for projects like just you don't need a Dockerfile like this PR proposes.
+## Quick Start
 
+### 1. Clone Gospel
 
-FROM eget as downloader
-RUN eget casey/just --tag 1.42.4 --to /just
+```bash
+git clone https://github.com/elasticdotventures/dotfiles.git ~/.b00t
+```
 
-FROM scratch
-COPY --from=downloader /just /usr/local/bin/just
+### 2. Build Layers
 
+```bash
+cd /home/brianh/homeassistant/_b00t_/node-ts.🦄
+./docker.🐳/build-layers.sh
+```
 
+This builds all layers in dependency order:
+- `b00t-layer/debian-base:bookworm`
+- `b00t-layer/ca-certificates:bookworm`
+- `b00t-layer/build-essential:bookworm`
+- `b00t-layer/ssl-dev:bookworm`
+- `b00t-layer/ssl-runtime:bookworm`
+- `b00t-layer/git:2.43`
+- `b00t-layer/mosquitto-clients:2.0`
+- `b00t-layer/rust-toolchain:1.75`
 
-Notes: 
-The --tag and --to options are completely optional. By default they'll select the latest release (not always ideal, similar to the caveats I mentioned regarding how your PR handles tagging the image), and it'll download/extract into the current working directory.
+### 3. Build b00t
 
-UX will vary by repo as some projects manage releases a bit more broadly with assets attached or bad naming conventions that a tool like eget cannot infer which file to download without some additional filtering for guidance (supported via --asset).
+```bash
+./docker.🐳/b00t/build.sh
+```
 
-As you can see though it becomes vastly simpler for other images and reduces boilerplate.
+Composes b00t from layers (multi-stage build):
+- **Builder**: rust-toolchain + build-essential + ssl-dev
+- **Runtime**: debian-base + ssl-runtime + ca-certificates + git + mosquitto-clients
 
-FROM scratch
-RUN --mount=type=bind,from=eget:latest,source=/usr/local/bin/eget,target=/usr/local/bin/eget \
-  eget casey/just --tag 1.42.4 --to /usr/local/bin
- 
+### 4. Test Everything
 
+```bash
+./docker.🐳/test-layers.sh
+```
 
+Tests each layer individually and the composed b00t container.
 
-## get started with b00t
+### 5. Use b00t
 
-Docker creates "containers" for operating systems and installed packages. The containers start with a _base image_ and then are built by running a series of `RUN` commands to create _Layers_. 
+```bash
+# Source environment
+source docker.🐳/b00t/env.sh
 
-Containers are stored in servers known as Docker Repositories, similar to how Git projects are stored in hosted git repositories.  Docker repositories provide the container images to docker build processes. Docker by default uses docker.io also called "Docker Hub" as a registry which allows publishing of public Docker repos for free, and paid private plans.  If you publish a container which contains any KEYs, PASSWORDs, secret, etc. then hacker-bots can extract those from your container - so don't do that! _b00t_ v1 will attempt to establish a private registry using Azure Container Registry (ACR).
+# Run b00t-cli
+b00t --version
+b00t-cli --help
 
-Docker Layers behave similary to Git Branches or Python Virtual Environments. Anything that happens in a Docker container stays inside thatt container.  Docker containers by default expose no services and you must `EXPOSE` ports for ssh, http, https, etc. 
+# Run b00t-mcp
+b00t-mcp --help
+```
 
-Docker is smart - when updating/rebuilding a docker container only the layer which has changed and ALL layers following the modified layer are rebuilt.  Docker will often be a part of a developers "inner-loop" (rebuilding an image after each change).  To keep fast build times it's best to have layers which will change a lot towards the bottom/end. Usually this is why you're own layer (that you're developing) is last.  
+## Layer Details
 
-One important reason to use Docker is that the resulting containers are isolated from other containers.  _b00t_ believes that Idempotent containers - those which perform one task (or a series of similar tasks, using idempotent functions) and then shut-down are BEST and it is undesirable to have long running containers which handle many types of requests from a variety of users. 
+### Base Layers
 
-Containers can be booted, then stopped or "frozen" at the point they are ready & waiting for a request.  Then copies of the frozen container can be re-loaded faster than actually booting (or even have Hot-standbys that are pre-thawed to handle subsequent requests), or a docker server can be left running to handle many requests (such as gunicorn, uwsgi) where the request isolation happens at the 
+**debian-base** (~80MB)
+- Minimal Debian bookworm-slim
+- No dependencies
+- Foundation for all layers
 
-Docker-compose.yml, Azure Container Instances (ACI), and AWS ECS (Elastic Container Service) are both services for starting one or more containers and are built on top of docker-compose, which is part of "Swarm".  Docker Swarm itself is End-of-Life already but it's lineage lives on through ACI, ECS and others, although each service has it's own unique customizations.
+**ca-certificates** (~1MB)
+- CA certificates for HTTPS
+- Depends on: debian-base
+- Required by: git, rust-toolchain
 
-Kubernetes, groups containers together into "pods". The term "pods" is distinct to K8.  "K8" is Googles open-source contribution to container management - built on Docker Swarm. K8 is consider the direct successor by most people to Docker Swarm. k8 is also offer as a managed service by Azure Kubernetes Services (AKS) which is distinct from ACI.
+**build-essential** (~150MB)
+- gcc, g++, make, pkg-config
+- Depends on: debian-base
+- Required by: rust-toolchain (build only)
 
-_b00t_ approach is that k8 exists MOSTLY to accomodate older software architectures which require a plurality of instances running simulatenously to complete a task (distinctly "non-idempotent").  SO if you're building new software app using _b00t_ it's almost certainly better to use a serverless HTTP function so you don't even need to THINK about the operating system.  K8 is not presently part of _b00t_ despite it being extremely popular among prospective employers it (in the opinion of the _b00t_ author) only really suitable to operate in companies that are equivalently sized to Google. If your company is smaller than Google it's probably better to use a managed K8 service from your preferred cloud provider UNLESS you life plan is to become a professional administrator of docker pods.  There is almost always a better pattern and way to do things than starting a new build on K8. 
+### SSL Layers
 
-# Future: 
-# https://github.com/nestybox/sysbox
-# https://github.com/kata-containers/kata-containers
-# gvisor - probably not.
+**ssl-dev** (~5MB)
+- libssl-dev for building
+- Depends on: debian-base
+- Build-time only
 
+**ssl-runtime** (~2MB)
+- libssl3 for runtime
+- Depends on: debian-base
+- Runtime dependency
 
-## +++ MultiStage Builds
-# also notes on chaining files, etc.
-https://docs.docker.com/develop/develop-images/multistage-build/
+### Tool Layers
 
-# Really useful docker command list:
-https://spin.atomicobject.com/2018/10/04/docker-command-line/
+**git** (~30MB)
+- Git version control
+- Depends on: debian-base, ca-certificates
+- Provides: `git`
+- Has env.sh wrapper
+
+**mosquitto-clients** (~1MB)
+- MQTT client tools
+- Depends on: debian-base
+- Provides: `mosquitto_pub`, `mosquitto_sub`
+- Has env.sh wrapper
+
+**rust-toolchain** (~1.2GB)
+- Rust 1.75 compiler and cargo
+- Depends on: debian-base, build-essential, ssl-dev, ca-certificates
+- Provides: `cargo`, `rustc`, `rustup`, `rustfmt`
+- Has env.sh wrapper
+
+## Layer Composition
+
+### Multi-Stage Build Pattern
+
+```dockerfile
+# Build stage - compose build layers
+FROM b00t-layer/rust-toolchain:1.75 AS builder
+COPY --from=b00t-layer/build-essential:bookworm /usr /usr
+COPY --from=b00t-layer/ssl-dev:bookworm /usr /usr
+# ... build application ...
+
+# Runtime stage - compose runtime layers
+FROM b00t-layer/debian-base:bookworm AS runtime
+COPY --from=b00t-layer/ssl-runtime:bookworm /usr /usr
+COPY --from=b00t-layer/git:2.43 /usr /usr
+# ... copy built artifacts ...
+```
+
+### Benefits
+
+1. **Reusability**: Build rust-toolchain once, use everywhere
+2. **Cache Efficiency**: Layer changes only rebuild affected components
+3. **Version Management**: Independent layer versioning
+4. **Size Optimization**: Only include needed layers
+5. **Development Speed**: Fast iteration with layer caching
+
+## Individual Layer Usage
+
+Each layer can be used standalone via env.sh:
+
+```bash
+# Use git layer
+source docker.🐳/layers/git/env.sh
+git clone https://github.com/example/repo.git
+
+# Use rust layer
+source docker.🐳/layers/rust-toolchain/env.sh
+cargo build --release
+
+# Use mosquitto layer
+source docker.🐳/layers/mosquitto-clients/env.sh
+mosquitto_sub -h localhost -t "b00t/#"
+```
+
+## Adding New Layers
+
+### 1. Create Layer Directory
+
+```bash
+mkdir -p docker.🐳/layers/my-tool
+```
+
+### 2. Create Dockerfile
+
+```dockerfile
+# docker.🐳/layers/my-tool/Dockerfile
+FROM b00t-layer/debian-base:bookworm
+
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends my-tool && \
+    rm -rf /var/lib/apt/lists/*
+
+LABEL layer.name="my-tool" \
+      layer.version="1.0" \
+      layer.description="My tool description"
+```
+
+### 3. Create layer.toml
+
+```toml
+[layer]
+name = "my-tool"
+version = "1.0"
+description = "My tool description"
+
+[provides]
+binaries = ["my-tool"]
+libraries = []
+paths = ["/usr/bin"]
+
+[requires]
+layers = ["debian-base"]
+
+[runtime]
+layers = ["debian-base"]
+
+[aliases]
+my-tool = "my-tool"
+```
+
+### 4. Create env.sh (Optional)
+
+```bash
+#!/bin/bash
+_my_tool_docker() {
+    docker run --rm -it \
+        -v "$PWD":"$PWD" -w "$PWD" \
+        b00t-layer/my-tool:1.0 \
+        my-tool "$@"
+}
+alias my-tool='_my_tool_docker'
+```
+
+### 5. Add to build-layers.sh
+
+```bash
+build_layer "my-tool" || exit 1
+```
+
+## Maintenance
+
+### Rebuild Specific Layer
+
+```bash
+cd docker.🐳/layers/rust-toolchain
+docker build -t b00t-layer/rust-toolchain:1.75 .
+```
+
+### Rebuild All Layers
+
+```bash
+./docker.🐳/build-layers.sh
+```
+
+### Clean Up
+
+```bash
+# Remove all b00t layers
+docker images | grep "b00t-layer/" | awk '{print $3}' | xargs docker rmi
+
+# Remove b00t containers
+docker rmi b00t:aarch64 b00t:latest
+```
+
+## Integration with b00t Architecture
+
+This layer system supports the b00t architecture:
+
+- **Gospel Convention**: `~/.b00t` mounted read-only
+- **Agent Workspace**: `~/_b00t_` mounted read-write
+- **Skills**: Each skill (rust, node, python) is a layer
+- **MQTT**: mosquitto-clients layer for coordination
+- **Git**: git layer for memoization
+
+See [B00T-ARCHITECTURE.md](../B00T-ARCHITECTURE.md) for complete system design.
+
+## Troubleshooting
+
+### Layer Build Fails
+
+```bash
+# Check layer dependencies
+docker images | grep "b00t-layer/"
+
+# Rebuild dependencies first
+./docker.🐳/build-layers.sh
+```
+
+### b00t Build Fails
+
+```bash
+# Check gospel exists
+ls -la ~/.b00t
+
+# Rebuild layers
+./docker.🐳/build-layers.sh
+
+# Try build again
+./docker.🐳/b00t/build.sh
+```
+
+### Permission Errors
+
+Ensure `--user "$(id -u):$(id -g)"` in env.sh wrappers.
+
+---
+
+**Status**: Layer system implemented and ready for testing
+**Next**: Run `./docker.🐳/test-layers.sh` to validate
