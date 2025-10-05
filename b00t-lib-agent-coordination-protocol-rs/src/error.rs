@@ -93,6 +93,11 @@ impl ACPError {
         Self::AuthenticationFailed { reason: reason.into() }
     }
 
+    /// Create an authentication failed error (alias)
+    pub fn authentication_failed(reason: impl Into<String>) -> Self {
+        Self::AuthenticationFailed { reason: reason.into() }
+    }
+
     /// Create a permission denied error
     pub fn permission_denied(reason: impl Into<String>) -> Self {
         Self::PermissionDenied { reason: reason.into() }

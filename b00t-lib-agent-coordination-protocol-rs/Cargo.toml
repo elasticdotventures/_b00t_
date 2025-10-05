@@ -26,6 +26,10 @@ chrono = { version = "0.4", features = ["serde"] }
 tracing = "0.1"
 anyhow = "1.0"
 futures = "0.3"
+jsonwebtoken = "9.0"
+sha2 = "0.10"
+hex = "0.4"
+reqwest = { version = "0.12", features = ["json"] }
 
 # Python bindings - using compatible version
 pyo3 = { version = "0.25", features = ["extension-module"], optional = true }
