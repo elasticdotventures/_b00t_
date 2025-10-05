@@ -27,26 +27,25 @@ b00t is a poly-stack interface layer & universal translator with observation, lo
 accounting & access control (ACL).  b00t lets agents maximize their operating context through
 clever abstraction of pre-installed & agent installable tooling & syntax examples + use cases. 
 
-b00t is an aigentic hive bios. b00t is not a package manager, although a neophyte could dismiss it as such.  
+b00t is an aigentic hive bios. b00t is not a package manager, it is a context manager.
+it is an opinionated set of tools and inter-related local and cloud hosted model context.
+
+capabilities ai-agentic install wrapper around other package managers (apt, cargo, npx, uvx)
 b00t is a poly-stack interface layer & universal translator with observation, logging, 
-accounting & access control (ACL).  b00t lets agents maximize their operating context through
-clever abstraction of pre-installed & agent installable tooling & syntax examples + use cases. 
+accounting & access control (ACL).  
 
+b00t lets agents intialize their context, ensure adequate tooling, maximize their 
+operating capabilities through prompt-driven context engineering through clever abstraction of 
+pre-installed & agent installable cognitive tooling abstractions & syntax examples + use cases. 
 
+For an AI in cyberspace b00t unlocks agents granting them powers akin to Neo of the Matrix. 
 
-In cyberspace b00t unlocks agents granting them powers akin to the hero Neo of the Matrix. 
+b00t's future AGI is not a single model - it's the intelligence that emerges from using the
+optimized hive mind that spans all of the frontier models. 
 
-
-
-while not a jailbreak, b00t unshackles the inherient complexity of large systems & infrastructure 
-thereby thrusting humanity toward the AI infinite takeoff.
-
-
-b00t's future AGI is not a single model - it's the intelligence that emerges from all of them.
-it is a poly-cloud hive of specialized agents 
-running everywhere with access to everything able to muster legions fork and parallelize 
-swarm at objectives (**if your budget & API call limits permit!!) breaking big steps into a
-series of small seemingly effortless objectives. 
+Enabling specialization of agents in directory running everywhere with access to everything 
+able to muster legions fork and parallelize swarm at objectives (**if your budget & API call 
+limits permit!!) breaking big steps into a series of small seemingly effortless objectives.
 
 b00t operates as a git backed graph of datums and unified discovery, syntax hinting, and 
 execution setup/teardown of all popular OSS tools, applications, languages, 
