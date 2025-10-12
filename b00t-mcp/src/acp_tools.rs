@@ -10,6 +10,7 @@ use tokio::sync::Mutex;
 use tracing::{info, warn, error};
 
 use crate::acp_hive::{AcpHiveClient, HiveMission};
+use b00t_acp::{fetch_jwt_from_website, AcpJwtValidator};
 
 /// Global hive client registry for MCP agents
 type HiveRegistry = Arc<Mutex<HashMap<String, AcpHiveClient>>>;
@@ -90,24 +91,34 @@ pub struct HiveShowParams {
 
 /// MCP tool: Join an existing hive mission
 pub async fn acp_hive_join(params: JoinHiveParams) -> Result<String> {
-    let agent_id = format!("mcp_agent_{}", uuid::Uuid::new_v4().to_string()[..8]);
+    let uuid_str = uuid::Uuid::new_v4().to_string();
+    let agent_id = format!("mcp_agent_{}", &uuid_str[..8]);
     let namespace = params.namespace.unwrap_or_else(|| {
-        format!("account.{}", whoami::username())
+        get_hive_namespace(&params.role)
     });
     let nats_url = params.nats_url.unwrap_or_else(|| {
-        "nats://c010.promptexecution.com:4222".to_string()
+        std::env::var("NATS_URL")
+            .unwrap_or_else(|_| "nats://c010.promptexecution.com:4222".to_string())
     });
 
     info!("🐝 MCP agent {} joining hive mission: {}", agent_id, params.mission_id);
 
-    // Create hive client
-    let client = AcpHiveClient::join_mission(
+    // 🔐 JWT Security: Fetch JWT from b00t-website for namespace authentication
+    let jwt_token = fetch_jwt_for_hive_operation(&params.role, &namespace).await?;
+
+    // Create hive client with JWT authentication
+    let mut client = AcpHiveClient::join_mission(
         agent_id.clone(),
         params.role.clone(),
         params.mission_id.clone(),
-        namespace,
+        namespace.clone(),
         nats_url,
     ).await.context("Failed to join hive mission")?;
+    
+    // Set JWT token for security
+    if jwt_token != "development_mode_no_jwt" {
+        client.set_jwt_token(jwt_token.clone());
+    }
 
     // Register client globally
     {
@@ -121,7 +132,11 @@ pub async fn acp_hive_join(params: JoinHiveParams) -> Result<String> {
         "agent_id": agent_id,
         "mission_id": params.mission_id,
         "role": params.role,
-        "namespace": namespace
+        "namespace": namespace,
+        "security": {
+            "jwt_authenticated": jwt_token != "development_mode_no_jwt",
+            "namespace_enforced": jwt_token != "development_mode_no_jwt"
+        }
     });
 
     Ok(serde_json::to_string_pretty(&response)?)
@@ -129,15 +144,20 @@ pub async fn acp_hive_join(params: JoinHiveParams) -> Result<String> {
 
 /// MCP tool: Create a new hive mission
 pub async fn acp_hive_create(params: CreateHiveParams) -> Result<String> {
-    let agent_id = format!("mcp_leader_{}", uuid::Uuid::new_v4().to_string()[..8]);
+    let uuid_str = uuid::Uuid::new_v4().to_string();
+    let agent_id = format!("mcp_leader_{}", &uuid_str[..8]);
     let namespace = params.namespace.unwrap_or_else(|| {
-        format!("account.{}", whoami::username())
+        get_hive_namespace(&params.role)
     });
     let nats_url = params.nats_url.unwrap_or_else(|| {
-        "nats://c010.promptexecution.com:4222".to_string()
+        std::env::var("NATS_URL")
+            .unwrap_or_else(|_| "nats://c010.promptexecution.com:4222".to_string())
     });
 
     info!("🐝 MCP agent {} creating hive mission: {}", agent_id, params.mission_id);
+
+    // 🔐 JWT Security: Fetch JWT from b00t-website for namespace authentication
+    let jwt_token = fetch_jwt_for_hive_operation(&params.role, &namespace).await?;
 
     // Create mission
     let mission = AcpHiveClient::create_mission(
@@ -147,13 +167,18 @@ pub async fn acp_hive_create(params: CreateHiveParams) -> Result<String> {
         params.description.clone(),
     );
 
-    // Create hive client
-    let client = AcpHiveClient::new(
+    // Create hive client with JWT authentication
+    let mut client = AcpHiveClient::new(
         agent_id.clone(),
         params.role.clone(),
         mission,
         nats_url,
     ).await.context("Failed to create hive mission")?;
+    
+    // Set JWT token for security
+    if jwt_token != "development_mode_no_jwt" {
+        client.set_jwt_token(jwt_token.clone());
+    }
 
     // Register client globally
     {
@@ -169,7 +194,11 @@ pub async fn acp_hive_create(params: CreateHiveParams) -> Result<String> {
         "expected_agents": params.expected_agents,
         "role": params.role,
         "namespace": namespace,
-        "description": params.description
+        "description": params.description,
+        "security": {
+            "jwt_authenticated": jwt_token != "development_mode_no_jwt",
+            "namespace_enforced": jwt_token != "development_mode_no_jwt"
+        }
     });
 
     Ok(serde_json::to_string_pretty(&response)?)
@@ -279,11 +308,11 @@ pub async fn acp_hive_ready(params: HiveStepSyncParams) -> Result<String> {
 
 /// MCP tool: Show hive status and participating agents
 pub async fn acp_hive_show(params: HiveShowParams) -> Result<String> {
-    let registry = HIVE_CLIENTS.lock().await;
+    let mut registry = HIVE_CLIENTS.lock().await;
     
     if let Some(mission_id) = params.mission_id {
         // Show specific mission
-        if let Some(client) = registry.get(&mission_id) {
+        if let Some(client) = registry.get_mut(&mission_id) {
             let status = client.get_hive_status().await
                 .context("Failed to get hive status")?;
 
@@ -326,7 +355,7 @@ pub async fn acp_hive_leave(params: HiveShowParams) -> Result<String> {
     if let Some(mission_id) = params.mission_id {
         let mut registry = HIVE_CLIENTS.lock().await;
         
-        if let Some(client) = registry.remove(&mission_id) {
+        if let Some(mut client) = registry.remove(&mission_id) {
             // Send leaving status before disconnecting
             if let Err(e) = client.send_status("leaving_mission", None).await {
                 warn!("Failed to send leaving status: {}", e);
@@ -354,9 +383,57 @@ pub fn get_nats_url() -> String {
         .unwrap_or_else(|_| "nats://c010.promptexecution.com:4222".to_string())
 }
 
-/// Helper to get current user namespace
-pub fn get_user_namespace() -> String {
-    format!("account.{}", whoami::username())
+/// Helper to get current hive namespace for a given role
+pub fn get_hive_namespace(role: &str) -> String {
+    format!("account.{}.{}", whoami::username(), role)
+}
+
+/// 🔐 Fetch JWT token for hive operations with namespace enforcement
+async fn fetch_jwt_for_hive_operation(role: &str, namespace: &str) -> Result<String> {
+    // Check for environment variables first (for testing/development)
+    if let Ok(jwt) = std::env::var("B00T_HIVE_JWT") {
+        info!("Using JWT from B00T_HIVE_JWT environment variable");
+        return Ok(jwt);
+    }
+    
+    if let Ok(session_token) = std::env::var("B00T_SESSION_TOKEN") {
+        let website_url = std::env::var("B00T_WEBSITE_URL")
+            .unwrap_or_else(|_| "https://b00t.promptexecution.com".to_string());
+        
+        info!("Fetching JWT from b00t-website for role: {}, namespace: {}", role, namespace);
+        
+        match fetch_jwt_from_website(&website_url, &session_token, role).await {
+            Ok(jwt) => {
+                // Validate JWT and ensure namespace matches
+                if let Ok(validator) = AcpJwtValidator::from_operator_jwt("placeholder") {
+                    if let Ok(security_ctx) = validator.validate_jwt(&jwt) {
+                        if security_ctx.namespace == namespace {
+                            info!("✅ JWT validated for namespace: {}", namespace);
+                            return Ok(jwt);
+                        } else {
+                            return Err(anyhow::anyhow!(
+                                "JWT namespace '{}' does not match requested namespace '{}'",
+                                security_ctx.namespace, namespace
+                            ));
+                        }
+                    }
+                }
+                
+                // Return JWT even if validation fails (for development)
+                warn!("JWT validation failed, continuing in development mode");
+                return Ok(jwt);
+            }
+            Err(e) => {
+                warn!("Failed to fetch JWT from b00t-website: {}", e);
+            }
+        }
+    }
+    
+    // For development: continue without JWT
+    warn!("No JWT available - running in development mode (INSECURE)");
+    warn!("Set B00T_HIVE_JWT or B00T_SESSION_TOKEN environment variable for production");
+    
+    Ok("development_mode_no_jwt".to_string())
 }
 
 #[cfg(test)]

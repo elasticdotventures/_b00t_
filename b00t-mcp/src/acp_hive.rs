@@ -18,7 +18,7 @@ use b00t_acp::{Agent, AgentConfig, ACPMessage, MessageType};
 pub struct HiveMission {
     /// Unique mission identifier
     pub mission_id: String,
-    /// Mission namespace (e.g., account.username)
+    /// Mission namespace (e.g., account.{hive}.{role})
     pub namespace: String,
     /// Expected number of agents in the hive
     pub expected_agents: usize,
@@ -61,12 +61,13 @@ pub struct HiveStatus {
 }
 
 /// ACP Hive Client for MCP agent coordination
-#[derive(Clone)]
 pub struct AcpHiveClient {
     agent: Agent,
     mission: HiveMission,
     agent_status: AgentStatus,
     hive_status: HiveStatus,
+    /// JWT token for NATS authentication and namespace enforcement
+    jwt_token: Option<String>,
 }
 
 impl AcpHiveClient {
@@ -119,6 +120,7 @@ impl AcpHiveClient {
             mission,
             agent_status,
             hive_status,
+            jwt_token: None,
         })
     }
 
@@ -143,7 +145,7 @@ impl AcpHiveClient {
         info!("🐝 Sending hive status: {} (step {})", description, self.agent_status.step);
         
         // Send via ACP agent (stub for now)
-        self.agent.send_message(&message).await
+        self.agent.send_message(&message.subject(), &message).await
             .context("Failed to send status to hive")?;
 
         // Update local status
@@ -169,7 +171,7 @@ impl AcpHiveClient {
 
         info!("🐝 Proposing action to hive: {} (step {})", action, self.agent_status.step);
 
-        self.agent.send_message(&message).await
+        self.agent.send_message(&message.subject(), &message).await
             .context("Failed to propose action to hive")?;
 
         Ok(())
@@ -224,7 +226,7 @@ impl AcpHiveClient {
 
         info!("🐝 Signaling ready for step {}", step);
 
-        self.agent.send_message(&message).await
+        self.agent.send_message(&message.subject(), &message).await
             .context("Failed to signal step readiness")?;
 
         self.agent_status.step = step;
@@ -339,6 +341,23 @@ impl AcpHiveClient {
     /// Get current step
     pub fn current_step(&self) -> u64 {
         self.agent_status.step
+    }
+
+    /// Set JWT token for NATS authentication
+    pub fn set_jwt_token(&mut self, jwt_token: String) {
+        self.jwt_token = Some(jwt_token);
+        info!("🔐 JWT token set for agent {} in mission {}", 
+              self.agent_status.agent_id, self.mission.mission_id);
+    }
+
+    /// Get JWT token
+    pub fn jwt_token(&self) -> Option<&String> {
+        self.jwt_token.as_ref()
+    }
+
+    /// Check if agent is authenticated with JWT
+    pub fn is_authenticated(&self) -> bool {
+        self.jwt_token.is_some()
     }
 }
 

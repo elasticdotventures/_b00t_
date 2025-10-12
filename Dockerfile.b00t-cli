@@ -23,27 +23,43 @@ COPY b00t-cli/ ./b00t-cli/
 COPY b00t-mcp/ ./b00t-mcp/
 COPY b00t-c0re-lib/ ./b00t-c0re-lib/
 COPY b00t-grok/ ./b00t-grok/
+COPY b00t-lib-agent-coordination-protocol-rs/ ./b00t-lib-agent-coordination-protocol-rs/
 COPY k0mmand3r/ ./k0mmand3r/
+COPY b00t-py/ ./b00t-py/
 
 # Create dummy source for dependency caching
-RUN mkdir -p b00t-cli/src b00t-mcp/src b00t-c0re-lib/src b00t-grok/src k0mmand3r/src && \
+RUN mkdir -p b00t-cli/src b00t-mcp/src b00t-c0re-lib/src b00t-grok/src b00t-lib-agent-coordination-protocol-rs/src k0mmand3r/src b00t-py/src && \
     echo "fn main() {}" > b00t-cli/src/main.rs && \
     echo "// dummy" > b00t-cli/src/lib.rs && \
     echo "fn main() {}" > b00t-mcp/src/main.rs && \
     echo "// dummy" > b00t-mcp/src/lib.rs && \
     echo "// dummy" > b00t-c0re-lib/src/lib.rs && \
     echo "// dummy" > b00t-grok/src/lib.rs && \
-    echo "// dummy" > k0mmand3r/src/lib.rs
+    echo "// dummy" > b00t-lib-agent-coordination-protocol-rs/src/lib.rs && \
+    echo "// dummy" > k0mmand3r/src/lib.rs && \
+    echo "// dummy" > b00t-py/src/lib.rs
 
 # Build dependencies (this layer will be cached unless Cargo files change)
-RUN cargo build --release --bin b00t-cli && rm -rf b00t-cli/src b00t-mcp/src b00t-c0re-lib/src b00t-grok/src k0mmand3r/src
+RUN cargo build --release --bin b00t-cli && rm -rf b00t-cli/src b00t-mcp/src b00t-c0re-lib/src b00t-grok/src b00t-lib-agent-coordination-protocol-rs/src k0mmand3r/src b00t-py/src
 
 # Copy actual source code  
 COPY b00t-cli/src ./b00t-cli/src
 COPY b00t-mcp/src ./b00t-mcp/src
 COPY b00t-c0re-lib/src ./b00t-c0re-lib/src
 COPY b00t-grok/src ./b00t-grok/src
+COPY b00t-lib-agent-coordination-protocol-rs/src ./b00t-lib-agent-coordination-protocol-rs/src
 COPY k0mmand3r/src ./k0mmand3r/src
+COPY b00t-py/src ./b00t-py/src
+
+# Ensure workspace crates rebuild with real sources
+RUN cargo clean --release \
+    -p b00t-cli \
+    -p b00t-mcp \
+    -p b00t-c0re-lib \
+    -p b00t-grok \
+    -p k0mmand3r \
+    -p b00t-py \
+  && rm -f target/release/deps/libb00t_acp* target/release/deps/b00t_acp-*
 
 # Build the actual binary
 RUN cargo build --release --bin b00t-cli

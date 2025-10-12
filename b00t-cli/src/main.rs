@@ -1084,7 +1084,8 @@ fn check_readme_status(memory: &mut session_memory::SessionMemory) -> Result<()>
     Ok(())
 }
 
-fn main() {
+#[tokio::main]
+async fn main() {
     let cli = Cli::parse();
 
     if cli.doc {
