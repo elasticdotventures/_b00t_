@@ -322,8 +322,9 @@ pub async fn fetch_jwt_from_website(
         .context("Failed to request ACP Hive JWT from b00t-website")?;
 
     if !response.status().is_success() {
+        let status = response.status();
         let error_text = response.text().await.unwrap_or_else(|_| "Unknown error".to_string());
-        return Err(anyhow::anyhow!("ACP Hive JWT request failed: {} - {}", response.status(), error_text));
+        return Err(anyhow::anyhow!("ACP Hive JWT request failed: {} - {}", status, error_text));
     }
 
     let response_data: serde_json::Value = response.json().await

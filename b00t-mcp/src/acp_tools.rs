@@ -91,7 +91,8 @@ pub struct HiveShowParams {
 
 /// MCP tool: Join an existing hive mission
 pub async fn acp_hive_join(params: JoinHiveParams) -> Result<String> {
-    let agent_id = format!("mcp_agent_{}", uuid::Uuid::new_v4().to_string()[..8]);
+    let uuid_str = uuid::Uuid::new_v4().to_string();
+    let agent_id = format!("mcp_agent_{}", &uuid_str[..8]);
     let namespace = params.namespace.unwrap_or_else(|| {
         get_hive_namespace(&params.role)
     });
@@ -116,7 +117,7 @@ pub async fn acp_hive_join(params: JoinHiveParams) -> Result<String> {
     
     // Set JWT token for security
     if jwt_token != "development_mode_no_jwt" {
-        client.set_jwt_token(jwt_token);
+        client.set_jwt_token(jwt_token.clone());
     }
 
     // Register client globally
@@ -143,7 +144,8 @@ pub async fn acp_hive_join(params: JoinHiveParams) -> Result<String> {
 
 /// MCP tool: Create a new hive mission
 pub async fn acp_hive_create(params: CreateHiveParams) -> Result<String> {
-    let agent_id = format!("mcp_leader_{}", uuid::Uuid::new_v4().to_string()[..8]);
+    let uuid_str = uuid::Uuid::new_v4().to_string();
+    let agent_id = format!("mcp_leader_{}", &uuid_str[..8]);
     let namespace = params.namespace.unwrap_or_else(|| {
         get_hive_namespace(&params.role)
     });
@@ -306,11 +308,11 @@ pub async fn acp_hive_ready(params: HiveStepSyncParams) -> Result<String> {
 
 /// MCP tool: Show hive status and participating agents
 pub async fn acp_hive_show(params: HiveShowParams) -> Result<String> {
-    let registry = HIVE_CLIENTS.lock().await;
+    let mut registry = HIVE_CLIENTS.lock().await;
     
     if let Some(mission_id) = params.mission_id {
         // Show specific mission
-        if let Some(client) = registry.get(&mission_id) {
+        if let Some(client) = registry.get_mut(&mission_id) {
             let status = client.get_hive_status().await
                 .context("Failed to get hive status")?;
 
@@ -353,7 +355,7 @@ pub async fn acp_hive_leave(params: HiveShowParams) -> Result<String> {
     if let Some(mission_id) = params.mission_id {
         let mut registry = HIVE_CLIENTS.lock().await;
         
-        if let Some(client) = registry.remove(&mission_id) {
+        if let Some(mut client) = registry.remove(&mission_id) {
             // Send leaving status before disconnecting
             if let Err(e) = client.send_status("leaving_mission", None).await {
                 warn!("Failed to send leaving status: {}", e);

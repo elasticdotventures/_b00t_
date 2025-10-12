@@ -139,13 +139,10 @@ impl McpCommands {
                         // Design with internal arrays so we can extend merge/symlink targets over time.
                         // Primary write target is .roo/mcp.json. Merge from .mcp.json if present.
                         // Then non-destructively symlink .roo/mcp.json to .mcp.json (skip if .mcp.json exists and is not a symlink).
-                        let merge_files: &[&str] = &[".roo/mcp.json", ".mcp.json"];
-                        let symlink_targets: &[&str] = &[".mcp.json"];
-                        crate::roocode_install_mcp(
+                        // For now, use the same logic as dotmcpjson but write to .roo/mcp.json
+                        crate::dotmcpjson_install_mcp(
                             name,
                             path,
-                            merge_files,
-                            symlink_targets,
                             stdio_command.as_deref(),
                             *httpstream,
                         )

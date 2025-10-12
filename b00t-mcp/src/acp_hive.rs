@@ -61,7 +61,6 @@ pub struct HiveStatus {
 }
 
 /// ACP Hive Client for MCP agent coordination
-#[derive(Clone)]
 pub struct AcpHiveClient {
     agent: Agent,
     mission: HiveMission,
@@ -146,7 +145,7 @@ impl AcpHiveClient {
         info!("🐝 Sending hive status: {} (step {})", description, self.agent_status.step);
         
         // Send via ACP agent (stub for now)
-        self.agent.send_message(&message).await
+        self.agent.send_message(&message.subject(), &message).await
             .context("Failed to send status to hive")?;
 
         // Update local status
@@ -172,7 +171,7 @@ impl AcpHiveClient {
 
         info!("🐝 Proposing action to hive: {} (step {})", action, self.agent_status.step);
 
-        self.agent.send_message(&message).await
+        self.agent.send_message(&message.subject(), &message).await
             .context("Failed to propose action to hive")?;
 
         Ok(())
@@ -227,7 +226,7 @@ impl AcpHiveClient {
 
         info!("🐝 Signaling ready for step {}", step);
 
-        self.agent.send_message(&message).await
+        self.agent.send_message(&message.subject(), &message).await
             .context("Failed to signal step readiness")?;
 
         self.agent_status.step = step;
