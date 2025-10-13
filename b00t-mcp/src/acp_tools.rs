@@ -461,7 +461,7 @@ mod tests {
 
     #[test]
     fn test_namespace_helper() {
-        let namespace = get_user_namespace();
+        let namespace = get_hive_namespace("test-role");
         assert!(namespace.starts_with("account."));
     }
 }
