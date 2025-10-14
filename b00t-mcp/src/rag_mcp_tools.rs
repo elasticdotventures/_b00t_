@@ -9,7 +9,7 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 use tracing::{info, warn, error};
 
-use crate::rag_light::{RagLightManager, RagLightConfig, DocumentSource, LoaderType};
+use b00t_c0re_lib::rag::{RagLightManager, RagLightConfig, DocumentSource, LoaderType};
 
 /// Global RAGLight manager instance
 type RagLightRegistry = Arc<Mutex<Option<RagLightManager>>>;
@@ -246,16 +246,16 @@ pub async fn rag_status() -> Result<String> {
         let topics = manager.get_topics();
         
         let active_jobs = jobs.iter().filter(|j| {
-            matches!(j.status, crate::rag_light::IndexingStatus::Processing | 
-                              crate::rag_light::IndexingStatus::Queued)
+            matches!(j.status, b00t_c0re_lib::rag::IndexingStatus::Processing |
+                              b00t_c0re_lib::rag::IndexingStatus::Queued)
         }).count();
-        
+
         let completed_jobs = jobs.iter().filter(|j| {
-            matches!(j.status, crate::rag_light::IndexingStatus::Completed)
+            matches!(j.status, b00t_c0re_lib::rag::IndexingStatus::Completed)
         }).count();
-        
+
         let failed_jobs = jobs.iter().filter(|j| {
-            matches!(j.status, crate::rag_light::IndexingStatus::Failed)
+            matches!(j.status, b00t_c0re_lib::rag::IndexingStatus::Failed)
         }).count();
         
         let response = serde_json::json!({

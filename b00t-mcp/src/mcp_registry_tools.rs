@@ -8,8 +8,8 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 use tracing::{info, error};
 
-use crate::mcp_registry::{McpRegistry, McpServerRegistration, McpServerConfig, HealthStatus, create_registration_from_datum};
-use crate::generic_mcp_proxy::GenericMcpProxy;
+use b00t_c0re_lib::mcp_registry::{McpRegistry, McpServerRegistration, McpServerConfig, HealthStatus, create_registration_from_datum, ServerTransport, RegistrationMetadata, RegistrationSource, InstallationStatus};
+use b00t_c0re_lib::mcp_proxy::GenericMcpProxy;
 
 /// Global MCP registry instance
 type RegistryHandle = Arc<Mutex<McpRegistry>>;
@@ -86,16 +86,16 @@ pub async fn registry_register(params: RegistryRegisterParams) -> Result<String>
             args: params.args,
             env: params.env,
             cwd: None,
-            transport: crate::mcp_registry::ServerTransport::Stdio,
+            transport: ServerTransport::Stdio,
         },
-        metadata: crate::mcp_registry::RegistrationMetadata {
+        metadata: RegistrationMetadata {
             registered_at: chrono::Utc::now(),
             updated_at: chrono::Utc::now(),
-            source: crate::mcp_registry::RegistrationSource::Local,
+            source: RegistrationSource::Local,
             health_status: HealthStatus::Unknown,
             last_health_check: None,
             dependencies: Vec::new(),
-            installation_status: crate::mcp_registry::InstallationStatus::NotInstalled,
+            installation_status: InstallationStatus::NotInstalled,
         },
     };
 
@@ -104,7 +104,7 @@ pub async fn registry_register(params: RegistryRegisterParams) -> Result<String>
 
     // Also register with generic proxy for dynamic tool execution
     let mut proxy = MCP_PROXY.lock().await;
-    let server_config = crate::generic_mcp_proxy::McpServerConfig {
+    let server_config = b00t_c0re_lib::mcp_proxy::McpServerConfig {
         command: command_for_proxy,
         args: args_for_proxy,
         cwd: None,

@@ -9,11 +9,8 @@ pub mod derive_mcp;
 pub mod mcp_tools;
 pub mod acp_hive;
 pub mod acp_tools;
-pub mod rag_light;
 pub mod rag_mcp_tools;
-pub mod generic_mcp_proxy;
 pub mod proxy_mcp_tools;
-pub mod mcp_registry;
 pub mod mcp_registry_tools;
 
 pub use acl::{AclConfig, AclFilter, Policy};
@@ -24,9 +21,13 @@ pub use github_auth::{GitHubAuthConfig, GitHubAuthState, github_auth_router, Git
 pub use params::*;
 pub use acp_hive::{AcpHiveClient, HiveMission, AgentStatus, HiveStatus};
 pub use acp_tools::*;
-pub use rag_light::{RagLightManager, RagLightConfig, DocumentSource, LoaderType};
 pub use rag_mcp_tools::*;
-pub use generic_mcp_proxy::{GenericMcpProxy, McpToolDefinition, McpToolRequest, McpToolResponse};
 pub use proxy_mcp_tools::*;
-pub use mcp_registry::{McpRegistry, McpServerRegistration, create_registration_from_datum};
 pub use mcp_registry_tools::*;
+
+// Re-export from b00t-c0re-lib
+pub use b00t_c0re_lib::{
+    RagLightManager, RagLightConfig, DocumentSource, LoaderType,
+    GenericMcpProxy, McpToolDefinition, McpToolRequest, McpToolResponse,
+    McpRegistry, McpServerRegistration, McpServerConfig, create_registration_from_datum,
+};

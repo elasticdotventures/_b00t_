@@ -216,9 +216,6 @@ The system will:
         installed: bool,
         #[clap(long, help = "Show only available (not installed) tools")]
         available: bool,
-
-        #[clap(long = "filter", help = "Filter by subsystem (MCP compatibility)")]
-        filter_flag: Option<String>,  // 🦨 MCP compatibility: accept --filter flag
     },
     #[clap(about = "Kubernetes (k8s) cluster and pod management")]
     K8s {
@@ -1150,10 +1147,8 @@ async fn main() {
                 std::process::exit(1);
             }
         }
-        Some(Commands::Status { filter, installed, available, filter_flag }) => {
-            // 🦨 MCP compatibility: merge positional and flag arguments
-            let effective_filter = filter.as_ref().or(filter_flag.as_ref());
-            if let Err(e) = show_status(&cli.path, effective_filter.map(|s| s.as_str()), *installed, *available) {
+        Some(Commands::Status { filter, installed, available }) => {
+            if let Err(e) = show_status(&cli.path, filter.as_ref().map(|s| s.as_str()), *installed, *available) {
                 eprintln!("Error: {}", e);
                 std::process::exit(1);
             }

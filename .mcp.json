@@ -1,32 +1,26 @@
 {
   "mcpServers": {
-    "b00t-mcp": {
-      "args": [
-        "--stdio"
-      ],
-      "command": "b00t-mcp"
-    },
     "context7": {
+      "command": "bunx",
       "args": [
         "-y",
         "@upstash/context7-mcp"
-      ],
-      "command": "bunx"
+      ]
     },
     "github": {
+      "command": "npx",
       "args": [
         "-y",
         "@modelcontextprotocol/server-github"
-      ],
-      "command": "npx"
+      ]
     },
     "taskmaster-ai": {
+      "command": "bunx",
       "args": [
         "-y",
         "--package=task-master-ai",
         "task-master-ai"
       ],
-      "command": "bunx",
       "env": {}
     }
   }

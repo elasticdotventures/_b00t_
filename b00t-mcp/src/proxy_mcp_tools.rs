@@ -8,7 +8,7 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 use tracing::{info, warn, error};
 
-use crate::generic_mcp_proxy::{GenericMcpProxy, McpToolRequest, McpToolDefinition, create_raglight_tools};
+use b00t_c0re_lib::mcp_proxy::{GenericMcpProxy, McpToolRequest, McpToolDefinition, create_raglight_tools};
 
 /// Global MCP proxy instance
 type McpProxyRegistry = Arc<Mutex<GenericMcpProxy>>;
@@ -113,7 +113,7 @@ pub async fn proxy_register_tool(params: ProxyRegisterToolParams) -> Result<Stri
 pub async fn proxy_discover_tools(params: ProxyDiscoverParams) -> Result<String> {
     let mut proxy = MCP_PROXY.lock().await;
     
-    let server_config = crate::generic_mcp_proxy::McpServerConfig {
+    let server_config = b00t_c0re_lib::mcp_proxy::McpServerConfig {
         command: params.command.clone(),
         args: params.args,
         cwd: params.cwd,

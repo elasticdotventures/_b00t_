@@ -39,6 +39,9 @@ pub mod rhai_engine;
 pub mod ai_client;
 pub mod b00t_config;
 pub mod secret_validation;
+pub mod mcp_registry;
+pub mod mcp_proxy;
+pub mod rag;
 
 // Re-export commonly used types
 pub use template::TemplateRenderer;
@@ -49,6 +52,9 @@ pub use rhai_engine::RhaiEngine;
 pub use ai_client::{B00tAiClient, AiClientConfig, AiProviderConfig, ChatMessage};
 pub use b00t_config::{B00tUnifiedConfig, UserConfig, CloudServicesConfig, AiConfiguration};
 pub use secret_validation::{SecretValidator, CloudflareValidation, AwsValidation, QdrantValidation};
+pub use mcp_registry::{McpRegistry, McpServerRegistration, McpServerConfig, create_registration_from_datum};
+pub use mcp_proxy::{GenericMcpProxy, McpToolDefinition, McpToolRequest, McpToolResponse};
+pub use rag::{RagLightManager, RagLightConfig, DocumentSource, LoaderType};
 
 /// Common configuration structure for b00t components
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]

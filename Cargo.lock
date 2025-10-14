@@ -458,6 +458,7 @@ dependencies = [
  "chrono",
  "dirs",
  "duct",
+ "lazy_static",
  "pyo3",
  "redis",
  "regex",
@@ -474,6 +475,7 @@ dependencies = [
  "tokio",
  "tokio-test",
  "toml 0.9.5",
+ "tracing",
  "ts-rs",
  "uuid",
 ]
