@@ -5,3 +5,6 @@ WINDOWS_IP=$(ip route | awk '/^default/ {print $3}')
 powershell.exe -Command "Start-Process netsh.exe -ArgumentList \"advfirewall firewall add rule name=X11-Forwarding dir=in action=allow program=%ProgramFiles%\VcXsrv\vcxsrv.exe localip=$WINDOWS_IP remoteip=$LINUX_IP localport=6000 protocol=tcp\" -Verb RunAs"
 
 # credit https://thomasward.com/wsl2-x11/
+
+# https://github.com/reillyfeatherstone/wsl-open-win-browser
+

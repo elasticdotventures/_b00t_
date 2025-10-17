@@ -9,6 +9,7 @@ mod cog
 mod b00t
 # this is an antipattern (litellm is early-stage AI infra, skip for now)
 mod litellm '_b00t_/litellm/justfile'
+mod b00t-mcp-npm
 
 # Datum justfiles (install recipes for core tech stacks)
 mod python '_b00t_/python.🐍/justfile'
@@ -35,6 +36,7 @@ install:
     echo "🥾 _b00t_ install"
     cargo install --path b00t-mcp
     cargo install --path b00t-cli
+
 
 installx:
     sudo apt update

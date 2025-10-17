@@ -1,0 +1,20 @@
+#!/bin/bash
+# Mock b00t-mcp binary for testing npm package
+
+echo "b00t-mcp 0.7.0"
+echo "🥾 Mock binary for testing npm package installation"
+echo "Platform: $(uname -s)-$(uname -m)"
+
+if [[ "$1" == "--version" ]]; then
+  echo "b00t-mcp 0.7.0"
+  exit 0
+fi
+
+if [[ "$1" == "--help" ]]; then
+  echo "Usage: b00t-mcp [OPTIONS]"
+  echo "Mock MCP server for testing"
+  exit 0
+fi
+
+echo "🧪 This is a mock binary for testing. Install the real version with:"
+echo "npm install -g b00t-mcp"
