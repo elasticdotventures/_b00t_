@@ -1,0 +1,35 @@
+version: '3.8'
+
+services:
+  mosquitto:
+    image: eclipse-mosquitto:2
+    container_name: mosquitto
+    restart: unless-stopped
+    ports:
+      - "1883:1883"      # MQTT
+      - "9001:9001"      # WebSocket
+    volumes:
+      - ./mosquitto/config:/mosquitto/config
+      - ./mosquitto/data:/mosquitto/data
+      - ./mosquitto/log:/mosquitto/log
+    networks:
+      - b00t
+    environment:
+      - TZ=UTC
+
+  # Placeholder for HomeAssistant (to be added later by docker agent)
+  # homeassistant:
+  #   image: ghcr.io/home-assistant/home-assistant:stable
+  #   container_name: homeassistant
+  #   restart: unless-stopped
+  #   network_mode: host
+  #   volumes:
+  #     - ./homeassistant/config:/config
+  #     - /etc/localtime:/etc/localtime:ro
+  #   privileged: true
+  #   environment:
+  #     - TZ=UTC
+
+networks:
+  b00t:
+    driver: bridge

@@ -1,0 +1,18 @@
+[layer]
+name = "debian-base"
+version = "bookworm"
+description = "Minimal Debian bookworm base system"
+
+[provides]
+binaries = []
+libraries = []
+paths = []
+
+[requires]
+layers = []
+
+[runtime]
+layers = []
+
+[environment]
+DEBIAN_FRONTEND = "noninteractive"

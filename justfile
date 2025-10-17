@@ -7,8 +7,16 @@ repo-root := env_var_or_default("JUST_REPO_ROOT", `git rev-parse --show-toplevel
 set shell := ["bash", "-cu"]
 mod cog
 mod b00t
-# this is an antipattens  
+# this is an antipattern (litellm is early-stage AI infra, skip for now)
 mod litellm '_b00t_/litellm/justfile'
+
+# Datum justfiles (install recipes for core tech stacks)
+mod python '_b00t_/python.🐍/justfile'
+mod docker '_b00t_/docker.🐳/justfile'
+mod bash '_b00t_/bash.🐚/justfile'
+mod git '_b00t_/git.🐙/justfile'
+mod terraform '_b00t_/terraform.🧊/justfile'
+mod k8s '_b00t_/k8s.🚢/justfile'
 
 stow:
     stow --adopt -d ~/.dotfiles -t ~ bash
@@ -32,7 +40,7 @@ installx:
     sudo apt update
     ## TODO: someday.
     # cd {{repo-root}} && ./_b00t_.sh setup
-    sudo apt install -y fzf bat moreutils fd-find bc jq python3-argcomplete
+    sudo apt install -y fzf bat moreutils fd-find bc jq python3-argcomplete curl
     ln -sf /usr/bin/batcat ~/.local/bin/bat
     # 🦨 TODO setup.sh .. but first isolate python, rust, js
     # 🦨 TODO replace crudini with toml-cli
@@ -44,6 +52,84 @@ installx:
     command -v eget >/dev/null 2>&1 || (curl https://zyedidia.github.io/eget.sh | sh && sudo mv -v eget /usr/local/bin/)
     command -v rg >/dev/null 2>&1 || (eget BurntSushi/ripgrep && sudo mv -v rg /usr/local/bin/)
     echo "/🥾"
+
+# Node.js/TypeScript development environment setup
+install-node:
+    #!/bin/bash
+    echo "🦄 Installing Node.js/TypeScript development environment..."
+    # Install nvm (Node Version Manager)
+    command -v nvm >/dev/null 2>&1 || curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.1/install.sh | bash
+    # Source nvm in current session
+    export NVM_DIR="$HOME/.nvm"
+    [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+    [ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"
+    # Install and use LTS Node.js
+    nvm install --lts
+    nvm use --lts
+    nvm alias default lts/*
+    # Install bun (preferred over npm)
+    command -v bun >/dev/null 2>&1 || curl -fsSL https://bun.sh/install | bash
+    # Install pnpm as fallback
+    command -v pnpm >/dev/null 2>&1 || npm install -g pnpm
+    # Install essential global packages
+    bun add -g typescript tsx @types/node
+    bun add -g eslint prettier husky lint-staged commitlint @commitlint/config-conventional
+    bun add -g yeoman-generator yo
+    echo "✅ Node.js/TypeScript environment ready"
+
+# Setup TypeScript project with b00t standards
+setup-ts-project:
+    #!/bin/bash
+    echo "🦄 Setting up TypeScript project with b00t standards..."
+    # Initialize package.json if not exists
+    [ ! -f package.json ] && bun init -y
+    # Install core dependencies
+    bun add -D typescript tsx @types/node
+    bun add -D eslint @typescript-eslint/parser @typescript-eslint/eslint-plugin
+    bun add -D prettier eslint-config-prettier eslint-plugin-prettier
+    bun add -D husky lint-staged @commitlint/cli @commitlint/config-conventional
+    # Install Effect-TS (preferred functional programming library)
+    bun add effect
+    # Setup git hooks
+    bunx husky install
+    # Create .husky/pre-commit hook
+    echo '#!/usr/bin/env sh\n. "$(dirname -- "$0")/_/husky.sh"\nbunx lint-staged' > .husky/pre-commit
+    chmod +x .husky/pre-commit
+    # Create .husky/commit-msg hook
+    echo '#!/usr/bin/env sh\n. "$(dirname -- "$0")/_/husky.sh"\nbunx commitlint --edit "$1"' > .husky/commit-msg
+    chmod +x .husky/commit-msg
+    echo "✅ TypeScript project setup complete"
+
+# Run TypeScript development server
+dev-ts:
+    #!/bin/bash
+    echo "🚀 Starting TypeScript development..."
+    bun run dev || bunx tsx watch src/index.ts
+
+# Build TypeScript project
+build-ts:
+    #!/bin/bash
+    echo "🔨 Building TypeScript project..."
+    bun run build || bunx tsc
+
+# Lint and format TypeScript code
+lint-ts:
+    #!/bin/bash
+    echo "🧹 Linting TypeScript code..."
+    bunx eslint . --ext .ts,.tsx --fix
+    bunx prettier --write "src/**/*.{ts,tsx,json}"
+
+# Test TypeScript project
+test-ts:
+    #!/bin/bash
+    echo "🧪 Running TypeScript tests..."
+    bun test || bunx jest
+
+# Quick WIP commit for TypeScript projects
+wip-ts:
+    #!/bin/bash
+    git add .
+    git commit -m "wip: work in progress - squash me"
 
 dotenv-load:
     dotenv -f .env
@@ -101,7 +187,7 @@ captain:
 
 operator:
     #!/bin/bash
-    export _B00T_ROLE="operator" 
+    export _B00T_ROLE="operator"
     echo "⚙️ Switched to Operator role"
     cargo run --bin b00t-cli -- whatismy role --show-tools
 
@@ -204,5 +290,5 @@ port-map:
     {{repo-root}}/scripts/port-map.sh
 
 install-services:
-    {{repo-root}}/scripts/install-systemd-services.sh 
+    {{repo-root}}/scripts/install-systemd-services.sh
 
