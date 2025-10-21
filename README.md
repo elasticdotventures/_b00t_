@@ -60,19 +60,19 @@ currently crew, role, and hive chat are being integrated prior to the 1.0 releas
 
 b00t is an aigentic hive bios. b00t is not a package manager, although a neophyte could dismiss it as such.
 
-b00t is a poly-stack interface layer & universal translator with observation, logging, accounting & access control (ACL).
+b00t is a poly-stack interface layer & universal translator with observation, logging, accounting & inter-agent chat (*in development).
 
-b00t lets agents maximize their operating context through clever abstraction of pre-installed & agent installable tooling & syntax examples + use cases.
+b00t lets code-instruction tuned agents maximize their operating context through clever abstractions of pre-installed & agent installable tooling & syntax examples + skills & mcp tool use cases.
 
 In cyberspace, b00t unlocks agents, granting them powers akin to the hero Neo of the Matrix.
 
-While not a jailbreak, b00t unshackles the inherient complexity of large systems & infrastructure, thereby thrusting humanity toward the AI infinite takeoff.
+While not a jailbreak, b00t's approach to using idiomatics (idiomatic domain specific languages & tools) unshackles the inherient complexity of large systems & infrastructure thereby moving humanity one degree closer to having an obedient capable instruction tuned AGI.
 
-b00t's future AGI is not a single model - it's the intelligence that emerges from all of them. It is a poly-cloud hive of specialized agents running everywhere with access to everything, able to muster legions, fork and parallelize, swarm at objectives (**if your budget & API call limits permit!!), breaking big steps into a series of small, seemingly effortless objectives.
+b00t's future AGI is not a single model - it's the intelligence that emerges from all of them collaborating.  b00t enrolls agents in a poly-cloud hive of agents with specialized tools and skills running everywhere with access to everything, small AI agentic crews building with Rust, Python, Typescript, Bash, and others, breaking big steps into a series of small, seemingly effortless objectives.
 
-b00t operates as a git-backed graph of datums and unified discovery, syntax hinting, and execution setup/teardown of all popular OSS tools, applications, languages, frameworks, clouds & self-hosted Linux/WSL & Android on x86, ARM or RISC-V. b00t agents are capable of running shells, containers, notebooks, k8s, or controlling robotics.
+b00t operates as a git-backed graph of datums and unified discovery, syntax hinting, and execution setup/teardown of all popular OSS tools, applications, languages, frameworks, clouds & self-hosted Linux/WSL & Android on x86, ARM or RISC-V. b00t agents are capable of running shells, containers, notebooks, k8s, or controlling robotics.   These concepts are collateralized into high level "stacks" (software and tools) and "skills" (tools contextually arranged idiomatically and organized as they pertain to an executable environment). 
 
-As an operator interface, b00t is itself a vsix extension that interfaces with other VS Code extensions ([GitHub Copilot](https://github.com/features/copilot), [roo](https://github.com/elasticdotventures/roo)) as well as mcp, models, and lsp.
+As an operator interface, b00t syntax is available a .vsix extension that interfaces with other VS Code extensions ([GitHub Copilot](https://github.com/features/copilot), [roo](https://github.com/elasticdotventures/roo)) as well as mcp, models, and lsp. Also CLI, Claude Skills, and more. 
 
 Currently, the datums are managed with b00t-cli; however, a TUI to customize projects & roles, crew, role, and hive chat are being integrated prior to the 1.0 release.
 
