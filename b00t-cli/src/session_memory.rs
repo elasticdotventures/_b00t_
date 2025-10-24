@@ -160,9 +160,27 @@ impl SessionMemory {
         // Ensure ._b00t_.toml is in .gitignore before creating/loading
         Self::ensure_gitignore_entry().context("Failed to ensure .gitignore entry")?;
 
-        // Use confy to load from _b00t_.toml in .git directory
-        let mut memory: SessionMemory = confy::load_path(config_dir.join("_b00t_.toml"))
-            .context("Failed to load session memory")?;
+        let config_path = config_dir.join("_b00t_.toml");
+
+        // Use confy to load from _b00t_.toml in .git directory, falling back to defaults on bad data
+        let mut memory: SessionMemory = match confy::load_path(&config_path) {
+            Ok(memory) => memory,
+            Err(err) => {
+                // Backup the invalid file if it exists, then start fresh
+                if config_path.exists() {
+                    let backup_path = config_path.with_extension("toml.bak");
+                    let _ = fs::rename(&config_path, &backup_path);
+                }
+                tracing::warn!(
+                    "Session memory file corrupt or unreadable ({}); regenerating defaults",
+                    err
+                );
+                let mut memory = SessionMemory::default();
+                // Force metadata reinitialization flow below
+                memory.metadata.session_id.clear();
+                memory
+            }
+        };
 
         // Initialize metadata if this is first load
         if memory.metadata.session_id.is_empty() {
