@@ -4,9 +4,23 @@ type = "cli"
 hint = "Hugging Face CLI for syncing models, datasets, and spaces"
 keywords = ["ml", "models", "datasets", "huggingface"]
 install = """
-uv tool install huggingface_hub[cli]
+if command -v pkgx >/dev/null 2>&1; then
+  pkgx install huggingface-cli
+elif command -v brew >/dev/null 2>&1; then
+  brew install huggingface-cli
+else
+  uv tool install huggingface_hub[cli]
+fi
 """
-update = "uv tool install huggingface_hub[cli]"
+update = """
+if command -v pkgx >/dev/null 2>&1; then
+  pkgx install huggingface-cli
+elif command -v brew >/dev/null 2>&1; then
+  brew upgrade huggingface-cli || brew install huggingface-cli
+else
+  uv tool install huggingface_hub[cli]
+fi
+"""
 version = "huggingface-cli --version"
 version_regex = "huggingface-cli (\\d+\\.\\d+\\.\\d+)"
 aliases = ["huggingface-cli"]
