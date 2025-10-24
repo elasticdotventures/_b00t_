@@ -4,7 +4,7 @@ use tiktoken_rs::o200k_base;
 
 /// Handle LFMF (Lessons From My Failures) recording
 /// Uses shared LFMF system from b00t-c0re-lib for consistency
-pub fn handle_lfmf(path: &str, tool: &str, lesson: &str, scope: &str) -> Result<()> {
+pub async fn handle_lfmf(path: &str, tool: &str, lesson: &str, scope: &str) -> Result<()> {
     // Expect lesson in "<topic>: <body>" format
     let parts: Vec<&str> = lesson.splitn(2, ':').map(|s| s.trim()).collect();
     if parts.len() != 2 {
@@ -41,26 +41,22 @@ pub fn handle_lfmf(path: &str, tool: &str, lesson: &str, scope: &str) -> Result<
     }
 
     // Use shared LFMF system for recording
-    let rt = tokio::runtime::Runtime::new().context("Failed to create async runtime")?;
+    let config = LfmfSystem::load_config(path)?;
+    let mut lfmf_system = LfmfSystem::new(config);
 
-    rt.block_on(async {
-        let config = LfmfSystem::load_config(path)?;
-        let mut lfmf_system = LfmfSystem::new(config);
+    // Try to initialize vector database (non-fatal if fails)
+    if let Err(e) = lfmf_system.initialize().await {
+        println!(
+            "⚠️ Vector database unavailable: {}. Lesson will be saved to filesystem only.",
+            e
+        );
+    }
 
-        // Try to initialize vector database (non-fatal if fails)
-        if let Err(e) = lfmf_system.initialize().await {
-            println!(
-                "⚠️ Vector database unavailable: {}. Lesson will be saved to filesystem only.",
-                e
-            );
-        }
+    // Record the lesson using shared system
+    // Scope handling: currently only memoized, extend LfmfSystem for future
+    println!("Scope: {}", scope);
+    lfmf_system.record_lesson(tool, lesson).await?;
 
-        // Record the lesson using shared system
-        // Scope handling: currently only memoized, extend LfmfSystem for future
-        println!("Scope: {}", scope);
-        lfmf_system.record_lesson(tool, lesson).await?;
-
-        println!("✅ Lesson recorded for {}: {}", tool, topic);
-        Ok(())
-    })
+    println!("✅ Lesson recorded for {}: {}", tool, topic);
+    Ok(())
 }

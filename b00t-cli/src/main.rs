@@ -1281,7 +1281,7 @@ async fn main() {
             };
             // Determine scope
             let scope = if *global { "global" } else { "repo" };
-            if let Err(e) = commands::lfmf::handle_lfmf(&cli.path, &tool, &lesson, scope) {
+            if let Err(e) = commands::lfmf::handle_lfmf(&cli.path, &tool, &lesson, scope).await {
                 eprintln!("Error: {}", e);
                 std::process::exit(1);
             }
@@ -1289,16 +1289,7 @@ async fn main() {
         Some(Commands::Advice { tool, query, count }) => {
             use crate::commands::advice::handle_advice;
 
-            // Create Tokio runtime for async advice operations
-            let rt = match tokio::runtime::Runtime::new() {
-                Ok(rt) => rt,
-                Err(e) => {
-                    eprintln!("Error creating async runtime: {}", e);
-                    std::process::exit(1);
-                }
-            };
-
-            if let Err(e) = rt.block_on(handle_advice(&cli.path, tool, query, *count)) {
+            if let Err(e) = handle_advice(&cli.path, tool, query, *count).await {
                 eprintln!("Error: {}", e);
                 std::process::exit(1);
             }
