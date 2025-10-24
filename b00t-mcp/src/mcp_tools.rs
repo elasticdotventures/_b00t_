@@ -693,7 +693,7 @@ pub struct AcpHiveLeaveCommand {
 impl_mcp_tool!(AcpHiveLeaveCommand, "b00t_acp_hive_leave", ["acp", "hive", "leave"]);
 
 // Custom implementations for ACP hive tools
-// 🤓 Disabled until acp_hive/acp_tools are refactored for b00t_chat
+// 🤓 Disabled - acp_hive uses full NATS Agent from old ACP; chat refactor simplified to stubs
 // use crate::acp_tools::*;
 
 /// Create and populate a registry with all available MCP tools
@@ -742,7 +742,7 @@ pub fn create_mcp_registry() -> McpCommandRegistry {
         .register::<GrokLearnCommand>()
         .register::<GrokStatusCommand>();
         // ACP Hive coordination tools
-        // 🤓 Disabled until acp_hive/acp_tools refactored for b00t_chat
+        // 🤓 Disabled - acp_hive uses full NATS Agent from old ACP; chat refactor simplified to stubs
         // .register::<AcpHiveJoinCommand>()
         // .register::<AcpHiveCreateCommand>()
         // .register::<AcpHiveStatusCommand>()

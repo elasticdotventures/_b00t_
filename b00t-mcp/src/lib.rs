@@ -1,7 +1,7 @@
 pub mod acl;
 pub mod mcp_server_rusty;
 // pub mod oauth;  // 🤓 Disabled complex OAuth until handler trait fixed
-// pub mod acp_hive;  // 🤓 Disabled - needs refactoring for b00t_chat (Agent/AgentConfig removed)
+// pub mod acp_hive;  // 🤓 Disabled - uses full NATS Agent from old ACP; chat refactor simplified to stubs
 // pub mod acp_tools;  // 🤓 Disabled - depends on acp_hive
 pub mod chat;
 pub mod clap_reflection;

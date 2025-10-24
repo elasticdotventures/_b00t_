@@ -24,7 +24,7 @@
 //! # }
 //! ```
 
-// pub mod agent;  // 🤓 Legacy ACP code - has unresolved dependencies after chat refactor
+// pub mod agent;  // 🤓 agent.rs uses full NATS Agent from old ACP - chat refactor simplified to stubs
 pub mod client;
 pub mod error;
 pub mod message;
@@ -33,11 +33,16 @@ pub mod security;
 pub mod server;
 pub mod transport;
 
-// pub use agent::{Agent, AgentConfig};
+// pub use agent::{Agent, AgentConfig};  // 🤓 Disabled - needs chat-compatible refactor
 pub use client::ChatClient;
 pub use error::{ChatError, ChatResult};
 pub use message::ChatMessage;
-pub use protocol::{ACPMessage, MessageType};
-pub use security::{fetch_jwt_from_website, AcpJwtValidator};
+pub use protocol::{ACPMessage, MessageType, StepBarrier};
+pub use security::{fetch_jwt_from_website, AcpJwtValidator, AcpSecurityContext, NamespaceEnforcer};
 pub use server::{spawn_local_server, ChatInbox, LocalChatServer};
 pub use transport::{default_socket_path, ChatTransport, ChatTransportConfig, ChatTransportKind};
+
+// Type aliases for compatibility
+pub use ChatError as ACPError;
+pub use ChatResult as Result;
+pub type JsonValue = serde_json::Value;
