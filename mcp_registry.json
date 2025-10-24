@@ -1,0 +1,764 @@
+{
+  "local.b00t/test-new": {
+    "id": "local.b00t/test-new",
+    "name": "test-new",
+    "description": "MCP server",
+    "version": "0.1.0",
+    "homepage": "https://github.com/elasticdotventures/dotfiles",
+    "documentation": null,
+    "license": "Apache-2.0",
+    "tags": [
+      "b00t",
+      "local"
+    ],
+    "config": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@test/new"
+      ],
+      "transport": "stdio"
+    },
+    "metadata": {
+      "registered_at": "2025-10-17T04:59:02.601274209Z",
+      "updated_at": "2025-10-24T00:59:57.546345309Z",
+      "source": "local",
+      "health_status": "unknown",
+      "last_health_check": null,
+      "dependencies": [],
+      "installation_status": "notinstalled"
+    }
+  },
+  "local.b00t/context7": {
+    "id": "local.b00t/context7",
+    "name": "context7",
+    "description": "MCP server",
+    "version": "0.1.0",
+    "homepage": "https://github.com/elasticdotventures/dotfiles",
+    "documentation": null,
+    "license": "Apache-2.0",
+    "tags": [
+      "b00t",
+      "local"
+    ],
+    "config": {
+      "command": "bunx",
+      "args": [
+        "-y",
+        "@upstash/context7-mcp"
+      ],
+      "transport": "stdio"
+    },
+    "metadata": {
+      "registered_at": "2025-10-17T04:59:02.602781956Z",
+      "updated_at": "2025-10-24T00:59:57.547753537Z",
+      "source": "local",
+      "health_status": "unknown",
+      "last_health_check": null,
+      "dependencies": [],
+      "installation_status": "notinstalled"
+    }
+  },
+  "local.b00t/kubernetes": {
+    "id": "local.b00t/kubernetes",
+    "name": "kubernetes",
+    "description": "Kubernetes cluster management via MCP",
+    "version": "0.1.0",
+    "homepage": "https://github.com/elasticdotventures/dotfiles",
+    "documentation": null,
+    "license": "Apache-2.0",
+    "tags": [
+      "b00t",
+      "local"
+    ],
+    "config": {
+      "command": "npx",
+      "args": [
+        "mcp-server-kubernetes"
+      ],
+      "transport": "stdio"
+    },
+    "metadata": {
+      "registered_at": "2025-10-17T04:59:02.603043651Z",
+      "updated_at": "2025-10-24T00:59:57.548090738Z",
+      "source": "local",
+      "health_status": "unknown",
+      "last_health_check": null,
+      "dependencies": [],
+      "installation_status": "notinstalled"
+    }
+  },
+  "local.b00t/aws-docs-test": {
+    "id": "local.b00t/aws-docs-test",
+    "name": "aws-docs-test",
+    "description": "AWS Documentation MCP server with multiple deployment methods (test)",
+    "version": "0.1.0",
+    "homepage": "https://github.com/elasticdotventures/dotfiles",
+    "documentation": null,
+    "license": "Apache-2.0",
+    "tags": [
+      "b00t",
+      "local"
+    ],
+    "config": {
+      "command": "uvx",
+      "args": [
+        "awslabs.aws-documentation-mcp-server@latest"
+      ],
+      "transport": "stdio"
+    },
+    "metadata": {
+      "registered_at": "2025-10-17T04:59:02.602967258Z",
+      "updated_at": "2025-10-24T00:59:57.548012665Z",
+      "source": "local",
+      "health_status": "unknown",
+      "last_health_check": null,
+      "dependencies": [],
+      "installation_status": "notinstalled"
+    }
+  },
+  "local.b00t/test-with-deps": {
+    "id": "local.b00t/test-with-deps",
+    "name": "test-with-deps",
+    "description": "Test MCP server with dependencies",
+    "version": "0.1.0",
+    "homepage": "https://github.com/elasticdotventures/dotfiles",
+    "documentation": null,
+    "license": "Apache-2.0",
+    "tags": [
+      "b00t",
+      "local"
+    ],
+    "config": {
+      "command": "uvx",
+      "args": [
+        "test-package"
+      ],
+      "transport": "stdio"
+    },
+    "metadata": {
+      "registered_at": "2025-10-24T00:52:02.977148593Z",
+      "updated_at": "2025-10-24T00:52:02.977149199Z",
+      "source": "local",
+      "health_status": "unknown",
+      "last_health_check": null,
+      "dependencies": [
+        {
+          "dep_type": "python",
+          "min_version": null,
+          "installed": false,
+          "install_method": "b00t-cli cli install python"
+        },
+        {
+          "dep_type": "docker",
+          "min_version": null,
+          "installed": false,
+          "install_method": "b00t-cli cli install docker"
+        },
+        {
+          "dep_type": "node",
+          "min_version": null,
+          "installed": false,
+          "install_method": "b00t-cli cli install node"
+        }
+      ],
+      "installation_status": "notinstalled"
+    }
+  },
+  "local.b00t/filesystem": {
+    "id": "local.b00t/filesystem",
+    "name": "filesystem",
+    "description": "MCP server",
+    "version": "0.1.0",
+    "homepage": "https://github.com/elasticdotventures/dotfiles",
+    "documentation": null,
+    "license": "Apache-2.0",
+    "tags": [
+      "b00t",
+      "local"
+    ],
+    "config": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-filesystem"
+      ],
+      "transport": "stdio"
+    },
+    "metadata": {
+      "registered_at": "2025-10-17T04:59:02.600671346Z",
+      "updated_at": "2025-10-24T00:59:57.545967066Z",
+      "source": "local",
+      "health_status": "unknown",
+      "last_health_check": null,
+      "dependencies": [],
+      "installation_status": "notinstalled"
+    }
+  },
+  "local.b00t/b00t-mcp": {
+    "id": "local.b00t/b00t-mcp",
+    "name": "b00t-mcp",
+    "description": "MCP server for b00t-cli command proxy with ACL filtering",
+    "version": "0.1.0",
+    "homepage": "https://github.com/elasticdotventures/dotfiles",
+    "documentation": null,
+    "license": "Apache-2.0",
+    "tags": [
+      "b00t",
+      "local"
+    ],
+    "config": {
+      "command": "b00t-mcp",
+      "args": [
+        "--stdio"
+      ],
+      "transport": "stdio"
+    },
+    "metadata": {
+      "registered_at": "2025-10-17T04:59:02.602383714Z",
+      "updated_at": "2025-10-24T00:59:57.547363540Z",
+      "source": "local",
+      "health_status": "unknown",
+      "last_health_check": null,
+      "dependencies": [],
+      "installation_status": "notinstalled"
+    }
+  },
+  "local.b00t/legacy-test": {
+    "id": "local.b00t/legacy-test",
+    "name": "legacy-test",
+    "description": "Multi-method MCP server (testing new format)",
+    "version": "0.1.0",
+    "homepage": "https://github.com/elasticdotventures/dotfiles",
+    "documentation": null,
+    "license": "Apache-2.0",
+    "tags": [
+      "b00t",
+      "local"
+    ],
+    "config": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-filesystem"
+      ],
+      "env": {
+        "FILESYSTEM_ACCESS": "true"
+      },
+      "transport": "stdio"
+    },
+    "metadata": {
+      "registered_at": "2025-10-17T04:59:02.600823410Z",
+      "updated_at": "2025-10-24T00:59:57.546062700Z",
+      "source": "local",
+      "health_status": "unknown",
+      "last_health_check": null,
+      "dependencies": [],
+      "installation_status": "notinstalled"
+    }
+  },
+  "local.b00t/kubernetes-flux159": {
+    "id": "local.b00t/kubernetes-flux159",
+    "name": "kubernetes-flux159",
+    "description": "MCP server",
+    "version": "0.1.0",
+    "homepage": "https://github.com/elasticdotventures/dotfiles",
+    "documentation": null,
+    "license": "Apache-2.0",
+    "tags": [
+      "b00t",
+      "local"
+    ],
+    "config": {
+      "command": "npx",
+      "args": [
+        "mcp-server-kubernetes"
+      ],
+      "transport": "stdio"
+    },
+    "metadata": {
+      "registered_at": "2025-10-17T04:59:02.602554629Z",
+      "updated_at": "2025-10-24T00:59:57.547523546Z",
+      "source": "local",
+      "health_status": "unknown",
+      "last_health_check": null,
+      "dependencies": [],
+      "installation_status": "notinstalled"
+    }
+  },
+  "local.b00t/brave-search": {
+    "id": "local.b00t/brave-search",
+    "name": "brave-search",
+    "description": "Brave Search API integration",
+    "version": "0.1.0",
+    "homepage": "https://github.com/elasticdotventures/dotfiles",
+    "documentation": null,
+    "license": "Apache-2.0",
+    "tags": [
+      "b00t",
+      "local"
+    ],
+    "config": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-brave-search"
+      ],
+      "transport": "stdio"
+    },
+    "metadata": {
+      "registered_at": "2025-10-17T04:59:02.602479649Z",
+      "updated_at": "2025-10-24T00:59:57.547447546Z",
+      "source": "local",
+      "health_status": "unknown",
+      "last_health_check": null,
+      "dependencies": [],
+      "installation_status": "notinstalled"
+    }
+  },
+  "local.b00t/rust-crate-doc": {
+    "id": "local.b00t/rust-crate-doc",
+    "name": "rust-crate-doc",
+    "description": "Rust crate documentation access and search",
+    "version": "0.1.0",
+    "homepage": "https://github.com/elasticdotventures/dotfiles",
+    "documentation": null,
+    "license": "Apache-2.0",
+    "tags": [
+      "b00t",
+      "local"
+    ],
+    "config": {
+      "command": "bash",
+      "args": [
+        "cratedocs",
+        "stdio",
+        "--debug"
+      ],
+      "transport": "stdio"
+    },
+    "metadata": {
+      "registered_at": "2025-10-17T04:59:02.601773536Z",
+      "updated_at": "2025-10-24T00:59:57.546748026Z",
+      "source": "local",
+      "health_status": "unknown",
+      "last_health_check": null,
+      "dependencies": [],
+      "installation_status": "notinstalled"
+    }
+  },
+  "local.b00t/fetch-url-as-markdown": {
+    "id": "local.b00t/fetch-url-as-markdown",
+    "name": "fetch-url-as-markdown",
+    "description": "Fetches URLs and converts content to markdown format",
+    "version": "0.1.0",
+    "homepage": "https://github.com/elasticdotventures/dotfiles",
+    "documentation": null,
+    "license": "Apache-2.0",
+    "tags": [
+      "b00t",
+      "local"
+    ],
+    "config": {
+      "command": "uvx",
+      "args": [
+        "mcp-server-fetch"
+      ],
+      "transport": "stdio"
+    },
+    "metadata": {
+      "registered_at": "2025-10-17T04:59:02.602635969Z",
+      "updated_at": "2025-10-24T00:59:57.547605792Z",
+      "source": "local",
+      "health_status": "unknown",
+      "last_health_check": null,
+      "dependencies": [],
+      "installation_status": "notinstalled"
+    }
+  },
+  "local.b00t/test-http": {
+    "id": "local.b00t/test-http",
+    "name": "test-http",
+    "description": "MCP HTTP server",
+    "version": "0.1.0",
+    "homepage": "https://github.com/elasticdotventures/dotfiles",
+    "documentation": null,
+    "license": "Apache-2.0",
+    "tags": [
+      "b00t",
+      "local"
+    ],
+    "config": {
+      "command": "npx",
+      "args": [],
+      "transport": "stdio"
+    },
+    "metadata": {
+      "registered_at": "2025-10-17T04:59:02.602302296Z",
+      "updated_at": "2025-10-24T00:59:57.547280091Z",
+      "source": "local",
+      "health_status": "unknown",
+      "last_health_check": null,
+      "dependencies": [],
+      "installation_status": "notinstalled"
+    }
+  },
+  "local.b00t/github": {
+    "id": "local.b00t/github",
+    "name": "github",
+    "description": "GitHub MCP server",
+    "version": "0.1.0",
+    "homepage": "https://github.com/elasticdotventures/dotfiles",
+    "documentation": null,
+    "license": "Apache-2.0",
+    "tags": [
+      "b00t",
+      "local"
+    ],
+    "config": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-github"
+      ],
+      "transport": "stdio"
+    },
+    "metadata": {
+      "registered_at": "2025-10-17T04:59:02.600510380Z",
+      "updated_at": "2025-10-24T00:59:57.545866143Z",
+      "source": "local",
+      "health_status": "unknown",
+      "last_health_check": null,
+      "dependencies": [],
+      "installation_status": "notinstalled"
+    }
+  },
+  "local.b00t/just-mcp": {
+    "id": "local.b00t/just-mcp",
+    "name": "just-mcp",
+    "description": "Justfile MCP server",
+    "version": "0.1.0",
+    "homepage": "https://github.com/elasticdotventures/dotfiles",
+    "documentation": null,
+    "license": "Apache-2.0",
+    "tags": [
+      "b00t",
+      "local"
+    ],
+    "config": {
+      "command": "just-mcp",
+      "args": [
+        "--stdio"
+      ],
+      "transport": "stdio"
+    },
+    "metadata": {
+      "registered_at": "2025-10-17T04:59:02.602129305Z",
+      "updated_at": "2025-10-24T00:59:57.547103573Z",
+      "source": "local",
+      "health_status": "unknown",
+      "last_health_check": null,
+      "dependencies": [],
+      "installation_status": "notinstalled"
+    }
+  },
+  "local.b00t/playwright": {
+    "id": "local.b00t/playwright",
+    "name": "playwright",
+    "description": "MCP server",
+    "version": "0.1.0",
+    "homepage": "https://github.com/elasticdotventures/dotfiles",
+    "documentation": null,
+    "license": "Apache-2.0",
+    "tags": [
+      "b00t",
+      "local"
+    ],
+    "config": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@executeautomation/playwright-mcp-server"
+      ],
+      "transport": "stdio"
+    },
+    "metadata": {
+      "registered_at": "2025-10-17T04:59:02.602214447Z",
+      "updated_at": "2025-10-24T00:59:57.547190801Z",
+      "source": "local",
+      "health_status": "unknown",
+      "last_health_check": null,
+      "dependencies": [],
+      "installation_status": "notinstalled"
+    }
+  },
+  "local.b00t/memory": {
+    "id": "local.b00t/memory",
+    "name": "memory",
+    "description": "MCP server",
+    "version": "0.1.0",
+    "homepage": "https://github.com/elasticdotventures/dotfiles",
+    "documentation": null,
+    "license": "Apache-2.0",
+    "tags": [
+      "b00t",
+      "local"
+    ],
+    "config": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@buger/probe-mcp"
+      ],
+      "transport": "stdio"
+    },
+    "metadata": {
+      "registered_at": "2025-10-17T04:59:02.601951735Z",
+      "updated_at": "2025-10-24T00:59:57.546925838Z",
+      "source": "local",
+      "health_status": "unknown",
+      "last_health_check": null,
+      "dependencies": [],
+      "installation_status": "notinstalled"
+    }
+  },
+  "local.b00t/test-e2e": {
+    "id": "local.b00t/test-e2e",
+    "name": "test-e2e",
+    "description": "MCP server",
+    "version": "0.1.0",
+    "homepage": "https://github.com/elasticdotventures/dotfiles",
+    "documentation": null,
+    "license": "Apache-2.0",
+    "tags": [
+      "b00t",
+      "local"
+    ],
+    "config": {
+      "command": "uvx",
+      "args": [
+        "test-package-e2e"
+      ],
+      "transport": "stdio"
+    },
+    "metadata": {
+      "registered_at": "2025-10-24T00:59:57.547825858Z",
+      "updated_at": "2025-10-24T00:59:57.547826412Z",
+      "source": "local",
+      "health_status": "unknown",
+      "last_health_check": null,
+      "dependencies": [],
+      "installation_status": "notinstalled"
+    }
+  },
+  "local.b00t/aws-knowledge-test": {
+    "id": "local.b00t/aws-knowledge-test",
+    "name": "aws-knowledge-test",
+    "description": "AWS Knowledge MCP server with multiple deployment methods (test)",
+    "version": "0.1.0",
+    "homepage": "https://github.com/elasticdotventures/dotfiles",
+    "documentation": null,
+    "license": "Apache-2.0",
+    "tags": [
+      "b00t",
+      "local"
+    ],
+    "config": {
+      "command": "npx",
+      "args": [
+        "mcp-remote",
+        "https://knowledge-mcp.global.api.aws"
+      ],
+      "env": {
+        "AWS_REGION": "us-east-1",
+        "LOG_LEVEL": "ERROR"
+      },
+      "transport": "stdio"
+    },
+    "metadata": {
+      "registered_at": "2025-10-17T04:59:02.601131189Z",
+      "updated_at": "2025-10-24T00:59:57.546253703Z",
+      "source": "local",
+      "health_status": "unknown",
+      "last_health_check": null,
+      "dependencies": [],
+      "installation_status": "notinstalled"
+    }
+  },
+  "local.b00t/taskmaster-ai": {
+    "id": "local.b00t/taskmaster-ai",
+    "name": "taskmaster-ai",
+    "description": "A poly agentic MCP-powered task-management system you can drop into any project or repo.\n\nChange the main, research and fallback models to <model_name>, <model_name> and <model_name> respectively.\nThere is a CLI + MCP interface\n\n```bash\n\n# Initialize a new project\ntask-master init\n\n# Parse a PRD and generate tasks\ntask-master parse-prd your-prd.txt\n\n# List all tasks\ntask-master list\n\n# Show the next task to work on\ntask-master next\n\n# Show specific task(s) - supports comma-separated IDs\ntask-master show 1,3,5\n\n# Research fresh information with project context\ntask-master research \"What are the latest best practices for JWT authentication?\"\n\n# Generate task files\ntask-master generate\n\n# Add rules after initialization\ntask-master rules add windsurf,roo,vscode\n```\n\n\n",
+    "version": "0.1.0",
+    "homepage": "https://github.com/elasticdotventures/dotfiles",
+    "documentation": null,
+    "license": "Apache-2.0",
+    "tags": [
+      "b00t",
+      "local"
+    ],
+    "config": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "--package=task-master-ai",
+        "task-master-ai"
+      ],
+      "env": {
+        "VERTEX_PROJECT_ID": "",
+        "MISTRAL_API_KEY": "",
+        "OPENAI_BASE_URL": "",
+        "OPENAI_API_KEY": "",
+        "AZURE_OPENAI_ENDPOINT": "",
+        "ANTHROPIC_API_KEY": "",
+        "XAI_API_KEY": "",
+        "OLLAMA_API_KEY": "",
+        "OLLAMA_BASE_URL": "",
+        "OPENROUTER_API_KEY": "",
+        "PERPLEXITY_API_KEY": "",
+        "VERTEX_LOCATION": "",
+        "AZURE_OPENAI_API_KEY": "",
+        "GOOGLE_API_KEY": "",
+        "GOOGLE_APPLICATION_CREDENTIALS": ""
+      },
+      "transport": "stdio"
+    },
+    "metadata": {
+      "registered_at": "2025-10-17T04:59:02.601682439Z",
+      "updated_at": "2025-10-24T00:59:57.546656239Z",
+      "source": "local",
+      "health_status": "unknown",
+      "last_health_check": null,
+      "dependencies": [],
+      "installation_status": "notinstalled"
+    }
+  },
+  "local.b00t/grok-guru": {
+    "id": "local.b00t/grok-guru",
+    "name": "grok-guru",
+    "description": "b00t grok RAG knowledgebase with vector search capabilities (with pre-commit validation)",
+    "version": "0.1.0",
+    "homepage": "https://github.com/elasticdotventures/dotfiles",
+    "documentation": null,
+    "license": "Apache-2.0",
+    "tags": [
+      "b00t",
+      "local"
+    ],
+    "config": {
+      "command": "uv",
+      "args": [
+        "run",
+        "python",
+        "-m",
+        "b00t_grok_guru.server"
+      ],
+      "env": {
+        "QDRANT_URL": "https://a0cfd978-2e95-499c-93cc-9acd66b16d35.us-west-1-0.aws.cloud.qdrant.io:6333",
+        "QDRANT_API_KEY": ""
+      },
+      "transport": "stdio"
+    },
+    "metadata": {
+      "registered_at": "2025-10-17T04:59:02.601877640Z",
+      "updated_at": "2025-10-24T00:59:57.546850305Z",
+      "source": "local",
+      "health_status": "unknown",
+      "last_health_check": null,
+      "dependencies": [],
+      "installation_status": "notinstalled"
+    }
+  },
+  "local.b00t/browser-use": {
+    "id": "local.b00t/browser-use",
+    "name": "browser-use",
+    "description": "Browser automation MCP server for web interactions",
+    "version": "0.1.0",
+    "homepage": "https://github.com/elasticdotventures/dotfiles",
+    "documentation": null,
+    "license": "Apache-2.0",
+    "tags": [
+      "b00t",
+      "local"
+    ],
+    "config": {
+      "command": "uvx",
+      "args": [
+        "browser-use[cli]",
+        "--mcp"
+      ],
+      "transport": "stdio"
+    },
+    "metadata": {
+      "registered_at": "2025-10-17T04:59:02.601387213Z",
+      "updated_at": "2025-10-24T00:59:57.546430358Z",
+      "source": "local",
+      "health_status": "unknown",
+      "last_health_check": null,
+      "dependencies": [],
+      "installation_status": "notinstalled"
+    }
+  },
+  "local.b00t/test-debug": {
+    "id": "local.b00t/test-debug",
+    "name": "test-debug",
+    "description": "MCP server",
+    "version": "0.1.0",
+    "homepage": "https://github.com/elasticdotventures/dotfiles",
+    "documentation": null,
+    "license": "Apache-2.0",
+    "tags": [
+      "b00t",
+      "local"
+    ],
+    "config": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@test/debug"
+      ],
+      "transport": "stdio"
+    },
+    "metadata": {
+      "registered_at": "2025-10-17T04:59:02.602709617Z",
+      "updated_at": "2025-10-24T00:59:57.547680773Z",
+      "source": "local",
+      "health_status": "unknown",
+      "last_health_check": null,
+      "dependencies": [],
+      "installation_status": "notinstalled"
+    }
+  },
+  "local.b00t/lsp": {
+    "id": "local.b00t/lsp",
+    "name": "lsp",
+    "description": "Language Server Protocol via Docker - Provides LSP functionality through Docker container",
+    "version": "0.1.0",
+    "homepage": "https://github.com/elasticdotventures/dotfiles",
+    "documentation": null,
+    "license": "Apache-2.0",
+    "tags": [
+      "b00t",
+      "local"
+    ],
+    "config": {
+      "command": "docker",
+      "args": [
+        "run",
+        "-i",
+        "--rm",
+        "docker.io/jonrad/lsp-mcp:0.3.1"
+      ],
+      "transport": "stdio"
+    },
+    "metadata": {
+      "registered_at": "2025-10-17T04:59:02.602051246Z",
+      "updated_at": "2025-10-24T00:59:57.547025052Z",
+      "source": "local",
+      "health_status": "unknown",
+      "last_health_check": null,
+      "dependencies": [],
+      "installation_status": "notinstalled"
+    }
+  }
+}

@@ -76,7 +76,7 @@ pub enum McpCommands {
     },
     #[clap(
         about = "MCP Registry operations (list, search, install dependencies)",
-        long_about = "Interact with b00t MCP registry for server management and dependency installation.\n\nExamples:\n  b00t-cli mcp registry list\n  b00t-cli mcp registry search --tag docker\n  b00t-cli mcp registry get io.b00t/server-name\n  b00t-cli mcp registry install-deps io.b00t/server-name\n  b00t-cli mcp registry sync-official"
+        long_about = "Interact with b00t MCP registry for server management and dependency installation.\n\nExamples:\n  b00t-cli mcp registry list\n  b00t-cli mcp registry search --tag docker\n  b00t-cli mcp registry get io.b00t/server-name\n  b00t-cli mcp registry install-deps io.b00t/server-name\n  b00t-cli mcp registry sync-official\n  b00t-cli mcp registry sync-datums --path ~/.dotfiles/_b00t_"
     )]
     Registry {
         #[clap(subcommand)]
@@ -116,6 +116,11 @@ pub enum RegistryAction {
     Export {
         #[clap(long, short, help = "Output file (default: stdout)")]
         output: Option<String>,
+    },
+    #[clap(about = "Sync registry from datum TOML files")]
+    SyncDatums {
+        #[clap(long, help = "Path to datums directory", default_value = "~/.dotfiles/_b00t_")]
+        path: String,
     },
 }
 
@@ -314,6 +319,12 @@ impl RegistryAction {
                 } else {
                     println!("{}", json);
                 }
+                Ok(())
+            }
+            RegistryAction::SyncDatums { path } => {
+                println!("🔄 Syncing registry from datum files...");
+                let count = registry.sync_from_datums(path)?;
+                println!("✅ Synced {} MCP servers from datum files", count);
                 Ok(())
             }
         }

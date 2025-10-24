@@ -425,6 +425,186 @@ impl McpRegistry {
         Ok(0)
     }
 
+    /// Sync registry from datum TOML files (registry-as-view)
+    /// Scans _b00t_ directory and populates registry from .mcp.toml files
+    pub fn sync_from_datums(&mut self, datums_path: &str) -> Result<usize> {
+        use std::fs;
+
+        info!("🔄 Syncing registry from datum files in {}", datums_path);
+
+        let expanded_path = shellexpand::tilde(datums_path).to_string();
+        let datums_dir = PathBuf::from(&expanded_path);
+
+        if !datums_dir.exists() {
+            warn!("Datums directory not found: {}", datums_path);
+            return Ok(0);
+        }
+
+        let mut synced_count = 0;
+
+        // Read all .mcp.toml files
+        for entry in fs::read_dir(&datums_dir)? {
+            let entry = entry?;
+            let path = entry.path();
+
+            if path.is_file() {
+                if let Some(filename) = path.file_name().and_then(|s| s.to_str()) {
+                    if filename.ends_with(".mcp.toml") {
+                        match self.sync_datum_file(&path) {
+                            Ok(true) => synced_count += 1,
+                            Ok(false) => {}, // Already synced
+                            Err(e) => warn!("Failed to sync {}: {}", filename, e),
+                        }
+                    }
+                }
+            }
+        }
+
+        if synced_count > 0 {
+            self.save()?;
+            info!("✅ Synced {} MCP servers from datums", synced_count);
+        }
+
+        Ok(synced_count)
+    }
+
+    /// Sync a single datum file to registry
+    /// Returns Ok(true) if a new registration was added, Ok(false) if updated/unchanged
+    fn sync_datum_file(&mut self, path: &PathBuf) -> Result<bool> {
+        use serde::Deserialize;
+        use std::fs;
+
+        #[derive(Deserialize)]
+        struct UnifiedConfig {
+            b00t: BootDatumForRegistry,
+        }
+
+        #[derive(Deserialize)]
+        struct BootDatumForRegistry {
+            name: String,
+            #[serde(default)]
+            hint: String,
+            command: Option<String>,
+            args: Option<Vec<String>>,
+            depends_on: Option<Vec<String>>,
+            env: Option<HashMap<String, String>>,
+            #[serde(default)]
+            keywords: Option<Vec<String>>,
+            mcp: Option<serde_json::Value>,
+        }
+
+        let content = fs::read_to_string(path)?;
+        let config: UnifiedConfig = toml::from_str(&content)
+            .context(format!("Failed to parse TOML: {}", path.display()))?;
+
+        let datum = config.b00t;
+
+        // Extract command and args (prioritize mcp.stdio[0] if available)
+        let (command, args) = if let Some(mcp_val) = &datum.mcp {
+            if let Some(stdio) = mcp_val.get("stdio").and_then(|v| v.as_array()) {
+                if let Some(method) = stdio.first() {
+                    let cmd = method.get("command")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("npx")
+                        .to_string();
+                    let method_args = method.get("args")
+                        .and_then(|v| v.as_array())
+                        .map(|arr| {
+                            arr.iter()
+                                .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                                .collect()
+                        })
+                        .unwrap_or_default();
+                    (cmd, method_args)
+                } else {
+                    (datum.command.unwrap_or_else(|| "npx".to_string()), datum.args.unwrap_or_default())
+                }
+            } else {
+                (datum.command.unwrap_or_else(|| "npx".to_string()), datum.args.unwrap_or_default())
+            }
+        } else {
+            (datum.command.unwrap_or_else(|| "npx".to_string()), datum.args.unwrap_or_default())
+        };
+
+        // Convert depends_on to registry dependencies
+        let dependencies = self.convert_datum_deps_to_registry_deps(&datum.depends_on);
+
+        // Generate server ID from name
+        let server_id = format!("local.b00t/{}", datum.name);
+
+        // Check if already exists and is up to date
+        let is_new = !self.servers.contains_key(&server_id);
+
+        let registration = McpServerRegistration {
+            id: server_id.clone(),
+            name: datum.name.clone(),
+            description: datum.hint.clone(),
+            version: "0.1.0".to_string(),
+            homepage: Some("https://github.com/elasticdotventures/dotfiles".to_string()),
+            documentation: None,
+            license: Some("Apache-2.0".to_string()),
+            tags: datum.keywords.unwrap_or_else(|| vec!["b00t".to_string(), "local".to_string()]),
+            config: McpServerConfig {
+                command,
+                args,
+                env: datum.env,
+                cwd: None,
+                transport: ServerTransport::Stdio,
+            },
+            metadata: RegistrationMetadata {
+                registered_at: self.servers.get(&server_id)
+                    .map(|s| s.metadata.registered_at)
+                    .unwrap_or_else(Utc::now),
+                updated_at: Utc::now(),
+                source: RegistrationSource::Local,
+                health_status: HealthStatus::Unknown,
+                last_health_check: None,
+                dependencies,
+                installation_status: InstallationStatus::NotInstalled,
+            },
+        };
+
+        self.servers.insert(server_id, registration);
+        Ok(is_new)
+    }
+
+    /// Convert datum depends_on references to registry dependencies
+    fn convert_datum_deps_to_registry_deps(&self, depends_on: &Option<Vec<String>>) -> Vec<Dependency> {
+        let Some(deps) = depends_on else {
+            return Vec::new();
+        };
+
+        deps.iter().filter_map(|dep| {
+            // Parse datum ID format: "name.type" (e.g., "docker.cli", "python.cli")
+            let parts: Vec<&str> = dep.split('.').collect();
+            if parts.len() != 2 {
+                return None;
+            }
+
+            let (name, datum_type) = (parts[0], parts[1]);
+
+            // Map datum type to dependency type
+            let dep_type = match (name, datum_type) {
+                ("docker", "cli") | ("docker", "docker") => Some(DependencyType::Docker),
+                ("node", "cli") | ("node", _) => Some(DependencyType::Node),
+                ("npm", "cli") | ("npx", "cli") => Some(DependencyType::Npm),
+                ("python", "cli") | ("python3", "cli") => Some(DependencyType::Python),
+                ("pip", "cli") | ("pip3", "cli") => Some(DependencyType::Pip),
+                ("rust", "cli") | ("rustc", "cli") | ("cargo", "cli") => Some(DependencyType::Rust),
+                ("uvx", "cli") => Some(DependencyType::System("uvx".to_string())),
+                _ if datum_type == "cli" => Some(DependencyType::System(name.to_string())),
+                _ => None,
+            };
+
+            dep_type.map(|dt| Dependency {
+                dep_type: dt,
+                min_version: None,
+                installed: false, // Will be checked later
+                install_method: Some(format!("b00t-cli cli install {}", name)),
+            })
+        }).collect()
+    }
+
     /// Install dependencies for an MCP server
     pub async fn install_dependencies(&mut self, server_id: &str) -> Result<()> {
         // Clone dependencies to avoid borrow conflicts

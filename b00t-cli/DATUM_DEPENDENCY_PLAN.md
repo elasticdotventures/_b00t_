@@ -512,6 +512,37 @@ $ b00t-cli stack install postgres-dev-stack
 
 **Deliverable**: Can define and install multi-component software stacks
 
+### Phase 2.5: Registry-as-View Integration (COMPLETED)
+
+**Tasks**:
+1. ✅ Create `sync_from_datums()` method in McpRegistry
+2. ✅ Add `sync_datum_file()` to convert TOML to registry entries
+3. ✅ Implement `convert_datum_deps_to_registry_deps()` mapping
+4. ✅ Add `mcp registry sync-datums` CLI command
+5. ✅ Test end-to-end flow: register → sync → query
+
+**Implementation**:
+- Registry now acts as a "view" over datum TOML files
+- `mcp_registry.rs:428-605` - sync methods with server_id generation
+- `commands/mcp.rs:120-124` - SyncDatums CLI command
+- Datum TOML files remain single source of truth
+- Registry populated via sync for runtime metadata and health checks
+
+**Usage**:
+```bash
+# Sync registry from datum files
+b00t-cli mcp registry sync-datums --path ~/.dotfiles/_b00t_
+
+# Register new MCP (creates TOML + syncs to registry)
+b00t-cli mcp register test-server -- uvx test-package
+
+# Query from registry
+b00t-cli mcp registry get local.b00t/test-server
+b00t-cli mcp registry list
+```
+
+**Deliverable**: Registry and datum systems integrated with datums as source of truth
+
 ### Phase 3: Whitelist Validation (Week 3)
 
 **Tasks**:
