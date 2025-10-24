@@ -1,6 +1,6 @@
+use crate::datum_gemini::gemini_install_mcp;
 use anyhow::Result;
 use clap::Parser;
-use crate::datum_gemini::gemini_install_mcp;
 
 #[derive(Parser)]
 pub enum AppCommands {
@@ -21,7 +21,7 @@ pub enum AppCommands {
         claudecode_command: AppClaudecodeCommands,
     },
     #[clap(
-        about = "Gemini CLI integration commands", 
+        about = "Gemini CLI integration commands",
         long_about = "Gemini CLI integration commands.\n\nMCP Examples:\n  b00t-cli app geminicli mcp install gh --repo\n  b00t-cli mcp install gh geminicli --user"
     )]
     Geminicli {
@@ -121,9 +121,7 @@ impl AppCommands {
                 println!("🤖 Claude Code app functionality coming soon...");
                 Ok(())
             }
-            AppCommands::Geminicli { geminicli_command } => {
-                geminicli_command.execute(path)
-            }
+            AppCommands::Geminicli { geminicli_command } => geminicli_command.execute(path),
         }
     }
 }
@@ -131,9 +129,7 @@ impl AppCommands {
 impl AppGeminicliCommands {
     pub fn execute(&self, path: &str) -> Result<()> {
         match self {
-            AppGeminicliCommands::Mcp { mcp_command } => {
-                mcp_command.execute(path)
-            }
+            AppGeminicliCommands::Mcp { mcp_command } => mcp_command.execute(path),
         }
     }
 }
@@ -158,10 +154,10 @@ mod tests {
     fn test_app_commands_exist() {
         let vscode_cmd = AppCommands::Vscode {
             vscode_command: AppVscodeCommands::Extension {
-                extension_command: AppVscodeExtensionCommands::List { json: false }
-            }
+                extension_command: AppVscodeExtensionCommands::List { json: false },
+            },
         };
-        
+
         assert!(vscode_cmd.execute("test").is_ok());
     }
 }

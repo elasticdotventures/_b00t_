@@ -1,7 +1,7 @@
 use anyhow::Result;
 use clap::Parser;
-use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 
 #[derive(Parser)]
 pub enum WhatismyCommands {
@@ -50,13 +50,16 @@ impl WhatismyCommands {
                 use crate::session_memory::SessionMemory;
                 let memory = SessionMemory::load()?;
                 let agent = detect_agent(&memory, *no_env);
-                
+
                 if *json {
-                    println!("{}", serde_json::to_string(&serde_json::json!({
-                        "agent": agent,
-                        "pid": std::process::id(),
-                        "ppid": get_parent_pid(),
-                    }))?);
+                    println!(
+                        "{}",
+                        serde_json::to_string(&serde_json::json!({
+                            "agent": agent,
+                            "pid": std::process::id(),
+                            "ppid": get_parent_pid(),
+                        }))?
+                    );
                 } else {
                     println!("{}", agent);
                 }
@@ -65,15 +68,18 @@ impl WhatismyCommands {
             WhatismyCommands::Session { json } => {
                 use crate::session_memory::SessionMemory;
                 let memory = SessionMemory::load()?;
-                
+
                 if *json {
-                    println!("{}", serde_json::to_string(&serde_json::json!({
-                        "session_id": memory.metadata.session_id,
-                        "pid": std::process::id(),
-                        "created_at": memory.metadata.created_at,
-                        "updated_at": memory.metadata.updated_at,
-                        "branch": memory.metadata.initial_branch,
-                    }))?);
+                    println!(
+                        "{}",
+                        serde_json::to_string(&serde_json::json!({
+                            "session_id": memory.metadata.session_id,
+                            "pid": std::process::id(),
+                            "created_at": memory.metadata.created_at,
+                            "updated_at": memory.metadata.updated_at,
+                            "branch": memory.metadata.initial_branch,
+                        }))?
+                    );
                 } else {
                     println!("{}", memory.get_summary());
                 }
@@ -83,7 +89,7 @@ impl WhatismyCommands {
                 use crate::session_memory::SessionMemory;
                 let memory = SessionMemory::load()?;
                 let env_info = memory.collect_tracked_env();
-                
+
                 if *json {
                     println!("{}", serde_json::to_string(&env_info)?);
                 } else {
@@ -94,7 +100,7 @@ impl WhatismyCommands {
             WhatismyCommands::Status { json } => {
                 use crate::session_memory::SessionMemory;
                 let mut memory = SessionMemory::load()?;
-                
+
                 if *json {
                     let context = memory.get_agent_context();
                     println!("{}", serde_json::to_string_pretty(&context)?);
@@ -103,7 +109,7 @@ impl WhatismyCommands {
                     match memory.render_status_template() {
                         Ok(rendered) => println!("{}", rendered),
                         Err(_) => {
-                            // Fallback: Run the enhanced diagnostics 
+                            // Fallback: Run the enhanced diagnostics
                             crate::commands::init::run_system_diagnostics(&mut memory)?;
                         }
                     }
@@ -113,14 +119,15 @@ impl WhatismyCommands {
             WhatismyCommands::Template { name, format } => {
                 use crate::session_memory::SessionMemory;
                 let memory = SessionMemory::load()?;
-                
+
                 match name.as_str() {
                     "status" => {
                         match format.as_str() {
                             "tera" => {
                                 // Output the raw Tera template
-                                let template_content = memory.load_default_status_template().unwrap_or_else(|_| 
-                                    "Error loading template".to_string());
+                                let template_content = memory
+                                    .load_default_status_template()
+                                    .unwrap_or_else(|_| "Error loading template".to_string());
                                 println!("{}", template_content);
                             }
                             "toml" => {
@@ -172,12 +179,18 @@ impl WhatismyCommands {
                                 println!("{}", serde_json::to_string_pretty(&template_data)?);
                             }
                             _ => {
-                                return Err(anyhow::anyhow!("Unsupported format: {}. Use: toml, yaml, json, or tera", format));
+                                return Err(anyhow::anyhow!(
+                                    "Unsupported format: {}. Use: toml, yaml, json, or tera",
+                                    format
+                                ));
                             }
                         }
                     }
                     _ => {
-                        return Err(anyhow::anyhow!("Unknown template: {}. Available: status", name));
+                        return Err(anyhow::anyhow!(
+                            "Unknown template: {}. Available: status",
+                            name
+                        ));
                     }
                 }
                 Ok(())
@@ -185,11 +198,11 @@ impl WhatismyCommands {
             WhatismyCommands::Role { json, show_tools } => {
                 use crate::session_memory::SessionMemory;
                 let memory = SessionMemory::load()?;
-                
+
                 // Detect current role based on agent patterns
                 let agent = detect_agent(&memory, false);
                 let role = detect_role_from_agent(&agent);
-                
+
                 if *json {
                     let role_data = if *show_tools {
                         get_role_with_tools(&role)?
@@ -204,7 +217,7 @@ impl WhatismyCommands {
                 } else {
                     println!("🎭 Role: {}", role);
                     println!("🤖 Agent: {}", agent);
-                    
+
                     if *show_tools {
                         show_blessed_tools(&role)?;
                     }
@@ -226,22 +239,23 @@ pub fn detect_agent(memory: &SessionMemory, no_env: bool) -> String {
             }
         }
     }
-    
+
     // Detect based on parent process and environment
     let pid = std::process::id();
     let ppid = get_parent_pid();
-    
+
     // Check for Claude Code
     if memory.get_env_var("CLAUDECODE").as_deref() == Some("1") {
         return format!("🤖 Claude Code PID:{}", pid);
     }
-    
+
     // Check for other AI environments using tracked variables
-    if memory.get_env_var("ANTHROPIC_API_KEY").is_some() || 
-       memory.get_env_var("CLAUDE_API_KEY").is_some() {
+    if memory.get_env_var("ANTHROPIC_API_KEY").is_some()
+        || memory.get_env_var("CLAUDE_API_KEY").is_some()
+    {
         return format!("🤖 Claude Agent PID:{}", pid);
     }
-    
+
     // Check parent process name against configured patterns
     if let Some(parent_cmd) = get_parent_command() {
         for (pattern, display) in &memory.config.agent_patterns {
@@ -250,7 +264,7 @@ pub fn detect_agent(memory: &SessionMemory, no_env: bool) -> String {
             }
         }
     }
-    
+
     // Default: not an agent
     format!("🧑‍💻 Human PID:{} PPID:{}", pid, ppid.unwrap_or(0))
 }
@@ -260,11 +274,7 @@ fn get_parent_pid() -> Option<u32> {
     {
         unsafe {
             let ppid = libc::getppid();
-            if ppid > 0 {
-                Some(ppid as u32)
-            } else {
-                None
-            }
+            if ppid > 0 { Some(ppid as u32) } else { None }
         }
     }
     #[cfg(not(unix))]
@@ -282,7 +292,7 @@ fn get_parent_command() -> Option<String> {
                 return Some(cmdline.trim().to_string());
             }
         }
-        
+
         // Fallback: use ps command
         if let Ok(output) = duct::cmd!("ps", "-o", "comm=", "-p", ppid.to_string()).read() {
             return Some(output.trim().to_string());
@@ -307,7 +317,7 @@ fn detect_role_from_agent(agent: &str) -> String {
             return role.to_lowercase();
         }
     }
-    
+
     // Fallback to agent-based detection
     if agent.contains("Claude") {
         "captain".to_string()
@@ -321,12 +331,16 @@ fn detect_role_from_agent(agent: &str) -> String {
 /// Load blessings configuration
 fn load_blessings() -> Result<HashMap<String, AgentBlessing>> {
     let config_dir = crate::session_memory::SessionMemory::get_config_path()?;
-    let blessings_path = config_dir.join("_b00t_").join("cake.🍰").join("agents").join("blessings.toml");
-    
+    let blessings_path = config_dir
+        .join("_b00t_")
+        .join("cake.🍰")
+        .join("agents")
+        .join("blessings.toml");
+
     if !blessings_path.exists() {
         return Ok(HashMap::new());
     }
-    
+
     let content = std::fs::read_to_string(&blessings_path)?;
     let blessings: HashMap<String, AgentBlessing> = toml::from_str(&content)?;
     Ok(blessings)
@@ -335,7 +349,7 @@ fn load_blessings() -> Result<HashMap<String, AgentBlessing>> {
 /// Get role data with tools
 fn get_role_with_tools(role: &str) -> Result<serde_json::Value> {
     let blessings = load_blessings()?;
-    
+
     if let Some(blessing) = blessings.get(role) {
         Ok(serde_json::json!({
             "role": role,
@@ -356,19 +370,30 @@ fn get_role_with_tools(role: &str) -> Result<serde_json::Value> {
 /// Show blessed tools for role
 fn show_blessed_tools(role: &str) -> Result<()> {
     let blessings = load_blessings()?;
-    
+
     if let Some(blessing) = blessings.get(role) {
         println!("📜 Description: {}", blessing.description);
         println!("🛠️  Blessed Tools:");
         for tool in &blessing.tools {
-            let status = if tool_is_available(tool) { "✅" } else { "❌" };
+            let status = if tool_is_available(tool) {
+                "✅"
+            } else {
+                "❌"
+            };
             println!("  {} {}", status, tool);
         }
-        println!("🎯 Required: {}", if blessing.required_for_role { "Yes" } else { "No" });
+        println!(
+            "🎯 Required: {}",
+            if blessing.required_for_role {
+                "Yes"
+            } else {
+                "No"
+            }
+        );
     } else {
         println!("❓ No blessings found for role: {}", role);
     }
-    
+
     Ok(())
 }
 
@@ -389,7 +414,7 @@ mod tests {
             no_env: false,
             json: false,
         };
-        
+
         assert!(agent_cmd.execute("test").is_ok());
     }
 }

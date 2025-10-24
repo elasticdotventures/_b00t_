@@ -313,8 +313,8 @@ alias nowdate='date +"%d-%m-%Y"'
 # 🐙 git
 alias gitstatus='git -C . status --porcelain | grep "^.\w"'
 
-# 🐍 Python ve = create .venv, va = activate!
-alias ve='python3 -m venv ./venv'
+# 🐍 Python ve = create .venv with uv, va = activate!
+alias ve='UV_CACHE_DIR="${UV_CACHE_DIR:-$PWD/.uv-cache}" uv venv .venv'
 alias va='source ./venv/bin/activate'
 
 # use fzf to find a file and open it in vs code

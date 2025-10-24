@@ -6,12 +6,12 @@ use serde::{Deserialize, Serialize};
 // MCP-specific multi-method structures
 
 /// Stdio-based MCP server method configuration (MCP nomenclature)
-/// 
+///
 /// Defines how to execute an MCP server via stdio transport (command line interface).
 /// Multiple stdio methods can be specified with different priorities.
-/// 
+///
 /// # Examples
-/// 
+///
 /// ```toml
 /// [[b00t.stdio]]
 /// command = "npx"
@@ -19,7 +19,7 @@ use serde::{Deserialize, Serialize};
 /// priority = 0
 /// requires = ["node"]
 /// transport = "stdio"
-/// 
+///
 /// [[b00t.stdio]]
 /// command = "uvx"  
 /// args = ["mcp-server-filesystem"]
@@ -42,11 +42,11 @@ pub struct McpStdioMethod {
 }
 
 /// HTTP stream-based MCP server method configuration (MCP nomenclature)
-/// 
+///
 /// Defines how to connect to an MCP server via HTTP stream transport.
-/// 
+///
 /// # Examples
-/// 
+///
 /// ```toml
 /// [b00t.httpstream]
 /// url = "https://mcp-server.example.com"
@@ -84,18 +84,18 @@ fn default_httpstream_transport() -> String {
 }
 
 /// Multi-method MCP server configuration datum
-/// 
+///
 /// Manages MCP server configurations with support for multiple deployment methods.
 /// Automatically selects the best available method based on priority and system requirements.
-/// 
+///
 /// # Examples
-/// 
+///
 /// ```rust
 /// use b00t_cli::datum_mcp::McpDatum;
-/// 
+///
 /// // Load MCP server configuration
 /// let mcp = McpDatum::from_config("filesystem", "~/.dotfiles/_b00t_").unwrap();
-/// 
+///
 /// // Select best available method
 /// if let Some(method) = mcp.select_best_method() {
 ///     println!("Selected method: {:?}", method);
@@ -115,10 +115,14 @@ impl McpDatum {
     fn parse_stdio_methods(&self) -> Vec<McpStdioMethod> {
         if let Some(mcp) = &self.datum.mcp {
             if let Some(stdio_data) = &mcp.stdio {
-                stdio_data.iter()
-                    .filter_map(|raw| serde_json::from_value(serde_json::Value::Object(
-                        raw.iter().map(|(k, v)| (k.clone(), v.clone())).collect()
-                    )).ok())
+                stdio_data
+                    .iter()
+                    .filter_map(|raw| {
+                        serde_json::from_value(serde_json::Value::Object(
+                            raw.iter().map(|(k, v)| (k.clone(), v.clone())).collect(),
+                        ))
+                        .ok()
+                    })
                     .collect()
             } else {
                 Vec::new()
@@ -128,13 +132,17 @@ impl McpDatum {
         }
     }
 
-    // Helper to parse HTTP stream method from raw data  
+    // Helper to parse HTTP stream method from raw data
     fn parse_httpstream_method(&self) -> Option<McpHttpStreamMethod> {
         if let Some(mcp) = &self.datum.mcp {
             if let Some(httpstream_data) = &mcp.httpstream {
                 serde_json::from_value(serde_json::Value::Object(
-                    httpstream_data.iter().map(|(k, v)| (k.clone(), v.clone())).collect()
-                )).ok()
+                    httpstream_data
+                        .iter()
+                        .map(|(k, v)| (k.clone(), v.clone()))
+                        .collect(),
+                ))
+                .ok()
             } else {
                 None
             }
@@ -178,7 +186,7 @@ impl McpDatum {
             // TODO: Add actual internet connectivity check
             // For now, assume internet is available
         }
-        
+
         // Check other requirements
         self.evaluate_method_constraints(&httpstream.requires)
     }
@@ -188,7 +196,7 @@ impl McpDatum {
         if !check_command_available(&stdio.command) {
             return false;
         }
-        
+
         // Check method-specific constraints
         self.evaluate_method_constraints(&stdio.requires)
     }
@@ -201,7 +209,11 @@ impl McpDatum {
         requires.iter().all(|constraint| {
             match constraint.as_str() {
                 "node" => check_command_available("node") || check_command_available("npx"),
-                "python" => check_command_available("python") || check_command_available("python3") || check_command_available("uvx"),
+                "python" => {
+                    check_command_available("python")
+                        || check_command_available("python3")
+                        || check_command_available("uvx")
+                }
                 "docker" => check_command_available("docker"),
                 "internet" => true, // TODO: Add actual internet check
                 constraint if constraint.starts_with("CMD:") => {
@@ -272,7 +284,9 @@ impl DatumChecker for McpDatum {
         // Return the selected method info if available
         if let Some(method) = self.select_best_method() {
             match method {
-                McpSelectedMethod::HttpStream(httpstream) => Some(format!("HTTP Stream: {}", httpstream.url)),
+                McpSelectedMethod::HttpStream(httpstream) => {
+                    Some(format!("HTTP Stream: {}", httpstream.url))
+                }
                 McpSelectedMethod::Stdio(stdio) => Some(format!("{} available", stdio.command)),
             }
         } else {

@@ -46,13 +46,18 @@ pub enum McpCommands {
     Install {
         #[clap(help = "MCP server name")]
         name: String,
-        #[clap(help = "Installation target: claudecode, vscode, geminicli, dotmcpjson, roocode, stdout")]
+        #[clap(
+            help = "Installation target: claudecode, vscode, geminicli, dotmcpjson, roocode, stdout"
+        )]
         target: String,
         #[clap(long, help = "Install to repository-specific location (for geminicli)")]
         repo: bool,
         #[clap(long, help = "Install to user-global location (for geminicli)")]
         user: bool,
-        #[clap(long, help = "Select stdio method by command (for multi-source MCP configs)")]
+        #[clap(
+            long,
+            help = "Select stdio method by command (for multi-source MCP configs)"
+        )]
         stdio_command: Option<String>,
         #[clap(long, help = "Use httpstream method (for multi-source MCP configs)")]
         httpstream: bool,
@@ -69,12 +74,67 @@ pub enum McpCommands {
         #[clap(help = "Comma-separated list of MCP server names to output")]
         servers: String,
     },
+    #[clap(
+        about = "MCP Registry operations (list, search, install dependencies)",
+        long_about = "Interact with b00t MCP registry for server management and dependency installation.\n\nExamples:\n  b00t-cli mcp registry list\n  b00t-cli mcp registry search --tag docker\n  b00t-cli mcp registry get io.b00t/server-name\n  b00t-cli mcp registry install-deps io.b00t/server-name\n  b00t-cli mcp registry sync-official\n  b00t-cli mcp registry sync-datums --path ~/.dotfiles/_b00t_"
+    )]
+    Registry {
+        #[clap(subcommand)]
+        action: RegistryAction,
+    },
+}
+
+#[derive(Parser)]
+pub enum RegistryAction {
+    #[clap(about = "List all registered MCP servers")]
+    List {
+        #[clap(long, help = "Output in JSON format")]
+        json: bool,
+    },
+    #[clap(about = "Search for MCP servers by keyword or tag")]
+    Search {
+        #[clap(long, help = "Search keyword in name/description")]
+        keyword: Option<String>,
+        #[clap(long, help = "Search by tag")]
+        tag: Option<String>,
+    },
+    #[clap(about = "Get detailed information about a specific server")]
+    Get {
+        #[clap(help = "Server ID (e.g., io.b00t/server-name)")]
+        server_id: String,
+    },
+    #[clap(about = "Install dependencies for an MCP server")]
+    InstallDeps {
+        #[clap(help = "Server ID to install dependencies for")]
+        server_id: String,
+    },
+    #[clap(about = "Sync with official MCP registry")]
+    SyncOfficial,
+    #[clap(about = "Auto-discover MCP servers from system")]
+    Discover,
+    #[clap(about = "Export registry in MCP format")]
+    Export {
+        #[clap(long, short, help = "Output file (default: stdout)")]
+        output: Option<String>,
+    },
+    #[clap(about = "Sync registry from datum TOML files")]
+    SyncDatums {
+        #[clap(long, help = "Path to datums directory", default_value = "~/.dotfiles/_b00t_")]
+        path: String,
+    },
 }
 
 impl McpCommands {
-    pub fn execute(&self, path: &str) -> Result<()> {
+    pub async fn execute_async(&self, path: &str) -> Result<()> {
         match self {
-            McpCommands::Register { name_or_json, hint: _, remove, dwiw, no_dwiw, command_args } => {
+            McpCommands::Register {
+                name_or_json,
+                hint: _,
+                remove,
+                dwiw,
+                no_dwiw,
+                command_args,
+            } => {
                 if *remove {
                     // Remove mode: delete the MCP server configuration
                     crate::mcp_remove(name_or_json, path)
@@ -99,25 +159,29 @@ impl McpCommands {
                             "name": server_name,
                             "command": command,
                             "args": args
-                        }).to_string();
+                        })
+                        .to_string();
 
                         crate::mcp_add_json(&json_str, actual_dwiw, path)
                     } else {
-                        anyhow::bail!("Invalid register command. Use JSON format or command format with --");
+                        anyhow::bail!(
+                            "Invalid register command. Use JSON format or command format with --"
+                        );
                     }
                 }
             }
-            McpCommands::List { json } => {
-                crate::mcp_list(path, *json)
-            }
-            McpCommands::Install { name, target, repo, user, stdio_command, httpstream } => {
+            McpCommands::List { json } => crate::mcp_list(path, *json),
+            McpCommands::Install {
+                name,
+                target,
+                repo,
+                user,
+                stdio_command,
+                httpstream,
+            } => {
                 match target.as_str() {
-                    "claudecode" | "claude" => {
-                        crate::claude_code_install_mcp(name, path)
-                    }
-                    "vscode" => {
-                        crate::vscode_install_mcp(name, path)
-                    }
+                    "claudecode" | "claude" => crate::claude_code_install_mcp(name, path),
+                    "vscode" => crate::vscode_install_mcp(name, path),
                     "geminicli" => {
                         // Determine installation location: default to repo if in git repo, otherwise user
                         let use_repo = if *repo && *user {
@@ -132,9 +196,12 @@ impl McpCommands {
                         };
                         crate::gemini_install_mcp(name, path, use_repo)
                     }
-                    "dotmcpjson" => {
-                        crate::dotmcpjson_install_mcp(name, path, stdio_command.as_deref(), *httpstream)
-                    }
+                    "dotmcpjson" => crate::dotmcpjson_install_mcp(
+                        name,
+                        path,
+                        stdio_command.as_deref(),
+                        *httpstream,
+                    ),
                     "roocode" => {
                         // Design with internal arrays so we can extend merge/symlink targets over time.
                         // Primary write target is .roo/mcp.json. Merge from .mcp.json if present.
@@ -159,9 +226,106 @@ impl McpCommands {
                     }
                 }
             }
-            McpCommands::Output { json, mcp_servers, servers } => {
+            McpCommands::Output {
+                json,
+                mcp_servers,
+                servers,
+            } => {
                 let use_mcp_servers_wrapper = !json && (*mcp_servers || !servers.contains(','));
                 crate::mcp_output(path, use_mcp_servers_wrapper, servers)
+            }
+            McpCommands::Registry { action } => action.execute_async().await,
+        }
+    }
+}
+
+impl RegistryAction {
+    pub async fn execute_async(&self) -> Result<()> {
+        use b00t_c0re_lib::mcp_registry::McpRegistry;
+
+        let mut registry = McpRegistry::default();
+
+        match self {
+            RegistryAction::List { json } => {
+                let servers = registry.list();
+
+                if *json {
+                    println!("{}", serde_json::to_string_pretty(&servers)?);
+                } else {
+                    println!("📋 Registered MCP Servers:\n");
+                    for server in servers {
+                        println!("  {} ({})", server.name, server.id);
+                        println!(
+                            "    Command: {} {}",
+                            server.config.command,
+                            server.config.args.join(" ")
+                        );
+                        println!("    Tags: {}", server.tags.join(", "));
+                        println!("    Status: {:?}", server.metadata.health_status);
+                        println!();
+                    }
+                }
+                Ok(())
+            }
+            RegistryAction::Search { keyword, tag } => {
+                let results = if let Some(tag_val) = tag {
+                    registry.search_by_tag(tag_val)
+                } else if let Some(kw) = keyword {
+                    registry.search(kw)
+                } else {
+                    anyhow::bail!("Must provide --keyword or --tag");
+                };
+
+                println!("🔍 Search Results ({} matches):\n", results.len());
+                for server in results {
+                    println!("  {} - {}", server.id, server.description);
+                    println!("    Tags: {}", server.tags.join(", "));
+                    println!();
+                }
+                Ok(())
+            }
+            RegistryAction::Get { server_id } => {
+                if let Some(server) = registry.get(server_id) {
+                    println!("{}", serde_json::to_string_pretty(&server)?);
+                    Ok(())
+                } else {
+                    anyhow::bail!("Server '{}' not found in registry", server_id)
+                }
+            }
+            RegistryAction::InstallDeps { server_id } => {
+                println!("📦 Installing dependencies for {}...", server_id);
+                registry.install_dependencies(server_id).await?;
+                println!("✅ Dependencies installed successfully");
+                Ok(())
+            }
+            RegistryAction::SyncOfficial => {
+                println!("🔄 Syncing with official MCP registry...");
+                let count = registry.sync_official_registry().await?;
+                println!("✅ Synced {} servers from official registry", count);
+                Ok(())
+            }
+            RegistryAction::Discover => {
+                println!("🔍 Auto-discovering MCP servers from system...");
+                let count = registry.auto_discover().await?;
+                println!("✅ Discovered {} MCP servers", count);
+                Ok(())
+            }
+            RegistryAction::Export { output } => {
+                let json = registry.export_to_mcp_format()?;
+
+                if let Some(path) = output {
+                    std::fs::write(path, &json)?;
+                    println!("✅ Registry exported to {}", path);
+                } else {
+                    println!("{}", json);
+                }
+                Ok(())
+            }
+            RegistryAction::SyncDatums { path } => {
+                println!("🔄 Syncing registry from datum files...");
+                let count = registry.sync_from_datums(path)?;
+                println!("✅ Synced {} MCP servers from datum files", count);
+                Ok(())
             }
         }
     }
@@ -175,7 +339,8 @@ mod tests {
     fn test_mcp_commands_exist() {
         // Test with JSON format
         let register_cmd = McpCommands::Register {
-            name_or_json: r#"{"name":"test-server","command":"npx","args":["-y","@test/package"]}"#.to_string(),
+            name_or_json: r#"{"name":"test-server","command":"npx","args":["-y","@test/package"]}"#
+                .to_string(),
             hint: None,
             remove: false,
             dwiw: false,
@@ -185,7 +350,8 @@ mod tests {
 
         // This should fail because we don't have a valid test directory, but the command should parse correctly
         // The important thing is that it doesn't panic and processes the JSON correctly
-        let result = register_cmd.execute("/tmp/nonexistent");
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let result = rt.block_on(register_cmd.execute_async("/tmp/nonexistent"));
         assert!(result.is_err()); // Expected to fail due to invalid path, but should not panic
 
         // Test install command enum creation
@@ -199,7 +365,7 @@ mod tests {
         };
 
         // This should fail because the server doesn't exist, but should not panic
-        let result = install_cmd.execute("/tmp/nonexistent");
+        let result = rt.block_on(install_cmd.execute_async("/tmp/nonexistent"));
         assert!(result.is_err()); // Expected to fail, but should not panic
     }
 }

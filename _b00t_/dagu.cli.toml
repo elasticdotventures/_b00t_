@@ -1,0 +1,28 @@
+[b00t]
+name = "dagu"
+type = "cli"
+hint = "Dagu - workflow engine and task scheduler with web UI for defining and running DAGs"
+desires = "1.23.2"
+keywords = ["workflow", "dag", "scheduler", "automation", "pipeline"]
+
+# Installation via official installer script to ~/.local/bin
+install = """
+curl -L https://raw.githubusercontent.com/dagu-org/dagu/main/scripts/installer.sh | bash
+"""
+
+# Update to latest version via installer
+update = """
+curl -L https://raw.githubusercontent.com/dagu-org/dagu/main/scripts/installer.sh | bash
+"""
+
+# Version detection (dagu writes to stderr)
+version = "dagu version 2>&1"
+version_regex = "v?(\\d+\\.\\d+\\.\\d+)"
+
+[b00t.env]
+# Skip auto-generation of example workflows on first run
+DAGU_SKIP_EXAMPLES = "false"
+# Run without Web UI if needed
+DAGU_HEADLESS = "false"
+# Default DAGs directory
+DAGU_DAGS_DIR = "~/.config/dagu/dags"

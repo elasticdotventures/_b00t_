@@ -1,7 +1,7 @@
-use anyhow::{Context, Result};
-use std::fs;
 use crate::get_expanded_path;
+use anyhow::{Context, Result};
 use b00t_c0re_lib::TemplateRenderer;
+use std::fs;
 
 /// Detect current AI agent based on environment variables
 pub fn detect_agent(ignore_env: bool) -> String {
@@ -46,10 +46,11 @@ pub fn whoami(path: &str) -> Result<()> {
     ))?;
 
     // Use b00t-c0re-lib template renderer
-    let renderer = TemplateRenderer::with_defaults()
-        .context("Failed to create template renderer")?;
-    
-    let rendered = renderer.render(&template_content)
+    let renderer =
+        TemplateRenderer::with_defaults().context("Failed to create template renderer")?;
+
+    let rendered = renderer
+        .render(&template_content)
         .context("Failed to render template")?;
 
     println!("{}", rendered);
@@ -64,25 +65,43 @@ mod tests {
     #[test]
     fn test_detect_agent_claude() {
         // Clear existing env vars first
-        unsafe { std::env::remove_var("_B00T_Agent"); }
-        unsafe { std::env::set_var("CLAUDECODE", "1"); }
+        unsafe {
+            std::env::remove_var("_B00T_Agent");
+        }
+        unsafe {
+            std::env::set_var("CLAUDECODE", "1");
+        }
         assert_eq!(detect_agent(false), "claude");
-        unsafe { std::env::remove_var("CLAUDECODE"); }
+        unsafe {
+            std::env::remove_var("CLAUDECODE");
+        }
     }
 
     #[test]
     fn test_detect_agent_env_variable() {
-        unsafe { std::env::remove_var("CLAUDECODE"); }
-        unsafe { std::env::set_var("_B00T_Agent", "test-agent"); }
+        unsafe {
+            std::env::remove_var("CLAUDECODE");
+        }
+        unsafe {
+            std::env::set_var("_B00T_Agent", "test-agent");
+        }
         assert_eq!(detect_agent(false), "test-agent");
-        unsafe { std::env::remove_var("_B00T_Agent"); }
+        unsafe {
+            std::env::remove_var("_B00T_Agent");
+        }
     }
 
     #[test]
     fn test_detect_agent_ignore_env() {
-        unsafe { std::env::remove_var("CLAUDECODE"); }
-        unsafe { std::env::set_var("_B00T_Agent", "test-agent"); }
+        unsafe {
+            std::env::remove_var("CLAUDECODE");
+        }
+        unsafe {
+            std::env::set_var("_B00T_Agent", "test-agent");
+        }
         assert_eq!(detect_agent(true), "");
-        unsafe { std::env::remove_var("_B00T_Agent"); }
+        unsafe {
+            std::env::remove_var("_B00T_Agent");
+        }
     }
 }

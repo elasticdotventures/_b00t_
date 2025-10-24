@@ -8,7 +8,7 @@
 //!
 //! TypeScript bindings are automatically generated for the website UI.
 
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -16,7 +16,10 @@ use ts_rs::TS;
 
 /// Central configuration datum for the entire b00t ecosystem
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, TS)]
-#[ts(export, export_to = "/home/brianh/promptexecution/infrastructure/b00t-website/dashboard/src/types/")]
+#[ts(
+    export,
+    export_to = "/home/brianh/promptexecution/infrastructure/b00t-website/dashboard/src/types/"
+)]
 #[serde(rename_all = "camelCase")]
 pub struct B00tUnifiedConfig {
     /// User identification and preferences
@@ -35,7 +38,10 @@ pub struct B00tUnifiedConfig {
 
 /// User identification and preferences
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, TS)]
-#[ts(export, export_to = "/home/brianh/promptexecution/infrastructure/b00t-website/dashboard/src/types/")]
+#[ts(
+    export,
+    export_to = "/home/brianh/promptexecution/infrastructure/b00t-website/dashboard/src/types/"
+)]
 #[serde(rename_all = "camelCase")]
 pub struct UserConfig {
     /// GitHub username
@@ -54,7 +60,10 @@ pub struct UserConfig {
 
 /// Cloud service configurations and credentials
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, TS)]
-#[ts(export, export_to = "/home/brianh/promptexecution/infrastructure/b00t-website/dashboard/src/types/")]
+#[ts(
+    export,
+    export_to = "/home/brianh/promptexecution/infrastructure/b00t-website/dashboard/src/types/"
+)]
 #[serde(rename_all = "camelCase")]
 pub struct CloudServicesConfig {
     /// Cloudflare configuration
@@ -69,7 +78,10 @@ pub struct CloudServicesConfig {
 
 /// Cloudflare service configuration
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, TS)]
-#[ts(export, export_to = "/home/brianh/promptexecution/infrastructure/b00t-website/dashboard/src/types/")]
+#[ts(
+    export,
+    export_to = "/home/brianh/promptexecution/infrastructure/b00t-website/dashboard/src/types/"
+)]
 #[serde(rename_all = "camelCase")]
 pub struct CloudflareConfig {
     /// Account ID
@@ -88,7 +100,10 @@ pub struct CloudflareConfig {
 
 /// AWS service configuration
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, TS)]
-#[ts(export, export_to = "/home/brianh/promptexecution/infrastructure/b00t-website/dashboard/src/types/")]
+#[ts(
+    export,
+    export_to = "/home/brianh/promptexecution/infrastructure/b00t-website/dashboard/src/types/"
+)]
 #[serde(rename_all = "camelCase")]
 pub struct AwsConfig {
     /// AWS region
@@ -105,7 +120,10 @@ pub struct AwsConfig {
 
 /// Qdrant vector database configuration
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, TS)]
-#[ts(export, export_to = "/home/brianh/promptexecution/infrastructure/b00t-website/dashboard/src/types/")]
+#[ts(
+    export,
+    export_to = "/home/brianh/promptexecution/infrastructure/b00t-website/dashboard/src/types/"
+)]
 #[serde(rename_all = "camelCase")]
 pub struct QdrantConfig {
     /// Qdrant endpoint URL
@@ -118,7 +136,10 @@ pub struct QdrantConfig {
 
 /// Generic cloud service configuration
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, TS)]
-#[ts(export, export_to = "/home/brianh/promptexecution/infrastructure/b00t-website/dashboard/src/types/")]
+#[ts(
+    export,
+    export_to = "/home/brianh/promptexecution/infrastructure/b00t-website/dashboard/src/types/"
+)]
 #[serde(rename_all = "camelCase")]
 pub struct CloudServiceConfig {
     /// Service name
@@ -135,7 +156,10 @@ pub struct CloudServiceConfig {
 
 /// AI configuration extending the existing AiClientConfig
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, TS)]
-#[ts(export, export_to = "/home/brianh/promptexecution/infrastructure/b00t-website/dashboard/src/types/")]
+#[ts(
+    export,
+    export_to = "/home/brianh/promptexecution/infrastructure/b00t-website/dashboard/src/types/"
+)]
 #[serde(rename_all = "camelCase")]
 pub struct AiConfiguration {
     /// AI provider configurations
@@ -152,7 +176,10 @@ pub struct AiConfiguration {
 
 /// AI provider configuration
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, TS)]
-#[ts(export, export_to = "/home/brianh/promptexecution/infrastructure/b00t-website/dashboard/src/types/")]
+#[ts(
+    export,
+    export_to = "/home/brianh/promptexecution/infrastructure/b00t-website/dashboard/src/types/"
+)]
 #[serde(rename_all = "camelCase")]
 pub struct AiProviderConfig {
     /// Provider name (openai, anthropic, etc.)
@@ -175,7 +202,10 @@ pub struct AiProviderConfig {
 
 /// AI preferences and behavior settings
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, TS)]
-#[ts(export, export_to = "/home/brianh/promptexecution/infrastructure/b00t-website/dashboard/src/types/")]
+#[ts(
+    export,
+    export_to = "/home/brianh/promptexecution/infrastructure/b00t-website/dashboard/src/types/"
+)]
 #[serde(rename_all = "camelCase")]
 pub struct AiPreferences {
     /// Maximum tokens per request
@@ -192,7 +222,10 @@ pub struct AiPreferences {
 
 /// Development and deployment configuration
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, TS)]
-#[ts(export, export_to = "/home/brianh/promptexecution/infrastructure/b00t-website/dashboard/src/types/")]
+#[ts(
+    export,
+    export_to = "/home/brianh/promptexecution/infrastructure/b00t-website/dashboard/src/types/"
+)]
 #[serde(rename_all = "camelCase")]
 pub struct DevelopmentConfig {
     /// Preferred programming languages
@@ -207,7 +240,10 @@ pub struct DevelopmentConfig {
 
 /// Environment preferences
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, TS)]
-#[ts(export, export_to = "/home/brianh/promptexecution/infrastructure/b00t-website/dashboard/src/types/")]
+#[ts(
+    export,
+    export_to = "/home/brianh/promptexecution/infrastructure/b00t-website/dashboard/src/types/"
+)]
 #[serde(rename_all = "camelCase")]
 pub struct EnvironmentPreferences {
     /// Preferred shell
@@ -222,7 +258,10 @@ pub struct EnvironmentPreferences {
 
 /// Git configuration preferences
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, TS)]
-#[ts(export, export_to = "/home/brianh/promptexecution/infrastructure/b00t-website/dashboard/src/types/")]
+#[ts(
+    export,
+    export_to = "/home/brianh/promptexecution/infrastructure/b00t-website/dashboard/src/types/"
+)]
 #[serde(rename_all = "camelCase")]
 pub struct GitConfig {
     /// Default branch name
@@ -237,7 +276,10 @@ pub struct GitConfig {
 
 /// Deployment configuration
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, TS)]
-#[ts(export, export_to = "/home/brianh/promptexecution/infrastructure/b00t-website/dashboard/src/types/")]
+#[ts(
+    export,
+    export_to = "/home/brianh/promptexecution/infrastructure/b00t-website/dashboard/src/types/"
+)]
 #[serde(rename_all = "camelCase")]
 pub struct DeploymentConfig {
     /// Preferred deployment targets
@@ -248,7 +290,10 @@ pub struct DeploymentConfig {
 
 /// Security and authentication settings
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, TS)]
-#[ts(export, export_to = "/home/brianh/promptexecution/infrastructure/b00t-website/dashboard/src/types/")]
+#[ts(
+    export,
+    export_to = "/home/brianh/promptexecution/infrastructure/b00t-website/dashboard/src/types/"
+)]
 #[serde(rename_all = "camelCase")]
 pub struct SecurityConfig {
     /// Keyring backend preference
@@ -263,7 +308,10 @@ pub struct SecurityConfig {
 
 /// Configuration metadata
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, TS)]
-#[ts(export, export_to = "/home/brianh/promptexecution/infrastructure/b00t-website/dashboard/src/types/")]
+#[ts(
+    export,
+    export_to = "/home/brianh/promptexecution/infrastructure/b00t-website/dashboard/src/types/"
+)]
 #[serde(rename_all = "camelCase")]
 pub struct ConfigMetadata {
     /// Configuration version
@@ -283,7 +331,10 @@ pub struct ConfigMetadata {
 // Enums for various configuration options
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, TS)]
-#[ts(export, export_to = "/home/brianh/promptexecution/infrastructure/b00t-website/dashboard/src/types/")]
+#[ts(
+    export,
+    export_to = "/home/brianh/promptexecution/infrastructure/b00t-website/dashboard/src/types/"
+)]
 pub enum CloudflareService {
     Workers,
     Pages,
@@ -296,7 +347,10 @@ pub enum CloudflareService {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, TS)]
-#[ts(export, export_to = "/home/brianh/promptexecution/infrastructure/b00t-website/dashboard/src/types/")]
+#[ts(
+    export,
+    export_to = "/home/brianh/promptexecution/infrastructure/b00t-website/dashboard/src/types/"
+)]
 pub enum AwsService {
     EC2,
     S3,
@@ -309,7 +363,10 @@ pub enum AwsService {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, TS)]
-#[ts(export, export_to = "/home/brianh/promptexecution/infrastructure/b00t-website/dashboard/src/types/")]
+#[ts(
+    export,
+    export_to = "/home/brianh/promptexecution/infrastructure/b00t-website/dashboard/src/types/"
+)]
 pub enum AuthMethod {
     ApiKey,
     OAuth,
@@ -319,7 +376,10 @@ pub enum AuthMethod {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, TS)]
-#[ts(export, export_to = "/home/brianh/promptexecution/infrastructure/b00t-website/dashboard/src/types/")]
+#[ts(
+    export,
+    export_to = "/home/brianh/promptexecution/infrastructure/b00t-website/dashboard/src/types/"
+)]
 pub enum KeyringBackend {
     System,
     File,
@@ -327,7 +387,10 @@ pub enum KeyringBackend {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, TS)]
-#[ts(export, export_to = "/home/brianh/promptexecution/infrastructure/b00t-website/dashboard/src/types/")]
+#[ts(
+    export,
+    export_to = "/home/brianh/promptexecution/infrastructure/b00t-website/dashboard/src/types/"
+)]
 #[serde(rename_all = "camelCase")]
 pub struct S3BucketConfig {
     pub name: String,
@@ -337,7 +400,10 @@ pub struct S3BucketConfig {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, TS)]
-#[ts(export, export_to = "/home/brianh/promptexecution/infrastructure/b00t-website/dashboard/src/types/")]
+#[ts(
+    export,
+    export_to = "/home/brianh/promptexecution/infrastructure/b00t-website/dashboard/src/types/"
+)]
 #[serde(rename_all = "camelCase")]
 pub struct QdrantCollectionConfig {
     pub name: String,
@@ -347,7 +413,10 @@ pub struct QdrantCollectionConfig {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, TS)]
-#[ts(export, export_to = "/home/brianh/promptexecution/infrastructure/b00t-website/dashboard/src/types/")]
+#[ts(
+    export,
+    export_to = "/home/brianh/promptexecution/infrastructure/b00t-website/dashboard/src/types/"
+)]
 #[serde(rename_all = "camelCase")]
 pub struct TerminalConfig {
     pub font_family: String,
@@ -357,7 +426,10 @@ pub struct TerminalConfig {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, TS)]
-#[ts(export, export_to = "/home/brianh/promptexecution/infrastructure/b00t-website/dashboard/src/types/")]
+#[ts(
+    export,
+    export_to = "/home/brianh/promptexecution/infrastructure/b00t-website/dashboard/src/types/"
+)]
 #[serde(rename_all = "camelCase")]
 pub struct DeploymentTarget {
     pub name: String,
@@ -369,7 +441,10 @@ pub struct DeploymentTarget {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, TS)]
-#[ts(export, export_to = "/home/brianh/promptexecution/infrastructure/b00t-website/dashboard/src/types/")]
+#[ts(
+    export,
+    export_to = "/home/brianh/promptexecution/infrastructure/b00t-website/dashboard/src/types/"
+)]
 #[serde(rename_all = "camelCase")]
 pub struct CicdPreferences {
     pub platform: String,
@@ -466,63 +541,70 @@ impl B00tUnifiedConfig {
         config.metadata.updated_at = chrono::Utc::now().to_rfc3339();
         config
     }
-    
+
     /// Update the configuration timestamp
     pub fn touch(&mut self) {
         self.metadata.updated_at = chrono::Utc::now().to_rfc3339();
     }
-    
+
     /// Validate the configuration
     pub fn validate(&self) -> Result<()> {
         // Basic validation
         if self.user.username.is_empty() {
             return Err(anyhow!("Username cannot be empty"));
         }
-        
+
         // Validate AI configuration
         if self.ai.providers.is_empty() {
             return Err(anyhow!("At least one AI provider must be configured"));
         }
-        
+
         if !self.ai.providers.contains_key(&self.ai.default_provider) {
-            return Err(anyhow!("Default AI provider '{}' is not configured", self.ai.default_provider));
+            return Err(anyhow!(
+                "Default AI provider '{}' is not configured",
+                self.ai.default_provider
+            ));
         }
-        
+
         // Validate cloud services if configured
         if let Some(ref cf) = self.cloud.cloudflare {
             if cf.account_id.is_empty() {
                 return Err(anyhow!("Cloudflare account ID cannot be empty"));
             }
         }
-        
+
         if let Some(ref aws) = self.cloud.aws {
             if aws.region.is_empty() {
                 return Err(anyhow!("AWS region cannot be empty"));
             }
         }
-        
+
         Ok(())
     }
-    
+
     /// Get JSON schema for this configuration
     pub fn get_json_schema() -> schemars::schema::RootSchema {
         schemars::schema_for!(B00tUnifiedConfig)
     }
-    
+
     /// Export TypeScript definitions
     pub fn export_typescript() -> Result<()> {
         use std::fs;
-        
+
         // Create types directory if it doesn't exist
         let types_dir = "../../../b00t-dashboard/src/types";
-        fs::create_dir_all(types_dir).map_err(|e| anyhow!("Failed to create types directory: {}", e))?;
-        
+        fs::create_dir_all(types_dir)
+            .map_err(|e| anyhow!("Failed to create types directory: {}", e))?;
+
         // Export all types
-        B00tUnifiedConfig::export().map_err(|e| anyhow!("Failed to export B00tUnifiedConfig: {}", e))?;
+        B00tUnifiedConfig::export()
+            .map_err(|e| anyhow!("Failed to export B00tUnifiedConfig: {}", e))?;
         UserConfig::export().map_err(|e| anyhow!("Failed to export UserConfig: {}", e))?;
-        CloudServicesConfig::export().map_err(|e| anyhow!("Failed to export CloudServicesConfig: {}", e))?;
-        AiConfiguration::export().map_err(|e| anyhow!("Failed to export AiConfiguration: {}", e))?;
-        
+        CloudServicesConfig::export()
+            .map_err(|e| anyhow!("Failed to export CloudServicesConfig: {}", e))?;
+        AiConfiguration::export()
+            .map_err(|e| anyhow!("Failed to export AiConfiguration: {}", e))?;
+
         println!("✅ TypeScript definitions exported to {}", types_dir);
         Ok(())
     }
@@ -535,28 +617,32 @@ mod tests {
     #[test]
     fn test_default_config_validation() {
         let mut config = B00tUnifiedConfig::default();
-        
+
         // Default config should be invalid (no providers)
         assert!(config.validate().is_err());
-        
+
         // Add a provider to make it valid
-        config.ai.providers.insert("openai".to_string(), AiProviderConfig {
-            provider: "openai".to_string(),
-            model: "gpt-4".to_string(),
-            api_key_keyring_key: Some("openai_api_key".to_string()),
-            endpoint: None,
-            enabled: true,
-            priority: 10,
-            settings: HashMap::new(),
-        });
-        
+        config.ai.providers.insert(
+            "openai".to_string(),
+            AiProviderConfig {
+                provider: "openai".to_string(),
+                model: "gpt-4".to_string(),
+                api_key_keyring_key: Some("openai_api_key".to_string()),
+                endpoint: None,
+                enabled: true,
+                priority: 10,
+                settings: HashMap::new(),
+            },
+        );
+
         assert!(config.validate().is_ok());
     }
-    
+
     #[test]
     fn test_user_config_creation() {
-        let config = B00tUnifiedConfig::new_for_user("testuser", Some("test@example.com".to_string()));
-        
+        let config =
+            B00tUnifiedConfig::new_for_user("testuser", Some("test@example.com".to_string()));
+
         assert_eq!(config.user.username, "testuser");
         assert_eq!(config.user.email, Some("test@example.com".to_string()));
         assert_eq!(config.metadata.source, "user");

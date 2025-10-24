@@ -37,7 +37,10 @@ impl RedisConfig {
     /// Build Redis connection URL
     pub fn connection_url(&self) -> String {
         match &self.password {
-            Some(password) => format!("redis://:{}@{}:{}/{}", password, self.host, self.port, self.database),
+            Some(password) => format!(
+                "redis://:{}@{}:{}/{}",
+                password, self.host, self.port, self.database
+            ),
             None => format!("redis://{}:{}/{}", self.host, self.port, self.database),
         }
     }
@@ -121,8 +124,8 @@ pub struct RedisComms {
 impl RedisComms {
     /// Create new Redis communication hub
     pub fn new(config: RedisConfig, agent_id: String) -> B00tResult<Self> {
-        let client = Client::open(config.connection_url())
-            .context("Failed to create Redis client")?;
+        let client =
+            Client::open(config.connection_url()).context("Failed to create Redis client")?;
 
         Ok(Self {
             client,
@@ -133,7 +136,9 @@ impl RedisComms {
 
     /// Get Redis connection
     fn get_connection(&self) -> B00tResult<Connection> {
-        let conn = self.client.get_connection()
+        let conn = self
+            .client
+            .get_connection()
             .context("Failed to get Redis connection")?;
 
         // Note: Redis crate handles timeouts internally via connection configuration
@@ -157,8 +162,8 @@ impl RedisComms {
     /// Publish message to a channel
     pub fn publish(&self, channel: &str, message: &AgentMessage) -> B00tResult<i32> {
         let mut conn = self.get_connection()?;
-        let json_message = serde_json::to_string(message)
-            .context("Failed to serialize agent message")?;
+        let json_message =
+            serde_json::to_string(message).context("Failed to serialize agent message")?;
 
         let subscribers: i32 = redis::cmd("PUBLISH")
             .arg(channel)
@@ -189,7 +194,12 @@ impl RedisComms {
     }
 
     /// Publish task coordination message
-    pub fn publish_task(&self, task_id: &str, action: TaskAction, payload: serde_json::Value) -> B00tResult<i32> {
+    pub fn publish_task(
+        &self,
+        task_id: &str,
+        action: TaskAction,
+        payload: serde_json::Value,
+    ) -> B00tResult<i32> {
         let message = AgentMessage::Task {
             task_id: task_id.to_string(),
             action,
@@ -201,7 +211,12 @@ impl RedisComms {
     }
 
     /// Publish session event
-    pub fn publish_session(&self, session_id: &str, event: SessionEvent, data: HashMap<String, serde_json::Value>) -> B00tResult<i32> {
+    pub fn publish_session(
+        &self,
+        session_id: &str,
+        event: SessionEvent,
+        data: HashMap<String, serde_json::Value>,
+    ) -> B00tResult<i32> {
         let message = AgentMessage::Session {
             session_id: session_id.to_string(),
             event,
@@ -212,7 +227,12 @@ impl RedisComms {
     }
 
     /// Publish system broadcast
-    pub fn broadcast(&self, message: &str, priority: BroadcastPriority, expires_at: Option<chrono::DateTime<chrono::Utc>>) -> B00tResult<i32> {
+    pub fn broadcast(
+        &self,
+        message: &str,
+        priority: BroadcastPriority,
+        expires_at: Option<chrono::DateTime<chrono::Utc>>,
+    ) -> B00tResult<i32> {
         let msg = AgentMessage::Broadcast {
             message: message.to_string(),
             priority,
@@ -407,7 +427,13 @@ impl RedisSessionStorage {
     }
 
     /// Set session value with expiration
-    pub fn set_session_value_ex(&self, session_id: &str, key: &str, value: &str, seconds: usize) -> B00tResult<()> {
+    pub fn set_session_value_ex(
+        &self,
+        session_id: &str,
+        key: &str,
+        value: &str,
+        seconds: usize,
+    ) -> B00tResult<()> {
         let redis_key = self.session_key(session_id, key);
         self.redis.setex(&redis_key, value, seconds)
     }
@@ -431,7 +457,11 @@ impl RedisSessionStorage {
     }
 
     /// Store entire session as hash
-    pub fn store_session_hash(&self, session_id: &str, data: &HashMap<String, String>) -> B00tResult<()> {
+    pub fn store_session_hash(
+        &self,
+        session_id: &str,
+        data: &HashMap<String, String>,
+    ) -> B00tResult<()> {
         let hash_key = format!("{}:{}", self.session_prefix, session_id);
         for (field, value) in data {
             self.redis.hset(&hash_key, field, value)?;
@@ -490,7 +520,9 @@ mod tests {
         let deserialized: AgentMessage = serde_json::from_str(&json).unwrap();
 
         match deserialized {
-            AgentMessage::Status { agent_id, status, .. } => {
+            AgentMessage::Status {
+                agent_id, status, ..
+            } => {
                 assert_eq!(agent_id, "test-agent");
                 assert!(matches!(status, AgentStatus::Online));
             }

@@ -5,14 +5,10 @@ use snafu::prelude::*;
 #[snafu(visibility(pub))]
 pub enum GrokError {
     #[snafu(display("Qdrant connection failed: {source}"))]
-    QdrantConnection {
-        source: qdrant_client::QdrantError,
-    },
+    QdrantConnection { source: qdrant_client::QdrantError },
 
     #[snafu(display("Qdrant operation failed: {source}"))]
-    QdrantOperation {
-        source: qdrant_client::QdrantError,
-    },
+    QdrantOperation { source: qdrant_client::QdrantError },
 
     #[snafu(display("Embedding generation failed: {source}"))]
     EmbeddingGeneration {
@@ -20,81 +16,49 @@ pub enum GrokError {
     },
 
     #[snafu(display("Ollama API configuration invalid: {message}"))]
-    OllamaConfig { 
-        message: String 
-    },
+    OllamaConfig { message: String },
 
     #[snafu(display("Environment variable '{variable}' not set or invalid"))]
-    EnvironmentVariable { 
-        variable: String 
-    },
+    EnvironmentVariable { variable: String },
 
     #[snafu(display("Python semantic chunking failed: {message}"))]
-    SemanticChunking { 
-        message: String 
-    },
+    SemanticChunking { message: String },
 
     #[snafu(display("Content chunking failed: {message}"))]
-    ContentChunking { 
-        message: String 
-    },
+    ContentChunking { message: String },
 
     #[snafu(display("Serialization failed: {source}"))]
-    Serialization {
-        source: serde_json::Error,
-    },
+    Serialization { source: serde_json::Error },
 
     #[snafu(display("UUID parsing failed: {source}"))]
-    UuidParsing {
-        source: uuid::Error,
-    },
+    UuidParsing { source: uuid::Error },
 
     #[snafu(display("Date/time parsing failed: {source}"))]
-    DateTimeParsing {
-        source: chrono::format::ParseError,
-    },
+    DateTimeParsing { source: chrono::format::ParseError },
 
     #[snafu(display("Client not initialized - call initialize() first"))]
     ClientNotInitialized,
 
     #[snafu(display("Invalid vector dimensions: expected {expected}, got {actual}"))]
-    VectorDimensions {
-        expected: usize,
-        actual: usize,
-    },
+    VectorDimensions { expected: usize, actual: usize },
 
     #[snafu(display("Content too large: {size} bytes exceeds limit of {limit} bytes"))]
-    ContentTooLarge {
-        size: usize,
-        limit: usize,
-    },
+    ContentTooLarge { size: usize, limit: usize },
 
     #[snafu(display("Collection '{collection}' operation failed: {message}"))]
-    CollectionOperation {
-        collection: String,
-        message: String,
-    },
+    CollectionOperation { collection: String, message: String },
 
     #[snafu(display("Invalid query parameters: {message}"))]
-    InvalidQuery {
-        message: String,
-    },
+    InvalidQuery { message: String },
 
     #[snafu(display("IO operation failed: {source}"))]
-    Io {
-        source: std::io::Error,
-    },
+    Io { source: std::io::Error },
 
     #[snafu(display("HTTP request failed: {source}"))]
-    Http {
-        source: reqwest::Error,
-    },
+    Http { source: reqwest::Error },
 
     #[snafu(display("Timeout occurred after {seconds} seconds during {operation}"))]
-    Timeout {
-        seconds: u64,
-        operation: String,
-    },
+    Timeout { seconds: u64, operation: String },
 }
 
 // Convenience type alias
@@ -165,7 +129,10 @@ impl From<qdrant_client::QdrantError> for GrokError {
     fn from(err: qdrant_client::QdrantError) -> Self {
         // Differentiate between connection and operation errors
         let error_str = err.to_string().to_lowercase();
-        if error_str.contains("connection") || error_str.contains("connect") || error_str.contains("network") {
+        if error_str.contains("connection")
+            || error_str.contains("connect")
+            || error_str.contains("network")
+        {
             GrokError::QdrantConnection { source: err }
         } else {
             GrokError::QdrantOperation { source: err }
@@ -215,11 +182,16 @@ mod tests {
 
     #[test]
     fn test_error_categories() {
-        let env_error = GrokError::EnvironmentVariable { variable: "TEST".to_string() };
+        let env_error = GrokError::EnvironmentVariable {
+            variable: "TEST".to_string(),
+        };
         assert_eq!(env_error.category(), "configuration");
         assert!(!env_error.is_recoverable());
-        
-        let timeout_error = GrokError::Timeout { seconds: 30, operation: "test".to_string() };
+
+        let timeout_error = GrokError::Timeout {
+            seconds: 30,
+            operation: "test".to_string(),
+        };
         assert_eq!(timeout_error.category(), "timeout");
         assert!(timeout_error.is_recoverable());
     }
@@ -229,8 +201,10 @@ mod tests {
         let client_error = GrokError::ClientNotInitialized;
         let user_msg = client_error.user_message();
         assert!(user_msg.contains("Service not ready"));
-        
-        let env_error = GrokError::EnvironmentVariable { variable: "QDRANT_URL".to_string() };
+
+        let env_error = GrokError::EnvironmentVariable {
+            variable: "QDRANT_URL".to_string(),
+        };
         let env_msg = env_error.user_message();
         assert!(env_msg.contains("QDRANT_URL"));
     }
@@ -239,7 +213,7 @@ mod tests {
     fn test_error_conversion() {
         let json_error = serde_json::from_str::<serde_json::Value>("invalid json");
         assert!(json_error.is_err());
-        
+
         let grok_error: GrokError = json_error.unwrap_err().into();
         assert!(matches!(grok_error, GrokError::Serialization { .. }));
         assert_eq!(grok_error.category(), "serialization");

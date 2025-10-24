@@ -1,8 +1,8 @@
+use crate::datum_cli::CliDatum;
+use crate::load_datum_providers;
+use crate::traits::*;
 use anyhow::Result;
 use clap::Parser;
-use crate::datum_cli::CliDatum;
-use crate::traits::*;
-use crate::load_datum_providers;
 use duct::cmd;
 // use std::fs;
 
@@ -117,7 +117,10 @@ fn cli_update(command: &str, path: &str) -> Result<()> {
     let cli_datum = CliDatum::from_config(command, path)?;
 
     // Try update command first, fall back to install command
-    let update_cmd = cli_datum.datum.update.as_ref()
+    let update_cmd = cli_datum
+        .datum
+        .update
+        .as_ref()
         .or(cli_datum.datum.install.as_ref());
 
     if let Some(cmd_str) = update_cmd {
@@ -140,14 +143,19 @@ fn cli_update(command: &str, path: &str) -> Result<()> {
 fn cli_check(command: &str, path: &str) -> Result<()> {
     let cli_datum = CliDatum::from_config(command, path)?;
     let version_status = cli_datum.version_status();
-    let current = cli_datum.current_version().unwrap_or_else(|| "not found".to_string());
+    let current = cli_datum
+        .current_version()
+        .unwrap_or_else(|| "not found".to_string());
 
     let status_text = match version_status {
         VersionStatus::Match => format!("🥾👍🏻 {} {} (matches desired)", command, current),
         VersionStatus::Newer => format!("🥾🐣 {} {} (newer than desired)", command, current),
         VersionStatus::Older => format!("🥾😭 {} {} (older than desired)", command, current),
         VersionStatus::Missing => format!("🥾😱 {} (not installed)", command),
-        VersionStatus::Unknown => format!("🥾⏹️ {} {} (version comparison unavailable)", command, current),
+        VersionStatus::Unknown => format!(
+            "🥾⏹️ {} {} (version comparison unavailable)",
+            command, current
+        ),
     };
 
     println!("{}", status_text);
@@ -164,7 +172,8 @@ fn cli_up(path: &str) -> Result<()> {
     println!("🔄 Checking all CLI commands for updates...");
 
     // Load all CLI datum providers
-    let cli_tools: Vec<Box<dyn DatumProvider>> = load_datum_providers::<CliDatum>(path, ".cli.toml")?;
+    let cli_tools: Vec<Box<dyn DatumProvider>> =
+        load_datum_providers::<CliDatum>(path, ".cli.toml")?;
 
     let mut updated_count = 0;
     let mut total_count = 0;
@@ -178,7 +187,10 @@ fn cli_up(path: &str) -> Result<()> {
             VersionStatus::Older | VersionStatus::Missing => {
                 println!("📦 Updating {}...", name);
                 if let Ok(cli_datum) = CliDatum::from_config(name, path) {
-                    let update_cmd = cli_datum.datum.update.as_ref()
+                    let update_cmd = cli_datum
+                        .datum
+                        .update
+                        .as_ref()
                         .or(cli_datum.datum.install.as_ref());
 
                     if let Some(cmd_str) = update_cmd {
@@ -208,7 +220,10 @@ fn cli_up(path: &str) -> Result<()> {
         }
     }
 
-    println!("🏁 Updated {} of {} CLI commands", updated_count, total_count);
+    println!(
+        "🏁 Updated {} of {} CLI commands",
+        updated_count, total_count
+    );
     Ok(())
 }
 
@@ -229,15 +244,25 @@ mod tests {
     #[test]
     fn test_all_cli_commands_have_variants() {
         // Test that all expected CLI command variants exist
-        let _detect = CliCommands::Detect { command: "test".to_string() };
-        let _desires = CliCommands::Desires { command: "test".to_string() };
-        let _install = CliCommands::Install { command: "test".to_string() };
-        let _update = CliCommands::Update { command: "test".to_string() };
-        let _check = CliCommands::Check { command: "test".to_string() };
+        let _detect = CliCommands::Detect {
+            command: "test".to_string(),
+        };
+        let _desires = CliCommands::Desires {
+            command: "test".to_string(),
+        };
+        let _install = CliCommands::Install {
+            command: "test".to_string(),
+        };
+        let _update = CliCommands::Update {
+            command: "test".to_string(),
+        };
+        let _check = CliCommands::Check {
+            command: "test".to_string(),
+        };
         let _up = CliCommands::Up;
         let _run = CliCommands::Run {
             script_name: "test".to_string(),
-            args: vec![]
+            args: vec![],
         };
 
         // If we got here, all variants exist

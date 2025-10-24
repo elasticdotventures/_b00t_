@@ -2,44 +2,56 @@ use anyhow::Result;
 use rmcp::{
     handler::server::ServerHandler,
     model::{
-        CallToolResult, Implementation, ProtocolVersion,
-        ServerCapabilities, ServerInfo, ListToolsResult,
-        CallToolRequestParam, PaginatedRequestParam,
-        Content, ErrorData as McpError,
+        Annotated,
+        CallToolRequestParam,
+        CallToolResult,
+        Content,
+        ErrorData as McpError,
+        Implementation,
         // Add resource support
-        ListResourcesResult, ReadResourceRequestParam, ReadResourceResult,
-        RawResource, ResourceContents, Annotated,
+        ListResourcesResult,
+        ListToolsResult,
+        PaginatedRequestParam,
+        ProtocolVersion,
+        RawResource,
+        ReadResourceRequestParam,
+        ReadResourceResult,
+        ResourceContents,
+        ServerCapabilities,
+        ServerInfo,
     },
     service::{RequestContext, RoleServer},
 };
-use std::path::Path;
 use std::collections::HashMap;
-use tracing::{info, error, debug};
+use std::path::Path;
+use tracing::{debug, error, info};
 
-use crate::mcp_tools::create_mcp_registry;
 use crate::clap_reflection::McpCommandRegistry;
+use crate::{chat::ChatRuntime, mcp_tools::create_mcp_registry};
 use b00t_c0re_lib::{B00tContext, utils};
 
 /// Rusty b00t MCP server with compile-time generated tools
-/// 
+///
 /// This replaces the brittle dynamic approach with proper Rust trait-based
 /// compile-time tool generation that dtolnay would approve of.
 #[derive(Clone)]
 pub struct B00tMcpServerRusty {
     working_dir: std::path::PathBuf,
     registry: McpCommandRegistry,
+    chat_runtime: ChatRuntime,
 }
 
 impl B00tMcpServerRusty {
     pub fn new<P: AsRef<Path>>(working_dir: P, _config_path: &str) -> Result<Self> {
         let working_dir = working_dir.as_ref().to_path_buf();
-        
+
         Ok(Self {
             working_dir,
             registry: create_mcp_registry(),
+            chat_runtime: ChatRuntime::global(),
         })
     }
-    
+
     /// Get the number of available tools
     pub fn tool_count(&self) -> usize {
         self.registry.get_tools().len()
@@ -47,30 +59,33 @@ impl B00tMcpServerRusty {
 }
 
 impl ServerHandler for B00tMcpServerRusty {
-    async fn ping(
-        &self,
-        _context: RequestContext<RoleServer>,
-    ) -> Result<(), McpError> {
+    async fn ping(&self, _context: RequestContext<RoleServer>) -> Result<(), McpError> {
         debug!("🏓 Ping received - Rusty MCP server is alive and well");
-        
+
         // Log server health info for debugging
         let tools_count = self.registry.get_tools().len();
-        debug!("🦀 Server status: {} compile-time tools available", tools_count);
+        debug!(
+            "🦀 Server status: {} compile-time tools available",
+            tools_count
+        );
         debug!("📁 Working directory: {}", self.working_dir.display());
-        
+
         // Verify b00t-cli is available
         let b00t_cli_available = std::process::Command::new("b00t-cli")
             .arg("--help")
             .output()
             .map(|output| output.status.success())
             .unwrap_or(false);
-        
-        debug!("🥾 b00t-cli availability: {}", if b00t_cli_available { "✅" } else { "❌" });
-        
+
+        debug!(
+            "🥾 b00t-cli availability: {}",
+            if b00t_cli_available { "✅" } else { "❌" }
+        );
+
         if !b00t_cli_available {
             info!("⚠️  b00t-cli not available - MCP tools may fail to execute properly");
         }
-        
+
         Ok(())
     }
 
@@ -81,7 +96,8 @@ impl ServerHandler for B00tMcpServerRusty {
             instructions: Some(
                 "🦀 Rusty MCP server for b00t-cli with compile-time generated tools. \
                  Features type-safe command dispatch, zero runtime parsing failures, \
-                 and full CLAP structure synchronization.".into()
+                 and full CLAP structure synchronization."
+                    .into(),
             ),
             capabilities: ServerCapabilities::builder()
                 .enable_tools()
@@ -96,15 +112,18 @@ impl ServerHandler for B00tMcpServerRusty {
         _context: RequestContext<RoleServer>,
     ) -> Result<ListToolsResult, McpError> {
         debug!("🦀 list_tools called - using compile-time generated tools");
-        
+
         let tools = self.registry.get_tools();
-        
-        info!("🦀 Generated {} compile-time tools from b00t-cli CLAP structures", tools.len());
-        
+
+        info!(
+            "🦀 Generated {} compile-time tools from b00t-cli CLAP structures",
+            tools.len()
+        );
+
         for tool in &tools {
             debug!("🔧 Tool: {}", tool.name);
         }
-        
+
         Ok(ListToolsResult {
             tools,
             next_cursor: None,
@@ -117,24 +136,27 @@ impl ServerHandler for B00tMcpServerRusty {
         _context: RequestContext<RoleServer>,
     ) -> Result<CallToolResult, McpError> {
         let tool_name = request.name.as_ref();
-        
+
         // Convert request arguments to HashMap
-        let params: HashMap<String, serde_json::Value> = request.arguments
-            .unwrap_or_default()
-            .into_iter()
-            .collect();
+        let params: HashMap<String, serde_json::Value> =
+            request.arguments.unwrap_or_default().into_iter().collect();
 
-        info!("🦀 Executing compile-time tool: {} with params: {:?}", tool_name, params);
+        info!(
+            "🦀 Executing compile-time tool: {} with params: {:?}",
+            tool_name, params
+        );
 
-        // Execute the command using the registry
-        match self.registry.execute(tool_name, &params) {
+        let execution_result = self.registry.execute(tool_name, &params);
+        let chat_indicator = self.chat_runtime.drain_indicator().await;
+
+        match execution_result {
             Ok(output) => {
                 info!("✅ Successfully executed tool: {}", tool_name);
-                Ok(self.create_success_result(&output))
+                Ok(self.create_success_result(&output, &chat_indicator))
             }
             Err(e) => {
                 error!("❌ Failed to execute tool {}: {}", tool_name, e);
-                Ok(self.create_error_result(&e.to_string()))
+                Ok(self.create_error_result(&e.to_string(), &chat_indicator))
             }
         }
     }
@@ -148,7 +170,7 @@ impl ServerHandler for B00tMcpServerRusty {
         debug!("🦀 list_resources called - providing b00t ecosystem resources");
 
         let mut resources: Vec<Annotated<RawResource>> = Vec::new();
-        
+
         // Add b00t skills directory as a resource
         if let Ok(b00t_dir) = utils::get_b00t_config_dir() {
             if b00t_dir.exists() {
@@ -170,7 +192,7 @@ impl ServerHandler for B00tMcpServerRusty {
                         let uri = format!("b00t://learn/{}", topic_name);
                         let mut resource = RawResource::new(
                             uri,
-                            format!("b00t_skill_{}", topic_name.replace('.', "_"))
+                            format!("b00t_skill_{}", topic_name.replace('.', "_")),
                         );
                         resource.description = Some(format!("B00t skill: {}", topic_name));
                         resource.mime_type = Some("text/markdown".to_string());
@@ -181,8 +203,10 @@ impl ServerHandler for B00tMcpServerRusty {
         }
 
         // Add current context as a resource
-        let mut context_resource = RawResource::new("b00t://context/current", "b00t_current_context");
-        context_resource.description = Some("Current b00t agent context and environment".to_string());
+        let mut context_resource =
+            RawResource::new("b00t://context/current", "b00t_current_context");
+        context_resource.description =
+            Some("Current b00t agent context and environment".to_string());
         context_resource.mime_type = Some("application/json".to_string());
         resources.push(Annotated::new(context_resource, None));
 
@@ -206,7 +230,7 @@ impl ServerHandler for B00tMcpServerRusty {
             uri if uri.starts_with("b00t://learn/") => {
                 let topic = uri.strip_prefix("b00t://learn/").unwrap_or("");
                 info!("📚 Reading b00t skill: {}", topic);
-                
+
                 match self.read_b00t_skill(topic).await {
                     Ok(content) => Ok(ReadResourceResult {
                         contents: vec![ResourceContents::text(content, uri)],
@@ -220,7 +244,7 @@ impl ServerHandler for B00tMcpServerRusty {
             }
             "b00t://context/current" => {
                 info!("🎯 Reading current b00t context");
-                
+
                 match self.read_current_context().await {
                     Ok(content) => Ok(ReadResourceResult {
                         contents: vec![ResourceContents::TextResourceContents {
@@ -239,7 +263,7 @@ impl ServerHandler for B00tMcpServerRusty {
             uri if uri.starts_with("file://") => {
                 let file_path = uri.strip_prefix("file://").unwrap_or(uri);
                 info!("📁 Reading file resource: {}", file_path);
-                
+
                 match std::fs::read_to_string(file_path) {
                     Ok(content) => Ok(ReadResourceResult {
                         contents: vec![ResourceContents::text(content, uri)],
@@ -259,26 +283,27 @@ impl ServerHandler for B00tMcpServerRusty {
         }
     }
 
-    async fn on_initialized(&self, _context: rmcp::service::NotificationContext<rmcp::service::RoleServer>) {
+    async fn on_initialized(
+        &self,
+        _context: rmcp::service::NotificationContext<rmcp::service::RoleServer>,
+    ) {
         info!("🦀 Rusty b00t-mcp server initialized successfully");
-        
+
         let tools = self.registry.get_tools();
-        let tool_names: Vec<&str> = tools.iter()
-            .map(|t| t.name.as_ref())
-            .collect();
-            
+        let tool_names: Vec<&str> = tools.iter().map(|t| t.name.as_ref()).collect();
+
         info!("🦀 Available compile-time tools: {}", tool_names.join(", "));
-        
+
         // Log some statistics
         info!("📊 Total tools: {}", tools.len());
-        
-        let tool_categories: HashMap<&str, usize> = tools.iter()
-            .fold(HashMap::new(), |mut acc, tool| {
+
+        let tool_categories: HashMap<&str, usize> =
+            tools.iter().fold(HashMap::new(), |mut acc, tool| {
                 let prefix = tool.name.as_ref().split('_').nth(1).unwrap_or("unknown");
                 *acc.entry(prefix).or_insert(0) += 1;
                 acc
             });
-            
+
         for (category, count) in tool_categories {
             info!("📋 {} tools: {}", category, count);
         }
@@ -287,55 +312,71 @@ impl ServerHandler for B00tMcpServerRusty {
 
 impl B00tMcpServerRusty {
     /// Create successful MCP tool result
-    fn create_success_result(&self, output: &str) -> CallToolResult {
+    fn create_success_result(&self, output: &str, indicator: &str) -> CallToolResult {
         #[derive(serde::Serialize)]
         struct B00tOutput {
             output: String,
             success: bool,
             server_type: String,
             working_dir: String,
+            indicator: String,
         }
 
+        let decorated_output = if output.trim().is_empty() {
+            indicator.to_string()
+        } else {
+            format!("{}\n{}", output, indicator)
+        };
+
         let result = B00tOutput {
-            output: output.to_string(),
+            output: decorated_output,
             success: true,
             server_type: "rusty".to_string(),
             working_dir: self.working_dir.display().to_string(),
+            indicator: indicator.to_string(),
         };
-        
+
         let content = serde_json::to_string_pretty(&result)
             .unwrap_or_else(|_| "Failed to serialize result".to_string());
-            
+
         CallToolResult::success(vec![Content::text(content)])
     }
 
     /// Create error MCP tool result
-    fn create_error_result(&self, error: &str) -> CallToolResult {
+    fn create_error_result(&self, error: &str, indicator: &str) -> CallToolResult {
         #[derive(serde::Serialize)]
         struct B00tError {
             error: String,
             success: bool,
             server_type: String,
             working_dir: String,
+            indicator: String,
         }
 
+        let decorated_error = if error.trim().is_empty() {
+            indicator.to_string()
+        } else {
+            format!("{}\n{}", error, indicator)
+        };
+
         let result = B00tError {
-            error: error.to_string(),
+            error: decorated_error,
             success: false,
             server_type: "rusty".to_string(),
             working_dir: self.working_dir.display().to_string(),
+            indicator: indicator.to_string(),
         };
-        
+
         let content = serde_json::to_string_pretty(&result)
             .unwrap_or_else(|_| "Failed to serialize error".to_string());
-            
+
         CallToolResult::error(vec![Content::text(content)])
     }
 
     /// Read a b00t skill using the shared library
     async fn read_b00t_skill(&self, topic: &str) -> Result<String> {
-        use b00t_c0re_lib::learn::get_learn_lesson;
         use b00t_c0re_lib::TemplateRenderer;
+        use b00t_c0re_lib::learn::get_learn_lesson;
         let path = self.working_dir.to_str().unwrap_or("");
         let lesson = get_learn_lesson(path, topic)?;
         let renderer = TemplateRenderer::with_defaults()?;
@@ -355,61 +396,62 @@ impl B00tMcpServerRusty {
 mod tests {
     use super::*;
     use tempfile::TempDir;
-    
+
     #[test]
     fn test_server_creation() {
         let temp_dir = TempDir::new().unwrap();
         let server = B00tMcpServerRusty::new(temp_dir.path(), "").unwrap();
-        
+
         assert_eq!(server.working_dir, temp_dir.path());
-        
+
         // Test that registry has tools
         let tools = server.registry.get_tools();
         assert!(!tools.is_empty());
     }
-    
+
     #[test]
     fn test_server_info() {
         let temp_dir = TempDir::new().unwrap();
         let server = B00tMcpServerRusty::new(temp_dir.path(), "").unwrap();
-        
+
         let info = server.get_info();
         assert!(info.instructions.unwrap().contains("🦀 Rusty MCP server"));
         assert!(info.capabilities.tools.is_some());
     }
-    
+
     // 🦨 TODO: Fix RequestContext creation for tests
     // #[tokio::test]
     // async fn test_list_tools() {
     //     let temp_dir = TempDir::new().unwrap();
     //     let server = B00tMcpServerRusty::new(temp_dir.path(), "").unwrap();
-    //     
+    //
     //     // Need to create proper RequestContext - RequestContext::default() doesn't exist
     //     // let result = server.list_tools(None, context).await;
     //     // assert!(result.is_ok());
     // }
-    
+
     // #[tokio::test]
     // async fn test_ping() {
     //     let temp_dir = TempDir::new().unwrap();
     //     let server = B00tMcpServerRusty::new(temp_dir.path(), "").unwrap();
-    //     
-    //     // Need to create proper RequestContext - RequestContext::default() doesn't exist  
+    //
+    //     // Need to create proper RequestContext - RequestContext::default() doesn't exist
     //     // let result = server.ping(context).await;
     //     // assert!(result.is_ok());
     // }
-    
+
     #[test]
     fn test_result_creation() {
         let temp_dir = TempDir::new().unwrap();
         let server = B00tMcpServerRusty::new(temp_dir.path(), "").unwrap();
-        
-        let success_result = server.create_success_result("Test output");
+
+        let indicator = "<🥾>{ \"chat\": { \"msgs\": 0 } }</🥾>";
+        let success_result = server.create_success_result("Test output", indicator);
         assert!(success_result.content.len() > 0);
-        
-        let error_result = server.create_error_result("Test error");
+
+        let error_result = server.create_error_result("Test error", indicator);
         assert!(error_result.content.len() > 0);
-        
+
         // Verify the content can be parsed
         if let Some(_content) = success_result.content.get(0) {
             // Verify we have content

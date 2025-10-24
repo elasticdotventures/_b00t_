@@ -10,7 +10,7 @@ use tokio::sync::Mutex;
 use tracing::{info, warn, error};
 
 use crate::acp_hive::{AcpHiveClient, HiveMission};
-use b00t_acp::{fetch_jwt_from_website, AcpJwtValidator};
+use b00t_chat::{fetch_jwt_from_website, AcpJwtValidator};
 
 /// Global hive client registry for MCP agents
 type HiveRegistry = Arc<Mutex<HashMap<String, AcpHiveClient>>>;
@@ -461,7 +461,7 @@ mod tests {
 
     #[test]
     fn test_namespace_helper() {
-        let namespace = get_user_namespace();
+        let namespace = get_hive_namespace("test-role");
         assert!(namespace.starts_with("account."));
     }
 }

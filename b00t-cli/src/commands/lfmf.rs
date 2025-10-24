@@ -1,5 +1,5 @@
 use anyhow::{Context, Result};
-use b00t_c0re_lib::{LfmfSystem};
+use b00t_c0re_lib::LfmfSystem;
 use tiktoken_rs::o200k_base;
 
 /// Handle LFMF (Lessons From My Failures) recording
@@ -19,22 +19,29 @@ pub fn handle_lfmf(path: &str, tool: &str, lesson: &str, scope: &str) -> Result<
     let topic_tokens = bpe.encode_with_special_tokens(topic).len();
     let body_tokens = bpe.encode_with_special_tokens(body).len();
     if topic_tokens > 25 {
-        anyhow::bail!("Topic must be <25 tokens (OpenAI tiktoken, not words). Yours: {}. See --help for guidance.", topic_tokens);
+        anyhow::bail!(
+            "Topic must be <25 tokens (OpenAI tiktoken, not words). Yours: {}. See --help for guidance.",
+            topic_tokens
+        );
     }
     if body_tokens > 250 {
-        anyhow::bail!("Body must be <250 tokens (OpenAI tiktoken, not words). Yours: {}. See --help for guidance.", body_tokens);
+        anyhow::bail!(
+            "Body must be <250 tokens (OpenAI tiktoken, not words). Yours: {}. See --help for guidance.",
+            body_tokens
+        );
     }
     if topic.is_empty() || body.is_empty() {
         anyhow::bail!("Topic and body must not be empty. See --help for examples.");
     }
     // Affirmative style check (simple heuristic)
     if body.to_lowercase().contains("don't") || body.to_lowercase().contains("never") {
-        println!("⚠️ Please use positive, affirmative style (e.g., 'Do X for Y benefit'). See --help for examples.");
+        println!(
+            "⚠️ Please use positive, affirmative style (e.g., 'Do X for Y benefit'). See --help for examples."
+        );
     }
 
     // Use shared LFMF system for recording
-    let rt = tokio::runtime::Runtime::new()
-        .context("Failed to create async runtime")?;
+    let rt = tokio::runtime::Runtime::new().context("Failed to create async runtime")?;
 
     rt.block_on(async {
         let config = LfmfSystem::load_config(path)?;
@@ -42,7 +49,10 @@ pub fn handle_lfmf(path: &str, tool: &str, lesson: &str, scope: &str) -> Result<
 
         // Try to initialize vector database (non-fatal if fails)
         if let Err(e) = lfmf_system.initialize().await {
-            println!("⚠️ Vector database unavailable: {}. Lesson will be saved to filesystem only.", e);
+            println!(
+                "⚠️ Vector database unavailable: {}. Lesson will be saved to filesystem only.",
+                e
+            );
         }
 
         // Record the lesson using shared system

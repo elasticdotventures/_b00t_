@@ -8,31 +8,42 @@ fn test_server_creation() {
     let config_path = temp_dir.join("test_acl.toml");
 
     // Create a minimal ACL config
-    std::fs::write(&config_path, r#"default_policy = "allow"
+    std::fs::write(
+        &config_path,
+        r#"default_policy = "allow"
 
 [commands]
 detect = { policy = "allow" }
 status = { policy = "allow" }
-"#).expect("Failed to write test config");
+"#,
+    )
+    .expect("Failed to write test config");
 
     let config_path_str = config_path.to_str().unwrap();
 
     // Test server creation with new rusty server
     let server = B00tMcpServerRusty::new(".", config_path_str);
     match &server {
-        Ok(_) => {},
+        Ok(_) => {}
         Err(e) => {
             println!("Server creation failed with error: {:?}", e);
         }
     }
-    assert!(server.is_ok(), "Server creation should succeed: {:?}", server.err());
+    assert!(
+        server.is_ok(),
+        "Server creation should succeed: {:?}",
+        server.err()
+    );
 
     // Test server info
     let server = server.unwrap();
     let info = server.get_info();
-    assert_eq!(info.protocol_version, rmcp::model::ProtocolVersion::default());
+    assert_eq!(
+        info.protocol_version,
+        rmcp::model::ProtocolVersion::default()
+    );
     assert!(info.capabilities.tools.is_some());
-    // 🦀 Test resources support 
+    // 🦀 Test resources support
     assert!(info.capabilities.resources.is_some());
 
     // Clean up
@@ -60,17 +71,18 @@ fn test_parameter_struct_creation() {
 
 #[test]
 fn test_lfmf_command_creates_lesson() {
-use b00t_c0re_lib::learn::record_lesson;
-use std::fs;
-let temp_dir = tempfile::tempdir().unwrap();
-let temp_path = temp_dir.path();
-let tool = "mcp_testtool";
-let lesson = "Lesson from MCP.";
-let _ = record_lesson(temp_path.to_str().unwrap(), tool, lesson);
-let file_path = temp_path.join("learn").join(format!("{}.md", tool));
-assert!(file_path.exists());
-let content = fs::read_to_string(&file_path).unwrap();
-assert!(content.contains(lesson));}
+    use b00t_c0re_lib::learn::record_lesson;
+    use std::fs;
+    let temp_dir = tempfile::tempdir().unwrap();
+    let temp_path = temp_dir.path();
+    let tool = "mcp_testtool";
+    let lesson = "Lesson from MCP.";
+    let _ = record_lesson(temp_path.to_str().unwrap(), tool, lesson);
+    let file_path = temp_path.join("learn").join(format!("{}.md", tool));
+    assert!(file_path.exists());
+    let content = fs::read_to_string(&file_path).unwrap();
+    assert!(content.contains(lesson));
+}
 
 #[test]
 fn test_json_schema_generation() {

@@ -1,18 +1,18 @@
 [package]
-name = "b00t-acp"
+name = "b00t-chat"
 version = "0.1.0"
 edition = "2021"
-description = "Agent Coordination Protocol (ACP) StepSync implementation in Rust"
+description = "b00t chat coordination system with multi-transport support"
 license = "MIT"
 repository = "https://github.com/promptexecution/b00t"
-keywords = ["agent", "coordination", "protocol", "nats", "messaging"]
-categories = ["network-programming", "web-programming"]
+keywords = ["agent", "chat", "coordination", "nats", "ipc"]
+categories = ["network-programming", "web-programming", "development-tools"]
 authors = ["PromptExecution <noreply@promptexecution.com>"]
 
 # [workspace] - removed to avoid conflict with parent workspace
 
 [lib]
-name = "b00t_acp"
+name = "b00t_chat"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
@@ -30,6 +30,7 @@ jsonwebtoken = "9.0"
 sha2 = "0.10"
 hex = "0.4"
 reqwest = { version = "0.12", features = ["json"] }
+dirs = "6.0"
 
 # Python bindings - using compatible version
 pyo3 = { version = "0.25", features = ["extension-module"], optional = true }

@@ -1,0 +1,56 @@
+name: quick-check
+description: Quick sanity checks without strict requirements (good for local dev)
+
+env:
+  - PROJECT_ROOT: /home/brianh/.dotfiles
+  - CARGO_TERM_COLOR: always
+
+steps:
+  - name: cargo-check-workspace
+    command: cargo check --workspace
+    dir: ${PROJECT_ROOT}
+    output: STDOUT
+
+  - name: cargo-test-lib-only
+    command: cargo test --lib --workspace
+    dir: ${PROJECT_ROOT}
+    depends:
+      - cargo-check-workspace
+    output: STDOUT
+    continueOn:
+      failure: true
+
+  - name: verify-b00t-cli-build
+    command: cargo build --bin b00t-cli
+    dir: ${PROJECT_ROOT}
+    depends:
+      - cargo-check-workspace
+    output: STDOUT
+
+  - name: verify-b00t-mcp-build
+    command: cargo build --bin b00t-mcp
+    dir: ${PROJECT_ROOT}
+    depends:
+      - cargo-check-workspace
+    output: STDOUT
+
+  - name: test-b00t-cli-version
+    command: ./target/debug/b00t-cli --version
+    dir: ${PROJECT_ROOT}
+    depends:
+      - verify-b00t-cli-build
+    output: STDOUT
+
+  - name: test-dagu-detection
+    command: ./target/debug/b00t-cli . dagu
+    dir: ${PROJECT_ROOT}
+    depends:
+      - verify-b00t-cli-build
+    output: STDOUT
+
+  - name: test-mcp-registry-sync
+    command: ./target/debug/b00t-cli mcp registry sync-datums
+    dir: ${PROJECT_ROOT}
+    depends:
+      - verify-b00t-cli-build
+    output: STDOUT

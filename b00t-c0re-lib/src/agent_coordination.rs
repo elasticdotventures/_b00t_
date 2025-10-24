@@ -6,8 +6,8 @@
 //! - Team captain delegation and voting systems
 //! - Progress reporting and notifications
 
-use crate::redis::{RedisComms, AgentMessage, AgentStatus};
 use crate::B00tResult;
+use crate::redis::{AgentMessage, AgentStatus, RedisComms};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
@@ -18,12 +18,12 @@ use tokio::time::timeout;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AgentMetadata {
     pub agent_id: String,
-    pub agent_role: String, // e.g., "captain", "worker", "specialist"
+    pub agent_role: String,        // e.g., "captain", "worker", "specialist"
     pub capabilities: Vec<String>, // Skills/domains this agent handles
-    pub crew: Option<String>, // Crew membership
+    pub crew: Option<String>,      // Crew membership
     pub status: AgentStatus,
-    pub last_seen: u64, // Unix timestamp
-    pub load: f32, // Current workload 0.0-1.0
+    pub last_seen: u64,                        // Unix timestamp
+    pub load: f32,                             // Current workload 0.0-1.0
     pub specializations: HashMap<String, f32>, // Domain -> proficiency score
 }
 
@@ -32,9 +32,7 @@ pub struct AgentMetadata {
 #[serde(tag = "msg_type", content = "data")]
 pub enum CoordinationMessage {
     /// Agent presence announcement
-    Presence {
-        metadata: AgentMetadata,
-    },
+    Presence { metadata: AgentMetadata },
 
     /// Direct message between agents
     DirectMessage {
@@ -101,7 +99,7 @@ pub enum CoordinationMessage {
     /// Notification about external events (files, PRs, etc.)
     EventNotification {
         event_type: String, // "file_created", "pr_opened", "build_failed", etc.
-        source: String, // System/service that generated the event
+        source: String,     // System/service that generated the event
         details: serde_json::Value,
         timestamp: u64,
         affected_agents: Option<Vec<String>>, // Target specific agents
@@ -136,7 +134,7 @@ pub enum TaskPriority {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum TaskCompletionStatus {
     Success,
-    Failed(String), // Error message
+    Failed(String),         // Error message
     PartialSuccess(String), // Partial completion details
     Cancelled,
 }
@@ -150,18 +148,21 @@ pub struct VotingOption {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum VotingType {
-    SingleChoice,     // Pick one option
-    RankedChoice,     // Rank options by preference
-    Approval,         // Approve multiple options
-    VetoCapable,      // Any agent can veto
+    SingleChoice, // Pick one option
+    RankedChoice, // Rank options by preference
+    Approval,     // Approve multiple options
+    VetoCapable,  // Any agent can veto
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum VoteChoice {
-    Single(String),                    // Option ID
-    Ranked(Vec<String>),              // Ordered list of option IDs
-    Approval(Vec<String>),            // List of approved option IDs
-    Veto { option_id: String, alternative: Option<String> },
+    Single(String),        // Option ID
+    Ranked(Vec<String>),   // Ordered list of option IDs
+    Approval(Vec<String>), // List of approved option IDs
+    Veto {
+        option_id: String,
+        alternative: Option<String>,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -213,13 +214,17 @@ impl AgentCoordinator {
             metadata: self.agent_metadata.clone(),
         };
 
-        self.redis.publish("b00t:agents:presence", &AgentMessage::Session {
-            session_id: self.agent_metadata.agent_id.clone(),
-            event: crate::redis::SessionEvent::Created,
-            data: HashMap::from([
-                ("coordination_message".to_string(), serde_json::to_value(&message)?),
-            ]),
-        })?;
+        self.redis.publish(
+            "b00t:agents:presence",
+            &AgentMessage::Session {
+                session_id: self.agent_metadata.agent_id.clone(),
+                event: crate::redis::SessionEvent::Created,
+                data: HashMap::from([(
+                    "coordination_message".to_string(),
+                    serde_json::to_value(&message)?,
+                )]),
+            },
+        )?;
 
         Ok(())
     }
@@ -251,7 +256,7 @@ impl AgentCoordinator {
         to_agent: &str,
         subject: &str,
         content: &str,
-        requires_ack: bool
+        requires_ack: bool,
     ) -> B00tResult<String> {
         let message_id = uuid::Uuid::new_v4().to_string();
         let message = CoordinationMessage::DirectMessage {
@@ -264,7 +269,8 @@ impl AgentCoordinator {
             requires_ack,
         };
 
-        self.send_coordination_message(&format!("b00t:agent:{}", to_agent), &message).await?;
+        self.send_coordination_message(&format!("b00t:agent:{}", to_agent), &message)
+            .await?;
         Ok(message_id)
     }
 
@@ -280,7 +286,11 @@ impl AgentCoordinator {
         blocking: bool,
     ) -> B00tResult<Option<TaskCompletion>> {
         let deadline_timestamp = deadline.map(|d| {
-            SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs() + d.as_secs()
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_secs()
+                + d.as_secs()
         });
 
         let message = CoordinationMessage::TaskDelegation {
@@ -304,11 +314,13 @@ impl AgentCoordinator {
         };
 
         // Send delegation message
-        self.send_coordination_message(&format!("b00t:agent:{}", worker_id), &message).await?;
+        self.send_coordination_message(&format!("b00t:agent:{}", worker_id), &message)
+            .await?;
 
         // If blocking, wait for completion
         if let Some(receiver) = completion_receiver {
-            match timeout(Duration::from_secs(3600), receiver).await { // 1 hour timeout
+            match timeout(Duration::from_secs(3600), receiver).await {
+                // 1 hour timeout
                 Ok(Ok(completion)) => Ok(Some(completion)),
                 Ok(Err(_)) => anyhow::bail!("Task completion channel closed unexpectedly"),
                 Err(_) => anyhow::bail!("Task delegation timed out after 1 hour"),
@@ -336,7 +348,8 @@ impl AgentCoordinator {
             artifacts,
         };
 
-        self.send_coordination_message(&format!("b00t:agent:{}", captain_id), &message).await?;
+        self.send_coordination_message(&format!("b00t:agent:{}", captain_id), &message)
+            .await?;
         Ok(())
     }
 
@@ -349,7 +362,11 @@ impl AgentCoordinator {
         estimated_completion: Option<Duration>,
     ) -> B00tResult<()> {
         let estimated_timestamp = estimated_completion.map(|d| {
-            SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs() + d.as_secs()
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_secs()
+                + d.as_secs()
         });
 
         let message = CoordinationMessage::ProgressUpdate {
@@ -361,7 +378,8 @@ impl AgentCoordinator {
         };
 
         // Broadcast progress to all interested parties
-        self.send_coordination_message("b00t:progress:updates", &message).await?;
+        self.send_coordination_message("b00t:progress:updates", &message)
+            .await?;
         Ok(())
     }
 
@@ -376,7 +394,8 @@ impl AgentCoordinator {
         eligible_voters: Vec<String>,
     ) -> B00tResult<HashMap<String, VoteChoice>> {
         let proposal_id = uuid::Uuid::new_v4().to_string();
-        let deadline_timestamp = SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs() + deadline.as_secs();
+        let deadline_timestamp =
+            SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs() + deadline.as_secs();
 
         let message = CoordinationMessage::VotingProposal {
             captain_id: self.agent_metadata.agent_id.clone(),
@@ -395,7 +414,8 @@ impl AgentCoordinator {
 
         // Send proposal to eligible voters
         for voter in &eligible_voters {
-            self.send_coordination_message(&format!("b00t:agent:{}", voter), &message).await?;
+            self.send_coordination_message(&format!("b00t:agent:{}", voter), &message)
+                .await?;
         }
 
         // Wait for voting to complete or timeout
@@ -421,7 +441,8 @@ impl AgentCoordinator {
         };
 
         // Send vote back to captain
-        self.send_coordination_message("b00t:votes:collection", &message).await?;
+        self.send_coordination_message("b00t:votes:collection", &message)
+            .await?;
         Ok(())
     }
 
@@ -442,7 +463,8 @@ impl AgentCoordinator {
         };
 
         // Broadcast to all agents or specific targets
-        self.send_coordination_message("b00t:events:notifications", &message).await?;
+        self.send_coordination_message("b00t:events:notifications", &message)
+            .await?;
         Ok(())
     }
 
@@ -479,7 +501,8 @@ impl AgentCoordinator {
         };
 
         // Broadcast capability request
-        self.send_coordination_message("b00t:capabilities:requests", &message).await?;
+        self.send_coordination_message("b00t:capabilities:requests", &message)
+            .await?;
 
         // TODO: Collect responses with timeout
         Ok(vec![])
@@ -487,13 +510,18 @@ impl AgentCoordinator {
 
     // Private helper methods
 
-    async fn send_coordination_message(&self, channel: &str, message: &CoordinationMessage) -> B00tResult<()> {
+    async fn send_coordination_message(
+        &self,
+        channel: &str,
+        message: &CoordinationMessage,
+    ) -> B00tResult<()> {
         let agent_message = AgentMessage::Session {
             session_id: uuid::Uuid::new_v4().to_string(),
             event: crate::redis::SessionEvent::Updated,
-            data: HashMap::from([
-                ("coordination_message".to_string(), serde_json::to_value(message)?),
-            ]),
+            data: HashMap::from([(
+                "coordination_message".to_string(),
+                serde_json::to_value(message)?,
+            )]),
         };
 
         self.redis.publish(channel, &agent_message)?;
@@ -565,7 +593,7 @@ mod tests {
             VoteChoice::Ranked(vec!["opt1".to_string(), "opt2".to_string()]),
             VoteChoice::Veto {
                 option_id: "bad_option".to_string(),
-                alternative: Some("better_option".to_string())
+                alternative: Some("better_option".to_string()),
             },
         ];
 

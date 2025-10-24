@@ -7,14 +7,16 @@ fn main() {
             println!("cargo:warning=🤓 DETECTED: Both VIRTUAL_ENV and CONDA_PREFIX set");
             println!("cargo:warning=❌ PyO3 linking will FAIL with undefined Python symbols");
             println!("cargo:warning=✅ SOLUTION: unset CONDA_PREFIX && cargo build");
-            println!("cargo:warning=💡 OR: Use justfile commands (handles environment automatically)");
+            println!(
+                "cargo:warning=💡 OR: Use justfile commands (handles environment automatically)"
+            );
         } else if !conda_prefix.is_empty() {
             println!("cargo:warning=🤓 DETECTED: CONDA_PREFIX={}", conda_prefix);
-            println!("cargo:warning=⚠️  PyO3 may conflict with conda Python environment");  
+            println!("cargo:warning=⚠️  PyO3 may conflict with conda Python environment");
             println!("cargo:warning=✅ IF BUILD FAILS: unset CONDA_PREFIX && cargo build");
         }
     }
-    
+
     // 🤓 Feature guidance for library vs extension usage
     let features = env::var("CARGO_FEATURE_PYO3").is_ok();
     if features {

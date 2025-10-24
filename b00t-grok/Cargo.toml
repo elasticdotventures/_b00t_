@@ -36,7 +36,7 @@ name = "b00t_grok"
 crate-type = ["cdylib", "rlib"]
 
 [features]
-default = ["pyo3"]
+default = []
 pyo3 = ["dep:pyo3"]
 
 # 🦨 Remove unused maturin config - will configure in pyproject.toml when needed

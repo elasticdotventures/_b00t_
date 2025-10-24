@@ -12,31 +12,33 @@ use ts_rs::TS;
 
 fn main() -> Result<()> {
     println!("🏗️  Generating TypeScript types and JSON schemas for b00t unified configuration...");
-    
+
     // Create output directories
-    let ts_types_dir = "/home/brianh/promptexecution/infrastructure/b00t-website/dashboard/src/types";
-    let json_schemas_dir = "/home/brianh/promptexecution/infrastructure/b00t-website/dashboard/src/schemas";
-    
+    let ts_types_dir =
+        "/home/brianh/promptexecution/infrastructure/b00t-website/dashboard/src/types";
+    let json_schemas_dir =
+        "/home/brianh/promptexecution/infrastructure/b00t-website/dashboard/src/schemas";
+
     create_dir_if_not_exists(ts_types_dir)?;
     create_dir_if_not_exists(json_schemas_dir)?;
-    
+
     // Generate TypeScript types using ts-rs
     println!("📝 Exporting TypeScript types...");
     export_typescript_types()?;
-    
+
     // Generate JSON schemas using schemars
     println!("📋 Generating JSON schemas...");
     generate_json_schemas(json_schemas_dir)?;
-    
+
     // Generate a comprehensive index file
     println!("📦 Creating index exports...");
     create_typescript_index(ts_types_dir)?;
     create_schema_index(json_schemas_dir)?;
-    
+
     println!("✅ Schema generation completed successfully!");
     println!("   TypeScript types: {}", ts_types_dir);
     println!("   JSON schemas: {}", json_schemas_dir);
-    
+
     Ok(())
 }
 
@@ -66,20 +68,20 @@ fn export_typescript_types() -> Result<()> {
     DeploymentConfig::export()?;
     SecurityConfig::export()?;
     ConfigMetadata::export()?;
-    
+
     // Export enums
     CloudflareService::export()?;
     AwsService::export()?;
     AuthMethod::export()?;
     KeyringBackend::export()?;
-    
+
     // Export nested configs
     S3BucketConfig::export()?;
     QdrantCollectionConfig::export()?;
     TerminalConfig::export()?;
     DeploymentTarget::export()?;
     CicdPreferences::export()?;
-    
+
     Ok(())
 }
 
@@ -97,14 +99,14 @@ fn generate_json_schemas(schemas_dir: &str) -> Result<()> {
         ("DevelopmentConfig", schema_for!(DevelopmentConfig)),
         ("SecurityConfig", schema_for!(SecurityConfig)),
     ];
-    
+
     for (name, schema) in configs {
         let schema_json = serde_json::to_string_pretty(&schema)?;
         let file_path = format!("{}/{}.json", schemas_dir, name);
         fs::write(&file_path, schema_json)?;
         println!("   📄 Generated schema: {}.json", name);
     }
-    
+
     Ok(())
 }
 
@@ -159,11 +161,11 @@ export type {
   DevelopmentConfig as DevConfig 
 };
 "#;
-    
+
     let index_path = format!("{}/index.ts", types_dir);
     fs::write(index_path, index_content)?;
     println!("   📦 Created TypeScript index file");
-    
+
     Ok(())
 }
 
@@ -186,10 +188,10 @@ fn create_schema_index(schemas_dir: &str) -> Result<()> {
   }
 }
 "#;
-    
+
     let index_path = format!("{}/index.json", schemas_dir);
     fs::write(index_path, index_content)?;
     println!("   📦 Created JSON schema index file");
-    
+
     Ok(())
 }

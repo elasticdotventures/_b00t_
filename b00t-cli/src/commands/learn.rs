@@ -1,6 +1,6 @@
 use anyhow::Result;
-use b00t_c0re_lib::learn::{get_learn_topics, get_learn_lesson};
 use b00t_c0re_lib::TemplateRenderer;
+use b00t_c0re_lib::learn::{get_learn_lesson, get_learn_topics};
 
 pub fn handle_learn(path: &str, topic: Option<&str>) -> Result<()> {
     match topic {

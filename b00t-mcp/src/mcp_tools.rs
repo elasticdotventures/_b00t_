@@ -1,6 +1,6 @@
-use clap::Parser;
-use crate::clap_reflection::{McpReflection, McpCommandRegistry};
+use crate::clap_reflection::{McpCommandRegistry, McpReflection};
 use crate::impl_mcp_tool;
+use clap::Parser;
 // use b00t_c0re_lib::GrokClient;
 
 // Re-export b00t-cli command structures for MCP use
@@ -105,7 +105,11 @@ pub struct LfmfCommand {
     pub lesson: String,
     #[arg(long, group = "scope", help = "Record lesson for this repo (default)")]
     pub repo: bool,
-    #[arg(long, group = "scope", help = "Record lesson globally (mutually exclusive with --repo)")]
+    #[arg(
+        long,
+        group = "scope",
+        help = "Record lesson globally (mutually exclusive with --repo)"
+    )]
     pub global: bool,
 }
 
@@ -116,7 +120,9 @@ impl_mcp_tool!(LfmfCommand, "b00t_lfmf", ["lfmf"]);
 pub struct AdviceCommand {
     #[arg(help = "Tool name")]
     pub tool: String,
-    #[arg(help = "Error pattern to get advice for, 'list' to show all lessons, or 'search <query>'")]
+    #[arg(
+        help = "Error pattern to get advice for, 'list' to show all lessons, or 'search <query>'"
+    )]
     pub query: String,
     #[arg(long, help = "Maximum number of results to return (default: 5)")]
     pub count: Option<usize>,
@@ -189,7 +195,11 @@ pub struct AgentDiscoverCommand {
     pub json: bool,
 }
 
-impl_mcp_tool!(AgentDiscoverCommand, "b00t_agent_discover", ["agent", "discover"]);
+impl_mcp_tool!(
+    AgentDiscoverCommand,
+    "b00t_agent_discover",
+    ["agent", "discover"]
+);
 
 /// MCP command for sending messages to agents
 #[derive(Parser, Clone)]
@@ -207,7 +217,11 @@ pub struct AgentMessageCommand {
     pub ack: bool,
 }
 
-impl_mcp_tool!(AgentMessageCommand, "b00t_agent_message", ["agent", "message"]);
+impl_mcp_tool!(
+    AgentMessageCommand,
+    "b00t_agent_message",
+    ["agent", "message"]
+);
 
 /// MCP command for task delegation (captain only)
 #[derive(Parser, Clone)]
@@ -234,7 +248,11 @@ pub struct AgentDelegateCommand {
     pub blocking: bool,
 }
 
-impl_mcp_tool!(AgentDelegateCommand, "b00t_agent_delegate", ["agent", "delegate"]);
+impl_mcp_tool!(
+    AgentDelegateCommand,
+    "b00t_agent_delegate",
+    ["agent", "delegate"]
+);
 
 /// MCP command for completing tasks (worker response)
 #[derive(Parser, Clone)]
@@ -255,7 +273,11 @@ pub struct AgentCompleteCommand {
     pub artifacts: Option<String>,
 }
 
-impl_mcp_tool!(AgentCompleteCommand, "b00t_agent_complete", ["agent", "complete"]);
+impl_mcp_tool!(
+    AgentCompleteCommand,
+    "b00t_agent_complete",
+    ["agent", "complete"]
+);
 
 /// MCP command for reporting progress
 #[derive(Parser, Clone)]
@@ -273,7 +295,11 @@ pub struct AgentProgressCommand {
     pub eta: Option<u64>,
 }
 
-impl_mcp_tool!(AgentProgressCommand, "b00t_agent_progress", ["agent", "progress"]);
+impl_mcp_tool!(
+    AgentProgressCommand,
+    "b00t_agent_progress",
+    ["agent", "progress"]
+);
 
 /// MCP command for creating voting proposals (captain only)
 #[derive(Parser, Clone)]
@@ -297,7 +323,11 @@ pub struct AgentVoteCreateCommand {
     pub voters: String,
 }
 
-impl_mcp_tool!(AgentVoteCreateCommand, "b00t_agent_vote_create", ["agent", "vote", "create"]);
+impl_mcp_tool!(
+    AgentVoteCreateCommand,
+    "b00t_agent_vote_create",
+    ["agent", "vote", "create"]
+);
 
 /// MCP command for submitting votes
 #[derive(Parser, Clone)]
@@ -312,7 +342,11 @@ pub struct AgentVoteSubmitCommand {
     pub reasoning: Option<String>,
 }
 
-impl_mcp_tool!(AgentVoteSubmitCommand, "b00t_agent_vote_submit", ["agent", "vote", "submit"]);
+impl_mcp_tool!(
+    AgentVoteSubmitCommand,
+    "b00t_agent_vote_submit",
+    ["agent", "vote", "submit"]
+);
 
 /// MCP command for waiting for messages (blocking)
 #[derive(Parser, Clone)]
@@ -366,7 +400,11 @@ pub struct AgentCapabilityCommand {
     pub urgency: Option<String>, // "low", "normal", "high", "emergency"
 }
 
-impl_mcp_tool!(AgentCapabilityCommand, "b00t_agent_capability", ["agent", "capability"]);
+impl_mcp_tool!(
+    AgentCapabilityCommand,
+    "b00t_agent_capability",
+    ["agent", "capability"]
+);
 
 /// App VSCode MCP install command
 #[derive(Parser, Clone)]
@@ -375,7 +413,11 @@ pub struct AppVscodeMcpInstallCommand {
     pub name: String,
 }
 
-impl_mcp_tool!(AppVscodeMcpInstallCommand, "b00t_app_vscode_mcp_install", ["app", "vscode", "mcp", "install"]);
+impl_mcp_tool!(
+    AppVscodeMcpInstallCommand,
+    "b00t_app_vscode_mcp_install",
+    ["app", "vscode", "mcp", "install"]
+);
 
 /// App Claude Code MCP install command
 #[derive(Parser, Clone)]
@@ -384,7 +426,11 @@ pub struct AppClaudecodeMcpInstallCommand {
     pub name: String,
 }
 
-impl_mcp_tool!(AppClaudecodeMcpInstallCommand, "b00t_app_claudecode_mcp_install", ["app", "claudecode", "mcp", "install"]);
+impl_mcp_tool!(
+    AppClaudecodeMcpInstallCommand,
+    "b00t_app_claudecode_mcp_install",
+    ["app", "claudecode", "mcp", "install"]
+);
 
 /// MCP install command with full target and parameter support
 // 🤓 ENTANGLED: b00t-cli/src/commands/mcp.rs McpCommands::Install
@@ -403,7 +449,10 @@ pub struct McpInstallCommand {
     #[arg(long, help = "Install to user-global location (for geminicli)")]
     pub user: bool,
 
-    #[arg(long, help = "Select stdio method by command (for multi-source MCP configs)")]
+    #[arg(
+        long,
+        help = "Select stdio method by command (for multi-source MCP configs)"
+    )]
     pub stdio_command: Option<String>,
 
     #[arg(long, help = "Use httpstream method (for multi-source MCP configs)")]
@@ -433,7 +482,11 @@ impl_mcp_tool!(SessionInitCommand, "b00t_session_init", ["session", "init"]);
 #[derive(Parser, Clone)]
 pub struct SessionStatusCommand;
 
-impl_mcp_tool!(SessionStatusCommand, "b00t_session_status", ["session", "status"]);
+impl_mcp_tool!(
+    SessionStatusCommand,
+    "b00t_session_status",
+    ["session", "status"]
+);
 
 /// Session end command
 #[derive(Parser, Clone)]
@@ -491,7 +544,11 @@ pub struct GrokAskCommand {
     #[arg(long, help = "Optional topic to filter by")]
     pub topic: Option<String>,
 
-    #[arg(long, help = "Maximum number of results to return", default_value = "10")]
+    #[arg(
+        long,
+        help = "Maximum number of results to return",
+        default_value = "10"
+    )]
     pub limit: Option<usize>,
 }
 
@@ -636,7 +693,8 @@ pub struct AcpHiveLeaveCommand {
 impl_mcp_tool!(AcpHiveLeaveCommand, "b00t_acp_hive_leave", ["acp", "hive", "leave"]);
 
 // Custom implementations for ACP hive tools
-use crate::acp_tools::*;
+// 🤓 Disabled - acp_hive uses full NATS Agent from old ACP; chat refactor simplified to stubs
+// use crate::acp_tools::*;
 
 /// Create and populate a registry with all available MCP tools
 pub fn create_mcp_registry() -> McpCommandRegistry {
@@ -682,16 +740,17 @@ pub fn create_mcp_registry() -> McpCommandRegistry {
         .register::<GrokDigestCommand>()
         .register::<GrokAskCommand>()
         .register::<GrokLearnCommand>()
-        .register::<GrokStatusCommand>()
+        .register::<GrokStatusCommand>();
         // ACP Hive coordination tools
-        .register::<AcpHiveJoinCommand>()
-        .register::<AcpHiveCreateCommand>()
-        .register::<AcpHiveStatusCommand>()
-        .register::<AcpHiveProposeCommand>()
-        .register::<AcpHiveSyncCommand>()
-        .register::<AcpHiveReadyCommand>()
-        .register::<AcpHiveShowCommand>()
-        .register::<AcpHiveLeaveCommand>();
+        // 🤓 Disabled - acp_hive uses full NATS Agent from old ACP; chat refactor simplified to stubs
+        // .register::<AcpHiveJoinCommand>()
+        // .register::<AcpHiveCreateCommand>()
+        // .register::<AcpHiveStatusCommand>()
+        // .register::<AcpHiveProposeCommand>()
+        // .register::<AcpHiveSyncCommand>()
+        // .register::<AcpHiveReadyCommand>()
+        // .register::<AcpHiveShowCommand>()
+        // .register::<AcpHiveLeaveCommand>();
 
     builder.build()
 }
@@ -711,9 +770,7 @@ mod tests {
         assert!(!tools.is_empty());
 
         // Check specific tools exist
-        let tool_names: Vec<&str> = tools.iter()
-            .map(|t| t.name.as_ref())
-            .collect();
+        let tool_names: Vec<&str> = tools.iter().map(|t| t.name.as_ref()).collect();
 
         assert!(tool_names.contains(&"b00t_mcp_list"));
         assert!(tool_names.contains(&"b00t_cli_detect"));

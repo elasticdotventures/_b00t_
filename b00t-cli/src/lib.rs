@@ -3,18 +3,20 @@ use chrono::{DateTime, Utc};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 
+pub mod cloud_sync;
 pub mod datum_ai;
 pub mod datum_apt;
 pub mod datum_bash;
 pub mod datum_docker;
 pub mod datum_k8s;
+pub mod datum_stack;
 pub mod datum_vscode;
+pub mod dependency_resolver;
 pub mod k8s;
 pub mod session_memory;
 pub mod traits;
 pub mod utils;
 pub mod whoami;
-pub mod cloud_sync;
 pub use traits::*;
 
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
@@ -84,6 +86,16 @@ pub struct BootDatum {
     // Aliases for CLI commands
     pub aliases: Option<Vec<String>>,
 
+    // Datum dependencies - references to other datum IDs for auto-installation
+    // Format: "datum-name.datum-type" (e.g., "python.cli", "docker.docker")
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub depends_on: Option<Vec<String>>,
+
+    // Stack members - list of datum IDs that form this stack (only for DatumType::Stack)
+    // Format: ["postgres.docker", "pgadmin.docker", "redis.docker"]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub members: Option<Vec<String>>,
+
     // MCP-specific multi-method support - these will be handled by datum_mcp module
     #[serde(skip_serializing_if = "Option::is_none")]
     pub mcp: Option<McpMethods>,
@@ -110,6 +122,7 @@ pub enum DatumType {
     Nix,
     Ai,
     Cli,
+    Stack,
 }
 
 #[derive(Serialize, Debug)]
@@ -202,21 +215,31 @@ pub fn extract_comments_and_clean_json(input: &str) -> (String, Option<String>) 
 
     // Also handle trailing commas (JSON5 style) - both objects and arrays
     let trailing_comma_re = Regex::new(r",(\s*[}\]])").unwrap();
-    cleaned_input = trailing_comma_re.replace_all(&cleaned_input, "$1").to_string();
-    
+    cleaned_input = trailing_comma_re
+        .replace_all(&cleaned_input, "$1")
+        .to_string();
+
     // Handle trailing commas at end of lines more aggressively
-    let lines: Vec<String> = cleaned_input.lines().map(|line| {
-        let trimmed = line.trim_end();
-        if trimmed.ends_with(',') && 
-           (line.contains('}') || line.contains(']') || 
-            cleaned_input.lines().skip_while(|l| l != &line).nth(1)
-                .map(|next| next.trim().starts_with('}') || next.trim().starts_with(']'))
-                .unwrap_or(false)) {
-            trimmed.strip_suffix(',').unwrap_or(trimmed).to_string()
-        } else {
-            line.to_string()
-        }
-    }).collect();
+    let lines: Vec<String> = cleaned_input
+        .lines()
+        .map(|line| {
+            let trimmed = line.trim_end();
+            if trimmed.ends_with(',')
+                && (line.contains('}')
+                    || line.contains(']')
+                    || cleaned_input
+                        .lines()
+                        .skip_while(|l| l != &line)
+                        .nth(1)
+                        .map(|next| next.trim().starts_with('}') || next.trim().starts_with(']'))
+                        .unwrap_or(false))
+            {
+                trimmed.strip_suffix(',').unwrap_or(trimmed).to_string()
+            } else {
+                line.to_string()
+            }
+        })
+        .collect();
     cleaned_input = lines.join("\n");
 
     (cleaned_input.trim().to_string(), first_comment)
@@ -247,7 +270,7 @@ fn create_mcp_datum_from_json(
                 .collect()
         })
         .unwrap_or_else(|| vec![]);
-    
+
     // Detect transport type and requirements based on command
     let (requires, transport_type) = match command.as_str() {
         "docker" => (vec!["docker".to_string()], "stdio"),
@@ -255,7 +278,7 @@ fn create_mcp_datum_from_json(
         "npx" | "node" => (vec!["node".to_string()], "stdio"),
         _ => (vec![], "stdio"),
     };
-    
+
     let cli_method = serde_json::json!({
         "command": command,
         "args": args,
@@ -263,7 +286,7 @@ fn create_mcp_datum_from_json(
         "requires": requires,
         "transport": transport_type
     });
-    
+
     BootDatum {
         name,
         datum_type: Some(DatumType::Mcp),
@@ -304,11 +327,18 @@ fn create_mcp_datum_from_json(
                     .collect()
             }),
         aliases: None,
+        depends_on: None,
+        members: None,
         // Convert legacy command/args to new multi-method format
         mcp: Some(McpMethods {
-            stdio: Some(vec![cli_method.as_object().unwrap().iter()
-                .map(|(k, v)| (k.clone(), v.clone()))
-                .collect()]),
+            stdio: Some(vec![
+                cli_method
+                    .as_object()
+                    .unwrap()
+                    .iter()
+                    .map(|(k, v)| (k.clone(), v.clone()))
+                    .collect(),
+            ]),
             httpstream: None,
         }),
     }
@@ -326,14 +356,14 @@ pub fn normalize_mcp_json(input: &str, dwiw: bool) -> Result<BootDatum> {
     // 🤓 YET-ANOTHER-STANDARD SYNDROME: AI tooling JSON format chaos
     // Different MCP ecosystems use different JSON formats:
     // 1. Flat format: {"name": "server", "command": "npx", "args": [...]}
-    // 2. Nested format: {"server-name": {"command": "npx", "args": [...]}}  
+    // 2. Nested format: {"server-name": {"command": "npx", "args": [...]}}
     // 3. mcpServers wrapper: {"mcpServers": {"server-name": {...}}}
     // We auto-detect and support all three because... modern AI tooling. 🙄
 
     // Handle direct format: {"name": "...", "command": "...", "args": [...]} or {"name": "...", "url": "..."}
     if let Some(name) = json_value.get("name") {
         let name_str = name.as_str().unwrap_or("unknown").to_string();
-        
+
         // Check if this is an HTTP server (has URL field)
         if let Some(url) = json_value.get("url") {
             let http_method = serde_json::json!({
@@ -344,12 +374,14 @@ pub fn normalize_mcp_json(input: &str, dwiw: bool) -> Result<BootDatum> {
                 "requires_auth": false,
                 "transport": "httpstream"
             });
-            
+
             return Ok(BootDatum {
                 name: name_str,
                 datum_type: Some(DatumType::Mcp),
                 desires: None,
-                hint: hint.clone().unwrap_or_else(|| "MCP HTTP server".to_string()),
+                hint: hint
+                    .clone()
+                    .unwrap_or_else(|| "MCP HTTP server".to_string()),
                 install: None,
                 update: None,
                 version: None,
@@ -385,17 +417,28 @@ pub fn normalize_mcp_json(input: &str, dwiw: bool) -> Result<BootDatum> {
                             .collect()
                     }),
                 aliases: None,
+                depends_on: None,
+                members: None,
                 mcp: Some(McpMethods {
                     stdio: None,
-                    httpstream: Some(http_method.as_object().unwrap().iter()
-                        .map(|(k, v)| (k.clone(), v.clone()))
-                        .collect()),
+                    httpstream: Some(
+                        http_method
+                            .as_object()
+                            .unwrap()
+                            .iter()
+                            .map(|(k, v)| (k.clone(), v.clone()))
+                            .collect(),
+                    ),
                 }),
             });
         }
-        
+
         // Otherwise, treat as CLI/stdio server
-        return Ok(create_mcp_datum_from_json(name_str, hint.clone(), &json_value));
+        return Ok(create_mcp_datum_from_json(
+            name_str,
+            hint.clone(),
+            &json_value,
+        ));
     }
 
     // Handle mcpServers wrapper format: {"mcpServers": {"server_name": {...}}}
@@ -409,14 +452,25 @@ pub fn normalize_mcp_json(input: &str, dwiw: bool) -> Result<BootDatum> {
         if keys.len() == 1 {
             let server_name = keys[0].clone();
             let server_config = &mcp_servers[&server_name];
-            return Ok(create_mcp_datum_from_json(server_name, hint.clone(), server_config));
+            return Ok(create_mcp_datum_from_json(
+                server_name,
+                hint.clone(),
+                server_config,
+            ));
         } else if keys.len() > 1 {
             // Multiple servers in mcpServers - take the first one and warn
             let server_name = keys[0].clone();
             let server_config = &mcp_servers[&server_name];
-            eprintln!("⚠️  Multiple servers found in mcpServers, using first: {}", server_name);
+            eprintln!(
+                "⚠️  Multiple servers found in mcpServers, using first: {}",
+                server_name
+            );
             eprintln!("💡 To register multiple servers, use separate commands for each");
-            return Ok(create_mcp_datum_from_json(server_name, hint.clone(), server_config));
+            return Ok(create_mcp_datum_from_json(
+                server_name,
+                hint.clone(),
+                server_config,
+            ));
         }
     }
 
@@ -473,6 +527,7 @@ pub fn create_unified_toml_config(datum: &BootDatum, path: &str) -> Result<()> {
         DatumType::Nix => ".nix.toml",
         DatumType::Ai => ".ai.toml",
         DatumType::Cli => ".cli.toml",
+        DatumType::Stack => ".stack.toml",
         DatumType::Unknown => ".toml",
     };
 
@@ -504,6 +559,7 @@ impl std::fmt::Display for DatumType {
             DatumType::Nix => write!(f, "nix"),
             DatumType::Ai => write!(f, "AI"),
             DatumType::Cli => write!(f, "CLI"),
+            DatumType::Stack => write!(f, "stack"),
         }
     }
 }
@@ -528,6 +584,8 @@ impl DatumType {
             DatumType::Nix
         } else if filename.ends_with(".ai.toml") {
             DatumType::Ai
+        } else if filename.ends_with(".stack.toml") {
+            DatumType::Stack
         } else {
             DatumType::Unknown // Default fallback for .toml files
         }
@@ -619,9 +677,9 @@ pub fn get_config(
 }
 
 pub fn get_mcp_config(name: &str, path: &str) -> Result<BootDatum> {
-    use std::fs;
     use anyhow::Context;
-    
+    use std::fs;
+
     let mut path_buf = get_expanded_path(path)?;
     path_buf.push(format!("{}.mcp.toml", name));
 
@@ -644,9 +702,9 @@ pub fn get_mcp_config(name: &str, path: &str) -> Result<BootDatum> {
 }
 
 pub fn get_mcp_toml_files(path: &str) -> Result<Vec<String>> {
-    use std::fs;
     use anyhow::Context;
-    
+    use std::fs;
+
     let expanded_path = get_expanded_path(path)?;
     let entries = fs::read_dir(&expanded_path)
         .with_context(|| format!("Error reading directory {}", expanded_path.display()))?;
@@ -669,7 +727,7 @@ pub fn get_mcp_toml_files(path: &str) -> Result<Vec<String>> {
 
 pub fn mcp_list(path: &str, json_output: bool) -> Result<()> {
     use anyhow::Context;
-    
+
     let mcp_files = get_mcp_toml_files(path)?;
     let mut mcp_items = Vec::new();
 
@@ -677,34 +735,39 @@ pub fn mcp_list(path: &str, json_output: bool) -> Result<()> {
         match get_mcp_config(&server_name, path) {
             Ok(datum) => {
                 // Extract command and args from MCP structure (prioritizing stdio methods)
-                let (command, args) = if let Some(mcp) = &datum.mcp {
-                    if let Some(stdio_methods) = &mcp.stdio {
-                        if let Some(first_method) = stdio_methods.first() {
-                            let command = first_method.get("command")
+                let (command, args) =
+                    if let Some(mcp) = &datum.mcp {
+                        if let Some(stdio_methods) = &mcp.stdio {
+                            if let Some(first_method) = stdio_methods.first() {
+                                let command = first_method
+                                    .get("command")
+                                    .and_then(|v| v.as_str())
+                                    .map(|s| s.to_string());
+                                let args = first_method.get("args").and_then(|v| v.as_array()).map(
+                                    |arr| {
+                                        arr.iter()
+                                            .filter_map(|v| v.as_str())
+                                            .map(|s| s.to_string())
+                                            .collect::<Vec<String>>()
+                                    },
+                                );
+                                (command, args)
+                            } else {
+                                (None, None)
+                            }
+                        } else if let Some(httpstream) = &mcp.httpstream {
+                            let url = httpstream
+                                .get("url")
                                 .and_then(|v| v.as_str())
                                 .map(|s| s.to_string());
-                            let args = first_method.get("args")
-                                .and_then(|v| v.as_array())
-                                .map(|arr| arr.iter()
-                                    .filter_map(|v| v.as_str())
-                                    .map(|s| s.to_string())
-                                    .collect::<Vec<String>>());
-                            (command, args)
+                            (Some("HTTP".to_string()), url.map(|u| vec![u]))
                         } else {
                             (None, None)
                         }
-                    } else if let Some(httpstream) = &mcp.httpstream {
-                        let url = httpstream.get("url")
-                            .and_then(|v| v.as_str())
-                            .map(|s| s.to_string());
-                        (Some("HTTP".to_string()), url.map(|u| vec![u]))
                     } else {
-                        (None, None)
-                    }
-                } else {
-                    // Fallback to legacy fields for backwards compatibility
-                    (datum.command.clone(), datum.args.clone())
-                };
+                        // Fallback to legacy fields for backwards compatibility
+                        (datum.command.clone(), datum.args.clone())
+                    };
 
                 mcp_items.push(McpListItem {
                     name: server_name,
@@ -769,38 +832,38 @@ pub fn mcp_list(path: &str, json_output: bool) -> Result<()> {
 }
 
 /// Register an MCP server configuration from JSON input
-/// 
+///
 /// Creates a new multi-method MCP server configuration using the modern format
 /// with [[b00t.cli]] sections and proper requirement specifications.
-/// 
+///
 /// # Arguments
-/// 
+///
 /// * `json` - JSON string containing MCP server configuration, or "-" to read from stdin
 /// * `dwiw` - "Do What I Want" flag to auto-cleanup and format JSON comments
 /// * `path` - Path to the _b00t_ directory where configuration will be stored
-/// 
+///
 /// # Examples
-/// 
+///
 /// ```rust
 /// // Register from JSON string
 /// let json = r#"{"name":"filesystem","command":"npx","args":["-y","@modelcontextprotocol/server-filesystem"]}"#;
 /// b00t_cli::mcp_add_json(json, false, "~/.dotfiles/_b00t_").unwrap();
-/// 
+///
 /// // Register with DWIW to strip comments
 /// let json_with_comments = r#"{"name":"github","command":"npx","args":["-y","@modelcontextprotocol/server-github"]} // GitHub MCP server"#;
 /// b00t_cli::mcp_add_json(json_with_comments, true, "~/.dotfiles/_b00t_").unwrap();
-/// 
+///
 /// // CLI usage examples:
 /// // b00t-cli mcp register '{"name":"filesystem","command":"npx","args":["-y","@modelcontextprotocol/server-filesystem"]}'
 /// // b00t-cli mcp register brave-search -- npx -y @modelcontextprotocol/server-brave-search
 /// // echo '{"name":"test"}' | b00t-cli mcp register -
 /// ```
 pub fn mcp_add_json(json: &str, dwiw: bool, path: &str) -> Result<()> {
-    use std::io::{self, Read, IsTerminal};
-    
+    use std::io::{self, IsTerminal, Read};
+
     let json_content = if json == "-" {
         let mut buffer = String::new();
-        
+
         // Check if reading from terminal (interactive) vs pipe
         if io::stdin().is_terminal() {
             eprintln!("📋 Paste your MCP server JSON configuration and press Ctrl+D when done:");
@@ -810,7 +873,7 @@ pub fn mcp_add_json(json: &str, dwiw: bool, path: &str) -> Result<()> {
             eprintln!("   • Named: {{\"server-name\":{{\"command\":\"npx\",...}}}}");
             eprintln!("");
         }
-        
+
         match io::stdin().read_to_string(&mut buffer) {
             Ok(_) => {
                 let trimmed = buffer.trim();
@@ -846,41 +909,45 @@ pub fn mcp_add_json(json: &str, dwiw: bool, path: &str) -> Result<()> {
 }
 
 /// Remove an MCP server configuration by name
-/// 
+///
 /// # Examples
-/// 
+///
 /// ```rust
 /// // Remove an MCP server configuration from the _b00t_ directory
 /// b00t_cli::mcp_remove("filesystem", "~/.dotfiles/_b00t_").unwrap();
-/// 
+///
 /// // CLI usage:
 /// // b00t-cli mcp register --remove filesystem
 /// ```
 pub fn mcp_remove(name: &str, path: &str) -> Result<()> {
     use std::fs;
     use std::path::PathBuf;
-    
+
     let expanded_path = get_expanded_path(path)?;
     let mut mcp_path = PathBuf::from(expanded_path);
-    
+
     // Construct the filename
     let filename = format!("{}.mcp.toml", name);
     mcp_path.push(filename);
-    
+
     if mcp_path.exists() {
-        fs::remove_file(&mcp_path)
-            .with_context(|| format!("Failed to remove MCP server configuration: {}", mcp_path.display()))?;
+        fs::remove_file(&mcp_path).with_context(|| {
+            format!(
+                "Failed to remove MCP server configuration: {}",
+                mcp_path.display()
+            )
+        })?;
         println!("Removed MCP server configuration: {}", name);
     } else {
         anyhow::bail!("MCP server configuration not found: {}", name);
     }
-    
+
     Ok(())
 }
 
 pub fn mcp_output(path: &str, use_mcp_servers_wrapper: bool, servers: &str) -> Result<()> {
     use anyhow::Context;
-    
+
     let requested_servers: Vec<&str> = servers.split(',').map(|s| s.trim()).collect();
     let mut server_configs = serde_json::Map::new();
 
@@ -893,16 +960,11 @@ pub fn mcp_output(path: &str, use_mcp_servers_wrapper: bool, servers: &str) -> R
             Ok(datum) => {
                 let (command, args) = extract_mcp_command_args(&datum);
                 let mut server_config = serde_json::Map::new();
-                server_config.insert(
-                    "command".to_string(),
-                    serde_json::Value::String(command),
-                );
+                server_config.insert("command".to_string(), serde_json::Value::String(command));
                 server_config.insert(
                     "args".to_string(),
                     serde_json::Value::Array(
-                        args.into_iter()
-                            .map(serde_json::Value::String)
-                            .collect(),
+                        args.into_iter().map(serde_json::Value::String).collect(),
                     ),
                 );
 
@@ -970,33 +1032,37 @@ fn extract_mcp_command_args(datum: &BootDatum) -> (String, Vec<String>) {
     if let Some(mcp) = &datum.mcp {
         if let Some(stdio_methods) = &mcp.stdio {
             if let Some(first_method) = stdio_methods.first() {
-                let command = first_method.get("command")
+                let command = first_method
+                    .get("command")
                     .and_then(|v| v.as_str())
                     .unwrap_or("npx")
                     .to_string();
-                let args = first_method.get("args")
+                let args = first_method
+                    .get("args")
                     .and_then(|v| v.as_array())
-                    .map(|arr| arr.iter()
-                        .filter_map(|v| v.as_str())
-                        .map(|s| s.to_string())
-                        .collect::<Vec<String>>())
+                    .map(|arr| {
+                        arr.iter()
+                            .filter_map(|v| v.as_str())
+                            .map(|s| s.to_string())
+                            .collect::<Vec<String>>()
+                    })
                     .unwrap_or_default();
                 return (command, args);
             }
         }
     }
-    
+
     // Fallback to legacy fields for backwards compatibility
     (
         datum.command.clone().unwrap_or_else(|| "npx".to_string()),
-        datum.args.clone().unwrap_or_default()
+        datum.args.clone().unwrap_or_default(),
     )
 }
 
 // MCP Installation Functions
 pub fn claude_code_install_mcp(name: &str, path: &str) -> Result<()> {
     use duct::cmd;
-    
+
     let datum = get_mcp_config(name, path)?;
     let (command, args) = extract_mcp_command_args(&datum);
 
@@ -1037,7 +1103,7 @@ pub fn claude_code_install_mcp(name: &str, path: &str) -> Result<()> {
 
 pub fn vscode_install_mcp(name: &str, path: &str) -> Result<()> {
     use duct::cmd;
-    
+
     let datum = get_mcp_config(name, path)?;
     let (command, args) = extract_mcp_command_args(&datum);
 
@@ -1072,7 +1138,7 @@ pub fn vscode_install_mcp(name: &str, path: &str) -> Result<()> {
 
 pub fn gemini_install_mcp(name: &str, path: &str, use_repo: bool) -> Result<()> {
     use duct::cmd;
-    
+
     let datum = get_mcp_config(name, path)?;
     let (command, args) = extract_mcp_command_args(&datum);
 
@@ -1086,11 +1152,23 @@ pub fn gemini_install_mcp(name: &str, path: &str, use_repo: bool) -> Result<()> 
         serde_json::to_string(&gemini_json).context("Failed to serialize JSON for Gemini CLI")?;
 
     let location_flag = if use_repo { "--repo" } else { "--user" };
-    let result = cmd!("gemini", "mcp", "add-json", location_flag, &datum.name, &json_str).run();
+    let result = cmd!(
+        "gemini",
+        "mcp",
+        "add-json",
+        location_flag,
+        &datum.name,
+        &json_str
+    )
+    .run();
 
     match result {
         Ok(_) => {
-            let location = if use_repo { "repository" } else { "user global" };
+            let location = if use_repo {
+                "repository"
+            } else {
+                "user global"
+            };
             println!(
                 "Successfully installed MCP server '{}' to Gemini CLI ({})",
                 datum.name, location
@@ -1101,8 +1179,15 @@ pub fn gemini_install_mcp(name: &str, path: &str, use_repo: bool) -> Result<()> 
             );
         }
         Err(e) => {
-            let location = if use_repo { "repository" } else { "user global" };
-            eprintln!("Failed to install MCP server to Gemini CLI ({}): {}", location, e);
+            let location = if use_repo {
+                "repository"
+            } else {
+                "user global"
+            };
+            eprintln!(
+                "Failed to install MCP server to Gemini CLI ({}): {}",
+                location, e
+            );
             eprintln!(
                 "Manual command: gemini mcp add-json {} {} '{}'",
                 location_flag, datum.name, json_str
@@ -1114,27 +1199,32 @@ pub fn gemini_install_mcp(name: &str, path: &str, use_repo: bool) -> Result<()> 
     Ok(())
 }
 
-pub fn dotmcpjson_install_mcp(name: &str, path: &str, stdio_command: Option<&str>, use_httpstream: bool) -> Result<()> {
+pub fn dotmcpjson_install_mcp(
+    name: &str,
+    path: &str,
+    stdio_command: Option<&str>,
+    use_httpstream: bool,
+) -> Result<()> {
     use crate::utils::get_workspace_root;
-    
+
     // Get MCP configuration from b00t-cli
     let datum = get_mcp_config(name, path)?;
-    
+
     // Find the repo root and .mcp.json file
     let repo_root = get_workspace_root();
     let mcp_json_path = std::path::Path::new(&repo_root).join(".mcp.json");
-    
+
     if !mcp_json_path.exists() {
         anyhow::bail!("No .mcp.json file found in repo root: {}", repo_root);
     }
-    
+
     // Load existing .mcp.json
-    let existing_content = std::fs::read_to_string(&mcp_json_path)
-        .context("Failed to read .mcp.json file")?;
-    
-    let mut mcp_config: serde_json::Value = serde_json::from_str(&existing_content)
-        .context("Failed to parse .mcp.json file")?;
-    
+    let existing_content =
+        std::fs::read_to_string(&mcp_json_path).context("Failed to read .mcp.json file")?;
+
+    let mut mcp_config: serde_json::Value =
+        serde_json::from_str(&existing_content).context("Failed to parse .mcp.json file")?;
+
     // Ensure mcpServers object exists
     if !mcp_config.is_object() {
         mcp_config = serde_json::json!({});
@@ -1142,17 +1232,18 @@ pub fn dotmcpjson_install_mcp(name: &str, path: &str, stdio_command: Option<&str
     if !mcp_config["mcpServers"].is_object() {
         mcp_config["mcpServers"] = serde_json::json!({});
     }
-    
+
     // Handle multi-source selection if available
     let (command, args, env, method_type) = if let Some(methods) = &datum.mcp {
         // Multi-source MCP config - select appropriate method
         if use_httpstream {
             // Use httpstream method
             if let Some(httpstream_method) = &methods.httpstream {
-                let url = httpstream_method.get("url")
+                let url = httpstream_method
+                    .get("url")
                     .and_then(|v| v.as_str())
                     .ok_or_else(|| anyhow::anyhow!("Missing url in httpstream method"))?;
-                
+
                 // For httpstream, we create a pseudo-command structure
                 (url.to_string(), vec![], None, "httpstream")
             } else {
@@ -1162,33 +1253,41 @@ pub fn dotmcpjson_install_mcp(name: &str, path: &str, stdio_command: Option<&str
             // Use stdio method filtered by command
             if let Some(stdio_methods) = &methods.stdio {
                 let matching_method = stdio_methods.iter().find(|method| {
-                    method.get("command")
+                    method
+                        .get("command")
                         .and_then(|v| v.as_str())
                         .map(|cmd| cmd == stdio_command_filter)
                         .unwrap_or(false)
                 });
-                
+
                 if let Some(method) = matching_method {
-                    let command = method.get("command")
+                    let command = method
+                        .get("command")
                         .and_then(|v| v.as_str())
                         .ok_or_else(|| anyhow::anyhow!("Missing command in stdio method"))?;
-                    let args = method.get("args")
+                    let args = method
+                        .get("args")
                         .and_then(|v| v.as_array())
-                        .map(|arr| arr.iter().filter_map(|v| v.as_str().map(|s| s.to_string())).collect())
+                        .map(|arr| {
+                            arr.iter()
+                                .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                                .collect()
+                        })
                         .unwrap_or_default();
-                    let env = method.get("env")
-                        .and_then(|v| v.as_object())
-                        .map(|obj| obj.iter()
+                    let env = method.get("env").and_then(|v| v.as_object()).map(|obj| {
+                        obj.iter()
                             .filter_map(|(k, v)| v.as_str().map(|s| (k.clone(), s.to_string())))
-                            .collect::<std::collections::HashMap<String, String>>());
-                        
+                            .collect::<std::collections::HashMap<String, String>>()
+                    });
+
                     (command.to_string(), args, env, "stdio")
                 } else {
                     anyhow::bail!(
-                        "No stdio method with command '{}' found for MCP '{}'. Available commands: {}", 
-                        stdio_command_filter, 
+                        "No stdio method with command '{}' found for MCP '{}'. Available commands: {}",
+                        stdio_command_filter,
                         name,
-                        stdio_methods.iter()
+                        stdio_methods
+                            .iter()
                             .filter_map(|m| m.get("command").and_then(|v| v.as_str()))
                             .collect::<Vec<_>>()
                             .join(", ")
@@ -1203,21 +1302,27 @@ pub fn dotmcpjson_install_mcp(name: &str, path: &str, stdio_command: Option<&str
                 if stdio_methods.is_empty() {
                     anyhow::bail!("No stdio methods available for MCP '{}'", name);
                 }
-                
+
                 let method = &stdio_methods[0];
-                let command = method.get("command")
+                let command = method
+                    .get("command")
                     .and_then(|v| v.as_str())
                     .ok_or_else(|| anyhow::anyhow!("Missing command in stdio method"))?;
-                let args = method.get("args")
+                let args = method
+                    .get("args")
                     .and_then(|v| v.as_array())
-                    .map(|arr| arr.iter().filter_map(|v| v.as_str().map(|s| s.to_string())).collect())
+                    .map(|arr| {
+                        arr.iter()
+                            .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                            .collect()
+                    })
                     .unwrap_or_default();
-                let env = method.get("env")
-                    .and_then(|v| v.as_object())
-                    .map(|obj| obj.iter()
+                let env = method.get("env").and_then(|v| v.as_object()).map(|obj| {
+                    obj.iter()
                         .filter_map(|(k, v)| v.as_str().map(|s| (k.clone(), s.to_string())))
-                        .collect::<std::collections::HashMap<String, String>>());
-                    
+                        .collect::<std::collections::HashMap<String, String>>()
+                });
+
                 (command.to_string(), args, env, "stdio")
             } else {
                 anyhow::bail!("No stdio methods available for MCP '{}'", name);
@@ -1228,7 +1333,7 @@ pub fn dotmcpjson_install_mcp(name: &str, path: &str, stdio_command: Option<&str
         let (command, args) = extract_mcp_command_args(&datum);
         (command, args, datum.env.clone(), "stdio")
     };
-    
+
     // Create MCP server entry for .mcp.json format
     let server_config = if method_type == "httpstream" {
         // For httpstream, use url instead of command/args
@@ -1242,7 +1347,7 @@ pub fn dotmcpjson_install_mcp(name: &str, path: &str, stdio_command: Option<&str
             "args": args
         })
     };
-    
+
     // Add optional env if present
     if let Some(method_env) = env {
         if let Some(server_obj) = server_config.as_object() {
@@ -1253,19 +1358,19 @@ pub fn dotmcpjson_install_mcp(name: &str, path: &str, stdio_command: Option<&str
     } else {
         mcp_config["mcpServers"][&datum.name] = server_config;
     }
-    
+
     // Write back to .mcp.json with pretty formatting
     let updated_content = serde_json::to_string_pretty(&mcp_config)
         .context("Failed to serialize updated .mcp.json")?;
-    
+
     std::fs::write(&mcp_json_path, updated_content)
         .context("Failed to write updated .mcp.json file")?;
-    
+
     println!(
         "✅ Successfully installed MCP server '{}' to .mcp.json",
         datum.name
     );
-    
+
     if method_type == "httpstream" {
         println!("🌐 Used httpstream method");
     } else if let Some(cmd) = stdio_command {
@@ -1273,12 +1378,11 @@ pub fn dotmcpjson_install_mcp(name: &str, path: &str, stdio_command: Option<&str
     } else {
         println!("📡 Used default stdio method");
     }
-    
+
     println!("📁 Updated: {}", mcp_json_path.display());
-    
+
     Ok(())
 }
-
 
 // Session management functions
 impl SessionState {

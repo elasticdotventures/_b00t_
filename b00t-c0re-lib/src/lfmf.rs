@@ -7,9 +7,9 @@
 //! - Configurable advice retrieval with TOML/env configuration
 
 use anyhow::{Context, Result};
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::{env, fs, path::Path};
-use chrono::{DateTime, Utc};
 
 use crate::grok::GrokClient;
 
@@ -106,31 +106,38 @@ impl LfmfSystem {
     /// Load configuration from TOML file or environment variables
     pub fn load_config(path: &str) -> Result<LfmfConfig> {
         let config_path = Path::new(path).join("lfmf.toml");
-        
-        let mut config = if config_path.exists() {
-            let content = fs::read_to_string(&config_path)
-                .context(format!("Failed to read LFMF config from {}", config_path.display()))?;
-            toml::from_str(&content)
-                .context("Failed to parse lfmf.toml")?
+        let config_dir = Path::new(path);
+        let config_exists = config_path.exists();
+
+        let mut config = if config_exists {
+            let content = fs::read_to_string(&config_path).context(format!(
+                "Failed to read LFMF config from {}",
+                config_path.display()
+            ))?;
+            toml::from_str(&content).context("Failed to parse lfmf.toml")?
         } else {
-            LfmfConfig::default()
+            let mut cfg = LfmfConfig::default();
+            cfg.filesystem.learn_dir = config_dir.join("learn").to_string_lossy().to_string();
+            cfg
         };
 
         // Override with environment variables if present
-        if let Ok(url) = env::var("QDRANT_URL") {
-            config.qdrant.url = url;
-        }
-        
-        if let Ok(api_key) = env::var("QDRANT_API_KEY") {
-            config.qdrant.api_key = Some(api_key);
-        }
-        
-        if let Ok(collection) = env::var("QDRANT_COLLECTION") {
-            config.qdrant.collection = Some(collection);
-        }
+        if !config_exists {
+            if let Ok(url) = env::var("QDRANT_URL") {
+                config.qdrant.url = url;
+            }
 
-        if let Ok(learn_dir) = env::var("B00T_LEARN_DIR") {
-            config.filesystem.learn_dir = learn_dir;
+            if let Ok(api_key) = env::var("QDRANT_API_KEY") {
+                config.qdrant.api_key = Some(api_key);
+            }
+
+            if let Ok(collection) = env::var("QDRANT_COLLECTION") {
+                config.qdrant.collection = Some(collection);
+            }
+
+            if let Ok(learn_dir) = env::var("B00T_LEARN_DIR") {
+                config.filesystem.learn_dir = learn_dir;
+            }
         }
 
         Ok(config)
@@ -139,18 +146,22 @@ impl LfmfSystem {
     /// Initialize the system with vector database connection
     pub async fn initialize(&mut self) -> Result<()> {
         let mut client = GrokClient::new();
-        
+
         // Set up environment variables for the grok client
         if let Some(ref api_key) = self.config.qdrant.api_key {
-            unsafe { std::env::set_var("QDRANT_API_KEY", api_key); }
+            unsafe {
+                std::env::set_var("QDRANT_API_KEY", api_key);
+            }
         }
-        unsafe { std::env::set_var("QDRANT_URL", &self.config.qdrant.url); }
-        
+        unsafe {
+            std::env::set_var("QDRANT_URL", &self.config.qdrant.url);
+        }
+
         match client.initialize().await {
             Ok(_) => {
                 self.grok_client = Some(client);
                 Ok(())
-            },
+            }
             Err(e) => {
                 // Vector DB not available, will use filesystem fallback
                 Err(e)
@@ -171,17 +182,20 @@ impl LfmfSystem {
 
         // Always store in filesystem as backup
         self.store_in_filesystem(&lesson_obj)?;
-        
+
         Ok(())
     }
 
     /// Parse lesson string into structured format
     fn parse_lesson(&self, tool: &str, lesson: &str) -> Result<Lesson> {
         let timestamp = Utc::now();
-        
+
         // Try to extract topic and content from "topic: content" format
         let (topic, content) = if let Some((topic_part, content_part)) = lesson.split_once(':') {
-            (topic_part.trim().to_string(), content_part.trim().to_string())
+            (
+                topic_part.trim().to_string(),
+                content_part.trim().to_string(),
+            )
         } else {
             ("General".to_string(), lesson.to_string())
         };
@@ -201,11 +215,15 @@ impl LfmfSystem {
     /// Store lesson in vector database
     async fn store_in_vector_db(&self, client: &GrokClient, lesson: &Lesson) -> Result<()> {
         // Create content for vector storage
-        let vector_content = format!("Tool: {}\nTopic: {}\nSolution: {}", 
-            lesson.tool, lesson.topic, lesson.content);
+        let vector_content = format!(
+            "Tool: {}\nTopic: {}\nSolution: {}",
+            lesson.tool, lesson.topic, lesson.content
+        );
 
         // Store using grok digest functionality
-        client.digest(&lesson.tool, &vector_content).await
+        client
+            .digest(&lesson.tool, &vector_content)
+            .await
             .context("Failed to store lesson in vector database")?;
 
         Ok(())
@@ -218,35 +236,48 @@ impl LfmfSystem {
 
         // Ensure directory exists
         if let Some(parent) = tool_file.parent() {
-            fs::create_dir_all(parent)
-                .context("Failed to create learn directory")?;
+            fs::create_dir_all(parent).context("Failed to create learn directory")?;
         }
 
         // Format lesson entry
         let entry = format!("---\n{}: {}\n", lesson.topic, lesson.content);
 
         // Append to tool file
-        fs::write(&tool_file, if tool_file.exists() {
-            let existing = fs::read_to_string(&tool_file)?;
-            format!("{}\n{}", existing, entry)
-        } else {
-            entry
-        })
+        fs::write(
+            &tool_file,
+            if tool_file.exists() {
+                let existing = fs::read_to_string(&tool_file)?;
+                format!("{}\n{}", existing, entry)
+            } else {
+                entry
+            },
+        )
         .context(format!("Failed to write lesson to {}", tool_file.display()))?;
 
         Ok(())
     }
 
     /// Get advice for a specific error/query
-    pub async fn get_advice(&mut self, tool: &str, query: &str, count: Option<usize>) -> Result<Vec<String>> {
+    pub async fn get_advice(
+        &mut self,
+        tool: &str,
+        query: &str,
+        count: Option<usize>,
+    ) -> Result<Vec<String>> {
         let max_results = count.unwrap_or(5);
 
         // Try vector database first if available
         if let Some(ref client) = self.grok_client {
-            match self.get_vector_advice(client, tool, query, max_results).await {
+            match self
+                .get_vector_advice(client, tool, query, max_results)
+                .await
+            {
                 Ok(advice) => return Ok(advice),
                 Err(e) => {
-                    eprintln!("🔄 Vector database query failed: {}, using filesystem fallback", e);
+                    eprintln!(
+                        "🔄 Vector database query failed: {}, using filesystem fallback",
+                        e
+                    );
                 }
             }
         }
@@ -256,28 +287,49 @@ impl LfmfSystem {
     }
 
     /// Get advice from vector database
-    async fn get_vector_advice(&self, client: &GrokClient, tool: &str, query: &str, max_results: usize) -> Result<Vec<String>> {
+    async fn get_vector_advice(
+        &self,
+        client: &GrokClient,
+        tool: &str,
+        query: &str,
+        max_results: usize,
+    ) -> Result<Vec<String>> {
         let results = client.ask(query, Some(tool), Some(max_results)).await?;
-        
-        Ok(results.results.into_iter()
+
+        Ok(results
+            .results
+            .into_iter()
             .take(max_results)
             .map(|r| r.content)
             .collect())
     }
 
     /// Get advice from filesystem using pattern matching
-    fn get_filesystem_advice(&self, tool: &str, query: &str, max_results: usize) -> Result<Vec<String>> {
+    fn get_filesystem_advice(
+        &self,
+        tool: &str,
+        query: &str,
+        max_results: usize,
+    ) -> Result<Vec<String>> {
         let learn_dir = Path::new(&self.config.filesystem.learn_dir);
         let tool_file = learn_dir.join(format!("{}.md", tool));
 
         if !tool_file.exists() {
-            return Ok(vec![format!("💡 No lessons found for tool '{}'. Record lessons with: lfmf {} \"<topic>: <lesson>\"", tool, tool)]);
+            return Ok(vec![format!(
+                "💡 No lessons found for tool '{}'. Record lessons with: lfmf {} \"<topic>: <lesson>\"",
+                tool, tool
+            )]);
         }
 
-        let content = fs::read_to_string(&tool_file)
-            .context(format!("Failed to read lessons from {}", tool_file.display()))?;
+        let content = fs::read_to_string(&tool_file).context(format!(
+            "Failed to read lessons from {}",
+            tool_file.display()
+        ))?;
 
-        let lessons: Vec<&str> = content.split("---\n").filter(|s| !s.trim().is_empty()).collect();
+        let lessons: Vec<&str> = content
+            .split("---\n")
+            .filter(|s| !s.trim().is_empty())
+            .collect();
         let query_lower = query.to_lowercase();
 
         let mut matches: Vec<(String, f32)> = Vec::new();
@@ -318,13 +370,17 @@ impl LfmfSystem {
         }
 
         if matches.is_empty() {
-            return Ok(vec![format!("No similar patterns found for: {}\n💡 Record this pattern with: lfmf {} \"<topic>: <solution>\"", query, tool)]);
+            return Ok(vec![format!(
+                "No similar patterns found for: {}\n💡 Record this pattern with: lfmf {} \"<topic>: <solution>\"",
+                query, tool
+            )]);
         }
 
         // Sort by score descending and format results
         matches.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
 
-        Ok(matches.into_iter()
+        Ok(matches
+            .into_iter()
             .take(max_results)
             .map(|(lesson, score)| {
                 if let Some((topic, body)) = lesson.split_once(':') {
@@ -342,13 +398,22 @@ impl LfmfSystem {
 
         // Try vector database first
         if let Some(ref client) = self.grok_client {
-            match client.ask(&format!("lessons for {}", tool), Some(tool), Some(max_results)).await {
+            match client
+                .ask(
+                    &format!("lessons for {}", tool),
+                    Some(tool),
+                    Some(max_results),
+                )
+                .await
+            {
                 Ok(results) => {
-                    return Ok(results.results.into_iter()
+                    return Ok(results
+                        .results
+                        .into_iter()
                         .take(max_results)
                         .map(|r| r.content)
                         .collect());
-                },
+                }
                 Err(_) => {} // Fall through to filesystem
             }
         }
@@ -362,9 +427,13 @@ impl LfmfSystem {
         }
 
         let content = fs::read_to_string(&tool_file)?;
-        let lessons: Vec<&str> = content.split("---\n").filter(|s| !s.trim().is_empty()).collect();
+        let lessons: Vec<&str> = content
+            .split("---\n")
+            .filter(|s| !s.trim().is_empty())
+            .collect();
 
-        Ok(lessons.into_iter()
+        Ok(lessons
+            .into_iter()
             .take(max_results)
             .map(|lesson| {
                 let lesson = lesson.trim();
@@ -405,7 +474,9 @@ mod tests {
         let config = LfmfConfig::default();
         let system = LfmfSystem::new(config);
 
-        let lesson = system.parse_lesson("rust", "cargo build: Run cargo build to compile").unwrap();
+        let lesson = system
+            .parse_lesson("rust", "cargo build: Run cargo build to compile")
+            .unwrap();
         assert_eq!(lesson.tool, "rust");
         assert_eq!(lesson.topic, "cargo build");
         assert_eq!(lesson.content, "Run cargo build to compile");
@@ -418,8 +489,10 @@ mod tests {
         config.filesystem.learn_dir = temp_dir.path().join("learn").to_string_lossy().to_string();
 
         let mut system = LfmfSystem::new(config);
-        
-        let lesson = system.parse_lesson("rust", "linker error: Check LD_LIBRARY_PATH").unwrap();
+
+        let lesson = system
+            .parse_lesson("rust", "linker error: Check LD_LIBRARY_PATH")
+            .unwrap();
         system.store_in_filesystem(&lesson).unwrap();
 
         // Verify file was created
@@ -434,7 +507,7 @@ mod tests {
     fn test_config_loading() {
         let temp_dir = TempDir::new().unwrap();
         let config_file = temp_dir.path().join("lfmf.toml");
-        
+
         let config_content = r#"
 [qdrant]
 url = "http://custom:6334"
@@ -443,9 +516,9 @@ api_key = "test-key"
 [filesystem]
 learn_dir = "custom_learn"
 "#;
-        
+
         fs::write(&config_file, config_content).unwrap();
-        
+
         let config = LfmfSystem::load_config(temp_dir.path().to_str().unwrap()).unwrap();
         assert_eq!(config.qdrant.url, "http://custom:6334");
         assert_eq!(config.qdrant.api_key, Some("test-key".to_string()));

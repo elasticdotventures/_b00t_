@@ -14,8 +14,7 @@ pub fn expand_path<P: AsRef<Path>>(path: P) -> B00tResult<PathBuf> {
 
 /// Get the b00t configuration directory (~/.dotfiles/_b00t_)
 pub fn get_b00t_config_dir() -> B00tResult<PathBuf> {
-    let home = dirs::home_dir()
-        .with_context(|| "Could not determine home directory")?;
+    let home = dirs::home_dir().with_context(|| "Could not determine home directory")?;
     Ok(home.join(".dotfiles").join("_b00t_"))
 }
 
@@ -35,9 +34,8 @@ pub fn run_command(command: &str, args: &[&str]) -> B00tResult<String> {
         .stdout_capture()
         .run()
         .with_context(|| format!("Failed to execute command: {} {:?}", command, args))?;
-    
-    String::from_utf8(output.stdout)
-        .with_context(|| "Command output was not valid UTF-8")
+
+    String::from_utf8(output.stdout).with_context(|| "Command output was not valid UTF-8")
 }
 
 /// Get git information from current directory
@@ -58,12 +56,12 @@ pub struct GitInfo {
 }
 
 fn is_git_repository() -> bool {
-    Path::new(".git").exists() ||
-    duct::cmd!("git", "rev-parse", "--git-dir")
-        .stderr_null()
-        .stdout_null()
-        .run()
-        .is_ok()
+    Path::new(".git").exists()
+        || duct::cmd!("git", "rev-parse", "--git-dir")
+            .stderr_null()
+            .stdout_null()
+            .run()
+            .is_ok()
 }
 
 fn get_git_branch() -> String {
@@ -102,7 +100,7 @@ mod tests {
     fn test_command_exists() {
         // Test with a command that should exist on most systems
         assert!(command_exists("echo"));
-        
+
         // Test with a command that shouldn't exist
         assert!(!command_exists("nonexistent_command_12345"));
     }
