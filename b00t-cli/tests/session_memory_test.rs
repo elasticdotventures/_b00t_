@@ -1,12 +1,44 @@
 use b00t_cli::session_memory::SessionMemory;
 use std::env;
+use std::path::Path;
+use std::sync::{Mutex, OnceLock};
 use tempfile::TempDir;
+
+fn session_lock() -> &'static Mutex<()> {
+    static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+    LOCK.get_or_init(|| Mutex::new(()))
+}
+
+struct DirGuard {
+    original: std::path::PathBuf,
+    cleared_agent: bool,
+}
+
+impl DirGuard {
+    fn change_to(path: &Path) -> Self {
+        let original = env::current_dir().unwrap();
+        env::set_current_dir(path).unwrap();
+        // Clear agent env markers to avoid contaminating other tests
+        std::env::remove_var("_B00T_Agent");
+        std::env::remove_var("CLAUDECODE");
+        Self { original }
+    }
+}
+
+impl Drop for DirGuard {
+    fn drop(&mut self) {
+        let _ = env::set_current_dir(&self.original);
+        // Ensure agent env vars remain cleared after test
+        std::env::remove_var("_B00T_Agent");
+        std::env::remove_var("CLAUDECODE");
+    }
+}
 
 #[test]
 fn test_session_memory_basic_operations() {
+    let _lock = session_lock().lock().unwrap();
     let temp_dir = TempDir::new().unwrap();
-    let original_dir = env::current_dir().unwrap();
-    env::set_current_dir(&temp_dir).unwrap();
+    let _dir_guard = DirGuard::change_to(temp_dir.path());
 
     // Initialize git repo to create valid git root with .git directory
     std::process::Command::new("git")
@@ -56,15 +88,13 @@ fn test_session_memory_basic_operations() {
     // Test clear operation
     memory.clear().unwrap();
     assert!(memory.list_keys().is_empty());
-
-    env::set_current_dir(original_dir).unwrap();
 }
 
 #[test]
 fn test_session_memory_persistence() {
+    let _lock = session_lock().lock().unwrap();
     let temp_dir = TempDir::new().unwrap();
-    let original_dir = env::current_dir().unwrap();
-    env::set_current_dir(&temp_dir).unwrap();
+    let _dir_guard = DirGuard::change_to(temp_dir.path());
 
     std::process::Command::new("git")
         .args(&["init"])
@@ -88,15 +118,13 @@ fn test_session_memory_persistence() {
         );
         assert_eq!(memory.get_num("persistent_counter"), 1);
     }
-
-    env::set_current_dir(original_dir).unwrap();
 }
 
 #[test]
 fn test_readme_tracking() {
+    let _lock = session_lock().lock().unwrap();
     let temp_dir = TempDir::new().unwrap();
-    let original_dir = env::current_dir().unwrap();
-    env::set_current_dir(&temp_dir).unwrap();
+    let _dir_guard = DirGuard::change_to(temp_dir.path());
 
     std::process::Command::new("git")
         .args(&["init"])
@@ -117,15 +145,13 @@ fn test_readme_tracking() {
     // Verify persistence
     let memory2 = SessionMemory::load().unwrap();
     assert!(memory2.is_readme_read());
-
-    env::set_current_dir(original_dir).unwrap();
 }
 
 #[test]
 fn test_metadata_tracking() {
+    let _lock = session_lock().lock().unwrap();
     let temp_dir = TempDir::new().unwrap();
-    let original_dir = env::current_dir().unwrap();
-    env::set_current_dir(&temp_dir).unwrap();
+    let _dir_guard = DirGuard::change_to(temp_dir.path());
 
     std::process::Command::new("git")
         .args(&["init"])
@@ -142,6 +168,4 @@ fn test_metadata_tracking() {
     // Verify metadata is populated
     assert!(!memory.metadata.session_id.is_empty());
     assert!(memory.metadata.created_at <= chrono::Utc::now());
-
-    env::set_current_dir(original_dir).unwrap();
 }

@@ -38,4 +38,35 @@ desires = "1.0.0"
         assert_eq!(VersionStatus::Missing.emoji(), "😱");
         assert_eq!(VersionStatus::Unknown.emoji(), "⏹️");
     }
+
+    #[test]
+    fn test_cli_datum_preserves_env_entries() {
+        let temp_dir = TempDir::new().unwrap();
+        let path = temp_dir.path().to_str().unwrap();
+
+        let config_content = r#"
+[b00t]
+name = "hf-cli"
+type = "cli"
+hint = "HF CLI datum test"
+version = "huggingface-cli --version"
+
+[b00t.env]
+HF_TOKEN = "${HF_TOKEN}"
+"#;
+
+        let config_path = temp_dir.path().join("hf-cli.cli.toml");
+        std::fs::write(&config_path, config_content).unwrap();
+
+        let (config, _) = b00t_cli::get_config("hf-cli", path).unwrap();
+        let env_map = config
+            .b00t
+            .env
+            .expect("expected env map for huggingface CLI datum");
+
+        assert_eq!(
+            env_map.get("HF_TOKEN"),
+            Some(&"${HF_TOKEN}".to_string())
+        ); // output: HF_TOKEN placeholder is preserved.
+    }
 }

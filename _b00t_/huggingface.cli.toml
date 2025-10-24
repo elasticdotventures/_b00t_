@@ -1,0 +1,39 @@
+[b00t]
+name = "huggingface"
+type = "cli"
+hint = "Hugging Face CLI for syncing models, datasets, and spaces"
+keywords = ["ml", "models", "datasets", "huggingface"]
+install = """
+if command -v brew >/dev/null 2>&1; then
+  brew install huggingface-cli
+elif command -v pkgx >/dev/null 2>&1; then
+  mkdir -p ~/.local/bin
+  cat <<'EOF' > ~/.local/bin/huggingface-cli
+#!/usr/bin/env bash
+pkgx +huggingface_hub huggingface-cli "$@"
+EOF
+  chmod +x ~/.local/bin/huggingface-cli
+else
+  uv tool install huggingface_hub[cli]
+fi
+"""
+update = """
+if command -v brew >/dev/null 2>&1; then
+  brew upgrade huggingface-cli || brew install huggingface-cli
+elif command -v pkgx >/dev/null 2>&1; then
+  mkdir -p ~/.local/bin
+  cat <<'EOF' > ~/.local/bin/huggingface-cli
+#!/usr/bin/env bash
+pkgx +huggingface_hub huggingface-cli "$@"
+EOF
+  chmod +x ~/.local/bin/huggingface-cli
+else
+  uv tool install huggingface_hub[cli]
+fi
+"""
+version = "huggingface-cli --version"
+version_regex = "huggingface-cli (\\d+\\.\\d+\\.\\d+)"
+aliases = ["huggingface-cli"]
+
+[b00t.env]
+HF_TOKEN = "${HF_TOKEN}"
