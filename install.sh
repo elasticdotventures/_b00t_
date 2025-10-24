@@ -15,6 +15,56 @@ NC='\033[0m' # No Color
 REPO="elasticdotventures/dotfiles"
 INSTALL_DIR="${INSTALL_DIR:-$HOME/.local/bin}"
 CONFIG_DIR="${CONFIG_DIR:-$HOME/.config/b00t}"
+USE_PKGX="${USE_PKGX:-auto}"  # auto, true, false
+
+# Check if pkgx is available (minimal install option)
+check_pkgx() {
+    if [ "$USE_PKGX" = "false" ]; then
+        return 1
+    fi
+
+    if command -v pkgx >/dev/null 2>&1; then
+        return 0
+    fi
+
+    # If USE_PKGX=auto, offer to install pkgx
+    if [ "$USE_PKGX" = "auto" ]; then
+        echo "${BLUE}🔍 pkgx not found. pkgx provides minimal installation (4 MiB vs 1 GB Rust toolchain)${NC}"
+        echo "${YELLOW}💡 Install pkgx for faster, cleaner b00t installation? [y/N]${NC}"
+        read -r response
+        if [[ "$response" =~ ^[Yy]$ ]]; then
+            echo "${BLUE}📦 Installing pkgx...${NC}"
+            if curl -Ssf https://pkgx.sh | sh; then
+                export PATH="$HOME/.local/bin:$PATH"
+                return 0
+            else
+                echo "${YELLOW}⚠️  pkgx installation failed, falling back to binary method${NC}"
+                return 1
+            fi
+        fi
+    fi
+
+    return 1
+}
+
+# Install via pkgx (preferred method)
+install_via_pkgx() {
+    echo "${BLUE}🥾 Installing b00t via pkgx (minimal method)...${NC}"
+
+    # Install b00t-cli via pkgx
+    if pkgx +b00t-cli; then
+        echo "${GREEN}✅ b00t-cli installed via pkgx${NC}"
+
+        # Verify installation
+        if pkgx b00t-cli --version >/dev/null 2>&1; then
+            echo "${GREEN}✅ Installation verified${NC}"
+            return 0
+        fi
+    fi
+
+    echo "${RED}❌ pkgx installation failed${NC}"
+    return 1
+}
 
 # Detect platform
 detect_platform() {
@@ -177,7 +227,29 @@ verify_installation() {
 main() {
     echo "${BLUE}🥾 b00t Universal Installer${NC}"
     echo "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-    
+
+    # Try pkgx first (minimal install, preferred method)
+    if check_pkgx; then
+        echo "${BLUE}✨ Using pkgx for minimal installation${NC}"
+        if install_via_pkgx; then
+            setup_config
+            echo ""
+            echo "${GREEN}🎉 Installation complete (via pkgx)!${NC}"
+            echo "${BLUE}💡 Quick start:${NC}"
+            echo "   pkgx b00t-cli --help"
+            echo "   pkgx b00t-cli status"
+            echo "   pkgx b00t-cli learn rust"
+            echo ""
+            echo "${BLUE}💡 Or install permanently:${NC}"
+            echo "   pkgx +b00t-cli  # Adds to ~/.local/bin"
+            echo ""
+            echo "${BLUE}📚 Documentation: https://github.com/$REPO${NC}"
+            return 0
+        fi
+        echo "${YELLOW}⚠️  pkgx method failed, falling back to binary installation${NC}"
+    fi
+
+    # Fallback: Binary installation from GitHub releases
     detect_platform
     check_dependencies
     get_latest_version
@@ -185,7 +257,7 @@ main() {
     setup_config
     update_path
     verify_installation
-    
+
     echo ""
     echo "${GREEN}🎉 Installation complete!${NC}"
     echo "${BLUE}💡 Quick start:${NC}"
@@ -210,6 +282,17 @@ case "${1:-}" in
         echo "Environment variables:"
         echo "  INSTALL_DIR    Installation directory (default: \$HOME/.local/bin)"
         echo "  CONFIG_DIR     Configuration directory (default: \$HOME/.config/b00t)"
+        echo "  USE_PKGX       Use pkgx for installation: auto (default), true, false"
+        echo ""
+        echo "Examples:"
+        echo "  # Default: auto-detect pkgx"
+        echo "  curl -fsSL https://raw.githubusercontent.com/$REPO/main/install.sh | sh"
+        echo ""
+        echo "  # Force pkgx method"
+        echo "  curl -fsSL https://raw.githubusercontent.com/$REPO/main/install.sh | USE_PKGX=true sh"
+        echo ""
+        echo "  # Skip pkgx, use binary method"
+        echo "  curl -fsSL https://raw.githubusercontent.com/$REPO/main/install.sh | USE_PKGX=false sh"
         exit 0
         ;;
     --version|-v)

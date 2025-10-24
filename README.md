@@ -9,17 +9,41 @@
 
 ## 🚀 Quick Install
 
-### Universal Installation (Recommended)
+### 🌟 Minimal Installation (Recommended - pkgx)
 
-The fastest way to get b00t running on any system:
+The fastest, cleanest way to install b00t - **4 MiB vs 1 GB toolchain**:
+
+```bash
+# Install pkgx (one-time setup)
+curl -Ssf https://pkgx.sh | sh
+
+# Run b00t immediately (auto-downloads on first use)
+pkgx b00t-cli --version
+
+# Or install permanently to ~/.local/bin
+pkgx +b00t-cli
+b00t-cli --version
+```
+
+**Why pkgx?**
+- ✅ **Minimal footprint**: 4 MiB binary vs 1 GB Rust toolchain
+- ✅ **Zero pollution**: Isolated in `~/.pkgx`, no system-wide changes
+- ✅ **Instant availability**: Run without installation
+- ✅ **Perfect for AI agents**: Fast bootstrap, ephemeral usage
+- ✅ **Auto-updates**: Automatically tracks GitHub releases
+
+### Universal Installation (Classic Method)
+
+One-liner that works everywhere:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/elasticdotventures/dotfiles/main/install.sh | sh
 ```
 
 This universal installer:
+- ✅ **Prefers pkgx** for minimal installation (prompts if not installed)
 - ✅ **Auto-detects your platform** (Linux x86_64/aarch64/armv7, macOS)
-- ✅ **Downloads optimized binaries** from GitHub releases  
+- ✅ **Downloads optimized binaries** from GitHub releases
 - ✅ **Falls back to container mode** if binaries unavailable
 - ✅ **Configures your shell** automatically (bash/zsh/fish)
 - ✅ **Sets up PATH and aliases** for immediate use
