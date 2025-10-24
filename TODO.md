@@ -180,23 +180,21 @@ graph TD
 ```
 https://github.com/cocogitto/cocogitto
 
- code --list-extensions
-
+code --list-extensions
 
 search the codebase for _b00t_INSPIRATION_FILE="$_B00T_Path/./r3src_资源/inspiration.json"
 
-
-
-
- alias ccr-router="ccr start"
+alias ccr-router="ccr start"
 alias ccrclaude="ANTHROPIC_BASE_URL=http://localhost:3456 claude"
 
 ```curl -fsSL https://raw.githubusercontent.com/tilt-dev/tilt/master/scripts/install.sh | bash
 
-
 sudo apt install xdg-utils
 # xdg-settings, xdg-open, xdg-mime
 
+uvx mcp-cli provider list
 
- uvx mcp-cli provider list
-
+if ($env:VSCODE_INJECTION -eq "1") {
+    $env:EDITOR = "code --wait"  # or 'code-insiders' for VS Code Insiders
+}
+export PATH=$(echo "$PATH" | tr ':' '\n' | grep -v '^/mnt/c' | paste -sd ':' -)

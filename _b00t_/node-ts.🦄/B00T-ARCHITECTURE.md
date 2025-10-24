@@ -14,7 +14,7 @@ The **gospel** is the canonical source repository from `elasticdotventures/dotfi
 │   └── b00t.just                    # b00t-specific just commands
 ├── b00t-cli/                        # CLI source
 ├── b00t-mcp/                        # MCP server source
-├── b00t-lib-chat/  # Chat coordination library
+├── b00t-lib-chat/                   # Chat coordination library
 ├── b00t-c0re-lib/                   # Core library
 ├── Dockerfile.b00t-cli              # Official b00t-cli build
 ├── .github/workflows/               # CI/CD (source of truth for builds)
@@ -182,6 +182,7 @@ b00t.bob.python-docker/status
 b00t.coordination/step/1
 ```
 
+<<<<<<< HEAD
 ### Chat message envelope
 
 From `README-chat.md`:
@@ -200,6 +201,51 @@ From `README-chat.md`:
 - `sender` identifies the emitting agent.
 - `metadata` carries structured context; `body` stays human friendly.
 - Timestamps are recorded in UTC for deterministic ordering.
+=======
+### Message Types (ACP StepSync)
+
+From `README-hive-acp.md`:
+
+**STATUS** - Convey current state
+```json
+{
+  "type": "STATUS",
+  "agent": "alice",
+  "step": 1,
+  "payload": {"description": "Compiling b00t-cli", "progress": 50}
+}
+```
+
+**PROPOSE** - Suggest action
+```json
+{
+  "type": "PROPOSE",
+  "agent": "alice",
+  "step": 1,
+  "payload": {"action": "add_dependency", "crate": "rumqttc"}
+}
+```
+
+**STEP** - Mark step complete
+```json
+{
+  "type": "STEP",
+  "agent": "alice",
+  "step": 1,
+  "payload": {"step": 1}
+}
+```
+
+**ACK** - Acknowledge step
+```json
+{
+  "type": "ACK",
+  "agent": "bob",
+  "step": 1,
+  "payload": {"step": 1, "from": "alice"}
+}
+```
+>>>>>>> origin/main
 
 ### Step Synchronization
 

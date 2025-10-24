@@ -42,7 +42,7 @@ RUN mkdir -p b00t-cli/src b00t-mcp/src b00t-c0re-lib/src b00t-grok/src b00t-lib-
 # Build dependencies (this layer will be cached unless Cargo files change)
 RUN cargo build --release --bin b00t-cli && rm -rf b00t-cli/src b00t-mcp/src b00t-c0re-lib/src b00t-grok/src b00t-lib-chat/src k0mmand3r/src b00t-py/src
 
-# Copy actual source code  
+# Copy actual source code
 COPY b00t-cli/src ./b00t-cli/src
 COPY b00t-mcp/src ./b00t-mcp/src
 COPY b00t-c0re-lib/src ./b00t-c0re-lib/src

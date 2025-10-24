@@ -1,0 +1,15 @@
+[layer]
+name = "ssl-runtime"
+version = "bookworm"
+description = "OpenSSL runtime libraries"
+
+[provides]
+binaries = []
+libraries = ["libssl.so.3", "libcrypto.so.3"]
+paths = ["/usr/lib"]
+
+[requires]
+layers = ["debian-base"]
+
+[runtime]
+layers = ["debian-base"]

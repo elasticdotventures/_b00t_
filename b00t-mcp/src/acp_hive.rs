@@ -11,7 +11,7 @@ use tokio::time::sleep;
 use tracing::{info, warn, debug, error};
 use uuid::Uuid;
 
-use b00t_acp::{Agent, AgentConfig, ACPMessage, MessageType};
+use b00t_chat::{Agent, AgentConfig, ACPMessage, MessageType};
 
 /// Hive mission configuration for ACP coordination
 #[derive(Debug, Clone, Serialize, Deserialize)]

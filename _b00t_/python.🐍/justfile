@@ -1,0 +1,121 @@
+# Python 🐍 Development Environment
+# b00t standardized Python setup using uv (preferred) and pixi
+# 🤓: ALWAYS uv/uvx, NEVER pip/poetry unless legacy project
+# 🤓: PREFER pixi over conda, but support both
+
+# Install uv (Astral's fast Python package installer)
+install-uv:
+    #!/bin/bash
+    if ! command -v uv >/dev/null 2>&1; then
+        echo "📦 Installing uv..."
+        curl -LsSf https://astral.sh/uv/install.sh | sh
+        export PATH="$HOME/.local/bin:$PATH"
+        echo "✅ uv installed"
+    else
+        echo "✅ uv already installed: $(uv --version)"
+    fi
+
+# Install pixi (preferred conda alternative)
+install-pixi:
+    #!/bin/bash
+    if ! command -v pixi >/dev/null 2>&1; then
+        echo "📦 Installing pixi..."
+        curl -fsSL https://pixi.sh/install.sh | bash
+        export PATH="$HOME/.pixi/bin:$PATH"
+        echo "✅ pixi installed"
+    else
+        echo "✅ pixi already installed: $(pixi --version)"
+    fi
+
+# Install miniconda (legacy support)
+install-miniconda:
+    #!/bin/bash
+    cd {{justfile_directory()}}/miniconda
+    just install
+
+# Full Python development environment setup
+install: install-uv install-pixi
+    #!/bin/bash
+    echo "🐍 Python development environment ready"
+    echo "  uv:   $(command -v uv >/dev/null 2>&1 && uv --version || echo 'not installed')"
+    echo "  pixi: $(command -v pixi >/dev/null 2>&1 && pixi --version || echo 'not installed')"
+    echo ""
+    echo "🤓 Use 'uv' for package management, 'pixi' for environments"
+
+# Create new Python project with uv
+init-project NAME:
+    #!/bin/bash
+    echo "🐍 Creating Python project: {{NAME}}"
+    uv init {{NAME}}
+    cd {{NAME}}
+    uv venv
+    echo "✅ Project created. Activate with: source {{NAME}}/.venv/bin/activate"
+
+# Install project dependencies from pyproject.toml
+sync:
+    #!/bin/bash
+    echo "🔄 Syncing dependencies..."
+    uv sync
+
+# Add dependency to project
+add PKG:
+    uv add {{PKG}}
+
+# Add dev dependency
+add-dev PKG:
+    uv add --dev {{PKG}}
+
+# Run command in uv environment
+run *ARGS:
+    uv run {{ARGS}}
+
+# Install b00t Python stack (core requirements)
+install-b00t-stack:
+    #!/bin/bash
+    echo "🥾 Installing b00t Python core stack..."
+    # Core: type safety, error handling, FastAPI
+    uv tool install ruff
+    uv pip install --system \
+        "returns>=0.22.0" \
+        "fastapi>=0.115.0" \
+        "uvicorn[standard]>=0.30.0" \
+        "pydantic>=2.0.0" \
+        "httpx>=0.27.0"
+    echo "✅ b00t Python stack installed"
+
+# Install MCP development tools
+install-mcp:
+    #!/bin/bash
+    echo "🔌 Installing MCP development tools..."
+    uv pip install --system "fastmcp>=0.4.0"
+    echo "✅ MCP tools ready"
+
+# Format code with ruff
+fmt:
+    #!/bin/bash
+    echo "🧹 Formatting with ruff..."
+    ruff format .
+    ruff check --fix .
+
+# Lint code
+lint:
+    ruff check .
+
+# Type check with mypy
+typecheck:
+    uv run mypy .
+
+# Run tests
+test:
+    uv run pytest
+
+# Clean Python cache files
+clean:
+    #!/bin/bash
+    echo "🧹 Cleaning Python cache..."
+    find . -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
+    find . -type f -name "*.pyc" -delete 2>/dev/null || true
+    find . -type d -name ".pytest_cache" -exec rm -rf {} + 2>/dev/null || true
+    find . -type d -name ".mypy_cache" -exec rm -rf {} + 2>/dev/null || true
+    find . -type d -name "*.egg-info" -exec rm -rf {} + 2>/dev/null || true
+    echo "✅ Cleaned"

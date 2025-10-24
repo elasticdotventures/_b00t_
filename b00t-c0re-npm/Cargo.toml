@@ -1,0 +1,25 @@
+[package]
+name = "b00t-c0re"
+version = "0.1.0"
+edition = "2021"
+description = "Core Rust functionality for b00t framework with WebAssembly bindings"
+license = "MIT"
+repository = "https://github.com/elasticdotventures/dotfiles"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+wasm-bindgen = "0.2"
+js-sys = "0.3"
+serde = { version = "1.0", features = ["derive"] }
+serde-wasm-bindgen = "0.6"
+
+[dependencies.web-sys]
+version = "0.3"
+features = [
+  "console",
+]
+
+[dependencies.wasm-bindgen-futures]
+version = "0.4"

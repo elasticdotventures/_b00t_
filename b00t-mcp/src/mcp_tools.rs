@@ -575,6 +575,127 @@ impl_mcp_tool!(GrokStatusCommand, "b00t_grok_status", ["grok", "status"]);
 
 // ACP Hive coordination MCP tools
 
+/// MCP command for joining a hive mission
+#[derive(Parser, Clone)]
+pub struct AcpHiveJoinCommand {
+    #[arg(help = "Mission identifier")]
+    pub mission_id: String,
+
+    #[arg(help = "Agent role in the mission")]
+    pub role: String,
+
+    #[arg(long, help = "Agent namespace (defaults to account.username)")]
+    pub namespace: Option<String>,
+
+    #[arg(long, help = "NATS server URL (defaults to c010.promptexecution.com:4222)")]
+    pub nats_url: Option<String>,
+}
+
+impl_mcp_tool!(AcpHiveJoinCommand, "b00t_acp_hive_join", ["acp", "hive", "join"]);
+
+/// MCP command for creating a hive mission
+#[derive(Parser, Clone)]
+pub struct AcpHiveCreateCommand {
+    #[arg(help = "Mission identifier")]
+    pub mission_id: String,
+
+    #[arg(help = "Expected number of agents")]
+    pub expected_agents: usize,
+
+    #[arg(help = "Mission description")]
+    pub description: String,
+
+    #[arg(help = "Agent role in the mission")]
+    pub role: String,
+
+    #[arg(long, help = "Agent namespace (defaults to account.username)")]
+    pub namespace: Option<String>,
+
+    #[arg(long, help = "NATS server URL (defaults to c010.promptexecution.com:4222)")]
+    pub nats_url: Option<String>,
+}
+
+impl_mcp_tool!(AcpHiveCreateCommand, "b00t_acp_hive_create", ["acp", "hive", "create"]);
+
+/// MCP command for sending status to hive
+#[derive(Parser, Clone)]
+pub struct AcpHiveStatusCommand {
+    #[arg(help = "Mission identifier")]
+    pub mission_id: String,
+
+    #[arg(help = "Status description")]
+    pub description: String,
+
+    #[arg(long, help = "Optional payload data (JSON)")]
+    pub payload: Option<String>,
+}
+
+impl_mcp_tool!(AcpHiveStatusCommand, "b00t_acp_hive_status", ["acp", "hive", "status"]);
+
+/// MCP command for proposing actions to hive
+#[derive(Parser, Clone)]
+pub struct AcpHiveProposeCommand {
+    #[arg(help = "Mission identifier")]
+    pub mission_id: String,
+
+    #[arg(help = "Action to propose")]
+    pub action: String,
+
+    #[arg(long, help = "Optional action payload (JSON)")]
+    pub payload: Option<String>,
+}
+
+impl_mcp_tool!(AcpHiveProposeCommand, "b00t_acp_hive_propose", ["acp", "hive", "propose"]);
+
+/// MCP command for step synchronization
+#[derive(Parser, Clone)]
+pub struct AcpHiveSyncCommand {
+    #[arg(help = "Mission identifier")]
+    pub mission_id: String,
+
+    #[arg(help = "Target step to synchronize to")]
+    pub target_step: u64,
+
+    #[arg(long, help = "Timeout in seconds", default_value = "60")]
+    pub timeout_seconds: u64,
+}
+
+impl_mcp_tool!(AcpHiveSyncCommand, "b00t_acp_hive_sync", ["acp", "hive", "sync"]);
+
+/// MCP command for signaling step readiness
+#[derive(Parser, Clone)]
+pub struct AcpHiveReadyCommand {
+    #[arg(help = "Mission identifier")]
+    pub mission_id: String,
+
+    #[arg(help = "Step to signal readiness for")]
+    pub target_step: u64,
+}
+
+impl_mcp_tool!(AcpHiveReadyCommand, "b00t_acp_hive_ready", ["acp", "hive", "ready"]);
+
+/// MCP command for showing hive status
+#[derive(Parser, Clone)]
+pub struct AcpHiveShowCommand {
+    #[arg(help = "Mission identifier (optional - shows all missions if not specified)")]
+    pub mission_id: Option<String>,
+}
+
+impl_mcp_tool!(AcpHiveShowCommand, "b00t_acp_hive_show", ["acp", "hive", "show"]);
+
+/// MCP command for leaving hive mission
+#[derive(Parser, Clone)]
+pub struct AcpHiveLeaveCommand {
+    #[arg(help = "Mission identifier")]
+    pub mission_id: String,
+}
+
+impl_mcp_tool!(AcpHiveLeaveCommand, "b00t_acp_hive_leave", ["acp", "hive", "leave"]);
+
+// Custom implementations for ACP hive tools
+// 🤓 Disabled until acp_hive/acp_tools are refactored for b00t_chat
+// use crate::acp_tools::*;
+
 /// Create and populate a registry with all available MCP tools
 pub fn create_mcp_registry() -> McpCommandRegistry {
     let mut builder = McpCommandRegistry::builder();
@@ -620,6 +741,16 @@ pub fn create_mcp_registry() -> McpCommandRegistry {
         .register::<GrokAskCommand>()
         .register::<GrokLearnCommand>()
         .register::<GrokStatusCommand>();
+        // ACP Hive coordination tools
+        // 🤓 Disabled until acp_hive/acp_tools refactored for b00t_chat
+        // .register::<AcpHiveJoinCommand>()
+        // .register::<AcpHiveCreateCommand>()
+        // .register::<AcpHiveStatusCommand>()
+        // .register::<AcpHiveProposeCommand>()
+        // .register::<AcpHiveSyncCommand>()
+        // .register::<AcpHiveReadyCommand>()
+        // .register::<AcpHiveShowCommand>()
+        // .register::<AcpHiveLeaveCommand>();
 
     builder.build()
 }

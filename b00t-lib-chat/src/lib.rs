@@ -24,14 +24,20 @@
 //! # }
 //! ```
 
+// pub mod agent;  // 🤓 Legacy ACP code - has unresolved dependencies after chat refactor
 pub mod client;
 pub mod error;
 pub mod message;
+pub mod protocol;
+pub mod security;
 pub mod server;
 pub mod transport;
 
+// pub use agent::{Agent, AgentConfig};
 pub use client::ChatClient;
 pub use error::{ChatError, ChatResult};
 pub use message::ChatMessage;
+pub use protocol::{ACPMessage, MessageType};
+pub use security::{fetch_jwt_from_website, AcpJwtValidator};
 pub use server::{spawn_local_server, ChatInbox, LocalChatServer};
 pub use transport::{default_socket_path, ChatTransport, ChatTransportConfig, ChatTransportKind};
