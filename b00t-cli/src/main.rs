@@ -189,6 +189,15 @@ The system will:
         #[clap(subcommand)]
         cli_command: CliCommands,
     },
+    #[clap(
+        name = ".",
+        about = "Check installed vs desired version for CLI command",
+        long_about = "Check if a CLI tool's installed version matches the desired version.\n\nThis is a shorthand for: b00t-cli cli check <command>\n\nExamples:\n  b00t-cli . dagu\n  b00t-cli . git\n  b00t-cli . just"
+    )]
+    DotCheck {
+        #[clap(help = "Command name to check")]
+        command: String,
+    },
     #[clap(about = "Execute RHAI scripts with b00t context")]
     Script {
         #[clap(subcommand)]
@@ -1142,6 +1151,16 @@ async fn main() {
         }
         Some(Commands::Cli { cli_command }) => {
             if let Err(e) = cli_command.execute(&cli.path) {
+                eprintln!("Error: {}", e);
+                std::process::exit(1);
+            }
+        }
+        Some(Commands::DotCheck { command }) => {
+            // Shorthand for cli check
+            let check_cmd = CliCommands::Check {
+                command: command.clone(),
+            };
+            if let Err(e) = check_cmd.execute(&cli.path) {
                 eprintln!("Error: {}", e);
                 std::process::exit(1);
             }
