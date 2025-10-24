@@ -15,8 +15,8 @@ update = """
 curl -L https://raw.githubusercontent.com/dagu-org/dagu/main/scripts/installer.sh | bash
 """
 
-# Version detection
-version = "dagu version"
+# Version detection (dagu writes to stderr)
+version = "dagu version 2>&1"
 version_regex = "v?(\\d+\\.\\d+\\.\\d+)"
 
 [b00t.env]
