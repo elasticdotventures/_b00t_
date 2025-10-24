@@ -11,12 +11,16 @@ fn session_lock() -> &'static Mutex<()> {
 
 struct DirGuard {
     original: std::path::PathBuf,
+    cleared_agent: bool,
 }
 
 impl DirGuard {
     fn change_to(path: &Path) -> Self {
         let original = env::current_dir().unwrap();
         env::set_current_dir(path).unwrap();
+        // Clear agent env markers to avoid contaminating other tests
+        std::env::remove_var("_B00T_Agent");
+        std::env::remove_var("CLAUDECODE");
         Self { original }
     }
 }
@@ -24,6 +28,9 @@ impl DirGuard {
 impl Drop for DirGuard {
     fn drop(&mut self) {
         let _ = env::set_current_dir(&self.original);
+        // Ensure agent env vars remain cleared after test
+        std::env::remove_var("_B00T_Agent");
+        std::env::remove_var("CLAUDECODE");
     }
 }
 
