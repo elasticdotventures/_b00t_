@@ -39,10 +39,24 @@ build:
       --root {{prefix}} \
       --locked
 
+    # Copy _b00t_ datums directory (essential for functionality)
+    mkdir -p {{prefix}}/share/b00t
+    cp -r _b00t_ {{prefix}}/share/b00t/_b00t_
+
     # Create convenience symlink
     ln -sf {{prefix}}/bin/b00t-cli {{prefix}}/bin/b00t
 
+    # Create environment setup script
+    mkdir -p {{prefix}}/etc/profile.d
+    cat > {{prefix}}/etc/profile.d/b00t.sh << 'ENVEOF'
+# b00t environment configuration
+export _B00T_Path="{{prefix}}/share/b00t/_b00t_"
+ENVEOF
+
 test:
+  env:
+    _B00T_Path: "{{prefix}}/share/b00t/_b00t_"
+
   script: |
     # Test b00t-cli
     b00t-cli --version | grep {{version}}
@@ -54,5 +68,12 @@ test:
     # Test convenience symlink
     b00t --version
 
-    # Test basic functionality
-    b00t-cli whoami || true  # May not have config in test env
+    # Test datums are installed
+    test -d "{{prefix}}/share/b00t/_b00t_"
+    test -f "{{prefix}}/share/b00t/_b00t_/b00t.just"
+
+    # Test basic functionality with datums
+    b00t-cli whoami || true  # May not have full config in test env
+
+    # Test MCP datum listing
+    b00t-cli --path "{{prefix}}/share/b00t/_b00t_" mcp list || true

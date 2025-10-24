@@ -15,6 +15,7 @@ NC='\033[0m' # No Color
 REPO="elasticdotventures/dotfiles"
 INSTALL_DIR="${INSTALL_DIR:-$HOME/.local/bin}"
 CONFIG_DIR="${CONFIG_DIR:-$HOME/.config/b00t}"
+B00T_HOME="${B00T_HOME:-$HOME/.b00t}"  # b00t installation directory (includes datums)
 USE_PKGX="${USE_PKGX:-auto}"  # auto, true, false
 
 # Check if pkgx is available (minimal install option)
@@ -111,31 +112,47 @@ get_latest_version() {
     echo "${GREEN}📦 Latest version: $VERSION${NC}"
 }
 
-# Download and install binaries
+# Download and install binaries + datums
 install_binaries() {
     local asset_name="b00t-${PLATFORM}.tar.gz"
     local download_url="https://github.com/$REPO/releases/download/$VERSION/$asset_name"
     local temp_dir=$(mktemp -d)
-    
+
     echo "${BLUE}⬇️  Downloading $asset_name...${NC}"
-    
+
     if ! curl -fsSL "$download_url" -o "$temp_dir/$asset_name"; then
         echo "${RED}Failed to download release asset${NC}" >&2
         echo "${YELLOW}💡 Trying container-based installation...${NC}"
         install_from_container
         return
     fi
-    
-    echo "${BLUE}📂 Extracting to $INSTALL_DIR...${NC}"
-    mkdir -p "$INSTALL_DIR"
-    tar -xzf "$temp_dir/$asset_name" -C "$INSTALL_DIR"
-    
-    # Make binaries executable
-    chmod +x "$INSTALL_DIR/b00t-cli" "$INSTALL_DIR/b00t-mcp" 2>/dev/null || true
-    
-    # Create symlink for easier access
-    ln -sf "$INSTALL_DIR/b00t-cli" "$INSTALL_DIR/b00t" 2>/dev/null || true
-    
+
+    echo "${BLUE}📂 Extracting to $B00T_HOME...${NC}"
+    mkdir -p "$B00T_HOME"
+    tar -xzf "$temp_dir/$asset_name" -C "$temp_dir"
+
+    # Move extracted b00t/ contents to B00T_HOME
+    if [ -d "$temp_dir/b00t" ]; then
+        # Remove old installation if exists
+        rm -rf "$B00T_HOME"/*
+        cp -r "$temp_dir/b00t"/* "$B00T_HOME/"
+
+        # Make binaries executable
+        chmod +x "$B00T_HOME/b00t-cli" "$B00T_HOME/b00t-mcp" 2>/dev/null || true
+
+        # Create symlinks in INSTALL_DIR for PATH
+        mkdir -p "$INSTALL_DIR"
+        ln -sf "$B00T_HOME/b00t-cli" "$INSTALL_DIR/b00t-cli"
+        ln -sf "$B00T_HOME/b00t-mcp" "$INSTALL_DIR/b00t-mcp"
+        ln -sf "$B00T_HOME/b00t" "$INSTALL_DIR/b00t"
+
+        echo "${GREEN}✅ Installed binaries and datums to $B00T_HOME${NC}"
+        echo "${GREEN}✅ Created symlinks in $INSTALL_DIR${NC}"
+    else
+        echo "${RED}❌ Unexpected tarball structure${NC}" >&2
+        exit 1
+    fi
+
     rm -rf "$temp_dir"
 }
 
@@ -187,10 +204,10 @@ EOF
     fi
 }
 
-# Update PATH
+# Update PATH and set _B00T_Path
 update_path() {
     local shell_rc=""
-    
+
     # Detect shell config file
     if [ -n "$ZSH_VERSION" ]; then
         shell_rc="$HOME/.zshrc"
@@ -199,15 +216,24 @@ update_path() {
     else
         shell_rc="$HOME/.profile"
     fi
-    
-    # Check if PATH already contains install directory
-    if [[ ":$PATH:" != *":$INSTALL_DIR:"* ]]; then
-        echo "${BLUE}🔧 Adding $INSTALL_DIR to PATH in $shell_rc...${NC}"
-        echo "" >> "$shell_rc"
-        echo "# Added by b00t installer" >> "$shell_rc"
-        echo "export PATH=\"$INSTALL_DIR:\$PATH\"" >> "$shell_rc"
-        export PATH="$INSTALL_DIR:$PATH"
+
+    # Check if b00t is already configured
+    if ! grep -q "# Added by b00t installer" "$shell_rc" 2>/dev/null; then
+        echo "${BLUE}🔧 Configuring shell environment in $shell_rc...${NC}"
+        cat >> "$shell_rc" << EOF
+
+# Added by b00t installer
+export PATH="$INSTALL_DIR:\$PATH"
+export _B00T_Path="$B00T_HOME/_b00t_"
+EOF
+        echo "${GREEN}✅ Shell configuration updated${NC}"
+    else
+        echo "${BLUE}💡 Shell already configured for b00t${NC}"
     fi
+
+    # Set for current session
+    export PATH="$INSTALL_DIR:$PATH"
+    export _B00T_Path="$B00T_HOME/_b00t_"
 }
 
 # Verify installation
@@ -280,7 +306,8 @@ case "${1:-}" in
         echo "  --version, -v  Show installer version"
         echo ""
         echo "Environment variables:"
-        echo "  INSTALL_DIR    Installation directory (default: \$HOME/.local/bin)"
+        echo "  INSTALL_DIR    Binary symlinks directory (default: \$HOME/.local/bin)"
+        echo "  B00T_HOME      b00t installation directory (default: \$HOME/.b00t)"
         echo "  CONFIG_DIR     Configuration directory (default: \$HOME/.config/b00t)"
         echo "  USE_PKGX       Use pkgx for installation: auto (default), true, false"
         echo ""

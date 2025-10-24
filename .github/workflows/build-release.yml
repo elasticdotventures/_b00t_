@@ -122,19 +122,28 @@ jobs:
 
       - name: Create tarball
         run: |
-          mkdir -p dist
-          cd target/${{ matrix.target }}/release
+          mkdir -p dist/b00t
 
-          # Package binaries
-          tar czf ../../../dist/b00t-${{ matrix.target }}.tar.gz \
-            b00t-cli \
-            b00t-mcp
+          # Copy binaries
+          cp target/${{ matrix.target }}/release/b00t-cli dist/b00t/
+          cp target/${{ matrix.target }}/release/b00t-mcp dist/b00t/
 
-          cd ../../../
+          # Copy _b00t_ datums directory (essential for functionality)
+          cp -r _b00t_ dist/b00t/_b00t_
+
+          # Create symlink
+          cd dist/b00t
+          ln -s b00t-cli b00t
+          cd ../..
+
+          # Package everything
+          cd dist
+          tar czf b00t-${{ matrix.target }}.tar.gz b00t/
 
           # Create checksums
-          cd dist
           shasum -a 256 b00t-${{ matrix.target }}.tar.gz > b00t-${{ matrix.target }}.tar.gz.sha256
+
+          cd ..
 
       - name: Upload Release Asset
         uses: actions/upload-release-asset@v1
