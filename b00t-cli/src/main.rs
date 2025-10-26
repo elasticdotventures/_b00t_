@@ -13,6 +13,7 @@ mod bootstrap;
 mod cloud_sync;
 mod commands;
 mod datum_ai;
+mod datum_ai_model;
 mod datum_apt;
 mod datum_bash;
 mod datum_cli;
@@ -28,6 +29,7 @@ use utils::get_workspace_root;
 
 // 🦨 REMOVED unused K8sDatum import - not used in main.rs
 use datum_ai::AiDatum;
+use datum_ai_model::AiModelDatumEntry;
 use datum_apt::AptDatum;
 use datum_bash::BashDatum;
 use datum_cli::CliDatum;
@@ -38,8 +40,8 @@ use traits::*;
 
 use crate::commands::learn::handle_learn;
 use crate::commands::{
-    AiCommands, AppCommands, BootstrapCommands, ChatCommands, CliCommands, GrokCommands,
-    InitCommands, K8sCommands, McpCommands, SessionCommands, StackCommands, WhatismyCommands,
+    AiCommands, AppCommands, BootstrapCommands, ChatCommands, CliCommands, GrokCommands, InitCommands, K8sCommands,
+    McpCommands, ModelCommands, SessionCommands, StackCommands, WhatismyCommands,
 };
 
 // Re-export commonly used functions for datum modules
@@ -188,6 +190,14 @@ The system will:
     Cli {
         #[clap(subcommand)]
         cli_command: CliCommands,
+    },
+    #[clap(
+        about = "AI model datum management",
+        long_about = "List, inspect, install, and activate AI model datums defined in the _b00t_ directory."
+    )]
+    Model {
+        #[clap(subcommand)]
+        model_command: ModelCommands,
     },
     #[clap(
         name = ".",
@@ -490,6 +500,11 @@ fn show_status(
     all_tools.extend(datum_providers_to_tool_status(load_datum_providers::<
         AiDatum,
     >(path, ".ai.toml")?));
+    all_tools.extend(datum_providers_to_tool_status(load_datum_providers::<
+        AiModelDatumEntry,
+    >(
+        path, ".ai_model.toml"
+    )?));
     all_tools.extend(datum_providers_to_tool_status(load_datum_providers::<
         AptDatum,
     >(path, ".apt.toml")?));
@@ -1156,6 +1171,12 @@ async fn main() {
         }
         Some(Commands::Cli { cli_command }) => {
             if let Err(e) = cli_command.execute(&cli.path) {
+                eprintln!("Error: {}", e);
+                std::process::exit(1);
+            }
+        }
+        Some(Commands::Model { model_command }) => {
+            if let Err(e) = model_command.execute(&cli.path) {
                 eprintln!("Error: {}", e);
                 std::process::exit(1);
             }

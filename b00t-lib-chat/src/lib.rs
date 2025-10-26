@@ -31,6 +31,7 @@ pub mod message;
 pub mod protocol;
 pub mod security;
 pub mod server;
+pub mod skill;
 pub mod transport;
 
 // pub use agent::{Agent, AgentConfig};  // 🤓 Disabled - needs chat-compatible refactor
@@ -38,8 +39,11 @@ pub use client::ChatClient;
 pub use error::{ChatError, ChatResult};
 pub use message::ChatMessage;
 pub use protocol::{ACPMessage, MessageType, StepBarrier};
-pub use security::{fetch_jwt_from_website, AcpJwtValidator, AcpSecurityContext, NamespaceEnforcer};
+pub use security::{
+    fetch_jwt_from_website, AcpJwtValidator, AcpSecurityContext, NamespaceEnforcer,
+};
 pub use server::{spawn_local_server, ChatInbox, LocalChatServer};
+pub use skill::{parse_b00t_command, BootCommand, ModelAction};
 pub use transport::{default_socket_path, ChatTransport, ChatTransportConfig, ChatTransportKind};
 
 // Type aliases for compatibility

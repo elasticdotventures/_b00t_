@@ -119,7 +119,11 @@ pub enum RegistryAction {
     },
     #[clap(about = "Sync registry from datum TOML files")]
     SyncDatums {
-        #[clap(long, help = "Path to datums directory", default_value = "~/.dotfiles/_b00t_")]
+        #[clap(
+            long,
+            help = "Path to datums directory",
+            default_value = "~/.dotfiles/_b00t_"
+        )]
         path: String,
     },
 }
