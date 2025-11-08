@@ -1,0 +1,17 @@
+[b00t]
+name = "redis"
+type = "docker"
+hint = "Redis in-memory data structure store for caching and message queuing"
+desires = "7-alpine"
+
+# Docker-specific fields
+image = "redis:7-alpine"
+docker_args = [
+    "-p", "6379:6379",
+    "-v", "redis_data:/data"
+]
+
+# Environment variables
+[b00t.env]
+REDIS_URL = "redis://localhost:6379"
+REDIS_PORT = "6379"
