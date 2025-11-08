@@ -7,6 +7,10 @@ use uuid::Uuid;
 #[derive(Subcommand, Clone)]
 pub enum GrokCommands {
     /// Digest content into chunks about a topic
+    ///
+    /// Examples:
+    ///   b00t grok digest -t rust "Rust ensures memory safety"
+    ///   b00t grok digest --topic python "Python is dynamically typed" --rag
     Digest {
         /// Topic to digest content about
         #[arg(short, long)]
@@ -24,6 +28,11 @@ pub enum GrokCommands {
         rag: Option<String>,
     },
     /// Ask questions and search the knowledgebase
+    ///
+    /// Examples:
+    ///   b00t grok ask "memory safety patterns"
+    ///   b00t grok ask "error handling" -t rust --limit 5
+    ///   b00t grok ask "async programming" --rag
     Ask {
         /// Query to search for
         query: String,
@@ -44,6 +53,17 @@ pub enum GrokCommands {
         rag: Option<String>,
     },
     /// Learn from URLs or files
+    ///
+    /// Examples:
+    ///   # Auto-crawl URL (via crawl4ai)
+    ///   b00t grok learn "https://docs.python.org/3/tutorial/"
+    ///   b00t grok learn -s "https://github.com/user/repo" "dummy"
+    ///
+    ///   # Learn from file
+    ///   b00t grok learn -s "notes.md" "$(cat notes.md)"
+    ///
+    ///   # Learn from direct content
+    ///   b00t grok learn "Rust is a systems programming language" -t rust
     Learn {
         /// Source URL or file path
         #[arg(short, long)]

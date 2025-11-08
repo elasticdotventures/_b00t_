@@ -478,3 +478,160 @@ mod tests {
         assert_eq!(result.results.len(), 1);
     }
 }
+
+#[cfg(test)]
+mod additional_tests {
+    use super::*;
+
+    #[test]
+    fn test_grok_client_default() {
+        let client = GrokClient::default();
+        assert!(client.mcp_client.is_none());
+    }
+
+    #[test]
+    fn test_digest_result_message() {
+        let result = DigestResult {
+            success: false,
+            chunk_id: String::new(),
+            topic: String::new(),
+            content_preview: String::new(),
+            created_at: String::new(),
+            message: Some("Error occurred".to_string()),
+        };
+        
+        assert!(!result.success);
+        assert_eq!(result.message.unwrap(), "Error occurred");
+    }
+
+    #[test]
+    fn test_ask_result_empty() {
+        let result = AskResult {
+            success: true,
+            query: "test".to_string(),
+            total_found: 0,
+            results: vec![],
+            message: None,
+        };
+        
+        assert!(result.results.is_empty());
+        assert_eq!(result.total_found, 0);
+    }
+
+    #[test]
+    fn test_chunk_result_with_tags() {
+        let chunk = ChunkResult {
+            id: "test-1".to_string(),
+            content: "Test content".to_string(),
+            topic: "rust".to_string(),
+            tags: vec!["testing".to_string(), "rust".to_string()],
+            source: Some("test.rs".to_string()),
+            created_at: "2025-01-01T00:00:00Z".to_string(),
+        };
+        
+        assert_eq!(chunk.tags.len(), 2);
+        assert!(chunk.tags.contains(&"testing".to_string()));
+    }
+
+    #[test]
+    fn test_learn_result_multiple_chunks() {
+        let summaries = vec![
+            ChunkSummary {
+                id: "chunk-1".to_string(),
+                topic: "rust".to_string(),
+                content_preview: "First chunk...".to_string(),
+                tags: vec![],
+            },
+            ChunkSummary {
+                id: "chunk-2".to_string(),
+                topic: "rust".to_string(),
+                content_preview: "Second chunk...".to_string(),
+                tags: vec![],
+            },
+        ];
+        
+        let result = LearnResult {
+            success: true,
+            source: "test.md".to_string(),
+            chunks_created: 2,
+            chunk_summaries: summaries,
+            message: None,
+        };
+        
+        assert_eq!(result.chunks_created, 2);
+        assert_eq!(result.chunk_summaries.len(), 2);
+    }
+
+    #[tokio::test]
+    #[ignore = "Requires b00t-grok-py service and QDRANT"]
+    async fn test_full_workflow() {
+        // Test complete workflow:
+        // 1. Initialize client
+        // 2. Digest content
+        // 3. Learn from content
+        // 4. Query the knowledgebase
+        // 5. Check status
+        
+        let mut client = GrokClient::new();
+        
+        // Initialize
+        let init_result = client.initialize().await;
+        if init_result.is_err() {
+            println!("⚠️ Service not available, skipping workflow test");
+            return;
+        }
+        
+        // Digest
+        let digest = client.digest("rust", "Rust ensures memory safety").await;
+        assert!(digest.is_ok(), "Digest should succeed");
+        
+        // Learn
+        let learn = client.learn("Rust is fast.\n\nRust is safe.", Some("test.md")).await;
+        assert!(learn.is_ok(), "Learn should succeed");
+        
+        // Ask
+        let ask = client.ask("memory safety", None, Some(5)).await;
+        assert!(ask.is_ok(), "Ask should succeed");
+        
+        // Status
+        let status = client.status().await;
+        assert!(status.is_ok(), "Status should succeed");
+        
+        let status_value = status.unwrap();
+        assert!(status_value.get("status").is_some());
+    }
+
+    #[test]
+    fn test_result_types_implement_debug() {
+        // Verify all result types implement Debug
+        let digest = DigestResult {
+            success: true,
+            chunk_id: "test".to_string(),
+            topic: "rust".to_string(),
+            content_preview: "preview".to_string(),
+            created_at: "2025-01-01".to_string(),
+            message: None,
+        };
+        
+        let debug_str = format!("{:?}", digest);
+        assert!(debug_str.contains("DigestResult"));
+        assert!(debug_str.contains("rust"));
+    }
+
+    #[test]
+    fn test_result_types_implement_clone() {
+        let original = ChunkResult {
+            id: "test".to_string(),
+            content: "content".to_string(),
+            topic: "topic".to_string(),
+            tags: vec!["tag1".to_string()],
+            source: Some("source.md".to_string()),
+            created_at: "2025-01-01".to_string(),
+        };
+        
+        let cloned = original.clone();
+        assert_eq!(original.id, cloned.id);
+        assert_eq!(original.content, cloned.content);
+        assert_eq!(original.tags, cloned.tags);
+    }
+}

@@ -10,6 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastmcp import FastMCP
 
 from .guru import GrokGuru
+from .config import GrokConfig
 from .types import (
     DigestRequest, DigestResponse,
     AskRequest, AskResponse,
@@ -26,20 +27,25 @@ guru: GrokGuru = None
 async def lifespan(app: FastAPI):
     """Manage application startup and shutdown."""
     global guru
-    
+
     # Startup
-    qdrant_url = os.getenv("QDRANT_URL")
-    if not qdrant_url:
-        raise ValueError("QDRANT_URL environment variable required")
-    
-    api_key = os.getenv("QDRANT_API_KEY", "")
-    
-    guru = GrokGuru(qdrant_url=qdrant_url, api_key=api_key)
+    # 🤓 Load configuration from environment
+    config = GrokConfig()
+
+    # Initialize guru with model functions from config
+    guru = GrokGuru(
+        qdrant_url=config.qdrant_url,
+        api_key=config.qdrant_api_key,
+        use_rag_anything=config.use_rag_anything,
+        llm_model_func=config.get_llm_func(),
+        vision_model_func=config.get_vision_func(),
+        embedding_func=config.get_embedding_func()
+    )
     await guru.initialize()
-    
-    logging.info("b00t grok guru server started")
+
+    logging.info("b00t grok guru server started with RAG-Anything integration")
     yield
-    
+
     # Shutdown
     logging.info("b00t grok guru server shutting down")
 
@@ -227,14 +233,111 @@ async def grok_learn(content: str, source: str = None) -> Dict[str, Any]:
 async def grok_status() -> Dict[str, Any]:
     """
     Get the current status of the grok system.
-    
+
     Returns:
         Dictionary containing system status information
     """
     if guru is None:
         return {"status": "error", "message": "Guru not initialized"}
-    
+
     return guru.get_status()
+
+
+@mcp.tool()
+async def grok_process_multimodal_document(
+    file_path: str,
+    parse_method: str = "auto"
+) -> Dict[str, Any]:
+    """
+    Process a multimodal document (PDF, images, Office docs, etc.) using RAG-Anything.
+
+    Extracts text, images, tables, and equations from documents and stores them
+    in the knowledge graph.
+
+    Args:
+        file_path: Absolute path to the document file
+        parse_method: Processing method - "auto" (smart detection), "ocr" (force OCR), or "txt" (text only)
+
+    Returns:
+        Dictionary containing processing results with extracted content
+    """
+    if guru is None:
+        raise ValueError("Guru not initialized")
+
+    result = await guru.process_multimodal_document(file_path, parse_method)
+    return result
+
+
+@mcp.tool()
+async def grok_ask_multimodal(
+    query: str,
+    topic: str = None,
+    limit: int = 5,
+    mode: str = "hybrid",
+    include_images: bool = False,
+    include_tables: bool = False,
+    include_equations: bool = False
+) -> Dict[str, Any]:
+    """
+    Search the knowledgebase with multimodal capabilities.
+
+    Uses RAG-Anything's hybrid search combining vector similarity and knowledge graph
+    traversal. Can optionally filter for specific content types.
+
+    Args:
+        query: Search query or question
+        topic: Optional topic filter to narrow results
+        limit: Maximum number of results to return (default: 5)
+        mode: Search mode - "hybrid" (vector+graph), "vector" (similarity only), or "graph" (graph only)
+        include_images: Include results with image content
+        include_tables: Include results with table content
+        include_equations: Include results with equation content
+
+    Returns:
+        Dictionary containing search results and metadata
+    """
+    if guru is None:
+        raise ValueError("Guru not initialized")
+
+    # Build multimodal content filter
+    multimodal_content = None
+    if include_images or include_tables or include_equations:
+        multimodal_content = {
+            "images": include_images,
+            "tables": include_tables,
+            "equations": include_equations
+        }
+
+    result = await guru.ask(
+        query=query,
+        topic=topic,
+        limit=limit,
+        mode=mode,
+        multimodal_content=multimodal_content
+    )
+
+    if not result.success:
+        raise ValueError(f"Multimodal query failed: {result.message}")
+
+    # Format results for MCP response
+    formatted_results = []
+    for chunk in result.results:
+        formatted_results.append({
+            "id": chunk.id,
+            "content": chunk.content,
+            "topic": chunk.topic,
+            "tags": chunk.tags,
+            "source": chunk.attribution_url or chunk.attribution_filename,
+            "created_at": chunk.created_at
+        })
+
+    return {
+        "success": True,
+        "query": result.query,
+        "mode": mode,
+        "total_found": result.total_found,
+        "results": formatted_results
+    }
 
 
 # Create combined server with both FastAPI and MCP
