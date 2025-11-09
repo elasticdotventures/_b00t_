@@ -7,8 +7,9 @@ use std::fs;
 // use std::io::{Read};
 // use std::path::PathBuf;
 // 🤓 cleaned up unused Tera import after switching to simple string replacement
-use b00t_cli::{AiConfig, BootDatum, SessionState, UnifiedConfig};
+use b00t_cli::{AiConfig, BootDatum, SessionState, UnifiedConfig, whoami};
 
+mod bootstrap;
 mod cloud_sync;
 mod commands;
 mod datum_ai;
@@ -23,7 +24,6 @@ mod session_memory;
 mod test_cloud_integration;
 mod traits;
 mod utils;
-mod whoami;
 use utils::get_workspace_root;
 
 // 🦨 REMOVED unused K8sDatum import - not used in main.rs
@@ -38,8 +38,8 @@ use traits::*;
 
 use crate::commands::learn::handle_learn;
 use crate::commands::{
-    AiCommands, AppCommands, ChatCommands, CliCommands, GrokCommands, InitCommands, K8sCommands,
-    McpCommands, SessionCommands, StackCommands, WhatismyCommands,
+    AiCommands, AppCommands, BootstrapCommands, ChatCommands, CliCommands, GrokCommands,
+    InitCommands, K8sCommands, McpCommands, SessionCommands, StackCommands, WhatismyCommands,
 };
 
 // Re-export commonly used functions for datum modules
@@ -270,6 +270,11 @@ The system will:
     Grok {
         #[clap(subcommand)]
         grok_command: GrokCommands,
+    },
+    #[clap(about = "Bootstrap self-configuring b00t installation (Phase 0: Foundation)")]
+    Bootstrap {
+        #[clap(subcommand)]
+        bootstrap_command: BootstrapCommands,
     },
 }
 
@@ -1241,6 +1246,14 @@ async fn main() {
 
             // 🤓 No need for nested runtime - already in #[tokio::main]
             if let Err(e) = handle_grok_command(grok_command.clone()).await {
+                eprintln!("Error: {}", e);
+                std::process::exit(1);
+            }
+        }
+        Some(Commands::Bootstrap { bootstrap_command }) => {
+            use crate::commands::bootstrap::handle_bootstrap_command;
+
+            if let Err(e) = handle_bootstrap_command(bootstrap_command.clone()).await {
                 eprintln!("Error: {}", e);
                 std::process::exit(1);
             }

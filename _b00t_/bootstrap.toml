@@ -1,0 +1,63 @@
+# b00t Bootstrap Configuration
+# This file defines how b00t self-configures on first run
+
+[meta]
+version = "0.1.0"
+schema = "https://b00t.promptexecution.com/schemas/bootstrap/v0.1.0"
+created = "2025-11-09T00:00:00Z"
+
+[bootstrap]
+# First-run behavior
+interactive = true  # Prompt user for configuration choices
+timeout_secs = 30   # Auto-select defaults after 30s
+auto_install = true # Automatically install missing dependencies
+
+[bootstrap.required_bins]
+# Essential CLI tools that MUST be present
+docker = { version = ">=20.10.0", priority = 1 }
+git = { version = ">=2.30.0", priority = 1 }
+just = { version = ">=1.0.0", priority = 2 }
+fzf = { version = ">=0.40.0", priority = 3 }
+
+[bootstrap.optional_bins]
+# Nice-to-have tools (won't block bootstrap if missing)
+gh = { version = ">=2.0.0", install_hint = "GitHub CLI for MCP integration" }
+cargo = { version = ">=1.70.0", install_hint = "Rust toolchain for building b00t-cli" }
+rustc = { version = ">=1.70.0", install_hint = "Rust compiler" }
+node = { version = ">=18.0.0", install_hint = "Node.js for npm MCP servers" }
+npm = { version = ">=9.0.0", install_hint = "Package manager for MCP servers" }
+uv = { version = ">=0.1.0", install_hint = "Python package manager (fast pip alternative)" }
+
+[bootstrap.directories]
+# Directories to create during bootstrap
+config = "~/.b00t/config"
+sessions = "~/.b00t/sessions"
+logs = "~/.b00t/logs"
+secrets = "~/.b00t/secrets"
+
+[bootstrap.services]
+# Services that should be started/configured
+qdrant = { enabled = true, auto_start = true, datum = "_b00t_/qdrant.docker.toml" }
+redis = { enabled = false, auto_start = false, datum = "_b00t_/redis.docker.toml" }
+
+[bootstrap.mcp_servers]
+# MCP servers to enable by default
+github = { enabled = false, auto_install = false, datum = "_b00t_/mcp/github.mcp.toml" }
+taskmaster = { enabled = false, auto_install = false, datum = "_b00t_/mcp/taskmaster.mcp.toml" }
+
+[bootstrap.network]
+# Network discovery settings
+discover_local = true
+methods = ["mdns"]  # Start with mDNS only
+# Future: ["mdns", "tailscale", "cloudflare_zt"]
+
+[bootstrap.security]
+# Security & secrets management
+use_keychain = true  # Use OS keychain for secrets
+keychain_backend = "auto"  # "auto", "os", "file"
+encrypt_sessions = false  # Encrypt ~/.b00t/sessions/*.toon (future)
+
+[bootstrap.reporting]
+# Report format for install summary
+format = "toon"  # "toon", "json", "yaml"
+output = "~/.b00t/bootstrap-report.toon"
