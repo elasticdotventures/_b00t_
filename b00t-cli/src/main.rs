@@ -1239,16 +1239,8 @@ async fn main() {
         Some(Commands::Grok { grok_command }) => {
             use crate::commands::grok::handle_grok_command;
 
-            // Create Tokio runtime for async grok operations
-            let rt = match tokio::runtime::Runtime::new() {
-                Ok(rt) => rt,
-                Err(e) => {
-                    eprintln!("Error creating async runtime: {}", e);
-                    std::process::exit(1);
-                }
-            };
-
-            if let Err(e) = rt.block_on(handle_grok_command(grok_command.clone())) {
+            // 🤓 No need for nested runtime - already in #[tokio::main]
+            if let Err(e) = handle_grok_command(grok_command.clone()).await {
                 eprintln!("Error: {}", e);
                 std::process::exit(1);
             }
