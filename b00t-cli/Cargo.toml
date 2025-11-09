@@ -11,6 +11,11 @@ repository.workspace = true
 name = "b00t-cli"
 path = "src/main.rs"
 
+# 🤓 Thin wrapper so `b00t` works without bash aliases
+[[bin]]
+name = "b00t"
+path = "src/b00t.rs"
+
 [lib]
 name = "b00t_cli"
 path = "src/lib.rs"

@@ -1,6 +1,7 @@
 pub mod advice;
 pub mod ai;
 pub mod app;
+pub mod bootstrap;
 pub mod chat;
 pub mod cli_cmd;
 pub mod grok;
@@ -17,6 +18,7 @@ pub mod whatismy;
 
 pub use ai::AiCommands;
 pub use app::AppCommands;
+pub use bootstrap::BootstrapCommands;
 pub use chat::ChatCommands;
 pub use cli_cmd::CliCommands;
 pub use grok::GrokCommands;
