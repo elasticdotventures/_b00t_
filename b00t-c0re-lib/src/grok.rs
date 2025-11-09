@@ -96,7 +96,8 @@ impl GrokClient {
                 .arg("b00t_grok_guru.server")
                 .current_dir("/home/brianh/.dotfiles/b00t-grok-py")
                 .env("QDRANT_URL", qdrant_url)
-                .env("QDRANT_API_KEY", qdrant_api_key);
+                .env("QDRANT_API_KEY", qdrant_api_key)
+                .env("PYTHONPATH", "python"); // 🤓 Required for uv to find modules in python/ dir
         }))?;
 
         // Connect to b00t-grok-py MCP server using unit client handler
