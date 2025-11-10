@@ -310,15 +310,53 @@ impl Orchestrator {
     async fn is_docker_running(&self, name: &str) -> Result<bool> {
         let runtime = self.get_container_runtime()?;
 
+        // Use 'docker ps' (only running containers) with exact name match
         let output = Command::new(&runtime)
-            .args(&["ps", "--filter", &format!("name={}", name), "--format", "{{.Names}}"])
+            .args(&["ps", "--filter", &format!("name=^{name}$"), "--format", "{{.Names}}"])
             .output()?;
 
         let running = String::from_utf8_lossy(&output.stdout)
             .lines()
-            .any(|line| line.contains(name));
+            .any(|line| line.trim() == name);
 
         Ok(running)
+    }
+
+    /// Check if docker container exists (running or stopped)
+    async fn docker_container_exists(&self, name: &str) -> Result<Option<bool>> {
+        let runtime = self.get_container_runtime()?;
+
+        // Use 'docker ps -a' (all containers) - check both running and stopped
+        // Use explicit delimiter to avoid tab/space issues
+        let output = Command::new(&runtime)
+            .args(&["ps", "-a", "--filter", &format!("name={}", name), "--format", "{{.Names}}|||{{.Status}}"])
+            .output()?;
+
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        if std::env::var("B00T_DEBUG").is_ok() {
+            eprintln!("   docker_container_exists({}) output: {:?}", name, stdout.as_ref());
+        }
+
+        for line in stdout.lines() {
+            let parts: Vec<&str> = line.split("|||").collect();
+            if std::env::var("B00T_DEBUG").is_ok() {
+                eprintln!("     parts: {:?}, len={}, parts[0]='{}', name='{}'", parts, parts.len(), if parts.len() > 0 { parts[0].trim() } else { "" }, name);
+            }
+            if parts.len() == 2 && parts[0].trim() == name {
+                // Status starts with "Up" if running, "Exited" if stopped
+                let status = parts[1].trim();
+                let is_running = status.starts_with("Up");
+                if std::env::var("B00T_DEBUG").is_ok() {
+                    eprintln!("   ✓ Found container: status='{}', is_running={}", status, is_running);
+                }
+                return Ok(Some(is_running));
+            }
+        }
+
+        if std::env::var("B00T_DEBUG").is_ok() {
+            eprintln!("   Container {} not found", name);
+        }
+        Ok(None) // Container doesn't exist
     }
 
     /// Start a service based on its datum type
@@ -334,6 +372,44 @@ impl Orchestrator {
     /// Start docker container using datum configuration
     async fn start_docker_service(&self, datum: &BootDatum) -> Result<()> {
         let runtime = self.get_container_runtime()?;
+
+        // Check if container already exists (running or stopped)
+        match self.docker_container_exists(&datum.name).await? {
+            Some(true) => {
+                // Container exists and is running
+                if std::env::var("B00T_DEBUG").is_ok() {
+                    eprintln!("   Container {} already running", datum.name);
+                }
+                return Ok(());
+            }
+            Some(false) => {
+                // Container exists but is stopped - restart it
+                if std::env::var("B00T_DEBUG").is_ok() {
+                    eprintln!("   Restarting stopped container: {}", datum.name);
+                }
+                let output = Command::new(&runtime)
+                    .args(&["start", &datum.name])
+                    .output()
+                    .context(format!("Failed to restart {} container", datum.name))?;
+
+                if !output.status.success() {
+                    let stderr = String::from_utf8_lossy(&output.stderr);
+                    anyhow::bail!("Failed to restart {}: {}", datum.name, stderr);
+                }
+
+                // Wait for service to be ready
+                self.wait_for_ready(datum).await?;
+                return Ok(());
+            }
+            None => {
+                // Container doesn't exist - create it
+                if std::env::var("B00T_DEBUG").is_ok() {
+                    eprintln!("   Creating new container: {}", datum.name);
+                }
+            }
+        }
+
+        // Create new container
         let image = datum.image.as_ref()
             .ok_or_else(|| anyhow::anyhow!("Docker datum missing image field"))?;
 
@@ -370,11 +446,7 @@ impl Orchestrator {
 
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
-            // Check if already running
-            if stderr.contains("already in use") || stderr.contains("Conflict") {
-                return Ok(()); // Already running, success
-            }
-            anyhow::bail!("Failed to start {}: {}", datum.name, stderr);
+            anyhow::bail!("Failed to create {}: {}", datum.name, stderr);
         }
 
         // Wait for service to be ready
