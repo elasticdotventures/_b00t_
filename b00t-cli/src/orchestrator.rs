@@ -36,6 +36,10 @@ impl Orchestrator {
             anyhow::bail!("b00t path does not exist: {}", path);
         }
 
+        if std::env::var("B00T_DEBUG").is_ok() {
+            eprintln!("🔍 Loading datums from: {}", path);
+        }
+
         // Scan for all .toml files
         for entry in std::fs::read_dir(b00t_path)? {
             let entry = entry?;
@@ -51,12 +55,29 @@ impl Orchestrator {
 
             // Parse datum from each .{type}.toml file
             if let Some(name) = Self::extract_datum_name(file_name) {
-                if let Ok((config, _)) = get_config(&name, path) {
-                    let datum = config.b00t;
-                    let key = Self::make_key(&datum);
-                    datums.insert(key, datum);
+                if std::env::var("B00T_DEBUG").is_ok() {
+                    eprintln!("   Loading datum: {} from {}", name, file_name);
+                }
+                match get_config(&name, path) {
+                    Ok((config, _)) => {
+                        let datum = config.b00t;
+                        let key = Self::make_key(&datum);
+                        if std::env::var("B00T_DEBUG").is_ok() {
+                            eprintln!("   ✓ Loaded: {} -> {}", file_name, key);
+                        }
+                        datums.insert(key, datum);
+                    }
+                    Err(e) => {
+                        if std::env::var("B00T_DEBUG").is_ok() {
+                            eprintln!("   ✗ Failed to load {}: {}", file_name, e);
+                        }
+                    }
                 }
             }
+        }
+
+        if std::env::var("B00T_DEBUG").is_ok() {
+            eprintln!("   Loaded {} datums total", datums.len());
         }
 
         Ok(datums)
@@ -133,6 +154,12 @@ impl Orchestrator {
         Box::pin(async move {
             let mut started = Vec::new();
 
+            if std::env::var("B00T_DEBUG").is_ok() {
+                eprintln!("🔍 Resolving capability: {}", capability);
+                eprintln!("   Prefer: {:?}", requirement.prefer);
+                eprintln!("   Fallback: {:?}", requirement.fallback);
+            }
+
             // Find API datums that provide this capability
             let mut candidates: Vec<_> = self.datums.iter()
                 .filter(|(_, datum)| {
@@ -143,6 +170,12 @@ impl Orchestrator {
                         .unwrap_or(false)
                 })
                 .collect();
+
+            if std::env::var("B00T_DEBUG").is_ok() {
+                eprintln!("   Found {} candidates: {:?}",
+                    candidates.len(),
+                    candidates.iter().map(|(k, _)| k.as_str()).collect::<Vec<_>>());
+            }
 
             // Sort by preference if specified
             if let Some(prefer) = &requirement.prefer {
@@ -171,12 +204,28 @@ impl Orchestrator {
 
             // If all failed and fallback specified, try that
             if let Some(fallback) = &requirement.fallback {
+                if std::env::var("B00T_DEBUG").is_ok() {
+                    eprintln!("   Trying fallback: {}", fallback);
+                    eprintln!("   Available API datums: {:?}",
+                        self.datums.iter()
+                            .filter(|(_, d)| d.datum_type == Some(crate::DatumType::Api))
+                            .map(|(k, d)| format!("{}={}", k, d.name))
+                            .collect::<Vec<_>>());
+                }
+
                 if let Some(api_datum) = self.datums.values()
                     .find(|d| d.name == *fallback && d.datum_type == Some(crate::DatumType::Api))
                 {
+                    if std::env::var("B00T_DEBUG").is_ok() {
+                        eprintln!("   ✓ Found fallback API datum: {}", api_datum.name);
+                    }
                     let mut api_started = self.ensure_api_dependencies(api_datum).await?;
                     started.append(&mut api_started);
                     return Ok(started);
+                } else {
+                    if std::env::var("B00T_DEBUG").is_ok() {
+                        eprintln!("   ✗ Fallback API datum not found: {}", fallback);
+                    }
                 }
             }
 
@@ -189,14 +238,32 @@ impl Orchestrator {
         Box::pin(async move {
             let mut started = Vec::new();
 
+            if std::env::var("B00T_DEBUG").is_ok() {
+                eprintln!("🔧 Ensuring dependencies for API: {}", api_datum.name);
+            }
+
             // Start infrastructure dependencies (e.g., Docker containers)
             if let Some(depends_on) = &api_datum.depends_on {
+                if std::env::var("B00T_DEBUG").is_ok() {
+                    eprintln!("   Infrastructure deps: {:?}", depends_on);
+                }
                 for dep_key in depends_on {
                     if let Some(dep_datum) = self.datums.get(dep_key) {
                         if self.needs_start(dep_datum).await? {
+                            if std::env::var("B00T_DEBUG").is_ok() {
+                                eprintln!("   Starting: {}", dep_key);
+                            }
                             self.start_service(dep_datum).await
                                 .context(format!("Failed to start {}", dep_key))?;
                             started.push(dep_key.clone());
+                        } else {
+                            if std::env::var("B00T_DEBUG").is_ok() {
+                                eprintln!("   Already running: {}", dep_key);
+                            }
+                        }
+                    } else {
+                        if std::env::var("B00T_DEBUG").is_ok() {
+                            eprintln!("   ⚠️  Dependency not found: {}", dep_key);
                         }
                     }
                 }
@@ -204,8 +271,17 @@ impl Orchestrator {
 
             // Recursively resolve API requirements (e.g., composite APIs)
             if let Some(requires) = &api_datum.requires {
-                for (_, requirement) in requires {
+                if std::env::var("B00T_DEBUG").is_ok() {
+                    eprintln!("   API capabilities required: {:?}",
+                        requires.iter()
+                            .map(|(name, req)| format!("{}={:?}", name, req.capability))
+                            .collect::<Vec<_>>());
+                }
+                for (req_name, requirement) in requires {
                     if let Some(capability) = &requirement.capability {
+                        if std::env::var("B00T_DEBUG").is_ok() {
+                            eprintln!("   Resolving required capability '{}' for requirement '{}'", capability, req_name);
+                        }
                         let mut resolved = self.resolve_capability(capability, requirement).await?;
                         started.append(&mut resolved);
                     }

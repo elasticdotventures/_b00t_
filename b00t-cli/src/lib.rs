@@ -713,6 +713,10 @@ pub fn get_config(
         ".apt.toml",
         ".nix.toml",
         ".bash.toml",
+        ".k8s.toml",     // Kubernetes deployments
+        ".api.toml",     // API protocol definitions
+        ".ai.toml",      // AI model configurations
+        ".stack.toml",   // Stack compositions
         ".toml",
     ];
 
