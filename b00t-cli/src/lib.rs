@@ -13,6 +13,7 @@ pub mod datum_stack;
 pub mod datum_vscode;
 pub mod dependency_resolver;
 pub mod k8s;
+pub mod orchestrator;
 pub mod session_memory;
 pub mod traits;
 pub mod utils;

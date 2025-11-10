@@ -1,5 +1,6 @@
 use anyhow::{Context, Result};
 use b00t_c0re_lib::{DocumentSource, GrokClient, LoaderType, RagLightConfig, RagLightManager};
+use b00t_cli::orchestrator::Orchestrator;
 use clap::Subcommand;
 use std::{fs, path::PathBuf};
 use uuid::Uuid;
@@ -96,6 +97,9 @@ pub async fn handle_grok_command(command: GrokCommands) -> Result<()> {
             if let Some(backend) = backend {
                 handle_rag_digest(&topic, &content, backend).await
             } else {
+                // Ensure dependencies are running
+                ensure_grok_dependencies().await?;
+
                 let mut client = GrokClient::new();
                 client.initialize().await?;
                 handle_digest(&client, &topic, &content).await
@@ -111,6 +115,9 @@ pub async fn handle_grok_command(command: GrokCommands) -> Result<()> {
             if let Some(backend) = backend {
                 handle_rag_ask(&query, topic.as_deref(), limit, backend).await
             } else {
+                // Ensure dependencies are running
+                ensure_grok_dependencies().await?;
+
                 let mut client = GrokClient::new();
                 client.initialize().await?;
                 handle_ask(&client, &query, topic.as_deref(), limit).await
@@ -126,6 +133,9 @@ pub async fn handle_grok_command(command: GrokCommands) -> Result<()> {
             if let Some(backend) = backend {
                 handle_rag_learn(source.as_deref(), &content, topic.as_deref(), backend).await
             } else {
+                // Ensure dependencies are running
+                ensure_grok_dependencies().await?;
+
                 let mut client = GrokClient::new();
                 client.initialize().await?;
                 handle_learn(&client, source.as_deref(), &content).await
@@ -428,3 +438,28 @@ fn normalize_source_path(source: &str) -> String {
 
 // 🤓 Helper functions removed - configuration now handled by b00t-c0re-lib::GrokClient
 // which reads QDRANT_URL and QDRANT_API_KEY from environment variables
+
+/// Ensure grok dependencies (Qdrant) are running
+async fn ensure_grok_dependencies() -> Result<()> {
+    let path = std::env::var("_B00T_Path")
+        .unwrap_or_else(|_| {
+            dirs::home_dir()
+                .unwrap_or_else(|| std::path::PathBuf::from("."))
+                .join(".b00t/_b00t_")
+                .to_string_lossy()
+                .to_string()
+        });
+
+    let orchestrator = Orchestrator::new(&path)
+        .context("Failed to create orchestrator")?;
+
+    let started = orchestrator.ensure_dependencies("grok-guru.mcp").await
+        .context("Failed to ensure grok dependencies")?;
+
+    // Silent unless debugging - services start transparently
+    if !started.is_empty() && std::env::var("B00T_DEBUG").is_ok() {
+        eprintln!("🚀 Started dependencies: {}", started.join(", "));
+    }
+
+    Ok(())
+}

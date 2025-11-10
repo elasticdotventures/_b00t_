@@ -2,6 +2,7 @@
 name = "grok-guru"
 type = "mcp"
 hint = "b00t grok RAG knowledgebase with vector search capabilities (with pre-commit validation)"
+depends_on = ["qdrant.docker", "ollama.docker"]
 
 [[b00t.mcp.stdio]]
 command = "uv"
@@ -10,6 +11,7 @@ transport = "stdio"
 priority = 0
 requires = ["python"]
 
+# 🤓 Environment loaded from dependency datums at runtime
+# grok-guru inherits QDRANT_URL, OLLAMA_API_URL from qdrant.docker and ollama.docker
 [b00t.env]
-QDRANT_URL = "https://a0cfd978-2e95-499c-93cc-9acd66b16d35.us-west-1-0.aws.cloud.qdrant.io:6333"
-QDRANT_API_KEY = ""
+# Optionally override or add grok-specific vars here
