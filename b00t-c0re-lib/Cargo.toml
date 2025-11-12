@@ -44,9 +44,9 @@ redis = "0.32.4"
 uuid = { version = "1.0", features = ["v4", "serde"] }
 tokio = { version = "1.0", features = ["full", "macros", "rt-multi-thread"] }
 rhai = "1.22.2"
-rig-core = "0.17.1"
-ts-rs = "8.1"
-schemars = "0.8"
+rig-core = "0.24.0"
+ts-rs = "11.1.0"
+schemars = "1.1.0"
 reqwest = { version = "0.12", features = ["json"] }
 tracing.workspace = true
 lazy_static = "1.5.0"

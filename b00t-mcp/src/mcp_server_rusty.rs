@@ -251,6 +251,7 @@ impl ServerHandler for B00tMcpServerRusty {
                             uri: uri.clone(),
                             mime_type: Some("application/json".to_string()),
                             text: content,
+                            meta: None,
                         }],
                     }),
                     Err(e) => {

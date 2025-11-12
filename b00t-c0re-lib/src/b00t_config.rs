@@ -583,7 +583,7 @@ impl B00tUnifiedConfig {
     }
 
     /// Get JSON schema for this configuration
-    pub fn get_json_schema() -> schemars::schema::RootSchema {
+    pub fn get_json_schema() -> schemars::Schema {
         schemars::schema_for!(B00tUnifiedConfig)
     }
 
