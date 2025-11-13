@@ -46,6 +46,24 @@
           },
           "additionalProperties": false,
           "description": "Environment variables for the MCP server"
+        },
+        "depends_on": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_.-]+\\.[A-Za-z0-9_.-]+$"
+          },
+          "description": "Explicit datum dependencies (e.g., qdrant.docker, ollama.docker)"
+        },
+        "requires": {
+          "type": "object",
+          "description": "Capability dependencies resolved by the orchestrator",
+          "patternProperties": {
+            "^[A-Za-z0-9_.-]+$": {
+              "$ref": "#/definitions/capabilityRequirement"
+            }
+          },
+          "additionalProperties": false
         }
       },
       "required": ["name", "type"],
@@ -135,6 +153,31 @@
         }
       },
       "required": ["url"],
+      "additionalProperties": false
+    },
+    "capabilityRequirement": {
+      "type": "object",
+      "properties": {
+        "capability": {
+          "type": "string",
+          "description": "Capability name to resolve (e.g., rag, embeddings)"
+        },
+        "protocol": {
+          "type": "string",
+          "description": "Protocol the provider must implement"
+        },
+        "prefer": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Ordered list of preferred providers"
+        },
+        "fallback": {
+          "type": "string",
+          "description": "Fallback provider if no preferred providers are available"
+        }
+      },
       "additionalProperties": false
     }
   }

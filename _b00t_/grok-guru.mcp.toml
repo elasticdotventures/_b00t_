@@ -2,8 +2,9 @@
 name = "grok-guru"
 type = "mcp"
 hint = "b00t grok RAG knowledgebase with vector search capabilities (with pre-commit validation)"
+depends_on = ["qdrant.docker", "ollama.docker"]
 
-# Capability-based dependency instead of direct infrastructure
+# Capability-based dependency: prefer rag-api implementation of rag-composite-v1 protocol
 [b00t.requires.rag]
 capability = "rag"
 protocol = "rag-composite-v1"
