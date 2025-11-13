@@ -2,7 +2,8 @@
 
 Provides:
 - Web crawling jobs with Redis-backed tracking
-- Google ADK agent integration for AI agents as jobs
+- Pydantic-AI agent integration for production AI agents (RECOMMENDED)
+- Google ADK agent integration (DEPRECATED - use pydantic-ai)
 - Cleanup and maintenance jobs for Redis data
 - Multi-agent coordination via RQ
 - Datum-based provider configuration (DRY - uses Rust via PyO3)
@@ -19,7 +20,22 @@ from .jobs import (
     cleanup_old_data_job,
 )
 
-# ADK integration
+# Pydantic-AI integration (RECOMMENDED - production-ready)
+from .pydantic_ai_integration import (
+    create_agent_from_datum as create_pydantic_agent,
+    get_model_string_from_datum,
+    select_best_model,
+    list_available_models,
+    list_available_providers,
+)
+
+from .pydantic_ai_jobs import (
+    pydantic_agent_job,
+    auto_select_agent_job,
+    multi_agent_pydantic_job,
+)
+
+# ADK integration (DEPRECATED - use pydantic-ai)
 from .adk_integration import (
     ADKAgentRunner,
     AgentConfig,
@@ -33,7 +49,7 @@ from .adk_integration import (
 # Datum provider (DRY - uses Rust via PyO3)
 from .datum_provider import (
     DatumProvider,
-    create_agent_from_datum,
+    create_agent_from_datum as create_adk_agent_from_datum,
 )
 
 # RQ integration utilities
@@ -52,7 +68,16 @@ __all__ = [
     "digest_url_job",
     "process_binary_content_job",
     "cleanup_old_data_job",
-    # ADK Integration
+    # Pydantic-AI Integration (RECOMMENDED)
+    "create_pydantic_agent",
+    "get_model_string_from_datum",
+    "select_best_model",
+    "list_available_models",
+    "list_available_providers",
+    "pydantic_agent_job",
+    "auto_select_agent_job",
+    "multi_agent_pydantic_job",
+    # ADK Integration (DEPRECATED)
     "ADKAgentRunner",
     "AgentConfig",
     "AgentExecutionContext",
@@ -62,7 +87,7 @@ __all__ = [
     "multi_agent_coordination_job",
     # Datum Provider (DRY)
     "DatumProvider",
-    "create_agent_from_datum",
+    "create_adk_agent_from_datum",
     # RQ Utils
     "get_queue",
     "get_all_queues",

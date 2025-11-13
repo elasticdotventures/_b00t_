@@ -22,6 +22,7 @@ dependencies = [
     "uvicorn>=0.24.0",
     "pydantic>=2.5.0",
     "pydantic-settings>=2.0.0",
+    "pydantic-ai>=0.0.14",  # Production-ready agent framework
     "httpx>=0.25.0",
     "pypdf2>=3.0.0",
     "returns>=0.22.0",
@@ -41,6 +42,16 @@ dev = [
     "ruff>=0.1.0",
     "mypy>=1.7.0",
 ]
+# Pydantic-AI with all provider support
+pydantic-ai-full = [
+    "pydantic-ai[openai]>=0.0.14",
+    "pydantic-ai[anthropic]>=0.0.14",
+    "pydantic-ai[gemini]>=0.0.14",
+    "pydantic-ai[groq]>=0.0.14",
+    "pydantic-ai[ollama]>=0.0.14",
+    "pydantic-ai[openrouter]>=0.0.14",
+]
+# Legacy Google ADK support (deprecated)
 adk = [
     "google-adk-python>=0.1.0",
 ]
