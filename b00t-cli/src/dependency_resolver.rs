@@ -205,6 +205,10 @@ mod tests {
             depends_on,
             members: None,
             mcp: None,
+            protocol: None,
+            implements: None,
+            provides: None,
+            requires: None,
         }
     }
 
