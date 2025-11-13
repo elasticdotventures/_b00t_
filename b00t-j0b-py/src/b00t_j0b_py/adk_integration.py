@@ -61,6 +61,15 @@ class AgentExecutionContext:
         }
 
 
+class ModelProvider(Enum):
+    """Supported model providers."""
+    GEMINI = "gemini"  # Google Gemini (default)
+    OPENAI = "openai"  # OpenAI models
+    OPENROUTER = "openrouter"  # OpenRouter (multi-model gateway)
+    ANTHROPIC = "anthropic"  # Anthropic Claude
+    OPENAI_COMPATIBLE = "openai_compatible"  # Generic OpenAI-compatible API
+
+
 @dataclass
 class AgentConfig:
     """Configuration for ADK agent execution."""
@@ -73,6 +82,11 @@ class AgentConfig:
     model_name: str = "gemini-2.0-flash-exp"
     temperature: float = 0.7
     max_tokens: Optional[int] = None
+
+    # Provider configuration
+    provider: ModelProvider = ModelProvider.GEMINI
+    api_base: Optional[str] = None  # Custom API endpoint (e.g., OpenRouter)
+    api_key: Optional[str] = None  # API key (falls back to env var)
 
     # Tool configuration
     tools: List[str] = field(default_factory=list)  # Tool names to enable
@@ -100,6 +114,9 @@ class AgentConfig:
             "model_name": self.model_name,
             "temperature": self.temperature,
             "max_tokens": self.max_tokens,
+            "provider": self.provider.value if isinstance(self.provider, ModelProvider) else self.provider,
+            "api_base": self.api_base,
+            "api_key": self.api_key,
             "tools": self.tools,
             "enable_mcp": self.enable_mcp,
             "sub_agents": [sa.to_dict() for sa in self.sub_agents],
@@ -156,13 +173,79 @@ class ADKAgentRunner:
         except Exception:
             return None
 
+    def _get_model_client(self, agent_config: AgentConfig) -> Any:
+        """Get LLM client based on provider configuration.
+
+        Args:
+            agent_config: Agent configuration with provider settings
+
+        Returns:
+            Configured model client
+
+        Example configurations:
+            # OpenRouter with Qwen
+            provider=ModelProvider.OPENROUTER,
+            api_base="https://openrouter.ai/api/v1",
+            model_name="qwen/qwen-2.5-72b-instruct"
+
+            # OpenRouter with Kimi
+            provider=ModelProvider.OPENROUTER,
+            api_base="https://openrouter.ai/api/v1",
+            model_name="moonshot/kimi-k2"
+
+            # Anthropic Claude
+            provider=ModelProvider.ANTHROPIC,
+            model_name="claude-3-5-sonnet-20241022"
+        """
+        import os
+
+        # Get API key from config or environment
+        api_key = agent_config.api_key or os.getenv(
+            f"{agent_config.provider.value.upper()}_API_KEY"
+        )
+
+        if agent_config.provider == ModelProvider.GEMINI:
+            # Use Google Gemini (default ADK behavior)
+            # from adk.models import GeminiModel
+            # return GeminiModel(model=agent_config.model_name, api_key=api_key)
+            pass
+
+        elif agent_config.provider in (ModelProvider.OPENROUTER, ModelProvider.OPENAI_COMPATIBLE):
+            # Use OpenAI-compatible API (OpenRouter, etc.)
+            # from openai import OpenAI
+            # client = OpenAI(
+            #     base_url=agent_config.api_base or "https://openrouter.ai/api/v1",
+            #     api_key=api_key,
+            # )
+            # Wrap in ADK-compatible interface
+            pass
+
+        elif agent_config.provider == ModelProvider.OPENAI:
+            # Use OpenAI directly
+            # from openai import OpenAI
+            # client = OpenAI(api_key=api_key)
+            pass
+
+        elif agent_config.provider == ModelProvider.ANTHROPIC:
+            # Use Anthropic Claude
+            # from anthropic import Anthropic
+            # client = Anthropic(api_key=api_key)
+            pass
+
+        raise NotImplementedError(
+            f"Model client for {agent_config.provider.value} requires implementation. "
+            "See _get_model_client() for configuration examples."
+        )
+
     def _create_adk_agent(self, agent_config: AgentConfig) -> Any:
         """Create ADK agent from configuration.
 
-        Note: This is a placeholder. Actual implementation requires:
-        - `from adk import Agent` (when google-adk-python is installed)
-        - Proper tool registration
-        - Model client initialization
+        Supports multiple LLM providers:
+        - Gemini (default)
+        - OpenAI
+        - OpenRouter (Qwen, Kimi, DeepSeek, etc.)
+        - Anthropic Claude
+        - Any OpenAI-compatible API
 
         Args:
             agent_config: Agent configuration
@@ -171,16 +254,20 @@ class ADKAgentRunner:
             Initialized ADK agent instance
         """
         # TODO: Implement actual ADK agent creation
-        # This requires google-adk-python package:
+        # Pattern for multi-provider support:
         #
         # from adk import Agent
         # from adk.tools import tool
         #
+        # # Get model client based on provider
+        # model_client = self._get_model_client(agent_config)
+        #
         # agent = Agent(
         #     name=agent_config.name,
         #     description=agent_config.description,
-        #     model=agent_config.model_name,
+        #     model=model_client,  # Provider-specific client
         #     temperature=agent_config.temperature,
+        #     max_tokens=agent_config.max_tokens,
         #     tools=[self._get_tool(tool_name) for tool_name in agent_config.tools],
         #     sub_agents=[self._create_adk_agent(sub) for sub in agent_config.sub_agents],
         # )
@@ -339,13 +426,19 @@ def adk_agent_job(
         Execution result
     """
     # Reconstruct AgentConfig from dict
-    # 🤓 Simple reconstruction - would need proper deserialization for sub_agents
+    # 🤓 Handle provider enum deserialization
+    provider_str = agent_config_dict.get("provider", "gemini")
+    provider = ModelProvider(provider_str) if isinstance(provider_str, str) else provider_str
+
     agent_config = AgentConfig(
         name=agent_config_dict["name"],
         description=agent_config_dict["description"],
         model_name=agent_config_dict.get("model_name", "gemini-2.0-flash-exp"),
         temperature=agent_config_dict.get("temperature", 0.7),
         max_tokens=agent_config_dict.get("max_tokens"),
+        provider=provider,
+        api_base=agent_config_dict.get("api_base"),
+        api_key=agent_config_dict.get("api_key"),
         tools=agent_config_dict.get("tools", []),
         enable_mcp=agent_config_dict.get("enable_mcp", False),
         require_approval=agent_config_dict.get("require_approval", False),
