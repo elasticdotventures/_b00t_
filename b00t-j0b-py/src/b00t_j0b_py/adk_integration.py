@@ -1,5 +1,8 @@
 """Google ADK integration for running agents as RQ jobs.
 
+⚠️ DEPRECATED: This module is deprecated in favor of pydantic_ai_integration.
+Use pydantic-ai for new development. See docs/PYDANTIC_AI_ANALYSIS.md for migration.
+
 This module provides integration between Google ADK (Agent Development Kit)
 and the b00t job system, enabling AI agents to be executed as background jobs
 with full lifecycle management, monitoring, and coordination.
@@ -10,9 +13,22 @@ Key features:
 - Session management and state persistence
 - Tool integration with b00t ecosystem
 - Human-in-the-loop (HITL) support via Redis pub/sub
+
+MIGRATION: Use pydantic_ai_integration.create_agent_from_datum() instead.
 """
 
+import warnings
 from typing import Dict, Any, List, Optional, Callable
+
+# Emit deprecation warning when module is imported
+warnings.warn(
+    "adk_integration is deprecated and will be removed in a future version. "
+    "Use pydantic_ai_integration instead for production workloads. "
+    "Pydantic-AI provides 25+ providers, native MCP support, and 56% less code. "
+    "See docs/PYDANTIC_AI_ANALYSIS.md for migration guide.",
+    DeprecationWarning,
+    stacklevel=2
+)
 from dataclasses import dataclass, field
 from enum import Enum
 from rq import get_current_job
