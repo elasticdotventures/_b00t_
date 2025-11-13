@@ -21,8 +21,15 @@ capabilities = "text,chat"
 context_length = 8192
 cost_per_token = 0.0
 
+# Environment variables required by this provider
+# Actual values are loaded from .env via direnv (b00t pattern: direnv → .envrc → dotenv → .env)
+# See b00t-j0b-py/.env.example for setup instructions
 [env]
-LITELLM_MASTER_KEY = "${LITELLM_MASTER_KEY}"
-LITELLM_API_BASE = "http://localhost:4000"
-# LiteLLM requires individual provider API keys
-# These should be set in .envrc or .env
+# Optional: Only required if LiteLLM proxy has authentication enabled
+# required = ["LITELLM_MASTER_KEY"]
+
+# Optional: Default values for non-secret configuration
+defaults = { LITELLM_API_BASE = "http://localhost:4000" }
+
+# Note: LiteLLM is a proxy. The actual provider API keys (OPENAI_API_KEY, etc.)
+# should be configured in the LiteLLM proxy server, not in this .env file

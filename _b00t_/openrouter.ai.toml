@@ -38,6 +38,12 @@ cost_per_1k_input_tokens = 0.01
 cost_per_1k_output_tokens = 0.03
 max_tokens = 4096
 
+# Environment variables required by this provider
+# Actual values are loaded from .env via direnv (b00t pattern: direnv → .envrc → dotenv → .env)
+# See b00t-j0b-py/.env.example for setup instructions
 [env]
-OPENROUTER_API_BASE = "https://openrouter.ai/api/v1"
-OPENROUTER_API_KEY = "${OPENROUTER_API_KEY}"
+# Required: Must be present in .env file
+required = ["OPENROUTER_API_KEY"]
+
+# Optional: Default values for non-secret configuration
+defaults = { OPENROUTER_API_BASE = "https://openrouter.ai/api/v1" }
