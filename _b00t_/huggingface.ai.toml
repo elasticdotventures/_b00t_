@@ -27,7 +27,13 @@ context_length = 16384
 cost_per_token = 0.0
 max_tokens = 4096
 
+# Environment variables required by this provider
+# Actual values are loaded from .env via direnv (b00t pattern: direnv → .envrc → dotenv → .env)
+# See b00t-j0b-py/.env.example for setup instructions
 [env]
-HUGGINGFACE_API_BASE = "https://api-inference.huggingface.co/models"
-HUGGINGFACE_API_KEY = "${HUGGINGFACE_TOKEN}"
-HF_TOKEN = "${HUGGINGFACE_TOKEN}"
+# Required: Must be present in .env file
+# HuggingFace uses HF_TOKEN or HUGGINGFACE_TOKEN
+required = ["HF_TOKEN"]
+
+# Optional: Default values for non-secret configuration
+defaults = { HUGGINGFACE_API_BASE = "https://api-inference.huggingface.co/models" }
