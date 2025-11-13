@@ -252,6 +252,10 @@ mod tests {
             depends_on: None,
             members: None,
             mcp: None,
+            protocol: None,
+            implements: None,
+            provides: None,
+            requires: None,
         }
     }
 
@@ -288,6 +292,10 @@ mod tests {
             depends_on: None,
             members: Some(members),
             mcp: None,
+            protocol: None,
+            implements: None,
+            provides: None,
+            requires: None,
         }
     }
 
