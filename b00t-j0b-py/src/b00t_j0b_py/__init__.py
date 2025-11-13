@@ -5,6 +5,7 @@ Provides:
 - Google ADK agent integration for AI agents as jobs
 - Cleanup and maintenance jobs for Redis data
 - Multi-agent coordination via RQ
+- Datum-based provider configuration (DRY - uses Rust via PyO3)
 """
 
 __version__ = "0.1.0"
@@ -27,6 +28,12 @@ from .adk_integration import (
     ModelProvider,
     adk_agent_job,
     multi_agent_coordination_job,
+)
+
+# Datum provider (DRY - uses Rust via PyO3)
+from .datum_provider import (
+    DatumProvider,
+    create_agent_from_datum,
 )
 
 # RQ integration utilities
@@ -53,6 +60,9 @@ __all__ = [
     "ModelProvider",
     "adk_agent_job",
     "multi_agent_coordination_job",
+    # Datum Provider (DRY)
+    "DatumProvider",
+    "create_agent_from_datum",
     # RQ Utils
     "get_queue",
     "get_all_queues",
