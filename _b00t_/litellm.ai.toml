@@ -1,0 +1,28 @@
+[b00t]
+name = "litellm"
+type = "ai"
+hint = "LiteLLM proxy - unified interface for 100+ LLM providers"
+
+[models.gpt-4]
+capabilities = "text,chat,code,vision"
+context_length = 128000
+# Costs vary by provider
+
+[models.claude-3-opus]
+capabilities = "text,chat,code,vision,reasoning"
+context_length = 200000
+
+[models.gemini-pro]
+capabilities = "text,chat,vision"
+context_length = 1048576
+
+[models.ollama-llama3]
+capabilities = "text,chat"
+context_length = 8192
+cost_per_token = 0.0
+
+[env]
+LITELLM_MASTER_KEY = "${LITELLM_MASTER_KEY}"
+LITELLM_API_BASE = "http://localhost:4000"
+# LiteLLM requires individual provider API keys
+# These should be set in .envrc or .env

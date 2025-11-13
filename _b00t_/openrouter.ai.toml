@@ -1,0 +1,43 @@
+[b00t]
+name = "openrouter"
+type = "ai"
+hint = "OpenRouter multi-model gateway - access 200+ models via single API"
+
+[models.qwen-2_5-72b-instruct]
+capabilities = "text,chat,code,reasoning,multilingual"
+context_length = 32768
+cost_per_1k_input_tokens = 0.00035
+cost_per_1k_output_tokens = 0.00040
+max_tokens = 4096
+
+[models.kimi-k2]
+capabilities = "text,chat,long_context"
+context_length = 200000
+cost_per_1k_input_tokens = 0.00030
+cost_per_1k_output_tokens = 0.00090
+max_tokens = 8192
+
+[models.deepseek-r1]
+capabilities = "text,chat,reasoning,code,math"
+context_length = 65536
+cost_per_1k_input_tokens = 0.00055
+cost_per_1k_output_tokens = 0.00219
+max_tokens = 4096
+
+[models.claude-3-5-sonnet]
+capabilities = "text,chat,code,vision,reasoning"
+context_length = 200000
+cost_per_1k_input_tokens = 0.003
+cost_per_1k_output_tokens = 0.015
+max_tokens = 8192
+
+[models.gpt-4-turbo]
+capabilities = "text,chat,code,vision"
+context_length = 128000
+cost_per_1k_input_tokens = 0.01
+cost_per_1k_output_tokens = 0.03
+max_tokens = 4096
+
+[env]
+OPENROUTER_API_BASE = "https://openrouter.ai/api/v1"
+OPENROUTER_API_KEY = "${OPENROUTER_API_KEY}"
