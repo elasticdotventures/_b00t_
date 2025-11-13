@@ -198,31 +198,148 @@ def process_binary_content_job(url: str, content: bytes, content_type: str) -> D
         }
 
 
-def cleanup_old_data_job() -> Dict[str, Any]:
-    """RQ job to clean up old crawl data."""
+def cleanup_old_data_job(
+    max_age_days: int = 7,
+    clean_failed_jobs: bool = True,
+    clean_finished_jobs: bool = True,
+) -> Dict[str, Any]:
+    """RQ job to clean up old crawl data and stale job registries.
+
+    Args:
+        max_age_days: Maximum age in days for crawl data (default: 7)
+        clean_failed_jobs: Clean failed job registry (default: True)
+        clean_finished_jobs: Clean finished job registry older than max_age (default: True)
+
+    Returns:
+        Dictionary with cleanup stats and results
+    """
     job = get_current_job()
     job_id = job.id if job else "local"
-    
-    print(f"[{job_id}] Starting cleanup of old crawl data")
-    
+
+    print(f"[{job_id}] Starting cleanup of old crawl data (max_age={max_age_days}d)")
+
     try:
-        # Get current stats
+        from datetime import datetime, timedelta
+        from .rq_integration import get_redis_connection, get_all_queues
+
+        # Get current stats before cleanup
         stats_before = tracker.get_stats()
-        
-        # TODO: Implement actual cleanup logic
-        # For now, just return current stats
-        
+        cleanup_results = {
+            "crawl_data_cleaned": 0,
+            "failed_jobs_cleaned": 0,
+            "finished_jobs_cleaned": 0,
+            "stale_queues_cleaned": 0,
+            "errors": []
+        }
+
+        # Calculate cutoff timestamp
+        cutoff_time = datetime.utcnow() - timedelta(days=max_age_days)
+
+        # 1. Clean old crawl data beyond TTL
+        # Note: Redis TTL handles expiration automatically, but we can clean manually
+        # for data that may have been set without TTL or needs earlier cleanup
+        try:
+            redis_conn = get_redis_connection()
+
+            # Scan and clean old crawled URLs
+            cursor = 0
+            crawl_cleaned = 0
+            while True:
+                cursor, keys = redis_conn.scan(cursor, match="crawl:url:*", count=100)
+                for key in keys:
+                    try:
+                        data = redis_conn.get(key)
+                        if data:
+                            import json
+                            crawl_info = json.loads(data)
+                            crawled_at = datetime.fromisoformat(crawl_info.get("crawled_at", ""))
+                            if crawled_at < cutoff_time:
+                                redis_conn.delete(key)
+                                crawl_cleaned += 1
+                    except Exception as e:
+                        cleanup_results["errors"].append(f"Error processing {key}: {str(e)}")
+
+                if cursor == 0:
+                    break
+
+            cleanup_results["crawl_data_cleaned"] = crawl_cleaned
+            print(f"[{job_id}] Cleaned {crawl_cleaned} old crawl entries")
+
+        except Exception as e:
+            cleanup_results["errors"].append(f"Crawl data cleanup error: {str(e)}")
+
+        # 2. Clean RQ job registries
+        try:
+            queues = get_all_queues()
+
+            for queue in queues:
+                # Clean failed jobs if requested
+                if clean_failed_jobs:
+                    failed_registry = queue.failed_job_registry
+                    failed_count = len(failed_registry)
+                    if failed_count > 0:
+                        # Clean all failed jobs older than max_age
+                        failed_jobs = failed_registry.get_job_ids()
+                        for job_id_to_clean in failed_jobs:
+                            try:
+                                from rq.job import Job
+                                job_obj = Job.fetch(job_id_to_clean, connection=redis_conn)
+                                if job_obj.ended_at and job_obj.ended_at < cutoff_time:
+                                    failed_registry.remove(job_obj)
+                                    cleanup_results["failed_jobs_cleaned"] += 1
+                            except Exception:
+                                pass  # Job may already be gone
+
+                # Clean finished jobs if requested
+                if clean_finished_jobs:
+                    finished_registry = queue.finished_job_registry
+                    finished_jobs = finished_registry.get_job_ids()
+                    for job_id_to_clean in finished_jobs:
+                        try:
+                            from rq.job import Job
+                            job_obj = Job.fetch(job_id_to_clean, connection=redis_conn)
+                            if job_obj.ended_at and job_obj.ended_at < cutoff_time:
+                                finished_registry.remove(job_obj)
+                                cleanup_results["finished_jobs_cleaned"] += 1
+                        except Exception:
+                            pass  # Job may already be gone
+
+            print(f"[{job_id}] Cleaned {cleanup_results['failed_jobs_cleaned']} failed jobs, "
+                  f"{cleanup_results['finished_jobs_cleaned']} finished jobs")
+
+        except Exception as e:
+            cleanup_results["errors"].append(f"Job registry cleanup error: {str(e)}")
+
+        # 3. Clean stale processing queues (items that never got processed)
+        try:
+            for queue_name in ["default", "high", "low"]:
+                queue_key = f"crawl:queue:{queue_name}"
+                queue_size = redis_conn.scard(queue_key)
+
+                # If queue has stale items (optional: check timestamp in items)
+                if queue_size > 1000:  # Arbitrary threshold for "stale"
+                    print(f"[{job_id}] Warning: Queue {queue_name} has {queue_size} items")
+                    # Optionally clear or trim
+                    # For now, just report
+
+        except Exception as e:
+            cleanup_results["errors"].append(f"Queue cleanup error: {str(e)}")
+
+        # Get stats after cleanup
         stats_after = tracker.get_stats()
-        
-        print(f"[{job_id}] Cleanup completed")
-        
+
+        print(f"[{job_id}] Cleanup completed - removed {cleanup_results['crawl_data_cleaned']} entries, "
+              f"{cleanup_results['failed_jobs_cleaned'] + cleanup_results['finished_jobs_cleaned']} jobs")
+
         return {
             "status": "success",
             "stats_before": stats_before,
             "stats_after": stats_after,
+            "cleanup_results": cleanup_results,
+            "max_age_days": max_age_days,
             "job_id": job_id
         }
-    
+
     except Exception as e:
         print(f"[{job_id}] Error during cleanup: {e}")
         return {
