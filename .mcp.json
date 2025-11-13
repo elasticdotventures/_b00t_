@@ -1,26 +1,36 @@
 {
   "mcpServers": {
     "context7": {
-      "command": "bunx",
       "args": [
         "-y",
         "@upstash/context7-mcp"
-      ]
+      ],
+      "command": "bunx"
     },
     "github": {
-      "command": "npx",
       "args": [
         "-y",
         "@modelcontextprotocol/server-github"
-      ]
+      ],
+      "command": "npx"
+    },
+    "rust-crate-docs-docker": {
+      "args": [
+        "run",
+        "--rm",
+        "-i",
+        "ghcr.io/promptexecution/rust-cargo-docs-rag-mcp:latest",
+        "stdio"
+      ],
+      "command": "docker"
     },
     "taskmaster-ai": {
-      "command": "bunx",
       "args": [
         "-y",
         "--package=task-master-ai",
         "task-master-ai"
       ],
+      "command": "bunx",
       "env": {}
     }
   }
