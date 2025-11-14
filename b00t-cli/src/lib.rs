@@ -123,11 +123,13 @@ pub struct BootDatum {
     pub learn: Option<LearnMetadata>,
 
     // Usage examples - CLI/API usage patterns
-    #[serde(skip_serializing_if = "Option::is_none")]
+    // Supports: usage = ["cmd  # desc", ...] or [[b00t.usage]] tables
+    #[serde(skip_serializing_if = "Option::is_none", deserialize_with = "b00t_c0re_lib::deserialize_usage")]
     pub usage: Option<Vec<UsageExample>>,
 
     // External references - docs, repos, blogs, tutorials
-    #[serde(skip_serializing_if = "Option::is_none")]
+    // Supports: references = ["url#desc", ...] or [[b00t.references]] tables
+    #[serde(skip_serializing_if = "Option::is_none", deserialize_with = "b00t_c0re_lib::deserialize_references")]
     pub references: Option<Vec<Reference>>,
 
     // LFMF category mapping - groups datum lessons under a category
