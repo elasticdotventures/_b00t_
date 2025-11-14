@@ -1,6 +1,7 @@
 # justfile for Rust Development Environment
 # Alias to get the Git repository root
 repo-root := env_var_or_default("JUST_REPO_ROOT", `git rev-parse --show-toplevel 2>/dev/null || echo .`)
+workspace_version := `toml get Cargo.toml workspace.package.version | tr -d '"'`
 
 
 
@@ -23,7 +24,8 @@ stow:
     stow --adopt -d ~/.dotfiles -t ~ bash
 
 release:
-    gh release create v1.1.0 --title "Release v1.1.0" --notes "Release notes for version 1.1.0"
+    VERSION="{{workspace_version}}"
+    gh release create "v${VERSION}" --title "Release v${VERSION}" --notes "Release notes for version ${VERSION}"
 
     # check for latest release tag of _b00t_ in github using gh cli
     NET_VERSION=$(cd "$HOME/.dotfiles" && gh release view -R elasticdotventures/dotfiles --json tagName | jq -r .tagName)
@@ -34,8 +36,10 @@ release:
 
 install:
     echo "🥾 _b00t_ install"
-    cargo install --path b00t-mcp
-    cargo install --path b00t-cli
+    cargo install --path b00t-mcp --force
+    cargo install --path b00t-cli --force
+    cargo install cocogitto --locked --force
+    just install-commit-hook
 
 
 installx:
@@ -167,7 +171,48 @@ clean-workflows:
         /repos/elasticdotventures/dotfiles/actions/runs/{}
 
 version:
-    git describe --tags --abbrev=0
+    echo "{{workspace_version}}"
+
+commit-hook:
+    #!/bin/bash
+    set -euo pipefail
+    if ! git diff --quiet; then
+        echo "⚠️ Unstaged changes detected; please stash or stage before running commit-hook"
+        exit 1
+    fi
+    cargo fmt
+    CURRENT_VERSION=$(toml get Cargo.toml workspace.package.version | tr -d '"')
+    IFS='.' read -r MAJOR MINOR PATCH <<< "${CURRENT_VERSION}"
+    PATCH=$((PATCH + 1))
+    NEW_VERSION="${MAJOR}.${MINOR}.${PATCH}"
+    TMP_FILE=$(mktemp)
+    toml set Cargo.toml workspace.package.version "${NEW_VERSION}" > "${TMP_FILE}"
+    mv "${TMP_FILE}" Cargo.toml
+    cargo metadata --format-version 1 >/dev/null 2>&1 || true
+    git add -u
+    VERSION=$(toml get Cargo.toml workspace.package.version | tr -d '"')
+    if git diff --cached --quiet; then
+        echo "No staged changes after running commit-hook"
+    else
+        echo "✅ Staged fmt + version bump (v${VERSION}); continue with your commit."
+    fi
+
+install-commit-hook:
+    #!/bin/bash
+    set -euo pipefail
+    HOOK_PATH=".git/hooks/pre-commit"
+    {
+        echo "#!/usr/bin/env bash"
+        echo "set -euo pipefail"
+        echo "if command -v just >/dev/null 2>&1; then"
+        echo "    just commit-hook"
+        echo "else"
+        echo "    echo \"just is required to run commit-hook\" >&2"
+        echo "    exit 1"
+        echo "fi"
+    } > "${HOOK_PATH}"
+    chmod +x "${HOOK_PATH}"
+    echo "✅ Installed .git/hooks/pre-commit to run 'just commit-hook'"
 
 cliff:
     # git-cliff --tag $(git describe --tags --abbrev=0) -o CHANGELOG.md
@@ -293,4 +338,3 @@ port-map:
 
 install-services:
     {{repo-root}}/scripts/install-systemd-services.sh
-

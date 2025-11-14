@@ -38,7 +38,9 @@ pub use client::ChatClient;
 pub use error::{ChatError, ChatResult};
 pub use message::ChatMessage;
 pub use protocol::{ACPMessage, MessageType, StepBarrier};
-pub use security::{fetch_jwt_from_website, AcpJwtValidator, AcpSecurityContext, NamespaceEnforcer};
+pub use security::{
+    fetch_jwt_from_website, AcpJwtValidator, AcpSecurityContext, NamespaceEnforcer,
+};
 pub use server::{spawn_local_server, ChatInbox, LocalChatServer};
 pub use transport::{default_socket_path, ChatTransport, ChatTransportConfig, ChatTransportKind};
 

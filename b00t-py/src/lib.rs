@@ -11,10 +11,10 @@ use pyo3::types::PyDict;
 use std::collections::HashMap;
 
 // Import b00t-cli functions
-use b00t_cli::{mcp_list, mcp_output, get_expanded_path};
+use b00t_cli::{get_expanded_path, mcp_list, mcp_output};
 
 // Import datum types
-use b00t_c0re_lib::datum_ai_model::{AiModelDatum, ModelProvider, ModelCapability, ModelSize};
+use b00t_c0re_lib::datum_ai_model::{AiModelDatum, ModelCapability, ModelProvider, ModelSize};
 
 /// Python exception for b00t errors
 create_exception!(b00t_py, B00tError, pyo3::exceptions::PyException);
@@ -94,8 +94,8 @@ fn version() -> &'static str {
 #[pyo3(signature = (model_name, path = "~/.dotfiles/_b00t_"))]
 fn load_ai_model_datum(py: Python<'_>, model_name: &str, path: &str) -> PyResult<PyObject> {
     // Expand path
-    let mut datum_path = get_expanded_path(path)
-        .map_err(|e| B00tError::new_err(format!("Invalid path: {}", e)))?;
+    let mut datum_path =
+        get_expanded_path(path).map_err(|e| B00tError::new_err(format!("Invalid path: {}", e)))?;
     datum_path.push(format!("{}.ai_model.toml", model_name));
 
     // Check if file exists
@@ -151,10 +151,7 @@ fn load_ai_model_datum(py: Python<'_>, model_name: &str, path: &str) -> PyResult
     // Add capabilities
     if let Some(capabilities) = ai_model.get("capabilities") {
         if let Some(caps_array) = capabilities.as_array() {
-            let caps: Vec<&str> = caps_array
-                .iter()
-                .filter_map(|v| v.as_str())
-                .collect();
+            let caps: Vec<&str> = caps_array.iter().filter_map(|v| v.as_str()).collect();
             py_dict.set_item("capabilities", caps)?;
         }
     }
@@ -193,8 +190,8 @@ fn load_ai_model_datum(py: Python<'_>, model_name: &str, path: &str) -> PyResult
 #[pyo3(signature = (provider_name, path = "~/.dotfiles/_b00t_"))]
 fn check_provider_env(py: Python<'_>, provider_name: &str, path: &str) -> PyResult<PyObject> {
     // Expand path
-    let mut datum_path = get_expanded_path(path)
-        .map_err(|e| B00tError::new_err(format!("Invalid path: {}", e)))?;
+    let mut datum_path =
+        get_expanded_path(path).map_err(|e| B00tError::new_err(format!("Invalid path: {}", e)))?;
     datum_path.push(format!("{}.ai.toml", provider_name));
 
     // Check if file exists
@@ -246,8 +243,8 @@ fn check_provider_env(py: Python<'_>, provider_name: &str, path: &str) -> PyResu
 #[pyfunction]
 #[pyo3(signature = (path = "~/.dotfiles/_b00t_"))]
 fn list_ai_providers(path: &str) -> PyResult<Vec<String>> {
-    let datum_path = get_expanded_path(path)
-        .map_err(|e| B00tError::new_err(format!("Invalid path: {}", e)))?;
+    let datum_path =
+        get_expanded_path(path).map_err(|e| B00tError::new_err(format!("Invalid path: {}", e)))?;
 
     let mut providers = Vec::new();
 
@@ -279,8 +276,8 @@ fn list_ai_providers(path: &str) -> PyResult<Vec<String>> {
 #[pyfunction]
 #[pyo3(signature = (path = "~/.dotfiles/_b00t_"))]
 fn list_ai_models(path: &str) -> PyResult<Vec<String>> {
-    let datum_path = get_expanded_path(path)
-        .map_err(|e| B00tError::new_err(format!("Invalid path: {}", e)))?;
+    let datum_path =
+        get_expanded_path(path).map_err(|e| B00tError::new_err(format!("Invalid path: {}", e)))?;
 
     let mut models = Vec::new();
 

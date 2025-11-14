@@ -2,9 +2,9 @@
 //!
 //! Uses stack datums to self-install missing binaries and services
 
+use crate::bootstrap::prereq::PrereqResult;
 use anyhow::{Context, Result};
 use std::process::Command;
-use crate::bootstrap::prereq::{BinaryCheck, PrereqResult};
 
 /// Install missing required binaries based on OS
 pub async fn install_missing_required(prereq: &PrereqResult) -> Result<Vec<String>> {
@@ -141,14 +141,22 @@ async fn start_qdrant() -> Result<()> {
     if std::path::Path::new("_b00t_/qdrant.docker.toml").exists() {
         // 🤓 Future: parse datum and use proper docker/podman command
         // For now, use simple run command
-        run_command(container_runtime, &[
-            "run", "-d",
-            "--name", "qdrant",
-            "-p", "6333:6333",
-            "-p", "6334:6334",
-            "-v", "qdrant_storage:/qdrant/storage",
-            "qdrant/qdrant:latest"
-        ])?;
+        run_command(
+            container_runtime,
+            &[
+                "run",
+                "-d",
+                "--name",
+                "qdrant",
+                "-p",
+                "6333:6333",
+                "-p",
+                "6334:6334",
+                "-v",
+                "qdrant_storage:/qdrant/storage",
+                "qdrant/qdrant:latest",
+            ],
+        )?;
     }
 
     Ok(())

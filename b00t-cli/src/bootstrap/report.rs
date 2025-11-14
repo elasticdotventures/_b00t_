@@ -5,7 +5,7 @@
 //!
 //! See: https://github.com/toon-format/toon
 
-use crate::bootstrap::prereq::{BinaryCheck, PrereqResult};
+use crate::bootstrap::prereq::PrereqResult;
 use crate::bootstrap::skeleton::SkeletonResult;
 use anyhow::{Context, Result};
 use std::fs;
@@ -20,10 +20,7 @@ pub struct BootstrapReport {
 }
 
 /// Generate Toon format report from bootstrap results
-pub fn generate_toon_report(
-    report: &BootstrapReport,
-    output_path: &Path,
-) -> Result<()> {
+pub fn generate_toon_report(report: &BootstrapReport, output_path: &Path) -> Result<()> {
     let toon_content = serialize_to_toon(report)?;
 
     let expanded_path = shellexpand::tilde(output_path.to_str().unwrap());
@@ -51,7 +48,9 @@ fn serialize_to_toon(report: &BootstrapReport) -> Result<String> {
     toon.push_str("[meta]\n");
     toon.push_str(&format!("timestamp = \"{}\"\n", report.timestamp));
     toon.push_str("format = \"toon\"\n");
-    toon.push_str("schema = \"https://b00t.promptexecution.com/schemas/bootstrap-report/v0.1.0\"\n\n");
+    toon.push_str(
+        "schema = \"https://b00t.promptexecution.com/schemas/bootstrap-report/v0.1.0\"\n\n",
+    );
 
     // Summary section
     toon.push_str("[summary]\n");
@@ -75,18 +74,23 @@ fn serialize_to_toon(report: &BootstrapReport) -> Result<String> {
     toon.push_str(&format!("missing_optional = {}\n", missing_optional));
 
     if let Some(ref skeleton) = report.skeleton_result {
-        toon.push_str(&format!("directories_created = {}\n", skeleton.created.len()));
+        toon.push_str(&format!(
+            "directories_created = {}\n",
+            skeleton.created.len()
+        ));
         toon.push_str(&format!(
             "directories_existed = {}\n",
             skeleton.already_existed.len()
         ));
         toon.push_str(&format!(
-            "directory_errors = {}\n\n",
-            skeleton.errors.len()
+            "directories_processed = {}\n",
+            skeleton.total_count()
         ));
+        toon.push_str(&format!("directory_errors = {}\n\n", skeleton.errors.len()));
     } else {
         toon.push_str("directories_created = 0\n");
         toon.push_str("directories_existed = 0\n");
+        toon.push_str("directories_processed = 0\n");
         toon.push_str("directory_errors = 0\n\n");
     }
 
@@ -98,7 +102,10 @@ fn serialize_to_toon(report: &BootstrapReport) -> Result<String> {
         for bin in &report.prereq_result.required {
             toon.push_str(&format!("name = \"{}\"\n", bin.name));
             toon.push_str(&format!("found = {}\n", bin.found));
-            toon.push_str(&format!("required_version = \"{}\"\n", bin.required_version));
+            toon.push_str(&format!(
+                "required_version = \"{}\"\n",
+                bin.required_version
+            ));
 
             if let Some(ref installed) = bin.installed_version {
                 toon.push_str(&format!("installed_version = \"{}\"\n", installed));

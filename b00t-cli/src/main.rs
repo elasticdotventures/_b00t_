@@ -44,9 +44,9 @@ use crate::commands::{
 
 // Re-export commonly used functions for datum modules
 pub use b00t_cli::{
-    claude_code_install_mcp, dotmcpjson_install_mcp, gemini_install_mcp, get_config,
-    get_expanded_path, get_mcp_config, get_mcp_toml_files, mcp_add_json, mcp_list, mcp_output,
-    mcp_remove, vscode_install_mcp,
+    claude_code_install_mcp, codex_install_mcp, dotmcpjson_install_mcp, gemini_install_mcp,
+    get_config, get_expanded_path, get_mcp_config, get_mcp_toml_files, mcp_add_json, mcp_list,
+    mcp_output, mcp_remove, vscode_install_mcp,
 };
 
 mod integration_tests;
@@ -1261,7 +1261,7 @@ async fn main() {
         Some(Commands::Lfmf {
             tool,
             lesson,
-            repo,
+            repo: _,
             global,
         }) => {
             // Validate required fields

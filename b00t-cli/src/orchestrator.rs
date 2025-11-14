@@ -3,8 +3,7 @@
 //! Solves the chicken-egg problem where b00t commands need services running.
 //! Automatically starts dependencies before executing commands.
 
-use crate::dependency_resolver::DependencyResolver;
-use crate::{get_config, BootDatum, DatumType};
+use crate::{BootDatum, get_config};
 use anyhow::{Context, Result};
 use std::collections::HashMap;
 use std::path::Path;
@@ -22,9 +21,7 @@ impl Orchestrator {
     pub fn new(path: &str) -> Result<Self> {
         let all_datums = Self::load_all_datums(path)?;
 
-        Ok(Self {
-            datums: all_datums,
-        })
+        Ok(Self { datums: all_datums })
     }
 
     /// Load all datums from _b00t_/ directory
@@ -49,9 +46,7 @@ impl Orchestrator {
                 continue;
             }
 
-            let file_name = file_path.file_name()
-                .and_then(|n| n.to_str())
-                .unwrap_or("");
+            let file_name = file_path.file_name().and_then(|n| n.to_str()).unwrap_or("");
 
             // Parse datum from each .{type}.toml file
             if let Some(name) = Self::extract_datum_name(file_name) {
@@ -93,7 +88,9 @@ impl Orchestrator {
         let without_ext = filename.strip_suffix(".toml")?;
 
         // Remove type suffix (e.g., .docker, .mcp, .cli, .api)
-        let types = ["docker", "mcp", "cli", "bash", "vscode", "k8s", "apt", "ai", "api", "stack"];
+        let types = [
+            "docker", "mcp", "cli", "bash", "vscode", "k8s", "apt", "ai", "api", "stack",
+        ];
         for typ in types {
             let suffix = format!(".{}", typ);
             if let Some(name) = without_ext.strip_suffix(&suffix) {
@@ -106,7 +103,9 @@ impl Orchestrator {
 
     /// Make datum key from name and type
     fn make_key(datum: &BootDatum) -> String {
-        let type_str = datum.datum_type.as_ref()
+        let type_str = datum
+            .datum_type
+            .as_ref()
             .map(|t| format!("{:?}", t).to_lowercase())
             .unwrap_or_else(|| "unknown".to_string());
         format!("{}.{}", datum.name, type_str)
@@ -118,7 +117,9 @@ impl Orchestrator {
         let mut started = Vec::new();
 
         // Get datum and its dependencies
-        let datum = self.datums.get(datum_key)
+        let datum = self
+            .datums
+            .get(datum_key)
             .ok_or_else(|| anyhow::anyhow!("Datum not found: {}", datum_key))?
             .clone();
 
@@ -127,7 +128,8 @@ impl Orchestrator {
         for dep_key in dep_keys {
             if let Some(dep_datum) = self.datums.get(&dep_key) {
                 if self.needs_start(dep_datum).await? {
-                    self.start_service(dep_datum).await
+                    self.start_service(dep_datum)
+                        .await
                         .context(format!("Failed to start {}", dep_key))?;
                     started.push(dep_key.clone());
                 }
@@ -138,6 +140,12 @@ impl Orchestrator {
         if let Some(requires) = &datum.requires {
             for (req_name, requirement) in requires {
                 if let Some(capability) = &requirement.capability {
+                    if std::env::var("B00T_DEBUG").is_ok() {
+                        eprintln!(
+                            "🔧 Requirement '{}' resolved via capability '{}'",
+                            req_name, capability
+                        );
+                    }
                     // Resolve capability to concrete API implementations
                     let resolved = self.resolve_capability(capability, requirement).await?;
                     started.extend(resolved);
@@ -150,7 +158,11 @@ impl Orchestrator {
 
     /// Resolve a capability requirement to concrete API implementations
     /// Returns list of services that were started
-    fn resolve_capability<'a>(&'a self, capability: &'a str, requirement: &'a crate::CapabilityRequirement) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<Vec<String>>> + 'a>> {
+    fn resolve_capability<'a>(
+        &'a self,
+        capability: &'a str,
+        requirement: &'a crate::CapabilityRequirement,
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<Vec<String>>> + 'a>> {
         Box::pin(async move {
             let mut started = Vec::new();
 
@@ -161,26 +173,36 @@ impl Orchestrator {
             }
 
             // Find API datums that provide this capability
-            let mut candidates: Vec<_> = self.datums.iter()
+            let mut candidates: Vec<_> = self
+                .datums
+                .iter()
                 .filter(|(_, datum)| {
-                    datum.datum_type == Some(crate::DatumType::Api) &&
-                    datum.provides.as_ref()
-                        .and_then(|p| p.capability.as_ref())
-                        .map(|c| c == capability)
-                        .unwrap_or(false)
+                    datum.datum_type == Some(crate::DatumType::Api)
+                        && datum
+                            .provides
+                            .as_ref()
+                            .and_then(|p| p.capability.as_ref())
+                            .map(|c| c == capability)
+                            .unwrap_or(false)
                 })
                 .collect();
 
             if std::env::var("B00T_DEBUG").is_ok() {
-                eprintln!("   Found {} candidates: {:?}",
+                eprintln!(
+                    "   Found {} candidates: {:?}",
                     candidates.len(),
-                    candidates.iter().map(|(k, _)| k.as_str()).collect::<Vec<_>>());
+                    candidates
+                        .iter()
+                        .map(|(k, _)| k.as_str())
+                        .collect::<Vec<_>>()
+                );
             }
 
             // Sort by preference if specified
             if let Some(prefer) = &requirement.prefer {
                 candidates.sort_by_key(|(key, _)| {
-                    prefer.iter()
+                    prefer
+                        .iter()
                         .position(|p| key.starts_with(p))
                         .unwrap_or(prefer.len())
                 });
@@ -206,14 +228,19 @@ impl Orchestrator {
             if let Some(fallback) = &requirement.fallback {
                 if std::env::var("B00T_DEBUG").is_ok() {
                     eprintln!("   Trying fallback: {}", fallback);
-                    eprintln!("   Available API datums: {:?}",
-                        self.datums.iter()
+                    eprintln!(
+                        "   Available API datums: {:?}",
+                        self.datums
+                            .iter()
                             .filter(|(_, d)| d.datum_type == Some(crate::DatumType::Api))
                             .map(|(k, d)| format!("{}={}", k, d.name))
-                            .collect::<Vec<_>>());
+                            .collect::<Vec<_>>()
+                    );
                 }
 
-                if let Some(api_datum) = self.datums.values()
+                if let Some(api_datum) = self
+                    .datums
+                    .values()
                     .find(|d| d.name == *fallback && d.datum_type == Some(crate::DatumType::Api))
                 {
                     if std::env::var("B00T_DEBUG").is_ok() {
@@ -234,7 +261,10 @@ impl Orchestrator {
     }
 
     /// Ensure API dependencies (infrastructure + recursive API requirements)
-    fn ensure_api_dependencies<'a>(&'a self, api_datum: &'a BootDatum) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<Vec<String>>> + 'a>> {
+    fn ensure_api_dependencies<'a>(
+        &'a self,
+        api_datum: &'a BootDatum,
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<Vec<String>>> + 'a>> {
         Box::pin(async move {
             let mut started = Vec::new();
 
@@ -253,7 +283,8 @@ impl Orchestrator {
                             if std::env::var("B00T_DEBUG").is_ok() {
                                 eprintln!("   Starting: {}", dep_key);
                             }
-                            self.start_service(dep_datum).await
+                            self.start_service(dep_datum)
+                                .await
                                 .context(format!("Failed to start {}", dep_key))?;
                             started.push(dep_key.clone());
                         } else {
@@ -272,15 +303,21 @@ impl Orchestrator {
             // Recursively resolve API requirements (e.g., composite APIs)
             if let Some(requires) = &api_datum.requires {
                 if std::env::var("B00T_DEBUG").is_ok() {
-                    eprintln!("   API capabilities required: {:?}",
-                        requires.iter()
+                    eprintln!(
+                        "   API capabilities required: {:?}",
+                        requires
+                            .iter()
                             .map(|(name, req)| format!("{}={:?}", name, req.capability))
-                            .collect::<Vec<_>>());
+                            .collect::<Vec<_>>()
+                    );
                 }
                 for (req_name, requirement) in requires {
                     if let Some(capability) = &requirement.capability {
                         if std::env::var("B00T_DEBUG").is_ok() {
-                            eprintln!("   Resolving required capability '{}' for requirement '{}'", capability, req_name);
+                            eprintln!(
+                                "   Resolving required capability '{}' for requirement '{}'",
+                                capability, req_name
+                            );
                         }
                         let mut resolved = self.resolve_capability(capability, requirement).await?;
                         started.append(&mut resolved);
@@ -295,9 +332,7 @@ impl Orchestrator {
     /// Check if a service needs to be started
     async fn needs_start(&self, datum: &BootDatum) -> Result<bool> {
         match datum.datum_type.as_ref() {
-            Some(crate::DatumType::Docker) => {
-                Ok(!self.is_docker_running(&datum.name).await?)
-            }
+            Some(crate::DatumType::Docker) => Ok(!self.is_docker_running(&datum.name).await?),
             Some(crate::DatumType::Mcp) => {
                 // MCP servers managed by session, not orchestrator
                 Ok(false)
@@ -312,7 +347,13 @@ impl Orchestrator {
 
         // Use 'docker ps' (only running containers) with exact name match
         let output = Command::new(&runtime)
-            .args(&["ps", "--filter", &format!("name=^{name}$"), "--format", "{{.Names}}"])
+            .args(&[
+                "ps",
+                "--filter",
+                &format!("name=^{name}$"),
+                "--format",
+                "{{.Names}}",
+            ])
             .output()?;
 
         let running = String::from_utf8_lossy(&output.stdout)
@@ -329,25 +370,45 @@ impl Orchestrator {
         // Use 'docker ps -a' (all containers) - check both running and stopped
         // Use explicit delimiter to avoid tab/space issues
         let output = Command::new(&runtime)
-            .args(&["ps", "-a", "--filter", &format!("name={}", name), "--format", "{{.Names}}|||{{.Status}}"])
+            .args(&[
+                "ps",
+                "-a",
+                "--filter",
+                &format!("name={}", name),
+                "--format",
+                "{{.Names}}|||{{.Status}}",
+            ])
             .output()?;
 
         let stdout = String::from_utf8_lossy(&output.stdout);
         if std::env::var("B00T_DEBUG").is_ok() {
-            eprintln!("   docker_container_exists({}) output: {:?}", name, stdout.as_ref());
+            eprintln!(
+                "   docker_container_exists({}) output: {:?}",
+                name,
+                stdout.as_ref()
+            );
         }
 
         for line in stdout.lines() {
             let parts: Vec<&str> = line.split("|||").collect();
             if std::env::var("B00T_DEBUG").is_ok() {
-                eprintln!("     parts: {:?}, len={}, parts[0]='{}', name='{}'", parts, parts.len(), if parts.len() > 0 { parts[0].trim() } else { "" }, name);
+                eprintln!(
+                    "     parts: {:?}, len={}, parts[0]='{}', name='{}'",
+                    parts,
+                    parts.len(),
+                    if parts.len() > 0 { parts[0].trim() } else { "" },
+                    name
+                );
             }
             if parts.len() == 2 && parts[0].trim() == name {
                 // Status starts with "Up" if running, "Exited" if stopped
                 let status = parts[1].trim();
                 let is_running = status.starts_with("Up");
                 if std::env::var("B00T_DEBUG").is_ok() {
-                    eprintln!("   ✓ Found container: status='{}', is_running={}", status, is_running);
+                    eprintln!(
+                        "   ✓ Found container: status='{}', is_running={}",
+                        status, is_running
+                    );
                 }
                 return Ok(Some(is_running));
             }
@@ -362,9 +423,7 @@ impl Orchestrator {
     /// Start a service based on its datum type
     async fn start_service(&self, datum: &BootDatum) -> Result<()> {
         match datum.datum_type.as_ref() {
-            Some(crate::DatumType::Docker) => {
-                self.start_docker_service(datum).await
-            }
+            Some(crate::DatumType::Docker) => self.start_docker_service(datum).await,
             _ => Ok(()), // No-op for other types
         }
     }
@@ -410,7 +469,9 @@ impl Orchestrator {
         }
 
         // Create new container
-        let image = datum.image.as_ref()
+        let image = datum
+            .image
+            .as_ref()
             .ok_or_else(|| anyhow::anyhow!("Docker datum missing image field"))?;
 
         // Build docker run command from datum

@@ -7,12 +7,12 @@
 //! - Skeleton generation (~/.b00t/ directories)
 //! - Toon format reporting
 
-pub mod prereq;
 pub mod installer;
-pub mod skeleton;
+pub mod prereq;
 pub mod report;
+pub mod skeleton;
 
-pub use prereq::{check_prerequisites, PrereqResult};
 pub use installer::{install_missing_required, start_services};
-pub use skeleton::create_skeleton;
+pub use prereq::check_prerequisites;
 pub use report::{generate_toon_report, print_toon_report};
+pub use skeleton::create_skeleton;

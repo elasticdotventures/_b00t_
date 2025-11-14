@@ -1,5 +1,5 @@
 use anyhow::Result;
-use b00t_c0re_lib::{LfmfConfig, LfmfSystem};
+use b00t_c0re_lib::LfmfSystem;
 
 /// Handle b00t advice command - syntax therapist functionality
 /// Uses shared LFMF system from b00t-c0re-lib

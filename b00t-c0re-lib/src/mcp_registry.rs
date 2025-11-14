@@ -452,7 +452,7 @@ impl McpRegistry {
                     if filename.ends_with(".mcp.toml") {
                         match self.sync_datum_file(&path) {
                             Ok(true) => synced_count += 1,
-                            Ok(false) => {}, // Already synced
+                            Ok(false) => {} // Already synced
                             Err(e) => warn!("Failed to sync {}: {}", filename, e),
                         }
                     }
@@ -503,11 +503,13 @@ impl McpRegistry {
         let (command, args) = if let Some(mcp_val) = &datum.mcp {
             if let Some(stdio) = mcp_val.get("stdio").and_then(|v| v.as_array()) {
                 if let Some(method) = stdio.first() {
-                    let cmd = method.get("command")
+                    let cmd = method
+                        .get("command")
                         .and_then(|v| v.as_str())
                         .unwrap_or("npx")
                         .to_string();
-                    let method_args = method.get("args")
+                    let method_args = method
+                        .get("args")
                         .and_then(|v| v.as_array())
                         .map(|arr| {
                             arr.iter()
@@ -517,13 +519,22 @@ impl McpRegistry {
                         .unwrap_or_default();
                     (cmd, method_args)
                 } else {
-                    (datum.command.unwrap_or_else(|| "npx".to_string()), datum.args.unwrap_or_default())
+                    (
+                        datum.command.unwrap_or_else(|| "npx".to_string()),
+                        datum.args.unwrap_or_default(),
+                    )
                 }
             } else {
-                (datum.command.unwrap_or_else(|| "npx".to_string()), datum.args.unwrap_or_default())
+                (
+                    datum.command.unwrap_or_else(|| "npx".to_string()),
+                    datum.args.unwrap_or_default(),
+                )
             }
         } else {
-            (datum.command.unwrap_or_else(|| "npx".to_string()), datum.args.unwrap_or_default())
+            (
+                datum.command.unwrap_or_else(|| "npx".to_string()),
+                datum.args.unwrap_or_default(),
+            )
         };
 
         // Convert depends_on to registry dependencies
@@ -543,7 +554,9 @@ impl McpRegistry {
             homepage: Some("https://github.com/elasticdotventures/dotfiles".to_string()),
             documentation: None,
             license: Some("Apache-2.0".to_string()),
-            tags: datum.keywords.unwrap_or_else(|| vec!["b00t".to_string(), "local".to_string()]),
+            tags: datum
+                .keywords
+                .unwrap_or_else(|| vec!["b00t".to_string(), "local".to_string()]),
             config: McpServerConfig {
                 command,
                 args,
@@ -552,7 +565,9 @@ impl McpRegistry {
                 transport: ServerTransport::Stdio,
             },
             metadata: RegistrationMetadata {
-                registered_at: self.servers.get(&server_id)
+                registered_at: self
+                    .servers
+                    .get(&server_id)
                     .map(|s| s.metadata.registered_at)
                     .unwrap_or_else(Utc::now),
                 updated_at: Utc::now(),
@@ -569,40 +584,47 @@ impl McpRegistry {
     }
 
     /// Convert datum depends_on references to registry dependencies
-    fn convert_datum_deps_to_registry_deps(&self, depends_on: &Option<Vec<String>>) -> Vec<Dependency> {
+    fn convert_datum_deps_to_registry_deps(
+        &self,
+        depends_on: &Option<Vec<String>>,
+    ) -> Vec<Dependency> {
         let Some(deps) = depends_on else {
             return Vec::new();
         };
 
-        deps.iter().filter_map(|dep| {
-            // Parse datum ID format: "name.type" (e.g., "docker.cli", "python.cli")
-            let parts: Vec<&str> = dep.split('.').collect();
-            if parts.len() != 2 {
-                return None;
-            }
+        deps.iter()
+            .filter_map(|dep| {
+                // Parse datum ID format: "name.type" (e.g., "docker.cli", "python.cli")
+                let parts: Vec<&str> = dep.split('.').collect();
+                if parts.len() != 2 {
+                    return None;
+                }
 
-            let (name, datum_type) = (parts[0], parts[1]);
+                let (name, datum_type) = (parts[0], parts[1]);
 
-            // Map datum type to dependency type
-            let dep_type = match (name, datum_type) {
-                ("docker", "cli") | ("docker", "docker") => Some(DependencyType::Docker),
-                ("node", "cli") | ("node", _) => Some(DependencyType::Node),
-                ("npm", "cli") | ("npx", "cli") => Some(DependencyType::Npm),
-                ("python", "cli") | ("python3", "cli") => Some(DependencyType::Python),
-                ("pip", "cli") | ("pip3", "cli") => Some(DependencyType::Pip),
-                ("rust", "cli") | ("rustc", "cli") | ("cargo", "cli") => Some(DependencyType::Rust),
-                ("uvx", "cli") => Some(DependencyType::System("uvx".to_string())),
-                _ if datum_type == "cli" => Some(DependencyType::System(name.to_string())),
-                _ => None,
-            };
+                // Map datum type to dependency type
+                let dep_type = match (name, datum_type) {
+                    ("docker", "cli") | ("docker", "docker") => Some(DependencyType::Docker),
+                    ("node", "cli") | ("node", _) => Some(DependencyType::Node),
+                    ("npm", "cli") | ("npx", "cli") => Some(DependencyType::Npm),
+                    ("python", "cli") | ("python3", "cli") => Some(DependencyType::Python),
+                    ("pip", "cli") | ("pip3", "cli") => Some(DependencyType::Pip),
+                    ("rust", "cli") | ("rustc", "cli") | ("cargo", "cli") => {
+                        Some(DependencyType::Rust)
+                    }
+                    ("uvx", "cli") => Some(DependencyType::System("uvx".to_string())),
+                    _ if datum_type == "cli" => Some(DependencyType::System(name.to_string())),
+                    _ => None,
+                };
 
-            dep_type.map(|dt| Dependency {
-                dep_type: dt,
-                min_version: None,
-                installed: false, // Will be checked later
-                install_method: Some(format!("b00t-cli cli install {}", name)),
+                dep_type.map(|dt| Dependency {
+                    dep_type: dt,
+                    min_version: None,
+                    installed: false, // Will be checked later
+                    install_method: Some(format!("b00t-cli cli install {}", name)),
+                })
             })
-        }).collect()
+            .collect()
     }
 
     /// Install dependencies for an MCP server
