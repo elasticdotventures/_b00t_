@@ -5,6 +5,29 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
 use b00t_cli::{BootDatum, UnifiedConfig};
+use b00t_c0re_lib::lfmf::DatumLookup;
+
+/// Implementation of DatumLookup trait for b00t datums
+/// Enables LFMF system to resolve datum names to categories
+pub struct B00tDatumLookup {
+    b00t_path: String,
+}
+
+impl B00tDatumLookup {
+    pub fn new(b00t_path: String) -> Self {
+        Self { b00t_path }
+    }
+}
+
+impl DatumLookup for B00tDatumLookup {
+    fn find_datum(&self, pattern: &str) -> Option<(String, Option<String>)> {
+        if let Ok(Some(datum)) = find_datum_by_pattern(&self.b00t_path, pattern) {
+            Some((datum.name, datum.lfmf_category))
+        } else {
+            None
+        }
+    }
+}
 
 /// Get all datums from _b00t_ directory
 pub fn get_all_datums(b00t_path: &str) -> Result<HashMap<String, BootDatum>> {
