@@ -180,7 +180,14 @@ commit-hook:
         exit 1
     fi
     cargo fmt
-    cargo set-version --workspace --bump patch
+    CURRENT_VERSION=$(toml get Cargo.toml workspace.package.version | tr -d '"')
+    IFS='.' read -r MAJOR MINOR PATCH <<< "${CURRENT_VERSION}"
+    PATCH=$((PATCH + 1))
+    NEW_VERSION="${MAJOR}.${MINOR}.${PATCH}"
+    TMP_FILE=$(mktemp)
+    toml set Cargo.toml workspace.package.version "${NEW_VERSION}" > "${TMP_FILE}"
+    mv "${TMP_FILE}" Cargo.toml
+    cargo metadata --format-version 1 >/dev/null 2>&1 || true
     git add -u
     VERSION=$(toml get Cargo.toml workspace.package.version | tr -d '"')
     if git diff --cached --quiet; then
