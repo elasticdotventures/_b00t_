@@ -81,7 +81,7 @@ pub fn create_skeleton(config_path: &Path) -> Result<SkeletonResult> {
     let mut errors = Vec::new();
 
     // Process each directory
-    for (name, path_str) in &config.bootstrap.directories {
+    for (_name, path_str) in &config.bootstrap.directories {
         let path = expand_path(path_str);
 
         match create_directory(&path) {

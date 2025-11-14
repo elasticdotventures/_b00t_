@@ -1261,7 +1261,7 @@ async fn main() {
         Some(Commands::Lfmf {
             tool,
             lesson,
-            repo,
+            repo: _,
             global,
         }) => {
             // Validate required fields

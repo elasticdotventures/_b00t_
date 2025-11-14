@@ -1,6 +1,7 @@
 # justfile for Rust Development Environment
 # Alias to get the Git repository root
 repo-root := env_var_or_default("JUST_REPO_ROOT", `git rev-parse --show-toplevel 2>/dev/null || echo .`)
+workspace_version := `toml get Cargo.toml workspace.package.version | tr -d '"'`
 
 
 
@@ -23,7 +24,8 @@ stow:
     stow --adopt -d ~/.dotfiles -t ~ bash
 
 release:
-    gh release create v1.1.0 --title "Release v1.1.0" --notes "Release notes for version 1.1.0"
+    VERSION="{{workspace_version}}"
+    gh release create "v${VERSION}" --title "Release v${VERSION}" --notes "Release notes for version ${VERSION}"
 
     # check for latest release tag of _b00t_ in github using gh cli
     NET_VERSION=$(cd "$HOME/.dotfiles" && gh release view -R elasticdotventures/dotfiles --json tagName | jq -r .tagName)
@@ -34,8 +36,9 @@ release:
 
 install:
     echo "🥾 _b00t_ install"
-    cargo install --path b00t-mcp
-    cargo install --path b00t-cli
+    cargo install --path b00t-mcp --force
+    cargo install --path b00t-cli --force
+    cargo install cocogitto --locked --force
 
 
 installx:
@@ -167,7 +170,24 @@ clean-workflows:
         /repos/elasticdotventures/dotfiles/actions/runs/{}
 
 version:
-    git describe --tags --abbrev=0
+    echo "{{workspace_version}}"
+
+commit-hook:
+    #!/bin/bash
+    set -euo pipefail
+    if ! git diff --quiet || ! git diff --cached --quiet; then
+        echo "⚠️ Worktree must be clean before running commit-hook"
+        exit 1
+    fi
+    cargo fmt
+    cargo set-version --workspace --bump patch
+    git add -u
+    VERSION=$(toml get Cargo.toml workspace.package.version | tr -d '"')
+    if git diff --cached --quiet; then
+        echo "No changes to commit"
+        exit 0
+    fi
+    git commit -m "chore: fmt + version ${VERSION}"
 
 cliff:
     # git-cliff --tag $(git describe --tags --abbrev=0) -o CHANGELOG.md
@@ -293,4 +313,3 @@ port-map:
 
 install-services:
     {{repo-root}}/scripts/install-systemd-services.sh
-

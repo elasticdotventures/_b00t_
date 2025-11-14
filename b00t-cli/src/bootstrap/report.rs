@@ -5,7 +5,7 @@
 //!
 //! See: https://github.com/toon-format/toon
 
-use crate::bootstrap::prereq::{BinaryCheck, PrereqResult};
+use crate::bootstrap::prereq::PrereqResult;
 use crate::bootstrap::skeleton::SkeletonResult;
 use anyhow::{Context, Result};
 use std::fs;
@@ -82,10 +82,15 @@ fn serialize_to_toon(report: &BootstrapReport) -> Result<String> {
             "directories_existed = {}\n",
             skeleton.already_existed.len()
         ));
+        toon.push_str(&format!(
+            "directories_processed = {}\n",
+            skeleton.total_count()
+        ));
         toon.push_str(&format!("directory_errors = {}\n\n", skeleton.errors.len()));
     } else {
         toon.push_str("directories_created = 0\n");
         toon.push_str("directories_existed = 0\n");
+        toon.push_str("directories_processed = 0\n");
         toon.push_str("directory_errors = 0\n\n");
     }
 

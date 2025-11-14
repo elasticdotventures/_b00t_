@@ -140,6 +140,12 @@ impl Orchestrator {
         if let Some(requires) = &datum.requires {
             for (req_name, requirement) in requires {
                 if let Some(capability) = &requirement.capability {
+                    if std::env::var("B00T_DEBUG").is_ok() {
+                        eprintln!(
+                            "🔧 Requirement '{}' resolved via capability '{}'",
+                            req_name, capability
+                        );
+                    }
                     // Resolve capability to concrete API implementations
                     let resolved = self.resolve_capability(capability, requirement).await?;
                     started.extend(resolved);

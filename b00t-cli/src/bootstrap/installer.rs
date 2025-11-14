@@ -2,7 +2,7 @@
 //!
 //! Uses stack datums to self-install missing binaries and services
 
-use crate::bootstrap::prereq::{BinaryCheck, PrereqResult};
+use crate::bootstrap::prereq::PrereqResult;
 use anyhow::{Context, Result};
 use std::process::Command;
 

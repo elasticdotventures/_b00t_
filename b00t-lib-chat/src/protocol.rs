@@ -132,6 +132,11 @@ impl StepBarrier {
         self.current_step
     }
 
+    /// Configured timeout (milliseconds) before forcing a step advance
+    pub fn timeout_ms(&self) -> u64 {
+        self.timeout_ms
+    }
+
     /// Record that an agent completed a step
     pub fn record_step_completion(&mut self, step: u64, agent_id: String) {
         let completions = self.step_completions.entry(step).or_insert_with(Vec::new);
@@ -267,5 +272,11 @@ mod tests {
 
         let pending = barrier.pending_agents(0);
         assert_eq!(pending, vec!["a2"]);
+    }
+
+    #[test]
+    fn test_step_barrier_timeout_tracking() {
+        let barrier = StepBarrier::new(vec!["agent".to_string()], 1500);
+        assert_eq!(barrier.timeout_ms(), 1500);
     }
 }

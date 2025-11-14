@@ -13,6 +13,6 @@ pub mod report;
 pub mod skeleton;
 
 pub use installer::{install_missing_required, start_services};
-pub use prereq::{PrereqResult, check_prerequisites};
+pub use prereq::check_prerequisites;
 pub use report::{generate_toon_report, print_toon_report};
 pub use skeleton::create_skeleton;
