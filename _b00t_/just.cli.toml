@@ -33,18 +33,3 @@ command = "just --list --list-prefix '> '"
 [[b00t.usage]]
 description = "Run recipe with dotenv"
 command = "just --dotenv .env.local deploy"
-
-[[b00t.references]]
-url = "https://github.com/elasticdotventures/just"
-description = "elasticdotventures just fork with enhancements"
-type = "github"
-
-[[b00t.references]]
-url = "https://just.systems/man/en/"
-description = "Official Just Manual"
-type = "docs"
-
-[[b00t.references]]
-url = "https://github.com/casey/just"
-description = "Upstream Just repository"
-type = "github"

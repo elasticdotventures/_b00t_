@@ -22,7 +22,7 @@ pub mod whoami;
 pub use traits::*;
 
 // Learn metadata structures - re-exported from b00t-c0re-lib
-pub use b00t_c0re_lib::{LearnMetadata, Reference, ReferenceType, UsageExample};
+pub use b00t_c0re_lib::{LearnMetadata, UsageExample};
 
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
 pub struct McpServer {
@@ -126,11 +126,6 @@ pub struct BootDatum {
     // Supports: usage = ["cmd  # desc", ...] or [[b00t.usage]] tables
     #[serde(skip_serializing_if = "Option::is_none", deserialize_with = "b00t_c0re_lib::deserialize_usage")]
     pub usage: Option<Vec<UsageExample>>,
-
-    // External references - docs, repos, blogs, tutorials
-    // Supports: references = ["url#desc", ...] or [[b00t.references]] tables
-    #[serde(skip_serializing_if = "Option::is_none", deserialize_with = "b00t_c0re_lib::deserialize_references")]
-    pub references: Option<Vec<Reference>>,
 
     // LFMF category mapping - groups datum lessons under a category
     // Used by `b00t lfmf <category> "<topic>: <solution>"`
@@ -417,7 +412,6 @@ fn create_mcp_datum_from_json(
         requires: None,
     learn: None,
     usage: None,
-    references: None,
     lfmf_category: None,
     }
 }
@@ -515,7 +509,6 @@ pub fn normalize_mcp_json(input: &str, dwiw: bool) -> Result<BootDatum> {
                 requires: None,
             learn: None,
             usage: None,
-            references: None,
             lfmf_category: None,
             });
         }

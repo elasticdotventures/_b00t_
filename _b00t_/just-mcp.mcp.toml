@@ -22,13 +22,3 @@ Just MCP server provides Model Context Protocol integration for justfiles, allow
 [[b00t.usage]]
 description = "Start MCP server in stdio mode"
 command = "just-mcp --stdio"
-
-[[b00t.references]]
-url = "https://github.com/elasticdotventures/just"
-description = "elasticdotventures just fork"
-type = "github"
-
-[[b00t.references]]
-url = "https://modelcontextprotocol.io"
-description = "Model Context Protocol specification"
-type = "docs"
