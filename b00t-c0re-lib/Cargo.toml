@@ -52,5 +52,6 @@ tracing.workspace = true
 lazy_static = "1.5.0"
 
 [dev-dependencies]
-tempfile = "3.0"
+tempfile = "3.10"
 tokio-test = "0.4"
+

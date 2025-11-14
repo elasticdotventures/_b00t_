@@ -13,6 +13,10 @@ pub async fn handle_advice(
     let config = LfmfSystem::load_config(path)?;
     let mut lfmf_system = LfmfSystem::new(config);
 
+    // Set datum lookup for category resolution
+    let lookup = crate::datum_utils::B00tDatumLookup::new(path.to_string());
+    lfmf_system.set_datum_lookup(lookup);
+
     // Try to initialize vector database (non-fatal if fails)
     if let Err(e) = lfmf_system.initialize().await {
         println!(
