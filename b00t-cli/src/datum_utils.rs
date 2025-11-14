@@ -329,4 +329,62 @@ type = "github"
         assert_eq!(refs[0].url, "https://just.systems");
         assert_eq!(refs[1].ref_type, b00t_cli::ReferenceType::GitHub);
     }
+
+    #[test]
+    fn test_datum_with_concise_format() {
+        let temp_dir = TempDir::new().unwrap();
+        let b00t_path = temp_dir.path().to_str().unwrap();
+
+        create_test_datum_file(
+            temp_dir.path(),
+            "rust.cli.toml",
+            r#"
+[b00t]
+name = "rustc"
+type = "cli"
+hint = "Rust compiler"
+
+# Concise format - single line per item
+usage = [
+  "rustc --version  # Check version",
+  "cargo build  # Build project"
+]
+
+references = [
+  "https://github.com/rust-lang/rust#official-repo",
+  "https://doc.rust-lang.org/book/",
+  "https://stackoverflow.com/questions/tagged/rust"
+]
+"#,
+        );
+
+        let datum = find_datum_by_pattern(b00t_path, "rustc").unwrap().unwrap();
+
+        // Test concise usage format
+        assert!(datum.usage.is_some());
+        let usage = datum.usage.unwrap();
+        assert_eq!(usage.len(), 2);
+        assert_eq!(usage[0].command, "rustc --version");
+        assert_eq!(usage[0].description, "Check version");
+        assert_eq!(usage[1].command, "cargo build");
+        assert_eq!(usage[1].description, "Build project");
+
+        // Test concise references format
+        assert!(datum.references.is_some());
+        let refs = datum.references.unwrap();
+        assert_eq!(refs.len(), 3);
+
+        // First ref with fragment
+        assert_eq!(refs[0].url, "https://github.com/rust-lang/rust");
+        assert_eq!(refs[0].description, "official repo");
+        assert_eq!(refs[0].ref_type, b00t_cli::ReferenceType::GitHub);
+
+        // Second ref auto-detected as docs
+        assert_eq!(refs[1].url, "https://doc.rust-lang.org/book/");
+        assert_eq!(refs[1].ref_type, b00t_cli::ReferenceType::Docs);
+
+        // Third ref auto-detected as stackoverflow
+        assert_eq!(refs[2].url, "https://stackoverflow.com/questions/tagged/rust");
+        assert_eq!(refs[2].ref_type, b00t_cli::ReferenceType::StackOverflow);
+    }
 }

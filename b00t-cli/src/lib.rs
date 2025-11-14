@@ -131,7 +131,11 @@ pub struct BootDatum {
     pub usage: Option<Vec<UsageExample>>,
 
     // External references - docs, repos, blogs, tutorials
-    #[serde(skip_serializing_if = "Option::is_none")]
+    // Supports: references = ["url#desc", ...] or [[b00t.references]] tables
+    #[serde(
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "b00t_c0re_lib::deserialize_references"
+    )]
     pub references: Option<Vec<Reference>>,
     // LFMF category mapping - groups datum lessons under a category
     // Used by `b00t lfmf <category> "<topic>: <solution>"`
@@ -416,13 +420,10 @@ fn create_mcp_datum_from_json(
         implements: None,
         provides: None,
         requires: None,
-    learn: None,
-    usage: None,
-<<<<<<< HEAD
-=======
-    references: None,
->>>>>>> e917c92 (feat(datum): implement unified datum schema with learn, usage, and references)
-    lfmf_category: None,
+        learn: None,
+        usage: None,
+        references: None,
+        lfmf_category: None,
     }
 }
 
@@ -517,13 +518,10 @@ pub fn normalize_mcp_json(input: &str, dwiw: bool) -> Result<BootDatum> {
                 implements: None,
                 provides: None,
                 requires: None,
-            learn: None,
-            usage: None,
-<<<<<<< HEAD
-=======
-            references: None,
->>>>>>> e917c92 (feat(datum): implement unified datum schema with learn, usage, and references)
-            lfmf_category: None,
+                learn: None,
+                usage: None,
+                references: None,
+                lfmf_category: None,
             });
         }
 

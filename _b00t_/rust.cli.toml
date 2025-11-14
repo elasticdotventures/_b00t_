@@ -1,0 +1,27 @@
+[b00t]
+name = "rustc"
+type = "cli"
+desires = "1.82.0"
+hint = "Rust compiler and toolchain"
+lfmf_category = "rust"
+
+[b00t.learn]
+topic = "rust"
+auto_digest = true
+
+# Concise format: command  # description
+usage = [
+  "rustc --version  # Check Rust version",
+  "cargo build  # Build project",
+  "cargo test  # Run tests",
+  "cargo clippy  # Lint code"
+]
+
+# Concise format: url#fragment-description
+# Type auto-detected from domain
+references = [
+  "https://github.com/rust-lang/rust#official-repo",
+  "https://doc.rust-lang.org/book/#the-book",
+  "https://doc.rust-lang.org/std/#standard-library",
+  "https://github.com/rust-lang/rustlings#interactive-exercises"
+]
