@@ -265,6 +265,7 @@ mod tests {
             requires: None,
             learn: None,
             usage: None,
+            references: None,
             lfmf_category: None,
         }
     }
@@ -308,6 +309,7 @@ mod tests {
             requires: None,
             learn: None,
             usage: None,
+            references: None,
             lfmf_category: None,
         }
     }
