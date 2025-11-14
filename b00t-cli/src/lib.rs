@@ -21,6 +21,9 @@ pub mod utils;
 pub mod whoami;
 pub use traits::*;
 
+// Learn metadata structures - re-exported from b00t-c0re-lib
+pub use b00t_c0re_lib::{LearnMetadata, UsageExample};
+
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
 pub struct McpServer {
     pub name: String,
@@ -114,6 +117,20 @@ pub struct BootDatum {
 
     #[serde(skip_serializing_if = "Option::is_none")]
     pub requires: Option<std::collections::HashMap<String, CapabilityRequirement>>, // Required capabilities
+
+    // Learn integration - links datum to learning materials and auto-digest to grok
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub learn: Option<LearnMetadata>,
+
+    // Usage examples - CLI/API usage patterns
+    // Supports: usage = ["cmd  # desc", ...] or [[b00t.usage]] tables
+    #[serde(skip_serializing_if = "Option::is_none", deserialize_with = "b00t_c0re_lib::deserialize_usage")]
+    pub usage: Option<Vec<UsageExample>>,
+
+    // LFMF category mapping - groups datum lessons under a category
+    // Used by `b00t lfmf <category> "<topic>: <solution>"`
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub lfmf_category: Option<String>,
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
@@ -393,6 +410,9 @@ fn create_mcp_datum_from_json(
         implements: None,
         provides: None,
         requires: None,
+    learn: None,
+    usage: None,
+    lfmf_category: None,
     }
 }
 
@@ -487,6 +507,9 @@ pub fn normalize_mcp_json(input: &str, dwiw: bool) -> Result<BootDatum> {
                 implements: None,
                 provides: None,
                 requires: None,
+            learn: None,
+            usage: None,
+            lfmf_category: None,
             });
         }
 

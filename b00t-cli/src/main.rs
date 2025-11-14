@@ -19,6 +19,7 @@ mod datum_cli;
 mod datum_docker;
 mod datum_gemini;
 mod datum_mcp;
+mod datum_utils;
 mod datum_vscode;
 mod session_memory;
 mod test_cloud_integration;
@@ -38,7 +39,7 @@ use traits::*;
 
 use crate::commands::learn::handle_learn;
 use crate::commands::{
-    AiCommands, AppCommands, BootstrapCommands, ChatCommands, CliCommands, GrokCommands,
+    AiCommands, AppCommands, BootstrapCommands, ChatCommands, CliCommands, DatumCommands, GrokCommands,
     InitCommands, K8sCommands, McpCommands, SessionCommands, StackCommands, WhatismyCommands,
 };
 
@@ -265,6 +266,11 @@ The system will:
 
         #[clap(long = "topic", help = "Topic to learn about (MCP compatibility)")]
         topic_flag: Option<String>, // 🦨 MCP compatibility: accept --topic flag
+    },
+    #[clap(about = "Datum management and inspection")]
+    Datum {
+        #[clap(subcommand)]
+        datum_command: DatumCommands,
     },
     #[clap(about = "Grok knowledgebase RAG system")]
     Grok {
@@ -1237,6 +1243,13 @@ async fn main() {
             // 🦨 MCP compatibility: merge positional and flag arguments
             let effective_topic = topic.as_ref().or(topic_flag.as_ref());
             if let Err(e) = handle_learn(&cli.path, effective_topic.map(|s| s.as_str())) {
+                eprintln!("Error: {}", e);
+                std::process::exit(1);
+            }
+        }
+        Some(Commands::Datum { datum_command }) => {
+            use crate::commands::datum::handle_datum_command;
+            if let Err(e) = handle_datum_command(&cli.path, datum_command) {
                 eprintln!("Error: {}", e);
                 std::process::exit(1);
             }

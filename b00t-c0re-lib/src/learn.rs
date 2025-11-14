@@ -151,3 +151,4 @@ fn expand_path(path: &str) -> PathBuf {
 struct LearnConfig {
     topics: HashMap<String, String>,
 }
+
