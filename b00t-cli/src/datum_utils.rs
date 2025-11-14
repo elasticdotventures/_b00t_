@@ -68,20 +68,16 @@ pub fn get_all_datums(b00t_path: &str) -> Result<HashMap<String, BootDatum>> {
 pub fn find_datum_by_pattern(b00t_path: &str, pattern: &str) -> Result<Option<BootDatum>> {
     let datums = get_all_datums(b00t_path)?;
 
-    // Exact match first
+    // Exact match first (key lookup)
     if let Some(datum) = datums.get(pattern) {
         return Ok(Some(datum.clone()));
     }
 
-    // Try name match
+    // Try name or lfmf_category match in single pass
     for (_, datum) in datums.iter() {
         if datum.name == pattern {
             return Ok(Some(datum.clone()));
         }
-    }
-
-    // Try lfmf_category match
-    for (_, datum) in datums.iter() {
         if let Some(category) = &datum.lfmf_category {
             if category == pattern {
                 return Ok(Some(datum.clone()));
