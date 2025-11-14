@@ -39,6 +39,7 @@ install:
     cargo install --path b00t-mcp --force
     cargo install --path b00t-cli --force
     cargo install cocogitto --locked --force
+    just install-commit-hook
 
 
 installx:
@@ -175,8 +176,8 @@ version:
 commit-hook:
     #!/bin/bash
     set -euo pipefail
-    if ! git diff --quiet || ! git diff --cached --quiet; then
-        echo "⚠️ Worktree must be clean before running commit-hook"
+    if ! git diff --quiet; then
+        echo "⚠️ Unstaged changes detected; please stash or stage before running commit-hook"
         exit 1
     fi
     cargo fmt
@@ -191,10 +192,27 @@ commit-hook:
     git add -u
     VERSION=$(toml get Cargo.toml workspace.package.version | tr -d '"')
     if git diff --cached --quiet; then
-        echo "No changes to commit"
-        exit 0
+        echo "No staged changes after running commit-hook"
+    else
+        echo "✅ Staged fmt + version bump (v${VERSION}); continue with your commit."
     fi
-    git commit -m "chore: fmt + version ${VERSION}"
+
+install-commit-hook:
+    #!/bin/bash
+    set -euo pipefail
+    HOOK_PATH=".git/hooks/pre-commit"
+    {
+        echo "#!/usr/bin/env bash"
+        echo "set -euo pipefail"
+        echo "if command -v just >/dev/null 2>&1; then"
+        echo "    just commit-hook"
+        echo "else"
+        echo "    echo \"just is required to run commit-hook\" >&2"
+        echo "    exit 1"
+        echo "fi"
+    } > "${HOOK_PATH}"
+    chmod +x "${HOOK_PATH}"
+    echo "✅ Installed .git/hooks/pre-commit to run 'just commit-hook'"
 
 cliff:
     # git-cliff --tag $(git describe --tags --abbrev=0) -o CHANGELOG.md
