@@ -26,7 +26,7 @@ mod integration {
         // 3. Learn from structured content
         // 4. Query the knowledgebase
         // 5. Validate results
-        
+
         // TODO: Implement when b00t-grok exports proper Rust API
         println!("⚠️ Integration test placeholder - requires compiled module");
         Ok(())

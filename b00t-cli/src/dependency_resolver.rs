@@ -1,6 +1,6 @@
-use anyhow::{bail, Result};
-use std::collections::{HashMap, HashSet};
 use crate::BootDatum;
+use anyhow::{Result, bail};
+use std::collections::{HashMap, HashSet};
 
 /// Dependency resolver with topological sort and cycle detection
 pub struct DependencyResolver<'a> {
@@ -13,7 +13,9 @@ impl<'a> DependencyResolver<'a> {
         let mut datum_map = HashMap::new();
         for datum in datums {
             // Key format: "name.type" (e.g., "docker.cli", "postgres.docker")
-            let type_str = datum.datum_type.as_ref()
+            let type_str = datum
+                .datum_type
+                .as_ref()
                 .map(|t| format!("{:?}", t).to_lowercase())
                 .unwrap_or_else(|| "unknown".to_string());
             let key = format!("{}.{}", datum.name, type_str);
@@ -53,7 +55,9 @@ impl<'a> DependencyResolver<'a> {
         }
 
         // Get datum from map
-        let datum = self.datums.get(datum_key)
+        let datum = self
+            .datums
+            .get(datum_key)
             .ok_or_else(|| anyhow::anyhow!("Datum not found: {}", datum_key))?;
 
         visiting.insert(datum_key.to_string());
@@ -94,7 +98,10 @@ impl<'a> DependencyResolver<'a> {
     /// Check if datum has any dependencies (direct or transitive)
     pub fn has_dependencies(&self, datum_key: &str) -> bool {
         if let Some(datum) = self.datums.get(datum_key) {
-            datum.depends_on.as_ref().map_or(false, |deps| !deps.is_empty())
+            datum
+                .depends_on
+                .as_ref()
+                .map_or(false, |deps| !deps.is_empty())
         } else {
             false
         }
@@ -102,7 +109,8 @@ impl<'a> DependencyResolver<'a> {
 
     /// Get direct dependencies of a datum
     pub fn get_direct_dependencies(&self, datum_key: &str) -> Vec<String> {
-        self.datums.get(datum_key)
+        self.datums
+            .get(datum_key)
             .and_then(|d| d.depends_on.as_ref())
             .map(|deps| deps.clone())
             .unwrap_or_default()
@@ -153,7 +161,9 @@ impl<'a> DependencyResolver<'a> {
         let mut graph = HashMap::new();
 
         for (key, datum) in &self.datums {
-            let deps = datum.depends_on.as_ref()
+            let deps = datum
+                .depends_on
+                .as_ref()
                 .map(|d| d.clone())
                 .unwrap_or_default();
             graph.insert(key.clone(), deps);
@@ -240,7 +250,11 @@ mod tests {
         let datum_a = create_test_datum("a", "cli", None);
         let datum_b = create_test_datum("b", "cli", Some(vec!["a.cli".to_string()]));
         let datum_c = create_test_datum("c", "cli", Some(vec!["a.cli".to_string()]));
-        let datum_d = create_test_datum("d", "cli", Some(vec!["b.cli".to_string(), "c.cli".to_string()]));
+        let datum_d = create_test_datum(
+            "d",
+            "cli",
+            Some(vec!["b.cli".to_string(), "c.cli".to_string()]),
+        );
 
         let resolver = DependencyResolver::new(vec![&datum_a, &datum_b, &datum_c, &datum_d]);
 
@@ -261,7 +275,12 @@ mod tests {
 
         let result = resolver.resolve("a.cli");
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("Circular dependency"));
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("Circular dependency")
+        );
     }
 
     #[test]
@@ -273,7 +292,12 @@ mod tests {
 
         let result = resolver.resolve("a.cli");
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("Circular dependency"));
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("Circular dependency")
+        );
     }
 
     #[test]
@@ -295,7 +319,9 @@ mod tests {
 
         let resolver = DependencyResolver::new(vec![&datum_a, &datum_b, &datum_c]);
 
-        let result = resolver.resolve_many(&["b.cli".to_string(), "c.cli".to_string()]).unwrap();
+        let result = resolver
+            .resolve_many(&["b.cli".to_string(), "c.cli".to_string()])
+            .unwrap();
 
         // a.cli should appear only once, followed by b and c
         assert_eq!(result.len(), 3);

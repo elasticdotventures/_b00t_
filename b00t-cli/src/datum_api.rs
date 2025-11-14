@@ -1,7 +1,6 @@
 use crate::traits::*;
-use crate::{ApiProvides, BootDatum, CapabilityRequirement, get_expanded_path};
+use crate::{BootDatum, get_expanded_path};
 use anyhow::Result;
-use std::collections::HashMap;
 
 pub struct ApiDatum {
     pub datum: BootDatum,
@@ -19,9 +18,7 @@ impl ApiDatum {
         let content = std::fs::read_to_string(&path_buf)?;
         let config: crate::UnifiedConfig = toml::from_str(&content)?;
 
-        Ok(ApiDatum {
-            datum: config.b00t,
-        })
+        Ok(ApiDatum { datum: config.b00t })
     }
 
     /// Check if this API is available (reachable)

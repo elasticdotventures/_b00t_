@@ -1,8 +1,8 @@
+use crate::dependency_resolver::DependencyResolver;
+use crate::{BootDatum, DatumType};
 use anyhow::{Context, Result, bail};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-use crate::{BootDatum, DatumType, UnifiedConfig};
-use crate::dependency_resolver::DependencyResolver;
 
 /// Stack operations for managing multi-component software stacks
 pub struct StackDatum {
@@ -23,8 +23,11 @@ impl StackDatum {
 
         // Validate this is actually a stack datum
         if datum.datum_type != Some(DatumType::Stack) {
-            bail!("File {} is not a stack datum (type: {:?})",
-                  path.display(), datum.datum_type);
+            bail!(
+                "File {} is not a stack datum (type: {:?})",
+                path.display(),
+                datum.datum_type
+            );
         }
 
         // Validate members field exists
@@ -44,7 +47,10 @@ impl StackDatum {
     }
 
     /// Validate that all stack members exist and are accessible
-    pub fn validate_members(&self, available_datums: &HashMap<String, BootDatum>) -> Result<Vec<String>> {
+    pub fn validate_members(
+        &self,
+        available_datums: &HashMap<String, BootDatum>,
+    ) -> Result<Vec<String>> {
         let mut errors = Vec::new();
 
         for member_id in self.get_members() {
@@ -63,7 +69,7 @@ impl StackDatum {
     /// Returns installation order including transitive dependencies
     pub fn resolve_dependencies<'a>(
         &self,
-        available_datums: &'a HashMap<String, &'a BootDatum>
+        available_datums: &'a HashMap<String, &'a BootDatum>,
     ) -> Result<Vec<String>> {
         let resolver = DependencyResolver::new(available_datums.values().copied().collect());
 
@@ -75,11 +81,15 @@ impl StackDatum {
     }
 
     /// Generate docker-compose.yml for Docker-based stacks
-    pub fn generate_docker_compose(&self, available_datums: &HashMap<String, BootDatum>) -> Result<String> {
+    pub fn generate_docker_compose(
+        &self,
+        available_datums: &HashMap<String, BootDatum>,
+    ) -> Result<String> {
         let mut services = Vec::new();
 
         for member_id in self.get_members() {
-            let datum = available_datums.get(&member_id)
+            let datum = available_datums
+                .get(&member_id)
                 .context(format!("Member {} not found", member_id))?;
 
             // Only process Docker datums
@@ -88,7 +98,9 @@ impl StackDatum {
             }
 
             let service_name = datum.name.clone();
-            let image = datum.image.as_ref()
+            let image = datum
+                .image
+                .as_ref()
                 .context(format!("Docker datum {} has no image", member_id))?;
 
             // Build service definition
@@ -204,9 +216,7 @@ impl StackDatum {
         let members_count = self.get_members().len();
         format!(
             "{} ({} members): {}",
-            self.datum.name,
-            members_count,
-            self.datum.hint
+            self.datum.name, members_count, self.datum.hint
         )
     }
 }
@@ -231,10 +241,7 @@ mod tests {
             vsix_id: None,
             script: None,
             image: Some(image.to_string()),
-            docker_args: Some(vec![
-                "-p".to_string(),
-                "5432:5432".to_string(),
-            ]),
+            docker_args: Some(vec!["-p".to_string(), "5432:5432".to_string()]),
             oci_uri: None,
             resource_path: None,
             chart_path: None,
@@ -301,10 +308,10 @@ mod tests {
 
     #[test]
     fn test_get_members() {
-        let stack = create_test_stack("test-stack", vec![
-            "postgres.docker".to_string(),
-            "redis.docker".to_string(),
-        ]);
+        let stack = create_test_stack(
+            "test-stack",
+            vec!["postgres.docker".to_string(), "redis.docker".to_string()],
+        );
 
         let stack_datum = StackDatum {
             datum: stack,
@@ -319,10 +326,10 @@ mod tests {
 
     #[test]
     fn test_validate_members() {
-        let stack = create_test_stack("test-stack", vec![
-            "postgres.docker".to_string(),
-            "missing.docker".to_string(),
-        ]);
+        let stack = create_test_stack(
+            "test-stack",
+            vec!["postgres.docker".to_string(), "missing.docker".to_string()],
+        );
 
         let stack_datum = StackDatum {
             datum: stack,
@@ -342,9 +349,7 @@ mod tests {
 
     #[test]
     fn test_generate_docker_compose() {
-        let stack = create_test_stack("test-stack", vec![
-            "postgres.docker".to_string(),
-        ]);
+        let stack = create_test_stack("test-stack", vec!["postgres.docker".to_string()]);
 
         let stack_datum = StackDatum {
             datum: stack,

@@ -73,8 +73,8 @@ pub fn create_skeleton(config_path: &Path) -> Result<SkeletonResult> {
     let content = std::fs::read_to_string(config_path)
         .with_context(|| format!("Failed to read {}", config_path.display()))?;
 
-    let config: BootstrapConfig = toml::from_str(&content)
-        .context("Failed to parse bootstrap.toml")?;
+    let config: BootstrapConfig =
+        toml::from_str(&content).context("Failed to parse bootstrap.toml")?;
 
     let mut created = Vec::new();
     let mut already_existed = Vec::new();

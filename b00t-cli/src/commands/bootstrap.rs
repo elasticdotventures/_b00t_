@@ -5,11 +5,11 @@
 //! - Create directory skeleton (~/.b00t/*)
 //! - Generate Toon format report
 
-use crate::bootstrap::{
-    check_prerequisites, create_skeleton, generate_toon_report, print_toon_report,
-    install_missing_required, start_services,
-};
 use crate::bootstrap::report::BootstrapReport;
+use crate::bootstrap::{
+    check_prerequisites, create_skeleton, generate_toon_report, install_missing_required,
+    print_toon_report, start_services,
+};
 use anyhow::{Context, Result};
 use chrono::Utc;
 use clap::Parser;
@@ -51,9 +51,13 @@ pub enum BootstrapCommands {
 /// Handle bootstrap commands
 pub async fn handle_bootstrap_command(cmd: BootstrapCommands) -> Result<()> {
     match cmd {
-        BootstrapCommands::Run { skip_dirs, skip_install, skip_services, output, print } => {
-            run_bootstrap(skip_dirs, skip_install, skip_services, output, print).await
-        }
+        BootstrapCommands::Run {
+            skip_dirs,
+            skip_install,
+            skip_services,
+            output,
+            print,
+        } => run_bootstrap(skip_dirs, skip_install, skip_services, output, print).await,
         BootstrapCommands::Check => check_only().await,
         BootstrapCommands::Skeleton => skeleton_only().await,
     }
@@ -80,14 +84,15 @@ async fn run_bootstrap(
 
     // Check prerequisites
     println!("📋 Checking prerequisites...");
-    let mut prereq_result = check_prerequisites(&config_path)
-        .context("Failed to check prerequisites")?;
+    let mut prereq_result =
+        check_prerequisites(&config_path).context("Failed to check prerequisites")?;
 
     // Auto-install missing binaries (unless skipped)
     if !skip_install && !prereq_result.all_required_met {
         println!();
         println!("🔧 Auto-installing missing dependencies...");
-        let installed = install_missing_required(&prereq_result).await
+        let installed = install_missing_required(&prereq_result)
+            .await
             .context("Failed to auto-install dependencies")?;
 
         if !installed.is_empty() {
@@ -102,8 +107,7 @@ async fn run_bootstrap(
     if !skip_services {
         println!();
         println!("🚀 Starting services...");
-        let started = start_services().await
-            .context("Failed to start services")?;
+        let started = start_services().await.context("Failed to start services")?;
 
         if !started.is_empty() {
             println!("✅ Started: {}", started.join(", "));
@@ -118,8 +122,7 @@ async fn run_bootstrap(
         None
     } else {
         println!("📁 Creating directory skeleton...");
-        Some(create_skeleton(&config_path)
-            .context("Failed to create directory skeleton")?)
+        Some(create_skeleton(&config_path).context("Failed to create directory skeleton")?)
     };
 
     // Generate report
@@ -134,12 +137,9 @@ async fn run_bootstrap(
         print_toon_report(&report);
     } else {
         // Write to file
-        let output_path = output.unwrap_or_else(|| {
-            PathBuf::from("~/.b00t/bootstrap-report.toon")
-        });
+        let output_path = output.unwrap_or_else(|| PathBuf::from("~/.b00t/bootstrap-report.toon"));
 
-        generate_toon_report(&report, &output_path)
-            .context("Failed to generate Toon report")?;
+        generate_toon_report(&report, &output_path).context("Failed to generate Toon report")?;
 
         println!();
         print_toon_report(&report);
@@ -160,10 +160,7 @@ async fn run_bootstrap(
 async fn check_only() -> Result<()> {
     let config_path = PathBuf::from("_b00t_/bootstrap.toml");
     if !config_path.exists() {
-        anyhow::bail!(
-            "Bootstrap config not found: {}",
-            config_path.display()
-        );
+        anyhow::bail!("Bootstrap config not found: {}", config_path.display());
     }
 
     println!("📋 Checking prerequisites...");
@@ -187,10 +184,7 @@ async fn check_only() -> Result<()> {
 async fn skeleton_only() -> Result<()> {
     let config_path = PathBuf::from("_b00t_/bootstrap.toml");
     if !config_path.exists() {
-        anyhow::bail!(
-            "Bootstrap config not found: {}",
-            config_path.display()
-        );
+        anyhow::bail!("Bootstrap config not found: {}", config_path.display());
     }
 
     println!("📁 Creating directory skeleton...");
@@ -198,7 +192,10 @@ async fn skeleton_only() -> Result<()> {
 
     if skeleton_result.is_success() {
         println!("✅ Created {} directories", skeleton_result.created.len());
-        println!("ℹ️  {} directories already existed", skeleton_result.already_existed.len());
+        println!(
+            "ℹ️  {} directories already existed",
+            skeleton_result.already_existed.len()
+        );
 
         for dir in &skeleton_result.created {
             println!("  ✨ {}", dir.display());
