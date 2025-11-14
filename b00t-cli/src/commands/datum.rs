@@ -81,6 +81,16 @@ fn handle_show(b00t_path: &str, datum_name: &str) -> Result<()> {
         }
     }
 
+    // References
+    if let Some(refs) = &datum.references {
+        println!("## References");
+        println!();
+        for ref_item in refs {
+            println!("- **{:?}:** [{}]({})", ref_item.ref_type, ref_item.description, ref_item.url);
+        }
+        println!();
+    }
+
     // Dependencies
     if let Some(deps) = &datum.depends_on {
         println!("## Dependencies");

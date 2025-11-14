@@ -1,5 +1,5 @@
 //! Datum types for enhanced b00t schema
-//! These types extend BootDatum with learn and usage metadata
+//! These types extend BootDatum with learn, usage, and reference metadata
 
 use serde::{Deserialize, Deserializer, Serialize};
 
@@ -49,7 +49,7 @@ impl UsageExample {
     }
 }
 
-/// Custom deserializer for usage examples
+/// Custom deserializer for usage examples that supports both concise and verbose TOML formats
 pub fn deserialize_usage<'de, D>(deserializer: D) -> Result<Option<Vec<UsageExample>>, D::Error>
 where
     D: Deserializer<'de>,
@@ -68,6 +68,27 @@ where
         }
         Some(UsageFormat::Structured(examples)) => Ok(Some(examples)),
     }
+}
+
+/// External reference metadata such as docs, repos, blogs, or tutorials
+#[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
+pub struct Reference {
+    pub url: String,
+    pub description: String,
+    #[serde(rename = "type")]
+    pub ref_type: ReferenceType,
+}
+
+/// Reference types for external links
+#[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
+#[serde(rename_all = "lowercase")]
+pub enum ReferenceType {
+    Docs,
+    GitHub,
+    Blog,
+    Tutorial,
+    StackOverflow,
+    Community,
 }
 
 #[cfg(test)]

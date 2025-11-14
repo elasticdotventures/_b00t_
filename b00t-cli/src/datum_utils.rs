@@ -295,4 +295,38 @@ output = "Building..."
         assert_eq!(usage[0].command, "just -l");
         assert_eq!(usage[1].output, Some("Building...".to_string()));
     }
+
+    #[test]
+    fn test_datum_with_references() {
+        let temp_dir = TempDir::new().unwrap();
+        let b00t_path = temp_dir.path().to_str().unwrap();
+
+        create_test_datum_file(
+            temp_dir.path(),
+            "just.cli.toml",
+            r#"
+[b00t]
+name = "just"
+type = "cli"
+hint = "Command runner"
+
+[[b00t.references]]
+url = "https://just.systems"
+description = "Official docs"
+type = "docs"
+
+[[b00t.references]]
+url = "https://github.com/casey/just"
+description = "GitHub repo"
+type = "github"
+"#,
+        );
+
+        let datum = find_datum_by_pattern(b00t_path, "just").unwrap().unwrap();
+        assert!(datum.references.is_some());
+        let refs = datum.references.unwrap();
+        assert_eq!(refs.len(), 2);
+        assert_eq!(refs[0].url, "https://just.systems");
+        assert_eq!(refs[1].ref_type, b00t_cli::ReferenceType::GitHub);
+    }
 }

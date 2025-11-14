@@ -48,7 +48,9 @@ pub mod utils;
 pub use ai_client::{AiClientConfig, AiProviderConfig, B00tAiClient, ChatMessage};
 pub use b00t_config::{AiConfiguration, B00tUnifiedConfig, CloudServicesConfig, UserConfig};
 pub use context::B00tContext;
-pub use datum_types::{deserialize_usage, LearnMetadata, UsageExample};
+pub use datum_types::{
+    deserialize_usage, LearnMetadata, Reference, ReferenceType, UsageExample,
+};
 pub use grok::{AskResult, ChunkResult, ChunkSummary, DigestResult, GrokClient, LearnResult};
 pub use lfmf::{Lesson, LfmfConfig, LfmfSystem};
 pub use mcp_proxy::{GenericMcpProxy, McpToolDefinition, McpToolRequest, McpToolResponse};
