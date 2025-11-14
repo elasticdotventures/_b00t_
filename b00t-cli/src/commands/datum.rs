@@ -19,7 +19,7 @@ pub fn handle_datum_command(path: &str, datum_command: &DatumCommands) -> Result
 
 fn handle_show(b00t_path: &str, datum_name: &str) -> Result<()> {
     // Find the datum
-    let datum = learn::find_datum_by_pattern(b00t_path, datum_name)?
+    let datum = datum_utils::find_datum_by_pattern(b00t_path, datum_name)?
         .ok_or_else(|| anyhow::anyhow!("Datum '{}' not found", datum_name))?;
 
     println!("# Datum: {}", datum.name);
