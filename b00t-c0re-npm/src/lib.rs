@@ -21,7 +21,10 @@ pub fn b00t_version() -> String {
 /// Core b00t greeting - stay aligned!
 #[wasm_bindgen]
 pub fn b00t_greet(name: &str) -> String {
-    format!("🥾 Hello {}, welcome to b00t! Stay aligned, get cake! 🎂", name)
+    format!(
+        "🥾 Hello {}, welcome to b00t! Stay aligned, get cake! 🎂",
+        name
+    )
 }
 
 /// Check if a command looks like a slash command

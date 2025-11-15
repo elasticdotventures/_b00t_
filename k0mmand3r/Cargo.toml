@@ -1,6 +1,6 @@
 [package]
 name = "k0mmand3r"
-version = "0.1.5"
+version.workspace = true
 edition = "2021"
 authors = [ "Brian H. <brianh@elastic.ventures>" ]
 license = "MIT"
