@@ -85,86 +85,6 @@ Example:
         #[clap(help = "Text to tokenize")]
         text: String,
     },
-    #[clap(
-        about = "Record a lesson learned for a tool",
-        long_about = r#"
-lfmf is a dynamic, opinionated man-page for any tool with a b00t datum (TOML, learn/ dir, etc).
-It memoizes operator-informed tips, tricks, and anti-patterns—never repo-specific, always tool wisdom.
-Each entry is a <25 token topic and <250 token body, written in a positive, laconic, affirmative style.
-Use lfmf to help the hive avoid repeating mistakes and accelerate mastery.
-Good entries separate neophyte from master. Bad entries are vague, negative, or repo-specific.
-
-Usage:
-  b00t-cli lfmf <tool> "<topic>: <body>"
-
-Examples:
-  # Good
-  b00t-cli lfmf just "modules & workdir: Use modules and workdir to avoid cd; keeps recipes portable and context-safe."
-  b00t-cli lfmf docker "container cleanup: Use 'docker system prune' regularly to avoid disk bloat."
-  b00t-cli lfmf git "atomic commits: Commit small, focused changes for easier review and rollback."
-
-  # Bad
-  b00t-cli lfmf just "cd: I always use cd in my recipes."
-  b00t-cli lfmf docker "disk full: My disk filled up once."
-  b00t-cli lfmf git "fix: Fixed a bug in my repo."
-
-Tips:
-- Topic: <25 tokens, concise, positive, tool-focused.
-- Body: <250 tokens, actionable, never repo-specific.
-- Affirmative: 'Do X for Y benefit', not 'Don't do X'.
-- Suitable tools: any with a b00t datum (TOML, learn/ dir, etc).
-"#
-    )]
-    Lfmf {
-        #[clap(long, help = "Tool name")]
-        tool: Option<String>,
-        #[clap(long, help = "Lesson in '<topic>: <body>' format")]
-        lesson: Option<String>,
-        #[clap(long, group = "scope", help = "Record lesson for this repo (default)")]
-        repo: bool,
-        #[clap(
-            long,
-            group = "scope",
-            help = "Record lesson globally (mutually exclusive with --repo)"
-        )]
-        global: bool,
-    },
-    #[clap(
-        about = "Get advice for syntax errors and debugging",
-        long_about = r#"
-The b00t advice system acts as a syntax therapist, providing contextual debugging assistance
-based on lessons learned from previous failures. It performs semantic search through the
-hive's collective knowledge to suggest solutions for similar error patterns.
-
-Usage:
-  b00t-cli advice <tool> "<error_pattern>"
-  b00t-cli advice <tool> list  # List all lessons for a tool
-  b00t-cli advice <tool> search "<query>"  # Semantic search for lessons
-
-Examples:
-  b00t-cli advice just "Unknown start of token '.'"
-  b00t-cli advice rust "cannot borrow as mutable"
-  b00t-cli advice docker "permission denied"
-  b00t-cli advice just list
-  b00t-cli advice rust search "template syntax"
-
-The system will:
-1. Search for similar error patterns in the vector database
-2. Return relevant lessons with confidence scores
-3. Provide conversational debugging guidance
-4. Suggest specific solutions based on hive experience
-"#
-    )]
-    Advice {
-        #[clap(help = "Tool name")]
-        tool: String,
-        #[clap(
-            help = "Error pattern to get advice for, 'list' to show all lessons, or 'search <query>'"
-        )]
-        query: String,
-        #[clap(long, help = "Maximum number of results to return (default: 5)")]
-        count: Option<usize>,
-    },
     #[clap(about = "MCP (Model Context Protocol) server management")]
     Mcp {
         #[clap(subcommand)]
@@ -257,16 +177,10 @@ The system will:
         #[clap(subcommand)]
         chat_command: ChatCommands,
     },
-    #[clap(about = "Learn about topics with guided documentation")]
+    #[clap(about = "Learn about topics with unified knowledge management")]
     // 🤓 ENTANGLED: b00t-mcp/src/mcp_tools.rs LearnCommand
-    // When this changes, update b00t-mcp LearnCommand structure
-    Learn {
-        #[clap(help = "Topic to learn about (e.g., rust, python, typescript, bash)")]
-        topic: Option<String>,
-
-        #[clap(long = "topic", help = "Topic to learn about (MCP compatibility)")]
-        topic_flag: Option<String>, // 🦨 MCP compatibility: accept --topic flag
-    },
+    // Unified knowledge command: LFMF lessons, learn docs, man pages, RAG
+    Learn(LearnArgs),
     #[clap(about = "Datum management and inspection")]
     Datum {
         #[clap(subcommand)]
@@ -1239,10 +1153,8 @@ async fn main() {
                 std::process::exit(1);
             }
         }
-        Some(Commands::Learn { topic, topic_flag }) => {
-            // 🦨 MCP compatibility: merge positional and flag arguments
-            let effective_topic = topic.as_ref().or(topic_flag.as_ref());
-            if let Err(e) = handle_learn(&cli.path, effective_topic.map(|s| s.as_str())) {
+        Some(Commands::Learn(args)) => {
+            if let Err(e) = handle_learn(&cli.path, args.clone()) {
                 eprintln!("Error: {}", e);
                 std::process::exit(1);
             }
@@ -1267,51 +1179,6 @@ async fn main() {
             use crate::commands::bootstrap::handle_bootstrap_command;
 
             if let Err(e) = handle_bootstrap_command(bootstrap_command.clone()).await {
-                eprintln!("Error: {}", e);
-                std::process::exit(1);
-            }
-        }
-        Some(Commands::Lfmf {
-            tool,
-            lesson,
-            repo: _,
-            global,
-        }) => {
-            // Validate required fields
-            let tool = match tool {
-                Some(t) => t,
-                None => {
-                    eprintln!("--tool is required");
-                    std::process::exit(1);
-                }
-            };
-            let lesson = match lesson {
-                Some(l) => l,
-                None => {
-                    eprintln!("--lesson is required");
-                    std::process::exit(1);
-                }
-            };
-            // Determine scope
-            let scope = if *global { "global" } else { "repo" };
-            if let Err(e) = commands::lfmf::handle_lfmf(&cli.path, &tool, &lesson, scope) {
-                eprintln!("Error: {}", e);
-                std::process::exit(1);
-            }
-        }
-        Some(Commands::Advice { tool, query, count }) => {
-            use crate::commands::advice::handle_advice;
-
-            // Create Tokio runtime for async advice operations
-            let rt = match tokio::runtime::Runtime::new() {
-                Ok(rt) => rt,
-                Err(e) => {
-                    eprintln!("Error creating async runtime: {}", e);
-                    std::process::exit(1);
-                }
-            };
-
-            if let Err(e) = rt.block_on(handle_advice(&cli.path, tool, query, *count)) {
                 eprintln!("Error: {}", e);
                 std::process::exit(1);
             }

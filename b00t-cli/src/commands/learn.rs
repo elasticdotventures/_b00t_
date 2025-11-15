@@ -8,7 +8,7 @@ use clap::Parser;
 use std::fs;
 use tiktoken_rs::o200k_base;
 
-#[derive(Parser, Debug)]
+#[derive(Parser, Debug, Clone)]
 pub struct LearnArgs {
     /// Topic to learn about (e.g., git, rust, just)
     #[arg(help = "Topic to learn about")]
@@ -167,14 +167,20 @@ async fn handle_record(
     let lookup = crate::datum_utils::B00tDatumLookup::new(path.to_string());
     lfmf_system.set_datum_lookup(lookup);
 
+    // Try to initialize vector database (non-fatal if fails)
+    if let Err(e) = lfmf_system.initialize().await {
+        println!("⚠️  Vector database unavailable: {}. Lesson will be saved to filesystem only.", e);
+    }
+
     let scope = if global { "global" } else { "repo" };
+    println!("Scope: {}", scope);
 
     lfmf_system
-        .record_lesson(topic, lesson_topic, body, scope)
+        .record_lesson(topic, lesson)
         .await
         .context("Failed to record lesson")?;
 
-    println!("✅ Recorded lesson for '{}' in {} scope", topic, scope);
+    println!("✅ Recorded lesson for '{}': {}", topic, lesson_topic);
     println!("\nView: b00t learn {} --search list", topic);
 
     Ok(())
@@ -194,50 +200,39 @@ async fn handle_search(
     let lookup = crate::datum_utils::B00tDatumLookup::new(path.to_string());
     lfmf_system.set_datum_lookup(lookup);
 
-    if query.eq_ignore_ascii_case("list") {
+    // Initialize vector DB (non-fatal if fails)
+    if let Err(e) = lfmf_system.initialize().await {
+        println!("🔄 Vector database unavailable ({}), using filesystem fallback", e);
+    }
+
+    let results = if query.eq_ignore_ascii_case("list") {
         // List all lessons
-        let lessons = lfmf_system.list_lessons(topic).await?;
-
-        if lessons.is_empty() {
-            println!("No lessons found for '{}'", topic);
-            println!("\nRecord one: b00t learn {} --record \"<topic>: <body>\"", topic);
-            return Ok(());
-        }
-
-        println!("## Lessons for '{}' ({} total)\n", topic, lessons.len());
-        for (idx, lesson) in lessons.iter().enumerate() {
-            println!("{}. **{}**: {}", idx + 1, lesson.topic, lesson.body);
-        }
+        lfmf_system.list_lessons(topic, Some(limit)).await?
     } else {
-        // Search lessons
-        let results = lfmf_system.search_lessons(topic, query, limit).await?;
+        // Search lessons using get_advice
+        lfmf_system.get_advice(topic, query, Some(limit)).await?
+    };
 
-        if results.is_empty() {
-            println!("No matching lessons found for query: '{}'", query);
-            return Ok(());
-        }
+    if results.is_empty() {
+        println!("No lessons found for '{}'", topic);
+        println!("\nRecord one: b00t learn {} --record \"<topic>: <body>\"", topic);
+        return Ok(());
+    }
 
-        println!("## Search Results for '{}'\n", query);
-        for (idx, result) in results.iter().enumerate() {
-            println!(
-                "{}. **{}** (score: {:.2})\n   {}\n",
-                idx + 1,
-                result.lesson.topic,
-                result.score,
-                result.lesson.body
-            );
-        }
+    println!("## Lessons for '{}' ({} total)\n", topic, results.len());
+    for (idx, lesson) in results.iter().enumerate() {
+        println!("{}. {}", idx + 1, lesson);
     }
 
     Ok(())
 }
 
-async fn handle_digest(path: &str, topic: Option<&str>, content: &str) -> Result<()> {
+async fn handle_digest(_path: &str, topic: Option<&str>, content: &str) -> Result<()> {
     let topic = topic
         .ok_or_else(|| anyhow::anyhow!("Topic required for digesting content to RAG"))?
         .to_string();
 
-    let client = GrokClient::new().context("Failed to create Grok client")?;
+    let client = GrokClient::new();
 
     client
         .digest(&topic, content)
@@ -251,30 +246,29 @@ async fn handle_digest(path: &str, topic: Option<&str>, content: &str) -> Result
 }
 
 async fn handle_ask(
-    path: &str,
+    _path: &str,
     topic: Option<&str>,
     query: &str,
     limit: usize,
 ) -> Result<()> {
-    let client = GrokClient::new().context("Failed to create Grok client")?;
+    let client = GrokClient::new();
 
     let results = client
         .ask(query, topic, Some(limit))
         .await
         .context("Failed to query RAG")?;
 
-    if results.chunks.is_empty() {
+    if results.results.is_empty() {
         println!("No results found for query: '{}'", query);
         return Ok(());
     }
 
     println!("## RAG Results for '{}'\n", query);
-    for (idx, chunk) in results.chunks.iter().enumerate() {
+    for (idx, chunk) in results.results.iter().enumerate() {
         println!(
-            "{}. (score: {:.2}, topic: {})\n   {}\n",
+            "{}. (topic: {})\n   {}\n",
             idx + 1,
-            chunk.score,
-            chunk.topic.as_deref().unwrap_or("unknown"),
+            chunk.topic,
             chunk.content.lines().next().unwrap_or("")
         );
     }

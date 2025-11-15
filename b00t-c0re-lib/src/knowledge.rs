@@ -7,14 +7,13 @@
 //! 4. RAG results (vector DB)
 
 use anyhow::Result;
-use crate::{ChunkResult, GrokClient, Lesson, LfmfSystem, ManPage};
-use crate::learn::{get_learn_lesson, get_learn_topics};
-use std::path::Path;
+use crate::{ChunkResult, GrokClient, LfmfSystem, ManPage};
+use crate::learn::get_learn_lesson;
 
 #[derive(Debug, Clone)]
 pub struct KnowledgeSource {
     pub topic: String,
-    pub lfmf_lessons: Vec<Lesson>,
+    pub lfmf_lessons: Vec<String>,
     pub learn_content: Option<String>,
     pub man_page: Option<ManPage>,
     pub rag_results: Vec<ChunkResult>,
@@ -52,8 +51,10 @@ impl KnowledgeSource {
 
         // 1. Try to load LFMF lessons
         if let Ok(config) = LfmfSystem::load_config(b00t_path) {
-            let lfmf_system = LfmfSystem::new(config);
-            if let Ok(lessons) = lfmf_system.list_lessons(topic).await {
+            let mut lfmf_system = LfmfSystem::new(config);
+            // Initialize vector DB (non-fatal if fails)
+            let _ = lfmf_system.initialize().await;
+            if let Ok(lessons) = lfmf_system.list_lessons(topic, Some(10)).await {
                 knowledge.lfmf_lessons = lessons;
             }
         }
@@ -69,10 +70,9 @@ impl KnowledgeSource {
         }
 
         // 4. Try RAG search (if grok is available)
-        if let Ok(client) = GrokClient::new() {
-            if let Ok(results) = client.ask(topic, Some(topic), Some(10)).await {
-                knowledge.rag_results = results.chunks;
-            }
+        let client = GrokClient::new();
+        if let Ok(results) = client.ask(topic, Some(topic), Some(10)).await {
+            knowledge.rag_results = results.results;
         }
 
         Ok(knowledge)
@@ -150,7 +150,7 @@ impl KnowledgeSource {
         println!("## 📚 LFMF Lessons (Priority: 🔥)\n");
 
         for (idx, lesson) in self.lfmf_lessons.iter().enumerate() {
-            println!("{}. **{}**: {}", idx + 1, lesson.topic, lesson.body);
+            println!("{}. {}", idx + 1, lesson);
         }
         println!();
 
@@ -223,7 +223,7 @@ impl KnowledgeSource {
         println!("## 🧠 RAG Knowledge Base\n");
 
         for (idx, chunk) in self.rag_results.iter().take(5).enumerate() {
-            println!("{}. {} (score: {:.2})", idx + 1, chunk.content.lines().next().unwrap_or(""), chunk.score);
+            println!("{}. {}", idx + 1, chunk.content.lines().next().unwrap_or(""));
         }
         println!();
 
