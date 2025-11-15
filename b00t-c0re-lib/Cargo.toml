@@ -2,7 +2,7 @@
 name = "b00t-c0re-lib"
 # 🤓 SINGLE SOURCE OF TRUTH for b00t ecosystem versioning
 # All other crates (b00t-cli, b00t-mcp) should reference this version
-version = "0.7.0"
+version.workspace = true
 edition.workspace = true
 authors.workspace = true
 license.workspace = true

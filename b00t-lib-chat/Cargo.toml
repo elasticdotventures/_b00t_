@@ -1,6 +1,6 @@
 [package]
 name = "b00t-chat"
-version = "0.1.0"
+version.workspace = true
 edition = "2021"
 description = "b00t chat coordination system with multi-transport support"
 license = "MIT"
@@ -49,11 +49,5 @@ rand = "0.8"
 default = []
 python = ["pyo3"]
 wasm = ["wasm-bindgen", "js-sys", "web-sys", "serde-wasm-bindgen"]
-
-[profile.release]
-lto = true
-codegen-units = 1
-panic = "abort"
-strip = true
 
 # Examples are in examples/ directory, not as bins

@@ -1,6 +1,6 @@
 [package]
 name = "b00t-c0re"
-version = "0.1.0"
+version.workspace = true
 edition = "2021"
 description = "Core Rust functionality for b00t framework with WebAssembly bindings"
 license = "MIT"
