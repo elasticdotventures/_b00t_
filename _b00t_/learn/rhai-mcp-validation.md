@@ -183,7 +183,7 @@ Validate required configuration files exist and are valid:
 ```rhai
 // _b00t_/scripts/config-validate.rhai
 
-let config_file = WORKSPACE_ROOT + "/config.json";
+let config_file = get_env("WORKSPACE_ROOT") + "/config.json";
 
 if !file_exists(config_file) {
     log_error(`❌ Configuration file not found: ${config_file}`);
