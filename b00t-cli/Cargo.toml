@@ -50,7 +50,7 @@ confy = "2.0.0"
 libc = "0.2"
 reqwest = { version = "0.12.23", features = ["json"] }
 whoami = "1.5"
-b00t-chat = { path = "../b00t-lib-chat" }
+b00t-chat = { workspace = true }
 
 
 [dev-dependencies]

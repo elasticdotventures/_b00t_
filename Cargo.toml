@@ -20,9 +20,11 @@ repository = "https://github.com/elasticdotventures/dotfiles"
 
 [workspace.dependencies]
 # Workspace members
-b00t-cli = { path = "b00t-cli" }
-b00t-c0re-lib = { path = "b00t-c0re-lib" }
-b00t-grok = { path = "b00t-grok", default-features = false }
+# 🤓 Version required for crates.io publishing
+b00t-cli = { path = "b00t-cli", version = "0.7.2" }
+b00t-c0re-lib = { path = "b00t-c0re-lib", version = "0.7.2" }
+b00t-grok = { path = "b00t-grok", version = "0.7.2", default-features = false }
+b00t-chat = { path = "b00t-lib-chat", version = "0.1.0" }
 
 # Common dependencies that could be shared across workspace members
 serde = { version = "1.0", features = ["derive"] }
