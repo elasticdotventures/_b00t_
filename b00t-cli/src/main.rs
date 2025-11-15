@@ -179,7 +179,7 @@ Example:
         chat_command: ChatCommands,
     },
     #[clap(about = "Learn about topics with unified knowledge management")]
-    // 🤓 ENTANGLED: b00t-mcp/src/mcp_tools.rs LearnCommand
+    // 🤓 ENTANGLED (synchronized): b00t-mcp/src/mcp_tools.rs LearnCommand now uses LearnArgs wrapper, matching CLI structure.
     // Unified knowledge command: LFMF lessons, learn docs, man pages, RAG
     Learn(LearnArgs),
     #[clap(about = "Datum management and inspection")]
