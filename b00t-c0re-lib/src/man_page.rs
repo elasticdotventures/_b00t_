@@ -65,7 +65,7 @@ impl ManPage {
                     && trimmed.len() <= max_length
                     && !next_line.is_empty()
                     && !next_line.chars().all(|c| c.is_uppercase() || c.is_whitespace() || c == '-' || c == '(' || c == ')')
-            }
+            } {
                 // Save previous section
                 if let Some((title, start)) = current_section.take() {
                     let section_content: String = lines[start..idx]
