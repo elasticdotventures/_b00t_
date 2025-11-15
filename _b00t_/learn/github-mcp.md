@@ -208,12 +208,40 @@ The `_b00t_/github.mcp.toml` already configures:
 - ✅ Fallback to @modelcontextprotocol/server-github (priority 10)
 - ✅ Default toolsets: `issues,pull_requests,actions`
 - ✅ gh CLI requirement for secure token access
+- ✅ **RHAI pre-start validation** (fail-fast credential check)
 
-**Usage:**
+**RHAI Validation Script:**
+
+The configuration includes a `pre_start` rhai script that validates GitHub credentials before starting the MCP server:
+
+```toml
+[[b00t.mcp.stdio]]
+priority = 0
+command = "npx"
+args = ["-y", "github-mcp-server"]
+pre_start = "github-auth-validate.rhai"  # Runs before server starts
+```
+
+**What the validation script does:**
+1. Checks if `GITHUB_PERSONAL_ACCESS_TOKEN` already set in environment
+2. Checks for token in `.env` file
+3. Falls back to `gh auth token` if gh CLI available
+4. **Fails fast** with actionable error if no credentials found
+5. Sets token in environment for MCP server
+
+**Benefits:**
+- ✅ Prevents server startup failures due to missing credentials
+- ✅ Provides clear error messages (vs cryptic MCP server errors)
+- ✅ Avoids cascading stack failures
+- ✅ Validates `gh auth login` state before attempting server start
+
+**Manual validation:**
 ```bash
-# b00t will use gh CLI token automatically
-export GITHUB_PERSONAL_ACCESS_TOKEN="$(gh auth token)"
-# MCP server starts with configured toolsets
+# Test the validation script manually
+b00t script run github-auth-validate
+
+# View validation script
+cat _b00t_/scripts/github-auth-validate.rhai
 ```
 
 **Override toolsets:**
@@ -403,12 +431,18 @@ Record lessons about GitHub MCP configuration:
 b00t lfmf github-mcp "gh CLI token: Use \$(gh auth token) instead of storing PATs (eliminates security vector)"
 b00t lfmf github-mcp "server preference: Use official github-mcp-server (toolsets support) over archived @modelcontextprotocol/server-github"
 
+# RHAI validation pattern
+b00t lfmf github-mcp "pre-start validation: Use pre_start rhai script for fail-fast credential checks before MCP server starts"
+b00t lfmf github-mcp "rhai script location: Validation scripts live in _b00t_/scripts/ directory (e.g. github-auth-validate.rhai)"
+b00t lfmf github-mcp "validation benefits: Prevents cascading stack failures with clear error messages vs cryptic server errors"
+
 # Toolset configuration
 b00t lfmf github-mcp "context toolset: Always include 'context' toolset for environment awareness in GITHUB_TOOLSETS"
 b00t lfmf github-mcp "env precedence: GITHUB_TOOLSETS env var takes precedence over CLI --toolsets flag"
 
 # Authentication
 b00t lfmf github-mcp "gh auth scopes: Use gh auth refresh -s workflow,security_events to add scopes for actions/code_security toolsets"
+b00t lfmf github-mcp "credential priority: Check env → .env file → gh CLI → fail (validation script pattern)"
 b00t lfmf github-mcp "fallback auth: If gh CLI unavailable, use PAT but document as technical debt for security review"
 ```
 
@@ -417,6 +451,7 @@ Get advice:
 ```bash
 b00t advice github-mcp "authentication"
 b00t advice github-mcp "toolset not working"
-b00t advice github-mcp "gh CLI token"
+b00t advice github-mcp "rhai validation"
+b00t advice github-mcp "pre-start script"
 b00t advice github-mcp list
 ```
