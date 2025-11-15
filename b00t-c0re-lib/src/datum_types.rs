@@ -63,9 +63,11 @@ where
 
     match Option::<UsageFormat>::deserialize(deserializer)? {
         None => Ok(None),
-        Some(UsageFormat::Strings(cmds)) => {
-            Ok(Some(cmds.into_iter().map(|c| UsageExample::from_str(&c)).collect()))
-        }
+        Some(UsageFormat::Strings(cmds)) => Ok(Some(
+            cmds.into_iter()
+                .map(|c| UsageExample::from_str(&c))
+                .collect(),
+        )),
         Some(UsageFormat::Structured(examples)) => Ok(Some(examples)),
     }
 }

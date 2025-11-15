@@ -50,10 +50,13 @@ impl ManPage {
 
         for (idx, line) in lines.iter().enumerate() {
             // Detect section headers (all caps, often at start of line)
-            if line.trim().chars().all(|c| c.is_uppercase() || c.is_whitespace() || c == '-' || c == '(' || c == ')')
+            if line
+                .trim()
+                .chars()
+                .all(|c| c.is_uppercase() || c.is_whitespace() || c == '-' || c == '(' || c == ')')
                 && !line.trim().is_empty()
-                && line.trim().len() > 2 {
-
+                && line.trim().len() > 2
+            {
                 // Save previous section
                 if let Some((title, start)) = current_section.take() {
                     let section_content: String = lines[start..idx]
@@ -78,7 +81,7 @@ impl ManPage {
                                 .collect::<Vec<_>>()
                                 .join(" ")
                                 .trim()
-                                .to_string()
+                                .to_string(),
                         );
                     }
                 }
@@ -115,10 +118,7 @@ impl ManPage {
     /// Detect version from --version or man page
     pub fn detect_version(cmd: &str) -> Option<String> {
         // Try --version flag
-        let output = Command::new(cmd)
-            .arg("--version")
-            .output()
-            .ok()?;
+        let output = Command::new(cmd).arg("--version").output().ok()?;
 
         if output.status.success() {
             let version_str = String::from_utf8_lossy(&output.stdout);
@@ -126,10 +126,9 @@ impl ManPage {
             let first_line = version_str.lines().next()?;
 
             // Look for version patterns like "v1.2.3", "1.2.3", "version 1.2.3"
-            if let Some(version) = first_line
-                .split_whitespace()
-                .find(|s| s.chars().next().map(|c| c.is_numeric()).unwrap_or(false) || s.starts_with('v'))
-            {
+            if let Some(version) = first_line.split_whitespace().find(|s| {
+                s.chars().next().map(|c| c.is_numeric()).unwrap_or(false) || s.starts_with('v')
+            }) {
                 return Some(version.trim_start_matches('v').to_string());
             }
         }
@@ -150,7 +149,8 @@ impl ManPage {
     pub fn paginate(&self, lines_per_page: usize) -> Vec<String> {
         // Prioritize section-based pagination
         if !self.sections.is_empty() {
-            return self.sections
+            return self
+                .sections
                 .iter()
                 .map(|s| format!("## {}\n\n{}", s.title, s.content))
                 .collect();
@@ -174,7 +174,8 @@ impl ManPage {
     }
 
     fn to_concise_markdown(&self) -> String {
-        let mut md = format!("# {} ({})\n\n",
+        let mut md = format!(
+            "# {} ({})\n\n",
             self.name,
             self.version.as_deref().unwrap_or("unknown")
         );
@@ -187,7 +188,8 @@ impl ManPage {
         for section in &self.sections {
             if section.title.contains("NAME")
                 || section.title.contains("SYNOPSIS")
-                || section.title.contains("DESCRIPTION") {
+                || section.title.contains("DESCRIPTION")
+            {
                 md.push_str(&format!("## {}\n{}\n\n", section.title, section.content));
             }
         }
@@ -212,7 +214,9 @@ impl ManPage {
 
     /// Generate datum TOML content for auto-creation
     pub fn to_datum_toml(&self) -> String {
-        let description = self.description.as_deref()
+        let description = self
+            .description
+            .as_deref()
             .unwrap_or("Command line utility")
             .lines()
             .next()

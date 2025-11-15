@@ -390,7 +390,7 @@ dependencies = [
 
 [[package]]
 name = "b00t-c0re"
-version = "0.7.3"
+version = "0.7.6"
 dependencies = [
  "js-sys",
  "serde",
@@ -402,7 +402,7 @@ dependencies = [
 
 [[package]]
 name = "b00t-c0re-lib"
-version = "0.7.3"
+version = "0.7.6"
 dependencies = [
  "anyhow",
  "chrono",
@@ -432,7 +432,7 @@ dependencies = [
 
 [[package]]
 name = "b00t-chat"
-version = "0.7.3"
+version = "0.7.6"
 dependencies = [
  "anyhow",
  "async-nats",
@@ -460,7 +460,7 @@ dependencies = [
 
 [[package]]
 name = "b00t-cli"
-version = "0.7.3"
+version = "0.7.6"
 dependencies = [
  "anyhow",
  "assert_cmd",
@@ -495,7 +495,7 @@ dependencies = [
 
 [[package]]
 name = "b00t-grok"
-version = "0.7.3"
+version = "0.7.6"
 dependencies = [
  "anyhow",
  "async-openai",
@@ -514,7 +514,7 @@ dependencies = [
 
 [[package]]
 name = "b00t-mcp"
-version = "0.7.3"
+version = "0.7.6"
 dependencies = [
  "anyhow",
  "axum 0.8.6",
@@ -554,7 +554,7 @@ dependencies = [
 
 [[package]]
 name = "b00t-py"
-version = "0.7.3"
+version = "0.7.6"
 dependencies = [
  "anyhow",
  "b00t-c0re-lib",
@@ -2185,7 +2185,7 @@ dependencies = [
 
 [[package]]
 name = "k0mmand3r"
-version = "0.7.3"
+version = "0.7.6"
 dependencies = [
  "decimal-rs",
  "indexmap 2.12.0",

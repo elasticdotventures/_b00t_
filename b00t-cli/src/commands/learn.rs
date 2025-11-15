@@ -107,25 +107,24 @@ async fn handle_display(path: &str, topic: &str, opts: DisplayOpts) -> Result<()
     if !knowledge.has_knowledge() {
         anyhow::bail!(
             "No knowledge found for '{}'. Try:\n  • b00t learn {} --record \"<topic>: <body>\"\n  • b00t learn {} --man (if man page exists)",
-            topic, topic, topic
+            topic,
+            topic,
+            topic
         );
     }
 
     knowledge.display(&opts)
 }
 
-async fn handle_record(
-    path: &str,
-    topic: Option<&str>,
-    lesson: &str,
-    global: bool,
-) -> Result<()> {
+async fn handle_record(path: &str, topic: Option<&str>, lesson: &str, global: bool) -> Result<()> {
     let topic = topic.ok_or_else(|| anyhow::anyhow!("Topic required for recording lesson"))?;
 
     // Parse "<topic>: <body>" format
     let parts: Vec<&str> = lesson.splitn(2, ':').map(|s| s.trim()).collect();
     if parts.len() != 2 {
-        anyhow::bail!("Lesson must be in '<topic>: <body>' format.\n\nExample:\n  b00t learn git --record \"atomic commits: Commit small, focused changes for easier review\"");
+        anyhow::bail!(
+            "Lesson must be in '<topic>: <body>' format.\n\nExample:\n  b00t learn git --record \"atomic commits: Commit small, focused changes for easier review\""
+        );
     }
 
     let lesson_topic = parts[0];
@@ -169,7 +168,10 @@ async fn handle_record(
 
     // Try to initialize vector database (non-fatal if fails)
     if let Err(e) = lfmf_system.initialize().await {
-        println!("⚠️  Vector database unavailable: {}. Lesson will be saved to filesystem only.", e);
+        println!(
+            "⚠️  Vector database unavailable: {}. Lesson will be saved to filesystem only.",
+            e
+        );
     }
 
     let scope = if global { "global" } else { "repo" };
@@ -186,12 +188,7 @@ async fn handle_record(
     Ok(())
 }
 
-async fn handle_search(
-    path: &str,
-    topic: Option<&str>,
-    query: &str,
-    limit: usize,
-) -> Result<()> {
+async fn handle_search(path: &str, topic: Option<&str>, query: &str, limit: usize) -> Result<()> {
     let topic = topic.ok_or_else(|| anyhow::anyhow!("Topic required for searching lessons"))?;
 
     let config = LfmfSystem::load_config(path)?;
@@ -202,7 +199,10 @@ async fn handle_search(
 
     // Initialize vector DB (non-fatal if fails)
     if let Err(e) = lfmf_system.initialize().await {
-        println!("🔄 Vector database unavailable ({}), using filesystem fallback", e);
+        println!(
+            "🔄 Vector database unavailable ({}), using filesystem fallback",
+            e
+        );
     }
 
     let results = if query.eq_ignore_ascii_case("list") {
@@ -215,7 +215,10 @@ async fn handle_search(
 
     if results.is_empty() {
         println!("No lessons found for '{}'", topic);
-        println!("\nRecord one: b00t learn {} --record \"<topic>: <body>\"", topic);
+        println!(
+            "\nRecord one: b00t learn {} --record \"<topic>: <body>\"",
+            topic
+        );
         return Ok(());
     }
 
@@ -245,12 +248,7 @@ async fn handle_digest(_path: &str, topic: Option<&str>, content: &str) -> Resul
     Ok(())
 }
 
-async fn handle_ask(
-    _path: &str,
-    topic: Option<&str>,
-    query: &str,
-    limit: usize,
-) -> Result<()> {
+async fn handle_ask(_path: &str, topic: Option<&str>, query: &str, limit: usize) -> Result<()> {
     let client = GrokClient::new();
 
     let results = client

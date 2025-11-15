@@ -6,9 +6,9 @@
 //! 3. Man pages (system docs)
 //! 4. RAG results (vector DB)
 
-use anyhow::Result;
-use crate::{ChunkResult, GrokClient, LfmfSystem, ManPage};
 use crate::learn::get_learn_lesson;
+use crate::{ChunkResult, GrokClient, LfmfSystem, ManPage};
+use anyhow::Result;
 
 #[derive(Debug, Clone)]
 pub struct KnowledgeSource {
@@ -108,7 +108,10 @@ impl KnowledgeSource {
                 self.display_man_inline(man, opts)?;
             } else {
                 // Just mention it's available
-                println!("\n📄 **Man Page Available**: `b00t learn {} --man`\n", self.topic);
+                println!(
+                    "\n📄 **Man Page Available**: `b00t learn {} --man`\n",
+                    self.topic
+                );
             }
         }
 
@@ -128,19 +131,27 @@ impl KnowledgeSource {
         println!("╠═══════════════════════════════════════╣");
 
         if !self.lfmf_lessons.is_empty() {
-            println!("║ 📚 LFMF Lessons: {:<21}║", format!("{} lessons", self.lfmf_lessons.len()));
+            println!(
+                "║ 📚 LFMF Lessons: {:<21}║",
+                format!("{} lessons", self.lfmf_lessons.len())
+            );
         }
         if self.learn_content.is_some() {
             println!("║ 📖 Learn Content: {}.md{:<14}║", self.topic, "");
         }
         if self.man_page.is_some() {
-            let version = self.man_page.as_ref()
+            let version = self
+                .man_page
+                .as_ref()
                 .and_then(|m| m.version.as_deref())
                 .unwrap_or("unknown");
             println!("║ 📄 Man Page: {} v{:<17}║", self.topic, version);
         }
         if !self.rag_results.is_empty() {
-            println!("║ 🧠 RAG Results: {:<21}║", format!("{} chunks", self.rag_results.len()));
+            println!(
+                "║ 🧠 RAG Results: {:<21}║",
+                format!("{} chunks", self.rag_results.len())
+            );
         }
 
         println!("╚═══════════════════════════════════════╝\n");
@@ -198,7 +209,10 @@ impl KnowledgeSource {
     }
 
     fn display_man_inline(&self, man: &ManPage, opts: &DisplayOpts) -> Result<()> {
-        println!("## 📄 Man Page ({})\n", man.version.as_deref().unwrap_or("unknown"));
+        println!(
+            "## 📄 Man Page ({})\n",
+            man.version.as_deref().unwrap_or("unknown")
+        );
 
         if opts.concise {
             let markdown = man.to_markdown(true);
@@ -223,7 +237,11 @@ impl KnowledgeSource {
         println!("## 🧠 RAG Knowledge Base\n");
 
         for (idx, chunk) in self.rag_results.iter().take(5).enumerate() {
-            println!("{}. {}", idx + 1, chunk.content.lines().next().unwrap_or(""));
+            println!(
+                "{}. {}",
+                idx + 1,
+                chunk.content.lines().next().unwrap_or("")
+            );
         }
         println!();
 
@@ -236,12 +254,19 @@ impl KnowledgeSource {
         let mut section_num = 1;
 
         if !self.lfmf_lessons.is_empty() {
-            println!("[{}] LFMF Lessons ({} items)", section_num, self.lfmf_lessons.len());
+            println!(
+                "[{}] LFMF Lessons ({} items)",
+                section_num,
+                self.lfmf_lessons.len()
+            );
             section_num += 1;
         }
 
         if self.learn_content.is_some() {
-            println!("[{}] Learn Content (_b00t_/learn/{}.md)", section_num, self.topic);
+            println!(
+                "[{}] Learn Content (_b00t_/learn/{}.md)",
+                section_num, self.topic
+            );
             section_num += 1;
         }
 
@@ -261,8 +286,14 @@ impl KnowledgeSource {
         println!("\n**Quick Actions:**");
 
         if !self.lfmf_lessons.is_empty() {
-            println!("• Record lesson: `b00t learn {} --record \"<topic>: <body>\"`", self.topic);
-            println!("• Search lessons: `b00t learn {} --search \"<query>\"`", self.topic);
+            println!(
+                "• Record lesson: `b00t learn {} --record \"<topic>: <body>\"`",
+                self.topic
+            );
+            println!(
+                "• Search lessons: `b00t learn {} --search \"<query>\"`",
+                self.topic
+            );
         }
 
         if self.man_page.is_some() {
@@ -270,7 +301,10 @@ impl KnowledgeSource {
             println!("• Show TOC: `b00t learn {} --toc`", self.topic);
         }
 
-        println!("• Query RAG: `b00t learn {} --ask \"<question>\"`", self.topic);
+        println!(
+            "• Query RAG: `b00t learn {} --ask \"<question>\"`",
+            self.topic
+        );
     }
 
     /// Check if any knowledge exists

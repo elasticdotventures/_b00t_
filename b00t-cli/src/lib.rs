@@ -413,16 +413,9 @@ fn create_mcp_datum_from_json(
         implements: None,
         provides: None,
         requires: None,
-<<<<<<< HEAD
         learn: None,
         usage: None,
-        references: None,
         lfmf_category: None,
-=======
-    learn: None,
-    usage: None,
-    lfmf_category: None,
->>>>>>> 33077b8 (refactor: remove b00t.references field from datum schema)
     }
 }
 
@@ -517,16 +510,9 @@ pub fn normalize_mcp_json(input: &str, dwiw: bool) -> Result<BootDatum> {
                 implements: None,
                 provides: None,
                 requires: None,
-<<<<<<< HEAD
                 learn: None,
                 usage: None,
-                references: None,
                 lfmf_category: None,
-=======
-            learn: None,
-            usage: None,
-            lfmf_category: None,
->>>>>>> 33077b8 (refactor: remove b00t.references field from datum schema)
             });
         }
 
