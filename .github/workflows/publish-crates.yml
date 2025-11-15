@@ -65,12 +65,12 @@ jobs:
         run: cargo test --workspace --all-features
 
       - name: Publish b00t-chat
-        if: github.event_name == 'release' || github.event.inputs.dry_run == 'false'
+        if: github.event_name == 'release' || github.event_name == 'workflow_dispatch'
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
         run: |
           cd b00t-lib-chat
-          if [ "${{ github.event.inputs.dry_run }}" == "true" ]; then
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ] && [ "${{ github.event.inputs.dry_run }}" == "true" ]; then
             echo "🔍 DRY RUN: Would publish b00t-chat"
             cargo publish --dry-run --allow-dirty
           else
@@ -79,14 +79,16 @@ jobs:
           fi
 
       - name: Publish b00t-c0re-lib
-        if: (github.event_name == 'release' && github.event.inputs.dry_run != 'true') || (github.event_name == 'workflow_dispatch' && github.event.inputs.dry_run == 'false')
+        if: github.event_name == 'release' || github.event_name == 'workflow_dispatch'
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
         run: |
-          # Wait for b00t-chat to be available on crates.io
-          sleep 30
+          # Wait for b00t-chat to be available on crates.io (skip in dry-run)
+          if [ "${{ github.event_name }}" != "workflow_dispatch" ] || [ "${{ github.event.inputs.dry_run }}" != "true" ]; then
+            sleep 30
+          fi
           cd b00t-c0re-lib
-          if [ "${{ github.event.inputs.dry_run }}" == "true" ]; then
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ] && [ "${{ github.event.inputs.dry_run }}" == "true" ]; then
             echo "🔍 DRY RUN: Would publish b00t-c0re-lib"
             cargo publish --dry-run --allow-dirty
           else
@@ -95,14 +97,16 @@ jobs:
           fi
 
       - name: Publish b00t-cli
-        if: github.event_name == 'release' || github.event.inputs.dry_run == 'false'
+        if: github.event_name == 'release' || github.event_name == 'workflow_dispatch'
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
         run: |
-          # Wait for dependencies to be available on crates.io
-          sleep 45
+          # Wait for dependencies to be available on crates.io (skip in dry-run)
+          if [ "${{ github.event_name }}" != "workflow_dispatch" ] || [ "${{ github.event.inputs.dry_run }}" != "true" ]; then
+            sleep 45
+          fi
           cd b00t-cli
-          if [ "${{ github.event.inputs.dry_run }}" == "true" ]; then
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ] && [ "${{ github.event.inputs.dry_run }}" == "true" ]; then
             echo "🔍 DRY RUN: Would publish b00t-cli"
             cargo publish --dry-run --allow-dirty
           else
@@ -111,14 +115,16 @@ jobs:
           fi
 
       - name: Publish b00t-mcp
-        if: github.event_name == 'release' || github.event.inputs.dry_run == 'false'
+        if: github.event_name == 'release' || github.event_name == 'workflow_dispatch'
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
         run: |
-          # Wait for dependencies to be available on crates.io
-          sleep 45
+          # Wait for dependencies to be available on crates.io (skip in dry-run)
+          if [ "${{ github.event_name }}" != "workflow_dispatch" ] || [ "${{ github.event.inputs.dry_run }}" != "true" ]; then
+            sleep 45
+          fi
           cd b00t-mcp
-          if [ "${{ github.event.inputs.dry_run }}" == "true" ]; then
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ] && [ "${{ github.event.inputs.dry_run }}" == "true" ]; then
             echo "🔍 DRY RUN: Would publish b00t-mcp"
             cargo publish --dry-run --allow-dirty
           else
@@ -131,7 +137,7 @@ jobs:
         run: |
           echo "## 📦 Crates Publishing Summary" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          if [ "${{ github.event.inputs.dry_run }}" == "true" ]; then
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ] && [ "${{ github.event.inputs.dry_run }}" == "true" ]; then
             echo "**Mode**: Dry Run (no actual publishing)" >> $GITHUB_STEP_SUMMARY
           else
             echo "**Mode**: Live Publishing" >> $GITHUB_STEP_SUMMARY
