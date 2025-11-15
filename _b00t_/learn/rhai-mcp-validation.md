@@ -308,12 +308,12 @@ Pre-start scripts have access to all b00t RHAI functions:
 - `log_error(msg)` - Error message (❌)
 - `log_success(msg)` - Success message (✅)
 
-### Context Variables
-- `WORKSPACE_ROOT` - Current workspace path
-- `USER` - Current user
-- `IS_CI` - Running in CI environment
-- `IS_DOCKER` - Running in Docker container
-- `HOSTNAME` - Current hostname
+### Context Variables (access via `get_env()`)
+- `get_env("WORKSPACE_ROOT")` - Current workspace path
+- `get_env("USER")` - Current user
+- `get_env("IS_CI")` - Running in CI environment
+- `get_env("IS_DOCKER")` - Running in Docker container
+- `get_env("HOSTNAME")` - Current hostname
 
 ## Error Handling
 
