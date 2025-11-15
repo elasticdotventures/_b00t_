@@ -280,14 +280,14 @@ async fn handle_ask(_path: &str, topic: Option<&str>, query: &str, limit: usize)
 
 /// Check if datum exists for topic
 fn datum_exists(path: &str, topic: &str) -> Result<bool> {
-    let datum_path = format!("{}/{}.cli.toml", path, topic);
-    Ok(std::path::Path::new(&datum_path).exists())
+    let datum_path = std::path::Path::new(path).join(format!("{}.cli.toml", topic));
+    Ok(datum_path.exists())
 }
 
 /// Create datum from man page
 fn create_datum_from_man(path: &str, topic: &str, man: &ManPage) -> Result<()> {
     let datum_content = man.to_datum_toml();
-    let datum_path = format!("{}/{}.cli.toml", path, topic);
-    fs::write(datum_path, datum_content).context("Failed to write datum file")?;
+    let datum_path = std::path::Path::new(path).join(format!("{}.cli.toml", topic));
+    fs::write(&datum_path, datum_content).context("Failed to write datum file")?;
     Ok(())
 }
