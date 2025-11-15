@@ -37,7 +37,7 @@ use datum_mcp::McpDatum;
 use datum_vscode::VscodeDatum;
 use traits::*;
 
-use crate::commands::learn::handle_learn;
+use crate::commands::learn::{LearnArgs, handle_learn};
 use crate::commands::{
     AiCommands, AppCommands, BootstrapCommands, ChatCommands, CliCommands, DatumCommands, GrokCommands,
     InitCommands, K8sCommands, McpCommands, SessionCommands, StackCommands, WhatismyCommands,
