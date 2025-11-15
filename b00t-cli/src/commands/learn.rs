@@ -8,6 +8,10 @@ use clap::Parser;
 use std::fs;
 use tiktoken_rs::o200k_base;
 
+/// Arguments for the unified learn command.
+///
+/// Combines LFMF lessons, curated docs, man pages, and RAG into a single interface.
+/// Supports recording lessons, searching, displaying knowledge, and RAG operations.
 #[derive(Parser, Debug, Clone)]
 pub struct LearnArgs {
     /// Topic to learn about (e.g., git, rust, just)
