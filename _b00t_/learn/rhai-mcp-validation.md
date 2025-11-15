@@ -52,7 +52,11 @@ if token != "" {
 }
 
 // Check .env file
-let env_file = WORKSPACE_ROOT + "/.env";
+let workspace_root = get_env("WORKSPACE_ROOT");
+if workspace_root == "" {
+    workspace_root = get_env("HOME");
+}
+let env_file = workspace_root + "/.env";
 if file_exists(env_file) {
     // ... parse .env for token ...
 }
