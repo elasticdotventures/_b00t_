@@ -1,3 +1,4 @@
+use b00t_c0re_lib::version;
 use std::env;
 use std::fs;
 use std::path::Path;
@@ -17,14 +18,17 @@ fn setup_test_environment(temp_dir: &Path) -> Result<(), std::io::Error> {
     fs::create_dir_all(&session_dir)?;
 
     // Create minimal _b00t_.toml to prevent session memory errors
-    let toml_content = r#"
+    let toml_content = format!(
+        r#"
 [session]
 initialized = true
 agent_type = "test"
 
 [b00t]
-version = "0.7.0"
-"#;
+version = "{version}"
+"#,
+        version = version::VERSION
+    );
     fs::write(session_dir.join("_b00t_.toml"), toml_content)?;
 
     Ok(())
