@@ -50,13 +50,22 @@ impl ManPage {
 
         for (idx, line) in lines.iter().enumerate() {
             // Detect section headers (all caps, often at start of line)
-            if line
-                .trim()
-                .chars()
-                .all(|c| c.is_uppercase() || c.is_whitespace() || c == '-' || c == '(' || c == ')')
-                && !line.trim().is_empty()
-                && line.trim().len() > 2
-            {
+            if {
+                let trimmed = line.trim();
+                // Require minimal indentation (no more than 2 leading spaces)
+                let leading_spaces = line.chars().take_while(|c| c.is_whitespace()).count();
+                // Require line to be reasonably short (<= 40 chars)
+                let max_length = 40;
+                // Check next line is not another header or empty
+                let next_line = lines.get(idx + 1).map(|l| l.trim()).unwrap_or("");
+                trimmed.chars().all(|c| c.is_uppercase() || c.is_whitespace() || c == '-' || c == '(' || c == ')')
+                    && !trimmed.is_empty()
+                    && trimmed.len() > 2
+                    && leading_spaces <= 2
+                    && trimmed.len() <= max_length
+                    && !next_line.is_empty()
+                    && !next_line.chars().all(|c| c.is_uppercase() || c.is_whitespace() || c == '-' || c == '(' || c == ')')
+            }
                 // Save previous section
                 if let Some((title, start)) = current_section.take() {
                     let section_content: String = lines[start..idx]
