@@ -420,7 +420,7 @@ dependencies = [
 
 [[package]]
 name = "b00t-chat"
-version = "0.1.0"
+version = "0.7.2"
 dependencies = [
  "anyhow",
  "async-nats",

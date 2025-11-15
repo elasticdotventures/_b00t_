@@ -107,8 +107,8 @@ release:
         --title "Release v${VERSION}" \
         --notes "Release notes for version ${VERSION}
 
-Published crates:
-- \`b00t-chat\` v0.1.0
+Published crates (unified versioning):
+- \`b00t-chat\` v${VERSION}
 - \`b00t-c0re-lib\` v${VERSION}
 - \`b00t-cli\` v${VERSION}
 - \`b00t-mcp\` v${VERSION}
