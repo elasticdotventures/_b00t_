@@ -52,7 +52,7 @@ description = "Extend default toolsets"
 command = "GITHUB_PERSONAL_ACCESS_TOKEN=\"$(gh auth token)\" GITHUB_TOOLSETS=\"default,code_security,experiments\" npx -y github-mcp-server"
 
 [[b00t.usage]]
-description = "Run with docker (all toolsets, uses stored PAT)"
+description = "Run with docker (all toolsets, uses gh CLI token)"
 command = "docker run -i --rm -e GITHUB_PERSONAL_ACCESS_TOKEN=\"$(gh auth token)\" -e GITHUB_TOOLSETS=\"all\" ghcr.io/github/github-mcp-server"
 
 [[b00t.references]]
