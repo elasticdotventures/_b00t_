@@ -3,11 +3,11 @@ name = "b00t-chat"
 version.workspace = true
 edition = "2021"
 description = "b00t chat coordination system with multi-transport support"
-license = "MIT"
-repository = "https://github.com/promptexecution/b00t"
+license.workspace = true
+repository.workspace = true
 keywords = ["agent", "chat", "coordination", "nats", "ipc"]
 categories = ["network-programming", "web-programming", "development-tools"]
-authors = ["PromptExecution <noreply@promptexecution.com>"]
+authors.workspace = true
 
 # [workspace] - removed to avoid conflict with parent workspace
 
@@ -50,4 +50,5 @@ default = []
 python = ["pyo3"]
 wasm = ["wasm-bindgen", "js-sys", "web-sys", "serde-wasm-bindgen"]
 
+# 🤓 Profile configuration moved to workspace root to avoid warnings
 # Examples are in examples/ directory, not as bins

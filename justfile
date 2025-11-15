@@ -23,15 +23,101 @@ mod k8s '_b00t_/k8s.🚢/justfile'
 stow:
     stow --adopt -d ~/.dotfiles -t ~ bash
 
+# Test crates.io publishing (dry-run)
+publish-dry-run:
+    #!/bin/bash
+    set -euo pipefail
+    echo "🔍 Testing crates.io publishing (dry-run)..."
+
+    echo "📦 Testing b00t-chat..."
+    cd b00t-lib-chat && cargo publish --dry-run --allow-dirty
+
+    echo "📦 Testing b00t-c0re-lib..."
+    cd ../b00t-c0re-lib && cargo publish --dry-run --allow-dirty
+
+    echo "📦 Testing b00t-cli..."
+    cd ../b00t-cli && cargo publish --dry-run --allow-dirty
+
+    echo "📦 Testing b00t-mcp..."
+    cd ../b00t-mcp && cargo publish --dry-run --allow-dirty
+
+    echo "✅ All crates passed dry-run validation"
+
+# Reserve/claim crate names on crates.io (one-time setup)
+# 🤓 Run this BEFORE first release to reserve names
+claim-crates:
+    #!/bin/bash
+    set -euo pipefail
+    echo "🚩 Claiming crate names on crates.io..."
+    echo "⚠️  This will create placeholder versions if names are available"
+    read -p "Continue? (y/N) " -n 1 -r
+    echo
+    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+        echo "Aborted"
+        exit 1
+    fi
+
+    echo "📦 Publishing b00t-chat to claim name..."
+    cd b00t-lib-chat && cargo publish --allow-dirty || echo "⚠️ Already claimed or failed"
+
+    echo "⏳ Waiting 30s for crates.io indexing..."
+    sleep 30
+
+    echo "📦 Publishing b00t-c0re-lib to claim name..."
+    cd ../b00t-c0re-lib && cargo publish --allow-dirty || echo "⚠️ Already claimed or failed"
+
+    echo "⏳ Waiting 30s for crates.io indexing..."
+    sleep 30
+
+    echo "📦 Publishing b00t-cli to claim name..."
+    cd ../b00t-cli && cargo publish --allow-dirty || echo "⚠️ Already claimed or failed"
+
+    echo "⏳ Waiting 30s for crates.io indexing..."
+    sleep 30
+
+    echo "📦 Publishing b00t-mcp to claim name..."
+    cd ../b00t-mcp && cargo publish --allow-dirty || echo "⚠️ Already claimed or failed"
+
+    echo "✅ Crate names claimed (if available)"
+
+# Create GitHub release (triggers crates.io publishing workflow)
 release:
+    #!/bin/bash
+    set -euo pipefail
     VERSION="{{workspace_version}}"
-    gh release create "v${VERSION}" --title "Release v${VERSION}" --notes "Release notes for version ${VERSION}"
 
-    # check for latest release tag of _b00t_ in github using gh cli
-    NET_VERSION=$(cd "$HOME/.dotfiles" && gh release view -R elasticdotventures/dotfiles --json tagName | jq -r .tagName)
+    echo "🚀 Creating release v${VERSION}..."
 
-    # compare to local release
-    OUR_VERSION=$(cd "$HOME/.dotfiles" && git tag -l | sort -V | tail -n 1)
+    # Verify workspace is clean
+    if ! git diff --quiet; then
+        echo "⚠️ Uncommitted changes detected"
+        exit 1
+    fi
+
+    # Run tests first
+    echo "🧪 Running tests..."
+    cargo test --workspace --all-features
+
+    # Create git tag
+    git tag -a "v${VERSION}" -m "Release v${VERSION}"
+    git push origin "v${VERSION}"
+
+    # Create GitHub release (triggers publish-crates.yml workflow)
+    gh release create "v${VERSION}" \
+        --title "Release v${VERSION}" \
+        --notes "Release notes for version ${VERSION}
+
+Published crates (unified versioning):
+- \`b00t-chat\` v${VERSION}
+- \`b00t-c0re-lib\` v${VERSION}
+- \`b00t-cli\` v${VERSION}
+- \`b00t-mcp\` v${VERSION}
+
+This release automatically publishes to crates.io via GitHub Actions."
+
+    echo "✅ Release v${VERSION} created"
+    echo "📦 Crates will be published to crates.io by GitHub Actions"
+    echo "🔗 Check workflow: https://github.com/elasticdotventures/dotfiles/actions"
 
 
 install:
