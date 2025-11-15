@@ -79,7 +79,7 @@ jobs:
           fi
 
       - name: Publish b00t-c0re-lib
-        if: github.event_name == 'release' || github.event.inputs.dry_run == 'false'
+        if: (github.event_name == 'release' && github.event.inputs.dry_run != 'true') || (github.event_name == 'workflow_dispatch' && github.event.inputs.dry_run == 'false')
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
         run: |
