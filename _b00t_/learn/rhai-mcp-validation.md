@@ -235,10 +235,16 @@ Check credentials in priority order:
 4. Secret manager (last resort)
 
 ```rhai
-let token = get_env("API_KEY")
-    ?? check_env_file("API_KEY")
-    ?? get_from_cli()
-    ?? throw "No credentials found";
+let token = get_env("API_KEY");
+if token == "" {
+    token = check_env_file("API_KEY");
+}
+if token == "" {
+    token = get_from_cli();
+}
+if token == "" {
+    throw "No credentials found";
+}
 ```
 
 ### 3. Validate Format/Scopes
