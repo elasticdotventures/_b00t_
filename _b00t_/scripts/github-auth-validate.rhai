@@ -68,7 +68,7 @@ if !auth_status_result.contains("Logged in to github.com") {
     log_error("ℹ️  Run: gh auth login");
     log_error("ℹ️  Or set GITHUB_PERSONAL_ACCESS_TOKEN manually:");
     log_error("   export GITHUB_PERSONAL_ACCESS_TOKEN=ghp_xxxxxxxxxxxx");
-    throw "GitHub authentication failed: gh CLI not authenticated (run 'gh auth login')";
+    throw "GitHub authentication failed: gh CLI not authenticated (run 'gh auth login'). Check: " + auth_status_result;
 }
 
 // Get token from gh CLI
