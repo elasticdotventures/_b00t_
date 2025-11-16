@@ -4,12 +4,15 @@
 This POC demonstrates a functional multi-agent system with:
 - ✅ Agent spawning with custom skills & personality
 - ✅ k0mmand3r REPL with slash commands
-- ✅ IPC message bus (in-memory channels)
+- ✅ IPC message bus (in-memory channels, single-process)
 - ✅ Handshake protocol
 - ✅ Voting system with quorum
 - ✅ Crew formation
 - ✅ Crown delegation (captain authority)
 - ✅ Cake token budgets
+
+**Architecture Note:** Currently uses in-process message passing for protocol development.
+Inter-process communication via Unix sockets is planned for Phase 2.
 
 ## Architecture
 
@@ -36,19 +39,32 @@ This POC demonstrates a functional multi-agent system with:
 
 ## Running the POC
 
-### Quick Start
+> **⚠️ Current Limitation**: This POC demonstrates the **API design** for multi-agent communication.
+> Each agent creates its own isolated `MessageBus` instance, so agents in separate terminal processes
+> **cannot** communicate with each other yet. For actual inter-process communication, see the
+> [Future Enhancements](#phase-2-advanced-protocols) section on Unix domain sockets.
+
+### Single-Process Demo
+
+To test the full protocol with multiple agents, run them in the same process using a coordinator:
 
 ```bash
-# Terminal 1 - Agent Alpha (curious, rust/testing specialist)
-cargo run --bin b00t-agent -- --id alpha --skills rust,testing --personality curious
-
-# Terminal 2 - Agent Beta (pragmatic, docker/deploy specialist)
-cargo run --bin b00t-agent -- --id beta --skills docker,deploy --personality pragmatic
+# Run the multi-agent demo (not yet implemented - shows API design)
+cargo run --example multi_agent_demo
 ```
 
-### Demo Script
+### Interactive REPL (Single Agent)
 
-Once both agents are running:
+You can still run individual agents to explore the REPL interface and command syntax:
+
+```bash
+# Agent Alpha (curious, rust/testing specialist)
+cargo run --bin b00t-agent -- --id alpha --skills rust,testing --personality curious
+```
+
+### Demo Script (API Design Reference)
+
+The following shows the *intended* multi-agent workflow once IPC is implemented:
 
 **In Alpha terminal:**
 ```
@@ -73,6 +89,9 @@ alpha> /crew form beta
 alpha> /delegate beta 100       # Transfer crown 👑 and 100🍰 to beta
 alpha> /negotiate cpu 4 Need more cores for compilation
 ```
+
+> **Note**: The above workflow requires Unix domain socket IPC (Phase 2). Currently, each agent
+> can only send/receive messages within its own process for testing the command interface.
 
 ## Slash Commands
 
@@ -152,7 +171,10 @@ _b00t_/
 ## Future Enhancements
 
 ### Phase 2: Advanced Protocols
-- [ ] Unix domain socket IPC (inter-terminal)
+- [ ] **Unix domain socket IPC** - Enable actual inter-process communication between agents in separate terminals
+  - Shared message bus via `/tmp/b00t-ipc.sock`
+  - Message serialization/deserialization
+  - Connection pooling and discovery
 - [ ] Persistent message log
 - [ ] Leader election (Raft/Paxos)
 - [ ] Smart contract budgets
@@ -190,15 +212,26 @@ _b00t_/
 ## Conclusion
 
 This POC demonstrates a **working foundation** for multi-agent b00t systems:
-- Agents spawn with custom capabilities
-- Coordinate via structured protocols
-- Self-organize into crews
-- Vote on decisions democratically
-- Negotiate resources transparently
+- Agents spawn with custom capabilities ✅
+- Coordinate via structured protocols ✅
+- Self-organize into crews ✅
+- Vote on decisions democratically ✅
+- Negotiate resources transparently ✅
 
-**Status**: POC COMPLETE ✨
+**Current Status**: POC COMPLETE ✨ (Single-Process)
 
-The architecture is extensible for Unix sockets, rustfs, and production deployments.
+**What Works:**
+- Full message protocol implementation
+- k0mmand3r REPL interface
+- Voting and proposal system
+- All unit tests passing
+
+**What's Next:**
+- Unix domain socket IPC for actual inter-process communication
+- Enable agents in separate terminals to communicate
+- Persistent message history
+
+The architecture is designed to be extensible for Unix sockets, rustfs, and production deployments.
 
 ---
 
