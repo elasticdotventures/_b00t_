@@ -5,6 +5,7 @@
 
 use crate::B00tResult;
 use anyhow::Context;
+use futures::StreamExt;
 use redis::{Client, Connection};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -415,12 +416,10 @@ impl RedisComms {
     }
 }
 
-/// Redis pub/sub subscriber with async message streaming (minimal implementation).
-///
-/// 🤓 Full async streaming pub/sub will be implemented in Phase 3 with the MessageRouter.
-/// For now, this provides the interface for agent_coordination to compile.
+/// Redis pub/sub subscriber with full async message streaming.
 pub struct RedisSubscriber {
-    _client: Client,
+    client: Client,
+    pubsub: Option<redis::aio::PubSub>,
     subscriptions: Vec<String>,
 }
 
@@ -428,36 +427,76 @@ impl RedisSubscriber {
     /// Create a new subscriber from a Redis client.
     pub fn new(client: Client) -> B00tResult<Self> {
         Ok(Self {
-            _client: client,
+            client,
+            pubsub: None,
             subscriptions: Vec::new(),
         })
     }
 
-    /// Subscribe to one or more channels (stub).
+    /// Subscribe to one or more channels.
     pub async fn subscribe(&mut self, channels: &[&str]) -> B00tResult<()> {
+        // Create PubSub connection if not exists
+        if self.pubsub.is_none() {
+            let pubsub = self
+                .client
+                .get_async_pubsub()
+                .await
+                .context("Failed to create async PubSub connection")?;
+            self.pubsub = Some(pubsub);
+        }
+
+        let pubsub = self
+            .pubsub
+            .as_mut()
+            .ok_or_else(|| anyhow::anyhow!("PubSub not initialized"))?;
+
         for channel in channels {
+            pubsub
+                .subscribe(*channel)
+                .await
+                .context(format!("Failed to subscribe to channel: {}", channel))?;
             self.subscriptions.push(channel.to_string());
+            tracing::debug!("Subscribed to Redis channel: {}", channel);
         }
-        tracing::debug!("Redis subscriber: subscribed to {} channels", channels.len());
+
         Ok(())
     }
 
-    /// Unsubscribe from channels (stub).
+    /// Unsubscribe from channels.
     pub async fn unsubscribe(&mut self, channels: &[&str]) -> B00tResult<()> {
-        for channel in channels {
-            self.subscriptions.retain(|s| s != channel);
+        if let Some(pubsub) = self.pubsub.as_mut() {
+            for channel in channels {
+                pubsub
+                    .unsubscribe(*channel)
+                    .await
+                    .context(format!("Failed to unsubscribe from channel: {}", channel))?;
+                self.subscriptions.retain(|s| s != channel);
+                tracing::debug!("Unsubscribed from Redis channel: {}", channel);
+            }
         }
         Ok(())
     }
 
-    /// Get the next message from any subscribed channel (stub).
+    /// Get the next message from any subscribed channel.
     ///
-    /// Returns `None` for now - will be implemented with proper async streaming in Phase 3.
+    /// Returns `None` if the connection is closed or an error occurs.
     pub async fn next_message(&mut self) -> B00tResult<Option<PubSubMessage>> {
-        // Stub: return None to allow compilation
-        // Full implementation will use redis::aio::PubSub in Phase 3
-        tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
-        Ok(None)
+        if let Some(pubsub) = self.pubsub.as_mut() {
+            let msg = pubsub
+                .on_message()
+                .next()
+                .await
+                .ok_or_else(|| anyhow::anyhow!("PubSub stream closed"))?;
+
+            let channel = msg.get_channel_name().to_string();
+            let payload: String = msg
+                .get_payload()
+                .context("Failed to get message payload")?;
+
+            Ok(Some(PubSubMessage { channel, payload }))
+        } else {
+            Ok(None)
+        }
     }
 
     /// Get list of active subscriptions.
@@ -465,8 +504,17 @@ impl RedisSubscriber {
         &self.subscriptions
     }
 
-    /// Close the pub/sub connection (stub).
-    pub async fn close(self) -> B00tResult<()> {
+    /// Close the pub/sub connection.
+    pub async fn close(mut self) -> B00tResult<()> {
+        if let Some(mut pubsub) = self.pubsub.take() {
+            for channel in &self.subscriptions {
+                pubsub
+                    .unsubscribe(channel)
+                    .await
+                    .context(format!("Failed to unsubscribe from {}", channel))?;
+            }
+            tracing::debug!("Closed Redis PubSub connection");
+        }
         Ok(())
     }
 }

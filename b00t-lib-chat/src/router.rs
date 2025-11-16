@@ -7,7 +7,7 @@ use crate::discovery::SocketRegistry;
 use crate::error::{ChatError, ChatResult};
 use crate::ipc_transport::{AgentEndpoint, DiscoverableTransport, TransportKind};
 use crate::message::ChatMessage;
-use crate::transport::{LocalSocketTransport, ChatTransport};
+use crate::transport::LocalSocketTransport;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use tracing::{debug, info, warn};

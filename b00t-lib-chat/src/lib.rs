@@ -30,12 +30,14 @@ pub mod discovery;
 pub mod error;
 pub mod ipc_transport;
 pub mod message;
+pub mod metrics;
 pub mod protocol;
 pub mod router;
 pub mod security;
 pub mod server;
 pub mod skill;
 pub mod transport;
+pub mod transports;
 
 // pub use agent::{Agent, AgentConfig};  // 🤓 Disabled - needs chat-compatible refactor
 pub use client::ChatClient;
@@ -46,6 +48,7 @@ pub use ipc_transport::{
     DiscoverableTransport, IpcTransport, TransportKind,
 };
 pub use message::ChatMessage;
+pub use metrics::{ChatMetrics, LatencyTimer};
 pub use protocol::{ACPMessage, MessageType, StepBarrier};
 pub use router::{Destination, MessageRouter, MessageRouterBuilder};
 pub use security::{
@@ -54,6 +57,7 @@ pub use security::{
 pub use server::{spawn_local_server, ChatInbox, LocalChatServer};
 pub use skill::{parse_b00t_command, BootCommand, ModelAction};
 pub use transport::{default_socket_path, ChatTransport, ChatTransportConfig, ChatTransportKind};
+pub use transports::{MqttTransport, NatsTransport};
 
 // Type aliases for compatibility
 pub use ChatError as ACPError;
