@@ -119,7 +119,7 @@ Example:
     )]
     Model {
         #[clap(subcommand)]
-        model_command: ModelCommands,
+        model_command: commands::ModelCommands,
     },
     #[clap(
         name = ".",
@@ -187,6 +187,11 @@ Example:
     Session {
         #[clap(subcommand)]
         session_command: SessionCommands,
+    },
+    #[clap(about = "Agent coordination and management")]
+    Agent {
+        #[clap(subcommand)]
+        agent_command: commands::AgentCommands,
     },
     #[clap(about = "Agent Coordination Protocol (ACP) - send messages to agents")]
     Chat {
@@ -1177,6 +1182,12 @@ async fn main() {
         Some(Commands::Session { session_command }) => {
             if let Err(e) = session_command.execute(&cli.path) {
                 eprintln!("Error: {}", e);
+                std::process::exit(1);
+            }
+        }
+        Some(Commands::Agent { agent_command }) => {
+            if let Err(e) = commands::agent::handle_agent_command(agent_command.clone()).await {
+                eprintln!("Agent Error: {}", e);
                 std::process::exit(1);
             }
         }
