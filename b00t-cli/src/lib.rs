@@ -191,7 +191,7 @@ pub enum DatumType {
     Ai,
     #[serde(rename = "ai_model")]
     AiModel,
-    Api,      // API protocol endpoints (OpenAI-compat, embeddings, etc.)
+    Api, // API protocol endpoints (OpenAI-compat, embeddings, etc.)
     Cli,
     Stack,
 }
