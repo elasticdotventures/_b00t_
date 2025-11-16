@@ -22,6 +22,9 @@ RUN apt-get update && apt-get install -y \
     python3-dev \
     && rm -rf /var/lib/apt/lists/*
 
+# Install toml-cli (required by justfile for version management)
+RUN cargo install toml-cli
+
 # Set working directory for the Rust project
 WORKDIR /build
 
@@ -37,6 +40,7 @@ COPY b00t-mcp/ ./b00t-mcp/
 COPY b00t-c0re-lib/ ./b00t-c0re-lib/
 COPY b00t-grok/ ./b00t-grok/
 COPY b00t-lib-chat/ ./b00t-lib-chat/
+COPY b00t-ipc/ ./b00t-ipc/
 COPY k0mmand3r/ ./k0mmand3r/
 COPY b00t-py/ ./b00t-py/
 
