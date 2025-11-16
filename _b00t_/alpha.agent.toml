@@ -1,0 +1,28 @@
+[b00t]
+name = "alpha"
+type = "agent"
+hint = "Curious agent specializing in Rust & testing"
+
+[b00t.agent]
+pid = "01QR79jKinPGYGza4dPvj3jJ"
+branch = "claude/multi-agent-boot-poc-01QR79jKinPGYGza4dPvj3jJ"
+model = "claude-sonnet-4-5"
+skills = ["rust", "testing", "tdd", "architecture"]
+personality = "curious"
+humor = "moderate"
+role = "specialist"
+
+[b00t.agent.ipc]
+socket = "/tmp/b00t/agents/alpha.sock"
+pubsub = true
+protocol = "msgpack"
+
+[b00t.agent.crew]
+# Initially specialist, can be promoted to captain
+role = "specialist"
+captain = false
+
+[b00t.env]
+# Agent-specific environment
+AGENT_ID = "alpha"
+AGENT_SKILLS = "rust,testing,tdd,architecture"

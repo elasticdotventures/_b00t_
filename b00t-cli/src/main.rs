@@ -13,6 +13,7 @@ mod bootstrap;
 mod cloud_sync;
 mod commands;
 mod datum_ai;
+mod datum_ai_model;
 mod datum_apt;
 mod datum_bash;
 mod datum_cli;
@@ -29,6 +30,7 @@ use utils::get_workspace_root;
 
 // 🦨 REMOVED unused K8sDatum import - not used in main.rs
 use datum_ai::AiDatum;
+use datum_ai_model::AiModelDatumEntry;
 use datum_apt::AptDatum;
 use datum_bash::BashDatum;
 use datum_cli::CliDatum;
@@ -40,8 +42,8 @@ use traits::*;
 use crate::commands::learn::{LearnArgs, handle_learn};
 use crate::commands::{
     AiCommands, AppCommands, BootstrapCommands, ChatCommands, CliCommands, DatumCommands,
-    GrokCommands, InitCommands, K8sCommands, McpCommands, SessionCommands, StackCommands,
-    WhatismyCommands,
+    GrokCommands, InitCommands, InstallCommands, K8sCommands, McpCommands, ModelCommands, SessionCommands,
+    StackCommands, WhatismyCommands,
 };
 
 // Re-export commonly used functions for datum modules
@@ -112,6 +114,14 @@ Example:
         cli_command: CliCommands,
     },
     #[clap(
+        about = "AI model datum management",
+        long_about = "List, inspect, install, and activate AI model datums defined in the _b00t_ directory."
+    )]
+    Model {
+        #[clap(subcommand)]
+        model_command: commands::ModelCommands,
+    },
+    #[clap(
         name = ".",
         about = "Check installed vs desired version for CLI command",
         long_about = "Check if a CLI tool's installed version matches the desired version.\n\nThis is a shorthand for: b00t-cli cli check <command>\n\nExamples:\n  b00t-cli . dagu\n  b00t-cli . git\n  b00t-cli . just"
@@ -168,10 +178,20 @@ Example:
         #[clap(subcommand)]
         k8s_command: K8sCommands,
     },
+    #[clap(about = "Run 'just install' to install b00t components")]
+    Install {
+        #[clap(subcommand)]
+        install_command: InstallCommands,
+    },
     #[clap(about = "Session management")]
     Session {
         #[clap(subcommand)]
         session_command: SessionCommands,
+    },
+    #[clap(about = "Agent coordination and management")]
+    Agent {
+        #[clap(subcommand)]
+        agent_command: commands::AgentCommands,
     },
     #[clap(about = "Agent Coordination Protocol (ACP) - send messages to agents")]
     Chat {
@@ -411,6 +431,11 @@ fn show_status(
     all_tools.extend(datum_providers_to_tool_status(load_datum_providers::<
         AiDatum,
     >(path, ".ai.toml")?));
+    all_tools.extend(datum_providers_to_tool_status(load_datum_providers::<
+        AiModelDatumEntry,
+    >(
+        path, ".ai_model.toml"
+    )?));
     all_tools.extend(datum_providers_to_tool_status(load_datum_providers::<
         AptDatum,
     >(path, ".apt.toml")?));
@@ -1081,6 +1106,12 @@ async fn main() {
                 std::process::exit(1);
             }
         }
+        Some(Commands::Model { model_command }) => {
+            if let Err(e) = model_command.execute(&cli.path) {
+                eprintln!("Error: {}", e);
+                std::process::exit(1);
+            }
+        }
         Some(Commands::DotCheck { command }) => {
             // Shorthand for cli check
             let check_cmd = CliCommands::Check {
@@ -1142,9 +1173,21 @@ async fn main() {
                 std::process::exit(1);
             }
         }
+        Some(Commands::Install { install_command }) => {
+            if let Err(e) = install_command.execute(&cli.path) {
+                eprintln!("Error: {}", e);
+                std::process::exit(1);
+            }
+        }
         Some(Commands::Session { session_command }) => {
             if let Err(e) = session_command.execute(&cli.path) {
                 eprintln!("Error: {}", e);
+                std::process::exit(1);
+            }
+        }
+        Some(Commands::Agent { agent_command }) => {
+            if let Err(e) = commands::agent::handle_agent_command(agent_command.clone()).await {
+                eprintln!("Agent Error: {}", e);
                 std::process::exit(1);
             }
         }

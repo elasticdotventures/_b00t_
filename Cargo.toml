@@ -7,6 +7,7 @@ members = [
     "b00t-grok",
     "k0mmand3r",
     "b00t-py",
+    "b00t-ipc",
 ]
 resolver = "2"
 
