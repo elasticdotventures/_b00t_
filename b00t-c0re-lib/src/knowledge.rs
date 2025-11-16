@@ -145,7 +145,10 @@ impl KnowledgeSource {
                 .as_ref()
                 .and_then(|m| m.version.as_deref())
                 .unwrap_or("unknown");
-            println!("║ 📄 Man Page: {} v{:<17}║", self.topic, version);
+            println!(
+                "║ 📄 Man Page: {:<26}║",
+                format!("{} v{}", self.topic, version)
+            );
         }
         if !self.rag_results.is_empty() {
             println!(

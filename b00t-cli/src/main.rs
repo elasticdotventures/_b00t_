@@ -1155,7 +1155,7 @@ async fn main() {
             }
         }
         Some(Commands::Learn(args)) => {
-            if let Err(e) = handle_learn(&cli.path, args) {
+            if let Err(e) = handle_learn(&cli.path, args.clone()) {
                 eprintln!("Error: {}", e);
                 std::process::exit(1);
             }
