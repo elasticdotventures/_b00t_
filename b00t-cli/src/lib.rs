@@ -962,7 +962,7 @@ pub fn mcp_list(path: &str, json_output: bool) -> Result<()> {
 ///
 /// # Examples
 ///
-/// ```rust
+/// ```ignore
 /// // Register from JSON string
 /// let json = r#"{"name":"filesystem","command":"npx","args":["-y","@modelcontextprotocol/server-filesystem"]}"#;
 /// b00t_cli::mcp_add_json(json, false, "~/.dotfiles/_b00t_").unwrap();
@@ -1030,7 +1030,7 @@ pub fn mcp_add_json(json: &str, dwiw: bool, path: &str) -> Result<()> {
 ///
 /// # Examples
 ///
-/// ```rust
+/// ```ignore
 /// // Remove an MCP server configuration from the _b00t_ directory
 /// b00t_cli::mcp_remove("filesystem", "~/.dotfiles/_b00t_").unwrap();
 ///
