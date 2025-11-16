@@ -24,7 +24,5 @@ fn main() {
         if env::var("CONDA_PREFIX").is_ok() {
             println!("cargo:warning=⚠️  CONDA_PREFIX detected - unset if linking fails");
         }
-    } else {
-        println!("cargo:warning=🦀 Building as Rust library (PyO3 disabled)");
     }
 }

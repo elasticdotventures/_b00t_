@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 
 pub mod cloud_sync;
 pub mod datum_ai;
+pub mod datum_ai_model;
 pub mod datum_api;
 pub mod datum_apt;
 pub mod datum_bash;
@@ -14,12 +15,16 @@ pub mod datum_stack;
 pub mod datum_vscode;
 pub mod dependency_resolver;
 pub mod k8s;
+pub mod model_manager;
 pub mod orchestrator;
 pub mod session_memory;
 pub mod traits;
 pub mod utils;
 pub mod whoami;
 pub use traits::*;
+
+// Learn metadata structures - re-exported from b00t-c0re-lib
+pub use b00t_c0re_lib::{LearnMetadata, UsageExample};
 
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
 pub struct McpServer {
@@ -114,6 +119,23 @@ pub struct BootDatum {
 
     #[serde(skip_serializing_if = "Option::is_none")]
     pub requires: Option<std::collections::HashMap<String, CapabilityRequirement>>, // Required capabilities
+
+    // Learn integration - links datum to learning materials and auto-digest to grok
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub learn: Option<LearnMetadata>,
+
+    // Usage examples - CLI/API usage patterns
+    // Supports: usage = ["cmd  # desc", ...] or [[b00t.usage]] tables
+    #[serde(
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "b00t_c0re_lib::deserialize_usage"
+    )]
+    pub usage: Option<Vec<UsageExample>>,
+
+    // LFMF category mapping - groups datum lessons under a category
+    // Used by `b00t lfmf <category> "<topic>: <solution>"`
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub lfmf_category: Option<String>,
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
@@ -167,7 +189,9 @@ pub enum DatumType {
     Apt,
     Nix,
     Ai,
-    Api,      // API protocol endpoints (OpenAI-compat, embeddings, etc.)
+    #[serde(rename = "ai_model")]
+    AiModel,
+    Api, // API protocol endpoints (OpenAI-compat, embeddings, etc.)
     Cli,
     Stack,
 }
@@ -393,6 +417,9 @@ fn create_mcp_datum_from_json(
         implements: None,
         provides: None,
         requires: None,
+        learn: None,
+        usage: None,
+        lfmf_category: None,
     }
 }
 
@@ -487,6 +514,9 @@ pub fn normalize_mcp_json(input: &str, dwiw: bool) -> Result<BootDatum> {
                 implements: None,
                 provides: None,
                 requires: None,
+                learn: None,
+                usage: None,
+                lfmf_category: None,
             });
         }
 
@@ -583,6 +613,7 @@ pub fn create_unified_toml_config(datum: &BootDatum, path: &str) -> Result<()> {
         DatumType::Apt => ".apt.toml",
         DatumType::Nix => ".nix.toml",
         DatumType::Ai => ".ai.toml",
+        DatumType::AiModel => ".ai_model.toml",
         DatumType::Api => ".api.toml",
         DatumType::Cli => ".cli.toml",
         DatumType::Stack => ".stack.toml",
@@ -616,6 +647,7 @@ impl std::fmt::Display for DatumType {
             DatumType::Apt => write!(f, "apt"),
             DatumType::Nix => write!(f, "nix"),
             DatumType::Ai => write!(f, "AI"),
+            DatumType::AiModel => write!(f, "ai-model"),
             DatumType::Api => write!(f, "API"),
             DatumType::Cli => write!(f, "CLI"),
             DatumType::Stack => write!(f, "stack"),
@@ -643,6 +675,8 @@ impl DatumType {
             DatumType::Nix
         } else if filename.ends_with(".ai.toml") {
             DatumType::Ai
+        } else if filename.ends_with(".ai_model.toml") {
+            DatumType::AiModel
         } else if filename.ends_with(".stack.toml") {
             DatumType::Stack
         } else {
@@ -704,7 +738,6 @@ pub fn get_config(
     command: &str,
     path: &str,
 ) -> Result<(UnifiedConfig, String), Box<dyn std::error::Error>> {
-    // Try different file extensions in order of preference
     let extensions = [
         ".cli.toml",
         ".mcp.toml",
@@ -713,29 +746,35 @@ pub fn get_config(
         ".apt.toml",
         ".nix.toml",
         ".bash.toml",
-        ".k8s.toml",     // Kubernetes deployments
-        ".api.toml",     // API protocol definitions
-        ".ai.toml",      // AI model configurations
-        ".stack.toml",   // Stack compositions
+        ".k8s.toml",   // Kubernetes deployments
+        ".api.toml",   // API protocol definitions
+        ".ai.toml",    // AI model configurations
+        ".stack.toml", // Stack compositions
         ".toml",
     ];
 
-    let mut path_buf = std::path::PathBuf::new();
-    let expanded_path = shellexpand::tilde(path).to_string();
-    path_buf.push(expanded_path);
+    let mut visited = std::collections::HashSet::new();
 
-    for ext in &extensions {
-        let filename = format!("{}{}", command, ext);
-        path_buf.push(&filename); // 🤓 FIX: use push instead of set_file_name to avoid removing _b00t_ directory
-        if path_buf.exists() {
-            let content = std::fs::read_to_string(&path_buf)?;
-            let config: UnifiedConfig = toml::from_str(&content)?;
-            return Ok((config, filename));
+    for base in [path, "~/.dotfiles/_b00t_", "~/.b00t"] {
+        let expanded = shellexpand::tilde(base).to_string();
+        if !visited.insert(expanded.clone()) {
+            continue;
         }
-        path_buf.pop(); // 🤓 FIX: remove the filename for next iteration
+
+        let mut candidate = std::path::PathBuf::from(expanded);
+        for ext in &extensions {
+            let filename = format!("{}{}", command, ext);
+            candidate.push(&filename);
+            if candidate.exists() {
+                let content = std::fs::read_to_string(&candidate)?;
+                let config: UnifiedConfig = toml::from_str(&content)?;
+                return Ok((config, filename));
+            }
+            candidate.pop();
+        }
     }
 
-    eprintln!("{} UNDEFINED", command);
+    eprintln!("{command} UNDEFINED");
     std::process::exit(100);
 }
 
@@ -743,43 +782,59 @@ pub fn get_mcp_config(name: &str, path: &str) -> Result<BootDatum> {
     use anyhow::Context;
     use std::fs;
 
-    let mut path_buf = get_expanded_path(path)?;
-    path_buf.push(format!("{}.mcp.toml", name));
+    for base in [path, "~/.dotfiles/_b00t_", "~/.b00t"] {
+        let mut path_buf = get_expanded_path(base)?;
+        path_buf.push(format!("{}.mcp.toml", name));
 
-    if !path_buf.exists() {
-        anyhow::bail!(
-            "MCP server '{}' not found. Use 'b00t-cli mcp add' to create it first.",
-            name
-        );
+        if path_buf.exists() {
+            let content = fs::read_to_string(&path_buf).context(format!(
+                "Failed to read MCP config from {}",
+                path_buf.display()
+            ))?;
+
+            let config: UnifiedConfig =
+                toml::from_str(&content).context("Failed to parse MCP config TOML")?;
+
+            return Ok(config.b00t);
+        }
     }
 
-    let content = fs::read_to_string(&path_buf).context(format!(
-        "Failed to read MCP config from {}",
-        path_buf.display()
-    ))?;
-
-    let config: UnifiedConfig =
-        toml::from_str(&content).context("Failed to parse MCP config TOML")?;
-
-    Ok(config.b00t)
+    anyhow::bail!(
+        "MCP server '{}' not found. Use 'b00t-cli mcp add' to create it first.",
+        name
+    );
 }
 
 pub fn get_mcp_toml_files(path: &str) -> Result<Vec<String>> {
     use anyhow::Context;
     use std::fs;
 
-    let expanded_path = get_expanded_path(path)?;
-    let entries = fs::read_dir(&expanded_path)
-        .with_context(|| format!("Error reading directory {}", expanded_path.display()))?;
-
+    let mut seen = std::collections::HashSet::new();
     let mut mcp_files = Vec::new();
-    for entry in entries {
-        if let Ok(entry) = entry {
-            let entry_path = entry.path();
-            if let Some(file_name) = entry_path.file_name().and_then(|s| s.to_str()) {
-                if file_name.ends_with(".mcp.toml") {
-                    if let Some(server_name) = file_name.strip_suffix(".mcp.toml") {
-                        mcp_files.push(server_name.to_string());
+
+    for base in [path, "~/.dotfiles/_b00t_", "~/.b00t"] {
+        let expanded_path = match get_expanded_path(base) {
+            Ok(p) => p,
+            Err(_) => continue,
+        };
+
+        if !expanded_path.exists() {
+            continue;
+        }
+
+        let entries = fs::read_dir(&expanded_path)
+            .with_context(|| format!("Error reading directory {}", expanded_path.display()))?;
+
+        for entry in entries {
+            if let Ok(entry) = entry {
+                let entry_path = entry.path();
+                if let Some(file_name) = entry_path.file_name().and_then(|s| s.to_str()) {
+                    if file_name.ends_with(".mcp.toml") {
+                        if let Some(server_name) = file_name.strip_suffix(".mcp.toml") {
+                            if seen.insert(server_name.to_string()) {
+                                mcp_files.push(server_name.to_string());
+                            }
+                        }
                     }
                 }
             }
@@ -1021,7 +1076,7 @@ pub fn mcp_output(path: &str, use_mcp_servers_wrapper: bool, servers: &str) -> R
 
         match get_mcp_config(server_name, path) {
             Ok(datum) => {
-                let (command, args) = extract_mcp_command_args(&datum);
+                let (command, args, env) = extract_mcp_command_args(&datum);
                 let mut server_config = serde_json::Map::new();
                 server_config.insert("command".to_string(), serde_json::Value::String(command));
                 server_config.insert(
@@ -1030,6 +1085,9 @@ pub fn mcp_output(path: &str, use_mcp_servers_wrapper: bool, servers: &str) -> R
                         args.into_iter().map(serde_json::Value::String).collect(),
                     ),
                 );
+                if let Some(env_map) = env {
+                    server_config.insert("env".to_string(), serde_json::to_value(env_map)?);
+                }
 
                 server_configs.insert(
                     server_name.to_string(),
@@ -1090,8 +1148,14 @@ pub fn mcp_output(path: &str, use_mcp_servers_wrapper: bool, servers: &str) -> R
     Ok(())
 }
 
-/// Extract command and args from MCP datum, handling both new multi-method and legacy formats
-fn extract_mcp_command_args(datum: &BootDatum) -> (String, Vec<String>) {
+/// Extract command, args, and env from MCP datum, handling both new multi-method and legacy formats
+fn extract_mcp_command_args(
+    datum: &BootDatum,
+) -> (
+    String,
+    Vec<String>,
+    Option<std::collections::HashMap<String, String>>,
+) {
     if let Some(mcp) = &datum.mcp {
         if let Some(stdio_methods) = &mcp.stdio {
             if let Some(first_method) = stdio_methods.first() {
@@ -1110,15 +1174,26 @@ fn extract_mcp_command_args(datum: &BootDatum) -> (String, Vec<String>) {
                             .collect::<Vec<String>>()
                     })
                     .unwrap_or_default();
-                return (command, args);
+                let env = first_method
+                    .get("env")
+                    .and_then(|v| v.as_object())
+                    .map(|obj| {
+                        obj.iter()
+                            .filter_map(|(k, v)| v.as_str().map(|s| (k.clone(), s.to_string())))
+                            .collect::<std::collections::HashMap<String, String>>()
+                    });
+                return (command, args, env);
             }
         }
     }
 
     // Fallback to legacy fields for backwards compatibility
+    let env = datum.env.clone();
+
     (
         datum.command.clone().unwrap_or_else(|| "npx".to_string()),
         datum.args.clone().unwrap_or_default(),
+        env,
     )
 }
 
@@ -1127,13 +1202,18 @@ pub fn claude_code_install_mcp(name: &str, path: &str) -> Result<()> {
     use duct::cmd;
 
     let datum = get_mcp_config(name, path)?;
-    let (command, args) = extract_mcp_command_args(&datum);
+    let (command, args, env) = extract_mcp_command_args(&datum);
 
-    let claude_json = serde_json::json!({
+    let mut claude_json = serde_json::json!({
         "name": datum.name,
         "command": command,
         "args": args
     });
+    if let Some(env_map) = env {
+        if let Some(obj) = claude_json.as_object_mut() {
+            obj.insert("env".to_string(), serde_json::to_value(env_map)?);
+        }
+    }
 
     let json_str =
         serde_json::to_string(&claude_json).context("Failed to serialize JSON for Claude Code")?;
@@ -1168,13 +1248,18 @@ pub fn vscode_install_mcp(name: &str, path: &str) -> Result<()> {
     use duct::cmd;
 
     let datum = get_mcp_config(name, path)?;
-    let (command, args) = extract_mcp_command_args(&datum);
+    let (command, args, env) = extract_mcp_command_args(&datum);
 
-    let vscode_json = serde_json::json!({
+    let mut vscode_json = serde_json::json!({
         "name": datum.name,
         "command": command,
         "args": args
     });
+    if let Some(env_map) = env {
+        if let Some(obj) = vscode_json.as_object_mut() {
+            obj.insert("env".to_string(), serde_json::to_value(env_map)?);
+        }
+    }
 
     let json_str =
         serde_json::to_string(&vscode_json).context("Failed to serialize JSON for VSCode")?;
@@ -1203,13 +1288,18 @@ pub fn gemini_install_mcp(name: &str, path: &str, use_repo: bool) -> Result<()> 
     use duct::cmd;
 
     let datum = get_mcp_config(name, path)?;
-    let (command, args) = extract_mcp_command_args(&datum);
+    let (command, args, env) = extract_mcp_command_args(&datum);
 
-    let gemini_json = serde_json::json!({
+    let mut gemini_json = serde_json::json!({
         "name": datum.name,
         "command": command,
         "args": args
     });
+    if let Some(env_map) = env {
+        if let Some(obj) = gemini_json.as_object_mut() {
+            obj.insert("env".to_string(), serde_json::to_value(env_map)?);
+        }
+    }
 
     let json_str =
         serde_json::to_string(&gemini_json).context("Failed to serialize JSON for Gemini CLI")?;
@@ -1393,8 +1483,8 @@ pub fn dotmcpjson_install_mcp(
         }
     } else {
         // Legacy single-source config - use extract_mcp_command_args for consistency
-        let (command, args) = extract_mcp_command_args(&datum);
-        (command, args, datum.env.clone(), "stdio")
+        let (command, args, env) = extract_mcp_command_args(&datum);
+        (command, args, env, "stdio")
     };
 
     // Create MCP server entry for .mcp.json format
@@ -1533,4 +1623,45 @@ impl SessionState {
             self.commands_run, cost_info, time_info, agent_info
         )
     }
+}
+pub fn codex_install_mcp(name: &str, path: &str) -> Result<()> {
+    use duct::cmd;
+
+    let datum = get_mcp_config(name, path)?;
+    let (command, args, env) = extract_mcp_command_args(&datum);
+
+    let mut codex_args: Vec<String> =
+        vec!["mcp".to_string(), "add".to_string(), datum.name.clone()];
+    if let Some(env_map) = env {
+        let mut entries: Vec<(String, String)> = env_map.into_iter().collect();
+        entries.sort_by(|a, b| a.0.cmp(&b.0));
+        for (key, value) in entries {
+            codex_args.push("--env".to_string());
+            codex_args.push(format!("{}={}", key, value));
+        }
+    }
+    codex_args.push("--".to_string());
+    codex_args.push(command.clone());
+    codex_args.extend(args.iter().cloned());
+
+    let manual_command = format!("codex {}", codex_args.join(" "));
+    let codex_args_refs: Vec<&str> = codex_args.iter().map(|s| s.as_str()).collect();
+    let result = cmd("codex", codex_args_refs).run();
+
+    match result {
+        Ok(_) => {
+            println!(
+                "Successfully installed MCP server '{}' to Codex",
+                datum.name
+            );
+            println!("Codex command: {}", manual_command);
+        }
+        Err(e) => {
+            eprintln!("Failed to install MCP server to Codex: {}", e);
+            eprintln!("Manual command: {}", manual_command);
+            return Err(anyhow::anyhow!("Codex installation failed: {}", e));
+        }
+    }
+
+    Ok(())
 }

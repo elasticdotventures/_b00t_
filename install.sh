@@ -15,6 +15,57 @@ NC='\033[0m' # No Color
 REPO="elasticdotventures/dotfiles"
 INSTALL_DIR="${INSTALL_DIR:-$HOME/.local/bin}"
 CONFIG_DIR="${CONFIG_DIR:-$HOME/.config/b00t}"
+B00T_HOME="${B00T_HOME:-$HOME/.b00t}"  # b00t installation directory (includes datums)
+USE_PKGX="${USE_PKGX:-auto}"  # auto, true, false
+
+# Check if pkgx is available (minimal install option)
+check_pkgx() {
+    if [ "$USE_PKGX" = "false" ]; then
+        return 1
+    fi
+
+    if command -v pkgx >/dev/null 2>&1; then
+        return 0
+    fi
+
+    # If USE_PKGX=auto, offer to install pkgx
+    if [ "$USE_PKGX" = "auto" ]; then
+        echo "${BLUE}🔍 pkgx not found. pkgx provides minimal installation (4 MiB vs 1 GB Rust toolchain)${NC}"
+        echo "${YELLOW}💡 Install pkgx for faster, cleaner b00t installation? [y/N]${NC}"
+        read -r response
+        if [[ "$response" =~ ^[Yy]$ ]]; then
+            echo "${BLUE}📦 Installing pkgx...${NC}"
+            if curl -Ssf https://pkgx.sh | sh; then
+                export PATH="$HOME/.local/bin:$PATH"
+                return 0
+            else
+                echo "${YELLOW}⚠️  pkgx installation failed, falling back to binary method${NC}"
+                return 1
+            fi
+        fi
+    fi
+
+    return 1
+}
+
+# Install via pkgx (preferred method)
+install_via_pkgx() {
+    echo "${BLUE}🥾 Installing b00t via pkgx (minimal method)...${NC}"
+
+    # Install b00t-cli via pkgx
+    if pkgx +b00t-cli; then
+        echo "${GREEN}✅ b00t-cli installed via pkgx${NC}"
+
+        # Verify installation
+        if pkgx b00t-cli --version >/dev/null 2>&1; then
+            echo "${GREEN}✅ Installation verified${NC}"
+            return 0
+        fi
+    fi
+
+    echo "${RED}❌ pkgx installation failed${NC}"
+    return 1
+}
 
 # Detect platform
 detect_platform() {
@@ -61,31 +112,47 @@ get_latest_version() {
     echo "${GREEN}📦 Latest version: $VERSION${NC}"
 }
 
-# Download and install binaries
+# Download and install binaries + datums
 install_binaries() {
     local asset_name="b00t-${PLATFORM}.tar.gz"
     local download_url="https://github.com/$REPO/releases/download/$VERSION/$asset_name"
     local temp_dir=$(mktemp -d)
-    
+
     echo "${BLUE}⬇️  Downloading $asset_name...${NC}"
-    
+
     if ! curl -fsSL "$download_url" -o "$temp_dir/$asset_name"; then
         echo "${RED}Failed to download release asset${NC}" >&2
         echo "${YELLOW}💡 Trying container-based installation...${NC}"
         install_from_container
         return
     fi
-    
-    echo "${BLUE}📂 Extracting to $INSTALL_DIR...${NC}"
-    mkdir -p "$INSTALL_DIR"
-    tar -xzf "$temp_dir/$asset_name" -C "$INSTALL_DIR"
-    
-    # Make binaries executable
-    chmod +x "$INSTALL_DIR/b00t-cli" "$INSTALL_DIR/b00t-mcp" 2>/dev/null || true
-    
-    # Create symlink for easier access
-    ln -sf "$INSTALL_DIR/b00t-cli" "$INSTALL_DIR/b00t" 2>/dev/null || true
-    
+
+    echo "${BLUE}📂 Extracting to $B00T_HOME...${NC}"
+    mkdir -p "$B00T_HOME"
+    tar -xzf "$temp_dir/$asset_name" -C "$temp_dir"
+
+    # Move extracted b00t/ contents to B00T_HOME
+    if [ -d "$temp_dir/b00t" ]; then
+        # Remove old installation if exists
+        rm -rf "$B00T_HOME"/*
+        cp -r "$temp_dir/b00t"/* "$B00T_HOME/"
+
+        # Make binaries executable
+        chmod +x "$B00T_HOME/b00t-cli" "$B00T_HOME/b00t-mcp" 2>/dev/null || true
+
+        # Create symlinks in INSTALL_DIR for PATH
+        mkdir -p "$INSTALL_DIR"
+        ln -sf "$B00T_HOME/b00t-cli" "$INSTALL_DIR/b00t-cli"
+        ln -sf "$B00T_HOME/b00t-mcp" "$INSTALL_DIR/b00t-mcp"
+        ln -sf "$B00T_HOME/b00t" "$INSTALL_DIR/b00t"
+
+        echo "${GREEN}✅ Installed binaries and datums to $B00T_HOME${NC}"
+        echo "${GREEN}✅ Created symlinks in $INSTALL_DIR${NC}"
+    else
+        echo "${RED}❌ Unexpected tarball structure${NC}" >&2
+        exit 1
+    fi
+
     rm -rf "$temp_dir"
 }
 
@@ -137,10 +204,10 @@ EOF
     fi
 }
 
-# Update PATH
+# Update PATH and set _B00T_Path
 update_path() {
     local shell_rc=""
-    
+
     # Detect shell config file
     if [ -n "$ZSH_VERSION" ]; then
         shell_rc="$HOME/.zshrc"
@@ -149,15 +216,24 @@ update_path() {
     else
         shell_rc="$HOME/.profile"
     fi
-    
-    # Check if PATH already contains install directory
-    if [[ ":$PATH:" != *":$INSTALL_DIR:"* ]]; then
-        echo "${BLUE}🔧 Adding $INSTALL_DIR to PATH in $shell_rc...${NC}"
-        echo "" >> "$shell_rc"
-        echo "# Added by b00t installer" >> "$shell_rc"
-        echo "export PATH=\"$INSTALL_DIR:\$PATH\"" >> "$shell_rc"
-        export PATH="$INSTALL_DIR:$PATH"
+
+    # Check if b00t is already configured
+    if ! grep -q "# Added by b00t installer" "$shell_rc" 2>/dev/null; then
+        echo "${BLUE}🔧 Configuring shell environment in $shell_rc...${NC}"
+        cat >> "$shell_rc" << EOF
+
+# Added by b00t installer
+export PATH="$INSTALL_DIR:\$PATH"
+export _B00T_Path="$B00T_HOME/_b00t_"
+EOF
+        echo "${GREEN}✅ Shell configuration updated${NC}"
+    else
+        echo "${BLUE}💡 Shell already configured for b00t${NC}"
     fi
+
+    # Set for current session
+    export PATH="$INSTALL_DIR:$PATH"
+    export _B00T_Path="$B00T_HOME/_b00t_"
 }
 
 # Verify installation
@@ -177,7 +253,29 @@ verify_installation() {
 main() {
     echo "${BLUE}🥾 b00t Universal Installer${NC}"
     echo "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-    
+
+    # Try pkgx first (minimal install, preferred method)
+    if check_pkgx; then
+        echo "${BLUE}✨ Using pkgx for minimal installation${NC}"
+        if install_via_pkgx; then
+            setup_config
+            echo ""
+            echo "${GREEN}🎉 Installation complete (via pkgx)!${NC}"
+            echo "${BLUE}💡 Quick start:${NC}"
+            echo "   pkgx b00t-cli --help"
+            echo "   pkgx b00t-cli status"
+            echo "   pkgx b00t-cli learn rust"
+            echo ""
+            echo "${BLUE}💡 Or install permanently:${NC}"
+            echo "   pkgx +b00t-cli  # Adds to ~/.local/bin"
+            echo ""
+            echo "${BLUE}📚 Documentation: https://github.com/$REPO${NC}"
+            return 0
+        fi
+        echo "${YELLOW}⚠️  pkgx method failed, falling back to binary installation${NC}"
+    fi
+
+    # Fallback: Binary installation from GitHub releases
     detect_platform
     check_dependencies
     get_latest_version
@@ -185,7 +283,7 @@ main() {
     setup_config
     update_path
     verify_installation
-    
+
     echo ""
     echo "${GREEN}🎉 Installation complete!${NC}"
     echo "${BLUE}💡 Quick start:${NC}"
@@ -208,8 +306,20 @@ case "${1:-}" in
         echo "  --version, -v  Show installer version"
         echo ""
         echo "Environment variables:"
-        echo "  INSTALL_DIR    Installation directory (default: \$HOME/.local/bin)"
+        echo "  INSTALL_DIR    Binary symlinks directory (default: \$HOME/.local/bin)"
+        echo "  B00T_HOME      b00t installation directory (default: \$HOME/.b00t)"
         echo "  CONFIG_DIR     Configuration directory (default: \$HOME/.config/b00t)"
+        echo "  USE_PKGX       Use pkgx for installation: auto (default), true, false"
+        echo ""
+        echo "Examples:"
+        echo "  # Default: auto-detect pkgx"
+        echo "  curl -fsSL https://raw.githubusercontent.com/$REPO/main/install.sh | sh"
+        echo ""
+        echo "  # Force pkgx method"
+        echo "  curl -fsSL https://raw.githubusercontent.com/$REPO/main/install.sh | USE_PKGX=true sh"
+        echo ""
+        echo "  # Skip pkgx, use binary method"
+        echo "  curl -fsSL https://raw.githubusercontent.com/$REPO/main/install.sh | USE_PKGX=false sh"
         exit 0
         ;;
     --version|-v)

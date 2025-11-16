@@ -48,7 +48,7 @@ jobs:
           git reset --hard "origin/$default_branch" # output: sync with remote default branch
           git checkout -B next # output: create/reset next branch at default branch tip
 
-          pr_numbers="$(gh pr list --repo "$REPO" --state open --json number --limit 1000 --jq '.[].number' | sort -n)" # output: newline separated PR numbers
+          pr_numbers="$(gh pr list --repo "$REPO" --state open --json number,draft --limit 1000 --jq '.[] | select(.draft | not) | .number' | sort -n)" # output: newline separated non-draft PR numbers
 
           if [ -z "$pr_numbers" ]; then
             echo "No open PRs; pushing clean next branch." # output: status message

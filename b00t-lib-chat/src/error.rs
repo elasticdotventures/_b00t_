@@ -21,6 +21,10 @@ pub enum ChatError {
     #[error("invalid socket path: {0}")]
     InvalidSocketPath(String),
 
+    /// Agent not found in registry.
+    #[error("agent not found: {0}")]
+    AgentNotFound(String),
+
     /// Stubbed transports that are not fully implemented yet.
     #[error("transport not implemented: {0}")]
     NotImplemented(&'static str),

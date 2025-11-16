@@ -1,10 +1,9 @@
 use anyhow::{Context, Result};
 use clap::Parser;
 use std::collections::HashMap;
-use std::path::Path;
 
 use b00t_cli::datum_stack::StackDatum;
-use b00t_cli::{BootDatum, get_expanded_path, UnifiedConfig};
+use b00t_cli::{BootDatum, get_expanded_path};
 
 #[derive(Parser)]
 pub enum StackCommands {
@@ -118,11 +117,7 @@ fn list_stacks(path: &str, json_output: bool) -> Result<()> {
                     println!("  {}", stack.get_summary());
                 }
                 Err(e) => {
-                    eprintln!(
-                        "  ❌ {} (error: {})",
-                        stack_path.display(),
-                        e
-                    );
+                    eprintln!("  ❌ {} (error: {})", stack_path.display(), e);
                 }
             }
         }
@@ -344,7 +339,9 @@ fn load_all_datums(path: &str) -> Result<HashMap<String, BootDatum>> {
                     if let Ok(content) = std::fs::read_to_string(&entry_path) {
                         if let Ok(config) = toml::from_str::<crate::UnifiedConfig>(&content) {
                             let datum = config.b00t;
-                            let datum_type = datum.datum_type.as_ref()
+                            let datum_type = datum
+                                .datum_type
+                                .as_ref()
                                 .map(|t| format!("{:?}", t).to_lowercase())
                                 .unwrap_or_else(|| "unknown".to_string());
                             let key = format!("{}.{}", datum.name, datum_type);

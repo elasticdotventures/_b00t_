@@ -19,7 +19,7 @@ pub async fn test_cloud_sync_flow() -> Result<()> {
 
     // Test cloud sync client creation
     let sync_config = CloudSyncConfig::default();
-    let mut sync_client = CloudSyncClient::new(sync_config)?;
+    let sync_client = CloudSyncClient::new(sync_config)?;
 
     eprintln!("✅ Cloud sync client created successfully");
 

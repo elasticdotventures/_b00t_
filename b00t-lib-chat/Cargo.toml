@@ -1,13 +1,13 @@
 [package]
 name = "b00t-chat"
-version = "0.1.0"
+version.workspace = true
 edition = "2021"
 description = "b00t chat coordination system with multi-transport support"
-license = "MIT"
-repository = "https://github.com/promptexecution/b00t"
+license.workspace = true
+repository.workspace = true
 keywords = ["agent", "chat", "coordination", "nats", "ipc"]
 categories = ["network-programming", "web-programming", "development-tools"]
-authors = ["PromptExecution <noreply@promptexecution.com>"]
+authors.workspace = true
 
 # [workspace] - removed to avoid conflict with parent workspace
 
@@ -17,9 +17,11 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 async-nats = "0.45.0"
+rumqttc = "0.24"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 tokio = { version = "1.0", features = ["full"] }
+tokio-stream = "0.1"
 uuid = { version = "1.0", features = ["v4", "serde"] }
 thiserror = "2.0.17"
 chrono = { version = "0.4", features = ["serde"] }
@@ -31,6 +33,15 @@ sha2 = "0.10"
 hex = "0.4"
 reqwest = { version = "0.12", features = ["json"] }
 dirs = "6.0"
+k0mmand3r = { path = "../k0mmand3r" }
+notify = { version = "6.1", default-features = false, features = ["macos_fsevent"] }
+async-trait = "0.1"
+async-stream = "0.3"
+
+# OpenTelemetry observability
+opentelemetry = { version = "0.28", features = ["metrics", "trace"] }
+opentelemetry_sdk = { version = "0.28", features = ["rt-tokio", "metrics", "trace"] }
+opentelemetry-otlp = { version = "0.28", features = ["metrics", "trace"] }
 
 # Python bindings - using compatible version
 pyo3 = { version = "0.25", features = ["extension-module"], optional = true }
@@ -44,16 +55,12 @@ serde-wasm-bindgen = { version = "0.6", optional = true }
 [dev-dependencies]
 tracing-subscriber = "0.3"
 rand = "0.8"
+tempfile = "3.0"
 
 [features]
 default = []
 python = ["pyo3"]
 wasm = ["wasm-bindgen", "js-sys", "web-sys", "serde-wasm-bindgen"]
 
-[profile.release]
-lto = true
-codegen-units = 1
-panic = "abort"
-strip = true
-
+# 🤓 Profile configuration moved to workspace root to avoid warnings
 # Examples are in examples/ directory, not as bins

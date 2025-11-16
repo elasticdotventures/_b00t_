@@ -49,7 +49,7 @@ desires = "1.0.0"
 name = "hf-cli"
 type = "cli"
 hint = "HF CLI datum test"
-version = "huggingface-cli --version"
+version = "hf version"
 
 [b00t.env]
 HF_TOKEN = "${HF_TOKEN}"
@@ -64,9 +64,6 @@ HF_TOKEN = "${HF_TOKEN}"
             .env
             .expect("expected env map for huggingface CLI datum");
 
-        assert_eq!(
-            env_map.get("HF_TOKEN"),
-            Some(&"${HF_TOKEN}".to_string())
-        ); // output: HF_TOKEN placeholder is preserved.
+        assert_eq!(env_map.get("HF_TOKEN"), Some(&"${HF_TOKEN}".to_string())); // output: HF_TOKEN placeholder is preserved.
     }
 }

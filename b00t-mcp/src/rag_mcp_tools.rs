@@ -7,7 +7,7 @@ use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tokio::sync::Mutex;
-use tracing::{error, info, warn};
+use tracing::info;
 
 use b00t_c0re_lib::rag::{DocumentSource, LoaderType, RagLightConfig, RagLightManager};
 

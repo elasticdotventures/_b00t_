@@ -74,8 +74,7 @@ fn load_config(config_path: &Path) -> Result<BootstrapConfig> {
     let content = std::fs::read_to_string(config_path)
         .with_context(|| format!("Failed to read {}", config_path.display()))?;
 
-    toml::from_str(&content)
-        .with_context(|| format!("Failed to parse bootstrap.toml"))
+    toml::from_str(&content).with_context(|| format!("Failed to parse bootstrap.toml"))
 }
 
 /// Check if binary exists in PATH
@@ -97,10 +96,7 @@ fn find_binary(name: &str) -> Option<PathBuf> {
 
 /// Get version of binary by running `<binary> --version`
 fn get_version(name: &str) -> Option<String> {
-    let output = Command::new(name)
-        .arg("--version")
-        .output()
-        .ok()?;
+    let output = Command::new(name).arg("--version").output().ok()?;
 
     if !output.status.success() {
         return None;
@@ -263,7 +259,9 @@ pub fn check_prerequisites(config_path: &Path) -> Result<PrereqResult> {
 
     // Sort by priority (lower number = higher priority)
     required_checks.sort_by_key(|check| {
-        config.bootstrap.required_bins
+        config
+            .bootstrap
+            .required_bins
             .get(&check.name)
             .map(|spec| spec.priority)
             .unwrap_or(99)
@@ -274,7 +272,8 @@ pub fn check_prerequisites(config_path: &Path) -> Result<PrereqResult> {
         optional_checks.push(check_binary(name, spec));
     }
 
-    let all_required_met = required_checks.iter()
+    let all_required_met = required_checks
+        .iter()
         .all(|check| check.found && check.meets_requirement);
 
     Ok(PrereqResult {
@@ -298,14 +297,8 @@ mod tests {
             extract_version("docker version 20.10.0, build..."),
             Some("20.10.0".to_string())
         );
-        assert_eq!(
-            extract_version("just 1.5.0"),
-            Some("1.5.0".to_string())
-        );
-        assert_eq!(
-            extract_version("v3.2.1"),
-            Some("3.2.1".to_string())
-        );
+        assert_eq!(extract_version("just 1.5.0"), Some("1.5.0".to_string()));
+        assert_eq!(extract_version("v3.2.1"), Some("3.2.1".to_string()));
     }
 
     #[test]
