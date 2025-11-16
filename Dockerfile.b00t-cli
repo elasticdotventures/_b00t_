@@ -102,7 +102,7 @@ RUN test -d /opt/b00t/config && \
     test -d /opt/b00t/config/scripts && \
     test -d /opt/b00t/config/learn && \
     test -f /opt/b00t/config/scripts/setup.rhai && \
-    ls /opt/b00t/config/*.toml | wc -l | grep -qv '^0$' && \
+    find /opt/b00t/config -maxdepth 1 -name '*.toml' -type f | wc -l | grep -qv '^0$' && \
     echo "✅ _b00t_ datums, scripts, and learn content verified"
 
 # Default working directory
