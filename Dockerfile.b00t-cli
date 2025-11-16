@@ -47,8 +47,10 @@ COPY b00t-py/ ./b00t-py/
 # Build using just install (installs b00t-cli, b00t-mcp, cocogitto to ~/.cargo/bin)
 RUN just install || (echo "just install failed" && exit 1)
 
-# Verify the binaries work
-RUN ~/.cargo/bin/b00t-cli --version && ~/.cargo/bin/b00t-mcp --version
+# Verify the binaries were installed to /usr/local/cargo/bin
+RUN ls -la /usr/local/cargo/bin/b00t-* && \
+    /usr/local/cargo/bin/b00t-cli --version && \
+    /usr/local/cargo/bin/b00t-mcp --version
 
 # ================================
 # Stage 2: b00t Resources Layer
@@ -81,9 +83,9 @@ RUN apt-get update && apt-get install -y \
     ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy the compiled binaries from builder stage (installed via just install to ~/.cargo/bin)
-COPY --from=rust-builder /root/.cargo/bin/b00t-cli /usr/local/bin/b00t-cli
-COPY --from=rust-builder /root/.cargo/bin/b00t-mcp /usr/local/bin/b00t-mcp
+# Copy the compiled binaries from builder stage (cargo install puts them in /usr/local/cargo/bin in Docker)
+COPY --from=rust-builder /usr/local/cargo/bin/b00t-cli /usr/local/bin/b00t-cli
+COPY --from=rust-builder /usr/local/cargo/bin/b00t-mcp /usr/local/bin/b00t-mcp
 
 # Copy _b00t_ resources from resources stage
 COPY --from=b00t-resources /opt/b00t/config/ /opt/b00t/config/
