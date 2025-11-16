@@ -26,9 +26,12 @@
 
 // pub mod agent;  // 🤓 agent.rs uses full NATS Agent from old ACP - chat refactor simplified to stubs
 pub mod client;
+pub mod discovery;
 pub mod error;
+pub mod ipc_transport;
 pub mod message;
 pub mod protocol;
+pub mod router;
 pub mod security;
 pub mod server;
 pub mod skill;
@@ -36,9 +39,15 @@ pub mod transport;
 
 // pub use agent::{Agent, AgentConfig};  // 🤓 Disabled - needs chat-compatible refactor
 pub use client::ChatClient;
+pub use discovery::{SocketRegistry, SocketRegistryBuilder};
 pub use error::{ChatError, ChatResult};
+pub use ipc_transport::{
+    AgentEndpoint, AgentEvent, AgentWatcher, BroadcastTransport, DirectTransport,
+    DiscoverableTransport, IpcTransport, TransportKind,
+};
 pub use message::ChatMessage;
 pub use protocol::{ACPMessage, MessageType, StepBarrier};
+pub use router::{Destination, MessageRouter, MessageRouterBuilder};
 pub use security::{
     fetch_jwt_from_website, AcpJwtValidator, AcpSecurityContext, NamespaceEnforcer,
 };

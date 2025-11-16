@@ -114,6 +114,7 @@ pub enum BroadcastPriority {
 }
 
 /// Redis pub/sub communication hub for b00t agents
+#[derive(Clone)]
 pub struct RedisComms {
     client: Client,
     #[allow(dead_code)]
@@ -390,6 +391,91 @@ impl RedisComms {
             .context("Failed to HGETALL from Redis hash")?;
         Ok(result)
     }
+
+    /// Poll for messages published to a channel (blocking with timeout).
+    ///
+    /// This is a simplified pub/sub that polls for recent messages.
+    /// For production, use a dedicated RedisSubscriber with async streams.
+    pub async fn poll_channel_messages(
+        &self,
+        channel: &str,
+        timeout_secs: u64,
+    ) -> B00tResult<Vec<String>> {
+        // For now, return empty - full pub/sub implementation deferred to Phase 3
+        // This allows compilation while we implement the message router
+        let _ = (channel, timeout_secs);
+        Ok(Vec::new())
+    }
+
+    /// Create a pub/sub subscriber (stub for Phase 2)
+    ///
+    /// Returns a `RedisSubscriber` that can subscribe to multiple channels.
+    pub fn create_subscriber(&self) -> B00tResult<RedisSubscriber> {
+        RedisSubscriber::new(self.client.clone())
+    }
+}
+
+/// Redis pub/sub subscriber with async message streaming (minimal implementation).
+///
+/// 🤓 Full async streaming pub/sub will be implemented in Phase 3 with the MessageRouter.
+/// For now, this provides the interface for agent_coordination to compile.
+pub struct RedisSubscriber {
+    _client: Client,
+    subscriptions: Vec<String>,
+}
+
+impl RedisSubscriber {
+    /// Create a new subscriber from a Redis client.
+    pub fn new(client: Client) -> B00tResult<Self> {
+        Ok(Self {
+            _client: client,
+            subscriptions: Vec::new(),
+        })
+    }
+
+    /// Subscribe to one or more channels (stub).
+    pub async fn subscribe(&mut self, channels: &[&str]) -> B00tResult<()> {
+        for channel in channels {
+            self.subscriptions.push(channel.to_string());
+        }
+        tracing::debug!("Redis subscriber: subscribed to {} channels", channels.len());
+        Ok(())
+    }
+
+    /// Unsubscribe from channels (stub).
+    pub async fn unsubscribe(&mut self, channels: &[&str]) -> B00tResult<()> {
+        for channel in channels {
+            self.subscriptions.retain(|s| s != channel);
+        }
+        Ok(())
+    }
+
+    /// Get the next message from any subscribed channel (stub).
+    ///
+    /// Returns `None` for now - will be implemented with proper async streaming in Phase 3.
+    pub async fn next_message(&mut self) -> B00tResult<Option<PubSubMessage>> {
+        // Stub: return None to allow compilation
+        // Full implementation will use redis::aio::PubSub in Phase 3
+        tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+        Ok(None)
+    }
+
+    /// Get list of active subscriptions.
+    pub fn subscriptions(&self) -> &[String] {
+        &self.subscriptions
+    }
+
+    /// Close the pub/sub connection (stub).
+    pub async fn close(self) -> B00tResult<()> {
+        Ok(())
+    }
+}
+
+/// A message received from Redis pub/sub.
+#[derive(Debug, Clone)]
+pub struct PubSubMessage {
+    pub channel: String,
+    pub payload: String,
 }
 
 /// Redis-based session storage backend

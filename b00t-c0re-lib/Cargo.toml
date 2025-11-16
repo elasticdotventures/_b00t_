@@ -40,7 +40,7 @@ serde_yaml = "0.9"
 shellexpand = "3.1.0"
 dirs = "6.0"
 duct = "1.0"
-redis = "0.32.4"
+redis = { version = "0.32.4", features = ["aio", "tokio-comp", "connection-manager"] }
 uuid = { version = "1.0", features = ["v4", "serde"] }
 tokio = { version = "1.0", features = ["full", "macros", "rt-multi-thread"] }
 rhai = "1.22.2"
@@ -50,6 +50,8 @@ schemars = "1.1.0"
 reqwest = { version = "0.12", features = ["json"] }
 tracing.workspace = true
 lazy_static = "1.5.0"
+async-trait = "0.1"
+futures = "0.3"
 
 [dev-dependencies]
 tempfile = "3.10"

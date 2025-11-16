@@ -27,6 +27,7 @@ pub mod version {
 }
 
 pub mod agent_coordination;
+pub mod agent_manager;
 pub mod ai_client;
 pub mod b00t_config;
 pub mod context;
@@ -47,6 +48,7 @@ pub mod template;
 pub mod utils;
 
 // Re-export commonly used types
+pub use agent_manager::{AgentConfig, AgentHandle, AgentManager};
 pub use ai_client::{AiClientConfig, AiProviderConfig, B00tAiClient, ChatMessage};
 pub use b00t_config::{AiConfiguration, B00tUnifiedConfig, CloudServicesConfig, UserConfig};
 pub use context::B00tContext;

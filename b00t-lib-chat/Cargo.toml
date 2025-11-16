@@ -32,6 +32,9 @@ hex = "0.4"
 reqwest = { version = "0.12", features = ["json"] }
 dirs = "6.0"
 k0mmand3r = { path = "../k0mmand3r" }
+notify = { version = "6.1", default-features = false, features = ["macos_fsevent"] }
+async-trait = "0.1"
+async-stream = "0.3"
 
 # Python bindings - using compatible version
 pyo3 = { version = "0.25", features = ["extension-module"], optional = true }
