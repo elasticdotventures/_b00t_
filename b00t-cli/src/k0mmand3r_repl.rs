@@ -211,10 +211,7 @@ Examples:
         let action = args[0];
         match action {
             "form" => {
-                let members: Vec<String> = args[1..]
-                    .iter()
-                    .map(|s| s.to_string())
-                    .collect();
+                let members: Vec<String> = args[1..].iter().map(|s| s.to_string()).collect();
 
                 self.bus
                     .send(Message::CrewForm {
@@ -243,9 +240,7 @@ Examples:
         }
 
         let to = args[0];
-        let budget: u64 = args[1]
-            .parse()
-            .context("Budget must be a number")?;
+        let budget: u64 = args[1].parse().context("Budget must be a number")?;
 
         self.bus
             .send(Message::Delegate {
@@ -266,9 +261,7 @@ Examples:
         }
 
         let resource = args[0];
-        let amount: u64 = args[1]
-            .parse()
-            .context("Amount must be a number")?;
+        let amount: u64 = args[1].parse().context("Amount must be a number")?;
         let reason = args[2..].join(" ");
 
         self.bus

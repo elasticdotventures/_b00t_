@@ -26,7 +26,7 @@ use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
-use tokio::sync::{mpsc, RwLock};
+use tokio::sync::{RwLock, mpsc};
 use uuid::Uuid;
 
 /// Agent identity and configuration
@@ -133,10 +133,7 @@ pub enum Message {
         reason: String,
     },
     /// General broadcast to crew
-    Broadcast {
-        from: String,
-        content: String,
-    },
+    Broadcast { from: String, content: String },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -220,9 +217,7 @@ impl MessageBus {
 
     /// Send a message
     pub async fn send(&self, msg: Message) -> Result<()> {
-        self.tx
-            .send(msg)
-            .context("Failed to send message to bus")?;
+        self.tx.send(msg).context("Failed to send message to bus")?;
         Ok(())
     }
 
@@ -233,11 +228,7 @@ impl MessageBus {
     }
 
     /// Handshake between two agents
-    pub async fn handshake(
-        &self,
-        from: impl Into<String>,
-        to: impl Into<String>,
-    ) -> Result<()> {
+    pub async fn handshake(&self, from: impl Into<String>, to: impl Into<String>) -> Result<()> {
         let msg = Message::Handshake {
             from: from.into(),
             to: to.into(),
@@ -335,10 +326,7 @@ mod tests {
     async fn test_proposal_lifecycle() {
         let bus = MessageBus::new().await.unwrap();
 
-        let proposal_id = bus
-            .create_proposal("Implement IPC", "alpha")
-            .await
-            .unwrap();
+        let proposal_id = bus.create_proposal("Implement IPC", "alpha").await.unwrap();
 
         bus.vote(&proposal_id, "alpha", VoteChoice::Yes)
             .await

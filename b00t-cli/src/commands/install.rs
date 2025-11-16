@@ -26,7 +26,10 @@ fn run_just_install(dry_run: bool) -> Result<()> {
     let workspace_root = crate::utils::get_workspace_root();
 
     if dry_run {
-        println!("🔍 Dry run: Would execute 'just install' from {}", workspace_root);
+        println!(
+            "🔍 Dry run: Would execute 'just install' from {}",
+            workspace_root
+        );
         println!("\nThe justfile install recipe would:");
         println!("  1. cargo install --path b00t-mcp --force");
         println!("  2. cargo install --path b00t-cli --force");
