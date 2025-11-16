@@ -20,6 +20,7 @@ mod datum_cli;
 mod datum_docker;
 mod datum_gemini;
 mod datum_mcp;
+mod datum_utils;
 mod datum_vscode;
 mod session_memory;
 mod test_cloud_integration;
@@ -40,15 +41,15 @@ use traits::*;
 
 use crate::commands::learn::handle_learn;
 use crate::commands::{
-    AiCommands, AppCommands, BootstrapCommands, ChatCommands, CliCommands, GrokCommands, InitCommands, K8sCommands,
-    McpCommands, ModelCommands, SessionCommands, StackCommands, WhatismyCommands,
+    AiCommands, AppCommands, BootstrapCommands, ChatCommands, CliCommands, DatumCommands, GrokCommands,
+    InitCommands, K8sCommands, McpCommands, SessionCommands, StackCommands, WhatismyCommands,
 };
 
 // Re-export commonly used functions for datum modules
 pub use b00t_cli::{
-    claude_code_install_mcp, dotmcpjson_install_mcp, gemini_install_mcp, get_config,
-    get_expanded_path, get_mcp_config, get_mcp_toml_files, mcp_add_json, mcp_list, mcp_output,
-    mcp_remove, vscode_install_mcp,
+    claude_code_install_mcp, codex_install_mcp, dotmcpjson_install_mcp, gemini_install_mcp,
+    get_config, get_expanded_path, get_mcp_config, get_mcp_toml_files, mcp_add_json, mcp_list,
+    mcp_output, mcp_remove, vscode_install_mcp,
 };
 
 mod integration_tests;
@@ -275,6 +276,11 @@ The system will:
 
         #[clap(long = "topic", help = "Topic to learn about (MCP compatibility)")]
         topic_flag: Option<String>, // 🦨 MCP compatibility: accept --topic flag
+    },
+    #[clap(about = "Datum management and inspection")]
+    Datum {
+        #[clap(subcommand)]
+        datum_command: DatumCommands,
     },
     #[clap(about = "Grok knowledgebase RAG system")]
     Grok {
@@ -1262,6 +1268,13 @@ async fn main() {
                 std::process::exit(1);
             }
         }
+        Some(Commands::Datum { datum_command }) => {
+            use crate::commands::datum::handle_datum_command;
+            if let Err(e) = handle_datum_command(&cli.path, datum_command) {
+                eprintln!("Error: {}", e);
+                std::process::exit(1);
+            }
+        }
         Some(Commands::Grok { grok_command }) => {
             use crate::commands::grok::handle_grok_command;
 
@@ -1282,7 +1295,7 @@ async fn main() {
         Some(Commands::Lfmf {
             tool,
             lesson,
-            repo,
+            repo: _,
             global,
         }) => {
             // Validate required fields

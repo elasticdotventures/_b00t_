@@ -88,10 +88,17 @@ pub struct Lesson {
     pub tags: Vec<String>,
 }
 
+/// Trait for looking up datums by pattern
+/// Implemented by clients to avoid circular dependencies
+pub trait DatumLookup {
+    fn find_datum(&self, pattern: &str) -> Option<(String, Option<String>)>; // Returns (name, lfmf_category)
+}
+
 /// LFMF system for recording and retrieving tribal knowledge
 pub struct LfmfSystem {
     config: LfmfConfig,
     grok_client: Option<GrokClient>,
+    datum_lookup: Option<Box<dyn DatumLookup + Send + Sync>>,
 }
 
 impl LfmfSystem {
@@ -100,7 +107,13 @@ impl LfmfSystem {
         Self {
             config,
             grok_client: None,
+            datum_lookup: None,
         }
+    }
+
+    /// Set datum lookup implementation for category resolution
+    pub fn set_datum_lookup<L: DatumLookup + Send + Sync + 'static>(&mut self, lookup: L) {
+        self.datum_lookup = Some(Box::new(lookup));
     }
 
     /// Load configuration from TOML file or environment variables
@@ -169,9 +182,24 @@ impl LfmfSystem {
         }
     }
 
+    /// Resolve tool/category name - checks if it's a datum with lfmf_category
+    fn resolve_category(&self, tool_or_category: &str) -> String {
+        if let Some(ref lookup) = self.datum_lookup {
+            // Try to find datum and get its lfmf_category
+            if let Some((name, category)) = lookup.find_datum(tool_or_category) {
+                // Prefer lfmf_category if set, otherwise use datum name
+                return category.unwrap_or(name);
+            }
+        }
+        // Default: use tool_or_category as-is
+        tool_or_category.to_string()
+    }
+
     /// Record a lesson learned from failure
     pub async fn record_lesson(&mut self, tool: &str, lesson: &str) -> Result<()> {
-        let lesson_obj = self.parse_lesson(tool, lesson)?;
+        // Resolve category (might be a datum name)
+        let category = self.resolve_category(tool);
+        let lesson_obj = self.parse_lesson(&category, lesson)?;
 
         // Try to store in vector database first
         if let Some(ref client) = self.grok_client {
@@ -266,10 +294,13 @@ impl LfmfSystem {
     ) -> Result<Vec<String>> {
         let max_results = count.unwrap_or(5);
 
+        // Resolve category (might be a datum name)
+        let category = self.resolve_category(tool);
+
         // Try vector database first if available
         if let Some(ref client) = self.grok_client {
             match self
-                .get_vector_advice(client, tool, query, max_results)
+                .get_vector_advice(client, &category, query, max_results)
                 .await
             {
                 Ok(advice) => return Ok(advice),
@@ -283,7 +314,7 @@ impl LfmfSystem {
         }
 
         // Fallback to filesystem
-        self.get_filesystem_advice(tool, query, max_results)
+        self.get_filesystem_advice(&category, query, max_results)
     }
 
     /// Get advice from vector database
@@ -396,12 +427,15 @@ impl LfmfSystem {
     pub async fn list_lessons(&mut self, tool: &str, count: Option<usize>) -> Result<Vec<String>> {
         let max_results = count.unwrap_or(10);
 
+        // Resolve category (might be a datum name)
+        let category = self.resolve_category(tool);
+
         // Try vector database first
         if let Some(ref client) = self.grok_client {
             match client
                 .ask(
-                    &format!("lessons for {}", tool),
-                    Some(tool),
+                    &format!("lessons for {}", category),
+                    Some(&category),
                     Some(max_results),
                 )
                 .await
@@ -420,10 +454,10 @@ impl LfmfSystem {
 
         // Fallback to filesystem
         let learn_dir = Path::new(&self.config.filesystem.learn_dir);
-        let tool_file = learn_dir.join(format!("{}.md", tool));
+        let tool_file = learn_dir.join(format!("{}.md", category));
 
         if !tool_file.exists() {
-            return Ok(vec![format!("No lessons found for tool '{}'", tool)]);
+            return Ok(vec![format!("No lessons found for category '{}'", category)]);
         }
 
         let content = fs::read_to_string(&tool_file)?;

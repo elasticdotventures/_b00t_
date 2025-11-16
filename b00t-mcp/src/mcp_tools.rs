@@ -587,11 +587,18 @@ pub struct AcpHiveJoinCommand {
     #[arg(long, help = "Agent namespace (defaults to account.username)")]
     pub namespace: Option<String>,
 
-    #[arg(long, help = "NATS server URL (defaults to c010.promptexecution.com:4222)")]
+    #[arg(
+        long,
+        help = "NATS server URL (defaults to c010.promptexecution.com:4222)"
+    )]
     pub nats_url: Option<String>,
 }
 
-impl_mcp_tool!(AcpHiveJoinCommand, "b00t_acp_hive_join", ["acp", "hive", "join"]);
+impl_mcp_tool!(
+    AcpHiveJoinCommand,
+    "b00t_acp_hive_join",
+    ["acp", "hive", "join"]
+);
 
 /// MCP command for creating a hive mission
 #[derive(Parser, Clone)]
@@ -611,11 +618,18 @@ pub struct AcpHiveCreateCommand {
     #[arg(long, help = "Agent namespace (defaults to account.username)")]
     pub namespace: Option<String>,
 
-    #[arg(long, help = "NATS server URL (defaults to c010.promptexecution.com:4222)")]
+    #[arg(
+        long,
+        help = "NATS server URL (defaults to c010.promptexecution.com:4222)"
+    )]
     pub nats_url: Option<String>,
 }
 
-impl_mcp_tool!(AcpHiveCreateCommand, "b00t_acp_hive_create", ["acp", "hive", "create"]);
+impl_mcp_tool!(
+    AcpHiveCreateCommand,
+    "b00t_acp_hive_create",
+    ["acp", "hive", "create"]
+);
 
 /// MCP command for sending status to hive
 #[derive(Parser, Clone)]
@@ -630,7 +644,11 @@ pub struct AcpHiveStatusCommand {
     pub payload: Option<String>,
 }
 
-impl_mcp_tool!(AcpHiveStatusCommand, "b00t_acp_hive_status", ["acp", "hive", "status"]);
+impl_mcp_tool!(
+    AcpHiveStatusCommand,
+    "b00t_acp_hive_status",
+    ["acp", "hive", "status"]
+);
 
 /// MCP command for proposing actions to hive
 #[derive(Parser, Clone)]
@@ -645,7 +663,11 @@ pub struct AcpHiveProposeCommand {
     pub payload: Option<String>,
 }
 
-impl_mcp_tool!(AcpHiveProposeCommand, "b00t_acp_hive_propose", ["acp", "hive", "propose"]);
+impl_mcp_tool!(
+    AcpHiveProposeCommand,
+    "b00t_acp_hive_propose",
+    ["acp", "hive", "propose"]
+);
 
 /// MCP command for step synchronization
 #[derive(Parser, Clone)]
@@ -660,7 +682,11 @@ pub struct AcpHiveSyncCommand {
     pub timeout_seconds: u64,
 }
 
-impl_mcp_tool!(AcpHiveSyncCommand, "b00t_acp_hive_sync", ["acp", "hive", "sync"]);
+impl_mcp_tool!(
+    AcpHiveSyncCommand,
+    "b00t_acp_hive_sync",
+    ["acp", "hive", "sync"]
+);
 
 /// MCP command for signaling step readiness
 #[derive(Parser, Clone)]
@@ -672,7 +698,11 @@ pub struct AcpHiveReadyCommand {
     pub target_step: u64,
 }
 
-impl_mcp_tool!(AcpHiveReadyCommand, "b00t_acp_hive_ready", ["acp", "hive", "ready"]);
+impl_mcp_tool!(
+    AcpHiveReadyCommand,
+    "b00t_acp_hive_ready",
+    ["acp", "hive", "ready"]
+);
 
 /// MCP command for showing hive status
 #[derive(Parser, Clone)]
@@ -681,7 +711,11 @@ pub struct AcpHiveShowCommand {
     pub mission_id: Option<String>,
 }
 
-impl_mcp_tool!(AcpHiveShowCommand, "b00t_acp_hive_show", ["acp", "hive", "show"]);
+impl_mcp_tool!(
+    AcpHiveShowCommand,
+    "b00t_acp_hive_show",
+    ["acp", "hive", "show"]
+);
 
 /// MCP command for leaving hive mission
 #[derive(Parser, Clone)]
@@ -690,7 +724,11 @@ pub struct AcpHiveLeaveCommand {
     pub mission_id: String,
 }
 
-impl_mcp_tool!(AcpHiveLeaveCommand, "b00t_acp_hive_leave", ["acp", "hive", "leave"]);
+impl_mcp_tool!(
+    AcpHiveLeaveCommand,
+    "b00t_acp_hive_leave",
+    ["acp", "hive", "leave"]
+);
 
 // Custom implementations for ACP hive tools
 // 🤓 Disabled - acp_hive uses full NATS Agent from old ACP; chat refactor simplified to stubs
@@ -741,16 +779,16 @@ pub fn create_mcp_registry() -> McpCommandRegistry {
         .register::<GrokAskCommand>()
         .register::<GrokLearnCommand>()
         .register::<GrokStatusCommand>();
-        // ACP Hive coordination tools
-        // 🤓 Disabled - acp_hive uses full NATS Agent from old ACP; chat refactor simplified to stubs
-        // .register::<AcpHiveJoinCommand>()
-        // .register::<AcpHiveCreateCommand>()
-        // .register::<AcpHiveStatusCommand>()
-        // .register::<AcpHiveProposeCommand>()
-        // .register::<AcpHiveSyncCommand>()
-        // .register::<AcpHiveReadyCommand>()
-        // .register::<AcpHiveShowCommand>()
-        // .register::<AcpHiveLeaveCommand>();
+    // ACP Hive coordination tools
+    // 🤓 Disabled - acp_hive uses full NATS Agent from old ACP; chat refactor simplified to stubs
+    // .register::<AcpHiveJoinCommand>()
+    // .register::<AcpHiveCreateCommand>()
+    // .register::<AcpHiveStatusCommand>()
+    // .register::<AcpHiveProposeCommand>()
+    // .register::<AcpHiveSyncCommand>()
+    // .register::<AcpHiveReadyCommand>()
+    // .register::<AcpHiveShowCommand>()
+    // .register::<AcpHiveLeaveCommand>();
 
     builder.build()
 }

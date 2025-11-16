@@ -1,6 +1,7 @@
 # justfile for Rust Development Environment
 # Alias to get the Git repository root
 repo-root := env_var_or_default("JUST_REPO_ROOT", `git rev-parse --show-toplevel 2>/dev/null || echo .`)
+workspace_version := `toml get Cargo.toml workspace.package.version | tr -d '"'`
 
 
 
@@ -22,20 +23,109 @@ mod k8s '_b00t_/k8s.🚢/justfile'
 stow:
     stow --adopt -d ~/.dotfiles -t ~ bash
 
+# Test crates.io publishing (dry-run)
+publish-dry-run:
+    #!/bin/bash
+    set -euo pipefail
+    echo "🔍 Testing crates.io publishing (dry-run)..."
+
+    echo "📦 Testing b00t-chat..."
+    cd b00t-lib-chat && cargo publish --dry-run --allow-dirty
+
+    echo "📦 Testing b00t-c0re-lib..."
+    cd ../b00t-c0re-lib && cargo publish --dry-run --allow-dirty
+
+    echo "📦 Testing b00t-cli..."
+    cd ../b00t-cli && cargo publish --dry-run --allow-dirty
+
+    echo "📦 Testing b00t-mcp..."
+    cd ../b00t-mcp && cargo publish --dry-run --allow-dirty
+
+    echo "✅ All crates passed dry-run validation"
+
+# Reserve/claim crate names on crates.io (one-time setup)
+# 🤓 Run this BEFORE first release to reserve names
+claim-crates:
+    #!/bin/bash
+    set -euo pipefail
+    echo "🚩 Claiming crate names on crates.io..."
+    echo "⚠️  This will create placeholder versions if names are available"
+    read -p "Continue? (y/N) " -n 1 -r
+    echo
+    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+        echo "Aborted"
+        exit 1
+    fi
+
+    echo "📦 Publishing b00t-chat to claim name..."
+    cd b00t-lib-chat && cargo publish --allow-dirty || echo "⚠️ Already claimed or failed"
+
+    echo "⏳ Waiting 30s for crates.io indexing..."
+    sleep 30
+
+    echo "📦 Publishing b00t-c0re-lib to claim name..."
+    cd ../b00t-c0re-lib && cargo publish --allow-dirty || echo "⚠️ Already claimed or failed"
+
+    echo "⏳ Waiting 30s for crates.io indexing..."
+    sleep 30
+
+    echo "📦 Publishing b00t-cli to claim name..."
+    cd ../b00t-cli && cargo publish --allow-dirty || echo "⚠️ Already claimed or failed"
+
+    echo "⏳ Waiting 30s for crates.io indexing..."
+    sleep 30
+
+    echo "📦 Publishing b00t-mcp to claim name..."
+    cd ../b00t-mcp && cargo publish --allow-dirty || echo "⚠️ Already claimed or failed"
+
+    echo "✅ Crate names claimed (if available)"
+
+# Create GitHub release (triggers crates.io publishing workflow)
 release:
-    gh release create v1.1.0 --title "Release v1.1.0" --notes "Release notes for version 1.1.0"
+    #!/bin/bash
+    set -euo pipefail
+    VERSION="{{workspace_version}}"
 
-    # check for latest release tag of _b00t_ in github using gh cli
-    NET_VERSION=$(cd "$HOME/.dotfiles" && gh release view -R elasticdotventures/dotfiles --json tagName | jq -r .tagName)
+    echo "🚀 Creating release v${VERSION}..."
 
-    # compare to local release
-    OUR_VERSION=$(cd "$HOME/.dotfiles" && git tag -l | sort -V | tail -n 1)
+    # Verify workspace is clean
+    if ! git diff --quiet; then
+        echo "⚠️ Uncommitted changes detected"
+        exit 1
+    fi
+
+    # Run tests first
+    echo "🧪 Running tests..."
+    cargo test --workspace --all-features
+
+    # Create git tag
+    git tag -a "v${VERSION}" -m "Release v${VERSION}"
+    git push origin "v${VERSION}"
+
+    # Create GitHub release (triggers publish-crates.yml workflow)
+    gh release create "v${VERSION}" \
+        --title "Release v${VERSION}" \
+        --notes "Release notes for version ${VERSION}
+
+Published crates (unified versioning):
+- \`b00t-chat\` v${VERSION}
+- \`b00t-c0re-lib\` v${VERSION}
+- \`b00t-cli\` v${VERSION}
+- \`b00t-mcp\` v${VERSION}
+
+This release automatically publishes to crates.io via GitHub Actions."
+
+    echo "✅ Release v${VERSION} created"
+    echo "📦 Crates will be published to crates.io by GitHub Actions"
+    echo "🔗 Check workflow: https://github.com/elasticdotventures/dotfiles/actions"
 
 
 install:
     echo "🥾 _b00t_ install"
-    cargo install --path b00t-mcp
-    cargo install --path b00t-cli
+    cargo install --path b00t-mcp --force
+    cargo install --path b00t-cli --force
+    cargo install cocogitto --locked --force
+    just install-commit-hook
 
 
 installx:
@@ -167,7 +257,48 @@ clean-workflows:
         /repos/elasticdotventures/dotfiles/actions/runs/{}
 
 version:
-    git describe --tags --abbrev=0
+    echo "{{workspace_version}}"
+
+commit-hook:
+    #!/bin/bash
+    set -euo pipefail
+    if ! git diff --quiet; then
+        echo "⚠️ Unstaged changes detected; please stash or stage before running commit-hook"
+        exit 1
+    fi
+    cargo fmt
+    CURRENT_VERSION=$(toml get Cargo.toml workspace.package.version | tr -d '"')
+    IFS='.' read -r MAJOR MINOR PATCH <<< "${CURRENT_VERSION}"
+    PATCH=$((PATCH + 1))
+    NEW_VERSION="${MAJOR}.${MINOR}.${PATCH}"
+    TMP_FILE=$(mktemp)
+    toml set Cargo.toml workspace.package.version "${NEW_VERSION}" > "${TMP_FILE}"
+    mv "${TMP_FILE}" Cargo.toml
+    cargo metadata --format-version 1 >/dev/null 2>&1 || true
+    git add -u
+    VERSION=$(toml get Cargo.toml workspace.package.version | tr -d '"')
+    if git diff --cached --quiet; then
+        echo "No staged changes after running commit-hook"
+    else
+        echo "✅ Staged fmt + version bump (v${VERSION}); continue with your commit."
+    fi
+
+install-commit-hook:
+    #!/bin/bash
+    set -euo pipefail
+    HOOK_PATH=".git/hooks/pre-commit"
+    {
+        echo "#!/usr/bin/env bash"
+        echo "set -euo pipefail"
+        echo "if command -v just >/dev/null 2>&1; then"
+        echo "    just commit-hook"
+        echo "else"
+        echo "    echo \"just is required to run commit-hook\" >&2"
+        echo "    exit 1"
+        echo "fi"
+    } > "${HOOK_PATH}"
+    chmod +x "${HOOK_PATH}"
+    echo "✅ Installed .git/hooks/pre-commit to run 'just commit-hook'"
 
 cliff:
     # git-cliff --tag $(git describe --tags --abbrev=0) -o CHANGELOG.md

@@ -6,7 +6,7 @@ use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tokio::sync::Mutex;
-use tracing::{error, info, warn};
+use tracing::info;
 
 use b00t_c0re_lib::mcp_proxy::{
     GenericMcpProxy, McpToolDefinition, McpToolRequest, create_raglight_tools,

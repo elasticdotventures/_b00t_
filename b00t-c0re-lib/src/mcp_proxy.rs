@@ -10,7 +10,7 @@ use std::collections::HashMap;
 use std::process::Stdio;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::process::Command;
-use tracing::{debug, error, info, warn};
+use tracing::{debug, info};
 
 /// Generic MCP tool definition
 #[derive(Debug, Clone, Serialize, Deserialize)]

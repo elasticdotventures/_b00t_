@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
 use tokio::process::Command;
-use tracing::{debug, error, info, warn};
+use tracing::{error, info};
 
 /// Document loader types supported by b00t RAG system
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -276,7 +276,7 @@ impl RagLightManager {
         cmd.arg("-c").arg(format!(
             r#"
 import sys
-sys.path.insert(0, '{}')
+sys.path.insert(0, '{raglight_path}')
 
 from raglight import RagLightConfig, RagLight
 import asyncio
@@ -353,7 +353,7 @@ if __name__ == '__main__':
         cmd.arg("-c").arg(format!(
             r#"
 import sys
-sys.path.insert(0, '{}')
+sys.path.insert(0, '{raglight_path}')
 
 from raglight import RagLightConfig, RagLight
 import asyncio

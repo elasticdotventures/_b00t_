@@ -44,13 +44,21 @@ pub async fn handle_lfmf(path: &str, tool: &str, lesson: &str, scope: &str) -> R
     let config = LfmfSystem::load_config(path)?;
     let mut lfmf_system = LfmfSystem::new(config);
 
-    // Try to initialize vector database (non-fatal if fails)
-    if let Err(e) = lfmf_system.initialize().await {
-        println!(
-            "⚠️ Vector database unavailable: {}. Lesson will be saved to filesystem only.",
-            e
-        );
-    }
+    rt.block_on(async {
+        let config = LfmfSystem::load_config(path)?;
+        let mut lfmf_system = LfmfSystem::new(config);
+
+        // Set datum lookup for category resolution
+        let lookup = crate::datum_utils::B00tDatumLookup::new(path.to_string());
+        lfmf_system.set_datum_lookup(lookup);
+
+        // Try to initialize vector database (non-fatal if fails)
+        if let Err(e) = lfmf_system.initialize().await {
+            println!(
+                "⚠️ Vector database unavailable: {}. Lesson will be saved to filesystem only.",
+                e
+            );
+        }
 
     // Record the lesson using shared system
     // Scope handling: currently only memoized, extend LfmfSystem for future

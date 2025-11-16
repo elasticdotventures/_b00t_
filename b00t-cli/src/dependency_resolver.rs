@@ -219,6 +219,9 @@ mod tests {
             implements: None,
             provides: None,
             requires: None,
+            learn: None,
+            usage: None,
+            lfmf_category: None,
         }
     }
 

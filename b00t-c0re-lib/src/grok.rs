@@ -500,7 +500,7 @@ mod additional_tests {
             created_at: String::new(),
             message: Some("Error occurred".to_string()),
         };
-        
+
         assert!(!result.success);
         assert_eq!(result.message.unwrap(), "Error occurred");
     }
@@ -514,7 +514,7 @@ mod additional_tests {
             results: vec![],
             message: None,
         };
-        
+
         assert!(result.results.is_empty());
         assert_eq!(result.total_found, 0);
     }
@@ -529,7 +529,7 @@ mod additional_tests {
             source: Some("test.rs".to_string()),
             created_at: "2025-01-01T00:00:00Z".to_string(),
         };
-        
+
         assert_eq!(chunk.tags.len(), 2);
         assert!(chunk.tags.contains(&"testing".to_string()));
     }
@@ -550,7 +550,7 @@ mod additional_tests {
                 tags: vec![],
             },
         ];
-        
+
         let result = LearnResult {
             success: true,
             source: "test.md".to_string(),
@@ -558,7 +558,7 @@ mod additional_tests {
             chunk_summaries: summaries,
             message: None,
         };
-        
+
         assert_eq!(result.chunks_created, 2);
         assert_eq!(result.chunk_summaries.len(), 2);
     }
@@ -572,32 +572,34 @@ mod additional_tests {
         // 3. Learn from content
         // 4. Query the knowledgebase
         // 5. Check status
-        
+
         let mut client = GrokClient::new();
-        
+
         // Initialize
         let init_result = client.initialize().await;
         if init_result.is_err() {
             println!("⚠️ Service not available, skipping workflow test");
             return;
         }
-        
+
         // Digest
         let digest = client.digest("rust", "Rust ensures memory safety").await;
         assert!(digest.is_ok(), "Digest should succeed");
-        
+
         // Learn
-        let learn = client.learn("Rust is fast.\n\nRust is safe.", Some("test.md")).await;
+        let learn = client
+            .learn("Rust is fast.\n\nRust is safe.", Some("test.md"))
+            .await;
         assert!(learn.is_ok(), "Learn should succeed");
-        
+
         // Ask
         let ask = client.ask("memory safety", None, Some(5)).await;
         assert!(ask.is_ok(), "Ask should succeed");
-        
+
         // Status
         let status = client.status().await;
         assert!(status.is_ok(), "Status should succeed");
-        
+
         let status_value = status.unwrap();
         assert!(status_value.get("status").is_some());
     }
@@ -613,7 +615,7 @@ mod additional_tests {
             created_at: "2025-01-01".to_string(),
             message: None,
         };
-        
+
         let debug_str = format!("{:?}", digest);
         assert!(debug_str.contains("DigestResult"));
         assert!(debug_str.contains("rust"));
@@ -629,7 +631,7 @@ mod additional_tests {
             source: Some("source.md".to_string()),
             created_at: "2025-01-01".to_string(),
         };
-        
+
         let cloned = original.clone();
         assert_eq!(original.id, cloned.id);
         assert_eq!(original.content, cloned.content);
