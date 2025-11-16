@@ -36,11 +36,11 @@ COPY b00t-lib-chat/ ./b00t-lib-chat/
 COPY k0mmand3r/ ./k0mmand3r/
 COPY b00t-py/ ./b00t-py/
 
-# Build using just install (installs to ~/.cargo/bin)
+# Build using just install (installs b00t-cli, b00t-mcp, cocogitto to ~/.cargo/bin)
 RUN just install || (echo "just install failed" && exit 1)
 
-# Verify the binary works
-RUN ~/.cargo/bin/b00t-cli --version
+# Verify the binaries work
+RUN ~/.cargo/bin/b00t-cli --version && ~/.cargo/bin/b00t-mcp --version
 
 # ================================
 # Stage 2: b00t Resources Layer  
@@ -61,7 +61,7 @@ ARG BUILD_COMMIT=unknown
 ARG BUILD_DATE
 
 LABEL org.opencontainers.image.source=https://github.com/elasticdotventures/dotfiles
-LABEL org.opencontainers.image.description="b00t-cli binary and configuration layer"
+LABEL org.opencontainers.image.description="b00t-cli and b00t-mcp binaries with configuration layer"
 LABEL org.opencontainers.image.licenses=MIT
 LABEL org.opencontainers.image.version=${BUILD_VERSION}
 LABEL org.opencontainers.image.revision=${BUILD_COMMIT}
@@ -72,13 +72,14 @@ RUN apt-get update && apt-get install -y \
     ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy the compiled binary from builder stage (installed via just install to ~/.cargo/bin)
+# Copy the compiled binaries from builder stage (installed via just install to ~/.cargo/bin)
 COPY --from=rust-builder /root/.cargo/bin/b00t-cli /usr/local/bin/b00t-cli
+COPY --from=rust-builder /root/.cargo/bin/b00t-mcp /usr/local/bin/b00t-mcp
 
 # Copy _b00t_ resources from resources stage
 COPY --from=b00t-resources /opt/b00t/config/ /opt/b00t/config/
 
-# Create symlink for easier access
+# Create symlinks for easier access
 RUN ln -sf /usr/local/bin/b00t-cli /usr/local/bin/b00t
 
 # Set default environment variables
@@ -89,10 +90,11 @@ ENV B00T_CLI_COMMIT=${BUILD_COMMIT}
 ENV B00T_CLI_BUILD_DATE=${BUILD_DATE}
 
 # Verify installation
-RUN b00t-cli --version && b00t-cli status --help
+RUN b00t-cli --version && b00t-cli status --help && b00t-mcp --version
 
 # Default working directory
 WORKDIR /workspace
 
-# Default command
+# Default command (override with b00t-mcp for MCP server)
+# Run b00t-mcp: docker run --rm -it <image> b00t-mcp
 CMD ["b00t-cli", "--help"]
