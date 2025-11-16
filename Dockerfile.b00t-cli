@@ -1,20 +1,26 @@
 # syntax=docker/dockerfile:latest
 
 # ================================
+# Stage 0: Just binary from fork
+# ================================
+FROM ghcr.io/elasticdotventures/just:latest AS just-binary
+
+# ================================
 # Stage 1: Rust Build Environment
 # ================================
 FROM rust:1.91-slim AS rust-builder
 
-# Install build dependencies including just
+# Copy just from forked container
+COPY --from=just-binary /usr/local/bin/just /usr/local/bin/just
+
+# Install build dependencies
 RUN apt-get update && apt-get install -y \
     pkg-config \
     libssl-dev \
     ca-certificates \
     python3 \
     python3-dev \
-    wget \
-    && rm -rf /var/lib/apt/lists/* \
-    && wget -qO- https://github.com/casey/just/releases/download/1.40.0/just-1.40.0-x86_64-unknown-linux-musl.tar.gz | tar xzf - -C /usr/local/bin
+    && rm -rf /var/lib/apt/lists/*
 
 # Set working directory for the Rust project
 WORKDIR /build
