@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 
 pub mod cloud_sync;
 pub mod datum_ai;
+pub mod datum_ai_model;
 pub mod datum_api;
 pub mod datum_apt;
 pub mod datum_bash;
@@ -14,6 +15,7 @@ pub mod datum_stack;
 pub mod datum_vscode;
 pub mod dependency_resolver;
 pub mod k8s;
+pub mod model_manager;
 pub mod orchestrator;
 pub mod session_memory;
 pub mod traits;
@@ -184,7 +186,9 @@ pub enum DatumType {
     Apt,
     Nix,
     Ai,
-    Api, // API protocol endpoints (OpenAI-compat, embeddings, etc.)
+    #[serde(rename = "ai_model")]
+    AiModel,
+    Api,      // API protocol endpoints (OpenAI-compat, embeddings, etc.)
     Cli,
     Stack,
 }
@@ -606,6 +610,7 @@ pub fn create_unified_toml_config(datum: &BootDatum, path: &str) -> Result<()> {
         DatumType::Apt => ".apt.toml",
         DatumType::Nix => ".nix.toml",
         DatumType::Ai => ".ai.toml",
+        DatumType::AiModel => ".ai_model.toml",
         DatumType::Api => ".api.toml",
         DatumType::Cli => ".cli.toml",
         DatumType::Stack => ".stack.toml",
@@ -639,6 +644,7 @@ impl std::fmt::Display for DatumType {
             DatumType::Apt => write!(f, "apt"),
             DatumType::Nix => write!(f, "nix"),
             DatumType::Ai => write!(f, "AI"),
+            DatumType::AiModel => write!(f, "ai-model"),
             DatumType::Api => write!(f, "API"),
             DatumType::Cli => write!(f, "CLI"),
             DatumType::Stack => write!(f, "stack"),
@@ -666,6 +672,8 @@ impl DatumType {
             DatumType::Nix
         } else if filename.ends_with(".ai.toml") {
             DatumType::Ai
+        } else if filename.ends_with(".ai_model.toml") {
+            DatumType::AiModel
         } else if filename.ends_with(".stack.toml") {
             DatumType::Stack
         } else {
@@ -727,7 +735,6 @@ pub fn get_config(
     command: &str,
     path: &str,
 ) -> Result<(UnifiedConfig, String), Box<dyn std::error::Error>> {
-    // Try different file extensions in order of preference
     let extensions = [
         ".cli.toml",
         ".mcp.toml",
@@ -743,22 +750,28 @@ pub fn get_config(
         ".toml",
     ];
 
-    let mut path_buf = std::path::PathBuf::new();
-    let expanded_path = shellexpand::tilde(path).to_string();
-    path_buf.push(expanded_path);
+    let mut visited = std::collections::HashSet::new();
 
-    for ext in &extensions {
-        let filename = format!("{}{}", command, ext);
-        path_buf.push(&filename); // 🤓 FIX: use push instead of set_file_name to avoid removing _b00t_ directory
-        if path_buf.exists() {
-            let content = std::fs::read_to_string(&path_buf)?;
-            let config: UnifiedConfig = toml::from_str(&content)?;
-            return Ok((config, filename));
+    for base in [path, "~/.dotfiles/_b00t_", "~/.b00t"] {
+        let expanded = shellexpand::tilde(base).to_string();
+        if !visited.insert(expanded.clone()) {
+            continue;
         }
-        path_buf.pop(); // 🤓 FIX: remove the filename for next iteration
+
+        let mut candidate = std::path::PathBuf::from(expanded);
+        for ext in &extensions {
+            let filename = format!("{}{}", command, ext);
+            candidate.push(&filename);
+            if candidate.exists() {
+                let content = std::fs::read_to_string(&candidate)?;
+                let config: UnifiedConfig = toml::from_str(&content)?;
+                return Ok((config, filename));
+            }
+            candidate.pop();
+        }
     }
 
-    eprintln!("{} UNDEFINED", command);
+    eprintln!("{command} UNDEFINED");
     std::process::exit(100);
 }
 
@@ -766,43 +779,59 @@ pub fn get_mcp_config(name: &str, path: &str) -> Result<BootDatum> {
     use anyhow::Context;
     use std::fs;
 
-    let mut path_buf = get_expanded_path(path)?;
-    path_buf.push(format!("{}.mcp.toml", name));
+    for base in [path, "~/.dotfiles/_b00t_", "~/.b00t"] {
+        let mut path_buf = get_expanded_path(base)?;
+        path_buf.push(format!("{}.mcp.toml", name));
 
-    if !path_buf.exists() {
-        anyhow::bail!(
-            "MCP server '{}' not found. Use 'b00t-cli mcp add' to create it first.",
-            name
-        );
+        if path_buf.exists() {
+            let content = fs::read_to_string(&path_buf).context(format!(
+                "Failed to read MCP config from {}",
+                path_buf.display()
+            ))?;
+
+            let config: UnifiedConfig =
+                toml::from_str(&content).context("Failed to parse MCP config TOML")?;
+
+            return Ok(config.b00t);
+        }
     }
 
-    let content = fs::read_to_string(&path_buf).context(format!(
-        "Failed to read MCP config from {}",
-        path_buf.display()
-    ))?;
-
-    let config: UnifiedConfig =
-        toml::from_str(&content).context("Failed to parse MCP config TOML")?;
-
-    Ok(config.b00t)
+    anyhow::bail!(
+        "MCP server '{}' not found. Use 'b00t-cli mcp add' to create it first.",
+        name
+    );
 }
 
 pub fn get_mcp_toml_files(path: &str) -> Result<Vec<String>> {
     use anyhow::Context;
     use std::fs;
 
-    let expanded_path = get_expanded_path(path)?;
-    let entries = fs::read_dir(&expanded_path)
-        .with_context(|| format!("Error reading directory {}", expanded_path.display()))?;
-
+    let mut seen = std::collections::HashSet::new();
     let mut mcp_files = Vec::new();
-    for entry in entries {
-        if let Ok(entry) = entry {
-            let entry_path = entry.path();
-            if let Some(file_name) = entry_path.file_name().and_then(|s| s.to_str()) {
-                if file_name.ends_with(".mcp.toml") {
-                    if let Some(server_name) = file_name.strip_suffix(".mcp.toml") {
-                        mcp_files.push(server_name.to_string());
+
+    for base in [path, "~/.dotfiles/_b00t_", "~/.b00t"] {
+        let expanded_path = match get_expanded_path(base) {
+            Ok(p) => p,
+            Err(_) => continue,
+        };
+
+        if !expanded_path.exists() {
+            continue;
+        }
+
+        let entries = fs::read_dir(&expanded_path)
+            .with_context(|| format!("Error reading directory {}", expanded_path.display()))?;
+
+        for entry in entries {
+            if let Ok(entry) = entry {
+                let entry_path = entry.path();
+                if let Some(file_name) = entry_path.file_name().and_then(|s| s.to_str()) {
+                    if file_name.ends_with(".mcp.toml") {
+                        if let Some(server_name) = file_name.strip_suffix(".mcp.toml") {
+                            if seen.insert(server_name.to_string()) {
+                                mcp_files.push(server_name.to_string());
+                            }
+                        }
                     }
                 }
             }

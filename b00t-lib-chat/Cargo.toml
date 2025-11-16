@@ -31,6 +31,7 @@ sha2 = "0.10"
 hex = "0.4"
 reqwest = { version = "0.12", features = ["json"] }
 dirs = "6.0"
+k0mmand3r = { path = "../k0mmand3r" }
 
 # Python bindings - using compatible version
 pyo3 = { version = "0.25", features = ["extension-module"], optional = true }

@@ -1,0 +1,179 @@
+name: Build and Release Binaries
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag to build (e.g., v0.7.1)'
+        required: true
+        type: string
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+jobs:
+  create-release:
+    name: Create Release
+    runs-on: ubuntu-latest
+    outputs:
+      upload_url: ${{ steps.create_release.outputs.upload_url }}
+      version: ${{ steps.get_version.outputs.version }}
+    steps:
+      - name: Get version from tag
+        id: get_version
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            VERSION="${{ github.event.inputs.tag }}"
+          else
+            VERSION="${GITHUB_REF#refs/tags/}"
+          fi
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+          echo "Version: ${VERSION}"
+
+      - name: Create Release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ steps.get_version.outputs.version }}
+          release_name: Release ${{ steps.get_version.outputs.version }}
+          draft: false
+          prerelease: false
+          body: |
+            ## b00t ${{ steps.get_version.outputs.version }}
+
+            ### Installation
+
+            **Universal installer:**
+            ```bash
+            curl -fsSL https://raw.githubusercontent.com/elasticdotventures/dotfiles/main/install.sh | sh
+            ```
+
+            **Direct binary download:**
+            ```bash
+            # Linux x86_64
+            curl -L https://github.com/elasticdotventures/dotfiles/releases/download/${{ steps.get_version.outputs.version }}/b00t-x86_64-unknown-linux-gnu.tar.gz | tar xz
+
+            # macOS (Intel)
+            curl -L https://github.com/elasticdotventures/dotfiles/releases/download/${{ steps.get_version.outputs.version }}/b00t-x86_64-apple-darwin.tar.gz | tar xz
+            ```
+
+            **pkgx (minimal install):**
+            ```bash
+            pkgx b00t-cli --version
+            ```
+
+            ### Changes
+            See [CHANGELOG.md](CHANGELOG.md) for details.
+
+  build:
+    name: Build ${{ matrix.target }}
+    needs: create-release
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Linux targets
+          - target: x86_64-unknown-linux-gnu
+            os: ubuntu-latest
+            use-cross: false
+          - target: aarch64-unknown-linux-gnu
+            os: ubuntu-latest
+            use-cross: true
+          - target: armv7-unknown-linux-gnueabihf
+            os: ubuntu-latest
+            use-cross: true
+
+          # macOS targets
+          - target: x86_64-apple-darwin
+            os: macos-latest
+            use-cross: false
+          - target: aarch64-apple-darwin
+            os: macos-latest
+            use-cross: false
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Install cross-compilation tools
+        if: matrix.use-cross
+        run: |
+          cargo install cross --git https://github.com/cross-rs/cross
+
+      - name: Build workspace
+        run: |
+          if [ "${{ matrix.use-cross }}" = "true" ]; then
+            cross build --release --target ${{ matrix.target }} -p b00t-cli -p b00t-mcp
+          else
+            cargo build --release --target ${{ matrix.target }} -p b00t-cli -p b00t-mcp
+          fi
+
+      - name: Create tarball
+        run: |
+          mkdir -p dist/b00t
+
+          # Copy binaries
+          cp target/${{ matrix.target }}/release/b00t-cli dist/b00t/
+          cp target/${{ matrix.target }}/release/b00t-mcp dist/b00t/
+
+          # Copy _b00t_ datums directory (essential for functionality)
+          cp -r _b00t_ dist/b00t/_b00t_
+
+          # Create symlink
+          cd dist/b00t
+          ln -s b00t-cli b00t
+          cd ../..
+
+          # Package everything
+          cd dist
+          tar czf b00t-${{ matrix.target }}.tar.gz b00t/
+
+          # Create checksums
+          shasum -a 256 b00t-${{ matrix.target }}.tar.gz > b00t-${{ matrix.target }}.tar.gz.sha256
+
+          cd ..
+
+      - name: Upload Release Asset
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ needs.create-release.outputs.upload_url }}
+          asset_path: ./dist/b00t-${{ matrix.target }}.tar.gz
+          asset_name: b00t-${{ matrix.target }}.tar.gz
+          asset_content_type: application/gzip
+
+      - name: Upload Checksum
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ needs.create-release.outputs.upload_url }}
+          asset_path: ./dist/b00t-${{ matrix.target }}.tar.gz.sha256
+          asset_name: b00t-${{ matrix.target }}.tar.gz.sha256
+          asset_content_type: text/plain
+
+  verify:
+    name: Verify Release
+    needs: [create-release, build]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download and verify Linux x86_64 binary
+        run: |
+          curl -L https://github.com/${{ github.repository }}/releases/download/${{ needs.create-release.outputs.version }}/b00t-x86_64-unknown-linux-gnu.tar.gz -o b00t.tar.gz
+          tar xzf b00t.tar.gz
+          ./b00t-cli --version
+          ./b00t-mcp --help
+          echo "✅ Binaries verified successfully"

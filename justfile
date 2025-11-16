@@ -309,6 +309,94 @@ cliff:
 inspect-mcp:
 	npx @modelcontextprotocol/inspector ./target/release/b00t-mcp
 
+# Hugging Face model caching helper
+hf-download model dest="" revision="":
+	#!/usr/bin/env bash
+	set -euo pipefail
+	MODEL="{{model}}"
+	if [[ -z "$MODEL" ]]; then
+		echo "⚠️ set model=<repo>" >&2
+		exit 1
+	fi
+	if ! command -v huggingface-cli >/dev/null 2>&1; then
+		echo "⚠️ huggingface-cli missing; run 'b00t-cli cli install huggingface'" >&2
+		exit 1
+	fi
+	DEST="{{dest}}"
+	if [[ -z "$DEST" ]]; then
+		SANITIZED="${MODEL//\//__}"
+		DEST="$HOME/.b00t/models/$SANITIZED"
+	fi
+	mkdir -p "$DEST"
+	ARGS=(download "$MODEL" --local-dir "$DEST" --local-dir-use-symlinks False)
+	if [[ -n "{{revision}}" ]]; then
+		ARGS+=(--revision "{{revision}}")
+	fi
+	huggingface-cli "${ARGS[@]}"
+	echo "✅ cached $MODEL -> $DEST"
+
+# Invoke b00t-cli to install/cache a datum-backed model
+b00t-install-model model="llava" force="false" no_activate="false":
+	#!/usr/bin/env bash
+	set -euo pipefail
+	MODEL="{{model}}"
+ARGS=(model download "$MODEL")
+	if [[ "{{force}}" == "true" ]]; then
+		ARGS+=(--force)
+	fi
+	if [[ "{{no_activate}}" == "true" ]]; then
+		ARGS+=(--no-activate)
+	fi
+	b00t-cli "${ARGS[@]}"
+
+# Launch vLLM container against cached weights
+vllm-up model="" dtype="" port="8000" image="vllm/vllm-openai:latest":
+	#!/usr/bin/env bash
+	set -euo pipefail
+	if [[ -n "{{model}}" ]]; then
+		eval "$(b00t-cli model env "{{model}}")"
+	else
+		eval "$(b00t-cli model env)"
+	fi
+	: "${VLLM_MODEL_DIR:?Missing VLLM_MODEL_DIR from model env}"
+	: "${VLLM_MODEL_PATH:?Missing VLLM_MODEL_PATH from model env}"
+	DTYPE="${dtype:-${VLLM_DTYPE:-float16}}"
+	PORT="{{port}}"
+	IMAGE="{{image}}"
+	CONTAINER="${VLLM_CONTAINER_NAME:-vllm-server}"
+	docker rm -f "$CONTAINER" >/dev/null 2>&1 || true
+	EXTRA_ARGS=()
+	if [[ -n "${VLLM_MAX_MODEL_LEN:-}" ]]; then
+		EXTRA_ARGS+=(--max-model-len "${VLLM_MAX_MODEL_LEN}")
+	fi
+	if [[ -n "${VLLM_EXTRA_ARGS:-}" ]]; then
+		# shellcheck disable=SC2206
+		EXTRA_ARGS+=(${VLLM_EXTRA_ARGS})
+	fi
+	docker run --rm -d \
+		--name "$CONTAINER" \
+		--gpus all \
+		-p "${PORT}:8000" \
+		-v "${VLLM_MODEL_DIR}:${VLLM_MODEL_PATH}:ro" \
+		${HF_TOKEN:+-e HF_TOKEN="$HF_TOKEN"} \
+		"$IMAGE" \
+		--model "${VLLM_MODEL_PATH}" \
+		--dtype "${DTYPE}" \
+		--tensor-parallel-size "${VLLM_TP_SIZE:-1}" \
+		"${EXTRA_ARGS[@]}"
+	echo "✅ vLLM listening on http://localhost:${PORT}"
+
+# Tail vLLM logs (defaults to follow mode)
+vllm-logs follow="true":
+	#!/usr/bin/env bash
+	set -euo pipefail
+	CONTAINER="${VLLM_CONTAINER_NAME:-vllm-server}"
+	if [[ "{{follow}}" == "true" ]]; then
+		docker logs -f "$CONTAINER"
+	else
+		docker logs "$CONTAINER"
+	fi
+
 # Captain's Command Arsenal - Memoized Agent Operations
 
 # Role switching commands

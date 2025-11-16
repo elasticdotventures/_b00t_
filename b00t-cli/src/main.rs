@@ -13,6 +13,7 @@ mod bootstrap;
 mod cloud_sync;
 mod commands;
 mod datum_ai;
+mod datum_ai_model;
 mod datum_apt;
 mod datum_bash;
 mod datum_cli;
@@ -29,6 +30,7 @@ use utils::get_workspace_root;
 
 // 🦨 REMOVED unused K8sDatum import - not used in main.rs
 use datum_ai::AiDatum;
+use datum_ai_model::AiModelDatumEntry;
 use datum_apt::AptDatum;
 use datum_bash::BashDatum;
 use datum_cli::CliDatum;
@@ -189,6 +191,14 @@ The system will:
     Cli {
         #[clap(subcommand)]
         cli_command: CliCommands,
+    },
+    #[clap(
+        about = "AI model datum management",
+        long_about = "List, inspect, install, and activate AI model datums defined in the _b00t_ directory."
+    )]
+    Model {
+        #[clap(subcommand)]
+        model_command: ModelCommands,
     },
     #[clap(
         name = ".",
@@ -496,6 +506,11 @@ fn show_status(
     all_tools.extend(datum_providers_to_tool_status(load_datum_providers::<
         AiDatum,
     >(path, ".ai.toml")?));
+    all_tools.extend(datum_providers_to_tool_status(load_datum_providers::<
+        AiModelDatumEntry,
+    >(
+        path, ".ai_model.toml"
+    )?));
     all_tools.extend(datum_providers_to_tool_status(load_datum_providers::<
         AptDatum,
     >(path, ".apt.toml")?));
@@ -1166,6 +1181,12 @@ async fn main() {
                 std::process::exit(1);
             }
         }
+        Some(Commands::Model { model_command }) => {
+            if let Err(e) = model_command.execute(&cli.path) {
+                eprintln!("Error: {}", e);
+                std::process::exit(1);
+            }
+        }
         Some(Commands::DotCheck { command }) => {
             // Shorthand for cli check
             let check_cmd = CliCommands::Check {
@@ -1294,7 +1315,7 @@ async fn main() {
             };
             // Determine scope
             let scope = if *global { "global" } else { "repo" };
-            if let Err(e) = commands::lfmf::handle_lfmf(&cli.path, &tool, &lesson, scope) {
+            if let Err(e) = commands::lfmf::handle_lfmf(&cli.path, &tool, &lesson, scope).await {
                 eprintln!("Error: {}", e);
                 std::process::exit(1);
             }
@@ -1302,16 +1323,7 @@ async fn main() {
         Some(Commands::Advice { tool, query, count }) => {
             use crate::commands::advice::handle_advice;
 
-            // Create Tokio runtime for async advice operations
-            let rt = match tokio::runtime::Runtime::new() {
-                Ok(rt) => rt,
-                Err(e) => {
-                    eprintln!("Error creating async runtime: {}", e);
-                    std::process::exit(1);
-                }
-            };
-
-            if let Err(e) = rt.block_on(handle_advice(&cli.path, tool, query, *count)) {
+            if let Err(e) = handle_advice(&cli.path, tool, query, *count).await {
                 eprintln!("Error: {}", e);
                 std::process::exit(1);
             }

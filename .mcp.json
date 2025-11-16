@@ -1,5 +1,12 @@
 {
   "mcpServers": {
+    "b00t-mcp": {
+      "args": [
+        "--stdio"
+      ],
+      "command": "b00t-mcp",
+      "env": {}
+    },
     "context7": {
       "args": [
         "-y",
