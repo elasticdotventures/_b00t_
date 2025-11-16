@@ -251,7 +251,10 @@ fn load_ai_model_datum(py: Python<'_>, model_name: &str, path: &str) -> PyResult
     // Add capabilities
     if let Some(capabilities) = ai_model.get("capabilities") {
         if let Some(caps_array) = capabilities.as_array() {
-            let caps: Vec<&str> = caps_array.iter().filter_map(|v| v.as_str()).collect();
+            let caps: Vec<&str> = caps_array
+                .iter()
+                .filter_map(|v| v.as_str())
+                .collect();
             py_dict.set_item("capabilities", caps)?;
         }
     }
