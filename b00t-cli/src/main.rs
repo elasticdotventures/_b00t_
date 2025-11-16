@@ -42,8 +42,8 @@ use traits::*;
 use crate::commands::learn::{LearnArgs, handle_learn};
 use crate::commands::{
     AiCommands, AppCommands, BootstrapCommands, ChatCommands, CliCommands, DatumCommands,
-    GrokCommands, InitCommands, K8sCommands, McpCommands, SessionCommands, StackCommands,
-    WhatismyCommands,
+    GrokCommands, InitCommands, InstallCommands, K8sCommands, McpCommands, SessionCommands,
+    StackCommands, WhatismyCommands,
 };
 
 // Re-export commonly used functions for datum modules
@@ -177,6 +177,11 @@ Example:
     K8s {
         #[clap(subcommand)]
         k8s_command: K8sCommands,
+    },
+    #[clap(about = "Run 'just install' to install b00t components")]
+    Install {
+        #[clap(subcommand)]
+        install_command: InstallCommands,
     },
     #[clap(about = "Session management")]
     Session {
@@ -1159,6 +1164,12 @@ async fn main() {
         }
         Some(Commands::K8s { k8s_command }) => {
             if let Err(e) = k8s_command.execute(&cli.path) {
+                eprintln!("Error: {}", e);
+                std::process::exit(1);
+            }
+        }
+        Some(Commands::Install { install_command }) => {
+            if let Err(e) = install_command.execute(&cli.path) {
                 eprintln!("Error: {}", e);
                 std::process::exit(1);
             }
