@@ -259,6 +259,13 @@ mod tests {
             depends_on: None,
             members: None,
             mcp: None,
+            protocol: None,
+            implements: None,
+            provides: None,
+            requires: None,
+            learn: None,
+            usage: None,
+            lfmf_category: None,
         }
     }
 
@@ -295,6 +302,13 @@ mod tests {
             depends_on: None,
             members: Some(members),
             mcp: None,
+            protocol: None,
+            implements: None,
+            provides: None,
+            requires: None,
+            learn: None,
+            usage: None,
+            lfmf_category: None,
         }
     }
 

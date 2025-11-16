@@ -49,7 +49,7 @@ desires = "1.0.0"
 name = "hf-cli"
 type = "cli"
 hint = "HF CLI datum test"
-version = "huggingface-cli --version"
+version = "hf version"
 
 [b00t.env]
 HF_TOKEN = "${HF_TOKEN}"

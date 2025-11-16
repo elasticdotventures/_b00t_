@@ -23,10 +23,13 @@ pub trait McpReflection: CommandFactory {
             .unwrap_or_else(|| format!("b00t-cli {}", Self::command_path().join(" ")));
 
         Tool {
-            name: name.into(),
+            name: name.clone().into(),
+            title: Some(name),
             description: Some(description.into()),
             input_schema: std::sync::Arc::new(Self::generate_json_schema()),
+            output_schema: None,
             annotations: None,
+            icons: None,
         }
     }
 

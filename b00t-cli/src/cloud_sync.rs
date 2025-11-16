@@ -123,7 +123,10 @@ impl CloudSyncClient {
     async fn fetch_ai_config_for_user(&self, username: &str) -> Result<AiClientConfig> {
         // This would require implementing a public endpoint for user configs
         // For now, return a default configuration
-        eprintln!("⚠️ Cloud sync not fully authenticated, using default AI config");
+        eprintln!(
+            "⚠️ Cloud sync for '{}' not fully authenticated, using default AI config",
+            username
+        );
         Ok(AiClientConfig::default())
     }
 

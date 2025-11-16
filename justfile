@@ -1,6 +1,7 @@
 # justfile for Rust Development Environment
 # Alias to get the Git repository root
 repo-root := env_var_or_default("JUST_REPO_ROOT", `git rev-parse --show-toplevel 2>/dev/null || echo .`)
+workspace_version := `toml get Cargo.toml workspace.package.version | tr -d '"'`
 
 
 
@@ -22,20 +23,101 @@ mod k8s '_b00t_/k8s.🚢/justfile'
 stow:
     stow --adopt -d ~/.dotfiles -t ~ bash
 
+# Test crates.io publishing (dry-run)
+publish-dry-run:
+    #!/bin/bash
+    set -euo pipefail
+    echo "🔍 Testing crates.io publishing (dry-run)..."
+
+    echo "📦 Testing b00t-chat..."
+    cd b00t-lib-chat && cargo publish --dry-run --allow-dirty
+
+    echo "📦 Testing b00t-c0re-lib..."
+    cd ../b00t-c0re-lib && cargo publish --dry-run --allow-dirty
+
+    echo "📦 Testing b00t-cli..."
+    cd ../b00t-cli && cargo publish --dry-run --allow-dirty
+
+    echo "📦 Testing b00t-mcp..."
+    cd ../b00t-mcp && cargo publish --dry-run --allow-dirty
+
+    echo "✅ All crates passed dry-run validation"
+
+# Reserve/claim crate names on crates.io (one-time setup)
+# 🤓 Run this BEFORE first release to reserve names
+claim-crates:
+    #!/bin/bash
+    set -euo pipefail
+    echo "🚩 Claiming crate names on crates.io..."
+    echo "⚠️  This will create placeholder versions if names are available"
+    read -p "Continue? (y/N) " -n 1 -r
+    echo
+    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+        echo "Aborted"
+        exit 1
+    fi
+
+    echo "📦 Publishing b00t-chat to claim name..."
+    cd b00t-lib-chat && cargo publish --allow-dirty || echo "⚠️ Already claimed or failed"
+
+    echo "⏳ Waiting 30s for crates.io indexing..."
+    sleep 30
+
+    echo "📦 Publishing b00t-c0re-lib to claim name..."
+    cd ../b00t-c0re-lib && cargo publish --allow-dirty || echo "⚠️ Already claimed or failed"
+
+    echo "⏳ Waiting 30s for crates.io indexing..."
+    sleep 30
+
+    echo "📦 Publishing b00t-cli to claim name..."
+    cd ../b00t-cli && cargo publish --allow-dirty || echo "⚠️ Already claimed or failed"
+
+    echo "⏳ Waiting 30s for crates.io indexing..."
+    sleep 30
+
+    echo "📦 Publishing b00t-mcp to claim name..."
+    cd ../b00t-mcp && cargo publish --allow-dirty || echo "⚠️ Already claimed or failed"
+
+    echo "✅ Crate names claimed (if available)"
+
+# Create GitHub release (triggers crates.io publishing workflow)
 release:
-    gh release create v1.1.0 --title "Release v1.1.0" --notes "Release notes for version 1.1.0"
+    #!/bin/bash
+    set -euo pipefail
+    VERSION="{{workspace_version}}"
 
-    # check for latest release tag of _b00t_ in github using gh cli
-    NET_VERSION=$(cd "$HOME/.dotfiles" && gh release view -R elasticdotventures/dotfiles --json tagName | jq -r .tagName)
+    echo "🚀 Creating release v${VERSION}..."
 
-    # compare to local release
-    OUR_VERSION=$(cd "$HOME/.dotfiles" && git tag -l | sort -V | tail -n 1)
+    # Verify workspace is clean
+    if ! git diff --quiet; then
+        echo "⚠️ Uncommitted changes detected"
+        exit 1
+    fi
+
+    # Run tests first
+    echo "🧪 Running tests..."
+    cargo test --workspace --all-features
+
+    # Create git tag
+    git tag -a "v${VERSION}" -m "Release v${VERSION}"
+    git push origin "v${VERSION}"
+
+    # Create GitHub release (triggers publish-crates.yml workflow)
+    gh release create "v${VERSION}" \
+        --title "Release v${VERSION}" \
+        --generate-notes
+
+    echo "✅ Release v${VERSION} created"
+    echo "📦 Crates will be published to crates.io by GitHub Actions"
+    echo "🔗 Check workflow: https://github.com/elasticdotventures/dotfiles/actions"
 
 
 install:
     echo "🥾 _b00t_ install"
-    cargo install --path b00t-mcp
-    cargo install --path b00t-cli
+    cargo install --path b00t-mcp --force
+    cargo install --path b00t-cli --force
+    cargo install cocogitto --locked --force
+    just install-commit-hook
 
 
 installx:
@@ -167,7 +249,53 @@ clean-workflows:
         /repos/elasticdotventures/dotfiles/actions/runs/{}
 
 version:
-    git describe --tags --abbrev=0
+    echo "{{workspace_version}}"
+
+commit-hook:
+    #!/bin/bash
+    set -euo pipefail
+    if ! git diff --quiet; then
+        echo "⚠️ Unstaged changes detected; please stash or stage before running commit-hook"
+        exit 1
+    fi
+    cargo fmt
+    CURRENT_VERSION=$(toml get Cargo.toml workspace.package.version | tr -d '"')
+    IFS='.' read -r MAJOR MINOR PATCH <<< "${CURRENT_VERSION}"
+    PATCH=$((PATCH + 1))
+    NEW_VERSION="${MAJOR}.${MINOR}.${PATCH}"
+    TMP_FILE=$(mktemp)
+    toml set Cargo.toml workspace.package.version "${NEW_VERSION}" > "${TMP_FILE}"
+    mv "${TMP_FILE}" Cargo.toml
+    cargo metadata --format-version 1 >/dev/null 2>&1 || true
+    git add -u
+    VERSION=$(toml get Cargo.toml workspace.package.version | tr -d '"')
+    if git diff --cached --quiet; then
+        echo "No staged changes after running commit-hook"
+    else
+        echo "✅ Staged fmt + version bump (v${VERSION}); continue with your commit."
+    fi
+
+install-commit-hook:
+    #!/bin/bash
+    set -euo pipefail
+    # Skip if not in a git repo (e.g., Docker container)
+    if [ ! -d ".git" ]; then
+        echo "⏭️  Skipping git hook installation (not a git repository)"
+        exit 0
+    fi
+    HOOK_PATH=".git/hooks/pre-commit"
+    {
+        echo "#!/usr/bin/env bash"
+        echo "set -euo pipefail"
+        echo "if command -v just >/dev/null 2>&1; then"
+        echo "    just commit-hook"
+        echo "else"
+        echo "    echo \"just is required to run commit-hook\" >&2"
+        echo "    exit 1"
+        echo "fi"
+    } > "${HOOK_PATH}"
+    chmod +x "${HOOK_PATH}"
+    echo "✅ Installed .git/hooks/pre-commit to run 'just commit-hook'"
 
 cliff:
     # git-cliff --tag $(git describe --tags --abbrev=0) -o CHANGELOG.md
@@ -177,6 +305,94 @@ cliff:
 
 inspect-mcp:
 	npx @modelcontextprotocol/inspector ./target/release/b00t-mcp
+
+# Hugging Face model caching helper
+hf-download model dest="" revision="":
+	#!/usr/bin/env bash
+	set -euo pipefail
+	MODEL="{{model}}"
+	if [[ -z "$MODEL" ]]; then
+		echo "⚠️ set model=<repo>" >&2
+		exit 1
+	fi
+	if ! command -v huggingface-cli >/dev/null 2>&1; then
+		echo "⚠️ huggingface-cli missing; run 'b00t-cli cli install huggingface'" >&2
+		exit 1
+	fi
+	DEST="{{dest}}"
+	if [[ -z "$DEST" ]]; then
+		SANITIZED="${MODEL//\//__}"
+		DEST="$HOME/.b00t/models/$SANITIZED"
+	fi
+	mkdir -p "$DEST"
+	ARGS=(download "$MODEL" --local-dir "$DEST" --local-dir-use-symlinks False)
+	if [[ -n "{{revision}}" ]]; then
+		ARGS+=(--revision "{{revision}}")
+	fi
+	huggingface-cli "${ARGS[@]}"
+	echo "✅ cached $MODEL -> $DEST"
+
+# Invoke b00t-cli to install/cache a datum-backed model
+b00t-install-model model="llava" force="false" no_activate="false":
+	#!/usr/bin/env bash
+	set -euo pipefail
+	MODEL="{{model}}"
+	ARGS=(model download "$MODEL")
+	if [[ "{{force}}" == "true" ]]; then
+		ARGS+=(--force)
+	fi
+	if [[ "{{no_activate}}" == "true" ]]; then
+		ARGS+=(--no-activate)
+	fi
+	b00t-cli "${ARGS[@]}"
+
+# Launch vLLM container against cached weights
+vllm-up model="" dtype="" port="8000" image="vllm/vllm-openai:latest":
+	#!/usr/bin/env bash
+	set -euo pipefail
+	if [[ -n "{{model}}" ]]; then
+		eval "$(b00t-cli model env "{{model}}")"
+	else
+		eval "$(b00t-cli model env)"
+	fi
+	: "${VLLM_MODEL_DIR:?Missing VLLM_MODEL_DIR from model env}"
+	: "${VLLM_MODEL_PATH:?Missing VLLM_MODEL_PATH from model env}"
+	DTYPE="${dtype:-${VLLM_DTYPE:-float16}}"
+	PORT="{{port}}"
+	IMAGE="{{image}}"
+	CONTAINER="${VLLM_CONTAINER_NAME:-vllm-server}"
+	docker rm -f "$CONTAINER" >/dev/null 2>&1 || true
+	EXTRA_ARGS=()
+	if [[ -n "${VLLM_MAX_MODEL_LEN:-}" ]]; then
+		EXTRA_ARGS+=(--max-model-len "${VLLM_MAX_MODEL_LEN}")
+	fi
+	if [[ -n "${VLLM_EXTRA_ARGS:-}" ]]; then
+		# shellcheck disable=SC2206
+		EXTRA_ARGS+=(${VLLM_EXTRA_ARGS})
+	fi
+	docker run --rm -d \
+		--name "$CONTAINER" \
+		--gpus all \
+		-p "${PORT}:8000" \
+		-v "${VLLM_MODEL_DIR}:${VLLM_MODEL_PATH}:ro" \
+		${HF_TOKEN:+-e HF_TOKEN="$HF_TOKEN"} \
+		"$IMAGE" \
+		--model "${VLLM_MODEL_PATH}" \
+		--dtype "${DTYPE}" \
+		--tensor-parallel-size "${VLLM_TP_SIZE:-1}" \
+		"${EXTRA_ARGS[@]}"
+	echo "✅ vLLM listening on http://localhost:${PORT}"
+
+# Tail vLLM logs (defaults to follow mode)
+vllm-logs follow="true":
+	#!/usr/bin/env bash
+	set -euo pipefail
+	CONTAINER="${VLLM_CONTAINER_NAME:-vllm-server}"
+	if [[ "{{follow}}" == "true" ]]; then
+		docker logs -f "$CONTAINER"
+	else
+		docker logs "$CONTAINER"
+	fi
 
 # Captain's Command Arsenal - Memoized Agent Operations
 
@@ -293,4 +509,3 @@ port-map:
 
 install-services:
     {{repo-root}}/scripts/install-systemd-services.sh
-

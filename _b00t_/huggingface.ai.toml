@@ -1,0 +1,39 @@
+[b00t]
+name = "huggingface"
+type = "ai"
+hint = "HuggingFace Hub - access open-source models via Inference API"
+
+[models.llama-3_2-3b-instruct]
+capabilities = "text,chat,code"
+context_length = 8192
+cost_per_token = 0.0  # Free tier available
+max_tokens = 2048
+
+[models.mistral-7b-instruct-v0_3]
+capabilities = "text,chat,code,multilingual"
+context_length = 32768
+cost_per_token = 0.0
+max_tokens = 8192
+
+[models.qwen-2_5-coder-32b-instruct]
+capabilities = "code,chat"
+context_length = 32768
+cost_per_token = 0.0
+max_tokens = 4096
+
+[models.deepseek-coder-33b-instruct]
+capabilities = "code,chat"
+context_length = 16384
+cost_per_token = 0.0
+max_tokens = 4096
+
+# Environment variables required by this provider
+# Actual values are loaded from .env via direnv (b00t pattern: direnv → .envrc → dotenv → .env)
+# See b00t-j0b-py/.env.example for setup instructions
+[env]
+# Required: Must be present in .env file
+# HuggingFace uses HF_TOKEN or HUGGINGFACE_TOKEN
+required = ["HF_TOKEN"]
+
+# Optional: Default values for non-secret configuration
+defaults = { HUGGINGFACE_API_BASE = "https://api-inference.huggingface.co/models" }

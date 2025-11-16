@@ -9,17 +9,41 @@
 
 ## 🚀 Quick Install
 
-### Universal Installation (Recommended)
+### 🌟 Minimal Installation (Recommended - pkgx)
 
-The fastest way to get b00t running on any system:
+The fastest, cleanest way to install b00t - **4 MiB vs 1 GB toolchain**:
+
+```bash
+# Install pkgx (one-time setup)
+curl -Ssf https://pkgx.sh | sh
+
+# Run b00t immediately (auto-downloads on first use)
+pkgx b00t-cli --version
+
+# Or install permanently to ~/.local/bin
+pkgx +b00t-cli
+b00t-cli --version
+```
+
+**Why pkgx?**
+- ✅ **Minimal footprint**: 4 MiB binary vs 1 GB Rust toolchain
+- ✅ **Zero pollution**: Isolated in `~/.pkgx`, no system-wide changes
+- ✅ **Instant availability**: Run without installation
+- ✅ **Perfect for AI agents**: Fast bootstrap, ephemeral usage
+- ✅ **Auto-updates**: Automatically tracks GitHub releases
+
+### Universal Installation (Classic Method)
+
+One-liner that works everywhere:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/elasticdotventures/dotfiles/main/install.sh | sh
 ```
 
 This universal installer:
+- ✅ **Prefers pkgx** for minimal installation (prompts if not installed)
 - ✅ **Auto-detects your platform** (Linux x86_64/aarch64/armv7, macOS)
-- ✅ **Downloads optimized binaries** from GitHub releases  
+- ✅ **Downloads optimized binaries** from GitHub releases
 - ✅ **Falls back to container mode** if binaries unavailable
 - ✅ **Configures your shell** automatically (bash/zsh/fish)
 - ✅ **Sets up PATH and aliases** for immediate use
@@ -174,6 +198,40 @@ b00t detect node    # Check Node.js version and availability
 b00t desires rust   # See target Rust version from configuration  
 b00t install python # Install or update Python to desired version
 b00t up            # Update all tools to desired versions
+```
+
+### Vision Model Management
+Vision-style models now ship as first-class b00t datums, so any client (CLI, Blender panel, chat agent) can reuse a single cached copy:
+
+```bash
+# Discover the available model datums (⭐ marks the active model)
+b00t-cli model list
+
+# Cache weights via Hugging Face using the datum metadata
+b00t-cli model download llava         # alias for llava-v1-5-7b-hf
+b00t-cli model download deepseek      # alias for deepseek-ocr
+
+# Export environment variables for direnv/shells
+eval "$(b00t-cli model env)"          # emits export statements for the active model
+
+# Launch a local vLLM OpenAI-compatible server with the cached weights
+just vllm-up                          # reads env from the active datum
+just vllm-logs                        # tail the container logs
+# or directly via CLI
+b00t-cli model serve llava --port 9000
+b00t-cli model stop                  # stops the active container
+```
+
+Helper recipes wrap common workflows:
+
+- `just hf-download model=repo dest=~/path` – thin wrapper around `huggingface-cli download`, defaulting to `~/.b00t/models/<repo>`.
+- `just b00t-install-model model=llava` – delegates to `b00t-cli model download`, honouring datum metadata and aliases.
+- `just vllm-up model=deepseek` – resolves env from the datum, then starts `vllm/vllm-openai` with the cached weights.
+
+To keep direnv aligned across repos, drop this into `.envrc` and run `direnv allow` once:
+
+```bash
+eval "$(b00t-cli model env)"  # keep VLLM_MODEL_DIR/VLLM_MODEL_PATH in sync with the active datum
 ```
 
 ### **Session Management**

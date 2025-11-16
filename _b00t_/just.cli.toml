@@ -1,7 +1,6 @@
-
-
 [b00t]
 name = "just"
+type = "cli"
 desires = "1.25.2"
 install = '''
 curl -sSL https://just.systems/install.sh | bash -s -- --to ~/.local/bin
@@ -13,4 +12,24 @@ curl -sSL https://just.systems/install.sh | bash -s -- --to ~/.local/bin --force
 version = "just --version"
 version_regex = '\d+\.\d+\.\d+'
 hint = "just is a command runner that abstracts cli tools for a repo without reading the docs. run `just -l` to list commands."
+lfmf_category = "just"
 
+[b00t.learn]
+topic = "just"
+auto_digest = true
+
+[[b00t.usage]]
+description = "List all recipes in current directory"
+command = "just -l"
+
+[[b00t.usage]]
+description = "Run a specific recipe"
+command = "just <recipe-name>"
+
+[[b00t.usage]]
+description = "List recipes with working directory"
+command = "just --list --list-prefix '> '"
+
+[[b00t.usage]]
+description = "Run recipe with dotenv"
+command = "just --dotenv .env.local deploy"
