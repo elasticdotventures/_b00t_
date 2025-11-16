@@ -8,6 +8,12 @@
 use pyo3::create_exception;
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
+
+use serde_json;
+
+// Import b00t-cli functions
+use b00t_cli::model_manager::{self, ServeOptions};
+use b00t_cli::{mcp_list, mcp_output};
 use std::collections::HashMap;
 
 // Import b00t-cli functions
@@ -18,6 +24,14 @@ use b00t_c0re_lib::datum_ai_model::{AiModelDatum, ModelCapability, ModelProvider
 
 /// Python exception for b00t errors
 create_exception!(b00t_py, B00tError, pyo3::exceptions::PyException);
+
+fn to_py_err(prefix: &str, err: anyhow::Error) -> PyErr {
+    B00tError::new_err(format!("{}: {}", prefix, err))
+}
+
+fn to_py_err_serde(prefix: &str, err: serde_json::Error) -> PyErr {
+    B00tError::new_err(format!("{}: {}", prefix, err))
+}
 
 /// List all MCP servers available in the b00t configuration
 ///
@@ -70,6 +84,92 @@ fn mcp_output_py(servers: &str, path: &str, json_format: bool) -> PyResult<Strin
             e
         ))),
     }
+}
+
+#[pyfunction]
+#[pyo3(signature = (path = "~/.dotfiles/_b00t_"))]
+fn model_list_py(path: &str) -> PyResult<String> {
+    let models =
+        model_manager::list_models(path).map_err(|e| to_py_err("Failed to list models", e))?;
+    serde_json::to_string(&models).map_err(|e| to_py_err_serde("Failed to serialise model list", e))
+}
+
+#[pyfunction]
+#[pyo3(signature = (path = "~/.dotfiles/_b00t_", name = None))]
+fn model_info_py(path: &str, name: Option<&str>) -> PyResult<String> {
+    let record = model_manager::describe_model(path, name)
+        .map_err(|e| to_py_err("Failed to load model datum", e))?;
+    serde_json::to_string(&record).map_err(|e| to_py_err_serde("Failed to serialise model info", e))
+}
+
+#[pyfunction]
+#[pyo3(signature = (path = "~/.dotfiles/_b00t_", name = None))]
+fn model_env_py(py: Python<'_>, path: &str, name: Option<&str>) -> PyResult<PyObject> {
+    let envs = model_manager::export_model_env(path, name)
+        .map_err(|e| to_py_err("Failed to export model env", e))?;
+    let dict = PyDict::new(py);
+    for (key, value) in envs {
+        dict.set_item(key, value)?;
+    }
+    Ok(dict.into())
+}
+
+#[pyfunction]
+#[pyo3(signature = (name, path = "~/.dotfiles/_b00t_", force = false, activate = true))]
+fn model_download_py(name: &str, path: &str, force: bool, activate: bool) -> PyResult<String> {
+    let op = model_manager::download_model(path, name, force, activate)
+        .map_err(|e| to_py_err("Failed to download model", e))?;
+    serde_json::to_string(&op)
+        .map_err(|e| to_py_err_serde("Failed to serialise download result", e))
+}
+
+#[pyfunction]
+#[pyo3(signature = (name, path = "~/.dotfiles/_b00t_"))]
+fn model_remove_py(name: &str, path: &str) -> PyResult<Option<String>> {
+    model_manager::remove_model(path, name).map_err(|e| to_py_err("Failed to remove model", e))
+}
+
+#[pyfunction]
+#[pyo3(signature = (name, path = "~/.dotfiles/_b00t_"))]
+fn model_activate_py(name: &str, path: &str) -> PyResult<()> {
+    model_manager::activate_model(path, name).map_err(|e| to_py_err("Failed to activate model", e))
+}
+
+#[pyfunction]
+#[pyo3(signature = (path = "~/.dotfiles/_b00t_", name = None, port = None, dtype = None, image = None, container = None, tensor_parallel_size = 1, extra_args = None, use_gpu = true, replace_existing = true))]
+fn model_serve_py(
+    path: &str,
+    name: Option<&str>,
+    port: Option<u16>,
+    dtype: Option<&str>,
+    image: Option<&str>,
+    container: Option<&str>,
+    tensor_parallel_size: u32,
+    extra_args: Option<Vec<String>>,
+    use_gpu: bool,
+    replace_existing: bool,
+) -> PyResult<String> {
+    let mut options = ServeOptions::default();
+    options.port = port;
+    options.dtype = dtype.map(|s| s.to_string());
+    options.image = image.map(|s| s.to_string());
+    options.container_name = container.map(|s| s.to_string());
+    options.tensor_parallel_size = Some(tensor_parallel_size);
+    options.extra_args = extra_args.unwrap_or_default();
+    options.gpus = use_gpu;
+    options.force_replace = replace_existing;
+
+    let result = model_manager::serve_model(path, name, options)
+        .map_err(|e| to_py_err("Failed to start model server", e))?;
+    serde_json::to_string(&result)
+        .map_err(|e| to_py_err_serde("Failed to serialise serve result", e))
+}
+
+#[pyfunction]
+#[pyo3(signature = (path = "~/.dotfiles/_b00t_", container = None))]
+fn model_stop_py(path: &str, container: Option<&str>) -> PyResult<()> {
+    model_manager::stop_model(path, container)
+        .map_err(|e| to_py_err("Failed to stop model server", e))
 }
 
 /// Get b00t ecosystem version
@@ -304,6 +404,14 @@ fn b00t_py(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     // MCP functions
     m.add_function(wrap_pyfunction!(mcp_list_py, m)?)?;
     m.add_function(wrap_pyfunction!(mcp_output_py, m)?)?;
+    m.add_function(wrap_pyfunction!(model_list_py, m)?)?;
+    m.add_function(wrap_pyfunction!(model_info_py, m)?)?;
+    m.add_function(wrap_pyfunction!(model_env_py, m)?)?;
+    m.add_function(wrap_pyfunction!(model_download_py, m)?)?;
+    m.add_function(wrap_pyfunction!(model_remove_py, m)?)?;
+    m.add_function(wrap_pyfunction!(model_activate_py, m)?)?;
+    m.add_function(wrap_pyfunction!(model_serve_py, m)?)?;
+    m.add_function(wrap_pyfunction!(model_stop_py, m)?)?;
 
     // Datum functions
     m.add_function(wrap_pyfunction!(load_ai_model_datum, m)?)?;

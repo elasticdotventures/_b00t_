@@ -182,7 +182,6 @@ b00t.bob.python-docker/status
 b00t.coordination/step/1
 ```
 
-<<<<<<< HEAD
 ### Chat message envelope
 
 From `README-chat.md`:
@@ -201,7 +200,6 @@ From `README-chat.md`:
 - `sender` identifies the emitting agent.
 - `metadata` carries structured context; `body` stays human friendly.
 - Timestamps are recorded in UTC for deterministic ordering.
-=======
 ### Message Types (ACP StepSync)
 
 From `README-hive-acp.md`:
@@ -245,7 +243,6 @@ From `README-hive-acp.md`:
   "payload": {"step": 1, "from": "alice"}
 }
 ```
->>>>>>> origin/main
 
 ### Step Synchronization
 

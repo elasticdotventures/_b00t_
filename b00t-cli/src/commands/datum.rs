@@ -134,9 +134,9 @@ fn handle_show(b00t_path: &str, datum_name: &str) -> Result<()> {
     if let Some(category) = &datum.lfmf_category {
         println!("## LFMF Lessons ({})", category);
         println!();
-        println!("View lessons with: `b00t advice {} list`", category);
+        println!("View lessons with: `b00t learn {} --search list`", category);
         println!(
-            "Record lessons with: `b00t lfmf {} \"<topic>: <solution>\"`",
+            "Record lessons with: `b00t learn {} --record \"<topic>: <solution>\"`",
             category
         );
         println!();
