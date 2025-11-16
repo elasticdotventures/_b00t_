@@ -1,0 +1,8 @@
+name: b00t-cli-tests
+schedule: "0 0 * * *"  # Daily cron; adjust or disable in scheduler as needed.
+description: "Run b00t-cli focused cargo tests to verify datum changes."
+steps:
+  - name: cargo-test-b00t-cli
+    command: cargo test -p b00t-cli
+    env:
+      RUST_BACKTRACE: "1"

@@ -398,26 +398,39 @@ mod tests {
     use super::*;
     use tempfile::TempDir;
 
+    fn with_tokio_runtime<T>(f: impl FnOnce() -> T) -> T {
+        let runtime = tokio::runtime::Runtime::new().expect("tokio runtime");
+        let guard = runtime.enter();
+        let result = f();
+        drop(guard);
+        runtime.shutdown_background();
+        result
+    }
+
     #[test]
     fn test_server_creation() {
-        let temp_dir = TempDir::new().unwrap();
-        let server = B00tMcpServerRusty::new(temp_dir.path(), "").unwrap();
+        with_tokio_runtime(|| {
+            let temp_dir = TempDir::new().unwrap();
+            let server = B00tMcpServerRusty::new(temp_dir.path(), "").unwrap();
 
-        assert_eq!(server.working_dir, temp_dir.path());
+            assert_eq!(server.working_dir, temp_dir.path());
 
-        // Test that registry has tools
-        let tools = server.registry.get_tools();
-        assert!(!tools.is_empty());
+            // Test that registry has tools
+            let tools = server.registry.get_tools();
+            assert!(!tools.is_empty());
+        });
     }
 
     #[test]
     fn test_server_info() {
-        let temp_dir = TempDir::new().unwrap();
-        let server = B00tMcpServerRusty::new(temp_dir.path(), "").unwrap();
+        with_tokio_runtime(|| {
+            let temp_dir = TempDir::new().unwrap();
+            let server = B00tMcpServerRusty::new(temp_dir.path(), "").unwrap();
 
-        let info = server.get_info();
-        assert!(info.instructions.unwrap().contains("🦀 Rusty MCP server"));
-        assert!(info.capabilities.tools.is_some());
+            let info = server.get_info();
+            assert!(info.instructions.unwrap().contains("🦀 Rusty MCP server"));
+            assert!(info.capabilities.tools.is_some());
+        });
     }
 
     // 🦨 TODO: Fix RequestContext creation for tests
@@ -443,20 +456,22 @@ mod tests {
 
     #[test]
     fn test_result_creation() {
-        let temp_dir = TempDir::new().unwrap();
-        let server = B00tMcpServerRusty::new(temp_dir.path(), "").unwrap();
+        with_tokio_runtime(|| {
+            let temp_dir = TempDir::new().unwrap();
+            let server = B00tMcpServerRusty::new(temp_dir.path(), "").unwrap();
 
-        let indicator = "<🥾>{ \"chat\": { \"msgs\": 0 } }</🥾>";
-        let success_result = server.create_success_result("Test output", indicator);
-        assert!(success_result.content.len() > 0);
-
-        let error_result = server.create_error_result("Test error", indicator);
-        assert!(error_result.content.len() > 0);
-
-        // Verify the content can be parsed
-        if let Some(_content) = success_result.content.get(0) {
-            // Verify we have content
+            let indicator = "<🥾>{ \"chat\": { \"msgs\": 0 } }</🥾>";
+            let success_result = server.create_success_result("Test output", indicator);
             assert!(!success_result.content.is_empty());
-        }
+
+            let error_result = server.create_error_result("Test error", indicator);
+            assert!(!error_result.content.is_empty());
+
+            // Verify the content can be parsed
+            if let Some(_content) = success_result.content.get(0) {
+                // Verify we have content
+                assert!(!success_result.content.is_empty());
+            }
+        });
     }
 }

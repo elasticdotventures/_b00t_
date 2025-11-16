@@ -3,7 +3,7 @@ use clap::Parser;
 use std::collections::HashMap;
 
 use b00t_cli::datum_stack::StackDatum;
-use b00t_cli::{BootDatum, get_expanded_path};
+use b00t_cli::{BootDatum, UnifiedConfig, get_expanded_path};
 
 #[derive(Parser)]
 pub enum StackCommands {

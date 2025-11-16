@@ -11,6 +11,7 @@ use anyhow::{Context, Result};
 use b00t_ipc::{Agent, Message, MessageBus, VoteChoice};
 use std::io::{self, Write};
 use std::sync::Arc;
+use uuid::Uuid;
 
 pub struct Repl {
     agent: Agent,
@@ -103,6 +104,15 @@ impl Repl {
             "/propose" => {
                 self.cmd_propose(&parts[1..]).await?;
             }
+            "/ahoy" => {
+                self.cmd_ahoy(&parts[1..]).await?;
+            }
+            "/apply" => {
+                self.cmd_apply(&parts[1..]).await?;
+            }
+            "/award" => {
+                self.cmd_award(&parts[1..]).await?;
+            }
             _ => {
                 println!("❓ Unknown command: {}", cmd);
                 println!("Type /help for available commands");
@@ -124,6 +134,9 @@ impl Repl {
   /negotiate <resource> <amount> <reason> - Request resource allocation
   /status - Show current agent status
   /propose <description> - Create new proposal for voting
+  /ahoy <role> <budget> <skills...> <description> - Announce role seeking applicants
+  /apply <ahoy_id> <pitch...> - Apply for announced role
+  /award <ahoy_id> <winner> - Award role to selected applicant (captain only)
   /help - Show this help
   /quit - Exit REPL
 
@@ -133,6 +146,9 @@ Examples:
   /crew form beta gamma
   /delegate beta 100
   /negotiate cpu 4 "Need more cores for compilation"
+  /ahoy "backend dev" 50 rust,docker "Build API microservice"
+  /apply abc456 "5 years Rust experience, built 10+ APIs"
+  /award abc456 beta
 "#
         );
     }
@@ -311,6 +327,93 @@ Examples:
         println!("📝 Proposal created: {}", proposal_id);
         println!("   Description: {}", description);
         println!("   Use: /vote {} yes|no|abstain", proposal_id);
+
+        Ok(())
+    }
+
+    async fn cmd_ahoy(&self, args: &[&str]) -> Result<()> {
+        if args.len() < 4 {
+            anyhow::bail!("Usage: /ahoy <role> <budget> <skills> <description...>");
+        }
+
+        let role = args[0].to_string();
+        let budget: u64 = args[1].parse().context("Budget must be a number")?;
+        let required_skills: Vec<String> =
+            args[2].split(',').map(|s| s.trim().to_string()).collect();
+        let description = args[3..].join(" ");
+        let ahoy_id = Uuid::new_v4().to_string();
+
+        self.bus
+            .send(Message::Ahoy {
+                from: self.agent.id.clone(),
+                ahoy_id: ahoy_id.clone(),
+                role: role.clone(),
+                description: description.clone(),
+                required_skills: required_skills.clone(),
+                budget,
+            })
+            .await?;
+
+        println!("📢 Ahoy! Seeking applicants:");
+        println!("   ID: {}", ahoy_id);
+        println!("   Role: {}", role);
+        println!("   Budget: {}🍰", budget);
+        println!("   Required skills: {:?}", required_skills);
+        println!("   Description: {}", description);
+        println!("\n   Agents can apply with: /apply {} <pitch>", ahoy_id);
+
+        Ok(())
+    }
+
+    async fn cmd_apply(&self, args: &[&str]) -> Result<()> {
+        if args.len() < 2 {
+            anyhow::bail!("Usage: /apply <ahoy_id> <pitch...>");
+        }
+
+        let ahoy_id = args[0].to_string();
+        let pitch = args[1..].join(" ");
+        let relevant_skills = self.agent.skills.clone();
+
+        self.bus
+            .send(Message::Apply {
+                from: self.agent.id.clone(),
+                ahoy_id: ahoy_id.clone(),
+                pitch: pitch.clone(),
+                relevant_skills: relevant_skills.clone(),
+            })
+            .await?;
+
+        println!("✋ Application submitted:");
+        println!("   Ahoy ID: {}", ahoy_id);
+        println!("   Skills: {:?}", relevant_skills);
+        println!("   Pitch: {}", pitch);
+
+        Ok(())
+    }
+
+    async fn cmd_award(&self, args: &[&str]) -> Result<()> {
+        if args.len() < 2 {
+            anyhow::bail!("Usage: /award <ahoy_id> <winner>");
+        }
+
+        let ahoy_id = args[0].to_string();
+        let winner = args[1].to_string();
+        // TODO: Retrieve budget from ahoy announcement
+        let budget = 0;
+
+        self.bus
+            .send(Message::Award {
+                from: self.agent.id.clone(),
+                ahoy_id: ahoy_id.clone(),
+                winner: winner.clone(),
+                budget,
+            })
+            .await?;
+
+        println!("🏆 Role awarded!");
+        println!("   Ahoy ID: {}", ahoy_id);
+        println!("   Winner: {}", winner);
+        println!("   Reward: {}🍰", budget);
 
         Ok(())
     }

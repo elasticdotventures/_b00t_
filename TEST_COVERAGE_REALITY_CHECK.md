@@ -59,7 +59,7 @@ This document provides an honest assessment of what was tested at which level an
 
 ### ✅ Orchestrator Tests (orchestrator_grok_test.rs)
 
-**File**: `b00t-cli/tests/orchestrator_grok_test.rs` (227 lines, 7 tests)
+**File**: `b00t-cli/tests/orchestrator_grok_test.rs` (255 lines, 7 tests)
 
 #### Covered:
 1. ✅ `Orchestrator::ensure_dependencies()` for grok-guru.mcp
@@ -78,7 +78,7 @@ This document provides an honest assessment of what was tested at which level an
 
 ### ✅ CLI-Level Tests (cli_learn_commands_test.rs) - NEW
 
-**File**: `b00t-cli/tests/cli_learn_commands_test.rs` (614 lines, 13 tests)
+**File**: `b00t-cli/tests/cli_learn_commands_test.rs` (485 lines, 13 tests)
 
 #### Covered at CLI Level:
 1. ✅ `b00t learn --digest` - actual command execution

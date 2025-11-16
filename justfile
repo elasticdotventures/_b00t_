@@ -278,6 +278,11 @@ commit-hook:
 install-commit-hook:
     #!/bin/bash
     set -euo pipefail
+    # Skip if not in a git repo (e.g., Docker container)
+    if [ ! -d ".git" ]; then
+        echo "⏭️  Skipping git hook installation (not a git repository)"
+        exit 0
+    fi
     HOOK_PATH=".git/hooks/pre-commit"
     {
         echo "#!/usr/bin/env bash"
@@ -332,7 +337,7 @@ b00t-install-model model="llava" force="false" no_activate="false":
 	#!/usr/bin/env bash
 	set -euo pipefail
 	MODEL="{{model}}"
-ARGS=(model download "$MODEL")
+	ARGS=(model download "$MODEL")
 	if [[ "{{force}}" == "true" ]]; then
 		ARGS+=(--force)
 	fi

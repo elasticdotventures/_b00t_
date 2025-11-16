@@ -1,11 +1,21 @@
 use b00t_mcp::{B00tMcpServerRusty, DetectParams, StatusParams};
 use rmcp::handler::server::ServerHandler;
 
+fn run_in_tokio_runtime<T>(f: impl FnOnce() -> T) -> T {
+    let runtime = tokio::runtime::Runtime::new().expect("tokio runtime");
+    let guard = runtime.enter();
+    let result = f();
+    drop(guard);
+    runtime.shutdown_background();
+    result
+}
+
 #[test]
 fn test_server_creation() {
-    // Create a temporary ACL config file for testing
-    let temp_dir = std::env::temp_dir();
-    let config_path = temp_dir.join("test_acl.toml");
+    run_in_tokio_runtime(|| {
+        // Create a temporary ACL config file for testing
+        let temp_dir = std::env::temp_dir();
+        let config_path = temp_dir.join("test_acl.toml");
 
     // Create a minimal ACL config
     std::fs::write(
@@ -46,8 +56,9 @@ status = { policy = "allow" }
     // 🦀 Test resources support
     assert!(info.capabilities.resources.is_some());
 
-    // Clean up
-    std::fs::remove_file(&config_path).ok();
+        // Clean up
+        std::fs::remove_file(&config_path).ok();
+    });
 }
 
 #[test]
