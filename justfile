@@ -105,15 +105,7 @@ release:
     # Create GitHub release (triggers publish-crates.yml workflow)
     gh release create "v${VERSION}" \
         --title "Release v${VERSION}" \
-        --notes "Release notes for version ${VERSION}
-
-        Published crates (unified versioning):
-        - \`b00t-chat\` v${VERSION}
-        - \`b00t-c0re-lib\` v${VERSION}
-        - \`b00t-cli\` v${VERSION}
-        - \`b00t-mcp\` v${VERSION}
-
-        This release automatically publishes to crates.io via GitHub Actions."
+        --generate-notes
 
     echo "✅ Release v${VERSION} created"
     echo "📦 Crates will be published to crates.io by GitHub Actions"
