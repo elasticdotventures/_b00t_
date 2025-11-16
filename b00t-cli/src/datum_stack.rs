@@ -1,5 +1,5 @@
 use crate::dependency_resolver::DependencyResolver;
-use crate::{BootDatum, DatumType};
+use crate::{BootDatum, DatumType, UnifiedConfig};
 use anyhow::{Context, Result, bail};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};

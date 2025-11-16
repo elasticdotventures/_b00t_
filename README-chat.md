@@ -57,6 +57,24 @@ b00t-cli chat send --transport nats --message "deploying" \
 b00t-cli chat info
 ```
 
+## Slash commands
+
+Slash messages prefixed with `/b00t` can be translated into CLI invocations via
+`b00t_chat::parse_b00t_command`. The initial model-management verbs match the
+new datum workflow:
+
+```text
+/b00t model list            # Inspect cached datums
+/b00t model download llava  # Delegate to `b00t-cli model download llava`
+/b00t model env deepseek    # Emit env exports for direnv blending
+/b00t model remove llava    # Remove cached weights (`--yes` implied)
+/b00t model serve llava     # Launch default vLLM container for LLaVA
+/b00t model stop            # Stop the active model container
+```
+
+Chat front-ends can call `BootCommand::to_cli_args()` to hand the parsed action
+off to the existing `b00t-cli model …` commands.
+
 ## Integration checklist
 
 - [x] Rename workspace crate to `b00t-chat`
