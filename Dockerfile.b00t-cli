@@ -84,7 +84,7 @@ COPY --from=rust-builder /root/.cargo/bin/b00t-mcp /usr/local/bin/b00t-mcp
 # Copy _b00t_ resources from resources stage
 COPY --from=b00t-resources /opt/b00t/config/ /opt/b00t/config/
 
-# Create symlinks for easier access
+# Create symlink for easier access
 RUN ln -sf /usr/local/bin/b00t-cli /usr/local/bin/b00t
 
 # Set default environment variables
