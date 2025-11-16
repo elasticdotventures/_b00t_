@@ -1,6 +1,6 @@
 use crate::datum_ai_model::AiModelDatumEntry;
+use crate::traits::DatumChecker; // 🦨 Fix: trait needed for is_installed() method
 use crate::{check_command_available, get_expanded_path};
-use crate::traits::DatumChecker;  // 🦨 Fix: trait needed for is_installed() method
 use anyhow::{Context, Result, anyhow};
 use duct::cmd;
 use serde::Serialize;

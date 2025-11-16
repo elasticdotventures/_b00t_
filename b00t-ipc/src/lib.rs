@@ -134,6 +134,29 @@ pub enum Message {
     },
     /// General broadcast to crew
     Broadcast { from: String, content: String },
+    /// Ahoy - announcement seeking applicants for role/task
+    Ahoy {
+        from: String,
+        ahoy_id: String,
+        role: String,
+        description: String,
+        required_skills: Vec<String>,
+        budget: u64, // 🍰 cake reward
+    },
+    /// Apply - agent applies for ahoy role
+    Apply {
+        from: String,
+        ahoy_id: String,
+        pitch: String, // Why agent is qualified
+        relevant_skills: Vec<String>,
+    },
+    /// Award - captain selects winner of ahoy
+    Award {
+        from: String,
+        ahoy_id: String,
+        winner: String,
+        budget: u64, // 🍰 cake awarded
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

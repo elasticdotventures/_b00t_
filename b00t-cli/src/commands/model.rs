@@ -1,8 +1,18 @@
-use b00t_cli::model_manager::{  // 🦨 Fix: use b00t_cli:: from binary, model_manager is in lib
-    ModelOperation, ModelRecord, ServeOptions, activate_model, describe_model, download_model,
-    export_model_env, list_models, remove_model, serve_model, stop_model,
-};
 use anyhow::{Result, anyhow};
+use b00t_cli::model_manager::{
+    // 🦨 Fix: use b00t_cli:: from binary, model_manager is in lib
+    ModelOperation,
+    ModelRecord,
+    ServeOptions,
+    activate_model,
+    describe_model,
+    download_model,
+    export_model_env,
+    list_models,
+    remove_model,
+    serve_model,
+    stop_model,
+};
 use clap::Parser;
 use serde_json::json;
 
@@ -188,7 +198,8 @@ fn env_cmd(path: &str, name: Option<&str>, plain: bool, json_output: bool) -> Re
         return Ok(());
     }
 
-    for (key, value) in &env {  // 🦨 Fix: iterate by reference, env already borrowed above
+    for (key, value) in &env {
+        // 🦨 Fix: iterate by reference, env already borrowed above
         if plain {
             println!("{}={}", key, value);
         } else {
