@@ -1,4 +1,3 @@
-pub mod advice;
 pub mod ai;
 pub mod app;
 pub mod bootstrap;
@@ -9,7 +8,6 @@ pub mod grok;
 pub mod init;
 pub mod k8s;
 pub mod learn;
-pub mod lfmf;
 pub mod mcp;
 pub mod model;
 pub mod script;

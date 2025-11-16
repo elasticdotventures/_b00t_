@@ -1,11 +1,11 @@
 //! Datum utility functions for loading and searching datums
 
 use anyhow::Result;
+use b00t_c0re_lib::lfmf::DatumLookup;
+use b00t_cli::{BootDatum, UnifiedConfig};
 use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
-use b00t_cli::{BootDatum, UnifiedConfig};
-use b00t_c0re_lib::lfmf::DatumLookup;
 
 /// Implementation of DatumLookup trait for b00t datums
 /// Enables LFMF system to resolve datum names to categories
@@ -106,10 +106,7 @@ pub fn get_datums_by_lfmf_category(b00t_path: &str, category: &str) -> Result<Ve
 }
 
 /// Get learn content for a datum (either from topic reference or inline)
-pub fn get_datum_learn_content(
-    b00t_path: &str,
-    datum: &BootDatum,
-) -> Result<Option<String>> {
+pub fn get_datum_learn_content(b00t_path: &str, datum: &BootDatum) -> Result<Option<String>> {
     if let Some(learn) = &datum.learn {
         if let Some(topic) = &learn.topic {
             // Load from learn topic
