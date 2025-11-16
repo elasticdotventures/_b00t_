@@ -126,7 +126,10 @@ pub struct BootDatum {
 
     // Usage examples - CLI/API usage patterns
     // Supports: usage = ["cmd  # desc", ...] or [[b00t.usage]] tables
-    #[serde(skip_serializing_if = "Option::is_none", deserialize_with = "b00t_c0re_lib::deserialize_usage")]
+    #[serde(
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "b00t_c0re_lib::deserialize_usage"
+    )]
     pub usage: Option<Vec<UsageExample>>,
 
     // LFMF category mapping - groups datum lessons under a category
@@ -414,9 +417,9 @@ fn create_mcp_datum_from_json(
         implements: None,
         provides: None,
         requires: None,
-    learn: None,
-    usage: None,
-    lfmf_category: None,
+        learn: None,
+        usage: None,
+        lfmf_category: None,
     }
 }
 
@@ -511,9 +514,9 @@ pub fn normalize_mcp_json(input: &str, dwiw: bool) -> Result<BootDatum> {
                 implements: None,
                 provides: None,
                 requires: None,
-            learn: None,
-            usage: None,
-            lfmf_category: None,
+                learn: None,
+                usage: None,
+                lfmf_category: None,
             });
         }
 

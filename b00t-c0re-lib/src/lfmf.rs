@@ -457,7 +457,10 @@ impl LfmfSystem {
         let tool_file = learn_dir.join(format!("{}.md", category));
 
         if !tool_file.exists() {
-            return Ok(vec![format!("No lessons found for category '{}'", category)]);
+            return Ok(vec![format!(
+                "No lessons found for category '{}'",
+                category
+            )]);
         }
 
         let content = fs::read_to_string(&tool_file)?;

@@ -1,6 +1,6 @@
+use crate::datum_utils;
 use anyhow::Result;
 use clap::Parser;
-use crate::datum_utils;
 
 #[derive(Parser, Debug)]
 pub enum DatumCommands {
@@ -26,7 +26,13 @@ fn handle_show(b00t_path: &str, datum_name: &str) -> Result<()> {
     println!();
 
     // Basic info
-    println!("**Type:** {:?}", datum.datum_type.as_ref().unwrap_or(&b00t_cli::DatumType::Unknown));
+    println!(
+        "**Type:** {:?}",
+        datum
+            .datum_type
+            .as_ref()
+            .unwrap_or(&b00t_cli::DatumType::Unknown)
+    );
     println!("**Hint:** {}", datum.hint);
     println!();
 
@@ -128,8 +134,11 @@ fn handle_show(b00t_path: &str, datum_name: &str) -> Result<()> {
     if let Some(category) = &datum.lfmf_category {
         println!("## LFMF Lessons ({})", category);
         println!();
-        println!("View lessons with: `b00t advice {} list`", category);
-        println!("Record lessons with: `b00t lfmf {} \"<topic>: <solution>\"`", category);
+        println!("View lessons with: `b00t learn {} --search list`", category);
+        println!(
+            "Record lessons with: `b00t learn {} --record \"<topic>: <solution>\"`",
+            category
+        );
         println!();
     }
 
