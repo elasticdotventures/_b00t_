@@ -58,13 +58,16 @@ impl ManPage {
                 let max_length = 40;
                 // Check next line is not another header or empty
                 let next_line = lines.get(idx + 1).map(|l| l.trim()).unwrap_or("");
-                trimmed.chars().all(|c| c.is_uppercase() || c.is_whitespace() || c == '-' || c == '(' || c == ')')
-                    && !trimmed.is_empty()
+                trimmed.chars().all(|c| {
+                    c.is_uppercase() || c.is_whitespace() || c == '-' || c == '(' || c == ')'
+                }) && !trimmed.is_empty()
                     && trimmed.len() > 2
                     && leading_spaces <= 2
                     && trimmed.len() <= max_length
                     && !next_line.is_empty()
-                    && !next_line.chars().all(|c| c.is_uppercase() || c.is_whitespace() || c == '-' || c == '(' || c == ')')
+                    && !next_line.chars().all(|c| {
+                        c.is_uppercase() || c.is_whitespace() || c == '-' || c == '(' || c == ')'
+                    })
             } {
                 // Save previous section
                 if let Some((title, start)) = current_section.take() {
