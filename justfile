@@ -345,7 +345,7 @@ b00t-install-model model="llava" force="false" no_activate="false":
 	#!/usr/bin/env bash
 	set -euo pipefail
 	MODEL="{{model}}"
-ARGS=(model download "$MODEL")
+	ARGS=(model download "$MODEL")
 	if [[ "{{force}}" == "true" ]]; then
 		ARGS+=(--force)
 	fi
