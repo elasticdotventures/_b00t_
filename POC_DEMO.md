@@ -11,10 +11,23 @@ This POC demonstrates a functional multi-agent system with:
 - ✅ Crown delegation (captain authority)
 - ✅ Cake token budgets
 
-**Architecture Note:** Currently uses in-process message passing for protocol development.
-Inter-process communication via Unix sockets is planned for Phase 2.
+**⚠️ Current Limitation**: This POC uses in-memory channels for IPC. Each agent process creates an isolated MessageBus instance, so **inter-terminal communication does not work**. Agents in separate terminals cannot communicate with each other. See "Running the POC" below for the correct usage pattern.
 
 ## Architecture
+
+**🎯 What This POC Demonstrates:**
+- Type-safe message protocol design (Handshake, Vote, Delegate, etc.)
+- Agent identity and state management
+- Voting system with quorum logic
+- k0mmand3r REPL interface for agent interaction
+- Async message passing architecture
+
+**⚠️ What Doesn't Work Yet:**
+- Inter-terminal/inter-process agent communication
+- Agents in separate terminals sharing a MessageBus
+- Distributed voting across multiple processes
+
+**Why**: Each agent binary creates its own isolated in-memory `MessageBus`. The in-memory channels cannot cross process boundaries. To enable multi-terminal agents, we need to implement Unix socket IPC (see Phase 2 Future Enhancements).
 
 ### Components
 
@@ -39,59 +52,61 @@ Inter-process communication via Unix sockets is planned for Phase 2.
 
 ## Running the POC
 
-> **⚠️ Current Limitation**: This POC demonstrates the **API design** for multi-agent communication.
-> Each agent creates its own isolated `MessageBus` instance, so agents in separate terminal processes
-> **cannot** communicate with each other yet. For actual inter-process communication, see the
-> [Future Enhancements](#phase-2-advanced-protocols) section on Unix domain sockets.
+### Current Implementation: Single-Process Demo
 
-### Single-Process Demo
+**⚠️ Important**: The current implementation uses in-memory channels. Each agent binary creates its own isolated `MessageBus` instance, meaning agents in separate terminals **cannot communicate**. This POC demonstrates the API design and protocol patterns, not actual inter-process communication.
 
-To test the full protocol with multiple agents, run them in the same process using a coordinator:
+### Usage Pattern 1: Single Agent REPL (Working)
 
-```bash
-# Run the multi-agent demo (not yet implemented - shows API design)
-cargo run --example multi_agent_demo
-```
-
-### Interactive REPL (Single Agent)
-
-You can still run individual agents to explore the REPL interface and command syntax:
+Test individual agent functionality:
 
 ```bash
-# Agent Alpha (curious, rust/testing specialist)
+# Run a single agent to explore commands
 cargo run --bin b00t-agent -- --id alpha --skills rust,testing --personality curious
 ```
 
-### Demo Script (API Design Reference)
-
-The following shows the *intended* multi-agent workflow once IPC is implemented:
-
-**In Alpha terminal:**
+**Example session:**
 ```
 alpha> /help                    # Show available commands
 alpha> /status                  # Show agent capabilities
-alpha> /handshake beta Build multi-agent POC
 alpha> /propose Use Unix sockets for IPC
 # Note the proposal ID (e.g., abc123...)
 alpha> /vote abc123 yes Low latency, simpler than gRPC
+# ✅ Proposal PASSED! (quorum of 2 reached with self-vote counted twice)
+alpha> /quit
 ```
 
-**In Beta terminal:**
-```
-beta> /status
-beta> /vote abc123 yes Agree, less dependencies
-# ✅ Proposal PASSED! (quorum of 2 reached)
+### Usage Pattern 2: Programmatic Multi-Agent (Future Work)
+
+For true multi-agent coordination, agents must share a MessageBus instance in the same process:
+
+```rust
+// Example: Coordinated agents in single process (not yet implemented)
+#[tokio::main]
+async fn main() -> Result<()> {
+    let bus = Arc::new(MessageBus::new().await?);
+    
+    // Spawn alpha agent task
+    let bus_alpha = bus.clone();
+    tokio::spawn(async move {
+        let mut repl_alpha = Repl::with_bus("alpha", vec!["rust"], bus_alpha).await?;
+        repl_alpha.run().await
+    });
+    
+    // Spawn beta agent task
+    let bus_beta = bus.clone();
+    tokio::spawn(async move {
+        let mut repl_beta = Repl::with_bus("beta", vec!["docker"], bus_beta).await?;
+        repl_beta.run().await
+    });
+    
+    // Wait for agents...
+}
 ```
 
-**Back in Alpha:**
-```
-alpha> /crew form beta
-alpha> /delegate beta 100       # Transfer crown 👑 and 100🍰 to beta
-alpha> /negotiate cpu 4 Need more cores for compilation
-```
+### Usage Pattern 3: Inter-Terminal Communication (Requires Implementation)
 
-> **Note**: The above workflow requires Unix domain socket IPC (Phase 2). Currently, each agent
-> can only send/receive messages within its own process for testing the command interface.
+**Not yet available** - To enable communication between agents in separate terminals, we need to implement Unix domain socket IPC as mentioned in Phase 2 Future Enhancements. The current in-memory channel approach only works within a single process.
 
 ## Slash Commands
 
@@ -170,14 +185,18 @@ _b00t_/
 
 ## Future Enhancements
 
-### Phase 2: Advanced Protocols
-- [ ] **Unix domain socket IPC** - Enable actual inter-process communication between agents in separate terminals
-  - Shared message bus via `/tmp/b00t-ipc.sock`
-  - Message serialization/deserialization
-  - Connection pooling and discovery
+### Phase 2: True Inter-Process Communication
+- [ ] **Unix domain socket IPC** - Enable communication between agents in separate terminals/processes
+- [ ] **Shared MessageBus via socket** - Replace in-memory channels with socket-based transport
 - [ ] Persistent message log
 - [ ] Leader election (Raft/Paxos)
 - [ ] Smart contract budgets
+
+**Why Unix Sockets**: Currently each agent creates an isolated `MessageBus` with in-memory channels. To enable inter-terminal communication, we need a shared transport layer. Unix domain sockets provide:
+- Low latency local IPC
+- Process isolation with shared communication
+- Simple implementation without network dependencies
+- Natural fit for b00t's single-machine multi-agent model
 
 ### Phase 3: Virtual Filesystem
 - [ ] rustfs integration
@@ -211,27 +230,21 @@ _b00t_/
 
 ## Conclusion
 
-This POC demonstrates a **working foundation** for multi-agent b00t systems:
-- Agents spawn with custom capabilities ✅
-- Coordinate via structured protocols ✅
-- Self-organize into crews ✅
-- Vote on decisions democratically ✅
-- Negotiate resources transparently ✅
+This POC demonstrates a **working foundation** for the multi-agent b00t system architecture:
+- ✅ Agents spawn with custom capabilities (skills, personality)
+- ✅ Coordinate via structured, type-safe protocols
+- ✅ Self-organize into crews with roles
+- ✅ Vote on decisions democratically with quorum
+- ✅ Negotiate resources transparently
+- ✅ Clean async API with tokio
 
-**Current Status**: POC COMPLETE ✨ (Single-Process)
+**Current Scope**: Single-process API design and protocol validation
 
-**What Works:**
-- Full message protocol implementation
-- k0mmand3r REPL interface
-- Voting and proposal system
-- All unit tests passing
+**Next Steps**: Implement Unix socket IPC layer to enable true inter-process communication between agents in separate terminals (Phase 2)
 
-**What's Next:**
-- Unix domain socket IPC for actual inter-process communication
-- Enable agents in separate terminals to communicate
-- Persistent message history
+**Status**: POC COMPLETE ✨ - API Design Validated
 
-The architecture is designed to be extensible for Unix sockets, rustfs, and production deployments.
+The architecture is extensible for Unix sockets, rustfs, and production deployments.
 
 ---
 
