@@ -42,7 +42,7 @@ use traits::*;
 use crate::commands::learn::{LearnArgs, handle_learn};
 use crate::commands::{
     AiCommands, AppCommands, BootstrapCommands, ChatCommands, CliCommands, DatumCommands,
-    GrokCommands, InitCommands, InstallCommands, K8sCommands, McpCommands, SessionCommands,
+    GrokCommands, InitCommands, InstallCommands, K8sCommands, McpCommands, ModelCommands, SessionCommands,
     StackCommands, WhatismyCommands,
 };
 
