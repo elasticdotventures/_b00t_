@@ -3,7 +3,7 @@
 # ================================
 # Stage 1: Rust Build Environment
 # ================================
-FROM rust:1.83-slim AS rust-builder
+FROM rust:1.91-slim AS rust-builder
 
 # Install build dependencies including just
 RUN apt-get update && apt-get install -y \
