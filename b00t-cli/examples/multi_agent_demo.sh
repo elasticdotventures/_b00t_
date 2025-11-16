@@ -15,10 +15,14 @@ echo ""
 
 # Build the binaries
 echo "📦 Building b00t-agent..."
-cargo build --bin b00t-agent 2>&1 | grep -v "Compiling\|Finished" || true
-echo ""
-
-echo "✅ Build complete!"
+if cargo build --bin b00t-agent 2>&1 | grep -v "Compiling\|Finished"; then
+    echo ""
+    echo "✅ Build complete!"
+else
+    echo ""
+    echo "❌ Build failed!"
+    exit 1
+fi
 echo ""
 echo "🎬 Demo Instructions:"
 echo ""
