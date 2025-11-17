@@ -369,42 +369,62 @@ async fn run_job(
             continue;
         }
 
-        // Execute step
-        let result = execute_step(path, step, &env_map).await;
+        // Execute step with retry logic
+        let max_retries = config.config.retry_failed_steps;
+        let mut last_error = None;
+        let mut attempt = 0;
 
-        match result {
-            Ok(_) => {
-                println!("   ✅ Success");
+        loop {
+            let result = execute_step(path, step, &env_map).await;
 
-                // Create checkpoint if configured
-                if !no_checkpoint
-                    && config.config.checkpoint_mode != "off"
-                    && (config.config.checkpoint_after_each_step
-                        || step.checkpoint.is_some())
-                {
-                    if let Some(checkpoint_name) = &step.checkpoint {
-                        create_checkpoint(path, name, checkpoint_name, config.config.create_git_tag)
-                            .await?;
+            match result {
+                Ok(_) => {
+                    if attempt > 0 {
+                        println!("   ✅ Success (after {} retries)", attempt);
+                    } else {
+                        println!("   ✅ Success");
                     }
-                }
-            }
-            Err(e) => {
-                println!("   ❌ Failed: {}", e);
 
-                if config.config.continue_on_failure {
-                    println!("   ⚠️  Continuing despite failure...");
-                    continue;
-                }
-
-                if config.config.rollback_on_failure && !config.rollback.is_empty() {
-                    println!("\n🔄 Rolling back...");
-                    for rollback_step in &config.rollback {
-                        println!("   Executing rollback: {}", rollback_step.name);
-                        execute_step(path, rollback_step, &env_map).await?;
+                    // Create checkpoint if configured
+                    if !no_checkpoint
+                        && config.config.checkpoint_mode != "off"
+                        && (config.config.checkpoint_after_each_step
+                            || step.checkpoint.is_some())
+                    {
+                        if let Some(checkpoint_name) = &step.checkpoint {
+                            create_checkpoint(path, name, checkpoint_name, config.config.create_git_tag)
+                                .await?;
+                        }
                     }
+                    break;
                 }
+                Err(e) => {
+                    attempt += 1;
+                    
+                    if attempt <= max_retries {
+                        println!("   ⚠️  Attempt {}/{} failed: {}", attempt, max_retries + 1, e);
+                        println!("   🔄 Retrying...");
+                        last_error = Some(e);
+                        continue;
+                    }
 
-                return Err(e.context(format!("Step '{}' failed", step_name)));
+                    println!("   ❌ Failed after {} attempts: {}", attempt, e);
+
+                    if config.config.continue_on_failure {
+                        println!("   ⚠️  Continuing despite failure...");
+                        break;
+                    }
+
+                    if config.config.rollback_on_failure && !config.rollback.is_empty() {
+                        println!("\n🔄 Rolling back...");
+                        for rollback_step in &config.rollback {
+                            println!("   Executing rollback: {}", rollback_step.name);
+                            execute_step(path, rollback_step, &env_map).await?;
+                        }
+                    }
+
+                    return Err(e.context(format!("Step '{}' failed after {} attempts", step_name, attempt)));
+                }
             }
         }
     }
