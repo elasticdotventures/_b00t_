@@ -257,7 +257,7 @@ async fn plan_job(path: &str, name: &str, show_dag: bool, json: bool) -> Result<
             }
             b00t_cli::datum_job::JobTask::Agent { agent_type, prompt, .. } => {
                 println!("   Type: agent ({})", agent_type);
-                println!("   Prompt: {}", prompt.lines().next().unwrap_or(""));
+                println!("   Prompt: {}", prompt.lines().next().unwrap_or("<empty>"));
             }
             b00t_cli::datum_job::JobTask::K0mmander { .. } => {
                 println!("   Type: k0mmander");
