@@ -72,7 +72,9 @@ pub struct McpStdioMethod {
 
     /// Whitelist of environment variable names to propagate from the parent process.
     /// Only variables listed here will be forwarded to the child process.
+    /// Additional environment variable names to forward from parent process
     /// (Codex: env_vars)
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub env_vars: Option<Vec<String>>,
 
     /// Working directory for server launch
