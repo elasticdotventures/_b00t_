@@ -7,7 +7,7 @@ use std::fs;
 // use std::io::{Read};
 // use std::path::PathBuf;
 // 🤓 cleaned up unused Tera import after switching to simple string replacement
-use b00t_cli::{AiConfig, BootDatum, SessionState, UnifiedConfig, whoami};
+use b00t_cli::{AiConfig, BootDatum, SessionState, UnifiedConfig, handle_up_command, whoami};
 
 mod bootstrap;
 mod cloud_sync;
@@ -287,49 +287,6 @@ fn datum_providers_to_tool_status(providers: Vec<Box<dyn DatumProvider>>) -> Vec
             }
         })
         .collect()
-}
-
-fn handle_up_command(_b00t_path: &str, _yes: bool) -> Result<()> {
-    use b00t_cli::datum_config::B00tConfig;
-
-    // Load or create configuration
-    let (config, config_path) = B00tConfig::load_or_create()?;
-
-    println!("🔍 Checking all datums from {} ...", config_path.display());
-
-    // If config file doesn't exist yet, show helpful message
-    if !config_path.exists() {
-        println!("\n⚠️  No _b00t_.toml found at {}", config_path.display());
-        println!("   Create one to track your installed datums:\n");
-        println!("   Example _b00t_.toml:");
-        println!("   ---");
-        println!("   version = \"{}\"", b00t_c0re_lib::version::VERSION);
-        println!("   initialized = \"{}\"", chrono::Utc::now().to_rfc3339());
-        println!("   install_methods = [\"docker\", \"pkgx\", \"apt\", \"curl\"]");
-        println!("   datums = [");
-        println!("     \"git.cli\",");
-        println!("     \"docker.docker\",");
-        println!("     \"rust.*\",    # All rust-related datums");
-        println!("     \"ai.*\",      # All AI providers");
-        println!("   ]");
-        println!("   ---\n");
-        println!("💡 Run `b00t install <datum>` to auto-create and update this file.");
-        return Ok(());
-    }
-
-    println!("\n📋 Configuration loaded:");
-    println!("   Version: {}", config.version);
-    println!("   Datums: {:?}", config.datums);
-    println!("   Install methods: {:?}", config.install_methods);
-
-    // 🤓 TODO: Full datum checking/updating requires refactoring to avoid trait conflicts
-    // For now, delegate to `b00t cli up` for CLI datums or use `b00t status`
-    println!("\n💡 To check and update datums:");
-    println!("   • For CLI tools: b00t cli up [--yes]");
-    println!("   • For all tools: b00t status");
-    println!("\n📝 Full _b00t_.toml integration coming in next PR");
-
-    Ok(())
 }
 
 fn checkpoint(message: Option<&str>, skip_tests: bool) -> Result<()> {
