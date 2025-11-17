@@ -141,7 +141,8 @@ mod learn_rag_integration {
         let mut grok_client = GrokClient::new();
         grok_client.initialize().await?;
 
-        let content = "Rust's ownership system prevents data races by enforcing strict borrowing rules.";
+        let content =
+            "Rust's ownership system prevents data races by enforcing strict borrowing rules.";
         let digest_result = grok_client.digest("rust", content).await?;
         assert!(digest_result.success);
 
@@ -223,9 +224,7 @@ mod learn_rag_integration {
         client
             .digest("rust", "Rust has zero-cost abstractions")
             .await?;
-        client
-            .digest("python", "Python uses duck typing")
-            .await?;
+        client.digest("python", "Python uses duck typing").await?;
 
         tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
 
@@ -238,7 +237,10 @@ mod learn_rag_integration {
 
         // Verify topic isolation
         for result in &rust_results.results {
-            assert_eq!(result.topic, "rust", "Rust query should only return rust results");
+            assert_eq!(
+                result.topic, "rust",
+                "Rust query should only return rust results"
+            );
         }
 
         for result in &python_results.results {
@@ -272,10 +274,7 @@ mod learn_rag_integration {
                 println!("✅ Grok status: {:?}", status);
 
                 // Verify status has expected fields
-                assert!(
-                    status.is_object(),
-                    "Status should be a JSON object"
-                );
+                assert!(status.is_object(), "Status should be a JSON object");
             }
             Err(e) => {
                 println!("ℹ️  Grok service not available: {}", e);
@@ -332,7 +331,10 @@ mod lfmf_integration {
             "Should find lesson about release builds"
         );
 
-        println!("✅ LFMF vector DB integration: {} results found", results.len());
+        println!(
+            "✅ LFMF vector DB integration: {} results found",
+            results.len()
+        );
 
         Ok(())
     }
@@ -358,10 +360,7 @@ mod lfmf_integration {
         // List lessons (filesystem-based)
         let results = lfmf.list_lessons("git", Some(10)).await?;
 
-        assert!(
-            !results.is_empty(),
-            "Should find lesson in filesystem"
-        );
+        assert!(!results.is_empty(), "Should find lesson in filesystem");
         assert!(
             results[0].contains("conventional commits"),
             "Should contain recorded lesson"

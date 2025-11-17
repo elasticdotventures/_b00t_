@@ -4,11 +4,11 @@
 //! agent coordination infrastructure.
 
 use anyhow::Result;
+use b00t_c0re_lib::AgentManager;
 use b00t_c0re_lib::agent_coordination::{
     AgentCoordinator, AgentMetadata, TaskCompletionStatus, TaskPriority,
 };
 use b00t_c0re_lib::redis::{AgentStatus, RedisComms, RedisConfig};
-use b00t_c0re_lib::AgentManager;
 use clap::Parser;
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -58,7 +58,11 @@ pub enum AgentCommands {
         #[arg(help = "Task description")]
         description: String,
 
-        #[arg(long, help = "Priority level (low, normal, high, critical)", default_value = "normal")]
+        #[arg(
+            long,
+            help = "Priority level (low, normal, high, critical)",
+            default_value = "normal"
+        )]
         priority: String,
 
         #[arg(long, help = "Deadline in minutes")]
@@ -112,7 +116,10 @@ pub enum AgentCommands {
 
     #[clap(about = "Start all agents in a directory")]
     StartAll {
-        #[arg(help = "Directory containing .agent.toml files", default_value = "_b00t_")]
+        #[arg(
+            help = "Directory containing .agent.toml files",
+            default_value = "_b00t_"
+        )]
         dir: PathBuf,
     },
 }
@@ -209,7 +216,11 @@ async fn handle_discover(
 
     if let Some(caps) = capabilities {
         let required: Vec<_> = caps.split(',').map(|s| s.trim()).collect();
-        agents.retain(|a| required.iter().all(|c| a.capabilities.contains(&c.to_string())));
+        agents.retain(|a| {
+            required
+                .iter()
+                .all(|c| a.capabilities.contains(&c.to_string()))
+        });
     }
 
     if json {
