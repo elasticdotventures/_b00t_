@@ -1,5 +1,6 @@
 [b00t]
 name = "ccometixline"
+type = "cli"
 desires = "latest"
 install = """
 npm install -g @cometix/ccline
