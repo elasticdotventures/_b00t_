@@ -1,0 +1,21 @@
+[b00t]
+name = "phase3-workflows"
+type = "stack"
+hint = "Phase 3: Workflow orchestration (Argo Workflows) for AI/ML DAG pipelines"
+members = ["argo-workflows.k8s", "argo-cli.cli"]
+
+[b00t.orchestration]
+schedule_type = "workflow_dag"
+gpu_batch_group = "ml-pipeline"
+
+[[b00t.usage]]
+description = "Deploy Argo Workflows to cluster"
+command = "b00t stack deploy phase3-workflows"
+
+[[b00t.usage]]
+description = "Access Argo UI"
+command = "kubectl -n argo port-forward deployment/argo-workflows-server 2746:2746"
+
+[[b00t.usage]]
+description = "Submit workflow example"
+command = "argo submit -n argo examples/dag-workflow.yaml"

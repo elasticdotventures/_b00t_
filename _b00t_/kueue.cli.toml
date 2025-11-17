@@ -1,0 +1,59 @@
+[b00t]
+name = "kueue"
+type = "cli"
+desires = "0.10.0"
+hint = "k8s-native job queuing with resource quotas and budget management. Built-in support for GPU time-slicing and fair sharing."
+
+version = "kubectl kueue version --client"
+version_regex = '(\d+\.\d+\.\d+)'
+
+install = '''
+# Install kueue kubectl plugin
+kubectl krew install kueue
+
+# Or install CRDs directly
+kubectl apply --server-side -f https://github.com/kubernetes-sigs/kueue/releases/download/v0.10.0/manifests.yaml
+'''
+
+[b00t.orchestration]
+# Kueue integrates with b00t budget controller
+schedule_type = "queue_based"
+supports_gpu_sharing = true
+supports_budget_limits = true
+
+[b00t.learn]
+topic = "kueue"
+inline = """
+# Kueue - k8s Job Queuing with Quotas
+
+Kueue is k8s-native job queuing with:
+- Resource quotas (CPU/memory/GPU)
+- Fair sharing across teams
+- Budget enforcement (cohort quotas)
+- GPU time-slicing
+- Preemption for priority jobs
+
+## b00t Integration
+- Maps b00t budget constraints → Kueue ResourceQuotas
+- Maps b00t GPU affinity → Kueue ClusterQueues
+- Maps b00t stacks → Kueue LocalQueues
+
+## Why Kueue vs Custom Controller?
+✓ Battle-tested k8s-native
+✓ GPU sharing built-in
+✓ Budget quotas out-of-box
+✓ Integrates with Argo/Tekton
+✓ Multi-tenancy support
+"""
+
+[[b00t.usage]]
+description = "Create resource flavor for GPU nodes"
+command = "kubectl apply -f gpu-resource-flavor.yaml"
+
+[[b00t.usage]]
+description = "Create cluster queue with budget"
+command = "kubectl kueue create clusterqueue main-cq --cohort=main --max-cpu=100"
+
+[[b00t.usage]]
+description = "List queued jobs"
+command = "kubectl kueue list jobs"

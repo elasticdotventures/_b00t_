@@ -1,0 +1,70 @@
+[b00t]
+name = "langchain-agent-pm2"
+type = "cli"
+hint = "b00t LangChain Agent service managed by PM2"
+keywords = ["langchain", "agent", "pm2", "service", "daemon"]
+
+[b00t.service]
+description = "LangChain v1.0 agent service with MCP tools and k0mmand3r IPC"
+manager = "pm2"
+process_name = "b00t-langchain-agent"
+working_dir = "langchain-agent"
+
+# Service lifecycle commands
+[b00t.service.commands]
+start = "cd langchain-agent && pm2 start ecosystem.config.cjs"
+stop = "pm2 stop b00t-langchain-agent"
+restart = "pm2 restart b00t-langchain-agent"
+status = "pm2 show b00t-langchain-agent"
+logs = "pm2 logs b00t-langchain-agent"
+delete = "pm2 delete b00t-langchain-agent"
+
+# PM2 process configuration
+[b00t.service.pm2]
+instances = 1
+exec_mode = "fork"
+max_memory_restart = "2G"
+min_uptime = "30s"
+max_restarts = 10
+autorestart = true
+exp_backoff_restart_delay = 1000
+
+# Health monitoring
+[b00t.service.health]
+enabled = true
+interval_seconds = 30
+redis_channel = "b00t:langchain"
+status_channel = "b00t:langchain:status"
+
+[b00t.env]
+# Redis connection
+REDIS_URL = "redis://localhost:6379"
+
+# b00t datums path
+_B00T_Path = "~/.dotfiles/_b00t_"
+
+# k0mmand3r channels
+LANGCHAIN_COMMAND_CHANNEL = "b00t:langchain"
+
+# LangChain tracing
+LANGCHAIN_TRACING_V2 = "true"
+LANGCHAIN_PROJECT = "b00t"
+LOG_LEVEL = "info"
+
+# API keys (loaded from environment)
+required = ["ANTHROPIC_API_KEY"]
+optional = ["LANGCHAIN_API_KEY", "LANGSMITH_API_KEY", "OPENAI_API_KEY"]
+
+[b00t.depends_on]
+requires = ["pm2.cli", "python.cli", "redis.service"]
+suggests = ["crawl4ai-mcp", "github-mcp"]
+
+# Quick start commands
+[b00t.aliases]
+lc-start = "cd langchain-agent && just start"
+lc-stop = "cd langchain-agent && just stop"
+lc-restart = "cd langchain-agent && just restart"
+lc-logs = "cd langchain-agent && just logs"
+lc-status = "cd langchain-agent && just status"
+lc-deploy = "cd langchain-agent && just deploy"
+lc-health = "cd langchain-agent && just health-check"

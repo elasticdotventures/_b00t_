@@ -1,0 +1,20 @@
+[b00t]
+name = "phase1-devex"
+type = "stack"
+hint = "Phase 1: Developer Experience tools for k8s (k9s, stern, kubectx, kapp, k3d)"
+members = ["k9s.cli", "stern.cli", "kubectx.cli", "kapp.cli", "k3d.cli"]
+
+[b00t.orchestration]
+schedule_type = "local_install"
+
+[[b00t.usage]]
+description = "Install all Phase 1 developer tools"
+command = "b00t stack install phase1-devex"
+
+[[b00t.usage]]
+description = "Quick start: launch k9s UI"
+command = "k9s"
+
+[[b00t.usage]]
+description = "Tail logs from all pods in namespace"
+command = "stern -n default ."
