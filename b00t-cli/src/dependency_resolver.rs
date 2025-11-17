@@ -222,6 +222,7 @@ mod tests {
             learn: None,
             usage: None,
             lfmf_category: None,
+            job: None,
         }
     }
 

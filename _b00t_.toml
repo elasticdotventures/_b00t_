@@ -1,0 +1,16 @@
+version = "0.7.14"
+initialized = "2025-11-17T10:00:00Z"
+install_methods = ["docker", "pkgx", "apt", "curl"]
+
+datums = [
+    "git.cli",
+    "just.cli",
+    "rust.*",
+]
+
+[[history]]
+datum = "git.cli"
+version = "2.40.0"
+timestamp = "2025-11-17T10:00:00Z"
+method = "apt"
+status = "success"

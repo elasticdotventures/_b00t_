@@ -1,0 +1,130 @@
+[b00t]
+name = "langchain"
+type = "ai"
+hint = "LangChain v1.0 - Build agents with LLMs + external tools (helm chart for thought)"
+desires = "1.0.0"
+keywords = ["agent", "llm", "mcp", "langgraph", "tools"]
+
+[b00t.env]
+# LangChain API keys
+required = ["ANTHROPIC_API_KEY"]
+optional = ["LANGCHAIN_API_KEY", "LANGSMITH_API_KEY", "OPENAI_API_KEY"]
+
+# LangChain tracing configuration
+defaults = {
+  LANGCHAIN_TRACING_V2 = "true",
+  LANGCHAIN_PROJECT = "b00t",
+  LANGSMITH_ENDPOINT = "https://api.smith.langchain.com"
+}
+
+# Agent presets - different agent configurations
+[langchain.agents.researcher]
+description = "Technical researcher with web crawling and knowledge base"
+model = "anthropic/claude-sonnet-4"
+tools = ["crawl4ai-mcp", "github-mcp", "grok"]
+middleware = ["summarization"]
+system_prompt = """You are a technical researcher for the b00t project.
+Use crawl4ai to fetch documentation, grok to search existing knowledge,
+and github to analyze codebases. Provide concise, actionable insights."""
+max_iterations = 10
+timeout_seconds = 300
+
+[langchain.agents.coder]
+description = "Rust/TypeScript expert with code analysis"
+model = "anthropic/claude-sonnet-4"
+tools = ["github-mcp", "sequential-thinking-mcp", "taskmaster-mcp"]
+middleware = ["human-in-loop"]
+system_prompt = """You are a senior Rust and TypeScript developer for b00t.
+Follow DRY principles, use existing libraries, write idiomatic code.
+Always add tests. Use sequential-thinking for complex problems."""
+max_iterations = 15
+timeout_seconds = 600
+
+[langchain.agents.coordinator]
+description = "Multi-agent coordinator for complex tasks"
+model = "anthropic/claude-sonnet-4"
+tools = ["taskmaster-mcp", "sequential-thinking-mcp"]
+middleware = ["summarization", "human-in-loop"]
+system_prompt = """You coordinate multiple b00t agents to solve complex tasks.
+Break down problems, delegate to specialist agents, synthesize results.
+Use taskmaster to track progress."""
+max_iterations = 20
+timeout_seconds = 900
+peer_agents = ["researcher", "coder"]  # Can invoke other agents
+
+# Chain presets - predefined workflows
+[langchain.chains.research-and-digest]
+description = "Research a topic and add to knowledge base"
+steps = [
+  { agent = "researcher", task = "crawl", params = { url = "${url}" } },
+  { tool = "grok", action = "digest", input = "${crawl_result}" },
+  { tool = "grok", action = "ask", query = "${question}" }
+]
+
+[langchain.chains.implement-feature]
+description = "Research, plan, and implement a feature"
+steps = [
+  { agent = "researcher", task = "research", query = "${feature_description}" },
+  { agent = "coder", task = "plan", context = "${research_result}" },
+  { agent = "coder", task = "implement", plan = "${plan_result}" },
+  { tool = "taskmaster-mcp", action = "track", task = "${feature_description}" }
+]
+
+# Middleware configurations
+[langchain.middleware.human-in-loop]
+enabled = true
+redis_channel = "b00t:human-approval"
+timeout_seconds = 300
+approval_required_for = ["file_write", "git_commit", "api_call"]
+
+[langchain.middleware.summarization]
+enabled = true
+model = "anthropic/claude-haiku-3"  # Fast, cheap summarization
+threshold_tokens = 4000
+strategy = "recursive"  # or "map-reduce"
+
+[langchain.middleware.pii-redaction]
+enabled = false  # Enable when handling sensitive data
+patterns = ["email", "phone", "ssn", "api_key"]
+replacement = "[REDACTED]"
+
+# Model provider configurations
+[langchain.models.anthropic]
+default_model = "claude-sonnet-4"
+api_key_env = "ANTHROPIC_API_KEY"
+models = [
+  { name = "claude-sonnet-4", context_window = 200000, cost_per_1k_input = 3.0, cost_per_1k_output = 15.0 },
+  { name = "claude-haiku-3", context_window = 200000, cost_per_1k_input = 0.25, cost_per_1k_output = 1.25 },
+  { name = "claude-opus-4", context_window = 200000, cost_per_1k_input = 15.0, cost_per_1k_output = 75.0 }
+]
+
+[langchain.models.openai]
+default_model = "gpt-4-turbo"
+api_key_env = "OPENAI_API_KEY"
+models = [
+  { name = "gpt-4-turbo", context_window = 128000, cost_per_1k_input = 10.0, cost_per_1k_output = 30.0 },
+  { name = "gpt-4o", context_window = 128000, cost_per_1k_input = 5.0, cost_per_1k_output = 15.0 },
+  { name = "gpt-4o-mini", context_window = 128000, cost_per_1k_input = 0.15, cost_per_1k_output = 0.6 }
+]
+
+# MCP server connections (for tool discovery)
+[langchain.mcp.servers]
+# Existing b00t MCP servers to connect
+crawl4ai = { transport = "docker", url = "http://localhost:8001/mcp" }
+github = { transport = "http", url = "http://localhost:8002/mcp" }
+grok = { transport = "stdio", command = "b00t-mcp", args = ["grok"] }
+sequential-thinking = { transport = "stdio", command = "npx", args = ["-y", "@modelcontextprotocol/server-sequential-thinking"] }
+taskmaster = { transport = "stdio", command = "npx", args = ["-y", "taskmaster-ai"] }
+
+# k0mmand3r IPC configuration
+[langchain.ipc]
+redis_url = "redis://localhost:6379"
+command_channel = "b00t:langchain"
+status_channel = "b00t:langchain:status"
+log_level = "info"
+
+# LangSmith tracing (optional observability)
+[langchain.tracing]
+enabled = true
+project = "b00t"
+sample_rate = 1.0  # 100% sampling for dev, reduce in prod
