@@ -455,31 +455,58 @@ async fn execute_step(
     }
 }
 
-/// Execute bash command
+/// Execute bash command with streaming output
 async fn execute_bash(
     command: &str,
     cwd: &str,
     env: &std::collections::HashMap<String, String>,
-    _timeout_ms: Option<u64>,
+    timeout_ms: Option<u64>,
 ) -> Result<()> {
     use tokio::process::Command;
+    use tokio::time::{timeout, Duration};
 
     let mut cmd = Command::new("bash");
     cmd.arg("-c")
         .arg(command)
         .current_dir(cwd)
-        .envs(env);
+        .envs(env)
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped());
 
-    let output = cmd.output().await?;
+    let execution = async {
+        let output = cmd.output().await?;
 
-    if output.status.success() {
-        if !output.stdout.is_empty() {
-            println!("   Output: {}", String::from_utf8_lossy(&output.stdout));
-        }
-        Ok(())
-    } else {
+        // Stream output in real-time
+        let stdout = String::from_utf8_lossy(&output.stdout);
         let stderr = String::from_utf8_lossy(&output.stderr);
-        anyhow::bail!("Command failed: {}", stderr)
+
+        if !stdout.is_empty() {
+            for line in stdout.lines() {
+                println!("   {}", line);
+            }
+        }
+
+        if !stderr.is_empty() && !output.status.success() {
+            for line in stderr.lines() {
+                eprintln!("   {}", line);
+            }
+        }
+
+        if output.status.success() {
+            Ok(())
+        } else {
+            anyhow::bail!("Command failed with exit code: {}", output.status)
+        }
+    };
+
+    // Apply timeout if specified
+    if let Some(ms) = timeout_ms {
+        match timeout(Duration::from_millis(ms), execution).await {
+            Ok(result) => result,
+            Err(_) => anyhow::bail!("Command timed out after {}ms", ms),
+        }
+    } else {
+        execution.await
     }
 }
 
@@ -504,22 +531,88 @@ async fn execute_k0mmander(_script: &str, _cwd: &str) -> Result<()> {
 }
 
 /// Execute another datum
-async fn execute_datum(_path: &str, _datum: &str, _args: &[String]) -> Result<()> {
-    // TODO: Execute datum using b00t-cli
-    println!("   ⚠️  Datum execution not yet implemented");
-    Ok(())
+async fn execute_datum(path: &str, datum: &str, args: &[String]) -> Result<()> {
+    use tokio::process::Command;
+
+    // Determine datum type from filename
+    let datum_file = if datum.contains('.') {
+        datum.to_string()
+    } else {
+        // Try to find the datum file
+        format!("{}.bash.toml", datum) // Default to bash for now
+    };
+
+    println!("   Executing datum: {}", datum_file);
+
+    // For bash datums, execute the script
+    if datum_file.ends_with(".bash.toml") {
+        // Load the datum and execute its script
+        let datum_path = format!("{}", datum_file);
+        let (config, _) = b00t_cli::get_config(path, &datum_path)
+            .map_err(|e| anyhow::anyhow!("Failed to load datum: {}", e))?;
+
+        if let Some(script) = config.b00t.script {
+            let mut cmd = Command::new("bash");
+            cmd.arg("-c").arg(&script).current_dir(path);
+
+            // Add args as environment variables
+            for (idx, arg) in args.iter().enumerate() {
+                cmd.env(format!("ARG{}", idx), arg);
+            }
+
+            let output = cmd.output().await?;
+
+            if output.status.success() {
+                if !output.stdout.is_empty() {
+                    println!("   {}", String::from_utf8_lossy(&output.stdout));
+                }
+                Ok(())
+            } else {
+                let stderr = String::from_utf8_lossy(&output.stderr);
+                anyhow::bail!("Datum execution failed: {}", stderr)
+            }
+        } else {
+            anyhow::bail!("Datum '{}' has no script to execute", datum)
+        }
+    } else {
+        anyhow::bail!("Unsupported datum type: {}", datum_file)
+    }
 }
 
 /// Execute MCP tool
 async fn execute_mcp(
-    _path: &str,
-    _server: &str,
-    _tool: &str,
-    _params: &serde_json::Value,
+    path: &str,
+    server: &str,
+    tool: &str,
+    params: &serde_json::Value,
 ) -> Result<()> {
-    // TODO: Use b00t-cli mcp execute
-    println!("   ⚠️  MCP execution not yet implemented");
-    Ok(())
+    use tokio::process::Command;
+
+    // Use b00t-cli mcp execute command
+    let params_json = serde_json::to_string(params)?;
+
+    let output = Command::new(std::env::current_exe()?)
+        .args(&[
+            "--path",
+            path,
+            "mcp",
+            "execute",
+            server,
+            tool,
+            &params_json,
+        ])
+        .output()
+        .await?;
+
+    if output.status.success() {
+        if !output.stdout.is_empty() {
+            println!("   Output: {}", String::from_utf8_lossy(&output.stdout));
+        }
+        Ok(())
+    } else {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        anyhow::bail!("MCP execution failed: {}", stderr)
+    }
 }
 
 /// Execute Dagu DAG
