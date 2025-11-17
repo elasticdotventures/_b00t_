@@ -195,9 +195,10 @@ b00t mcp install b00t cursor       # For Cursor
 ### **Smart Context Management**
 ```bash
 b00t detect node    # Check Node.js version and availability
-b00t desires rust   # See target Rust version from configuration  
+b00t desires rust   # See target Rust version from configuration
 b00t install python # Install or update Python to desired version
-b00t up            # Update all tools to desired versions
+b00t up             # Check all tools and report version status
+b00t up --yes       # Update all tools to desired versions
 ```
 
 ### Vision Model Management
