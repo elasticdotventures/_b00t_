@@ -101,7 +101,7 @@ export class Pm2TaskerService {
       const pm2Options: pm2.StartOptions = {
         name: datum.name,
         script: datum.script || datum.command,
-        args: datum.args?.join(' '),
+        args: datum.args,
         cwd: datum.cwd || process.cwd(),
         env: datum.env || {},
         instances: datum.instances || 1,
