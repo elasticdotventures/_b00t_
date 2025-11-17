@@ -1,0 +1,75 @@
+[b00t]
+name = "kompose"
+type = "cli"
+desires = "1.35.0"
+hint = "Convert docker-compose to Kubernetes manifests. Bridges the gap between Docker Compose and k8s deployment."
+
+version = "kompose version"
+version_regex = '(\d+\.\d+\.\d+)'
+
+install = '''
+# Check if pkgx is available (preferred method)
+if command -v pkgx >/dev/null 2>&1; then
+    echo "✨ Using pkgx for kompose installation (recommended)"
+    pkgx install kompose@1.35
+    mkdir -p ~/.local/bin
+    cat > ~/.local/bin/kompose << 'EOF'
+#!/bin/bash
+exec pkgx kompose "$@"
+EOF
+    chmod +x ~/.local/bin/kompose
+    exit 0
+fi
+
+# Fallback: Official GitHub release
+KOMPOSE_VERSION="1.35.0"
+OS=$(uname -s | tr '[:upper:]' '[:lower:]')
+ARCH=$(uname -m)
+
+# Map architecture names
+case "$ARCH" in
+    x86_64)
+        ARCH="amd64"
+        ;;
+    aarch64|arm64)
+        ARCH="arm64"
+        ;;
+esac
+
+# Download and install
+curl -L "https://github.com/kubernetes/kompose/releases/download/v${KOMPOSE_VERSION}/kompose-${OS}-${ARCH}" -o /tmp/kompose
+chmod +x /tmp/kompose
+sudo mv /tmp/kompose /usr/local/bin/kompose
+
+kompose version
+'''
+
+[b00t.learn]
+topic = "kompose"
+inline = """
+# Kompose - Docker Compose to Kubernetes
+
+Kompose converts docker-compose.yml to Kubernetes manifests.
+
+## Key Features
+- Converts services → Deployments
+- Converts volumes → PersistentVolumeClaims
+- Converts networks → Services
+- Labels and annotations preserved
+- Support for Helm charts generation
+
+## b00t Integration
+b00t stacks → docker-compose → kompose → k8s manifests + orchestration metadata
+"""
+
+[[b00t.usage]]
+description = "Convert docker-compose to k8s manifests"
+command = "kompose convert -f docker-compose.yml"
+
+[[b00t.usage]]
+description = "Generate Helm chart from docker-compose"
+command = "kompose convert --chart -f docker-compose.yml"
+
+[[b00t.usage]]
+description = "Convert with custom output directory"
+command = "kompose convert -f docker-compose.yml -o ./k8s-manifests"
