@@ -3,6 +3,7 @@ use clap::Parser;
 use std::collections::HashMap;
 
 use b00t_cli::datum_stack::StackDatum;
+use b00t_cli::traits::DatumCrdDisplay;
 use b00t_cli::{BootDatum, UnifiedConfig, get_expanded_path};
 
 #[derive(Parser)]
@@ -55,6 +56,30 @@ pub enum StackCommands {
         #[clap(long, short = 'o', help = "Output file (default: stdout)")]
         output: Option<String>,
     },
+    #[clap(
+        about = "Generate k8s CRD from stack",
+        long_about = "Generate a Kubernetes Custom Resource Definition YAML from a stack.\n\nThis enables MBSE-based stack → pod transformation for AI/ML pipelines.\n\nExamples:\n  b00t-cli stack to-crd llm-inference-pipeline\n  b00t-cli stack to-crd llm-inference-pipeline --output stack.yaml\n  b00t-cli stack to-crd llm-inference-pipeline --pod-only"
+    )]
+    ToCrd {
+        #[clap(help = "Stack name")]
+        name: String,
+        #[clap(long, short = 'o', help = "Output file (default: stdout)")]
+        output: Option<String>,
+        #[clap(long, help = "Generate only pod spec (not full CRD)")]
+        pod_only: bool,
+    },
+    #[clap(
+        about = "Convert stack to k8s manifests via kompose",
+        long_about = "Convert stack to Kubernetes manifests using kompose.\n\nFlow: Stack → docker-compose → kompose → k8s manifests + orchestration metadata\n\nThis uses real container images from docker members, eliminating guesswork.\n\nExamples:\n  b00t-cli stack to-k8s postgres-dev-stack\n  b00t-cli stack to-k8s postgres-dev-stack --output-dir ./k8s\n  b00t-cli stack to-k8s llm-pipeline --enhance"
+    )]
+    ToK8s {
+        #[clap(help = "Stack name")]
+        name: String,
+        #[clap(long, help = "Output directory for k8s manifests (default: ./<stack>-k8s)")]
+        output_dir: Option<String>,
+        #[clap(long, help = "Enhance with b00t orchestration metadata (GPU affinity, budget)")]
+        enhance: bool,
+    },
 }
 
 impl StackCommands {
@@ -75,6 +100,16 @@ impl StackCommands {
             StackCommands::Compose { name, output } => {
                 generate_compose(name, path, output.as_deref())
             }
+            StackCommands::ToCrd {
+                name,
+                output,
+                pod_only,
+            } => generate_crd(name, path, output.as_deref(), *pod_only),
+            StackCommands::ToK8s {
+                name,
+                output_dir,
+                enhance,
+            } => generate_k8s_via_kompose(name, path, output_dir.as_deref(), *enhance),
         }
     }
 }
@@ -309,6 +344,293 @@ fn generate_compose(name: &str, path: &str, output_file: Option<&str>) -> Result
         println!("✅ Generated docker-compose.yml: {}", output_path);
     } else {
         println!("{}", compose_yaml);
+    }
+
+    Ok(())
+}
+
+/// Generate k8s CRD from stack (MBSE stack → pod transformation)
+fn generate_crd(name: &str, path: &str, output_file: Option<&str>, pod_only: bool) -> Result<()> {
+    let stack_path = get_expanded_path(path)?.join(format!("{}.stack.toml", name));
+
+    if !stack_path.exists() {
+        anyhow::bail!("Stack '{}' not found at {}", name, stack_path.display());
+    }
+
+    let stack = StackDatum::from_file(&stack_path)?;
+
+    let yaml = if pod_only {
+        stack.to_pod_spec()
+            .context("Failed to generate pod spec")?
+    } else {
+        stack.to_crd_template()
+            .context("Failed to generate CRD template")?
+    };
+
+    if let Some(output_path) = output_file {
+        std::fs::write(output_path, &yaml)
+            .context(format!("Failed to write to {}", output_path))?;
+
+        if pod_only {
+            println!("✅ Generated pod spec: {}", output_path);
+        } else {
+            println!("✅ Generated k8s CRD: {}", output_path);
+        }
+
+        // Show resource requirements summary
+        let reqs = stack.get_resource_requirements();
+        if reqs.cpu.is_some() || reqs.memory.is_some() || reqs.gpu_count.is_some() {
+            println!("\n📊 Resource Requirements:");
+            if let Some(cpu) = &reqs.cpu {
+                println!("   CPU: {}", cpu);
+            }
+            if let Some(memory) = &reqs.memory {
+                println!("   Memory: {}", memory);
+            }
+            if let Some(gpu_count) = reqs.gpu_count {
+                println!("   GPU: {} x {}", gpu_count,
+                    reqs.gpu_type.as_deref().unwrap_or("nvidia.com/gpu"));
+            }
+        }
+
+        // Show affinity strategy
+        let affinity = stack.get_affinity_rules();
+        if let Some(batch_group) = &affinity.gpu_batch_group {
+            println!("\n🔗 GPU Batch Group: {}", batch_group);
+            println!("   Strategy: {:?}", affinity.strategy);
+        }
+
+        // Show budget constraints
+        if let Some(budget) = stack.get_budget_constraints() {
+            println!("\n💰 Budget Constraints:");
+            println!("   Daily Limit: {:.2} {}", budget.daily_limit, budget.currency);
+            println!("   Cost per Job: {:.2} {}", budget.cost_per_job, budget.currency);
+            println!("   On Exceeded: {}", budget.on_exceeded);
+        }
+    } else {
+        println!("{}", yaml);
+    }
+
+    Ok(())
+}
+
+/// Convert stack to k8s manifests via kompose (stack → compose → k8s)
+fn generate_k8s_via_kompose(
+    name: &str,
+    path: &str,
+    output_dir: Option<&str>,
+    enhance: bool,
+) -> Result<()> {
+    let stack_path = get_expanded_path(path)?.join(format!("{}.stack.toml", name));
+
+    if !stack_path.exists() {
+        anyhow::bail!("Stack '{}' not found at {}", name, stack_path.display());
+    }
+
+    let stack = StackDatum::from_file(&stack_path)?;
+    let available_datums = load_all_datums(path)?;
+
+    println!("🔄 Converting stack '{}' to k8s manifests via kompose...", name);
+
+    // Step 1: Generate docker-compose.yml
+    println!("   1/3 Generating docker-compose.yml...");
+    let compose_yaml = stack.generate_docker_compose(&available_datums)?;
+
+    // Write to temp file
+    let temp_compose = format!("/tmp/{}-compose.yml", name);
+    std::fs::write(&temp_compose, &compose_yaml)
+        .context("Failed to write temporary docker-compose.yml")?;
+
+    // Step 2: Run kompose convert
+    println!("   2/3 Running kompose convert...");
+
+    // Check if kompose is installed
+    let kompose_check = std::process::Command::new("kompose")
+        .arg("version")
+        .output();
+
+    if kompose_check.is_err() {
+        anyhow::bail!(
+            "kompose not found. Install with: b00t cli install kompose\n\
+             Or download from: https://github.com/kubernetes/kompose"
+        );
+    }
+
+    let output_directory = output_dir
+        .map(|s| s.to_string())
+        .unwrap_or_else(|| format!("./{}-k8s", name));
+
+    // Create output directory
+    std::fs::create_dir_all(&output_directory)
+        .context(format!("Failed to create output directory: {}", output_directory))?;
+
+    // Run kompose convert
+    let kompose_result = std::process::Command::new("kompose")
+        .arg("convert")
+        .arg("-f")
+        .arg(&temp_compose)
+        .arg("-o")
+        .arg(&output_directory)
+        .output()
+        .context("Failed to run kompose convert")?;
+
+    if !kompose_result.status.success() {
+        let stderr = String::from_utf8_lossy(&kompose_result.stderr);
+        anyhow::bail!("kompose convert failed: {}", stderr);
+    }
+
+    // Step 3: Enhance with orchestration metadata (if requested)
+    if enhance {
+        println!("   3/3 Enhancing with b00t orchestration metadata...");
+        enhance_k8s_manifests(&stack, &output_directory)?;
+    } else {
+        println!("   3/3 Skipping enhancement (use --enhance to add orchestration metadata)");
+    }
+
+    println!("\n✅ Generated k8s manifests in: {}", output_directory);
+
+    // Show what was generated
+    let manifest_files: Vec<_> = std::fs::read_dir(&output_directory)?
+        .filter_map(|e| e.ok())
+        .filter(|e| {
+            e.path()
+                .extension()
+                .and_then(|s| s.to_str())
+                .map(|s| s == "yaml" || s == "yml")
+                .unwrap_or(false)
+        })
+        .collect();
+
+    println!("\n📄 Generated files ({}):", manifest_files.len());
+    for file in &manifest_files {
+        println!("   - {}", file.file_name().to_string_lossy());
+    }
+
+    // Show resource requirements if enhanced
+    if enhance {
+        let reqs = stack.get_resource_requirements();
+        if reqs.cpu.is_some() || reqs.memory.is_some() || reqs.gpu_count.is_some() {
+            println!("\n📊 Enhanced with Resource Requirements:");
+            if let Some(cpu) = &reqs.cpu {
+                println!("   CPU: {}", cpu);
+            }
+            if let Some(memory) = &reqs.memory {
+                println!("   Memory: {}", memory);
+            }
+            if let Some(gpu_count) = reqs.gpu_count {
+                println!(
+                    "   GPU: {} x {}",
+                    gpu_count,
+                    reqs.gpu_type.as_deref().unwrap_or("nvidia.com/gpu")
+                );
+            }
+        }
+
+        let affinity = stack.get_affinity_rules();
+        if affinity.gpu_batch_group.is_some() {
+            println!("\n🔗 Enhanced with GPU Batch Affinity");
+        }
+
+        if let Some(budget) = stack.get_budget_constraints() {
+            println!("\n💰 Enhanced with Budget Constraints:");
+            println!("   Daily Limit: {:.2} {}", budget.daily_limit, budget.currency);
+        }
+    }
+
+    // Clean up temp file
+    let _ = std::fs::remove_file(&temp_compose);
+
+    println!("\n💡 Next steps:");
+    println!("   kubectl apply -f {}", output_directory);
+    if !enhance {
+        println!("   Or run with --enhance to add GPU affinity and budget metadata");
+    }
+
+    Ok(())
+}
+
+/// Enhance kompose-generated k8s manifests with b00t orchestration metadata
+fn enhance_k8s_manifests(stack: &StackDatum, output_dir: &str) -> Result<()> {
+    use serde_yaml::Value;
+
+    let budget = stack.get_budget_constraints();
+    let affinity = stack.get_affinity_rules();
+
+    // Find all deployment YAMLs
+    for entry in std::fs::read_dir(output_dir)? {
+        let entry = entry?;
+        let path = entry.path();
+
+        if path.extension().and_then(|s| s.to_str()) != Some("yaml") {
+            continue;
+        }
+
+        // Check if it's a Deployment
+        let content = std::fs::read_to_string(&path)?;
+        if !content.contains("kind: Deployment") {
+            continue;
+        }
+
+        // Parse YAML
+        let mut doc: Value = serde_yaml::from_str(&content)?;
+
+        // Add budget annotations to metadata
+        if let Some(budget_constraints) = &budget {
+            if let Some(metadata) = doc.get_mut("metadata") {
+                if let Some(metadata_map) = metadata.as_mapping_mut() {
+                    let annotations_key = Value::String("annotations".to_string());
+
+                    // Get or create annotations map
+                    let annotations = metadata_map
+                        .entry(annotations_key)
+                        .or_insert_with(|| Value::Mapping(Default::default()));
+
+                    if let Some(annot_map) = annotations.as_mapping_mut() {
+                        annot_map.insert(
+                            Value::String("b00t.io/budget-daily-limit".to_string()),
+                            Value::String(budget_constraints.daily_limit.to_string()),
+                        );
+                        annot_map.insert(
+                            Value::String("b00t.io/budget-cost-per-job".to_string()),
+                            Value::String(budget_constraints.cost_per_job.to_string()),
+                        );
+                        annot_map.insert(
+                            Value::String("b00t.io/budget-currency".to_string()),
+                            Value::String(budget_constraints.currency.clone()),
+                        );
+                    }
+                }
+            }
+        }
+
+        // Add GPU batch group label to pod template
+        if let Some(batch_group) = &affinity.gpu_batch_group {
+            if let Some(spec) = doc.get_mut("spec") {
+                if let Some(template) = spec.get_mut("template") {
+                    if let Some(template_metadata) = template.get_mut("metadata") {
+                        if let Some(metadata_map) = template_metadata.as_mapping_mut() {
+                            let labels_key = Value::String("labels".to_string());
+
+                            // Get or create labels map
+                            let labels = metadata_map
+                                .entry(labels_key)
+                                .or_insert_with(|| Value::Mapping(Default::default()));
+
+                            if let Some(labels_map) = labels.as_mapping_mut() {
+                                labels_map.insert(
+                                    Value::String("b00t.io/gpu-batch-group".to_string()),
+                                    Value::String(batch_group.clone()),
+                                );
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Write back
+        let output = serde_yaml::to_string(&doc)?;
+        std::fs::write(&path, output)?;
     }
 
     Ok(())

@@ -1,0 +1,62 @@
+[b00t]
+name = "nvidia-gpu-operator"
+type = "k8s"
+hint = "Automates NVIDIA GPU driver/toolkit installation in k8s. Essential for GPU workloads."
+desires = "24.6.0"
+
+chart_path = "nvidia/gpu-operator"
+namespace = "gpu-operator"
+values_file = "nvidia-gpu-operator-values.yaml"
+
+install = '''
+# Add NVIDIA Helm repo
+helm repo add nvidia https://helm.ngc.nvidia.com/nvidia
+helm repo update
+
+# Create namespace
+kubectl create namespace gpu-operator --dry-run=client -o yaml | kubectl apply -f -
+
+# Install GPU Operator
+helm install gpu-operator nvidia/gpu-operator \
+    --namespace gpu-operator \
+    --set driver.enabled=true \
+    --set toolkit.enabled=true \
+    --set devicePlugin.enabled=true \
+    --set migManager.enabled=false \
+    --set gfd.enabled=true \
+    --version v24.6.0
+
+# Wait for operator to be ready
+kubectl wait --for=condition=ready pod \
+    -l app=nvidia-operator-validator \
+    -n gpu-operator \
+    --timeout=600s
+
+echo "GPU Operator installed. Verify with:"
+echo "kubectl get nodes -o json | jq '.items[].status.capacity'"
+'''
+
+version = '''
+helm list -n gpu-operator -o json | jq -r '.[] | select(.name=="gpu-operator") | .app_version'
+'''
+
+[b00t.orchestration.gpu_requirements]
+# Enables GPU scheduling features
+gpu_sharing = true
+time_slicing = true
+
+[[b00t.usage]]
+description = "Check GPU availability on nodes"
+command = "kubectl get nodes -o json | jq '.items[].status.capacity'"
+
+[[b00t.usage]]
+description = "Verify GPU operator pods"
+command = "kubectl get pods -n gpu-operator"
+
+[[b00t.usage]]
+description = "View GPU device plugin logs"
+command = "kubectl logs -n gpu-operator -l app=nvidia-device-plugin-daemonset"
+
+[[b00t.usage]]
+description = "Enable GPU time-slicing (2 slices per GPU)"
+command = "kubectl patch clusterpolicy/cluster-policy -n gpu-operator --type merge -p '{\"spec\":{\"devicePlugin\":{\"config\":{\"name\":\"time-slicing-config\",\"default\":\"any\"}}}}'"

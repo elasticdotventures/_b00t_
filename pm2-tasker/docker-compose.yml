@@ -1,0 +1,44 @@
+version: '3.8'
+
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: b00t-redis
+    ports:
+      - "6379:6379"
+    networks:
+      - b00t-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    volumes:
+      - redis-data:/data
+
+  pm2-tasker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: b00t-pm2-tasker
+    depends_on:
+      redis:
+        condition: service_healthy
+    environment:
+      REDIS_URL: redis://redis:6379
+      PM2_TASKER_CHANNEL: b00t:k0mmand3r
+      LOG_LEVEL: info
+      NODE_ENV: production
+    networks:
+      - b00t-network
+    volumes:
+      - pm2-data:/root/.pm2
+    restart: unless-stopped
+
+networks:
+  b00t-network:
+    driver: bridge
+
+volumes:
+  redis-data:
+  pm2-data:

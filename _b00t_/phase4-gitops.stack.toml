@@ -1,0 +1,30 @@
+[b00t]
+name = "phase4-gitops"
+type = "stack"
+hint = "Phase 4: GitOps automation (Flux CD) - auto-deploy b00t stack changes from git"
+members = ["flux-cd.k8s"]
+
+[b00t.orchestration]
+schedule_type = "gitops"
+watch_paths = ["_b00t_", "clusters"]
+reconcile_interval = "1m"
+
+[[b00t.usage]]
+description = "Deploy Flux CD and bootstrap"
+command = "b00t stack deploy phase4-gitops"
+
+[[b00t.usage]]
+description = "Bootstrap Flux with GitHub"
+command = "flux bootstrap github --owner=elasticdotventures --repository=_b00t_ --branch=main --path=clusters/prod"
+
+[[b00t.usage]]
+description = "Check Flux status"
+command = "flux check"
+
+[[b00t.usage]]
+description = "View all Flux resources"
+command = "flux get all"
+
+[[b00t.usage]]
+description = "Force reconciliation"
+command = "flux reconcile kustomization b00t-stacks --with-source"

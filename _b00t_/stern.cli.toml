@@ -1,0 +1,49 @@
+[b00t]
+name = "stern"
+type = "cli"
+hint = "Tail logs from multiple k8s pods simultaneously. Perfect for stack debugging."
+desires = "1.30.0"
+
+install = '''
+if command -v pkgx >/dev/null 2>&1; then
+    pkgx install stern@1.30
+    mkdir -p ~/.local/bin
+    cat > ~/.local/bin/stern << 'EOF'
+#!/bin/bash
+exec pkgx stern "$@"
+EOF
+    chmod +x ~/.local/bin/stern
+elif command -v brew >/dev/null 2>&1; then
+    brew install stern
+else
+    # Install from GitHub releases
+    STERN_VERSION="1.30.0"
+    OS=$(uname -s | tr '[:upper:]' '[:lower:]')
+    ARCH=$(uname -m)
+    case $ARCH in
+        x86_64) ARCH="amd64" ;;
+        aarch64) ARCH="arm64" ;;
+    esac
+
+    curl -L "https://github.com/stern/stern/releases/download/v${STERN_VERSION}/stern_${STERN_VERSION}_${OS}_${ARCH}.tar.gz" | \
+        tar xz -C /tmp
+
+    sudo mv /tmp/stern /usr/local/bin/stern
+    chmod +x /usr/local/bin/stern
+fi
+'''
+
+version = "stern --version"
+version_regex = 'stern version (\d+\.\d+\.\d+)'
+
+[[b00t.usage]]
+description = "Tail logs from all pods with label app=myapp"
+command = "stern -l app=myapp"
+
+[[b00t.usage]]
+description = "Tail logs from pods matching pattern"
+command = "stern llm-.*"
+
+[[b00t.usage]]
+description = "Tail logs from specific namespace"
+command = "stern -n default ."
