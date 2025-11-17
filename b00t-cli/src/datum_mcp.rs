@@ -70,9 +70,9 @@ pub struct McpStdioMethod {
     #[serde(default)]
     pub env: std::collections::HashMap<String, String>,
 
-    /// Additional environment variable names to forward from parent process
+    /// Whitelist of environment variable names to propagate from the parent process.
+    /// Only variables listed here will be forwarded to the child process.
     /// (Codex: env_vars)
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub env_vars: Option<Vec<String>>,
 
     /// Working directory for server launch
