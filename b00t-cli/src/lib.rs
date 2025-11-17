@@ -15,6 +15,7 @@ pub mod datum_mcp;
 pub mod datum_stack;
 pub mod datum_vscode;
 pub mod dependency_resolver;
+pub mod budget_controller;
 pub mod k8s;
 pub mod model_manager;
 pub mod orchestrator;
