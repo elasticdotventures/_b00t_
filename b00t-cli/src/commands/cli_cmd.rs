@@ -8,6 +8,7 @@ use clap::Parser;
 use duct::cmd;
 use std::collections::HashMap;
 use std::path::PathBuf;
+use shellexpand;
 
 #[derive(Parser)]
 pub enum CliCommands {
