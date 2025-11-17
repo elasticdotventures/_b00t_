@@ -81,24 +81,20 @@ impl B00tConfig {
 
     /// Find the appropriate config file path
     /// Priority:
-    /// 1. If in git repo: <repo_root>/_b00t_.toml
-    /// 2. ~/.dotfiles/_b00t_.toml (if ~/.dotfiles exists)
-    /// 3. ~/.b00t/_b00t_.toml
+    /// 1. If in git repo: <repo_root>/_b00t_.toml (project-specific)
+    /// 2. ~/.b00t/_b00t_.toml (user-level)
+    ///
+    /// Note: Projects may have a _b00t_/ directory for project-specific datums,
+    /// but the config file is always _b00t_.toml at the repo root.
     pub fn find_config_path() -> Result<PathBuf> {
-        // Check if we're in a git repo
+        // Check if we're in a git repo - use project-specific config at repo root
         if let Ok(repo_root) = Self::find_git_root() {
             let config_path = repo_root.join("_b00t_.toml");
             return Ok(config_path);
         }
 
-        // Check for ~/.dotfiles
+        // Fall back to user-level config
         if let Ok(home) = std::env::var("HOME") {
-            let dotfiles_path = PathBuf::from(home.clone()).join(".dotfiles/_b00t_.toml");
-            if dotfiles_path.parent().map(|p| p.exists()).unwrap_or(false) {
-                return Ok(dotfiles_path);
-            }
-
-            // Fall back to ~/.b00t
             let b00t_path = PathBuf::from(home).join(".b00t/_b00t_.toml");
             return Ok(b00t_path);
         }
