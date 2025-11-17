@@ -15,10 +15,13 @@ hint = "CCometixLine is a high-performance Rust-based statusline tool for Claude
 [b00t.learn]
 topic = "ccometixline"
 
-[b00t.references]
-github = "https://github.com/Haleclipse/CCometixLine"
-npm = "https://www.npmjs.com/package/@cometix/ccline"
+[[b00t.references]]
+name = "CCometixLine GitHub"
+url = "https://github.com/Haleclipse/CCometixLine"
 
+[[b00t.references]]
+name = "CCometixLine npm"
+url = "https://www.npmjs.com/package/@cometix/ccline"
 [[b00t.usage]]
 description = "Check installation"
 command = "ccline --version"
