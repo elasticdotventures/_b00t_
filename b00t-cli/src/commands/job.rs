@@ -587,17 +587,106 @@ async fn execute_bash(
     }
 }
 
-/// Execute sub-agent task
+/// Execute sub-agent task via LangChain agent service
 async fn execute_agent(
-    _agent_type: &str,
-    _prompt: &str,
-    _context_files: &[String],
-    _timeout_ms: Option<u64>,
+    agent_type: &str,
+    prompt: &str,
+    context_files: &[String],
+    timeout_ms: Option<u64>,
 ) -> Result<()> {
-    // TODO: Integrate with b00t-agent or Task MCP tool
-    // For now, placeholder
-    println!("   ⚠️  Agent execution not yet implemented");
-    Ok(())
+    use tokio::process::Command;
+    use tokio::time::{timeout, Duration};
+
+    println!("   🤖 Executing LangChain agent: {}", agent_type);
+
+    // Build full prompt with context files
+    let mut full_prompt = String::new();
+
+    // Load context files if specified
+    if !context_files.is_empty() {
+        println!("   📄 Loading context files:");
+        for file_path in context_files {
+            println!("      - {}", file_path);
+            match tokio::fs::read_to_string(file_path).await {
+                Ok(content) => {
+                    full_prompt.push_str(&format!("\n--- Context from {} ---\n", file_path));
+                    full_prompt.push_str(&content);
+                    full_prompt.push_str("\n--- End context ---\n\n");
+                }
+                Err(e) => {
+                    eprintln!("   ⚠️  Failed to read {}: {}", file_path, e);
+                }
+            }
+        }
+    }
+
+    // Add the actual prompt
+    full_prompt.push_str(prompt);
+
+    // Build command to execute LangChain agent
+    let mut cmd = Command::new("uv");
+    cmd.args(&["run", "b00t-langchain", "test-agent", agent_type, &full_prompt]);
+
+    // Set working directory to langchain-agent
+    let langchain_dir = std::env::current_dir()
+        .context("Failed to get current directory")?
+        .join("langchain-agent");
+
+    if langchain_dir.exists() {
+        cmd.current_dir(&langchain_dir);
+    } else {
+        // Try relative path from _b00t_ root
+        let alt_path = std::env::current_dir()?.parent()
+            .context("No parent directory")?
+            .join("langchain-agent");
+        if alt_path.exists() {
+            cmd.current_dir(&alt_path);
+        } else {
+            anyhow::bail!(
+                "LangChain agent directory not found. Expected: {} or {}",
+                langchain_dir.display(),
+                alt_path.display()
+            );
+        }
+    }
+
+    // Execute with timeout
+    let execution = async {
+        let output = cmd.output().await.context("Failed to execute agent command")?;
+
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        let stderr = String::from_utf8_lossy(&output.stderr);
+
+        // Print output
+        if !stdout.is_empty() {
+            for line in stdout.lines() {
+                println!("   {}", line);
+            }
+        }
+
+        if !stderr.is_empty() && !output.status.success() {
+            for line in stderr.lines() {
+                eprintln!("   {}", line);
+            }
+        }
+
+        if output.status.success() {
+            println!("   ✅ Agent completed successfully");
+            Ok(())
+        } else {
+            anyhow::bail!(
+                "Agent failed with exit code: {}",
+                output.status.code().unwrap_or(-1)
+            )
+        }
+    };
+
+    // Apply timeout if specified
+    let timeout_duration = timeout_ms.unwrap_or(300000); // Default 5 minutes
+    match timeout(Duration::from_millis(timeout_duration), execution).await {
+        Ok(result) => result,
+        Err(_) => anyhow::bail!("Agent timed out after {}ms", timeout_duration),
+    }
 }
 
 /// Execute k0mmander script
