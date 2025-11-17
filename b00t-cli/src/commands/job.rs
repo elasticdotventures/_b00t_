@@ -980,3 +980,99 @@ fn find_job_datums(path: &str) -> Result<Vec<String>> {
     jobs.sort();
     Ok(jobs)
 }
+
+// ============================================================================
+// Public API for IPC integration
+// ============================================================================
+
+/// Public wrapper for run_job (for job_ipc module)
+pub async fn run_job_internal(
+    path: &str,
+    name: &str,
+    from_step: Option<&str>,
+    to_step: Option<&str>,
+    dry_run: bool,
+    no_checkpoint: bool,
+    resume: bool,
+    env_vars: &[String],
+) -> Result<()> {
+    run_job(path, name, from_step, to_step, dry_run, no_checkpoint, resume, env_vars).await
+}
+
+/// Get job status as JSON string
+pub async fn get_job_status_json(path: &str, name: Option<&str>, all: bool) -> Result<String> {
+    use b00t_cli::job_state::JobState;
+    use std::fs;
+
+    let state_dir = std::path::PathBuf::from(path).join(".b00t").join("jobs");
+
+    if !state_dir.exists() {
+        return Ok(serde_json::to_string(&serde_json::json!({
+            "jobs": []
+        }))?);
+    }
+
+    let mut states = Vec::new();
+
+    if let Some(job_name) = name {
+        match JobState::load_latest(path, job_name) {
+            Ok(state) => states.push(state),
+            Err(_) => {
+                return Ok(serde_json::to_string(&serde_json::json!({
+                    "error": format!("Job '{}' not found", job_name)
+                }))?);
+            }
+        }
+    } else if all {
+        for entry in fs::read_dir(&state_dir)? {
+            let entry = entry?;
+            if entry.path().is_dir() {
+                let job_name = entry.file_name().to_string_lossy().to_string();
+                if let Ok(state) = JobState::load_latest(path, &job_name) {
+                    states.push(state);
+                }
+            }
+        }
+    }
+
+    Ok(serde_json::to_string(&serde_json::json!({
+        "jobs": states
+    }))?)
+}
+
+/// Stop job (internal version for IPC)
+pub async fn stop_job_internal(path: &str, name: Option<&str>, all: bool) -> Result<()> {
+    stop_job(path, name, all).await
+}
+
+/// Get job plan as JSON string
+pub async fn get_job_plan_json(path: &str, name: &str) -> Result<String> {
+    use b00t_cli::datum_job::JobDatum;
+
+    let datum_path = format!("{}.job.toml", name);
+    let datum = JobDatum::from_config(&datum_path, path)
+        .context(format!("Job '{}' not found", name))?;
+
+    datum.validate()?;
+
+    let config = datum.job_config()?;
+    let execution_order = datum.execution_order()?;
+
+    Ok(serde_json::to_string(&serde_json::json!({
+        "job_name": name,
+        "description": config.description,
+        "mode": config.config.mode,
+        "execution_order": execution_order,
+        "steps": config.steps,
+        "checkpoint_mode": config.config.checkpoint_mode,
+    }))?)
+}
+
+/// List jobs as JSON string
+pub async fn list_jobs_json(path: &str) -> Result<String> {
+    let jobs = find_job_datums(path)?;
+
+    Ok(serde_json::to_string(&serde_json::json!({
+        "jobs": jobs
+    }))?)
+}

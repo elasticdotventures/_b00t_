@@ -4,6 +4,7 @@ use regex::Regex;
 use serde::{Deserialize, Serialize};
 
 pub mod cloud_sync;
+pub mod commands;
 pub mod datum_ai;
 pub mod datum_ai_model;
 pub mod datum_api;
@@ -19,6 +20,7 @@ pub mod datum_stack;
 pub mod datum_vscode;
 pub mod dependency_resolver;
 pub mod job_state;
+pub mod job_ipc;
 pub mod k8s;
 pub mod model_manager;
 pub mod orchestrator;
