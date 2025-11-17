@@ -104,7 +104,47 @@ export _B00T_Path="~/.dotfiles/_b00t_"
 
 ## Usage
 
-### Start Service
+### Production Deployment with PM2 (Recommended)
+
+For production use, deploy as a PM2-managed service with auto-restart and monitoring:
+
+```bash
+# Quick start
+just deploy
+
+# Or step by step:
+just install  # Install dependencies
+just start    # Start PM2 service
+just save     # Save PM2 process list
+
+# Monitor
+just status   # Show service status
+just logs     # Tail logs
+just monitor  # Real-time monitoring
+
+# Manage
+just restart  # Restart service
+just stop     # Stop service
+just delete   # Remove from PM2
+```
+
+**Health Check**:
+```bash
+just health-check
+# Or directly:
+uv run python healthcheck.py
+```
+
+**Auto-start on System Boot**:
+```bash
+just setup-startup
+# Follow instructions, then:
+just save
+```
+
+### Development Mode
+
+For development without PM2:
 
 ```bash
 # Via uv
@@ -115,6 +155,9 @@ uv run b00t-langchain serve --redis-url redis://localhost:6380
 
 # With custom channel
 uv run b00t-langchain serve --channel b00t:my-channel
+
+# Or via just
+just dev
 ```
 
 ### Slash Commands
