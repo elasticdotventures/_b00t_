@@ -43,9 +43,15 @@ use traits::*;
 
 use crate::commands::learn::{LearnArgs, handle_learn};
 use crate::commands::{
-    AiCommands, AppCommands, BootstrapCommands, BudgetCommands, ChatCommands, CliCommands, DatumCommands,
-    GrokCommands, InitCommands, InstallCommands, JobCommands, K8sCommands, McpCommands,
-    ModelCommands, SessionCommands, StackCommands, WhatismyCommands,
+    AiCommands, AppCommands,
+    BootstrapCommands, BudgetCommands, 
+    ChatCommands, CliCommands,
+    DatumCommands, GrokCommands, 
+    InitCommands, InstallCommands, 
+    JobCommands, K8sCommands, 
+    McpCommands, ModelCommands, 
+    SessionCommands, StackCommands, 
+    WhatismyCommands,
 };
 
 // Re-export commonly used functions for datum modules
