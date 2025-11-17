@@ -1,11 +1,40 @@
 # 🥾 b00t - Universal Agentic Development Framework
 
-[![Container Build Status](https://github.com/elasticdotventures/dotfiles/actions/workflows/b00t-container.yml/badge.svg)](https://github.com/elasticdotventures/dotfiles/actions/workflows/b00t-container.yml)
+[![Container Build Status](https://github.com/elasticdotventures/_b00t_/actions/workflows/b00t-container.yml/badge.svg)](https://github.com/elasticdotventures/_b00t_/actions/workflows/b00t-container.yml)
 
-> **"I am an agent. Tell me what I'm running on, what tools are available, what I'm allowed to do, what goals I should optimize for, and where the boundaries are."**  
+> **"I am an agent. Tell me what I'm running on, what tools are available, what I'm allowed to do, what goals I should optimize for, and where the boundaries are."**
 > —ChatGPT (TL;DR b00t agent perspective)
 
 **b00t** is an agentic hive operating system that unlocks AI agents with Neo-like powers in cyberspace. It's a context-aware development framework that bridges the gap between AI models and real-world tooling, enabling agents to maximize their capabilities through intelligent abstraction and unified tool discovery.
+
+## ⚡ Quick Examples
+
+```bash
+# Install b00t (one-liner)
+curl -fsSL https://raw.githubusercontent.com/elasticdotventures/_b00t_/main/install.sh | sh
+
+# Install tools with automatic dependency resolution
+b00t cli install fastmcp          # Installs python → uv → fastmcp (DAG-aware)
+b00t cli install rust             # Install Rust toolchain
+b00t cli check python             # Check if Python is installed
+
+# Learn about available tools
+b00t learn rust                   # Load Rust development context
+b00t learn docker                 # Container orchestration knowledge
+
+# Record and retrieve tribal knowledge
+b00t lfmf rust "cargo build conflict: Unset CONDA_PREFIX before cargo to avoid PyO3 linker errors"
+b00t advice rust "PyO3"           # Get contextual debugging advice
+
+# MCP server integration
+b00t mcp install browser-use claudecode    # Install MCP server with deps
+b00t mcp list                              # List available MCP servers
+
+# Model management
+b00t model list                   # Show available AI models
+b00t model download llava         # Download model weights
+b00t model serve llava            # Launch vLLM server
+```
 
 ## 🚀 Quick Install
 
@@ -37,7 +66,7 @@ b00t-cli --version
 One-liner that works everywhere:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/elasticdotventures/dotfiles/main/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/elasticdotventures/_b00t_/main/install.sh | sh
 ```
 
 This universal installer:
@@ -58,8 +87,8 @@ This universal installer:
 cargo install b00t-cli
 
 # Or install from source
-git clone https://github.com/elasticdotventures/dotfiles.git ~/.dotfiles
-cd ~/.dotfiles && cargo install --path b00t-cli
+git clone https://github.com/elasticdotventures/_b00t_.git
+cd _b00t_ && cargo install --path b00t-cli
 ```
 </details>
 
@@ -68,8 +97,8 @@ cd ~/.dotfiles && cargo install --path b00t-cli
 
 ```bash
 # Run latest b00t container
-docker pull ghcr.io/elasticdotventures/dotfiles:latest
-docker run --rm -it -v $(pwd):/workspace ghcr.io/elasticdotventures/dotfiles:latest
+docker pull ghcr.io/elasticdotventures/_b00t_:latest
+docker run --rm -it -v $(pwd):/workspace ghcr.io/elasticdotventures/_b00t_:latest
 
 # Or use the container wrapper (installed via universal script)
 b00t status  # Automatically uses container if no native binary
@@ -278,8 +307,8 @@ Ready to enhance the b00t ecosystem?
 
 ```bash
 # Clone and contribute
-git clone https://github.com/elasticdotventures/dotfiles.git ~/.dotfiles
-cd ~/.dotfiles
+git clone https://github.com/elasticdotventures/_b00t_.git
+cd _b00t_
 
 # Set up development environment
 just install    # Bootstrap development dependencies
@@ -319,9 +348,9 @@ b00t learn mlflow     # ML experiment tracking
 **🥾 Ready to unlock your agent potential?**
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/elasticdotventures/dotfiles/main/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/elasticdotventures/_b00t_/main/install.sh | sh
 ```
 
 **Welcome to the b00t hive mind. Your Neo-like journey in cyberspace begins now.**
 
-*For questions, issues, or hive recruitment: [GitHub Issues](https://github.com/elasticdotventures/dotfiles/issues)*
+*For questions, issues, or hive recruitment: [GitHub Issues](https://github.com/elasticdotventures/_b00t_/issues)*

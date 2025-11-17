@@ -1,0 +1,69 @@
+[b00t]
+name = "flux-cd"
+type = "k8s"
+hint = "GitOps continuous delivery. Auto-deploy b00t stack changes from git."
+desires = "2.3.0"
+
+namespace = "flux-system"
+
+install = '''
+# Install Flux CLI
+FLUX_VERSION="2.3.0"
+OS=$(uname -s | tr '[:upper:]' '[:lower:]')
+ARCH=$(uname -m)
+case $ARCH in
+    x86_64) ARCH="amd64" ;;
+    aarch64) ARCH="arm64" ;;
+esac
+
+curl -sL "https://github.com/fluxcd/flux2/releases/download/v${FLUX_VERSION}/flux_${FLUX_VERSION}_${OS}_${ARCH}.tar.gz" | \
+    tar xz -C /tmp
+
+sudo mv /tmp/flux /usr/local/bin/flux
+chmod +x /usr/local/bin/flux
+
+# Verify
+flux --version
+
+# Bootstrap Flux (user needs to configure)
+echo "To bootstrap Flux, run:"
+echo "flux bootstrap github \\"
+echo "  --owner=<github-user> \\"
+echo "  --repository=<repo-name> \\"
+echo "  --branch=main \\"
+echo "  --path=clusters/my-cluster \\"
+echo "  --personal"
+'''
+
+version = "flux --version"
+version_regex = 'flux version (\d+\.\d+\.\d+)'
+
+[b00t.orchestration]
+# GitOps configuration
+gitops_enabled = true
+watch_paths = ["_b00t_", "clusters"]
+reconcile_interval = "1m"
+
+[[b00t.usage]]
+description = "Bootstrap Flux on cluster"
+command = "flux bootstrap github --owner=myorg --repository=_b00t_ --branch=main --path=clusters/prod"
+
+[[b00t.usage]]
+description = "Check Flux system status"
+command = "flux check"
+
+[[b00t.usage]]
+description = "Create GitRepository source"
+command = "flux create source git b00t --url=https://github.com/myorg/_b00t_ --branch=main --interval=1m"
+
+[[b00t.usage]]
+description = "Create Kustomization to deploy _b00t_ manifests"
+command = "flux create kustomization b00t-stacks --source=b00t --path=./_b00t_/manifests --prune=true --interval=1m"
+
+[[b00t.usage]]
+description = "Reconcile immediately"
+command = "flux reconcile kustomization b00t-stacks --with-source"
+
+[[b00t.usage]]
+description = "View all Flux resources"
+command = "flux get all"
