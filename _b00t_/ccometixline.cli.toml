@@ -33,8 +33,3 @@ command = "ccline"
 [[b00t.usage]]
 description = "Enable verbose mode"
 command = "ccline --verbose"
-[b00t.requirements]
-git_version = "1.5+"
-recommended_git = "2.22+"
-fonts = "Nerd Fonts required for proper icon display"
-environment = "Claude Code"
