@@ -42,8 +42,8 @@ use traits::*;
 use crate::commands::learn::{LearnArgs, handle_learn};
 use crate::commands::{
     AiCommands, AppCommands, BootstrapCommands, ChatCommands, CliCommands, DatumCommands,
-    GrokCommands, InitCommands, InstallCommands, K8sCommands, McpCommands, ModelCommands,
-    SessionCommands, StackCommands, WhatismyCommands,
+    GrokCommands, InitCommands, InstallCommands, JobCommands, K8sCommands, McpCommands,
+    ModelCommands, SessionCommands, StackCommands, WhatismyCommands,
 };
 
 // Re-export commonly used functions for datum modules
@@ -192,6 +192,11 @@ Example:
     Agent {
         #[clap(subcommand)]
         agent_command: commands::AgentCommands,
+    },
+    #[clap(about = "Job workflow orchestration with checkpoints and sub-agents")]
+    Job {
+        #[clap(subcommand)]
+        job_command: commands::JobCommands,
     },
     #[clap(about = "Agent Coordination Protocol (ACP) - send messages to agents")]
     Chat {
@@ -1248,6 +1253,12 @@ async fn main() {
         Some(Commands::Agent { agent_command }) => {
             if let Err(e) = commands::agent::handle_agent_command(agent_command.clone()).await {
                 eprintln!("Agent Error: {}", e);
+                std::process::exit(1);
+            }
+        }
+        Some(Commands::Job { job_command }) => {
+            if let Err(e) = job_command.execute_async(&cli.path).await {
+                eprintln!("Job Error: {}", e);
                 std::process::exit(1);
             }
         }

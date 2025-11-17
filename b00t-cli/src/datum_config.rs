@@ -221,6 +221,7 @@ impl B00tConfig {
             DatumType::Stack => "stack",
             DatumType::Api => "api",
             DatumType::Config => "config",
+            DatumType::Job => "job",
             DatumType::Unknown => "unknown",
         }
     }
@@ -283,6 +284,7 @@ impl ConfigDatum {
             learn: None,
             usage: None,
             lfmf_category: None,
+            job: None,
         };
 
         Ok(Self { datum, config })

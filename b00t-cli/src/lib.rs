@@ -12,6 +12,7 @@ pub mod datum_bash;
 pub mod datum_cli;
 pub mod datum_config;
 pub mod datum_docker;
+pub mod datum_job;
 pub mod datum_k8s;
 pub mod datum_mcp;
 pub mod datum_stack;
@@ -139,6 +140,11 @@ pub struct BootDatum {
     // Used by `b00t lfmf <category> "<topic>: <solution>"`
     #[serde(skip_serializing_if = "Option::is_none")]
     pub lfmf_category: Option<String>,
+
+    // Job workflow configuration - multi-step orchestration with checkpoints
+    // Used by `b00t job run <name>` for workflow execution
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub job: Option<serde_json::Value>,
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
@@ -198,6 +204,7 @@ pub enum DatumType {
     Cli,
     Stack,
     Config, // b00t configuration file (_b00t_.toml)
+    Job, // Workflow orchestration with checkpoints
 }
 
 #[derive(Serialize, Debug)]
@@ -424,6 +431,7 @@ fn create_mcp_datum_from_json(
         learn: None,
         usage: None,
         lfmf_category: None,
+        job: None,
     }
 }
 
@@ -521,6 +529,7 @@ pub fn normalize_mcp_json(input: &str, dwiw: bool) -> Result<BootDatum> {
                 learn: None,
                 usage: None,
                 lfmf_category: None,
+                job: None,
             });
         }
 
@@ -622,6 +631,7 @@ pub fn create_unified_toml_config(datum: &BootDatum, path: &str) -> Result<()> {
         DatumType::Cli => ".cli.toml",
         DatumType::Stack => ".stack.toml",
         DatumType::Config => ".config.toml",
+        DatumType::Job => ".job.toml",
         DatumType::Unknown => ".toml",
     };
 
@@ -657,6 +667,7 @@ impl std::fmt::Display for DatumType {
             DatumType::Cli => write!(f, "CLI"),
             DatumType::Stack => write!(f, "stack"),
             DatumType::Config => write!(f, "config"),
+            DatumType::Job => write!(f, "job"),
         }
     }
 }
@@ -687,6 +698,8 @@ impl DatumType {
             DatumType::Stack
         } else if filename.ends_with(".config.toml") || filename.ends_with("_b00t_.toml") {
             DatumType::Config
+        } else if filename.ends_with(".job.toml") {
+            DatumType::Job
         } else {
             DatumType::Unknown // Default fallback for .toml files
         }
