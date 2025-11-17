@@ -1,0 +1,168 @@
+# Example b00t job definition - Multi-stage build workflow with checkpoints
+# 🤓 Jobs are datum-native, support dependencies, checkpoints, and sub-agent execution
+
+[b00t]
+name = "example-workflow"
+type = "job"
+hint = "Multi-stage build workflow with checkpoints and sub-agent execution"
+version = "0.1.0"
+depends_on = []
+
+# Job metadata and configuration
+[b00t.job]
+description = "Example workflow demonstrating checkpoints, sub-agents, and task orchestration"
+author = "hackathon-team"
+tags = ["example", "workflow", "checkpoint"]
+
+# Execution configuration
+[b00t.job.config]
+# Execution mode: sequential, parallel, dag
+mode = "sequential"
+
+# Checkpoint behavior
+checkpoint_mode = "auto"  # auto, manual, off
+checkpoint_after_each_step = true
+create_git_tag = true
+
+# Sub-agent configuration
+use_subagents = true
+subagent_timeout_ms = 300000  # 5 minutes per task
+subagent_type = "general-purpose"  # or: explore, plan, code-reviewer
+
+# Failure handling
+continue_on_failure = false
+retry_failed_steps = 1
+rollback_on_failure = true
+
+# Step definitions - executed in order (sequential mode)
+[[b00t.job.steps]]
+name = "setup"
+description = "Initialize workspace and verify dependencies"
+checkpoint = "setup-complete"  # Git tag/checkpoint name
+
+# Task to execute (multiple formats supported)
+[b00t.job.steps.task]
+type = "bash"  # bash, agent, k0mmander, datum, mcp
+command = "cargo check --all && cargo test --lib --no-fail-fast"
+cwd = "."
+timeout_ms = 120000
+
+# Step conditions
+[b00t.job.steps.condition]
+when = "always"  # always, on_success, on_failure, on_previous
+
+[[b00t.job.steps]]
+name = "lint"
+description = "Run clippy and rustfmt checks"
+checkpoint = "lint-complete"
+depends_on = ["setup"]  # Step dependency
+
+[b00t.job.steps.task]
+type = "bash"
+command = "cargo clippy --all-targets -- -D warnings && cargo fmt --check"
+cwd = "."
+
+[[b00t.job.steps]]
+name = "build-release"
+description = "Build optimized release binaries"
+checkpoint = "build-complete"
+depends_on = ["lint"]
+
+[b00t.job.steps.task]
+type = "bash"
+command = "cargo build --release --all-targets"
+cwd = "."
+timeout_ms = 600000  # 10 minutes
+
+# Artifacts to preserve in checkpoint
+[b00t.job.steps.artifacts]
+paths = ["target/release/b00t-cli", "target/release/mcp-user"]
+archive = true
+
+[[b00t.job.steps]]
+name = "integration-tests"
+description = "Run integration tests with sub-agent"
+checkpoint = "tests-complete"
+depends_on = ["build-release"]
+
+# Use sub-agent for complex task
+[b00t.job.steps.task]
+type = "agent"  # Spawns b00t-agent or uses agent coordination
+agent_type = "general-purpose"
+prompt = """
+Run all integration tests for b00t-cli and mcp-user:
+1. Test mcp-user with @modelcontextprotocol/server-filesystem
+2. Test b00t-cli mcp execute command
+3. Verify job orchestration works
+4. Check all binaries execute correctly
+"""
+context_files = ["b00t-cli/tests/**/*.rs"]
+
+[[b00t.job.steps]]
+name = "package"
+description = "Create distribution packages"
+checkpoint = "package-complete"
+depends_on = ["integration-tests"]
+
+[b00t.job.steps.task]
+type = "k0mmander"  # Execute k0mmander script
+script = """
+# K0mmander task script
+task package {
+  inputs: ["target/release/b00t-cli", "target/release/mcp-user"]
+  outputs: ["dist/b00t-${VERSION}.tar.gz"]
+
+  commands: [
+    "mkdir -p dist",
+    "tar czf dist/b00t-${VERSION}.tar.gz -C target/release b00t-cli mcp-user",
+    "sha256sum dist/b00t-${VERSION}.tar.gz > dist/b00t-${VERSION}.tar.gz.sha256"
+  ]
+}
+"""
+
+# Alternative: datum task (execute another datum)
+# [b00t.job.steps.task]
+# type = "datum"
+# datum = "package-release.bash"  # Executes _b00t_/package-release.bash.toml
+
+[[b00t.job.steps]]
+name = "verify-package"
+description = "Verify package integrity"
+checkpoint = "verify-complete"
+depends_on = ["package"]
+
+[b00t.job.steps.task]
+type = "bash"
+command = "sha256sum -c dist/b00t-${VERSION}.tar.gz.sha256"
+
+[b00t.job.steps.condition]
+when = "on_success"  # Only if previous steps succeeded
+
+# Rollback steps - executed on failure
+[[b00t.job.rollback]]
+name = "cleanup-artifacts"
+description = "Clean up partial artifacts on failure"
+
+[b00t.job.rollback.task]
+type = "bash"
+command = "rm -rf dist/*.tar.gz target/release/b00t-*"
+
+[[b00t.job.rollback]]
+name = "restore-checkpoint"
+description = "Restore to last successful checkpoint"
+
+[b00t.job.rollback.task]
+type = "bash"
+command = "git checkout ${LAST_CHECKPOINT_TAG}"
+
+# Environment variables available to all steps
+[b00t.job.env]
+VERSION = "0.7.14"
+RUST_BACKTRACE = "1"
+CARGO_TERM_COLOR = "always"
+
+# Outputs/results schema
+[b00t.job.outputs]
+artifacts = ["dist/*.tar.gz", "dist/*.sha256"]
+reports = ["target/test-results.json"]
+logs = [".b00t/job-logs/${JOB_ID}.log"]

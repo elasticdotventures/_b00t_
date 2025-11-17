@@ -22,6 +22,8 @@ mod datum_gemini;
 mod datum_mcp;
 mod datum_utils;
 mod datum_vscode;
+mod dependency_resolver;
+mod orchestrator;
 mod session_memory;
 mod test_cloud_integration;
 mod traits;
@@ -41,9 +43,15 @@ use traits::*;
 
 use crate::commands::learn::{LearnArgs, handle_learn};
 use crate::commands::{
-    AiCommands, AppCommands, BootstrapCommands, ChatCommands, CliCommands, DatumCommands,
-    GrokCommands, InitCommands, InstallCommands, K8sCommands, McpCommands, ModelCommands,
-    SessionCommands, StackCommands, WhatismyCommands,
+    AiCommands, AppCommands,
+    BootstrapCommands, BudgetCommands, 
+    ChatCommands, CliCommands,
+    DatumCommands, GrokCommands, 
+    InitCommands, InstallCommands, 
+    JobCommands, K8sCommands, 
+    McpCommands, ModelCommands, 
+    SessionCommands, StackCommands, 
+    WhatismyCommands,
 };
 
 // Re-export commonly used functions for datum modules
@@ -102,6 +110,11 @@ Example:
     Stack {
         #[clap(subcommand)]
         stack_command: StackCommands,
+    },
+    #[clap(about = "Budget-aware scheduling and tracking")]
+    Budget {
+        #[clap(subcommand)]
+        budget_command: BudgetCommands,
     },
     #[clap(about = "Application integration commands")]
     App {
@@ -192,6 +205,11 @@ Example:
     Agent {
         #[clap(subcommand)]
         agent_command: commands::AgentCommands,
+    },
+    #[clap(about = "Job workflow orchestration with checkpoints and sub-agents")]
+    Job {
+        #[clap(subcommand)]
+        job_command: commands::JobCommands,
     },
     #[clap(about = "Agent Coordination Protocol (ACP) - send messages to agents")]
     Chat {
@@ -289,13 +307,17 @@ fn datum_providers_to_tool_status(providers: Vec<Box<dyn DatumProvider>>) -> Vec
         .collect()
 }
 
-fn handle_up_command(_b00t_path: &str, _yes: bool) -> Result<()> {
+fn handle_up_command(_b00t_path: &str, yes: bool) -> Result<()> {
     use b00t_cli::datum_config::B00tConfig;
 
     // Load or create configuration
     let (config, config_path) = B00tConfig::load_or_create()?;
 
-    println!("🔍 Checking all datums from {} ...", config_path.display());
+    if yes {
+        println!("🔄 Updating all datums from {}...", config_path.display());
+    } else {
+        println!("🔍 Checking all datums from {} (use --yes to update)...", config_path.display());
+    }
 
     // If config file doesn't exist yet, show helpful message
     if !config_path.exists() {
@@ -322,12 +344,13 @@ fn handle_up_command(_b00t_path: &str, _yes: bool) -> Result<()> {
     println!("   Datums: {:?}", config.datums);
     println!("   Install methods: {:?}", config.install_methods);
 
-    // 🤓 TODO: Full datum checking/updating requires refactoring to avoid trait conflicts
-    // For now, delegate to `b00t cli up` for CLI datums or use `b00t status`
-    println!("\n💡 To check and update datums:");
-    println!("   • For CLI tools: b00t cli up [--yes]");
-    println!("   • For all tools: b00t status");
-    println!("\n📝 Full _b00t_.toml integration coming in next PR");
+    // 🤓 TODO: Implement datum loading and updating
+    // Currently blocked by trait version conflicts - needs refactoring
+    println!("\n⚠️  Full datum checking not yet implemented");
+    println!("   Next steps:");
+    println!("   1. Load datums from _b00t_ path");
+    println!("   2. Match against configured patterns");
+    println!("   3. Check versions and update if --yes flag is set");
 
     Ok(())
 }
@@ -1149,6 +1172,12 @@ async fn main() {
                 std::process::exit(1);
             }
         }
+        Some(Commands::Budget { budget_command }) => {
+            if let Err(e) = budget_command.execute(&cli.path) {
+                eprintln!("Error: {}", e);
+                std::process::exit(1);
+            }
+        }
         Some(Commands::App { app_command }) => {
             if let Err(e) = app_command.execute(&cli.path) {
                 eprintln!("Error: {}", e);
@@ -1243,6 +1272,12 @@ async fn main() {
         Some(Commands::Agent { agent_command }) => {
             if let Err(e) = commands::agent::handle_agent_command(agent_command.clone()).await {
                 eprintln!("Agent Error: {}", e);
+                std::process::exit(1);
+            }
+        }
+        Some(Commands::Job { job_command }) => {
+            if let Err(e) = job_command.execute_async(&cli.path).await {
+                eprintln!("Job Error: {}", e);
                 std::process::exit(1);
             }
         }

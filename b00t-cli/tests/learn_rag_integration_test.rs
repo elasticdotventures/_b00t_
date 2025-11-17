@@ -92,8 +92,10 @@ mod learn_rag_integration {
     #[tokio::test]
     async fn test_learn_digest_without_qdrant() -> Result<()> {
         // Test graceful degradation when Qdrant is not available
-        env::remove_var("QDRANT_URL");
-        env::remove_var("QDRANT_API_KEY");
+        unsafe {
+            env::remove_var("QDRANT_URL");
+            env::remove_var("QDRANT_API_KEY");
+        }
 
         let mut client = GrokClient::new();
 
@@ -342,7 +344,9 @@ mod lfmf_integration {
     #[tokio::test]
     async fn test_lfmf_filesystem_fallback() -> Result<()> {
         // Test LFMF works without vector DB
-        env::remove_var("QDRANT_URL");
+        unsafe {
+            env::remove_var("QDRANT_URL");
+        }
 
         let temp_dir = setup_temp_dir();
         let temp_path = temp_dir.path().to_str().unwrap();
@@ -379,7 +383,9 @@ mod error_handling {
     #[tokio::test]
     async fn test_initialization_errors() -> Result<()> {
         // Test behavior with invalid Qdrant URL
-        env::set_var("QDRANT_URL", "http://invalid-host-that-does-not-exist:9999");
+        unsafe {
+            env::set_var("QDRANT_URL", "http://invalid-host-that-does-not-exist:9999");
+        }
 
         let mut client = GrokClient::new();
         let result = client.initialize().await;
@@ -399,7 +405,9 @@ mod error_handling {
         }
 
         // Clean up
-        env::remove_var("QDRANT_URL");
+        unsafe {
+            env::remove_var("QDRANT_URL");
+        }
 
         Ok(())
     }

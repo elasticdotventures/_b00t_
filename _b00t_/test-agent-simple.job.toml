@@ -1,0 +1,31 @@
+[b00t]
+name = "test-agent-simple"
+type = "job"
+hint = "Simple test of LangChain agent integration"
+
+[b00t.job]
+description = "Basic agent execution test without context files"
+author = "b00t"
+tags = ["test", "langchain", "agent"]
+
+[b00t.job.config]
+mode = "sequential"
+continue_on_failure = false
+
+[[b00t.job.steps]]
+name = "test-researcher"
+description = "Test researcher agent with simple prompt"
+
+[b00t.job.steps.task]
+type = "agent"
+agent_type = "researcher"
+prompt = "What are the key benefits of integrating LangChain agents with job workflows? Provide a brief 2-3 sentence answer."
+timeout_ms = 60000
+
+[[b00t.job.steps]]
+name = "complete"
+description = "Job completed successfully"
+
+[b00t.job.steps.task]
+type = "bash"
+command = "echo '✅ Agent integration test passed'"

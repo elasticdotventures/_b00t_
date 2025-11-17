@@ -4,6 +4,7 @@ use regex::Regex;
 use serde::{Deserialize, Serialize};
 
 pub mod cloud_sync;
+pub mod commands;
 pub mod datum_ai;
 pub mod datum_ai_model;
 pub mod datum_api;
@@ -12,11 +13,16 @@ pub mod datum_bash;
 pub mod datum_cli;
 pub mod datum_config;
 pub mod datum_docker;
+pub mod datum_job;
 pub mod datum_k8s;
 pub mod datum_mcp;
 pub mod datum_stack;
 pub mod datum_vscode;
 pub mod dependency_resolver;
+pub mod job_state;
+pub mod job_ipc;
+pub mod budget_controller;
+pub mod job_state;
 pub mod k8s;
 pub mod model_manager;
 pub mod orchestrator;
@@ -25,6 +31,9 @@ pub mod traits;
 pub mod utils;
 pub mod whoami;
 pub use traits::*;
+
+// Re-export datum types for easy access
+pub use datum_stack::{JobDatum, StackDatum};
 
 // Learn metadata structures - re-exported from b00t-c0re-lib
 pub use b00t_c0re_lib::{LearnMetadata, UsageExample};
@@ -46,6 +55,108 @@ pub struct McpConfig {
 pub struct UnifiedConfig {
     pub b00t: BootDatum,
     pub env: Option<std::collections::HashMap<String, String>>,
+}
+
+// Orchestration metadata for k8s/stack integration
+#[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
+pub struct OrchestrationMetadata {
+    /// Scheduling type: budget_aware, time_based, resource_based, gpu_affinity
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub schedule_type: Option<String>,
+
+    /// Default daily budget in specified currency
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub default_budget: Option<String>,
+
+    /// Budget currency (USD, EUR, etc.)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub budget_currency: Option<String>,
+
+    /// GPU batch group ID for affinity scheduling
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub gpu_batch_group: Option<String>,
+
+    /// Resource requirements (CPU, memory, GPU)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub resource_requirements: Option<std::collections::HashMap<String, String>>,
+
+    /// GPU-specific requirements
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub gpu_requirements: Option<GpuRequirements>,
+
+    /// GPU epoch configuration for batching
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub gpu_epoch: Option<GpuEpoch>,
+
+    /// Budget constraint details
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub budget_constraint: Option<BudgetConstraint>,
+
+    /// k8s compatibility flag
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub k8s_compatible: Option<bool>,
+
+    /// Source for pod template (e.g., "datum_display")
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub pod_template_source: Option<String>,
+
+    /// Stacks required to be running (for Job datums)
+    /// Format: ["stack-name.stack", ...]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub requires_stacks: Option<Vec<String>>,
+
+    /// Queue name for Kueue job scheduling
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub queue_name: Option<String>,
+}
+
+#[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
+pub struct GpuRequirements {
+    /// Number of GPUs required
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub count: Option<u32>,
+
+    /// GPU memory requirement
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub memory: Option<String>,
+
+    /// GPU type (e.g., "nvidia-a100", "nvidia-v100")
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub gpu_type: Option<String>,
+
+    /// Allow sharing GPU with other jobs
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub shared: Option<bool>,
+}
+
+#[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
+pub struct GpuEpoch {
+    /// Model ID for GPU batching
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub model_id: Option<String>,
+
+    /// Batch window duration (e.g., "15m", "1h")
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub batch_window: Option<String>,
+
+    /// Maximum concurrent jobs in batch
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub max_concurrent_jobs: Option<u32>,
+}
+
+#[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
+pub struct BudgetConstraint {
+    /// Daily budget limit
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub daily_limit: Option<f64>,
+
+    /// Cost per job execution
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cost_per_job: Option<f64>,
+
+    /// Action on budget exceeded: defer, alert, cancel
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub on_budget_exceeded: Option<String>,
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
@@ -139,6 +250,11 @@ pub struct BootDatum {
     // Used by `b00t lfmf <category> "<topic>: <solution>"`
     #[serde(skip_serializing_if = "Option::is_none")]
     pub lfmf_category: Option<String>,
+
+    // Job workflow configuration - multi-step orchestration with checkpoints
+    // Used by `b00t job run <name>` for workflow execution
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub job: Option<serde_json::Value>,
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
@@ -198,6 +314,7 @@ pub enum DatumType {
     Cli,
     Stack,
     Config, // b00t configuration file (_b00t_.toml)
+    Job, // Workflow orchestration with checkpoints
 }
 
 #[derive(Serialize, Debug)]
@@ -424,6 +541,7 @@ fn create_mcp_datum_from_json(
         learn: None,
         usage: None,
         lfmf_category: None,
+        job: None,
     }
 }
 
@@ -521,6 +639,8 @@ pub fn normalize_mcp_json(input: &str, dwiw: bool) -> Result<BootDatum> {
                 learn: None,
                 usage: None,
                 lfmf_category: None,
+                orchestration: None,
+                job: None,
             });
         }
 
@@ -622,6 +742,7 @@ pub fn create_unified_toml_config(datum: &BootDatum, path: &str) -> Result<()> {
         DatumType::Cli => ".cli.toml",
         DatumType::Stack => ".stack.toml",
         DatumType::Config => ".config.toml",
+        DatumType::Job => ".job.toml",
         DatumType::Unknown => ".toml",
     };
 
@@ -657,6 +778,7 @@ impl std::fmt::Display for DatumType {
             DatumType::Cli => write!(f, "CLI"),
             DatumType::Stack => write!(f, "stack"),
             DatumType::Config => write!(f, "config"),
+            DatumType::Job => write!(f, "job"),
         }
     }
 }
@@ -687,6 +809,8 @@ impl DatumType {
             DatumType::Stack
         } else if filename.ends_with(".config.toml") || filename.ends_with("_b00t_.toml") {
             DatumType::Config
+        } else if filename.ends_with(".job.toml") {
+            DatumType::Job
         } else {
             DatumType::Unknown // Default fallback for .toml files
         }
@@ -763,7 +887,15 @@ pub fn get_config(
 
     let mut visited = std::collections::HashSet::new();
 
-    for base in [path, "~/.dotfiles/_b00t_", "~/.b00t"] {
+    // Try path/_b00t_ first, then path itself, then standard locations
+    let search_paths = [
+        format!("{}/_b00t_", path),
+        path.to_string(),
+        "~/.dotfiles/_b00t_".to_string(),
+        "~/.b00t".to_string(),
+    ];
+
+    for base in &search_paths {
         let expanded = shellexpand::tilde(base).to_string();
         if !visited.insert(expanded.clone()) {
             continue;
