@@ -1,7 +1,3 @@
-
-
-
-
 //! Job orchestration commands - Workflow execution with checkpoints
 //!
 //! Provides `b00t job` command for:
