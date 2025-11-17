@@ -289,17 +289,13 @@ fn datum_providers_to_tool_status(providers: Vec<Box<dyn DatumProvider>>) -> Vec
         .collect()
 }
 
-fn handle_up_command(_b00t_path: &str, yes: bool) -> Result<()> {
+fn handle_up_command(_b00t_path: &str, _yes: bool) -> Result<()> {
     use b00t_cli::datum_config::B00tConfig;
 
     // Load or create configuration
     let (config, config_path) = B00tConfig::load_or_create()?;
 
-    if yes {
-        println!("🔄 Updating all datums from {}...", config_path.display());
-    } else {
-        println!("🔍 Checking all datums from {} (use --yes to update)...", config_path.display());
-    }
+    println!("🔍 Checking all datums from {} ...", config_path.display());
 
     // If config file doesn't exist yet, show helpful message
     if !config_path.exists() {
@@ -326,13 +322,12 @@ fn handle_up_command(_b00t_path: &str, yes: bool) -> Result<()> {
     println!("   Datums: {:?}", config.datums);
     println!("   Install methods: {:?}", config.install_methods);
 
-    // 🤓 TODO: Implement datum loading and updating
-    // Currently blocked by trait version conflicts - needs refactoring
-    println!("\n⚠️  Full datum checking not yet implemented");
-    println!("   Next steps:");
-    println!("   1. Load datums from _b00t_ path");
-    println!("   2. Match against configured patterns");
-    println!("   3. Check versions and update if --yes flag is set");
+    // 🤓 TODO: Full datum checking/updating requires refactoring to avoid trait conflicts
+    // For now, delegate to `b00t cli up` for CLI datums or use `b00t status`
+    println!("\n💡 To check and update datums:");
+    println!("   • For CLI tools: b00t cli up [--yes]");
+    println!("   • For all tools: b00t status");
+    println!("\n📝 Full _b00t_.toml integration coming in next PR");
 
     Ok(())
 }
