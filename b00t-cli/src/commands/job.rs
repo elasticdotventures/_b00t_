@@ -237,7 +237,7 @@ async fn plan_job(path: &str, name: &str, show_dag: bool, json: bool) -> Result<
             .steps
             .iter()
             .find(|s| &s.name == step_name)
-            .unwrap();
+            .ok_or_else(|| anyhow::anyhow!("Step '{}' not found in execution plan", step_name))?;
 
         println!("{}. {} - {}", idx + 1, step.name, step.description);
 
