@@ -16,6 +16,7 @@ import typer
 from dotenv import load_dotenv
 
 from .agent_service import AgentService
+from .job_executor import JobExecutor
 from .k0mmand3r import K0mmand3rListener
 from .mcp_tools import MCPToolDiscovery
 
@@ -74,11 +75,16 @@ async def run_service(
     )
     await agent_service.initialize()
 
+    # Initialize Job Executor for job system integration
+    job_executor = JobExecutor(agent_service=agent_service)
+    log.info("✅ Job executor initialized")
+
     # Initialize k0mmand3r listener
     listener = K0mmand3rListener(
         redis_sub=redis_sub,
         agent_service=agent_service,
         channel=channel,
+        job_executor=job_executor,
     )
 
     # Start listening
@@ -129,6 +135,11 @@ def test_agent(
     name: str = typer.Argument(..., help="Agent name (e.g., 'researcher')"),
     prompt: str = typer.Argument(..., help="Prompt for the agent"),
     model: str = typer.Option("anthropic/claude-sonnet-4", help="LLM model"),
+    datum_path: str = typer.Option(
+        "~/.dotfiles/_b00t_",
+        envvar="_B00T_Path",
+        help="Path to b00t datums",
+    ),
 ) -> None:
     """Test an agent directly (without Redis)."""
 
@@ -138,7 +149,7 @@ def test_agent(
         service = AgentService(
             redis_client=None,  # type: ignore
             mcp_tools=[],
-            datum_path=Path("~/.dotfiles/_b00t_").expanduser(),
+            datum_path=Path(datum_path).expanduser(),
         )
         await service.initialize()
 

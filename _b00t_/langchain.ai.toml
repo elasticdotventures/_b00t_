@@ -11,11 +11,10 @@ required = ["ANTHROPIC_API_KEY"]
 optional = ["LANGCHAIN_API_KEY", "LANGSMITH_API_KEY", "OPENAI_API_KEY"]
 
 # LangChain tracing configuration
-defaults = {
-  LANGCHAIN_TRACING_V2 = "true",
-  LANGCHAIN_PROJECT = "b00t",
-  LANGSMITH_ENDPOINT = "https://api.smith.langchain.com"
-}
+[b00t.env.defaults]
+LANGCHAIN_TRACING_V2 = "true"
+LANGCHAIN_PROJECT = "b00t"
+LANGSMITH_ENDPOINT = "https://api.smith.langchain.com"
 
 # Agent presets - different agent configurations
 [langchain.agents.researcher]

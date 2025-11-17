@@ -12,9 +12,28 @@ from typing import Any
 from redis.asyncio import Redis
 
 from .agent_service import AgentService
+from .job_executor import JobExecutor
 from .types import AgentAction, ChainAction, K0mmand3rMessage
 
 log = logging.getLogger(__name__)
+
+
+# k0mmand3r verb mapping (per k0mmand3r_interface.md spec)
+VERB_MAP = {
+    "dispatch": "run",  # /k0mmand3r dispatch -> agent run
+    "status": "status",  # /k0mmand3r status -> agent status
+    "capability": "create",  # /k0mmand3r capability -> agent create
+    "complete": "delete",  # /k0mmand3r complete -> agent delete
+    "message": "broadcast",  # /k0mmand3r message -> agent broadcast
+}
+
+# Status filtering levels (per k0mmand3r_interface.md:204)
+STATUS_LEVELS = {
+    "critical": ["error", "fatal"],
+    "compact": ["info", "error", "fatal"],
+    "verbose": ["debug", "info", "warn", "error", "fatal"],
+    "debug": ["trace", "debug", "info", "warn", "error", "fatal"],
+}
 
 
 class K0mmand3rListener:
@@ -25,6 +44,8 @@ class K0mmand3rListener:
         redis_sub: Redis,
         agent_service: AgentService,
         channel: str,
+        job_executor: JobExecutor | None = None,
+        filter_mode: str = "compact",
     ) -> None:
         """
         Initialize k0mmand3r listener.
@@ -33,10 +54,14 @@ class K0mmand3rListener:
             redis_sub: Redis client for subscribing (separate from pub client)
             agent_service: Agent service to execute commands
             channel: Redis channel to listen on
+            job_executor: Optional job executor for job system integration
+            filter_mode: Status filtering mode (critical, compact, verbose, debug)
         """
         self.redis_sub = redis_sub
         self.agent_service = agent_service
         self.channel = channel
+        self.job_executor = job_executor
+        self.filter_mode = filter_mode
         self.running = False
 
     async def start(self) -> None:
@@ -94,8 +119,17 @@ class K0mmand3rListener:
 
             log.info(f"📨 Received command: {message.verb} from {message.agent_id}")
 
+            # Map k0mmand3r verbs to actions (per k0mmand3r_interface.md)
+            if message.verb in VERB_MAP:
+                # Translate k0mmand3r verb to internal action
+                if "params" not in message_dict:
+                    message_dict["params"] = {}
+                message_dict["params"]["action"] = VERB_MAP[message.verb]
+                message = K0mmand3rMessage(**message_dict)
+                log.debug(f"   Mapped {message.verb} -> action={VERB_MAP[message.verb]}")
+
             # Route based on verb
-            if message.verb == "agent":
+            if message.verb in ("agent", "dispatch", "status", "capability", "complete", "message"):
                 await self._handle_agent_command(message)
             elif message.verb == "chain":
                 await self._handle_chain_command(message)
@@ -171,12 +205,38 @@ class K0mmand3rListener:
                     self.agent_service.agents.pop(agent_name, None)
                     log.info(f"🗑️  Deleted agent: {agent_name}")
 
+            elif action == "run-job":
+                # Execute agent from job system
+                if not self.job_executor:
+                    log.error("❌ Job executor not initialized")
+                    await self._publish_result({"error": "Job executor not available"})
+                    return
+
+                agent_type = params.get("agent_type")
+                prompt = params.get("prompt", "")
+                context_files = params.get("context_files", [])
+                timeout_ms = params.get("timeout_ms")
+
+                if not agent_type:
+                    log.error("❌ Missing agent_type for job execution")
+                    return
+
+                result = await self.job_executor.execute_agent_task(
+                    agent_type=agent_type,
+                    prompt=prompt,
+                    context_files=context_files,
+                    timeout_ms=timeout_ms,
+                )
+
+                # Publish result
+                await self._publish_result(result)
+
             else:
                 log.warning(f"⚠️  Unknown agent action: {action}")
 
         except Exception as e:
             log.error(f"❌ Agent command failed: {e}")
-            await self._publish_result({"error": str(e)})
+            await self._publish_result({"error": str(e)}, level="error")
 
     async def _handle_chain_command(self, message: K0mmand3rMessage) -> None:
         """
@@ -224,20 +284,56 @@ class K0mmand3rListener:
             log.error(f"❌ Chain command failed: {e}")
             await self._publish_result({"error": str(e)})
 
-    async def _publish_result(self, result: dict[str, Any]) -> None:
+    async def _publish_result(self, result: dict[str, Any], level: str = "info") -> None:
         """
-        Publish result back to Redis.
+        Publish result back to Redis with k0mmand3r-compatible status format.
 
         Args:
             result: Result to publish
+            level: Message level (trace, debug, info, warn, error, fatal)
         """
         try:
+            # Check if message should be filtered
+            if not self._should_publish(level):
+                log.debug(f"   Filtered {level} message (filter_mode={self.filter_mode})")
+                return
+
+            # Format as k0mmand3r status message (per k0mmand3r_interface.md:215)
+            from datetime import datetime
+
+            status_message = {
+                "timestamp": datetime.utcnow().isoformat() + "Z",
+                "agent": f"langchain.{result.get('agent_name', 'unknown')}",
+                "task_id": result.get("task_id", ""),
+                "type": "error" if result.get("error") else "progress",
+                "level": level,
+                "message": result.get("output") or result.get("error") or result.get("message", ""),
+                "metadata": result.get("metadata", {}),
+            }
+
+            # Add progress if available
+            if "progress" in result.get("metadata", {}):
+                status_message["progress"] = result["metadata"]["progress"]
+
             # Publish to status channel
             status_channel = f"{self.channel}:status"
             await self.agent_service.redis_client.publish(
                 status_channel,
-                json.dumps(result),
+                json.dumps(status_message),
             )
-            log.info(f"📤 Published result to {status_channel}")
+            log.info(f"📤 Published {level} to {status_channel}")
         except Exception as e:
             log.error(f"❌ Failed to publish result: {e}")
+
+    def _should_publish(self, level: str) -> bool:
+        """
+        Check if message level should be published based on filter mode.
+
+        Args:
+            level: Message level
+
+        Returns:
+            True if should publish, False if filtered
+        """
+        allowed_levels = STATUS_LEVELS.get(self.filter_mode, STATUS_LEVELS["compact"])
+        return level in allowed_levels
