@@ -305,6 +305,10 @@ export class Pm2TaskerService {
       ...metadata,
     });
 
-    await this.redis.publish('b00t:task:status', message);
+    try {
+      await this.redis.publish('b00t:task:status', message);
+    } catch (error) {
+      this.log.error(`❌ Failed to publish task status for ${taskName}:`, error);
+    }
   }
 }
