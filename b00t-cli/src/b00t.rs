@@ -8,10 +8,10 @@ use std::process::{Command, exit};
 
 fn main() {
     // Get the directory where this binary is located
-    let current_exe = env::current_exe()
-        .expect("Failed to determine current executable path");
+    let current_exe = env::current_exe().expect("Failed to determine current executable path");
 
-    let bin_dir = current_exe.parent()
+    let bin_dir = current_exe
+        .parent()
         .expect("Failed to get parent directory");
 
     // Path to b00t-cli in the same directory

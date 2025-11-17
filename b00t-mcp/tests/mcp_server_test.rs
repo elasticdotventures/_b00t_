@@ -1,53 +1,64 @@
 use b00t_mcp::{B00tMcpServerRusty, DetectParams, StatusParams};
 use rmcp::handler::server::ServerHandler;
 
+fn run_in_tokio_runtime<T>(f: impl FnOnce() -> T) -> T {
+    let runtime = tokio::runtime::Runtime::new().expect("tokio runtime");
+    let guard = runtime.enter();
+    let result = f();
+    drop(guard);
+    runtime.shutdown_background();
+    result
+}
+
 #[test]
 fn test_server_creation() {
-    // Create a temporary ACL config file for testing
-    let temp_dir = std::env::temp_dir();
-    let config_path = temp_dir.join("test_acl.toml");
+    run_in_tokio_runtime(|| {
+        // Create a temporary ACL config file for testing
+        let temp_dir = std::env::temp_dir();
+        let config_path = temp_dir.join("test_acl.toml");
 
-    // Create a minimal ACL config
-    std::fs::write(
-        &config_path,
-        r#"default_policy = "allow"
+        // Create a minimal ACL config
+        std::fs::write(
+            &config_path,
+            r#"default_policy = "allow"
 
 [commands]
 detect = { policy = "allow" }
 status = { policy = "allow" }
 "#,
-    )
-    .expect("Failed to write test config");
+        )
+        .expect("Failed to write test config");
 
-    let config_path_str = config_path.to_str().unwrap();
+        let config_path_str = config_path.to_str().unwrap();
 
-    // Test server creation with new rusty server
-    let server = B00tMcpServerRusty::new(".", config_path_str);
-    match &server {
-        Ok(_) => {}
-        Err(e) => {
-            println!("Server creation failed with error: {:?}", e);
+        // Test server creation with new rusty server
+        let server = B00tMcpServerRusty::new(".", config_path_str);
+        match &server {
+            Ok(_) => {}
+            Err(e) => {
+                println!("Server creation failed with error: {:?}", e);
+            }
         }
-    }
-    assert!(
-        server.is_ok(),
-        "Server creation should succeed: {:?}",
-        server.err()
-    );
+        assert!(
+            server.is_ok(),
+            "Server creation should succeed: {:?}",
+            server.err()
+        );
 
-    // Test server info
-    let server = server.unwrap();
-    let info = server.get_info();
-    assert_eq!(
-        info.protocol_version,
-        rmcp::model::ProtocolVersion::default()
-    );
-    assert!(info.capabilities.tools.is_some());
-    // 🦀 Test resources support
-    assert!(info.capabilities.resources.is_some());
+        // Test server info
+        let server = server.unwrap();
+        let info = server.get_info();
+        assert_eq!(
+            info.protocol_version,
+            rmcp::model::ProtocolVersion::default()
+        );
+        assert!(info.capabilities.tools.is_some());
+        // 🦀 Test resources support
+        assert!(info.capabilities.resources.is_some());
 
-    // Clean up
-    std::fs::remove_file(&config_path).ok();
+        // Clean up
+        std::fs::remove_file(&config_path).ok();
+    });
 }
 
 #[test]

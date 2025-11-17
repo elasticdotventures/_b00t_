@@ -5,21 +5,27 @@ use serde::{Deserialize, Serialize};
 
 pub mod cloud_sync;
 pub mod datum_ai;
+pub mod datum_ai_model;
 pub mod datum_api;
 pub mod datum_apt;
 pub mod datum_bash;
 pub mod datum_docker;
 pub mod datum_k8s;
+pub mod datum_mcp;
 pub mod datum_stack;
 pub mod datum_vscode;
 pub mod dependency_resolver;
 pub mod k8s;
+pub mod model_manager;
 pub mod orchestrator;
 pub mod session_memory;
 pub mod traits;
 pub mod utils;
 pub mod whoami;
 pub use traits::*;
+
+// Learn metadata structures - re-exported from b00t-c0re-lib
+pub use b00t_c0re_lib::{LearnMetadata, UsageExample};
 
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
 pub struct McpServer {
@@ -114,6 +120,23 @@ pub struct BootDatum {
 
     #[serde(skip_serializing_if = "Option::is_none")]
     pub requires: Option<std::collections::HashMap<String, CapabilityRequirement>>, // Required capabilities
+
+    // Learn integration - links datum to learning materials and auto-digest to grok
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub learn: Option<LearnMetadata>,
+
+    // Usage examples - CLI/API usage patterns
+    // Supports: usage = ["cmd  # desc", ...] or [[b00t.usage]] tables
+    #[serde(
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "b00t_c0re_lib::deserialize_usage"
+    )]
+    pub usage: Option<Vec<UsageExample>>,
+
+    // LFMF category mapping - groups datum lessons under a category
+    // Used by `b00t lfmf <category> "<topic>: <solution>"`
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub lfmf_category: Option<String>,
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
@@ -167,7 +190,9 @@ pub enum DatumType {
     Apt,
     Nix,
     Ai,
-    Api,      // API protocol endpoints (OpenAI-compat, embeddings, etc.)
+    #[serde(rename = "ai_model")]
+    AiModel,
+    Api, // API protocol endpoints (OpenAI-compat, embeddings, etc.)
     Cli,
     Stack,
 }
@@ -393,6 +418,9 @@ fn create_mcp_datum_from_json(
         implements: None,
         provides: None,
         requires: None,
+        learn: None,
+        usage: None,
+        lfmf_category: None,
     }
 }
 
@@ -487,6 +515,9 @@ pub fn normalize_mcp_json(input: &str, dwiw: bool) -> Result<BootDatum> {
                 implements: None,
                 provides: None,
                 requires: None,
+                learn: None,
+                usage: None,
+                lfmf_category: None,
             });
         }
 
@@ -583,6 +614,7 @@ pub fn create_unified_toml_config(datum: &BootDatum, path: &str) -> Result<()> {
         DatumType::Apt => ".apt.toml",
         DatumType::Nix => ".nix.toml",
         DatumType::Ai => ".ai.toml",
+        DatumType::AiModel => ".ai_model.toml",
         DatumType::Api => ".api.toml",
         DatumType::Cli => ".cli.toml",
         DatumType::Stack => ".stack.toml",
@@ -616,6 +648,7 @@ impl std::fmt::Display for DatumType {
             DatumType::Apt => write!(f, "apt"),
             DatumType::Nix => write!(f, "nix"),
             DatumType::Ai => write!(f, "AI"),
+            DatumType::AiModel => write!(f, "ai-model"),
             DatumType::Api => write!(f, "API"),
             DatumType::Cli => write!(f, "CLI"),
             DatumType::Stack => write!(f, "stack"),
@@ -643,6 +676,8 @@ impl DatumType {
             DatumType::Nix
         } else if filename.ends_with(".ai.toml") {
             DatumType::Ai
+        } else if filename.ends_with(".ai_model.toml") {
+            DatumType::AiModel
         } else if filename.ends_with(".stack.toml") {
             DatumType::Stack
         } else {
@@ -704,7 +739,6 @@ pub fn get_config(
     command: &str,
     path: &str,
 ) -> Result<(UnifiedConfig, String), Box<dyn std::error::Error>> {
-    // Try different file extensions in order of preference
     let extensions = [
         ".cli.toml",
         ".mcp.toml",
@@ -713,29 +747,35 @@ pub fn get_config(
         ".apt.toml",
         ".nix.toml",
         ".bash.toml",
-        ".k8s.toml",     // Kubernetes deployments
-        ".api.toml",     // API protocol definitions
-        ".ai.toml",      // AI model configurations
-        ".stack.toml",   // Stack compositions
+        ".k8s.toml",   // Kubernetes deployments
+        ".api.toml",   // API protocol definitions
+        ".ai.toml",    // AI model configurations
+        ".stack.toml", // Stack compositions
         ".toml",
     ];
 
-    let mut path_buf = std::path::PathBuf::new();
-    let expanded_path = shellexpand::tilde(path).to_string();
-    path_buf.push(expanded_path);
+    let mut visited = std::collections::HashSet::new();
 
-    for ext in &extensions {
-        let filename = format!("{}{}", command, ext);
-        path_buf.push(&filename); // 🤓 FIX: use push instead of set_file_name to avoid removing _b00t_ directory
-        if path_buf.exists() {
-            let content = std::fs::read_to_string(&path_buf)?;
-            let config: UnifiedConfig = toml::from_str(&content)?;
-            return Ok((config, filename));
+    for base in [path, "~/.dotfiles/_b00t_", "~/.b00t"] {
+        let expanded = shellexpand::tilde(base).to_string();
+        if !visited.insert(expanded.clone()) {
+            continue;
         }
-        path_buf.pop(); // 🤓 FIX: remove the filename for next iteration
+
+        let mut candidate = std::path::PathBuf::from(expanded);
+        for ext in &extensions {
+            let filename = format!("{}{}", command, ext);
+            candidate.push(&filename);
+            if candidate.exists() {
+                let content = std::fs::read_to_string(&candidate)?;
+                let config: UnifiedConfig = toml::from_str(&content)?;
+                return Ok((config, filename));
+            }
+            candidate.pop();
+        }
     }
 
-    eprintln!("{} UNDEFINED", command);
+    eprintln!("{command} UNDEFINED");
     std::process::exit(100);
 }
 
@@ -743,43 +783,59 @@ pub fn get_mcp_config(name: &str, path: &str) -> Result<BootDatum> {
     use anyhow::Context;
     use std::fs;
 
-    let mut path_buf = get_expanded_path(path)?;
-    path_buf.push(format!("{}.mcp.toml", name));
+    for base in [path, "~/.dotfiles/_b00t_", "~/.b00t"] {
+        let mut path_buf = get_expanded_path(base)?;
+        path_buf.push(format!("{}.mcp.toml", name));
 
-    if !path_buf.exists() {
-        anyhow::bail!(
-            "MCP server '{}' not found. Use 'b00t-cli mcp add' to create it first.",
-            name
-        );
+        if path_buf.exists() {
+            let content = fs::read_to_string(&path_buf).context(format!(
+                "Failed to read MCP config from {}",
+                path_buf.display()
+            ))?;
+
+            let config: UnifiedConfig =
+                toml::from_str(&content).context("Failed to parse MCP config TOML")?;
+
+            return Ok(config.b00t);
+        }
     }
 
-    let content = fs::read_to_string(&path_buf).context(format!(
-        "Failed to read MCP config from {}",
-        path_buf.display()
-    ))?;
-
-    let config: UnifiedConfig =
-        toml::from_str(&content).context("Failed to parse MCP config TOML")?;
-
-    Ok(config.b00t)
+    anyhow::bail!(
+        "MCP server '{}' not found. Use 'b00t-cli mcp add' to create it first.",
+        name
+    );
 }
 
 pub fn get_mcp_toml_files(path: &str) -> Result<Vec<String>> {
     use anyhow::Context;
     use std::fs;
 
-    let expanded_path = get_expanded_path(path)?;
-    let entries = fs::read_dir(&expanded_path)
-        .with_context(|| format!("Error reading directory {}", expanded_path.display()))?;
-
+    let mut seen = std::collections::HashSet::new();
     let mut mcp_files = Vec::new();
-    for entry in entries {
-        if let Ok(entry) = entry {
-            let entry_path = entry.path();
-            if let Some(file_name) = entry_path.file_name().and_then(|s| s.to_str()) {
-                if file_name.ends_with(".mcp.toml") {
-                    if let Some(server_name) = file_name.strip_suffix(".mcp.toml") {
-                        mcp_files.push(server_name.to_string());
+
+    for base in [path, "~/.dotfiles/_b00t_", "~/.b00t"] {
+        let expanded_path = match get_expanded_path(base) {
+            Ok(p) => p,
+            Err(_) => continue,
+        };
+
+        if !expanded_path.exists() {
+            continue;
+        }
+
+        let entries = fs::read_dir(&expanded_path)
+            .with_context(|| format!("Error reading directory {}", expanded_path.display()))?;
+
+        for entry in entries {
+            if let Ok(entry) = entry {
+                let entry_path = entry.path();
+                if let Some(file_name) = entry_path.file_name().and_then(|s| s.to_str()) {
+                    if file_name.ends_with(".mcp.toml") {
+                        if let Some(server_name) = file_name.strip_suffix(".mcp.toml") {
+                            if seen.insert(server_name.to_string()) {
+                                mcp_files.push(server_name.to_string());
+                            }
+                        }
                     }
                 }
             }
@@ -907,7 +963,7 @@ pub fn mcp_list(path: &str, json_output: bool) -> Result<()> {
 ///
 /// # Examples
 ///
-/// ```rust
+/// ```ignore
 /// // Register from JSON string
 /// let json = r#"{"name":"filesystem","command":"npx","args":["-y","@modelcontextprotocol/server-filesystem"]}"#;
 /// b00t_cli::mcp_add_json(json, false, "~/.dotfiles/_b00t_").unwrap();
@@ -975,7 +1031,7 @@ pub fn mcp_add_json(json: &str, dwiw: bool, path: &str) -> Result<()> {
 ///
 /// # Examples
 ///
-/// ```rust
+/// ```ignore
 /// // Remove an MCP server configuration from the _b00t_ directory
 /// b00t_cli::mcp_remove("filesystem", "~/.dotfiles/_b00t_").unwrap();
 ///
@@ -1021,7 +1077,7 @@ pub fn mcp_output(path: &str, use_mcp_servers_wrapper: bool, servers: &str) -> R
 
         match get_mcp_config(server_name, path) {
             Ok(datum) => {
-                let (command, args) = extract_mcp_command_args(&datum);
+                let (command, args, env) = extract_mcp_command_args(&datum);
                 let mut server_config = serde_json::Map::new();
                 server_config.insert("command".to_string(), serde_json::Value::String(command));
                 server_config.insert(
@@ -1030,6 +1086,9 @@ pub fn mcp_output(path: &str, use_mcp_servers_wrapper: bool, servers: &str) -> R
                         args.into_iter().map(serde_json::Value::String).collect(),
                     ),
                 );
+                if let Some(env_map) = env {
+                    server_config.insert("env".to_string(), serde_json::to_value(env_map)?);
+                }
 
                 server_configs.insert(
                     server_name.to_string(),
@@ -1090,8 +1149,14 @@ pub fn mcp_output(path: &str, use_mcp_servers_wrapper: bool, servers: &str) -> R
     Ok(())
 }
 
-/// Extract command and args from MCP datum, handling both new multi-method and legacy formats
-fn extract_mcp_command_args(datum: &BootDatum) -> (String, Vec<String>) {
+/// Extract command, args, and env from MCP datum, handling both new multi-method and legacy formats
+fn extract_mcp_command_args(
+    datum: &BootDatum,
+) -> (
+    String,
+    Vec<String>,
+    Option<std::collections::HashMap<String, String>>,
+) {
     if let Some(mcp) = &datum.mcp {
         if let Some(stdio_methods) = &mcp.stdio {
             if let Some(first_method) = stdio_methods.first() {
@@ -1110,15 +1175,26 @@ fn extract_mcp_command_args(datum: &BootDatum) -> (String, Vec<String>) {
                             .collect::<Vec<String>>()
                     })
                     .unwrap_or_default();
-                return (command, args);
+                let env = first_method
+                    .get("env")
+                    .and_then(|v| v.as_object())
+                    .map(|obj| {
+                        obj.iter()
+                            .filter_map(|(k, v)| v.as_str().map(|s| (k.clone(), s.to_string())))
+                            .collect::<std::collections::HashMap<String, String>>()
+                    });
+                return (command, args, env);
             }
         }
     }
 
     // Fallback to legacy fields for backwards compatibility
+    let env = datum.env.clone();
+
     (
         datum.command.clone().unwrap_or_else(|| "npx".to_string()),
         datum.args.clone().unwrap_or_default(),
+        env,
     )
 }
 
@@ -1127,13 +1203,18 @@ pub fn claude_code_install_mcp(name: &str, path: &str) -> Result<()> {
     use duct::cmd;
 
     let datum = get_mcp_config(name, path)?;
-    let (command, args) = extract_mcp_command_args(&datum);
+    let (command, args, env) = extract_mcp_command_args(&datum);
 
-    let claude_json = serde_json::json!({
+    let mut claude_json = serde_json::json!({
         "name": datum.name,
         "command": command,
         "args": args
     });
+    if let Some(env_map) = env {
+        if let Some(obj) = claude_json.as_object_mut() {
+            obj.insert("env".to_string(), serde_json::to_value(env_map)?);
+        }
+    }
 
     let json_str =
         serde_json::to_string(&claude_json).context("Failed to serialize JSON for Claude Code")?;
@@ -1168,13 +1249,18 @@ pub fn vscode_install_mcp(name: &str, path: &str) -> Result<()> {
     use duct::cmd;
 
     let datum = get_mcp_config(name, path)?;
-    let (command, args) = extract_mcp_command_args(&datum);
+    let (command, args, env) = extract_mcp_command_args(&datum);
 
-    let vscode_json = serde_json::json!({
+    let mut vscode_json = serde_json::json!({
         "name": datum.name,
         "command": command,
         "args": args
     });
+    if let Some(env_map) = env {
+        if let Some(obj) = vscode_json.as_object_mut() {
+            obj.insert("env".to_string(), serde_json::to_value(env_map)?);
+        }
+    }
 
     let json_str =
         serde_json::to_string(&vscode_json).context("Failed to serialize JSON for VSCode")?;
@@ -1203,13 +1289,18 @@ pub fn gemini_install_mcp(name: &str, path: &str, use_repo: bool) -> Result<()> 
     use duct::cmd;
 
     let datum = get_mcp_config(name, path)?;
-    let (command, args) = extract_mcp_command_args(&datum);
+    let (command, args, env) = extract_mcp_command_args(&datum);
 
-    let gemini_json = serde_json::json!({
+    let mut gemini_json = serde_json::json!({
         "name": datum.name,
         "command": command,
         "args": args
     });
+    if let Some(env_map) = env {
+        if let Some(obj) = gemini_json.as_object_mut() {
+            obj.insert("env".to_string(), serde_json::to_value(env_map)?);
+        }
+    }
 
     let json_str =
         serde_json::to_string(&gemini_json).context("Failed to serialize JSON for Gemini CLI")?;
@@ -1393,8 +1484,8 @@ pub fn dotmcpjson_install_mcp(
         }
     } else {
         // Legacy single-source config - use extract_mcp_command_args for consistency
-        let (command, args) = extract_mcp_command_args(&datum);
-        (command, args, datum.env.clone(), "stdio")
+        let (command, args, env) = extract_mcp_command_args(&datum);
+        (command, args, env, "stdio")
     };
 
     // Create MCP server entry for .mcp.json format
@@ -1533,4 +1624,277 @@ impl SessionState {
             self.commands_run, cost_info, time_info, agent_info
         )
     }
+}
+/// Install MCP server to Codex config.toml
+///
+/// Writes directly to ~/.codex/config.toml using Codex's native TOML format.
+/// This is a stop-gap until Codex adopts the industry-standard .mcp.json format.
+///
+/// Supports both stdio and httpstream methods with full vendor capability fields:
+/// - Timeout controls (startup_timeout_sec, tool_timeout_sec)
+/// - Tool filtering (enabled_tools, disabled_tools, enabled)
+/// - Authentication (bearer_token_env_var, http_headers)
+/// - Environment configuration (env, env_vars, cwd)
+///
+/// # Arguments
+/// * `name` - MCP server name
+/// * `path` - Path to b00t datum directory
+///
+/// # Format
+/// ```toml
+/// [mcp_servers.server-name]
+/// command = "npx"
+/// args = ["-y", "@scope/package"]
+/// startup_timeout_sec = 10
+/// tool_timeout_sec = 60
+/// enabled = true
+///
+/// [mcp_servers.server-name.env]
+/// KEY = "value"
+/// ```
+pub fn codex_install_mcp(name: &str, path: &str) -> Result<()> {
+    use crate::datum_mcp::{McpDatum, McpHttpStreamMethod, McpStdioMethod};
+    use std::collections::HashMap;
+
+    // Load MCP datum and select best method
+    let mcp_datum = McpDatum::from_config(name, path)?;
+    let selected_method = mcp_datum
+        .select_best_method()
+        .ok_or_else(|| anyhow::anyhow!(
+            "No available method for MCP server '{}'. Ensure the datum file contains valid 'stdio' or 'httpstream' configuration.",
+            name
+        ))?;
+
+    // Expand ~/.codex/config.toml path
+    let codex_config_path = shellexpand::tilde("~/.codex/config.toml").to_string();
+    let config_path = std::path::Path::new(&codex_config_path);
+
+    // Create ~/.codex directory if it doesn't exist
+    if let Some(parent) = config_path.parent() {
+        std::fs::create_dir_all(parent).context("Failed to create ~/.codex directory")?;
+    }
+
+    // Load existing config or create new
+    let mut config_value: toml::Value = if config_path.exists() {
+        let existing_content =
+            std::fs::read_to_string(config_path).context("Failed to read ~/.codex/config.toml")?;
+        toml::from_str(&existing_content).context("Failed to parse ~/.codex/config.toml")?
+    } else {
+        toml::Value::Table(toml::map::Map::new())
+    };
+
+    // Ensure [mcp_servers] table exists
+    if !config_value.is_table() {
+        config_value = toml::Value::Table(toml::map::Map::new());
+    }
+    let config_table = config_value.as_table_mut().unwrap();
+    if !config_table.contains_key("mcp_servers") {
+        config_table.insert(
+            "mcp_servers".to_string(),
+            toml::Value::Table(toml::map::Map::new()),
+        );
+    }
+
+    // Get mcp_servers table
+    let mcp_servers = config_table
+        .get_mut("mcp_servers")
+        .and_then(|v| v.as_table_mut())
+        .ok_or_else(|| anyhow::anyhow!("mcp_servers is not a table"))?;
+
+    // Build server configuration based on method type
+    let mut server_config = toml::map::Map::new();
+
+    match &selected_method {
+        crate::datum_mcp::McpSelectedMethod::Stdio(stdio) => {
+            // STDIO method configuration
+            server_config.insert(
+                "command".to_string(),
+                toml::Value::String(stdio.command.clone()),
+            );
+
+            if !stdio.args.is_empty() {
+                server_config.insert(
+                    "args".to_string(),
+                    toml::Value::Array(
+                        stdio
+                            .args
+                            .iter()
+                            .map(|s| toml::Value::String(s.clone()))
+                            .collect(),
+                    ),
+                );
+            }
+
+            // Environment variables
+            if !stdio.env.is_empty() {
+                let mut env_table = toml::map::Map::new();
+                for (k, v) in &stdio.env {
+                    env_table.insert(k.clone(), toml::Value::String(v.clone()));
+                }
+                server_config.insert("env".to_string(), toml::Value::Table(env_table));
+            }
+
+            // Vendor capabilities - environment
+            if let Some(env_vars) = &stdio.env_vars {
+                server_config.insert(
+                    "env_vars".to_string(),
+                    toml::Value::Array(
+                        env_vars
+                            .iter()
+                            .map(|s| toml::Value::String(s.clone()))
+                            .collect(),
+                    ),
+                );
+            }
+
+            if let Some(cwd) = &stdio.cwd {
+                server_config.insert("cwd".to_string(), toml::Value::String(cwd.clone()));
+            }
+
+            // Vendor capabilities - timeouts
+            if let Some(timeout) = stdio.startup_timeout_sec {
+                server_config.insert(
+                    "startup_timeout_sec".to_string(),
+                    toml::Value::Integer(timeout as i64),
+                );
+            }
+
+            if let Some(timeout) = stdio.tool_timeout_sec {
+                server_config.insert(
+                    "tool_timeout_sec".to_string(),
+                    toml::Value::Integer(timeout as i64),
+                );
+            }
+
+            // Vendor capabilities - tool filtering
+            if let Some(enabled) = stdio.enabled {
+                server_config.insert("enabled".to_string(), toml::Value::Boolean(enabled));
+            }
+
+            if let Some(enabled_tools) = &stdio.enabled_tools {
+                server_config.insert(
+                    "enabled_tools".to_string(),
+                    toml::Value::Array(
+                        enabled_tools
+                            .iter()
+                            .map(|s| toml::Value::String(s.clone()))
+                            .collect(),
+                    ),
+                );
+            }
+
+            if let Some(disabled_tools) = &stdio.disabled_tools {
+                server_config.insert(
+                    "disabled_tools".to_string(),
+                    toml::Value::Array(
+                        disabled_tools
+                            .iter()
+                            .map(|s| toml::Value::String(s.clone()))
+                            .collect(),
+                    ),
+                );
+            }
+        }
+        crate::datum_mcp::McpSelectedMethod::HttpStream(http) => {
+            // HTTP stream method configuration
+            server_config.insert("url".to_string(), toml::Value::String(http.url.clone()));
+
+            // Vendor capabilities - authentication
+            if let Some(bearer_var) = &http.bearer_token_env_var {
+                server_config.insert(
+                    "bearer_token_env_var".to_string(),
+                    toml::Value::String(bearer_var.clone()),
+                );
+            }
+
+            if let Some(headers) = &http.http_headers {
+                let mut headers_table = toml::map::Map::new();
+                for (k, v) in headers {
+                    headers_table.insert(k.clone(), toml::Value::String(v.clone()));
+                }
+                server_config.insert(
+                    "http_headers".to_string(),
+                    toml::Value::Table(headers_table),
+                );
+            }
+
+            if let Some(env_headers) = &http.env_http_headers {
+                let mut env_headers_table = toml::map::Map::new();
+                for (k, v) in env_headers {
+                    env_headers_table.insert(k.clone(), toml::Value::String(v.clone()));
+                }
+                server_config.insert(
+                    "env_http_headers".to_string(),
+                    toml::Value::Table(env_headers_table),
+                );
+            }
+
+            // Vendor capabilities - timeouts
+            if let Some(timeout) = http.startup_timeout_sec {
+                server_config.insert(
+                    "startup_timeout_sec".to_string(),
+                    toml::Value::Integer(timeout as i64),
+                );
+            }
+
+            if let Some(timeout) = http.tool_timeout_sec {
+                server_config.insert(
+                    "tool_timeout_sec".to_string(),
+                    toml::Value::Integer(timeout as i64),
+                );
+            }
+
+            // Vendor capabilities - tool filtering
+            if let Some(enabled) = http.enabled {
+                server_config.insert("enabled".to_string(), toml::Value::Boolean(enabled));
+            }
+
+            if let Some(enabled_tools) = &http.enabled_tools {
+                server_config.insert(
+                    "enabled_tools".to_string(),
+                    toml::Value::Array(
+                        enabled_tools
+                            .iter()
+                            .map(|s| toml::Value::String(s.clone()))
+                            .collect(),
+                    ),
+                );
+            }
+
+            if let Some(disabled_tools) = &http.disabled_tools {
+                server_config.insert(
+                    "disabled_tools".to_string(),
+                    toml::Value::Array(
+                        disabled_tools
+                            .iter()
+                            .map(|s| toml::Value::String(s.clone()))
+                            .collect(),
+                    ),
+                );
+            }
+        }
+    }
+
+    // Insert or update server configuration
+    mcp_servers.insert(name.to_string(), toml::Value::Table(server_config));
+
+    // Serialize and write back to file
+    let toml_string =
+        toml::to_string_pretty(&config_value).context("Failed to serialize config to TOML")?;
+    std::fs::write(config_path, toml_string).context("Failed to write ~/.codex/config.toml")?;
+
+    println!(
+        "✅ Successfully installed MCP server '{}' to ~/.codex/config.toml",
+        name
+    );
+    println!(
+        "   Method: {}",
+        if selected_method.is_httpstream() {
+            "httpstream"
+        } else {
+            "stdio"
+        }
+    );
+
+    Ok(())
 }

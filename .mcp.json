@@ -4,7 +4,8 @@
       "args": [
         "--stdio"
       ],
-      "command": "b00t-mcp"
+      "command": "b00t-mcp",
+      "env": {}
     },
     "context7": {
       "args": [
@@ -19,6 +20,16 @@
         "@modelcontextprotocol/server-github"
       ],
       "command": "npx"
+    },
+    "rust-crate-docs-docker": {
+      "args": [
+        "run",
+        "--rm",
+        "-i",
+        "ghcr.io/promptexecution/rust-cargo-docs-rag-mcp:latest",
+        "stdio"
+      ],
+      "command": "docker"
     },
     "taskmaster-ai": {
       "args": [

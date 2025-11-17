@@ -97,27 +97,27 @@ impl GrokError {
     /// Get user-friendly error message
     pub fn user_message(&self) -> String {
         match self {
-            GrokError::QdrantConnection { .. } => 
+            GrokError::QdrantConnection { .. } =>
                 "Unable to connect to vector database. Check server status and network connectivity.".to_string(),
-            GrokError::QdrantOperation { .. } => 
+            GrokError::QdrantOperation { .. } =>
                 "Database operation failed. Please try again.".to_string(),
-            GrokError::EmbeddingGeneration { .. } => 
+            GrokError::EmbeddingGeneration { .. } =>
                 "Failed to generate text embeddings. Check Ollama server status.".to_string(),
-            GrokError::OllamaConfig { .. } => 
+            GrokError::OllamaConfig { .. } =>
                 "Ollama configuration is invalid. Check OLLAMA_API_URL environment variable.".to_string(),
-            GrokError::EnvironmentVariable { variable } => 
+            GrokError::EnvironmentVariable { variable } =>
                 format!("Missing required configuration: {}. Please check your .env file.", variable),
-            GrokError::SemanticChunking { .. } | GrokError::ContentChunking { .. } => 
+            GrokError::SemanticChunking { .. } | GrokError::ContentChunking { .. } =>
                 "Failed to process content into chunks. Content may be malformed.".to_string(),
-            GrokError::ClientNotInitialized => 
+            GrokError::ClientNotInitialized =>
                 "Service not ready. Please wait for initialization to complete.".to_string(),
-            GrokError::VectorDimensions { .. } => 
+            GrokError::VectorDimensions { .. } =>
                 "Vector dimension mismatch. This may indicate a model configuration issue.".to_string(),
-            GrokError::ContentTooLarge { limit, .. } => 
+            GrokError::ContentTooLarge { limit, .. } =>
                 format!("Content is too large. Maximum size is {} bytes.", limit),
-            GrokError::InvalidQuery { .. } => 
+            GrokError::InvalidQuery { .. } =>
                 "Query parameters are invalid. Please check your request.".to_string(),
-            GrokError::Timeout { seconds, operation } => 
+            GrokError::Timeout { seconds, operation } =>
                 format!("Operation '{}' timed out after {} seconds. Please try again.", operation, seconds),
             _ => "An unexpected error occurred. Please contact support.".to_string(),
         }

@@ -1,7 +1,7 @@
 //! Core ACP protocol types and step synchronization logic
 
-use serde::{Deserialize, Serialize};
 use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use uuid::Uuid;
 
@@ -12,13 +12,13 @@ pub enum MessageType {
     /// Convey current state or logs of an agent
     Status,
     /// Suggest an action, plan, or mutation
-    Propose, 
+    Propose,
     /// Mark the completion of a step
     Step,
 }
 
 /// Core ACP message structure
-/// 
+///
 /// All ACP messages MUST include: step, agent_id, type, payload
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ACPMessage {
@@ -84,9 +84,10 @@ impl ACPMessage {
     /// Get NATS subject for this message
     /// Format: acp.{step}.{agent_id}.{type}
     pub fn subject(&self) -> String {
-        format!("acp.{}.{}.{}", 
-            self.step, 
-            self.agent_id, 
+        format!(
+            "acp.{}.{}.{}",
+            self.step,
+            self.agent_id,
             format!("{:?}", self.message_type).to_lowercase()
         )
     }
@@ -105,7 +106,7 @@ impl ACPMessage {
 }
 
 /// Step barrier synchronization manager
-/// 
+///
 /// Ensures all agents complete a step before advancing to the next
 #[derive(Debug)]
 pub struct StepBarrier {
@@ -131,6 +132,11 @@ impl StepBarrier {
         self.current_step
     }
 
+    /// Configured timeout (milliseconds) before forcing a step advance
+    pub fn timeout_ms(&self) -> u64 {
+        self.timeout_ms
+    }
+
     /// Record that an agent completed a step
     pub fn record_step_completion(&mut self, step: u64, agent_id: String) {
         let completions = self.step_completions.entry(step).or_insert_with(Vec::new);
@@ -142,8 +148,11 @@ impl StepBarrier {
     /// Check if step is complete (all known agents have sent STEP message)
     pub fn is_step_complete(&self, step: u64) -> bool {
         if let Some(completions) = self.step_completions.get(&step) {
-            completions.len() >= self.known_agents.len() && 
-            self.known_agents.iter().all(|agent| completions.contains(agent))
+            completions.len() >= self.known_agents.len()
+                && self
+                    .known_agents
+                    .iter()
+                    .all(|agent| completions.contains(agent))
         } else {
             false
         }
@@ -168,7 +177,8 @@ impl StepBarrier {
     pub fn pending_agents(&self, step: u64) -> Vec<String> {
         let empty_vec = Vec::new();
         let completed = self.step_completions.get(&step).unwrap_or(&empty_vec);
-        self.known_agents.iter()
+        self.known_agents
+            .iter()
             .filter(|agent| !completed.contains(agent))
             .cloned()
             .collect()
@@ -213,9 +223,9 @@ mod tests {
         let msg = ACPMessage::status(
             "test-agent".to_string(),
             1,
-            serde_json::json!({"status": "ready"})
+            serde_json::json!({"status": "ready"}),
         );
-        
+
         assert_eq!(msg.step, 1);
         assert_eq!(msg.agent_id, "test-agent");
         assert_eq!(msg.message_type, MessageType::Status);
@@ -227,28 +237,25 @@ mod tests {
         let msg = ACPMessage::propose(
             "claude.124435".to_string(),
             5,
-            serde_json::json!({"action": "deploy"})
+            serde_json::json!({"action": "deploy"}),
         );
-        
+
         assert_eq!(msg.subject(), "acp.5.claude.124435.propose");
     }
 
     #[test]
     fn test_step_barrier() {
-        let mut barrier = StepBarrier::new(
-            vec!["agent1".to_string(), "agent2".to_string()],
-            30000
-        );
-        
+        let mut barrier = StepBarrier::new(vec!["agent1".to_string(), "agent2".to_string()], 30000);
+
         assert_eq!(barrier.current_step(), 0);
         assert!(!barrier.is_step_complete(0));
-        
+
         barrier.record_step_completion(0, "agent1".to_string());
         assert!(!barrier.is_step_complete(0));
-        
+
         barrier.record_step_completion(0, "agent2".to_string());
         assert!(barrier.is_step_complete(0));
-        
+
         assert!(barrier.try_advance_step());
         assert_eq!(barrier.current_step(), 1);
     }
@@ -257,13 +264,19 @@ mod tests {
     fn test_pending_agents() {
         let mut barrier = StepBarrier::new(
             vec!["a1".to_string(), "a2".to_string(), "a3".to_string()],
-            30000
+            30000,
         );
-        
+
         barrier.record_step_completion(0, "a1".to_string());
         barrier.record_step_completion(0, "a3".to_string());
-        
+
         let pending = barrier.pending_agents(0);
         assert_eq!(pending, vec!["a2"]);
+    }
+
+    #[test]
+    fn test_step_barrier_timeout_tracking() {
+        let barrier = StepBarrier::new(vec!["agent".to_string()], 1500);
+        assert_eq!(barrier.timeout_ms(), 1500);
     }
 }

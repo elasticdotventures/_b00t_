@@ -40,14 +40,14 @@ pub enum McpCommands {
         json: bool,
     },
     #[clap(
-        about = "Install MCP server to a target (claudecode, vscode, geminicli, dotmcpjson, roocode, stdout)",
-        long_about = "Install MCP server to a target application.\n\nExamples:\n  b00t-cli mcp install gh claudecode\n  b00t-cli mcp install filesystem geminicli --repo\n  b00t-cli mcp install browser-use dotmcpjson --stdio-command uvx\n  b00t-cli mcp install aws-knowledge dotmcpjson --httpstream\n  b00t-cli mcp install filesystem roocode\n  b00t-cli mcp install filesystem stdout\n  b00t-cli app vscode mcp install filesystem"
+        about = "Install MCP server to a target (claudecode, vscode, geminicli, dotmcpjson, roocode, codex, stdout)",
+        long_about = "Install MCP server to a target application.\n\nExamples:\n  b00t-cli mcp install gh claudecode\n  b00t-cli mcp install filesystem geminicli --repo\n  b00t-cli mcp install browser-use dotmcpjson --stdio-command uvx\n  b00t-cli mcp install aws-knowledge dotmcpjson --httpstream\n  b00t-cli mcp install filesystem roocode\n  b00t-cli mcp install filesystem codex\n  b00t-cli mcp install filesystem stdout\n  b00t-cli app vscode mcp install filesystem"
     )]
     Install {
         #[clap(help = "MCP server name")]
         name: String,
         #[clap(
-            help = "Installation target: claudecode, vscode, geminicli, dotmcpjson, roocode, stdout"
+            help = "Installation target: claudecode, vscode, geminicli, dotmcpjson, roocode, codex, stdout"
         )]
         target: String,
         #[clap(long, help = "Install to repository-specific location (for geminicli)")]
@@ -119,7 +119,11 @@ pub enum RegistryAction {
     },
     #[clap(about = "Sync registry from datum TOML files")]
     SyncDatums {
-        #[clap(long, help = "Path to datums directory", default_value = "~/.dotfiles/_b00t_")]
+        #[clap(
+            long,
+            help = "Path to datums directory",
+            default_value = "~/.dotfiles/_b00t_"
+        )]
         path: String,
     },
 }
@@ -182,6 +186,7 @@ impl McpCommands {
                 match target.as_str() {
                     "claudecode" | "claude" => crate::claude_code_install_mcp(name, path),
                     "vscode" => crate::vscode_install_mcp(name, path),
+                    "codex" => crate::codex_install_mcp(name, path),
                     "geminicli" => {
                         // Determine installation location: default to repo if in git repo, otherwise user
                         let use_repo = if *repo && *user {
@@ -220,7 +225,7 @@ impl McpCommands {
                     }
                     _ => {
                         anyhow::bail!(
-                            "Error: Invalid target '{}'. Valid targets are: claudecode, vscode, geminicli, dotmcpjson, roocode, stdout",
+                            "Error: Invalid target '{}'. Valid targets are: claudecode, vscode, geminicli, dotmcpjson, roocode, codex, stdout",
                             target
                         );
                     }

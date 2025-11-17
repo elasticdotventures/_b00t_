@@ -298,3 +298,6 @@ test_*.json
 mcp-probe/*
 mcp-probe
 */.claude/*
+
+# Claude Code frameworks (exclude all)
+.claude/

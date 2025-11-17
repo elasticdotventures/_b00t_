@@ -407,3 +407,7 @@ Template syntax conflict: Use grep/cut instead of Go template {{.Names}} to avoi
 
 ---
 Duplicate recipe error: Use 6C pattern - comment old version, rename to name-legacy, clean later
+
+---
+module invocation from subdirectories: Justfile modules (e.g., 'mod b00t') must be invoked from the justfile root where module is declared. Use 'just b00t::recipe-name' syntax. If in subdirectory, either cd to project root first or use 'just -f /path/to/justfile b00t::recipe'
+
