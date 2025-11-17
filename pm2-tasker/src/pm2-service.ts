@@ -86,10 +86,21 @@ export class Pm2TaskerService {
         };
       }
 
+      // Ensure a valid script or command is provided
+      if (!datum.script && !datum.command) {
+        this.log.error(`No valid script or command provided for task: ${datum.name}`);
+        return {
+          success: false,
+          name: datum.name,
+          error: 'No valid script or command provided',
+          message: `Task ${datum.name} could not be started: no script or command specified`,
+        };
+      }
+
       // Build PM2 start options from datum
       const pm2Options: pm2.StartOptions = {
         name: datum.name,
-        script: datum.script || datum.command || 'echo',
+        script: datum.script || datum.command,
         args: datum.args?.join(' '),
         cwd: datum.cwd || process.cwd(),
         env: datum.env || {},
