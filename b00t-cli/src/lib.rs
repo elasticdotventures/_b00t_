@@ -25,6 +25,9 @@ pub mod utils;
 pub mod whoami;
 pub use traits::*;
 
+// Re-export datum types for easy access
+pub use datum_stack::{JobDatum, StackDatum};
+
 // Learn metadata structures - re-exported from b00t-c0re-lib
 pub use b00t_c0re_lib::{LearnMetadata, UsageExample};
 
@@ -728,6 +731,7 @@ pub fn create_unified_toml_config(datum: &BootDatum, path: &str) -> Result<()> {
         DatumType::Api => ".api.toml",
         DatumType::Cli => ".cli.toml",
         DatumType::Stack => ".stack.toml",
+        DatumType::Job => ".job.toml",
         DatumType::Unknown => ".toml",
     };
 
@@ -762,6 +766,7 @@ impl std::fmt::Display for DatumType {
             DatumType::Api => write!(f, "API"),
             DatumType::Cli => write!(f, "CLI"),
             DatumType::Stack => write!(f, "stack"),
+            DatumType::Job => write!(f, "job"),
         }
     }
 }

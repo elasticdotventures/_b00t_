@@ -13,6 +13,12 @@ pub struct StackDatum {
     pub stack_path: PathBuf,
 }
 
+/// Job datum for orchestrator-agnostic job definitions
+pub struct JobDatum {
+    pub datum: BootDatum,
+    pub job_path: PathBuf,
+}
+
 impl StackDatum {
     /// Load a stack from a TOML file
     pub fn from_file(path: &Path) -> Result<Self> {
@@ -221,6 +227,45 @@ impl StackDatum {
             "{} ({} members): {}",
             self.datum.name, members_count, self.datum.hint
         )
+    }
+}
+
+/// JobDatum implementation for loading job datums
+impl JobDatum {
+    /// Load a job from a TOML file
+    pub fn from_file(path: &Path) -> Result<Self> {
+        let content = std::fs::read_to_string(path)
+            .context(format!("Failed to read job file: {}", path.display()))?;
+
+        let config: crate::UnifiedConfig = toml::from_str(&content)
+            .context(format!("Failed to parse job TOML: {}", path.display()))?;
+
+        let datum = config.b00t;
+
+        // Validate this is actually a job datum
+        if datum.datum_type != Some(DatumType::Job) {
+            bail!(
+                "File {} is not a job datum (type: {:?})",
+                path.display(),
+                datum.datum_type
+            );
+        }
+
+        Ok(Self {
+            datum,
+            job_path: path.to_path_buf(),
+        })
+    }
+
+    /// Load job by name from _b00t_ directory
+    pub fn from_config(name: &str, b00t_path: &str) -> Result<Self> {
+        let job_path = PathBuf::from(b00t_path).join(format!("{}.job.toml", name));
+
+        if !job_path.exists() {
+            bail!("Job datum not found: {}", job_path.display());
+        }
+
+        Self::from_file(&job_path)
     }
 }
 

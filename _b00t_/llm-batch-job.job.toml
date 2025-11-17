@@ -1,51 +1,58 @@
 [b00t]
 name = "llm-batch-job"
 type = "job"
-hint = "Batch inference job for LLM pipeline. Requires llm-inference-pipeline stack to be running."
+hint = "Batch inference job for LLM pipeline. Orchestrator-agnostic definition."
 
-# The actual container to run
+# Container specification (portable across orchestrators)
 image = "ghcr.io/my-org/llm-batch-processor:latest"
-
-# Command and args for the job
-command = ["python"]
+command = "python"
 args = ["-m", "batch_processor", "--model", "llama-70b-q4", "--batch-size", "32"]
 
-# Environment variables
+# Environment variables (abstract service references)
 [b00t.env]
-MODEL_ENDPOINT = "http://n8n:5678"
+# Abstract reference: ${STACK:stack-name:service:port}
+# Adapters resolve to orchestrator-specific format:
+#   k8s: http://n8n.default.svc.cluster.local:5678
+#   docker-compose: http://n8n:5678
+#   direct: http://localhost:5678
+MODEL_ENDPOINT = "${STACK:llm-inference-pipeline:n8n:5678}"
 BATCH_SIZE = "32"
 OUTPUT_PATH = "/data/results"
 
-# Job orchestration metadata
+# Orchestration hints (not implementation)
 [b00t.orchestration]
-# This job requires the llm-inference-pipeline stack to be running
+# Abstract: "needs these stacks running" - adapters implement waiting
 requires_stacks = ["llm-inference-pipeline"]
 
-# Use Kueue for queue management
+# Hint: use queuing if available (k8s→Kueue, others→equivalent)
 queue_name = "gpu-queue"
 schedule_type = "queue_based"
 
-# Resource requirements (inherits from stack if not specified)
+# Resource requirements (portable)
 [b00t.orchestration.resource_requirements]
 cpu = "2"
 memory = "8Gi"
 
-# GPU requirements - shares GPU with llm-inference-pipeline
+# GPU requirements (adapters translate to orchestrator-specific)
 [b00t.orchestration.gpu_requirements]
 count = 1
 gpu_type = "nvidia-a100"
-shared = true  # Share with inference server
+shared = true
 
-# Budget constraint
+# Budget constraint (tracked by b00t budget controller)
 [b00t.orchestration.budget_constraint]
 daily_limit = 50.00
 cost_per_job = 1.25
 on_budget_exceeded = "defer"
 
 [[b00t.usage]]
-description = "Generate k8s Job manifest with stack dependencies"
-command = "b00t job to-k8s llm-batch-job"
+description = "Deploy job with auto-detected orchestrator"
+command = "b00t job deploy llm-batch-job"
 
 [[b00t.usage]]
-description = "Submit job to Kueue queue"
-command = "kubectl apply -f llm-batch-job-k8s/job.yaml"
+description = "Generate k8s manifest (orchestrator-specific)"
+command = "b00t job to-manifest llm-batch-job --orchestrator kubernetes"
+
+[[b00t.usage]]
+description = "Show job information"
+command = "b00t job show llm-batch-job"

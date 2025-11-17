@@ -23,6 +23,7 @@ mod datum_mcp;
 mod datum_utils;
 mod datum_vscode;
 mod dependency_resolver;
+mod orchestrator;
 mod session_memory;
 mod test_cloud_integration;
 mod traits;
