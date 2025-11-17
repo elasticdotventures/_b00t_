@@ -78,22 +78,21 @@ async function main() {
   log.info(`Listening for commands on channel: ${env.PM2_TASKER_CHANNEL}`);
 
   // Graceful shutdown
-  process.on('SIGINT', async () => {
-    log.info('⚠️  SIGINT received, shutting down gracefully...');
+  async function gracefulShutdown(signal: string) {
+    log.info(`⚠️  ${signal} received, shutting down gracefully...`);
     await k0mmand3rListener.stop();
     await pm2Service.shutdown();
     await redisClient.quit();
     await redisSub.quit();
     process.exit(0);
+  }
+
+  process.on('SIGINT', () => {
+    gracefulShutdown('SIGINT');
   });
 
-  process.on('SIGTERM', async () => {
-    log.info('⚠️  SIGTERM received, shutting down gracefully...');
-    await k0mmand3rListener.stop();
-    await pm2Service.shutdown();
-    await redisClient.quit();
-    await redisSub.quit();
-    process.exit(0);
+  process.on('SIGTERM', () => {
+    gracefulShutdown('SIGTERM');
   });
 }
 
