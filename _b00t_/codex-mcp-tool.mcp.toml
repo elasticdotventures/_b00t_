@@ -1,0 +1,11 @@
+[b00t]
+name = "codex-mcp-tool"
+type = "mcp"
+hint = "MCP server"
+
+[[b00t.mcp.stdio]]
+args = ["-y", "@trishchuk/codex-mcp-tool"]
+command = "npx"
+requires = ["node"]
+transport = "stdio"
+priority = 0
