@@ -18,7 +18,6 @@ fn clear_agent_env_markers() {
         std::env::remove_var("_B00T_Agent");
         std::env::remove_var("CLAUDECODE");
     }
-    _cleared_agent: bool,
 }
 
 impl DirGuard {

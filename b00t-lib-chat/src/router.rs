@@ -64,18 +64,10 @@ impl MessageRouter {
     /// Route a message to its destination.
     pub async fn route(&self, message: &ChatMessage, destination: &Destination) -> ChatResult<()> {
         match destination {
-            Destination::Agent(agent_id) => {
-                self.route_to_agent(message, agent_id).await
-            }
-            Destination::Crew(crew_id) => {
-                self.route_to_crew(message, crew_id).await
-            }
-            Destination::Broadcast => {
-                self.route_broadcast(message).await
-            }
-            Destination::Direct(uri) => {
-                self.route_direct(message, uri).await
-            }
+            Destination::Agent(agent_id) => self.route_to_agent(message, agent_id).await,
+            Destination::Crew(crew_id) => self.route_to_crew(message, crew_id).await,
+            Destination::Broadcast => self.route_broadcast(message).await,
+            Destination::Direct(uri) => self.route_direct(message, uri).await,
         }
     }
 
@@ -95,7 +87,10 @@ impl MessageRouter {
                 }
                 _ => {
                     // Fall back to other transports
-                    warn!("Transport {:?} not yet implemented, using fallback", endpoint.transport_kind);
+                    warn!(
+                        "Transport {:?} not yet implemented, using fallback",
+                        endpoint.transport_kind
+                    );
                     self.route_fallback(message, agent_id).await
                 }
             }
@@ -128,7 +123,10 @@ impl MessageRouter {
             }
         }
 
-        info!("📡 Broadcast to crew '{}': {} agents reached", crew_id, sent_count);
+        info!(
+            "📡 Broadcast to crew '{}': {} agents reached",
+            crew_id, sent_count
+        );
 
         if sent_count == 0 && !errors.is_empty() {
             Err(ChatError::Other(format!(
@@ -168,10 +166,15 @@ impl MessageRouter {
     }
 
     /// Route to a discovered endpoint.
-    async fn route_to_endpoint(&self, message: &ChatMessage, endpoint: &AgentEndpoint) -> ChatResult<()> {
+    async fn route_to_endpoint(
+        &self,
+        message: &ChatMessage,
+        endpoint: &AgentEndpoint,
+    ) -> ChatResult<()> {
         match endpoint.transport_kind {
             TransportKind::UnixSocket => {
-                let transport = LocalSocketTransport::new(Some(endpoint.endpoint_uri.clone().into()))?;
+                let transport =
+                    LocalSocketTransport::new(Some(endpoint.endpoint_uri.clone().into()))?;
                 transport.send(message).await
             }
             _ => {
@@ -257,16 +260,33 @@ impl Default for MessageRouterBuilder {
 #[macro_export]
 macro_rules! route_message {
     ($router:expr, $msg:expr => agent $agent_id:expr) => {
-        $router.route(&$msg, &$crate::router::Destination::Agent($agent_id.to_string())).await
+        $router
+            .route(
+                &$msg,
+                &$crate::router::Destination::Agent($agent_id.to_string()),
+            )
+            .await
     };
     ($router:expr, $msg:expr => crew $crew_id:expr) => {
-        $router.route(&$msg, &$crate::router::Destination::Crew($crew_id.to_string())).await
+        $router
+            .route(
+                &$msg,
+                &$crate::router::Destination::Crew($crew_id.to_string()),
+            )
+            .await
     };
     ($router:expr, $msg:expr => broadcast) => {
-        $router.route(&$msg, &$crate::router::Destination::Broadcast).await
+        $router
+            .route(&$msg, &$crate::router::Destination::Broadcast)
+            .await
     };
     ($router:expr, $msg:expr => direct $uri:expr) => {
-        $router.route(&$msg, &$crate::router::Destination::Direct($uri.to_string())).await
+        $router
+            .route(
+                &$msg,
+                &$crate::router::Destination::Direct($uri.to_string()),
+            )
+            .await
     };
 }
 
@@ -277,9 +297,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_router_creation() {
-        let registry = SocketRegistryBuilder::new()
-            .with_system_dir()
-            .build();
+        let registry = SocketRegistryBuilder::new().with_system_dir().build();
 
         let router = MessageRouterBuilder::new()
             .with_registry(registry)

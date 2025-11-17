@@ -11,6 +11,7 @@ pub mod datum_apt;
 pub mod datum_bash;
 pub mod datum_docker;
 pub mod datum_k8s;
+pub mod datum_mcp;
 pub mod datum_stack;
 pub mod datum_vscode;
 pub mod dependency_resolver;
@@ -1624,44 +1625,276 @@ impl SessionState {
         )
     }
 }
+/// Install MCP server to Codex config.toml
+///
+/// Writes directly to ~/.codex/config.toml using Codex's native TOML format.
+/// This is a stop-gap until Codex adopts the industry-standard .mcp.json format.
+///
+/// Supports both stdio and httpstream methods with full vendor capability fields:
+/// - Timeout controls (startup_timeout_sec, tool_timeout_sec)
+/// - Tool filtering (enabled_tools, disabled_tools, enabled)
+/// - Authentication (bearer_token_env_var, http_headers)
+/// - Environment configuration (env, env_vars, cwd)
+///
+/// # Arguments
+/// * `name` - MCP server name
+/// * `path` - Path to b00t datum directory
+///
+/// # Format
+/// ```toml
+/// [mcp_servers.server-name]
+/// command = "npx"
+/// args = ["-y", "@scope/package"]
+/// startup_timeout_sec = 10
+/// tool_timeout_sec = 60
+/// enabled = true
+///
+/// [mcp_servers.server-name.env]
+/// KEY = "value"
+/// ```
 pub fn codex_install_mcp(name: &str, path: &str) -> Result<()> {
-    use duct::cmd;
+    use crate::datum_mcp::{McpDatum, McpHttpStreamMethod, McpStdioMethod};
+    use std::collections::HashMap;
 
-    let datum = get_mcp_config(name, path)?;
-    let (command, args, env) = extract_mcp_command_args(&datum);
+    // Load MCP datum and select best method
+    let mcp_datum = McpDatum::from_config(name, path)?;
+    let selected_method = mcp_datum
+        .select_best_method()
+        .ok_or_else(|| anyhow::anyhow!(
+            "No available method for MCP server '{}'. Ensure the datum file contains valid 'stdio' or 'httpstream' configuration.",
+            name
+        ))?;
 
-    let mut codex_args: Vec<String> =
-        vec!["mcp".to_string(), "add".to_string(), datum.name.clone()];
-    if let Some(env_map) = env {
-        let mut entries: Vec<(String, String)> = env_map.into_iter().collect();
-        entries.sort_by(|a, b| a.0.cmp(&b.0));
-        for (key, value) in entries {
-            codex_args.push("--env".to_string());
-            codex_args.push(format!("{}={}", key, value));
-        }
+    // Expand ~/.codex/config.toml path
+    let codex_config_path = shellexpand::tilde("~/.codex/config.toml").to_string();
+    let config_path = std::path::Path::new(&codex_config_path);
+
+    // Create ~/.codex directory if it doesn't exist
+    if let Some(parent) = config_path.parent() {
+        std::fs::create_dir_all(parent).context("Failed to create ~/.codex directory")?;
     }
-    codex_args.push("--".to_string());
-    codex_args.push(command.clone());
-    codex_args.extend(args.iter().cloned());
 
-    let manual_command = format!("codex {}", codex_args.join(" "));
-    let codex_args_refs: Vec<&str> = codex_args.iter().map(|s| s.as_str()).collect();
-    let result = cmd("codex", codex_args_refs).run();
+    // Load existing config or create new
+    let mut config_value: toml::Value = if config_path.exists() {
+        let existing_content =
+            std::fs::read_to_string(config_path).context("Failed to read ~/.codex/config.toml")?;
+        toml::from_str(&existing_content).context("Failed to parse ~/.codex/config.toml")?
+    } else {
+        toml::Value::Table(toml::map::Map::new())
+    };
 
-    match result {
-        Ok(_) => {
-            println!(
-                "Successfully installed MCP server '{}' to Codex",
-                datum.name
+    // Ensure [mcp_servers] table exists
+    if !config_value.is_table() {
+        config_value = toml::Value::Table(toml::map::Map::new());
+    }
+    let config_table = config_value.as_table_mut().unwrap();
+    if !config_table.contains_key("mcp_servers") {
+        config_table.insert(
+            "mcp_servers".to_string(),
+            toml::Value::Table(toml::map::Map::new()),
+        );
+    }
+
+    // Get mcp_servers table
+    let mcp_servers = config_table
+        .get_mut("mcp_servers")
+        .and_then(|v| v.as_table_mut())
+        .ok_or_else(|| anyhow::anyhow!("mcp_servers is not a table"))?;
+
+    // Build server configuration based on method type
+    let mut server_config = toml::map::Map::new();
+
+    match &selected_method {
+        crate::datum_mcp::McpSelectedMethod::Stdio(stdio) => {
+            // STDIO method configuration
+            server_config.insert(
+                "command".to_string(),
+                toml::Value::String(stdio.command.clone()),
             );
-            println!("Codex command: {}", manual_command);
+
+            if !stdio.args.is_empty() {
+                server_config.insert(
+                    "args".to_string(),
+                    toml::Value::Array(
+                        stdio
+                            .args
+                            .iter()
+                            .map(|s| toml::Value::String(s.clone()))
+                            .collect(),
+                    ),
+                );
+            }
+
+            // Environment variables
+            if !stdio.env.is_empty() {
+                let mut env_table = toml::map::Map::new();
+                for (k, v) in &stdio.env {
+                    env_table.insert(k.clone(), toml::Value::String(v.clone()));
+                }
+                server_config.insert("env".to_string(), toml::Value::Table(env_table));
+            }
+
+            // Vendor capabilities - environment
+            if let Some(env_vars) = &stdio.env_vars {
+                server_config.insert(
+                    "env_vars".to_string(),
+                    toml::Value::Array(
+                        env_vars
+                            .iter()
+                            .map(|s| toml::Value::String(s.clone()))
+                            .collect(),
+                    ),
+                );
+            }
+
+            if let Some(cwd) = &stdio.cwd {
+                server_config.insert("cwd".to_string(), toml::Value::String(cwd.clone()));
+            }
+
+            // Vendor capabilities - timeouts
+            if let Some(timeout) = stdio.startup_timeout_sec {
+                server_config.insert(
+                    "startup_timeout_sec".to_string(),
+                    toml::Value::Integer(timeout as i64),
+                );
+            }
+
+            if let Some(timeout) = stdio.tool_timeout_sec {
+                server_config.insert(
+                    "tool_timeout_sec".to_string(),
+                    toml::Value::Integer(timeout as i64),
+                );
+            }
+
+            // Vendor capabilities - tool filtering
+            if let Some(enabled) = stdio.enabled {
+                server_config.insert("enabled".to_string(), toml::Value::Boolean(enabled));
+            }
+
+            if let Some(enabled_tools) = &stdio.enabled_tools {
+                server_config.insert(
+                    "enabled_tools".to_string(),
+                    toml::Value::Array(
+                        enabled_tools
+                            .iter()
+                            .map(|s| toml::Value::String(s.clone()))
+                            .collect(),
+                    ),
+                );
+            }
+
+            if let Some(disabled_tools) = &stdio.disabled_tools {
+                server_config.insert(
+                    "disabled_tools".to_string(),
+                    toml::Value::Array(
+                        disabled_tools
+                            .iter()
+                            .map(|s| toml::Value::String(s.clone()))
+                            .collect(),
+                    ),
+                );
+            }
         }
-        Err(e) => {
-            eprintln!("Failed to install MCP server to Codex: {}", e);
-            eprintln!("Manual command: {}", manual_command);
-            return Err(anyhow::anyhow!("Codex installation failed: {}", e));
+        crate::datum_mcp::McpSelectedMethod::HttpStream(http) => {
+            // HTTP stream method configuration
+            server_config.insert("url".to_string(), toml::Value::String(http.url.clone()));
+
+            // Vendor capabilities - authentication
+            if let Some(bearer_var) = &http.bearer_token_env_var {
+                server_config.insert(
+                    "bearer_token_env_var".to_string(),
+                    toml::Value::String(bearer_var.clone()),
+                );
+            }
+
+            if let Some(headers) = &http.http_headers {
+                let mut headers_table = toml::map::Map::new();
+                for (k, v) in headers {
+                    headers_table.insert(k.clone(), toml::Value::String(v.clone()));
+                }
+                server_config.insert(
+                    "http_headers".to_string(),
+                    toml::Value::Table(headers_table),
+                );
+            }
+
+            if let Some(env_headers) = &http.env_http_headers {
+                let mut env_headers_table = toml::map::Map::new();
+                for (k, v) in env_headers {
+                    env_headers_table.insert(k.clone(), toml::Value::String(v.clone()));
+                }
+                server_config.insert(
+                    "env_http_headers".to_string(),
+                    toml::Value::Table(env_headers_table),
+                );
+            }
+
+            // Vendor capabilities - timeouts
+            if let Some(timeout) = http.startup_timeout_sec {
+                server_config.insert(
+                    "startup_timeout_sec".to_string(),
+                    toml::Value::Integer(timeout as i64),
+                );
+            }
+
+            if let Some(timeout) = http.tool_timeout_sec {
+                server_config.insert(
+                    "tool_timeout_sec".to_string(),
+                    toml::Value::Integer(timeout as i64),
+                );
+            }
+
+            // Vendor capabilities - tool filtering
+            if let Some(enabled) = http.enabled {
+                server_config.insert("enabled".to_string(), toml::Value::Boolean(enabled));
+            }
+
+            if let Some(enabled_tools) = &http.enabled_tools {
+                server_config.insert(
+                    "enabled_tools".to_string(),
+                    toml::Value::Array(
+                        enabled_tools
+                            .iter()
+                            .map(|s| toml::Value::String(s.clone()))
+                            .collect(),
+                    ),
+                );
+            }
+
+            if let Some(disabled_tools) = &http.disabled_tools {
+                server_config.insert(
+                    "disabled_tools".to_string(),
+                    toml::Value::Array(
+                        disabled_tools
+                            .iter()
+                            .map(|s| toml::Value::String(s.clone()))
+                            .collect(),
+                    ),
+                );
+            }
         }
     }
+
+    // Insert or update server configuration
+    mcp_servers.insert(name.to_string(), toml::Value::Table(server_config));
+
+    // Serialize and write back to file
+    let toml_string =
+        toml::to_string_pretty(&config_value).context("Failed to serialize config to TOML")?;
+    std::fs::write(config_path, toml_string).context("Failed to write ~/.codex/config.toml")?;
+
+    println!(
+        "✅ Successfully installed MCP server '{}' to ~/.codex/config.toml",
+        name
+    );
+    println!(
+        "   Method: {}",
+        if selected_method.is_httpstream() {
+            "httpstream"
+        } else {
+            "stdio"
+        }
+    );
 
     Ok(())
 }

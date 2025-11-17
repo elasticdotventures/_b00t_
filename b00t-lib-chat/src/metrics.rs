@@ -142,18 +142,14 @@ impl ChatMetrics {
 
     /// Record connection established.
     pub fn record_connection_opened(&self, transport: &str) {
-        self.connections_active.add(
-            1,
-            &[KeyValue::new("transport", transport.to_string())],
-        );
+        self.connections_active
+            .add(1, &[KeyValue::new("transport", transport.to_string())]);
     }
 
     /// Record connection closed.
     pub fn record_connection_closed(&self, transport: &str) {
-        self.connections_active.add(
-            -1,
-            &[KeyValue::new("transport", transport.to_string())],
-        );
+        self.connections_active
+            .add(-1, &[KeyValue::new("transport", transport.to_string())]);
     }
 
     /// Record connection error.

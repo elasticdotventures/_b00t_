@@ -81,7 +81,12 @@ mod orchestrator_grok_integration {
     #[tokio::test]
     async fn test_orchestrator_creation_with_missing_path() {
         let temp_dir = setup_temp_dir();
-        let temp_path = temp_dir.path().join("nonexistent").to_str().unwrap().to_string();
+        let temp_path = temp_dir
+            .path()
+            .join("nonexistent")
+            .to_str()
+            .unwrap()
+            .to_string();
 
         // Orchestrator should handle missing path gracefully
         let result = Orchestrator::new(&temp_path);

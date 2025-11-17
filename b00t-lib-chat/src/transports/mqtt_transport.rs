@@ -52,8 +52,13 @@ impl MqttTransport {
         }
 
         let parts: Vec<&str> = self.broker_url.split(':').collect();
-        let host = parts.first().ok_or_else(|| ChatError::Other("Invalid broker URL".to_string()))?;
-        let port = parts.get(1).and_then(|p| p.parse::<u16>().ok()).unwrap_or(1883);
+        let host = parts
+            .first()
+            .ok_or_else(|| ChatError::Other("Invalid broker URL".to_string()))?;
+        let port = parts
+            .get(1)
+            .and_then(|p| p.parse::<u16>().ok())
+            .unwrap_or(1883);
 
         let mut mqtt_options = MqttOptions::new(&self.client_id, *host, port);
         mqtt_options.set_keep_alive(std::time::Duration::from_secs(30));
@@ -83,7 +88,8 @@ impl MqttTransport {
                         // Deserialize message from payload
                         match serde_json::from_slice::<ChatMessage>(&publish.payload) {
                             Ok(message) => {
-                                ChatMetrics::global().record_message_received("mqtt", &message.channel);
+                                ChatMetrics::global()
+                                    .record_message_received("mqtt", &message.channel);
                                 if message_tx.send(message).is_err() {
                                     warn!("Message receiver dropped");
                                     break;
@@ -107,9 +113,7 @@ impl MqttTransport {
     /// Get the underlying MQTT client.
     async fn get_client(&self) -> ChatResult<AsyncClient> {
         let client_guard = self.client.read().await;
-        client_guard
-            .clone()
-            .ok_or(ChatError::NotConnected)
+        client_guard.clone().ok_or(ChatError::NotConnected)
     }
 
     /// Convert ChatMessage to MQTT topic format.

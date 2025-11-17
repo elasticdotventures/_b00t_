@@ -489,9 +489,7 @@ impl RedisSubscriber {
                 .ok_or_else(|| anyhow::anyhow!("PubSub stream closed"))?;
 
             let channel = msg.get_channel_name().to_string();
-            let payload: String = msg
-                .get_payload()
-                .context("Failed to get message payload")?;
+            let payload: String = msg.get_payload().context("Failed to get message payload")?;
 
             Ok(Some(PubSubMessage { channel, payload }))
         } else {
