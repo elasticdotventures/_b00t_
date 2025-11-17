@@ -400,7 +400,9 @@ async fn run_job(
                     println!("\n🔄 Rolling back...");
                     for rollback_step in &config.rollback {
                         println!("   Executing rollback: {}", rollback_step.name);
-                        execute_step(path, rollback_step, &env_map).await?;
+                        if let Err(rollback_err) = execute_step(path, rollback_step, &env_map).await {
+                            eprintln!("⚠️  Rollback step '{}' failed: {}", rollback_step.name, rollback_err);
+                        }
                     }
                 }
 
