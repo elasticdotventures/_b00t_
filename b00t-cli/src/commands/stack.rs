@@ -3,6 +3,7 @@ use clap::Parser;
 use std::collections::HashMap;
 
 use b00t_cli::datum_stack::StackDatum;
+use b00t_cli::traits::DatumCrdDisplay;
 use b00t_cli::{BootDatum, UnifiedConfig, get_expanded_path};
 
 #[derive(Parser)]
@@ -55,6 +56,18 @@ pub enum StackCommands {
         #[clap(long, short = 'o', help = "Output file (default: stdout)")]
         output: Option<String>,
     },
+    #[clap(
+        about = "Generate k8s CRD from stack",
+        long_about = "Generate a Kubernetes Custom Resource Definition YAML from a stack.\n\nThis enables MBSE-based stack → pod transformation for AI/ML pipelines.\n\nExamples:\n  b00t-cli stack to-crd llm-inference-pipeline\n  b00t-cli stack to-crd llm-inference-pipeline --output stack.yaml\n  b00t-cli stack to-crd llm-inference-pipeline --pod-only"
+    )]
+    ToCrd {
+        #[clap(help = "Stack name")]
+        name: String,
+        #[clap(long, short = 'o', help = "Output file (default: stdout)")]
+        output: Option<String>,
+        #[clap(long, help = "Generate only pod spec (not full CRD)")]
+        pod_only: bool,
+    },
 }
 
 impl StackCommands {
@@ -75,6 +88,11 @@ impl StackCommands {
             StackCommands::Compose { name, output } => {
                 generate_compose(name, path, output.as_deref())
             }
+            StackCommands::ToCrd {
+                name,
+                output,
+                pod_only,
+            } => generate_crd(name, path, output.as_deref(), *pod_only),
         }
     }
 }
@@ -309,6 +327,71 @@ fn generate_compose(name: &str, path: &str, output_file: Option<&str>) -> Result
         println!("✅ Generated docker-compose.yml: {}", output_path);
     } else {
         println!("{}", compose_yaml);
+    }
+
+    Ok(())
+}
+
+/// Generate k8s CRD from stack (MBSE stack → pod transformation)
+fn generate_crd(name: &str, path: &str, output_file: Option<&str>, pod_only: bool) -> Result<()> {
+    let stack_path = get_expanded_path(path)?.join(format!("{}.stack.toml", name));
+
+    if !stack_path.exists() {
+        anyhow::bail!("Stack '{}' not found at {}", name, stack_path.display());
+    }
+
+    let stack = StackDatum::from_file(&stack_path)?;
+
+    let yaml = if pod_only {
+        stack.to_pod_spec()
+            .context("Failed to generate pod spec")?
+    } else {
+        stack.to_crd_template()
+            .context("Failed to generate CRD template")?
+    };
+
+    if let Some(output_path) = output_file {
+        std::fs::write(output_path, &yaml)
+            .context(format!("Failed to write to {}", output_path))?;
+
+        if pod_only {
+            println!("✅ Generated pod spec: {}", output_path);
+        } else {
+            println!("✅ Generated k8s CRD: {}", output_path);
+        }
+
+        // Show resource requirements summary
+        let reqs = stack.get_resource_requirements();
+        if reqs.cpu.is_some() || reqs.memory.is_some() || reqs.gpu_count.is_some() {
+            println!("\n📊 Resource Requirements:");
+            if let Some(cpu) = &reqs.cpu {
+                println!("   CPU: {}", cpu);
+            }
+            if let Some(memory) = &reqs.memory {
+                println!("   Memory: {}", memory);
+            }
+            if let Some(gpu_count) = reqs.gpu_count {
+                println!("   GPU: {} x {}", gpu_count,
+                    reqs.gpu_type.as_deref().unwrap_or("nvidia.com/gpu"));
+            }
+        }
+
+        // Show affinity strategy
+        let affinity = stack.get_affinity_rules();
+        if let Some(batch_group) = &affinity.gpu_batch_group {
+            println!("\n🔗 GPU Batch Group: {}", batch_group);
+            println!("   Strategy: {:?}", affinity.strategy);
+        }
+
+        // Show budget constraints
+        if let Some(budget) = stack.get_budget_constraints() {
+            println!("\n💰 Budget Constraints:");
+            println!("   Daily Limit: {:.2} {}", budget.daily_limit, budget.currency);
+            println!("   Cost per Job: {:.2} {}", budget.cost_per_job, budget.currency);
+            println!("   On Exceeded: {}", budget.on_exceeded);
+        }
+    } else {
+        println!("{}", yaml);
     }
 
     Ok(())
