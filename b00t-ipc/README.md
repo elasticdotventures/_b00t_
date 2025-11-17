@@ -98,8 +98,8 @@ Proposals require quorum (default: 2 votes):
 
 ```rust
 let mut proposal = Proposal::new("Use Unix sockets", "alpha");
-proposal.cast_vote("alpha".to_string(), VoteChoice::Yes);
-proposal.cast_vote("beta".to_string(), VoteChoice::Yes);
+proposal.cast_vote("alpha", VoteChoice::Yes);
+proposal.cast_vote("beta", VoteChoice::Yes);
 
 assert!(proposal.is_passed());
 ```

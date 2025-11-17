@@ -1,0 +1,45 @@
+[b00t]
+name = "gemini-mcp-tool"
+type = "mcp"
+hint = "Google Gemini MCP server - AI assistant with code sandbox and file analysis"
+lfmf_category = "gemini"
+
+[b00t.learn]
+topic = "gemini"
+auto_digest = true
+
+# Primary stdio method
+[[b00t.mcp.stdio]]
+priority = 0
+command = "npx"
+args = ["-y", "gemini-mcp-tool"]
+transport = "stdio"
+requires = ["node", "geminicli"]
+
+[[b00t.usage]]
+description = "Launch Gemini MCP server"
+command = "npx -y gemini-mcp-tool"
+
+[[b00t.usage]]
+description = "Install to Claude Code"
+command = "claude mcp add gemini-cli -- npx -y gemini-mcp-tool"
+
+[[b00t.usage]]
+description = "Use ask-gemini tool in AI assistant"
+command = "ask-gemini with prompt: '@file.js explain this code'"
+
+[[b00t.usage]]
+description = "Use sandbox for safe code execution"
+command = "sandbox-test with prompt: 'test this Python code safely'"
+
+[[b00t.references]]
+name = "Gemini MCP Tool GitHub"
+url = "https://github.com/jamubc/gemini-mcp-tool"
+
+[[b00t.references]]
+name = "Google Gemini CLI"
+url = "https://github.com/google-gemini/gemini-cli"
+
+[[b00t.references]]
+name = "Model Context Protocol"
+url = "https://modelcontextprotocol.io"

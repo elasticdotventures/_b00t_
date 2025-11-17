@@ -19,6 +19,7 @@ mod bash '_b00t_/bash.🐚/justfile'
 mod git '_b00t_/git.🐙/justfile'
 mod terraform '_b00t_/terraform.🧊/justfile'
 mod k8s '_b00t_/k8s.🚢/justfile'
+mod pm2-tasker 'pm2-tasker/justfile'
 
 stow:
     stow --adopt -d ~/.dotfiles -t ~ bash
@@ -278,6 +279,11 @@ commit-hook:
 install-commit-hook:
     #!/bin/bash
     set -euo pipefail
+    # Skip if not in a git repo (e.g., Docker container)
+    if [ ! -d ".git" ]; then
+        echo "⏭️  Skipping git hook installation (not a git repository)"
+        exit 0
+    fi
     HOOK_PATH=".git/hooks/pre-commit"
     {
         echo "#!/usr/bin/env bash"

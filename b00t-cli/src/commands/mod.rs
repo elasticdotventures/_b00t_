@@ -1,3 +1,4 @@
+pub mod agent;
 pub mod ai;
 pub mod app;
 pub mod bootstrap;
@@ -7,6 +8,7 @@ pub mod datum;
 pub mod grok;
 pub mod init;
 pub mod install;
+pub mod job;
 pub mod k8s;
 pub mod learn;
 pub mod mcp;
@@ -17,6 +19,7 @@ pub mod stack;
 pub mod tiktoken;
 pub mod whatismy;
 
+pub use agent::AgentCommands;
 pub use ai::AiCommands;
 pub use app::AppCommands;
 pub use bootstrap::BootstrapCommands;
@@ -26,6 +29,7 @@ pub use datum::DatumCommands;
 pub use grok::GrokCommands;
 pub use init::InitCommands;
 pub use install::InstallCommands;
+pub use job::JobCommands;
 pub use k8s::K8sCommands;
 pub use mcp::McpCommands;
 pub use model::ModelCommands;
