@@ -1,11 +1,11 @@
 [b00t]
-name = "codex"
+name = "openai-codex-mcp"
 type = "mcp"
 hint = "OpenAI Codex MCP server for agentic AI coding sessions"
-lfmf_category = "codex-mcp"
+lfmf_category = "codex"
 
 [b00t.learn]
-topic = "codex-mcp"
+topic = "codex"
 auto_digest = true
 
 # Primary stdio method
