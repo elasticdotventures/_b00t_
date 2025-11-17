@@ -1,6 +1,6 @@
 #!/bin/bash
 # 🥾 b00t Universal Installer
-# One-liner installation: curl -fsSL https://raw.githubusercontent.com/elasticdotventures/dotfiles/main/install.sh | sh
+# One-liner installation: curl -fsSL https://raw.githubusercontent.com/elasticdotventures/_b00t_/main/install.sh | sh
 
 set -e
 
@@ -12,7 +12,7 @@ BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
 # Configuration
-REPO="elasticdotventures/dotfiles"
+REPO="elasticdotventures/_b00t_"
 INSTALL_DIR="${INSTALL_DIR:-$HOME/.local/bin}"
 CONFIG_DIR="${CONFIG_DIR:-$HOME/.config/b00t}"
 B00T_HOME="${B00T_HOME:-$HOME/.b00t}"  # b00t installation directory (includes datums)
