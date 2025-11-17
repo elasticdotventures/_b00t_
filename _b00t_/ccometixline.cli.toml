@@ -18,13 +18,17 @@ topic = "ccometixline"
 github = "https://github.com/Haleclipse/CCometixLine"
 npm = "https://www.npmjs.com/package/@cometix/ccline"
 
-[b00t.usage]
-examples = [
-  { description = "Check installation", command = "ccline --version" },
-  { description = "View statusline output", command = "ccline" },
-  { description = "Enable verbose mode", command = "ccline --verbose" }
-]
+[[b00t.usage]]
+description = "Check installation"
+command = "ccline --version"
 
+[[b00t.usage]]
+description = "View statusline output"
+command = "ccline"
+
+[[b00t.usage]]
+description = "Enable verbose mode"
+command = "ccline --verbose"
 [b00t.requirements]
 git_version = "1.5+"
 recommended_git = "2.22+"
