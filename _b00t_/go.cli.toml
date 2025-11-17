@@ -113,7 +113,7 @@ else
         darwin) OS="darwin" ;;
     esac
 
-    GO_VERSION="1.23.4"
+    GO_VERSION="1.23.0"
     GO_TARBALL="go${GO_VERSION}.${OS}-${ARCH}.tar.gz"
     DOWNLOAD_URL="https://go.dev/dl/${GO_TARBALL}"
 
