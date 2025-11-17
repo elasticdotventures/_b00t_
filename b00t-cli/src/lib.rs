@@ -22,9 +22,13 @@ pub mod model_manager;
 pub mod orchestrator;
 pub mod session_memory;
 pub mod traits;
+pub mod up_command;
 pub mod utils;
 pub mod whoami;
 pub use traits::*;
+
+// Re-export up_command function for use in main.rs
+pub use up_command::handle_up_command;
 
 // Learn metadata structures - re-exported from b00t-c0re-lib
 pub use b00t_c0re_lib::{LearnMetadata, UsageExample};
