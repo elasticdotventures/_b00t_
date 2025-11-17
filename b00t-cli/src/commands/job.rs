@@ -311,6 +311,7 @@ async fn run_job(
     env_vars: &[String],
 ) -> Result<()> {
     use b00t_cli::datum_job::JobDatum;
+    use b00t_cli::job_state::{JobState, JobStatus, StepStatus};
 
     println!("🚀 Starting job: {}", name);
 
@@ -322,6 +323,29 @@ async fn run_job(
 
     let config = datum.job_config()?;
     let mut execution_order = datum.execution_order()?;
+
+    // Create or resume job state
+    let mut job_state = if resume {
+        match JobState::load_latest(path, name) {
+            Ok(state) => {
+                println!("📂 Resuming from previous run ({})", state.run_id);
+                println!("   Started: {}", state.started_at);
+                println!("   Status: {:?}", state.status);
+                state
+            }
+            Err(_) => {
+                println!("⚠️  No previous run found, starting fresh");
+                JobState::new(name.to_string(), config.config.mode.clone(), execution_order.len())
+            }
+        }
+    } else {
+        JobState::new(name.to_string(), config.config.mode.clone(), execution_order.len())
+    };
+
+    // Save initial state
+    if !dry_run {
+        job_state.save(path)?;
+    }
 
     // Filter by from_step/to_step
     if let Some(from) = from_step {
@@ -369,12 +393,33 @@ async fn run_job(
             continue;
         }
 
+        // Skip if resuming and step already completed
+        if resume {
+            if let Some(step_state) = job_state.steps.get(step_name) {
+                if step_state.status == StepStatus::Completed {
+                    println!("   ⏭️  Skipping (already completed)");
+                    continue;
+                }
+            }
+        }
+
+        // Update state: step starting
+        job_state.start_step(step_name.clone());
+        job_state.status = JobStatus::Running;
+        job_state.save(path)?;
+
         // Execute step
+        let step_start = std::time::Instant::now();
         let result = execute_step(path, step, &env_map).await;
+        let step_duration = step_start.elapsed();
 
         match result {
             Ok(_) => {
-                println!("   ✅ Success");
+                println!("   ✅ Success ({}s)", step_duration.as_secs());
+
+                // Update state: step completed
+                job_state.complete_step(step_name);
+                job_state.save(path)?;
 
                 // Create checkpoint if configured
                 if !no_checkpoint
@@ -385,11 +430,26 @@ async fn run_job(
                     if let Some(checkpoint_name) = &step.checkpoint {
                         create_checkpoint(path, name, checkpoint_name, config.config.create_git_tag)
                             .await?;
+
+                        // Record checkpoint in state
+                        let git_tag = if config.config.create_git_tag {
+                            Some(format!("job/{}/{}", name, checkpoint_name))
+                        } else {
+                            None
+                        };
+                        job_state.add_checkpoint(step_name.clone(), checkpoint_name.clone(), git_tag);
+                        job_state.save(path)?;
                     }
                 }
             }
             Err(e) => {
                 println!("   ❌ Failed: {}", e);
+
+                // Update state: step failed
+                job_state.fail_step(step_name, e.to_string());
+                job_state.status = JobStatus::Failed;
+                job_state.error = Some(e.to_string());
+                job_state.save(path)?;
 
                 if config.config.continue_on_failure {
                     println!("   ⚠️  Continuing despite failure...");
@@ -398,12 +458,18 @@ async fn run_job(
 
                 if config.config.rollback_on_failure && !config.rollback.is_empty() {
                     println!("\n🔄 Rolling back...");
+                    job_state.status = JobStatus::RollingBack;
+                    job_state.save(path)?;
+
                     for rollback_step in &config.rollback {
                         println!("   Executing rollback: {}", rollback_step.name);
                         if let Err(rollback_err) = execute_step(path, rollback_step, &env_map).await {
                             eprintln!("⚠️  Rollback step '{}' failed: {}", rollback_step.name, rollback_err);
                         }
                     }
+
+                    job_state.status = JobStatus::RolledBack;
+                    job_state.save(path)?;
                 }
 
                 return Err(e.context(format!("Step '{}' failed", step_name)));
@@ -412,6 +478,11 @@ async fn run_job(
     }
 
     println!("\n✨ Job completed successfully!");
+
+    // Update final state
+    job_state.status = JobStatus::Completed;
+    job_state.completed_at = Some(chrono::Utc::now());
+    job_state.save(path)?;
 
     Ok(())
 }
@@ -665,10 +736,96 @@ async fn create_checkpoint(
 }
 
 /// Show job status
-async fn status_job(_path: &str, _name: Option<&str>, _all: bool, _json: bool) -> Result<()> {
-    // TODO: Implement job status tracking
-    println!("⚠️  Job status tracking not yet implemented");
-    println!("Future: Track running jobs via IPC/Redis");
+async fn status_job(path: &str, name: Option<&str>, all: bool, json: bool) -> Result<()> {
+    use b00t_cli::job_state::JobState;
+    use std::fs;
+
+    let state_dir = std::path::PathBuf::from(path).join(".b00t").join("jobs");
+
+    if !state_dir.exists() {
+        println!("No job state found");
+        return Ok(());
+    }
+
+    let mut states = Vec::new();
+
+    if let Some(job_name) = name {
+        // Load specific job state
+        match JobState::load_latest(path, job_name) {
+            Ok(state) => states.push(state),
+            Err(e) => {
+                println!("❌ Failed to load job state for '{}': {}", job_name, e);
+                return Ok(());
+            }
+        }
+    } else if all {
+        // Load all job states
+        for entry in fs::read_dir(&state_dir)? {
+            let entry = entry?;
+            if entry.path().is_dir() {
+                let job_name = entry.file_name().to_string_lossy().to_string();
+                if let Ok(state) = JobState::load_latest(path, &job_name) {
+                    states.push(state);
+                }
+            }
+        }
+    } else {
+        println!("Specify --all to see all jobs or provide a job name");
+        return Ok(());
+    }
+
+    if json {
+        let json_output = serde_json::to_string_pretty(&states)?;
+        println!("{}", json_output);
+    } else {
+        for state in states {
+            println!("\n📊 Job: {}", state.job_name);
+            println!("   Run ID: {}", state.run_id);
+            println!("   Status: {:?}", state.status);
+            println!("   Started: {}", state.started_at);
+            if let Some(completed) = state.completed_at {
+                println!("   Completed: {}", completed);
+                let duration = completed - state.started_at;
+                println!("   Duration: {}s", duration.num_seconds());
+            }
+            if let Some(current) = &state.current_step {
+                println!("   Current step: {}", current);
+            }
+            if let Some(error) = &state.error {
+                println!("   Error: {}", error);
+            }
+
+            println!("\n   Steps:");
+            for (step_name, step_state) in &state.steps {
+                let status_icon = match step_state.status {
+                    b00t_cli::job_state::StepStatus::Pending => "⏳",
+                    b00t_cli::job_state::StepStatus::Running => "🏃",
+                    b00t_cli::job_state::StepStatus::Completed => "✅",
+                    b00t_cli::job_state::StepStatus::Failed => "❌",
+                    b00t_cli::job_state::StepStatus::Skipped => "⏭️ ",
+                };
+                print!("     {} {}", status_icon, step_name);
+                if let Some(duration_ms) = step_state.duration_ms {
+                    print!(" ({}s)", duration_ms / 1000);
+                }
+                if let Some(error) = &step_state.error {
+                    print!(" - {}", error);
+                }
+                println!();
+            }
+
+            if !state.checkpoints.is_empty() {
+                println!("\n   Checkpoints:");
+                for checkpoint in &state.checkpoints {
+                    println!("     📍 {} - {} ({})", checkpoint.step_name, checkpoint.checkpoint_name, checkpoint.created_at);
+                    if let Some(tag) = &checkpoint.git_tag {
+                        println!("        Tag: {}", tag);
+                    }
+                }
+            }
+        }
+    }
+
     Ok(())
 }
 
