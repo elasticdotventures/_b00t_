@@ -9,6 +9,8 @@ pub mod datum_ai_model;
 pub mod datum_api;
 pub mod datum_apt;
 pub mod datum_bash;
+pub mod datum_cli;
+pub mod datum_config;
 pub mod datum_docker;
 pub mod datum_k8s;
 pub mod datum_mcp;
@@ -195,6 +197,7 @@ pub enum DatumType {
     Api, // API protocol endpoints (OpenAI-compat, embeddings, etc.)
     Cli,
     Stack,
+    Config, // b00t configuration file (_b00t_.toml)
 }
 
 #[derive(Serialize, Debug)]
@@ -618,6 +621,7 @@ pub fn create_unified_toml_config(datum: &BootDatum, path: &str) -> Result<()> {
         DatumType::Api => ".api.toml",
         DatumType::Cli => ".cli.toml",
         DatumType::Stack => ".stack.toml",
+        DatumType::Config => ".config.toml",
         DatumType::Unknown => ".toml",
     };
 
@@ -652,6 +656,7 @@ impl std::fmt::Display for DatumType {
             DatumType::Api => write!(f, "API"),
             DatumType::Cli => write!(f, "CLI"),
             DatumType::Stack => write!(f, "stack"),
+            DatumType::Config => write!(f, "config"),
         }
     }
 }
@@ -659,7 +664,7 @@ impl std::fmt::Display for DatumType {
 impl DatumType {
     pub fn from_filename_extension(filename: &str) -> DatumType {
         if filename.ends_with(".cli.toml") {
-            DatumType::Unknown
+            DatumType::Cli
         } else if filename.ends_with(".mcp.toml") {
             DatumType::Mcp
         } else if filename.ends_with(".bash.toml") {
@@ -680,6 +685,8 @@ impl DatumType {
             DatumType::AiModel
         } else if filename.ends_with(".stack.toml") {
             DatumType::Stack
+        } else if filename.ends_with(".config.toml") || filename.ends_with("_b00t_.toml") {
+            DatumType::Config
         } else {
             DatumType::Unknown // Default fallback for .toml files
         }
