@@ -326,7 +326,7 @@ impl JobDatum {
             in_degree.entry(step.name.clone()).or_insert(0);
 
             for dep in &step.depends_on {
-                *in_degree.entry(dep.clone()).or_insert(0) += 0;
+                // Only increment the in-degree of the dependent step
                 *in_degree.entry(step.name.clone()).or_insert(0) += 1;
             }
         }
