@@ -56,12 +56,13 @@ uv run playwright install chromium
 uv run b00t-langchain serve
 ```
 
-### Via pip
+### Manual (not recommended)
 
 ```bash
-pip install -e .
-playwright install chromium
-b00t-langchain serve
+# Use uv instead - see above
+uv sync
+uv run playwright install chromium
+uv run b00t-langchain serve
 ```
 
 ## Configuration

@@ -16,11 +16,10 @@ LangChain v1.0 is the first stable release (November 2024) providing a productio
 ## Installation
 
 ```bash
-# Via uv (recommended)
+# Via uv (b00t standard)
 uv add langchain langchain-anthropic langgraph
 
-# Or pip
-pip install langchain langchain-anthropic langgraph
+# Note: uv is ALWAYS used in b00t, never pip directly
 ```
 
 ## Core Concepts

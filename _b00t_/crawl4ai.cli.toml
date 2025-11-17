@@ -5,14 +5,14 @@ hint = "crawl4ai - AI-powered web crawler with LLM-ready markdown output"
 desires = "0.7.6"
 keywords = ["web-scraping", "crawler", "markdown", "ai", "llm"]
 
-# Installation via pipx (isolated Python environment)
+# Installation via uv tool (b00t standard)
 install = """
-pipx install crawl4ai[all]
+uv tool install crawl4ai[all]
 """
 
 # Update to latest version
 update = """
-pipx upgrade crawl4ai
+uv tool upgrade crawl4ai
 """
 
 # Version detection

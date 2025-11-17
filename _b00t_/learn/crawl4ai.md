@@ -16,11 +16,11 @@ crawl4ai is an AI-powered web crawler that outputs clean, LLM-ready markdown. Pe
 ## Installation
 
 ```bash
-# Via pipx (isolated environment - recommended)
-pipx install crawl4ai[all]
+# Via uv tool (b00t standard - recommended)
+uv tool install crawl4ai[all]
 
 # Install playwright browsers
-playwright install chromium
+uv tool run playwright install chromium
 ```
 
 ## Basic Usage
@@ -233,7 +233,7 @@ crawl4ai https://api.example.com/docs \
 ### "Playwright not installed"
 
 ```bash
-playwright install chromium
+uv tool run playwright install chromium
 ```
 
 ### "Timeout waiting for page"
