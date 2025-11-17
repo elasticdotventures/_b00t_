@@ -96,6 +96,7 @@ async def run_service(
     finally:
         await listener.stop()
         await agent_service.shutdown()
+        await mcp_discovery.shutdown()
         await redis_client.aclose()
         await redis_sub.aclose()
         log.info("✅ Service stopped")

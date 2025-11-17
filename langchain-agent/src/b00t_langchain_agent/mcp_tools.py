@@ -8,10 +8,11 @@ import asyncio
 import logging
 import tomllib
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
+from fastmcp import Client
 from langchain_core.tools import BaseTool, StructuredTool
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, create_model
 
 from .types import MCPServerConfig
 
@@ -31,6 +32,7 @@ class MCPToolDiscovery:
         self.datum_path = datum_path
         self.tools: list[BaseTool] = []
         self.mcp_servers: list[MCPServerConfig] = []
+        self.mcp_clients: dict[str, Client] = {}  # Active MCP client connections
 
     async def initialize(self) -> None:
         """Discover MCP servers and load tools."""
@@ -52,8 +54,6 @@ class MCPToolDiscovery:
         log.info(f"Total MCP servers discovered: {len(self.mcp_servers)}")
 
         # Connect to servers and discover tools
-        # 🤓: Full MCP protocol implementation would go here
-        # For now, create placeholder tools for testing
         await self._discover_tools()
 
     def _parse_mcp_datum(self, datum_file: Path) -> list[MCPServerConfig]:
@@ -110,65 +110,206 @@ class MCPToolDiscovery:
 
     async def _discover_tools(self) -> None:
         """
-        Discover tools from MCP servers.
+        Discover tools from MCP servers using FastMCP client.
 
-        🤓: This is a placeholder implementation. Full MCP protocol integration
-        requires fastmcp or similar client library to:
-        1. Start stdio processes or connect to HTTP servers
-        2. Call list_tools JSON-RPC method
-        3. Convert JSON-Schema -> Pydantic -> LangChain BaseTool
+        Connects to each MCP server, lists available tools, and converts them
+        to LangChain BaseTool instances with real execution.
         """
         log.info("🛠️  Discovering tools from MCP servers...")
 
-        # Create placeholder tools for common MCP servers
-        # 🤓: These will be replaced with actual tool discovery via MCP protocol
-        placeholder_tools = self._create_placeholder_tools()
-        self.tools.extend(placeholder_tools)
+        for server in self.mcp_servers:
+            try:
+                await self._connect_and_discover(server)
+            except Exception as e:
+                log.warning(f"⚠️  Failed to connect to {server.name}: {e}")
+                # Continue with other servers
 
         log.info(f"Total tools available: {len(self.tools)}")
 
-    def _create_placeholder_tools(self) -> list[BaseTool]:
+    async def _connect_and_discover(self, server: MCPServerConfig) -> None:
         """
-        Create placeholder tools for testing.
+        Connect to a single MCP server and discover its tools.
 
-        🤓: Remove this once full MCP protocol is implemented.
+        Args:
+            server: MCP server configuration
         """
-        tools: list[BaseTool] = []
+        log.info(f"  Connecting to {server.name} ({server.transport})...")
 
-        # Common server names to create placeholder tools for
-        server_names = {server.name for server in self.mcp_servers}
+        try:
+            # Create MCP client based on transport
+            if server.transport == "stdio":
+                # FastMCP Client for stdio: command with args
+                client_input = [server.command] + server.args
+                client = Client(client_input)
+            elif server.transport == "http":
+                # FastMCP Client for HTTP
+                client = Client(server.url)
+            else:
+                log.warning(f"  ⚠️  Unsupported transport: {server.transport}")
+                return
 
-        # crawl4ai placeholder
-        if any("crawl4ai" in name for name in server_names):
-            tools.append(
-                StructuredTool.from_function(
-                    func=lambda url: f"Crawled: {url}",
-                    name="crawl4ai_crawl",
-                    description="Crawl a URL and extract clean markdown content",
+            # Connect and list tools
+            async with client:
+                # List available tools from MCP server
+                mcp_tools = await client.list_tools()
+
+                log.info(f"  ✅ {server.name}: {len(mcp_tools.tools)} tools")
+
+                # Convert each MCP tool to LangChain BaseTool
+                for mcp_tool in mcp_tools.tools:
+                    try:
+                        lc_tool = self._create_langchain_tool(
+                            server_name=server.name,
+                            mcp_tool=mcp_tool,
+                            client=client,
+                        )
+                        self.tools.append(lc_tool)
+                        log.debug(f"    • {mcp_tool.name}: {mcp_tool.description}")
+                    except Exception as e:
+                        log.warning(f"    ⚠️  Failed to convert tool {mcp_tool.name}: {e}")
+
+        except Exception as e:
+            log.error(f"  ❌ Failed to connect to {server.name}: {e}")
+            raise
+
+    def _create_langchain_tool(
+        self,
+        server_name: str,
+        mcp_tool: Any,
+        client: Client,
+    ) -> BaseTool:
+        """
+        Create a LangChain BaseTool from an MCP tool definition.
+
+        Args:
+            server_name: Name of the MCP server
+            mcp_tool: MCP tool definition from list_tools()
+            client: Active MCP client connection
+
+        Returns:
+            LangChain BaseTool that executes via MCP
+        """
+        # Extract tool metadata
+        tool_name = mcp_tool.name
+        tool_description = mcp_tool.description or f"Tool from {server_name}"
+
+        # Convert MCP inputSchema (JSON Schema) to Pydantic model
+        input_schema = getattr(mcp_tool, "inputSchema", None)
+        if input_schema:
+            args_model = self._json_schema_to_pydantic(tool_name, input_schema)
+        else:
+            # No input schema - create empty model
+            args_model = create_model(f"{tool_name}Input")
+
+        # Create async function that calls MCP tool
+        async def async_tool_func(**kwargs: Any) -> str:
+            """Call MCP tool via FastMCP client."""
+            try:
+                # Call the MCP tool through the client
+                async with client:
+                    result = await client.call_tool(tool_name, kwargs)
+
+                    # Extract text content from result
+                    if hasattr(result, "content") and result.content:
+                        # result.content is a list of content blocks
+                        text_parts = []
+                        for content_block in result.content:
+                            if hasattr(content_block, "text"):
+                                text_parts.append(content_block.text)
+                            else:
+                                text_parts.append(str(content_block))
+                        return "\n".join(text_parts)
+                    else:
+                        return str(result)
+
+            except Exception as e:
+                log.error(f"Error calling MCP tool {tool_name}: {e}")
+                return f"Error: {str(e)}"
+
+        # Sync wrapper for LangChain (which expects sync functions)
+        def sync_tool_func(**kwargs: Any) -> str:
+            """Synchronous wrapper around async MCP tool call."""
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                # If event loop is running, create a new task
+                # 🤓: This is tricky - LangGraph runs in async context
+                # We need to use asyncio.create_task instead
+                raise RuntimeError(
+                    f"Cannot call MCP tool {tool_name} from running event loop. "
+                    "Use async tools with LangGraph."
                 )
-            )
+            else:
+                # Create new event loop if none exists
+                return asyncio.run(async_tool_func(**kwargs))
 
-        # github placeholder
-        if any("github" in name for name in server_names):
-            tools.append(
-                StructuredTool.from_function(
-                    func=lambda repo: f"GitHub: {repo}",
-                    name="github_get_repo",
-                    description="Get repository information from GitHub",
+        # Create StructuredTool with async support
+        # 🤓: LangChain/LangGraph supports async tools via coroutine_func
+        return StructuredTool(
+            name=tool_name,
+            description=tool_description,
+            args_schema=args_model,
+            coroutine=async_tool_func,  # Async execution
+        )
+
+    def _json_schema_to_pydantic(
+        self, tool_name: str, json_schema: dict[str, Any]
+    ) -> type[BaseModel]:
+        """
+        Convert JSON Schema to Pydantic model.
+
+        Args:
+            tool_name: Name of the tool (for model naming)
+            json_schema: JSON Schema definition
+
+        Returns:
+            Pydantic BaseModel class
+        """
+        # Get properties from JSON Schema
+        properties = json_schema.get("properties", {})
+        required_fields = json_schema.get("required", [])
+
+        # Build Pydantic field definitions
+        field_defs: dict[str, Any] = {}
+
+        for field_name, field_schema in properties.items():
+            field_type = self._json_type_to_python(field_schema)
+            field_description = field_schema.get("description", "")
+
+            # Determine if field is required
+            if field_name in required_fields:
+                field_defs[field_name] = (field_type, Field(description=field_description))
+            else:
+                field_defs[field_name] = (
+                    field_type | None,
+                    Field(default=None, description=field_description),
                 )
-            )
 
-        # grok placeholder
-        if any("grok" in name for name in server_names):
-            tools.append(
-                StructuredTool.from_function(
-                    func=lambda query: f"Grok search: {query}",
-                    name="grok_search",
-                    description="Search b00t knowledge base",
-                )
-            )
+        # Create dynamic Pydantic model
+        model_name = f"{tool_name.replace('-', '_').title()}Input"
+        return create_model(model_name, **field_defs)
 
-        return tools
+    def _json_type_to_python(self, schema: dict[str, Any]) -> type:
+        """
+        Convert JSON Schema type to Python type.
+
+        Args:
+            schema: JSON Schema field definition
+
+        Returns:
+            Python type
+        """
+        json_type = schema.get("type", "string")
+
+        type_mapping = {
+            "string": str,
+            "integer": int,
+            "number": float,
+            "boolean": bool,
+            "array": list,
+            "object": dict,
+        }
+
+        return type_mapping.get(json_type, str)
 
     def get_tools_by_name(self, tool_names: list[str]) -> list[BaseTool]:
         """
@@ -184,15 +325,29 @@ class MCPToolDiscovery:
         matched_tools: list[BaseTool] = []
 
         for tool_name in tool_names:
-            # Exact match
-            for tool in self.tools:
-                if tool.name == tool_name:
-                    matched_tools.append(tool)
-                    continue
-
-            # Prefix match (e.g., "crawl4ai" matches "crawl4ai_crawl")
-            for tool in self.tools:
-                if tool.name.startswith(tool_name):
-                    matched_tools.append(tool)
+            # First try exact match
+            exact_matches = [tool for tool in self.tools if tool.name == tool_name]
+            if exact_matches:
+                matched_tools.extend(exact_matches)
+            else:
+                # Fallback to prefix match (e.g., "crawl4ai" matches "crawl4ai_crawl")
+                prefix_matches = [tool for tool in self.tools if tool.name.startswith(tool_name)]
+                matched_tools.extend(prefix_matches)
 
         return matched_tools
+
+    async def shutdown(self) -> None:
+        """Cleanup MCP client connections."""
+        log.info("🛑 Shutting down MCP clients...")
+
+        # Close all active clients
+        for name, client in self.mcp_clients.items():
+            try:
+                # FastMCP clients are managed by context managers
+                # No explicit cleanup needed
+                log.debug(f"  Closed {name}")
+            except Exception as e:
+                log.warning(f"  ⚠️  Error closing {name}: {e}")
+
+        self.mcp_clients.clear()
+        log.info("✅ MCP clients stopped")
