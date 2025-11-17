@@ -1,0 +1,61 @@
+[b00t]
+name = "kube-prometheus-stack"
+type = "k8s"
+hint = "Prometheus + Grafana + Alertmanager stack. GPU metrics, pod resources, budget monitoring."
+desires = "65.0.0"
+
+chart_path = "prometheus-community/kube-prometheus-stack"
+namespace = "monitoring"
+values_file = "kube-prometheus-stack-values.yaml"
+
+install = '''
+# Add Prometheus community Helm repo
+helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+helm repo update
+
+# Create namespace
+kubectl create namespace monitoring --dry-run=client -o yaml | kubectl apply -f -
+
+# Install kube-prometheus-stack
+helm install kube-prometheus-stack prometheus-community/kube-prometheus-stack \
+    --namespace monitoring \
+    --set prometheus.prometheusSpec.serviceMonitorSelectorNilUsesHelmValues=false \
+    --set grafana.enabled=true \
+    --set grafana.adminPassword=admin \
+    --set prometheus.prometheusSpec.retention=30d \
+    --set prometheus.prometheusSpec.storageSpec.volumeClaimTemplate.spec.resources.requests.storage=50Gi
+
+# Wait for deployment
+kubectl wait --for=condition=available --timeout=300s \
+    deployment/kube-prometheus-stack-operator -n monitoring
+
+echo "Prometheus stack installed!"
+echo "Grafana: kubectl port-forward -n monitoring svc/kube-prometheus-stack-grafana 3000:80"
+echo "Prometheus: kubectl port-forward -n monitoring svc/kube-prometheus-stack-prometheus 9090:9090"
+echo "Grafana credentials: admin/admin"
+'''
+
+version = '''
+helm list -n monitoring -o json | jq -r '.[] | select(.name=="kube-prometheus-stack") | .app_version'
+'''
+
+[b00t.orchestration]
+# Integration with b00t budget controller
+budget_metrics_enabled = true
+webhook_alerts = true
+
+[[b00t.usage]]
+description = "Port-forward to Grafana"
+command = "kubectl port-forward -n monitoring svc/kube-prometheus-stack-grafana 3000:80"
+
+[[b00t.usage]]
+description = "Port-forward to Prometheus"
+command = "kubectl port-forward -n monitoring svc/kube-prometheus-stack-prometheus 9090:9090"
+
+[[b00t.usage]]
+description = "Query GPU usage via Prometheus"
+command = "kubectl exec -n monitoring prometheus-kube-prometheus-stack-prometheus-0 -- promtool query instant 'DCGM_FI_DEV_GPU_UTIL'"
+
+[[b00t.usage]]
+description = "Create ServiceMonitor for custom metrics"
+command = "kubectl apply -f service-monitor.yaml"
