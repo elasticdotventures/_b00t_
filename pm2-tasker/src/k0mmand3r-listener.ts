@@ -137,7 +137,18 @@ export class K0mmand3rListener {
       script: params.script,
       env: this.parseEnvParams(params),
       cwd: params.cwd,
-      instances: params.instances ? parseInt(params.instances, 10) : 1,
+      instances: (() => {
+        if (params.instances) {
+          const parsed = parseInt(params.instances, 10);
+          if (!Number.isNaN(parsed) && parsed > 0) {
+            return parsed;
+          } else {
+            this.log.warn(`Invalid instances value "${params.instances}" in /start command; defaulting to 1`);
+            return 1;
+          }
+        }
+        return 1;
+      })(),
       max_memory_restart: params.max_memory_restart || params.memory,
     };
 
