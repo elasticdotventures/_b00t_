@@ -315,18 +315,24 @@ impl JobDatum {
 
     /// Topological sort for DAG execution
     fn topological_sort(&self, steps: &[JobStep]) -> Result<Vec<String>> {
-        use std::collections::{HashMap, HashSet, VecDeque};
+        use std::collections::{HashMap, VecDeque};
 
+        // graph maps each step to the list of steps that depend on it
         let mut graph: HashMap<String, Vec<String>> = HashMap::new();
         let mut in_degree: HashMap<String, usize> = HashMap::new();
 
-        // Build dependency graph
+        // Initialize all steps in the graph and in_degree
         for step in steps {
-            graph.insert(step.name.clone(), step.depends_on.clone());
+            graph.entry(step.name.clone()).or_insert_with(Vec::new);
             in_degree.entry(step.name.clone()).or_insert(0);
+        }
 
+        // Build dependency graph: for each step, track what depends on it
+        for step in steps {
+            // step depends on each item in step.depends_on
+            // so each dependency has step as a dependent
             for dep in &step.depends_on {
-                // Only increment the in-degree of the dependent step
+                graph.entry(dep.clone()).or_insert_with(Vec::new).push(step.name.clone());
                 *in_degree.entry(step.name.clone()).or_insert(0) += 1;
             }
         }
@@ -374,7 +380,6 @@ mod tests {
 name = "test-job"
 type = "job"
 hint = "Test job"
-usage = ""
 
 [b00t.job]
 description = "Test job"
