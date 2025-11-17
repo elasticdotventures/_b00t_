@@ -87,8 +87,8 @@ pub enum McpCommands {
         long_about = "Execute an MCP tool from a registered server via stdio transport.\n\nExamples (datum-based):\n  b00t-cli mcp execute filesystem read_file '{\"path\":\"/tmp/test.txt\"}'\n  b00t-cli mcp execute brave-search search '{\"query\":\"rust programming\"}'\n\nExamples (direct command):\n  b00t-cli mcp execute --command npx --args '-y,@modelcontextprotocol/server-filesystem' read_file '{\"path\":\"/file.txt\"}'\n  b00t-cli mcp execute -c uvx -a 'mcp-server-playwright' screenshot '{\"url\":\"https://example.com\"}'\n\nDiscovery:\n  b00t-cli mcp execute filesystem --discover\n  b00t-cli mcp execute --command npx --args '-y,@mcp/server-filesystem' --discover"
     )]
     Execute {
-        #[clap(help = "MCP server name (from datum registry) or tool name (with --command)")]
-        server_or_tool: String,
+        #[clap(help = "MCP server name (from datum registry) or tool name (with --command). Optional in discovery mode with --command.")]
+        server_or_tool: Option<String>,
         #[clap(help = "Tool name to execute (omit in discovery mode)")]
         tool: Option<String>,
         #[clap(help = "Tool parameters as JSON string (omit in discovery mode)")]
@@ -291,25 +291,25 @@ impl McpCommands {
                         timeout_ms: Some(30000),
                     };
 
-                    // In direct mode, server_or_tool is the tool name
+                    // In direct mode, server_or_tool is the tool name (optional in discovery mode)
                     let tool_name = if *discover {
                         None
                     } else {
-                        Some(server_or_tool.clone())
+                        server_or_tool.clone()
                     };
 
                     (config, tool_name)
                 } else {
                     // Datum-based mode: lookup server from registry
-                    let server_name = server_or_tool;
-                    let datum_path = format!("{}.mcp.toml", server_name);
+                    let server_name = server_or_tool
+                        .as_ref()
+                        .ok_or_else(|| anyhow::anyhow!("Server name required (or use --command for direct mode)"))?;
 
-                    // Load datum config
-                    let (config, _filename) = crate::get_config(path, &datum_path)
-                        .map_err(|e| anyhow::anyhow!("{}", e))?;
+                    // Load MCP datum config
+                    let datum = crate::get_mcp_config(server_name, path)?;
 
                     // Extract stdio method from datum
-                    if let Some(mcp) = config.b00t.mcp {
+                    if let Some(mcp) = datum.mcp {
                         if let Some(stdio_methods) = mcp.stdio {
                             if let Some(first_method) = stdio_methods.first() {
                                 // Parse stdio method (it's stored as a HashMap<String, Value>)

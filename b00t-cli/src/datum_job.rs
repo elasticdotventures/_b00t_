@@ -226,7 +226,9 @@ pub struct JobOutputs {
 impl JobDatum {
     /// Load job from TOML file
     pub fn from_config(name: &str, path: &str) -> Result<Self> {
-        let (config, _filename) = crate::get_config(path, name)
+        // Strip .job.toml extension if present since get_config adds extensions
+        let base_name = name.trim_end_matches(".job.toml");
+        let (config, _filename) = crate::get_config(path, base_name)
             .map_err(|e| anyhow::anyhow!("{}", e))?;
         Ok(JobDatum { datum: config.b00t })
     }

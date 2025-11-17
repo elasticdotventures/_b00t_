@@ -777,7 +777,15 @@ pub fn get_config(
 
     let mut visited = std::collections::HashSet::new();
 
-    for base in [path, "~/.dotfiles/_b00t_", "~/.b00t"] {
+    // Try path/_b00t_ first, then path itself, then standard locations
+    let search_paths = [
+        format!("{}/_b00t_", path),
+        path.to_string(),
+        "~/.dotfiles/_b00t_".to_string(),
+        "~/.b00t".to_string(),
+    ];
+
+    for base in &search_paths {
         let expanded = shellexpand::tilde(base).to_string();
         if !visited.insert(expanded.clone()) {
             continue;
