@@ -1,0 +1,51 @@
+[b00t]
+name = "llm-batch-job"
+type = "job"
+hint = "Batch inference job for LLM pipeline. Requires llm-inference-pipeline stack to be running."
+
+# The actual container to run
+image = "ghcr.io/my-org/llm-batch-processor:latest"
+
+# Command and args for the job
+command = ["python"]
+args = ["-m", "batch_processor", "--model", "llama-70b-q4", "--batch-size", "32"]
+
+# Environment variables
+[b00t.env]
+MODEL_ENDPOINT = "http://n8n:5678"
+BATCH_SIZE = "32"
+OUTPUT_PATH = "/data/results"
+
+# Job orchestration metadata
+[b00t.orchestration]
+# This job requires the llm-inference-pipeline stack to be running
+requires_stacks = ["llm-inference-pipeline"]
+
+# Use Kueue for queue management
+queue_name = "gpu-queue"
+schedule_type = "queue_based"
+
+# Resource requirements (inherits from stack if not specified)
+[b00t.orchestration.resource_requirements]
+cpu = "2"
+memory = "8Gi"
+
+# GPU requirements - shares GPU with llm-inference-pipeline
+[b00t.orchestration.gpu_requirements]
+count = 1
+gpu_type = "nvidia-a100"
+shared = true  # Share with inference server
+
+# Budget constraint
+[b00t.orchestration.budget_constraint]
+daily_limit = 50.00
+cost_per_job = 1.25
+on_budget_exceeded = "defer"
+
+[[b00t.usage]]
+description = "Generate k8s Job manifest with stack dependencies"
+command = "b00t job to-k8s llm-batch-job"
+
+[[b00t.usage]]
+description = "Submit job to Kueue queue"
+command = "kubectl apply -f llm-batch-job-k8s/job.yaml"

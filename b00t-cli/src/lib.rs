@@ -89,6 +89,15 @@ pub struct OrchestrationMetadata {
     /// Source for pod template (e.g., "datum_display")
     #[serde(skip_serializing_if = "Option::is_none")]
     pub pod_template_source: Option<String>,
+
+    /// Stacks required to be running (for Job datums)
+    /// Format: ["stack-name.stack", ...]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub requires_stacks: Option<Vec<String>>,
+
+    /// Queue name for Kueue job scheduling
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub queue_name: Option<String>,
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
@@ -293,6 +302,7 @@ pub enum DatumType {
     Api, // API protocol endpoints (OpenAI-compat, embeddings, etc.)
     Cli,
     Stack,
+    Job, // k8s Job that requires stacks to be running
 }
 
 #[derive(Serialize, Debug)]
