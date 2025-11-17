@@ -1660,7 +1660,10 @@ pub fn codex_install_mcp(name: &str, path: &str) -> Result<()> {
     let mcp_datum = McpDatum::from_config(name, path)?;
     let selected_method = mcp_datum
         .select_best_method()
-        .ok_or_else(|| anyhow::anyhow!("No available method for MCP server '{}'", name))?;
+        .ok_or_else(|| anyhow::anyhow!(
+            "No available method for MCP server '{}'. Ensure the datum file contains valid 'stdio' or 'httpstream' configuration.",
+            name
+        ))?;
 
     // Expand ~/.codex/config.toml path
     let codex_config_path = shellexpand::tilde("~/.codex/config.toml").to_string();
