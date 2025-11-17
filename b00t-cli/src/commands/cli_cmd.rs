@@ -8,6 +8,7 @@ use clap::Parser;
 use duct::cmd;
 use std::collections::HashMap;
 use std::path::PathBuf;
+use shellexpand;
 
 #[derive(Parser)]
 pub enum CliCommands {
@@ -50,8 +51,18 @@ pub enum CliCommands {
         #[clap(help = "Command name to check")]
         command: String,
     },
-    #[clap(about = "Update all CLI commands")]
-    Up,
+    #[clap(
+        about = "Check all CLI commands for updates",
+        long_about = "Check all CLI commands for updates. By default, only reports which tools need updating.\n\nUse --yes to actually perform the updates.\n\nExamples:\n  b00t-cli cli up          # Check versions only\n  b00t-cli cli up --yes    # Update outdated tools\n  b00t-cli cli up -y       # Same as --yes"
+    )]
+    Up {
+        #[clap(
+            short = 'y',
+            long = "yes",
+            help = "Actually perform updates (default: check only)"
+        )]
+        yes: bool,
+    },
 }
 
 impl CliCommands {
@@ -66,7 +77,7 @@ impl CliCommands {
             CliCommands::Install { command } => cli_install(command, path),
             CliCommands::Update { command } => cli_update(command, path),
             CliCommands::Check { command } => cli_check(command, path),
-            CliCommands::Up => cli_up(path),
+            CliCommands::Up { yes } => cli_up(path, *yes),
         }
     }
 }
@@ -274,62 +285,96 @@ fn cli_check(command: &str, path: &str) -> Result<()> {
     }
 }
 
-fn cli_up(path: &str) -> Result<()> {
-    println!("🔄 Checking all CLI commands for updates...");
+fn cli_up(path: &str, yes: bool) -> Result<()> {
+    if yes {
+        println!("🔄 Checking and updating all CLI commands...");
+    } else {
+        println!("🔍 Checking all CLI commands (use --yes to update)...");
+    }
 
     // Load all CLI datum providers
     let cli_tools: Vec<Box<dyn DatumProvider>> =
         load_datum_providers::<CliDatum>(path, ".cli.toml")?;
 
     let mut updated_count = 0;
+    let mut needs_update_count = 0;
     let mut total_count = 0;
 
     for tool in cli_tools {
         total_count += 1;
         let name = tool.name();
         let version_status = tool.version_status();
+        let current = tool
+            .current_version()
+            .unwrap_or_else(|| "not found".to_string());
+        let desired = tool
+            .desired_version()
+            .unwrap_or_else(|| "unknown".to_string());
 
         match version_status {
             VersionStatus::Older | VersionStatus::Missing => {
-                println!("📦 Updating {}...", name);
-                if let Ok(cli_datum) = CliDatum::from_config(name, path) {
-                    let update_cmd = cli_datum
-                        .datum
-                        .update
-                        .as_ref()
-                        .or(cli_datum.datum.install.as_ref());
+                needs_update_count += 1;
+                if yes {
+                    println!("📦 Updating {}...", name);
+                    if let Ok(cli_datum) = CliDatum::from_config(name, path) {
+                        let update_cmd = cli_datum
+                            .datum
+                            .update
+                            .as_ref()
+                            .or(cli_datum.datum.install.as_ref());
 
-                    if let Some(cmd_str) = update_cmd {
-                        match cmd!("bash", "-c", cmd_str).run() {
-                            Ok(_) => {
-                                println!("✅ Updated {}", name);
-                                updated_count += 1;
+                        if let Some(cmd_str) = update_cmd {
+                            match cmd!("bash", "-c", cmd_str).run() {
+                                Ok(_) => {
+                                    println!("✅ Updated {}", name);
+                                    updated_count += 1;
+                                }
+                                Err(e) => {
+                                    eprintln!("❌ Failed to update {}: {}", name, e);
+                                }
                             }
-                            Err(e) => {
-                                eprintln!("❌ Failed to update {}: {}", name, e);
-                            }
+                        } else {
+                            eprintln!("⚠️ No update command for {}", name);
                         }
+                    }
+                } else {
+                    if version_status == VersionStatus::Missing {
+                        println!("🥾😱 {} (not installed) -> desires: {}", name, desired);
                     } else {
-                        eprintln!("⚠️ No update command for {}", name);
+                        println!(
+                            "🥾😭 {} (current: {}, desires: {})",
+                            name, current, desired
+                        );
                     }
                 }
             }
             VersionStatus::Match => {
-                println!("✅ {} is up to date", name);
+                println!("🥾👍🏻 {} {} (up to date)", name, current);
             }
             VersionStatus::Newer => {
-                println!("🐣 {} is newer than desired", name);
+                println!("🥾🐣 {} {} (newer than desired: {})", name, current, desired);
             }
             VersionStatus::Unknown => {
-                println!("⏹️ {} version status unknown", name);
+                println!("🥾⏹️ {} {} (version status unknown)", name, current);
             }
         }
     }
 
-    println!(
-        "🏁 Updated {} of {} CLI commands",
-        updated_count, total_count
-    );
+    if yes {
+        println!(
+            "🏁 Updated {} of {} CLI commands",
+            updated_count, total_count
+        );
+    } else {
+        if needs_update_count > 0 {
+            println!(
+                "\n💡 {} of {} commands need updates. Run 'b00t cli up --yes' to update them.",
+                needs_update_count, total_count
+            );
+        } else {
+            println!("\n🎉 All {} CLI commands are up to date!", total_count);
+        }
+    }
     Ok(())
 }
 
@@ -365,7 +410,8 @@ mod tests {
         let _check = CliCommands::Check {
             command: "test".to_string(),
         };
-        let _up = CliCommands::Up;
+        let _up = CliCommands::Up { yes: false };
+        let _up_yes = CliCommands::Up { yes: true };
         let _run = CliCommands::Run {
             script_name: "test".to_string(),
             args: vec![],

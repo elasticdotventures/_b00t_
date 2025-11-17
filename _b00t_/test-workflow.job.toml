@@ -1,0 +1,31 @@
+[b00t]
+name = "test-workflow"
+type = "job"
+hint = "Sequential workflow with checkpoints"
+
+[b00t.job]
+description = "TODO: Describe your workflow"
+tags = ["workflow"]
+
+[b00t.job.config]
+mode = "sequential"
+checkpoint_mode = "auto"
+checkpoint_after_each_step = true
+
+[[b00t.job.steps]]
+name = "step1"
+description = "First step"
+checkpoint = "step1-complete"
+
+[b00t.job.steps.task]
+type = "bash"
+command = "echo 'Step 1'"
+
+[[b00t.job.steps]]
+name = "step2"
+description = "Second step"
+checkpoint = "step2-complete"
+
+[b00t.job.steps.task]
+type = "bash"
+command = "echo 'Step 2'"

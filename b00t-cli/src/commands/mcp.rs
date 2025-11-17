@@ -82,6 +82,28 @@ pub enum McpCommands {
         #[clap(subcommand)]
         action: RegistryAction,
     },
+    #[clap(
+        about = "Execute MCP tool via stdio transport",
+        long_about = "Execute an MCP tool from a registered server via stdio transport.\n\nExamples (datum-based):\n  b00t-cli mcp execute filesystem read_file '{\"path\":\"/tmp/test.txt\"}'\n  b00t-cli mcp execute brave-search search '{\"query\":\"rust programming\"}'\n\nExamples (direct command):\n  b00t-cli mcp execute --command npx --args '-y,@modelcontextprotocol/server-filesystem' read_file '{\"path\":\"/file.txt\"}'\n  b00t-cli mcp execute -c uvx -a 'mcp-server-playwright' screenshot '{\"url\":\"https://example.com\"}'\n\nDiscovery:\n  b00t-cli mcp execute filesystem --discover\n  b00t-cli mcp execute --command npx --args '-y,@mcp/server-filesystem' --discover"
+    )]
+    Execute {
+        #[clap(help = "MCP server name (from datum registry) or tool name (with --command). Optional in discovery mode with --command.")]
+        server_or_tool: Option<String>,
+        #[clap(help = "Tool name to execute (omit in discovery mode)")]
+        tool: Option<String>,
+        #[clap(help = "Tool parameters as JSON string (omit in discovery mode)")]
+        params: Option<String>,
+        #[clap(short, long, help = "Server command (alternative to server name, e.g., npx, uvx, docker)")]
+        command: Option<String>,
+        #[clap(short, long, help = "Server arguments (comma-separated, e.g., '-y,@mcp/server')")]
+        args: Option<String>,
+        #[clap(long, help = "Working directory for server process")]
+        cwd: Option<String>,
+        #[clap(short, long, help = "Discover and list available tools only")]
+        discover: bool,
+        #[clap(short = 'f', long, help = "Output format: json, text (default: text)")]
+        format: Option<String>,
+    },
 }
 
 #[derive(Parser)]
@@ -240,6 +262,163 @@ impl McpCommands {
                 crate::mcp_output(path, use_mcp_servers_wrapper, servers)
             }
             McpCommands::Registry { action } => action.execute_async().await,
+            McpCommands::Execute {
+                server_or_tool,
+                tool,
+                params,
+                command,
+                args,
+                cwd,
+                discover,
+                format,
+            } => {
+                use b00t_c0re_lib::mcp_proxy::{GenericMcpProxy, McpServerConfig, McpToolRequest};
+                use serde_json::Value as JsonValue;
+
+                // Determine operating mode: datum-based or direct command
+                let (server_config, tool_name) = if let Some(cmd) = command {
+                    // Direct command mode: --command specified
+                    let parsed_args = args
+                        .as_ref()
+                        .map(|a| a.split(',').map(|s| s.trim().to_string()).collect())
+                        .unwrap_or_default();
+
+                    let config = McpServerConfig {
+                        command: cmd.clone(),
+                        args: parsed_args,
+                        cwd: cwd.clone(),
+                        env: None,
+                        timeout_ms: Some(30000),
+                    };
+
+                    // In direct mode, server_or_tool is the tool name (optional in discovery mode)
+                    let tool_name = if *discover {
+                        None
+                    } else {
+                        server_or_tool.clone()
+                    };
+
+                    (config, tool_name)
+                } else {
+                    // Datum-based mode: lookup server from registry
+                    let server_name = server_or_tool
+                        .as_ref()
+                        .ok_or_else(|| anyhow::anyhow!("Server name required (or use --command for direct mode)"))?;
+
+                    // Load MCP datum config
+                    let datum = crate::get_mcp_config(server_name, path)?;
+
+                    // Extract stdio method from datum
+                    if let Some(mcp) = datum.mcp {
+                        if let Some(stdio_methods) = mcp.stdio {
+                            if let Some(first_method) = stdio_methods.first() {
+                                // Parse stdio method (it's stored as a HashMap<String, Value>)
+                                let cmd = first_method
+                                    .get("command")
+                                    .and_then(|v| v.as_str())
+                                    .ok_or_else(|| anyhow::anyhow!("Missing 'command' in stdio method"))?
+                                    .to_string();
+
+                                let parsed_args = first_method
+                                    .get("args")
+                                    .and_then(|v| v.as_array())
+                                    .map(|arr| {
+                                        arr.iter()
+                                            .filter_map(|v| v.as_str().map(String::from))
+                                            .collect()
+                                    })
+                                    .unwrap_or_default();
+
+                                let server_config = McpServerConfig {
+                                    command: cmd,
+                                    args: parsed_args,
+                                    cwd: cwd.clone(),
+                                    env: None,
+                                    timeout_ms: Some(30000),
+                                };
+
+                                (server_config, tool.clone())
+                            } else {
+                                anyhow::bail!("No stdio methods defined for server '{}'", server_name);
+                            }
+                        } else {
+                            anyhow::bail!("No stdio configuration for server '{}'", server_name);
+                        }
+                    } else {
+                        anyhow::bail!("'{}' is not an MCP server", server_name);
+                    }
+                };
+
+                // Create MCP proxy
+                let mut proxy = GenericMcpProxy::new();
+
+                // Discover tools from server
+                println!("🔌 Connecting to MCP server...");
+                let discovered_tools = proxy
+                    .discover_tools_from_server(server_config.clone())
+                    .await?;
+
+                println!("✅ Discovered {} tools", discovered_tools.len());
+
+                // Discovery mode: list tools and exit
+                if *discover {
+                    println!("\n📋 Available tools:");
+                    for tool_name in discovered_tools {
+                        // Get tool info for better display
+                        if let Some(info) = proxy.get_tool(&tool_name) {
+                            println!("  • {} - {}", tool_name, info.description);
+                        } else {
+                            println!("  • {}", tool_name);
+                        }
+                    }
+                    return Ok(());
+                }
+
+                // Execute mode: validate tool name and params
+                let tool_name = tool_name.ok_or_else(|| {
+                    anyhow::anyhow!("Tool name required (or use --discover to list tools)")
+                })?;
+
+                let params_str = params.as_ref().ok_or_else(|| {
+                    anyhow::anyhow!("Tool parameters required (JSON string)")
+                })?;
+
+                // Parse params JSON
+                let params_value: JsonValue = serde_json::from_str(params_str)
+                    .map_err(|e| anyhow::anyhow!("Invalid JSON parameters: {}", e))?;
+
+                // Execute tool
+                println!("🚀 Executing tool '{}'...", tool_name);
+                let request = McpToolRequest {
+                    tool: tool_name.clone(),
+                    params: params_value,
+                    request_id: Some(uuid::Uuid::new_v4().to_string()),
+                };
+
+                let response = proxy.execute_tool(request).await?;
+
+                // Format output
+                match format.as_deref() {
+                    Some("json") => {
+                        println!("{}", serde_json::to_string_pretty(&response)?);
+                    }
+                    _ => {
+                        // Text mode (default)
+                        if response.success {
+                            println!("✅ Success");
+                            if let Some(data) = response.data {
+                                println!("\n📊 Result:");
+                                println!("{}", serde_json::to_string_pretty(&data)?);
+                            }
+                        } else {
+                            println!("❌ Error: {}", response.error.unwrap_or_else(|| "Unknown error".to_string()));
+                        }
+                        println!("\n⏱️  Duration: {}ms", response.metadata.duration_ms);
+                    }
+                }
+
+                Ok(())
+            }
         }
     }
 }
