@@ -373,6 +373,8 @@ mod tests {
 [b00t]
 name = "test-job"
 type = "job"
+hint = "Test job"
+usage = ""
 
 [b00t.job]
 description = "Test job"
