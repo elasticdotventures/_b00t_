@@ -214,7 +214,7 @@ Example:
     },
     #[clap(
         about = "Update all datums defined in _b00t_.toml",
-        long_about = "Check and update all datums according to _b00t_.toml configuration.\n\nBy default, checks versions only. Use --yes to actually perform updates.\n\nConfiguration file priority:\n1. <git_root>/_b00t_.toml (if in a git repo)\n2. ~/.dotfiles/_b00t_.toml (if ~/.dotfiles exists)\n3. ~/.b00t/_b00t_.toml\n\nExamples:\n  b00t up           # Check all datums\n  b00t up --yes     # Update outdated datums\n  b00t up -y        # Same as --yes"
+        long_about = "Check and update all datums according to _b00t_.toml configuration.\n\nBy default, checks versions only. Use --yes to actually perform updates.\n\nConfiguration file priority:\n1. <git_root>/_b00t_.toml (project-specific, if in a git repo)\n2. ~/.b00t/_b00t_.toml (user-level)\n\nNote: Projects may have a _b00t_/ directory for project-specific datums.\n\nExamples:\n  b00t up           # Check all datums\n  b00t up --yes     # Update outdated datums\n  b00t up -y        # Same as --yes"
     )]
     Up {
         #[clap(
