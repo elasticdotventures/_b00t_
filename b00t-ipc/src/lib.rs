@@ -7,8 +7,9 @@
 //! - **Message**: Typed communication between agents
 //! - **Crew**: Coordinated group with roles & voting
 //! - **Protocol**: Handshake, voting, negotiation patterns
+//! - **Transport**: Multi-protocol pub/sub (Redis, NATS, IRC, RabbitMQ)
 //!
-//! # Example
+//! # Example: In-Process MessageBus
 //! ```rust,no_run
 //! use b00t_ipc::{Agent, Message, MessageBus};
 //!
@@ -21,6 +22,20 @@
 //!     bus.handshake("alpha", "beta").await.unwrap();
 //! }
 //! ```
+//!
+//! # Example: External Transport (Redis)
+//! ```rust,no_run
+//! use b00t_ipc::transport::{Transport, RedisTransport, K0mmand3rMessage};
+//!
+//! #[tokio::main]
+//! async fn main() {
+//!     let transport = RedisTransport::connect("redis://localhost:6379").await.unwrap();
+//!     let msg = K0mmand3rMessage::new("start").with_param("task", "myapp");
+//!     transport.publish("b00t:k0mmand3r", &msg).await.unwrap();
+//! }
+//! ```
+
+pub mod transport;
 
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};

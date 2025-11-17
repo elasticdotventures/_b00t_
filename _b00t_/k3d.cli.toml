@@ -1,0 +1,46 @@
+[b00t]
+name = "k3d"
+type = "cli"
+hint = "k3s in Docker. Spin up local k8s clusters in seconds for testing."
+desires = "5.7.0"
+depends_on = ["docker.cli"]
+
+install = '''
+if command -v pkgx >/dev/null 2>&1; then
+    pkgx install k3d@5.7
+    mkdir -p ~/.local/bin
+    cat > ~/.local/bin/k3d << 'EOF'
+#!/bin/bash
+exec pkgx k3d "$@"
+EOF
+    chmod +x ~/.local/bin/k3d
+elif command -v brew >/dev/null 2>&1; then
+    brew install k3d
+else
+    # Install from GitHub
+    curl -s https://raw.githubusercontent.com/k3d-io/k3d/main/install.sh | bash
+fi
+'''
+
+version = "k3d version"
+version_regex = 'k3d version v(\d+\.\d+\.\d+)'
+
+[[b00t.usage]]
+description = "Create a single-node cluster"
+command = "k3d cluster create mycluster"
+
+[[b00t.usage]]
+description = "Create cluster with 3 agents (worker nodes)"
+command = "k3d cluster create mycluster --agents 3"
+
+[[b00t.usage]]
+description = "Create cluster with GPU support"
+command = "k3d cluster create gpu-cluster --gpus all"
+
+[[b00t.usage]]
+description = "List clusters"
+command = "k3d cluster list"
+
+[[b00t.usage]]
+description = "Delete cluster"
+command = "k3d cluster delete mycluster"

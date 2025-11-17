@@ -1,0 +1,43 @@
+[b00t]
+name = "pm2"
+type = "cli"
+hint = "PM2 - Advanced Node.js process manager with built-in load balancer"
+desires = "5.3.0"
+keywords = ["process-manager", "nodejs", "daemon", "clustering", "monitoring"]
+
+# Install via npm globally
+install = """
+npm install -g pm2@latest
+"""
+
+# Update to latest version
+update = """
+npm update -g pm2
+"""
+
+# Version detection
+version = "pm2 --version"
+version_regex = "^(\\d+\\.\\d+\\.\\d+)"
+
+# Common PM2 commands
+[b00t.aliases]
+pm2-list = "pm2 list"
+pm2-logs = "pm2 logs"
+pm2-mon = "pm2 monit"
+pm2-stop-all = "pm2 stop all"
+pm2-delete-all = "pm2 delete all"
+pm2-restart-all = "pm2 restart all"
+pm2-save = "pm2 save"
+pm2-resurrect = "pm2 resurrect"
+
+[b00t.env]
+# PM2 home directory
+PM2_HOME = "~/.pm2"
+# Enable PM2 monitoring
+PM2_MONITORING = "true"
+# Max memory restart threshold
+PM2_MAX_MEMORY_RESTART = "500M"
+
+[b00t.depends_on]
+# PM2 requires Node.js
+requires = ["node.cli"]

@@ -1,0 +1,156 @@
+[b00t]
+name = "go"
+type = "cli"
+desires = "1.23.0"
+install = '''
+# Install Go programming language
+# Preferred method: pkgx (fast, isolated, no system pollution)
+# Fallback: Official Go installation
+
+echo "📦 Installing Go..."
+
+# Check if pkgx is available (preferred method)
+if command -v pkgx >/dev/null 2>&1; then
+    echo "✨ Using pkgx for Go installation (recommended)"
+    pkgx install go@1.23
+
+    # Verify pkgx installation
+    if pkgx go version >/dev/null 2>&1; then
+        echo "✅ Go installed via pkgx"
+        # Create wrapper script for seamless usage
+        mkdir -p ~/.local/bin
+        cat > ~/.local/bin/go << 'EOF'
+#!/bin/bash
+exec pkgx go "$@"
+EOF
+        chmod +x ~/.local/bin/go
+        echo "✅ Created go wrapper in ~/.local/bin/go"
+        exit 0
+    fi
+fi
+
+# Fallback: Traditional installation
+echo "📦 Installing Go via official method..."
+
+# Detect platform
+OS=$(uname -s | tr '[:upper:]' '[:lower:]')
+ARCH=$(uname -m)
+
+case "$ARCH" in
+    x86_64) ARCH="amd64" ;;
+    aarch64|arm64) ARCH="arm64" ;;
+    armv7l) ARCH="armv6l" ;;
+    *) echo "❌ Unsupported architecture: $ARCH"; exit 1 ;;
+esac
+
+case "$OS" in
+    linux) OS="linux" ;;
+    darwin) OS="darwin" ;;
+    *) echo "❌ Unsupported OS: $OS"; exit 1 ;;
+esac
+
+GO_VERSION="1.23.4"
+GO_TARBALL="go${GO_VERSION}.${OS}-${ARCH}.tar.gz"
+DOWNLOAD_URL="https://go.dev/dl/${GO_TARBALL}"
+
+# Download and install
+echo "⬇️  Downloading Go ${GO_VERSION} for ${OS}-${ARCH}..."
+cd /tmp
+curl -LO "${DOWNLOAD_URL}"
+
+# Remove old installation
+sudo rm -rf /usr/local/go
+
+# Extract to /usr/local
+echo "📂 Extracting to /usr/local..."
+sudo tar -C /usr/local -xzf "${GO_TARBALL}"
+rm "${GO_TARBALL}"
+
+# Add to PATH (if not already present)
+SHELL_RC="${HOME}/.bashrc"
+if [ -n "$ZSH_VERSION" ]; then
+    SHELL_RC="${HOME}/.zshrc"
+fi
+
+if ! grep -q "/usr/local/go/bin" "$SHELL_RC" 2>/dev/null; then
+    echo '' >> "$SHELL_RC"
+    echo '# Added by b00t go installer' >> "$SHELL_RC"
+    echo 'export PATH=$PATH:/usr/local/go/bin' >> "$SHELL_RC"
+    echo 'export PATH=$PATH:$HOME/go/bin' >> "$SHELL_RC"
+fi
+
+export PATH=$PATH:/usr/local/go/bin
+export PATH=$PATH:$HOME/go/bin
+
+# Verify installation
+go version
+echo "✅ Go installed successfully"
+'''
+update = '''
+# Update Go to latest version
+echo "🔄 Updating Go..."
+
+if command -v pkgx >/dev/null 2>&1 && [ -f ~/.local/bin/go ] && grep -q "pkgx" ~/.local/bin/go 2>/dev/null; then
+    echo "✨ Updating via pkgx..."
+    pkgx install go@latest
+    echo "✅ Go updated via pkgx"
+else
+    echo "📦 Updating via official method..."
+    # Re-run install script to get latest version
+    # (Install script handles removal of old version)
+
+    OS=$(uname -s | tr '[:upper:]' '[:lower:]')
+    ARCH=$(uname -m)
+
+    case "$ARCH" in
+        x86_64) ARCH="amd64" ;;
+        aarch64|arm64) ARCH="arm64" ;;
+        armv7l) ARCH="armv6l" ;;
+    esac
+
+    case "$OS" in
+        linux) OS="linux" ;;
+        darwin) OS="darwin" ;;
+    esac
+
+    GO_VERSION="1.23.0"
+    GO_TARBALL="go${GO_VERSION}.${OS}-${ARCH}.tar.gz"
+    DOWNLOAD_URL="https://go.dev/dl/${GO_TARBALL}"
+
+    cd /tmp
+    curl -LO "${DOWNLOAD_URL}"
+    sudo rm -rf /usr/local/go
+    sudo tar -C /usr/local -xzf "${GO_TARBALL}"
+    rm "${GO_TARBALL}"
+
+    echo "✅ Go updated to ${GO_VERSION}"
+fi
+'''
+version = "go version"
+version_regex = 'go(\d+\.\d+\.?\d*)'
+hint = "Go programming language - fast, statically typed, compiled language with excellent concurrency support. Preferred installation via pkgx for zero system pollution."
+lfmf_category = "go"
+
+[b00t.learn]
+topic = "go"
+auto_digest = false
+
+[[b00t.usage]]
+description = "Check Go version"
+command = "go version"
+
+[[b00t.usage]]
+description = "Initialize Go module"
+command = "go mod init example.com/myproject"
+
+[[b00t.usage]]
+description = "Build Go binary"
+command = "go build -o mybinary"
+
+[[b00t.usage]]
+description = "Run Go program"
+command = "go run main.go"
+
+[[b00t.usage]]
+description = "Install Go package globally"
+command = "go install github.com/user/package@latest"

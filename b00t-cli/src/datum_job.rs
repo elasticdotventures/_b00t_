@@ -315,23 +315,29 @@ impl JobDatum {
 
     /// Topological sort for DAG execution
     fn topological_sort(&self, steps: &[JobStep]) -> Result<Vec<String>> {
-        use std::collections::{HashMap, HashSet, VecDeque};
+        use std::collections::{HashMap, VecDeque};
 
-        let mut graph: HashMap<String, Vec<String>> = HashMap::new();
+        // Build reverse dependency graph (who depends on me?)
+        let mut reverse_graph: HashMap<String, Vec<String>> = HashMap::new();
         let mut in_degree: HashMap<String, usize> = HashMap::new();
 
-        // Build dependency graph
+        // Initialize all steps
         for step in steps {
-            graph.insert(step.name.clone(), step.depends_on.clone());
-            in_degree.entry(step.name.clone()).or_insert(0);
+            in_degree.insert(step.name.clone(), step.depends_on.len());
+            reverse_graph.entry(step.name.clone()).or_insert_with(Vec::new);
+        }
 
+        // Build reverse edges: if B depends on A, then reverse_graph[A] contains B
+        for step in steps {
             for dep in &step.depends_on {
-                *in_degree.entry(dep.clone()).or_insert(0) += 0;
-                *in_degree.entry(step.name.clone()).or_insert(0) += 1;
+                reverse_graph
+                    .entry(dep.clone())
+                    .or_insert_with(Vec::new)
+                    .push(step.name.clone());
             }
         }
 
-        // Kahn's algorithm
+        // Kahn's algorithm: start with nodes that have no dependencies
         let mut queue: VecDeque<String> = in_degree
             .iter()
             .filter(|&(_, &deg)| deg == 0)
@@ -343,12 +349,13 @@ impl JobDatum {
         while let Some(node) = queue.pop_front() {
             result.push(node.clone());
 
-            if let Some(deps) = graph.get(&node) {
-                for dep in deps {
-                    if let Some(deg) = in_degree.get_mut(dep) {
+            // Reduce in-degree of nodes that depend on this node
+            if let Some(dependents) = reverse_graph.get(&node) {
+                for dependent in dependents {
+                    if let Some(deg) = in_degree.get_mut(dependent) {
                         *deg -= 1;
                         if *deg == 0 {
-                            queue.push_back(dep.clone());
+                            queue.push_back(dependent.clone());
                         }
                     }
                 }
