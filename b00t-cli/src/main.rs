@@ -212,6 +212,18 @@ Example:
         #[clap(subcommand)]
         grok_command: GrokCommands,
     },
+    #[clap(
+        about = "Update all datums defined in _b00t_.toml",
+        long_about = "Check and update all datums according to _b00t_.toml configuration.\n\nBy default, checks versions only. Use --yes to actually perform updates.\n\nConfiguration file priority:\n1. <git_root>/_b00t_.toml (if in a git repo)\n2. ~/.dotfiles/_b00t_.toml (if ~/.dotfiles exists)\n3. ~/.b00t/_b00t_.toml\n\nExamples:\n  b00t up           # Check all datums\n  b00t up --yes     # Update outdated datums\n  b00t up -y        # Same as --yes"
+    )]
+    Up {
+        #[clap(
+            short = 'y',
+            long = "yes",
+            help = "Actually perform updates (default: check only)"
+        )]
+        yes: bool,
+    },
     #[clap(about = "Bootstrap self-configuring b00t installation (Phase 0: Foundation)")]
     Bootstrap {
         #[clap(subcommand)]
@@ -275,6 +287,54 @@ fn datum_providers_to_tool_status(providers: Vec<Box<dyn DatumProvider>>) -> Vec
             }
         })
         .collect()
+}
+
+fn handle_up_command(_b00t_path: &str, yes: bool) -> Result<()> {
+    use b00t_cli::datum_config::B00tConfig;
+
+    // Load or create configuration
+    let (config, config_path) = B00tConfig::load_or_create()?;
+
+    if yes {
+        println!("🔄 Updating all datums from {}...", config_path.display());
+    } else {
+        println!("🔍 Checking all datums from {} (use --yes to update)...", config_path.display());
+    }
+
+    // If config file doesn't exist yet, show helpful message
+    if !config_path.exists() {
+        println!("\n⚠️  No _b00t_.toml found at {}", config_path.display());
+        println!("   Create one to track your installed datums:\n");
+        println!("   Example _b00t_.toml:");
+        println!("   ---");
+        println!("   version = \"{}\"", b00t_c0re_lib::version::VERSION);
+        println!("   initialized = \"{}\"", chrono::Utc::now().to_rfc3339());
+        println!("   install_methods = [\"docker\", \"pkgx\", \"apt\", \"curl\"]");
+        println!("   datums = [");
+        println!("     \"git.cli\",");
+        println!("     \"docker.docker\",");
+        println!("     \"rust.*\",    # All rust-related datums");
+        println!("     \"ai.*\",      # All AI providers");
+        println!("   ]");
+        println!("   ---\n");
+        println!("💡 Run `b00t install <datum>` to auto-create and update this file.");
+        return Ok(());
+    }
+
+    println!("\n📋 Configuration loaded:");
+    println!("   Version: {}", config.version);
+    println!("   Datums: {:?}", config.datums);
+    println!("   Install methods: {:?}", config.install_methods);
+
+    // 🤓 TODO: Implement datum loading and updating
+    // Currently blocked by trait version conflicts - needs refactoring
+    println!("\n⚠️  Full datum checking not yet implemented");
+    println!("   Next steps:");
+    println!("   1. Load datums from _b00t_ path");
+    println!("   2. Match against configured patterns");
+    println!("   3. Check versions and update if --yes flag is set");
+
+    Ok(())
 }
 
 fn checkpoint(message: Option<&str>, skip_tests: bool) -> Result<()> {
@@ -1215,6 +1275,12 @@ async fn main() {
 
             // 🤓 No need for nested runtime - already in #[tokio::main]
             if let Err(e) = handle_grok_command(grok_command.clone()).await {
+                eprintln!("Error: {}", e);
+                std::process::exit(1);
+            }
+        }
+        Some(Commands::Up { yes }) => {
+            if let Err(e) = handle_up_command(&cli.path, *yes) {
                 eprintln!("Error: {}", e);
                 std::process::exit(1);
             }
