@@ -33,6 +33,8 @@ pub enum JobStatus {
     Failed,
     Cancelled,
     Paused,
+    RollingBack,
+    RolledBack,
 }
 
 /// Step execution state

@@ -1,4 +1,71 @@
 use crate::BootDatum;
+use anyhow::Result;
+
+/// Display trait for generating k8s CRDs from b00t datums
+/// Enables MBSE-based stack → pod transformation
+pub trait DatumCrdDisplay {
+    /// Generate complete k8s Custom Resource Definition YAML
+    fn to_crd_template(&self) -> Result<String>;
+
+    /// Generate k8s Pod spec YAML
+    fn to_pod_spec(&self) -> Result<String>;
+
+    /// Get resource requirements (CPU, memory, GPU)
+    fn get_resource_requirements(&self) -> ResourceRequirements;
+
+    /// Get affinity rules for GPU batching and scheduling
+    fn get_affinity_rules(&self) -> AffinityRules;
+
+    /// Get budget constraints if defined
+    fn get_budget_constraints(&self) -> Option<BudgetConstraints>;
+}
+
+/// Resource requirements for k8s pod scheduling
+#[derive(Debug, Clone, Default)]
+pub struct ResourceRequirements {
+    pub cpu: Option<String>,
+    pub memory: Option<String>,
+    pub gpu_count: Option<u32>,
+    pub gpu_memory: Option<String>,
+    pub gpu_type: Option<String>,
+}
+
+/// Affinity rules for pod scheduling
+#[derive(Debug, Clone)]
+pub struct AffinityRules {
+    pub strategy: AffinityStrategy,
+    pub gpu_batch_group: Option<String>,
+    pub topology_key: Option<String>,
+}
+
+impl Default for AffinityRules {
+    fn default() -> Self {
+        Self {
+            strategy: AffinityStrategy::None,
+            gpu_batch_group: None,
+            topology_key: None,
+        }
+    }
+}
+
+/// Affinity scheduling strategies
+#[derive(Debug, Clone, PartialEq)]
+pub enum AffinityStrategy {
+    None,
+    GpuAffinity,      // Batch jobs to minimize GPU load/unload
+    CostOptimized,    // Batch by budget constraints
+    TimeEpoch,        // Batch by time windows
+    ResourceSharing,  // Allow multiple jobs on same GPU
+}
+
+/// Budget constraints for cost-aware scheduling
+#[derive(Debug, Clone)]
+pub struct BudgetConstraints {
+    pub daily_limit: f64,
+    pub cost_per_job: f64,
+    pub currency: String,
+    pub on_exceeded: String, // defer, alert, cancel
+}
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum VersionStatus {

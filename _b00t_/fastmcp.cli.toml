@@ -1,0 +1,51 @@
+[b00t]
+name = "fastmcp"
+type = "cli"
+desires = "0.1.0"
+depends_on = ["python.cli", "uv.cli"]
+install = '''
+# Install fastmcp - Python framework for building MCP servers
+# https://github.com/jlowin/fastmcp
+
+echo "📦 Installing fastmcp via uv..."
+
+# Install fastmcp using uv tool install (global installation)
+uv tool install fastmcp
+
+# Alternatively install in current project:
+# uv add fastmcp
+
+# Verify installation
+uvx --version
+echo "✅ fastmcp installed successfully"
+'''
+update = '''
+# Update fastmcp to latest version
+echo "🔄 Updating fastmcp..."
+uv tool upgrade fastmcp || uv tool install fastmcp --force
+echo "✅ fastmcp updated successfully"
+'''
+version = "uv tool list | grep fastmcp || echo 'not installed'"
+version_regex = 'fastmcp.*?(\d+\.\d+\.\d+)'
+hint = "fastmcp - A Python framework for building Model Context Protocol (MCP) servers quickly using FastAPI-like syntax"
+lfmf_category = "fastmcp"
+
+[b00t.learn]
+topic = "fastmcp"
+auto_digest = false
+
+[[b00t.usage]]
+description = "Create new fastmcp server"
+command = "fastmcp init my-server"
+
+[[b00t.usage]]
+description = "Run fastmcp server in development mode"
+command = "fastmcp dev server.py"
+
+[[b00t.usage]]
+description = "List installed MCP tools"
+command = "uv tool list"
+
+[[b00t.usage]]
+description = "Run MCP server with uvx"
+command = "uvx my-mcp-package"
