@@ -44,7 +44,11 @@ pub enum BudgetCommands {
     Record {
         #[clap(help = "Stack name")]
         name: String,
-        #[clap(long, help = "Current budget state file", default_value = "/tmp/budget-state.json")]
+        #[clap(
+            long,
+            help = "Current budget state file",
+            default_value = "/tmp/budget-state.json"
+        )]
         state_file: String,
     },
 }
@@ -83,10 +87,7 @@ fn check_budget(name: &str, path: &str, json_output: bool) -> Result<()> {
 
     let daily_limit = budget_constraint.daily_limit.unwrap_or(0.0);
     let cost_per_job = budget_constraint.cost_per_job.unwrap_or(0.0);
-    let currency = orchestration
-        .budget_currency
-        .as_deref()
-        .unwrap_or("USD");
+    let currency = orchestration.budget_currency.as_deref().unwrap_or("USD");
 
     // For demonstration, load or initialize budget state
     let state_file = format!("/tmp/budget-{}.json", name);
@@ -116,15 +117,25 @@ fn check_budget(name: &str, path: &str, json_output: bool) -> Result<()> {
         println!("Daily Limit:      {:.2} {}", daily_limit, currency);
         println!("Cost per Job:     {:.2} {}", cost_per_job, currency);
         println!("Spent Today:      {:.2} {}", state.spent_today, currency);
-        println!("Remaining:        {:.2} {}", daily_limit - state.spent_today, currency);
+        println!(
+            "Remaining:        {:.2} {}",
+            daily_limit - state.spent_today,
+            currency
+        );
         println!("Jobs Completed:   {}", state.jobs_completed);
-        println!("Usage:            {:.1}%", (state.spent_today / daily_limit) * 100.0);
+        println!(
+            "Usage:            {:.1}%",
+            (state.spent_today / daily_limit) * 100.0
+        );
         println!();
-        println!("Status: {}", match state.status {
-            BudgetStatus::Ok => "✅ OK",
-            BudgetStatus::Warning => "⚠️  WARNING (>80%)",
-            BudgetStatus::Exceeded => "🚫 EXCEEDED",
-        });
+        println!(
+            "Status: {}",
+            match state.status {
+                BudgetStatus::Ok => "✅ OK",
+                BudgetStatus::Warning => "⚠️  WARNING (>80%)",
+                BudgetStatus::Exceeded => "🚫 EXCEEDED",
+            }
+        );
     }
 
     Ok(())
@@ -177,23 +188,33 @@ fn simulate_job(name: &str, path: &str, spent_today: f64, jobs_completed: u32) -
     println!("🧪 Budget Simulation for '{}'", name);
     println!();
     println!("Current State:");
-    println!("  Spent Today:     {:.2} {} ({:.1}%)", spent_today, currency, (spent_today / daily_limit) * 100.0);
+    println!(
+        "  Spent Today:     {:.2} {} ({:.1}%)",
+        spent_today,
+        currency,
+        (spent_today / daily_limit) * 100.0
+    );
     println!("  Jobs Completed:  {}", jobs_completed);
     println!("  Daily Limit:     {:.2} {}", daily_limit, currency);
     println!();
     println!("Simulating Job:");
     println!("  Cost per Job:    {:.2} {}", cost_per_job, currency);
-    println!("  Projected Total: {:.2} {} ({:.1}%)",
+    println!(
+        "  Projected Total: {:.2} {} ({:.1}%)",
         spent_today + cost_per_job,
         currency,
-        ((spent_today + cost_per_job) / daily_limit) * 100.0);
+        ((spent_today + cost_per_job) / daily_limit) * 100.0
+    );
     println!();
-    println!("Decision: {}", match action {
-        BudgetAction::Allow => "✅ ALLOW - Job can proceed",
-        BudgetAction::Defer => "⏸️  DEFER - Wait until budget resets",
-        BudgetAction::Alert => "⚠️  ALERT - Job allowed but send notification",
-        BudgetAction::Cancel => "🚫 CANCEL - Job permanently cancelled",
-    });
+    println!(
+        "Decision: {}",
+        match action {
+            BudgetAction::Allow => "✅ ALLOW - Job can proceed",
+            BudgetAction::Defer => "⏸️  DEFER - Wait until budget resets",
+            BudgetAction::Alert => "⚠️  ALERT - Job allowed but send notification",
+            BudgetAction::Cancel => "🚫 CANCEL - Job permanently cancelled",
+        }
+    );
     println!();
     println!("Policy on Exceeded: {}", on_exceeded);
 
@@ -265,7 +286,11 @@ fn record_job(name: &str, path: &str, state_file: &str) -> Result<()> {
     println!("✅ Recorded job completion for '{}'", name);
     println!();
     println!("Updated Budget State:");
-    println!("  Spent Today:     {:.2} ({:.1}%)", state.spent_today, (state.spent_today / daily_limit) * 100.0);
+    println!(
+        "  Spent Today:     {:.2} ({:.1}%)",
+        state.spent_today,
+        (state.spent_today / daily_limit) * 100.0
+    );
     println!("  Jobs Completed:  {}", state.jobs_completed);
     println!("  Status:          {:?}", state.status);
 

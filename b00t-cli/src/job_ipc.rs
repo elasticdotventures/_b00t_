@@ -46,8 +46,7 @@ use tokio::sync::RwLock;
 use tracing::{error, info, warn};
 
 use crate::commands::job::{
-    run_job_internal, get_job_status_json, stop_job_internal,
-    get_job_plan_json, list_jobs_json,
+    get_job_plan_json, get_job_status_json, list_jobs_json, run_job_internal, stop_job_internal,
 };
 
 /// Job IPC listener configuration
@@ -100,7 +99,10 @@ impl<T: Transport + 'static> JobIpcListener<T> {
 
     /// Start listening for job commands
     pub async fn start(&self) -> Result<()> {
-        info!("🎧 Starting job IPC listener on channel: {}", self.config.command_channel);
+        info!(
+            "🎧 Starting job IPC listener on channel: {}",
+            self.config.command_channel
+        );
 
         // Mark as running
         {
@@ -109,7 +111,8 @@ impl<T: Transport + 'static> JobIpcListener<T> {
         }
 
         // Subscribe to command channel
-        let mut rx = self.transport
+        let mut rx = self
+            .transport
             .subscribe(&self.config.command_channel)
             .await
             .context("Failed to subscribe to command channel")?;
@@ -143,7 +146,11 @@ impl<T: Transport + 'static> JobIpcListener<T> {
 
     /// Handle incoming job command
     async fn handle_command(&self, msg: K0mmand3rMessage) -> Result<()> {
-        let action = msg.params.get("action").map(|s| s.as_str()).unwrap_or("run");
+        let action = msg
+            .params
+            .get("action")
+            .map(|s| s.as_str())
+            .unwrap_or("run");
 
         match action {
             "run" => self.handle_run(msg).await,
@@ -153,24 +160,38 @@ impl<T: Transport + 'static> JobIpcListener<T> {
             "list" => self.handle_list(msg).await,
             _ => {
                 warn!("Unknown job action: {}", action);
-                self.publish_error(&msg, format!("Unknown action: {}", action)).await
+                self.publish_error(&msg, format!("Unknown action: {}", action))
+                    .await
             }
         }
     }
 
     /// Handle job run command
     async fn handle_run(&self, msg: K0mmand3rMessage) -> Result<()> {
-        let name = msg.params.get("name")
-            .context("Missing 'name' parameter")?;
+        let name = msg.params.get("name").context("Missing 'name' parameter")?;
 
         let from_step = msg.params.get("from_step").map(|s| s.as_str());
         let to_step = msg.params.get("to_step").map(|s| s.as_str());
-        let resume = msg.params.get("resume").map(|s| s == "true").unwrap_or(false);
-        let dry_run = msg.params.get("dry_run").map(|s| s == "true").unwrap_or(false);
-        let no_checkpoint = msg.params.get("no_checkpoint").map(|s| s == "true").unwrap_or(false);
+        let resume = msg
+            .params
+            .get("resume")
+            .map(|s| s == "true")
+            .unwrap_or(false);
+        let dry_run = msg
+            .params
+            .get("dry_run")
+            .map(|s| s == "true")
+            .unwrap_or(false);
+        let no_checkpoint = msg
+            .params
+            .get("no_checkpoint")
+            .map(|s| s == "true")
+            .unwrap_or(false);
 
         // Parse env vars (env_KEY=VALUE format)
-        let env_vars: Vec<String> = msg.params.iter()
+        let env_vars: Vec<String> = msg
+            .params
+            .iter()
             .filter(|(k, _)| k.starts_with("env_"))
             .map(|(k, v)| format!("{}={}", &k[4..], v))
             .collect();
@@ -178,11 +199,8 @@ impl<T: Transport + 'static> JobIpcListener<T> {
         info!("🚀 Running job: {}", name);
 
         // Publish starting status
-        self.publish_status(
-            &msg,
-            "started",
-            &format!("Starting job: {}", name),
-        ).await?;
+        self.publish_status(&msg, "started", &format!("Starting job: {}", name))
+            .await?;
 
         // Execute job (calling existing job command implementation)
         let result = run_job_internal(
@@ -194,7 +212,8 @@ impl<T: Transport + 'static> JobIpcListener<T> {
             no_checkpoint,
             resume,
             &env_vars,
-        ).await;
+        )
+        .await;
 
         // Publish completion status
         match result {
@@ -203,13 +222,12 @@ impl<T: Transport + 'static> JobIpcListener<T> {
                     &msg,
                     "completed",
                     &format!("Job {} completed successfully", name),
-                ).await?;
+                )
+                .await?;
             }
             Err(e) => {
-                self.publish_error(
-                    &msg,
-                    format!("Job {} failed: {}", name, e),
-                ).await?;
+                self.publish_error(&msg, format!("Job {} failed: {}", name, e))
+                    .await?;
             }
         }
 
@@ -224,18 +242,12 @@ impl<T: Transport + 'static> JobIpcListener<T> {
         info!("📊 Getting job status: {:?}", name);
 
         // Get status (calling existing job status implementation)
-        let status_output = get_job_status_json(
-            &self.config.work_dir,
-            name.map(|s| s.as_str()),
-            all,
-        ).await?;
+        let status_output =
+            get_job_status_json(&self.config.work_dir, name.map(|s| s.as_str()), all).await?;
 
         // Publish status response
-        self.publish_status(
-            &msg,
-            "status_response",
-            &status_output,
-        ).await?;
+        self.publish_status(&msg, "status_response", &status_output)
+            .await?;
 
         Ok(())
     }
@@ -248,25 +260,16 @@ impl<T: Transport + 'static> JobIpcListener<T> {
         info!("🛑 Stopping job: {:?}", name);
 
         // Stop job (calling existing job stop implementation)
-        let result = stop_job_internal(
-            &self.config.work_dir,
-            name.map(|s| s.as_str()),
-            all,
-        ).await;
+        let result = stop_job_internal(&self.config.work_dir, name.map(|s| s.as_str()), all).await;
 
         match result {
             Ok(_) => {
-                self.publish_status(
-                    &msg,
-                    "stopped",
-                    "Job stopped successfully",
-                ).await?;
+                self.publish_status(&msg, "stopped", "Job stopped successfully")
+                    .await?;
             }
             Err(e) => {
-                self.publish_error(
-                    &msg,
-                    format!("Failed to stop job: {}", e),
-                ).await?;
+                self.publish_error(&msg, format!("Failed to stop job: {}", e))
+                    .await?;
             }
         }
 
@@ -275,23 +278,16 @@ impl<T: Transport + 'static> JobIpcListener<T> {
 
     /// Handle job plan command
     async fn handle_plan(&self, msg: K0mmand3rMessage) -> Result<()> {
-        let name = msg.params.get("name")
-            .context("Missing 'name' parameter")?;
+        let name = msg.params.get("name").context("Missing 'name' parameter")?;
 
         info!("📋 Getting job plan: {}", name);
 
         // Get plan (calling existing job plan implementation)
-        let plan_output = get_job_plan_json(
-            &self.config.work_dir,
-            name,
-        ).await?;
+        let plan_output = get_job_plan_json(&self.config.work_dir, name).await?;
 
         // Publish plan response
-        self.publish_status(
-            &msg,
-            "plan_response",
-            &plan_output,
-        ).await?;
+        self.publish_status(&msg, "plan_response", &plan_output)
+            .await?;
 
         Ok(())
     }
@@ -301,27 +297,39 @@ impl<T: Transport + 'static> JobIpcListener<T> {
         info!("📝 Listing jobs");
 
         // List jobs (calling existing job list implementation)
-        let list_output = list_jobs_json(
-            &self.config.work_dir,
-        ).await?;
+        let list_output = list_jobs_json(&self.config.work_dir).await?;
 
         // Publish list response
-        self.publish_status(
-            &msg,
-            "list_response",
-            &list_output,
-        ).await?;
+        self.publish_status(&msg, "list_response", &list_output)
+            .await?;
 
         Ok(())
     }
 
     /// Publish status update
-    async fn publish_status(&self, original_msg: &K0mmand3rMessage, status: &str, message: &str) -> Result<()> {
+    async fn publish_status(
+        &self,
+        original_msg: &K0mmand3rMessage,
+        status: &str,
+        message: &str,
+    ) -> Result<()> {
         let status_msg = K0mmand3rMessage::new("job_status")
             .with_param("status", status)
-            .with_param("job_name", original_msg.params.get("name").map(|s| s.as_str()).unwrap_or(""))
+            .with_param(
+                "job_name",
+                original_msg
+                    .params
+                    .get("name")
+                    .map(|s| s.as_str())
+                    .unwrap_or(""),
+            )
             .with_content(message)
-            .with_agent_id(original_msg.agent_id.clone().unwrap_or_else(|| "job-orchestrator".to_string()));
+            .with_agent_id(
+                original_msg
+                    .agent_id
+                    .clone()
+                    .unwrap_or_else(|| "job-orchestrator".to_string()),
+            );
 
         self.transport
             .publish(&self.config.status_channel, &status_msg)

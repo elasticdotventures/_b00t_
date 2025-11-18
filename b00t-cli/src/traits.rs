@@ -52,10 +52,10 @@ impl Default for AffinityRules {
 #[derive(Debug, Clone, PartialEq)]
 pub enum AffinityStrategy {
     None,
-    GpuAffinity,      // Batch jobs to minimize GPU load/unload
-    CostOptimized,    // Batch by budget constraints
-    TimeEpoch,        // Batch by time windows
-    ResourceSharing,  // Allow multiple jobs on same GPU
+    GpuAffinity,     // Batch jobs to minimize GPU load/unload
+    CostOptimized,   // Batch by budget constraints
+    TimeEpoch,       // Batch by time windows
+    ResourceSharing, // Allow multiple jobs on same GPU
 }
 
 /// Budget constraints for cost-aware scheduling

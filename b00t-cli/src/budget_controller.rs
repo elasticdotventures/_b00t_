@@ -39,10 +39,10 @@ pub enum BudgetStatus {
 /// Budget policy action
 #[derive(Debug, Clone, PartialEq)]
 pub enum BudgetAction {
-    Allow,          // Job can proceed
-    Defer,          // Defer job until next day
-    Alert,          // Send alert but allow
-    Cancel,         // Cancel job permanently
+    Allow,  // Job can proceed
+    Defer,  // Defer job until next day
+    Alert,  // Send alert but allow
+    Cancel, // Cancel job permanently
 }
 
 /// n8n webhook payload for budget alerts
@@ -177,10 +177,7 @@ impl BudgetController {
             .context("Failed to send webhook to n8n")?;
 
         if !response.status().is_success() {
-            anyhow::bail!(
-                "n8n webhook returned error: {}",
-                response.status()
-            );
+            anyhow::bail!("n8n webhook returned error: {}", response.status());
         }
 
         Ok(())

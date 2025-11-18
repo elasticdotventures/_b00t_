@@ -43,15 +43,9 @@ use traits::*;
 
 use crate::commands::learn::{LearnArgs, handle_learn};
 use crate::commands::{
-    AiCommands, AppCommands,
-    BootstrapCommands, BudgetCommands, 
-    ChatCommands, CliCommands,
-    DatumCommands, GrokCommands, 
-    InitCommands, InstallCommands, 
-    JobCommands, K8sCommands, 
-    McpCommands, ModelCommands, 
-    SessionCommands, StackCommands, 
-    WhatismyCommands,
+    AiCommands, AppCommands, BootstrapCommands, BudgetCommands, ChatCommands, CliCommands,
+    DatumCommands, GrokCommands, InitCommands, InstallCommands, JobCommands, K8sCommands,
+    McpCommands, ModelCommands, SessionCommands, StackCommands, WhatismyCommands,
 };
 
 // Re-export commonly used functions for datum modules
@@ -316,7 +310,10 @@ fn handle_up_command(_b00t_path: &str, yes: bool) -> Result<()> {
     if yes {
         println!("🔄 Updating all datums from {}...", config_path.display());
     } else {
-        println!("🔍 Checking all datums from {} (use --yes to update)...", config_path.display());
+        println!(
+            "🔍 Checking all datums from {} (use --yes to update)...",
+            config_path.display()
+        );
     }
 
     // If config file doesn't exist yet, show helpful message

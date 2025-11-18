@@ -228,8 +228,8 @@ impl JobDatum {
     pub fn from_config(name: &str, path: &str) -> Result<Self> {
         // Strip .job.toml extension if present since get_config adds extensions
         let base_name = name.trim_end_matches(".job.toml");
-        let (config, _filename) = crate::get_config(path, base_name)
-            .map_err(|e| anyhow::anyhow!("{}", e))?;
+        let (config, _filename) =
+            crate::get_config(path, base_name).map_err(|e| anyhow::anyhow!("{}", e))?;
         Ok(JobDatum { datum: config.b00t })
     }
 
@@ -269,11 +269,7 @@ impl JobDatum {
             for step in &config.steps {
                 for dep in &step.depends_on {
                     if !step_names.contains(dep.as_str()) {
-                        anyhow::bail!(
-                            "Step '{}' depends on unknown step '{}'",
-                            step.name,
-                            dep
-                        );
+                        anyhow::bail!("Step '{}' depends on unknown step '{}'", step.name, dep);
                     }
                 }
             }
@@ -324,7 +320,9 @@ impl JobDatum {
         // Initialize all steps
         for step in steps {
             in_degree.insert(step.name.clone(), step.depends_on.len());
-            reverse_graph.entry(step.name.clone()).or_insert_with(Vec::new);
+            reverse_graph
+                .entry(step.name.clone())
+                .or_insert_with(Vec::new);
         }
 
         // Build reverse edges: if B depends on A, then reverse_graph[A] contains B

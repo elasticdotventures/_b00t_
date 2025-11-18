@@ -104,7 +104,10 @@ pub trait Transport: Send + Sync {
     async fn publish(&self, channel: &str, msg: &K0mmand3rMessage) -> Result<()>;
 
     /// Subscribe to channel, returns receiver for messages
-    async fn subscribe(&self, channel: &str) -> Result<mpsc::UnboundedReceiver<(String, K0mmand3rMessage)>>;
+    async fn subscribe(
+        &self,
+        channel: &str,
+    ) -> Result<mpsc::UnboundedReceiver<(String, K0mmand3rMessage)>>;
 
     /// Unsubscribe from channel
     async fn unsubscribe(&self, channel: &str) -> Result<()>;
@@ -136,7 +139,8 @@ pub mod redis_transport {
     pub struct RedisTransport {
         client: Client,
         connection: Arc<RwLock<MultiplexedConnection>>,
-        subscriptions: Arc<RwLock<HashMap<String, mpsc::UnboundedSender<(String, K0mmand3rMessage)>>>>,
+        subscriptions:
+            Arc<RwLock<HashMap<String, mpsc::UnboundedSender<(String, K0mmand3rMessage)>>>>,
     }
 
     #[async_trait]
@@ -158,13 +162,17 @@ pub mod redis_transport {
         async fn publish(&self, channel: &str, msg: &K0mmand3rMessage) -> Result<()> {
             let json = serde_json::to_string(msg).context("Failed to serialize message")?;
             let mut conn = self.connection.write().await;
-            let _: () = conn.publish(channel, json)
+            let _: () = conn
+                .publish(channel, json)
                 .await
                 .context("Failed to publish to Redis")?;
             Ok(())
         }
 
-        async fn subscribe(&self, channel: &str) -> Result<mpsc::UnboundedReceiver<(String, K0mmand3rMessage)>> {
+        async fn subscribe(
+            &self,
+            channel: &str,
+        ) -> Result<mpsc::UnboundedReceiver<(String, K0mmand3rMessage)>> {
             let (tx, rx) = mpsc::unbounded_channel();
 
             // Store sender for this subscription
@@ -203,13 +211,14 @@ pub mod redis_transport {
                                 }
                             };
 
-                            let k0mmand3r_msg: K0mmand3rMessage = match serde_json::from_str(&payload) {
-                                Ok(m) => m,
-                                Err(e) => {
-                                    eprintln!("Failed to deserialize message: {}", e);
-                                    continue;
-                                }
-                            };
+                            let k0mmand3r_msg: K0mmand3rMessage =
+                                match serde_json::from_str(&payload) {
+                                    Ok(m) => m,
+                                    Err(e) => {
+                                        eprintln!("Failed to deserialize message: {}", e);
+                                        continue;
+                                    }
+                                };
 
                             // Send to channel receiver
                             let subs = subscriptions.read().await;
@@ -262,7 +271,8 @@ pub mod nats_transport {
 
     pub struct NatsTransport {
         client: Client,
-        subscriptions: Arc<RwLock<HashMap<String, mpsc::UnboundedSender<(String, K0mmand3rMessage)>>>>,
+        subscriptions:
+            Arc<RwLock<HashMap<String, mpsc::UnboundedSender<(String, K0mmand3rMessage)>>>>,
     }
 
     #[async_trait]
@@ -287,7 +297,10 @@ pub mod nats_transport {
             Ok(())
         }
 
-        async fn subscribe(&self, channel: &str) -> Result<mpsc::UnboundedReceiver<(String, K0mmand3rMessage)>> {
+        async fn subscribe(
+            &self,
+            channel: &str,
+        ) -> Result<mpsc::UnboundedReceiver<(String, K0mmand3rMessage)>> {
             let (tx, rx) = mpsc::unbounded_channel();
 
             // Store sender
@@ -297,7 +310,8 @@ pub mod nats_transport {
             }
 
             // Subscribe to NATS subject
-            let mut subscriber = self.client
+            let mut subscriber = self
+                .client
                 .subscribe(channel.to_string())
                 .await
                 .context("Failed to subscribe to NATS")?;

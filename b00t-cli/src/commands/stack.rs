@@ -75,9 +75,15 @@ pub enum StackCommands {
     ToK8s {
         #[clap(help = "Stack name")]
         name: String,
-        #[clap(long, help = "Output directory for k8s manifests (default: ./<stack>-k8s)")]
+        #[clap(
+            long,
+            help = "Output directory for k8s manifests (default: ./<stack>-k8s)"
+        )]
         output_dir: Option<String>,
-        #[clap(long, help = "Enhance with b00t orchestration metadata (GPU affinity, budget)")]
+        #[clap(
+            long,
+            help = "Enhance with b00t orchestration metadata (GPU affinity, budget)"
+        )]
         enhance: bool,
     },
 }
@@ -360,10 +366,10 @@ fn generate_crd(name: &str, path: &str, output_file: Option<&str>, pod_only: boo
     let stack = StackDatum::from_file(&stack_path)?;
 
     let yaml = if pod_only {
-        stack.to_pod_spec()
-            .context("Failed to generate pod spec")?
+        stack.to_pod_spec().context("Failed to generate pod spec")?
     } else {
-        stack.to_crd_template()
+        stack
+            .to_crd_template()
             .context("Failed to generate CRD template")?
     };
 
@@ -388,8 +394,11 @@ fn generate_crd(name: &str, path: &str, output_file: Option<&str>, pod_only: boo
                 println!("   Memory: {}", memory);
             }
             if let Some(gpu_count) = reqs.gpu_count {
-                println!("   GPU: {} x {}", gpu_count,
-                    reqs.gpu_type.as_deref().unwrap_or("nvidia.com/gpu"));
+                println!(
+                    "   GPU: {} x {}",
+                    gpu_count,
+                    reqs.gpu_type.as_deref().unwrap_or("nvidia.com/gpu")
+                );
             }
         }
 
@@ -403,8 +412,14 @@ fn generate_crd(name: &str, path: &str, output_file: Option<&str>, pod_only: boo
         // Show budget constraints
         if let Some(budget) = stack.get_budget_constraints() {
             println!("\n💰 Budget Constraints:");
-            println!("   Daily Limit: {:.2} {}", budget.daily_limit, budget.currency);
-            println!("   Cost per Job: {:.2} {}", budget.cost_per_job, budget.currency);
+            println!(
+                "   Daily Limit: {:.2} {}",
+                budget.daily_limit, budget.currency
+            );
+            println!(
+                "   Cost per Job: {:.2} {}",
+                budget.cost_per_job, budget.currency
+            );
             println!("   On Exceeded: {}", budget.on_exceeded);
         }
     } else {
@@ -430,7 +445,10 @@ fn generate_k8s_via_kompose(
     let stack = StackDatum::from_file(&stack_path)?;
     let available_datums = load_all_datums(path)?;
 
-    println!("🔄 Converting stack '{}' to k8s manifests via kompose...", name);
+    println!(
+        "🔄 Converting stack '{}' to k8s manifests via kompose...",
+        name
+    );
 
     // Step 1: Generate docker-compose.yml
     println!("   1/3 Generating docker-compose.yml...");
@@ -461,8 +479,10 @@ fn generate_k8s_via_kompose(
         .unwrap_or_else(|| format!("./{}-k8s", name));
 
     // Create output directory
-    std::fs::create_dir_all(&output_directory)
-        .context(format!("Failed to create output directory: {}", output_directory))?;
+    std::fs::create_dir_all(&output_directory).context(format!(
+        "Failed to create output directory: {}",
+        output_directory
+    ))?;
 
     // Run kompose convert
     let kompose_result = std::process::Command::new("kompose")
@@ -533,7 +553,10 @@ fn generate_k8s_via_kompose(
 
         if let Some(budget) = stack.get_budget_constraints() {
             println!("\n💰 Enhanced with Budget Constraints:");
-            println!("   Daily Limit: {:.2} {}", budget.daily_limit, budget.currency);
+            println!(
+                "   Daily Limit: {:.2} {}",
+                budget.daily_limit, budget.currency
+            );
         }
     }
 
