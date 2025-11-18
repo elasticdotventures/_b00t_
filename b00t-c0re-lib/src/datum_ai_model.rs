@@ -76,6 +76,10 @@ pub enum ModelProvider {
     Ollama,
     #[serde(rename = "xai")]
     XAI,
+    #[serde(rename = "openrouter")]
+    OpenRouter,
+    #[serde(rename = "litellm")]
+    LiteLLM,
     /// Generic OpenAI-compatible endpoint
     #[serde(rename = "openai_compatible")]
     OpenAICompatible,
@@ -101,6 +105,8 @@ impl ModelProvider {
             Self::Replicate => "replicate/",
             Self::Ollama => "ollama/",
             Self::XAI => "xai/",
+            Self::OpenRouter => "openrouter/",
+            Self::LiteLLM => "", // LiteLLM is a proxy, no prefix needed
             Self::OpenAICompatible => "openai/",
             Self::Other(prefix) => prefix,
         }

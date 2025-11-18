@@ -1,0 +1,37 @@
+[b00t]
+name = "openai-codex-mcp"
+type = "mcp"
+hint = "OpenAI Codex MCP server for agentic AI coding sessions"
+lfmf_category = "codex"
+
+[b00t.learn]
+topic = "codex"
+auto_digest = true
+
+# Primary stdio method
+[[b00t.mcp.stdio]]
+priority = 0
+command = "codex"
+args = ["mcp-server"]
+transport = "stdio"
+requires = ["codex"]
+
+[[b00t.usage]]
+description = "Launch Codex MCP server"
+command = "codex mcp-server"
+
+[[b00t.usage]]
+description = "Test with MCP Inspector (requires 10min timeout)"
+command = "npx @modelcontextprotocol/inspector codex mcp-server"
+
+[[b00t.usage]]
+description = "Start Codex session with approval policy"
+command = "codex mcp-server --approval-policy untrusted"
+
+[[b00t.references]]
+name = "OpenAI Codex MCP Documentation"
+url = "https://developers.openai.com/codex/mcp"
+
+[[b00t.references]]
+name = "Model Context Protocol"
+url = "https://modelcontextprotocol.io"

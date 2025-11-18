@@ -1,0 +1,27 @@
+# LLaVA 1.5 7B vision-language checkpoint managed by b00t
+
+[b00t]
+name = "llava-v1-5-7b-hf"
+type = "ai_model"
+hint = "LLaVA 1.5 7B multimodal model for vision-grounded prompts"
+aliases = ["llava"]
+
+[b00t.env]
+VLLM_MODEL_DIR = "~/.b00t/models/liuhaotian__llava-v1.5-7b-hf"
+VLLM_MODEL_PATH = "/models/llava"
+VLLM_DTYPE = "float16"
+
+[ai_model]
+provider = "huggingface"
+size = "small"
+capabilities = ["vision", "chat"]
+litellm_model = "huggingface/liuhaotian/llava-v1.5-7b-hf"
+api_key_env = "HF_TOKEN"
+rpm_limit = 30
+
+[ai_model.metadata]
+hf_repo = "liuhaotian/llava-v1.5-7b-hf"
+container_mount = "/models/llava"
+dtype = "float16"
+cache_dir = "~/.b00t/models/liuhaotian__llava-v1.5-7b-hf"
+revision = "main"

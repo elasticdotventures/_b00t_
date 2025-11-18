@@ -1,0 +1,11 @@
+[b00t]
+name = "rust-crate-docs-docker"
+type = "mcp"
+hint = "MCP server"
+
+[[b00t.mcp.stdio]]
+priority = 0
+transport = "stdio"
+args = ["run", "--rm", "-i", "ghcr.io/promptexecution/rust-cargo-docs-rag-mcp:latest", "stdio"]
+requires = ["docker"]
+command = "docker"

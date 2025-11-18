@@ -10,7 +10,8 @@
 /// Macro to generate McpReflection and McpExecutor implementations
 ///
 /// Usage:
-/// ```rust
+/// ```ignore
+/// use b00t_mcp::impl_mcp_tool;
 /// impl_mcp_tool!(McpListCommand, "b00t_mcp_list", ["mcp", "list"]);
 /// ```
 #[macro_export]

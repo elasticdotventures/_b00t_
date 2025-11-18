@@ -177,7 +177,7 @@ impl RhaiEngine {
     }
 
     /// Create scope with b00t context variables
-    pub fn create_scope(&self) -> Scope {
+    pub fn create_scope(&self) -> Scope<'_> {
         let mut scope = Scope::new();
 
         // Add b00t context variables

@@ -1,0 +1,35 @@
+[b00t]
+name = "litellm"
+type = "ai"
+hint = "LiteLLM proxy - unified interface for 100+ LLM providers"
+
+[models.gpt-4]
+capabilities = "text,chat,code,vision"
+context_length = 128000
+# Costs vary by provider
+
+[models.claude-3-opus]
+capabilities = "text,chat,code,vision,reasoning"
+context_length = 200000
+
+[models.gemini-pro]
+capabilities = "text,chat,vision"
+context_length = 1048576
+
+[models.ollama-llama3]
+capabilities = "text,chat"
+context_length = 8192
+cost_per_token = 0.0
+
+# Environment variables required by this provider
+# Actual values are loaded from .env via direnv (b00t pattern: direnv → .envrc → dotenv → .env)
+# See b00t-j0b-py/.env.example for setup instructions
+[env]
+# Optional: Only required if LiteLLM proxy has authentication enabled
+# required = ["LITELLM_MASTER_KEY"]
+
+# Optional: Default values for non-secret configuration
+defaults = { LITELLM_API_BASE = "http://localhost:4000" }
+
+# Note: LiteLLM is a proxy. The actual provider API keys (OPENAI_API_KEY, etc.)
+# should be configured in the LiteLLM proxy server, not in this .env file

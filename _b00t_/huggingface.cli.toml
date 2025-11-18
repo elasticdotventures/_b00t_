@@ -1,39 +1,149 @@
 [b00t]
 name = "huggingface"
 type = "cli"
-hint = "Hugging Face CLI for syncing models, datasets, and spaces"
+hint = "hf CLI for pushing and pulling models, datasets, and Spaces from Hugging Face Hub"
 keywords = ["ml", "models", "datasets", "huggingface"]
 install = """
-if command -v brew >/dev/null 2>&1; then
+set -eo pipefail
+
+write_pwsh_shim() {
+  local scripts_dir="$1"
+  mkdir -p "${scripts_dir}"
+  cat <<'PWSH' > "${scripts_dir}/hf.ps1"
+param(
+    [Parameter(ValueFromRemainingArguments = $true)]
+    [string[]]$Args
+)
+
+$scriptPath = $MyInvocation.MyCommand.Path
+$hfCmd = Get-Command hf -ErrorAction SilentlyContinue | Where-Object { $_.Source -ne $scriptPath }
+
+if ($hfCmd) {
+    & $hfCmd.Source @Args  # output: reuse installed hf binary.
+    exit $LASTEXITCODE
+}
+
+if (Get-Command huggingface-cli -ErrorAction SilentlyContinue) {
+    & huggingface-cli @Args  # output: fallback to deprecated shim.
+    exit $LASTEXITCODE
+}
+
+$localHf = Join-Path $HOME ".local/bin/hf"
+if (Test-Path $localHf) {
+    & $localHf @Args  # output: invokes uv/pkgx hf wrapper.
+    exit $LASTEXITCODE
+}
+
+Write-Error "hf CLI is not installed."  # output: pwsh error message.
+exit 1
+PWSH
+}
+
+ensure_hf_shims() {
+  if command -v huggingface-cli >/dev/null 2>&1 && ! command -v hf >/dev/null 2>&1; then
+    mkdir -p ~/.local/bin
+    cat <<'EOF' > ~/.local/bin/hf
+#!/usr/bin/env bash
+huggingface-cli "$@"
+EOF
+    chmod +x ~/.local/bin/hf
+  fi
+
+  if command -v pwsh >/dev/null 2>&1 || [ -d "${HOME}/Documents/PowerShell" ] || [ -d "${HOME}/Documents/WindowsPowerShell" ]; then
+    write_pwsh_shim "${HOME}/Documents/PowerShell/Scripts"
+    write_pwsh_shim "${HOME}/Documents/WindowsPowerShell/Scripts"
+  fi
+}
+
+if command -v uv >/dev/null 2>&1; then
+  uv tool install --upgrade huggingface_hub[cli]
+elif command -v brew >/dev/null 2>&1; then
   brew install huggingface-cli
 elif command -v pkgx >/dev/null 2>&1; then
   mkdir -p ~/.local/bin
-  cat <<'EOF' > ~/.local/bin/huggingface-cli
+  cat <<'EOF' > ~/.local/bin/hf
 #!/usr/bin/env bash
-pkgx +huggingface_hub huggingface-cli "$@"
+pkgx +huggingface_hub hf "$@"
 EOF
-  chmod +x ~/.local/bin/huggingface-cli
+  chmod +x ~/.local/bin/hf
 else
-  uv tool install huggingface_hub[cli]
+  python3 -m pip install --user --upgrade "huggingface_hub[cli]"
 fi
+
+ensure_hf_shims
 """
 update = """
-if command -v brew >/dev/null 2>&1; then
+set -eo pipefail
+
+write_pwsh_shim() {
+  local scripts_dir="$1"
+  mkdir -p "${scripts_dir}"
+  cat <<'PWSH' > "${scripts_dir}/hf.ps1"
+param(
+    [Parameter(ValueFromRemainingArguments = $true)]
+    [string[]]$Args
+)
+
+$scriptPath = $MyInvocation.MyCommand.Path
+$hfCmd = Get-Command hf -ErrorAction SilentlyContinue | Where-Object { $_.Source -ne $scriptPath }
+
+if ($hfCmd) {
+    & $hfCmd.Source @Args  # output: reuse installed hf binary.
+    exit $LASTEXITCODE
+}
+
+if (Get-Command huggingface-cli -ErrorAction SilentlyContinue) {
+    & huggingface-cli @Args  # output: fallback to deprecated shim.
+    exit $LASTEXITCODE
+}
+
+$localHf = Join-Path $HOME ".local/bin/hf"
+if (Test-Path $localHf) {
+    & $localHf @Args  # output: invokes uv/pkgx hf wrapper.
+    exit $LASTEXITCODE
+}
+
+Write-Error "hf CLI is not installed."  # output: pwsh error message.
+exit 1
+PWSH
+}
+
+ensure_hf_shims() {
+  if command -v huggingface-cli >/dev/null 2>&1 && ! command -v hf >/dev/null 2>&1; then
+    mkdir -p ~/.local/bin
+    cat <<'EOF' > ~/.local/bin/hf
+#!/usr/bin/env bash
+huggingface-cli "$@"
+EOF
+    chmod +x ~/.local/bin/hf
+  fi
+
+  if command -v pwsh >/dev/null 2>&1 || [ -d "${HOME}/Documents/PowerShell" ] || [ -d "${HOME}/Documents/WindowsPowerShell" ]; then
+    write_pwsh_shim "${HOME}/Documents/PowerShell/Scripts"
+    write_pwsh_shim "${HOME}/Documents/WindowsPowerShell/Scripts"
+  fi
+}
+
+if command -v uv >/dev/null 2>&1; then
+  uv tool install --upgrade huggingface_hub[cli]
+elif command -v brew >/dev/null 2>&1; then
   brew upgrade huggingface-cli || brew install huggingface-cli
 elif command -v pkgx >/dev/null 2>&1; then
   mkdir -p ~/.local/bin
-  cat <<'EOF' > ~/.local/bin/huggingface-cli
+  cat <<'EOF' > ~/.local/bin/hf
 #!/usr/bin/env bash
-pkgx +huggingface_hub huggingface-cli "$@"
+pkgx +huggingface_hub hf "$@"
 EOF
-  chmod +x ~/.local/bin/huggingface-cli
+  chmod +x ~/.local/bin/hf
 else
-  uv tool install huggingface_hub[cli]
+  python3 -m pip install --user --upgrade "huggingface_hub[cli]"
 fi
+
+ensure_hf_shims
 """
-version = "huggingface-cli --version"
-version_regex = "huggingface-cli (\\d+\\.\\d+\\.\\d+)"
-aliases = ["huggingface-cli"]
+version = "hf version"
+version_regex = "version[^0-9]*(\\d+\\.\\d+\\.\\d+)"
+aliases = ["hf", "huggingface-cli"]
 
 [b00t.env]
 HF_TOKEN = "${HF_TOKEN}"

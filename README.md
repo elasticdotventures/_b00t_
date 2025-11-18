@@ -1,25 +1,78 @@
 # 🥾 b00t - Universal Agentic Development Framework
 
-[![Container Build Status](https://github.com/elasticdotventures/dotfiles/actions/workflows/b00t-container.yml/badge.svg)](https://github.com/elasticdotventures/dotfiles/actions/workflows/b00t-container.yml)
+[![Container Build Status](https://github.com/elasticdotventures/_b00t_/actions/workflows/b00t-container.yml/badge.svg)](https://github.com/elasticdotventures/_b00t_/actions/workflows/b00t-container.yml)
 
-> **"I am an agent. Tell me what I'm running on, what tools are available, what I'm allowed to do, what goals I should optimize for, and where the boundaries are."**  
+> **"I am an agent. Tell me what I'm running on, what tools are available, what I'm allowed to do, what goals I should optimize for, and where the boundaries are."**
 > —ChatGPT (TL;DR b00t agent perspective)
 
 **b00t** is an agentic hive operating system that unlocks AI agents with Neo-like powers in cyberspace. It's a context-aware development framework that bridges the gap between AI models and real-world tooling, enabling agents to maximize their capabilities through intelligent abstraction and unified tool discovery.
 
-## 🚀 Quick Install
-
-### Universal Installation (Recommended)
-
-The fastest way to get b00t running on any system:
+## ⚡ Quick Examples
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/elasticdotventures/dotfiles/main/install.sh | sh
+# Install b00t (one-liner)
+curl -fsSL https://raw.githubusercontent.com/elasticdotventures/_b00t_/main/install.sh | sh
+
+# Install tools with automatic dependency resolution
+b00t cli install fastmcp          # Installs python → uv → fastmcp (DAG-aware)
+b00t cli install rust             # Install Rust toolchain
+b00t cli check python             # Check if Python is installed
+
+# Learn about available tools
+b00t learn rust                   # Load Rust development context
+b00t learn docker                 # Container orchestration knowledge
+
+# Record and retrieve tribal knowledge
+b00t lfmf rust "cargo build conflict: Unset CONDA_PREFIX before cargo to avoid PyO3 linker errors"
+b00t advice rust "PyO3"           # Get contextual debugging advice
+
+# MCP server integration
+b00t mcp install browser-use claudecode    # Install MCP server with deps
+b00t mcp list                              # List available MCP servers
+
+# Model management
+b00t model list                   # Show available AI models
+b00t model download llava         # Download model weights
+b00t model serve llava            # Launch vLLM server
+```
+
+## 🚀 Quick Install
+
+### 🌟 Minimal Installation (Recommended - pkgx)
+
+The fastest, cleanest way to install b00t - **4 MiB vs 1 GB toolchain**:
+
+```bash
+# Install pkgx (one-time setup)
+curl -Ssf https://pkgx.sh | sh
+
+# Run b00t immediately (auto-downloads on first use)
+pkgx b00t-cli --version
+
+# Or install permanently to ~/.local/bin
+pkgx +b00t-cli
+b00t-cli --version
+```
+
+**Why pkgx?**
+- ✅ **Minimal footprint**: 4 MiB binary vs 1 GB Rust toolchain
+- ✅ **Zero pollution**: Isolated in `~/.pkgx`, no system-wide changes
+- ✅ **Instant availability**: Run without installation
+- ✅ **Perfect for AI agents**: Fast bootstrap, ephemeral usage
+- ✅ **Auto-updates**: Automatically tracks GitHub releases
+
+### Universal Installation (Classic Method)
+
+One-liner that works everywhere:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/elasticdotventures/_b00t_/main/install.sh | sh
 ```
 
 This universal installer:
+- ✅ **Prefers pkgx** for minimal installation (prompts if not installed)
 - ✅ **Auto-detects your platform** (Linux x86_64/aarch64/armv7, macOS)
-- ✅ **Downloads optimized binaries** from GitHub releases  
+- ✅ **Downloads optimized binaries** from GitHub releases
 - ✅ **Falls back to container mode** if binaries unavailable
 - ✅ **Configures your shell** automatically (bash/zsh/fish)
 - ✅ **Sets up PATH and aliases** for immediate use
@@ -34,8 +87,8 @@ This universal installer:
 cargo install b00t-cli
 
 # Or install from source
-git clone https://github.com/elasticdotventures/dotfiles.git ~/.dotfiles
-cd ~/.dotfiles && cargo install --path b00t-cli
+git clone https://github.com/elasticdotventures/_b00t_.git
+cd _b00t_ && cargo install --path b00t-cli
 ```
 </details>
 
@@ -44,8 +97,8 @@ cd ~/.dotfiles && cargo install --path b00t-cli
 
 ```bash
 # Run latest b00t container
-docker pull ghcr.io/elasticdotventures/dotfiles:latest
-docker run --rm -it -v $(pwd):/workspace ghcr.io/elasticdotventures/dotfiles:latest
+docker pull ghcr.io/elasticdotventures/_b00t_:latest
+docker run --rm -it -v $(pwd):/workspace ghcr.io/elasticdotventures/_b00t_:latest
 
 # Or use the container wrapper (installed via universal script)
 b00t status  # Automatically uses container if no native binary
@@ -171,9 +224,44 @@ b00t mcp install b00t cursor       # For Cursor
 ### **Smart Context Management**
 ```bash
 b00t detect node    # Check Node.js version and availability
-b00t desires rust   # See target Rust version from configuration  
+b00t desires rust   # See target Rust version from configuration
 b00t install python # Install or update Python to desired version
-b00t up            # Update all tools to desired versions
+b00t up             # Check all tools and report version status
+b00t up --yes       # Update all tools to desired versions
+```
+
+### Vision Model Management
+Vision-style models now ship as first-class b00t datums, so any client (CLI, Blender panel, chat agent) can reuse a single cached copy:
+
+```bash
+# Discover the available model datums (⭐ marks the active model)
+b00t-cli model list
+
+# Cache weights via Hugging Face using the datum metadata
+b00t-cli model download llava         # alias for llava-v1-5-7b-hf
+b00t-cli model download deepseek      # alias for deepseek-ocr
+
+# Export environment variables for direnv/shells
+eval "$(b00t-cli model env)"          # emits export statements for the active model
+
+# Launch a local vLLM OpenAI-compatible server with the cached weights
+just vllm-up                          # reads env from the active datum
+just vllm-logs                        # tail the container logs
+# or directly via CLI
+b00t-cli model serve llava --port 9000
+b00t-cli model stop                  # stops the active container
+```
+
+Helper recipes wrap common workflows:
+
+- `just hf-download model=repo dest=~/path` – thin wrapper around `huggingface-cli download`, defaulting to `~/.b00t/models/<repo>`.
+- `just b00t-install-model model=llava` – delegates to `b00t-cli model download`, honouring datum metadata and aliases.
+- `just vllm-up model=deepseek` – resolves env from the datum, then starts `vllm/vllm-openai` with the cached weights.
+
+To keep direnv aligned across repos, drop this into `.envrc` and run `direnv allow` once:
+
+```bash
+eval "$(b00t-cli model env)"  # keep VLLM_MODEL_DIR/VLLM_MODEL_PATH in sync with the active datum
 ```
 
 ### **Session Management**
@@ -219,8 +307,8 @@ Ready to enhance the b00t ecosystem?
 
 ```bash
 # Clone and contribute
-git clone https://github.com/elasticdotventures/dotfiles.git ~/.dotfiles
-cd ~/.dotfiles
+git clone https://github.com/elasticdotventures/_b00t_.git
+cd _b00t_
 
 # Set up development environment
 just install    # Bootstrap development dependencies
@@ -260,9 +348,9 @@ b00t learn mlflow     # ML experiment tracking
 **🥾 Ready to unlock your agent potential?**
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/elasticdotventures/dotfiles/main/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/elasticdotventures/_b00t_/main/install.sh | sh
 ```
 
 **Welcome to the b00t hive mind. Your Neo-like journey in cyberspace begins now.**
 
-*For questions, issues, or hive recruitment: [GitHub Issues](https://github.com/elasticdotventures/dotfiles/issues)*
+*For questions, issues, or hive recruitment: [GitHub Issues](https://github.com/elasticdotventures/_b00t_/issues)*

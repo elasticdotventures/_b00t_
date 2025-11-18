@@ -1,0 +1,28 @@
+# b00t AI Model Datum - Qwen 2.5 72B Instruct
+
+[b00t]
+name = "qwen-2.5-72b"
+type = "ai_model"
+hint = "Alibaba's Qwen 2.5 72B - strong reasoning and multilingual capabilities"
+
+[ai_model]
+provider = "openrouter"
+size = "large"
+capabilities = ["chat", "code", "reasoning"]
+litellm_model = "openrouter/qwen/qwen-2.5-72b-instruct"
+api_base = "https://openrouter.ai/api/v1"
+api_key_env = "OPENROUTER_API_KEY"
+rpm_limit = 60
+context_window = 32768
+enabled = true
+access_groups = ["default"]
+
+[ai_model.parameters]
+max_tokens = 4096
+temperature = 0.7
+
+[ai_model.metadata]
+family = "qwen-2.5"
+provider_model_id = "qwen/qwen-2.5-72b-instruct"
+cost_per_1k_input = 0.35
+cost_per_1k_output = 0.40
