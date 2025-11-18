@@ -33,6 +33,8 @@ pub enum JobStatus {
     Failed,
     Cancelled,
     Paused,
+    RollingBack,
+    RolledBack,
 }
 
 /// Step execution state
@@ -151,6 +153,17 @@ impl JobState {
         }
     }
 
+    /// Increment retry count for a step
+    pub fn increment_retry(&mut self, step_name: &str) {
+        if let Some(step) = self.steps.get_mut(step_name) {
+            step.retries += 1;
+            step.status = StepStatus::Running;
+            step.started_at = Some(Utc::now());
+            step.completed_at = None;
+            step.error = None;
+        }
+    }
+
     /// Add checkpoint
     pub fn add_checkpoint(&mut self, step_name: String, checkpoint_name: String, git_tag: Option<String>) {
         self.checkpoints.push(CheckpointInfo {
@@ -201,20 +214,22 @@ impl JobState {
         std::fs::write(&state_path, json)?;
 
         // Also create/update symlink to "latest"
-        let mut latest_path = state_path.parent().unwrap().to_path_buf();
-        latest_path.push("latest.json");
+        if let Some(parent) = state_path.parent() {
+            let mut latest_path = parent.to_path_buf();
+            latest_path.push("latest.json");
 
-        // Remove old symlink if exists
-        let _ = std::fs::remove_file(&latest_path);
+            // Remove old symlink if exists
+            let _ = std::fs::remove_file(&latest_path);
 
-        // Create new symlink (or copy on Windows)
-        #[cfg(unix)]
-        {
-            std::os::unix::fs::symlink(&state_path, &latest_path)?;
-        }
-        #[cfg(not(unix))]
-        {
-            std::fs::copy(&state_path, &latest_path)?;
+            // Create new symlink (or copy on Windows)
+            #[cfg(unix)]
+            {
+                std::os::unix::fs::symlink(&state_path, &latest_path)?;
+            }
+            #[cfg(not(unix))]
+            {
+                std::fs::copy(&state_path, &latest_path)?;
+            }
         }
 
         Ok(())

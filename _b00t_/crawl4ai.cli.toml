@@ -1,0 +1,143 @@
+[b00t]
+name = "crawl4ai"
+type = "cli"
+hint = "crawl4ai - AI-powered web crawler with LLM-ready markdown output"
+desires = "0.7.6"
+keywords = ["web-scraping", "crawler", "markdown", "ai", "llm"]
+
+# Installation via uv tool (b00t standard)
+install = """
+uv tool install crawl4ai[all]
+"""
+
+# Update to latest version
+update = """
+uv tool upgrade crawl4ai
+"""
+
+# Version detection
+version = "crawl4ai --version"
+version_regex = "crawl4ai version (\\d+\\.\\d+\\.\\d+)"
+
+# Common crawl4ai commands
+[b00t.aliases]
+crawl = "crawl4ai"
+crawl-fast = "crawl4ai --mode fast"
+crawl-deep = "crawl4ai --depth 2"
+crawl-js = "crawl4ai --js-code"
+crawl-wait = "crawl4ai --wait-for 'css:.main-content'"
+
+[b00t.env]
+# User agent for crawl4ai requests
+CRAWL4AI_USER_AGENT = "b00t-crawler/0.7 (https://github.com/elasticdotventures/_b00t_)"
+# Output directory for crawled content
+CRAWL4AI_OUTPUT_DIR = "~/.b00t/crawls"
+# Browser executable path (optional)
+CRAWL4AI_BROWSER_PATH = ""
+# Enable verbose logging
+CRAWL4AI_VERBOSE = "false"
+
+[b00t.usage]
+# Basic URL crawling
+basic = "crawl4ai https://example.com"
+# Markdown output
+markdown = "crawl4ai https://example.com --format markdown"
+# Deep crawl with links
+deep = "crawl4ai https://example.com --depth 2 --max-pages 10"
+# Wait for dynamic content
+dynamic = "crawl4ai https://example.com --wait-for 'css:.loaded'"
+# Extract specific CSS selector
+extract = "crawl4ai https://example.com --css-selector '.article-content'"
+# Output to file
+file = "crawl4ai https://example.com --output ~/crawls/example.md"
+# Custom user agent
+agent = "crawl4ai https://example.com --user-agent 'b00t-crawler'"
+# Fast mode (no JS rendering)
+fast = "crawl4ai https://example.com --mode fast"
+
+[b00t.learn]
+# crawl4ai CLI documentation and patterns
+content = """
+# crawl4ai CLI Usage
+
+crawl4ai is an AI-powered web crawler that outputs LLM-ready markdown.
+
+## Basic Commands
+
+```bash
+# Simple crawl
+crawl4ai https://docs.python.org/3/
+
+# Markdown output
+crawl4ai https://example.com --format markdown
+
+# Save to file
+crawl4ai https://example.com --output ~/crawls/example.md
+
+# Custom user agent (identify as b00t)
+crawl4ai https://example.com --user-agent "b00t-crawler/0.7"
+```
+
+## Advanced Features
+
+```bash
+# Deep crawl (follow links)
+crawl4ai https://docs.langchain.com --depth 2 --max-pages 20
+
+# Wait for dynamic content
+crawl4ai https://spa-site.com --wait-for "css:.loaded"
+
+# Extract specific content
+crawl4ai https://example.com --css-selector "article.main"
+
+# Execute JavaScript
+crawl4ai https://example.com --js-code "window.scrollTo(0, document.body.scrollHeight)"
+
+# Fast mode (no browser rendering)
+crawl4ai https://example.com --mode fast
+```
+
+## Output Formats
+
+- `markdown` (default): Clean markdown, LLM-friendly
+- `html`: Raw HTML
+- `text`: Plain text
+- `json`: Structured JSON with metadata
+
+## Integration with b00t
+
+```bash
+# Crawl and learn from URL
+crawl4ai https://docs.langchain.com/oss/python/releases/langchain-v1 \\
+  --format markdown \\
+  --output ~/.b00t/crawls/langchain-v1.md \\
+  --user-agent "b00t-crawler"
+
+# Then ingest into grok
+b00t-cli grok learn ~/.b00t/crawls/langchain-v1.md
+```
+
+## Browser Configuration
+
+crawl4ai uses Playwright for browser automation:
+
+```bash
+# Install browsers (first time)
+playwright install chromium
+
+# Or all browsers
+playwright install
+```
+
+## Tips
+
+1. **Use --mode fast** for static sites (faster, no JS rendering)
+2. **Set --user-agent** to identify as b00t
+3. **Use --css-selector** to extract specific content
+4. **Enable --depth** for documentation sites with multiple pages
+5. **Save to ~/.b00t/crawls/** for organized storage
+"""
+
+[b00t.depends_on]
+# crawl4ai requires Python and Playwright
+requires = ["python.cli", "playwright"]

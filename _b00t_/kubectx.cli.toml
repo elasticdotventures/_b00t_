@@ -1,0 +1,49 @@
+[b00t]
+name = "kubectx"
+type = "cli"
+hint = "Fast k8s context and namespace switching. Includes kubectx + kubens."
+desires = "0.9.5"
+
+install = '''
+if command -v pkgx >/dev/null 2>&1; then
+    pkgx install kubectx@0.9
+    mkdir -p ~/.local/bin
+    cat > ~/.local/bin/kubectx << 'EOF'
+#!/bin/bash
+exec pkgx kubectx "$@"
+EOF
+    chmod +x ~/.local/bin/kubectx
+
+    cat > ~/.local/bin/kubens << 'EOF'
+#!/bin/bash
+exec pkgx kubens "$@"
+EOF
+    chmod +x ~/.local/bin/kubens
+elif command -v brew >/dev/null 2>&1; then
+    brew install kubectx
+else
+    # Install from GitHub
+    sudo git clone https://github.com/ahmetb/kubectx /opt/kubectx
+    sudo ln -sf /opt/kubectx/kubectx /usr/local/bin/kubectx
+    sudo ln -sf /opt/kubectx/kubens /usr/local/bin/kubens
+fi
+'''
+
+version = "kubectx --version"
+version_regex = '(\d+\.\d+\.\d+)'
+
+[[b00t.usage]]
+description = "List available k8s contexts"
+command = "kubectx"
+
+[[b00t.usage]]
+description = "Switch to specific context"
+command = "kubectx minikube"
+
+[[b00t.usage]]
+description = "List available namespaces"
+command = "kubens"
+
+[[b00t.usage]]
+description = "Switch to specific namespace"
+command = "kubens default"

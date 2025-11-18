@@ -1,0 +1,60 @@
+[b00t]
+name = "kubecost"
+type = "k8s"
+hint = "k8s cost allocation and budgeting. Tracks GPU costs, feeds b00t budget controller."
+desires = "2.0.0"
+
+chart_path = "kubecost/cost-analyzer"
+namespace = "kubecost"
+values_file = "kubecost-values.yaml"
+
+install = '''
+# Add Kubecost Helm repo
+helm repo add kubecost https://kubecost.github.io/cost-analyzer/
+helm repo update
+
+# Create namespace
+kubectl create namespace kubecost --dry-run=client -o yaml | kubectl apply -f -
+
+# Install Kubecost (OSS edition)
+helm install kubecost kubecost/cost-analyzer \
+    --namespace kubecost \
+    --set kubecostToken="" \
+    --set prometheus.server.global.external_labels.cluster_id=main-cluster \
+    --set prometheus.server.persistentVolume.enabled=true \
+    --set prometheus.server.persistentVolume.size=32Gi
+
+# Wait for deployment
+kubectl wait --for=condition=available --timeout=300s \
+    deployment/kubecost-cost-analyzer -n kubecost
+
+echo "Kubecost installed!"
+echo "Access UI: kubectl port-forward -n kubecost deployment/kubecost-cost-analyzer 9090"
+echo "Visit: http://localhost:9090"
+'''
+
+version = '''
+helm list -n kubecost -o json | jq -r '.[] | select(.name=="kubecost") | .app_version'
+'''
+
+[b00t.orchestration]
+# Integration with b00t budget controller
+cost_tracking_enabled = true
+daily_budget_alerts = true
+
+[b00t.orchestration.budget_constraint]
+# Default budget tracking
+daily_limit = 100.00
+webhook_url = "http://n8n.default.svc.cluster.local:5678/webhook/budget"
+
+[[b00t.usage]]
+description = "Port-forward to Kubecost UI"
+command = "kubectl port-forward -n kubecost deployment/kubecost-cost-analyzer 9090"
+
+[[b00t.usage]]
+description = "Get cost by namespace (API)"
+command = "curl http://localhost:9090/model/allocation?window=1d"
+
+[[b00t.usage]]
+description = "Get GPU cost allocation"
+command = "curl 'http://localhost:9090/model/allocation?window=1d&aggregate=label:nvidia.com/gpu.product'"
