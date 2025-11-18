@@ -241,6 +241,7 @@ pub struct BootDatum {
     // Usage examples - CLI/API usage patterns
     // Supports: usage = ["cmd  # desc", ...] or [[b00t.usage]] tables
     #[serde(
+        default,
         skip_serializing_if = "Option::is_none",
         deserialize_with = "b00t_c0re_lib::deserialize_usage"
     )]
