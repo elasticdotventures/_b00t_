@@ -153,6 +153,17 @@ impl JobState {
         }
     }
 
+    /// Increment retry count for a step
+    pub fn increment_retry(&mut self, step_name: &str) {
+        if let Some(step) = self.steps.get_mut(step_name) {
+            step.retries += 1;
+            step.status = StepStatus::Running;
+            step.started_at = Some(Utc::now());
+            step.completed_at = None;
+            step.error = None;
+        }
+    }
+
     /// Add checkpoint
     pub fn add_checkpoint(&mut self, step_name: String, checkpoint_name: String, git_tag: Option<String>) {
         self.checkpoints.push(CheckpointInfo {
