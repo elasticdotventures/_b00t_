@@ -528,7 +528,7 @@ async fn execute_step(
     }
 }
 
-/// Execute bash command with streaming output
+/// Execute bash command and display output after completion
 async fn execute_bash(
     command: &str,
     cwd: &str,
@@ -549,7 +549,7 @@ async fn execute_bash(
     let execution = async {
         let output = cmd.output().await?;
 
-        // Stream output in real-time
+        // Display output after command completes
         let stdout = String::from_utf8_lossy(&output.stdout);
         let stderr = String::from_utf8_lossy(&output.stderr);
 
