@@ -203,8 +203,8 @@ async fn plan_job(path: &str, name: &str, show_dag: bool, json: bool) -> Result<
     use b00t_cli::datum_job::JobDatum;
 
     let datum_path = format!("{}.job.toml", name);
-    let datum = JobDatum::from_config(&datum_path, path)
-        .context(format!("Job '{}' not found", name))?;
+    let datum =
+        JobDatum::from_config(&datum_path, path).context(format!("Job '{}' not found", name))?;
 
     datum.validate()?;
 
@@ -229,7 +229,14 @@ async fn plan_job(path: &str, name: &str, show_dag: bool, json: bool) -> Result<
     println!("📝 Description: {}", config.description);
     println!("⚙️  Mode: {}", config.config.mode);
     println!("📍 Checkpoints: {}", config.config.checkpoint_mode);
-    println!("🤖 Sub-agents: {}", if config.config.use_subagents { "enabled" } else { "disabled" });
+    println!(
+        "🤖 Sub-agents: {}",
+        if config.config.use_subagents {
+            "enabled"
+        } else {
+            "disabled"
+        }
+    );
     println!("\n📋 Execution Plan ({} steps):\n", execution_order.len());
 
     for (idx, step_name) in execution_order.iter().enumerate() {
@@ -255,7 +262,9 @@ async fn plan_job(path: &str, name: &str, show_dag: bool, json: bool) -> Result<
                 println!("   Type: bash");
                 println!("   Command: {}", command);
             }
-            b00t_cli::datum_job::JobTask::Agent { agent_type, prompt, .. } => {
+            b00t_cli::datum_job::JobTask::Agent {
+                agent_type, prompt, ..
+            } => {
                 println!("   Type: agent ({})", agent_type);
                 println!("   Prompt: {}", prompt.lines().next().unwrap_or("<empty>"));
             }
@@ -316,8 +325,8 @@ async fn run_job(
     println!("🚀 Starting job: {}", name);
 
     let datum_path = format!("{}.job.toml", name);
-    let datum = JobDatum::from_config(&datum_path, path)
-        .context(format!("Job '{}' not found", name))?;
+    let datum =
+        JobDatum::from_config(&datum_path, path).context(format!("Job '{}' not found", name))?;
 
     datum.validate()?;
 
@@ -335,11 +344,19 @@ async fn run_job(
             }
             Err(_) => {
                 println!("⚠️  No previous run found, starting fresh");
-                JobState::new(name.to_string(), config.config.mode.clone(), execution_order.len())
+                JobState::new(
+                    name.to_string(),
+                    config.config.mode.clone(),
+                    execution_order.len(),
+                )
             }
         }
     } else {
-        JobState::new(name.to_string(), config.config.mode.clone(), execution_order.len())
+        JobState::new(
+            name.to_string(),
+            config.config.mode.clone(),
+            execution_order.len(),
+        )
     };
 
     // Save initial state
@@ -424,12 +441,16 @@ async fn run_job(
                 // Create checkpoint if configured
                 if !no_checkpoint
                     && config.config.checkpoint_mode != "off"
-                    && (config.config.checkpoint_after_each_step
-                        || step.checkpoint.is_some())
+                    && (config.config.checkpoint_after_each_step || step.checkpoint.is_some())
                 {
                     if let Some(checkpoint_name) = &step.checkpoint {
-                        create_checkpoint(path, name, checkpoint_name, config.config.create_git_tag)
-                            .await?;
+                        create_checkpoint(
+                            path,
+                            name,
+                            checkpoint_name,
+                            config.config.create_git_tag,
+                        )
+                        .await?;
 
                         // Record checkpoint in state
                         let git_tag = if config.config.create_git_tag {
@@ -437,7 +458,11 @@ async fn run_job(
                         } else {
                             None
                         };
-                        job_state.add_checkpoint(step_name.clone(), checkpoint_name.clone(), git_tag);
+                        job_state.add_checkpoint(
+                            step_name.clone(),
+                            checkpoint_name.clone(),
+                            git_tag,
+                        );
                         job_state.save(path)?;
                     }
                 }
@@ -463,8 +488,12 @@ async fn run_job(
 
                     for rollback_step in &config.rollback {
                         println!("   Executing rollback: {}", rollback_step.name);
-                        if let Err(rollback_err) = execute_step(path, rollback_step, &env_map).await {
-                            eprintln!("⚠️  Rollback step '{}' failed: {}", rollback_step.name, rollback_err);
+                        if let Err(rollback_err) = execute_step(path, rollback_step, &env_map).await
+                        {
+                            eprintln!(
+                                "⚠️  Rollback step '{}' failed: {}",
+                                rollback_step.name, rollback_err
+                            );
                         }
                     }
 
@@ -506,8 +535,13 @@ async fn execute_step(
             let mut combined_env = env.clone();
             combined_env.extend(step_env.clone());
 
-            execute_bash(command, cwd.as_deref().unwrap_or(path), &combined_env, *timeout_ms)
-                .await
+            execute_bash(
+                command,
+                cwd.as_deref().unwrap_or(path),
+                &combined_env,
+                *timeout_ms,
+            )
+            .await
         }
         JobTask::Agent {
             agent_type,
@@ -536,7 +570,7 @@ async fn execute_bash(
     timeout_ms: Option<u64>,
 ) -> Result<()> {
     use tokio::process::Command;
-    use tokio::time::{timeout, Duration};
+    use tokio::time::{Duration, timeout};
 
     let mut cmd = Command::new("bash");
     cmd.arg("-c")
@@ -591,7 +625,7 @@ async fn execute_agent(
     timeout_ms: Option<u64>,
 ) -> Result<()> {
     use tokio::process::Command;
-    use tokio::time::{timeout, Duration};
+    use tokio::time::{Duration, timeout};
 
     println!("   🤖 Executing LangChain agent: {}", agent_type);
 
@@ -621,7 +655,13 @@ async fn execute_agent(
 
     // Build command to execute LangChain agent
     let mut cmd = Command::new("uv");
-    cmd.args(&["run", "b00t-langchain", "test-agent", agent_type, &full_prompt]);
+    cmd.args(&[
+        "run",
+        "b00t-langchain",
+        "test-agent",
+        agent_type,
+        &full_prompt,
+    ]);
 
     // Set working directory to langchain-agent
     let langchain_dir = std::env::current_dir()
@@ -632,7 +672,8 @@ async fn execute_agent(
         cmd.current_dir(&langchain_dir);
     } else {
         // Try relative path from _b00t_ root
-        let alt_path = std::env::current_dir()?.parent()
+        let alt_path = std::env::current_dir()?
+            .parent()
             .context("No parent directory")?
             .join("langchain-agent");
         if alt_path.exists() {
@@ -648,7 +689,10 @@ async fn execute_agent(
 
     // Execute with timeout
     let execution = async {
-        let output = cmd.output().await.context("Failed to execute agent command")?;
+        let output = cmd
+            .output()
+            .await
+            .context("Failed to execute agent command")?;
 
         let stdout = String::from_utf8_lossy(&output.stdout);
         let stderr = String::from_utf8_lossy(&output.stderr);
@@ -754,15 +798,7 @@ async fn execute_mcp(
     let params_json = serde_json::to_string(params)?;
 
     let output = Command::new(std::env::current_exe()?)
-        .args(&[
-            "--path",
-            path,
-            "mcp",
-            "execute",
-            server,
-            tool,
-            &params_json,
-        ])
+        .args(&["--path", path, "mcp", "execute", server, tool, &params_json])
         .output()
         .await?;
 
@@ -778,7 +814,10 @@ async fn execute_mcp(
 }
 
 /// Execute Dagu DAG
-async fn execute_dagu(_dag: &str, _params: &std::collections::HashMap<String, String>) -> Result<()> {
+async fn execute_dagu(
+    _dag: &str,
+    _params: &std::collections::HashMap<String, String>,
+) -> Result<()> {
     // TODO: Integrate with Dagu
     println!("   ⚠️  Dagu execution not yet implemented");
     Ok(())
@@ -906,7 +945,10 @@ async fn status_job(path: &str, name: Option<&str>, all: bool, json: bool) -> Re
             if !state.checkpoints.is_empty() {
                 println!("\n   Checkpoints:");
                 for checkpoint in &state.checkpoints {
-                    println!("     📍 {} - {} ({})", checkpoint.step_name, checkpoint.checkpoint_name, checkpoint.created_at);
+                    println!(
+                        "     📍 {} - {} ({})",
+                        checkpoint.step_name, checkpoint.checkpoint_name, checkpoint.created_at
+                    );
                     if let Some(tag) = &checkpoint.git_tag {
                         println!("        Tag: {}", tag);
                     }
@@ -978,7 +1020,9 @@ async fn create_job(
     }
 
     let template_name = template.unwrap_or("sequential");
-    let job_path = PathBuf::from(path).join("_b00t_").join(format!("{}.job.toml", name));
+    let job_path = PathBuf::from(path)
+        .join("_b00t_")
+        .join(format!("{}.job.toml", name));
 
     if job_path.exists() {
         anyhow::bail!("Job '{}' already exists", name);
@@ -1085,7 +1129,17 @@ pub async fn run_job_internal(
     resume: bool,
     env_vars: &[String],
 ) -> Result<()> {
-    run_job(path, name, from_step, to_step, dry_run, no_checkpoint, resume, env_vars).await
+    run_job(
+        path,
+        name,
+        from_step,
+        to_step,
+        dry_run,
+        no_checkpoint,
+        resume,
+        env_vars,
+    )
+    .await
 }
 
 /// Get job status as JSON string
@@ -1139,8 +1193,8 @@ pub async fn get_job_plan_json(path: &str, name: &str) -> Result<String> {
     use b00t_cli::datum_job::JobDatum;
 
     let datum_path = format!("{}.job.toml", name);
-    let datum = JobDatum::from_config(&datum_path, path)
-        .context(format!("Job '{}' not found", name))?;
+    let datum =
+        JobDatum::from_config(&datum_path, path).context(format!("Job '{}' not found", name))?;
 
     datum.validate()?;
 

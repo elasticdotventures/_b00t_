@@ -66,8 +66,7 @@ async fn main() -> Result<()> {
 
     // Initialize logging if verbose
     if args.verbose {
-        env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info"))
-            .init();
+        env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
     }
 
     // Parse server arguments
@@ -138,8 +137,8 @@ async fn main() -> Result<()> {
         .ok_or_else(|| anyhow::anyhow!("Tool parameters required (JSON string)"))?;
 
     // Parse params JSON
-    let params_value: serde_json::Value = serde_json::from_str(params_str)
-        .context("Invalid JSON parameters")?;
+    let params_value: serde_json::Value =
+        serde_json::from_str(params_str).context("Invalid JSON parameters")?;
 
     // Execute tool
     if args.verbose {
@@ -182,7 +181,9 @@ async fn main() -> Result<()> {
             } else {
                 eprintln!(
                     "❌ Error: {}",
-                    response.error.unwrap_or_else(|| "Unknown error".to_string())
+                    response
+                        .error
+                        .unwrap_or_else(|| "Unknown error".to_string())
                 );
                 std::process::exit(1);
             }

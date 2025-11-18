@@ -6,9 +6,9 @@ use crate::{BootDatum, UnifiedConfig};
 use anyhow::{Context, Result};
 use clap::Parser;
 use duct::cmd;
+use shellexpand;
 use std::collections::HashMap;
 use std::path::PathBuf;
-use shellexpand;
 
 #[derive(Parser)]
 pub enum CliCommands {
@@ -125,7 +125,8 @@ fn cli_install(command: &str, path: &str) -> Result<()> {
 
             // Resolve installation order (includes command itself and all deps)
             let datum_key = format!("{}.cli", command);
-            let install_order = resolver.resolve(&datum_key)
+            let install_order = resolver
+                .resolve(&datum_key)
                 .context(format!("Failed to resolve dependencies for {}", command))?;
 
             println!("📋 Installation order ({} items):", install_order.len());
@@ -341,10 +342,7 @@ fn cli_up(path: &str, yes: bool) -> Result<()> {
                     if version_status == VersionStatus::Missing {
                         println!("🥾😱 {} (not installed) -> desires: {}", name, desired);
                     } else {
-                        println!(
-                            "🥾😭 {} (current: {}, desires: {})",
-                            name, current, desired
-                        );
+                        println!("🥾😭 {} (current: {}, desires: {})", name, current, desired);
                     }
                 }
             }
@@ -352,7 +350,10 @@ fn cli_up(path: &str, yes: bool) -> Result<()> {
                 println!("🥾👍🏻 {} {} (up to date)", name, current);
             }
             VersionStatus::Newer => {
-                println!("🥾🐣 {} {} (newer than desired: {})", name, current, desired);
+                println!(
+                    "🥾🐣 {} {} (newer than desired: {})",
+                    name, current, desired
+                );
             }
             VersionStatus::Unknown => {
                 println!("🥾⏹️ {} {} (version status unknown)", name, current);

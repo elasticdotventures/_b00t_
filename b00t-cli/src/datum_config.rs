@@ -375,7 +375,10 @@ mod tests {
     #[test]
     fn test_new_config() {
         let config = B00tConfig::new();
-        assert_eq!(config.install_methods, vec!["docker", "pkgx", "apt", "curl"]);
+        assert_eq!(
+            config.install_methods,
+            vec!["docker", "pkgx", "apt", "curl"]
+        );
         assert!(config.datums.is_empty());
         assert!(config.history.is_empty());
     }

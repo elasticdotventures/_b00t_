@@ -3,6 +3,7 @@ use chrono::{DateTime, Utc};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 
+pub mod budget_controller;
 pub mod cloud_sync;
 pub mod commands;
 pub mod datum_ai;
@@ -19,9 +20,9 @@ pub mod datum_mcp;
 pub mod datum_stack;
 pub mod datum_vscode;
 pub mod dependency_resolver;
-pub mod job_state;
+pub mod entanglement;
 pub mod job_ipc;
-pub mod budget_controller;
+pub mod job_state;
 pub mod job_state;
 pub mod k8s;
 pub mod model_manager;
@@ -256,6 +257,61 @@ pub struct BootDatum {
     // Used by `b00t job run <name>` for workflow execution
     #[serde(skip_serializing_if = "Option::is_none")]
     pub job: Option<serde_json::Value>,
+
+    // Entanglement: Cross-datum capability graph relationships
+    // These fields create a directed graph of datum capabilities and dependencies.
+    // Arrays are ordered by priority (first = highest priority).
+    //
+    // Format: ["datum-name"] or ["datum-name.datum-type"] for disambiguation
+    // Examples:
+    //   - "geminicli" (assumes primary type from context)
+    //   - "geminicli.cli" (explicit: CLI tool)
+    //   - "gemini-mcp-tool.mcp" (explicit: MCP server)
+    //
+    // Validation ensures:
+    //   - Referenced datums exist
+    //   - Referenced datums match the specified stereotype (type)
+    //   - No circular dependencies (optional, for dependency resolution)
+    //
+    // Use cases:
+    //   - Agents discovering their available tools (CLI + MCP servers)
+    //   - MCP servers declaring their CLI tool dependencies
+    //   - Agents forming crews with other agents
+    //   - Tools advertising their integration points
+    /// References to Agent datums (agentic AI systems)
+    /// Example: Codex agent can use Gemini CLI agent for collaboration
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub entangled_agents: Option<Vec<String>>,
+
+    /// References to CLI tool datums
+    /// Example: MCP server depends on CLI tool for auth/configuration
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub entangled_cli: Option<Vec<String>>,
+
+    /// References to MCP server datums
+    /// Example: Agent can use these MCP servers as tools
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub entangled_mcp: Option<Vec<String>>,
+
+    /// References to AI model datums
+    /// Example: Agent specifies which models it can use
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub entangled_ai_models: Option<Vec<String>>,
+
+    /// References to API datums
+    /// Example: Tool integrates with specific API endpoints
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub entangled_apis: Option<Vec<String>>,
+
+    /// References to Docker container datums
+    /// Example: Stack includes these containers
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub entangled_docker: Option<Vec<String>>,
+
+    /// References to K8s resource datums
+    /// Example: Service depends on these K8s resources
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub entangled_k8s: Option<Vec<String>>,
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
@@ -301,6 +357,7 @@ pub struct CapabilityRequirement {
 #[serde(rename_all = "lowercase")]
 pub enum DatumType {
     Unknown,
+    Agent, // Agentic AI systems (Claude, OpenAI Codex, Gemini CLI in agent mode)
     Mcp,
     Bash,
     Vscode,
@@ -315,7 +372,7 @@ pub enum DatumType {
     Cli,
     Stack,
     Config, // b00t configuration file (_b00t_.toml)
-    Job, // Workflow orchestration with checkpoints
+    Job,    // Workflow orchestration with checkpoints
 }
 
 #[derive(Serialize, Debug)]

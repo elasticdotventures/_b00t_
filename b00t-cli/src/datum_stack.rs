@@ -3,7 +3,7 @@ use crate::traits::{
     AffinityRules, AffinityStrategy, BudgetConstraints, DatumCrdDisplay, ResourceRequirements,
 };
 use crate::{BootDatum, DatumType, UnifiedConfig};
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result, bail};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
@@ -338,7 +338,10 @@ metadata:
 
         // Add GPU batch group label
         if let Some(batch_group) = &affinity.gpu_batch_group {
-            pod_spec.push_str(&format!("        b00t.io/gpu-batch-group: {}\n", batch_group));
+            pod_spec.push_str(&format!(
+                "        b00t.io/gpu-batch-group: {}\n",
+                batch_group
+            ));
         }
 
         pod_spec.push_str("    spec:\n");
@@ -410,7 +413,8 @@ metadata:
             match affinity.strategy {
                 AffinityStrategy::GpuAffinity | AffinityStrategy::TimeEpoch => {
                     pod_spec.push_str("        podAffinity:\n");
-                    pod_spec.push_str("          preferredDuringSchedulingIgnoredDuringExecution:\n");
+                    pod_spec
+                        .push_str("          preferredDuringSchedulingIgnoredDuringExecution:\n");
                     pod_spec.push_str("            - weight: 100\n");
                     pod_spec.push_str("              podAffinityTerm:\n");
                     pod_spec.push_str("                labelSelector:\n");
@@ -423,7 +427,10 @@ metadata:
                     }
                     pod_spec.push_str(&format!(
                         "                topologyKey: {}\n",
-                        affinity.topology_key.as_deref().unwrap_or("kubernetes.io/hostname")
+                        affinity
+                            .topology_key
+                            .as_deref()
+                            .unwrap_or("kubernetes.io/hostname")
                     ));
                 }
                 _ => {}

@@ -87,15 +87,25 @@ pub enum McpCommands {
         long_about = "Execute an MCP tool from a registered server via stdio transport.\n\nExamples (datum-based):\n  b00t-cli mcp execute filesystem read_file '{\"path\":\"/tmp/test.txt\"}'\n  b00t-cli mcp execute brave-search search '{\"query\":\"rust programming\"}'\n\nExamples (direct command):\n  b00t-cli mcp execute --command npx --args '-y,@modelcontextprotocol/server-filesystem' read_file '{\"path\":\"/file.txt\"}'\n  b00t-cli mcp execute -c uvx -a 'mcp-server-playwright' screenshot '{\"url\":\"https://example.com\"}'\n\nDiscovery:\n  b00t-cli mcp execute filesystem --discover\n  b00t-cli mcp execute --command npx --args '-y,@mcp/server-filesystem' --discover"
     )]
     Execute {
-        #[clap(help = "MCP server name (from datum registry) or tool name (with --command). Optional in discovery mode with --command.")]
+        #[clap(
+            help = "MCP server name (from datum registry) or tool name (with --command). Optional in discovery mode with --command."
+        )]
         server_or_tool: Option<String>,
         #[clap(help = "Tool name to execute (omit in discovery mode)")]
         tool: Option<String>,
         #[clap(help = "Tool parameters as JSON string (omit in discovery mode)")]
         params: Option<String>,
-        #[clap(short, long, help = "Server command (alternative to server name, e.g., npx, uvx, docker)")]
+        #[clap(
+            short,
+            long,
+            help = "Server command (alternative to server name, e.g., npx, uvx, docker)"
+        )]
         command: Option<String>,
-        #[clap(short, long, help = "Server arguments (comma-separated, e.g., '-y,@mcp/server')")]
+        #[clap(
+            short,
+            long,
+            help = "Server arguments (comma-separated, e.g., '-y,@mcp/server')"
+        )]
         args: Option<String>,
         #[clap(long, help = "Working directory for server process")]
         cwd: Option<String>,
@@ -301,9 +311,9 @@ impl McpCommands {
                     (config, tool_name)
                 } else {
                     // Datum-based mode: lookup server from registry
-                    let server_name = server_or_tool
-                        .as_ref()
-                        .ok_or_else(|| anyhow::anyhow!("Server name required (or use --command for direct mode)"))?;
+                    let server_name = server_or_tool.as_ref().ok_or_else(|| {
+                        anyhow::anyhow!("Server name required (or use --command for direct mode)")
+                    })?;
 
                     // Load MCP datum config
                     let datum = crate::get_mcp_config(server_name, path)?;
@@ -316,7 +326,9 @@ impl McpCommands {
                                 let cmd = first_method
                                     .get("command")
                                     .and_then(|v| v.as_str())
-                                    .ok_or_else(|| anyhow::anyhow!("Missing 'command' in stdio method"))?
+                                    .ok_or_else(|| {
+                                        anyhow::anyhow!("Missing 'command' in stdio method")
+                                    })?
                                     .to_string();
 
                                 let parsed_args = first_method
@@ -339,7 +351,10 @@ impl McpCommands {
 
                                 (server_config, tool.clone())
                             } else {
-                                anyhow::bail!("No stdio methods defined for server '{}'", server_name);
+                                anyhow::bail!(
+                                    "No stdio methods defined for server '{}'",
+                                    server_name
+                                );
                             }
                         } else {
                             anyhow::bail!("No stdio configuration for server '{}'", server_name);
@@ -379,9 +394,9 @@ impl McpCommands {
                     anyhow::anyhow!("Tool name required (or use --discover to list tools)")
                 })?;
 
-                let params_str = params.as_ref().ok_or_else(|| {
-                    anyhow::anyhow!("Tool parameters required (JSON string)")
-                })?;
+                let params_str = params
+                    .as_ref()
+                    .ok_or_else(|| anyhow::anyhow!("Tool parameters required (JSON string)"))?;
 
                 // Parse params JSON
                 let params_value: JsonValue = serde_json::from_str(params_str)
@@ -411,7 +426,12 @@ impl McpCommands {
                                 println!("{}", serde_json::to_string_pretty(&data)?);
                             }
                         } else {
-                            println!("❌ Error: {}", response.error.unwrap_or_else(|| "Unknown error".to_string()));
+                            println!(
+                                "❌ Error: {}",
+                                response
+                                    .error
+                                    .unwrap_or_else(|| "Unknown error".to_string())
+                            );
                         }
                         println!("\n⏱️  Duration: {}ms", response.metadata.duration_ms);
                     }

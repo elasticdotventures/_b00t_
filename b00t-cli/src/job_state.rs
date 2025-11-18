@@ -165,7 +165,12 @@ impl JobState {
     }
 
     /// Add checkpoint
-    pub fn add_checkpoint(&mut self, step_name: String, checkpoint_name: String, git_tag: Option<String>) {
+    pub fn add_checkpoint(
+        &mut self,
+        step_name: String,
+        checkpoint_name: String,
+        git_tag: Option<String>,
+    ) {
         self.checkpoints.push(CheckpointInfo {
             step_name,
             checkpoint_name,

@@ -12,7 +12,7 @@ use crate::datum_stack::{JobDatum, StackDatum};
 
 pub struct K8sAdapter {
     namespace: String,
-    use_kueue: bool,  // Use Kueue for job queuing if available
+    use_kueue: bool, // Use Kueue for job queuing if available
 }
 
 impl K8sAdapter {
@@ -41,7 +41,10 @@ impl K8sAdapter {
         let mut manifest = String::new();
 
         // Extract container spec
-        let image = job.datum.image.as_ref()
+        let image = job
+            .datum
+            .image
+            .as_ref()
             .context("Job datum missing image field")?;
 
         let command = job.datum.command.clone();
@@ -111,10 +114,7 @@ metadata:
 
         // Add command if specified
         if let Some(cmd) = &command {
-            manifest.push_str(&format!(
-                "        command: [\"{}\"]\n",
-                cmd
-            ));
+            manifest.push_str(&format!("        command: [\"{}\"]\n", cmd));
         }
 
         // Add args if specified
@@ -195,7 +195,7 @@ metadata:
     fn resolve_service_reference(&self, value: &str) -> Result<String> {
         // Parse ${STACK:stack-name:service:endpoint} syntax
         if value.starts_with("${STACK:") && value.ends_with('}') {
-            let inner = &value[8..value.len() - 1];  // Remove ${STACK: and }
+            let inner = &value[8..value.len() - 1]; // Remove ${STACK: and }
             let parts: Vec<&str> = inner.split(':').collect();
 
             if parts.len() >= 2 {
@@ -204,8 +204,10 @@ metadata:
                 let port = parts.get(2).unwrap_or(&"80");
 
                 // k8s-specific: Service DNS name
-                let k8s_service = format!("http://{}.{}.svc.cluster.local:{}",
-                    service_name, self.namespace, port);
+                let k8s_service = format!(
+                    "http://{}.{}.svc.cluster.local:{}",
+                    service_name, self.namespace, port
+                );
                 return Ok(k8s_service);
             }
         }
@@ -232,10 +234,7 @@ metadata:
             // GPU requirements
             if let Some(gpu) = &orch.gpu_requirements {
                 if let Some(count) = gpu.count {
-                    resources.push_str(&format!(
-                        "            nvidia.com/gpu: {}\n",
-                        count
-                    ));
+                    resources.push_str(&format!("            nvidia.com/gpu: {}\n", count));
                 }
             }
         }
@@ -272,7 +271,7 @@ impl OrchestratorAdapter for K8sAdapter {
         if let Some(orch) = &job.datum.orchestration {
             if orch.budget_constraint.is_some() {
                 metadata.warnings.push(
-                    "Budget constraints require b00t budget controller to be running".to_string()
+                    "Budget constraints require b00t budget controller to be running".to_string(),
                 );
             }
         }
@@ -282,7 +281,7 @@ impl OrchestratorAdapter for K8sAdapter {
             if let Some(orch) = &job.datum.orchestration {
                 if orch.queue_name.is_some() {
                     metadata.warnings.push(
-                        "Kueue queue requested but Kueue CRDs not found in cluster".to_string()
+                        "Kueue queue requested but Kueue CRDs not found in cluster".to_string(),
                     );
                 }
             }
@@ -301,9 +300,9 @@ impl OrchestratorAdapter for K8sAdapter {
         // This would call stack.generate_docker_compose() then run kompose
 
         let mut metadata = AdapterMetadata::default();
-        metadata.warnings.push(
-            "Stack translation via kompose not yet implemented in adapter".to_string()
-        );
+        metadata
+            .warnings
+            .push("Stack translation via kompose not yet implemented in adapter".to_string());
 
         // Placeholder - would integrate with existing stack to-k8s command
         Ok(AdapterOutput {
@@ -343,7 +342,9 @@ mod tests {
         assert_eq!(result, "http://n8n.default.svc.cluster.local:5678");
 
         // Test plain value
-        let result = adapter.resolve_service_reference("http://example.com").unwrap();
+        let result = adapter
+            .resolve_service_reference("http://example.com")
+            .unwrap();
         assert_eq!(result, "http://example.com");
     }
 }

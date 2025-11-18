@@ -49,18 +49,18 @@ impl std::fmt::Display for Orchestrator {
 /// MCP tool call command
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct McpCommand {
-    pub server: String,      // MCP server name (e.g., "kubernetes-mcp")
-    pub tool: String,        // Tool name (e.g., "kubectl_apply")
-    pub arguments: Value,    // JSON arguments for the tool
+    pub server: String,   // MCP server name (e.g., "kubernetes-mcp")
+    pub tool: String,     // Tool name (e.g., "kubectl_apply")
+    pub arguments: Value, // JSON arguments for the tool
 }
 
 /// Output from adapter translation
 #[derive(Debug, Clone)]
 pub struct AdapterOutput {
     pub orchestrator: Orchestrator,
-    pub manifests: Vec<String>,      // Generated manifests (YAML, HCL, scripts, etc.)
-    pub mcp_commands: Vec<McpCommand>,  // MCP tool calls for execution
-    pub metadata: AdapterMetadata,   // Additional metadata
+    pub manifests: Vec<String>, // Generated manifests (YAML, HCL, scripts, etc.)
+    pub mcp_commands: Vec<McpCommand>, // MCP tool calls for execution
+    pub metadata: AdapterMetadata, // Additional metadata
 }
 
 /// Metadata about the adapter output
@@ -77,7 +77,7 @@ pub struct ServiceEndpoint {
     pub name: String,
     pub port: u16,
     pub protocol: String,
-    pub url: String,  // Orchestrator-specific URL
+    pub url: String, // Orchestrator-specific URL
 }
 
 /// Abstract container specification (from datum)
@@ -96,7 +96,7 @@ pub struct Dependencies {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub requires_stacks: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub wait_for_services: Option<Vec<String>>,  // Format: "service:port"
+    pub wait_for_services: Option<Vec<String>>, // Format: "service:port"
 }
 
 /// Trait for orchestrator-specific adapters
