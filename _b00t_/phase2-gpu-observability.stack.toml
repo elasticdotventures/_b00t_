@@ -1,0 +1,34 @@
+[b00t]
+name = "phase2-gpu-observability"
+type = "stack"
+hint = "Phase 2: GPU management + observability (NVIDIA GPU Operator, Prometheus, Grafana, Kubecost)"
+members = ["nvidia-gpu-operator.k8s", "kube-prometheus-stack.k8s", "kubecost.k8s"]
+
+[b00t.orchestration]
+schedule_type = "monitoring"
+gpu_enabled = true
+budget_tracking = true
+
+[b00t.orchestration.gpu_requirements]
+gpu_sharing = true
+time_slicing = true
+
+[b00t.orchestration.budget_constraint]
+daily_limit = 100.00
+webhook_url = "http://n8n.default.svc.cluster.local:5678/webhook/budget"
+
+[[b00t.usage]]
+description = "Deploy GPU + observability stack"
+command = "b00t stack deploy phase2-gpu-observability"
+
+[[b00t.usage]]
+description = "Access Grafana dashboard"
+command = "kubectl port-forward -n monitoring svc/kube-prometheus-stack-grafana 3000:80"
+
+[[b00t.usage]]
+description = "Access Kubecost UI"
+command = "kubectl port-forward -n kubecost deployment/kubecost-cost-analyzer 9090"
+
+[[b00t.usage]]
+description = "Check GPU availability"
+command = "kubectl get nodes -o json | jq '.items[].status.capacity'"

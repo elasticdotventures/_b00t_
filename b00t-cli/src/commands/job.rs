@@ -257,7 +257,7 @@ async fn plan_job(path: &str, name: &str, show_dag: bool, json: bool) -> Result<
             }
             b00t_cli::datum_job::JobTask::Agent { agent_type, prompt, .. } => {
                 println!("   Type: agent ({})", agent_type);
-                println!("   Prompt: {}", prompt.lines().next().unwrap_or(""));
+                println!("   Prompt: {}", prompt.lines().next().unwrap_or("<empty>"));
             }
             b00t_cli::datum_job::JobTask::K0mmander { .. } => {
                 println!("   Type: k0mmander");
@@ -311,6 +311,7 @@ async fn run_job(
     env_vars: &[String],
 ) -> Result<()> {
     use b00t_cli::datum_job::JobDatum;
+    use b00t_cli::job_state::{JobState, JobStatus, StepStatus};
 
     println!("🚀 Starting job: {}", name);
 
@@ -322,6 +323,29 @@ async fn run_job(
 
     let config = datum.job_config()?;
     let mut execution_order = datum.execution_order()?;
+
+    // Create or resume job state
+    let mut job_state = if resume {
+        match JobState::load_latest(path, name) {
+            Ok(state) => {
+                println!("📂 Resuming from previous run ({})", state.run_id);
+                println!("   Started: {}", state.started_at);
+                println!("   Status: {:?}", state.status);
+                state
+            }
+            Err(_) => {
+                println!("⚠️  No previous run found, starting fresh");
+                JobState::new(name.to_string(), config.config.mode.clone(), execution_order.len())
+            }
+        }
+    } else {
+        JobState::new(name.to_string(), config.config.mode.clone(), execution_order.len())
+    };
+
+    // Save initial state
+    if !dry_run {
+        job_state.save(path)?;
+    }
 
     // Filter by from_step/to_step
     if let Some(from) = from_step {
@@ -369,66 +393,96 @@ async fn run_job(
             continue;
         }
 
-        // Execute step with retry logic
-        let max_retries = config.config.retry_failed_steps;
-        let mut last_error = None;
-        let mut retry_count = 0;
+        // Skip if resuming and step already completed
+        if resume {
+            if let Some(step_state) = job_state.steps.get(step_name) {
+                if step_state.status == StepStatus::Completed {
+                    println!("   ⏭️  Skipping (already completed)");
+                    continue;
+                }
+            }
+        }
 
-        loop {
-            let result = execute_step(path, step, &env_map).await;
+        // Update state: step starting
+        job_state.start_step(step_name.clone());
+        job_state.status = JobStatus::Running;
+        job_state.save(path)?;
 
-            match result {
-                Ok(_) => {
-                    if retry_count > 0 {
-                        println!("   ✅ Success (after {} retries)", retry_count);
-                    } else {
-                        println!("   ✅ Success");
+        // Execute step
+        let step_start = std::time::Instant::now();
+        let result = execute_step(path, step, &env_map).await;
+        let step_duration = step_start.elapsed();
+
+        match result {
+            Ok(_) => {
+                println!("   ✅ Success ({}s)", step_duration.as_secs());
+
+                // Update state: step completed
+                job_state.complete_step(step_name);
+                job_state.save(path)?;
+
+                // Create checkpoint if configured
+                if !no_checkpoint
+                    && config.config.checkpoint_mode != "off"
+                    && (config.config.checkpoint_after_each_step
+                        || step.checkpoint.is_some())
+                {
+                    if let Some(checkpoint_name) = &step.checkpoint {
+                        create_checkpoint(path, name, checkpoint_name, config.config.create_git_tag)
+                            .await?;
+
+                        // Record checkpoint in state
+                        let git_tag = if config.config.create_git_tag {
+                            Some(format!("job/{}/{}", name, checkpoint_name))
+                        } else {
+                            None
+                        };
+                        job_state.add_checkpoint(step_name.clone(), checkpoint_name.clone(), git_tag);
+                        job_state.save(path)?;
                     }
+                }
+            }
+            Err(e) => {
+                println!("   ❌ Failed: {}", e);
 
-                    // Create checkpoint if configured
-                    if !no_checkpoint
-                        && config.config.checkpoint_mode != "off"
-                        && (config.config.checkpoint_after_each_step
-                            || step.checkpoint.is_some())
-                    {
-                        if let Some(checkpoint_name) = &step.checkpoint {
-                            create_checkpoint(path, name, checkpoint_name, config.config.create_git_tag)
-                                .await?;
+                // Update state: step failed
+                job_state.fail_step(step_name, e.to_string());
+                job_state.status = JobStatus::Failed;
+                job_state.error = Some(e.to_string());
+                job_state.save(path)?;
+
+                if config.config.continue_on_failure {
+                    println!("   ⚠️  Continuing despite failure...");
+                    continue;
+                }
+
+                if config.config.rollback_on_failure && !config.rollback.is_empty() {
+                    println!("\n🔄 Rolling back...");
+                    job_state.status = JobStatus::RollingBack;
+                    job_state.save(path)?;
+
+                    for rollback_step in &config.rollback {
+                        println!("   Executing rollback: {}", rollback_step.name);
+                        if let Err(rollback_err) = execute_step(path, rollback_step, &env_map).await {
+                            eprintln!("⚠️  Rollback step '{}' failed: {}", rollback_step.name, rollback_err);
                         }
                     }
-                    break;
+
+                    job_state.status = JobStatus::RolledBack;
+                    job_state.save(path)?;
                 }
-                Err(e) => {
-                    if retry_count < max_retries {
-                        retry_count += 1;
-                        println!("   ⚠️  Failed: {} (retry {}/{})", e, retry_count, max_retries);
-                        last_error = Some(e);
-                        continue;
-                    }
 
-                    println!("   ❌ Failed: {}", e);
-
-                    if config.config.continue_on_failure {
-                        println!("   ⚠️  Continuing despite failure...");
-                        last_error = Some(e);
-                        break;
-                    }
-
-                    if config.config.rollback_on_failure && !config.rollback.is_empty() {
-                        println!("\n🔄 Rolling back...");
-                        for rollback_step in &config.rollback {
-                            println!("   Executing rollback: {}", rollback_step.name);
-                            execute_step(path, rollback_step, &env_map).await?;
-                        }
-                    }
-
-                    return Err(e.context(format!("Step '{}' failed after {} retries", step_name, retry_count)));
-                }
+                return Err(e.context(format!("Step '{}' failed", step_name)));
             }
         }
     }
 
     println!("\n✨ Job completed successfully!");
+
+    // Update final state
+    job_state.status = JobStatus::Completed;
+    job_state.completed_at = Some(chrono::Utc::now());
+    job_state.save(path)?;
 
     Ok(())
 }
@@ -474,7 +528,7 @@ async fn execute_step(
     }
 }
 
-/// Execute bash command with streaming output
+/// Execute bash command and display output after completion
 async fn execute_bash(
     command: &str,
     cwd: &str,
@@ -495,7 +549,7 @@ async fn execute_bash(
     let execution = async {
         let output = cmd.output().await?;
 
-        // Stream output in real-time
+        // Display output after command completes
         let stdout = String::from_utf8_lossy(&output.stdout);
         let stderr = String::from_utf8_lossy(&output.stderr);
 
@@ -529,17 +583,106 @@ async fn execute_bash(
     }
 }
 
-/// Execute sub-agent task
+/// Execute sub-agent task via LangChain agent service
 async fn execute_agent(
-    _agent_type: &str,
-    _prompt: &str,
-    _context_files: &[String],
-    _timeout_ms: Option<u64>,
+    agent_type: &str,
+    prompt: &str,
+    context_files: &[String],
+    timeout_ms: Option<u64>,
 ) -> Result<()> {
-    // TODO: Integrate with b00t-agent or Task MCP tool
-    // For now, placeholder
-    println!("   ⚠️  Agent execution not yet implemented");
-    Ok(())
+    use tokio::process::Command;
+    use tokio::time::{timeout, Duration};
+
+    println!("   🤖 Executing LangChain agent: {}", agent_type);
+
+    // Build full prompt with context files
+    let mut full_prompt = String::new();
+
+    // Load context files if specified
+    if !context_files.is_empty() {
+        println!("   📄 Loading context files:");
+        for file_path in context_files {
+            println!("      - {}", file_path);
+            match tokio::fs::read_to_string(file_path).await {
+                Ok(content) => {
+                    full_prompt.push_str(&format!("\n--- Context from {} ---\n", file_path));
+                    full_prompt.push_str(&content);
+                    full_prompt.push_str("\n--- End context ---\n\n");
+                }
+                Err(e) => {
+                    eprintln!("   ⚠️  Failed to read {}: {}", file_path, e);
+                }
+            }
+        }
+    }
+
+    // Add the actual prompt
+    full_prompt.push_str(prompt);
+
+    // Build command to execute LangChain agent
+    let mut cmd = Command::new("uv");
+    cmd.args(&["run", "b00t-langchain", "test-agent", agent_type, &full_prompt]);
+
+    // Set working directory to langchain-agent
+    let langchain_dir = std::env::current_dir()
+        .context("Failed to get current directory")?
+        .join("langchain-agent");
+
+    if langchain_dir.exists() {
+        cmd.current_dir(&langchain_dir);
+    } else {
+        // Try relative path from _b00t_ root
+        let alt_path = std::env::current_dir()?.parent()
+            .context("No parent directory")?
+            .join("langchain-agent");
+        if alt_path.exists() {
+            cmd.current_dir(&alt_path);
+        } else {
+            anyhow::bail!(
+                "LangChain agent directory not found. Expected: {} or {}",
+                langchain_dir.display(),
+                alt_path.display()
+            );
+        }
+    }
+
+    // Execute with timeout
+    let execution = async {
+        let output = cmd.output().await.context("Failed to execute agent command")?;
+
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        let stderr = String::from_utf8_lossy(&output.stderr);
+
+        // Print output
+        if !stdout.is_empty() {
+            for line in stdout.lines() {
+                println!("   {}", line);
+            }
+        }
+
+        if !stderr.is_empty() && !output.status.success() {
+            for line in stderr.lines() {
+                eprintln!("   {}", line);
+            }
+        }
+
+        if output.status.success() {
+            println!("   ✅ Agent completed successfully");
+            Ok(())
+        } else {
+            anyhow::bail!(
+                "Agent failed with exit code: {}",
+                output.status.code().unwrap_or(-1)
+            )
+        }
+    };
+
+    // Apply timeout if specified
+    let timeout_duration = timeout_ms.unwrap_or(300000); // Default 5 minutes
+    match timeout(Duration::from_millis(timeout_duration), execution).await {
+        Ok(result) => result,
+        Err(_) => anyhow::bail!("Agent timed out after {}ms", timeout_duration),
+    }
 }
 
 /// Execute k0mmander script
@@ -682,10 +825,96 @@ async fn create_checkpoint(
 }
 
 /// Show job status
-async fn status_job(_path: &str, _name: Option<&str>, _all: bool, _json: bool) -> Result<()> {
-    // TODO: Implement job status tracking
-    println!("⚠️  Job status tracking not yet implemented");
-    println!("Future: Track running jobs via IPC/Redis");
+async fn status_job(path: &str, name: Option<&str>, all: bool, json: bool) -> Result<()> {
+    use b00t_cli::job_state::JobState;
+    use std::fs;
+
+    let state_dir = std::path::PathBuf::from(path).join(".b00t").join("jobs");
+
+    if !state_dir.exists() {
+        println!("No job state found");
+        return Ok(());
+    }
+
+    let mut states = Vec::new();
+
+    if let Some(job_name) = name {
+        // Load specific job state
+        match JobState::load_latest(path, job_name) {
+            Ok(state) => states.push(state),
+            Err(e) => {
+                println!("❌ Failed to load job state for '{}': {}", job_name, e);
+                return Ok(());
+            }
+        }
+    } else if all {
+        // Load all job states
+        for entry in fs::read_dir(&state_dir)? {
+            let entry = entry?;
+            if entry.path().is_dir() {
+                let job_name = entry.file_name().to_string_lossy().to_string();
+                if let Ok(state) = JobState::load_latest(path, &job_name) {
+                    states.push(state);
+                }
+            }
+        }
+    } else {
+        println!("Specify --all to see all jobs or provide a job name");
+        return Ok(());
+    }
+
+    if json {
+        let json_output = serde_json::to_string_pretty(&states)?;
+        println!("{}", json_output);
+    } else {
+        for state in states {
+            println!("\n📊 Job: {}", state.job_name);
+            println!("   Run ID: {}", state.run_id);
+            println!("   Status: {:?}", state.status);
+            println!("   Started: {}", state.started_at);
+            if let Some(completed) = state.completed_at {
+                println!("   Completed: {}", completed);
+                let duration = completed - state.started_at;
+                println!("   Duration: {}s", duration.num_seconds());
+            }
+            if let Some(current) = &state.current_step {
+                println!("   Current step: {}", current);
+            }
+            if let Some(error) = &state.error {
+                println!("   Error: {}", error);
+            }
+
+            println!("\n   Steps:");
+            for (step_name, step_state) in &state.steps {
+                let status_icon = match step_state.status {
+                    b00t_cli::job_state::StepStatus::Pending => "⏳",
+                    b00t_cli::job_state::StepStatus::Running => "🏃",
+                    b00t_cli::job_state::StepStatus::Completed => "✅",
+                    b00t_cli::job_state::StepStatus::Failed => "❌",
+                    b00t_cli::job_state::StepStatus::Skipped => "⏭️ ",
+                };
+                print!("     {} {}", status_icon, step_name);
+                if let Some(duration_ms) = step_state.duration_ms {
+                    print!(" ({}s)", duration_ms / 1000);
+                }
+                if let Some(error) = &step_state.error {
+                    print!(" - {}", error);
+                }
+                println!();
+            }
+
+            if !state.checkpoints.is_empty() {
+                println!("\n   Checkpoints:");
+                for checkpoint in &state.checkpoints {
+                    println!("     📍 {} - {} ({})", checkpoint.step_name, checkpoint.checkpoint_name, checkpoint.created_at);
+                    if let Some(tag) = &checkpoint.git_tag {
+                        println!("        Tag: {}", tag);
+                    }
+                }
+            }
+        }
+    }
+
     Ok(())
 }
 
@@ -839,4 +1068,100 @@ fn find_job_datums(path: &str) -> Result<Vec<String>> {
 
     jobs.sort();
     Ok(jobs)
+}
+
+// ============================================================================
+// Public API for IPC integration
+// ============================================================================
+
+/// Public wrapper for run_job (for job_ipc module)
+pub async fn run_job_internal(
+    path: &str,
+    name: &str,
+    from_step: Option<&str>,
+    to_step: Option<&str>,
+    dry_run: bool,
+    no_checkpoint: bool,
+    resume: bool,
+    env_vars: &[String],
+) -> Result<()> {
+    run_job(path, name, from_step, to_step, dry_run, no_checkpoint, resume, env_vars).await
+}
+
+/// Get job status as JSON string
+pub async fn get_job_status_json(path: &str, name: Option<&str>, all: bool) -> Result<String> {
+    use b00t_cli::job_state::JobState;
+    use std::fs;
+
+    let state_dir = std::path::PathBuf::from(path).join(".b00t").join("jobs");
+
+    if !state_dir.exists() {
+        return Ok(serde_json::to_string(&serde_json::json!({
+            "jobs": []
+        }))?);
+    }
+
+    let mut states = Vec::new();
+
+    if let Some(job_name) = name {
+        match JobState::load_latest(path, job_name) {
+            Ok(state) => states.push(state),
+            Err(_) => {
+                return Ok(serde_json::to_string(&serde_json::json!({
+                    "error": format!("Job '{}' not found", job_name)
+                }))?);
+            }
+        }
+    } else if all {
+        for entry in fs::read_dir(&state_dir)? {
+            let entry = entry?;
+            if entry.path().is_dir() {
+                let job_name = entry.file_name().to_string_lossy().to_string();
+                if let Ok(state) = JobState::load_latest(path, &job_name) {
+                    states.push(state);
+                }
+            }
+        }
+    }
+
+    Ok(serde_json::to_string(&serde_json::json!({
+        "jobs": states
+    }))?)
+}
+
+/// Stop job (internal version for IPC)
+pub async fn stop_job_internal(path: &str, name: Option<&str>, all: bool) -> Result<()> {
+    stop_job(path, name, all).await
+}
+
+/// Get job plan as JSON string
+pub async fn get_job_plan_json(path: &str, name: &str) -> Result<String> {
+    use b00t_cli::datum_job::JobDatum;
+
+    let datum_path = format!("{}.job.toml", name);
+    let datum = JobDatum::from_config(&datum_path, path)
+        .context(format!("Job '{}' not found", name))?;
+
+    datum.validate()?;
+
+    let config = datum.job_config()?;
+    let execution_order = datum.execution_order()?;
+
+    Ok(serde_json::to_string(&serde_json::json!({
+        "job_name": name,
+        "description": config.description,
+        "mode": config.config.mode,
+        "execution_order": execution_order,
+        "steps": config.steps,
+        "checkpoint_mode": config.config.checkpoint_mode,
+    }))?)
+}
+
+/// List jobs as JSON string
+pub async fn list_jobs_json(path: &str) -> Result<String> {
+    let jobs = find_job_datums(path)?;
+
+    Ok(serde_json::to_string(&serde_json::json!({
+        "jobs": jobs
+    }))?)
 }

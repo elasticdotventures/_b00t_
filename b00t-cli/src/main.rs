@@ -22,6 +22,8 @@ mod datum_gemini;
 mod datum_mcp;
 mod datum_utils;
 mod datum_vscode;
+mod dependency_resolver;
+mod orchestrator;
 mod session_memory;
 mod test_cloud_integration;
 mod traits;
@@ -41,9 +43,15 @@ use traits::*;
 
 use crate::commands::learn::{LearnArgs, handle_learn};
 use crate::commands::{
-    AiCommands, AppCommands, BootstrapCommands, ChatCommands, CliCommands, DatumCommands,
-    GrokCommands, InitCommands, InstallCommands, JobCommands, K8sCommands, McpCommands,
-    ModelCommands, SessionCommands, StackCommands, WhatismyCommands,
+    AiCommands, AppCommands,
+    BootstrapCommands, BudgetCommands, 
+    ChatCommands, CliCommands,
+    DatumCommands, GrokCommands, 
+    InitCommands, InstallCommands, 
+    JobCommands, K8sCommands, 
+    McpCommands, ModelCommands, 
+    SessionCommands, StackCommands, 
+    WhatismyCommands,
 };
 
 // Re-export commonly used functions for datum modules
@@ -102,6 +110,11 @@ Example:
     Stack {
         #[clap(subcommand)]
         stack_command: StackCommands,
+    },
+    #[clap(about = "Budget-aware scheduling and tracking")]
+    Budget {
+        #[clap(subcommand)]
+        budget_command: BudgetCommands,
     },
     #[clap(about = "Application integration commands")]
     App {
@@ -1155,6 +1168,12 @@ async fn main() {
         }
         Some(Commands::Stack { stack_command }) => {
             if let Err(e) = stack_command.execute(&cli.path) {
+                eprintln!("Error: {}", e);
+                std::process::exit(1);
+            }
+        }
+        Some(Commands::Budget { budget_command }) => {
+            if let Err(e) = budget_command.execute(&cli.path) {
                 eprintln!("Error: {}", e);
                 std::process::exit(1);
             }
