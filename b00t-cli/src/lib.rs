@@ -639,7 +639,6 @@ pub fn normalize_mcp_json(input: &str, dwiw: bool) -> Result<BootDatum> {
                 learn: None,
                 usage: None,
                 lfmf_category: None,
-                orchestration: None,
                 job: None,
             });
         }
