@@ -2147,6 +2147,25 @@ where
     Ok(tools)
 }
 
+// Helper function for README.md status checking
+fn check_readme_status(memory: &mut session_memory::SessionMemory) -> Result<()> {
+    let git_root = utils::get_workspace_root();
+    let readme_path = std::path::PathBuf::from(&git_root).join("README.md");
+
+    if readme_path.exists() {
+        if !memory.is_readme_read() {
+            println!("📖 README.md found but not yet marked as read");
+            println!("💡 Run `b00t-cli session mark-readme-read` after reading it");
+        } else {
+            println!("✅ README.md already read this session");
+        }
+    } else {
+        println!("ℹ️  No README.md found in git root");
+    }
+
+    Ok(())
+}
+
 // Session management functions
 pub fn handle_session_init(
     budget: &Option<f64>,
@@ -2175,8 +2194,9 @@ pub fn handle_session_init(
 
     session.save()?;
 
-    // Initialize session memory
-    let _memory = session_memory::SessionMemory::load()?;
+    // Initialize session memory and check README.md
+    let mut memory = session_memory::SessionMemory::load()?;
+    check_readme_status(&mut memory)?;
 
     println!("🥾 Session {} initialized", session.session_id);
 
@@ -2217,9 +2237,11 @@ pub fn handle_session_end() -> Result<()> {
     println!("📊 Final stats: {}", session.get_status_line());
 
     if path.exists() {
-        std::fs::remove_file(&path)?;
-        println!("🗑️  Session file removed");
+        std::fs::remove_file(&path).context("Failed to remove session file")?;
     }
 
+    unsafe {
+        std::env::remove_var("B00T_SESSION_ID");
+    }
     Ok(())
 }
