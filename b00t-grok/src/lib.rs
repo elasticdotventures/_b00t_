@@ -538,7 +538,12 @@ impl GrokClient {
                 vector: scored_point.vectors.and_then(|v| match v.vectors_options? {
                     qdrant_client::qdrant::vectors_output::VectorsOptions::Vector(
                         vector_struct,
-                    ) => Some(vector_struct.data),
+                    ) => vector_struct.vector.and_then(|vec| match vec {
+                        qdrant_client::qdrant::vector_output::Vector::Dense(dense) => {
+                            Some(dense.data)
+                        }
+                        _ => None,
+                    }),
                     _ => None,
                 }),
             };
@@ -934,7 +939,12 @@ impl GrokClient {
                 vector: scored_point.vectors.and_then(|v| match v.vectors_options? {
                     qdrant_client::qdrant::vectors_output::VectorsOptions::Vector(
                         vector_struct,
-                    ) => Some(vector_struct.data),
+                    ) => vector_struct.vector.and_then(|vec| match vec {
+                        qdrant_client::qdrant::vector_output::Vector::Dense(dense) => {
+                            Some(dense.data)
+                        }
+                        _ => None,
+                    }),
                     _ => None,
                 }),
             };
@@ -1085,7 +1095,12 @@ impl GrokClient {
                 vector: point.vectors.and_then(|v| match v.vectors_options? {
                     qdrant_client::qdrant::vectors_output::VectorsOptions::Vector(
                         vector_struct,
-                    ) => Some(vector_struct.data),
+                    ) => vector_struct.vector.and_then(|vec| match vec {
+                        qdrant_client::qdrant::vector_output::Vector::Dense(dense) => {
+                            Some(dense.data)
+                        }
+                        _ => None,
+                    }),
                     _ => None,
                 }),
             };

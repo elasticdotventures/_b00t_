@@ -101,7 +101,7 @@ fn model_info_py(path: &str, name: Option<&str>) -> PyResult<String> {
 
 #[pyfunction]
 #[pyo3(signature = (path = "~/.dotfiles/_b00t_", name = None))]
-fn model_env_py(py: Python<'_>, path: &str, name: Option<&str>) -> PyResult<PyObject> {
+fn model_env_py(py: Python<'_>, path: &str, name: Option<&str>) -> PyResult<Py<PyAny>> {
     let envs = model_manager::export_model_env(path, name)
         .map_err(|e| to_py_err("Failed to export model env", e))?;
     let dict = PyDict::new(py);
@@ -189,7 +189,7 @@ fn version() -> &'static str {
 ///
 #[pyfunction]
 #[pyo3(signature = (model_name, path = "~/.dotfiles/_b00t_"))]
-fn load_ai_model_datum(py: Python<'_>, model_name: &str, path: &str) -> PyResult<PyObject> {
+fn load_ai_model_datum(py: Python<'_>, model_name: &str, path: &str) -> PyResult<Py<PyAny>> {
     // Expand path
     let mut datum_path =
         get_expanded_path(path).map_err(|e| B00tError::new_err(format!("Invalid path: {}", e)))?;
@@ -294,7 +294,7 @@ fn load_ai_model_datum(py: Python<'_>, model_name: &str, path: &str) -> PyResult
 ///
 #[pyfunction]
 #[pyo3(signature = (provider_name, path = "~/.dotfiles/_b00t_"))]
-fn check_provider_env(py: Python<'_>, provider_name: &str, path: &str) -> PyResult<PyObject> {
+fn check_provider_env(py: Python<'_>, provider_name: &str, path: &str) -> PyResult<Py<PyAny>> {
     // Expand path
     let mut datum_path =
         get_expanded_path(path).map_err(|e| B00tError::new_err(format!("Invalid path: {}", e)))?;
