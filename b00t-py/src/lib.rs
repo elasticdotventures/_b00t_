@@ -13,15 +13,13 @@ use serde_json;
 
 // Import b00t-cli functions
 use b00t_cli::model_manager::{self, ServeOptions};
-use std::collections::HashMap;
 
 // Import b00t-cli functions
 use b00t_cli::{get_expanded_path, mcp_list, mcp_output};
 
 // Import datum types
-use b00t_c0re_lib::datum_ai_model::{AiModelDatum, ModelCapability, ModelProvider, ModelSize};
 
-/// Python exception for b00t errors
+// Python exception for b00t errors
 create_exception!(b00t_py, B00tError, pyo3::exceptions::PyException);
 
 fn to_py_err(prefix: &str, err: anyhow::Error) -> PyErr {

@@ -4,7 +4,7 @@ use std::collections::HashMap;
 
 use crate::datum_stack::StackDatum;
 use crate::traits::DatumCrdDisplay;
-use crate::{BootDatum, UnifiedConfig, get_expanded_path};
+use crate::{BootDatum, get_expanded_path};
 
 #[derive(Parser)]
 pub enum StackCommands {

@@ -579,6 +579,7 @@ fn format_duration(seconds: i64) -> String {
 }
 
 /// Configure system preferences in session memory
+#[allow(dead_code)]
 fn configure_system_preferences(memory: &mut SessionMemory) -> Result<()> {
     println!("  ⚙️  Configuring system preferences...");
 
@@ -615,6 +616,7 @@ fn configure_system_preferences(memory: &mut SessionMemory) -> Result<()> {
 }
 
 /// Interactive documentation tour
+#[allow(dead_code)]
 fn interactive_documentation_tour(_path: &str, memory: &mut SessionMemory) -> Result<()> {
     println!("  📖 Starting interactive documentation tour...");
 

@@ -7,7 +7,7 @@ use std::fs;
 // use std::io::{Read};
 // use std::path::PathBuf;
 // 🤓 cleaned up unused Tera import after switching to simple string replacement
-use b00t_cli::{AiConfig, BootDatum, SessionState, UnifiedConfig, whoami};
+use b00t_cli::{SessionState, UnifiedConfig, whoami};
 
 // 🦨 Module declarations removed - these are declared in lib.rs now
 // Import from b00t_cli:: instead
@@ -25,8 +25,8 @@ use b00t_cli::utils::get_workspace_root;
 use b00t_cli::commands::learn::{LearnArgs, handle_learn};
 use b00t_cli::commands::{
     AiCommands, AppCommands, BootstrapCommands, BudgetCommands, ChatCommands, CliCommands,
-    DatumCommands, GrokCommands, InitCommands, InstallCommands, JobCommands, K8sCommands,
-    McpCommands, ModelCommands, SessionCommands, StackCommands, WhatismyCommands,
+    DatumCommands, GrokCommands, InitCommands, InstallCommands, K8sCommands, McpCommands,
+    SessionCommands, StackCommands, WhatismyCommands,
 };
 
 // Re-export commonly used functions for datum modules

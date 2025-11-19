@@ -69,7 +69,7 @@ impl BudgetController {
     /// Check if a job can proceed based on budget constraints
     pub fn check_budget(
         &self,
-        stack_name: &str,
+        _stack_name: &str,
         budget_state: &BudgetState,
         daily_limit: f64,
         cost_per_job: f64,

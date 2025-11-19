@@ -157,6 +157,7 @@ impl SocketRegistry {
     }
 
     /// Unregister a socket that was removed.
+    #[allow(dead_code)]
     async fn unregister_socket(&self, socket_path: &Path) -> ChatResult<()> {
         let agent_id = socket_path
             .file_stem()

@@ -1873,8 +1873,7 @@ impl SessionState {
 /// KEY = "value"
 /// ```
 pub fn codex_install_mcp(name: &str, path: &str) -> Result<()> {
-    use crate::datum_mcp::{McpDatum, McpHttpStreamMethod, McpStdioMethod};
-    use std::collections::HashMap;
+    use crate::datum_mcp::McpDatum;
 
     // Load MCP datum and select best method
     let mcp_datum = McpDatum::from_config(name, path)?;

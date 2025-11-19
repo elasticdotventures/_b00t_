@@ -399,7 +399,7 @@ impl GrokClient {
         };
 
         // Store in Qdrant
-        let mut payload = HashMap::new();
+        let mut payload: HashMap<String, qdrant_client::qdrant::Value> = HashMap::new();
         payload.insert("content".to_string(), content.into());
         payload.insert("datum".to_string(), topic.into());
         payload.insert("topic".to_string(), topic.into());
@@ -628,7 +628,7 @@ impl GrokClient {
             };
 
             // Prepare point for batch insertion
-            let mut payload = HashMap::new();
+            let mut payload: HashMap<String, qdrant_client::qdrant::Value> = HashMap::new();
             payload.insert("content".to_string(), chunk_text.clone().into());
             payload.insert("datum".to_string(), inferred_topic.clone().into());
             payload.insert("topic".to_string(), inferred_topic.into());
@@ -748,7 +748,7 @@ impl GrokClient {
         };
 
         // Store in Qdrant
-        let mut payload = HashMap::new();
+        let mut payload: HashMap<String, qdrant_client::qdrant::Value> = HashMap::new();
         payload.insert("content".to_string(), content.into());
         payload.insert("datum".to_string(), topic.clone().into());
         payload.insert("topic".to_string(), topic.into());
