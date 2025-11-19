@@ -1,8 +1,8 @@
 //! Datum utility functions for loading and searching datums
 
+use crate::{BootDatum, UnifiedConfig};
 use anyhow::Result;
 use b00t_c0re_lib::lfmf::DatumLookup;
-use b00t_cli::{BootDatum, UnifiedConfig};
 use std::collections::HashMap;
 use std::fs;
 use std::path::Path;

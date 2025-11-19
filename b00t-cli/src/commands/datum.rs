@@ -31,7 +31,7 @@ fn handle_show(b00t_path: &str, datum_name: &str) -> Result<()> {
         datum
             .datum_type
             .as_ref()
-            .unwrap_or(&b00t_cli::DatumType::Unknown)
+            .unwrap_or(&crate::DatumType::Unknown)
     );
     println!("**Hint:** {}", datum.hint);
     println!();
