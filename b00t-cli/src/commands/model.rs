@@ -1,6 +1,5 @@
-use anyhow::{Result, anyhow};
-use b00t_cli::model_manager::{
-    // 🦨 Fix: use b00t_cli:: from binary, model_manager is in lib
+use crate::model_manager::{
+    // use crate:: to reference lib root, model_manager is a sibling module
     ModelOperation,
     ModelRecord,
     ServeOptions,
@@ -13,6 +12,7 @@ use b00t_cli::model_manager::{
     serve_model,
     stop_model,
 };
+use anyhow::{Result, anyhow};
 use clap::Parser;
 use serde_json::json;
 

@@ -2,7 +2,7 @@ use crate::dependency_resolver::DependencyResolver;
 use crate::traits::{
     AffinityRules, AffinityStrategy, BudgetConstraints, DatumCrdDisplay, ResourceRequirements,
 };
-use crate::{BootDatum, DatumType, UnifiedConfig};
+use crate::{BootDatum, DatumType};
 use anyhow::{Context, Result, bail};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -272,7 +272,7 @@ impl JobDatum {
 // Implement DatumCrdDisplay trait for stack → k8s CRD transformation
 impl DatumCrdDisplay for StackDatum {
     fn to_crd_template(&self) -> Result<String> {
-        let resource_reqs = self.get_resource_requirements();
+        let _resource_reqs = self.get_resource_requirements();
         let affinity = self.get_affinity_rules();
         let budget = self.get_budget_constraints();
 

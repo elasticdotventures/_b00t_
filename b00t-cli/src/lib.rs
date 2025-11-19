@@ -3,6 +3,7 @@ use chrono::{DateTime, Utc};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 
+pub mod bootstrap;
 pub mod budget_controller;
 pub mod cloud_sync;
 pub mod commands;
@@ -14,15 +15,16 @@ pub mod datum_bash;
 pub mod datum_cli;
 pub mod datum_config;
 pub mod datum_docker;
+pub mod datum_gemini;
 pub mod datum_job;
 pub mod datum_k8s;
 pub mod datum_mcp;
 pub mod datum_stack;
+pub mod datum_utils;
 pub mod datum_vscode;
 pub mod dependency_resolver;
 pub mod entanglement;
 pub mod job_ipc;
-pub mod job_state;
 pub mod job_state;
 pub mod k8s;
 pub mod model_manager;
@@ -257,6 +259,10 @@ pub struct BootDatum {
     // Used by `b00t job run <name>` for workflow execution
     #[serde(skip_serializing_if = "Option::is_none")]
     pub job: Option<serde_json::Value>,
+
+    // Orchestration metadata - scheduling, budgets, GPU affinity
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub orchestration: Option<OrchestrationMetadata>,
 
     // Entanglement: Cross-datum capability graph relationships
     // These fields create a directed graph of datum capabilities and dependencies.
@@ -600,6 +606,14 @@ fn create_mcp_datum_from_json(
         usage: None,
         lfmf_category: None,
         job: None,
+        orchestration: None,
+        entangled_agents: None,
+        entangled_cli: None,
+        entangled_mcp: None,
+        entangled_ai_models: None,
+        entangled_apis: None,
+        entangled_docker: None,
+        entangled_k8s: None,
     }
 }
 
@@ -698,6 +712,14 @@ pub fn normalize_mcp_json(input: &str, dwiw: bool) -> Result<BootDatum> {
                 usage: None,
                 lfmf_category: None,
                 job: None,
+                orchestration: None,
+                entangled_agents: None,
+                entangled_cli: None,
+                entangled_mcp: None,
+                entangled_ai_models: None,
+                entangled_apis: None,
+                entangled_docker: None,
+                entangled_k8s: None,
             });
         }
 
@@ -786,6 +808,7 @@ pub fn create_unified_toml_config(datum: &BootDatum, path: &str) -> Result<()> {
     // Use explicit datum_type or default to Unknown
     let datum_type = datum.datum_type.clone().unwrap_or(DatumType::Unknown);
     let suffix = match datum_type {
+        DatumType::Agent => ".agent.toml",
         DatumType::Mcp => ".mcp.toml",
         DatumType::Bash => ".bash.toml",
         DatumType::Vscode => ".vscode.toml",
@@ -822,6 +845,7 @@ impl std::fmt::Display for DatumType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             DatumType::Unknown => write!(f, "unknown"),
+            DatumType::Agent => write!(f, "agent"),
             DatumType::Mcp => write!(f, "MCP"),
             DatumType::Bash => write!(f, "bash"),
             DatumType::Vscode => write!(f, "VSCode"),
@@ -1162,11 +1186,11 @@ pub fn mcp_list(path: &str, json_output: bool) -> Result<()> {
 /// ```ignore
 /// // Register from JSON string
 /// let json = r#"{"name":"filesystem","command":"npx","args":["-y","@modelcontextprotocol/server-filesystem"]}"#;
-/// b00t_cli::mcp_add_json(json, false, "~/.dotfiles/_b00t_").unwrap();
+/// crate::mcp_add_json(json, false, "~/.dotfiles/_b00t_").unwrap();
 ///
 /// // Register with DWIW to strip comments
 /// let json_with_comments = r#"{"name":"github","command":"npx","args":["-y","@modelcontextprotocol/server-github"]} // GitHub MCP server"#;
-/// b00t_cli::mcp_add_json(json_with_comments, true, "~/.dotfiles/_b00t_").unwrap();
+/// crate::mcp_add_json(json_with_comments, true, "~/.dotfiles/_b00t_").unwrap();
 ///
 /// // CLI usage examples:
 /// // b00t-cli mcp register '{"name":"filesystem","command":"npx","args":["-y","@modelcontextprotocol/server-filesystem"]}'
@@ -1229,7 +1253,7 @@ pub fn mcp_add_json(json: &str, dwiw: bool, path: &str) -> Result<()> {
 ///
 /// ```ignore
 /// // Remove an MCP server configuration from the _b00t_ directory
-/// b00t_cli::mcp_remove("filesystem", "~/.dotfiles/_b00t_").unwrap();
+/// crate::mcp_remove("filesystem", "~/.dotfiles/_b00t_").unwrap();
 ///
 /// // CLI usage:
 /// // b00t-cli mcp register --remove filesystem
@@ -1849,8 +1873,7 @@ impl SessionState {
 /// KEY = "value"
 /// ```
 pub fn codex_install_mcp(name: &str, path: &str) -> Result<()> {
-    use crate::datum_mcp::{McpDatum, McpHttpStreamMethod, McpStdioMethod};
-    use std::collections::HashMap;
+    use crate::datum_mcp::McpDatum;
 
     // Load MCP datum and select best method
     let mcp_datum = McpDatum::from_config(name, path)?;
@@ -2091,6 +2114,112 @@ pub fn codex_install_mcp(name: &str, path: &str) -> Result<()> {
             "stdio"
         }
     );
+
+    Ok(())
+}
+
+/// Generic function to load datum providers for a specific file extension
+pub fn load_datum_providers<T>(path: &str, extension: &str) -> Result<Vec<Box<dyn DatumProvider>>>
+where
+    T: DatumProvider + 'static,
+    T: for<'a> TryFrom<(&'a str, &'a str), Error = anyhow::Error>,
+{
+    let mut tools: Vec<Box<dyn DatumProvider>> = Vec::new();
+    let expanded_path = get_expanded_path(path)?;
+
+    if let Ok(entries) = std::fs::read_dir(&expanded_path) {
+        for entry in entries {
+            if let Ok(entry) = entry {
+                let entry_path = entry.path();
+                if let Some(file_name) = entry_path.file_name().and_then(|s| s.to_str()) {
+                    if file_name.ends_with(extension) {
+                        if let Some(tool_name) = file_name.strip_suffix(extension) {
+                            if let Ok(datum) = T::try_from((tool_name, path)) {
+                                tools.push(Box::new(datum));
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    Ok(tools)
+}
+
+// Session management functions
+pub fn handle_session_init(
+    budget: &Option<f64>,
+    time_limit: &Option<u32>,
+    agent: Option<&str>,
+) -> Result<()> {
+    let agent_name = agent
+        .map(|s| s.to_string())
+        .or_else(|| std::env::var("_B00T_Agent").ok())
+        .filter(|s| !s.is_empty());
+
+    let mut session = SessionState::new(agent_name);
+
+    if let Some(budget) = budget {
+        session.budget_limit = Some(*budget);
+    }
+
+    if let Some(time_limit) = time_limit {
+        session.time_limit_minutes = Some(*time_limit);
+    }
+
+    // Set session ID in environment
+    unsafe {
+        std::env::set_var("B00T_SESSION_ID", &session.session_id);
+    }
+
+    session.save()?;
+
+    // Initialize session memory
+    let _memory = session_memory::SessionMemory::load()?;
+
+    println!("🥾 Session {} initialized", session.session_id);
+
+    if let Some(agent) = &session.agent_info {
+        println!("🤖 Agent: {}", agent.name);
+    }
+
+    if let Some(budget) = session.budget_limit {
+        println!("💰 Budget: ${:.2}", budget);
+    }
+
+    if let Some(time_limit) = session.time_limit_minutes {
+        println!("⏱️  Time limit: {}m", time_limit);
+    }
+
+    Ok(())
+}
+
+pub fn handle_session_status() -> Result<()> {
+    let session = SessionState::load()?;
+    println!("{}", session.get_status_line());
+
+    if !session.hints.is_empty() {
+        println!("💡 Hints:");
+        for hint in &session.hints {
+            println!("   • {}", hint);
+        }
+    }
+
+    Ok(())
+}
+
+pub fn handle_session_end() -> Result<()> {
+    let session = SessionState::load()?;
+    let path = SessionState::get_session_file_path()?;
+
+    println!("🥾 Session {} ended", session.session_id);
+    println!("📊 Final stats: {}", session.get_status_line());
+
+    if path.exists() {
+        std::fs::remove_file(&path)?;
+        println!("🗑️  Session file removed");
+    }
 
     Ok(())
 }

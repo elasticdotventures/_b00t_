@@ -7,45 +7,26 @@ use std::fs;
 // use std::io::{Read};
 // use std::path::PathBuf;
 // 🤓 cleaned up unused Tera import after switching to simple string replacement
-use b00t_cli::{AiConfig, BootDatum, SessionState, UnifiedConfig, whoami};
+use b00t_cli::{SessionState, UnifiedConfig, whoami};
 
-mod bootstrap;
-mod cloud_sync;
-mod commands;
-mod datum_ai;
-mod datum_ai_model;
-mod datum_apt;
-mod datum_bash;
-mod datum_cli;
-mod datum_docker;
-mod datum_gemini;
-mod datum_mcp;
-mod datum_utils;
-mod datum_vscode;
-mod dependency_resolver;
-mod orchestrator;
-mod session_memory;
-mod test_cloud_integration;
-mod traits;
-mod utils;
-use utils::get_workspace_root;
+// 🦨 Module declarations removed - these are declared in lib.rs now
+// Import from b00t_cli:: instead
+use b00t_cli::datum_ai::AiDatum;
+use b00t_cli::datum_ai_model::AiModelDatumEntry;
+use b00t_cli::datum_apt::AptDatum;
+use b00t_cli::datum_bash::BashDatum;
+use b00t_cli::datum_cli::CliDatum;
+use b00t_cli::datum_docker::DockerDatum;
+use b00t_cli::datum_mcp::McpDatum;
+use b00t_cli::datum_vscode::VscodeDatum;
+use b00t_cli::traits::*;
+use b00t_cli::utils::get_workspace_root;
 
-// 🦨 REMOVED unused K8sDatum import - not used in main.rs
-use datum_ai::AiDatum;
-use datum_ai_model::AiModelDatumEntry;
-use datum_apt::AptDatum;
-use datum_bash::BashDatum;
-use datum_cli::CliDatum;
-use datum_docker::DockerDatum;
-use datum_mcp::McpDatum;
-use datum_vscode::VscodeDatum;
-use traits::*;
-
-use crate::commands::learn::{LearnArgs, handle_learn};
-use crate::commands::{
+use b00t_cli::commands::learn::{LearnArgs, handle_learn};
+use b00t_cli::commands::{
     AiCommands, AppCommands, BootstrapCommands, BudgetCommands, ChatCommands, CliCommands,
-    DatumCommands, GrokCommands, InitCommands, InstallCommands, JobCommands, K8sCommands,
-    McpCommands, ModelCommands, SessionCommands, StackCommands, WhatismyCommands,
+    DatumCommands, GrokCommands, InitCommands, InstallCommands, K8sCommands, McpCommands,
+    SessionCommands, StackCommands, WhatismyCommands,
 };
 
 // Re-export commonly used functions for datum modules
@@ -126,7 +107,7 @@ Example:
     )]
     Model {
         #[clap(subcommand)]
-        model_command: commands::ModelCommands,
+        model_command: b00t_cli::commands::ModelCommands,
     },
     #[clap(
         name = ".",
@@ -140,7 +121,7 @@ Example:
     #[clap(about = "Execute RHAI scripts with b00t context")]
     Script {
         #[clap(subcommand)]
-        script_command: commands::script::ScriptCommands,
+        script_command: b00t_cli::commands::script::ScriptCommands,
     },
     #[clap(about = "Initialize system settings and aliases")]
     Init {
@@ -198,12 +179,12 @@ Example:
     #[clap(about = "Agent coordination and management")]
     Agent {
         #[clap(subcommand)]
-        agent_command: commands::AgentCommands,
+        agent_command: b00t_cli::commands::AgentCommands,
     },
     #[clap(about = "Job workflow orchestration with checkpoints and sub-agents")]
     Job {
         #[clap(subcommand)]
-        job_command: commands::JobCommands,
+        job_command: b00t_cli::commands::JobCommands,
     },
     #[clap(about = "Agent Coordination Protocol (ACP) - send messages to agents")]
     Chat {
@@ -362,7 +343,7 @@ fn checkpoint(message: Option<&str>, skip_tests: bool) -> Result<()> {
     }
 
     // Track checkpoint attempt in session memory
-    let mut memory = session_memory::SessionMemory::load().unwrap_or_default();
+    let mut memory = b00t_cli::session_memory::SessionMemory::load().unwrap_or_default();
     let checkpoint_count = memory.incr("checkpoint_count").unwrap_or(1);
 
     // Check if this is a Rust project and run cargo check
@@ -1042,7 +1023,7 @@ pub fn handle_session_init(
     session.save()?;
 
     // Initialize session memory and check README.md
-    let mut memory = session_memory::SessionMemory::load()?;
+    let mut memory = b00t_cli::session_memory::SessionMemory::load()?;
     check_readme_status(&mut memory)?;
 
     println!("🥾 Session {} initialized", session.session_id);
@@ -1117,7 +1098,7 @@ pub fn handle_session_prompt() -> Result<()> {
 }
 
 /// Check if README.md exists and track reading status
-fn check_readme_status(memory: &mut session_memory::SessionMemory) -> Result<()> {
+fn check_readme_status(memory: &mut b00t_cli::session_memory::SessionMemory) -> Result<()> {
     let git_root = get_workspace_root();
     let readme_path = std::path::PathBuf::from(&git_root).join("README.md");
 
@@ -1146,7 +1127,7 @@ async fn main() {
 
     match &cli.command {
         Some(Commands::Tiktoken { text }) => {
-            if let Err(e) = commands::tiktoken::handle_tiktoken(text) {
+            if let Err(e) = b00t_cli::commands::tiktoken::handle_tiktoken(text) {
                 eprintln!("Error: {}", e);
                 std::process::exit(1);
             }
@@ -1267,7 +1248,9 @@ async fn main() {
             }
         }
         Some(Commands::Agent { agent_command }) => {
-            if let Err(e) = commands::agent::handle_agent_command(agent_command.clone()).await {
+            if let Err(e) =
+                b00t_cli::commands::agent::handle_agent_command(agent_command.clone()).await
+            {
                 eprintln!("Agent Error: {}", e);
                 std::process::exit(1);
             }
@@ -1291,14 +1274,14 @@ async fn main() {
             }
         }
         Some(Commands::Datum { datum_command }) => {
-            use crate::commands::datum::handle_datum_command;
+            use b00t_cli::commands::datum::handle_datum_command;
             if let Err(e) = handle_datum_command(&cli.path, datum_command) {
                 eprintln!("Error: {}", e);
                 std::process::exit(1);
             }
         }
         Some(Commands::Grok { grok_command }) => {
-            use crate::commands::grok::handle_grok_command;
+            use b00t_cli::commands::grok::handle_grok_command;
 
             // 🤓 No need for nested runtime - already in #[tokio::main]
             if let Err(e) = handle_grok_command(grok_command.clone()).await {
@@ -1313,7 +1296,7 @@ async fn main() {
             }
         }
         Some(Commands::Bootstrap { bootstrap_command }) => {
-            use crate::commands::bootstrap::handle_bootstrap_command;
+            use b00t_cli::commands::bootstrap::handle_bootstrap_command;
 
             if let Err(e) = handle_bootstrap_command(bootstrap_command.clone()).await {
                 eprintln!("Error: {}", e);
@@ -1321,7 +1304,7 @@ async fn main() {
             }
         }
         Some(Commands::Script { script_command }) => {
-            use crate::commands::script::handle_script_command;
+            use b00t_cli::commands::script::handle_script_command;
 
             if let Err(e) = handle_script_command(script_command.clone()) {
                 eprintln!("Error: {}", e);
