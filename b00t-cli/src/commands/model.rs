@@ -1,5 +1,5 @@
 use crate::model_manager::{
-    // 🦨 Fix: use crate:: from binary, model_manager is in lib
+    // use crate:: to reference lib root, model_manager is a sibling module
     ModelOperation,
     ModelRecord,
     ServeOptions,

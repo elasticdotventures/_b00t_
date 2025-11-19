@@ -1,4 +1,4 @@
-use anyhow::{Context, Result};
+use anyhow::Result;
 use clap::Parser;
 use duct::cmd;
 // use regex::Regex;
@@ -1071,23 +1071,6 @@ pub fn handle_session_update(cost: &Option<f64>, hint: Option<&str>) -> Result<(
     }
 
     session.save()?;
-    Ok(())
-}
-
-pub fn handle_session_end() -> Result<()> {
-    let session = SessionState::load()?;
-    let path = SessionState::get_session_file_path()?;
-
-    println!("🥾 Session {} ended", session.session_id);
-    println!("📊 Final stats: {}", session.get_status_line());
-
-    if path.exists() {
-        std::fs::remove_file(&path).context("Failed to remove session file")?;
-    }
-
-    unsafe {
-        std::env::remove_var("B00T_SESSION_ID");
-    }
     Ok(())
 }
 
