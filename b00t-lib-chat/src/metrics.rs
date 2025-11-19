@@ -47,7 +47,7 @@ impl ChatMetrics {
             let meter = global::meter("b00t-chat");
 
             ChatMetrics {
-                meter: meter.clone(),
+                _meter: meter.clone(),
                 messages_sent: meter
                     .u64_counter("b00t.messages.sent")
                     .with_description("Total messages sent")
