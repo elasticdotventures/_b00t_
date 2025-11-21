@@ -19,3 +19,6 @@
 [submodule "b00t-vscode/just-lsp"]
 	path = b00t-vscode/just-lsp.subrepo
 	url = https://github.com/terror/just-lsp
+[submodule "integrations/nasdanika-mcp"]
+	path = integrations/nasdanika-mcp
+	url = https://github.com/elasticdotventures/mcp-server.git

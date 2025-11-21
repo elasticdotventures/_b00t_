@@ -23,7 +23,6 @@ pub mod dependency_resolver;
 pub mod entanglement;
 pub mod job_ipc;
 pub mod job_state;
-pub mod job_state;
 pub mod k8s;
 pub mod model_manager;
 pub mod orchestrator;

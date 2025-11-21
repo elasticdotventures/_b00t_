@@ -20,6 +20,7 @@ mod git '_b00t_/git.🐙/justfile'
 mod terraform '_b00t_/terraform.🧊/justfile'
 mod k8s '_b00t_/k8s.🚢/justfile'
 mod pm2-tasker 'pm2-tasker/justfile'
+mod embed '_b00t_/python.🐍/embed/justfile'
 
 stow:
     stow --adopt -d ~/.dotfiles -t ~ bash

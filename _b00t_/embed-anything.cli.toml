@@ -1,0 +1,114 @@
+[b00t]
+name = "embed-anything"
+type = "cli"
+hint = "Minimalist, high-performance Rust embedding pipeline for semantic search and RAG"
+lfmf_category = "embed-anything"
+
+[b00t.capabilities]
+embeddings = true
+vector_search = true
+multimodal = true
+rag = true
+
+[b00t.version]
+command = "python3 -c \"import embed_anything; print(embed_anything.__version__)\" 2>/dev/null || echo 'not installed'"
+regex = "(\\d+\\.\\d+\\.\\d+)"
+desires = "0.5.0"
+
+[b00t.install]
+command = """
+# Check if uv is available
+if command -v uv &> /dev/null; then
+    echo "Installing with uv..."
+    uv pip install embed-anything-gpu || uv pip install embed-anything
+else
+    echo "Installing with pip..."
+    pip3 install embed-anything-gpu || pip3 install embed-anything
+fi
+"""
+
+[b00t.update]
+command = """
+if command -v uv &> /dev/null; then
+    uv pip install --upgrade embed-anything-gpu || uv pip install --upgrade embed-anything
+else
+    pip3 install --upgrade embed-anything-gpu || pip3 install --upgrade embed-anything
+fi
+"""
+
+[b00t.env]
+# EmbedAnything uses HuggingFace models by default
+HF_HOME = "~/.cache/huggingface"
+
+[b00t.learn]
+topic = "embed-anything"
+
+[[b00t.usage]]
+description = "Embed a single file"
+command = """python3 -c '
+from embed_anything import EmbeddingModel, WhichModel, TextEmbedConfig
+
+model = EmbeddingModel.from_pretrained_hf(
+    WhichModel.Bert,
+    model_id="sentence-transformers/all-MiniLM-L12-v2"
+)
+config = TextEmbedConfig(chunk_size=512, batch_size=32)
+embeddings = model.embed_file("document.pdf", config=config)
+print(f"Generated {len(embeddings)} embeddings")
+'"""
+
+[[b00t.usage]]
+description = "Semantic search with dense embeddings"
+command = """python3 -c '
+from embed_anything import EmbeddingModel, WhichModel
+
+model = EmbeddingModel.from_pretrained_hf(
+    WhichModel.Jina,
+    model_id="jinaai/jina-embeddings-v2-base-en"
+)
+
+# Embed query
+query_emb = model.embed_query(["how to install rust"], config=None)
+
+# Compare with document embeddings
+# similarity = cosine_similarity(query_emb, doc_embeddings)
+print("Query embedded successfully")
+'"""
+
+[[b00t.usage]]
+description = "Batch embed directory with streaming"
+command = """python3 -c '
+from embed_anything import EmbeddingModel, WhichModel, TextEmbedConfig
+
+model = EmbeddingModel.from_pretrained_hf(
+    WhichModel.Bert,
+    model_id="sentence-transformers/all-MiniLM-L6-v2"
+)
+
+config = TextEmbedConfig(chunk_size=256)
+
+# Memory-efficient streaming
+for embedding in model.embed_directory_stream("./docs", config=config):
+    # Stream directly to vector DB
+    print(f"Embedded: {embedding.metadata}")
+'"""
+
+[[b00t.usage]]
+description = "Sparse embeddings with Splade"
+command = """python3 -c '
+from embed_anything import EmbeddingModel, WhichModel
+
+model = EmbeddingModel.from_pretrained_hf(
+    WhichModel.Splade,
+    model_id="naver/splade-cocondenser-ensembledistil"
+)
+
+# Sparse embeddings for hybrid search
+embeddings = model.embed_query(["machine learning"], config=None)
+print("Sparse embeddings generated")
+'"""
+
+[b00t.entangled]
+depends_on = ["python", "uv"]
+related_crates = ["candle", "onnxruntime"]
+vector_dbs = ["qdrant", "milvus", "weaviate"]
