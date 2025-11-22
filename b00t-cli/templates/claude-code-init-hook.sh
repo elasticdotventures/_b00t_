@@ -43,8 +43,10 @@ if command -v b00t-cli &> /dev/null; then
 
         # Check if Docker image exists
         if docker image inspect ghcr.io/promptexecution/rust-cargo-docs-rag-mcp:latest &> /dev/null; then
-            # Create temporary MCP config
-            cat > /tmp/rust-docs-mcp.json <<'EOF'
+            # Create secure temporary MCP config
+            TEMP_CONFIG=$(mktemp)
+            trap 'rm -f "$TEMP_CONFIG"' EXIT
+            cat > "$TEMP_CONFIG" <<'EOF'
 {
   "mcpServers": {
     "rust-cargo-docs": {
@@ -60,9 +62,8 @@ if command -v b00t-cli &> /dev/null; then
   }
 }
 EOF
-            b00t-cli mcp add --json "$(cat /tmp/rust-docs-mcp.json)" --hint "Rust documentation RAG search"
+            b00t-cli mcp add --json "$(cat "$TEMP_CONFIG")" --hint "Rust documentation RAG search"
             b00t-cli app claudecode mcp install rust-cargo-docs
-            rm /tmp/rust-docs-mcp.json
         else
             echo "   ⚠️  Docker image not found: ghcr.io/promptexecution/rust-cargo-docs-rag-mcp:latest"
             echo "   Pull with: docker pull ghcr.io/promptexecution/rust-cargo-docs-rag-mcp:latest"
