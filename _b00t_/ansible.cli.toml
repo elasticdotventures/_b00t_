@@ -1,0 +1,107 @@
+[b00t]
+name = "ansible"
+type = "cli"
+desires = "9.2.0"
+hint = "Ansible automates provisioning + configuration. Install to run hive playbooks (k0s + Kata, etc.)."
+lfmf_category = "ansible"
+
+install = '''
+# Install Ansible with multiple strategies so hive nodes can pick the best method.
+set -euo pipefail
+
+if command -v pkgx >/dev/null 2>&1; then
+    echo "✨ Installing ansible via pkgx"
+    if pkgx install ansible; then
+        mkdir -p ~/.local/bin
+        cat > ~/.local/bin/ansible <<'WRAP'
+#!/bin/bash
+exec pkgx ansible "$@"
+WRAP
+        chmod +x ~/.local/bin/ansible
+        echo "✅ ansible installed via pkgx"
+        exit 0
+    fi
+    echo "⚠️ pkgx install failed, falling back"
+fi
+
+OS=$(uname -s)
+if [ "$OS" = "Linux" ]; then
+    if command -v apt >/dev/null 2>&1; then
+        echo "📦 Installing ansible via apt"
+        if command -v sudo >/dev/null 2>&1 && sudo -n true >/dev/null 2>&1 && \
+           timeout 120 sudo apt update && timeout 120 sudo apt install -y ansible; then
+            exit 0
+        else
+            echo "⚠️  apt install failed, falling back"
+        fi
+    elif command -v dnf >/dev/null 2>&1; then
+        echo "📦 Installing ansible via dnf"
+        if command -v sudo >/dev/null 2>&1 && sudo -n true >/dev/null 2>&1 && \
+           timeout 120 sudo dnf install -y ansible; then
+            exit 0
+        else
+            echo "⚠️  dnf install failed, falling back"
+        fi
+    fi
+elif [ "$OS" = "Darwin" ]; then
+    if command -v brew >/dev/null 2>&1; then
+        echo "🍺 Installing ansible via Homebrew"
+        if brew install ansible; then
+            exit 0
+        else
+            echo "⚠️  brew install failed, falling back"
+        fi
+    fi
+fi
+
+echo "📦 Installing ansible via uv (fallback)"
+if ! command -v uv >/dev/null 2>&1; then
+    echo "⚙️  Installing uv runtime"
+    curl -fsSL https://astral.sh/uv/install.sh | sh
+    export PATH="$HOME/.local/bin:$PATH"
+fi
+uv tool install ansible-core
+'''
+
+update = '''
+set -euo pipefail
+if command -v pkgx >/dev/null 2>&1 && [ -f ~/.local/bin/ansible ] && grep -q "pkgx" ~/.local/bin/ansible; then
+    pkgx install ansible@latest
+    exit 0
+fi
+if command -v apt >/dev/null 2>&1 && command -v sudo >/dev/null 2>&1 && sudo -n true >/dev/null 2>&1; then
+    timeout 120 sudo apt update && timeout 120 sudo apt install -y ansible
+elif command -v dnf >/dev/null 2>&1 && command -v sudo >/dev/null 2>&1 && sudo -n true >/dev/null 2>&1; then
+    timeout 120 sudo dnf upgrade -y ansible
+elif command -v brew >/dev/null 2>&1; then
+    brew upgrade ansible
+elif command -v uv >/dev/null 2>&1; then
+    uv tool upgrade ansible-core
+else
+    echo "⚠️  Install uv (curl -fsSL https://astral.sh/uv/install.sh | sh) then rerun b00t cli install ansible."
+    exit 1
+fi
+'''
+
+version = "ansible --version"
+version_regex = 'ansible \[core (\d+\.\d+\.\d+)\]'
+
+[b00t.learn]
+topic = "ansible"
+auto_digest = false
+
+[[b00t.usage]]
+description = "Ping localhost for sanity"
+command = "ansible localhost -m ping"
+
+[[b00t.usage]]
+description = "Start/apply the k0s + Kata orchestrator"
+command = "just orchestrator-k0s-kata MODE=start INVENTORY=~/.config/b00t/k0s-inventory.yaml"
+
+[[b00t.usage]]
+description = "Stop/reset the orchestrator-managed components"
+command = "just orchestrator-k0s-kata MODE=stop INVENTORY=~/.config/b00t/k0s-inventory.yaml"
+
+[[b00t.usage]]
+description = "Check playbook syntax"
+command = "just orchestrator-k0s-kata MODE=check"

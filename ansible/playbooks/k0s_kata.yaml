@@ -1,0 +1,10 @@
+---
+- name: Provision k0s nodes with Kata runtime
+  hosts: k0s_nodes
+  become: true
+  vars:
+    k0s_role: "{{ k0s_role | default('controller') }}"
+    kata_runtime_class: "{{ kata_runtime_class | default('kata') }}"
+    kata_thinpool_device: "{{ kata_thinpool_device | default('/dev/mapper/data') }}"
+  roles:
+    - k0s_kata

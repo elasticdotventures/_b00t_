@@ -1,0 +1,21 @@
+[b00t]
+name = "k0s-kata"
+type = "stack"
+hint = "Orchestrator entrypoint for provisioning k0s controllers with Kata shim via Ansible."
+members = ["ansible.cli"]
+lfmf_category = "k0s"
+
+[b00t.env]
+K0S_KATA_INVENTORY = "~/.config/b00t/k0s-inventory.yaml"
+
+[[b00t.usage]]
+description = "Start/apply the k0s + Kata orchestrator"
+command = "just orchestrator-k0s-kata MODE=start INVENTORY=$K0S_KATA_INVENTORY"
+
+[[b00t.usage]]
+description = "Stop/reset the orchestrator-managed components"
+command = "just orchestrator-k0s-kata MODE=stop INVENTORY=$K0S_KATA_INVENTORY"
+
+[[b00t.usage]]
+description = "Check playbook syntax before running"
+command = "just orchestrator-k0s-kata MODE=check"
