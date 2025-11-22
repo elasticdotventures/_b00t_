@@ -18,7 +18,7 @@ await init();
 
 // Use b00t core functions
 console.log(b00t_version()); // "0.1.0"
-console.log(b00t_greet("Agent")); // "🥾 Hello Agent, welcome to b00t! Stay aligned, get cake! 🎂"
+console.log(b00t_greet("Agent")); // "🥾 Hello Agent, welcome to b00t! Stay aligned, get cake! 🍰"
 
 // Check slash commands
 console.log(is_slash_command("/help")); // true
@@ -57,7 +57,7 @@ npm test
 Part of the b00t extreme programming agent framework.
 Visit: https://github.com/elasticdotventures/dotfiles
 
-*Stay aligned, get cake!* 🎂
+*Stay aligned, get cake!* 🍰
 
 ## 📄 License
 

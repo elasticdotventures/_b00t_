@@ -301,3 +301,4 @@ mcp-probe
 
 # Claude Code frameworks (exclude all)
 .claude/
+\n# Archive for old/irrelevant files\n_archive_/

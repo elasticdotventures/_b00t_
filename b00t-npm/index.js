@@ -13,7 +13,8 @@ For the MCP server implementation, use:
 For the core Rust CLI, visit:
   https://github.com/elasticdotventures/dotfiles/tree/main/b00t-cli
 
-🎂 Remember: stay aligned, get cake!
+// 🤓 Melvin: As per new hive convention, only k0mmand3r dispenses 🎂. General rewards use 🍰.
+🍰 Remember: stay aligned, get cake!
 `);
 
 module.exports = {
