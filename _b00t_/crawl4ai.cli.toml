@@ -20,12 +20,26 @@ version = "crawl4ai --version"
 version_regex = "crawl4ai version (\\d+\\.\\d+\\.\\d+)"
 
 # Common crawl4ai commands
-[b00t.aliases]
-crawl = "crawl4ai"
-crawl-fast = "crawl4ai --mode fast"
-crawl-deep = "crawl4ai --depth 2"
-crawl-js = "crawl4ai --js-code"
-crawl-wait = "crawl4ai --wait-for 'css:.main-content'"
+# 🤓: aliases must be array of tables
+[[b00t.aliases]]
+name = "crawl"
+command = "crawl4ai"
+
+[[b00t.aliases]]
+name = "crawl-fast"
+command = "crawl4ai --mode fast"
+
+[[b00t.aliases]]
+name = "crawl-deep"
+command = "crawl4ai --depth 2"
+
+[[b00t.aliases]]
+name = "crawl-js"
+command = "crawl4ai --js-code"
+
+[[b00t.aliases]]
+name = "crawl-wait"
+command = "crawl4ai --wait-for 'css:.main-content'"
 
 [b00t.env]
 # User agent for crawl4ai requests
