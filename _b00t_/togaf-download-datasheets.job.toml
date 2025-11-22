@@ -16,8 +16,8 @@ output_dir = "~/.b00t/data/togaf/datasheets"
 
 # Environment variables needed for authentication
 [b00t.job.env]
-# OPENGROUP_USERNAME is loaded from the environment (e.g., set in ~/.env)
-# OPENGROUP_ORG_SECRET loaded from ~/.env
+OPENGROUP_USERNAME = "__b00t__"
+# 🤓: OPENGROUP_ORG_SECRET loaded from ~/.env
 # OPENGROUP_ORG_SECRET = ""  # Set in ~/.env
 
 [[b00t.job.steps]]
@@ -35,11 +35,9 @@ description = "Use playwright MCP to login and download datasheets"
 checkpoint = "download-complete"
 
 [b00t.job.steps.task]
-type = "mcp"
-server = "playwright"
-tool = "download-datasheets"
+type = "mcp-playwright"
 description = "Login to publications.opengroup.org and download all TOGAF datasheets"
-params = { url = "https://publications.opengroup.org/data-sheets" }
+url = "https://publications.opengroup.org/data-sheets"
 # 🤓: This step requires playwright MCP tools for browser automation
 # The actual automation will be done via Task agent with playwright-mcp access
 

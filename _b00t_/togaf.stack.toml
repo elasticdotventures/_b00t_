@@ -6,7 +6,7 @@ members = []
 
 # Environment variables for TOGAF operations
 [b00t.env]
-# OPENGROUP_USERNAME = ""  # Set in ~/.env
+OPENGROUP_USERNAME = "__b00t__"
 # 🤓: OPENGROUP_ORG_SECRET loaded from ~/.env - contains password for publications.opengroup.org
 # OPENGROUP_ORG_SECRET = ""  # Set in ~/.env
 
