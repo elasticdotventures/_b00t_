@@ -9,8 +9,18 @@ Usage:
 
 import argparse
 import json
-import tomllib
+import sys
 from pathlib import Path
+
+# 🤓: tomllib only in Python 3.11+, fallback to tomli for 3.10
+if sys.version_info >= (3, 11):
+    import tomllib
+else:
+    try:
+        import tomli as tomllib
+    except ImportError:
+        print("⚠️  tomli not installed. Run: uv pip install tomli")
+        sys.exit(1)
 from typing import List, Dict, Any
 from dataclasses import dataclass, asdict
 
