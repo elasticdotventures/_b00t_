@@ -60,11 +60,28 @@ requires = ["pm2.cli", "python.cli", "redis.service"]
 suggests = ["crawl4ai-mcp", "github-mcp"]
 
 # Quick start commands
-[b00t.aliases]
-lc-start = "cd langchain-agent && just start"
-lc-stop = "cd langchain-agent && just stop"
-lc-restart = "cd langchain-agent && just restart"
-lc-logs = "cd langchain-agent && just logs"
-lc-status = "cd langchain-agent && just status"
-lc-deploy = "cd langchain-agent && just deploy"
+# 🤓: aliases must be array of tables, not inline table
+[[b00t.aliases]]
+name = "lc-start"
+command = "cd langchain-agent && just start"
+
+[[b00t.aliases]]
+name = "lc-stop"
+command = "cd langchain-agent && just stop"
+
+[[b00t.aliases]]
+name = "lc-restart"
+command = "cd langchain-agent && just restart"
+
+[[b00t.aliases]]
+name = "lc-logs"
+command = "cd langchain-agent && just logs"
+
+[[b00t.aliases]]
+name = "lc-status"
+command = "cd langchain-agent && just status"
+
+[[b00t.aliases]]
+name = "lc-deploy"
+command = "cd langchain-agent && just deploy"
 lc-health = "cd langchain-agent && just health-check"

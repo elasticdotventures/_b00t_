@@ -20,13 +20,30 @@ version = "pm2 --version"
 version_regex = "^(\\d+\\.\\d+\\.\\d+)"
 
 # Common PM2 commands
-[b00t.aliases]
-pm2-list = "pm2 list"
-pm2-logs = "pm2 logs"
-pm2-mon = "pm2 monit"
-pm2-stop-all = "pm2 stop all"
-pm2-delete-all = "pm2 delete all"
-pm2-restart-all = "pm2 restart all"
+# 🤓: aliases must be array of tables
+[[b00t.aliases]]
+name = "pm2-list"
+command = "pm2 list"
+
+[[b00t.aliases]]
+name = "pm2-logs"
+command = "pm2 logs"
+
+[[b00t.aliases]]
+name = "pm2-mon"
+command = "pm2 monit"
+
+[[b00t.aliases]]
+name = "pm2-stop-all"
+command = "pm2 stop all"
+
+[[b00t.aliases]]
+name = "pm2-delete-all"
+command = "pm2 delete all"
+
+[[b00t.aliases]]
+name = "pm2-restart-all"
+command = "pm2 restart all"
 pm2-save = "pm2 save"
 pm2-resurrect = "pm2 resurrect"
 
