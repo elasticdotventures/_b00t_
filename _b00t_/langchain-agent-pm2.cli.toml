@@ -84,4 +84,7 @@ command = "cd langchain-agent && just status"
 [[b00t.aliases]]
 name = "lc-deploy"
 command = "cd langchain-agent && just deploy"
-lc-health = "cd langchain-agent && just health-check"
+
+[[b00t.aliases]]
+name = "lc-health"
+command = "cd langchain-agent && just health-check"
