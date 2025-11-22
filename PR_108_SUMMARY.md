@@ -39,7 +39,7 @@ $ git merge-base origin/next origin/feature/blender-b00t-stack
 
 1. **Oct 24, 2025**: PR #108 created with 6 commits on `feature/blender-b00t-stack`
 2. **Nov 16, 2025**: GitHub Actions merged PR via temporary branch `tmp-pr-108` into `next`
-3. **Nov 22, 2025**: PR still shows "open" because base branch is `main`, not `next`
+3. **Current Status**: PR still shows "open" because base branch is `main`, not `next`
 
 ## Why Does It Show "Unmergeable"?
 
