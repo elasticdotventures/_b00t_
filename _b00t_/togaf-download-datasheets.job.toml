@@ -16,8 +16,8 @@ output_dir = "~/.b00t/data/togaf/datasheets"
 
 # Environment variables needed for authentication
 [b00t.job.env]
-OPENGROUP_USERNAME = "__b00t__"
-# 🤓: OPENGROUP_ORG_SECRET loaded from ~/.env
+# OPENGROUP_USERNAME is loaded from the environment (e.g., set in ~/.env)
+# OPENGROUP_ORG_SECRET loaded from ~/.env
 # OPENGROUP_ORG_SECRET = ""  # Set in ~/.env
 
 [[b00t.job.steps]]
