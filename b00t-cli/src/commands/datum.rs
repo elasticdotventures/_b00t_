@@ -239,7 +239,9 @@ fn generate_flat_tree(datums: &HashMap<String, b00t_cli::BootDatum>) -> Result<s
 
     // Sort by name
     nodes.sort_by(|a, b| {
-        a["text"].as_str().unwrap_or("").cmp(b["text"].as_str().unwrap_or(""))
+        let a_text = a["text"].as_str().unwrap_or("");
+        let b_text = b["text"].as_str().unwrap_or("");
+        a_text.cmp(b_text)
     });
 
     Ok(json!(nodes))
