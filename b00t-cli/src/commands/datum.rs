@@ -1,6 +1,7 @@
 use crate::datum_utils;
 use anyhow::Result;
 use clap::Parser;
+use std::collections::HashMap;
 
 #[derive(Parser, Debug)]
 pub enum DatumCommands {
@@ -168,14 +169,11 @@ fn handle_tree(
     group_by_type: bool,
     types_filter: Option<&str>,
 ) -> Result<()> {
-    use serde_json::json;
-    use std::collections::HashMap;
-
     // Load all datums
     let datums = datum_utils::get_all_datums(b00t_path)?;
 
     // Filter by types if specified
-    let filtered_datums: HashMap<String, b00t_cli::BootDatum> = if let Some(types_str) = types_filter {
+    let filtered_datums: HashMap<String, crate::BootDatum> = if let Some(types_str) = types_filter {
         let types: Vec<String> = types_str
             .split(',')
             .map(|s| s.trim().to_lowercase())
@@ -215,7 +213,7 @@ fn handle_tree(
     Ok(())
 }
 
-fn generate_flat_tree(datums: &HashMap<String, b00t_cli::BootDatum>) -> Result<serde_json::Value> {
+fn generate_flat_tree(datums: &HashMap<String, crate::BootDatum>) -> Result<serde_json::Value> {
     use serde_json::json;
 
     let mut nodes = Vec::new();
@@ -247,7 +245,7 @@ fn generate_flat_tree(datums: &HashMap<String, b00t_cli::BootDatum>) -> Result<s
     Ok(json!(nodes))
 }
 
-fn generate_grouped_tree(datums: &HashMap<String, b00t_cli::BootDatum>) -> Result<serde_json::Value> {
+fn generate_grouped_tree(datums: &HashMap<String, crate::BootDatum>) -> Result<serde_json::Value> {
     use serde_json::json;
     use std::collections::BTreeMap;
 
@@ -294,16 +292,16 @@ fn generate_grouped_tree(datums: &HashMap<String, b00t_cli::BootDatum>) -> Resul
     Ok(json!(root_nodes))
 }
 
-fn get_icon_for_type(dtype: &Option<b00t_cli::DatumType>) -> String {
+fn get_icon_for_type(dtype: &Option<crate::DatumType>) -> String {
     match dtype {
-        Some(b00t_cli::DatumType::Cli) => "fas fa-terminal".to_string(),
-        Some(b00t_cli::DatumType::Mcp) => "fas fa-plug".to_string(),
-        Some(b00t_cli::DatumType::Ai) => "fas fa-robot".to_string(),
-        Some(b00t_cli::DatumType::AiModel) => "fas fa-brain".to_string(),
-        Some(b00t_cli::DatumType::K8s) => "fas fa-dharmachakra".to_string(),
-        Some(b00t_cli::DatumType::Job) => "fas fa-tasks".to_string(),
-        Some(b00t_cli::DatumType::Stack) => "fas fa-layer-group".to_string(),
-        Some(b00t_cli::DatumType::Agent) => "fas fa-user-secret".to_string(),
+        Some(crate::DatumType::Cli) => "fas fa-terminal".to_string(),
+        Some(crate::DatumType::Mcp) => "fas fa-plug".to_string(),
+        Some(crate::DatumType::Ai) => "fas fa-robot".to_string(),
+        Some(crate::DatumType::AiModel) => "fas fa-brain".to_string(),
+        Some(crate::DatumType::K8s) => "fas fa-dharmachakra".to_string(),
+        Some(crate::DatumType::Job) => "fas fa-tasks".to_string(),
+        Some(crate::DatumType::Stack) => "fas fa-layer-group".to_string(),
+        Some(crate::DatumType::Agent) => "fas fa-user-secret".to_string(),
         _ => "jstree-file".to_string(),
     }
 }
