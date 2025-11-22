@@ -64,7 +64,6 @@ if command -v b00t-cli &> /dev/null; then
 EOF
             b00t-cli mcp add --json "$(cat "$TEMP_CONFIG")" --hint "Rust documentation RAG search"
             b00t-cli app claudecode mcp install rust-cargo-docs
-            rm -f "$TEMP_CONFIG"
         else
             echo "   ⚠️  Docker image not found: ghcr.io/promptexecution/rust-cargo-docs-rag-mcp:latest"
             echo "   Pull with: docker pull ghcr.io/promptexecution/rust-cargo-docs-rag-mcp:latest"
