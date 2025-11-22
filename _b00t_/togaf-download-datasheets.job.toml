@@ -35,9 +35,11 @@ description = "Use playwright MCP to login and download datasheets"
 checkpoint = "download-complete"
 
 [b00t.job.steps.task]
-type = "mcp-playwright"
+type = "mcp"
+server = "playwright"
+tool = "download-datasheets"
 description = "Login to publications.opengroup.org and download all TOGAF datasheets"
-url = "https://publications.opengroup.org/data-sheets"
+params = { url = "https://publications.opengroup.org/data-sheets" }
 # 🤓: This step requires playwright MCP tools for browser automation
 # The actual automation will be done via Task agent with playwright-mcp access
 
