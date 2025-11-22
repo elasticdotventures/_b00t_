@@ -44,6 +44,28 @@ command = "pm2 delete all"
 [[b00t.aliases]]
 name = "pm2-restart-all"
 command = "pm2 restart all"
+pm2-save = "pm2 save"
+pm2-resurrect = "pm2 resurrect"
+
+[[b00t.aliases]]
+name = "pm2-logs"
+command = "pm2 logs"
+
+[[b00t.aliases]]
+name = "pm2-mon"
+command = "pm2 monit"
+
+[[b00t.aliases]]
+name = "pm2-stop-all"
+command = "pm2 stop all"
+
+[[b00t.aliases]]
+name = "pm2-delete-all"
+command = "pm2 delete all"
+
+[[b00t.aliases]]
+name = "pm2-restart-all"
+command = "pm2 restart all"
 
 [[b00t.aliases]]
 name = "pm2-save"

@@ -158,7 +158,7 @@ impl JobCommands {
 
 /// List all available jobs
 async fn list_jobs(path: &str, json: bool) -> Result<()> {
-    use b00t_cli::datum_job::JobDatum;
+    use crate::datum_job::JobDatum;
 
     let jobs = find_job_datums(path)?;
 
@@ -200,7 +200,7 @@ async fn list_jobs(path: &str, json: bool) -> Result<()> {
 
 /// Show job execution plan
 async fn plan_job(path: &str, name: &str, show_dag: bool, json: bool) -> Result<()> {
-    use b00t_cli::datum_job::JobDatum;
+    use crate::datum_job::JobDatum;
 
     let datum_path = format!("{}.job.toml", name);
     let datum =
@@ -258,26 +258,26 @@ async fn plan_job(path: &str, name: &str, show_dag: bool, json: bool) -> Result<
 
         // Show task type
         match &step.task {
-            b00t_cli::datum_job::JobTask::Bash { command, .. } => {
+            crate::datum_job::JobTask::Bash { command, .. } => {
                 println!("   Type: bash");
                 println!("   Command: {}", command);
             }
-            b00t_cli::datum_job::JobTask::Agent {
+            crate::datum_job::JobTask::Agent {
                 agent_type, prompt, ..
             } => {
                 println!("   Type: agent ({})", agent_type);
                 println!("   Prompt: {}", prompt.lines().next().unwrap_or("<empty>"));
             }
-            b00t_cli::datum_job::JobTask::K0mmander { .. } => {
+            crate::datum_job::JobTask::K0mmander { .. } => {
                 println!("   Type: k0mmander");
             }
-            b00t_cli::datum_job::JobTask::Datum { datum, .. } => {
+            crate::datum_job::JobTask::Datum { datum, .. } => {
                 println!("   Type: datum ({})", datum);
             }
-            b00t_cli::datum_job::JobTask::Mcp { server, tool, .. } => {
+            crate::datum_job::JobTask::Mcp { server, tool, .. } => {
                 println!("   Type: mcp ({}/{})", server, tool);
             }
-            b00t_cli::datum_job::JobTask::Dagu { dag, .. } => {
+            crate::datum_job::JobTask::Dagu { dag, .. } => {
                 println!("   Type: dagu ({})", dag);
             }
         }
@@ -294,7 +294,7 @@ async fn plan_job(path: &str, name: &str, show_dag: bool, json: bool) -> Result<
 }
 
 /// Print DAG visualization
-fn print_dag(steps: &[b00t_cli::datum_job::JobStep]) -> Result<()> {
+fn print_dag(steps: &[crate::datum_job::JobStep]) -> Result<()> {
     // Simple ASCII DAG visualization
     for step in steps {
         if step.depends_on.is_empty() {
@@ -319,8 +319,8 @@ async fn run_job(
     resume: bool,
     env_vars: &[String],
 ) -> Result<()> {
-    use b00t_cli::datum_job::JobDatum;
-    use b00t_cli::job_state::{JobState, JobStatus, StepStatus};
+    use crate::datum_job::JobDatum;
+    use crate::job_state::{JobState, JobStatus, StepStatus};
 
     println!("🚀 Starting job: {}", name);
 
@@ -519,10 +519,10 @@ async fn run_job(
 /// Execute a single job step
 async fn execute_step(
     path: &str,
-    step: &b00t_cli::datum_job::JobStep,
+    step: &crate::datum_job::JobStep,
     env: &std::collections::HashMap<String, String>,
 ) -> Result<()> {
-    use b00t_cli::datum_job::JobTask;
+    use crate::datum_job::JobTask;
 
     match &step.task {
         JobTask::Bash {
@@ -754,7 +754,7 @@ async fn execute_datum(path: &str, datum: &str, args: &[String]) -> Result<()> {
     if datum_file.ends_with(".bash.toml") {
         // Load the datum and execute its script
         let datum_path = format!("{}", datum_file);
-        let (config, _) = b00t_cli::get_config(path, &datum_path)
+        let (config, _) = crate::get_config(path, &datum_path)
             .map_err(|e| anyhow::anyhow!("Failed to load datum: {}", e))?;
 
         if let Some(script) = config.b00t.script {
@@ -865,7 +865,7 @@ async fn create_checkpoint(
 
 /// Show job status
 async fn status_job(path: &str, name: Option<&str>, all: bool, json: bool) -> Result<()> {
-    use b00t_cli::job_state::JobState;
+    use crate::job_state::JobState;
     use std::fs;
 
     let state_dir = std::path::PathBuf::from(path).join(".b00t").join("jobs");
@@ -926,11 +926,11 @@ async fn status_job(path: &str, name: Option<&str>, all: bool, json: bool) -> Re
             println!("\n   Steps:");
             for (step_name, step_state) in &state.steps {
                 let status_icon = match step_state.status {
-                    b00t_cli::job_state::StepStatus::Pending => "⏳",
-                    b00t_cli::job_state::StepStatus::Running => "🏃",
-                    b00t_cli::job_state::StepStatus::Completed => "✅",
-                    b00t_cli::job_state::StepStatus::Failed => "❌",
-                    b00t_cli::job_state::StepStatus::Skipped => "⏭️ ",
+                    crate::job_state::StepStatus::Pending => "⏳",
+                    crate::job_state::StepStatus::Running => "🏃",
+                    crate::job_state::StepStatus::Completed => "✅",
+                    crate::job_state::StepStatus::Failed => "❌",
+                    crate::job_state::StepStatus::Skipped => "⏭️ ",
                 };
                 print!("     {} {}", status_icon, step_name);
                 if let Some(duration_ms) = step_state.duration_ms {
@@ -1144,7 +1144,7 @@ pub async fn run_job_internal(
 
 /// Get job status as JSON string
 pub async fn get_job_status_json(path: &str, name: Option<&str>, all: bool) -> Result<String> {
-    use b00t_cli::job_state::JobState;
+    use crate::job_state::JobState;
     use std::fs;
 
     let state_dir = std::path::PathBuf::from(path).join(".b00t").join("jobs");
@@ -1190,7 +1190,7 @@ pub async fn stop_job_internal(path: &str, name: Option<&str>, all: bool) -> Res
 
 /// Get job plan as JSON string
 pub async fn get_job_plan_json(path: &str, name: &str) -> Result<String> {
-    use b00t_cli::datum_job::JobDatum;
+    use crate::datum_job::JobDatum;
 
     let datum_path = format!("{}.job.toml", name);
     let datum =

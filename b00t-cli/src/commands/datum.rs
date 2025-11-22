@@ -48,7 +48,7 @@ fn handle_show(b00t_path: &str, datum_name: &str) -> Result<()> {
         datum
             .datum_type
             .as_ref()
-            .unwrap_or(&b00t_cli::DatumType::Unknown)
+            .unwrap_or(&crate::DatumType::Unknown)
     );
     println!("**Hint:** {}", datum.hint);
     println!();
@@ -176,12 +176,16 @@ fn handle_tree(
 
     // Filter by types if specified
     let filtered_datums: HashMap<String, b00t_cli::BootDatum> = if let Some(types_str) = types_filter {
-        let types: Vec<&str> = types_str.split(',').map(|s| s.trim()).collect();
+        let types: Vec<String> = types_str
+            .split(',')
+            .map(|s| s.trim().to_lowercase())
+            .collect();
         datums
             .into_iter()
             .filter(|(_, datum)| {
                 if let Some(dtype) = &datum.datum_type {
-                    types.iter().any(|t| format!("{:?}", dtype).to_lowercase().contains(&t.to_lowercase()))
+                    let dtype_str = format!("{:?}", dtype).to_lowercase();
+                    types.iter().any(|t| dtype_str.contains(t))
                 } else {
                     false
                 }

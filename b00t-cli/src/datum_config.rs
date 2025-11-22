@@ -208,6 +208,7 @@ impl B00tConfig {
     /// Convert DatumType to string for pattern matching
     fn datum_type_str(dtype: &DatumType) -> &'static str {
         match dtype {
+            DatumType::Agent => "agent",
             DatumType::Cli => "cli",
             DatumType::Mcp => "mcp",
             DatumType::Ai => "ai",
@@ -285,6 +286,14 @@ impl ConfigDatum {
             usage: None,
             lfmf_category: None,
             job: None,
+            orchestration: None,
+            entangled_agents: None,
+            entangled_cli: None,
+            entangled_mcp: None,
+            entangled_ai_models: None,
+            entangled_apis: None,
+            entangled_docker: None,
+            entangled_k8s: None,
         };
 
         Ok(Self { datum, config })

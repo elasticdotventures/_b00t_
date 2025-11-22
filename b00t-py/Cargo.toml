@@ -20,10 +20,10 @@ b00t-c0re-lib = { path = "../b00t-c0re-lib", features = ["python"] }
 serde.workspace = true
 serde_json.workspace = true
 anyhow.workspace = true
-toml = "0.8"
+toml.workspace = true
 
 # PyO3 for Python bindings
-pyo3 = { version = "0.25", features = ["extension-module"] }
+pyo3 = { version = "0.27", features = ["extension-module"] }
 
 [build-dependencies]
-pyo3-build-config = "0.25"
+pyo3-build-config = "0.27"
