@@ -301,7 +301,8 @@ mcp-probe
 
 # Claude Code frameworks (exclude all)
 .claude/
-# Archive for old/irrelevant files\n
+
+# Archive for old/irrelevant files
 _archive_/
 
 # Proprietary/Licensed Content - DO NOT COMMIT
