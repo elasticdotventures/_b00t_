@@ -308,3 +308,6 @@ mcp-probe
 **/.b00t/data/togaf/datasheets/
 **/togaf/datasheets/
 *.togaf-datasheet.*
+
+# Archive for old/irrelevant files
+_archive_/
