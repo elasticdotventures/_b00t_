@@ -7,7 +7,6 @@ use anyhow::{Context, Result};
 use chrono::{DateTime, Utc};
 use jsonwebtoken::{decode, Algorithm, DecodingKey, Validation};
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 
 /// JWT Claims structure matching b00t-website NATS provisioner
 #[derive(Debug, Serialize, Deserialize)]

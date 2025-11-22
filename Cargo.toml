@@ -14,7 +14,7 @@ resolver = "2"
 [workspace.package]
 # 🤓 Version management centralized in b00t-c0re-lib
 # All workspace crates inherit from the single source of truth
-version = "0.7.17"
+version = "0.7.23"
 edition = "2024"
 authors = ["Brian Horakh <brian@promptexecution.com>"]
 license = "MIT"

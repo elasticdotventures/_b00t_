@@ -237,7 +237,7 @@ fn default_httpstream_transport() -> String {
 /// # Examples
 ///
 /// ```rust
-/// use b00t_cli::datum_mcp::McpDatum;
+/// use crate::datum_mcp::McpDatum;
 ///
 /// // Load MCP server configuration
 /// let mcp = McpDatum::from_config("filesystem", "~/.dotfiles/_b00t_").unwrap();

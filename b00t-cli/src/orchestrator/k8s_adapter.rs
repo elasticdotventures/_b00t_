@@ -6,7 +6,7 @@ use serde_json::json;
 use std::collections::HashMap;
 
 use super::adapter::{
-    AdapterMetadata, AdapterOutput, McpCommand, Orchestrator, OrchestratorAdapter, ServiceEndpoint,
+    AdapterMetadata, AdapterOutput, McpCommand, Orchestrator, OrchestratorAdapter,
 };
 use crate::datum_stack::{JobDatum, StackDatum};
 
@@ -199,7 +199,7 @@ metadata:
             let parts: Vec<&str> = inner.split(':').collect();
 
             if parts.len() >= 2 {
-                let stack_name = parts[0];
+                let _stack_name = parts[0];
                 let service_name = parts[1];
                 let port = parts.get(2).unwrap_or(&"80");
 
@@ -295,7 +295,7 @@ impl OrchestratorAdapter for K8sAdapter {
         })
     }
 
-    fn translate_stack(&self, stack: &StackDatum) -> Result<AdapterOutput> {
+    fn translate_stack(&self, _stack: &StackDatum) -> Result<AdapterOutput> {
         // Use existing kompose integration from stack.rs
         // This would call stack.generate_docker_compose() then run kompose
 
