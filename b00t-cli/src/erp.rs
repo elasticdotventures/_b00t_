@@ -101,6 +101,7 @@ impl SmolQueue for TempfileChainQueue {
             .with_context(|| format!("open tempfile-chain file {:?}", file))?;
         fh.write_all(payload.as_bytes())
             .context("write tempfile-chain payload")?;
+        fh.flush().context("flush tempfile-chain payload")?;
         Ok(())
     }
 
