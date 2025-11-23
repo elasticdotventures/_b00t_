@@ -1170,7 +1170,15 @@ fn main() {
             }
         }
         Some(Commands::Acp { acp_command }) => {
-            if let Err(e) = acp_command.execute().await {
+            let rt = match tokio::runtime::Runtime::new() {
+                Ok(rt) => rt,
+                Err(e) => {
+                    eprintln!("Error creating async runtime: {}", e);
+                    std::process::exit(1);
+                }
+            };
+
+            if let Err(e) = rt.block_on(acp_command.execute()) {
                 eprintln!("ACP Error: {}", e);
                 std::process::exit(1);
             }
