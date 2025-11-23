@@ -1,7 +1,7 @@
 use anyhow::{Context, Result};
 use fs2::FileExt;
 use std::fs::{read_dir, OpenOptions};
-use std::io::{BufRead, BufReader, Read, Write};
+use std::io::{BufRead, BufReader, Read, Seek, Write};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use uuid::Uuid;
@@ -59,7 +59,7 @@ impl SmolQueue for BashLineQueue {
 
     fn try_recv(&self) -> Result<Option<String>> {
         // Open with read+write to allow locking and modification
-        let fh = OpenOptions::new()
+        let mut fh = OpenOptions::new()
             .read(true)
             .write(true)
             .open(&self.path)
@@ -69,27 +69,29 @@ impl SmolQueue for BashLineQueue {
         fh.try_lock_exclusive()
             .context("failed to acquire exclusive lock on bash-line queue")?;
         
-        let mut reader = BufReader::new(&fh);
-        let mut first = String::new();
-        let count = reader.read_line(&mut first).context("read bash-line message")?;
-        if count == 0 {
-            // Release lock automatically when fh is dropped
-            return Ok(None);
-        }
-        
-        // Read remainder to keep queue behaviour
-        let mut remaining = String::new();
-        reader.read_to_string(&mut remaining).context("read remaining bash-line queue")?;
+        // Read the first line and remaining content
+        let (first, remaining) = {
+            let mut reader = BufReader::new(&fh);
+            let mut first = String::new();
+            let count = reader.read_line(&mut first).context("read bash-line message")?;
+            if count == 0 {
+                // Release lock automatically when fh is dropped
+                return Ok(None);
+            }
+            
+            // Read remainder to keep queue behaviour
+            let mut remaining = String::new();
+            reader.read_to_string(&mut remaining).context("read remaining bash-line queue")?;
+            (first, remaining)
+        }; // BufReader is dropped here, releasing the borrow
         
         // Truncate and rewrite with the lock still held
         fh.set_len(0).context("truncate bash-line queue")?;
-        use std::io::Seek;
-        let mut fh_mut = fh;
-        fh_mut.seek(std::io::SeekFrom::Start(0)).context("seek to start of bash-line queue")?;
-        fh_mut.write_all(remaining.as_bytes()).context("write remaining bash-line queue")?;
-        fh_mut.flush().context("flush bash-line queue")?;
+        fh.seek(std::io::SeekFrom::Start(0)).context("seek to start of bash-line queue")?;
+        fh.write_all(remaining.as_bytes()).context("write remaining bash-line queue")?;
+        fh.flush().context("flush bash-line queue")?;
         
-        // Lock is released when fh_mut is dropped
+        // Lock is released when fh is dropped
         Ok(Some(first.trim_end_matches('\n').to_string()))
     }
 }
