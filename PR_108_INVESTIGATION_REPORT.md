@@ -17,7 +17,7 @@ Git confirms there's nothing new to merge because all 6 commits from the PR alre
 
 ## Issue Statement
 
-Research and explain why pull #108 can't pass (why can't it merge into `/next`).
+Research and explain why PR #108 can't pass (why can't it merge into `/next`).
 
 ## Investigation Findings
 
