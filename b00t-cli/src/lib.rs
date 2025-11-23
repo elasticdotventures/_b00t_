@@ -12,6 +12,7 @@ pub mod datum_vscode;
 pub mod k8s;
 pub mod session_memory;
 pub mod traits;
+pub mod erp;
 pub mod utils;
 pub mod whoami;
 pub mod cloud_sync;
@@ -43,6 +44,10 @@ pub struct BootDatum {
     pub datum_type: Option<DatumType>,
     pub desires: Option<String>,
     pub hint: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub skills: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub compliance: Option<Vec<String>>,
 
     pub install: Option<String>,
     pub update: Option<String>,
@@ -110,6 +115,7 @@ pub enum DatumType {
     Nix,
     Ai,
     Cli,
+    Role,
 }
 
 #[derive(Serialize, Debug)]
@@ -269,6 +275,8 @@ fn create_mcp_datum_from_json(
         datum_type: Some(DatumType::Mcp),
         desires: None,
         hint: hint.unwrap_or_else(|| "MCP server".to_string()),
+        skills: None,
+        compliance: None,
         install: None,
         update: None,
         version: None,
@@ -350,6 +358,8 @@ pub fn normalize_mcp_json(input: &str, dwiw: bool) -> Result<BootDatum> {
                 datum_type: Some(DatumType::Mcp),
                 desires: None,
                 hint: hint.clone().unwrap_or_else(|| "MCP HTTP server".to_string()),
+                skills: None,
+                compliance: None,
                 install: None,
                 update: None,
                 version: None,
@@ -473,6 +483,7 @@ pub fn create_unified_toml_config(datum: &BootDatum, path: &str) -> Result<()> {
         DatumType::Nix => ".nix.toml",
         DatumType::Ai => ".ai.toml",
         DatumType::Cli => ".cli.toml",
+        DatumType::Role => ".toml",
         DatumType::Unknown => ".toml",
     };
 
@@ -504,6 +515,7 @@ impl std::fmt::Display for DatumType {
             DatumType::Nix => write!(f, "nix"),
             DatumType::Ai => write!(f, "AI"),
             DatumType::Cli => write!(f, "CLI"),
+            DatumType::Role => write!(f, "role"),
         }
     }
 }
@@ -528,6 +540,8 @@ impl DatumType {
             DatumType::Nix
         } else if filename.ends_with(".ai.toml") {
             DatumType::Ai
+        } else if filename.ends_with(".role.toml") {
+            DatumType::Role
         } else {
             DatumType::Unknown // Default fallback for .toml files
         }
@@ -554,9 +568,27 @@ pub fn check_command_available(command: &str) -> bool {
 }
 
 pub fn get_expanded_path(path: &str) -> Result<std::path::PathBuf> {
-    Ok(std::path::PathBuf::from(
-        shellexpand::tilde(path).to_string(),
-    ))
+    use std::path::PathBuf;
+    use std::sync::atomic::{AtomicBool, Ordering};
+
+    static WARNED_LEGACY: AtomicBool = AtomicBool::new(false);
+
+    let primary = PathBuf::from(shellexpand::tilde(path).to_string());
+    if primary.exists() {
+        return Ok(primary);
+    }
+
+    // Fallback to legacy ~/.dotfiles/_b00t_ if primary missing
+    let legacy = PathBuf::from(shellexpand::tilde("~/.dotfiles/_b00t_").to_string());
+    if legacy.exists() {
+        if !WARNED_LEGACY.swap(true, Ordering::SeqCst) {
+            eprintln!("⚠️ Using legacy b00t path at {}", legacy.display());
+        }
+        return Ok(legacy);
+    }
+
+    // Return the primary even if it doesn't exist to preserve prior behavior
+    Ok(primary)
 }
 
 pub fn get_ai_tools_status(path: &str) -> Result<Vec<Box<dyn StatusProvider>>> {
@@ -589,6 +621,7 @@ pub fn get_config(
 ) -> Result<(UnifiedConfig, String), Box<dyn std::error::Error>> {
     // Try different file extensions in order of preference
     let extensions = [
+        ".role.toml",
         ".cli.toml",
         ".mcp.toml",
         ".vscode.toml",

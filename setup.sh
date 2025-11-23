@@ -367,3 +367,5 @@ npm i -g opencode-ai@latest
 
  sudo apt install zip
 
+sudo apt install yamllint
+

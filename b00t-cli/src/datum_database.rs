@@ -310,6 +310,8 @@ impl DatumCreator for DatabaseDatum {
             datum_type: Some(crate::DatumType::Database),
             desires: None,
             hint,
+            skills: None,
+            compliance: None,
             install: None,
             update: None,
             version: None,

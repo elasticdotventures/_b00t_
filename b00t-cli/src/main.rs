@@ -43,7 +43,7 @@ use crate::commands::{AcpCommands, AiCommands, AppCommands, CliCommands, GrokCom
 use crate::commands::learn::handle_learn;
 
 // Re-export commonly used functions for datum modules
-pub use b00t_cli::{get_config, get_expanded_path, get_mcp_config, get_mcp_toml_files, mcp_add_json, mcp_remove, mcp_list, mcp_output, claude_code_install_mcp, vscode_install_mcp, gemini_install_mcp, dotmcpjson_install_mcp};
+pub use b00t_cli::{DatumType, get_config, get_expanded_path, get_mcp_config, get_mcp_toml_files, mcp_add_json, mcp_remove, mcp_list, mcp_output, claude_code_install_mcp, vscode_install_mcp, gemini_install_mcp, dotmcpjson_install_mcp};
 
 mod integration_tests;
 
@@ -52,7 +52,7 @@ mod integration_tests;
 struct Cli {
     #[clap(subcommand)]
     command: Option<Commands>,
-    #[clap(short, long, env = "_B00T_Path", default_value = "~/.dotfiles/_b00t_")]
+    #[clap(short, long, env = "_B00T_Path", default_value = "~/.b00t/_b00t_")]
     path: String,
     #[clap(
         long,
@@ -185,7 +185,10 @@ The system will:
         init_command: InitCommands,
     },
     #[clap(about = "Show agent identity and context information")]
-    Whoami,
+    Whoami {
+        #[clap(long, help = "Override detected role (matches role datum)")]
+        role: Option<String>,
+    },
     #[clap(about = "Create checkpoint: commit all files and run tests")]
     // 🤓 ENTANGLED: b00t-mcp/src/mcp_tools.rs CheckpointCommand
     // When this changes, update b00t-mcp CheckpointCommand structure
@@ -749,6 +752,7 @@ echo "malicious" > ~/.dotfiles/_b00t_/hack.toml
         ("Apt", "APT packages", vec![".apt.toml"]),
         ("Nix", "Nix packages", vec![".nix.toml"]),
         ("Bash", "Bash scripts", vec![".bash.toml"]),
+        ("Role", "Role onboarding/compliance datums", vec![".role.toml", ".toml (type=role)"]),
     ];
 
     println!("### DatumType Enum");
@@ -765,7 +769,7 @@ echo "malicious" > ~/.dotfiles/_b00t_/hack.toml
 
     let file_org_doc = r#"## File Organization
 
-Configuration files are stored in `$_B00T_Path` (default: `~/.dotfiles/_b00t_/`) with naming convention:
+Configuration files are stored in `$_B00T_Path` (default: `~/.b00t/_b00t_/`, legacy fallback: `~/.dotfiles/_b00t_/`) with naming convention:
 "#;
     print!("{}", file_org_doc);
 
@@ -1084,13 +1088,49 @@ fn check_readme_status(memory: &mut session_memory::SessionMemory) -> Result<()>
     Ok(())
 }
 
-fn main() {
+fn maybe_warn_delegation(role: Option<String>, path: &str) {
+    if role.as_deref() != Some("executive") {
+        return;
+    }
+
+    let mut base_path = get_expanded_path(path).unwrap_or_else(|_| std::path::PathBuf::from(path));
+    let mut role_path = base_path.clone();
+    role_path.push("executive.role.toml");
+    let found = if role_path.exists() {
+        true
+    } else {
+        let mut fallback = base_path.clone();
+        fallback.push("executive.toml");
+        base_path = fallback.clone();
+        fallback.exists()
+    };
+
+    if !found {
+        eprintln!(
+            "⚠️ Role=executive but no executive role datum found under {}",
+            base_path.display()
+        );
+    }
+
+    eprintln!(
+        "🍰 executive role active: delegate >50 LOC or research tasks to Codex/Gemini via b00t MCP; avoid self-implementation."
+    );
+}
+
+#[tokio::main]
+async fn main() {
     let cli = Cli::parse();
 
     if cli.doc {
         generate_documentation();
         return;
     }
+
+    // Load session to refresh persisted role/env context (best-effort)
+    let _ = session_memory::SessionMemory::load();
+
+    let active_role = std::env::var("_B00T_ROLE").ok().map(|r| r.to_lowercase());
+    maybe_warn_delegation(active_role, &cli.path);
 
     match &cli.command {
         Some(Commands::Tiktoken { text }) => {
@@ -1129,8 +1169,8 @@ fn main() {
                 std::process::exit(1);
             }
         }
-        Some(Commands::Whoami) => {
-            if let Err(e) = whoami::whoami(&cli.path) {
+        Some(Commands::Whoami { role }) => {
+            if let Err(e) = whoami::whoami(&cli.path, role.clone()) {
                 eprintln!("Error: {}", e);
                 std::process::exit(1);
             }

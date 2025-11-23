@@ -5,6 +5,15 @@ use tiktoken_rs::o200k_base;
 /// Handle LFMF (Lessons From My Failures) recording
 /// Uses shared LFMF system from b00t-c0re-lib for consistency
 pub fn handle_lfmf(path: &str, tool: &str, lesson: &str, scope: &str) -> Result<()> {
+    // Ensure lessons write into the provided path unless explicitly overridden
+    if std::env::var("B00T_LEARN_DIR").is_err() {
+        let learn_dir = std::path::Path::new(path)
+            .join("learn")
+            .to_string_lossy()
+            .to_string();
+        unsafe { std::env::set_var("B00T_LEARN_DIR", &learn_dir); }
+    }
+
     // Expect lesson in "<topic>: <body>" format
     let parts: Vec<&str> = lesson.splitn(2, ':').map(|s| s.trim()).collect();
     if parts.len() != 2 {

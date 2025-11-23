@@ -229,10 +229,10 @@ elif command -v minikube &> /dev/null; then
     source <(kubectl completion bash)
     complete -o default -F __start_kubectl k
 
-    if [ -f ~/.kube/minikube-config ]; then
-      # prefer alt
-      export KUBECONFIG=~/.kube/minikube-config
-    fi
+    #if [ -f ~/.kube/minikube-config ]; then
+    #  # prefer alt
+     # export KUBECONFIG=~/.kube/minikube-config
+    #fi
 
     # bash completion
     #echo 'source <(kubectl completion bash)' >>~/.bashrc
