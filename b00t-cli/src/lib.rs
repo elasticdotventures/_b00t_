@@ -1483,7 +1483,7 @@ pub fn dotmcpjson_install_mcp(name: &str, path: &str, stdio_command: Option<&str
     } else {
         // Legacy single-source config - use extract_mcp_command_args for consistency
         let (command, args) = extract_mcp_command_args(&datum);
-        (command, args, datum.env.clone(), "stdio")
+        (command, args, Some(datum.env.clone().unwrap_or_default()), "stdio")
     };
     
     // Create MCP server entry for .mcp.json format
