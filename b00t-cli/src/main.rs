@@ -1230,11 +1230,17 @@ async fn main() {
                 std::process::exit(1);
             }
         }
-        Some(Commands::Agent { agent_command }) => {
-            if let Err(e) =
-                b00t_cli::commands::agent::handle_agent_command(agent_command.clone()).await
-            {
-                eprintln!("Agent Error: {}", e);
+        Some(Commands::Acp { acp_command }) => {
+            let rt = match tokio::runtime::Runtime::new() {
+                Ok(rt) => rt,
+                Err(e) => {
+                    eprintln!("Error creating async runtime: {}", e);
+                    std::process::exit(1);
+                }
+            };
+
+            if let Err(e) = rt.block_on(acp_command.execute()) {
+                eprintln!("ACP Error: {}", e);
                 std::process::exit(1);
             }
         }
