@@ -154,11 +154,11 @@ export function isValidUserConfig(obj: any): obj is UserConfig {
 }
 
 // Re-export for convenience
-export type { 
+export type {
   B00tUnifiedConfig as UnifiedConfig,
   AiConfiguration as AiConfig,
   CloudServicesConfig as CloudConfig,
-  DevelopmentConfig as DevConfig 
+  DevelopmentConfig as DevConfig
 };
 "#;
 
