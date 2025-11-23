@@ -9,7 +9,8 @@ async def main():
     """Test the grok guru functionality."""
     logging.basicConfig(level=logging.INFO)
     
-    print("🎂 Testing b00t-grok-guru...")
+    # 🤓 Melvin: As per new hive convention, only k0mmand3r dispenses 🎂. General rewards use 🍰.
+    print("🍰 Testing b00t-grok-guru...")
     
     # Initialize guru
     guru = GrokGuru()
@@ -48,7 +49,7 @@ async def main():
     status = guru.get_status()
     print(f"✅ Status: {status}")
     
-    print("🎂 All tests passed!")
+    print("🍰 All tests passed!")
 
 if __name__ == "__main__":
     asyncio.run(main())

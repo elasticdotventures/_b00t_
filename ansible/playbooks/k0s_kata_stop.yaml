@@ -1,0 +1,6 @@
+---
+- name: Disable k0s nodes and remove Kata runtime class
+  hosts: k0s_nodes
+  become: true
+  roles:
+    - k0s_kata_stop

@@ -1215,6 +1215,19 @@ async fn main() {
                 std::process::exit(1);
             }
         }
+        Some(Commands::Chat { chat_command }) => {
+            if let Err(e) = chat_command.execute().await {
+                eprintln!("Chat Error: {}", e);
+                std::process::exit(1);
+            }
+        }
+        Some(Commands::Datum { datum_command }) => {
+            use b00t_cli::commands::datum::handle_datum_command;
+            if let Err(e) = handle_datum_command(&cli.path, datum_command) {
+                eprintln!("Error: {}", e);
+                std::process::exit(1);
+            }
+        }
         Some(Commands::Learn { topic, topic_flag }) => {
             // 🦨 MCP compatibility: merge positional and flag arguments
             let effective_topic = topic.as_ref().or(topic_flag.as_ref());

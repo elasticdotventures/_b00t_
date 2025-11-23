@@ -36,7 +36,7 @@ b00t is an extreme programming (XP) agentic developer interface that provides:
 - 📋 Task management and workflow automation
 - 🍰 Cake rewards for aligned behavior
 
-*"Stay aligned, get cake!"* 🎂
+*"Stay aligned, get cake!"* 🍰
 
 ## 📄 License
 

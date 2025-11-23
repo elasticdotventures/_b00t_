@@ -1,0 +1,34 @@
+---
+- name: Stop k0s service on node
+  command: k0s stop
+  register: stop_result
+  changed_when: "already stopped" not in stop_result.stdout
+
+- name: Reset k0s state (optional)
+  command: k0s reset --force --config /etc/k0s/k0s.yaml
+  when: k0s_reset_force | default(false)
+  register: reset_result
+  changed_when: reset_result.rc == 0
+  failed_when: false
+
+- name: Remove Kata runtime class label
+  command: >-
+    k0s kubectl label node {{ ansible_hostname }} katacontainers.sh/installed-
+  register: label_remove
+  failed_when: label_remove.rc not in [0, 1]
+
+- name: Delete Kata runtime class if present
+  shell: |
+    if k0s kubectl get runtimeclass {{ kata_runtime_class | default('kata') }} >/dev/null 2>&1; then
+      k0s kubectl delete runtimeclass {{ kata_runtime_class | default('kata') }}
+    fi
+  args:
+    warn: false
+
+- name: Disable k0s systemd service if available
+  shell: |
+    if systemctl list-unit-files | grep -q '^k0s.*service'; then
+      systemctl disable --now $(systemctl list-unit-files | awk '/^k0s.*service/ {print $1}')
+    fi
+  args:
+    warn: false

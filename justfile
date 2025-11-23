@@ -25,6 +25,30 @@ mod embed '_b00t_/python.🐍/embed/justfile'
 stow:
     stow --adopt -d ~/.dotfiles -t ~ bash
 
+ansible-k0s PLAYBOOK="ansible/playbooks/k0s_kata.yaml" INVENTORY="ansible/inventory.sample.yaml" EXTRA_ARGS="":
+    #!/bin/bash
+    set -euo pipefail
+    INVENTORY="${INVENTORY:-ansible/inventory.sample.yaml}"
+    PLAYBOOK="${PLAYBOOK:-ansible/playbooks/k0s_kata.yaml}"
+    EXTRA_ARGS="${EXTRA_ARGS:-}"
+    export ANSIBLE_ROLES_PATH="${ANSIBLE_ROLES_PATH:-$PWD/ansible/roles}"
+    if ! command -v ansible-playbook >/dev/null 2>&1; then
+        echo "ansible-playbook not found. Install ansible-core first." >&2
+        exit 1
+    fi
+    echo "🥾 provisioning k0s + Kata via ansible"
+    ANSIBLE_FORCE_COLOR=1 ansible-playbook -i "$INVENTORY" "$PLAYBOOK" $EXTRA_ARGS
+
+ansible-k0s-check PLAYBOOK="ansible/playbooks/k0s_kata.yaml":
+    #!/bin/bash
+    set -euo pipefail
+    export ANSIBLE_ROLES_PATH="${ANSIBLE_ROLES_PATH:-$PWD/ansible/roles}"
+    if ! command -v ansible-playbook >/dev/null 2>&1; then
+        echo "ansible-playbook not found. Install ansible-core first." >&2
+        exit 1
+    fi
+    ANSIBLE_FORCE_COLOR=1 ansible-playbook --syntax-check "$PLAYBOOK"
+
 # Test crates.io publishing (dry-run)
 publish-dry-run:
     #!/bin/bash
@@ -511,3 +535,23 @@ port-map:
 
 install-services:
     {{repo-root}}/scripts/install-systemd-services.sh
+ansible-k0s-stop PLAYBOOK="ansible/playbooks/k0s_kata_stop.yaml" INVENTORY="ansible/inventory.sample.yaml" EXTRA_ARGS="":
+    #!/bin/bash
+    set -euo pipefail
+    INVENTORY="${INVENTORY:-ansible/inventory.sample.yaml}"
+    PLAYBOOK="${PLAYBOOK:-ansible/playbooks/k0s_kata_stop.yaml}"
+    EXTRA_ARGS="${EXTRA_ARGS:-}"
+    if ! command -v ansible-playbook >/dev/null 2>&1; then
+        echo "ansible-playbook not found. Install ansible-core first." >&2
+        exit 1
+    fi
+    echo "🥾 stopping k0s + Kata via ansible"
+    ANSIBLE_FORCE_COLOR=1 ansible-playbook -i "$INVENTORY" "$PLAYBOOK" $EXTRA_ARGS
+
+orchestrator-k0s-kata MODE="start" INVENTORY="~/.config/b00t/k0s-inventory.yaml" EXTRA_ARGS="":
+    #!/bin/bash
+    set -euo pipefail
+    MODE="${MODE:-start}"
+    INVENTORY="${INVENTORY:-$HOME/.config/b00t/k0s-inventory.yaml}"
+    EXTRA_ARGS="${EXTRA_ARGS:-}"
+    K0S_KATA_EXTRA_ARGS="$EXTRA_ARGS" scripts/orchestrators/k0s_kata.sh "$MODE" "$INVENTORY"

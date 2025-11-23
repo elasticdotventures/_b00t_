@@ -336,6 +336,15 @@ b00t learn terraform  # Infrastructure as code
 b00t learn aws        # AWS service patterns
 ```
 
+### **Edge Provisioning via Ansible**
+```bash
+# Copy and edit the inventory before running
+cp ansible/inventory.sample.yaml ~/.config/b00t/k0s-inventory.yaml
+just orchestrator-k0s-kata MODE=start INVENTORY=~/.config/b00t/k0s-inventory.yaml   # start/apply
+just orchestrator-k0s-kata MODE=stop INVENTORY=~/.config/b00t/k0s-inventory.yaml  # stop/teardown (add EXTRA_ARGS=\"-e k0s_reset_force=true\" to nuke state)
+```
+See `docs/ANSIBLE_K0S_KATA.md` for full instructions on bringing k0s + Kata shim nodes up or down.
+
 ### **AI/ML Workflows**
 ```bash
 b00t learn pytorch    # Deep learning framework context
