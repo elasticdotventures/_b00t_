@@ -1,0 +1,91 @@
+[b00t]
+name = "plantuml-server-b00t"
+type = "docker"
+hint = "b00t fork of PlantUML server with integrated MCP server for diagram generation via TOGAF workflows"
+desires = "latest"
+
+# 🤓: b00t-enhanced PlantUML server combining:
+# - Java-based PlantUML rendering engine (eclipse-temurin:17)
+# - Node.js MCP server (infobip/plantuml-mcp-server)
+# - Single container deployment for b00t job orchestration
+
+# Docker image from PromptExecution fork
+image = "ghcr.io/promptexecution/plantuml-server-b00t-togaf-mcp:latest"
+
+docker_args = [
+    "-p", "8080:8080",      # PlantUML HTTP server
+    "-p", "3000:3000",      # MCP server (if using HTTP transport)
+    "-v", "togaf_diagrams:/diagrams:z",  # 🤓: Optional volume for diagram persistence
+]
+
+[b00t.env]
+PLANTUML_SERVER_URL = "http://localhost:8080/plantuml"
+# 🤓: MCP server points to local PlantUML server for rendering
+PLANTUML_LIMIT_SIZE = "16384"  # Max diagram size (increase for complex TOGAF diagrams)
+
+[b00t.docker]
+# GitHub Container Registry source
+registry = "ghcr.io"
+repository = "promptexecution/plantuml-server-b00t-togaf-mcp"
+platforms = ["linux/amd64", "linux/arm64"]
+
+# Health check for PlantUML server availability
+healthcheck_cmd = "wget -q --spider http://localhost:8080/plantuml || exit 1"
+healthcheck_interval = "30s"
+healthcheck_timeout = "3s"
+
+[b00t.docker.build]
+# 🤓: Dockerfile in fork repo uses multi-stage build:
+# Stage 1: eclipse-temurin:17-jre-alpine (PlantUML server)
+# Stage 2: node:18-alpine (MCP server)
+# Combined runtime with supervisord or shell script entrypoint
+context = "https://github.com/PromptExecution/plantuml-server--b00t--togaf--mcp.git"
+dockerfile = "Dockerfile"
+
+# Build args for version pinning
+[b00t.docker.build.args]
+PLANTUML_VERSION = "1.2024.3"
+NODE_VERSION = "18-alpine"
+MCP_SERVER_VERSION = "0.1.11"  # infobip/plantuml-mcp-server
+
+[b00t.orchestration]
+description = "PlantUML server with MCP for TOGAF diagram generation"
+k8s_compatible = true
+requires_gpu = false
+
+# 🤓: For k8s deployment with TOGAF datasheets volume mount
+[b00t.orchestration.volumes]
+togaf_datasheets = "/togaf/datasheets"
+diagram_output = "/diagrams"
+
+[b00t.learn]
+topic = "plantuml"
+auto_digest = true
+
+[[b00t.references]]
+name = "PromptExecution PlantUML Fork"
+url = "https://github.com/PromptExecution/plantuml-server--b00t--togaf--mcp"
+
+[[b00t.references]]
+name = "infobip PlantUML MCP Server"
+url = "https://github.com/infobip/plantuml-mcp-server"
+
+[[b00t.references]]
+name = "PlantUML Official"
+url = "https://plantuml.com/"
+
+[[b00t.usage]]
+description = "Run PlantUML server with MCP locally"
+command = "docker run -d -p 8080:8080 -p 3000:3000 --name plantuml-b00t ghcr.io/promptexecution/plantuml-server-b00t-togaf-mcp:latest"
+
+[[b00t.usage]]
+description = "Build container from fork (GitHub Actions)"
+command = "gh workflow run build-and-publish.yml --repo PromptExecution/plantuml-server--b00t--togaf--mcp"
+
+[[b00t.usage]]
+description = "Test PlantUML server"
+command = "curl -X POST http://localhost:8080/plantuml/svg -d '@startuml\\nAlice -> Bob: Hello\\n@enduml'"
+
+[[b00t.usage]]
+description = "Mount TOGAF datasheets volume"
+command = "docker run -d -p 8080:8080 -v ~/.b00t/data/togaf/datasheets:/togaf/datasheets:ro --name plantuml-b00t ghcr.io/promptexecution/plantuml-server-b00t-togaf-mcp:latest"

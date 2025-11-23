@@ -1,0 +1,100 @@
+[b00t]
+name = "plantuml"
+type = "mcp"
+hint = "PlantUML MCP server for diagram generation (SVG, PNG) via b00t jobs and TOGAF workflows"
+lfmf_category = "plantuml-mcp"
+
+[b00t.learn]
+topic = "plantuml-mcp"
+auto_digest = true
+
+# 🤓: PREFERRED - infobip/plantuml-mcp-server (TypeScript, official MCP SDK)
+# Supports: SVG, PNG output | Auto-fix workflow | URL encoding/decoding
+# Requires: PLANTUML_SERVER_URL pointing to PlantUML rendering server
+[[b00t.mcp.stdio]]
+priority = 0
+command = "npx"
+requires = ["node"]
+transport = "stdio"
+args = ["-y", "plantuml-mcp-server"]
+
+# 🤓: Points to local PlantUML server (from plantuml-server-b00t container)
+# Can also point to public server: https://www.plantuml.com/plantuml
+[b00t.mcp.stdio.env]
+PLANTUML_SERVER_URL = "http://localhost:8080/plantuml"
+
+# 🤓: ALTERNATIVE - @brainstack/plantuml-mcp (includes dark theme, professional styling)
+[[b00t.mcp.stdio]]
+priority = 10
+command = "npx"
+requires = ["node"]
+transport = "stdio"
+args = ["-y", "@brainstack/plantuml-mcp"]
+
+[b00t.mcp.stdio.env]
+PLANTUML_SERVER_URL = "http://localhost:8080/plantuml"
+
+# MCP Tool Capabilities
+[b00t.mcp.tools]
+# 🤓: Tool signatures from infobip/plantuml-mcp-server
+generate_plantuml_diagram = """
+Generate PlantUML diagram with automatic syntax validation.
+Returns embeddable SVG/PNG URL.
+
+Input:
+  plantuml_code: string (diagram source code)
+  format: 'svg' | 'png' (default: 'svg')
+
+Output:
+  diagram_url: string (embeddable URL)
+  format: string (svg or png)
+  encoded: string (URL-encoded diagram)
+"""
+
+encode_plantuml = """
+Encode PlantUML code for URL usage and sharing.
+
+Input:
+  plantuml_code: string
+
+Output:
+  encoded_string: string (URL-safe encoding)
+"""
+
+decode_plantuml = """
+Decode PlantUML string back to source code.
+
+Input:
+  encoded_string: string
+
+Output:
+  plantuml_code: string (decoded source)
+"""
+
+[[b00t.references]]
+name = "infobip PlantUML MCP Server"
+url = "https://github.com/infobip/plantuml-mcp-server"
+
+[[b00t.references]]
+name = "PlantUML Documentation"
+url = "https://plantuml.com/guide"
+
+[[b00t.references]]
+name = "TOGAF with PlantUML"
+url = "https://github.com/joelparkerhenderson/demo-plantuml/tree/main/examples/togaf"
+
+[[b00t.usage]]
+description = "Run with local PlantUML server (b00t container)"
+command = "PLANTUML_SERVER_URL='http://localhost:8080/plantuml' npx -y plantuml-mcp-server"
+
+[[b00t.usage]]
+description = "Run with public PlantUML server (no local dependency)"
+command = "PLANTUML_SERVER_URL='https://www.plantuml.com/plantuml' npx -y plantuml-mcp-server"
+
+[[b00t.usage]]
+description = "Install PlantUML MCP in Claude Code via b00t"
+command = "b00t-cli mcp install plantuml claudecode"
+
+[[b00t.usage]]
+description = "Test diagram generation (requires MCP server running)"
+command = "echo '@startuml\\nAlice -> Bob: Hello\\n@enduml' | npx plantuml-mcp-server"
