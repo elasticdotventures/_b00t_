@@ -29,6 +29,7 @@ pub mod erp;
 pub mod job_ipc;
 pub mod job_state;
 pub mod k0mmand3r_repl;
+pub mod erp;
 pub mod k8s;
 pub mod model_manager;
 pub mod orchestrator;

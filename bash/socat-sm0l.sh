@@ -28,5 +28,6 @@ while true; do
     continue
   fi
 
+  try=0
   wait "$pid" || true
 done
