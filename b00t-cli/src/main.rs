@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{Context, Result};
 use clap::Parser;
 use duct::cmd;
 // use regex::Regex;
@@ -7,34 +7,43 @@ use std::fs;
 // use std::io::{Read};
 // use std::path::PathBuf;
 // 🤓 cleaned up unused Tera import after switching to simple string replacement
-use b00t_cli::{SessionState, UnifiedConfig, whoami};
-
-// 🦨 Module declarations removed - these are declared in lib.rs now
-// Import from b00t_cli:: instead
-use b00t_cli::datum_ai::AiDatum;
-use b00t_cli::datum_ai_model::AiModelDatumEntry;
-use b00t_cli::datum_apt::AptDatum;
-use b00t_cli::datum_bash::BashDatum;
-use b00t_cli::datum_cli::CliDatum;
-use b00t_cli::datum_docker::DockerDatum;
-use b00t_cli::datum_mcp::McpDatum;
-use b00t_cli::datum_vscode::VscodeDatum;
-use b00t_cli::traits::*;
-use b00t_cli::utils::get_workspace_root;
-
-use b00t_cli::commands::learn::{LearnArgs, handle_learn};
-use b00t_cli::commands::{
-    AiCommands, AppCommands, BootstrapCommands, BudgetCommands, ChatCommands, CliCommands,
-    DatumCommands, GrokCommands, InitCommands, InstallCommands, K8sCommands, McpCommands,
-    SessionCommands, StackCommands, WhatismyCommands,
+use b00t_cli::{
+    AiConfig, BootDatum,
+    SessionState, UnifiedConfig,
 };
+
+mod commands;
+mod datum_ai;
+mod datum_apt;
+mod datum_bash;
+mod datum_cli;
+mod datum_docker;
+mod datum_gemini;
+mod datum_mcp;
+mod datum_vscode;
+mod session_memory;
+mod traits;
+mod utils;
+mod whoami;
+mod cloud_sync;
+mod test_cloud_integration;
+use utils::get_workspace_root;
+
+// 🦨 REMOVED unused K8sDatum import - not used in main.rs
+use datum_ai::AiDatum;
+use datum_apt::AptDatum;
+use datum_bash::BashDatum;
+use datum_cli::CliDatum;
+use datum_docker::DockerDatum;
+use datum_mcp::McpDatum;
+use datum_vscode::VscodeDatum;
+use traits::*;
+
+use crate::commands::{AcpCommands, AiCommands, AppCommands, CliCommands, GrokCommands, InitCommands, K8sCommands, McpCommands, SessionCommands, WhatismyCommands};
+use crate::commands::learn::handle_learn;
 
 // Re-export commonly used functions for datum modules
-pub use b00t_cli::{
-    claude_code_install_mcp, codex_install_mcp, dotmcpjson_install_mcp, gemini_install_mcp,
-    get_config, get_expanded_path, get_mcp_config, get_mcp_toml_files, mcp_add_json, mcp_list,
-    mcp_output, mcp_remove, vscode_install_mcp,
-};
+pub use b00t_cli::{DatumType, get_config, get_expanded_path, get_mcp_config, get_mcp_toml_files, mcp_add_json, mcp_remove, mcp_list, mcp_output, claude_code_install_mcp, vscode_install_mcp, gemini_install_mcp, dotmcpjson_install_mcp};
 
 mod integration_tests;
 
@@ -43,7 +52,7 @@ mod integration_tests;
 struct Cli {
     #[clap(subcommand)]
     command: Option<Commands>,
-    #[clap(short, long, env = "_B00T_Path", default_value = "~/.dotfiles/_b00t_")]
+    #[clap(short, long, env = "_B00T_Path", default_value = "~/.b00t/_b00t_")]
     path: String,
     #[clap(
         long,
@@ -71,6 +80,80 @@ Example:
         #[clap(help = "Text to tokenize")]
         text: String,
     },
+    #[clap(
+        about = "Record a lesson learned for a tool",
+        long_about = r#"
+lfmf is a dynamic, opinionated man-page for any tool with a b00t datum (TOML, learn/ dir, etc).
+It memoizes operator-informed tips, tricks, and anti-patterns—never repo-specific, always tool wisdom.
+Each entry is a <25 token topic and <250 token body, written in a positive, laconic, affirmative style.
+Use lfmf to help the hive avoid repeating mistakes and accelerate mastery.
+Good entries separate neophyte from master. Bad entries are vague, negative, or repo-specific.
+
+Usage:
+  b00t-cli lfmf <tool> "<topic>: <body>"
+
+Examples:
+  # Good
+  b00t-cli lfmf just "modules & workdir: Use modules and workdir to avoid cd; keeps recipes portable and context-safe."
+  b00t-cli lfmf docker "container cleanup: Use 'docker system prune' regularly to avoid disk bloat."
+  b00t-cli lfmf git "atomic commits: Commit small, focused changes for easier review and rollback."
+
+  # Bad
+  b00t-cli lfmf just "cd: I always use cd in my recipes."
+  b00t-cli lfmf docker "disk full: My disk filled up once."
+  b00t-cli lfmf git "fix: Fixed a bug in my repo."
+
+Tips:
+- Topic: <25 tokens, concise, positive, tool-focused.
+- Body: <250 tokens, actionable, never repo-specific.
+- Affirmative: 'Do X for Y benefit', not 'Don't do X'.
+- Suitable tools: any with a b00t datum (TOML, learn/ dir, etc).
+"#
+    )]
+    Lfmf {
+        #[clap(long, help = "Tool name")]
+        tool: Option<String>,
+        #[clap(long, help = "Lesson in '<topic>: <body>' format")]
+        lesson: Option<String>,
+        #[clap(long, group = "scope", help = "Record lesson for this repo (default)")]
+        repo: bool,
+        #[clap(long, group = "scope", help = "Record lesson globally (mutually exclusive with --repo)")]
+        global: bool,
+    },
+    #[clap(
+        about = "Get advice for syntax errors and debugging",
+        long_about = r#"
+The b00t advice system acts as a syntax therapist, providing contextual debugging assistance
+based on lessons learned from previous failures. It performs semantic search through the
+hive's collective knowledge to suggest solutions for similar error patterns.
+
+Usage:
+  b00t-cli advice <tool> "<error_pattern>"
+  b00t-cli advice <tool> list  # List all lessons for a tool
+  b00t-cli advice <tool> search "<query>"  # Semantic search for lessons
+
+Examples:
+  b00t-cli advice just "Unknown start of token '.'"
+  b00t-cli advice rust "cannot borrow as mutable"
+  b00t-cli advice docker "permission denied"
+  b00t-cli advice just list
+  b00t-cli advice rust search "template syntax"
+
+The system will:
+1. Search for similar error patterns in the vector database
+2. Return relevant lessons with confidence scores
+3. Provide conversational debugging guidance
+4. Suggest specific solutions based on hive experience
+"#
+    )]
+    Advice {
+        #[clap(help = "Tool name")]
+        tool: String,
+        #[clap(help = "Error pattern to get advice for, 'list' to show all lessons, or 'search <query>'")]
+        query: String,
+        #[clap(long, help = "Maximum number of results to return (default: 5)")]
+        count: Option<usize>,
+    },
     #[clap(about = "MCP (Model Context Protocol) server management")]
     Mcp {
         #[clap(subcommand)]
@@ -80,16 +163,6 @@ Example:
     Ai {
         #[clap(subcommand)]
         ai_command: AiCommands,
-    },
-    #[clap(about = "Software stack management")]
-    Stack {
-        #[clap(subcommand)]
-        stack_command: StackCommands,
-    },
-    #[clap(about = "Budget-aware scheduling and tracking")]
-    Budget {
-        #[clap(subcommand)]
-        budget_command: BudgetCommands,
     },
     #[clap(about = "Application integration commands")]
     App {
@@ -101,27 +174,10 @@ Example:
         #[clap(subcommand)]
         cli_command: CliCommands,
     },
-    #[clap(
-        about = "AI model datum management",
-        long_about = "List, inspect, install, and activate AI model datums defined in the _b00t_ directory."
-    )]
-    Model {
-        #[clap(subcommand)]
-        model_command: b00t_cli::commands::ModelCommands,
-    },
-    #[clap(
-        name = ".",
-        about = "Check installed vs desired version for CLI command",
-        long_about = "Check if a CLI tool's installed version matches the desired version.\n\nThis is a shorthand for: b00t-cli cli check <command>\n\nExamples:\n  b00t-cli . dagu\n  b00t-cli . git\n  b00t-cli . just"
-    )]
-    DotCheck {
-        #[clap(help = "Command name to check")]
-        command: String,
-    },
     #[clap(about = "Execute RHAI scripts with b00t context")]
     Script {
         #[clap(subcommand)]
-        script_command: b00t_cli::commands::script::ScriptCommands,
+        script_command: commands::script::ScriptCommands,
     },
     #[clap(about = "Initialize system settings and aliases")]
     Init {
@@ -129,7 +185,10 @@ Example:
         init_command: InitCommands,
     },
     #[clap(about = "Show agent identity and context information")]
-    Whoami,
+    Whoami {
+        #[clap(long, help = "Override detected role (matches role datum)")]
+        role: Option<String>,
+    },
     #[clap(about = "Create checkpoint: commit all files and run tests")]
     // 🤓 ENTANGLED: b00t-mcp/src/mcp_tools.rs CheckpointCommand
     // When this changes, update b00t-mcp CheckpointCommand structure
@@ -140,7 +199,7 @@ Example:
         skip_tests: bool,
 
         #[clap(long = "message", help = "Commit message (MCP compatibility)")]
-        message_flag: Option<String>, // 🦨 MCP compatibility: accept --message flag
+        message_flag: Option<String>,  // 🦨 MCP compatibility: accept --message flag
     },
     #[clap(about = "Query system information")]
     Whatismy {
@@ -160,67 +219,39 @@ Example:
         installed: bool,
         #[clap(long, help = "Show only available (not installed) tools")]
         available: bool,
+
+        #[clap(long = "filter", help = "Filter by subsystem (MCP compatibility)")]
+        filter_flag: Option<String>,  // 🦨 MCP compatibility: accept --filter flag
     },
     #[clap(about = "Kubernetes (k8s) cluster and pod management")]
     K8s {
         #[clap(subcommand)]
         k8s_command: K8sCommands,
     },
-    #[clap(about = "Run 'just install' to install b00t components")]
-    Install {
-        #[clap(subcommand)]
-        install_command: InstallCommands,
-    },
     #[clap(about = "Session management")]
     Session {
         #[clap(subcommand)]
         session_command: SessionCommands,
     },
-    #[clap(about = "Agent coordination and management")]
-    Agent {
-        #[clap(subcommand)]
-        agent_command: b00t_cli::commands::AgentCommands,
-    },
-    #[clap(about = "Job workflow orchestration with checkpoints and sub-agents")]
-    Job {
-        #[clap(subcommand)]
-        job_command: b00t_cli::commands::JobCommands,
-    },
     #[clap(about = "Agent Coordination Protocol (ACP) - send messages to agents")]
-    Chat {
+    Acp {
         #[clap(subcommand)]
-        chat_command: ChatCommands,
+        acp_command: AcpCommands,
     },
-    #[clap(about = "Learn about topics with unified knowledge management")]
-    // 🤓 ENTANGLED (synchronized): b00t-mcp/src/mcp_tools.rs LearnCommand now uses LearnArgs wrapper, matching CLI structure.
-    // Unified knowledge command: LFMF lessons, learn docs, man pages, RAG
-    Learn(LearnArgs),
-    #[clap(about = "Datum management and inspection")]
-    Datum {
-        #[clap(subcommand)]
-        datum_command: DatumCommands,
+    #[clap(about = "Learn about topics with guided documentation")]
+    // 🤓 ENTANGLED: b00t-mcp/src/mcp_tools.rs LearnCommand
+    // When this changes, update b00t-mcp LearnCommand structure
+    Learn {
+        #[clap(help = "Topic to learn about (e.g., rust, python, typescript, bash)")]
+        topic: Option<String>,
+
+        #[clap(long = "topic", help = "Topic to learn about (MCP compatibility)")]
+        topic_flag: Option<String>,  // 🦨 MCP compatibility: accept --topic flag
     },
     #[clap(about = "Grok knowledgebase RAG system")]
     Grok {
         #[clap(subcommand)]
         grok_command: GrokCommands,
-    },
-    #[clap(
-        about = "Update all datums defined in _b00t_.toml",
-        long_about = "Check and update all datums according to _b00t_.toml configuration.\n\nBy default, checks versions only. Use --yes to actually perform updates.\n\nConfiguration file priority:\n1. <git_root>/_b00t_.toml (project-specific, if in a git repo)\n2. ~/.b00t/_b00t_.toml (user-level)\n\nNote: Projects may have a _b00t_/ directory for project-specific datums.\n\nExamples:\n  b00t up           # Check all datums\n  b00t up --yes     # Update outdated datums\n  b00t up -y        # Same as --yes"
-    )]
-    Up {
-        #[clap(
-            short = 'y',
-            long = "yes",
-            help = "Actually perform updates (default: check only)"
-        )]
-        yes: bool,
-    },
-    #[clap(about = "Bootstrap self-configuring b00t installation (Phase 0: Foundation)")]
-    Bootstrap {
-        #[clap(subcommand)]
-        bootstrap_command: BootstrapCommands,
     },
 }
 
@@ -282,56 +313,6 @@ fn datum_providers_to_tool_status(providers: Vec<Box<dyn DatumProvider>>) -> Vec
         .collect()
 }
 
-fn handle_up_command(_b00t_path: &str, yes: bool) -> Result<()> {
-    use b00t_cli::datum_config::B00tConfig;
-
-    // Load or create configuration
-    let (config, config_path) = B00tConfig::load_or_create()?;
-
-    if yes {
-        println!("🔄 Updating all datums from {}...", config_path.display());
-    } else {
-        println!(
-            "🔍 Checking all datums from {} (use --yes to update)...",
-            config_path.display()
-        );
-    }
-
-    // If config file doesn't exist yet, show helpful message
-    if !config_path.exists() {
-        println!("\n⚠️  No _b00t_.toml found at {}", config_path.display());
-        println!("   Create one to track your installed datums:\n");
-        println!("   Example _b00t_.toml:");
-        println!("   ---");
-        println!("   version = \"{}\"", b00t_c0re_lib::version::VERSION);
-        println!("   initialized = \"{}\"", chrono::Utc::now().to_rfc3339());
-        println!("   install_methods = [\"docker\", \"pkgx\", \"apt\", \"curl\"]");
-        println!("   datums = [");
-        println!("     \"git.cli\",");
-        println!("     \"docker.docker\",");
-        println!("     \"rust.*\",    # All rust-related datums");
-        println!("     \"ai.*\",      # All AI providers");
-        println!("   ]");
-        println!("   ---\n");
-        println!("💡 Run `b00t install <datum>` to auto-create and update this file.");
-        return Ok(());
-    }
-
-    println!("\n📋 Configuration loaded:");
-    println!("   Version: {}", config.version);
-    println!("   Datums: {:?}", config.datums);
-    println!("   Install methods: {:?}", config.install_methods);
-
-    // 🤓 TODO: Implement datum loading and updating
-    // Currently blocked by trait version conflicts - needs refactoring
-    println!("\n⚠️  Full datum checking not yet implemented");
-    println!("   Next steps:");
-    println!("   1. Load datums from _b00t_ path");
-    println!("   2. Match against configured patterns");
-    println!("   3. Check versions and update if --yes flag is set");
-
-    Ok(())
-}
 
 fn checkpoint(message: Option<&str>, skip_tests: bool) -> Result<()> {
     println!("🥾 Creating checkpoint...");
@@ -343,7 +324,7 @@ fn checkpoint(message: Option<&str>, skip_tests: bool) -> Result<()> {
     }
 
     // Track checkpoint attempt in session memory
-    let mut memory = b00t_cli::session_memory::SessionMemory::load().unwrap_or_default();
+    let mut memory = session_memory::SessionMemory::load().unwrap_or_default();
     let checkpoint_count = memory.incr("checkpoint_count").unwrap_or(1);
 
     // Check if this is a Rust project and run cargo check
@@ -361,10 +342,7 @@ fn checkpoint(message: Option<&str>, skip_tests: bool) -> Result<()> {
     }
 
     // Generate commit message with checkpoint number
-    let default_msg = format!(
-        "🥾 checkpoint #{}: automated commit via b00t-cli",
-        checkpoint_count
-    );
+    let default_msg = format!("🥾 checkpoint #{}: automated commit via b00t-cli", checkpoint_count);
     let commit_msg = message.unwrap_or(&default_msg);
 
     // Add all files (including untracked)
@@ -422,10 +400,7 @@ fn checkpoint(message: Option<&str>, skip_tests: bool) -> Result<()> {
             // CI integration hints
             println!("💡 Next steps:");
             println!("   • Run `git push` to trigger CI pipeline");
-            println!(
-                "   • Create PR: `gh pr create --title \"{}\"` (if ready)",
-                commit_msg
-            );
+            println!("   • Create PR: `gh pr create --title \"{}\"` (if ready)", commit_msg);
         }
         Err(e) => {
             let _ = memory.incr("failed_commits");
@@ -438,6 +413,7 @@ fn checkpoint(message: Option<&str>, skip_tests: bool) -> Result<()> {
 
     Ok(())
 }
+
 
 /// Generic function to load datum providers for a specific file extension
 /// Replaces the 7 duplicate get_*_tools_status functions
@@ -487,11 +463,6 @@ fn show_status(
     all_tools.extend(datum_providers_to_tool_status(load_datum_providers::<
         AiDatum,
     >(path, ".ai.toml")?));
-    all_tools.extend(datum_providers_to_tool_status(load_datum_providers::<
-        AiModelDatumEntry,
-    >(
-        path, ".ai_model.toml"
-    )?));
     all_tools.extend(datum_providers_to_tool_status(load_datum_providers::<
         AptDatum,
     >(path, ".apt.toml")?));
@@ -781,6 +752,7 @@ echo "malicious" > ~/.dotfiles/_b00t_/hack.toml
         ("Apt", "APT packages", vec![".apt.toml"]),
         ("Nix", "Nix packages", vec![".nix.toml"]),
         ("Bash", "Bash scripts", vec![".bash.toml"]),
+        ("Role", "Role onboarding/compliance datums", vec![".role.toml", ".toml (type=role)"]),
     ];
 
     println!("### DatumType Enum");
@@ -797,7 +769,7 @@ echo "malicious" > ~/.dotfiles/_b00t_/hack.toml
 
     let file_org_doc = r#"## File Organization
 
-Configuration files are stored in `$_B00T_Path` (default: `~/.dotfiles/_b00t_/`) with naming convention:
+Configuration files are stored in `$_B00T_Path` (default: `~/.b00t/_b00t_/`, legacy fallback: `~/.dotfiles/_b00t_/`) with naming convention:
 "#;
     print!("{}", file_org_doc);
 
@@ -1023,7 +995,7 @@ pub fn handle_session_init(
     session.save()?;
 
     // Initialize session memory and check README.md
-    let mut memory = b00t_cli::session_memory::SessionMemory::load()?;
+    let mut memory = session_memory::SessionMemory::load()?;
     check_readme_status(&mut memory)?;
 
     println!("🥾 Session {} initialized", session.session_id);
@@ -1074,6 +1046,23 @@ pub fn handle_session_update(cost: &Option<f64>, hint: Option<&str>) -> Result<(
     Ok(())
 }
 
+pub fn handle_session_end() -> Result<()> {
+    let session = SessionState::load()?;
+    let path = SessionState::get_session_file_path()?;
+
+    println!("🥾 Session {} ended", session.session_id);
+    println!("📊 Final stats: {}", session.get_status_line());
+
+    if path.exists() {
+        std::fs::remove_file(&path).context("Failed to remove session file")?;
+    }
+
+    unsafe {
+        std::env::remove_var("B00T_SESSION_ID");
+    }
+    Ok(())
+}
+
 pub fn handle_session_prompt() -> Result<()> {
     let session = SessionState::load()?;
     print!("{}", session.get_status_line());
@@ -1081,7 +1070,7 @@ pub fn handle_session_prompt() -> Result<()> {
 }
 
 /// Check if README.md exists and track reading status
-fn check_readme_status(memory: &mut b00t_cli::session_memory::SessionMemory) -> Result<()> {
+fn check_readme_status(memory: &mut session_memory::SessionMemory) -> Result<()> {
     let git_root = get_workspace_root();
     let readme_path = std::path::PathBuf::from(&git_root).join("README.md");
 
@@ -1099,6 +1088,35 @@ fn check_readme_status(memory: &mut b00t_cli::session_memory::SessionMemory) -> 
     Ok(())
 }
 
+fn maybe_warn_delegation(role: Option<String>, path: &str) {
+    if role.as_deref() != Some("executive") {
+        return;
+    }
+
+    let mut base_path = get_expanded_path(path).unwrap_or_else(|_| std::path::PathBuf::from(path));
+    let mut role_path = base_path.clone();
+    role_path.push("executive.role.toml");
+    let found = if role_path.exists() {
+        true
+    } else {
+        let mut fallback = base_path.clone();
+        fallback.push("executive.toml");
+        base_path = fallback.clone();
+        fallback.exists()
+    };
+
+    if !found {
+        eprintln!(
+            "⚠️ Role=executive but no executive role datum found under {}",
+            base_path.display()
+        );
+    }
+
+    eprintln!(
+        "🍰 executive role active: delegate >50 LOC or research tasks to Codex/Gemini via b00t MCP; avoid self-implementation."
+    );
+}
+
 #[tokio::main]
 async fn main() {
     let cli = Cli::parse();
@@ -1108,33 +1126,27 @@ async fn main() {
         return;
     }
 
+    // Load session to refresh persisted role/env context (best-effort)
+    let _ = session_memory::SessionMemory::load();
+
+    let active_role = std::env::var("_B00T_ROLE").ok().map(|r| r.to_lowercase());
+    maybe_warn_delegation(active_role, &cli.path);
+
     match &cli.command {
         Some(Commands::Tiktoken { text }) => {
-            if let Err(e) = b00t_cli::commands::tiktoken::handle_tiktoken(text) {
+            if let Err(e) = commands::tiktoken::handle_tiktoken(text) {
                 eprintln!("Error: {}", e);
                 std::process::exit(1);
             }
-        }
+        },
         Some(Commands::Mcp { mcp_command }) => {
-            if let Err(e) = mcp_command.execute_async(&cli.path).await {
+            if let Err(e) = mcp_command.execute(&cli.path) {
                 eprintln!("Error: {}", e);
                 std::process::exit(1);
             }
         }
         Some(Commands::Ai { ai_command }) => {
             if let Err(e) = ai_command.execute(&cli.path) {
-                eprintln!("Error: {}", e);
-                std::process::exit(1);
-            }
-        }
-        Some(Commands::Stack { stack_command }) => {
-            if let Err(e) = stack_command.execute(&cli.path) {
-                eprintln!("Error: {}", e);
-                std::process::exit(1);
-            }
-        }
-        Some(Commands::Budget { budget_command }) => {
-            if let Err(e) = budget_command.execute(&cli.path) {
                 eprintln!("Error: {}", e);
                 std::process::exit(1);
             }
@@ -1151,39 +1163,19 @@ async fn main() {
                 std::process::exit(1);
             }
         }
-        Some(Commands::Model { model_command }) => {
-            if let Err(e) = model_command.execute(&cli.path) {
-                eprintln!("Error: {}", e);
-                std::process::exit(1);
-            }
-        }
-        Some(Commands::DotCheck { command }) => {
-            // Shorthand for cli check
-            let check_cmd = CliCommands::Check {
-                command: command.clone(),
-            };
-            if let Err(e) = check_cmd.execute(&cli.path) {
-                eprintln!("Error: {}", e);
-                std::process::exit(1);
-            }
-        }
         Some(Commands::Init { init_command }) => {
             if let Err(e) = init_command.execute(&cli.path) {
                 eprintln!("Error: {}", e);
                 std::process::exit(1);
             }
         }
-        Some(Commands::Whoami) => {
-            if let Err(e) = whoami::whoami(&cli.path) {
+        Some(Commands::Whoami { role }) => {
+            if let Err(e) = whoami::whoami(&cli.path, role.clone()) {
                 eprintln!("Error: {}", e);
                 std::process::exit(1);
             }
         }
-        Some(Commands::Checkpoint {
-            message,
-            skip_tests,
-            message_flag,
-        }) => {
+        Some(Commands::Checkpoint { message, skip_tests, message_flag }) => {
             // 🦨 MCP compatibility: merge positional and flag arguments
             let effective_message = message.as_ref().or(message_flag.as_ref());
             if let Err(e) = checkpoint(effective_message.map(|s| s.as_str()), *skip_tests) {
@@ -1197,29 +1189,16 @@ async fn main() {
                 std::process::exit(1);
             }
         }
-        Some(Commands::Status {
-            filter,
-            installed,
-            available,
-        }) => {
-            if let Err(e) = show_status(
-                &cli.path,
-                filter.as_ref().map(|s| s.as_str()),
-                *installed,
-                *available,
-            ) {
+        Some(Commands::Status { filter, installed, available, filter_flag }) => {
+            // 🦨 MCP compatibility: merge positional and flag arguments
+            let effective_filter = filter.as_ref().or(filter_flag.as_ref());
+            if let Err(e) = show_status(&cli.path, effective_filter.map(|s| s.as_str()), *installed, *available) {
                 eprintln!("Error: {}", e);
                 std::process::exit(1);
             }
         }
         Some(Commands::K8s { k8s_command }) => {
             if let Err(e) = k8s_command.execute(&cli.path) {
-                eprintln!("Error: {}", e);
-                std::process::exit(1);
-            }
-        }
-        Some(Commands::Install { install_command }) => {
-            if let Err(e) = install_command.execute(&cli.path) {
                 eprintln!("Error: {}", e);
                 std::process::exit(1);
             }
@@ -1236,57 +1215,74 @@ async fn main() {
                 std::process::exit(1);
             }
         }
-        Some(Commands::Job { job_command }) => {
-            if let Err(e) = job_command.execute_async(&cli.path).await {
-                eprintln!("Job Error: {}", e);
-                std::process::exit(1);
-            }
-        }
-        Some(Commands::Chat { chat_command }) => {
-            if let Err(e) = chat_command.execute().await {
-                eprintln!("Chat Error: {}", e);
-                std::process::exit(1);
-            }
-        }
-        Some(Commands::Learn(args)) => {
-            if let Err(e) = handle_learn(&cli.path, args.clone()) {
-                eprintln!("Error: {}", e);
-                std::process::exit(1);
-            }
-        }
-        Some(Commands::Datum { datum_command }) => {
-            use b00t_cli::commands::datum::handle_datum_command;
-            if let Err(e) = handle_datum_command(&cli.path, datum_command) {
+        Some(Commands::Learn { topic, topic_flag }) => {
+            // 🦨 MCP compatibility: merge positional and flag arguments
+            let effective_topic = topic.as_ref().or(topic_flag.as_ref());
+            if let Err(e) = handle_learn(&cli.path, effective_topic.map(|s| s.as_str())) {
                 eprintln!("Error: {}", e);
                 std::process::exit(1);
             }
         }
         Some(Commands::Grok { grok_command }) => {
-            use b00t_cli::commands::grok::handle_grok_command;
+            use crate::commands::grok::handle_grok_command;
 
-            // 🤓 No need for nested runtime - already in #[tokio::main]
-            if let Err(e) = handle_grok_command(grok_command.clone()).await {
+            // Create Tokio runtime for async grok operations
+            let rt = match tokio::runtime::Runtime::new() {
+                Ok(rt) => rt,
+                Err(e) => {
+                    eprintln!("Error creating async runtime: {}", e);
+                    std::process::exit(1);
+                }
+            };
+
+            if let Err(e) = rt.block_on(handle_grok_command(grok_command.clone())) {
                 eprintln!("Error: {}", e);
                 std::process::exit(1);
             }
         }
-        Some(Commands::Up { yes }) => {
-            if let Err(e) = handle_up_command(&cli.path, *yes) {
+        Some(Commands::Lfmf { tool, lesson, repo, global }) => {
+            // Validate required fields
+            let tool = match tool {
+                Some(t) => t,
+                None => {
+                    eprintln!("--tool is required");
+                    std::process::exit(1);
+                }
+            };
+            let lesson = match lesson {
+                Some(l) => l,
+                None => {
+                    eprintln!("--lesson is required");
+                    std::process::exit(1);
+                }
+            };
+            // Determine scope
+            let scope = if *global { "global" } else { "repo" };
+            if let Err(e) = commands::lfmf::handle_lfmf(&cli.path, &tool, &lesson, scope) {
                 eprintln!("Error: {}", e);
                 std::process::exit(1);
             }
         }
-        Some(Commands::Bootstrap { bootstrap_command }) => {
-            use b00t_cli::commands::bootstrap::handle_bootstrap_command;
+        Some(Commands::Advice { tool, query, count }) => {
+            use crate::commands::advice::handle_advice;
 
-            if let Err(e) = handle_bootstrap_command(bootstrap_command.clone()).await {
+            // Create Tokio runtime for async advice operations
+            let rt = match tokio::runtime::Runtime::new() {
+                Ok(rt) => rt,
+                Err(e) => {
+                    eprintln!("Error creating async runtime: {}", e);
+                    std::process::exit(1);
+                }
+            };
+
+            if let Err(e) = rt.block_on(handle_advice(&cli.path, tool, query, *count)) {
                 eprintln!("Error: {}", e);
                 std::process::exit(1);
             }
         }
         Some(Commands::Script { script_command }) => {
-            use b00t_cli::commands::script::handle_script_command;
-
+            use crate::commands::script::handle_script_command;
+            
             if let Err(e) = handle_script_command(script_command.clone()) {
                 eprintln!("Error: {}", e);
                 std::process::exit(1);

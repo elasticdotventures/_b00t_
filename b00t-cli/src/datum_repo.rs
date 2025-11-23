@@ -205,24 +205,11 @@ impl DatumCreator for RepoDatum {
             datum_type: Some(crate::DatumType::Repo),
             desires: Some(branch.clone()),
             hint,
-            install: None,
-            update: None,
-            version: None,
-            version_regex: None,
-            command: None,
-            args: None,
-            vsix_id: None,
-            script: None,
-            image: None,
-            docker_args: None,
-            package_name: None,
-            env: None,
-            require: None,
-            aliases: None,
             url: Some(url),
             branch: Some(branch),
             clone_path: Some(clone_path),
             dsn: None,
+            ..BootDatum::default()
         })
     }
     
