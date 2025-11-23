@@ -188,7 +188,7 @@ impl AcpJwtValidator {
     /// Check if a subject pattern is within the allowed namespace
     fn is_subject_in_namespace(subject: &str, namespace: &str) -> bool {
         // Allow exact matches and wildcard patterns within namespace
-        subject.starts_with(namespace) || 
+        subject == namespace ||
         subject.starts_with(&format!("{}.", namespace)) ||
         subject == format!("{}.>", namespace)
     }
