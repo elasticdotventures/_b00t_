@@ -175,11 +175,10 @@ impl SmolQueue for SocatQueue {
             .stdout(Stdio::null())
             .spawn()
             .with_context(|| format!("launch socat to {}", self.target))?;
-        if let Some(stdin) = &mut child.stdin {
-            stdin
-                .write_all(payload.as_bytes())
-                .context("write payload to socat stdin")?;
-        }
+        let stdin = child.stdin.as_mut().context("stdin not available")?;
+        stdin
+            .write_all(payload.as_bytes())
+            .context("write payload to socat stdin")?;
         let status = child.wait().context("wait for socat")?;
         if !status.success() {
             anyhow::bail!("socat exited with {}", status);
