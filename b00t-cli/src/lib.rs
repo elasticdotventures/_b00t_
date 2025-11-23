@@ -733,7 +733,7 @@ impl std::fmt::Display for DatumType {
 impl DatumType {
     pub fn from_filename_extension(filename: &str) -> DatumType {
         if filename.ends_with(".cli.toml") {
-            DatumType::Unknown
+            DatumType::Cli
         } else if filename.ends_with(".mcp.toml") {
             DatumType::Mcp
         } else if filename.ends_with(".bash.toml") {
