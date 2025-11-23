@@ -1,9 +1,9 @@
 use anyhow::{Context, Result};
+use fs2::FileExt;
 use std::fs::{read_dir, OpenOptions};
 use std::io::{BufRead, BufReader, Read, Write};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
-use std::time::Duration;
 use uuid::Uuid;
 
 /// Minimal queue trait for sm0l workers that need a local IPC hop.
@@ -39,36 +39,57 @@ impl SmolQueue for BashLineQueue {
     }
 
     fn send(&self, payload: &str) -> Result<()> {
-        let mut fh = OpenOptions::new()
+        let fh = OpenOptions::new()
             .create(true)
             .append(true)
             .open(&self.path)
             .context("open bash-line queue for append")?;
-        writeln!(fh, "{}", payload).context("write bash-line payload")?;
-        fh.flush().context("flush bash-line payload")?;
+        
+        // Acquire exclusive lock to prevent race conditions during append
+        fh.try_lock_exclusive()
+            .context("failed to acquire exclusive lock on bash-line queue")?;
+        
+        let mut fh_locked = fh;
+        writeln!(fh_locked, "{}", payload).context("write bash-line payload")?;
+        fh_locked.flush().context("flush bash-line payload")?;
+        
+        // Lock is released when fh_locked is dropped
         Ok(())
     }
 
     fn try_recv(&self) -> Result<Option<String>> {
+        // Open with read+write to allow locking and modification
         let fh = OpenOptions::new()
             .read(true)
+            .write(true)
             .open(&self.path)
             .context("open bash-line queue for read")?;
-        let mut reader = BufReader::new(fh);
+        
+        // Acquire exclusive lock to prevent race conditions
+        fh.try_lock_exclusive()
+            .context("failed to acquire exclusive lock on bash-line queue")?;
+        
+        let mut reader = BufReader::new(&fh);
         let mut first = String::new();
         let count = reader.read_line(&mut first).context("read bash-line message")?;
         if count == 0 {
+            // Release lock automatically when fh is dropped
             return Ok(None);
         }
-        // Rewrite remainder to keep queue behaviour (best-effort, not atomic).
+        
+        // Read remainder to keep queue behaviour
         let mut remaining = String::new();
         reader.read_to_string(&mut remaining).context("read remaining bash-line queue")?;
-        let mut fh = OpenOptions::new()
-            .write(true)
-            .truncate(true)
-            .open(&self.path)
-            .context("truncate bash-line queue")?;
-        fh.write_all(remaining.as_bytes()).context("write remaining bash-line queue")?;
+        
+        // Truncate and rewrite with the lock still held
+        fh.set_len(0).context("truncate bash-line queue")?;
+        use std::io::Seek;
+        let mut fh_mut = fh;
+        fh_mut.seek(std::io::SeekFrom::Start(0)).context("seek to start of bash-line queue")?;
+        fh_mut.write_all(remaining.as_bytes()).context("write remaining bash-line queue")?;
+        fh_mut.flush().context("flush bash-line queue")?;
+        
+        // Lock is released when fh_mut is dropped
         Ok(Some(first.trim_end_matches('\n').to_string()))
     }
 }
