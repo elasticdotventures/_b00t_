@@ -1230,11 +1230,9 @@ async fn main() {
                 std::process::exit(1);
             }
         }
-        Some(Commands::Agent { agent_command }) => {
-            if let Err(e) =
-                b00t_cli::commands::agent::handle_agent_command(agent_command.clone()).await
-            {
-                eprintln!("Agent Error: {}", e);
+        Some(Commands::Acp { acp_command }) => {
+            if let Err(e) = acp_command.execute().await {
+                eprintln!("ACP Error: {}", e);
                 std::process::exit(1);
             }
         }
