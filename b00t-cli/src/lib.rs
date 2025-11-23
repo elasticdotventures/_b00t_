@@ -35,6 +35,7 @@ pub mod model_manager;
 pub mod orchestrator;
 pub mod session_memory;
 pub mod traits;
+pub mod erp;
 pub mod utils;
 pub mod whoami;
 pub use traits::*;
@@ -508,6 +509,25 @@ fn create_mcp_datum_from_json(
         datum_type: Some(DatumType::Mcp),
         desires: None,
         hint: hint.unwrap_or_else(|| "MCP server".to_string()),
+        skills: None,
+        compliance: None,
+        install: None,
+        update: None,
+        version: None,
+        version_regex: None,
+        command: None, // Legacy field - not used in new format
+        args: None,    // Legacy field - not used in new format
+        vsix_id: None,
+        script: None,
+        image: None,
+        docker_args: None,
+        oci_uri: None,
+        resource_path: None,
+        chart_path: None,
+        namespace: None,
+        values_file: None,
+        keywords: None,
+        package_name: None,
         env: server_config
             .get("env")
             .and_then(|v| v.as_object())
@@ -572,6 +592,25 @@ pub fn normalize_mcp_json(input: &str, dwiw: bool) -> Result<BootDatum> {
                 datum_type: Some(DatumType::Mcp),
                 desires: None,
                 hint: hint.clone().unwrap_or_else(|| "MCP HTTP server".to_string()),
+                skills: None,
+                compliance: None,
+                install: None,
+                update: None,
+                version: None,
+                version_regex: None,
+                command: None,
+                args: None,
+                vsix_id: None,
+                script: None,
+                image: None,
+                docker_args: None,
+                oci_uri: None,
+                resource_path: None,
+                chart_path: None,
+                namespace: None,
+                values_file: None,
+                keywords: None,
+                package_name: None,
                 env: json_value
                     .get("env")
                     .and_then(|v| v.as_object())
