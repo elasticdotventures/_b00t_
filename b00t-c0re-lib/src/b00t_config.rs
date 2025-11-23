@@ -6,7 +6,7 @@
 //! - User preferences and settings
 //! - Service credentials and validation
 //!
-//! TypeScript bindings are automatically generated for the website UI.
+//! TypeScript bindings are automatically generated for the dashboard UI.
 
 use anyhow::{Result, anyhow};
 use schemars::JsonSchema;
