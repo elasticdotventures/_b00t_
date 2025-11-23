@@ -832,6 +832,10 @@ elif [ "$(rand0 10)" -gt 5 ] ; then
 
 # part of motd
 
+# Fallback calendar helper for hosts without ymd in PATH
+if ! command -v ymd >/dev/null 2>&1; then
+    ymd() { date +%Y%m%d; }
+fi
     log_📢_记录 "lang: $LANG"
     log_📢_记录 "🥾📈 motd project stats, cleanup, tasks goes here. "
     local skunk_x=0

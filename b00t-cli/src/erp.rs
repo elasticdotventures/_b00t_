@@ -167,13 +167,14 @@ impl SmolQueue for TempfileChainQueue {
 /// socat-based queue for hosts with sockets enabled.
 pub struct SocatQueue {
     target: String,
+    timeout: Duration,
 }
-
 
 impl SocatQueue {
     pub fn new(target: impl Into<String>) -> Self {
         Self {
             target: target.into(),
+            timeout: Duration::from_secs(2),
         }
     }
 
@@ -205,10 +206,11 @@ impl SmolQueue for SocatQueue {
             .stdout(Stdio::null())
             .spawn()
             .with_context(|| format!("launch socat to {}", self.target))?;
-        let stdin = child.stdin.as_mut().context("stdin not available")?;
-        stdin
-            .write_all(payload.as_bytes())
-            .context("write payload to socat stdin")?;
+        if let Some(stdin) = &mut child.stdin {
+            stdin
+                .write_all(payload.as_bytes())
+                .context("write payload to socat stdin")?;
+        }
         let status = child.wait().context("wait for socat")?;
         if !status.success() {
             anyhow::bail!("socat exited with {}", status);
