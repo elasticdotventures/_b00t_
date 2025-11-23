@@ -22,3 +22,6 @@
 [submodule "integrations/nasdanika-mcp"]
 	path = integrations/nasdanika-mcp
 	url = https://github.com/elasticdotventures/mcp-server.git
+[submodule "plantuml-server"]
+	path = plantuml-server
+	url = https://github.com/PromptExecution/plantuml-server--b00t--togaf--mcp.git

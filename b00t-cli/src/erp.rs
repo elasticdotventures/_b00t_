@@ -1,9 +1,9 @@
 use anyhow::{Context, Result};
+use fs2::FileExt;
 use std::fs::{read_dir, OpenOptions};
-use std::io::{BufRead, BufReader, Read, Write};
+use std::io::{BufRead, BufReader, Read, Seek, Write};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
-use std::time::Duration;
 use uuid::Uuid;
 
 /// Minimal queue trait for sm0l workers that need a local IPC hop.
@@ -14,6 +14,11 @@ pub trait SmolQueue {
 }
 
 /// File-backed queue that appends lines to a single file.
+/// 
+/// Uses exclusive file locking (via fs2::FileExt) to prevent race conditions
+/// in concurrent producer/consumer scenarios. Both send() and try_recv() use
+/// try_lock_exclusive(), which fails immediately if the lock cannot be acquired,
+/// allowing callers to implement their own retry logic as needed.
 pub struct BashLineQueue {
     path: PathBuf,
 }
@@ -44,30 +49,55 @@ impl SmolQueue for BashLineQueue {
             .append(true)
             .open(&self.path)
             .context("open bash-line queue for append")?;
+        
+        // Acquire exclusive lock to prevent race conditions during append
+        fh.try_lock_exclusive()
+            .context("failed to acquire exclusive lock on bash-line queue")?;
+        
         writeln!(fh, "{}", payload).context("write bash-line payload")?;
+        fh.flush().context("flush bash-line payload")?;
+        
+        // Lock is released when fh is dropped
         Ok(())
     }
 
     fn try_recv(&self) -> Result<Option<String>> {
-        let fh = OpenOptions::new()
-            .read(true)
-            .open(&self.path)
-            .context("open bash-line queue for read")?;
-        let mut reader = BufReader::new(fh);
-        let mut first = String::new();
-        let count = reader.read_line(&mut first).context("read bash-line message")?;
-        if count == 0 {
-            return Ok(None);
-        }
-        // Rewrite remainder to keep queue behaviour (best-effort, not atomic).
-        let mut remaining = String::new();
-        reader.read_to_string(&mut remaining).ok();
+        // Open with read+write to allow locking and modification
         let mut fh = OpenOptions::new()
+            .read(true)
             .write(true)
-            .truncate(true)
+            .create(true)
             .open(&self.path)
-            .context("truncate bash-line queue")?;
-        fh.write_all(remaining.as_bytes()).ok();
+            .context("open bash-line queue for read+write")?;
+        
+        // Acquire exclusive lock to prevent race conditions
+        fh.try_lock_exclusive()
+            .context("failed to acquire exclusive lock on bash-line queue")?;
+        
+        // Read the first line and remaining content
+        let (first, remaining) = {
+            let mut reader = BufReader::new(&fh);
+            let mut first = String::new();
+            let count = reader.read_line(&mut first).context("read bash-line message")?;
+            if count == 0 {
+                // Release lock automatically when fh is dropped
+                return Ok(None);
+            }
+            
+            // Read remainder to keep queue behaviour
+            let mut remaining = String::new();
+            reader.read_to_string(&mut remaining).context("read remaining bash-line queue")?;
+            (first, remaining)
+        }; // BufReader is dropped here, releasing the borrow
+        
+        // Truncate and rewrite with the lock still held
+        fh.set_len(0).context("truncate bash-line queue")?;
+        // set_len doesn't change file position, so seek to start before writing
+        fh.seek(std::io::SeekFrom::Start(0)).context("seek to start of bash-line queue")?;
+        fh.write_all(remaining.as_bytes()).context("write remaining bash-line queue")?;
+        fh.flush().context("flush bash-line queue")?;
+        
+        // Lock is released when fh is dropped
         Ok(Some(first.trim_end_matches('\n').to_string()))
     }
 }
@@ -101,6 +131,7 @@ impl SmolQueue for TempfileChainQueue {
             .with_context(|| format!("open tempfile-chain file {:?}", file))?;
         fh.write_all(payload.as_bytes())
             .context("write tempfile-chain payload")?;
+        fh.flush().context("flush tempfile-chain payload")?;
         Ok(())
     }
 

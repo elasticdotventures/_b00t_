@@ -328,10 +328,23 @@ fi
 
 # handy for generating dumps, etc..
 # $ script.sh >> foobar.`ymd`
+if ! command -v ymd >/dev/null 2>&1; then
+    ymd() { date +'%Y%m%d'; }
+fi
+if ! command -v ymd_hm >/dev/null 2>&1; then
+    ymd_hm() { date +'%Y%m%d.%H%M'; }
+fi
+if ! command -v ymd_hms >/dev/null 2>&1; then
+    ymd_hms() { date +'%Y%m%d.%H%M%S'; }
+fi
 alias yyyymmdd="date +'%Y%m%d'"
 alias ymd="date +'%Y%m%d'"
 alias ymd_hm="date +'%Y%m%d.%H%M'"
 alias ymd_hms="date +'%Y%m%d.%H%M%S'"
+# Ensure date helpers are available in non-interactive shells where aliases are disabled
+if ! command -v ymd >/dev/null 2>&1; then ymd(){ date +'%Y%m%d'; }; fi
+if ! command -v ymd_hm >/dev/null 2>&1; then ymd_hm(){ date +'%Y%m%d.%H%M'; }; fi
+if ! command -v ymd_hms >/dev/null 2>&1; then ymd_hms(){ date +'%Y%m%d.%H%M%S'; }; fi
 ##################
 
 
