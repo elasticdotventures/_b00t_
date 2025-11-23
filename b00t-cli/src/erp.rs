@@ -14,6 +14,11 @@ pub trait SmolQueue {
 }
 
 /// File-backed queue that appends lines to a single file.
+/// 
+/// Uses exclusive file locking (via fs2::FileExt) to prevent race conditions
+/// in concurrent producer/consumer scenarios. Both send() and try_recv() use
+/// try_lock_exclusive(), which fails immediately if the lock cannot be acquired,
+/// allowing callers to implement their own retry logic as needed.
 pub struct BashLineQueue {
     path: PathBuf,
 }
@@ -63,7 +68,7 @@ impl SmolQueue for BashLineQueue {
             .read(true)
             .write(true)
             .open(&self.path)
-            .context("open bash-line queue for read")?;
+            .context("open bash-line queue for read+write")?;
         
         // Acquire exclusive lock to prevent race conditions
         fh.try_lock_exclusive()
