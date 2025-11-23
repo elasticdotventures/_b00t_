@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(rustc --version)",
+      "Bash(git -C /home/brianh/homeassistant/_b00t_/node-ts.🦄/_b00t_ remote -v)",
+      "Read(//home/node/**)",
+      "Bash(echo $HOME)",
+      "Bash(chmod:*)",
+      "Bash(./docker.🐳/b00t/build-from-gospel.sh)",
+      "Bash(command -v:*)",
+      "Bash(cargo --version)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

@@ -1,0 +1,29 @@
+[b00t]
+name = "openai-embeddings"
+type = "api"
+hint = "OpenAI embeddings API via remote service"
+desires = "latest"
+
+# Protocol specification
+protocol = "openai-embeddings-v1"
+implements = ["openai-compat-base"]
+
+# No infrastructure dependencies - this is a remote API
+# depends_on = []
+
+# Capability provision
+[b00t.provides]
+capability = "embeddings"
+endpoints = ["/v1/embeddings"]
+operations = ["create_embedding"]
+
+# Available models from OpenAI
+[b00t.provides.models]
+preferred = ["text-embedding-3-small", "text-embedding-3-large"]
+supported = ["text-embedding-3-small", "text-embedding-3-large", "text-embedding-ada-002"]
+
+# Environment variables (requires API key)
+[b00t.env]
+OPENAI_API_BASE = "https://api.openai.com/v1"
+OPENAI_API_KEY = "${OPENAI_API_KEY}"
+OPENAI_EMBEDDING_MODEL = "text-embedding-3-small"

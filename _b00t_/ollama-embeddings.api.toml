@@ -1,0 +1,28 @@
+[b00t]
+name = "ollama-embeddings"
+type = "api"
+hint = "Ollama embeddings API via local Docker container"
+desires = "latest"
+
+# Protocol specification
+protocol = "openai-embeddings-v1"
+implements = ["openai-compat-base"]
+
+# Infrastructure dependencies
+depends_on = ["ollama.docker"]
+
+# Capability provision
+[b00t.provides]
+capability = "embeddings"
+endpoints = ["/api/embeddings", "/v1/embeddings"]
+operations = ["create_embedding"]
+
+# Available models (loaded dynamically from Ollama)
+[b00t.provides.models]
+preferred = ["nomic-embed-text", "mxbai-embed-large", "all-minilm"]
+supported = ["nomic-embed-text", "mxbai-embed-large", "all-minilm", "snowflake-arctic-embed"]
+
+# Environment variables (inherited from ollama.docker)
+[b00t.env]
+OLLAMA_API_URL = "${OLLAMA_API_URL}"
+OLLAMA_EMBEDDING_MODEL = "nomic-embed-text"

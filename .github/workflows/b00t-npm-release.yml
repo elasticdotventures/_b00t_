@@ -1,0 +1,186 @@
+name: 🥾 b00t & b00t-c0re NPM Release
+
+on:
+  push:
+    tags:
+      - 'b00t-v*'
+      - 'b00t-c0re-v*'
+  workflow_dispatch:
+    inputs:
+      package:
+        description: 'Package to publish (b00t or b00t-c0re)'
+        required: true
+        type: choice
+        options:
+          - b00t
+          - b00t-c0re
+          - both
+      version:
+        description: 'Version to release (e.g., 0.1.1)'
+        required: true
+        type: string
+      publish:
+        description: 'Publish to NPM (only enable for releases)'
+        required: false
+        type: boolean
+        default: false
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+jobs:
+  publish-b00t:
+    name: 📦 Publish b00t placeholder
+    if: contains(github.ref, 'b00t-v') || github.event.inputs.package == 'b00t' || github.event.inputs.package == 'both'
+    runs-on: ubuntu-latest
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+
+      - name: 🏗️ Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: 📝 Update package.json version
+        if: github.event.inputs.version && (github.event.inputs.package == 'b00t' || github.event.inputs.package == 'both')
+        run: |
+          cd b00t-npm
+          npm version ${{ github.event.inputs.version }} --no-git-tag-version
+
+      - name: 📝 Update package.json version from tag
+        if: contains(github.ref, 'b00t-v')
+        run: |
+          cd b00t-npm
+          VERSION=$(echo ${{ github.ref_name }} | sed 's/^b00t-v//')
+          npm version $VERSION --no-git-tag-version
+
+      - name: 🚀 Publish to NPM
+        if: contains(github.ref, 'b00t-v') || github.event.inputs.publish == 'true'
+        run: |
+          cd b00t-npm
+          npm publish
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: 📋 Dry-run publish (for testing)
+        if: "!contains(github.ref, 'b00t-v') && github.event.inputs.publish != 'true'"
+        run: |
+          cd b00t-npm
+          npm publish --dry-run
+
+  build-b00t-c0re:
+    name: 🦀 Build b00t-c0re WASM
+    if: contains(github.ref, 'b00t-c0re-v') || github.event.inputs.package == 'b00t-c0re' || github.event.inputs.package == 'both'
+    runs-on: ubuntu-latest
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+
+      - name: 🦀 Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - name: 📦 Install wasm-pack
+        run: |
+          curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
+
+      - name: 🔨 Build WASM package
+        run: |
+          cd b00t-c0re-npm
+          wasm-pack build --target nodejs --scope promptexecution
+
+      - name: 📤 Upload WASM artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: b00t-c0re-wasm
+          path: b00t-c0re-npm/pkg
+
+  publish-b00t-c0re:
+    name: 📦 Publish b00t-c0re
+    needs: build-b00t-c0re
+    if: contains(github.ref, 'b00t-c0re-v') || github.event.inputs.package == 'b00t-c0re' || github.event.inputs.package == 'both'
+    runs-on: ubuntu-latest
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+
+      - name: 📥 Download WASM artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: b00t-c0re-wasm
+          path: b00t-c0re-npm/pkg
+
+      - name: 🏗️ Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: 📝 Update package.json version
+        if: github.event.inputs.version && (github.event.inputs.package == 'b00t-c0re' || github.event.inputs.package == 'both')
+        run: |
+          cd b00t-c0re-npm
+          npm version ${{ github.event.inputs.version }} --no-git-tag-version
+
+      - name: 📝 Update package.json version from tag
+        if: contains(github.ref, 'b00t-c0re-v')
+        run: |
+          cd b00t-c0re-npm
+          VERSION=$(echo ${{ github.ref_name }} | sed 's/^b00t-c0re-v//')
+          npm version $VERSION --no-git-tag-version
+
+      - name: 🚀 Publish to NPM
+        if: contains(github.ref, 'b00t-c0re-v') || github.event.inputs.publish == 'true'
+        run: |
+          cd b00t-c0re-npm
+          npm publish
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: 📋 Dry-run publish (for testing)
+        if: "!contains(github.ref, 'b00t-c0re-v') && github.event.inputs.publish != 'true'"
+        run: |
+          cd b00t-c0re-npm
+          npm publish --dry-run
+
+  create-release:
+    name: 📋 Create GitHub Release
+    needs: [publish-b00t, publish-b00t-c0re]
+    if: always() && (contains(github.ref, 'b00t-v') || contains(github.ref, 'b00t-c0re-v'))
+    runs-on: ubuntu-latest
+    steps:
+      - name: 📋 Create GitHub Release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.ref_name }}
+          release_name: 🥾 ${{ github.ref_name }}
+          body: |
+            ## 🥾 b00t Package Release ${{ github.ref_name }}
+
+            ### 📦 Installation
+
+            ```bash
+            # For b00t placeholder
+            npm install b00t
+
+            # For b00t-c0re WASM bindings
+            npm install b00t-c0re
+
+            # For b00t-mcp server
+            npm install -g b00t-mcp
+            ```
+
+            ### 🤓 About b00t
+
+            b00t is an extreme programming (XP) agentic developer interface.
+            *Stay aligned, get cake!* 🎂
+
+            Full repository: https://github.com/elasticdotventures/dotfiles
+          draft: false
+          prerelease: false

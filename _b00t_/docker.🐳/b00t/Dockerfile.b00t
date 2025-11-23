@@ -1,0 +1,119 @@
+# syntax=docker/dockerfile:latest
+# Unified b00t Container - CLI and MCP Server
+#
+# This builds both b00t-cli and b00t-mcp in a single container.
+# Use aliases to run either: b00t-cli, b00t-mcp, or just b00t
+#
+# Proposal for gospel (~/.b00t/Dockerfile.b00t)
+# Based on Dockerfile.b00t-cli but enhanced for unified deployment
+
+# ================================
+# Stage 1: Rust Build Environment
+# ================================
+FROM rust:1.88-slim AS rust-builder
+
+# Install build dependencies
+RUN apt-get update && apt-get install -y \
+    pkg-config \
+    libssl-dev \
+    ca-certificates \
+    python3 \
+    python3-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Set working directory for the Rust project
+WORKDIR /build
+
+# Copy workspace root and all workspace members
+COPY Cargo.toml Cargo.lock ./
+COPY b00t-cli/ ./b00t-cli/
+COPY b00t-mcp/ ./b00t-mcp/
+COPY b00t-c0re-lib/ ./b00t-c0re-lib/
+COPY b00t-grok/ ./b00t-grok/
+COPY k0mmand3r/ ./k0mmand3r/
+
+# Create dummy source for dependency caching
+RUN mkdir -p b00t-cli/src b00t-mcp/src b00t-c0re-lib/src b00t-grok/src k0mmand3r/src && \
+    echo "fn main() {}" > b00t-cli/src/main.rs && \
+    echo "// dummy" > b00t-cli/src/lib.rs && \
+    echo "fn main() {}" > b00t-mcp/src/main.rs && \
+    echo "// dummy" > b00t-mcp/src/lib.rs && \
+    echo "// dummy" > b00t-c0re-lib/src/lib.rs && \
+    echo "// dummy" > b00t-grok/src/lib.rs && \
+    echo "// dummy" > k0mmand3r/src/lib.rs
+
+# Build dependencies (this layer will be cached unless Cargo files change)
+RUN cargo build --release --bin b00t-cli --bin b00t-mcp && \
+    rm -rf b00t-cli/src b00t-mcp/src b00t-c0re-lib/src b00t-grok/src k0mmand3r/src
+
+# Copy actual source code
+COPY b00t-cli/src ./b00t-cli/src
+COPY b00t-mcp/src ./b00t-mcp/src
+COPY b00t-c0re-lib/src ./b00t-c0re-lib/src
+COPY b00t-grok/src ./b00t-grok/src
+COPY k0mmand3r/src ./k0mmand3r/src
+
+# Build both binaries
+RUN cargo build --release --bin b00t-cli --bin b00t-mcp
+
+# Verify both binaries work
+RUN ./target/release/b00t-cli --version && \
+    ./target/release/b00t-mcp --version
+
+# ================================
+# Stage 2: b00t Resources Layer
+# ================================
+FROM scratch AS b00t-resources
+
+# Copy _b00t_ configuration files and resources
+COPY _b00t_/ /opt/b00t/config/
+
+# ================================
+# Stage 3: Unified b00t Distribution Layer
+# ================================
+FROM ubuntu:24.04 AS b00t-unified
+
+# Build args for version information
+ARG BUILD_VERSION=0.0.1
+ARG BUILD_COMMIT=unknown
+ARG BUILD_DATE
+
+LABEL org.opencontainers.image.source=https://github.com/elasticdotventures/dotfiles
+LABEL org.opencontainers.image.description="b00t unified container - CLI and MCP server"
+LABEL org.opencontainers.image.licenses=MIT
+LABEL org.opencontainers.image.version=${BUILD_VERSION}
+LABEL org.opencontainers.image.revision=${BUILD_COMMIT}
+LABEL org.opencontainers.image.created=${BUILD_DATE}
+
+# Install minimal runtime dependencies
+RUN apt-get update && apt-get install -y \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy both compiled binaries from builder stage
+COPY --from=rust-builder /build/target/release/b00t-cli /usr/local/bin/b00t-cli
+COPY --from=rust-builder /build/target/release/b00t-mcp /usr/local/bin/b00t-mcp
+
+# Copy _b00t_ resources from resources stage
+COPY --from=b00t-resources /opt/b00t/config/ /opt/b00t/config/
+
+# Create symlinks and aliases
+# - b00t -> b00t-cli (default to CLI)
+# - Both b00t-cli and b00t-mcp available
+RUN ln -sf /usr/local/bin/b00t-cli /usr/local/bin/b00t
+
+# Set default environment variables
+ENV _B00T_Path=/opt/b00t/config
+ENV PATH="/usr/local/bin:${PATH}"
+ENV B00T_VERSION=${BUILD_VERSION}
+ENV B00T_COMMIT=${BUILD_COMMIT}
+ENV B00T_BUILD_DATE=${BUILD_DATE}
+
+# Verify both installations
+RUN b00t-cli --version && b00t-mcp --version && b00t --version
+
+# Default working directory
+WORKDIR /workspace
+
+# Default command (shows help for both)
+CMD ["sh", "-c", "echo 'b00t unified container'; echo ''; b00t-cli --help; echo ''; echo 'MCP Server:'; b00t-mcp --version"]

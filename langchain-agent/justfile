@@ -1,0 +1,105 @@
+# LangChain Agent Service - PM2 Management
+# 🤓: Just commands for b00t-langchain-agent service lifecycle
+
+# Default recipe - show available commands
+default:
+    @just --list
+
+# Install dependencies
+install:
+    uv sync
+
+# Start the service with PM2
+start:
+    pm2 start ecosystem.config.cjs
+
+# Stop the service
+stop:
+    pm2 stop b00t-langchain-agent
+
+# Restart the service
+restart:
+    pm2 restart b00t-langchain-agent
+
+# Delete the service from PM2
+delete:
+    pm2 delete b00t-langchain-agent
+
+# View logs (tail -f)
+logs:
+    pm2 logs b00t-langchain-agent
+
+# View logs (last 100 lines)
+logs-tail:
+    pm2 logs b00t-langchain-agent --lines 100
+
+# Show service status
+status:
+    pm2 show b00t-langchain-agent
+
+# Show all PM2 processes
+list:
+    pm2 list
+
+# Monitor service in real-time
+monitor:
+    pm2 monit
+
+# Save PM2 process list for resurrection
+save:
+    pm2 save
+
+# Reload service with zero-downtime
+reload:
+    pm2 reload b00t-langchain-agent
+
+# Flush all logs
+flush-logs:
+    pm2 flush b00t-langchain-agent
+
+# Start service in development mode (no PM2)
+dev:
+    uv run b00t-langchain serve
+
+# Test agent directly (no Redis)
+test-agent name prompt:
+    uv run b00t-langchain test-agent {{name}} "{{prompt}}" --datum-path ~/.dotfiles/_b00t_
+
+# List available MCP tools
+list-tools:
+    uv run b00t-langchain list-tools
+
+# Run Python tests
+test:
+    uv run pytest tests/ -v
+
+# Type check with mypy
+typecheck:
+    uv run mypy src/
+
+# Format code
+fmt:
+    uv run ruff format src/ tests/
+
+# Lint code
+lint:
+    uv run ruff check src/ tests/
+
+# Setup PM2 startup script (Linux/macOS)
+setup-startup:
+    pm2 startup
+    @echo "Run the generated command with sudo, then: just save"
+
+# Full deployment: install, start, save
+deploy: install start save
+    @echo "✅ Deployed b00t-langchain-agent service"
+
+# Full teardown: stop and delete
+teardown: stop delete
+    @echo "✅ Removed b00t-langchain-agent service"
+
+# Health check via Redis
+health-check:
+    #!/usr/bin/env bash
+    redis-cli -h localhost -p 6379 PING || echo "❌ Redis not available"
+    pm2 jlist | jq '.[] | select(.name=="b00t-langchain-agent") | {name, status, uptime, restarts, memory}' || echo "❌ Service not running"

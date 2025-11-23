@@ -29,5 +29,6 @@ done
 
 
 
-alias ve='python3 -m venv ./venv'
+# Use uv-based virtualenvs to stay aligned with b00t guidance
+alias ve='UV_CACHE_DIR="${UV_CACHE_DIR:-$PWD/.uv-cache}" uv venv .venv'
 alias va='source ./venv/bin/activate'

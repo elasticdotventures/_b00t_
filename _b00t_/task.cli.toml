@@ -1,0 +1,89 @@
+[b00t]
+name = "task"
+type = "cli"
+desires = "3.39.0"
+depends_on = ["go.cli"]
+install = '''
+# Install Task - A task runner / build tool written in Go
+# https://taskfile.dev/
+
+echo "📦 Installing Task (Taskfile)..."
+
+# Ensure Go is available
+if ! command -v go >/dev/null 2>&1; then
+    echo "❌ Go is required but not found in PATH"
+    echo "💡 Run: b00t cli install go"
+    exit 1
+fi
+
+# Install via go install (recommended method)
+echo "🔧 Installing task via go install..."
+go install github.com/go-task/task/v3/cmd/task@latest
+
+# Verify installation
+if command -v task >/dev/null 2>&1; then
+    echo "✅ Task installed successfully"
+    task --version
+else
+    # Check if it's in ~/go/bin but not in PATH
+    if [ -f "$HOME/go/bin/task" ]; then
+        echo "✅ Task installed to ~/go/bin/task"
+        echo "⚠️  Note: ~/go/bin may not be in your PATH"
+        echo "💡 Add to PATH: export PATH=\$PATH:\$HOME/go/bin"
+
+        # Add to PATH for current session
+        export PATH=$PATH:$HOME/go/bin
+        task --version
+    else
+        echo "❌ Task installation failed"
+        exit 1
+    fi
+fi
+'''
+update = '''
+# Update Task to latest version
+echo "🔄 Updating Task..."
+
+if ! command -v go >/dev/null 2>&1; then
+    echo "❌ Go is required but not found"
+    exit 1
+fi
+
+# Update via go install
+go install github.com/go-task/task/v3/cmd/task@latest
+
+echo "✅ Task updated successfully"
+task --version
+'''
+version = "task --version"
+version_regex = '(\d+\.\d+\.\d+)'
+hint = "Task - A task runner / build tool that aims to be simpler and easier to use than GNU Make. Uses YAML for task definitions. Alternative to Make, just, and other build tools."
+lfmf_category = "task"
+
+[b00t.learn]
+topic = "task"
+auto_digest = false
+
+[[b00t.usage]]
+description = "List available tasks"
+command = "task --list"
+
+[[b00t.usage]]
+description = "Run a specific task"
+command = "task <task-name>"
+
+[[b00t.usage]]
+description = "Initialize Taskfile in current directory"
+command = "task --init"
+
+[[b00t.usage]]
+description = "Run task with verbose output"
+command = "task --verbose <task-name>"
+
+[[b00t.usage]]
+description = "Show task summary"
+command = "task --summary <task-name>"
+
+[[b00t.usage]]
+description = "Run all tasks (if default task exists)"
+command = "task"

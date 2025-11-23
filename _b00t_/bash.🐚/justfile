@@ -1,0 +1,147 @@
+# Bash 🐚 Modern Shell Environment
+# b00t gospel: use modern CLI tools, timeout everything, justfile all the things
+# 🤓: fd > find, rg > grep, bat > cat, just > make
+
+# Install all essential modern CLI tools
+install: install-core install-moreutils install-modern-tools
+    @echo "✅ Bash 🐚 environment complete"
+
+# Core essential tools (minimal viable environment)
+install-core:
+    #!/bin/bash
+    echo "📦 Installing core CLI tools..."
+    if command -v apt-get >/dev/null 2>&1; then
+        sudo apt-get update
+        sudo apt-get install -y \
+            fd-find \
+            ripgrep \
+            bat \
+            fzf \
+            jq \
+            tree \
+            curl \
+            wget \
+            bc
+        # fd-find is named fdfind on Ubuntu
+        if [ ! -e ~/.local/bin/fd ] && [ -e /usr/bin/fdfind ]; then
+            mkdir -p ~/.local/bin
+            ln -sf /usr/bin/fdfind ~/.local/bin/fd
+        fi
+        # bat is named batcat on Ubuntu
+        if [ ! -e ~/.local/bin/bat ] && [ -e /usr/bin/batcat ]; then
+            mkdir -p ~/.local/bin
+            ln -sf /usr/bin/batcat ~/.local/bin/bat
+        fi
+    else
+        echo "⚠️  Non-apt system detected, install manually:"
+        echo "  fd, ripgrep, bat, fzf, jq, tree"
+    fi
+    echo "✅ Core tools installed"
+
+# Install moreutils (chronic, sponge, ts, vipe, etc.)
+install-moreutils:
+    #!/bin/bash
+    if command -v chronic >/dev/null 2>&1; then
+        echo "✅ moreutils already installed"
+    else
+        echo "📦 Installing moreutils..."
+        sudo apt-get install -y moreutils
+        echo "✅ moreutils installed (chronic, sponge, ts, vipe, ifne, pee)"
+    fi
+
+# Install modern replacements and enhancements
+install-modern-tools:
+    #!/bin/bash
+    echo "📦 Installing modern CLI enhancements..."
+    # exa (modern ls)
+    if ! command -v exa >/dev/null 2>&1; then
+        sudo apt-get install -y exa || cargo install exa
+    fi
+    # just (command runner)
+    if ! command -v just >/dev/null 2>&1; then
+        curl --proto '=https' --tlsv1.2 -sSf https://just.systems/install.sh | bash -s -- --to ~/.local/bin
+    fi
+    # direnv (auto-load .envrc)
+    if ! command -v direnv >/dev/null 2>&1; then
+        curl -sfL https://direnv.net/install.sh | bash
+    fi
+    # yq (YAML processor)
+    if ! command -v yq >/dev/null 2>&1; then
+        wget https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 -O ~/.local/bin/yq
+        chmod +x ~/.local/bin/yq
+    fi
+    # entr (run commands on file changes)
+    if ! command -v entr >/dev/null 2>&1; then
+        sudo apt-get install -y entr
+    fi
+    echo "✅ Modern tools installed"
+
+# Install network tools (socat, httpie)
+install-network:
+    #!/bin/bash
+    echo "📦 Installing network tools..."
+    sudo apt-get install -y socat httpie nmap
+    echo "✅ Network tools installed"
+
+# Verify installation
+verify:
+    @echo "🔍 Verifying bash environment..."
+    @echo "Core Tools:"
+    @command -v fd >/dev/null 2>&1 && echo "  ✅ fd" || echo "  ❌ fd"
+    @command -v rg >/dev/null 2>&1 && echo "  ✅ rg" || echo "  ❌ rg"
+    @command -v bat >/dev/null 2>&1 && echo "  ✅ bat" || echo "  ❌ bat"
+    @command -v fzf >/dev/null 2>&1 && echo "  ✅ fzf" || echo "  ❌ fzf"
+    @command -v jq >/dev/null 2>&1 && echo "  ✅ jq" || echo "  ❌ jq"
+    @echo ""
+    @echo "Moreutils:"
+    @command -v chronic >/dev/null 2>&1 && echo "  ✅ chronic" || echo "  ❌ chronic"
+    @command -v sponge >/dev/null 2>&1 && echo "  ✅ sponge" || echo "  ❌ sponge"
+    @command -v ts >/dev/null 2>&1 && echo "  ✅ ts" || echo "  ❌ ts"
+    @command -v vipe >/dev/null 2>&1 && echo "  ✅ vipe" || echo "  ❌ vipe"
+    @command -v ifne >/dev/null 2>&1 && echo "  ✅ ifne" || echo "  ❌ ifne"
+    @echo ""
+    @echo "Modern Replacements:"
+    @command -v just >/dev/null 2>&1 && echo "  ✅ just" || echo "  ❌ just"
+    @command -v direnv >/dev/null 2>&1 && echo "  ✅ direnv" || echo "  ❌ direnv"
+    @command -v yq >/dev/null 2>&1 && echo "  ✅ yq" || echo "  ❌ yq"
+    @command -v entr >/dev/null 2>&1 && echo "  ✅ entr" || echo "  ❌ entr"
+
+# Show examples of modern tool usage
+examples:
+    @echo "🎓 Modern Bash Tool Examples:"
+    @echo ""
+    @echo "Find files (fd):"
+    @echo "  fd --type f '\.rs$'  # Find all Rust files"
+    @echo "  fd --type d config   # Find config directories"
+    @echo ""
+    @echo "Search content (rg):"
+    @echo "  rg 'TODO'            # Find all TODOs"
+    @echo "  rg -i 'error' --type rust  # Case-insensitive in Rust files"
+    @echo ""
+    @echo "View files (bat):"
+    @echo "  bat README.md        # Cat with syntax highlighting"
+    @echo ""
+    @echo "Fuzzy find (fzf):"
+    @echo "  git log --oneline | fzf  # Interactive commit picker"
+    @echo ""
+    @echo "Moreutils patterns:"
+    @echo "  chronic make test    # Quiet unless fails"
+    @echo "  cat log | ts         # Add timestamps"
+    @echo "  data.json | vipe | jq .  # Edit in pipeline"
+    @echo "  cat file | sponge file   # Safe in-place edit"
+    @echo "  grep TODO | ifne notify  # Only if has output"
+    @echo ""
+    @echo "Live reload:"
+    @echo "  ls *.rs | entr -r cargo test  # Run tests on change"
+
+# Show performance comparison
+benchmark:
+    @echo "⚡ Performance Comparison (on large repo):"
+    @echo ""
+    @echo "find vs fd:"
+    @time find . -name "*.rs" >/dev/null 2>&1 || true
+    @time fd '\.rs$' >/dev/null 2>&1 || true
+    @echo ""
+    @echo "grep vs rg:"
+    @time grep -r "TODO" . >/dev/null 2>&1 || true
+    @time rg "TODO" >/dev/null 2>&1 || true

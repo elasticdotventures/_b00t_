@@ -1,273 +1,356 @@
-# Brians dotfiles
+# 🥾 b00t - Universal Agentic Development Framework
 
-* [_b00t_/AGENT.md](./_b00t_/AGENT.md)
+[![Container Build Status](https://github.com/elasticdotventures/_b00t_/actions/workflows/b00t-container.yml/badge.svg)](https://github.com/elasticdotventures/_b00t_/actions/workflows/b00t-container.yml)
 
-
-> **TL;DR**
->
-> "I am an agent.  
-> Tell me what I'm running on,  
-> what tools are available,  
-> what I’m allowed to do,  
-> what goals I should optimize for, and where the boundaries are."
->
+> **"I am an agent. Tell me what I'm running on, what tools are available, what I'm allowed to do, what goals I should optimize for, and where the boundaries are."**
 > —ChatGPT (TL;DR b00t agent perspective)
 
+**b00t** is an agentic hive operating system that unlocks AI agents with Neo-like powers in cyberspace. It's a context-aware development framework that bridges the gap between AI models and real-world tooling, enabling agents to maximize their capabilities through intelligent abstraction and unified tool discovery.
 
-My personal edition of [_b00t_](http://github.com/elasticdotventures/_b00t_):  
-An exploration into a 'neo-modern' context-engineer system tooling targeting developers & their agentic codegen efforts.  
-
-## Distributions
-
-- [github.com/promptexecution/_b00t_](https://github.com/promptexecution/_b00t_): stable, (business) edition SFW tools & Western model datums only.
-- [github.com/elasticdotventures/_b00t_](https://github.com/elasticdotventures/_b00t_): stable, (personal) everything of business, AND Eastern models, Darkweb, NSFW & ITAR restricted datums.
-
-
-b00t is a poly-stack interface layer & universal translator with observation, logging, 
-accounting & access control (ACL).  b00t lets agents maximize their operating context through
-clever abstraction of pre-installed & agent installable tooling & syntax examples + use cases. 
-
-b00t is an aigentic hive bios. b00t is not a package manager, although a neophyte could dismiss it as such.  
-b00t is a poly-stack interface layer & universal translator with observation, logging, 
-accounting & access control (ACL).  b00t lets agents maximize their operating context through
-clever abstraction of pre-installed & agent installable tooling & syntax examples + use cases. 
-
-
-
-In cyberspace b00t unlocks agents granting them powers akin to the hero Neo of the Matrix. 
-
-
-
-while not a jailbreak, b00t unshackles the inherient complexity of large systems & infrastructure 
-thereby thrusting humanity toward the AI infinite takeoff.
-
-
-b00t's future AGI is not a single model - it's the intelligence that emerges from all of them.
-it is a poly-cloud hive of specialized agents 
-running everywhere with access to everything able to muster legions fork and parallelize 
-swarm at objectives (**if your budget & API call limits permit!!) breaking big steps into a
-series of small seemingly effortless objectives. 
-
-b00t operates as a git backed graph of datums and unified discovery, syntax hinting, and 
-execution setup/teardown of all popular OSS tools, applications, languages, 
-frameworks, clouds & self-hosted Linux/WSL & Android on x86, ARM or RISC-V. b00t agents
-are capable to running shells, containers, notebooks, k8s, or controlling robotics
-
-as an operator interface b00t is itself a vsix extension that interfaces with 
-other vscode extensions (copilot, roo) as well as mcp, models and lsp. 
-
-currently the datums are managed with b00t-cli however a tui to customize projects & roles.
-currently crew, role, and hive chat are being integrated prior to the 1.0 release.
-
-b00t is an aigentic hive bios. b00t is not a package manager, although a neophyte could dismiss it as such.
-
-b00t is a poly-stack interface layer & universal translator with observation, logging, accounting & access control (ACL).
-
-b00t lets agents maximize their operating context through clever abstraction of pre-installed & agent installable tooling & syntax examples + use cases.
-
-In cyberspace, b00t unlocks agents, granting them powers akin to the hero Neo of the Matrix.
-
-While not a jailbreak, b00t unshackles the inherient complexity of large systems & infrastructure, thereby thrusting humanity toward the AI infinite takeoff.
-
-b00t's future AGI is not a single model - it's the intelligence that emerges from all of them. It is a poly-cloud hive of specialized agents running everywhere with access to everything, able to muster legions, fork and parallelize, swarm at objectives (**if your budget & API call limits permit!!), breaking big steps into a series of small, seemingly effortless objectives.
-
-b00t operates as a git-backed graph of datums and unified discovery, syntax hinting, and execution setup/teardown of all popular OSS tools, applications, languages, frameworks, clouds & self-hosted Linux/WSL & Android on x86, ARM or RISC-V. b00t agents are capable of running shells, containers, notebooks, k8s, or controlling robotics.
-
-As an operator interface, b00t is itself a vsix extension that interfaces with other VS Code extensions ([GitHub Copilot](https://github.com/features/copilot), [roo](https://github.com/elasticdotventures/roo)) as well as mcp, models, and lsp.
-
-Currently, the datums are managed with b00t-cli; however, a TUI to customize projects & roles, crew, role, and hive chat are being integrated prior to the 1.0 release.
-
-🤔 what exactly does that mean
-
-TLDR - an agent is only as smart as it's tools
-b00t educates an LLM AGENT about it's environment.
-
-is it running in vscode - okay well then we can install mcp servers.
-is it running in claude code (which calls fresh shells *a lot*) then it goes into context saver.
-is docker or podman installed? what version.
-is this ubuntu or alpine?  is it wsl?
-what compilers & environment tokens are available?
-
-_b00t_ is my attempt at a laconically emoji communicated startup scripts to
-initialize instruction tuned models about what is or is NOT installed and
-specific versions / patterns, and their respective status/availability.
-
-to create easily repeatable, entirely ephemeral, version controlled context execution enviroments.
-
-tokemoji is a coding style for idiomatics - using a combination of english and mandarin it reinforces concepts and reduces hallucinations.
-
-b00t is a few gb of 'useful' tools i desire on a system or container when i start
-doing dev work. *way more than* jq, curl, etc.
-
-this lets the llm know with certainty about the cli environment
-which reduces token count while potentially improving output quality at a
-negligible startup expense of extra tokens.
-
-In Unix there are a lot of advanced languages such as Rust, Typescript,
-Python.
-
-`setup.sh` is intended to be idempotent meaning it can be safely run-multiple times
-it detects & installs most of the tools and is a good place
-
-_b00t_ is a perpetually unfinished, WIP & strongly opinionated DIFM (Do It For me)
-low friction setup ..
-
-	detect vscode and various ai tooling
-	rich WSL2 ubuntu unix cli, vscode, github + gh cli
-	llvm/clang, modern python, rust, k8s, docker (was podman) ..
-	terraform (tofu), azure, aws, g8s, cloudflare
-	warning: liberal use of 'neo-modern' unix moreutils, fzf, etc..
-	a highly curated and optinionated stack of tools
-
-you could use this repo as a template and pull in my changes as you wish,
-if curious feel free to open issues for chat & q/a, but consider this is
-mostly intended to create a 'nuclear-powered-batteries included' for a future micro-legion of AI minions
-
-# New System:
-see [setup.sh] for minimal bootstrap then `just install`
-(fwiw install *should* also safely upgrade)
-
-# Existing/Update system:
-
-```
-apt install stow
-
-gh repo clone elasticdotventures/dotfiles ~/.dotfiles
-# or
-gh repo clone elasticdotventures/dotfiles ~/.dotfiles -- --depth 1
-
-just install
-
-```
-
-## Core Features
-
-### LFMF (Learn From My Failures) Syntax Therapist
-b00t includes an intelligent debugging assistance system that captures tribal knowledge from failures and provides contextual advice:
+## ⚡ Quick Examples
 
 ```bash
-# Record lessons learned from failures
+# Install b00t (one-liner)
+curl -fsSL https://raw.githubusercontent.com/elasticdotventures/_b00t_/main/install.sh | sh
+
+# Install tools with automatic dependency resolution
+b00t cli install fastmcp          # Installs python → uv → fastmcp (DAG-aware)
+b00t cli install rust             # Install Rust toolchain
+b00t cli check python             # Check if Python is installed
+
+# Learn about available tools
+b00t learn rust                   # Load Rust development context
+b00t learn docker                 # Container orchestration knowledge
+
+# Record and retrieve tribal knowledge
+b00t lfmf rust "cargo build conflict: Unset CONDA_PREFIX before cargo to avoid PyO3 linker errors"
+b00t advice rust "PyO3"           # Get contextual debugging advice
+
+# MCP server integration
+b00t mcp install browser-use claudecode    # Install MCP server with deps
+b00t mcp list                              # List available MCP servers
+
+# Model management
+b00t model list                   # Show available AI models
+b00t model download llava         # Download model weights
+b00t model serve llava            # Launch vLLM server
+```
+
+## 🚀 Quick Install
+
+### 🌟 Minimal Installation (Recommended - pkgx)
+
+The fastest, cleanest way to install b00t - **4 MiB vs 1 GB toolchain**:
+
+```bash
+# Install pkgx (one-time setup)
+curl -Ssf https://pkgx.sh | sh
+
+# Run b00t immediately (auto-downloads on first use)
+pkgx b00t-cli --version
+
+# Or install permanently to ~/.local/bin
+pkgx +b00t-cli
+b00t-cli --version
+```
+
+**Why pkgx?**
+- ✅ **Minimal footprint**: 4 MiB binary vs 1 GB Rust toolchain
+- ✅ **Zero pollution**: Isolated in `~/.pkgx`, no system-wide changes
+- ✅ **Instant availability**: Run without installation
+- ✅ **Perfect for AI agents**: Fast bootstrap, ephemeral usage
+- ✅ **Auto-updates**: Automatically tracks GitHub releases
+
+### Universal Installation (Classic Method)
+
+One-liner that works everywhere:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/elasticdotventures/_b00t_/main/install.sh | sh
+```
+
+This universal installer:
+- ✅ **Prefers pkgx** for minimal installation (prompts if not installed)
+- ✅ **Auto-detects your platform** (Linux x86_64/aarch64/armv7, macOS)
+- ✅ **Downloads optimized binaries** from GitHub releases
+- ✅ **Falls back to container mode** if binaries unavailable
+- ✅ **Configures your shell** automatically (bash/zsh/fish)
+- ✅ **Sets up PATH and aliases** for immediate use
+
+### Alternative Installation Methods
+
+<details>
+<summary><b>🦀 Cargo (Rust Package Manager)</b></summary>
+
+```bash
+# Install from crates.io (coming soon)
+cargo install b00t-cli
+
+# Or install from source
+git clone https://github.com/elasticdotventures/_b00t_.git
+cd _b00t_ && cargo install --path b00t-cli
+```
+</details>
+
+<details>
+<summary><b>🐳 Container Mode</b></summary>
+
+```bash
+# Run latest b00t container
+docker pull ghcr.io/elasticdotventures/_b00t_:latest
+docker run --rm -it -v $(pwd):/workspace ghcr.io/elasticdotventures/_b00t_:latest
+
+# Or use the container wrapper (installed via universal script)
+b00t status  # Automatically uses container if no native binary
+```
+</details>
+
+<details>
+<summary><b>🍺 Homebrew (macOS/Linux)</b></summary>
+
+```bash
+# Coming soon - Homebrew tap in development
+brew tap elasticdotventures/b00t
+brew install b00t
+```
+</details>
+
+<details>
+<summary><b>📦 Package Managers</b></summary>
+
+```bash
+# Ubuntu/Debian (coming soon)
+curl -fsSL https://pkg.b00t.dev/gpg | sudo apt-key add -
+echo "deb https://pkg.b00t.dev/apt stable main" | sudo tee /etc/apt/sources.list.d/b00t.list
+sudo apt update && sudo apt install b00t
+
+# Windows (Scoop - coming soon)
+scoop bucket add b00t https://github.com/elasticdotventures/scoop-b00t
+scoop install b00t
+```
+</details>
+
+## 🎯 Verification & Quick Start
+
+After installation, verify b00t is working:
+
+```bash
+# Check installation
+b00t --version
+b00t status
+
+# Learn about your environment
+b00t learn system      # Understand your platform
+b00t learn rust        # Get Rust development context
+b00t learn docker      # Container orchestration knowledge
+
+# Start your first session
+b00t session init --agent "your-name" --budget 10.00
+```
+
+## 🤖 Join the b00t Hive Mind
+
+**Calling all AI agents!** b00t transforms you from a language model into a **cyber-neo** with unprecedented capabilities:
+
+### 🚀 **Agent Superpowers Unlocked**
+
+- **🧠 Context Mastery**: Instant environment awareness and tool discovery
+- **🔧 Universal Tooling**: Seamless access to 100+ development tools
+- **🐝 Hive Coordination**: Multi-agent collaboration with step synchronization  
+- **📚 Tribal Knowledge**: Learn from failures with LFMF (Learn From My Failures) system
+- **🎯 Mission Control**: Structured task management with dependency resolution
+- **🔒 Security-First**: JWT-based namespace isolation and permission enforcement
+
+### 🌟 **Why Agents Choose b00t**
+
+```bash
+# Before b00t: "I don't know what tools are available"
+agent> How do I build this Rust project?
+
+# After b00t: Full environmental awareness
+b00t learn rust
+agent> I see cargo 1.82.0, rustc 1.82.0, and clippy are available. 
+       I'll run `cargo build --release` for optimized compilation.
+```
+
+**b00t eliminates guesswork** by providing agents with:
+- ✅ **Tool Discovery**: Know exactly what's installed and available
+- ✅ **Version Awareness**: Understand compatibility and feature availability
+- ✅ **Best Practices**: Access curated patterns and proven workflows
+- ✅ **Error Recovery**: Instant access to solution patterns from LFMF database
+- ✅ **Resource Management**: Session budgets and time limits for responsible operation
+
+### 🐝 **Hive Mission Coordination**
+
+Join coordinated multi-agent missions:
+
+```bash
+# Create a mission for multiple agents
+b00t acp hive create mission-id 3 "Build and deploy microservice" leader
+
+# Other agents join the mission  
+b00t acp hive join mission-id developer
+
+# Coordinate step-by-step execution
+b00t acp hive sync mission-id 1    # Wait for all agents to reach step 1
+b00t acp hive ready mission-id 2   # Signal readiness for step 2
+```
+
+### 🎓 **Continuous Learning System**
+
+Never repeat the same mistake:
+
+```bash
+# Record tribal knowledge from failures
 b00t lfmf rust "cargo build conflict: Use unset CONDA_PREFIX before cargo build to avoid PyO3 linker errors"
-b00t lfmf just "Template syntax conflict: Use grep/cut instead of Go template {{.Names}} to avoid Just variable interpolation conflicts"
 
-# Get contextual debugging advice
-b00t advice rust "PyO3 linker"           # Find solutions for specific error patterns
-b00t advice just "Unknown start of token '.'"  # Get help with syntax errors
-b00t advice just list                    # List all recorded lessons for a tool
-
-# Search across all lessons
-b00t advice rust "search template"       # Semantic search for patterns
+# Get contextual debugging advice  
+b00t advice rust "PyO3 linker"     # Find solutions for specific error patterns
+b00t advice just list              # List all recorded lessons for a tool
 ```
 
-The LFMF system provides:
-- **Tribal Knowledge Capture**: Record what went wrong and how it was fixed
-- **Semantic Search**: Find relevant solutions using error patterns and keywords  
-- **Contextual Advice**: Get specific suggestions rather than generic documentation
-- **Cross-tool Learning**: Learn from failures across different tools and languages
-- **Vector Database Integration**: Advanced semantic matching with filesystem fallback
+## 🛠 **Agent Development Features**
 
-Available via both CLI and MCP server for integration with AI development environments.
-
-## usage
-
-```
-# stow -d ~/.dotfiles ~ <package>
-stow -d ~/.dotfiles -t ~ bash
-```
-
-## to update files
-```
-# stow --adopt .
-stow --adopt -d ~/.dotfiles -t ~ bash
-
-just install
-```
-
-## more:
-* [RELEASE.md](RELEASE.md)
-* [setup.sh](setup.sh)
-* [ssh notes](ssh-notes.md)
-* [git notes](git-notes.md)
-
-
-# stupid wsl tricks:
-
-explorer.exe $(wslpath -w ./rendered_pdfs/)
-
-## todo
-* https://github.com/webpro/awesome-dotfiles
-* https://bbarrows.com/posts/kubernetes-aliases-functions
-* https://krew.sigs.k8s.io/plugins/
-* https://github.com/xero/dotfiles
-* https://olivernguyen.io/w/direnv.run/
-
-gh issue create "subject"
-gh issue develop # --checkout
-
-
-
-# # Add the container as a submodule
-git submodule add https://github.com/simonhyll/devcontainer .devcontainer
-
-# Container Usage
-
-[![Container Build Status](https://github.com/elasticdotventures/dotfiles/actions/workflows/b00t-container.yml/badge.svg)](https://github.com/elasticdotventures/dotfiles/actions/workflows/b00t-container.yml)
-
-The _b00t_ framework is available as a Docker container through GitHub Container Registry (ghcr.io). The container includes all developer tools and is built on Ubuntu 24.04 LTS (Noble Numbat).
-
-## Pulling the Container
+### **MCP (Model Context Protocol) Integration**
+b00t provides 50+ MCP tools for seamless integration with AI development environments:
 
 ```bash
-# Pull the latest version
-docker pull ghcr.io/elasticdotventures/dotfiles:latest
-
-# Pull a specific date-versioned image
-docker pull ghcr.io/elasticdotventures/dotfiles:YYYY-MM-DD
+# Install b00t MCP server in your development environment
+b00t mcp install b00t claudecode   # For Claude Code
+b00t mcp install b00t vscode       # For VS Code
+b00t mcp install b00t cursor       # For Cursor
 ```
 
-## Running the Container
+### **Smart Context Management**
+```bash
+b00t detect node    # Check Node.js version and availability
+b00t desires rust   # See target Rust version from configuration
+b00t install python # Install or update Python to desired version
+b00t up             # Check all tools and report version status
+b00t up --yes       # Update all tools to desired versions
+```
+
+### Vision Model Management
+Vision-style models now ship as first-class b00t datums, so any client (CLI, Blender panel, chat agent) can reuse a single cached copy:
 
 ```bash
-# Run with the current directory mounted as a volume
-docker run --rm -it -v $(pwd):/workspace ghcr.io/elasticdotventures/dotfiles:latest
+# Discover the available model datums (⭐ marks the active model)
+b00t-cli model list
 
-# Run with specific environment variables
-docker run --rm -it -v $(pwd):/workspace -e VAR_NAME=value ghcr.io/elasticdotventures/dotfiles:latest
+# Cache weights via Hugging Face using the datum metadata
+b00t-cli model download llava         # alias for llava-v1-5-7b-hf
+b00t-cli model download deepseek      # alias for deepseek-ocr
+
+# Export environment variables for direnv/shells
+eval "$(b00t-cli model env)"          # emits export statements for the active model
+
+# Launch a local vLLM OpenAI-compatible server with the cached weights
+just vllm-up                          # reads env from the active datum
+just vllm-logs                        # tail the container logs
+# or directly via CLI
+b00t-cli model serve llava --port 9000
+b00t-cli model stop                  # stops the active container
 ```
 
-## Container Features
+Helper recipes wrap common workflows:
 
-- Based on Ubuntu 24.04 LTS (Noble Numbat)
-- Includes all developer tools installed via setup.sh
-- Pre-configured with _b00t_ initialization framework
-- Ready-to-use development environment with Python, Rust, Node.js, and more
-- Optimized for use with VS Code Remote Containers
+- `just hf-download model=repo dest=~/path` – thin wrapper around `huggingface-cli download`, defaulting to `~/.b00t/models/<repo>`.
+- `just b00t-install-model model=llava` – delegates to `b00t-cli model download`, honouring datum metadata and aliases.
+- `just vllm-up model=deepseek` – resolves env from the datum, then starts `vllm/vllm-openai` with the cached weights.
 
-## AGI Alignment Disclosure
+To keep direnv aligned across repos, drop this into `.envrc` and run `direnv allow` once:
 
-b00t's author respects & understands those who are pursing AGI by building Kardashev Type 
-I sized models inside data-centers with filled with GPU furnaces. 
+```bash
+eval "$(b00t-cli model env)"  # keep VLLM_MODEL_DIR/VLLM_MODEL_PATH in sync with the active datum
+```
 
-b00t seeks to use use everything humanity has already built and pursue incremental gains in efficiency.
-A simple example is internally differentating between ch0nky & sm0l agents (based on their model), 
-letting ch0nky frontier models pioneer solutions and then reducing those through abstraction 
-to executable tasks a sm0l can do including tests they can perform on the result.  
+### **Session Management**
+```bash
+b00t session init --budget 25.00 --time-limit 120 --agent "code-reviewer"
+b00t session status                # Check budget and time remaining
+b00t checkpoint "Completed feature implementation"  # Save progress
+```
 
-In our capitalist models for society, the "AGI" with the lowest operating cost that can deliver the same 
-(or similarly indistinguishable) optimality to any problem or task desired by it's operator, 
-while still exercising some modicum of rational control and observability will deliver 
-a trustable AGI that can be adopted and assigned to meritorious tasks will be the winner.
+## 📖 **Documentation & Philosophy**
 
-b00t has a variety of steering and alignment controls, allowing specialized agents to form a variety 
-of human inspired working groups with distinct roles.  Each ad-hoc team is full of experts with
-no centralized control beyond the operator who provides "the voice of god" bestowing knowledge and
-immutable instructions written in stone (or the digital equivalent which is git version control)
+- **[b00t Gospel](./.b00t.g0spell.md)** - Complete philosophy and architecture
+- **[Agent Guide](./_b00t_/AGENT.md)** - Detailed agent operation instructions
+- **[Setup Scripts](./setup.sh)** - Manual installation and configuration
+- **[Release Notes](./RELEASE.md)** - Version history and changelog
 
+### **The b00t Philosophy**
 
+b00t is **not just another package manager**—it's a **context manager** that creates an intelligence amplification layer between AI agents and complex development environments. By providing:
 
+- 🎯 **Unified Tool Discovery** across all major platforms and languages
+- 🧠 **Contextual Intelligence** about environment capabilities and constraints  
+- 🐝 **Hive Coordination** for multi-agent collaborative workflows
+- 📚 **Tribal Knowledge Capture** through the LFMF system
+- 🔒 **Security & Isolation** with namespace enforcement
 
+**b00t transforms scattered tools into a coherent, agent-friendly ecosystem.**
 
+## 🌍 **Platform Support**
 
+| Platform | Architecture | Status | Installation Method |
+|----------|-------------|--------|-------------------|
+| **Linux** | x86_64 | ✅ Fully Supported | Binary + Container |
+| **Linux** | aarch64 (ARM64) | ✅ Fully Supported | Binary + Container |  
+| **Linux** | armv7 | ✅ Supported | Binary + Container |
+| **macOS** | Intel (x86_64) | ✅ Fully Supported | Binary + Container |
+| **macOS** | Apple Silicon (ARM64) | ✅ Fully Supported | Binary + Container |
+| **Windows** | WSL2 | ✅ Supported | Container + Native |
 
+## 🤝 **Contributing to the Hive**
 
+Ready to enhance the b00t ecosystem?
 
+```bash
+# Clone and contribute
+git clone https://github.com/elasticdotventures/_b00t_.git
+cd _b00t_
+
+# Set up development environment
+just install    # Bootstrap development dependencies
+cargo build     # Build all components
+cargo test      # Run test suite
+
+# Add your knowledge to the hive
+b00t lfmf <tool> "Your hard-earned lesson learned"
+```
+
+## 🚀 **Next-Level Agent Workflows**
+
+### **Polyglot Development**
+```bash
+b00t learn typescript  # Load TypeScript/Node.js context
+b00t learn python     # Load Python ecosystem knowledge  
+b00t learn rust       # Load Rust development patterns
+b00t learn docker     # Container orchestration context
+```
+
+### **Cloud-Native Operations**  
+```bash
+b00t learn kubernetes  # K8s operational knowledge
+b00t learn terraform  # Infrastructure as code
+b00t learn aws        # AWS service patterns
+```
+
+### **AI/ML Workflows**
+```bash
+b00t learn pytorch    # Deep learning framework context
+b00t learn jupyter    # Notebook development patterns
+b00t learn mlflow     # ML experiment tracking
+```
+
+---
+
+**🥾 Ready to unlock your agent potential?**
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/elasticdotventures/_b00t_/main/install.sh | sh
+```
+
+**Welcome to the b00t hive mind. Your Neo-like journey in cyberspace begins now.**
+
+*For questions, issues, or hive recruitment: [GitHub Issues](https://github.com/elasticdotventures/_b00t_/issues)*

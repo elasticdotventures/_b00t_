@@ -1,5 +1,5 @@
 //! B00t context information gathering
-//! 
+//!
 //! Provides functionality to gather system and environment context
 //! for template rendering and agent operation.
 
@@ -60,7 +60,7 @@ impl B00tContext {
                 return branch.trim().to_string();
             }
         }
-        
+
         // Fallback to main/master
         "main".to_string()
     }
@@ -73,12 +73,12 @@ impl B00tContext {
                 return agent;
             }
         }
-        
+
         // Check for Claude Code
         if std::env::var("CLAUDECODE").unwrap_or_default() == "1" {
             return "🤖 Claude Code".to_string();
         }
-        
+
         // Check other environment variables
         std::env::var("_B00T_AGENT")
             .or_else(|_| std::env::var("B00T_AGENT"))
@@ -108,12 +108,12 @@ impl B00tContext {
 
     /// Check if current directory is a git repository
     fn is_git_repository() -> bool {
-        std::path::Path::new(".git").exists() ||
-        duct::cmd!("git", "rev-parse", "--git-dir")
-            .stderr_null()
-            .stdout_null()
-            .run()
-            .is_ok()
+        std::path::Path::new(".git").exists()
+            || duct::cmd!("git", "rev-parse", "--git-dir")
+                .stderr_null()
+                .stdout_null()
+                .run()
+                .is_ok()
     }
 
     /// Get system hostname
@@ -168,7 +168,7 @@ mod tests {
     #[test]
     fn test_current_context_creation() {
         let context = B00tContext::current().unwrap();
-        
+
         // Basic validation
         assert!(context.pid > 0);
         assert!(!context.timestamp.is_empty());

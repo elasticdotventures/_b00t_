@@ -1,0 +1,132 @@
+[b00t]
+name = "virtfs"
+type = "stack"
+hint = "Virtual filesystem presenting b00t datums as Claude Code skills via FUSE"
+lfmf_category = "virtfs"
+
+[b00t.capabilities]
+fuse = true
+skill_generation = true
+agent_proxy = true
+live_reload = true
+
+[b00t.version]
+command = "b00t-cli mount status 2>/dev/null | grep -oP 'version: \\K[0-9.]+' || echo 'not installed'"
+regex = "(\\d+\\.\\d+\\.\\d+)"
+desires = "0.1.0"
+
+[b00t.install]
+command = """
+# Build b00t-cli with virtfs feature
+cd ~/.b00t/b00t-cli
+cargo build --release --features virtfs
+
+# Create mount point
+mkdir -p ~/.claude/b00t
+
+# Install systemd user service (Linux)
+if command -v systemctl &> /dev/null; then
+    mkdir -p ~/.config/systemd/user
+    cat > ~/.config/systemd/user/b00t-virtfs.service <<'EOF'
+[Unit]
+Description=b00t Virtual Filesystem
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=%h/.b00t/b00t-cli/target/release/b00t-cli mount --daemon
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target
+EOF
+    systemctl --user enable b00t-virtfs.service
+    systemctl --user start b00t-virtfs.service
+else
+    # macOS or other: run manually
+    ~/.b00t/b00t-cli/target/release/b00t-cli mount --daemon
+fi
+"""
+
+[b00t.update]
+command = """
+cd ~/.b00t/b00t-cli
+git pull origin main
+cargo build --release --features virtfs
+
+# Restart service
+if command -v systemctl &> /dev/null; then
+    systemctl --user restart b00t-virtfs.service
+else
+    # Unmount and remount
+    b00t-cli unmount
+    b00t-cli mount --daemon
+fi
+"""
+
+[b00t.env]
+B00T_MOUNT_POINT = "~/.claude/b00t"
+B00T_VIRTFS_CACHE_SIZE = "1000"
+B00T_VIRTFS_WORKERS = "4"
+
+[b00t.learn]
+topic = "virtfs"
+
+[[b00t.usage]]
+description = "Mount virtual filesystem"
+command = "b00t-cli mount --mount-point ~/.claude/b00t --daemon"
+
+[[b00t.usage]]
+description = "Check mount status"
+command = "b00t-cli mount status"
+output = """
+✅ b00t virtfs mounted at ~/.claude/b00t
+   Skills: 83
+   Agents: 15
+   Uptime: 2h 15m
+"""
+
+[[b00t.usage]]
+description = "List generated skills"
+command = "ls ~/.claude/b00t/skills/"
+output = """
+rust.md
+kubernetes.md
+embed-anything.md
+...
+"""
+
+[[b00t.usage]]
+description = "Read a skill (triggers generation)"
+command = "cat ~/.claude/b00t/skills/rust.md"
+
+[[b00t.usage]]
+description = "Unmount filesystem"
+command = "b00t-cli unmount"
+
+[[b00t.usage]]
+description = "Force refresh all skills"
+command = "b00t-cli mount refresh"
+
+[b00t.entangled]
+depends_on = ["b00t-cli", "fuser"]
+provides = ["claude-code-skills", "agent-proxies"]
+integrates_with = ["b00t-mcp", "rust-cargo-docs-rag-mcp"]
+
+[b00t.architecture]
+# TOGAF alignment
+adm_phase = ["A", "B", "C", "D"]  # All phases
+business_capabilities = ["datum-management", "skill-discovery", "agent-delegation"]
+application_components = ["b00t-cli", "virtfs-fuse", "skill-generator"]
+technology_components = ["fuse-rs", "rust-runtime", "filesystem"]
+
+# Nasdanika patterns
+assembly_pattern = "declarative"
+resource_provider = true
+observability = "filesystem-stats"
+
+[b00t.togaf]
+principle = "Single Source of Truth"
+pattern = "Declarative Assembly"
+governance = "Datum-driven generation"

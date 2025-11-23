@@ -12,10 +12,11 @@ blacklist = [
 whitelist = [
     # Whitelist all IPs between
     # 192.168.0.0 and 192.168.0.255
-    "192.168.0.0/24",
+    "192.168.0.0/16",
     # Whitelist a single IP
     "192.168.1.0/32",   
     "10.0.0.0/8",
+    "127.0.0.1/32"
 ]
 
 [users]

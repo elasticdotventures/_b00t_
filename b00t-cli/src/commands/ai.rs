@@ -61,7 +61,7 @@ mod tests {
         let add_cmd = AiCommands::Add {
             file: "test.toml".to_string(),
         };
-        
+
         assert!(add_cmd.execute("test").is_ok());
     }
 }

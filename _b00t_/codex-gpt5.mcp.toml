@@ -1,0 +1,11 @@
+[b00t]
+name = "codex-gpt5"
+type = "mcp"
+hint = "MCP server"
+
+[[b00t.mcp.stdio]]
+requires = []
+transport = "stdio"
+command = "codex"
+priority = 0
+args = ["mcp-server"]

@@ -1,0 +1,15 @@
+[layer]
+name = "build-essential"
+version = "bookworm"
+description = "GCC, make, and essential build tools"
+
+[provides]
+binaries = ["gcc", "g++", "make", "pkg-config"]
+libraries = []
+paths = ["/usr/bin"]
+
+[requires]
+layers = ["debian-base"]
+
+[runtime]
+layers = []

@@ -298,3 +298,13 @@ test_*.json
 mcp-probe/*
 mcp-probe
 */.claude/*
+
+# Claude Code frameworks (exclude all)
+.claude/
+
+# Proprietary/Licensed Content - DO NOT COMMIT
+# 🤓: TOGAF datasheets are property of The Open Group
+# Downloaded from publications.opengroup.org for local reference only
+**/.b00t/data/togaf/datasheets/
+**/togaf/datasheets/
+*.togaf-datasheet.*

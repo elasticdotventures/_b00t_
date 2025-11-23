@@ -1,0 +1,96 @@
+# b00t Bootstrap Report
+# Generated in Toon format (30-60% more token-efficient than JSON)
+
+[meta]
+timestamp = "2025-11-10T02:26:29.651759372+00:00"
+format = "toon"
+schema = "https://b00t.promptexecution.com/schemas/bootstrap-report/v0.1.0"
+
+[summary]
+all_required_met = true
+required_binaries_count = 4
+optional_binaries_count = 6
+missing_required = 0
+missing_optional = 0
+directories_created = 4
+directories_existed = 0
+directory_errors = 0
+
+# Required binaries (tabular format - very token-efficient)
+[[required_bins]]
+name = "git"
+found = true
+required_version = ">=2.30.0"
+installed_version = "2.34.1"
+meets_requirement = true
+path = "/usr/bin/git"
+
+name = "just"
+found = true
+required_version = ">=1.0.0"
+installed_version = "1.36.0"
+meets_requirement = true
+path = "/usr/local/bin/just"
+
+name = "fzf"
+found = true
+required_version = ">=0.40.0"
+installed_version = "unknown"
+meets_requirement = true
+path = "/usr/bin/fzf"
+
+name = "docker (via podman)"
+found = true
+required_version = ">=20.10.0"
+installed_version = "3.4.4"
+meets_requirement = true
+path = "/usr/local/bin/docker"
+
+# Optional binaries
+[[optional_bins]]
+name = "uv"
+found = true
+installed_version = "0.5.30"
+meets_requirement = true
+install_hint = "Python package manager (fast pip alternative)"
+
+name = "gh"
+found = true
+installed_version = "2.31.0"
+meets_requirement = true
+install_hint = "GitHub CLI for MCP integration"
+
+name = "rustc"
+found = true
+installed_version = "1.88.0"
+meets_requirement = true
+install_hint = "Rust compiler"
+
+name = "npm"
+found = true
+installed_version = "10.9.2"
+meets_requirement = true
+install_hint = "Package manager for MCP servers"
+
+name = "cargo"
+found = true
+installed_version = "1.88.0"
+meets_requirement = true
+install_hint = "Rust toolchain for building b00t-cli"
+
+name = "node"
+found = true
+installed_version = "22.15.0"
+meets_requirement = true
+install_hint = "Node.js for npm MCP servers"
+
+# Directories created during bootstrap
+[[directories_created]]
+path = "/home/brianh/.b00t/sessions"
+
+path = "/home/brianh/.b00t/secrets"
+
+path = "/home/brianh/.b00t/config"
+
+path = "/home/brianh/.b00t/logs"
+

@@ -69,3 +69,19 @@ mcp-test:
     b00t-cli mcp list
     echo "---"
     b00t-cli mcp list --json | jq '.servers[] | {name, command, hint}'
+
+# Install b00t-mcp to current directory's .mcp.json
+mcp-self-install:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    echo "🥾 Installing b00t-mcp to $(pwd)/.mcp.json"
+    b00t-cli --path ~/.dotfiles/_b00t_/_b00t_ mcp install b00t-mcp dotmcpjson
+    echo "✅ b00t-mcp installed to .mcp.json"
+
+# Install b00t-mcp with custom stdio command (e.g., docker, npx)
+mcp-self-install-with COMMAND:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    echo "🥾 Installing b00t-mcp to $(pwd)/.mcp.json with {{COMMAND}}"
+    b00t-cli --path ~/.dotfiles/_b00t_/_b00t_ mcp install b00t-mcp dotmcpjson --stdio-command {{COMMAND}}
+    echo "✅ b00t-mcp installed to .mcp.json"

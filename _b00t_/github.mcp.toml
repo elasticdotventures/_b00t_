@@ -2,10 +2,63 @@
 name = "github"
 type = "mcp"
 hint = "GitHub MCP server"
+lfmf_category = "github-mcp"
 
+[b00t.learn]
+topic = "github-mcp"
+auto_digest = true
+
+# 🤓: PREFERRED - Official github-mcp-server with toolsets support
+# Requires GITHUB_PERSONAL_ACCESS_TOKEN (use `gh auth token` to avoid storing PATs)
+# Use env.GITHUB_TOOLSETS to enable specific toolsets
 [[b00t.mcp.stdio]]
 priority = 0
+command = "npx"
+requires = ["node", "gh"]
+transport = "stdio"
+args = ["-y", "github-mcp-server"]
+
+# 🤓: RHAI validation script runs before MCP server starts
+# Validates/retrieves GITHUB_PERSONAL_ACCESS_TOKEN from gh CLI or env
+# Fails fast if credentials unavailable (prevents entire stack failure)
+pre_start = "github-auth-validate.rhai"
+
+[b00t.mcp.stdio.env]
+# 🤓: Use gh CLI to get token dynamically (avoids storing PAT as security vector)
+# In shell: export GITHUB_PERSONAL_ACCESS_TOKEN="$(gh auth token)"
+# GITHUB_PERSONAL_ACCESS_TOKEN = ""  # Set via environment or use gh auth token
+# 🤓: Enable specific toolsets: repos,issues,pull_requests,actions,code_security,experiments
+# Use "all" to enable everything, "default" for baseline (context,repos,issues,pull_requests,users)
+GITHUB_TOOLSETS = "issues,pull_requests,actions"
+
+# 🤓: FALLBACK - Archived @modelcontextprotocol/server-github (no toolsets support)
+[[b00t.mcp.stdio]]
+priority = 10
 command = "npx"
 requires = ["node"]
 transport = "stdio"
 args = ["-y", "@modelcontextprotocol/server-github"]
+
+[[b00t.usage]]
+description = "Run with gh CLI token (avoids storing PAT)"
+command = "GITHUB_PERSONAL_ACCESS_TOKEN=\"$(gh auth token)\" GITHUB_TOOLSETS=\"all\" npx -y github-mcp-server"
+
+[[b00t.usage]]
+description = "Enable specific toolsets (issues, PRs, actions)"
+command = "GITHUB_PERSONAL_ACCESS_TOKEN=\"$(gh auth token)\" GITHUB_TOOLSETS=\"issues,pull_requests,actions\" npx -y github-mcp-server"
+
+[[b00t.usage]]
+description = "Extend default toolsets"
+command = "GITHUB_PERSONAL_ACCESS_TOKEN=\"$(gh auth token)\" GITHUB_TOOLSETS=\"default,code_security,experiments\" npx -y github-mcp-server"
+
+[[b00t.usage]]
+description = "Run with docker (all toolsets, uses gh CLI token)"
+command = "docker run -i --rm -e GITHUB_PERSONAL_ACCESS_TOKEN=\"$(gh auth token)\" -e GITHUB_TOOLSETS=\"all\" ghcr.io/github/github-mcp-server"
+
+[[b00t.references]]
+name = "Official GitHub MCP Server"
+url = "https://github.com/github/github-mcp-server"
+
+[[b00t.references]]
+name = "MCP GitHub Documentation"
+url = "https://modelcontextprotocol.io/llms-full.txt"

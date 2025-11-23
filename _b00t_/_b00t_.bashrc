@@ -313,8 +313,8 @@ alias nowdate='date +"%d-%m-%Y"'
 # 🐙 git
 alias gitstatus='git -C . status --porcelain | grep "^.\w"'
 
-# 🐍 Python ve = create .venv, va = activate!
-alias ve='python3 -m venv ./venv'
+# 🐍 Python ve = create .venv with uv, va = activate!
+alias ve='UV_CACHE_DIR="${UV_CACHE_DIR:-$PWD/.uv-cache}" uv venv .venv'
 alias va='source ./venv/bin/activate'
 
 # use fzf to find a file and open it in vs code
@@ -328,6 +328,15 @@ fi
 
 # handy for generating dumps, etc..
 # $ script.sh >> foobar.`ymd`
+if ! command -v ymd >/dev/null 2>&1; then
+    ymd() { date +'%Y%m%d'; }
+fi
+if ! command -v ymd_hm >/dev/null 2>&1; then
+    ymd_hm() { date +'%Y%m%d.%H%M'; }
+fi
+if ! command -v ymd_hms >/dev/null 2>&1; then
+    ymd_hms() { date +'%Y%m%d.%H%M%S'; }
+fi
 alias yyyymmdd="date +'%Y%m%d'"
 alias ymd="date +'%Y%m%d'"
 alias ymd_hm="date +'%Y%m%d.%H%M'"
@@ -821,7 +830,7 @@ elif [ "$(rand0 10)" -gt 5 ] ; then
         /bin/rm -f $motdTmpFile
     fi
 
-    # part of motd
+# part of motd
 
     log_📢_记录 "lang: $LANG"
     log_📢_记录 "🥾📈 motd project stats, cleanup, tasks goes here. "

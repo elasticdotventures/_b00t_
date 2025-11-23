@@ -1,2 +1,5 @@
+env:
+	source ~/_b00t_/npm.🐳/env.sh
+
 install:
 	curl -fsSL https://bun.sh/install | bash

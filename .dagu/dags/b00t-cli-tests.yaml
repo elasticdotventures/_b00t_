@@ -1,0 +1,50 @@
+name: b00t-cli-tests
+description: Comprehensive tests for b00t-cli crate (Rust compilation and tests)
+
+env:
+  - PROJECT_ROOT: /home/brianh/.dotfiles
+  - CARGO_TERM_COLOR: always
+  - RUST_BACKTRACE: "1"
+
+steps:
+  - name: git-status
+    command: git status --short
+    dir: ${PROJECT_ROOT}
+    output: STDOUT
+
+  - name: cargo-check
+    command: cargo check --all-features
+    dir: ${PROJECT_ROOT}/b00t-cli
+    depends:
+      - git-status
+    output: STDOUT
+
+  - name: cargo-clippy
+    command: cargo clippy --all-features -- -D warnings
+    dir: ${PROJECT_ROOT}/b00t-cli
+    depends:
+      - cargo-check
+    output: STDOUT
+    continueOn:
+      failure: true
+
+  - name: cargo-test
+    command: cargo test --all-features
+    dir: ${PROJECT_ROOT}/b00t-cli
+    depends:
+      - cargo-check
+    output: STDOUT
+
+  - name: cargo-build-release
+    command: cargo build --release
+    dir: ${PROJECT_ROOT}/b00t-cli
+    depends:
+      - cargo-test
+    output: STDOUT
+
+  - name: verify-binary
+    command: ./target/release/b00t-cli --version
+    dir: ${PROJECT_ROOT}
+    depends:
+      - cargo-build-release
+    output: STDOUT

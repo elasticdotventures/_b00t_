@@ -1,0 +1,39 @@
+{
+  "name": "b00t",
+  "version": "0.1.0",
+  "description": "🥾 b00t - Extreme Programming Agent Framework (placeholder package)",
+  "main": "index.js",
+  "scripts": {
+    "start": "echo '🥾 b00t framework - visit https://github.com/elasticdotventures/dotfiles for full implementation'",
+    "test": "echo 'Tests will be implemented in the full b00t framework'"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/elasticdotventures/dotfiles.git",
+    "directory": "b00t-npm"
+  },
+  "keywords": [
+    "b00t",
+    "ai",
+    "agent",
+    "framework",
+    "extreme-programming",
+    "xp",
+    "rust",
+    "cli",
+    "promptexecution"
+  ],
+  "author": "Brian Horakh <brian@promptexecution.com>",
+  "license": "MIT",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "files": [
+    "index.js",
+    "README.md",
+    "LICENSE"
+  ]
+}

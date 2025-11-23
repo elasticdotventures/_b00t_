@@ -557,6 +557,8 @@ impl SessionMemory {
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct AgentContext {
     pub agent_name: String,
+    /// The functional role of the agent (e.g., "developer", "reviewer", "CI bot").
+    /// This describes the agent's purpose or responsibility, as opposed to `agent_name` which is a unique identifier.
     pub agent_role: Option<String>,
     pub session_id: String,
     pub session_duration: i64,

@@ -1,0 +1,23 @@
+# openscad
+
+    x1,y2
+    x2,y2
+OR
+    centroid
+    h*w
+    scale in three dimensions?
+        centroid $ORIGIN
+
+    attach centroid to face
+        place mate connector at centroid
+        place mate connector at face
+            align mate connectors
+        attach mate connectors
+
+extrude_height = 1.5mm  # case material thickness
+
+4' x 8' sheets
+
+12" inches / 696
+24" inches - 304.8
+

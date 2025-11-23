@@ -1,13 +1,13 @@
 use anyhow::Result;
 use axum::{
+    Router,
     extract::{Query, State},
     http::StatusCode,
     response::{Html, Json, Redirect},
     routing::{get, post},
-    Router,
 };
-use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
-use jsonwebtoken::{encode, EncodingKey, Header};
+use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
+use jsonwebtoken::{EncodingKey, Header, encode};
 use serde::{Deserialize, Serialize};
 use std::{
     collections::HashMap,
@@ -16,8 +16,8 @@ use std::{
 };
 use uuid::Uuid;
 
-use crate::github_auth::{GitHubAuthState, require_github_auth, github_login_url};
 use crate::acl::AclConfig;
+use crate::github_auth::{GitHubAuthState, github_login_url, require_github_auth};
 
 // Minimal OAuth configuration for MVP
 #[derive(Clone)]
@@ -43,7 +43,7 @@ impl Default for MinimalOAuthConfig {
 #[derive(Clone)]
 pub struct MinimalOAuthState {
     pub config: MinimalOAuthConfig,
-    pub sessions: Arc<RwLock<HashMap<String, String>>>, // session_id -> user_data  
+    pub sessions: Arc<RwLock<HashMap<String, String>>>, // session_id -> user_data
     pub github_auth: GitHubAuthState,
     pub acl_config: Option<AclConfig>,
 }
@@ -64,14 +64,16 @@ impl MinimalOAuthState {
     }
 
     fn should_bypass_oauth(&self) -> bool {
-        self.acl_config.as_ref()
+        self.acl_config
+            .as_ref()
             .and_then(|config| config.dev.as_ref())
             .and_then(|dev| dev.bypass_oauth)
             .unwrap_or(false)
     }
 
     fn get_local_user(&self) -> String {
-        self.acl_config.as_ref()
+        self.acl_config
+            .as_ref()
             .and_then(|config| config.dev.as_ref())
             .and_then(|dev| dev.local_user.as_ref())
             .cloned()
@@ -101,9 +103,8 @@ impl MinimalOAuthState {
 
         let header = Header::default();
         let key = EncodingKey::from_secret(&self.config.jwt_secret);
-        
-        encode(&header, &claims, &key)
-            .map_err(|e| anyhow::anyhow!("Failed to encode JWT: {}", e))
+
+        encode(&header, &claims, &key).map_err(|e| anyhow::anyhow!("Failed to encode JWT: {}", e))
     }
 }
 
@@ -139,10 +140,16 @@ pub struct ErrorResponseJson {
 // Minimal OAuth router
 pub fn minimal_oauth_router(state: MinimalOAuthState) -> Router {
     Router::new()
-        .route("/.well-known/oauth-authorization-server", get(discovery_handler))
+        .route(
+            "/.well-known/oauth-authorization-server",
+            get(discovery_handler),
+        )
         .route("/oauth/authorize", get(authorize_handler))
         .route("/oauth/token", post(token_handler))
-        .route("/oauth/consent", get(consent_form_handler).post(consent_post_handler))
+        .route(
+            "/oauth/consent",
+            get(consent_form_handler).post(consent_post_handler),
+        )
         .with_state(state)
 }
 
@@ -175,16 +182,24 @@ async fn authorize_handler(
         eprintln!("🚧 DEV MODE: Bypassing OAuth authentication");
         let oauth_session_id = Uuid::new_v4().to_string();
         let local_user = state.get_local_user();
-        let redirect_data = format!("{}|{}|dev:{}", 
-            req.redirect_uri, 
+        let redirect_data = format!(
+            "{}|{}|dev:{}",
+            req.redirect_uri,
             req.state.unwrap_or_default(),
             local_user
         );
-        
-        state.sessions.write().unwrap().insert(oauth_session_id.clone(), redirect_data);
-        
+
+        state
+            .sessions
+            .write()
+            .unwrap()
+            .insert(oauth_session_id.clone(), redirect_data);
+
         // Redirect to consent with bypass indication
-        return Ok(Redirect::to(&format!("/oauth/consent?session_id={}&dev_bypass=true", oauth_session_id)));
+        return Ok(Redirect::to(&format!(
+            "/oauth/consent?session_id={}&dev_bypass=true",
+            oauth_session_id
+        )));
     }
 
     // Check if user is authenticated via GitHub
@@ -193,20 +208,29 @@ async fn authorize_handler(
         Ok(_user) => {
             // User is authenticated, proceed with OAuth consent
             let oauth_session_id = Uuid::new_v4().to_string();
-            let redirect_data = format!("{}|{}|{}", 
-                req.redirect_uri, 
+            let redirect_data = format!(
+                "{}|{}|{}",
+                req.redirect_uri,
                 req.state.unwrap_or_default(),
                 session_id.unwrap_or(&"".to_string())
             );
-            
-            state.sessions.write().unwrap().insert(oauth_session_id.clone(), redirect_data);
-            
+
+            state
+                .sessions
+                .write()
+                .unwrap()
+                .insert(oauth_session_id.clone(), redirect_data);
+
             // Redirect to consent
-            Ok(Redirect::to(&format!("/oauth/consent?session_id={}", oauth_session_id)))
+            Ok(Redirect::to(&format!(
+                "/oauth/consent?session_id={}",
+                oauth_session_id
+            )))
         }
         Err(_) => {
             // User not authenticated, redirect to GitHub login
-            let return_url = format!("/oauth/authorize?client_id={}&redirect_uri={}&state={}&response_type=code",
+            let return_url = format!(
+                "/oauth/authorize?client_id={}&redirect_uri={}&state={}&response_type=code",
                 urlencoding::encode(&req.client_id),
                 urlencoding::encode(&req.redirect_uri),
                 urlencoding::encode(&req.state.unwrap_or_default())
@@ -218,19 +242,18 @@ async fn authorize_handler(
 }
 
 // Consent form
-async fn consent_form_handler(
-    Query(params): Query<HashMap<String, String>>,
-) -> Html<String> {
+async fn consent_form_handler(Query(params): Query<HashMap<String, String>>) -> Html<String> {
     let session_id = params.get("session_id").cloned().unwrap_or_default();
     let is_dev_bypass = params.get("dev_bypass").is_some();
-    
+
     let auth_status = if is_dev_bypass {
         "<p style=\"color: #ff9800;\">🚧 <strong>Development Mode</strong> - OAuth bypassed for local testing</p>"
     } else {
         "<p>Authenticated via GitHub OAuth</p>"
     };
-    
-    let html = format!(r#"
+
+    let html = format!(
+        r#"
 <!DOCTYPE html>
 <html>
 <head>
@@ -261,7 +284,9 @@ async fn consent_form_handler(
     </div>
 </body>
 </html>
-    "#, auth_status, session_id);
+    "#,
+        auth_status, session_id
+    );
 
     Html(html)
 }
@@ -278,7 +303,8 @@ async fn consent_post_handler(
     axum::extract::Form(form): axum::extract::Form<ConsentRequest>,
 ) -> Result<Redirect, (StatusCode, String)> {
     let mut sessions = state.sessions.write().unwrap();
-    let session_data = sessions.remove(&form.session_id)
+    let session_data = sessions
+        .remove(&form.session_id)
         .ok_or_else(|| (StatusCode::BAD_REQUEST, "Invalid session".to_string()))?;
 
     let parts: Vec<&str> = session_data.split('|').collect();
@@ -292,7 +318,7 @@ async fn consent_post_handler(
 
     // Generate authorization code
     let auth_code = URL_SAFE_NO_PAD.encode(Uuid::new_v4().as_bytes());
-    
+
     // Get user ID from session (either GitHub or dev bypass)
     let session_info = parts.get(2).unwrap_or(&"");
     let user_id = if session_info.starts_with("dev:") {
@@ -302,12 +328,20 @@ async fn consent_post_handler(
         // GitHub authentication
         match state.github_auth.get_user_from_session(session_info) {
             Some(user) => format!("github:{}", user.login),
-            None => return Err((StatusCode::INTERNAL_SERVER_ERROR, "GitHub session expired".to_string())),
+            None => {
+                return Err((
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "GitHub session expired".to_string(),
+                ));
+            }
         }
     } else {
-        return Err((StatusCode::INTERNAL_SERVER_ERROR, "Missing authentication session".to_string()));
+        return Err((
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "Missing authentication session".to_string(),
+        ));
     };
-    
+
     // Store code for token exchange with real GitHub user ID
     sessions.insert(auth_code.clone(), user_id);
 
@@ -344,24 +378,26 @@ async fn token_handler(
 
     // Exchange code for token
     let mut sessions = state.sessions.write().unwrap();
-    let user_id = sessions.remove(&req.code)
-        .ok_or_else(|| (
+    let user_id = sessions.remove(&req.code).ok_or_else(|| {
+        (
             StatusCode::BAD_REQUEST,
             Json(ErrorResponseJson {
                 error: "invalid_grant".to_string(),
                 error_description: "Invalid authorization code".to_string(),
             }),
-        ))?;
+        )
+    })?;
 
     // Generate access token
-    let access_token = state.generate_access_token(&user_id)
-        .map_err(|_| (
+    let access_token = state.generate_access_token(&user_id).map_err(|_| {
+        (
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(ErrorResponseJson {
                 error: "server_error".to_string(),
                 error_description: "Failed to generate token".to_string(),
             }),
-        ))?;
+        )
+    })?;
 
     Ok(Json(TokenResponseJson {
         access_token,

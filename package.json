@@ -1,1 +1,5 @@
-{}
+{
+  "dependencies": {
+    "dotenv": "^17.2.3"
+  }
+}

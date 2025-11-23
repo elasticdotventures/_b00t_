@@ -1,0 +1,100 @@
+# Justfile for PM2 Tasker
+
+set shell := ["bash", "-cu"]
+
+# Install dependencies
+install:
+    npm install
+
+# Build TypeScript
+build:
+    npm run build
+
+# Run in development mode
+dev:
+    npm run dev
+
+# Start with PM2
+start: build
+    npm run pm2:start
+
+# Stop PM2 process
+stop:
+    npm run pm2:stop
+
+# Delete PM2 process
+delete:
+    npm run pm2:delete
+
+# Restart PM2 process
+restart:
+    pm2 restart b00t-tasker
+
+# View PM2 logs
+logs:
+    npm run pm2:logs
+
+# List PM2 processes
+list:
+    pm2 list
+
+# PM2 monit dashboard
+monit:
+    pm2 monit
+
+# Lint TypeScript
+lint:
+    npm run lint
+
+# Test (TBD)
+test:
+    npm test
+
+# Build Docker image
+docker-build:
+    docker build -t b00t-pm2-tasker:latest .
+
+# Run Docker container
+docker-run:
+    #!/bin/bash
+    docker run -d \
+        --name pm2-tasker \
+        --network b00t-network \
+        -e REDIS_URL=${REDIS_URL:-redis://redis:6379} \
+        -e LOG_LEVEL=${LOG_LEVEL:-info} \
+        b00t-pm2-tasker:latest
+
+# Stop Docker container
+docker-stop:
+    docker stop pm2-tasker
+    docker rm pm2-tasker
+
+# Docker logs
+docker-logs:
+    docker logs -f pm2-tasker
+
+# Clean build artifacts
+clean:
+    rm -rf dist node_modules
+
+# Full reset
+reset: clean
+    npm install
+    npm run build
+
+# Test slash command via Redis
+test-start-cmd:
+    #!/bin/bash
+    redis-cli PUBLISH b00t:k0mmand3r '{"verb":"start","params":{"task":"test-echo","command":"echo","args":"Hello from PM2 Tasker"}}'
+
+test-stop-cmd:
+    #!/bin/bash
+    redis-cli PUBLISH b00t:k0mmand3r '{"verb":"stop","params":{"task":"test-echo"}}'
+
+test-status-cmd:
+    #!/bin/bash
+    redis-cli PUBLISH b00t:k0mmand3r '{"verb":"status","params":{}}'
+
+# Subscribe to task status channel (for debugging)
+watch-status:
+    redis-cli SUBSCRIBE b00t:task:status

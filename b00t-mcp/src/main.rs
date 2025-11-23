@@ -1,18 +1,20 @@
 use anyhow::Result;
 use clap::{Arg, Command};
 use rmcp::{ServiceExt, transport::io::stdio};
-use std::path::Path;
 use std::net::SocketAddr;
+use std::path::Path;
 
-use rmcp::transport::streamable_http_server::{
-    StreamableHttpService, StreamableHttpServerConfig,
-    session::local::LocalSessionManager,
-};
-use tower_http::cors::CorsLayer;
 use axum::Router;
+use rmcp::transport::streamable_http_server::{
+    StreamableHttpServerConfig, StreamableHttpService, session::local::LocalSessionManager,
+};
 use tokio::net::TcpListener;
+use tower_http::cors::CorsLayer;
 
-use b00t_mcp::{B00tMcpServerRusty, MinimalOAuthConfig, MinimalOAuthState, minimal_oauth_router, GitHubAuthConfig, GitHubAuthState, github_auth_router};
+use b00t_mcp::{
+    B00tMcpServerRusty, GitHubAuthConfig, GitHubAuthState, MinimalOAuthConfig, MinimalOAuthState,
+    github_auth_router, minimal_oauth_router,
+};
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -74,14 +76,23 @@ async fn main() -> Result<()> {
     let working_dir = matches.get_one::<String>("working-dir").unwrap().clone();
     let config_path = matches.get_one::<String>("config").unwrap().clone();
     let working_path = Path::new(&working_dir);
-    
+
     let host = matches.get_one::<String>("host").unwrap().clone();
-    let port = matches.get_one::<String>("port").unwrap().parse::<u16>()
+    let port = matches
+        .get_one::<String>("port")
+        .unwrap()
+        .parse::<u16>()
         .expect("Invalid port number");
 
-    let is_stdio_mode = matches.get_flag("stdio") || matches.get_one::<String>("mode").map_or(false, |m| m == "stdio");
-    let is_http_mode = matches.get_flag("http") || matches.get_one::<String>("mode").map_or(false, |m| m == "http");
-    
+    let is_stdio_mode = matches.get_flag("stdio")
+        || matches
+            .get_one::<String>("mode")
+            .map_or(false, |m| m == "stdio");
+    let is_http_mode = matches.get_flag("http")
+        || matches
+            .get_one::<String>("mode")
+            .map_or(false, |m| m == "http");
+
     if is_stdio_mode {
         // Run as MCP server
         // eprintln!(
@@ -99,24 +110,29 @@ async fn main() -> Result<()> {
     } else if is_http_mode {
         // HTTP server mode
         let addr: SocketAddr = format!("{}:{}", host, port).parse()?;
-        
+
         eprintln!("🌐 Starting HTTP MCP server on http://{}", addr);
-        eprintln!("🦀 Rusty MCP server with {} compile-time tools", 
-                 B00tMcpServerRusty::new(working_path, &config_path)?.tool_count());
-        
-        // Create HTTP service with CORS support  
+        eprintln!(
+            "🦀 Rusty MCP server with {} compile-time tools",
+            B00tMcpServerRusty::new(working_path, &config_path)?.tool_count()
+        );
+
+        // Create HTTP service with CORS support
         let http_config = StreamableHttpServerConfig::default();
-        
+
         let working_dir_clone = working_dir.clone();
         let config_path_clone = config_path.clone();
-        
-        let service: StreamableHttpService<B00tMcpServerRusty, LocalSessionManager> = 
+
+        let service: StreamableHttpService<B00tMcpServerRusty, LocalSessionManager> =
             StreamableHttpService::new(
-                move || B00tMcpServerRusty::new(&working_dir_clone, &config_path_clone).map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e)),
+                move || {
+                    B00tMcpServerRusty::new(&working_dir_clone, &config_path_clone)
+                        .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))
+                },
                 Default::default(),
                 http_config,
             );
-        
+
         // Load ACL config for development settings
         let acl_config = match b00t_mcp::acl::AclFilter::load_from_file(&config_path) {
             Ok(filter) => Some(filter.config().clone()),
@@ -131,20 +147,23 @@ async fn main() -> Result<()> {
             if let Some(ref dev) = config.dev {
                 if dev.bypass_oauth.unwrap_or(false) {
                     eprintln!("🚧 DEV MODE: OAuth bypass enabled in ACL config");
-                    eprintln!("    Local user: {}", dev.local_user.as_ref().unwrap_or(&"local-dev".to_string()));
+                    eprintln!(
+                        "    Local user: {}",
+                        dev.local_user.as_ref().unwrap_or(&"local-dev".to_string())
+                    );
                 }
             }
         }
-        
+
         // Create GitHub auth state
         let github_config = GitHubAuthConfig::default();
         let github_state = GitHubAuthState::new(github_config);
-        
+
         // Create minimal OAuth state with GitHub auth and ACL config
         let oauth_config = MinimalOAuthConfig::default();
-        let oauth_state = MinimalOAuthState::new(oauth_config, github_state.clone())
-            .with_acl_config(acl_config);
-        
+        let oauth_state =
+            MinimalOAuthState::new(oauth_config, github_state.clone()).with_acl_config(acl_config);
+
         // Create axum router with CORS, OAuth, and GitHub auth
         let app = Router::new()
             .nest_service("/mcp", service)
@@ -157,13 +176,16 @@ async fn main() -> Result<()> {
         eprintln!("🚀 HTTP server listening on {}", addr);
         eprintln!("📍 MCP endpoint available at: http://{}/mcp", addr);
         eprintln!("🔐 OAuth endpoints:");
-        eprintln!("    Discovery: http://{}/.well-known/oauth-authorization-server", addr);
+        eprintln!(
+            "    Discovery: http://{}/.well-known/oauth-authorization-server",
+            addr
+        );
         eprintln!("    Authorize: http://{}/oauth/authorize", addr);
         eprintln!("    Token: http://{}/oauth/token", addr);
         eprintln!("🐙 GitHub Auth endpoints:");
         eprintln!("    Login: http://{}/auth/github", addr);
         eprintln!("    Callback: http://{}/auth/github/callback", addr);
-        
+
         axum::serve(listener, app).await?;
     } else {
         // Show usage information
