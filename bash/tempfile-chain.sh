@@ -26,7 +26,7 @@ while true; do
   try=0
   while IFS= read -r line; do
     [ -z "$line" ] && continue
-    printf '%s\n' "$line" | eval "$handler" || echo "warn: handler failed" >&2
+    printf '%s\n' "$line" | bash -c "$handler" || echo "warn: handler failed" >&2
   done <"$queue"
 
   # truncate after processing
