@@ -61,13 +61,13 @@ impl SmolQueue for BashLineQueue {
         }
         // Rewrite remainder to keep queue behaviour (best-effort, not atomic).
         let mut remaining = String::new();
-        reader.read_to_string(&mut remaining).ok();
+        reader.read_to_string(&mut remaining).context("read remaining bash-line queue")?;
         let mut fh = OpenOptions::new()
             .write(true)
             .truncate(true)
             .open(&self.path)
             .context("truncate bash-line queue")?;
-        fh.write_all(remaining.as_bytes()).ok();
+        fh.write_all(remaining.as_bytes()).context("write remaining bash-line queue")?;
         Ok(Some(first.trim_end_matches('\n').to_string()))
     }
 }
