@@ -26,28 +26,18 @@ mod integration_tests {
         // Test reading the config back
         let server = get_mcp_config("playwright", temp_path).unwrap();
         assert_eq!(server.name, "playwright");
-
+        
         // 🤓 Handle both legacy and new multi-source formats
         // Legacy format has direct command/args fields
         // New format has command/args in mcp.stdio[0]
         if let Some(ref mcp_methods) = server.mcp {
             if let Some(ref stdio_methods) = mcp_methods.stdio {
-                assert!(
-                    !stdio_methods.is_empty(),
-                    "Should have at least one stdio method"
-                );
+                assert!(!stdio_methods.is_empty(), "Should have at least one stdio method");
                 let first_method = &stdio_methods[0];
                 let command = first_method.get("command").and_then(|v| v.as_str());
-                let args = first_method
-                    .get("args")
-                    .and_then(|v| v.as_array())
-                    .map(|arr| {
-                        arr.iter()
-                            .filter_map(|v| v.as_str())
-                            .map(|s| s.to_string())
-                            .collect::<Vec<_>>()
-                    });
-
+                let args = first_method.get("args").and_then(|v| v.as_array())
+                    .map(|arr| arr.iter().filter_map(|v| v.as_str()).map(|s| s.to_string()).collect::<Vec<_>>());
+                    
                 assert_eq!(command, Some("npx"));
                 assert_eq!(
                     args,
@@ -82,13 +72,28 @@ mod integration_tests {
         assert!(result.unwrap_err().to_string().contains("not found"));
     }
 
-    // TODO: Update test for new unified learn command
-    // Disabled during main branch merge - lfmf was merged into learn command
-    // #[test]
-    // fn test_lfmf_creates_and_appends_lesson() {
-    //     // LFMF functionality was merged into learn command in main branch
-    //     // Test needs to be updated to use new learn --record interface
-    // }
+    #[test]
+    fn test_lfmf_creates_and_appends_lesson() {
+        use crate::commands::lfmf::handle_lfmf;
+        let temp_dir = setup_temp_dir();
+        let temp_path = temp_dir.path().to_str().unwrap();
+        let tool = "testtool";
+        let lesson1 = "First: lesson learned.";
+        let lesson2 = "Second: lesson learned.";
+        // First call: should create file
+        let result1 = handle_lfmf(temp_path, tool, lesson1, "repo");
+        assert!(result1.is_ok());
+        let file_path = temp_dir.path().join("learn").join(format!("{}.md", tool));
+        assert!(file_path.exists());
+        let content1 = std::fs::read_to_string(&file_path).unwrap();
+        assert!(content1.contains(lesson1));
+        // Second call: should append
+        let result2 = handle_lfmf(temp_path, tool, lesson2, "repo");
+        assert!(result2.is_ok());
+        let content2 = std::fs::read_to_string(&file_path).unwrap();
+        assert!(content2.contains(lesson1));
+        assert!(content2.contains(lesson2));
+    }
 
     #[test]
     fn test_learn_lists_md_topics_without_toml() {
@@ -146,6 +151,7 @@ baz = "learn/baz.md"
         assert!(topics.contains(&"baz".to_string()));
     }
 
+
     fn test_mcp_add_with_dwiw() {
         let temp_dir = setup_temp_dir();
         let temp_path = temp_dir.path().to_str().unwrap();
@@ -164,26 +170,16 @@ baz = "learn/baz.md"
 
         let server = get_mcp_config("github", temp_path).unwrap();
         assert_eq!(server.name, "github");
-
+        
         // 🤓 Handle both legacy and new multi-source formats
         if let Some(ref mcp_methods) = server.mcp {
             if let Some(ref stdio_methods) = mcp_methods.stdio {
-                assert!(
-                    !stdio_methods.is_empty(),
-                    "Should have at least one stdio method"
-                );
+                assert!(!stdio_methods.is_empty(), "Should have at least one stdio method");
                 let first_method = &stdio_methods[0];
                 let command = first_method.get("command").and_then(|v| v.as_str());
-                let args = first_method
-                    .get("args")
-                    .and_then(|v| v.as_array())
-                    .map(|arr| {
-                        arr.iter()
-                            .filter_map(|v| v.as_str())
-                            .map(|s| s.to_string())
-                            .collect::<Vec<_>>()
-                    });
-
+                let args = first_method.get("args").and_then(|v| v.as_array())
+                    .map(|arr| arr.iter().filter_map(|v| v.as_str()).map(|s| s.to_string()).collect::<Vec<_>>());
+                    
                 assert_eq!(command, Some("npx"));
                 assert_eq!(
                     args,
