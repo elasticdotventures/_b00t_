@@ -136,14 +136,13 @@ impl SmolQueue for TempfileChainQueue {
 /// socat-based queue for hosts with sockets enabled.
 pub struct SocatQueue {
     target: String,
-    timeout: Duration,
 }
+
 
 impl SocatQueue {
     pub fn new(target: impl Into<String>) -> Self {
         Self {
             target: target.into(),
-            timeout: Duration::from_secs(2),
         }
     }
 
