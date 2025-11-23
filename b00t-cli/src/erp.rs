@@ -44,7 +44,7 @@ impl SmolQueue for BashLineQueue {
     }
 
     fn send(&self, payload: &str) -> Result<()> {
-        let fh = OpenOptions::new()
+        let mut fh = OpenOptions::new()
             .create(true)
             .append(true)
             .open(&self.path)
@@ -54,11 +54,10 @@ impl SmolQueue for BashLineQueue {
         fh.try_lock_exclusive()
             .context("failed to acquire exclusive lock on bash-line queue")?;
         
-        let mut fh_locked = fh;
-        writeln!(fh_locked, "{}", payload).context("write bash-line payload")?;
-        fh_locked.flush().context("flush bash-line payload")?;
+        writeln!(fh, "{}", payload).context("write bash-line payload")?;
+        fh.flush().context("flush bash-line payload")?;
         
-        // Lock is released when fh_locked is dropped
+        // Lock is released when fh is dropped
         Ok(())
     }
 
@@ -67,6 +66,7 @@ impl SmolQueue for BashLineQueue {
         let mut fh = OpenOptions::new()
             .read(true)
             .write(true)
+            .create(true)
             .open(&self.path)
             .context("open bash-line queue for read+write")?;
         
@@ -92,6 +92,7 @@ impl SmolQueue for BashLineQueue {
         
         // Truncate and rewrite with the lock still held
         fh.set_len(0).context("truncate bash-line queue")?;
+        // set_len doesn't change file position, so seek to start before writing
         fh.seek(std::io::SeekFrom::Start(0)).context("seek to start of bash-line queue")?;
         fh.write_all(remaining.as_bytes()).context("write remaining bash-line queue")?;
         fh.flush().context("flush bash-line queue")?;
