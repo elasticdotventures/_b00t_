@@ -1,12 +1,13 @@
 //! JWT Security and Namespace Enforcement for ACP
-//!
+//! 
 //! Integrates with b00t-website JWT provisioning to enforce namespace isolation
 //! based on GitHub user identity.
 
-use anyhow::{Context, Result};
+use anyhow::{Result, Context};
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use chrono::{DateTime, Utc};
 use jsonwebtoken::{decode, Algorithm, DecodingKey, Validation};
-use serde::{Deserialize, Serialize};
 
 /// JWT Claims structure matching b00t-website NATS provisioner
 #[derive(Debug, Serialize, Deserialize)]
@@ -53,7 +54,7 @@ pub struct NatsPermissions {
     pub subs: i32,
     /// Data limits (-1 = unlimited)
     pub data: i32,
-    /// Payload limits (-1 = unlimited)
+    /// Payload limits (-1 = unlimited) 
     pub payload: i32,
     /// Connection restrictions
     pub connect_only: bool,
@@ -123,8 +124,7 @@ impl AcpJwtValidator {
 
         // Parse subject: Handle both user.{hive}.{role}.{pid} and acp.{hive}.{role}
         let subject_parts: Vec<&str> = claims.sub.split('.').collect();
-        let (hive, role, pid, namespace) = if subject_parts.len() == 4 && subject_parts[0] == "user"
-        {
+        let (hive, role, pid, namespace) = if subject_parts.len() == 4 && subject_parts[0] == "user" {
             // Standard user token: user.{hive}.{role}.{pid}
             let hive = subject_parts[1].to_string();
             let role = subject_parts[2].to_string();
@@ -139,20 +139,13 @@ impl AcpJwtValidator {
             let namespace = format!("account.{}.{}", hive, role);
             (hive, role, pid, namespace)
         } else {
-            return Err(anyhow::anyhow!(
-                "Invalid JWT subject format: {}",
-                claims.sub
-            ));
+            return Err(anyhow::anyhow!("Invalid JWT subject format: {}", claims.sub));
         };
 
         // Validate audience matches GitHub hive pattern
         let expected_audience = format!("github.{}", hive);
         if claims.aud != expected_audience {
-            return Err(anyhow::anyhow!(
-                "JWT audience mismatch: expected {}, got {}",
-                expected_audience,
-                claims.aud
-            ));
+            return Err(anyhow::anyhow!("JWT audience mismatch: expected {}, got {}", expected_audience, claims.aud));
         }
 
         // Convert expiration timestamp
@@ -174,29 +167,18 @@ impl AcpJwtValidator {
     }
 
     /// Validate that all permissions are within the user's namespace
-    fn validate_namespace_permissions(
-        namespace: &str,
-        permissions: &SubjectPermissions,
-    ) -> Result<()> {
+    fn validate_namespace_permissions(namespace: &str, permissions: &SubjectPermissions) -> Result<()> {
         // Check publish permissions
         for subject in &permissions.publish {
             if !Self::is_subject_in_namespace(subject, namespace) {
-                return Err(anyhow::anyhow!(
-                    "Publish permission '{}' outside namespace '{}'",
-                    subject,
-                    namespace
-                ));
+                return Err(anyhow::anyhow!("Publish permission '{}' outside namespace '{}'", subject, namespace));
             }
         }
 
-        // Check subscribe permissions
+        // Check subscribe permissions  
         for subject in &permissions.subscribe {
             if !Self::is_subject_in_namespace(subject, namespace) {
-                return Err(anyhow::anyhow!(
-                    "Subscribe permission '{}' outside namespace '{}'",
-                    subject,
-                    namespace
-                ));
+                return Err(anyhow::anyhow!("Subscribe permission '{}' outside namespace '{}'", subject, namespace));
             }
         }
 
@@ -206,22 +188,22 @@ impl AcpJwtValidator {
     /// Check if a subject pattern is within the allowed namespace
     fn is_subject_in_namespace(subject: &str, namespace: &str) -> bool {
         // Allow exact matches and wildcard patterns within namespace
-        subject.starts_with(namespace)
-            || subject.starts_with(&format!("{}.", namespace))
-            || subject == format!("{}.>", namespace)
+        subject.starts_with(namespace) || 
+        subject.starts_with(&format!("{}.", namespace)) ||
+        subject == format!("{}.>", namespace)
     }
 
     /// Derive signing secret from operator JWT (matches b00t-website logic)
     fn derive_signing_secret(operator_jwt: &str) -> Result<String> {
         use sha2::{Digest, Sha256};
-
+        
         let salt = "b00t-nats-user-jwt-salt";
         let combined = format!("{}{}", operator_jwt, salt);
-
+        
         let mut hasher = Sha256::new();
         hasher.update(combined.as_bytes());
         let result = hasher.finalize();
-
+        
         Ok(hex::encode(result))
     }
 }
@@ -250,20 +232,14 @@ impl NamespaceEnforcer {
 
         // Additional validation: mission ID should not try to escape namespace
         if mission_id.contains("..") || mission_id.contains("/") || mission_id.contains("\\") {
-            return Err(anyhow::anyhow!(
-                "Invalid mission ID: contains path traversal characters"
-            ));
+            return Err(anyhow::anyhow!("Invalid mission ID: contains path traversal characters"));
         }
 
         Ok(())
     }
 
     /// Validate that an ACP subject is allowed for this hive
-    pub fn validate_subject_access(
-        &self,
-        subject: &str,
-        operation: SubjectOperation,
-    ) -> Result<()> {
+    pub fn validate_subject_access(&self, subject: &str, operation: SubjectOperation) -> Result<()> {
         let allowed_subjects = match operation {
             SubjectOperation::Publish => &self.security_context.publish_subjects,
             SubjectOperation::Subscribe => &self.security_context.subscribe_subjects,
@@ -297,11 +273,11 @@ impl NamespaceEnforcer {
             // Single-level wildcard - simplified matching
             let pattern_parts: Vec<&str> = pattern.split('.').collect();
             let subject_parts: Vec<&str> = subject.split('.').collect();
-
+            
             if pattern_parts.len() != subject_parts.len() {
                 return false;
             }
-
+            
             for (p_part, s_part) in pattern_parts.iter().zip(subject_parts.iter()) {
                 if *p_part != "*" && *p_part != *s_part {
                     return false;
@@ -334,7 +310,7 @@ pub async fn fetch_jwt_from_website(
     role: &str,
 ) -> Result<String> {
     let client = reqwest::Client::new();
-
+    
     let response = client
         .post(&format!("{}/api/nats/hive-jwt", website_url))
         .header("Cookie", format!("session_token={}", session_token))
@@ -347,20 +323,11 @@ pub async fn fetch_jwt_from_website(
 
     if !response.status().is_success() {
         let status = response.status();
-        let error_text = response
-            .text()
-            .await
-            .unwrap_or_else(|_| "Unknown error".to_string());
-        return Err(anyhow::anyhow!(
-            "ACP Hive JWT request failed: {} - {}",
-            status,
-            error_text
-        ));
+        let error_text = response.text().await.unwrap_or_else(|_| "Unknown error".to_string());
+        return Err(anyhow::anyhow!("ACP Hive JWT request failed: {} - {}", status, error_text));
     }
 
-    let response_data: serde_json::Value = response
-        .json()
-        .await
+    let response_data: serde_json::Value = response.json().await
         .context("Failed to parse ACP Hive JWT response")?;
 
     let jwt = response_data

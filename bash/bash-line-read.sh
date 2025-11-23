@@ -30,6 +30,6 @@ while true; do
     if [ -z "$line" ]; then
       continue
     fi
-    printf '%s\n' "$line" | $handler || echo "warn: handler failed" >&2
+    printf '%s\n' "$line" | eval "$handler" || echo "warn: handler failed" >&2
   done <"$fifo"
 done

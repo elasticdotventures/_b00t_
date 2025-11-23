@@ -114,6 +114,17 @@ pub trait DatumProvider: DatumChecker + StatusProvider + FilterLogic + Send + Sy
     fn datum(&self) -> &BootDatum;
 }
 
+/// Factory-style trait for interactive datum creation
+pub trait DatumCreator {
+    fn create_interactive(name: &str, path: &str) -> Result<BootDatum>;
+    fn file_extension() -> &'static str {
+        ".toml"
+    }
+    fn type_name() -> &'static str {
+        "datum"
+    }
+}
+
 // Base implementation for common constraint evaluation
 pub trait ConstraintEvaluator {
     fn datum(&self) -> &BootDatum;
