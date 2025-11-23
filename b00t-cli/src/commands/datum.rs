@@ -173,25 +173,26 @@ fn handle_tree(
     let datums = datum_utils::get_all_datums(b00t_path)?;
 
     // Filter by types if specified
-    let filtered_datums: HashMap<String, crate::BootDatum> = if let Some(types_str) = types_filter {
-        let types: Vec<String> = types_str
-            .split(',')
-            .map(|s| s.trim().to_lowercase())
-            .collect();
-        datums
-            .into_iter()
-            .filter(|(_, datum)| {
-                if let Some(dtype) = &datum.datum_type {
-                    let dtype_str = format!("{:?}", dtype).to_lowercase();
-                    types.iter().any(|t| dtype_str.contains(t))
-                } else {
-                    false
-                }
-            })
-            .collect()
-    } else {
-        datums
-    };
+    let filtered_datums: HashMap<String, b00t_cli::BootDatum> =
+        if let Some(types_str) = types_filter {
+            let types: Vec<String> = types_str
+                .split(',')
+                .map(|s| s.trim().to_lowercase())
+                .collect();
+            datums
+                .into_iter()
+                .filter(|(_, datum)| {
+                    if let Some(dtype) = &datum.datum_type {
+                        let dtype_str = format!("{:?}", dtype).to_lowercase();
+                        types.iter().any(|t| dtype_str.contains(t))
+                    } else {
+                        false
+                    }
+                })
+                .collect()
+        } else {
+            datums
+        };
 
     // Generate JSTree structure
     let tree_data = if group_by_type {
@@ -245,7 +246,9 @@ fn generate_flat_tree(datums: &HashMap<String, crate::BootDatum>) -> Result<serd
     Ok(json!(nodes))
 }
 
-fn generate_grouped_tree(datums: &HashMap<String, crate::BootDatum>) -> Result<serde_json::Value> {
+fn generate_grouped_tree(
+    datums: &HashMap<String, b00t_cli::BootDatum>,
+) -> Result<serde_json::Value> {
     use serde_json::json;
     use std::collections::BTreeMap;
 
