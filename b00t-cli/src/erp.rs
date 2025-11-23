@@ -45,6 +45,7 @@ impl SmolQueue for BashLineQueue {
             .open(&self.path)
             .context("open bash-line queue for append")?;
         writeln!(fh, "{}", payload).context("write bash-line payload")?;
+        fh.flush().context("flush bash-line payload")?;
         Ok(())
     }
 
