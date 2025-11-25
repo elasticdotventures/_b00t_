@@ -399,12 +399,19 @@ impl SessionMemory {
     /// Check if shell output should be verbose based on interactive state
     pub fn should_show_verbose_output(&self) -> bool {
         let is_interactive = self.is_interactive_shell();
-        
-        if is_interactive {
+
+        let mut verbose = if is_interactive {
             self.config.verbose_interactive
         } else {
             self.config.verbose_noninteractive
+        };
+
+        // Suppress verbose output in AI agent shells (Claude, Gemini, OpenAI Codex, etc.)
+        if verbose && self.is_ai_agent_shell() {
+            verbose = false;
         }
+
+        verbose
     }
 
     /// Detect if running in interactive shell
@@ -421,6 +428,40 @@ impl SessionMemory {
             // Fallback: check TERM environment variable
             self.get_env_var("TERM").is_some()
         }
+    }
+
+    /// Detect whether the current shell is running inside an AI agent environment
+    fn is_ai_agent_shell(&self) -> bool {
+        // Explicit agent override
+        if let Some(agent) = self.get_env_var("_B00T_Agent") {
+            let agent_lower = agent.to_lowercase();
+            if agent.contains('🤖')
+                || agent_lower.contains("claude")
+                || agent_lower.contains("gemini")
+                || agent_lower.contains("openai")
+                || agent_lower.contains("codex")
+                || agent_lower.contains("gpt")
+            {
+                return true;
+            }
+        }
+
+        // Known environment markers
+        if self.get_env_var("CLAUDECODE").as_deref() == Some("1") {
+            return true;
+        }
+        if self.get_env_var("CODEX_MANAGED_BY_BUN").is_some()
+            || self.get_env_var("CODEX_SANDBOX_NETWORK_DISABLED").is_some()
+        {
+            return true;
+        }
+
+        // Gemini environment variables
+        if std::env::vars().any(|(k, _)| k.starts_with("GEMINI_")) {
+            return true;
+        }
+
+        false
     }
 
     /// Get seconds since session creation
