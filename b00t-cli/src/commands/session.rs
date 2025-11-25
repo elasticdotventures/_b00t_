@@ -146,14 +146,17 @@ impl SessionCommands {
                 use crate::commands::whatismy::detect_agent;
                 let agent = detect_agent(&memory, false);
 
-                // Print different output based on verbosity settings
-                if memory.should_show_verbose_output() {
+                // Print output only on first shell or every 10th shell to cut noise
+                let should_emit =
+                    memory.should_show_verbose_output() && (count == 1 || count % 10 == 0);
+
+                if should_emit {
+                    println!("🥾👋 {} (shell #{})", agent, count);
                     println!(
-                        "🥾👋 {} (shell #{}) run `b00t whoami` for superpowers",
-                        agent, count
+                        "🤖 Need help? Run `b00t up --help` or hand off to your agent via `b00t-cli whatismy agent`."
                     );
                 } else {
-                    // Just print the agent for environment variable assignment
+                    // Always return agent string so .bash_profile can export _B00T_Agent
                     println!("{}", agent);
                 }
 
