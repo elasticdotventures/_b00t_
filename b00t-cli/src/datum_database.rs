@@ -2,6 +2,7 @@ use anyhow::Result;
 use duct::cmd;
 use crate::{BootDatum, get_config, check_command_available};
 use crate::traits::*;
+use reqwest::Url;
 
 /// Database datum for managing database connections via DSN (Data Source Name)
 pub struct DatabaseDatum {
@@ -51,7 +52,7 @@ impl DatabaseDatum {
                 }
                 Some("redis") => {
                     // Use redis-cli to test connection
-                    if let Ok(url) = url::Url::parse(dsn) {
+                    if let Ok(url) = Url::parse(dsn) {
                         let host = url.host_str().unwrap_or("localhost");
                         let port = url.port().unwrap_or(6379);
                         let result = cmd!("redis-cli", "-h", host, "-p", &port.to_string(), "ping").read();
@@ -84,7 +85,7 @@ impl DatabaseDatum {
                     result.ok().map(|v| v.split_whitespace().next().unwrap_or("unknown").to_string())
                 }
                 Some("redis") => {
-                    if let Ok(url) = url::Url::parse(dsn) {
+                    if let Ok(url) = Url::parse(dsn) {
                         let host = url.host_str().unwrap_or("localhost");
                         let port = url.port().unwrap_or(6379);
                         let result = cmd!("redis-cli", "-h", host, "-p", &port.to_string(), "info", "server").read();
@@ -322,14 +323,8 @@ impl DatumCreator for DatabaseDatum {
             script: None,
             image: None,
             docker_args: None,
-            package_name: None,
-            env: None,
-            require: None,
-            aliases: None,
-            url: None,
-            branch: None,
-            clone_path: None,
             dsn: Some(dsn),
+            ..BootDatum::default()
         })
     }
     

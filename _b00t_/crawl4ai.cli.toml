@@ -19,27 +19,7 @@ uv tool upgrade crawl4ai
 version = "crawl4ai --version"
 version_regex = "crawl4ai version (\\d+\\.\\d+\\.\\d+)"
 
-# Common crawl4ai commands
-# 🤓: aliases must be array of tables
-[[b00t.aliases]]
-name = "crawl"
-command = "crawl4ai"
-
-[[b00t.aliases]]
-name = "crawl-fast"
-command = "crawl4ai --mode fast"
-
-[[b00t.aliases]]
-name = "crawl-deep"
-command = "crawl4ai --depth 2"
-
-[[b00t.aliases]]
-name = "crawl-js"
-command = "crawl4ai --js-code"
-
-[[b00t.aliases]]
-name = "crawl-wait"
-command = "crawl4ai --wait-for 'css:.main-content'"
+aliases = ["crawl", "crawl-fast", "crawl-deep", "crawl-js", "crawl-wait"]
 
 [b00t.env]
 # User agent for crawl4ai requests
@@ -51,23 +31,37 @@ CRAWL4AI_BROWSER_PATH = ""
 # Enable verbose logging
 CRAWL4AI_VERBOSE = "false"
 
-[b00t.usage]
-# Basic URL crawling
-basic = "crawl4ai https://example.com"
-# Markdown output
-markdown = "crawl4ai https://example.com --format markdown"
-# Deep crawl with links
-deep = "crawl4ai https://example.com --depth 2 --max-pages 10"
-# Wait for dynamic content
-dynamic = "crawl4ai https://example.com --wait-for 'css:.loaded'"
-# Extract specific CSS selector
-extract = "crawl4ai https://example.com --css-selector '.article-content'"
-# Output to file
-file = "crawl4ai https://example.com --output ~/crawls/example.md"
-# Custom user agent
-agent = "crawl4ai https://example.com --user-agent 'b00t-crawler'"
-# Fast mode (no JS rendering)
-fast = "crawl4ai https://example.com --mode fast"
+[[b00t.usage]]
+description = "Basic URL crawling"
+command = "crawl4ai https://example.com"
+
+[[b00t.usage]]
+description = "Markdown output"
+command = "crawl4ai https://example.com --format markdown"
+
+[[b00t.usage]]
+description = "Deep crawl with links"
+command = "crawl4ai https://example.com --depth 2 --max-pages 10"
+
+[[b00t.usage]]
+description = "Wait for dynamic content"
+command = "crawl4ai https://example.com --wait-for 'css:.loaded'"
+
+[[b00t.usage]]
+description = "Extract specific CSS selector"
+command = "crawl4ai https://example.com --css-selector '.article-content'"
+
+[[b00t.usage]]
+description = "Output to file"
+command = "crawl4ai https://example.com --output ~/crawls/example.md"
+
+[[b00t.usage]]
+description = "Custom user agent"
+command = "crawl4ai https://example.com --user-agent 'b00t-crawler'"
+
+[[b00t.usage]]
+description = "Fast mode (no JS rendering)"
+command = "crawl4ai https://example.com --mode fast"
 
 [b00t.learn]
 # crawl4ai CLI documentation and patterns
@@ -152,6 +146,4 @@ playwright install
 5. **Save to ~/.b00t/crawls/** for organized storage
 """
 
-[b00t.depends_on]
-# crawl4ai requires Python and Playwright
-requires = ["python.cli", "playwright"]
+depends_on = ["python.cli", "playwright"]
