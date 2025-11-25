@@ -218,7 +218,7 @@ impl McpCommands {
                 match target.as_str() {
                     "claudecode" | "claude" => crate::claude_code_install_mcp(name, path),
                     "vscode" => crate::vscode_install_mcp(name, path),
-                    "codex" => crate::codex_install_mcp(name, path),
+                    "codex" => crate::vscode_install_mcp(name, path),
                     "geminicli" => {
                         // Determine installation location: default to repo if in git repo, otherwise user
                         let use_repo = if *repo && *user {

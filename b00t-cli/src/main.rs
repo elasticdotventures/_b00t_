@@ -7,39 +7,25 @@ use std::fs;
 // use std::io::{Read};
 // use std::path::PathBuf;
 // 🤓 cleaned up unused Tera import after switching to simple string replacement
+use b00t_cli::commands;
+use b00t_cli::datum_ai::AiDatum;
+use b00t_cli::datum_ai_model::AiModelDatumEntry;
+use b00t_cli::datum_apt::AptDatum;
+use b00t_cli::datum_bash::BashDatum;
+use b00t_cli::datum_cli::CliDatum;
+use b00t_cli::datum_docker::DockerDatum;
+use b00t_cli::datum_mcp::McpDatum;
+use b00t_cli::datum_vscode::VscodeDatum;
+use b00t_cli::session_memory;
+use b00t_cli::traits::*;
+use b00t_cli::utils::get_workspace_root;
+use b00t_cli::whoami::whoami;
 use b00t_cli::{AiConfig, BootDatum, SessionState, UnifiedConfig};
 
-mod cloud_sync;
-mod commands;
-mod datum_ai;
-mod datum_apt;
-mod datum_bash;
-mod datum_cli;
-mod datum_docker;
-mod datum_gemini;
-mod datum_mcp;
-mod datum_vscode;
-mod session_memory;
-mod test_cloud_integration;
-mod traits;
-mod utils;
-mod whoami;
-use utils::get_workspace_root;
-
-// 🦨 REMOVED unused K8sDatum import - not used in main.rs
-use datum_ai::AiDatum;
-use datum_apt::AptDatum;
-use datum_bash::BashDatum;
-use datum_cli::CliDatum;
-use datum_docker::DockerDatum;
-use datum_mcp::McpDatum;
-use datum_vscode::VscodeDatum;
-use traits::*;
-
-use crate::commands::learn::handle_learn;
-use crate::commands::{
-    AcpCommands, AiCommands, AppCommands, CliCommands, GrokCommands, InitCommands, K8sCommands,
-    McpCommands, SessionCommands, WhatismyCommands,
+use b00t_cli::commands::learn::handle_learn;
+use b00t_cli::commands::{
+    AiCommands, AppCommands, ChatCommands, CliCommands, DatumCommands, GrokCommands, InitCommands,
+    K8sCommands, McpCommands, SessionCommands, WhatismyCommands,
 };
 
 // Re-export commonly used functions for datum modules
@@ -154,16 +140,6 @@ The system will:
 4. Suggest specific solutions based on hive experience
 "#
     )]
-    Advice {
-        #[clap(help = "Tool name")]
-        tool: String,
-        #[clap(
-            help = "Error pattern to get advice for, 'list' to show all lessons, or 'search <query>'"
-        )]
-        query: String,
-        #[clap(long, help = "Maximum number of results to return (default: 5)")]
-        count: Option<usize>,
-    },
     #[clap(about = "MCP (Model Context Protocol) server management")]
     Mcp {
         #[clap(subcommand)]
@@ -187,7 +163,7 @@ The system will:
     #[clap(about = "Execute RHAI scripts with b00t context")]
     Script {
         #[clap(subcommand)]
-        script_command: commands::script::ScriptCommands,
+        script_command: b00t_cli::commands::script::ScriptCommands,
     },
     #[clap(about = "Initialize system settings and aliases")]
     Init {
@@ -243,10 +219,15 @@ The system will:
         #[clap(subcommand)]
         session_command: SessionCommands,
     },
-    #[clap(about = "Agent Coordination Protocol (ACP) - send messages to agents")]
-    Acp {
+    #[clap(about = "Chat and agent messaging")]
+    Chat {
         #[clap(subcommand)]
-        acp_command: AcpCommands,
+        chat_command: ChatCommands,
+    },
+    #[clap(about = "Datum management")]
+    Datum {
+        #[clap(subcommand)]
+        datum_command: DatumCommands,
     },
     #[clap(about = "Learn about topics with guided documentation")]
     // 🤓 ENTANGLED: b00t-mcp/src/mcp_tools.rs LearnCommand
@@ -1361,7 +1342,7 @@ async fn main() {
             }
         }
         Some(Commands::Mcp { mcp_command }) => {
-            if let Err(e) = mcp_command.execute(&cli.path) {
+            if let Err(e) = mcp_command.execute_async(&cli.path).await {
                 eprintln!("Error: {}", e);
                 std::process::exit(1);
             }
@@ -1391,7 +1372,7 @@ async fn main() {
             }
         }
         Some(Commands::Whoami { role }) => {
-            if let Err(e) = whoami::whoami(&cli.path, role.clone()) {
+            if let Err(e) = whoami(&cli.path, role.clone()) {
                 eprintln!("Error: {}", e);
                 std::process::exit(1);
             }
@@ -1444,12 +1425,6 @@ async fn main() {
                 std::process::exit(1);
             }
         }
-        Some(Commands::Acp { acp_command }) => {
-            if let Err(e) = acp_command.execute().await {
-                eprintln!("ACP Error: {}", e);
-                std::process::exit(1);
-            }
-        }
         Some(Commands::Chat { chat_command }) => {
             if let Err(e) = chat_command.execute().await {
                 eprintln!("Chat Error: {}", e);
@@ -1466,13 +1441,26 @@ async fn main() {
         Some(Commands::Learn { topic, topic_flag }) => {
             // 🦨 MCP compatibility: merge positional and flag arguments
             let effective_topic = topic.as_ref().or(topic_flag.as_ref());
-            if let Err(e) = handle_learn(&cli.path, effective_topic.map(|s| s.as_str())) {
+            let learn_args = commands::learn::LearnArgs {
+                topic: effective_topic.cloned(),
+                man: false,
+                toc: false,
+                section: None,
+                concise: false,
+                record: None,
+                global: false,
+                search: None,
+                limit: 5,
+                digest: None,
+                ask: None,
+            };
+            if let Err(e) = handle_learn(&cli.path, learn_args).await {
                 eprintln!("Error: {}", e);
                 std::process::exit(1);
             }
         }
         Some(Commands::Grok { grok_command }) => {
-            use crate::commands::grok::handle_grok_command;
+            use b00t_cli::commands::grok::handle_grok_command;
 
             // Create Tokio runtime for async grok operations
             let rt = match tokio::runtime::Runtime::new() {
@@ -1516,25 +1504,8 @@ async fn main() {
                 std::process::exit(1);
             }
         }
-        Some(Commands::Advice { tool, query, count }) => {
-            use crate::commands::advice::handle_advice;
-
-            // Create Tokio runtime for async advice operations
-            let rt = match tokio::runtime::Runtime::new() {
-                Ok(rt) => rt,
-                Err(e) => {
-                    eprintln!("Error creating async runtime: {}", e);
-                    std::process::exit(1);
-                }
-            };
-
-            if let Err(e) = rt.block_on(handle_advice(&cli.path, tool, query, *count)) {
-                eprintln!("Error: {}", e);
-                std::process::exit(1);
-            }
-        }
         Some(Commands::Script { script_command }) => {
-            use crate::commands::script::handle_script_command;
+            use b00t_cli::commands::script::handle_script_command;
 
             if let Err(e) = handle_script_command(script_command.clone()) {
                 eprintln!("Error: {}", e);
