@@ -313,6 +313,208 @@ fn datum_providers_to_tool_status(providers: Vec<Box<dyn DatumProvider>>) -> Vec
         .collect()
 }
 
+fn handle_up_command(_b00t_path: &str, yes: bool) -> Result<()> {
+    use b00t_cli::datum_config::B00tConfig;
+
+    // Load or create configuration
+    let (config, config_path) = B00tConfig::load_or_create()?;
+
+    if yes {
+        println!("🔄 Updating all datums from {}...", config_path.display());
+    } else {
+        println!(
+            "🔍 Checking all datums from {} (use --yes to update)...",
+            config_path.display()
+        );
+    }
+
+    // If config file doesn't exist yet, show helpful message
+    if !config_path.exists() {
+        println!("\n⚠️  No _b00t_.toml found at {}", config_path.display());
+        println!("   Create one to track your installed datums:\n");
+        println!("   Example _b00t_.toml:");
+        println!("   ---");
+        println!("   version = \"{}\"", b00t_c0re_lib::version::VERSION);
+        println!("   initialized = \"{}\"", chrono::Utc::now().to_rfc3339());
+        println!("   install_methods = [\"docker\", \"pkgx\", \"apt\", \"curl\"]");
+        println!("   datums = [");
+        println!("     \"git.cli\",");
+        println!("     \"docker.docker\",");
+        println!("     \"rust.*\",    # All rust-related datums");
+        println!("     \"ai.*\",      # All AI providers");
+        println!("   ]");
+        println!("   [checks]        # Optional per-host registry (true=check, false=ignore)");
+        println!("   docker = true");
+        println!("   podman = false");
+        println!("   ---\n");
+        println!("💡 Run `b00t install <datum>` to auto-create and update this file.");
+        return Ok(());
+    }
+
+    println!("\n📋 Configuration loaded:");
+    println!("   Version: {}", config.version);
+    println!("   Datums: {:?}", config.datums);
+    println!("   Install methods: {:?}", config.install_methods);
+    println!("   Checks: {:?}", config.checks);
+    println!(
+        "🤖 Need fixes? Use `b00t up --help` or delegate via `b00t-cli whatismy agent` to pick the right agent."
+    );
+
+    let path = "~/.dotfiles/_b00t_";
+
+    // Collect all datums using existing providers and filter early
+    let mut all_tools = Vec::new();
+    all_tools.extend(filter_and_convert(
+        load_datum_providers::<CliDatum>(path, ".cli.toml")?,
+        &config.datums,
+        &config.checks,
+    ));
+    all_tools.extend(filter_and_convert(
+        load_datum_providers::<McpDatum>(path, ".mcp.toml")?,
+        &config.datums,
+        &config.checks,
+    ));
+    all_tools.extend(filter_and_convert(
+        load_datum_providers::<AiDatum>(path, ".ai.toml")?,
+        &config.datums,
+        &config.checks,
+    ));
+    all_tools.extend(filter_and_convert(
+        load_datum_providers::<AiModelDatumEntry>(path, ".ai_model.toml")?,
+        &config.datums,
+        &config.checks,
+    ));
+    all_tools.extend(filter_and_convert(
+        load_datum_providers::<AptDatum>(path, ".apt.toml")?,
+        &config.datums,
+        &config.checks,
+    ));
+    all_tools.extend(filter_and_convert(
+        load_datum_providers::<BashDatum>(path, ".bash.toml")?,
+        &config.datums,
+        &config.checks,
+    ));
+    all_tools.extend(filter_and_convert(
+        load_datum_providers::<DockerDatum>(path, ".docker.toml")?,
+        &config.datums,
+        &config.checks,
+    ));
+    all_tools.extend(filter_and_convert(
+        load_datum_providers::<VscodeDatum>(path, ".vscode.toml")?,
+        &config.datums,
+        &config.checks,
+    ));
+    all_tools.extend(get_other_tools_status(path)?);
+
+    if all_tools.is_empty() {
+        println!("⚠️  No datums matched the configuration.");
+        println!("🤖 Need fixes? Use `b00t up --help` or delegate via `b00t-cli whatismy agent`.");
+        return Ok(());
+    }
+
+    // Present status table
+    println!("\nStatus:");
+    for tool in &all_tools {
+        let id = format!("{}.{}", tool.name, tool.subsystem);
+        let version_str = match (&tool.current_version, &tool.desired_version) {
+            (Some(cur), Some(des)) => format!("{cur} → {des}"),
+            (Some(cur), None) => cur.clone(),
+            (None, Some(des)) => format!("? → {des}"),
+            _ => "-".to_string(),
+        };
+        println!(
+            "{} {} {:<18} {:<8} {:<14} {}",
+            tool.status_icon(),
+            tool.version_emoji(),
+            id,
+            tool.subsystem,
+            version_str,
+            tool.hint
+        );
+    }
+
+    if yes {
+        println!("\n⚠️  --yes (auto-update) not yet implemented; status only.");
+    }
+
+    println!(
+        "\n🤖 Need fixes? Use `b00t up --help` or delegate via `b00t-cli whatismy agent` to pick the right agent."
+    );
+
+    Ok(())
+}
+
+fn pattern_matches_id(pattern: &str, name: &str, subsystem: &str, id: &str) -> bool {
+    if pattern == "*" || pattern == "*.*" {
+        return true;
+    }
+    if pattern == id || pattern == name || pattern == subsystem {
+        return true;
+    }
+    let parts: Vec<&str> = pattern.split('.').collect();
+    if parts.len() == 2 {
+        let (pname, ptype) = (parts[0], parts[1]);
+        let name_match = pname == "*" || pname == name;
+        let type_match = ptype == "*" || ptype == subsystem;
+        return name_match && type_match;
+    }
+    false
+}
+
+fn datum_selected_by_patterns(name: &str, subsystem: &str, patterns: &[String]) -> bool {
+    if patterns.is_empty() {
+        return true;
+    }
+    let id = format!("{}.{}", name, subsystem);
+    patterns
+        .iter()
+        .any(|p| pattern_matches_id(p, name, subsystem, &id))
+}
+
+fn check_enabled_by_registry(
+    name: &str,
+    subsystem: &str,
+    checks: &std::collections::HashMap<String, bool>,
+) -> bool {
+    let id = format!("{}.{}", name, subsystem);
+    for key in [&id, name, subsystem] {
+        if let Some(enabled) = checks.get(key) {
+            if !*enabled {
+                return false;
+            }
+        }
+    }
+    true
+}
+
+fn filter_and_convert(
+    providers: Vec<Box<dyn DatumProvider>>,
+    patterns: &[String],
+    checks: &std::collections::HashMap<String, bool>,
+) -> Vec<ToolStatus> {
+    providers
+        .into_iter()
+        .filter(|p| datum_selected_by_patterns(p.name(), p.subsystem(), patterns))
+        .filter(|p| check_enabled_by_registry(p.name(), p.subsystem(), checks))
+        .map(|provider| {
+            let is_installed = DatumChecker::is_installed(provider.as_ref());
+            let is_disabled = StatusProvider::is_disabled(provider.as_ref());
+            let version_status = DatumChecker::version_status(provider.as_ref());
+
+            ToolStatus {
+                name: StatusProvider::name(provider.as_ref()).to_string(),
+                subsystem: StatusProvider::subsystem(provider.as_ref()).to_string(),
+                installed: is_installed,
+                available: FilterLogic::is_available(provider.as_ref()),
+                disabled: is_disabled,
+                version_status: Some(version_status.emoji().to_string()),
+                current_version: DatumChecker::current_version(provider.as_ref()),
+                desired_version: DatumChecker::desired_version(provider.as_ref()),
+                hint: StatusProvider::hint(provider.as_ref()).to_string(),
+            }
+        })
+        .collect()
+}
 
 fn checkpoint(message: Option<&str>, skip_tests: bool) -> Result<()> {
     println!("🥾 Creating checkpoint...");

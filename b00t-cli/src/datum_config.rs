@@ -28,6 +28,10 @@ pub struct B00tConfig {
     #[serde(default)]
     pub history: Vec<InstallHistoryEntry>,
 
+    /// Optional per-host check registry (true=enable, false=ignore)
+    #[serde(default)]
+    pub checks: HashMap<String, bool>,
+
     /// Optional metadata
     #[serde(flatten)]
     pub metadata: Option<HashMap<String, serde_json::Value>>,
@@ -58,6 +62,7 @@ impl B00tConfig {
             ],
             datums: Vec::new(),
             history: Vec::new(),
+            checks: HashMap::new(),
             metadata: None,
         }
     }

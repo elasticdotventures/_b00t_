@@ -48,6 +48,9 @@ _b00t_INSPIRATION_FILE="$_B00T_Path/./r3src_资源/inspiration.json"
 # mostly, this is for future opentelemetry & storytime log
 unset -f log_📢_记录
 function log_📢_记录() {
+    if [ -n "${_B00T_QUIET_LOGIN:-}" ] || [ -n "${_B00T_Agent:-}" ]; then
+        return 0
+    fi
     # Use session-aware output control via b00t-cli
     if command -v b00t-cli &> /dev/null; then
         # Check if we should show verbose output

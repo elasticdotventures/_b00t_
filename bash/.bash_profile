@@ -2,14 +2,18 @@
 
 # Session-aware b00t initialization (single source of truth)
 if command -v b00t-cli &> /dev/null; then
-    # Use session-aware initialization that handles counting, agent detection, and output verbosity
-    b00t_output=$(b00t-cli session bashrc-init 2>/dev/null)
-    if [ $? -eq 0 ] && [ -n "$b00t_output" ]; then
-        # Extract agent from output for environment variable
-        export _B00T_Agent="$b00t_output"
-        # The greeting is handled by bashrc-init based on verbosity settings
+    if _b00t_agent_output=$(b00t-cli session bashrc-init 2>/dev/null); then
+        [ -n "$_b00t_agent_output" ] && export _B00T_Agent="$_b00t_agent_output"
     fi
+    # let b00t-cli decide if this shell should be quiet (agents: Claude/Gemini/Codex)
+    b00t-cli session should-show-output >/dev/null 2>&1 || export _B00T_QUIET_LOGIN=1
 fi
+
+b00t_quiet_echo() {
+    if [ -z "${_B00T_QUIET_LOGIN:-}" ]; then
+        echo "$@"
+    fi
+}
 
 
 # b00t is a collection of environment detection
@@ -67,7 +71,7 @@ fi
 
 # check for .code-connect directory in home
 if [[ $IS_WSL == true ]] ; then
-    echo "🐧💌💙 WSL"
+    b00t_quiet_echo "🐧💌💙 WSL"
     # https://docs.roocode.com/features/shell-integration
     # . "$(code --locate-shell-integration-path bash)"    #
 
@@ -165,7 +169,7 @@ if command -v podman &> /dev/null; then
 
 
 elif command -v docker &> /dev/null; then
-     echo "🥲🐳 docker"
+     b00t_quiet_echo "🥲🐳 docker"
 #     # https://docs.docker.com/engine/install/linux-postinstall/
 #     # TODO: check group
 #     # sudo usermod -aG docker $USER
@@ -298,7 +302,7 @@ fi
 if command -v direnv &> /dev/null; then
     eval "$(direnv hook bash)"
 else
-    echo "🥲 direnv not installed, cannot hook shell."
+    b00t_quiet_echo "🥲 direnv not installed, cannot hook shell."
 fi
 
 
@@ -316,4 +320,4 @@ fi
 
 alias gemini='npx -y https://github.com/google-gemini/gemini-cli'
 
-echo "🐚 .bash_profile loaded"
+b00t_quiet_echo "🐚 .bash_profile loaded"
