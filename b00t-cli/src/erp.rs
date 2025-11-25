@@ -1,9 +1,10 @@
 use anyhow::{Context, Result};
 use fs2::FileExt;
-use std::fs::{read_dir, OpenOptions};
+use std::fs::{OpenOptions, read_dir};
 use std::io::{BufRead, BufReader, Read, Seek, Write};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
+use std::time::Duration;
 use uuid::Uuid;
 
 /// Minimal queue trait for sm0l workers that need a local IPC hop.
@@ -14,7 +15,7 @@ pub trait SmolQueue {
 }
 
 /// File-backed queue that appends lines to a single file.
-/// 
+///
 /// Uses exclusive file locking (via fs2::FileExt) to prevent race conditions
 /// in concurrent producer/consumer scenarios. Both send() and try_recv() use
 /// try_lock_exclusive(), which fails immediately if the lock cannot be acquired,
@@ -49,14 +50,14 @@ impl SmolQueue for BashLineQueue {
             .append(true)
             .open(&self.path)
             .context("open bash-line queue for append")?;
-        
+
         // Acquire exclusive lock to prevent race conditions during append
         fh.try_lock_exclusive()
             .context("failed to acquire exclusive lock on bash-line queue")?;
-        
+
         writeln!(fh, "{}", payload).context("write bash-line payload")?;
         fh.flush().context("flush bash-line payload")?;
-        
+
         // Lock is released when fh is dropped
         Ok(())
     }
@@ -69,34 +70,40 @@ impl SmolQueue for BashLineQueue {
             .create(true)
             .open(&self.path)
             .context("open bash-line queue for read+write")?;
-        
+
         // Acquire exclusive lock to prevent race conditions
         fh.try_lock_exclusive()
             .context("failed to acquire exclusive lock on bash-line queue")?;
-        
+
         // Read the first line and remaining content
         let (first, remaining) = {
             let mut reader = BufReader::new(&fh);
             let mut first = String::new();
-            let count = reader.read_line(&mut first).context("read bash-line message")?;
+            let count = reader
+                .read_line(&mut first)
+                .context("read bash-line message")?;
             if count == 0 {
                 // Release lock automatically when fh is dropped
                 return Ok(None);
             }
-            
+
             // Read remainder to keep queue behaviour
             let mut remaining = String::new();
-            reader.read_to_string(&mut remaining).context("read remaining bash-line queue")?;
+            reader
+                .read_to_string(&mut remaining)
+                .context("read remaining bash-line queue")?;
             (first, remaining)
         }; // BufReader is dropped here, releasing the borrow
-        
+
         // Truncate and rewrite with the lock still held
         fh.set_len(0).context("truncate bash-line queue")?;
         // set_len doesn't change file position, so seek to start before writing
-        fh.seek(std::io::SeekFrom::Start(0)).context("seek to start of bash-line queue")?;
-        fh.write_all(remaining.as_bytes()).context("write remaining bash-line queue")?;
+        fh.seek(std::io::SeekFrom::Start(0))
+            .context("seek to start of bash-line queue")?;
+        fh.write_all(remaining.as_bytes())
+            .context("write remaining bash-line queue")?;
         fh.flush().context("flush bash-line queue")?;
-        
+
         // Lock is released when fh is dropped
         Ok(Some(first.trim_end_matches('\n').to_string()))
     }
@@ -146,7 +153,10 @@ impl SmolQueue for TempfileChainQueue {
                     Some(current) => {
                         let cur_meta = std::fs::metadata(&current).ok();
                         let new_meta = std::fs::metadata(&path).ok();
-                        match (cur_meta.and_then(|m| m.modified().ok()), new_meta.and_then(|m| m.modified().ok())) {
+                        match (
+                            cur_meta.and_then(|m| m.modified().ok()),
+                            new_meta.and_then(|m| m.modified().ok()),
+                        ) {
                             (Some(cur_time), Some(new_time)) if new_time < cur_time => Some(path),
                             _ => Some(current),
                         }
@@ -157,8 +167,8 @@ impl SmolQueue for TempfileChainQueue {
         let Some(target) = oldest else {
             return Ok(None);
         };
-        let content = std::fs::read_to_string(&target)
-            .with_context(|| format!("read {:?}", target))?;
+        let content =
+            std::fs::read_to_string(&target).with_context(|| format!("read {:?}", target))?;
         let _ = std::fs::remove_file(&target);
         Ok(Some(content))
     }
@@ -255,7 +265,9 @@ impl QueueBackend {
         if default_dir.exists() {
             return Ok(Self::Tempfile(TempfileChainQueue::new(default_dir)?));
         }
-        Ok(Self::Bash(BashLineQueue::new(default_dir.join("sm0l.queue.log"))?))
+        Ok(Self::Bash(BashLineQueue::new(
+            default_dir.join("sm0l.queue.log"),
+        )?))
     }
 }
 

@@ -425,7 +425,7 @@ dependencies = [
 
 [[package]]
 name = "b00t-c0re-lib"
-version = "0.7.33"
+version = "0.7.34"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -457,7 +457,7 @@ dependencies = [
 
 [[package]]
 name = "b00t-chat"
-version = "0.7.33"
+version = "0.7.34"
 dependencies = [
  "anyhow",
  "async-nats",
@@ -495,7 +495,7 @@ dependencies = [
 
 [[package]]
 name = "b00t-cli"
-version = "0.7.33"
+version = "0.7.34"
 dependencies = [
  "anyhow",
  "assert_cmd",
@@ -533,7 +533,7 @@ dependencies = [
 
 [[package]]
 name = "b00t-grok"
-version = "0.7.33"
+version = "0.7.34"
 dependencies = [
  "anyhow",
  "async-openai",
@@ -552,7 +552,7 @@ dependencies = [
 
 [[package]]
 name = "b00t-ipc"
-version = "0.7.33"
+version = "0.7.34"
 dependencies = [
  "anyhow",
  "async-nats",
@@ -571,7 +571,7 @@ dependencies = [
 
 [[package]]
 name = "b00t-mcp"
-version = "0.7.33"
+version = "0.7.34"
 dependencies = [
  "anyhow",
  "axum 0.8.7",
@@ -611,7 +611,7 @@ dependencies = [
 
 [[package]]
 name = "b00t-py"
-version = "0.7.33"
+version = "0.7.34"
 dependencies = [
  "anyhow",
  "b00t-c0re-lib",
@@ -2403,7 +2403,7 @@ dependencies = [
 
 [[package]]
 name = "k0mmand3r"
-version = "0.7.33"
+version = "0.7.34"
 dependencies = [
  "decimal-rs",
  "indexmap 2.12.1",
@@ -3296,7 +3296,7 @@ checksum = "7edddbd0b52d732b21ad9a5fab5c704c14cd949e5e9a1ec5929a24fded1b904c"
 
 [[package]]
 name = "plantuml-server-rust"
-version = "0.7.33"
+version = "0.7.34"
 dependencies = [
  "anyhow",
  "axum 0.7.9",

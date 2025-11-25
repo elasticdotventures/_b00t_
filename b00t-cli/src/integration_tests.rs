@@ -26,18 +26,28 @@ mod integration_tests {
         // Test reading the config back
         let server = get_mcp_config("playwright", temp_path).unwrap();
         assert_eq!(server.name, "playwright");
-        
+
         // 🤓 Handle both legacy and new multi-source formats
         // Legacy format has direct command/args fields
         // New format has command/args in mcp.stdio[0]
         if let Some(ref mcp_methods) = server.mcp {
             if let Some(ref stdio_methods) = mcp_methods.stdio {
-                assert!(!stdio_methods.is_empty(), "Should have at least one stdio method");
+                assert!(
+                    !stdio_methods.is_empty(),
+                    "Should have at least one stdio method"
+                );
                 let first_method = &stdio_methods[0];
                 let command = first_method.get("command").and_then(|v| v.as_str());
-                let args = first_method.get("args").and_then(|v| v.as_array())
-                    .map(|arr| arr.iter().filter_map(|v| v.as_str()).map(|s| s.to_string()).collect::<Vec<_>>());
-                    
+                let args = first_method
+                    .get("args")
+                    .and_then(|v| v.as_array())
+                    .map(|arr| {
+                        arr.iter()
+                            .filter_map(|v| v.as_str())
+                            .map(|s| s.to_string())
+                            .collect::<Vec<_>>()
+                    });
+
                 assert_eq!(command, Some("npx"));
                 assert_eq!(
                     args,
@@ -151,7 +161,6 @@ baz = "learn/baz.md"
         assert!(topics.contains(&"baz".to_string()));
     }
 
-
     fn test_mcp_add_with_dwiw() {
         let temp_dir = setup_temp_dir();
         let temp_path = temp_dir.path().to_str().unwrap();
@@ -170,16 +179,26 @@ baz = "learn/baz.md"
 
         let server = get_mcp_config("github", temp_path).unwrap();
         assert_eq!(server.name, "github");
-        
+
         // 🤓 Handle both legacy and new multi-source formats
         if let Some(ref mcp_methods) = server.mcp {
             if let Some(ref stdio_methods) = mcp_methods.stdio {
-                assert!(!stdio_methods.is_empty(), "Should have at least one stdio method");
+                assert!(
+                    !stdio_methods.is_empty(),
+                    "Should have at least one stdio method"
+                );
                 let first_method = &stdio_methods[0];
                 let command = first_method.get("command").and_then(|v| v.as_str());
-                let args = first_method.get("args").and_then(|v| v.as_array())
-                    .map(|arr| arr.iter().filter_map(|v| v.as_str()).map(|s| s.to_string()).collect::<Vec<_>>());
-                    
+                let args = first_method
+                    .get("args")
+                    .and_then(|v| v.as_array())
+                    .map(|arr| {
+                        arr.iter()
+                            .filter_map(|v| v.as_str())
+                            .map(|s| s.to_string())
+                            .collect::<Vec<_>>()
+                    });
+
                 assert_eq!(command, Some("npx"));
                 assert_eq!(
                     args,
