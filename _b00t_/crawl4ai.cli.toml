@@ -7,7 +7,32 @@ keywords = ["web-scraping", "crawler", "markdown", "ai", "llm"]
 
 # Installation via uv tool (b00t standard)
 install = """
+# 🤓 Self-healing: ensure uv is available before tool install
+if ! command -v uv >/dev/null 2>&1; then
+    echo "🥾 uv required for crawl4ai installation"
+    if command -v b00t >/dev/null 2>&1; then
+        echo "🔧 Auto-installing uv via b00t..."
+        b00t cli install uv
+        if [ $? -ne 0 ]; then
+            echo "❌ Failed to install uv via b00t"
+            exit 1
+        fi
+    else
+        echo "💡 Install uv: curl -LsSf https://astral.sh/uv/install.sh | sh"
+        exit 1
+    fi
+fi
+
+# Install crawl4ai with all dependencies
 uv tool install crawl4ai[all]
+
+# Verify installation
+if ! command -v crawl4ai >/dev/null 2>&1; then
+    echo "❌ crawl4ai installation failed"
+    exit 1
+fi
+
+echo "✅ crawl4ai installed successfully"
 """
 
 # Update to latest version

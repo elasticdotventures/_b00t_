@@ -4,13 +4,38 @@
 name = "gh"
 desires = "2.74.2"
 install = """
-curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | sudo dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg \
-&& sudo chmod go+r /usr/share/keyrings/githubcli-archive-keyring.gpg \
-&& echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null \
-&& sudo apt update \
-&& sudo apt install gh -y
+# 🤓 Non-sudo installation via binary download  
+VERSION="2.74.2"
+OS=$(uname -s | tr '[:upper:]' '[:lower:]')
+ARCH=$(uname -m)
+case $ARCH in
+    x86_64) ARCH="amd64" ;;
+    aarch64) ARCH="arm64" ;;
+esac
+
+mkdir -p ~/.local/bin
+cd /tmp
+curl -fsSL "https://github.com/cli/cli/releases/download/v${VERSION}/gh_${VERSION}_${OS}_${ARCH}.tar.gz" | \
+    tar xzf -
+cp "gh_${VERSION}_${OS}_${ARCH}/bin/gh" ~/.local/bin/gh
+chmod +x ~/.local/bin/gh
+rm -rf "gh_${VERSION}_${OS}_${ARCH}"
 """
-update = "sudo apt update && sudo apt install gh -y"
+update = """
+# 🤓 Update via binary download (non-sudo)
+VERSION="2.74.2"
+OS=$(uname -s | tr '[:upper:]' '[:lower:]')
+ARCH=$(uname -m)
+case $ARCH in
+    x86_64) ARCH="amd64" ;;
+    aarch64) ARCH="arm64" ;;
+esac
+
+mkdir -p ~/.local/bin
+curl -fsSL "https://github.com/cli/cli/releases/download/v${VERSION}/gh_${VERSION}_${OS}_${ARCH}.tar.gz" | \
+    tar xz --strip-components=1 -C ~/.local/bin --wildcards "*/bin/gh"
+chmod +x ~/.local/bin/gh
+"""
 version = "gh --version"
 version_regex = "\\d+\\.\\d+\\.\\d+"
 hint = "gh is the official GitHub CLI, for interacting with GitHub from the command line."

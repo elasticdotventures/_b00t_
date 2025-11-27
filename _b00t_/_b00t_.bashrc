@@ -129,7 +129,7 @@ pathAdd "$HOME/.yarn/bin"
 ## * * * * * //
 
 
-if [ "/usr/bin/docker" ] ; then
+if [ -x "/usr/bin/docker" ] ; then
     log_📢_记录 "🐳 has d0cker! loading docker extensions"
     source "$_B00T_Path/docker.🐳/_bashrc.sh"
 
@@ -433,7 +433,7 @@ export -f _b00t_init_🥾_开始
 function iz_n0t_alpine_linux_🐧🌲() {
    return $(cat /etc/os-release | grep "NAME=" | grep -ic "Alpine")
 }
-if [ ! iz_n0t_alpine_linux ] ; then
+if ! iz_n0t_alpine_linux_🐧🌲 ; then
     # gh issue
     echo "🥾🤮 🐧🌲 alpine linux not fully supported yet"
 fi

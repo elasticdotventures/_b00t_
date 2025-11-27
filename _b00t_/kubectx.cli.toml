@@ -6,17 +6,17 @@ desires = "0.9.5"
 
 install = '''
 if command -v pkgx >/dev/null 2>&1; then
-    pkgx install kubectx@0.9
+    # 🤓 pkgx install syntax removed - use exec pkgx tool@version directly
     mkdir -p ~/.local/bin
     cat > ~/.local/bin/kubectx << 'EOF'
 #!/bin/bash
-exec pkgx kubectx "$@"
+exec pkgx kubectx@0.9 "$@"
 EOF
     chmod +x ~/.local/bin/kubectx
 
     cat > ~/.local/bin/kubens << 'EOF'
 #!/bin/bash
-exec pkgx kubens "$@"
+exec pkgx kubens@0.9 "$@"
 EOF
     chmod +x ~/.local/bin/kubens
 elif command -v brew >/dev/null 2>&1; then
