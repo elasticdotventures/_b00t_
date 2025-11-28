@@ -526,41 +526,14 @@ mod tests {
             datum_type: Some(DatumType::Docker),
             desires: None,
             hint: format!("Test docker datum {}", name),
-            install: None,
-            update: None,
-            version: None,
-            version_regex: None,
-            command: None,
-            args: None,
-            vsix_id: None,
-            script: None,
             image: Some(image.to_string()),
             docker_args: Some(vec!["-p".to_string(), "5432:5432".to_string()]),
-            oci_uri: None,
-            resource_path: None,
-            chart_path: None,
-            namespace: None,
-            values_file: None,
-            keywords: None,
-            package_name: None,
             env: Some({
                 let mut env = HashMap::new();
                 env.insert("TEST_VAR".to_string(), "test_value".to_string());
                 env
             }),
-            require: None,
-            aliases: None,
-            depends_on: None,
-            members: None,
-            mcp: None,
-            protocol: None,
-            implements: None,
-            provides: None,
-            requires: None,
-            learn: None,
-            usage: None,
-            lfmf_category: None,
-            job: None,
+            ..BootDatum::default()
         }
     }
 
@@ -570,41 +543,13 @@ mod tests {
             datum_type: Some(DatumType::Stack),
             desires: None,
             hint: format!("Test stack {}", name),
-            install: None,
-            update: None,
-            version: None,
-            version_regex: None,
-            command: None,
-            args: None,
-            vsix_id: None,
-            script: None,
-            image: None,
-            docker_args: None,
-            oci_uri: None,
-            resource_path: None,
-            chart_path: None,
-            namespace: None,
-            values_file: None,
-            keywords: None,
-            package_name: None,
             env: Some({
                 let mut env = HashMap::new();
                 env.insert("STACK_VAR".to_string(), "stack_value".to_string());
                 env
             }),
-            require: None,
-            aliases: None,
-            depends_on: None,
             members: Some(members),
-            mcp: None,
-            protocol: None,
-            implements: None,
-            provides: None,
-            requires: None,
-            learn: None,
-            usage: None,
-            lfmf_category: None,
-            job: None,
+            ..BootDatum::default()
         }
     }
 

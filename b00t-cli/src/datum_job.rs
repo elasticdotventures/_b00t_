@@ -26,6 +26,7 @@
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use crate::BootDatum;
 
 /// Job datum - Defines workflow with steps, checkpoints, and execution config
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -379,7 +380,7 @@ mod tests {
 name = "test-job"
 type = "job"
 hint = "Test job"
-usage = ""
+usage = []
 
 [b00t.job]
 description = "Test job"
@@ -450,37 +451,7 @@ steps = [
                 datum_type: Some(crate::DatumType::Job),
                 hint: "Test job".to_string(),
                 desires: None,
-                install: None,
-                update: None,
-                version: None,
-                version_regex: None,
-                command: None,
-                args: None,
-                vsix_id: None,
-                script: None,
-                image: None,
-                docker_args: None,
-                oci_uri: None,
-                resource_path: None,
-                chart_path: None,
-                namespace: None,
-                values_file: None,
-                keywords: None,
-                package_name: None,
-                env: None,
-                require: None,
-                aliases: None,
-                depends_on: None,
-                members: None,
-                mcp: None,
-                protocol: None,
-                implements: None,
-                provides: None,
-                requires: None,
-                learn: None,
-                usage: None,
-                lfmf_category: None,
-                job: None,
+                ..BootDatum::default()
             },
         };
 

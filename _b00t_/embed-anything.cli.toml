@@ -3,20 +3,10 @@ name = "embed-anything"
 type = "cli"
 hint = "Minimalist, high-performance Rust embedding pipeline for semantic search and RAG"
 lfmf_category = "embed-anything"
-
-[b00t.capabilities]
-embeddings = true
-vector_search = true
-multimodal = true
-rag = true
-
-[b00t.version]
-command = "python3 -c \"import embed_anything; print(embed_anything.__version__)\" 2>/dev/null || echo 'not installed'"
-regex = "(\\d+\\.\\d+\\.\\d+)"
 desires = "0.5.0"
-
-[b00t.install]
-command = """
+version = "python3 -c \"import embed_anything; print(embed_anything.__version__)\" 2>/dev/null || echo 'not installed'"
+version_regex = "(\\d+\\.\\d+\\.\\d+)"
+install = """
 # Check if uv is available
 if command -v uv &> /dev/null; then
     echo "Installing with uv..."
@@ -26,15 +16,19 @@ else
     pip3 install embed-anything-gpu || pip3 install embed-anything
 fi
 """
-
-[b00t.update]
-command = """
+update = """
 if command -v uv &> /dev/null; then
     uv pip install --upgrade embed-anything-gpu || uv pip install --upgrade embed-anything
 else
     pip3 install --upgrade embed-anything-gpu || pip3 install --upgrade embed-anything
 fi
 """
+
+[b00t.capabilities]
+embeddings = true
+vector_search = true
+multimodal = true
+rag = true
 
 [b00t.env]
 # EmbedAnything uses HuggingFace models by default
@@ -54,7 +48,7 @@ model = EmbeddingModel.from_pretrained_hf(
 )
 config = TextEmbedConfig(chunk_size=512, batch_size=32)
 embeddings = model.embed_file("document.pdf", config=config)
-print(f"Generated {len(embeddings)} embeddings")
+print(f\"Generated {len(embeddings)} embeddings\")
 '"""
 
 [[b00t.usage]]
@@ -90,7 +84,7 @@ config = TextEmbedConfig(chunk_size=256)
 # Memory-efficient streaming
 for embedding in model.embed_directory_stream("./docs", config=config):
     # Stream directly to vector DB
-    print(f"Embedded: {embedding.metadata}")
+    print(f\"Embedded: {embedding.metadata}\")
 '"""
 
 [[b00t.usage]]

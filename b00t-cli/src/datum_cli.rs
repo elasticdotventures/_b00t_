@@ -25,7 +25,7 @@ impl TryFrom<(&str, &str)> for CliDatum {
 impl DatumChecker for CliDatum {
     fn is_installed(&self) -> bool {
         if let Some(version_cmd) = &self.datum.version {
-            cmd!("bash", "-c", version_cmd).stderr_null().read().is_ok()
+            cmd!("bash", "-c", version_cmd).read().is_ok()
         } else {
             check_command_available(&self.datum.name)
         }
@@ -33,7 +33,7 @@ impl DatumChecker for CliDatum {
 
     fn current_version(&self) -> Option<String> {
         if let Some(version_cmd) = &self.datum.version {
-            if let Ok(output) = cmd!("bash", "-c", version_cmd).stderr_null().read() {
+            if let Ok(output) = cmd!("bash", "-c", version_cmd).read() {
                 if let Some(regex) = &self.datum.version_regex {
                     if let Ok(re) = regex::Regex::new(regex) {
                         if let Some(caps) = re.captures(&output) {

@@ -12,19 +12,19 @@ echo "📦 Installing Go..."
 # Check if pkgx is available (preferred method)
 if command -v pkgx >/dev/null 2>&1; then
     echo "✨ Using pkgx for Go installation (recommended)"
-    pkgx install go@1.23
-
-    # Verify pkgx installation
-    if pkgx go version >/dev/null 2>&1; then
-        echo "✅ Go installed via pkgx"
-        # Create wrapper script for seamless usage
-        mkdir -p ~/.local/bin
-        cat > ~/.local/bin/go << 'EOF'
+    # 🤓 pkgx syntax: use env instead of install
+    mkdir -p ~/.local/bin
+    cat > ~/.local/bin/go << 'EOF'
 #!/bin/bash
-exec pkgx go "$@"
+exec pkgx go@1.23 "$@"
 EOF
-        chmod +x ~/.local/bin/go
-        echo "✅ Created go wrapper in ~/.local/bin/go"
+    chmod +x ~/.local/bin/go
+    
+    # Test wrapper
+    if ~/.local/bin/go version >/dev/null 2>&1; then
+        echo "✅ Go installed via pkgx wrapper"
+        # Ensure PATH includes ~/.local/bin
+        export PATH="$HOME/.local/bin:$PATH"
         exit 0
     fi
 fi

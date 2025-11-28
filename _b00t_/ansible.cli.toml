@@ -11,17 +11,20 @@ set -euo pipefail
 
 if command -v pkgx >/dev/null 2>&1; then
     echo "✨ Installing ansible via pkgx"
-    if pkgx install ansible; then
-        mkdir -p ~/.local/bin
-        cat > ~/.local/bin/ansible <<'WRAP'
+    # 🤓 pkgx syntax: use env instead of install
+    mkdir -p ~/.local/bin
+    cat > ~/.local/bin/ansible <<'WRAP'
 #!/bin/bash
-exec pkgx ansible "$@"
+exec pkgx ansible@9.2 "$@"
 WRAP
-        chmod +x ~/.local/bin/ansible
-        echo "✅ ansible installed via pkgx"
+    chmod +x ~/.local/bin/ansible
+    
+    # Test wrapper
+    if ~/.local/bin/ansible --version >/dev/null 2>&1; then
+        echo "✅ ansible installed via pkgx wrapper"
         exit 0
     fi
-    echo "⚠️ pkgx install failed, falling back"
+    echo "⚠️ pkgx wrapper failed, falling back"
 fi
 
 OS=$(uname -s)

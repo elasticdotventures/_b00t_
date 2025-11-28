@@ -2,6 +2,7 @@
 //!
 //! Combines LFMF lessons, curated docs, man pages, and RAG into one command
 
+use crate::datum_utils::B00tDatumLookup;
 use anyhow::{Context, Result};
 use b00t_c0re_lib::{DisplayOpts, GrokClient, KnowledgeSource, LfmfSystem, ManPage};
 use clap::Parser;

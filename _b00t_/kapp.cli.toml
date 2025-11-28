@@ -6,11 +6,11 @@ desires = "0.63.0"
 
 install = '''
 if command -v pkgx >/dev/null 2>&1; then
-    pkgx install kapp@0.63
+    # 🤓 pkgx install syntax removed - use exec pkgx tool@version directly
     mkdir -p ~/.local/bin
     cat > ~/.local/bin/kapp << 'EOF'
 #!/bin/bash
-exec pkgx kapp "$@"
+exec pkgx kapp@0.63 "$@"
 EOF
     chmod +x ~/.local/bin/kapp
 elif command -v brew >/dev/null 2>&1; then

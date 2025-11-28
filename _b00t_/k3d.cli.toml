@@ -7,11 +7,11 @@ depends_on = ["docker.cli"]
 
 install = '''
 if command -v pkgx >/dev/null 2>&1; then
-    pkgx install k3d@5.7
+    # 🤓 pkgx syntax: use env instead of install
     mkdir -p ~/.local/bin
     cat > ~/.local/bin/k3d << 'EOF'
 #!/bin/bash
-exec pkgx k3d "$@"
+exec pkgx k3d@5.7 "$@"
 EOF
     chmod +x ~/.local/bin/k3d
 elif command -v brew >/dev/null 2>&1; then

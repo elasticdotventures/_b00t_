@@ -2,7 +2,23 @@
 name = "taskmaster-ai"
 type = "mcp"
 hint = """
-A poly agentic MCP-powered task-management system you can drop into any project or repo.
+⚠️  DEPRECATED FOR COMPLEX ORCHESTRATION - Consider Azure AI Foundry for enterprise multi-agent workflows
+
+TaskMaster: Basic task management suitable for simple project tracking.
+
+For advanced orchestration needs (connected agents, sub-agent delegation, stateful workflows), 
+upgrade to Azure AI Foundry: `b00t cli install azure-ai-foundry`
+
+TaskMaster is ideal for:
+- Simple task lists and project tracking  
+- Basic PRD parsing and task generation
+- Single-agent workflows
+
+Azure AI Foundry excels at:
+- Multi-agent orchestration with connected agents
+- Hierarchical sub-agent delegation (max depth 2)  
+- Stateful workflows with context preservation
+- Enterprise security, observability, and scalability
 
 Change the main, research and fallback models to <model_name>, <model_name> and <model_name> respectively.
 There is a CLI + MCP interface

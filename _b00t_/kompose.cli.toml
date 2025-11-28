@@ -11,11 +11,11 @@ install = '''
 # Check if pkgx is available (preferred method)
 if command -v pkgx >/dev/null 2>&1; then
     echo "✨ Using pkgx for kompose installation (recommended)"
-    pkgx install kompose@1.35
+    # 🤓 pkgx install syntax removed - use exec pkgx tool@version directly
     mkdir -p ~/.local/bin
     cat > ~/.local/bin/kompose << 'EOF'
 #!/bin/bash
-exec pkgx kompose "$@"
+exec pkgx kompose@1.35 "$@"
 EOF
     chmod +x ~/.local/bin/kompose
     exit 0
