@@ -319,7 +319,8 @@ mod tests {
         // Complete step
         state.complete_step("step1");
         assert_eq!(state.metadata.completed_steps, 1);
-        assert_eq!(state.progress_percent(), 33.333333333333336);
+        let progress = state.progress_percent();
+        assert!((progress - 33.333333333333336).abs() < 1e-6);
 
         // Complete job
         state.complete();
