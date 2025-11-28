@@ -46,6 +46,25 @@ version_regex = "crawl4ai version (\\d+\\.\\d+\\.\\d+)"
 
 aliases = ["crawl", "crawl-fast", "crawl-deep", "crawl-js", "crawl-wait"]
 
+[[b00t.aliases]]
+name = "crawl"
+command = "crawl4ai"
+
+[[b00t.aliases]]
+name = "crawl-fast"
+command = "crawl4ai --mode fast"
+
+[[b00t.aliases]]
+name = "crawl-deep"
+command = "crawl4ai --mode deep"
+
+[[b00t.aliases]]
+name = "crawl-js"
+command = "crawl4ai --browser"
+
+[[b00t.aliases]]
+name = "crawl-wait"
+command = "crawl4ai --wait"
 [b00t.env]
 # User agent for crawl4ai requests
 CRAWL4AI_USER_AGENT = "b00t-crawler/0.7 (https://github.com/elasticdotventures/_b00t_)"
