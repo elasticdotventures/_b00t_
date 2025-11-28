@@ -19,6 +19,7 @@ mod datum_docker;
 mod datum_gemini;
 mod datum_mcp;
 mod datum_vscode;
+mod dependency_resolver;
 mod session_memory;
 mod test_cloud_integration;
 mod traits;
