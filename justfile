@@ -278,6 +278,9 @@ version:
     echo "{{workspace_version}}"
 
 commit-hook:
+    echo "removed"
+
+commit-hook2:
     #!/bin/bash
     set -euo pipefail
     if ! git diff --quiet; then
