@@ -36,7 +36,6 @@ pub mod job_state;
 pub mod job_ipc;
 pub mod model_manager;
 pub mod orchestrator;
-pub mod delegation_demo;
 pub use traits::*;
 
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Default)]
