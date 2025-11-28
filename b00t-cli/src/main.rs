@@ -28,7 +28,7 @@ use b00t_cli::commands::{AiCommands, AppCommands, CliCommands, GrokCommands, Ini
 use b00t_cli::commands::learn::handle_learn;
 
 // Re-export commonly used functions for datum modules
-pub use b00t_cli::{DatumType, get_config, get_expanded_path, get_mcp_config, get_mcp_toml_files, mcp_add_json, mcp_remove, mcp_list, mcp_output, claude_code_install_mcp, vscode_install_mcp, gemini_install_mcp, dotmcpjson_install_mcp};
+pub use b00t_cli::{DatumType, get_config, get_expanded_path, get_mcp_config, get_mcp_toml_files, mcp_add_json, mcp_remove, mcp_list, mcp_output, claude_code_install_mcp, vscode_install_mcp, gemini_install_mcp, codex_install_mcp, dotmcpjson_install_mcp, codex_sync_dotmcpjson};
 
 mod integration_tests;
 
@@ -1067,7 +1067,7 @@ async fn main() {
             };
             // Determine scope
             let scope = if *global { "global" } else { "repo" };
-            if let Err(e) = commands::lfmf::handle_lfmf(&cli.path, &tool, &lesson, scope) {
+            if let Err(e) = commands::lfmf::handle_lfmf(&cli.path, &tool, &lesson, scope).await {
                 eprintln!("Error: {}", e);
                 std::process::exit(1);
             }
