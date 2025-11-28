@@ -405,9 +405,13 @@ fn cli_up(path: &str, yes: bool, quiet: bool, all: bool) -> Result<()> {
                 println!("\n🎉 All {} CLI commands are up to date!", total_count);
             }
         }
-    } else if needs_update_count > 0 {
-        // In quiet mode, still show the count
-        println!("{} of {} need updates", needs_update_count, total_count);
+    } else {
+        // In quiet mode, always show a summary
+        if needs_update_count > 0 {
+            println!("{} of {} need updates", needs_update_count, total_count);
+        } else {
+            println!("All {} CLI commands are up to date!", total_count);
+        }
     }
     Ok(())
 }
