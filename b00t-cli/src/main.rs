@@ -7,12 +7,7 @@ use std::fs;
 // use std::io::{Read};
 // use std::path::PathBuf;
 // 🤓 cleaned up unused Tera import after switching to simple string replacement
-use b00t_cli::{
-    commands,
-    load_datum_providers, AiConfig, BootDatum, SessionState, UnifiedConfig, session_memory, whoami,
-};
-
-use b00t_cli::utils::get_workspace_root;
+use b00t_cli::{UnifiedConfig, commands, load_datum_providers, session_memory, whoami};
 
 // 🦨 REMOVED unused K8sDatum import - not used in main.rs
 use b00t_cli::datum_ai::AiDatum;
@@ -24,15 +19,18 @@ use b00t_cli::datum_mcp::McpDatum;
 use b00t_cli::datum_vscode::VscodeDatum;
 use b00t_cli::traits::*;
 
-use b00t_cli::commands::{
-    AiCommands, AgentCommands, AnsibleCommands, AppCommands, ChatCommands, CliCommands,
-    DatumCommands, GrokCommands, InitCommands, JobCommands, K8sCommands, McpCommands,
-    SessionCommands, WhatismyCommands,
-};
 use b00t_cli::commands::learn::handle_learn;
+use b00t_cli::commands::{
+    AiCommands, AnsibleCommands, AppCommands, CliCommands, GrokCommands, InitCommands, K8sCommands,
+    McpCommands, SessionCommands, WhatismyCommands,
+};
 
 // Re-export commonly used functions for datum modules
-pub use b00t_cli::{DatumType, get_config, get_expanded_path, get_mcp_config, get_mcp_toml_files, mcp_add_json, mcp_remove, mcp_list, mcp_output, claude_code_install_mcp, vscode_install_mcp, gemini_install_mcp, codex_install_mcp, dotmcpjson_install_mcp, codex_sync_dotmcpjson};
+pub use b00t_cli::{
+    DatumType, claude_code_install_mcp, codex_install_mcp, codex_sync_dotmcpjson,
+    dotmcpjson_install_mcp, gemini_install_mcp, get_config, get_expanded_path, get_mcp_config,
+    get_mcp_toml_files, mcp_add_json, mcp_list, mcp_output, mcp_remove, vscode_install_mcp,
+};
 
 mod integration_tests;
 
@@ -106,7 +104,11 @@ Tips:
         lesson: Option<String>,
         #[clap(long, group = "scope", help = "Record lesson for this repo (default)")]
         repo: bool,
-        #[clap(long, group = "scope", help = "Record lesson globally (mutually exclusive with --repo)")]
+        #[clap(
+            long,
+            group = "scope",
+            help = "Record lesson globally (mutually exclusive with --repo)"
+        )]
         global: bool,
     },
     #[clap(
@@ -155,6 +157,11 @@ The system will:
         #[clap(subcommand)]
         cli_command: CliCommands,
     },
+    #[clap(about = "Run Ansible playbooks")]
+    Ansible {
+        #[clap(subcommand)]
+        ansible_command: commands::ansible::AnsibleCommands,
+    },
     #[clap(about = "Execute RHAI scripts with b00t context")]
     Script {
         #[clap(subcommand)]
@@ -170,21 +177,6 @@ The system will:
         #[clap(long, help = "Override detected role (matches role datum)")]
         role: Option<String>,
     },
-    #[clap(about = "Coordinate agents")]
-    Agent {
-        #[clap(subcommand)]
-        agent_command: AgentCommands,
-    },
-    #[clap(about = "Manage jobs (run, list, inspect)")]
-    Job {
-        #[clap(subcommand)]
-        job_command: JobCommands,
-    },
-    #[clap(about = "Chat transport and messaging")]
-    Chat {
-        #[clap(subcommand)]
-        chat_command: ChatCommands,
-    },
     #[clap(about = "Create checkpoint: commit all files and run tests")]
     // 🤓 ENTANGLED: b00t-mcp/src/mcp_tools.rs CheckpointCommand
     // When this changes, update b00t-mcp CheckpointCommand structure
@@ -195,7 +187,7 @@ The system will:
         skip_tests: bool,
 
         #[clap(long = "message", help = "Commit message (MCP compatibility)")]
-        message_flag: Option<String>,  // 🦨 MCP compatibility: accept --message flag
+        message_flag: Option<String>, // 🦨 MCP compatibility: accept --message flag
     },
     #[clap(about = "Query system information")]
     Whatismy {
@@ -217,7 +209,7 @@ The system will:
         available: bool,
 
         #[clap(long = "filter", help = "Filter by subsystem (MCP compatibility)")]
-        filter_flag: Option<String>,  // 🦨 MCP compatibility: accept --filter flag
+        filter_flag: Option<String>, // 🦨 MCP compatibility: accept --filter flag
     },
     #[clap(about = "Kubernetes (k8s) cluster and pod management")]
     K8s {
@@ -236,20 +228,10 @@ The system will:
         #[clap(flatten)]
         args: commands::learn::LearnArgs,
     },
-    #[clap(about = "Inspect or run datums directly")]
-    Datum {
-        #[clap(subcommand)]
-        datum_command: DatumCommands,
-    },
     #[clap(about = "Grok knowledgebase RAG system")]
     Grok {
         #[clap(subcommand)]
         grok_command: GrokCommands,
-    },
-    #[clap(about = "Run ansible playbooks via datum metadata or direct path")]
-    Ansible {
-        #[clap(subcommand)]
-        ansible_command: AnsibleCommands,
     },
 }
 
@@ -311,7 +293,6 @@ fn datum_providers_to_tool_status(providers: Vec<Box<dyn DatumProvider>>) -> Vec
         .collect()
 }
 
-
 fn checkpoint(message: Option<&str>, skip_tests: bool) -> Result<()> {
     println!("🥾 Creating checkpoint...");
 
@@ -340,7 +321,10 @@ fn checkpoint(message: Option<&str>, skip_tests: bool) -> Result<()> {
     }
 
     // Generate commit message with checkpoint number
-    let default_msg = format!("🥾 checkpoint #{}: automated commit via b00t-cli", checkpoint_count);
+    let default_msg = format!(
+        "🥾 checkpoint #{}: automated commit via b00t-cli",
+        checkpoint_count
+    );
     let commit_msg = message.unwrap_or(&default_msg);
 
     // Add all files (including untracked)
@@ -398,7 +382,10 @@ fn checkpoint(message: Option<&str>, skip_tests: bool) -> Result<()> {
             // CI integration hints
             println!("💡 Next steps:");
             println!("   • Run `git push` to trigger CI pipeline");
-            println!("   • Create PR: `gh pr create --title \"{}\"` (if ready)", commit_msg);
+            println!(
+                "   • Create PR: `gh pr create --title \"{}\"` (if ready)",
+                commit_msg
+            );
         }
         Err(e) => {
             let _ = memory.incr("failed_commits");
@@ -411,7 +398,6 @@ fn checkpoint(message: Option<&str>, skip_tests: bool) -> Result<()> {
 
     Ok(())
 }
-
 
 fn show_status(
     path: &str,
@@ -720,7 +706,11 @@ echo "malicious" > ~/.dotfiles/_b00t_/hack.toml
         ("Apt", "APT packages", vec![".apt.toml"]),
         ("Nix", "Nix packages", vec![".nix.toml"]),
         ("Bash", "Bash scripts", vec![".bash.toml"]),
-        ("Role", "Role onboarding/compliance datums", vec![".role.toml", ".toml (type=role)"]),
+        (
+            "Role",
+            "Role onboarding/compliance datums",
+            vec![".role.toml", ".toml (type=role)"],
+        ),
     ];
 
     println!("### DatumType Enum");
@@ -984,7 +974,7 @@ async fn main() {
                 eprintln!("Error: {}", e);
                 std::process::exit(1);
             }
-        },
+        }
         Some(Commands::Mcp { mcp_command }) => {
             if let Err(e) = mcp_command.execute_async(&cli.path).await {
                 eprintln!("Error: {}", e);
@@ -1009,6 +999,12 @@ async fn main() {
                 std::process::exit(1);
             }
         }
+        Some(Commands::Ansible { ansible_command }) => {
+            if let Err(e) = ansible_command.execute(&cli.path) {
+                eprintln!("Error: {}", e);
+                std::process::exit(1);
+            }
+        }
         Some(Commands::Init { init_command }) => {
             if let Err(e) = init_command.execute(&cli.path) {
                 eprintln!("Error: {}", e);
@@ -1021,7 +1017,11 @@ async fn main() {
                 std::process::exit(1);
             }
         }
-        Some(Commands::Checkpoint { message, skip_tests, message_flag }) => {
+        Some(Commands::Checkpoint {
+            message,
+            skip_tests,
+            message_flag,
+        }) => {
             // 🦨 MCP compatibility: merge positional and flag arguments
             let effective_message = message.as_ref().or(message_flag.as_ref());
             if let Err(e) = checkpoint(effective_message.map(|s| s.as_str()), *skip_tests) {
@@ -1035,10 +1035,20 @@ async fn main() {
                 std::process::exit(1);
             }
         }
-        Some(Commands::Status { filter, installed, available, filter_flag }) => {
+        Some(Commands::Status {
+            filter,
+            installed,
+            available,
+            filter_flag,
+        }) => {
             // 🦨 MCP compatibility: merge positional and flag arguments
             let effective_filter = filter.as_ref().or(filter_flag.as_ref());
-            if let Err(e) = show_status(&cli.path, effective_filter.map(|s| s.as_str()), *installed, *available) {
+            if let Err(e) = show_status(
+                &cli.path,
+                effective_filter.map(|s| s.as_str()),
+                *installed,
+                *available,
+            ) {
                 eprintln!("Error: {}", e);
                 std::process::exit(1);
             }
@@ -1055,35 +1065,8 @@ async fn main() {
                 std::process::exit(1);
             }
         }
-        Some(Commands::Agent { agent_command }) => {
-            if let Err(e) =
-                b00t_cli::commands::agent::handle_agent_command(agent_command.clone()).await
-            {
-                eprintln!("Agent Error: {}", e);
-                std::process::exit(1);
-            }
-        }
-        Some(Commands::Job { job_command }) => {
-            if let Err(e) = job_command.execute_async(&cli.path).await {
-                eprintln!("Job Error: {}", e);
-                std::process::exit(1);
-            }
-        }
-        Some(Commands::Chat { chat_command }) => {
-            if let Err(e) = chat_command.execute().await {
-                eprintln!("Chat Error: {}", e);
-                std::process::exit(1);
-            }
-        }
         Some(Commands::Learn { args }) => {
             if let Err(e) = handle_learn(&cli.path, args.clone()).await {
-                eprintln!("Error: {}", e);
-                std::process::exit(1);
-            }
-        }
-        Some(Commands::Datum { datum_command }) => {
-            use b00t_cli::commands::datum::handle_datum_command;
-            if let Err(e) = handle_datum_command(&cli.path, datum_command) {
                 eprintln!("Error: {}", e);
                 std::process::exit(1);
             }
@@ -1105,13 +1088,12 @@ async fn main() {
                 std::process::exit(1);
             }
         }
-        Some(Commands::Ansible { ansible_command }) => {
-            if let Err(e) = ansible_command.execute(&cli.path) {
-                eprintln!("Ansible Error: {}", e);
-                std::process::exit(1);
-            }
-        }
-        Some(Commands::Lfmf { tool, lesson, repo, global }) => {
+        Some(Commands::Lfmf {
+            tool,
+            lesson,
+            repo,
+            global,
+        }) => {
             // Validate required fields
             let tool = match tool {
                 Some(t) => t,
@@ -1136,7 +1118,7 @@ async fn main() {
         }
         Some(Commands::Script { script_command }) => {
             use commands::script::handle_script_command;
-            
+
             if let Err(e) = handle_script_command(script_command.clone()) {
                 eprintln!("Error: {}", e);
                 std::process::exit(1);
