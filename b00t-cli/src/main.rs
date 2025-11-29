@@ -1026,8 +1026,35 @@ async fn main() {
                 std::process::exit(1);
             }
         }
-        Some(Commands::Learn { args }) => {
+        Some(Commands::Agent { agent_command }) => {
+            if let Err(e) =
+                b00t_cli::commands::agent::handle_agent_command(agent_command.clone()).await
+            {
+                eprintln!("Agent Error: {}", e);
+                std::process::exit(1);
+            }
+        }
+        Some(Commands::Job { job_command }) => {
+            if let Err(e) = job_command.execute_async(&cli.path).await {
+                eprintln!("Job Error: {}", e);
+                std::process::exit(1);
+            }
+        }
+        Some(Commands::Chat { chat_command }) => {
+            if let Err(e) = chat_command.execute().await {
+                eprintln!("Chat Error: {}", e);
+                std::process::exit(1);
+            }
+        }
+        Some(Commands::Learn(args)) => {
             if let Err(e) = handle_learn(&cli.path, args.clone()).await {
+                eprintln!("Error: {}", e);
+                std::process::exit(1);
+            }
+        }
+        Some(Commands::Datum { datum_command }) => {
+            use b00t_cli::commands::datum::handle_datum_command;
+            if let Err(e) = handle_datum_command(&cli.path, datum_command) {
                 eprintln!("Error: {}", e);
                 std::process::exit(1);
             }
