@@ -41,6 +41,7 @@ instead of inline `install` script logic, while also validating the converted re
 1. Ensure `ansible-core` is installed via `b00t install ansible` (uses `_b00t_/ansible.cli.toml`).
 2. Run `b00t ansible run <datum> --check` to syntax-check the referenced playbook (the command now
    builds args via `AnsibleConfig` and respects datum variables).
+3. You can also invoke playbooks directly from a stack context with `b00t stack ansible --run <script|datum> <name> -- <params>` to leverage the new helper (extra `key=value` entries become vars, everything else is passed through as flags).
 3. Execute `b00t ansible run <datum>` against a local inventory or ephemeral container to verify
    correctness; capture logs under `logs/orchestrators/` just like existing orchestrator scripts.
 4. Optionally, script the above in `just` or CI to iterate through a batch of datums:
