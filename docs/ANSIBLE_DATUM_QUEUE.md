@@ -29,7 +29,7 @@ Use `scripts/ansible-datum-status.py` to view the next datum to convert, mark pr
 | kueue.cli | cli | Pending |  |
 | nvidia-gpu-operator.k8s | k8s | Pending |  |
 | opentofu.cli | cli | Pending |  |
-| python.cli | cli | Pending |  |
+| python.cli | cli | Done | ansible/playbooks/install-python.yaml |
 | rustc.cli | cli | Pending |  |
 | stern.cli | cli | Pending |  |
 | task.cli | cli | Pending |  |
