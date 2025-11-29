@@ -205,6 +205,8 @@ impl DatumCreator for RepoDatum {
             datum_type: Some(crate::DatumType::Repo),
             desires: Some(branch.clone()),
             hint,
+            skills: None,
+            compliance: None,
             install: None,
             update: None,
             version: None,
@@ -223,6 +225,7 @@ impl DatumCreator for RepoDatum {
             branch: Some(branch),
             clone_path: Some(clone_path),
             dsn: None,
+            ..BootDatum::default()
         })
     }
     

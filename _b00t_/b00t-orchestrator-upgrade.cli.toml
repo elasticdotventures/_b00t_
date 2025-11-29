@@ -1,0 +1,175 @@
+[b00t]
+name = "b00t-orchestrator-upgrade"
+type = "cli" 
+hint = "Orchestrator upgrade path: TaskMaster → Azure AI Foundry for enterprise multi-agent systems"
+depends_on = ["azure-ai-foundry.cli"]
+
+install = '''
+# 🤓 B00t Orchestrator Upgrade Guide
+echo "🥾 B00t Orchestrator Evolution: TaskMaster → Azure AI Foundry"
+
+cat << 'EOF'
+
+╔══════════════════════════════════════════════════════════════════╗
+║                     🥾 B00t Orchestrator Hierarchy               ║
+╠══════════════════════════════════════════════════════════════════╣
+║                                                                  ║
+║  📊 Simple Task Management:                                      ║
+║     └─ TaskMaster AI (Basic task lists, single workflows)       ║
+║                                                                  ║  
+║  🏢 Enterprise Multi-Agent Orchestration:                       ║
+║     └─ Azure AI Foundry (Connected agents, sub-agent delegation)║
+║                                                                  ║
+║  🔄 Migration Path:                                              ║
+║     TaskMaster → Azure AI Foundry when complexity increases     ║
+║                                                                  ║
+╚══════════════════════════════════════════════════════════════════╝
+
+ORCHESTRATION CAPABILITY MATRIX:
+
+┌─────────────────┬──────────────┬─────────────────────┐
+│ Capability      │ TaskMaster   │ Azure AI Foundry    │
+├─────────────────┼──────────────┼─────────────────────┤
+│ Task Lists      │ ✅ Excellent │ ✅ Good             │
+│ PRD Parsing     │ ✅ Good      │ ✅ Excellent        │
+│ Single Agents   │ ✅ Good      │ ✅ Excellent        │  
+│ Multi-Agents    │ ❌ Limited   │ ✅ Excellent        │
+│ Sub-Agent Trees │ ❌ No        │ ✅ Max Depth 2     │
+│ Stateful Flow   │ ❌ No        │ ✅ Enterprise       │
+│ Enterprise Sec  │ ❌ Basic     │ ✅ Azure AD/RBAC   │
+│ Observability   │ ❌ Limited   │ ✅ Comprehensive    │
+│ Scalability     │ ❌ Local     │ ✅ Cloud-Native     │
+└─────────────────┴──────────────┴─────────────────────┘
+
+USE CASE RECOMMENDATIONS:
+
+🎯 Use TaskMaster for:
+   • Personal project tracking
+   • Simple development workflows  
+   • Prototyping and experimentation
+   • Single-user task management
+   • Basic PRD-to-task conversion
+
+🏢 Use Azure AI Foundry for:
+   • Customer service automation (support + billing + escalation agents)
+   • Content creation workflows (research + writing + management)
+   • Supply chain orchestration (multiple specialized agents)
+   • Enterprise business process automation
+   • Multi-tenant agent systems
+   • Production-grade agent deployments
+
+MIGRATION INDICATORS:
+
+Upgrade to Azure AI Foundry when you need:
+❗ Multiple specialized agents working together
+❗ Hierarchical agent delegation (agents managing sub-agents)
+❗ Stateful workflows that preserve context
+❗ Enterprise security, audit, and compliance
+❗ Cloud-scale agent deployments
+❗ Integration with Azure enterprise services
+
+EOF
+
+# Check if user has TaskMaster projects that could benefit from Foundry
+if [ -d ".taskmaster" ] || command -v task-master >/dev/null 2>&1; then
+    echo ""
+    echo "🔄 MIGRATION OPPORTUNITY DETECTED"
+    echo "   Found TaskMaster configuration in current directory"
+    echo "   Consider upgrading to Azure AI Foundry for:"
+    echo "   • Connected agent workflows"
+    echo "   • Enterprise security and scalability" 
+    echo "   • Advanced orchestration patterns"
+    echo ""
+    echo "📚 Migration Guide: ~/.b00t/foundry-samples/migration"
+fi
+
+echo ""
+echo "✅ Orchestrator upgrade guidance installed"
+echo "💡 Next: Evaluate your use case complexity against the matrix above"
+echo "🔧 Install Foundry: b00t cli install azure-ai-foundry"
+'''
+
+version = "echo 'Orchestrator Guide v1.0'"
+version_regex = 'v(\d+\.\d+)'
+
+[[b00t.usage]]
+description = "Show orchestrator comparison matrix"
+command = "b00t cli install b00t-orchestrator-upgrade"
+
+[[b00t.usage]]
+description = "Install Azure AI Foundry for enterprise orchestration"
+command = "b00t cli install azure-ai-foundry"
+
+[[b00t.usage]]
+description = "Keep TaskMaster for simple task management"
+command = "b00t mcp install taskmaster-ai claudecode"
+
+[b00t.learn]
+topic = "orchestrator-hierarchy"
+auto_digest = true
+content = """
+# B00t Orchestrator Hierarchy and Migration Strategy
+
+## Orchestration Evolution Path
+
+B00t recognizes different orchestration needs and provides tools for each level:
+
+### Level 1: Simple Task Management
+**Tool: TaskMaster AI**
+- Basic task lists and project tracking
+- PRD parsing to task conversion  
+- Single-user workflows
+- Development and prototyping
+
+### Level 2: Enterprise Multi-Agent Orchestration  
+**Tool: Azure AI Foundry**
+- Connected agents with hierarchical delegation
+- Sub-agent specialization (max depth 2)
+- Stateful workflows with context preservation
+- Enterprise security, observability, scalability
+
+## Migration Decision Framework
+
+### Complexity Indicators
+
+**Stay with TaskMaster when:**
+- Working on personal projects
+- Need simple task tracking
+- Single developer workflows
+- Prototype/experimental phase
+- Basic PRD → task conversion
+
+**Upgrade to Azure AI Foundry when:**
+- Need multiple specialized agents
+- Require agent-to-sub-agent delegation
+- Building customer-facing automation
+- Enterprise security requirements
+- Production-scale deployments
+- Complex business process automation
+
+### Real-World Migration Examples
+
+**Customer Support Evolution:**
+```
+TaskMaster: "Customer support task list"
+     ↓ (complexity increases)
+Azure AI Foundry: Support Coordinator → [Technical Agent, Billing Agent, Escalation Agent]
+```
+
+**Content Creation Evolution:**
+```
+TaskMaster: "Blog post tasks: research, write, publish"
+     ↓ (workflow complexity increases)  
+Azure AI Foundry: Content Workflow → [Collector Agent, Writer Agent, Manager Agent]
+```
+
+## Technical Migration Path
+
+1. **Assessment**: Evaluate current TaskMaster usage patterns
+2. **Planning**: Identify agent specialization opportunities
+3. **Pilot**: Start with simple connected agents
+4. **Scale**: Expand to full multi-agent workflows
+5. **Optimize**: Leverage enterprise features (security, observability)
+
+The key insight: TaskMaster and Azure AI Foundry serve different orchestration needs. Use TaskMaster for simplicity, migrate to Foundry when complexity demands connected agents and enterprise features.
+"""

@@ -63,6 +63,18 @@ pub enum McpCommands {
         httpstream: bool,
     },
     #[clap(
+        about = "Sync .mcp.json into a target client",
+        long_about = "Sync repository .mcp.json entries into a target MCP client.\n\nExamples:\n  b00t-cli mcp sync codex --repo\n  b00t-cli mcp sync codex --user"
+    )]
+    Sync {
+        #[clap(help = "Sync target: codex")]
+        target: String,
+        #[clap(long, help = "Sync to repository-specific location (if supported)")]
+        repo: bool,
+        #[clap(long, help = "Sync to user-global location (if supported)")]
+        user: bool,
+    },
+    #[clap(
         about = "Output MCP servers in various formats",
         long_about = "Output MCP servers in various formats for configuration files.\n\nExamples:\n  b00t-cli mcp output filesystem,brave-search\n  b00t-cli mcp output --json filesystem\n  b00t-cli mcp output --mcpServers filesystem,brave-search"
     )]
@@ -218,7 +230,25 @@ impl McpCommands {
                 match target.as_str() {
                     "claudecode" | "claude" => crate::claude_code_install_mcp(name, path),
                     "vscode" => crate::vscode_install_mcp(name, path),
-                    "codex" => crate::codex_install_mcp(name, path),
+                    "codex" => {
+                        let use_repo = if *repo && *user {
+                            anyhow::bail!("Error: Cannot specify both --repo and --user flags");
+                        } else if *repo {
+                            true
+                        } else if *user {
+                            false
+                        } else {
+                            crate::utils::is_git_repo()
+                        };
+
+                        crate::codex_install_mcp(
+                            name,
+                            path,
+                            use_repo,
+                            stdio_command.as_deref(),
+                            *httpstream,
+                        )
+                    }
                     "geminicli" => {
                         // Determine installation location: default to repo if in git repo, otherwise user
                         let use_repo = if *repo && *user {
@@ -261,6 +291,22 @@ impl McpCommands {
                             target
                         );
                     }
+                }
+            }
+            McpCommands::Sync { target, repo, user } => {
+                let use_repo = if *repo && *user {
+                    anyhow::bail!("Error: Cannot specify both --repo and --user flags");
+                } else if *repo {
+                    true
+                } else if *user {
+                    false
+                } else {
+                    crate::utils::is_git_repo()
+                };
+
+                match target.as_str() {
+                    "codex" => crate::codex_sync_dotmcpjson(path, use_repo),
+                    _ => anyhow::bail!("Error: Invalid target '{}'. Valid targets are: codex", target),
                 }
             }
             McpCommands::Output {

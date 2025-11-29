@@ -36,6 +36,10 @@ interval_seconds = 30
 redis_channel = "b00t:langchain"
 status_channel = "b00t:langchain:status"
 
+depends_on = ["pm2.cli", "python.cli", "redis.service"]
+
+aliases = ["lc-start", "lc-stop", "lc-restart", "lc-logs", "lc-status", "lc-deploy", "lc-health"]
+
 [b00t.env]
 # Redis connection
 REDIS_URL = "redis://localhost:6379"
@@ -52,39 +56,3 @@ LANGCHAIN_PROJECT = "b00t"
 LOG_LEVEL = "info"
 
 # API keys (loaded from environment)
-required = ["ANTHROPIC_API_KEY"]
-optional = ["LANGCHAIN_API_KEY", "LANGSMITH_API_KEY", "OPENAI_API_KEY"]
-
-[b00t.depends_on]
-requires = ["pm2.cli", "python.cli", "redis.service"]
-suggests = ["crawl4ai-mcp", "github-mcp"]
-
-# Quick start commands
-# 🤓: aliases must be array of tables, not inline table
-[[b00t.aliases]]
-name = "lc-start"
-command = "cd langchain-agent && just start"
-
-[[b00t.aliases]]
-name = "lc-stop"
-command = "cd langchain-agent && just stop"
-
-[[b00t.aliases]]
-name = "lc-restart"
-command = "cd langchain-agent && just restart"
-
-[[b00t.aliases]]
-name = "lc-logs"
-command = "cd langchain-agent && just logs"
-
-[[b00t.aliases]]
-name = "lc-status"
-command = "cd langchain-agent && just status"
-
-[[b00t.aliases]]
-name = "lc-deploy"
-command = "cd langchain-agent && just deploy"
-
-[[b00t.aliases]]
-name = "lc-health"
-command = "cd langchain-agent && just health-check"

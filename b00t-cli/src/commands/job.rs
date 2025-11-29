@@ -7,6 +7,8 @@
 //! - Sub-agent spawning for complex tasks
 //! - Integration with k0mmander/Dagu/go tasker
 
+use crate::datum_job::{JobDatum, JobStep, JobTask};
+use crate::job_state::{JobState, JobStatus, StepStatus};
 use anyhow::{Context, Result};
 use clap::Parser;
 use std::path::PathBuf;
@@ -258,26 +260,26 @@ async fn plan_job(path: &str, name: &str, show_dag: bool, json: bool) -> Result<
 
         // Show task type
         match &step.task {
-            crate::datum_job::JobTask::Bash { command, .. } => {
+            JobTask::Bash { command, .. } => {
                 println!("   Type: bash");
                 println!("   Command: {}", command);
             }
-            crate::datum_job::JobTask::Agent {
+            JobTask::Agent {
                 agent_type, prompt, ..
             } => {
                 println!("   Type: agent ({})", agent_type);
                 println!("   Prompt: {}", prompt.lines().next().unwrap_or("<empty>"));
             }
-            crate::datum_job::JobTask::K0mmander { .. } => {
+            JobTask::K0mmander { .. } => {
                 println!("   Type: k0mmander");
             }
-            crate::datum_job::JobTask::Datum { datum, .. } => {
+            JobTask::Datum { datum, .. } => {
                 println!("   Type: datum ({})", datum);
             }
-            crate::datum_job::JobTask::Mcp { server, tool, .. } => {
+            JobTask::Mcp { server, tool, .. } => {
                 println!("   Type: mcp ({}/{})", server, tool);
             }
-            crate::datum_job::JobTask::Dagu { dag, .. } => {
+            JobTask::Dagu { dag, .. } => {
                 println!("   Type: dagu ({})", dag);
             }
         }
@@ -294,7 +296,7 @@ async fn plan_job(path: &str, name: &str, show_dag: bool, json: bool) -> Result<
 }
 
 /// Print DAG visualization
-fn print_dag(steps: &[crate::datum_job::JobStep]) -> Result<()> {
+fn print_dag(steps: &[JobStep]) -> Result<()> {
     // Simple ASCII DAG visualization
     for step in steps {
         if step.depends_on.is_empty() {
@@ -412,7 +414,7 @@ async fn run_job(
 
         // Skip if resuming and step already completed
         if resume {
-            if let Some(step_state) = job_state.steps.get(step_name) {
+            if let Some(step_state) = job_state.steps.get(step_name.as_str()) {
                 if step_state.status == StepStatus::Completed {
                     println!("   ⏭️  Skipping (already completed)");
                     continue;
@@ -460,7 +462,7 @@ async fn run_job(
                         };
                         job_state.add_checkpoint(
                             step_name.clone(),
-                            checkpoint_name.clone(),
+                            checkpoint_name.to_string(),
                             git_tag,
                         );
                         job_state.save(path)?;
@@ -519,7 +521,7 @@ async fn run_job(
 /// Execute a single job step
 async fn execute_step(
     path: &str,
-    step: &crate::datum_job::JobStep,
+    step: &JobStep,
     env: &std::collections::HashMap<String, String>,
 ) -> Result<()> {
     use crate::datum_job::JobTask;
@@ -536,7 +538,7 @@ async fn execute_step(
             combined_env.extend(step_env.clone());
 
             execute_bash(
-                command,
+                command.as_str(),
                 cwd.as_deref().unwrap_or(path),
                 &combined_env,
                 *timeout_ms,
@@ -548,17 +550,17 @@ async fn execute_step(
             prompt,
             context_files,
             timeout_ms,
-        } => execute_agent(agent_type, prompt, context_files, *timeout_ms).await,
+        } => execute_agent(&agent_type, &prompt, &context_files, *timeout_ms).await,
         JobTask::K0mmander { script, cwd } => {
-            execute_k0mmander(script, cwd.as_deref().unwrap_or(path)).await
+            execute_k0mmander(&script, cwd.as_deref().unwrap_or(path)).await
         }
-        JobTask::Datum { datum, args } => execute_datum(path, datum, args).await,
+        JobTask::Datum { datum, args } => execute_datum(path, &datum, &args).await,
         JobTask::Mcp {
             server,
             tool,
             params,
-        } => execute_mcp(path, server, tool, params).await,
-        JobTask::Dagu { dag, params } => execute_dagu(dag, params).await,
+        } => execute_mcp(path, &server, &tool, &params).await,
+        JobTask::Dagu { dag, params } => execute_dagu(&dag, &params).await,
     }
 }
 
@@ -926,11 +928,11 @@ async fn status_job(path: &str, name: Option<&str>, all: bool, json: bool) -> Re
             println!("\n   Steps:");
             for (step_name, step_state) in &state.steps {
                 let status_icon = match step_state.status {
-                    crate::job_state::StepStatus::Pending => "⏳",
-                    crate::job_state::StepStatus::Running => "🏃",
-                    crate::job_state::StepStatus::Completed => "✅",
-                    crate::job_state::StepStatus::Failed => "❌",
-                    crate::job_state::StepStatus::Skipped => "⏭️ ",
+                    StepStatus::Pending => "⏳",
+                    StepStatus::Running => "🏃",
+                    StepStatus::Completed => "✅",
+                    StepStatus::Failed => "❌",
+                    StepStatus::Skipped => "⏭️ ",
                 };
                 print!("     {} {}", status_icon, step_name);
                 if let Some(duration_ms) = step_state.duration_ms {

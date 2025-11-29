@@ -16,12 +16,29 @@ fn is_infrastructure_available() -> bool {
 }
 
 fn get_b00t_binary() -> String {
-    // Get the b00t binary path from cargo
-    env::var("CARGO_BIN_EXE_b00t-cli").unwrap_or_else(|_| {
-        // Fallback: try to find in target directory
-        let manifest_dir = env::var("CARGO_MANIFEST_DIR").unwrap();
-        format!("{}/target/debug/b00t-cli", manifest_dir)
-    })
+    let manifest_dir = env::var("CARGO_MANIFEST_DIR").unwrap();
+    let mut candidates = vec![];
+
+    // Cargo sets CARGO_BIN_EXE_<name> with '-' replaced by '_'
+    if let Ok(path) = env::var("CARGO_BIN_EXE_b00t_cli") {
+        candidates.push(path);
+    }
+    if let Ok(path) = env::var("CARGO_BIN_EXE_b00t-cli") {
+        candidates.push(path);
+    }
+
+    // Common local build outputs
+    candidates.push(format!("{}/target/debug/b00t-cli", manifest_dir));
+    candidates.push(format!("{}/../target/debug/b00t-cli", manifest_dir)); // workspace root
+    candidates.push(format!("{}/target/debug/deps/b00t-cli", manifest_dir));
+
+    for path in &candidates {
+        if std::path::Path::new(path).exists() {
+            return path.clone();
+        }
+    }
+
+    panic!("b00t binary not found; tried: {:?}", candidates);
 }
 
 fn setup_temp_dir() -> TempDir {
@@ -206,6 +223,11 @@ mod cli_learn_record_search {
 
     #[test]
     fn test_cli_learn_record_and_search() {
+        if !is_infrastructure_available() {
+            println!("⚠️  Skipping: QDRANT_URL not set");
+            return;
+        }
+
         let temp_dir = setup_temp_dir();
         let temp_path = temp_dir.path().to_str().unwrap();
         let b00t = get_b00t_binary();
@@ -268,6 +290,11 @@ mod cli_learn_record_search {
 
     #[test]
     fn test_cli_learn_record_token_limit() {
+        if !is_infrastructure_available() {
+            println!("⚠️  Skipping: QDRANT_URL not set");
+            return;
+        }
+
         let temp_dir = setup_temp_dir();
         let temp_path = temp_dir.path().to_str().unwrap();
         let b00t = get_b00t_binary();

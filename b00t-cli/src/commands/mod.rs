@@ -12,6 +12,7 @@ pub mod install;
 pub mod job;
 pub mod k8s;
 pub mod learn;
+pub mod lfmf;
 pub mod mcp;
 pub mod model;
 pub mod script;

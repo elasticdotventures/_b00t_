@@ -19,61 +19,41 @@ npm update -g pm2
 version = "pm2 --version"
 version_regex = "^(\\d+\\.\\d+\\.\\d+)"
 
-# Common PM2 commands
-# 🤓: aliases must be array of tables
+aliases = ["pm2-list", "pm2-logs", "pm2-mon", "pm2-stop-all", "pm2-delete-all", "pm2-restart-all", "pm2-save", "pm2-resurrect"]
+depends_on = ["node.cli"]
+
+
 [[b00t.aliases]]
 name = "pm2-list"
-command = "pm2 list"
+cmd = "pm2 list"
 
 [[b00t.aliases]]
 name = "pm2-logs"
-command = "pm2 logs"
+cmd = "pm2 logs"
 
 [[b00t.aliases]]
 name = "pm2-mon"
-command = "pm2 monit"
+cmd = "pm2 monit"
 
 [[b00t.aliases]]
 name = "pm2-stop-all"
-command = "pm2 stop all"
+cmd = "pm2 stop all"
 
 [[b00t.aliases]]
 name = "pm2-delete-all"
-command = "pm2 delete all"
+cmd = "pm2 delete all"
 
 [[b00t.aliases]]
 name = "pm2-restart-all"
-command = "pm2 restart all"
-pm2-save = "pm2 save"
-pm2-resurrect = "pm2 resurrect"
-
-[[b00t.aliases]]
-name = "pm2-logs"
-command = "pm2 logs"
-
-[[b00t.aliases]]
-name = "pm2-mon"
-command = "pm2 monit"
-
-[[b00t.aliases]]
-name = "pm2-stop-all"
-command = "pm2 stop all"
-
-[[b00t.aliases]]
-name = "pm2-delete-all"
-command = "pm2 delete all"
-
-[[b00t.aliases]]
-name = "pm2-restart-all"
-command = "pm2 restart all"
+cmd = "pm2 restart all"
 
 [[b00t.aliases]]
 name = "pm2-save"
-command = "pm2 save"
+cmd = "pm2 save"
 
 [[b00t.aliases]]
 name = "pm2-resurrect"
-command = "pm2 resurrect"
+cmd = "pm2 resurrect"
 [b00t.env]
 # PM2 home directory
 PM2_HOME = "~/.pm2"
@@ -81,7 +61,3 @@ PM2_HOME = "~/.pm2"
 PM2_MONITORING = "true"
 # Max memory restart threshold
 PM2_MAX_MEMORY_RESTART = "500M"
-
-[b00t.depends_on]
-# PM2 requires Node.js
-requires = ["node.cli"]

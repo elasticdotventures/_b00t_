@@ -3,20 +3,10 @@ name = "virtfs"
 type = "stack"
 hint = "Virtual filesystem presenting b00t datums as Claude Code skills via FUSE"
 lfmf_category = "virtfs"
-
-[b00t.capabilities]
-fuse = true
-skill_generation = true
-agent_proxy = true
-live_reload = true
-
-[b00t.version]
-command = "b00t-cli mount status 2>/dev/null | grep -oP 'version: \\K[0-9.]+' || echo 'not installed'"
-regex = "(\\d+\\.\\d+\\.\\d+)"
 desires = "0.1.0"
-
-[b00t.install]
-command = """
+version = "b00t-cli mount status 2>/dev/null | grep -oP 'version: \\K[0-9.]+' || echo 'not installed'"
+version_regex = "(\\d+\\.\\d+\\.\\d+)"
+install = """
 # Build b00t-cli with virtfs feature
 cd ~/.b00t/b00t-cli
 cargo build --release --features virtfs
@@ -48,9 +38,7 @@ else
     ~/.b00t/b00t-cli/target/release/b00t-cli mount --daemon
 fi
 """
-
-[b00t.update]
-command = """
+update = """
 cd ~/.b00t/b00t-cli
 git pull origin main
 cargo build --release --features virtfs
@@ -64,6 +52,12 @@ else
     b00t-cli mount --daemon
 fi
 """
+
+[b00t.capabilities]
+fuse = true
+skill_generation = true
+agent_proxy = true
+live_reload = true
 
 [b00t.env]
 B00T_MOUNT_POINT = "~/.claude/b00t"

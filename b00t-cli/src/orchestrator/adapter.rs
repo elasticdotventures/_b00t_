@@ -46,6 +46,19 @@ impl std::fmt::Display for Orchestrator {
     }
 }
 
+impl Orchestrator {
+    /// Construct an orchestrator instance from a _b00t_ path.
+    /// Current stub: defaults to Direct execution until adapters are expanded.
+    pub fn new(_b00t_path: &str) -> Result<Self> {
+        Ok(Orchestrator::Direct)
+    }
+
+    /// Ensure dependencies for the given datum/stack; stub returns empty list.
+    pub async fn ensure_dependencies(&self, _name: &str) -> Result<Vec<String>> {
+        Ok(vec![])
+    }
+}
+
 /// MCP tool call command
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct McpCommand {

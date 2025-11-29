@@ -1,1 +1,149 @@
-opentofu.cli.toml
+[b00t]
+name = "opentofu"
+type = "cli"
+desires = "1.8.0"
+aliases = ["terraform", "tofu"]
+install = '''
+# Install OpenTofu - Open-source Terraform alternative
+# https://opentofu.org/
+
+echo "📦 Installing OpenTofu..."
+
+# Detect platform
+OS=$(uname -s | tr '[:upper:]' '[:lower:]')
+ARCH=$(uname -m)
+
+case "$ARCH" in
+    x86_64) ARCH="amd64" ;;
+    aarch64|arm64) ARCH="arm64" ;;
+    armv7l) ARCH="arm" ;;
+    *) echo "❌ Unsupported architecture: $ARCH"; exit 1 ;;
+esac
+
+case "$OS" in
+    linux) OS="linux" ;;
+    darwin) OS="darwin" ;;
+    *) echo "❌ Unsupported OS: $OS"; exit 1 ;;
+esac
+
+# Try pkgx first (preferred method)
+if command -v pkgx >/dev/null 2>&1; then
+    echo "✨ Installing OpenTofu via pkgx (recommended)..."
+    if pkgx install opentofu@1.8; then
+        # Create wrapper scripts
+        mkdir -p ~/.local/bin
+        cat > ~/.local/bin/tofu << 'EOF'
+#!/bin/bash
+exec pkgx tofu "$@"
+EOF
+        cat > ~/.local/bin/terraform << 'EOF'
+#!/bin/bash
+# OpenTofu wrapper - OSS Terraform alternative
+exec pkgx tofu "$@"
+EOF
+        chmod +x ~/.local/bin/tofu ~/.local/bin/terraform
+        echo "✅ OpenTofu installed via pkgx"
+        echo "✅ Created tofu and terraform wrappers in ~/.local/bin"
+        exit 0
+    fi
+    echo "⚠️  pkgx installation failed, falling back to binary method..."
+fi
+
+# Official installation method: Use OpenTofu installer script
+# https://opentofu.org/docs/intro/install/standalone/
+echo "📦 Using official OpenTofu installer script..."
+
+# Download and run the official installer
+curl --proto '=https' --tlsv1.2 -fsSL https://get.opentofu.org/install-opentofu.sh -o /tmp/install-opentofu.sh
+chmod +x /tmp/install-opentofu.sh
+
+# Run installer with standalone method (installs to /usr/local/bin by default)
+/tmp/install-opentofu.sh --install-method standalone
+
+# Clean up
+rm /tmp/install-opentofu.sh
+
+# Create terraform symlink for drop-in compatibility
+if [ -f /usr/local/bin/tofu ] || [ -f /usr/bin/tofu ]; then
+    TOFU_BIN=$(command -v tofu)
+    INSTALL_DIR=$(dirname "$TOFU_BIN")
+
+    if [ -w "$INSTALL_DIR" ]; then
+        ln -sf "$TOFU_BIN" "$INSTALL_DIR/terraform"
+        echo "✅ Created terraform symlink to tofu"
+    elif command -v sudo >/dev/null 2>&1; then
+        sudo ln -sf "$TOFU_BIN" "$INSTALL_DIR/terraform"
+        echo "✅ Created terraform symlink to tofu (with sudo)"
+    fi
+fi
+
+echo "✅ OpenTofu installed successfully"
+tofu version
+echo "💡 Use 'tofu' or 'terraform' command (both point to OpenTofu OSS fork)"
+'''
+update = '''
+# Update OpenTofu to latest version
+echo "🔄 Updating OpenTofu..."
+
+if command -v pkgx >/dev/null 2>&1 && [ -f ~/.local/bin/tofu ] && grep -q "pkgx" ~/.local/bin/tofu 2>/dev/null; then
+    echo "✨ Updating via pkgx..."
+    pkgx install opentofu@latest
+    echo "✅ OpenTofu updated via pkgx"
+else
+    echo "📦 Updating via official installer..."
+
+    # Download and run the official installer
+    curl --proto '=https' --tlsv1.2 -fsSL https://get.opentofu.org/install-opentofu.sh -o /tmp/install-opentofu.sh
+    chmod +x /tmp/install-opentofu.sh
+
+    # Run installer (will update to latest version)
+    /tmp/install-opentofu.sh --install-method standalone
+
+    # Clean up
+    rm /tmp/install-opentofu.sh
+
+    echo "✅ OpenTofu updated successfully"
+fi
+
+tofu version
+'''
+version = "tofu version"
+version_regex = 'OpenTofu v(\d+\.\d+\.?\d*)'
+hint = "OpenTofu - Open-source Terraform alternative (OSS fork). Drop-in replacement for Terraform with full compatibility. We prefer OSS forks over proprietary tools."
+lfmf_category = "opentofu"
+
+[b00t.learn]
+topic = "opentofu"
+auto_digest = false
+
+[[b00t.usage]]
+description = "Check OpenTofu version"
+command = "tofu version"
+
+[[b00t.usage]]
+description = "Initialize OpenTofu configuration"
+command = "tofu init"
+
+[[b00t.usage]]
+description = "Plan infrastructure changes"
+command = "tofu plan"
+
+[[b00t.usage]]
+description = "Apply infrastructure changes"
+command = "tofu apply"
+
+[[b00t.usage]]
+description = "Show current state"
+command = "tofu show"
+
+[[b00t.usage]]
+description = "Validate configuration"
+command = "tofu validate"
+
+[[b00t.usage]]
+description = "Format configuration files"
+command = "tofu fmt"
+
+[[b00t.usage]]
+description = "Use terraform command (aliased to tofu)"
+command = "terraform apply  # Uses OpenTofu OSS fork"

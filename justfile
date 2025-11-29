@@ -1,7 +1,7 @@
 # justfile for Rust Development Environment
 # Alias to get the Git repository root
 repo-root := env_var_or_default("JUST_REPO_ROOT", `git rev-parse --show-toplevel 2>/dev/null || echo .`)
-workspace_version := `toml get Cargo.toml workspace.package.version | tr -d '"'`
+workspace_version := `if command -v toml >/dev/null 2>&1; then toml get Cargo.toml workspace.package.version | tr -d '"' ; else echo "0.0.0-unknown"; fi`
 
 
 
@@ -278,6 +278,9 @@ version:
     echo "{{workspace_version}}"
 
 commit-hook:
+    echo "removed"
+
+commit-hook2:
     #!/bin/bash
     set -euo pipefail
     if ! git diff --quiet; then

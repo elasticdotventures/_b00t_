@@ -6,11 +6,11 @@ desires = "1.30.0"
 
 install = '''
 if command -v pkgx >/dev/null 2>&1; then
-    pkgx install stern@1.30
+    # 🤓 pkgx syntax: use env instead of install
     mkdir -p ~/.local/bin
     cat > ~/.local/bin/stern << 'EOF'
 #!/bin/bash
-exec pkgx stern "$@"
+exec pkgx stern@1.30 "$@"
 EOF
     chmod +x ~/.local/bin/stern
 elif command -v brew >/dev/null 2>&1; then

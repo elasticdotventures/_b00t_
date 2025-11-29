@@ -1,1 +1,123 @@
-k0s.cli.toml
+[b00t]
+name = "k0s"
+type = "cli"
+desires = "1.31.0"
+aliases = ["k8s", "kubernetes"]
+install = '''
+# Install k0s - Zero friction Kubernetes distribution
+# Official docs: https://docs.k0sproject.io/stable/install/
+
+echo "📦 Installing k0s..."
+
+# Try pkgx first (preferred method)
+if command -v pkgx >/dev/null 2>&1; then
+    echo "✨ Installing k0s via pkgx (recommended)..."
+    if pkgx install k0s; then
+        # Create wrapper scripts for seamless usage
+        mkdir -p ~/.local/bin
+        cat > ~/.local/bin/k0s << 'EOF'
+#!/bin/bash
+exec pkgx k0s "$@"
+EOF
+        cat > ~/.local/bin/k8s << 'EOF'
+#!/bin/bash
+# k8s wrapper - points to k0s distribution
+exec pkgx k0s "$@"
+EOF
+        chmod +x ~/.local/bin/k0s ~/.local/bin/k8s
+        echo "✅ k0s installed via pkgx"
+        echo "✅ Created k0s and k8s wrappers in ~/.local/bin"
+        exit 0
+    fi
+    echo "⚠️  pkgx installation failed, falling back to official installer..."
+fi
+
+# Official installation method: Use k0s installer script
+# https://docs.k0sproject.io/stable/install/
+echo "📦 Using official k0s installer script..."
+
+# Download and run the official installer
+curl --proto '=https' --tlsv1.2 -sSf https://get.k0s.sh | sudo sh
+
+# Verify installation
+if command -v k0s >/dev/null 2>&1; then
+    echo "✅ k0s installed successfully"
+    k0s version
+
+    # Create k8s symlink for alias compatibility
+    K0S_BIN=$(command -v k0s)
+    INSTALL_DIR=$(dirname "$K0S_BIN")
+
+    if [ -w "$INSTALL_DIR" ]; then
+        ln -sf "$K0S_BIN" "$INSTALL_DIR/k8s"
+        echo "✅ Created k8s symlink to k0s"
+    elif command -v sudo >/dev/null 2>&1; then
+        sudo ln -sf "$K0S_BIN" "$INSTALL_DIR/k8s"
+        echo "✅ Created k8s symlink to k0s (with sudo)"
+    fi
+
+    echo "💡 Use 'k0s' or 'k8s' command (both point to k0s distribution)"
+else
+    echo "❌ k0s installation failed"
+    exit 1
+fi
+'''
+update = '''
+# Update k0s to latest version
+echo "🔄 Updating k0s..."
+
+if command -v pkgx >/dev/null 2>&1 && [ -f ~/.local/bin/k0s ] && grep -q "pkgx" ~/.local/bin/k0s 2>/dev/null; then
+    echo "✨ Updating via pkgx..."
+    pkgx install k0s@latest
+    echo "✅ k0s updated via pkgx"
+else
+    echo "📦 Updating via official installer..."
+
+    # Re-run the installer to get latest version
+    curl --proto '=https' --tlsv1.2 -sSf https://get.k0s.sh | sudo sh
+
+    echo "✅ k0s updated successfully"
+fi
+
+k0s version
+'''
+version = "k0s version"
+version_regex = 'v(\d+\.\d+\.?\d*)'
+hint = "k0s - Zero friction Kubernetes distribution. Lightweight, certified Kubernetes that works on any infrastructure. We prefer k0s for its simplicity and low resource footprint."
+lfmf_category = "k0s"
+
+[b00t.learn]
+topic = "k0s"
+auto_digest = false
+
+[[b00t.usage]]
+description = "Check k0s version"
+command = "k0s version"
+
+[[b00t.usage]]
+description = "Install k0s as controller (single node)"
+command = "sudo k0s install controller --single"
+
+[[b00t.usage]]
+description = "Install k0s as controller with worker (multi-node)"
+command = "sudo k0s install controller --enable-worker --no-taints"
+
+[[b00t.usage]]
+description = "Start k0s service"
+command = "sudo k0s start"
+
+[[b00t.usage]]
+description = "Check k0s status"
+command = "sudo k0s status"
+
+[[b00t.usage]]
+description = "Get kubeconfig"
+command = "sudo k0s kubeconfig admin"
+
+[[b00t.usage]]
+description = "Stop k0s service"
+command = "sudo k0s stop"
+
+[[b00t.usage]]
+description = "Use k8s command (aliased to k0s)"
+command = "k8s version  # Same as k0s version"

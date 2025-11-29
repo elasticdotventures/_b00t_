@@ -6,11 +6,11 @@ desires = "0.32.0"
 
 install = '''
 if command -v pkgx >/dev/null 2>&1; then
-    pkgx install k9s@0.32
+    # 🤓 pkgx syntax: use env instead of install
     mkdir -p ~/.local/bin
     cat > ~/.local/bin/k9s << 'EOF'
 #!/bin/bash
-exec pkgx k9s "$@"
+exec pkgx k9s@0.32 "$@"
 EOF
     chmod +x ~/.local/bin/k9s
 elif command -v brew >/dev/null 2>&1; then

@@ -723,3 +723,7 @@ fi
 
 run_cmd apt install -y zip
 
+sudo apt install yamllint
+
+sudo apt install yamllint
+

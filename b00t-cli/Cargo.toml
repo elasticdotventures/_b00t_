@@ -11,27 +11,16 @@ repository.workspace = true
 name = "b00t-cli"
 path = "src/main.rs"
 
-# 🤓 Thin wrapper so `b00t` works without bash aliases
 [[bin]]
-name = "b00t"
-path = "src/b00t.rs"
-
-# 🤓 Multi-agent REPL for crew coordination
-[[bin]]
-name = "b00t-agent"
-path = "src/bin/b00t-agent.rs"
-
-# 🤓 Standalone MCP tool executor via stdio (hackathon: carmack+dtolnoy)
-[[bin]]
-name = "mcp-user"
-path = "src/bin/mcp-user.rs"
+name = "delegation_demo"
+path = "src/bin/delegation_demo.rs"
 
 [lib]
 name = "b00t_cli"
 path = "src/lib.rs"
 
 [dependencies]
-tiktoken-rs = "0.9.1"
+tiktoken-rs = "0.7.0"
 # Shared workspace dependencies
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
@@ -40,11 +29,11 @@ clap = { workspace = true }
 regex = { workspace = true }
 anyhow = { workspace = true }
 chrono = { workspace = true, features = ["serde"] }
+tempfile = "3.13.0"
 
 # b00t-cli specific dependencies
 b00t-c0re-lib = { workspace = true }
 b00t-grok = { workspace = true }
-b00t-ipc = { path = "../b00t-ipc" }
 duct = "1.0"
 shellexpand = "3.1.0"
 semver = "1.0"
@@ -57,14 +46,17 @@ tokio = { version = "1.34.0", features = ["full"] }
 serde_yaml = "0.9"
 tracing = "0.1"
 uuid = { version = "1.0", features = ["v4"] }
+fs2 = "0.4"
 confy = "2.0.0"
 libc = "0.2"
 reqwest = { version = "0.12.23", features = ["json"] }
 whoami = "1.5"
 b00t-chat = { workspace = true }
 env_logger = "0.11"
+b00t-ipc = { path = "../b00t-ipc" }
+url = "2.5"
 
 
 [dev-dependencies]
 assert_cmd = "2.0.17"
-tempfile = "3.0"
+tempfile = "3.13.0"

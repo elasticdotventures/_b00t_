@@ -1,16 +1,6 @@
 use crate::model_manager::{
-    // use crate:: to reference lib root, model_manager is a sibling module
-    ModelOperation,
-    ModelRecord,
-    ServeOptions,
-    activate_model,
-    describe_model,
-    download_model,
-    export_model_env,
-    list_models,
-    remove_model,
-    serve_model,
-    stop_model,
+    ModelOperation, ModelRecord, ServeOptions, activate_model, describe_model, download_model,
+    export_model_env, list_models, remove_model, serve_model, stop_model,
 };
 use anyhow::{Result, anyhow};
 use clap::Parser;

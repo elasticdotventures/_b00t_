@@ -301,4 +301,12 @@ mcp-probe
 
 # Claude Code frameworks (exclude all)
 .claude/
-\n# Archive for old/irrelevant files\n_archive_/
+# Archive for old/irrelevant files\n
+_archive_/
+
+# Proprietary/Licensed Content - DO NOT COMMIT
+# 🤓: TOGAF datasheets are property of The Open Group
+# Downloaded from publications.opengroup.org for local reference only
+**/.b00t/data/togaf/datasheets/
+**/togaf/datasheets/
+*.togaf-datasheet.*
