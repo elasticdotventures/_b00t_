@@ -1,8 +1,10 @@
 use anyhow::{Context, Result, anyhow};
 use clap::Parser;
+use regex::Regex;
 use std::collections::HashMap;
 
 use crate::datum_stack::StackDatum;
+use crate::dependency_resolver::DependencyResolver;
 use crate::traits::DatumCrdDisplay;
 use crate::{
     BootDatum, ansible::AnsibleConfig, ansible::run_playbook, get_config, get_expanded_path,
@@ -319,6 +321,9 @@ fn install_stack(name: &str, path: &str, dry_run: bool) -> Result<()> {
     let stack_path = get_expanded_path(path)?.join(format!("{}.stack.toml", name));
 
     if !stack_path.exists() {
+        if name.contains('*') || name.contains('?') {
+            return install_datums_by_pattern(name, path, dry_run);
+        }
         anyhow::bail!("Stack '{}' not found at {}", name, stack_path.display());
     }
 
@@ -355,6 +360,52 @@ fn install_stack(name: &str, path: &str, dry_run: bool) -> Result<()> {
     println!("   This would install each member using their install commands");
 
     Ok(())
+}
+
+fn install_datums_by_pattern(pattern: &str, path: &str, dry_run: bool) -> Result<()> {
+    let available_datums = load_all_datums(path)?;
+    let regex = build_pattern_regex(pattern)?;
+    let matched_keys: Vec<String> = available_datums
+        .keys()
+        .filter(|key| regex.is_match(key))
+        .cloned()
+        .collect();
+
+    if matched_keys.is_empty() {
+        anyhow::bail!("No datums match pattern '{}'", pattern);
+    }
+
+    let datum_refs: Vec<&BootDatum> = available_datums.values().collect();
+    let resolver = DependencyResolver::new(datum_refs);
+    let install_order = resolver.resolve_many(&matched_keys)?;
+
+    println!(
+        "📦 Installing datums matching pattern '{}' ({} items):",
+        pattern,
+        install_order.len()
+    );
+    for (idx, member) in install_order.iter().enumerate() {
+        println!("   {}. {}", idx + 1, member);
+    }
+
+    if dry_run {
+        return Ok(());
+    }
+
+    for member in install_order {
+        if let Some(datum) = available_datums.get(&member) {
+            run_stack_ansible("datum", &datum.name, &[], path)?;
+        }
+    }
+
+    Ok(())
+}
+
+fn build_pattern_regex(pattern: &str) -> Result<Regex> {
+    let escaped = regex::escape(pattern);
+    let regex_str = format!("^{}$", escaped.replace(r"\*", ".*").replace(r"\?", "."));
+    let regex = Regex::new(&regex_str).context("Failed to compile datum pattern")?;
+    Ok(regex)
 }
 
 /// Generate docker-compose.yml from stack
