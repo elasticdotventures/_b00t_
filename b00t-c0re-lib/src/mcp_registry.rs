@@ -490,6 +490,8 @@ impl McpRegistry {
             env: Option<HashMap<String, String>>,
             #[serde(default)]
             keywords: Option<Vec<String>>,
+            #[serde(default)]
+            ansible: Option<serde_json::Value>,
             mcp: Option<serde_json::Value>,
         }
 

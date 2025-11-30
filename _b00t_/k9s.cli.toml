@@ -3,6 +3,7 @@ name = "k9s"
 type = "cli"
 hint = "Terminal UI for k8s cluster management. Makes kubectl operations visual and fast."
 desires = "0.32.0"
+auto_install = false
 
 install = '''
 if command -v pkgx >/dev/null 2>&1; then

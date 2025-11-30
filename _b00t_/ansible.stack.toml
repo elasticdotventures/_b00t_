@@ -1,0 +1,17 @@
+[b00t]
+name = "ansible"
+type = "stack"
+hint = "Registry of Ansible playbooks and the CLI/runtime capability so stacks can depend on it."
+members = ["ansible.cli"]
+lfmf_category = "ansible"
+
+[b00t.env]
+ANSIBLE_PLAYBOOKS_DIR = "ansible/playbooks"
+
+[[b00t.usage]]
+description = "List available Ansible recipes"
+command = "ls $ANSIBLE_PLAYBOOKS_DIR"
+
+[[b00t.usage]]
+description = "Run a datum-backed playbook"
+command = "b00t ansible run <datum> --check"

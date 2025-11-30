@@ -139,7 +139,13 @@ release:
 
 
 install:
+    #!/bin/bash
+    set -euo pipefail
     echo "🥾 _b00t_ install"
+    CARGO_HOME_VALUE="${CARGO_HOME:-$PWD/.cargo}"
+    export CARGO_HOME="${CARGO_HOME_VALUE}"
+    export PATH="${CARGO_HOME_VALUE}/bin:${PATH}"
+    mkdir -p "${CARGO_HOME_VALUE}/bin"
     cargo install --path b00t-mcp --force
     cargo install --path b00t-cli --force
     cargo install cocogitto --locked --force

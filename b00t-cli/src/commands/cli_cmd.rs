@@ -6,9 +6,17 @@ use crate::{BootDatum, UnifiedConfig};
 use anyhow::{Context, Result};
 use clap::Parser;
 use duct::cmd;
+use once_cell::sync::Lazy;
 use shellexpand;
 use std::collections::HashMap;
 use std::path::PathBuf;
+
+static IS_ROOT: Lazy<bool> = Lazy::new(|| {
+    cmd!("id", "-u")
+        .read()
+        .map(|out| out.trim() == "0")
+        .unwrap_or(false)
+});
 
 #[derive(Parser)]
 pub enum CliCommands {
@@ -311,6 +319,24 @@ fn cli_up(path: &str, yes: bool) -> Result<()> {
         let desired = tool
             .desired_version()
             .unwrap_or_else(|| "unknown".to_string());
+
+        let datum = tool.datum();
+
+        if datum.auto_install.map(|v| !v).unwrap_or(false) {
+            println!(
+                "⏭️ {} (auto_install=false) - skipping install/update in cli up",
+                name
+            );
+            continue;
+        }
+
+        if datum.requires_sudo && !*IS_ROOT {
+            println!(
+                "⏭️ {} (requires sudo) - run b00t cli up with sudo to install/update",
+                name
+            );
+            continue;
+        }
 
         match version_status {
             VersionStatus::Older | VersionStatus::Missing => {
