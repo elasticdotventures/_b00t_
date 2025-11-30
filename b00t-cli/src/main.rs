@@ -1,11 +1,16 @@
 use anyhow::Result;
 use clap::Parser;
 use duct::cmd;
+// use regex::Regex;
+// use semver::Version;
 use std::fs;
-use b00t_cli::{
-    commands, load_datum_providers, SessionState, UnifiedConfig, handle_up_command, session_memory, whoami,
-};
+// use std::io::{Read};
+// use std::path::PathBuf;
+// 🤓 cleaned up unused Tera import after switching to simple string replacement
+use b00t_cli::{SessionState, UnifiedConfig, whoami};
 
+// 🦨 Module declarations removed - these are declared in lib.rs now
+// Import from b00t_cli:: instead
 use b00t_cli::datum_ai::AiDatum;
 use b00t_cli::datum_ai_model::AiModelDatumEntry;
 use b00t_cli::datum_apt::AptDatum;
@@ -16,19 +21,16 @@ use b00t_cli::datum_mcp::McpDatum;
 use b00t_cli::datum_vscode::VscodeDatum;
 use b00t_cli::traits::*;
 use b00t_cli::utils::get_workspace_root;
-
+use b00t_cli::commands::learn::{LearnArgs, handle_learn};
 use b00t_cli::commands::{
     AiCommands, AgentCommands, AnsibleCommands, AppCommands, BootstrapCommands, BudgetCommands,
     ChatCommands, CliCommands, DatumCommands, GrokCommands, InitCommands, InstallCommands,
-    JobCommands, K8sCommands, McpCommands, ModelCommands, RedisCommands, SessionCommands,
-    StackCommands, WhatismyCommands,
+    JobCommands, K8sCommands, McpCommands, SessionCommands, StackCommands, WhatismyCommands,
 };
-use b00t_cli::commands::learn::{LearnArgs, handle_learn};
-use b00t_cli::commands::install::{install_datum, run_just_install};
 
 // Re-export commonly used functions for datum modules
 pub use b00t_cli::{
-    DatumType, claude_code_install_mcp, codex_install_mcp, dotmcpjson_install_mcp, gemini_install_mcp,
+    claude_code_install_mcp, codex_install_mcp, dotmcpjson_install_mcp, gemini_install_mcp,
     get_config, get_expanded_path, get_mcp_config, get_mcp_toml_files, mcp_add_json, mcp_list,
     mcp_output, mcp_remove, vscode_install_mcp,
 };
@@ -68,76 +70,6 @@ Example:
         #[clap(help = "Text to tokenize")]
         text: String,
     },
-    #[clap(
-        about = "Record a lesson learned for a tool",
-        long_about = r#"
-lfmf is a dynamic, opinionated man-page for any tool with a b00t datum (TOML, learn/ dir, etc).
-It memoizes operator-informed tips, tricks, and anti-patterns—never repo-specific, always tool wisdom.
-Each entry is a <25 token topic and <250 token body, written in a positive, laconic, affirmative style.
-Use lfmf to help the hive avoid repeating mistakes and accelerate mastery.
-Good entries separate neophyte from master. Bad entries are vague, negative, or repo-specific.
-
-Usage:
-  b00t-cli lfmf <tool> "<topic>: <body>"
-
-Examples:
-  # Good
-  b00t-cli lfmf just "modules & workdir: Use modules and workdir to avoid cd; keeps recipes portable and context-safe."
-  b00t-cli lfmf docker "container cleanup: Use 'docker system prune' regularly to avoid disk bloat."
-  b00t-cli lfmf git "atomic commits: Commit small, focused changes for easier review and rollback."
-
-  # Bad
-  b00t-cli lfmf just "cd: I always use cd in my recipes."
-  b00t-cli lfmf docker "disk full: My disk filled up once."
-  b00t-cli lfmf git "fix: Fixed a bug in my repo."
-
-Tips:
-- Topic: <25 tokens, concise, positive, tool-focused.
-- Body: <250 tokens, actionable, never repo-specific.
-- Affirmative: 'Do X for Y benefit', not 'Don't do X'.
-- Suitable tools: any with a b00t datum (TOML, learn/ dir, etc).
-"#
-    )]
-    Lfmf {
-        #[clap(long, help = "Tool name")]
-        tool: Option<String>,
-        #[clap(long, help = "Lesson in '<topic>: <body>' format")]
-        lesson: Option<String>,
-        #[clap(long, group = "scope", help = "Record lesson for this repo (default)")]
-        repo: bool,
-        #[clap(
-            long,
-            group = "scope",
-            help = "Record lesson globally (mutually exclusive with --repo)"
-        )]
-        global: bool,
-    },
-    #[clap(
-        about = "Get advice for syntax errors and debugging",
-        long_about = r#"
-The b00t advice system acts as a syntax therapist, providing contextual debugging assistance
-based on lessons learned from previous failures. It performs semantic search through the
-hive's collective knowledge to suggest solutions for similar error patterns.
-
-Usage:
-  b00t-cli advice <tool> "<error_pattern>"
-  b00t-cli advice <tool> list  # List all lessons for a tool
-  b00t-cli advice <tool> search "<query>"  # Semantic search for lessons
-
-Examples:
-  b00t-cli advice just "Unknown start of token '.'"
-  b00t-cli advice rust "cannot borrow as mutable"
-  b00t-cli advice docker "permission denied"
-  b00t-cli advice just list
-  b00t-cli advice rust search "template syntax"
-
-The system will:
-1. Search for similar error patterns in the vector database
-2. Return relevant lessons with confidence scores
-3. Provide conversational debugging guidance
-4. Suggest specific solutions based on hive experience
-"#
-    )]
     #[clap(about = "MCP (Model Context Protocol) server management")]
     Mcp {
         #[clap(subcommand)]
@@ -167,11 +99,6 @@ The system will:
     Cli {
         #[clap(subcommand)]
         cli_command: CliCommands,
-    },
-    #[clap(about = "Run Ansible playbooks")]
-    Ansible {
-        #[clap(subcommand)]
-        ansible_command: commands::ansible::AnsibleCommands,
     },
     #[clap(
         about = "AI model datum management",
@@ -205,6 +132,21 @@ The system will:
         #[clap(long, help = "Override detected role (matches role datum)")]
         role: Option<String>,
     },
+    #[clap(about = "Coordinate agents")]
+    Agent {
+        #[clap(subcommand)]
+        agent_command: AgentCommands,
+    },
+    #[clap(about = "Manage jobs (run, list, inspect)")]
+    Job {
+        #[clap(subcommand)]
+        job_command: JobCommands,
+    },
+    #[clap(about = "Chat transport and messaging")]
+    Chat {
+        #[clap(subcommand)]
+        chat_command: ChatCommands,
+    },
     #[clap(about = "Create checkpoint: commit all files and run tests")]
     // 🤓 ENTANGLED: b00t-mcp/src/mcp_tools.rs CheckpointCommand
     // When this changes, update b00t-mcp CheckpointCommand structure
@@ -236,12 +178,17 @@ The system will:
         #[clap(long, help = "Show only available (not installed) tools")]
         available: bool,
         #[clap(long = "filter", help = "Filter by subsystem (MCP compatibility)")]
-        filter_flag: Option<String>, // 🦨 MCP compatibility: accept --filter flag
+        filter_flag: Option<String>,
     },
     #[clap(about = "Kubernetes (k8s) cluster and pod management")]
     K8s {
         #[clap(subcommand)]
         k8s_command: K8sCommands,
+    },
+    #[clap(about = "Run 'just install' to install b00t components")]
+    Install {
+        #[clap(subcommand)]
+        install_command: InstallCommands,
     },
     #[clap(about = "Session management")]
     Session {
@@ -267,6 +214,17 @@ The system will:
     // 🤓 ENTANGLED (synchronized): b00t-mcp/src/mcp_tools.rs LearnCommand now uses LearnArgs wrapper, matching CLI structure.
     // Unified knowledge command: LFMF lessons, learn docs, man pages, RAG
     Learn(LearnArgs),
+    #[clap(about = "Record a Lesson From My Failure (LFMF)")]
+    Lfmf {
+        #[clap(long, help = "Tool/category name")]
+        tool: Option<String>,
+        #[clap(long, help = "Lesson text")]
+        lesson: Option<String>,
+        #[clap(long, help = "Repository path for repo-scoped lessons")]
+        repo: Option<String>,
+        #[clap(long, help = "Store lesson globally instead of repo")]
+        global: bool,
+    },
     #[clap(about = "Datum management and inspection")]
     Datum {
         #[clap(subcommand)]
@@ -277,12 +235,10 @@ The system will:
         #[clap(subcommand)]
         grok_command: GrokCommands,
     },
-    #[clap(about = "Install a datum (auto-resolves dependencies) or run bootstrap install when no name is provided")]
-    Install {
-        #[clap(help = "Datum name to install (omit to run repo bootstrap just install)")]
-        name: Option<String>,
-        #[clap(long, help = "Show what would be installed for bootstrap mode")]
-        dry_run: bool,
+    #[clap(about = "Run ansible playbooks via datum metadata or direct path")]
+    Ansible {
+        #[clap(subcommand)]
+        ansible_command: AnsibleCommands,
     },
     #[clap(
         about = "Update all datums defined in _b00t_.toml",
@@ -300,11 +256,6 @@ The system will:
     Bootstrap {
         #[clap(subcommand)]
         bootstrap_command: BootstrapCommands,
-    },
-    #[clap(about = "Redis server management and monitoring")]
-    Redis {
-        #[clap(subcommand)]
-        redis_command: RedisCommands,
     },
 }
 
@@ -364,6 +315,57 @@ fn datum_providers_to_tool_status(providers: Vec<Box<dyn DatumProvider>>) -> Vec
             }
         })
         .collect()
+}
+
+fn handle_up_command(_b00t_path: &str, yes: bool) -> Result<()> {
+    use b00t_cli::datum_config::B00tConfig;
+
+    // Load or create configuration
+    let (config, config_path) = B00tConfig::load_or_create()?;
+
+    if yes {
+        println!("🔄 Updating all datums from {}...", config_path.display());
+    } else {
+        println!(
+            "🔍 Checking all datums from {} (use --yes to update)...",
+            config_path.display()
+        );
+    }
+
+    // If config file doesn't exist yet, show helpful message
+    if !config_path.exists() {
+        println!("\n⚠️  No _b00t_.toml found at {}", config_path.display());
+        println!("   Create one to track your installed datums:\n");
+        println!("   Example _b00t_.toml:");
+        println!("   ---");
+        println!("   version = \"{}\"", b00t_c0re_lib::version::VERSION);
+        println!("   initialized = \"{}\"", chrono::Utc::now().to_rfc3339());
+        println!("   install_methods = [\"docker\", \"pkgx\", \"apt\", \"curl\"]");
+        println!("   datums = [");
+        println!("     \"git.cli\",");
+        println!("     \"docker.docker\",");
+        println!("     \"rust.*\",    # All rust-related datums");
+        println!("     \"ai.*\",      # All AI providers");
+        println!("   ]");
+        println!("   ---\n");
+        println!("💡 Run `b00t install <datum>` to auto-create and update this file.");
+        return Ok(());
+    }
+
+    println!("\n📋 Configuration loaded:");
+    println!("   Version: {}", config.version);
+    println!("   Datums: {:?}", config.datums);
+    println!("   Install methods: {:?}", config.install_methods);
+
+    // 🤓 TODO: Implement datum loading and updating
+    // Currently blocked by trait version conflicts - needs refactoring
+    println!("\n⚠️  Full datum checking not yet implemented");
+    println!("   Next steps:");
+    println!("   1. Load datums from _b00t_ path");
+    println!("   2. Match against configured patterns");
+    println!("   3. Check versions and update if --yes flag is set");
+
+    Ok(())
 }
 
 fn checkpoint(message: Option<&str>, skip_tests: bool) -> Result<()> {
@@ -470,6 +472,36 @@ fn checkpoint(message: Option<&str>, skip_tests: bool) -> Result<()> {
     }
 
     Ok(())
+}
+
+/// Generic function to load datum providers for a specific file extension
+/// Replaces the 7 duplicate get_*_tools_status functions
+fn load_datum_providers<T>(path: &str, extension: &str) -> Result<Vec<Box<dyn DatumProvider>>>
+where
+    T: DatumProvider + 'static,
+    T: for<'a> TryFrom<(&'a str, &'a str), Error = anyhow::Error>,
+{
+    let mut tools: Vec<Box<dyn DatumProvider>> = Vec::new();
+    let expanded_path = get_expanded_path(path)?;
+
+    if let Ok(entries) = std::fs::read_dir(&expanded_path) {
+        for entry in entries {
+            if let Ok(entry) = entry {
+                let entry_path = entry.path();
+                if let Some(file_name) = entry_path.file_name().and_then(|s| s.to_str()) {
+                    if file_name.ends_with(extension) {
+                        if let Some(tool_name) = file_name.strip_suffix(extension) {
+                            if let Ok(datum) = T::try_from((tool_name, path)) {
+                                tools.push(Box::new(datum));
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    Ok(tools)
 }
 
 fn show_status(
@@ -784,11 +816,6 @@ echo "malicious" > ~/.dotfiles/_b00t_/hack.toml
         ("Apt", "APT packages", vec![".apt.toml"]),
         ("Nix", "Nix packages", vec![".nix.toml"]),
         ("Bash", "Bash scripts", vec![".bash.toml"]),
-        (
-            "Role",
-            "Role onboarding/compliance datums",
-            vec![".role.toml", ".toml (type=role)"],
-        ),
     ];
 
     println!("### DatumType Enum");
@@ -805,7 +832,7 @@ echo "malicious" > ~/.dotfiles/_b00t_/hack.toml
 
     let file_org_doc = r#"## File Organization
 
-Configuration files are stored in `$_B00T_Path` (default: `~/.b00t/_b00t_`) with naming convention:
+Configuration files are stored in `$_B00T_Path` (default: `~/.dotfiles/_b00t_/`) with naming convention:
 "#;
     print!("{}", file_org_doc);
 
@@ -1002,6 +1029,55 @@ Unless you're developing b00t-cli itself, always use the `b00t` alias. It provid
     print!("{}", workflow_doc);
 }
 
+// Session management functions
+pub fn handle_session_init(
+    budget: &Option<f64>,
+    time_limit: &Option<u32>,
+    agent: Option<&str>,
+) -> Result<()> {
+    let agent_name = agent
+        .map(|s| s.to_string())
+        .or_else(|| std::env::var("_B00T_Agent").ok())
+        .filter(|s| !s.is_empty());
+
+    let mut session = SessionState::new(agent_name);
+
+    if let Some(budget) = budget {
+        session.budget_limit = Some(*budget);
+    }
+
+    if let Some(time_limit) = time_limit {
+        session.time_limit_minutes = Some(*time_limit);
+    }
+
+    // Set session ID in environment
+    unsafe {
+        std::env::set_var("B00T_SESSION_ID", &session.session_id);
+    }
+
+    session.save()?;
+
+    // Initialize session memory and check README.md
+    let mut memory = b00t_cli::session_memory::SessionMemory::load()?;
+    check_readme_status(&mut memory)?;
+
+    println!("🥾 Session {} initialized", session.session_id);
+
+    if let Some(agent) = &session.agent_info {
+        println!("🤖 Agent: {}", agent.name);
+    }
+
+    if let Some(budget) = session.budget_limit {
+        println!("💰 Budget: ${:.2}", budget);
+    }
+
+    if let Some(time_limit) = session.time_limit_minutes {
+        println!("⏱️  Time limit: {}m", time_limit);
+    }
+
+    Ok(())
+}
+
 pub fn handle_session_status() -> Result<()> {
     let session = SessionState::load()?;
     println!("{}", session.get_status_line());
@@ -1110,12 +1186,6 @@ async fn main() {
                 std::process::exit(1);
             }
         }
-        Some(Commands::Ansible { ansible_command }) => {
-            if let Err(e) = ansible_command.execute(&cli.path) {
-                eprintln!("Error: {}", e);
-                std::process::exit(1);
-            }
-        }
         Some(Commands::Model { model_command }) => {
             if let Err(e) = model_command.execute(&cli.path) {
                 eprintln!("Error: {}", e);
@@ -1168,7 +1238,6 @@ async fn main() {
             available,
             filter_flag,
         }) => {
-            // 🤓 MCP compatibility: merge positional and flag arguments
             let effective_filter = filter.as_ref().or(filter_flag.as_ref());
             if let Err(e) = show_status(
                 &cli.path,
@@ -1186,20 +1255,53 @@ async fn main() {
                 std::process::exit(1);
             }
         }
+        Some(Commands::Install { install_command }) => {
+            if let Err(e) = install_command.execute(&cli.path) {
+                eprintln!("Error: {}", e);
+                std::process::exit(1);
+            }
+        }
         Some(Commands::Session { session_command }) => {
             if let Err(e) = session_command.execute(&cli.path) {
                 eprintln!("Error: {}", e);
                 std::process::exit(1);
             }
         }
-        Some(Commands::Learn(args)) => {
+        Some(Commands::Agent { agent_command }) => {
+            if let Err(e) =
+                b00t_cli::commands::agent::handle_agent_command(agent_command.clone()).await
+            {
+                eprintln!("Agent Error: {}", e);
+                std::process::exit(1);
+            }
+        }
+        Some(Commands::Job { job_command }) => {
+            if let Err(e) = job_command.execute_async(&cli.path).await {
+                eprintln!("Job Error: {}", e);
+                std::process::exit(1);
+            }
+        }
+        Some(Commands::Chat { chat_command }) => {
+            if let Err(e) = chat_command.execute().await {
+                eprintln!("Chat Error: {}", e);
+                std::process::exit(1);
+            }
+        }
+        Some(Commands::Learn { args }) => {
             if let Err(e) = handle_learn(&cli.path, args.clone()).await {
                 eprintln!("Error: {}", e);
                 std::process::exit(1);
             }
         }
+        Some(Commands::Datum { datum_command }) => {
+            use b00t_cli::commands::datum::handle_datum_command;
+            if let Err(e) = handle_datum_command(&cli.path, datum_command) {
+                eprintln!("Error: {}", e);
+                std::process::exit(1);
+            }
+        }
         Some(Commands::Grok { grok_command }) => {
-            use crate::commands::grok::handle_grok_command;
+            use b00t_cli::commands::grok::handle_grok_command;
 
             // 🤓 No need for nested runtime - already in #[tokio::main]
             if let Err(e) = handle_grok_command(grok_command.clone()).await {
@@ -1207,25 +1309,13 @@ async fn main() {
                 std::process::exit(1);
             }
         }
-        Some(Commands::Install { name, dry_run }) => {
-            if let Some(name) = name {
-                if let Err(e) = install_datum(&cli.path, name) {
-                    eprintln!("Install Error: {}", e);
-                    std::process::exit(1);
-                }
-            } else if let Err(e) = run_just_install(*dry_run) {
-                eprintln!("Install Error: {}", e);
+        Some(Commands::Ansible { ansible_command }) => {
+            if let Err(e) = ansible_command.execute(&cli.path) {
+                eprintln!("Ansible Error: {}", e);
                 std::process::exit(1);
             }
         }
-        Some(Commands::Redis { redis_command }) => {
-            use b00t_cli::commands::redis::handle_redis_command;
-            if let Err(e) = handle_redis_command(redis_command.clone()).await {
-                eprintln!("Redis Error: {}", e);
-                std::process::exit(1);
-            }
-        }
-        Some(Commands::Lfmf { tool, lesson, repo: _, global }) => {
+        Some(Commands::Lfmf { tool, lesson, repo, global }) => {
             // Validate required fields
             let tool = match tool {
                 Some(t) => t,
@@ -1255,7 +1345,7 @@ async fn main() {
             }
         }
         Some(Commands::Bootstrap { bootstrap_command }) => {
-            use crate::commands::bootstrap::handle_bootstrap_command;
+            use b00t_cli::commands::bootstrap::handle_bootstrap_command;
 
             if let Err(e) = handle_bootstrap_command(bootstrap_command.clone()).await {
                 eprintln!("Error: {}", e);
@@ -1263,35 +1353,9 @@ async fn main() {
             }
         }
         Some(Commands::Script { script_command }) => {
-            use crate::commands::script::handle_script_command;
+            use b00t_cli::commands::script::handle_script_command;
 
             if let Err(e) = handle_script_command(script_command.clone()) {
-                eprintln!("Error: {}", e);
-                std::process::exit(1);
-            }
-        }
-        Some(Commands::Agent { agent_command }) => {
-            use b00t_cli::commands::agent::handle_agent_command;
-            if let Err(e) = handle_agent_command(agent_command.clone()).await {
-                eprintln!("Error: {}", e);
-                std::process::exit(1);
-            }
-        }
-        Some(Commands::Job { job_command }) => {
-            if let Err(e) = job_command.execute_async(&cli.path).await {
-                eprintln!("Error: {}", e);
-                std::process::exit(1);
-            }
-        }
-        Some(Commands::Chat { chat_command }) => {
-            if let Err(e) = chat_command.execute().await {
-                eprintln!("Error: {}", e);
-                std::process::exit(1);
-            }
-        }
-        Some(Commands::Datum { datum_command }) => {
-            use b00t_cli::commands::datum::handle_datum_command;
-            if let Err(e) = handle_datum_command(&cli.path, datum_command) {
                 eprintln!("Error: {}", e);
                 std::process::exit(1);
             }
