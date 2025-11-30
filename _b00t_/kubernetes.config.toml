@@ -1,0 +1,7 @@
+[kubernetes]
+# Preferred Kubernetes distribution for this host (default = k0s)
+preferred = "k0s"
+# Last detection timestamp / reason is filled by scripts/kubernetes_detect.rhai
+last_detected = ""
+reason = "default"
+detector = "scripts/kubernetes_detect.rhai"

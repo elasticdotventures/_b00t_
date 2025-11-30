@@ -1,0 +1,59 @@
+- name: Install k0s (Zero friction Kubernetes)
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    local_bin: "{{ lookup('env', 'HOME') }}/.local/bin"
+  tasks:
+    - name: Ensure local bin directory exists
+      file:
+        path: "{{ local_bin }}"
+        state: directory
+        mode: '0755'
+
+    - name: Attempt to install k0s via pkgx
+      shell: pkgx install k0s
+      args:
+        warn: false
+      register: pkgx_install
+      failed_when: false
+      changed_when: pkgx_install.rc == 0
+
+    - name: Create k0s pkgx wrapper
+      copy:
+        dest: "{{ local_bin }}/k0s"
+        content: |
+          #!/bin/bash
+          exec pkgx k0s "$@"
+        mode: '0755'
+      when: pkgx_install.rc == 0
+
+    - name: Create k8s alias wrapper
+      copy:
+        dest: "{{ local_bin }}/k8s"
+        content: |
+          #!/bin/bash
+          exec pkgx k0s "$@"
+        mode: '0755'
+      when: pkgx_install.rc == 0
+
+    - name: Install k0s via upstream installer
+      shell: curl --proto '=https' --tlsv1.2 -sSf https://get.k0s.sh | sh
+      become: true
+      args:
+        warn: false
+      when: pkgx_install.rc != 0
+
+    - name: Verify k0s is in PATH
+      command: command -v k0s
+      register: k0s_bin
+      failed_when: k0s_bin.rc != 0
+      changed_when: false
+
+    - name: Ensure k8s symlink
+      file:
+        src: "{{ k0s_bin.stdout }}"
+        dest: "{{ k0s_bin.stdout | dirname }}/k8s"
+        state: link
+        force: true
+      become: true

@@ -1,0 +1,80 @@
+- name: Install Python 3.12 toolchain
+  hosts: localhost
+  connection: local
+  gather_facts: true
+  vars:
+    python_version: "3.12.0"
+  tasks:
+    - name: Refresh apt cache
+      apt:
+        update_cache: yes
+      when: ansible_facts.pkg_mgr == "apt"
+
+    - name: Ensure build dependencies are present
+      apt:
+        name:
+          - software-properties-common
+          - build-essential
+          - curl
+        state: present
+      when: ansible_facts.pkg_mgr == "apt"
+
+    - name: Add deadsnakes PPA (Ubuntu/Debian)
+      apt_repository:
+        repo: ppa:deadsnakes/ppa
+        state: present
+      when: ansible_facts.pkg_mgr == "apt"
+
+    - name: Install Python 3.12 packages via apt
+      apt:
+        name:
+          - python3.12
+          - python3.12-venv
+          - python3.12-dev
+          - python3-pip
+        state: present
+        update_cache: no
+      when: ansible_facts.pkg_mgr == "apt"
+
+    - name: Configure python3 alternative
+      alternatives:
+        name: python3
+        path: /usr/bin/python3.12
+        priority: 1
+      when: ansible_facts.pkg_mgr == "apt" and ansible_facts.os_family == "Debian"
+
+    - name: Install Python via Homebrew
+      homebrew:
+        name: python@3.12
+        state: present
+      when: ansible_facts.pkg_mgr == "homebrew"
+
+    - name: Ensure pyenv is present for fallback
+      shell: |
+        curl https://pyenv.run | bash
+      args:
+        creates: ~/.pyenv/bin/pyenv
+      when: ansible_facts.pkg_mgr not in ["apt", "homebrew"]
+
+    - name: Ensure pyenv environment is configured
+      shell: |
+        export PATH="$HOME/.pyenv/bin:$PATH"
+        eval "$(pyenv init -)"
+        pyenv versions | grep -q {{ python_version }}
+      register: pyenv_check
+      ignore_errors: true
+      when: ansible_facts.pkg_mgr not in ["apt", "homebrew"]
+
+    - name: Install Python via pyenv fallback
+      shell: |
+        export PATH="$HOME/.pyenv/bin:$PATH"
+        eval "$(pyenv init -)"
+        pyenv install -s {{ python_version }}
+        pyenv global {{ python_version }}
+      when: ansible_facts.pkg_mgr not in ["apt", "homebrew"]
+
+    - name: Verify python3 version
+      command: python3 --version
+      register: python_version_check
+      changed_when: false
+      failed_when: python_version_check.rc != 0

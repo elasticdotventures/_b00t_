@@ -310,6 +310,5 @@ _archive_/
 **/.b00t/data/togaf/datasheets/
 **/togaf/datasheets/
 *.togaf-datasheet.*
-
-# Archive for old/irrelevant files
-_archive_/
+google-cloud-sdk/
+.cargo/*

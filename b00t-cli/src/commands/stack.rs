@@ -1,10 +1,14 @@
-use anyhow::{Context, Result};
+use anyhow::{Context, Result, anyhow};
 use clap::Parser;
+use regex::Regex;
 use std::collections::HashMap;
 
 use crate::datum_stack::StackDatum;
+use crate::dependency_resolver::DependencyResolver;
 use crate::traits::DatumCrdDisplay;
-use crate::{BootDatum, get_expanded_path};
+use crate::{
+    BootDatum, ansible::AnsibleConfig, ansible::run_playbook, get_config, get_expanded_path,
+};
 
 #[derive(Parser)]
 pub enum StackCommands {
@@ -86,6 +90,25 @@ pub enum StackCommands {
         )]
         enhance: bool,
     },
+    #[clap(
+        about = "Run an Ansible playbook from stack context",
+        long_about = "Runs either a raw playbook path or a datum-backed playbook through the shared Ansible helper.\n\nExamples:\n  b00t-cli stack ansible --run script ansible/playbooks/k0s_kata.yaml -- -i inventory\n  b00t-cli stack ansible --run datum k0s -- k0s_role=worker"
+    )]
+    Ansible {
+        #[clap(
+            long,
+            help = "Specify whether to run a script path or stack datum (script|datum)",
+            value_parser = ["script", "datum"]
+        )]
+        run: String,
+        #[clap(help = "Playbook path or datum name")]
+        target: String,
+        #[clap(
+            last = true,
+            help = "Parameters forwarded to ansible-playbook (extra args or key=value vars)"
+        )]
+        params: Vec<String>,
+    },
 }
 
 impl StackCommands {
@@ -116,6 +139,11 @@ impl StackCommands {
                 output_dir,
                 enhance,
             } => generate_k8s_via_kompose(name, path, output_dir.as_deref(), *enhance),
+            StackCommands::Ansible {
+                run,
+                target,
+                params,
+            } => run_stack_ansible(run, target, params, path),
         }
     }
 }
@@ -293,6 +321,9 @@ fn install_stack(name: &str, path: &str, dry_run: bool) -> Result<()> {
     let stack_path = get_expanded_path(path)?.join(format!("{}.stack.toml", name));
 
     if !stack_path.exists() {
+        if name.contains('*') || name.contains('?') {
+            return install_datums_by_pattern(name, path, dry_run);
+        }
         anyhow::bail!("Stack '{}' not found at {}", name, stack_path.display());
     }
 
@@ -329,6 +360,52 @@ fn install_stack(name: &str, path: &str, dry_run: bool) -> Result<()> {
     println!("   This would install each member using their install commands");
 
     Ok(())
+}
+
+fn install_datums_by_pattern(pattern: &str, path: &str, dry_run: bool) -> Result<()> {
+    let available_datums = load_all_datums(path)?;
+    let regex = build_pattern_regex(pattern)?;
+    let matched_keys: Vec<String> = available_datums
+        .keys()
+        .filter(|key| regex.is_match(key))
+        .cloned()
+        .collect();
+
+    if matched_keys.is_empty() {
+        anyhow::bail!("No datums match pattern '{}'", pattern);
+    }
+
+    let datum_refs: Vec<&BootDatum> = available_datums.values().collect();
+    let resolver = DependencyResolver::new(datum_refs);
+    let install_order = resolver.resolve_many(&matched_keys)?;
+
+    println!(
+        "📦 Installing datums matching pattern '{}' ({} items):",
+        pattern,
+        install_order.len()
+    );
+    for (idx, member) in install_order.iter().enumerate() {
+        println!("   {}. {}", idx + 1, member);
+    }
+
+    if dry_run {
+        return Ok(());
+    }
+
+    for member in install_order {
+        if let Some(datum) = available_datums.get(&member) {
+            run_stack_ansible("datum", &datum.name, &[], path)?;
+        }
+    }
+
+    Ok(())
+}
+
+fn build_pattern_regex(pattern: &str) -> Result<Regex> {
+    let escaped = regex::escape(pattern);
+    let regex_str = format!("^{}$", escaped.replace(r"\*", ".*").replace(r"\?", "."));
+    let regex = Regex::new(&regex_str).context("Failed to compile datum pattern")?;
+    Ok(regex)
 }
 
 /// Generate docker-compose.yml from stack
@@ -570,6 +647,48 @@ fn generate_k8s_via_kompose(
     }
 
     Ok(())
+}
+
+fn run_stack_ansible(run: &str, target: &str, params: &[String], path: &str) -> Result<()> {
+    let workspace = get_expanded_path(path)?;
+    let mut config = AnsibleConfig::default();
+
+    if run == "datum" {
+        let (cfg, _) = get_config(target, path).map_err(|e| {
+            anyhow!(
+                "Failed to load datum '{target}': {e}",
+                target = target,
+                e = e
+            )
+        })?;
+        config = cfg
+            .b00t
+            .ansible
+            .ok_or_else(|| anyhow!("Datum '{target}' has no [ansible] section", target = target))?;
+    } else {
+        config.playbook = target.to_string();
+    }
+
+    let mut extra_args = config.extra_args.take().unwrap_or_default();
+    let mut extra_vars = config.extra_vars.take().unwrap_or_default();
+
+    for param in params {
+        if let Some((key, value)) = param.split_once('=') {
+            extra_vars.insert(key.to_string(), value.to_string());
+        } else {
+            extra_args.push(param.clone());
+        }
+    }
+
+    if !extra_args.is_empty() {
+        config.extra_args = Some(extra_args);
+    }
+
+    if !extra_vars.is_empty() {
+        config.extra_vars = Some(extra_vars);
+    }
+
+    run_playbook(&config, Some(workspace.as_path()))
 }
 
 /// Enhance kompose-generated k8s manifests with b00t orchestration metadata

@@ -25,6 +25,7 @@ pub mod dependency_resolver;
 pub mod budget_controller;
 pub mod entanglement;
 pub mod datum_vscode;
+pub mod ansible;
 pub mod k8s;
 pub mod session_memory;
 pub mod traits;
@@ -110,6 +111,8 @@ pub struct BootDatum {
     #[serde(rename = "type")]
     pub datum_type: Option<DatumType>,
     pub desires: Option<String>,
+    #[serde(default)]
+    pub auto_install: Option<bool>,
     pub hint: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub skills: Option<Vec<String>>,
@@ -120,6 +123,8 @@ pub struct BootDatum {
     pub update: Option<String>,
     pub version: Option<String>,
     pub version_regex: Option<String>,
+    #[serde(default)]
+    pub requires_sudo: bool,
 
     // MCP server fields
     pub command: Option<String>,
@@ -145,6 +150,10 @@ pub struct BootDatum {
     // Common metadata fields
     pub keywords: Option<Vec<String>>,
     pub package_name: Option<String>,
+
+    // Ansible playbook metadata
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub ansible: Option<crate::ansible::AnsibleConfig>,
 
     // Environment variables
     pub env: Option<std::collections::HashMap<String, String>>,

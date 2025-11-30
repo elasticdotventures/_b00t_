@@ -19,3 +19,8 @@ command = "just orchestrator-k0s-kata MODE=stop INVENTORY=$K0S_KATA_INVENTORY"
 [[b00t.usage]]
 description = "Check playbook syntax before running"
 command = "just orchestrator-k0s-kata MODE=check"
+
+[b00t.ansible]
+playbook = "ansible/playbooks/k0s_kata.yaml"
+inventory = "$K0S_KATA_INVENTORY"
+extra_vars = { k0s_role = "controller", kata_runtime_class = "kata" }
