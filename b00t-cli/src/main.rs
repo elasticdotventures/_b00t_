@@ -24,7 +24,11 @@ use b00t_cli::datum_mcp::McpDatum;
 use b00t_cli::datum_vscode::VscodeDatum;
 use b00t_cli::traits::*;
 
-use b00t_cli::commands::{AiCommands, AppCommands, CliCommands, GrokCommands, InitCommands, K8sCommands, McpCommands, SessionCommands, WhatismyCommands};
+use b00t_cli::commands::{
+    AiCommands, AgentCommands, AnsibleCommands, AppCommands, ChatCommands, CliCommands,
+    DatumCommands, GrokCommands, InitCommands, JobCommands, K8sCommands, McpCommands,
+    SessionCommands, WhatismyCommands,
+};
 use b00t_cli::commands::learn::handle_learn;
 
 // Re-export commonly used functions for datum modules
@@ -166,6 +170,21 @@ The system will:
         #[clap(long, help = "Override detected role (matches role datum)")]
         role: Option<String>,
     },
+    #[clap(about = "Coordinate agents")]
+    Agent {
+        #[clap(subcommand)]
+        agent_command: AgentCommands,
+    },
+    #[clap(about = "Manage jobs (run, list, inspect)")]
+    Job {
+        #[clap(subcommand)]
+        job_command: JobCommands,
+    },
+    #[clap(about = "Chat transport and messaging")]
+    Chat {
+        #[clap(subcommand)]
+        chat_command: ChatCommands,
+    },
     #[clap(about = "Create checkpoint: commit all files and run tests")]
     // 🤓 ENTANGLED: b00t-mcp/src/mcp_tools.rs CheckpointCommand
     // When this changes, update b00t-mcp CheckpointCommand structure
@@ -217,10 +236,20 @@ The system will:
         #[clap(flatten)]
         args: commands::learn::LearnArgs,
     },
+    #[clap(about = "Inspect or run datums directly")]
+    Datum {
+        #[clap(subcommand)]
+        datum_command: DatumCommands,
+    },
     #[clap(about = "Grok knowledgebase RAG system")]
     Grok {
         #[clap(subcommand)]
         grok_command: GrokCommands,
+    },
+    #[clap(about = "Run ansible playbooks via datum metadata or direct path")]
+    Ansible {
+        #[clap(subcommand)]
+        ansible_command: AnsibleCommands,
     },
 }
 
@@ -1046,7 +1075,7 @@ async fn main() {
                 std::process::exit(1);
             }
         }
-        Some(Commands::Learn(args)) => {
+        Some(Commands::Learn { args }) => {
             if let Err(e) = handle_learn(&cli.path, args.clone()).await {
                 eprintln!("Error: {}", e);
                 std::process::exit(1);
@@ -1073,6 +1102,12 @@ async fn main() {
 
             if let Err(e) = rt.block_on(handle_grok_command(grok_command.clone())) {
                 eprintln!("Error: {}", e);
+                std::process::exit(1);
+            }
+        }
+        Some(Commands::Ansible { ansible_command }) => {
+            if let Err(e) = ansible_command.execute(&cli.path) {
+                eprintln!("Ansible Error: {}", e);
                 std::process::exit(1);
             }
         }

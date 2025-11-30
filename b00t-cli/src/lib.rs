@@ -25,6 +25,7 @@ pub mod dependency_resolver;
 pub mod budget_controller;
 pub mod entanglement;
 pub mod datum_vscode;
+pub mod ansible;
 pub mod k8s;
 pub mod session_memory;
 pub mod traits;
@@ -145,6 +146,10 @@ pub struct BootDatum {
     // Common metadata fields
     pub keywords: Option<Vec<String>>,
     pub package_name: Option<String>,
+
+    // Ansible playbook metadata
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub ansible: Option<crate::ansible::AnsibleConfig>,
 
     // Environment variables
     pub env: Option<std::collections::HashMap<String, String>>,

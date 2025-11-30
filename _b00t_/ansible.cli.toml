@@ -9,18 +9,57 @@ install = '''
 # Install Ansible with multiple strategies so hive nodes can pick the best method.
 set -euo pipefail
 
+export PATH="$HOME/.local/bin:${PATH:-}"
+
+# Prefer uvx (canonical)
+if command -v uvx >/dev/null 2>&1; then
+    echo "✨ Installing ansible via uvx"
+    mkdir -p "$HOME/.local/bin"
+    cat > "$HOME/.local/bin/ansible" <<'WRAP'
+#!/bin/bash
+exec uvx ansible "$@"
+WRAP
+    chmod +x "$HOME/.local/bin/ansible"
+    if uvx ansible --version >/dev/null 2>&1; then
+        echo "✅ ansible available via uvx wrapper"
+        exit 0
+    fi
+    echo "⚠️ uvx ansible failed, installing uv then retrying"
+fi
+
+if ! command -v uvx >/dev/null 2>&1; then
+    if ! command -v uv >/dev/null 2>&1; then
+        echo "⚙️  Installing uv runtime to provide uvx"
+        curl -fsSL https://astral.sh/uv/install.sh | sh
+        export PATH="$HOME/.local/bin:${PATH:-}"
+    fi
+    if command -v uvx >/dev/null 2>&1; then
+        echo "✨ Installing ansible via uvx"
+        mkdir -p "$HOME/.local/bin"
+        cat > "$HOME/.local/bin/ansible" <<'WRAP'
+#!/bin/bash
+exec uvx ansible "$@"
+WRAP
+        chmod +x "$HOME/.local/bin/ansible"
+        if uvx ansible --version >/dev/null 2>&1; then
+            echo "✅ ansible available via uvx wrapper"
+            exit 0
+        fi
+        echo "⚠️ uvx ansible retry failed, falling back"
+    fi
+fi
+
 if command -v pkgx >/dev/null 2>&1; then
     echo "✨ Installing ansible via pkgx"
-    # 🤓 pkgx syntax: use env instead of install
-    mkdir -p ~/.local/bin
-    cat > ~/.local/bin/ansible <<'WRAP'
+    mkdir -p "$HOME/.local/bin"
+    cat > "$HOME/.local/bin/ansible" <<'WRAP'
 #!/bin/bash
 exec pkgx ansible@9.2 "$@"
 WRAP
-    chmod +x ~/.local/bin/ansible
+    chmod +x "$HOME/.local/bin/ansible"
     
     # Test wrapper
-    if ~/.local/bin/ansible --version >/dev/null 2>&1; then
+    if "$HOME/.local/bin/ansible" --version >/dev/null 2>&1; then
         echo "✅ ansible installed via pkgx wrapper"
         exit 0
     fi
@@ -68,6 +107,11 @@ uv tool install ansible-core
 
 update = '''
 set -euo pipefail
+if command -v uvx >/dev/null 2>&1 && [ -x "$HOME/.local/bin/ansible" ] && grep -q "uvx ansible" "$HOME/.local/bin/ansible"; then
+    echo "✨ Updating ansible via uvx"
+    UVX_TOOL_UPGRADE=1 uvx ansible --version
+    exit 0
+fi
 if command -v pkgx >/dev/null 2>&1 && [ -f ~/.local/bin/ansible ] && grep -q "pkgx" ~/.local/bin/ansible; then
     pkgx install ansible@latest
     exit 0
