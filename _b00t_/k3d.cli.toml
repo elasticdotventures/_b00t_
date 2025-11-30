@@ -3,6 +3,7 @@ name = "k3d"
 type = "cli"
 hint = "k3s in Docker. Spin up local k8s clusters in seconds for testing."
 desires = "5.7.0"
+auto_install = false
 depends_on = ["docker.cli"]
 
 install = '''

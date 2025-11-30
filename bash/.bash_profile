@@ -24,7 +24,8 @@ if [ -f ~/.dotfiles/_b00t_/_b00t_.bashrc ] ; then
     ##    echo "🥾 _b00t_"
     ##fi
 
-    . ~/.dotfiles/_b00t_/_b00t_.bashrc
+    # TODO: re-enable b00t
+    # . ~/.dotfiles/_b00t_/_b00t_.bashrc
 
     # Check if running in VS Code integrated terminal
     # Returns 0 (success) if VSCODE_GIT_IPC_HANDLE is set, 1 (failure) otherwise
@@ -273,8 +274,8 @@ if command -v nvm &> /dev/null; then
 fi
 
 # check for latest _b00t_ version
-_B00T_LOCAL_VERSION=$(git -C ~/.dotfiles/ describe --tags --abbrev=0)
-_B00T_LATEST_VERSION=$(gh release --repo elasticdotventures/dotfiles view --json tagName -q .tagName)
+#_B00T_LOCAL_VERSION=$(git -C ~/.dotfiles/ describe --tags --abbrev=0)
+#_B00T_LATEST_VERSION=$(gh release --repo elasticdotventures/dotfiles view --json tagName -q .tagName)
 ##if [ -z "$_B00T_LOCAL_VERSION" ]; then
     ## echo "🙈🥾 no _b00t_ version"
 ##elif [ "$_B00T_LOCAL_VERSION" != "$_B00T_LATEST_VERSION" ]; then
@@ -314,10 +315,10 @@ fi
 # TODO: check if go is installed
 export PATH=$PATH:/usr/local/go/bin
 
-if [ -d ~/.krew ] ; then
-    export PATH="${KREW_ROOT:-$HOME/.krew}/bin:$PATH"
-fi
+#if [ -d ~/.krew ] ; then
+#    export PATH="${KREW_ROOT:-$HOME/.krew}/bin:$PATH"
+#fi
 
 alias gemini='npx -y https://github.com/google-gemini/gemini-cli'
 
-b00t_quiet_echo "🐚 .bash_profile loaded"
+#b00t_quiet_echo "🐚 .bash_profile loaded"

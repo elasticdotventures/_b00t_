@@ -2,6 +2,7 @@
 name = "k0s"
 type = "cli"
 desires = "1.31.0"
+auto_install = false
 aliases = ["k8s", "kubernetes"]
 install = '''
 # Install k0s - Zero friction Kubernetes distribution

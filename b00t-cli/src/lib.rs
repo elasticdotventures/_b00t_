@@ -111,6 +111,8 @@ pub struct BootDatum {
     #[serde(rename = "type")]
     pub datum_type: Option<DatumType>,
     pub desires: Option<String>,
+    #[serde(default)]
+    pub auto_install: Option<bool>,
     pub hint: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub skills: Option<Vec<String>>,

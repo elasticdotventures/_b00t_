@@ -6,9 +6,17 @@ use crate::{BootDatum, UnifiedConfig};
 use anyhow::{Context, Result};
 use clap::Parser;
 use duct::cmd;
+use once_cell::sync::Lazy;
 use shellexpand;
 use std::collections::HashMap;
 use std::path::PathBuf;
+
+static IS_ROOT: Lazy<bool> = Lazy::new(|| {
+    cmd!("id", "-u")
+        .read()
+        .map(|out| out.trim() == "0")
+        .unwrap_or(false)
+});
 
 #[derive(Parser)]
 pub enum CliCommands {
@@ -231,6 +239,27 @@ fn load_all_datums(path: &str) -> Result<HashMap<String, BootDatum>> {
     Ok(datums)
 }
 
+fn datum_requires_sudo(datum: &BootDatum) -> bool {
+    let requires_hint = datum
+        .require
+        .as_ref()
+        .map(|reqs| {
+            reqs.iter()
+                .any(|r| r.to_lowercase().contains("sudo") || r.to_lowercase().contains("root"))
+        })
+        .unwrap_or(false);
+
+    let install_str = datum.install.as_deref().unwrap_or("");
+    let update_str = datum.update.as_deref().unwrap_or("");
+
+    let cmd_requires_sudo = |s: &str| {
+        let lower = s.to_lowercase();
+        lower.contains("sudo ") || lower.starts_with("sudo") || lower.contains("\nsudo ")
+    };
+
+    requires_hint || cmd_requires_sudo(install_str) || cmd_requires_sudo(update_str)
+}
+
 fn cli_update(command: &str, path: &str) -> Result<()> {
     let cli_datum = CliDatum::from_config(command, path)?;
 
@@ -311,6 +340,24 @@ fn cli_up(path: &str, yes: bool) -> Result<()> {
         let desired = tool
             .desired_version()
             .unwrap_or_else(|| "unknown".to_string());
+
+        let datum = tool.datum();
+
+        if datum.auto_install.map(|v| !v).unwrap_or(false) {
+            println!(
+                "⏭️ {} (auto_install=false) - skipping install/update in cli up",
+                name
+            );
+            continue;
+        }
+
+        if datum_requires_sudo(datum) && !*IS_ROOT {
+            println!(
+                "⏭️ {} (requires sudo) - run b00t cli up with sudo to install/update",
+                name
+            );
+            continue;
+        }
 
         match version_status {
             VersionStatus::Older | VersionStatus::Missing => {

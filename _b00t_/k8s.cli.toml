@@ -2,6 +2,7 @@
 name = "k0s"
 type = "cli"
 desires = "1.31.0"
+auto_install = false
 aliases = ["k8s", "kubernetes"]
 update = "b00t ansible run k0s"
 hint = "k0s - Zero friction Kubernetes distribution. Lightweight, certified Kubernetes that works on any infrastructure. We prefer k0s for its simplicity and low resource footprint."
