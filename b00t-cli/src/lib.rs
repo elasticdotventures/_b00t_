@@ -123,6 +123,8 @@ pub struct BootDatum {
     pub update: Option<String>,
     pub version: Option<String>,
     pub version_regex: Option<String>,
+    #[serde(default)]
+    pub requires_sudo: bool,
 
     // MCP server fields
     pub command: Option<String>,

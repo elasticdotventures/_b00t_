@@ -239,27 +239,6 @@ fn load_all_datums(path: &str) -> Result<HashMap<String, BootDatum>> {
     Ok(datums)
 }
 
-fn datum_requires_sudo(datum: &BootDatum) -> bool {
-    let requires_hint = datum
-        .require
-        .as_ref()
-        .map(|reqs| {
-            reqs.iter()
-                .any(|r| r.to_lowercase().contains("sudo") || r.to_lowercase().contains("root"))
-        })
-        .unwrap_or(false);
-
-    let install_str = datum.install.as_deref().unwrap_or("");
-    let update_str = datum.update.as_deref().unwrap_or("");
-
-    let cmd_requires_sudo = |s: &str| {
-        let lower = s.to_lowercase();
-        lower.contains("sudo ") || lower.starts_with("sudo") || lower.contains("\nsudo ")
-    };
-
-    requires_hint || cmd_requires_sudo(install_str) || cmd_requires_sudo(update_str)
-}
-
 fn cli_update(command: &str, path: &str) -> Result<()> {
     let cli_datum = CliDatum::from_config(command, path)?;
 
@@ -351,7 +330,7 @@ fn cli_up(path: &str, yes: bool) -> Result<()> {
             continue;
         }
 
-        if datum_requires_sudo(datum) && !*IS_ROOT {
+        if datum.requires_sudo && !*IS_ROOT {
             println!(
                 "⏭️ {} (requires sudo) - run b00t cli up with sudo to install/update",
                 name
