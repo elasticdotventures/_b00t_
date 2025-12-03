@@ -788,5 +788,37 @@
       "dependencies": [],
       "installation_status": "notinstalled"
     }
+  },
+  "local.b00t/pm2-mcp": {
+    "id": "local.b00t/pm2-mcp",
+    "name": "pm2-mcp",
+    "description": "PM2 process manager MCP server - manage, monitor, and control background processes with PM2",
+    "version": "0.1.0",
+    "homepage": "https://github.com/PromptExecution/pm2-mcp",
+    "documentation": null,
+    "license": "Proprietary",
+    "tags": [
+      "b00t",
+      "local",
+      "pm2",
+      "process-manager"
+    ],
+    "config": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "pm2-mcp"
+      ],
+      "transport": "stdio"
+    },
+    "metadata": {
+      "registered_at": "2025-12-03T12:36:00.000000000Z",
+      "updated_at": "2025-12-03T12:36:00.000000000Z",
+      "source": "local",
+      "health_status": "unknown",
+      "last_health_check": null,
+      "dependencies": [],
+      "installation_status": "notinstalled"
+    }
   }
 }
