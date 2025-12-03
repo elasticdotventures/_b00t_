@@ -42,13 +42,6 @@ ${learn_topics}
 ${optional_notes}
 "###;
 
-fn format_list(prefix, items, separator) {
-    if items.is_empty() {
-        return "".to_string();
-    }
-    format!("{}{}", prefix, items.join(separator))
-}
-
 let agent_specs = #{ 
     "cli-master": #{
         description: "Ship CLI development analyses that combine agent-aware commands with human readable documentation.",
