@@ -100,6 +100,8 @@ for spec_name in agent_specs.keys() {
         .replace("${optional_notes}", spec.optional_notes);
 
     let path = format!(".claude/agents/{}.md", spec_name);
-    create_dir(path.split("/").take(path.split("/").len() - 1).join("/"));
+    let dir_path = path.split("/");
+    let dir_parts = dir_path[..dir_path.len() - 1];
+    create_dir(dir_parts.join("/"));
     write_file(&path, &content);
 }
