@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 import argparse
+import json
 from pathlib import Path
-import sys
 
 DOC_PATH = Path('docs/ANSIBLE_DATUM_QUEUE.md')
 STATUS_VALUES = {'pending', 'in progress', 'done'}
@@ -16,16 +16,17 @@ def read_table():
     rows = []
     for line in lines[delim_idx + 1:]:
         if not line.startswith('| '):
-            break
+            continue
         cells = [cell.strip() for cell in line.strip().strip('|').split('|')]
-        if len(cells) != 4:
+        if len(cells) != 5:
             continue
         rows.append({
             'line': line,
             'name': cells[0],
             'type': cells[1],
-            'status': cells[2],
-            'notes': cells[3],
+            'skill': cells[2],
+            'status': cells[3],
+            'notes': cells[4],
         })
     suffix_start = delim_idx + 1 + len(rows)
     return lines[:header_idx], lines[header_idx], lines[delim_idx], rows, lines[suffix_start:]
@@ -40,15 +41,31 @@ def write_table(prefix, header, delim, rows, suffix):
 
 def list_entries(rows):
     for row in rows:
-        print(f"{row['name']}: {row['status']} ({row['notes']})")
+        skill_desc = f" [skill={row['skill']}]" if row['skill'] else ''
+        print(f"{row['name']}{skill_desc}: {row['status']} ({row['notes']})")
 
 
 def next_entry(rows):
     for row in rows:
         if row['status'].lower().startswith('pending'):
-            print(f"Next datum to convert: {row['name']} ({row['type']}) - {row['notes']}")
+            skill_desc = f" (skill={row['skill']})" if row['skill'] else ''
+            print(f"Next datum: {row['name']} ({row['type']}){skill_desc} - {row['notes']}")
             return
     print('All datums marked as done or in progress.')
+
+
+def triz_snapshot(rows):
+    data = [
+        {
+            'datum': row['name'],
+            'type': row['type'],
+            'skill': row['skill'],
+            'status': row['status'],
+            'notes': row['notes'],
+        }
+        for row in rows
+    ]
+    print(json.dumps(data, indent=2))
 
 
 def mark_entry(rows, name, status, notes):
@@ -61,7 +78,7 @@ def mark_entry(rows, name, status, notes):
             row['status'] = status_title
             if notes is not None:
                 row['notes'] = notes
-            row['line'] = f"| {row['name']} | {row['type']} | {row['status']} | {row['notes']} |"
+            row['line'] = f"| {row['name']} | {row['type']} | {row['skill']} | {row['status']} | {row['notes']} |"
             updated = True
             break
     if not updated:
@@ -74,6 +91,7 @@ def main():
 
     subparsers.add_parser('list', help='List all datums and their status')
     subparsers.add_parser('next', help='Show the next pending datum')
+    subparsers.add_parser('triz', help='Emit structured TRIZ snapshot (JSON)')
     mark = subparsers.add_parser('mark', help='Update a datum status')
     mark.add_argument('name')
     mark.add_argument('status', help='Pending, In Progress, Done')
@@ -86,6 +104,8 @@ def main():
         list_entries(rows)
     elif args.cmd == 'next':
         next_entry(rows)
+    elif args.cmd == 'triz':
+        triz_snapshot(rows)
     elif args.cmd == 'mark':
         mark_entry(rows, args.name, args.status, args.note)
         write_table(prefix, header, delim, rows, suffix)

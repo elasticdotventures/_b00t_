@@ -306,7 +306,10 @@ impl McpCommands {
 
                 match target.as_str() {
                     "codex" => crate::codex_sync_dotmcpjson(path, use_repo),
-                    _ => anyhow::bail!("Error: Invalid target '{}'. Valid targets are: codex", target),
+                    _ => anyhow::bail!(
+                        "Error: Invalid target '{}'. Valid targets are: codex",
+                        target
+                    ),
                 }
             }
             McpCommands::Output {
