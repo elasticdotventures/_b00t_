@@ -88,8 +88,8 @@ for spec_name in agent_specs.keys() {
     let content = TEMPLATE
         .replace("${name}", spec_name)
         .replace("${description}", spec.description)
-        .replace("${skills}", skills.clone())
-        .replace("${datums}", datums.clone())
+        .replace("${skills}", skills)
+        .replace("${datums}", datums)
         .replace("${title}", title)
         .replace("${specialization}", spec.specialization)
         .replace("${philosophy}", spec.philosophy)
