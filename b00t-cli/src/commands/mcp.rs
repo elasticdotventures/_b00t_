@@ -619,15 +619,16 @@ mod tests {
 
     /// Helper to create a test MCP datum TOML content
     const TEST_MCP_DATUM_TOML: &str = r#"
-[datum]
+[b00t]
 name = "test-server"
-kind = "mcp"
+type = "mcp"
 hint = "Test MCP server"
 
-[[datum.interfaces.stdio]]
-method = "stdio"
+[[b00t.mcp.stdio]]
 command = "npx"
 args = ["-y", "@test/server"]
+priority = 0
+transport = "stdio"
 "#;
 
     #[test]
