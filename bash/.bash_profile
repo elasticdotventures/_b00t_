@@ -24,8 +24,8 @@ if [ -f ~/.dotfiles/_b00t_/_b00t_.bashrc ] ; then
     ##    echo "🥾 _b00t_"
     ##fi
 
-    # TODO: re-enable b00t
-    # . ~/.dotfiles/_b00t_/_b00t_.bashrc
+    # re-enable b00t
+    . ~/.dotfiles/_b00t_/_b00t_.bashrc
 
     # Check if running in VS Code integrated terminal
     # Returns 0 (success) if VSCODE_GIT_IPC_HANDLE is set, 1 (failure) otherwise

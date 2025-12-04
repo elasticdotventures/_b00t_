@@ -63,15 +63,21 @@ pub enum McpCommands {
         httpstream: bool,
     },
     #[clap(
-        about = "Sync .mcp.json into a target client",
-        long_about = "Sync repository .mcp.json entries into a target MCP client.\n\nExamples:\n  b00t-cli mcp sync codex --repo\n  b00t-cli mcp sync codex --user"
+        about = "Sync MCP servers between b00t and agent platforms",
+        long_about = "Bidirectional sync of MCP server configs using datum metadata.\n\nExamples:\n  b00t-cli mcp sync push b00t kiro              # b00t -> kiro global\n  b00t-cli mcp sync pull kiro b00t              # kiro -> b00t datums\n  b00t-cli mcp sync push b00t claude            # b00t -> claude agents\n  b00t-cli mcp sync push b00t kiro --agent cli-master  # specific agent\n  b00t-cli mcp sync codex --repo                # legacy codex sync"
     )]
     Sync {
-        #[clap(help = "Sync target: codex")]
-        target: String,
-        #[clap(long, help = "Sync to repository-specific location (if supported)")]
+        #[clap(help = "Operation: push, pull, or target name (legacy)")]
+        operation_or_target: String,
+        #[clap(help = "Source platform (for push/pull) or empty (legacy)")]
+        source: Option<String>,
+        #[clap(help = "Destination platform (for push/pull) or empty (legacy)")]
+        dest: Option<String>,
+        #[clap(long, help = "Specific agent name to sync")]
+        agent: Option<String>,
+        #[clap(long, help = "Sync to repository-specific location (legacy)")]
         repo: bool,
-        #[clap(long, help = "Sync to user-global location (if supported)")]
+        #[clap(long, help = "Sync to user-global location (legacy)")]
         user: bool,
     },
     #[clap(
@@ -293,20 +299,44 @@ impl McpCommands {
                     }
                 }
             }
-            McpCommands::Sync { target, repo, user } => {
-                let use_repo = if *repo && *user {
-                    anyhow::bail!("Error: Cannot specify both --repo and --user flags");
-                } else if *repo {
-                    true
-                } else if *user {
-                    false
-                } else {
-                    crate::utils::is_git_repo()
-                };
+            McpCommands::Sync { 
+                operation_or_target, 
+                source, 
+                dest,
+                agent,
+                repo, 
+                user 
+            } => {
+                // Check if this is new push/pull syntax or legacy codex sync
+                if operation_or_target == "push" || operation_or_target == "pull" {
+                    let src = source.as_ref().ok_or_else(|| anyhow::anyhow!("Source required for push/pull"))?;
+                    let dst = dest.as_ref().ok_or_else(|| anyhow::anyhow!("Destination required for push/pull"))?;
+                    
+                    crate::mcp_sync_bidirectional(
+                        path,
+                        operation_or_target.as_str(),
+                        src,
+                        dst,
+                        agent.as_deref(),
+                    )
+                } else if source.is_none() && dest.is_none() {
+                    // Legacy codex sync (no source/dest args)
+                    let use_repo = if *repo && *user {
+                        anyhow::bail!("Error: Cannot specify both --repo and --user flags");
+                    } else if *repo {
+                        true
+                    } else if *user {
+                        false
+                    } else {
+                        crate::utils::is_git_repo()
+                    };
 
-                match target.as_str() {
-                    "codex" => crate::codex_sync_dotmcpjson(path, use_repo),
-                    _ => anyhow::bail!("Error: Invalid target '{}'. Valid targets are: codex", target),
+                    match operation_or_target.as_str() {
+                        "codex" => crate::codex_sync_dotmcpjson(path, use_repo),
+                        _ => anyhow::bail!("Error: Invalid target '{}'. Use 'push/pull src dest' or 'codex'", operation_or_target),
+                    }
+                } else {
+                    anyhow::bail!("Error: Invalid syntax. Use 'b00t-cli mcp sync push <src> <dest>' or 'b00t-cli mcp sync codex'");
                 }
             }
             McpCommands::Output {

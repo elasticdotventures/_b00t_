@@ -518,6 +518,7 @@ dependencies = [
  "duct",
  "env_logger",
  "fs2",
+ "glob",
  "k8s-openapi",
  "kube",
  "libc",

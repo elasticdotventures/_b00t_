@@ -30,6 +30,7 @@ use b00t_cli::commands::{
     SessionCommands, WhatismyCommands,
 };
 use b00t_cli::commands::learn::handle_learn;
+use b00t_cli::commands::install::{install_datum, run_just_install};
 
 // Re-export commonly used functions for datum modules
 pub use b00t_cli::{DatumType, get_config, get_expanded_path, get_mcp_config, get_mcp_toml_files, mcp_add_json, mcp_remove, mcp_list, mcp_output, claude_code_install_mcp, vscode_install_mcp, gemini_install_mcp, codex_install_mcp, dotmcpjson_install_mcp, codex_sync_dotmcpjson};
@@ -250,6 +251,13 @@ The system will:
     Ansible {
         #[clap(subcommand)]
         ansible_command: AnsibleCommands,
+    },
+    #[clap(about = "Install a datum (auto-resolves dependencies) or run bootstrap install when no name is provided")]
+    Install {
+        #[clap(help = "Datum name to install (omit to run repo bootstrap just install)")]
+        name: Option<String>,
+        #[clap(long, help = "Show what would be installed for bootstrap mode")]
+        dry_run: bool,
     },
 }
 
@@ -1108,6 +1116,17 @@ async fn main() {
         Some(Commands::Ansible { ansible_command }) => {
             if let Err(e) = ansible_command.execute(&cli.path) {
                 eprintln!("Ansible Error: {}", e);
+                std::process::exit(1);
+            }
+        }
+        Some(Commands::Install { name, dry_run }) => {
+            if let Some(name) = name {
+                if let Err(e) = install_datum(&cli.path, name) {
+                    eprintln!("Install Error: {}", e);
+                    std::process::exit(1);
+                }
+            } else if let Err(e) = run_just_install(*dry_run) {
+                eprintln!("Install Error: {}", e);
                 std::process::exit(1);
             }
         }
