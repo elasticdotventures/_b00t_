@@ -6,4 +6,4 @@ if [ ! -x "$KIRO_BIN" ]; then
   echo "Set KIRO_CLI_BINARY to the executable path or install kiro-cli." >&2
   exit 1
 fi
-exec "$KIRO_BIN" chat --trust-all-tools "$@"
+exec "$KIRO_BIN" chat --trusted-tools "${KIRO_TRUSTED_TOOLS:-tool1,tool2}" "$@"
