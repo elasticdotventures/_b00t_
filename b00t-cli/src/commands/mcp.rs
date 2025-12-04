@@ -617,6 +617,19 @@ mod tests {
     use std::fs;
     use tempfile::TempDir;
 
+    /// Helper to create a test MCP datum TOML content
+    const TEST_MCP_DATUM_TOML: &str = r#"
+[datum]
+name = "test-server"
+kind = "mcp"
+hint = "Test MCP server"
+
+[[datum.interfaces.stdio]]
+method = "stdio"
+command = "npx"
+args = ["-y", "@test/server"]
+"#;
+
     #[test]
     fn test_mcp_commands_exist() {
         // Test with JSON format
@@ -657,20 +670,9 @@ mod tests {
         let path = temp_dir.path().to_str().unwrap();
         
         // Create a sample MCP datum file
-        let test_datum = r#"
-[datum]
-name = "test-server"
-kind = "mcp"
-hint = "Test MCP server"
-
-[[datum.interfaces.stdio]]
-method = "stdio"
-command = "npx"
-args = ["-y", "@test/server"]
-"#;
         fs::write(
             temp_dir.path().join("test-server.mcp.toml"),
-            test_datum,
+            TEST_MCP_DATUM_TOML,
         )
         .unwrap();
 
