@@ -16,17 +16,11 @@
 set -o nounset    # Exposes unset variables, strict mode.
 trap "set +o nounset" EXIT  # restore nounset at exit, even in crash!
 
-# 🦨 TODO: refactor the list using b00t datums to (TRACK or DETECT) what is installed and initialize based on the datum (new capability), before this list becomes too exhaustively long.
-# Provide safe defaults for environment variables referenced under nounset
+# Initialize variables that may be referenced before being set
 : "${force_color_prompt:=}"
-: "${SDKMAN_CANDIDATES_API:=}"
-: "${SDKMAN_BROKER_API:=}"
-: "${ZSH_VERSION:=}"
-: "${sdkman_curl_retry:=}"
-: "${sdkman_curl_retry_max_time:=}"
-: "${sdkman_curl_continue:=}"
-: "${IS_WSL:=false}"
+: "${preexec_functions:=}"
 : "${SSH_AUTH_SOCK:=}"
+
 # 🤔 trial:
 umask 000
 
@@ -341,7 +335,6 @@ if [ -f "/usr/bin/fdfind" ] ; then
 fi
 
 # handy for generating dumps, etc..
-## date helpers
 # $ script.sh >> foobar.`ymd`
 if ! command -v ymd >/dev/null 2>&1; then
     ymd() { date +'%Y%m%d'; }
@@ -356,11 +349,6 @@ alias yyyymmdd="date +'%Y%m%d'"
 alias ymd="date +'%Y%m%d'"
 alias ymd_hm="date +'%Y%m%d.%H%M'"
 alias ymd_hms="date +'%Y%m%d.%H%M%S'"
-
-# TODO: fix Ensure date helpers are available in non-interactive shells where aliases are disabled
-#if ! command -v ymd >/dev/null 2>&1; then ymd(){ date +'%Y%m%d'; }; fi
-#if ! command -v ymd_hm >/dev/null 2>&1; then ymd_hm(){ date +'%Y%m%d.%H%M'; }; fi
-#if ! command -v ymd_hms >/dev/null 2>&1; then ymd_hms(){ date +'%Y%m%d.%H%M%S'; }; fi
 ##################
 
 
@@ -1042,9 +1030,11 @@ function _b00t_check() {
     fi
 }
 
-# TODO: idempotency; Run _b00t_check automatically when .bashrc is sourced
+# Run _b00t_check automatically when .bashrc is sourced
 # check b00t bash alias (was it created, then it exists)
-#if ! is_n0t_aliased "b00t" ; then
-#    _b00t_check
-#fi
+if ! is_n0t_aliased "b00t" ; then
+    _b00t_check
+fi
 
+# alias b00t-check=_b00t_check
+# alias b00t-up="b00t up"
