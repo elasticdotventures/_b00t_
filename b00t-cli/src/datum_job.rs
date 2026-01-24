@@ -26,7 +26,6 @@
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use crate::BootDatum;
 
 /// Job datum - Defines workflow with steps, checkpoints, and execution config
 #[derive(Debug, Clone, Serialize, Deserialize)]

@@ -1,4 +1,4 @@
-use anyhow::{Context, Result};
+use anyhow::Result;
 use clap::Parser;
 use duct::cmd;
 // use regex::Regex;
@@ -9,10 +9,9 @@ use std::fs;
 // 🤓 cleaned up unused Tera import after switching to simple string replacement
 use b00t_cli::{
     commands,
-    load_datum_providers, AiConfig, BootDatum, SessionState, UnifiedConfig, session_memory, whoami,
+    load_datum_providers, UnifiedConfig, session_memory, whoami,
 };
 
-use b00t_cli::utils::get_workspace_root;
 
 // 🦨 REMOVED unused K8sDatum import - not used in main.rs
 use b00t_cli::datum_ai::AiDatum;
@@ -1111,7 +1110,7 @@ async fn main() {
                 std::process::exit(1);
             }
         }
-        Some(Commands::Lfmf { tool, lesson, repo, global }) => {
+        Some(Commands::Lfmf { tool, lesson, repo: _, global }) => {
             // Validate required fields
             let tool = match tool {
                 Some(t) => t,
