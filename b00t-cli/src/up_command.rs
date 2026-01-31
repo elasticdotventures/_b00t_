@@ -4,6 +4,7 @@ use crate::datum_cli::CliDatum;
 use crate::datum_config::B00tConfig;
 use crate::datum_docker::DockerDatum;
 use crate::datum_mcp::McpDatum;
+use crate::load_datum_providers;
 use crate::traits::{DatumProvider, VersionStatus};
 use crate::DatumType;
 use duct::cmd;
@@ -40,10 +41,10 @@ pub fn handle_up_command(b00t_path: &str, yes: bool) -> Result<()> {
     }
 
     // Pre-load all datum providers by type - work entirely within lib.rs trait system
-    let cli_tools = load_cli_providers(b00t_path)?;
-    let mcp_tools = load_mcp_providers(b00t_path)?;
-    let docker_tools = load_docker_providers(b00t_path)?;
-    let ai_tools = load_ai_providers(b00t_path)?;
+    let cli_tools = load_datum_providers::<CliDatum>(b00t_path, ".cli.toml")?;
+    let mcp_tools = load_datum_providers::<McpDatum>(b00t_path, ".mcp.toml")?;
+    let docker_tools = load_datum_providers::<DockerDatum>(b00t_path, ".docker.toml")?;
+    let ai_tools = load_datum_providers::<AiDatum>(b00t_path, ".ai.toml")?;
 
     // Build all_datums list from loaded providers
     let mut all_datums: Vec<(String, DatumType)> = Vec::new();
@@ -177,98 +178,4 @@ pub fn handle_up_command(b00t_path: &str, yes: bool) -> Result<()> {
     Ok(())
 }
 
-/// Load CLI datum providers
-fn load_cli_providers(b00t_path: &str) -> Result<Vec<Box<dyn DatumProvider>>> {
-    let mut tools: Vec<Box<dyn DatumProvider>> = Vec::new();
-    let expanded_path = shellexpand::tilde(b00t_path).to_string();
-    let b00t_dir = std::path::PathBuf::from(&expanded_path);
 
-    if let Ok(entries) = std::fs::read_dir(&b00t_dir) {
-        for entry in entries.flatten() {
-            let path = entry.path();
-            if let Some(file_name) = path.file_name() {
-                let name_str = file_name.to_string_lossy();
-                if name_str.ends_with(".cli.toml") {
-                    let name = name_str.trim_end_matches(".cli.toml");
-                    if let Ok(datum) = CliDatum::from_config(name, b00t_path) {
-                        tools.push(Box::new(datum));
-                    }
-                }
-            }
-        }
-    }
-
-    Ok(tools)
-}
-
-/// Load MCP datum providers
-fn load_mcp_providers(b00t_path: &str) -> Result<Vec<Box<dyn DatumProvider>>> {
-    let mut tools: Vec<Box<dyn DatumProvider>> = Vec::new();
-    let expanded_path = shellexpand::tilde(b00t_path).to_string();
-    let b00t_dir = std::path::PathBuf::from(&expanded_path);
-
-    if let Ok(entries) = std::fs::read_dir(&b00t_dir) {
-        for entry in entries.flatten() {
-            let path = entry.path();
-            if let Some(file_name) = path.file_name() {
-                let name_str = file_name.to_string_lossy();
-                if name_str.ends_with(".mcp.toml") {
-                    let name = name_str.trim_end_matches(".mcp.toml");
-                    if let Ok(datum) = McpDatum::from_config(name, b00t_path) {
-                        tools.push(Box::new(datum));
-                    }
-                }
-            }
-        }
-    }
-
-    Ok(tools)
-}
-
-/// Load Docker datum providers
-fn load_docker_providers(b00t_path: &str) -> Result<Vec<Box<dyn DatumProvider>>> {
-    let mut tools: Vec<Box<dyn DatumProvider>> = Vec::new();
-    let expanded_path = shellexpand::tilde(b00t_path).to_string();
-    let b00t_dir = std::path::PathBuf::from(&expanded_path);
-
-    if let Ok(entries) = std::fs::read_dir(&b00t_dir) {
-        for entry in entries.flatten() {
-            let path = entry.path();
-            if let Some(file_name) = path.file_name() {
-                let name_str = file_name.to_string_lossy();
-                if name_str.ends_with(".docker.toml") {
-                    let name = name_str.trim_end_matches(".docker.toml");
-                    if let Ok(datum) = DockerDatum::from_config(name, b00t_path) {
-                        tools.push(Box::new(datum));
-                    }
-                }
-            }
-        }
-    }
-
-    Ok(tools)
-}
-
-/// Load AI datum providers
-fn load_ai_providers(b00t_path: &str) -> Result<Vec<Box<dyn DatumProvider>>> {
-    let mut tools: Vec<Box<dyn DatumProvider>> = Vec::new();
-    let expanded_path = shellexpand::tilde(b00t_path).to_string();
-    let b00t_dir = std::path::PathBuf::from(&expanded_path);
-
-    if let Ok(entries) = std::fs::read_dir(&b00t_dir) {
-        for entry in entries.flatten() {
-            let path = entry.path();
-            if let Some(file_name) = path.file_name() {
-                let name_str = file_name.to_string_lossy();
-                if name_str.ends_with(".ai.toml") {
-                    let name = name_str.trim_end_matches(".ai.toml");
-                    if let Ok(datum) = AiDatum::try_from((name, b00t_path as &str)) {
-                        tools.push(Box::new(datum));
-                    }
-                }
-            }
-        }
-    }
-
-    Ok(tools)
-}
