@@ -46,4 +46,11 @@ case "$TARGET" in
 esac
 
 # Delegate to b00t-cli for actual sync logic
-exec b00t-cli mcp sync "$OPERATION" "$TARGET" ${AGENT:+"$AGENT"}
+if [[ "$OPERATION" == "push" ]]; then
+  exec b00t-cli mcp sync push b00t "$TARGET" ${AGENT:+"$AGENT"}
+elif [[ "$OPERATION" == "pull" ]]; then
+  exec b00t-cli mcp sync pull "$TARGET" b00t ${AGENT:+"$AGENT"}
+else
+  echo "❌ Unknown operation: $OPERATION" >&2
+  usage
+fi

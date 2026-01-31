@@ -1,0 +1,36 @@
+[b00t]
+name = "qwen-code"
+type = "mcp"
+hint = "Qwen Code MCP server (like claudecode or openai-codex) for agentic AI coding sessions"
+lfmf_category = "qwen-code"
+
+[b00t.learn]
+topic = "qwen-code"
+auto_digest = true
+
+# Primary stdio method
+[[b00t.mcp.stdio]]
+priority = 0
+command = "scripts/run-qwen-code-mcp.sh"
+transport = "stdio"
+requires = ["qwen-code"]
+
+[[b00t.usage]]
+description = "Launch Qwen Code MCP server"
+command = "qwen-code mcp-server"
+
+[[b00t.usage]]
+description = "Test with MCP Inspector (requires 10min timeout)"
+command = "npx @modelcontextprotocol/inspector qwen-code mcp-server"
+
+[[b00t.usage]]
+description = "Start Qwen Code session with approval policy"
+command = "qwen-code mcp-server --approval-policy untrusted"
+
+[[b00t.references]]
+name = "Qwen Code Repository"
+url = "https://github.com/QwenLM/qwen-code"
+
+[[b00t.references]]
+name = "Model Context Protocol"
+url = "https://modelcontextprotocol.io"

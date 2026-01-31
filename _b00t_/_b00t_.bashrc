@@ -16,6 +16,11 @@
 set -o nounset    # Exposes unset variables, strict mode.
 trap "set +o nounset" EXIT  # restore nounset at exit, even in crash!
 
+# Initialize variables that may be referenced before being set
+: "${force_color_prompt:=}"
+: "${preexec_functions:=}"
+: "${SSH_AUTH_SOCK:=}"
+
 # 🤔 trial:
 umask 000
 
@@ -344,7 +349,8 @@ alias yyyymmdd="date +'%Y%m%d'"
 alias ymd="date +'%Y%m%d'"
 alias ymd_hm="date +'%Y%m%d.%H%M'"
 alias ymd_hms="date +'%Y%m%d.%H%M%S'"
-# Ensure date helpers are available in non-interactive shells where aliases are disabled
+
+# TODO: fix Ensure date helpers are available in non-interactive shells where aliases are disabled
 #if ! command -v ymd >/dev/null 2>&1; then ymd(){ date +'%Y%m%d'; }; fi
 #if ! command -v ymd_hm >/dev/null 2>&1; then ymd_hm(){ date +'%Y%m%d.%H%M'; }; fi
 #if ! command -v ymd_hms >/dev/null 2>&1; then ymd_hms(){ date +'%Y%m%d.%H%M%S'; }; fi
@@ -833,12 +839,6 @@ elif [ "$(rand0 10)" -gt 5 ] ; then
         /bin/rm -f $motdTmpFile
     fi
 
-# part of motd
-
-# Fallback calendar helper for hosts without ymd in PATH
-if ! command -v ymd >/dev/null 2>&1; then
-    ymd() { date +%Y%m%d; }
-fi
     log_📢_记录 "lang: $LANG"
     log_📢_记录 "🥾📈 motd project stats, cleanup, tasks goes here. "
     local skunk_x=0
