@@ -212,13 +212,46 @@ b00t advice just list              # List all recorded lessons for a tool
 ## 🛠 **Agent Development Features**
 
 ### **MCP (Model Context Protocol) Integration**
-b00t provides 50+ MCP tools for seamless integration with AI development environments:
+
+#### Option 1: Install via Claude Code Marketplace (Recommended)
+
+Add b00t as a marketplace for easy plugin and skill management:
+
+```bash
+# Add b00t marketplace to Claude Code
+/plugin marketplace add elasticdotventures/_b00t_
+/plugin marketplace add ./claude-plugin/
+
+# Install b00t plugins from marketplace
+/plugin install b00t@b00t-plugins
+```
+
+This provides:
+- ✅ `/b00t` skill for dispatching learn packets to agents
+- ✅ Automatic skill activation based on context
+- ✅ Centralized plugin management via marketplace
+- ✅ Access to hive-memory, devops-stacks, and other skills
+
+#### Option 2: Install MCP Server Directly
+
+Install b00t MCP server for 50+ MCP tools:
 
 ```bash
 # Install b00t MCP server in your development environment
 b00t mcp install b00t claudecode   # For Claude Code
 b00t mcp install b00t vscode       # For VS Code
 b00t mcp install b00t cursor       # For Cursor
+```
+
+#### Option 3: Manual Skill Installation
+
+Copy skills directly to Claude Code:
+
+```bash
+# Copy individual skills
+cp -r .claude/skills/hive-memory ~/.claude/skills/
+cp -r .claude/skills/devops-stacks ~/.claude/skills/
+cp -r .claude/skills/systems-engineering ~/.claude/skills/
 ```
 
 ### **Smart Context Management**
