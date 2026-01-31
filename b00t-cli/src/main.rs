@@ -31,6 +31,7 @@ use b00t_cli::commands::{
     SessionCommands, StackCommands,  WhatismyCommands,
 };
 use b00t_cli::commands::learn::handle_learn;
+use b00t_cli::commands::install::{install_datum, run_just_install};
 
 // Re-export commonly used functions for datum modules
 pub use b00t_cli::{
@@ -248,6 +249,13 @@ Example:
     Ansible {
         #[clap(subcommand)]
         ansible_command: AnsibleCommands,
+    },
+    #[clap(about = "Install a datum (auto-resolves dependencies) or run bootstrap install when no name is provided")]
+    Install {
+        #[clap(help = "Datum name to install (omit to run repo bootstrap just install)")]
+        name: Option<String>,
+        #[clap(long, help = "Show what would be installed for bootstrap mode")]
+        dry_run: bool,
     },
     #[clap(
         about = "Update all datums defined in _b00t_.toml",
@@ -1253,6 +1261,17 @@ async fn main() {
         Some(Commands::Ansible { ansible_command }) => {
             if let Err(e) = ansible_command.execute(&cli.path) {
                 eprintln!("Ansible Error: {}", e);
+                std::process::exit(1);
+            }
+        }
+        Some(Commands::Install { name, dry_run }) => {
+            if let Some(name) = name {
+                if let Err(e) = install_datum(&cli.path, name) {
+                    eprintln!("Install Error: {}", e);
+                    std::process::exit(1);
+                }
+            } else if let Err(e) = run_just_install(*dry_run) {
+                eprintln!("Install Error: {}", e);
                 std::process::exit(1);
             }
         }
