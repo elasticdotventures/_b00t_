@@ -7,7 +7,11 @@ use std::fs;
 // use std::io::{Read};
 // use std::path::PathBuf;
 // 🤓 cleaned up unused Tera import after switching to simple string replacement
-use b00t_cli::{SessionState, UnifiedConfig, whoami};
+use b00t_cli::{
+    commands,SessionState,
+    load_datum_providers, UnifiedConfig, session_memory, whoami,
+};
+
 
 // 🦨 Module declarations removed - these are declared in lib.rs now
 // Import from b00t_cli:: instead
@@ -1252,7 +1256,7 @@ async fn main() {
                 std::process::exit(1);
             }
         }
-        Some(Commands::Lfmf { tool, lesson, repo, global }) => {
+        Some(Commands::Lfmf { tool, lesson, repo: _, global }) => {
             // Validate required fields
             let tool = match tool {
                 Some(t) => t,
