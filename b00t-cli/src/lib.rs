@@ -71,21 +71,6 @@ pub struct UnifiedConfig {
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Default)]
-pub struct UsageExample {
-    pub description: String,
-    pub command: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub output: Option<String>,
-}
-
-#[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Default)]
-pub struct LearnMeta {
-    pub topic: Option<String>,
-    pub inline: Option<String>,
-    pub auto_digest: Option<bool>,
-}
-
-#[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Default)]
 pub struct BudgetConstraint {
     pub daily_limit: Option<f64>,
     pub cost_per_job: Option<f64>,
@@ -202,7 +187,7 @@ pub struct BootDatum {
     pub dsn: Option<String>,
 
     // RAG / learn metadata
-    pub learn: Option<LearnMeta>,
+    pub learn: Option<LearnMetadata>,
     pub lfmf_category: Option<String>,
     pub usage: Option<Vec<UsageExample>>,
 
