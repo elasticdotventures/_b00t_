@@ -1,0 +1,45 @@
+name: full-workspace-tests
+description: Test entire Rust workspace (all crates)
+
+env:
+  - PROJECT_ROOT: /home/brianh/.dotfiles
+  - CARGO_TERM_COLOR: always
+  - RUST_BACKTRACE: "1"
+
+steps:
+  - name: workspace-check
+    command: cargo check --workspace --all-features
+    dir: ${PROJECT_ROOT}
+    output: STDOUT
+
+  - name: workspace-test
+    command: cargo test --workspace --all-features
+    dir: ${PROJECT_ROOT}
+    depends:
+      - workspace-check
+    output: STDOUT
+
+  - name: workspace-clippy
+    command: cargo clippy --workspace --all-features -- -D warnings
+    dir: ${PROJECT_ROOT}
+    depends:
+      - workspace-check
+    output: STDOUT
+    continueOn:
+      failure: true
+
+  - name: workspace-build
+    command: cargo build --workspace --release
+    dir: ${PROJECT_ROOT}
+    depends:
+      - workspace-test
+    output: STDOUT
+
+  - name: verify-binaries
+    command: |
+      echo "=== b00t-cli ===" && ./target/release/b00t-cli --version
+      echo "=== b00t-mcp ===" && ./target/release/b00t-mcp --version
+    dir: ${PROJECT_ROOT}
+    depends:
+      - workspace-build
+    output: STDOUT

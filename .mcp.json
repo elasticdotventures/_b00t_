@@ -1,5 +1,12 @@
 {
   "mcpServers": {
+    "b00t-mcp": {
+      "args": [
+        "--stdio"
+      ],
+      "command": "b00t-mcp",
+      "env": {}
+    },
     "context7": {
       "command": "bunx",
       "args": [
@@ -13,6 +20,16 @@
         "-y",
         "@modelcontextprotocol/server-github"
       ]
+    },
+    "rust-crate-docs-docker": {
+      "args": [
+        "run",
+        "--rm",
+        "-i",
+        "ghcr.io/promptexecution/rust-cargo-docs-rag-mcp:latest",
+        "stdio"
+      ],
+      "command": "docker"
     },
     "taskmaster-ai": {
       "command": "bunx",

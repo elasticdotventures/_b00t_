@@ -19,20 +19,39 @@ fn run_with_sudo(cmd, is_docker_env) {
     }
 }
 
+// Interactive/optional config helpers
+fn env_bool(name, default_val) {
+    let v = get_env(name);
+    if v == null { return default_val; }
+    if v == "true" || v == "1" || v == "yes" || v == "y" || v == "TRUE" || v == "YES" || v == "Y" { return true; }
+    if v == "false" || v == "0" || v == "no" || v == "n" || v == "FALSE" || v == "NO" || v == "N" { return false; }
+    return default_val;
+}
+
+let interactive = env_bool("INTERACTIVE", !is_ci);
+let assume_yes = env_bool("ASSUME_YES", is_ci || is_docker);
+// Defaults per preference (Docker/CI): DOTFILES=yes, USE_STOW=yes, GH=no
+let install_gh = env_bool("INSTALL_GH", false);
+let install_dotfiles = env_bool("INSTALL_DOTFILES", is_ci || is_docker);
+let use_stow = env_bool("USE_STOW", is_ci || is_docker);
+let home = get_env("HOME");
+
+log_info(`Config: interactive=${interactive}, assume_yes=${assume_yes}, install_gh=${install_gh}, install_dotfiles=${install_dotfiles}, use_stow=${use_stow}`);
+
 // Core system updates
 log_info("📦 Updating package lists...");
 run_with_sudo("apt update && apt upgrade -y", is_docker);
 run_with_sudo("apt install software-properties-common -y", is_docker);
 
-// GitHub CLI installation
-if !command_exists("gh") {
+// GitHub CLI installation (optional)
+if install_gh && !command_exists("gh") {
     log_info("📥 Installing GitHub CLI...");
-    
+
     // Ensure curl is available
     if !command_exists("curl") {
         run_with_sudo("apt update && apt install curl -y", is_docker);
     }
-    
+
     let gh_install_cmd = `
         curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | ${if is_docker { "" } else { "sudo " }}dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg &&
         ${if is_docker { "" } else { "sudo " }}chmod go+r /usr/share/keyrings/githubcli-archive-keyring.gpg &&
@@ -40,48 +59,83 @@ if !command_exists("gh") {
         ${if is_docker { "" } else { "sudo " }}apt update &&
         ${if is_docker { "" } else { "sudo " }}apt install git gh -y
     `;
-    
+
     run_cmd(gh_install_cmd);
+} else if !install_gh {
+    log_info("⏭️ Skipping GitHub CLI installation (INSTALL_GH=false)");
 }
 
-// GitHub authentication
-if file_exists("/run/secrets/GH_TOKEN") {
-    log_info("🔐 Configuring GitHub authentication...");
-    run_cmd("gh auth login --with-token < /run/secrets/GH_TOKEN");
-}
+// GitHub authentication and extensions (only if gh available)
+if command_exists("gh") {
+    if file_exists("/run/secrets/GH_TOKEN") {
+        log_info("🔐 Configuring GitHub authentication with GH_TOKEN...");
+        // Best-effort; do not fail the setup if auth fails
+        let _ = run_cmd("gh auth login --with-token < /run/secrets/GH_TOKEN");
+    }
 
-// Check GitHub auth status
-fn check_github_auth() {
-    let status_output = run_cmd("gh auth status 2>&1");
-    return status_output.contains("✓ Logged in to github.com");
-}
+    // Check GitHub auth status
+    fn check_github_auth() {
+        let status_output = run_cmd("gh auth status 2>&1");
+        return status_output.contains("✓ Logged in to github.com");
+    }
 
-if check_github_auth() {
-    log_success("✅ GitHub authentication verified");
-    
-    // Install GitHub extensions
-    run_cmd("gh extension install https://github.com/nektos/gh-act");
-    run_cmd("gh extension install github/gh-copilot --force");
+    if check_github_auth() {
+        log_success("✅ GitHub authentication verified");
+        // Keep extensions optional but safe; do not fail setup
+        let _ = run_cmd("gh extension install https://github.com/nektos/gh-act");
+        let _ = run_cmd("gh extension install github/gh-copilot --force");
+    } else {
+        log_warn("❌ GitHub not authenticated - skipping extensions");
+    }
 } else {
-    log_warn("❌ GitHub not authenticated - skipping extensions");
+    log_info("⏭️ gh not installed; skipping auth/extension setup");
 }
 
-// GNU Stow for dotfiles management
-if !command_exists("stow") {
-    log_info("📁 Installing GNU Stow...");
-    run_with_sudo("apt install stow -y", is_docker);
-}
+// Dotfiles setup (optional)
+if install_dotfiles {
+    let dotfiles_dir = home + "/.dotfiles";
+    if !file_exists(dotfiles_dir) {
+        log_info("📥 Cloning dotfiles repository...");
+        if command_exists("gh") {
+            run_cmd(`gh repo clone elasticdotventures/dotfiles ${dotfiles_dir} -- --depth 1`);
+        } else {
+            run_cmd(`git clone --depth 1 https://github.com/elasticdotventures/dotfiles.git ${dotfiles_dir}`);
+        }
+    }
 
-// Clone dotfiles if needed
-let dotfiles_dir = USER + "/.dotfiles";
-if !file_exists(dotfiles_dir) {
-    log_info("📥 Cloning dotfiles repository...");
-    run_cmd(`gh repo clone elasticdotventures/dotfiles ${dotfiles_dir} -- --depth 1`);
+    if use_stow {
+        if !command_exists("stow") {
+            if assume_yes {
+                log_info("📁 Installing GNU Stow...");
+                run_with_sudo("apt install stow -y", is_docker);
+            } else {
+                log_warn("Stow not found and ASSUME_YES=false; falling back to symlink strategy");
+            }
+        }
+        if command_exists("stow") {
+            log_info("🔗 Linking dotfiles with stow...");
+            run_cmd(`stow -d ${dotfiles_dir} -t ${home} bash`);
+        } else {
+            log_info("🔗 Applying minimal symlink fallback for bash files");
+            let files = [".bashrc", ".bash_profile", ".bash_aliases"];
+            for f in files {
+                let src = dotfiles_dir + "/bash/" + f;
+                let dst = home + "/" + f;
+                if file_exists(src) { run_cmd("ln -sf " + src + " " + dst); }
+            }
+        }
+    } else {
+        log_info("🔗 USE_STOW=false; applying minimal symlink fallback for bash files");
+        let files = [".bashrc", ".bash_profile", ".bash_aliases"];
+        for f in files {
+            let src = dotfiles_dir + "/bash/" + f;
+            let dst = home + "/" + f;
+            if file_exists(src) { run_cmd("ln -sf " + src + " " + dst); }
+        }
+    }
+} else {
+    log_info("⏭️ Skipping dotfiles setup (INSTALL_DOTFILES=false)");
 }
-
-// Apply dotfiles with stow
-log_info("🔗 Linking dotfiles...");
-run_cmd(`stow -d ${dotfiles_dir} -t ${USER} bash`);
 
 // Essential development tools
 log_info("🛠️  Installing development tools...");
@@ -224,7 +278,7 @@ if !command_exists("gcloud") {
     run_cmd("curl https://packages.cloud.google.com/apt/doc/apt-key.gpg | " + (if is_docker { "" } else { "sudo " }) + "gpg --dearmor -o /usr/share/keyrings/cloud.google.gpg");
     run_cmd("echo \"deb [signed-by=/usr/share/keyrings/cloud.google.gpg] https://packages.cloud.google.com/apt cloud-sdk main\" | " + (if is_docker { "" } else { "sudo " }) + "tee -a /etc/apt/sources.list.d/google-cloud-sdk.list");
     run_with_sudo("apt-get update && apt-get install google-cloud-cli -y", is_docker);
-    
+
     if !is_ci {
         let gcloud_configs = run_cmd("gcloud config configurations list");
         if !gcloud_configs.contains("NAME") {
@@ -241,10 +295,10 @@ if !is_ci && command_exists("kubectl") {
         log_info("⚙️  Setting up kubectl completion...");
         create_dir(get_env("HOME") + "/.kube");
         run_cmd("kubectl completion bash > " + kube_completion);
-        
+
         let bash_profile = get_env("HOME") + "/.bash_profile";
         let completion_source = "\n# kubectl shell completion\nsource '" + kube_completion + "'\n";
-        
+
         if file_exists(bash_profile) {
             write_file(bash_profile, read_file(bash_profile) + completion_source);
         } else {
@@ -302,7 +356,7 @@ if !is_ci {
     if !command_exists("brew") {
         log_info("🍺 Installing Homebrew...");
         run_cmd("/bin/bash -c \"$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)\"");
-        
+
         let linuxbrew_bin = "/home/linuxbrew/.linuxbrew/bin/brew";
         if file_exists(linuxbrew_bin) {
             run_cmd(linuxbrew_bin + " shellenv");
@@ -310,13 +364,13 @@ if !is_ci {
             write_file(get_env("HOME") + "/.bashrc", bashrc_content + "\neval \"$(" + linuxbrew_bin + " shellenv)\"\n");
         }
     }
-    
+
     // asdf via Homebrew
     if command_exists("brew") && !command_exists("asdf") {
         log_info("🔧 Installing asdf via Homebrew...");
         run_cmd("brew install asdf");
     }
-    
+
     // Go via asdf
     if command_exists("asdf") {
         let golang_check = run_cmd("asdf list golang 2>&1");

@@ -2,14 +2,17 @@
 //!
 //! Provides MCP tools to interact with the b00t MCP registry
 
-use anyhow::{Result, Context};
+use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tokio::sync::Mutex;
-use tracing::{info, error};
+use tracing::{error, info};
 
-use b00t_c0re_lib::mcp_registry::{McpRegistry, McpServerRegistration, McpServerConfig, HealthStatus, create_registration_from_datum, ServerTransport, RegistrationMetadata, RegistrationSource, InstallationStatus};
 use b00t_c0re_lib::mcp_proxy::GenericMcpProxy;
+use b00t_c0re_lib::mcp_registry::{
+    HealthStatus, InstallationStatus, McpRegistry, McpServerConfig, McpServerRegistration,
+    RegistrationMetadata, RegistrationSource, ServerTransport, create_registration_from_datum,
+};
 
 /// Global MCP registry instance
 type RegistryHandle = Arc<Mutex<McpRegistry>>;
@@ -75,7 +78,9 @@ pub async fn registry_register(params: RegistryRegisterParams) -> Result<String>
     let registration = McpServerRegistration {
         id: params.id.clone(),
         name: params.name.clone(),
-        description: params.description.unwrap_or_else(|| format!("MCP server: {}", params.name)),
+        description: params
+            .description
+            .unwrap_or_else(|| format!("MCP server: {}", params.name)),
         version: "0.1.0".to_string(),
         homepage: None,
         documentation: None,
@@ -99,7 +104,8 @@ pub async fn registry_register(params: RegistryRegisterParams) -> Result<String>
         },
     };
 
-    registry.register(registration)
+    registry
+        .register(registration)
         .context("Failed to register server")?;
 
     // Also register with generic proxy for dynamic tool execution
@@ -115,10 +121,17 @@ pub async fn registry_register(params: RegistryRegisterParams) -> Result<String>
     // Auto-discover tools from the registered server
     match proxy.discover_tools_from_server(server_config).await {
         Ok(tools) => {
-            info!("🔍 Discovered {} tools from {}", tools.len(), id_for_response);
+            info!(
+                "🔍 Discovered {} tools from {}",
+                tools.len(),
+                id_for_response
+            );
         }
         Err(e) => {
-            error!("⚠️  Failed to discover tools from {}: {}", id_for_response, e);
+            error!(
+                "⚠️  Failed to discover tools from {}: {}",
+                id_for_response, e
+            );
         }
     }
 
@@ -136,7 +149,8 @@ pub async fn registry_register(params: RegistryRegisterParams) -> Result<String>
 pub async fn registry_unregister(params: RegistryUnregisterParams) -> Result<String> {
     let mut registry = REGISTRY.lock().await;
 
-    registry.unregister(&params.id)
+    registry
+        .unregister(&params.id)
         .context("Failed to unregister server")?;
 
     let response = serde_json::json!({
@@ -153,18 +167,21 @@ pub async fn registry_list() -> Result<String> {
     let registry = REGISTRY.lock().await;
     let servers = registry.list();
 
-    let server_summaries: Vec<serde_json::Value> = servers.iter().map(|s| {
-        serde_json::json!({
-            "id": s.id,
-            "name": s.name,
-            "description": s.description,
-            "version": s.version,
-            "command": s.config.command,
-            "tags": s.tags,
-            "health": format!("{:?}", s.metadata.health_status),
-            "source": format!("{:?}", s.metadata.source),
+    let server_summaries: Vec<serde_json::Value> = servers
+        .iter()
+        .map(|s| {
+            serde_json::json!({
+                "id": s.id,
+                "name": s.name,
+                "description": s.description,
+                "version": s.version,
+                "command": s.config.command,
+                "tags": s.tags,
+                "health": format!("{:?}", s.metadata.health_status),
+                "source": format!("{:?}", s.metadata.source),
+            })
         })
-    }).collect();
+        .collect();
 
     let response = serde_json::json!({
         "success": true,
@@ -186,7 +203,10 @@ pub async fn registry_get(params: RegistryGetParams) -> Result<String> {
         });
         Ok(serde_json::to_string_pretty(&response)?)
     } else {
-        Err(anyhow::anyhow!("Server '{}' not found in registry", params.id))
+        Err(anyhow::anyhow!(
+            "Server '{}' not found in registry",
+            params.id
+        ))
     }
 }
 
@@ -202,14 +222,17 @@ pub async fn registry_search(params: RegistrySearchParams) -> Result<String> {
         registry.list()
     };
 
-    let server_summaries: Vec<serde_json::Value> = results.iter().map(|s| {
-        serde_json::json!({
-            "id": s.id,
-            "name": s.name,
-            "description": s.description,
-            "tags": s.tags,
+    let server_summaries: Vec<serde_json::Value> = results
+        .iter()
+        .map(|s| {
+            serde_json::json!({
+                "id": s.id,
+                "name": s.name,
+                "description": s.description,
+                "tags": s.tags,
+            })
         })
-    }).collect();
+        .collect();
 
     let response = serde_json::json!({
         "success": true,
@@ -224,7 +247,9 @@ pub async fn registry_search(params: RegistrySearchParams) -> Result<String> {
 pub async fn registry_sync_official() -> Result<String> {
     let mut registry = REGISTRY.lock().await;
 
-    let synced_count = registry.sync_official_registry().await
+    let synced_count = registry
+        .sync_official_registry()
+        .await
         .context("Failed to sync with official registry")?;
 
     let response = serde_json::json!({
@@ -240,7 +265,9 @@ pub async fn registry_sync_official() -> Result<String> {
 pub async fn registry_discover() -> Result<String> {
     let mut registry = REGISTRY.lock().await;
 
-    let discovered_count = registry.auto_discover().await
+    let discovered_count = registry
+        .auto_discover()
+        .await
         .context("Failed to auto-discover servers")?;
 
     let response = serde_json::json!({
@@ -256,7 +283,8 @@ pub async fn registry_discover() -> Result<String> {
 pub async fn registry_export() -> Result<String> {
     let registry = REGISTRY.lock().await;
 
-    let export_json = registry.export_to_mcp_format()
+    let export_json = registry
+        .export_to_mcp_format()
         .context("Failed to export registry")?;
 
     Ok(export_json)
@@ -266,7 +294,8 @@ pub async fn registry_export() -> Result<String> {
 pub async fn registry_import(json: String) -> Result<String> {
     let mut registry = REGISTRY.lock().await;
 
-    let imported_count = registry.import_from_mcp_format(&json)
+    let imported_count = registry
+        .import_from_mcp_format(&json)
         .context("Failed to import registry")?;
 
     let response = serde_json::json!({
@@ -283,8 +312,8 @@ pub async fn init_registry_with_b00t() -> Result<()> {
     let mut registry = REGISTRY.lock().await;
 
     // Register b00t-mcp itself
-    let b00t_mcp_path = std::env::current_exe()
-        .unwrap_or_else(|_| std::path::PathBuf::from("b00t-mcp"));
+    let b00t_mcp_path =
+        std::env::current_exe().unwrap_or_else(|_| std::path::PathBuf::from("b00t-mcp"));
 
     let registration = create_registration_from_datum(
         "io.b00t/b00t-mcp".to_string(),

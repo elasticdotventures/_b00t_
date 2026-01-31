@@ -1,0 +1,59 @@
+{
+  "name": "b00t-mcp",
+  "version": "0.7.0",
+  "description": "MCP (Model Context Protocol) server for b00t-cli command proxy with ACL filtering",
+  "main": "dist/index.js",
+  "bin": {
+    "b00t-mcp": "bin/b00t-mcp"
+  },
+  "scripts": {
+    "preinstall": "node scripts/install.js",
+    "postinstall": "node scripts/postinstall.js",
+    "build": "node scripts/build.js",
+    "test": "node scripts/test.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/elasticdotventures/dotfiles.git",
+    "directory": "b00t-mcp"
+  },
+  "keywords": [
+    "mcp", 
+    "b00t", 
+    "cli", 
+    "proxy", 
+    "acl",
+    "rust",
+    "model-context-protocol"
+  ],
+  "author": "Brian Horakh <brian@promptexecution.com>",
+  "license": "MIT",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "os": [
+    "darwin",
+    "linux",
+    "win32"
+  ],
+  "cpu": [
+    "x64",
+    "arm64"
+  ],
+  "files": [
+    "bin/",
+    "scripts/",
+    "dist/",
+    "README.md",
+    "LICENSE"
+  ],
+  "devDependencies": {
+    "axios": "^1.6.0",
+    "tar": "^7.0.0",
+    "which": "^4.0.0"
+  },
+  "preferGlobal": true,
+  "publishConfig": {
+    "access": "public"
+  }
+}

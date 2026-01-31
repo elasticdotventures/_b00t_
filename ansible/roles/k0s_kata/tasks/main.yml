@@ -1,0 +1,109 @@
+---
+- name: Ensure apt cache is up to date
+  apt:
+    update_cache: true
+    cache_valid_time: 3600
+  when: ansible_os_family == 'Debian'
+
+- name: Install base packages
+  apt:
+    name:
+      - curl
+      - jq
+      - lvm2
+      - thin-provisioning-tools
+      - software-properties-common
+    state: present
+  when: ansible_os_family == 'Debian'
+
+- name: Install Kata Containers repository
+  apt_repository:
+    repo: ppa:katacontainers/kata-containers
+    state: present
+  when: ansible_os_family == 'Debian'
+
+- name: Install Kata Containers packages
+  apt:
+    name:
+      - kata-runtime
+      - kata-containers
+    state: present
+  when: ansible_os_family == 'Debian'
+
+- name: Prepare Kata devmapper directories
+  file:
+    path: /var/lib/kata-containers/devmapper
+    state: directory
+    mode: "0755"
+
+- name: Create kata thin pool
+  command: >
+    kata-collect-data.sh --setup-devmapper {{ kata_thinpool_device }}
+  args:
+    creates: /var/lib/kata-containers/devmapper/metadata
+  register: kata_devmapper
+  changed_when: kata_devmapper.rc == 0
+
+- name: Install k0s binary
+  shell: curl -sSLf https://get.k0s.sh | sh
+  args:
+    creates: /usr/local/bin/k0s
+
+- name: Create k0s configuration directory
+  file:
+    path: /etc/k0s
+    state: directory
+    mode: "0755"
+
+- name: Render k0s config with Kata runtime class
+  template:
+    src: k0s.yaml.j2
+    dest: /etc/k0s/k0s.yaml
+    mode: "0644"
+
+- name: Install k0s {{ k0s_role }} service
+  command: >
+    k0s install {{ k0s_role }} --single --enable-worker --config /etc/k0s/k0s.yaml
+  args:
+    creates: /etc/systemd/system/k0s{{ k0s_role }}.service
+
+- name: Ensure k0s service is started
+  command: k0s start
+  register: k0s_start
+  changed_when: '"already running" not in k0s_start.stdout'
+
+- name: Wait for k0s API
+  command: k0s status
+  register: k0s_status
+  retries: 20
+  delay: 10
+  until: k0s_status.rc == 0
+
+- name: Label node for Kata scheduling
+  command: >-
+    k0s kubectl label node {{ ansible_hostname }} katacontainers.sh/installed=true --overwrite
+  register: kata_label
+  failed_when: kata_label.rc not in [0]
+
+- name: Apply Kata runtime class
+  shell: |
+    cat <<'EOF' | k0s kubectl apply -f -
+    apiVersion: node.k8s.io/v1
+    kind: RuntimeClass
+    metadata:
+      name: {{ kata_runtime_class }}
+    handler: kata
+    scheduling:
+      nodeSelector:
+        katacontainers.sh/installed: "true"
+    EOF
+  args:
+    warn: false
+
+- name: Display kubectl runtime classes for verification
+  command: k0s kubectl get runtimeclass
+  register: runtimeclasses
+  changed_when: false
+  failed_when: runtimeclasses.rc != 0
+  tags:
+    - debug

@@ -116,7 +116,7 @@ mod tests {
             namespace: None,
             env: vec![],
         };
-        
+
         assert!(deploy_cmd.execute("test").is_ok());
     }
 }

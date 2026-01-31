@@ -1,0 +1,63 @@
+# justfile for b00t-mcp NPM package management
+# 📦 Cross-platform binary distribution via npm/npx
+
+repo-root := env_var_or_default("JUST_REPO_ROOT", `git rev-parse --show-toplevel 2>/dev/null || echo ..`)
+
+set shell := ["bash", "-cu"]
+
+# 🔨 Build cross-platform binaries
+build:
+    #!/bin/bash
+    echo "🔨 Building b00t-mcp for npm distribution..."
+    node scripts/build.js
+
+# 🧪 Test npm package structure
+test:
+    #!/bin/bash
+    echo "🧪 Testing b00t-mcp npm package..."
+    node scripts/test.js
+
+# 📦 Create npm package tarball
+pack:
+    #!/bin/bash
+    echo "📦 Creating npm package..."
+    npm pack
+
+# 🚀 Publish to npm registry
+publish:
+    #!/bin/bash
+    echo "🚀 Publishing b00t-mcp to npm..."
+    npm publish
+
+# 🧪 Test installation process
+install-test:
+    #!/bin/bash
+    echo "🧪 Testing npm installation..."
+    cd /tmp
+    npm install -g {{repo-root}}/b00t-mcp-npm
+    which b00t-mcp
+    b00t-mcp --version || echo "Version check failed but binary found"
+
+# 🧹 Clean build artifacts
+clean:
+    #!/bin/bash
+    echo "🧹 Cleaning npm build artifacts..."
+    rm -rf dist/ *.tgz node_modules/
+    
+# 📋 Show package info
+info:
+    #!/bin/bash
+    echo "📋 b00t-mcp npm package info:"
+    echo "Version: $(jq -r .version package.json)"
+    echo "Files:"
+    npm pack --dry-run
+
+# 🔍 Validate package before publish
+validate: test pack
+    #!/bin/bash
+    echo "✅ Package validation complete"
+
+# 🎯 Full build and test workflow
+ci: build test pack
+    #!/bin/bash
+    echo "🎯 CI workflow complete"

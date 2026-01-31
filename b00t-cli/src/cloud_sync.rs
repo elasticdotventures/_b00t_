@@ -1,9 +1,9 @@
 //! Cloud configuration synchronization for b00t-cli
-//! 
+//!
 //! Syncs AI provider configurations from b00t-website cloud service
 //! to local b00t-cli sessions for unified model management.
 
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use b00t_c0re_lib::AiClientConfig;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
@@ -95,7 +95,7 @@ impl CloudSyncClient {
     /// Fetch AI config with authentication token
     async fn fetch_ai_config_authenticated(&self, token: &str) -> Result<AiClientConfig> {
         let url = format!("{}/ai-config", self.config.cloud_endpoint);
-        
+
         let response = self
             .client
             .get(&url)
@@ -123,7 +123,10 @@ impl CloudSyncClient {
     async fn fetch_ai_config_for_user(&self, username: &str) -> Result<AiClientConfig> {
         // This would require implementing a public endpoint for user configs
         // For now, return a default configuration
-        eprintln!("⚠️ Cloud sync not fully authenticated, using default AI config");
+        eprintln!(
+            "⚠️ Cloud sync for '{}' not fully authenticated, using default AI config",
+            username
+        );
         Ok(AiClientConfig::default())
     }
 
@@ -132,23 +135,28 @@ impl CloudSyncClient {
         let mut providers = HashMap::new();
 
         for (provider_name, cloud_provider) in cloud_config.providers {
-            providers.insert(provider_name.clone(), b00t_c0re_lib::AiProviderConfig {
-                provider: provider_name,
-                model: cloud_provider.model,
-                api_key: None, // API keys are stored separately in local keyring
-                endpoint: None,
-                enabled: cloud_provider.enabled,
-                priority: cloud_provider.priority,
-            });
+            providers.insert(
+                provider_name.clone(),
+                b00t_c0re_lib::AiProviderConfig {
+                    provider: provider_name,
+                    model: cloud_provider.model,
+                    api_key: None, // API keys are stored separately in local keyring
+                    endpoint: None,
+                    enabled: cloud_provider.enabled,
+                    priority: cloud_provider.priority,
+                },
+            );
         }
 
         AiClientConfig {
             providers,
             default_provider: cloud_config.default_provider,
             fallback_provider: cloud_config.fallback_provider,
-            last_updated: Some(cloud_config.last_updated.unwrap_or_else(|| {
-                chrono::Utc::now().to_rfc3339()
-            })),
+            last_updated: Some(
+                cloud_config
+                    .last_updated
+                    .unwrap_or_else(|| chrono::Utc::now().to_rfc3339()),
+            ),
         }
     }
 
@@ -169,7 +177,7 @@ impl CloudSyncClient {
 
                 // Update last sync timestamp
                 self.config.last_sync = Some(SystemTime::now());
-                
+
                 // Store updated sync config in session
                 memory.set(
                     "cloud_sync_config",
@@ -192,7 +200,8 @@ impl CloudSyncClient {
 
     /// Get AI configuration from session memory (cached)
     pub fn get_cached_ai_config(memory: &SessionMemory) -> Option<AiClientConfig> {
-        memory.get("ai_config_json")
+        memory
+            .get("ai_config_json")
             .and_then(|json| serde_json::from_str(&json).ok())
     }
 }
@@ -227,9 +236,8 @@ pub fn init_cloud_sync(memory: &mut SessionMemory) -> Result<CloudSyncClient> {
 
 /// Periodic cloud sync task
 pub async fn periodic_cloud_sync() -> Result<()> {
-    let mut memory = SessionMemory::load().map_err(|e| {
-        anyhow!("Failed to load session memory for cloud sync: {}", e)
-    })?;
+    let mut memory = SessionMemory::load()
+        .map_err(|e| anyhow!("Failed to load session memory for cloud sync: {}", e))?;
 
     let mut sync_client = init_cloud_sync(&mut memory)?;
 

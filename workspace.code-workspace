@@ -1,0 +1,14 @@
+{
+	"folders": [
+		{
+			"path": "."
+		}
+	],
+	"settings": {
+		"terminal.external.linuxExec": "sakura",
+		"volar.tsPlugin": true,
+		"i18n-ally.localesPaths": [
+			"../vitessetestee/locales"
+		]
+	}
+}

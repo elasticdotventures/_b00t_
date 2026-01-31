@@ -1,0 +1,26 @@
+# DeepSeek OCR vision model for high fidelity text extraction
+
+[b00t]
+name = "deepseek-ocr"
+type = "ai_model"
+hint = "DeepSeek OCR visual encoder for scene text recognition"
+aliases = ["deepseek"]
+
+[b00t.env]
+VLLM_MODEL_DIR = "~/.b00t/models/deepseek-ai__deepseek-ocr"
+VLLM_MODEL_PATH = "/models/deepseek-ocr"
+VLLM_DTYPE = "bfloat16"
+
+[ai_model]
+provider = "huggingface"
+size = "small"
+capabilities = ["vision"]
+litellm_model = "huggingface/deepseek-ai/deepseek-ocr"
+api_key_env = "HF_TOKEN"
+
+[ai_model.metadata]
+hf_repo = "deepseek-ai/deepseek-ocr"
+container_mount = "/models/deepseek-ocr"
+dtype = "bfloat16"
+cache_dir = "~/.b00t/models/deepseek-ai__deepseek-ocr"
+revision = "main"

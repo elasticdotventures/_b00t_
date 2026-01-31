@@ -1,10 +1,10 @@
 //! Template rendering functionality for b00t ecosystem
-//! 
+//!
 //! Provides simple string-based template rendering with b00t-specific variables
 //! including PID, timestamps, git info, and agent context.
 
-use crate::context::B00tContext;
 use crate::B00tResult;
+use crate::context::B00tContext;
 use anyhow::Context;
 
 /// Template renderer that handles b00t-specific variable substitution
@@ -26,7 +26,7 @@ impl TemplateRenderer {
     }
 
     /// Render a template string by replacing b00t variables
-    /// 
+    ///
     /// Supports these template variables:
     /// - {{PID}} - Current process ID
     /// - {{TIMESTAMP}} - Current UTC timestamp
@@ -40,7 +40,7 @@ impl TemplateRenderer {
     /// - {{HOSTNAME}} - System hostname
     pub fn render(&self, template: &str) -> B00tResult<String> {
         let mut rendered = template.to_string();
-        
+
         // Replace all b00t template variables
         rendered = rendered.replace("{{PID}}", &self.context.pid.to_string());
         rendered = rendered.replace("{{TIMESTAMP}}", &self.context.timestamp);
@@ -60,9 +60,10 @@ impl TemplateRenderer {
 
     /// Render a template from a file path
     pub fn render_file<P: AsRef<std::path::Path>>(&self, path: P) -> B00tResult<String> {
-        let template_content = std::fs::read_to_string(&path)
-            .with_context(|| format!("Failed to read template file: {}", path.as_ref().display()))?;
-        
+        let template_content = std::fs::read_to_string(&path).with_context(|| {
+            format!("Failed to read template file: {}", path.as_ref().display())
+        })?;
+
         self.render(&template_content)
     }
 
@@ -97,11 +98,14 @@ mod tests {
         };
 
         let renderer = TemplateRenderer::new(context);
-        
+
         let template = "PID: {{PID}}, User: {{USER}}, Branch: {{BRANCH}}, Agent: {{_B00T_Agent}}";
         let result = renderer.render(template).unwrap();
-        
-        assert_eq!(result, "PID: 12345, User: testuser, Branch: main, Agent: TestAgent");
+
+        assert_eq!(
+            result,
+            "PID: 12345, User: testuser, Branch: main, Agent: TestAgent"
+        );
     }
 
     #[test]
@@ -122,7 +126,7 @@ mod tests {
         let renderer = TemplateRenderer::new(context);
         let template = "Git repo: {{IS_GIT_REPO}} / {{GIT_REPO}}";
         let result = renderer.render(template).unwrap();
-        
+
         assert_eq!(result, "Git repo: false / false");
     }
 }

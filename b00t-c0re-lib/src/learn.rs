@@ -1,13 +1,14 @@
 use anyhow::{Context, Result};
 use std::collections::HashMap;
 use std::fs;
-use std::path::{PathBuf};
+use std::path::PathBuf;
 
 /// Aggregates available learn topics from TOML and markdown files
 pub fn get_learn_topics(path: &str) -> Result<Vec<String>> {
     let expanded_path = expand_path(path);
     let learn_dir = expanded_path.join("learn");
-    let learn_config_path = expanded_path.parent()
+    let learn_config_path = expanded_path
+        .parent()
         .ok_or_else(|| anyhow::anyhow!("Cannot get parent directory"))?
         .join("learn.toml");
 
@@ -40,7 +41,8 @@ pub fn get_learn_topics(path: &str) -> Result<Vec<String>> {
 
     let mut all_topics: HashMap<String, PathBuf> = HashMap::new();
     for (topic, rel_path) in &toml_topics {
-        let topic_file_path = expanded_path.parent()
+        let topic_file_path = expanded_path
+            .parent()
             .ok_or_else(|| anyhow::anyhow!("Cannot get parent directory"))?
             .join(rel_path);
         all_topics.insert(topic.clone(), topic_file_path);
@@ -56,7 +58,8 @@ pub fn get_learn_topics(path: &str) -> Result<Vec<String>> {
 pub fn get_learn_lesson(path: &str, topic: &str) -> Result<String> {
     let expanded_path = expand_path(path);
     let learn_dir = expanded_path.join("learn");
-    let learn_config_path = expanded_path.parent()
+    let learn_config_path = expanded_path
+        .parent()
         .ok_or_else(|| anyhow::anyhow!("Cannot get parent directory"))?
         .join("learn.toml");
 
@@ -89,7 +92,8 @@ pub fn get_learn_lesson(path: &str, topic: &str) -> Result<String> {
 
     let mut all_topics: HashMap<String, PathBuf> = HashMap::new();
     for (topic, rel_path) in &toml_topics {
-        let topic_file_path = expanded_path.parent()
+        let topic_file_path = expanded_path
+            .parent()
             .ok_or_else(|| anyhow::anyhow!("Cannot get parent directory"))?
             .join(rel_path);
         all_topics.insert(topic.clone(), topic_file_path);

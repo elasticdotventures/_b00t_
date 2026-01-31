@@ -1,0 +1,40 @@
+[b00t]
+name = "togaf"
+type = "stack"
+hint = "TOGAF (The Open Group Architecture Framework) - Enterprise architecture framework for designing, planning, implementing, and governing enterprise information architecture"
+members = []
+
+# Environment variables for TOGAF operations
+[b00t.env]
+# OPENGROUP_USERNAME = ""  # Set in ~/.env
+# 🤓: OPENGROUP_ORG_SECRET loaded from ~/.env - contains password for publications.opengroup.org
+# OPENGROUP_ORG_SECRET = ""  # Set in ~/.env
+
+[b00t.learn]
+topic = "togaf"
+auto_digest = true
+
+[b00t.orchestration]
+description = "TOGAF enterprise architecture framework stack"
+k8s_compatible = false
+
+[[b00t.references]]
+name = "TOGAF Data Sheets"
+url = "https://publications.opengroup.org/data-sheets"
+requires_auth = true
+
+[[b00t.references]]
+name = "The Open Group"
+url = "https://www.opengroup.org/"
+
+[[b00t.references]]
+name = "TOGAF Standard"
+url = "https://www.opengroup.org/togaf"
+
+[[b00t.usage]]
+description = "Download TOGAF datasheets from OpenGroup publications"
+command = "b00t job run togaf-download-datasheets"
+
+[[b00t.usage]]
+description = "Learn TOGAF concepts into b00t knowledge base"
+command = "b00t learn togaf"

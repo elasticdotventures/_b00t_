@@ -5,6 +5,7 @@
 
 use crate::B00tResult;
 use anyhow::Context;
+use futures::StreamExt;
 use redis::{Client, Connection};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -37,7 +38,10 @@ impl RedisConfig {
     /// Build Redis connection URL
     pub fn connection_url(&self) -> String {
         match &self.password {
-            Some(password) => format!("redis://:{}@{}:{}/{}", password, self.host, self.port, self.database),
+            Some(password) => format!(
+                "redis://:{}@{}:{}/{}",
+                password, self.host, self.port, self.database
+            ),
             None => format!("redis://{}:{}/{}", self.host, self.port, self.database),
         }
     }
@@ -111,6 +115,7 @@ pub enum BroadcastPriority {
 }
 
 /// Redis pub/sub communication hub for b00t agents
+#[derive(Clone)]
 pub struct RedisComms {
     client: Client,
     #[allow(dead_code)]
@@ -121,8 +126,8 @@ pub struct RedisComms {
 impl RedisComms {
     /// Create new Redis communication hub
     pub fn new(config: RedisConfig, agent_id: String) -> B00tResult<Self> {
-        let client = Client::open(config.connection_url())
-            .context("Failed to create Redis client")?;
+        let client =
+            Client::open(config.connection_url()).context("Failed to create Redis client")?;
 
         Ok(Self {
             client,
@@ -133,7 +138,9 @@ impl RedisComms {
 
     /// Get Redis connection
     fn get_connection(&self) -> B00tResult<Connection> {
-        let conn = self.client.get_connection()
+        let conn = self
+            .client
+            .get_connection()
             .context("Failed to get Redis connection")?;
 
         // Note: Redis crate handles timeouts internally via connection configuration
@@ -157,8 +164,8 @@ impl RedisComms {
     /// Publish message to a channel
     pub fn publish(&self, channel: &str, message: &AgentMessage) -> B00tResult<i32> {
         let mut conn = self.get_connection()?;
-        let json_message = serde_json::to_string(message)
-            .context("Failed to serialize agent message")?;
+        let json_message =
+            serde_json::to_string(message).context("Failed to serialize agent message")?;
 
         let subscribers: i32 = redis::cmd("PUBLISH")
             .arg(channel)
@@ -189,7 +196,12 @@ impl RedisComms {
     }
 
     /// Publish task coordination message
-    pub fn publish_task(&self, task_id: &str, action: TaskAction, payload: serde_json::Value) -> B00tResult<i32> {
+    pub fn publish_task(
+        &self,
+        task_id: &str,
+        action: TaskAction,
+        payload: serde_json::Value,
+    ) -> B00tResult<i32> {
         let message = AgentMessage::Task {
             task_id: task_id.to_string(),
             action,
@@ -201,7 +213,12 @@ impl RedisComms {
     }
 
     /// Publish session event
-    pub fn publish_session(&self, session_id: &str, event: SessionEvent, data: HashMap<String, serde_json::Value>) -> B00tResult<i32> {
+    pub fn publish_session(
+        &self,
+        session_id: &str,
+        event: SessionEvent,
+        data: HashMap<String, serde_json::Value>,
+    ) -> B00tResult<i32> {
         let message = AgentMessage::Session {
             session_id: session_id.to_string(),
             event,
@@ -212,7 +229,12 @@ impl RedisComms {
     }
 
     /// Publish system broadcast
-    pub fn broadcast(&self, message: &str, priority: BroadcastPriority, expires_at: Option<chrono::DateTime<chrono::Utc>>) -> B00tResult<i32> {
+    pub fn broadcast(
+        &self,
+        message: &str,
+        priority: BroadcastPriority,
+        expires_at: Option<chrono::DateTime<chrono::Utc>>,
+    ) -> B00tResult<i32> {
         let msg = AgentMessage::Broadcast {
             message: message.to_string(),
             priority,
@@ -370,6 +392,136 @@ impl RedisComms {
             .context("Failed to HGETALL from Redis hash")?;
         Ok(result)
     }
+
+    /// Poll for messages published to a channel (blocking with timeout).
+    ///
+    /// This is a simplified pub/sub that polls for recent messages.
+    /// For production, use a dedicated RedisSubscriber with async streams.
+    pub async fn poll_channel_messages(
+        &self,
+        channel: &str,
+        timeout_secs: u64,
+    ) -> B00tResult<Vec<String>> {
+        // For now, return empty - full pub/sub implementation deferred to Phase 3
+        // This allows compilation while we implement the message router
+        let _ = (channel, timeout_secs);
+        Ok(Vec::new())
+    }
+
+    /// Create a pub/sub subscriber (stub for Phase 2)
+    ///
+    /// Returns a `RedisSubscriber` that can subscribe to multiple channels.
+    pub fn create_subscriber(&self) -> B00tResult<RedisSubscriber> {
+        RedisSubscriber::new(self.client.clone())
+    }
+}
+
+/// Redis pub/sub subscriber with full async message streaming.
+pub struct RedisSubscriber {
+    client: Client,
+    pubsub: Option<redis::aio::PubSub>,
+    subscriptions: Vec<String>,
+}
+
+impl RedisSubscriber {
+    /// Create a new subscriber from a Redis client.
+    pub fn new(client: Client) -> B00tResult<Self> {
+        Ok(Self {
+            client,
+            pubsub: None,
+            subscriptions: Vec::new(),
+        })
+    }
+
+    /// Subscribe to one or more channels.
+    pub async fn subscribe(&mut self, channels: &[&str]) -> B00tResult<()> {
+        // Create PubSub connection if not exists
+        if self.pubsub.is_none() {
+            let pubsub = self
+                .client
+                .get_async_pubsub()
+                .await
+                .context("Failed to create async PubSub connection")?;
+            self.pubsub = Some(pubsub);
+        }
+
+        let pubsub = self
+            .pubsub
+            .as_mut()
+            .ok_or_else(|| anyhow::anyhow!("PubSub not initialized"))?;
+
+        for channel in channels {
+            pubsub
+                .subscribe(*channel)
+                .await
+                .context(format!("Failed to subscribe to channel: {}", channel))?;
+            self.subscriptions.push(channel.to_string());
+            tracing::debug!("Subscribed to Redis channel: {}", channel);
+        }
+
+        Ok(())
+    }
+
+    /// Unsubscribe from channels.
+    pub async fn unsubscribe(&mut self, channels: &[&str]) -> B00tResult<()> {
+        if let Some(pubsub) = self.pubsub.as_mut() {
+            for channel in channels {
+                pubsub
+                    .unsubscribe(*channel)
+                    .await
+                    .context(format!("Failed to unsubscribe from channel: {}", channel))?;
+                self.subscriptions.retain(|s| s != channel);
+                tracing::debug!("Unsubscribed from Redis channel: {}", channel);
+            }
+        }
+        Ok(())
+    }
+
+    /// Get the next message from any subscribed channel.
+    ///
+    /// Returns `None` if the connection is closed or an error occurs.
+    pub async fn next_message(&mut self) -> B00tResult<Option<PubSubMessage>> {
+        if let Some(pubsub) = self.pubsub.as_mut() {
+            let msg = pubsub
+                .on_message()
+                .next()
+                .await
+                .ok_or_else(|| anyhow::anyhow!("PubSub stream closed"))?;
+
+            let channel = msg.get_channel_name().to_string();
+            let payload: String = msg.get_payload().context("Failed to get message payload")?;
+
+            Ok(Some(PubSubMessage { channel, payload }))
+        } else {
+            Ok(None)
+        }
+    }
+
+    /// Get list of active subscriptions.
+    pub fn subscriptions(&self) -> &[String] {
+        &self.subscriptions
+    }
+
+    /// Close the pub/sub connection.
+    pub async fn close(mut self) -> B00tResult<()> {
+        if let Some(mut pubsub) = self.pubsub.take() {
+            for channel in &self.subscriptions {
+                pubsub
+                    .unsubscribe(channel)
+                    .await
+                    .context(format!("Failed to unsubscribe from {}", channel))?;
+            }
+            tracing::debug!("Closed Redis PubSub connection");
+        }
+        Ok(())
+    }
+}
+
+/// A message received from Redis pub/sub.
+#[derive(Debug, Clone)]
+pub struct PubSubMessage {
+    pub channel: String,
+    pub payload: String,
 }
 
 /// Redis-based session storage backend
@@ -407,7 +559,13 @@ impl RedisSessionStorage {
     }
 
     /// Set session value with expiration
-    pub fn set_session_value_ex(&self, session_id: &str, key: &str, value: &str, seconds: usize) -> B00tResult<()> {
+    pub fn set_session_value_ex(
+        &self,
+        session_id: &str,
+        key: &str,
+        value: &str,
+        seconds: usize,
+    ) -> B00tResult<()> {
         let redis_key = self.session_key(session_id, key);
         self.redis.setex(&redis_key, value, seconds)
     }
@@ -431,7 +589,11 @@ impl RedisSessionStorage {
     }
 
     /// Store entire session as hash
-    pub fn store_session_hash(&self, session_id: &str, data: &HashMap<String, String>) -> B00tResult<()> {
+    pub fn store_session_hash(
+        &self,
+        session_id: &str,
+        data: &HashMap<String, String>,
+    ) -> B00tResult<()> {
         let hash_key = format!("{}:{}", self.session_prefix, session_id);
         for (field, value) in data {
             self.redis.hset(&hash_key, field, value)?;
@@ -490,7 +652,9 @@ mod tests {
         let deserialized: AgentMessage = serde_json::from_str(&json).unwrap();
 
         match deserialized {
-            AgentMessage::Status { agent_id, status, .. } => {
+            AgentMessage::Status {
+                agent_id, status, ..
+            } => {
                 assert_eq!(agent_id, "test-agent");
                 assert!(matches!(status, AgentStatus::Online));
             }

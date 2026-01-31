@@ -1,0 +1,24 @@
+[b00t]
+name = "grok"
+type = "stack"
+hint = "Complete grok RAG knowledgebase stack with dependencies"
+
+# Stack members - services needed for grok to function
+members = [
+    "qdrant.docker",
+    "ollama.docker",
+    "grok-guru.mcp",
+]
+
+# 🤓 Stack loads environment from member datums at runtime
+# Environment variables are DRY - defined once in each datum's [b00t.env]
+# Stack can pass through with ${ENV} or map to different names if needed
+
+[b00t.env]
+# Pass through from qdrant.docker datum
+QDRANT_URL = "${QDRANT_URL}"
+QDRANT_API_KEY = "${QDRANT_API_KEY}"
+
+# Pass through from ollama.docker datum
+OLLAMA_API_URL = "${OLLAMA_API_URL}"
+OLLAMA_URL = "${OLLAMA_URL}"

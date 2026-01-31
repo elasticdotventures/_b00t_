@@ -92,6 +92,73 @@ b00t-mcp --config /path/to/custom-acl.toml --stdio
 }
 ```
 
+## Executing External MCP Tools via stdio
+
+b00t provides two mechanisms for agents and scripts to execute MCP tools via stdio transport when they can't run MCP directly:
+
+### `b00t-cli mcp execute` - Datum-based and Direct Execution
+
+Execute MCP tools from registered servers (datums) or via direct command specification:
+
+```bash
+# Execute from registered MCP server datum
+b00t-cli mcp execute filesystem read_file '{"path":"/tmp/test.txt"}'
+b00t-cli mcp execute brave-search search '{"query":"rust programming"}'
+
+# Direct execution without datum registration
+b00t-cli mcp execute --command npx \
+  --args '-y,@modelcontextprotocol/server-filesystem' \
+  read_file '{"path":"/file.txt"}'
+
+b00t-cli mcp execute -c uvx \
+  -a 'mcp-server-playwright' \
+  screenshot '{"url":"https://example.com"}'
+
+# Discover available tools from a server
+b00t-cli mcp execute filesystem --discover
+b00t-cli mcp execute --command npx --args '-y,@mcp/server-filesystem' --discover
+```
+
+### `mcp-user` - Standalone Utility for Simplified Access
+
+Lightweight standalone binary for quick MCP tool execution:
+
+```bash
+# Discover tools from an MCP server
+mcp-user -c npx -a '-y,@modelcontextprotocol/server-filesystem' --discover
+
+# Execute a tool (concise output)
+mcp-user -c npx -a '-y,@modelcontextprotocol/server-filesystem' \
+  read_file '{"path":"/tmp/test.txt"}'
+
+# Use with Python-based MCP servers (uvx)
+mcp-user -c uvx -a 'mcp-server-playwright' \
+  screenshot '{"url":"https://example.com"}'
+
+# Verbose mode for debugging
+mcp-user -v -c npx -a '-y,@mcp/server-git' \
+  git_status '{"repo_path":"."}'
+
+# JSON output format
+mcp-user -c npx -a '-y,@mcp/server-filesystem' \
+  --format json read_file '{"path":"/file.txt"}'
+```
+
+**Use cases for stdio MCP execution:**
+- Agents that can't run MCP directly (e.g., restricted environments)
+- Shell scripts and automation workflows
+- Quick testing of MCP servers during development
+- Piping MCP tool outputs to other commands
+- Integration with non-MCP-aware tools
+
+**Key features:**
+- ✅ No datum registration required (direct command mode)
+- ✅ Automatic tool discovery and validation
+- ✅ JSON and text output formats
+- ✅ Supports all MCP stdio transports (npx, uvx, docker, etc.)
+- ✅ Verbose mode for debugging connections
+- ✅ Working directory customization
+
 ## Security Model
 
 ### Default Security Posture

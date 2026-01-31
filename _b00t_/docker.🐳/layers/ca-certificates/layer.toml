@@ -1,0 +1,15 @@
+[layer]
+name = "ca-certificates"
+version = "bookworm"
+description = "CA certificates for HTTPS connections"
+
+[provides]
+binaries = ["update-ca-certificates"]
+libraries = []
+paths = ["/etc/ssl/certs"]
+
+[requires]
+layers = ["debian-base"]
+
+[runtime]
+layers = ["debian-base"]

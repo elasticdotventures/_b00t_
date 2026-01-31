@@ -1,14 +1,14 @@
 //! RAGLight Integration for b00t MCP Server
-//! 
+//!
 //! Provides document loading, indexing, and querying capabilities using RAGLight
 //! with b00t datum topics and async processing.
 
-use anyhow::{Result, Context};
+use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
 use tokio::process::Command;
-use tracing::{info, warn, error, debug};
+use tracing::{error, info};
 
 /// Document loader types supported by b00t RAG system
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -118,7 +118,7 @@ impl RagLightManager {
     /// Create new RAGLight manager with configuration
     pub fn new(config: RagLightConfig) -> Result<Self> {
         let available_topics = Self::discover_b00t_topics(&config)?;
-        
+
         Ok(Self {
             config,
             active_jobs: HashMap::new(),
@@ -135,27 +135,25 @@ impl RagLightManager {
             .join("_b00t_");
 
         let mut topics = Vec::new();
-        
+
         if b00t_path.exists() {
-            let entries = std::fs::read_dir(&b00t_path)
-                .context("Failed to read b00t directory")?;
-                
+            let entries = std::fs::read_dir(&b00t_path).context("Failed to read b00t directory")?;
+
             for entry in entries {
                 let entry = entry?;
                 let path = entry.path();
-                
+
                 if let Some(stem) = path.file_stem() {
                     if let Some(name) = stem.to_str() {
                         // Include TOML configs and learn directories
-                        if path.extension().map(|e| e == "toml").unwrap_or(false) ||
-                           path.is_dir() {
+                        if path.extension().map(|e| e == "toml").unwrap_or(false) || path.is_dir() {
                             topics.push(name.to_string());
                         }
                     }
                 }
             }
         }
-        
+
         // Add core b00t topics
         topics.extend([
             "rust".to_string(),
@@ -169,10 +167,10 @@ impl RagLightManager {
             "mcp".to_string(),
             "acp".to_string(),
         ]);
-        
+
         topics.sort();
         topics.dedup();
-        
+
         info!("Discovered {} b00t topics for RAG", topics.len());
         Ok(topics)
     }
@@ -186,7 +184,10 @@ impl RagLightManager {
 
         // Validate topic exists
         if !self.available_topics.contains(&source.topic) {
-            return Err(anyhow::anyhow!("Topic '{}' not found in available b00t datums", source.topic));
+            return Err(anyhow::anyhow!(
+                "Topic '{}' not found in available b00t datums",
+                source.topic
+            ));
         }
 
         // Create indexing job
@@ -202,23 +203,20 @@ impl RagLightManager {
         };
 
         self.active_jobs.insert(job_id.clone(), job.clone());
-        
+
         // Start async processing
         self.process_indexing_job(job_id.clone()).await?;
-        
-        info!("Started indexing job {} for topic '{}'", job_id, job.source.topic);
+
+        info!(
+            "Started indexing job {} for topic '{}'",
+            job_id, job.source.topic
+        );
         Ok(job_id)
     }
 
     /// Detect appropriate loader type based on source
     fn detect_loader_type(&self, source: &str) -> Result<LoaderType> {
-        if source.starts_with("http://") || source.starts_with("https://") {
-            if source.contains("github.com") || source.contains("gitlab.com") || source.ends_with(".git") {
-                Ok(LoaderType::Git)
-            } else {
-                Ok(LoaderType::Url)
-            }
-        } else if source.ends_with(".pdf") {
+        if source.ends_with(".pdf") {
             Ok(LoaderType::Pdf)
         } else if source.ends_with(".md") || source.ends_with(".markdown") {
             Ok(LoaderType::Markdown)
@@ -226,6 +224,15 @@ impl RagLightManager {
             Ok(LoaderType::Text)
         } else if source.starts_with("git@") || source.contains(".git") {
             Ok(LoaderType::Git)
+        } else if source.starts_with("http://") || source.starts_with("https://") {
+            if source.contains("github.com")
+                || source.contains("gitlab.com")
+                || source.ends_with(".git")
+            {
+                Ok(LoaderType::Git)
+            } else {
+                Ok(LoaderType::Url)
+            }
         } else {
             Ok(LoaderType::Auto)
         }
@@ -233,7 +240,9 @@ impl RagLightManager {
 
     /// Process indexing job asynchronously
     async fn process_indexing_job(&mut self, job_id: String) -> Result<()> {
-        let job = self.active_jobs.get_mut(&job_id)
+        let job = self
+            .active_jobs
+            .get_mut(&job_id)
             .ok_or_else(|| anyhow::anyhow!("Job {} not found", job_id))?;
 
         job.status = IndexingStatus::Processing;
@@ -242,7 +251,7 @@ impl RagLightManager {
         job.updated_at = chrono::Utc::now();
 
         let source = job.source.clone();
-        
+
         // Spawn background task for actual processing
         let config = self.config.clone();
         tokio::spawn(async move {
@@ -264,9 +273,10 @@ impl RagLightManager {
 
         // Create RAGLight indexing script arguments
         let mut cmd = Command::new(&python_cmd);
-        cmd.arg("-c").arg(format!(r#"
+        cmd.arg("-c").arg(format!(
+            r#"
 import sys
-sys.path.insert(0, '{}')
+sys.path.insert(0, '{raglight_path}')
 
 from raglight import RagLightConfig, RagLight
 import asyncio
@@ -302,27 +312,17 @@ if __name__ == '__main__':
             provider = config.llm_config.provider,
             model = config.llm_config.model,
             vector_db_path = config.vector_db_path.display(),
-            loader_type = format!("{:?}", source.loader_type.unwrap_or(LoaderType::Auto))
-                .to_lowercase()
-                .replace('\\', "\\\\")
-                .replace('\'', "\\'")
-                .replace('\n', "\\n")
-                .replace('\r', "\\r"),
-            source = source.source
-                .replace('\\', "\\\\")
-                .replace('\'', "\\'")
-                .replace('\n', "\\n")
-                .replace('\r', "\\r"),
-            topic = source.topic
-                .replace('\\', "\\\\")
-                .replace('\'', "\\'")
-                .replace('\n', "\\n")
-                .replace('\r', "\\r"),
+            loader_type =
+                format!("{:?}", source.loader_type.unwrap_or(LoaderType::Auto)).to_lowercase(),
+            source = source.source,
+            topic = source.topic,
         ));
 
         info!("Running RAGLight indexing for source: {}", source.source);
-        
-        let output = cmd.output().await
+
+        let output = cmd
+            .output()
+            .await
             .context("Failed to execute RAGLight indexing")?;
 
         if !output.status.success() {
@@ -337,7 +337,12 @@ if __name__ == '__main__':
     }
 
     /// Query RAG system for a topic
-    pub async fn query(&self, topic: &str, query: &str, max_results: Option<usize>) -> Result<String> {
+    pub async fn query(
+        &self,
+        topic: &str,
+        query: &str,
+        max_results: Option<usize>,
+    ) -> Result<String> {
         let python_cmd = if let Some(venv) = &self.config.venv_path {
             venv.join("bin").join("python")
         } else {
@@ -345,9 +350,10 @@ if __name__ == '__main__':
         };
 
         let mut cmd = Command::new(&python_cmd);
-        cmd.arg("-c").arg(format!(r#"
+        cmd.arg("-c").arg(format!(
+            r#"
 import sys
-sys.path.insert(0, '{}')
+sys.path.insert(0, '{raglight_path}')
 
 from raglight import RagLightConfig, RagLight
 import asyncio
@@ -376,7 +382,9 @@ if __name__ == '__main__':
             topic = topic,
         ));
 
-        let output = cmd.output().await
+        let output = cmd
+            .output()
+            .await
             .context("Failed to execute RAGLight query")?;
 
         if !output.status.success() {
@@ -445,17 +453,23 @@ mod tests {
         let manager = RagLightManager::new(config).unwrap();
 
         assert!(matches!(
-            manager.detect_loader_type("https://github.com/owner/repo").unwrap(),
+            manager
+                .detect_loader_type("https://github.com/owner/repo")
+                .unwrap(),
             LoaderType::Git
         ));
-        
+
         assert!(matches!(
-            manager.detect_loader_type("https://example.com/doc.pdf").unwrap(),
+            manager
+                .detect_loader_type("https://example.com/doc.pdf")
+                .unwrap(),
             LoaderType::Pdf
         ));
-        
+
         assert!(matches!(
-            manager.detect_loader_type("https://example.com/page").unwrap(),
+            manager
+                .detect_loader_type("https://example.com/page")
+                .unwrap(),
             LoaderType::Url
         ));
     }
@@ -471,7 +485,7 @@ mod tests {
 
         let json = serde_json::to_string(&source).unwrap();
         let deserialized: DocumentSource = serde_json::from_str(&json).unwrap();
-        
+
         assert_eq!(source.source, deserialized.source);
         assert_eq!(source.topic, deserialized.topic);
     }

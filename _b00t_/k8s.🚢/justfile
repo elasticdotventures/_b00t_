@@ -1,0 +1,25 @@
+# Kubernetes 🚢 Container Orchestration
+# b00t k8s setup and tooling
+# 🤓: kubectl, k3s, minikube
+
+# Install kubectl
+install:
+    #!/bin/bash
+    if command -v kubectl >/dev/null 2>&1; then
+        echo "✅ kubectl already installed: $(kubectl version --client --short 2>/dev/null || kubectl version --client)"
+        exit 0
+    fi
+    echo "📦 Installing kubectl..."
+    if [ -f /etc/debian_version ]; then
+        # Ubuntu/Debian
+        sudo apt-get update
+        sudo apt-get install -y apt-transport-https ca-certificates curl
+        curl -fsSL https://pkgs.k8s.io/core:/stable:/v1.28/deb/Release.key | sudo gpg --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg
+        echo 'deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v1.28/deb/ /' | sudo tee /etc/apt/sources.list.d/kubernetes.list
+        sudo apt-get update
+        sudo apt-get install -y kubectl
+    else
+        echo "❌ Unsupported OS for auto-install"
+        exit 1
+    fi
+    echo "✅ kubectl installed"

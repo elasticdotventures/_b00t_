@@ -1,16 +1,16 @@
 //! Generic MCP Tool Proxy Implementation in Rust
-//! 
+//!
 //! Provides a dynamic, runtime-configurable MCP tool proxy that can handle
 //! any MCP tool without requiring compile-time knowledge of tool signatures.
 
-use anyhow::{Result, Context};
+use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
-use serde_json::{Value, Map};
+use serde_json::{Map, Value};
 use std::collections::HashMap;
 use std::process::Stdio;
-use tokio::process::Command;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
-use tracing::{info, warn, error, debug};
+use tokio::process::Command;
+use tracing::{debug, info};
 
 /// Generic MCP tool definition
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -119,8 +119,12 @@ impl GenericMcpProxy {
     /// Register an MCP tool definition
     pub fn register_tool(&mut self, tool: McpToolDefinition) -> Result<()> {
         let tool_name = tool.name.clone();
-        let server_id = format!("{}:{}", tool.server_config.command, tool.server_config.args.join(" "));
-        
+        let server_id = format!(
+            "{}:{}",
+            tool.server_config.command,
+            tool.server_config.args.join(" ")
+        );
+
         // Register server if not already registered
         if !self.servers.contains_key(&server_id) {
             let connection = McpServerConnection {
@@ -145,7 +149,10 @@ impl GenericMcpProxy {
     }
 
     /// Auto-discover tools from an MCP server
-    pub async fn discover_tools_from_server(&mut self, server_config: McpServerConfig) -> Result<Vec<String>> {
+    pub async fn discover_tools_from_server(
+        &mut self,
+        server_config: McpServerConfig,
+    ) -> Result<Vec<String>> {
         let tools = self.query_server_tools(&server_config).await?;
         let mut registered_tools = Vec::new();
 
@@ -167,7 +174,10 @@ impl GenericMcpProxy {
             registered_tools.push(tool_info["name"].as_str().unwrap_or("unknown").to_string());
         }
 
-        info!("🔍 Auto-discovered {} tools from MCP server", registered_tools.len());
+        info!(
+            "🔍 Auto-discovered {} tools from MCP server",
+            registered_tools.len()
+        );
         Ok(registered_tools)
     }
 
@@ -181,7 +191,7 @@ impl GenericMcpProxy {
         });
 
         let response = self.execute_server_request(server_config, request).await?;
-        
+
         if let Some(result) = response.get("result") {
             if let Some(tools) = result.get("tools") {
                 if let Some(tools_array) = tools.as_array() {
@@ -199,7 +209,9 @@ impl GenericMcpProxy {
         let timestamp = chrono::Utc::now();
 
         // Get tool definition
-        let tool_def = self.tools.get(&request.tool)
+        let tool_def = self
+            .tools
+            .get(&request.tool)
             .ok_or_else(|| anyhow::anyhow!("Tool '{}' not found", request.tool))?
             .clone();
 
@@ -207,7 +219,10 @@ impl GenericMcpProxy {
         self.validate_parameters(&tool_def.input_schema, &request.params)?;
 
         // Prepare JSON-RPC request
-        let request_id = request.request_id.clone().unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
+        let request_id = request
+            .request_id
+            .clone()
+            .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
         let jsonrpc_request = serde_json::json!({
             "jsonrpc": "2.0",
             "id": request_id,
@@ -218,13 +233,19 @@ impl GenericMcpProxy {
             }
         });
 
-        info!("🚀 Executing MCP tool '{}' with params: {}", request.tool, request.params);
+        info!(
+            "🚀 Executing MCP tool '{}' with params: {}",
+            request.tool, request.params
+        );
 
         // Execute via MCP server
-        match self.execute_server_request(&tool_def.server_config, jsonrpc_request).await {
+        match self
+            .execute_server_request(&tool_def.server_config, jsonrpc_request)
+            .await
+        {
             Ok(response) => {
                 let duration = start_time.elapsed().as_millis() as u64;
-                
+
                 if let Some(result) = response.get("result") {
                     Ok(McpToolResponse {
                         success: true,
@@ -234,7 +255,11 @@ impl GenericMcpProxy {
                         metadata: McpExecutionMetadata {
                             tool: request.tool,
                             duration_ms: duration,
-                            server: format!("{}:{}", tool_def.server_config.command, tool_def.server_config.args.join(" ")),
+                            server: format!(
+                                "{}:{}",
+                                tool_def.server_config.command,
+                                tool_def.server_config.args.join(" ")
+                            ),
                             timestamp,
                         },
                     })
@@ -247,7 +272,11 @@ impl GenericMcpProxy {
                         metadata: McpExecutionMetadata {
                             tool: request.tool,
                             duration_ms: duration,
-                            server: format!("{}:{}", tool_def.server_config.command, tool_def.server_config.args.join(" ")),
+                            server: format!(
+                                "{}:{}",
+                                tool_def.server_config.command,
+                                tool_def.server_config.args.join(" ")
+                            ),
                             timestamp,
                         },
                     })
@@ -265,7 +294,11 @@ impl GenericMcpProxy {
                     metadata: McpExecutionMetadata {
                         tool: request.tool,
                         duration_ms: duration,
-                        server: format!("{}:{}", tool_def.server_config.command, tool_def.server_config.args.join(" ")),
+                        server: format!(
+                            "{}:{}",
+                            tool_def.server_config.command,
+                            tool_def.server_config.args.join(" ")
+                        ),
                         timestamp,
                     },
                 })
@@ -274,7 +307,11 @@ impl GenericMcpProxy {
     }
 
     /// Execute JSON-RPC request on MCP server
-    async fn execute_server_request(&self, server_config: &McpServerConfig, request: Value) -> Result<Value> {
+    async fn execute_server_request(
+        &self,
+        server_config: &McpServerConfig,
+        request: Value,
+    ) -> Result<Value> {
         let mut cmd = Command::new(&server_config.command);
         cmd.args(&server_config.args);
         cmd.stdin(Stdio::piped());
@@ -291,21 +328,28 @@ impl GenericMcpProxy {
             }
         }
 
-        debug!("Starting MCP server: {} {}", server_config.command, server_config.args.join(" "));
+        debug!(
+            "Starting MCP server: {} {}",
+            server_config.command,
+            server_config.args.join(" ")
+        );
 
-        let mut child = cmd.spawn()
-            .context("Failed to start MCP server process")?;
+        let mut child = cmd.spawn().context("Failed to start MCP server process")?;
 
-        let stdin = child.stdin.take()
+        let stdin = child
+            .stdin
+            .take()
             .ok_or_else(|| anyhow::anyhow!("Failed to get stdin handle"))?;
-        let stdout = child.stdout.take()
+        let stdout = child
+            .stdout
+            .take()
             .ok_or_else(|| anyhow::anyhow!("Failed to get stdout handle"))?;
 
         // Send request
         let mut stdin_writer = stdin;
         let request_str = serde_json::to_string(&request)?;
         debug!("Sending MCP request: {}", request_str);
-        
+
         stdin_writer.write_all(request_str.as_bytes()).await?;
         stdin_writer.write_all(b"\n").await?;
         stdin_writer.shutdown().await?;
@@ -334,11 +378,16 @@ impl GenericMcpProxy {
             if let Some(params_obj) = params.as_object() {
                 for required_field in required {
                     if !params_obj.contains_key(required_field) {
-                        return Err(anyhow::anyhow!("Required parameter '{}' missing", required_field));
+                        return Err(anyhow::anyhow!(
+                            "Required parameter '{}' missing",
+                            required_field
+                        ));
                     }
                 }
             } else if !required.is_empty() {
-                return Err(anyhow::anyhow!("Parameters must be an object when required fields are specified"));
+                return Err(anyhow::anyhow!(
+                    "Parameters must be an object when required fields are specified"
+                ));
             }
         }
 
@@ -360,7 +409,8 @@ impl GenericMcpProxy {
         let mut health_status = HashMap::new();
 
         // Collect server configs to avoid borrowing issues
-        let server_configs: Vec<(String, McpServerConfig)> = self.servers
+        let server_configs: Vec<(String, McpServerConfig)> = self
+            .servers
             .iter()
             .map(|(id, conn)| (id.clone(), conn.config.clone()))
             .collect();
@@ -386,7 +436,10 @@ impl GenericMcpProxy {
             "params": {}
         });
 
-        match self.execute_server_request(server_config, ping_request).await {
+        match self
+            .execute_server_request(server_config, ping_request)
+            .await
+        {
             Ok(_) => true,
             Err(_) => false,
         }
@@ -456,7 +509,7 @@ mod tests {
     fn test_tool_registration() {
         let mut proxy = GenericMcpProxy::new();
         let tools = create_raglight_tools();
-        
+
         assert!(proxy.register_tools_from_config(tools).is_ok());
         assert_eq!(proxy.list_tools().len(), 2);
         assert!(proxy.get_tool("rag-add-document").is_some());

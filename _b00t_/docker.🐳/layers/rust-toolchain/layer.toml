@@ -1,0 +1,27 @@
+[layer]
+name = "rust-toolchain"
+version = "1.75"
+description = "Rust compiler and cargo toolchain"
+
+[provides]
+binaries = ["cargo", "rustc", "rustup", "rustfmt", "clippy"]
+libraries = []
+paths = ["/usr/local/cargo/bin"]
+
+[requires]
+layers = ["debian-base", "build-essential", "ssl-dev", "ca-certificates"]
+
+[runtime]
+layers = ["debian-base", "ca-certificates"]
+
+[environment]
+CARGO_HOME = "/usr/local/cargo"
+RUSTUP_HOME = "/usr/local/rustup"
+PATH = "/usr/local/cargo/bin:${PATH}"
+
+[aliases]
+cargo = "cargo"
+rustc = "rustc"
+rustup = "rustup"
+rustfmt = "rustfmt"
+clippy = "cargo clippy"

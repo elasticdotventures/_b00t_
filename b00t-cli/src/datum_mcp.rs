@@ -6,22 +6,52 @@ use serde::{Deserialize, Serialize};
 // MCP-specific multi-method structures
 
 /// Stdio-based MCP server method configuration (MCP nomenclature)
-/// 
+///
 /// Defines how to execute an MCP server via stdio transport (command line interface).
 /// Multiple stdio methods can be specified with different priorities.
-/// 
+///
+/// # Vendor Capabilities
+///
+/// The following fields represent advanced MCP server capabilities currently implemented
+/// by specific vendors but designed as vendor-neutral extensions to support the evolving
+/// MCP ecosystem. These fields are optional and ignored by clients that don't support them.
+///
+/// **Currently supported by:**
+/// - OpenAI Codex (`~/.codex/config.toml`)
+///
+/// **Timeout Controls:**
+/// - `startup_timeout_sec`: Server initialization timeout (default: 10)
+/// - `tool_timeout_sec`: Tool execution timeout (default: 60)
+///
+/// **Tool Filtering:**
+/// - `enabled_tools`: Allowlist of tool names to expose (applies before disabled_tools)
+/// - `disabled_tools`: Denylist of tool names to hide (applied after allowlist)
+/// - `enabled`: Master switch to enable/disable server without deletion (default: true)
+///
+/// **Environment:**
+/// - `env`: Static environment variables (key-value pairs)
+/// - `env_vars`: Additional environment variable names to whitelist/forward from parent
+/// - `cwd`: Working directory for server launch
+///
 /// # Examples
-/// 
+///
 /// ```toml
-/// [[b00t.stdio]]
+/// [[b00t.mcp.stdio]]
 /// command = "npx"
 /// args = ["-y", "@modelcontextprotocol/server-filesystem"]
 /// priority = 0
 /// requires = ["node"]
 /// transport = "stdio"
-/// 
-/// [[b00t.stdio]]
-/// command = "uvx"  
+/// cwd = "/workspace"
+/// startup_timeout_sec = 15
+/// tool_timeout_sec = 120
+/// enabled_tools = ["read_file", "write_file"]
+///
+/// [b00t.mcp.stdio.env]
+/// LOG_LEVEL = "debug"
+///
+/// [[b00t.mcp.stdio]]
+/// command = "uvx"
 /// args = ["mcp-server-filesystem"]
 /// priority = 1
 /// requires = ["python"]
@@ -35,26 +65,99 @@ pub struct McpStdioMethod {
     pub priority: u8,
     #[serde(default)]
     pub requires: Vec<String>,
+
+    // Environment configuration
     #[serde(default)]
     pub env: std::collections::HashMap<String, String>,
+
+    /// Whitelist of environment variable names to propagate from the parent process.
+    /// Only variables listed here will be forwarded to the child process.
+    /// Additional environment variable names to forward from parent process
+    /// (Codex: env_vars)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub env_vars: Option<Vec<String>>,
+
+    /// Working directory for server launch
+    /// (Codex: cwd)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cwd: Option<String>,
+
     #[serde(default = "default_stdio_transport")]
     pub transport: String,
+
+    // Vendor capabilities - timeout controls
+    /// Server startup timeout in seconds (default: 10)
+    /// (Codex: startup_timeout_sec)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub startup_timeout_sec: Option<u32>,
+
+    /// Tool execution timeout in seconds (default: 60)
+    /// (Codex: tool_timeout_sec)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tool_timeout_sec: Option<u32>,
+
+    // Vendor capabilities - tool filtering
+    /// Master enable/disable switch (default: true)
+    /// (Codex: enabled)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub enabled: Option<bool>,
+
+    /// Allowlist of tool names to expose (applied first)
+    /// (Codex: enabled_tools)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub enabled_tools: Option<Vec<String>>,
+
+    /// Denylist of tool names to hide (applied after allowlist)
+    /// (Codex: disabled_tools)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub disabled_tools: Option<Vec<String>>,
 }
 
 /// HTTP stream-based MCP server method configuration (MCP nomenclature)
-/// 
+///
 /// Defines how to connect to an MCP server via HTTP stream transport.
-/// 
+///
+/// # Vendor Capabilities
+///
+/// The following fields represent advanced MCP server capabilities currently implemented
+/// by specific vendors but designed as vendor-neutral extensions to support the evolving
+/// MCP ecosystem. These fields are optional and ignored by clients that don't support them.
+///
+/// **Currently supported by:**
+/// - OpenAI Codex (`~/.codex/config.toml`)
+///
+/// **Authentication:**
+/// - `bearer_token_env_var`: Environment variable name containing bearer token
+/// - `http_headers`: Static HTTP headers (key-value pairs)
+/// - `env_http_headers`: HTTP headers populated from environment variables
+///
+/// **Timeout Controls:**
+/// - `startup_timeout_sec`: Server initialization timeout (default: 10)
+/// - `tool_timeout_sec`: Tool execution timeout (default: 60)
+///
+/// **Tool Filtering:**
+/// - `enabled_tools`: Allowlist of tool names to expose (applies before disabled_tools)
+/// - `disabled_tools`: Denylist of tool names to hide (applied after allowlist)
+/// - `enabled`: Master switch to enable/disable server without deletion (default: true)
+///
 /// # Examples
-/// 
+///
 /// ```toml
-/// [b00t.httpstream]
+/// [b00t.mcp.httpstream]
 /// url = "https://mcp-server.example.com"
 /// priority = 0
 /// requires = ["internet"]
 /// requires_internet = true
-/// requires_auth = false
+/// requires_auth = true
+/// bearer_token_env_var = "API_TOKEN"
 /// transport = "httpstream"
+/// startup_timeout_sec = 15
+/// tool_timeout_sec = 90
+/// enabled_tools = ["search", "analyze"]
+///
+/// [b00t.mcp.httpstream.http_headers]
+/// X-API-Version = "2024-01"
+/// X-Client-ID = "b00t-cli"
 /// ```
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
 pub struct McpHttpStreamMethod {
@@ -69,6 +172,49 @@ pub struct McpHttpStreamMethod {
     pub requires_auth: bool,
     #[serde(default = "default_httpstream_transport")]
     pub transport: String,
+
+    // Vendor capabilities - authentication
+    /// Environment variable name containing bearer token
+    /// (Codex: bearer_token_env_var)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub bearer_token_env_var: Option<String>,
+
+    /// Static HTTP headers
+    /// (Codex: http_headers)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub http_headers: Option<std::collections::HashMap<String, String>>,
+
+    /// HTTP headers populated from environment variables
+    /// (Codex: env_http_headers)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub env_http_headers: Option<std::collections::HashMap<String, String>>,
+
+    // Vendor capabilities - timeout controls
+    /// Server startup timeout in seconds (default: 10)
+    /// (Codex: startup_timeout_sec)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub startup_timeout_sec: Option<u32>,
+
+    /// Tool execution timeout in seconds (default: 60)
+    /// (Codex: tool_timeout_sec)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tool_timeout_sec: Option<u32>,
+
+    // Vendor capabilities - tool filtering
+    /// Master enable/disable switch (default: true)
+    /// (Codex: enabled)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub enabled: Option<bool>,
+
+    /// Allowlist of tool names to expose (applied first)
+    /// (Codex: enabled_tools)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub enabled_tools: Option<Vec<String>>,
+
+    /// Denylist of tool names to hide (applied after allowlist)
+    /// (Codex: disabled_tools)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub disabled_tools: Option<Vec<String>>,
 }
 
 fn default_true() -> bool {
@@ -84,18 +230,18 @@ fn default_httpstream_transport() -> String {
 }
 
 /// Multi-method MCP server configuration datum
-/// 
+///
 /// Manages MCP server configurations with support for multiple deployment methods.
 /// Automatically selects the best available method based on priority and system requirements.
-/// 
+///
 /// # Examples
-/// 
+///
 /// ```rust
-/// use b00t_cli::datum_mcp::McpDatum;
-/// 
+/// use crate::datum_mcp::McpDatum;
+///
 /// // Load MCP server configuration
 /// let mcp = McpDatum::from_config("filesystem", "~/.dotfiles/_b00t_").unwrap();
-/// 
+///
 /// // Select best available method
 /// if let Some(method) = mcp.select_best_method() {
 ///     println!("Selected method: {:?}", method);
@@ -112,13 +258,17 @@ impl McpDatum {
     }
 
     // Helper to parse stdio methods from raw data
-    fn parse_stdio_methods(&self) -> Vec<McpStdioMethod> {
+    pub fn parse_stdio_methods(&self) -> Vec<McpStdioMethod> {
         if let Some(mcp) = &self.datum.mcp {
             if let Some(stdio_data) = &mcp.stdio {
-                stdio_data.iter()
-                    .filter_map(|raw| serde_json::from_value(serde_json::Value::Object(
-                        raw.iter().map(|(k, v)| (k.clone(), v.clone())).collect()
-                    )).ok())
+                stdio_data
+                    .iter()
+                    .filter_map(|raw| {
+                        serde_json::from_value(serde_json::Value::Object(
+                            raw.iter().map(|(k, v)| (k.clone(), v.clone())).collect(),
+                        ))
+                        .ok()
+                    })
                     .collect()
             } else {
                 Vec::new()
@@ -128,13 +278,17 @@ impl McpDatum {
         }
     }
 
-    // Helper to parse HTTP stream method from raw data  
+    // Helper to parse HTTP stream method from raw data
     fn parse_httpstream_method(&self) -> Option<McpHttpStreamMethod> {
         if let Some(mcp) = &self.datum.mcp {
             if let Some(httpstream_data) = &mcp.httpstream {
                 serde_json::from_value(serde_json::Value::Object(
-                    httpstream_data.iter().map(|(k, v)| (k.clone(), v.clone())).collect()
-                )).ok()
+                    httpstream_data
+                        .iter()
+                        .map(|(k, v)| (k.clone(), v.clone()))
+                        .collect(),
+                ))
+                .ok()
             } else {
                 None
             }
@@ -178,7 +332,7 @@ impl McpDatum {
             // TODO: Add actual internet connectivity check
             // For now, assume internet is available
         }
-        
+
         // Check other requirements
         self.evaluate_method_constraints(&httpstream.requires)
     }
@@ -188,7 +342,7 @@ impl McpDatum {
         if !check_command_available(&stdio.command) {
             return false;
         }
-        
+
         // Check method-specific constraints
         self.evaluate_method_constraints(&stdio.requires)
     }
@@ -201,7 +355,11 @@ impl McpDatum {
         requires.iter().all(|constraint| {
             match constraint.as_str() {
                 "node" => check_command_available("node") || check_command_available("npx"),
-                "python" => check_command_available("python") || check_command_available("python3") || check_command_available("uvx"),
+                "python" => {
+                    check_command_available("python")
+                        || check_command_available("python3")
+                        || check_command_available("uvx")
+                }
                 "docker" => check_command_available("docker"),
                 "internet" => true, // TODO: Add actual internet check
                 constraint if constraint.starts_with("CMD:") => {
@@ -272,7 +430,9 @@ impl DatumChecker for McpDatum {
         // Return the selected method info if available
         if let Some(method) = self.select_best_method() {
             match method {
-                McpSelectedMethod::HttpStream(httpstream) => Some(format!("HTTP Stream: {}", httpstream.url)),
+                McpSelectedMethod::HttpStream(httpstream) => {
+                    Some(format!("HTTP Stream: {}", httpstream.url))
+                }
                 McpSelectedMethod::Stdio(stdio) => Some(format!("{} available", stdio.command)),
             }
         } else {

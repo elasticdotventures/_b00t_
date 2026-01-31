@@ -24,7 +24,8 @@ git rebase -i HEAD~$COUNT
 
 # Edit the commit message 
 msg=$(read -p "write something inspiring that summarizes the progress")
-echo git commit --amend -m "🎂 $msg"
+# 🤓 Melvin: As per new hive convention, only k0mmand3r dispenses 🎂. General commits use 🍰.
+echo git commit --amend -m "🍰 $msg"
 
 # Force push the changes (if the branch is already pushed to a remote)
 echo git push --force

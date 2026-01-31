@@ -1,0 +1,22 @@
+# syntax=docker/dockerfile:1
+
+##* * * * * \\
+# 🐳 Docker
+# 👾 Google Layer
+# 层 (Céng) Layer
+##* * * * * //
+
+# install gcp-cli
+
+# snap install google-cloud-sdk --classic
+# gcloud init
+
+pull gcr.io/google.com/cloudsdktool/cloud-sdk:latest
+
+# https://cloud.google.com/sdk/docs/install
+RUN echo "deb [signed-by=/usr/share/keyrings/cloud.google.gpg] http://packages.cloud.google.com/apt cloud-sdk main" | tee -a /etc/apt/sources.list.d/google-cloud-sdk.list && curl https://packages.cloud.google.com/apt/doc/apt-key.gpg | apt-key --keyring /usr/share/keyrings/cloud.google.gpg  add - && apt-get update -y && apt-get install google-cloud-sdk -y
+      
+
+# Google Sheets Scriping Starter Pack
+# https://github.com/niieani/google-sheets-scripting-starter-pack
+

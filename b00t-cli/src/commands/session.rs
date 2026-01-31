@@ -1,7 +1,7 @@
+use crate::session_memory::SessionMemory;
+use crate::{handle_session_end, handle_session_init, handle_session_status};
 use anyhow::Result;
 use clap::Parser;
-use crate::{handle_session_init, handle_session_status, handle_session_end};
-use crate::session_memory::SessionMemory;
 
 #[derive(Parser)]
 pub enum SessionCommands {
@@ -63,17 +63,16 @@ pub enum SessionCommands {
 impl SessionCommands {
     pub fn execute(&self, _path: &str) -> Result<()> {
         match self {
-            SessionCommands::Init { budget, name: _name } => {
+            SessionCommands::Init {
+                budget,
+                name: _name,
+            } => {
                 // For now, using budget directly and no time_limit support in CLI args
                 // name parameter exists but not used in handler yet
                 handle_session_init(budget, &None, None)
             }
-            SessionCommands::Status => {
-                handle_session_status()
-            }
-            SessionCommands::End => {
-                handle_session_end()
-            }
+            SessionCommands::Status => handle_session_status(),
+            SessionCommands::End => handle_session_end(),
             SessionCommands::Get { key } => {
                 let memory = SessionMemory::load()?;
                 if let Some(value) = memory.get(key) {
@@ -130,9 +129,7 @@ impl SessionCommands {
                 println!("✅ README.md marked as read for this session");
                 Ok(())
             }
-            SessionCommands::Template => {
-                generate_session_template()
-            }
+            SessionCommands::Template => generate_session_template(),
             SessionCommands::ShouldShowOutput => {
                 let memory = SessionMemory::load()?;
                 if memory.should_show_verbose_output() {
@@ -144,26 +141,39 @@ impl SessionCommands {
             SessionCommands::BashrcInit => {
                 let mut memory = SessionMemory::load()?;
                 let count = memory.increment_shell_count()?;
-                
+
                 // Always detect and print agent (for _B00T_Agent export)
                 use crate::commands::whatismy::detect_agent;
                 let agent = detect_agent(&memory, false);
-                
-                // Print different output based on verbosity settings
-                if memory.should_show_verbose_output() {
-                    println!("🥾👋 {} (shell #{}) run `b00t whoami` for superpowers", agent, count);
+
+                // Print output only on first shell or every 10th shell to cut noise
+                let should_emit =
+                    memory.should_show_verbose_output() && (count == 1 || count % 10 == 0);
+
+                if should_emit {
+                    println!("🥾👋 {} (shell #{})", agent, count);
+                    println!(
+                        "🤖 Need help? Run `b00t up --help` or hand off to your agent via `b00t-cli whatismy agent`."
+                    );
                 } else {
-                    // Just print the agent for environment variable assignment
+                    // Always return agent string so .bash_profile can export _B00T_Agent
                     println!("{}", agent);
                 }
-                
+
                 Ok(())
             }
             SessionCommands::Build => {
                 let mut memory = SessionMemory::load()?;
                 let count = memory.increment_build_count()?;
-                println!("Build #{} on branch {}", count, 
-                    memory.metadata.initial_branch.as_deref().unwrap_or("unknown"));
+                println!(
+                    "Build #{} on branch {}",
+                    count,
+                    memory
+                        .metadata
+                        .initial_branch
+                        .as_deref()
+                        .unwrap_or("unknown")
+                );
                 Ok(())
             }
             SessionCommands::Compile => {
@@ -278,7 +288,7 @@ mod tests {
             budget: Some(10.0),
             name: Some("test-session".to_string()),
         };
-        
+
         assert!(init_cmd.execute("test").is_ok());
     }
 }

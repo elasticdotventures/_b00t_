@@ -1,0 +1,161 @@
+# Docker/Podman 🐳 Container Platform
+# b00t prefers podman (daemonless, rootless) but supports docker
+# 🤓: podman is API-compatible with docker CLI
+
+# Detect container runtime
+_runtime:
+    #!/bin/bash
+    if command -v podman >/dev/null 2>&1; then
+        echo "podman"
+    elif command -v docker >/dev/null 2>&1; then
+        echo "docker"
+    else
+        echo "none"
+    fi
+
+# Install podman (preferred)
+install-podman:
+    #!/bin/bash
+    if command -v podman >/dev/null 2>&1; then
+        echo "✅ podman already installed: $(podman --version)"
+        exit 0
+    fi
+    echo "📦 Installing podman..."
+    if [ -f /etc/debian_version ]; then
+        # Ubuntu/Debian
+        sudo apt-get update
+        sudo apt-get install -y podman
+    elif [ -f /etc/redhat-release ]; then
+        # RHEL/Fedora
+        sudo dnf install -y podman
+    else
+        echo "❌ Unsupported OS for auto-install"
+        exit 1
+    fi
+    echo "✅ podman installed: $(podman --version)"
+
+# Install docker (fallback)
+install-docker:
+    #!/bin/bash
+    if command -v docker >/dev/null 2>&1; then
+        echo "✅ docker already installed: $(docker --version)"
+        exit 0
+    fi
+    echo "📦 Installing docker..."
+    if [ -f /etc/debian_version ]; then
+        # Ubuntu/Debian - official Docker install
+        sudo apt-get update
+        sudo apt-get install -y ca-certificates curl
+        sudo install -m 0755 -d /etc/apt/keyrings
+        sudo curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+        sudo chmod a+r /etc/apt/keyrings/docker.asc
+        echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+        sudo apt-get update
+        sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+        # Add user to docker group
+        sudo usermod -aG docker $USER
+        echo "⚠️  Log out and back in for docker group membership to take effect"
+    else
+        echo "❌ Unsupported OS for auto-install"
+        exit 1
+    fi
+    echo "✅ docker installed: $(docker --version)"
+
+# Default install: prefer podman
+install: install-podman
+
+# Show container runtime info
+info:
+    #!/bin/bash
+    runtime=$(just _runtime)
+    if [ "$runtime" = "podman" ]; then
+        echo "🐳 Using podman"
+        podman --version
+        podman info | grep -E "runRoot|graphRoot|rootless"
+    elif [ "$runtime" = "docker" ]; then
+        echo "🐳 Using docker"
+        docker --version
+        docker info | grep -E "Server Version|Storage Driver|Rootless"
+    else
+        echo "❌ No container runtime installed"
+        echo "Run: just install"
+    fi
+
+# Common container operations (works with both docker/podman)
+
+# List running containers
+ps:
+    #!/bin/bash
+    runtime=$(just _runtime)
+    $runtime ps
+
+# List all containers
+ps-all:
+    #!/bin/bash
+    runtime=$(just _runtime)
+    $runtime ps -a
+
+# List images
+images:
+    #!/bin/bash
+    runtime=$(just _runtime)
+    $runtime images
+
+# Clean up stopped containers and dangling images
+clean:
+    #!/bin/bash
+    runtime=$(just _runtime)
+    echo "🧹 Cleaning up containers and images..."
+    $runtime container prune -f
+    $runtime image prune -f
+    echo "✅ Cleaned"
+
+# Clean up everything (containers, images, volumes, networks)
+clean-all:
+    #!/bin/bash
+    runtime=$(just _runtime)
+    echo "🧹 Deep cleaning Docker/Podman..."
+    $runtime system prune -a --volumes -f
+    echo "✅ Deep cleaned"
+
+# Build image from Dockerfile in current directory
+build TAG:
+    #!/bin/bash
+    runtime=$(just _runtime)
+    $runtime build -t {{TAG}} .
+
+# Run container
+run IMAGE *ARGS:
+    #!/bin/bash
+    runtime=$(just _runtime)
+    $runtime run {{ARGS}} {{IMAGE}}
+
+# Run container interactively
+run-it IMAGE *ARGS:
+    #!/bin/bash
+    runtime=$(just _runtime)
+    $runtime run -it --rm {{ARGS}} {{IMAGE}}
+
+# Execute command in running container
+exec CONTAINER *ARGS:
+    #!/bin/bash
+    runtime=$(just _runtime)
+    $runtime exec -it {{CONTAINER}} {{ARGS}}
+
+# View logs
+logs CONTAINER:
+    #!/bin/bash
+    runtime=$(just _runtime)
+    $runtime logs -f {{CONTAINER}}
+
+# Stop container
+stop CONTAINER:
+    #!/bin/bash
+    runtime=$(just _runtime)
+    $runtime stop {{CONTAINER}}
+
+# Remove container
+rm CONTAINER:
+    #!/bin/bash
+    runtime=$(just _runtime)
+    $runtime rm {{CONTAINER}}

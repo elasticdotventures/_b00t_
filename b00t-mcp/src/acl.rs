@@ -52,7 +52,6 @@ pub enum Policy {
     Deny,
 }
 
-
 #[derive(Clone)]
 pub struct AclFilter {
     config: AclConfig,
@@ -70,21 +69,19 @@ impl AclFilter {
     pub fn load_from_file<P: AsRef<Path>>(path: P) -> Result<Self> {
         let expanded_path = shellexpand::tilde(path.as_ref().to_str().unwrap()).to_string();
         let config_path = Path::new(&expanded_path);
-        
+
         if !config_path.exists() {
             // Create default config if it doesn't exist
             let default_config = AclConfig::default();
             let config_content = toml::to_string_pretty(&default_config)
                 .context("Failed to serialize default ACL config")?;
-            
+
             if let Some(parent) = config_path.parent() {
-                std::fs::create_dir_all(parent)
-                    .context("Failed to create config directory")?;
+                std::fs::create_dir_all(parent).context("Failed to create config directory")?;
             }
-            
-            fs::write(config_path, config_content)
-                .context("Failed to write default ACL config")?;
-            
+
+            fs::write(config_path, config_content).context("Failed to write default ACL config")?;
+
             eprintln!("Created default ACL config at: {}", config_path.display());
             return Ok(Self::new(default_config)?);
         }
@@ -92,8 +89,9 @@ impl AclFilter {
         let config_content = fs::read_to_string(config_path)
             .with_context(|| format!("Failed to read ACL config from {}", config_path.display()))?;
 
-        let config: AclConfig = toml::from_str(&config_content)
-            .with_context(|| format!("Failed to parse ACL config from {}", config_path.display()))?;
+        let config: AclConfig = toml::from_str(&config_content).with_context(|| {
+            format!("Failed to parse ACL config from {}", config_path.display())
+        })?;
 
         Self::new(config)
     }
@@ -106,10 +104,10 @@ impl AclFilter {
         if let Some(patterns) = &config.patterns {
             if let Some(allow) = &patterns.allow {
                 for pattern in allow {
-                    allow_patterns.push(
-                        Regex::new(pattern)
-                            .with_context(|| format!("Invalid allow regex pattern: {}", pattern))?,
-                    );
+                    allow_patterns
+                        .push(Regex::new(pattern).with_context(|| {
+                            format!("Invalid allow regex pattern: {}", pattern)
+                        })?);
                 }
             }
             if let Some(deny) = &patterns.deny {
@@ -191,50 +189,73 @@ impl AclFilter {
 impl Default for AclConfig {
     fn default() -> Self {
         let mut commands = HashMap::new();
-        
+
         // Allow most b00t commands by default
-        commands.insert("detect".to_string(), CommandRule {
-            policy: Policy::Allow,
-            arg_patterns: None,
-            description: Some("Detect installed versions of tools".to_string()),
-        });
-        
-        commands.insert("desires".to_string(), CommandRule {
-            policy: Policy::Allow,
-            arg_patterns: None,
-            description: Some("Show desired versions from config".to_string()),
-        });
-        
-        commands.insert("learn".to_string(), CommandRule {
-            policy: Policy::Allow,
-            arg_patterns: None,
-            description: Some("Show learning resources for topics".to_string()),
-        });
-        
-        commands.insert("mcp".to_string(), CommandRule {
-            policy: Policy::Allow,
-            arg_patterns: Some(vec!["^(list|add)".to_string()]), // Only allow list and add
-            description: Some("MCP server management (list/add only)".to_string()),
-        });
-        
+        commands.insert(
+            "detect".to_string(),
+            CommandRule {
+                policy: Policy::Allow,
+                arg_patterns: None,
+                description: Some("Detect installed versions of tools".to_string()),
+            },
+        );
+
+        commands.insert(
+            "desires".to_string(),
+            CommandRule {
+                policy: Policy::Allow,
+                arg_patterns: None,
+                description: Some("Show desired versions from config".to_string()),
+            },
+        );
+
+        commands.insert(
+            "learn".to_string(),
+            CommandRule {
+                policy: Policy::Allow,
+                arg_patterns: None,
+                description: Some("Show learning resources for topics".to_string()),
+            },
+        );
+
+        commands.insert(
+            "mcp".to_string(),
+            CommandRule {
+                policy: Policy::Allow,
+                arg_patterns: Some(vec!["^(list|add)".to_string()]), // Only allow list and add
+                description: Some("MCP server management (list/add only)".to_string()),
+            },
+        );
+
         // Restrict potentially dangerous commands
-        commands.insert("install".to_string(), CommandRule {
-            policy: Policy::Deny,
-            arg_patterns: None,
-            description: Some("Install commands denied by default for security".to_string()),
-        });
-        
-        commands.insert("update".to_string(), CommandRule {
-            policy: Policy::Deny,
-            arg_patterns: None,
-            description: Some("Update commands denied by default for security".to_string()),
-        });
-        
-        commands.insert("up".to_string(), CommandRule {
-            policy: Policy::Deny,
-            arg_patterns: None,
-            description: Some("Bulk update commands denied by default for security".to_string()),
-        });
+        commands.insert(
+            "install".to_string(),
+            CommandRule {
+                policy: Policy::Deny,
+                arg_patterns: None,
+                description: Some("Install commands denied by default for security".to_string()),
+            },
+        );
+
+        commands.insert(
+            "update".to_string(),
+            CommandRule {
+                policy: Policy::Deny,
+                arg_patterns: None,
+                description: Some("Update commands denied by default for security".to_string()),
+            },
+        );
+
+        commands.insert(
+            "up".to_string(),
+            CommandRule {
+                policy: Policy::Deny,
+                arg_patterns: None,
+                description: Some(
+                    "Bulk update commands denied by default for security".to_string(),
+                ),
+            },
+        );
 
         Self {
             default_policy: Policy::Allow,
@@ -259,7 +280,7 @@ mod tests {
     fn test_default_acl() {
         let config = AclConfig::default();
         let filter = AclFilter::new(config).unwrap();
-        
+
         assert!(filter.is_allowed("detect", &["git".to_string()]));
         assert!(filter.is_allowed("learn", &["rust".to_string()]));
         assert!(!filter.is_allowed("install", &["git".to_string()]));

@@ -1,0 +1,38 @@
+[b00t]
+name = "argo-cli"
+type = "cli"
+hint = "Argo Workflows CLI for submitting and managing workflows"
+desires = "3.5.0"
+
+install = '''
+ARGO_VERSION="3.5.0"
+OS=$(uname -s | tr '[:upper:]' '[:lower:]')
+ARCH=$(uname -m)
+case $ARCH in
+    x86_64) ARCH="amd64" ;;
+    aarch64) ARCH="arm64" ;;
+esac
+
+# Download and install
+curl -sLO "https://github.com/argoproj/argo-workflows/releases/download/v${ARGO_VERSION}/argo-${OS}-${ARCH}.gz"
+gunzip "argo-${OS}-${ARCH}.gz"
+chmod +x "argo-${OS}-${ARCH}"
+sudo mv "argo-${OS}-${ARCH}" /usr/local/bin/argo
+
+argo version
+'''
+
+version = "argo version --short"
+version_regex = 'argo: v(\d+\.\d+\.\d+)'
+
+[[b00t.usage]]
+description = "Submit workflow"
+command = "argo submit workflow.yaml"
+
+[[b00t.usage]]
+description = "Watch workflow execution"
+command = "argo watch @latest"
+
+[[b00t.usage]]
+description = "Get workflow status"
+command = "argo get @latest"

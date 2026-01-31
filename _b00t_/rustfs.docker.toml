@@ -1,0 +1,40 @@
+[b00t]
+name = "rustfs"
+type = "docker"
+hint = "RustFS distributed object storage fast deployment via Docker (basic quick start)."
+desires = "latest"
+
+image = "rustfs/rustfs:latest"
+docker_args = [
+    "-d",
+    "--name", "rustfs-quick",
+    "-p", "9000:9000",
+    "-p", "9001:9001",
+    "-e", "RUSTFS_EXTERNAL_ADDRESS=:9000",
+    "-e", "RUSTFS_CORS_ALLOWED_ORIGINS=http://localhost:9001",
+    "-e", "RUSTFS_ACCESS_KEY=rustfsadmin",
+    "-e", "RUSTFS_SECRET_KEY=rustfsadmin",
+    "-v", "rustfs-data:/data"
+]
+
+[b00t.env]
+RUSTFS_API_PORT = "9000"
+RUSTFS_CONSOLE_PORT = "9001"
+RUSTFS_ACCESS_KEY = "rustfsadmin"
+RUSTFS_SECRET_KEY = "rustfsadmin"
+
+[[b00t.usage]]
+description = "Check RustFS API health"
+command = "curl http://localhost:$RUSTFS_API_PORT/health"
+
+[[b00t.usage]]
+description = "Print the RustFS console URL"
+command = "printf 'Console: http://localhost:$RUSTFS_CONSOLE_PORT/rustfs/console/\\n'"
+
+[[b00t.usage]]
+description = "Stop the quick RustFS deployment"
+command = "docker stop rustfs-quick && docker rm rustfs-quick"
+
+[[b00t.learn]]
+topic = "rustfs"
+inline = "Deploy via `docker run -d --name rustfs-quick -p 9000:9000 -p 9001:9001 rustfs/rustfs:latest`; API exposed on 9000, console on 9001."

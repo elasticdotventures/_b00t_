@@ -1,0 +1,18 @@
+[layer]
+name = "git"
+version = "2.43"
+description = "Git version control system"
+
+[provides]
+binaries = ["git"]
+libraries = []
+paths = ["/usr/bin"]
+
+[requires]
+layers = ["debian-base", "ca-certificates"]
+
+[runtime]
+layers = ["debian-base", "ca-certificates"]
+
+[aliases]
+git = "git"

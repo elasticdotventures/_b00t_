@@ -1,0 +1,17 @@
+{
+    "_syntax": 1,
+    "fzf": [
+        "--prompt=\"Name of person:\""
+    ],
+    "exdict": {
+        "ls": [
+            "bash",
+            "ls",
+            "-la"
+        ],
+        "fd": [
+            "bash",
+            "fd"
+        ]
+    }
+}

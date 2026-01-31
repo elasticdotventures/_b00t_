@@ -36,7 +36,8 @@ def test_grok():
     chunks = client.learn("https://example.com", "Example content")
     print(f"✅ Learn: {len(chunks)} chunks")
     
-    print("🎂 b00t-grok PyO3 module tests passed!")
+    # 🤓 Melvin: As per new hive convention, only k0mmand3r dispenses 🎂. General rewards use 🍰.
+    print("🍰 b00t-grok PyO3 module tests passed!")
 
 if __name__ == "__main__":
     test_grok()
