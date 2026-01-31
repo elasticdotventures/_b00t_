@@ -1832,19 +1832,28 @@ fn get_platform_mcp_path(platform: &str) -> Result<String> {
     Ok(shellexpand::tilde(path).to_string())
 }
 
+/// Valid source platform for push operations
+const VALID_PUSH_SOURCE: &str = "b00t";
+
 /// Bidirectional MCP sync between b00t and agent platforms
 pub fn mcp_sync_bidirectional(
     path: &str,
     operation: &str,
     source: &str,
     dest: &str,
-    agent: Option<&str>,
+    _agent: Option<&str>, // 🤓: Reserved for future agent-specific filtering
 ) -> Result<()> {
     use std::collections::HashMap;
     use std::path::PathBuf;
     use crate::datum_mcp::McpDatum;
 
     let op = SyncOperation::from_str(operation)?;
+    
+    // Validate source for push operation (pull will validate dest == "b00t" when implemented)
+    if matches!(op, SyncOperation::Push) && source != VALID_PUSH_SOURCE {
+        anyhow::bail!("Push operation requires source to be '{}', got '{}'", VALID_PUSH_SOURCE, source);
+    }
+    
     println!("🔄 MCP Sync: {:?} {} → {}", op, source, dest);
     
     match op {
