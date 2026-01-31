@@ -404,24 +404,37 @@ async fn fetch_jwt_for_hive_operation(role: &str, namespace: &str) -> Result<Str
         
         match fetch_jwt_from_website(&website_url, &session_token, role).await {
             Ok(jwt) => {
-                // Validate JWT and ensure namespace matches
-                if let Ok(validator) = AcpJwtValidator::from_operator_jwt("placeholder") {
-                    if let Ok(security_ctx) = validator.validate_jwt(&jwt) {
-                        if security_ctx.namespace == namespace {
-                            info!("✅ JWT validated for namespace: {}", namespace);
-                            return Ok(jwt);
-                        } else {
-                            return Err(anyhow::anyhow!(
-                                "JWT namespace '{}' does not match requested namespace '{}'",
-                                security_ctx.namespace, namespace
-                            ));
+                // Optionally validate JWT if operator JWT is available
+                if let Ok(operator_jwt) = std::env::var("B00T_OPERATOR_JWT") {
+                    match AcpJwtValidator::from_operator_jwt(&operator_jwt) {
+                        Ok(validator) => {
+                            match validator.validate_jwt(&jwt) {
+                                Ok(security_ctx) => {
+                                    if security_ctx.namespace == namespace {
+                                        info!("✅ JWT validated for namespace: {}", namespace);
+                                        return Ok(jwt);
+                                    } else {
+                                        return Err(anyhow::anyhow!(
+                                            "JWT namespace '{}' does not match requested namespace '{}'",
+                                            security_ctx.namespace, namespace
+                                        ));
+                                    }
+                                }
+                                Err(e) => {
+                                    return Err(anyhow::anyhow!("JWT validation failed: {}", e));
+                                }
+                            }
+                        }
+                        Err(e) => {
+                            return Err(anyhow::anyhow!("Failed to create JWT validator: {}", e));
                         }
                     }
+                } else {
+                    // No operator JWT available - skip validation but warn
+                    warn!("B00T_OPERATOR_JWT not set - skipping JWT validation");
+                    info!("Fetched JWT for namespace: {} (validation skipped)", namespace);
+                    return Ok(jwt);
                 }
-                
-                // Return JWT even if validation fails (for development)
-                warn!("JWT validation failed, continuing in development mode");
-                return Ok(jwt);
             }
             Err(e) => {
                 warn!("Failed to fetch JWT from b00t-website: {}", e);
