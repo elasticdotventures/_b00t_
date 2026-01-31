@@ -1846,16 +1846,9 @@ pub fn mcp_sync_bidirectional(
 
     let op = SyncOperation::from_str(operation)?;
     
-    // Validate source for push operation
-    match op {
-        SyncOperation::Push => {
-            if source != "b00t" {
-                anyhow::bail!("Push operation requires source to be 'b00t', got '{}'", source);
-            }
-        }
-        SyncOperation::Pull => {
-            // Pull will validate dest == "b00t" when implemented
-        }
+    // Validate source for push operation (pull will validate dest == "b00t" when implemented)
+    if matches!(op, SyncOperation::Push) && source != "b00t" {
+        anyhow::bail!("Push operation requires source to be 'b00t', got '{}'", source);
     }
     
     println!("🔄 MCP Sync: {:?} {} → {}", op, source, dest);
