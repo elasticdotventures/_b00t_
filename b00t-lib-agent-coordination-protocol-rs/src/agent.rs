@@ -127,33 +127,41 @@ impl Agent {
         let (security_context, namespace_enforcer) = if let Some(jwt_token) = &config.jwt_token {
             info!("Validating JWT token for agent '{}'", config.agent_id);
             
-            // For development, we'll use a placeholder validator
-            // In production, this would use the actual operator JWT
-            let validator = AcpJwtValidator::new("placeholder_secret".to_string());
+            // Get operator JWT from environment or fail
+            let operator_jwt = std::env::var("B00T_OPERATOR_JWT")
+                .map_err(|_| ACPError::authentication_failed(
+                    "B00T_OPERATOR_JWT environment variable must be set for JWT validation. \
+                     This is required for production security. If running in development mode \
+                     without proper NATS authentication, remove the JWT token from config."
+                ))?;
             
-            match validator.validate_jwt(jwt_token) {
-                Ok(security_ctx) => {
-                    // Verify namespace matches config
-                    if security_ctx.namespace != config.namespace {
-                        return Err(ACPError::authentication_failed(format!(
-                            "JWT namespace '{}' does not match config namespace '{}'",
-                            security_ctx.namespace, config.namespace
-                        )));
-                    }
-                    
-                    let enforcer = NamespaceEnforcer::new(security_ctx.clone());
-                    info!("Agent '{}' authenticated for namespace '{}'", config.agent_id, security_ctx.namespace);
-                    (Some(security_ctx), Some(enforcer))
-                },
-                Err(e) => {
-                    warn!("JWT validation failed for agent '{}': {}", config.agent_id, e);
-                    // For development, continue without security context
-                    // In production, this should be an error
-                    (None, None)
-                }
+            // Derive signing secret from operator JWT
+            let validator = AcpJwtValidator::from_operator_jwt(&operator_jwt)
+                .map_err(|e| ACPError::authentication_failed(format!(
+                    "Failed to initialize JWT validator from operator JWT: {}",
+                    e
+                )))?;
+            
+            // Validate JWT - fail hard on any errors
+            let security_ctx = validator.validate_jwt(jwt_token)
+                .map_err(|e| ACPError::authentication_failed(format!(
+                    "JWT validation failed for agent '{}': {}",
+                    config.agent_id, e
+                )))?;
+            
+            // Verify namespace matches config
+            if security_ctx.namespace != config.namespace {
+                return Err(ACPError::authentication_failed(format!(
+                    "JWT namespace '{}' does not match config namespace '{}'",
+                    security_ctx.namespace, config.namespace
+                )));
             }
+            
+            let enforcer = NamespaceEnforcer::new(security_ctx.clone());
+            info!("Agent '{}' authenticated for namespace '{}'", config.agent_id, security_ctx.namespace);
+            (Some(security_ctx), Some(enforcer))
         } else {
-            info!("No JWT provided for agent '{}' - running in development mode", config.agent_id);
+            info!("No JWT provided for agent '{}' - running without authentication", config.agent_id);
             (None, None)
         };
 
