@@ -1,0 +1,14 @@
+##* * * * * *//
+# _B00t_
+##* * * * * *\\
+-r requirements.txt
+
+yq
+emoji>=1.2.0
+toml
+docopt
+subprocess
+dynmen
+# https://docker-py.readthedocs.io/en/stable/
+docker
+
