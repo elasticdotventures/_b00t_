@@ -796,7 +796,7 @@
     "version": "0.1.0",
     "homepage": "https://github.com/PromptExecution/pm2-mcp",
     "documentation": null,
-    "license": "Proprietary",
+    "license": null,
     "tags": [
       "b00t",
       "local",
