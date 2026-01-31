@@ -36,10 +36,16 @@ pub mod model_manager;
 pub mod orchestrator;
 pub mod session_memory;
 pub mod traits;
+pub mod up_command;
 pub mod utils;
 pub mod whoami;
 pub use traits::*;
 
+// Re-export up_command function for use in main.rs
+pub use up_command::handle_up_command;
+
+// Learn metadata structures - re-exported from b00t-c0re-lib
+pub use b00t_c0re_lib::{LearnMetadata, UsageExample};
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Default)]
 pub struct ApiProvides {
     pub capability: Option<String>,
@@ -229,10 +235,10 @@ pub enum DatumType {
     Cli,
     Api,
     Stack,
+    Config, // b00t configuration file (_b00t_.toml)
     Job,
     Agent,
     AiModel,
-    Config,
     Database,
     Repo,
     Role,
@@ -677,12 +683,12 @@ impl DatumType {
             DatumType::Api
         } else if filename.ends_with(".stack.toml") {
             DatumType::Stack
+        } else if filename.ends_with(".config.toml") || filename.ends_with("_b00t_.toml") {
+            DatumType::Config
         } else if filename.ends_with(".job.toml") {
             DatumType::Job
         } else if filename.ends_with(".agent.toml") {
             DatumType::Agent
-        } else if filename.ends_with(".config.toml") {
-            DatumType::Config
         } else if filename.ends_with(".database.toml") {
             DatumType::Database
         } else if filename.ends_with(".repo.toml") {
