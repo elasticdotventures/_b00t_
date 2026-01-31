@@ -25,6 +25,7 @@ use b00t_cli::datum_mcp::McpDatum;
 use b00t_cli::datum_vscode::VscodeDatum;
 use b00t_cli::traits::*;
 
+use b00t_cli::commands::learn::handle_learn;
 use b00t_cli::commands::{
     AiCommands, AgentCommands, AnsibleCommands, AppCommands, ChatCommands, CliCommands,
     DatumCommands, GrokCommands, InitCommands, InstallCommands, JobCommands, K8sCommands, McpCommands,
@@ -35,7 +36,7 @@ use b00t_cli::commands::install::{install_datum, run_just_install};
 
 // Re-export commonly used functions for datum modules
 pub use b00t_cli::{
-    claude_code_install_mcp, codex_install_mcp, dotmcpjson_install_mcp, gemini_install_mcp,
+    DatumType, claude_code_install_mcp, codex_install_mcp, dotmcpjson_install_mcp, gemini_install_mcp,
     get_config, get_expanded_path, get_mcp_config, get_mcp_toml_files, mcp_add_json, mcp_list,
     mcp_output, mcp_remove, vscode_install_mcp,
 };
@@ -75,6 +76,76 @@ Example:
         #[clap(help = "Text to tokenize")]
         text: String,
     },
+    #[clap(
+        about = "Record a lesson learned for a tool",
+        long_about = r#"
+lfmf is a dynamic, opinionated man-page for any tool with a b00t datum (TOML, learn/ dir, etc).
+It memoizes operator-informed tips, tricks, and anti-patterns—never repo-specific, always tool wisdom.
+Each entry is a <25 token topic and <250 token body, written in a positive, laconic, affirmative style.
+Use lfmf to help the hive avoid repeating mistakes and accelerate mastery.
+Good entries separate neophyte from master. Bad entries are vague, negative, or repo-specific.
+
+Usage:
+  b00t-cli lfmf <tool> "<topic>: <body>"
+
+Examples:
+  # Good
+  b00t-cli lfmf just "modules & workdir: Use modules and workdir to avoid cd; keeps recipes portable and context-safe."
+  b00t-cli lfmf docker "container cleanup: Use 'docker system prune' regularly to avoid disk bloat."
+  b00t-cli lfmf git "atomic commits: Commit small, focused changes for easier review and rollback."
+
+  # Bad
+  b00t-cli lfmf just "cd: I always use cd in my recipes."
+  b00t-cli lfmf docker "disk full: My disk filled up once."
+  b00t-cli lfmf git "fix: Fixed a bug in my repo."
+
+Tips:
+- Topic: <25 tokens, concise, positive, tool-focused.
+- Body: <250 tokens, actionable, never repo-specific.
+- Affirmative: 'Do X for Y benefit', not 'Don't do X'.
+- Suitable tools: any with a b00t datum (TOML, learn/ dir, etc).
+"#
+    )]
+    Lfmf {
+        #[clap(long, help = "Tool name")]
+        tool: Option<String>,
+        #[clap(long, help = "Lesson in '<topic>: <body>' format")]
+        lesson: Option<String>,
+        #[clap(long, group = "scope", help = "Record lesson for this repo (default)")]
+        repo: bool,
+        #[clap(
+            long,
+            group = "scope",
+            help = "Record lesson globally (mutually exclusive with --repo)"
+        )]
+        global: bool,
+    },
+    #[clap(
+        about = "Get advice for syntax errors and debugging",
+        long_about = r#"
+The b00t advice system acts as a syntax therapist, providing contextual debugging assistance
+based on lessons learned from previous failures. It performs semantic search through the
+hive's collective knowledge to suggest solutions for similar error patterns.
+
+Usage:
+  b00t-cli advice <tool> "<error_pattern>"
+  b00t-cli advice <tool> list  # List all lessons for a tool
+  b00t-cli advice <tool> search "<query>"  # Semantic search for lessons
+
+Examples:
+  b00t-cli advice just "Unknown start of token '.'"
+  b00t-cli advice rust "cannot borrow as mutable"
+  b00t-cli advice docker "permission denied"
+  b00t-cli advice just list
+  b00t-cli advice rust search "template syntax"
+
+The system will:
+1. Search for similar error patterns in the vector database
+2. Return relevant lessons with confidence scores
+3. Provide conversational debugging guidance
+4. Suggest specific solutions based on hive experience
+"#
+    )]
     #[clap(about = "MCP (Model Context Protocol) server management")]
     Mcp {
         #[clap(subcommand)]
@@ -105,6 +176,10 @@ Example:
         #[clap(subcommand)]
         cli_command: CliCommands,
     },
+    #[clap(about = "Run Ansible playbooks")]
+    Ansible {
+        #[clap(subcommand)]
+        ansible_command: commands::ansible::AnsibleCommands,
     #[clap(
         about = "AI model datum management",
         long_about = "List, inspect, install, and activate AI model datums defined in the _b00t_ directory."
@@ -137,21 +212,6 @@ Example:
         #[clap(long, help = "Override detected role (matches role datum)")]
         role: Option<String>,
     },
-    #[clap(about = "Coordinate agents")]
-    Agent {
-        #[clap(subcommand)]
-        agent_command: AgentCommands,
-    },
-    #[clap(about = "Manage jobs (run, list, inspect)")]
-    Job {
-        #[clap(subcommand)]
-        job_command: JobCommands,
-    },
-    #[clap(about = "Chat transport and messaging")]
-    Chat {
-        #[clap(subcommand)]
-        chat_command: ChatCommands,
-    },
     #[clap(about = "Create checkpoint: commit all files and run tests")]
     // 🤓 ENTANGLED: b00t-mcp/src/mcp_tools.rs CheckpointCommand
     // When this changes, update b00t-mcp CheckpointCommand structure
@@ -183,7 +243,7 @@ Example:
         #[clap(long, help = "Show only available (not installed) tools")]
         available: bool,
         #[clap(long = "filter", help = "Filter by subsystem (MCP compatibility)")]
-        filter_flag: Option<String>,
+        filter_flag: Option<String>, // 🦨 MCP compatibility: accept --filter flag
     },
     #[clap(about = "Kubernetes (k8s) cluster and pod management")]
     K8s {
@@ -231,11 +291,6 @@ Example:
         global: bool,
     },
     #[clap(about = "Datum management and inspection")]
-    Datum {
-        #[clap(subcommand)]
-        datum_command: DatumCommands,
-    },
-    #[clap(about = "Inspect or run datums directly")]
     Datum {
         #[clap(subcommand)]
         datum_command: DatumCommands,
@@ -814,6 +869,11 @@ echo "malicious" > ~/.dotfiles/_b00t_/hack.toml
         ("Apt", "APT packages", vec![".apt.toml"]),
         ("Nix", "Nix packages", vec![".nix.toml"]),
         ("Bash", "Bash scripts", vec![".bash.toml"]),
+        (
+            "Role",
+            "Role onboarding/compliance datums",
+            vec![".role.toml", ".toml (type=role)"],
+        ),
     ];
 
     println!("### DatumType Enum");
@@ -1135,6 +1195,12 @@ async fn main() {
                 std::process::exit(1);
             }
         }
+        Some(Commands::Ansible { ansible_command }) => {
+            if let Err(e) = ansible_command.execute(&cli.path) {
+                eprintln!("Error: {}", e);
+                std::process::exit(1);
+            }
+        }
         Some(Commands::Model { model_command }) => {
             if let Err(e) = model_command.execute(&cli.path) {
                 eprintln!("Error: {}", e);
@@ -1187,6 +1253,7 @@ async fn main() {
             available,
             filter_flag,
         }) => {
+            // 🤓 MCP compatibility: merge positional and flag arguments
             let effective_filter = filter.as_ref().or(filter_flag.as_ref());
             if let Err(e) = show_status(
                 &cli.path,
@@ -1216,35 +1283,8 @@ async fn main() {
                 std::process::exit(1);
             }
         }
-        Some(Commands::Agent { agent_command }) => {
-            if let Err(e) =
-                b00t_cli::commands::agent::handle_agent_command(agent_command.clone()).await
-            {
-                eprintln!("Agent Error: {}", e);
-                std::process::exit(1);
-            }
-        }
-        Some(Commands::Job { job_command }) => {
-            if let Err(e) = job_command.execute_async(&cli.path).await {
-                eprintln!("Job Error: {}", e);
-                std::process::exit(1);
-            }
-        }
-        Some(Commands::Chat { chat_command }) => {
-            if let Err(e) = chat_command.execute().await {
-                eprintln!("Chat Error: {}", e);
-                std::process::exit(1);
-            }
-        }
         Some(Commands::Learn { args }) => {
             if let Err(e) = handle_learn(&cli.path, args.clone()).await {
-                eprintln!("Error: {}", e);
-                std::process::exit(1);
-            }
-        }
-        Some(Commands::Datum { datum_command }) => {
-            use b00t_cli::commands::datum::handle_datum_command;
-            if let Err(e) = handle_datum_command(&cli.path, datum_command) {
                 eprintln!("Error: {}", e);
                 std::process::exit(1);
             }
@@ -1258,6 +1298,12 @@ async fn main() {
                 std::process::exit(1);
             }
         }
+        Some(Commands::Lfmf {
+            tool,
+            lesson,
+            repo,
+            global,
+        }) => {
         Some(Commands::Ansible { ansible_command }) => {
             if let Err(e) = ansible_command.execute(&cli.path) {
                 eprintln!("Ansible Error: {}", e);
