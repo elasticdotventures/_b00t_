@@ -1081,6 +1081,12 @@ fn check_readme_status(memory: &mut session_memory::SessionMemory) -> Result<()>
     Ok(())
 }
 
+// NOTE:
+// `main` is async and uses `#[tokio::main]` because several commands and
+// integrations in this CLI rely on async operations (e.g. networked/AI calls)
+// and expect a Tokio runtime to be available. Even though `main` itself mostly
+// orchestrates synchronous-looking code, removing the async entrypoint would
+// break those async paths.
 #[tokio::main]
 async fn main() {
     let cli = Cli::parse();
