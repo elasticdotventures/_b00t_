@@ -26,6 +26,7 @@ Copy the ralph files into your project:
 # From your project root
 mkdir -p scripts/ralph
 cp /path/to/ralph/ralph.sh scripts/ralph/
+cp /path/to/ralph/scripts/validate_prd.sh scripts/ralph/
 
 # Copy the prompt template for your AI tool of choice:
 cp /path/to/ralph/prompt.md scripts/ralph/prompt.md    # For Amp
@@ -33,6 +34,7 @@ cp /path/to/ralph/prompt.md scripts/ralph/prompt.md    # For Amp
 cp /path/to/ralph/CLAUDE.md scripts/ralph/CLAUDE.md    # For Claude Code
 
 chmod +x scripts/ralph/ralph.sh
+chmod +x scripts/ralph/validate_prd.sh
 ```
 
 ### Option 2: Install skills globally (Amp)
@@ -113,27 +115,36 @@ This creates `prd.json` with user stories structured for autonomous execution.
 # Using Amp (default)
 ./scripts/ralph/ralph.sh [max_iterations]
 
-# Using Claude Code
+# Using Claude Code with retry logic
 ./scripts/ralph/ralph.sh --tool claude [max_iterations]
+
+# With custom retry settings
+./scripts/ralph/ralph.sh --tool claude --retries 5 --hang-timeout 10 [max_iterations]
 ```
 
-Default is 10 iterations. Use `--tool amp` or `--tool claude` to select your AI coding tool.
+**Options:**
+- `--tool amp|claude` - Select AI coding tool (default: amp)
+- `--retries N` - Max retry attempts on transient failures (default: 3)
+- `--hang-timeout N` - Seconds to wait after result before killing hung process (default: 5)
+- `max_iterations` - Maximum iterations to run (default: 10)
 
 Ralph will:
-1. Create a feature branch (from PRD `branchName`)
-2. Pick the highest priority story where `passes: false`
-3. Implement that single story
-4. Run quality checks (typecheck, tests)
-5. Commit if checks pass
-6. Update `prd.json` to mark story as `passes: true`
-7. Append learnings to `progress.txt`
-8. Repeat until all stories pass or max iterations reached
+1. **Validate PRD** - Check for duplicate IDs, missing required fields, valid structure
+2. Create a feature branch (from PRD `branchName`)
+3. Pick the highest priority story where `passes: false`
+4. Implement that single story (with automatic retry on transient errors)
+5. Run quality checks (typecheck, tests)
+6. Commit if checks pass
+7. Update `prd.json` to mark story as `passes: true`
+8. Append learnings to `progress.txt`
+9. Repeat until all stories pass or max iterations reached
 
 ## Key Files
 
 | File | Purpose |
 |------|---------|
-| `ralph.sh` | The bash loop that spawns fresh AI instances (supports `--tool amp` or `--tool claude`) |
+| `ralph.sh` | The bash loop that spawns fresh AI instances (supports `--tool amp` or `--tool claude` with retry logic) |
+| `scripts/validate_prd.sh` | PRD validation script (checks structure before starting loop) |
 | `prompt.md` | Prompt template for Amp |
 | `CLAUDE.md` | Prompt template for Claude Code |
 | `prd.json` | User stories with `passes` status (the task list) |
@@ -206,6 +217,30 @@ Frontend stories must include "Verify in browser using dev-browser skill" in acc
 
 When all stories have `passes: true`, Ralph outputs `<promise>COMPLETE</promise>` and the loop exits.
 
+## Reliability Features
+
+### PRD Validation
+
+Ralph validates `prd.json` before starting the loop to catch:
+- Duplicate story IDs
+- Missing required fields (`id`, `title`, `priority`)
+- Invalid PRD structure
+
+This fails fast and saves API costs by catching input errors early.
+
+### Retry Logic
+
+Ralph automatically retries on transient failures:
+- Rate limits, timeouts, connection resets
+- 502/503/504 errors
+- "No messages returned" errors
+
+Uses exponential backoff (5s, 10s, 20s...) up to `--retries` attempts (default: 3).
+
+### Hang Detection (Claude Code)
+
+For Claude Code, Ralph uses stream-json output monitoring to detect when work completes and automatically terminates hung processes after `--hang-timeout` seconds (default: 5).
+
 ## Debugging
 
 Check current state:
@@ -219,6 +254,9 @@ cat progress.txt
 
 # Check git history
 git log --oneline -10
+
+# Validate PRD structure
+./scripts/validate_prd.sh prd.json
 ```
 
 ## Customizing the Prompt
