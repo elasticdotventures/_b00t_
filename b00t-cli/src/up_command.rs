@@ -4,6 +4,7 @@ use crate::datum_cli::CliDatum;
 use crate::datum_config::B00tConfig;
 use crate::datum_docker::DockerDatum;
 use crate::datum_mcp::McpDatum;
+use crate::load_datum_providers;
 use crate::traits::{DatumProvider, VersionStatus};
 use crate::DatumType;
 use duct::cmd;
