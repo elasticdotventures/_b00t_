@@ -52,6 +52,7 @@ b00t-chat = { workspace = true }
 env_logger = "0.11"
 b00t-ipc = { path = "../b00t-ipc" }
 url = "2.5"
+glob = "0.3.3"
 
 
 [dev-dependencies]

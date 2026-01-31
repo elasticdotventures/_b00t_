@@ -3,128 +3,65 @@ name = "go"
 type = "cli"
 desires = "1.23.0"
 install = '''
-# Install Go programming language
-# Preferred method: pkgx (fast, isolated, no system pollution)
-# Fallback: Official Go installation
+# Install Go without duplicating logic in downstream datums
+set -euo pipefail
+GO_VERSION="${GO_VERSION:-1.23.4}"
+OS="$(uname -s | tr '[:upper:]' '[:lower:]')"
+ARCH="$(uname -m)"
 
-echo "📦 Installing Go..."
-
-# Check if pkgx is available (preferred method)
+# Preferred: pkgx wrapper (no system pollution)
 if command -v pkgx >/dev/null 2>&1; then
-    echo "✨ Using pkgx for Go installation (recommended)"
-    # 🤓 pkgx syntax: use env instead of install
-    mkdir -p ~/.local/bin
-    cat > ~/.local/bin/go << 'EOF'
-#!/bin/bash
-exec pkgx go@1.23 "$@"
+    mkdir -p "$HOME/.local/bin"
+    cat > "$HOME/.local/bin/go" <<EOF
+#!/usr/bin/env bash
+exec pkgx go@"${GO_VERSION:-1.23.4}" "$@"
 EOF
-    chmod +x ~/.local/bin/go
-    
-    # Test wrapper
-    if ~/.local/bin/go version >/dev/null 2>&1; then
-        echo "✅ Go installed via pkgx wrapper"
-        # Ensure PATH includes ~/.local/bin
-        export PATH="$HOME/.local/bin:$PATH"
+    chmod +x "$HOME/.local/bin/go"
+    export PATH="$HOME/.local/bin:$PATH"
+    if go version >/dev/null 2>&1; then
+        echo "✅ Go available via pkgx wrapper"
         exit 0
     fi
 fi
 
-# Fallback: Traditional installation
-echo "📦 Installing Go via official method..."
-
-# Detect platform
-OS=$(uname -s | tr '[:upper:]' '[:lower:]')
-ARCH=$(uname -m)
-
+# Fallback: user-local tarball install (no sudo)
 case "$ARCH" in
     x86_64) ARCH="amd64" ;;
     aarch64|arm64) ARCH="arm64" ;;
     armv7l) ARCH="armv6l" ;;
-    *) echo "❌ Unsupported architecture: $ARCH"; exit 1 ;;
+    *) echo "❌ Unsupported architecture: $ARCH" >&2; exit 1 ;;
 esac
-
 case "$OS" in
-    linux) OS="linux" ;;
-    darwin) OS="darwin" ;;
-    *) echo "❌ Unsupported OS: $OS"; exit 1 ;;
+    linux|darwin) ;; 
+    *) echo "❌ Unsupported OS: $OS" >&2; exit 1 ;;
 esac
 
-GO_VERSION="1.23.4"
 GO_TARBALL="go${GO_VERSION}.${OS}-${ARCH}.tar.gz"
-DOWNLOAD_URL="https://go.dev/dl/${GO_TARBALL}"
+URL="https://go.dev/dl/${GO_TARBALL}"
+TMP="${TMPDIR:-/tmp}"
+echo "⬇️  Downloading ${URL}"
+curl -fsSL "${URL}" -o "${TMP}/${GO_TARBALL}"
 
-# Download and install
-echo "⬇️  Downloading Go ${GO_VERSION} for ${OS}-${ARCH}..."
-cd /tmp
-curl -LO "${DOWNLOAD_URL}"
+INSTALL_DIR="$HOME/.local/go"
+rm -rf "${INSTALL_DIR}"
+mkdir -p "${INSTALL_DIR}"
+tar -C "$HOME/.local" -xzf "${TMP}/${GO_TARBALL}"
+rm -f "${TMP}/${GO_TARBALL}"
 
-# Remove old installation
-sudo rm -rf /usr/local/go
-
-# Extract to /usr/local
-echo "📂 Extracting to /usr/local..."
-sudo tar -C /usr/local -xzf "${GO_TARBALL}"
-rm "${GO_TARBALL}"
-
-# Add to PATH (if not already present)
-SHELL_RC="${HOME}/.bashrc"
-if [ -n "$ZSH_VERSION" ]; then
-    SHELL_RC="${HOME}/.zshrc"
+export PATH="$HOME/.local/go/bin:$HOME/go/bin:$PATH"
+if ! grep -q "/.local/go/bin" "$HOME/.bashrc" 2>/dev/null; then
+  echo 'export PATH=$HOME/.local/go/bin:$HOME/go/bin:$PATH' >> "$HOME/.bashrc"
+fi
+if [ -n "${ZSH_VERSION-}" ] && ! grep -q "/.local/go/bin" "$HOME/.zshrc" 2>/dev/null; then
+  echo 'export PATH=$HOME/.local/go/bin:$HOME/go/bin:$PATH' >> "$HOME/.zshrc"
 fi
 
-if ! grep -q "/usr/local/go/bin" "$SHELL_RC" 2>/dev/null; then
-    echo '' >> "$SHELL_RC"
-    echo '# Added by b00t go installer' >> "$SHELL_RC"
-    echo 'export PATH=$PATH:/usr/local/go/bin' >> "$SHELL_RC"
-    echo 'export PATH=$PATH:$HOME/go/bin' >> "$SHELL_RC"
-fi
-
-export PATH=$PATH:/usr/local/go/bin
-export PATH=$PATH:$HOME/go/bin
-
-# Verify installation
 go version
-echo "✅ Go installed successfully"
+echo "✅ Go installed to $HOME/.local/go"
 '''
 update = '''
-# Update Go to latest version
-echo "🔄 Updating Go..."
-
-if command -v pkgx >/dev/null 2>&1 && [ -f ~/.local/bin/go ] && grep -q "pkgx" ~/.local/bin/go 2>/dev/null; then
-    echo "✨ Updating via pkgx..."
-    pkgx install go@latest
-    echo "✅ Go updated via pkgx"
-else
-    echo "📦 Updating via official method..."
-    # Re-run install script to get latest version
-    # (Install script handles removal of old version)
-
-    OS=$(uname -s | tr '[:upper:]' '[:lower:]')
-    ARCH=$(uname -m)
-
-    case "$ARCH" in
-        x86_64) ARCH="amd64" ;;
-        aarch64|arm64) ARCH="arm64" ;;
-        armv7l) ARCH="armv6l" ;;
-    esac
-
-    case "$OS" in
-        linux) OS="linux" ;;
-        darwin) OS="darwin" ;;
-    esac
-
-    GO_VERSION="1.23.0"
-    GO_TARBALL="go${GO_VERSION}.${OS}-${ARCH}.tar.gz"
-    DOWNLOAD_URL="https://go.dev/dl/${GO_TARBALL}"
-
-    cd /tmp
-    curl -LO "${DOWNLOAD_URL}"
-    sudo rm -rf /usr/local/go
-    sudo tar -C /usr/local -xzf "${GO_TARBALL}"
-    rm "${GO_TARBALL}"
-
-    echo "✅ Go updated to ${GO_VERSION}"
-fi
+# Update Go using the same logic as install
+GO_VERSION="${GO_VERSION:-1.23.4}" b00t cli install go
 '''
 version = "go version"
 version_regex = 'go(\d+\.\d+\.?\d*)'
