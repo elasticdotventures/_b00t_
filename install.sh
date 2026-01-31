@@ -180,7 +180,8 @@ verify_installation() {
         echo "${YELLOW}⚠️  b00t command not found in PATH${NC}"
         local escaped_install_dir
         escaped_install_dir=$(escape_shell_path "$INSTALL_DIR")
-        printf '%b💡 Try running: export PATH=%s:"$PATH"%b\n' "${BLUE}" "$escaped_install_dir" "${NC}"
+        # Display the escaped path safely
+        echo "${BLUE}💡 Try running: export PATH=${escaped_install_dir}:\"\$PATH\"${NC}"
     fi
 }
 
