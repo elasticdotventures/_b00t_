@@ -240,7 +240,7 @@ impl B00tConfig {
     }
 
     /// Convert DatumType to string for pattern matching
-    fn datum_type_str(dtype: &DatumType) -> &'static str {
+    pub fn datum_type_str(dtype: &DatumType) -> &'static str {
         match dtype {
             DatumType::Agent => "agent",
             DatumType::Cli => "cli",

@@ -69,7 +69,7 @@ pub fn handle_up_command(b00t_path: &str, yes: bool) -> Result<()> {
         println!("   Configured patterns: {:?}", config.datums);
         println!("   Available datums: {} total", all_datums.len());
         for (name, dtype) in &all_datums {
-            println!("     - {}.{:?}", name, dtype);
+            println!("     - {}.{}", name, B00tConfig::datum_type_str(dtype));
         }
         return Ok(());
     }
