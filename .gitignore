@@ -322,3 +322,4 @@ docker/
 nextest_test
 togaf-cli/
 togaf-dsl/
+*.old
