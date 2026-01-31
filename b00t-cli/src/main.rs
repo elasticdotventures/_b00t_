@@ -1029,55 +1029,6 @@ Unless you're developing b00t-cli itself, always use the `b00t` alias. It provid
     print!("{}", workflow_doc);
 }
 
-// Session management functions
-pub fn handle_session_init(
-    budget: &Option<f64>,
-    time_limit: &Option<u32>,
-    agent: Option<&str>,
-) -> Result<()> {
-    let agent_name = agent
-        .map(|s| s.to_string())
-        .or_else(|| std::env::var("_B00T_Agent").ok())
-        .filter(|s| !s.is_empty());
-
-    let mut session = SessionState::new(agent_name);
-
-    if let Some(budget) = budget {
-        session.budget_limit = Some(*budget);
-    }
-
-    if let Some(time_limit) = time_limit {
-        session.time_limit_minutes = Some(*time_limit);
-    }
-
-    // Set session ID in environment
-    unsafe {
-        std::env::set_var("B00T_SESSION_ID", &session.session_id);
-    }
-
-    session.save()?;
-
-    // Initialize session memory and check README.md
-    let mut memory = b00t_cli::session_memory::SessionMemory::load()?;
-    check_readme_status(&mut memory)?;
-
-    println!("🥾 Session {} initialized", session.session_id);
-
-    if let Some(agent) = &session.agent_info {
-        println!("🤖 Agent: {}", agent.name);
-    }
-
-    if let Some(budget) = session.budget_limit {
-        println!("💰 Budget: ${:.2}", budget);
-    }
-
-    if let Some(time_limit) = session.time_limit_minutes {
-        println!("⏱️  Time limit: {}m", time_limit);
-    }
-
-    Ok(())
-}
-
 pub fn handle_session_status() -> Result<()> {
     let session = SessionState::load()?;
     println!("{}", session.get_status_line());
