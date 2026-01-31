@@ -481,27 +481,8 @@ where
     T: DatumProvider + 'static,
     T: for<'a> TryFrom<(&'a str, &'a str), Error = anyhow::Error>,
 {
-    let mut tools: Vec<Box<dyn DatumProvider>> = Vec::new();
-    let expanded_path = get_expanded_path(path)?;
-
-    if let Ok(entries) = std::fs::read_dir(&expanded_path) {
-        for entry in entries {
-            if let Ok(entry) = entry {
-                let entry_path = entry.path();
-                if let Some(file_name) = entry_path.file_name().and_then(|s| s.to_str()) {
-                    if file_name.ends_with(extension) {
-                        if let Some(tool_name) = file_name.strip_suffix(extension) {
-                            if let Ok(datum) = T::try_from((tool_name, path)) {
-                                tools.push(Box::new(datum));
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    Ok(tools)
+    // Delegate to the implementation provided by the library crate to avoid duplication.
+    b00t_cli::load_datum_providers::<T>(path, extension)
 }
 
 fn show_status(
