@@ -11,10 +11,6 @@ repository.workspace = true
 name = "b00t-cli"
 path = "src/main.rs"
 
-[[bin]]
-name = "delegation_demo"
-path = "src/bin/delegation_demo.rs"
-
 [lib]
 name = "b00t_cli"
 path = "src/lib.rs"

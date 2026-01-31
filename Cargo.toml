@@ -8,6 +8,8 @@ members = [
     "k0mmand3r",
     "b00t-py",
     "b00t-ipc",
+    "togaf-dsl",
+    "togaf-cli",
 ]
 resolver = "2"
 
