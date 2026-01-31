@@ -1035,11 +1035,9 @@ function _b00t_check() {
     fi
 }
 
-# Run _b00t_check automatically when .bashrc is sourced
+# TODO: idempotency; Run _b00t_check automatically when .bashrc is sourced
 # check b00t bash alias (was it created, then it exists)
 #if ! is_n0t_aliased "b00t" ; then
 #    _b00t_check
 #fi
 
-# alias b00t-check=_b00t_check
-# alias b00t-up="b00t up"
