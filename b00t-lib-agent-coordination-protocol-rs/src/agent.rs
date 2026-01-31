@@ -500,4 +500,50 @@ mod tests {
         // NATS URL should fall back to default since no env var is set in test
         assert!(config.nats_url.contains("c010.promptexecution.com"));
     }
+
+    #[tokio::test]
+    async fn test_jwt_validation_requires_operator_jwt() {
+        // Test that providing a JWT token without B00T_OPERATOR_JWT env var fails
+        std::env::remove_var("B00T_OPERATOR_JWT");
+        
+        let config = AgentConfig::new(
+            "test-agent".to_string(),
+            "nats://localhost:4222".to_string(),
+            "account.test.ai-assistant".to_string()
+        )
+        .with_jwt("fake-jwt-token".to_string());
+        
+        // This should fail because B00T_OPERATOR_JWT is not set
+        let result = Agent::new(config).await;
+        assert!(result.is_err());
+        
+        if let Err(e) = result {
+            let error_msg = format!("{}", e);
+            assert!(error_msg.contains("B00T_OPERATOR_JWT"));
+            assert!(error_msg.contains("must be set"));
+        }
+    }
+
+    #[tokio::test]
+    async fn test_no_jwt_works_without_operator_jwt() {
+        // Test that agents can start without JWT in development mode
+        std::env::remove_var("B00T_OPERATOR_JWT");
+        
+        let config = AgentConfig::new(
+            "test-agent".to_string(),
+            "nats://localhost:4222".to_string(),
+            "account.test".to_string()
+        );
+        // Don't set jwt_token - should work without operator JWT
+        
+        // Note: This will fail because we can't connect to NATS in tests,
+        // but it should fail at the transport layer, not JWT validation
+        let result = Agent::new(config).await;
+        
+        // The error should NOT be about B00T_OPERATOR_JWT
+        if let Err(e) = result {
+            let error_msg = format!("{}", e);
+            assert!(!error_msg.contains("B00T_OPERATOR_JWT"));
+        }
+    }
 }
