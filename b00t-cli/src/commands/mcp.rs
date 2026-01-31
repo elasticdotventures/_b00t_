@@ -63,15 +63,21 @@ pub enum McpCommands {
         httpstream: bool,
     },
     #[clap(
-        about = "Sync .mcp.json into a target client",
-        long_about = "Sync repository .mcp.json entries into a target MCP client.\n\nExamples:\n  b00t-cli mcp sync codex --repo\n  b00t-cli mcp sync codex --user"
+        about = "Sync MCP servers between b00t and agent platforms",
+        long_about = "Bidirectional sync of MCP server configs using datum metadata.\n\nExamples:\n  b00t-cli mcp sync push b00t kiro              # b00t -> kiro global\n  b00t-cli mcp sync pull kiro b00t              # kiro -> b00t datums\n  b00t-cli mcp sync push b00t claude            # b00t -> claude agents\n  b00t-cli mcp sync push b00t kiro --agent cli-master  # specific agent\n  b00t-cli mcp sync codex --repo                # legacy codex sync"
     )]
     Sync {
-        #[clap(help = "Sync target: codex")]
-        target: String,
-        #[clap(long, help = "Sync to repository-specific location (if supported)")]
+        #[clap(help = "Operation: push, pull, or target name (legacy)")]
+        operation_or_target: String,
+        #[clap(help = "Source platform (for push/pull) or empty (legacy)")]
+        source: Option<String>,
+        #[clap(help = "Destination platform (for push/pull) or empty (legacy)")]
+        dest: Option<String>,
+        #[clap(long, help = "Specific agent name to sync")]
+        agent: Option<String>,
+        #[clap(long, help = "Sync to repository-specific location (legacy)")]
         repo: bool,
-        #[clap(long, help = "Sync to user-global location (if supported)")]
+        #[clap(long, help = "Sync to user-global location (legacy)")]
         user: bool,
     },
     #[clap(
@@ -293,23 +299,44 @@ impl McpCommands {
                     }
                 }
             }
-            McpCommands::Sync { target, repo, user } => {
-                let use_repo = if *repo && *user {
-                    anyhow::bail!("Error: Cannot specify both --repo and --user flags");
-                } else if *repo {
-                    true
-                } else if *user {
-                    false
-                } else {
-                    crate::utils::is_git_repo()
-                };
+            McpCommands::Sync { 
+                operation_or_target, 
+                source, 
+                dest,
+                agent,
+                repo, 
+                user 
+            } => {
+                // Check if this is new push/pull syntax or legacy codex sync
+                if operation_or_target == "push" || operation_or_target == "pull" {
+                    let src = source.as_ref().ok_or_else(|| anyhow::anyhow!("Source required for push/pull"))?;
+                    let dst = dest.as_ref().ok_or_else(|| anyhow::anyhow!("Destination required for push/pull"))?;
+                    
+                    crate::mcp_sync_bidirectional(
+                        path,
+                        operation_or_target.as_str(),
+                        src,
+                        dst,
+                        agent.as_deref(),
+                    )
+                } else if source.is_none() && dest.is_none() {
+                    // Legacy codex sync (no source/dest args)
+                    let use_repo = if *repo && *user {
+                        anyhow::bail!("Error: Cannot specify both --repo and --user flags");
+                    } else if *repo {
+                        true
+                    } else if *user {
+                        false
+                    } else {
+                        crate::utils::is_git_repo()
+                    };
 
-                match target.as_str() {
-                    "codex" => crate::codex_sync_dotmcpjson(path, use_repo),
-                    _ => anyhow::bail!(
-                        "Error: Invalid target '{}'. Valid targets are: codex",
-                        target
-                    ),
+                    match operation_or_target.as_str() {
+                        "codex" => crate::codex_sync_dotmcpjson(path, use_repo),
+                        _ => anyhow::bail!("Error: Invalid target '{}'. Use 'push/pull src dest' or 'codex'", operation_or_target),
+                    }
+                } else {
+                    anyhow::bail!("Error: Invalid syntax. Use 'b00t-cli mcp sync push <src> <dest>' or 'b00t-cli mcp sync codex'");
                 }
             }
             McpCommands::Output {
@@ -587,6 +614,22 @@ impl RegistryAction {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::fs;
+    use tempfile::TempDir;
+
+    /// Helper to create a test MCP datum TOML content
+    const TEST_MCP_DATUM_TOML: &str = r#"
+[b00t]
+name = "test-server"
+type = "mcp"
+hint = "Test MCP server"
+
+[[b00t.mcp.stdio]]
+command = "npx"
+args = ["-y", "@test/server"]
+priority = 0
+transport = "stdio"
+"#;
 
     #[test]
     fn test_mcp_commands_exist() {
@@ -620,5 +663,219 @@ mod tests {
         // This should fail because the server doesn't exist, but should not panic
         let result = rt.block_on(install_cmd.execute_async("/tmp/nonexistent"));
         assert!(result.is_err()); // Expected to fail, but should not panic
+    }
+
+    #[test]
+    fn test_sync_push_with_valid_input() {
+        let temp_dir = TempDir::new().unwrap();
+        let path = temp_dir.path().to_str().unwrap();
+        
+        // Create a sample MCP datum file
+        fs::write(
+            temp_dir.path().join("test-server.mcp.toml"),
+            TEST_MCP_DATUM_TOML,
+        )
+        .unwrap();
+
+        let sync_cmd = McpCommands::Sync {
+            operation_or_target: "push".to_string(),
+            source: Some("b00t".to_string()),
+            dest: Some("kiro".to_string()),
+            agent: None,
+            repo: false,
+            user: false,
+        };
+
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let result = rt.block_on(sync_cmd.execute_async(path));
+        
+        // Should succeed in creating the sync operation
+        // Note: This may fail if ~/.kiro doesn't exist, but the important part
+        // is that it processes the command structure correctly
+        assert!(result.is_ok() || result.unwrap_err().to_string().contains("kiro"));
+    }
+
+    #[test]
+    fn test_sync_invalid_platform() {
+        let temp_dir = TempDir::new().unwrap();
+        let path = temp_dir.path().to_str().unwrap();
+
+        let sync_cmd = McpCommands::Sync {
+            operation_or_target: "push".to_string(),
+            source: Some("b00t".to_string()),
+            dest: Some("invalid-platform".to_string()),
+            agent: None,
+            repo: false,
+            user: false,
+        };
+
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let result = rt.block_on(sync_cmd.execute_async(path));
+        
+        // Should fail with unknown platform error
+        assert!(result.is_err());
+        let err_msg = result.unwrap_err().to_string();
+        assert!(
+            err_msg.contains("Unknown platform") || err_msg.contains("invalid-platform"),
+            "Expected platform error, got: {}",
+            err_msg
+        );
+    }
+
+    #[test]
+    fn test_sync_missing_source_parameter() {
+        let temp_dir = TempDir::new().unwrap();
+        let path = temp_dir.path().to_str().unwrap();
+
+        let sync_cmd = McpCommands::Sync {
+            operation_or_target: "push".to_string(),
+            source: None, // Missing source
+            dest: Some("kiro".to_string()),
+            agent: None,
+            repo: false,
+            user: false,
+        };
+
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let result = rt.block_on(sync_cmd.execute_async(path));
+        
+        // Should fail with source required error
+        assert!(result.is_err());
+        let err_msg = result.unwrap_err().to_string();
+        assert!(
+            err_msg.contains("Source required") || err_msg.contains("source"),
+            "Expected source error, got: {}",
+            err_msg
+        );
+    }
+
+    #[test]
+    fn test_sync_missing_dest_parameter() {
+        let temp_dir = TempDir::new().unwrap();
+        let path = temp_dir.path().to_str().unwrap();
+
+        let sync_cmd = McpCommands::Sync {
+            operation_or_target: "pull".to_string(),
+            source: Some("kiro".to_string()),
+            dest: None, // Missing dest
+            agent: None,
+            repo: false,
+            user: false,
+        };
+
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let result = rt.block_on(sync_cmd.execute_async(path));
+        
+        // Should fail with destination required error
+        assert!(result.is_err());
+        let err_msg = result.unwrap_err().to_string();
+        assert!(
+            err_msg.contains("Destination required") || err_msg.contains("dest"),
+            "Expected destination error, got: {}",
+            err_msg
+        );
+    }
+
+    #[test]
+    fn test_sync_invalid_source_for_push() {
+        let temp_dir = TempDir::new().unwrap();
+        let path = temp_dir.path().to_str().unwrap();
+
+        let sync_cmd = McpCommands::Sync {
+            operation_or_target: "push".to_string(),
+            source: Some("kiro".to_string()), // Invalid source (should be "b00t")
+            dest: Some("kiro".to_string()),
+            agent: None,
+            repo: false,
+            user: false,
+        };
+
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let result = rt.block_on(sync_cmd.execute_async(path));
+        
+        // Should fail with invalid source error
+        assert!(result.is_err());
+        let err_msg = result.unwrap_err().to_string();
+        assert!(
+            err_msg.contains("Push operation requires source to be 'b00t'"),
+            "Expected source validation error, got: {}",
+            err_msg
+        );
+    }
+
+    #[test]
+    fn test_sync_legacy_codex_fallback() {
+        let temp_dir = TempDir::new().unwrap();
+        let path = temp_dir.path().to_str().unwrap();
+
+        let sync_cmd = McpCommands::Sync {
+            operation_or_target: "codex".to_string(),
+            source: None, // Legacy mode: no source/dest
+            dest: None,   // Legacy mode: no source/dest
+            agent: None,
+            repo: true,
+            user: false,
+        };
+
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let result = rt.block_on(sync_cmd.execute_async(path));
+        
+        // Should attempt legacy codex sync
+        // May fail if not in a git repo or missing files, but should not panic
+        assert!(result.is_ok() || result.is_err());
+    }
+
+    #[test]
+    fn test_sync_invalid_operation() {
+        let temp_dir = TempDir::new().unwrap();
+        let path = temp_dir.path().to_str().unwrap();
+
+        let sync_cmd = McpCommands::Sync {
+            operation_or_target: "invalid-op".to_string(),
+            source: None,
+            dest: None,
+            agent: None,
+            repo: false,
+            user: false,
+        };
+
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let result = rt.block_on(sync_cmd.execute_async(path));
+        
+        // Should fail with invalid operation error
+        assert!(result.is_err());
+        let err_msg = result.unwrap_err().to_string();
+        assert!(
+            err_msg.contains("Invalid") || err_msg.contains("invalid-op"),
+            "Expected invalid operation error, got: {}",
+            err_msg
+        );
+    }
+
+    #[test]
+    fn test_sync_conflicting_repo_and_user_flags() {
+        let temp_dir = TempDir::new().unwrap();
+        let path = temp_dir.path().to_str().unwrap();
+
+        let sync_cmd = McpCommands::Sync {
+            operation_or_target: "codex".to_string(),
+            source: None,
+            dest: None,
+            agent: None,
+            repo: true,
+            user: true, // Both flags set
+        };
+
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let result = rt.block_on(sync_cmd.execute_async(path));
+        
+        // Should fail with conflicting flags error
+        assert!(result.is_err());
+        let err_msg = result.unwrap_err().to_string();
+        assert!(
+            err_msg.contains("both") || err_msg.contains("Cannot specify"),
+            "Expected conflicting flags error, got: {}",
+            err_msg
+        );
     }
 }

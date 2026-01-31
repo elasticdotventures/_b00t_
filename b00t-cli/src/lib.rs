@@ -1896,3 +1896,119 @@ fn check_readme_status(memory: &mut session_memory::SessionMemory) -> Result<()>
 
     Ok(())
 }
+
+/// Sync operation type
+#[derive(Debug, Clone, Copy, PartialEq)]
+enum SyncOperation {
+    Push,
+    Pull,
+}
+
+impl SyncOperation {
+    fn from_str(s: &str) -> Result<Self> {
+        match s {
+            "push" => Ok(Self::Push),
+            "pull" => Ok(Self::Pull),
+            _ => anyhow::bail!("Invalid operation '{}'. Use 'push' or 'pull'", s),
+        }
+    }
+}
+
+/// MCP server configuration for JSON output
+#[derive(Debug, Serialize)]
+struct McpServerConfig {
+    command: String,
+    args: Vec<String>,
+}
+
+/// Platform-specific MCP config paths
+fn get_platform_mcp_path(platform: &str) -> Result<String> {
+    let path = match platform {
+        "kiro" => "~/.kiro/mcp/mcp.json",
+        "claude" => anyhow::bail!("Claude sync not yet implemented - uses agent frontmatter"),
+        "q" => "~/.aws/q/mcp.json",
+        _ => anyhow::bail!("Unknown platform: {}", platform),
+    };
+    Ok(shellexpand::tilde(path).to_string())
+}
+
+/// Valid source platform for push operations
+const VALID_PUSH_SOURCE: &str = "b00t";
+
+/// Bidirectional MCP sync between b00t and agent platforms
+pub fn mcp_sync_bidirectional(
+    path: &str,
+    operation: &str,
+    source: &str,
+    dest: &str,
+    _agent: Option<&str>, // 🤓: Reserved for future agent-specific filtering
+) -> Result<()> {
+    use std::collections::HashMap;
+    use std::path::PathBuf;
+    use crate::datum_mcp::McpDatum;
+
+    let op = SyncOperation::from_str(operation)?;
+    
+    // Validate source for push operation (pull will validate dest == "b00t" when implemented)
+    if matches!(op, SyncOperation::Push) && source != VALID_PUSH_SOURCE {
+        anyhow::bail!("Push operation requires source to be '{}', got '{}'", VALID_PUSH_SOURCE, source);
+    }
+    
+    println!("🔄 MCP Sync: {:?} {} → {}", op, source, dest);
+    
+    match op {
+        SyncOperation::Push => {
+            let mcp_files = get_mcp_toml_files(path)?;
+            let mut servers = HashMap::new();
+            let exclude = vec!["kiro-plugin", "claude-plugin", "q-plugin"];
+            
+            for file in mcp_files {
+                match McpDatum::from_config(&file, path) {
+                    Ok(mcp_datum) => {
+                        let name = &mcp_datum.datum.name;
+                        
+                        if exclude.contains(&name.as_str()) {
+                            continue;
+                        }
+                        
+                        let stdio_methods = mcp_datum.parse_stdio_methods();
+                        if let Some(method) = stdio_methods.first() {
+                            servers.insert(
+                                name.clone(),
+                                McpServerConfig {
+                                    command: method.command.clone(),
+                                    args: method.args.clone(),
+                                }
+                            );
+                        }
+                    }
+                    Err(e) => {
+                        eprintln!("⚠️  Failed to parse {}: {}", file, e);
+                    }
+                }
+            }
+
+            let dest_config_path = get_platform_mcp_path(dest)?;
+            
+            #[derive(Serialize)]
+            struct McpConfig {
+                #[serde(rename = "mcpServers")]
+                mcp_servers: HashMap<String, McpServerConfig>,
+            }
+            
+            let config = McpConfig { mcp_servers: servers };
+            
+            if let Some(parent) = PathBuf::from(&dest_config_path).parent() {
+                std::fs::create_dir_all(parent)?;
+            }
+            
+            std::fs::write(&dest_config_path, serde_json::to_string_pretty(&config)?)?;
+            println!("✅ Synced {} servers to {}", config.mcp_servers.len(), dest_config_path);
+        }
+        SyncOperation::Pull => {
+            anyhow::bail!("Pull operation not yet implemented");
+        }
+    }
+
+    Ok(())
+}
