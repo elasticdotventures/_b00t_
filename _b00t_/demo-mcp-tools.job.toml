@@ -1,0 +1,81 @@
+# Demo workflow - MCP tool execution from jobs
+# Showcases stdio MCP integration with job orchestration
+
+[b00t]
+name = "demo-mcp-tools"
+type = "job"
+hint = "Demonstrate MCP tool execution in workflows"
+version = "1.0.0"
+
+[b00t.job]
+description = "Demo workflow showing MCP tool integration with job orchestration"
+author = "hackathon-team"
+tags = ["demo", "mcp", "workflow"]
+
+[b00t.job.config]
+mode = "sequential"
+checkpoint_mode = "manual"  # Manual checkpoints for demo
+checkpoint_after_each_step = false
+create_git_tag = false
+use_subagents = false
+continue_on_failure = false
+
+# Demo Step 1: Use MCP filesystem server to list files
+[[b00t.job.steps]]
+name = "list-files"
+description = "Use MCP filesystem server to list directory contents"
+
+[b00t.job.steps.task]
+type = "mcp"
+server = "filesystem"  # Assumes filesystem.mcp.toml exists
+tool = "list_directory"
+params = { path = "/tmp" }
+
+# Demo Step 2: Read a test file via MCP
+[[b00t.job.steps]]
+name = "read-test-file"
+description = "Read test file contents via MCP"
+depends_on = []
+
+[b00t.job.steps.task]
+type = "mcp"
+server = "filesystem"
+tool = "read_file"
+params = { path = "/etc/hostname" }
+
+# Demo Step 3: Execute bash to create test file
+[[b00t.job.steps]]
+name = "create-test-data"
+description = "Create test data file"
+
+[b00t.job.steps.task]
+type = "bash"
+command = '''
+echo "Job orchestration test at $(date)" > /tmp/b00t-job-test.txt
+echo "Created test file: /tmp/b00t-job-test.txt"
+cat /tmp/b00t-job-test.txt
+'''
+
+# Demo Step 4: Read the created file via MCP
+[[b00t.job.steps]]
+name = "read-created-file"
+description = "Read the file we just created via MCP"
+depends_on = ["create-test-data"]
+
+[b00t.job.steps.task]
+type = "mcp"
+server = "filesystem"
+tool = "read_file"
+params = { path = "/tmp/b00t-job-test.txt" }
+
+# Demo Step 5: Cleanup
+[[b00t.job.steps]]
+name = "cleanup"
+description = "Clean up test files"
+
+[b00t.job.steps.task]
+type = "bash"
+command = "rm -f /tmp/b00t-job-test.txt && echo 'Cleanup complete'"
+
+[b00t.job.env]
+DEMO_MODE = "true"

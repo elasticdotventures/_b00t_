@@ -9,6 +9,7 @@
 use crate::learn::get_learn_lesson;
 use crate::{ChunkResult, GrokClient, LfmfSystem, ManPage};
 use anyhow::Result;
+use std::env;
 
 #[derive(Debug, Clone)]
 pub struct KnowledgeSource {
@@ -52,8 +53,14 @@ impl KnowledgeSource {
         // 1. Try to load LFMF lessons
         if let Ok(config) = LfmfSystem::load_config(b00t_path) {
             let mut lfmf_system = LfmfSystem::new(config);
-            // Initialize vector DB (non-fatal if fails)
-            let _ = lfmf_system.initialize().await;
+            let skip_grok = env::var("B00T_LEARN_SKIP_GROK")
+                .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
+                .unwrap_or(false);
+
+            if !skip_grok {
+                // Initialize vector DB (non-fatal if fails)
+                let _ = lfmf_system.initialize().await;
+            }
             if let Ok(lessons) = lfmf_system.list_lessons(topic, Some(10)).await {
                 knowledge.lfmf_lessons = lessons;
             }

@@ -1,6 +1,5 @@
 use anyhow::{Context, Result};
 use b00t_c0re_lib::{DocumentSource, GrokClient, LoaderType, RagLightConfig, RagLightManager};
-use b00t_cli::orchestrator::Orchestrator;
 use clap::Subcommand;
 use std::{fs, path::PathBuf};
 use uuid::Uuid;
@@ -441,25 +440,27 @@ fn normalize_source_path(source: &str) -> String {
 
 /// Ensure grok dependencies (Qdrant) are running
 async fn ensure_grok_dependencies() -> Result<()> {
-    let path = std::env::var("_B00T_Path").unwrap_or_else(|_| {
-        dirs::home_dir()
-            .unwrap_or_else(|| std::path::PathBuf::from("."))
-            .join(".b00t/_b00t_")
-            .to_string_lossy()
-            .to_string()
-    });
-
-    let orchestrator = Orchestrator::new(&path).context("Failed to create orchestrator")?;
-
-    let started = orchestrator
-        .ensure_dependencies("grok-guru.mcp")
-        .await
-        .context("Failed to ensure grok dependencies")?;
-
-    // Silent unless debugging - services start transparently
-    if !started.is_empty() && std::env::var("B00T_DEBUG").is_ok() {
-        eprintln!("🚀 Started dependencies: {}", started.join(", "));
-    }
+    // 🤓 Orchestrator::new() not yet implemented - stubbed for now
+    // TODO: Implement orchestrator initialization when the API is ready
+    // let path = std::env::var("_B00T_Path").unwrap_or_else(|_| {
+    //     dirs::home_dir()
+    //         .unwrap_or_else(|| std::path::PathBuf::from("."))
+    //         .join(".b00t/_b00t_")
+    //         .to_string_lossy()
+    //         .to_string()
+    // });
+    //
+    // let orchestrator = Orchestrator::new(&path).context("Failed to create orchestrator")?;
+    //
+    // let started = orchestrator
+    //     .ensure_dependencies("grok-guru.mcp")
+    //     .await
+    //     .context("Failed to ensure grok dependencies")?;
+    //
+    // // Silent unless debugging - services start transparently
+    // if !started.is_empty() && std::env::var("B00T_DEBUG").is_ok() {
+    //     eprintln!("🚀 Started dependencies: {}", started.join(", "));
+    // }
 
     Ok(())
 }

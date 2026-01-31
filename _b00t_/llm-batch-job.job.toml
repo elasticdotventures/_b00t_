@@ -1,0 +1,58 @@
+[b00t]
+name = "llm-batch-job"
+type = "job"
+hint = "Batch inference job for LLM pipeline. Orchestrator-agnostic definition."
+
+# Container specification (portable across orchestrators)
+image = "ghcr.io/my-org/llm-batch-processor:latest"
+command = "python"
+args = ["-m", "batch_processor", "--model", "llama-70b-q4", "--batch-size", "32"]
+
+# Environment variables (abstract service references)
+[b00t.env]
+# Abstract reference: ${STACK:stack-name:service:port}
+# Adapters resolve to orchestrator-specific format:
+#   k8s: http://n8n.default.svc.cluster.local:5678
+#   docker-compose: http://n8n:5678
+#   direct: http://localhost:5678
+MODEL_ENDPOINT = "${STACK:llm-inference-pipeline:n8n:5678}"
+BATCH_SIZE = "32"
+OUTPUT_PATH = "/data/results"
+
+# Orchestration hints (not implementation)
+[b00t.orchestration]
+# Abstract: "needs these stacks running" - adapters implement waiting
+requires_stacks = ["llm-inference-pipeline"]
+
+# Hint: use queuing if available (k8s→Kueue, others→equivalent)
+queue_name = "gpu-queue"
+schedule_type = "queue_based"
+
+# Resource requirements (portable)
+[b00t.orchestration.resource_requirements]
+cpu = "2"
+memory = "8Gi"
+
+# GPU requirements (adapters translate to orchestrator-specific)
+[b00t.orchestration.gpu_requirements]
+count = 1
+gpu_type = "nvidia-a100"
+shared = true
+
+# Budget constraint (tracked by b00t budget controller)
+[b00t.orchestration.budget_constraint]
+daily_limit = 50.00
+cost_per_job = 1.25
+on_budget_exceeded = "defer"
+
+[[b00t.usage]]
+description = "Deploy job with auto-detected orchestrator"
+command = "b00t job deploy llm-batch-job"
+
+[[b00t.usage]]
+description = "Generate k8s manifest (orchestrator-specific)"
+command = "b00t job to-manifest llm-batch-job --orchestrator kubernetes"
+
+[[b00t.usage]]
+description = "Show job information"
+command = "b00t job show llm-batch-job"

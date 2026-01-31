@@ -1,0 +1,61 @@
+[b00t]
+name = "togaf-download-datasheets"
+type = "job"
+hint = "Download TOGAF datasheets from OpenGroup publications using browser automation"
+
+[b00t.job]
+description = "Automated download of TOGAF datasheets from publications.opengroup.org"
+tags = ["togaf", "download", "automation", "browser"]
+requires = ["playwright.mcp"]
+
+[b00t.job.config]
+mode = "sequential"
+checkpoint_mode = "auto"
+checkpoint_after_each_step = true
+output_dir = "~/.b00t/data/togaf/datasheets"
+
+# Environment variables needed for authentication
+[b00t.job.env]
+# OPENGROUP_USERNAME is loaded from the environment (e.g., set in ~/.env)
+# OPENGROUP_ORG_SECRET loaded from ~/.env
+# OPENGROUP_ORG_SECRET = ""  # Set in ~/.env
+
+[[b00t.job.steps]]
+name = "setup-output-dir"
+description = "Create output directory for datasheets"
+checkpoint = "setup-complete"
+
+[b00t.job.steps.task]
+type = "bash"
+command = "mkdir -p ~/.b00t/data/togaf/datasheets"
+
+[[b00t.job.steps]]
+name = "download-datasheets"
+description = "Use playwright MCP to login and download datasheets"
+checkpoint = "download-complete"
+
+[b00t.job.steps.task]
+type = "mcp"
+server = "playwright"
+tool = "download-datasheets"
+description = "Login to publications.opengroup.org and download all TOGAF datasheets"
+params = { url = "https://publications.opengroup.org/data-sheets" }
+# 🤓: This step requires playwright MCP tools for browser automation
+# The actual automation will be done via Task agent with playwright-mcp access
+
+[[b00t.job.steps]]
+name = "verify-downloads"
+description = "Verify downloaded files exist"
+checkpoint = "verify-complete"
+
+[b00t.job.steps.task]
+type = "bash"
+command = "ls -lah ~/.b00t/data/togaf/datasheets/ && echo 'Total files:' && ls ~/.b00t/data/togaf/datasheets/ | wc -l"
+
+[[b00t.usage]]
+description = "Run the TOGAF datasheet download job"
+command = "b00t job run togaf-download-datasheets"
+
+[[b00t.usage]]
+description = "Check job status"
+command = "b00t job status togaf-download-datasheets"

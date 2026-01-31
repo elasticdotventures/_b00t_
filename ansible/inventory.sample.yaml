@@ -1,0 +1,10 @@
+all:
+  children:
+    k0s_nodes:
+      hosts:
+        edge-arm-01:
+          ansible_host: 192.168.10.20
+          ansible_user: ubuntu
+          ansible_become: true
+          kata_thinpool_device: /dev/mapper/data
+          k0s_role: controller

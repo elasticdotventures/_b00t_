@@ -1,0 +1,58 @@
+[b00t]
+name = "llm-inference-pipeline"
+type = "stack"
+hint = "LLM inference pipeline with GPU batching and budget-aware scheduling. Optimized for batch processing to minimize model loading overhead."
+members = ["python.cli", "n8n.docker"]
+
+# Environment variables for the stack
+[b00t.env]
+MODEL_NAME = "llama-70b-q4"
+INFERENCE_ENDPOINT = "http://localhost:8000"
+MAX_BATCH_SIZE = "4"
+
+# Stack orchestration metadata for AI/ML pipeline management
+[b00t.orchestration]
+schedule_type = "gpu_affinity"
+gpu_batch_group = "llama-70b"
+k8s_compatible = true
+pod_template_source = "datum_display"
+
+# Resource requirements
+[b00t.orchestration.resource_requirements]
+cpu = "4"
+memory = "16Gi"
+
+# GPU-specific requirements
+[b00t.orchestration.gpu_requirements]
+count = 1
+memory = "48Gi"
+gpu_type = "nvidia-a100"
+shared = true
+
+# GPU epoch configuration for batching
+[b00t.orchestration.gpu_epoch]
+model_id = "llama-70b-q4"
+batch_window = "15m"
+max_concurrent_jobs = 4
+
+# Budget constraint details
+[b00t.orchestration.budget_constraint]
+daily_limit = 100.00
+cost_per_job = 2.50
+on_budget_exceeded = "defer"
+
+[b00t.learn]
+topic = "llm-inference"
+auto_digest = false
+
+[[b00t.usage]]
+description = "Install the LLM inference pipeline stack"
+command = "b00t stack install llm-inference-pipeline"
+
+[[b00t.usage]]
+description = "Generate k8s CRD for deployment"
+command = "b00t stack to-crd llm-inference-pipeline --output llm-pipeline.yaml"
+
+[[b00t.usage]]
+description = "Generate pod spec only"
+command = "b00t stack to-crd llm-inference-pipeline --pod-only"

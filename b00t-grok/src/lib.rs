@@ -399,7 +399,7 @@ impl GrokClient {
         };
 
         // Store in Qdrant
-        let mut payload = HashMap::new();
+        let mut payload: HashMap<String, qdrant_client::qdrant::Value> = HashMap::new();
         payload.insert("content".to_string(), content.into());
         payload.insert("datum".to_string(), topic.into());
         payload.insert("topic".to_string(), topic.into());
@@ -538,7 +538,12 @@ impl GrokClient {
                 vector: scored_point.vectors.and_then(|v| match v.vectors_options? {
                     qdrant_client::qdrant::vectors_output::VectorsOptions::Vector(
                         vector_struct,
-                    ) => Some(vector_struct.data),
+                    ) => vector_struct.vector.and_then(|vec| match vec {
+                        qdrant_client::qdrant::vector_output::Vector::Dense(dense) => {
+                            Some(dense.data)
+                        }
+                        _ => None,
+                    }),
                     _ => None,
                 }),
             };
@@ -628,7 +633,7 @@ impl GrokClient {
             };
 
             // Prepare point for batch insertion
-            let mut payload = HashMap::new();
+            let mut payload: HashMap<String, qdrant_client::qdrant::Value> = HashMap::new();
             payload.insert("content".to_string(), chunk_text.clone().into());
             payload.insert("datum".to_string(), inferred_topic.clone().into());
             payload.insert("topic".to_string(), inferred_topic.into());
@@ -748,7 +753,7 @@ impl GrokClient {
         };
 
         // Store in Qdrant
-        let mut payload = HashMap::new();
+        let mut payload: HashMap<String, qdrant_client::qdrant::Value> = HashMap::new();
         payload.insert("content".to_string(), content.into());
         payload.insert("datum".to_string(), topic.clone().into());
         payload.insert("topic".to_string(), topic.into());
@@ -934,7 +939,12 @@ impl GrokClient {
                 vector: scored_point.vectors.and_then(|v| match v.vectors_options? {
                     qdrant_client::qdrant::vectors_output::VectorsOptions::Vector(
                         vector_struct,
-                    ) => Some(vector_struct.data),
+                    ) => vector_struct.vector.and_then(|vec| match vec {
+                        qdrant_client::qdrant::vector_output::Vector::Dense(dense) => {
+                            Some(dense.data)
+                        }
+                        _ => None,
+                    }),
                     _ => None,
                 }),
             };
@@ -1085,7 +1095,12 @@ impl GrokClient {
                 vector: point.vectors.and_then(|v| match v.vectors_options? {
                     qdrant_client::qdrant::vectors_output::VectorsOptions::Vector(
                         vector_struct,
-                    ) => Some(vector_struct.data),
+                    ) => vector_struct.vector.and_then(|vec| match vec {
+                        qdrant_client::qdrant::vector_output::Vector::Dense(dense) => {
+                            Some(dense.data)
+                        }
+                        _ => None,
+                    }),
                     _ => None,
                 }),
             };

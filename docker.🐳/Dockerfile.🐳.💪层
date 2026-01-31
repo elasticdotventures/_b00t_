@@ -1,0 +1,7 @@
+# syntax=docker/dockerfile:1
+
+# safely initialize _b00t_ bash?? no docker equivalent. 
+# RUN if [ `type -t "_b00t_init_🚀_开始"` == "function" ] ; then _b00t_init_🚀_开始 ; fi
+
+RUN /c0de/_b00t/bash/c0re_init.🤖.sh
+

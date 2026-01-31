@@ -1,7 +1,7 @@
 # justfile for Rust Development Environment
 # Alias to get the Git repository root
 repo-root := env_var_or_default("JUST_REPO_ROOT", `git rev-parse --show-toplevel 2>/dev/null || echo .`)
-workspace_version := `toml get Cargo.toml workspace.package.version | tr -d '"'`
+workspace_version := `if command -v toml >/dev/null 2>&1; then toml get Cargo.toml workspace.package.version | tr -d '"' ; else echo "0.0.0-unknown"; fi`
 
 
 
@@ -19,9 +19,48 @@ mod bash '_b00t_/bash.🐚/justfile'
 mod git '_b00t_/git.🐙/justfile'
 mod terraform '_b00t_/terraform.🧊/justfile'
 mod k8s '_b00t_/k8s.🚢/justfile'
+mod pm2-tasker 'pm2-tasker/justfile'
+mod embed '_b00t_/python.🐍/embed/justfile'
+
+next-task:
+    #!/bin/bash
+    set -euo pipefail
+    echo "Next up: extend Gremlin graph (role/capability edges) and wire GraalVM Gremlin server."
+
+gremlin-graalvm-build:
+    docker build -t graalvm-gremlin:latest docker/graalvm-gremlin
+
+gremlin-graalvm-run:
+    docker run --rm -p 8182:8182 \
+      -v $PWD/docker/graalvm-gremlin/gremlin-server.yaml:/opt/gremlin-server/conf/gremlin-server.yaml \
+      docker.io/tinkerpop/gremlin-server:latest
 
 stow:
     stow --adopt -d ~/.dotfiles -t ~ bash
+
+ansible-k0s PLAYBOOK="ansible/playbooks/k0s_kata.yaml" INVENTORY="ansible/inventory.sample.yaml" EXTRA_ARGS="":
+    #!/bin/bash
+    set -euo pipefail
+    INVENTORY="${INVENTORY:-ansible/inventory.sample.yaml}"
+    PLAYBOOK="${PLAYBOOK:-ansible/playbooks/k0s_kata.yaml}"
+    EXTRA_ARGS="${EXTRA_ARGS:-}"
+    export ANSIBLE_ROLES_PATH="${ANSIBLE_ROLES_PATH:-$PWD/ansible/roles}"
+    if ! command -v ansible-playbook >/dev/null 2>&1; then
+        echo "ansible-playbook not found. Install ansible-core first." >&2
+        exit 1
+    fi
+    echo "🥾 provisioning k0s + Kata via ansible"
+    ANSIBLE_FORCE_COLOR=1 ansible-playbook -i "$INVENTORY" "$PLAYBOOK" $EXTRA_ARGS
+
+ansible-k0s-check PLAYBOOK="ansible/playbooks/k0s_kata.yaml":
+    #!/bin/bash
+    set -euo pipefail
+    export ANSIBLE_ROLES_PATH="${ANSIBLE_ROLES_PATH:-$PWD/ansible/roles}"
+    if ! command -v ansible-playbook >/dev/null 2>&1; then
+        echo "ansible-playbook not found. Install ansible-core first." >&2
+        exit 1
+    fi
+    ANSIBLE_FORCE_COLOR=1 ansible-playbook --syntax-check "$PLAYBOOK"
 
 # Test crates.io publishing (dry-run)
 publish-dry-run:
@@ -113,7 +152,13 @@ release:
 
 
 install:
+    #!/bin/bash
+    set -euo pipefail
     echo "🥾 _b00t_ install"
+    CARGO_HOME_VALUE="${CARGO_HOME:-$PWD/.cargo}"
+    export CARGO_HOME="${CARGO_HOME_VALUE}"
+    export PATH="${CARGO_HOME_VALUE}/bin:${PATH}"
+    mkdir -p "${CARGO_HOME_VALUE}/bin"
     cargo install --path b00t-mcp --force
     cargo install --path b00t-cli --force
     cargo install cocogitto --locked --force
@@ -252,6 +297,9 @@ version:
     echo "{{workspace_version}}"
 
 commit-hook:
+    echo "removed"
+
+commit-hook2:
     #!/bin/bash
     set -euo pipefail
     if ! git diff --quiet; then
@@ -509,3 +557,23 @@ port-map:
 
 install-services:
     {{repo-root}}/scripts/install-systemd-services.sh
+ansible-k0s-stop PLAYBOOK="ansible/playbooks/k0s_kata_stop.yaml" INVENTORY="ansible/inventory.sample.yaml" EXTRA_ARGS="":
+    #!/bin/bash
+    set -euo pipefail
+    INVENTORY="${INVENTORY:-ansible/inventory.sample.yaml}"
+    PLAYBOOK="${PLAYBOOK:-ansible/playbooks/k0s_kata_stop.yaml}"
+    EXTRA_ARGS="${EXTRA_ARGS:-}"
+    if ! command -v ansible-playbook >/dev/null 2>&1; then
+        echo "ansible-playbook not found. Install ansible-core first." >&2
+        exit 1
+    fi
+    echo "🥾 stopping k0s + Kata via ansible"
+    ANSIBLE_FORCE_COLOR=1 ansible-playbook -i "$INVENTORY" "$PLAYBOOK" $EXTRA_ARGS
+
+orchestrator-k0s-kata MODE="start" INVENTORY="~/.config/b00t/k0s-inventory.yaml" EXTRA_ARGS="":
+    #!/bin/bash
+    set -euo pipefail
+    MODE="${MODE:-start}"
+    INVENTORY="${INVENTORY:-$HOME/.config/b00t/k0s-inventory.yaml}"
+    EXTRA_ARGS="${EXTRA_ARGS:-}"
+    K0S_KATA_EXTRA_ARGS="$EXTRA_ARGS" scripts/orchestrators/k0s_kata.sh "$MODE" "$INVENTORY"

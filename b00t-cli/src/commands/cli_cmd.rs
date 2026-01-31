@@ -1,10 +1,22 @@
 use crate::datum_cli::CliDatum;
+use crate::dependency_resolver::DependencyResolver;
 use crate::load_datum_providers;
 use crate::traits::*;
-use anyhow::Result;
+use crate::{BootDatum, UnifiedConfig};
+use anyhow::{Context, Result};
 use clap::Parser;
 use duct::cmd;
-// use std::fs;
+use once_cell::sync::Lazy;
+use shellexpand;
+use std::collections::HashMap;
+use std::path::PathBuf;
+
+static IS_ROOT: Lazy<bool> = Lazy::new(|| {
+    cmd!("id", "-u")
+        .read()
+        .map(|out| out.trim() == "0")
+        .unwrap_or(false)
+});
 
 #[derive(Parser)]
 pub enum CliCommands {
@@ -106,6 +118,68 @@ fn cli_desires(command: &str, path: &str) -> Result<()> {
 
 fn cli_install(command: &str, path: &str) -> Result<()> {
     let cli_datum = CliDatum::from_config(command, path)?;
+
+    // Check if datum has dependencies
+    if let Some(deps) = &cli_datum.datum.depends_on {
+        if !deps.is_empty() {
+            println!("📦 Resolving dependencies for {}...", command);
+
+            // Load all available datums for dependency resolution
+            let all_datums = load_all_datums(path)?;
+
+            // Build dependency resolver
+            let datum_refs: Vec<&BootDatum> = all_datums.values().collect();
+            let resolver = DependencyResolver::new(datum_refs);
+
+            // Resolve installation order (includes command itself and all deps)
+            let datum_key = format!("{}.cli", command);
+            let install_order = resolver
+                .resolve(&datum_key)
+                .context(format!("Failed to resolve dependencies for {}", command))?;
+
+            println!("📋 Installation order ({} items):", install_order.len());
+            for (idx, item) in install_order.iter().enumerate() {
+                println!("   {}. {}", idx + 1, item);
+            }
+            println!();
+
+            // Install each datum in dependency order
+            for datum_key in &install_order {
+                // Skip if already installed (check for the datum)
+                if let Some(datum) = all_datums.get(datum_key) {
+                    // Check if installed
+                    if let Some(version_cmd) = &datum.version {
+                        if cmd!("bash", "-c", version_cmd).read().is_ok() {
+                            println!("✅ {} already installed, skipping", datum_key);
+                            continue;
+                        }
+                    }
+
+                    // Install this datum
+                    if let Some(install_cmd) = &datum.install {
+                        println!("🚀 Installing {}...", datum_key);
+                        let result = cmd!("bash", "-c", install_cmd).run();
+                        match result {
+                            Ok(_) => {
+                                println!("✅ Successfully installed {}", datum_key);
+                            }
+                            Err(e) => {
+                                anyhow::bail!("Failed to install {}: {}", datum_key, e);
+                            }
+                        }
+                    } else {
+                        println!("⚠️ No install command for {}, skipping", datum_key);
+                    }
+                } else {
+                    anyhow::bail!("Datum not found in registry: {}", datum_key);
+                }
+            }
+
+            return Ok(());
+        }
+    }
+
+    // No dependencies - install directly
     if let Some(install_cmd) = &cli_datum.datum.install {
         println!("🚀 Installing {}...", command);
         let result = cmd!("bash", "-c", install_cmd).run();
@@ -121,6 +195,48 @@ fn cli_install(command: &str, path: &str) -> Result<()> {
     } else {
         anyhow::bail!("No install command specified for {}", command);
     }
+}
+
+/// Load all datums from _b00t_ directory for dependency resolution
+fn load_all_datums(path: &str) -> Result<HashMap<String, BootDatum>> {
+    let mut datums = HashMap::new();
+    let b00t_dir = PathBuf::from(shellexpand::tilde(path).to_string());
+
+    if !b00t_dir.exists() {
+        return Ok(datums);
+    }
+
+    for entry in std::fs::read_dir(&b00t_dir)? {
+        let entry = entry?;
+        let entry_path = entry.path();
+
+        if entry_path.is_file() {
+            if let Some(file_name) = entry_path.file_name().and_then(|s| s.to_str()) {
+                // Skip stack files
+                if file_name.ends_with(".stack.toml") {
+                    continue;
+                }
+
+                // Load other datum types
+                if file_name.ends_with(".toml") {
+                    if let Ok(content) = std::fs::read_to_string(&entry_path) {
+                        if let Ok(config) = toml::from_str::<UnifiedConfig>(&content) {
+                            let datum = config.b00t;
+                            let datum_type = datum
+                                .datum_type
+                                .as_ref()
+                                .map(|t| format!("{:?}", t).to_lowercase())
+                                .unwrap_or_else(|| "unknown".to_string());
+                            let key = format!("{}.{}", datum.name, datum_type);
+                            datums.insert(key, datum);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    Ok(datums)
 }
 
 fn cli_update(command: &str, path: &str) -> Result<()> {
@@ -204,6 +320,24 @@ fn cli_up(path: &str, yes: bool) -> Result<()> {
             .desired_version()
             .unwrap_or_else(|| "unknown".to_string());
 
+        let datum = tool.datum();
+
+        if datum.auto_install.map(|v| !v).unwrap_or(false) {
+            println!(
+                "⏭️ {} (auto_install=false) - skipping install/update in cli up",
+                name
+            );
+            continue;
+        }
+
+        if datum.requires_sudo && !*IS_ROOT {
+            println!(
+                "⏭️ {} (requires sudo) - run b00t cli up with sudo to install/update",
+                name
+            );
+            continue;
+        }
+
         match version_status {
             VersionStatus::Older | VersionStatus::Missing => {
                 needs_update_count += 1;
@@ -234,10 +368,7 @@ fn cli_up(path: &str, yes: bool) -> Result<()> {
                     if version_status == VersionStatus::Missing {
                         println!("🥾😱 {} (not installed) -> desires: {}", name, desired);
                     } else {
-                        println!(
-                            "🥾😭 {} (current: {}, desires: {})",
-                            name, current, desired
-                        );
+                        println!("🥾😭 {} (current: {}, desires: {})", name, current, desired);
                     }
                 }
             }
@@ -245,7 +376,10 @@ fn cli_up(path: &str, yes: bool) -> Result<()> {
                 println!("🥾👍🏻 {} {} (up to date)", name, current);
             }
             VersionStatus::Newer => {
-                println!("🥾🐣 {} {} (newer than desired: {})", name, current, desired);
+                println!(
+                    "🥾🐣 {} {} (newer than desired: {})",
+                    name, current, desired
+                );
             }
             VersionStatus::Unknown => {
                 println!("🥾⏹️ {} {} (version status unknown)", name, current);

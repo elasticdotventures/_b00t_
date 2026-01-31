@@ -53,47 +53,43 @@ pub struct LearnArgs {
     pub ask: Option<String>,
 }
 
-pub fn handle_learn(path: &str, args: LearnArgs) -> Result<()> {
-    let rt = tokio::runtime::Runtime::new().context("Failed to create async runtime")?;
+pub async fn handle_learn(path: &str, args: LearnArgs) -> Result<()> {
+    // Record lesson
+    if let Some(lesson) = args.record {
+        return handle_record(path, args.topic.as_deref(), &lesson, args.global).await;
+    }
 
-    rt.block_on(async {
-        // Record lesson
-        if let Some(lesson) = args.record {
-            return handle_record(path, args.topic.as_deref(), &lesson, args.global).await;
-        }
+    // Search lessons
+    if let Some(query) = args.search {
+        return handle_search(path, args.topic.as_deref(), &query, args.limit).await;
+    }
 
-        // Search lessons
-        if let Some(query) = args.search {
-            return handle_search(path, args.topic.as_deref(), &query, args.limit).await;
-        }
+    // Digest to RAG
+    if let Some(content) = args.digest {
+        return handle_digest(path, args.topic.as_deref(), &content).await;
+    }
 
-        // Digest to RAG
-        if let Some(content) = args.digest {
-            return handle_digest(path, args.topic.as_deref(), &content).await;
-        }
+    // Query RAG
+    if let Some(query) = args.ask {
+        return handle_ask(path, args.topic.as_deref(), &query, args.limit).await;
+    }
 
-        // Query RAG
-        if let Some(query) = args.ask {
-            return handle_ask(path, args.topic.as_deref(), &query, args.limit).await;
-        }
+    // Default: display knowledge
+    let topic = args
+        .topic
+        .ok_or_else(|| anyhow::anyhow!("Topic required. Use: b00t learn <topic>"))?;
 
-        // Default: display knowledge
-        let topic = args
-            .topic
-            .ok_or_else(|| anyhow::anyhow!("Topic required. Use: b00t learn <topic>"))?;
-
-        handle_display(
-            path,
-            &topic,
-            DisplayOpts {
-                force_man: args.man,
-                toc_only: args.toc,
-                section: args.section,
-                concise: args.concise,
-            },
-        )
-        .await
-    })
+    handle_display(
+        path,
+        &topic,
+        DisplayOpts {
+            force_man: args.man,
+            toc_only: args.toc,
+            section: args.section,
+            concise: args.concise,
+        },
+    )
+    .await
 }
 
 async fn handle_display(path: &str, topic: &str, opts: DisplayOpts) -> Result<()> {

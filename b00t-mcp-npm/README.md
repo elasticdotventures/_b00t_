@@ -114,4 +114,4 @@ MIT License - see [LICENSE](https://github.com/elasticdotventures/dotfiles/blob/
 
 ---
 
-🎂 Built with love by the [PromptExecution](https://promptexecution.com) team
+🍰 Built with love by the [PromptExecution](https://promptexecution.com) team

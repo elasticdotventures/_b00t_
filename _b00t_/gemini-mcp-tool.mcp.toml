@@ -16,6 +16,10 @@ args = ["-y", "gemini-mcp-tool"]
 transport = "stdio"
 requires = ["node", "geminicli"]
 
+# 🔗 Entanglements: This MCP server depends on the CLI tool for auth
+# Uses geminicli.cli for Google authentication
+entangled_cli = ["geminicli"]
+
 [[b00t.usage]]
 description = "Launch Gemini MCP server"
 command = "npx -y gemini-mcp-tool"

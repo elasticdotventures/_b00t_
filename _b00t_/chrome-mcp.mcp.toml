@@ -1,0 +1,11 @@
+[b00t]
+name = "chrome-mcp"
+type = "mcp"
+hint = "Chrome DevTools automation via local CDP bridge"
+
+[[b00t.mcp.stdio]]
+requires = ["node"]
+transport = "stdio"
+priority = 0
+args = ["-y", "mcp-remote", "http://localhost:3000/sse"] # converts the chrome-mcp SSE endpoint into stdio
+command = "npx"

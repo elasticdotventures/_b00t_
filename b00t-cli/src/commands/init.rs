@@ -614,6 +614,33 @@ fn configure_system_preferences(memory: &mut SessionMemory) -> Result<()> {
     Ok(())
 }
 
+fn check_bashrc(path: &str) {
+    // Best-effort: do not fail init
+    let mut bashrc_path =
+        crate::get_expanded_path(path).unwrap_or_else(|_| std::path::PathBuf::from(path));
+    bashrc_path.push("_b00t_.bashrc");
+
+    if !bashrc_path.exists() {
+        eprintln!(
+            "⚠️ _b00t_.bashrc missing at {} — run install.sh or copy from .dotfiles/_b00t_/_b00t_.bashrc",
+            bashrc_path.display()
+        );
+        return;
+    }
+
+    // Lightweight content probe for ymd helpers
+    if let Ok(content) = std::fs::read_to_string(&bashrc_path) {
+        let has_ymd = content.contains("alias ymd=") || content.contains("ymd(){");
+        let has_motd = content.contains("motd");
+        if !has_ymd {
+            eprintln!("⚠️ _b00t_.bashrc missing ymd helpers; motd generation may fail.");
+        }
+        if !has_motd {
+            eprintln!("⚠️ _b00t_.bashrc missing motd setup.");
+        }
+    }
+}
+
 /// Interactive documentation tour
 fn interactive_documentation_tour(_path: &str, memory: &mut SessionMemory) -> Result<()> {
     println!("  📖 Starting interactive documentation tour...");
@@ -665,7 +692,11 @@ impl InitCommands {
                 skip_redis,
                 skip_diagnostics,
                 skip_tour,
-            } => execute_hello_world_protocol(path, *skip_redis, *skip_diagnostics, *skip_tour),
+            } => {
+                execute_hello_world_protocol(path, *skip_redis, *skip_diagnostics, *skip_tour)?;
+                check_bashrc(path);
+                Ok(())
+            }
         }
     }
 }

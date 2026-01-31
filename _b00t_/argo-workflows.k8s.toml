@@ -1,0 +1,59 @@
+[b00t]
+name = "argo-workflows"
+type = "k8s"
+hint = "DAG-based workflow orchestration for k8s. Better than batch Jobs for AI/ML pipelines."
+desires = "3.5.0"
+
+chart_path = "argo/argo-workflows"
+namespace = "argo"
+values_file = "argo-workflows-values.yaml"
+
+install = '''
+# Add Argo Helm repo
+helm repo add argo https://argoproj.github.io/argo-helm
+helm repo update
+
+# Install Argo Workflows
+kubectl create namespace argo --dry-run=client -o yaml | kubectl apply -f -
+
+helm install argo-workflows argo/argo-workflows \
+    --namespace argo \
+    --set server.serviceType=LoadBalancer \
+    --set controller.workflowDefaults.spec.serviceAccountName=argo-workflow \
+    --version 0.41.0
+
+# Wait for deployment
+kubectl wait --for=condition=available --timeout=300s \
+    deployment/argo-workflows-server -n argo
+
+echo "Argo Workflows installed. Access UI:"
+echo "kubectl -n argo port-forward deployment/argo-workflows-server 2746:2746"
+echo "Then visit: https://localhost:2746"
+'''
+
+version = '''
+kubectl get deployment argo-workflows-server -n argo -o jsonpath='{.spec.template.spec.containers[0].image}' | grep -oP 'v\K[0-9.]+'
+'''
+
+[b00t.orchestration]
+schedule_type = "workflow_dag"
+
+[[b00t.usage]]
+description = "Install Argo CLI"
+command = "curl -sLO https://github.com/argoproj/argo-workflows/releases/download/v3.5.0/argo-linux-amd64.gz && gunzip argo-linux-amd64.gz && chmod +x argo-linux-amd64 && sudo mv ./argo-linux-amd64 /usr/local/bin/argo"
+
+[[b00t.usage]]
+description = "Submit workflow from file"
+command = "argo submit -n argo workflow.yaml"
+
+[[b00t.usage]]
+description = "List workflows"
+command = "argo list -n argo"
+
+[[b00t.usage]]
+description = "Get workflow logs"
+command = "argo logs -n argo @latest"
+
+[[b00t.usage]]
+description = "Port-forward to Argo UI"
+command = "kubectl -n argo port-forward deployment/argo-workflows-server 2746:2746"

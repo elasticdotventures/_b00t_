@@ -244,6 +244,20 @@ pub fn detect_agent(memory: &SessionMemory, no_env: bool) -> String {
     let pid = std::process::id();
     let ppid = get_parent_pid();
 
+    // Detect OpenAI Codex sandbox (bun wrapper)
+    if memory
+        .get_env_var("CODEX_MANAGED_BY_BUN")
+        .or_else(|| memory.get_env_var("CODEX_SANDBOX_NETWORK_DISABLED"))
+        .is_some()
+    {
+        return format!("🤖 OpenAI Codex PID:{}", pid);
+    }
+
+    // Detect Gemini environments via env vars
+    if std::env::vars().any(|(k, _)| k.starts_with("GEMINI_")) {
+        return format!("🤖 Gemini PID:{}", pid);
+    }
+
     // Check for Claude Code
     if memory.get_env_var("CLAUDECODE").as_deref() == Some("1") {
         return format!("🤖 Claude Code PID:{}", pid);

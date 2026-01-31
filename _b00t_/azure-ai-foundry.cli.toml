@@ -1,0 +1,198 @@
+[b00t]
+name = "azure-ai-foundry"
+type = "cli"
+hint = "Azure AI Foundry - Enterprise multi-agent orchestration platform with connected agents, sub-agent delegation, and stateful workflows"
+desires = "latest"
+keywords = ["multi-agent", "orchestration", "azure", "ai", "agents", "foundry", "sub-agents", "workflows"]
+
+# 🤓 Azure AI Foundry provides superior multi-agent orchestration vs TaskMaster
+# - Connected Agents: Hierarchical delegation without custom orchestrators
+# - Sub-Agent Architecture: Purpose-built specialists coordinated by primary agents  
+# - Stateful Workflows: Context-aware orchestration for complex business processes
+# - Enterprise Integration: MCP, A2A protocol support, security, observability
+install = '''
+# Azure AI Foundry CLI and SDK installation
+echo "📦 Installing Azure AI Foundry CLI and development tools..."
+
+# Install Azure CLI (prerequisite)
+if ! command -v az >/dev/null 2>&1; then
+    echo "🔧 Installing Azure CLI..."
+    curl -sL https://aka.ms/InstallAzureCLIDeb | sudo bash
+fi
+
+# Install Azure AI Foundry extension
+echo "🔧 Installing Azure AI Foundry CLI extension..."
+az extension add --name azure-ai-foundry --allow-preview true
+
+# Install Python SDK
+echo "🔧 Installing Azure AI Foundry Python SDK..."
+if command -v uv >/dev/null 2>&1; then
+    uv pip install azure-ai-foundry[all] azure-ai-agents semantic-kernel
+elif command -v pip >/dev/null 2>&1; then
+    pip install azure-ai-foundry[all] azure-ai-agents semantic-kernel
+else
+    echo "❌ Python package manager required (pip or uv)"
+    exit 1
+fi
+
+# Clone foundry-samples for reference patterns
+if [ ! -d "$HOME/.b00t/foundry-samples" ]; then
+    echo "📁 Cloning foundry-samples repository..."
+    git clone https://github.com/azure-ai-foundry/foundry-samples "$HOME/.b00t/foundry-samples"
+else
+    echo "📁 Updating foundry-samples repository..."
+    cd "$HOME/.b00t/foundry-samples" && git pull
+fi
+
+echo "✅ Azure AI Foundry installation completed"
+echo "💡 Next: Configure Azure credentials with 'az login'"
+echo "🔗 Samples: ~/.b00t/foundry-samples"
+echo "📚 Docs: https://learn.microsoft.com/azure/ai-foundry"
+'''
+
+update = '''
+echo "🔄 Updating Azure AI Foundry..."
+az extension update --name azure-ai-foundry
+if command -v uv >/dev/null 2>&1; then
+    uv pip install --upgrade azure-ai-foundry[all] azure-ai-agents semantic-kernel
+else
+    pip install --upgrade azure-ai-foundry[all] azure-ai-agents semantic-kernel
+fi
+cd "$HOME/.b00t/foundry-samples" && git pull
+echo "✅ Azure AI Foundry updated"
+'''
+
+version = "az extension list --query \"[?name=='azure-ai-foundry'].version\" -o tsv"
+version_regex = '(\d+\.\d+\.\d+)'
+
+depends_on = ["python.cli"]
+
+[b00t.env]
+# Azure AI Foundry configuration
+AZURE_AI_FOUNDRY_WORKSPACE = ""
+AZURE_AI_FOUNDRY_RESOURCE_GROUP = ""
+AZURE_AI_FOUNDRY_SUBSCRIPTION_ID = ""
+
+[[b00t.usage]]
+description = "Login to Azure"
+command = "az login"
+
+[[b00t.usage]]  
+description = "Create AI Foundry workspace"
+command = "az ai-foundry workspace create --name my-workspace --resource-group my-rg"
+
+[[b00t.usage]]
+description = "List available agent templates"
+command = "az ai-foundry agent list-templates"
+
+[[b00t.usage]]
+description = "Create connected agents system"
+command = "az ai-foundry agent create --template connected-agents --workspace my-workspace"
+
+[[b00t.usage]]
+description = "Deploy multi-agent workflow"
+command = "az ai-foundry workflow deploy --config workflow.yaml"
+
+[[b00t.usage]]
+description = "Monitor agent orchestration"
+command = "az ai-foundry monitor agents --workspace my-workspace"
+
+[[b00t.references]]
+name = "Azure AI Foundry Documentation"
+url = "https://learn.microsoft.com/azure/ai-foundry"
+
+[[b00t.references]]
+name = "Multi-Agent Orchestration Patterns"
+url = "https://learn.microsoft.com/azure/architecture/ai-ml/guide/ai-agent-design-patterns"
+
+[[b00t.references]]
+name = "Foundry Samples Repository"
+url = "https://github.com/azure-ai-foundry/foundry-samples"
+
+[[b00t.references]]
+name = "Connected Agents Guide"
+url = "https://learn.microsoft.com/azure/ai-foundry/agents/how-to/connected-agents"
+
+[[b00t.references]]
+name = "Agent Service Overview"
+url = "https://learn.microsoft.com/azure/ai-foundry/agents/overview"
+
+[b00t.learn]
+topic = "azure-ai-foundry"
+auto_digest = true
+content = """
+# Azure AI Foundry - Enterprise Multi-Agent Orchestration
+
+Azure AI Foundry provides superior multi-agent orchestration capabilities compared to simpler task management tools like TaskMaster.
+
+## Key Advantages Over TaskMaster
+
+### 1. Connected Agents Architecture
+- **Hierarchical Delegation**: Primary agents intelligently delegate to specialized sub-agents
+- **No Custom Orchestrators**: Natural language routing eliminates hardcoded logic
+- **Maximum Depth 2**: Parent agents can have multiple sub-agent siblings
+- **Purpose-Built Specialists**: Each sub-agent optimized for specific tasks
+
+### 2. Stateful Multi-Agent Workflows
+- **Context Preservation**: Maintains state across complex business processes
+- **Workflow Orchestration**: Manages customer onboarding, supply chain automation
+- **Enterprise Integration**: Built-in security, observability, audit trails
+
+### 3. Framework Integration
+- **Semantic Kernel**: Open-source agent framework extension
+- **Protocol Support**: MCP (Model Context Protocol), A2A (Agent2Agent)
+- **Interoperability**: Seamless integration with third-party tools
+
+## Implementation Patterns
+
+### Connected Agents Example
+```python
+# Primary agent delegates to specialized sub-agents
+customer_support_agent = {
+    "sub_agents": [
+        "technical_support_agent",
+        "billing_agent", 
+        "escalation_agent"
+    ],
+    "routing": "natural_language",  # No hardcoded logic needed
+    "max_depth": 2
+}
+```
+
+### Multi-Agent Workflow
+```yaml
+workflow:
+  name: "customer_onboarding"
+  agents:
+    - content_collector
+    - writing_assistant  
+    - content_manager
+  state_management: true
+  context_preservation: true
+```
+
+## Enterprise Features
+
+- **Security**: Enterprise-grade authentication and authorization
+- **Observability**: Comprehensive monitoring and debugging
+- **Scalability**: Cloud-native scaling for production workloads
+- **Reliability**: Improved error handling and fault tolerance
+
+## Migration from TaskMaster
+
+TaskMaster is suitable for simple task lists but Azure AI Foundry excels at:
+- Complex business process automation
+- Multi-step workflows requiring context
+- Enterprise security and compliance
+- Sub-agent specialization and coordination
+
+## Getting Started
+
+1. Install Azure AI Foundry CLI: `b00t cli install azure-ai-foundry`
+2. Login to Azure: `az login`
+3. Create workspace: `az ai-foundry workspace create`
+4. Explore samples: `~/.b00t/foundry-samples`
+5. Deploy connected agents: `az ai-foundry agent create --template connected-agents`
+"""
+
+lfmf_category = "azure-ai-foundry"
