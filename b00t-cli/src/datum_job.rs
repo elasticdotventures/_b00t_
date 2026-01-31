@@ -23,7 +23,6 @@
 //! command = "cargo test --all"
 //! ```
 
-use crate::BootDatum;
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
