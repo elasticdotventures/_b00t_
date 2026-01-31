@@ -20,13 +20,13 @@ use b00t_cli::datum_docker::DockerDatum;
 use b00t_cli::datum_mcp::McpDatum;
 use b00t_cli::datum_vscode::VscodeDatum;
 use b00t_cli::traits::*;
-use b00t_cli::utils::get_workspace_root;
-use b00t_cli::commands::learn::{LearnArgs, handle_learn};
+
 use b00t_cli::commands::{
-    AiCommands, AgentCommands, AnsibleCommands, AppCommands, BootstrapCommands, BudgetCommands,
-    ChatCommands, CliCommands, DatumCommands, GrokCommands, InitCommands, InstallCommands,
-    JobCommands, K8sCommands, McpCommands, SessionCommands, StackCommands, WhatismyCommands,
+    AiCommands, AgentCommands, AnsibleCommands, AppCommands, ChatCommands, CliCommands,
+    DatumCommands, GrokCommands, InitCommands, InstallCommands, JobCommands, K8sCommands, McpCommands,
+    SessionCommands, StackCommands,  WhatismyCommands,
 };
+use b00t_cli::commands::learn::handle_learn;
 
 // Re-export commonly used functions for datum modules
 pub use b00t_cli::{
@@ -226,6 +226,11 @@ Example:
         global: bool,
     },
     #[clap(about = "Datum management and inspection")]
+    Datum {
+        #[clap(subcommand)]
+        datum_command: DatumCommands,
+    },
+    #[clap(about = "Inspect or run datums directly")]
     Datum {
         #[clap(subcommand)]
         datum_command: DatumCommands,
