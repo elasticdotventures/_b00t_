@@ -1,7 +1,7 @@
 [b00t]
 name = "go"
 type = "cli"
-desires = "1.23.0"
+desires = "1.23.4"
 install = '''
 # Install Go without duplicating logic in downstream datums
 set -euo pipefail

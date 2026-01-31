@@ -7,8 +7,8 @@
 //! - Sub-agent spawning for complex tasks
 //! - Integration with k0mmander/Dagu/go tasker
 
-use crate::datum_job::{JobDatum, JobStep, JobTask};
-use crate::job_state::{JobState, JobStatus, StepStatus};
+use crate::datum_job::{JobStep, JobTask};
+use crate::job_state::StepStatus;
 use anyhow::{Context, Result};
 use clap::Parser;
 use std::path::PathBuf;
