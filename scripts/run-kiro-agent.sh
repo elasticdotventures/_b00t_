@@ -18,11 +18,4 @@ if [ ! -x "$KIRO_BIN" ]; then
   exit 1
 fi
 
-# Support trusted tools allowlist via environment variable or argument
-TRUSTED_TOOLS="${TRUSTED_TOOLS:-}"
-if [ -n "$TRUSTED_TOOLS" ]; then
-  exec "$KIRO_BIN" chat --agent "$AGENT_NAME" --trusted-tools "$TRUSTED_TOOLS" "$@"
-else
-  echo "⚠️  No trusted tools specified. Only safe default tools will be available."
-  exec "$KIRO_BIN" chat --agent "$AGENT_NAME" "$@"
-fi
+exec "$KIRO_BIN" chat --agent "$AGENT_NAME" --trust-all-tools "$@"
