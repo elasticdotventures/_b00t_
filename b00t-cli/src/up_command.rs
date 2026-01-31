@@ -41,10 +41,10 @@ pub fn handle_up_command(b00t_path: &str, yes: bool) -> Result<()> {
     }
 
     // Pre-load all datum providers by type - work entirely within lib.rs trait system
-    let cli_tools = load_datum_providers::<CliDatum>(b00t_path, ".cli.toml")?;
-    let mcp_tools = load_datum_providers::<McpDatum>(b00t_path, ".mcp.toml")?;
-    let docker_tools = load_datum_providers::<DockerDatum>(b00t_path, ".docker.toml")?;
-    let ai_tools = load_datum_providers::<AiDatum>(b00t_path, ".ai.toml")?;
+    let cli_tools = crate::load_datum_providers::<CliDatum>(b00t_path, ".cli.toml")?;
+    let mcp_tools = crate::load_datum_providers::<McpDatum>(b00t_path, ".mcp.toml")?;
+    let docker_tools = crate::load_datum_providers::<DockerDatum>(b00t_path, ".docker.toml")?;
+    let ai_tools = crate::load_datum_providers::<AiDatum>(b00t_path, ".ai.toml")?;
 
     // Build all_datums list from loaded providers
     let mut all_datums: Vec<(String, DatumType)> = Vec::new();
@@ -177,5 +177,3 @@ pub fn handle_up_command(b00t_path: &str, yes: bool) -> Result<()> {
 
     Ok(())
 }
-
-
