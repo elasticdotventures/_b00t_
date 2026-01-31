@@ -240,7 +240,7 @@ impl B00tConfig {
     }
 
     /// Convert DatumType to string for pattern matching
-    fn datum_type_str(dtype: &DatumType) -> &'static str {
+    pub fn datum_type_str(dtype: &DatumType) -> &'static str {
         match dtype {
             DatumType::Agent => "agent",
             DatumType::Cli => "cli",
@@ -453,5 +453,28 @@ mod tests {
         assert!(config.datums.is_empty());
 
         assert!(!config.remove_datum("nonexistent.datum"));
+    }
+
+    #[test]
+    fn test_datum_type_str_lowercase() {
+        // Verify that datum_type_str returns lowercase strings for consistency
+        assert_eq!(B00tConfig::datum_type_str(&DatumType::Cli), "cli");
+        assert_eq!(B00tConfig::datum_type_str(&DatumType::Mcp), "mcp");
+        assert_eq!(B00tConfig::datum_type_str(&DatumType::Docker), "docker");
+        assert_eq!(B00tConfig::datum_type_str(&DatumType::Ai), "ai");
+        
+        // Ensure all returned strings are lowercase
+        for datum_type in &[
+            DatumType::Agent,
+            DatumType::Cli,
+            DatumType::Mcp,
+            DatumType::Ai,
+            DatumType::Docker,
+            DatumType::K8s,
+        ] {
+            let type_str = B00tConfig::datum_type_str(datum_type);
+            assert_eq!(type_str, type_str.to_lowercase(), 
+                "datum_type_str should return lowercase string");
+        }
     }
 }
