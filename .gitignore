@@ -313,3 +313,4 @@ _archive_/
 *.togaf-datasheet.*
 google-cloud-sdk/
 .cargo/*
+integrations/plantuml-server--b00t--togaf--mcp/
