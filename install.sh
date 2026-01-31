@@ -37,7 +37,7 @@ detect_platform() {
 
 # Check dependencies
 check_dependencies() {
-    local deps=("curl" "tar")
+    local deps=("curl" "tar" "sha256sum")
     for dep in "${deps[@]}"; do
         if ! command -v "$dep" >/dev/null 2>&1; then
             echo "${RED}Error: $dep is required but not installed${NC}" >&2
@@ -64,8 +64,11 @@ get_latest_version() {
 # Download and install binaries
 install_binaries() {
     local asset_name="b00t-${PLATFORM}.tar.gz"
+    local checksum_name="${asset_name}.sha256"
     local download_url="https://github.com/$REPO/releases/download/$VERSION/$asset_name"
+    local checksum_url="https://github.com/$REPO/releases/download/$VERSION/$checksum_name"
     local temp_dir=$(mktemp -d)
+    local original_dir="$PWD"
     
     echo "${BLUE}⬇️  Downloading $asset_name...${NC}"
     
@@ -75,6 +78,25 @@ install_binaries() {
         install_from_container
         return
     fi
+    
+    echo "${BLUE}🔐 Downloading checksum...${NC}"
+    if ! curl -fsSL "$checksum_url" -o "$temp_dir/$checksum_name"; then
+        echo "${RED}Failed to download checksum file${NC}" >&2
+        echo "${RED}Security verification required but checksum not available${NC}" >&2
+        rm -rf "$temp_dir"
+        exit 1
+    fi
+    
+    echo "${BLUE}🔍 Verifying checksum...${NC}"
+    # Verify checksum using sha256sum -c which expects format: "checksum  filename"
+    if ! (cd "$temp_dir" && sha256sum -c "$checksum_name" >/dev/null 2>&1); then
+        echo "${RED}❌ Checksum verification failed!${NC}" >&2
+        echo "${RED}The downloaded file may be corrupted or tampered with${NC}" >&2
+        cd "$original_dir" || exit 1
+        rm -rf "$temp_dir"
+        exit 1
+    fi
+    echo "${GREEN}✅ Checksum verified${NC}"
     
     echo "${BLUE}📂 Extracting to $INSTALL_DIR...${NC}"
     mkdir -p "$INSTALL_DIR"
