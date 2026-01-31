@@ -832,7 +832,7 @@ echo "malicious" > ~/.dotfiles/_b00t_/hack.toml
 
     let file_org_doc = r#"## File Organization
 
-Configuration files are stored in `$_B00T_Path` (default: `~/.dotfiles/_b00t_/`) with naming convention:
+Configuration files are stored in `$_B00T_Path` (default: `~/.b00t/_b00t_`) with naming convention:
 "#;
     print!("{}", file_org_doc);
 
