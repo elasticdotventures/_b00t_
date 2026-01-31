@@ -1,16 +1,15 @@
 /* file src/typescript_wasm.rs */
 
-use wasm_bindgen::prelude::*;
-use std::convert::TryFrom;
-use wasm_bindgen::JsValue;
 use crate::KmdLine;
-
+use std::convert::TryFrom;
+use wasm_bindgen::prelude::*;
+use wasm_bindgen::JsValue;
 
 #[cfg(target_arch = "wasm32")]
 #[wasm_bindgen]
 pub struct KmdLineWasm {
     verb: Option<String>,
-    params: Option<String>,  // JSON string
+    params: Option<String>, // JSON string
     content: Option<String>,
 }
 
@@ -72,7 +71,9 @@ impl TryFrom<&KmdLine<'_>> for KmdLineWasm {
         let verb = kmdline.verb.clone();
         let content = kmdline.content.clone();
 
-        let params = kmdline.params.as_ref()
+        let params = kmdline
+            .params
+            .as_ref()
             .map(|kmdparams| serde_json::to_string(&kmdparams.kvs).unwrap_or_default())
             .filter(|s| !s.is_empty()); // Only Some if string is not empty
 
@@ -83,7 +84,6 @@ impl TryFrom<&KmdLine<'_>> for KmdLineWasm {
         })
     }
 }
-
 
 /* *********************** */
 
@@ -119,4 +119,3 @@ mod tests {
 
     // Additional tests can be written for other edge cases and scenarios
 }
-

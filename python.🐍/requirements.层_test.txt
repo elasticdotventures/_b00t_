@@ -1,0 +1,15 @@
+##* * * * * *//
+#
+# TEST - just libraries for testing. 
+#
+##* * * * * *\\
+
+-r requirements.txt
+pytest>=4.2.0
+
+# https://hg.sr.ht/~danmur/pytest-shell/browse/default/README.rst
+pytest-shell>=0.2.3
+
+# Tox
+# https://tox.readthedocs.io/en/latest/#what-is-tox
+

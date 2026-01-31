@@ -3,7 +3,7 @@
 //! This module provides validation methods for various cloud services
 //! to ensure secrets are valid before storing them in the configuration.
 
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use reqwest::Client;
 use std::time::Duration;
 use tokio::time::timeout;
@@ -29,25 +29,30 @@ impl SecretValidator {
     }
 
     /// Validate Cloudflare API token
-    pub async fn validate_cloudflare_token(&self, token: &str, account_id: Option<&str>) -> Result<CloudflareValidation> {
+    pub async fn validate_cloudflare_token(
+        &self,
+        token: &str,
+        account_id: Option<&str>,
+    ) -> Result<CloudflareValidation> {
         let url = "https://api.cloudflare.com/client/v4/user/tokens/verify";
-        
+
         let response = timeout(
             VALIDATION_TIMEOUT,
-            self.client
-                .get(url)
-                .bearer_auth(token)
-                .send()
-        ).await
+            self.client.get(url).bearer_auth(token).send(),
+        )
+        .await
         .map_err(|_| anyhow!("Cloudflare validation request timed out"))?
         .map_err(|e| anyhow!("Failed to validate Cloudflare token: {}", e))?;
 
         let status = response.status();
-        let body: serde_json::Value = response.json().await
+        let body: serde_json::Value = response
+            .json()
+            .await
             .map_err(|e| anyhow!("Failed to parse Cloudflare response: {}", e))?;
 
         if !status.is_success() {
-            return Err(anyhow!("Invalid Cloudflare token: {}", 
+            return Err(anyhow!(
+                "Invalid Cloudflare token: {}",
                 body.get("errors")
                     .and_then(|e| e.as_array())
                     .and_then(|arr| arr.first())
@@ -59,13 +64,16 @@ impl SecretValidator {
 
         // Validate account access if account_id provided
         let account_access = if let Some(account_id) = account_id {
-            self.validate_cloudflare_account_access(token, account_id).await?
+            self.validate_cloudflare_account_access(token, account_id)
+                .await?
         } else {
             false
         };
 
-        let result = body.get("result").ok_or_else(|| anyhow!("Invalid response format"))?;
-        
+        let result = body
+            .get("result")
+            .ok_or_else(|| anyhow!("Invalid response format"))?;
+
         Ok(CloudflareValidation {
             valid: true,
             account_id: account_id.map(String::from),
@@ -75,16 +83,21 @@ impl SecretValidator {
     }
 
     /// Validate Cloudflare account access
-    async fn validate_cloudflare_account_access(&self, token: &str, account_id: &str) -> Result<bool> {
-        let url = format!("https://api.cloudflare.com/client/v4/accounts/{}", account_id);
-        
+    async fn validate_cloudflare_account_access(
+        &self,
+        token: &str,
+        account_id: &str,
+    ) -> Result<bool> {
+        let url = format!(
+            "https://api.cloudflare.com/client/v4/accounts/{}",
+            account_id
+        );
+
         let response = timeout(
             VALIDATION_TIMEOUT,
-            self.client
-                .get(&url)
-                .bearer_auth(token)
-                .send()
-        ).await
+            self.client.get(&url).bearer_auth(token).send(),
+        )
+        .await
         .map_err(|_| anyhow!("Cloudflare account validation timed out"))?
         .map_err(|e| anyhow!("Failed to validate account access: {}", e))?;
 
@@ -97,7 +110,8 @@ impl SecretValidator {
             .get("policies")
             .and_then(|p| p.as_array())
             .map(|policies| {
-                policies.iter()
+                policies
+                    .iter()
                     .filter_map(|policy| policy.get("effect").and_then(|e| e.as_str()))
                     .map(String::from)
                     .collect()
@@ -106,10 +120,15 @@ impl SecretValidator {
     }
 
     /// Validate AWS credentials
-    pub async fn validate_aws_credentials(&self, access_key: &str, secret_key: &str, region: &str) -> Result<AwsValidation> {
+    pub async fn validate_aws_credentials(
+        &self,
+        access_key: &str,
+        secret_key: &str,
+        region: &str,
+    ) -> Result<AwsValidation> {
         // This is a simplified validation - in production you'd want to use the AWS SDK
         // For now, we'll validate the format and attempt a simple STS call
-        
+
         if access_key.len() < 16 || !access_key.starts_with("AKIA") {
             return Err(anyhow!("Invalid AWS access key format"));
         }
@@ -130,24 +149,31 @@ impl SecretValidator {
     }
 
     /// Validate Qdrant connection and API key
-    pub async fn validate_qdrant_connection(&self, endpoint: &str, api_key: &str) -> Result<QdrantValidation> {
+    pub async fn validate_qdrant_connection(
+        &self,
+        endpoint: &str,
+        api_key: &str,
+    ) -> Result<QdrantValidation> {
         let url = format!("{}/collections", endpoint.trim_end_matches('/'));
-        
+
         let response = timeout(
             VALIDATION_TIMEOUT,
-            self.client
-                .get(&url)
-                .header("api-key", api_key)
-                .send()
-        ).await
+            self.client.get(&url).header("api-key", api_key).send(),
+        )
+        .await
         .map_err(|_| anyhow!("Qdrant validation request timed out"))?
         .map_err(|e| anyhow!("Failed to validate Qdrant connection: {}", e))?;
 
         if !response.status().is_success() {
-            return Err(anyhow!("Invalid Qdrant credentials or endpoint: HTTP {}", response.status()));
+            return Err(anyhow!(
+                "Invalid Qdrant credentials or endpoint: HTTP {}",
+                response.status()
+            ));
         }
 
-        let body: serde_json::Value = response.json().await
+        let body: serde_json::Value = response
+            .json()
+            .await
             .map_err(|e| anyhow!("Failed to parse Qdrant response: {}", e))?;
 
         let collections = body
@@ -173,22 +199,25 @@ impl SecretValidator {
     /// Validate OpenAI API key
     pub async fn validate_openai_api_key(&self, api_key: &str) -> Result<OpenAiValidation> {
         let url = "https://api.openai.com/v1/models";
-        
+
         let response = timeout(
             VALIDATION_TIMEOUT,
-            self.client
-                .get(url)
-                .bearer_auth(api_key)
-                .send()
-        ).await
+            self.client.get(url).bearer_auth(api_key).send(),
+        )
+        .await
         .map_err(|_| anyhow!("OpenAI validation request timed out"))?
         .map_err(|e| anyhow!("Failed to validate OpenAI API key: {}", e))?;
 
         if !response.status().is_success() {
-            return Err(anyhow!("Invalid OpenAI API key: HTTP {}", response.status()));
+            return Err(anyhow!(
+                "Invalid OpenAI API key: HTTP {}",
+                response.status()
+            ));
         }
 
-        let body: serde_json::Value = response.json().await
+        let body: serde_json::Value = response
+            .json()
+            .await
             .map_err(|e| anyhow!("Failed to parse OpenAI response: {}", e))?;
 
         let models = body
@@ -213,23 +242,29 @@ impl SecretValidator {
     /// Validate Anthropic API key
     pub async fn validate_anthropic_api_key(&self, api_key: &str) -> Result<AnthropicValidation> {
         let url = "https://api.anthropic.com/v1/models";
-        
+
         let response = timeout(
             VALIDATION_TIMEOUT,
             self.client
                 .get(url)
                 .header("x-api-key", api_key)
                 .header("anthropic-version", "2023-06-01")
-                .send()
-        ).await
+                .send(),
+        )
+        .await
         .map_err(|_| anyhow!("Anthropic validation request timed out"))?
         .map_err(|e| anyhow!("Failed to validate Anthropic API key: {}", e))?;
 
         if !response.status().is_success() {
-            return Err(anyhow!("Invalid Anthropic API key: HTTP {}", response.status()));
+            return Err(anyhow!(
+                "Invalid Anthropic API key: HTTP {}",
+                response.status()
+            ));
         }
 
-        let body: serde_json::Value = response.json().await
+        let body: serde_json::Value = response
+            .json()
+            .await
             .map_err(|e| anyhow!("Failed to parse Anthropic response: {}", e))?;
 
         let models = body
@@ -251,19 +286,21 @@ impl SecretValidator {
     }
 
     /// Validate generic API endpoint with optional authentication
-    pub async fn validate_generic_endpoint(&self, endpoint: &str, auth_header: Option<(&str, &str)>) -> Result<GenericValidation> {
+    pub async fn validate_generic_endpoint(
+        &self,
+        endpoint: &str,
+        auth_header: Option<(&str, &str)>,
+    ) -> Result<GenericValidation> {
         let mut request = self.client.get(endpoint);
-        
+
         if let Some((header_name, header_value)) = auth_header {
             request = request.header(header_name, header_value);
         }
 
-        let response = timeout(
-            VALIDATION_TIMEOUT,
-            request.send()
-        ).await
-        .map_err(|_| anyhow!("Generic endpoint validation timed out"))?
-        .map_err(|e| anyhow!("Failed to validate endpoint: {}", e))?;
+        let response = timeout(VALIDATION_TIMEOUT, request.send())
+            .await
+            .map_err(|_| anyhow!("Generic endpoint validation timed out"))?
+            .map_err(|e| anyhow!("Failed to validate endpoint: {}", e))?;
 
         Ok(GenericValidation {
             valid: response.status().is_success(),
@@ -345,23 +382,29 @@ mod tests {
     #[tokio::test]
     async fn test_invalid_cloudflare_token() {
         let validator = SecretValidator::new().unwrap();
-        let result = validator.validate_cloudflare_token("invalid_token", None).await;
+        let result = validator
+            .validate_cloudflare_token("invalid_token", None)
+            .await;
         assert!(result.is_err());
     }
 
     #[test]
     fn test_aws_key_format_validation() {
         let validator = SecretValidator::new().unwrap();
-        
+
         // Test invalid formats
-        let result = tokio_test::block_on(
-            validator.validate_aws_credentials("invalid", "invalid", "us-east-1")
-        );
+        let result = tokio_test::block_on(validator.validate_aws_credentials(
+            "invalid",
+            "invalid",
+            "us-east-1",
+        ));
         assert!(result.is_err());
-        
-        let result = tokio_test::block_on(
-            validator.validate_aws_credentials("AKIAIOSFODNN7EXAMPLE", "short", "us-east-1")
-        );
+
+        let result = tokio_test::block_on(validator.validate_aws_credentials(
+            "AKIAIOSFODNN7EXAMPLE",
+            "short",
+            "us-east-1",
+        ));
         assert!(result.is_err());
     }
 }

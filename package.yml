@@ -1,0 +1,79 @@
+# pkgx package manifest for b00t-cli
+# https://github.com/elasticdotventures/dotfiles
+
+distributable:
+  url: https://github.com/elasticdotventures/dotfiles/archive/refs/tags/v{{version}}.tar.gz
+  strip-components: 1
+
+versions:
+  github: elasticdotventures/dotfiles/tags
+  strip: /^v/
+
+provides:
+  - bin/b00t-cli
+  - bin/b00t-mcp
+
+dependencies:
+  # Runtime dependencies
+  git-scm.org: ^2
+
+companions:
+  # Optional but recommended
+  just.systems/just: '*'
+  docker.com: '*'
+
+build:
+  dependencies:
+    rust-lang.org: ^1.85  # Minimum for rig-core features
+    rust-lang.org/cargo: '*'
+
+  script: |
+    # Build both b00t-cli and b00t-mcp
+    cargo install \
+      --path b00t-cli \
+      --root {{prefix}} \
+      --locked
+
+    cargo install \
+      --path b00t-mcp \
+      --root {{prefix}} \
+      --locked
+
+    # Copy _b00t_ datums directory (essential for functionality)
+    mkdir -p {{prefix}}/share/b00t
+    cp -r _b00t_ {{prefix}}/share/b00t/_b00t_
+
+    # Create convenience symlink
+    ln -sf {{prefix}}/bin/b00t-cli {{prefix}}/bin/b00t
+
+    # Create environment setup script
+    mkdir -p {{prefix}}/etc/profile.d
+    cat > {{prefix}}/etc/profile.d/b00t.sh << 'ENVEOF'
+# b00t environment configuration
+export _B00T_Path="{{prefix}}/share/b00t/_b00t_"
+ENVEOF
+
+test:
+  env:
+    _B00T_Path: "{{prefix}}/share/b00t/_b00t_"
+
+  script: |
+    # Test b00t-cli
+    b00t-cli --version | grep {{version}}
+    b00t-cli status --help
+
+    # Test b00t-mcp
+    b00t-mcp --help
+
+    # Test convenience symlink
+    b00t --version
+
+    # Test datums are installed
+    test -d "{{prefix}}/share/b00t/_b00t_"
+    test -f "{{prefix}}/share/b00t/_b00t_/b00t.just"
+
+    # Test basic functionality with datums
+    b00t-cli whoami || true  # May not have full config in test env
+
+    # Test MCP datum listing
+    b00t-cli --path "{{prefix}}/share/b00t/_b00t_" mcp list || true

@@ -1,0 +1,192 @@
+[b00t]
+name = "azure-ai-foundry"
+type = "mcp"
+hint = "Azure AI Foundry MCP server - Enterprise multi-agent orchestration with connected agents, sub-agent delegation, and stateful workflows. Replaces TaskMaster for complex business processes."
+
+# 🤓 Azure AI Foundry MCP provides enterprise-grade agent orchestration
+# Superior to TaskMaster for multi-agent systems with sub-agent delegation
+[[b00t.mcp.stdio]]
+command = "npx"
+args = ["-y", "azure-ai-foundry-mcp"]
+transport = "stdio"
+priority = 0
+requires = ["node", "azure-cli"]
+
+# 🤓 Alternative: Experimental MCP server from Azure AI Foundry organization
+[[b00t.mcp.stdio]]
+command = "npx"
+args = ["-y", "@azure-ai-foundry/mcp-foundry"]
+transport = "stdio"
+priority = 10
+requires = ["node", "azure-cli"]
+
+[b00t.env]
+# Azure AI Foundry authentication
+AZURE_CLIENT_ID = ""
+AZURE_CLIENT_SECRET = ""
+AZURE_TENANT_ID = ""
+AZURE_SUBSCRIPTION_ID = ""
+
+# Azure AI Foundry workspace configuration
+AZURE_AI_FOUNDRY_WORKSPACE = ""
+AZURE_AI_FOUNDRY_RESOURCE_GROUP = ""
+AZURE_AI_FOUNDRY_ENDPOINT = ""
+
+# Connected agents configuration
+AZURE_AI_FOUNDRY_MAX_AGENT_DEPTH = "2"
+AZURE_AI_FOUNDRY_ROUTING_MODE = "natural_language"
+
+[[b00t.usage]]
+description = "Create connected agents system"
+command = "Use MCP to orchestrate: 'Create a customer support system with technical, billing, and escalation sub-agents'"
+
+[[b00t.usage]]
+description = "Deploy multi-agent workflow"
+command = "Use MCP to deploy: 'Set up a content creation workflow with collector, writer, and manager agents'"
+
+[[b00t.usage]]
+description = "Monitor agent orchestration"
+command = "Use MCP to monitor: 'Show status of all connected agents in workspace'"
+
+[[b00t.usage]]
+description = "Scale agent deployment"
+command = "Use MCP to scale: 'Deploy 5 specialized sub-agents for customer onboarding process'"
+
+[b00t.learn]
+topic = "azure-ai-foundry-mcp"
+auto_digest = true
+content = """
+# Azure AI Foundry MCP Server - Enterprise Agent Orchestration
+
+Provides MCP interface to Azure AI Foundry's advanced multi-agent capabilities.
+
+## Advantages Over TaskMaster MCP
+
+### Enterprise Multi-Agent Architecture
+- **Connected Agents**: Hierarchical delegation without custom orchestrators
+- **Sub-Agent Specialization**: Purpose-built agents for specific business functions
+- **Stateful Workflows**: Context preservation across complex business processes
+- **Natural Language Routing**: No hardcoded logic for agent coordination
+
+### MCP Integration Capabilities
+
+```typescript
+// Connected agents via MCP
+await mcp.call("azure_foundry.create_connected_agents", {
+  primary_agent: "customer_support_coordinator",
+  sub_agents: [
+    {
+      name: "technical_support",
+      specialization: "technical_troubleshooting",
+      tools: ["diagnostic_tools", "knowledge_base"]
+    },
+    {
+      name: "billing_agent", 
+      specialization: "billing_and_payments",
+      tools: ["payment_processor", "billing_system"]
+    },
+    {
+      name: "escalation_agent",
+      specialization: "complex_issue_resolution", 
+      tools: ["crm_system", "manager_notifications"]
+    }
+  ],
+  routing_strategy: "natural_language",
+  max_depth: 2
+});
+
+// Stateful multi-agent workflows
+await mcp.call("azure_foundry.deploy_workflow", {
+  workflow_name: "customer_onboarding",
+  agents: ["content_collector", "writing_assistant", "content_manager"],
+  state_management: true,
+  context_preservation: true,
+  enterprise_features: {
+    security: "enterprise_grade",
+    observability: "comprehensive",
+    scalability: "cloud_native"
+  }
+});
+```
+
+## Enterprise Features via MCP
+
+### Security and Compliance
+- Azure AD integration for authentication
+- Role-based access control (RBAC) 
+- Audit trails and compliance logging
+- Enterprise-grade encryption
+
+### Observability and Monitoring
+- Real-time agent performance metrics
+- Workflow execution tracing
+- Error handling and fault tolerance
+- Cost optimization insights
+
+### Scalability and Reliability
+- Cloud-native auto-scaling
+- Multi-region deployment support
+- High availability configurations
+- Load balancing for agent workloads
+
+## Migration from TaskMaster
+
+### When to Use TaskMaster
+- Simple task lists and project tracking
+- Basic PRD parsing
+- Single-user workflows
+- Development/prototyping phases
+
+### When to Use Azure AI Foundry
+- Multi-agent business process automation
+- Customer service orchestration
+- Complex workflow management
+- Enterprise production deployments
+- Sub-agent specialization needs
+- Stateful context requirements
+
+## Connected Agents Patterns
+
+### Customer Support System
+```python
+support_system = {
+    "primary_agent": "support_coordinator",
+    "sub_agents": {
+        "technical": "handles_technical_issues",
+        "billing": "processes_payment_queries", 
+        "escalation": "manages_complex_cases"
+    },
+    "routing": "intelligent_natural_language",
+    "context_sharing": True
+}
+```
+
+### Content Creation Workflow  
+```python
+content_workflow = {
+    "agents": [
+        "content_collector",  # Gathers requirements and research
+        "writing_assistant",  # Creates and refines content
+        "content_manager"     # Stores, organizes, and publishes
+    ],
+    "state_management": True,
+    "workflow_orchestration": "stateful"
+}
+```
+
+Azure AI Foundry MCP provides enterprise-ready multi-agent orchestration that scales from prototype to production, replacing TaskMaster for complex business automation needs.
+"""
+
+[[b00t.references]]
+name = "Azure AI Foundry MCP Documentation"
+url = "https://learn.microsoft.com/azure/ai-foundry/agents/how-to/connected-agents"
+
+[[b00t.references]]
+name = "Connected Agents Architecture"
+url = "https://learn.microsoft.com/azure/architecture/ai-ml/guide/ai-agent-design-patterns"
+
+[[b00t.references]]
+name = "Multi-Agent Orchestration Guide" 
+url = "https://techcommunity.microsoft.com/blog/azure-ai-foundry-blog/building-a-digital-workforce-with-multi-agents-in-azure-ai-foundry-agent-service/4414671"
+
+lfmf_category = "azure-ai-foundry"

@@ -1,0 +1,33 @@
+# b00t direnv configuration
+# This file demonstrates the b00t pattern: direnv → .envrc → dotenv → .env
+#
+# Setup:
+#   1. Copy this file: cp .envrc.example .envrc
+#   2. Copy .env.example: cp .env.example .env
+#   3. Edit .env with your actual API keys
+#   4. Enable direnv: direnv allow
+#
+# The b00t pattern:
+#   - direnv automatically loads .envrc when entering directory
+#   - .envrc calls dotenv to load environment variables from .env
+#   - .env contains actual API keys (gitignored for security)
+#   - Datums in ~/.dotfiles/_b00t_/ specify WHICH env vars are required
+#   - Python code validates required vars exist via b00t datum system
+
+# Load project .env file (contains API keys)
+dotenv
+
+# Optionally load home directory .env for global keys
+# dotenv ~/.env
+
+# Optionally load additional environment-specific configs
+# dotenv .env.local
+# dotenv .env.development
+
+# You can also set project-specific variables here
+# export PROJECT_NAME="b00t-j0b-py"
+# export LOG_LEVEL="INFO"
+
+# Layout python - ensures direnv works with Python virtual environments
+# Uncomment if using a venv:
+# layout python python3.12

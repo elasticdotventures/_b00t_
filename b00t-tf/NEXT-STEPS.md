@@ -325,6 +325,6 @@ wrangler r2 bucket info b00t-dxt-files
 
 ---
 
-**🥾 Ready to deploy when we finish! 🎂**
+**🥾 Ready to deploy when we finish! 🍰**
 
 *This roadmap provides a comprehensive path from current development state to production-ready b00t .dxt generation system.*

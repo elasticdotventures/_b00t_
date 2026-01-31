@@ -1,0 +1,39 @@
+[b00t]
+name = "rag-api"
+type = "api"
+hint = "Composite RAG API requiring embeddings and vector database"
+desires = "latest"
+
+# Protocol specification
+protocol = "rag-composite-v1"
+implements = ["rag-base"]
+
+# Capability provision
+[b00t.provides]
+capability = "rag"
+operations = [
+    "ingest_documents",
+    "search_documents",
+    "retrieve_context",
+    "delete_documents"
+]
+
+# Composite API requirements
+[b00t.requires.embeddings]
+capability = "embeddings"
+protocol = "openai-embeddings-v1"
+prefer = ["ollama-embeddings", "openai-embeddings"]
+fallback = "openai-embeddings"
+
+[b00t.requires.vector_db]
+capability = "vector-db"
+protocol = "qdrant-rest-v1"
+prefer = ["qdrant-api"]
+fallback = "qdrant-api"
+
+# Environment variables (composed from requirements)
+[b00t.env]
+RAG_EMBEDDING_API = "${OLLAMA_API_URL}"
+RAG_VECTOR_DB_URL = "${QDRANT_URL}"
+RAG_COLLECTION = "${QDRANT_COLLECTION}"
+RAG_EMBEDDING_MODEL = "${OLLAMA_EMBEDDING_MODEL}"

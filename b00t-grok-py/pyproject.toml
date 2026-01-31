@@ -16,13 +16,16 @@ dependencies = [
     "fastmcp>=0.4.0",
     "httpx>=0.25.0",
     # "InstructorEmbedding>=1.0.0",  # 🤓 Optional - will use mock embeddings if not available
-    # "qdrant-client>=1.7.0",  # 🤓 Optional - will be added when vector search is implemented
+    "qdrant-client>=1.7.0", # 🤓 Required for Qdrant vector storage
     "pydantic>=2.0.0",
     "python-multipart>=0.0.6",
-    # "torch>=2.0.0,<3.0.0",  # 🤓 Too heavy for basic demo
+    # "torch>=2.0.0,<3.0.0",  # 🤓 Installed via raganything[all]
     "chonkie>=1.1.2",
     "maturin>=1.9.3",
     "numpy>=2.2.6",
+    "raganything[all]>=1.2.8", # 🤓 Multimodal RAG with embeddings, processing, and knowledge graphs
+    "pillow>=10.0.0", # 🤓 Image processing for multimodal content
+    "crawl4ai>=0.7.6",
 ]
 license = {text = "MIT"}
 readme = "README.md"
@@ -71,3 +74,13 @@ python_version = "3.10"
 warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = true
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+pythonpath = ["python"]
+
+[dependency-groups]
+dev = [
+    "pytest-asyncio>=1.1.0",
+]

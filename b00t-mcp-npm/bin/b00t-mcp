@@ -1,0 +1,52 @@
+#!/usr/bin/env node
+
+const fs = require('fs');
+const path = require('path');
+const { spawn } = require('child_process');
+
+// Determine binary name for platform
+const platform = process.platform;
+const extension = platform === 'win32' ? '.exe' : '';
+const binaryName = `b00t-mcp${extension}`;
+
+// Find the actual binary
+const possiblePaths = [
+  // Mock binary for testing
+  path.join(__dirname, 'b00t-mcp-mock'),
+  // Same directory as this script
+  path.join(__dirname, binaryName),
+  // Parent bin directory
+  path.join(__dirname, '..', 'bin', binaryName),
+  // node_modules installation
+  path.join(__dirname, '..', '..', '.bin', binaryName)
+];
+
+let binaryPath = null;
+for (const testPath of possiblePaths) {
+  if (fs.existsSync(testPath)) {
+    binaryPath = testPath;
+    break;
+  }
+}
+
+if (!binaryPath) {
+  console.error('❌ b00t-mcp binary not found');
+  console.error('🔧 Try reinstalling with: npm install -g b00t-mcp');
+  process.exit(1);
+}
+
+// Execute the binary with all arguments
+const child = spawn(binaryPath, process.argv.slice(2), {
+  stdio: 'inherit',
+  env: process.env
+});
+
+// Forward exit code
+child.on('exit', (code) => {
+  process.exit(code || 0);
+});
+
+child.on('error', (error) => {
+  console.error('❌ Failed to execute b00t-mcp:', error.message);
+  process.exit(1);
+});

@@ -1,10 +1,10 @@
 use anyhow::Result;
 use axum::{
+    Router,
     extract::{Query, State},
     http::StatusCode,
     response::{Html, Redirect},
     routing::get,
-    Router,
 };
 use reqwest;
 use serde::{Deserialize, Serialize};
@@ -71,7 +71,10 @@ impl GitHubAuthState {
 
     pub fn create_user_session(&self, user: GitHubUser) -> String {
         let session_id = Uuid::new_v4().to_string();
-        self.sessions.write().unwrap().insert(session_id.clone(), user);
+        self.sessions
+            .write()
+            .unwrap()
+            .insert(session_id.clone(), user);
         session_id
     }
 }
@@ -119,13 +122,18 @@ async fn github_login(
 ) -> Result<Redirect, (StatusCode, String)> {
     // Generate OAuth state parameter
     let oauth_state = Uuid::new_v4().to_string();
-    
+
     // Store return URL for after authentication
-    let return_url = params.get("return_to")
+    let return_url = params
+        .get("return_to")
         .unwrap_or(&format!("{}/oauth/consent", state.config.base_url))
         .to_string();
-    
-    state.oauth_states.write().unwrap().insert(oauth_state.clone(), return_url);
+
+    state
+        .oauth_states
+        .write()
+        .unwrap()
+        .insert(oauth_state.clone(), return_url);
 
     // GitHub authorization URL
     let github_auth_url = format!(
@@ -145,21 +153,34 @@ async fn github_callback(
 ) -> Result<Redirect, (StatusCode, String)> {
     // Handle OAuth errors
     if let Some(error) = query.error {
-        let error_msg = query.error_description
+        let error_msg = query
+            .error_description
             .unwrap_or_else(|| "GitHub OAuth error".to_string());
-        return Err((StatusCode::BAD_REQUEST, format!("GitHub OAuth error: {} - {}", error, error_msg)));
+        return Err((
+            StatusCode::BAD_REQUEST,
+            format!("GitHub OAuth error: {} - {}", error, error_msg),
+        ));
     }
 
-    let code = query.code
-        .ok_or_else(|| (StatusCode::BAD_REQUEST, "Missing authorization code".to_string()))?;
+    let code = query.code.ok_or_else(|| {
+        (
+            StatusCode::BAD_REQUEST,
+            "Missing authorization code".to_string(),
+        )
+    })?;
 
-    let oauth_state = query.state
-        .ok_or_else(|| (StatusCode::BAD_REQUEST, "Missing state parameter".to_string()))?;
+    let oauth_state = query.state.ok_or_else(|| {
+        (
+            StatusCode::BAD_REQUEST,
+            "Missing state parameter".to_string(),
+        )
+    })?;
 
     // Retrieve return URL and remove OAuth state
     let return_url = {
         let mut states = state.oauth_states.write().unwrap();
-        states.remove(&oauth_state)
+        states
+            .remove(&oauth_state)
             .ok_or_else(|| (StatusCode::BAD_REQUEST, "Invalid OAuth state".to_string()))?
     };
 
@@ -176,22 +197,45 @@ async fn github_callback(
         ])
         .send()
         .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to exchange code: {}", e)))?
+        .map_err(|e| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Failed to exchange code: {}", e),
+            )
+        })?
         .json::<GitHubTokenResponse>()
         .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to parse token response: {}", e)))?;
+        .map_err(|e| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Failed to parse token response: {}", e),
+            )
+        })?;
 
     // Get user info from GitHub API
     let user_response = client
         .get("https://api.github.com/user")
-        .header("Authorization", format!("token {}", token_response.access_token))
+        .header(
+            "Authorization",
+            format!("token {}", token_response.access_token),
+        )
         .header("User-Agent", "b00t-mcp/1.0")
         .send()
         .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to get user info: {}", e)))?
+        .map_err(|e| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Failed to get user info: {}", e),
+            )
+        })?
         .json::<GitHubUserResponse>()
         .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to parse user response: {}", e)))?;
+        .map_err(|e| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Failed to parse user response: {}", e),
+            )
+        })?;
 
     // Create user session
     let github_user = GitHubUser {
@@ -200,7 +244,10 @@ async fn github_callback(
         name: user_response.name,
         email: user_response.email,
         avatar_url: user_response.avatar_url,
-        authenticated_at: SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs(),
+        authenticated_at: SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs(),
     };
 
     let session_id = state.create_user_session(github_user);
@@ -240,15 +287,18 @@ pub async fn require_github_auth(
     state: &GitHubAuthState,
     session_id: Option<&str>,
 ) -> Result<GitHubUser, Redirect> {
-    let session_id = session_id.ok_or_else(|| {
-        Redirect::to("/auth/github")
-    })?;
+    let session_id = session_id.ok_or_else(|| Redirect::to("/auth/github"))?;
 
-    state.get_user_from_session(session_id)
+    state
+        .get_user_from_session(session_id)
         .ok_or_else(|| Redirect::to("/auth/github"))
 }
 
 // Generate login URL with return path
 pub fn github_login_url(base_url: &str, return_to: &str) -> String {
-    format!("{}/auth/github?return_to={}", base_url, urlencoding::encode(return_to))
+    format!(
+        "{}/auth/github?return_to={}",
+        base_url,
+        urlencoding::encode(return_to)
+    )
 }

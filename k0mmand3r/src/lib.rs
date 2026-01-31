@@ -86,8 +86,8 @@ this is just content, no verb!
 #![allow(unused_variables)]
 //use indexmap::IndexMap;
 
-use std::collections::HashMap;
 use decimal_rs::Decimal;
+use std::collections::HashMap;
 
 #[cfg(feature = "lang-python")]
 use pyo3::prelude::*;
@@ -103,11 +103,11 @@ use winnow::prelude::*;
 use winnow::seq;
 use winnow::stream::Stream; // choose between two parsers; and we're happy with either being used.
 use winnow::token::one_of; // one_of(('0'..='9', 'a'..='f', 'A'..='F')).parse_next(input)
-use winnow::{Parser};
 use winnow::token::take_while;
+use winnow::Parser;
 
-use serde_json::json;
 use serde::Serialize;
+use serde_json::json;
 
 #[cfg(not(target_arch = "wasm32"))]
 #[cfg(feature = "lang-python")]
@@ -116,11 +116,8 @@ mod python;
 #[cfg(feature = "lang-python")]
 pub use python::k0mmand3r;
 
-
 #[cfg(target_arch = "wasm32")]
 mod typescript_wasm;
-
-
 
 /* winnow parsers */
 fn parse_prefix_dash2x<'s>(input: &mut &'s str) -> winnow::Result<&'s str> {
@@ -195,7 +192,6 @@ fn parse_content<'i>(input: &mut &'i str) -> winnow::Result<&'i str> {
     }
 }
 
-
 #[derive(Debug, PartialEq, Eq, Serialize)]
 pub struct KmdParams<'i> {
     kvs: HashMap<&'i str, &'i str>,
@@ -210,9 +206,7 @@ impl<'i> KmdParams<'i> {
     }
 }
 
-
 /* *********************** */
-
 
 #[derive(Debug, PartialEq, Serialize)]
 pub struct KmdLine<'i> {
@@ -423,23 +417,19 @@ mod tests {
         assert_eq!(actual, expected);
     }
 
-
     #[test]
     fn test_kommand_VerbOnly() {
-        let mut input =
-            r#"/verbonly"#;
+        let mut input = r#"/verbonly"#;
         let expected = KmdLine {
             verb: Some("verbonly".to_string()),
             params: None,
-            content: None
+            content: None,
         };
 
         let actual = KmdLine::parse(&mut input).unwrap();
         assert_eq!(actual, expected);
     }
-
 }
-
 
 /*
 

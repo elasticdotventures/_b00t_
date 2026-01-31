@@ -1,5 +1,5 @@
 //! AI client abstraction using Rig.rs
-//! 
+//!
 //! Provides unified LLM interface with cloud-managed provider configuration.
 //! Supports dynamic provider switching based on b00t-website selections.
 
@@ -35,26 +35,32 @@ pub struct AiClientConfig {
 impl Default for AiClientConfig {
     fn default() -> Self {
         let mut providers = HashMap::new();
-        
+
         // Default OpenAI configuration
-        providers.insert("openai".to_string(), AiProviderConfig {
-            provider: "openai".to_string(),
-            model: "gpt-4o-mini".to_string(),
-            api_key: None,
-            endpoint: None,
-            enabled: false,
-            priority: 0,
-        });
-        
+        providers.insert(
+            "openai".to_string(),
+            AiProviderConfig {
+                provider: "openai".to_string(),
+                model: "gpt-4o-mini".to_string(),
+                api_key: None,
+                endpoint: None,
+                enabled: false,
+                priority: 0,
+            },
+        );
+
         // Default Anthropic configuration
-        providers.insert("anthropic".to_string(), AiProviderConfig {
-            provider: "anthropic".to_string(),
-            model: "claude-3-haiku-20240307".to_string(),
-            api_key: None,
-            endpoint: None,
-            enabled: false,
-            priority: 1,
-        });
+        providers.insert(
+            "anthropic".to_string(),
+            AiProviderConfig {
+                provider: "anthropic".to_string(),
+                model: "claude-3-haiku-20240307".to_string(),
+                api_key: None,
+                endpoint: None,
+                enabled: false,
+                priority: 1,
+            },
+        );
 
         Self {
             providers,
@@ -105,17 +111,22 @@ impl B00tAiClient {
 
     /// Check if provider is enabled and has API key
     pub fn is_provider_ready(&self, provider: &str) -> bool {
-        self.config.providers.get(provider)
+        self.config
+            .providers
+            .get(provider)
             .map(|p| p.enabled && p.api_key.is_some())
             .unwrap_or(false)
     }
 
     /// Get the best available provider (prioritized + enabled)
     pub fn get_best_provider(&self) -> Option<String> {
-        let mut providers: Vec<_> = self.config.providers.values()
+        let mut providers: Vec<_> = self
+            .config
+            .providers
+            .values()
             .filter(|p| p.enabled && p.api_key.is_some())
             .collect();
-        
+
         providers.sort_by_key(|p| p.priority);
         providers.first().map(|p| p.provider.clone())
     }
@@ -126,34 +137,47 @@ impl B00tAiClient {
     }
 
     /// Create completion with specific provider
-    pub async fn complete_with_provider(&self, prompt: &str, provider: Option<&str>) -> B00tResult<String> {
+    pub async fn complete_with_provider(
+        &self,
+        prompt: &str,
+        provider: Option<&str>,
+    ) -> B00tResult<String> {
         let provider_name = provider.unwrap_or(&self.config.default_provider);
-        let provider_config = self.config.providers.get(provider_name)
+        let provider_config = self
+            .config
+            .providers
+            .get(provider_name)
             .ok_or_else(|| anyhow!("Provider '{}' not found", provider_name))?;
 
         if !provider_config.enabled {
             return Err(anyhow!("Provider '{}' is disabled", provider_name).into());
         }
 
-        let api_key = provider_config.api_key.as_ref()
+        let api_key = provider_config
+            .api_key
+            .as_ref()
             .ok_or_else(|| anyhow!("No API key configured for provider '{}'", provider_name))?;
 
         match provider_config.provider.as_str() {
             "openai" => {
                 let client = openai::Client::new(api_key);
                 let agent = client.agent(&provider_config.model).build();
-                let response = agent.prompt(prompt).await
+                let response = agent
+                    .prompt(prompt)
+                    .await
                     .map_err(|e| anyhow!("OpenAI completion failed: {}", e))?;
                 Ok(response)
             }
             "anthropic" => {
                 let client = anthropic::Client::new(api_key);
                 let agent = client.agent(&provider_config.model).build();
-                let response = agent.prompt(prompt).await
+                let response = agent
+                    .prompt(prompt)
+                    .await
                     .map_err(|e| anyhow!("Anthropic completion failed: {}", e))?;
                 Ok(response)
             }
-            _ => Err(anyhow!("Unsupported provider: {}", provider_config.provider).into())
+            _ => Err(anyhow!("Unsupported provider: {}", provider_config.provider).into()),
         }
     }
 
@@ -163,20 +187,30 @@ impl B00tAiClient {
     }
 
     /// Create chat with specific provider
-    pub async fn chat_with_provider(&self, messages: &[ChatMessage], provider: Option<&str>) -> B00tResult<String> {
+    pub async fn chat_with_provider(
+        &self,
+        messages: &[ChatMessage],
+        provider: Option<&str>,
+    ) -> B00tResult<String> {
         let provider_name = provider.unwrap_or(&self.config.default_provider);
-        let provider_config = self.config.providers.get(provider_name)
+        let provider_config = self
+            .config
+            .providers
+            .get(provider_name)
             .ok_or_else(|| anyhow!("Provider '{}' not found", provider_name))?;
 
         if !provider_config.enabled {
             return Err(anyhow!("Provider '{}' is disabled", provider_name).into());
         }
 
-        let api_key = provider_config.api_key.as_ref()
+        let api_key = provider_config
+            .api_key
+            .as_ref()
             .ok_or_else(|| anyhow!("No API key configured for provider '{}'", provider_name))?;
 
         // For now, convert chat to a simple prompt (Rig.rs chat API requires more research)
-        let prompt = messages.iter()
+        let prompt = messages
+            .iter()
             .map(|msg| format!("{}: {}", msg.role, msg.content))
             .collect::<Vec<_>>()
             .join("\n");
@@ -185,18 +219,22 @@ impl B00tAiClient {
             "openai" => {
                 let client = openai::Client::new(api_key);
                 let agent = client.agent(&provider_config.model).build();
-                let response = agent.prompt(&prompt).await
+                let response = agent
+                    .prompt(&prompt)
+                    .await
                     .map_err(|e| anyhow!("OpenAI chat failed: {}", e))?;
                 Ok(response)
             }
             "anthropic" => {
                 let client = anthropic::Client::new(api_key);
                 let agent = client.agent(&provider_config.model).build();
-                let response = agent.prompt(&prompt).await
+                let response = agent
+                    .prompt(&prompt)
+                    .await
                     .map_err(|e| anyhow!("Anthropic chat failed: {}", e))?;
                 Ok(response)
             }
-            _ => Err(anyhow!("Unsupported provider: {}", provider_config.provider).into())
+            _ => Err(anyhow!("Unsupported provider: {}", provider_config.provider).into()),
         }
     }
 
@@ -213,12 +251,12 @@ impl B00tAiClient {
                             eprintln!("⚠️ Primary provider failed, used fallback: {}", fallback);
                             Ok(response)
                         }
-                        Err(fallback_error) => {
-                            Err(anyhow!(
-                                "Both providers failed. Primary: {}. Fallback: {}", 
-                                primary_error, fallback_error
-                            ).into())
-                        }
+                        Err(fallback_error) => Err(anyhow!(
+                            "Both providers failed. Primary: {}. Fallback: {}",
+                            primary_error,
+                            fallback_error
+                        )
+                        .into()),
                     }
                 } else {
                     Err(primary_error)

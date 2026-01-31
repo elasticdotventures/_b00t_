@@ -1,0 +1,52 @@
+[b00t]
+name = "uv"
+type = "cli"
+desires = "0.8.0"
+depends_on = ["python.cli"]
+install = '''
+# Install uv - ultra-fast Python package installer and resolver
+# Official installation: https://github.com/astral-sh/uv
+
+echo "📦 Installing uv..."
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# Add to PATH for current session
+export PATH="$HOME/.local/bin:$PATH"
+
+# Verify installation
+uv --version
+'''
+update = '''
+# Update uv to latest version
+echo "🔄 Updating uv..."
+uv self update || curl -LsSf https://astral.sh/uv/install.sh | sh
+uv --version
+'''
+version = "uv --version"
+version_regex = '(\d+\.\d+\.\d+)'
+hint = "uv - An extremely fast Python package installer and resolver, written in Rust. 🦀 Replaces pip, pip-tools, pipx, poetry, pyenv, virtualenv, and more."
+lfmf_category = "uv"
+
+[b00t.learn]
+topic = "uv"
+auto_digest = false
+
+[[b00t.usage]]
+description = "Check uv version"
+command = "uv --version"
+
+[[b00t.usage]]
+description = "Run Python package with uv (like pipx)"
+command = "uvx package-name"
+
+[[b00t.usage]]
+description = "Create virtual environment with uv"
+command = "uv venv"
+
+[[b00t.usage]]
+description = "Install package in current project"
+command = "uv add package-name"
+
+[[b00t.usage]]
+description = "Install package globally (like pipx)"
+command = "uv tool install package-name"

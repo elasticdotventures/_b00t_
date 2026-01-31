@@ -1,0 +1,18 @@
+[b00t]
+name = "ollama"
+type = "docker"
+hint = "Ollama local LLM server for embeddings and inference"
+desires = "latest"
+
+# Docker-specific fields
+image = "docker.io/ollama/ollama:latest"
+docker_args = [
+    "-p", "11434:11434",
+    "-v", "ollama_data:/root/.ollama"
+]
+
+# Environment variables
+[b00t.env]
+OLLAMA_HOST = "0.0.0.0:11434"
+OLLAMA_API_URL = "http://localhost:11434"
+OLLAMA_URL = "http://localhost:11434"

@@ -1,0 +1,15 @@
+[layer]
+name = "ssl-dev"
+version = "bookworm"
+description = "OpenSSL development libraries for building"
+
+[provides]
+binaries = []
+libraries = ["libssl.a", "libcrypto.a"]
+paths = ["/usr/include/openssl", "/usr/lib"]
+
+[requires]
+layers = ["debian-base"]
+
+[runtime]
+layers = []

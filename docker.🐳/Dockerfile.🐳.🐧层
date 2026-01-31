@@ -1,0 +1,34 @@
+# syntax=docker/dockerfile:1
+
+##* * * * * \\
+# 🐳 Docker
+# 🐧 Linux
+# 层 (Céng) Layer
+#
+#* this layer is here to provide additional underlyin
+#* support such as kata, busybox, etc. 
+
+##* * * * * //
+
+# Can one Docker File Load Another:
+# 🍰 https://stackoverflow.com/questions/36362233/can-a-dockerfile-extend-another-one
+# docker build -t my-php-base-image 
+# next layer 
+# FROM my-php-base-mage
+
+
+
+#RUN apt-get update && \
+#    apt-get install -y git libicu-dev libmagickwand-dev libmcrypt-dev libcurl3-dev jpegoptim
+#RUN pecl install imagick && \
+#    docker-php-ext-enable imagick
+
+#RUN docker-php-ext-install intl
+# RUN docker-php-ext-install pdo_mysql
+#RUN docker-php-ext-install opcache
+#RUN docker-php-ext-install mcrypt
+#RUN docker-php-ext-install zip
+
+# define a list of utilities/commands in container. 
+ENTRYPOINT ["top", "-b"]
+

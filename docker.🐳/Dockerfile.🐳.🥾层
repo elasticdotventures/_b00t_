@@ -1,0 +1,12 @@
+# syntax=docker/dockerfile:1
+
+RUN /c0de/_b00t_/bash.🔨/c0re_init.🥾.sh
+
+# 🚀 StarShip
+RUN sh -c "$(curl -fsSL https://starship.rs/install.sh)" -- --bin-dir /data/data/com.termux/files/usr/bin
+
+
+
+# BashHub, cloud backed bash history 
+# https://github.com/rcaloras/bashhub-client
+# curl -OL https://bashhub.com/setup && bash setup

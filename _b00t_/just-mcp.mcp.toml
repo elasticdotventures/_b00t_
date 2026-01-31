@@ -1,7 +1,8 @@
 [b00t]
 name = "just-mcp"
 type = "mcp"
-hint = "Justfile MCP server"
+hint = "Justfile MCP server - exposes justfile recipes via MCP protocol"
+lfmf_category = "just"
 
 [[b00t.mcp.stdio]]
 command = "just-mcp"
@@ -9,3 +10,15 @@ args = ["--stdio"]
 transport = "stdio"
 priority = 0
 requires = []
+
+[b00t.learn]
+inline = """
+Just MCP server provides Model Context Protocol integration for justfiles, allowing AI assistants to:
+- List available recipes from justfiles
+- Execute just recipes
+- Query recipe metadata and dependencies
+"""
+
+[[b00t.usage]]
+description = "Start MCP server in stdio mode"
+command = "just-mcp --stdio"

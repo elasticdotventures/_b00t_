@@ -1,0 +1,14 @@
+[b00t]
+name = "ai-dev-stack"
+type = "stack"
+hint = "AI development stack with filesystem, GitHub, and Context7 MCP servers"
+
+# Stack members - MCP servers useful for AI-assisted development
+members = [
+    "filesystem.mcp",
+    "github.mcp",
+    "context7.mcp",
+]
+
+# No shared env vars needed for this stack
+# Individual MCP servers will use their own env requirements

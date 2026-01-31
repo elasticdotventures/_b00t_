@@ -39,7 +39,8 @@ b00t-cli is a Rust-based command-line tool for managing software versions and in
 - `install <command>`: Runs installation command from config
 - `update <command>`: Runs update command (falls back to install if not specified)
 - `. <command>`: Compares installed vs desired versions with emoji status
-- `up`: Updates all outdated tools found in config directory
+- `up`: Checks all CLI tools and reports version status (check-only by default)
+- `up --yes` or `up -y`: Checks and updates all outdated tools to desired versions
 
 **MCP (Model Context Protocol) Management**:
 - `mcp add <json>`: Parse JSON and create `.mcp.toml` configuration

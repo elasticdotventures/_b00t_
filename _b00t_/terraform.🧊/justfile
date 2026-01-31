@@ -1,0 +1,24 @@
+# Terraform/OpenTofu 🧊 Infrastructure as Code
+# b00t prefers OpenTofu (FOSS fork of Terraform)
+# 🤓: tofu > terraform (avoid Hashicorp license issues)
+
+# Install OpenTofu (preferred)
+install:
+    #!/bin/bash
+    if command -v tofu >/dev/null 2>&1; then
+        echo "✅ tofu already installed: $(tofu --version | head -1)"
+        exit 0
+    fi
+    echo "📦 Installing OpenTofu..."
+    if [ -f /etc/debian_version ]; then
+        # Ubuntu/Debian
+        curl --proto '=https' --tlsv1.2 -fsSL 'https://packages.opentofu.org/install/repositories/opentofu/tofu/script.deb.sh?any=true' -o /tmp/tofu-repository-setup.sh
+        sudo bash /tmp/tofu-repository-setup.sh
+        rm /tmp/tofu-repository-setup.sh
+        sudo apt-get update
+        sudo apt-get install -y tofu
+    else
+        echo "❌ Unsupported OS for auto-install"
+        exit 1
+    fi
+    echo "✅ OpenTofu installed: $(tofu --version | head -1)"

@@ -6,24 +6,26 @@
 //! - Team captain delegation and voting systems
 //! - Progress reporting and notifications
 
-use crate::redis::{RedisComms, AgentMessage, AgentStatus};
 use crate::B00tResult;
+use crate::redis::{AgentMessage, AgentStatus, RedisComms};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
-use tokio::sync::{mpsc, oneshot};
+use tokio::sync::{Mutex, mpsc, oneshot};
 use tokio::time::timeout;
+use tracing::{debug, error, info};
 
 /// Agent metadata for discovery and capabilities
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AgentMetadata {
     pub agent_id: String,
-    pub agent_role: String, // e.g., "captain", "worker", "specialist"
+    pub agent_role: String,        // e.g., "captain", "worker", "specialist"
     pub capabilities: Vec<String>, // Skills/domains this agent handles
-    pub crew: Option<String>, // Crew membership
+    pub crew: Option<String>,      // Crew membership
     pub status: AgentStatus,
-    pub last_seen: u64, // Unix timestamp
-    pub load: f32, // Current workload 0.0-1.0
+    pub last_seen: u64,                        // Unix timestamp
+    pub load: f32,                             // Current workload 0.0-1.0
     pub specializations: HashMap<String, f32>, // Domain -> proficiency score
 }
 
@@ -32,9 +34,7 @@ pub struct AgentMetadata {
 #[serde(tag = "msg_type", content = "data")]
 pub enum CoordinationMessage {
     /// Agent presence announcement
-    Presence {
-        metadata: AgentMetadata,
-    },
+    Presence { metadata: AgentMetadata },
 
     /// Direct message between agents
     DirectMessage {
@@ -101,7 +101,7 @@ pub enum CoordinationMessage {
     /// Notification about external events (files, PRs, etc.)
     EventNotification {
         event_type: String, // "file_created", "pr_opened", "build_failed", etc.
-        source: String, // System/service that generated the event
+        source: String,     // System/service that generated the event
         details: serde_json::Value,
         timestamp: u64,
         affected_agents: Option<Vec<String>>, // Target specific agents
@@ -136,7 +136,7 @@ pub enum TaskPriority {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum TaskCompletionStatus {
     Success,
-    Failed(String), // Error message
+    Failed(String),         // Error message
     PartialSuccess(String), // Partial completion details
     Cancelled,
 }
@@ -150,18 +150,21 @@ pub struct VotingOption {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum VotingType {
-    SingleChoice,     // Pick one option
-    RankedChoice,     // Rank options by preference
-    Approval,         // Approve multiple options
-    VetoCapable,      // Any agent can veto
+    SingleChoice, // Pick one option
+    RankedChoice, // Rank options by preference
+    Approval,     // Approve multiple options
+    VetoCapable,  // Any agent can veto
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum VoteChoice {
-    Single(String),                    // Option ID
-    Ranked(Vec<String>),              // Ordered list of option IDs
-    Approval(Vec<String>),            // List of approved option IDs
-    Veto { option_id: String, alternative: Option<String> },
+    Single(String),        // Option ID
+    Ranked(Vec<String>),   // Ordered list of option IDs
+    Approval(Vec<String>), // List of approved option IDs
+    Veto {
+        option_id: String,
+        alternative: Option<String>,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -213,13 +216,17 @@ impl AgentCoordinator {
             metadata: self.agent_metadata.clone(),
         };
 
-        self.redis.publish("b00t:agents:presence", &AgentMessage::Session {
-            session_id: self.agent_metadata.agent_id.clone(),
-            event: crate::redis::SessionEvent::Created,
-            data: HashMap::from([
-                ("coordination_message".to_string(), serde_json::to_value(&message)?),
-            ]),
-        })?;
+        self.redis.publish(
+            "b00t:agents:presence",
+            &AgentMessage::Session {
+                session_id: self.agent_metadata.agent_id.clone(),
+                event: crate::redis::SessionEvent::Created,
+                data: HashMap::from([(
+                    "coordination_message".to_string(),
+                    serde_json::to_value(&message)?,
+                )]),
+            },
+        )?;
 
         Ok(())
     }
@@ -251,7 +258,7 @@ impl AgentCoordinator {
         to_agent: &str,
         subject: &str,
         content: &str,
-        requires_ack: bool
+        requires_ack: bool,
     ) -> B00tResult<String> {
         let message_id = uuid::Uuid::new_v4().to_string();
         let message = CoordinationMessage::DirectMessage {
@@ -264,7 +271,8 @@ impl AgentCoordinator {
             requires_ack,
         };
 
-        self.send_coordination_message(&format!("b00t:agent:{}", to_agent), &message).await?;
+        self.send_coordination_message(&format!("b00t:agent:{}", to_agent), &message)
+            .await?;
         Ok(message_id)
     }
 
@@ -280,7 +288,11 @@ impl AgentCoordinator {
         blocking: bool,
     ) -> B00tResult<Option<TaskCompletion>> {
         let deadline_timestamp = deadline.map(|d| {
-            SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs() + d.as_secs()
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_secs()
+                + d.as_secs()
         });
 
         let message = CoordinationMessage::TaskDelegation {
@@ -304,11 +316,13 @@ impl AgentCoordinator {
         };
 
         // Send delegation message
-        self.send_coordination_message(&format!("b00t:agent:{}", worker_id), &message).await?;
+        self.send_coordination_message(&format!("b00t:agent:{}", worker_id), &message)
+            .await?;
 
         // If blocking, wait for completion
         if let Some(receiver) = completion_receiver {
-            match timeout(Duration::from_secs(3600), receiver).await { // 1 hour timeout
+            match timeout(Duration::from_secs(3600), receiver).await {
+                // 1 hour timeout
                 Ok(Ok(completion)) => Ok(Some(completion)),
                 Ok(Err(_)) => anyhow::bail!("Task completion channel closed unexpectedly"),
                 Err(_) => anyhow::bail!("Task delegation timed out after 1 hour"),
@@ -336,7 +350,8 @@ impl AgentCoordinator {
             artifacts,
         };
 
-        self.send_coordination_message(&format!("b00t:agent:{}", captain_id), &message).await?;
+        self.send_coordination_message(&format!("b00t:agent:{}", captain_id), &message)
+            .await?;
         Ok(())
     }
 
@@ -349,7 +364,11 @@ impl AgentCoordinator {
         estimated_completion: Option<Duration>,
     ) -> B00tResult<()> {
         let estimated_timestamp = estimated_completion.map(|d| {
-            SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs() + d.as_secs()
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_secs()
+                + d.as_secs()
         });
 
         let message = CoordinationMessage::ProgressUpdate {
@@ -361,7 +380,8 @@ impl AgentCoordinator {
         };
 
         // Broadcast progress to all interested parties
-        self.send_coordination_message("b00t:progress:updates", &message).await?;
+        self.send_coordination_message("b00t:progress:updates", &message)
+            .await?;
         Ok(())
     }
 
@@ -376,7 +396,8 @@ impl AgentCoordinator {
         eligible_voters: Vec<String>,
     ) -> B00tResult<HashMap<String, VoteChoice>> {
         let proposal_id = uuid::Uuid::new_v4().to_string();
-        let deadline_timestamp = SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs() + deadline.as_secs();
+        let deadline_timestamp =
+            SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs() + deadline.as_secs();
 
         let message = CoordinationMessage::VotingProposal {
             captain_id: self.agent_metadata.agent_id.clone(),
@@ -395,7 +416,8 @@ impl AgentCoordinator {
 
         // Send proposal to eligible voters
         for voter in &eligible_voters {
-            self.send_coordination_message(&format!("b00t:agent:{}", voter), &message).await?;
+            self.send_coordination_message(&format!("b00t:agent:{}", voter), &message)
+                .await?;
         }
 
         // Wait for voting to complete or timeout
@@ -421,7 +443,8 @@ impl AgentCoordinator {
         };
 
         // Send vote back to captain
-        self.send_coordination_message("b00t:votes:collection", &message).await?;
+        self.send_coordination_message("b00t:votes:collection", &message)
+            .await?;
         Ok(())
     }
 
@@ -442,7 +465,8 @@ impl AgentCoordinator {
         };
 
         // Broadcast to all agents or specific targets
-        self.send_coordination_message("b00t:events:notifications", &message).await?;
+        self.send_coordination_message("b00t:events:notifications", &message)
+            .await?;
         Ok(())
     }
 
@@ -479,7 +503,8 @@ impl AgentCoordinator {
         };
 
         // Broadcast capability request
-        self.send_coordination_message("b00t:capabilities:requests", &message).await?;
+        self.send_coordination_message("b00t:capabilities:requests", &message)
+            .await?;
 
         // TODO: Collect responses with timeout
         Ok(vec![])
@@ -487,13 +512,18 @@ impl AgentCoordinator {
 
     // Private helper methods
 
-    async fn send_coordination_message(&self, channel: &str, message: &CoordinationMessage) -> B00tResult<()> {
+    async fn send_coordination_message(
+        &self,
+        channel: &str,
+        message: &CoordinationMessage,
+    ) -> B00tResult<()> {
         let agent_message = AgentMessage::Session {
             session_id: uuid::Uuid::new_v4().to_string(),
             event: crate::redis::SessionEvent::Updated,
-            data: HashMap::from([
-                ("coordination_message".to_string(), serde_json::to_value(message)?),
-            ]),
+            data: HashMap::from([(
+                "coordination_message".to_string(),
+                serde_json::to_value(message)?,
+            )]),
         };
 
         self.redis.publish(channel, &agent_message)?;
@@ -501,14 +531,209 @@ impl AgentCoordinator {
     }
 
     async fn start_message_listener(&mut self) -> B00tResult<()> {
-        // TODO: Implement Redis subscription listener
-        // This would handle incoming coordination messages and route them to handlers
+        let mut subscriber = self.redis.create_subscriber()?;
+
+        // Subscribe to agent-specific channel and broadcast channels
+        let agent_channel = format!("b00t:agent:{}", self.agent_metadata.agent_id);
+        let channels = vec![
+            agent_channel.as_str(),
+            "b00t:agents:presence",
+            "b00t:votes:collection",
+            "b00t:progress:updates",
+            "b00t:events:notifications",
+            "b00t:capabilities:requests",
+        ];
+
+        subscriber.subscribe(&channels).await?;
+
+        let pending_tasks = Arc::new(Mutex::new(std::mem::take(&mut self.pending_tasks)));
+        let pending_votes = Arc::new(Mutex::new(std::mem::take(&mut self.pending_votes)));
+        let agent_id = self.agent_metadata.agent_id.clone();
+
+        tokio::spawn(async move {
+            while let Ok(Some(msg)) = subscriber.next_message().await {
+                if let Err(e) = Self::handle_subscription_message(
+                    msg,
+                    &agent_id,
+                    &pending_tasks,
+                    &pending_votes,
+                )
+                .await
+                {
+                    error!("Error handling subscription message: {}", e);
+                }
+            }
+        });
+
+        Ok(())
+    }
+
+    /// Handle an incoming pub/sub message.
+    async fn handle_subscription_message(
+        msg: crate::redis::PubSubMessage,
+        agent_id: &str,
+        pending_tasks: &Arc<Mutex<HashMap<String, oneshot::Sender<TaskCompletion>>>>,
+        _pending_votes: &Arc<Mutex<HashMap<String, oneshot::Sender<HashMap<String, VoteChoice>>>>>,
+    ) -> B00tResult<()> {
+        // Parse the AgentMessage envelope
+        let agent_msg: crate::redis::AgentMessage = serde_json::from_str(&msg.payload)?;
+
+        // Extract CoordinationMessage if present
+        if let crate::redis::AgentMessage::Session { data, .. } = agent_msg {
+            if let Some(coord_value) = data.get("coordination_message") {
+                let coord_msg: CoordinationMessage = serde_json::from_value(coord_value.clone())?;
+
+                match coord_msg {
+                    CoordinationMessage::TaskCompletion {
+                        worker_id,
+                        task_id,
+                        status,
+                        result,
+                        artifacts,
+                        ..
+                    } => {
+                        // Notify blocking delegate_task() calls
+                        let completion = TaskCompletion {
+                            task_id: task_id.clone(),
+                            status,
+                            result,
+                            artifacts,
+                            worker_id,
+                        };
+
+                        if let Some(tx) = pending_tasks.lock().await.remove(&task_id) {
+                            let _ = tx.send(completion);
+                        }
+                    }
+
+                    CoordinationMessage::Vote {
+                        voter_id,
+                        proposal_id,
+                        ..
+                    } => {
+                        // Collect votes for proposals
+                        // This is a simplified version - production would aggregate properly
+                        debug!(
+                            "Received vote from {} for proposal {}",
+                            voter_id, proposal_id
+                        );
+                    }
+
+                    CoordinationMessage::DirectMessage {
+                        to_agent,
+                        from_agent,
+                        subject,
+                        content,
+                        ..
+                    } => {
+                        if to_agent == agent_id {
+                            info!(
+                                "📨 Direct message from {}: {} - {}",
+                                from_agent, subject, content
+                            );
+                        }
+                    }
+
+                    CoordinationMessage::TaskDelegation {
+                        worker_id,
+                        task_description,
+                        priority,
+                        ..
+                    } => {
+                        if worker_id == agent_id {
+                            info!(
+                                "📋 Task delegation received: {} (priority: {:?})",
+                                task_description, priority
+                            );
+                            // Worker agents should handle this by processing the task
+                        }
+                    }
+
+                    CoordinationMessage::ProgressUpdate {
+                        task_id,
+                        progress_percent,
+                        status_message,
+                        ..
+                    } => {
+                        debug!(
+                            "📊 Progress update for {}: {}% - {}",
+                            task_id, progress_percent, status_message
+                        );
+                    }
+
+                    CoordinationMessage::Presence { metadata } => {
+                        debug!("👋 Agent presence: {}", metadata.agent_id);
+                    }
+
+                    _ => {
+                        // Other message types can be logged or handled by custom handlers
+                        debug!("Received coordination message on channel: {}", msg.channel);
+                    }
+                }
+            }
+        }
+
         Ok(())
     }
 
     async fn start_presence_heartbeat(&self) -> B00tResult<()> {
-        // TODO: Implement periodic presence updates
-        // Every 30 seconds, update agent metadata in Redis
+        let redis = self.redis.clone();
+        let mut metadata = self.agent_metadata.clone();
+        let agent_id = metadata.agent_id.clone();
+
+        tokio::spawn(async move {
+            let mut interval = tokio::time::interval(Duration::from_secs(30));
+
+            loop {
+                interval.tick().await;
+
+                // Update timestamp
+                metadata.last_seen = SystemTime::now()
+                    .duration_since(UNIX_EPOCH)
+                    .unwrap()
+                    .as_secs();
+
+                // Write to Redis hash (agent registry)
+                let json = match serde_json::to_string(&metadata) {
+                    Ok(j) => j,
+                    Err(e) => {
+                        error!("Failed to serialize agent metadata: {}", e);
+                        continue;
+                    }
+                };
+
+                if let Err(e) = redis.hset("b00t:agents:registry", &agent_id, &json) {
+                    error!("Failed to update agent registry: {}", e);
+                    continue;
+                }
+
+                // Publish presence announcement
+                let presence_msg = CoordinationMessage::Presence {
+                    metadata: metadata.clone(),
+                };
+
+                let agent_msg = crate::redis::AgentMessage::Session {
+                    session_id: uuid::Uuid::new_v4().to_string(),
+                    event: crate::redis::SessionEvent::Updated,
+                    data: match serde_json::to_value(&presence_msg) {
+                        Ok(v) => {
+                            let mut map = HashMap::new();
+                            map.insert("coordination_message".to_string(), v);
+                            map
+                        }
+                        Err(e) => {
+                            error!("Failed to serialize presence message: {}", e);
+                            continue;
+                        }
+                    },
+                };
+
+                if let Err(e) = redis.publish("b00t:agents:presence", &agent_msg) {
+                    error!("Failed to publish presence: {}", e);
+                }
+            }
+        });
+
         Ok(())
     }
 }
@@ -565,7 +790,7 @@ mod tests {
             VoteChoice::Ranked(vec!["opt1".to_string(), "opt2".to_string()]),
             VoteChoice::Veto {
                 option_id: "bad_option".to_string(),
-                alternative: Some("better_option".to_string())
+                alternative: Some("better_option".to_string()),
             },
         ];
 

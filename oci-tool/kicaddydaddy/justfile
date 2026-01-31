@@ -1,0 +1,27 @@
+# Define paths
+CONFIG_DIR := "/config"
+KICAD_CONTAINER := "ghcr.io/kicad/kicad:nightly-full"
+
+# Run KiCad in the container with necessary volumes mounted
+run-kicad:
+    docker run --rm -it -v ~/.dotfiles:{{CONFIG_DIR}} {{KICAD_CONTAINER}}
+
+# Build a project (specify path and flags as needed)
+build PROJECT_DIR:
+    docker run --rm -v {{PROJECT_DIR}}:/project -v ~/.dotfiles:{{CONFIG_DIR}} {{KICAD_CONTAINER}} kicad-cli sch export /project
+
+# Publish a build (to a repository or storage)
+publish PROJECT_DIR OUTPUT_DIR:
+    @echo "Publishing build from {{PROJECT_DIR}} to {{OUTPUT_DIR}}..."
+    # Replace with actual publishing commands, e.g., `rsync`, `scp`, etc.
+
+# Justify the setup
+setup:
+    @echo "Setting up environment for KiCad in a containerized toolchain."
+    # Any initialization logic here
+
+# Custom clean-up function (if needed)
+clean:
+    @echo "Cleaning up container instances or temp files..."
+    docker system prune -f
+
