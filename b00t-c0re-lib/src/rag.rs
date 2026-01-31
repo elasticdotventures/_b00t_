@@ -302,9 +302,22 @@ if __name__ == '__main__':
             provider = config.llm_config.provider,
             model = config.llm_config.model,
             vector_db_path = config.vector_db_path.display(),
-            loader_type = format!("{:?}", source.loader_type.unwrap_or(LoaderType::Auto)).to_lowercase(),
-            source = source.source,
-            topic = source.topic,
+            loader_type = format!("{:?}", source.loader_type.unwrap_or(LoaderType::Auto))
+                .to_lowercase()
+                .replace('\\', "\\\\")
+                .replace('\'', "\\'")
+                .replace('\n', "\\n")
+                .replace('\r', "\\r"),
+            source = source.source
+                .replace('\\', "\\\\")
+                .replace('\'', "\\'")
+                .replace('\n', "\\n")
+                .replace('\r', "\\r"),
+            topic = source.topic
+                .replace('\\', "\\\\")
+                .replace('\'', "\\'")
+                .replace('\n', "\\n")
+                .replace('\r', "\\r"),
         ));
 
         info!("Running RAGLight indexing for source: {}", source.source);
