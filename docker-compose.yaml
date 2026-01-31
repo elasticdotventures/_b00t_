@@ -1,0 +1,30 @@
+version: '3.8'
+
+# https://github.com/compose-spec/compose-spec/blob/master/spec.md
+
+services:
+  b00t:
+    build:
+      # context: https://github.com/elasticdotventures/_b00t_.git
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - 5004:5000
+    #args:
+    #  - ARRG=VALUE
+    environment:
+      - FLASK_APP=src/__init__.py
+      - FLASK_ENV=development
+    #volumes:
+    #  - .:/c0de/_b00t_
+    #volumes:
+    #    - ./:/var/www/html
+
+networks:
+  public: {}
+
+
+#  public
+#volumes:
+  
+#  // git? 
