@@ -348,7 +348,7 @@ fn handle_up_command(_b00t_path: &str, yes: bool) -> Result<()> {
         println!("     \"ai.*\",      # All AI providers");
         println!("   ]");
         println!("   ---\n");
-        println!("💡 Run `b00t install <datum>` to auto-create and update this file.");
+        println!("💡 Run `b00t install` to auto-create and update this file.");
         return Ok(());
     }
 
