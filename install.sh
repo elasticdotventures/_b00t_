@@ -137,6 +137,11 @@ EOF
     fi
 }
 
+# Escape directory path for safe shell usage
+escape_shell_path() {
+    printf '%q' "$1"
+}
+
 # Update PATH
 update_path() {
     local shell_rc=""
@@ -151,11 +156,15 @@ update_path() {
     fi
     
     # Check if PATH already contains install directory
+    # Use escape_shell_path for proper shell escaping to handle spaces and special chars
+    local escaped_install_dir
+    escaped_install_dir=$(escape_shell_path "$INSTALL_DIR")
+    
     if [[ ":$PATH:" != *":$INSTALL_DIR:"* ]]; then
         echo "${BLUE}🔧 Adding $INSTALL_DIR to PATH in $shell_rc...${NC}"
         echo "" >> "$shell_rc"
         echo "# Added by b00t installer" >> "$shell_rc"
-        echo "export PATH=\"$INSTALL_DIR:\$PATH\"" >> "$shell_rc"
+        printf 'export PATH=%s:"$PATH"\n' "$escaped_install_dir" >> "$shell_rc"
         export PATH="$INSTALL_DIR:$PATH"
     fi
 }
@@ -169,7 +178,10 @@ verify_installation() {
         echo "${GREEN}✅ b00t installed successfully: $version_output${NC}"
     else
         echo "${YELLOW}⚠️  b00t command not found in PATH${NC}"
-        echo "${BLUE}💡 Try running: export PATH=\"$INSTALL_DIR:\$PATH\"${NC}"
+        local escaped_install_dir
+        escaped_install_dir=$(escape_shell_path "$INSTALL_DIR")
+        # Display the escaped path safely
+        echo "${BLUE}💡 Try running: export PATH=${escaped_install_dir}:\"\$PATH\"${NC}"
     fi
 }
 
