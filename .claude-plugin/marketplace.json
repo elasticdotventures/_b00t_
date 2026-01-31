@@ -1,0 +1,19 @@
+{
+  "name": "b00t-plugins",
+  "owner": {
+    "name": "elasticdotventures"
+  },
+  "metadata": {
+    "description": "Local marketplace for b00t plugins and skills",
+    "version": "0.1.0",
+    "pluginRoot": "./plugins"
+  },
+  "plugins": [
+    {
+      "name": "b00t",
+      "source": "b00t",
+      "description": "Adds /b00t skill for dispatching b00t learn packets to agents",
+      "version": "0.1.0"
+    }
+  ]
+}

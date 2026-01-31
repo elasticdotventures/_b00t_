@@ -301,7 +301,8 @@ mcp-probe
 
 # Claude Code frameworks (exclude all)
 .claude/
-# Archive for old/irrelevant files\n
+
+# Archive for old/irrelevant files
 _archive_/
 
 # Proprietary/Licensed Content - DO NOT COMMIT
@@ -312,3 +313,12 @@ _archive_/
 *.togaf-datasheet.*
 google-cloud-sdk/
 .cargo/*
+integrations/plantuml-server--b00t--togaf--mcp/
+
+# Unfinished/experimental - not part of b00t
+.devcontainer.x/
+docker-to-wsl/
+docker/
+nextest_test
+togaf-cli/
+togaf-dsl/
