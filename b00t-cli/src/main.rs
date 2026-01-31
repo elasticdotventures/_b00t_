@@ -7,9 +7,43 @@ use std::fs;
 // use std::io::{Read};
 // use std::path::PathBuf;
 // 🤓 cleaned up unused Tera import after switching to simple string replacement
-use b00t_cli::{
-    commands,SessionState,
-    load_datum_providers, UnifiedConfig, session_memory, whoami,
+use b00t_cli::{commands, load_datum_providers, session_memory, AiConfig, BootDatum, SessionState, UnifiedConfig, handle_up_command, whoami};
+
+mod bootstrap;
+mod cloud_sync;
+mod commands;
+mod datum_ai;
+mod datum_ai_model;
+mod datum_apt;
+mod datum_bash;
+mod datum_cli;
+mod datum_docker;
+mod datum_gemini;
+mod datum_mcp;
+mod datum_utils;
+mod datum_vscode;
+mod session_memory;
+mod test_cloud_integration;
+mod traits;
+mod utils;
+use utils::get_workspace_root;
+
+// 🦨 REMOVED unused K8sDatum import - not used in main.rs
+use datum_ai::AiDatum;
+use datum_ai_model::AiModelDatumEntry;
+use datum_apt::AptDatum;
+use datum_bash::BashDatum;
+use datum_cli::CliDatum;
+use datum_docker::DockerDatum;
+use datum_mcp::McpDatum;
+use datum_vscode::VscodeDatum;
+use traits::*;
+
+use crate::commands::learn::{LearnArgs, handle_learn};
+use crate::commands::{
+    AiCommands, AppCommands, BootstrapCommands, ChatCommands, CliCommands, DatumCommands,
+    GrokCommands, InitCommands, InstallCommands, K8sCommands, McpCommands, ModelCommands,
+    SessionCommands, StackCommands, WhatismyCommands,
 };
 
 
@@ -1340,6 +1374,12 @@ async fn main() {
             // Determine scope
             let scope = if *global { "global" } else { "repo" };
             if let Err(e) = commands::lfmf::handle_lfmf(&cli.path, &tool, &lesson, scope).await {
+                eprintln!("Error: {}", e);
+                std::process::exit(1);
+            }
+        }
+        Some(Commands::Up { yes }) => {
+            if let Err(e) = handle_up_command(&cli.path, *yes) {
                 eprintln!("Error: {}", e);
                 std::process::exit(1);
             }
