@@ -16,11 +16,17 @@
 set -o nounset    # Exposes unset variables, strict mode.
 trap "set +o nounset" EXIT  # restore nounset at exit, even in crash!
 
-# Initialize variables that may be referenced before being set
+# 🦨 TODO: refactor the list using b00t datums to (TRACK or DETECT) what is installed and initialize based on the datum (new capability), before this list becomes too exhaustively long.
+# Provide safe defaults for environment variables referenced under nounset
 : "${force_color_prompt:=}"
-: "${preexec_functions:=}"
+: "${SDKMAN_CANDIDATES_API:=}"
+: "${SDKMAN_BROKER_API:=}"
+: "${ZSH_VERSION:=}"
+: "${sdkman_curl_retry:=}"
+: "${sdkman_curl_retry_max_time:=}"
+: "${sdkman_curl_continue:=}"
+: "${IS_WSL:=false}"
 : "${SSH_AUTH_SOCK:=}"
-
 # 🤔 trial:
 umask 000
 
@@ -335,6 +341,7 @@ if [ -f "/usr/bin/fdfind" ] ; then
 fi
 
 # handy for generating dumps, etc..
+## date helpers
 # $ script.sh >> foobar.`ymd`
 if ! command -v ymd >/dev/null 2>&1; then
     ymd() { date +'%Y%m%d'; }
