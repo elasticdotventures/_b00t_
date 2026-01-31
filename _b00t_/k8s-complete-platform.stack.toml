@@ -1,0 +1,46 @@
+[b00t]
+name = "k8s-complete-platform"
+type = "stack"
+hint = "Complete k8s platform: DevEx + Workflows + GPU/Observability + GitOps"
+members = [
+    "phase1-devex.stack",
+    "phase3-workflows.stack",
+    "phase2-gpu-observability.stack",
+    "phase4-gitops.stack"
+]
+
+[b00t.orchestration]
+schedule_type = "platform"
+gpu_enabled = true
+gitops_enabled = true
+budget_tracking = true
+
+[b00t.orchestration.budget_constraint]
+daily_limit = 500.00
+cost_per_job = 2.50
+on_budget_exceeded = "alert"
+webhook_url = "http://n8n.default.svc.cluster.local:5678/webhook/budget"
+
+[[b00t.usage]]
+description = "Install complete k8s platform (all phases)"
+command = "b00t stack install k8s-complete-platform"
+
+[[b00t.usage]]
+description = "Deploy complete platform to cluster"
+command = "b00t stack deploy k8s-complete-platform"
+
+[[b00t.usage]]
+description = "Check platform status"
+command = "b00t stack status k8s-complete-platform"
+
+[[b00t.usage]]
+description = "Quick access: k9s UI"
+command = "k9s"
+
+[[b00t.usage]]
+description = "Quick access: Grafana"
+command = "kubectl port-forward -n monitoring svc/kube-prometheus-stack-grafana 3000:80"
+
+[[b00t.usage]]
+description = "Quick access: Argo Workflows UI"
+command = "kubectl -n argo port-forward deployment/argo-workflows-server 2746:2746"

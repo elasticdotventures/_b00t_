@@ -1,4 +1,4 @@
-use crate::get_expanded_path;
+use crate::{DatumType, get_config, get_expanded_path};
 use anyhow::{Context, Result};
 use b00t_c0re_lib::TemplateRenderer;
 use std::fs;
@@ -28,8 +28,8 @@ pub fn detect_agent(ignore_env: bool) -> String {
     "".to_string()
 }
 
-/// Display agent identity information from AGENT.md template
-pub fn whoami(path: &str) -> Result<()> {
+/// Display agent identity information from AGENT.md template and role datum (if available)
+pub fn whoami(path: &str, role_override: Option<String>) -> Result<()> {
     let expanded_path = get_expanded_path(path)?;
     let agent_md_path = expanded_path.join("AGENT.md");
 
@@ -55,7 +55,86 @@ pub fn whoami(path: &str) -> Result<()> {
 
     println!("{}", rendered);
 
+    // Append role summary if we can resolve a role datum
+    if let Some(role) = resolve_role(role_override) {
+        if let Some(role_details) = load_role_datum(&role, path) {
+            print_role_summary(&role_details);
+        } else {
+            println!(
+                "⚠️ Role datum '{}' not found or missing required fields",
+                role
+            );
+        }
+    }
+
     Ok(())
+}
+
+#[derive(Clone, Debug, PartialEq)]
+struct RoleDetails {
+    name: String,
+    hint: String,
+    skills: Vec<String>,
+    compliance: Vec<String>,
+}
+
+fn resolve_role(role_override: Option<String>) -> Option<String> {
+    role_override
+        .filter(|r| !r.trim().is_empty())
+        .or_else(|| std::env::var("_B00T_ROLE").ok())
+        .map(|r| r.to_lowercase())
+}
+
+fn load_role_datum(role: &str, path: &str) -> Option<RoleDetails> {
+    let (config, _) = get_config(role, path).ok()?;
+    let datum = config.b00t;
+
+    if let Some(datum_type) = &datum.datum_type {
+        if datum_type != &DatumType::Role {
+            return None;
+        }
+    } else {
+        // Without an explicit type we assume a generic datum is intended for this role
+    }
+
+    let skills = datum.skills.unwrap_or_default();
+    let compliance = datum.compliance.unwrap_or_default();
+
+    Some(RoleDetails {
+        name: datum.name,
+        hint: datum.hint,
+        skills,
+        compliance,
+    })
+}
+
+fn summarize_list(items: &[String], max_items: usize) -> Option<String> {
+    if items.is_empty() {
+        return None;
+    }
+
+    let shown: Vec<String> = items.iter().take(max_items).cloned().collect();
+    let remaining = items.len().saturating_sub(shown.len());
+
+    let mut summary = shown.join(", ");
+    if remaining > 0 {
+        summary.push_str(&format!(" (+{} more)", remaining));
+    }
+
+    Some(summary)
+}
+
+fn print_role_summary(role: &RoleDetails) {
+    println!("🎭 Role: {}", role.name);
+    println!("💡 {}", role.hint);
+
+    if let Some(skills_summary) = summarize_list(&role.skills, 5) {
+        println!("🧠 Skills: {}", skills_summary);
+    }
+
+    if let Some(compliance_summary) = summarize_list(&role.compliance, 3) {
+        println!("⚖️ Compliance: {}", compliance_summary);
+    }
 }
 
 #[cfg(test)]
@@ -103,5 +182,29 @@ mod tests {
         unsafe {
             std::env::remove_var("_B00T_Agent");
         }
+    }
+
+    #[test]
+    fn test_resolve_role_prefers_override() {
+        unsafe {
+            std::env::set_var("_B00T_ROLE", "captain");
+        }
+        let resolved = resolve_role(Some("executive".to_string()));
+        assert_eq!(resolved, Some("executive".to_string()));
+        unsafe {
+            std::env::remove_var("_B00T_ROLE");
+        }
+    }
+
+    #[test]
+    fn test_summarize_list_limits_output() {
+        let items = vec![
+            "a".to_string(),
+            "b".to_string(),
+            "c".to_string(),
+            "d".to_string(),
+        ];
+        let summary = summarize_list(&items, 2).unwrap();
+        assert_eq!(summary, "a, b (+2 more)");
     }
 }

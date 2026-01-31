@@ -58,6 +58,7 @@ impl Default for SessionConfig {
                 "HOME".to_string(),
                 "CLAUDECODE".to_string(),
                 "_B00T_Agent".to_string(),
+                "_B00T_ROLE".to_string(),
                 "VSCODE_GIT_IPC_HANDLE".to_string(),
                 "SSH_CLIENT".to_string(),
                 "SSH_TTY".to_string(),
@@ -102,6 +103,10 @@ impl Default for SessionMetadata {
 impl SessionMemory {
     /// Get the git root path for storing _b00t_.toml in .git/ directory
     pub fn get_config_path() -> Result<PathBuf> {
+        if let Ok(test_root) = std::env::var("_B00T_TEST_ROOT") {
+            return Ok(PathBuf::from(test_root).join(".git"));
+        }
+
         let git_root = get_workspace_root();
         Ok(PathBuf::from(git_root).join(".git"))
     }
@@ -160,27 +165,9 @@ impl SessionMemory {
         // Ensure ._b00t_.toml is in .gitignore before creating/loading
         Self::ensure_gitignore_entry().context("Failed to ensure .gitignore entry")?;
 
-        let config_path = config_dir.join("_b00t_.toml");
-
-        // Use confy to load from _b00t_.toml in .git directory, falling back to defaults on bad data
-        let mut memory: SessionMemory = match confy::load_path(&config_path) {
-            Ok(memory) => memory,
-            Err(err) => {
-                // Backup the invalid file if it exists, then start fresh
-                if config_path.exists() {
-                    let backup_path = config_path.with_extension("toml.bak");
-                    let _ = fs::rename(&config_path, &backup_path);
-                }
-                tracing::warn!(
-                    "Session memory file corrupt or unreadable ({}); regenerating defaults",
-                    err
-                );
-                let mut memory = SessionMemory::default();
-                // Force metadata reinitialization flow below
-                memory.metadata.session_id.clear();
-                memory
-            }
-        };
+        // Use confy to load from _b00t_.toml in .git directory
+        let mut memory: SessionMemory = confy::load_path(config_dir.join("_b00t_.toml"))
+            .context("Failed to load session memory")?;
 
         // Initialize metadata if this is first load
         if memory.metadata.session_id.is_empty() {
@@ -192,6 +179,9 @@ impl SessionMemory {
         if memory.config.tracked_env_vars.is_empty() {
             memory.config = SessionConfig::default();
         }
+
+        // Persist or restore role across shells
+        memory.refresh_role_env();
 
         // Update last accessed time and save
         memory.metadata.updated_at = chrono::Utc::now();
@@ -385,6 +375,25 @@ impl SessionMemory {
         result
     }
 
+    /// Persist _B00T_ROLE when set; restore last role when missing
+    pub fn refresh_role_env(&mut self) {
+        if let Ok(role) = std::env::var("_B00T_ROLE") {
+            if !role.is_empty() {
+                self.strings.insert("last_role".to_string(), role);
+                return;
+            }
+        }
+
+        if std::env::var("_B00T_ROLE").is_err() {
+            if let Some(last_role) = self.strings.get("last_role").cloned() {
+                unsafe {
+                    std::env::set_var("_B00T_ROLE", &last_role);
+                }
+                eprintln!("⚠️ Restored _B00T_ROLE from last session: {}", last_role);
+            }
+        }
+    }
+
     /// Increment shell start count for this PID
     pub fn increment_shell_count(&mut self) -> Result<i64> {
         if !self.config.count_shell_starts {
@@ -455,10 +464,12 @@ impl SessionMemory {
         let agent_name = self
             .get_env_var("_B00T_Agent")
             .unwrap_or_else(|| "Unknown".to_string());
+        let agent_role = self.get_env_var("_B00T_ROLE");
         let current_branch = self.metadata.initial_branch.as_deref().unwrap_or("unknown");
 
         AgentContext {
             agent_name,
+            agent_role,
             session_id: self.metadata.session_id.clone(),
             session_duration: self.seconds_since_start(),
             current_branch: current_branch.to_string(),
@@ -572,6 +583,7 @@ impl SessionMemory {
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct AgentContext {
     pub agent_name: String,
+    pub agent_role: Option<String>,
     pub session_id: String,
     pub session_duration: i64,
     pub current_branch: String,

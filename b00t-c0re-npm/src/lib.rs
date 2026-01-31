@@ -21,8 +21,9 @@ pub fn b00t_version() -> String {
 /// Core b00t greeting - stay aligned!
 #[wasm_bindgen]
 pub fn b00t_greet(name: &str) -> String {
+    // 🤓 Melvin: As per new hive convention, only k0mmand3r dispenses 🎂. General rewards use 🍰.
     format!(
-        "🥾 Hello {}, welcome to b00t! Stay aligned, get cake! 🎂",
+        "🥾 Hello {}, welcome to b00t! Stay aligned, get cake! 🍰",
         name
     )
 }

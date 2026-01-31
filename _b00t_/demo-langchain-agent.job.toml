@@ -1,0 +1,55 @@
+[b00t]
+name = "demo-langchain-agent"
+type = "job"
+hint = "Demo workflow using LangChain agent for research tasks"
+
+[b00t.job]
+description = "Demonstrate LangChain agent integration with job system"
+author = "b00t"
+tags = ["demo", "langchain", "agent", "research"]
+
+[b00t.job.config]
+mode = "sequential"
+checkpoint_mode = "auto"
+checkpoint_after_each_step = true
+use_subagents = true
+subagent_type = "langchain"
+subagent_timeout_ms = 300000
+continue_on_failure = false
+
+[[b00t.job.steps]]
+name = "research-langchain"
+description = "Use researcher agent to analyze LangChain integration"
+
+[b00t.job.steps.task]
+type = "agent"
+agent_type = "researcher"
+prompt = """
+Analyze the integration between b00t job system and LangChain agents.
+Key questions:
+1. What are the benefits of this integration?
+2. What workflow patterns does it enable?
+3. How does it compare to direct agent invocation?
+"""
+context_files = [
+    "LANGCHAIN_ARCHITECTURE.md",
+    "b00t-cli/src/datum_job.rs"
+]
+timeout_ms = 180000
+
+[[b00t.job.steps]]
+name = "summarize-findings"
+description = "Summarize the research findings"
+checkpoint = "research-complete"
+
+[b00t.job.steps.task]
+type = "bash"
+command = """
+echo "✅ LangChain agent research completed"
+echo ""
+echo "The integration enables:"
+echo "  - Workflow-driven agent execution"
+echo "  - Git-based checkpoint persistence"
+echo "  - Multi-step agent orchestration"
+echo "  - Context injection from files"
+"""

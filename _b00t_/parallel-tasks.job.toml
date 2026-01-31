@@ -1,0 +1,155 @@
+# DAG workflow - Parallel task execution
+# Demonstrates dependency management and parallel execution
+
+[b00t]
+name = "parallel-tasks"
+type = "job"
+hint = "DAG workflow with parallel and sequential steps"
+version = "1.0.0"
+
+[b00t.job]
+description = "Demonstrate DAG execution with parallel tasks and dependencies"
+author = "hackathon-team"
+tags = ["demo", "dag", "parallel"]
+
+[b00t.job.config]
+mode = "dag"  # DAG mode enables dependency-based execution
+checkpoint_mode = "auto"
+checkpoint_after_each_step = false  # Only checkpoint at key stages
+create_git_tag = false
+use_subagents = false
+continue_on_failure = false
+
+# Root task - no dependencies
+[[b00t.job.steps]]
+name = "init"
+description = "Initialize workspace"
+checkpoint = "init-complete"
+
+[b00t.job.steps.task]
+type = "bash"
+command = '''
+echo "Initializing workspace..."
+mkdir -p /tmp/b00t-dag-demo/{data,output,logs}
+echo "Workspace initialized"
+'''
+
+# Parallel tasks - both depend only on init
+[[b00t.job.steps]]
+name = "process-a"
+description = "Process dataset A (runs in parallel with B)"
+depends_on = ["init"]
+
+[b00t.job.steps.task]
+type = "bash"
+command = '''
+echo "Processing dataset A..."
+sleep 1
+echo "Dataset A processed" > /tmp/b00t-dag-demo/data/result-a.txt
+cat /tmp/b00t-dag-demo/data/result-a.txt
+'''
+timeout_ms = 5000
+
+[[b00t.job.steps]]
+name = "process-b"
+description = "Process dataset B (runs in parallel with A)"
+depends_on = ["init"]
+
+[b00t.job.steps.task]
+type = "bash"
+command = '''
+echo "Processing dataset B..."
+sleep 1
+echo "Dataset B processed" > /tmp/b00t-dag-demo/data/result-b.txt
+cat /tmp/b00t-dag-demo/data/result-b.txt
+'''
+timeout_ms = 5000
+
+[[b00t.job.steps]]
+name = "process-c"
+description = "Process dataset C (runs in parallel with A and B)"
+depends_on = ["init"]
+
+[b00t.job.steps.task]
+type = "bash"
+command = '''
+echo "Processing dataset C..."
+sleep 1
+echo "Dataset C processed" > /tmp/b00t-dag-demo/data/result-c.txt
+cat /tmp/b00t-dag-demo/data/result-c.txt
+'''
+timeout_ms = 5000
+
+# Merge task - depends on all parallel tasks
+[[b00t.job.steps]]
+name = "merge"
+description = "Merge all results (waits for A, B, C)"
+depends_on = ["process-a", "process-b", "process-c"]
+checkpoint = "merge-complete"
+
+[b00t.job.steps.task]
+type = "bash"
+command = '''
+echo "Merging results..."
+cat /tmp/b00t-dag-demo/data/result-*.txt > /tmp/b00t-dag-demo/output/merged.txt
+echo "Merge complete. Results:"
+cat /tmp/b00t-dag-demo/output/merged.txt
+'''
+
+# Validation - depends on merge
+[[b00t.job.steps]]
+name = "validate"
+description = "Validate merged output"
+depends_on = ["merge"]
+
+[b00t.job.steps.task]
+type = "bash"
+command = '''
+echo "Validating output..."
+if [ $(wc -l < /tmp/b00t-dag-demo/output/merged.txt) -eq 3 ]; then
+    echo "✓ Validation passed: Found 3 result lines"
+else
+    echo "✗ Validation failed: Expected 3 lines"
+    exit 1
+fi
+'''
+
+# Reporting - parallel with validation
+[[b00t.job.steps]]
+name = "report"
+description = "Generate report (runs parallel with validate)"
+depends_on = ["merge"]
+
+[b00t.job.steps.task]
+type = "bash"
+command = '''
+echo "Generating report..."
+echo "=== Job Execution Report ===" > /tmp/b00t-dag-demo/output/report.txt
+echo "Processed: A, B, C" >> /tmp/b00t-dag-demo/output/report.txt
+echo "Merged: $(date)" >> /tmp/b00t-dag-demo/output/report.txt
+cat /tmp/b00t-dag-demo/output/report.txt
+'''
+
+# Final cleanup - depends on both validate and report
+[[b00t.job.steps]]
+name = "cleanup"
+description = "Clean up temporary files"
+depends_on = ["validate", "report"]
+checkpoint = "complete"
+
+[b00t.job.steps.task]
+type = "bash"
+command = '''
+echo "Cleaning up..."
+rm -rf /tmp/b00t-dag-demo
+echo "Cleanup complete"
+'''
+
+[b00t.job.env]
+DAG_MODE = "true"
+PARALLEL_JOBS = "3"
+
+[b00t.job.outputs]
+artifacts = []
+reports = []
+logs = [".b00t/jobs/parallel-tasks/*.json"]

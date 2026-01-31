@@ -181,14 +181,24 @@ pub struct McpRegistry {
 
 impl McpRegistry {
     /// Create new MCP registry
-    pub fn new(storage_path: PathBuf) -> Result<Self> {
+    /// If from_file is true, will attempt to load from storage_path
+    /// If from_file is false, will initialize empty and sync from datum files
+    pub fn new(storage_path: PathBuf, from_file: bool) -> Result<Self> {
         let mut registry = Self {
             servers: HashMap::new(),
             storage_path,
             enable_official_sync: true,
         };
 
-        registry.load()?;
+        if from_file {
+            registry.load()?;
+        } else {
+            // Load from datum files instead of file
+            if let Err(e) = registry.sync_from_datums("~/.b00t") {
+                warn!("Failed to sync from datums: {}", e);
+            }
+        }
+
         Ok(registry)
     }
 
@@ -208,19 +218,11 @@ impl McpRegistry {
         Ok(())
     }
 
-    /// Save registry to storage
+    /// Save registry to storage - NO-OP in the new design since registry is runtime-only
     fn save(&self) -> Result<()> {
-        // Ensure parent directory exists
-        if let Some(parent) = self.storage_path.parent() {
-            std::fs::create_dir_all(parent).context("Failed to create registry directory")?;
-        }
-
-        let data =
-            serde_json::to_string_pretty(&self.servers).context("Failed to serialize registry")?;
-
-        std::fs::write(&self.storage_path, data).context("Failed to write registry storage")?;
-
-        debug!("💾 Saved registry with {} servers", self.servers.len());
+        // In the new design, we don't persist the registry to file
+        // The source of truth is the datum TOML files in ~/.b00t/
+        debug!("Registry persistence disabled - using datum files as source of truth");
         Ok(())
     }
 
@@ -234,7 +236,7 @@ impl McpRegistry {
         self.validate_registration(&registration)?;
 
         self.servers.insert(server_id.clone(), registration);
-        self.save()?;
+        // Don't save to file - registry is runtime-only, registration is ephemeral
 
         info!("✅ Successfully registered MCP server: {}", server_id);
         Ok(())
@@ -243,7 +245,7 @@ impl McpRegistry {
     /// Unregister an MCP server
     pub fn unregister(&mut self, server_id: &str) -> Result<()> {
         if self.servers.remove(server_id).is_some() {
-            self.save()?;
+            // Don't save to file - registry is runtime-only, unregistration is ephemeral
             info!("🗑️  Unregistered MCP server: {}", server_id);
             Ok(())
         } else {
@@ -292,7 +294,7 @@ impl McpRegistry {
         if let Some(registration) = self.servers.get_mut(server_id) {
             registration.metadata.health_status = status;
             registration.metadata.last_health_check = Some(Utc::now());
-            self.save()?;
+            // Don't save to file - registry is runtime-only, health status is ephemeral
             Ok(())
         } else {
             Err(anyhow::anyhow!("Server '{}' not found", server_id))
@@ -349,7 +351,7 @@ impl McpRegistry {
         }
 
         if imported_count > 0 {
-            self.save()?;
+            // Don't save to file - registry is runtime-only, import is ephemeral
         }
 
         Ok(imported_count)
@@ -377,7 +379,7 @@ impl McpRegistry {
         }
 
         if synced_count > 0 {
-            self.save()?;
+            // Don't save to file - registry is runtime-only, sync is ephemeral
         }
 
         info!("✅ Synced {} servers from official registry", synced_count);
@@ -412,7 +414,7 @@ impl McpRegistry {
         }
 
         if discovered_count > 0 {
-            self.save()?;
+            // Don't save to file - registry is runtime-only, discovery is ephemeral
             info!("✅ Discovered {} MCP servers", discovered_count);
         }
 
@@ -461,7 +463,7 @@ impl McpRegistry {
         }
 
         if synced_count > 0 {
-            self.save()?;
+            // Don't save to file - registry is runtime-only, datum sync is ephemeral
             info!("✅ Synced {} MCP servers from datums", synced_count);
         }
 
@@ -490,6 +492,8 @@ impl McpRegistry {
             env: Option<HashMap<String, String>>,
             #[serde(default)]
             keywords: Option<Vec<String>>,
+            #[serde(default)]
+            ansible: Option<serde_json::Value>,
             mcp: Option<serde_json::Value>,
         }
 
@@ -640,7 +644,7 @@ impl McpRegistry {
             registration.metadata.installation_status = InstallationStatus::Installing;
             registration.metadata.dependencies.clone()
         };
-        self.save()?;
+        // Don't save to file - registry is runtime-only, dependency status is ephemeral
 
         // Check and install each dependency
         let mut installed_deps = Vec::new();
@@ -663,7 +667,7 @@ impl McpRegistry {
                     warn!("⚠️  {}", error_msg);
                     let reg = self.servers.get_mut(server_id).unwrap();
                     reg.metadata.installation_status = InstallationStatus::Failed(error_msg);
-                    self.save()?;
+                    // Don't save to file - registry is runtime-only, failure status is ephemeral
                     return Err(e);
                 }
             }
@@ -674,7 +678,7 @@ impl McpRegistry {
         registration.metadata.dependencies = installed_deps;
         registration.metadata.installation_status = InstallationStatus::Installed;
         registration.metadata.updated_at = Utc::now();
-        self.save()?;
+        // Don't save to file - registry is runtime-only, installation status is ephemeral
 
         info!("✅ All dependencies installed for {}", server_id);
         Ok(())
@@ -857,7 +861,8 @@ impl Default for McpRegistry {
             .join(".b00t")
             .join("mcp_registry.json");
 
-        Self::new(storage_path.clone()).unwrap_or_else(|_| Self {
+        // Initialize without loading from file, instead sync from datum files
+        Self::new(storage_path.clone(), false).unwrap_or_else(|_| Self {
             servers: HashMap::new(),
             storage_path,
             enable_official_sync: true,

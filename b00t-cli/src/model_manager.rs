@@ -6,7 +6,7 @@ use duct::cmd;
 use serde::Serialize;
 use std::collections::BTreeMap;
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 const STATE_DIR: &str = "~/.b00t/models";
 const ACTIVE_MODEL_FILE: &str = "active-model";

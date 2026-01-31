@@ -16,6 +16,17 @@
 set -o nounset    # Exposes unset variables, strict mode.
 trap "set +o nounset" EXIT  # restore nounset at exit, even in crash!
 
+# 🦨 TODO: refactor the list using b00t datums to (TRACK or DETECT) what is installed and initialize based on the datum (new capability), before this list becomes too exhaustively long.
+# Provide safe defaults for environment variables referenced under nounset
+: "${force_color_prompt:=}"
+: "${SDKMAN_CANDIDATES_API:=}"
+: "${SDKMAN_BROKER_API:=}"
+: "${ZSH_VERSION:=}"
+: "${sdkman_curl_retry:=}"
+: "${sdkman_curl_retry_max_time:=}"
+: "${sdkman_curl_continue:=}"
+: "${IS_WSL:=false}"
+: "${SSH_AUTH_SOCK:=}"
 # 🤔 trial:
 umask 000
 
@@ -48,6 +59,9 @@ _b00t_INSPIRATION_FILE="$_B00T_Path/./r3src_资源/inspiration.json"
 # mostly, this is for future opentelemetry & storytime log
 unset -f log_📢_记录
 function log_📢_记录() {
+    if [ -n "${_B00T_QUIET_LOGIN:-}" ] || [ -n "${_B00T_Agent:-}" ]; then
+        return 0
+    fi
     # Use session-aware output control via b00t-cli
     if command -v b00t-cli &> /dev/null; then
         # Check if we should show verbose output
@@ -126,7 +140,7 @@ pathAdd "$HOME/.yarn/bin"
 ## * * * * * //
 
 
-if [ "/usr/bin/docker" ] ; then
+if [ -x "/usr/bin/docker" ] ; then
     log_📢_记录 "🐳 has d0cker! loading docker extensions"
     source "$_B00T_Path/docker.🐳/_bashrc.sh"
 
@@ -327,11 +341,26 @@ if [ -f "/usr/bin/fdfind" ] ; then
 fi
 
 # handy for generating dumps, etc..
+## date helpers
 # $ script.sh >> foobar.`ymd`
+if ! command -v ymd >/dev/null 2>&1; then
+    ymd() { date +'%Y%m%d'; }
+fi
+if ! command -v ymd_hm >/dev/null 2>&1; then
+    ymd_hm() { date +'%Y%m%d.%H%M'; }
+fi
+if ! command -v ymd_hms >/dev/null 2>&1; then
+    ymd_hms() { date +'%Y%m%d.%H%M%S'; }
+fi
 alias yyyymmdd="date +'%Y%m%d'"
 alias ymd="date +'%Y%m%d'"
 alias ymd_hm="date +'%Y%m%d.%H%M'"
 alias ymd_hms="date +'%Y%m%d.%H%M%S'"
+
+# TODO: fix Ensure date helpers are available in non-interactive shells where aliases are disabled
+#if ! command -v ymd >/dev/null 2>&1; then ymd(){ date +'%Y%m%d'; }; fi
+#if ! command -v ymd_hm >/dev/null 2>&1; then ymd_hm(){ date +'%Y%m%d.%H%M'; }; fi
+#if ! command -v ymd_hms >/dev/null 2>&1; then ymd_hms(){ date +'%Y%m%d.%H%M%S'; }; fi
 ##################
 
 
@@ -417,7 +446,7 @@ export -f _b00t_init_🥾_开始
 function iz_n0t_alpine_linux_🐧🌲() {
    return $(cat /etc/os-release | grep "NAME=" | grep -ic "Alpine")
 }
-if [ ! iz_n0t_alpine_linux ] ; then
+if ! iz_n0t_alpine_linux_🐧🌲 ; then
     # gh issue
     echo "🥾🤮 🐧🌲 alpine linux not fully supported yet"
 fi
@@ -817,8 +846,6 @@ elif [ "$(rand0 10)" -gt 5 ] ; then
         /bin/rm -f $motdTmpFile
     fi
 
-    # part of motd
-
     log_📢_记录 "lang: $LANG"
     log_📢_记录 "🥾📈 motd project stats, cleanup, tasks goes here. "
     local skunk_x=0
@@ -1015,11 +1042,9 @@ function _b00t_check() {
     fi
 }
 
-# Run _b00t_check automatically when .bashrc is sourced
+# TODO: idempotency; Run _b00t_check automatically when .bashrc is sourced
 # check b00t bash alias (was it created, then it exists)
-if ! is_n0t_aliased "b00t" ; then
-    _b00t_check
-fi
+#if ! is_n0t_aliased "b00t" ; then
+#    _b00t_check
+#fi
 
-# alias b00t-check=_b00t_check
-# alias b00t-up="b00t up"

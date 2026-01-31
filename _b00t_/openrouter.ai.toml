@@ -46,4 +46,6 @@ max_tokens = 4096
 required = ["OPENROUTER_API_KEY"]
 
 # Optional: Default values for non-secret configuration
-defaults = { OPENROUTER_API_BASE = "https://openrouter.ai/api/v1" }
+# 🤓: env.defaults expects string value, not inline map
+[b00t.env.defaults]
+OPENROUTER_API_BASE = "https://openrouter.ai/api/v1"

@@ -1,18 +1,8 @@
-use anyhow::{Result, anyhow};
-use b00t_cli::model_manager::{
-    // 🦨 Fix: use b00t_cli:: from binary, model_manager is in lib
-    ModelOperation,
-    ModelRecord,
-    ServeOptions,
-    activate_model,
-    describe_model,
-    download_model,
-    export_model_env,
-    list_models,
-    remove_model,
-    serve_model,
-    stop_model,
+use crate::model_manager::{
+    ModelOperation, ModelRecord, ServeOptions, activate_model, describe_model, download_model,
+    export_model_env, list_models, remove_model, serve_model, stop_model,
 };
+use anyhow::{Result, anyhow};
 use clap::Parser;
 use serde_json::json;
 

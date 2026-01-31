@@ -1,0 +1,93 @@
+[b00t]
+name = "go"
+type = "cli"
+desires = "1.23.4"
+install = '''
+# Install Go without duplicating logic in downstream datums
+set -euo pipefail
+GO_VERSION="${GO_VERSION:-1.23.4}"
+OS="$(uname -s | tr '[:upper:]' '[:lower:]')"
+ARCH="$(uname -m)"
+
+# Preferred: pkgx wrapper (no system pollution)
+if command -v pkgx >/dev/null 2>&1; then
+    mkdir -p "$HOME/.local/bin"
+    cat > "$HOME/.local/bin/go" <<EOF
+#!/usr/bin/env bash
+exec pkgx go@"${GO_VERSION:-1.23.4}" "$@"
+EOF
+    chmod +x "$HOME/.local/bin/go"
+    export PATH="$HOME/.local/bin:$PATH"
+    if go version >/dev/null 2>&1; then
+        echo "✅ Go available via pkgx wrapper"
+        exit 0
+    fi
+fi
+
+# Fallback: user-local tarball install (no sudo)
+case "$ARCH" in
+    x86_64) ARCH="amd64" ;;
+    aarch64|arm64) ARCH="arm64" ;;
+    armv7l) ARCH="armv6l" ;;
+    *) echo "❌ Unsupported architecture: $ARCH" >&2; exit 1 ;;
+esac
+case "$OS" in
+    linux|darwin) ;; 
+    *) echo "❌ Unsupported OS: $OS" >&2; exit 1 ;;
+esac
+
+GO_TARBALL="go${GO_VERSION}.${OS}-${ARCH}.tar.gz"
+URL="https://go.dev/dl/${GO_TARBALL}"
+TMP="${TMPDIR:-/tmp}"
+echo "⬇️  Downloading ${URL}"
+curl -fsSL "${URL}" -o "${TMP}/${GO_TARBALL}"
+
+INSTALL_DIR="$HOME/.local/go"
+rm -rf "${INSTALL_DIR}"
+mkdir -p "${INSTALL_DIR}"
+tar -C "$HOME/.local" -xzf "${TMP}/${GO_TARBALL}"
+rm -f "${TMP}/${GO_TARBALL}"
+
+export PATH="$HOME/.local/go/bin:$HOME/go/bin:$PATH"
+if ! grep -q "/.local/go/bin" "$HOME/.bashrc" 2>/dev/null; then
+  echo 'export PATH=$HOME/.local/go/bin:$HOME/go/bin:$PATH' >> "$HOME/.bashrc"
+fi
+if [ -n "${ZSH_VERSION-}" ] && ! grep -q "/.local/go/bin" "$HOME/.zshrc" 2>/dev/null; then
+  echo 'export PATH=$HOME/.local/go/bin:$HOME/go/bin:$PATH' >> "$HOME/.zshrc"
+fi
+
+go version
+echo "✅ Go installed to $HOME/.local/go"
+'''
+update = '''
+# Update Go using the same logic as install
+GO_VERSION="${GO_VERSION:-1.23.4}" b00t cli install go
+'''
+version = "go version"
+version_regex = 'go(\d+\.\d+\.?\d*)'
+hint = "Go programming language - fast, statically typed, compiled language with excellent concurrency support. Preferred installation via pkgx for zero system pollution."
+lfmf_category = "go"
+
+[b00t.learn]
+topic = "go"
+auto_digest = false
+
+[[b00t.usage]]
+description = "Check Go version"
+command = "go version"
+
+[[b00t.usage]]
+description = "Initialize Go module"
+command = "go mod init example.com/myproject"
+
+[[b00t.usage]]
+description = "Build Go binary"
+command = "go build -o mybinary"
+
+[[b00t.usage]]
+description = "Run Go program"
+command = "go run main.go"
+
+[[b00t.usage]]
+description = "Install Go package globally"
+command = "go install github.com/user/package@latest"

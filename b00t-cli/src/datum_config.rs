@@ -28,6 +28,10 @@ pub struct B00tConfig {
     #[serde(default)]
     pub history: Vec<InstallHistoryEntry>,
 
+    /// Optional per-host check registry (true=enable, false=ignore)
+    #[serde(default)]
+    pub checks: HashMap<String, bool>,
+
     /// Optional metadata
     #[serde(flatten)]
     pub metadata: Option<HashMap<String, serde_json::Value>>,
@@ -58,6 +62,7 @@ impl B00tConfig {
             ],
             datums: Vec::new(),
             history: Vec::new(),
+            checks: HashMap::new(),
             metadata: None,
         }
     }
@@ -87,19 +92,48 @@ impl B00tConfig {
     /// Note: Projects may have a _b00t_/ directory for project-specific datums,
     /// but the config file is always _b00t_.toml at the repo root.
     pub fn find_config_path() -> Result<PathBuf> {
+        let hostname = Self::current_hostname();
+
         // Check if we're in a git repo - use project-specific config at repo root
         if let Ok(repo_root) = Self::find_git_root() {
+            if let Some(host_config) = Self::host_specific_config(&repo_root, hostname.as_deref())
+            {
+                return Ok(host_config);
+            }
             let config_path = repo_root.join("_b00t_.toml");
             return Ok(config_path);
         }
 
         // Fall back to user-level config
         if let Ok(home) = std::env::var("HOME") {
-            let b00t_path = PathBuf::from(home).join(".b00t/_b00t_.toml");
-            return Ok(b00t_path);
+            let base_path = PathBuf::from(home).join(".b00t");
+            if let Some(host_config) =
+                Self::host_specific_config(&base_path, hostname.as_deref())
+            {
+                return Ok(host_config);
+            }
+            return Ok(base_path.join("_b00t_.toml"));
         }
 
         anyhow::bail!("Could not determine config file path");
+    }
+
+    fn host_specific_config(base_dir: &Path, hostname: Option<&str>) -> Option<PathBuf> {
+        let host = hostname?;
+        let candidate = base_dir.join(format!("_b00t_.{}.toml", host));
+        candidate.exists().then_some(candidate)
+    }
+
+    fn current_hostname() -> Option<String> {
+        std::env::var("HOSTNAME")
+            .ok()
+            .filter(|h| !h.is_empty())
+            .or_else(|| {
+                std::fs::read_to_string("/etc/hostname")
+                    .ok()
+                    .map(|s| s.trim().to_string())
+                    .filter(|s| !s.is_empty())
+            })
     }
 
     /// Find git repository root by looking for .git directory
@@ -208,6 +242,7 @@ impl B00tConfig {
     /// Convert DatumType to string for pattern matching
     fn datum_type_str(dtype: &DatumType) -> &'static str {
         match dtype {
+            DatumType::Agent => "agent",
             DatumType::Cli => "cli",
             DatumType::Mcp => "mcp",
             DatumType::Ai => "ai",
@@ -221,7 +256,9 @@ impl B00tConfig {
             DatumType::Stack => "stack",
             DatumType::Api => "api",
             DatumType::Config => "config",
+            DatumType::Job => "job",
             DatumType::Unknown => "unknown",
+            _ => "unknown",
         }
     }
 }
@@ -283,6 +320,7 @@ impl ConfigDatum {
             learn: None,
             usage: None,
             lfmf_category: None,
+            ..BootDatum::default()
         };
 
         Ok(Self { datum, config })
@@ -373,7 +411,10 @@ mod tests {
     #[test]
     fn test_new_config() {
         let config = B00tConfig::new();
-        assert_eq!(config.install_methods, vec!["docker", "pkgx", "apt", "curl"]);
+        assert_eq!(
+            config.install_methods,
+            vec!["docker", "pkgx", "apt", "curl"]
+        );
         assert!(config.datums.is_empty());
         assert!(config.history.is_empty());
     }

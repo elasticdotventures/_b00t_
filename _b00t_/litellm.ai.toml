@@ -29,7 +29,9 @@ cost_per_token = 0.0
 # required = ["LITELLM_MASTER_KEY"]
 
 # Optional: Default values for non-secret configuration
-defaults = { LITELLM_API_BASE = "http://localhost:4000" }
+# 🤓: env.defaults expects string value, not inline map
+[b00t.env.defaults]
+LITELLM_API_BASE = "http://localhost:4000"
 
 # Note: LiteLLM is a proxy. The actual provider API keys (OPENAI_API_KEY, etc.)
 # should be configured in the LiteLLM proxy server, not in this .env file
