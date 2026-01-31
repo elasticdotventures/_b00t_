@@ -68,6 +68,7 @@ install_binaries() {
     local download_url="https://github.com/$REPO/releases/download/$VERSION/$asset_name"
     local checksum_url="https://github.com/$REPO/releases/download/$VERSION/$checksum_name"
     local temp_dir=$(mktemp -d)
+    local original_dir="$PWD"
     
     echo "${BLUE}⬇️  Downloading $asset_name...${NC}"
     
@@ -87,15 +88,14 @@ install_binaries() {
     fi
     
     echo "${BLUE}🔍 Verifying checksum...${NC}"
-    cd "$temp_dir"
-    if ! sha256sum -c "$checksum_name" 2>&1 | grep -q "$asset_name: OK"; then
+    # Verify checksum using sha256sum -c which expects format: "checksum  filename"
+    if ! (cd "$temp_dir" && sha256sum -c "$checksum_name" >/dev/null 2>&1); then
         echo "${RED}❌ Checksum verification failed!${NC}" >&2
         echo "${RED}The downloaded file may be corrupted or tampered with${NC}" >&2
-        cd - >/dev/null
+        cd "$original_dir" || exit 1
         rm -rf "$temp_dir"
         exit 1
     fi
-    cd - >/dev/null
     echo "${GREEN}✅ Checksum verified${NC}"
     
     echo "${BLUE}📂 Extracting to $INSTALL_DIR...${NC}"
