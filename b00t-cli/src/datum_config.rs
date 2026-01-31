@@ -348,10 +348,33 @@ impl DatumChecker for ConfigDatum {
 
     fn version_status(&self) -> VersionStatus {
         match (self.current_version(), self.desired_version()) {
-            (Some(current), Some(desired)) if current == desired => VersionStatus::Match,
-            (Some(_), Some(_)) => VersionStatus::Older,
+            (Some(current), Some(desired)) => {
+                use semver::Version;
+                if let (Ok(curr_ver), Ok(des_ver)) =
+                    (Version::parse(&current), Version::parse(&desired))
+                {
+                    match curr_ver.cmp(&des_ver) {
+                        std::cmp::Ordering::Equal => VersionStatus::Match,
+                        std::cmp::Ordering::Greater => VersionStatus::Newer,
+                        std::cmp::Ordering::Less => VersionStatus::Older,
+                    }
+                } else {
+                    // Fallback to string comparison if not semver
+                    match current.cmp(&desired) {
+                        std::cmp::Ordering::Equal => VersionStatus::Match,
+                        _ => VersionStatus::Unknown,
+                    }
+                }
+            }
+            (Some(_), None) => VersionStatus::Unknown,
             (None, Some(_)) => VersionStatus::Missing,
-            _ => VersionStatus::Unknown,
+            (None, None) => {
+                if DatumChecker::is_installed(self) {
+                    VersionStatus::Unknown
+                } else {
+                    VersionStatus::Missing
+                }
+            }
         }
     }
 }
