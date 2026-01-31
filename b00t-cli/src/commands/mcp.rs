@@ -777,6 +777,33 @@ transport = "stdio"
     }
 
     #[test]
+    fn test_sync_invalid_source_for_push() {
+        let temp_dir = TempDir::new().unwrap();
+        let path = temp_dir.path().to_str().unwrap();
+
+        let sync_cmd = McpCommands::Sync {
+            operation_or_target: "push".to_string(),
+            source: Some("kiro".to_string()), // Invalid source (should be "b00t")
+            dest: Some("kiro".to_string()),
+            agent: None,
+            repo: false,
+            user: false,
+        };
+
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let result = rt.block_on(sync_cmd.execute_async(path));
+        
+        // Should fail with invalid source error
+        assert!(result.is_err());
+        let err_msg = result.unwrap_err().to_string();
+        assert!(
+            err_msg.contains("Push operation requires source to be 'b00t'"),
+            "Expected source validation error, got: {}",
+            err_msg
+        );
+    }
+
+    #[test]
     fn test_sync_legacy_codex_fallback() {
         let temp_dir = TempDir::new().unwrap();
         let path = temp_dir.path().to_str().unwrap();

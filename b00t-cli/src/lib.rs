@@ -1838,13 +1838,26 @@ pub fn mcp_sync_bidirectional(
     operation: &str,
     source: &str,
     dest: &str,
-    agent: Option<&str>,
+    _agent: Option<&str>, // 🤓: Reserved for future agent-specific filtering
 ) -> Result<()> {
     use std::collections::HashMap;
     use std::path::PathBuf;
     use crate::datum_mcp::McpDatum;
 
     let op = SyncOperation::from_str(operation)?;
+    
+    // Validate source for push operation
+    match op {
+        SyncOperation::Push => {
+            if source != "b00t" {
+                anyhow::bail!("Push operation requires source to be 'b00t', got '{}'", source);
+            }
+        }
+        SyncOperation::Pull => {
+            // Pull will validate dest == "b00t" when implemented
+        }
+    }
+    
     println!("🔄 MCP Sync: {:?} {} → {}", op, source, dest);
     
     match op {
