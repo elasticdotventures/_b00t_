@@ -137,6 +137,11 @@ EOF
     fi
 }
 
+# Escape directory path for safe shell usage
+escape_shell_path() {
+    printf '%q' "$1"
+}
+
 # Update PATH
 update_path() {
     local shell_rc=""
@@ -151,9 +156,9 @@ update_path() {
     fi
     
     # Check if PATH already contains install directory
-    # Use printf %q for proper shell escaping to handle spaces and special chars
+    # Use escape_shell_path for proper shell escaping to handle spaces and special chars
     local escaped_install_dir
-    escaped_install_dir=$(printf '%q' "$INSTALL_DIR")
+    escaped_install_dir=$(escape_shell_path "$INSTALL_DIR")
     
     if [[ ":$PATH:" != *":$INSTALL_DIR:"* ]]; then
         echo "${BLUE}🔧 Adding $INSTALL_DIR to PATH in $shell_rc...${NC}"
@@ -174,8 +179,8 @@ verify_installation() {
     else
         echo "${YELLOW}⚠️  b00t command not found in PATH${NC}"
         local escaped_install_dir
-        escaped_install_dir=$(printf '%q' "$INSTALL_DIR")
-        printf "${BLUE}💡 Try running: export PATH=%s:\"\$PATH\"${NC}\n" "$escaped_install_dir"
+        escaped_install_dir=$(escape_shell_path "$INSTALL_DIR")
+        printf '%b💡 Try running: export PATH=%s:"$PATH"%b\n' "${BLUE}" "$escaped_install_dir" "${NC}"
     fi
 }
 
