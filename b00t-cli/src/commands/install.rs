@@ -111,9 +111,14 @@ pub fn install_datum(path: &str, name: &str) -> Result<()> {
 
         // Skip if already installed (best-effort using version command)
         if let Some(version_cmd) = &datum.version {
-            if cmd!("bash", "-c", version_cmd).run().is_ok() {
-                println!("✅ {} already installed, skipping", key);
-                continue;
+            match cmd!("bash", "-c", version_cmd).run() {
+                Ok(_) => {
+                    println!("✅ {} already installed, skipping", key);
+                    continue;
+                }
+                Err(e) => {
+                    eprintln!("⚠️  Version check for '{}' failed: {}. Proceeding with installation.", key, e);
+                }
             }
         }
 
