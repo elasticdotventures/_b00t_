@@ -126,5 +126,5 @@ b00t mcp install <server>  # Install MCP server
 
 ## Additional Resources
 
-See [AGENTS.md](mdc:AGENTS.md) for comprehensive agent alignment protocols and b00t gospel.
-See [dev_workflow.md](.github/instructions/dev_workflow.md) for Taskmaster development workflow.
+See [AGENTS.md](mdc:/AGENTS.md) for comprehensive agent alignment protocols and b00t gospel.
+See [dev_workflow.md](mdc:/.github/instructions/dev_workflow.md) for Taskmaster development workflow.
