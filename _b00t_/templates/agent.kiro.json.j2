@@ -15,7 +15,7 @@
   ],
   "toolsSettings": {
     "namespace": {
-      "enabled": {{ namespace_enabled | lower }},
+      "enabled": {{ namespace_enabled | tojson }},
       "skills": {{ skills | tojson }},
       "isolation": "{{ isolation_mode }}"
     }
