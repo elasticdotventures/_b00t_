@@ -317,3 +317,4 @@ google-cloud-sdk/
 .codemachine/prompts
 .codemachine/agents
 .codemachine/template.json
+.b00t-tools-env.json
