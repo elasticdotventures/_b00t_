@@ -312,3 +312,8 @@ _archive_/
 *.togaf-datasheet.*
 google-cloud-sdk/
 .cargo/*
+.codemachine/logs
+.codemachine/memory
+.codemachine/prompts
+.codemachine/agents
+.codemachine/template.json
