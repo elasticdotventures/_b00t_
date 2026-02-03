@@ -564,3 +564,43 @@ orchestrator-k0s-kata MODE="start" INVENTORY="~/.config/b00t/k0s-inventory.yaml"
     INVENTORY="${INVENTORY:-$HOME/.config/b00t/k0s-inventory.yaml}"
     EXTRA_ARGS="${EXTRA_ARGS:-}"
     K0S_KATA_EXTRA_ARGS="$EXTRA_ARGS" scripts/orchestrators/k0s_kata.sh "$MODE" "$INVENTORY"
+
+# Ralph autonomous agent integration
+# 🤓 Ralph runs TaskMaster workflows autonomously via codex/claude/amp/opencode
+
+# Run ralph hive validation before starting projects
+ralph-hive-validate tool="codex" iterations="5":
+    #!/bin/bash
+    set -euo pipefail
+    echo "🥾 Running ralph hive validation..."
+    cargo run --bin b00t-cli -- agent ralph \
+        --tool {{tool}} \
+        --task hive-validate \
+        --max-iterations {{iterations}} \
+        --project-root {{repo-root}}
+
+# Run ralph maintenance tasks
+ralph-maintenance tool="codex" iterations="10":
+    #!/bin/bash
+    set -euo pipefail
+    echo "🥾 Running ralph maintenance..."
+    cargo run --bin b00t-cli -- agent ralph \
+        --tool {{tool}} \
+        --task maintenance \
+        --max-iterations {{iterations}} \
+        --project-root {{repo-root}}
+
+# Run ralph on pending TaskMaster tasks
+ralph-run tool="codex" iterations="10":
+    #!/bin/bash
+    set -euo pipefail
+    echo "🥾 Running ralph autonomous loop..."
+    cargo run --bin b00t-cli -- agent ralph \
+        --tool {{tool}} \
+        --task pending \
+        --max-iterations {{iterations}} \
+        --project-root {{repo-root}}
+
+# Pre-project validation hook - run this before starting any work
+pre-project: ralph-hive-validate
+    echo "✅ Hive validated - ready for project work"

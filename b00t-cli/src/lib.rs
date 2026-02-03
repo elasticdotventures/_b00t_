@@ -19,6 +19,7 @@ pub mod datum_job;
 pub mod datum_k8s;
 pub mod datum_mcp;
 pub mod datum_repo;
+pub mod datum_skill;
 pub mod datum_stack;
 pub mod datum_utils;
 pub mod dependency_resolver;
@@ -186,10 +187,11 @@ pub struct BootDatum {
     pub depends_on: Option<Vec<String>>,
     pub members: Option<Vec<String>>,
 
-    // Orchestration / stack / job metadata
+    // Orchestration / stack / job / skill metadata
     pub orchestration: Option<OrchestrationConfig>,
     pub stack: Option<serde_json::Value>,
     pub job: Option<serde_json::Value>,
+    pub skill: Option<serde_json::Value>,
 
     // Database connection
     pub dsn: Option<String>,
@@ -235,6 +237,7 @@ pub enum DatumType {
     Database,
     Repo,
     Role,
+    Skill,
 }
 
 #[derive(Serialize, Debug)]
@@ -579,6 +582,7 @@ pub fn create_unified_toml_config(datum: &BootDatum, path: &str) -> Result<()> {
         DatumType::Database => ".database.toml",
         DatumType::Repo => ".repo.toml",
         DatumType::Role => ".toml",
+        DatumType::Skill => ".skill.toml",
         DatumType::Unknown => ".toml",
     };
 
@@ -619,6 +623,7 @@ impl std::fmt::Display for DatumType {
             DatumType::Database => write!(f, "database"),
             DatumType::Repo => write!(f, "repo"),
             DatumType::Role => write!(f, "role"),
+            DatumType::Skill => write!(f, "skill"),
         }
     }
 }
@@ -659,6 +664,8 @@ impl DatumType {
             DatumType::Repo
         } else if filename.ends_with(".role.toml") {
             DatumType::Role
+        } else if filename.ends_with(".skill.toml") {
+            DatumType::Skill
         } else {
             DatumType::Unknown // Default fallback for .toml files
         }
