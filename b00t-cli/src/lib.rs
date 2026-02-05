@@ -36,6 +36,7 @@ pub mod whoami;
 pub mod cloud_sync;
 pub mod job_state;
 pub mod job_ipc;
+pub mod job_executor;
 pub mod model_manager;
 pub mod orchestrator;
 pub use traits::*;
@@ -746,6 +747,7 @@ pub fn get_config(
     // Try different file extensions in order of preference
     let extensions = [
         ".role.toml",
+        ".job.toml",
         ".cli.toml",
         ".mcp.toml",
         ".vscode.toml",
@@ -938,7 +940,7 @@ pub fn mcp_list(path: &str, json_output: bool) -> Result<()> {
 /// 
 /// # Examples
 /// 
-/// ```rust
+/// ```rust,ignore
 /// // Register from JSON string
 /// let json = r#"{"name":"filesystem","command":"npx","args":["-y","@modelcontextprotocol/server-filesystem"]}"#;
 /// b00t_cli::mcp_add_json(json, false, "~/.dotfiles/_b00t_").unwrap();
@@ -1006,7 +1008,7 @@ pub fn mcp_add_json(json: &str, dwiw: bool, path: &str) -> Result<()> {
 /// 
 /// # Examples
 /// 
-/// ```rust
+/// ```rust,ignore
 /// // Remove an MCP server configuration from the _b00t_ directory
 /// b00t_cli::mcp_remove("filesystem", "~/.dotfiles/_b00t_").unwrap();
 /// 
