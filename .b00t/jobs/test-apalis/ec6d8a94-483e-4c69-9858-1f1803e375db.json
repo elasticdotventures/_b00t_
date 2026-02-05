@@ -1,0 +1,29 @@
+{
+  "job_name": "test-apalis",
+  "run_id": "ec6d8a94-483e-4c69-9858-1f1803e375db",
+  "status": "running",
+  "started_at": "2026-02-05T11:29:36.483420403Z",
+  "completed_at": null,
+  "current_step": "start",
+  "steps": {
+    "start": {
+      "name": "start",
+      "status": "completed",
+      "started_at": "2026-02-05T11:29:36.491191643Z",
+      "completed_at": "2026-02-05T11:29:36.524012550Z",
+      "duration_ms": 32,
+      "error": null,
+      "retries": 0
+    }
+  },
+  "checkpoints": [],
+  "error": null,
+  "metadata": {
+    "execution_mode": "sequential",
+    "total_steps": 3,
+    "completed_steps": 1,
+    "failed_steps": 0,
+    "skipped_steps": 0,
+    "env": {}
+  }
+}
