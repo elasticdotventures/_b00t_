@@ -1,0 +1,17 @@
+<error_handling>
+  <error_case name="name_mismatch">
+    <symptom>Frontmatter name does not match directory name</symptom>
+    <response>
+      <step>Do not proceed with additional edits until the mismatch is resolved</step>
+      <step>Prefer renaming the directory to match the intended canonical name (or update frontmatter), but confirm with the user if the skill is already in use</step>
+    </response>
+  </error_case>
+
+  <error_case name="invalid_name_format">
+    <symptom>Name contains uppercase, underscores, or consecutive hyphens</symptom>
+    <response>
+      <step>Propose a corrected name and confirm before applying renames</step>
+      <step>Explain that renames may be breaking if other tooling references the skill name</step>
+    </response>
+  </error_case>
+</error_handling>

@@ -1,0 +1,47 @@
+[b00t]
+name = "foundry-local"
+type = "ai"
+hint = "Foundry Local - OpenAI-compatible local inference runtime"
+version = "foundry --version"
+version_regex = '\\d+\\.\\d+\\.\\d+'
+install = "# Windows: winget install Microsoft.FoundryLocal | macOS: brew install microsoft/foundrylocal/foundrylocal"
+update = "# Windows: winget upgrade --id Microsoft.FoundryLocal | macOS: brew upgrade foundrylocal"
+
+[b00t.ai]
+provider = "foundry_local"
+api_type = "openai_compatible"
+models = ["phi-3.5-mini", "qwen2.5-0.5b"]
+context_window = 128000
+pricing_model = "local"
+
+[b00t.env]
+FOUNDRY_LOCAL_ENDPOINT = "http://localhost:8080"
+FOUNDRY_LOCAL_API_KEY = "${FOUNDRY_LOCAL_API_KEY}"
+
+[b00t.learn]
+topic = "foundry-local"
+auto_digest = true
+
+[[b00t.usage]]
+example = "Run a local model"
+command = "foundry model run phi-3.5-mini"
+
+[[b00t.usage]]
+example = "List available local models"
+command = "foundry model ls"
+
+[[b00t.references]]
+name = "Foundry Local README"
+url = "https://github.com/microsoft/Foundry-Local"
+type = "source"
+
+[[b00t.references]]
+name = "Foundry Local Documentation"
+url = "https://aka.ms/foundry-local-docs"
+type = "docs"
+
+[b00t.metadata]
+category = "ai-runtime"
+tags = ["foundry-local", "openai-compatible", "onnx", "local"]
+maturity = "preview"
+license = "Microsoft Software License Terms"

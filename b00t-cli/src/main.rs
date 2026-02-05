@@ -26,7 +26,7 @@ use b00t_cli::traits::*;
 use b00t_cli::commands::{
     AiCommands, AgentCommands, AnsibleCommands, AppCommands, ChatCommands, CliCommands,
     DatumCommands, GrokCommands, InitCommands, JobCommands, K8sCommands, McpCommands,
-    SessionCommands, WhatismyCommands,
+    RedisCommands, SessionCommands, WhatismyCommands,
 };
 use b00t_cli::commands::learn::handle_learn;
 
@@ -249,6 +249,11 @@ The system will:
     Ansible {
         #[clap(subcommand)]
         ansible_command: AnsibleCommands,
+    },
+    #[clap(about = "Redis server management and monitoring")]
+    Redis {
+        #[clap(subcommand)]
+        redis_command: RedisCommands,
     },
 }
 
@@ -1107,6 +1112,13 @@ async fn main() {
         Some(Commands::Ansible { ansible_command }) => {
             if let Err(e) = ansible_command.execute(&cli.path) {
                 eprintln!("Ansible Error: {}", e);
+                std::process::exit(1);
+            }
+        }
+        Some(Commands::Redis { redis_command }) => {
+            use b00t_cli::commands::redis::handle_redis_command;
+            if let Err(e) = handle_redis_command(redis_command.clone()).await {
+                eprintln!("Redis Error: {}", e);
                 std::process::exit(1);
             }
         }

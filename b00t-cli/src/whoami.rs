@@ -139,11 +139,12 @@ mod tests {
 
     #[test]
     fn test_detect_agent_claude() {
-        // Clear existing env vars first
-        unsafe { std::env::remove_var("_B00T_Agent"); }
+        // Force ignore_env to avoid cross-test env races
+        unsafe { std::env::set_var("_B00T_Agent", "test-agent"); }
         unsafe { std::env::set_var("CLAUDECODE", "1"); }
-        assert_eq!(detect_agent(false), "claude");
+        assert_eq!(detect_agent(true), "claude");
         unsafe { std::env::remove_var("CLAUDECODE"); }
+        unsafe { std::env::remove_var("_B00T_Agent"); }
     }
 
     #[test]
