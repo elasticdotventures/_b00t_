@@ -111,11 +111,24 @@ impl ManPage {
                 .join("\n");
 
             sections.push(ManSection {
-                title,
+                title: title.clone(),
                 content: section_content.trim().to_string(),
                 line_start: start,
                 line_end: lines.len(),
             });
+
+            // Extract description from DESCRIPTION section if it is last
+            if title.contains("DESCRIPTION") && description.is_none() {
+                description = Some(
+                    section_content
+                        .lines()
+                        .take(3)
+                        .collect::<Vec<_>>()
+                        .join(" ")
+                        .trim()
+                        .to_string(),
+                );
+            }
         }
 
         Ok(ManPage {

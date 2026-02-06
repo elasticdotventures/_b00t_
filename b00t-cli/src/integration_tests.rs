@@ -82,8 +82,8 @@ mod integration_tests {
         assert!(result.unwrap_err().to_string().contains("not found"));
     }
 
-    #[test]
-    fn test_lfmf_creates_and_appends_lesson() {
+    #[tokio::test]
+    async fn test_lfmf_creates_and_appends_lesson() {
         use crate::commands::lfmf::handle_lfmf;
         let temp_dir = setup_temp_dir();
         let temp_path = temp_dir.path().to_str().unwrap();
@@ -92,14 +92,14 @@ mod integration_tests {
         let lesson2 = "Second: lesson learned.";
         // First call: should create file
         let result1 = handle_lfmf(temp_path, tool, lesson1, "repo");
-        assert!(result1.is_ok());
+        assert!(result1.await.is_ok());
         let file_path = temp_dir.path().join("learn").join(format!("{}.md", tool));
         assert!(file_path.exists());
         let content1 = std::fs::read_to_string(&file_path).unwrap();
         assert!(content1.contains(lesson1));
         // Second call: should append
         let result2 = handle_lfmf(temp_path, tool, lesson2, "repo");
-        assert!(result2.is_ok());
+        assert!(result2.await.is_ok());
         let content2 = std::fs::read_to_string(&file_path).unwrap();
         assert!(content2.contains(lesson1));
         assert!(content2.contains(lesson2));

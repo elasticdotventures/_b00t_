@@ -229,7 +229,7 @@ impl JobDatum {
         // Strip .job.toml extension if present since get_config adds extensions
         let base_name = name.trim_end_matches(".job.toml");
         let (config, _filename) =
-            crate::get_config(path, base_name).map_err(|e| anyhow::anyhow!("{}", e))?;
+            crate::get_config(base_name, path).map_err(|e| anyhow::anyhow!("{}", e))?;
         Ok(JobDatum { datum: config.b00t })
     }
 
@@ -450,7 +450,7 @@ steps = [
                 datum_type: Some(crate::DatumType::Job),
                 hint: "Test job".to_string(),
                 desires: None,
-                ..BootDatum::default()
+                ..crate::BootDatum::default()
             },
         };
 

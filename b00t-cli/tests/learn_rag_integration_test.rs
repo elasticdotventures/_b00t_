@@ -292,6 +292,7 @@ mod lfmf_integration {
     use super::*;
 
     #[tokio::test]
+    #[ignore = "Requires running Qdrant instance"]
     async fn test_lfmf_with_vector_db() -> Result<()> {
         if !is_qdrant_available() {
             println!("⚠️  Skipping test: QDRANT_URL not set");

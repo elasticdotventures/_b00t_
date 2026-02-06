@@ -2,51 +2,29 @@ use anyhow::Result;
 use clap::Parser;
 use duct::cmd;
 use std::fs;
-use b00t_cli::{AiConfig, BootDatum, SessionState, UnifiedConfig, whoami, load_datum_providers, handle_up_command};
-
-mod ansible;
-mod bootstrap;
-mod budget_controller;
-mod cloud_sync;
-mod commands;
-mod datum_ai;
-mod datum_ai_model;
-mod datum_apt;
-mod datum_bash;
-mod datum_cli;
-mod datum_docker;
-mod datum_gemini;
-mod datum_job;
-mod datum_mcp;
-mod datum_stack;
-mod datum_utils;
-mod datum_vscode;
-mod dependency_resolver;
-mod job_state;
-mod model_manager;
-mod session_memory;
-mod test_cloud_integration;
-mod traits;
-mod utils;
-use utils::get_workspace_root;
-
-use datum_ai::AiDatum;
-use datum_ai_model::AiModelDatumEntry;
-use datum_apt::AptDatum;
-use datum_bash::BashDatum;
-use datum_cli::CliDatum;
-use datum_docker::DockerDatum;
-use datum_mcp::McpDatum;
-use datum_vscode::VscodeDatum;
-use traits::*;
-
-use crate::commands::learn::{LearnArgs, handle_learn};
-use crate::commands::{
-    AiCommands, AgentCommands, AnsibleCommands, AppCommands, BootstrapCommands, ChatCommands, CliCommands, DatumCommands,
-    GrokCommands, InitCommands, InstallCommands, JobCommands, K8sCommands, McpCommands, ModelCommands,
-    SessionCommands, StackCommands, WhatismyCommands,
+use b00t_cli::{
+    commands, load_datum_providers, SessionState, UnifiedConfig, handle_up_command, session_memory, whoami,
 };
-use crate::commands::install::{install_datum, run_just_install};
+
+use b00t_cli::datum_ai::AiDatum;
+use b00t_cli::datum_ai_model::AiModelDatumEntry;
+use b00t_cli::datum_apt::AptDatum;
+use b00t_cli::datum_bash::BashDatum;
+use b00t_cli::datum_cli::CliDatum;
+use b00t_cli::datum_docker::DockerDatum;
+use b00t_cli::datum_mcp::McpDatum;
+use b00t_cli::datum_vscode::VscodeDatum;
+use b00t_cli::traits::*;
+use b00t_cli::utils::get_workspace_root;
+
+use b00t_cli::commands::{
+    AiCommands, AgentCommands, AnsibleCommands, AppCommands, BootstrapCommands, BudgetCommands,
+    ChatCommands, CliCommands, DatumCommands, GrokCommands, InitCommands, InstallCommands,
+    JobCommands, K8sCommands, McpCommands, ModelCommands, RedisCommands, SessionCommands,
+    StackCommands, WhatismyCommands,
+};
+use b00t_cli::commands::learn::{LearnArgs, handle_learn};
+use b00t_cli::commands::install::{install_datum, run_just_install};
 
 // Re-export commonly used functions for datum modules
 pub use b00t_cli::{
@@ -322,6 +300,11 @@ The system will:
     Bootstrap {
         #[clap(subcommand)]
         bootstrap_command: BootstrapCommands,
+    },
+    #[clap(about = "Redis server management and monitoring")]
+    Redis {
+        #[clap(subcommand)]
+        redis_command: RedisCommands,
     },
 }
 
@@ -1235,6 +1218,13 @@ async fn main() {
                 std::process::exit(1);
             }
         }
+        Some(Commands::Redis { redis_command }) => {
+            use b00t_cli::commands::redis::handle_redis_command;
+            if let Err(e) = handle_redis_command(redis_command.clone()).await {
+                eprintln!("Redis Error: {}", e);
+                std::process::exit(1);
+            }
+        }
         Some(Commands::Lfmf { tool, lesson, repo: _, global }) => {
             // Validate required fields
             let tool = match tool {
@@ -1276,6 +1266,32 @@ async fn main() {
             use crate::commands::script::handle_script_command;
 
             if let Err(e) = handle_script_command(script_command.clone()) {
+                eprintln!("Error: {}", e);
+                std::process::exit(1);
+            }
+        }
+        Some(Commands::Agent { agent_command }) => {
+            use b00t_cli::commands::agent::handle_agent_command;
+            if let Err(e) = handle_agent_command(agent_command.clone()).await {
+                eprintln!("Error: {}", e);
+                std::process::exit(1);
+            }
+        }
+        Some(Commands::Job { job_command }) => {
+            if let Err(e) = job_command.execute_async(&cli.path).await {
+                eprintln!("Error: {}", e);
+                std::process::exit(1);
+            }
+        }
+        Some(Commands::Chat { chat_command }) => {
+            if let Err(e) = chat_command.execute().await {
+                eprintln!("Error: {}", e);
+                std::process::exit(1);
+            }
+        }
+        Some(Commands::Datum { datum_command }) => {
+            use b00t_cli::commands::datum::handle_datum_command;
+            if let Err(e) = handle_datum_command(&cli.path, datum_command) {
                 eprintln!("Error: {}", e);
                 std::process::exit(1);
             }
