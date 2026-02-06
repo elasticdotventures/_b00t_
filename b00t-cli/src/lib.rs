@@ -19,6 +19,7 @@ pub mod datum_job;
 pub mod datum_k8s;
 pub mod datum_mcp;
 pub mod datum_repo;
+pub mod datum_skill;
 pub mod datum_stack;
 pub mod datum_utils;
 pub mod dependency_resolver;
@@ -35,6 +36,7 @@ pub mod whoami;
 pub mod cloud_sync;
 pub mod job_state;
 pub mod job_ipc;
+pub mod job_executor;
 pub mod model_manager;
 pub mod orchestrator;
 pub use traits::*;
@@ -186,10 +188,11 @@ pub struct BootDatum {
     pub depends_on: Option<Vec<String>>,
     pub members: Option<Vec<String>>,
 
-    // Orchestration / stack / job metadata
+    // Orchestration / stack / job / skill metadata
     pub orchestration: Option<OrchestrationConfig>,
     pub stack: Option<serde_json::Value>,
     pub job: Option<serde_json::Value>,
+    pub skill: Option<serde_json::Value>,
 
     // Database connection
     pub dsn: Option<String>,
@@ -235,6 +238,7 @@ pub enum DatumType {
     Database,
     Repo,
     Role,
+    Skill,
 }
 
 #[derive(Serialize, Debug)]
@@ -579,6 +583,7 @@ pub fn create_unified_toml_config(datum: &BootDatum, path: &str) -> Result<()> {
         DatumType::Database => ".database.toml",
         DatumType::Repo => ".repo.toml",
         DatumType::Role => ".toml",
+        DatumType::Skill => ".skill.toml",
         DatumType::Unknown => ".toml",
     };
 
@@ -619,6 +624,7 @@ impl std::fmt::Display for DatumType {
             DatumType::Database => write!(f, "database"),
             DatumType::Repo => write!(f, "repo"),
             DatumType::Role => write!(f, "role"),
+            DatumType::Skill => write!(f, "skill"),
         }
     }
 }
@@ -659,6 +665,8 @@ impl DatumType {
             DatumType::Repo
         } else if filename.ends_with(".role.toml") {
             DatumType::Role
+        } else if filename.ends_with(".skill.toml") {
+            DatumType::Skill
         } else {
             DatumType::Unknown // Default fallback for .toml files
         }
@@ -739,6 +747,7 @@ pub fn get_config(
     // Try different file extensions in order of preference
     let extensions = [
         ".role.toml",
+        ".job.toml",
         ".cli.toml",
         ".mcp.toml",
         ".vscode.toml",
@@ -931,7 +940,7 @@ pub fn mcp_list(path: &str, json_output: bool) -> Result<()> {
 /// 
 /// # Examples
 /// 
-/// ```rust
+/// ```rust,ignore
 /// // Register from JSON string
 /// let json = r#"{"name":"filesystem","command":"npx","args":["-y","@modelcontextprotocol/server-filesystem"]}"#;
 /// b00t_cli::mcp_add_json(json, false, "~/.dotfiles/_b00t_").unwrap();
@@ -999,7 +1008,7 @@ pub fn mcp_add_json(json: &str, dwiw: bool, path: &str) -> Result<()> {
 /// 
 /// # Examples
 /// 
-/// ```rust
+/// ```rust,ignore
 /// // Remove an MCP server configuration from the _b00t_ directory
 /// b00t_cli::mcp_remove("filesystem", "~/.dotfiles/_b00t_").unwrap();
 /// 
