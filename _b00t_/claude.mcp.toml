@@ -10,31 +10,3 @@ args = []
 transport = "stdio"
 priority = 0
 requires = ["b00t-cli"]
-
-[b00t.meta.capabilities]
-agents = true
-agent_dir = "~/.b00t/.claude/agents"
-subcommands = ["chat"]
-sync_format = "markdown"
-
-[b00t.meta.agent]
-config_format = "markdown"
-config_extension = ".md"
-frontmatter = true
-
-[b00t.meta.mcp_syntax]
-format = "markdown"
-frontmatter_keys = ["name", "description", "skills", "datums"]
-
-[b00t.meta.sync]
-push_cmd = "scripts/b00t-mcp-sync.sh push claude"
-pull_cmd = "scripts/b00t-mcp-sync.sh pull claude"
-agent_mcp_path = "datums"
-
-[b00t.meta.namespace]
-enabled = true
-extract_from = "frontmatter.skills"
-syntax = "jinja"
-skill_isolation = true
-template = "_b00t_/templates/agent.claude.md.j2"
-
