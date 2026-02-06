@@ -1,9 +1,8 @@
 //! Redis management and monitoring commands for b00t-cli
 
 use anyhow::{Context, Result};
-use b00t_c0re_lib::redis::{RedisComms, RedisConfig, BroadcastPriority};
+use b00t_c0re_lib::redis::{AgentMessage, RedisComms, RedisConfig, BroadcastPriority};
 use clap::Parser;
-use serde_json::json;
 use std::collections::HashMap;
 use tokio::time::{sleep, Duration};
 
@@ -250,7 +249,7 @@ async fn test_redis_ping(config: RedisConfig) -> Result<()> {
     Ok(())
 }
 
-async fn monitor_redis_messages(config: RedisConfig, pattern: &str, duration: u64) -> Result<()> {
+async fn monitor_redis_messages(_config: RedisConfig, pattern: &str, duration: u64) -> Result<()> {
     println!("👁️  Monitoring Redis channels: {}", pattern);
     println!("Duration: {}s", duration);
     println!("Press Ctrl+C to stop early");
@@ -277,26 +276,19 @@ async fn monitor_redis_messages(config: RedisConfig, pattern: &str, duration: u6
 }
 
 async fn publish_message(config: RedisConfig, agent_id: String, channel: &str, message: &str) -> Result<()> {
-    let redis = RedisComms::new(config, agent_id)
+    let redis = RedisComms::new(config, agent_id.clone())
         .context("Failed to create Redis connection")?;
     
-    // Create a generic message payload
-    let msg_payload = json!({
-        "content": message,
-        "timestamp": chrono::Utc::now().to_rfc3339(),
-        "source": "b00t-cli"
-    });
+    // Create an AgentMessage::Broadcast for the publish
+    let agent_msg = AgentMessage::Broadcast {
+        message: message.to_string(),
+        priority: BroadcastPriority::Normal,
+        expires_at: None,
+    };
     
-    // For direct channel publishing, we'll use the raw message
-    let mut conn = redis.get_connection()?;
-    let subscribers: i32 = redis::cmd("PUBLISH")
-        .arg(channel)
-        .arg(message)
-        .query(&mut conn)
-        .context("Failed to publish message")?;
+    let _subscribers = redis.publish(channel, &agent_msg)?;
     
     println!("📢 Published to '{}': {}", channel, message);
-    println!("   Delivered to {} subscribers", subscribers);
     
     Ok(())
 }
@@ -351,7 +343,7 @@ async fn delete_redis_key(config: RedisConfig, agent_id: String, key: &str) -> R
 }
 
 async fn list_agent_statuses(config: RedisConfig, agent_id: String) -> Result<()> {
-    let redis = RedisComms::new(config, agent_id)
+    let _redis = RedisComms::new(config, agent_id)
         .context("Failed to create Redis connection")?;
     
     println!("🤖 Agent Status Dashboard");
@@ -375,7 +367,7 @@ async fn broadcast_message(config: RedisConfig, agent_id: String, message: &str,
         chrono::Utc::now() + chrono::Duration::seconds(secs as i64)
     });
     
-    let subscribers = redis.broadcast(message, priority, expires_at)?;
+    let subscribers = redis.broadcast(message, priority.clone(), expires_at)?;
     
     println!("📢 Broadcast sent: {}", message);
     println!("   Priority: {:?}", priority);
@@ -439,7 +431,7 @@ async fn clear_b00t_keys(config: RedisConfig, agent_id: String, confirm: bool) -
         return Ok(());
     }
     
-    let redis = RedisComms::new(config, agent_id)
+    let _redis = RedisComms::new(config, agent_id)
         .context("Failed to create Redis connection")?;
     
     println!("🧹 Clearing b00t-related Redis keys...");

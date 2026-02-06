@@ -98,11 +98,15 @@ impl GrokClient {
                 .env("QDRANT_URL", qdrant_url)
                 .env("QDRANT_API_KEY", qdrant_api_key)
                 .env("PYTHONPATH", "python"); // 🤓 Required for uv to find modules in python/ dir
-        }))?;
+        }))
+        .map_err(|e| anyhow::anyhow!("Failed to spawn grok server: {}", e))?; // output: descriptive error
 
         // Connect to b00t-grok-py MCP server using unit client handler
         let client_handler = (); // Unit type implements ClientHandler as a no-op
-        let running_service = client_handler.serve(transport).await?;
+        let running_service = client_handler
+            .serve(transport)
+            .await
+            .map_err(|e| anyhow::anyhow!("Failed to initialize grok client: {}", e))?; // output: descriptive error
 
         self.mcp_client = Some(running_service);
         Ok(())

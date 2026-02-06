@@ -122,6 +122,21 @@ pub enum AgentCommands {
         )]
         dir: PathBuf,
     },
+
+    #[clap(about = "Run ralph autonomous agent for hive maintenance/validation")]
+    Ralph {
+        #[arg(long, help = "Executor tool (codex, claude, amp, opencode)", default_value = "codex")]
+        tool: String,
+
+        #[arg(long, help = "Task filter (pending, hive-validate, maintenance)", default_value = "hive-validate")]
+        task: String,
+
+        #[arg(long, help = "Maximum iterations", default_value = "5")]
+        max_iterations: u32,
+
+        #[arg(long, help = "Project root path")]
+        project_root: Option<PathBuf>,
+    },
 }
 
 pub async fn handle_agent_command(cmd: AgentCommands) -> Result<()> {
@@ -179,6 +194,10 @@ pub async fn handle_agent_command(cmd: AgentCommands) -> Result<()> {
         AgentCommands::Start { config } => handle_start(&config).await,
 
         AgentCommands::StartAll { dir } => handle_start_all(&dir).await,
+
+        AgentCommands::Ralph { tool, task, max_iterations, project_root } => {
+            handle_ralph(&tool, &task, max_iterations, project_root.as_deref()).await
+        }
     }
 }
 
@@ -435,6 +454,144 @@ async fn handle_start_all(dir: &PathBuf) -> Result<()> {
 
     // Keep agents running
     tokio::signal::ctrl_c().await?;
+
+    Ok(())
+}
+
+async fn handle_ralph(
+    tool: &str,
+    task: &str,
+    max_iterations: u32,
+    project_root: Option<&std::path::Path>,
+) -> Result<()> {
+    use duct::cmd;
+
+    println!("🥾 Running ralph autonomous agent");
+    println!("   Tool: {}", tool);
+    println!("   Task: {}", task);
+    println!("   Max iterations: {}", max_iterations);
+
+    // Determine project root
+    let root = project_root
+        .map(|p| p.to_path_buf())
+        .unwrap_or_else(|| std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")));
+
+    println!("   Project: {}", root.display());
+
+    // Check if ralph submodule exists
+    let ralph_path = root.join("_b00t_/ralph");
+    if !ralph_path.exists() {
+        anyhow::bail!(
+            "Ralph submodule not found at {}. Run 'git submodule update --init --recursive'",
+            ralph_path.display()
+        );
+    }
+
+    // Check if taskmaster is initialized
+    let taskmaster_path = root.join(".taskmaster");
+    if !taskmaster_path.exists() {
+        println!("⚠️  TaskMaster not initialized. Initializing now...");
+        cmd!("taskmaster", "init")
+            .dir(&root)
+            .run()
+            .map_err(|e| anyhow::anyhow!("Failed to initialize taskmaster: {}", e))?;
+    }
+
+    // Create hive validation task if needed
+    if task == "hive-validate" {
+        ensure_hive_validation_task(&root).await?;
+    }
+
+    // Run ralph
+    println!("🚀 Starting ralph autonomous loop...");
+    let ralph_cmd = cmd!(
+        "uv",
+        "run",
+        "ralph",
+        "run",
+        "--tool",
+        tool,
+        "--max-iterations",
+        max_iterations.to_string(),
+        "--filter",
+        task
+    )
+    .dir(&ralph_path)
+    .env("PROJECT_ROOT", root.to_str().unwrap_or("."));
+
+    let output = ralph_cmd
+        .stdout_to_stderr()
+        .run()
+        .map_err(|e| anyhow::anyhow!("Ralph execution failed: {}", e))?;
+
+    if output.status.success() {
+        println!("✅ Ralph completed successfully");
+    } else {
+        anyhow::bail!("Ralph failed with exit code: {:?}", output.status.code());
+    }
+
+    Ok(())
+}
+
+async fn ensure_hive_validation_task(root: &std::path::Path) -> Result<()> {
+    use std::fs;
+
+    let tasks_file = root.join(".taskmaster/tasks/tasks.json");
+
+    // Read existing tasks
+    if !tasks_file.exists() {
+        println!("📋 Creating hive validation tasks...");
+
+        let tasks_dir = tasks_file.parent().unwrap();
+        fs::create_dir_all(tasks_dir)?;
+
+        let initial_tasks = serde_json::json!({
+            "metadata": {
+                "version": "1.0.0",
+                "branchName": "main",
+                "createdAt": chrono::Utc::now().to_rfc3339()
+            },
+            "tasks": [
+                {
+                    "id": "hive-001",
+                    "title": "Hive Validation - b00t System Health",
+                    "description": "As a system operator, I need to validate the b00t hive is healthy and all critical datums are properly configured, so that agents can operate reliably. This includes checking: 1) All submodules are initialized, 2) Critical CLI tools are installed (rust, uv, just, gh), 3) MCP servers are configured, 4) Agent coordination is functional.",
+                    "status": "pending",
+                    "priority": "high",
+                    "tags": ["hive-validate", "system-health"],
+                    "blockedBy": [],
+                    "acceptanceCriteria": [
+                        "Git submodules initialized and up to date",
+                        "Rust toolchain installed and functional",
+                        "UV package manager available",
+                        "Just command runner available",
+                        "GitHub CLI authenticated",
+                        "At least 3 MCP servers configured",
+                        "Redis available for agent coordination"
+                    ]
+                },
+                {
+                    "id": "hive-002",
+                    "title": "Hive Maintenance - Datum Ontology Validation",
+                    "description": "As a system operator, I need to validate that all datum files are properly structured and follow b00t conventions, so that the hive can discover and use capabilities correctly. Validate: 1) TOML syntax, 2) Required fields present, 3) Version detection works, 4) No duplicate datums, 5) Stack dependencies are valid.",
+                    "status": "pending",
+                    "priority": "normal",
+                    "tags": ["hive-validate", "maintenance"],
+                    "blockedBy": ["hive-001"],
+                    "acceptanceCriteria": [
+                        "All .toml files pass syntax validation",
+                        "No missing required fields in datums",
+                        "Version regex patterns are valid",
+                        "Stack dependencies form valid DAG",
+                        "No circular dependencies detected"
+                    ]
+                }
+            ]
+        });
+
+        fs::write(&tasks_file, serde_json::to_string_pretty(&initial_tasks)?)?;
+        println!("✅ Created hive validation tasks");
+    }
 
     Ok(())
 }
