@@ -22,6 +22,19 @@ mod k8s '_b00t_/k8s.🚢/justfile'
 mod pm2-tasker 'pm2-tasker/justfile'
 mod embed '_b00t_/python.🐍/embed/justfile'
 
+next-task:
+    #!/bin/bash
+    set -euo pipefail
+    echo "Next up: extend Gremlin graph (role/capability edges) and wire GraalVM Gremlin server."
+
+gremlin-graalvm-build:
+    docker build -t graalvm-gremlin:latest docker/graalvm-gremlin
+
+gremlin-graalvm-run:
+    docker run --rm -p 8182:8182 \
+      -v $PWD/docker/graalvm-gremlin/gremlin-server.yaml:/opt/gremlin-server/conf/gremlin-server.yaml \
+      docker.io/tinkerpop/gremlin-server:latest
+
 stow:
     stow --adopt -d ~/.dotfiles -t ~ bash
 

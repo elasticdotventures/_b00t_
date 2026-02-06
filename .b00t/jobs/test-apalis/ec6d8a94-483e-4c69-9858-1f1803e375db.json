@@ -1,0 +1,46 @@
+{
+  "job_name": "test-apalis",
+  "run_id": "ec6d8a94-483e-4c69-9858-1f1803e375db",
+  "status": "failed",
+  "started_at": "2026-02-05T11:29:36.483420403Z",
+  "completed_at": null,
+  "current_step": "cargo-check",
+  "steps": {
+    "cargo-check": {
+      "name": "cargo-check",
+      "status": "failed",
+      "started_at": "2026-02-05T11:29:37.051115554Z",
+      "completed_at": "2026-02-05T11:30:37.051160448Z",
+      "duration_ms": 60000,
+      "error": "Command timed out after 60000ms",
+      "retries": 0
+    },
+    "start": {
+      "name": "start",
+      "status": "completed",
+      "started_at": "2026-02-05T11:29:36.491191643Z",
+      "completed_at": "2026-02-05T11:29:36.524012550Z",
+      "duration_ms": 32,
+      "error": null,
+      "retries": 0
+    }
+  },
+  "checkpoints": [
+    {
+      "step_name": "start",
+      "checkpoint_name": "test-start",
+      "git_commit": null,
+      "git_tag": "job/test-apalis/test-start",
+      "created_at": "2026-02-05T11:29:37.050419085Z"
+    }
+  ],
+  "error": "Command timed out after 60000ms",
+  "metadata": {
+    "execution_mode": "sequential",
+    "total_steps": 3,
+    "completed_steps": 1,
+    "failed_steps": 1,
+    "skipped_steps": 0,
+    "env": {}
+  }
+}

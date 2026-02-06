@@ -1,18 +1,20 @@
 [b00t]
 name = "pm2"
 type = "cli"
-hint = "PM2 - Advanced Node.js process manager with built-in load balancer"
+hint = "PM2 + MCP bundle (bun-installed GitHub package)"
 desires = "5.3.0"
-keywords = ["process-manager", "nodejs", "daemon", "clustering", "monitoring"]
+keywords = ["process-manager", "nodejs", "daemon", "clustering", "monitoring", "mcp"]
 
-# Install via npm globally
+# Install via bun globally (includes MCP server)
 install = """
-npm install -g pm2@latest
+command -v bun >/dev/null 2>&1 || { echo "bun required for pm2-mcp install" >&2; exit 1; }
+bun install github:promptexecution/pm2-mcp -g
 """
 
-# Update to latest version
+# Update to latest version of the MCP-enabled bundle
 update = """
-npm update -g pm2
+command -v bun >/dev/null 2>&1 || { echo "bun required for pm2-mcp update" >&2; exit 1; }
+bun install github:promptexecution/pm2-mcp -g --force
 """
 
 # Version detection
