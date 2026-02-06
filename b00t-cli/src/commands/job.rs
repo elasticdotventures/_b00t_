@@ -170,7 +170,7 @@ async fn list_jobs(path: &str, json: bool) -> Result<()> {
             .map(|name| {
                 serde_json::json!({
                     "name": name,
-                    "path": format!("{}/_b00t_/{}.job.toml", path, name)
+                    "path": format!("{}/{}.job.toml", path, name)
                 })
             })
             .collect();
@@ -1038,8 +1038,8 @@ async fn create_job(
     }
 
     let template_name = template.unwrap_or("sequential");
+    // path already points to the _b00t_ directory (from cli.path default)
     let job_path = PathBuf::from(path)
-        .join("_b00t_")
         .join(format!("{}.job.toml", name));
 
     if job_path.exists() {
@@ -1108,7 +1108,8 @@ command = "echo 'Step 2'"
 fn find_job_datums(path: &str) -> Result<Vec<String>> {
     use std::fs;
 
-    let b00t_dir = PathBuf::from(path).join("_b00t_");
+    // path already points to the _b00t_ directory (from cli.path default)
+    let b00t_dir = PathBuf::from(path);
     let mut jobs = Vec::new();
 
     if !b00t_dir.exists() {
