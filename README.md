@@ -220,7 +220,7 @@ Add b00t as a marketplace for easy plugin and skill management:
 ```bash
 # Add b00t marketplace to Claude Code
 /plugin marketplace add elasticdotventures/_b00t_
-/plugin marketplace add ./claude-plugin/
+/plugin marketplace add ./.claude-plugin/
 
 # Install b00t plugins from marketplace
 /plugin install b00t@b00t-plugins
