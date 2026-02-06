@@ -8,8 +8,8 @@ members = [
     "k0mmand3r",
     "b00t-py",
     "b00t-ipc",
-    "togaf-dsl",
-    "togaf-cli",
+    # "togaf-dsl",  # 🦨 Removed - directory does not exist
+    # "togaf-cli",  # 🦨 Removed - directory does not exist
 ]
 resolver = "2"
 
