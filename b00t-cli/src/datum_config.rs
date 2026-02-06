@@ -240,7 +240,7 @@ impl B00tConfig {
     }
 
     /// Convert DatumType to string for pattern matching
-    fn datum_type_str(dtype: &DatumType) -> &'static str {
+    pub fn datum_type_str(dtype: &DatumType) -> &'static str {
         match dtype {
             DatumType::Agent => "agent",
             DatumType::Cli => "cli",
@@ -290,7 +290,35 @@ impl ConfigDatum {
             datum_type: Some(DatumType::Config),
             desires: Some(b00t_c0re_lib::version::VERSION.to_string()),
             hint: "b00t configuration file".to_string(),
+            install: None,
+            update: None,
+            version: None,
+            version_regex: None,
+            command: None,
+            args: None,
+            vsix_id: None,
+            script: None,
+            image: None,
+            docker_args: None,
+            oci_uri: None,
+            resource_path: None,
+            chart_path: None,
+            namespace: None,
+            values_file: None,
             keywords: Some(vec!["config".to_string(), "b00t".to_string()]),
+            package_name: None,
+            env: None,
+            require: None,
+            aliases: None,
+            depends_on: None,
+            members: None,
+            mcp: None,
+            protocol: None,
+            implements: None,
+            provides: None,
+            learn: None,
+            usage: None,
+            lfmf_category: None,
             ..BootDatum::default()
         };
 
@@ -319,10 +347,33 @@ impl DatumChecker for ConfigDatum {
 
     fn version_status(&self) -> VersionStatus {
         match (self.current_version(), self.desired_version()) {
-            (Some(current), Some(desired)) if current == desired => VersionStatus::Match,
-            (Some(_), Some(_)) => VersionStatus::Older,
+            (Some(current), Some(desired)) => {
+                use semver::Version;
+                if let (Ok(curr_ver), Ok(des_ver)) =
+                    (Version::parse(&current), Version::parse(&desired))
+                {
+                    match curr_ver.cmp(&des_ver) {
+                        std::cmp::Ordering::Equal => VersionStatus::Match,
+                        std::cmp::Ordering::Greater => VersionStatus::Newer,
+                        std::cmp::Ordering::Less => VersionStatus::Older,
+                    }
+                } else {
+                    // Fallback to string comparison if not semver
+                    match current.cmp(&desired) {
+                        std::cmp::Ordering::Equal => VersionStatus::Match,
+                        _ => VersionStatus::Unknown,
+                    }
+                }
+            }
+            (Some(_), None) => VersionStatus::Unknown,
             (None, Some(_)) => VersionStatus::Missing,
-            _ => VersionStatus::Unknown,
+            (None, None) => {
+                if DatumChecker::is_installed(self) {
+                    VersionStatus::Unknown
+                } else {
+                    VersionStatus::Missing
+                }
+            }
         }
     }
 }
@@ -401,5 +452,28 @@ mod tests {
         assert!(config.datums.is_empty());
 
         assert!(!config.remove_datum("nonexistent.datum"));
+    }
+
+    #[test]
+    fn test_datum_type_str_lowercase() {
+        // Verify that datum_type_str returns lowercase strings for consistency
+        assert_eq!(B00tConfig::datum_type_str(&DatumType::Cli), "cli");
+        assert_eq!(B00tConfig::datum_type_str(&DatumType::Mcp), "mcp");
+        assert_eq!(B00tConfig::datum_type_str(&DatumType::Docker), "docker");
+        assert_eq!(B00tConfig::datum_type_str(&DatumType::Ai), "ai");
+        
+        // Ensure all returned strings are lowercase
+        for datum_type in &[
+            DatumType::Agent,
+            DatumType::Cli,
+            DatumType::Mcp,
+            DatumType::Ai,
+            DatumType::Docker,
+            DatumType::K8s,
+        ] {
+            let type_str = B00tConfig::datum_type_str(datum_type);
+            assert_eq!(type_str, type_str.to_lowercase(), 
+                "datum_type_str should return lowercase string");
+        }
     }
 }

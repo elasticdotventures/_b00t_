@@ -83,6 +83,9 @@ pub enum ModelProvider {
     /// Generic OpenAI-compatible endpoint
     #[serde(rename = "openai_compatible")]
     OpenAICompatible,
+    /// Foundry Local (OpenAI-compatible local runtime)
+    #[serde(rename = "foundry_local")]
+    FoundryLocal,
     /// Catch-all for new/unknown providers stored as raw string
     #[serde(untagged)]
     Other(String),
@@ -108,6 +111,7 @@ impl ModelProvider {
             Self::OpenRouter => "openrouter/",
             Self::LiteLLM => "", // LiteLLM is a proxy, no prefix needed
             Self::OpenAICompatible => "openai/",
+            Self::FoundryLocal => "openai/",
             Self::Other(prefix) => prefix,
         }
     }

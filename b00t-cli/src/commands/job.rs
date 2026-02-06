@@ -7,8 +7,8 @@
 //! - Sub-agent spawning for complex tasks
 //! - Integration with k0mmander/Dagu/go tasker
 
-use crate::datum_job::{JobDatum, JobStep, JobTask};
-use crate::job_state::{JobState, JobStatus, StepStatus};
+use crate::datum_job::{JobStep, JobTask};
+use crate::job_state::StepStatus;
 use anyhow::{Context, Result};
 use clap::Parser;
 use std::path::PathBuf;
@@ -177,9 +177,15 @@ async fn list_jobs(path: &str, json: bool) -> Result<()> {
         println!("{}", serde_json::to_string_pretty(&job_list)?);
     } else {
         println!("📋 Available jobs:\n");
+
+        // JobDatum::from_config expects the _b00t_ directory path
+        let b00t_path = PathBuf::from(path).join("_b00t_");
+        let b00t_path_str = b00t_path.to_str()
+            .ok_or_else(|| anyhow::anyhow!("Invalid path to _b00t_ directory"))?;
+
         for job_name in jobs {
             let datum_path = format!("{}.job.toml", job_name);
-            match JobDatum::from_config(&datum_path, path) {
+            match JobDatum::from_config(&datum_path, b00t_path_str) {
                 Ok(datum) => {
                     if let Ok(config) = datum.job_config() {
                         println!("  • {} - {}", job_name, config.description);
@@ -204,9 +210,14 @@ async fn list_jobs(path: &str, json: bool) -> Result<()> {
 async fn plan_job(path: &str, name: &str, show_dag: bool, json: bool) -> Result<()> {
     use crate::datum_job::JobDatum;
 
+    // JobDatum::from_config expects the _b00t_ directory path
+    let b00t_path = PathBuf::from(path).join("_b00t_");
+    let b00t_path_str = b00t_path.to_str()
+        .ok_or_else(|| anyhow::anyhow!("Invalid path to _b00t_ directory"))?;
+
     let datum_path = format!("{}.job.toml", name);
     let datum =
-        JobDatum::from_config(&datum_path, path).context(format!("Job '{}' not found", name))?;
+        JobDatum::from_config(&datum_path, b00t_path_str).context(format!("Job '{}' not found", name))?;
 
     datum.validate()?;
 
@@ -326,9 +337,14 @@ async fn run_job(
 
     println!("🚀 Starting job: {}", name);
 
+    // JobDatum::from_config expects the _b00t_ directory path
+    let b00t_path = PathBuf::from(path).join("_b00t_");
+    let b00t_path_str = b00t_path.to_str()
+        .ok_or_else(|| anyhow::anyhow!("Invalid path to _b00t_ directory"))?;
+
     let datum_path = format!("{}.job.toml", name);
     let datum =
-        JobDatum::from_config(&datum_path, path).context(format!("Job '{}' not found", name))?;
+        JobDatum::from_config(&datum_path, b00t_path_str).context(format!("Job '{}' not found", name))?;
 
     datum.validate()?;
 
@@ -1194,9 +1210,14 @@ pub async fn stop_job_internal(path: &str, name: Option<&str>, all: bool) -> Res
 pub async fn get_job_plan_json(path: &str, name: &str) -> Result<String> {
     use crate::datum_job::JobDatum;
 
+    // JobDatum::from_config expects the _b00t_ directory path
+    let b00t_path = PathBuf::from(path).join("_b00t_");
+    let b00t_path_str = b00t_path.to_str()
+        .ok_or_else(|| anyhow::anyhow!("Invalid path to _b00t_ directory"))?;
+
     let datum_path = format!("{}.job.toml", name);
     let datum =
-        JobDatum::from_config(&datum_path, path).context(format!("Job '{}' not found", name))?;
+        JobDatum::from_config(&datum_path, b00t_path_str).context(format!("Job '{}' not found", name))?;
 
     datum.validate()?;
 

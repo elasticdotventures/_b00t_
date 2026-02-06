@@ -1,0 +1,100 @@
+<common_patterns>
+  <skill_folder_patterns>
+    <pattern name="project_generic">
+      <description>Project skill available across all modes in this repo</description>
+      <path>./.roo/skills/&lt;skill-name&gt;/SKILL.md</path>
+    </pattern>
+
+    <pattern name="project_mode_specific">
+      <description>Project skill available only in a specific mode</description>
+      <path>./.roo/skills-&lt;mode&gt;/&lt;skill-name&gt;/SKILL.md</path>
+    </pattern>
+
+    <pattern name="global_generic">
+      <description>Global skill available across all workspaces</description>
+      <path>&lt;home&gt;/.roo/skills/&lt;skill-name&gt;/SKILL.md</path>
+    </pattern>
+
+    <pattern name="global_mode_specific">
+      <description>Global skill available only in a specific mode</description>
+      <path>&lt;home&gt;/.roo/skills-&lt;mode&gt;/&lt;skill-name&gt;/SKILL.md</path>
+    </pattern>
+  </skill_folder_patterns>
+
+  <skill_structure_guidance>
+    <default>
+      <rule>Default to keeping essential workflow instructions in SKILL.md.</rule>
+      <rule>Add additional files only when they materially improve navigation, reuse, or verification.</rule>
+    </default>
+
+    <optional_folders>
+      <folder name="references">
+        <use_for>Optional deep dives (APIs, schemas, checklists, edge cases)</use_for>
+        <rule>Link directly from SKILL.md; avoid multi-hop references.</rule>
+      </folder>
+      <folder name="scripts">
+        <use_for>Deterministic validation or automation (prefer execute-first workflows)</use_for>
+        <rule>SKILL.md must state whether to execute the script or read it as reference.</rule>
+      </folder>
+      <folder name="assets">
+        <use_for>Reusable templates and example artifacts</use_for>
+      </folder>
+    </optional_folders>
+  </skill_structure_guidance>
+
+  <linked_file_handling>
+    <rule>Do not assume linked file contents unless they have been explicitly read.</rule>
+    <rule>Prefer reading the minimum necessary linked file(s) for the current task.</rule>
+  </linked_file_handling>
+
+  <path_conventions>
+    <rule>Use forward slashes in paths (e.g., references/guide.md) for cross-platform compatibility.</rule>
+  </path_conventions>
+
+  <override_priority>
+    <note>When the same skill name exists in multiple locations, prefer the highest-precedence one.</note>
+    <order>
+      <item>Project mode-specific: ./.roo/skills-&lt;mode&gt;/&lt;skill-name&gt;/</item>
+      <item>Project generic: ./.roo/skills/&lt;skill-name&gt;/</item>
+      <item>Global mode-specific: &lt;home&gt;/.roo/skills-&lt;mode&gt;/&lt;skill-name&gt;/</item>
+      <item>Global generic: &lt;home&gt;/.roo/skills/&lt;skill-name&gt;/</item>
+    </order>
+  </override_priority>
+
+  <skill_md_minimum_format>
+    <note>SKILL.md must start with YAML frontmatter including name and description.</note>
+    <frontmatter_example><![CDATA[
+--- name: your-skill-name description: When to use this skill and what it does (include matching keywords) ---
+# When to use
+# When NOT to use
+# Inputs required
+# Workflow 1) ... 2) ...
+# Examples
+# Troubleshooting
+    ]]></frontmatter_example>
+  </skill_md_minimum_format>
+
+  <recommended_skill_md_sections>
+    <section>Title (matches intent; human-readable)</section>
+    <section>When to use this skill</section>
+    <section>When NOT to use this skill</section>
+    <section>Inputs required from the user</section>
+    <section>Workflow (numbered)</section>
+    <section>Examples (minimal, realistic)</section>
+    <section>Troubleshooting / edge cases</section>
+  </recommended_skill_md_sections>
+
+  <validation_rules>
+    <name_constraints>
+      <rule>1–64 characters</rule>
+      <rule>Lowercase letters, numbers, and hyphens only</rule>
+      <rule>No leading or trailing hyphen</rule>
+      <rule>No consecutive hyphens</rule>
+      <rule>Must match the directory name exactly</rule>
+    </name_constraints>
+    <description_constraints>
+      <rule>Non-empty after trimming</rule>
+      <rule>Max 1024 characters</rule>
+    </description_constraints>
+  </validation_rules>
+</common_patterns>

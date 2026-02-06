@@ -236,8 +236,8 @@ fn default_httpstream_transport() -> String {
 ///
 /// # Examples
 ///
-/// ```rust
-/// use crate::datum_mcp::McpDatum;
+/// ```rust,ignore
+/// use b00t_cli::datum_mcp::McpDatum;
 ///
 /// // Load MCP server configuration
 /// let mcp = McpDatum::from_config("filesystem", "~/.dotfiles/_b00t_").unwrap();
@@ -258,7 +258,7 @@ impl McpDatum {
     }
 
     // Helper to parse stdio methods from raw data
-    fn parse_stdio_methods(&self) -> Vec<McpStdioMethod> {
+    pub fn parse_stdio_methods(&self) -> Vec<McpStdioMethod> {
         if let Some(mcp) = &self.datum.mcp {
             if let Some(stdio_data) = &mcp.stdio {
                 stdio_data

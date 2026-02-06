@@ -1,0 +1,22 @@
+[b00t]
+name = "ralph"
+type = "cli"
+hint = "Autonomous agent loop runner for TaskMaster-AI workflows"
+
+[b00t.cli]
+command = "ralph"
+version_cmd = "uv run ralph --version"
+version_regex = "ralph\\s+([0-9.]+)"
+install = """
+cd _b00t_/ralph && \
+uv sync && \
+uv pip install -e .
+"""
+desires = "latest"
+
+[b00t.capabilities]
+features = ["autonomous-loop", "taskmaster-integration", "mcp-server"]
+requires = ["uv", "python3.11+", "taskmaster"]
+
+[b00t.env]
+RALPH_HOME = "_b00t_/ralph"
