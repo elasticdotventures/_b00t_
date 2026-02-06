@@ -108,8 +108,6 @@ pub enum StackCommands {
             help = "Parameters forwarded to ansible-playbook (extra args or key=value vars)"
         )]
         params: Vec<String>,
-        #[clap(long, help = "Skill name to pass pro forma as extra vars")]
-        skill: Option<String>,
     },
 }
 
@@ -145,8 +143,7 @@ impl StackCommands {
                 run,
                 target,
                 params,
-                skill,
-            } => run_stack_ansible(run, target, params, skill.as_deref(), path),
+            } => run_stack_ansible(run, target, params, path),
         }
     }
 }
@@ -396,10 +393,10 @@ fn install_datums_by_pattern(pattern: &str, path: &str, dry_run: bool) -> Result
     }
 
     for member in install_order {
-            if let Some(datum) = available_datums.get(&member) {
-                run_stack_ansible("datum", &datum.name, &[], None, path)?;
-            }
+        if let Some(datum) = available_datums.get(&member) {
+            run_stack_ansible("datum", &datum.name, &[], path)?;
         }
+    }
 
     Ok(())
 }
@@ -652,13 +649,7 @@ fn generate_k8s_via_kompose(
     Ok(())
 }
 
-fn run_stack_ansible(
-    run: &str,
-    target: &str,
-    params: &[String],
-    skill: Option<&str>,
-    path: &str,
-) -> Result<()> {
+fn run_stack_ansible(run: &str, target: &str, params: &[String], path: &str) -> Result<()> {
     let workspace = get_expanded_path(path)?;
     let mut config = AnsibleConfig::default();
 
@@ -687,10 +678,6 @@ fn run_stack_ansible(
         } else {
             extra_args.push(param.clone());
         }
-    }
-
-    if let Some(skill_name) = skill {
-        extra_vars.entry("skill".to_string()).or_insert(skill_name.to_string());
     }
 
     if !extra_args.is_empty() {
