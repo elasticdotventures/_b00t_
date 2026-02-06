@@ -1,7 +1,8 @@
+use crate::entanglement::parse_entanglement_ref;
+use crate::{DatumType, UnifiedConfig, get_config, get_expanded_path};
 use anyhow::{Context, Result};
-use std::fs;
-use crate::{get_config, get_expanded_path, DatumType};
 use b00t_c0re_lib::TemplateRenderer;
+use std::fs;
 
 /// Detect current AI agent based on environment variables
 pub fn detect_agent(ignore_env: bool) -> String {
@@ -46,10 +47,11 @@ pub fn whoami(path: &str, role_override: Option<String>) -> Result<()> {
     ))?;
 
     // Use b00t-c0re-lib template renderer
-    let renderer = TemplateRenderer::with_defaults()
-        .context("Failed to create template renderer")?;
-    
-    let rendered = renderer.render(&template_content)
+    let renderer =
+        TemplateRenderer::with_defaults().context("Failed to create template renderer")?;
+
+    let rendered = renderer
+        .render(&template_content)
         .context("Failed to render template")?;
 
     println!("{}", rendered);
@@ -57,9 +59,12 @@ pub fn whoami(path: &str, role_override: Option<String>) -> Result<()> {
     // Append role summary if we can resolve a role datum
     if let Some(role) = resolve_role(role_override) {
         if let Some(role_details) = load_role_datum(&role, path) {
-            print_role_summary(&role_details);
+            print_role_summary(&role_details, path);
         } else {
-            println!("⚠️ Role datum '{}' not found or missing required fields", role);
+            println!(
+                "⚠️ Role datum '{}' not found or missing required fields",
+                role
+            );
         }
     }
 
@@ -72,6 +77,24 @@ struct RoleDetails {
     hint: String,
     skills: Vec<String>,
     compliance: Vec<String>,
+    entangled_agents: Vec<String>,
+    entangled_cli: Vec<String>,
+    entangled_mcp: Vec<String>,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+struct CapabilityCheck {
+    reference: String,
+    expected_type: DatumType,
+    status: CapabilityStatus,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+enum CapabilityStatus {
+    Ready,
+    Missing,
+    TypeMismatch { found: DatumType },
+    InvalidReference,
 }
 
 fn resolve_role(role_override: Option<String>) -> Option<String> {
@@ -95,12 +118,18 @@ fn load_role_datum(role: &str, path: &str) -> Option<RoleDetails> {
 
     let skills = datum.skills.unwrap_or_default();
     let compliance = datum.compliance.unwrap_or_default();
+    let entangled_agents = datum.entangled_agents.unwrap_or_default();
+    let entangled_cli = datum.entangled_cli.unwrap_or_default();
+    let entangled_mcp = datum.entangled_mcp.unwrap_or_default();
 
     Some(RoleDetails {
         name: datum.name,
         hint: datum.hint,
         skills,
         compliance,
+        entangled_agents,
+        entangled_cli,
+        entangled_mcp,
     })
 }
 
@@ -120,7 +149,107 @@ fn summarize_list(items: &[String], max_items: usize) -> Option<String> {
     Some(summary)
 }
 
-fn print_role_summary(role: &RoleDetails) {
+fn collect_capability_checks(role: &RoleDetails, path: &str) -> Vec<CapabilityCheck> {
+    let mut checks = Vec::new();
+
+    for reference in &role.entangled_agents {
+        checks.push(check_role_capability(reference, DatumType::Agent, path));
+    }
+    for reference in &role.entangled_cli {
+        checks.push(check_role_capability(reference, DatumType::Cli, path));
+    }
+    for reference in &role.entangled_mcp {
+        checks.push(check_role_capability(reference, DatumType::Mcp, path));
+    }
+
+    checks
+}
+
+fn check_role_capability(reference: &str, fallback_type: DatumType, path: &str) -> CapabilityCheck {
+    let (name, ref_type) = match parse_entanglement_ref(reference) {
+        Ok((name, ref_type)) => (name, ref_type),
+        Err(_) => {
+            return CapabilityCheck {
+                reference: reference.to_string(),
+                expected_type: fallback_type,
+                status: CapabilityStatus::InvalidReference,
+            };
+        }
+    };
+
+    let expected_type = ref_type.unwrap_or(fallback_type);
+    let (config, filename) = match get_config_with_type_preference(&name, &expected_type, path) {
+        Ok(config) => config,
+        Err(_) => {
+            return CapabilityCheck {
+                reference: reference.to_string(),
+                expected_type,
+                status: CapabilityStatus::Missing,
+            };
+        }
+    };
+
+    let found = config.b00t.get_datum_type(Some(&filename));
+    if found == expected_type {
+        CapabilityCheck {
+            reference: reference.to_string(),
+            expected_type,
+            status: CapabilityStatus::Ready,
+        }
+    } else {
+        CapabilityCheck {
+            reference: reference.to_string(),
+            expected_type,
+            status: CapabilityStatus::TypeMismatch { found },
+        }
+    }
+}
+
+fn get_config_with_type_preference(
+    name: &str,
+    expected_type: &DatumType,
+    path: &str,
+) -> Result<(UnifiedConfig, String), Box<dyn std::error::Error>> {
+    if let Some(extension) = file_extension_for_type(expected_type) {
+        let expanded_path = get_expanded_path(path)?;
+        let filename = format!("{}{}", name, extension);
+        let config_path = expanded_path.join(&filename);
+        if config_path.exists() {
+            let content = fs::read_to_string(&config_path)?;
+            let config: UnifiedConfig = toml::from_str(&content)?;
+            return Ok((config, filename));
+        }
+    }
+
+    get_config(name, path)
+}
+
+fn file_extension_for_type(datum_type: &DatumType) -> Option<&'static str> {
+    match datum_type {
+        DatumType::Mcp => Some(".mcp.toml"),
+        DatumType::Cli => Some(".cli.toml"),
+        DatumType::Agent => Some(".agent.toml"),
+        DatumType::Role => Some(".role.toml"),
+        DatumType::Stack => Some(".stack.toml"),
+        DatumType::Job => Some(".job.toml"),
+        DatumType::Api => Some(".api.toml"),
+        DatumType::Skill => Some(".skill.toml"),
+        DatumType::Config => Some(".config.toml"),
+        DatumType::Database => Some(".database.toml"),
+        DatumType::Repo => Some(".repo.toml"),
+        DatumType::Ai => Some(".ai.toml"),
+        DatumType::AiModel => Some(".ai_model.toml"),
+        DatumType::Bash => Some(".bash.toml"),
+        DatumType::Vscode => Some(".vscode.toml"),
+        DatumType::Docker => Some(".docker.toml"),
+        DatumType::K8s => Some(".k8s.toml"),
+        DatumType::Apt => Some(".apt.toml"),
+        DatumType::Nix => Some(".nix.toml"),
+        DatumType::Unknown => None,
+    }
+}
+
+fn print_role_summary(role: &RoleDetails, path: &str) {
     println!("🎭 Role: {}", role.name);
     println!("💡 {}", role.hint);
 
@@ -131,44 +260,109 @@ fn print_role_summary(role: &RoleDetails) {
     if let Some(compliance_summary) = summarize_list(&role.compliance, 3) {
         println!("⚖️ Compliance: {}", compliance_summary);
     }
+
+    if let Some(agent_summary) = summarize_list(&role.entangled_agents, 5) {
+        println!("🤖 Sub-agents: {}", agent_summary);
+    }
+
+    if let Some(cli_summary) = summarize_list(&role.entangled_cli, 5) {
+        println!("🛠️ CLI tools: {}", cli_summary);
+    }
+
+    if let Some(mcp_summary) = summarize_list(&role.entangled_mcp, 5) {
+        println!("🔌 MCP tools: {}", mcp_summary);
+    }
+
+    let checks = collect_capability_checks(role, path);
+    if !checks.is_empty() {
+        println!("🩺 Capability check:");
+        for check in checks {
+            match check.status {
+                CapabilityStatus::Ready => {
+                    println!("   ✅ {} [{}]", check.reference, check.expected_type);
+                }
+                CapabilityStatus::Missing => {
+                    println!(
+                        "   ❌ {} [{} missing]",
+                        check.reference, check.expected_type
+                    );
+                }
+                CapabilityStatus::TypeMismatch { found } => {
+                    println!(
+                        "   ❌ {} [expected {}, found {}]",
+                        check.reference, check.expected_type, found
+                    );
+                }
+                CapabilityStatus::InvalidReference => {
+                    println!("   ❌ {} [invalid reference format]", check.reference);
+                }
+            }
+        }
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::fs;
+    use tempfile::TempDir;
 
     #[test]
     fn test_detect_agent_claude() {
         // Force ignore_env to avoid cross-test env races
-        unsafe { std::env::set_var("_B00T_Agent", "test-agent"); }
-        unsafe { std::env::set_var("CLAUDECODE", "1"); }
+        unsafe {
+            std::env::set_var("_B00T_Agent", "test-agent");
+        }
+        unsafe {
+            std::env::set_var("CLAUDECODE", "1");
+        }
         assert_eq!(detect_agent(true), "claude");
-        unsafe { std::env::remove_var("CLAUDECODE"); }
-        unsafe { std::env::remove_var("_B00T_Agent"); }
+        unsafe {
+            std::env::remove_var("CLAUDECODE");
+        }
+        unsafe {
+            std::env::remove_var("_B00T_Agent");
+        }
     }
 
     #[test]
     fn test_detect_agent_env_variable() {
-        unsafe { std::env::remove_var("CLAUDECODE"); }
-        unsafe { std::env::set_var("_B00T_Agent", "test-agent"); }
+        unsafe {
+            std::env::remove_var("CLAUDECODE");
+        }
+        unsafe {
+            std::env::set_var("_B00T_Agent", "test-agent");
+        }
         assert_eq!(detect_agent(false), "test-agent");
-        unsafe { std::env::remove_var("_B00T_Agent"); }
+        unsafe {
+            std::env::remove_var("_B00T_Agent");
+        }
     }
 
     #[test]
     fn test_detect_agent_ignore_env() {
-        unsafe { std::env::remove_var("CLAUDECODE"); }
-        unsafe { std::env::set_var("_B00T_Agent", "test-agent"); }
+        unsafe {
+            std::env::remove_var("CLAUDECODE");
+        }
+        unsafe {
+            std::env::set_var("_B00T_Agent", "test-agent");
+        }
         assert_eq!(detect_agent(true), "");
-        unsafe { std::env::remove_var("_B00T_Agent"); }
+        unsafe {
+            std::env::remove_var("_B00T_Agent");
+        }
     }
 
     #[test]
     fn test_resolve_role_prefers_override() {
-        unsafe { std::env::set_var("_B00T_ROLE", "captain"); }
+        unsafe {
+            std::env::set_var("_B00T_ROLE", "captain");
+        }
         let resolved = resolve_role(Some("executive".to_string()));
         assert_eq!(resolved, Some("executive".to_string()));
-        unsafe { std::env::remove_var("_B00T_ROLE"); }
+        unsafe {
+            std::env::remove_var("_B00T_ROLE");
+        }
     }
 
     #[test]
@@ -181,5 +375,133 @@ mod tests {
         ];
         let summary = summarize_list(&items, 2).unwrap();
         assert_eq!(summary, "a, b (+2 more)");
+    }
+
+    #[test]
+    fn test_load_role_datum_includes_entangled_capabilities() {
+        let temp = TempDir::new().unwrap();
+        let role_path = temp.path().join("orchestrator.role.toml");
+        fs::write(
+            role_path,
+            r#"[b00t]
+name = "orchestrator"
+type = "role"
+hint = "orchestrator"
+skills = ["delegation"]
+compliance = ["monitor chat"]
+entangled_agents = ["ralph.agent"]
+entangled_cli = ["b00t.cli"]
+entangled_mcp = ["ralph.mcp"]
+"#,
+        )
+        .unwrap();
+
+        let role = load_role_datum("orchestrator", temp.path().to_str().unwrap()).unwrap();
+        assert_eq!(role.name, "orchestrator");
+        assert_eq!(role.entangled_agents, vec!["ralph.agent".to_string()]);
+        assert_eq!(role.entangled_cli, vec!["b00t.cli".to_string()]);
+        assert_eq!(role.entangled_mcp, vec!["ralph.mcp".to_string()]);
+    }
+
+    #[test]
+    fn test_collect_capability_checks_reports_ready_and_missing() {
+        let temp = TempDir::new().unwrap();
+        let path = temp.path();
+
+        fs::write(
+            path.join("orchestrator.role.toml"),
+            r#"[b00t]
+name = "orchestrator"
+type = "role"
+hint = "orchestrator"
+entangled_agents = ["ralph.agent", "ghost.agent"]
+entangled_cli = ["b00t.cli"]
+entangled_mcp = ["ralph.mcp", "taskmaster-ai.mcp"]
+"#,
+        )
+        .unwrap();
+        fs::write(
+            path.join("ralph.agent.toml"),
+            r#"[b00t]
+name = "ralph"
+type = "agent"
+hint = "ralph agent"
+"#,
+        )
+        .unwrap();
+        fs::write(
+            path.join("b00t.cli.toml"),
+            r#"[b00t]
+name = "b00t"
+type = "cli"
+hint = "b00t cli"
+"#,
+        )
+        .unwrap();
+        fs::write(
+            path.join("ralph.mcp.toml"),
+            r#"[b00t]
+name = "ralph"
+type = "mcp"
+hint = "ralph mcp"
+"#,
+        )
+        .unwrap();
+
+        let role = load_role_datum("orchestrator", path.to_str().unwrap()).unwrap();
+        let checks = collect_capability_checks(&role, path.to_str().unwrap());
+
+        assert!(
+            checks
+                .iter()
+                .any(|c| { c.reference == "ralph.agent" && c.status == CapabilityStatus::Ready })
+        );
+        assert!(
+            checks
+                .iter()
+                .any(|c| { c.reference == "b00t.cli" && c.status == CapabilityStatus::Ready })
+        );
+        assert!(
+            checks
+                .iter()
+                .any(|c| { c.reference == "ghost.agent" && c.status == CapabilityStatus::Missing })
+        );
+        assert!(checks.iter().any(|c| {
+            c.reference == "taskmaster-ai.mcp" && c.status == CapabilityStatus::Missing
+        }));
+    }
+
+    #[test]
+    fn test_check_role_capability_detects_invalid_reference() {
+        let check = check_role_capability("ralph.agent.extra", DatumType::Agent, "/tmp");
+        assert_eq!(check.status, CapabilityStatus::InvalidReference);
+    }
+
+    #[test]
+    fn test_check_role_capability_prefers_typed_file_extension() {
+        let temp = TempDir::new().unwrap();
+        let path = temp.path();
+
+        fs::write(
+            path.join("ralph.agent.toml"),
+            r#"[b00t]
+name = "ralph"
+type = "agent"
+hint = "ralph agent"
+"#,
+        )
+        .unwrap();
+        fs::write(
+            path.join("ralph.mcp.toml"),
+            r#"[b00t]
+name = "ralph"
+type = "mcp"
+hint = "ralph mcp"
+"#,
+        )
+        .unwrap();
+
+        let check = check_role_capability("ralph.mcp", DatumType::Mcp, path.to_str().unwrap());
+        assert_eq!(check.status, CapabilityStatus::Ready);
     }
 }
