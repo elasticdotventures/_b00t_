@@ -493,6 +493,8 @@ async fn handle_ralph(
         println!("⚠️  TaskMaster not initialized. Initializing now...");
         cmd!("taskmaster", "init")
             .dir(&root)
+            .stdout_capture()
+            .stderr_capture()
             .run()
             .map_err(|e| anyhow::anyhow!("Failed to initialize taskmaster: {}", e))?;
     }
