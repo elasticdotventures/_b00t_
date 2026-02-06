@@ -230,7 +230,7 @@ This provides:
 - ✅ `/b00t` skill for dispatching learn packets to agents
 - ✅ Automatic skill activation based on context
 - ✅ Centralized plugin management via marketplace
-- ✅ Access to hive-memory, devops-stacks, and other skills
+- ✅ Access to available b00t skills from this repository
 
 #### Option 2: Install MCP Server Directly
 
