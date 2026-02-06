@@ -248,10 +248,10 @@ b00t mcp install b00t cursor       # For Cursor
 Copy skills directly to Claude Code:
 
 ```bash
-# Copy individual skills
-cp -r .claude/skills/hive-memory ~/.claude/skills/
-cp -r .claude/skills/devops-stacks ~/.claude/skills/
-cp -r .claude/skills/systems-engineering ~/.claude/skills/
+# Copy individual skills from this repo into Claude's local agents directory
+cp -r plugins/b00t/skills/hive-memory ~/.claude/agents/
+cp -r plugins/b00t/skills/devops-stacks ~/.claude/agents/
+cp -r plugins/b00t/skills/systems-engineering ~/.claude/agents/
 ```
 
 ### **Smart Context Management**
