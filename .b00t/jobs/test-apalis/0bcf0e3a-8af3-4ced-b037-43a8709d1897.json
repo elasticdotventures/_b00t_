@@ -4,7 +4,7 @@
   "status": "running",
   "started_at": "2026-02-06T11:03:16.335253741Z",
   "completed_at": null,
-  "current_step": "start",
+  "current_step": "cargo-check",
   "steps": {
     "start": {
       "name": "start",
@@ -14,14 +14,31 @@
       "duration_ms": 1,
       "error": null,
       "retries": 0
+    },
+    "cargo-check": {
+      "name": "cargo-check",
+      "status": "completed",
+      "started_at": "2026-02-06T11:03:16.387596180Z",
+      "completed_at": "2026-02-06T11:03:34.057614697Z",
+      "duration_ms": 17670,
+      "error": null,
+      "retries": 0
     }
   },
-  "checkpoints": [],
+  "checkpoints": [
+    {
+      "step_name": "start",
+      "checkpoint_name": "test-start",
+      "git_commit": null,
+      "git_tag": "job/test-apalis/test-start",
+      "created_at": "2026-02-06T11:03:16.387237994Z"
+    }
+  ],
   "error": null,
   "metadata": {
     "execution_mode": "sequential",
     "total_steps": 3,
-    "completed_steps": 1,
+    "completed_steps": 2,
     "failed_steps": 0,
     "skipped_steps": 0,
     "env": {}
