@@ -180,7 +180,8 @@ async fn list_jobs(path: &str, json: bool) -> Result<()> {
 
         // JobDatum::from_config expects the _b00t_ directory path
         let b00t_path = PathBuf::from(path).join("_b00t_");
-        let b00t_path_str = b00t_path.to_str()
+        let b00t_path_str = b00t_path
+            .to_str()
             .ok_or_else(|| anyhow::anyhow!("Invalid path to _b00t_ directory"))?;
 
         for job_name in jobs {
@@ -212,12 +213,13 @@ async fn plan_job(path: &str, name: &str, show_dag: bool, json: bool) -> Result<
 
     // JobDatum::from_config expects the _b00t_ directory path
     let b00t_path = PathBuf::from(path).join("_b00t_");
-    let b00t_path_str = b00t_path.to_str()
+    let b00t_path_str = b00t_path
+        .to_str()
         .ok_or_else(|| anyhow::anyhow!("Invalid path to _b00t_ directory"))?;
 
     let datum_path = format!("{}.job.toml", name);
-    let datum =
-        JobDatum::from_config(&datum_path, b00t_path_str).context(format!("Job '{}' not found", name))?;
+    let datum = JobDatum::from_config(&datum_path, b00t_path_str)
+        .context(format!("Job '{}' not found", name))?;
 
     datum.validate()?;
 
@@ -339,12 +341,13 @@ async fn run_job(
 
     // JobDatum::from_config expects the _b00t_ directory path
     let b00t_path = PathBuf::from(path).join("_b00t_");
-    let b00t_path_str = b00t_path.to_str()
+    let b00t_path_str = b00t_path
+        .to_str()
         .ok_or_else(|| anyhow::anyhow!("Invalid path to _b00t_ directory"))?;
 
     let datum_path = format!("{}.job.toml", name);
-    let datum =
-        JobDatum::from_config(&datum_path, b00t_path_str).context(format!("Job '{}' not found", name))?;
+    let datum = JobDatum::from_config(&datum_path, b00t_path_str)
+        .context(format!("Job '{}' not found", name))?;
 
     datum.validate()?;
 
@@ -1039,8 +1042,7 @@ async fn create_job(
 
     let template_name = template.unwrap_or("sequential");
     // path already points to the _b00t_ directory (from cli.path default)
-    let job_path = PathBuf::from(path)
-        .join(format!("{}.job.toml", name));
+    let job_path = PathBuf::from(path).join(format!("{}.job.toml", name));
 
     if job_path.exists() {
         anyhow::bail!("Job '{}' already exists", name);
@@ -1213,12 +1215,13 @@ pub async fn get_job_plan_json(path: &str, name: &str) -> Result<String> {
 
     // JobDatum::from_config expects the _b00t_ directory path
     let b00t_path = PathBuf::from(path).join("_b00t_");
-    let b00t_path_str = b00t_path.to_str()
+    let b00t_path_str = b00t_path
+        .to_str()
         .ok_or_else(|| anyhow::anyhow!("Invalid path to _b00t_ directory"))?;
 
     let datum_path = format!("{}.job.toml", name);
-    let datum =
-        JobDatum::from_config(&datum_path, b00t_path_str).context(format!("Job '{}' not found", name))?;
+    let datum = JobDatum::from_config(&datum_path, b00t_path_str)
+        .context(format!("Job '{}' not found", name))?;
 
     datum.validate()?;
 

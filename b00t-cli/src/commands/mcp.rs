@@ -299,19 +299,23 @@ impl McpCommands {
                     }
                 }
             }
-            McpCommands::Sync { 
-                operation_or_target, 
-                source, 
+            McpCommands::Sync {
+                operation_or_target,
+                source,
                 dest,
                 agent,
-                repo, 
-                user 
+                repo,
+                user,
             } => {
                 // Check if this is new push/pull syntax or legacy codex sync
                 if operation_or_target == "push" || operation_or_target == "pull" {
-                    let src = source.as_ref().ok_or_else(|| anyhow::anyhow!("Source required for push/pull"))?;
-                    let dst = dest.as_ref().ok_or_else(|| anyhow::anyhow!("Destination required for push/pull"))?;
-                    
+                    let src = source
+                        .as_ref()
+                        .ok_or_else(|| anyhow::anyhow!("Source required for push/pull"))?;
+                    let dst = dest
+                        .as_ref()
+                        .ok_or_else(|| anyhow::anyhow!("Destination required for push/pull"))?;
+
                     crate::mcp_sync_bidirectional(
                         path,
                         operation_or_target.as_str(),
@@ -333,10 +337,15 @@ impl McpCommands {
 
                     match operation_or_target.as_str() {
                         "codex" => crate::codex_sync_dotmcpjson(path, use_repo),
-                        _ => anyhow::bail!("Error: Invalid target '{}'. Use 'push/pull src dest' or 'codex'", operation_or_target),
+                        _ => anyhow::bail!(
+                            "Error: Invalid target '{}'. Use 'push/pull src dest' or 'codex'",
+                            operation_or_target
+                        ),
                     }
                 } else {
-                    anyhow::bail!("Error: Invalid syntax. Use 'b00t-cli mcp sync push <src> <dest>' or 'b00t-cli mcp sync codex'");
+                    anyhow::bail!(
+                        "Error: Invalid syntax. Use 'b00t-cli mcp sync push <src> <dest>' or 'b00t-cli mcp sync codex'"
+                    );
                 }
             }
             McpCommands::Output {
@@ -669,7 +678,7 @@ transport = "stdio"
     fn test_sync_push_with_valid_input() {
         let temp_dir = TempDir::new().unwrap();
         let path = temp_dir.path().to_str().unwrap();
-        
+
         // Create a sample MCP datum file
         fs::write(
             temp_dir.path().join("test-server.mcp.toml"),
@@ -688,7 +697,7 @@ transport = "stdio"
 
         let rt = tokio::runtime::Runtime::new().unwrap();
         let result = rt.block_on(sync_cmd.execute_async(path));
-        
+
         // Should succeed in creating the sync operation
         // Note: This may fail if ~/.kiro doesn't exist, but the important part
         // is that it processes the command structure correctly
@@ -711,7 +720,7 @@ transport = "stdio"
 
         let rt = tokio::runtime::Runtime::new().unwrap();
         let result = rt.block_on(sync_cmd.execute_async(path));
-        
+
         // Should fail with unknown platform error
         assert!(result.is_err());
         let err_msg = result.unwrap_err().to_string();
@@ -738,7 +747,7 @@ transport = "stdio"
 
         let rt = tokio::runtime::Runtime::new().unwrap();
         let result = rt.block_on(sync_cmd.execute_async(path));
-        
+
         // Should fail with source required error
         assert!(result.is_err());
         let err_msg = result.unwrap_err().to_string();
@@ -765,7 +774,7 @@ transport = "stdio"
 
         let rt = tokio::runtime::Runtime::new().unwrap();
         let result = rt.block_on(sync_cmd.execute_async(path));
-        
+
         // Should fail with destination required error
         assert!(result.is_err());
         let err_msg = result.unwrap_err().to_string();
@@ -792,7 +801,7 @@ transport = "stdio"
 
         let rt = tokio::runtime::Runtime::new().unwrap();
         let result = rt.block_on(sync_cmd.execute_async(path));
-        
+
         // Should fail with invalid source error
         assert!(result.is_err());
         let err_msg = result.unwrap_err().to_string();
@@ -819,7 +828,7 @@ transport = "stdio"
 
         let rt = tokio::runtime::Runtime::new().unwrap();
         let result = rt.block_on(sync_cmd.execute_async(path));
-        
+
         // Should attempt legacy codex sync
         // May fail if not in a git repo or missing files, but should not panic
         assert!(result.is_ok() || result.is_err());
@@ -841,7 +850,7 @@ transport = "stdio"
 
         let rt = tokio::runtime::Runtime::new().unwrap();
         let result = rt.block_on(sync_cmd.execute_async(path));
-        
+
         // Should fail with invalid operation error
         assert!(result.is_err());
         let err_msg = result.unwrap_err().to_string();
@@ -868,7 +877,7 @@ transport = "stdio"
 
         let rt = tokio::runtime::Runtime::new().unwrap();
         let result = rt.block_on(sync_cmd.execute_async(path));
-        
+
         // Should fail with conflicting flags error
         assert!(result.is_err());
         let err_msg = result.unwrap_err().to_string();

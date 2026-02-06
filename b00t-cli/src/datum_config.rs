@@ -96,8 +96,7 @@ impl B00tConfig {
 
         // Check if we're in a git repo - use project-specific config at repo root
         if let Ok(repo_root) = Self::find_git_root() {
-            if let Some(host_config) = Self::host_specific_config(&repo_root, hostname.as_deref())
-            {
+            if let Some(host_config) = Self::host_specific_config(&repo_root, hostname.as_deref()) {
                 return Ok(host_config);
             }
             let config_path = repo_root.join("_b00t_.toml");
@@ -107,9 +106,7 @@ impl B00tConfig {
         // Fall back to user-level config
         if let Ok(home) = std::env::var("HOME") {
             let base_path = PathBuf::from(home).join(".b00t");
-            if let Some(host_config) =
-                Self::host_specific_config(&base_path, hostname.as_deref())
-            {
+            if let Some(host_config) = Self::host_specific_config(&base_path, hostname.as_deref()) {
                 return Ok(host_config);
             }
             return Ok(base_path.join("_b00t_.toml"));
@@ -461,7 +458,7 @@ mod tests {
         assert_eq!(B00tConfig::datum_type_str(&DatumType::Mcp), "mcp");
         assert_eq!(B00tConfig::datum_type_str(&DatumType::Docker), "docker");
         assert_eq!(B00tConfig::datum_type_str(&DatumType::Ai), "ai");
-        
+
         // Ensure all returned strings are lowercase
         for datum_type in &[
             DatumType::Agent,
@@ -472,8 +469,11 @@ mod tests {
             DatumType::K8s,
         ] {
             let type_str = B00tConfig::datum_type_str(datum_type);
-            assert_eq!(type_str, type_str.to_lowercase(), 
-                "datum_type_str should return lowercase string");
+            assert_eq!(
+                type_str,
+                type_str.to_lowercase(),
+                "datum_type_str should return lowercase string"
+            );
         }
     }
 }
