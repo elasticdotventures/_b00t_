@@ -42,6 +42,13 @@ ${learn_topics}
 ${optional_notes}
 "###;
 
+fn format_list(prefix, items, separator) {
+    if items.is_empty() {
+        return "".to_string();
+    }
+    format!("{}{}", prefix, items.join(separator))
+}
+
 let agent_specs = #{ 
     "cli-master": #{
         description: "Ship CLI development analyses that combine agent-aware commands with human readable documentation.",
@@ -81,8 +88,8 @@ for spec_name in agent_specs.keys() {
     let content = TEMPLATE
         .replace("${name}", spec_name)
         .replace("${description}", spec.description)
-        .replace("${skills}", skills)
-        .replace("${datums}", datums)
+        .replace("${skills}", skills.clone())
+        .replace("${datums}", datums.clone())
         .replace("${title}", title)
         .replace("${specialization}", spec.specialization)
         .replace("${philosophy}", spec.philosophy)
@@ -93,8 +100,6 @@ for spec_name in agent_specs.keys() {
         .replace("${optional_notes}", spec.optional_notes);
 
     let path = format!(".claude/agents/{}.md", spec_name);
-    let dir_path = path.split("/");
-    let dir_parts = dir_path[..dir_path.len() - 1];
-    create_dir(dir_parts.join("/"));
+    create_dir(dirname(path));
     write_file(&path, &content);
 }

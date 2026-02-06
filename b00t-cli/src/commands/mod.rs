@@ -1,7 +1,7 @@
 pub mod agent;
 pub mod ai;
-pub mod app;
 pub mod ansible;
+pub mod app;
 pub mod bootstrap;
 pub mod budget;
 pub mod chat;
@@ -25,8 +25,8 @@ pub mod whatismy;
 
 pub use agent::AgentCommands;
 pub use ai::AiCommands;
-pub use app::AppCommands;
 pub use ansible::AnsibleCommands;
+pub use app::AppCommands;
 pub use bootstrap::BootstrapCommands;
 pub use budget::BudgetCommands;
 pub use chat::ChatCommands;

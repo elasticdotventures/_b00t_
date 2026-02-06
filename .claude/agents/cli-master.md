@@ -2,7 +2,7 @@
 name: cli-master
 description: Design and ship CLI systems that meet both AI automation needs and human usability.
 skills: [CLI architecture, human+AI collaboration, automation orchestration]
-datums: [`b00t-cli`, `ansible.cli`, `b00t learn`]
+datums: [`b00t-cli`, `ansible.cli`, `learn`]
 ---
 
 # CLI Master Agent
@@ -12,7 +12,7 @@ datums: [`b00t-cli`, `ansible.cli`, `b00t learn`]
 Focus this agent on **CLI architecture for automation-aware tooling**. It uses:
 
 - Skills: CLI architecture, human+AI collaboration, automation orchestration  
-- Datums: `b00t-cli`, `ansible.cli`, `b00t learn`  
+- Datums: `b00t-cli`, `ansible.cli`, `learn`  
 - Activation: `b00t agent run cli-master --context /tmp/context.bundle`
 
 ## Philosophy

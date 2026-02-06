@@ -1,0 +1,47 @@
+[b00t]
+name = "rustfs-mcp"
+type = "mcp"
+hint = "RustFS distributed object storage MCP server for S3-compatible storage operations"
+lfmf_category = "rustfs"
+
+[b00t.learn]
+topic = "rustfs"
+auto_digest = true
+
+# Primary stdio method
+[[b00t.mcp.stdio]]
+priority = 0
+command = "cargo"
+args = ["run", "--package", "rustfs-mcp", "--", "mcp-server"]
+transport = "stdio"
+requires = ["rust", "cargo"]
+
+[[b00t.usage]]
+description = "Launch RustFS MCP server"
+command = "cargo run --package rustfs-mcp -- mcp-server"
+
+[[b00t.usage]]
+description = "Test with MCP Inspector"
+command = "npx @modelcontextprotocol/inspector cargo run --package rustfs-mcp -- mcp-server"
+
+[[b00t.usage]]
+description = "Start RustFS MCP server with configuration"
+command = "RUSTFS_CONFIG_PATH=./config.toml cargo run --package rustfs-mcp -- mcp-server"
+
+[[b00t.references]]
+name = "RustFS Repository"
+url = "https://github.com/rustfs/rustfs"
+
+[[b00t.references]]
+name = "Model Context Protocol"
+url = "https://modelcontextprotocol.io"
+
+[[b00t.references]]
+name = "S3 Compatible Storage"
+url = "https://aws.amazon.com/s3/"
+
+[env]
+RUSTFS_MCP_PORT = "8080"
+RUSTFS_MCP_HOST = "127.0.0.1"
+RUSTFS_DATA_PATH = "/tmp/rustfs-data"
+RUSTFS_CONFIG_PATH = "./rustfs-config.toml"

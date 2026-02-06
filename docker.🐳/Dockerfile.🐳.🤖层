@@ -1,0 +1,60 @@
+
+##* * * * * \\
+# 🐳 Docker
+# 🤖 Azure Docker Components Library
+# 层 (Céng) Layer
+##* * * * * //
+
+# TODO: "ACI" Azure Container Instancecs 
+# https://docs.docker.com/cloud/aci-integration/
+# https://docs.docker.com/cloud/aci-container-features/
+
+# TODO: ACI for Docker-compose.
+# https://docs.docker.com/cloud/aci-compose-features/
+
+
+#ARGS 特征_Tèzhēng_feature-mssql-odbc
+#ARGS 特征_Tèzhēng_feature-AZ_CLI
+#ARGS 特征_Tèzhēng_feature-AZ_init
+
+# Brilliant Explanation of Conditional Branching in Docker:
+# 🍰 https://stackoverflow.com/questions/43654656/dockerfile-if-else-condition-with-external-arguments
+
+## * * * * *\\
+## MS SQL
+FROM base as 特征_Tèzhēng_feature-mssql-odbc
+RUN curl https://packages.microsoft.com/keys/microsoft.asc > /tmp/microsoft.asc
+RUN apt-key add /tmp/microsoft.asc
+RUN curl https://packages.microsoft.com/config/ubuntu/20.10/prod.list > /etc/apt/sources.list.d/mssql-release.list
+
+RUN apt-get update
+RUN ACCEPT_EULA=Y apt-get install -y msodbcsql17
+##    optional: for bcp and sqlcmd
+RUN ACCEPT_EULA=Y apt-get install -y mssql-tools
+RUN echo 'export PATH="$PATH:/opt/mssql-tools/bin"' >> ~/profile
+RUN echo 'export PATH="$PATH:/opt/mssql-tools/bin"' >> ~/.bash_profile
+RUN echo 'export PATH="$PATH:/opt/mssql-tools/bin"' >> ~/.bashrc
+RUN export PATH="$PATH:/opt/mssql-tools/bin"
+#- sometimes necessary:
+# RUN source ~/.bashrc
+# RUN source ~/profile
+## optional: for unixODBC development headers
+RUN apt-get install -y unixodbc-dev
+## * * * * *//
+
+
+# pip (next) needs git. 
+# https://github.com/langholz/django-azure-sql-backend
+# https://docs.microsoft.com/en-us/sql/connect/odbc/linux-mac/installing-the-microsoft-odbc-driver-for-sql-server?view=sql-server-ver15
+
+
+## AppService 
+ENV AzureWebJobsScriptRoot=/home/site/wwwroot/ \
+    AzureFunctionsJobHost__Logging__Console__IsEnabled=true
+
+#FROM mcr.microsoft.com/azure-functions/python:3.0-python3.8 as builder
+EXPOSE 80/tcp
+EXPOSE 443/tcp
+EXPOSE 8000/tcp
+
+
