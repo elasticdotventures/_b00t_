@@ -200,3 +200,5 @@ sudo apt install xdg-utils
 
  uvx mcp-cli provider list
 
+just install broken.
+had to type curl -fsSL https://get.pnpm.io/install.sh | sh - to install pnpm `b00t install pnpm` didn't work!
