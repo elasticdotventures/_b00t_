@@ -1,11 +1,11 @@
-use crate::{BootDatum, UnifiedConfig};
 use crate::dependency_resolver::DependencyResolver;
-use anyhow::{anyhow, Context, Result};
+use crate::{BootDatum, UnifiedConfig};
+use anyhow::{Context, Result, anyhow};
 use clap::Parser;
 use duct::cmd;
+use shellexpand;
 use std::collections::HashMap;
 use std::path::PathBuf;
-use shellexpand;
 use toml;
 
 #[derive(Parser)]
@@ -117,7 +117,10 @@ pub fn install_datum(path: &str, name: &str) -> Result<()> {
                     continue;
                 }
                 Err(e) => {
-                    eprintln!("⚠️  Version check for '{}' failed: {}. Proceeding with installation.", key, e);
+                    eprintln!(
+                        "⚠️  Version check for '{}' failed: {}. Proceeding with installation.",
+                        key, e
+                    );
                 }
             }
         }
@@ -345,7 +348,13 @@ hint = "Test stack"
         let result = install_datum(path, "docker");
         // This will succeed in finding the datum but may fail on actual install
         // We're testing the lookup logic here
-        assert!(result.is_ok() || result.unwrap_err().to_string().contains("Failed to install"));
+        assert!(
+            result.is_ok()
+                || result
+                    .unwrap_err()
+                    .to_string()
+                    .contains("Failed to install")
+        );
     }
 
     #[test]
@@ -366,7 +375,13 @@ hint = "Test stack"
         let result = install_datum(path, "docker.cli");
         // This will succeed in finding the datum but may fail on actual install
         // We're testing the lookup logic here
-        assert!(result.is_ok() || result.unwrap_err().to_string().contains("Failed to install"));
+        assert!(
+            result.is_ok()
+                || result
+                    .unwrap_err()
+                    .to_string()
+                    .contains("Failed to install")
+        );
     }
 
     #[test]
@@ -512,7 +527,13 @@ hint = "Test stack"
         let result = install_datum(path, "c");
         // Test will succeed in resolving dependencies
         // Actual installation may fail but that's OK for this test
-        assert!(result.is_ok() || result.unwrap_err().to_string().contains("Failed to install"));
+        assert!(
+            result.is_ok()
+                || result
+                    .unwrap_err()
+                    .to_string()
+                    .contains("Failed to install")
+        );
     }
 
     #[test]
@@ -563,7 +584,13 @@ hint = "Test stack"
 
         let result = install_datum(path, "d");
         // Test will succeed in resolving dependencies
-        assert!(result.is_ok() || result.unwrap_err().to_string().contains("Failed to install"));
+        assert!(
+            result.is_ok()
+                || result
+                    .unwrap_err()
+                    .to_string()
+                    .contains("Failed to install")
+        );
     }
 
     #[test]
@@ -601,11 +628,23 @@ hint = "Test stack"
         assert!(result.is_ok());
         let datums = result.unwrap();
         assert_eq!(datums.len(), 4);
-        
+
         // Verify each datum has the correct type
-        assert_eq!(datums.get("docker.cli").unwrap().datum_type, Some(DatumType::Cli));
-        assert_eq!(datums.get("postgres.docker").unwrap().datum_type, Some(DatumType::Docker));
-        assert_eq!(datums.get("sequential.mcp").unwrap().datum_type, Some(DatumType::Mcp));
-        assert_eq!(datums.get("kubectl.cli").unwrap().datum_type, Some(DatumType::Cli));
+        assert_eq!(
+            datums.get("docker.cli").unwrap().datum_type,
+            Some(DatumType::Cli)
+        );
+        assert_eq!(
+            datums.get("postgres.docker").unwrap().datum_type,
+            Some(DatumType::Docker)
+        );
+        assert_eq!(
+            datums.get("sequential.mcp").unwrap().datum_type,
+            Some(DatumType::Mcp)
+        );
+        assert_eq!(
+            datums.get("kubectl.cli").unwrap().datum_type,
+            Some(DatumType::Cli)
+        );
     }
 }

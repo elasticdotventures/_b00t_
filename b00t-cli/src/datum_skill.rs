@@ -94,7 +94,7 @@ impl SkillDatum {
         // Strip .skill.toml extension if present
         let base_name = name.trim_end_matches(".skill.toml");
         let (config, _filename) =
-            crate::get_config(path, base_name).map_err(|e| anyhow::anyhow!("{}", e))?;
+            crate::get_config(base_name, path).map_err(|e| anyhow::anyhow!("{}", e))?;
         Ok(SkillDatum { datum: config.b00t })
     }
 
@@ -294,7 +294,10 @@ dependencies = []
         assert_eq!(skill_config.description, "Test skill for unit testing");
         assert_eq!(skill_config.instructions_file, "test.md");
         assert_eq!(skill_config.examples, vec!["example.txt"]);
-        assert_eq!(skill_config.metadata.applies_to, vec!["testing", "validation"]);
+        assert_eq!(
+            skill_config.metadata.applies_to,
+            vec!["testing", "validation"]
+        );
         assert_eq!(skill_config.metadata.output_types, vec![".txt", ".md"]);
     }
 

@@ -56,8 +56,7 @@ impl JobExecutor {
     /// Create new job executor with SQLite backend
     pub async fn new(project_root: &Path) -> Result<Self> {
         let jobs_dir = project_root.join(".b00t/jobs");
-        std::fs::create_dir_all(&jobs_dir)
-            .context("Failed to create .b00t/jobs directory")?;
+        std::fs::create_dir_all(&jobs_dir).context("Failed to create .b00t/jobs directory")?;
 
         let db_path = jobs_dir.join("apalis.db");
 
@@ -92,8 +91,7 @@ impl JobExecutor {
             .context("Failed to load job configuration")?;
 
         // Validate job
-        job_datum.validate()
-            .context("Job validation failed")?;
+        job_datum.validate().context("Job validation failed")?;
 
         let job_config = job_datum.job_config()?;
 
@@ -103,7 +101,10 @@ impl JobExecutor {
 
         // For MVP, only support sequential mode
         if job_config.config.mode != "sequential" {
-            anyhow::bail!("Only sequential mode supported in MVP (got: {})", job_config.config.mode);
+            anyhow::bail!(
+                "Only sequential mode supported in MVP (got: {})",
+                job_config.config.mode
+            );
         }
 
         // Note: SqliteStorage not used in MVP (synchronous execution)
@@ -111,11 +112,21 @@ impl JobExecutor {
 
         // Execute steps sequentially
         for (idx, step) in job_config.steps.iter().enumerate() {
-            println!("\n📍 Step {}/{}: {}", idx + 1, job_config.steps.len(), step.name);
+            println!(
+                "\n📍 Step {}/{}: {}",
+                idx + 1,
+                job_config.steps.len(),
+                step.name
+            );
             println!("   {}", step.description);
 
             match &step.task {
-                JobTask::Bash { command, cwd, timeout_ms, env } => {
+                JobTask::Bash {
+                    command,
+                    cwd,
+                    timeout_ms,
+                    env,
+                } => {
                     // Create bash task job
                     let task_job = BashTaskJob {
                         job_name: job_datum.datum.name.clone(),
@@ -129,7 +140,8 @@ impl JobExecutor {
                     };
 
                     // Execute task directly (MVP: synchronous execution)
-                    self.execute_bash_task(task_job).await
+                    self.execute_bash_task(task_job)
+                        .await
                         .with_context(|| format!("Step '{}' failed", step.name))?;
 
                     println!("   ✅ Step completed");
@@ -199,7 +211,12 @@ impl JobExecutor {
     }
 
     /// Create git checkpoint after successful step
-    fn create_checkpoint(&self, job_name: &str, step_name: &str, checkpoint_name: &str) -> Result<()> {
+    fn create_checkpoint(
+        &self,
+        job_name: &str,
+        step_name: &str,
+        checkpoint_name: &str,
+    ) -> Result<()> {
         use duct::cmd;
 
         let tag_name = format!("checkpoint/{}/{}", job_name, checkpoint_name);
@@ -334,7 +351,11 @@ command = "echo 'Test passed'"
         fs::write(&job_file_path, job_toml).unwrap();
 
         // Verify file was created
-        assert!(job_file_path.exists(), "Job file should exist at: {}", job_file_path.display());
+        assert!(
+            job_file_path.exists(),
+            "Job file should exist at: {}",
+            job_file_path.display()
+        );
         println!("Created job file at: {}", job_file_path.display());
 
         // Initialize git repo (required for checkpoints)

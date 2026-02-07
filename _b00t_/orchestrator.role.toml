@@ -1,0 +1,42 @@
+[b00t]
+name = "orchestrator"
+type = "role"
+hint = "Hive orchestrator role: coordinate sub-agents, load role-scoped tools, and monitor intra-agent chat."
+
+skills = [
+    "role-scoped capability loading",
+    "sub-agent delegation and supervision",
+    "intra-agent chat monitoring",
+    "hive maintenance triage",
+    "context budget preservation",
+    "datum dependency validation",
+]
+
+compliance = [
+    "Use role-linked datums as source of truth for tools and agents",
+    "Delegate iterative execution to ralph for maintenance loops",
+    "Verify chat transport readiness before cross-agent messaging",
+    "Checkpoint major milestones with tested commits",
+]
+
+entangled_agents = [
+    "ralph.agent",
+]
+
+entangled_cli = [
+    "b00t.cli",
+    "just.cli",
+    "uv.cli",
+]
+
+entangled_mcp = [
+    "taskmaster-ai.mcp",
+    "context7.mcp",
+    "b00t-mcp.mcp",
+]
+
+depends_on = [
+    "memory.mcp",
+]
+
+keywords = ["role", "orchestrator", "sub-agent", "ralph", "chat-monitoring"]
