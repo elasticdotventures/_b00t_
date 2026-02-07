@@ -1,3 +1,4 @@
+# syntax=docker/dockerfile:1
 # syntax=docker/dockerfile:1.7
 # Layer: mosquitto-clients
 # MQTT client tools (mosquitto_pub, mosquitto_sub)
