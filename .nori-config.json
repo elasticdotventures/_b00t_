@@ -1,0 +1,13 @@
+{
+  "agents": {
+    "claude-code": {
+      "profile": {
+        "baseProfile": "senior-swe"
+      }
+    }
+  },
+  "sendSessionTranscript": "enabled",
+  "autoupdate": "disabled",
+  "version": "19.1.8",
+  "installDir": "/home/brianh/.dotfiles"
+}

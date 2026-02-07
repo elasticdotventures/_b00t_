@@ -1,0 +1,171 @@
+# Ralph Wiggum + b00t Enhanced Configuration
+# B00t gospel integration for Ralph agent system
+
+[b00t]
+name = "ralph-b00t-enhanced"
+type = "agent"
+hint = "Enhanced Ralph Wiggum AI agent with b00t gospel integration, NRtW/DRY principles, and role-based capabilities"
+
+[b00t.agent]
+description = "Self-learning AI agent with b00t gospel compliance"
+version = "2.0.0"
+author = "b00t-hive"
+license = "MIT"
+
+[b00t.agent.capabilities]
+# Core capabilities enhanced with b00t principles
+core = [
+    "self-learning-loop",
+    "role-based-execution",
+    "nrtw-enforcement",
+    "dry-pattern-detection",
+    "b00t-gospel-integration",
+    "library-discovery",
+    "pattern-memoization"
+]
+
+# Role-specific capabilities
+roles = [
+    "architect",
+    "developer",
+    "researcher",
+    "devops",
+    "general"
+]
+
+# NRtW (Never Reinvent the Wheel) library recommendations
+[b00t.agent.nrtw_libraries]
+python = ["requests", "click", "rich", "typer", "fastapi", "pydantic", "pytest"]
+javascript = ["lodash", "axios", "express", "react", "vue", "jest", "webpack"]
+typescript = ["typescript", "eslint", "prettier", "jest", "cypress", "next.js"]
+rust = ["tokio", "serde", "clap", "reqwest", "actix", "tracing", "anyhow"]
+go = ["gin", "cobra", "viper", "grpc", "gorm", "testify", "chi"]
+
+# DRY pattern detection rules
+[b00t.agent.dry_patterns]
+duplicate_detection = true
+similarity_threshold = 0.85
+file_extensions = [".py", ".js", ".ts", ".rs", ".go"]
+exclude_patterns = ["*.test.*", "*.spec.*", "node_modules/*", "vendor/*"]
+
+# Self-learning configuration
+[b00t.agent.learning]
+enabled = true
+memory_directory = "learning"
+pattern_consolidation = true
+cross_project_learning = true
+learning_retention_days = 90
+
+# B00t gospel integration settings
+[b00t.agent.b00t_integration]
+enabled = true
+gospel_path = "~/.b00t"
+workspace_path = "~/_b00t_"
+auto_skill_loading = true
+compliance_checking = true
+blessing_system = true
+
+# Role definitions with specific capabilities
+[b00t.agent.role.architect]
+capabilities = ["system-design", "container-orchestration", "compliance-review", "architecture-patterns"]
+preferred_tools = ["claude", "codex"]
+nrtw_focus = ["design-patterns", "infrastructure-as-code", "monitoring-solutions"]
+
+[b00t.agent.role.developer]
+capabilities = ["code-implementation", "testing", "debugging", "refactoring"]
+preferred_tools = ["codex", "claude"]
+nrtw_focus = ["libraries", "frameworks", "testing-tools"]
+
+[b00t.agent.role.researcher]
+capabilities = ["documentation", "analysis", "library-discovery", "benchmarking"]
+preferred_tools = ["claude", "amp"]
+nrtw_focus = ["documentation-tools", "analysis-libraries", "data-processing"]
+
+[b00t.agent.role.devops]
+capabilities = ["deployment", "infrastructure", "monitoring", "automation"]
+preferred_tools = ["codex", "amp"]
+nrtw_focus = ["deployment-tools", "monitoring-solutions", "automation-frameworks"]
+
+[b00t.agent.role.general]
+capabilities = ["all-capabilities"]
+preferred_tools = ["amp", "claude", "codex"]
+nrtw_focus = ["general-purpose"]
+
+# Quality gates and compliance
+[b00t.agent.quality_gates]
+nrtw_compliance = true
+dry_compliance = true
+b00t_gospel_compliance = true
+testing_required = true
+documentation_required = true
+
+# Integration with b00t CLI tools
+[b00t.agent.b00t_tools]
+skill_discovery = "b00t learn"
+project_management = "b00t-cli"
+mcp_integration = "b00t-mcp"
+library_search = "b00t search"
+
+# Output and reporting
+[b00t.agent.output]
+progress_format = "markdown"
+learning_extraction = true
+pattern_documentation = true
+compliance_reporting = true
+archive_previous_runs = true
+
+# Environment variables for runtime
+[b00t.env]
+RALPH_TOOL = "amp"
+RALPH_MAX_ITERATIONS = "10"
+RALPH_AGENT_ROLE = "general"
+RALPH_NRtW_MODE = "true"
+RALPH_DRY_ENFORCEMENT = "true"
+RALPH_B00T_INTEGRATION = "true"
+B00T_GOSPEL_PATH = "~/.b00t"
+B00T_WORKSPACE_PATH = "~/_b00t_"
+
+# Usage examples and documentation
+[b00t.usage]
+description = "Enhanced Ralph agent with b00t gospel integration"
+
+[[b00t.usage.examples]]
+description = "Run as architect with NRtW enforcement"
+command = "./ralph-b00t-enhanced.sh --tool claude --role architect"
+
+[[b00t.usage.examples]]
+description = "Discover Python libraries using NRtW principles"
+command = "./ralph-b00t-enhanced.sh --discover python"
+
+[[b00t.usage.examples]]
+description = "Learn about Docker patterns"
+command = "./ralph-b00t-enhanced.sh --learn docker"
+
+[[b00t.usage.examples]]
+description = "Show agent status and capabilities"
+command = "./ralph-b00t-enhanced.sh --whoami"
+
+[[b00t.usage.examples]]
+description = "Run without b00t integration (legacy mode)"
+command = "./ralph-b00t-enhanced.sh --no-b00t-integration"
+
+# References and links
+[b00t.references]
+original_ralph = "https://github.com/snarktank/ralph"
+b00t_gospel = "https://github.com/elasticdotventures/dotfiles"
+nrtw_principles = "https://en.wikipedia.org/wiki/Don%27t_repeat_yourself"
+
+[[b00t.references.documentation]]
+name = "B00t Gospel"
+url = "https://github.com/elasticdotventures/dotfiles/blob/main/AGENT.md"
+description = "Core b00t operating principles and agent guidelines"
+
+[[b00t.references.documentation]]
+name = "Ralph Original"
+url = "https://github.com/snarktank/ralph"
+description = "Original Ralph Wiggum implementation"
+
+[[b00t.references.documentation]]
+name = "NRtW Principles"
+url = "https://blog.codinghorror.com/dont-reinvent-the-wheel/"
+description = "Never Reinvent the Wheel philosophy"
