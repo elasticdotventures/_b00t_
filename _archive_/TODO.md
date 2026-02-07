@@ -198,3 +198,5 @@ if ($env:VSCODE_INJECTION -eq "1") {
     $env:EDITOR = "code --wait"  # or 'code-insiders' for VS Code Insiders
 }
 export PATH=$(echo "$PATH" | tr ':' '\n' | grep -v '^/mnt/c' | paste -sd ':' -)
+just install broken.
+had to type curl -fsSL https://get.pnpm.io/install.sh | sh - to install pnpm `b00t install pnpm` didn't work!
