@@ -125,10 +125,18 @@ pub enum AgentCommands {
 
     #[clap(about = "Run ralph autonomous agent for hive maintenance/validation")]
     Ralph {
-        #[arg(long, help = "Executor tool (codex, claude, amp, opencode)", default_value = "codex")]
+        #[arg(
+            long,
+            help = "Executor tool (codex, claude, amp, opencode)",
+            default_value = "codex"
+        )]
         tool: String,
 
-        #[arg(long, help = "Task filter (pending, hive-validate, maintenance)", default_value = "hive-validate")]
+        #[arg(
+            long,
+            help = "Task filter (pending, hive-validate, maintenance)",
+            default_value = "hive-validate"
+        )]
         task: String,
 
         #[arg(long, help = "Maximum iterations", default_value = "5")]
@@ -195,9 +203,12 @@ pub async fn handle_agent_command(cmd: AgentCommands) -> Result<()> {
 
         AgentCommands::StartAll { dir } => handle_start_all(&dir).await,
 
-        AgentCommands::Ralph { tool, task, max_iterations, project_root } => {
-            handle_ralph(&tool, &task, max_iterations, project_root.as_deref()).await
-        }
+        AgentCommands::Ralph {
+            tool,
+            task,
+            max_iterations,
+            project_root,
+        } => handle_ralph(&tool, &task, max_iterations, project_root.as_deref()).await,
     }
 }
 
@@ -506,20 +517,10 @@ async fn handle_ralph(
 
     // Run ralph
     println!("🚀 Starting ralph autonomous loop...");
-    let ralph_cmd = cmd!(
-        "uv",
-        "run",
-        "ralph",
-        "run",
-        "--tool",
-        tool,
-        "--max-iterations",
-        max_iterations.to_string(),
-        "--filter",
-        task
-    )
-    .dir(&ralph_path)
-    .env("PROJECT_ROOT", root.to_str().unwrap_or("."));
+    let ralph_args = build_ralph_command_args(tool, max_iterations, task);
+    let ralph_cmd = cmd("uv", ralph_args)
+        .dir(&ralph_path)
+        .env("PROJECT_ROOT", root.to_str().unwrap_or("."));
 
     let output = ralph_cmd
         .stdout_to_stderr()
@@ -533,6 +534,38 @@ async fn handle_ralph(
     }
 
     Ok(())
+}
+
+fn build_ralph_command_args(tool: &str, max_iterations: u32, task: &str) -> Vec<String> {
+    let mut args = vec![
+        "run".to_string(),
+        "ralph".to_string(),
+        "run".to_string(),
+        "--tool".to_string(),
+        tool.to_string(),
+        "--max-iterations".to_string(),
+        max_iterations.to_string(),
+    ];
+
+    if let Some(task_id) = resolve_ralph_task_id(task) {
+        args.push("--task-id".to_string());
+        args.push(task_id);
+    }
+
+    args
+}
+
+fn resolve_ralph_task_id(task: &str) -> Option<String> {
+    let normalized = task.trim().to_lowercase();
+    if normalized.is_empty() || normalized == "pending" || normalized == "all" {
+        return None;
+    }
+
+    match normalized.as_str() {
+        "hive-validate" => Some("hive-001".to_string()),
+        "maintenance" => Some("hive-002".to_string()),
+        _ => Some(task.to_string()),
+    }
 }
 
 async fn ensure_hive_validation_task(root: &std::path::Path) -> Result<()> {
@@ -596,4 +629,41 @@ async fn ensure_hive_validation_task(root: &std::path::Path) -> Result<()> {
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{build_ralph_command_args, resolve_ralph_task_id};
+
+    #[test]
+    fn test_resolve_ralph_task_id_mappings() {
+        assert_eq!(
+            resolve_ralph_task_id("hive-validate"),
+            Some("hive-001".to_string())
+        );
+        assert_eq!(
+            resolve_ralph_task_id("maintenance"),
+            Some("hive-002".to_string())
+        );
+        assert_eq!(resolve_ralph_task_id("pending"), None);
+        assert_eq!(resolve_ralph_task_id("all"), None);
+        assert_eq!(
+            resolve_ralph_task_id("custom-123"),
+            Some("custom-123".to_string())
+        );
+    }
+
+    #[test]
+    fn test_build_ralph_command_args_uses_task_id_not_filter() {
+        let args = build_ralph_command_args("codex", 5, "hive-validate");
+        assert!(args.contains(&"--task-id".to_string()));
+        assert!(args.contains(&"hive-001".to_string()));
+        assert!(!args.contains(&"--filter".to_string()));
+    }
+
+    #[test]
+    fn test_build_ralph_command_args_omits_task_for_pending() {
+        let args = build_ralph_command_args("codex", 5, "pending");
+        assert!(!args.contains(&"--task-id".to_string()));
+    }
 }
