@@ -330,3 +330,5 @@ togaf-cli/
 togaf-dsl/
 *.old
 ralphs/ralph-v1
+.nori-config.json
+.nori/
