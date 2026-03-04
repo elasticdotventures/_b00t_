@@ -70,6 +70,7 @@ impl UpArgs {
             let _ = session.set("up.last_exit", &code.to_string());
             let _ = session.set("up.tool", &self.tool);
             let _ = session.set("up.restart_count", &restart_count.to_string());
+            emit_up_heartbeat(restart_count, code, &self.role);
 
             match code {
                 0 => {
@@ -93,6 +94,28 @@ impl UpArgs {
                 }
             }
         }
+    }
+}
+
+/// Emit b00t up state change event to IPC channel (best-effort, non-fatal)
+fn emit_up_heartbeat(cycle: u32, exit_code: i32, role: &Option<String>) {
+    let msg = format!(
+        r#"{{"event":"b00t.up.cycle","cycle":{},"exit_code":{},"role":"{}","timestamp":"{}"}}"#,
+        cycle,
+        exit_code,
+        role.as_deref().unwrap_or("developer"),
+        chrono::Utc::now().to_rfc3339(),
+    );
+
+    // Only attempt IPC if socket exists — best-effort, never fatal
+    let ipc_sock = dirs::home_dir()
+        .unwrap_or_default()
+        .join(".b00t")
+        .join("ipc.sock");
+    if ipc_sock.exists() {
+        let _ = std::process::Command::new("b00t-ipc")
+            .args(["pub", "b00t.up", &msg])
+            .output();
     }
 }
 
