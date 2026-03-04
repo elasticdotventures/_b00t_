@@ -40,3 +40,11 @@ version = "gh --version"
 version_regex = "\\d+\\.\\d+\\.\\d+"
 hint = "gh is the official GitHub CLI, for interacting with GitHub from the command line."
 
+
+[validate]
+command = "gh --version"
+regex = "gh version \\d+"
+
+[roles]
+required_for = ["developer", "orchestrator"]
+optional_for = ["analyst"]

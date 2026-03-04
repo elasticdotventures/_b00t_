@@ -168,4 +168,25 @@ mod tests {
         assert!(hit_max);
         assert_eq!(restart_count, 3);
     }
+
+    #[test]
+    fn test_datum_toml_has_validate_section() {
+        let workspace = crate::utils::get_workspace_root();
+        let git_datum = format!("{}/_b00t_/gh.cli.toml", workspace);
+        if std::path::Path::new(&git_datum).exists() {
+            let content = std::fs::read_to_string(&git_datum).unwrap();
+            assert!(content.contains("[validate]"), "gh datum missing [validate] section");
+            assert!(content.contains("[roles]"), "gh datum missing [roles] section");
+            assert!(content.contains("required_for"), "gh datum missing required_for field");
+        }
+        // Graceful skip if file doesn't exist (CI environments)
+
+        // Also check rustc datum if present
+        let rustc_datum = format!("{}/_b00t_/rustc.cli.toml", workspace);
+        if std::path::Path::new(&rustc_datum).exists() {
+            let content = std::fs::read_to_string(&rustc_datum).unwrap();
+            assert!(content.contains("[validate]"), "rustc datum missing [validate] section");
+            assert!(content.contains("[roles]"), "rustc datum missing [roles] section");
+        }
+    }
 }
