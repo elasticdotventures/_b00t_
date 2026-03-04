@@ -22,6 +22,7 @@ pub mod script;
 pub mod session;
 pub mod stack;
 pub mod tiktoken;
+pub mod tutorial;
 pub mod up;
 pub mod whatismy;
 
@@ -45,5 +46,6 @@ pub use ontology::OntologyCommands;
 pub use redis::RedisCommands;
 pub use session::SessionCommands;
 pub use stack::StackCommands;
+pub use tutorial::TutorialCommands;
 pub use up::UpArgs;
 pub use whatismy::WhatismyCommands;

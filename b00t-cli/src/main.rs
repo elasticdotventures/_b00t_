@@ -26,7 +26,7 @@ use b00t_cli::traits::*;
 use b00t_cli::commands::{
     AiCommands, AgentCommands, AnsibleCommands, AppCommands, ChatCommands, CliCommands,
     DatumCommands, GrokCommands, InitCommands, JobCommands, K8sCommands, McpCommands,
-    OntologyCommands, RedisCommands, SessionCommands, WhatismyCommands,
+    OntologyCommands, RedisCommands, SessionCommands, TutorialCommands, WhatismyCommands,
 };
 use b00t_cli::commands::learn::handle_learn;
 
@@ -261,6 +261,11 @@ The system will:
     Ontology {
         #[clap(subcommand)]
         ontology_command: OntologyCommands,
+    },
+    #[clap(about = "Tutorial progression tracking for role-based datum onboarding")]
+    Tutorial {
+        #[clap(subcommand)]
+        tutorial_command: TutorialCommands,
     },
 }
 
@@ -1166,8 +1171,14 @@ async fn main() {
         }
         Some(Commands::Script { script_command }) => {
             use commands::script::handle_script_command;
-            
+
             if let Err(e) = handle_script_command(script_command.clone()) {
+                eprintln!("Error: {}", e);
+                std::process::exit(1);
+            }
+        }
+        Some(Commands::Tutorial { tutorial_command }) => {
+            if let Err(e) = tutorial_command.execute() {
                 eprintln!("Error: {}", e);
                 std::process::exit(1);
             }
