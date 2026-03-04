@@ -33,6 +33,7 @@ pub mod job_executor;
 pub mod job_ipc;
 pub mod job_state;
 pub mod k8s;
+pub mod memory_provider;
 pub mod model_manager;
 pub mod orchestrator;
 pub mod session_memory;
