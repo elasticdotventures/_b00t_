@@ -2,6 +2,7 @@
 use anyhow::{Context, Result};
 use clap::Parser;
 use crate::session_memory::SessionMemory;
+use crate::commands::ontology::build_ontology;
 use std::process::Command;
 
 #[derive(Parser, Debug)]
@@ -39,11 +40,18 @@ impl UpArgs {
             println!("🥾 b00t up: cycle {} (tool={}, max_iter={})",
                 restart_count + 1, self.tool, self.max_iter);
 
-            // Build ontology JSON (placeholder until Task 4 implements real ontology)
-            let ontology_json = format!(
-                r#"{{"role":"{}","available":[],"installable":[],"blessings":[],"note":"placeholder"}}"#,
-                self.role.as_deref().unwrap_or("developer")
-            );
+            // Build ontology JSON from live datum TOML scan
+            let datum_dir = format!("{}/_b00t_", workspace_root);
+            let ontology = build_ontology(self.role.as_deref(), &datum_dir)
+                .unwrap_or_else(|_| crate::commands::ontology::Ontology {
+                    role: self.role.clone().unwrap_or_else(|| "developer".to_string()),
+                    available: vec![],
+                    installable: vec![],
+                    blessings: vec![],
+                    timestamp: chrono::Utc::now().to_rfc3339(),
+                });
+            let ontology_json = serde_json::to_string(&ontology)
+                .unwrap_or_else(|_| "{}".to_string());
 
             let status = Command::new("bash")
                 .arg(&ralph_script)

@@ -26,7 +26,7 @@ use b00t_cli::traits::*;
 use b00t_cli::commands::{
     AiCommands, AgentCommands, AnsibleCommands, AppCommands, ChatCommands, CliCommands,
     DatumCommands, GrokCommands, InitCommands, JobCommands, K8sCommands, McpCommands,
-    RedisCommands, SessionCommands, WhatismyCommands,
+    OntologyCommands, RedisCommands, SessionCommands, WhatismyCommands,
 };
 use b00t_cli::commands::learn::handle_learn;
 
@@ -257,6 +257,11 @@ The system will:
     },
     #[clap(about = "Launch ralph agent REPL outer-loop")]
     Up(commands::up::UpArgs),
+    #[clap(about = "Query live capability ontology from datum TOMLs")]
+    Ontology {
+        #[clap(subcommand)]
+        ontology_command: OntologyCommands,
+    },
 }
 
 // Using unified config from lib.rs
@@ -1126,6 +1131,12 @@ async fn main() {
         }
         Some(Commands::Up(args)) => {
             if let Err(e) = args.execute() {
+                eprintln!("Error: {}", e);
+                std::process::exit(1);
+            }
+        }
+        Some(Commands::Ontology { ontology_command }) => {
+            if let Err(e) = ontology_command.execute() {
                 eprintln!("Error: {}", e);
                 std::process::exit(1);
             }
