@@ -21,6 +21,7 @@ pub mod script;
 pub mod session;
 pub mod stack;
 pub mod tiktoken;
+pub mod up;
 pub mod whatismy;
 
 pub use agent::AgentCommands;
@@ -42,4 +43,5 @@ pub use model::ModelCommands;
 pub use redis::RedisCommands;
 pub use session::SessionCommands;
 pub use stack::StackCommands;
+pub use up::UpArgs;
 pub use whatismy::WhatismyCommands;

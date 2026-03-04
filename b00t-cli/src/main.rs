@@ -255,6 +255,8 @@ The system will:
         #[clap(subcommand)]
         redis_command: RedisCommands,
     },
+    #[clap(about = "Launch ralph agent REPL outer-loop")]
+    Up(commands::up::UpArgs),
 }
 
 // Using unified config from lib.rs
@@ -1119,6 +1121,12 @@ async fn main() {
             use b00t_cli::commands::redis::handle_redis_command;
             if let Err(e) = handle_redis_command(redis_command.clone()).await {
                 eprintln!("Redis Error: {}", e);
+                std::process::exit(1);
+            }
+        }
+        Some(Commands::Up(args)) => {
+            if let Err(e) = args.execute() {
+                eprintln!("Error: {}", e);
                 std::process::exit(1);
             }
         }
