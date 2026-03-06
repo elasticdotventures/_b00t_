@@ -88,13 +88,35 @@ impl GrokClient {
             env::var("QDRANT_URL").unwrap_or_else(|_| "http://192.168.2.13:6333".to_string());
         let qdrant_api_key = env::var("QDRANT_API_KEY").unwrap_or_default();
 
+        // Resolve grok-py path: env var > sibling of cargo workspace root > fallback
+        // 🤓 B00T_GROK_PY_PATH env var allows override; workspace root sibling avoids hardcoded $HOME
+        let grok_py_path = env::var("B00T_GROK_PY_PATH").unwrap_or_else(|_| {
+            // Derive from CARGO_MANIFEST_DIR at runtime via env, or walk up from executable
+            let workspace_root = env::var("CARGO_MANIFEST_DIR")
+                .map(|d| {
+                    // CARGO_MANIFEST_DIR points to the crate, workspace is parent
+                    std::path::Path::new(&d)
+                        .parent()
+                        .map(|p| p.to_string_lossy().to_string())
+                        .unwrap_or(d)
+                })
+                .unwrap_or_else(|_| {
+                    // Runtime fallback: use current exe path to find workspace root
+                    std::env::current_exe()
+                        .ok()
+                        .and_then(|p| p.parent().and_then(|p| p.parent()).and_then(|p| p.parent()).map(|p| p.to_string_lossy().to_string()))
+                        .unwrap_or_else(|| format!("{}/.b00t", env::var("HOME").unwrap_or_default()))
+                });
+            format!("{}/b00t-grok-py", workspace_root)
+        });
+
         // Create the child process transport
         let transport = TokioChildProcess::new(Command::new("uv").configure(|cmd| {
             cmd.arg("run")
                 .arg("python")
                 .arg("-m")
                 .arg("b00t_grok_guru.server")
-                .current_dir("/home/brianh/.dotfiles/b00t-grok-py")
+                .current_dir(&grok_py_path) // output: resolved from B00T_GROK_PY_PATH or workspace root
                 .env("QDRANT_URL", qdrant_url)
                 .env("QDRANT_API_KEY", qdrant_api_key)
                 .env("PYTHONPATH", "python"); // 🤓 Required for uv to find modules in python/ dir
