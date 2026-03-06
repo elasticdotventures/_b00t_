@@ -192,9 +192,6 @@ The system will:
         message: Option<String>,
         #[clap(long, help = "Skip running tests (not recommended)")]
         skip_tests: bool,
-
-        #[clap(long = "message", help = "Commit message (MCP compatibility)")]
-        message_flag: Option<String>,  // 🦨 MCP compatibility: accept --message flag
     },
     #[clap(about = "Query system information")]
     Whatismy {
@@ -214,9 +211,6 @@ The system will:
         installed: bool,
         #[clap(long, help = "Show only available (not installed) tools")]
         available: bool,
-
-        #[clap(long = "filter", help = "Filter by subsystem (MCP compatibility)")]
-        filter_flag: Option<String>,  // 🦨 MCP compatibility: accept --filter flag
     },
     #[clap(about = "Kubernetes (k8s) cluster and pod management")]
     K8s {
@@ -1037,10 +1031,8 @@ async fn main() {
                 std::process::exit(1);
             }
         }
-        Some(Commands::Checkpoint { message, skip_tests, message_flag }) => {
-            // 🦨 MCP compatibility: merge positional and flag arguments
-            let effective_message = message.as_ref().or(message_flag.as_ref());
-            if let Err(e) = checkpoint(effective_message.map(|s| s.as_str()), *skip_tests) {
+        Some(Commands::Checkpoint { message, skip_tests }) => {
+            if let Err(e) = checkpoint(message.as_deref(), *skip_tests) {
                 eprintln!("Error: {}", e);
                 std::process::exit(1);
             }
@@ -1051,10 +1043,8 @@ async fn main() {
                 std::process::exit(1);
             }
         }
-        Some(Commands::Status { filter, installed, available, filter_flag }) => {
-            // 🦨 MCP compatibility: merge positional and flag arguments
-            let effective_filter = filter.as_ref().or(filter_flag.as_ref());
-            if let Err(e) = show_status(&cli.path, effective_filter.map(|s| s.as_str()), *installed, *available) {
+        Some(Commands::Status { filter, installed, available }) => {
+            if let Err(e) = show_status(&cli.path, filter.as_deref(), *installed, *available) {
                 eprintln!("Error: {}", e);
                 std::process::exit(1);
             }
@@ -1106,17 +1096,7 @@ async fn main() {
         }
         Some(Commands::Grok { grok_command }) => {
             use commands::grok::handle_grok_command;
-
-            // Create Tokio runtime for async grok operations
-            let rt = match tokio::runtime::Runtime::new() {
-                Ok(rt) => rt,
-                Err(e) => {
-                    eprintln!("Error creating async runtime: {}", e);
-                    std::process::exit(1);
-                }
-            };
-
-            if let Err(e) = rt.block_on(handle_grok_command(grok_command.clone())) {
+            if let Err(e) = handle_grok_command(grok_command.clone()).await {
                 eprintln!("Error: {}", e);
                 std::process::exit(1);
             }
