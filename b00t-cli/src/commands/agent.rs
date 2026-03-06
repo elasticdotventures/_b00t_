@@ -6,7 +6,8 @@
 use anyhow::Result;
 use b00t_c0re_lib::AgentManager;
 use b00t_c0re_lib::agent_coordination::{
-    AgentCoordinator, AgentMetadata, TaskCompletionStatus, TaskPriority,
+    AgentCoordinator, AgentMetadata, MessageFilter, RequestUrgency, TaskCompletionStatus,
+    TaskPriority,
 };
 use b00t_c0re_lib::redis::{AgentStatus, RedisComms, RedisConfig};
 use clap::Parser;
@@ -123,6 +124,51 @@ pub enum AgentCommands {
         dir: PathBuf,
     },
 
+    #[clap(about = "Report this agent's capabilities and request capable agents for a task")]
+    Capability {
+        #[arg(help = "Required capabilities (comma-separated)")]
+        capabilities: String,
+
+        #[arg(help = "Task description")]
+        description: String,
+
+        #[arg(long, help = "Request urgency (low, normal, high, emergency)", default_value = "normal")]
+        urgency: String,
+    },
+
+    #[clap(about = "Send a notification event to the b00t IPC channel")]
+    Notify {
+        #[arg(help = "Event type (e.g., 'file_created', 'pr_opened')")]
+        event_type: String,
+
+        #[arg(help = "Event source")]
+        source: String,
+
+        #[arg(help = "Event details (JSON)")]
+        details: String,
+
+        #[arg(long, help = "Target specific agents (comma-separated)")]
+        agents: Option<String>,
+    },
+
+    #[clap(about = "Wait for an agent message or event")]
+    Wait {
+        #[arg(long, help = "Timeout in seconds", default_value = "30")]
+        timeout: u64,
+
+        #[arg(long, help = "Filter by message type")]
+        message_type: Option<String>,
+
+        #[arg(long, help = "Filter by sender agent")]
+        from_agent: Option<String>,
+
+        #[arg(long, help = "Filter by task ID")]
+        task_id: Option<String>,
+
+        #[arg(long, help = "Filter by subject")]
+        subject: Option<String>,
+    },
+
     #[clap(about = "Run ralph autonomous agent for hive maintenance/validation")]
     Ralph {
         #[arg(
@@ -198,6 +244,27 @@ pub async fn handle_agent_command(cmd: AgentCommands) -> Result<()> {
             message,
             eta,
         } => handle_progress(&task_id, progress, &message, eta).await,
+
+        AgentCommands::Capability {
+            capabilities,
+            description,
+            urgency,
+        } => handle_capability(&capabilities, &description, &urgency).await,
+
+        AgentCommands::Notify {
+            event_type,
+            source,
+            details,
+            agents,
+        } => handle_notify(&event_type, &source, &details, agents).await,
+
+        AgentCommands::Wait {
+            timeout,
+            message_type,
+            from_agent,
+            task_id,
+            subject,
+        } => handle_wait(timeout, message_type, from_agent, task_id, subject).await,
 
         AgentCommands::Start { config } => handle_start(&config).await,
 
@@ -439,6 +506,144 @@ async fn handle_progress(
         .await?;
 
     println!("📊 Progress reported: {}% - {}", progress, message);
+
+    Ok(())
+}
+
+async fn handle_capability(
+    capabilities: &str,
+    description: &str,
+    urgency_str: &str,
+) -> Result<()> {
+    let config = RedisConfig::default();
+    let redis = RedisComms::new(config, "cli-capability".into())?;
+
+    let metadata = AgentMetadata {
+        agent_id: "cli-capability".to_string(),
+        agent_role: "cli".to_string(),
+        capabilities: vec![],
+        crew: None,
+        status: AgentStatus::Online,
+        last_seen: SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs(),
+        load: 0.0,
+        specializations: HashMap::new(),
+    };
+
+    let coordinator = AgentCoordinator::new(redis, metadata);
+
+    let required_caps: Vec<String> = capabilities
+        .split(',')
+        .map(|s| s.trim().to_string())
+        .collect();
+
+    let urgency = match urgency_str.to_lowercase().as_str() {
+        "low" => RequestUrgency::Low,
+        "high" => RequestUrgency::High,
+        "emergency" => RequestUrgency::Emergency,
+        _ => RequestUrgency::Normal,
+    };
+
+    println!("Requesting agents with capabilities: {}", capabilities);
+    println!("Task: {}", description);
+
+    let agents = coordinator
+        .request_capability(required_caps, description, urgency)
+        .await?;
+
+    if agents.is_empty() {
+        println!("No agents responded (Redis may be unavailable)");
+    } else {
+        println!("Capable agents found: {}", agents.len());
+        for (agent_id, skills) in &agents {
+            println!("  {} - {:?}", agent_id, skills);
+        }
+    }
+
+    Ok(())
+}
+
+async fn handle_notify(
+    event_type: &str,
+    source: &str,
+    details_str: &str,
+    agents: Option<String>,
+) -> Result<()> {
+    let config = RedisConfig::default();
+    let redis = RedisComms::new(config, "cli-notify".into())?;
+
+    let metadata = AgentMetadata {
+        agent_id: "cli-notify".to_string(),
+        agent_role: "cli".to_string(),
+        capabilities: vec![],
+        crew: None,
+        status: AgentStatus::Online,
+        last_seen: SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs(),
+        load: 0.0,
+        specializations: HashMap::new(),
+    };
+
+    let coordinator = AgentCoordinator::new(redis, metadata);
+
+    let details: serde_json::Value = serde_json::from_str(details_str)
+        .unwrap_or_else(|_| serde_json::json!({"message": details_str}));
+
+    let affected_agents = agents.map(|s| {
+        s.split(',')
+            .map(|a| a.trim().to_string())
+            .collect::<Vec<_>>()
+    });
+
+    coordinator
+        .notify_event(event_type, source, details, affected_agents)
+        .await?;
+
+    println!("Notification sent: [{}] from {}", event_type, source);
+
+    Ok(())
+}
+
+async fn handle_wait(
+    timeout_secs: u64,
+    message_type: Option<String>,
+    from_agent: Option<String>,
+    task_id: Option<String>,
+    subject: Option<String>,
+) -> Result<()> {
+    let config = RedisConfig::default();
+    let redis = RedisComms::new(config, "cli-wait".into())?;
+
+    let metadata = AgentMetadata {
+        agent_id: "cli-wait".to_string(),
+        agent_role: "cli".to_string(),
+        capabilities: vec![],
+        crew: None,
+        status: AgentStatus::Online,
+        last_seen: SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs(),
+        load: 0.0,
+        specializations: HashMap::new(),
+    };
+
+    let coordinator = AgentCoordinator::new(redis, metadata);
+
+    let filter = MessageFilter {
+        message_types: message_type.map(|t| vec![t]),
+        from_agents: from_agent.map(|a| vec![a]),
+        task_ids: task_id.map(|t| vec![t]),
+        subjects: subject.map(|s| vec![s]),
+    };
+
+    println!("Waiting for message (timeout: {}s)...", timeout_secs);
+
+    let timeout_duration = Duration::from_secs(timeout_secs);
+    match coordinator.wait_for_message(timeout_duration, filter).await {
+        Ok(msg) => {
+            println!("Message received: {:?}", msg);
+        }
+        Err(e) => {
+            // Timeout or channel closed is expected non-fatal outcome
+            println!("Wait ended: {}", e);
+        }
+    }
 
     Ok(())
 }
