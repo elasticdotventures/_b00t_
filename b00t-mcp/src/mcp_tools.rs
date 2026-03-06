@@ -795,6 +795,7 @@ pub fn create_mcp_registry() -> McpCommandRegistry {
     builder
         .register::<McpListCommand>()
         .register::<McpAddCommand>()
+        .register::<McpInstallCommand>()
         .register::<McpOutputCommand>()
         .register::<CliDetectCommand>()
         .register::<CliDesiresCommand>()
