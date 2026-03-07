@@ -479,7 +479,6 @@ function _b00t_source_modular_bashrc() {
     ensure_b00t_log
     nullglob_was_set="$(shopt -p nullglob)"
     shopt -s nullglob
-
     for dir in "${dirs[@]}"; do
         [ -n "$dir" ] || continue
         [ -d "$dir" ] || continue
@@ -490,6 +489,7 @@ function _b00t_source_modular_bashrc() {
                 .*|_*) continue ;;
             esac
 
+            ensure_b00t_log
             if [ "${B00T_BASH_PROFILE:-0}" = "1" ]; then
                 start_ms="$(date +%s%3N)"
             fi
@@ -503,7 +503,6 @@ function _b00t_source_modular_bashrc() {
             fi
         done
     done
-
     eval "$nullglob_was_set"
 }
 export -f _b00t_source_modular_bashrc
