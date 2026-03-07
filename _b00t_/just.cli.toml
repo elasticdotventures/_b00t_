@@ -33,3 +33,11 @@ command = "just --list --list-prefix '> '"
 [[b00t.usage]]
 description = "Run recipe with dotenv"
 command = "just --dotenv .env.local deploy"
+
+[validate]
+command = "just --version"
+regex = "\\d+\\.\\d+\\.\\d+"
+
+[roles]
+required_for = ["developer", "orchestrator"]
+optional_for = ["analyst"]

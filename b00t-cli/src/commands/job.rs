@@ -178,8 +178,8 @@ async fn list_jobs(path: &str, json: bool) -> Result<()> {
     } else {
         println!("📋 Available jobs:\n");
 
-        // JobDatum::from_config expects the _b00t_ directory path
-        let b00t_path = PathBuf::from(path).join("_b00t_");
+        // path is already the _b00t_ directory (cli.path default = ~/.b00t/_b00t_); expand tilde
+        let b00t_path = crate::get_expanded_path(path).unwrap_or_else(|_| PathBuf::from(path));
         let b00t_path_str = b00t_path
             .to_str()
             .ok_or_else(|| anyhow::anyhow!("Invalid path to _b00t_ directory"))?;
@@ -211,8 +211,8 @@ async fn list_jobs(path: &str, json: bool) -> Result<()> {
 async fn plan_job(path: &str, name: &str, show_dag: bool, json: bool) -> Result<()> {
     use crate::datum_job::JobDatum;
 
-    // JobDatum::from_config expects the _b00t_ directory path
-    let b00t_path = PathBuf::from(path).join("_b00t_");
+    // path is already the _b00t_ directory (cli.path default = ~/.b00t/_b00t_); expand tilde
+    let b00t_path = crate::get_expanded_path(path).unwrap_or_else(|_| PathBuf::from(path));
     let b00t_path_str = b00t_path
         .to_str()
         .ok_or_else(|| anyhow::anyhow!("Invalid path to _b00t_ directory"))?;
@@ -339,8 +339,8 @@ async fn run_job(
 
     println!("🚀 Starting job: {}", name);
 
-    // JobDatum::from_config expects the _b00t_ directory path
-    let b00t_path = PathBuf::from(path).join("_b00t_");
+    // path is already the _b00t_ directory (cli.path default = ~/.b00t/_b00t_); expand tilde
+    let b00t_path = crate::get_expanded_path(path).unwrap_or_else(|_| PathBuf::from(path));
     let b00t_path_str = b00t_path
         .to_str()
         .ok_or_else(|| anyhow::anyhow!("Invalid path to _b00t_ directory"))?;
@@ -1110,8 +1110,8 @@ command = "echo 'Step 2'"
 fn find_job_datums(path: &str) -> Result<Vec<String>> {
     use std::fs;
 
-    // path already points to the _b00t_ directory (from cli.path default)
-    let b00t_dir = PathBuf::from(path);
+    // path already points to the _b00t_ directory (from cli.path default); expand tilde
+    let b00t_dir = crate::get_expanded_path(path).unwrap_or_else(|_| PathBuf::from(path));
     let mut jobs = Vec::new();
 
     if !b00t_dir.exists() {
@@ -1213,8 +1213,8 @@ pub async fn stop_job_internal(path: &str, name: Option<&str>, all: bool) -> Res
 pub async fn get_job_plan_json(path: &str, name: &str) -> Result<String> {
     use crate::datum_job::JobDatum;
 
-    // JobDatum::from_config expects the _b00t_ directory path
-    let b00t_path = PathBuf::from(path).join("_b00t_");
+    // path is already the _b00t_ directory (cli.path default = ~/.b00t/_b00t_); expand tilde
+    let b00t_path = crate::get_expanded_path(path).unwrap_or_else(|_| PathBuf::from(path));
     let b00t_path_str = b00t_path
         .to_str()
         .ok_or_else(|| anyhow::anyhow!("Invalid path to _b00t_ directory"))?;
