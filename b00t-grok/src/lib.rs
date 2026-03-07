@@ -102,10 +102,13 @@ impl Chunker for BasicChunker {
 use qdrant_client::{
     Qdrant,
     qdrant::{
-        CreateCollection, Distance, PointStruct, SearchPoints, VectorParams,
+        CreateCollection, Distance, PointStruct, SearchPoints, Value, VectorParams,
         WithPayloadSelector, Filter, Condition, CollectionOperationResponse,
+        value::Kind as ValueKind,
     },
 };
+
+type QdrantPayload = HashMap<String, Value>;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Datum {
@@ -373,7 +376,7 @@ impl GrokClient {
         };
 
         // Store in Qdrant
-        let mut payload: HashMap<String, qdrant_client::qdrant::Value> = HashMap::new();
+        let mut payload: QdrantPayload = HashMap::new();
         payload.insert("content".to_string(), content.into());
         payload.insert("datum".to_string(), topic.into());
         payload.insert("topic".to_string(), topic.into());
@@ -577,7 +580,7 @@ impl GrokClient {
             };
 
             // Prepare point for batch insertion
-            let mut payload: HashMap<String, qdrant_client::qdrant::Value> = HashMap::new();
+            let mut payload: QdrantPayload = HashMap::new();
             payload.insert("content".to_string(), chunk_text.clone().into());
             payload.insert("datum".to_string(), inferred_topic.clone().into());
             payload.insert("topic".to_string(), inferred_topic.into());
@@ -695,7 +698,7 @@ impl GrokClient {
         };
 
         // Store in Qdrant
-        let mut payload: HashMap<String, qdrant_client::qdrant::Value> = HashMap::new();
+        let mut payload: QdrantPayload = HashMap::new();
         payload.insert("content".to_string(), content.into());
         payload.insert("datum".to_string(), topic.clone().into());
         payload.insert("topic".to_string(), topic.into());
@@ -814,8 +817,8 @@ impl GrokClient {
 
             let confidence = payload.get("confidence")
                 .and_then(|v| match v {
-                    qdrant_client::qdrant::Value { kind: Some(qdrant_client::qdrant::value::Kind::DoubleValue(f)) } => Some(*f as f32),
-                    qdrant_client::qdrant::Value { kind: Some(qdrant_client::qdrant::value::Kind::IntegerValue(i)) } => Some(*i as f32),
+                    Value { kind: Some(ValueKind::DoubleValue(f)) } => Some(*f as f32),
+                    Value { kind: Some(ValueKind::IntegerValue(i)) } => Some(*i as f32),
                     _ => None,
                 })
                 .unwrap_or(0.0);
@@ -946,8 +949,8 @@ impl GrokClient {
 
             let confidence = payload.get("confidence")
                 .and_then(|v| match v {
-                    qdrant_client::qdrant::Value { kind: Some(qdrant_client::qdrant::value::Kind::DoubleValue(f)) } => Some(*f as f32),
-                    qdrant_client::qdrant::Value { kind: Some(qdrant_client::qdrant::value::Kind::IntegerValue(i)) } => Some(*i as f32),
+                    Value { kind: Some(ValueKind::DoubleValue(f)) } => Some(*f as f32),
+                    Value { kind: Some(ValueKind::IntegerValue(i)) } => Some(*i as f32),
                     _ => None,
                 })
                 .unwrap_or(0.0);
