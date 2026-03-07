@@ -47,6 +47,32 @@ function log_📢_记录() {
     echo "$@"
 }
 export -f log_📢_记录
+
+# ASCII-safe logger wrapper. Some shells/sessions may not retain unicode function names.
+unset -f log_b00t
+function log_b00t() {
+    log_📢_记录 "$@"
+}
+export -f log_b00t
+
+# Always repair logger symbols before loading optional modules.
+unset -f ensure_b00t_log
+function ensure_b00t_log() {
+    if [ "$(LC_ALL=C type -t log_📢_记录 2>/dev/null)" != "function" ]; then
+        function log_📢_记录() {
+            echo "$@"
+        }
+    fi
+    if [ "$(LC_ALL=C type -t log_b00t 2>/dev/null)" != "function" ]; then
+        function log_b00t() {
+            log_📢_记录 "$@"
+        }
+    fi
+    export -f log_📢_记录
+    export -f log_b00t
+}
+export -f ensure_b00t_log
+ensure_b00t_log
 ## 记录 //
 
 ## this will allow b00t to restart itself. 
@@ -431,6 +457,52 @@ function bash_source_加载() {
     return $?
 }
 export -f bash_source_加载
+
+##
+## Modular bashrc drop-in loader
+## Source readable *.sh files from colon-separated directories.
+##
+unset -f _b00t_source_modular_bashrc
+function _b00t_source_modular_bashrc() {
+    local dir=""
+    local file=""
+    local start_ms=0
+    local end_ms=0
+    local elapsed_ms=0
+    local old_ifs="$IFS"
+    local -a dirs=()
+
+    IFS=':' read -r -a dirs <<< "${_B00T_BASH_MODULE_DIRS:-}"
+    IFS="$old_ifs"
+
+    for dir in "${dirs[@]}"; do
+        [ -n "$dir" ] || continue
+        [ -d "$dir" ] || continue
+
+        shopt -s nullglob
+        for file in "$dir"/*.sh; do
+            [ -r "$file" ] || continue
+            case "$(basename "$file")" in
+                .*|_*) continue ;;
+            esac
+
+            ensure_b00t_log
+            if [ "${B00T_BASH_PROFILE:-0}" = "1" ]; then
+                start_ms="$(date +%s%3N)"
+            fi
+
+            source "$file"
+
+            if [ "${B00T_BASH_PROFILE:-0}" = "1" ]; then
+                end_ms="$(date +%s%3N)"
+                elapsed_ms="$((end_ms - start_ms))"
+                log_b00t "b00t rc.d loaded: $file (${elapsed_ms}ms)"
+            fi
+        done
+        shopt -u nullglob
+    done
+}
+export -f _b00t_source_modular_bashrc
 
 
 
@@ -855,6 +927,10 @@ function has_sudo() {
 }
 has_sudo 
 
+# Modular drop-ins for shell customization without editing core bootstrap.
+export _B00T_BASH_MODULE_DIRS="${_B00T_BASH_MODULE_DIRS:-$_B00T_C0DE_Path/bash.🐚/rc.d:$HOME/.b00t/bashrc.d:$HOME/.bashrc.d}"
+_b00t_source_modular_bashrc
+
 
 
 #############################
@@ -918,4 +994,3 @@ export _user="$(id -u -n)"
 export _uid="$(id -u)" 
 echo "🙇‍♂️ \$_user: $_user  \$_uid : $_uid"
 set +o nounset 
-
