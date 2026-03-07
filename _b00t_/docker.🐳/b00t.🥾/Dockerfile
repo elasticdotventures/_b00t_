@@ -1,3 +1,4 @@
+# syntax=docker/dockerfile:1
 # syntax=docker/dockerfile:1.7
 # Multi-stage Dockerfile for b00t-cli and b00t-mcp runtime
 

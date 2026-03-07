@@ -1,3 +1,4 @@
+# syntax=docker/dockerfile:1
 # Enhanced _b00t_ Development Environment with b00t-cli
 # This demonstrates how to integrate the b00t-cli layer
 

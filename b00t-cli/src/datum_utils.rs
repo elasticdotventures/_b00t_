@@ -1,11 +1,83 @@
 //! Datum utility functions for loading and searching datums
+//!
+//! Provides recursive datum discovery, pattern search, constraint filtering,
+//! and graph export capabilities for the b00t datum system.
 
-use crate::{BootDatum, UnifiedConfig};
+use crate::{BootDatum, DatumType, UnifiedConfig};
 use anyhow::Result;
 use b00t_c0re_lib::lfmf::DatumLookup;
+use regex::Regex;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
+
+/// Maximum recursion depth for datum discovery
+const DEFAULT_MAX_DEPTH: usize = 10;
+
+/// Datum search result with file path metadata
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DatumSearchResult {
+    /// Datum key (filename without .toml)
+    pub key: String,
+    /// Resolved file path
+    pub path: String,
+    /// Datum type
+    pub datum_type: Option<DatumType>,
+    /// Datum name
+    pub name: String,
+    /// Hint/description
+    pub hint: String,
+    /// LFMF category if set
+    pub lfmf_category: Option<String>,
+    /// Match reason for search results
+    pub match_reason: Option<String>,
+}
+
+/// Filter criteria for datum queries
+#[derive(Debug, Clone, Default)]
+pub struct DatumFilter {
+    /// Only available datums (prerequisites satisfied)
+    pub available_only: bool,
+    /// Only datums with all prerequisites met
+    pub prereqs_satisfied: bool,
+    /// Required OS (e.g., "linux", "macos", "windows")
+    pub require_os: Option<String>,
+    /// Required commands/tools
+    pub require_cmds: Vec<String>,
+    /// Must have any of these env vars set
+    pub needs_any_env: bool,
+    /// Must have all of these env vars set
+    pub needs_all_env: bool,
+    /// Filter by datum type
+    pub datum_type: Option<DatumType>,
+    /// Custom constraint requirements (e.g., "OS:linux", "CMD:docker")
+    pub require_constraints: Vec<String>,
+}
+
+/// Graph node for datum ontology export
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DatumGraphNode {
+    pub key: String,
+    pub name: String,
+    pub datum_type: Option<DatumType>,
+    pub hint: String,
+}
+
+/// Graph edge for datum ontology export
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DatumGraphEdge {
+    pub from: String,
+    pub to: String,
+    pub edge_type: String, // "depends_on", "entangled_*", etc.
+}
+
+/// Datum ontology graph
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DatumGraph {
+    pub nodes: Vec<DatumGraphNode>,
+    pub edges: Vec<DatumGraphEdge>,
+}
 
 /// Implementation of DatumLookup trait for b00t datums
 /// Enables LFMF system to resolve datum names to categories
@@ -29,8 +101,23 @@ impl DatumLookup for B00tDatumLookup {
     }
 }
 
-/// Get all datums from _b00t_ directory
+/// Get all datums from _b00t_ directory (non-recursive, for backwards compatibility)
 pub fn get_all_datums(b00t_path: &str) -> Result<HashMap<String, BootDatum>> {
+    get_all_datums_recursive(b00t_path, 0)
+}
+
+/// Get all datums recursively with configurable depth
+///
+/// # Arguments
+/// * `b00t_path` - Path to _b00t_ directory
+/// * `max_depth` - Maximum recursion depth (0 = top-level only, None = unlimited)
+///
+/// # Returns
+/// HashMap of datum key -> (BootDatum, file path)
+pub fn get_all_datums_with_paths(
+    b00t_path: &str,
+    max_depth: Option<usize>,
+) -> Result<HashMap<String, (BootDatum, String)>> {
     let expanded_path = shellexpand::tilde(b00t_path);
     let path = Path::new(expanded_path.as_ref());
     let mut datums = HashMap::new();
@@ -39,14 +126,45 @@ pub fn get_all_datums(b00t_path: &str) -> Result<HashMap<String, BootDatum>> {
         return Ok(datums);
     }
 
-    for entry in fs::read_dir(&path)? {
-        let entry = entry?;
+    let depth = max_depth.unwrap_or(DEFAULT_MAX_DEPTH);
+    scan_datums_recursive(path, &mut datums, 0, depth)?;
+
+    Ok(datums)
+}
+
+/// Recursive scanner for datum files
+fn scan_datums_recursive(
+    dir: &Path,
+    datums: &mut HashMap<String, (BootDatum, String)>,
+    current_depth: usize,
+    max_depth: usize,
+) -> Result<()> {
+    if current_depth > max_depth {
+        return Ok(());
+    }
+
+    let entries = match fs::read_dir(dir) {
+        Ok(e) => e,
+        Err(_) => return Ok(()), // Skip directories we can't read
+    };
+
+    for entry in entries {
+        let entry = match entry {
+            Ok(e) => e,
+            Err(_) => continue,
+        };
         let entry_path = entry.path();
 
-        if entry_path.extension().and_then(|s| s.to_str()) == Some("toml") {
+        if entry_path.is_dir() {
+            // Recurse into subdirectories
+            scan_datums_recursive(&entry_path, datums, current_depth + 1, max_depth)?;
+        } else if entry_path.extension().and_then(|s| s.to_str()) == Some("toml") {
             if let Some(filename) = entry_path.file_name().and_then(|s| s.to_str()) {
                 // Skip non-datum files
-                if filename == "bootstrap.toml" || filename == "git-cliff.toml" {
+                if filename == "bootstrap.toml"
+                    || filename == "git-cliff.toml"
+                    || filename == "_b00t_.toml"
+                {
                     continue;
                 }
 
@@ -54,14 +172,21 @@ pub fn get_all_datums(b00t_path: &str) -> Result<HashMap<String, BootDatum>> {
                 if let Ok(content) = fs::read_to_string(&entry_path) {
                     if let Ok(config) = toml::from_str::<UnifiedConfig>(&content) {
                         let datum_key = filename.trim_end_matches(".toml").to_string();
-                        datums.insert(datum_key, config.b00t);
+                        let path_str = entry_path.to_string_lossy().to_string();
+                        datums.insert(datum_key, (config.b00t, path_str));
                     }
                 }
             }
         }
     }
 
-    Ok(datums)
+    Ok(())
+}
+
+/// Get all datums recursively (returns just BootDatum for backwards compatibility)
+fn get_all_datums_recursive(b00t_path: &str, max_depth: usize) -> Result<HashMap<String, BootDatum>> {
+    let with_paths = get_all_datums_with_paths(b00t_path, if max_depth == 0 { None } else { Some(max_depth) })?;
+    Ok(with_paths.into_iter().map(|(k, (d, _))| (k, d)).collect())
 }
 
 /// Get datum by name pattern (searches for matching datums)
