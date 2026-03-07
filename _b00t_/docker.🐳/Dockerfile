@@ -1,3 +1,4 @@
+# syntax=docker/dockerfile:1
 # _b00t_ Development Environment Container
 FROM ubuntu:24.04
 ENV IS_DOCKER_BUILD=true

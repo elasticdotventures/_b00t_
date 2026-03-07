@@ -1,3 +1,4 @@
+# syntax=docker/dockerfile:1
 # syntax=docker/dockerfile:latest
 # Unified b00t Container - CLI and MCP Server
 #
