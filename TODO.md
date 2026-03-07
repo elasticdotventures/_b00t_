@@ -200,5 +200,22 @@ sudo apt install xdg-utils
 
  uvx mcp-cli provider list
 
-just install broken.
-had to type curl -fsSL https://get.pnpm.io/install.sh | sh - to install pnpm `b00t install pnpm` didn't work!
+## [RESOLVED] pnpm install via `b00t install pnpm` was broken
+
+**Root cause**: No `pnpm.cli.toml` existed so b00t had no install recipe.
+
+**Fix**: Added `_b00t_/pnpm.cli.toml` and `_b00t_/corepack.cli.toml`.
+
+**Safe install path** (no `curl | sh`):
+
+```bash
+# preferred — corepack is bundled with Node.js >= 16.10
+corepack enable pnpm
+corepack install -g pnpm@latest
+
+# fallback
+npm install -g pnpm
+```
+
+> ⚠️ `curl -fsSL https://get.pnpm.io/install.sh | sh` executes arbitrary remote code without
+> verification — avoid it. Use corepack or npm instead.
