@@ -167,6 +167,7 @@ install:
 
 installx:
     sudo apt update
+    sudo apt install dnsutils net-tools iputils-ping tcpdump  nmap mtr-tiny whois iproute2
     ## TODO: someday.
     # cd {{repo-root}} && ./_b00t_.sh setup
     sudo apt install -y fzf bat moreutils fd-find bc jq python3-argcomplete curl
