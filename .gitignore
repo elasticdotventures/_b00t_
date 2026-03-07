@@ -301,7 +301,8 @@ mcp-probe
 
 # Claude Code frameworks (exclude all)
 .claude/
-# Archive for old/irrelevant files\n
+
+# Archive for old/irrelevant files
 _archive_/
 
 # Proprietary/Licensed Content - DO NOT COMMIT
@@ -318,3 +319,14 @@ google-cloud-sdk/
 .codemachine/agents
 .codemachine/template.json
 .b00t-tools-env.json
+integrations/plantuml-server--b00t--togaf--mcp/
+
+# Unfinished/experimental - not part of b00t
+.devcontainer.x/
+docker-to-wsl/
+docker/
+nextest_test
+togaf-cli/
+togaf-dsl/
+*.old
+ralphs/ralph-v1

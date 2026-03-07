@@ -1,0 +1,13 @@
+{
+  "name": "my-profile",
+  "version": "1.0.0",
+  "description": "Captured from existing configuration",
+  "dependencies": {
+    "skills": {
+      "agent-orchestration": "*",
+      "devops-stacks": "*",
+      "hive-memory": "*",
+      "systems-engineering": "*"
+    }
+  }
+}
