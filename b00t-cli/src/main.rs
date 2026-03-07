@@ -15,12 +15,25 @@ use b00t_cli::datum_mcp::McpDatum;
 use b00t_cli::datum_vscode::VscodeDatum;
 use b00t_cli::traits::*;
 use b00t_cli::utils::get_workspace_root;
-
 use b00t_cli::commands::learn::{LearnArgs, handle_learn};
+#[rustfmt::skip]
 use b00t_cli::commands::{
-    AiCommands, AgentCommands, AnsibleCommands, AppCommands, BootstrapCommands, BudgetCommands, ChatCommands, CliCommands, DatumCommands,
-    GrokCommands, InitCommands, JobCommands, K8sCommands, McpCommands, ModelCommands,
-    SessionCommands, StackCommands, WhatismyCommands,
+  //  Keep commands 1 line per letter A,B,C,... for easy diff
+    AiCommands, AgentCommands, AnsibleCommands, AppCommands, 
+    BootstrapCommands, BudgetCommands, 
+    ChatCommands, CliCommands,
+    DatumCommands, 
+    GrokCommands, 
+    InitCommands, 
+    JobCommands, 
+    K8sCommands, 
+    McpCommands, ModelCommands,
+    OntologyCommands, 
+    RedisCommands, 
+    SessionCommands, StackCommands,
+    TutorialCommands, WhatismyCommands
+    
+
 };
 use b00t_cli::commands::install::{install_datum, run_just_install};
 
@@ -211,9 +224,6 @@ The system will:
         message: Option<String>,
         #[clap(long, help = "Skip running tests (not recommended)")]
         skip_tests: bool,
-
-        #[clap(long = "message", help = "Commit message (MCP compatibility)")]
-        message_flag: Option<String>, // 🦨 MCP compatibility: accept --message flag
     },
     #[clap(about = "Query system information")]
     Whatismy {
@@ -233,8 +243,6 @@ The system will:
         installed: bool,
         #[clap(long, help = "Show only available (not installed) tools")]
         available: bool,
-        #[clap(long = "filter", help = "Filter by subsystem (MCP compatibility)")]
-        filter_flag: Option<String>, // 🦨 MCP compatibility: accept --filter flag
     },
     #[clap(about = "Kubernetes (k8s) cluster and pod management")]
     K8s {
@@ -286,6 +294,18 @@ The system will:
     Bootstrap {
         #[clap(subcommand)]
         bootstrap_command: BootstrapCommands,
+    },
+    #[clap(about = "Launch ralph agent REPL outer-loop")]
+    Up(commands::up::UpArgs),
+    #[clap(about = "Query live capability ontology from datum TOMLs")]
+    Ontology {
+        #[clap(subcommand)]
+        ontology_command: OntologyCommands,
+    },
+    #[clap(about = "Tutorial progression tracking for role-based datum onboarding")]
+    Tutorial {
+        #[clap(subcommand)]
+        tutorial_command: TutorialCommands,
     },
 }
 
@@ -1125,14 +1145,8 @@ async fn main() {
                 std::process::exit(1);
             }
         }
-        Some(Commands::Checkpoint {
-            message,
-            skip_tests,
-            message_flag,
-        }) => {
-            // 🦨 MCP compatibility: merge positional and flag arguments
-            let effective_message = message.as_ref().or(message_flag.as_ref());
-            if let Err(e) = checkpoint(effective_message.map(|s| s.as_str()), *skip_tests) {
+        Some(Commands::Checkpoint { message, skip_tests }) => {
+            if let Err(e) = checkpoint(message.as_deref(), *skip_tests) {
                 eprintln!("Error: {}", e);
                 std::process::exit(1);
             }
@@ -1143,20 +1157,8 @@ async fn main() {
                 std::process::exit(1);
             }
         }
-        Some(Commands::Status {
-            filter,
-            installed,
-            available,
-            filter_flag,
-        }) => {
-            // 🤓 MCP compatibility: merge positional and flag arguments
-            let effective_filter = filter.as_ref().or(filter_flag.as_ref());
-            if let Err(e) = show_status(
-                &cli.path,
-                effective_filter.map(|s| s.as_str()),
-                *installed,
-                *available,
-            ) {
+        Some(Commands::Status { filter, installed, available }) => {
+            if let Err(e) = show_status(&cli.path, filter.as_deref(), *installed, *available) {
                 eprintln!("Error: {}", e);
                 std::process::exit(1);
             }
@@ -1187,9 +1189,7 @@ async fn main() {
             }
         }
         Some(Commands::Grok { grok_command }) => {
-            use b00t_cli::commands::grok::handle_grok_command;
-
-            // 🤓 No need for nested runtime - already in #[tokio::main]
+            use commands::grok::handle_grok_command;
             if let Err(e) = handle_grok_command(grok_command.clone()).await {
                 eprintln!("Error: {}", e);
                 std::process::exit(1);
@@ -1203,6 +1203,18 @@ async fn main() {
                 }
             } else if let Err(e) = run_just_install(*dry_run) {
                 eprintln!("Install Error: {}", e);
+                std::process::exit(1);
+            }
+        }
+        Some(Commands::Up(args)) => {
+            if let Err(e) = args.execute() {
+                eprintln!("Error: {}", e);
+                std::process::exit(1);
+            }
+        }
+        Some(Commands::Ontology { ontology_command }) => {
+            if let Err(e) = ontology_command.execute() {
+                eprintln!("Error: {}", e);
                 std::process::exit(1);
             }
         }
@@ -1238,30 +1250,16 @@ async fn main() {
             }
         }
         Some(Commands::Script { script_command }) => {
-            use b00t_cli::commands::script::handle_script_command;
+            use commands::script::handle_script_command;
 
             if let Err(e) = handle_script_command(script_command.clone()) {
                 eprintln!("Error: {}", e);
                 std::process::exit(1);
             }
         }
-        Some(Commands::Agent { agent_command }) => {
-            if let Err(e) =
-                b00t_cli::commands::agent::handle_agent_command(agent_command.clone()).await
-            {
-                eprintln!("Agent Error: {}", e);
-                std::process::exit(1);
-            }
-        }
-        Some(Commands::Job { job_command }) => {
-            if let Err(e) = job_command.execute_async(&cli.path).await {
-                eprintln!("Job Error: {}", e);
-                std::process::exit(1);
-            }
-        }
-        Some(Commands::Chat { chat_command }) => {
-            if let Err(e) = chat_command.execute().await {
-                eprintln!("Chat Error: {}", e);
+        Some(Commands::Tutorial { tutorial_command }) => {
+            if let Err(e) = tutorial_command.execute() {
+                eprintln!("Error: {}", e);
                 std::process::exit(1);
             }
         }

@@ -50,3 +50,11 @@ command = "uv add package-name"
 [[b00t.usage]]
 description = "Install package globally (like pipx)"
 command = "uv tool install package-name"
+
+[validate]
+command = "uv --version"
+regex = "uv \\d+"
+
+[roles]
+required_for = ["developer"]
+optional_for = ["orchestrator", "analyst"]

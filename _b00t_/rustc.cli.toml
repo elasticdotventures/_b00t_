@@ -11,3 +11,11 @@ version = "rustc --version"
 version_regex = '\d+\.\d+\.\d+'
 hint = "Rust is a systems programming language focused on safety and performance. Use `rustup show` to inspect your toolchain."
 
+
+[validate]
+command = "rustc --version"
+regex = "rustc \\d+"
+
+[roles]
+required_for = ["developer"]
+optional_for = ["orchestrator"]

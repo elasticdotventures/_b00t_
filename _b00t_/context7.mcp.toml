@@ -9,3 +9,11 @@ requires = []
 args = ["-y", "@upstash/context7-mcp"]
 priority = 0
 transport = "stdio"
+
+[validate]
+command = "bunx --yes @upstash/context7-mcp --version"
+regex = "\\d+|context7|MCP"
+
+[roles]
+required_for = ["developer", "orchestrator"]
+optional_for = ["analyst"]

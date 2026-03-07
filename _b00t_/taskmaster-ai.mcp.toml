@@ -75,3 +75,11 @@ GOOGLE_API_KEY = ""
 VERTEX_PROJECT_ID = ""
 VERTEX_LOCATION = ""
 GOOGLE_APPLICATION_CREDENTIALS = ""
+
+[validate]
+command = "npx --yes task-master --version"
+regex = "\\d+\\.\\d+"
+
+[roles]
+required_for = ["orchestrator"]
+optional_for = ["developer"]

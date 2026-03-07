@@ -734,6 +734,59 @@ impl_mcp_tool!(
 // 🤓 Disabled - acp_hive uses full NATS Agent from old ACP; chat refactor simplified to stubs
 // use crate::acp_tools::*;
 
+/// Tutorial status command — show tutorial progression for current agent role
+#[derive(Parser, Clone)]
+pub struct TutorialStatusCommand;
+
+impl_mcp_tool!(
+    TutorialStatusCommand,
+    "b00t_tutorial_status",
+    ["tutorial", "status"]
+);
+
+/// Tutorial next command — get next recommended datum to install/validate
+#[derive(Parser, Clone)]
+pub struct TutorialNextCommand;
+
+impl_mcp_tool!(
+    TutorialNextCommand,
+    "b00t_tutorial_next",
+    ["tutorial", "next"]
+);
+
+/// Ontology query command — query live capability ontology from datum TOMLs
+// 🤓 ENTANGLED: b00t-cli/src/commands/ontology.rs OntologyCommands::Query
+#[derive(Parser, Clone)]
+pub struct OntologyQueryCommand {
+    #[arg(long, help = "Filter by agent role (developer|orchestrator|analyst)")]
+    pub role: Option<String>,
+
+    #[arg(long, help = "Output format: table or json", default_value = "json")]
+    pub format: Option<String>,
+}
+
+impl_mcp_tool!(
+    OntologyQueryCommand,
+    "b00t_ontology_query",
+    ["ontology", "query"]
+);
+
+/// Up command — launch ralph agent REPL outer-loop
+// 🤓 ENTANGLED: b00t-cli/src/commands/up.rs UpArgs
+#[derive(Parser, Clone)]
+pub struct UpCommand {
+    #[arg(long, help = "AI tool to use for the ralph loop", default_value = "claude")]
+    pub tool: Option<String>,
+
+    #[arg(long, help = "Maximum iterations per ralph session", default_value = "10")]
+    pub max_iter: Option<u32>,
+
+    #[arg(long, help = "Agent role (filters ontology + tutorial path)")]
+    pub role: Option<String>,
+}
+
+impl_mcp_tool!(UpCommand, "b00t_up", ["up"]);
+
 /// Create and populate a registry with all available MCP tools
 pub fn create_mcp_registry() -> McpCommandRegistry {
     let mut builder = McpCommandRegistry::builder();
@@ -742,6 +795,7 @@ pub fn create_mcp_registry() -> McpCommandRegistry {
     builder
         .register::<McpListCommand>()
         .register::<McpAddCommand>()
+        .register::<McpInstallCommand>()
         .register::<McpOutputCommand>()
         .register::<CliDetectCommand>()
         .register::<CliDesiresCommand>()
@@ -778,7 +832,14 @@ pub fn create_mcp_registry() -> McpCommandRegistry {
         .register::<GrokDigestCommand>()
         .register::<GrokAskCommand>()
         .register::<GrokLearnCommand>()
-        .register::<GrokStatusCommand>();
+        .register::<GrokStatusCommand>()
+        // Tutorial progression tools
+        .register::<TutorialStatusCommand>()
+        .register::<TutorialNextCommand>()
+        // Ontology query tool
+        .register::<OntologyQueryCommand>()
+        // Up command — ralph REPL outer-loop
+        .register::<UpCommand>();
     // ACP Hive coordination tools
     // 🤓 Disabled - acp_hive uses full NATS Agent from old ACP; chat refactor simplified to stubs
     // .register::<AcpHiveJoinCommand>()
