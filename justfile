@@ -125,7 +125,7 @@ release:
     set -euo pipefail
     VERSION="{{workspace_version}}"
 
-    echo "🚀 Creating release v${VERSION}..."
+    echo "🚀 Dispatching GitHub-native release for v${VERSION}..."
 
     # Verify workspace is clean
     if ! git diff --quiet; then
@@ -137,17 +137,12 @@ release:
     echo "🧪 Running tests..."
     cargo test --workspace --all-features
 
-    # Create git tag
-    git tag -a "v${VERSION}" -m "Release v${VERSION}"
-    git push origin "v${VERSION}"
+    gh workflow run release.yml \
+        -f version="${VERSION}" \
+        -f run_tests=true
 
-    # Create GitHub release (triggers publish-crates.yml workflow)
-    gh release create "v${VERSION}" \
-        --title "Release v${VERSION}" \
-        --generate-notes
-
-    echo "✅ Release v${VERSION} created"
-    echo "📦 Crates will be published to crates.io by GitHub Actions"
+    echo "✅ Release workflow dispatched for v${VERSION}"
+    echo "📦 Tagging, release creation, binaries, and crates publishing now flow through GitHub Actions"
     echo "🔗 Check workflow: https://github.com/elasticdotventures/dotfiles/actions"
 
 

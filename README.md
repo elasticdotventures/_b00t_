@@ -1,6 +1,6 @@
 # 🥾 b00t - Universal Agentic Development Framework
 
-[![Container Build Status](https://github.com/elasticdotventures/_b00t_/actions/workflows/b00t-container.yml/badge.svg)](https://github.com/elasticdotventures/_b00t_/actions/workflows/b00t-container.yml)
+[![Container Build Status](https://github.com/elasticdotventures/_b00t_/actions/workflows/b00t-cli-container.yml/badge.svg)](https://github.com/elasticdotventures/_b00t_/actions/workflows/b00t-cli-container.yml)
 
 > **"I am an agent. Tell me what I'm running on, what tools are available, what I'm allowed to do, what goals I should optimize for, and where the boundaries are."**
 > —ChatGPT (TL;DR b00t agent perspective)
@@ -23,8 +23,8 @@ b00t learn rust                   # Load Rust development context
 b00t learn docker                 # Container orchestration knowledge
 
 # Record and retrieve tribal knowledge
-b00t lfmf rust "cargo build conflict: Unset CONDA_PREFIX before cargo to avoid PyO3 linker errors"
-b00t advice rust "PyO3"           # Get contextual debugging advice
+b00t learn rust --record "cargo build conflict: Unset CONDA_PREFIX before cargo to avoid PyO3 linker errors"
+b00t learn rust --search "PyO3"   # Get contextual debugging advice
 
 # MCP server integration
 b00t mcp install browser-use claudecode    # Install MCP server with deps
@@ -83,12 +83,12 @@ This universal installer:
 <summary><b>🦀 Cargo (Rust Package Manager)</b></summary>
 
 ```bash
-# Install from crates.io (coming soon)
+# Install from crates.io (when published)
 cargo install b00t-cli
 
 # Or install from source
 git clone https://github.com/elasticdotventures/_b00t_.git
-cd _b00t_ && cargo install --path b00t-cli
+cd _b00t_ && cargo install --path b00t-cli --force
 ```
 </details>
 
@@ -138,6 +138,8 @@ After installation, verify b00t is working:
 # Check installation
 b00t --version
 b00t status
+b00t version check
+b00t version upgrade
 
 # Learn about your environment
 b00t learn system      # Understand your platform
@@ -256,12 +258,28 @@ cp -r plugins/b00t/skills/systems-engineering ~/.claude/agents/
 
 ### **Smart Context Management**
 ```bash
-b00t detect node    # Check Node.js version and availability
-b00t desires rust   # See target Rust version from configuration
-b00t install python # Install or update Python to desired version
-b00t up             # Check all tools and report version status
-b00t up --yes       # Update all tools to desired versions
+b00t cli detect node    # Check Node.js version and availability
+b00t cli desires rust   # See target Rust version from configuration
+b00t cli install python # Install or update Python to desired version
+b00t cli up             # Check all tools and report version status
+b00t cli up --yes       # Update all tools to desired versions
+b00t version check      # Compare installed b00t-cli vs latest GitHub release
+b00t version upgrade    # Print or run the installer-backed self-upgrade path
 ```
+
+### **GitHub Releases**
+```bash
+# Dispatch the GitHub-native release workflow for the workspace version
+just release
+
+# Or trigger the workflow directly
+gh workflow run release.yml -f version="$(just version)" -f run_tests=true
+```
+
+Release automation is split into:
+- `release.yml` for tagging and creating the GitHub release
+- `build-release.yml` for cross-platform release assets
+- `publish-crates.yml` for crates.io publishing
 
 ### Vision Model Management
 Vision-style models now ship as first-class b00t datums, so any client (CLI, Blender panel, chat agent) can reuse a single cached copy:

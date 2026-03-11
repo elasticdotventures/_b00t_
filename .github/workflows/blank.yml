@@ -40,7 +40,9 @@ jobs:
 
       # https://docs.astral.sh/uv/guides/integration/github/#setting-up-python
       - name: Install uv
-        uses: astral-sh/setup-uv@v5
+        uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: false
 
       - name: Set up Python
         run: uv python install
@@ -103,4 +105,3 @@ jobs:
       # -
       #   name: Image digest
       #   run: echo ${{ steps.docker_build.outputs.digest }}
-

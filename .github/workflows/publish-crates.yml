@@ -6,6 +6,10 @@ on:
     types: [published]
   workflow_dispatch:
     inputs:
+      tag:
+        description: Release tag to publish (for example v0.7.35). Optional for dry-run.
+        required: false
+        type: string
       dry_run:
         description: 'Run without publishing (dry-run)'
         required: false
@@ -25,9 +29,27 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'release' && github.event.release.tag_name || github.event.inputs.tag || github.ref }}
 
       - name: Setup Rust toolchain
         uses: dtolnay/rust-toolchain@stable
+
+      - name: Resolve release metadata
+        id: release
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "release" ]; then
+            TAG="${{ github.event.release.tag_name }}"
+          else
+            TAG="${{ github.event.inputs.tag }}"
+          fi
+
+          WORKSPACE_VERSION=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -n1)
+          echo "workspace_version=${WORKSPACE_VERSION}" >> "$GITHUB_OUTPUT"
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+          echo "release_version=${TAG#v}" >> "$GITHUB_OUTPUT"
 
       - name: Cache cargo registry
         uses: actions/cache@v4
@@ -46,17 +68,13 @@ jobs:
             ${{ runner.os }}-cargo-git-
 
       - name: Verify workspace version matches release tag
-        if: github.event_name == 'release'
+        if: steps.release.outputs.tag != ''
         run: |
-          WORKSPACE_VERSION=$(cargo metadata --format-version 1 --no-deps | jq -r '.packages[] | select(.name == "b00t-c0re-lib") | .version')
-          RELEASE_TAG="${{ github.event.release.tag_name }}"
-          RELEASE_VERSION="${RELEASE_TAG#v}"
+          echo "Workspace version: v${{ steps.release.outputs.workspace_version }}"
+          echo "Release tag: ${{ steps.release.outputs.tag }}"
 
-          echo "Workspace version: v${WORKSPACE_VERSION}"
-          echo "Release tag: ${RELEASE_TAG}"
-
-          if [ "v${WORKSPACE_VERSION}" != "${RELEASE_TAG}" ]; then
-            echo "❌ Version mismatch: workspace v${WORKSPACE_VERSION} != release ${RELEASE_TAG}"
+          if [ "v${{ steps.release.outputs.workspace_version }}" != "${{ steps.release.outputs.tag }}" ]; then
+            echo "❌ Version mismatch: workspace v${{ steps.release.outputs.workspace_version }} != release ${{ steps.release.outputs.tag }}"
             exit 1
           fi
           echo "✅ Version match confirmed"
@@ -72,10 +90,10 @@ jobs:
           cd b00t-lib-chat
           if [ "${{ github.event_name }}" == "workflow_dispatch" ] && [ "${{ github.event.inputs.dry_run }}" == "true" ]; then
             echo "🔍 DRY RUN: Would publish b00t-chat"
-            cargo publish --dry-run --allow-dirty
+            cargo publish --dry-run --allow-dirty --locked
           else
             echo "📦 Publishing b00t-chat to crates.io"
-            cargo publish --allow-dirty
+            cargo publish --allow-dirty --locked
           fi
 
       - name: Publish b00t-c0re-lib
@@ -90,10 +108,10 @@ jobs:
           cd b00t-c0re-lib
           if [ "${{ github.event_name }}" == "workflow_dispatch" ] && [ "${{ github.event.inputs.dry_run }}" == "true" ]; then
             echo "🔍 DRY RUN: Would publish b00t-c0re-lib"
-            cargo publish --dry-run --allow-dirty
+            cargo publish --dry-run --allow-dirty --locked
           else
             echo "📦 Publishing b00t-c0re-lib to crates.io"
-            cargo publish --allow-dirty
+            cargo publish --allow-dirty --locked
           fi
 
       - name: Publish b00t-cli
@@ -108,10 +126,10 @@ jobs:
           cd b00t-cli
           if [ "${{ github.event_name }}" == "workflow_dispatch" ] && [ "${{ github.event.inputs.dry_run }}" == "true" ]; then
             echo "🔍 DRY RUN: Would publish b00t-cli"
-            cargo publish --dry-run --allow-dirty
+            cargo publish --dry-run --allow-dirty --locked
           else
             echo "📦 Publishing b00t-cli to crates.io"
-            cargo publish --allow-dirty
+            cargo publish --allow-dirty --locked
           fi
 
       - name: Publish b00t-mcp
@@ -126,10 +144,10 @@ jobs:
           cd b00t-mcp
           if [ "${{ github.event_name }}" == "workflow_dispatch" ] && [ "${{ github.event.inputs.dry_run }}" == "true" ]; then
             echo "🔍 DRY RUN: Would publish b00t-mcp"
-            cargo publish --dry-run --allow-dirty
+            cargo publish --dry-run --allow-dirty --locked
           else
             echo "📦 Publishing b00t-mcp to crates.io"
-            cargo publish --allow-dirty
+            cargo publish --allow-dirty --locked
           fi
 
       - name: Summary
@@ -142,7 +160,7 @@ jobs:
           else
             echo "**Mode**: Live Publishing" >> $GITHUB_STEP_SUMMARY
           fi
-          echo "**Version**: ${{ github.event.release.tag_name || 'manual trigger' }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Version**: ${{ steps.release.outputs.tag || 'manual trigger' }}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### Published Crates:" >> $GITHUB_STEP_SUMMARY
           echo "- b00t-chat" >> $GITHUB_STEP_SUMMARY
