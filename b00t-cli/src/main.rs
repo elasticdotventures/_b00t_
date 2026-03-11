@@ -1,10 +1,11 @@
 use anyhow::Result;
+use b00t_cli::{SessionState, UnifiedConfig, load_datum_providers, whoami};
 use clap::Parser;
 use duct::cmd;
 use std::fs;
-use b00t_cli::{SessionState, UnifiedConfig, load_datum_providers, whoami};
 
 // Import datum types from lib.rs (already declared there as pub mod)
+use b00t_cli::commands::learn::{LearnArgs, handle_learn};
 use b00t_cli::datum_ai::AiDatum;
 use b00t_cli::datum_ai_model::AiModelDatumEntry;
 use b00t_cli::datum_apt::AptDatum;
@@ -15,7 +16,6 @@ use b00t_cli::datum_mcp::McpDatum;
 use b00t_cli::datum_vscode::VscodeDatum;
 use b00t_cli::traits::*;
 use b00t_cli::utils::get_workspace_root;
-use b00t_cli::commands::learn::{LearnArgs, handle_learn};
 #[rustfmt::skip]
 use b00t_cli::commands::{
   //  Keep commands 1 line per letter A,B,C,... for easy diff
@@ -29,9 +29,8 @@ use b00t_cli::commands::{
     K8sCommands, 
     McpCommands, ModelCommands,
     OntologyCommands, 
-    RedisCommands, 
     SessionCommands, StackCommands,
-    TutorialCommands, WhatismyCommands
+    TutorialCommands, VersionCommands, WhatismyCommands
     
 
 };
@@ -39,9 +38,9 @@ use b00t_cli::commands::install::{install_datum, run_just_install};
 
 // Re-export commonly used functions for datum modules
 pub use b00t_cli::{
-    DatumType, claude_code_install_mcp, codex_install_mcp, dotmcpjson_install_mcp, gemini_install_mcp,
-    get_config, get_expanded_path, get_mcp_config, get_mcp_toml_files, mcp_add_json, mcp_list,
-    mcp_output, mcp_remove, vscode_install_mcp,
+    DatumType, claude_code_install_mcp, codex_install_mcp, dotmcpjson_install_mcp,
+    gemini_install_mcp, get_config, get_expanded_path, get_mcp_config, get_mcp_toml_files,
+    mcp_add_json, mcp_list, mcp_output, mcp_remove, vscode_install_mcp,
 };
 
 mod integration_tests;
@@ -283,7 +282,9 @@ The system will:
         #[clap(subcommand)]
         grok_command: GrokCommands,
     },
-    #[clap(about = "Install a datum (auto-resolves dependencies) or run bootstrap install when no name is provided")]
+    #[clap(
+        about = "Install a datum (auto-resolves dependencies) or run bootstrap install when no name is provided"
+    )]
     Install {
         #[clap(help = "Datum name to install (omit to run repo bootstrap just install)")]
         name: Option<String>,
@@ -296,7 +297,12 @@ The system will:
         bootstrap_command: BootstrapCommands,
     },
     #[clap(about = "Launch ralph agent REPL outer-loop")]
-    Up(commands::up::UpArgs),
+    Up(b00t_cli::commands::up::UpArgs),
+    #[clap(about = "Check or upgrade the installed b00t-cli release")]
+    Version {
+        #[clap(subcommand)]
+        version_command: VersionCommands,
+    },
     #[clap(about = "Query live capability ontology from datum TOMLs")]
     Ontology {
         #[clap(subcommand)]
@@ -1145,7 +1151,10 @@ async fn main() {
                 std::process::exit(1);
             }
         }
-        Some(Commands::Checkpoint { message, skip_tests }) => {
+        Some(Commands::Checkpoint {
+            message,
+            skip_tests,
+        }) => {
             if let Err(e) = checkpoint(message.as_deref(), *skip_tests) {
                 eprintln!("Error: {}", e);
                 std::process::exit(1);
@@ -1157,7 +1166,11 @@ async fn main() {
                 std::process::exit(1);
             }
         }
-        Some(Commands::Status { filter, installed, available }) => {
+        Some(Commands::Status {
+            filter,
+            installed,
+            available,
+        }) => {
             if let Err(e) = show_status(&cli.path, filter.as_deref(), *installed, *available) {
                 eprintln!("Error: {}", e);
                 std::process::exit(1);
@@ -1171,6 +1184,26 @@ async fn main() {
         }
         Some(Commands::Session { session_command }) => {
             if let Err(e) = session_command.execute(&cli.path) {
+                eprintln!("Error: {}", e);
+                std::process::exit(1);
+            }
+        }
+        Some(Commands::Agent { agent_command }) => {
+            if let Err(e) =
+                b00t_cli::commands::agent::handle_agent_command(agent_command.clone()).await
+            {
+                eprintln!("Error: {}", e);
+                std::process::exit(1);
+            }
+        }
+        Some(Commands::Job { job_command }) => {
+            if let Err(e) = job_command.execute_async(&cli.path).await {
+                eprintln!("Error: {}", e);
+                std::process::exit(1);
+            }
+        }
+        Some(Commands::Chat { chat_command }) => {
+            if let Err(e) = chat_command.execute().await {
                 eprintln!("Error: {}", e);
                 std::process::exit(1);
             }
@@ -1189,7 +1222,7 @@ async fn main() {
             }
         }
         Some(Commands::Grok { grok_command }) => {
-            use commands::grok::handle_grok_command;
+            use b00t_cli::commands::grok::handle_grok_command;
             if let Err(e) = handle_grok_command(grok_command.clone()).await {
                 eprintln!("Error: {}", e);
                 std::process::exit(1);
@@ -1212,13 +1245,24 @@ async fn main() {
                 std::process::exit(1);
             }
         }
+        Some(Commands::Version { version_command }) => {
+            if let Err(e) = b00t_cli::commands::version::handle_version_command(version_command) {
+                eprintln!("Error: {}", e);
+                std::process::exit(1);
+            }
+        }
         Some(Commands::Ontology { ontology_command }) => {
             if let Err(e) = ontology_command.execute() {
                 eprintln!("Error: {}", e);
                 std::process::exit(1);
             }
         }
-        Some(Commands::Lfmf { tool, lesson, repo: _, global }) => {
+        Some(Commands::Lfmf {
+            tool,
+            lesson,
+            repo: _,
+            global,
+        }) => {
             // Validate required fields
             let tool = match tool {
                 Some(t) => t,
@@ -1236,7 +1280,9 @@ async fn main() {
             };
             // Determine scope
             let scope = if *global { "global" } else { "repo" };
-            if let Err(e) = b00t_cli::commands::lfmf::handle_lfmf(&cli.path, &tool, &lesson, scope).await {
+            if let Err(e) =
+                b00t_cli::commands::lfmf::handle_lfmf(&cli.path, &tool, &lesson, scope).await
+            {
                 eprintln!("Error: {}", e);
                 std::process::exit(1);
             }
@@ -1250,7 +1296,7 @@ async fn main() {
             }
         }
         Some(Commands::Script { script_command }) => {
-            use commands::script::handle_script_command;
+            use b00t_cli::commands::script::handle_script_command;
 
             if let Err(e) = handle_script_command(script_command.clone()) {
                 eprintln!("Error: {}", e);

@@ -46,7 +46,7 @@ uuid = { version = "1.0", features = ["v4"] }
 fs2 = "0.4"
 confy = "2.0.0"
 libc = "0.2"
-reqwest = { version = "0.12.23", features = ["json"] }
+reqwest = { version = "0.12.23", features = ["blocking", "json"] }
 whoami = "1.5"
 b00t-chat = { workspace = true }
 env_logger = "0.11"

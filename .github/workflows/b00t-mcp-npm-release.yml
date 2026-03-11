@@ -169,36 +169,31 @@ jobs:
 
       - name: 📋 Create GitHub Release
         if: startsWith(github.ref, 'refs/tags/')
-        uses: actions/create-release@v1
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          tag_name: ${{ github.ref_name }}
-          release_name: 🥾 b00t-mcp ${{ github.ref_name }}
-          body: |
-            ## 🥾 b00t-mcp Release ${{ github.ref_name }}
-            
-            ### 📦 Installation
-            
-            ```bash
-            npm install -g b00t-mcp
-            # or
-            npx b00t-mcp --help
-            # or  
-            bunx b00t-mcp --help
-            ```
-            
-            ### 🎯 Supported Platforms
-            
-            - Linux x64/ARM64
-            - macOS x64/ARM64 (Intel/Apple Silicon)  
-            - Windows x64/ARM64
-            
-            ### 📋 What's Changed
-            
-            See [CHANGELOG.md](https://github.com/elasticdotventures/dotfiles/blob/main/CHANGELOG.md) for details.
-          draft: false
-          prerelease: false
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "${{ github.ref_name }}" \
+            --title "🥾 b00t-mcp ${{ github.ref_name }}" \
+            --notes "## 🥾 b00t-mcp Release ${{ github.ref_name }}
+
+          ### 📦 Installation
+
+          \`\`\`bash
+          npm install -g b00t-mcp
+          npx b00t-mcp --help
+          bunx b00t-mcp --help
+          \`\`\`
+
+          ### 🎯 Supported Platforms
+
+          - Linux x64/ARM64
+          - macOS x64/ARM64 (Intel/Apple Silicon)
+          - Windows x64/ARM64
+
+          ### 📋 What's Changed
+
+          See https://github.com/elasticdotventures/dotfiles/blob/main/CHANGELOG.md for details." \
+            || gh release edit "${{ github.ref_name }}" --title "🥾 b00t-mcp ${{ github.ref_name }}"
 
       - name: 📤 Upload release binaries
         if: startsWith(github.ref, 'refs/tags/')

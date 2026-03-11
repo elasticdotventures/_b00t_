@@ -84,7 +84,7 @@ mod integration_tests {
 
     #[tokio::test]
     async fn test_lfmf_creates_and_appends_lesson() {
-        use crate::commands::lfmf::handle_lfmf;
+        use b00t_cli::commands::lfmf::handle_lfmf;
         let temp_dir = setup_temp_dir();
         let temp_path = temp_dir.path().to_str().unwrap();
         let tool = "testtool";
