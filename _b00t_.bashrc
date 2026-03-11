@@ -496,7 +496,7 @@ function _b00t_source_modular_bashrc() {
             if [ "${B00T_BASH_PROFILE:-0}" = "1" ]; then
                 end_ms="$(date +%s%3N)"
                 elapsed_ms="$((end_ms - start_ms))"
-                log_b00t "b00t rc.d loaded: $file (${elapsed_ms}ms)"
+                log_b00t "🥾 rc.d loaded: $file (${elapsed_ms}ms)"
             fi
         done
         shopt -u nullglob
