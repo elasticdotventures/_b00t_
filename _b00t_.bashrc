@@ -471,17 +471,19 @@ function _b00t_source_modular_bashrc() {
     local elapsed_ms=0
     local old_ifs="$IFS"
     local -a dirs=()
+    local nullglob_was_set
 
     IFS=':' read -r -a dirs <<< "${_B00T_BASH_MODULE_DIRS:-}"
     IFS="$old_ifs"
 
     ensure_b00t_log
+    nullglob_was_set="$(shopt -p nullglob)"
+    shopt -s nullglob
 
     for dir in "${dirs[@]}"; do
         [ -n "$dir" ] || continue
         [ -d "$dir" ] || continue
 
-        shopt -s nullglob
         for file in "$dir"/*.sh; do
             [ -r "$file" ] || continue
             case "$(basename "$file")" in
@@ -500,8 +502,9 @@ function _b00t_source_modular_bashrc() {
                 log_b00t "🥾 rc.d loaded: $file (${elapsed_ms}ms)"
             fi
         done
-        shopt -u nullglob
     done
+
+    eval "$nullglob_was_set"
 }
 export -f _b00t_source_modular_bashrc
 
