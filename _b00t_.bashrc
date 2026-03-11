@@ -476,12 +476,9 @@ function _b00t_source_modular_bashrc() {
     IFS=':' read -r -a dirs <<< "${_B00T_BASH_MODULE_DIRS:-}"
     IFS="$old_ifs"
 
-<<<<<<< copilot/sub-pr-240-again
     ensure_b00t_log
-=======
     nullglob_was_set="$(shopt -p nullglob)"
     shopt -s nullglob
->>>>>>> feat/bashrc-modular-loader-log-fallback
 
     for dir in "${dirs[@]}"; do
         [ -n "$dir" ] || continue
