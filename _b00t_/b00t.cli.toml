@@ -1,8 +1,8 @@
 [b00t]
 name = "b00t"
-desires = "0.2.1"
-install = "cd /home/brianh/.dotfiles/b00t-cli && cargo install --path ."
-update = "cd /home/brianh/.dotfiles/b00t-cli && cargo install --path ."
+desires = "0.7.35"
+install = "curl -fsSL https://raw.githubusercontent.com/elasticdotventures/dotfiles/main/install.sh | sh"
+update = "curl -fsSL https://raw.githubusercontent.com/elasticdotventures/dotfiles/main/install.sh | sh"
 version = "b00t-cli --version"
-version_regex = '\d+\.\d+\.\d+'
+version_regex = '(\d+\.\d+\.\d+)'
 hint = "b00t is a tool to manage command-line tools."

@@ -24,6 +24,7 @@ pub mod stack;
 pub mod tiktoken;
 pub mod tutorial;
 pub mod up;
+pub mod version;
 pub mod whatismy;
 
 pub use agent::AgentCommands;
@@ -48,4 +49,5 @@ pub use session::SessionCommands;
 pub use stack::StackCommands;
 pub use tutorial::TutorialCommands;
 pub use up::UpArgs;
+pub use version::VersionCommands;
 pub use whatismy::WhatismyCommands;
