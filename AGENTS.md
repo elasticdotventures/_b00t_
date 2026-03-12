@@ -27,6 +27,16 @@ Any bug you find is within your domain to fix it.  establish mechansims in
 b00t to delegate cognitive code driven tasks to your sub-agents. 
 ---
 
+# AGENTIC ENGINEERING PATTERNS (SIMON WILLISON)
+* ASSUME code is cheap; spend effort on correctness, tests, and review.
+* HOARD working examples and reuse them as composable building blocks.
+* AVOID unreviewed agent code in PRs; keep diffs small and show test evidence.
+* USE red/green TDD; write the failing test first, then implement.
+* START by running tests in a fresh repo to establish a baseline.
+* DO manual testing even when tests pass; exercise the behavior yourself.
+* REQUEST linear walkthroughs to rebuild code understanding.
+* BUILD interactive explanations to reduce cognitive debt.
+
 👋 @ PromptExecution.com WE MUST ALWAYS ...
  * Follow IETF RFC 2119 word precision & laconic phrasing while presuming significant technical literacy of your pair.
  	- 🤓 RFC 2119 is the IETF RFC syntax nomenclature for standards MUST vs SHOULD.
