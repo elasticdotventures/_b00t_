@@ -73,6 +73,29 @@ function ensure_b00t_log() {
 }
 export -f ensure_b00t_log
 ensure_b00t_log
+
+# Keep VS Code shell detection in b00t bootstrap (not ~/.bash_profile).
+unset -f _b00t_log_vscode_shell_context
+function _b00t_log_vscode_shell_context() {
+    local vscode_detection="$HOME/.dotfiles/vscode.🆚/vscode-detection.sh"
+
+    [ -r "$vscode_detection" ] || return 0
+    source "$vscode_detection"
+
+    if ! type is_vscode_shell &>/dev/null; then
+        log_b00t "🙈🥾 is_vscode_shell not defined"
+    elif is_vscode_shell; then
+        log_b00t "🥾💻 hi VS Code! running b00t-cli"
+    else
+        log_b00t "Not inside VSCODE"
+    fi
+}
+export -f _b00t_log_vscode_shell_context
+
+if [[ $- == *i* ]] && [ -z "${_B00T_VSCODE_LOGGED:-}" ]; then
+    _b00t_log_vscode_shell_context
+    export _B00T_VSCODE_LOGGED=1
+fi
 ## 记录 //
 
 ## this will allow b00t to restart itself. 
@@ -479,7 +502,6 @@ function _b00t_source_modular_bashrc() {
     ensure_b00t_log
     nullglob_was_set="$(shopt -p nullglob)"
     shopt -s nullglob
-
     for dir in "${dirs[@]}"; do
         [ -n "$dir" ] || continue
         [ -d "$dir" ] || continue
@@ -490,6 +512,7 @@ function _b00t_source_modular_bashrc() {
                 .*|_*) continue ;;
             esac
 
+            ensure_b00t_log
             if [ "${B00T_BASH_PROFILE:-0}" = "1" ]; then
                 start_ms="$(date +%s%3N)"
             fi
@@ -503,7 +526,6 @@ function _b00t_source_modular_bashrc() {
             fi
         done
     done
-
     eval "$nullglob_was_set"
 }
 export -f _b00t_source_modular_bashrc

@@ -438,6 +438,31 @@ vllm-logs follow="true":
 		docker logs "$CONTAINER"
 	fi
 
+# Launch mistral.rs OpenAI-compatible server against a cached local model.
+mistralrs-up model_id="mistralai/Mistral-7B-Instruct-v0.3" model_name="mistral-local" port="1234":
+	#!/usr/bin/env bash
+	set -euo pipefail
+	MODEL_ID="{{model_id}}"
+	MODEL_NAME="{{model_name}}"
+	PORT="{{port}}"
+	echo "🚀 starting mistralrs-server on :${PORT} with ${MODEL_ID}"
+	mistralrs-server \
+		--port "${PORT}" \
+		--served-model-name "${MODEL_NAME}" \
+		--hf-model-id "${MODEL_ID}"
+
+# Smoke test local mistral.rs chat endpoint.
+mistralrs-chat prompt="hello from b00t" port="1234" model_name="mistral-local":
+	#!/usr/bin/env bash
+	set -euo pipefail
+	PROMPT="{{prompt}}"
+	PORT="{{port}}"
+	MODEL_NAME="{{model_name}}"
+	curl -fsS \
+		-H 'Content-Type: application/json' \
+		-d "$(jq -nc --arg m "$MODEL_NAME" --arg p "$PROMPT" '{model:$m,messages:[{role:"user",content:$p}],max_tokens:120,temperature:0.2}')" \
+		"http://127.0.0.1:${PORT}/v1/chat/completions" | jq -r '.choices[0].message.content // empty'
+
 # Captain's Command Arsenal - Memoized Agent Operations
 
 # Role switching commands
@@ -575,7 +600,7 @@ orchestrator-k0s-kata MODE="start" INVENTORY="~/.config/b00t/k0s-inventory.yaml"
     K0S_KATA_EXTRA_ARGS="$EXTRA_ARGS" scripts/orchestrators/k0s_kata.sh "$MODE" "$INVENTORY"
 
 # Ralph autonomous agent integration
-# 🤓 Ralph runs TaskMaster workflows autonomously via codex/claude/amp/opencode
+# 🤓 Ralph runs TaskMaster workflows autonomously via codex/claude/amp/opencode/mistralrs
 
 # Run ralph hive validation before starting projects
 ralph-hive-validate tool="codex" iterations="5":

@@ -97,6 +97,29 @@ function ensure_b00t_log() {
 }
 export -f ensure_b00t_log
 ensure_b00t_log
+
+# Keep VS Code shell detection in b00t bootstrap (not ~/.bash_profile).
+unset -f _b00t_log_vscode_shell_context
+function _b00t_log_vscode_shell_context() {
+    local vscode_detection="$HOME/.dotfiles/vscode.🆚/vscode-detection.sh"
+
+    [ -r "$vscode_detection" ] || return 0
+    source "$vscode_detection"
+
+    if ! type is_vscode_shell &>/dev/null; then
+        log_b00t "🙈🥾 is_vscode_shell not defined"
+    elif is_vscode_shell; then
+        log_b00t "🥾💻 hi VS Code! running b00t-cli"
+    else
+        log_b00t "Not inside VSCODE"
+    fi
+}
+export -f _b00t_log_vscode_shell_context
+
+if [[ $- == *i* ]] && [ -z "${_B00T_VSCODE_LOGGED:-}" ]; then
+    _b00t_log_vscode_shell_context
+    export _B00T_VSCODE_LOGGED=1
+fi
 ## 记录 //
 
 ## Agent detection handled by .bash_profile (single source of truth)
