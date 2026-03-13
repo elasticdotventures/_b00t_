@@ -80,6 +80,11 @@ run_mistralrs_step() {
     local prompt="$1"
     ensure_mistralrs_server || return 1
 
+    if ! command -v jq >/dev/null 2>&1; then
+        log "jq is required to build mistralrs request payloads and parse responses. Please install jq (e.g., 'sudo apt install jq' or use your OS package manager)."
+        return 1
+    fi
+
     local payload
     payload="$(jq -nc \
         --arg model "${MISTRALRS_MODEL_NAME}" \
