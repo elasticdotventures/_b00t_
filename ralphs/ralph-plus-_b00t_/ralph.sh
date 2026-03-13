@@ -149,17 +149,34 @@ write_status() {
     local pending
     pending="$(pending_tasks_count)"
 
-    jq -nc \
-        --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-        --arg tool "${TOOL}" \
-        --arg role "${ROLE}" \
-        --arg state "${state}" \
-        --arg last "${last}" \
-        --argjson loop_num "${loop_num}" \
-        --argjson max "${MAX_ITERATIONS}" \
-        --argjson pending "${pending}" \
-        '{timestamp:$ts, tool:$tool, role:$role, status:$state, loop:$loop_num, max_iterations:$max, pending_tasks:$pending, last_output:$last}' \
-        > "${STATUS_FILE}"
+    if command -v jq >/dev/null 2>&1; then
+        jq -nc \
+            --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            --arg tool "${TOOL}" \
+            --arg role "${ROLE}" \
+            --arg state "${state}" \
+            --arg last "${last}" \
+            --argjson loop_num "${loop_num}" \
+            --argjson max "${MAX_ITERATIONS}" \
+            --argjson pending "${pending}" \
+            '{timestamp:$ts, tool:$tool, role:$role, status:$state, loop:$loop_num, max_iterations:$max, pending_tasks:$pending, last_output:$last}' \
+            > "${STATUS_FILE}" || {
+                echo "ralph.sh: failed to write status using jq" >&2
+                exit 1
+            }
+    else
+        # Fallback: minimal non-jq status format (key=value lines)
+        {
+            printf 'timestamp=%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            printf 'tool=%s\n' "${TOOL}"
+            printf 'role=%s\n' "${ROLE}"
+            printf 'status=%s\n' "${state}"
+            printf 'loop=%s\n' "${loop_num}"
+            printf 'max_iterations=%s\n' "${MAX_ITERATIONS}"
+            printf 'pending_tasks=%s\n' "${pending}"
+            printf 'last_output=%s\n' "${last}"
+        } > "${STATUS_FILE}"
+    fi
 }
 
 log "starting b00t Ralph loop: tool=${TOOL} max_iterations=${MAX_ITERATIONS}"
