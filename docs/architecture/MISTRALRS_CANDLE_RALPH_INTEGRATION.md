@@ -8,8 +8,8 @@
    - CLI datum: `_b00t_/mistralrs.cli.toml`
    - AI provider datum: `_b00t_/mistralrs-local.ai.toml`
    - AI model datum: `_b00t_/mistral-7b-instruct-v0_3-local.ai_model.toml`
-4. Use a b00t-native Ralph loop entrypoint at `b00t.sh` target:
-   - `ralphs/ralph-plus-_b00t_/ralph.sh`
+4. Use a b00t-native Ralph loop entrypoint script at `<workspace_root>/b00t.sh`:
+   - invoked directly by `b00t-cli up`
    - supports `--tool mistralrs` for local inference
    - keeps loop status in `.b00t/ralph/status.json`
    - returns `75` on unfinished max-iteration to align with `b00t-cli up` restart semantics
