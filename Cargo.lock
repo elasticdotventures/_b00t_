@@ -618,6 +618,7 @@ dependencies = [
  "serde_json",
  "serde_yaml",
  "shellexpand",
+ "shlex",
  "snafu",
  "tempfile",
  "tera",

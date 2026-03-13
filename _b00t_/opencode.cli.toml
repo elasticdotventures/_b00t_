@@ -1,0 +1,53 @@
+# b00t CLI Datum - opencode (sst/opencode)
+# Terminal AI coding agent; configurable against any OpenAI-compatible endpoint
+
+[b00t]
+name = "opencode"
+type = "cli"
+desires = "latest"
+hint = "opencode terminal AI coding agent - use with local vLLM or cloud via mistralrs proxy"
+install = """
+pnpm add -g opencode-ai
+"""
+update = """
+pnpm update -g opencode-ai
+"""
+version = "opencode --version"
+version_regex = '([0-9]+\\.[0-9]+\\.[0-9]+)'
+lfmf_category = "opencode"
+
+[b00t.learn]
+topic = "opencode"
+auto_digest = true
+
+[[b00t.usage]]
+description = "Launch opencode TUI (uses active model config)"
+command = "opencode"
+
+[[b00t.usage]]
+description = "Run one-shot with message against local vllm"
+command = "OPENAI_BASE_URL=http://localhost:8000/v1 OPENAI_API_KEY=local-vllm opencode run 'your task'"
+
+[[b00t.usage]]
+description = "Start headless ACP server for b00t agent delegation"
+command = "opencode serve --port 3000"
+
+[[b00t.usage]]
+description = "List configured models"
+command = "opencode models"
+
+[[b00t.references]]
+name = "opencode GitHub"
+url = "https://github.com/sst/opencode"
+
+[[b00t.references]]
+name = "opencode config docs"
+url = "https://opencode.ai/docs/config"
+
+[validate]
+command = "opencode --version"
+regex = "[0-9]+\\.[0-9]+\\.[0-9]+"
+
+[roles]
+required_for = ["developer"]
+optional_for = ["orchestrator"]
