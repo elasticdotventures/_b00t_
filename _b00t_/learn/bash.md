@@ -1,4 +1,4 @@
-tips and tricks
+# tips and tricks
 Instead of:
 
 tmpfile=$(mktemp)
