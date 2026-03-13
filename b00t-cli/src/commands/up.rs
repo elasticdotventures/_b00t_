@@ -8,7 +8,7 @@ use std::process::Command;
 #[derive(Parser, Debug)]
 pub struct UpArgs {
     /// AI tool to use for the ralph loop
-    #[clap(long, default_value = "claude", value_parser = ["claude", "amp", "codex"])]
+    #[clap(long, default_value = "claude", value_parser = ["claude", "amp", "codex", "opencode", "mistralrs"])]
     pub tool: String,
 
     /// Maximum iterations per ralph session
@@ -128,6 +128,12 @@ mod tests {
     fn test_up_command_parses() {
         let args = UpArgs::try_parse_from(["b00t-cli", "--tool", "claude"]);
         assert!(args.is_ok(), "UpArgs should parse --tool claude");
+    }
+
+    #[test]
+    fn test_up_command_parses_mistralrs_tool() {
+        let args = UpArgs::try_parse_from(["b00t-cli", "--tool", "mistralrs"]);
+        assert!(args.is_ok(), "UpArgs should parse --tool mistralrs");
     }
 
     #[test]
