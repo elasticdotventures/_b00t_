@@ -136,7 +136,7 @@ run_external_step() {
 
 should_exit() {
     local output="$1"
-    if echo "${output}" | rg -qi 'EXIT_SIGNAL\s*[:=]\s*true'; then
+    if echo "${output}" | grep -Eqi 'EXIT_SIGNAL[[:space:]]*[:=][[:space:]]*true'; then
         return 0
     fi
     return 1
