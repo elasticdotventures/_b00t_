@@ -2,71 +2,18 @@
 # b00t Ralph loop entrypoint used by b00t-cli up.
 # Accepts: --tool <tool> [--max-iterations <n>] [n]
 
-set -u
-set -o pipefail
+set -euo pipefail
 
-TOOL="${RALPH_TOOL:-claude}"
-MAX_ITERATIONS="${RALPH_MAX_ITERATIONS:-10}"
-LOOP_SLEEP_SECONDS="${RALPH_LOOP_SLEEP_SECONDS:-5}"
-ROLE="${B00T_ROLE:-developer}"
-MISTRALRS_PORT="${MISTRALRS_PORT:-1234}"
-MISTRALRS_API_BASE="${MISTRALRS_API_BASE:-http://127.0.0.1:${MISTRALRS_PORT}/v1}"
-MISTRALRS_MODEL_NAME="${MISTRALRS_MODEL_NAME:-mistral-local}"
-MISTRALRS_MODEL_ID="${MISTRALRS_MODEL_ID:-mistralai/Mistral-7B-Instruct-v0.3}"
-STATE_DIR="${RALPH_STATE_DIR:-.b00t/ralph}"
-STATUS_FILE="${STATE_DIR}/status.json"
-LOG_FILE="${STATE_DIR}/loop.log"
+# Thin wrapper that delegates to the canonical workspace-root b00t.sh
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+TARGET="${SCRIPT_DIR}/../../b00t.sh"
 
-mkdir -p "${STATE_DIR}"
-
-log() {
-    local ts
-    ts="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-    echo "[${ts}] $*" | tee -a "${LOG_FILE}" >&2
-}
-
-usage() {
-    cat <<'EOF'
-Usage: b00t.sh [--tool TOOL] [--max-iterations N] [N]
-
-Tools:
-  claude|codex|amp|opencode   External executor modes (best-effort)
-  mistralrs                   Local OpenAI-compatible inference via mistralrs-server
-EOF
-}
-
-while [[ $# -gt 0 ]]; do
-    case "$1" in
-        --tool)
-            TOOL="${2:-$TOOL}"
-            shift 2
-            ;;
-        --max-iterations)
-            MAX_ITERATIONS="${2:-$MAX_ITERATIONS}"
-            shift 2
-            ;;
-        --help|-h)
-            usage
-            exit 0
-            ;;
-        *)
-            if [[ "$1" =~ ^[0-9]+$ ]]; then
-                MAX_ITERATIONS="$1"
-                shift
-            else
-                log "unknown arg: $1"
-                usage
-                exit 2
-            fi
-            ;;
-    esac
-done
-
-if ! [[ "${MAX_ITERATIONS}" =~ ^[0-9]+$ ]]; then
-    log "max iterations must be numeric"
-    exit 2
+if [[ ! -x "${TARGET}" ]]; then
+    echo "Error: canonical b00t.sh not found or not executable at: ${TARGET}" >&2
+    exit 1
 fi
 
+exec "${TARGET}" "$@"
 pending_tasks_count() {
     local tasks_file=".taskmaster/tasks/tasks.json"
     if [[ ! -f "${tasks_file}" ]]; then
