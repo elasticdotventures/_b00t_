@@ -29,6 +29,7 @@ pub mod datum_vscode;
 pub mod dependency_resolver;
 pub mod entanglement;
 pub mod erp;
+pub mod hive;
 pub mod job_executor;
 pub mod job_ipc;
 pub mod job_state;
@@ -240,6 +241,7 @@ pub enum DatumType {
     Repo,
     Role,
     Skill,
+    HiveProfile,
 }
 
 #[derive(Serialize, Debug)]
@@ -614,6 +616,7 @@ pub fn create_unified_toml_config(datum: &BootDatum, path: &str) -> Result<()> {
         DatumType::Repo => ".repo.toml",
         DatumType::Role => ".toml",
         DatumType::Skill => ".skill.toml",
+        DatumType::HiveProfile => ".hive.toml",
         DatumType::Unknown => ".toml",
     };
 
@@ -655,6 +658,7 @@ impl std::fmt::Display for DatumType {
             DatumType::Repo => write!(f, "repo"),
             DatumType::Role => write!(f, "role"),
             DatumType::Skill => write!(f, "skill"),
+            DatumType::HiveProfile => write!(f, "hive_profile"),
         }
     }
 }
@@ -697,6 +701,8 @@ impl DatumType {
             DatumType::Role
         } else if filename.ends_with(".skill.toml") {
             DatumType::Skill
+        } else if filename.ends_with(".hive.toml") {
+            DatumType::HiveProfile
         } else {
             DatumType::Unknown // Default fallback for .toml files
         }

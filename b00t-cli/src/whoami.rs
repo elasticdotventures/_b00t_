@@ -245,6 +245,7 @@ fn file_extension_for_type(datum_type: &DatumType) -> Option<&'static str> {
         DatumType::K8s => Some(".k8s.toml"),
         DatumType::Apt => Some(".apt.toml"),
         DatumType::Nix => Some(".nix.toml"),
+        DatumType::HiveProfile => Some(".hive.toml"),
         DatumType::Unknown => None,
     }
 }

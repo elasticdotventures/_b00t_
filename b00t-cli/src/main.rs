@@ -23,12 +23,12 @@ use b00t_cli::commands::{
     BootstrapCommands, BudgetCommands, 
     ChatCommands, CliCommands,
     DatumCommands, 
-    GrokCommands, 
-    InitCommands, 
-    JobCommands, 
-    K8sCommands, 
+    GrokCommands, HiveCommands,
+    InitCommands,
+    JobCommands,
+    K8sCommands,
     McpCommands, ModelCommands,
-    OntologyCommands, 
+    OntologyCommands,
     SessionCommands, StackCommands,
     TutorialCommands, VersionCommands, WhatismyCommands
     
@@ -157,6 +157,11 @@ The system will:
     Ai {
         #[clap(subcommand)]
         ai_command: AiCommands,
+    },
+    #[clap(about = "Hive CMDB: system resource state, profile activation, command guards")]
+    Hive {
+        #[clap(subcommand)]
+        hive_command: HiveCommands,
     },
     #[clap(about = "Software stack management")]
     Stack {
@@ -1089,6 +1094,12 @@ async fn main() {
         }
         Some(Commands::Ai { ai_command }) => {
             if let Err(e) = ai_command.execute(&cli.path) {
+                eprintln!("Error: {}", e);
+                std::process::exit(1);
+            }
+        }
+        Some(Commands::Hive { hive_command }) => {
+            if let Err(e) = b00t_cli::commands::hive::handle_hive_command(hive_command, &cli.path) {
                 eprintln!("Error: {}", e);
                 std::process::exit(1);
             }
