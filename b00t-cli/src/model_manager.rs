@@ -527,6 +527,11 @@ pub fn serve_model(
         // 🤓 shlex::split handles quoted args correctly (e.g. --override-generation-config '{"k":"v"}')
         if let Some(parsed) = shlex::split(extra) {
             run_args.extend(parsed);
+        } else {
+            return Err(anyhow!(
+                "Invalid shell quoting in metadata key 'vllm_extra_args': {}",
+                extra
+            ));
         }
     }
 
