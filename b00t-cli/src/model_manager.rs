@@ -14,7 +14,7 @@ const DEFAULT_IMAGE: &str = "vllm/vllm-openai:latest";
 const DEFAULT_DTYPE: &str = "float16";
 const DEFAULT_PORT: u16 = 8000;
 
-/// Container runtime selection: prefer podman (rootless, CDI GPU) over docker when both present.
+/// Container runtime selection: prefer docker as safe default, with optional podman support.
 /// Podman uses CDI spec: --device nvidia.com/gpu=all --security-opt=label=disable
 /// Docker uses: --gpus all
 #[derive(Debug, Clone, PartialEq)]
@@ -33,10 +33,14 @@ fn detect_container_runtime(override_hint: Option<&str>) -> ContainerRuntime {
             return ContainerRuntime::Docker;
         }
     }
-    // auto-detect: prefer podman when available (rootless + CDI GPU)
+    // auto-detect: prefer docker as the safe default; fall back to podman if docker is unavailable
+    if check_command_available("docker") {
+        return ContainerRuntime::Docker;
+    }
     if check_command_available("podman") {
         return ContainerRuntime::Podman;
     }
+    // default to docker if neither is discoverable; caller will surface any runtime errors
     ContainerRuntime::Docker
 }
 
