@@ -63,40 +63,13 @@ Enforces Don't Repeat Yourself and Never Reinvent the Wheel principles.
 
 ## Installation
 
-### From Local Marketplace
-
 ```bash
-# Add the local b00t marketplace
-/plugin marketplace add /path/to/.b00t
-
-# Install specific plugins
-/plugin install b00t@b00t-plugins
-/plugin install ralph-yei@b00t-plugins
-```
-
-### From GitHub Marketplace
-
-Once published to GitHub:
-
-```bash
-# Add the GitHub marketplace
+# Add the b00t marketplace
 /plugin marketplace add elasticdotventures/_b00t_
 
 # Install plugins
 /plugin install b00t@b00t-plugins
 /plugin install ralph-yei@b00t-plugins
-```
-
-### From Repository Root
-
-For direct installation without marketplace registration:
-
-```bash
-# Navigate to _b00t_ repository
-cd /path/to/_b00t_
-
-# Install from local directory (Claude Code detects .claude-plugin/)
-/plugin install .
 ```
 
 ## Usage
