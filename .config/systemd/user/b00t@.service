@@ -14,10 +14,11 @@ PropagatesStopTo=b00t-hive-%i.service
 [Service]
 Type=oneshot
 RemainAfterExit=yes
-# 🤓 %h = home dir; b00t-cli must be on PATH or in ~/.cargo/bin
-Environment="PATH=%h/.cargo/bin:%h/.venv/bin:/usr/local/bin:/usr/bin:/bin"
-ExecStart=%h/.cargo/bin/b00t-cli stack activate %i
-ExecStop=%h/.cargo/bin/b00t-cli stack deactivate %i
+# 🤓 PATH searched in order: cargo (default), venv, pkgx, nix-profile, local, system
+# 💡例 b00t-cli installed via: cargo install / pkgx / ~/.local/bin — all covered
+Environment="PATH=%h/.cargo/bin:%h/.venv/bin:%h/.local/bin:%h/.pkgx/bin:%h/.nix-profile/bin:/usr/local/bin:/usr/bin:/bin"
+ExecStart=/bin/sh -c 'exec b00t-cli stack activate "%i"'
+ExecStop=/bin/sh -c 'exec b00t-cli stack deactivate "%i"'
 
 [Install]
 WantedBy=default.target

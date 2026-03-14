@@ -146,15 +146,25 @@ release:
     echo "🔗 Check workflow: https://github.com/elasticdotventures/dotfiles/actions"
 
 
+# 🥾 Bootstrap b00t on a fresh machine (no cargo/just required).
+# 💡例 curl the script and pipe to bash, or run directly:
+#    ./b00t-lite.sh          — auto-detects OS, installs system deps + rustup
+#    ./b00t-lite.sh --dry-run — preview commands without executing
+bootstrap:
+    #!/bin/bash
+    set -euo pipefail
+    echo "🥾 b00t bootstrap (b00t-lite)"
+    B00T_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    exec "${B00T_DIR}/b00t-lite.sh" "$@"
+
 # 🥾 Install b00t binaries + systemd unit files.
-# 💡 Recommended: sudo just install
-#    sudo path → installs b00t@.service to /usr/lib/systemd/user/ (all users)
-#    user path → installs to ~/.config/systemd/user/ (current user only)
+# 💡 Recommended: sudo just install (sudo enables system-wide b00t@.service)
+#    Menu selects components; defaults to [2] binaries+service after 10s timeout.
 install:
     #!/bin/bash
     set -euo pipefail
 
-    # 🤓 _prompt_timeout: ONLY used for sudo-requiring steps; everything else runs unconditionally
+    # 🤓 _prompt_timeout: ONLY used for sudo-requiring steps
     _prompt_timeout() {
         local desc="${1:-proceed}"
         local timeout=10
@@ -169,35 +179,54 @@ install:
         return 1
     }
 
-    echo "🥾 _b00t_ install"
+    echo "🥾 b00t install"
+    echo
+    echo "  [1] binaries only          (b00t-cli, b00t-mcp, cocogitto)"
+    echo "  [2] binaries + service     (+ b00t@.service systemd template)"
+    echo "  [3] full bootstrap         (b00t-lite.sh: system deps + binaries + service)"
+    echo
+    printf "  choice [2], timeout 10s: "
+    read -r -t 10 CHOICE || CHOICE="2"
+    echo
+    CHOICE="${CHOICE:-2}"
+
+    # option 3 → delegate entirely to b00t-lite.sh
+    if [[ "$CHOICE" == "3" ]]; then
+        B00T_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+        exec "${B00T_DIR}/b00t-lite.sh"
+    fi
+
     CARGO_HOME_VALUE="${CARGO_HOME:-$HOME/.cargo}"
     export CARGO_HOME="${CARGO_HOME_VALUE}"
     export PATH="${CARGO_HOME_VALUE}/bin:${PATH}"
     mkdir -p "${CARGO_HOME_VALUE}/bin"
 
-    # No sudo required — install unconditionally
+    # [1] [2] [3]: binaries always installed unconditionally
     cargo install --path b00t-mcp  --force
     cargo install --path b00t-cli  --force
     cargo install cocogitto --locked --force
     just install-commit-hook
+    echo "  ✅ binaries installed"
 
-    # systemd unit: sudo-only step gets prompt; user-local runs unconditionally
-    echo
-    if [[ "${EUID:-$(id -u)}" -eq 0 ]]; then
-        echo "🔑 root — installing b00t@.service system-wide"
-        _prompt_timeout "cp b00t@.service → /usr/lib/systemd/user/ (requires root)" && {
-            mkdir -p /usr/lib/systemd/user
-            cp -v .config/systemd/user/b00t@.service /usr/lib/systemd/user/b00t@.service
-            systemctl daemon-reload
-            echo "  ✅ /usr/lib/systemd/user/b00t@.service"
-            echo "  💡 any user can now: systemctl --user enable b00t@<profile>"
-        } || true
-    else
-        mkdir -p "$HOME/.config/systemd/user"
-        cp -v .config/systemd/user/b00t@.service "$HOME/.config/systemd/user/b00t@.service"
-        systemctl --user daemon-reload 2>/dev/null || true
-        echo "  ✅ ~/.config/systemd/user/b00t@.service"
-        echo "  💡 for system-wide install (all users): sudo just install"
+    # [2] [3]: systemd service
+    if [[ "$CHOICE" == "2" || "$CHOICE" == "a" ]]; then
+        echo
+        if [[ "${EUID:-$(id -u)}" -eq 0 ]]; then
+            echo "🔑 root — installing b00t@.service system-wide"
+            _prompt_timeout "cp b00t@.service → /usr/lib/systemd/user/ (requires root)" && {
+                mkdir -p /usr/lib/systemd/user
+                cp -v .config/systemd/user/b00t@.service /usr/lib/systemd/user/b00t@.service
+                systemctl daemon-reload
+                echo "  ✅ /usr/lib/systemd/user/b00t@.service (system-wide)"
+                echo "  💡 any user: systemctl --user enable b00t@<profile>"
+            } || true
+        else
+            mkdir -p "$HOME/.config/systemd/user"
+            cp -v .config/systemd/user/b00t@.service "$HOME/.config/systemd/user/b00t@.service"
+            systemctl --user daemon-reload 2>/dev/null || true
+            echo "  ✅ ~/.config/systemd/user/b00t@.service"
+            echo "  💡 system-wide (all users): sudo just install"
+        fi
     fi
 
 
