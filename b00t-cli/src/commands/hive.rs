@@ -12,7 +12,7 @@ use std::path::{Path, PathBuf};
 
 use crate::hive::{
     GuardResult, HiveProfile, SystemSnapshot, activate_profile, check_guards, discover_profiles,
-    load_profile,
+    hive_stacks_status, load_profile,
 };
 
 #[derive(Parser)]
@@ -130,6 +130,22 @@ pub fn handle_hive_command(cmd: &HiveCommands, path: &str) -> Result<()> {
                 }
             }
 
+            // Show b00t hive stacks (b00t@*.service and b00t-hive-*.service)
+            let stacks = hive_stacks_status();
+            if !stacks.is_empty() {
+                println!();
+                println!("  Hive stacks:");
+                for (unit, active, enabled) in &stacks {
+                    let status = match (active, enabled) {
+                        (true, true)  => "active+enabled",
+                        (true, false) => "active",
+                        (false, true) => "enabled",
+                        (false, false) => "inactive",
+                    };
+                    println!("    [{}] {}", status, unit);
+                }
+            }
+
             if guards {
                 // Load universal guards + active profile guards
                 let all_guards = load_all_guards(&datum_dir, &snapshot);
@@ -189,6 +205,7 @@ pub fn handle_hive_command(cmd: &HiveCommands, path: &str) -> Result<()> {
                     "services_stop": p.services_stop,
                     "services_start": p.services_start,
                     "guards": p.guards.len(),
+                    "service_spec": p.service_spec.is_some(),
                 });
                 println!("{}", serde_json::to_string_pretty(&plan)?);
                 return Ok(());
@@ -224,6 +241,11 @@ pub fn handle_hive_command(cmd: &HiveCommands, path: &str) -> Result<()> {
             if !p.guards.is_empty() {
                 println!();
                 println!("  Guards: {} profile-specific", p.guards.len());
+            }
+
+            if p.service_spec.is_some() {
+                println!();
+                println!("  Service: will generate b00t-hive-{}.service", profile);
             }
 
             Ok(())

@@ -3,7 +3,7 @@
 //! Reads real system resources (RAM, GPU, systemd services) and manages
 //! hive profile transitions (download-mode ↔ inference-qwen3 ↔ inference-sm0l).
 //!
-//! Profile datums: _b00t_/*.hive.toml
+//! Profile datums: _b00t_/*.hive.toml  OR  _b00t_/*.hive.tomllm  (.tomllm wins)
 //! State file: /tmp/b00t/hive-state.json (volatile; reset on reboot)
 
 use anyhow::{Context, Result, bail};
@@ -108,6 +108,23 @@ impl SystemSnapshot {
     }
 }
 
+// ─── Hive Service Spec ────────────────────────────────────────────────────────
+
+/// Inline systemd service spec — declared in [b00t.hive.service] datum section
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct HiveServiceSpec {
+    pub description: Option<String>,
+    pub service_type: String,                // systemd Type= (default: "simple")
+    pub exec_start: String,                  // ExecStart= (may be multi-line with \ continuation)
+    pub exec_start_pre: Vec<String>,         // ExecStartPre= lines
+    pub environment: Vec<String>,            // Environment= lines (each "KEY=VALUE")
+    pub limit_nofile: Option<u32>,           // LimitNOFILE=
+    pub restart: Option<String>,             // Restart=
+    pub restart_sec: Option<String>,         // RestartSec=
+    pub timeout_start_sec: Option<String>,   // TimeoutStartSec=
+    pub after: Vec<String>,                  // After= dependencies (default: ["network.target"])
+}
+
 // ─── Hive Profile (from .hive.toml datums) ────────────────────────────────────
 
 /// Parsed hive profile — resource budget + transition rules
@@ -138,6 +155,9 @@ pub struct HiveProfile {
     // MCP tool activation
     pub mcp_activate: Vec<String>,
     pub mcp_deactivate: Vec<String>,
+
+    // inline service spec (generates b00t-hive-<name>.service on activate)
+    pub service_spec: Option<HiveServiceSpec>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -183,6 +203,7 @@ struct HiveTomlHive {
     services: Option<HiveTomlServices>,
     guards: Option<Vec<HiveTomlGuard>>,
     mcp_tools: Option<HiveTomlMcpTools>,
+    service: Option<HiveTomlServiceSpec>,
 }
 
 #[derive(Deserialize)]
@@ -219,8 +240,26 @@ struct HiveTomlMcpTools {
     deactivate: Option<Vec<String>>,
 }
 
+#[derive(Deserialize, Default)]
+struct HiveTomlServiceSpec {
+    description: Option<String>,
+    #[serde(rename = "type")]
+    service_type: Option<String>,
+    exec_start: Option<String>,
+    #[serde(default)]
+    exec_start_pre: Vec<String>,
+    #[serde(default)]
+    environment: Vec<String>,
+    limit_nofile: Option<u32>,
+    restart: Option<String>,
+    restart_sec: Option<String>,
+    timeout_start_sec: Option<String>,
+    #[serde(default)]
+    after: Vec<String>,
+}
+
 impl HiveProfile {
-    /// Load from a .hive.toml file
+    /// Load from a .hive.toml or .hive.tomllm file
     pub fn from_file(path: &Path) -> Result<Self> {
         let content = fs::read_to_string(path)
             .context(format!("reading {}", path.display()))?;
@@ -234,6 +273,7 @@ impl HiveProfile {
             services: None,
             guards: None,
             mcp_tools: None,
+            service: None,
         });
 
         let (resources_ram_gb, resources_gpu_mb, resources_cpu_cores, resources_gate) =
@@ -276,6 +316,19 @@ impl HiveProfile {
             (vec![], vec![])
         };
 
+        let service_spec = hive.service.map(|s| HiveServiceSpec {
+            description: s.description,
+            service_type: s.service_type.unwrap_or_else(|| "simple".to_string()),
+            exec_start: s.exec_start.unwrap_or_default(),
+            exec_start_pre: s.exec_start_pre,
+            environment: s.environment,
+            limit_nofile: s.limit_nofile,
+            restart: s.restart,
+            restart_sec: s.restart_sec,
+            timeout_start_sec: s.timeout_start_sec,
+            after: if s.after.is_empty() { vec!["network.target".to_string()] } else { s.after },
+        });
+
         Ok(HiveProfile {
             name: raw.b00t.name,
             hint: raw.b00t.hint,
@@ -290,35 +343,43 @@ impl HiveProfile {
             guards,
             mcp_activate,
             mcp_deactivate,
+            service_spec,
         })
     }
 }
 
 // ─── Profile Discovery ────────────────────────────────────────────────────────
 
-/// Find all .hive.toml datums in the b00t datum directory
+/// Find all .hive.toml / .hive.tomllm datums; .tomllm wins on name collision
 pub fn discover_profiles(datum_dir: &Path) -> Vec<(String, PathBuf)> {
-    let mut profiles = Vec::new();
+    let mut profiles: HashMap<String, PathBuf> = HashMap::new();
     if let Ok(entries) = fs::read_dir(datum_dir) {
         for entry in entries.flatten() {
             let path = entry.path();
             if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
-                if name.ends_with(".hive.toml") {
+                if name.ends_with(".hive.tomllm") {
+                    let profile_name = name.trim_end_matches(".hive.tomllm").to_string();
+                    profiles.insert(profile_name, path); // .tomllm wins
+                } else if name.ends_with(".hive.toml") {
                     let profile_name = name.trim_end_matches(".hive.toml").to_string();
-                    profiles.push((profile_name, path));
+                    profiles.entry(profile_name).or_insert(path); // .toml only if no .tomllm
                 }
             }
         }
     }
-    profiles.sort_by(|a, b| a.0.cmp(&b.0));
-    profiles
+    let mut result: Vec<(String, PathBuf)> = profiles.into_iter().collect();
+    result.sort_by(|a, b| a.0.cmp(&b.0));
+    result
 }
 
-/// Load a named profile from datum dir
+/// Load a named profile from datum dir — prefers .hive.tomllm over .hive.toml
 pub fn load_profile(name: &str, datum_dir: &Path) -> Result<HiveProfile> {
-    let path = datum_dir.join(format!("{}.hive.toml", name));
+    // 🤓 .tomllm is valid TOML + comment annotations; wins over .toml on discovery
+    let tomllm_path = datum_dir.join(format!("{}.hive.tomllm", name));
+    let toml_path = datum_dir.join(format!("{}.hive.toml", name));
+    let path = if tomllm_path.exists() { tomllm_path } else { toml_path };
     if !path.exists() {
-        bail!("hive profile '{}' not found at {}", name, path.display());
+        bail!("hive profile '{}' not found (tried .hive.tomllm and .hive.toml)", name);
     }
     HiveProfile::from_file(&path)
 }
@@ -383,6 +444,92 @@ pub fn check_guards(command: &str, guards: &[HiveGuard]) -> GuardResult {
     GuardResult::Allow
 }
 
+// ─── Systemd Unit Generation ──────────────────────────────────────────────────
+
+/// Generate systemd unit file content from an inline service spec.
+/// Unit name: `b00t-hive-{profile_name}.service`
+pub fn generate_systemd_unit(profile_name: &str, spec: &HiveServiceSpec) -> String {
+    let description = spec.description.as_deref()
+        .unwrap_or(profile_name);
+    let after = if spec.after.is_empty() {
+        "network.target".to_string()
+    } else {
+        spec.after.join(" ")
+    };
+
+    let mut unit = format!(
+        "[Unit]\nDescription=b00t hive stack: {description}\nAfter={after}\nWants={after}\n\n[Service]\nType={}\n",
+        spec.service_type
+    );
+
+    if let Some(n) = spec.limit_nofile {
+        unit.push_str(&format!("LimitNOFILE={n}\n"));
+    }
+
+    for env in &spec.environment {
+        unit.push_str(&format!("Environment=\"{env}\"\n"));
+    }
+    unit.push('\n');
+
+    for pre in &spec.exec_start_pre {
+        unit.push_str(&format!("ExecStartPre={pre}\n"));
+    }
+
+    // ExecStart: strip leading/trailing whitespace, preserve internal \ continuations
+    let exec = spec.exec_start.trim();
+    unit.push_str(&format!("ExecStart={exec}\n"));
+
+    if let Some(r) = &spec.restart {
+        unit.push_str(&format!("Restart={r}\n"));
+    }
+    if let Some(rs) = &spec.restart_sec {
+        unit.push_str(&format!("RestartSec={rs}\n"));
+    }
+    if let Some(ts) = &spec.timeout_start_sec {
+        unit.push_str(&format!("TimeoutStartSec={ts}\n"));
+    }
+
+    unit.push_str("\n[Install]\nWantedBy=default.target\n");
+    unit
+}
+
+// ─── Hive Stack Status ────────────────────────────────────────────────────────
+
+/// Query systemd for b00t@*.service and b00t-hive-*.service status.
+/// Returns list of (unit_name, is_active, is_enabled) tuples.
+pub fn hive_stacks_status() -> Vec<(String, bool, bool)> {
+    let patterns = ["b00t@*.service", "b00t-hive-*.service"];
+    let mut results = Vec::new();
+
+    for pattern in &patterns {
+        let output = Command::new("systemctl")
+            .args(["--user", "list-units", pattern, "--all", "--no-legend", "--plain"])
+            .output();
+        if let Ok(o) = output {
+            for line in String::from_utf8_lossy(&o.stdout).lines() {
+                let parts: Vec<&str> = line.split_whitespace().collect();
+                if parts.len() >= 4 {
+                    let unit = parts[0].to_string();
+                    let is_active = parts[2] == "active";
+                    results.push((unit, is_active, false));
+                }
+            }
+        }
+    }
+
+    // Check enabled state
+    for item in &mut results {
+        let out = Command::new("systemctl")
+            .args(["--user", "is-enabled", &item.0])
+            .output();
+        if let Ok(o) = out {
+            item.2 = String::from_utf8_lossy(&o.stdout).trim() == "enabled";
+        }
+    }
+
+    results
+}
+
 // ─── Activation ───────────────────────────────────────────────────────────────
 
 /// Activate a hive profile: stop conflicting services, start required services
@@ -432,6 +579,33 @@ pub fn activate_profile(
         }
     }
 
+    // 3a. Generate systemd unit from inline service spec (if declared in datum)
+    let mut generated_unit: Option<String> = None;
+    if let Some(ref spec) = profile.service_spec {
+        if !spec.exec_start.is_empty() {
+            let unit_name = format!("b00t-hive-{}.service", profile.name);
+            let unit_content = generate_systemd_unit(&profile.name, spec);
+            log.push(format!("generate {}", unit_name));
+            if !dry_run {
+                let systemd_user_dir = dirs::home_dir()
+                    .unwrap_or_else(|| std::path::PathBuf::from("/tmp"))
+                    .join(".config/systemd/user");
+                fs::create_dir_all(&systemd_user_dir)
+                    .context("creating ~/.config/systemd/user")?;
+                let unit_path = systemd_user_dir.join(&unit_name);
+                fs::write(&unit_path, &unit_content)
+                    .context(format!("writing {}", unit_path.display()))?;
+                log.push(format!("  wrote {}", unit_path.display()));
+                // daemon-reload so systemd sees the new unit
+                let _ = Command::new("systemctl")
+                    .args(["--user", "daemon-reload"])
+                    .status();
+                log.push("  daemon-reload".to_string());
+            }
+            generated_unit = Some(unit_name);
+        }
+    }
+
     // 4. Start required services
     for unit in &profile.services_start {
         log.push(format!("start {}", unit));
@@ -443,6 +617,23 @@ pub fn activate_profile(
                 Ok(s) if s.success() => {}
                 Ok(s) => log.push(format!("  ⚠️  {} exit code {}", unit, s.code().unwrap_or(-1))),
                 Err(e) => log.push(format!("  ⚠️  {} failed: {}", unit, e)),
+            }
+        }
+    }
+
+    // 4b. Start generated unit (if any) and not already in services_start
+    if let Some(ref unit_name) = generated_unit {
+        if !profile.services_start.contains(unit_name) {
+            log.push(format!("start {}", unit_name));
+            if !dry_run {
+                let result = Command::new("systemctl")
+                    .args(["--user", "start", unit_name])
+                    .status();
+                match result {
+                    Ok(s) if s.success() => {}
+                    Ok(s) => log.push(format!("  ⚠️  {} exit code {}", unit_name, s.code().unwrap_or(-1))),
+                    Err(e) => log.push(format!("  ⚠️  {} failed: {}", unit_name, e)),
+                }
             }
         }
     }
@@ -663,8 +854,56 @@ message = "use uv"
             guards: vec![],
             mcp_activate: vec![],
             mcp_deactivate: vec![],
+            service_spec: None,
         };
         let issues = snapshot.satisfies_gate(&profile);
         assert!(!issues.is_empty(), "should fail gate with only 2GB free");
+    }
+
+    #[test]
+    fn test_generate_systemd_unit_contains_exec_start() {
+        let spec = HiveServiceSpec {
+            description: Some("test service".to_string()),
+            service_type: "simple".to_string(),
+            exec_start: "/usr/bin/test --arg val".to_string(),
+            exec_start_pre: vec![],
+            environment: vec!["FOO=bar".to_string()],
+            limit_nofile: Some(65536),
+            restart: Some("on-failure".to_string()),
+            restart_sec: Some("30s".to_string()),
+            timeout_start_sec: Some("300".to_string()),
+            after: vec!["network.target".to_string()],
+        };
+        let unit = generate_systemd_unit("test-profile", &spec);
+        assert!(unit.contains("ExecStart=/usr/bin/test --arg val"));
+        assert!(unit.contains("LimitNOFILE=65536"));
+        assert!(unit.contains("Environment=\"FOO=bar\""));
+        assert!(unit.contains("Restart=on-failure"));
+        assert!(unit.contains("[Install]"));
+    }
+
+    #[test]
+    fn test_parse_hive_toml_with_service_spec() {
+        let toml_str = r#"
+[b00t]
+name = "test-svc"
+type = "hive_profile"
+hint = "test with inline service"
+
+[b00t.hive.service]
+description = "test svc"
+exec_start = "/usr/bin/sleep 3600"
+environment = ["FOO=bar"]
+limit_nofile = 1024
+restart = "on-failure"
+"#;
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("test-svc.hive.toml");
+        std::fs::write(&path, toml_str).unwrap();
+        let profile = HiveProfile::from_file(&path).unwrap();
+        assert!(profile.service_spec.is_some());
+        let spec = profile.service_spec.unwrap();
+        assert_eq!(spec.exec_start, "/usr/bin/sleep 3600");
+        assert_eq!(spec.limit_nofile, Some(1024));
     }
 }

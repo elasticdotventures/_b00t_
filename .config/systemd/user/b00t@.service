@@ -1,0 +1,25 @@
+# b00t hive stack template unit
+# Usage: systemctl --user enable --now b00t@<profile>
+# This activates the named hive profile and manages its lifecycle.
+# ExecStart runs b00t hive activate which:
+#   1. Checks resource gates
+#   2. Generates b00t-hive-<profile>.service from datum spec (if declared)
+#   3. Starts all required services
+
+[Unit]
+Description=b00t hive stack: %i
+Documentation=https://github.com/PromptExecution/b00t
+After=network.target
+# Stop the specific generated service on unit stop
+PropagatesStopTo=b00t-hive-%i.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+# 🤓 %h = home dir; b00t-cli must be on PATH or in ~/.cargo/bin
+Environment="PATH=%h/.cargo/bin:%h/.venv/bin:/usr/local/bin:/usr/bin:/bin"
+ExecStart=%h/.cargo/bin/b00t-cli hive activate %i
+ExecStop=%h/.cargo/bin/b00t-cli hive activate download-mode
+
+[Install]
+WantedBy=default.target

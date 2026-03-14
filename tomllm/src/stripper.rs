@@ -87,7 +87,7 @@ mod tests {
     #[test]
     fn test_strip_comment_lines() {
         let input = r#"
-# @tribal: use uv pip, never pip directly
+# 🤓 use uv pip, never pip directly
 package_manager = "uv"
 
 # section comment
@@ -95,7 +95,7 @@ package_manager = "uv"
 python = "3.12"  # inline comment
 "#;
         let stripped = strip(input);
-        assert!(!stripped.contains("@tribal"));
+        assert!(!stripped.contains("🤓"));
         assert!(!stripped.contains("section comment"));
         assert!(!stripped.contains("inline comment"));
         assert!(stripped.contains("package_manager"));
