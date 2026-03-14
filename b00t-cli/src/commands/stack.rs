@@ -5,6 +5,7 @@ use std::collections::HashMap;
 
 use crate::datum_stack::StackDatum;
 use crate::dependency_resolver::DependencyResolver;
+use crate::hive::{SystemSnapshot, activate_profile, load_profile};
 use crate::traits::DatumCrdDisplay;
 use crate::{
     BootDatum, ansible::AnsibleConfig, ansible::run_playbook, get_config, get_expanded_path,
@@ -91,6 +92,28 @@ pub enum StackCommands {
         enhance: bool,
     },
     #[clap(
+        about = "Activate a sysconfig profile (check resources, start services)",
+        long_about = "Transitions local system to named profile: checks resource gates, generates\nand starts declared service units. This is the sysconfig/service-lifecycle layer —\nhive is for node-to-node trust and CMDB, stack manages local service state.\n\nExamples:\n  b00t stack activate inference-qwen3\n  b00t stack activate download-mode --dry-run\n  b00t stack activate inference-qwen3 --force"
+    )]
+    Activate {
+        #[clap(help = "Profile name (e.g. inference-qwen3, download-mode)")]
+        profile: String,
+        #[clap(long, help = "Show plan without executing")]
+        dry_run: bool,
+        #[clap(long, help = "Skip resource gate checks")]
+        force: bool,
+    },
+    #[clap(
+        about = "Deactivate a profile (stop its services, return to idle)",
+        long_about = "Stops services started by the named profile and transitions to idle state.\n\nExamples:\n  b00t stack deactivate inference-qwen3\n  b00t stack deactivate inference-qwen3 --dry-run"
+    )]
+    Deactivate {
+        #[clap(help = "Profile name to stop")]
+        profile: String,
+        #[clap(long, help = "Show what would be stopped without stopping")]
+        dry_run: bool,
+    },
+    #[clap(
         about = "Run an Ansible playbook from stack context",
         long_about = "Runs either a raw playbook path or a datum-backed playbook through the shared Ansible helper.\n\nExamples:\n  b00t-cli stack ansible --run script ansible/playbooks/k0s_kata.yaml -- -i inventory\n  b00t-cli stack ansible --run datum k0s -- k0s_role=worker"
     )]
@@ -139,6 +162,14 @@ impl StackCommands {
                 output_dir,
                 enhance,
             } => generate_k8s_via_kompose(name, path, output_dir.as_deref(), *enhance),
+            StackCommands::Activate {
+                profile,
+                dry_run,
+                force,
+            } => stack_activate(profile, path, *dry_run, *force),
+            StackCommands::Deactivate { profile, dry_run } => {
+                stack_deactivate(profile, path, *dry_run)
+            }
             StackCommands::Ansible {
                 run,
                 target,
@@ -775,6 +806,78 @@ fn enhance_k8s_manifests(stack: &StackDatum, output_dir: &str) -> Result<()> {
         std::fs::write(&path, output)?;
     }
 
+    Ok(())
+}
+
+/// Activate a sysconfig profile — service lifecycle layer (not hive/CMDB layer).
+/// 🤓 hive = node trust + CMDB; stack = local sysconfig + service lifecycle
+fn stack_activate(profile: &str, path: &str, dry_run: bool, force: bool) -> Result<()> {
+    let datum_dir = get_expanded_path(path)?;
+    let snapshot = SystemSnapshot::capture()?;
+    let p = load_profile(profile, &datum_dir)?;
+
+    println!("Activating profile '{}' ...", profile);
+    if dry_run {
+        println!("  [dry-run mode]");
+    }
+    println!("  {}", snapshot.summary_line());
+    println!();
+
+    match activate_profile(&p, &snapshot, dry_run, force) {
+        Ok(log) => {
+            for line in &log {
+                println!("  {}", line);
+            }
+            Ok(())
+        }
+        Err(e) => {
+            eprintln!("activation failed: {}", e);
+            eprintln!();
+            eprintln!("Tip: use --force to skip gate, --dry-run to preview");
+            std::process::exit(1);
+        }
+    }
+}
+
+/// Deactivate a profile — stop its generated service unit if running.
+fn stack_deactivate(profile: &str, path: &str, dry_run: bool) -> Result<()> {
+    let unit = format!("b00t-hive-{}.service", profile);
+    println!("Deactivating profile '{}' ...", profile);
+
+    if dry_run {
+        println!("  [dry-run] would stop: {}", unit);
+        println!("  [dry-run] would stop: b00t@{}.service", profile);
+        return Ok(());
+    }
+
+    // Stop the generated service unit
+    let _ = std::process::Command::new("systemctl")
+        .args(["--user", "stop", &unit])
+        .status();
+
+    // Stop the template instance unit
+    let template_unit = format!("b00t@{}.service", profile);
+    let status = std::process::Command::new("systemctl")
+        .args(["--user", "stop", &template_unit])
+        .status();
+
+    match status {
+        Ok(s) if s.success() => println!("  stopped {}", template_unit),
+        Ok(_) => println!("  {} was not running", template_unit),
+        Err(e) => eprintln!("  systemctl stop failed: {}", e),
+    }
+
+    // Activate idle/download-mode fallback if present
+    let datum_dir = get_expanded_path(path)?;
+    if load_profile("download-mode", &datum_dir).is_ok() {
+        println!("  transitioning to download-mode ...");
+        let snapshot = SystemSnapshot::capture()?;
+        if let Ok(p) = load_profile("download-mode", &datum_dir) {
+            let _ = activate_profile(&p, &snapshot, false, true);
+        }
+    }
+
+    println!("  profile '{}' deactivated", profile);
     Ok(())
 }
 

@@ -160,6 +160,8 @@ fn cli_install(command: &str, path: &str) -> Result<()> {
 
                     // Install this datum
                     if let Some(install_cmd) = &datum.install {
+                        run_datum_hook(datum.hook_detect.as_deref());
+                        run_datum_hook(datum.hook_install.as_deref());
                         println!("🚀 Installing {}...", datum_key);
                         let result = cmd!("bash", "-c", install_cmd).run();
                         match result {
@@ -184,6 +186,7 @@ fn cli_install(command: &str, path: &str) -> Result<()> {
 
     // No dependencies - install directly
     if let Some(install_cmd) = &cli_datum.datum.install {
+        run_hook_install(&cli_datum.datum);
         println!("🚀 Installing {}...", command);
         let result = cmd!("bash", "-c", install_cmd).run();
         match result {
@@ -253,6 +256,7 @@ fn cli_update(command: &str, path: &str) -> Result<()> {
         .or(cli_datum.datum.install.as_ref());
 
     if let Some(cmd_str) = update_cmd {
+        run_hook_update(&cli_datum.datum);
         println!("🔄 Updating {}...", command);
         let result = cmd!("bash", "-c", cmd_str).run();
         match result {
@@ -410,10 +414,10 @@ fn cli_up(path: &str, yes: bool) -> Result<()> {
     Ok(())
 }
 
-/// Run `hook_detect` script if present; print result to stderr (non-fatal).
-/// 🤓 hook_detect runs BEFORE version detection — can warn or suggest redirect.
-fn run_hook_detect(datum: &BootDatum) {
-    let script = match datum.hook_detect.as_deref() {
+/// Generic lifecycle hook runner — fires any datum hook field, non-fatal.
+/// 🤓 All hooks share the same HookResult protocol: ok | warn: | redirect: | missing: | <info>
+fn run_datum_hook(script: Option<&str>) {
+    let script = match script {
         Some(s) if !s.trim().is_empty() => s,
         _ => return,
     };
@@ -424,6 +428,18 @@ fn run_hook_detect(datum: &BootDatum) {
         HookResult::Redirect(name) => eprintln!("🔀 use '{}' datum instead", name),
         HookResult::Info(msg) => eprintln!("ℹ️  {}", msg),
     }
+}
+
+fn run_hook_detect(datum: &BootDatum) {
+    run_datum_hook(datum.hook_detect.as_deref());
+}
+
+fn run_hook_install(datum: &BootDatum) {
+    run_datum_hook(datum.hook_install.as_deref());
+}
+
+fn run_hook_update(datum: &BootDatum) {
+    run_datum_hook(datum.hook_update.as_deref());
 }
 
 #[cfg(test)]
