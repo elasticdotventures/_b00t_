@@ -473,14 +473,40 @@ pub fn serve_model(
         let _ = cmd(bin, &["rm", "-f", &container]).run();
     }
 
+    // Container isolation controls (defaults preserve existing behavior).
+    // Hardened deployments can override via model metadata:
+    // - container_ipc_host="false" to avoid --ipc=host
+    // - podman_disable_selinux_label="false" to keep SELinux labeling
+    let use_host_ipc = entry
+        .model
+        .metadata
+        .get("container_ipc_host")
+        .map(|v| v != "false")
+        .unwrap_or(true);
+    let disable_selinux_label = entry
+        .model
+        .metadata
+        .get("podman_disable_selinux_label")
+        .map(|v| v != "false")
+        .unwrap_or(true);
+
     let mut run_args = vec![
         "run".to_string(),
         "--rm".to_string(),
         "-d".to_string(),
         "--name".to_string(),
         container.clone(),
-        "--ipc=host".to_string(),
     ];
+
+    if use_host_ipc {
+        // Sharing host IPC namespace weakens container isolation.
+        // To disable this, set container_ipc_host="false" in model metadata.
+        eprintln!(
+            "[b00t:model-manager] Warning: using --ipc=host for container `{}` (set container_ipc_host=\"false\" in model metadata to disable).",
+            container
+        );
+        run_args.push("--ipc=host".to_string());
+    }
 
     if options.gpus {
         match runtime {
@@ -488,7 +514,15 @@ pub fn serve_model(
                 // CDI-based GPU passthrough (nvidia-ctk cdi generate --output /etc/cdi/nvidia.yaml)
                 run_args.push("--device".to_string());
                 run_args.push("nvidia.com/gpu=all".to_string());
-                run_args.push("--security-opt=label=disable".to_string());
+                if disable_selinux_label {
+                    // Disabling SELinux labeling weakens container confinement.
+                    // To keep SELinux labeling, set podman_disable_selinux_label="false" in model metadata.
+                    eprintln!(
+                        "[b00t:model-manager] Warning: disabling SELinux labeling for Podman GPU container `{}` (set podman_disable_selinux_label=\"false\" in model metadata to keep labels).",
+                        container
+                    );
+                    run_args.push("--security-opt=label=disable".to_string());
+                }
             }
             ContainerRuntime::Docker => {
                 run_args.push("--gpus".to_string());
