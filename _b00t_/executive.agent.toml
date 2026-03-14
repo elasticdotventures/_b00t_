@@ -95,6 +95,15 @@ B00T_HIVE_ROLE = "captain"
 topic = "hive-cmdb"
 auto_digest = true
 
+# 🤓 irontology-mcp (github.com/PromptExecution/irontology-mcp) is the parallel semantic graph/RAG
+# workstream that will index hive CMDB datums as ontology nodes. When ready for integration,
+# the executive agent will delegate semantic queries (resource compatibility, agent routing)
+# to the irontology MCP tool instead of reading TOML files directly.
+[b00t.entanglement]
+irontology_mcp = "github.com/PromptExecution/irontology-mcp"
+integration_status = "pending"
+integration_note = "irontology will provide semantic queries over .hive.toml/.agent.toml/.stack.toml datum graph"
+
 [[b00t.usage]]
 description = "Initialize executive agent for hive management"
 command = "b00t agent start executive"
