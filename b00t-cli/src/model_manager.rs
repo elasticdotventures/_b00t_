@@ -536,21 +536,51 @@ pub fn serve_model(
 }
 
 pub fn stop_model(path: &str, container_name: Option<&str>) -> Result<()> {
-    let (target, runtime) = if let Some(name) = container_name {
-        (name.to_string(), detect_container_runtime(None))
+    if let Some(name) = container_name {
+        // When an explicit container name is provided, we don't know which runtime
+        // created it. Try Podman first, then Docker, and only error if both fail.
+        let target = name.to_string();
+
+        let podman_rt = ContainerRuntime::Podman;
+        let podman_bin = runtime_bin(&podman_rt);
+        let podman_result = cmd(podman_bin, &["rm", "-f", &target]).run();
+        if podman_result.is_ok() {
+            return Ok(());
+        }
+
+        let docker_rt = ContainerRuntime::Docker;
+        let docker_bin = runtime_bin(&docker_rt);
+        let docker_result = cmd(docker_bin, &["rm", "-f", &target]).run();
+        if docker_result.is_ok() {
+            return Ok(());
+        }
+
+        let podman_err = podman_result.err();
+        let docker_err = docker_result.err();
+
+        return Err(anyhow!(
+            "Failed to stop container {} with either podman or docker (podman error: {:?}, docker error: {:?})",
+            target,
+            podman_err,
+            docker_err
+        ));
     } else {
         let entry = select_model(path, None)?;
-        let rt = detect_container_runtime(
-            entry.model.metadata.get("container_runtime").map(String::as_str)
+        let runtime = detect_container_runtime(
+            entry
+                .model
+                .metadata
+                .get("container_runtime")
+                .map(String::as_str),
         );
-        (format!("vllm-{}", entry.datum.name.replace('/', "-")), rt)
-    };
+        let target = format!("vllm-{}", entry.datum.name.replace('/', "-"));
 
-    let bin = runtime_bin(&runtime);
-    cmd(bin, &["rm", "-f", &target])
-        .run()
-        .with_context(|| format!("Failed to stop {} container {}", bin, target))?;
-    Ok(())
+        let bin = runtime_bin(&runtime);
+        cmd(bin, &["rm", "-f", &target])
+            .run()
+            .with_context(|| format!("Failed to stop {} container {}", bin, target))?;
+        Ok(())
+    }
 }
 
 #[cfg(test)]
