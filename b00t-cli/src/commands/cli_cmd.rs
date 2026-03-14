@@ -1,5 +1,6 @@
 use crate::datum_cli::CliDatum;
 use crate::dependency_resolver::DependencyResolver;
+use crate::hook_engine::{HookResult, run_hook};
 use crate::load_datum_providers;
 use crate::traits::*;
 use crate::{BootDatum, UnifiedConfig};
@@ -92,6 +93,7 @@ impl CliCommands {
 
 fn cli_detect(command: &str, path: &str) -> Result<()> {
     let cli_datum = CliDatum::from_config(command, path)?;
+    run_hook_detect(&cli_datum.datum);
     match cli_datum.current_version() {
         Some(version) => {
             println!("{}", version);
@@ -118,6 +120,7 @@ fn cli_desires(command: &str, path: &str) -> Result<()> {
 
 fn cli_install(command: &str, path: &str) -> Result<()> {
     let cli_datum = CliDatum::from_config(command, path)?;
+    run_hook_detect(&cli_datum.datum);
 
     // Check if datum has dependencies
     if let Some(deps) = &cli_datum.datum.depends_on {
@@ -157,6 +160,8 @@ fn cli_install(command: &str, path: &str) -> Result<()> {
 
                     // Install this datum
                     if let Some(install_cmd) = &datum.install {
+                        run_datum_hook(datum.hook_detect.as_deref());
+                        run_datum_hook(datum.hook_install.as_deref());
                         println!("🚀 Installing {}...", datum_key);
                         let result = cmd!("bash", "-c", install_cmd).run();
                         match result {
@@ -181,6 +186,7 @@ fn cli_install(command: &str, path: &str) -> Result<()> {
 
     // No dependencies - install directly
     if let Some(install_cmd) = &cli_datum.datum.install {
+        run_hook_install(&cli_datum.datum);
         println!("🚀 Installing {}...", command);
         let result = cmd!("bash", "-c", install_cmd).run();
         match result {
@@ -250,6 +256,7 @@ fn cli_update(command: &str, path: &str) -> Result<()> {
         .or(cli_datum.datum.install.as_ref());
 
     if let Some(cmd_str) = update_cmd {
+        run_hook_update(&cli_datum.datum);
         println!("🔄 Updating {}...", command);
         let result = cmd!("bash", "-c", cmd_str).run();
         match result {
@@ -268,6 +275,7 @@ fn cli_update(command: &str, path: &str) -> Result<()> {
 
 fn cli_check(command: &str, path: &str) -> Result<()> {
     let cli_datum = CliDatum::from_config(command, path)?;
+    run_hook_detect(&cli_datum.datum);
     let version_status = cli_datum.version_status();
     let current = cli_datum
         .current_version()
@@ -321,6 +329,7 @@ fn cli_up(path: &str, yes: bool) -> Result<()> {
             .unwrap_or_else(|| "unknown".to_string());
 
         let datum = tool.datum();
+        run_hook_detect(datum);
 
         if datum.auto_install.map(|v| !v).unwrap_or(false) {
             println!(
@@ -403,6 +412,34 @@ fn cli_up(path: &str, yes: bool) -> Result<()> {
         }
     }
     Ok(())
+}
+
+/// Generic lifecycle hook runner — fires any datum hook field, non-fatal.
+/// 🤓 All hooks share the same HookResult protocol: ok | warn: | redirect: | missing: | <info>
+fn run_datum_hook(script: Option<&str>) {
+    let script = match script {
+        Some(s) if !s.trim().is_empty() => s,
+        _ => return,
+    };
+    match run_hook(script) {
+        HookResult::Ok => {}
+        HookResult::Warn(msg) => eprintln!("⚠️  {}", msg),
+        HookResult::Missing(msg) => eprintln!("🥾😱 not installed — {}", msg),
+        HookResult::Redirect(name) => eprintln!("🔀 use '{}' datum instead", name),
+        HookResult::Info(msg) => eprintln!("ℹ️  {}", msg),
+    }
+}
+
+fn run_hook_detect(datum: &BootDatum) {
+    run_datum_hook(datum.hook_detect.as_deref());
+}
+
+fn run_hook_install(datum: &BootDatum) {
+    run_datum_hook(datum.hook_install.as_deref());
+}
+
+fn run_hook_update(datum: &BootDatum) {
+    run_datum_hook(datum.hook_update.as_deref());
 }
 
 #[cfg(test)]

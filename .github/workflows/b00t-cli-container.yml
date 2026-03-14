@@ -7,11 +7,6 @@ on:
       - 'b00t-cli/**'
       - 'Dockerfile.b00t-cli'
       - '.github/workflows/b00t-cli-container.yml'
-  pull_request:
-    branches: [ main ]
-    paths:
-      - 'b00t-cli/**'  
-      - 'Dockerfile.b00t-cli'
   release:
     types: [ published ]
   workflow_dispatch:  # Allow manual trigger

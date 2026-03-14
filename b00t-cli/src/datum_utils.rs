@@ -158,7 +158,10 @@ fn scan_datums_recursive(
         if entry_path.is_dir() {
             // Recurse into subdirectories
             scan_datums_recursive(&entry_path, datums, current_depth + 1, max_depth)?;
-        } else if entry_path.extension().and_then(|s| s.to_str()) == Some("toml") {
+        } else if matches!(
+            entry_path.extension().and_then(|s| s.to_str()),
+            Some("toml") | Some("tomllm") // 🤓 .tomllm = .toml + # comment annotations; TOML parses identically
+        ) {
             if let Some(filename) = entry_path.file_name().and_then(|s| s.to_str()) {
                 // Skip non-datum files
                 if filename == "bootstrap.toml"
@@ -171,9 +174,14 @@ fn scan_datums_recursive(
                 // Try to parse as unified config
                 if let Ok(content) = fs::read_to_string(&entry_path) {
                     if let Ok(config) = toml::from_str::<UnifiedConfig>(&content) {
-                        let datum_key = filename.trim_end_matches(".toml").to_string();
+                        // Strip outer extension (.tomllm or .toml) for datum key
+                        // 🤓 .tomllm wins over .toml on key collision (richer tribal context)
+                        let ext = if filename.ends_with(".tomllm") { ".tomllm" } else { ".toml" };
+                        let datum_key = filename.trim_end_matches(ext).to_string();
                         let path_str = entry_path.to_string_lossy().to_string();
-                        datums.insert(datum_key, (config.b00t, path_str));
+                        if ext == ".tomllm" || !datums.contains_key(&datum_key) {
+                            datums.insert(datum_key, (config.b00t, path_str));
+                        }
                     }
                 }
             }

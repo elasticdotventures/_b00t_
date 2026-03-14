@@ -40,6 +40,17 @@ impl UpArgs {
             println!("🥾 b00t up: cycle {} (tool={}, max_iter={})",
                 restart_count + 1, self.tool, self.max_iter);
 
+            // Hive stack summary — quick check before launching agent
+            let stacks = crate::hive::hive_stacks_status();
+            if !stacks.is_empty() {
+                let active: Vec<_> = stacks.iter().filter(|(_, a, _)| *a).map(|(n, _, _)| n.as_str()).collect();
+                if active.is_empty() {
+                    println!("  🥾 stacks: none active (b00t hive activate <profile>)");
+                } else {
+                    println!("  🥾 stacks: {}", active.join(", "));
+                }
+            }
+
             // Build ontology JSON from live datum TOML scan
             let datum_dir = format!("{}/_b00t_", workspace_root);
             let ontology = build_ontology(self.role.as_deref(), &datum_dir)

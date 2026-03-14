@@ -1,0 +1,41 @@
+[package]
+name = "tomllm"
+version = "0.1.0"
+edition = "2024"
+# 🤓 intentionally NOT inheriting workspace version — tomllm is published independently to crates.io
+description = "TOML + LLM comment conventions: tribal knowledge in #comments, stripped for data pipelines"
+license = "MIT"
+repository = "https://github.com/elasticdotventures/_b00t_/tree/main/tomllm"
+keywords = ["toml", "llm", "agent", "config", "annotations"]
+categories = ["parsing", "config", "text-processing"]
+readme = "README.md"
+
+[lib]
+name = "tomllm"
+crate-type = ["cdylib", "rlib"]  # cdylib for WASM/Python, rlib for Rust consumers
+
+[features]
+default = []
+# 🤓 wasm: enables wasm-bindgen exports for TypeScript/JS consumers
+wasm = ["wasm-bindgen", "serde-wasm-bindgen"]
+# 🤓 python feature (pyo3) excluded from workspace build — version conflicts with b00t-py
+# Publish tomllm-py as a SEPARATE crate/repo with maturin when ready
+# python = ["pyo3"]
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+toml = { workspace = true }
+thiserror = "2"
+regex = { workspace = true }
+
+[dependencies.wasm-bindgen]
+version = "0.2"
+optional = true
+
+[dependencies.serde-wasm-bindgen]
+version = "0.6"
+optional = true
+
+[dev-dependencies]
+tempfile = "3"
