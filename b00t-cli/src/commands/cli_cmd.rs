@@ -1,5 +1,6 @@
 use crate::datum_cli::CliDatum;
 use crate::dependency_resolver::DependencyResolver;
+use crate::hook_engine::{HookResult, run_hook};
 use crate::load_datum_providers;
 use crate::traits::*;
 use crate::{BootDatum, UnifiedConfig};
@@ -92,6 +93,7 @@ impl CliCommands {
 
 fn cli_detect(command: &str, path: &str) -> Result<()> {
     let cli_datum = CliDatum::from_config(command, path)?;
+    run_hook_detect(&cli_datum.datum);
     match cli_datum.current_version() {
         Some(version) => {
             println!("{}", version);
@@ -118,6 +120,7 @@ fn cli_desires(command: &str, path: &str) -> Result<()> {
 
 fn cli_install(command: &str, path: &str) -> Result<()> {
     let cli_datum = CliDatum::from_config(command, path)?;
+    run_hook_detect(&cli_datum.datum);
 
     // Check if datum has dependencies
     if let Some(deps) = &cli_datum.datum.depends_on {
@@ -268,6 +271,7 @@ fn cli_update(command: &str, path: &str) -> Result<()> {
 
 fn cli_check(command: &str, path: &str) -> Result<()> {
     let cli_datum = CliDatum::from_config(command, path)?;
+    run_hook_detect(&cli_datum.datum);
     let version_status = cli_datum.version_status();
     let current = cli_datum
         .current_version()
@@ -321,6 +325,7 @@ fn cli_up(path: &str, yes: bool) -> Result<()> {
             .unwrap_or_else(|| "unknown".to_string());
 
         let datum = tool.datum();
+        run_hook_detect(datum);
 
         if datum.auto_install.map(|v| !v).unwrap_or(false) {
             println!(
@@ -403,6 +408,22 @@ fn cli_up(path: &str, yes: bool) -> Result<()> {
         }
     }
     Ok(())
+}
+
+/// Run `hook_detect` script if present; print result to stderr (non-fatal).
+/// 🤓 hook_detect runs BEFORE version detection — can warn or suggest redirect.
+fn run_hook_detect(datum: &BootDatum) {
+    let script = match datum.hook_detect.as_deref() {
+        Some(s) if !s.trim().is_empty() => s,
+        _ => return,
+    };
+    match run_hook(script) {
+        HookResult::Ok => {}
+        HookResult::Warn(msg) => eprintln!("⚠️  {}", msg),
+        HookResult::Missing(msg) => eprintln!("🥾😱 not installed — {}", msg),
+        HookResult::Redirect(name) => eprintln!("🔀 use '{}' datum instead", name),
+        HookResult::Info(msg) => eprintln!("ℹ️  {}", msg),
+    }
 }
 
 #[cfg(test)]

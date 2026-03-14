@@ -30,6 +30,7 @@ pub mod dependency_resolver;
 pub mod entanglement;
 pub mod erp;
 pub mod hive;
+pub mod hook_engine;
 pub mod job_executor;
 pub mod job_ipc;
 pub mod job_state;
@@ -208,6 +209,10 @@ pub struct BootDatum {
     pub provides: Option<ApiProvides>,
     pub protocol: Option<String>,
     pub implements: Option<Vec<String>>,
+
+    // Rhai hook scripts — run at specific lifecycle points
+    // 🤓 hook_detect: runs before version detection; return "ok" | "warn: <msg>" | "redirect:<datum>"
+    pub hook_detect: Option<String>,
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
