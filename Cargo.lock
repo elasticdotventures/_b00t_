@@ -625,6 +625,7 @@ dependencies = [
  "tiktoken-rs",
  "tokio",
  "toml",
+ "tomllm",
  "tracing",
  "url",
  "uuid",
@@ -5486,6 +5487,20 @@ name = "toml_writer"
 version = "1.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fcc842091f2def52017664b53082ecbbeb5c7731092bad69d2c63050401dfd64"
+
+[[package]]
+name = "tomllm"
+version = "0.1.0"
+dependencies = [
+ "regex",
+ "serde",
+ "serde-wasm-bindgen",
+ "serde_json",
+ "tempfile",
+ "thiserror 2.0.17",
+ "toml",
+ "wasm-bindgen",
+]
 
 [[package]]
 name = "tonic"

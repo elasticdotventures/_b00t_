@@ -56,7 +56,9 @@ pub fn whoami(path: &str, role_override: Option<String>) -> Result<()> {
 
     println!("{}", rendered);
 
-    // Append role summary if we can resolve a role datum
+    // Append role summary from .role.tomllm / .role.toml / .agent.tomllm / .agent.toml datum
+    // 🤓 role datums are executable + introspectable: skills, capabilities, entanglements
+    // .tomllm extension: TOML + #comment tribal knowledge; toml parser handles it identically
     if let Some(role) = resolve_role(role_override) {
         if let Some(role_details) = load_role_datum(&role, path) {
             print_role_summary(&role_details, path);
@@ -105,7 +107,8 @@ fn resolve_role(role_override: Option<String>) -> Option<String> {
 }
 
 fn load_role_datum(role: &str, path: &str) -> Option<RoleDetails> {
-    let (config, _) = get_config(role, path).ok()?;
+    // 🤓 prefer .role.tomllm / .role.toml over other typed datums with same name
+    let (config, _) = get_config_with_type_preference(role, &DatumType::Role, path).ok()?;
     let datum = config.b00t;
 
     if let Some(datum_type) = &datum.datum_type {
@@ -210,9 +213,16 @@ fn get_config_with_type_preference(
     expected_type: &DatumType,
     path: &str,
 ) -> Result<(UnifiedConfig, String), Box<dyn std::error::Error>> {
-    if let Some(extension) = file_extension_for_type(expected_type) {
-        let expanded_path = get_expanded_path(path)?;
-        let filename = format!("{}{}", name, extension);
+    // 🤓 .tomllm is a superset of .toml; prefer typed extension, fall back to generic get_config
+    let expanded_path = get_expanded_path(path)?;
+    if let Some(base) = base_suffix_for_type(expected_type) {
+        if let Some(result) = get_config_typed(name, base, &expanded_path) {
+            return Ok(result);
+        }
+    }
+    // AiModel legacy + Unknown: try plain .ai_model.toml / .toml
+    if expected_type == &DatumType::AiModel {
+        let filename = format!("{}.ai_model.toml", name);
         let config_path = expanded_path.join(&filename);
         if config_path.exists() {
             let content = fs::read_to_string(&config_path)?;
@@ -220,34 +230,57 @@ fn get_config_with_type_preference(
             return Ok((config, filename));
         }
     }
-
     get_config(name, path)
 }
 
-fn file_extension_for_type(datum_type: &DatumType) -> Option<&'static str> {
+/// Returns the canonical base suffix for a DatumType (e.g. `".role"` → tries `.role.tomllm` then `.role.toml`).
+/// 🤓 .tomllm is a superset of .toml; callers ALWAYS prefer .tomllm and fall back to .toml automatically.
+///    Encoding only the base here means every new DatumType gets the dual-extension behaviour for free.
+fn base_suffix_for_type(datum_type: &DatumType) -> Option<&'static str> {
     match datum_type {
-        DatumType::Mcp => Some(".mcp.toml"),
-        DatumType::Cli => Some(".cli.toml"),
-        DatumType::Agent => Some(".agent.toml"),
-        DatumType::Role => Some(".role.toml"),
-        DatumType::Stack => Some(".stack.toml"),
-        DatumType::Job => Some(".job.toml"),
-        DatumType::Api => Some(".api.toml"),
-        DatumType::Skill => Some(".skill.toml"),
-        DatumType::Config => Some(".config.toml"),
-        DatumType::Database => Some(".database.toml"),
-        DatumType::Repo => Some(".repo.toml"),
-        DatumType::Ai => Some(".ai.toml"),
-        DatumType::AiModel => Some(".ai_model.toml"),
-        DatumType::Bash => Some(".bash.toml"),
-        DatumType::Vscode => Some(".vscode.toml"),
-        DatumType::Docker => Some(".docker.toml"),
-        DatumType::K8s => Some(".k8s.toml"),
-        DatumType::Apt => Some(".apt.toml"),
-        DatumType::Nix => Some(".nix.toml"),
-        DatumType::HiveProfile => Some(".hive.toml"),
-        DatumType::Unknown => None,
+        DatumType::Role        => Some(".role"),
+        DatumType::Agent       => Some(".agent"),
+        DatumType::HiveProfile => Some(".hive"),
+        DatumType::Mcp         => Some(".mcp"),
+        DatumType::Cli         => Some(".cli"),
+        DatumType::Stack       => Some(".stack"),
+        DatumType::Job         => Some(".job"),
+        DatumType::Api         => Some(".api"),
+        DatumType::Skill       => Some(".skill"),
+        DatumType::Config      => Some(".config"),
+        DatumType::Database    => Some(".database"),
+        DatumType::Repo        => Some(".repo"),
+        DatumType::Ai          => Some(".ai"),
+        DatumType::Bash        => Some(".bash"),
+        DatumType::Vscode      => Some(".vscode"),
+        DatumType::Docker      => Some(".docker"),
+        DatumType::K8s         => Some(".k8s"),
+        DatumType::Apt         => Some(".apt"),
+        DatumType::Nix         => Some(".nix"),
+        DatumType::AiModel     => None, // legacy: .ai_model.toml has no .tomllm twin yet
+        DatumType::Unknown     => None,
     }
+}
+
+/// Try typed extensions for `name` — .tomllm first, then .toml.
+/// Returns the first match, or falls back to generic get_config.
+fn get_config_typed<'a>(
+    name: &str,
+    base: &str,
+    expanded_path: &std::path::Path,
+) -> Option<(UnifiedConfig, String)> {
+    for ext in [".tomllm", ".toml"] {
+        let filename = format!("{}{}{}", name, base, ext);
+        let config_path = expanded_path.join(&filename);
+        if config_path.exists() {
+            if let Ok(content) = fs::read_to_string(&config_path) {
+                if let Ok(config) = toml::from_str::<UnifiedConfig>(&content) {
+                    return Some((config, filename));
+                }
+            }
+        }
+    }
+    None
 }
 
 fn print_role_summary(role: &RoleDetails, path: &str) {

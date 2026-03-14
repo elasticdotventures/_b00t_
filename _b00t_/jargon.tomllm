@@ -1,0 +1,64 @@
+[b00t]
+# @tribal: jargon datum — canonical registry of .tomllm annotation filters & b00t emoji jargon
+# @tribal: emoji + UTF-8 漢語 ideoglyphs are grep-friendly semantic markers in .tomllm files
+# @example: b00t learn jargon
+# @example: grep "# 🤓" _b00t_/*.tomllm  → list all tribal knowledge hints
+name = "jargon"
+type = "config"
+hint = "Emoji + .tomllm annotation filter registry — the b00t tribal lexicon"
+
+[b00t.annotations]
+# @tribal: .tomllm annotation prefixes are stripped by tomllm::TomllmDoc::strip_for_pipeline()
+#          only meaningful content reaches the data pipeline; annotations are for agents/humans
+# Format: `# <filter> <content>` — all annotation lines begin with `#` (valid TOML comment)
+
+[b00t.annotations.filters]
+# 🤓 melvin — non-obvious tribal knowledge; do NOT remove without 3x TRIZ justification
+# Usage: # 🤓 <context-specific insight that would take hours to rediscover>
+melvin        = "🤓"
+melvin_hanyu  = "🤓 (书呆子 shūdāizi) — tribal wisdom; single 🤓 allowed per session"
+
+# @tribal: annotation — machine-readable semantic tag; parsed by tomllm crate
+# Usage: # @<tag>: <content>
+tribal        = "@tribal"
+example       = "@example"
+requires      = "@requires"
+see           = "@see"
+warn          = "@warn"
+
+[b00t.annotations.emoji_jargon]
+# 🚩 cybersec flag — unintentional data disclosure risk
+cybersec_flag = "🚩 (红旗 hóngqí) — security concern; potential data disclosure"
+# 🦨 skunk — renamed/moved identifier; ephemeral note, remove after review
+skunk         = "🦨 (臭鼬 chòuyòu) — renamed/moved; remove after review"
+# ⚠️ warning
+warn          = "⚠️ (警告 jǐnggào) — caveat; read before proceeding"
+# ✅ / ❌ pass/fail
+pass          = "✅ (通过 tōngguò) — capability check passed"
+fail          = "❌ (失败 shībài) — capability missing or mismatch"
+# 🍰 cake — aligned behavior reward
+cake          = "🍰 (蛋糕 dàngāo) — reward for aligned execution"
+# 🥾 boot
+boot          = "🥾 b00t — the framework itself; also: bootstrap"
+# 🐛 bug
+bug           = "🐛 (虫子 chóngzi) — defect"
+
+[b00t.annotations.cognitive_tiers]
+# Emoji shorthand for cognitive tier routing in executive context
+sm0l          = "🐭 (小 xiǎo) — any small model; classify/route/test"
+ch0nky        = "🐻 (胖 pàng) — code-gen capable local model"
+frontier      = "🚀 (前沿 qiányán) — cloud API frontier model; expensive"
+
+[b00t.tomllm_strip_rules]
+# @tribal: tomllm::TomllmDoc::strip_for_pipeline() removes lines matching these prefixes
+# Stripping annotations before passing to data pipeline saves tokens & avoids leaking tribal context
+strip_line_prefixes = ["# @tribal:", "# @example:", "# @requires:", "# @see:", "# @warn:", "# 🤓"]
+# Note: tail-map block (# b00t:map v1 ... ) is preserved by strip_for_pipeline (extracted separately)
+preserve_tail_map   = true
+
+# b00t:map v1
+# summary: b00t jargon datum — emoji+annotation filter registry for .tomllm tribal lexicon
+# tags: jargon, tomllm, emoji, annotations, filters, 漢語, tribal
+# tier: sm0l
+# cmds: b00t learn jargon, grep "# 🤓" _b00t_/*.tomllm
+# complexity: 2

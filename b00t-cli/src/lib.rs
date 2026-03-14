@@ -617,6 +617,8 @@ pub fn create_unified_toml_config(datum: &BootDatum, path: &str) -> Result<()> {
         DatumType::Role => ".toml",
         DatumType::Skill => ".skill.toml",
         DatumType::HiveProfile => ".hive.toml",
+        // 🤓 .tomllm = valid TOML + # comment annotations for tribal knowledge
+        // tomllm crate strips comments for data pipelines; tail-map enables fast executive scanning
         DatumType::Unknown => ".toml",
     };
 
@@ -664,48 +666,57 @@ impl std::fmt::Display for DatumType {
 }
 
 impl DatumType {
+    /// Map filename suffix → DatumType.
+    /// 🤓 .tomllm is a transparent alias for .toml (TOML natively strips # comments);
+    ///    longer/more-specific suffixes MUST appear before shorter ones in this table.
     pub fn from_filename_extension(filename: &str) -> DatumType {
-        if filename.ends_with(".cli.toml") {
-            DatumType::Cli
-        } else if filename.ends_with(".mcp.toml") {
-            DatumType::Mcp
-        } else if filename.ends_with(".bash.toml") {
-            DatumType::Bash
-        } else if filename.ends_with(".vscode.toml") {
-            DatumType::Vscode
-        } else if filename.ends_with(".docker.toml") {
-            DatumType::Docker
-        } else if filename.ends_with(".k8s.toml") {
-            DatumType::K8s
-        } else if filename.ends_with(".apt.toml") {
-            DatumType::Apt
-        } else if filename.ends_with(".nix.toml") {
-            DatumType::Nix
-        } else if filename.ends_with(".ai.toml") {
-            DatumType::Ai
-        } else if filename.ends_with(".api.toml") {
-            DatumType::Api
-        } else if filename.ends_with(".stack.toml") {
-            DatumType::Stack
-        } else if filename.ends_with(".job.toml") {
-            DatumType::Job
-        } else if filename.ends_with(".agent.toml") {
-            DatumType::Agent
-        } else if filename.ends_with(".config.toml") {
-            DatumType::Config
-        } else if filename.ends_with(".database.toml") {
-            DatumType::Database
-        } else if filename.ends_with(".repo.toml") {
-            DatumType::Repo
-        } else if filename.ends_with(".role.toml") {
-            DatumType::Role
-        } else if filename.ends_with(".skill.toml") {
-            DatumType::Skill
-        } else if filename.ends_with(".hive.toml") {
-            DatumType::HiveProfile
-        } else {
-            DatumType::Unknown // Default fallback for .toml files
+        // (suffix, type) — order: longest/most-specific first
+        const SUFFIX_MAP: &[(&str, DatumType)] = &[
+            (".database.toml",   DatumType::Database),
+            (".database.tomllm", DatumType::Database),
+            (".hive.toml",       DatumType::HiveProfile),
+            (".hive.tomllm",     DatumType::HiveProfile),
+            (".agent.toml",      DatumType::Agent),
+            (".agent.tomllm",    DatumType::Agent),
+            (".config.toml",     DatumType::Config),
+            (".config.tomllm",   DatumType::Config),
+            (".docker.toml",     DatumType::Docker),
+            (".docker.tomllm",   DatumType::Docker),
+            (".skill.toml",      DatumType::Skill),
+            (".skill.tomllm",    DatumType::Skill),
+            (".stack.toml",      DatumType::Stack),
+            (".stack.tomllm",    DatumType::Stack),
+            (".repo.toml",       DatumType::Repo),
+            (".repo.tomllm",     DatumType::Repo),
+            (".role.toml",       DatumType::Role),
+            (".role.tomllm",     DatumType::Role),
+            (".bash.toml",       DatumType::Bash),
+            (".bash.tomllm",     DatumType::Bash),
+            (".vscode.toml",     DatumType::Vscode),
+            (".vscode.tomllm",   DatumType::Vscode),
+            (".k8s.toml",        DatumType::K8s),
+            (".k8s.tomllm",      DatumType::K8s),
+            (".apt.toml",        DatumType::Apt),
+            (".apt.tomllm",      DatumType::Apt),
+            (".nix.toml",        DatumType::Nix),
+            (".nix.tomllm",      DatumType::Nix),
+            (".mcp.toml",        DatumType::Mcp),
+            (".mcp.tomllm",      DatumType::Mcp),
+            (".cli.toml",        DatumType::Cli),
+            (".cli.tomllm",      DatumType::Cli),
+            (".api.toml",        DatumType::Api),
+            (".api.tomllm",      DatumType::Api),
+            (".job.toml",        DatumType::Job),
+            (".job.tomllm",      DatumType::Job),
+            (".ai.toml",         DatumType::Ai),
+            (".ai.tomllm",       DatumType::Ai),
+        ];
+        for (suffix, datum_type) in SUFFIX_MAP {
+            if filename.ends_with(suffix) {
+                return datum_type.clone();
+            }
         }
+        DatumType::Unknown
     }
 }
 
@@ -776,47 +787,37 @@ pub fn get_ai_tools_status(path: &str) -> Result<Vec<Box<dyn StatusProvider>>> {
     Ok(tools)
 }
 
+/// Base type suffixes in resolution order — longest/most-specific first.
+/// 🤓 For each base, tomllm::loader::resolve_path tries `<base>.tomllm` then `<base>.toml`.
+///    DRY: adding a new DatumType only requires one entry here, not a paired .tomllm/.toml.
+const BASE_SUFFIXES: &[&str] = &[
+    ".database", ".hive", ".agent", ".config", ".docker",
+    ".skill", ".stack", ".repo", ".role", ".bash", ".vscode",
+    ".k8s", ".apt", ".nix", ".mcp", ".cli", ".api", ".job", ".ai",
+    ".ai_model", // legacy: no .tomllm twin yet, but resolver handles it gracefully
+    "",          // plain: {name}.tomllm / {name}.toml
+];
+
 pub fn get_config(
     command: &str,
     path: &str,
 ) -> Result<(UnifiedConfig, String), Box<dyn std::error::Error>> {
-    // Try different file extensions in order of preference
-    let extensions = [
-        ".role.toml",
-        ".agent.toml",
-        ".stack.toml",
-        ".api.toml",
-        ".config.toml",
-        ".database.toml",
-        ".repo.toml",
-        ".skill.toml",
-        ".ai.toml",
-        ".ai_model.toml",
-        ".k8s.toml",
-        ".job.toml",
-        ".cli.toml",
-        ".mcp.toml",
-        ".vscode.toml",
-        ".docker.toml",
-        ".apt.toml",
-        ".nix.toml",
-        ".bash.toml",
-        ".toml",
-    ];
+    use tomllm::loader::resolve_path;
+    let expanded = shellexpand::tilde(path);
+    let dir = std::path::Path::new(expanded.as_ref());
 
-    let mut path_buf = std::path::PathBuf::new();
-    let expanded_path = shellexpand::tilde(path).to_string();
-    path_buf.push(expanded_path);
-
-    for ext in &extensions {
-        let filename = format!("{}{}", command, ext);
-        path_buf.push(&filename); // 🤓 FIX: use push instead of set_file_name to avoid removing _b00t_ directory
-        if path_buf.exists() {
-            let content = std::fs::read_to_string(&path_buf)?;
+    // 🤓 tomllm::loader::resolve_path handles .tomllm-first, .toml-fallback for each base
+    for base in BASE_SUFFIXES {
+        if let Some(resolved) = resolve_path(dir, command, base) {
+            let filename = resolved
+                .file_name()
+                .and_then(|s| s.to_str())
+                .unwrap_or("")
+                .to_string();
+            let content = std::fs::read_to_string(&resolved)?;
             let config: UnifiedConfig = toml::from_str(&content)?;
             return Ok((config, filename));
         }
-        path_buf.pop(); // 🤓 FIX: remove the filename for next iteration
     }
 
     Err(format!("{} UNDEFINED", command).into())
