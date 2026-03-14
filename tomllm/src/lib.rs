@@ -39,11 +39,14 @@ use wasm_bindgen::prelude::*;
 pub mod loader;
 pub mod map_block;
 pub mod parser;
+pub mod registry;
 pub mod stripper;
 
-pub use loader::{load_first, load_typed, load_any_typed, resolve_path};
+pub use loader::{load_any_typed, load_first, load_typed, resolve_path};
 pub use map_block::{CognitiveTier, MapBlock};
 pub use parser::TomllmDoc;
+pub use registry::TomllmRegistry;
+// 🤓 define_typed_registry! is #[macro_export] — already at crate root; no pub use needed
 
 #[derive(Debug, Error)]
 pub enum TomllmError {
