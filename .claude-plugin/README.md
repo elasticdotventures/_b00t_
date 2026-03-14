@@ -72,6 +72,8 @@ Enforces Don't Repeat Yourself and Never Reinvent the Wheel principles.
 /plugin install ralph-yei@b00t-plugins
 ```
 
+> **Tip:** For local development, use `/plugin marketplace add /path/to/.b00t`
+
 ## Usage
 
 ### Automatic Skill Activation
