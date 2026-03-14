@@ -1,0 +1,47 @@
+[b00t]
+name = "inference-sm0l"
+type = "hive_profile"
+hint = "vLLM sm0l model (Qwen2.5-3B Q8 or similar) — low RAM, GPU-light; compatible with concurrent dev work"
+
+[b00t.hive.resources]
+# 🤓 3B Q8 model = ~3.5GB VRAM + ~1GB RAM for vllm overhead
+# Leaves most resources free for dev tools, builds, etc.
+ram_gb = 4
+gpu_mb = 5000
+cpu_cores = 2
+
+[b00t.hive.resources.gate]
+ram_free_gb = 2
+gpu_free_mb = 4000
+
+[b00t.hive.exclusion]
+group = "primary-workload"
+priority = 50  # fallback when qwen3 model not yet downloaded or RAM constrained
+
+[b00t.hive.services]
+start = [
+  "vllm-sm0l.service",  # 🤓 future service unit; for now run manually
+]
+stop = []
+
+[b00t.hive.mcp_tools]
+activate = ["vllm-local", "opencode-local"]
+
+[[b00t.hive.guards]]
+pattern = "pip install"
+action = "warn"
+message = "🦨 use uv pip install"
+redirect = "uv pip install"
+
+[[b00t.hive.guards]]
+pattern = "docker run"
+action = "warn"
+message = "🦨 use podman (CDI GPU: --device nvidia.com/gpu=all --security-opt=label=disable)"
+
+[[b00t.usage]]
+description = "Start sm0l vllm manually (Qwen2.5-3B Q8)"
+command = "BLOB=$(ls ~/.cache/huggingface/hub/models--Qwen--Qwen2.5-3B-Instruct-GGUF/blobs/ | grep -v incomplete | head -1) && ~/.venv/bin/vllm serve ~/.cache/huggingface/hub/models--Qwen--Qwen2.5-3B-Instruct-GGUF/blobs/$BLOB --served-model-name qwen3-coder --port 8000 --max-model-len 32768 --enable-auto-tool-choice --tool-call-parser hermes"
+
+[[b00t.usage]]
+description = "Activate sm0l inference (safe to run alongside dev tools)"
+command = "b00t hive activate inference-sm0l"

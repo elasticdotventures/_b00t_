@@ -197,7 +197,7 @@ mod tests {
         let toml = r#"
             [b00t]
             name = "vision-test"
-            type = "aimodel"
+            type = "ai_model"
             hint = "Vision test model"
 
             [b00t.env]

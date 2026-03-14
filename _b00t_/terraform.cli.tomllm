@@ -1,8 +1,32 @@
 [b00t]
+# 🤓 terraform datum installs opentofu — OSS fork with full drop-in compatibility
+# 🤓 hook_detect runs before version detection: warns if HashiCorp terraform (BSL) is found
+# 💡例 b00t cli check terraform
+# 💡例 b00t . terraform
 name = "opentofu"
 type = "cli"
 desires = "1.8.0"
 aliases = ["terraform", "tofu"]
+
+# 🤓 Rhai hook: runs at `b00t detect terraform` / `b00t . terraform`
+# 💡例 exec("terraform version") contains "OpenTofu" if OSS fork; "Terraform" if HashiCorp BSL
+# ⚠️需 rhai engine: which(), exec() available; no filesystem access
+hook_detect = '''
+let tf   = which("terraform");
+let tofu = which("tofu");
+if tf == "" && tofu == "" {
+    "missing: neither terraform nor tofu found — install OSS fork: b00t cli install terraform"
+} else if tf != "" {
+    let v = exec("terraform version 2>/dev/null");
+    if v.contains("OpenTofu") {
+        "ok"
+    } else {
+        "warn: HashiCorp Terraform (BSL license) at " + tf + " — OSS replacement: b00t cli install terraform"
+    }
+} else {
+    "ok"
+}
+'''
 install = '''
 # Install OpenTofu - Open-source Terraform alternative
 # https://opentofu.org/

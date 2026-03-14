@@ -238,3 +238,86 @@ Projects frequently employ one or more technologies
 
 ## Task Master AI Instructions
 **Import Task Master's development workflow commands and guidelines, treat as if import is in the main CLAUDE.md file.**
+
+---
+
+## HIVE CMDB — `b00t hive`
+
+Dynamic system state CMDB for local metal resource management.
+**Anti-pattern:** running vllm (30GB RAM cpu-offload) + HF download simultaneously on 31GB RAM system.
+
+```bash
+b00t hive status             # RAM/GPU/CPU/downloads/active-profile snapshot
+b00t hive list               # available .hive.toml profiles
+b00t hive plan=<profile>     # dry-run: resource gate check + service diff
+b00t hive activate=<profile> # transition system state (stops conflicts, starts required)
+b00t hive run=<cmd>          # guard evaluation before execution
+```
+
+Profiles in `_b00t_/*.hive.toml`. Each profile declares:
+- `resources.ram_gb` / `resources.gpu_mb` — what it consumes
+- `resources.gate.*` — minimum FREE resources required to activate
+- `exclusion.group` — mutual exclusion (only one profile per group active)
+- `services.start/stop` — systemd --user units
+- `guards[]` — command pattern → warn/block/redirect
+
+## COGNITIVE TIERS
+
+Route tasks by cognitive complexity — NEVER pass full sub-agent output to executive context:
+
+| Tier | Models | Tasks | Output contract to executive |
+|---|---|---|---|
+| `sm0l` | qwen2.5-3B, haiku | tests, lint, classify, route, grep | `PASS` or `FAIL: <name> <5-line excerpt>` |
+| `ch0nky` | qwen3-coder-next (local vllm) | implement, refactor, debug | diff + test result |
+| `frontier` | claude-opus/sonnet, gpt-4o | architecture, security, novel design | structured decision |
+
+Executive context is costly — always demand compressed summaries from lower tiers.
+
+## .tomllm FORMAT
+
+`.tomllm` = valid TOML + enriched `#` comment conventions.
+- `# @tribal:` / `# 🤓` — non-obvious knowledge; stripped for data pipelines
+- `# @example:` — concrete usage; stripped for data pipelines
+- Tail-map (last ≤10 lines): `# b00t:map v1` magic block for fast executive scanning
+- `tomllm` crate: `TomllmDoc::parse()`, `strip_for_pipeline()`, `MapBlock::scan_tail()`
+- Publishing: crates.io `tomllm` + TypeScript/WASM (`--features wasm`) + Python (separate `tomllm-py`)
+
+```toml
+# @tribal: always use uv pip, never pip install
+package_manager = "uv"
+
+# b00t:map v1
+# summary: one-line description
+# tags: keyword, list
+# tier: sm0l|ch0nky|frontier
+# cmds: b00t cmd --flag=value
+# complexity: 1-10
+```
+
+## AGENTS/ ROLE SUPPLEMENTS
+
+`b00t whoami --role=<role>` loads `AGENTS/--role=<role>.md` if present.
+- Naming: `--flag=value` (explicit `=`) preferred over `--flag value` — cleaner token boundaries for embedding
+- Each supplement ≤200 lines; MUST include tail-map block
+- Role supplement appended BEFORE `.role.toml` datum summary
+- Create with: `AGENTS/--role=executive.md`, `AGENTS/--role=specialist.md`, etc.
+
+## COMMAND GUARDS — `b00t hive run`
+
+Universal guards (always active) + profile-specific guards:
+```
+pip install    → 🦨 use uv pip install
+docker run     → 🦨 use podman --device nvidia.com/gpu=all --security-opt=label=disable
+rm -rf /       → 🚫 BLOCKED
+huggingface-cli → 🦨 deprecated; use hf download
+```
+Use `--strict` to block on any warning. Guards defined in `_b00t_/hive-guards.hive.toml`.
+
+
+<!-- b00t:map v1
+summary: b00t hive AGENTS.md — XP agent operating protocol with CMDB, cognitive tiers, tomllm, guards
+tags: b00t, hive, executive, cmdb, cognitive-tiers, tomllm, guards, vllm, rust
+tier: frontier
+cmds: b00t whoami --role=executive, b00t hive status, b00t hive list
+complexity: 9
+-->
