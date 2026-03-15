@@ -29,7 +29,7 @@ use b00t_cli::commands::{
     K8sCommands,
     McpCommands, ModelCommands,
     OntologyCommands,
-    SessionCommands, StackCommands,
+    SessionCommands, SoulCommands, StackCommands,
     TutorialCommands, VersionCommands, WhatismyCommands
     
 
@@ -229,6 +229,11 @@ The system will:
         message: Option<String>,
         #[clap(long, help = "Skip running tests (not recommended)")]
         skip_tests: bool,
+    },
+    #[clap(about = "Agentic soul — persistent identity & memory (~/._b00t_/SOUL.tomllm)")]
+    Soul {
+        #[clap(subcommand)]
+        soul_command: SoulCommands,
     },
     #[clap(about = "Query system information", alias = "inspect")]
     Whatismy {
@@ -1168,6 +1173,12 @@ async fn main() {
             skip_tests,
         }) => {
             if let Err(e) = checkpoint(message.as_deref(), *skip_tests) {
+                eprintln!("Error: {}", e);
+                std::process::exit(1);
+            }
+        }
+        Some(Commands::Soul { soul_command }) => {
+            if let Err(e) = b00t_cli::commands::soul::handle_soul_command(soul_command) {
                 eprintln!("Error: {}", e);
                 std::process::exit(1);
             }

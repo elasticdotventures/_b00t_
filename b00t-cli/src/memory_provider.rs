@@ -32,19 +32,47 @@ impl MemoryProvider for FileMemory {
         if !self.path.exists() {
             return Ok(None);
         }
-        let content = std::fs::read_to_string(&self.path)?;
+        let raw = std::fs::read_to_string(&self.path)?;
+        // Strip .tomllm comment lines before TOML parsing
+        let content: String = raw
+            .lines()
+            .filter(|l| !l.trim_start().starts_with('#'))
+            .collect::<Vec<_>>()
+            .join("\n");
         let store: FileStore = toml::from_str(&content).unwrap_or_default();
         Ok(store.data.get(key).cloned())
     }
 
     fn write(&self, key: &str, val: &str) -> Result<()> {
+        // Ensure parent dir exists (~/._b00t_/)
+        if let Some(parent) = self.path.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
         let mut store: FileStore = if self.path.exists() {
-            toml::from_str(&std::fs::read_to_string(&self.path)?).unwrap_or_default()
+            let raw = std::fs::read_to_string(&self.path)?;
+            let stripped: String = raw
+                .lines()
+                .filter(|l| !l.trim_start().starts_with('#'))
+                .collect::<Vec<_>>()
+                .join("\n");
+            toml::from_str(&stripped).unwrap_or_default()
         } else {
             FileStore::default()
         };
         store.data.insert(key.to_string(), val.to_string());
-        std::fs::write(&self.path, toml::to_string(&store)?)?;
+        // Write with .tomllm header + b00t:map tail
+        let toml_body = toml::to_string(&store)?;
+        let output = format!(
+            "# b00t SOUL — agentic identity & persistent memory\n\
+             # @tribal: soul persists across sessions; write via `b00t soul set`, never edit directly\n\
+             \n\
+             {toml_body}\n\
+             # b00t:map v1\n\
+             # summary: agent soul — accumulated identity, memory, lessons\n\
+             # tags: soul, memory, identity, session\n\
+             # tier: sm0l\n"
+        );
+        std::fs::write(&self.path, output)?;
         Ok(())
     }
 
@@ -62,17 +90,22 @@ pub fn is_copaw_available() -> bool {
         .unwrap_or(false)
 }
 
+/// Canonical SOUL file path: ~/._b00t_/SOUL.tomllm
+/// 🤓 ._b00t_ (dot-underscore-b00t-underscore) is the soul directory — separate from .b00t (runtime)
+pub fn soul_path() -> PathBuf {
+    dirs::home_dir()
+        .unwrap_or_else(|| PathBuf::from("/tmp"))
+        .join("._b00t_")
+        .join("SOUL.tomllm")
+}
+
 /// Detect best available memory provider (copaw > redis > file fallback)
 pub fn detect_provider() -> Box<dyn MemoryProvider> {
     // Future: if is_copaw_available() { return Box::new(CopawMemory::new()); }
     // Future: if redis_ping_ok() { return Box::new(RedisMemory::new()); }
 
-    // File fallback — always available
-    let path = dirs::home_dir()
-        .unwrap_or_else(|| PathBuf::from("/tmp"))
-        .join(".b00t")
-        .join("memory.toml");
-    Box::new(FileMemory::new(path))
+    // File fallback — soul file at ~/._b00t_/SOUL.tomllm
+    Box::new(FileMemory::new(soul_path()))
 }
 
 #[cfg(test)]
