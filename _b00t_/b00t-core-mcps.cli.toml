@@ -62,8 +62,6 @@ echo "✅ Core MCP servers installation completed"
 update = '''
 # Update all core MCP servers  
 echo "🔄 Updating core MCP servers..."
-
-# Keep MCP server list in sync with install step
 declare -A MCP_SERVERS=(
     ["b00t-mcp"]="no-deps"           # Core b00t command proxy
     ["github"]="node.cli,gh.cli"     # GitHub integration  

@@ -72,7 +72,7 @@ b00t mcp install <server>  # Install MCP server
 
 ### Starting Work
 1. Use `sequential-thinking` MCP to create a plan
-2. Track progress with lightweight repo-native mechanisms (repository issue tracker such as GitHub Issues, PR state, or `b00t` job checkpoints)
+2. Track progress via lightweight repo-native channels (GitHub issues, PR state, or `b00t` job checkpoints)
 3. Verify assumptions from first principles
 4. Check for existing libraries/solutions before coding
 5. **If acting as executive orchestrator**: delegate sub-tasks to specialized agents (see Sub-Agent Delegation below)
