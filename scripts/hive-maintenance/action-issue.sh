@@ -38,7 +38,7 @@ ISSUE_BODY=$(gh issue view "${ISSUE_NUM}" --repo "${REPO}" --json body -q '.body
 
 # ── 2. Create worktree on feature branch ─────────────────────────────────────
 mkdir -p "${WORKTREE_ROOT}"
-REPO_ROOT=$(git -C /home/brianh/.b00t rev-parse --show-toplevel)
+REPO_ROOT=$(git rev-parse --show-toplevel)
 
 # Check if branch already exists
 if git -C "${REPO_ROOT}" rev-parse --verify "${BRANCH}" >/dev/null 2>&1; then
