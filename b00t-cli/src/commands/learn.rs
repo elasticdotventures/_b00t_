@@ -120,7 +120,22 @@ async fn handle_display(path: &str, topic: &str, opts: DisplayOpts) -> Result<()
         );
     }
 
-    knowledge.display(&opts)
+    knowledge.display(&opts)?;
+
+    // Run hook_learn if present in datum
+    if let Ok((config, _)) = crate::get_config(topic, path) {
+        if let Some(script) = config.b00t.hook_learn {
+            use crate::hook_engine::{run_hook, HookResult};
+            match run_hook(&script) {
+                HookResult::Ok => {}
+                HookResult::Info(msg) | HookResult::Warn(msg) => println!("{}", msg),
+                HookResult::Missing(msg) => println!("⚠️  {}", msg),
+                HookResult::Redirect(_) => {}
+            }
+        }
+    }
+
+    Ok(())
 }
 
 async fn handle_record(path: &str, topic: Option<&str>, lesson: &str, global: bool) -> Result<()> {

@@ -214,9 +214,11 @@ pub struct BootDatum {
     // 🤓 hook_detect:  runs before version detection; return "ok" | "warn: <msg>" | "redirect:<datum>"
     // 🤓 hook_install: runs before install; can abort/redirect (e.g. terraform→opentofu)
     // 🤓 hook_update:  runs before update; same protocol as hook_detect
+    // 🤓 hook_learn:   runs during `b00t learn <topic>`; return value appended to learn output
     pub hook_detect: Option<String>,
     pub hook_install: Option<String>,
     pub hook_update: Option<String>,
+    pub hook_learn: Option<String>,
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
