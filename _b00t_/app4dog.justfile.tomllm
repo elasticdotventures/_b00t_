@@ -15,7 +15,7 @@ hints   = "app4dog workspace justfile — CI, ACR, CVAT, Metaflow, dev-up/down"
 path        = "justfile"
 mcp_server  = "just-mcp"
 recipe_groups = ["dev", "db", "ci", "docker", "acr", "cvat", "ml", "proxy", "health"]
-sandbox     = "local"
+allowed_sandboxes = ["none", "ebpf"]   # none = direct; ebpf = future eBPF scoped
 allow_side_effects = true
 # ⚠️需 require declares runtime deps; sandbox validates before granting execution
 require     = ["docker", "just", "tofu"]

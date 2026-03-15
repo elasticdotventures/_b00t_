@@ -20,6 +20,7 @@ pub mod datum_docker;
 pub mod datum_gemini;
 pub mod datum_job;
 pub mod datum_justfile;
+pub mod just_ast;
 pub mod datum_k8s;
 pub mod datum_mcp;
 pub mod datum_repo;
@@ -259,8 +260,10 @@ pub struct JustfileConfig {
     pub mcp_server: Option<String>,
     /// Logical recipe groups for agent navigation (e.g. ["dev", "ci", "ml"])
     pub recipe_groups: Option<Vec<String>>,
-    /// Execution context: "local" | "container" | "wasm"
+    /// Execution context: "local" | "container" | "wasm" (backward compat — single preferred sandbox)
     pub sandbox: Option<String>,
+    /// Ordered subset of sandbox kinds this justfile is compatible with (e.g. ["none", "ebpf"])
+    pub allowed_sandboxes: Option<Vec<String>>,
     /// Whether run_recipe has side effects (default: true — conservative)
     pub allow_side_effects: Option<bool>,
     /// eBPF-scoped capabilities — tested contract, not a request
