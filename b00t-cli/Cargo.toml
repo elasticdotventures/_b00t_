@@ -54,6 +54,7 @@ fs2 = "0.4"
 confy = "2.0.0"
 libc = "0.2"
 reqwest = { version = "0.12.23", features = ["blocking", "json"] }
+axum = { version = "0.7", features = ["macros"] }
 sqlx = { version = "0.8", features = ["sqlite", "runtime-tokio"] }
 rusqlite = { version = "0.32", features = ["bundled"] }
 whoami = "1.5"

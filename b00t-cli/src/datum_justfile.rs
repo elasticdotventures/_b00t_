@@ -1,18 +1,21 @@
+use crate::just_ast::{AstDiff, JustfileAst};
 use crate::traits::*;
-use crate::{BootDatum, JustfileCapabilities, JustfileConfig, check_command_available, get_config};
+use crate::{BootDatum, JustfileConfig, check_command_available, get_config};
 use anyhow::{Context, Result, anyhow};
-use duct::cmd;
 use std::path::{Path, PathBuf};
 use std::time::Instant;
 
 /// A registered justfile — the b00t-native executable unit.
 ///
-/// Only registered justfile datums are visible to just-mcp.
-/// The sandbox reads `[b00t.justfile.capabilities]` to scope the agent's
-/// filesystem view via eBPF before recipe execution begins.
+/// Carries a live JustfileAst loaded from `just --dump --dump-format json`.
+/// Call `reload()` to detect changes and get a structural diff.
+/// The sandbox kind vector declares which isolation contexts this justfile
+/// is compatible with; the runtime picks the first one it supports.
 pub struct JustfileDatum {
     pub datum: BootDatum,
     pub justfile_path: PathBuf,
+    /// Live AST — None until first load_ast() call
+    pub ast: Option<JustfileAst>,
 }
 
 impl JustfileDatum {
@@ -20,12 +23,31 @@ impl JustfileDatum {
         let (config, _filename) = get_config(name, path).map_err(|e| anyhow!("{}", e))?;
         let datum = config.b00t;
         let justfile_path = Self::resolve_justfile_path(&datum, path)?;
-        Ok(JustfileDatum { datum, justfile_path })
+        Ok(JustfileDatum { datum, justfile_path, ast: None })
     }
 
     pub fn from_datum(datum: BootDatum, base_dir: &Path) -> Result<Self> {
         let justfile_path = Self::resolve_justfile_path(&datum, &base_dir.display().to_string())?;
-        Ok(JustfileDatum { datum, justfile_path })
+        Ok(JustfileDatum { datum, justfile_path, ast: None })
+    }
+
+    /// Load (or return cached) AST. Uses just's JSON dump — requires just >= 1.13.0.
+    pub fn load_ast(&mut self) -> Result<&JustfileAst> {
+        if self.ast.is_none() {
+            self.ast = Some(JustfileAst::load(&self.justfile_path)?);
+        }
+        Ok(self.ast.as_ref().unwrap())
+    }
+
+    /// Reload AST if justfile has changed; return structural diff.
+    pub fn reload(&mut self) -> Result<AstDiff> {
+        match self.ast.as_mut() {
+            Some(ast) => ast.reload(),
+            None => {
+                self.ast = Some(JustfileAst::load(&self.justfile_path)?);
+                Ok(AstDiff::empty())
+            }
+        }
     }
 
     fn resolve_justfile_path(datum: &BootDatum, base_dir: &str) -> Result<PathBuf> {
@@ -58,10 +80,6 @@ impl JustfileDatum {
     fn justfile_config(&self) -> JustfileConfig {
         self.datum.justfile.clone().unwrap_or_default()
     }
-
-    fn capabilities(&self) -> JustfileCapabilities {
-        self.justfile_config().capabilities.unwrap_or_default()
-    }
 }
 
 impl TryFrom<(&str, &str)> for JustfileDatum {
@@ -77,10 +95,15 @@ impl DatumChecker for JustfileDatum {
     }
 
     fn current_version(&self) -> Option<String> {
-        // Justfiles don't carry versions — return the file hash as a change signal
-        std::fs::read(&self.justfile_path)
+        // Use mtime as the "version" — changes are detected via AstDiff
+        std::fs::metadata(&self.justfile_path)
             .ok()
-            .map(|bytes| format!("{:x}", md5_simple(&bytes)))
+            .and_then(|m| m.modified().ok())
+            .map(|t| {
+                t.duration_since(std::time::UNIX_EPOCH)
+                    .map(|d| d.as_secs().to_string())
+                    .unwrap_or_else(|_| "unknown".to_string())
+            })
     }
 
     fn desired_version(&self) -> Option<String> {
@@ -160,18 +183,27 @@ impl CliExecutor for JustfileDatum {
         just_args.extend_from_slice(args);
 
         let start = Instant::now();
-        let output = cmd("just", &just_args)
-            .dir(working_dir)
-            .stderr_to_stdout()
-            .read()
+        let output = std::process::Command::new("just")
+            .args(&just_args)
+            .current_dir(working_dir)
+            .output()
             .context("just execution failed")?;
 
+        let stdout = String::from_utf8_lossy(&output.stdout).into_owned();
+        let exit_code = output.status.code().unwrap_or(-1);
+
         Ok(ExecOutput {
-            value: output,
-            exit_code: 0,
+            value: stdout,
+            exit_code,
             duration_ms: start.elapsed().as_millis() as u64,
             sandbox: self.sandbox_requirements(),
-            declared_effects: vec![],
+            sandbox_kind: self.allowed_sandboxes().into_iter().next().unwrap_or(SandboxKind::None),
+            io_method: self.io_method(),
+            declared_effects: if self.justfile_config().allow_side_effects.unwrap_or(true) {
+                vec!["filesystem-write".to_string()]
+            } else {
+                vec![]
+            },
         })
     }
 
@@ -183,15 +215,15 @@ impl CliExecutor for JustfileDatum {
         ];
         just_args.extend_from_slice(args);
 
-        let command_line = format!("just {}", just_args.join(" "));
-        let working_dir = self
-            .justfile_path
-            .parent()
+        let working_dir = self.justfile_path.parent()
             .map(PathBuf::from)
             .unwrap_or_else(|| PathBuf::from("."));
 
+        let sandbox_kind = self.allowed_sandboxes().into_iter().next().unwrap_or(SandboxKind::None);
+        let io_method = IoMethod::for_sandbox(&sandbox_kind);
+
         Ok(ExecPlan {
-            command_line,
+            command_line: format!("just {}", just_args.join(" ")),
             working_dir,
             env: vec![],
             declared_effects: if self.justfile_config().allow_side_effects.unwrap_or(true) {
@@ -199,45 +231,36 @@ impl CliExecutor for JustfileDatum {
             } else {
                 vec![]
             },
+            sandbox_kind,
+            io_method,
         })
     }
 
     fn list_commands(&self) -> Result<Vec<CommandSignature>> {
-        let output = cmd!(
-            "just",
-            "--justfile",
-            self.justfile_path.display().to_string(),
-            "--list",
-            "--list-heading",
-            "",
-            "--list-prefix",
-            ""
-        )
-        .read()
-        .context("just --list failed")?;
+        // Use just's JSON dump for rich parameter info
+        let ast = JustfileAst::load(&self.justfile_path)?;
+        let mut recipes = ast.recipes_sorted();
 
-        let signatures = output
-            .lines()
-            .filter(|l| !l.trim().is_empty())
-            .map(|line| {
-                let parts: Vec<&str> = line.splitn(2, ' ').collect();
-                CommandSignature {
-                    name: parts[0].trim().to_string(),
-                    description: parts.get(1).map(|s| s.trim().to_string()),
-                    parameters: vec![],
-                    dependencies: vec![],
-                }
-            })
-            .collect();
+        // Filter out private recipes
+        recipes.retain(|r| !r.private);
 
-        Ok(signatures)
+        Ok(recipes.iter().map(|r| CommandSignature {
+            name: r.name.clone(),
+            description: r.doc.clone(),
+            parameters: r.parameters.iter().map(|p| ParameterSignature {
+                name: p.name.clone(),
+                default_value: p.default.clone(),
+                required: p.default.is_none() && p.kind == "singular",
+                kind: p.kind.clone(),
+            }).collect(),
+            dependencies: r.dependencies.clone(),
+            private: r.private,
+        }).collect())
     }
 
     fn sandbox_requirements(&self) -> SandboxRequirements {
-        let caps = self.capabilities();
-        let justfile_dir = self
-            .justfile_path
-            .parent()
+        let caps = self.justfile_config().capabilities.unwrap_or_default();
+        let justfile_dir = self.justfile_path.parent()
             .map(PathBuf::from)
             .unwrap_or_else(|| PathBuf::from("."));
 
@@ -247,8 +270,7 @@ impl CliExecutor for JustfileDatum {
                 let path = if Path::new(&p).is_absolute() {
                     PathBuf::from(&p)
                 } else {
-                    self.justfile_path
-                        .parent()
+                    self.justfile_path.parent()
                         .unwrap_or_else(|| Path::new("."))
                         .join(&p)
                 };
@@ -266,13 +288,21 @@ impl CliExecutor for JustfileDatum {
             max_duration: None,
         }
     }
-}
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
+    fn allowed_sandboxes(&self) -> Vec<SandboxKind> {
+        let config = self.justfile_config();
+        if let Some(kinds) = config.allowed_sandboxes {
+            kinds.iter().map(|s| SandboxKind::from_str(s)).collect()
+        } else if let Some(single) = config.sandbox {
+            vec![SandboxKind::from_str(&single)]
+        } else {
+            // Default: None (direct execution) is always permitted
+            vec![SandboxKind::None]
+        }
+    }
 
-/// Minimal MD5-like hash for change detection — not crypto, just a fingerprint.
-fn md5_simple(data: &[u8]) -> u64 {
-    data.iter().fold(0xcbf29ce484222325u64, |acc, &b| {
-        acc.wrapping_mul(0x100000001b3).wrapping_add(b as u64)
-    })
+    fn io_method(&self) -> IoMethod {
+        let preferred_sandbox = self.allowed_sandboxes().into_iter().next().unwrap_or(SandboxKind::None);
+        IoMethod::for_sandbox(&preferred_sandbox)
+    }
 }
