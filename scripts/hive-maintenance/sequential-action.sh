@@ -70,12 +70,16 @@ for issue_spec in "${ISSUES[@]}"; do
 
     log "▶️  processing #${num} [${cluster}]: ${title}"
 
-    PR_URL=$(REPO="${REPO}" MAX_OODA="${MAX_OODA}" WORKTREE_ROOT="${WORKTREE_ROOT}" \
-        "${OODA}" "${num}" "${cluster}" "${title}" 2>&1 | tee -a "${RESULTS_LOG}" | tail -1) || {
+    OODA_OUTPUT=$(REPO="${REPO}" MAX_OODA="${MAX_OODA}" WORKTREE_ROOT="${WORKTREE_ROOT}" \
+        "${OODA}" "${num}" "${cluster}" "${title}" 2>&1) || {
         log "❌ #${num} failed OODA loop"
         FAILED=$((FAILED + 1))
         continue
     }
+
+    printf '%s\n' "${OODA_OUTPUT}" | tee -a "${RESULTS_LOG}" >/dev/null
+
+    PR_URL=$(printf '%s\n' "${OODA_OUTPUT}" | grep -oE 'https://github.com[^[:space:]]*' | head -n1 || true)
 
     if echo "${PR_URL}" | grep -q "github.com"; then
         log "✅ #${num} → ${PR_URL}"
