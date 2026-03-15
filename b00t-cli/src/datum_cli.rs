@@ -1,7 +1,9 @@
 use crate::traits::*;
 use crate::{BootDatum, check_command_available, get_config};
-use anyhow::Result;
+use anyhow::{Result, anyhow};
 use duct::cmd;
+use std::path::PathBuf;
+use std::time::Instant;
 
 pub struct CliDatum {
     pub datum: BootDatum,
@@ -125,5 +127,75 @@ impl ConstraintEvaluator for CliDatum {
 impl DatumProvider for CliDatum {
     fn datum(&self) -> &BootDatum {
         &self.datum
+    }
+}
+
+impl CliExecutor for CliDatum {
+    fn execute(&self, args: &[String]) -> Result<ExecOutput<String>> {
+        let name = &self.datum.name;
+        if !check_command_available(name) { return Err(anyhow!("CLI tool not found: {}", name)); }
+        let start = Instant::now();
+        let output = std::process::Command::new(name).args(args).output()
+            .map_err(|e| anyhow!("failed to execute {}: {}", name, e))?;
+        Ok(ExecOutput {
+            value: String::from_utf8_lossy(&output.stdout).into_owned(),
+            exit_code: output.status.code().unwrap_or(-1),
+            duration_ms: start.elapsed().as_millis() as u64,
+            sandbox: self.sandbox_requirements(),
+            sandbox_kind: SandboxKind::None, io_method: IoMethod::Stdio,
+            declared_effects: vec![],
+        })
+    }
+    fn dry_run(&self, args: &[String]) -> Result<ExecPlan> {
+        let cmd = std::iter::once(self.datum.name.as_str())
+            .chain(args.iter().map(String::as_str)).collect::<Vec<_>>().join(" ");
+        Ok(ExecPlan { command_line: cmd, working_dir: PathBuf::from("."), env: vec![],
+            declared_effects: vec![], sandbox_kind: SandboxKind::None, io_method: IoMethod::Stdio })
+    }
+    fn list_commands(&self) -> Result<Vec<CommandSignature>> {
+        Ok(vec![CommandSignature {
+            name: self.datum.name.clone(),
+            description: Some(self.datum.hint.clone()).filter(|h| !h.is_empty()),
+            parameters: vec![ParameterSignature { name: "args".to_string(), default_value: None, required: false, kind: "star".to_string() }],
+            dependencies: vec![], private: false,
+        }])
+    }
+    fn sandbox_requirements(&self) -> SandboxRequirements { SandboxRequirements::default() }
+    fn allowed_sandboxes(&self) -> Vec<SandboxKind> {
+        if let Some(s) = self.datum.justfile.as_ref().and_then(|jf| jf.sandbox.as_deref()) {
+            vec![SandboxKind::from_str(s)]
+        } else { vec![SandboxKind::None] }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    fn mkd(name: &str) -> CliDatum {
+        CliDatum { datum: BootDatum { name: name.to_string(), hint: format!("{} CLI", name), ..BootDatum::default() } }
+    }
+    #[test]
+    fn list_commands_returns_single_entry_for_cli() {
+        let d = mkd("echo");
+        let cmds = d.list_commands().unwrap();
+        assert_eq!(cmds.len(), 1);
+        assert_eq!(cmds[0].name, "echo");
+        assert_eq!(cmds[0].parameters[0].kind, "star");
+    }
+    #[test]
+    fn allowed_sandboxes_defaults_to_none() {
+        assert_eq!(mkd("echo").allowed_sandboxes(), vec![SandboxKind::None]);
+    }
+    #[test]
+    fn dry_run_builds_command_line() {
+        let plan = mkd("echo").dry_run(&["hello".to_string()]).unwrap();
+        assert!(plan.command_line.starts_with("echo"));
+        assert!(plan.command_line.contains("hello"));
+    }
+    #[test]
+    fn execute_captures_stdout() {
+        let out = mkd("echo").execute(&["hello-b00t".to_string()]).unwrap();
+        assert_eq!(out.exit_code, 0);
+        assert_eq!(out.value.trim(), "hello-b00t");
     }
 }
