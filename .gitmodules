@@ -40,3 +40,6 @@
 [submodule "just-mcp"]
 	path = just-mcp
 	url = https://github.com/PromptExecution/just-mcp
+[submodule "vendor/moltis-b00t"]
+	path = vendor/moltis-b00t
+	url = https://github.com/app4dog/moltis-b00t.git
