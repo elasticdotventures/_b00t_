@@ -32,16 +32,17 @@ State persists in git (branch + commit messages). Each phase can resume independ
 1. Write failing tests first (TDD). # output: test_files[]
 2. Implement minimum code to pass tests. # output: changed_files[]
 3. Run code-quality skill on all changed files. # output: quality_report
-4. AUTO-FIX all HIGH certainty findings. # output: auto_fix_log
-5. Surface MEDIUM findings to Operator. ← **HUMAN GATE (if MEDIUM findings exist)**
-6. Commit: `git commit -m "feat: <description>"` # output: commit_sha
+4. Run deslop skill on all changed files. # output: deslop_report
+5. AUTO-FIX all HIGH certainty findings (quality + deslop). # output: auto_fix_log
+6. Surface MEDIUM findings to Operator. ← **HUMAN GATE (if MEDIUM findings exist)**
+7. Commit: `git commit -m "feat: <description>"` # output: commit_sha
 
 ### Phase 4: REVIEW
 
 1. Run full test suite. # output: test_results (PASS|FAIL)
 2. If FAIL: diagnose, fix, re-run. Loop max 3x before escalating to Operator.
 3. Run code-quality on full diff. # output: quality_report
-4. Check for documentation drift (code changed without doc update). # output: drift_findings
+4. Run drift-detect on changed files. # output: drift_findings
 5. All LOW certainty findings → Operator review. ← **HUMAN GATE**
 6. Confirm ready to ship. ← **HUMAN GATE**
 
@@ -92,6 +93,10 @@ Detects current phase from branch + commit state, continues from last gate.
 
 - Uses `certainty-grade` skill for all findings
 - Uses `code-quality` skill at IMPLEMENT and REVIEW phases
+- Uses `certainty-grade` skill for all findings
+- Uses `code-quality` + `deslop` skills at IMPLEMENT phase
+- Uses `drift-detect` at REVIEW phase
+- Uses `model-routing` skill to select model per phase
 - Uses `b00t learn` for task-relevant topics before IMPLEMENT
 - Uses taskmaster-ai MCP when available
 - Falls back to gh issues if taskmaster-ai unavailable
