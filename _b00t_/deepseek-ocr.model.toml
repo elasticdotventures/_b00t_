@@ -2,7 +2,7 @@
 
 [b00t]
 name = "deepseek-ocr"
-type = "ai_model"
+type = "model"
 hint = "DeepSeek OCR visual encoder for scene text recognition"
 aliases = ["deepseek"]
 

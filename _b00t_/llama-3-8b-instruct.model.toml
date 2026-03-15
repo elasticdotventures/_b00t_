@@ -3,7 +3,7 @@
 
 [b00t]
 name = "llama-3-8b-instruct"
-type = "ai_model"
+type = "model"
 hint = "Meta's fast 8B parameter instruction-tuned model"
 
 [ai_model]

@@ -301,32 +301,31 @@ fn print_role_summary(role: &RoleDetails, path: &str) {
 mod tests {
     use super::*;
     use std::fs;
+    use std::sync::Mutex;
     use tempfile::TempDir;
+
+    // Serialize env-mutating tests — process env is global state
+    static ENV_MUTEX: Mutex<()> = Mutex::new(());
 
     #[test]
     fn test_detect_agent_claude() {
-        // Force ignore_env to avoid cross-test env races
+        let _guard = ENV_MUTEX.lock().unwrap();
         unsafe {
             std::env::set_var("_B00T_Agent", "test-agent");
-        }
-        unsafe {
             std::env::set_var("CLAUDECODE", "1");
         }
         assert_eq!(detect_agent(true), "claude");
         unsafe {
             std::env::remove_var("CLAUDECODE");
-        }
-        unsafe {
             std::env::remove_var("_B00T_Agent");
         }
     }
 
     #[test]
     fn test_detect_agent_env_variable() {
+        let _guard = ENV_MUTEX.lock().unwrap();
         unsafe {
             std::env::remove_var("CLAUDECODE");
-        }
-        unsafe {
             std::env::set_var("_B00T_Agent", "test-agent");
         }
         assert_eq!(detect_agent(false), "test-agent");
@@ -337,10 +336,9 @@ mod tests {
 
     #[test]
     fn test_detect_agent_ignore_env() {
+        let _guard = ENV_MUTEX.lock().unwrap();
         unsafe {
             std::env::remove_var("CLAUDECODE");
-        }
-        unsafe {
             std::env::set_var("_B00T_Agent", "test-agent");
         }
         assert_eq!(detect_agent(true), "");

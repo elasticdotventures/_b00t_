@@ -19,6 +19,8 @@ pub mod datum_database;
 pub mod datum_docker;
 pub mod datum_gemini;
 pub mod datum_job;
+pub mod datum_justfile;
+pub mod just_ast;
 pub mod datum_k8s;
 pub mod datum_mcp;
 pub mod datum_repo;
@@ -200,6 +202,10 @@ pub struct BootDatum {
     // Database connection
     pub dsn: Option<String>,
 
+    // Justfile datum configuration
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub justfile: Option<JustfileConfig>,
+
     // RAG / learn metadata
     pub learn: Option<LearnMeta>,
     pub lfmf_category: Option<String>,
@@ -214,9 +220,11 @@ pub struct BootDatum {
     // 🤓 hook_detect:  runs before version detection; return "ok" | "warn: <msg>" | "redirect:<datum>"
     // 🤓 hook_install: runs before install; can abort/redirect (e.g. terraform→opentofu)
     // 🤓 hook_update:  runs before update; same protocol as hook_detect
+    // 🤓 hook_learn:   runs during `b00t learn <topic>`; return value appended to learn output
     pub hook_detect: Option<String>,
     pub hook_install: Option<String>,
     pub hook_update: Option<String>,
+    pub hook_learn: Option<String>,
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
@@ -225,6 +233,41 @@ pub struct McpMethods {
     pub stdio: Option<Vec<std::collections::HashMap<String, serde_json::Value>>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub httpstream: Option<std::collections::HashMap<String, serde_json::Value>>,
+}
+
+/// Sandbox capabilities declared by a justfile datum.
+/// These are tested contracts, not access-control requests.
+/// An eBPF sandbox uses these to shape the agent's filesystem view —
+/// undeclared paths are absent, not denied.
+#[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Default)]
+pub struct JustfileCapabilities {
+    /// Whether network egress is permitted during recipe execution
+    pub network: Option<bool>,
+    /// Filesystem paths visible to the executing agent (globs supported)
+    pub filesystem: Option<Vec<String>>,
+    /// Environment variable patterns the recipe may read (globs supported)
+    pub env_vars: Option<Vec<String>>,
+    /// Secret names that must be injected by the sandbox, never logged
+    pub secrets: Option<Vec<String>>,
+}
+
+/// Justfile datum configuration — declares recipes, sandbox, and executor metadata.
+#[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Default)]
+pub struct JustfileConfig {
+    /// Path to the justfile, relative to the project root
+    pub path: Option<String>,
+    /// MCP server datum name that introspects this justfile (e.g. "just-mcp")
+    pub mcp_server: Option<String>,
+    /// Logical recipe groups for agent navigation (e.g. ["dev", "ci", "ml"])
+    pub recipe_groups: Option<Vec<String>>,
+    /// Execution context: "local" | "container" | "wasm" (backward compat — single preferred sandbox)
+    pub sandbox: Option<String>,
+    /// Ordered subset of sandbox kinds this justfile is compatible with (e.g. ["none", "ebpf"])
+    pub allowed_sandboxes: Option<Vec<String>>,
+    /// Whether run_recipe has side effects (default: true — conservative)
+    pub allow_side_effects: Option<bool>,
+    /// eBPF-scoped capabilities — tested contract, not a request
+    pub capabilities: Option<JustfileCapabilities>,
 }
 
 /// DatumType — b00t's typed datum registry.
@@ -253,6 +296,7 @@ tomllm::define_typed_registry! {
         Job         => ".job"       [ serde="job",          display="job"         ],
         AiModel     => ".ai_model"  [ serde="ai_model",     display="ai_model"    ],
         Ai          => ".ai"        [ serde="ai",           display="AI"          ],
+        Justfile    => ".justfile"  [ serde="justfile",     display="Justfile"    ],
     }
 }
 
@@ -637,6 +681,7 @@ pub fn create_unified_toml_config(datum: &BootDatum, path: &str) -> Result<()> {
         DatumType::Role => ".toml",
         DatumType::Skill => ".skill.toml",
         DatumType::HiveProfile => ".hive.toml",
+        DatumType::Justfile => ".justfile",
         // 🤓 .tomllm = valid TOML + # comment annotations for tribal knowledge
         // tomllm crate strips comments for data pipelines; tail-map enables fast executive scanning
         DatumType::Unknown => ".toml",
