@@ -126,7 +126,7 @@ if [[ "${IMPLEMENTED}" != "true" ]]; then
 fi
 
 # ── 5. Check if any files changed ────────────────────────────────────────────
-CHANGED=$(git -C "${WORKTREE}" status --porcelain | grep -v "^\?\? \.codex" | wc -l | tr -d ' ')
+CHANGED=$(git -C "${WORKTREE}" status --porcelain | grep -vF "?? .codex" | wc -l | tr -d ' ')
 if [[ "${CHANGED}" -eq 0 ]]; then
     log "no changes made — skipping commit"
     git -C "${REPO_ROOT}" worktree remove --force "${WORKTREE}" 2>/dev/null || true
