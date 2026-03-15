@@ -1,5 +1,7 @@
 use crate::BootDatum;
 use anyhow::Result;
+use std::path::PathBuf;
+use std::time::Duration;
 
 /// Display trait for generating k8s CRDs from b00t datums
 /// Enables MBSE-based stack → pod transformation
@@ -177,4 +179,131 @@ pub trait ConstraintEvaluator {
             }
         })
     }
+}
+
+// ── CliExecutor: polymorphic execution trait ──────────────────────────────────
+
+/// Declared sandbox capabilities — a tested contract, not a request.
+/// An eBPF sandbox uses these to deterministically scope the agent's view:
+/// undeclared paths are absent, not denied.
+#[derive(Debug, Clone, Default)]
+pub struct SandboxRequirements {
+    /// Network egress permitted
+    pub network: bool,
+    /// Filesystem paths visible to the agent (absolute, canonicalized)
+    pub filesystem: Vec<PathBuf>,
+    /// Environment variable patterns readable by the recipe (globs)
+    pub env_vars: Vec<String>,
+    /// Secrets injected by sandbox, never logged or echoed
+    pub secrets: Vec<String>,
+    /// Wall-clock execution limit
+    pub max_duration: Option<Duration>,
+}
+
+impl SandboxRequirements {
+    /// Merge two requirement sets — union of capabilities.
+    /// Used when composing recipe pipelines: the merged set is the minimum
+    /// sandbox required to run the full chain.
+    pub fn merge(mut self, other: &SandboxRequirements) -> Self {
+        self.network = self.network || other.network;
+        for p in &other.filesystem {
+            if !self.filesystem.contains(p) {
+                self.filesystem.push(p.clone());
+            }
+        }
+        for e in &other.env_vars {
+            if !self.env_vars.contains(e) {
+                self.env_vars.push(e.clone());
+            }
+        }
+        for s in &other.secrets {
+            if !self.secrets.contains(s) {
+                self.secrets.push(s.clone());
+            }
+        }
+        if let Some(other_dur) = other.max_duration {
+            self.max_duration = Some(match self.max_duration {
+                Some(d) => d.max(other_dur),
+                None => other_dur,
+            });
+        }
+        self
+    }
+}
+
+/// Metadata describing a single executable command or recipe.
+#[derive(Debug, Clone)]
+pub struct CommandSignature {
+    pub name: String,
+    pub description: Option<String>,
+    pub parameters: Vec<ParameterSignature>,
+    pub dependencies: Vec<String>,
+}
+
+/// A single parameter in a command signature.
+#[derive(Debug, Clone)]
+pub struct ParameterSignature {
+    pub name: String,
+    pub default_value: Option<String>,
+    pub required: bool,
+}
+
+/// What would execute — returned by `dry_run` without side effects.
+#[derive(Debug, Clone)]
+pub struct ExecPlan {
+    pub command_line: String,
+    pub working_dir: PathBuf,
+    pub env: Vec<(String, String)>,
+    pub declared_effects: Vec<String>,
+}
+
+/// Monadic execution result — wraps output with provenance metadata.
+/// Use `and_then` to chain executions; sandbox requirements propagate through the chain.
+pub struct ExecOutput<T> {
+    pub value: T,
+    pub exit_code: i32,
+    pub duration_ms: u64,
+    pub sandbox: SandboxRequirements,
+    pub declared_effects: Vec<String>,
+}
+
+impl<T> ExecOutput<T> {
+    /// Monadic bind — chain executions, merge sandbox requirements.
+    pub fn and_then<U, F>(self, f: F) -> Result<ExecOutput<U>>
+    where
+        F: FnOnce(T) -> Result<ExecOutput<U>>,
+    {
+        let sandbox = self.sandbox;
+        let mut next = f(self.value)?;
+        next.sandbox = next.sandbox.merge(&sandbox);
+        Ok(next)
+    }
+
+    /// Map over value, preserve metadata.
+    pub fn map<U, F: FnOnce(T) -> U>(self, f: F) -> ExecOutput<U> {
+        ExecOutput {
+            value: f(self.value),
+            exit_code: self.exit_code,
+            duration_ms: self.duration_ms,
+            sandbox: self.sandbox,
+            declared_effects: self.declared_effects,
+        }
+    }
+}
+
+/// Polymorphic execution trait — implemented by justfile, CLI, and bash datums.
+/// Provides a commodity interface: discover → plan → execute → compose.
+pub trait CliExecutor: DatumProvider {
+    /// Execute with the given arguments, returning output wrapped in provenance.
+    fn execute(&self, args: &[String]) -> Result<ExecOutput<String>>;
+
+    /// Dry-run: describe what would execute without triggering side effects.
+    fn dry_run(&self, args: &[String]) -> Result<ExecPlan>;
+
+    /// List available commands/recipes for agent discovery.
+    fn list_commands(&self) -> Result<Vec<CommandSignature>>;
+
+    /// Declare sandbox requirements for this executor.
+    /// Used by the eBPF sandbox to scope the agent's filesystem view.
+    fn sandbox_requirements(&self) -> SandboxRequirements;
 }
