@@ -13,7 +13,7 @@ Run hive maintenance: investigate all open GH issues, post findings, advance the
 ## Execute
 Run the dispatcher (dry-run first if no logs exist, then live):
 ```bash
-cd /home/brianh/.b00t
+cd {{repo-root}}
 # dry-run to verify
 bash scripts/hive-maintenance/dispatch-hive.sh --dry-run
 
