@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# ralph-issue.sh — codex worker + haiku reviewer per GH issue
+# ralph-issue.sh — codex worker + automated review per GH issue
 # Usage: ./ralph-issue.sh <issue_num> <cluster> "<issue_title>"
-# Pattern: codex exec → haiku review → gh comment
-# RL: re-runs if haiku rejects until MAX_ITER or APPROVED
+# Pattern: codex exec → codex-powered review → gh comment
+# RL: re-runs if review rejects until MAX_ITER or APPROVED
 
 set -euo pipefail
 
@@ -11,7 +11,6 @@ CLUSTER="${2:?cluster required}"
 ISSUE_TITLE="${3:?issue_title required}"
 MAX_ITER="${MAX_ITER:-5}"
 REPO="${REPO:-elasticdotventures/_b00t_}"
-BUDGET="${BUDGET:-0.50}"
 
 WORKDIR=$(mktemp -d /tmp/ralph-issue-${ISSUE_NUM}-XXXX)
 PROMPT_FILE="${WORKDIR}/PROMPT.md"
