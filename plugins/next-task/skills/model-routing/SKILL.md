@@ -21,7 +21,7 @@ Reads routing table from `_b00t_/model-routing.tomllm`. Falls back to hardcoded 
 
 1. Classify the task type. # output: task_type
 2. Map task_type → cognitive tier. # output: tier (sm0l|ch0nky|frontier)
-3. Read available models from `b00t learn model-routing` or datum file. # output: available_models[]
+3. Load routing config: `b00t learn model-routing` via MCP or CLI — NEVER read .tomllm directly. # output: available_models[]
 4. Select best available model for tier (prefer local, fallback frontier). # output: selected_model
 5. Check resource gate: `b00t hive status` — ensure RAM/GPU available. # output: resource_ok
 6. If resource gate fails: escalate one tier up or queue. # output: model_or_queue
@@ -73,4 +73,5 @@ Anti-pattern: running vLLM (qwen3-coder, 20GB VRAM) + HuggingFace download simul
 
 Used by `/next-task` at each phase to select model.
 Used by `b00t-mcp` agent delegation.
-Reads datum: `_b00t_/model-routing.tomllm`
+Load via: `b00t learn model-routing` (MCP preferred, CLI fallback)
+# 🤓 NEVER read _b00t_/*.tomllm directly — always use b00t learn/MCP which applies guardrails, guru enrichment & tribal knowledge
