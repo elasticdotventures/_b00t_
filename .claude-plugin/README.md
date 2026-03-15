@@ -69,7 +69,7 @@ Enforces Don't Repeat Yourself and Never Reinvent the Wheel principles.
 
 # Install plugins
 /plugin install b00t@b00t-plugins
-/plugin install ralph-yei@b00t-plugins
+/plugin install next-task@b00t-plugins
 ```
 
 > **Tip:** For local development, use `/plugin marketplace add /path/to/.b00t`
