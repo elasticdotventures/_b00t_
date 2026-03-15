@@ -748,3 +748,32 @@ ralph-run tool="codex" iterations="10":
 # Pre-project validation hook - run this before starting any work
 pre-project: ralph-hive-validate
     echo "✅ Hive validated - ready for project work"
+
+# Hive maintenance: dispatch codex+haiku agents per GH issue cluster (parallel)
+# Uses: scripts/hive-maintenance/dispatch-hive.sh
+# Each issue: codex exec investigates → haiku reviews → gh comment posted
+# RL: haiku rejects → codex retries until approved or max-iter
+hive-maintenance cluster="" max_iter="5":
+    #!/bin/bash
+    set -euo pipefail
+    SCRIPT="{{repo-root}}/scripts/hive-maintenance/dispatch-hive.sh"
+    chmod +x "${SCRIPT}"
+    ARGS=""
+    [[ -n "{{cluster}}" ]] && ARGS="${ARGS} --cluster {{cluster}}"
+    MAX_ITER={{max_iter}} bash "${SCRIPT}" ${ARGS}
+
+# Dry-run hive maintenance (verify issue mapping without API calls)
+hive-maintenance-dry:
+    #!/bin/bash
+    bash {{repo-root}}/scripts/hive-maintenance/dispatch-hive.sh --dry-run
+
+# Run ralph loop for hive maintenance in current session (uses HIVE_MAINTENANCE_PROMPT.md)
+# Stop hook intercepts exit → feeds same prompt → iterates until <promise> detected
+hive-ralph-loop max_iter="10":
+    #!/bin/bash
+    echo "🐝 Starting ralph loop for hive maintenance (max {{max_iter}} iters)"
+    echo "Prompt anchor: HIVE_MAINTENANCE_PROMPT.md"
+    claude --print \
+        --model claude-haiku-4-5-20251001 \
+        --max-budget-usd 0.10 \
+        "$(cat {{repo-root}}/HIVE_MAINTENANCE_PROMPT.md)"

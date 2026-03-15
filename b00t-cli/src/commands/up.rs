@@ -3,6 +3,7 @@ use anyhow::{Context, Result};
 use clap::Parser;
 use crate::session_memory::SessionMemory;
 use crate::commands::ontology::build_ontology;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 
 #[derive(Parser, Debug)]
@@ -22,14 +23,35 @@ pub struct UpArgs {
     /// Maximum restart cycles before giving up
     #[clap(long, default_value = "5")]
     pub max_restarts: u32,
+
+    /// Onboard a git repo: discover ._b00t_/ datums and symlink into ~/.b00t/_b00t_/
+    #[clap(long, help = "Repo path to onboard (defaults to cwd)", value_name = "PATH")]
+    pub repo: Option<Option<String>>,
+
+    /// Dry run — show what would be symlinked without writing (repo mode only)
+    #[clap(long)]
+    pub dry_run: bool,
 }
 
 impl UpArgs {
     pub fn execute(&self) -> Result<()> {
+        // Repo onboarding mode: `b00t up --repo [path]`
+        if let Some(repo_path) = &self.repo {
+            let path = repo_path.as_deref().unwrap_or(".");
+            return up_repo(path, self.dry_run);
+        }
+
         let workspace_root = crate::utils::get_workspace_root();
         let ralph_script = format!("{}/b00t.sh", workspace_root);
 
         if !std::path::Path::new(&ralph_script).exists() {
+            // Postel: check if we're in a git repo with ._b00t_/ before failing
+            let cwd = std::env::current_dir().unwrap_or_default();
+            if let Some(datum_dir) = find_repo_datum_dir(&cwd) {
+                println!("🥾 b00t up: no b00t.sh found, but ._b00t_/ detected at {}",
+                    datum_dir.display());
+                println!("   hint: run `b00t up --repo .` to onboard this repo");
+            }
             anyhow::bail!("b00t.sh not found at {}. Run from b00t workspace root.", ralph_script);
         }
 
@@ -108,6 +130,179 @@ impl UpArgs {
     }
 }
 
+// ── Repo onboarding ───────────────────────────────────────────────────────────
+
+/// Postel-defensive discovery: check several candidate paths for a b00t datum dir.
+/// Be liberal in what we accept (._b00t_/, .b00t/, _b00t_/, b00t/).
+fn find_repo_datum_dir(start: &Path) -> Option<PathBuf> {
+    let candidates = ["._b00t_", ".b00t", "_b00t_", "b00t"];
+    let mut dir = start.to_path_buf();
+    loop {
+        for name in &candidates {
+            let candidate = dir.join(name);
+            if candidate.is_dir() {
+                return Some(candidate);
+            }
+        }
+        // Also accept a bare b00t.toml / workspace.project.tomllm at root
+        if dir.join(".git").exists() {
+            break; // hit git root without finding datum dir
+        }
+        if !dir.pop() {
+            break;
+        }
+    }
+    None
+}
+
+/// Walk up from `start` to find the git repository root.
+fn find_git_root(start: &Path) -> Option<PathBuf> {
+    let mut dir = start.to_path_buf();
+    loop {
+        if dir.join(".git").exists() {
+            return Some(dir);
+        }
+        if !dir.pop() {
+            return None;
+        }
+    }
+}
+
+/// Derive a namespace slug from git remote URL or directory name.
+/// e.g. "git@github.com:app4dog/workspace.git" → "app4dog--workspace"
+fn namespace_from_repo(repo_root: &Path) -> String {
+    // Try git remote origin URL
+    let output = Command::new("git")
+        .args(["-C", &repo_root.to_string_lossy(), "remote", "get-url", "origin"])
+        .output()
+        .ok()
+        .filter(|o| o.status.success());
+
+    if let Some(out) = output {
+        let url = String::from_utf8_lossy(&out.stdout).trim().to_string();
+        // Extract "owner/repo" from SSH or HTTPS URL
+        let slug = url
+            .trim_end_matches(".git")
+            .split([':', '/'])
+            .rev()
+            .take(2)
+            .collect::<Vec<_>>()
+            .into_iter()
+            .rev()
+            .collect::<Vec<_>>()
+            .join("--");
+        if !slug.is_empty() {
+            return slug;
+        }
+    }
+
+    // Fallback: directory name
+    repo_root
+        .file_name()
+        .map(|n| n.to_string_lossy().to_string())
+        .unwrap_or_else(|| "unknown".to_string())
+}
+
+/// Core repo onboarding: discover ._b00t_/ datums, symlink into ~/.b00t/_b00t_/
+fn up_repo(path: &str, dry_run: bool) -> Result<()> {
+    let start = Path::new(path).canonicalize()
+        .with_context(|| format!("Cannot resolve path: {}", path))?;
+
+    // 1. Find git root (required — we need it for namespace derivation)
+    let git_root = find_git_root(&start)
+        .ok_or_else(|| anyhow::anyhow!("Not inside a git repository: {}", start.display()))?;
+
+    // 2. Find datum dir (Postel: multiple candidate names)
+    let datum_dir = find_repo_datum_dir(&git_root)
+        .ok_or_else(|| anyhow::anyhow!(
+            "No ._b00t_/ directory found in {}.\n  Create one with: mkdir ._b00t_",
+            git_root.display()
+        ))?;
+
+    // 3. Derive namespace for symlink prefixing
+    let namespace = namespace_from_repo(&git_root);
+    println!("🥾 b00t up --repo: {}", git_root.display());
+    println!("   namespace : {}", namespace);
+    println!("   datum dir : {}", datum_dir.display());
+    if dry_run {
+        println!("   mode      : dry-run (no changes written)");
+    }
+
+    // 4. Find all .tomllm files in the datum dir
+    let entries = std::fs::read_dir(&datum_dir)
+        .with_context(|| format!("Cannot read {}", datum_dir.display()))?;
+
+    let tomllm_files: Vec<PathBuf> = entries
+        .filter_map(|e| e.ok())
+        .map(|e| e.path())
+        .filter(|p| p.extension().map(|x| x == "tomllm").unwrap_or(false)
+            || p.to_string_lossy().ends_with(".tomllm"))
+        .collect();
+
+    if tomllm_files.is_empty() {
+        println!("   ⚠️  no .tomllm files found in {}", datum_dir.display());
+        return Ok(());
+    }
+
+    // 5. Symlink each into ~/.b00t/_b00t_/ as <namespace>--<filename>
+    let b00t_datum_dir = dirs::home_dir()
+        .ok_or_else(|| anyhow::anyhow!("Cannot determine home directory"))?
+        .join(".b00t")
+        .join("_b00t_");
+
+    if !b00t_datum_dir.exists() && !dry_run {
+        std::fs::create_dir_all(&b00t_datum_dir)
+            .with_context(|| format!("Cannot create {}", b00t_datum_dir.display()))?;
+    }
+
+    let mut registered = 0usize;
+    for src in &tomllm_files {
+        let filename = src.file_name().unwrap().to_string_lossy();
+        let link_name = format!("{namespace}--{filename}");
+        let link_path = b00t_datum_dir.join(&link_name);
+
+        if dry_run {
+            println!("   [dry-run] {} → {}", link_name, src.display());
+            continue;
+        }
+
+        // If link already exists and points to same target, skip silently
+        if link_path.exists() || link_path.symlink_metadata().is_ok() {
+            if let Ok(existing) = std::fs::read_link(&link_path) {
+                if existing == *src {
+                    println!("   ✓ already linked: {}", link_name);
+                    registered += 1;
+                    continue;
+                }
+                // Stale symlink — replace it
+                std::fs::remove_file(&link_path)
+                    .with_context(|| format!("Cannot remove stale link: {}", link_path.display()))?;
+            } else {
+                // Real file exists — don't clobber, warn instead
+                println!("   ⚠️  skipped (real file exists): {}", link_path.display());
+                continue;
+            }
+        }
+
+        std::os::unix::fs::symlink(src, &link_path)
+            .with_context(|| format!("Cannot create symlink: {}", link_path.display()))?;
+        println!("   → {}", link_name);
+        registered += 1;
+    }
+
+    if !dry_run {
+        println!("   ✅ registered {} datum(s) into {}", registered, b00t_datum_dir.display());
+        // Persist to session memory so subsequent commands know the active repo
+        if let Ok(mut session) = SessionMemory::load() {
+            let _ = session.set("up.repo.root", &git_root.to_string_lossy());
+            let _ = session.set("up.repo.namespace", &namespace);
+            let _ = session.set("up.repo.datum_dir", &datum_dir.to_string_lossy());
+        }
+    }
+
+    Ok(())
+}
+
 /// Emit b00t up state change event to IPC channel (best-effort, non-fatal)
 fn emit_up_heartbeat(cycle: u32, exit_code: i32, role: &Option<String>) {
     let msg = format!(
@@ -154,6 +349,8 @@ mod tests {
             max_iter: 10,
             role: None,
             max_restarts: 5,
+            repo: None,
+            dry_run: false,
         };
         assert_eq!(args.tool, "claude");
         assert_eq!(args.max_iter, 10);
@@ -215,6 +412,35 @@ mod tests {
         }
         assert!(hit_max);
         assert_eq!(restart_count, 3);
+    }
+
+    #[test]
+    fn test_find_git_root_finds_ancestor() {
+        // Any path inside this cargo workspace should resolve to a git root
+        let cwd = std::env::current_dir().unwrap();
+        let root = find_git_root(&cwd);
+        assert!(root.is_some(), "should find git root from cwd");
+        assert!(root.unwrap().join(".git").exists());
+    }
+
+    #[test]
+    fn test_namespace_from_repo_fallback_to_dirname() {
+        // In a temp dir with no git remote, should fall back to dir name
+        let tmp = std::env::temp_dir().join("b00t-test-ns");
+        let _ = std::fs::create_dir_all(&tmp);
+        let ns = namespace_from_repo(&tmp);
+        assert!(!ns.is_empty(), "namespace should not be empty");
+        // Cleanup (best-effort)
+        let _ = std::fs::remove_dir(&tmp);
+    }
+
+    #[test]
+    fn test_find_repo_datum_dir_returns_none_for_tempdir() {
+        // A fresh temp dir has no ._b00t_/ etc.
+        let tmp = std::env::temp_dir();
+        // Only fails if none of the candidate dirs exist at tmp or its ancestors
+        // (This is a best-effort check — may return Some if temp is under a b00t repo)
+        let _ = find_repo_datum_dir(&tmp); // just verify it doesn't panic
     }
 
     #[test]

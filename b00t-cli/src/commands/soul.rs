@@ -5,11 +5,22 @@
 //! knowledge, role state, and tribal memory.
 //!
 //! Inspired by moltis per-agent memory workspaces + session persistence.
+//!
+//! ## b00t soul serve
+//! Exposes soul K/V over HTTP so external consumers (moltis MoltisMemory_🥾)
+//! can delegate their K/V caches to b00t without linking the b00t crate.
+//!
+//! API:
+//! - GET    /v1/kv/{key}         → `{"value": "..."}` or 404
+//! - PUT    /v1/kv/{key}         → body `{"value": "..."}`, 204
+//! - DELETE /v1/kv/{key}         → 204
+//! - GET    /v1/kv?prefix=<pfx>  → `{"keys": [...]}`
+//! - GET    /healthz              → `{"status": "ok"}`
 
 use anyhow::Result;
 use clap::Parser;
 
-use crate::memory_provider::{FileMemory, MemoryProvider, soul_path};
+use crate::memory_provider::{FileMemory, MemoryProvider, detect_provider, soul_path};
 
 #[derive(Parser)]
 pub enum SoulCommands {
@@ -40,6 +51,14 @@ pub enum SoulCommands {
     Reset {
         #[clap(long, help = "Confirm reset without prompt")]
         confirm: bool,
+    },
+
+    #[clap(about = "Serve soul K/V over HTTP (port 7700 by default)")]
+    Serve {
+        #[clap(long, default_value = "7700", help = "TCP port to listen on")]
+        port: u16,
+        #[clap(long, default_value = "127.0.0.1", help = "Bind address")]
+        host: String,
     },
 }
 
@@ -125,5 +144,140 @@ pub fn handle_soul_command(cmd: &SoulCommands) -> Result<()> {
             println!("soul: reset — {}", path.display());
             Ok(())
         }
+
+        SoulCommands::Serve { port, host } => {
+            let rt = tokio::runtime::Runtime::new()?;
+            rt.block_on(serve_soul_kv(host, *port))
+        }
     }
+}
+
+// ─── soul serve HTTP API ──────────────────────────────────────────────────────
+
+use std::sync::Arc;
+
+use axum::{
+    Router,
+    extract::{Path as AxumPath, Query, State},
+    http::StatusCode,
+    response::IntoResponse,
+    routing::get,
+};
+use serde::{Deserialize, Serialize};
+
+#[derive(Clone)]
+struct SoulState {
+    provider: Arc<dyn MemoryProvider>,
+}
+
+#[derive(Serialize, Deserialize)]
+struct KvValue {
+    value: String,
+}
+
+#[derive(Serialize, Deserialize)]
+struct KvKeys {
+    keys: Vec<String>,
+}
+
+#[derive(Deserialize)]
+struct PrefixQuery {
+    prefix: Option<String>,
+}
+
+async fn kv_get(
+    State(s): State<SoulState>,
+    AxumPath(key): AxumPath<String>,
+) -> impl IntoResponse {
+    match s.provider.read(&key) {
+        Ok(Some(val)) => {
+            let body = serde_json::to_string(&KvValue { value: val }).unwrap_or_default();
+            (StatusCode::OK, body).into_response()
+        }
+        Ok(None) => StatusCode::NOT_FOUND.into_response(),
+        Err(e) => {
+            let msg = format!("{{\"error\":\"{e}\"}}");
+            (StatusCode::INTERNAL_SERVER_ERROR, msg).into_response()
+        }
+    }
+}
+
+async fn kv_put(
+    State(s): State<SoulState>,
+    AxumPath(key): AxumPath<String>,
+    body: String,
+) -> impl IntoResponse {
+    let kv: KvValue = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => {
+            return (
+                StatusCode::BAD_REQUEST,
+                format!("{{\"error\":\"bad JSON: {e}\"}}"),
+            )
+                .into_response()
+        }
+    };
+    match s.provider.write(&key, &kv.value) {
+        Ok(()) => StatusCode::NO_CONTENT.into_response(),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("{{\"error\":\"{e}\"}}"),
+        )
+            .into_response(),
+    }
+}
+
+async fn kv_delete(
+    State(s): State<SoulState>,
+    AxumPath(key): AxumPath<String>,
+) -> impl IntoResponse {
+    match s.provider.delete(&key) {
+        Ok(()) => StatusCode::NO_CONTENT.into_response(),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("{{\"error\":\"{e}\"}}"),
+        )
+            .into_response(),
+    }
+}
+
+async fn kv_list(
+    State(s): State<SoulState>,
+    Query(q): Query<PrefixQuery>,
+) -> impl IntoResponse {
+    let prefix = q.prefix.as_deref().unwrap_or("");
+    match s.provider.list_keys(prefix) {
+        Ok(keys) => {
+            let body = serde_json::to_string(&KvKeys { keys }).unwrap_or_default();
+            (StatusCode::OK, body).into_response()
+        }
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("{{\"error\":\"{e}\"}}"),
+        )
+            .into_response(),
+    }
+}
+
+async fn healthz() -> impl IntoResponse {
+    (StatusCode::OK, "{\"status\":\"ok\"}")
+}
+
+async fn serve_soul_kv(host: &str, port: u16) -> Result<()> {
+    let provider = detect_provider();
+    let state = SoulState {
+        provider: Arc::from(provider),
+    };
+
+    let app = Router::new()
+        .route("/healthz", get(healthz))
+        .route("/v1/kv", get(kv_list))
+        .route("/v1/kv/:key", get(kv_get).put(kv_put).delete(kv_delete))
+        .with_state(state);
+
+    let addr = format!("{host}:{port}");
+    let listener = tokio::net::TcpListener::bind(&addr).await?;
+    println!("soul serve: listening on http://{addr}");
+    axum::serve(listener, app).await?;
+    Ok(())
 }

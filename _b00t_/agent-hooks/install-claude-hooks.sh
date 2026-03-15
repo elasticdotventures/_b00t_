@@ -148,7 +148,9 @@ fi
 # jq strategy:
 #   For each event in b00t payload:
 #     existing_event_array + b00t_event_matchers
-#     then deduplicate by the full matcher object to preserve distinct user hooks
+#     🦨 then deduplicate by the full matcher object to preserve distinct user hooks
+#     🦨 then deduplicate by the nested hooks[].command value 
+# --- merge: append b00t hooks to each event's array, dedup by command string ---
 MERGED="$(echo "$EXISTING" | jq \
     --argjson b00t "$B00T_HOOKS_JSON" \
     '
