@@ -16,7 +16,7 @@ SLUG=$(echo "${ISSUE_TITLE}" | tr '[:upper:]' '[:lower:]' \
     | sed 's/[^a-z0-9]/-/g' | sed 's/--*/-/g' | cut -c1-40 | sed 's/-$//')
 BRANCH="issue-${ISSUE_NUM}-${SLUG}"
 WORKTREE="${WORKTREE_ROOT}/${BRANCH}"
-REPO_ROOT=$(git -C /home/brianh/.b00t rev-parse --show-toplevel)
+REPO_ROOT="${REPO_ROOT:-$(git rev-parse --show-toplevel)}"
 LOG="${WORKTREE_ROOT}/ooda-${ISSUE_NUM}.log"
 
 mkdir -p "${WORKTREE_ROOT}"
