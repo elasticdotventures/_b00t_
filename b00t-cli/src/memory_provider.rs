@@ -197,11 +197,34 @@ pub fn soul_path() -> PathBuf {
 }
 
 /// Detect best available memory provider.
-/// Priority: SqliteMemoryStore > FileMemory (SOUL.tomllm)
+///
+/// Priority:
+/// 1. `<cwd>/._b00t_/soul.db`  — repo-local soul (if `._b00t_/` dir exists)
+/// 2. `~/._b00t_/soul.db`       — global soul (default)
+///
 /// Future slots: MoltisMemory_🥾 | RedisMemory | PgvectorMemory | NeumannMemory
 pub fn detect_provider() -> Box<dyn MemoryProvider> {
-    // Prefer SQLite — richer interface, better durability
-    Box::new(SqliteMemoryStore::new(SqliteMemoryStore::default_path()))
+    Box::new(SqliteMemoryStore::new(active_soul_db_path()))
+}
+
+/// Active soul DB path — local workspace if `._b00t_/` exists, else global.
+pub fn active_soul_db_path() -> PathBuf {
+    std::env::current_dir()
+        .ok()
+        .map(|d| d.join("._b00t_"))
+        .filter(|p| p.is_dir())
+        .map(|d| d.join("soul.db"))
+        .unwrap_or_else(SqliteMemoryStore::default_path)
+}
+
+/// Active SOUL.tomllm path — local workspace if `._b00t_/` exists, else global.
+pub fn active_soul_path() -> PathBuf {
+    std::env::current_dir()
+        .ok()
+        .map(|d| d.join("._b00t_"))
+        .filter(|p| p.is_dir())
+        .map(|d| d.join("SOUL.tomllm"))
+        .unwrap_or_else(soul_path)
 }
 
 /// Fallback file provider — used when SQLite unavailable or for SOUL.tomllm compat
