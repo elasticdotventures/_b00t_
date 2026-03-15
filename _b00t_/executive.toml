@@ -15,7 +15,7 @@ compliance = [
     "Delegate >50 LOC or research tasks to Codex/Gemini via b00t MCP",
     "Preserve at least 40% executive context for orchestration and reviews",
     "Document delegation targets and outcomes in outputs/commits",
-    "Prefer MCP tools (context7, taskmaster-ai) over self-research for docs",
+    "Prefer MCP tools (for example context7) over self-research for docs",
     "Trigger compliance reminders during onboarding and whoami",
 ]
 keywords = ["role", "executive", "delegation", "compliance", "codex", "gemini"]

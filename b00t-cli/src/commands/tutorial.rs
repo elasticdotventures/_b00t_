@@ -37,7 +37,7 @@ impl TutorialCommands {
 
 pub fn default_role_path(role: &str) -> Vec<String> {
     let path: &[&str] = match role {
-        "orchestrator" => &["gh", "just", "context7", "taskmaster-ai", "argo-cli"],
+        "orchestrator" => &["gh", "just", "context7", "argo-cli"],
         "analyst"      => &["gh", "uv", "context7"],
         _              => &["gh", "just", "uv", "rustc", "context7"], // developer
     };
@@ -171,7 +171,8 @@ mod tests {
     #[test]
     fn test_role_path_orchestrator() {
         let path = default_role_path("orchestrator");
-        assert!(path.contains(&"taskmaster-ai".to_string()));
+        assert!(!path.contains(&"taskmaster-ai".to_string()));
+        assert!(path.contains(&"context7".to_string()));
     }
 
     #[test]

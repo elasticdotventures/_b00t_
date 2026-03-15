@@ -72,7 +72,7 @@ b00t mcp install <server>  # Install MCP server
 
 ### Starting Work
 1. Use `sequential-thinking` MCP to create a plan
-2. Use `taskmaster-ai` MCP to track progress on larger tasks
+2. Track progress with lightweight repo-native mechanisms (for example session todos or issue state)
 3. Verify assumptions from first principles
 4. Check for existing libraries/solutions before coding
 

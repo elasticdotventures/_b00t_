@@ -30,7 +30,6 @@ entangled_cli = [
 ]
 
 entangled_mcp = [
-    "taskmaster-ai.mcp",
     "context7.mcp",
     "b00t-mcp.mcp",
 ]

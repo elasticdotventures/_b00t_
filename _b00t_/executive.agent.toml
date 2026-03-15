@@ -13,7 +13,6 @@ skills = [
   "systemd",
   "vllm",
   "rust",
-  "taskmaster",
   "autonomous-loop",
 ]
 personality = "strategic"
@@ -80,7 +79,7 @@ notify = "HIVE: inference idle, starting queued download"
 cli_path = "b00t"
 supports_tools = ["opencode", "claude", "ralph"]
 max_iterations = 50
-requires = ["taskmaster", "b00t-cli"]
+requires = ["b00t-cli"]
 
 [b00t.agent.mcp]
 enabled = true

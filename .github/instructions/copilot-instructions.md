@@ -33,8 +33,7 @@ just -l                      # List available commands
 
 ### Before Starting
 1. Use `sequential-thinking` MCP to plan
-2. Use `taskmaster-ai` MCP to track progress
+2. Track progress with lightweight repo-native mechanisms
 3. Verify assumptions from first principles
 4. Review primary instructions above as needed
-
 
