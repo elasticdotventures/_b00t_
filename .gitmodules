@@ -37,3 +37,6 @@
 [submodule "_b00t_/ralph"]
 	path = _b00t_/ralph
 	url = https://github.com/PromptExecution/b00t-wiggums.git
+[submodule "just-mcp"]
+	path = just-mcp
+	url = https://github.com/PromptExecution/just-mcp
