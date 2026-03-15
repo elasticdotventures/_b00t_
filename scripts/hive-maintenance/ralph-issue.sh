@@ -16,6 +16,25 @@ WORKDIR=$(mktemp -d /tmp/ralph-issue-${ISSUE_NUM}-XXXX)
 PROMPT_FILE="${WORKDIR}/PROMPT.md"
 CODEX_OUT="${WORKDIR}/codex-output.md"
 REVIEW_OUT="${WORKDIR}/haiku-review.md"
+
+# Limit how much Codex output is embedded directly into GitHub comments
+MAX_CODEX_COMMENT_BYTES="${MAX_CODEX_COMMENT_BYTES:-60000}"
+CODEX_SNIPPET="${WORKDIR}/codex-output-snippet.md"
+if [ -f "${CODEX_OUT}" ]; then
+    # Create a bounded snippet of the Codex output for safe inclusion in comments
+    head -c "${MAX_CODEX_COMMENT_BYTES}" "${CODEX_OUT}" > "${CODEX_SNIPPET}" || true
+    # If truncated, append a short notice
+    if [ "$(wc -c < "${CODEX_OUT}" 2>/dev/null || echo 0)" -gt "${MAX_CODEX_COMMENT_BYTES}" ]; then
+        {
+            echo
+            echo
+            echo "[...codex output truncated to first ${MAX_CODEX_COMMENT_BYTES} bytes for GitHub comment safety...]"
+        } >> "${CODEX_SNIPPET}"
+    fi
+else
+    : > "${CODEX_SNIPPET}"
+fi
+
 ITER=0
 
 cleanup() { rm -rf "${WORKDIR}"; }
@@ -98,7 +117,7 @@ ${REVIEW}
 
 <details><summary>Full codex analysis</summary>
 
-$(cat ${CODEX_OUT})
+$(cat ${CODEX_SNIPPET})
 
 </details>
 
@@ -132,7 +151,7 @@ Last reviewer feedback:
 $(cat ${REVIEW_OUT} 2>/dev/null || echo 'N/A')
 
 <details><summary>Last codex output</summary>
-$(cat ${CODEX_OUT} 2>/dev/null || echo 'N/A')
+$(cat ${CODEX_SNIPPET} 2>/dev/null || echo 'N/A')
 </details>" 2>&1 || true
 
 exit 1
