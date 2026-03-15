@@ -79,7 +79,8 @@ Example:
         text: String,
     },
     #[clap(
-        about = "Record a lesson learned for a tool",
+        about = "Record a lesson learned for a tool (lfmf = Learn From My Failure)",
+        alias = "lesson",
         long_about = r#"
 lfmf is a dynamic, opinionated man-page for any tool with a b00t datum (TOML, learn/ dir, etc).
 It memoizes operator-informed tips, tricks, and anti-patterns—never repo-specific, always tool wisdom.
@@ -229,7 +230,7 @@ The system will:
         #[clap(long, help = "Skip running tests (not recommended)")]
         skip_tests: bool,
     },
-    #[clap(about = "Query system information")]
+    #[clap(about = "Query system information", alias = "inspect")]
     Whatismy {
         #[clap(subcommand)]
         whatismy_command: WhatismyCommands,

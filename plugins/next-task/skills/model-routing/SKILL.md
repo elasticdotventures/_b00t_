@@ -13,8 +13,8 @@ Reads routing table from `_b00t_/model-routing.tomllm`. Falls back to hardcoded 
 
 | Tier | Tasks | b00t Models (in priority order) |
 |------|-------|--------------------------------|
-| `sm0l` | grep, lint, classify, route, test pass/fail | haiku, local sm0l |
-| `ch0nky` | implement, refactor, debug, code review | qwen3-coder-local (RTX 3090), sonnet |
+| `small` (sm0l) | grep, lint, classify, route, test pass/fail | haiku, local sm0l |
+| `chunky` (ch0nky) | implement, refactor, debug, code review | qwen3-coder-local (RTX 3090), sonnet |
 | `frontier` | architecture, security, novel design, planning | opus, sonnet |
 
 ## Steps
@@ -29,14 +29,14 @@ Reads routing table from `_b00t_/model-routing.tomllm`. Falls back to hardcoded 
 
 ## Task → Tier Mapping
 
-**sm0l** (Haiku / local 3B):
+**small** `sm0l` (Haiku / local 3B):
 - Running tests, checking lint output
 - Classifying/routing messages
 - Extracting structured data from well-defined input
 - File diffing, counting, summarizing short text
 - Executing known shell commands
 
-**ch0nky** (qwen3-coder-local → Sonnet fallback):
+**chunky** `ch0nky` (qwen3-coder-local → Sonnet fallback):
 - Writing or refactoring code
 - Debugging with stack traces
 - Multi-file code review
