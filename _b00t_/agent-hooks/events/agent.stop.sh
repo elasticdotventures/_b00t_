@@ -17,12 +17,5 @@ INPUT="${B00T_HOOK_INPUT:-$(cat)}"
 AGENT_TYPE="$(echo "$INPUT" | jq -r '.agent_type          // "unknown"' 2>/dev/null || echo "unknown")"
 LAST_MSG="$(  echo "$INPUT" | jq -r '.last_assistant_message // ""'    2>/dev/null || echo "")"
 
-# Load role-specific agent.stop hook if defined
-ROLE_HOOK="${B00T_DIR:-$HOME/.b00t/_b00t_}/hooks/roles/$AGENT_TYPE/agent.stop.sh"
-if [ -x "$ROLE_HOOK" ]; then
-    echo "$INPUT" | "$ROLE_HOOK"
-    exit $?
-fi
-
 # Default: allow
 exit 0
