@@ -29,7 +29,7 @@ use b00t_cli::commands::{
     K8sCommands,
     McpCommands, ModelCommands,
     OntologyCommands,
-    SessionCommands, StackCommands,
+    SessionCommands, SoulCommands, StackCommands,
     TutorialCommands, VersionCommands, WhatismyCommands
     
 
@@ -79,7 +79,8 @@ Example:
         text: String,
     },
     #[clap(
-        about = "Record a lesson learned for a tool",
+        about = "Record a lesson learned for a tool (lfmf = Learn From My Failure)",
+        alias = "lesson",
         long_about = r#"
 lfmf is a dynamic, opinionated man-page for any tool with a b00t datum (TOML, learn/ dir, etc).
 It memoizes operator-informed tips, tricks, and anti-patterns—never repo-specific, always tool wisdom.
@@ -229,7 +230,12 @@ The system will:
         #[clap(long, help = "Skip running tests (not recommended)")]
         skip_tests: bool,
     },
-    #[clap(about = "Query system information")]
+    #[clap(about = "Agentic soul — persistent identity & memory (~/._b00t_/SOUL.tomllm)")]
+    Soul {
+        #[clap(subcommand)]
+        soul_command: SoulCommands,
+    },
+    #[clap(about = "Query system information", alias = "inspect")]
     Whatismy {
         #[clap(subcommand)]
         whatismy_command: WhatismyCommands,
@@ -1167,6 +1173,12 @@ async fn main() {
             skip_tests,
         }) => {
             if let Err(e) = checkpoint(message.as_deref(), *skip_tests) {
+                eprintln!("Error: {}", e);
+                std::process::exit(1);
+            }
+        }
+        Some(Commands::Soul { soul_command }) => {
+            if let Err(e) = b00t_cli::commands::soul::handle_soul_command(soul_command) {
                 eprintln!("Error: {}", e);
                 std::process::exit(1);
             }

@@ -11,15 +11,15 @@
   "plugins": [
     {
       "name": "b00t",
-      "source": "b00t",
+      "source": "./plugins/b00t",
       "description": "Adds /b00t skill for dispatching b00t learn packets to agents",
       "version": "0.1.0"
     },
     {
-      "name": "ralph-yei",
-      "source": "ralph-yei",
-      "description": "Ralph Yei plugin (new home) for PRD-driven autonomous skills and execution workflows",
-      "version": "1.0.0"
+      "name": "next-task",
+      "source": "./plugins/next-task",
+      "description": "Workflow orchestration, certainty-graded quality rules, and task pipelines for b00t agents",
+      "version": "0.1.0"
     }
   ]
 }

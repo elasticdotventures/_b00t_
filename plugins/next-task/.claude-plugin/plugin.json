@@ -1,17 +1,18 @@
 {
-  "name": "b00t",
+  "name": "next-task",
   "version": "0.1.0",
-  "description": "b00t /b00t skill for sending learn packets to nominated agents",
+  "description": "Workflow orchestration, certainty-graded quality rules, and task pipelines for b00t agents",
   "author": {"name": "elasticdotventures"},
   "repository": "https://github.com/elasticdotventures/_b00t_",
   "license": "MIT",
   "capabilities": {
     "skills": true,
-    "commands": true,
+    "agents": true,
+    "commands": false,
     "hooks": false,
     "mcp": true
   },
   "metadata": {
-    "category": "agent-orchestration"
+    "category": "workflow-orchestration"
   }
 }

@@ -105,6 +105,36 @@ integration_note = "will enable: query('which profiles are resource-compatible w
 _B00T_ROLE = "executive"
 B00T_HIVE_CAPTAIN = "true"
 
+# agent-hooks this role activates (loaded by agent-hooks/roles/executive/<event>.sh)
+# 🤓 "agent-hooks" = AI agent lifecycle hooks (PreToolUse, SubagentStart, etc.)
+#          distinct from git hooks (pre-commit) or CI/CD pipeline hooks.
+#          each event maps to agent-hooks/roles/executive/<event>.sh if present,
+#          then falls back to agent-hooks/events/<event>.sh (generic).
+[b00t.agent_hooks]
+# events this role provides custom handling for
+events = [
+    "tool.pre",       # → roles/executive/tool.pre.sh  (resource gate + hive check)
+    "agent.start",    # → roles/executive/agent.start.sh (log + inject tier constraints)
+    "agent.stop",     # → roles/executive/agent.stop.sh  (validate output contracts)
+    "session.start",  # → generic session.start.sh (env injection)
+    "tool.post",      # → generic tool.post.sh (auto-test after commit)
+]
+# gates this role enforces
+gates = [
+    "block-credential-harvest",   # PreToolUse: block cat ~/.ssh, env|grep key
+    "block-destructive-rm",       # PreToolUse: block rm -rf /home, rm -rf ~
+    "warn-pip-prefer-uv",         # PreToolUse: warn pip install → uv pip install
+    "warn-docker-prefer-podman",  # PreToolUse: warn docker run → podman
+    "gate-large-file",            # PreToolUse: ask on Write >800 lines
+    "hive-resource-check",        # PreToolUse: inject hive status before model ops
+]
+# validations run after tool execution
+validations = [
+    "auto-test-after-commit",     # PostToolUse: cargo test / npm test / pytest
+    "clippy-after-rust-edit",     # PostToolUse: cargo clippy errors after .rs edit
+    "audit-log",                  # PostToolUse: append to agent-hooks/audit.log
+]
+
 [[b00t.usage]]
 description = "Load executive role context"
 command = "b00t whoami --role=executive"

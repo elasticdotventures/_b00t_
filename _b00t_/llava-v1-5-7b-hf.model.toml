@@ -2,7 +2,7 @@
 
 [b00t]
 name = "llava-v1-5-7b-hf"
-type = "ai_model"
+type = "model"
 hint = "LLaVA 1.5 7B multimodal model for vision-grounded prompts"
 aliases = ["llava"]
 
