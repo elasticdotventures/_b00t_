@@ -11,7 +11,7 @@ WORKTREE_ROOT="${WORKTREE_ROOT:-/tmp/b00t-wt}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 OODA="${SCRIPT_DIR}/ooda-issue.sh"
 START_FROM="${1:-0}"
-[[ "$1" == "--start-from" ]] && START_FROM="${2:-0}"
+[[ "${1:-}" == "--start-from" ]] && START_FROM="${2:-0}"
 
 RESULTS_LOG="${SCRIPT_DIR}/logs/sequential-$(date +%Y%m%d-%H%M%S).log"
 mkdir -p "$(dirname "${RESULTS_LOG}")"
