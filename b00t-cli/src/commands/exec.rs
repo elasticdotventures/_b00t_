@@ -129,6 +129,27 @@ pub fn handle_exec(args: &ExecArgs, path: &str) -> Result<()> {
     let all_guards = load_all_guards(&datum_dir, &snapshot);
     let guard_result = check_guards(&cmd_str, &all_guards);
 
+    // In dry-run mode, evaluate guards but avoid any cache/log side effects.
+    if args.dry_run {
+        match &guard_result {
+            GuardResult::Allow => {
+                println!("[dry-run] would execute: {}", cmd_str);
+            }
+            GuardResult::Warn { message, redirect } => {
+                eprintln!("⚠️  {}", message);
+                if let Some(alt) = redirect {
+                    eprintln!("   suggested: {}", alt);
+                }
+                println!("[dry-run] would execute: {}", cmd_str);
+            }
+            GuardResult::Block { message } => {
+                eprintln!("❌ BLOCK: {}", message);
+                println!("[dry-run] blocked command; would NOT execute: {}", cmd_str);
+            }
+        }
+        return Ok(());
+    }
+
     match &guard_result {
         GuardResult::Allow => {
             // no-op
@@ -180,11 +201,6 @@ pub fn handle_exec(args: &ExecArgs, path: &str) -> Result<()> {
                 }
             }
         }
-    }
-
-    if args.dry_run {
-        println!("[dry-run] would execute: {}", cmd_str);
-        return Ok(());
     }
 
     // Background execution via --sleep
