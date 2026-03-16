@@ -71,12 +71,17 @@ printf '%s | session=%s tool=%s cmd=%.120s\n' \
 # ─── Lint-on-save for Rust files ─────────────────────────────────────────────
 if [ "$TOOL" = "Edit" ] || [ "$TOOL" = "Write" ]; then
     if echo "$FILE_PATH" | grep -qE '\.rs$'; then
-        CWD="${CLAUDE_PROJECT_DIR:-$(pwd)}"
-        CLIPPY_OUT="$(cd "$CWD" && cargo clippy --quiet 2>&1 | grep -E '^error' | head -10 || true)"
-        if [ -n "$CLIPPY_OUT" ]; then
-            echo "⚠️  b00t: clippy errors after edit:" >&2
-            echo "$CLIPPY_OUT" >&2
-            exit 2
+        # Make clippy-on-save opt-in and only run in Rust projects
+        if [ "${B00T_CLIPPY_ON_SAVE:-0}" = "1" ]; then
+            CWD="${CLAUDE_PROJECT_DIR:-$(pwd)}"
+            if [ -f "$CWD/Cargo.toml" ]; then
+                CLIPPY_OUT="$(cd "$CWD" && cargo clippy --quiet 2>&1 | grep -E '^error' | head -10 || true)"
+                if [ -n "$CLIPPY_OUT" ]; then
+                    echo "⚠️  b00t: clippy errors after edit:" >&2
+                    echo "$CLIPPY_OUT" >&2
+                    exit 2
+                fi
+            fi
         fi
     fi
 fi
