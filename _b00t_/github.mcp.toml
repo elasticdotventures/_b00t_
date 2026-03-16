@@ -17,12 +17,11 @@ command = "npx"
 requires = ["node", "gh"]
 transport = "stdio"
 args = ["-y", "github-mcp-server"]
+pre_start = "github-auth-validate.rhai"
 
 # 🤓: RHAI validation script runs before MCP server starts
 # Validates/retrieves GITHUB_PERSONAL_ACCESS_TOKEN from gh CLI or env
 # Fails fast if credentials unavailable (prevents entire stack failure)
-pre_start = "github-auth-validate.rhai"
-
 [b00t.mcp.stdio.env]
 # 🤓: Use gh CLI to get token dynamically (avoids storing PAT as security vector)
 # In shell: export GITHUB_PERSONAL_ACCESS_TOKEN="$(gh auth token)"

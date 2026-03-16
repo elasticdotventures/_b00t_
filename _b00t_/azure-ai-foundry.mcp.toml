@@ -2,6 +2,7 @@
 name = "azure-ai-foundry"
 type = "mcp"
 hint = "Azure AI Foundry MCP server - Enterprise multi-agent orchestration with connected agents, sub-agent delegation, and stateful workflows. Replaces lightweight local backlog/job flows for complex business processes."
+lfmf_category = "azure-ai-foundry"
 
 # 🤓 Azure AI Foundry MCP provides enterprise-grade agent orchestration
 # Superior to TODO-next/b00t job for multi-agent systems with sub-agent delegation
@@ -188,5 +189,3 @@ url = "https://learn.microsoft.com/azure/architecture/ai-ml/guide/ai-agent-desig
 [[b00t.references]]
 name = "Multi-Agent Orchestration Guide" 
 url = "https://techcommunity.microsoft.com/blog/azure-ai-foundry-blog/building-a-digital-workforce-with-multi-agents-in-azure-ai-foundry-agent-service/4414671"
-
-lfmf_category = "azure-ai-foundry"
