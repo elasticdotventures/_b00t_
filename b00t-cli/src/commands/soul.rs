@@ -160,8 +160,12 @@ pub fn handle_soul_command(cmd: &SoulCommands) -> Result<()> {
         #[cfg(feature = "dbus")]
         SoulCommands::Dbus { session } => {
             let datum_dir = crate::get_expanded_path("~/.dotfiles/_b00t_/")?;
-            let rt = tokio::runtime::Runtime::new()?;
-            rt.block_on(serve_dbus(*session, datum_dir))
+            // 🤓 main.rs uses #[tokio::main] so we're already inside a tokio runtime.
+            // Runtime::new().block_on() would panic — use block_in_place instead.
+            let use_session = *session;
+            tokio::task::block_in_place(move || {
+                tokio::runtime::Handle::current().block_on(serve_dbus(use_session, datum_dir))
+            })
         }
     }
 }
