@@ -2,7 +2,7 @@
   "name": "b00t",
   "version": "0.1.0",
   "description": "b00t plugin for Claude Code - extreme programming agent framework with datum system, direnv pattern, and DRY philosophy",
-  "author": "elasticdotventures",
+  "author": {"name": "elasticdotventures"},
   "repository": "https://github.com/elasticdotventures/_b00t_",
   "license": "MIT",
   "keywords": [

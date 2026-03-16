@@ -12,7 +12,7 @@ pub fn strip(input: &str) -> String {
     input
         .lines()
         .map(strip_line)
-        .filter(|l| !l.trim().is_empty() || true) // preserve blank lines for readability
+        .filter(|l| !l.trim().is_empty() || l.is_empty()) // preserve blank lines for readability
         .collect::<Vec<_>>()
         .join("\n")
 }

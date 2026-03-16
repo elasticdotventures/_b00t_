@@ -40,3 +40,22 @@ depends_on = [
 ]
 
 keywords = ["role", "orchestrator", "sub-agent", "ralph", "chat-monitoring"]
+
+# agent-hooks this role activates
+# 🤓 "agent-hooks" = AI agent lifecycle hooks (not git hooks, not CI hooks)
+[b00t.agent_hooks]
+events = [
+    "agent.start",    # log sub-agent spawn + inject tier constraint context
+    "agent.stop",     # validate output contracts before returning to parent
+    "tool.pre",       # generic security gates (inherit from events/tool.pre.sh)
+    "tool.post",      # auto-test after commit, audit log
+]
+gates = [
+    "block-credential-harvest",
+    "block-destructive-rm",
+    "validate-subagent-output-contract",  # SubagentStop: enforce sm0l/ch0nky contracts
+]
+validations = [
+    "auto-test-after-commit",
+    "audit-log",
+]

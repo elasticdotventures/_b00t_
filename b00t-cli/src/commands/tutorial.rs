@@ -1,7 +1,7 @@
 // b00t-cli/src/commands/tutorial.rs
+use crate::session_memory::SessionMemory;
 use anyhow::Result;
 use clap::Parser;
-use crate::session_memory::SessionMemory;
 
 #[derive(Parser, Debug)]
 pub enum TutorialCommands {
@@ -44,27 +44,40 @@ pub fn default_role_path(role: &str) -> Vec<String> {
     path.iter().map(|s| s.to_string()).collect()
 }
 
-pub fn next_uncompleted(path: &[String], completed: &[String], skipped: &[String]) -> Option<String> {
+pub fn next_uncompleted(
+    path: &[String],
+    completed: &[String],
+    skipped: &[String],
+) -> Option<String> {
     path.iter()
         .find(|d| !completed.contains(d) && !skipped.contains(d))
         .cloned()
 }
 
 pub fn progress_percent(total: usize, completed: usize) -> u32 {
-    if total == 0 { return 0; }
+    if total == 0 {
+        return 0;
+    }
     ((completed as f64 / total as f64) * 100.0) as u32
 }
 
 fn get_role(session: &SessionMemory) -> String {
-    session.get("tutorial.role")
+    session
+        .get("tutorial.role")
         .cloned()
         .or_else(|| std::env::var("B00T_ROLE").ok())
         .unwrap_or_else(|| "developer".to_string())
 }
 
 fn parse_csv(session: &SessionMemory, key: &str) -> Vec<String> {
-    session.get(key)
-        .map(|s| s.split(',').filter(|x| !x.is_empty()).map(String::from).collect())
+    session
+        .get(key)
+        .map(|s| {
+            s.split(',')
+                .filter(|x| !x.is_empty())
+                .map(String::from)
+                .collect()
+        })
         .unwrap_or_default()
 }
 
@@ -78,9 +91,13 @@ fn show_status(session: &SessionMemory) -> Result<()> {
     println!("Tutorial -- role: {} ({}%)", role, pct);
     println!("{}", "-".repeat(40));
     for datum in &path {
-        let icon = if completed.contains(datum) { "[x]" }
-                   else if skipped.contains(datum) { "[s]" }
-                   else { "[ ]" };
+        let icon = if completed.contains(datum) {
+            "[x]"
+        } else if skipped.contains(datum) {
+            "[s]"
+        } else {
+            "[ ]"
+        };
         println!(" {} {}", icon, datum);
     }
     println!("\n{}/{} validated.", completed.len(), path.len());
@@ -124,7 +141,10 @@ fn validate_datum(session: &mut SessionMemory, datum: &str) -> Result<()> {
             println!("Datum '{}' not found in {}", datum, datum_dir);
         }
         Some(d) if d.validate.command.is_empty() => {
-            println!("Datum '{}' has no [validate] command -- marking as validated", datum);
+            println!(
+                "Datum '{}' has no [validate] command -- marking as validated",
+                datum
+            );
             mark_completed(session, datum)?;
         }
         Some(d) => {
@@ -219,7 +239,11 @@ mod tests {
     fn test_csv_roundtrip() {
         let list = vec!["gh".to_string(), "just".to_string(), "uv".to_string()];
         let csv = list.join(",");
-        let parsed: Vec<String> = csv.split(',').filter(|x| !x.is_empty()).map(String::from).collect();
+        let parsed: Vec<String> = csv
+            .split(',')
+            .filter(|x| !x.is_empty())
+            .map(String::from)
+            .collect();
         assert_eq!(list, parsed);
     }
 }

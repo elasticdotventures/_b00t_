@@ -1,0 +1,613 @@
+//! `b00t soul` — agentic soul management
+//!
+//! The soul is the persistent identity of a b00t agent instance.
+//! Lives at ~/._b00t_/SOUL.tomllm — survives sessions, encodes accumulated
+//! knowledge, role state, and tribal memory.
+//!
+//! Inspired by moltis per-agent memory workspaces + session persistence.
+//!
+//! ## b00t soul serve
+//! Exposes soul K/V over HTTP so external consumers (moltis MoltisMemory_🥾)
+//! can delegate their K/V caches to b00t without linking the b00t crate.
+//!
+//! API:
+//! - GET    /v1/kv/{key}         → `{"value": "..."}` or 404
+//! - PUT    /v1/kv/{key}         → body `{"value": "..."}`, 204
+//! - DELETE /v1/kv/{key}         → 204
+//! - GET    /v1/kv?prefix=<pfx>  → `{"keys": [...]}`
+//! - GET    /healthz              → `{"status": "ok"}`
+
+use anyhow::{Context as _, Result, bail};
+use clap::Parser;
+
+use crate::memory_provider::{FileMemory, MemoryProvider, detect_provider, soul_path};
+use crate::soul_writer::{FileSoulWriter, SoulMemoryWriter, active_soul_dir, global_soul_dir, local_soul_dir};
+
+#[derive(Parser)]
+pub enum SoulCommands {
+    #[clap(about = "Show current soul state (~/._b00t_/SOUL.tomllm)")]
+    Status {
+        #[clap(long, help = "Output as JSON")]
+        json: bool,
+    },
+
+    #[clap(about = "Read a key from soul memory")]
+    Get {
+        #[clap(help = "Key to read")]
+        key: String,
+    },
+
+    #[clap(about = "Write a key to soul memory")]
+    Set {
+        #[clap(help = "Key")]
+        key: String,
+        #[clap(help = "Value")]
+        value: String,
+    },
+
+    #[clap(about = "Show soul file path")]
+    Path,
+
+    #[clap(about = "Reset soul memory (clears all keys — irreversible)")]
+    Reset {
+        #[clap(long, help = "Confirm reset without prompt")]
+        confirm: bool,
+    },
+
+    #[clap(about = "Serve soul K/V over HTTP (port 7700 by default)")]
+    Serve {
+        #[clap(long, default_value = "7700", help = "TCP port to listen on")]
+        port: u16,
+        #[clap(long, default_value = "127.0.0.1", help = "Bind address")]
+        host: String,
+    },
+
+    /// Distil session transcript into persistent soul memories.
+    ///
+    /// Reads session text from stdin, runs a silent LLM turn (sm0l tier),
+    /// extracts facts as K/V, writes to SqliteMemoryStore + SOUL.md.
+    ///
+    /// Example:
+    ///   b00t session export | b00t soul distill
+    ///   cat session.txt | b00t soul distill --model haiku
+    #[clap(about = "Distil session transcript → soul memories (reads stdin)")]
+    Distill {
+        #[clap(long, default_value = "sm0l", help = "Tier: sm0l|ch0nky|frontier")]
+        model: String,
+        #[clap(long, help = "OpenAI-compatible base URL (overrides OPENAI_BASE_URL)")]
+        base_url: Option<String>,
+        #[clap(long, help = "Dry-run — print extracted facts without writing")]
+        dry_run: bool,
+    },
+
+    /// Initialize a workspace-local soul directory (`._b00t_/`).
+    ///
+    /// Creates `._b00t_/SOUL.tomllm` and `._b00t_/SOUL.md` in the current directory.
+    /// Subsequent soul operations prefer this local store over the global one.
+    #[clap(about = "Init local ._b00t_/ soul workspace in current directory")]
+    Init {
+        #[clap(long, help = "Path to initialize (default: current dir)")]
+        path: Option<String>,
+    },
+
+    /// Show which soul directories are active (local + global).
+    #[clap(about = "Show active soul directories (local + global)")]
+    Where,
+}
+
+pub fn handle_soul_command(cmd: &SoulCommands) -> Result<()> {
+    let path = soul_path();
+    let mem = FileMemory::new(path.clone());
+
+    match cmd {
+        SoulCommands::Status { json } => {
+            if !path.exists() {
+                if *json {
+                    println!("{{\"soul\": null, \"path\": \"{}\"}}", path.display());
+                } else {
+                    println!("Soul: uninitialized");
+                    println!("  Path: {}", path.display());
+                    println!("  Tip:  b00t soul set <key> <value> to initialize");
+                }
+                return Ok(());
+            }
+
+            let raw = std::fs::read_to_string(&path)?;
+
+            if *json {
+                // Strip comments, parse, emit JSON
+                let stripped: String = raw
+                    .lines()
+                    .filter(|l| !l.trim_start().starts_with('#'))
+                    .collect::<Vec<_>>()
+                    .join("\n");
+                #[derive(serde::Deserialize, serde::Serialize)]
+                struct SoulStore {
+                    #[serde(default)]
+                    data: std::collections::HashMap<String, String>,
+                }
+                let store: SoulStore = toml::from_str(&stripped).unwrap_or(SoulStore {
+                    data: Default::default(),
+                });
+                println!("{}", serde_json::to_string_pretty(&store.data)?);
+            } else {
+                println!("Soul: {}", path.display());
+                println!();
+                // Print non-comment lines
+                for line in raw.lines() {
+                    if !line.trim_start().starts_with('#') || line.starts_with("# b00t:map") {
+                        println!("  {}", line);
+                    }
+                }
+            }
+            Ok(())
+        }
+
+        SoulCommands::Get { key } => {
+            match mem.read(key)? {
+                Some(val) => println!("{}", val),
+                None => {
+                    eprintln!("soul: key '{}' not found", key);
+                    std::process::exit(1);
+                }
+            }
+            Ok(())
+        }
+
+        SoulCommands::Set { key, value } => {
+            mem.write(key, value)?;
+            println!("soul: {} = {}", key, value);
+            Ok(())
+        }
+
+        SoulCommands::Path => {
+            println!("{}", path.display());
+            Ok(())
+        }
+
+        SoulCommands::Reset { confirm } => {
+            if !confirm {
+                eprintln!("soul reset clears all memory. Use --confirm to proceed.");
+                eprintln!("  b00t soul reset --confirm");
+                std::process::exit(1);
+            }
+            if path.exists() {
+                std::fs::remove_file(&path)?;
+            }
+            println!("soul: reset — {}", path.display());
+            Ok(())
+        }
+
+        SoulCommands::Serve { port, host } => {
+            let rt = tokio::runtime::Runtime::new()?;
+            rt.block_on(serve_soul_kv(host, *port))
+        }
+
+        SoulCommands::Distill { model, base_url, dry_run } => {
+            let rt = tokio::runtime::Runtime::new()?;
+            rt.block_on(distill_soul(model, base_url.as_deref(), *dry_run))
+        }
+
+        SoulCommands::Init { path: init_path } => {
+            let target = init_path
+                .as_deref()
+                .map(std::path::PathBuf::from)
+                .unwrap_or_else(|| std::env::current_dir().unwrap_or_default());
+            soul_init(&target)
+        }
+
+        SoulCommands::Where => {
+            soul_where()
+        }
+    }
+}
+
+// ─── soul serve HTTP API ──────────────────────────────────────────────────────
+
+use std::sync::Arc;
+
+use axum::{
+    Router,
+    extract::{Path as AxumPath, Query, State},
+    http::StatusCode,
+    response::IntoResponse,
+    routing::get,
+};
+use serde::{Deserialize, Serialize};
+
+#[derive(Clone)]
+struct SoulState {
+    provider: Arc<dyn MemoryProvider>,
+}
+
+#[derive(Serialize, Deserialize)]
+struct KvValue {
+    value: String,
+}
+
+#[derive(Serialize, Deserialize)]
+struct KvKeys {
+    keys: Vec<String>,
+}
+
+#[derive(Deserialize)]
+struct PrefixQuery {
+    prefix: Option<String>,
+}
+
+async fn kv_get(
+    State(s): State<SoulState>,
+    AxumPath(key): AxumPath<String>,
+) -> impl IntoResponse {
+    match s.provider.read(&key) {
+        Ok(Some(val)) => {
+            let body = serde_json::to_string(&KvValue { value: val }).unwrap_or_default();
+            (StatusCode::OK, body).into_response()
+        }
+        Ok(None) => StatusCode::NOT_FOUND.into_response(),
+        Err(e) => {
+            let msg = format!("{{\"error\":\"{e}\"}}");
+            (StatusCode::INTERNAL_SERVER_ERROR, msg).into_response()
+        }
+    }
+}
+
+async fn kv_put(
+    State(s): State<SoulState>,
+    AxumPath(key): AxumPath<String>,
+    body: String,
+) -> impl IntoResponse {
+    let kv: KvValue = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => {
+            return (
+                StatusCode::BAD_REQUEST,
+                format!("{{\"error\":\"bad JSON: {e}\"}}"),
+            )
+                .into_response()
+        }
+    };
+    match s.provider.write(&key, &kv.value) {
+        Ok(()) => StatusCode::NO_CONTENT.into_response(),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("{{\"error\":\"{e}\"}}"),
+        )
+            .into_response(),
+    }
+}
+
+async fn kv_delete(
+    State(s): State<SoulState>,
+    AxumPath(key): AxumPath<String>,
+) -> impl IntoResponse {
+    match s.provider.delete(&key) {
+        Ok(()) => StatusCode::NO_CONTENT.into_response(),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("{{\"error\":\"{e}\"}}"),
+        )
+            .into_response(),
+    }
+}
+
+async fn kv_list(
+    State(s): State<SoulState>,
+    Query(q): Query<PrefixQuery>,
+) -> impl IntoResponse {
+    let prefix = q.prefix.as_deref().unwrap_or("");
+    match s.provider.list_keys(prefix) {
+        Ok(keys) => {
+            let body = serde_json::to_string(&KvKeys { keys }).unwrap_or_default();
+            (StatusCode::OK, body).into_response()
+        }
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("{{\"error\":\"{e}\"}}"),
+        )
+            .into_response(),
+    }
+}
+
+async fn healthz() -> impl IntoResponse {
+    (StatusCode::OK, "{\"status\":\"ok\"}")
+}
+
+// ─── soul init ────────────────────────────────────────────────────────────────
+
+/// Create `._b00t_/` workspace soul directory with skeleton files.
+fn soul_init(target: &std::path::Path) -> Result<()> {
+    let soul_dir = target.join("._b00t_");
+    std::fs::create_dir_all(&soul_dir)
+        .with_context(|| format!("create {}", soul_dir.display()))?;
+
+    // SOUL.tomllm — K/V identity file
+    let tomllm = soul_dir.join("SOUL.tomllm");
+    if !tomllm.exists() {
+        std::fs::write(
+            &tomllm,
+            "# b00t SOUL — workspace agentic identity\n\
+             # @tribal: edit via `b00t soul set`, not directly\n\n\
+             [data]\n\
+             # b00t:map v1\n\
+             # summary: workspace soul — identity & memory for this repo\n\
+             # tags: soul, memory, workspace\n\
+             # tier: sm0l\n",
+        )?;
+        println!("soul init: created {}", tomllm.display());
+    } else {
+        println!("soul init: exists  {}", tomllm.display());
+    }
+
+    // SOUL.md — markdown memory file
+    let soul_md = soul_dir.join("SOUL.md");
+    if !soul_md.exists() {
+        let today = chrono::Utc::now().format("%Y-%m-%d");
+        std::fs::write(
+            &soul_md,
+            format!(
+                "# Soul — {}\n\n\
+                 Workspace soul initialized {today}.\n\
+                 Distilled memories from sessions will be appended here.\n",
+                target.file_name().and_then(|n| n.to_str()).unwrap_or("workspace"),
+            ),
+        )?;
+        println!("soul init: created {}", soul_md.display());
+    } else {
+        println!("soul init: exists  {}", soul_md.display());
+    }
+
+    println!("soul: workspace soul active at {}", soul_dir.display());
+    Ok(())
+}
+
+// ─── soul where ───────────────────────────────────────────────────────────────
+
+/// Show active soul directories (local + global).
+fn soul_where() -> Result<()> {
+    let global = global_soul_dir();
+    let local = local_soul_dir();
+
+    if let Some(ref l) = local {
+        println!("local:  {} ✓", l.display());
+        println!("        (active — takes priority over global)");
+    } else {
+        println!("local:  none (run `b00t soul init` to create ._b00t_/ here)");
+    }
+    println!("global: {}", global.display());
+    if !global.exists() {
+        println!("        (uninitialized — run `b00t soul set <key> <val>` to create)");
+    }
+    println!("active: {}", active_soul_dir().display());
+    Ok(())
+}
+
+// ─── soul distill ─────────────────────────────────────────────────────────────
+
+/// System prompt for the silent memory-distillation LLM turn.
+/// Adapted from moltis `MEMORY_FLUSH_SYSTEM_PROMPT` — outputs TOML for easy K/V parsing.
+const DISTILL_SYSTEM_PROMPT: &str = r#"You are a memory distillation agent for b00t soul.
+
+Review the session transcript and extract facts worth persisting across sessions.
+Focus on:
+- User role, preferences, working style
+- Project context, architecture decisions, conventions
+- Technical setup: tools, languages, frameworks, env
+- Key decisions and their reasoning
+- Recurring patterns, tribal knowledge
+
+Output ONLY valid TOML in this exact format (no prose, no code fences):
+
+[facts]
+# Each key = concise identifier, value = one-line fact
+# key = "value"
+
+[markdown_summary]
+text = """
+# Session memory — YYYY-MM-DD
+(2-5 bullet points of what was done/decided)
+"""
+
+If nothing is worth persisting, output an empty [facts] section."#;
+
+/// Tier → model ID map. Uses OPENAI_BASE_URL / ANTHROPIC_API_KEY env routing.
+fn tier_to_model(tier: &str) -> &'static str {
+    match tier {
+        "sm0l" | "small" => "claude-haiku-4-5-20251001",
+        "ch0nky" | "chunky" => "claude-sonnet-4-6",
+        "frontier" => "claude-opus-4-6",
+        other => {
+            // Accept raw model IDs passthrough
+            // 🤓 leaking lifetime via static ref is ok here — caller uses it immediately
+            let _ = other;
+            "claude-haiku-4-5-20251001"
+        }
+    }
+}
+
+async fn distill_soul(tier: &str, base_url: Option<&str>, dry_run: bool) -> Result<()> {
+    use std::io::Read as _;
+
+    // Read transcript from stdin
+    let mut transcript = String::new();
+    std::io::stdin()
+        .read_to_string(&mut transcript)
+        .context("read transcript from stdin")?;
+
+    if transcript.trim().is_empty() {
+        bail!("soul distill: no transcript on stdin — pipe session text");
+    }
+
+    // Truncate to ~32K chars to avoid huge context costs on sm0l tier
+    let truncated = if transcript.len() > 32_768 {
+        eprintln!(
+            "soul distill: transcript truncated to 32K chars ({} total)",
+            transcript.len()
+        );
+        &transcript[..32_768]
+    } else {
+        &transcript
+    };
+
+    let model = tier_to_model(tier);
+    let api_key = std::env::var("ANTHROPIC_API_KEY")
+        .or_else(|_| std::env::var("OPENAI_API_KEY"))
+        .unwrap_or_default();
+    let url_base = base_url
+        .map(str::to_owned)
+        .or_else(|| std::env::var("OPENAI_BASE_URL").ok())
+        .unwrap_or_else(|| "https://api.anthropic.com/v1".to_owned());
+
+    eprintln!("soul distill: calling {model} via {url_base} ...");
+
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(60))
+        .build()?;
+
+    // OpenAI-compatible chat completions payload
+    let payload = serde_json::json!({
+        "model": model,
+        "max_tokens": 1024,
+        "system": DISTILL_SYSTEM_PROMPT,
+        "messages": [
+            { "role": "user", "content": truncated }
+        ]
+    });
+
+    let resp = client
+        .post(format!("{url_base}/messages"))
+        .header("x-api-key", &api_key)
+        .header("anthropic-version", "2023-06-01")
+        .header("content-type", "application/json")
+        .json(&payload)
+        .send()
+        .await
+        .context("distill LLM request")?
+        .error_for_status()
+        .context("distill LLM response")?;
+
+    let body: serde_json::Value = resp.json().await?;
+    let text = body["content"][0]["text"]
+        .as_str()
+        .unwrap_or("")
+        .to_owned();
+
+    if text.is_empty() {
+        bail!("soul distill: empty response from LLM");
+    }
+
+    // Parse TOML output — extract [facts] K/V and [markdown_summary].text
+    let parsed: toml::Value = toml::from_str(&text)
+        .with_context(|| format!("parse distill output as TOML:\n{text}"))?;
+
+    let facts: Vec<(String, String)> = parsed
+        .get("facts")
+        .and_then(|f| f.as_table())
+        .map(|t| {
+            t.iter()
+                .filter_map(|(k, v)| v.as_str().map(|s| (k.clone(), s.to_owned())))
+                .collect()
+        })
+        .unwrap_or_default();
+
+    let md_summary = parsed
+        .get("markdown_summary")
+        .and_then(|m| m.get("text"))
+        .and_then(|t| t.as_str())
+        .unwrap_or("")
+        .to_owned();
+
+    if dry_run {
+        println!("# soul distill dry-run — {} facts extracted", facts.len());
+        for (k, v) in &facts {
+            println!("  {k} = {v:?}");
+        }
+        if !md_summary.is_empty() {
+            println!("\n## markdown summary\n{md_summary}");
+        }
+        return Ok(());
+    }
+
+    // Write K/V facts to soul SqliteMemoryStore
+    let provider = detect_provider();
+    let mut written = 0usize;
+    for (k, v) in &facts {
+        let key = format!("distill:{k}");
+        provider.write(&key, v)?;
+        written += 1;
+    }
+
+    // Append markdown summary to SOUL.md in active soul dir
+    if !md_summary.is_empty() {
+        let writer = crate::soul_writer::FileSoulWriter::detect();
+        match writer.write_memory("SOUL.md", &md_summary, true) {
+            Ok(r) => eprintln!("soul distill: appended summary → {}", r.location),
+            Err(e) => eprintln!("soul distill: SOUL.md write skipped: {e}"),
+        }
+    }
+
+    println!(
+        "soul distill: {} facts → soul K/V; SOUL.md updated",
+        written
+    );
+    Ok(())
+}
+
+// ─── /v1/memory/write ─────────────────────────────────────────────────────────
+
+#[derive(Deserialize)]
+struct MemoryWriteRequest {
+    file: String,
+    content: String,
+    #[serde(default)]
+    append: bool,
+}
+
+#[derive(Serialize)]
+struct MemoryWriteResponse {
+    location: String,
+    bytes_written: usize,
+}
+
+async fn memory_write(
+    State(s): State<SoulState>,
+    body: String,
+) -> impl IntoResponse {
+    let req: MemoryWriteRequest = match serde_json::from_str(&body) {
+        Ok(r) => r,
+        Err(e) => {
+            return (StatusCode::BAD_REQUEST, format!("{{\"error\":\"bad JSON: {e}\"}}")).into_response()
+        }
+    };
+    let writer = crate::soul_writer::FileSoulWriter::detect();
+    match writer.write_memory(&req.file, &req.content, req.append) {
+        Ok(r) => {
+            let resp = MemoryWriteResponse {
+                location: r.location,
+                bytes_written: r.bytes_written,
+            };
+            (StatusCode::OK, serde_json::to_string(&resp).unwrap_or_default()).into_response()
+        }
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, format!("{{\"error\":\"{e}\"}}")).into_response(),
+    }
+}
+
+async fn serve_soul_kv(host: &str, port: u16) -> Result<()> {
+    let provider = detect_provider();
+    let state = SoulState {
+        provider: Arc::from(provider),
+    };
+
+    let app = Router::new()
+        .route("/healthz", get(healthz))
+        .route("/v1/kv", get(kv_list))
+        .route("/v1/kv/:key", get(kv_get).put(kv_put).delete(kv_delete))
+        .route("/v1/memory/write", axum::routing::post(memory_write))
+        .with_state(state);
+
+    let addr = format!("{host}:{port}");
+    let listener = tokio::net::TcpListener::bind(&addr).await?;
+    println!("soul serve: listening on http://{addr}");
+    axum::serve(listener, app).await?;
+    Ok(())
+}

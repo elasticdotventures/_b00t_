@@ -1509,7 +1509,10 @@ This is the fourth paragraph with more detailed information. It explains complex
         let client = GrokClient::new("https://example.com".to_string(), "test_key".to_string());
 
         // Test basic tool mapping
-        assert_eq!(client.infer_lfmf_topic("just", "some error", ""), "just_syntax");
+        assert_eq!(
+            client.infer_lfmf_topic("just", "some error", ""),
+            "just_syntax"
+        );
         assert_eq!(client.infer_lfmf_topic("rust", "compile error", ""), "rust");
         assert_eq!(
             client.infer_lfmf_topic("docker", "build failed", ""),

@@ -52,6 +52,7 @@ dead_code = "warn"
 pedantic = "warn"
 cargo = "warn"
 # Allow some pedantic lints that are too noisy
-module_name_repetitions = "allow"
-similar_names = "allow"
-too_many_lines = "allow"
+# priority = 1 required: individual overrides must outrank their lint group (priority 0)
+module_name_repetitions = { level = "allow", priority = 1 }
+similar_names = { level = "allow", priority = 1 }
+too_many_lines = { level = "allow", priority = 1 }

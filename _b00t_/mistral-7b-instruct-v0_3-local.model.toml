@@ -2,7 +2,7 @@
 
 [b00t]
 name = "mistral-7b-instruct-v0_3-local"
-type = "ai_model"
+type = "model"
 hint = "Local Mistral 7B Instruct served via mistral.rs (Candle)"
 aliases = ["mistral-local", "mistral7b-local"]
 

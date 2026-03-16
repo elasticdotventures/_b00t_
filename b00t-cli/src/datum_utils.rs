@@ -192,8 +192,18 @@ fn scan_datums_recursive(
 }
 
 /// Get all datums recursively (returns just BootDatum for backwards compatibility)
-fn get_all_datums_recursive(b00t_path: &str, max_depth: usize) -> Result<HashMap<String, BootDatum>> {
-    let with_paths = get_all_datums_with_paths(b00t_path, if max_depth == 0 { None } else { Some(max_depth) })?;
+fn get_all_datums_recursive(
+    b00t_path: &str,
+    max_depth: usize,
+) -> Result<HashMap<String, BootDatum>> {
+    let with_paths = get_all_datums_with_paths(
+        b00t_path,
+        if max_depth == 0 {
+            None
+        } else {
+            Some(max_depth)
+        },
+    )?;
     Ok(with_paths.into_iter().map(|(k, (d, _))| (k, d)).collect())
 }
 

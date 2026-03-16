@@ -104,8 +104,15 @@ impl GrokClient {
                     // Runtime fallback: use current exe path to find workspace root
                     std::env::current_exe()
                         .ok()
-                        .and_then(|p| p.parent().and_then(|p| p.parent()).and_then(|p| p.parent()).map(|p| p.to_string_lossy().to_string()))
-                        .unwrap_or_else(|| format!("{}/.b00t", env::var("HOME").unwrap_or_default()))
+                        .and_then(|p| {
+                            p.parent()
+                                .and_then(|p| p.parent())
+                                .and_then(|p| p.parent())
+                                .map(|p| p.to_string_lossy().to_string())
+                        })
+                        .unwrap_or_else(|| {
+                            format!("{}/.b00t", env::var("HOME").unwrap_or_default())
+                        })
                 });
             format!("{}/b00t-grok-py", workspace_root)
         });
