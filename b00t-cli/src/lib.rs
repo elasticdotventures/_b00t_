@@ -41,6 +41,7 @@ pub mod job_state;
 pub mod k8s;
 pub mod memory_provider;
 pub mod model_manager;
+pub mod soul_writer;
 pub mod orchestrator;
 pub mod session_memory;
 pub mod traits;

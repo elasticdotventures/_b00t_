@@ -282,6 +282,11 @@ pub trait Sandbox: Send + Sync {
             .output()
             .map_err(|e| anyhow::anyhow!("sandbox run failed: {}", e))?;
 
+        let output = std::process::Command::new("sh")
+            .arg("-c").arg(&plan.command_line)
+            .current_dir(&plan.working_dir)
+            .envs(plan.env.iter().map(|(k, v)| (k.as_str(), v.as_str())))
+            .output().map_err(|e| anyhow::anyhow!("sandbox run failed: {}", e))?;
         Ok(ExecOutput {
             value: String::from_utf8_lossy(&output.stdout).into_owned(),
             exit_code: output.status.code().unwrap_or(-1),
