@@ -2,6 +2,7 @@ use crate::BootDatum;
 use anyhow::Result;
 use std::path::PathBuf;
 use std::time::Duration;
+use shlex::Shlex;
 
 /// Display trait for generating k8s CRDs from b00t datums
 /// Enables MBSE-based stack → pod transformation
@@ -259,11 +260,28 @@ pub trait Sandbox: Send + Sync {
     fn run(&self, plan: &ExecPlan) -> Result<ExecOutput<String>> {
         use std::time::Instant;
         let start = Instant::now();
-        let output = std::process::Command::new("sh")
-            .arg("-c").arg(&plan.command_line)
+
+        // Parse the command line into argv tokens without invoking a shell.
+        let argv: Vec<String> = {
+            let lexer = Shlex::new(&plan.command_line);
+            lexer.collect()
+        };
+
+        if argv.is_empty() {
+            return Err(anyhow::anyhow!("sandbox run failed: empty command_line in ExecPlan"));
+        }
+
+        let mut cmd = std::process::Command::new(&argv[0]);
+        if argv.len() > 1 {
+            cmd.args(&argv[1..]);
+        }
+
+        let output = cmd
             .current_dir(&plan.working_dir)
             .envs(plan.env.iter().map(|(k, v)| (k.as_str(), v.as_str())))
-            .output().map_err(|e| anyhow::anyhow!("sandbox run failed: {}", e))?;
+            .output()
+            .map_err(|e| anyhow::anyhow!("sandbox run failed: {}", e))?;
+
         Ok(ExecOutput {
             value: String::from_utf8_lossy(&output.stdout).into_owned(),
             exit_code: output.status.code().unwrap_or(-1),
