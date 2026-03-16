@@ -189,9 +189,10 @@ fn print_ontology_table(o: &Ontology) {
 }
 
 pub fn filter_required_for_role<'a>(datums: &'a [DatumMeta], role: &str) -> Vec<&'a DatumMeta> {
+    let role_string = role.to_string();
     datums
         .iter()
-        .filter(|d| d.roles.required_for.contains(&role.to_string()))
+        .filter(|d| d.roles.required_for.contains(&role_string))
         .collect()
 }
 

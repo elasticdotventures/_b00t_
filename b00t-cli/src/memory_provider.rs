@@ -69,51 +69,6 @@ struct FileStore {
 
 impl MemoryProvider for FileMemory {
     fn read(&self, key: &str) -> Result<Option<String>> {
-        if !self.path.exists() {
-            return Ok(None);
-        }
-        let raw = std::fs::read_to_string(&self.path)?;
-        // Strip .tomllm comment lines before TOML parsing
-        let content: String = raw
-            .lines()
-            .filter(|l| !l.trim_start().starts_with('#'))
-            .collect::<Vec<_>>()
-            .join("\n");
-        let store: FileStore = toml::from_str(&content).unwrap_or_default();
-        Ok(store.data.get(key).cloned())
-    }
-
-    fn write(&self, key: &str, val: &str) -> Result<()> {
-        // Ensure parent dir exists (~/._b00t_/)
-        if let Some(parent) = self.path.parent() {
-            std::fs::create_dir_all(parent)?;
-        }
-        let mut store: FileStore = if self.path.exists() {
-            let raw = std::fs::read_to_string(&self.path)?;
-            let stripped: String = raw
-                .lines()
-                .filter(|l| !l.trim_start().starts_with('#'))
-                .collect::<Vec<_>>()
-                .join("\n");
-            toml::from_str(&stripped).unwrap_or_default()
-        } else {
-            FileStore::default()
-        };
-        store.data.insert(key.to_string(), val.to_string());
-        // Write with .tomllm header + b00t:map tail
-        let toml_body = toml::to_string(&store)?;
-        let output = format!(
-            "# b00t SOUL — agentic identity & persistent memory\n\
-             # @tribal: soul persists across sessions; write via `b00t soul set`, never edit directly\n\
-             \n\
-             {toml_body}\n\
-             # b00t:map v1\n\
-             # summary: agent soul — accumulated identity, memory, lessons\n\
-             # tags: soul, memory, identity, session\n\
-             # tier: sm0l\n"
-        );
-        std::fs::write(&self.path, output)?;
-        Ok(())
         Ok(self.load_store()?.data.get(key).cloned())
     }
 
@@ -155,22 +110,6 @@ pub struct SqliteMemoryStore {
     db_path: PathBuf,
 }
 
-/// Canonical SOUL file path: ~/._b00t_/SOUL.tomllm
-/// 🤓 ._b00t_ (dot-underscore-b00t-underscore) is the soul directory — separate from .b00t (runtime)
-pub fn soul_path() -> PathBuf {
-    dirs::home_dir()
-        .unwrap_or_else(|| PathBuf::from("/tmp"))
-        .join("._b00t_")
-        .join("SOUL.tomllm")
-}
-
-/// Detect best available memory provider (copaw > redis > file fallback)
-pub fn detect_provider() -> Box<dyn MemoryProvider> {
-    // Future: if is_copaw_available() { return Box::new(CopawMemory::new()); }
-    // Future: if redis_ping_ok() { return Box::new(RedisMemory::new()); }
-
-    // File fallback — soul file at ~/._b00t_/SOUL.tomllm
-    Box::new(FileMemory::new(soul_path()))
 impl SqliteMemoryStore {
     pub fn new(db_path: PathBuf) -> Self {
         Self { db_path }
@@ -258,11 +197,34 @@ pub fn soul_path() -> PathBuf {
 }
 
 /// Detect best available memory provider.
-/// Priority: SqliteMemoryStore > FileMemory (SOUL.tomllm)
+///
+/// Priority:
+/// 1. `<cwd>/._b00t_/soul.db`  — repo-local soul (if `._b00t_/` dir exists)
+/// 2. `~/._b00t_/soul.db`       — global soul (default)
+///
 /// Future slots: MoltisMemory_🥾 | RedisMemory | PgvectorMemory | NeumannMemory
 pub fn detect_provider() -> Box<dyn MemoryProvider> {
-    // Prefer SQLite — richer interface, better durability
-    Box::new(SqliteMemoryStore::new(SqliteMemoryStore::default_path()))
+    Box::new(SqliteMemoryStore::new(active_soul_db_path()))
+}
+
+/// Active soul DB path — local workspace if `._b00t_/` exists, else global.
+pub fn active_soul_db_path() -> PathBuf {
+    std::env::current_dir()
+        .ok()
+        .map(|d| d.join("._b00t_"))
+        .filter(|p| p.is_dir())
+        .map(|d| d.join("soul.db"))
+        .unwrap_or_else(SqliteMemoryStore::default_path)
+}
+
+/// Active SOUL.tomllm path — local workspace if `._b00t_/` exists, else global.
+pub fn active_soul_path() -> PathBuf {
+    std::env::current_dir()
+        .ok()
+        .map(|d| d.join("._b00t_"))
+        .filter(|p| p.is_dir())
+        .map(|d| d.join("SOUL.tomllm"))
+        .unwrap_or_else(soul_path)
 }
 
 /// Fallback file provider — used when SQLite unavailable or for SOUL.tomllm compat

@@ -3,6 +3,7 @@ use crate::traits::*;
 use crate::{BootDatum, JustfileConfig, check_command_available, get_config};
 use anyhow::{Context, Result, anyhow};
 use std::path::{Path, PathBuf};
+use std::sync::Mutex;
 use std::time::Instant;
 
 /// A registered justfile — the b00t-native executable unit.
@@ -14,8 +15,8 @@ use std::time::Instant;
 pub struct JustfileDatum {
     pub datum: BootDatum,
     pub justfile_path: PathBuf,
-    /// Live AST — None until first load_ast() call
-    pub ast: Option<JustfileAst>,
+    /// Live AST — lazily loaded; Mutex enables &self access (DatumProvider: Send+Sync).
+    ast: Mutex<Option<JustfileAst>>,
 }
 
 impl JustfileDatum {
@@ -23,31 +24,28 @@ impl JustfileDatum {
         let (config, _filename) = get_config(name, path).map_err(|e| anyhow!("{}", e))?;
         let datum = config.b00t;
         let justfile_path = Self::resolve_justfile_path(&datum, path)?;
-        Ok(JustfileDatum { datum, justfile_path, ast: None })
+        Ok(JustfileDatum { datum, justfile_path, ast: Mutex::new(None) })
     }
 
     pub fn from_datum(datum: BootDatum, base_dir: &Path) -> Result<Self> {
         let justfile_path = Self::resolve_justfile_path(&datum, &base_dir.display().to_string())?;
-        Ok(JustfileDatum { datum, justfile_path, ast: None })
+        Ok(JustfileDatum { datum, justfile_path, ast: Mutex::new(None) })
     }
 
-    /// Load (or return cached) AST. Uses just's JSON dump — requires just >= 1.13.0.
-    pub fn load_ast(&mut self) -> Result<&JustfileAst> {
-        if self.ast.is_none() {
-            self.ast = Some(JustfileAst::load(&self.justfile_path)?);
-        }
-        Ok(self.ast.as_ref().unwrap())
+    fn ensure_ast(&self) -> Result<()> {
+        let mut g = self.ast.lock().unwrap();
+        if g.is_none() { *g = Some(JustfileAst::load(&self.justfile_path)?); }
+        Ok(())
     }
 
-    /// Reload AST if justfile has changed; return structural diff.
-    pub fn reload(&mut self) -> Result<AstDiff> {
-        match self.ast.as_mut() {
-            Some(ast) => ast.reload(),
-            None => {
-                self.ast = Some(JustfileAst::load(&self.justfile_path)?);
-                Ok(AstDiff::empty())
-            }
-        }
+    pub fn with_ast<T, F: FnOnce(&JustfileAst) -> T>(&self, f: F) -> Result<T> {
+        self.ensure_ast()?;
+        Ok(f(self.ast.lock().unwrap().as_ref().unwrap()))
+    }
+
+    pub fn reload(&self) -> Result<AstDiff> {
+        self.ensure_ast()?;
+        self.ast.lock().unwrap().as_mut().unwrap().reload()
     }
 
     fn resolve_justfile_path(datum: &BootDatum, base_dir: &str) -> Result<PathBuf> {
@@ -237,25 +235,22 @@ impl CliExecutor for JustfileDatum {
     }
 
     fn list_commands(&self) -> Result<Vec<CommandSignature>> {
-        // Use just's JSON dump for rich parameter info
-        let ast = JustfileAst::load(&self.justfile_path)?;
-        let mut recipes = ast.recipes_sorted();
-
-        // Filter out private recipes
-        recipes.retain(|r| !r.private);
-
-        Ok(recipes.iter().map(|r| CommandSignature {
-            name: r.name.clone(),
-            description: r.doc.clone(),
-            parameters: r.parameters.iter().map(|p| ParameterSignature {
-                name: p.name.clone(),
-                default_value: p.default.clone(),
-                required: p.default.is_none() && p.kind == "singular",
-                kind: p.kind.clone(),
-            }).collect(),
-            dependencies: r.dependencies.clone(),
-            private: r.private,
-        }).collect())
+        self.with_ast(|ast| {
+            let mut recipes = ast.recipes_sorted();
+            recipes.retain(|r| !r.private);
+            recipes.iter().map(|r| CommandSignature {
+                name: r.name.clone(),
+                description: r.doc.clone(),
+                parameters: r.parameters.iter().map(|p| ParameterSignature {
+                    name: p.name.clone(),
+                    default_value: p.default.clone(),
+                    required: p.default.is_none() && p.kind == "singular",
+                    kind: p.kind.clone(),
+                }).collect(),
+                dependencies: r.dependencies.clone(),
+                private: r.private,
+            }).collect()
+        })
     }
 
     fn sandbox_requirements(&self) -> SandboxRequirements {
@@ -304,5 +299,47 @@ impl CliExecutor for JustfileDatum {
     fn io_method(&self) -> IoMethod {
         let preferred_sandbox = self.allowed_sandboxes().into_iter().next().unwrap_or(SandboxKind::None);
         IoMethod::for_sandbox(&preferred_sandbox)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::io::Write;
+    use tempfile::NamedTempFile;
+    fn tmp(c: &str) -> NamedTempFile {
+        let mut f = NamedTempFile::new().unwrap(); write!(f, "{}", c).unwrap(); f
+    }
+    fn mkd(path: &std::path::Path) -> JustfileDatum {
+        JustfileDatum { datum: BootDatum::default(), justfile_path: path.to_path_buf(), ast: Mutex::new(None) }
+    }
+    #[test]
+    fn list_commands_uses_ast_cache() {
+        let f = tmp("# Build\nbuild:\n    echo build\n\n# Test\ntest:\n    echo test\n");
+        let d = mkd(f.path());
+        let first = d.list_commands().unwrap();
+        let second = d.list_commands().unwrap();
+        assert!(d.ast.lock().unwrap().is_some());
+        assert_eq!(first.len(), second.len());
+        let names: Vec<&str> = first.iter().map(|c| c.name.as_str()).collect();
+        assert!(names.contains(&"build") && names.contains(&"test"));
+    }
+    #[test]
+    fn ensure_ast_caches_on_first_call() {
+        let f = tmp("hello:\n    echo hello\n");
+        let d = mkd(f.path());
+        assert!(d.ast.lock().unwrap().is_none());
+        d.ensure_ast().unwrap();
+        assert!(d.ast.lock().unwrap().is_some());
+        d.ensure_ast().unwrap(); // no double-lock panic
+    }
+    #[test]
+    fn list_commands_excludes_private_recipes() {
+        let f = tmp("pub-recipe:\n    echo public\n\n[private]\n_priv:\n    echo private\n");
+        let d = mkd(f.path());
+        let cmds = d.list_commands().unwrap();
+        let names: Vec<&str> = cmds.iter().map(|c| c.name.as_str()).collect();
+        assert!(names.contains(&"pub-recipe"));
+        assert!(!names.contains(&"_priv"));
     }
 }
