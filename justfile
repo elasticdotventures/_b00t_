@@ -785,3 +785,15 @@ hive-ralph-loop max_iter="10":
         --model claude-haiku-4-5-20251001 \
         --max-budget-usd 0.10 \
         "$(cat {{repo-root}}/HIVE_MAINTENANCE_PROMPT.md)"
+
+# Build irontology-mcp from submodule
+irontology-build:
+    cargo build --release --manifest-path vendor/irontology-mcp/Cargo.toml
+
+# Run irontology-mcp tests
+irontology-test:
+    cargo test --manifest-path vendor/irontology-mcp/Cargo.toml
+
+# Update irontology-mcp submodule to latest upstream
+irontology-update:
+    git submodule update --remote vendor/irontology-mcp
