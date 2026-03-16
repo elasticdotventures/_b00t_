@@ -28,6 +28,26 @@ impl B00tService {
     }
 }
 
+fn validate_unit_name_strict(unit: &str) -> zbus::fdo::Result<()> {
+    // Preserve existing validation logic.
+    validate_unit_name(unit)?;
+
+    // Additional hardening: reject values that look like options or contain whitespace.
+    if unit.starts_with('-') {
+        return Err(zbus::fdo::Error::InvalidArgs(
+            "invalid unit name: must not start with '-'".to_string(),
+        ));
+    }
+
+    if unit.chars().any(char::is_whitespace) {
+        return Err(zbus::fdo::Error::InvalidArgs(
+            "invalid unit name: must not contain whitespace".to_string(),
+        ));
+    }
+
+    Ok(())
+}
+
 // 🤓 zbus 4.x #[interface] requires &self methods returning zbus::Result or fdo::Result
 #[zbus::interface(name = "com.promptexecution.b00t1")]
 impl B00tService {
@@ -47,6 +67,7 @@ impl B00tService {
 
     /// Query systemctl status for a unit
     async fn service_status(&self, unit: &str) -> zbus::fdo::Result<String> {
+        validate_unit_name_strict(unit)?;
         let output = std::process::Command::new("systemctl")
             .args(["status", unit])
             .output()
@@ -56,7 +77,7 @@ impl B00tService {
 
     /// Start a systemd unit (system-level — the whole point of the DBus boundary)
     async fn service_start(&self, unit: &str) -> zbus::fdo::Result<bool> {
-        validate_unit_name(unit)?;
+        validate_unit_name_strict(unit)?;
         let status = std::process::Command::new("systemctl")
             .args(["start", unit])
             .status()
@@ -66,7 +87,7 @@ impl B00tService {
 
     /// Stop a systemd unit
     async fn service_stop(&self, unit: &str) -> zbus::fdo::Result<bool> {
-        validate_unit_name(unit)?;
+        validate_unit_name_strict(unit)?;
         let status = std::process::Command::new("systemctl")
             .args(["stop", unit])
             .status()
