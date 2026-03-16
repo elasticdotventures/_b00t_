@@ -80,10 +80,10 @@ pub fn build_ontology(role: Option<&str>, datum_dir: &str) -> Result<Ontology> {
     let role_str = role.unwrap_or("developer").to_string();
     let datums = scan_datums(datum_dir)?;
 
-    let role_datums: Vec<_> = datums.iter()
+    let role_datums: Vec<_> = datums
+        .iter()
         .filter(|d| {
-            d.roles.required_for.contains(&role_str)
-                || d.roles.optional_for.contains(&role_str)
+            d.roles.required_for.contains(&role_str) || d.roles.optional_for.contains(&role_str)
         })
         .collect();
 
@@ -159,26 +159,38 @@ pub fn is_validated(datum: &DatumMeta) -> bool {
 }
 
 pub fn detect_blessings() -> Vec<String> {
-    ["ANTHROPIC_API_KEY", "GITHUB_TOKEN", "OPENAI_API_KEY",
-     "HF_TOKEN", "CLOUDFLARE_API_TOKEN"]
-        .iter()
-        .filter(|k| std::env::var(k).map_or(false, |v| !v.is_empty()))
-        .map(|k| k.to_string())
-        .collect()
+    [
+        "ANTHROPIC_API_KEY",
+        "GITHUB_TOKEN",
+        "OPENAI_API_KEY",
+        "HF_TOKEN",
+        "CLOUDFLARE_API_TOKEN",
+    ]
+    .iter()
+    .filter(|k| std::env::var(k).map_or(false, |v| !v.is_empty()))
+    .map(|k| k.to_string())
+    .collect()
 }
 
 fn print_ontology_table(o: &Ontology) {
     println!("Ontology for role: {}", o.role);
     println!("\nAvailable ({}):", o.available.len());
-    for a in &o.available { println!("   {}", a); }
+    for a in &o.available {
+        println!("   {}", a);
+    }
     println!("\nInstallable ({}):", o.installable.len());
-    for i in &o.installable { println!("   b00t cli install {}", i); }
+    for i in &o.installable {
+        println!("   b00t cli install {}", i);
+    }
     println!("\nBlessings ({}):", o.blessings.len());
-    for b in &o.blessings { println!("   {}", b); }
+    for b in &o.blessings {
+        println!("   {}", b);
+    }
 }
 
 pub fn filter_required_for_role<'a>(datums: &'a [DatumMeta], role: &str) -> Vec<&'a DatumMeta> {
-    datums.iter()
+    datums
+        .iter()
         .filter(|d| d.roles.required_for.contains(&role.to_string()))
         .collect()
 }
@@ -187,10 +199,21 @@ pub fn filter_required_for_role<'a>(datums: &'a [DatumMeta], role: &str) -> Vec<
 mod tests {
     use super::*;
 
-    fn make_datum(name: &str, required_for: &[&str], optional_for: &[&str], validate_cmd: &str) -> DatumMeta {
+    fn make_datum(
+        name: &str,
+        required_for: &[&str],
+        optional_for: &[&str],
+        validate_cmd: &str,
+    ) -> DatumMeta {
         DatumMeta {
-            b00t: B00tSection { name: name.to_string(), datum_type: "cli".to_string() },
-            validate: ValidateSection { command: validate_cmd.to_string(), regex: String::new() },
+            b00t: B00tSection {
+                name: name.to_string(),
+                datum_type: "cli".to_string(),
+            },
+            validate: ValidateSection {
+                command: validate_cmd.to_string(),
+                regex: String::new(),
+            },
             roles: RolesSection {
                 required_for: required_for.iter().map(|s| s.to_string()).collect(),
                 optional_for: optional_for.iter().map(|s| s.to_string()).collect(),

@@ -775,10 +775,18 @@ impl_mcp_tool!(
 // 🤓 ENTANGLED: b00t-cli/src/commands/up.rs UpArgs
 #[derive(Parser, Clone)]
 pub struct UpCommand {
-    #[arg(long, help = "AI tool to use for the ralph loop", default_value = "claude")]
+    #[arg(
+        long,
+        help = "AI tool to use for the ralph loop",
+        default_value = "claude"
+    )]
     pub tool: Option<String>,
 
-    #[arg(long, help = "Maximum iterations per ralph session", default_value = "10")]
+    #[arg(
+        long,
+        help = "Maximum iterations per ralph session",
+        default_value = "10"
+    )]
     pub max_iter: Option<u32>,
 
     #[arg(long, help = "Agent role (filters ontology + tutorial path)")]
