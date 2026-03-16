@@ -289,16 +289,22 @@ impl Sandbox for NoSandbox {
 pub struct ContainerSandbox {
     pub image: String,
     pub extra_flags: Vec<String>,
+    kind: SandboxKind,
 }
 
 impl ContainerSandbox {
     pub fn new(image: impl Into<String>) -> Self {
-        Self { image: image.into(), extra_flags: vec!["--rm".to_string()] }
+        let image = image.into();
+        Self {
+            kind: SandboxKind::Container(image.clone()),
+            image,
+            extra_flags: vec!["--rm".to_string()],
+        }
     }
 }
 
 impl Sandbox for ContainerSandbox {
-    fn kind(&self) -> &SandboxKind { &SandboxKind::None }
+    fn kind(&self) -> &SandboxKind { &self.kind }
     fn io_method(&self) -> IoMethod { IoMethod::Pipe }
     fn scope(&self, _reqs: &SandboxRequirements) -> Result<()> { Ok(()) }
     fn run(&self, plan: &ExecPlan) -> Result<ExecOutput<String>> {
