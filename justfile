@@ -68,7 +68,7 @@ ansible-k0s-check PLAYBOOK="ansible/playbooks/k0s_kata.yaml":
 # 🔑 Install b00t DBus system service — delegates to b00t-service.just
 # Usage: sudo just install-dbus-service  OR  sudo just sudo::install-dbus-service
 install-dbus-service:
-    sudo just sudo::install-dbus-service
+    just sudo::install-dbus-service
 
 # Test crates.io publishing (dry-run)
 publish-dry-run:
