@@ -106,10 +106,14 @@ b00t job run build-and-test.job.toml   # CI sub-task
 ```
 
 #### Sub-Agent Response Protocol
-Instruct sub-agents to reply **laconically & fastidiously** to save executive context:
+Instruct non-`sm0l` sub-agents to reply **laconically & fastidiously** to save executive context:
 - ✅ `DONE: <1-line summary> | commit: <hash>`
 - ❌ `FAIL: <error in ≤5 lines>`
 - ⚠️ `BLOCKED: <dependency> missing`
+
+For `sm0l`-tier agents, follow the routing-table contract instead:
+- ✅ `PASS: <1-line summary>`
+- ❌ `FAIL: <error in ≤5 lines>`
 
 Never forward full sub-agent output to executive context — demand compressed summaries.
 
