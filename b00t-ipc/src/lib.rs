@@ -37,6 +37,11 @@
 
 pub mod transport;
 
+#[cfg(feature = "dbus")]
+pub mod dbus_interface;
+#[cfg(feature = "dbus")]
+pub mod dbus_client;
+
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;

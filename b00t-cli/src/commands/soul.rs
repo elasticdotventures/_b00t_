@@ -60,6 +60,13 @@ pub enum SoulCommands {
         #[clap(long, default_value = "127.0.0.1", help = "Bind address")]
         host: String,
     },
+
+    #[cfg(feature = "dbus")]
+    #[clap(about = "Serve b00t hive control over DBus (system bus)")]
+    Dbus {
+        #[clap(long, help = "Use session bus (dev/test, no root)")]
+        session: bool,
+    },
 }
 
 pub fn handle_soul_command(cmd: &SoulCommands) -> Result<()> {
@@ -148,6 +155,13 @@ pub fn handle_soul_command(cmd: &SoulCommands) -> Result<()> {
         SoulCommands::Serve { port, host } => {
             let rt = tokio::runtime::Runtime::new()?;
             rt.block_on(serve_soul_kv(host, *port))
+        }
+
+        #[cfg(feature = "dbus")]
+        SoulCommands::Dbus { session } => {
+            let datum_dir = crate::get_expanded_path("~/.dotfiles/_b00t_/")?;
+            let rt = tokio::runtime::Runtime::new()?;
+            rt.block_on(serve_dbus(*session, datum_dir))
         }
     }
 }
@@ -261,6 +275,77 @@ async fn kv_list(
 
 async fn healthz() -> impl IntoResponse {
     (StatusCode::OK, "{\"status\":\"ok\"}")
+}
+
+// ─── soul dbus server ─────────────────────────────────────────────────────────
+
+#[cfg(feature = "dbus")]
+async fn serve_dbus(session: bool, datum_dir: std::path::PathBuf) -> Result<()> {
+    use b00t_ipc::dbus_interface::{B00tService, StackResult, dbus_hive_bridge};
+
+    // Register bridge functions so B00tService methods can call hive logic
+    dbus_hive_bridge::register(
+        // capture
+        || {
+            let snapshot = crate::hive::SystemSnapshot::capture()?;
+            Ok(serde_json::to_string(&snapshot)?)
+        },
+        // activate
+        |profile: &str, datum_dir: &std::path::Path, force: bool| {
+            let p = crate::hive::load_profile(profile, datum_dir)?;
+            let snapshot = crate::hive::SystemSnapshot::capture()?;
+            match crate::hive::activate_profile(&p, &snapshot, false, force) {
+                Ok(log) => Ok(StackResult {
+                    success: true,
+                    log,
+                }),
+                Err(e) => Ok(StackResult {
+                    success: false,
+                    log: vec![e.to_string()],
+                }),
+            }
+        },
+        // deactivate
+        |profile: &str, _datum_dir: &std::path::Path| {
+            let unit = format!("b00t-hive-{profile}.service");
+            let _ = std::process::Command::new("systemctl")
+                .args(["stop", &unit])
+                .status();
+            let template_unit = format!("b00t@{profile}.service");
+            let _ = std::process::Command::new("systemctl")
+                .args(["stop", &template_unit])
+                .status();
+            Ok(StackResult {
+                success: true,
+                log: vec![format!("stopped {unit}"), format!("stopped {template_unit}")],
+            })
+        },
+    );
+
+    let service = B00tService::new(datum_dir);
+
+    let connection = if session {
+        println!("soul dbus: connecting to session bus ...");
+        zbus::connection::Builder::session()?
+    } else {
+        println!("soul dbus: connecting to system bus ...");
+        zbus::connection::Builder::system()?
+    };
+
+    let _conn = connection
+        .name("com.promptexecution.b00t1")?
+        .serve_at("/com/promptexecution/b00t1", service)?
+        .build()
+        .await?;
+
+    println!("soul dbus: bus name acquired — com.promptexecution.b00t1");
+    println!("soul dbus: serving at /com/promptexecution/b00t1");
+    println!("soul dbus: Ctrl+C to stop");
+
+    // Block until SIGINT/SIGTERM
+    tokio::signal::ctrl_c().await?;
+    println!("\nsoul dbus: shutting down");
+    Ok(())
 }
 
 async fn serve_soul_kv(host: &str, port: u16) -> Result<()> {
