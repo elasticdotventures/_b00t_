@@ -97,7 +97,7 @@ b00t learn rust        # Load Rust context into sub-agent
 b00t learn docker      # Container orchestration for sub-agent
 # See orchestrator role docs for full orchestrator patterns
 
-# Parallel task execution via b00t jobs (`.job.toml` suffix is implied)
+# Parallel task execution via b00t jobs (`.job.toml` suffix implied)
 b00t job run parallel-tasks           # DAG-mode parallel execution
 b00t job run build-and-test           # CI sub-task
 
@@ -106,7 +106,7 @@ b00t job run build-and-test           # CI sub-task
 ```
 
 #### Sub-Agent Response Protocol
-Instruct non-`sm0l` sub-agents to reply **laconically & fastidiously** to save executive context:
+Instruct sub-agents to reply **laconically & fastidiously** to save executive context:
 - ✅ `DONE: <1-line summary> | commit: <hash>`
 - ❌ `FAIL: <error in ≤5 lines>`
 - ⚠️ `BLOCKED: <dependency> missing`
