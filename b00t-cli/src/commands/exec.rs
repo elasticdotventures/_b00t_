@@ -192,6 +192,9 @@ pub fn handle_exec(args: &ExecArgs, path: &str) -> Result<()> {
         let sleep_secs = parse_duration(sleep_dur)?;
         let command_clone = args.command.clone();
 
+        // Apply the requested delay before spawning the background process.
+        std::thread::sleep(std::time::Duration::from_secs(sleep_secs));
+
         append_audit_log(&log_path, &AuditLogEntry {
             ts: Utc::now().to_rfc3339(),
             cmd: cmd_str.clone(),
