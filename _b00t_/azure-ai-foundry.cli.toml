@@ -5,7 +5,7 @@ hint = "Azure AI Foundry - Enterprise multi-agent orchestration platform with co
 desires = "latest"
 keywords = ["multi-agent", "orchestration", "azure", "ai", "agents", "foundry", "sub-agents", "workflows"]
 
-# 🤓 Azure AI Foundry provides superior multi-agent orchestration vs TaskMaster
+# 🤓 Azure AI Foundry provides superior multi-agent orchestration vs lightweight local backlog/job flows
 # - Connected Agents: Hierarchical delegation without custom orchestrators
 # - Sub-Agent Architecture: Purpose-built specialists coordinated by primary agents  
 # - Stateful Workflows: Context-aware orchestration for complex business processes
@@ -123,9 +123,9 @@ auto_digest = true
 content = """
 # Azure AI Foundry - Enterprise Multi-Agent Orchestration
 
-Azure AI Foundry provides superior multi-agent orchestration capabilities compared to simpler task management tools like TaskMaster.
+Azure AI Foundry provides superior multi-agent orchestration capabilities compared to simpler local backlog and job-based workflows.
 
-## Key Advantages Over TaskMaster
+## Key Advantages Over TODO-next + b00t job
 
 ### 1. Connected Agents Architecture
 - **Hierarchical Delegation**: Primary agents intelligently delegate to specialized sub-agents
@@ -178,9 +178,9 @@ workflow:
 - **Scalability**: Cloud-native scaling for production workloads
 - **Reliability**: Improved error handling and fault tolerance
 
-## Migration from TaskMaster
+## Migration from Local Backlog/Jobs
 
-TaskMaster is suitable for simple task lists but Azure AI Foundry excels at:
+TODO-next.md and b00t job are suitable for simple local workflows, but Azure AI Foundry excels at:
 - Complex business process automation
 - Multi-step workflows requiring context
 - Enterprise security and compliance
