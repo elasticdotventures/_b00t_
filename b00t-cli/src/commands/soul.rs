@@ -344,10 +344,25 @@ async fn serve_dbus(session: bool, datum_dir: std::path::PathBuf) -> Result<()> 
 
     println!("soul dbus: bus name acquired — com.promptexecution.b00t1");
     println!("soul dbus: serving at /com/promptexecution/b00t1");
-    println!("soul dbus: Ctrl+C to stop");
+    println!("soul dbus: Ctrl+C or SIGTERM to stop");
 
-    // Block until SIGINT/SIGTERM
-    tokio::signal::ctrl_c().await?;
+    // Block until SIGINT (Ctrl+C) or SIGTERM (e.g. systemd stop) on Unix.
+    // On non-Unix platforms, fall back to SIGINT only.
+    #[cfg(unix)]
+    {
+        let mut sigterm =
+            tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())?;
+        tokio::select! {
+            _ = tokio::signal::ctrl_c() => {},
+            _ = sigterm.recv() => {},
+        }
+    }
+
+    #[cfg(not(unix))]
+    {
+        tokio::signal::ctrl_c().await?;
+    }
+
     println!("\nsoul dbus: shutting down");
     Ok(())
 }
