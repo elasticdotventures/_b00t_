@@ -44,7 +44,8 @@ pub fn handle_quit(args: &QuitArgs) -> Result<()> {
     // Safety: can only target our own process tree (non-root)
     let ret = libc_kill(target_pid as i32, args.signal);
     if ret != 0 {
-        bail!("kill({}, {}) failed: errno={}", target_pid, args.signal, ret);
+        let err = std::io::Error::last_os_error();
+        bail!("kill({}, {}) failed: {}", target_pid, args.signal, err);
     }
 
     Ok(())
