@@ -25,9 +25,6 @@
 [submodule "rmcp-rust-sdk"]
 	path = rmcp-rust-sdk
 	url = git@github.com:modelcontextprotocol/rust-sdk.git
-[submodule "plantuml-server"]
-	path = plantuml-server
-	url = https://github.com/PromptExecution/plantuml-server--b00t--togaf--mcp.git
 [submodule "email/himalaya"]
 	path = email/himalaya
 	url = https://github.com/pimalaya/himalaya.git
