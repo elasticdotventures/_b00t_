@@ -8,6 +8,9 @@ workspace_version := `if command -v toml >/dev/null 2>&1; then toml get Cargo.to
 set shell := ["bash", "-cu"]
 mod cog
 mod b00t
+# 🔑 Root-requiring system setup — invoke as: sudo just sudo::<recipe>
+# e.g. sudo just sudo::setup | sudo just sudo::status | sudo just sudo::install-dbus-service
+mod sudo 'b00t-service.just'
 # this is an antipattern (litellm is early-stage AI infra, skip for now)
 mod litellm '_b00t_/litellm/justfile'
 mod b00t-mcp-npm
@@ -62,46 +65,10 @@ ansible-k0s-check PLAYBOOK="ansible/playbooks/k0s_kata.yaml":
     fi
     ANSIBLE_FORCE_COLOR=1 ansible-playbook --syntax-check "$PLAYBOOK"
 
-# Install b00t DBus system service (requires sudo)
+# 🔑 Install b00t DBus system service — delegates to b00t-service.just
+# Usage: sudo just install-dbus-service  OR  sudo just sudo::install-dbus-service
 install-dbus-service:
-    #!/bin/bash
-    set -euo pipefail
-    echo "🔌 Installing b00t DBus service ..."
-
-    # 1. Create _b00t system user + b00t group
-    if ! getent group b00t >/dev/null 2>&1; then
-        sudo groupadd --system b00t
-        echo "  created group: b00t"
-    fi
-    if ! id -u _b00t >/dev/null 2>&1; then
-        sudo useradd --system --no-create-home --shell /usr/sbin/nologin -g b00t _b00t
-        echo "  created user: _b00t"
-    fi
-
-    # 2. Add operator to b00t group
-    if ! id -nG brianh | grep -qw b00t; then
-        sudo usermod -aG b00t brianh
-        echo "  added brianh to b00t group"
-    fi
-
-    # 3. Build with dbus feature
-    echo "  building b00t-cli --features dbus ..."
-    cargo build --release --features dbus
-    sudo install -m 755 target/release/b00t-cli /usr/local/bin/b00t-cli
-
-    # 4. Install DBus policy
-    sudo install -m 644 systemd/com.promptexecution.b00t1.conf /etc/dbus-1/system.d/
-    echo "  installed DBus policy"
-
-    # 5. Install systemd unit
-    sudo install -m 644 systemd/b00t.service /etc/systemd/system/
-    echo "  installed systemd unit"
-
-    # 6. Reload and enable
-    sudo systemctl daemon-reload
-    sudo systemctl enable --now b00t.service
-    echo "✅ b00t.service installed and started"
-    echo "  verify: dbus-send --system --print-reply --dest=com.promptexecution.b00t1 /com/promptexecution/b00t1 com.promptexecution.b00t1.Ping"
+    sudo just sudo::install-dbus-service
 
 # Test crates.io publishing (dry-run)
 publish-dry-run:
