@@ -322,3 +322,7 @@ export PATH=$PATH:/usr/local/go/bin
 alias gemini='npx -y https://github.com/google-gemini/gemini-cli'
 
 #b00t_quiet_echo "🐚 .bash_profile loaded"
+
+if [ -r "$HOME/.local/bin/env" ]; then
+    . "$HOME/.local/bin/env"
+fi

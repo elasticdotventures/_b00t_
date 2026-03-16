@@ -1,8 +1,8 @@
 // b00t-cli/src/commands/up.rs
+use crate::commands::ontology::build_ontology;
+use crate::session_memory::SessionMemory;
 use anyhow::{Context, Result};
 use clap::Parser;
-use crate::session_memory::SessionMemory;
-use crate::commands::ontology::build_ontology;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -48,19 +48,28 @@ impl UpArgs {
             // Postel: check if we're in a git repo with ._b00t_/ before failing
             let cwd = std::env::current_dir().unwrap_or_default();
             if let Some(datum_dir) = find_repo_datum_dir(&cwd) {
-                println!("🥾 b00t up: no b00t.sh found, but ._b00t_/ detected at {}",
-                    datum_dir.display());
+                println!(
+                    "🥾 b00t up: no b00t.sh found, but ._b00t_/ detected at {}",
+                    datum_dir.display()
+                );
                 println!("   hint: run `b00t up --repo .` to onboard this repo");
             }
-            anyhow::bail!("b00t.sh not found at {}. Run from b00t workspace root.", ralph_script);
+            anyhow::bail!(
+                "b00t.sh not found at {}. Run from b00t workspace root.",
+                ralph_script
+            );
         }
 
         let mut restart_count = 0u32;
         let mut session = SessionMemory::load().unwrap_or_default();
 
         loop {
-            println!("🥾 b00t up: cycle {} (tool={}, max_iter={})",
-                restart_count + 1, self.tool, self.max_iter);
+            println!(
+                "🥾 b00t up: cycle {} (tool={}, max_iter={})",
+                restart_count + 1,
+                self.tool,
+                self.max_iter
+            );
 
             // Hive stack summary — quick check before launching agent
             let stacks = crate::hive::hive_stacks_status();
@@ -75,16 +84,17 @@ impl UpArgs {
 
             // Build ontology JSON from live datum TOML scan
             let datum_dir = format!("{}/_b00t_", workspace_root);
-            let ontology = build_ontology(self.role.as_deref(), &datum_dir)
-                .unwrap_or_else(|_| crate::commands::ontology::Ontology {
+            let ontology = build_ontology(self.role.as_deref(), &datum_dir).unwrap_or_else(|_| {
+                crate::commands::ontology::Ontology {
                     role: self.role.clone().unwrap_or_else(|| "developer".to_string()),
                     available: vec![],
                     installable: vec![],
                     blessings: vec![],
                     timestamp: chrono::Utc::now().to_rfc3339(),
-                });
-            let ontology_json = serde_json::to_string(&ontology)
-                .unwrap_or_else(|_| "{}".to_string());
+                }
+            });
+            let ontology_json =
+                serde_json::to_string(&ontology).unwrap_or_else(|_| "{}".to_string());
 
             let status = Command::new("bash")
                 .arg(&ralph_script)
@@ -107,7 +117,10 @@ impl UpArgs {
 
             match code {
                 0 => {
-                    println!("✅ b00t up: ralph completed after {} cycle(s)", restart_count + 1);
+                    println!(
+                        "✅ b00t up: ralph completed after {} cycle(s)",
+                        restart_count + 1
+                    );
                     return Ok(());
                 }
                 75 => {
@@ -119,8 +132,10 @@ impl UpArgs {
                             self.max_restarts
                         );
                     }
-                    println!("🔄 b00t up: restart {}/{} (exit 75 = TEMPFAIL)",
-                        restart_count, self.max_restarts);
+                    println!(
+                        "🔄 b00t up: restart {}/{} (exit 75 = TEMPFAIL)",
+                        restart_count, self.max_restarts
+                    );
                 }
                 n => {
                     anyhow::bail!("b00t up: ralph exited with error code {}", n);
@@ -379,7 +394,10 @@ mod tests {
 
         for code in exit_codes {
             match code {
-                0 => { final_code = 0; break; }
+                0 => {
+                    final_code = 0;
+                    break;
+                }
                 75 => {
                     restart_count += 1;
                     if restart_count >= max_restarts {
@@ -387,7 +405,10 @@ mod tests {
                         break;
                     }
                 }
-                n => { final_code = n; break; }
+                n => {
+                    final_code = n;
+                    break;
+                }
             }
         }
         assert_eq!(restart_count, 3);
@@ -449,9 +470,18 @@ mod tests {
         let git_datum = format!("{}/_b00t_/gh.cli.toml", workspace);
         if std::path::Path::new(&git_datum).exists() {
             let content = std::fs::read_to_string(&git_datum).unwrap();
-            assert!(content.contains("[validate]"), "gh datum missing [validate] section");
-            assert!(content.contains("[roles]"), "gh datum missing [roles] section");
-            assert!(content.contains("required_for"), "gh datum missing required_for field");
+            assert!(
+                content.contains("[validate]"),
+                "gh datum missing [validate] section"
+            );
+            assert!(
+                content.contains("[roles]"),
+                "gh datum missing [roles] section"
+            );
+            assert!(
+                content.contains("required_for"),
+                "gh datum missing required_for field"
+            );
         }
         // Graceful skip if file doesn't exist (CI environments)
 
@@ -459,8 +489,14 @@ mod tests {
         let rustc_datum = format!("{}/_b00t_/rustc.cli.toml", workspace);
         if std::path::Path::new(&rustc_datum).exists() {
             let content = std::fs::read_to_string(&rustc_datum).unwrap();
-            assert!(content.contains("[validate]"), "rustc datum missing [validate] section");
-            assert!(content.contains("[roles]"), "rustc datum missing [roles] section");
+            assert!(
+                content.contains("[validate]"),
+                "rustc datum missing [validate] section"
+            );
+            assert!(
+                content.contains("[roles]"),
+                "rustc datum missing [roles] section"
+            );
         }
     }
 }

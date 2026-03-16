@@ -136,9 +136,7 @@ impl B00tAiClient {
         self.config
             .providers
             .get(provider)
-            .map(|p| {
-                p.enabled && (p.api_key.is_some() || p.provider.as_str() == "foundry_local")
-            })
+            .map(|p| p.enabled && (p.api_key.is_some() || p.provider.as_str() == "foundry_local"))
             .unwrap_or(false)
     }
 
@@ -148,7 +146,9 @@ impl B00tAiClient {
             .config
             .providers
             .values()
-            .filter(|p| p.enabled && (p.api_key.is_some() || p.provider.as_str() == "foundry_local"))
+            .filter(|p| {
+                p.enabled && (p.api_key.is_some() || p.provider.as_str() == "foundry_local")
+            })
             .collect();
 
         providers.sort_by_key(|p| p.priority);
