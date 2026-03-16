@@ -132,7 +132,11 @@ pub enum AgentCommands {
         #[arg(help = "Task description")]
         description: String,
 
-        #[arg(long, help = "Request urgency (low, normal, high, emergency)", default_value = "normal")]
+        #[arg(
+            long,
+            help = "Request urgency (low, normal, high, emergency)",
+            default_value = "normal"
+        )]
         urgency: String,
     },
 
@@ -510,11 +514,7 @@ async fn handle_progress(
     Ok(())
 }
 
-async fn handle_capability(
-    capabilities: &str,
-    description: &str,
-    urgency_str: &str,
-) -> Result<()> {
+async fn handle_capability(capabilities: &str, description: &str, urgency_str: &str) -> Result<()> {
     let config = RedisConfig::default();
     let redis = RedisComms::new(config, "cli-capability".into())?;
 
