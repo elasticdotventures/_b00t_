@@ -12,23 +12,31 @@ static DBUS_AVAILABLE: OnceLock<bool> = OnceLock::new();
 /// Check if the b00t DBus service is reachable (cached after first probe)
 pub fn dbus_available() -> bool {
     *DBUS_AVAILABLE.get_or_init(|| {
-        let rt = match tokio::runtime::Handle::try_current() {
-            Ok(_handle) => {
-                // Already in a tokio context — can't block_on, so spawn and check
-                // 🤓 This path shouldn't normally hit since hive.rs calls are sync
-                return false;
+        match tokio::runtime::Handle::try_current() {
+            Ok(handle) => {
+                // Already in a tokio context — use block_in_place + handle.block_on
+                tokio::task::block_in_place(|| {
+                    handle.block_on(async {
+                        match b00t_ipc::dbus_client::connect_auto().await {
+                            Ok(proxy) => proxy.ping().await.is_ok(),
+                            Err(_) => false,
+                        }
+                    })
+                })
             }
-            Err(_) => match tokio::runtime::Runtime::new() {
-                Ok(rt) => rt,
-                Err(_) => return false,
-            },
-        };
-        rt.block_on(async {
-            match b00t_ipc::dbus_client::connect_auto().await {
-                Ok(proxy) => proxy.ping().await.is_ok(),
-                Err(_) => false,
+            Err(_) => {
+                let rt = match tokio::runtime::Runtime::new() {
+                    Ok(rt) => rt,
+                    Err(_) => return false,
+                };
+                rt.block_on(async {
+                    match b00t_ipc::dbus_client::connect_auto().await {
+                        Ok(proxy) => proxy.ping().await.is_ok(),
+                        Err(_) => false,
+                    }
+                })
             }
-        })
+        }
     })
 }
 
