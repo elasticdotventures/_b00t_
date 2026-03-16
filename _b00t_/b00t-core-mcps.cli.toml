@@ -17,7 +17,7 @@ declare -A MCP_SERVERS=(
     ["context7"]="node.cli"          # Documentation access
 )
 
-# 🤓 Azure AI Foundry recommended over TaskMaster for complex orchestration
+# 🤓 Azure AI Foundry is the recommended option for complex orchestration (TaskMaster MCP is optional/deprecated and not installed by this bundle)
 echo "💡 For multi-agent orchestration, consider Azure AI Foundry: b00t cli install azure-ai-foundry"
 
 # Install each MCP server
