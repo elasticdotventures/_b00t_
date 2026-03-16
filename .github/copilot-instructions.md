@@ -95,7 +95,7 @@ Route tasks to the cheapest tier that can handle them:
 # Load sub-agent skills before dispatching
 b00t learn rust        # Load Rust context into sub-agent
 b00t learn docker      # Container orchestration for sub-agent
-b00t learn orchestrator  # Full orchestrator patterns
+# See orchestrator role docs for full orchestrator patterns
 
 # Parallel task execution via b00t jobs
 b00t job run parallel-tasks.job.toml   # DAG-mode parallel execution
