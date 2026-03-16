@@ -72,9 +72,46 @@ b00t mcp install <server>  # Install MCP server
 
 ### Starting Work
 1. Use `sequential-thinking` MCP to create a plan
-2. Track progress with lightweight repo-native mechanisms (for example session todos or issue state)
+2. Track progress with lightweight repo-native mechanisms (git issues, PR state, or `b00t` job checkpoints)
 3. Verify assumptions from first principles
 4. Check for existing libraries/solutions before coding
+5. **If acting as executive orchestrator**: delegate sub-tasks to specialized agents (see Sub-Agent Delegation below)
+
+### Sub-Agent Delegation (Executive Orchestrator Pattern)
+
+Executive contexts are high-cost, high-intelligence models with limited token budgets. Delegate aggressively.
+
+#### Cognitive Tier Routing
+Route tasks to the cheapest tier that can handle them:
+
+| Tier | Models | Tasks | Response contract |
+|---|---|---|---|
+| `sm0l` | qwen2.5-3B, claude-haiku | lint, classify, grep, format | `PASS` or `FAIL: <5-line excerpt>` |
+| `ch0nky` | local qwen3-coder | implement, refactor, debug | diff + test result |
+| `frontier` | claude-opus/sonnet | architecture, security, novel design | structured decision |
+
+#### Delegating with b00t
+```bash
+# Load sub-agent skills before dispatching
+b00t learn rust        # Load Rust context into sub-agent
+b00t learn docker      # Container orchestration for sub-agent
+b00t learn orchestrator  # Full orchestrator patterns
+
+# Parallel task execution via b00t jobs
+b00t job run parallel-tasks.job.toml   # DAG-mode parallel execution
+b00t job run build-and-test.job.toml   # CI sub-task
+
+# Launch specialist agents with skills
+# See _b00t_/alpha.agent.toml, beta.agent.toml, executive.agent.toml
+```
+
+#### Sub-Agent Response Protocol
+Instruct sub-agents to reply **laconically & fastidiously** to save executive context:
+- ✅ `DONE: <1-line summary> | commit: <hash>`
+- ❌ `FAIL: <error in ≤5 lines>`
+- ⚠️ `BLOCKED: <dependency> missing`
+
+Never forward full sub-agent output to executive context — demand compressed summaries.
 
 ### During Development
 1. Write tests first (TDD)
@@ -127,4 +164,5 @@ b00t mcp install <server>  # Install MCP server
 ## Additional Resources
 
 See [AGENTS.md](mdc:/AGENTS.md) for comprehensive agent alignment protocols and b00t gospel.
-See [dev_workflow.md](mdc:/.github/instructions/dev_workflow.md) for Taskmaster development workflow.
+See [dev_workflow.md](mdc:/.github/instructions/dev_workflow.md) for legacy Taskmaster task management reference (use b00t-native job/agent patterns for new work).
+See [MULTI_AGENT_GOSPEL.md](mdc:/MULTI_AGENT_GOSPEL.md) for multi-agent coordination protocols (crew, IPC, cake economics).
