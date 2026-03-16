@@ -31,6 +31,7 @@ pub struct QuitArgs {
     pub dry_run: bool,
 }
 
+#[cfg(target_os = "linux")]
 pub fn handle_quit(args: &QuitArgs) -> Result<()> {
     let target_pid = resolve_agent_pid()?;
 
@@ -51,7 +52,13 @@ pub fn handle_quit(args: &QuitArgs) -> Result<()> {
     Ok(())
 }
 
+#[cfg(not(target_os = "linux"))]
+pub fn handle_quit(_args: &QuitArgs) -> Result<()> {
+    bail!("b00t quit: unsupported platform (Linux-only command)");
+}
+
 /// Resolve the agent PID via env var or process tree walk
+#[cfg(target_os = "linux")]
 fn resolve_agent_pid() -> Result<u32> {
     // 1. Explicit env var
     if let Ok(s) = std::env::var("B00T_AGENT_PID") {
@@ -75,6 +82,7 @@ fn resolve_agent_pid() -> Result<u32> {
 }
 
 /// Walk process tree upward until we find a known agent process name
+#[cfg(target_os = "linux")]
 fn walk_to_agent(start_pid: u32) -> Option<u32> {
     let mut current = start_pid;
     for _ in 0..16 {
@@ -94,6 +102,7 @@ fn walk_to_agent(start_pid: u32) -> Option<u32> {
 }
 
 /// Read PPID from /proc/<pid>/status
+#[cfg(target_os = "linux")]
 fn get_ppid(pid: u32) -> Result<u32> {
     let path = format!("/proc/{}/status", pid);
     let content = std::fs::read_to_string(&path)
@@ -108,9 +117,15 @@ fn get_ppid(pid: u32) -> Result<u32> {
 }
 
 /// Read process name from /proc/<pid>/comm
+#[cfg(target_os = "linux")]
 fn proc_name(pid: u32) -> Result<String> {
     let path = format!("/proc/{}/comm", pid);
     Ok(std::fs::read_to_string(&path)?.trim().to_string())
+}
+
+#[cfg(not(target_os = "linux"))]
+fn resolve_agent_pid() -> Result<u32> {
+    bail!("b00t quit: unsupported platform (Linux-only command)");
 }
 
 /// Thin libc kill wrapper — avoids pulling libc crate as dependency
