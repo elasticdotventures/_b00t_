@@ -97,9 +97,9 @@ b00t learn rust        # Load Rust context into sub-agent
 b00t learn docker      # Container orchestration for sub-agent
 # See orchestrator role docs for full orchestrator patterns
 
-# Parallel task execution via b00t jobs
-b00t job run parallel-tasks.job.toml   # DAG-mode parallel execution
-b00t job run build-and-test.job.toml   # CI sub-task
+# Parallel task execution via b00t jobs (`.job.toml` suffix is implied)
+b00t job run parallel-tasks           # DAG-mode parallel execution
+b00t job run build-and-test           # CI sub-task
 
 # Launch specialist agents with skills
 # See _b00t_/alpha.agent.toml, beta.agent.toml, executive.agent.toml
