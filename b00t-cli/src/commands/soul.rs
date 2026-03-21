@@ -62,6 +62,12 @@ pub enum SoulCommands {
         host: String,
     },
 
+    #[cfg(feature = "dbus")]
+    #[clap(about = "Serve b00t hive control over DBus (system bus)")]
+    Dbus {
+        #[clap(long, help = "Use session bus (dev/test, no root)")]
+        session: bool,
+    },
     /// Distil session transcript into persistent soul memories.
     ///
     /// Reads session text from stdin, runs a silent LLM turn (sm0l tier),
@@ -183,6 +189,15 @@ pub fn handle_soul_command(cmd: &SoulCommands) -> Result<()> {
             rt.block_on(serve_soul_kv(host, *port))
         }
 
+        #[cfg(feature = "dbus")]
+        SoulCommands::Dbus { session } => {
+            let datum_dir = crate::get_expanded_path("~/.dotfiles/_b00t_/")?;
+            // 🤓 main.rs uses #[tokio::main] so we're already inside a tokio runtime.
+            // Runtime::new().block_on() would panic — use block_in_place instead.
+            let use_session = *session;
+            tokio::task::block_in_place(move || {
+                tokio::runtime::Handle::current().block_on(serve_dbus(use_session, datum_dir))
+            })
         SoulCommands::Distill { model, base_url, dry_run } => {
             let rt = tokio::runtime::Runtime::new()?;
             rt.block_on(distill_soul(model, base_url.as_deref(), *dry_run))
@@ -311,6 +326,92 @@ async fn kv_list(
 
 async fn healthz() -> impl IntoResponse {
     (StatusCode::OK, "{\"status\":\"ok\"}")
+}
+
+// ─── soul dbus server ─────────────────────────────────────────────────────────
+
+#[cfg(feature = "dbus")]
+async fn serve_dbus(session: bool, datum_dir: std::path::PathBuf) -> Result<()> {
+    use b00t_ipc::dbus_interface::{B00tService, StackResult, dbus_hive_bridge};
+
+    // Register bridge functions so B00tService methods can call hive logic
+    dbus_hive_bridge::register(
+        // capture
+        || {
+            let snapshot = crate::hive::SystemSnapshot::capture()?;
+            Ok(serde_json::to_string(&snapshot)?)
+        },
+        // activate
+        |profile: &str, datum_dir: &std::path::Path, force: bool| {
+            let p = crate::hive::load_profile(profile, datum_dir)?;
+            let snapshot = crate::hive::SystemSnapshot::capture()?;
+            match crate::hive::activate_profile(&p, &snapshot, false, force) {
+                Ok(log) => Ok(StackResult {
+                    success: true,
+                    log,
+                }),
+                Err(e) => Ok(StackResult {
+                    success: false,
+                    log: vec![e.to_string()],
+                }),
+            }
+        },
+        // deactivate
+        |profile: &str, _datum_dir: &std::path::Path| {
+            let unit = format!("b00t-hive-{profile}.service");
+            let _ = std::process::Command::new("systemctl")
+                .args(["stop", &unit])
+                .status();
+            let template_unit = format!("b00t@{profile}.service");
+            let _ = std::process::Command::new("systemctl")
+                .args(["stop", &template_unit])
+                .status();
+            Ok(StackResult {
+                success: true,
+                log: vec![format!("stopped {unit}"), format!("stopped {template_unit}")],
+            })
+        },
+    );
+
+    let service = B00tService::new(datum_dir);
+
+    let connection = if session {
+        println!("soul dbus: connecting to session bus ...");
+        zbus::connection::Builder::session()?
+    } else {
+        println!("soul dbus: connecting to system bus ...");
+        zbus::connection::Builder::system()?
+    };
+
+    let _conn = connection
+        .name("com.promptexecution.b00t1")?
+        .serve_at("/com/promptexecution/b00t1", service)?
+        .build()
+        .await?;
+
+    println!("soul dbus: bus name acquired — com.promptexecution.b00t1");
+    println!("soul dbus: serving at /com/promptexecution/b00t1");
+    println!("soul dbus: Ctrl+C or SIGTERM to stop");
+
+    // Block until SIGINT (Ctrl+C) or SIGTERM (e.g. systemd stop) on Unix.
+    // On non-Unix platforms, fall back to SIGINT only.
+    #[cfg(unix)]
+    {
+        let mut sigterm =
+            tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())?;
+        tokio::select! {
+            _ = tokio::signal::ctrl_c() => {},
+            _ = sigterm.recv() => {},
+        }
+    }
+
+    #[cfg(not(unix))]
+    {
+        tokio::signal::ctrl_c().await?;
+    }
+
+    println!("\nsoul dbus: shutting down");
+    Ok(())
 }
 
 // ─── soul init ────────────────────────────────────────────────────────────────

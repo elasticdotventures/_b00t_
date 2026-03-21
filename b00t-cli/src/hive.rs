@@ -350,7 +350,7 @@ impl HiveProfile {
 
 // ─── Profile Discovery ────────────────────────────────────────────────────────
 
-/// Find all .hive.toml / .hive.tomllm datums; .tomllm wins on name collision
+/// Find all .hive.toml / .hive.tomllm / .stack.tomllm datums; priority: .hive.tomllm > .stack.tomllm > .hive.toml
 pub fn discover_profiles(datum_dir: &Path) -> Vec<(String, PathBuf)> {
     let mut profiles: HashMap<String, PathBuf> = HashMap::new();
     if let Ok(entries) = fs::read_dir(datum_dir) {
@@ -359,10 +359,13 @@ pub fn discover_profiles(datum_dir: &Path) -> Vec<(String, PathBuf)> {
             if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
                 if name.ends_with(".hive.tomllm") {
                     let profile_name = name.trim_end_matches(".hive.tomllm").to_string();
-                    profiles.insert(profile_name, path); // .tomllm wins
+                    profiles.insert(profile_name, path); // .hive.tomllm wins
+                } else if name.ends_with(".stack.tomllm") {
+                    let profile_name = name.trim_end_matches(".stack.tomllm").to_string();
+                    profiles.entry(profile_name).or_insert(path); // .stack.tomllm only if no .hive.tomllm
                 } else if name.ends_with(".hive.toml") {
                     let profile_name = name.trim_end_matches(".hive.toml").to_string();
-                    profiles.entry(profile_name).or_insert(path); // .toml only if no .tomllm
+                    profiles.entry(profile_name).or_insert(path); // .toml only if no .tomllm variants
                 }
             }
         }
@@ -372,15 +375,22 @@ pub fn discover_profiles(datum_dir: &Path) -> Vec<(String, PathBuf)> {
     result
 }
 
-/// Load a named profile from datum dir — prefers .hive.tomllm over .hive.toml
+/// Load a named profile from datum dir — prefers .hive.tomllm > .stack.tomllm > .hive.toml
 pub fn load_profile(name: &str, datum_dir: &Path) -> Result<HiveProfile> {
-    // 🤓 .tomllm is valid TOML + comment annotations; wins over .toml on discovery
-    let tomllm_path = datum_dir.join(format!("{}.hive.tomllm", name));
-    let toml_path = datum_dir.join(format!("{}.hive.toml", name));
-    let path = if tomllm_path.exists() { tomllm_path } else { toml_path };
-    if !path.exists() {
-        bail!("hive profile '{}' not found (tried .hive.tomllm and .hive.toml)", name);
-    }
+    // 🤓 priority: .hive.tomllm (explicit hive) > .stack.tomllm (sysconfig profile with inline service spec) > .hive.toml (fallback)
+    let hive_tomllm_path = datum_dir.join(format!("{}.hive.tomllm", name));
+    let stack_tomllm_path = datum_dir.join(format!("{}.stack.tomllm", name));
+    let hive_toml_path = datum_dir.join(format!("{}.hive.toml", name));
+
+    let path = if hive_tomllm_path.exists() {
+        hive_tomllm_path
+    } else if stack_tomllm_path.exists() {
+        stack_tomllm_path
+    } else if hive_toml_path.exists() {
+        hive_toml_path
+    } else {
+        bail!("profile '{}' not found (tried .hive.tomllm, .stack.tomllm, .hive.toml)", name);
+    };
     HiveProfile::from_file(&path)
 }
 
@@ -539,6 +549,14 @@ pub fn activate_profile(
     dry_run: bool,
     force: bool,
 ) -> Result<Vec<String>> {
+    // 🤓 Route through DBus when available — system-level systemctl without sudo
+    #[cfg(feature = "dbus")]
+    if !dry_run {
+        if crate::dbus_dispatch::dbus_available() {
+            return crate::dbus_dispatch::dbus_stack_activate(&profile.name, force);
+        }
+    }
+
     let mut log = Vec::new();
 
     // 1. Check resource gate

@@ -43,6 +43,7 @@ chrono = { version = "0.4", features = ["serde"] }
 tokio = { version = "1.34.0", features = ["full"] }
 rmcp = { version = "0.8.5", features = ["client", "transport-io", "server", "macros", "schemars", "transport-streamable-http-server", "transport-worker", "transport-child-process"] }
 tracing = "0.1"
+zbus = { version = "4", default-features = false, features = ["tokio", "macros"] }
 
 [workspace.lints.rust]
 unused_must_use = "warn"

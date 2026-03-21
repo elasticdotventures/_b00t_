@@ -8,6 +8,9 @@ workspace_version := `if command -v toml >/dev/null 2>&1; then toml get Cargo.to
 set shell := ["bash", "-cu"]
 mod cog
 mod b00t
+# 🔑 Root-requiring system setup — invoke as: sudo just sudo::<recipe>
+# e.g. sudo just sudo::setup | sudo just sudo::status | sudo just sudo::install-dbus-service
+mod sudo 'b00t-service.just'
 # this is an antipattern (litellm is early-stage AI infra, skip for now)
 mod litellm '_b00t_/litellm/justfile'
 mod b00t-mcp-npm
@@ -61,6 +64,11 @@ ansible-k0s-check PLAYBOOK="ansible/playbooks/k0s_kata.yaml":
         exit 1
     fi
     ANSIBLE_FORCE_COLOR=1 ansible-playbook --syntax-check "$PLAYBOOK"
+
+# 🔑 Install b00t DBus system service — delegates to b00t-service.just
+# Usage: sudo just install-dbus-service  OR  sudo just sudo::install-dbus-service
+install-dbus-service:
+    just sudo::install-dbus-service
 
 # Test crates.io publishing (dry-run)
 publish-dry-run:
@@ -777,3 +785,15 @@ hive-ralph-loop max_iter="10":
         --model claude-haiku-4-5-20251001 \
         --max-budget-usd 0.10 \
         "$(cat {{repo-root}}/HIVE_MAINTENANCE_PROMPT.md)"
+
+# Build irontology-mcp from submodule
+irontology-build:
+    cargo build --release --manifest-path vendor/irontology-mcp/Cargo.toml
+
+# Run irontology-mcp tests
+irontology-test:
+    cargo test --manifest-path vendor/irontology-mcp/Cargo.toml
+
+# Update irontology-mcp submodule to latest upstream
+irontology-update:
+    git submodule update --remote vendor/irontology-mcp

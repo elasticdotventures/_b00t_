@@ -25,6 +25,7 @@ chrono = { workspace = true, features = ["serde"] }
 # Transport backends (optional features)
 redis = { version = "0.32", features = ["tokio-comp", "aio"], optional = true }
 async-nats = { version = "0.45", optional = true }
+zbus = { workspace = true, optional = true }
 
 [dev-dependencies]
 tokio-test = "0.4"
@@ -33,7 +34,8 @@ tokio-test = "0.4"
 default = ["redis", "nats"]
 redis = ["dep:redis"]
 nats = ["dep:async-nats"]
-all-transports = ["redis", "nats"]
+dbus = ["dep:zbus"]
+all-transports = ["redis", "nats", "dbus"]
 
 [lints]
 workspace = true

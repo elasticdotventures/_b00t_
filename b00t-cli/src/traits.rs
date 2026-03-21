@@ -2,6 +2,7 @@ use crate::BootDatum;
 use anyhow::Result;
 use std::path::PathBuf;
 use std::time::Duration;
+use shlex::Shlex;
 
 /// Display trait for generating k8s CRDs from b00t datums
 /// Enables MBSE-based stack → pod transformation
@@ -259,6 +260,28 @@ pub trait Sandbox: Send + Sync {
     fn run(&self, plan: &ExecPlan) -> Result<ExecOutput<String>> {
         use std::time::Instant;
         let start = Instant::now();
+
+        // Parse the command line into argv tokens without invoking a shell.
+        let argv: Vec<String> = {
+            let lexer = Shlex::new(&plan.command_line);
+            lexer.collect()
+        };
+
+        if argv.is_empty() {
+            return Err(anyhow::anyhow!("sandbox run failed: empty command_line in ExecPlan"));
+        }
+
+        let mut cmd = std::process::Command::new(&argv[0]);
+        if argv.len() > 1 {
+            cmd.args(&argv[1..]);
+        }
+
+        let output = cmd
+            .current_dir(&plan.working_dir)
+            .envs(plan.env.iter().map(|(k, v)| (k.as_str(), v.as_str())))
+            .output()
+            .map_err(|e| anyhow::anyhow!("sandbox run failed: {}", e))?;
+
         let output = std::process::Command::new("sh")
             .arg("-c").arg(&plan.command_line)
             .current_dir(&plan.working_dir)
@@ -289,16 +312,22 @@ impl Sandbox for NoSandbox {
 pub struct ContainerSandbox {
     pub image: String,
     pub extra_flags: Vec<String>,
+    kind: SandboxKind,
 }
 
 impl ContainerSandbox {
     pub fn new(image: impl Into<String>) -> Self {
-        Self { image: image.into(), extra_flags: vec!["--rm".to_string()] }
+        let image = image.into();
+        Self {
+            kind: SandboxKind::Container(image.clone()),
+            image,
+            extra_flags: vec!["--rm".to_string()],
+        }
     }
 }
 
 impl Sandbox for ContainerSandbox {
-    fn kind(&self) -> &SandboxKind { &SandboxKind::None }
+    fn kind(&self) -> &SandboxKind { &self.kind }
     fn io_method(&self) -> IoMethod { IoMethod::Pipe }
     fn scope(&self, _reqs: &SandboxRequirements) -> Result<()> { Ok(()) }
     fn run(&self, plan: &ExecPlan) -> Result<ExecOutput<String>> {

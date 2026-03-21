@@ -32,6 +32,8 @@ pub mod dependency_resolver;
 pub mod entanglement;
 pub mod erp;
 pub mod hive;
+#[cfg(feature = "dbus")]
+pub mod dbus_dispatch;
 pub mod hook_engine;
 pub mod job_executor;
 pub mod job_ipc;

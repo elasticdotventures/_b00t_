@@ -324,6 +324,13 @@ The system will:
         #[clap(subcommand)]
         tutorial_command: TutorialCommands,
     },
+    #[clap(
+        about = "Execute command with guard enforcement and broad-authority audit log",
+        long_about = "Audited execution: Allow→run, Warn→run with warning, Block→reject first time / force on re-submit within 5min.\nAll executions logged to ~/.b00t/exec-log.jsonl.\n\nUse --sleep=<duration> for background execution (returns immediately)."
+    )]
+    Exec(b00t_cli::commands::exec::ExecArgs),
+    #[clap(about = "Killswitch: terminate upper agent instance and return CLI to prompt")]
+    Quit(b00t_cli::commands::quit::QuitArgs),
 }
 
 // Using unified config from lib.rs
@@ -1328,6 +1335,18 @@ async fn main() {
         }
         Some(Commands::Tutorial { tutorial_command }) => {
             if let Err(e) = tutorial_command.execute() {
+                eprintln!("Error: {}", e);
+                std::process::exit(1);
+            }
+        }
+        Some(Commands::Exec(args)) => {
+            if let Err(e) = b00t_cli::commands::exec::handle_exec(args, &cli.path) {
+                eprintln!("Error: {}", e);
+                std::process::exit(1);
+            }
+        }
+        Some(Commands::Quit(args)) => {
+            if let Err(e) = b00t_cli::commands::quit::handle_quit(args) {
                 eprintln!("Error: {}", e);
                 std::process::exit(1);
             }
