@@ -119,9 +119,9 @@ b00t cli install fastmcp           # install: python → uv → fastmcp (DAG-awa
 ## 🧠 Session & Budget Management
 
 ```bash
-b00t session init --budget 25.00 --time-limit 120 --agent "code-reviewer"
+b00t session init --budget 25.00 --name "code-reviewer"
 b00t session status
-b00t checkpoint "completed feature X"
+b00t checkpoint -m "completed feature X"
 ```
 
 ---
