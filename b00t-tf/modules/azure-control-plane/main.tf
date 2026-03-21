@@ -172,6 +172,10 @@ resource "azurerm_container_app" "cp" {
         value = tostring(var.lease_ttl_minutes)
       }
       env {
+        name  = "AZURE_LOCATION"
+        value = var.location
+      }
+      env {
         name  = "PORT"
         value = "8080"
       }
