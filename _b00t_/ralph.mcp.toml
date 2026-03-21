@@ -1,26 +1,19 @@
 [b00t]
 name = "ralph"
 type = "mcp"
-hint = "Ralph autonomous agent MCP server for task execution loops"
-status = "planned"  # 🤓 ralph source does not exist yet
+hint = "Ralph OODA loop via b00t-mcp — use b00t_up / b00t_status MCP tools to drive the loop"
 
 [b00t.mcp]
 protocol_version = "2024-11-05"
 
 [b00t.mcp.server.stdio]
-command = "uv"
-args = ["run", "ralph", "--mcp", "--transport", "stdio"]
-env = { RALPH_HOME = "_b00t_/ralph" }
-
-[b00t.mcp.server.http]
-command = "uv"
-args = ["run", "ralph", "--mcp", "--transport", "http", "--host", "127.0.0.1", "--port", "8000"]
-env = { RALPH_HOME = "_b00t_/ralph" }
+command = "b00t-mcp"
+args = ["--transport", "stdio"]
 
 [b00t.mcp.capabilities]
-tools = ["ralph_run", "ralph_status", "ralph_list_tasks"]
-prompts = ["ralph-prd", "ralph"]
-resources = ["taskmaster://tasks", "ralph://progress"]
+tools = ["b00t_up", "b00t_status", "b00t_cli_check"]
+resources = ["taskmaster://tasks"]
 
 [b00t.install]
-requires = ["ralph.cli"]
+requires = ["b00t-mcp"]
+note = "ralph loop is driven by b00t.sh; MCP exposes b00t_up/b00t_status to external agents"
