@@ -27,6 +27,8 @@ terraform {
   }
 }
 
+data "azurerm_client_config" "current" {}
+
 locals {
   rg_name  = "rg-b00t-control-${var.node_id}"
   app_name = "b00t-cp-${var.node_id}"
@@ -208,7 +210,7 @@ resource "azurerm_container_app" "cp" {
       }
       env {
         name  = "AZURE_SUBSCRIPTION_ID"
-        value = azurerm_resource_group.cp.id  # parsed at runtime
+        value = data.azurerm_client_config.current.subscription_id
       }
       env {
         name  = "AZURE_CLIENT_ID"
