@@ -17,9 +17,8 @@ declare -A MCP_SERVERS=(
     ["context7"]="node.cli"          # Documentation access
 )
 
-# 🤓 Azure AI Foundry recommended over TaskMaster for complex orchestration
+# 🤓 Azure AI Foundry is the recommended option for complex orchestration (TaskMaster MCP is optional/deprecated and not installed by this bundle)
 echo "💡 For multi-agent orchestration, consider Azure AI Foundry: b00t cli install azure-ai-foundry"
-echo "   TaskMaster suitable for basic task lists only"
 
 # Install each MCP server
 for mcp_name in "${!MCP_SERVERS[@]}"; do
@@ -63,7 +62,16 @@ echo "✅ Core MCP servers installation completed"
 update = '''
 # Update all core MCP servers  
 echo "🔄 Updating core MCP servers..."
-for mcp in b00t-mcp github filesystem taskmaster-ai context7; do
+
+# Keep MCP server list in sync with install step
+declare -A MCP_SERVERS=(
+    ["b00t-mcp"]="no-deps"           # Core b00t command proxy
+    ["github"]="node.cli,gh.cli"     # GitHub integration  
+    ["filesystem"]="node.cli"        # File operations
+    ["context7"]="node.cli"          # Documentation access
+)
+
+for mcp in "${!MCP_SERVERS[@]}"; do
     echo "📦 Updating MCP: $mcp"
     if command -v b00t >/dev/null 2>&1; then
         b00t mcp install "$mcp" claudecode --force
@@ -100,7 +108,6 @@ Essential MCP servers that enable b00t hive functionality:
 - **b00t-mcp**: Command proxy with ACL filtering for b00t-cli access
 - **github**: GitHub repository management and operations
 - **filesystem**: File system operations and project navigation
-- **taskmaster-ai**: Task and project management workflows
 - **context7**: Documentation and library context retrieval
 
 ## Auto-Installation

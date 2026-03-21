@@ -1,0 +1,13 @@
+[b00t]
+name = "rust"
+hint = "Rust language stack. See _b00t_/rust.🦀/ for notes, scripts, and agent docs."
+
+hook_learn = '''
+let files = exec("ls -1 $HOME/.b00t/_b00t_/rust.🦀/*.md 2>/dev/null");
+if files == "" {
+    "warn: no .md files found in _b00t_/rust.🦀/"
+} else {
+    let out = exec("for f in $HOME/.b00t/_b00t_/rust.🦀/*.md; do printf '\\n### %s\\n' \"$f\"; cat \"$f\"; done 2>/dev/null");
+    out
+}
+'''

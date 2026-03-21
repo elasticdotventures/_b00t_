@@ -2,7 +2,7 @@
 
 [b00t]
 name = "qwen-2.5-72b"
-type = "ai_model"
+type = "model"
 hint = "Alibaba's Qwen 2.5 72B - strong reasoning and multilingual capabilities"
 
 [ai_model]

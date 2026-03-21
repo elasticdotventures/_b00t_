@@ -3,7 +3,7 @@
 
 [b00t]
 name = "claude-3-5-sonnet"
-type = "ai_model"
+type = "model"
 hint = "Anthropic's flagship model with advanced reasoning"
 
 [ai_model]

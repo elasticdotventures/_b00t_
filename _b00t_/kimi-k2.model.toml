@@ -2,7 +2,7 @@
 
 [b00t]
 name = "kimi-k2"
-type = "ai_model"
+type = "model"
 hint = "Moonshot AI's Kimi K2 - massive 200K+ context window"
 
 [ai_model]

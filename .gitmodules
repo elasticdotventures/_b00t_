@@ -25,9 +25,6 @@
 [submodule "rmcp-rust-sdk"]
 	path = rmcp-rust-sdk
 	url = git@github.com:modelcontextprotocol/rust-sdk.git
-[submodule "plantuml-server"]
-	path = plantuml-server
-	url = https://github.com/PromptExecution/plantuml-server--b00t--togaf--mcp.git
 [submodule "email/himalaya"]
 	path = email/himalaya
 	url = https://github.com/pimalaya/himalaya.git
@@ -37,3 +34,9 @@
 [submodule "_b00t_/ralph"]
 	path = _b00t_/ralph
 	url = https://github.com/PromptExecution/b00t-wiggums.git
+[submodule "just-mcp"]
+	path = just-mcp
+	url = https://github.com/PromptExecution/just-mcp
+[submodule "vendor/moltis-b00t"]
+	path = vendor/moltis-b00t
+	url = https://github.com/app4dog/moltis-b00t.git

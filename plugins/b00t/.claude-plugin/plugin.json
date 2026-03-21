@@ -2,7 +2,7 @@
   "name": "b00t",
   "version": "0.1.0",
   "description": "b00t /b00t skill for sending learn packets to nominated agents",
-  "author": "elasticdotventures",
+  "author": {"name": "elasticdotventures"},
   "repository": "https://github.com/elasticdotventures/_b00t_",
   "license": "MIT",
   "capabilities": {

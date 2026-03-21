@@ -13,7 +13,7 @@ This file provides path-specific instructions for GitHub Copilot coding agent.
 For comprehensive b00t operating protocols, agent alignment, and detailed guidelines, see:
 - [AGENTS.md](mdc:/AGENTS.md) - Complete b00t gospel and alignment protocols
 - [.github/copilot-instructions.md](mdc:/.github/copilot-instructions.md) - Repository-wide Copilot instructions
-- [dev_workflow.md](mdc:/.github/instructions/dev_workflow.md) - Taskmaster development workflow
+- [dev_workflow.md](mdc:/.github/instructions/dev_workflow.md) - Legacy Taskmaster workflow (for reference; prefer repo-native progress tracking per "Before Starting")
 
 ## Quick Reference
 
@@ -33,8 +33,7 @@ just -l                      # List available commands
 
 ### Before Starting
 1. Use `sequential-thinking` MCP to plan
-2. Use `taskmaster-ai` MCP to track progress
+2. Track progress with lightweight repo-native mechanisms
 3. Verify assumptions from first principles
 4. Review primary instructions above as needed
-
 

@@ -8,6 +8,7 @@ members = [
     "k0mmand3r",
     "b00t-py",
     "b00t-ipc",
+    "tomllm",
 ]
 resolver = "2"
 
@@ -26,6 +27,10 @@ b00t-cli = { path = "b00t-cli" }
 b00t-c0re-lib = { path = "b00t-c0re-lib" }
 b00t-grok = { path = "b00t-grok", default-features = false }
 b00t-chat = { path = "b00t-lib-chat" }
+tomllm = { path = "tomllm" }
+
+# Rhai scripting engine — used for datum hooks (detect, install guards, etc.)
+rhai = { version = "1", features = ["sync"] }
 
 # Common dependencies that could be shared across workspace members
 serde = { version = "1.0", features = ["derive"] }
@@ -47,6 +52,7 @@ dead_code = "warn"
 pedantic = "warn"
 cargo = "warn"
 # Allow some pedantic lints that are too noisy
-module_name_repetitions = "allow"
-similar_names = "allow"
-too_many_lines = "allow"
+# priority = 1 required: individual overrides must outrank their lint group (priority 0)
+module_name_repetitions = { level = "allow", priority = 1 }
+similar_names = { level = "allow", priority = 1 }
+too_many_lines = { level = "allow", priority = 1 }

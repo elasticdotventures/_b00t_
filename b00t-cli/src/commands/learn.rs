@@ -18,6 +18,11 @@ pub struct LearnArgs {
     #[arg(help = "Topic to learn about")]
     pub topic: Option<String>,
 
+    // 🤓 --topic=<value> alias: MCP tools pass named flags; positional is for CLI users.
+    //    Both are accepted; --topic wins if both somehow provided (MCP compat).
+    #[arg(long = "topic", hide = true, conflicts_with = "topic")]
+    pub topic_flag: Option<String>,
+
     // Display modifiers
     #[arg(long, help = "Force display man page")]
     pub man: bool,
@@ -54,29 +59,31 @@ pub struct LearnArgs {
 }
 
 pub async fn handle_learn(path: &str, args: LearnArgs) -> Result<()> {
+    // 🤓 merge positional topic + --topic flag; --topic wins (MCP compat: passes named flags)
+    let topic_val = args.topic_flag.or(args.topic);
+
     // Record lesson
     if let Some(lesson) = args.record {
-        return handle_record(path, args.topic.as_deref(), &lesson, args.global).await;
+        return handle_record(path, topic_val.as_deref(), &lesson, args.global).await;
     }
 
     // Search lessons
     if let Some(query) = args.search {
-        return handle_search(path, args.topic.as_deref(), &query, args.limit).await;
+        return handle_search(path, topic_val.as_deref(), &query, args.limit).await;
     }
 
     // Digest to RAG
     if let Some(content) = args.digest {
-        return handle_digest(path, args.topic.as_deref(), &content).await;
+        return handle_digest(path, topic_val.as_deref(), &content).await;
     }
 
     // Query RAG
     if let Some(query) = args.ask {
-        return handle_ask(path, args.topic.as_deref(), &query, args.limit).await;
+        return handle_ask(path, topic_val.as_deref(), &query, args.limit).await;
     }
 
     // Default: display knowledge
-    let topic = args
-        .topic
+    let topic = topic_val
         .ok_or_else(|| anyhow::anyhow!("Topic required. Use: b00t learn <topic>"))?;
 
     handle_display(
@@ -113,7 +120,22 @@ async fn handle_display(path: &str, topic: &str, opts: DisplayOpts) -> Result<()
         );
     }
 
-    knowledge.display(&opts)
+    knowledge.display(&opts)?;
+
+    // Run hook_learn if present in datum
+    if let Ok((config, _)) = crate::get_config(topic, path) {
+        if let Some(script) = config.b00t.hook_learn {
+            use crate::hook_engine::{run_hook, HookResult};
+            match run_hook(&script) {
+                HookResult::Ok => {}
+                HookResult::Info(msg) | HookResult::Warn(msg) => println!("{}", msg),
+                HookResult::Missing(msg) => println!("⚠️  {}", msg),
+                HookResult::Redirect(_) => {}
+            }
+        }
+    }
+
+    Ok(())
 }
 
 async fn handle_record(path: &str, topic: Option<&str>, lesson: &str, global: bool) -> Result<()> {
