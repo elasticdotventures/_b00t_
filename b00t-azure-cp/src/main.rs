@@ -45,6 +45,8 @@ struct Config {
     subscription_id: String,
     client_id: String,
     lease_ttl_minutes: i64,
+    /// Azure region for ACI deployments (e.g. "australiaeast").
+    location: String,
     /// Bearer token required in `Authorization: Bearer <token>` header.
     /// If None, the endpoint is unauthenticated (only appropriate when
     /// external_ingress = false in Terraform keeps the endpoint internal).
@@ -69,6 +71,7 @@ impl Config {
                 .unwrap_or_else(|_| "30".to_string())
                 .parse()
                 .unwrap_or(30),
+            location: env::var("AZURE_LOCATION").context("AZURE_LOCATION not set")?,
             auth_token: env::var("B00T_CP_AUTH_TOKEN").ok(),
         })
     }
@@ -270,7 +273,7 @@ async fn provision_aci_resource(
     };
 
     let container_group = ContainerGroup {
-        location: Some(config.resource_group.clone()), // will be overridden below
+        location: Some(config.location.clone()),
         properties: Some(ContainerGroupProperties {
             containers: vec![Container {
                 name: group_name.clone(),
@@ -293,27 +296,31 @@ async fn provision_aci_resource(
         ..Default::default()
     };
 
-    // Get the region from the RG (australiaeast for our setup).
-    let location = "australiaeast";
-    let mut cg_with_location = container_group;
-    cg_with_location.location = Some(location.to_string());
-
-    aci_client
+    let created = aci_client
         .container_groups_client()
         .create_or_update(
             &subscription_id,
             &config.resource_group,
             &group_name,
-            cg_with_location,
+            container_group,
         )
         .await
         .context("failed to create ACI container group")?;
 
-    // The FQDN follows a deterministic pattern for public ACI groups.
-    let endpoint_url = format!(
-        "http://{}.australiaeast.azurecontainer.io:{}",
-        group_name, input.port
-    );
+    // Prefer the FQDN returned by ACI (authoritative); fall back to the
+    // deterministic pattern if the API response does not include it yet.
+    let endpoint_url = created
+        .properties
+        .as_ref()
+        .and_then(|p| p.ip_address.as_ref())
+        .and_then(|ip| ip.fqdn.as_deref())
+        .map(|fqdn| format!("http://{}:{}", fqdn, input.port))
+        .unwrap_or_else(|| {
+            format!(
+                "http://{}.{}.azurecontainer.io:{}",
+                group_name, config.location, input.port
+            )
+        });
 
     info!(group = %group_name, endpoint = %endpoint_url, "ACI container group created");
     Ok(endpoint_url)
