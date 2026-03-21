@@ -3,16 +3,13 @@ name = "ralph"
 type = "mcp"
 hint = "Ralph OODA loop via b00t-mcp — use b00t_up / b00t_status MCP tools to drive the loop"
 
-[b00t.mcp]
-protocol_version = "2024-11-05"
-
-[b00t.mcp.server.stdio]
+[[b00t.mcp.stdio]]
 command = "b00t-mcp"
 args = ["--transport", "stdio"]
-
-[b00t.mcp.capabilities]
-tools = ["b00t_up", "b00t_status", "b00t_cli_check"]
-resources = ["taskmaster://tasks"]
+transport = "stdio"
+priority = 0
+requires = ["b00t-mcp"]
+enabled_tools = ["b00t_up", "b00t_status", "b00t_cli_check"]
 
 [b00t.install]
 requires = ["b00t-mcp"]
