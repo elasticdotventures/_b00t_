@@ -9,6 +9,7 @@ members = [
     "b00t-py",
     "b00t-ipc",
     "tomllm",
+    "b00t-azure-cp",
 ]
 resolver = "2"
 

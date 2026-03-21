@@ -42,6 +42,7 @@ struct Config {
     subscription_id: String,
     client_id: String,
     lease_ttl_minutes: i64,
+    location: String,
 }
 
 impl Config {
@@ -62,6 +63,7 @@ impl Config {
                 .unwrap_or_else(|_| "30".to_string())
                 .parse()
                 .unwrap_or(30),
+            location: env::var("AZURE_LOCATION").context("AZURE_LOCATION not set")?,
         })
     }
 }
@@ -262,7 +264,7 @@ async fn provision_aci_resource(
     };
 
     let container_group = ContainerGroup {
-        location: Some(config.resource_group.clone()), // will be overridden below
+        location: Some(config.location.clone()),
         properties: Some(ContainerGroupProperties {
             containers: vec![Container {
                 name: group_name.clone(),
@@ -285,27 +287,34 @@ async fn provision_aci_resource(
         ..Default::default()
     };
 
-    // Get the region from the RG (australiaeast for our setup).
-    let location = "australiaeast";
-    let mut cg_with_location = container_group;
-    cg_with_location.location = Some(location.to_string());
-
-    aci_client
+    let created = aci_client
         .container_groups_client()
         .create_or_update(
             &subscription_id,
             &config.resource_group,
             &group_name,
-            cg_with_location,
+            container_group,
         )
         .await
         .context("failed to create ACI container group")?;
 
-    // The FQDN follows a deterministic pattern for public ACI groups.
-    let endpoint_url = format!(
-        "http://{}.australiaeast.azurecontainer.io:{}",
-        group_name, input.port
-    );
+    // Prefer the FQDN Azure assigns to the container group; fall back to the
+    // deterministic pattern using the provisioned location.
+    let fqdn = created
+        .properties
+        .as_ref()
+        .and_then(|p| p.ip_address.as_ref())
+        .and_then(|ip| ip.fqdn.as_deref())
+        .map(|s| s.to_string())
+        .unwrap_or_else(|| {
+            let fallback = format!(
+                "{}.{}.azurecontainer.io",
+                group_name, config.location
+            );
+            warn!(group = %group_name, fallback = %fallback, "FQDN not present in create response; using constructed fallback");
+            fallback
+        });
+    let endpoint_url = format!("http://{}:{}", fqdn, input.port);
 
     info!(group = %group_name, endpoint = %endpoint_url, "ACI container group created");
     Ok(endpoint_url)
