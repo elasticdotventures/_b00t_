@@ -64,6 +64,104 @@ impl Config {
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::env;
+
+    fn set_required_env() {
+        env::set_var("B00T_NODE_ID", "test-node");
+        env::set_var("AZURE_STORAGE_ACCOUNT_NAME", "teststorage");
+        env::set_var("AZURE_RESOURCE_GROUP", "testrg");
+        env::set_var("AZURE_SUBSCRIPTION_ID", "12345678-1234-1234-1234-1234567890ab");
+        env::set_var("AZURE_CLIENT_ID", "client-id-xyz");
+    }
+
+    #[test]
+    fn config_from_env_uses_defaults_when_optional_vars_missing() {
+        // Ensure a clean slate for optional vars.
+        env::remove_var("AZURE_TABLE_NAME");
+        env::remove_var("LEASE_TTL_MINUTES");
+
+        set_required_env();
+
+        let cfg = Config::from_env().expect("config should be created");
+
+        assert_eq!(cfg.node_id, "test-node");
+        assert_eq!(cfg.storage_account, "teststorage");
+        assert_eq!(cfg.table_name, "b00tLeases");
+        assert_eq!(cfg.resource_group, "testrg");
+        assert_eq!(
+            cfg.subscription_id,
+            "12345678-1234-1234-1234-1234567890ab"
+        );
+        assert_eq!(cfg.client_id, "client-id-xyz");
+        assert_eq!(cfg.lease_ttl_minutes, 30);
+    }
+
+    #[test]
+    fn config_from_env_respects_custom_table_name_and_ttl() {
+        set_required_env();
+        env::set_var("AZURE_TABLE_NAME", "CustomTable");
+        env::set_var("LEASE_TTL_MINUTES", "45");
+
+        let cfg = Config::from_env().expect("config should be created");
+
+        assert_eq!(cfg.table_name, "CustomTable");
+        assert_eq!(cfg.lease_ttl_minutes, 45);
+    }
+
+    #[test]
+    fn config_from_env_falls_back_to_default_ttl_on_parse_error() {
+        set_required_env();
+        env::set_var("LEASE_TTL_MINUTES", "not-a-number");
+
+        let cfg = Config::from_env().expect("config should be created");
+
+        assert_eq!(cfg.lease_ttl_minutes, 30);
+    }
+
+    #[test]
+    fn config_from_env_errors_when_required_var_missing() {
+        // Remove a required var and ensure we get an error.
+        env::remove_var("B00T_NODE_ID");
+        env::set_var("AZURE_STORAGE_ACCOUNT_NAME", "teststorage");
+        env::set_var("AZURE_RESOURCE_GROUP", "testrg");
+        env::set_var("AZURE_SUBSCRIPTION_ID", "12345678-1234-1234-1234-1234567890ab");
+        env::set_var("AZURE_CLIENT_ID", "client-id-xyz");
+        env::remove_var("LEASE_TTL_MINUTES");
+
+        let cfg = Config::from_env();
+        assert!(cfg.is_err(), "expected error when B00T_NODE_ID is missing");
+    }
+
+    #[test]
+    fn config_from_env_subscription_id_plain_and_resource_id_forms() {
+        set_required_env();
+
+        // Plain subscription ID
+        env::set_var(
+            "AZURE_SUBSCRIPTION_ID",
+            "11111111-2222-3333-4444-555555555555",
+        );
+        let cfg_plain = Config::from_env().expect("config should be created");
+        assert_eq!(
+            cfg_plain.subscription_id,
+            "11111111-2222-3333-4444-555555555555"
+        );
+
+        // Resource ID-like string; current behavior is to take it verbatim.
+        env::set_var(
+            "AZURE_SUBSCRIPTION_ID",
+            "/subscriptions/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee/resourceGroups/rg",
+        );
+        let cfg_resource = Config::from_env().expect("config should be created");
+        assert_eq!(
+            cfg_resource.subscription_id,
+            "/subscriptions/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee/resourceGroups/rg"
+        );
+    }
+}
 // ---------------------------------------------------------------------------
 // Lease entity (Azure Table Storage row)
 // ---------------------------------------------------------------------------
