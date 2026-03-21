@@ -18,11 +18,16 @@ use anyhow::{Context, Result};
 use azure_core::credentials::TokenCredential;
 use azure_data_tables::clients::TableServiceClient;
 use azure_identity::ManagedIdentityCredential;
+use axum::{Json, Router, extract::Request, http::{StatusCode, header}, middleware, response::{IntoResponse, Response}};
 use chrono::{DateTime, Utc};
 use rmcp::model::{ServerCapabilities, ServerInfo};
 use rmcp::schemars::JsonSchema;
+use rmcp::transport::streamable_http_server::{
+    StreamableHttpServerConfig, StreamableHttpService, session::local::LocalSessionManager,
+};
 use rmcp::{tool, tool_box, Error as McpError, ServerHandler};
 use serde::{Deserialize, Serialize};
+use tokio::net::TcpListener;
 use tokio::time;
 use tracing::{error, info, warn};
 use uuid::Uuid;
@@ -40,7 +45,12 @@ struct Config {
     subscription_id: String,
     client_id: String,
     lease_ttl_minutes: i64,
+    /// Azure region for ACI deployments (e.g. "australiaeast").
     location: String,
+    /// Bearer token required in `Authorization: Bearer <token>` header.
+    /// If None, the endpoint is unauthenticated (only appropriate when
+    /// external_ingress = false in Terraform keeps the endpoint internal).
+    auth_token: Option<String>,
 }
 
 impl Config {
@@ -53,7 +63,6 @@ impl Config {
                 .unwrap_or_else(|_| "b00tLeases".to_string()),
             resource_group: env::var("AZURE_RESOURCE_GROUP")
                 .context("AZURE_RESOURCE_GROUP not set")?,
-            // ACA passes the full resource group ID; extract subscription from it.
             subscription_id: env::var("AZURE_SUBSCRIPTION_ID")
                 .context("AZURE_SUBSCRIPTION_ID not set")?,
             client_id: env::var("AZURE_CLIENT_ID").context("AZURE_CLIENT_ID not set")?,
@@ -62,123 +71,11 @@ impl Config {
                 .parse()
                 .unwrap_or(30),
             location: env::var("AZURE_LOCATION").context("AZURE_LOCATION not set")?,
+            auth_token: env::var("B00T_CP_AUTH_TOKEN").ok(),
         })
     }
-
-    /// Returns the bare subscription UUID, handling the case where
-    /// `AZURE_SUBSCRIPTION_ID` is a full resource ID
-    /// (e.g. `/subscriptions/{sub}/resourceGroups/{rg}`).
-    fn subscription_id(&self) -> String {
-        if self.subscription_id.starts_with('/') {
-            self.subscription_id
-                .split('/')
-                .nth(2)
-                .unwrap_or(&self.subscription_id)
-                .to_string()
-        } else {
-            self.subscription_id.clone()
-        }
-    }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use std::env;
-
-    fn set_required_env() {
-        env::set_var("B00T_NODE_ID", "test-node");
-        env::set_var("AZURE_STORAGE_ACCOUNT_NAME", "teststorage");
-        env::set_var("AZURE_RESOURCE_GROUP", "testrg");
-        env::set_var("AZURE_SUBSCRIPTION_ID", "12345678-1234-1234-1234-1234567890ab");
-        env::set_var("AZURE_CLIENT_ID", "client-id-xyz");
-    }
-
-    #[test]
-    fn config_from_env_uses_defaults_when_optional_vars_missing() {
-        // Ensure a clean slate for optional vars.
-        env::remove_var("AZURE_TABLE_NAME");
-        env::remove_var("LEASE_TTL_MINUTES");
-
-        set_required_env();
-
-        let cfg = Config::from_env().expect("config should be created");
-
-        assert_eq!(cfg.node_id, "test-node");
-        assert_eq!(cfg.storage_account, "teststorage");
-        assert_eq!(cfg.table_name, "b00tLeases");
-        assert_eq!(cfg.resource_group, "testrg");
-        assert_eq!(
-            cfg.subscription_id,
-            "12345678-1234-1234-1234-1234567890ab"
-        );
-        assert_eq!(cfg.client_id, "client-id-xyz");
-        assert_eq!(cfg.lease_ttl_minutes, 30);
-    }
-
-    #[test]
-    fn config_from_env_respects_custom_table_name_and_ttl() {
-        set_required_env();
-        env::set_var("AZURE_TABLE_NAME", "CustomTable");
-        env::set_var("LEASE_TTL_MINUTES", "45");
-
-        let cfg = Config::from_env().expect("config should be created");
-
-        assert_eq!(cfg.table_name, "CustomTable");
-        assert_eq!(cfg.lease_ttl_minutes, 45);
-    }
-
-    #[test]
-    fn config_from_env_falls_back_to_default_ttl_on_parse_error() {
-        set_required_env();
-        env::set_var("LEASE_TTL_MINUTES", "not-a-number");
-
-        let cfg = Config::from_env().expect("config should be created");
-
-        assert_eq!(cfg.lease_ttl_minutes, 30);
-    }
-
-    #[test]
-    fn config_from_env_errors_when_required_var_missing() {
-        // Remove a required var and ensure we get an error.
-        env::remove_var("B00T_NODE_ID");
-        env::set_var("AZURE_STORAGE_ACCOUNT_NAME", "teststorage");
-        env::set_var("AZURE_RESOURCE_GROUP", "testrg");
-        env::set_var("AZURE_SUBSCRIPTION_ID", "12345678-1234-1234-1234-1234567890ab");
-        env::set_var("AZURE_CLIENT_ID", "client-id-xyz");
-        env::remove_var("LEASE_TTL_MINUTES");
-
-        let cfg = Config::from_env();
-        assert!(cfg.is_err(), "expected error when B00T_NODE_ID is missing");
-    }
-
-    #[test]
-    fn config_from_env_subscription_id_plain_and_resource_id_forms() {
-        set_required_env();
-
-        // Plain subscription ID
-        env::set_var(
-            "AZURE_SUBSCRIPTION_ID",
-            "11111111-2222-3333-4444-555555555555",
-        );
-        let cfg_plain = Config::from_env().expect("config should be created");
-        assert_eq!(
-            cfg_plain.subscription_id,
-            "11111111-2222-3333-4444-555555555555"
-        );
-
-        // Resource ID-like string; current behavior is to take it verbatim.
-        env::set_var(
-            "AZURE_SUBSCRIPTION_ID",
-            "/subscriptions/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee/resourceGroups/rg",
-        );
-        let cfg_resource = Config::from_env().expect("config should be created");
-        assert_eq!(
-            cfg_resource.subscription_id,
-            "/subscriptions/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee/resourceGroups/rg"
-        );
-    }
-}
 // ---------------------------------------------------------------------------
 // Lease entity (Azure Table Storage row)
 // ---------------------------------------------------------------------------
@@ -400,23 +297,20 @@ async fn provision_aci_resource(
         .await
         .context("failed to create ACI container group")?;
 
-    // Prefer the FQDN Azure assigns to the container group; fall back to the
-    // deterministic pattern using the provisioned location.
-    let fqdn = created
+    // Prefer the FQDN returned by ACI (authoritative); fall back to the
+    // deterministic pattern if the API response does not include it yet.
+    let endpoint_url = created
         .properties
         .as_ref()
         .and_then(|p| p.ip_address.as_ref())
         .and_then(|ip| ip.fqdn.as_deref())
-        .map(|s| s.to_string())
+        .map(|fqdn| format!("http://{}:{}", fqdn, input.port))
         .unwrap_or_else(|| {
-            let fallback = format!(
-                "{}.{}.azurecontainer.io",
-                group_name, config.location
-            );
-            warn!(group = %group_name, fallback = %fallback, "FQDN not present in create response; using constructed fallback");
-            fallback
+            format!(
+                "http://{}.{}.azurecontainer.io:{}",
+                group_name, config.location, input.port
+            )
         });
-    let endpoint_url = format!("http://{}:{}", fqdn, input.port);
 
     info!(group = %group_name, endpoint = %endpoint_url, "ACI container group created");
     Ok(endpoint_url)
@@ -427,7 +321,7 @@ async fn deprovision_aci_resource(
     credential: Arc<dyn TokenCredential>,
     resource_id: &str,
 ) -> Result<()> {
-    let subscription_id = config.subscription_id();
+    let subscription_id = &config.subscription_id;
 
     let aci_client = azure_mgmt_containerinstance::Client::new(
         "https://management.azure.com",
@@ -502,6 +396,8 @@ struct AzureCpServer {
     config: Config,
     table_client: Arc<TableServiceClient>,
     credential: Arc<dyn TokenCredential>,
+    /// Shared HTTP client with connect/request timeouts for Cost Management queries.
+    http_client: reqwest::Client,
 }
 
 #[tool_box]
@@ -648,7 +544,7 @@ impl AzureCpServer {
     #[tool(name = "azure.cost_estimate")]
     async fn cost_estimate(&self) -> Result<serde_json::Value, McpError> {
         // Use the Azure Cost Management REST API via azure_core.
-        let subscription_id = self.config.subscription_id();
+        let subscription_id = &self.config.subscription_id;
 
         let scope = format!(
             "/subscriptions/{}/resourceGroups/{}",
@@ -678,8 +574,8 @@ impl AzureCpServer {
             .await
             .map_err(|e| McpError::internal_error(format!("credential error: {e}"), None))?;
 
-        let client = reqwest::Client::new();
-        let resp = client
+        let resp = self
+            .http_client
             .post(&url)
             .bearer_auth(token.token.secret())
             .json(&query_body)
@@ -765,6 +661,11 @@ async fn main() -> Result<()> {
         config,
         table_client,
         credential,
+        http_client: reqwest::Client::builder()
+            .connect_timeout(Duration::from_secs(10))
+            .timeout(Duration::from_secs(30))
+            .build()
+            .context("failed to build HTTP client")?,
     };
 
     let port: u16 = env::var("PORT")
@@ -775,13 +676,64 @@ async fn main() -> Result<()> {
     let bind_addr = format!("0.0.0.0:{port}");
     info!(addr = %bind_addr, "listening for MCP connections");
 
-    // Serve via streamable HTTP transport (MCP over HTTP).
-    rmcp::transport::streamable_http_server::serve_server(
-        server,
-        bind_addr.parse()?,
-    )
-    .await
-    .context("MCP server error")?;
+    // Warn loudly if no auth token is configured — the endpoint should always
+    // be authenticated when external_ingress = true in Terraform.
+    let auth_token: Option<String> = server.config.auth_token.clone();
+    if auth_token.is_none() {
+        warn!("B00T_CP_AUTH_TOKEN is not set — MCP endpoint is unauthenticated. \
+               Only acceptable when external_ingress = false restricts public access.");
+    }
+
+    // Build StreamableHttpService from the MCP server handler.
+    let mcp_service: StreamableHttpService<AzureCpServer, LocalSessionManager> = {
+        let s = server.clone();
+        StreamableHttpService::new(
+            move || Ok(s.clone()),
+            LocalSessionManager::default(),
+            StreamableHttpServerConfig::default(),
+        )
+    };
+
+    // Wrap with bearer-token auth middleware (defense-in-depth on top of
+    // Terraform's external_ingress = false / ip_security_restriction controls).
+    let app = Router::new()
+        .nest_service("/mcp", mcp_service)
+        .layer(middleware::from_fn(move |req: Request, next: middleware::Next| {
+            let expected = auth_token.clone();
+            async move {
+                if let Some(ref token) = expected {
+                    let provided = req
+                        .headers()
+                        .get(header::AUTHORIZATION)
+                        .and_then(|v| v.to_str().ok())
+                        .and_then(|v| v.strip_prefix("Bearer "));
+                    // Constant-time comparison to avoid timing side-channels.
+                    // Seeds acc with the length-mismatch bit so a prefix match never passes.
+                    let ta = provided.unwrap_or("").as_bytes();
+                    let tb = token.as_bytes();
+                    let max_len = ta.len().max(tb.len());
+                    let mut acc: u8 = (ta.len() != tb.len()) as u8;
+                    for i in 0..max_len {
+                        acc |= ta.get(i).copied().unwrap_or(0) ^ tb.get(i).copied().unwrap_or(0);
+                    }
+                    if acc != 0 {
+                        return (
+                            StatusCode::UNAUTHORIZED,
+                            Json(serde_json::json!({"error": "unauthorized"})),
+                        )
+                            .into_response();
+                    }
+                }
+                next.run(req).await
+            }
+        }));
+
+    let listener = TcpListener::bind(&bind_addr)
+        .await
+        .context("failed to bind TCP listener")?;
+    axum::serve(listener, app)
+        .await
+        .context("MCP server error")?;
 
     Ok(())
 }

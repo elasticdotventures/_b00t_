@@ -27,12 +27,25 @@ terraform {
   }
 }
 
+data "azurerm_client_config" "current" {}
+
 locals {
-  rg_name    = "rg-b00t-control-${var.node_id}"
-  app_name   = "b00t-cp-${var.node_id}"
-  sa_name    = substr("b00tsa${regexreplace(lower(var.node_id), "[^a-z0-9]", "")}", 0, 24)
-  table_name = "b00tLeases"
-  budget_start_date = formatdate("YYYY-MM-01T00:00:00Z", timestamp())
+  rg_name  = "rg-b00t-control-${var.node_id}"
+  app_name = "b00t-cp-${var.node_id}"
+
+  # Azure Storage account name must be 3–24 chars, lowercase letters/numbers only.
+  # We derive a safe suffix from node_id by:
+  #   - forcing lowercase
+  #   - stripping non-alphanumeric chars
+  #   - appending a short deterministic hash
+  #   - truncating so that "b00tsa" + suffix <= 24 characters
+  clean_node_id = lower(regexreplace(var.node_id, "[^0-9a-z]", ""))
+  node_id_hash  = lower(regexreplace(base64encode(sha1(var.node_id)), "[^0-9a-z]", ""))
+  sa_suffix     = substr("${clean_node_id}${node_id_hash}", 0, 18)
+  sa_name       = "b00tsa${sa_suffix}"
+
+  table_name         = "b00tLeases"
+  budget_start_date  = formatdate("YYYY-MM-01T00:00:00Z", timestamp())
 }
 
 # ---------------------------------------------------------------------------
@@ -54,20 +67,34 @@ resource "azurerm_user_assigned_identity" "cp" {
   tags                = var.tags
 }
 
-# Least-privilege RBAC for MCP control plane identity:
-#   - Container Instance Contributor on this RG: manage ACI containers only.
-#   - Storage Table Data Contributor on the storage account: manage lease table rows.
-resource "azurerm_role_assignment" "cp_container_instance_contributor" {
-  scope                = azurerm_resource_group.cp.id
-  role_definition_name = "Container Instance Contributor"
-  principal_id         = azurerm_user_assigned_identity.cp.principal_id
+# Custom least-privilege role on this RG only — sufficient to provision/deprovision ACI containers.
+# Blast radius: limited to rg-b00t-control-{node_id}.
+resource "azurerm_role_definition" "cp_aci_operator" {
+  name        = "b00t-cp-aci-operator-${var.node_id}"
+  scope       = azurerm_resource_group.cp.id
+  description = "Least-privilege role for b00t control plane to manage ACI container groups within its resource group."
+
+  permissions {
+    actions = [
+      "Microsoft.ContainerInstance/containerGroups/*",
+      "Microsoft.Resources/subscriptions/resourceGroups/read",
+    ]
+    not_actions      = []
+    data_actions     = []
+    not_data_actions = []
+  }
+
+  assignable_scopes = [
+    azurerm_resource_group.cp.id,
+  ]
 }
 
-resource "azurerm_role_assignment" "cp_storage_table_data_contributor" {
-  scope                = azurerm_storage_account.cp.id
-  role_definition_name = "Storage Table Data Contributor"
-  principal_id         = azurerm_user_assigned_identity.cp.principal_id
+resource "azurerm_role_assignment" "cp_contributor" {
+  scope              = azurerm_resource_group.cp.id
+  role_definition_id = azurerm_role_definition.cp_aci_operator.role_definition_resource_id
+  principal_id       = azurerm_user_assigned_identity.cp.principal_id
 }
+
 # ---------------------------------------------------------------------------
 # Table Storage — lease state store for active ACI resources
 # ---------------------------------------------------------------------------
@@ -124,9 +151,31 @@ resource "azurerm_container_app" "cp" {
     identity_ids = [azurerm_user_assigned_identity.cp.id]
   }
 
+  # Store the bearer token as an ACA secret so it is never exposed in plan output.
+  secret {
+    name  = "b00t-cp-auth-token"
+    value = var.auth_token
+  }
+
   ingress {
-    external_enabled = true
+    # Default: internal-only (not publicly reachable from the internet).
+    # Set external_ingress = true only when the service sits behind a WAF or
+    # private endpoint. See variables.tf for guidance.
+    external_enabled = var.external_ingress
     target_port      = 8080
+
+    # Optional per-CIDR allowlist. Only evaluated when external_ingress = true.
+    # An empty allowed_ip_prefixes list means "allow all external IPs" — only
+    # use that in combination with a WAF or for private/VNet-only deployments.
+    dynamic "ip_security_restriction" {
+      for_each = var.allowed_ip_prefixes
+      content {
+        action           = "Allow"
+        ip_address_range = ip_security_restriction.value
+        name             = "allow-${ip_security_restriction.key}"
+      }
+    }
+
     traffic_weight {
       percentage      = 100
       latest_revision = true
@@ -161,23 +210,28 @@ resource "azurerm_container_app" "cp" {
       }
       env {
         name  = "AZURE_SUBSCRIPTION_ID"
-        value = azurerm_resource_group.cp.id  # parsed at runtime
+        value = data.azurerm_client_config.current.subscription_id
       }
       env {
         name  = "AZURE_CLIENT_ID"
         value = azurerm_user_assigned_identity.cp.client_id
       }
       env {
-        name  = "LEASE_TTL_MINUTES"
-        value = tostring(var.lease_ttl_minutes)
-      }
-      env {
         name  = "AZURE_LOCATION"
         value = var.location
       }
       env {
+        name  = "LEASE_TTL_MINUTES"
+        value = tostring(var.lease_ttl_minutes)
+      }
+      env {
         name  = "PORT"
         value = "8080"
+      }
+      # Bearer token injected from ACA secret — never visible in Terraform state as plaintext.
+      env {
+        name        = "B00T_CP_AUTH_TOKEN"
+        secret_name = "b00t-cp-auth-token"
       }
     }
   }

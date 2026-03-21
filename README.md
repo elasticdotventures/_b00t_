@@ -15,7 +15,7 @@
 curl -fsSL https://raw.githubusercontent.com/elasticdotventures/_b00t_/main/install.sh | bash
 ```
 
-SHA256-verified binary from GitHub Releases. Supports Linux x86_64/aarch64/armv7 and macOS Intel/Apple Silicon.
+Downloads the binary from GitHub Releases and verifies its SHA256 checksum when possible. Supports Linux x86_64/aarch64/armv7 and macOS Intel/Apple Silicon.
 
 **From crates.io:**
 ```bash
@@ -44,8 +44,8 @@ b00t cli up --yes                  # update all tools to desired versions
 b00t learn rust                    # load Rust dev context into agent session
 b00t learn docker                  # container orchestration knowledge
 
-b00t lfmf --tool rust --lesson "PyO3: unset CONDA_PREFIX before cargo build to fix linker errors"
-b00t learn rust --search "PyO3"    # retrieve lessons for a tool+pattern
+b00t lfmf rust "PyO3: unset CONDA_PREFIX before cargo build to fix linker errors"
+b00t advice rust "PyO3"            # retrieve lessons for a tool+pattern
 ```
 
 ---
@@ -65,9 +65,9 @@ Provides `/b00t` skill, context-aware tool dispatch, and all available b00t skil
 ### Direct MCP Server
 
 ```bash
-b00t mcp install b00t-mcp claudecode   # Claude Code
-b00t mcp install b00t-mcp vscode       # VS Code
-b00t mcp list                          # list available MCP servers
+b00t mcp install b00t claudecode   # Claude Code
+b00t mcp install b00t vscode       # VS Code
+b00t mcp list                      # list available MCP servers
 ```
 
 50+ MCP tools exposed via `b00t-mcp` — `b00t_up`, `b00t_status`, `b00t_learn`, `b00t_lfmf`, `b00t_advice`, and more.
@@ -78,10 +78,10 @@ b00t mcp list                          # list available MCP servers
 
 ```bash
 # Multi-agent mission coordination
-b00t hive list                             # list available hive profiles/guards
-b00t hive show default                     # inspect default hive configuration
-b00t chat send mission-id "Build and deploy microservice" --role leader
-b00t chat info mission-id                  # inspect mission/conversation state
+b00t acp hive create mission-id 3 "Build and deploy microservice" leader
+b00t acp hive join mission-id developer
+b00t acp hive sync mission-id 1    # barrier: wait for all agents at step 1
+b00t acp hive ready mission-id 2   # signal readiness for step 2
 ```
 
 ---
@@ -119,9 +119,9 @@ b00t cli install fastmcp           # install: python → uv → fastmcp (DAG-awa
 ## 🧠 Session & Budget Management
 
 ```bash
-b00t session init --budget 25.00 --name "code-reviewer"
+b00t session init --budget 25.00 --time-limit 120 --agent "code-reviewer"
 b00t session status
-b00t checkpoint -m "completed feature X"
+b00t checkpoint "completed feature X"
 ```
 
 ---
