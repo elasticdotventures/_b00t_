@@ -1,4 +1,6 @@
 [b00t]
+detect = "rustc --version 2>&1"
+desires = "1.87.0"
 name = "rust"
 hint = "Rust language stack. See _b00t_/rust.🦀/ for notes, scripts, and agent docs."
 

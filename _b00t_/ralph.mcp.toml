@@ -2,6 +2,7 @@
 name = "ralph"
 type = "mcp"
 hint = "Ralph autonomous agent MCP server for task execution loops"
+status = "planned"  # 🤓 ralph source does not exist yet
 
 [b00t.mcp]
 protocol_version = "2024-11-05"

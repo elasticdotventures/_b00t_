@@ -1,4 +1,12 @@
 #!/bin/bash
+# ⚠️  OPERATOR ONLY — NOT FOR PUBLIC DISTRIBUTION ⚠️
+# This script is a personal developer workstation bootstrap for @elasticdotventures.
+# It contains hardcoded personal configuration (git identity, cloud regions, etc.)
+# and MUST NOT be used as a general b00t installer.
+#
+# For b00t installation, use:
+#   curl -fsSL https://raw.githubusercontent.com/elasticdotventures/_b00t_/main/install.sh | sh
+#
 set -ex # Exit immediately if a command exits with a non-zero status, and print commands and their arguments as they are executed.
 
 # Detect if running in a CI environment or Docker

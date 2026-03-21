@@ -9,7 +9,7 @@
 # 🤓 canonical datum: ~/.b00t/just-mcp/_b00t_/just-mcp.mcp.tomllm (source of truth in repo)
 name    = "just-mcp"
 type    = "mcp"
-desires = "0.1.0"
+desires = "0.1.1"
 aliases = ["just-mcp"]
 hint    = "MCP server for justfile introspection — list_recipes, run_recipe, get_recipe_info, validate_justfile"
 

@@ -1,7 +1,7 @@
 [b00t]
 name = "task"
 type = "cli"
-desires = "3.39.0"
+desires = "3.49.1"
 depends_on = ["go.cli"]
 install = '''
 # Install Task - A task runner / build tool written in Go

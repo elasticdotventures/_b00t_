@@ -2,7 +2,7 @@
 name = "k9s"
 type = "cli"
 hint = "Terminal UI for k8s cluster management. Makes kubectl operations visual and fast."
-desires = "0.32.0"
+desires = "0.50.16"
 auto_install = false
 
 install = '''

@@ -2,6 +2,7 @@
 name = "ralph"
 type = "cli"
 hint = "Autonomous agent loop runner for TaskMaster-AI workflows"
+status = "planned"  # 🤓 ralph source does not exist yet — _b00t_/ralph/ is empty
 
 [b00t.cli]
 command = "ralph"

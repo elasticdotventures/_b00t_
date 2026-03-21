@@ -2,7 +2,7 @@
 name = "dagu"
 type = "cli"
 hint = "Dagu - workflow engine and task scheduler with web UI for defining and running DAGs"
-desires = "1.23.2"
+desires = "1.24.8"
 keywords = ["workflow", "dag", "scheduler", "automation", "pipeline"]
 
 # Installation via official installer script to ~/.local/bin
