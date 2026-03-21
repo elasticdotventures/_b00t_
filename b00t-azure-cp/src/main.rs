@@ -217,7 +217,9 @@ async fn provision_aci_resource(
     // The container group name is derived from the lease_id for uniqueness.
     let group_name = format!("b00t-aci-{}", &lease_id[..8]);
 
-    let subscription_id = &config.subscription_id;
+    // Extract subscription ID from the resource group ID env var.
+    // Format: /subscriptions/{sub}/resourceGroups/{rg}
+    let subscription_id = config.subscription_id();
 
     let aci_client = azure_mgmt_containerinstance::Client::new(
         format!("https://management.azure.com"),
@@ -455,7 +457,7 @@ impl AzureCpServer {
             .entity_client(&self.config.node_id, &input.lease_id)
             .get()
             .await
-            .map_err(|e| McpError::internal_error(format!("lease not found: {e}"), None))?
+            .map_err(|e| McpError::invalid_request(format!("lease not found or inaccessible: {e}"), None))?
             .entity;
 
         deprovision_aci_resource(
