@@ -28,11 +28,22 @@ terraform {
 }
 
 locals {
-  rg_name    = "rg-b00t-control-${var.node_id}"
-  app_name   = "b00t-cp-${var.node_id}"
-  sa_name    = "b00tsa${replace(var.node_id, "-", "")}"
-  table_name = "b00tLeases"
-  budget_start_date = formatdate("YYYY-MM-01T00:00:00Z", timestamp())
+  rg_name  = "rg-b00t-control-${var.node_id}"
+  app_name = "b00t-cp-${var.node_id}"
+
+  # Azure Storage account name must be 3–24 chars, lowercase letters/numbers only.
+  # We derive a safe suffix from node_id by:
+  #   - forcing lowercase
+  #   - stripping non-alphanumeric chars
+  #   - appending a short deterministic hash
+  #   - truncating so that "b00tsa" + suffix <= 24 characters
+  clean_node_id = lower(regexreplace(var.node_id, "[^0-9a-z]", ""))
+  node_id_hash  = lower(regexreplace(base64encode(sha1(var.node_id)), "[^0-9a-z]", ""))
+  sa_suffix     = substr("${clean_node_id}${node_id_hash}", 0, 18)
+  sa_name       = "b00tsa${sa_suffix}"
+
+  table_name         = "b00tLeases"
+  budget_start_date  = formatdate("YYYY-MM-01T00:00:00Z", timestamp())
 }
 
 # ---------------------------------------------------------------------------
