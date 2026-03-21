@@ -149,9 +149,31 @@ resource "azurerm_container_app" "cp" {
     identity_ids = [azurerm_user_assigned_identity.cp.id]
   }
 
+  # Store the bearer token as an ACA secret so it is never exposed in plan output.
+  secret {
+    name  = "b00t-cp-auth-token"
+    value = var.auth_token
+  }
+
   ingress {
-    external_enabled = true
+    # Default: internal-only (not publicly reachable from the internet).
+    # Set external_ingress = true only when the service sits behind a WAF or
+    # private endpoint. See variables.tf for guidance.
+    external_enabled = var.external_ingress
     target_port      = 8080
+
+    # Optional per-CIDR allowlist. Only evaluated when external_ingress = true.
+    # An empty allowed_ip_prefixes list means "allow all external IPs" — only
+    # use that in combination with a WAF or for private/VNet-only deployments.
+    dynamic "ip_security_restriction" {
+      for_each = var.allowed_ip_prefixes
+      content {
+        action           = "Allow"
+        ip_address_range = ip_security_restriction.value
+        name             = "allow-${ip_security_restriction.key}"
+      }
+    }
+
     traffic_weight {
       percentage      = 100
       latest_revision = true
@@ -199,6 +221,11 @@ resource "azurerm_container_app" "cp" {
       env {
         name  = "PORT"
         value = "8080"
+      }
+      # Bearer token injected from ACA secret — never visible in Terraform state as plaintext.
+      env {
+        name        = "B00T_CP_AUTH_TOKEN"
+        secret_name = "b00t-cp-auth-token"
       }
     }
   }
