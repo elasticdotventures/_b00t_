@@ -53,7 +53,7 @@ exec_start = """/usr/bin/podman run --rm \
     --name b00t-llama-server \
     --device nvidia.com/gpu=all \
     --security-opt=label=disable \
-    -v %h/.cache/huggingface:/root/.cache/huggingface:ro \
+    -v %h/.cache/huggingface:/root/.cache/huggingface:ro,rslave \
     -p 8000:8000 \
     ghcr.io/ggml-org/llama.cpp:server-cuda \
     -m /root/.cache/huggingface/hub/models--Qwen--Qwen3-Coder-Next-GGUF/snapshots/b82fb7382639d97b38fa7672e526c760c2fb358e/Qwen3-Coder-Next-Q4_K_M/Qwen3-Coder-Next-Q4_K_M-00001-of-00004.gguf \
@@ -82,8 +82,8 @@ hint = "podman pull ghcr.io/ggml-org/llama.cpp:server-cuda"
 
 [[b00t.hive.prereqs]]
 name = "nvidia-cdi-gpu"
-check = "podman run --rm --device nvidia.com/gpu=all --security-opt=label=disable ghcr.io/ggml-org/llama.cpp:server-cuda --version 2>&1 | grep -q 'CUDA devices'"
-hint = "CDI GPU device not visible; check nvidia-ctk cdi generate --output=/etc/cdi/nvidia.yaml"
+check = "podman run --rm --device nvidia.com/gpu=all --security-opt=label=disable --entrypoint /bin/sh ghcr.io/ggml-org/llama.cpp:server-cuda -c 'ls /dev/nvidia* >/dev/null 2>&1'"
+hint = "CDI GPU device not visible inside container; ensure nvidia-ctk cdi generate --output=/etc/cdi/nvidia.yaml has been run and CDI is configured for podman"
 
 [b00t.hive.services]
 # 🤓 services.start is now empty because [b00t.hive.service] generates b00t-hive-inference-qwen3.service
