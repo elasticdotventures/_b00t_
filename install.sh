@@ -179,12 +179,28 @@ update_path() {
 
     if ! grep -q "# Added by b00t installer" "$shell_rc" 2>/dev/null; then
         printf '%b\n' "${BLUE}🔧 Configuring shell environment in $shell_rc...${NC}"
-        cat >> "$shell_rc" << EOF
+        # Ensure parent directory exists (e.g. ~/.config/fish/)
+        mkdir -p "$(dirname "$shell_rc")"
+        # Use the RC file path to determine syntax, not $SHELL, to be robust
+        case "$shell_rc" in
+            */.config/fish/*)
+                # Fish does not support `export`; use set -gx with list syntax
+                cat >> "$shell_rc" << EOF
+
+# Added by b00t installer
+set -gx PATH "$INSTALL_DIR" \$PATH
+set -gx _B00T_Path "$B00T_HOME/_b00t_"
+EOF
+                ;;
+            *)
+                cat >> "$shell_rc" << EOF
 
 # Added by b00t installer
 export PATH="$INSTALL_DIR:\$PATH"
 export _B00T_Path="$B00T_HOME/_b00t_"
 EOF
+                ;;
+        esac
         printf '%b\n' "${GREEN}✅ Shell configuration updated ($shell_rc)${NC}"
     else
         printf '%b\n' "${BLUE}💡 Shell already configured for b00t${NC}"
