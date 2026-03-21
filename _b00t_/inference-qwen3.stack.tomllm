@@ -47,7 +47,7 @@ environment = [
     "HF_HOME=/home/brianh/.cache/huggingface",
 ]
 exec_start_pre = [
-    "/bin/bash -c 'echo vllm hive node starting on :8000'",
+    "/bin/bash -c 'echo llama-server inference-qwen3 hive node starting on :8000'",
 ]
 exec_start = """/usr/bin/podman run --rm \
     --name b00t-llama-server \
