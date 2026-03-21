@@ -65,9 +65,9 @@ Provides `/b00t` skill, context-aware tool dispatch, and all available b00t skil
 ### Direct MCP Server
 
 ```bash
-b00t mcp install b00t claudecode   # Claude Code
-b00t mcp install b00t vscode       # VS Code
-b00t mcp list                      # list available MCP servers
+b00t mcp install b00t-mcp claudecode   # Claude Code
+b00t mcp install b00t-mcp vscode       # VS Code
+b00t mcp list                          # list available MCP servers
 ```
 
 50+ MCP tools exposed via `b00t-mcp` — `b00t_up`, `b00t_status`, `b00t_learn`, `b00t_lfmf`, `b00t_advice`, and more.
