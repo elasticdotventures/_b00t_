@@ -10,20 +10,18 @@
 //! Lease state stored in Azure Table Storage (b00tLeases table).
 //! Background watchdog tears down leases where expires_at < now().
 
-use std::collections::HashMap;
 use std::env;
 use std::sync::Arc;
 use std::time::Duration;
 
-use anyhow::{anyhow, Context, Result};
+use anyhow::{Context, Result};
 use azure_core::credentials::TokenCredential;
 use azure_data_tables::clients::TableServiceClient;
 use azure_identity::ManagedIdentityCredential;
 use chrono::{DateTime, Utc};
-use rmcp::handler::server::tool::ToolCallContext;
-use rmcp::model::{Content, ServerCapabilities, ServerInfo};
-use rmcp::schemars::{self, JsonSchema};
-use rmcp::{tool, tool_box, Error as McpError, RoleServer, ServerHandler};
+use rmcp::model::{ServerCapabilities, ServerInfo};
+use rmcp::schemars::JsonSchema;
+use rmcp::{tool, tool_box, Error as McpError, ServerHandler};
 use serde::{Deserialize, Serialize};
 use tokio::time;
 use tracing::{error, info, warn};
