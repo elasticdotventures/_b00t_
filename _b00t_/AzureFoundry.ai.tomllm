@@ -1,0 +1,91 @@
+[b00t]
+# 🤓 Azure AI Foundry — model hosting, model catalog, provisioned throughput
+# 🤓 Repo: infrastructure/terraform/azure/ — foundry.tf, modules/ai-foundry*, modules/b00t-node-budget
+# 🤓 Two tiers: PAYG serverless (model catalog) and Provisioned Throughput (PTU)
+# 🤓 Region: australiaeast (most catalog models + NC-series GPU available here)
+# 🤓 Budget: $10 AUD/month per b00t node via b00t-node-budget terraform module
+name = "AzureFoundry"
+type = "ai_provider"
+hint = "Azure AI Foundry — hosted model catalog (PAYG) + provisioned throughput (PTU) on Azure"
+
+[b00t.tiers]
+# 🤓 PAYG Serverless (model catalog) — enable_model_catalog = true in foundry.tf
+# 🤓 Per-token billing. No idle charge. Always available after provisioning (~10 min first time).
+# 🤓 Models: Phi-4, Mistral-Small/Large, Meta Llama 3.1 8B/70B/405B, Cohere, AI21
+payg_serverless = "azurerm_ai_foundry_project serverlessEndpoints via azapi — pay-per-token"
+
+# 🤓 Provisioned Throughput (PTU) — use justfile recipes, NOT terraform
+# 🤓 Hourly charge regardless of traffic. Use for sustained high-load workloads.
+# 🤓 Start: just foundry-endpoint-start <name> <instance-type> <count>
+# 🤓 Stop:  just foundry-endpoint-stop <name>
+ptu_managed = "az ml online-deployment — hourly billing, scale to zero via justfile"
+
+[b00t.terraform]
+# 🤓 Feature flags in infrastructure/terraform/azure/foundry.tf
+enable_foundry = false       # set true to provision hub + project
+enable_model_catalog = false # set true (after enable_foundry) for PAYG serverless endpoints
+
+# 🤓 Modules
+hub_module = "infrastructure/terraform/azure/modules/ai-foundry"
+catalog_module = "infrastructure/terraform/azure/modules/ai-foundry-model-catalog"
+budget_module = "infrastructure/terraform/azure/modules/b00t-node-budget"
+
+[b00t.budget]
+# 🤓 Per-node budget: $10 AUD/month default via b00t-node-budget module
+# 🤓 Alerts: 80% forecasted + 100% actual → email brianh@promptexecution.com
+# 🤓 Does NOT auto-stop resources — alert only
+# 🤓 Override: set b00t_node_budget_aud in foundry.tf locals
+default_aud = 10
+alert_pct_forecast = 80
+alert_pct_actual = 100
+
+[b00t.mcp]
+# 🤓 Use azure-mcp to interact with Foundry resources without az CLI
+# 🤓 See AzureMcp.mcp.tomllm for install instructions
+azure_mcp_hint = "azure-mcp tools: azure_ai_search_*, azure_storage_* — foundry endpoints via ARM"
+
+[[b00t.usage]]
+description = "Enable PAYG model catalog (Phi-4 + Mistral-Small)"
+command = """# 1. Set enable_foundry = true in foundry.tf (if not already provisioned)
+# 2. Set enable_model_catalog = true in foundry.tf locals
+# 3. cd infrastructure/terraform/azure && tofu apply
+# Endpoint scoring URIs appear in terraform output: model_catalog_endpoints"""
+
+[[b00t.usage]]
+description = "Start provisioned throughput endpoint for burst capacity"
+command = """just foundry-endpoint-start my-endpoint Standard_DS3_v2 1
+# ⚠️ PTU billing starts immediately — stop when done:
+just foundry-endpoint-stop my-endpoint"""
+
+[[b00t.usage]]
+description = "Check Azure spend for Foundry resource group"
+command = "just foundry-cost-check"
+
+[[b00t.usage]]
+description = "List serverless PAYG endpoints (model catalog)"
+command = "just foundry-serverless-list"
+
+[[b00t.usage]]
+description = "Self-provision b00t node budget ($10 AUD/month)"
+command = """# Already applied via b00t_node_budget module in foundry.tf
+# No separate action needed — runs on every tofu apply
+# To change: edit b00t_node_budget_aud in locals and re-apply"""
+
+[b00t.models]
+# 🤓 Available in australiaeast model catalog (serverless PAYG, 2024-11):
+phi4 = "Phi-4 — 14B, Microsoft, strong reasoning, low cost"
+phi35_moe = "Phi-3.5-MoE-instruct — 41B MoE (6.6B active), fast, code-capable"
+mistral_small = "Mistral-Small-2409 — 22B, fast, cost-effective"
+mistral_large = "Mistral-Large-2411 — 123B, frontier-class"
+llama_8b = "Meta-Llama-3.1-8B-Instruct — fast, cheap sm0l tasks"
+llama_70b = "Meta-Llama-3.1-70B-Instruct — balanced capability/cost"
+llama_405b = "Meta-Llama-3.1-405B-Instruct — frontier-class, high cost"
+cohere_embed = "Cohere-embed-v3-multilingual — embeddings, RAG use cases"
+
+# b00t:map v1
+# summary: Azure AI Foundry — PAYG model catalog + PTU management + per-node budget
+# tags: azure, ai-foundry, model-catalog, terraform, budget, llm, inference
+# tier: frontier
+# cmds: just foundry-endpoint-status, just foundry-cost-check
+# complexity: 5
+# prereqs: az login, AZURE_SUBSCRIPTION_ID, tofu apply with enable_foundry=true
