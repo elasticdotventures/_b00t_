@@ -65,12 +65,32 @@ resource "azurerm_user_assigned_identity" "cp" {
   tags                = var.tags
 }
 
-# Contributor on this RG only — sufficient to provision/deprovision ACI containers.
+# Custom least-privilege role on this RG only — sufficient to provision/deprovision ACI containers.
 # Blast radius: limited to rg-b00t-control-{node_id}.
+resource "azurerm_role_definition" "cp_aci_operator" {
+  name        = "b00t-cp-aci-operator-${var.node_id}"
+  scope       = azurerm_resource_group.cp.id
+  description = "Least-privilege role for b00t control plane to manage ACI container groups within its resource group."
+
+  permissions {
+    actions = [
+      "Microsoft.ContainerInstance/containerGroups/*",
+      "Microsoft.Resources/subscriptions/resourceGroups/read",
+    ]
+    not_actions      = []
+    data_actions     = []
+    not_data_actions = []
+  }
+
+  assignable_scopes = [
+    azurerm_resource_group.cp.id,
+  ]
+}
+
 resource "azurerm_role_assignment" "cp_contributor" {
-  scope                = azurerm_resource_group.cp.id
-  role_definition_name = "Contributor"
-  principal_id         = azurerm_user_assigned_identity.cp.principal_id
+  scope              = azurerm_resource_group.cp.id
+  role_definition_id = azurerm_role_definition.cp_aci_operator.role_definition_resource_id
+  principal_id       = azurerm_user_assigned_identity.cp.principal_id
 }
 
 # ---------------------------------------------------------------------------
