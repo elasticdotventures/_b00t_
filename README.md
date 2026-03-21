@@ -44,8 +44,8 @@ b00t cli up --yes                  # update all tools to desired versions
 b00t learn rust                    # load Rust dev context into agent session
 b00t learn docker                  # container orchestration knowledge
 
-b00t lfmf rust "PyO3: unset CONDA_PREFIX before cargo build to fix linker errors"
-b00t advice rust "PyO3"            # retrieve lessons for a tool+pattern
+b00t lfmf --tool rust --lesson "PyO3: unset CONDA_PREFIX before cargo build to fix linker errors"
+b00t learn rust --search "PyO3"    # retrieve lessons for a tool+pattern
 ```
 
 ---
