@@ -12,7 +12,7 @@
 ## ⚡ Install
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/elasticdotventures/_b00t_/main/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/elasticdotventures/_b00t_/main/install.sh | bash
 ```
 
 Downloads the binary from GitHub Releases and verifies its SHA256 checksum when possible. Supports Linux x86_64/aarch64/armv7 and macOS Intel/Apple Silicon.
