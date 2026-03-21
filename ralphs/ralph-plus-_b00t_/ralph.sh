@@ -25,6 +25,7 @@ while [[ $# -gt 0 ]]; do
         --role) ROLE="$2"; shift 2 ;;
         --sleep) LOOP_SLEEP_SECONDS="$2"; shift 2 ;;
         [0-9]*) MAX_ITERATIONS="$1"; shift ;;
+        --*) echo "[ralph] warning: unrecognized flag '$1', ignoring" >&2; shift ;;
         *) shift ;;
     esac
 done
