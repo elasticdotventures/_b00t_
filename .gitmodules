@@ -40,3 +40,6 @@
 [submodule "vendor/moltis-b00t"]
 	path = vendor/moltis-b00t
 	url = https://github.com/app4dog/moltis-b00t.git
+[submodule "vendor/irontology-mcp"]
+	path = vendor/irontology-mcp
+	url = git@github.com:PromptExecution/irontology-mcp.git

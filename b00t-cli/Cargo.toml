@@ -61,12 +61,16 @@ whoami = "1.5"
 b00t-chat = { workspace = true }
 env_logger = "0.11"
 b00t-ipc = { path = "../b00t-ipc" }
+zbus = { workspace = true, optional = true }
 url = "2.5"
 glob = "0.3.3"
 
 # Apalis - Background job processing for workflow execution
 apalis = "1.0.0-rc.3"
 apalis-sqlite = "1.0.0-rc.3"
+
+[features]
+dbus = ["b00t-ipc/dbus", "dep:zbus"]
 
 [dev-dependencies]
 assert_cmd = "2.0.17"
