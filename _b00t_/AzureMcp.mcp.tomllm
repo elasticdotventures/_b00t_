@@ -1,0 +1,106 @@
+[b00t]
+# 🤓 Azure MCP — Microsoft's official MCP server for Azure resource management
+# 🤓 Repo: https://github.com/Azure/azure-mcp
+# 🤓 Auth: az login (DefaultAzureCredential) — works with service principal or user login
+# 🤓 Use for: Azure Storage, AI Search, CosmosDB, App Config, AI Foundry, Key Vault, etc.
+# 🤓 Scope: reads/manages Azure resources via ARM API; respects RBAC permissions
+# 🤓 AZURE_SUBSCRIPTION_ID must be set — see b00t datum AzureFoundry for Foundry context
+name = "AzureMcp"
+type = "mcp_server"
+hint = "Microsoft Azure MCP — manage Azure resources (Storage, AI Foundry, Search, CosmosDB) via MCP tools"
+
+[b00t.mcp]
+name = "azure"
+type = "stdio"
+command = "npx"
+args = ["@azure/mcp@latest", "server", "start"]
+# 🤓 Auth: DefaultAzureCredential chain — az login OR service principal env vars:
+#   AZURE_TENANT_ID, AZURE_CLIENT_ID, AZURE_CLIENT_SECRET
+# 🤓 Scope control: set AZURE_SUBSCRIPTION_ID to restrict to one subscription
+# ⚠️需 Requires Node.js + npx; install with: b00t cli install nodejs
+
+[b00t.env]
+# 🤓 Required: set in ~/.config/b00t/credentials.env or .envrc
+AZURE_SUBSCRIPTION_ID = "your-subscription-id"
+AZURE_TENANT_ID = "your-tenant-id"
+# 🤓 Optional: for service principal auth (CI/CD or non-interactive)
+# AZURE_CLIENT_ID = "sp-client-id"
+# AZURE_CLIENT_SECRET = "sp-client-secret"
+
+[b00t.tools]
+# 🤓 Storage
+azure_storage_list_accounts = "List all storage accounts in subscription"
+azure_storage_list_containers = "List containers in a storage account"
+azure_storage_list_blobs = "List blobs in a container"
+azure_storage_upload_blob = "Upload file to Azure Blob Storage"
+azure_storage_download_blob = "Download blob from Azure Storage"
+# 🤓 AI Search
+azure_ai_search_list_services = "List Azure AI Search (Cognitive Search) services"
+azure_ai_search_list_indexes = "List search indexes in a service"
+azure_ai_search_query = "Query a search index"
+# 🤓 CosmosDB
+azure_cosmos_list_accounts = "List CosmosDB accounts"
+azure_cosmos_list_databases = "List databases in a CosmosDB account"
+# 🤓 App Configuration
+azure_app_config_list_stores = "List App Configuration stores"
+azure_app_config_get_settings = "Get settings from an App Config store"
+# 🤓 Key Vault
+azure_keyvault_list_vaults = "List Key Vaults"
+azure_keyvault_list_secrets = "List secret names in a vault (no values)"
+# 🤓 Monitor / Cost
+azure_monitor_query_logs = "Query Log Analytics workspace"
+azure_cost_management_query = "Query Azure cost data"
+
+[b00t.install]
+# 🤓 Install azure-mcp to Claude Code
+claude_code = "b00t mcp install AzureMcp claudecode"
+vscode = "b00t mcp install AzureMcp vscode"
+# 🤓 Manual install for Node.js dep:
+nodejs = "brew install node || apt-get install -y nodejs"
+
+[[b00t.usage]]
+description = "Add Azure MCP to Claude Code (DefaultAzureCredential)"
+command = """b00t-cli mcp add --dwiw '{
+  "mcpServers": {
+    "azure": {
+      "command": "npx",
+      "args": ["@azure/mcp@latest", "server", "start"],
+      "env": {
+        "AZURE_SUBSCRIPTION_ID": "${AZURE_SUBSCRIPTION_ID}",
+        "AZURE_TENANT_ID": "${AZURE_TENANT_ID}"
+      }
+    }
+  }
+}'"""
+
+[[b00t.usage]]
+description = "List AI Foundry hubs in subscription"
+hint = "Use azure_storage_list_accounts or ARM REST via azure-mcp to enumerate Foundry workspaces"
+
+[[b00t.usage]]
+description = "Query Azure costs for b00t node resource group"
+hint = "azure_cost_management_query: scope=/subscriptions/{sub}/resourceGroups/rg-b00t-{node}, granularity=Monthly"
+
+[b00t.detect]
+hook = """
+let node = which("node");
+let npx = which("npx");
+if node == "" || npx == "" {
+    "missing: Node.js required for azure-mcp — install: brew install node"
+} else {
+    let az = which("az");
+    if az == "" {
+        "warn: azure-cli not found — DefaultAzureCredential may fail; install: brew install azure-cli"
+    } else {
+        "ok"
+    }
+}
+"""
+
+# b00t:map v1
+# summary: Microsoft Azure MCP server — manage Azure resources via MCP tools
+# tags: azure, mcp, azure-mcp, ai-foundry, storage, cloud
+# tier: frontier
+# cmds: npx @azure/mcp@latest server start
+# complexity: 4
+# prereqs: Node.js, az login or service principal env vars, AZURE_SUBSCRIPTION_ID

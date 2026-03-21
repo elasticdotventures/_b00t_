@@ -1,0 +1,42 @@
+[package]
+name = "b00t-azure-cp"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "b00t Azure Control Plane — MCP server for on-demand ACI compute with lease/heartbeat model"
+keywords = ["mcp", "azure", "aci", "control-plane", "b00t"]
+categories = ["command-line-utilities", "development-tools"]
+
+[[bin]]
+name = "b00t-azure-cp"
+path = "src/main.rs"
+
+[dependencies]
+# From workspace
+tokio = { workspace = true }
+rmcp = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+anyhow = { workspace = true }
+tracing = { workspace = true }
+chrono = { workspace = true }
+
+# Azure SDK for Rust
+azure_core = { version = "0.21.0", default-features = false, features = ["enable_reqwest"] }
+azure_identity = "0.21.0"
+azure_data_tables = "0.21.0"
+azure_mgmt_containerinstance = "0.21.0"
+
+# MCP tooling
+schemars = "1.1.0"
+uuid = { version = "1.0", features = ["v4", "serde"] }
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+axum = { version = "0.8", features = ["macros"] }
+tower-http = { version = "0.6", features = ["cors"] }
+reqwest = { version = "0.12", features = ["json"] }
+futures = "0.3"
+
+[lints]
+workspace = true
