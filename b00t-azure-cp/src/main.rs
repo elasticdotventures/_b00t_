@@ -457,7 +457,7 @@ impl AzureCpServer {
             .entity_client(&self.config.node_id, &input.lease_id)
             .get()
             .await
-            .map_err(|e| McpError::internal_error(format!("lease not found: {e}"), None))?
+            .map_err(|e| McpError::invalid_request(format!("lease not found or inaccessible: {e}"), None))?
             .entity;
 
         deprovision_aci_resource(
