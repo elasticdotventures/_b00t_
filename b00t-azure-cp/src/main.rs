@@ -52,7 +52,6 @@ impl Config {
                 .unwrap_or_else(|_| "b00tLeases".to_string()),
             resource_group: env::var("AZURE_RESOURCE_GROUP")
                 .context("AZURE_RESOURCE_GROUP not set")?,
-            // ACA passes the full resource group ID; extract subscription from it.
             subscription_id: env::var("AZURE_SUBSCRIPTION_ID")
                 .context("AZURE_SUBSCRIPTION_ID not set")?,
             client_id: env::var("AZURE_CLIENT_ID").context("AZURE_CLIENT_ID not set")?,
@@ -205,18 +204,7 @@ async fn provision_aci_resource(
     // The container group name is derived from the lease_id for uniqueness.
     let group_name = format!("b00t-aci-{}", &lease_id[..8]);
 
-    // Extract subscription ID from the resource group ID env var.
-    // Format: /subscriptions/{sub}/resourceGroups/{rg}
-    let subscription_id = if config.subscription_id.starts_with('/') {
-        config
-            .subscription_id
-            .split('/')
-            .nth(2)
-            .unwrap_or(&config.subscription_id)
-            .to_string()
-    } else {
-        config.subscription_id.clone()
-    };
+    let subscription_id = &config.subscription_id;
 
     let aci_client = azure_mgmt_containerinstance::Client::new(
         format!("https://management.azure.com"),
@@ -314,16 +302,7 @@ async fn deprovision_aci_resource(
     credential: Arc<dyn TokenCredential>,
     resource_id: &str,
 ) -> Result<()> {
-    let subscription_id = if config.subscription_id.starts_with('/') {
-        config
-            .subscription_id
-            .split('/')
-            .nth(2)
-            .unwrap_or(&config.subscription_id)
-            .to_string()
-    } else {
-        config.subscription_id.clone()
-    };
+    let subscription_id = &config.subscription_id;
 
     let aci_client = azure_mgmt_containerinstance::Client::new(
         "https://management.azure.com",
@@ -544,16 +523,7 @@ impl AzureCpServer {
     #[tool(name = "azure.cost_estimate")]
     async fn cost_estimate(&self) -> Result<serde_json::Value, McpError> {
         // Use the Azure Cost Management REST API via azure_core.
-        let subscription_id = if self.config.subscription_id.starts_with('/') {
-            self.config
-                .subscription_id
-                .split('/')
-                .nth(2)
-                .unwrap_or(&self.config.subscription_id)
-                .to_string()
-        } else {
-            self.config.subscription_id.clone()
-        };
+        let subscription_id = &self.config.subscription_id;
 
         let scope = format!(
             "/subscriptions/{}/resourceGroups/{}",
