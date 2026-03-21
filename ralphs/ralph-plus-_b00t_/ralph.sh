@@ -4,16 +4,36 @@
 
 set -euo pipefail
 
-# Thin wrapper that delegates to the canonical workspace-root b00t.sh
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-TARGET="${SCRIPT_DIR}/../../b00t.sh"
+# Defaults (can be overridden by env or flags)
+TOOL="${TOOL:-${B00T_TOOL:-claude}}"
+MAX_ITERATIONS=10
+ROLE="${B00T_ROLE:-developer}"
+LOOP_SLEEP_SECONDS="${LOOP_SLEEP_SECONDS:-3}"
+STATE_DIR="${B00T_STATE_DIR:-.b00t/ralph}"
+STATUS_FILE="${STATE_DIR}/status.json"
+LOG_FILE="${STATE_DIR}/loop.log"
+MISTRALRS_PORT="${MISTRALRS_PORT:-8181}"
+MISTRALRS_API_BASE="${MISTRALRS_API_BASE:-http://localhost:${MISTRALRS_PORT}/v1}"
+MISTRALRS_MODEL_ID="${MISTRALRS_MODEL_ID:-mistralai/Mistral-7B-Instruct-v0.3}"
+MISTRALRS_MODEL_NAME="${MISTRALRS_MODEL_NAME:-mistral}"
 
-if [[ ! -x "${TARGET}" ]]; then
-    echo "Error: canonical b00t.sh not found or not executable at: ${TARGET}" >&2
-    exit 1
-fi
+# Parse CLI args: --tool <tool> [--max-iterations <n>] [<n>]
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --tool) TOOL="$2"; shift 2 ;;
+        --max-iterations) MAX_ITERATIONS="$2"; shift 2 ;;
+        --role) ROLE="$2"; shift 2 ;;
+        --sleep) LOOP_SLEEP_SECONDS="$2"; shift 2 ;;
+        [0-9]*) MAX_ITERATIONS="$1"; shift ;;
+        --*) echo "[ralph] warning: unrecognized flag '$1', ignoring" >&2; shift ;;
+        *) shift ;;
+    esac
+done
 
-exec "${TARGET}" "$@"
+mkdir -p "${STATE_DIR}"
+
+log() { echo "[ralph] $*" >&2; }
+
 pending_tasks_count() {
     local tasks_file=".taskmaster/tasks/tasks.json"
     if [[ ! -f "${tasks_file}" ]]; then
