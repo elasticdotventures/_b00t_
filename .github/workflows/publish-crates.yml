@@ -104,12 +104,16 @@ jobs:
           # Wait for b00t-chat to propagate on crates.io (skip in dry-run)
           if [ "${{ github.event_name }}" != "workflow_dispatch" ] || [ "${{ github.event.inputs.dry_run }}" != "true" ]; then
             echo "⏳ Waiting for b00t-chat to appear on crates.io..."
+            found=0
             for i in $(seq 1 12); do
               if cargo search b00t-chat 2>/dev/null | grep -q "b00t-chat"; then
-                echo "✅ b00t-chat available"; break
+                echo "✅ b00t-chat available"; found=1; break
               fi
               echo "  attempt $i/12 — sleeping 10s"; sleep 10
             done
+            if [ "$found" -eq 0 ]; then
+              echo "❌ b00t-chat did not appear on crates.io after 12 attempts"; exit 1
+            fi
           fi
           cd b00t-c0re-lib
           if [ "${{ github.event_name }}" == "workflow_dispatch" ] && [ "${{ github.event.inputs.dry_run }}" == "true" ]; then
@@ -128,12 +132,16 @@ jobs:
           # Wait for b00t-c0re-lib to propagate on crates.io (skip in dry-run)
           if [ "${{ github.event_name }}" != "workflow_dispatch" ] || [ "${{ github.event.inputs.dry_run }}" != "true" ]; then
             echo "⏳ Waiting for b00t-c0re-lib to appear on crates.io..."
+            found=0
             for i in $(seq 1 18); do
               if cargo search b00t-c0re-lib 2>/dev/null | grep -q "b00t-c0re-lib"; then
-                echo "✅ b00t-c0re-lib available"; break
+                echo "✅ b00t-c0re-lib available"; found=1; break
               fi
               echo "  attempt $i/18 — sleeping 10s"; sleep 10
             done
+            if [ "$found" -eq 0 ]; then
+              echo "❌ b00t-c0re-lib did not appear on crates.io after 18 attempts"; exit 1
+            fi
           fi
           cd b00t-cli
           if [ "${{ github.event_name }}" == "workflow_dispatch" ] && [ "${{ github.event.inputs.dry_run }}" == "true" ]; then
@@ -152,12 +160,16 @@ jobs:
           # Wait for b00t-cli to propagate on crates.io (skip in dry-run)
           if [ "${{ github.event_name }}" != "workflow_dispatch" ] || [ "${{ github.event.inputs.dry_run }}" != "true" ]; then
             echo "⏳ Waiting for b00t-cli to appear on crates.io..."
+            found=0
             for i in $(seq 1 18); do
               if cargo search b00t-cli 2>/dev/null | grep -q "^b00t-cli "; then
-                echo "✅ b00t-cli available"; break
+                echo "✅ b00t-cli available"; found=1; break
               fi
               echo "  attempt $i/18 — sleeping 10s"; sleep 10
             done
+            if [ "$found" -eq 0 ]; then
+              echo "❌ b00t-cli did not appear on crates.io after 18 attempts"; exit 1
+            fi
           fi
           cd b00t-mcp
           if [ "${{ github.event_name }}" == "workflow_dispatch" ] && [ "${{ github.event.inputs.dry_run }}" == "true" ]; then
