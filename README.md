@@ -15,7 +15,7 @@
 curl -fsSL https://raw.githubusercontent.com/elasticdotventures/_b00t_/main/install.sh | sh
 ```
 
-SHA256-verified binary from GitHub Releases. Supports Linux x86_64/aarch64/armv7 and macOS Intel/Apple Silicon.
+Downloads the binary from GitHub Releases and verifies its SHA256 checksum when possible. Supports Linux x86_64/aarch64/armv7 and macOS Intel/Apple Silicon.
 
 **From crates.io:**
 ```bash
