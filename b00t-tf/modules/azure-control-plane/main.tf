@@ -54,14 +54,20 @@ resource "azurerm_user_assigned_identity" "cp" {
   tags                = var.tags
 }
 
-# Contributor on this RG only — sufficient to provision/deprovision ACI containers.
-# Blast radius: limited to rg-b00t-control-{node_id}.
-resource "azurerm_role_assignment" "cp_contributor" {
+# Least-privilege RBAC for MCP control plane identity:
+#   - Container Instance Contributor on this RG: manage ACI containers only.
+#   - Storage Table Data Contributor on the storage account: manage lease table rows.
+resource "azurerm_role_assignment" "cp_container_instance_contributor" {
   scope                = azurerm_resource_group.cp.id
-  role_definition_name = "Contributor"
+  role_definition_name = "Container Instance Contributor"
   principal_id         = azurerm_user_assigned_identity.cp.principal_id
 }
 
+resource "azurerm_role_assignment" "cp_storage_table_data_contributor" {
+  scope                = azurerm_storage_account.cp.id
+  role_definition_name = "Storage Table Data Contributor"
+  principal_id         = azurerm_user_assigned_identity.cp.principal_id
+}
 # ---------------------------------------------------------------------------
 # Table Storage — lease state store for active ACI resources
 # ---------------------------------------------------------------------------
