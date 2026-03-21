@@ -86,20 +86,27 @@ install_binaries() {
     printf '%b\n' "${BLUE}🔐 Verifying SHA256...${NC}"
     if curl -fsSL "$sha_url" -o "$temp_dir/$sha_name" 2>/dev/null; then
         # sha256sum on Linux, shasum -a 256 on macOS
+        local verified_ok=0
         if command -v sha256sum >/dev/null 2>&1; then
             (cd "$temp_dir" && sha256sum -c "$sha_name") || {
                 printf '%b\n' "${RED}SHA256 mismatch — aborting installation${NC}" >&2
                 rm -rf "$temp_dir"
                 exit 1
             }
+            verified_ok=1
         elif command -v shasum >/dev/null 2>&1; then
             (cd "$temp_dir" && shasum -a 256 -c "$sha_name") || {
                 printf '%b\n' "${RED}SHA256 mismatch — aborting installation${NC}" >&2
                 rm -rf "$temp_dir"
                 exit 1
             }
+            verified_ok=1
+        else
+            printf '%b\n' "${YELLOW}⚠️  No SHA256 verification tool (sha256sum/shasum) found, skipping verification${NC}"
         fi
-        printf '%b\n' "${GREEN}✅ SHA256 verified${NC}"
+        if [ "$verified_ok" -eq 1 ]; then
+            printf '%b\n' "${GREEN}✅ SHA256 verified${NC}"
+        fi
     else
         printf '%b\n' "${YELLOW}⚠️  No SHA256 sidecar found, skipping verification${NC}"
     fi
