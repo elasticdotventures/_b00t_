@@ -262,7 +262,7 @@ async fn provision_aci_resource(
     };
 
     let container_group = ContainerGroup {
-        location: Some(config.resource_group.clone()), // will be overridden below
+        location: None, // set to the actual region below
         properties: Some(ContainerGroupProperties {
             containers: vec![Container {
                 name: group_name.clone(),
