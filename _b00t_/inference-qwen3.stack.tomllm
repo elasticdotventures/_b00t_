@@ -49,8 +49,14 @@ environment = [
 exec_start_pre = [
     "/bin/bash -c 'echo vllm hive node starting on :8000'",
 ]
-exec_start = """/home/linuxbrew/.linuxbrew/bin/llama-server \
-    -m %h/.cache/huggingface/hub/models--Qwen--Qwen3-Coder-Next-GGUF/snapshots/main/Qwen3-Coder-Next-Q4_K_M/Qwen3-Coder-Next-Q4_K_M-00001-of-00004.gguf \
+exec_start = """/usr/bin/podman run --rm \
+    --name b00t-llama-server \
+    --device nvidia.com/gpu=all \
+    --security-opt=label=disable \
+    -v %h/.cache/huggingface:/root/.cache/huggingface:ro \
+    -p 8000:8000 \
+    ghcr.io/ggml-org/llama.cpp:server-cuda \
+    -m /root/.cache/huggingface/hub/models--Qwen--Qwen3-Coder-Next-GGUF/snapshots/b82fb7382639d97b38fa7672e526c760c2fb358e/Qwen3-Coder-Next-Q4_K_M/Qwen3-Coder-Next-Q4_K_M-00001-of-00004.gguf \
     --alias qwen3-coder \
     --port 8000 \
     -c 32768 \
@@ -64,15 +70,20 @@ timeout_start_sec = "300"
 # 🤓 prereqs are NOT yet enforced by b00t hive activate — tracked here for visibility
 #    Implementation plan: HivePrereq in hive.rs, run checks before activate_profile()
 [[b00t.hive.prereqs]]
-name = "llama-server-available"
-check = "command -v llama-server"
-on_fail = "brew install llama.cpp"
-hint = "llama-server required (brew install llama.cpp)"
+name = "podman-available"
+check = "command -v podman"
+hint = "podman required (sudo apt install podman)"
 
 [[b00t.hive.prereqs]]
-name = "llama-server-qwen3next-gguf"
-check = "llama-server --version 2>&1 | grep -qE 'version: (b[3-9][0-9]{3}|b[1-9][0-9]{4})'"
-hint = "llama-server build >=b3000 recommended for qwen3next GGUF; brew upgrade llama.cpp"
+name = "llama-cuda-image"
+check = "podman image exists ghcr.io/ggml-org/llama.cpp:server-cuda"
+on_fail = "podman pull ghcr.io/ggml-org/llama.cpp:server-cuda"
+hint = "podman pull ghcr.io/ggml-org/llama.cpp:server-cuda"
+
+[[b00t.hive.prereqs]]
+name = "nvidia-cdi-gpu"
+check = "podman run --rm --device nvidia.com/gpu=all --security-opt=label=disable ghcr.io/ggml-org/llama.cpp:server-cuda --version 2>&1 | grep -q 'CUDA devices'"
+hint = "CDI GPU device not visible; check nvidia-ctk cdi generate --output=/etc/cdi/nvidia.yaml"
 
 [b00t.hive.services]
 # 🤓 services.start is now empty because [b00t.hive.service] generates b00t-hive-inference-qwen3.service
@@ -122,9 +133,9 @@ description = "Test opencode against local Qwen3-Coder-Next"
 command = "opencode run --model vllm-local/qwen3-coder 'reply with only: HIVE_NODE_ONLINE'"
 
 # b00t:map v1
-# summary: inference-qwen3 hive profile — Qwen3-Coder-Next Q4_K_M via llama-server (llama.cpp)
-# tags: inference, llama-server, llama.cpp, qwen3, hive, gpu, service
+# summary: inference-qwen3 hive profile — Qwen3-Coder-Next Q4_K_M via podman ghcr.io/ggml-org/llama.cpp:server-cuda
+# tags: inference, llama-server, llama.cpp, qwen3, hive, gpu, service, podman, cuda
 # tier: frontier
 # cmds: b00t hive activate inference-qwen3, b00t hive plan inference-qwen3
 # complexity: 6
-# prereqs: llama-server (brew install llama.cpp); vllm unsupported for qwen3next GGUF (transformers gap)
+# prereqs: podman + nvidia CDI; brew llama-server dropped (no CUDA on Linux)
