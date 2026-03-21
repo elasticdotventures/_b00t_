@@ -5,7 +5,7 @@
 # and MUST NOT be used as a general b00t installer.
 #
 # For b00t installation, use:
-#   curl -fsSL https://raw.githubusercontent.com/elasticdotventures/_b00t_/main/install.sh | sh
+#   curl -fsSL https://raw.githubusercontent.com/elasticdotventures/_b00t_/main/install.sh | bash
 #
 set -ex # Exit immediately if a command exits with a non-zero status, and print commands and their arguments as they are executed.
 
