@@ -78,10 +78,10 @@ b00t mcp list                          # list available MCP servers
 
 ```bash
 # Multi-agent mission coordination
-b00t acp hive create mission-id 3 "Build and deploy microservice" leader
-b00t acp hive join mission-id developer
-b00t acp hive sync mission-id 1    # barrier: wait for all agents at step 1
-b00t acp hive ready mission-id 2   # signal readiness for step 2
+b00t hive list                             # list available hive profiles/guards
+b00t hive show default                     # inspect default hive configuration
+b00t chat send mission-id "Build and deploy microservice" --role leader
+b00t chat info mission-id                  # inspect mission/conversation state
 ```
 
 ---
