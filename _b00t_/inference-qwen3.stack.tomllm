@@ -53,7 +53,7 @@ exec_start = """/usr/bin/podman run --rm \
     --name b00t-llama-server \
     --device nvidia.com/gpu=all \
     --security-opt=label=disable \
-    -v %h/.cache/huggingface:/root/.cache/huggingface:ro \
+    -v %h/.cache/huggingface:/root/.cache/huggingface:ro,rslave \
     -p 8000:8000 \
     ghcr.io/ggml-org/llama.cpp:server-cuda \
     -m /root/.cache/huggingface/hub/models--Qwen--Qwen3-Coder-Next-GGUF/snapshots/b82fb7382639d97b38fa7672e526c760c2fb358e/Qwen3-Coder-Next-Q4_K_M/Qwen3-Coder-Next-Q4_K_M-00001-of-00004.gguf \
