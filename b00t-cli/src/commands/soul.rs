@@ -198,6 +198,7 @@ pub fn handle_soul_command(cmd: &SoulCommands) -> Result<()> {
             tokio::task::block_in_place(move || {
                 tokio::runtime::Handle::current().block_on(serve_dbus(use_session, datum_dir))
             })
+        }
         SoulCommands::Distill { model, base_url, dry_run } => {
             let rt = tokio::runtime::Runtime::new()?;
             rt.block_on(distill_soul(model, base_url.as_deref(), *dry_run))
