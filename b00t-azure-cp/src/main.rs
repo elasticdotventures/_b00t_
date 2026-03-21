@@ -10,20 +10,18 @@
 //! Lease state stored in Azure Table Storage (b00tLeases table).
 //! Background watchdog tears down leases where expires_at < now().
 
-use std::collections::HashMap;
 use std::env;
 use std::sync::Arc;
 use std::time::Duration;
 
-use anyhow::{anyhow, Context, Result};
+use anyhow::{Context, Result};
 use azure_core::credentials::TokenCredential;
 use azure_data_tables::clients::TableServiceClient;
 use azure_identity::ManagedIdentityCredential;
 use chrono::{DateTime, Utc};
-use rmcp::handler::server::tool::ToolCallContext;
-use rmcp::model::{Content, ServerCapabilities, ServerInfo};
-use rmcp::schemars::{self, JsonSchema};
-use rmcp::{tool, tool_box, Error as McpError, RoleServer, ServerHandler};
+use rmcp::model::{ServerCapabilities, ServerInfo};
+use rmcp::schemars::JsonSchema;
+use rmcp::{tool, tool_box, Error as McpError, ServerHandler};
 use serde::{Deserialize, Serialize};
 use tokio::time;
 use tracing::{error, info, warn};
@@ -42,6 +40,7 @@ struct Config {
     subscription_id: String,
     client_id: String,
     lease_ttl_minutes: i64,
+    location: String,
 }
 
 impl Config {
@@ -62,10 +61,109 @@ impl Config {
                 .unwrap_or_else(|_| "30".to_string())
                 .parse()
                 .unwrap_or(30),
+            location: env::var("AZURE_LOCATION").context("AZURE_LOCATION not set")?,
         })
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::env;
+
+    fn set_required_env() {
+        env::set_var("B00T_NODE_ID", "test-node");
+        env::set_var("AZURE_STORAGE_ACCOUNT_NAME", "teststorage");
+        env::set_var("AZURE_RESOURCE_GROUP", "testrg");
+        env::set_var("AZURE_SUBSCRIPTION_ID", "12345678-1234-1234-1234-1234567890ab");
+        env::set_var("AZURE_CLIENT_ID", "client-id-xyz");
+    }
+
+    #[test]
+    fn config_from_env_uses_defaults_when_optional_vars_missing() {
+        // Ensure a clean slate for optional vars.
+        env::remove_var("AZURE_TABLE_NAME");
+        env::remove_var("LEASE_TTL_MINUTES");
+
+        set_required_env();
+
+        let cfg = Config::from_env().expect("config should be created");
+
+        assert_eq!(cfg.node_id, "test-node");
+        assert_eq!(cfg.storage_account, "teststorage");
+        assert_eq!(cfg.table_name, "b00tLeases");
+        assert_eq!(cfg.resource_group, "testrg");
+        assert_eq!(
+            cfg.subscription_id,
+            "12345678-1234-1234-1234-1234567890ab"
+        );
+        assert_eq!(cfg.client_id, "client-id-xyz");
+        assert_eq!(cfg.lease_ttl_minutes, 30);
+    }
+
+    #[test]
+    fn config_from_env_respects_custom_table_name_and_ttl() {
+        set_required_env();
+        env::set_var("AZURE_TABLE_NAME", "CustomTable");
+        env::set_var("LEASE_TTL_MINUTES", "45");
+
+        let cfg = Config::from_env().expect("config should be created");
+
+        assert_eq!(cfg.table_name, "CustomTable");
+        assert_eq!(cfg.lease_ttl_minutes, 45);
+    }
+
+    #[test]
+    fn config_from_env_falls_back_to_default_ttl_on_parse_error() {
+        set_required_env();
+        env::set_var("LEASE_TTL_MINUTES", "not-a-number");
+
+        let cfg = Config::from_env().expect("config should be created");
+
+        assert_eq!(cfg.lease_ttl_minutes, 30);
+    }
+
+    #[test]
+    fn config_from_env_errors_when_required_var_missing() {
+        // Remove a required var and ensure we get an error.
+        env::remove_var("B00T_NODE_ID");
+        env::set_var("AZURE_STORAGE_ACCOUNT_NAME", "teststorage");
+        env::set_var("AZURE_RESOURCE_GROUP", "testrg");
+        env::set_var("AZURE_SUBSCRIPTION_ID", "12345678-1234-1234-1234-1234567890ab");
+        env::set_var("AZURE_CLIENT_ID", "client-id-xyz");
+        env::remove_var("LEASE_TTL_MINUTES");
+
+        let cfg = Config::from_env();
+        assert!(cfg.is_err(), "expected error when B00T_NODE_ID is missing");
+    }
+
+    #[test]
+    fn config_from_env_subscription_id_plain_and_resource_id_forms() {
+        set_required_env();
+
+        // Plain subscription ID
+        env::set_var(
+            "AZURE_SUBSCRIPTION_ID",
+            "11111111-2222-3333-4444-555555555555",
+        );
+        let cfg_plain = Config::from_env().expect("config should be created");
+        assert_eq!(
+            cfg_plain.subscription_id,
+            "11111111-2222-3333-4444-555555555555"
+        );
+
+        // Resource ID-like string; current behavior is to take it verbatim.
+        env::set_var(
+            "AZURE_SUBSCRIPTION_ID",
+            "/subscriptions/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee/resourceGroups/rg",
+        );
+        let cfg_resource = Config::from_env().expect("config should be created");
+        assert_eq!(
+            cfg_resource.subscription_id,
+            "/subscriptions/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee/resourceGroups/rg"
+        );
+    }
+}
 // ---------------------------------------------------------------------------
 // Lease entity (Azure Table Storage row)
 // ---------------------------------------------------------------------------
@@ -262,7 +360,7 @@ async fn provision_aci_resource(
     };
 
     let container_group = ContainerGroup {
-        location: None, // set to the actual region below
+        location: Some(config.location.clone()),
         properties: Some(ContainerGroupProperties {
             containers: vec![Container {
                 name: group_name.clone(),
@@ -285,27 +383,34 @@ async fn provision_aci_resource(
         ..Default::default()
     };
 
-    // Get the region from the RG (australiaeast for our setup).
-    let location = "australiaeast";
-    let mut cg_with_location = container_group;
-    cg_with_location.location = Some(location.to_string());
-
-    aci_client
+    let created = aci_client
         .container_groups_client()
         .create_or_update(
             &subscription_id,
             &config.resource_group,
             &group_name,
-            cg_with_location,
+            container_group,
         )
         .await
         .context("failed to create ACI container group")?;
 
-    // The FQDN follows a deterministic pattern for public ACI groups.
-    let endpoint_url = format!(
-        "http://{}.australiaeast.azurecontainer.io:{}",
-        group_name, input.port
-    );
+    // Prefer the FQDN Azure assigns to the container group; fall back to the
+    // deterministic pattern using the provisioned location.
+    let fqdn = created
+        .properties
+        .as_ref()
+        .and_then(|p| p.ip_address.as_ref())
+        .and_then(|ip| ip.fqdn.as_deref())
+        .map(|s| s.to_string())
+        .unwrap_or_else(|| {
+            let fallback = format!(
+                "{}.{}.azurecontainer.io",
+                group_name, config.location
+            );
+            warn!(group = %group_name, fallback = %fallback, "FQDN not present in create response; using constructed fallback");
+            fallback
+        });
+    let endpoint_url = format!("http://{}:{}", fqdn, input.port);
 
     info!(group = %group_name, endpoint = %endpoint_url, "ACI container group created");
     Ok(endpoint_url)
@@ -459,7 +564,7 @@ impl AzureCpServer {
             .entity_client(&self.config.node_id, &input.lease_id)
             .get()
             .await
-            .map_err(|e| McpError::internal_error(format!("lease not found: {e}"), None))?
+            .map_err(|e| McpError::invalid_request(format!("lease not found or inaccessible: {e}"), None))?
             .entity;
 
         deprovision_aci_resource(

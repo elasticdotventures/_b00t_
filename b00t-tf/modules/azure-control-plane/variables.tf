@@ -1,6 +1,11 @@
 variable "node_id" {
   description = "Unique identifier for this b00t node (used in resource names and lease partition key)."
   type        = string
+
+  validation {
+    condition = can(regex("^[a-z0-9-]+$", var.node_id)) && length(var.node_id) >= 3 && length(var.node_id) <= 32
+    error_message = "node_id must be 3-32 characters long and contain only lowercase letters, numbers, and hyphens."
+  }
 }
 
 variable "location" {

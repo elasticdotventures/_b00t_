@@ -30,7 +30,7 @@ terraform {
 locals {
   rg_name    = "rg-b00t-control-${var.node_id}"
   app_name   = "b00t-cp-${var.node_id}"
-  sa_name    = "b00tsa${replace(var.node_id, "-", "")}"
+  sa_name    = substr("b00tsa${regexreplace(lower(var.node_id), "[^a-z0-9]", "")}", 0, 24)
   table_name = "b00tLeases"
   budget_start_date = formatdate("YYYY-MM-01T00:00:00Z", timestamp())
 }
@@ -170,6 +170,10 @@ resource "azurerm_container_app" "cp" {
       env {
         name  = "LEASE_TTL_MINUTES"
         value = tostring(var.lease_ttl_minutes)
+      }
+      env {
+        name  = "AZURE_LOCATION"
+        value = var.location
       }
       env {
         name  = "PORT"
