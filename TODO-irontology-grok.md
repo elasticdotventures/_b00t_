@@ -33,8 +33,8 @@
   # output: vendor/irontology-mcp/target/release/irontology-mcp
 
   # Smoke test — binary starts and responds
-  echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"test","versio
-  n":"0.1"}}}' | vendor/irontology-mcp/target/release/irontology-mcp 2>/dev/null | head -1
+  echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"test","version":"0.1"}}}' \
+    | vendor/irontology-mcp/target/release/irontology-mcp 2>/dev/null | head -1
   # output: {"jsonrpc":"2.0","result":{"protocolVersion":...,"serverInfo":{"name":"irontology-mcp"...
 
   ---
