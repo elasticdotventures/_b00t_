@@ -398,6 +398,8 @@ struct AzureCpServer {
     config: Config,
     table_client: Arc<TableServiceClient>,
     credential: Arc<dyn TokenCredential>,
+    /// Shared HTTP client with connect/request timeouts for Cost Management queries.
+    http_client: reqwest::Client,
 }
 
 #[tool_box]
@@ -583,8 +585,8 @@ impl AzureCpServer {
             .await
             .map_err(|e| McpError::internal_error(format!("credential error: {e}"), None))?;
 
-        let client = reqwest::Client::new();
-        let resp = client
+        let resp = self
+            .http_client
             .post(&url)
             .bearer_auth(token.token.secret())
             .json(&query_body)
@@ -670,6 +672,11 @@ async fn main() -> Result<()> {
         config,
         table_client,
         credential,
+        http_client: reqwest::Client::builder()
+            .connect_timeout(Duration::from_secs(10))
+            .timeout(Duration::from_secs(30))
+            .build()
+            .context("failed to build HTTP client")?,
     };
 
     let port: u16 = env::var("PORT")
