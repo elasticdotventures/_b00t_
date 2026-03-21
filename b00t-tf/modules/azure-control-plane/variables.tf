@@ -49,3 +49,26 @@ variable "tags" {
   type        = map(string)
   default     = {}
 }
+
+variable "external_ingress" {
+  description = "When false (default), the ACA endpoint is internal-only (not publicly reachable). Set true only when a WAF/private endpoint fronts the service."
+  type        = bool
+  default     = false
+}
+
+variable "allowed_ip_prefixes" {
+  description = "CIDR blocks allowed to reach the ACA endpoint when external_ingress = true. Empty list permits all IPs (not recommended for production)."
+  type        = list(string)
+  default     = []
+}
+
+variable "auth_token" {
+  description = "Pre-shared bearer token clients must supply in the Authorization header. Required — use a securely-generated random value (e.g. `openssl rand -hex 32`)."
+  type        = string
+  sensitive   = true
+
+  validation {
+    condition     = length(var.auth_token) >= 32
+    error_message = "auth_token must be at least 32 characters. Generate one with: openssl rand -hex 32"
+  }
+}

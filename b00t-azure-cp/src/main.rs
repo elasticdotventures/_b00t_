@@ -18,11 +18,16 @@ use anyhow::{Context, Result};
 use azure_core::credentials::TokenCredential;
 use azure_data_tables::clients::TableServiceClient;
 use azure_identity::ManagedIdentityCredential;
+use axum::{Json, Router, extract::Request, http::{StatusCode, header}, middleware, response::{IntoResponse, Response}};
 use chrono::{DateTime, Utc};
 use rmcp::model::{ServerCapabilities, ServerInfo};
 use rmcp::schemars::JsonSchema;
+use rmcp::transport::streamable_http_server::{
+    StreamableHttpServerConfig, StreamableHttpService, session::local::LocalSessionManager,
+};
 use rmcp::{tool, tool_box, Error as McpError, ServerHandler};
 use serde::{Deserialize, Serialize};
+use tokio::net::TcpListener;
 use tokio::time;
 use tracing::{error, info, warn};
 use uuid::Uuid;
@@ -42,6 +47,10 @@ struct Config {
     lease_ttl_minutes: i64,
     /// Azure region for ACI deployments (e.g. "australiaeast").
     location: String,
+    /// Bearer token required in `Authorization: Bearer <token>` header.
+    /// If None, the endpoint is unauthenticated (only appropriate when
+    /// external_ingress = false in Terraform keeps the endpoint internal).
+    auth_token: Option<String>,
 }
 
 impl Config {
@@ -63,6 +72,7 @@ impl Config {
                 .parse()
                 .unwrap_or(30),
             location: env::var("AZURE_LOCATION").context("AZURE_LOCATION not set")?,
+            auth_token: env::var("B00T_CP_AUTH_TOKEN").ok(),
         })
     }
 }
@@ -687,13 +697,64 @@ async fn main() -> Result<()> {
     let bind_addr = format!("0.0.0.0:{port}");
     info!(addr = %bind_addr, "listening for MCP connections");
 
-    // Serve via streamable HTTP transport (MCP over HTTP).
-    rmcp::transport::streamable_http_server::serve_server(
-        server,
-        bind_addr.parse()?,
-    )
-    .await
-    .context("MCP server error")?;
+    // Warn loudly if no auth token is configured — the endpoint should always
+    // be authenticated when external_ingress = true in Terraform.
+    let auth_token: Option<String> = server.config.auth_token.clone();
+    if auth_token.is_none() {
+        warn!("B00T_CP_AUTH_TOKEN is not set — MCP endpoint is unauthenticated. \
+               Only acceptable when external_ingress = false restricts public access.");
+    }
+
+    // Build StreamableHttpService from the MCP server handler.
+    let mcp_service: StreamableHttpService<AzureCpServer, LocalSessionManager> = {
+        let s = server.clone();
+        StreamableHttpService::new(
+            move || Ok(s.clone()),
+            LocalSessionManager::default(),
+            StreamableHttpServerConfig::default(),
+        )
+    };
+
+    // Wrap with bearer-token auth middleware (defense-in-depth on top of
+    // Terraform's external_ingress = false / ip_security_restriction controls).
+    let app = Router::new()
+        .nest_service("/mcp", mcp_service)
+        .layer(middleware::from_fn(move |req: Request, next: middleware::Next| {
+            let expected = auth_token.clone();
+            async move {
+                if let Some(ref token) = expected {
+                    let provided = req
+                        .headers()
+                        .get(header::AUTHORIZATION)
+                        .and_then(|v| v.to_str().ok())
+                        .and_then(|v| v.strip_prefix("Bearer "));
+                    // Constant-time comparison to avoid timing side-channels.
+                    // Seeds acc with the length-mismatch bit so a prefix match never passes.
+                    let ta = provided.unwrap_or("").as_bytes();
+                    let tb = token.as_bytes();
+                    let max_len = ta.len().max(tb.len());
+                    let mut acc: u8 = (ta.len() != tb.len()) as u8;
+                    for i in 0..max_len {
+                        acc |= ta.get(i).copied().unwrap_or(0) ^ tb.get(i).copied().unwrap_or(0);
+                    }
+                    if acc != 0 {
+                        return (
+                            StatusCode::UNAUTHORIZED,
+                            Json(serde_json::json!({"error": "unauthorized"})),
+                        )
+                            .into_response();
+                    }
+                }
+                next.run(req).await
+            }
+        }));
+
+    let listener = TcpListener::bind(&bind_addr)
+        .await
+        .context("failed to bind TCP listener")?;
+    axum::serve(listener, app)
+        .await
+        .context("MCP server error")?;
 
     Ok(())
 }
