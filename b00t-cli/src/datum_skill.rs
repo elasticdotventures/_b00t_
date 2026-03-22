@@ -32,13 +32,30 @@
 
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 /// Skill datum - Defines progressive disclosure knowledge pattern
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SkillDatum {
     #[serde(flatten)]
     pub datum: crate::BootDatum,
+}
+
+/// YAML frontmatter extracted from agentskills.io SKILL.md format
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct SkillMdFrontmatter {
+    pub name: String,
+    pub description: String,
+    #[serde(default)]
+    pub tags: Vec<String>,
+    #[serde(default)]
+    pub applies_to: Vec<String>,
+    #[serde(default)]
+    pub output_types: Vec<String>,
+    #[serde(default)]
+    pub dependencies: Vec<String>,
+    pub author: Option<String>,
+    pub version: Option<String>,
 }
 
 /// Skill configuration
@@ -48,7 +65,13 @@ pub struct SkillConfig {
     pub description: String,
 
     /// Path to instructions markdown file (relative to skill directory)
+    /// Empty when skill was parsed from SKILL.md (use instructions_inline instead)
     pub instructions_file: String,
+
+    /// Inline instructions body — set when parsed from SKILL.md format
+    /// Takes precedence over instructions_file in load_instructions()
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub instructions_inline: Option<String>,
 
     /// Example files demonstrating the skill (relative to skill directory)
     #[serde(default)]
@@ -89,6 +112,65 @@ pub struct SkillMetadata {
 }
 
 impl SkillDatum {
+    /// Parse agentskills.io SKILL.md format into a SkillDatum.
+    ///
+    /// SKILL.md format:
+    /// ```markdown
+    /// ---
+    /// name: my-skill
+    /// description: When to use this skill.
+    /// tags: [rust, cli]
+    /// applies_to: [code generation, cli tooling]
+    /// output_types: [.rs]
+    /// ---
+    /// # My Skill
+    /// Full instructions body...
+    /// ```
+    ///
+    /// Instructions are stored inline (`instructions_inline`); no file I/O needed.
+    pub fn from_skill_md(path: &Path) -> Result<Self> {
+        let content = std::fs::read_to_string(path)
+            .map_err(|e| anyhow::anyhow!("Failed to read SKILL.md at {}: {}", path.display(), e))?;
+
+        let (frontmatter, body) = parse_skill_md_frontmatter(&content)?;
+
+        let skill_config = SkillConfig {
+            description: frontmatter.description.clone(),
+            // Use the SKILL.md path as instructions_file so validation passes,
+            // while still providing the parsed body via instructions_inline.
+            instructions_file: path.to_string_lossy().into_owned(),
+            instructions_inline: Some(body),
+            examples: vec![],
+            tags: frontmatter.tags.clone(),
+            metadata: SkillMetadata {
+                applies_to: if frontmatter.applies_to.is_empty() {
+                    // fall back: derive from description if no applies_to
+                    vec![frontmatter.description.clone()]
+                } else {
+                    frontmatter.applies_to.clone()
+                },
+                output_types: frontmatter.output_types.clone(),
+                dependencies: frontmatter.dependencies.clone(),
+                author: frontmatter.author.clone(),
+                version: frontmatter.version.clone(),
+            },
+            templates: vec![],
+        };
+
+        let skill_json = serde_json::to_value(&skill_config)
+            .map_err(|e| anyhow::anyhow!("Skill serialization failed: {}", e))?;
+
+        let datum = crate::BootDatum {
+            name: frontmatter.name.clone(),
+            datum_type: Some(crate::DatumType::Skill),
+            hint: frontmatter.description.clone(),
+            skill: Some(skill_json),
+            ..Default::default()
+        };
+
+        Ok(SkillDatum { datum })
+    }
+
     /// Load skill from TOML file
     pub fn from_config(name: &str, path: &str) -> Result<Self> {
         // Strip .skill.toml extension if present
@@ -132,9 +214,15 @@ impl SkillDatum {
         Ok(())
     }
 
-    /// Load instructions content from file (lazy, on-demand)
+    /// Load instructions content — inline body (SKILL.md) takes precedence over file
     pub fn load_instructions(&self, skill_base_path: &PathBuf) -> Result<String> {
         let config = self.skill_config()?;
+
+        // Inline instructions (from SKILL.md parsing) — no file I/O needed
+        if let Some(inline) = &config.instructions_inline {
+            return Ok(inline.clone());
+        }
+
         let instructions_path = skill_base_path.join(&config.instructions_file);
 
         if !instructions_path.exists() {
@@ -259,6 +347,35 @@ impl SkillDatum {
     }
 }
 
+/// Parse YAML frontmatter + body from SKILL.md content.
+/// Returns (frontmatter, body) where body is everything after the closing `---`.
+fn parse_skill_md_frontmatter(content: &str) -> Result<(SkillMdFrontmatter, String)> {
+    // Must start with ---
+    let rest = content
+        .strip_prefix("---")
+        .ok_or_else(|| anyhow::anyhow!("SKILL.md must start with YAML frontmatter (---)"))?;
+
+    // Find closing ---
+    let end = rest
+        .find("\n---")
+        .ok_or_else(|| anyhow::anyhow!("SKILL.md frontmatter not closed (missing closing ---)"))?;
+
+    let yaml = &rest[..end];
+    let body = rest[end + 4..].trim_start_matches('\n').to_string(); // skip "\n---\n"
+
+    let frontmatter: SkillMdFrontmatter = serde_yaml::from_str(yaml)
+        .map_err(|e| anyhow::anyhow!("Failed to parse SKILL.md frontmatter: {}", e))?;
+
+    if frontmatter.name.is_empty() {
+        anyhow::bail!("SKILL.md frontmatter must include 'name'");
+    }
+    if frontmatter.description.is_empty() {
+        anyhow::bail!("SKILL.md frontmatter must include 'description'");
+    }
+
+    Ok((frontmatter, body))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -352,6 +469,79 @@ output_types = [".job.toml", ".md", ".txt"]
         assert!(datum.can_generate(".job.toml"));
         assert!(datum.can_generate(".md"));
         assert!(!datum.can_generate(".rs"));
+    }
+
+    #[test]
+    fn test_parse_skill_md_frontmatter_minimal() {
+        let content = "---\nname: fast-rust\ndescription: Fast, reliable Rust code. Use when writing Rust.\n---\n# Fast Rust\nWrite idiomatic Rust.";
+        let (fm, body) = parse_skill_md_frontmatter(content).unwrap();
+        assert_eq!(fm.name, "fast-rust");
+        assert_eq!(fm.description, "Fast, reliable Rust code. Use when writing Rust.");
+        assert!(body.contains("Write idiomatic Rust."));
+    }
+
+    #[test]
+    fn test_parse_skill_md_frontmatter_full() {
+        let content = r#"---
+name: pdf-processing
+description: Extract PDF text, fill forms, merge files. Use when handling PDFs.
+tags: [pdf, document]
+applies_to: [document processing, pdf handling]
+output_types: [.pdf, .txt]
+dependencies: [pdfplumber]
+author: acme
+version: "1.0"
+---
+# PDF Processing
+
+## When to use
+Use for PDF work.
+"#;
+        let (fm, body) = parse_skill_md_frontmatter(content).unwrap();
+        assert_eq!(fm.name, "pdf-processing");
+        assert_eq!(fm.tags, vec!["pdf", "document"]);
+        assert_eq!(fm.applies_to, vec!["document processing", "pdf handling"]);
+        assert_eq!(fm.output_types, vec![".pdf", ".txt"]);
+        assert_eq!(fm.dependencies, vec!["pdfplumber"]);
+        assert_eq!(fm.author.as_deref(), Some("acme"));
+        assert!(body.contains("Use for PDF work."));
+    }
+
+    #[test]
+    fn test_from_skill_md_builds_datum() {
+        use std::io::Write;
+        let content = r#"---
+name: test-skill-md
+description: Test skill from SKILL.md format.
+tags: [test]
+applies_to: [testing]
+output_types: [.txt]
+---
+# Test
+Instructions here.
+"#;
+        let mut tmp = tempfile::NamedTempFile::new().unwrap();
+        tmp.write_all(content.as_bytes()).unwrap();
+        let datum = SkillDatum::from_skill_md(tmp.path()).unwrap();
+        assert_eq!(datum.datum.name, "test-skill-md");
+        let cfg = datum.skill_config().unwrap();
+        assert_eq!(cfg.description, "Test skill from SKILL.md format.");
+        assert!(cfg.instructions_inline.as_deref().unwrap().contains("Instructions here."));
+        // load_instructions returns inline content without needing a real path
+        let instructions = datum.load_instructions(&PathBuf::from("/nonexistent")).unwrap();
+        assert!(instructions.contains("Instructions here."));
+    }
+
+    #[test]
+    fn test_parse_skill_md_missing_delimiter_errors() {
+        let bad = "name: foo\ndescription: bar\n";
+        assert!(parse_skill_md_frontmatter(bad).is_err());
+    }
+
+    #[test]
+    fn test_parse_skill_md_missing_name_errors() {
+        let bad = "---\ndescription: something\n---\nbody";
+        assert!(parse_skill_md_frontmatter(bad).is_err());
     }
 
     #[test]

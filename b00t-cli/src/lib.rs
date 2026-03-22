@@ -25,6 +25,7 @@ pub mod datum_k8s;
 pub mod datum_mcp;
 pub mod datum_repo;
 pub mod datum_skill;
+pub mod skill_resolver;
 pub mod datum_stack;
 pub mod datum_utils;
 pub mod datum_vscode;
