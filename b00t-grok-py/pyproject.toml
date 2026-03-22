@@ -1,6 +1,6 @@
 [build-system]
-requires = ["maturin>=1.5,<2.0"]
-build-backend = "maturin"
+requires = ["hatchling"]
+build-backend = "hatchling.build"
 
 [project]
 name = "b00t-grok-py"
@@ -53,13 +53,8 @@ dev = [
     "mypy>=1.5.0",
 ]
 
-[tool.maturin]
-features = ["pyo3/extension-module"]
-bindings = "pyo3"
-compatibility = "manylinux2014"
-skip-auditwheel = false
-python-source = "python"
-manifest-path = "../b00t-grok/Cargo.toml"
+[tool.hatch.build.targets.wheel]
+packages = ["python/b00t_grok_guru"]
 
 [tool.black]
 line-length = 88
