@@ -533,7 +533,7 @@ pub struct GrokDigestCommand {
     pub content: String,
 
     #[arg(long, default_value = "raglight", help = "RAG backend (raglight or qdrant)")]
-    pub rag: Option<String>,
+    pub rag: String,
 }
 
 impl_mcp_tool!(GrokDigestCommand, "b00t_grok_digest", ["grok", "digest"]);
@@ -553,7 +553,7 @@ pub struct GrokAskCommand {
     pub limit: Option<usize>,
 
     #[arg(long, default_value = "raglight", help = "RAG backend (raglight or qdrant)")]
-    pub rag: Option<String>,
+    pub rag: String,
 }
 
 impl_mcp_tool!(GrokAskCommand, "b00t_grok_ask", ["grok", "ask"]);
@@ -572,7 +572,7 @@ pub struct GrokLearnCommand {
     pub source: Option<String>,
 
     #[arg(long, default_value = "raglight", help = "RAG backend (raglight or qdrant)")]
-    pub rag: Option<String>,
+    pub rag: String,
 }
 
 impl_mcp_tool!(GrokLearnCommand, "b00t_grok_learn", ["grok", "learn"]);
