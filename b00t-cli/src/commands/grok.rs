@@ -9,8 +9,8 @@ pub enum GrokCommands {
     /// Digest content into chunks about a topic
     ///
     /// Examples:
-    ///   b00t grok digest -t rust "Rust ensures memory safety"
-    ///   b00t grok digest --topic python "Python is dynamically typed" --rag
+    ///   b00t grok digest -t rust --content "Rust ensures memory safety"
+    ///   b00t grok digest --topic python --content "Python is dynamically typed" --rag
     Digest {
         /// Topic to digest content about
         #[arg(short, long)]
