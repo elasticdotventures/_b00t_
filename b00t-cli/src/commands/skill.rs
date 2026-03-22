@@ -276,9 +276,33 @@ mod tests {
     }
 
     #[test]
-    fn test_find_b00t_dir_global() {
-        // Global b00t dir should exist on this system
+    fn test_find_b00t_dir_project_local() {
+        // Use a temporary project-local _b00t_ directory so the test is hermetic
+        let original_cwd = std::env::current_dir().expect("failed to get current dir");
+
+        // Create a unique temp project directory
+        let temp_root = std::env::temp_dir().join(format!(
+            "b00t_test_find_b00t_dir_{}",
+            std::process::id()
+        ));
+        std::fs::create_dir_all(&temp_root).expect("failed to create temp project dir");
+
+        // Create the project-local _b00t_ directory that find_b00t_dir() should discover
+        let local_b00t = temp_root.join("_b00t_");
+        std::fs::create_dir_all(&local_b00t).expect("failed to create _b00t_ dir");
+
+        // Point current_dir at the temp project root so project-local lookup wins
+        std::env::set_current_dir(&temp_root).expect("failed to set current dir to temp root");
+
         let result = find_b00t_dir();
-        assert!(result.is_ok(), "expected global _b00t_ dir: {:?}", result);
+        assert!(
+            result.as_ref().is_ok_and(|p| p == &local_b00t),
+            "expected project-local _b00t_ dir at {:?}, got: {:?}",
+            local_b00t,
+            result
+        );
+
+        // Restore original current directory
+        std::env::set_current_dir(original_cwd).expect("failed to restore original dir");
     }
 }
