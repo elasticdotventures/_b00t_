@@ -117,6 +117,46 @@ impl SkillResolver {
         }
     }
 
+    /// Build resolver using `base` as the project root instead of `current_dir()`.
+    /// Project-local paths (`base/skills/`, `base/_b00t_/`) take priority over global home dirs.
+    /// This is equivalent to `default()` but anchored to `base` — used when the CLI receives
+    /// `--path <repo>` so skill resolution is relative to the intended repository root.
+    ///
+    /// # Example
+    /// ```rust,ignore
+    /// // Resolve skills for a repo at /home/user/my-project (from `b00t --path /home/user/my-project skill list`)
+    /// let resolver = SkillResolver::for_path(Path::new("/home/user/my-project"));
+    /// ```
+    pub fn for_path(base: &std::path::Path) -> Self {
+        let mut dirs = Vec::new();
+
+        // 1. Project-local SKILL.md skills/
+        let local_skills = base.join("skills");
+        if local_skills.is_dir() {
+            dirs.push(SkillDir { path: local_skills, format: SkillFormat::SkillMd });
+        }
+        // 2. Project-local b00t datums
+        let local_b00t = base.join("_b00t_");
+        if local_b00t.is_dir() {
+            dirs.push(SkillDir { path: local_b00t, format: SkillFormat::TomlDatum });
+        }
+
+        // 3. Claude Code native skills (global)
+        if let Some(home) = dirs::home_dir() {
+            let claude_skills = home.join(".claude").join("skills");
+            if claude_skills.is_dir() {
+                dirs.push(SkillDir { path: claude_skills, format: SkillFormat::SkillMd });
+            }
+            // 4. Global b00t datums
+            let global_b00t = home.join(".b00t").join("_b00t_");
+            if global_b00t.is_dir() {
+                dirs.push(SkillDir { path: global_b00t, format: SkillFormat::TomlDatum });
+            }
+        }
+
+        SkillResolver { dirs }
+    }
+
     /// Discover all skills — returns metadata only (discovery tier).
     pub fn list(&self) -> Vec<SkillMeta> {
         let mut out = Vec::new();

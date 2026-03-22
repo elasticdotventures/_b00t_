@@ -21,7 +21,7 @@ command = "qwen --mcp-server"
 
 [[b00t.usage]]
 description = "Test with MCP Inspector (requires 10min timeout)"
-command = "npx @modelcontextprotocol/inspector qwen-code mcp-server"
+command = "npx @modelcontextprotocol/inspector qwen --mcp-server"
 
 [[b00t.usage]]
 description = "Start Qwen Code session with approval policy"
