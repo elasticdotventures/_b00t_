@@ -669,18 +669,17 @@ mod tests {
     #[test]
     fn test_grok_backend_from_env_default_is_irontology() {
         // GROK_BACKEND unset → Irontology
-        // 🤓 unsafe required in Rust 2024 for env mutation
-        unsafe { std::env::remove_var("GROK_BACKEND") };
+        std::env::remove_var("GROK_BACKEND");
         assert_eq!(GrokBackend::from_env(), GrokBackend::Irontology);
     }
 
     #[test]
     fn test_grok_backend_python_variants() {
         for val in &["python", "qdrant", "PYTHON", "QDRANT"] {
-            unsafe { std::env::set_var("GROK_BACKEND", val) };
+            std::env::set_var("GROK_BACKEND", val);
             assert_eq!(GrokBackend::from_env(), GrokBackend::Python, "val={}", val);
         }
-        unsafe { std::env::remove_var("GROK_BACKEND") };
+        std::env::remove_var("GROK_BACKEND");
     }
 
     #[tokio::test]
