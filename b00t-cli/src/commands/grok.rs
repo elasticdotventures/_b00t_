@@ -70,7 +70,7 @@ pub enum GrokCommands {
         #[arg(short, long)]
         source: Option<String>,
         /// Content to learn from
-        #[arg(long)]
+        #[arg(long, required_unless_present = "source")]
         content: String,
         /// Topic to associate with ingested content (required when using --rag)
         #[arg(short, long, help = "Topic to associate with the ingested content")]
