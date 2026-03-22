@@ -169,10 +169,7 @@ pub fn handle_skill_command(cmd: &SkillCommands, _path: &str) -> Result<()> {
 
 /// Load skill names declared by a role datum from _b00t_/*.role.toml(l)
 fn load_role_skill_list(role_name: &str) -> Result<Vec<String>> {
-    use crate::session_memory::SessionMemory;
-
     let b00t_dir = find_b00t_dir()?;
-
     // Try <role>.role.tomllm, <role>.role.toml
     for ext in &["role.tomllm", "role.toml"] {
         let path = b00t_dir.join(format!("{}.{}", role_name, ext));
