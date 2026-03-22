@@ -540,10 +540,15 @@ pub fn graph_neighbors(
                 _ => ("", false),
             };
 
-            if include && !visited.contains(next) {
-                visited.insert(next.to_string());
+            if include {
+                // Always collect the edge if it is reachable within the depth limit
                 result.push(edge.clone());
-                queue.push_back((next.to_string(), d + 1));
+
+                // Only enqueue the next node once to avoid revisiting it
+                if !visited.contains(next) {
+                    visited.insert(next.to_string());
+                    queue.push_back((next.to_string(), d + 1));
+                }
             }
         }
     }
