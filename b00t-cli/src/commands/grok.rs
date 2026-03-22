@@ -1,5 +1,5 @@
 use anyhow::{Context, Result};
-use b00t_c0re_lib::{DocumentSource, GrokClient, LoaderType, RagLightConfig, RagLightManager};
+use b00t_c0re_lib::{DocumentSource, LoaderType, RagLightConfig, RagLightManager};
 use clap::Subcommand;
 use std::{fs, path::PathBuf};
 use uuid::Uuid;
@@ -9,13 +9,14 @@ pub enum GrokCommands {
     /// Digest content into chunks about a topic
     ///
     /// Examples:
-    ///   b00t grok digest -t rust "Rust ensures memory safety"
-    ///   b00t grok digest --topic python "Python is dynamically typed" --rag
+    ///   b00t grok digest -t rust --content "Rust ensures memory safety"
+    ///   b00t grok digest --topic python --content "Python is dynamically typed" --rag
     Digest {
         /// Topic to digest content about
         #[arg(short, long)]
         topic: String,
         /// Content to digest
+        #[arg(long)]
         content: String,
         /// Use RAG backend (default backend: raglight)
         #[arg(
@@ -69,6 +70,7 @@ pub enum GrokCommands {
         #[arg(short, long)]
         source: Option<String>,
         /// Content to learn from
+        #[arg(long, required_unless_present = "source")]
         content: String,
         /// Topic to associate with ingested content (required when using --rag)
         #[arg(short, long, help = "Topic to associate with the ingested content")]
@@ -83,6 +85,11 @@ pub enum GrokCommands {
         )]
         rag: Option<String>,
     },
+    /// Show grok knowledgebase status
+    ///
+    /// Examples:
+    ///   b00t grok status
+    Status,
 }
 
 pub async fn handle_grok_command(command: GrokCommands) -> Result<()> {
@@ -92,17 +99,9 @@ pub async fn handle_grok_command(command: GrokCommands) -> Result<()> {
             content,
             rag,
         } => {
-            let backend = parse_backend(rag)?;
-            if let Some(backend) = backend {
-                handle_rag_digest(&topic, &content, backend).await
-            } else {
-                // Ensure dependencies are running
-                ensure_grok_dependencies().await?;
-
-                let mut client = GrokClient::new();
-                client.initialize().await?;
-                handle_digest(&client, &topic, &content).await
-            }
+            // Default to raglight backend — Python grok server requires Qdrant+Ollama infrastructure
+            let backend = parse_backend(rag)?.unwrap_or(RagBackend::Raglight);
+            handle_rag_digest(&topic, &content, backend).await
         }
         GrokCommands::Ask {
             query,
@@ -110,17 +109,10 @@ pub async fn handle_grok_command(command: GrokCommands) -> Result<()> {
             limit,
             rag,
         } => {
-            let backend = parse_backend(rag)?;
-            if let Some(backend) = backend {
-                handle_rag_ask(&query, topic.as_deref(), limit, backend).await
-            } else {
-                // Ensure dependencies are running
-                ensure_grok_dependencies().await?;
-
-                let mut client = GrokClient::new();
-                client.initialize().await?;
-                handle_ask(&client, &query, topic.as_deref(), limit).await
-            }
+            // Default to raglight backend
+            let backend = parse_backend(rag)?.unwrap_or(RagBackend::Raglight);
+            let topic_ref = topic.as_deref();
+            handle_rag_ask(&query, topic_ref, limit, backend).await
         }
         GrokCommands::Learn {
             source,
@@ -128,108 +120,19 @@ pub async fn handle_grok_command(command: GrokCommands) -> Result<()> {
             topic,
             rag,
         } => {
-            let backend = parse_backend(rag)?;
-            if let Some(backend) = backend {
-                handle_rag_learn(source.as_deref(), &content, topic.as_deref(), backend).await
-            } else {
-                // Ensure dependencies are running
-                ensure_grok_dependencies().await?;
-
-                let mut client = GrokClient::new();
-                client.initialize().await?;
-                handle_learn(&client, source.as_deref(), &content).await
-            }
+            // Default to raglight backend
+            let backend = parse_backend(rag)?.unwrap_or(RagBackend::Raglight);
+            handle_rag_learn(source.as_deref(), &content, topic.as_deref(), backend).await
+        }
+        GrokCommands::Status => {
+            println!("🧠 Grok knowledgebase");
+            println!("  Backend: raglight (default)");
+            println!("  Commands: digest / ask / learn");
+            Ok(())
         }
     }
 }
 
-async fn handle_digest(client: &GrokClient, topic: &str, content: &str) -> Result<()> {
-    println!("🧠 Digesting content for topic '{}'...", topic);
-
-    let result = client.digest(topic, content).await?;
-
-    if result.success {
-        println!("✅ Digested chunk for topic '{}':", topic);
-        println!("📄 ID: {}", result.chunk_id);
-        println!("💬 Content: {}...", result.content_preview);
-        println!("📅 Created: {}", result.created_at);
-    } else {
-        eprintln!(
-            "❌ Digest failed: {}",
-            result.message.unwrap_or("Unknown error".to_string())
-        );
-        return Err(anyhow::anyhow!("Failed to digest content"));
-    }
-
-    Ok(())
-}
-
-async fn handle_ask(
-    client: &GrokClient,
-    query: &str,
-    topic: Option<&str>,
-    limit: Option<usize>,
-) -> Result<()> {
-    println!("🔍 Searching knowledgebase for: '{}'", query);
-    if let Some(topic) = topic {
-        println!("🎯 Filtering by topic: '{}'", topic);
-    }
-
-    let max_results = limit.unwrap_or(10);
-    let result = client.ask(query, topic, Some(max_results)).await?;
-
-    if result.success {
-        println!("📊 Found {} results:", result.total_found);
-
-        for (i, chunk) in result.results.iter().enumerate() {
-            println!("\n{}. 📄 {}", i + 1, chunk.topic);
-            println!(
-                "   💬 {}",
-                chunk.content.chars().take(100).collect::<String>()
-            );
-            if let Some(ref source) = chunk.source {
-                println!("   🔗 Source: {}", source);
-            }
-            println!("   📅 {}", chunk.created_at);
-        }
-    } else {
-        eprintln!(
-            "❌ Search failed: {}",
-            result.message.unwrap_or("Unknown error".to_string())
-        );
-        return Err(anyhow::anyhow!("Failed to search knowledgebase"));
-    }
-
-    Ok(())
-}
-
-async fn handle_learn(client: &GrokClient, source: Option<&str>, content: &str) -> Result<()> {
-    let source_str = source.unwrap_or("direct_input");
-    println!("📚 Learning from source: '{}'", source_str);
-
-    let result = client.learn(content, Some(source_str)).await?;
-
-    if result.success {
-        println!("✅ Successfully learned from '{}':", result.source);
-        println!("📦 Generated {} chunks", result.chunks_created);
-
-        for (i, summary) in result.chunk_summaries.iter().enumerate() {
-            println!("\n{}. 📄 Topic: {}", i + 1, summary.topic);
-            println!("   💬 {}", summary.content_preview);
-            if !summary.tags.is_empty() {
-                println!("   🏷️ Tags: {}", summary.tags.join(", "));
-            }
-        }
-    } else {
-        eprintln!(
-            "❌ Learn failed: {}",
-            result.message.unwrap_or("Unknown error".to_string())
-        );
-        return Err(anyhow::anyhow!("Failed to learn from content"));
-    }
-
-    Ok(())
-}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum RagBackend {
@@ -300,7 +203,7 @@ async fn handle_rag_ask(
     backend: RagBackend,
 ) -> Result<()> {
     let topic = topic
-        .ok_or_else(|| anyhow::anyhow!("--topic is required when using --rag for grok ask"))?;
+        .ok_or_else(|| anyhow::anyhow!("--topic is required for grok ask"))?;
 
     match backend {
         RagBackend::Raglight => {
@@ -335,7 +238,7 @@ async fn handle_rag_learn(
     backend: RagBackend,
 ) -> Result<()> {
     let topic = topic
-        .ok_or_else(|| anyhow::anyhow!("--topic is required when using --rag for grok learn"))?;
+        .ok_or_else(|| anyhow::anyhow!("--topic is required for grok learn"))?;
 
     match backend {
         RagBackend::Raglight => {
@@ -435,32 +338,3 @@ fn normalize_source_path(source: &str) -> String {
     source.to_string()
 }
 
-// 🤓 Helper functions removed - configuration now handled by b00t-c0re-lib::GrokClient
-// which reads QDRANT_URL and QDRANT_API_KEY from environment variables
-
-/// Ensure grok dependencies (Qdrant) are running
-async fn ensure_grok_dependencies() -> Result<()> {
-    // 🤓 Orchestrator::new() not yet implemented - stubbed for now
-    // TODO: Implement orchestrator initialization when the API is ready
-    // let path = std::env::var("_B00T_Path").unwrap_or_else(|_| {
-    //     dirs::home_dir()
-    //         .unwrap_or_else(|| std::path::PathBuf::from("."))
-    //         .join(".b00t/_b00t_")
-    //         .to_string_lossy()
-    //         .to_string()
-    // });
-    //
-    // let orchestrator = Orchestrator::new(&path).context("Failed to create orchestrator")?;
-    //
-    // let started = orchestrator
-    //     .ensure_dependencies("grok-guru.mcp")
-    //     .await
-    //     .context("Failed to ensure grok dependencies")?;
-    //
-    // // Silent unless debugging - services start transparently
-    // if !started.is_empty() && std::env::var("B00T_DEBUG").is_ok() {
-    //     eprintln!("🚀 Started dependencies: {}", started.join(", "));
-    // }
-
-    Ok(())
-}

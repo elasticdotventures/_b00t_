@@ -5,7 +5,7 @@
 # @tribal: agent tier is ch0nky (code gen, refactor, debug) — not frontier (architecture)
 
 [b00t]
-name = "qwen-code-agent"
+name = "qwen-code"
 type = "agent"
 hint = "qwen-code as b00t hive agent — ch0nky tier coder, Qwen3-Coder optimized, headless capable"
 lfmf_category = "qwen-code"

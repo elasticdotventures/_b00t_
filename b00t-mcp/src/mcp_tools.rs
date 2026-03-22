@@ -523,19 +523,24 @@ impl_mcp_tool!(CheckpointCommand, "b00t_checkpoint", ["checkpoint"]);
 
 /// MCP command for digesting content into chunks about a topic
 /// 🤓 ENTANGLED: b00t-cli/src/commands/grok.rs GrokCommands::Digest
+/// 🤓 Uses --rag raglight by default: full grok stack (Qdrant+Ollama) may not be running
 #[derive(Parser, Clone)]
 pub struct GrokDigestCommand {
-    #[arg(help = "Topic to digest content about")]
+    #[arg(long, help = "Topic to digest content about")]
     pub topic: String,
 
-    #[arg(help = "Content to digest")]
+    #[arg(long, help = "Content to digest")]
     pub content: String,
+
+    #[arg(long, default_value = "raglight", help = "RAG backend (raglight or qdrant)")]
+    pub rag: Option<String>,
 }
 
 impl_mcp_tool!(GrokDigestCommand, "b00t_grok_digest", ["grok", "digest"]);
 
 /// MCP command for asking questions and searching the knowledgebase
 /// 🤓 ENTANGLED: b00t-cli/src/commands/grok.rs GrokCommands::Ask
+/// 🤓 Uses --rag raglight by default: full grok stack (Qdrant+Ollama) may not be running
 #[derive(Parser, Clone)]
 pub struct GrokAskCommand {
     #[arg(help = "Query to search for")]
@@ -544,25 +549,31 @@ pub struct GrokAskCommand {
     #[arg(long, help = "Optional topic to filter by")]
     pub topic: Option<String>,
 
-    #[arg(
-        long,
-        help = "Maximum number of results to return",
-        default_value = "10"
-    )]
+    #[arg(long, help = "Maximum number of results to return", default_value = "10")]
     pub limit: Option<usize>,
+
+    #[arg(long, default_value = "raglight", help = "RAG backend (raglight or qdrant)")]
+    pub rag: Option<String>,
 }
 
 impl_mcp_tool!(GrokAskCommand, "b00t_grok_ask", ["grok", "ask"]);
 
 /// MCP command for learning from URLs or content
 /// 🤓 ENTANGLED: b00t-cli/src/commands/grok.rs GrokCommands::Learn
+/// 🤓 Uses --rag raglight by default: full grok stack (Qdrant+Ollama) may not be running
 #[derive(Parser, Clone)]
 pub struct GrokLearnCommand {
-    #[arg(help = "Content to learn from")]
+    #[arg(long, help = "Content to learn from")]
     pub content: String,
 
-    #[arg(long, help = "Source URL or file path")]
+    #[arg(short = 't', long, help = "Topic for RAG indexing (required for raglight backend)")]
+    pub topic: Option<String>,
+
+    #[arg(short = 's', long, help = "Source URL or file path")]
     pub source: Option<String>,
+
+    #[arg(long, default_value = "raglight", help = "RAG backend (raglight or qdrant)")]
+    pub rag: Option<String>,
 }
 
 impl_mcp_tool!(GrokLearnCommand, "b00t_grok_learn", ["grok", "learn"]);
