@@ -65,9 +65,9 @@ pub fn handle_skill_command(cmd: &SkillCommands, _path: &str) -> Result<()> {
                     .iter()
                     .map(|m| {
                         json!({
-                            "name": m.name,
-                            "description": m.description,
-                            "tags": m.tags,
+                            "name": &m.name,
+                            "description": &m.description,
+                            "tags": &m.tags,
                         })
                     })
                     .collect();
