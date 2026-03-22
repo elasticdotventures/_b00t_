@@ -136,7 +136,9 @@ impl SkillDatum {
 
         let skill_config = SkillConfig {
             description: frontmatter.description.clone(),
-            instructions_file: String::new(), // body is inline
+            // Use the SKILL.md path as instructions_file so validation passes,
+            // while still providing the parsed body via instructions_inline.
+            instructions_file: path.to_string_lossy().into_owned(),
             instructions_inline: Some(body),
             examples: vec![],
             tags: frontmatter.tags.clone(),
