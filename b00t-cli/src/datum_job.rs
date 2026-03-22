@@ -133,9 +133,10 @@ pub struct JobStep {
     #[serde(default)]
     pub cognitive_tier: Option<String>,
 
-    /// Output contract enforced after step completion.
+    /// Declarative output contract for this step, evaluated after completion.
     /// Format: "PASS|FAIL:<5lines>" for sm0l, "diff_summary+test_count" for ch0nky.
-    /// Violation blocks downstream steps and triggers rollback.
+    /// Intended to guide executors on when to gate downstream steps or trigger rollback,
+    /// but does not, by itself, guarantee such enforcement.
     #[serde(default)]
     pub output_contract: Option<String>,
 }
