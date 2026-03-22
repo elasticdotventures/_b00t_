@@ -252,18 +252,57 @@ fn print_role_summary(role: &RoleDetails, path: &str, with_skills: bool) {
 
     if with_skills && !role.skills.is_empty() {
         // Resolve skill metadata for all declared skills (discovery tier)
-        let resolver = SkillResolver::default();
-        let resolved = resolver.list_for_role(&role.skills);
-        println!("🧠 Skills ({} declared, {} resolved):", role.skills.len(), resolved.len());
+        // Prefer resolving skills relative to the expanded `path` (repository root),
+        // falling back to the current directory if anything goes wrong.
+        let mut resolved = Vec::new();
+
+        if let Ok(expanded_path) = get_expanded_path(path) {
+            if let Ok(original_dir) = std::env::current_dir() {
+                if std::env::set_current_dir(&expanded_path).is_ok() {
+                    let resolver = SkillResolver::default();
+                    resolved = resolver.list_for_role(&role.skills);
+                    // Best-effort restore of the original working directory.
+                    let _ = std::env::set_current_dir(original_dir);
+                }
+            }
+        }
+
+        // If resolution relative to `path` failed, fall back to the original behavior.
+        if resolved.is_empty() {
+            let resolver = SkillResolver::default();
+            resolved = resolver.list_for_role(&role.skills);
+        }
+
+        println!(
+            "🧠 Skills ({} declared, {} resolved):",
+            role.skills.len(),
+            resolved.len()
+        );
         for m in &resolved {
-            let tags = if m.tags.is_empty() { String::new() } else { format!(" [{}]", m.tags.join(", ")) };
+            let tags = if m.tags.is_empty() {
+                String::new()
+            } else {
+                format!(" [{}]", m.tags.join(", "))
+            };
             println!("   • {} — {}{}", m.name, m.description, tags);
         }
         // Show unresolved skill names so agent knows what to find
-        let resolved_names: std::collections::HashSet<_> = resolved.iter().map(|m| m.name.as_str()).collect();
-        let unresolved: Vec<_> = role.skills.iter().filter(|s| !resolved_names.contains(s.as_str())).collect();
+        let resolved_names: std::collections::HashSet<_> =
+            resolved.iter().map(|m| m.name.as_str()).collect();
+        let unresolved: Vec<_> = role
+            .skills
+            .iter()
+            .filter(|s| !resolved_names.contains(s.as_str()))
+            .collect();
         if !unresolved.is_empty() {
-            println!("   ⚠️ Unresolved: {} (no skill datum found)", unresolved.iter().map(|s| s.as_str()).collect::<Vec<_>>().join(", "));
+            println!(
+                "   ⚠️ Unresolved: {} (no skill datum found)",
+                unresolved
+                    .iter()
+                    .map(|s| s.as_str())
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            );
         }
     } else if let Some(skills_summary) = summarize_list(&role.skills, 5) {
         println!("🧠 Skills: {} (use --with-skills to resolve)", skills_summary);
