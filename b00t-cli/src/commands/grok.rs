@@ -70,7 +70,7 @@ pub enum GrokCommands {
         #[arg(short, long)]
         source: Option<String>,
         /// Content to learn from
-        #[arg(long)]
+        #[arg(long, required_unless_present = "source")]
         content: String,
         /// Topic to associate with ingested content (required when using --rag)
         #[arg(short, long, help = "Topic to associate with the ingested content")]
@@ -111,7 +111,8 @@ pub async fn handle_grok_command(command: GrokCommands) -> Result<()> {
         } => {
             // Default to raglight backend
             let backend = parse_backend(rag)?.unwrap_or(RagBackend::Raglight);
-            handle_rag_ask(&query, topic.as_deref(), limit, backend).await
+            let topic_ref = topic.as_deref().or(Some("default"));
+            handle_rag_ask(&query, topic_ref, limit, backend).await
         }
         GrokCommands::Learn {
             source,

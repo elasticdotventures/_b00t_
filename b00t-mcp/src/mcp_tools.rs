@@ -566,6 +566,8 @@ pub struct GrokLearnCommand {
     #[arg(long, help = "Content to learn from")]
     pub content: String,
 
+    #[arg(long, help = "Topic for RAG indexing (required for raglight backend)")]
+    pub topic: String,
     #[arg(long, help = "Source URL or file path")]
     pub source: Option<String>,
 
