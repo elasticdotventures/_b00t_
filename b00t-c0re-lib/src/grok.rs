@@ -388,23 +388,25 @@ impl GrokClient {
         // repo.search returns: {"results": [{"id": str, "content": str, "score": f64}], ...}
         let text = Self::extract_text(&response)?;
         let v: Value = serde_json::from_str(&text).unwrap_or(Value::Null);
-        let results: Vec<ChunkResult> = v
-            .get("results")
-            .and_then(|r| r.as_array())
-            .unwrap_or(&vec![])
-            .iter()
-            .filter_map(|item| {
-                let obj = item.as_object()?;
-                Some(ChunkResult {
-                    id: obj.get("id").and_then(|x| x.as_str()).unwrap_or("").to_string(),
-                    content: obj.get("content").and_then(|x| x.as_str()).unwrap_or("").to_string(),
-                    topic: obj.get("topic").and_then(|x| x.as_str()).unwrap_or("").to_string(),
-                    tags: vec![],
-                    source: obj.get("source").and_then(|x| x.as_str()).map(|s| s.to_string()),
-                    created_at: String::new(),
-                })
-            })
-            .collect();
+        let results: Vec<ChunkResult> =
+            if let Some(results_array) = v.get("results").and_then(|r| r.as_array()) {
+                results_array
+                    .iter()
+                    .filter_map(|item| {
+                        let obj = item.as_object()?;
+                        Some(ChunkResult {
+                            id: obj.get("id").and_then(|x| x.as_str()).unwrap_or("").to_string(),
+                            content: obj.get("content").and_then(|x| x.as_str()).unwrap_or("").to_string(),
+                            topic: obj.get("topic").and_then(|x| x.as_str()).unwrap_or("").to_string(),
+                            tags: vec![],
+                            source: obj.get("source").and_then(|x| x.as_str()).map(|s| s.to_string()),
+                            created_at: String::new(),
+                        })
+                    })
+                    .collect()
+            } else {
+                Vec::new()
+            };
         let total = results.len();
         Ok(AskResult {
             success: true,
