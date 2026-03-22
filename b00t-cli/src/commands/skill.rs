@@ -8,8 +8,10 @@
 use anyhow::Result;
 use clap::Parser;
 use serde_json::json;
+use std::path::Path;
 
 use crate::skill_resolver::SkillResolver;
+use crate::get_expanded_path;
 
 #[derive(Parser)]
 pub enum SkillCommands {
@@ -48,13 +50,14 @@ pub enum SkillCommands {
     },
 }
 
-pub fn handle_skill_command(cmd: &SkillCommands, _path: &str) -> Result<()> {
+pub fn handle_skill_command(cmd: &SkillCommands, path: &str) -> Result<()> {
+    // Resolve skills relative to the provided path (honours `b00t --path <repo> skill ...`)
+    let resolver = build_resolver(path);
     match cmd {
         SkillCommands::List { role, json } => {
-            let resolver = SkillResolver::default();
             let metas = match role {
                 Some(role_name) => {
-                    let role_skills = load_role_skill_list(role_name)?;
+                    let role_skills = load_role_skill_list(role_name, path)?;
                     resolver.list_for_role(&role_skills)
                 }
                 None => resolver.list(),
@@ -91,7 +94,6 @@ pub fn handle_skill_command(cmd: &SkillCommands, _path: &str) -> Result<()> {
         }
 
         SkillCommands::Search { query, json } => {
-            let resolver = SkillResolver::default();
             let metas = resolver.search(query);
 
             if *json {
@@ -99,9 +101,9 @@ pub fn handle_skill_command(cmd: &SkillCommands, _path: &str) -> Result<()> {
                     .iter()
                     .map(|m| {
                         json!({
-                            "name": m.name,
-                            "description": m.description,
-                            "tags": m.tags,
+                            "name": &m.name,
+                            "description": &m.description,
+                            "tags": &m.tags,
                         })
                     })
                     .collect();
@@ -117,7 +119,6 @@ pub fn handle_skill_command(cmd: &SkillCommands, _path: &str) -> Result<()> {
         }
 
         SkillCommands::Load { name, json } => {
-            let resolver = SkillResolver::default();
             // list() is cheap — find the meta without loading instructions
             let metas = resolver.list();
             let meta = metas
@@ -129,10 +130,10 @@ pub fn handle_skill_command(cmd: &SkillCommands, _path: &str) -> Result<()> {
                 println!(
                     "{}",
                     serde_json::to_string_pretty(&json!({
-                        "name": meta.name,
-                        "description": meta.description,
-                        "tags": meta.tags,
-                        "source_dir": meta.source_dir,
+                        "name": &meta.name,
+                        "description": &meta.description,
+                        "tags": &meta.tags,
+                        "source_dir": &meta.source_dir,
                     }))?
                 );
             } else {
@@ -148,7 +149,6 @@ pub fn handle_skill_command(cmd: &SkillCommands, _path: &str) -> Result<()> {
         }
 
         SkillCommands::Activate { name, role } => {
-            let resolver = SkillResolver::default();
             let content = resolver.load(name)?;
 
             // Optional role context prefix
@@ -167,9 +167,20 @@ pub fn handle_skill_command(cmd: &SkillCommands, _path: &str) -> Result<()> {
     }
 }
 
+/// Build a `SkillResolver` relative to the provided CLI `path` argument.
+fn build_resolver(path: &str) -> SkillResolver {
+    match get_expanded_path(path) {
+        Ok(expanded) => SkillResolver::for_path(&expanded),
+        Err(_) => {
+            eprintln!("⚠️  Could not expand path '{}', resolving skills from current directory", path);
+            SkillResolver::default()
+        }
+    }
+}
+
 /// Load skill names declared by a role datum from _b00t_/*.role.toml(l)
-fn load_role_skill_list(role_name: &str) -> Result<Vec<String>> {
-    let b00t_dir = find_b00t_dir()?;
+fn load_role_skill_list(role_name: &str, base_path: &str) -> Result<Vec<String>> {
+    let b00t_dir = find_b00t_dir_for(base_path)?;
     // Try <role>.role.tomllm, <role>.role.toml
     for ext in &["role.tomllm", "role.toml"] {
         let path = b00t_dir.join(format!("{}.{}", role_name, ext));
@@ -223,6 +234,19 @@ fn load_role_context_summary(role_name: &str) -> Result<String> {
     }
 
     Ok(format!("Role: {}", role_name))
+}
+
+/// Find the nearest _b00t_ directory relative to `base_path` (or global fallback)
+fn find_b00t_dir_for(base_path: &str) -> Result<std::path::PathBuf> {
+    // Try expanded path first
+    if let Ok(expanded) = get_expanded_path(base_path) {
+        let local = expanded.join("_b00t_");
+        if local.is_dir() {
+            return Ok(local);
+        }
+    }
+    // Fall back to cwd-based search
+    find_b00t_dir()
 }
 
 /// Find the nearest _b00t_ directory (project-local or global)

@@ -1,8 +1,8 @@
 # skill.source.toml — remote skill index sources for SkillResolver
-# 🤓 Sources are fetched ONLY on `b00t skill search --remote`; never on startup
+# 🤓 Sources are declared here for future `--remote` support; not fetched on startup
 # 🤓 Each [[source]] entry declares a remote repo with a known skill layout
-# 💡例 b00t skill search --remote "rust"    → fetches SKILL.md indexes from all sources
-# 💡例 b00t skill search                    → local only (fast, no network)
+# 💡例 b00t skill search "rust"    → local only (fast, no network)
+# 💡例 b00t skill list             → lists all locally resolved skills
 
 [b00t]
 name = "skill-sources"
@@ -14,12 +14,8 @@ description = "Search skills locally (no network)"
 command = "b00t skill search <query>"
 
 [[b00t.usage]]
-description = "Search skills including remote sources"
-command = "b00t skill search --remote <query>"
-
-[[b00t.usage]]
-description = "List all remote sources"
-command = "b00t skill list --sources"
+description = "List all available skills"
+command = "b00t skill list"
 
 # --- Remote Skill Sources ---
 
@@ -57,8 +53,8 @@ format = "skill-md"
 enabled = false  # single CLAUDE.md, not a skills dir — use manually
 
 # b00t:map v1
-# summary: remote skill index registry — lazy-fetch sources for b00t skill search --remote
+# summary: remote skill index registry — lazy-fetch sources for future b00t skill search --remote
 # tags: skill, remote, agentskills, registry
 # tier: sm0l
-# cmds: b00t skill search --remote <query>, b00t skill list --sources
+# cmds: b00t skill search <query>, b00t skill list
 # complexity: 2
