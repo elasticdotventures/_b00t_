@@ -118,12 +118,27 @@ impl GrokClient {
         });
 
         // Create the child process transport
-        let transport = TokioChildProcess::new(Command::new("uv").configure(|cmd| {
+        // 🤓 Resolve uv binary path explicitly: Command::new("uv") fails when spawned
+        //    from a process without full PATH (systemd/MCP). uv lives in ~/.local/bin.
+        let home = env::var("HOME").unwrap_or_default();
+        let uv_candidates = [
+            format!("{}/.local/bin/uv", home),
+            format!("{}/.cargo/bin/uv", home),
+            "/usr/local/bin/uv".to_string(),
+            "/usr/bin/uv".to_string(),
+        ];
+        let uv_path = uv_candidates
+            .iter()
+            .find(|p| std::path::Path::new(p.as_str()).exists())
+            .cloned()
+            .unwrap_or_else(|| "uv".to_string()); // fallback: hope it's in PATH
+        let transport = TokioChildProcess::new(Command::new(&uv_path).configure(|cmd| {
             cmd.arg("run")
                 .arg("python")
                 .arg("-m")
                 .arg("b00t_grok_guru.server")
                 .current_dir(&grok_py_path) // output: resolved from B00T_GROK_PY_PATH or workspace root
+                .env("PATH", env::var("PATH").unwrap_or_default()) // 🤓 propagate PATH to child
                 .env("QDRANT_URL", qdrant_url)
                 .env("QDRANT_API_KEY", qdrant_api_key)
                 .env("PYTHONPATH", "python"); // 🤓 Required for uv to find modules in python/ dir
