@@ -29,7 +29,7 @@ use b00t_cli::commands::{
     K8sCommands,
     McpCommands, ModelCommands,
     OntologyCommands,
-    SessionCommands, SoulCommands, StackCommands,
+    SessionCommands, SkillCommands, SoulCommands, StackCommands,
     TutorialCommands, VersionCommands, WhatismyCommands
     
 
@@ -220,6 +220,8 @@ The system will:
     Whoami {
         #[clap(long, help = "Override detected role (matches role datum)")]
         role: Option<String>,
+        #[clap(long, help = "Emit full skill metadata for all skills declared by the role")]
+        with_skills: bool,
     },
     #[clap(about = "Create checkpoint: commit all files and run tests")]
     // 🤓 ENTANGLED: b00t-mcp/src/mcp_tools.rs CheckpointCommand
@@ -234,6 +236,11 @@ The system will:
     Soul {
         #[clap(subcommand)]
         soul_command: SoulCommands,
+    },
+    #[clap(about = "Skill discovery and activation — progressive disclosure across skill dirs")]
+    Skill {
+        #[clap(subcommand)]
+        skill_command: SkillCommands,
     },
     #[clap(about = "Query system information", alias = "inspect")]
     Whatismy {
@@ -1169,8 +1176,8 @@ async fn main() {
                 std::process::exit(1);
             }
         }
-        Some(Commands::Whoami { role }) => {
-            if let Err(e) = whoami::whoami(&cli.path, role.clone()) {
+        Some(Commands::Whoami { role, with_skills }) => {
+            if let Err(e) = whoami::whoami(&cli.path, role.clone(), *with_skills) {
                 eprintln!("Error: {}", e);
                 std::process::exit(1);
             }
@@ -1186,6 +1193,12 @@ async fn main() {
         }
         Some(Commands::Soul { soul_command }) => {
             if let Err(e) = b00t_cli::commands::soul::handle_soul_command(soul_command) {
+                eprintln!("Error: {}", e);
+                std::process::exit(1);
+            }
+        }
+        Some(Commands::Skill { skill_command }) => {
+            if let Err(e) = b00t_cli::commands::skill::handle_skill_command(skill_command, &cli.path) {
                 eprintln!("Error: {}", e);
                 std::process::exit(1);
             }

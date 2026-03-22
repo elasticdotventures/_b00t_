@@ -74,6 +74,15 @@ pub enum AgentCommands {
 
         #[arg(long, help = "Block until completion")]
         blocking: bool,
+
+        #[arg(long, help = "Inject skill instructions into task context (skill name)")]
+        skill: Option<String>,
+
+        #[arg(long, help = "Inject role constraints into task context (role datum name)")]
+        role: Option<String>,
+
+        #[arg(long, help = "Expected output contract enforced at completion (e.g. 'PASS|FAIL:<5lines>')")]
+        output_contract: Option<String>,
     },
 
     #[clap(about = "Report task completion")]
@@ -221,6 +230,9 @@ pub async fn handle_agent_command(cmd: AgentCommands) -> Result<()> {
             deadline,
             capabilities,
             blocking,
+            skill,
+            role,
+            output_contract,
         } => {
             handle_delegate(
                 &worker,
@@ -230,6 +242,9 @@ pub async fn handle_agent_command(cmd: AgentCommands) -> Result<()> {
                 deadline,
                 capabilities,
                 blocking,
+                skill.as_deref(),
+                role.as_deref(),
+                output_contract.as_deref(),
             )
             .await
         }
@@ -375,6 +390,9 @@ async fn handle_delegate(
     deadline: Option<u64>,
     capabilities: Option<String>,
     blocking: bool,
+    skill: Option<&str>,
+    role: Option<&str>,
+    output_contract: Option<&str>,
 ) -> Result<()> {
     let config = RedisConfig::default();
     let redis = RedisComms::new(config, "cli-captain".into())?;
@@ -409,13 +427,22 @@ async fn handle_delegate(
     // Parse deadline
     let deadline_duration = deadline.map(|mins| Duration::from_secs(mins * 60));
 
+    // Build enriched task description with skill/role context injection
+    let enriched_description = build_enriched_description(description, skill, role, output_contract);
+
     println!("📋 Delegating task {} to {}", task_id, worker);
+    if skill.is_some() || role.is_some() {
+        println!("   🧠 Context: skill={:?} role={:?}", skill, role);
+    }
+    if let Some(contract) = output_contract {
+        println!("   📐 Output contract: {}", contract);
+    }
 
     let result = coordinator
         .delegate_task(
             worker,
             task_id,
-            description,
+            &enriched_description,
             priority,
             deadline_duration,
             required_caps,
@@ -836,9 +863,96 @@ async fn ensure_hive_validation_task(root: &std::path::Path) -> Result<()> {
     Ok(())
 }
 
+/// Build enriched task description by prepending skill instructions and role context.
+///
+/// Skill/role context is injected as a structured preamble before the task description.
+/// This ensures the receiving agent (any model) gets complete context without needing
+/// out-of-band communication.
+///
+/// Format:
+/// ```text
+/// [SKILL: fast-rust]
+/// <skill instructions body>
+/// ---
+/// [ROLE: executive]
+/// Role `executive`: Hive captain — manages...
+/// ---
+/// [OUTPUT CONTRACT: PASS|FAIL:<5lines>]
+/// ---
+/// <original task description>
+/// ```
+fn build_enriched_description(
+    description: &str,
+    skill: Option<&str>,
+    role: Option<&str>,
+    output_contract: Option<&str>,
+) -> String {
+    let mut parts: Vec<String> = Vec::new();
+
+    if let Some(skill_name) = skill {
+        let resolver = crate::skill_resolver::SkillResolver::default();
+        match resolver.load(skill_name) {
+            Ok(content) => {
+                parts.push(format!("[SKILL: {}]\n{}", skill_name, content.instructions));
+            }
+            Err(_) => {
+                // Skill not found — note it but don't fail delegation
+                parts.push(format!("[SKILL: {} — not resolved]", skill_name));
+            }
+        }
+    }
+
+    if let Some(role_name) = role {
+        let role_summary = load_role_hint(role_name);
+        parts.push(format!("[ROLE: {}]\n{}", role_name, role_summary));
+    }
+
+    if let Some(contract) = output_contract {
+        parts.push(format!("[OUTPUT CONTRACT: {}]", contract));
+    }
+
+    if parts.is_empty() {
+        return description.to_string();
+    }
+
+    format!("{}\n---\n{}", parts.join("\n---\n"), description)
+}
+
+/// Load a brief role hint string for delegation preamble
+fn load_role_hint(role_name: &str) -> String {
+    let b00t_dirs: Vec<_> = [
+        std::env::current_dir().ok().map(|d| d.join("_b00t_")),
+        dirs::home_dir().map(|d| d.join(".b00t").join("_b00t_")),
+    ]
+    .into_iter()
+    .flatten()
+    .filter(|p| p.is_dir())
+    .collect();
+
+    for dir in &b00t_dirs {
+        for ext in &["role.tomllm", "role.toml"] {
+            let path = dir.join(format!("{}.{}", role_name, ext));
+            if path.exists() {
+                if let Ok(content) = std::fs::read_to_string(&path) {
+                    if let Ok(value) = toml::from_str::<toml::Value>(&content) {
+                        let hint = value
+                            .get("b00t")
+                            .and_then(|b| b.get("hint"))
+                            .or_else(|| value.get("hint"))
+                            .and_then(|h| h.as_str())
+                            .unwrap_or(role_name);
+                        return format!("Role `{}`: {}", role_name, hint);
+                    }
+                }
+            }
+        }
+    }
+    format!("Role: {}", role_name)
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{build_ralph_command_args, resolve_ralph_task_id};
+    use super::{build_enriched_description, build_ralph_command_args, resolve_ralph_task_id};
 
     #[test]
     fn test_resolve_ralph_task_id_mappings() {
@@ -870,5 +984,27 @@ mod tests {
     fn test_build_ralph_command_args_omits_task_for_pending() {
         let args = build_ralph_command_args("codex", 5, "pending");
         assert!(!args.contains(&"--task-id".to_string()));
+    }
+
+    #[test]
+    fn test_build_enriched_description_passthrough() {
+        let result = build_enriched_description("do the thing", None, None, None);
+        assert_eq!(result, "do the thing");
+    }
+
+    #[test]
+    fn test_build_enriched_description_with_output_contract() {
+        let result = build_enriched_description("run tests", None, None, Some("PASS|FAIL:<5lines>"));
+        assert!(result.contains("[OUTPUT CONTRACT: PASS|FAIL:<5lines>]"));
+        assert!(result.contains("run tests"));
+        assert!(result.contains("---"));
+    }
+
+    #[test]
+    fn test_build_enriched_description_with_missing_skill_graceful() {
+        // Skill not found — should not panic, just note it
+        let result = build_enriched_description("do work", Some("nonexistent-skill-xyz"), None, None);
+        assert!(result.contains("nonexistent-skill-xyz"));
+        assert!(result.contains("do work"));
     }
 }

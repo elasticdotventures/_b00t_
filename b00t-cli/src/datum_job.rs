@@ -126,6 +126,19 @@ pub struct JobStep {
     /// Artifacts to preserve
     #[serde(default)]
     pub artifacts: Option<JobArtifacts>,
+
+    /// Cognitive tier for this step: "sm0l" | "ch0nky" | "frontier"
+    /// Routes to appropriate model from active role's [b00t.role.cognitive_tiers] map.
+    /// If None, uses job default or executive judgment.
+    #[serde(default)]
+    pub cognitive_tier: Option<String>,
+
+    /// Declarative output contract for this step, evaluated after completion.
+    /// Format: "PASS|FAIL:<5lines>" for sm0l, "diff_summary+test_count" for ch0nky.
+    /// Intended to guide executors on when to gate downstream steps or trigger rollback,
+    /// but does not, by itself, guarantee such enforcement.
+    #[serde(default)]
+    pub output_contract: Option<String>,
 }
 
 /// Task definition - multiple execution types supported
@@ -368,6 +381,31 @@ impl JobDatum {
     }
 }
 
+/// Resolve a cognitive tier name to a concrete model identifier.
+///
+/// Looks up `tier_name` in the provided tier map (from a role datum's
+/// `[b00t.role.cognitive_tiers]` section). Returns the first model listed for that tier.
+///
+/// # Example role datum snippet
+/// ```toml
+/// [b00t.role.cognitive_tiers]
+/// sm0l     = { models = ["qwen2.5-3b", "haiku"], tasks = ["test", "lint"] }
+/// ch0nky   = { models = ["qwen3-coder-next", "sonnet"], tasks = ["implement"] }
+/// frontier = { models = ["claude-opus", "gpt-4o"], tasks = ["architecture"] }
+/// ```
+pub fn resolve_cognitive_tier(
+    tier_name: &str,
+    tier_map: &serde_json::Value,
+) -> Option<String> {
+    tier_map
+        .get(tier_name)
+        .and_then(|t| t.get("models"))
+        .and_then(|m| m.as_array())
+        .and_then(|arr| arr.first())
+        .and_then(|v| v.as_str())
+        .map(String::from)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -413,6 +451,8 @@ steps = [
                 },
                 condition: None,
                 artifacts: None,
+                cognitive_tier: None,
+                output_contract: None,
             },
             JobStep {
                 name: "A".to_string(),
@@ -427,6 +467,8 @@ steps = [
                 },
                 condition: None,
                 artifacts: None,
+                cognitive_tier: None,
+                output_contract: None,
             },
             JobStep {
                 name: "B".to_string(),
@@ -441,6 +483,8 @@ steps = [
                 },
                 condition: None,
                 artifacts: None,
+                cognitive_tier: None,
+                output_contract: None,
             },
         ];
 
@@ -456,5 +500,70 @@ steps = [
 
         let order = datum.topological_sort(&steps).unwrap();
         assert_eq!(order, vec!["A", "B", "C"]);
+    }
+
+    #[test]
+    fn test_job_step_cognitive_tier_field_parses() {
+        let job_toml = r#"
+[b00t]
+name = "tier-test-job"
+type = "job"
+hint = "Test job with cognitive tiers"
+usage = []
+
+[b00t.job]
+description = "Test tier routing"
+tags = ["test"]
+
+[b00t.job.config]
+mode = "sequential"
+checkpoint_mode = "auto"
+use_subagents = true
+
+[[b00t.job.steps]]
+name = "run-tests"
+description = "Run unit tests"
+cognitive_tier = "sm0l"
+output_contract = "PASS|FAIL:<5lines>"
+
+[b00t.job.steps.task]
+type = "bash"
+command = "cargo test"
+
+[[b00t.job.steps]]
+name = "implement-feature"
+description = "Implement the feature"
+cognitive_tier = "ch0nky"
+
+[b00t.job.steps.task]
+type = "agent"
+agent_type = "general"
+prompt = "implement foo"
+"#;
+        let config: crate::UnifiedConfig = toml::from_str(job_toml).unwrap();
+        let datum = JobDatum { datum: config.b00t };
+        let job_config = datum.job_config().unwrap();
+
+        let test_step = &job_config.steps[0];
+        assert_eq!(test_step.cognitive_tier.as_deref(), Some("sm0l"));
+        assert_eq!(test_step.output_contract.as_deref(), Some("PASS|FAIL:<5lines>"));
+
+        let impl_step = &job_config.steps[1];
+        assert_eq!(impl_step.cognitive_tier.as_deref(), Some("ch0nky"));
+        assert!(impl_step.output_contract.is_none());
+    }
+
+    #[test]
+    fn test_resolve_cognitive_tier() {
+        let tier_map = serde_json::json!({
+            "sm0l": { "models": ["qwen2.5-3b", "haiku"], "tasks": ["test", "lint"] },
+            "ch0nky": { "models": ["qwen3-coder-next", "sonnet"], "tasks": ["implement"] },
+            "frontier": { "models": ["claude-opus", "gpt-4o"], "tasks": ["architecture"] }
+        });
+
+        assert_eq!(resolve_cognitive_tier("sm0l", &tier_map).as_deref(), Some("qwen2.5-3b"));
+        assert_eq!(resolve_cognitive_tier("ch0nky", &tier_map).as_deref(), Some("qwen3-coder-next"));
+        assert_eq!(resolve_cognitive_tier("frontier", &tier_map).as_deref(), Some("claude-opus"));
+        assert!(resolve_cognitive_tier("unknown", &tier_map).is_none());
     }
 }
