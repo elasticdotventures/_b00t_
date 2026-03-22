@@ -122,7 +122,7 @@ pub fn handle_skill_command(cmd: &SkillCommands, _path: &str) -> Result<()> {
             let metas = resolver.list();
             let meta = metas
                 .iter()
-                .find(|m| m.name == *name)
+                .find(|m| m.name == name.as_str())
                 .ok_or_else(|| anyhow::anyhow!("Skill '{}' not found", name))?;
 
             if *json {
