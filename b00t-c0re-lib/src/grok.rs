@@ -138,10 +138,14 @@ impl GrokClient {
                 .arg("-m")
                 .arg("b00t_grok_guru.server")
                 .current_dir(&grok_py_path) // output: resolved from B00T_GROK_PY_PATH or workspace root
-                .env("PATH", env::var("PATH").unwrap_or_default()) // 🤓 propagate PATH to child
                 .env("QDRANT_URL", qdrant_url)
                 .env("QDRANT_API_KEY", qdrant_api_key)
                 .env("PYTHONPATH", "python"); // 🤓 Required for uv to find modules in python/ dir
+
+            // 🤓 propagate PATH to child only if it exists; Command inherits env by default
+            if let Ok(path) = env::var("PATH") {
+                cmd.env("PATH", path);
+            }
         }))
         .map_err(|e| anyhow::anyhow!("Failed to spawn grok server: {}", e))?; // output: descriptive error
 
