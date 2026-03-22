@@ -1,0 +1,106 @@
+# b00t Agent Datum — qwen-code (AI coding agent role)
+# @tribal: qwen-code runs as ch0nky tier — local Qwen3-Coder or DashScope cloud
+# @tribal: headless via `qwen -p "task"` — no TUI, exit code 0 = success
+# @tribal: for local inference wire OPENAI_BASE_URL to mistralrs/vLLM proxy
+# @tribal: agent tier is ch0nky (code gen, refactor, debug) — not frontier (architecture)
+
+[b00t]
+name = "qwen-code-agent"
+type = "agent"
+hint = "qwen-code as b00t hive agent — ch0nky tier coder, Qwen3-Coder optimized, headless capable"
+lfmf_category = "qwen-code"
+
+depends_on = ["qwen-code.cli"]
+entangled_cli = ["qwen-code.cli"]
+entangled_mcp = ["qwen-code.mcp", "b00t-mcp.mcp", "context7.mcp"]
+
+[b00t.agent]
+pid = "qwen-code-001"
+# 🤓 model resolves: local vLLM (Qwen3-Coder-Next) via mistralrs proxy → DashScope fallback → OPENAI
+model = "qwen3-coder-next"
+skills = [
+  "code-generation",
+  "refactoring",
+  "debugging",
+  "code-review",
+  "test-writing",
+  "rust",
+  "python",
+  "typescript",
+]
+personality = "pragmatic"
+humor = "low"
+role = "specialist"
+
+[b00t.agent.ipc]
+socket = "/tmp/b00t/agents/qwen-code.sock"
+pubsub = false
+protocol = "msgpack"
+
+[b00t.agent.crew]
+role = "coder"
+captain = false
+# 🤓 qwen-code is a ch0nky specialist; receives task delegation from executive agent
+
+[b00t.agent.executor]
+# Headless invocation: qwen -p "<task>" in target project directory
+cli_path = "qwen"
+cli_args = ["-p"]
+supports_tools = []
+max_iterations = 20
+requires = ["qwen-code.cli", "node.cli"]
+
+[b00t.agent.model_routing]
+# 🤓 Prefer local → cloud; set OPENAI_BASE_URL to route to mistralrs/vLLM
+# local:   OPENAI_BASE_URL=http://localhost:8000/v1 OPENAI_API_KEY=local-vllm
+# cloud:   DASHSCOPE_API_KEY=sk-... (Alibaba DashScope, native Qwen3-Coder)
+# fallback: any OPENAI_API_KEY-compatible endpoint
+primary = "local-vllm"
+fallback = "dashscope"
+env_local_base_url = "OPENAI_BASE_URL"
+env_local_key = "OPENAI_API_KEY"
+env_cloud_key = "DASHSCOPE_API_KEY"
+
+[b00t.agent.cognitive_tiers]
+# qwen-code is a ch0nky specialist — route code tasks here, architecture to frontier
+ch0nky = { examples = ["implement", "refactor", "debug", "write-tests", "explain-code", "fix-bug"] }
+
+[b00t.env]
+AGENT_ID = "qwen-code"
+AGENT_TIER = "ch0nky"
+B00T_HIVE_ROLE = "specialist"
+
+[b00t.learn]
+topic = "qwen-code"
+auto_digest = true
+
+[[b00t.usage]]
+description = "Delegate coding task to qwen-code agent (headless, local vLLM)"
+command = "OPENAI_BASE_URL=http://localhost:8000/v1 OPENAI_API_KEY=local qwen -p 'implement a sled-backed cache for the NeumannStore'"
+
+[[b00t.usage]]
+description = "Delegate via b00t agent framework"
+command = "b00t agent delegate qwen-code 'refactor datum_utils.rs to use iterators' --tier ch0nky"
+
+[[b00t.usage]]
+description = "Code review task (headless)"
+command = "qwen -p 'review the diff in git diff HEAD~1 and suggest improvements'"
+
+[[b00t.usage]]
+description = "With DashScope cloud backend"
+command = "DASHSCOPE_API_KEY=sk-... qwen -p 'write unit tests for build_datum_graph()'"
+
+[[b00t.references]]
+name = "Qwen Code GitHub"
+url = "https://github.com/QwenLM/qwen-code"
+
+[[b00t.references]]
+name = "Qwen3-Coder model"
+url = "https://huggingface.co/Qwen/Qwen3-Coder"
+
+# b00t:map v1
+# summary: qwen-code as b00t hive specialist agent — ch0nky coder, headless capable
+# tags: qwen, agent, coding, ch0nky, specialist, qwen3-coder, headless
+# tier: ch0nky
+# cmds: qwen -p "task", b00t agent delegate qwen-code "task"
+# complexity: 4

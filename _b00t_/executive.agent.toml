@@ -77,7 +77,7 @@ notify = "HIVE: inference idle, starting queued download"
 [b00t.agent.executor]
 # Executive uses ralph-style autonomous loop
 cli_path = "b00t"
-supports_tools = ["opencode", "claude", "ralph"]
+supports_tools = ["opencode", "claude", "ralph", "qwen-code"]
 max_iterations = 50
 requires = ["b00t-cli"]
 

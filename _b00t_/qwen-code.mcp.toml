@@ -17,7 +17,7 @@ requires = ["qwen-code"]
 
 [[b00t.usage]]
 description = "Launch Qwen Code MCP server"
-command = "qwen-code mcp-server"
+command = "qwen --mcp-server"
 
 [[b00t.usage]]
 description = "Test with MCP Inspector (requires 10min timeout)"
@@ -25,7 +25,7 @@ command = "npx @modelcontextprotocol/inspector qwen-code mcp-server"
 
 [[b00t.usage]]
 description = "Start Qwen Code session with approval policy"
-command = "qwen-code mcp-server --approval-policy untrusted"
+command = "qwen --mcp-server --approval-policy untrusted"
 
 [[b00t.references]]
 name = "Qwen Code Repository"
