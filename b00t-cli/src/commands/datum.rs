@@ -506,17 +506,20 @@ fn handle_filter(
 ) -> Result<()> {
     let all_datums = datum_utils::get_all_datums(b00t_path)?;
 
-    // Parse --types into DatumFilter.datum_type (first type only for now)
-    let datum_type = type_filter.and_then(|t| {
-        let lower = t.split(',').next().unwrap_or("").trim().to_lowercase();
-        parse_datum_type(&lower)
-    });
+    // Parse --types into DatumFilter.datum_types (all comma-separated entries)
+    let datum_types: Vec<crate::DatumType> = type_filter
+        .map(|t| {
+            t.split(',')
+                .filter_map(|s| parse_datum_type(s.trim().to_lowercase().as_str()))
+                .collect()
+        })
+        .unwrap_or_default();
 
     let filter = DatumFilter {
         needs_any_env,
         needs_all_env,
         require_constraints: require.to_vec(),
-        datum_type,
+        datum_types,
         ..Default::default()
     };
 

@@ -49,8 +49,8 @@ pub struct DatumFilter {
     pub needs_any_env: bool,
     /// Must have all of these env vars set
     pub needs_all_env: bool,
-    /// Filter by datum type
-    pub datum_type: Option<DatumType>,
+    /// Filter by datum type(s); empty = all types
+    pub datum_types: Vec<DatumType>,
     /// Custom constraint requirements (e.g., "OS:linux", "CMD:docker")
     pub require_constraints: Vec<String>,
 }
@@ -347,16 +347,19 @@ pub fn filter_datums(
     for (key, datum) in datums {
         let mut reasons: Vec<String> = Vec::new();
 
-        // datum_type filter
-        if let Some(ref ft) = filter.datum_type {
-            match &datum.datum_type {
-                Some(dt) if std::mem::discriminant(dt) == std::mem::discriminant(ft) => {}
-                _ => {
-                    reasons.push(format!(
-                        "type mismatch: expected {:?}",
-                        ft
-                    ));
-                }
+        // datum_type filter — if types list is non-empty, datum must match one of them
+        if !filter.datum_types.is_empty() {
+            let matches = match &datum.datum_type {
+                Some(dt) => filter.datum_types.iter().any(|ft| {
+                    std::mem::discriminant(dt) == std::mem::discriminant(ft)
+                }),
+                None => false,
+            };
+            if !matches {
+                reasons.push(format!(
+                    "type mismatch: expected one of {:?}",
+                    filter.datum_types
+                ));
             }
         }
 
@@ -838,7 +841,7 @@ inline = "This is inline learn content"
         );
         let datums = get_all_datums(b00t_path).unwrap();
         let filter = DatumFilter {
-            datum_type: Some(crate::DatumType::Mcp),
+            datum_types: vec![crate::DatumType::Mcp],
             ..Default::default()
         };
         let results = filter_datums(datums, &filter, false);

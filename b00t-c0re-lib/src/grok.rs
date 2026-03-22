@@ -116,7 +116,13 @@ impl GrokClient {
     /// Spawn irontology-mcp binary via stdio MCP transport
     /// 🤓 IRONTOLOGY_BIN env var overrides; default: ~/.b00t/vendor/irontology-mcp/target/release/irontology-mcp
     async fn initialize_irontology(&mut self) -> Result<()> {
-        let home = env::var("HOME").unwrap_or_default();
+        let home = dirs::home_dir()
+            .map(|p| p.to_string_lossy().into_owned())
+            .or_else(|| env::var("HOME").ok())
+            .unwrap_or_else(|| {
+                tracing::warn!("HOME is unset and dirs::home_dir() failed; defaulting to /tmp");
+                "/tmp".to_string()
+            });
         let bin_path = env::var("IRONTOLOGY_BIN").unwrap_or_else(|_| {
             format!("{}/.b00t/vendor/irontology-mcp/target/release/irontology-mcp", home)
         });
