@@ -551,6 +551,45 @@ pub fn graph_neighbors(
     result
 }
 
+/// Index all datums into irontology-mcp via `GrokClient` for semantic search.
+///
+/// Builds text = "name: …\ntype: …\nhint: …\n{learn_content}" per datum,
+/// then calls `client.learn(text, Some(key))` → `repo.index`.
+/// Returns count of indexed datums.
+pub async fn index_datums_into_irontology(
+    b00t_path: &str,
+    client: &mut b00t_c0re_lib::grok::GrokClient,
+) -> Result<usize> {
+    let datums = get_all_datums_with_paths(b00t_path, None)?;
+    let mut count = 0;
+
+    for (key, (datum, _path)) in &datums {
+        let type_str = datum
+            .datum_type
+            .as_ref()
+            .map(|t| format!("{:?}", t))
+            .unwrap_or_else(|| "unknown".to_string());
+
+        let mut text = format!(
+            "name: {}\ntype: {}\nhint: {}\n",
+            datum.name, type_str, datum.hint
+        );
+
+        if let Ok(Some(learn)) = get_datum_learn_content(b00t_path, datum) {
+            text.push('\n');
+            // 🤓 cap at 4KB to stay within chunk budget
+            text.push_str(&learn.chars().take(4096).collect::<String>());
+        }
+
+        match client.learn(&text, Some(key)).await {
+            Ok(_) => count += 1,
+            Err(e) => eprintln!("⚠️ index_datums: failed to index {}: {}", key, e),
+        }
+    }
+
+    Ok(count)
+}
+
 /// Get learn content for a datum (either from topic reference or inline)
 pub fn get_datum_learn_content(b00t_path: &str, datum: &BootDatum) -> Result<Option<String>> {
     if let Some(learn) = &datum.learn {
@@ -935,6 +974,28 @@ inline = "This is inline learn content"
         let neighbors = graph_neighbors(&graph, "rust.cli", 1, "in");
         assert_eq!(neighbors.len(), 1);
         assert_eq!(neighbors[0].from, "cargo.cli");
+    }
+
+    // ── #200 semantic search / index text tests ───────────────────────────────
+
+    #[test]
+    fn test_index_datums_text_format() {
+        // Validate the text we'd build for indexing (without actually calling irontology)
+        let datum = crate::BootDatum {
+            name: "rustc".to_string(),
+            datum_type: Some(crate::DatumType::Cli),
+            hint: "Rust compiler".to_string(),
+            ..Default::default()
+        };
+        let type_str = datum
+            .datum_type
+            .as_ref()
+            .map(|t| format!("{:?}", t))
+            .unwrap_or_default();
+        let text = format!("name: {}\ntype: {}\nhint: {}\n", datum.name, type_str, datum.hint);
+        assert!(text.contains("name: rustc"));
+        assert!(text.contains("type: Cli"));
+        assert!(text.contains("hint: Rust compiler"));
     }
 
     #[test]

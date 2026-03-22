@@ -89,6 +89,18 @@ pub enum DatumCommands {
         #[clap(long, help = "Edge direction: in|out|both", default_value = "both", value_parser = ["in", "out", "both"])]
         direction: String,
     },
+
+    #[clap(about = "Semantic datum search via irontology-mcp (#200)")]
+    SemanticSearch {
+        #[clap(help = "Natural language query")]
+        query: String,
+
+        #[clap(long, help = "Re-index all datums before searching")]
+        rebuild: bool,
+
+        #[clap(long, help = "Max results", default_value = "5")]
+        limit: usize,
+    },
 }
 
 pub fn handle_datum_command(path: &str, datum_command: &DatumCommands) -> Result<()> {
@@ -132,6 +144,28 @@ pub fn handle_datum_command(path: &str, datum_command: &DatumCommands) -> Result
             depth,
             direction,
         } => handle_neighbors(path, datum, *depth, direction),
+        DatumCommands::SemanticSearch {
+            query,
+            rebuild,
+            limit,
+        } => {
+            // 🤓 Handle::block_on panics if called from within an async runtime context.
+            //    Spawn a fresh OS thread with its own current_thread runtime to bridge
+            //    the sync dispatch → async GrokClient calls.
+            let path_owned = path.to_string();
+            let query_owned = query.to_string();
+            let rebuild = *rebuild;
+            let limit = *limit;
+            std::thread::spawn(move || {
+                tokio::runtime::Builder::new_current_thread()
+                    .enable_all()
+                    .build()
+                    .expect("tokio build")
+                    .block_on(handle_semantic_search(&path_owned, &query_owned, rebuild, limit))
+            })
+            .join()
+            .map_err(|_| anyhow::anyhow!("semantic-search thread panicked"))?
+        }
     }
 }
 
@@ -608,6 +642,61 @@ fn handle_neighbors(
         );
     }
     println!("\n{} edge(s)", neighbors.len());
+
+    Ok(())
+}
+
+// ── #200: semantic datum search ───────────────────────────────────────────────
+
+async fn handle_semantic_search(
+    b00t_path: &str,
+    query: &str,
+    rebuild: bool,
+    limit: usize,
+) -> Result<()> {
+    use b00t_c0re_lib::grok::GrokClient;
+
+    let mut client = GrokClient::new();
+
+    // Try irontology; fall back to regex search if unavailable
+    // 🤓 GROK_BACKEND defaults to irontology (set in GrokBackend::from_env)
+    match client.initialize().await {
+        Ok(()) => {
+            if rebuild {
+                let count =
+                    datum_utils::index_datums_into_irontology(b00t_path, &mut client).await?;
+                println!("📚 Indexed {} datums into irontology", count);
+            }
+
+            let result = client.ask(query, None, Some(limit)).await?;
+            if result.results.is_empty() {
+                println!(
+                    "No semantic results for '{}'. Try --rebuild to index datums first.",
+                    query
+                );
+            } else {
+                println!("{:<30} {}", "KEY/SOURCE", "CONTENT PREVIEW");
+                println!("{}", "-".repeat(72));
+                for r in &result.results {
+                    let source = r.source.as_deref().unwrap_or(&r.id);
+                    println!(
+                        "{:<30} {}",
+                        truncate(source, 29),
+                        truncate(&r.content, 40),
+                    );
+                }
+                println!("\n{} result(s)", result.results.len());
+            }
+        }
+        Err(e) => {
+            // Graceful degradation: fall back to regex search
+            eprintln!(
+                "⚠️ irontology-mcp unavailable ({}), falling back to regex search",
+                e
+            );
+            handle_search(b00t_path, query, None, "table", None)?;
+        }
+    }
 
     Ok(())
 }
