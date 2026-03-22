@@ -48,7 +48,7 @@ cli_path = "qwen"
 cli_args = ["-p"]
 supports_tools = []
 max_iterations = 20
-requires = ["qwen-code.cli", "node.cli"]
+requires = ["qwen-code.cli"]
 
 [b00t.agent.model_routing]
 # 🤓 Prefer local → cloud; set OPENAI_BASE_URL to route to mistralrs/vLLM
