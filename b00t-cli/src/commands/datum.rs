@@ -704,10 +704,19 @@ async fn handle_semantic_search(
 // ── helpers ───────────────────────────────────────────────────────────────────
 
 fn truncate(s: &str, max: usize) -> String {
-    if s.len() <= max {
+    // Avoid slicing `&str` at arbitrary byte indices, which can panic for UTF-8.
+    if max == 0 {
+        return String::new();
+    }
+
+    let char_count = s.chars().count();
+    if char_count <= max {
         s.to_string()
     } else {
-        format!("{}…", &s[..max.saturating_sub(1)])
+        let take = max.saturating_sub(1);
+        let mut result: String = s.chars().take(take).collect();
+        result.push('…');
+        result
     }
 }
 
