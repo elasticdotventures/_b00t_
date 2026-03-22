@@ -279,13 +279,18 @@ mod tests {
     fn make_skill_md_dir(dir: &std::path::Path, name: &str, desc: &str, tags: &[&str]) {
         let skill_dir = dir.join(name);
         std::fs::create_dir_all(&skill_dir).unwrap();
-        let tags_yaml = tags
-            .iter()
-            .map(|t| format!("- {}", t))
-            .collect::<Vec<_>>()
-            .join("\n");
+        let tags_yaml = if tags.is_empty() {
+            "tags: []".to_string()
+        } else {
+            let items = tags
+                .iter()
+                .map(|t| format!("- {}", t))
+                .collect::<Vec<_>>()
+                .join("\n");
+            format!("tags:\n{}", items)
+        };
         let content = format!(
-            "---\nname: {}\ndescription: {}\ntags:\n{}\napplies_to:\n- general\noutput_types:\n- .txt\n---\n# {}\nInstructions for {}.\n",
+            "---\nname: {}\ndescription: {}\n{}\napplies_to:\n- general\noutput_types:\n- .txt\n---\n# {}\nInstructions for {}.\n",
             name, desc, tags_yaml, name, name
         );
         let mut f = std::fs::File::create(skill_dir.join("SKILL.md")).unwrap();
