@@ -111,7 +111,8 @@ pub async fn handle_grok_command(command: GrokCommands) -> Result<()> {
         } => {
             // Default to raglight backend
             let backend = parse_backend(rag)?.unwrap_or(RagBackend::Raglight);
-            handle_rag_ask(&query, topic.as_deref(), limit, backend).await
+            let topic_ref = topic.as_deref().or(Some("default"));
+            handle_rag_ask(&query, topic_ref, limit, backend).await
         }
         GrokCommands::Learn {
             source,
