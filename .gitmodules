@@ -42,4 +42,4 @@
 	url = https://github.com/app4dog/moltis-b00t.git
 [submodule "vendor/irontology-mcp"]
 	path = vendor/irontology-mcp
-	url = git@github.com:PromptExecution/irontology-mcp.git
+	url = https://github.com/PromptExecution/irontology-mcp.git
