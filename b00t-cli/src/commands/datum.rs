@@ -598,7 +598,9 @@ fn handle_graph(
             graph.nodes.iter().map(|n| n.key.as_str()).collect();
         graph
             .edges
-            .retain(|e| kept_keys.contains(e.from.as_str()) || kept_keys.contains(e.to.as_str()));
+            .retain(|e| {
+                kept_keys.contains(e.from.as_str()) && kept_keys.contains(e.to.as_str())
+            });
     }
 
     let content = if format == "json" {
