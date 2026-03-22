@@ -581,7 +581,7 @@ pub async fn index_datums_into_irontology(
             text.push_str(&learn.chars().take(4096).collect::<String>());
         }
 
-        match client.learn(&text, Some(key)).await {
+        match client.learn(&text, Some(key.as_str())).await {
             Ok(_) => count += 1,
             Err(e) => eprintln!("⚠️ index_datums: failed to index {}: {}", key, e),
         }
