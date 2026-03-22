@@ -17,13 +17,16 @@ changelog:
     cog changelog
 
 # 🚀 Release new version based on commit history
+# 🤓 pre-release-check gates grok E2E + full test suite before any version bump
 release:
+    just -f b00t-cli/justfile pre-release-check
     cog bump --auto
     cog changelog
     git push --follow-tags
 
 # 🔧 Manual version bump (use `major`, `minor`, or `patch`)
 bump VERSION:
+    just -f b00t-cli/justfile pre-release-check
     cog bump {{VERSION}}
     cog changelog
     git push --follow-tags

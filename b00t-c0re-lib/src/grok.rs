@@ -402,7 +402,18 @@ impl GrokClient {
     ) -> Result<AskResult> {
         // repo.search returns: {"results": [{"id": str, "content": str, "score": f64}], ...}
         let text = Self::extract_text(&response)?;
-        let v: Value = serde_json::from_str(&text).unwrap_or(Value::Null);
+        let v: Value = match serde_json::from_str(&text) {
+            Ok(v) => v,
+            Err(e) => {
+                return Ok(AskResult {
+                    success: false,
+                    query: query.to_string(),
+                    total_found: 0,
+                    results: Vec::new(),
+                    message: Some(format!("JSON parse error: {} — raw: {}", e, text)),
+                });
+            }
+        };
         let results: Vec<ChunkResult> =
             if let Some(results_array) = v.get("results").and_then(|r| r.as_array()) {
                 results_array

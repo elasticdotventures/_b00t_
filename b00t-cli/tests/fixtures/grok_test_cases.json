@@ -1,0 +1,69 @@
+{
+  "digest_cases": [
+    {
+      "topic": "rust",
+      "content": "Rust ensures memory safety without garbage collection through ownership and borrowing rules enforced at compile time.",
+      "expected_keywords": ["memory", "safety", "ownership"]
+    },
+    {
+      "topic": "python",
+      "content": "Python uses duck typing and dynamic dispatch, allowing flexible polymorphism without explicit interface declarations.",
+      "expected_keywords": ["duck", "typing", "polymorphism"]
+    },
+    {
+      "topic": "git",
+      "content": "Git uses a directed acyclic graph of commits where each commit references parent commits via SHA-1 hashes.",
+      "expected_keywords": ["commit", "graph", "SHA"]
+    }
+  ],
+  "learn_cases": [
+    {
+      "topic": "rust",
+      "source": "rust_ownership_guide.md",
+      "content": "The borrow checker validates lifetimes at compile time.\n\nOwnership rules prevent data races.\n\nMove semantics transfer ownership between scopes.",
+      "expected_chunks_min": 1
+    },
+    {
+      "topic": "bash",
+      "source": "bash_patterns.md",
+      "content": "Use set -euo pipefail for strict error handling.\n\nPrefer $() over backticks for command substitution.\n\nQuote all variable expansions to prevent word splitting.",
+      "expected_chunks_min": 1
+    }
+  ],
+  "ask_cases": [
+    {
+      "query": "memory safety without garbage collection",
+      "topic": "rust",
+      "expected_min_results": 1,
+      "must_contain_any": ["ownership", "borrow", "safety"]
+    },
+    {
+      "query": "flexible polymorphism",
+      "topic": "python",
+      "expected_min_results": 1,
+      "must_contain_any": ["duck", "typing", "dynamic"]
+    }
+  ],
+  "topic_isolation_cases": [
+    {
+      "ingest_topic": "rust",
+      "query_topic": "python",
+      "content": "Rust lifetimes prevent dangling references at compile time.",
+      "query": "lifetimes dangling references",
+      "expect_cross_topic_results": 0
+    }
+  ],
+  "edge_cases": [
+    {
+      "name": "unicode_content",
+      "topic": "rust",
+      "content": "Rust支持Unicode字符串，通过UTF-8编码存储所有文本数据。",
+      "expected_success": true
+    },
+    {
+      "name": "special_chars_in_topic_sanitization",
+      "raw_topic": "rust/async-await",
+      "expected_sanitized": "rust_async_await"
+    }
+  ]
+}
