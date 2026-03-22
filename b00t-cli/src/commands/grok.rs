@@ -9,8 +9,8 @@ pub enum GrokCommands {
     /// Digest content into chunks about a topic
     ///
     /// Examples:
-    ///   b00t grok digest -t rust "Rust ensures memory safety"
-    ///   b00t grok digest --topic python "Python is dynamically typed" --rag
+    ///   b00t grok digest -t rust --content "Rust ensures memory safety"
+    ///   b00t grok digest --topic python --content "Python is dynamically typed" --rag
     Digest {
         /// Topic to digest content about
         #[arg(short, long)]
@@ -203,7 +203,7 @@ async fn handle_rag_ask(
     backend: RagBackend,
 ) -> Result<()> {
     let topic = topic
-        .ok_or_else(|| anyhow::anyhow!("--topic is required when using --rag for grok ask"))?;
+        .ok_or_else(|| anyhow::anyhow!("--topic is required for grok ask"))?;
 
     match backend {
         RagBackend::Raglight => {
@@ -238,7 +238,7 @@ async fn handle_rag_learn(
     backend: RagBackend,
 ) -> Result<()> {
     let topic = topic
-        .ok_or_else(|| anyhow::anyhow!("--topic is required when using --rag for grok learn"))?;
+        .ok_or_else(|| anyhow::anyhow!("--topic is required for grok learn"))?;
 
     match backend {
         RagBackend::Raglight => {
