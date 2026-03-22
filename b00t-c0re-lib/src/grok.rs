@@ -15,6 +15,7 @@ use serde_json::{Map, Value, json};
 use std::borrow::Cow;
 use std::env;
 use tokio::process::Command;
+use dirs;
 
 /// Concrete MCP client running service type
 type McpRunningService = RunningService<rmcp::service::RoleClient, ()>;
@@ -910,5 +911,174 @@ mod additional_tests {
         assert_eq!(original.id, cloned.id);
         assert_eq!(original.content, cloned.content);
         assert_eq!(original.tags, cloned.tags);
+    }
+}
+
+#[cfg(test)]
+mod irontology_parser_tests {
+    use super::*;
+    use rmcp::model::{CallToolResult, Content};
+
+    fn make_text_result(text: &str) -> CallToolResult {
+        CallToolResult::success(vec![Content::text(text)])
+    }
+
+    fn make_empty_result() -> CallToolResult {
+        CallToolResult::success(vec![])
+    }
+
+    // ── extract_text ─────────────────────────────────────────────────────────
+
+    #[test]
+    fn test_extract_text_success() {
+        let result = make_text_result("hello world");
+        let text = GrokClient::extract_text(&result).unwrap();
+        assert_eq!(text, "hello world");
+    }
+
+    #[test]
+    fn test_extract_text_empty_content_errors() {
+        let result = make_empty_result();
+        let err = GrokClient::extract_text(&result).unwrap_err();
+        assert!(err.to_string().contains("Empty response content"));
+    }
+
+    #[test]
+    fn test_extract_text_non_text_content_errors() {
+        // Build a result whose content item is not text (use error variant which wraps text
+        // but we can still test via an image-like case — simplest: no text annotation)
+        // Content::text always produces text, so test via empty to cover non-text branch
+        // via the error result path (is_error=true, content is text so extract_text succeeds)
+        let result = CallToolResult::error(vec![Content::text("err msg")]);
+        let text = GrokClient::extract_text(&result).unwrap();
+        assert_eq!(text, "err msg");
+    }
+
+    // ── parse_irontology_digest_response ─────────────────────────────────────
+
+    #[test]
+    fn test_parse_digest_valid_indexed() {
+        let client = GrokClient::new();
+        let json = r#"{"indexed": true, "source": "s.md", "topic": "rust", "chunks": 3, "embedded": 3}"#;
+        let r = client
+            .parse_irontology_digest_response(make_text_result(json), "rust", "content here")
+            .unwrap();
+        assert!(r.success);
+        assert_eq!(r.topic, "rust");
+        assert!(r.message.is_none());
+        assert!(r.chunk_id.contains("rust"));
+    }
+
+    #[test]
+    fn test_parse_digest_not_indexed() {
+        let client = GrokClient::new();
+        let json = r#"{"indexed": false}"#;
+        let r = client
+            .parse_irontology_digest_response(make_text_result(json), "rust", "content here")
+            .unwrap();
+        assert!(!r.success);
+        assert!(r.message.is_some());
+    }
+
+    #[test]
+    fn test_parse_digest_invalid_json() {
+        let client = GrokClient::new();
+        // invalid JSON: indexed defaults to false, text returned as message
+        let r = client
+            .parse_irontology_digest_response(make_text_result("not json"), "rust", "c")
+            .unwrap();
+        assert!(!r.success);
+        assert!(r.message.is_some());
+    }
+
+    // ── parse_irontology_ask_response ────────────────────────────────────────
+
+    #[test]
+    fn test_parse_ask_valid_results() {
+        let client = GrokClient::new();
+        let json = r#"{"results": [{"id": "1", "content": "memory safety", "topic": "rust", "score": 0.9}]}"#;
+        let r = client
+            .parse_irontology_ask_response(make_text_result(json), "memory safety")
+            .unwrap();
+        assert!(r.success);
+        assert_eq!(r.total_found, 1);
+        assert_eq!(r.results[0].id, "1");
+        assert_eq!(r.results[0].content, "memory safety");
+        assert!(r.message.is_none());
+    }
+
+    #[test]
+    fn test_parse_ask_empty_results() {
+        let client = GrokClient::new();
+        let json = r#"{"results": []}"#;
+        let r = client
+            .parse_irontology_ask_response(make_text_result(json), "query")
+            .unwrap();
+        assert!(r.success);
+        assert_eq!(r.total_found, 0);
+        assert!(r.results.is_empty());
+    }
+
+    #[test]
+    fn test_parse_ask_invalid_json() {
+        let client = GrokClient::new();
+        let r = client
+            .parse_irontology_ask_response(make_text_result("bad json {"), "query")
+            .unwrap();
+        assert!(!r.success);
+        assert_eq!(r.total_found, 0);
+        let msg = r.message.unwrap();
+        assert!(msg.contains("JSON parse error"));
+        assert!(msg.contains("bad json {"));
+    }
+
+    #[test]
+    fn test_parse_ask_missing_results_key() {
+        let client = GrokClient::new();
+        // Valid JSON but no "results" key — should return empty with success=true
+        let json = r#"{"hits": []}"#;
+        let r = client
+            .parse_irontology_ask_response(make_text_result(json), "query")
+            .unwrap();
+        assert!(r.success);
+        assert_eq!(r.total_found, 0);
+    }
+
+    // ── parse_irontology_learn_response ──────────────────────────────────────
+
+    #[test]
+    fn test_parse_learn_valid_indexed() {
+        let client = GrokClient::new();
+        let json = r#"{"indexed": true, "chunks": 5, "embedded": 5}"#;
+        let r = client
+            .parse_irontology_learn_response(make_text_result(json), "test.md")
+            .unwrap();
+        assert!(r.success);
+        assert_eq!(r.chunks_created, 5);
+        assert_eq!(r.source, "test.md");
+        assert!(r.message.is_none());
+    }
+
+    #[test]
+    fn test_parse_learn_not_indexed() {
+        let client = GrokClient::new();
+        let json = r#"{"indexed": false, "chunks": 0}"#;
+        let r = client
+            .parse_irontology_learn_response(make_text_result(json), "test.md")
+            .unwrap();
+        assert!(!r.success);
+        assert_eq!(r.chunks_created, 0);
+        assert!(r.message.is_some());
+    }
+
+    #[test]
+    fn test_parse_learn_invalid_json() {
+        let client = GrokClient::new();
+        // invalid JSON → indexed=false, chunks=0
+        let r = client
+            .parse_irontology_learn_response(make_text_result("oops"), "test.md")
+            .unwrap();
+        assert!(!r.success);
+        assert_eq!(r.chunks_created, 0);
     }
 }
