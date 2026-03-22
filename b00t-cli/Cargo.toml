@@ -64,6 +64,7 @@ b00t-ipc = { path = "../b00t-ipc" }
 zbus = { workspace = true, optional = true }
 url = "2.5"
 glob = "0.3.3"
+which = "7"
 
 # Apalis - Background job processing for workflow execution
 apalis = "1.0.0-rc.3"

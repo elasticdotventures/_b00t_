@@ -70,7 +70,7 @@ pub enum GrokCommands {
         #[arg(short, long)]
         source: Option<String>,
         /// Content to learn from
-        #[arg(long)]
+        #[arg(long, required_unless_present = "source")]
         content: String,
         /// Topic to associate with ingested content (required when using --rag)
         #[arg(short, long, help = "Topic to associate with the ingested content")]
@@ -203,7 +203,7 @@ async fn handle_rag_ask(
     backend: RagBackend,
 ) -> Result<()> {
     let topic = topic
-        .ok_or_else(|| anyhow::anyhow!("--topic is required when using --rag for grok ask"))?;
+        .ok_or_else(|| anyhow::anyhow!("--topic is required for grok ask"))?;
 
     match backend {
         RagBackend::Raglight => {
@@ -238,7 +238,7 @@ async fn handle_rag_learn(
     backend: RagBackend,
 ) -> Result<()> {
     let topic = topic
-        .ok_or_else(|| anyhow::anyhow!("--topic is required when using --rag for grok learn"))?;
+        .ok_or_else(|| anyhow::anyhow!("--topic is required for grok learn"))?;
 
     match backend {
         RagBackend::Raglight => {

@@ -1,84 +1,66 @@
 [b00t]
 # 🤓 irontology-mcp: semantic graph/RAG over codebase + ontology
-# 🤓 Client project (PromptExecution / energy client) — ALPHA / unreleased
-# 🤓 vendor/irontology-mcp is a git submodule (branch: feature/irontology-mcp)
-# ⚠️需 No binary yet — mcp-server crate is library-only; stdio transport pending
-# 💡例 b00t mcp install irontology claudecode  ← unblocks when binary is added
+# 🤓 Co-evolved with b00t; PromptExecution/irontology-mcp accepts b00t-aligned PRs
+# 🤓 vendor/irontology-mcp is a git submodule (branch: feat/elasticdotventures/_b00t_)
 name = "IrontologyMcp"
 type = "mcp_server"
 transport = "stdio"
-hint = "Semantic graph/RAG over codebase + ontology; Rust MCP tools: repo.search, repo.read_symbol, ontology.list_classes"
+hint = "Semantic graph/RAG over codebase + ontology; tools: repo.search, repo.read_symbol, ontology.list_classes, ontology.related_resources"
 
 [b00t.source]
-# 🤓 submodule at vendor/irontology-mcp — do NOT push changes without client approval
+# 🤓 changes pushed to PromptExecution/irontology-mcp on feat/elasticdotventures/_b00t_
 repo = "git@github.com:PromptExecution/irontology-mcp.git"
-branch = "feature/irontology-mcp"
+branch = "feat/elasticdotventures/_b00t_"
 submodule_path = "vendor/irontology-mcp"
 
 [b00t.build]
-# 🤓 builds clean on Linux (confirmed 2026-03-16); was blocked on MSVC on Windows
+# 🤓 binary name is irontology-mcp (bin target in crates/mcp-server/Cargo.toml)
 command = "cargo build --release --manifest-path vendor/irontology-mcp/Cargo.toml"
-binary = "vendor/irontology-mcp/target/release/mcp-server"
-status = "build_ok_no_binary"
-# ⚠️ binary path is speculative — mcp-server crate has no main.rs yet
+binary = "vendor/irontology-mcp/target/release/irontology-mcp"
+status = "builds_and_responds"
+# 🤓 smoke test: echo initialize | ./irontology-mcp → JSON-RPC 200 with tools capability
 
 [b00t.mcp]
-# 🤓 stdio transport config — enable when binary exists
+# 🤓 stdio transport — binary builds; register with: b00t mcp install irontology claudecode
 name = "irontology"
 type = "stdio"
-command = "/home/brianh/.b00t/vendor/irontology-mcp/target/release/mcp-server"
+command = "vendor/irontology-mcp/target/release/irontology-mcp"
 args = []
-# env.ONTOLOGY_ROOT = "/path/to/ontology"
-# env.REPO_ROOT = "."
+env = { NEUMANN_DATA_DIR = "~/.b00t/neumann" }
 
 [b00t.tools]
-# 🤓 tools implemented in mcp-server library (no transport yet)
-# repo.search        — fusion search over codebase (BM25 + vector)
-# repo.read_symbol   — read symbol definition by name
-# ontology.list_classes — list OWL classes from loaded ontology
-# ontology.related_resources — resources related to ontology node (needs NeumannConfig)
+# repo.search              — 4-way fusion search (vector 0.35, graph 0.30, lexical 0.20, ontology 0.15)
+# repo.read_symbol         — read symbol definition by name/path
+# ontology.list_classes    — list ontology classes from NeumannStore
+# ontology.related_resources — RDF graph traversal of related entities
+
+[b00t.roadmap]
+# Phase 1 (#262): sled persistence for NeumannStore (data survives restart)
+# Phase 2 (#263): real VectorBackend via llama-server /v1/embeddings
+# Phase 3 (#261): wire b00t grok (digest/ask/learn) to irontology backend
 
 [b00t.domain]
-# 🤓 energy client: AEMO dispatch, NMI, DUID standing data spine
-# 🤓 semantic layer: RDF/OWL/SHACL projection of operational facts
-# 🤓 architectural layer: EA repository, TOGAF capability, SysML2 interface blocks
-# 🤓 goal: every business object has stable git-anchored URI + queryable RDF projection
-client = "energy (AEMO/NMI/DUID)"
-status = "alpha"
+# 🤓 primary consumer: b00t hive — indexes datum TOMLs as ontology nodes
+# 🤓 secondary: semantic queries over arbitrary codebases
+status = "functional_synthetic_backend"
 crates = ["codegraph", "domain", "dsl", "indexer", "mcp-server", "retrieval", "storage-neumann"]
 
-[b00t.open_issues]
-# 🤓 tracked here for visibility; no binary = cannot register with Claude Code yet
-[[b00t.open_issues.items]]
-issue = "mcp-server has no main.rs — stdio JSON-RPC transport not implemented"
-status = "open"
-unblocks = "b00t mcp install irontology claudecode"
-hint = "add crates/mcp-server/src/main.rs with rmcp or hand-rolled JSON-RPC 2.0 stdio loop"
-
-[[b00t.open_issues.items]]
-issue = "NeumannStore is in-memory stub — production Neumann client not wired"
-status = "open"
-
-[[b00t.open_issues.items]]
-issue = "watchexec watcher integration in indexer not yet implemented"
-status = "open"
+[[b00t.usage]]
+description = "Build irontology-mcp binary from submodule"
+command = "cargo build --release --manifest-path vendor/irontology-mcp/Cargo.toml"
 
 [[b00t.usage]]
-description = "Build irontology-mcp from submodule"
-command = "just irontology-build"
-
-[[b00t.usage]]
-description = "Run irontology-mcp tests"
-command = "just irontology-test"
-
-[[b00t.usage]]
-description = "Install to Claude Code (unblocks when binary exists)"
+description = "Install to Claude Code"
 command = "b00t mcp install irontology claudecode"
 
+[[b00t.usage]]
+description = "Smoke test binary"
+command = "echo '{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2024-11-05\",\"capabilities\":{},\"clientInfo\":{\"name\":\"test\",\"version\":\"0.0.1\"}}}' | vendor/irontology-mcp/target/debug/irontology-mcp"
+
 # b00t:map v1
-# summary: irontology-mcp — semantic graph/RAG MCP server (alpha library, no binary yet)
-# tags: mcp, semantic, ontology, rag, codegraph, energy, aemo, irontology
+# summary: irontology-mcp — semantic graph/RAG MCP server (binary working, synthetic backend)
+# tags: mcp, semantic, ontology, rag, codegraph, irontology, grok
 # tier: frontier
-# cmds: just irontology-build, just irontology-test
+# cmds: cargo build --release --manifest-path vendor/irontology-mcp/Cargo.toml
 # complexity: 8
 # prereqs: vendor/irontology-mcp submodule (git submodule update --init vendor/irontology-mcp)
