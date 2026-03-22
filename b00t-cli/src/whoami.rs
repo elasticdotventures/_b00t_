@@ -1,5 +1,6 @@
 use crate::entanglement::parse_entanglement_ref;
 use crate::{DatumType, UnifiedConfig, get_config, get_expanded_path};
+use crate::skill_resolver::SkillResolver;
 use anyhow::{Context, Result};
 use b00t_c0re_lib::TemplateRenderer;
 use std::fs;
@@ -30,7 +31,7 @@ pub fn detect_agent(ignore_env: bool) -> String {
 }
 
 /// Display agent identity information from AGENT.md template and role datum (if available)
-pub fn whoami(path: &str, role_override: Option<String>) -> Result<()> {
+pub fn whoami(path: &str, role_override: Option<String>, with_skills: bool) -> Result<()> {
     let expanded_path = get_expanded_path(path)?;
     let agent_md_path = expanded_path.join("AGENT.md");
 
@@ -61,7 +62,7 @@ pub fn whoami(path: &str, role_override: Option<String>) -> Result<()> {
     // .tomllm extension: TOML + #comment tribal knowledge; toml parser handles it identically
     if let Some(role) = resolve_role(role_override) {
         if let Some(role_details) = load_role_datum(&role, path) {
-            print_role_summary(&role_details, path);
+            print_role_summary(&role_details, path, with_skills);
         } else {
             println!(
                 "⚠️ Role datum '{}' not found or missing required fields",
@@ -245,12 +246,27 @@ fn get_config_typed<'a>(
     None
 }
 
-fn print_role_summary(role: &RoleDetails, path: &str) {
+fn print_role_summary(role: &RoleDetails, path: &str, with_skills: bool) {
     println!("🎭 Role: {}", role.name);
     println!("💡 {}", role.hint);
 
-    if let Some(skills_summary) = summarize_list(&role.skills, 5) {
-        println!("🧠 Skills: {}", skills_summary);
+    if with_skills && !role.skills.is_empty() {
+        // Resolve skill metadata for all declared skills (discovery tier)
+        let resolver = SkillResolver::default();
+        let resolved = resolver.list_for_role(&role.skills);
+        println!("🧠 Skills ({} declared, {} resolved):", role.skills.len(), resolved.len());
+        for m in &resolved {
+            let tags = if m.tags.is_empty() { String::new() } else { format!(" [{}]", m.tags.join(", ")) };
+            println!("   • {} — {}{}", m.name, m.description, tags);
+        }
+        // Show unresolved skill names so agent knows what to find
+        let resolved_names: std::collections::HashSet<_> = resolved.iter().map(|m| m.name.as_str()).collect();
+        let unresolved: Vec<_> = role.skills.iter().filter(|s| !resolved_names.contains(s.as_str())).collect();
+        if !unresolved.is_empty() {
+            println!("   ⚠️ Unresolved: {} (no skill datum found)", unresolved.iter().map(|s| s.as_str()).collect::<Vec<_>>().join(", "));
+        }
+    } else if let Some(skills_summary) = summarize_list(&role.skills, 5) {
+        println!("🧠 Skills: {} (use --with-skills to resolve)", skills_summary);
     }
 
     if let Some(compliance_summary) = summarize_list(&role.compliance, 3) {
