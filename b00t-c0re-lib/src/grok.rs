@@ -118,10 +118,12 @@ impl GrokClient {
     /// 🤓 IRONTOLOGY_BIN env var overrides; default: ~/.b00t/vendor/irontology-mcp/target/release/irontology-mcp
     async fn initialize_irontology(&mut self) -> Result<()> {
         let home = dirs::home_dir()
-            .ok_or_else(|| anyhow::anyhow!("Cannot determine home directory"))?;
-        let home = home.to_str()
-            .ok_or_else(|| anyhow::anyhow!("Home directory path is not valid UTF-8"))?
-            .to_string();
+            .map(|p| p.to_string_lossy().into_owned())
+            .or_else(|| env::var("HOME").ok())
+            .unwrap_or_else(|| {
+                tracing::warn!("HOME is unset and dirs::home_dir() failed; defaulting to /tmp");
+                "/tmp".to_string()
+            });
         let bin_path = env::var("IRONTOLOGY_BIN").unwrap_or_else(|_| {
             format!("{}/.b00t/vendor/irontology-mcp/target/release/irontology-mcp", home)
         });
@@ -395,36 +397,26 @@ impl GrokClient {
     ) -> Result<AskResult> {
         // repo.search returns: {"results": [{"id": str, "content": str, "score": f64}], ...}
         let text = Self::extract_text(&response)?;
-        let v: Value = match serde_json::from_str(&text) {
-            Ok(v) => v,
-            Err(e) => {
-                return Ok(AskResult {
-                    success: false,
-                    query: query.to_string(),
-                    total_found: 0,
-                    results: vec![],
-                    message: Some(format!("JSON parse error: {}: {}", e, text)),
-                });
-            }
-        };
-        let empty = vec![];
-        let results: Vec<ChunkResult> = v
-            .get("results")
-            .and_then(|r| r.as_array())
-            .unwrap_or(&empty)
-            .iter()
-            .filter_map(|item| {
-                let obj = item.as_object()?;
-                Some(ChunkResult {
-                    id: obj.get("id").and_then(|x| x.as_str()).unwrap_or("").to_string(),
-                    content: obj.get("content").and_then(|x| x.as_str()).unwrap_or("").to_string(),
-                    topic: obj.get("topic").and_then(|x| x.as_str()).unwrap_or("").to_string(),
-                    tags: vec![],
-                    source: obj.get("source").and_then(|x| x.as_str()).map(|s| s.to_string()),
-                    created_at: String::new(),
-                })
-            })
-            .collect();
+        let v: Value = serde_json::from_str(&text).unwrap_or(Value::Null);
+        let results: Vec<ChunkResult> =
+            if let Some(results_array) = v.get("results").and_then(|r| r.as_array()) {
+                results_array
+                    .iter()
+                    .filter_map(|item| {
+                        let obj = item.as_object()?;
+                        Some(ChunkResult {
+                            id: obj.get("id").and_then(|x| x.as_str()).unwrap_or("").to_string(),
+                            content: obj.get("content").and_then(|x| x.as_str()).unwrap_or("").to_string(),
+                            topic: obj.get("topic").and_then(|x| x.as_str()).unwrap_or("").to_string(),
+                            tags: vec![],
+                            source: obj.get("source").and_then(|x| x.as_str()).map(|s| s.to_string()),
+                            created_at: String::new(),
+                        })
+                    })
+                    .collect()
+            } else {
+                Vec::new()
+            };
         let total = results.len();
         Ok(AskResult {
             success: true,
