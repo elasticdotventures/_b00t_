@@ -454,12 +454,14 @@ fn find_b00t_dir() -> Result<PathBuf> {
 }
 
 fn sanitize_for_filename(input: &str) -> String {
-    let s: String = input
+    let mut s: String = input
         .chars()
         .map(|c| if c.is_ascii_alphanumeric() { c } else { '_' })
         .collect();
-    let s = s.trim_matches('_').to_string();
-    while s.contains("__") { let _ = s.replace("__", "_"); }
+    s = s.trim_matches('_').to_string();
+    while s.contains("__") {
+        s = s.replace("__", "_");
+    }
     if s.is_empty() { "topic".to_string() } else { s }
 }
 
