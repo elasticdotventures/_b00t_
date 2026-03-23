@@ -1,12 +1,12 @@
 [b00t]
 name = "b00t-orchestrator-upgrade"
 type = "cli" 
-hint = "Orchestrator upgrade path: TaskMaster → Azure AI Foundry for enterprise multi-agent systems"
+hint = "Orchestrator upgrade path: TODO-next/b00t job → Azure AI Foundry for enterprise multi-agent systems"
 depends_on = ["azure-ai-foundry.cli"]
 
 install = '''
 # 🤓 B00t Orchestrator Upgrade Guide
-echo "🥾 B00t Orchestrator Evolution: TaskMaster → Azure AI Foundry"
+echo "🥾 B00t Orchestrator Evolution: TODO-next + b00t job → Azure AI Foundry"
 
 cat << 'EOF'
 
@@ -15,20 +15,20 @@ cat << 'EOF'
 ╠══════════════════════════════════════════════════════════════════╣
 ║                                                                  ║
 ║  📊 Simple Task Management:                                      ║
-║     └─ TaskMaster AI (Basic task lists, single workflows)       ║
+║     └─ TODO-next.md + b00t job (lightweight local workflows)    ║
 ║                                                                  ║  
 ║  🏢 Enterprise Multi-Agent Orchestration:                       ║
 ║     └─ Azure AI Foundry (Connected agents, sub-agent delegation)║
 ║                                                                  ║
 ║  🔄 Migration Path:                                              ║
-║     TaskMaster → Azure AI Foundry when complexity increases     ║
+║     TODO-next/b00t job → Azure AI Foundry when complexity increases ║
 ║                                                                  ║
 ╚══════════════════════════════════════════════════════════════════╝
 
 ORCHESTRATION CAPABILITY MATRIX:
 
 ┌─────────────────┬──────────────┬─────────────────────┐
-│ Capability      │ TaskMaster   │ Azure AI Foundry    │
+│ Capability      │ TODO/job     │ Azure AI Foundry    │
 ├─────────────────┼──────────────┼─────────────────────┤
 │ Task Lists      │ ✅ Excellent │ ✅ Good             │
 │ PRD Parsing     │ ✅ Good      │ ✅ Excellent        │
@@ -43,7 +43,7 @@ ORCHESTRATION CAPABILITY MATRIX:
 
 USE CASE RECOMMENDATIONS:
 
-🎯 Use TaskMaster for:
+🎯 Use TODO-next + b00t job for:
    • Personal project tracking
    • Simple development workflows  
    • Prototyping and experimentation
@@ -70,11 +70,11 @@ Upgrade to Azure AI Foundry when you need:
 
 EOF
 
-# Check if user has TaskMaster projects that could benefit from Foundry
-if [ -d ".taskmaster" ] || command -v task-master >/dev/null 2>&1; then
+# Check if user has a lightweight local backlog that could benefit from Foundry
+if [ -f "TODO-next.md" ] || ls _b00t_/*.job.toml >/dev/null 2>&1; then
     echo ""
     echo "🔄 MIGRATION OPPORTUNITY DETECTED"
-    echo "   Found TaskMaster configuration in current directory"
+    echo "   Found TODO-next.md or b00t job workflows in current directory"
     echo "   Consider upgrading to Azure AI Foundry for:"
     echo "   • Connected agent workflows"
     echo "   • Enterprise security and scalability" 
@@ -101,8 +101,8 @@ description = "Install Azure AI Foundry for enterprise orchestration"
 command = "b00t cli install azure-ai-foundry"
 
 [[b00t.usage]]
-description = "Keep TaskMaster for simple task management"
-command = "b00t mcp install taskmaster-ai claudecode"
+description = "Use local lightweight orchestration"
+command = "printf '# TODO-next\\n\\n## Critical path\\n- [ ] First backlog item\\n' > TODO-next.md"
 
 [b00t.learn]
 topic = "orchestrator-hierarchy"
@@ -114,11 +114,11 @@ content = """
 
 B00t recognizes different orchestration needs and provides tools for each level:
 
-### Level 1: Simple Task Management
-**Tool: TaskMaster AI**
-- Basic task lists and project tracking
-- PRD parsing to task conversion  
-- Single-user workflows
+### Level 1: Lightweight Local Orchestration
+**Tooling: TODO-next.md + b00t job**
+- Basic backlog lists and project tracking
+- Job definitions for repeatable workflows
+- Single-user or small-team local execution
 - Development and prototyping
 
 ### Level 2: Enterprise Multi-Agent Orchestration  
@@ -132,7 +132,7 @@ B00t recognizes different orchestration needs and provides tools for each level:
 
 ### Complexity Indicators
 
-**Stay with TaskMaster when:**
+**Stay with TODO-next + b00t job when:**
 - Working on personal projects
 - Need simple task tracking
 - Single developer workflows
@@ -165,11 +165,11 @@ Azure AI Foundry: Content Workflow → [Collector Agent, Writer Agent, Manager A
 
 ## Technical Migration Path
 
-1. **Assessment**: Evaluate current TaskMaster usage patterns
+1. **Assessment**: Evaluate current TODO-next and b00t job usage patterns
 2. **Planning**: Identify agent specialization opportunities
 3. **Pilot**: Start with simple connected agents
 4. **Scale**: Expand to full multi-agent workflows
 5. **Optimize**: Leverage enterprise features (security, observability)
 
-The key insight: TaskMaster and Azure AI Foundry serve different orchestration needs. Use TaskMaster for simplicity, migrate to Foundry when complexity demands connected agents and enterprise features.
+The key insight: TODO-next/b00t job and Azure AI Foundry serve different orchestration needs. Use the local backlog/job path for simplicity, migrate to Foundry when complexity demands connected agents and enterprise features.
 """

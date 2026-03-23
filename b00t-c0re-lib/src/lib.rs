@@ -43,6 +43,7 @@ pub mod mcp_registry;
 pub mod rag;
 pub mod redis;
 pub mod rhai_engine;
+pub mod runtime_env;
 pub mod secret_validation;
 pub mod template;
 pub mod utils;

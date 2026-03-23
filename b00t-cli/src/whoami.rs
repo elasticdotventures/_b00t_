@@ -465,7 +465,7 @@ type = "role"
 hint = "orchestrator"
 entangled_agents = ["ralph.agent", "ghost.agent"]
 entangled_cli = ["b00t.cli"]
-entangled_mcp = ["ralph.mcp", "taskmaster-ai.mcp"]
+entangled_mcp = ["ralph.mcp", "b00t-mcp.mcp"]
 "#,
         )
         .unwrap();
@@ -516,7 +516,7 @@ hint = "ralph mcp"
                 .any(|c| { c.reference == "ghost.agent" && c.status == CapabilityStatus::Missing })
         );
         assert!(checks.iter().any(|c| {
-            c.reference == "taskmaster-ai.mcp" && c.status == CapabilityStatus::Missing
+            c.reference == "b00t-mcp.mcp" && c.status == CapabilityStatus::Missing
         }));
     }
 

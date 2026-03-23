@@ -125,7 +125,7 @@ pub fn install_datum(path: &str, name: &str) -> Result<()> {
             }
         }
 
-        if let Some(install_cmd) = &datum.install {
+        if let Some(install_cmd) = datum.install_command() {
             println!("🚀 Installing {}...", key);
             cmd!("bash", "-c", install_cmd)
                 .run()

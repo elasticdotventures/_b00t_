@@ -260,7 +260,7 @@ fn handle_show(b00t_path: &str, datum_name: &str) -> Result<()> {
     }
 
     // Installation
-    if let Some(install) = &datum.install {
+    if let Some(install) = datum.install_command() {
         println!("## Installation");
         println!();
         println!("```bash");

@@ -718,7 +718,7 @@ orchestrator-k0s-kata MODE="start" INVENTORY="~/.config/b00t/k0s-inventory.yaml"
     K0S_KATA_EXTRA_ARGS="$EXTRA_ARGS" scripts/orchestrators/k0s_kata.sh "$MODE" "$INVENTORY"
 
 # Ralph autonomous agent integration
-# 🤓 Ralph runs TaskMaster workflows autonomously via codex/claude/amp/opencode/mistralrs
+# 🤓 Ralph runs backlog/job workflows autonomously via codex/claude/amp/opencode/mistralrs
 
 # Run ralph hive validation before starting projects
 ralph-hive-validate tool="codex" iterations="5":
@@ -742,7 +742,7 @@ ralph-maintenance tool="codex" iterations="10":
         --max-iterations {{iterations}} \
         --project-root {{repo-root}}
 
-# Run ralph on pending TaskMaster tasks
+# Run ralph on pending backlog items
 ralph-run tool="codex" iterations="10":
     #!/bin/bash
     set -euo pipefail
