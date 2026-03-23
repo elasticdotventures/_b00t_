@@ -43,3 +43,6 @@
 [submodule "vendor/irontology-mcp"]
 	path = vendor/irontology-mcp
 	url = https://github.com/PromptExecution/irontology-mcp.git
+[submodule "vendor/tomllm"]
+	path = vendor/tomllm
+	url = git@github.com:PromptExecution/tomllm.git

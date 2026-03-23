@@ -6253,6 +6253,7 @@ checksum = "fcc842091f2def52017664b53082ecbbeb5c7731092bad69d2c63050401dfd64"
 name = "tomllm"
 version = "0.1.0"
 dependencies = [
+ "pyo3",
  "regex",
  "serde",
  "serde-wasm-bindgen",
