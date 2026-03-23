@@ -228,7 +228,7 @@ impl IrontologyBridgeClient {
             let entry = subjects.entry(fact.subject.clone()).or_insert_with(|| {
                 let topic_str = fact.subject
                     .split('/')
-                    .nth(2)
+                    .nth(1)
                     .unwrap_or("unknown")
                     .to_string();
                 (topic_str, String::new(), Vec::new())
