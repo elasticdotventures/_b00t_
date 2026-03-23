@@ -338,12 +338,15 @@ pub fn uninstall_datum(path: &str, name: &str, yes: bool, purge: bool) -> Result
 // 🤓 hook_uninstall is executed via hook_engine::run_hook() — see uninstall_datum() above.
 // No separate run_hook_uninstall() function needed; hook_engine is the canonical executor.
 
-/// Remove datum key from _b00t_.toml `datums = [...]` list.
-/// `path` is the datum directory (e.g. `~/.b00t/_b00t_`); `_b00t_.toml` lives INSIDE it.
-/// 🤓 Mirrors B00tConfig::remove_datum — if that method is extracted to a shared util, use it here.
+/// Remove datum key from global _b00t_.toml `datums = [...]` list.
+/// NOTE: `_b00t_.toml` lives at the repo root or `~/.b00t/_b00t_.toml` — it is **not** inside the datum dir.
+/// 🤓 Prefer delegating to `B00tConfig::remove_datum()`; if not available, use `B00tConfig::find_config_path()` as below.
 fn remove_from_manifest(path: &str, key: &str) -> Result<()> {
-    let b00t_toml = PathBuf::from(shellexpand::tilde(path).to_string())
-        .join("_b00t_.toml");  // _b00t_.toml is IN the datum dir, not parent
+    // Use the same discovery logic as the rest of b00t; do NOT assume `path/_b00t_.toml`.
+    let Some(b00t_toml) = B00tConfig::find_config_path() else {
+        eprintln!("⚠️  _b00t_.toml not found in repo or ~/.b00t, skipping purge");
+        return Ok(());
+    };
 
     if !b00t_toml.exists() {
         eprintln!("⚠️  _b00t_.toml not found at {}, skipping purge", b00t_toml.display());
