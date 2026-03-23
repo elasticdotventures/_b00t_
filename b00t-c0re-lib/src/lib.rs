@@ -28,6 +28,8 @@ pub mod version {
 
 pub mod agent_coordination;
 pub mod agent_manager;
+pub mod dual_grok;
+pub mod irontology_bridge;
 pub mod ai_client;
 pub mod b00t_config;
 pub mod context;
@@ -61,6 +63,11 @@ pub use man_page::{ManPage, ManSection};
 pub use mcp_proxy::{GenericMcpProxy, McpToolDefinition, McpToolRequest, McpToolResponse};
 pub use mcp_registry::{
     McpRegistry, McpServerConfig, McpServerRegistration, create_registration_from_datum,
+};
+pub use dual_grok::{DualGrokClient, DualIngestResult, DualQueryItem, DualQueryResult, GrokBackend};
+pub use irontology_bridge::{
+    DatumNode, IrontologyBridgeClient, IrontologyIngestResult, IrontologyQueryItem,
+    IntoIrontologyRecord, IntoRagDocument,
 };
 pub use rag::{DocumentSource, LoaderType, RagLightConfig, RagLightManager};
 pub use rhai_engine::RhaiEngine;
