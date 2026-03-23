@@ -731,7 +731,7 @@ async fn handle_ralph(
     }
 
     // TaskMaster was removed from b00t. Keep Ralph pointed at the live markdown backlog instead.
-    if task == "hive-validate" {
+    if task == "hive-validate" || task == "maintenance" {
         ensure_todo_next_backlog(&root).await?;
     }
 
