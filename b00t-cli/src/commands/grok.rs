@@ -105,8 +105,8 @@ pub enum GrokCommands {
         /// Tags to attach (comma-separated)
         #[arg(long, value_delimiter = ',')]
         tags: Vec<String>,
-        /// Also ingest into grok backends after storing git blob
-        #[arg(long, default_value_t = true)]
+        /// Also ingest into grok backends after storing git blob (use --ingest=false to disable)
+        #[arg(long, default_value_t = true, num_args = 0..=1)]
         ingest: bool,
     },
 }
