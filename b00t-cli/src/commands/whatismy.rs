@@ -40,6 +40,9 @@ pub enum WhatismyCommands {
         json: bool,
         #[clap(long, help = "Show available tools for role")]
         show_tools: bool,
+        /// Infer and rank skills from role datum + git log context
+        #[clap(long, help = "Infer skills for role from datum + repo context")]
+        skills: bool,
     },
 }
 
@@ -195,7 +198,7 @@ impl WhatismyCommands {
                 }
                 Ok(())
             }
-            WhatismyCommands::Role { json, show_tools } => {
+            WhatismyCommands::Role { json, show_tools, skills } => {
                 use crate::session_memory::SessionMemory;
                 let memory = SessionMemory::load()?;
 
@@ -203,8 +206,18 @@ impl WhatismyCommands {
                 let agent = detect_agent(&memory, false);
                 let role = detect_role_from_agent(&agent);
 
+                // Load role supplement (AGENTS/--role=<role>.md) if present
+                let supplement = load_role_supplement(&role);
+
+                // Infer skills from role datum + git log context (if --skills or --json)
+                let inferred_skills = if *skills || *json {
+                    infer_skills_for_role(&role)
+                } else {
+                    Vec::new()
+                };
+
                 if *json {
-                    let role_data = if *show_tools {
+                    let mut role_data = if *show_tools {
                         get_role_with_tools(&role)?
                     } else {
                         serde_json::json!({
@@ -213,13 +226,34 @@ impl WhatismyCommands {
                             "session_id": memory.metadata.session_id
                         })
                     };
+
+                    // Merge skill inference into JSON output
+                    if let Some(obj) = role_data.as_object_mut() {
+                        obj.insert("inferred_skills".to_string(), serde_json::json!(inferred_skills));
+                        if let Some(s) = &supplement {
+                            obj.insert("role_supplement".to_string(), serde_json::json!(s));
+                        }
+                    }
                     println!("{}", serde_json::to_string_pretty(&role_data)?);
                 } else {
                     println!("🎭 Role: {}", role);
                     println!("🤖 Agent: {}", agent);
 
+                    if let Some(s) = &supplement {
+                        println!("📋 Supplement: {}", s);
+                    }
+
                     if *show_tools {
                         show_blessed_tools(&role)?;
+                    }
+
+                    if *skills && !inferred_skills.is_empty() {
+                        println!("\n🎓 Inferred skills for role '{}' (ranked by context):", role);
+                        for (i, skill) in inferred_skills.iter().enumerate() {
+                            println!("  {}. {}", i + 1, skill);
+                        }
+                    } else if *skills {
+                        println!("ℹ️  No skills inferred (no role datum or git context found)");
                     }
                 }
                 Ok(())
@@ -416,6 +450,120 @@ fn tool_is_available(tool_name: &str) -> bool {
     let config_dir = crate::session_memory::SessionMemory::get_config_path().unwrap_or_default();
     let tool_path = config_dir.join("_b00t_").join(tool_name);
     tool_path.exists()
+}
+
+// ── Role supplement + skill inference ────────────────────────────────────────
+
+/// Load `AGENTS/--role=<role>.md` supplement — returns the tail-map summary if present
+fn load_role_supplement(role: &str) -> Option<String> {
+    // Search: project-local AGENTS/ first, then ~/.b00t/AGENTS/
+    let candidates = [
+        std::path::PathBuf::from("AGENTS").join(format!("--role={}.md", role)),
+        dirs::home_dir()
+            .unwrap_or_default()
+            .join(".b00t/AGENTS")
+            .join(format!("--role={}.md", role)),
+    ];
+
+    for path in &candidates {
+        if let Ok(content) = std::fs::read_to_string(path) {
+            // Extract tail-map summary line
+            let summary = content
+                .lines()
+                .find(|l| l.trim_start_matches("# ").starts_with("summary:"))
+                .map(|l| l.trim_start_matches("# ").trim_start_matches("summary:").trim().to_string())
+                .unwrap_or_else(|| format!("{}({:?})", role, path));
+            return Some(summary);
+        }
+    }
+    None
+}
+
+/// Infer skills for a role by combining:
+///   1. Role datum `skills = [...]` array from `_b00t_/<role>.role.tom(llm)`
+///   2. SkillResolver search on git log topic tokens (last 20 commits)
+///
+/// Returns deduped skill names ranked by: role-datum declaration → git frequency
+fn infer_skills_for_role(role: &str) -> Vec<String> {
+    use crate::skill_resolver::SkillResolver;
+    let mut skills: HashMap<String, usize> = HashMap::new();
+
+    // 1. Role datum declared skills (high base weight = role-declared skills rank first)
+    let declared = load_role_datum_skills(role);
+    for s in declared {
+        *skills.entry(s).or_insert(0) += 10;
+    }
+
+    // 2. Git log topic tokens → SkillResolver search (boost frequency-matched skills)
+    let resolver = SkillResolver::default();
+    if let Ok(tokens) = extract_git_log_topics() {
+        for token in &tokens {
+            let matches = resolver.search(token);
+            for m in matches {
+                *skills.entry(m.name).or_insert(0) += 1;
+            }
+        }
+    }
+
+    // Sort by weight descending, preserve insertion order for equal weights
+    let mut sorted: Vec<(String, usize)> = skills.into_iter().collect();
+    sorted.sort_by(|a, b| b.1.cmp(&a.1));
+    sorted.into_iter().map(|(name, _)| name).collect()
+}
+
+/// Parse `skills = [...]` from `_b00t_/<role>.role.toml(l)` datum
+fn load_role_datum_skills(role: &str) -> Vec<String> {
+    let candidates = [
+        dirs::home_dir().unwrap_or_default().join(format!(".dotfiles/_b00t_/{}.role.tomllm", role)),
+        dirs::home_dir().unwrap_or_default().join(format!(".dotfiles/_b00t_/{}.role.toml", role)),
+        dirs::home_dir().unwrap_or_default().join(format!(".b00t/_b00t_/{}.role.tomllm", role)),
+        dirs::home_dir().unwrap_or_default().join(format!(".b00t/_b00t_/{}.role.toml", role)),
+    ];
+
+    for path in &candidates {
+        if let Ok(content) = std::fs::read_to_string(path) {
+            // Strip tomllm comment lines before TOML parsing
+            let clean: String = content
+                .lines()
+                .filter(|l| !l.trim_start().starts_with("# "))
+                .collect::<Vec<_>>()
+                .join("\n");
+            if let Ok(val) = toml::from_str::<toml::Value>(&clean) {
+                if let Some(skills) = val.get("skills").and_then(|v| v.as_array()) {
+                    return skills
+                        .iter()
+                        .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                        .collect();
+                }
+            }
+        }
+    }
+    Vec::new()
+}
+
+/// Extract topic-like tokens from `git log --oneline -20`
+fn extract_git_log_topics() -> Result<Vec<String>> {
+    let output = duct::cmd!("git", "log", "--oneline", "-20")
+        .stderr_null()
+        .read()
+        .map_err(|e| anyhow::anyhow!("git log: {}", e))?;
+
+    // Extract tokens: skip hash (first col), split on spaces/punctuation
+    // Keep tokens ≥4 chars that are alphanumeric (likely identifiers/topics)
+    let tokens: Vec<String> = output
+        .lines()
+        .flat_map(|line| {
+            line.splitn(2, ' ')
+                .nth(1)  // skip the hash
+                .unwrap_or("")
+                .split(|c: char| !c.is_alphanumeric() && c != '-')
+                .filter(|t| t.len() >= 4)
+                .map(|t| t.to_lowercase())
+                .collect::<Vec<_>>()
+        })
+        .collect();
+
+    Ok(tokens)
 }
 
 #[cfg(test)]

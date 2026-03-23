@@ -42,6 +42,51 @@ bump level = "patch":
 noop:
 	@echo "Noop command executed. This is a placeholder for future commands."
 
+# Grok semantic E2E tests — unit tier (no service required, always run)
+# Release gate: must pass before cog bump / git release
+grok-e2e-unit:
+	#!/usr/bin/env bash
+	set -euo pipefail
+	echo "🧠 Running grok unit E2E tests (no service required)..."
+	cargo build --bin b00t-cli 2>&1
+	cargo test --test grok_semantic_e2e_test 2>&1
+	cd .. && cargo test --package b00t-c0re-lib --test grok_raglight_e2e_test 2>&1
+	echo "✅ grok unit E2E tests passed"
+
+# Grok semantic E2E tests — integration tier (requires raglight Python service)
+# Usage: just grok-e2e-integration   (set TEST_RAGLIGHT=1 implicitly)
+grok-e2e-integration:
+	#!/usr/bin/env bash
+	set -euo pipefail
+	echo "🧠 Running grok integration E2E tests (requires raglight)..."
+	cargo build --bin b00t-cli 2>&1
+	TEST_RAGLIGHT=1 cargo test --test grok_semantic_e2e_test -- --include-ignored 2>&1
+	cd .. && TEST_RAGLIGHT=1 cargo test --package b00t-c0re-lib --test grok_raglight_e2e_test -- --include-ignored 2>&1
+	echo "✅ grok integration E2E tests passed"
+
+# Full grok E2E suite: unit + integration
+# Use this as the release gate
+grok-e2e: grok-e2e-unit
+	@echo "✅ grok-e2e unit tier complete (run grok-e2e-integration for full pipeline)"
+
+# Pre-release gate: runs grok E2E + full cargo test suite
+# Wire to cog pre-bump-hook or call manually before any version bump
+pre-release-check:
+	#!/usr/bin/env bash
+	set -euo pipefail
+	echo "🚦 Pre-release checks starting..."
+	echo ""
+	echo "1/3 cargo test (full suite)..."
+	cargo test 2>&1
+	echo ""
+	echo "2/3 grok E2E unit tests..."
+	just grok-e2e-unit
+	echo ""
+	echo "3/3 b00t-c0re-lib tests..."
+	cd .. && cargo test --package b00t-c0re-lib 2>&1
+	echo ""
+	echo "✅ All pre-release checks passed — safe to bump version"
+
 # MCP shortcuts - delegate to b00t.just
 b00t-mcp-chat:
 	just -f ~/.dotfiles/_b00t_/b00t.just mcp-chat
