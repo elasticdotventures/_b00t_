@@ -11,7 +11,7 @@
 //!
 //! Test data: tests/fixtures/grok_test_cases.json
 
-use anyhow::Result;
+use assert_cmd::prelude::*;
 use serde::Deserialize;
 use std::{env, fs, path::PathBuf, process::Command, io::Write};
 
@@ -38,10 +38,10 @@ fn load_fixtures() -> GrokTestCases {
         .unwrap_or_else(|e| panic!("Invalid fixture JSON: {}", e))
 }
 
-/// Resolve path to the b00t-cli binary (debug build)
-fn b00t_bin() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../target/debug/b00t-cli")
+/// Returns a Command pointing at the b00t-cli binary built by Cargo.
+/// Uses `assert_cmd::prelude::CommandCargoExt` so the binary is always available.
+fn b00t_cmd() -> Command {
+    Command::cargo_bin("b00t-cli").expect("b00t-cli binary not found — run `cargo build` first")
 }
 
 fn is_raglight_enabled() -> bool {
@@ -62,13 +62,7 @@ mod cli_output_format {
     /// Use `--rag=raglite` if you need strict topic validation.
     #[test]
     fn test_digest_unknown_topic_dual_backend_partial_success() {
-        let bin = b00t_bin();
-        if !bin.exists() {
-            println!("⚠️  Build binary first: cargo build");
-            return;
-        }
-
-        let out = Command::new(&bin)
+        let out = b00t_cmd()
             .args(["grok", "digest", "-t", "totally_fake_topic_xyz_9999", "some content"])
             .output()
             .expect("failed to run b00t-cli");
@@ -92,13 +86,7 @@ mod cli_output_format {
     /// `b00t grok digest -t rust "content" --rag` must output job UUID and topic name
     #[test]
     fn test_digest_known_topic_output_contains_job_info() {
-        let bin = b00t_bin();
-        if !bin.exists() {
-            println!("⚠️  Build binary first: cargo build");
-            return;
-        }
-
-        let out = Command::new(&bin)
+        let out = b00t_cmd()
             .args(["grok", "digest", "-t", "rust", "Rust ownership prevents data races", "--rag"])
             .output()
             .expect("failed to run b00t-cli");
@@ -131,14 +119,8 @@ mod cli_output_format {
     /// `--rag=raglite` still requires --topic (strict mode).
     #[test]
     fn test_ask_raglite_only_requires_topic() {
-        let bin = b00t_bin();
-        if !bin.exists() {
-            println!("⚠️  Build binary first: cargo build");
-            return;
-        }
-
         // Strict: --rag=raglite without --topic must exit non-zero
-        let out = Command::new(&bin)
+        let out = b00t_cmd()
             .args(["grok", "ask", "memory safety", "--rag=raglite"])
             .output()
             .expect("failed to run b00t-cli");
@@ -154,13 +136,7 @@ mod cli_output_format {
     /// `b00t grok ask "query"` (dual default) without --topic — irontology queries all, raglite warns
     #[test]
     fn test_ask_dual_backend_without_topic_exits_zero() {
-        let bin = b00t_bin();
-        if !bin.exists() {
-            println!("⚠️  Build binary first: cargo build");
-            return;
-        }
-
-        let out = Command::new(&bin)
+        let out = b00t_cmd()
             .args(["grok", "ask", "memory safety"])
             .output()
             .expect("failed to run b00t-cli");
@@ -185,13 +161,7 @@ mod cli_output_format {
     /// `b00t grok learn "content" -t rust --rag` must queue job and exit zero
     #[test]
     fn test_learn_known_topic_exits_zero() {
-        let bin = b00t_bin();
-        if !bin.exists() {
-            println!("⚠️  Build binary first: cargo build");
-            return;
-        }
-
-        let out = Command::new(&bin)
+        let out = b00t_cmd()
             .args(["grok", "learn", "Rust fearless concurrency", "-t", "rust", "--rag"])
             .output()
             .expect("failed to run b00t-cli");
@@ -208,13 +178,7 @@ mod cli_output_format {
     /// `b00t grok learn "content" --rag` without -t must exit non-zero
     #[test]
     fn test_learn_without_topic_exits_nonzero() {
-        let bin = b00t_bin();
-        if !bin.exists() {
-            println!("⚠️  Build binary first: cargo build");
-            return;
-        }
-
-        let out = Command::new(&bin)
+        let out = b00t_cmd()
             .args(["grok", "learn", "content without topic", "--rag"])
             .output()
             .expect("failed to run b00t-cli");
@@ -228,15 +192,9 @@ mod cli_output_format {
     /// All fixture digest topics must produce zero-exit via CLI
     #[test]
     fn test_all_fixture_digest_topics_accepted() {
-        let bin = b00t_bin();
-        if !bin.exists() {
-            println!("⚠️  Build binary first: cargo build");
-            return;
-        }
-
         let cases = load_fixtures();
         for case in &cases.digest_cases {
-            let out = Command::new(&bin)
+            let out = b00t_cmd()
                 .args(["grok", "digest", "-t", &case.topic, &case.content, "--rag"])
                 .output()
                 .expect("failed to run b00t-cli");
@@ -265,14 +223,12 @@ mod cli_integration {
             println!("⚠️  Skipping: set TEST_RAGLIGHT=1");
             return;
         }
-        let bin = b00t_bin();
-        assert!(bin.exists(), "Build binary first: cargo build");
 
         let cases = load_fixtures();
         let case = &cases.digest_cases[0]; // rust + memory safety
 
         // Step 1: digest
-        let digest_out = Command::new(&bin)
+        let digest_out = b00t_cmd()
             .args(["grok", "digest", "-t", &case.topic, &case.content, "--rag"])
             .output()
             .expect("digest failed");
@@ -283,7 +239,7 @@ mod cli_integration {
 
         // Step 2: ask with keyword from expected_keywords
         let query = &case.expected_keywords[0];
-        let ask_out = Command::new(&bin)
+        let ask_out = b00t_cmd()
             .args(["grok", "ask", query, "-t", &case.topic, "--rag"])
             .output()
             .expect("ask failed");
@@ -312,8 +268,6 @@ mod cli_integration {
             println!("⚠️  Skipping: set TEST_RAGLIGHT=1");
             return;
         }
-        let bin = b00t_bin();
-        assert!(bin.exists(), "Build binary first");
 
         // Write a temp file with identifiable content
         let mut tmp = tempfile::NamedTempFile::new().expect("tempfile");
@@ -322,7 +276,7 @@ mod cli_integration {
         let src_path = tmp.path().to_str().unwrap().to_string();
 
         // Learn from file
-        let learn_out = Command::new(&bin)
+        let learn_out = b00t_cmd()
             .args(["grok", "learn", "dummy", "-s", &src_path, "-t", "rust", "--rag"])
             .output()
             .expect("learn failed");
@@ -335,7 +289,7 @@ mod cli_integration {
         std::thread::sleep(std::time::Duration::from_secs(5));
 
         // Query for learned content
-        let ask_out = Command::new(&bin)
+        let ask_out = b00t_cmd()
             .args(["grok", "ask", "borrow checker lifetimes", "-t", "rust", "--rag"])
             .output()
             .expect("ask failed");
