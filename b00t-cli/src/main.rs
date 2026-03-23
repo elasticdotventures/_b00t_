@@ -35,6 +35,7 @@ use b00t_cli::commands::{
 
 };
 use b00t_cli::commands::install::{install_datum, run_just_install};
+use b00t_cli::commands::uninstall::uninstall_datum;
 
 // Re-export commonly used functions for datum modules
 pub use b00t_cli::{
@@ -308,6 +309,15 @@ The system will:
         name: Option<String>,
         #[clap(long, help = "Show what would be installed for bootstrap mode")]
         dry_run: bool,
+    },
+    #[clap(about = "Uninstall a datum by name (use --purge to remove from _b00t_.toml)")]
+    Uninstall {
+        #[clap(help = "Datum name or key, e.g. 'ripgrep' or 'ripgrep.cli'")]
+        name: String,
+        #[clap(long, help = "Also remove datum entry from _b00t_.toml")]
+        purge: bool,
+        #[clap(long, short = 'y', help = "Skip confirmation prompt")]
+        yes: bool,
     },
     #[clap(about = "Bootstrap self-configuring b00t installation (Phase 0: Foundation)")]
     Bootstrap {
@@ -1268,6 +1278,12 @@ async fn main() {
             use b00t_cli::commands::grok::handle_grok_command;
             if let Err(e) = handle_grok_command(grok_command.clone()).await {
                 eprintln!("Error: {}", e);
+                std::process::exit(1);
+            }
+        }
+        Some(Commands::Uninstall { name, purge, yes }) => {
+            if let Err(e) = uninstall_datum(&cli.path, &name, *yes, *purge) {
+                eprintln!("Uninstall Error: {}", e);
                 std::process::exit(1);
             }
         }
