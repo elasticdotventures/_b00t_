@@ -229,6 +229,12 @@ pub struct BootDatum {
     pub hook_install: Option<String>,
     pub hook_update: Option<String>,
     pub hook_learn: Option<String>,
+    // Uninstall lifecycle
+    // 🤓 uninstall: shell script executed by duct::cmd("bash", "-c", script) — same executor as install
+    // 🤓 hook_uninstall: POST-hook (runs AFTER uninstall script, unlike other hooks which are pre-hooks);
+    //    EvalAltResult aborts (fatal); Warn("hook script error:...")/Redirect/Info continue
+    pub uninstall: Option<String>,
+    pub hook_uninstall: Option<String>,
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
@@ -1971,4 +1977,36 @@ fn check_readme_status(memory: &mut session_memory::SessionMemory) -> Result<()>
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn test_bootdatum_uninstall_fields_deserialize() {
+        let toml_str = r#"
+[b00t]
+name = "ripgrep"
+type = "cli"
+hint = "fast grep"
+install = "apt-get install -y ripgrep"
+uninstall = "apt-get remove -y ripgrep"
+hook_uninstall = "// Rhai: post-uninstall cleanup\nlet x = 1;"
+"#;
+        let config: crate::UnifiedConfig = toml::from_str(toml_str).unwrap();
+        assert_eq!(config.b00t.uninstall, Some("apt-get remove -y ripgrep".to_string()));
+        assert_eq!(config.b00t.hook_uninstall, Some("// Rhai: post-uninstall cleanup\nlet x = 1;".to_string()));
+    }
+
+    #[test]
+    fn test_bootdatum_uninstall_fields_default_none() {
+        let toml_str = r#"
+[b00t]
+name = "docker"
+type = "cli"
+hint = "containers"
+"#;
+        let config: crate::UnifiedConfig = toml::from_str(toml_str).unwrap();
+        assert!(config.b00t.uninstall.is_none());
+        assert!(config.b00t.hook_uninstall.is_none());
+    }
 }
