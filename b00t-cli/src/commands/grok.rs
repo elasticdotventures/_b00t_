@@ -89,7 +89,7 @@ pub enum GrokCommands {
     /// Examples:
     ///   b00t grok assimilate -t rust "Rust ownership prevents data races"
     ///   b00t grok assimilate -t rust --file notes.md
-    ///   b00t grok assimilate -t rust --distill "long article content..."
+    ///   b00t grok assimilate -t rust "long article content..."
     Assimilate {
         /// Topic for the datum (must be a known b00t datum topic)
         #[arg(short, long)]
