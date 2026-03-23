@@ -478,7 +478,7 @@ In `src/main.rs`, after the `Install` variant (around line 311):
     },
 ```
 
-- [ ] **Step 3.5: Add import in `main.rs`**
+- [ ] **Step 3.4: Add import in `main.rs`**
 
 Find the existing install import line (~line 37):
 ```rust

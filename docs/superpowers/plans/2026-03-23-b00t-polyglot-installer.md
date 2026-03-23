@@ -1647,7 +1647,7 @@ install: build-hooks
     ...rest unchanged...
 ```
 
-- [ ] **Step 8.11: Commit**
+- [ ] **Step 8.13: Commit**
 
 ```bash
 cd /home/brianh/.b00t && git add _b00t_/runtimes/ justfile && git commit -m "feat(hooks): b00t-branded hooks (statusline, context-monitor, datum-guard, update-check) + esbuild pipeline"
