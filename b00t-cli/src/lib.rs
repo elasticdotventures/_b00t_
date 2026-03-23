@@ -115,6 +115,22 @@ pub struct OrchestrationConfig {
     pub queue_name: Option<String>,
 }
 
+#[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
+#[serde(untagged)]
+pub enum InstallSpec {
+    Command(String),
+    Metadata { requires: Option<Vec<String>> },
+}
+
+impl InstallSpec {
+    pub fn command(&self) -> Option<&str> {
+        match self {
+            InstallSpec::Command(command) => Some(command),
+            InstallSpec::Metadata { .. } => None,
+        }
+    }
+}
+
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Default)]
 #[serde(default)]
 pub struct BootDatum {
@@ -130,7 +146,7 @@ pub struct BootDatum {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub compliance: Option<Vec<String>>,
 
-    pub install: Option<String>,
+    pub install: Option<InstallSpec>,
     pub update: Option<String>,
     pub version: Option<String>,
     pub version_regex: Option<String>,
@@ -714,6 +730,10 @@ impl BootDatum {
                 .map(DatumType::from_filename_extension)
                 .unwrap_or(DatumType::Unknown)
         })
+    }
+
+    pub fn install_command(&self) -> Option<&str> {
+        self.install.as_ref().and_then(InstallSpec::command)
     }
 }
 

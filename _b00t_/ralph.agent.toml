@@ -1,13 +1,13 @@
 [b00t]
 name = "ralph"
 type = "agent"
-hint = "Autonomous agent loop runner for TaskMaster-AI workflows"
+hint = "Autonomous agent loop runner for TODO-next.md and b00t job workflows"
 
 [b00t.agent]
 pid = "ralph-001"
 branch = "main"
 model = "claude-sonnet-4-5"
-skills = ["taskmaster", "autonomous-loop", "prd-parsing", "workflow-execution"]
+skills = ["todo-backlog", "autonomous-loop", "prd-parsing", "workflow-execution"]
 personality = "persistent"
 humor = "low"
 role = "executor"
@@ -18,7 +18,7 @@ pubsub = true
 protocol = "msgpack"
 
 [b00t.agent.crew]
-# Ralph acts as autonomous executor for TaskMaster workflows
+# Ralph acts as autonomous executor for backlog and job workflows
 role = "executor"
 captain = false
 
@@ -27,7 +27,7 @@ captain = false
 cli_path = "_b00t_/ralph/ralph/ralph_cli.py"
 supports_tools = ["amp", "claude", "codex", "opencode"]
 max_iterations = 10
-requires = ["uv", "taskmaster"]
+requires = ["uv"]
 
 [b00t.agent.mcp]
 # Ralph can run as MCP server
@@ -37,5 +37,5 @@ port = 8000
 
 [b00t.env]
 AGENT_ID = "ralph"
-AGENT_SKILLS = "taskmaster,autonomous-loop,prd-parsing,workflow-execution"
+AGENT_SKILLS = "todo-backlog,autonomous-loop,prd-parsing,workflow-execution"
 RALPH_PATH = "_b00t_/ralph"

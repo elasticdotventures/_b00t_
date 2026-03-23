@@ -1,118 +1,276 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "MCP TOML Configuration Schema",
-  "description": "Schema for validating MCP server TOML configuration files",
+  "description": "Schema for validating b00t MCP datum TOML files",
   "type": "object",
   "properties": {
     "b00t": {
       "type": "object",
       "properties": {
         "name": {
-          "type": "string",
-          "description": "Name of the MCP server"
+          "type": "string"
         },
         "type": {
-          "type": "string", 
-          "enum": ["mcp"],
-          "description": "Type must be 'mcp'"
+          "type": "string",
+          "enum": ["mcp"]
         },
         "hint": {
-          "type": "string",
-          "description": "Human-readable description of the MCP server"
+          "type": "string"
         },
-        "mcp": {
-          "type": "object",
-          "properties": {
-            "stdio": {
-              "type": "array",
-              "items": {
-                "$ref": "#/definitions/stdioMethod"
-              },
-              "description": "Array of stdio connection methods"
+        "lfmf_category": {
+          "type": "string"
+        },
+        "desires": {
+          "type": "string"
+        },
+        "install": {
+          "oneOf": [
+            {
+              "type": "string"
             },
-            "httpstream": {
-              "$ref": "#/definitions/httpstreamMethod",
-              "description": "HTTP stream connection method"
+            {
+              "type": "object",
+              "properties": {
+                "requires": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              },
+              "additionalProperties": false
             }
-          },
-          "additionalProperties": false
+          ]
+        },
+        "update": {
+          "type": "string"
+        },
+        "version": {
+          "type": "string"
+        },
+        "version_regex": {
+          "type": "string"
+        },
+        "homepage": {
+          "type": "string"
+        },
+        "keywords": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "entangled_cli": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "pre_start": {
+          "type": "string"
         },
         "env": {
-          "type": "object",
-          "patternProperties": {
-            "^[A-Z_][A-Z0-9_]*$": {
-              "type": "string"
-            }
-          },
-          "additionalProperties": false,
-          "description": "Environment variables for the MCP server"
+          "$ref": "#/definitions/envVars"
         },
         "depends_on": {
           "type": "array",
           "items": {
             "type": "string",
             "pattern": "^[A-Za-z0-9_.-]+\\.[A-Za-z0-9_.-]+$"
-          },
-          "description": "Explicit datum dependencies (e.g., qdrant.docker, ollama.docker)"
+          }
         },
         "requires": {
           "type": "object",
-          "description": "Capability dependencies resolved by the orchestrator",
           "patternProperties": {
             "^[A-Za-z0-9_.-]+$": {
               "$ref": "#/definitions/capabilityRequirement"
             }
           },
           "additionalProperties": false
+        },
+        "learn": {
+          "$ref": "#/definitions/learnBlock"
+        },
+        "usage": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/usageItem"
+          }
+        },
+        "references": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/referenceItem"
+          }
+        },
+        "mcp": {
+          "type": "object",
+          "properties": {
+            "protocol_version": {
+              "type": "string"
+            },
+            "stdio": {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/stdioMethod"
+              }
+            },
+            "httpstream": {
+              "$ref": "#/definitions/httpstreamMethod"
+            },
+            "server": {
+              "type": "object",
+              "properties": {
+                "stdio": {
+                  "$ref": "#/definitions/stdioMethod"
+                },
+                "http": {
+                  "$ref": "#/definitions/serverHttpMethod"
+                }
+              },
+              "additionalProperties": false
+            },
+            "capabilities": {
+              "type": "object",
+              "properties": {
+                "tools": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "prompts": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "resources": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              },
+              "additionalProperties": false
+            },
+            "tools": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "string"
+              }
+            }
+          },
+          "additionalProperties": false
+        },
+        "meta": {
+          "type": "object",
+          "properties": {
+            "capabilities": {
+              "$ref": "#/definitions/looseObject"
+            },
+            "agent": {
+              "$ref": "#/definitions/looseObject"
+            },
+            "mcp_syntax": {
+              "$ref": "#/definitions/looseObject"
+            },
+            "sync": {
+              "$ref": "#/definitions/looseObject"
+            },
+            "namespace": {
+              "$ref": "#/definitions/looseObject"
+            }
+          },
+          "additionalProperties": true
         }
       },
       "required": ["name", "type"],
       "additionalProperties": false
+    },
+    "validate": {
+      "type": "object",
+      "properties": {
+        "command": {
+          "type": "string"
+        },
+        "regex": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "roles": {
+      "type": "object",
+      "properties": {
+        "required_for": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "optional_for": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "env": {
+      "$ref": "#/definitions/envVars"
     }
   },
   "required": ["b00t"],
   "additionalProperties": false,
   "definitions": {
+    "envVars": {
+      "type": "object",
+      "patternProperties": {
+        "^[A-Za-z_][A-Za-z0-9_]*$": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
     "stdioMethod": {
       "type": "object",
       "properties": {
         "command": {
-          "type": "string",
-          "description": "Command to execute"
+          "type": "string"
         },
         "args": {
           "type": "array",
           "items": {
             "type": "string"
-          },
-          "description": "Command line arguments"
+          }
         },
         "transport": {
           "type": "string",
-          "enum": ["stdio"],
-          "description": "Transport method"
+          "enum": ["stdio"]
         },
         "priority": {
           "type": "integer",
-          "minimum": 0,
-          "description": "Priority order (0 = highest)"
+          "minimum": 0
         },
         "requires": {
           "type": "array",
           "items": {
             "type": "string"
-          },
-          "description": "Requirements/dependencies"
+          }
         },
         "env": {
-          "type": "object",
-          "patternProperties": {
-            "^[A-Z_][A-Z0-9_]*$": {
-              "type": "string"
-            }
-          },
-          "additionalProperties": false,
-          "description": "Method-specific environment variables"
+          "$ref": "#/definitions/envVars"
+        },
+        "pre_start": {
+          "type": "string"
+        },
+        "entangled_cli": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
         }
       },
       "required": ["command"],
@@ -123,62 +281,137 @@
       "properties": {
         "url": {
           "type": "string",
-          "format": "uri",
-          "description": "HTTP URL for the MCP server"
+          "format": "uri"
         },
         "transport": {
           "type": "string",
-          "enum": ["httpstream"],
-          "description": "Transport method"
+          "enum": ["httpstream"]
         },
         "priority": {
           "type": "integer",
-          "minimum": 0,
-          "description": "Priority order (0 = highest)"
+          "minimum": 0
         },
         "requires": {
           "type": "array",
           "items": {
             "type": "string"
-          },
-          "description": "Requirements/dependencies"
+          }
         },
         "requires_internet": {
-          "type": "boolean",
-          "description": "Whether internet access is required"
+          "type": "boolean"
         },
         "requires_auth": {
-          "type": "boolean",
-          "description": "Whether authentication is required"
+          "type": "boolean"
         }
       },
       "required": ["url"],
+      "additionalProperties": false
+    },
+    "serverHttpMethod": {
+      "type": "object",
+      "properties": {
+        "command": {
+          "type": "string"
+        },
+        "args": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "env": {
+          "$ref": "#/definitions/envVars"
+        }
+      },
+      "required": ["command"],
       "additionalProperties": false
     },
     "capabilityRequirement": {
       "type": "object",
       "properties": {
         "capability": {
-          "type": "string",
-          "description": "Capability name to resolve (e.g., rag, embeddings)"
+          "type": "string"
         },
         "protocol": {
-          "type": "string",
-          "description": "Protocol the provider must implement"
+          "type": "string"
         },
         "prefer": {
           "type": "array",
           "items": {
             "type": "string"
-          },
-          "description": "Ordered list of preferred providers"
+          }
         },
         "fallback": {
-          "type": "string",
-          "description": "Fallback provider if no preferred providers are available"
+          "type": "string"
         }
       },
       "additionalProperties": false
+    },
+    "learnBlock": {
+      "type": "object",
+      "properties": {
+        "topic": {
+          "type": "string"
+        },
+        "auto_digest": {
+          "type": "boolean"
+        },
+        "content": {
+          "type": "string"
+        },
+        "inline": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "usageItem": {
+      "type": "object",
+      "properties": {
+        "description": {
+          "type": "string"
+        },
+        "command": {
+          "type": "string"
+        }
+      },
+      "required": ["description", "command"],
+      "additionalProperties": false
+    },
+    "referenceItem": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "url": {
+          "type": "string"
+        },
+        "homepage": {
+          "type": "string"
+        }
+      },
+      "required": ["name"],
+      "additionalProperties": false
+    },
+    "looseObject": {
+      "type": "object",
+      "additionalProperties": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "boolean"
+          },
+          {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        ]
+      }
     }
   }
 }

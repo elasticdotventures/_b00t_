@@ -6,6 +6,7 @@
 use crate::B00tResult;
 use crate::agent_coordination::{AgentCoordinator, AgentMetadata};
 use crate::redis::{AgentStatus, RedisComms, RedisConfig};
+use crate::runtime_env::sandbox_root_cause_hint;
 use anyhow::Context;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -142,10 +143,14 @@ impl AgentManager {
         }
 
         // Create Unix socket listener
-        let listener = UnixListener::bind(&socket_path).context(format!(
-            "Failed to bind agent socket: {}",
-            socket_path.display()
-        ))?;
+        let listener = UnixListener::bind(&socket_path).with_context(|| {
+            let mut message = format!("Failed to bind agent socket: {}", socket_path.display());
+            if let Some(hint) = sandbox_root_cause_hint("Unix socket bind") {
+                message.push(' ');
+                message.push_str(&hint);
+            }
+            message
+        })?;
 
         info!("🔌 Agent socket bound: {}", socket_path.display());
 

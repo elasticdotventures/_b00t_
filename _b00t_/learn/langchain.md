@@ -209,7 +209,7 @@ system_prompt = "You are a Rust/TypeScript expert..."
 ```toml
 [langchain.agents.coordinator]
 model = "anthropic/claude-sonnet-4"
-tools = ["taskmaster-mcp", "sequential-thinking-mcp"]
+tools = ["b00t-mcp", "sequential-thinking-mcp"]
 peer_agents = ["researcher", "coder"]
 system_prompt = "You coordinate multiple agents..."
 ```

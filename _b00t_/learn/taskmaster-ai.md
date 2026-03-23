@@ -1,3 +1,2 @@
-at the ready! signal operation begins. agents are awarded points for efficiently and diligently dispatching chores from taskmaster-ai. taskmaster may not be in every environment especially for routine operational tasks in those situations.
-
+legacy note: taskmaster-ai is retained only for compatibility. active b00t workflows SHOULD use `TODO-next.md`, `b00t job`, and Redis-backed agent coordination instead.
 

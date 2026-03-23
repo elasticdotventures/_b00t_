@@ -110,7 +110,7 @@ pub fn handle_up_command(b00t_path: &str, yes: bool) -> Result<()> {
                     if yes {
                         println!("📦 Updating {}...", datum_spec);
                         let datum = tool.datum();
-                        let update_cmd = datum.update.as_ref().or(datum.install.as_ref());
+                        let update_cmd = datum.update.as_deref().or(datum.install_command());
 
                         if let Some(cmd_str) = update_cmd {
                             match cmd!("bash", "-c", cmd_str).run() {
