@@ -232,7 +232,8 @@ pub struct BootDatum {
     // Uninstall lifecycle
     // 🤓 uninstall: shell script executed by duct::cmd("bash", "-c", script) — same executor as install
     // 🤓 hook_uninstall: POST-hook (runs AFTER uninstall script, unlike other hooks which are pre-hooks);
-    //    EvalAltResult aborts (fatal); Warn("hook script error:...")/Redirect/Info continue
+    //    Rhai script errors are surfaced as Warn("hook script error: ...") by run_hook() and treated as fatal by uninstall_datum()
+    //    All other HookResult variants (non-error Warn/Redirect/Info/Missing) are non-fatal: logged and execution continues
     pub uninstall: Option<String>,
     pub hook_uninstall: Option<String>,
 }

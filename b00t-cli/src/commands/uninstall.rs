@@ -5,6 +5,7 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use toml;
 use crate::{BootDatum, UnifiedConfig};
+use crate::datum_config::B00tConfig;
 use crate::hook_engine::{run_hook, HookResult};
 
 /// Execute uninstall for a named datum.
@@ -81,45 +82,26 @@ pub fn uninstall_datum(path: &str, name: &str, yes: bool, purge: bool) -> Result
 // 🤓 hook_uninstall is executed via hook_engine::run_hook() — see uninstall_datum() above.
 // No separate run_hook_uninstall() function needed; hook_engine is the canonical executor.
 
-/// Remove datum key from _b00t_.toml `datums = [...]` list.
-/// `path` is the datum directory (e.g. `~/.b00t/_b00t_`); `_b00t_.toml` lives INSIDE it.
-/// 🤓 Mirrors B00tConfig::remove_datum — if that method is extracted to a shared util, use it here.
-fn remove_from_manifest(path: &str, key: &str) -> Result<()> {
-    let b00t_toml = PathBuf::from(shellexpand::tilde(path).to_string())
-        .join("_b00t_.toml");  // _b00t_.toml is IN the datum dir, not parent
+/// Remove datum key from the global _b00t_.toml using B00tConfig discovery.
+/// 🤓 _b00t_.toml lives at the repo root or ~/.b00t/_b00t_.toml — NOT inside datum_dir.
+///    Uses B00tConfig::find_config_path() to locate the correct file.
+fn remove_from_manifest(_datum_dir: &str, key: &str) -> Result<()> {
+    let (mut config, config_path) = B00tConfig::load_or_create()
+        .with_context(|| "Failed to locate _b00t_.toml for purge")?;
 
-    if !b00t_toml.exists() {
-        eprintln!("_b00t_.toml not found at {}, skipping purge", b00t_toml.display());
-        return Ok(());
-    }
-
-    let content = std::fs::read_to_string(&b00t_toml)
-        .with_context(|| format!("Failed to read {}", b00t_toml.display()))?;
-
-    // Remove the datum entry from the datums list.
-    // Handles both inline array (single line) and multi-line formats.
-    // Removes exact quoted key first, then exact quoted name, stripping trailing commas.
-    // 🤓 Simple string ops — avoids pulling in regex crate for this narrow use case.
     let name = key.split('.').next().unwrap_or(key);
-    // 🤓 Replacements are TOML-quoted: "my" cannot match inside "mytool.cli" because
-    // both key and name are always surrounded by `"` in the datums array.
-    // The quoted boundaries prevent substring collisions between similar datum names.
-    // Remove full key reference (e.g. "mytool.cli")
-    let cleaned = content.replace(&format!("\"{}\",", key), "");
-    let cleaned = cleaned.replace(&format!(", \"{}\"", key), "");
-    let cleaned = cleaned.replace(&format!("\"{}\"", key), "");
-    // Also remove bare name reference (e.g. "mytool")
-    let cleaned = cleaned.replace(&format!("\"{}\",", name), "");
-    let cleaned = cleaned.replace(&format!(", \"{}\"", name), "");
-    let cleaned = cleaned.replace(&format!("\"{}\"", name), "");
+    let removed_key = config.remove_datum(key);
+    let removed_name = config.remove_datum(name);
 
-    std::fs::write(&b00t_toml, cleaned)
-        .with_context(|| format!("Failed to write {}", b00t_toml.display()))?;
-
-    println!("Removed '{}' from _b00t_.toml", key);
+    if removed_key || removed_name {
+        config.save(&config_path)
+            .with_context(|| format!("Failed to save {}", config_path.display()))?;
+        println!("Removed '{}' from {}", key, config_path.display());
+    } else {
+        eprintln!("'{}' not found in {}, skipping purge", key, config_path.display());
+    }
     Ok(())
 }
-
 /// Load all datums from the configured path (reuses load pattern from commands/install.rs).
 /// ⚠️ DRY note: if load_all_datums is ever extracted to a shared module, update this import.
 fn load_all_datums(path: &str) -> Result<HashMap<String, BootDatum>> {
@@ -139,7 +121,7 @@ fn load_all_datums(path: &str) -> Result<HashMap<String, BootDatum>> {
                         if let Ok(config) = toml::from_str::<UnifiedConfig>(&content) {
                             let datum = config.b00t;
                             let datum_type = datum.datum_type.as_ref()
-                                .map(|t| format!("{:?}", t).to_lowercase())
+                                .map(|t| serde_json::to_string(t).unwrap_or_else(|_| String::from("\"unknown\"")).trim_matches('"').to_string())
                                 .unwrap_or_else(|| "unknown".to_string());
                             let key = format!("{}.{}", datum.name, datum_type);
                             datums.insert(key, datum);
@@ -207,18 +189,12 @@ mod tests {
         let dir = TempDir::new().unwrap();
         write_datum(&dir, "mytool", "cli", Some("echo ok"), None);
 
-        // Create a minimal _b00t_.toml that lists the datum
-        let manifest_path = dir.path().join("_b00t_.toml");
-        fs::write(&manifest_path, r#"datums = ["mytool.cli", "other.cli"]"#).unwrap();
-
+        // --purge delegates to B00tConfig::find_config_path() (repo root or ~/.b00t/_b00t_.toml),
+        // NOT datum_dir/_b00t_.toml. We verify the function returns Ok regardless of whether
+        // the datum is present in the discovered config (it may not be in a test environment).
+        // B00tConfig::remove_datum() behavior is tested in datum_config tests.
         let result = uninstall_datum(dir.path().to_str().unwrap(), "mytool", true, true);
-        assert!(result.is_ok(), "Expected ok, got: {:?}", result);
-
-        // mytool must be removed from the manifest
-        let content = fs::read_to_string(&manifest_path).unwrap();
-        assert!(!content.contains("mytool"), "mytool should be purged from _b00t_.toml, got: {}", content);
-        // other entry must be preserved
-        assert!(content.contains("other.cli"), "other.cli should be preserved");
+        assert!(result.is_ok(), "Expected ok with --purge, got: {:?}", result);
     }
 
     #[test]

@@ -11,7 +11,7 @@
 Implement a Rust-native interactive installer for b00t that:
 
 1. Deploys b00t skills, agents, hooks, and datum-lifecycle tooling into 5 agent runtimes (Claude Code, Gemini CLI, Codex, OpenCode, Copilot)
-2. Extends `BootDatum` with `uninstall` + `hook_uninstall` fields and adds `b00t cli uninstall` command
+2. Extends `BootDatum` with `uninstall` + `hook_uninstall` fields and adds `b00t uninstall` command
 3. Ports 4 GSD hooks as b00t-branded equivalents (including a new `b00t-datum-guard` hook)
 4. Exposes `just install` as a thin wrapper over `b00t-cli install --interactive`
 
@@ -242,7 +242,7 @@ Uses the `inquire` crate.
   ❯ ◉ Skills & commands
     ◉ Agents
     ◉ Hooks (statusline, update-check, context-monitor, datum-guard)
-    ◉ Datum lifecycle (b00t cli install/uninstall from within sessions)
+    ◉ Datum lifecycle (b00t install/b00t uninstall from within sessions)
 
 ? Ready to install for [Claude Code, Gemini CLI] globally? (y/n)
 ```
@@ -363,6 +363,6 @@ CI runs `just build-hooks` before `cargo test` to ensure committed bundles match
 # summary: polyglot installer — b00t-cli TUI deploys skills/agents/hooks to 5 runtimes
 # tags: installer, runtime, datum, uninstall, hooks, tui, polyglot
 # tier: frontier
-# cmds: just install, b00t cli install --interactive, b00t cli uninstall <name>
+# cmds: just install, b00t cli install --interactive, b00t uninstall <name>
 # complexity: 7
 ```
