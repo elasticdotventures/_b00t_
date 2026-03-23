@@ -65,6 +65,9 @@ zbus = { workspace = true, optional = true }
 url = "2.5"
 glob = "0.3.3"
 which = "7"
+inquire = "0.7"
+sha2 = "0.10"
+walkdir = "2"
 
 # Apalis - Background job processing for workflow execution
 apalis = "1.0.0-rc.3"
