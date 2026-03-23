@@ -567,7 +567,7 @@ impl ContentPackId {
             ContentPackId::Skills        => "Skills & commands",
             ContentPackId::Agents        => "Agents",
             ContentPackId::Hooks         => "Hooks (statusline, update-check, context-monitor, datum-guard)",
-            ContentPackId::DatumLifecycle => "Datum lifecycle (b00t cli install/uninstall)",
+            ContentPackId::DatumLifecycle => "Datum lifecycle (b00t install/b00t uninstall)",
         }
     }
 
