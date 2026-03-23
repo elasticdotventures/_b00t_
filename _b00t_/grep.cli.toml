@@ -10,6 +10,7 @@ hint = "Text search. Use rg (ripgrep) as primary; grep only for POSIX compatibil
 primary = "rg"
 fallback = "grep"
 install = "apt install ripgrep"
+uninstall = "sudo apt-get remove -y ripgrep"
 
 [cli.prefer_rg]
 reasons = [

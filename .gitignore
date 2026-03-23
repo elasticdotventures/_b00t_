@@ -335,3 +335,4 @@ ralphs/ralph-v1
 .nori-config.json
 .nori/
 libnull.rlib
+.worktrees/
