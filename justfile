@@ -165,6 +165,10 @@ bootstrap:
     B00T_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
     exec "${B00T_DIR}/b00t-lite.sh" "$@"
 
+# 🥾 Build Node.js hook bundles and distribute to all runtime hook dirs.
+build-hooks:
+    cd _b00t_/runtimes/hooks-src && npm install && node build.js
+
 # 🥾 Install b00t binaries + systemd unit files.
 # 💡 Recommended: sudo just install (sudo enables system-wide b00t@.service)
 #    Menu selects components; defaults to [2] binaries+service after 10s timeout.
@@ -237,6 +241,9 @@ install:
         fi
     fi
 
+# Install b00t skills/agents/hooks into agent runtimes (interactive TUI)
+install-runtimes: build-hooks
+    b00t-cli install --interactive
 
 # 💡 Recommended: sudo just installx
 #    sudo path → apt installs system packages; user path → user-local cargo/uv tools only

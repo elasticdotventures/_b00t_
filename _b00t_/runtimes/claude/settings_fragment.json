@@ -1,0 +1,8 @@
+{
+  "hooks": {
+    "SessionStart": [{"matcher": "", "hooks": [{"type": "command", "command": "node {{HOOKS_DIR}}/b00t-update-check.js"}]}],
+    "PostToolUse": [{"matcher": "Bash|Edit|Write|Agent|Task", "hooks": [{"type": "command", "command": "node {{HOOKS_DIR}}/b00t-context-monitor.js"}]}],
+    "PreToolUse": [{"matcher": "Bash", "hooks": [{"type": "command", "command": "node {{HOOKS_DIR}}/b00t-datum-guard.js"}]}]
+  },
+  "statusLine": "node {{HOOKS_DIR}}/b00t-statusline.js"
+}

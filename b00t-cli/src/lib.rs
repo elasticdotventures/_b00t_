@@ -8,6 +8,7 @@ pub mod bootstrap;
 pub mod budget_controller;
 pub mod cloud_sync;
 pub mod commands;
+pub mod install;
 pub mod datum_ai;
 pub mod datum_ai_model;
 pub mod datum_api;

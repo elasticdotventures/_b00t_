@@ -309,6 +309,17 @@ The system will:
         name: Option<String>,
         #[clap(long, help = "Show what would be installed for bootstrap mode")]
         dry_run: bool,
+        #[clap(long, help = "Interactive TUI installer for agent runtimes")]
+        interactive: bool,
+        /// Non-interactive: comma-separated runtime IDs (claude,gemini,codex,opencode,copilot)
+        #[clap(long, value_delimiter = ',')]
+        runtimes: Vec<String>,
+        /// Non-interactive: install scope (global or local)
+        #[clap(long, default_value = "global")]
+        scope: String,
+        /// Skip confirmation prompt (non-interactive mode)
+        #[clap(long, short = 'y')]
+        yes: bool,
     },
     #[clap(about = "Uninstall a datum by name (use --purge to remove from _b00t_.toml)")]
     Uninstall {
@@ -1287,8 +1298,42 @@ async fn main() {
                 std::process::exit(1);
             }
         }
-        Some(Commands::Install { name, dry_run }) => {
-            if let Some(name) = name {
+        Some(Commands::Install { name, dry_run, interactive, runtimes, scope, yes }) => {
+            if *interactive || !runtimes.is_empty() {
+                // Parse runtime IDs from comma-separated --runtimes arg
+                let mut runtime_ids_vec: Vec<b00t_cli::install::RuntimeId> = Vec::new();
+                let mut parse_error = false;
+                for r in runtimes.iter() {
+                    match r.as_str() {
+                        "claude"   => runtime_ids_vec.push(b00t_cli::install::RuntimeId::Claude),
+                        "gemini"   => runtime_ids_vec.push(b00t_cli::install::RuntimeId::Gemini),
+                        "codex"    => runtime_ids_vec.push(b00t_cli::install::RuntimeId::Codex),
+                        "opencode" => runtime_ids_vec.push(b00t_cli::install::RuntimeId::OpenCode),
+                        "copilot"  => runtime_ids_vec.push(b00t_cli::install::RuntimeId::Copilot),
+                        _ => { eprintln!("Install Error: unknown runtime '{}'. Valid: claude,gemini,codex,opencode,copilot", r); parse_error = true; }
+                    }
+                }
+                if parse_error {
+                    std::process::exit(1);
+                }
+                let runtime_ids: Option<Vec<b00t_cli::install::RuntimeId>> = if runtimes.is_empty() { None } else { Some(runtime_ids_vec) };
+                let scope_val = match scope.as_str() {
+                    "local" => {
+                        match std::env::current_dir() {
+                            Ok(dir) => Some(b00t_cli::install::InstallScope::Local(dir)),
+                            Err(e) => {
+                                eprintln!("Install Error: cannot determine current directory: {}", e);
+                                std::process::exit(1);
+                            }
+                        }
+                    }
+                    _       => Some(b00t_cli::install::InstallScope::Global),
+                };
+                if let Err(e) = b00t_cli::install::handle_install_command(*interactive, runtime_ids, scope_val, *yes) {
+                    eprintln!("Install Error: {}", e);
+                    std::process::exit(1);
+                }
+            } else if let Some(name) = name {
                 if let Err(e) = install_datum(&cli.path, name) {
                     eprintln!("Install Error: {}", e);
                     std::process::exit(1);
