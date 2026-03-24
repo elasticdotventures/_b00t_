@@ -1,9 +1,9 @@
-use anyhow::Result;
+use anyhow::{Context, Result};
 use std::path::PathBuf;
 use std::sync::Arc;
 use crate::install::adapter::*;
 use crate::install::content::{ContentPackId, FileCopyPack, ContentPack};
-use crate::install::manifest::{B00tInstallManifest, inject_managed_block, remove_managed_block};
+use crate::install::manifest::{B00tInstallManifest, remove_managed_block};
 
 pub struct ClaudeConfig {
     pub target_dir: PathBuf,
@@ -14,6 +14,24 @@ impl RuntimeConfig for ClaudeConfig {
     fn hooks_dir(&self) -> PathBuf { self.target_dir.join("hooks") }
     fn agents_dir(&self) -> PathBuf { self.target_dir.join("agents") }
     fn skills_dir(&self) -> PathBuf { self.target_dir.join("skills") }
+}
+
+/// Remove specific keys from a JSON settings file, writing back valid JSON.
+/// No-op if file does not exist. Keys missing from the file are silently skipped.
+fn remove_from_json_settings(path: &std::path::Path, keys: &[&str]) -> Result<()> {
+    if !path.exists() { return Ok(()); }
+    let content = std::fs::read_to_string(path)?;
+    let mut value: serde_json::Value = match serde_json::from_str(&content) {
+        Ok(v) => v,
+        Err(_) => return Ok(()), // already invalid — leave it alone
+    };
+    if let serde_json::Value::Object(ref mut map) = value {
+        for key in keys {
+            map.remove(*key);
+        }
+    }
+    std::fs::write(path, serde_json::to_string_pretty(&value)?)?;
+    Ok(())
 }
 
 #[derive(Default)]
@@ -80,9 +98,13 @@ impl RuntimeAdapter for ClaudeAdapter {
 
     fn uninstall(&self, manifest: &B00tInstallManifest) -> Result<()> {
         let mut m = manifest.clone();
-        // Remove managed blocks first
+        // Remove managed blocks first — JSON files use key-deletion, others use text-marker removal
         for block_path in &manifest.managed_blocks {
-            remove_managed_block(block_path)?;
+            if block_path.extension().and_then(|e| e.to_str()) == Some("json") {
+                remove_from_json_settings(block_path, &["hooks", "statusLine"])?;
+            } else {
+                remove_managed_block(block_path)?;
+            }
         }
         // Remove b00t-owned files
         let paths: Vec<PathBuf> = m.files.keys().cloned().collect();
@@ -111,11 +133,36 @@ impl RuntimeAdapter for ClaudeAdapter {
             eprintln!("⚠️  No settings_fragment.json for Claude runtime — skipping hook registration");
             return Ok(());
         }
-        let fragment = std::fs::read_to_string(&fragment_path)?;
-        // Substitute hooks_dir path into fragment
-        let fragment = fragment.replace("{{HOOKS_DIR}}", &hooks_dir.display().to_string());
+        let fragment_str = std::fs::read_to_string(&fragment_path)?
+            .replace("{{HOOKS_DIR}}", &hooks_dir.display().to_string());
 
-        inject_managed_block(&settings_path, &fragment)?;
+        let fragment: serde_json::Value = serde_json::from_str(&fragment_str)
+            .with_context(|| format!("Failed to parse settings_fragment.json: {}", fragment_path.display()))?;
+
+        // Read existing settings or start with empty object
+        let mut settings: serde_json::Value = if settings_path.exists() {
+            let content = std::fs::read_to_string(&settings_path)?;
+            serde_json::from_str(&content).unwrap_or(serde_json::Value::Object(Default::default()))
+        } else {
+            serde_json::Value::Object(Default::default())
+        };
+
+        // Merge fragment keys into settings (top-level merge)
+        if let (serde_json::Value::Object(settings_map), serde_json::Value::Object(fragment_map))
+            = (&mut settings, fragment)
+        {
+            for (key, value) in fragment_map {
+                settings_map.insert(key, value);
+            }
+        }
+
+        // Write back valid JSON
+        if let Some(parent) = settings_path.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+        std::fs::write(&settings_path, serde_json::to_string_pretty(&settings)?)?;
+
+        // Track in manifest for uninstall (JSON-aware cleanup via remove_from_json_settings)
         manifest.managed_blocks.push(settings_path);
         Ok(())
     }
@@ -164,5 +211,93 @@ mod tests {
         let manifest = adapter.install(&ctx).unwrap();
         assert_eq!(manifest.files.len(), 1);
         assert!(target_dir.path().join("b00t-manifest.json").exists());
+    }
+
+    #[test]
+    fn test_register_hooks_produces_valid_json() {
+        let tmp = TempDir::new().unwrap();
+        let hooks_src = tmp.path().join("hooks");
+        std::fs::create_dir_all(&hooks_src).unwrap();
+
+        // Minimal fragment with a top-level key that uses the placeholder
+        let fragment = r#"{"statusLine": "node {{HOOKS_DIR}}/b00t-statusline.js"}"#;
+        std::fs::write(tmp.path().join("settings_fragment.json"), fragment).unwrap();
+
+        let adapter = ClaudeAdapter;
+        let config = Arc::new(ClaudeConfig { target_dir: tmp.path().to_path_buf() });
+        let ctx = InstallContext {
+            scope: InstallScope::Local(tmp.path().to_path_buf()),
+            config,
+            content_packs: vec![ContentPackId::Hooks],
+            source_root: tmp.path().to_path_buf(),
+        };
+
+        let mut manifest = B00tInstallManifest::new(RuntimeId::Claude, InstallScope::Local(tmp.path().to_path_buf()));
+        adapter.register_hooks(&ctx, &mut manifest).unwrap();
+
+        // settings.json must be valid JSON
+        let content = std::fs::read_to_string(tmp.path().join("settings.json")).unwrap();
+        let parsed: serde_json::Value = serde_json::from_str(&content)
+            .expect("settings.json must be valid JSON");
+
+        assert!(parsed.get("statusLine").is_some(), "statusLine key must be present");
+
+        // {{HOOKS_DIR}} placeholder must be substituted
+        let status_line = parsed["statusLine"].as_str().unwrap();
+        assert!(!status_line.contains("{{HOOKS_DIR}}"), "placeholder must be substituted");
+        assert!(status_line.contains(&hooks_src.display().to_string()));
+
+        // manifest must track the settings path for uninstall
+        assert_eq!(manifest.managed_blocks.len(), 1);
+    }
+
+    #[test]
+    fn test_register_hooks_merges_into_existing_settings() {
+        let tmp = TempDir::new().unwrap();
+
+        // Pre-existing settings with a user key
+        std::fs::write(
+            tmp.path().join("settings.json"),
+            r#"{"enabledPlugins": {"my-plugin": true}}"#,
+        ).unwrap();
+
+        let fragment = r#"{"statusLine": "node {{HOOKS_DIR}}/b00t-statusline.js"}"#;
+        std::fs::write(tmp.path().join("settings_fragment.json"), fragment).unwrap();
+
+        let adapter = ClaudeAdapter;
+        let config = Arc::new(ClaudeConfig { target_dir: tmp.path().to_path_buf() });
+        let ctx = InstallContext {
+            scope: InstallScope::Local(tmp.path().to_path_buf()),
+            config,
+            content_packs: vec![ContentPackId::Hooks],
+            source_root: tmp.path().to_path_buf(),
+        };
+
+        let mut manifest = B00tInstallManifest::new(RuntimeId::Claude, InstallScope::Local(tmp.path().to_path_buf()));
+        adapter.register_hooks(&ctx, &mut manifest).unwrap();
+
+        let content = std::fs::read_to_string(tmp.path().join("settings.json")).unwrap();
+        let parsed: serde_json::Value = serde_json::from_str(&content)
+            .expect("settings.json must be valid JSON after merge");
+
+        // Original user key preserved
+        assert!(parsed.get("enabledPlugins").is_some(), "existing user keys must be preserved");
+        // Fragment key injected
+        assert!(parsed.get("statusLine").is_some(), "statusLine must be injected");
+    }
+
+    #[test]
+    fn test_remove_from_json_settings_deletes_keys() {
+        let tmp = TempDir::new().unwrap();
+        let file = tmp.path().join("settings.json");
+        std::fs::write(&file, r#"{"hooks": {}, "statusLine": "foo", "keep": true}"#).unwrap();
+
+        remove_from_json_settings(&file, &["hooks", "statusLine"]).unwrap();
+
+        let content = std::fs::read_to_string(&file).unwrap();
+        let parsed: serde_json::Value = serde_json::from_str(&content).unwrap();
+        assert!(parsed.get("hooks").is_none());
+        assert!(parsed.get("statusLine").is_none());
+        assert!(parsed.get("keep").is_some(), "unrelated keys must be preserved");
     }
 }
