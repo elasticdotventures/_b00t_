@@ -1,0 +1,43 @@
+const esbuild = require('esbuild');
+const path = require('path');
+const fs = require('fs');
+
+const HOOKS = [
+  'b00t-statusline',
+  'b00t-update-check',
+  'b00t-context-monitor',
+  'b00t-datum-guard',
+];
+
+// Output directories — committed pre-built
+const OUTPUT_DIRS = [
+  path.join(__dirname, '../claude/hooks'),
+  path.join(__dirname, '../gemini/hooks'),
+  path.join(__dirname, '../codex/hooks'),
+  path.join(__dirname, '../opencode/hooks'),
+  path.join(__dirname, '../copilot/hooks'),
+];
+
+for (const dir of OUTPUT_DIRS) {
+  fs.mkdirSync(dir, { recursive: true });
+}
+
+for (const hook of HOOKS) {
+  esbuild.buildSync({
+    entryPoints: [path.join(__dirname, `${hook}.ts`)],
+    bundle: true,
+    platform: 'node',
+    target: 'node18',
+    outfile: path.join(__dirname, `../claude/hooks/${hook}.js`),
+    minify: false,
+  });
+  console.log(`✅ Built ${hook}.js`);
+
+  // Copy to other runtime dirs
+  const built = fs.readFileSync(path.join(__dirname, `../claude/hooks/${hook}.js`));
+  for (const dir of OUTPUT_DIRS.slice(1)) {
+    fs.writeFileSync(path.join(dir, `${hook}.js`), built);
+  }
+}
+
+console.log('🥾 All hooks built and distributed.');
