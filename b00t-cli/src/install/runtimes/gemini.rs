@@ -1,0 +1,46 @@
+use anyhow::Result;
+use std::path::PathBuf;
+use std::sync::Arc;
+use crate::install::adapter::*;
+use crate::install::manifest::B00tInstallManifest;
+
+pub struct GeminiConfig { pub target_dir: PathBuf }
+
+impl RuntimeConfig for GeminiConfig {
+    fn settings_path(&self) -> PathBuf { self.target_dir.join("settings.json") }
+    fn hooks_dir(&self) -> PathBuf { self.target_dir.join("hooks") }
+    fn agents_dir(&self) -> PathBuf { self.target_dir.join("agents") }
+    fn skills_dir(&self) -> PathBuf { self.target_dir.join("skills") }
+}
+
+#[derive(Default)]
+pub struct GeminiAdapter;
+
+impl RuntimeAdapterTyped for GeminiAdapter {
+    type Config = GeminiConfig;
+    fn config_from_scope(&self, scope: &InstallScope) -> GeminiConfig {
+        GeminiConfig { target_dir: self.target_dir(scope) }
+    }
+}
+
+impl RuntimeAdapter for GeminiAdapter {
+    fn id(&self) -> RuntimeId { RuntimeId::Gemini }
+    fn target_dir(&self, scope: &InstallScope) -> PathBuf {
+        match scope {
+            InstallScope::Global => dirs::home_dir().unwrap_or_default().join(".gemini"),
+            InstallScope::Local(p) => p.join(".gemini"),
+        }
+    }
+    fn detect(&self) -> bool {
+        dirs::home_dir().map(|h| h.join(".gemini").exists()).unwrap_or(false)
+    }
+    fn default_config(&self, scope: &InstallScope) -> Arc<dyn RuntimeConfig> {
+        Arc::new(self.config_from_scope(scope))
+    }
+    fn install(&self, ctx: &InstallContext) -> Result<B00tInstallManifest> {
+        println!("TODO: GeminiAdapter::install");
+        Ok(B00tInstallManifest::new(RuntimeId::Gemini, ctx.scope.clone()))
+    }
+    fn uninstall(&self, _manifest: &B00tInstallManifest) -> Result<()> { Ok(()) }
+    fn register_hooks(&self, _ctx: &InstallContext, _manifest: &mut B00tInstallManifest) -> Result<()> { Ok(()) }
+}
