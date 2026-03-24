@@ -16,7 +16,8 @@ const remainingPct = contextTokensMax > 0
   : 100;
 
 // Write bridge for context-monitor
-const bridgeFile = path.join('/tmp', `b00t-ctx-${sessionId}.json`);
+const safeSessionId = sessionId.replace(/[^A-Za-z0-9_-]/g, '_');
+const bridgeFile = path.join('/tmp', `b00t-ctx-${safeSessionId}.json`);
 try {
   fs.writeFileSync(bridgeFile, JSON.stringify({ remaining_pct: remainingPct, updated_at: Date.now() }));
 } catch { /* non-fatal */ }
