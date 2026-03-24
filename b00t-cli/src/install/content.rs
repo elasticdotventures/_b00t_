@@ -21,6 +21,16 @@ impl ContentPackId {
         }
     }
 
+    /// Stable lowercase key used as `content_pack_id` in the manifest.
+    pub fn key(&self) -> &'static str {
+        match self {
+            ContentPackId::Skills        => "skills",
+            ContentPackId::Agents        => "agents",
+            ContentPackId::Hooks         => "hooks",
+            ContentPackId::DatumLifecycle => "datum_lifecycle",
+        }
+    }
+
     pub fn all() -> Vec<ContentPackId> {
         vec![
             ContentPackId::Skills,
@@ -70,16 +80,17 @@ impl ContentPack for FileCopyPack {
                 }
                 let content = std::fs::read(entry.path())?;
                 std::fs::write(&dest_path, &content)?;
-                manifest.record_file(&dest_path, &content);
+                manifest.record_file(&dest_path, &content, self.id.key());
             }
         }
         Ok(())
     }
 
     fn uninstall_from(&self, manifest: &mut B00tInstallManifest) -> Result<()> {
-        let to_remove: Vec<PathBuf> = manifest.files.keys()
-            .filter(|p| p.to_string_lossy().contains(&self.target_subdir))
-            .cloned()
+        let pack_key = self.id.key();
+        let to_remove: Vec<PathBuf> = manifest.files.iter()
+            .filter(|(_, entry)| entry.content_pack_id == pack_key)
+            .map(|(path, _)| path.clone())
             .collect();
 
         for path in to_remove {
