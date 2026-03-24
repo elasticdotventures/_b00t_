@@ -6,7 +6,8 @@ import * as path from 'path';
 import * as child_process from 'child_process';
 
 const input = JSON.parse(process.argv[2] || '{}');
-const sessionId: string = input?.session_id ?? 'unknown';
+// Sanitize sessionId to prevent path traversal when used in file names
+const sessionId: string = (input?.session_id ?? 'unknown').replace(/[^a-zA-Z0-9_]/g, '_');
 const model: string = input?.model ?? '?';
 const contextTokensUsed: number = input?.context_tokens_used ?? 0;
 const contextTokensMax: number = input?.context_tokens_max ?? 200000;
