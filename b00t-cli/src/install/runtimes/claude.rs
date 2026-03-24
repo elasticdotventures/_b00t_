@@ -49,7 +49,7 @@ impl RuntimeAdapter for ClaudeAdapter {
 
     fn target_dir(&self, scope: &InstallScope) -> Result<PathBuf> {
         match scope {
-            InstallScope::Global => Ok(home_dir_required()?.join(".claude")),
+            InstallScope::Global => Ok(super::require_home_dir("Claude")?.join(".claude")),
             InstallScope::Local(p) => Ok(p.join(".claude")),
         }
     }
@@ -184,7 +184,8 @@ mod tests {
     fn test_claude_target_dir_local() {
         let adapter = ClaudeAdapter;
         let project = PathBuf::from("/tmp/myproject");
-        let target = adapter.target_dir(&InstallScope::Local(project.clone())).unwrap();
+        let target = adapter.target_dir(&InstallScope::Local(project.clone()))
+            .expect("Local scope must never fail — no home dir lookup");
         assert_eq!(target, project.join(".claude"));
     }
 

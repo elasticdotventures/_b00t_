@@ -27,7 +27,7 @@ impl RuntimeAdapter for CopilotAdapter {
     fn id(&self) -> RuntimeId { RuntimeId::Copilot }
     fn target_dir(&self, scope: &InstallScope) -> Result<PathBuf> {
         match scope {
-            InstallScope::Global => Ok(home_dir_required()?.join(".copilot")),
+            InstallScope::Global => Ok(super::require_home_dir("Copilot")?.join(".copilot")),
             InstallScope::Local(p) => Ok(p.join(".copilot")),
         }
     }

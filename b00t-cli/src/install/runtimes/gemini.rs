@@ -27,7 +27,7 @@ impl RuntimeAdapter for GeminiAdapter {
     fn id(&self) -> RuntimeId { RuntimeId::Gemini }
     fn target_dir(&self, scope: &InstallScope) -> Result<PathBuf> {
         match scope {
-            InstallScope::Global => Ok(home_dir_required()?.join(".gemini")),
+            InstallScope::Global => Ok(super::require_home_dir("Gemini")?.join(".gemini")),
             InstallScope::Local(p) => Ok(p.join(".gemini")),
         }
     }

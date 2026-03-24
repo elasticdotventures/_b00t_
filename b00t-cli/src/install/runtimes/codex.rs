@@ -27,7 +27,7 @@ impl RuntimeAdapter for CodexAdapter {
     fn id(&self) -> RuntimeId { RuntimeId::Codex }
     fn target_dir(&self, scope: &InstallScope) -> Result<PathBuf> {
         match scope {
-            InstallScope::Global => Ok(home_dir_required()?.join(".codex")),
+            InstallScope::Global => Ok(super::require_home_dir("Codex")?.join(".codex")),
             InstallScope::Local(p) => Ok(p.join(".codex")),
         }
     }

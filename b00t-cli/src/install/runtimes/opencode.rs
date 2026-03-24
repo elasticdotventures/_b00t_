@@ -27,7 +27,7 @@ impl RuntimeAdapter for OpenCodeAdapter {
     fn id(&self) -> RuntimeId { RuntimeId::OpenCode }
     fn target_dir(&self, scope: &InstallScope) -> Result<PathBuf> {
         match scope {
-            InstallScope::Global => Ok(home_dir_required()?.join(".config/opencode")),
+            InstallScope::Global => Ok(super::require_home_dir("OpenCode")?.join(".config/opencode")),
             InstallScope::Local(p) => Ok(p.join(".config/opencode")),
         }
     }
