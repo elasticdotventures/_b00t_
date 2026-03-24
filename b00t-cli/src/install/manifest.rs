@@ -164,8 +164,9 @@ mod tests {
     #[test]
     fn test_inject_managed_block_creates_block() {
         let dir = TempDir::new().unwrap();
-        let file = dir.path().join("settings.json");
-        std::fs::write(&file, r#"{"existing": true}"#).unwrap();
+        // 🤓 use .tomllm (not .json); # markers corrupt JSON but are valid in .tomllm
+        let file = dir.path().join("settings.tomllm");
+        std::fs::write(&file, "existing = true\n").unwrap();
         inject_managed_block(&file, "injected content").unwrap();
         let result = std::fs::read_to_string(&file).unwrap();
         assert!(result.contains(MANAGED_BLOCK_START));
@@ -177,7 +178,7 @@ mod tests {
     #[test]
     fn test_remove_managed_block_preserves_user_content() {
         let dir = TempDir::new().unwrap();
-        let file = dir.path().join("settings.json");
+        let file = dir.path().join("settings.tomllm");
         let content = format!(
             "before\n{}\nmanaged\n{}\nafter\n",
             MANAGED_BLOCK_START, MANAGED_BLOCK_END
