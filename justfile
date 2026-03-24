@@ -241,6 +241,9 @@ install: build-hooks
         fi
     fi
 
+# Install b00t skills/agents/hooks into agent runtimes (interactive TUI)
+install-runtimes: build-hooks
+    b00t-cli install --interactive
 
 # 💡 Recommended: sudo just installx
 #    sudo path → apt installs system packages; user path → user-local cargo/uv tools only
