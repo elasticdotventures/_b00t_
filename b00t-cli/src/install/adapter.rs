@@ -1,7 +1,14 @@
-use anyhow::Result;
+use anyhow::{Context, Result};
 use std::path::PathBuf;
 use std::sync::Arc;
 use serde::{Deserialize, Serialize};
+
+/// Returns the current user's home directory, or a clear error if it cannot be determined.
+/// Prefer this over `dirs::home_dir().unwrap_or_default()` to avoid writing into a relative
+/// `~/...` path when `$HOME` is unset.
+pub fn home_dir_required() -> Result<PathBuf> {
+    dirs::home_dir().context("Cannot determine home directory — $HOME is not set")
+}
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum RuntimeId {

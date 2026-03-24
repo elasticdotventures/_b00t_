@@ -21,13 +21,18 @@ pub fn default_registry() -> AdapterRegistry {
     ])
 }
 
-/// Source root for runtime content: _b00t_/runtimes/ relative to workspace root
-pub fn runtimes_source_root() -> PathBuf {
-    std::env::var("B00T_ROOT")
-        .unwrap_or_else(|_| ".".to_string())
-        .parse::<PathBuf>()
-        .unwrap_or_else(|_| PathBuf::from("."))
-        .join("_b00t_/runtimes")
+/// Source root for runtime content: _b00t_/runtimes/ relative to workspace root.
+/// Uses get_workspace_root() (git rev-parse) so it works from any cwd, consistent
+/// with run_just_install. Returns Err when the directory does not exist.
+pub fn runtimes_source_root() -> Result<PathBuf> {
+    let root = PathBuf::from(crate::utils::get_workspace_root()).join("_b00t_/runtimes");
+    if !root.exists() {
+        anyhow::bail!(
+            "runtimes source directory not found: {}. Run from within the b00t repository.",
+            root.display()
+        );
+    }
+    Ok(root)
 }
 
 /// Main entry: run TUI or headless, then install all selected runtimes
@@ -46,10 +51,29 @@ pub fn handle_install_command(
             registry.detected().iter().map(|a| a.id()).collect()
         });
         let scope = scope_arg.unwrap_or(InstallScope::Global);
-        tui::headless_selection(runtimes, scope, content::ContentPackId::all())
+        let sel = tui::headless_selection(runtimes, scope, content::ContentPackId::all());
+        // In headless (non-interactive) mode without --yes, require explicit confirmation
+        if !yes {
+            let runtime_names: Vec<&str> = sel.runtimes.iter().map(RuntimeId::display_name).collect();
+            let scope_str = match &sel.scope {
+                InstallScope::Global => "globally".to_string(),
+                InstallScope::Local(p) => format!("locally in {}", p.display()),
+            };
+            let confirmed = inquire::Confirm::new(&format!(
+                "Install b00t for [{}] {}? (pass --yes to skip this prompt)",
+                runtime_names.join(", "), scope_str
+            ))
+            .with_default(false)
+            .prompt()
+            .map_err(|e| anyhow::anyhow!("Confirmation prompt failed (no TTY available?). Pass --yes to skip confirmation in non-interactive environments. Details: {}", e))?;
+            if !confirmed {
+                anyhow::bail!("Installation cancelled.");
+            }
+        }
+        sel
     };
 
-    let source_root = runtimes_source_root();
+    let source_root = runtimes_source_root()?;
 
     for runtime_id in &selection.runtimes {
         let adapter = registry.get(runtime_id)
@@ -77,6 +101,17 @@ pub fn handle_install_command(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::Mutex;
+
+    static ENV_MUTEX: Mutex<()> = Mutex::new(());
+
+    /// RAII guard that removes an env var on drop, ensuring cleanup even on panic.
+    struct EnvVarGuard(&'static str);
+    impl Drop for EnvVarGuard {
+        fn drop(&mut self) {
+            unsafe { std::env::remove_var(self.0); }
+        }
+    }
 
     #[test]
     fn test_default_registry_has_five_adapters() {
@@ -95,5 +130,39 @@ mod tests {
             content::ContentPackId::all(),
         );
         assert_eq!(selection.runtimes.len(), detected.len());
+    }
+
+    #[test]
+    fn test_runtimes_source_root_from_workspace() {
+        // When run from within the repo, runtimes_source_root() is anchored at the
+        // git workspace root. Verify the returned path ends with _b00t_/runtimes.
+        let root = crate::utils::get_workspace_root();
+        let expected = PathBuf::from(&root).join("_b00t_/runtimes");
+        if expected.exists() {
+            let result = runtimes_source_root();
+            assert!(result.is_ok(), "expected Ok, got {:?}", result);
+            assert_eq!(result.unwrap(), expected);
+        } else {
+            // The test environment has no runtimes dir; verify the function errors.
+            let result = runtimes_source_root();
+            assert!(result.is_err());
+            let msg = result.unwrap_err().to_string();
+            assert!(msg.contains("runtimes source directory not found"), "unexpected error: {}", msg);
+        }
+    }
+
+    #[test]
+    fn test_runtimes_source_root_errors_when_missing() {
+        // Override workspace root to a temp dir that has no _b00t_/runtimes.
+        let tmp = tempfile::tempdir().unwrap();
+        let _lock = ENV_MUTEX.lock().unwrap();
+        unsafe {
+            std::env::set_var("_B00T_TEST_ROOT", tmp.path().to_str().unwrap());
+        }
+        let _cleanup = EnvVarGuard("_B00T_TEST_ROOT");
+        let result = runtimes_source_root();
+        assert!(result.is_err());
+        let msg = result.unwrap_err().to_string();
+        assert!(msg.contains("runtimes source directory not found"), "unexpected error: {}", msg);
     }
 }
