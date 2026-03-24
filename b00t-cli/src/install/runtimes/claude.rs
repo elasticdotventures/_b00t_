@@ -39,20 +39,18 @@ pub struct ClaudeAdapter;
 
 impl RuntimeAdapterTyped for ClaudeAdapter {
     type Config = ClaudeConfig;
-    fn config_from_scope(&self, scope: &InstallScope) -> ClaudeConfig {
-        ClaudeConfig { target_dir: self.target_dir(scope) }
+    fn config_from_scope(&self, scope: &InstallScope) -> Result<ClaudeConfig> {
+        Ok(ClaudeConfig { target_dir: self.target_dir(scope)? })
     }
 }
 
 impl RuntimeAdapter for ClaudeAdapter {
     fn id(&self) -> RuntimeId { RuntimeId::Claude }
 
-    fn target_dir(&self, scope: &InstallScope) -> PathBuf {
+    fn target_dir(&self, scope: &InstallScope) -> Result<PathBuf> {
         match scope {
-            InstallScope::Global => dirs::home_dir()
-                .unwrap_or_else(|| PathBuf::from("~"))
-                .join(".claude"),
-            InstallScope::Local(p) => p.join(".claude"),
+            InstallScope::Global => Ok(super::require_home_dir("Claude")?.join(".claude")),
+            InstallScope::Local(p) => Ok(p.join(".claude")),
         }
     }
 
@@ -62,8 +60,8 @@ impl RuntimeAdapter for ClaudeAdapter {
             .unwrap_or(false)
     }
 
-    fn default_config(&self, scope: &InstallScope) -> Arc<dyn RuntimeConfig> {
-        Arc::new(self.config_from_scope(scope))
+    fn default_config(&self, scope: &InstallScope) -> Result<Arc<dyn RuntimeConfig>> {
+        Ok(Arc::new(self.config_from_scope(scope)?))
     }
 
     fn install(&self, ctx: &InstallContext) -> Result<B00tInstallManifest> {
@@ -176,7 +174,8 @@ mod tests {
     #[test]
     fn test_claude_target_dir_global() {
         let adapter = ClaudeAdapter;
-        let target = adapter.target_dir(&InstallScope::Global);
+        let target = adapter.target_dir(&InstallScope::Global)
+            .expect("home dir must be available in test environment");
         assert!(target.ends_with(".claude"));
         assert!(target.is_absolute());
     }
@@ -185,7 +184,8 @@ mod tests {
     fn test_claude_target_dir_local() {
         let adapter = ClaudeAdapter;
         let project = PathBuf::from("/tmp/myproject");
-        let target = adapter.target_dir(&InstallScope::Local(project.clone()));
+        let target = adapter.target_dir(&InstallScope::Local(project.clone()))
+            .expect("Local scope must never fail — no home dir lookup");
         assert_eq!(target, project.join(".claude"));
     }
 
