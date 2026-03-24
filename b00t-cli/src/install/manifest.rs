@@ -9,14 +9,24 @@ pub const MANIFEST_FILENAME: &str = "b00t-manifest.json";
 pub const MANAGED_BLOCK_START: &str = "# BEGIN B00T MANAGED BLOCK";
 pub const MANAGED_BLOCK_END: &str = "# END B00T MANAGED BLOCK";
 
+/// Per-file metadata stored in the manifest: allows safe, pack-scoped uninstall
+/// without fragile substring path matching.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ManifestFileEntry {
+    /// SHA256 hex digest of the installed content (for change detection)
+    pub sha256: String,
+    /// Stable key identifying which content pack owns this file (e.g. "skills")
+    pub content_pack_id: String,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct B00tInstallManifest {
     pub b00t_version: String,
     pub installed_at: String,
     pub runtime: String,
     pub scope: String,
-    /// Absolute paths → SHA256 hex digest
-    pub files: HashMap<PathBuf, String>,
+    /// Absolute paths → per-file metadata (SHA256 + owning content pack id)
+    pub files: HashMap<PathBuf, ManifestFileEntry>,
     /// Absolute paths to files containing managed blocks
     pub managed_blocks: Vec<PathBuf>,
 }
@@ -33,18 +43,21 @@ impl B00tInstallManifest {
         }
     }
 
-    /// Record a file as b00t-owned (absolute path, SHA256 of content)
-    pub fn record_file(&mut self, path: &Path, content: &[u8]) {
-        let digest = format!("{:x}", Sha256::digest(content));
-        self.files.insert(path.to_path_buf(), digest);
+    /// Record a file as b00t-owned (absolute path, SHA256 of content, owning pack id)
+    pub fn record_file(&mut self, path: &Path, content: &[u8], pack_id: &str) {
+        let sha256 = format!("{:x}", Sha256::digest(content));
+        self.files.insert(path.to_path_buf(), ManifestFileEntry {
+            sha256,
+            content_pack_id: pack_id.to_string(),
+        });
     }
 
     /// Return true if the file at `path` matches the recorded SHA256
     pub fn file_owned(&self, path: &Path) -> bool {
-        if let Some(recorded) = self.files.get(path) {
+        if let Some(entry) = self.files.get(path) {
             if let Ok(content) = std::fs::read(path) {
                 let digest = format!("{:x}", Sha256::digest(&content));
-                return digest == *recorded;
+                return digest == entry.sha256;
             }
         }
         false
@@ -118,7 +131,7 @@ mod tests {
         std::fs::write(&file_path, content).unwrap();
 
         let mut manifest = B00tInstallManifest::new(RuntimeId::Claude, InstallScope::Global);
-        manifest.record_file(&file_path, content);
+        manifest.record_file(&file_path, content, "skills");
         assert!(manifest.file_owned(&file_path));
     }
 
@@ -129,7 +142,7 @@ mod tests {
         std::fs::write(&file_path, b"original").unwrap();
 
         let mut manifest = B00tInstallManifest::new(RuntimeId::Claude, InstallScope::Global);
-        manifest.record_file(&file_path, b"original");
+        manifest.record_file(&file_path, b"original", "hooks");
 
         // Modify file
         std::fs::write(&file_path, b"modified by user").unwrap();
@@ -140,7 +153,10 @@ mod tests {
     fn test_manifest_save_and_load_roundtrip() {
         let dir = TempDir::new().unwrap();
         let mut manifest = B00tInstallManifest::new(RuntimeId::Gemini, InstallScope::Global);
-        manifest.files.insert(dir.path().join("foo.js"), "abc123".to_string());
+        manifest.files.insert(dir.path().join("foo.js"), ManifestFileEntry {
+            sha256: "abc123".to_string(),
+            content_pack_id: "skills".to_string(),
+        });
 
         manifest.save(dir.path()).unwrap();
         let loaded = B00tInstallManifest::load(dir.path()).unwrap();
@@ -153,7 +169,7 @@ mod tests {
         let dir = TempDir::new().unwrap();
         let abs_path = dir.path().join("skills/SKILL.md");
         let mut manifest = B00tInstallManifest::new(RuntimeId::Claude, InstallScope::Global);
-        manifest.record_file(&abs_path, b"content");
+        manifest.record_file(&abs_path, b"content", "skills");
 
         // All keys must be absolute
         for path in manifest.files.keys() {
