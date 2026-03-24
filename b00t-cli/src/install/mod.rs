@@ -49,18 +49,18 @@ pub fn handle_install_command(
         let sel = tui::headless_selection(runtimes, scope, content::ContentPackId::all());
         // In headless (non-interactive) mode without --yes, require explicit confirmation
         if !yes {
-            let runtime_names: Vec<&str> = sel.runtimes.iter().map(|r| r.display_name()).collect();
+            let runtime_names: Vec<&str> = sel.runtimes.iter().map(RuntimeId::display_name).collect();
             let scope_str = match &sel.scope {
                 InstallScope::Global => "globally".to_string(),
                 InstallScope::Local(p) => format!("locally in {}", p.display()),
             };
             let confirmed = inquire::Confirm::new(&format!(
-                "Ready to install for [{}] {}? (pass --yes to skip)",
+                "Install b00t for [{}] {}? (pass --yes to skip this prompt)",
                 runtime_names.join(", "), scope_str
             ))
             .with_default(false)
             .prompt()
-            .map_err(|e| anyhow::anyhow!("Confirmation failed: {}", e))?;
+            .map_err(|e| anyhow::anyhow!("Confirmation prompt failed (no TTY available?). Pass --yes to skip confirmation in non-interactive environments. Details: {}", e))?;
             if !confirmed {
                 anyhow::bail!("Installation cancelled.");
             }
