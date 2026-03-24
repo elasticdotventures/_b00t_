@@ -22,6 +22,16 @@ impl RuntimeId {
             RuntimeId::Copilot  => "Copilot",
         }
     }
+
+    pub fn source_dir_name(&self) -> &'static str {
+        match self {
+            RuntimeId::Claude   => "claude",
+            RuntimeId::Gemini   => "gemini",
+            RuntimeId::Codex    => "codex",
+            RuntimeId::OpenCode => "opencode",
+            RuntimeId::Copilot  => "copilot",
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
