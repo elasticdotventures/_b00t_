@@ -1301,16 +1301,22 @@ async fn main() {
         Some(Commands::Install { name, dry_run, interactive, runtimes, scope, yes }) => {
             if *interactive || !runtimes.is_empty() {
                 // Parse runtime IDs from comma-separated --runtimes arg
-                let runtime_ids: Option<Vec<b00t_cli::install::RuntimeId>> = if runtimes.is_empty() { None } else {
-                    Some(runtimes.iter().filter_map(|r| match r.as_str() {
-                        "claude"   => Some(b00t_cli::install::RuntimeId::Claude),
-                        "gemini"   => Some(b00t_cli::install::RuntimeId::Gemini),
-                        "codex"    => Some(b00t_cli::install::RuntimeId::Codex),
-                        "opencode" => Some(b00t_cli::install::RuntimeId::OpenCode),
-                        "copilot"  => Some(b00t_cli::install::RuntimeId::Copilot),
-                        _ => { eprintln!("Unknown runtime: {}", r); None }
-                    }).collect())
-                };
+                let mut runtime_ids_vec: Vec<b00t_cli::install::RuntimeId> = Vec::new();
+                let mut parse_error = false;
+                for r in runtimes.iter() {
+                    match r.as_str() {
+                        "claude"   => runtime_ids_vec.push(b00t_cli::install::RuntimeId::Claude),
+                        "gemini"   => runtime_ids_vec.push(b00t_cli::install::RuntimeId::Gemini),
+                        "codex"    => runtime_ids_vec.push(b00t_cli::install::RuntimeId::Codex),
+                        "opencode" => runtime_ids_vec.push(b00t_cli::install::RuntimeId::OpenCode),
+                        "copilot"  => runtime_ids_vec.push(b00t_cli::install::RuntimeId::Copilot),
+                        _ => { eprintln!("Install Error: unknown runtime '{}'. Valid: claude,gemini,codex,opencode,copilot", r); parse_error = true; }
+                    }
+                }
+                if parse_error {
+                    std::process::exit(1);
+                }
+                let runtime_ids: Option<Vec<b00t_cli::install::RuntimeId>> = if runtimes.is_empty() { None } else { Some(runtime_ids_vec) };
                 let scope_val = match scope.as_str() {
                     "local" => {
                         match std::env::current_dir() {

@@ -37,9 +37,8 @@ impl RuntimeAdapter for GeminiAdapter {
     fn default_config(&self, scope: &InstallScope) -> Arc<dyn RuntimeConfig> {
         Arc::new(self.config_from_scope(scope))
     }
-    fn install(&self, ctx: &InstallContext) -> Result<B00tInstallManifest> {
-        println!("TODO: GeminiAdapter::install");
-        Ok(B00tInstallManifest::new(RuntimeId::Gemini, ctx.scope.clone()))
+    fn install(&self, _ctx: &InstallContext) -> Result<B00tInstallManifest> {
+        Err(anyhow::anyhow!("{} runtime installer not yet implemented", self.id().display_name()))
     }
     fn uninstall(&self, _manifest: &B00tInstallManifest) -> Result<()> { Ok(()) }
     fn register_hooks(&self, _ctx: &InstallContext, _manifest: &mut B00tInstallManifest) -> Result<()> { Ok(()) }

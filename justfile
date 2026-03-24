@@ -172,7 +172,7 @@ build-hooks:
 # 🥾 Install b00t binaries + systemd unit files.
 # 💡 Recommended: sudo just install (sudo enables system-wide b00t@.service)
 #    Menu selects components; defaults to [2] binaries+service after 10s timeout.
-install: build-hooks
+install:
     #!/bin/bash
     set -euo pipefail
 
