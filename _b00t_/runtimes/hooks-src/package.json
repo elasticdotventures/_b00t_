@@ -1,0 +1,14 @@
+{
+  "name": "b00t-hooks",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "build": "node build.js",
+    "test": "node --test *.test.js"
+  },
+  "devDependencies": {
+    "esbuild": "^0.20.0",
+    "@types/node": "^20.0.0",
+    "typescript": "^5.0.0"
+  }
+}

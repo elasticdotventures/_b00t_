@@ -165,10 +165,14 @@ bootstrap:
     B00T_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
     exec "${B00T_DIR}/b00t-lite.sh" "$@"
 
+# 🥾 Build Node.js hook bundles and distribute to all runtime hook dirs.
+build-hooks:
+    cd _b00t_/runtimes/hooks-src && npm install && node build.js
+
 # 🥾 Install b00t binaries + systemd unit files.
 # 💡 Recommended: sudo just install (sudo enables system-wide b00t@.service)
 #    Menu selects components; defaults to [2] binaries+service after 10s timeout.
-install:
+install: build-hooks
     #!/bin/bash
     set -euo pipefail
 
