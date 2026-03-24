@@ -1,7 +1,14 @@
-use anyhow::Result;
+use anyhow::{Context, Result};
 use std::path::PathBuf;
 use std::sync::Arc;
 use serde::{Deserialize, Serialize};
+
+/// Returns the current user's home directory, or a clear error if it cannot be determined.
+/// Prefer this over `dirs::home_dir().unwrap_or_default()` to avoid writing into a relative
+/// `~/...` path when `$HOME` is unset.
+pub fn home_dir_required() -> Result<PathBuf> {
+    dirs::home_dir().context("Cannot determine home directory — $HOME is not set")
+}
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum RuntimeId {
@@ -59,9 +66,9 @@ pub struct InstallContext {
 /// Object-safe dispatch trait — no associated types
 pub trait RuntimeAdapter: Send + Sync {
     fn id(&self) -> RuntimeId;
-    fn target_dir(&self, scope: &InstallScope) -> PathBuf;
+    fn target_dir(&self, scope: &InstallScope) -> Result<PathBuf>;
     fn detect(&self) -> bool;
-    fn default_config(&self, scope: &InstallScope) -> Arc<dyn RuntimeConfig>;
+    fn default_config(&self, scope: &InstallScope) -> Result<Arc<dyn RuntimeConfig>>;
     fn install(&self, ctx: &InstallContext) -> Result<super::manifest::B00tInstallManifest>;
     fn uninstall(&self, manifest: &super::manifest::B00tInstallManifest) -> Result<()>;
     fn register_hooks(&self, ctx: &InstallContext, manifest: &mut super::manifest::B00tInstallManifest) -> Result<()>;
@@ -70,7 +77,7 @@ pub trait RuntimeAdapter: Send + Sync {
 /// Typed impl trait — associated Config type, used only at concrete impl level
 pub trait RuntimeAdapterTyped: RuntimeAdapter {
     type Config: RuntimeConfig;
-    fn config_from_scope(&self, scope: &InstallScope) -> Self::Config;
+    fn config_from_scope(&self, scope: &InstallScope) -> Result<Self::Config>;
 }
 
 pub struct AdapterRegistry {
@@ -116,10 +123,10 @@ mod tests {
 
     impl RuntimeAdapter for TestAdapter {
         fn id(&self) -> RuntimeId { self.id.clone() }
-        fn target_dir(&self, _scope: &InstallScope) -> PathBuf { PathBuf::from("/tmp/test") }
+        fn target_dir(&self, _scope: &InstallScope) -> Result<PathBuf> { Ok(PathBuf::from("/tmp/test")) }
         fn detect(&self) -> bool { self.detected }
-        fn default_config(&self, _scope: &InstallScope) -> Arc<dyn RuntimeConfig> {
-            Arc::new(TestAdapter { id: self.id.clone(), detected: self.detected })
+        fn default_config(&self, _scope: &InstallScope) -> Result<Arc<dyn RuntimeConfig>> {
+            Ok(Arc::new(TestAdapter { id: self.id.clone(), detected: self.detected }))
         }
         fn install(&self, _ctx: &InstallContext) -> Result<super::super::manifest::B00tInstallManifest> {
             Ok(super::super::manifest::B00tInstallManifest::new(self.id(), super::InstallScope::Global))

@@ -74,7 +74,7 @@ pub fn handle_install_command(
         let adapter = registry.get(runtime_id)
             .ok_or_else(|| anyhow::anyhow!("No adapter for {:?}", runtime_id))?;
 
-        let config = adapter.default_config(&selection.scope);
+        let config = adapter.default_config(&selection.scope)?;
         let runtime_source = source_root.join(runtime_id.source_dir_name());
 
         let ctx = InstallContext {
