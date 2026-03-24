@@ -18,24 +18,24 @@ pub struct OpenCodeAdapter;
 
 impl RuntimeAdapterTyped for OpenCodeAdapter {
     type Config = OpenCodeConfig;
-    fn config_from_scope(&self, scope: &InstallScope) -> OpenCodeConfig {
-        OpenCodeConfig { target_dir: self.target_dir(scope) }
+    fn config_from_scope(&self, scope: &InstallScope) -> Result<OpenCodeConfig> {
+        Ok(OpenCodeConfig { target_dir: self.target_dir(scope)? })
     }
 }
 
 impl RuntimeAdapter for OpenCodeAdapter {
     fn id(&self) -> RuntimeId { RuntimeId::OpenCode }
-    fn target_dir(&self, scope: &InstallScope) -> PathBuf {
+    fn target_dir(&self, scope: &InstallScope) -> Result<PathBuf> {
         match scope {
-            InstallScope::Global => dirs::home_dir().unwrap_or_default().join(".config/opencode"),
-            InstallScope::Local(p) => p.join(".config/opencode"),
+            InstallScope::Global => Ok(home_dir_required()?.join(".config/opencode")),
+            InstallScope::Local(p) => Ok(p.join(".config/opencode")),
         }
     }
     fn detect(&self) -> bool {
         dirs::home_dir().map(|h| h.join(".config/opencode").exists()).unwrap_or(false)
     }
-    fn default_config(&self, scope: &InstallScope) -> Arc<dyn RuntimeConfig> {
-        Arc::new(self.config_from_scope(scope))
+    fn default_config(&self, scope: &InstallScope) -> Result<Arc<dyn RuntimeConfig>> {
+        Ok(Arc::new(self.config_from_scope(scope)?))
     }
     fn install(&self, _ctx: &InstallContext) -> Result<B00tInstallManifest> {
         Err(anyhow::anyhow!("{} runtime installer not yet implemented", self.id().display_name()))
