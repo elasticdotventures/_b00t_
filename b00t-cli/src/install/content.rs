@@ -56,6 +56,8 @@ pub struct FileCopyPack {
     pub id: ContentPackId,
     pub source_dir: PathBuf,
     pub target_subdir: String,  // e.g. "skills", "agents"
+    /// When true, a missing source_dir is a hard error; when false, a warning is emitted instead.
+    pub required: bool,
 }
 
 impl ContentPack for FileCopyPack {
@@ -65,7 +67,20 @@ impl ContentPack for FileCopyPack {
 
     fn install_into(&self, target: &Path, manifest: &mut B00tInstallManifest) -> Result<()> {
         if !self.source_dir.exists() {
-            return Ok(()); // no content for this runtime yet — silent skip
+            if self.required {
+                anyhow::bail!(
+                    "content pack '{}': source directory '{}' does not exist — install would copy zero files",
+                    self.id().display_name(),
+                    self.source_dir.display()
+                );
+            } else {
+                eprintln!(
+                    "⚠️  content pack '{}': source directory '{}' not found — skipping",
+                    self.id().display_name(),
+                    self.source_dir.display()
+                );
+                return Ok(());
+            }
         }
         let dest = target.join(&self.target_subdir);
         std::fs::create_dir_all(&dest)?;
@@ -134,6 +149,7 @@ mod tests {
             id: ContentPackId::Skills,
             source_dir: source_dir.path().to_path_buf(),
             target_subdir: "skills".to_string(),
+            required: true,
         };
 
         let mut manifest = crate::install::manifest::B00tInstallManifest::new(
@@ -162,6 +178,7 @@ mod tests {
             id: ContentPackId::Hooks,
             source_dir: source_dir.path().to_path_buf(),
             target_subdir: "hooks".to_string(),
+            required: true,
         };
         let mut manifest = crate::install::manifest::B00tInstallManifest::new(
             RuntimeId::Claude, InstallScope::Global
@@ -177,5 +194,41 @@ mod tests {
         let backup = installed.with_extension("b00t-backup");
         assert!(backup.exists(), "Modified file should be backed up");
         assert!(installed.exists(), "Modified file should not be deleted");
+    }
+
+    #[test]
+    fn test_file_copy_pack_errors_when_required_source_missing() {
+        let target_dir = TempDir::new().unwrap();
+        let pack = FileCopyPack {
+            id: ContentPackId::Skills,
+            source_dir: PathBuf::from("/nonexistent/source/dir"),
+            target_subdir: "skills".to_string(),
+            required: true,
+        };
+        let mut manifest = crate::install::manifest::B00tInstallManifest::new(
+            RuntimeId::Claude, InstallScope::Global
+        );
+        let result = pack.install_into(target_dir.path(), &mut manifest);
+        assert!(result.is_err(), "required pack with missing source should return Err");
+        let msg = format!("{}", result.unwrap_err());
+        assert!(msg.contains("does not exist"), "error must mention missing source dir");
+        assert_eq!(manifest.files.len(), 0, "no files should be recorded on error");
+    }
+
+    #[test]
+    fn test_file_copy_pack_warns_when_optional_source_missing() {
+        let target_dir = TempDir::new().unwrap();
+        let pack = FileCopyPack {
+            id: ContentPackId::DatumLifecycle,
+            source_dir: PathBuf::from("/nonexistent/optional/dir"),
+            target_subdir: "skills".to_string(),
+            required: false,
+        };
+        let mut manifest = crate::install::manifest::B00tInstallManifest::new(
+            RuntimeId::Claude, InstallScope::Global
+        );
+        // optional pack with missing source should succeed with zero files installed
+        pack.install_into(target_dir.path(), &mut manifest).unwrap();
+        assert_eq!(manifest.files.len(), 0, "no files installed for missing optional source");
     }
 }

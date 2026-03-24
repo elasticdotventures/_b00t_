@@ -85,6 +85,7 @@ impl RuntimeAdapter for ClaudeAdapter {
                     ContentPackId::Agents => "agents".into(),
                     ContentPackId::Hooks  => "hooks".into(),
                 },
+                required: true,
             };
             pack.install_into(&target, &mut manifest)?;
         }
