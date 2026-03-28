@@ -336,3 +336,4 @@ ralphs/ralph-v1
 .nori/
 libnull.rlib
 .worktrees/
+.bugs/*.jsonl
