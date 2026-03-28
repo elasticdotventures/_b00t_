@@ -221,7 +221,7 @@ mod tests {
         std::fs::create_dir_all(&hooks_src).unwrap();
 
         // Minimal fragment with a top-level key that uses the placeholder
-        let fragment = r#"{"statusLine": "node {{HOOKS_DIR}}/b00t-statusline.js"}"#;
+        let fragment = r#"{"statusLine": {"command": "node {{HOOKS_DIR}}/b00t-statusline.js"}}"#;
         std::fs::write(tmp.path().join("settings_fragment.json"), fragment).unwrap();
 
         let adapter = ClaudeAdapter;
@@ -244,9 +244,10 @@ mod tests {
         assert!(parsed.get("statusLine").is_some(), "statusLine key must be present");
 
         // {{HOOKS_DIR}} placeholder must be substituted
-        let status_line = parsed["statusLine"].as_str().unwrap();
-        assert!(!status_line.contains("{{HOOKS_DIR}}"), "placeholder must be substituted");
-        assert!(status_line.contains(&hooks_src.display().to_string()));
+        let status_line_obj = parsed["statusLine"].as_object().unwrap();
+        let command = status_line_obj["command"].as_str().unwrap();
+        assert!(!command.contains("{{HOOKS_DIR}}"), "placeholder must be substituted");
+        assert!(command.contains(&hooks_src.display().to_string()));
 
         // manifest must track the settings path for uninstall
         assert_eq!(manifest.managed_blocks.len(), 1);
@@ -262,7 +263,7 @@ mod tests {
             r#"{"enabledPlugins": {"my-plugin": true}}"#,
         ).unwrap();
 
-        let fragment = r#"{"statusLine": "node {{HOOKS_DIR}}/b00t-statusline.js"}"#;
+        let fragment = r#"{"statusLine": {"command": "node {{HOOKS_DIR}}/b00t-statusline.js"}}"#;
         std::fs::write(tmp.path().join("settings_fragment.json"), fragment).unwrap();
 
         let adapter = ClaudeAdapter;
