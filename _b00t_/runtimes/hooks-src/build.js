@@ -7,6 +7,7 @@ const HOOKS = [
   'b00t-update-check',
   'b00t-context-monitor',
   'b00t-datum-guard',
+  'b00t-bug-capture',
 ];
 
 // Output directories — committed pre-built
