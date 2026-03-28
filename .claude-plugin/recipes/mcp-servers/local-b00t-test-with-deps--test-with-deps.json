@@ -1,0 +1,21 @@
+{
+  "description": "Test MCP server with dependencies",
+  "id": "local.b00t/test-with-deps",
+  "mcpServers": {
+    "test-with-deps": {
+      "args": [
+        "test-package"
+      ],
+      "command": "uvx",
+      "transport": "stdio"
+    }
+  },
+  "name": "test-with-deps",
+  "references": [],
+  "source": "registry",
+  "tags": [
+    "b00t",
+    "local"
+  ],
+  "version": "0.1.0"
+}

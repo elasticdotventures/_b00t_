@@ -153,6 +153,14 @@ release:
     echo "📦 Tagging, release creation, binaries, and crates publishing now flow through GitHub Actions"
     echo "🔗 Check workflow: https://github.com/elasticdotventures/dotfiles/actions"
 
+# Generate deterministic Claude marketplace + MCP role recipes.
+marketplace-generate:
+    python3 scripts/generate_claude_marketplace.py --repo-root .
+
+# Validate generated marketplace artifacts are up-to-date.
+marketplace-check:
+    python3 scripts/generate_claude_marketplace.py --repo-root . --check
+
 
 # 🥾 Bootstrap b00t on a fresh machine (no cargo/just required).
 # 💡例 curl the script and pipe to bash, or run directly:

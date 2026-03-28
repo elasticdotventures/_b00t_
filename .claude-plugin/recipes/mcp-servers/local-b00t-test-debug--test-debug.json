@@ -1,0 +1,22 @@
+{
+  "description": "MCP server",
+  "id": "local.b00t/test-debug",
+  "mcpServers": {
+    "test-debug": {
+      "args": [
+        "-y",
+        "@test/debug"
+      ],
+      "command": "npx",
+      "transport": "stdio"
+    }
+  },
+  "name": "test-debug",
+  "references": [],
+  "source": "registry",
+  "tags": [
+    "b00t",
+    "local"
+  ],
+  "version": "0.1.0"
+}

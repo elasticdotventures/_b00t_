@@ -1,0 +1,22 @@
+{
+  "description": "MCP server",
+  "id": "local.b00t/test-new",
+  "mcpServers": {
+    "test-new": {
+      "args": [
+        "-y",
+        "@test/new"
+      ],
+      "command": "npx",
+      "transport": "stdio"
+    }
+  },
+  "name": "test-new",
+  "references": [],
+  "source": "registry",
+  "tags": [
+    "b00t",
+    "local"
+  ],
+  "version": "0.1.0"
+}

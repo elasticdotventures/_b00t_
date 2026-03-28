@@ -70,9 +70,12 @@ Enforces Don't Repeat Yourself and Never Reinvent the Wheel principles.
 # Install plugins
 /plugin install b00t@b00t-plugins
 /plugin install next-task@b00t-plugins
+/plugin install skill-document-understanding@b00t-plugins
 ```
 
 > **Tip:** For local development, use `/plugin marketplace add /path/to/.b00t`
+> 
+> MCP bundle recipes are generated to `.claude-plugin/recipes/{skills,roles}/*.json`.
 
 ## Usage
 

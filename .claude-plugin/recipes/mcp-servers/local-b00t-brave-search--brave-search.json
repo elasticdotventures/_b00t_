@@ -1,0 +1,22 @@
+{
+  "description": "Brave Search API integration",
+  "id": "local.b00t/brave-search",
+  "mcpServers": {
+    "brave-search": {
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-brave-search"
+      ],
+      "command": "npx",
+      "transport": "stdio"
+    }
+  },
+  "name": "brave-search",
+  "references": [],
+  "source": "registry",
+  "tags": [
+    "b00t",
+    "local"
+  ],
+  "version": "0.1.0"
+}

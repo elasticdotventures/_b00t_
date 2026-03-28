@@ -1,0 +1,20 @@
+{
+  "description": "Test description",
+  "id": "io.test/test-server",
+  "mcpServers": {
+    "Test Server": {
+      "args": [
+        "--stdio"
+      ],
+      "command": "test-cmd",
+      "transport": "stdio"
+    }
+  },
+  "name": "Test Server",
+  "references": [],
+  "source": "registry",
+  "tags": [
+    "test"
+  ],
+  "version": "0.1.0"
+}

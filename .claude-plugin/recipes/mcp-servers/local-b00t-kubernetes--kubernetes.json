@@ -1,0 +1,21 @@
+{
+  "description": "Kubernetes cluster management via MCP",
+  "id": "local.b00t/kubernetes",
+  "mcpServers": {
+    "kubernetes": {
+      "args": [
+        "mcp-server-kubernetes"
+      ],
+      "command": "npx",
+      "transport": "stdio"
+    }
+  },
+  "name": "kubernetes",
+  "references": [],
+  "source": "registry",
+  "tags": [
+    "b00t",
+    "local"
+  ],
+  "version": "0.1.0"
+}

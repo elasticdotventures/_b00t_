@@ -1,0 +1,22 @@
+{
+  "description": "MCP server",
+  "id": "local.b00t/filesystem",
+  "mcpServers": {
+    "filesystem": {
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-filesystem"
+      ],
+      "command": "npx",
+      "transport": "stdio"
+    }
+  },
+  "name": "filesystem",
+  "references": [],
+  "source": "registry",
+  "tags": [
+    "b00t",
+    "local"
+  ],
+  "version": "0.1.0"
+}

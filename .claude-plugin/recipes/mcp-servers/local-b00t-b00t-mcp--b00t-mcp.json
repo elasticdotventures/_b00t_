@@ -1,0 +1,21 @@
+{
+  "description": "MCP server for b00t-cli command proxy with ACL filtering",
+  "id": "local.b00t/b00t-mcp",
+  "mcpServers": {
+    "b00t-mcp": {
+      "args": [
+        "--stdio"
+      ],
+      "command": "b00t-mcp",
+      "transport": "stdio"
+    }
+  },
+  "name": "b00t-mcp",
+  "references": [],
+  "source": "registry",
+  "tags": [
+    "b00t",
+    "local"
+  ],
+  "version": "0.1.0"
+}

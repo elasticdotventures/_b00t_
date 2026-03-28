@@ -1,0 +1,25 @@
+{
+  "description": "Multi-method MCP server (testing new format)",
+  "id": "local.b00t/legacy-test",
+  "mcpServers": {
+    "legacy-test": {
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-filesystem"
+      ],
+      "command": "npx",
+      "env": {
+        "FILESYSTEM_ACCESS": "true"
+      },
+      "transport": "stdio"
+    }
+  },
+  "name": "legacy-test",
+  "references": [],
+  "source": "registry",
+  "tags": [
+    "b00t",
+    "local"
+  ],
+  "version": "0.1.0"
+}

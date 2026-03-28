@@ -1,0 +1,22 @@
+{
+  "description": "MCP server",
+  "id": "local.b00t/memory",
+  "mcpServers": {
+    "memory": {
+      "args": [
+        "-y",
+        "@buger/probe-mcp"
+      ],
+      "command": "npx",
+      "transport": "stdio"
+    }
+  },
+  "name": "memory",
+  "references": [],
+  "source": "registry",
+  "tags": [
+    "b00t",
+    "local"
+  ],
+  "version": "0.1.0"
+}

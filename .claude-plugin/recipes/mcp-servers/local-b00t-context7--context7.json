@@ -1,0 +1,22 @@
+{
+  "description": "MCP server",
+  "id": "local.b00t/context7",
+  "mcpServers": {
+    "context7": {
+      "args": [
+        "-y",
+        "@upstash/context7-mcp"
+      ],
+      "command": "bunx",
+      "transport": "stdio"
+    }
+  },
+  "name": "context7",
+  "references": [],
+  "source": "registry",
+  "tags": [
+    "b00t",
+    "local"
+  ],
+  "version": "0.1.0"
+}

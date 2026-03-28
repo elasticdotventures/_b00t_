@@ -1,0 +1,21 @@
+{
+  "description": "AWS Documentation MCP server with multiple deployment methods (test)",
+  "id": "local.b00t/aws-docs-test",
+  "mcpServers": {
+    "aws-docs-test": {
+      "args": [
+        "awslabs.aws-documentation-mcp-server@latest"
+      ],
+      "command": "uvx",
+      "transport": "stdio"
+    }
+  },
+  "name": "aws-docs-test",
+  "references": [],
+  "source": "registry",
+  "tags": [
+    "b00t",
+    "local"
+  ],
+  "version": "0.1.0"
+}

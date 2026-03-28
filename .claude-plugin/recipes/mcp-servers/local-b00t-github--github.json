@@ -1,0 +1,22 @@
+{
+  "description": "GitHub MCP server",
+  "id": "local.b00t/github",
+  "mcpServers": {
+    "github": {
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-github"
+      ],
+      "command": "npx",
+      "transport": "stdio"
+    }
+  },
+  "name": "github",
+  "references": [],
+  "source": "registry",
+  "tags": [
+    "b00t",
+    "local"
+  ],
+  "version": "0.1.0"
+}

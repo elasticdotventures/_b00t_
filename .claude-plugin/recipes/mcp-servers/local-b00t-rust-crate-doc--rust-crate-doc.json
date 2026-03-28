@@ -1,0 +1,23 @@
+{
+  "description": "Rust crate documentation access and search",
+  "id": "local.b00t/rust-crate-doc",
+  "mcpServers": {
+    "rust-crate-doc": {
+      "args": [
+        "cratedocs",
+        "stdio",
+        "--debug"
+      ],
+      "command": "bash",
+      "transport": "stdio"
+    }
+  },
+  "name": "rust-crate-doc",
+  "references": [],
+  "source": "registry",
+  "tags": [
+    "b00t",
+    "local"
+  ],
+  "version": "0.1.0"
+}

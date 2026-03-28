@@ -1,0 +1,21 @@
+{
+  "description": "MCP server",
+  "id": "local.b00t/kubernetes-flux159",
+  "mcpServers": {
+    "kubernetes-flux159": {
+      "args": [
+        "mcp-server-kubernetes"
+      ],
+      "command": "npx",
+      "transport": "stdio"
+    }
+  },
+  "name": "kubernetes-flux159",
+  "references": [],
+  "source": "registry",
+  "tags": [
+    "b00t",
+    "local"
+  ],
+  "version": "0.1.0"
+}

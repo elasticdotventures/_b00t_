@@ -1,0 +1,22 @@
+{
+  "description": "MCP server",
+  "id": "local.b00t/playwright",
+  "mcpServers": {
+    "playwright": {
+      "args": [
+        "-y",
+        "@executeautomation/playwright-mcp-server"
+      ],
+      "command": "npx",
+      "transport": "stdio"
+    }
+  },
+  "name": "playwright",
+  "references": [],
+  "source": "registry",
+  "tags": [
+    "b00t",
+    "local"
+  ],
+  "version": "0.1.0"
+}

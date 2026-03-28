@@ -1,0 +1,19 @@
+{
+  "description": "MCP HTTP server",
+  "id": "local.b00t/test-http",
+  "mcpServers": {
+    "test-http": {
+      "args": [],
+      "command": "npx",
+      "transport": "stdio"
+    }
+  },
+  "name": "test-http",
+  "references": [],
+  "source": "registry",
+  "tags": [
+    "b00t",
+    "local"
+  ],
+  "version": "0.1.0"
+}

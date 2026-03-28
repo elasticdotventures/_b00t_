@@ -1,0 +1,21 @@
+{
+  "description": "Justfile MCP server",
+  "id": "local.b00t/just-mcp",
+  "mcpServers": {
+    "just-mcp": {
+      "args": [
+        "--stdio"
+      ],
+      "command": "just-mcp",
+      "transport": "stdio"
+    }
+  },
+  "name": "just-mcp",
+  "references": [],
+  "source": "registry",
+  "tags": [
+    "b00t",
+    "local"
+  ],
+  "version": "0.1.0"
+}

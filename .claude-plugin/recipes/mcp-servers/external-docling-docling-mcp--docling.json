@@ -1,0 +1,29 @@
+{
+  "description": "Docling MCP server for document parsing, OCR, markdown conversion, and extraction",
+  "id": "external.docling/docling-mcp",
+  "mcpServers": {
+    "docling": {
+      "args": [
+        "--from",
+        "docling-mcp",
+        "docling-mcp-server",
+        "--transport",
+        "stdio"
+      ],
+      "command": "uvx",
+      "transport": "stdio"
+    }
+  },
+  "name": "docling",
+  "references": [
+    "https://github.com/docling-project/docling",
+    "https://github.com/docling-project/docling-mcp"
+  ],
+  "source": "external",
+  "tags": [
+    "docling",
+    "documents",
+    "ocr"
+  ],
+  "version": "0.1.0"
+}

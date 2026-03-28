@@ -1,0 +1,26 @@
+{
+  "description": "AWS Knowledge MCP server with multiple deployment methods (test)",
+  "id": "local.b00t/aws-knowledge-test",
+  "mcpServers": {
+    "aws-knowledge-test": {
+      "args": [
+        "mcp-remote",
+        "https://knowledge-mcp.global.api.aws"
+      ],
+      "command": "npx",
+      "env": {
+        "AWS_REGION": "us-east-1",
+        "LOG_LEVEL": "ERROR"
+      },
+      "transport": "stdio"
+    }
+  },
+  "name": "aws-knowledge-test",
+  "references": [],
+  "source": "registry",
+  "tags": [
+    "b00t",
+    "local"
+  ],
+  "version": "0.1.0"
+}
