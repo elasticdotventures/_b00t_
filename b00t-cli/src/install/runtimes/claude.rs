@@ -100,7 +100,7 @@ impl RuntimeAdapter for ClaudeAdapter {
         // Remove managed blocks first — JSON files use key-deletion, others use text-marker removal
         for block_path in &manifest.managed_blocks {
             if block_path.extension().and_then(|e| e.to_str()) == Some("json") {
-                remove_from_json_settings(block_path, &["hooks", "statusLine"])?;
+                remove_from_json_settings(block_path, &["hooks", "statusLine", "_note"])?;
             } else {
                 remove_managed_block(block_path)?;
             }
@@ -301,5 +301,19 @@ mod tests {
         assert!(parsed.get("hooks").is_none());
         assert!(parsed.get("statusLine").is_none());
         assert!(parsed.get("keep").is_some(), "unrelated keys must be preserved");
+    }
+
+    #[test]
+    fn test_uninstall_removes_note_key() {
+        let tmp = TempDir::new().unwrap();
+        let file = tmp.path().join("settings.json");
+        std::fs::write(&file, r#"{"_note":"DO NOT EDIT","hooks":{},"keep":true}"#).unwrap();
+
+        remove_from_json_settings(&file, &["hooks", "statusLine", "_note"]).unwrap();
+
+        let content = std::fs::read_to_string(&file).unwrap();
+        let parsed: serde_json::Value = serde_json::from_str(&content).unwrap();
+        assert!(parsed.get("_note").is_none(), "_note must be removed on uninstall");
+        assert!(parsed.get("keep").is_some(), "unrelated keys preserved");
     }
 }
