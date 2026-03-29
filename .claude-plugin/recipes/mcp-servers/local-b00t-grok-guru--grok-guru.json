@@ -23,7 +23,8 @@
   "source": "registry",
   "tags": [
     "b00t",
-    "local"
+    "local",
+    "essential"
   ],
   "version": "0.1.0"
 }
