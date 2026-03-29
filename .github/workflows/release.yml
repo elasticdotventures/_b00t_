@@ -67,6 +67,25 @@ jobs:
         if: inputs.run_tests
         run: cargo test --workspace --all-features
 
+      - name: Generate Claude marketplace artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/generate_claude_marketplace.py --repo-root .
+          python3 scripts/generate_claude_marketplace.py --repo-root . --check
+
+      - name: Package Claude marketplace artifacts
+        id: marketplace-artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          ARTIFACT="claude-marketplace-${{ steps.version.outputs.tag }}.tar.gz"
+          tar -czf "${ARTIFACT}" \
+            .claude-plugin \
+            plugins/roles \
+            plugins/skills
+          echo "artifact=${ARTIFACT}" >> "$GITHUB_OUTPUT"
+
       - name: Create annotated tag
         shell: bash
         run: |
@@ -84,25 +103,6 @@ jobs:
             --target "${GITHUB_SHA}" \
             --title "Release ${{ steps.version.outputs.tag }}" \
             --generate-notes
-
-      - name: Generate Claude marketplace artifacts
-        shell: bash
-        run: |
-          set -euo pipefail
-          python3 scripts/generate_claude_marketplace.py --repo-root .
-          python3 scripts/generate_claude_marketplace.py --repo-root . --check
-
-      - name: Package Claude marketplace artifacts
-        shell: bash
-        run: |
-          set -euo pipefail
-          ARTIFACT="claude-marketplace-${{ steps.version.outputs.tag }}.tar.gz"
-          tar -czf "${ARTIFACT}" \
-            .claude-plugin \
-            plugins/roles \
-            plugins/skills
-          echo "artifact=${ARTIFACT}" >> "$GITHUB_OUTPUT"
-        id: marketplace-artifact
 
       - name: Upload Claude marketplace asset
         env:

@@ -67,13 +67,12 @@ def _recipe_file_name(server_id: str, server_name: str) -> str:
     return f"{_slugify(server_id)}--{_slugify(server_name)}.json"
 
 
-def _clean_generated_dir(path: Path, check: bool) -> bool:
-    if not path.exists():
+def _has_stale_files(directory: Path, expected_paths: set[Path], recursive: bool) -> bool:
+    """Return True if *directory* contains any file not present in *expected_paths*."""
+    if not directory.exists():
         return False
-    if check:
-        return False
-    shutil.rmtree(path)
-    return True
+    glob = directory.rglob("*.json") if recursive else directory.glob("*.json")
+    return any(f not in expected_paths for f in glob)
 
 
 def generate(
@@ -93,15 +92,25 @@ def generate(
     generated_roles_plugin_dir = repo_root / "plugins" / "roles"
     generated_skills_plugin_dir = repo_root / "plugins" / "skills"
 
-    changed |= _clean_generated_dir(mcp_recipe_dir, check)
-    changed |= _clean_generated_dir(roles_recipe_dir, check)
-    changed |= _clean_generated_dir(skills_recipe_dir, check)
-    changed |= _clean_generated_dir(generated_roles_plugin_dir, check)
-    changed |= _clean_generated_dir(generated_skills_plugin_dir, check)
+    # Flat recipe directories whose contents are fully regenerated each run.
+    # In check mode we leave them intact and compare against expected_paths at the end.
+    # In write mode we nuke them first so stale files are automatically removed.
+    if not check:
+        for d in (
+            mcp_recipe_dir,
+            roles_recipe_dir,
+            skills_recipe_dir,
+            generated_roles_plugin_dir,
+            generated_skills_plugin_dir,
+        ):
+            if d.exists():
+                shutil.rmtree(d)
+        mcp_recipe_dir.mkdir(parents=True, exist_ok=True)
+        roles_recipe_dir.mkdir(parents=True, exist_ok=True)
+        skills_recipe_dir.mkdir(parents=True, exist_ok=True)
 
-    mcp_recipe_dir.mkdir(parents=True, exist_ok=True)
-    roles_recipe_dir.mkdir(parents=True, exist_ok=True)
-    skills_recipe_dir.mkdir(parents=True, exist_ok=True)
+    # Track every path we intend to produce; used for stale-file detection in check mode.
+    expected_paths: set[Path] = set()
 
     marketplace_cfg = roles_doc["marketplace"]
     base_plugins = list(roles_doc.get("base_plugins", []))
@@ -135,10 +144,13 @@ def generate(
                 mcp_key: dict(server.get("config", {})),
             },
         }
-        changed |= _write_json(mcp_recipe_dir / _recipe_file_name(sid, sname), recipe, check)
+        recipe_path = mcp_recipe_dir / _recipe_file_name(sid, sname)
+        expected_paths.add(recipe_path)
+        changed |= _write_json(recipe_path, recipe, check)
 
-    generated_roles_plugin_dir.mkdir(parents=True, exist_ok=True)
-    generated_skills_plugin_dir.mkdir(parents=True, exist_ok=True)
+    if not check:
+        generated_roles_plugin_dir.mkdir(parents=True, exist_ok=True)
+        generated_skills_plugin_dir.mkdir(parents=True, exist_ok=True)
 
     for bundle in bundle_entries:
         bundle_type = str(bundle.get("type", "role"))
@@ -169,7 +181,9 @@ def generate(
                     sname: dict(server.get("config", {})),
                 },
             }
-            changed |= _write_json(mcp_recipe_dir / recipe_name, recipe, check)
+            recipe_path = mcp_recipe_dir / recipe_name
+            expected_paths.add(recipe_path)
+            changed |= _write_json(recipe_path, recipe, check)
 
             # Keep names deterministic and unique.
             mcp_key = sname
@@ -192,7 +206,9 @@ def generate(
             "mcpServers": merged_mcp_servers,
         }
         recipe_dir = roles_recipe_dir if bundle_type == "role" else skills_recipe_dir
-        changed |= _write_json(recipe_dir / f"{bundle_id}.json", bundle_recipe, check)
+        bundle_recipe_path = recipe_dir / f"{bundle_id}.json"
+        expected_paths.add(bundle_recipe_path)
+        changed |= _write_json(bundle_recipe_path, bundle_recipe, check)
 
         plugin_root = generated_roles_plugin_dir if bundle_type == "role" else generated_skills_plugin_dir
         bundle_plugin_dir = plugin_root / bundle_id / ".claude-plugin"
@@ -214,7 +230,9 @@ def generate(
                 "recipe": f"../../../.claude-plugin/recipes/{bundle_type}s/{bundle_id}.json",
             },
         }
-        changed |= _write_json(bundle_plugin_dir / "plugin.json", bundle_plugin_manifest, check)
+        plugin_manifest_path = bundle_plugin_dir / "plugin.json"
+        expected_paths.add(plugin_manifest_path)
+        changed |= _write_json(plugin_manifest_path, bundle_plugin_manifest, check)
 
         bundle_plugins.append(
             {
@@ -235,15 +253,30 @@ def generate(
         },
         "plugins": sorted(base_plugins + bundle_plugins, key=lambda p: p["name"]),
     }
-    changed |= _write_json(repo_root / ".claude-plugin" / "marketplace.json", marketplace, check)
+    marketplace_path = repo_root / ".claude-plugin" / "marketplace.json"
+    expected_paths.add(marketplace_path)
+    changed |= _write_json(marketplace_path, marketplace, check)
 
+    # Count expected MCP recipe files deterministically.
+    # Filter by parent directory because expected_paths also contains marketplace.json,
+    # index.json, bundle recipe files, and plugin manifests from other directories.
+    expected_mcp_recipe_count = sum(1 for p in expected_paths if p.parent == mcp_recipe_dir)
     index = {
         "generated_at": "deterministic",
         "marketplace": marketplace_cfg["name"],
         "bundle_count": len(bundle_entries),
-        "mcp_recipe_count": len(list(mcp_recipe_dir.glob("*.json"))),
+        "mcp_recipe_count": expected_mcp_recipe_count,
     }
-    changed |= _write_json(recipes_root / "index.json", index, check)
+    index_path = recipes_root / "index.json"
+    expected_paths.add(index_path)
+    changed |= _write_json(index_path, index, check)
+
+    # In check mode, flag stale files in flat recipe directories that wouldn't be regenerated.
+    if check:
+        for gen_dir in (mcp_recipe_dir, roles_recipe_dir, skills_recipe_dir):
+            changed |= _has_stale_files(gen_dir, expected_paths, recursive=False)
+        for gen_dir in (generated_roles_plugin_dir, generated_skills_plugin_dir):
+            changed |= _has_stale_files(gen_dir, expected_paths, recursive=True)
 
     if check and changed:
         return 1
