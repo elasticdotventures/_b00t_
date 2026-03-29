@@ -6,5 +6,5 @@
     "PostToolUseFailure": [{"matcher": "Bash", "hooks": [{"type": "command", "command": "node {{HOOKS_DIR}}/b00t-bug-capture.js"}]}],
     "PreToolUse": [{"matcher": "Bash", "hooks": [{"type": "command", "command": "node {{HOOKS_DIR}}/b00t-datum-guard.js"}]}]
   },
-  "statusLine": {"command": "node {{HOOKS_DIR}}/b00t-statusline.js"}
+  "statusLine": {"type": "command", "command": "node {{HOOKS_DIR}}/b00t-statusline.js"}
 }

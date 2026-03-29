@@ -221,7 +221,7 @@ mod tests {
         std::fs::create_dir_all(&hooks_src).unwrap();
 
         // Minimal fragment with a top-level key that uses the placeholder
-        let fragment = r#"{"statusLine": {"command": "node {{HOOKS_DIR}}/b00t-statusline.js"}}"#;
+        let fragment = r#"{"statusLine": {"type": "command", "command": "node {{HOOKS_DIR}}/b00t-statusline.js"}}"#;
         std::fs::write(tmp.path().join("settings_fragment.json"), fragment).unwrap();
 
         let adapter = ClaudeAdapter;
@@ -263,7 +263,7 @@ mod tests {
             r#"{"enabledPlugins": {"my-plugin": true}}"#,
         ).unwrap();
 
-        let fragment = r#"{"statusLine": {"command": "node {{HOOKS_DIR}}/b00t-statusline.js"}}"#;
+        let fragment = r#"{"statusLine": {"type": "command", "command": "node {{HOOKS_DIR}}/b00t-statusline.js"}}"#;
         std::fs::write(tmp.path().join("settings_fragment.json"), fragment).unwrap();
 
         let adapter = ClaudeAdapter;
