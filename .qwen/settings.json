@@ -1,0 +1,26 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(b00t *)",
+      "Bash(b00t-mcp *)",
+      "Bash(qwen *)",
+      "WebFetch(github.com)",
+      "Bash(chmod *)",
+      "Bash(jq *)",
+      "Bash(just *)",
+      "Bash(git add *)",
+      "Bash(git commit *)",
+      "Bash(b00t-cli *)",
+      "Bash(toml *)",
+      "Bash(python3 *)",
+      "Bash(do *)",
+      "Bash(done)",
+      "Bash(cargo install *)",
+      "Bash(git push *)",
+      "Bash(cp *)",
+      "Bash(./b00t.sh *)",
+      "Bash(grep_search *)"
+    ]
+  },
+  "$version": 3
+}

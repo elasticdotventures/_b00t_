@@ -29,6 +29,7 @@ pub mod version {
 pub mod agent_coordination;
 pub mod agent_manager;
 pub mod aaiii;
+pub mod datum_lsp;
 pub mod dual_grok;
 pub mod irontology_bridge;
 pub mod ai_client;
