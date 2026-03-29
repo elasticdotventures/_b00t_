@@ -1,11 +1,51 @@
 #!/usr/bin/env bash
 # b00t Ralph loop entrypoint used by b00t-cli up.
 # Accepts: --tool <tool> [--max-iterations <n>] [n]
+# 
+# 🤓 AAIII: Abstract AI Inference Interface - auto-detects available AI tools
+# Priority: qwen > claude > codex > opencode > amp > mistralrs
 
 set -euo pipefail
 
+# Auto-detect available AI tools
+detect_tool() {
+    # Check for qwen (new priority - Qwen Code CLI)
+    if command -v qwen >/dev/null 2>&1; then
+        echo "qwen"
+        return 0
+    fi
+    # Check for claude (Claude Code)
+    if command -v claude >/dev/null 2>&1; then
+        echo "claude"
+        return 0
+    fi
+    # Check for codex (OpenAI Codex)
+    if command -v codex >/dev/null 2>&1; then
+        echo "codex"
+        return 0
+    fi
+    # Check for opencode
+    if command -v opencode >/dev/null 2>&1; then
+        echo "opencode"
+        return 0
+    fi
+    # Check for amp
+    if command -v amp >/dev/null 2>&1; then
+        echo "amp"
+        return 0
+    fi
+    # Check for mistralrs server
+    if curl -fsS "http://localhost:${MISTRALRS_PORT:-8181}/v1/models" >/dev/null 2>&1; then
+        echo "mistralrs"
+        return 0
+    fi
+    # Fallback
+    echo "none"
+    return 1
+}
+
 # Defaults (can be overridden by env or flags)
-TOOL="${TOOL:-${B00T_TOOL:-claude}}"
+TOOL="${TOOL:-${B00T_TOOL:-auto}}"
 MAX_ITERATIONS=10
 ROLE="${B00T_ROLE:-developer}"
 LOOP_SLEEP_SECONDS="${LOOP_SLEEP_SECONDS:-3}"
@@ -20,7 +60,14 @@ MISTRALRS_MODEL_NAME="${MISTRALRS_MODEL_NAME:-mistral}"
 # Parse CLI args: --tool <tool> [--max-iterations <n>] [<n>]
 while [[ $# -gt 0 ]]; do
     case "$1" in
-        --tool) TOOL="$2"; shift 2 ;;
+        --tool) 
+            TOOL="$2"
+            if [[ "$TOOL" == "auto" ]]; then
+                TOOL="$(detect_tool)" || TOOL="none"
+                log "auto-detected tool: ${TOOL}"
+            fi
+            shift 2 
+            ;;
         --max-iterations) MAX_ITERATIONS="$2"; shift 2 ;;
         --role) ROLE="$2"; shift 2 ;;
         --sleep) LOOP_SLEEP_SECONDS="$2"; shift 2 ;;
@@ -129,6 +176,12 @@ run_mistralrs_step() {
 run_external_step() {
     local prompt="$1"
     case "${TOOL}" in
+        qwen)
+            # Qwen Code CLI - use -p for prompt mode
+            if command -v qwen >/dev/null 2>&1; then
+                qwen -p "${prompt}" 2>/dev/null || true
+            fi
+            ;;
         claude)
             if command -v claude >/dev/null 2>&1; then
                 claude -p "${prompt}" 2>/dev/null || true
