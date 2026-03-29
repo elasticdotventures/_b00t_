@@ -341,6 +341,11 @@ impl KvStore {
         self.config.backend
     }
 
+    /// Get KV config (for host/port info)
+    pub fn config(&self) -> &KvConfig {
+        &self.config
+    }
+
     /// Ping the KV store
     pub fn ping(&self) -> Result<bool> {
         match self.config.backend {

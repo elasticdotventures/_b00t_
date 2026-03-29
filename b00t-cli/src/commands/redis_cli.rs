@@ -63,17 +63,18 @@ pub fn redis_enabled(role: Option<&str>, force: bool) -> bool {
 pub async fn handle_redis_command(cmd: RedisCommands, _force: bool) -> Result<()> {
     // Auto-detect KV backend (Valkey > Redis > ForgeKV > File)
     let config = KvConfig::detect();
+    let backend = config.backend; // Save backend before move
     let store = KvStore::new(config);
 
     if !store.ping().unwrap_or(false) {
-        eprintln!("⚠️  KV backend {} not responding", config.backend);
+        eprintln!("⚠️  KV backend {} not responding", backend);
     }
 
     match cmd {
         RedisCommands::Status => {
             println!("🔍 KV Store Status");
-            println!("Backend: {}", config.backend);
-            println!("Host: {}:{}" , config.host, config.port);
+            println!("Backend: {}", backend);
+            println!("Host: {}:{}" , store.config().host, store.config().port);
             match store.ping() {
                 Ok(true) => println!("Status: ✅ Connected"),
                 Ok(false) => println!("Status: ❌ Not responding"),
