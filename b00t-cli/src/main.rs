@@ -28,8 +28,7 @@ use b00t_cli::commands::{
     JobCommands,
     K8sCommands,
     McpCommands, ModelCommands,
-    OntologyCommands,
-    RedisCommands, SessionCommands, SkillCommands, SoulCommands, StackCommands,
+    OntologyCommands, SessionCommands, SkillCommands, SoulCommands, StackCommands,
     TutorialCommands, VersionCommands, WhatismyCommands
 
 
@@ -346,11 +345,6 @@ The system will:
     Ontology {
         #[clap(subcommand)]
         ontology_command: OntologyCommands,
-    },
-    #[clap(about = "Redis/ForgeKV store management and agent coordination")]
-    Redis {
-        #[clap(subcommand)]
-        redis_command: RedisCommands,
     },
     #[clap(about = "Tutorial progression tracking for role-based datum onboarding")]
     Tutorial {
@@ -1362,13 +1356,6 @@ async fn main() {
         }
         Some(Commands::Ontology { ontology_command }) => {
             if let Err(e) = ontology_command.execute() {
-                eprintln!("Error: {}", e);
-                std::process::exit(1);
-            }
-        }
-        Some(Commands::Redis { redis_command }) => {
-            use b00t_cli::commands::redis::handle_redis_command;
-            if let Err(e) = handle_redis_command(redis_command.clone()).await {
                 eprintln!("Error: {}", e);
                 std::process::exit(1);
             }

@@ -51,7 +51,6 @@ pub use k8s::K8sCommands;
 pub use mcp::McpCommands;
 pub use model::ModelCommands;
 pub use ontology::OntologyCommands;
-pub use redis::RedisCommands;
 pub use session::SessionCommands;
 pub use skill::SkillCommands;
 pub use soul::SoulCommands;

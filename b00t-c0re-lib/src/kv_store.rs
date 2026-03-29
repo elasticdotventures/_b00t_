@@ -1,27 +1,34 @@
-//! Unified KV store abstraction with Redis/ForgeKV detection
+//! Internal KV store abstraction with auto-detection
 //!
-//! Provides a common interface for key-value storage with automatic
-//! backend detection:
-//! 1. Redis (redis-cli or redis crate)
-//! 2. ForgeKV (RESP2-compatible, rust-native alternative)
-//! 3. File-based fallback (for development without KV server)
+//! Provides transparent key-value storage for b00t internal use:
+//! 1. Valkey (Redis-compatible, preferred)
+//! 2. Redis (redis-cli available and responding)
+//! 3. ForgeKV (RESP2-compatible, rust-native)
+//! 4. File-based fallback (development without KV server)
+//!
+//! 🤓 This is INTERNAL ONLY - no CLI exposure, used by agent coordination
 
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
+use shellexpand::tilde;
 use std::collections::HashMap;
+use std::fs;
+use std::path::Path;
 use std::process::Command;
 
-/// KV store backend type
+/// KV store backend type (internal)
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum KvBackend {
-    Redis,
-    ForgeKV,
-    File,
+    Valkey,  // Preferred - fully open source
+    Redis,   // Original
+    ForgeKV, // Rust-native alternative
+    File,    // Fallback for development
 }
 
 impl std::fmt::Display for KvBackend {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
+            KvBackend::Valkey => write!(f, "Valkey"),
             KvBackend::Redis => write!(f, "Redis"),
             KvBackend::ForgeKV => write!(f, "ForgeKV"),
             KvBackend::File => write!(f, "File"),
@@ -54,18 +61,27 @@ impl Default for KvConfig {
 }
 
 impl KvConfig {
-    /// Detect best available KV backend
+    /// Detect best available KV backend (priority: Valkey > Redis > ForgeKV > File)
     pub fn detect() -> Self {
-        // Try Redis first
+        // Try Valkey first (check INFO server for valkey signature)
+        if Self::check_valkey() {
+            eprintln!("🔍 KV backend detected: Valkey (preferred)");
+            return Self {
+                backend: KvBackend::Valkey,
+                ..Default::default()
+            };
+        }
+
+        // Try Redis (redis-cli PONG response)
         if Self::check_redis_cli() {
-            eprintln!("🔍 KV backend detected: Redis (redis-cli)");
+            eprintln!("🔍 KV backend detected: Redis");
             return Self {
                 backend: KvBackend::Redis,
                 ..Default::default()
             };
         }
 
-        // Try ForgeKV (same port, RESP2 compatible)
+        // Try ForgeKV (same RESP2 protocol, check for forgekv signature)
         if Self::check_forgekv() {
             eprintln!("🔍 KV backend detected: ForgeKV");
             return Self {
@@ -74,12 +90,22 @@ impl KvConfig {
             };
         }
 
-        // Fallback to file-based
-        eprintln!("🔍 KV backend: File (no Redis/ForgeKV server detected)");
+        // Fallback to file-based (silent, for development)
         Self::default()
     }
 
-    /// Check if redis-cli is available and responsive
+    /// Check if Valkey is available (Redis-compatible with different INFO)
+    fn check_valkey() -> bool {
+        Command::new("redis-cli")
+            .args(["-p", "6379", "INFO", "server"])
+            .output()
+            .ok()
+            .and_then(|out| String::from_utf8(out.stdout).ok())
+            .map(|s| s.to_lowercase().contains("valkey"))
+            .unwrap_or(false)
+    }
+
+    /// Check if Redis is available (redis-cli PONG response)
     fn check_redis_cli() -> bool {
         Command::new("redis-cli")
             .args(["-p", "6379", "PING"])
@@ -90,7 +116,7 @@ impl KvConfig {
             .unwrap_or(false)
     }
 
-    /// Check if ForgeKV is available (also responds to PING)
+    /// Check if ForgeKV is available (RESP2 compatible, check signature)
     fn check_forgekv() -> bool {
         // ForgeKV is RESP2 compatible, so same check as Redis
         // Could differentiate by checking INFO or version
@@ -133,7 +159,7 @@ impl KvStore {
     /// Get a value from the KV store
     pub fn get(&self, key: &str) -> Result<Option<String>> {
         match self.config.backend {
-            KvBackend::Redis | KvBackend::ForgeKV => self.get_redis(key),
+            KvBackend::Valkey | KvBackend::Redis | KvBackend::ForgeKV => self.get_redis(key),
             KvBackend::File => self.get_file(key),
         }
     }
@@ -141,7 +167,7 @@ impl KvStore {
     /// Set a value in the KV store
     pub fn set(&self, key: &str, value: &str, expire_secs: Option<u64>) -> Result<()> {
         match self.config.backend {
-            KvBackend::Redis | KvBackend::ForgeKV => self.set_redis(key, value, expire_secs),
+            KvBackend::Valkey | KvBackend::Redis | KvBackend::ForgeKV => self.set_redis(key, value, expire_secs),
             KvBackend::File => self.set_file(key, value),
         }
     }
@@ -149,7 +175,7 @@ impl KvStore {
     /// Delete a key from the KV store
     pub fn del(&self, key: &str) -> Result<usize> {
         match self.config.backend {
-            KvBackend::Redis | KvBackend::ForgeKV => self.del_redis(key),
+            KvBackend::Valkey | KvBackend::Redis | KvBackend::ForgeKV => self.del_redis(key),
             KvBackend::File => self.del_file(key),
         }
     }
@@ -157,7 +183,7 @@ impl KvStore {
     /// Check if key exists
     pub fn exists(&self, key: &str) -> Result<bool> {
         match self.config.backend {
-            KvBackend::Redis | KvBackend::ForgeKV => self.exists_redis(key),
+            KvBackend::Valkey | KvBackend::Redis | KvBackend::ForgeKV => self.exists_redis(key),
             KvBackend::File => self.exists_file(key),
         }
     }
@@ -165,7 +191,7 @@ impl KvStore {
     /// Publish a message to a channel
     pub fn publish(&self, channel: &str, message: &str) -> Result<usize> {
         match self.config.backend {
-            KvBackend::Redis | KvBackend::ForgeKV => self.publish_redis(channel, message),
+            KvBackend::Valkey | KvBackend::Redis | KvBackend::ForgeKV => self.publish_redis(channel, message),
             KvBackend::File => Ok(0), // File backend doesn't support pub/sub
         }
     }
@@ -177,11 +203,12 @@ impl KvStore {
             .output()
             .context("Failed to execute redis-cli GET")?;
 
-        let result = String::from_utf8_lossy(&output.stdout).trim().to_string();
-        if result == "(nil)" || result.is_empty() {
+        let result = String::from_utf8_lossy(&output.stdout);
+        let trimmed = result.trim();
+        if trimmed == "(nil)" || trimmed.is_empty() {
             Ok(None)
         } else {
-            Ok(Some(result))
+            Ok(Some(trimmed.to_string()))
         }
     }
 
@@ -207,8 +234,8 @@ impl KvStore {
             .output()
             .context("Failed to execute redis-cli DEL")?;
 
-        let result = String::from_utf8_lossy(&output.stdout).trim();
-        result.parse::<usize>().context("Failed to parse DEL result")
+        let result = String::from_utf8_lossy(&output.stdout);
+        result.trim().parse::<usize>().context("Failed to parse DEL result")
     }
 
     fn exists_redis(&self, key: &str) -> Result<bool> {
@@ -217,8 +244,8 @@ impl KvStore {
             .output()
             .context("Failed to execute redis-cli EXISTS")?;
 
-        let result = String::from_utf8_lossy(&output.stdout).trim();
-        Ok(result == "1")
+        let result = String::from_utf8_lossy(&output.stdout);
+        Ok(result.trim() == "1")
     }
 
     fn publish_redis(&self, channel: &str, message: &str) -> Result<usize> {
@@ -227,18 +254,16 @@ impl KvStore {
             .output()
             .context("Failed to execute redis-cli PUBLISH")?;
 
-        let result = String::from_utf8_lossy(&output.stdout).trim();
-        result.parse::<usize>().context("Failed to parse PUBLISH result")
+        let result = String::from_utf8_lossy(&output.stdout);
+        result.trim().parse::<usize>().context("Failed to parse PUBLISH result")
     }
 
     // File backend implementations
     fn get_file(&self, key: &str) -> Result<Option<String>> {
-        use std::fs;
-        
         let file_path = self.config.file_path.as_deref().unwrap_or("~/.b00t/kv-store.json");
         let expanded = shellexpand::tilde(file_path);
-        
-        if !std::path::Path::new(expanded.as_ref()).exists() {
+
+        if !Path::new(expanded.as_ref()).exists() {
             return Ok(None);
         }
 
@@ -250,12 +275,10 @@ impl KvStore {
     }
 
     fn set_file(&self, key: &str, value: &str) -> Result<()> {
-        use std::fs;
-        
         let file_path = self.config.file_path.as_deref().unwrap_or("~/.b00t/kv-store.json");
         let expanded = shellexpand::tilde(file_path);
-        let path = std::path::Path::new(expanded.as_ref());
-        
+        let path = Path::new(expanded.as_ref());
+
         // Create directory if needed
         if let Some(parent) = path.parent() {
             fs::create_dir_all(parent).ok();
@@ -278,12 +301,10 @@ impl KvStore {
     }
 
     fn del_file(&self, key: &str) -> Result<usize> {
-        use std::fs;
-        
         let file_path = self.config.file_path.as_deref().unwrap_or("~/.b00t/kv-store.json");
         let expanded = shellexpand::tilde(file_path);
-        let path = std::path::Path::new(expanded.as_ref());
-        
+        let path = Path::new(expanded.as_ref());
+
         if !path.exists() {
             return Ok(0);
         }
@@ -323,14 +344,14 @@ impl KvStore {
     /// Ping the KV store
     pub fn ping(&self) -> Result<bool> {
         match self.config.backend {
-            KvBackend::Redis | KvBackend::ForgeKV => {
+            KvBackend::Valkey | KvBackend::Redis | KvBackend::ForgeKV => {
                 let output = Command::new("redis-cli")
                     .args(["-p", &self.config.port.to_string(), "PING"])
                     .output()
                     .context("Failed to execute redis-cli PING")?;
-                
-                let result = String::from_utf8_lossy(&output.stdout).trim();
-                Ok(result == "PONG")
+
+                let result = String::from_utf8_lossy(&output.stdout);
+                Ok(result.trim() == "PONG")
             }
             KvBackend::File => {
                 // File backend is always "available" if we can write to it
@@ -356,7 +377,7 @@ mod tests {
     fn test_kv_config_detect() {
         let config = KvConfig::detect();
         // Should always return a valid config (may be File backend)
-        assert!(matches!(config.backend, KvBackend::Redis | KvBackend::ForgeKV | KvBackend::File));
+        assert!(matches!(config.backend, KvBackend::Valkey | KvBackend::Redis | KvBackend::ForgeKV | KvBackend::File));
     }
 
     #[test]
