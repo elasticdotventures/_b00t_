@@ -42,6 +42,7 @@ pub mod knowledge;
 pub mod kv_store;
 pub mod learn;
 pub mod lfmf;
+pub mod lsp_proxy;
 pub mod man_page;
 pub mod mcp_proxy;
 pub mod mcp_registry;

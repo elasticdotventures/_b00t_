@@ -32,6 +32,21 @@
                     "justfile"
                 ],
                 "configuration": "./vscode-just/syntaxes/justfile-language-configuration.json"
+            },
+            {
+                "id": "tomllm",
+                "aliases": [
+                    "TOMLLM",
+                    "tomllm"
+                ],
+                "extensions": [
+                    ".tomllm",
+                    ".toml"
+                ],
+                "filenames": [
+                    "justfile"
+                ],
+                "configuration": "./vscode-tomllm/language-configuration.json"
             }
         ],
         "grammars": [
@@ -39,6 +54,11 @@
                 "language": "justfile",
                 "scopeName": "source.justfile",
                 "path": "./vscode-just/syntaxes/justfile.tmLanguage.json"
+            },
+            {
+                "language": "tomllm",
+                "scopeName": "source.tomllm",
+                "path": "./vscode-tomllm/syntaxes/tomllm.tmLanguage.json"
             }
         ],
         "commands": [

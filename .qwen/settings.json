@@ -19,7 +19,9 @@
       "Bash(git push *)",
       "Bash(cp *)",
       "Bash(./b00t.sh *)",
-      "Bash(grep_search *)"
+      "Bash(grep_search *)",
+      "Bash(mkdir *)",
+      "Bash(rm *)"
     ]
   },
   "$version": 3

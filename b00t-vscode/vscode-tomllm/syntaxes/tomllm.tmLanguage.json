@@ -1,0 +1,59 @@
+{
+    "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+    "name": "TOMLLM",
+    "scopeName": "source.tomllm",
+    "fileTypes": ["tomllm", "toml"],
+    "patterns": [
+        { "include": "#comments" },
+        { "include": "#sections" },
+        { "include": "#keys" },
+        { "include": "#values" }
+    ],
+    "repository": {
+        "comments": {
+            "name": "comment.line.number-sign.tomllm",
+            "match": "(#).*$",
+            "captures": {
+                "1": { "name": "punctuation.definition.comment.tomllm" }
+            }
+        },
+        "sections": {
+            "name": "entity.name.section.tomllm",
+            "match": "^\\s*(\\[\\[?)(.+?)(\\]?\\])\\s*(#.*)?$",
+            "captures": {
+                "1": { "name": "punctuation.definition.section.tomllm" },
+                "2": { "name": "entity.name.section.tomllm" },
+                "3": { "name": "punctuation.definition.section.tomllm" },
+                "4": { "name": "comment.line.number-sign.tomllm" }
+            }
+        },
+        "keys": {
+            "name": "variable.other.key.tomllm",
+            "match": "^\\s*([a-zA-Z0-9_-]+)\\s*(=)",
+            "captures": {
+                "1": { "name": "variable.other.key.tomllm" },
+                "2": { "name": "punctuation.separator.key-value.tomllm" }
+            }
+        },
+        "values": {
+            "patterns": [
+                {
+                    "name": "string.quoted.double.tomllm",
+                    "match": "\"([^\"\\\\]|\\\\.)*\""
+                },
+                {
+                    "name": "constant.language.boolean.tomllm",
+                    "match": "\\b(true|false)\\b"
+                },
+                {
+                    "name": "constant.numeric.integer.tomllm",
+                    "match": "\\b[0-9]+\\b"
+                },
+                {
+                    "name": "constant.numeric.float.tomllm",
+                    "match": "\\b[0-9]+\\.[0-9]+\\b"
+                }
+            ]
+        }
+    }
+}
