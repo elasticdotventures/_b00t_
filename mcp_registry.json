@@ -291,9 +291,11 @@
     "homepage": "https://github.com/elasticdotventures/dotfiles",
     "documentation": null,
     "license": "Apache-2.0",
+    "essential": true,
     "tags": [
       "b00t",
-      "local"
+      "local",
+      "essential"
     ],
     "config": {
       "command": "uv",
@@ -415,9 +417,11 @@
     "homepage": "https://github.com/elasticdotventures/dotfiles",
     "documentation": null,
     "license": "Apache-2.0",
+    "essential": true,
     "tags": [
       "b00t",
-      "local"
+      "local",
+      "essential"
     ],
     "config": {
       "command": "b00t-mcp",

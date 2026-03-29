@@ -100,7 +100,7 @@ impl RuntimeAdapter for ClaudeAdapter {
         // Remove managed blocks first — JSON files use key-deletion, others use text-marker removal
         for block_path in &manifest.managed_blocks {
             if block_path.extension().and_then(|e| e.to_str()) == Some("json") {
-                remove_from_json_settings(block_path, &["hooks", "statusLine"])?;
+                remove_from_json_settings(block_path, &["hooks", "statusLine", "_note"])?;
             } else {
                 remove_managed_block(block_path)?;
             }
@@ -221,7 +221,7 @@ mod tests {
         std::fs::create_dir_all(&hooks_src).unwrap();
 
         // Minimal fragment with a top-level key that uses the placeholder
-        let fragment = r#"{"statusLine": "node {{HOOKS_DIR}}/b00t-statusline.js"}"#;
+        let fragment = r#"{"statusLine": {"type": "command", "command": "node {{HOOKS_DIR}}/b00t-statusline.js"}}"#;
         std::fs::write(tmp.path().join("settings_fragment.json"), fragment).unwrap();
 
         let adapter = ClaudeAdapter;
@@ -244,9 +244,10 @@ mod tests {
         assert!(parsed.get("statusLine").is_some(), "statusLine key must be present");
 
         // {{HOOKS_DIR}} placeholder must be substituted
-        let status_line = parsed["statusLine"].as_str().unwrap();
-        assert!(!status_line.contains("{{HOOKS_DIR}}"), "placeholder must be substituted");
-        assert!(status_line.contains(&hooks_src.display().to_string()));
+        let status_line_obj = parsed["statusLine"].as_object().unwrap();
+        let command = status_line_obj["command"].as_str().unwrap();
+        assert!(!command.contains("{{HOOKS_DIR}}"), "placeholder must be substituted");
+        assert!(command.contains(&hooks_src.display().to_string()));
 
         // manifest must track the settings path for uninstall
         assert_eq!(manifest.managed_blocks.len(), 1);
@@ -262,7 +263,7 @@ mod tests {
             r#"{"enabledPlugins": {"my-plugin": true}}"#,
         ).unwrap();
 
-        let fragment = r#"{"statusLine": "node {{HOOKS_DIR}}/b00t-statusline.js"}"#;
+        let fragment = r#"{"statusLine": {"type": "command", "command": "node {{HOOKS_DIR}}/b00t-statusline.js"}}"#;
         std::fs::write(tmp.path().join("settings_fragment.json"), fragment).unwrap();
 
         let adapter = ClaudeAdapter;
@@ -300,5 +301,19 @@ mod tests {
         assert!(parsed.get("hooks").is_none());
         assert!(parsed.get("statusLine").is_none());
         assert!(parsed.get("keep").is_some(), "unrelated keys must be preserved");
+    }
+
+    #[test]
+    fn test_uninstall_removes_note_key() {
+        let tmp = TempDir::new().unwrap();
+        let file = tmp.path().join("settings.json");
+        std::fs::write(&file, r#"{"_note":"DO NOT EDIT","hooks":{},"keep":true}"#).unwrap();
+
+        remove_from_json_settings(&file, &["hooks", "statusLine", "_note"]).unwrap();
+
+        let content = std::fs::read_to_string(&file).unwrap();
+        let parsed: serde_json::Value = serde_json::from_str(&content).unwrap();
+        assert!(parsed.get("_note").is_none(), "_note must be removed on uninstall");
+        assert!(parsed.get("keep").is_some(), "unrelated keys preserved");
     }
 }
