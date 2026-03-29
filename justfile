@@ -24,6 +24,7 @@ mod terraform '_b00t_/terraform.🧊/justfile'
 mod k8s '_b00t_/k8s.🚢/justfile'
 mod pm2-tasker 'pm2-tasker/justfile'
 mod embed '_b00t_/python.🐍/embed/justfile'
+mod qwen-code '_b00t_/qwen-code.justfile'
 
 next-task:
     #!/bin/bash
@@ -152,6 +153,14 @@ release:
     echo "✅ Release workflow dispatched for v${VERSION}"
     echo "📦 Tagging, release creation, binaries, and crates publishing now flow through GitHub Actions"
     echo "🔗 Check workflow: https://github.com/elasticdotventures/dotfiles/actions"
+
+# Generate deterministic Claude marketplace + MCP role recipes.
+marketplace-generate:
+    python3 scripts/generate_claude_marketplace.py --repo-root .
+
+# Validate generated marketplace artifacts are up-to-date.
+marketplace-check:
+    python3 scripts/generate_claude_marketplace.py --repo-root . --check
 
 
 # 🥾 Bootstrap b00t on a fresh machine (no cargo/just required).

@@ -4,33 +4,67 @@ type = "mcp"
 hint = "Qwen Code MCP server (like claudecode or openai-codex) for agentic AI coding sessions"
 lfmf_category = "qwen-code"
 
+[b00t.install]
+# 🤓 install ensures script is in place and executable
+command = "chmod +x _b00t_/scripts/run-qwen-code-mcp.sh"
+
 [b00t.learn]
 topic = "qwen-code"
 auto_digest = true
 
-# Primary stdio method
+# 🤓 qwen CLI doesn't have native --mcp-server flag
+# 🤓 b00t-mcp acts as MCP server proxying qwen commands through ACL-filtered stdio
+# 🤓 qwen mcp add/remove/list manages MCP server registrations in ~/.qwen/settings.json
 [[b00t.mcp.stdio]]
 priority = 0
-command = "scripts/run-qwen-code-mcp.sh"
+command = "_b00t_/scripts/run-qwen-code-mcp.sh"
+args = []
 transport = "stdio"
 requires = ["qwen-code"]
 
 [[b00t.usage]]
-description = "Launch Qwen Code MCP server"
-command = "qwen --mcp-server"
+description = "List configured MCP servers in qwen CLI"
+command = "qwen mcp list"
 
 [[b00t.usage]]
-description = "Test with MCP Inspector (requires 10min timeout)"
-command = "npx @modelcontextprotocol/inspector qwen --mcp-server"
+description = "Add MCP server to qwen CLI"
+command = "qwen mcp add <name> <command> [args...]"
 
 [[b00t.usage]]
-description = "Start Qwen Code session with approval policy"
-command = "qwen --mcp-server --approval-policy untrusted"
+description = "Remove MCP server from qwen CLI"
+command = "qwen mcp remove <name>"
+
+[[b00t.usage]]
+description = "Add b00t-mcp to qwen CLI MCP servers"
+command = "qwen mcp add b00t-mcp b00t-mcp --stdio"
+
+[[b00t.usage]]
+description = "Launch b00t-mcp as stdio server (qwen-compatible)"
+command = "b00t-mcp --stdio -c ~/.dotfiles/b00t-mcp-acl.toml"
+
+[[b00t.usage]]
+description = "Start Qwen Code interactive session"
+command = "qwen"
+
+[[b00t.usage]]
+description = "Start Qwen Code with prompt (non-interactive)"
+command = "qwen -p 'your prompt here'"
 
 [[b00t.references]]
 name = "Qwen Code Repository"
 url = "https://github.com/QwenLM/qwen-code"
 
 [[b00t.references]]
+name = "Qwen Code MCP Commands"
+url = "https://github.com/QwenLM/qwen-code?tab=readme-ov-file#mcp"
+
+[[b00t.references]]
 name = "Model Context Protocol"
 url = "https://modelcontextprotocol.io"
+
+# b00t:map v1
+# summary: qwen-code MCP integration - b00t-mcp proxies qwen CLI commands via stdio with ACL
+# tags: qwen-code, mcp, b00t-mcp, stdio, agent, cli
+# tier: ch0nky
+# cmds: qwen mcp list, b00t-mcp --stdio, qwen -p 'prompt'
+# complexity: 6
