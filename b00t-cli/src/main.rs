@@ -19,19 +19,19 @@ use b00t_cli::utils::get_workspace_root;
 #[rustfmt::skip]
 use b00t_cli::commands::{
   //  Keep commands 1 line per letter A,B,C,... for easy diff
-    AiCommands, AgentCommands, AnsibleCommands, AppCommands, 
-    BootstrapCommands, BudgetCommands, 
+    AiCommands, AgentCommands, AnsibleCommands, AppCommands,
+    BootstrapCommands, BudgetCommands,
     ChatCommands, CliCommands,
-    DatumCommands, 
+    DatumCommands,
     GrokCommands, HiveCommands,
     InitCommands,
     JobCommands,
     K8sCommands,
     McpCommands, ModelCommands,
     OntologyCommands,
-    SessionCommands, SkillCommands, SoulCommands, StackCommands,
+    RedisCommands, SessionCommands, SkillCommands, SoulCommands, StackCommands,
     TutorialCommands, VersionCommands, WhatismyCommands
-    
+
 
 };
 use b00t_cli::commands::install::{install_datum, run_just_install};
@@ -346,6 +346,11 @@ The system will:
     Ontology {
         #[clap(subcommand)]
         ontology_command: OntologyCommands,
+    },
+    #[clap(about = "Redis/ForgeKV store management and agent coordination")]
+    Redis {
+        #[clap(subcommand)]
+        redis_command: RedisCommands,
     },
     #[clap(about = "Tutorial progression tracking for role-based datum onboarding")]
     Tutorial {
@@ -1357,6 +1362,13 @@ async fn main() {
         }
         Some(Commands::Ontology { ontology_command }) => {
             if let Err(e) = ontology_command.execute() {
+                eprintln!("Error: {}", e);
+                std::process::exit(1);
+            }
+        }
+        Some(Commands::Redis { redis_command }) => {
+            use b00t_cli::commands::redis::handle_redis_command;
+            if let Err(e) = handle_redis_command(redis_command.clone()).await {
                 eprintln!("Error: {}", e);
                 std::process::exit(1);
             }

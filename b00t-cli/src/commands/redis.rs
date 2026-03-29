@@ -1,6 +1,12 @@
-//! Redis management and monitoring commands for b00t-cli
+//! Redis/ForgeKV store management commands for b00t-cli
+//!
+//! Unified KV store abstraction supporting:
+//! - Redis (redis-cli or redis crate)
+//! - ForgeKV (RESP2-compatible, rust-native alternative)  
+//! - File-based fallback (for development without KV server)
 
 use anyhow::{Context, Result};
+use b00t_c0re_lib::kv_store::{KvConfig, KvStore, KvBackend};
 use b00t_c0re_lib::redis::{AgentMessage, BroadcastPriority, RedisComms, RedisConfig};
 use clap::Parser;
 use std::collections::HashMap;
@@ -98,6 +104,16 @@ impl From<BroadcastPriorityArg> for BroadcastPriority {
 }
 
 pub async fn handle_redis_command(redis_command: RedisCommands) -> Result<()> {
+    // Detect and show KV backend on first command
+    let kv_config = KvConfig::detect();
+    let kv_store = KvStore::new(kv_config.clone());
+    
+    if !kv_store.ping().unwrap_or(false) {
+        eprintln!("⚠️  KV backend {} detected but not responding", kv_config.backend);
+    } else {
+        eprintln!("✅ KV backend {} ready", kv_config.backend);
+    }
+
     let config = RedisConfig::default();
     let agent_id = format!("b00t-cli-{}", std::process::id());
 
