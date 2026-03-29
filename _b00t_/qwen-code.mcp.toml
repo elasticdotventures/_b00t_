@@ -4,6 +4,10 @@ type = "mcp"
 hint = "Qwen Code MCP server (like claudecode or openai-codex) for agentic AI coding sessions"
 lfmf_category = "qwen-code"
 
+[b00t.install]
+# 🤓 install ensures script is in place and executable
+command = "chmod +x _b00t_/scripts/run-qwen-code-mcp.sh"
+
 [b00t.learn]
 topic = "qwen-code"
 auto_digest = true
@@ -14,6 +18,7 @@ auto_digest = true
 [[b00t.mcp.stdio]]
 priority = 0
 command = "_b00t_/scripts/run-qwen-code-mcp.sh"
+args = []
 transport = "stdio"
 requires = ["qwen-code"]
 
