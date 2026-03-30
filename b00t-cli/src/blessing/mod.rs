@@ -10,6 +10,76 @@ pub struct BlessingGraph {
     pub edges: Vec<BlessingEdge>,
 }
 
+/// Tool preference for abstraction (e.g., prefer tofu over terraform)
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct ToolPreference {
+    /// Preferred tools in order (e.g., ["tofu", "terraform"])
+    pub tools: Vec<String>,
+    /// Whether to fail if preferred tool not found
+    #[serde(default)]
+    pub require_preferred: bool,
+}
+
+/// Bash command safety filter per role
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct BashSafetyFilter {
+    /// Role this filter applies to
+    pub role: String,
+    /// Commands explicitly allowed (e.g., "sed", "grep")
+    #[serde(default)]
+    pub allowed_commands: Vec<String>,
+    /// Commands explicitly blocked (e.g., "rm", "dd")
+    #[serde(default)]
+    pub denied_commands: Vec<String>,
+    /// Block all commands not in allowed list
+    #[serde(default = "default_deny_by_default")]
+    pub deny_by_default: bool,
+}
+
+fn default_deny_by_default() -> bool {
+    true
+}
+
+/// Execute Access: What binary/args can run
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct ExecuteAccess {
+    /// Hard-coded binary path (legacy)
+    pub binary: String,
+    /// Tool abstraction: prefer this tool over others
+    #[serde(default)]
+    pub tool_preference: Option<ToolPreference>,
+    /// Bash safety filters per role (for /bash execution)
+    #[serde(default)]
+    pub bash_filters: Vec<BashSafetyFilter>,
+    #[serde(default)]
+    pub allowed_args: Vec<String>,
+    #[serde(default)]
+    pub denied_args: Vec<String>,
+    #[serde(default)]
+    pub timeout_seconds: u32,
+    #[serde(default)]
+    pub max_cpu_percent: u32,
+    #[serde(default)]
+    pub max_memory_mb: u32,
+}
+
+/// Data Permissions: What data can be accessed
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct DataPermissions {
+    #[serde(default)]
+    pub readable_paths: Vec<String>,
+    #[serde(default)]
+    pub writable_paths: Vec<String>,
+    #[serde(default)]
+    pub blocked_paths: Vec<String>,
+    #[serde(default)]
+    pub requires_blessings: Vec<String>,
+    #[serde(default)]
+    pub network_allowed_hosts: Vec<String>,
+    #[serde(default)]
+    pub requires_vpn: bool,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
 pub struct BlessingNode {
     pub id: String,
@@ -27,6 +97,15 @@ pub struct BlessingNode {
     pub constraint: Option<String>,
     #[serde(default)]
     pub budget_tokens: Option<u32>,
+    /// Usage Notes (Trifecta Component 1): Documentation and how-to
+    #[serde(default)]
+    pub usage_notes: Option<String>,
+    /// Execute Access (Trifecta Component 2): What binary/args can run
+    #[serde(default)]
+    pub execute_access: Option<ExecuteAccess>,
+    /// Data Permissions (Trifecta Component 3): What data accessible
+    #[serde(default)]
+    pub data_permissions: Option<DataPermissions>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -41,11 +120,17 @@ impl BlessingGraph {
     pub fn from_toml(toml_str: &str) -> Result<Self, Box<dyn std::error::Error>> {
         let value: toml::Value = toml::from_str(toml_str)?;
 
-        let nodes: Vec<BlessingNode> = value
-            .get("b00t")
-            .and_then(|b| b.get("nodes"))
+        let b00t = value.get("b00t").ok_or("Missing [b00t] section")?;
+
+        // Support both "nodes" and "blessings" keys
+        let empty_vec = vec![];
+        let node_array = b00t
+            .get("nodes")
             .and_then(|n| n.as_array())
-            .unwrap_or(&vec![])
+            .or_else(|| b00t.get("blessings").and_then(|b| b.as_array()))
+            .unwrap_or(&empty_vec);
+
+        let nodes: Vec<BlessingNode> = node_array
             .iter()
             .filter_map(|n| {
                 let id = n.get("id")?.as_str()?.to_string();
@@ -62,11 +147,95 @@ impl BlessingGraph {
                     .filter_map(|v| v.as_str().map(|s| s.to_string()))
                     .collect();
 
+                // Parse trifecta components
+                let usage_notes = n.get("usage_notes").and_then(|u| u.as_str()).map(|s| s.to_string());
+
+                let execute_access = n.get("execute_access").and_then(|e| {
+                    Some(ExecuteAccess {
+                        binary: e.get("binary")?.as_str()?.to_string(),
+                        tool_preference: None,  // TODO: parse from TOML if present
+                        bash_filters: vec![],   // TODO: parse from TOML if present
+                        allowed_args: e
+                            .get("allowed_args")
+                            .and_then(|a| a.as_array())
+                            .unwrap_or(&vec![])
+                            .iter()
+                            .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                            .collect(),
+                        denied_args: e
+                            .get("denied_args")
+                            .and_then(|a| a.as_array())
+                            .unwrap_or(&vec![])
+                            .iter()
+                            .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                            .collect(),
+                        timeout_seconds: e
+                            .get("timeout_seconds")
+                            .and_then(|t| t.as_integer())
+                            .unwrap_or(0) as u32,
+                        max_cpu_percent: e
+                            .get("max_cpu_percent")
+                            .and_then(|m| m.as_integer())
+                            .unwrap_or(0) as u32,
+                        max_memory_mb: e
+                            .get("max_memory_mb")
+                            .and_then(|m| m.as_integer())
+                            .unwrap_or(0) as u32,
+                    })
+                });
+
+                let data_permissions = n.get("data_permissions").and_then(|d| {
+                    Some(DataPermissions {
+                        readable_paths: d
+                            .get("readable_paths")
+                            .and_then(|r| r.as_array())
+                            .unwrap_or(&vec![])
+                            .iter()
+                            .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                            .collect(),
+                        writable_paths: d
+                            .get("writable_paths")
+                            .and_then(|r| r.as_array())
+                            .unwrap_or(&vec![])
+                            .iter()
+                            .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                            .collect(),
+                        blocked_paths: d
+                            .get("blocked_paths")
+                            .and_then(|r| r.as_array())
+                            .unwrap_or(&vec![])
+                            .iter()
+                            .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                            .collect(),
+                        requires_blessings: d
+                            .get("requires_blessings")
+                            .and_then(|r| r.as_array())
+                            .unwrap_or(&vec![])
+                            .iter()
+                            .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                            .collect(),
+                        network_allowed_hosts: d
+                            .get("network_allowed_hosts")
+                            .and_then(|r| r.as_array())
+                            .unwrap_or(&vec![])
+                            .iter()
+                            .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                            .collect(),
+                        requires_vpn: d
+                            .get("requires_vpn")
+                            .and_then(|r| r.as_bool())
+                            .unwrap_or(false),
+                    })
+                });
+
                 Some(BlessingNode {
                     id,
                     type_,
                     cost_tokens,
                     role_access,
+                    usage_notes,
+                    execute_access,
+                    data_permissions,
                     ..Default::default()
                 })
             })
