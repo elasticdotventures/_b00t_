@@ -1,0 +1,157 @@
+# Assimilate: Capability Gap Closure Workflow
+# This is a Moku type-state machine that implements the assimilate agent's
+# capability creation and blessing integration workflow
+# Uses k0mmand3r coordination at each stage
+
+[b00t]
+name = "assimilate-workflow"
+type = "step"
+hint = "Multi-stage workflow for detecting, creating, and integrating new blessings into hive"
+
+[b00t.step.states]
+variants = ["DetectGaps", "CreatingSkill", "Integrating", "Validating", "Approved", "Deployed"]
+initial = "DetectGaps"
+
+# STAGE 1: Detect Capability Gaps
+[[b00t.step.state]]
+name = "DetectGaps"
+
+[b00t.step.state.DetectGaps.instructions]
+observe = "Scan audit_log for denied blessings and failed agent requests"
+orient = "Group by blessing name, calculate frequency and impact"
+decide = "Rank by impact: which gaps block most agents?"
+act = "Create skill creation request for top-priority gap"
+
+[b00t.step.state.DetectGaps.io]
+input = { audit_log = "json", agent_count = "i32", threshold_denials = "i32" }
+output = { top_gaps = "array[SkillRequest]", priority_score = "f32" }
+
+[b00t.step.state.DetectGaps.transition]
+to = "CreatingSkill"
+requires = [
+    "/negotiate blessing:observe-audit-logs",
+    "/delegate step:analyze-patterns to agent:assimilate"
+]
+guard = "has_blessing(blessing:observe-audit-logs)"
+output_contract = { result = "string", gap_count = "i32" }
+
+# STAGE 2: Create Skill via agent-skill-creator
+[[b00t.step.state]]
+name = "CreatingSkill"
+
+[b00t.step.state.CreatingSkill.instructions]
+observe = "Prepare skill creation request with examples and test cases"
+orient = "Understand skill domain and success criteria"
+decide = "Invoke agent-skill-creator LLM workflow"
+act = "Capture generated skill code and test suite"
+
+[b00t.step.state.CreatingSkill.io]
+input = { skill_request = "json", examples = "array[string]" }
+output = { skill_code = "string", test_suite = "string", skill_toml = "string" }
+
+[b00t.step.state.CreatingSkill.transition]
+to = "Integrating"
+requires = [
+    "/delegate step:create-skill to agent:agent-skill-creator",
+    "/negotiate blessing:create-new-datums"
+]
+guard = "has_blessing(blessing:create-new-datums) && skill_code.len() > 0"
+output_contract = { step_definition = "string", validation_errors = "array" }
+
+# STAGE 3: Integrate Skill into b00t
+[[b00t.step.state]]
+name = "Integrating"
+
+[b00t.step.state.Integrating.instructions]
+observe = "Review generated skill code for quality and safety"
+orient = "Understand where skill fits in b00t module hierarchy"
+decide = "Wire skill into blessing graph as new capability"
+act = "Commit skill code, update blessing nodes, register modules"
+
+[b00t.step.state.Integrating.io]
+input = { skill_code = "string", blessing_definition = "json" }
+output = { blessing_nodes = "array", module_registration = "string" }
+
+[b00t.step.state.Integrating.transition]
+to = "Validating"
+requires = [
+    "/negotiate blessing:modify-blessing-graph",
+    "/delegate step:wire-blessing to agent:assimilate"
+]
+guard = "has_blessing(blessing:modify-blessing-graph)"
+output_contract = { integrated_blessings = "array[string]" }
+
+# STAGE 4: Validate Integration (Run Tests)
+[[b00t.step.state]]
+name = "Validating"
+
+[b00t.step.state.Validating.instructions]
+observe = "Compile code and run test suite"
+orient = "Check irontology validation (no cycles, budget OK)"
+decide = "Verify blessing graph forms valid DAG"
+act = "Report validation results and blockers"
+
+[b00t.step.state.Validating.io]
+input = { blessing_graph = "json", test_results = "json" }
+output = { valid = "bool", errors = "array[string]", warnings = "array[string]" }
+
+[b00t.step.state.Validating.transition]
+to = "Approved"
+requires = [
+    "/vote on blessing:deploy-new-capability",
+    "/status from agent:executive"
+]
+guard = "valid == true && voted_yes(blessing:deploy-new-capability)"
+output_contract = { validation_status = "string", test_count = "i32" }
+
+# STAGE 5: Executive Approval (Voting/Authorization)
+[[b00t.step.state]]
+name = "Approved"
+
+[b00t.step.state.Approved.instructions]
+observe = "Receive executive approval or rejection"
+orient = "Understand approval conditions or required changes"
+decide = "If approved, proceed to deployment"
+act = "Register approval in audit trail"
+
+[b00t.step.state.Approved.io]
+input = { approval_vote = "string", executive_notes = "string" }
+output = { approved = "bool", conditions = "array[string]" }
+
+[b00t.step.state.Approved.transition]
+to = "Deployed"
+requires = ["/vote on blessing:deploy-new-capability"]
+guard = "approved == true"
+output_contract = { deployment_time = "string" }
+
+# STAGE 6: Deploy & Make Available
+[[b00t.step.state]]
+name = "Deployed"
+
+[b00t.step.state.Deployed.instructions]
+observe = "Blessing is now available to hive agents"
+orient = "Update blessings-active.toml with new capability"
+decide = "Mark blessing as discoverable in blessing graph"
+act = "Notify agents of new capability, log deployment"
+
+[b00t.step.state.Deployed.io]
+input = { blessing_id = "string", role_access = "array[string]" }
+output = { available = "bool", agent_notifications = "i32" }
+
+# No transition from Deployed (terminal state)
+# Can be re-triggered for next gap
+
+# ============================================================================
+# b00t:map v1
+# summary: Multi-stage capability assimilation workflow using agent-skill-creator
+# tags: orchestration, blessing-graph, continuous-improvement, kaizen
+# tier: orchestrator
+# cmds:
+#   b00t whoami --role=assimilate
+#   bless graph filter --role=executor
+#   audit log --pattern="blessing:denied"
+# complexity: 8
+#
+# Key insight: k0mmand3r steps can be nested - this step USES k0mmand3r
+# delegation internally to call agent-skill-creator, creating a meta-workflow
+# where orchestration steps coordinate sub-agent execution.
