@@ -38,6 +38,7 @@ pub mod inventory;
 pub mod blessing;
 pub mod k0mmand3r;
 pub mod step;
+pub mod sandbox;
 #[cfg(feature = "dbus")]
 pub mod dbus_dispatch;
 pub mod hook_engine;
