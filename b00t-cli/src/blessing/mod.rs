@@ -445,6 +445,7 @@ impl BlessingGraph {
 
 pub mod prompts;
 pub mod irontology;
+pub mod prayer;
 
 #[cfg(test)]
 mod tests;
