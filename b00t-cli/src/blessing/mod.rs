@@ -275,6 +275,7 @@ impl BlessingGraph {
 }
 
 pub mod prompts;
+pub mod irontology;
 
 #[cfg(test)]
 mod tests;
