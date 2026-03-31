@@ -73,8 +73,30 @@ walkdir = "2"
 apalis = "1.0.0-rc.3"
 apalis-sqlite = "1.0.0-rc.3"
 
+# LLM Inference & RAG Integration - Phase 7
+# 🤓 candle: Meta's Rust ML framework with zero-copy GPU acceleration
+candle-core = { version = "0.6", optional = true }
+candle-nn = { version = "0.6", optional = true }
+candle-transformers = { version = "0.6", optional = true }
+# 🤓 hf-hub: Hugging Face model hub client for downloading pre-trained models
+hf-hub = { version = "0.4", optional = true }
+# 🤓 tokenizers: Fast BPE tokenizer implementation
+tokenizers = { version = "0.22", optional = true }
+# 🤓 llama.cpp-sys: LLVM-accelerated CPU inference fallback (feature-gated)
+llama_cpp_sys = { version = "0.2", optional = true }
+# 🤓 ndarray: N-dimensional array algebra for tensor operations
+ndarray = "0.15"
+# async-trait: Syntactic sugar for trait methods with async fn
+async-trait = "0.1"
+
 [features]
-dbus = ["b00t-ipc/dbus", "dep:zbus"]
+default = []
+# 🤓 candle: Enable Candle-based inference (GPU/CPU with CUDA support)
+# 🦨 NOTE: candle-core has unresolved dependency conflicts with current Rust ecosystem
+#   To use: cargo build --features candle (requires resolving upstream issues)
+candle = ["candle-core", "candle-nn", "candle-transformers", "hf-hub", "tokenizers"]
+# 🤓 llamacpp-fallback: Enable llama.cpp CPU inference for systems without GPU
+llamacpp-fallback = ["llama_cpp_sys"]
 
 [dev-dependencies]
 assert_cmd = "2.0.17"
