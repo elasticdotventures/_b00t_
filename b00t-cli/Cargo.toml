@@ -75,9 +75,9 @@ apalis-sqlite = "1.0.0-rc.3"
 
 # LLM Inference & RAG Integration - Phase 7
 # 🤓 candle: Meta's Rust ML framework with zero-copy GPU acceleration
-candle-core = { version = "0.6", optional = true }
-candle-nn = { version = "0.6", optional = true }
-candle-transformers = { version = "0.6", optional = true }
+candle-core = { version = "0.4", optional = true }
+candle-nn = { version = "0.4", optional = true }
+candle-transformers = { version = "0.4", optional = true }
 # 🤓 hf-hub: Hugging Face model hub client for downloading pre-trained models
 hf-hub = { version = "0.4", optional = true }
 # 🤓 tokenizers: Fast BPE tokenizer implementation
