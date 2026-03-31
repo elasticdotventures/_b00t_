@@ -84,9 +84,9 @@ hf-hub = { version = "0.4", optional = true }
 tokenizers = { version = "0.22", optional = true }
 # 🤓 llama.cpp-sys: LLVM-accelerated CPU inference fallback (feature-gated)
 llama_cpp_sys = { version = "0.2", optional = true }
-# 🤓 ndarray: N-dimensional array algebra for tensor operations
+# 🤓 ndarray: N-dimensional array algebra for tensor operations (Task 7: RAG vector storage)
 ndarray = "0.15"
-# async-trait: Syntactic sugar for trait methods with async fn
+# 🤓 async-trait: Syntactic sugar for trait methods with async fn (Task 2: LLMInference trait definition)
 async-trait = "0.1"
 
 [features]
