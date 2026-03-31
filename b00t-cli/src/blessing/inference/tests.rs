@@ -294,4 +294,169 @@ mod inference_tests {
         let embedding = result.unwrap();
         assert_eq!(embedding.data.len(), 384);
     }
+
+    /// Test 21: llama.cpp backend creation with deprecation warning
+    #[test]
+    #[cfg(feature = "llamacpp-fallback")]
+    fn test_llamacpp_backend_new() {
+        use crate::blessing::inference::llamacpp::LlamaCppBackend;
+
+        let backend = LlamaCppBackend::new("all-MiniLM-L6-v2".to_string(), 384);
+        let info = backend.model_info();
+
+        assert_eq!(info.model_id, "all-MiniLM-L6-v2");
+        assert_eq!(info.embedding_dim, 384);
+        assert_eq!(info.backend_name, "llamacpp");
+        // deprecated flag should be true
+        assert!(backend.is_deprecated());
+    }
+
+    /// Test 22: llama.cpp backend is_available with CPU device detection
+    #[test]
+    #[cfg(feature = "llamacpp-fallback")]
+    fn test_llamacpp_is_available() {
+        use crate::blessing::inference::llamacpp::LlamaCppBackend;
+
+        let backend = LlamaCppBackend::new("test-model".to_string(), 384);
+        // Should not panic; CPU-only in Phase 7
+        let _available = backend.is_available();
+    }
+
+    /// Test 23: llama.cpp backend cache_stats with Phase 8 skunks
+    #[test]
+    #[cfg(feature = "llamacpp-fallback")]
+    fn test_llamacpp_model_cache_stats() {
+        use crate::blessing::inference::llamacpp::LlamaCppBackend;
+
+        let backend = LlamaCppBackend::new("all-MiniLM-L6-v2".to_string(), 384);
+        let stats = backend.cache_stats();
+
+        assert_eq!(stats.model_id, "all-MiniLM-L6-v2");
+        // 🦨 Phase 8: bytes_on_disk calculation from model_id + quantization
+        // 🦨 Phase 8: quantization detection (currently stub "q8")
+        // 🦨 Phase 8: Memory calculation refinement
+        assert_eq!(stats.quantization, "q8");
+    }
+
+    /// Test 24: llama.cpp deprecated flag set in new()
+    #[test]
+    #[cfg(feature = "llamacpp-fallback")]
+    fn test_llamacpp_deprecated_flag() {
+        use crate::blessing::inference::llamacpp::LlamaCppBackend;
+
+        let backend = LlamaCppBackend::new("test".to_string(), 384);
+        // Deprecation flag must be true; logs warning in new()
+        assert!(backend.is_deprecated());
+    }
+
+    /// Test 25: llama.cpp async embed returns proper dimensions
+    #[tokio::test]
+    #[cfg(feature = "llamacpp-fallback")]
+    async fn test_llamacpp_async_embed() {
+        use crate::blessing::inference::llamacpp::LlamaCppBackend;
+
+        let backend = LlamaCppBackend::new("all-MiniLM-L6-v2".to_string(), 384);
+        let result = backend.embed("test text").await;
+        assert!(result.is_ok());
+
+        let embedding = result.unwrap();
+        assert_eq!(embedding.data.len(), 384);
+    }
+
+    /// Test 26: Ripgrep backend creation
+    #[test]
+    fn test_ripgrep_backend_new() {
+        use crate::blessing::inference::fallback::RipgrepBM25;
+
+        let backend = RipgrepBM25::new();
+        let info = backend.model_info();
+
+        assert_eq!(info.model_id, "ripgrep-bm25");
+        assert_eq!(info.embedding_dim, 0);
+        assert_eq!(info.backend_name, "ripgrep");
+        assert!(info.available);
+    }
+
+    /// Test 27: Ripgrep is_available always true
+    #[test]
+    fn test_ripgrep_is_available() {
+        use crate::blessing::inference::fallback::RipgrepBM25;
+
+        let backend = RipgrepBM25::new();
+        assert!(backend.is_available());
+    }
+
+    /// Test 28: Ripgrep embed returns zero vector (no embeddings)
+    #[tokio::test]
+    async fn test_ripgrep_embed() {
+        use crate::blessing::inference::fallback::RipgrepBM25;
+
+        let backend = RipgrepBM25::new();
+        let result = backend.embed("test text").await;
+        assert!(result.is_ok());
+
+        let embedding = result.unwrap();
+        assert_eq!(embedding.data.len(), 0); // BM25 doesn't use embeddings
+    }
+
+    /// Test 29: Ripgrep compose_layers is no-op
+    #[tokio::test]
+    async fn test_ripgrep_compose_layers() {
+        use crate::blessing::inference::fallback::RipgrepBM25;
+
+        let mut backend = RipgrepBM25::new();
+        let result = backend.compose_layers(&["blessing1", "blessing2"]).await;
+        assert!(result.is_ok());
+    }
+
+    /// Test 30: Ripgrep clear_layers is no-op
+    #[test]
+    fn test_ripgrep_clear_layers() {
+        use crate::blessing::inference::fallback::RipgrepBM25;
+
+        let mut backend = RipgrepBM25::new();
+        let result = backend.clear_layers();
+        assert!(result.is_ok());
+    }
+
+    /// Test 31: Ripgrep model_info returns correct metadata
+    #[test]
+    fn test_ripgrep_model_info() {
+        use crate::blessing::inference::fallback::RipgrepBM25;
+
+        let backend = RipgrepBM25::new();
+        let info = backend.model_info();
+
+        assert_eq!(info.model_id, "ripgrep-bm25");
+        assert_eq!(info.embedding_dim, 0);
+        assert_eq!(info.backend_name, "ripgrep");
+        assert!(info.available);
+    }
+
+    /// Test 32: Ripgrep search returns empty results (stub)
+    #[test]
+    fn test_ripgrep_search_stub() {
+        use crate::blessing::inference::fallback::RipgrepBM25;
+
+        let backend = RipgrepBM25::new();
+        // 🦨 TODO: Implement actual ripgrep command execution
+        let results = backend.search("test query", 5);
+        assert!(results.is_empty());
+    }
+
+    /// Test 33: BM25SearchResult structure
+    #[test]
+    fn test_bm25_search_result() {
+        use crate::blessing::inference::fallback::BM25SearchResult;
+
+        let result = BM25SearchResult {
+            blessing_id: "blessing-1".to_string(),
+            relevance_score: 0.85,
+            matched_lines: vec!["line 1".to_string(), "line 2".to_string()],
+        };
+
+        assert_eq!(result.blessing_id, "blessing-1");
+        assert!((result.relevance_score - 0.85).abs() < 0.0001);
+        assert_eq!(result.matched_lines.len(), 2);
+    }
 }
