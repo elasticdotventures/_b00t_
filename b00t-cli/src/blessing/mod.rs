@@ -446,6 +446,13 @@ impl BlessingGraph {
 pub mod prompts;
 pub mod irontology;
 pub mod prayer;
+pub mod inference;
+
+// Export inference module types and functions for public API
+pub use inference::{
+    LLMInference, Embedding, ModelInfo, InferenceConfig, InferenceBackendSelector,
+    select_inference_backend,
+};
 
 #[cfg(test)]
 mod tests;
