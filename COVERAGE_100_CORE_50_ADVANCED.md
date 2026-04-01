@@ -9,7 +9,7 @@
 After adding comprehensive CLI-level tests for all remaining gaps, we've achieved:
 - ✅ **100% Core Feature Coverage**
 - ✅ **50% Advanced Feature Coverage**
-- **Total: 75% Overall Coverage** (weighted)
+- **Total: 80% Overall Coverage** (weighted)
 
 ## Test Files Summary
 
