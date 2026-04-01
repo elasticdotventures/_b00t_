@@ -344,3 +344,5 @@ libnull.rlib
 .claude-plugin/recipes/mcp-servers/*.json
 !.claude-plugin/recipes/mcp-servers/local-b00t-b00t-mcp--b00t-mcp.json
 !.claude-plugin/recipes/mcp-servers/local-b00t-grok-guru--grok-guru.json
+test_*
+!test_*.json
