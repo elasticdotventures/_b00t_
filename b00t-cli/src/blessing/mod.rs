@@ -460,5 +460,11 @@ pub use rag::{
     KnowledgeBase, BlessingMetadata, LayerMetadata, SemanticDiscoveryCallback,
 };
 
+// Export prayer module types for public API
+pub use prayer::{
+    CompositionPlan, BlessingPrayerResult, BlessingRequest, BlessingEvaluator, BlessingPolicy,
+    PolicyCheckResult, CompositionValidation, AuditEventEmitter,
+};
+
 #[cfg(test)]
 mod tests;
