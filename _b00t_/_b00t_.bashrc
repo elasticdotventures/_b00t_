@@ -16,6 +16,11 @@
 set -o nounset    # Exposes unset variables, strict mode.
 trap "set +o nounset" EXIT  # restore nounset at exit, even in crash!
 
+# Initialize variables that may be referenced before being set
+: "${force_color_prompt:=}"
+: "${preexec_functions:=}"
+: "${SSH_AUTH_SOCK:=}"
+
 # 🤔 trial:
 umask 000
 
@@ -48,6 +53,9 @@ _b00t_INSPIRATION_FILE="$_B00T_Path/./r3src_资源/inspiration.json"
 # mostly, this is for future opentelemetry & storytime log
 unset -f log_📢_记录
 function log_📢_记录() {
+    if [ -n "${_B00T_QUIET_LOGIN:-}" ] || [ -n "${_B00T_Agent:-}" ]; then
+        return 0
+    fi
     # Use session-aware output control via b00t-cli
     if command -v b00t-cli &> /dev/null; then
         # Check if we should show verbose output
@@ -63,6 +71,55 @@ function log_📢_记录() {
     fi
 }
 export -f log_📢_记录
+
+# ASCII-safe logger wrapper. Some shells/sessions may not retain unicode function names.
+unset -f log_b00t
+function log_b00t() {
+    log_📢_记录 "$@"
+}
+export -f log_b00t
+
+# Always repair logger symbols before loading optional modules.
+unset -f ensure_b00t_log
+function ensure_b00t_log() {
+    if [ "$(LC_ALL=C type -t log_📢_记录 2>/dev/null)" != "function" ]; then
+        function log_📢_记录() {
+            echo "$@"
+        }
+    fi
+    if [ "$(LC_ALL=C type -t log_b00t 2>/dev/null)" != "function" ]; then
+        function log_b00t() {
+            log_📢_记录 "$@"
+        }
+    fi
+    export -f log_📢_记录
+    export -f log_b00t
+}
+export -f ensure_b00t_log
+ensure_b00t_log
+
+# Keep VS Code shell detection in b00t bootstrap (not ~/.bash_profile).
+unset -f _b00t_log_vscode_shell_context
+function _b00t_log_vscode_shell_context() {
+    local vscode_detection="$HOME/.dotfiles/vscode.🆚/vscode-detection.sh"
+
+    [ -r "$vscode_detection" ] || return 0
+    source "$vscode_detection"
+
+    if ! type is_vscode_shell &>/dev/null; then
+        log_b00t "🙈🥾 is_vscode_shell not defined"
+    elif is_vscode_shell; then
+        log_b00t "🥾💻 hi VS Code! running b00t-cli"
+    else
+        log_b00t "Not inside VSCODE"
+    fi
+}
+export -f _b00t_log_vscode_shell_context
+
+if [[ $- == *i* ]] && [ -z "${_B00T_VSCODE_LOGGED:-}" ]; then
+    _b00t_log_vscode_shell_context
+    export _B00T_VSCODE_LOGGED=1
+fi
 ## 记录 //
 
 ## Agent detection handled by .bash_profile (single source of truth)
@@ -126,7 +183,7 @@ pathAdd "$HOME/.yarn/bin"
 ## * * * * * //
 
 
-if [ "/usr/bin/docker" ] ; then
+if [ -x "/usr/bin/docker" ] ; then
     log_📢_记录 "🐳 has d0cker! loading docker extensions"
     source "$_B00T_Path/docker.🐳/_bashrc.sh"
 
@@ -328,6 +385,15 @@ fi
 
 # handy for generating dumps, etc..
 # $ script.sh >> foobar.`ymd`
+if ! command -v ymd >/dev/null 2>&1; then
+    ymd() { date +'%Y%m%d'; }
+fi
+if ! command -v ymd_hm >/dev/null 2>&1; then
+    ymd_hm() { date +'%Y%m%d.%H%M'; }
+fi
+if ! command -v ymd_hms >/dev/null 2>&1; then
+    ymd_hms() { date +'%Y%m%d.%H%M%S'; }
+fi
 alias yyyymmdd="date +'%Y%m%d'"
 alias ymd="date +'%Y%m%d'"
 alias ymd_hm="date +'%Y%m%d.%H%M'"
@@ -417,7 +483,7 @@ export -f _b00t_init_🥾_开始
 function iz_n0t_alpine_linux_🐧🌲() {
    return $(cat /etc/os-release | grep "NAME=" | grep -ic "Alpine")
 }
-if [ ! iz_n0t_alpine_linux ] ; then
+if ! iz_n0t_alpine_linux_🐧🌲 ; then
     # gh issue
     echo "🥾🤮 🐧🌲 alpine linux not fully supported yet"
 fi
@@ -503,6 +569,52 @@ function bash_source_加载() {
     return $?
 }
 export -f bash_source_加载
+
+##
+## Modular bashrc drop-in loader
+## Source readable *.sh files from colon-separated directories.
+##
+unset -f _b00t_source_modular_bashrc
+function _b00t_source_modular_bashrc() {
+    local dir=""
+    local file=""
+    local start_ms=0
+    local end_ms=0
+    local elapsed_ms=0
+    local old_ifs="$IFS"
+    local -a dirs=()
+
+    IFS=':' read -r -a dirs <<< "${_B00T_BASH_MODULE_DIRS:-}"
+    IFS="$old_ifs"
+
+    for dir in "${dirs[@]}"; do
+        [ -n "$dir" ] || continue
+        [ -d "$dir" ] || continue
+
+        shopt -s nullglob
+        for file in "$dir"/*.sh; do
+            [ -r "$file" ] || continue
+            case "$(basename "$file")" in
+                .*|_*) continue ;;
+            esac
+
+            ensure_b00t_log
+            if [ "${B00T_BASH_PROFILE:-0}" = "1" ]; then
+                start_ms="$(date +%s%3N)"
+            fi
+
+            source "$file"
+
+            if [ "${B00T_BASH_PROFILE:-0}" = "1" ]; then
+                end_ms="$(date +%s%3N)"
+                elapsed_ms="$((end_ms - start_ms))"
+                log_b00t "🥾 rc.d loaded: $file (${elapsed_ms}ms)"
+            fi
+        done
+        shopt -u nullglob
+    done
+}
+export -f _b00t_source_modular_bashrc
 
 
 
@@ -817,8 +929,6 @@ elif [ "$(rand0 10)" -gt 5 ] ; then
         /bin/rm -f $motdTmpFile
     fi
 
-    # part of motd
-
     log_📢_记录 "lang: $LANG"
     log_📢_记录 "🥾📈 motd project stats, cleanup, tasks goes here. "
     local skunk_x=0
@@ -922,6 +1032,10 @@ is_b00table() {
 if ! is_b00table ; then
     has_sudo
 fi
+
+# Modular drop-ins for shell customization without editing core bootstrap.
+export _B00T_BASH_MODULE_DIRS="${_B00T_BASH_MODULE_DIRS:-$_B00T_Path/bash.🐚/rc.d:$HOME/.b00t/bashrc.d:$HOME/.bashrc.d}"
+_b00t_source_modular_bashrc
 
 
 #############################

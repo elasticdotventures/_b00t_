@@ -76,7 +76,9 @@ impl SocketRegistry {
         for path in &watch_paths {
             watcher
                 .watch(path, RecursiveMode::NonRecursive)
-                .map_err(|e| ChatError::Other(format!("Failed to watch {}: {}", path.display(), e)))?;
+                .map_err(|e| {
+                    ChatError::Other(format!("Failed to watch {}: {}", path.display(), e))
+                })?;
             info!("🔍 Watching for agent sockets: {}", path.display());
         }
 
@@ -140,7 +142,11 @@ impl SocketRegistry {
         agents.insert(agent_id.clone(), endpoint.clone());
 
         if is_new {
-            info!("🤖 Discovered agent: {} @ {}", agent_id, socket_path.display());
+            info!(
+                "🤖 Discovered agent: {} @ {}",
+                agent_id,
+                socket_path.display()
+            );
             let _ = self.event_tx.send(AgentEvent::Discovered(endpoint));
         } else {
             debug!("🔄 Updated agent: {}", agent_id);
@@ -151,6 +157,7 @@ impl SocketRegistry {
     }
 
     /// Unregister a socket that was removed.
+    #[allow(dead_code)]
     async fn unregister_socket(&self, socket_path: &Path) -> ChatResult<()> {
         let agent_id = socket_path
             .file_stem()
@@ -378,7 +385,9 @@ mod tests {
             .await
             .insert("stale-agent".to_string(), old_endpoint);
 
-        let removed = registry.prune_stale(std::time::Duration::from_secs(300)).await;
+        let removed = registry
+            .prune_stale(std::time::Duration::from_secs(300))
+            .await;
         assert_eq!(removed, 1);
         assert_eq!(registry.list_agents().await.len(), 0);
     }

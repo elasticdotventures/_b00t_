@@ -1,0 +1,16 @@
+[
+  {
+    "name": "test-idle",
+    "services_start": [],
+    "services_stop": [],
+    "resources_ram_gb": 1.0,
+    "force": false
+  },
+  {
+    "name": "test-inference",
+    "services_start": ["b00t-hive-test-inference.service"],
+    "services_stop": ["b00t-hive-test-idle.service"],
+    "resources_ram_gb": 16.0,
+    "force": true
+  }
+]

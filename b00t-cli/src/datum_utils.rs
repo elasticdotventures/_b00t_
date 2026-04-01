@@ -1,11 +1,83 @@
 //! Datum utility functions for loading and searching datums
+//!
+//! Provides recursive datum discovery, pattern search, constraint filtering,
+//! and graph export capabilities for the b00t datum system.
 
+use crate::{BootDatum, DatumType, UnifiedConfig};
 use anyhow::Result;
 use b00t_c0re_lib::lfmf::DatumLookup;
-use b00t_cli::{BootDatum, UnifiedConfig};
+use regex::Regex;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
+
+/// Maximum recursion depth for datum discovery
+const DEFAULT_MAX_DEPTH: usize = 10;
+
+/// Datum search result with file path metadata
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DatumSearchResult {
+    /// Datum key (filename without .toml)
+    pub key: String,
+    /// Resolved file path
+    pub path: String,
+    /// Datum type
+    pub datum_type: Option<DatumType>,
+    /// Datum name
+    pub name: String,
+    /// Hint/description
+    pub hint: String,
+    /// LFMF category if set
+    pub lfmf_category: Option<String>,
+    /// Match reason for search results
+    pub match_reason: Option<String>,
+}
+
+/// Filter criteria for datum queries
+#[derive(Debug, Clone, Default)]
+pub struct DatumFilter {
+    /// Only available datums (prerequisites satisfied)
+    pub available_only: bool,
+    /// Only datums with all prerequisites met
+    pub prereqs_satisfied: bool,
+    /// Required OS (e.g., "linux", "macos", "windows")
+    pub require_os: Option<String>,
+    /// Required commands/tools
+    pub require_cmds: Vec<String>,
+    /// Must have any of these env vars set
+    pub needs_any_env: bool,
+    /// Must have all of these env vars set
+    pub needs_all_env: bool,
+    /// Filter by datum type(s); empty = all types
+    pub datum_types: Vec<DatumType>,
+    /// Custom constraint requirements (e.g., "OS:linux", "CMD:docker")
+    pub require_constraints: Vec<String>,
+}
+
+/// Graph node for datum ontology export
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DatumGraphNode {
+    pub key: String,
+    pub name: String,
+    pub datum_type: Option<DatumType>,
+    pub hint: String,
+}
+
+/// Graph edge for datum ontology export
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DatumGraphEdge {
+    pub from: String,
+    pub to: String,
+    pub edge_type: String, // "depends_on", "entangled_*", etc.
+}
+
+/// Datum ontology graph
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DatumGraph {
+    pub nodes: Vec<DatumGraphNode>,
+    pub edges: Vec<DatumGraphEdge>,
+}
 
 /// Implementation of DatumLookup trait for b00t datums
 /// Enables LFMF system to resolve datum names to categories
@@ -29,8 +101,23 @@ impl DatumLookup for B00tDatumLookup {
     }
 }
 
-/// Get all datums from _b00t_ directory
+/// Get all datums from _b00t_ directory (non-recursive, for backwards compatibility)
 pub fn get_all_datums(b00t_path: &str) -> Result<HashMap<String, BootDatum>> {
+    get_all_datums_recursive(b00t_path, 0)
+}
+
+/// Get all datums recursively with configurable depth
+///
+/// # Arguments
+/// * `b00t_path` - Path to _b00t_ directory
+/// * `max_depth` - Maximum recursion depth (0 = top-level only, None = unlimited)
+///
+/// # Returns
+/// HashMap of datum key -> (BootDatum, file path)
+pub fn get_all_datums_with_paths(
+    b00t_path: &str,
+    max_depth: Option<usize>,
+) -> Result<HashMap<String, (BootDatum, String)>> {
     let expanded_path = shellexpand::tilde(b00t_path);
     let path = Path::new(expanded_path.as_ref());
     let mut datums = HashMap::new();
@@ -39,29 +126,85 @@ pub fn get_all_datums(b00t_path: &str) -> Result<HashMap<String, BootDatum>> {
         return Ok(datums);
     }
 
-    for entry in fs::read_dir(&path)? {
-        let entry = entry?;
+    let depth = max_depth.unwrap_or(DEFAULT_MAX_DEPTH);
+    scan_datums_recursive(path, &mut datums, 0, depth)?;
+
+    Ok(datums)
+}
+
+/// Recursive scanner for datum files
+fn scan_datums_recursive(
+    dir: &Path,
+    datums: &mut HashMap<String, (BootDatum, String)>,
+    current_depth: usize,
+    max_depth: usize,
+) -> Result<()> {
+    if current_depth > max_depth {
+        return Ok(());
+    }
+
+    let entries = match fs::read_dir(dir) {
+        Ok(e) => e,
+        Err(_) => return Ok(()), // Skip directories we can't read
+    };
+
+    for entry in entries {
+        let entry = match entry {
+            Ok(e) => e,
+            Err(_) => continue,
+        };
         let entry_path = entry.path();
 
-        if entry_path.extension().and_then(|s| s.to_str()) == Some("toml") {
+        if entry_path.is_dir() {
+            // Recurse into subdirectories
+            scan_datums_recursive(&entry_path, datums, current_depth + 1, max_depth)?;
+        } else if matches!(
+            entry_path.extension().and_then(|s| s.to_str()),
+            Some("toml") | Some("tomllm") // 🤓 .tomllm = .toml + # comment annotations; TOML parses identically
+        ) {
             if let Some(filename) = entry_path.file_name().and_then(|s| s.to_str()) {
                 // Skip non-datum files
-                if filename == "bootstrap.toml" || filename == "git-cliff.toml" {
+                if filename == "bootstrap.toml"
+                    || filename == "git-cliff.toml"
+                    || filename == "_b00t_.toml"
+                {
                     continue;
                 }
 
                 // Try to parse as unified config
                 if let Ok(content) = fs::read_to_string(&entry_path) {
                     if let Ok(config) = toml::from_str::<UnifiedConfig>(&content) {
-                        let datum_key = filename.trim_end_matches(".toml").to_string();
-                        datums.insert(datum_key, config.b00t);
+                        // Strip outer extension (.tomllm or .toml) for datum key
+                        // 🤓 .tomllm wins over .toml on key collision (richer tribal context)
+                        let ext = if filename.ends_with(".tomllm") { ".tomllm" } else { ".toml" };
+                        let datum_key = filename.trim_end_matches(ext).to_string();
+                        let path_str = entry_path.to_string_lossy().to_string();
+                        if ext == ".tomllm" || !datums.contains_key(&datum_key) {
+                            datums.insert(datum_key, (config.b00t, path_str));
+                        }
                     }
                 }
             }
         }
     }
 
-    Ok(datums)
+    Ok(())
+}
+
+/// Get all datums recursively (returns just BootDatum for backwards compatibility)
+fn get_all_datums_recursive(
+    b00t_path: &str,
+    max_depth: usize,
+) -> Result<HashMap<String, BootDatum>> {
+    let with_paths = get_all_datums_with_paths(
+        b00t_path,
+        if max_depth == 0 {
+            None
+        } else {
+            Some(max_depth)
+        },
+    )?;
+    Ok(with_paths.into_iter().map(|(k, (d, _))| (k, d)).collect())
 }
 
 /// Get datum by name pattern (searches for matching datums)
@@ -103,6 +246,356 @@ pub fn get_datums_by_lfmf_category(b00t_path: &str, category: &str) -> Result<Ve
         .collect();
 
     Ok(matching)
+}
+
+/// Search datums by regex/literal pattern across key, name, hint, lfmf_category, and path.
+///
+/// - `pattern`: compiled as regex; falls back to literal substring if invalid regex
+/// - `type_filter`: comma-separated DatumType names (case-insensitive); None = all types
+/// - `depth`: recursion depth; None = DEFAULT_MAX_DEPTH
+pub fn search_datums(
+    b00t_path: &str,
+    pattern: &str,
+    type_filter: Option<&str>,
+    depth: Option<usize>,
+) -> Result<Vec<DatumSearchResult>> {
+    let datums = get_all_datums_with_paths(b00t_path, depth)?;
+
+    // Compile regex; fallback to literal contains
+    let re = Regex::new(pattern).ok();
+
+    let type_filters: Option<Vec<String>> = type_filter.map(|t| {
+        t.split(',')
+            .map(|s| s.trim().to_lowercase())
+            .filter(|s| !s.is_empty())
+            .collect()
+    });
+
+    let matches_pattern = |s: &str| -> bool {
+        if let Some(r) = &re {
+            r.is_match(s)
+        } else {
+            s.contains(pattern)
+        }
+    };
+
+    let mut results: Vec<DatumSearchResult> = datums
+        .into_iter()
+        .filter_map(|(key, (datum, path))| {
+            // Type filter
+            if let Some(filters) = &type_filters {
+                let type_str = datum
+                    .datum_type
+                    .as_ref()
+                    .map(|t| format!("{:?}", t).to_lowercase())
+                    .unwrap_or_default();
+                if !filters.iter().any(|f| type_str.contains(f.as_str())) {
+                    return None;
+                }
+            }
+
+            // Pattern match across fields — first match wins for match_reason
+            let match_reason = if matches_pattern(&key) {
+                Some("key".to_string())
+            } else if matches_pattern(&datum.name) {
+                Some("name".to_string())
+            } else if matches_pattern(&datum.hint) {
+                Some("hint".to_string())
+            } else if datum
+                .lfmf_category
+                .as_deref()
+                .map(matches_pattern)
+                .unwrap_or(false)
+            {
+                Some("lfmf_category".to_string())
+            } else if matches_pattern(&path) {
+                Some("path".to_string())
+            } else {
+                return None;
+            };
+
+            Some(DatumSearchResult {
+                key,
+                path,
+                datum_type: datum.datum_type,
+                name: datum.name,
+                hint: datum.hint,
+                lfmf_category: datum.lfmf_category,
+                match_reason,
+            })
+        })
+        .collect();
+
+    results.sort_by(|a, b| a.key.cmp(&b.key));
+    Ok(results)
+}
+
+/// Apply a `DatumFilter` to a loaded datum map.
+///
+/// Returns `(key, datum, explain_reason)` tuples.
+/// When `explain=true`, filtered-out datums are returned with a non-None reason string.
+/// When `explain=false`, only passing datums are returned (reason = None).
+pub fn filter_datums(
+    datums: HashMap<String, BootDatum>,
+    filter: &DatumFilter,
+    explain: bool,
+) -> Vec<(String, BootDatum, Option<String>)> {
+    let current_os = std::env::consts::OS; // "linux", "macos", "windows"
+
+    let mut results = Vec::new();
+
+    for (key, datum) in datums {
+        let mut reasons: Vec<String> = Vec::new();
+
+        // datum_type filter — if types list is non-empty, datum must match one of them
+        if !filter.datum_types.is_empty() {
+            let matches = match &datum.datum_type {
+                Some(dt) => filter.datum_types.iter().any(|ft| {
+                    std::mem::discriminant(dt) == std::mem::discriminant(ft)
+                }),
+                None => false,
+            };
+            if !matches {
+                reasons.push(format!(
+                    "type mismatch: expected one of {:?}",
+                    filter.datum_types
+                ));
+            }
+        }
+
+        // require_os
+        if let Some(ref required_os) = filter.require_os {
+            if !current_os.eq_ignore_ascii_case(required_os) {
+                reasons.push(format!("OS mismatch: need {}, have {}", required_os, current_os));
+            }
+        }
+
+        // require_cmds — check each via which/PATH lookup
+        for cmd in &filter.require_cmds {
+            if which::which(cmd).is_err() {
+                reasons.push(format!("CMD not found: {}", cmd));
+            }
+        }
+
+        // require_constraints — parse "OS:linux" or "CMD:docker" tokens
+        for constraint in &filter.require_constraints {
+            if let Some(val) = constraint.strip_prefix("OS:") {
+                if !current_os.eq_ignore_ascii_case(val) {
+                    reasons.push(format!(
+                        "constraint OS:{} not satisfied (have {})",
+                        val, current_os
+                    ));
+                }
+            } else if let Some(cmd) = constraint.strip_prefix("CMD:") {
+                if which::which(cmd).is_err() {
+                    reasons.push(format!("constraint CMD:{} not found", cmd));
+                }
+            }
+        }
+
+        // needs_any_env — datum must declare env vars AND at least one is set
+        if filter.needs_any_env {
+            let any_set = datum
+                .env
+                .as_ref()
+                .map(|env| env.keys().any(|k| std::env::var(k).is_ok()))
+                .unwrap_or(false);
+            if !any_set {
+                reasons.push("needs_any_env: no declared env vars are set".to_string());
+            }
+        }
+
+        // needs_all_env — datum must declare env vars AND all are set
+        if filter.needs_all_env {
+            let all_set = datum
+                .env
+                .as_ref()
+                .map(|env| env.keys().all(|k| std::env::var(k).is_ok()))
+                .unwrap_or(false);
+            if !all_set {
+                reasons.push("needs_all_env: not all declared env vars are set".to_string());
+            }
+        }
+
+        if reasons.is_empty() {
+            results.push((key, datum, None));
+        } else if explain {
+            results.push((key, datum, Some(reasons.join("; "))));
+        }
+    }
+
+    results.sort_by(|a, b| a.0.cmp(&b.0));
+    results
+}
+
+/// Build a datum ontology graph from all loaded datums.
+///
+/// Nodes: one per datum (key, name, type, hint).
+/// Edges: depends_on + entangled_* fields → typed directed edges from datum → target.
+pub fn build_datum_graph(b00t_path: &str, depth: Option<usize>) -> Result<DatumGraph> {
+    let datums = get_all_datums_with_paths(b00t_path, depth)?;
+
+    let mut nodes = Vec::new();
+    let mut edges = Vec::new();
+
+    for (key, (datum, _path)) in &datums {
+        nodes.push(DatumGraphNode {
+            key: key.clone(),
+            name: datum.name.clone(),
+            datum_type: datum.datum_type.clone(),
+            hint: datum.hint.clone(),
+        });
+
+        // Helper: emit edges for a list of targets under a given edge_type
+        macro_rules! push_edges {
+            ($field:expr, $label:expr) => {
+                if let Some(targets) = $field {
+                    for target in targets {
+                        edges.push(DatumGraphEdge {
+                            from: key.clone(),
+                            to: target.clone(),
+                            edge_type: $label.to_string(),
+                        });
+                    }
+                }
+            };
+        }
+
+        push_edges!(&datum.depends_on, "depends_on");
+        push_edges!(&datum.entangled_agents, "entangled_agents");
+        push_edges!(&datum.entangled_cli, "entangled_cli");
+        push_edges!(&datum.entangled_mcp, "entangled_mcp");
+        push_edges!(&datum.entangled_ai_models, "entangled_ai_models");
+        push_edges!(&datum.entangled_apis, "entangled_apis");
+        push_edges!(&datum.entangled_docker, "entangled_docker");
+        push_edges!(&datum.entangled_k8s, "entangled_k8s");
+    }
+
+    nodes.sort_by(|a, b| a.key.cmp(&b.key));
+
+    Ok(DatumGraph { nodes, edges })
+}
+
+/// Serialize a `DatumGraph` to Graphviz DOT format.
+///
+/// Node labels include key + type. Edge labels show the relationship type.
+pub fn graph_to_dot(graph: &DatumGraph) -> String {
+    let mut out = String::from("digraph b00t {\n  rankdir=LR;\n  node [shape=box];\n");
+
+    for node in &graph.nodes {
+        let type_label = node
+            .datum_type
+            .as_ref()
+            .map(|t| format!("{:?}", t))
+            .unwrap_or_else(|| "?".to_string());
+        // Escape quotes in labels
+        let label = format!("{}\\n{}", node.key, type_label).replace('"', "\\\"");
+        let node_key = node.key.replace('"', "\\\"");
+        out.push_str(&format!(
+            "  \"{}\" [label=\"{}\"];\n",
+            node_key, label
+        ));
+    }
+
+    for edge in &graph.edges {
+        let from = edge.from.replace('"', "\\\"");
+        let to = edge.to.replace('"', "\\\"");
+        out.push_str(&format!(
+            "  \"{}\" -> \"{}\" [label=\"{}\"];\n",
+            from, to, edge.edge_type
+        ));
+    }
+
+    out.push('}');
+    out
+}
+
+/// BFS neighbor query on a datum graph.
+///
+/// Returns all (from, to, edge_type) reachable within `depth` hops from `seed`.
+/// `direction`: "out" (seed→x), "in" (x→seed), "both"
+pub fn graph_neighbors(
+    graph: &DatumGraph,
+    seed: &str,
+    depth: usize,
+    direction: &str,
+) -> Vec<DatumGraphEdge> {
+    use std::collections::{HashSet, VecDeque};
+
+    let mut visited: HashSet<String> = HashSet::new();
+    let mut queue: VecDeque<(String, usize)> = VecDeque::new();
+    let mut result: Vec<DatumGraphEdge> = Vec::new();
+
+    visited.insert(seed.to_string());
+    queue.push_back((seed.to_string(), 0));
+
+    while let Some((current, d)) = queue.pop_front() {
+        if d >= depth {
+            continue;
+        }
+
+        for edge in &graph.edges {
+            let (next, include) = match direction {
+                "out" if edge.from == current => (edge.to.as_str(), true),
+                "in" if edge.to == current => (edge.from.as_str(), true),
+                "both" if edge.from == current => (edge.to.as_str(), true),
+                "both" if edge.to == current => (edge.from.as_str(), true),
+                _ => ("", false),
+            };
+
+            if include {
+                // Always collect the edge if it is reachable within the depth limit
+                result.push(edge.clone());
+
+                // Only enqueue the next node once to avoid revisiting it
+                if !visited.contains(next) {
+                    visited.insert(next.to_string());
+                    queue.push_back((next.to_string(), d + 1));
+                }
+            }
+        }
+    }
+
+    result
+}
+
+/// Index all datums into irontology-mcp via `GrokClient` for semantic search.
+///
+/// Builds text = "name: …\ntype: …\nhint: …\n{learn_content}" per datum,
+/// then calls `client.learn(text, Some(key))` → `repo.index`.
+/// Returns count of indexed datums.
+pub async fn index_datums_into_irontology(
+    b00t_path: &str,
+    client: &mut b00t_c0re_lib::grok::GrokClient,
+) -> Result<usize> {
+    let datums = get_all_datums_with_paths(b00t_path, None)?;
+    let mut count = 0;
+
+    for (key, (datum, _path)) in &datums {
+        let type_str = datum
+            .datum_type
+            .as_ref()
+            .map(|t| format!("{:?}", t))
+            .unwrap_or_else(|| "unknown".to_string());
+
+        let mut text = format!(
+            "name: {}\ntype: {}\nhint: {}\n",
+            datum.name, type_str, datum.hint
+        );
+
+        if let Ok(Some(learn)) = get_datum_learn_content(b00t_path, datum) {
+            text.push('\n');
+            // 🤓 cap at 4KB to stay within chunk budget
+            text.push_str(&learn.chars().take(4096).collect::<String>());
+        }
+
+        match client.learn(&text, Some(key.as_str())).await {
+            Ok(_) => count += 1,
+            Err(e) => eprintln!("⚠️ index_datums: failed to index {}: {}", key, e),
+        }
+    }
+
+    Ok(count)
 }
 
 /// Get learn content for a datum (either from topic reference or inline)
@@ -257,6 +750,260 @@ inline = "This is inline learn content"
 
         assert!(content.is_some());
         assert_eq!(content.unwrap(), "This is inline learn content");
+    }
+
+    // ── #198 search_datums tests ──────────────────────────────────────────────
+
+    #[test]
+    fn test_search_datums_exact_key() {
+        let temp_dir = TempDir::new().unwrap();
+        let b00t_path = temp_dir.path().to_str().unwrap();
+        create_test_datum_file(
+            temp_dir.path(),
+            "rust.cli.toml",
+            "[b00t]\nname = \"rustc\"\ntype = \"cli\"\nhint = \"Rust compiler\"\n",
+        );
+        let results = search_datums(b00t_path, "rust.cli", None, None).unwrap();
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].key, "rust.cli");
+        assert_eq!(results[0].match_reason.as_deref(), Some("key"));
+    }
+
+    #[test]
+    fn test_search_datums_by_hint_regex() {
+        let temp_dir = TempDir::new().unwrap();
+        let b00t_path = temp_dir.path().to_str().unwrap();
+        create_test_datum_file(
+            temp_dir.path(),
+            "docker.cli.toml",
+            "[b00t]\nname = \"docker\"\ntype = \"cli\"\nhint = \"Container runtime\"\n",
+        );
+        create_test_datum_file(
+            temp_dir.path(),
+            "rust.cli.toml",
+            "[b00t]\nname = \"rustc\"\ntype = \"cli\"\nhint = \"Rust compiler\"\n",
+        );
+        // Regex: match "compiler" in hint
+        let results = search_datums(b00t_path, "compil", None, None).unwrap();
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].key, "rust.cli");
+        assert_eq!(results[0].match_reason.as_deref(), Some("hint"));
+    }
+
+    #[test]
+    fn test_search_datums_type_filter() {
+        let temp_dir = TempDir::new().unwrap();
+        let b00t_path = temp_dir.path().to_str().unwrap();
+        create_test_datum_file(
+            temp_dir.path(),
+            "gh.cli.toml",
+            "[b00t]\nname = \"gh\"\ntype = \"cli\"\nhint = \"GitHub CLI\"\n",
+        );
+        create_test_datum_file(
+            temp_dir.path(),
+            "github.mcp.toml",
+            "[b00t]\nname = \"github-mcp\"\ntype = \"mcp\"\nhint = \"GitHub MCP\"\n",
+        );
+        // Both contain "github" but only mcp type
+        let results = search_datums(b00t_path, "git", Some("mcp"), None).unwrap();
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].key, "github.mcp");
+    }
+
+    #[test]
+    fn test_search_datums_no_match() {
+        let temp_dir = TempDir::new().unwrap();
+        let b00t_path = temp_dir.path().to_str().unwrap();
+        create_test_datum_file(
+            temp_dir.path(),
+            "rust.cli.toml",
+            "[b00t]\nname = \"rustc\"\ntype = \"cli\"\nhint = \"Rust compiler\"\n",
+        );
+        let results = search_datums(b00t_path, "zzz_no_match_zzz", None, None).unwrap();
+        assert!(results.is_empty());
+    }
+
+    // ── #199 filter_datums tests ──────────────────────────────────────────────
+
+    #[test]
+    fn test_filter_datums_by_type() {
+        let temp_dir = TempDir::new().unwrap();
+        let b00t_path = temp_dir.path().to_str().unwrap();
+        create_test_datum_file(
+            temp_dir.path(),
+            "gh.cli.toml",
+            "[b00t]\nname = \"gh\"\ntype = \"cli\"\nhint = \"GitHub CLI\"\n",
+        );
+        create_test_datum_file(
+            temp_dir.path(),
+            "github.mcp.toml",
+            "[b00t]\nname = \"github-mcp\"\ntype = \"mcp\"\nhint = \"GitHub MCP\"\n",
+        );
+        let datums = get_all_datums(b00t_path).unwrap();
+        let filter = DatumFilter {
+            datum_types: vec![crate::DatumType::Mcp],
+            ..Default::default()
+        };
+        let results = filter_datums(datums, &filter, false);
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].0, "github.mcp");
+    }
+
+    #[test]
+    fn test_filter_datums_explain_os_mismatch() {
+        let temp_dir = TempDir::new().unwrap();
+        let b00t_path = temp_dir.path().to_str().unwrap();
+        create_test_datum_file(
+            temp_dir.path(),
+            "tool.cli.toml",
+            "[b00t]\nname = \"tool\"\ntype = \"cli\"\nhint = \"A tool\"\n",
+        );
+        let datums = get_all_datums(b00t_path).unwrap();
+        let filter = DatumFilter {
+            require_constraints: vec!["OS:plan9".to_string()], // impossible OS
+            ..Default::default()
+        };
+        let results = filter_datums(datums, &filter, true); // explain=true
+        assert_eq!(results.len(), 1);
+        assert!(results[0].2.is_some()); // reason present
+        assert!(results[0].2.as_ref().unwrap().contains("plan9"));
+    }
+
+    #[test]
+    fn test_filter_datums_empty_result() {
+        let temp_dir = TempDir::new().unwrap();
+        let b00t_path = temp_dir.path().to_str().unwrap();
+        create_test_datum_file(
+            temp_dir.path(),
+            "tool.cli.toml",
+            "[b00t]\nname = \"tool\"\ntype = \"cli\"\nhint = \"A tool\"\n",
+        );
+        let datums = get_all_datums(b00t_path).unwrap();
+        let filter = DatumFilter {
+            require_constraints: vec!["CMD:zzz_impossible_cmd_zzz".to_string()],
+            ..Default::default()
+        };
+        let results = filter_datums(datums, &filter, false); // explain=false → empty
+        assert!(results.is_empty());
+    }
+
+    // ── #201 graph tests ──────────────────────────────────────────────────────
+
+    #[test]
+    fn test_build_datum_graph_nodes() {
+        let temp_dir = TempDir::new().unwrap();
+        let b00t_path = temp_dir.path().to_str().unwrap();
+        create_test_datum_file(
+            temp_dir.path(),
+            "rust.cli.toml",
+            "[b00t]\nname = \"rustc\"\ntype = \"cli\"\nhint = \"Rust compiler\"\n",
+        );
+        let graph = build_datum_graph(b00t_path, None).unwrap();
+        assert_eq!(graph.nodes.len(), 1);
+        assert_eq!(graph.nodes[0].key, "rust.cli");
+    }
+
+    #[test]
+    fn test_build_datum_graph_depends_on_edges() {
+        let temp_dir = TempDir::new().unwrap();
+        let b00t_path = temp_dir.path().to_str().unwrap();
+        create_test_datum_file(
+            temp_dir.path(),
+            "cargo.cli.toml",
+            "[b00t]\nname = \"cargo\"\ntype = \"cli\"\nhint = \"Rust build tool\"\ndepends_on = [\"rust.cli\"]\n",
+        );
+        let graph = build_datum_graph(b00t_path, None).unwrap();
+        assert_eq!(graph.edges.len(), 1);
+        assert_eq!(graph.edges[0].from, "cargo.cli");
+        assert_eq!(graph.edges[0].to, "rust.cli");
+        assert_eq!(graph.edges[0].edge_type, "depends_on");
+    }
+
+    #[test]
+    fn test_graph_to_dot_syntax() {
+        let graph = DatumGraph {
+            nodes: vec![DatumGraphNode {
+                key: "rust.cli".to_string(),
+                name: "rustc".to_string(),
+                datum_type: None,
+                hint: "Rust compiler".to_string(),
+            }],
+            edges: vec![DatumGraphEdge {
+                from: "cargo.cli".to_string(),
+                to: "rust.cli".to_string(),
+                edge_type: "depends_on".to_string(),
+            }],
+        };
+        let dot = graph_to_dot(&graph);
+        assert!(dot.contains("digraph b00t {"));
+        assert!(dot.contains("->"));
+        assert!(dot.contains("rust.cli"));
+        assert!(dot.contains("depends_on"));
+    }
+
+    #[test]
+    fn test_graph_neighbors_out() {
+        let graph = DatumGraph {
+            nodes: vec![],
+            edges: vec![
+                DatumGraphEdge {
+                    from: "cargo.cli".to_string(),
+                    to: "rust.cli".to_string(),
+                    edge_type: "depends_on".to_string(),
+                },
+                DatumGraphEdge {
+                    from: "rust.cli".to_string(),
+                    to: "llvm.cli".to_string(),
+                    edge_type: "depends_on".to_string(),
+                },
+            ],
+        };
+        // depth=1 from cargo → only rust.cli
+        let neighbors = graph_neighbors(&graph, "cargo.cli", 1, "out");
+        assert_eq!(neighbors.len(), 1);
+        assert_eq!(neighbors[0].to, "rust.cli");
+
+        // depth=2 from cargo → rust.cli + llvm.cli
+        let neighbors2 = graph_neighbors(&graph, "cargo.cli", 2, "out");
+        assert_eq!(neighbors2.len(), 2);
+    }
+
+    #[test]
+    fn test_graph_neighbors_in() {
+        let graph = DatumGraph {
+            nodes: vec![],
+            edges: vec![DatumGraphEdge {
+                from: "cargo.cli".to_string(),
+                to: "rust.cli".to_string(),
+                edge_type: "depends_on".to_string(),
+            }],
+        };
+        // inbound to rust.cli → cargo.cli
+        let neighbors = graph_neighbors(&graph, "rust.cli", 1, "in");
+        assert_eq!(neighbors.len(), 1);
+        assert_eq!(neighbors[0].from, "cargo.cli");
+    }
+
+    // ── #200 semantic search / index text tests ───────────────────────────────
+
+    #[test]
+    fn test_index_datums_text_format() {
+        // Validate the text we'd build for indexing (without actually calling irontology)
+        let datum = crate::BootDatum {
+            name: "rustc".to_string(),
+            datum_type: Some(crate::DatumType::Cli),
+            hint: "Rust compiler".to_string(),
+            ..Default::default()
+        };
+        let type_str = datum
+            .datum_type
+            .as_ref()
+            .map(|t| format!("{:?}", t))
+            .unwrap_or_default();
+        let text = format!("name: {}\ntype: {}\nhint: {}\n", datum.name, type_str, datum.hint);
+        assert!(text.contains("name: rustc"));
+        assert!(text.contains("type: Cli"));
+        assert!(text.contains("hint: Rust compiler"));
     }
 
     #[test]

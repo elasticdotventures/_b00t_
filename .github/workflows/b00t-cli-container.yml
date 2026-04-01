@@ -7,11 +7,6 @@ on:
       - 'b00t-cli/**'
       - 'Dockerfile.b00t-cli'
       - '.github/workflows/b00t-cli-container.yml'
-  pull_request:
-    branches: [ main ]
-    paths:
-      - 'b00t-cli/**'  
-      - 'Dockerfile.b00t-cli'
   release:
     types: [ published ]
   workflow_dispatch:  # Allow manual trigger
@@ -30,6 +25,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'release' && github.event.release.tag_name || github.ref }}
 
       - name: Set up Just command runner
         uses: extractions/setup-just@v1
@@ -49,8 +46,13 @@ jobs:
 
       - name: Extract version from workspace Cargo.toml
         id: version
+        shell: bash
         run: |
-          VERSION=$(grep '^version =' b00t-c0re-lib/Cargo.toml | head -1 | cut -d'"' -f2)
+          VERSION=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -n1)
+          if [ "${{ github.event_name }}" = "release" ]; then
+            VERSION="${{ github.event.release.tag_name }}"
+            VERSION="${VERSION#v}"
+          fi
           echo "version=$VERSION" >> $GITHUB_OUTPUT
 
       - name: Extract Docker metadata
@@ -86,6 +88,7 @@ jobs:
       - name: Test container
         if: github.event_name != 'pull_request'
         run: |
-          docker run --rm ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest b00t-cli --version
-          docker run --rm ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest b00t-cli status --help
-          docker run --rm ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest b00t-mcp --version
+          PRIMARY_TAG=$(echo "${{ steps.meta.outputs.tags }}" | head -n1)
+          docker run --rm "${PRIMARY_TAG}" b00t-cli --version
+          docker run --rm "${PRIMARY_TAG}" b00t-cli status --help
+          docker run --rm "${PRIMARY_TAG}" b00t-mcp --version

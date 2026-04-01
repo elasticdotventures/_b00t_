@@ -25,7 +25,7 @@ default = []
 python = ["pyo3"]
 
 [dependencies]
-pyo3 = { version = "0.25", features = ["extension-module"], optional = true }
+pyo3 = { version = "0.27", features = ["extension-module"], optional = true }
 # Workspace dependencies
 serde.workspace = true
 serde_json.workspace = true
@@ -35,6 +35,10 @@ regex.workspace = true
 rmcp.workspace = true
 toml.workspace = true
 serde_yaml = "0.9"
+
+# Irontology semantic bridge — direct library integration (no MCP subprocess)
+# 🤓 binary pending (vendor/irontology-mcp has no main.rs yet); lib-only path works today
+storage-neumann = { path = "../vendor/irontology-mcp/crates/storage-neumann" }
 
 # Core lib specific dependencies
 shellexpand = "3.1.0"

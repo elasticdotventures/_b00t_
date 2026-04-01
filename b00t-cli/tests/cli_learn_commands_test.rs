@@ -7,8 +7,8 @@
 //! - b00t learn --search
 //! - End-to-end CLI workflow
 
-use std::process::Command;
 use std::env;
+use std::process::Command;
 use tempfile::TempDir;
 
 fn is_infrastructure_available() -> bool {
@@ -16,13 +16,29 @@ fn is_infrastructure_available() -> bool {
 }
 
 fn get_b00t_binary() -> String {
-    // Get the b00t binary path from cargo
-    env::var("CARGO_BIN_EXE_b00t-cli")
-        .unwrap_or_else(|_| {
-            // Fallback: try to find in target directory
-            let manifest_dir = env::var("CARGO_MANIFEST_DIR").unwrap();
-            format!("{}/target/debug/b00t-cli", manifest_dir)
-        })
+    let manifest_dir = env::var("CARGO_MANIFEST_DIR").unwrap();
+    let mut candidates = vec![];
+
+    // Cargo sets CARGO_BIN_EXE_<name> with '-' replaced by '_'
+    if let Ok(path) = env::var("CARGO_BIN_EXE_b00t_cli") {
+        candidates.push(path);
+    }
+    if let Ok(path) = env::var("CARGO_BIN_EXE_b00t-cli") {
+        candidates.push(path);
+    }
+
+    // Common local build outputs
+    candidates.push(format!("{}/target/debug/b00t-cli", manifest_dir));
+    candidates.push(format!("{}/../target/debug/b00t-cli", manifest_dir)); // workspace root
+    candidates.push(format!("{}/target/debug/deps/b00t-cli", manifest_dir));
+
+    for path in &candidates {
+        if std::path::Path::new(path).exists() {
+            return path.clone();
+        }
+    }
+
+    panic!("b00t binary not found; tried: {:?}", candidates);
 }
 
 fn setup_temp_dir() -> TempDir {
@@ -50,7 +66,10 @@ mod cli_learn_digest {
                 "--digest",
                 "Rust ensures memory safety through ownership and borrowing rules",
             ])
-            .env("_B00T_Path", env::var("_B00T_Path").unwrap_or_else(|_| ".".to_string()))
+            .env(
+                "_B00T_Path",
+                env::var("_B00T_Path").unwrap_or_else(|_| ".".to_string()),
+            )
             .output()
             .expect("Failed to execute b00t learn --digest");
 
@@ -190,7 +209,9 @@ mod cli_learn_ask {
 
         // Should indicate no results found
         assert!(
-            stdout.contains("No results") || stdout.contains("0 results") || stdout.contains("not found"),
+            stdout.contains("No results")
+                || stdout.contains("0 results")
+                || stdout.contains("not found"),
             "Should indicate no results found"
         );
     }
@@ -202,6 +223,11 @@ mod cli_learn_record_search {
 
     #[test]
     fn test_cli_learn_record_and_search() {
+        if !is_infrastructure_available() {
+            println!("⚠️  Skipping: QDRANT_URL not set");
+            return;
+        }
+
         let temp_dir = setup_temp_dir();
         let temp_path = temp_dir.path().to_str().unwrap();
         let b00t = get_b00t_binary();
@@ -218,8 +244,14 @@ mod cli_learn_record_search {
             .output()
             .expect("Failed to execute b00t learn --record");
 
-        println!("Record stdout: {}", String::from_utf8_lossy(&record_output.stdout));
-        println!("Record stderr: {}", String::from_utf8_lossy(&record_output.stderr));
+        println!(
+            "Record stdout: {}",
+            String::from_utf8_lossy(&record_output.stdout)
+        );
+        println!(
+            "Record stderr: {}",
+            String::from_utf8_lossy(&record_output.stderr)
+        );
 
         assert!(
             record_output.status.success(),
@@ -234,17 +266,15 @@ mod cli_learn_record_search {
 
         // Search for the recorded lesson
         let search_output = Command::new(&b00t)
-            .args(&[
-                "learn",
-                "cli_test_tool",
-                "--search",
-                "list",
-            ])
+            .args(&["learn", "cli_test_tool", "--search", "list"])
             .env("_B00T_Path", temp_path)
             .output()
             .expect("Failed to execute b00t learn --search");
 
-        println!("Search stdout: {}", String::from_utf8_lossy(&search_output.stdout));
+        println!(
+            "Search stdout: {}",
+            String::from_utf8_lossy(&search_output.stdout)
+        );
 
         assert!(
             search_output.status.success(),
@@ -260,6 +290,11 @@ mod cli_learn_record_search {
 
     #[test]
     fn test_cli_learn_record_token_limit() {
+        if !is_infrastructure_available() {
+            println!("⚠️  Skipping: QDRANT_URL not set");
+            return;
+        }
+
         let temp_dir = setup_temp_dir();
         let temp_path = temp_dir.path().to_str().unwrap();
         let b00t = get_b00t_binary();
@@ -269,18 +304,19 @@ mod cli_learn_record_search {
         let lesson = format!("topic: {}", very_long_body);
 
         let output = Command::new(&b00t)
-            .args(&[
-                "learn",
-                "cli_test_tool",
-                "--record",
-                &lesson,
-            ])
+            .args(&["learn", "cli_test_tool", "--record", &lesson])
             .env("_B00T_Path", temp_path)
             .output()
             .expect("Failed to execute b00t learn --record");
 
-        println!("Token limit stdout: {}", String::from_utf8_lossy(&output.stdout));
-        println!("Token limit stderr: {}", String::from_utf8_lossy(&output.stderr));
+        println!(
+            "Token limit stdout: {}",
+            String::from_utf8_lossy(&output.stdout)
+        );
+        println!(
+            "Token limit stderr: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
 
         // Should fail with token limit error
         assert!(
@@ -347,12 +383,7 @@ mod cli_end_to_end_workflow {
 
         println!("\n=== STEP 3: Search LFMF Lessons ===");
         let search_output = Command::new(&b00t)
-            .args(&[
-                "learn",
-                topic,
-                "--search",
-                "ownership",
-            ])
+            .args(&["learn", topic, "--search", "ownership"])
             .env("_B00T_Path", temp_path)
             .output()
             .expect("Failed to search lessons");
@@ -362,18 +393,14 @@ mod cli_end_to_end_workflow {
 
         let search_stdout = String::from_utf8_lossy(&search_output.stdout);
         assert!(
-            search_stdout.contains("ownership patterns") || search_stdout.contains("Rc<RefCell<T>>"),
+            search_stdout.contains("ownership patterns")
+                || search_stdout.contains("Rc<RefCell<T>>"),
             "Should find recorded LFMF lesson"
         );
 
         println!("\n=== STEP 4: Query RAG ===");
         let ask_output = Command::new(&b00t)
-            .args(&[
-                "learn",
-                topic,
-                "--ask",
-                "ownership and borrowing",
-            ])
+            .args(&["learn", topic, "--ask", "ownership and borrowing"])
             .output()
             .expect("Failed to ask RAG");
 
@@ -412,8 +439,14 @@ mod cli_end_to_end_workflow {
             .output()
             .expect("Failed to record lesson");
 
-        println!("Offline record: {}", String::from_utf8_lossy(&output.stdout));
-        println!("Offline stderr: {}", String::from_utf8_lossy(&output.stderr));
+        println!(
+            "Offline record: {}",
+            String::from_utf8_lossy(&output.stdout)
+        );
+        println!(
+            "Offline stderr: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
 
         // Should succeed with filesystem fallback
         assert!(
@@ -423,18 +456,16 @@ mod cli_end_to_end_workflow {
 
         // Search should also work (filesystem-based)
         let search_output = Command::new(&b00t)
-            .args(&[
-                "learn",
-                topic,
-                "--search",
-                "list",
-            ])
+            .args(&["learn", topic, "--search", "list"])
             .env("_B00T_Path", temp_path)
             .env_remove("QDRANT_URL")
             .output()
             .expect("Failed to search lessons");
 
-        println!("Offline search: {}", String::from_utf8_lossy(&search_output.stdout));
+        println!(
+            "Offline search: {}",
+            String::from_utf8_lossy(&search_output.stdout)
+        );
 
         assert!(
             search_output.status.success(),
@@ -477,20 +508,19 @@ mod cli_error_handling {
 
         // Try to use --digest and --ask together (invalid)
         let output = Command::new(&b00t)
-            .args(&[
-                "learn",
-                "rust",
-                "--digest",
-                "content",
-                "--ask",
-                "query",
-            ])
+            .args(&["learn", "rust", "--digest", "content", "--ask", "query"])
             .output()
             .expect("Failed to execute b00t learn");
 
         // Should handle gracefully (either one takes precedence or error)
-        println!("Invalid combo stdout: {}", String::from_utf8_lossy(&output.stdout));
-        println!("Invalid combo stderr: {}", String::from_utf8_lossy(&output.stderr));
+        println!(
+            "Invalid combo stdout: {}",
+            String::from_utf8_lossy(&output.stdout)
+        );
+        println!(
+            "Invalid combo stderr: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
 
         // Just verify no panic
         let stderr = String::from_utf8_lossy(&output.stderr);
@@ -518,8 +548,14 @@ mod cli_error_handling {
             .output()
             .expect("Failed to execute b00t learn --record");
 
-        println!("Invalid format stdout: {}", String::from_utf8_lossy(&output.stdout));
-        println!("Invalid format stderr: {}", String::from_utf8_lossy(&output.stderr));
+        println!(
+            "Invalid format stdout: {}",
+            String::from_utf8_lossy(&output.stdout)
+        );
+        println!(
+            "Invalid format stderr: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
 
         // Should fail with format error
         assert!(
@@ -561,8 +597,14 @@ mod cross_language_integration {
             .output()
             .expect("Failed to execute b00t grok digest");
 
-        println!("Cross-language stdout: {}", String::from_utf8_lossy(&output.stdout));
-        println!("Cross-language stderr: {}", String::from_utf8_lossy(&output.stderr));
+        println!(
+            "Cross-language stdout: {}",
+            String::from_utf8_lossy(&output.stdout)
+        );
+        println!(
+            "Cross-language stderr: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
 
         assert!(
             output.status.success(),
@@ -590,17 +632,20 @@ mod cross_language_integration {
         // (This assumes some invalid operation that Python will reject)
         let output = Command::new(&b00t)
             .args(&[
-                "grok",
-                "digest",
-                "-t",
-                "", // Empty topic should cause error
+                "grok", "digest", "-t", "", // Empty topic should cause error
                 "content",
             ])
             .output()
             .expect("Failed to execute b00t grok digest");
 
-        println!("Error propagation stdout: {}", String::from_utf8_lossy(&output.stdout));
-        println!("Error propagation stderr: {}", String::from_utf8_lossy(&output.stderr));
+        println!(
+            "Error propagation stdout: {}",
+            String::from_utf8_lossy(&output.stdout)
+        );
+        println!(
+            "Error propagation stderr: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
 
         // Should fail or show error message
         if !output.status.success() {

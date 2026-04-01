@@ -6,3 +6,7 @@ install = "mkdir -p ~/.local/bin && echo '#!/bin/bash\nnpx -y https://github.com
 version = "gemini --version 2>/dev/null || echo 'not installed'"
 version_regex = "([0-9]+\\.[0-9]+\\.[0-9]+)"
 aliases = ["gemini"]
+
+# 🔗 Entanglements: This CLI tool is used by the MCP server
+# gemini-mcp-tool.mcp depends on geminicli.cli for authentication
+entangled_mcp = ["gemini-mcp-tool"]

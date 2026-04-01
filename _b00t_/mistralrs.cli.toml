@@ -1,0 +1,30 @@
+[b00t]
+name = "mistralrs"
+type = "cli"
+desires = "latest"
+hint = "mistral.rs CLI/server for local Candle-backed inference"
+install = """
+cargo install mistralrs-server
+"""
+update = """
+cargo install mistralrs-server --force
+"""
+version = "mistralrs-server --version"
+version_regex = '([0-9]+\\.[0-9]+\\.[0-9]+)'
+lfmf_category = "mistralrs"
+
+[b00t.learn]
+topic = "mistralrs"
+auto_digest = true
+
+[[b00t.usage]]
+description = "Run local OpenAI-compatible server using Mistral 7B Instruct"
+command = "mistralrs-server --port 1234 --served-model-name mistral-local --hf-model-id mistralai/Mistral-7B-Instruct-v0.3"
+
+[validate]
+command = "mistralrs-server --version"
+regex = "[0-9]+\\.[0-9]+\\.[0-9]+"
+
+[roles]
+required_for = ["developer"]
+optional_for = ["orchestrator", "analyst"]

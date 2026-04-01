@@ -1,0 +1,54 @@
+[b00t]
+# 🤓 just-mcp is the MCP bridge between agents and justfiles — introspect & execute recipes without shell access
+# 🤓 Implemented in Rust (rmcp 0.3.0, MCP 2024-11-05 protocol), runs over stdio JSON-RPC
+# 🤓 b00t uses justfiles everywhere but had no datum for just-mcp — this fixes that gap
+# 💡例 b00t cli check just-mcp
+# 💡例 just-mcp --stdio --directory /path/to/project
+# 🔗参 https://docs.rs/crate/just-mcp/latest
+# 🔗参 https://github.com/PromptExecution/just-mcp  (submodule at ~/.b00t/just-mcp)
+# 🤓 canonical datum: ~/.b00t/just-mcp/_b00t_/just-mcp.mcp.tomllm (source of truth in repo)
+name    = "just-mcp"
+type    = "mcp"
+desires = "0.1.1"
+aliases = ["just-mcp"]
+hint    = "MCP server for justfile introspection — list_recipes, run_recipe, get_recipe_info, validate_justfile"
+
+# ── MCP Tools exposed ─────────────────────────────────────────────────────────
+[b00t.mcp.tools]
+# 🤓 four tools, all safe to call; run_recipe is the only side-effecting one
+list_recipes    = "discover all recipes in the justfile — use before run_recipe"
+run_recipe      = "execute a recipe with optional args; returns structured stdout/stderr/exit_code"
+get_recipe_info = "retrieve recipe metadata: params, docs, dependencies — read-only"
+validate_justfile = "syntax + semantic validation with diagnostics — read-only, run on edits"
+
+# ── Runtime interface ─────────────────────────────────────────────────────────
+[b00t.mcp.runtime]
+# 🤓 transport is stdio; spawn one process per justfile root
+# 🤓 --directory sets cwd for just execution; .env files are auto-loaded from that dir
+transport   = "stdio"
+exec        = "just-mcp"
+args        = ["--stdio", "--directory", "${JUSTFILE_DIR}"]
+protocol    = "MCP 2024-11-05"
+sdk         = "rmcp 0.3.0"
+
+# ── Installation ──────────────────────────────────────────────────────────────
+[b00t.mcp.install]
+# 🤓 prefer cargo install for reproducibility; pin version after first successful build
+# ⚠️需 requires: cargo, just (casey/just) already installed
+cargo   = "cargo install just-mcp"
+check   = "just-mcp --version"
+
+[b00t.mcp.install.hook_detect]
+# Rhai: check binary exists and version matches desires
+hook_detect = '''
+let bin = which("just-mcp");
+if bin == "" { "missing: cargo install just-mcp" } else { "ok" }
+'''
+
+# ── b00t integration ──────────────────────────────────────────────────────────
+[b00t.mcp.b00t_integration]
+# 🤓 b00t itself uses justfiles for all recipes — just-mcp is the agent-native interface to them
+# 🤓 justfile datums (type="justfile") declare which just-mcp instance serves them
+# 🤓 stack datums link justfile datums into the walkable system map
+# 🔗参 app4dog--workspace.stack.tomllm — example stack using this datum
+datum_type_served = "justfile"  # just-mcp is the introspection engine for type="justfile" datums

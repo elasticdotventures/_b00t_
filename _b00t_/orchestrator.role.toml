@@ -1,0 +1,60 @@
+[b00t]
+name = "orchestrator"
+type = "role"
+hint = "Hive orchestrator role: coordinate sub-agents, load role-scoped tools, and monitor intra-agent chat."
+
+skills = [
+    "role-scoped capability loading",
+    "sub-agent delegation and supervision",
+    "intra-agent chat monitoring",
+    "hive maintenance triage",
+    "context budget preservation",
+    "datum dependency validation",
+]
+
+compliance = [
+    "Use role-linked datums as source of truth for tools and agents",
+    "Delegate iterative execution to ralph for maintenance loops",
+    "Verify chat transport readiness before cross-agent messaging",
+    "Checkpoint major milestones with tested commits",
+]
+
+entangled_agents = [
+    "ralph.agent",
+]
+
+entangled_cli = [
+    "b00t.cli",
+    "just.cli",
+    "uv.cli",
+]
+
+entangled_mcp = [
+    "context7.mcp",
+    "b00t-mcp.mcp",
+]
+
+depends_on = [
+    "memory.mcp",
+]
+
+keywords = ["role", "orchestrator", "sub-agent", "ralph", "chat-monitoring"]
+
+# agent-hooks this role activates
+# 🤓 "agent-hooks" = AI agent lifecycle hooks (not git hooks, not CI hooks)
+[b00t.agent_hooks]
+events = [
+    "agent.start",    # log sub-agent spawn + inject tier constraint context
+    "agent.stop",     # validate output contracts before returning to parent
+    "tool.pre",       # generic security gates (inherit from events/tool.pre.sh)
+    "tool.post",      # auto-test after commit, audit log
+]
+gates = [
+    "block-credential-harvest",
+    "block-destructive-rm",
+    "validate-subagent-output-contract",  # SubagentStop: enforce sm0l/ch0nky contracts
+]
+validations = [
+    "auto-test-after-commit",
+    "audit-log",
+]

@@ -1,0 +1,83 @@
+[b00t]
+name = "plantuml-queue"
+type = "stack"
+hint = "Queue-based PlantUML diagram generation with sm0l model orchestration for TOGAF workflows"
+members = ["plantuml-server-b00t.docker", "plantuml.mcp", "ollama.docker"]
+
+# Environment variables for queue-based processing
+[b00t.env]
+PLANTUML_SERVER_URL = "http://localhost:8080/plantuml"
+OLLAMA_HOST = "http://localhost:11434"
+REDIS_URL = "redis://localhost:6379"  # For b00t-ipc MessageBus transport
+B00T_IPC_MODE = "redis"  # redis, nats, or in-process
+PLANTUML_QUEUE_WORKERS = "4"  # Concurrent workers for diagram generation
+SM0L_MODEL = "llama3.2:3b"  # Ollama model for subtask processing
+
+[b00t.orchestration]
+description = "Queue-based PlantUML generation with local sm0l model intelligence"
+k8s_compatible = true
+requires_gpu = false  # sm0l models run on CPU via Ollama
+
+# 🤓: IPC-based queue architecture for distributed diagram generation
+# Agents can submit diagram requests to MessageBus queue
+# Workers pull from queue, use sm0l model for validation/enhancement
+# PlantUML server renders final diagrams
+[b00t.orchestration.ipc]
+message_bus = "redis"  # b00t-ipc transport
+queue_name = "plantuml:diagram:requests"
+worker_concurrency = 4
+task_timeout = "30s"
+
+# sm0l model configuration for subtask processing
+[b00t.orchestration.sm0l_model]
+provider = "ollama"
+model = "llama3.2:3b"  # 3B parameter model, fast CPU inference
+capabilities = ["chat", "code"]
+use_cases = [
+    "PlantUML syntax validation",
+    "Diagram enhancement suggestions",
+    "TOGAF template matching",
+    "Error correction"
+]
+
+# Resource requirements (CPU-only, no GPU needed)
+[b00t.orchestration.resource_requirements]
+cpu = "2"
+memory = "4Gi"
+# No GPU required - sm0l models run efficiently on CPU
+
+[b00t.learn]
+topic = "plantuml-queue"
+auto_digest = true
+
+[[b00t.references]]
+name = "b00t-ipc MessageBus"
+url = "file://~/.dotfiles/b00t-ipc/src/lib.rs"
+
+[[b00t.references]]
+name = "PlantUML Server b00t Fork"
+url = "https://github.com/PromptExecution/plantuml-server--b00t--togaf--mcp"
+
+[[b00t.references]]
+name = "Ollama sm0l Models"
+url = "https://ollama.com/library/llama3.2"
+
+[[b00t.usage]]
+description = "Start PlantUML queue stack (all services)"
+command = "b00t stack start plantuml-queue"
+
+[[b00t.usage]]
+description = "Start Redis for b00t-ipc MessageBus"
+command = "docker run -d -p 6379:6379 --name redis redis:7-alpine"
+
+[[b00t.usage]]
+description = "Start Ollama with llama3.2:3b model"
+command = "docker run -d -p 11434:11434 --name ollama ollama/ollama && docker exec ollama ollama pull llama3.2:3b"
+
+[[b00t.usage]]
+description = "Start PlantUML server with MCP"
+command = "docker run -d -p 8080:8080 --name plantuml-b00t ghcr.io/promptexecution/plantuml-server--b00t--togaf--mcp:latest"
+
+[[b00t.usage]]
+description = "Submit diagram to queue (via b00t-ipc)"
+command = "b00t job submit plantuml-queue --input togaf-diagram.puml --format svg"

@@ -1,10 +1,30 @@
 #[cfg(test)]
 mod integration_tests {
-    use crate::{get_mcp_config, mcp_add_json};
+    use crate::{UnifiedConfig, get_mcp_config, mcp_add_json};
+    use b00t_cli::datum_mcp::McpDatum;
+    use serde_json::Value;
+    use std::path::{Path, PathBuf};
     use tempfile::TempDir;
 
     fn setup_temp_dir() -> TempDir {
         tempfile::tempdir().expect("Failed to create temp directory")
+    }
+
+    fn repo_root() -> PathBuf {
+        Path::new(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .expect("workspace root")
+            .to_path_buf()
+    }
+
+    fn repo_b00t_dir() -> PathBuf {
+        repo_root().join("_b00t_")
+    }
+
+    fn load_repo_mcp_toml(name: &str) -> String {
+        let path = repo_b00t_dir().join(format!("{name}.mcp.toml"));
+        std::fs::read_to_string(&path)
+            .unwrap_or_else(|e| panic!("failed to read {}: {e}", path.display()))
     }
 
     #[test]
@@ -82,13 +102,28 @@ mod integration_tests {
         assert!(result.unwrap_err().to_string().contains("not found"));
     }
 
-    // TODO: Update test for new unified learn command
-    // Disabled during main branch merge - lfmf was merged into learn command
-    // #[test]
-    // fn test_lfmf_creates_and_appends_lesson() {
-    //     // LFMF functionality was merged into learn command in main branch
-    //     // Test needs to be updated to use new learn --record interface
-    // }
+    #[tokio::test]
+    async fn test_lfmf_creates_and_appends_lesson() {
+        use b00t_cli::commands::lfmf::handle_lfmf;
+        let temp_dir = setup_temp_dir();
+        let temp_path = temp_dir.path().to_str().unwrap();
+        let tool = "testtool";
+        let lesson1 = "First: lesson learned.";
+        let lesson2 = "Second: lesson learned.";
+        // First call: should create file
+        let result1 = handle_lfmf(temp_path, tool, lesson1, "repo");
+        assert!(result1.await.is_ok());
+        let file_path = temp_dir.path().join("learn").join(format!("{}.md", tool));
+        assert!(file_path.exists());
+        let content1 = std::fs::read_to_string(&file_path).unwrap();
+        assert!(content1.contains(lesson1));
+        // Second call: should append
+        let result2 = handle_lfmf(temp_path, tool, lesson2, "repo");
+        assert!(result2.await.is_ok());
+        let content2 = std::fs::read_to_string(&file_path).unwrap();
+        assert!(content2.contains(lesson1));
+        assert!(content2.contains(lesson2));
+    }
 
     #[test]
     fn test_learn_lists_md_topics_without_toml() {
@@ -237,5 +272,136 @@ baz = "learn/baz.md"
 
         let result_json = crate::mcp_list(temp_path, true);
         assert!(result_json.is_ok());
+    }
+
+    #[test]
+    fn test_repo_mcp_datums_parse_with_runtime_loader() {
+        for name in ["github", "gemini-mcp-tool", "azure-ai-foundry", "ralph"] {
+            let content = load_repo_mcp_toml(name);
+            let config: UnifiedConfig =
+                toml::from_str(&content).unwrap_or_else(|e| panic!("{name} should parse: {e}"));
+            assert_eq!(config.b00t.name, name);
+            assert_eq!(
+                config.b00t.datum_type,
+                Some(crate::DatumType::Mcp),
+                "{name} should remain an MCP datum"
+            );
+        }
+
+        let b00t_path = repo_b00t_dir();
+        let b00t_path_str = b00t_path.to_str().expect("utf8 path");
+
+        let github = McpDatum::from_config("github", b00t_path_str).expect("load github datum");
+        let github_stdio = github.parse_stdio_methods();
+        assert!(
+            !github_stdio.is_empty(),
+            "github datum should expose at least one stdio method"
+        );
+        assert_eq!(github_stdio[0].command, "npx");
+
+        let gemini = get_mcp_config("gemini-mcp-tool", b00t_path_str).expect("load gemini datum");
+        assert_eq!(
+            gemini.entangled_cli,
+            Some(vec!["geminicli".to_string()]),
+            "gemini datum should keep top-level entangled CLI metadata"
+        );
+
+        let azure =
+            get_mcp_config("azure-ai-foundry", b00t_path_str).expect("load azure foundry datum");
+        assert_eq!(
+            azure.lfmf_category.as_deref(),
+            Some("azure-ai-foundry"),
+            "azure datum should keep top-level lfmf_category metadata"
+        );
+    }
+
+    #[test]
+    fn test_mcp_schema_covers_runtime_metadata_fields() {
+        let schema_path = repo_b00t_dir().join("schema-资源").join("mcp.json");
+        let schema: Value = serde_json::from_str(
+            &std::fs::read_to_string(&schema_path)
+                .unwrap_or_else(|e| panic!("failed to read {}: {e}", schema_path.display())),
+        )
+        .expect("schema json should parse");
+
+        let b00t_props = &schema["properties"]["b00t"]["properties"];
+        assert!(
+            b00t_props.get("lfmf_category").is_some(),
+            "schema must cover BootDatum.lfmf_category"
+        );
+        assert!(
+            b00t_props.get("entangled_cli").is_some(),
+            "schema must cover BootDatum.entangled_cli"
+        );
+
+        let stdio_props = &schema["definitions"]["stdioMethod"]["properties"];
+        assert!(
+            stdio_props.get("pre_start").is_some(),
+            "schema must cover method-level pre_start used by github.mcp.toml"
+        );
+        assert!(
+            stdio_props.get("entangled_cli").is_some(),
+            "schema must cover method-level entangled_cli when attached to a stdio method"
+        );
+
+        let install_schema = &b00t_props["install"];
+        let install_variants = install_schema["oneOf"]
+            .as_array()
+            .expect("schema install should allow multiple representations");
+        assert!(
+            install_variants
+                .iter()
+                .any(|variant| variant.get("type").and_then(Value::as_str) == Some("string")),
+            "schema must allow script-style install strings"
+        );
+        assert!(
+            install_variants.iter().any(|variant| {
+                variant["properties"]["requires"]["type"].as_str() == Some("array")
+            }),
+            "schema must allow install.requires arrays used by richer MCP datums"
+        );
+
+        let learn_props = &schema["definitions"]["learnBlock"]["properties"];
+        assert!(
+            learn_props.get("inline").is_some(),
+            "schema must cover inline learn blocks used by just-mcp"
+        );
+    }
+}
+
+#[cfg(test)]
+mod uninstall_integration {
+    use assert_cmd::Command;
+    use tempfile::TempDir;
+    use std::fs;
+
+    fn write_uninstall_datum(dir: &TempDir, name: &str, script: &str) {
+        let content = format!(
+            "[b00t]\nname = {:?}\ntype = \"cli\"\nhint = \"test\"\nuninstall = {:?}\n",
+            name, script
+        );
+        fs::write(dir.path().join(format!("{}.cli.toml", name)), content).unwrap();
+    }
+
+    #[test]
+    fn test_uninstall_command_not_found() {
+        let dir = TempDir::new().unwrap();
+        let mut cmd = Command::cargo_bin("b00t-cli").unwrap();
+        cmd.args(["--path", dir.path().to_str().unwrap(), "uninstall", "--yes", "nonexistent"]);
+        let output = cmd.output().unwrap();
+        assert!(!output.status.success());
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert!(stderr.contains("not found"), "got: {}", stderr);
+    }
+
+    #[test]
+    fn test_uninstall_command_executes() {
+        let dir = TempDir::new().unwrap();
+        let marker = dir.path().join("removed.txt");
+        write_uninstall_datum(&dir, "mytool", &format!("touch {}", marker.display()));
+        let mut cmd = Command::cargo_bin("b00t-cli").unwrap();
+        cmd.args(["--path", dir.path().to_str().unwrap(), "uninstall", "--yes", "mytool"]);
+        cmd.assert().success();
+        assert!(marker.exists());
     }
 }

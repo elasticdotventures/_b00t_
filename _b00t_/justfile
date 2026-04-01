@@ -21,3 +21,7 @@ default:
     @echo "Example: just litellm start"
     @echo ""
     @echo "Module help: just --list <module>"
+
+# Removal rationale: _b00t_/jira-notes.md distilled into lfmf lesson
+jira-notes-removed-rationale:
+    @echo "Removed _b00t_/jira-notes.md after distilling into _b00t_/lfmf/jira.md"

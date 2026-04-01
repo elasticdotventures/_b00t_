@@ -3,9 +3,10 @@
 //! Provides utilities for spawning, managing, and coordinating b00t agents
 //! from `.agent.toml` configuration files.
 
+use crate::B00tResult;
 use crate::agent_coordination::{AgentCoordinator, AgentMetadata};
 use crate::redis::{AgentStatus, RedisComms, RedisConfig};
-use crate::B00tResult;
+use crate::runtime_env::sandbox_root_cause_hint;
 use anyhow::Context;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -86,7 +87,11 @@ impl Drop for AgentHandle {
         // Clean up socket file on drop
         if self.socket_path.exists() {
             if let Err(e) = std::fs::remove_file(&self.socket_path) {
-                error!("Failed to remove socket {}: {}", self.socket_path.display(), e);
+                error!(
+                    "Failed to remove socket {}: {}",
+                    self.socket_path.display(),
+                    e
+                );
             } else {
                 info!("🧹 Cleaned up socket: {}", self.socket_path.display());
             }
@@ -138,10 +143,14 @@ impl AgentManager {
         }
 
         // Create Unix socket listener
-        let listener = UnixListener::bind(&socket_path).context(format!(
-            "Failed to bind agent socket: {}",
-            socket_path.display()
-        ))?;
+        let listener = UnixListener::bind(&socket_path).with_context(|| {
+            let mut message = format!("Failed to bind agent socket: {}", socket_path.display());
+            if let Some(hint) = sandbox_root_cause_hint("Unix socket bind") {
+                message.push(' ');
+                message.push_str(&hint);
+            }
+            message
+        })?;
 
         info!("🔌 Agent socket bound: {}", socket_path.display());
 
@@ -185,7 +194,11 @@ impl AgentManager {
         while let Some(entry) = entries.next_entry().await? {
             let path = entry.path();
             if path.extension().and_then(|s| s.to_str()) == Some("toml")
-                && path.file_name().and_then(|s| s.to_str()).map(|s| s.ends_with(".agent.toml")).unwrap_or(false)
+                && path
+                    .file_name()
+                    .and_then(|s| s.to_str())
+                    .map(|s| s.ends_with(".agent.toml"))
+                    .unwrap_or(false)
             {
                 match self.spawn_agent(&path).await {
                     Ok(handle) => handles.push(handle),
@@ -239,7 +252,9 @@ role = "test-crew"
 captain = false
 "#;
 
-        tokio::fs::write(&config_path, config_content).await.unwrap();
+        tokio::fs::write(&config_path, config_content)
+            .await
+            .unwrap();
 
         let config = AgentManager::load_config(&config_path).await.unwrap();
         assert_eq!(config.b00t.name, "test-agent");

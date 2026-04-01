@@ -1,0 +1,21 @@
+[b00t]
+name = "ralph"
+type = "cli"
+hint = "OODA loop autonomous task runner — b00t.sh; supports claude/codex/amp/opencode/mistralrs tools"
+
+[b00t.cli]
+command = "b00t.sh"
+detect = "test -f b00t.sh && echo 'ralph via b00t.sh'"
+version_cmd = "bash b00t.sh --help 2>&1 | head -1"
+version_regex = "ralph"
+install = "echo 'ralph is b00t.sh — already present in b00t root'"
+desires = "integrated"
+
+[b00t.capabilities]
+features = ["autonomous-loop", "ooda", "taskmaster-integration", "mistralrs"]
+requires = ["bash", "jq"]
+
+[b00t.env]
+TOOL = "claude"
+MAX_ITERATIONS = "10"
+LOOP_SLEEP_SECONDS = "2"

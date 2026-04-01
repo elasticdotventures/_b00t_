@@ -84,7 +84,11 @@ async fn test_concurrent_agent_coordination() {
                 let channel = format!("test.concurrent.{}", i);
                 tokio::spawn(async move {
                     for j in 0..10 {
-                        let msg = ChatMessage::new(&channel, &format!("agent-{}", i), &format!("msg-{}", j));
+                        let msg = ChatMessage::new(
+                            &channel,
+                            &format!("agent-{}", i),
+                            &format!("msg-{}", j),
+                        );
                         // Simulate some async work
                         sleep(Duration::from_millis(10)).await;
                         drop(msg);
@@ -103,7 +107,10 @@ async fn test_concurrent_agent_coordination() {
     })
     .await;
 
-    assert!(result.is_ok(), "Concurrent coordination test failed or timed out");
+    assert!(
+        result.is_ok(),
+        "Concurrent coordination test failed or timed out"
+    );
 }
 
 #[tokio::test]
@@ -123,7 +130,9 @@ async fn test_message_router_fallback() {
 
         // These should not panic even if transports are unavailable
         let _ = router.route(&msg, &Destination::Broadcast).await;
-        let _ = router.route(&msg, &Destination::Crew("test-crew".to_string())).await;
+        let _ = router
+            .route(&msg, &Destination::Crew("test-crew".to_string()))
+            .await;
     })
     .await;
 
@@ -232,7 +241,10 @@ where
 {
     match timeout(TEST_TIMEOUT, task).await {
         Ok(result) => result,
-        Err(_) => panic!("Deadlock detected in test '{}': no completion after {:?}", name, TEST_TIMEOUT),
+        Err(_) => panic!(
+            "Deadlock detected in test '{}': no completion after {:?}",
+            name, TEST_TIMEOUT
+        ),
     }
 }
 
@@ -241,7 +253,8 @@ async fn test_broadcast_to_multiple_agents() {
     monitor_for_deadlock(
         async {
             let metrics = ChatMetrics::global();
-            let broadcast_msg = ChatMessage::new("mission.broadcast", "coordinator", "Status update");
+            let broadcast_msg =
+                ChatMessage::new("mission.broadcast", "coordinator", "Status update");
 
             // Simulate broadcast to 5 agents
             for _i in 0..5 {

@@ -77,13 +77,6 @@ impl ManPage {
                         .collect::<Vec<_>>()
                         .join("\n");
 
-                    sections.push(ManSection {
-                        title: title.clone(),
-                        content: section_content.trim().to_string(),
-                        line_start: start,
-                        line_end: idx,
-                    });
-
                     // Extract description from DESCRIPTION section
                     if title.contains("DESCRIPTION") && description.is_none() {
                         description = Some(
@@ -96,6 +89,13 @@ impl ManPage {
                                 .to_string(),
                         );
                     }
+
+                    sections.push(ManSection {
+                        title,
+                        content: section_content.trim().to_string(),
+                        line_start: start,
+                        line_end: idx,
+                    });
                 }
 
                 current_section = Some((line.trim().to_string(), idx + 1));
@@ -110,12 +110,38 @@ impl ManPage {
                 .collect::<Vec<_>>()
                 .join("\n");
 
+            // Extract description from DESCRIPTION section if it is last
+            if title.contains("DESCRIPTION") && description.is_none() {
+                description = Some(
+                    section_content
+                        .lines()
+                        .take(3)
+                        .collect::<Vec<_>>()
+                        .join(" ")
+                        .trim()
+                        .to_string(),
+                );
+            }
+
             sections.push(ManSection {
-                title,
+                title: title.clone(),
                 content: section_content.trim().to_string(),
                 line_start: start,
                 line_end: lines.len(),
             });
+
+            // Extract description from DESCRIPTION section if it is last
+            if title.contains("DESCRIPTION") && description.is_none() {
+                description = Some(
+                    section_content
+                        .lines()
+                        .take(3)
+                        .collect::<Vec<_>>()
+                        .join(" ")
+                        .trim()
+                        .to_string(),
+                );
+            }
         }
 
         Ok(ManPage {

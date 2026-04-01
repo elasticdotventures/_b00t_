@@ -63,6 +63,24 @@ pub enum McpCommands {
         httpstream: bool,
     },
     #[clap(
+        about = "Sync MCP servers between b00t and agent platforms",
+        long_about = "Bidirectional sync of MCP server configs using datum metadata.\n\nExamples:\n  b00t-cli mcp sync push b00t kiro              # b00t -> kiro global\n  b00t-cli mcp sync pull kiro b00t              # kiro -> b00t datums\n  b00t-cli mcp sync push b00t claude            # b00t -> claude agents\n  b00t-cli mcp sync push b00t kiro --agent cli-master  # specific agent\n  b00t-cli mcp sync codex --repo                # legacy codex sync"
+    )]
+    Sync {
+        #[clap(help = "Operation: push, pull, or target name (legacy)")]
+        operation_or_target: String,
+        #[clap(help = "Source platform (for push/pull) or empty (legacy)")]
+        source: Option<String>,
+        #[clap(help = "Destination platform (for push/pull) or empty (legacy)")]
+        dest: Option<String>,
+        #[clap(long, help = "Specific agent name to sync")]
+        agent: Option<String>,
+        #[clap(long, help = "Sync to repository-specific location (legacy)")]
+        repo: bool,
+        #[clap(long, help = "Sync to user-global location (legacy)")]
+        user: bool,
+    },
+    #[clap(
         about = "Output MCP servers in various formats",
         long_about = "Output MCP servers in various formats for configuration files.\n\nExamples:\n  b00t-cli mcp output filesystem,brave-search\n  b00t-cli mcp output --json filesystem\n  b00t-cli mcp output --mcpServers filesystem,brave-search"
     )]
@@ -81,6 +99,38 @@ pub enum McpCommands {
     Registry {
         #[clap(subcommand)]
         action: RegistryAction,
+    },
+    #[clap(
+        about = "Execute MCP tool via stdio transport",
+        long_about = "Execute an MCP tool from a registered server via stdio transport.\n\nExamples (datum-based):\n  b00t-cli mcp execute filesystem read_file '{\"path\":\"/tmp/test.txt\"}'\n  b00t-cli mcp execute brave-search search '{\"query\":\"rust programming\"}'\n\nExamples (direct command):\n  b00t-cli mcp execute --command npx --args '-y,@modelcontextprotocol/server-filesystem' read_file '{\"path\":\"/file.txt\"}'\n  b00t-cli mcp execute -c uvx -a 'mcp-server-playwright' screenshot '{\"url\":\"https://example.com\"}'\n\nDiscovery:\n  b00t-cli mcp execute filesystem --discover\n  b00t-cli mcp execute --command npx --args '-y,@mcp/server-filesystem' --discover"
+    )]
+    Execute {
+        #[clap(
+            help = "MCP server name (from datum registry) or tool name (with --command). Optional in discovery mode with --command."
+        )]
+        server_or_tool: Option<String>,
+        #[clap(help = "Tool name to execute (omit in discovery mode)")]
+        tool: Option<String>,
+        #[clap(help = "Tool parameters as JSON string (omit in discovery mode)")]
+        params: Option<String>,
+        #[clap(
+            short,
+            long,
+            help = "Server command (alternative to server name, e.g., npx, uvx, docker)"
+        )]
+        command: Option<String>,
+        #[clap(
+            short,
+            long,
+            help = "Server arguments (comma-separated, e.g., '-y,@mcp/server')"
+        )]
+        args: Option<String>,
+        #[clap(long, help = "Working directory for server process")]
+        cwd: Option<String>,
+        #[clap(short, long, help = "Discover and list available tools only")]
+        discover: bool,
+        #[clap(short = 'f', long, help = "Output format: json, text (default: text)")]
+        format: Option<String>,
     },
 }
 
@@ -186,7 +236,25 @@ impl McpCommands {
                 match target.as_str() {
                     "claudecode" | "claude" => crate::claude_code_install_mcp(name, path),
                     "vscode" => crate::vscode_install_mcp(name, path),
-                    "codex" => crate::codex_install_mcp(name, path),
+                    "codex" => {
+                        let use_repo = if *repo && *user {
+                            anyhow::bail!("Error: Cannot specify both --repo and --user flags");
+                        } else if *repo {
+                            true
+                        } else if *user {
+                            false
+                        } else {
+                            crate::utils::is_git_repo()
+                        };
+
+                        crate::codex_install_mcp(
+                            name,
+                            path,
+                            use_repo,
+                            stdio_command.as_deref(),
+                            *httpstream,
+                        )
+                    }
                     "geminicli" => {
                         // Determine installation location: default to repo if in git repo, otherwise user
                         let use_repo = if *repo && *user {
@@ -231,6 +299,55 @@ impl McpCommands {
                     }
                 }
             }
+            McpCommands::Sync {
+                operation_or_target,
+                source,
+                dest,
+                agent,
+                repo,
+                user,
+            } => {
+                // Check if this is new push/pull syntax or legacy codex sync
+                if operation_or_target == "push" || operation_or_target == "pull" {
+                    let src = source
+                        .as_ref()
+                        .ok_or_else(|| anyhow::anyhow!("Source required for push/pull"))?;
+                    let dst = dest
+                        .as_ref()
+                        .ok_or_else(|| anyhow::anyhow!("Destination required for push/pull"))?;
+
+                    crate::mcp_sync_bidirectional(
+                        path,
+                        operation_or_target.as_str(),
+                        src,
+                        dst,
+                        agent.as_deref(),
+                    )
+                } else if source.is_none() && dest.is_none() {
+                    // Legacy codex sync (no source/dest args)
+                    let use_repo = if *repo && *user {
+                        anyhow::bail!("Error: Cannot specify both --repo and --user flags");
+                    } else if *repo {
+                        true
+                    } else if *user {
+                        false
+                    } else {
+                        crate::utils::is_git_repo()
+                    };
+
+                    match operation_or_target.as_str() {
+                        "codex" => crate::codex_sync_dotmcpjson(path, use_repo),
+                        _ => anyhow::bail!(
+                            "Error: Invalid target '{}'. Use 'push/pull src dest' or 'codex'",
+                            operation_or_target
+                        ),
+                    }
+                } else {
+                    anyhow::bail!(
+                        "Error: Invalid syntax. Use 'b00t-cli mcp sync push <src> <dest>' or 'b00t-cli mcp sync codex'"
+                    );
+                }
+            }
             McpCommands::Output {
                 json,
                 mcp_servers,
@@ -240,6 +357,173 @@ impl McpCommands {
                 crate::mcp_output(path, use_mcp_servers_wrapper, servers)
             }
             McpCommands::Registry { action } => action.execute_async().await,
+            McpCommands::Execute {
+                server_or_tool,
+                tool,
+                params,
+                command,
+                args,
+                cwd,
+                discover,
+                format,
+            } => {
+                use b00t_c0re_lib::mcp_proxy::{GenericMcpProxy, McpServerConfig, McpToolRequest};
+                use serde_json::Value as JsonValue;
+
+                // Determine operating mode: datum-based or direct command
+                let (server_config, tool_name) = if let Some(cmd) = command {
+                    // Direct command mode: --command specified
+                    let parsed_args = args
+                        .as_ref()
+                        .map(|a| a.split(',').map(|s| s.trim().to_string()).collect())
+                        .unwrap_or_default();
+
+                    let config = McpServerConfig {
+                        command: cmd.clone(),
+                        args: parsed_args,
+                        cwd: cwd.clone(),
+                        env: None,
+                        timeout_ms: Some(30000),
+                    };
+
+                    // In direct mode, server_or_tool is the tool name (optional in discovery mode)
+                    let tool_name = if *discover {
+                        None
+                    } else {
+                        server_or_tool.clone()
+                    };
+
+                    (config, tool_name)
+                } else {
+                    // Datum-based mode: lookup server from registry
+                    let server_name = server_or_tool.as_ref().ok_or_else(|| {
+                        anyhow::anyhow!("Server name required (or use --command for direct mode)")
+                    })?;
+
+                    // Load MCP datum config
+                    let datum = crate::get_mcp_config(server_name, path)?;
+
+                    // Extract stdio method from datum
+                    if let Some(mcp) = datum.mcp {
+                        if let Some(stdio_methods) = mcp.stdio {
+                            if let Some(first_method) = stdio_methods.first() {
+                                // Parse stdio method (it's stored as a HashMap<String, Value>)
+                                let cmd = first_method
+                                    .get("command")
+                                    .and_then(|v| v.as_str())
+                                    .ok_or_else(|| {
+                                        anyhow::anyhow!("Missing 'command' in stdio method")
+                                    })?
+                                    .to_string();
+
+                                let parsed_args = first_method
+                                    .get("args")
+                                    .and_then(|v| v.as_array())
+                                    .map(|arr| {
+                                        arr.iter()
+                                            .filter_map(|v| v.as_str().map(String::from))
+                                            .collect()
+                                    })
+                                    .unwrap_or_default();
+
+                                let server_config = McpServerConfig {
+                                    command: cmd,
+                                    args: parsed_args,
+                                    cwd: cwd.clone(),
+                                    env: None,
+                                    timeout_ms: Some(30000),
+                                };
+
+                                (server_config, tool.clone())
+                            } else {
+                                anyhow::bail!(
+                                    "No stdio methods defined for server '{}'",
+                                    server_name
+                                );
+                            }
+                        } else {
+                            anyhow::bail!("No stdio configuration for server '{}'", server_name);
+                        }
+                    } else {
+                        anyhow::bail!("'{}' is not an MCP server", server_name);
+                    }
+                };
+
+                // Create MCP proxy
+                let mut proxy = GenericMcpProxy::new();
+
+                // Discover tools from server
+                println!("🔌 Connecting to MCP server...");
+                let discovered_tools = proxy
+                    .discover_tools_from_server(server_config.clone())
+                    .await?;
+
+                println!("✅ Discovered {} tools", discovered_tools.len());
+
+                // Discovery mode: list tools and exit
+                if *discover {
+                    println!("\n📋 Available tools:");
+                    for tool_name in discovered_tools {
+                        // Get tool info for better display
+                        if let Some(info) = proxy.get_tool(&tool_name) {
+                            println!("  • {} - {}", tool_name, info.description);
+                        } else {
+                            println!("  • {}", tool_name);
+                        }
+                    }
+                    return Ok(());
+                }
+
+                // Execute mode: validate tool name and params
+                let tool_name = tool_name.ok_or_else(|| {
+                    anyhow::anyhow!("Tool name required (or use --discover to list tools)")
+                })?;
+
+                let params_str = params
+                    .as_ref()
+                    .ok_or_else(|| anyhow::anyhow!("Tool parameters required (JSON string)"))?;
+
+                // Parse params JSON
+                let params_value: JsonValue = serde_json::from_str(params_str)
+                    .map_err(|e| anyhow::anyhow!("Invalid JSON parameters: {}", e))?;
+
+                // Execute tool
+                println!("🚀 Executing tool '{}'...", tool_name);
+                let request = McpToolRequest {
+                    tool: tool_name.clone(),
+                    params: params_value,
+                    request_id: Some(uuid::Uuid::new_v4().to_string()),
+                };
+
+                let response = proxy.execute_tool(request).await?;
+
+                // Format output
+                match format.as_deref() {
+                    Some("json") => {
+                        println!("{}", serde_json::to_string_pretty(&response)?);
+                    }
+                    _ => {
+                        // Text mode (default)
+                        if response.success {
+                            println!("✅ Success");
+                            if let Some(data) = response.data {
+                                println!("\n📊 Result:");
+                                println!("{}", serde_json::to_string_pretty(&data)?);
+                            }
+                        } else {
+                            println!(
+                                "❌ Error: {}",
+                                response
+                                    .error
+                                    .unwrap_or_else(|| "Unknown error".to_string())
+                            );
+                        }
+                        println!("\n⏱️  Duration: {}ms", response.metadata.duration_ms);
+                    }
+                }
+
+                Ok(())
+            }
         }
     }
 }
@@ -339,6 +623,22 @@ impl RegistryAction {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::fs;
+    use tempfile::TempDir;
+
+    /// Helper to create a test MCP datum TOML content
+    const TEST_MCP_DATUM_TOML: &str = r#"
+[b00t]
+name = "test-server"
+type = "mcp"
+hint = "Test MCP server"
+
+[[b00t.mcp.stdio]]
+command = "npx"
+args = ["-y", "@test/server"]
+priority = 0
+transport = "stdio"
+"#;
 
     #[test]
     fn test_mcp_commands_exist() {
@@ -372,5 +672,219 @@ mod tests {
         // This should fail because the server doesn't exist, but should not panic
         let result = rt.block_on(install_cmd.execute_async("/tmp/nonexistent"));
         assert!(result.is_err()); // Expected to fail, but should not panic
+    }
+
+    #[test]
+    fn test_sync_push_with_valid_input() {
+        let temp_dir = TempDir::new().unwrap();
+        let path = temp_dir.path().to_str().unwrap();
+
+        // Create a sample MCP datum file
+        fs::write(
+            temp_dir.path().join("test-server.mcp.toml"),
+            TEST_MCP_DATUM_TOML,
+        )
+        .unwrap();
+
+        let sync_cmd = McpCommands::Sync {
+            operation_or_target: "push".to_string(),
+            source: Some("b00t".to_string()),
+            dest: Some("kiro".to_string()),
+            agent: None,
+            repo: false,
+            user: false,
+        };
+
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let result = rt.block_on(sync_cmd.execute_async(path));
+
+        // Should succeed in creating the sync operation
+        // Note: This may fail if ~/.kiro doesn't exist, but the important part
+        // is that it processes the command structure correctly
+        assert!(result.is_ok() || result.unwrap_err().to_string().contains("kiro"));
+    }
+
+    #[test]
+    fn test_sync_invalid_platform() {
+        let temp_dir = TempDir::new().unwrap();
+        let path = temp_dir.path().to_str().unwrap();
+
+        let sync_cmd = McpCommands::Sync {
+            operation_or_target: "push".to_string(),
+            source: Some("b00t".to_string()),
+            dest: Some("invalid-platform".to_string()),
+            agent: None,
+            repo: false,
+            user: false,
+        };
+
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let result = rt.block_on(sync_cmd.execute_async(path));
+
+        // Should fail with unknown platform error
+        assert!(result.is_err());
+        let err_msg = result.unwrap_err().to_string();
+        assert!(
+            err_msg.contains("Unknown platform") || err_msg.contains("invalid-platform"),
+            "Expected platform error, got: {}",
+            err_msg
+        );
+    }
+
+    #[test]
+    fn test_sync_missing_source_parameter() {
+        let temp_dir = TempDir::new().unwrap();
+        let path = temp_dir.path().to_str().unwrap();
+
+        let sync_cmd = McpCommands::Sync {
+            operation_or_target: "push".to_string(),
+            source: None, // Missing source
+            dest: Some("kiro".to_string()),
+            agent: None,
+            repo: false,
+            user: false,
+        };
+
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let result = rt.block_on(sync_cmd.execute_async(path));
+
+        // Should fail with source required error
+        assert!(result.is_err());
+        let err_msg = result.unwrap_err().to_string();
+        assert!(
+            err_msg.contains("Source required") || err_msg.contains("source"),
+            "Expected source error, got: {}",
+            err_msg
+        );
+    }
+
+    #[test]
+    fn test_sync_missing_dest_parameter() {
+        let temp_dir = TempDir::new().unwrap();
+        let path = temp_dir.path().to_str().unwrap();
+
+        let sync_cmd = McpCommands::Sync {
+            operation_or_target: "pull".to_string(),
+            source: Some("kiro".to_string()),
+            dest: None, // Missing dest
+            agent: None,
+            repo: false,
+            user: false,
+        };
+
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let result = rt.block_on(sync_cmd.execute_async(path));
+
+        // Should fail with destination required error
+        assert!(result.is_err());
+        let err_msg = result.unwrap_err().to_string();
+        assert!(
+            err_msg.contains("Destination required") || err_msg.contains("dest"),
+            "Expected destination error, got: {}",
+            err_msg
+        );
+    }
+
+    #[test]
+    fn test_sync_invalid_source_for_push() {
+        let temp_dir = TempDir::new().unwrap();
+        let path = temp_dir.path().to_str().unwrap();
+
+        let sync_cmd = McpCommands::Sync {
+            operation_or_target: "push".to_string(),
+            source: Some("kiro".to_string()), // Invalid source (should be "b00t")
+            dest: Some("kiro".to_string()),
+            agent: None,
+            repo: false,
+            user: false,
+        };
+
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let result = rt.block_on(sync_cmd.execute_async(path));
+
+        // Should fail with invalid source error
+        assert!(result.is_err());
+        let err_msg = result.unwrap_err().to_string();
+        assert!(
+            err_msg.contains("Push operation requires source to be 'b00t'"),
+            "Expected source validation error, got: {}",
+            err_msg
+        );
+    }
+
+    #[test]
+    fn test_sync_legacy_codex_fallback() {
+        let temp_dir = TempDir::new().unwrap();
+        let path = temp_dir.path().to_str().unwrap();
+
+        let sync_cmd = McpCommands::Sync {
+            operation_or_target: "codex".to_string(),
+            source: None, // Legacy mode: no source/dest
+            dest: None,   // Legacy mode: no source/dest
+            agent: None,
+            repo: true,
+            user: false,
+        };
+
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let result = rt.block_on(sync_cmd.execute_async(path));
+
+        // Should attempt legacy codex sync
+        // May fail if not in a git repo or missing files, but should not panic
+        assert!(result.is_ok() || result.is_err());
+    }
+
+    #[test]
+    fn test_sync_invalid_operation() {
+        let temp_dir = TempDir::new().unwrap();
+        let path = temp_dir.path().to_str().unwrap();
+
+        let sync_cmd = McpCommands::Sync {
+            operation_or_target: "invalid-op".to_string(),
+            source: None,
+            dest: None,
+            agent: None,
+            repo: false,
+            user: false,
+        };
+
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let result = rt.block_on(sync_cmd.execute_async(path));
+
+        // Should fail with invalid operation error
+        assert!(result.is_err());
+        let err_msg = result.unwrap_err().to_string();
+        assert!(
+            err_msg.contains("Invalid") || err_msg.contains("invalid-op"),
+            "Expected invalid operation error, got: {}",
+            err_msg
+        );
+    }
+
+    #[test]
+    fn test_sync_conflicting_repo_and_user_flags() {
+        let temp_dir = TempDir::new().unwrap();
+        let path = temp_dir.path().to_str().unwrap();
+
+        let sync_cmd = McpCommands::Sync {
+            operation_or_target: "codex".to_string(),
+            source: None,
+            dest: None,
+            agent: None,
+            repo: true,
+            user: true, // Both flags set
+        };
+
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let result = rt.block_on(sync_cmd.execute_async(path));
+
+        // Should fail with conflicting flags error
+        assert!(result.is_err());
+        let err_msg = result.unwrap_err().to_string();
+        assert!(
+            err_msg.contains("both") || err_msg.contains("Cannot specify"),
+            "Expected conflicting flags error, got: {}",
+            err_msg
+        );
     }
 }

@@ -1,0 +1,119 @@
+[b00t]
+name = "b00t-core-mcps"
+type = "cli"
+hint = "Auto-install core MCP servers required for b00t hive operations"
+depends_on = ["uv.cli"]
+
+# Self-healing: Install essential MCP servers for b00t operations
+install = '''
+# 🤓 Core MCP servers required for b00t hive functionality
+echo "🥾 Installing core MCP servers for b00t operations..."
+
+# Essential MCP servers with dependencies (prioritized by capability)
+declare -A MCP_SERVERS=(
+    ["b00t-mcp"]="no-deps"           # Core b00t command proxy
+    ["github"]="node.cli,gh.cli"     # GitHub integration  
+    ["filesystem"]="node.cli"        # File operations
+    ["context7"]="node.cli"          # Documentation access
+)
+
+# 🤓 Azure AI Foundry is the recommended option for complex orchestration (legacy taskmaster MCP is optional/deprecated and not installed by this bundle)
+echo "💡 For multi-agent orchestration, consider Azure AI Foundry: b00t cli install azure-ai-foundry"
+
+# Install each MCP server
+for mcp_name in "${!MCP_SERVERS[@]}"; do
+    echo "📦 Installing MCP server: $mcp_name"
+    
+    # Check dependencies
+    deps="${MCP_SERVERS[$mcp_name]}"
+    if [ "$deps" != "no-deps" ]; then
+        IFS=',' read -ra dep_array <<< "$deps"
+        for dep in "${dep_array[@]}"; do
+            if ! command -v "${dep%.*}" >/dev/null 2>&1; then
+                echo "🔧 Auto-installing dependency: $dep"
+                if command -v b00t >/dev/null 2>&1; then
+                    b00t cli install "${dep%.*}"
+                else
+                    echo "❌ b00t CLI required to install dependency: $dep"
+                    exit 1
+                fi
+            fi
+        done
+    fi
+    
+    # Install MCP server to Claude Code (primary target)
+    if command -v b00t >/dev/null 2>&1; then
+        echo "🔧 Installing $mcp_name to Claude Code..."
+        b00t mcp install "$mcp_name" claudecode
+        if [ $? -eq 0 ]; then
+            echo "✅ $mcp_name installed successfully"
+        else
+            echo "⚠️ $mcp_name installation failed, continuing..."
+        fi
+    else
+        echo "❌ b00t CLI required for MCP installation"
+        exit 1
+    fi
+done
+
+echo "✅ Core MCP servers installation completed"
+'''
+
+update = '''
+# Update all core MCP servers  
+echo "🔄 Updating core MCP servers..."
+# Keep MCP server list in sync with install step
+declare -A MCP_SERVERS=(
+    ["b00t-mcp"]="no-deps"           # Core b00t command proxy
+    ["github"]="node.cli,gh.cli"     # GitHub integration  
+    ["filesystem"]="node.cli"        # File operations
+    ["context7"]="node.cli"          # Documentation access
+)
+
+for mcp in "${!MCP_SERVERS[@]}"; do
+    echo "📦 Updating MCP: $mcp"
+    if command -v b00t >/dev/null 2>&1; then
+        b00t mcp install "$mcp" claudecode --force
+    fi
+done
+echo "✅ Core MCP servers updated"
+'''
+
+# We can check if MCP servers are installed via Claude Code
+version = "echo 'Core MCP bundle v1.0'"
+version_regex = 'v(\d+\.\d+)'
+
+[[b00t.usage]]
+description = "Install all core MCP servers"
+command = "b00t cli install b00t-core-mcps"
+
+[[b00t.usage]]
+description = "List installed MCP servers"
+command = "b00t mcp list"
+
+[[b00t.usage]]
+description = "Install specific MCP server"
+command = "b00t mcp install <server> claudecode"
+
+[b00t.learn]
+topic = "mcp-core"
+auto_digest = true
+content = """
+# Core MCP Servers for b00t Operations
+
+Essential MCP servers that enable b00t hive functionality:
+
+## Core Set
+- **b00t-mcp**: Command proxy with ACL filtering for b00t-cli access
+- **github**: GitHub repository management and operations
+- **filesystem**: File system operations and project navigation
+- **context7**: Documentation and library context retrieval
+
+## Auto-Installation
+Use `b00t cli install b00t-core-mcps` to install all core servers with dependency resolution.
+
+## Dependencies
+- Node.js (for most MCP servers)
+- GitHub CLI (for github MCP server authentication)
+- UV (for Python-based MCP servers)
+"""

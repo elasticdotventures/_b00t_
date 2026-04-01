@@ -12,6 +12,14 @@ use std::collections::HashMap;
 
 use crate::B00tResult;
 
+fn openai_client_for(api_key: &str, base_url: Option<&str>) -> openai::Client {
+    // output: use custom base_url when configured, otherwise default OpenAI endpoint
+    match base_url {
+        Some(url) => openai::Client::builder(api_key).base_url(url).build(),
+        None => openai::Client::new(api_key),
+    }
+}
+
 /// AI provider configuration from cloud dashboard
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct AiProviderConfig {
@@ -59,6 +67,20 @@ impl Default for AiClientConfig {
                 endpoint: None,
                 enabled: false,
                 priority: 1,
+            },
+        );
+
+        // Default Foundry Local configuration (OpenAI-compatible)
+        // output: foundry_local provider is present but disabled by default
+        providers.insert(
+            "foundry_local".to_string(),
+            AiProviderConfig {
+                provider: "foundry_local".to_string(),
+                model: "gpt-4o-mini".to_string(),
+                api_key: None,
+                endpoint: None,
+                enabled: false,
+                priority: 2,
             },
         );
 
@@ -114,7 +136,7 @@ impl B00tAiClient {
         self.config
             .providers
             .get(provider)
-            .map(|p| p.enabled && p.api_key.is_some())
+            .map(|p| p.enabled && (p.api_key.is_some() || p.provider.as_str() == "foundry_local"))
             .unwrap_or(false)
     }
 
@@ -124,7 +146,9 @@ impl B00tAiClient {
             .config
             .providers
             .values()
-            .filter(|p| p.enabled && p.api_key.is_some())
+            .filter(|p| {
+                p.enabled && (p.api_key.is_some() || p.provider.as_str() == "foundry_local")
+            })
             .collect();
 
         providers.sort_by_key(|p| p.priority);
@@ -153,19 +177,40 @@ impl B00tAiClient {
             return Err(anyhow!("Provider '{}' is disabled", provider_name).into());
         }
 
-        let api_key = provider_config
-            .api_key
-            .as_ref()
-            .ok_or_else(|| anyhow!("No API key configured for provider '{}'", provider_name))?;
+        let api_key = match provider_config.provider.as_str() {
+            "foundry_local" => provider_config.api_key.as_deref().unwrap_or(""),
+            _ => provider_config
+                .api_key
+                .as_deref()
+                .ok_or_else(|| anyhow!("No API key configured for provider '{}'", provider_name))?,
+        };
 
         match provider_config.provider.as_str() {
             "openai" => {
-                let client = openai::Client::new(api_key);
+                let base_url = provider_config
+                    .endpoint
+                    .clone()
+                    .or_else(|| std::env::var("OPENAI_BASE_URL").ok());
+                let client = openai_client_for(api_key, base_url.as_deref());
                 let agent = client.agent(&provider_config.model).build();
                 let response = agent
                     .prompt(prompt)
                     .await
                     .map_err(|e| anyhow!("OpenAI completion failed: {}", e))?;
+                Ok(response)
+            }
+            "foundry_local" => {
+                let base_url = provider_config
+                    .endpoint
+                    .clone()
+                    .or_else(|| std::env::var("FOUNDRY_LOCAL_ENDPOINT").ok())
+                    .ok_or_else(|| anyhow!("Foundry Local endpoint missing"))?;
+                let client = openai_client_for(api_key, Some(&base_url));
+                let agent = client.agent(&provider_config.model).build();
+                let response = agent
+                    .prompt(prompt)
+                    .await
+                    .map_err(|e| anyhow!("Foundry Local completion failed: {}", e))?;
                 Ok(response)
             }
             "anthropic" => {
@@ -203,10 +248,13 @@ impl B00tAiClient {
             return Err(anyhow!("Provider '{}' is disabled", provider_name).into());
         }
 
-        let api_key = provider_config
-            .api_key
-            .as_ref()
-            .ok_or_else(|| anyhow!("No API key configured for provider '{}'", provider_name))?;
+        let api_key = match provider_config.provider.as_str() {
+            "foundry_local" => provider_config.api_key.as_deref().unwrap_or(""),
+            _ => provider_config
+                .api_key
+                .as_deref()
+                .ok_or_else(|| anyhow!("No API key configured for provider '{}'", provider_name))?,
+        };
 
         // For now, convert chat to a simple prompt (Rig.rs chat API requires more research)
         let prompt = messages
@@ -217,12 +265,30 @@ impl B00tAiClient {
 
         match provider_config.provider.as_str() {
             "openai" => {
-                let client = openai::Client::new(api_key);
+                let base_url = provider_config
+                    .endpoint
+                    .clone()
+                    .or_else(|| std::env::var("OPENAI_BASE_URL").ok());
+                let client = openai_client_for(api_key, base_url.as_deref());
                 let agent = client.agent(&provider_config.model).build();
                 let response = agent
                     .prompt(&prompt)
                     .await
                     .map_err(|e| anyhow!("OpenAI chat failed: {}", e))?;
+                Ok(response)
+            }
+            "foundry_local" => {
+                let base_url = provider_config
+                    .endpoint
+                    .clone()
+                    .or_else(|| std::env::var("FOUNDRY_LOCAL_ENDPOINT").ok())
+                    .ok_or_else(|| anyhow!("Foundry Local endpoint missing"))?;
+                let client = openai_client_for(api_key, Some(&base_url));
+                let agent = client.agent(&provider_config.model).build();
+                let response = agent
+                    .prompt(&prompt)
+                    .await
+                    .map_err(|e| anyhow!("Foundry Local chat failed: {}", e))?;
                 Ok(response)
             }
             "anthropic" => {
@@ -328,5 +394,28 @@ mod tests {
         let system_msg = ChatMessage::system("You are a helpful assistant");
         assert_eq!(system_msg.role, "system");
         assert_eq!(system_msg.content, "You are a helpful assistant");
+    }
+
+    #[test]
+    fn test_foundry_local_default_provider_entry() {
+        let config = AiClientConfig::default();
+        let provider = config.providers.get("foundry_local").unwrap();
+
+        assert_eq!(provider.provider, "foundry_local");
+        assert_eq!(provider.model, "gpt-4o-mini");
+        assert!(!provider.enabled);
+        assert_eq!(provider.endpoint, None);
+    }
+
+    #[test]
+    fn test_foundry_local_provider_ready_without_api_key() {
+        let mut config = AiClientConfig::default();
+        let provider = config.providers.get_mut("foundry_local").unwrap();
+
+        provider.enabled = true;
+        provider.endpoint = Some("http://localhost:1234/v1".to_string());
+
+        let client = B00tAiClient::new(config).unwrap();
+        assert!(client.is_provider_ready("foundry_local"));
     }
 }

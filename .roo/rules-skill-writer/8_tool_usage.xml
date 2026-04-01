@@ -1,0 +1,30 @@
+<tool_guidance_guide>
+  <tool_priorities>
+    <priority level="1">
+      <tool>List directories/files</tool>
+      <when>Confirm whether skills already exist and where they should live</when>
+      <why>Avoid duplicate skills and ensure correct placement (project vs global; generic vs mode-specific)</why>
+    </priority>
+
+    <priority level="2">
+      <tool>Open/read files</tool>
+      <when>Inspect existing SKILL.md frontmatter and instructions before editing</when>
+      <why>Prevents breaking the name/description constraints and preserves intent</why>
+    </priority>
+
+    <priority level="3">
+      <tool>Edit files (project skills only)</tool>
+      <when>Creating or updating files under .roo/skills* inside the workspace</when>
+      <why>Edits are auditable and covered by file restrictions</why>
+    </priority>
+
+    <priority level="4">
+      <tool>Command execution</tool>
+      <when>
+        - Reading global skills under <home>/.roo/skills*
+        - Creating/updating global skills under <home>/.roo/skills*
+      </when>
+      <why>Global skills are outside the workspace; command execution is required for access</why>
+    </priority>
+  </tool_priorities>
+</tool_guidance_guide>

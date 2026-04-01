@@ -1,0 +1,62 @@
+# b00t AI Provider Datum - mistral.rs as model proxy/router
+#
+# 🤓 Architecture: mistralrs-server runs on :1234 as the b00t hive's SINGLE AI GATEWAY.
+# It performs "soup of the day" routing: b00t tools always target localhost:1234,
+# mistralrs routes upstream based on model name / attributes.
+#
+# Routing tiers (model "soup"):
+#   frontier  → Anthropic claude-opus-4 / OpenAI gpt-4o  (best quality, higher cost)
+#   ch0nky    → Qwen3-Coder-30B local vLLM (port 8000) or DeepSeek-V3 (big+cheap)
+#   sm0l      → Haiku / Gemini Flash (fast+cheap, simple tasks)
+#
+# LiteLLM may sit upstream of mistralrs for provider aggregation (see litellm.ai.toml).
+# b00t model datum system manages which model is "active" per tier via b00t-cli model activate.
+
+[b00t]
+name = "mistralrs-proxy"
+type = "ai"
+hint = "mistral.rs b00t hive proxy/router - soup-of-the-day model routing to cloud + local"
+
+[b00t.ai]
+provider = "openai_compatible"
+api_type = "openai_compatible"
+# 🤓 models match names emitted by mistralrs --served-model-name or routing aliases
+models = ["frontier", "ch0nky", "sm0l", "mistral-local"]
+context_window = 131072
+pricing_model = "mixed"
+
+[env]
+required = []
+
+[b00t.env.defaults]
+MISTRALRS_API_BASE = "http://127.0.0.1:1234/v1"
+MISTRALRS_API_KEY = "mistralrs-local"
+# 🤓 These env vars allow tools to target specific tiers without hardcoding model names
+B00T_AI_FRONTIER_BASE = "http://127.0.0.1:1234/v1"
+B00T_AI_FRONTIER_MODEL = "frontier"
+B00T_AI_CH0NKY_BASE = "http://127.0.0.1:1234/v1"
+B00T_AI_CH0NKY_MODEL = "ch0nky"
+B00T_AI_SM0L_BASE = "http://127.0.0.1:1234/v1"
+B00T_AI_SM0L_MODEL = "sm0l"
+
+# Upstream cloud backends (set via secrets/env):
+# ANTHROPIC_API_KEY  → frontier routing
+# OPENAI_API_KEY     → frontier fallback
+# OPENROUTER_API_KEY → ch0nky cloud option
+# DEEPSEEK_API_KEY   → ch0nky cloud option
+
+[[b00t.usage]]
+description = "Start mistralrs server routing to Anthropic (cloud frontier)"
+command = "mistralrs-server --port 1234 --served-model-name frontier mistralai/Mistral-7B-Instruct-v0.3"
+
+[[b00t.usage]]
+description = "Route sm0l requests via openai-compatible proxy"
+command = "MISTRALRS_API_BASE=http://localhost:1234/v1 b00t-cli ai output mistralrs-proxy"
+
+[[b00t.references]]
+name = "mistral.rs GitHub"
+url = "https://github.com/EricLBuehler/mistral.rs"
+
+[[b00t.references]]
+name = "LiteLLM proxy docs"
+url = "https://docs.litellm.ai/docs/proxy/quick_start"

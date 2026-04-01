@@ -92,8 +92,10 @@ mod learn_rag_integration {
     #[tokio::test]
     async fn test_learn_digest_without_qdrant() -> Result<()> {
         // Test graceful degradation when Qdrant is not available
-        env::remove_var("QDRANT_URL");
-        env::remove_var("QDRANT_API_KEY");
+        unsafe {
+            env::remove_var("QDRANT_URL");
+            env::remove_var("QDRANT_API_KEY");
+        }
 
         let mut client = GrokClient::new();
 
@@ -141,7 +143,8 @@ mod learn_rag_integration {
         let mut grok_client = GrokClient::new();
         grok_client.initialize().await?;
 
-        let content = "Rust's ownership system prevents data races by enforcing strict borrowing rules.";
+        let content =
+            "Rust's ownership system prevents data races by enforcing strict borrowing rules.";
         let digest_result = grok_client.digest("rust", content).await?;
         assert!(digest_result.success);
 
@@ -223,9 +226,7 @@ mod learn_rag_integration {
         client
             .digest("rust", "Rust has zero-cost abstractions")
             .await?;
-        client
-            .digest("python", "Python uses duck typing")
-            .await?;
+        client.digest("python", "Python uses duck typing").await?;
 
         tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
 
@@ -238,7 +239,10 @@ mod learn_rag_integration {
 
         // Verify topic isolation
         for result in &rust_results.results {
-            assert_eq!(result.topic, "rust", "Rust query should only return rust results");
+            assert_eq!(
+                result.topic, "rust",
+                "Rust query should only return rust results"
+            );
         }
 
         for result in &python_results.results {
@@ -272,10 +276,7 @@ mod learn_rag_integration {
                 println!("✅ Grok status: {:?}", status);
 
                 // Verify status has expected fields
-                assert!(
-                    status.is_object(),
-                    "Status should be a JSON object"
-                );
+                assert!(status.is_object(), "Status should be a JSON object");
             }
             Err(e) => {
                 println!("ℹ️  Grok service not available: {}", e);
@@ -291,6 +292,7 @@ mod lfmf_integration {
     use super::*;
 
     #[tokio::test]
+    #[ignore = "Requires running Qdrant instance"]
     async fn test_lfmf_with_vector_db() -> Result<()> {
         if !is_qdrant_available() {
             println!("⚠️  Skipping test: QDRANT_URL not set");
@@ -332,7 +334,10 @@ mod lfmf_integration {
             "Should find lesson about release builds"
         );
 
-        println!("✅ LFMF vector DB integration: {} results found", results.len());
+        println!(
+            "✅ LFMF vector DB integration: {} results found",
+            results.len()
+        );
 
         Ok(())
     }
@@ -340,7 +345,9 @@ mod lfmf_integration {
     #[tokio::test]
     async fn test_lfmf_filesystem_fallback() -> Result<()> {
         // Test LFMF works without vector DB
-        env::remove_var("QDRANT_URL");
+        unsafe {
+            env::remove_var("QDRANT_URL");
+        }
 
         let temp_dir = setup_temp_dir();
         let temp_path = temp_dir.path().to_str().unwrap();
@@ -358,10 +365,7 @@ mod lfmf_integration {
         // List lessons (filesystem-based)
         let results = lfmf.list_lessons("git", Some(10)).await?;
 
-        assert!(
-            !results.is_empty(),
-            "Should find lesson in filesystem"
-        );
+        assert!(!results.is_empty(), "Should find lesson in filesystem");
         assert!(
             results[0].contains("conventional commits"),
             "Should contain recorded lesson"
@@ -380,7 +384,9 @@ mod error_handling {
     #[tokio::test]
     async fn test_initialization_errors() -> Result<()> {
         // Test behavior with invalid Qdrant URL
-        env::set_var("QDRANT_URL", "http://invalid-host-that-does-not-exist:9999");
+        unsafe {
+            env::set_var("QDRANT_URL", "http://invalid-host-that-does-not-exist:9999");
+        }
 
         let mut client = GrokClient::new();
         let result = client.initialize().await;
@@ -400,7 +406,9 @@ mod error_handling {
         }
 
         // Clean up
-        env::remove_var("QDRANT_URL");
+        unsafe {
+            env::remove_var("QDRANT_URL");
+        }
 
         Ok(())
     }

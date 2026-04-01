@@ -1,0 +1,35 @@
+[b00t]
+name = "ccometixline"
+type = "cli"
+desires = "latest"
+install = """
+npm install -g @cometix/ccline
+"""
+update = """
+npm update -g @cometix/ccline
+"""
+version = "ccline --version"
+version_regex = '\d+\.\d+\.\d+'
+hint = "CCometixLine is a high-performance Rust-based statusline tool for Claude Code. Displays git status, Claude model info, context usage, and workspace location. Requires Nerd Fonts for icon display."
+
+[b00t.learn]
+topic = "ccometixline"
+
+[[b00t.references]]
+name = "CCometixLine GitHub"
+url = "https://github.com/Haleclipse/CCometixLine"
+
+[[b00t.references]]
+name = "CCometixLine npm"
+url = "https://www.npmjs.com/package/@cometix/ccline"
+[[b00t.usage]]
+description = "Check installation"
+command = "ccline --version"
+
+[[b00t.usage]]
+description = "View statusline output"
+command = "ccline"
+
+[[b00t.usage]]
+description = "Enable verbose mode"
+command = "ccline --verbose"

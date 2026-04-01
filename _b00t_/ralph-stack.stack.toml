@@ -1,0 +1,34 @@
+[b00t]
+name = "ralph-stack"
+type = "stack"
+hint = "Complete autonomous agent workflow stack with Ralph, TODO-next backlog, and b00t jobs"
+
+[b00t.stack]
+description = "Ralph autonomous agent loop with TODO-next backlog and b00t job integration"
+category = "agent-workflow"
+
+[b00t.stack.components]
+# Core components
+ralph_cli = { datum = "ralph.cli", required = true }
+ralph_mcp = { datum = "ralph.mcp", required = false }
+ralph_agent = { datum = "ralph.agent", required = true }
+
+# Python environment
+python = { datum = "python.cli", required = true, min_version = "3.11" }
+uv = { datum = "uv.cli", required = true }
+
+# Optional tools for different executors
+amp = { datum = "amp.cli", required = false }
+claude = { datum = "claude.cli", required = false }
+codex = { datum = "codex.cli", required = false }
+opencode = { datum = "opencode.cli", required = false }
+
+[b00t.stack.features]
+autonomous_loop = true
+todo_backlog = true
+job_workflow = true
+mcp_server = true
+multi_executor = true
+
+[b00t.install]
+order = ["python", "uv", "ralph_cli"]

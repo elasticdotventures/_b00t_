@@ -1,0 +1,11 @@
+[b00t]
+name = "css"
+type = "mcp"
+hint = "MCP server"
+
+[[b00t.mcp.stdio]]
+transport = "stdio"
+args = ["-y", "css-mcp"]
+command = "npx"
+requires = ["node"]
+priority = 0

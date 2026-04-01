@@ -8,10 +8,8 @@
 //! - Knowledge source aggregation
 
 use anyhow::Result;
-use b00t_c0re_lib::{
-    DisplayOpts, GrokClient, KnowledgeSource, LfmfConfig, LfmfSystem, ManPage,
-};
 use b00t_c0re_lib::lfmf::{FilesystemConfig, QdrantConfig};
+use b00t_c0re_lib::{DisplayOpts, GrokClient, KnowledgeSource, LfmfConfig, LfmfSystem, ManPage};
 use std::fs;
 use tempfile::TempDir;
 
@@ -135,10 +133,7 @@ async fn test_learn_content_from_file() -> Result<()> {
     let b00t_path = workspace.path().join("_b00t_");
 
     // Use b00t_c0re_lib::learn to get content
-    let content = b00t_c0re_lib::learn::get_learn_lesson(
-        b00t_path.to_str().unwrap(),
-        "rust",
-    )?;
+    let content = b00t_c0re_lib::learn::get_learn_lesson(b00t_path.to_str().unwrap(), "rust")?;
 
     assert!(content.contains("Memory Safety"));
     assert!(content.contains("Zero-Cost Abstractions"));

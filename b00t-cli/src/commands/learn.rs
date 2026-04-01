@@ -18,6 +18,11 @@ pub struct LearnArgs {
     #[arg(help = "Topic to learn about")]
     pub topic: Option<String>,
 
+    // 🤓 --topic=<value> alias: MCP tools pass named flags; positional is for CLI users.
+    //    Both are accepted; --topic wins if both somehow provided (MCP compat).
+    #[arg(long = "topic", hide = true, conflicts_with = "topic")]
+    pub topic_flag: Option<String>,
+
     // Display modifiers
     #[arg(long, help = "Force display man page")]
     pub man: bool,
@@ -53,47 +58,45 @@ pub struct LearnArgs {
     pub ask: Option<String>,
 }
 
-pub fn handle_learn(path: &str, args: LearnArgs) -> Result<()> {
-    let rt = tokio::runtime::Runtime::new().context("Failed to create async runtime")?;
+pub async fn handle_learn(path: &str, args: LearnArgs) -> Result<()> {
+    // 🤓 merge positional topic + --topic flag; --topic wins (MCP compat: passes named flags)
+    let topic_val = args.topic_flag.or(args.topic);
 
-    rt.block_on(async {
-        // Record lesson
-        if let Some(lesson) = args.record {
-            return handle_record(path, args.topic.as_deref(), &lesson, args.global).await;
-        }
+    // Record lesson
+    if let Some(lesson) = args.record {
+        return handle_record(path, topic_val.as_deref(), &lesson, args.global).await;
+    }
 
-        // Search lessons
-        if let Some(query) = args.search {
-            return handle_search(path, args.topic.as_deref(), &query, args.limit).await;
-        }
+    // Search lessons
+    if let Some(query) = args.search {
+        return handle_search(path, topic_val.as_deref(), &query, args.limit).await;
+    }
 
-        // Digest to RAG
-        if let Some(content) = args.digest {
-            return handle_digest(path, args.topic.as_deref(), &content).await;
-        }
+    // Digest to RAG
+    if let Some(content) = args.digest {
+        return handle_digest(path, topic_val.as_deref(), &content).await;
+    }
 
-        // Query RAG
-        if let Some(query) = args.ask {
-            return handle_ask(path, args.topic.as_deref(), &query, args.limit).await;
-        }
+    // Query RAG
+    if let Some(query) = args.ask {
+        return handle_ask(path, topic_val.as_deref(), &query, args.limit).await;
+    }
 
-        // Default: display knowledge
-        let topic = args
-            .topic
-            .ok_or_else(|| anyhow::anyhow!("Topic required. Use: b00t learn <topic>"))?;
+    // Default: display knowledge
+    let topic = topic_val
+        .ok_or_else(|| anyhow::anyhow!("Topic required. Use: b00t learn <topic>"))?;
 
-        handle_display(
-            path,
-            &topic,
-            DisplayOpts {
-                force_man: args.man,
-                toc_only: args.toc,
-                section: args.section,
-                concise: args.concise,
-            },
-        )
-        .await
-    })
+    handle_display(
+        path,
+        &topic,
+        DisplayOpts {
+            force_man: args.man,
+            toc_only: args.toc,
+            section: args.section,
+            concise: args.concise,
+        },
+    )
+    .await
 }
 
 async fn handle_display(path: &str, topic: &str, opts: DisplayOpts) -> Result<()> {
@@ -117,7 +120,22 @@ async fn handle_display(path: &str, topic: &str, opts: DisplayOpts) -> Result<()
         );
     }
 
-    knowledge.display(&opts)
+    knowledge.display(&opts)?;
+
+    // Run hook_learn if present in datum
+    if let Ok((config, _)) = crate::get_config(topic, path) {
+        if let Some(script) = config.b00t.hook_learn {
+            use crate::hook_engine::{run_hook, HookResult};
+            match run_hook(&script) {
+                HookResult::Ok => {}
+                HookResult::Info(msg) | HookResult::Warn(msg) => println!("{}", msg),
+                HookResult::Missing(msg) => println!("⚠️  {}", msg),
+                HookResult::Redirect(_) => {}
+            }
+        }
+    }
+
+    Ok(())
 }
 
 async fn handle_record(path: &str, topic: Option<&str>, lesson: &str, global: bool) -> Result<()> {
@@ -280,14 +298,31 @@ async fn handle_ask(_path: &str, topic: Option<&str>, query: &str, limit: usize)
 
 /// Check if datum exists for topic
 fn datum_exists(path: &str, topic: &str) -> Result<bool> {
-    let datum_path = std::path::Path::new(path).join(format!("{}.cli.toml", topic));
+    let datum_path = datum_path(path, topic)?;
     Ok(datum_path.exists())
 }
 
 /// Create datum from man page
 fn create_datum_from_man(path: &str, topic: &str, man: &ManPage) -> Result<()> {
     let datum_content = man.to_datum_toml();
-    let datum_path = std::path::Path::new(path).join(format!("{}.cli.toml", topic));
+    let datum_path = datum_path(path, topic)?;
     fs::write(&datum_path, datum_content).context("Failed to write datum file")?;
     Ok(())
+}
+
+fn datum_path(path: &str, topic: &str) -> Result<std::path::PathBuf> {
+    Ok(crate::get_expanded_path(path)?.join(format!("{}.cli.toml", topic)))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn datum_path_expands_home_directory() {
+        let home = dirs::home_dir().expect("expected home directory");
+        let path = datum_path("~/.b00t/_b00t_", "git").expect("expected expanded datum path");
+
+        assert_eq!(path, home.join(".b00t/_b00t_/git.cli.toml"));
+    }
 }

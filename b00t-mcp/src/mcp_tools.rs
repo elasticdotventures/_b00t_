@@ -523,19 +523,24 @@ impl_mcp_tool!(CheckpointCommand, "b00t_checkpoint", ["checkpoint"]);
 
 /// MCP command for digesting content into chunks about a topic
 /// 🤓 ENTANGLED: b00t-cli/src/commands/grok.rs GrokCommands::Digest
+/// 🤓 Uses --rag raglight by default: full grok stack (Qdrant+Ollama) may not be running
 #[derive(Parser, Clone)]
 pub struct GrokDigestCommand {
-    #[arg(help = "Topic to digest content about")]
+    #[arg(long, help = "Topic to digest content about")]
     pub topic: String,
 
-    #[arg(help = "Content to digest")]
+    #[arg(long, help = "Content to digest")]
     pub content: String,
+
+    #[arg(long, default_value = "raglight", help = "RAG backend (raglight or qdrant)")]
+    pub rag: Option<String>,
 }
 
 impl_mcp_tool!(GrokDigestCommand, "b00t_grok_digest", ["grok", "digest"]);
 
 /// MCP command for asking questions and searching the knowledgebase
 /// 🤓 ENTANGLED: b00t-cli/src/commands/grok.rs GrokCommands::Ask
+/// 🤓 Uses --rag raglight by default: full grok stack (Qdrant+Ollama) may not be running
 #[derive(Parser, Clone)]
 pub struct GrokAskCommand {
     #[arg(help = "Query to search for")]
@@ -544,25 +549,31 @@ pub struct GrokAskCommand {
     #[arg(long, help = "Optional topic to filter by")]
     pub topic: Option<String>,
 
-    #[arg(
-        long,
-        help = "Maximum number of results to return",
-        default_value = "10"
-    )]
+    #[arg(long, help = "Maximum number of results to return", default_value = "10")]
     pub limit: Option<usize>,
+
+    #[arg(long, default_value = "raglight", help = "RAG backend (raglight or qdrant)")]
+    pub rag: Option<String>,
 }
 
 impl_mcp_tool!(GrokAskCommand, "b00t_grok_ask", ["grok", "ask"]);
 
 /// MCP command for learning from URLs or content
 /// 🤓 ENTANGLED: b00t-cli/src/commands/grok.rs GrokCommands::Learn
+/// 🤓 Uses --rag raglight by default: full grok stack (Qdrant+Ollama) may not be running
 #[derive(Parser, Clone)]
 pub struct GrokLearnCommand {
-    #[arg(help = "Content to learn from")]
+    #[arg(long, help = "Content to learn from")]
     pub content: String,
 
-    #[arg(long, help = "Source URL or file path")]
+    #[arg(short = 't', long, help = "Topic for RAG indexing (required for raglight backend)")]
+    pub topic: Option<String>,
+
+    #[arg(short = 's', long, help = "Source URL or file path")]
     pub source: Option<String>,
+
+    #[arg(long, default_value = "raglight", help = "RAG backend (raglight or qdrant)")]
+    pub rag: Option<String>,
 }
 
 impl_mcp_tool!(GrokLearnCommand, "b00t_grok_learn", ["grok", "learn"]);
@@ -734,6 +745,67 @@ impl_mcp_tool!(
 // 🤓 Disabled - acp_hive uses full NATS Agent from old ACP; chat refactor simplified to stubs
 // use crate::acp_tools::*;
 
+/// Tutorial status command — show tutorial progression for current agent role
+#[derive(Parser, Clone)]
+pub struct TutorialStatusCommand;
+
+impl_mcp_tool!(
+    TutorialStatusCommand,
+    "b00t_tutorial_status",
+    ["tutorial", "status"]
+);
+
+/// Tutorial next command — get next recommended datum to install/validate
+#[derive(Parser, Clone)]
+pub struct TutorialNextCommand;
+
+impl_mcp_tool!(
+    TutorialNextCommand,
+    "b00t_tutorial_next",
+    ["tutorial", "next"]
+);
+
+/// Ontology query command — query live capability ontology from datum TOMLs
+// 🤓 ENTANGLED: b00t-cli/src/commands/ontology.rs OntologyCommands::Query
+#[derive(Parser, Clone)]
+pub struct OntologyQueryCommand {
+    #[arg(long, help = "Filter by agent role (developer|orchestrator|analyst)")]
+    pub role: Option<String>,
+
+    #[arg(long, help = "Output format: table or json", default_value = "json")]
+    pub format: Option<String>,
+}
+
+impl_mcp_tool!(
+    OntologyQueryCommand,
+    "b00t_ontology_query",
+    ["ontology", "query"]
+);
+
+/// Up command — launch ralph agent REPL outer-loop
+// 🤓 ENTANGLED: b00t-cli/src/commands/up.rs UpArgs
+#[derive(Parser, Clone)]
+pub struct UpCommand {
+    #[arg(
+        long,
+        help = "AI tool to use for the ralph loop",
+        default_value = "claude"
+    )]
+    pub tool: Option<String>,
+
+    #[arg(
+        long,
+        help = "Maximum iterations per ralph session",
+        default_value = "10"
+    )]
+    pub max_iter: Option<u32>,
+
+    #[arg(long, help = "Agent role (filters ontology + tutorial path)")]
+    pub role: Option<String>,
+}
+
+impl_mcp_tool!(UpCommand, "b00t_up", ["up"]);
+
 /// Create and populate a registry with all available MCP tools
 pub fn create_mcp_registry() -> McpCommandRegistry {
     let mut builder = McpCommandRegistry::builder();
@@ -742,6 +814,7 @@ pub fn create_mcp_registry() -> McpCommandRegistry {
     builder
         .register::<McpListCommand>()
         .register::<McpAddCommand>()
+        .register::<McpInstallCommand>()
         .register::<McpOutputCommand>()
         .register::<CliDetectCommand>()
         .register::<CliDesiresCommand>()
@@ -778,7 +851,14 @@ pub fn create_mcp_registry() -> McpCommandRegistry {
         .register::<GrokDigestCommand>()
         .register::<GrokAskCommand>()
         .register::<GrokLearnCommand>()
-        .register::<GrokStatusCommand>();
+        .register::<GrokStatusCommand>()
+        // Tutorial progression tools
+        .register::<TutorialStatusCommand>()
+        .register::<TutorialNextCommand>()
+        // Ontology query tool
+        .register::<OntologyQueryCommand>()
+        // Up command — ralph REPL outer-loop
+        .register::<UpCommand>();
     // ACP Hive coordination tools
     // 🤓 Disabled - acp_hive uses full NATS Agent from old ACP; chat refactor simplified to stubs
     // .register::<AcpHiveJoinCommand>()

@@ -4,6 +4,7 @@
 //! session sharing, and distributed b00t operations using the redis crate.
 
 use crate::B00tResult;
+use crate::runtime_env::sandbox_root_cause_hint;
 use anyhow::Context;
 use futures::StreamExt;
 use redis::{Client, Connection};
@@ -106,7 +107,7 @@ pub enum SessionEvent {
     Unlock,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub enum BroadcastPriority {
     Low,
     Normal,
@@ -141,7 +142,14 @@ impl RedisComms {
         let conn = self
             .client
             .get_connection()
-            .context("Failed to get Redis connection")?;
+            .with_context(|| {
+                let mut message = "Failed to get Redis connection".to_string();
+                if let Some(hint) = sandbox_root_cause_hint("Redis TCP connectivity") {
+                    message.push(' ');
+                    message.push_str(&hint);
+                }
+                message
+            })?;
 
         // Note: Redis crate handles timeouts internally via connection configuration
         Ok(conn)
@@ -489,9 +497,7 @@ impl RedisSubscriber {
                 .ok_or_else(|| anyhow::anyhow!("PubSub stream closed"))?;
 
             let channel = msg.get_channel_name().to_string();
-            let payload: String = msg
-                .get_payload()
-                .context("Failed to get message payload")?;
+            let payload: String = msg.get_payload().context("Failed to get message payload")?;
 
             Ok(Some(PubSubMessage { channel, payload }))
         } else {

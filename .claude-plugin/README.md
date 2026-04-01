@@ -63,22 +63,19 @@ Enforces Don't Repeat Yourself and Never Reinvent the Wheel principles.
 
 ## Installation
 
-### From Local Path
-
 ```bash
-# Navigate to _b00t_ repository
-cd /path/to/_b00t_
+# Add the b00t marketplace
+/plugin marketplace add elasticdotventures/_b00t_
 
-# Install plugin (Claude Code will detect .claude-plugin/)
-# Plugin is automatically available
+# Install plugins
+/plugin install b00t@b00t-plugins
+/plugin install next-task@b00t-plugins
+/plugin install skill-document-understanding@b00t-plugins
 ```
 
-### From Git Repository
-
-```bash
-# Install from GitHub
-/plugin install elasticdotventures/_b00t_
-```
+> **Tip:** For local development, use `/plugin marketplace add /path/to/.b00t`
+> 
+> MCP bundle recipes are generated to `.claude-plugin/recipes/{skills,roles}/*.json`.
 
 ## Usage
 

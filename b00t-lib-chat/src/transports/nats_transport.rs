@@ -50,13 +50,10 @@ impl NatsTransport {
         }
 
         let options = ConnectOptions::new();
-        let client = options
-            .connect(&self.url)
-            .await
-            .map_err(|e| {
-                ChatMetrics::global().record_connection_error("nats", "connection_failed");
-                ChatError::Other(format!("NATS connection failed: {}", e))
-            })?;
+        let client = options.connect(&self.url).await.map_err(|e| {
+            ChatMetrics::global().record_connection_error("nats", "connection_failed");
+            ChatError::Other(format!("NATS connection failed: {}", e))
+        })?;
 
         *client_guard = Some(client);
         ChatMetrics::global().record_connection_opened("nats");
@@ -67,9 +64,7 @@ impl NatsTransport {
     /// Get the underlying NATS client.
     async fn get_client(&self) -> ChatResult<Client> {
         let client_guard = self.client.read().await;
-        client_guard
-            .clone()
-            .ok_or(ChatError::NotConnected)
+        client_guard.clone().ok_or(ChatError::NotConnected)
     }
 
     /// Convert ChatMessage to NATS subject format.

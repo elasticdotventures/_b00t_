@@ -248,6 +248,37 @@ For production use with c010.promptexecution.com:
 
 See [b00t-backend-nats](../b00t-backend-nats/) for server configuration.
 
+## 🔒 Security Configuration
+
+### JWT Validation
+
+When using JWT authentication, the `B00T_OPERATOR_JWT` environment variable **MUST** be set for secure operation:
+
+```bash
+export B00T_OPERATOR_JWT="your-operator-jwt-here"
+```
+
+This operator JWT is used to derive the signing secret for validating agent JWTs. Without it:
+- **With JWT token in config**: Agent initialization will **fail hard** with authentication error
+- **Without JWT token in config**: Agent runs without authentication (development mode only)
+
+⚠️ **Security Warning**: Never use placeholder or hardcoded secrets in production. The library enforces this by requiring the operator JWT environment variable when JWT authentication is used.
+
+### Development Mode
+
+For local development without NATS authentication:
+1. Do not set `jwt_token` in `AgentConfig`
+2. Agent will run without namespace enforcement
+3. A warning will be logged: "No JWT provided - running without authentication"
+
+### Production Mode
+
+For production deployments:
+1. Set `B00T_OPERATOR_JWT` environment variable with your operator JWT
+2. Provide agent JWT via `AgentConfig.with_jwt()` or `B00T_HIVE_JWT` environment variable
+3. Agent will validate JWT and enforce namespace isolation
+4. Any validation failures will terminate agent initialization
+
 ## 📚 Use Cases
 
 ### AI Agent Coordination

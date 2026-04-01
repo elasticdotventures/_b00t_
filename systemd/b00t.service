@@ -1,0 +1,21 @@
+[Unit]
+Description=b00t hive control service (DBus)
+After=dbus.service network.target
+Requires=dbus.service
+
+[Service]
+Type=dbus
+BusName=com.promptexecution.b00t1
+User=_b00t
+Group=b00t
+ExecStart=/usr/local/bin/b00t-cli soul dbus
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/tmp/b00t /home/brianh/.config/systemd/user
+AmbientCapabilities=CAP_NET_BIND_SERVICE
+
+[Install]
+WantedBy=multi-user.target

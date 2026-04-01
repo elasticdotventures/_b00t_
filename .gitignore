@@ -298,3 +298,49 @@ test_*.json
 mcp-probe/*
 mcp-probe
 */.claude/*
+
+# Claude Code frameworks (exclude all)
+.claude/
+
+# Archive for old/irrelevant files
+_archive_/
+
+# Proprietary/Licensed Content - DO NOT COMMIT
+# 🤓: TOGAF datasheets are property of The Open Group
+# Downloaded from publications.opengroup.org for local reference only
+**/.b00t/data/togaf/datasheets/
+**/togaf/datasheets/
+*.togaf-datasheet.*
+google-cloud-sdk/
+.cargo/*
+.codemachine/logs
+.codemachine/memory
+.codemachine/prompts
+.codemachine/agents
+.codemachine/template.json
+.b00t-tools-env.json
+integrations/plantuml-server--b00t--togaf--mcp/
+
+# Unfinished/experimental - not part of b00t
+.devcontainer.x/
+docker-to-wsl/
+docker/
+nextest_test
+togaf-cli/
+togaf-dsl/
+*.old
+ralphs/ralph-v1
+.b00t/ralph/status.json
+.b00t/ralph/loop.log
+.nori-config.json
+.nori/
+libnull.rlib
+.worktrees/
+.bugs/*.jsonl
+
+# Generated MCP server recipes — only essential b00t-core ones are committed
+# All others generated locally via: just marketplace-generate
+# 🤓 can't ignore dir/ then !except files inside — must pattern match files directly
+.claude-plugin/recipes/mcp-servers/*.json
+!.claude-plugin/recipes/mcp-servers/local-b00t-b00t-mcp--b00t-mcp.json
+!.claude-plugin/recipes/mcp-servers/local-b00t-grok-guru--grok-guru.json

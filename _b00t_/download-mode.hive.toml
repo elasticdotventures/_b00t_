@@ -1,0 +1,57 @@
+[b00t]
+name = "download-mode"
+type = "hive_profile"
+hint = "HuggingFace model download mode — inference OFF, full RAM/disk bandwidth for downloads"
+
+[b00t.hive.resources]
+# 🤓 hf downloader uses ~2GB RAM for Python + HF client + download buffers
+ram_gb = 2
+gpu_mb = 0
+cpu_cores = 2
+
+[b00t.hive.resources.gate]
+# Minimum free resources required to activate this profile
+ram_free_gb = 1
+gpu_free_mb = 0
+
+[b00t.hive.exclusion]
+group = "primary-workload"
+priority = 10  # lower priority; switch to inference when download completes
+
+[b00t.hive.services]
+stop = [
+  "vllm-qwen3-coder.service",  # frees 24GB VRAM + up to 30GB RAM (cpu-offload)
+]
+# 🤓 No systemd unit for hf download — it runs as a foreground/background process
+# Use: nohup ~/.venv/bin/hf download ... >> /tmp/hf-download.log 2>&1 &
+
+[b00t.hive.mcp_tools]
+deactivate = ["vllm-local", "opencode-local"]
+
+[[b00t.hive.guards]]
+pattern = "pip install"
+action = "warn"
+message = "🦨 use uv pip install"
+redirect = "uv pip install"
+
+[[b00t.hive.guards]]
+pattern = "docker run"
+action = "warn"
+message = "🦨 use podman (CDI GPU: --device nvidia.com/gpu=all --security-opt=label=disable)"
+
+[[b00t.hive.guards]]
+pattern = "vllm serve"
+action = "warn"
+message = "🦨 profile=download-mode: starting vllm will compete for RAM with active download; switch to inference-qwen3 profile first"
+
+[[b00t.usage]]
+description = "Activate download mode (stops vllm, starts HF download)"
+command = "b00t hive activate download-mode"
+
+[[b00t.usage]]
+description = "Resume Qwen3-Coder-Next Q4_K_M download"
+command = "nohup ~/.venv/bin/hf download Qwen/Qwen3-Coder-Next-GGUF --include 'Qwen3-Coder-Next-Q4_K_M/*' >> /tmp/hf-download-qwen3next.log 2>&1 &"
+
+[[b00t.usage]]
+description = "Monitor download progress"
+command = "watch -n 30 'ls -lh ~/.cache/huggingface/hub/models--Qwen--Qwen3-Coder-Next-GGUF/blobs/'"

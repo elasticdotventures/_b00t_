@@ -1,3 +1,4 @@
+# syntax=docker/dockerfile:1
 # syntax=docker/dockerfile:1.7
 # Layer: debian-base
 # Minimal Debian bookworm base system
