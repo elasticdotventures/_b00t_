@@ -243,13 +243,20 @@ mod cli_learn_display_flags {
 
         println!("TOC output: {}", String::from_utf8_lossy(&output.stdout));
 
-        if output.status.success() {
-            let stdout = String::from_utf8_lossy(&output.stdout);
-            assert!(
-                stdout.contains("Section") || stdout.contains("1") || stdout.contains("Contents"),
-                "TOC should show section information"
-            );
-        }
+        // The test creates the backing learn file, so this should deterministically succeed.
+        assert!(
+            output.status.success(),
+            "b00t learn --toc failed: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        // Check for stable TOC markers based on the known section headings.
+        assert!(
+            stdout.contains("Section 1") && stdout.contains("Section 2") && stdout.contains("Section 3"),
+            "TOC output did not list expected sections. Output was:\n{}",
+            stdout
+        );
     }
 
     #[test]
