@@ -447,11 +447,17 @@ pub mod prompts;
 pub mod irontology;
 pub mod prayer;
 pub mod inference;
+pub mod rag;
 
 // Export inference module types and functions for public API
 pub use inference::{
     LLMInference, Embedding, ModelInfo, InferenceConfig, InferenceBackendSelector,
     select_inference_backend,
+};
+
+// Export rag module types for public API
+pub use rag::{
+    KnowledgeBase, BlessingMetadata, LayerMetadata, SemanticDiscoveryCallback,
 };
 
 #[cfg(test)]
