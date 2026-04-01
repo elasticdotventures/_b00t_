@@ -457,7 +457,7 @@ pub use inference::{
 
 // Export rag module types for public API
 pub use rag::{
-    KnowledgeBase, BlessingMetadata, LayerMetadata, SemanticDiscoveryCallback,
+    KnowledgeBase, BlessingMetadata, LayerMetadata, SemanticDiscoveryCallback, GraphRAG,
 };
 
 // Export prayer module types for public API

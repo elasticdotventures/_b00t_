@@ -234,5 +234,8 @@ impl KnowledgeBase {
 
 pub mod graph;
 
+// Export graph module types for public API
+pub use graph::{GraphRAG, GraphRAGNode, GraphRAGEdge};
+
 #[cfg(test)]
 mod tests;
