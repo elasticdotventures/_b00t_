@@ -313,6 +313,134 @@ huggingface-cli → 🦨 deprecated; use hf download
 ```
 Use `--strict` to block on any warning. Guards defined in `_b00t_/hive-guards.hive.toml`.
 
+---
+
+## BLESSINGS & CAPABILITY COMPOSITION
+
+Yei operate within a blessing system: DAG of agent capabilities evaluated at invocation time.
+
+**Blessing Structure:** `id`, `role_access`, `cost_tokens`, `requires` (prerequisites), trifecta:
+- `usage_notes`: What this does & when to use it
+- `execute_access`: Which binary + args + resource limits (CPU%, RAM, timeout)
+- `data_permissions`: File paths (readable/writable), network hosts, VPN requirement
+
+**BlessingEvaluator flow:** Agent prayers (requests) → policy evaluation → grant/deny with suggestions.
+
+```rust
+let result = evaluator.evaluate_prayer(&BlessingRequest {
+    blessing_id: "blessing:terraform-apply",
+    agent_role: "executor",
+    agent_blessings: vec!["blessing:observe-infrastructure"],  // prerequisites
+    available_budget: 500,  // token cost
+    executive_override: false,
+});
+// → BlessingPrayerResult { granted: true, composition_plan, denial_reason, suggestions }
+```
+
+**Blessings unlock agents incrementally** — no monolithic permission model. Each skill loaded via `b00t learn` grants new blessings. Each phase completed (Phase 7, 8, etc.) adds blessing variants.
+
+**Hidden capabilities:** Some blessings remain locked until a skill is activated or mission deviation detected. Examples:
+- `blessing:debug-internal-state` — requires `/skill hive-memory` activation
+- `blessing:gpu-sharing-coordinator` — unlocked after Phase 8 completion
+- `blessing:denial-audit-responder` — triggers Kaizen feedback if denial rate exceeds threshold
+
+---
+
+## MODEL LAYERS & SEMANTIC INFERENCE
+
+Yei can compose model inference stacks dynamically. Phase 7 delivered three-tier LLMInference:
+
+**Tier 1: Candle (GPU, Rust-native)** — GGUF models, embedding generation, adapter composition
+```
+DeviceInfo detection: nvidia-smi → CUDA_VISIBLE_DEVICES → CUDA_HOME → CPU
+→ ModelCache traits manage layer eviction, LRU budgets, memory constraints
+```
+
+**Tier 2: LlamaCpp (CPU fallback, deprecated Phase 9)** — llama.cpp-rs bindings, deprecation warning on load
+```
+Phase 8 implementation: CPU→GPU migration logic, multi-threaded coordination
+```
+
+**Tier 3: Ripgrep (Always available)** — BM25 text search, zero-vector embeddings, offline capability
+```
+Fallback when LLM inference unavailable or network-isolated
+```
+
+**CompositionPlan:** Blessing grants generate model layer stacks.
+```
+blessing:terraform-apply → CompositionPlan {
+    base_model_id: "meta-llama/Llama-2-7b",
+    layers: [LayerMetadata { artifact_path, embedding_dim, adapter_rank, quality_score }],
+    total_adapter_params: 147456,
+}
+```
+K0mmand3r loads layers before executing blessed action. Agents compose specialized models per blessing.
+
+**KnowledgeBase:** Semantic storage (BlessingMetadata + LayerMetadata) + GraphRAG DAG.
+- `discover_capability(blessing_id, metadata)` — register assimilated capabilities
+- `generate_layer(blessing_id) → LayerMetadata` — create GGUF artifacts from assimilations
+- `SemanticDiscoveryCallback` — Phase 8 hook: Kaizen loop notifications on quality updates
+
+---
+
+## HIVE NETWORKING & GPU SHARING
+
+Yei are nodes in a distributed b00t hive. **Penultimate state:** agents discover peer nodes on network, exchange GPU capacity, distribute inference workloads.
+
+**Discovery Protocol (Phase 9 target):**
+```
+b00t hive peers --network=local
+→ advertise: {node_id, gpu_free_mb, inference_queue_depth, location}
+→ fetch: peer list via mDNS/zeroconf or explicit registry
+```
+
+**Job Swapping (Phase 9 target):**
+```
+Node A (saturated GPU) → Node B (available GPU)
+CompositionPlan serialization → network transfer → load on B → execute → stream results
+```
+
+**Vector Layer Distribution:**
+Blessing artifacts (GGUF files) cached locally or fetched from peer nodes on-demand. Cache hierarchy:
+1. Local filesystem (fastest)
+2. Peer node cache (LAN latency)
+3. OCI registry / Git LFS (remote, slowest)
+
+**Hive Meditation:** Agents reflect on their own capabilities & limitations. If saturation detected (`queue_depth > threshold`), broadcast to peers: "Who has GPU capacity? I have [blessing:X] layer to execute."
+
+---
+
+## PLUGGABLE VECTOR LAYERS FOR AGENT AUGMENTATION
+
+Skills are vector layers. When yei activates `b00t learn skill`, the skill itself is a semantic layer that modifies agent behavior.
+
+**Skill as vector layer:**
+```toml
+[skill]
+name = "superpowers:subagent-driven-development"
+embedding_dim = 768  # semantic fingerprint
+quality_score = 0.98  # alignment fitness
+depends_on = ["superpowers:writing-plans", "superpowers:test-driven-development"]
+```
+
+Hive knowledge base stores embeddings of all skills. Future agents retrieve skills by semantic similarity:
+```
+query: "I need to execute a plan with independent tasks"
+→ RAG search → top matches: [subagent-driven-development, executing-plans, dispatching-parallel-agents]
+→ load highest-quality match
+```
+
+**Self-composition:** Agents can query their own blessing context + available skills to compose inference models specialized for their role:
+```rust
+my_blessings = ["observer", "architect", "analyst"];
+available_skills = ["hive-memory", "systems-engineering", "agent-orchestration"];
+composed_layers = knowledge_base.compose_for_blessings(my_blessings, available_skills);
+// → load model with layers: [blessing-observer-layer, skill-systems-engineering-layer, ...]
+```
+
+**Hive Source Code as Vector Layers:**
+The b00t codebase itself becomes composable. Phase 7 added inference modules. Phase 8 adds orchestrator hooks. Each phase contributes layers that future agents load selectively. Agents become smarter by pulling in relevant source code as embeddings.
+
 
 <!-- b00t:map v1
 summary: b00t hive AGENTS.md — XP agent operating protocol with CMDB, cognitive tiers, tomllm, guards
