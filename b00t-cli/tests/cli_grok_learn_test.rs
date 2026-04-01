@@ -82,13 +82,16 @@ mod cli_grok_learn {
 
         let b00t = get_b00t_binary();
 
+        // Read the file contents so we pass the actual string, not a shell expansion literal.
+        let file_contents = fs::read_to_string(&test_file).expect("Failed to read test file");
+
         let output = Command::new(&b00t)
             .args(&[
                 "grok",
                 "learn",
                 "-s",
                 test_file.to_str().unwrap(),
-                "$(cat test_doc.md)",
+                &file_contents,
                 "-t",
                 "rust_ownership",
             ])
