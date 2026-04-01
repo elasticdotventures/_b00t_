@@ -419,13 +419,16 @@ mod cli_error_paths {
         println!("Ask without topic: {}", String::from_utf8_lossy(&output.stderr));
 
         // Should fail with clear error when RAGLight requires topic
-        if !output.status.success() {
-            let stderr = String::from_utf8_lossy(&output.stderr);
-            assert!(
-                stderr.contains("topic") || stderr.contains("-t") || stderr.contains("required"),
-                "Should mention topic requirement for RAGLight"
-            );
-        }
+        assert!(
+            !output.status.success(),
+            "Should fail without topic when using --rag"
+        );
+
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert!(
+            stderr.contains("topic") || stderr.contains("-t") || stderr.contains("required"),
+            "Should mention topic requirement for RAGLight"
+        );
     }
 
     #[test]
