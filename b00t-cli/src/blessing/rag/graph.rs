@@ -266,7 +266,17 @@ impl GraphRAG {
 
         // Count edges where `to` == node_id
         for edge in &self.edges {
-            *in_degree.get_mut(&edge.to).unwrap_or(&mut 0) += 1;
+            match in_degree.get_mut(&edge.to) {
+                Some(degree) => {
+                    *degree += 1;
+                }
+                None => {
+                    return Err(format!(
+                        "Edge points to unknown node in topological_order: {}",
+                        edge.to
+                    ));
+                }
+            }
         }
 
         // Enqueue all nodes with in-degree 0
