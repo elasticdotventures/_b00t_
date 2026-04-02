@@ -1145,26 +1145,54 @@ fn normalize_slash_args(raw_args: Vec<String>) -> Vec<String> {
         return raw_args;
     }
 
-    let first = raw_args[1].as_str();
-    if first == "/k0mmand3r" || first == "k0mmand3r" {
-        if raw_args.len() >= 3 {
-            let slash = normalize_slash(&raw_args[2]);
-            let mut normalized = vec![raw_args[0].clone(), "k0mmand3r".to_string(), slash];
-            normalized.extend(raw_args.iter().skip(3).cloned());
+    // Scan argv for the first non-option token that either starts with '/'
+    // or is a /k0mmand3r alias, and normalize it while preserving
+    // leading flags/options.
+    let mut prefix: Vec<String> = Vec::new();
+    // Always keep argv[0] as-is.
+    prefix.push(raw_args[0].clone());
+
+    let mut i = 1;
+    while i < raw_args.len() {
+        let arg = &raw_args[i];
+
+        // Respect end-of-options marker; do not rewrite past `--`.
+        if arg == "--" {
+            return raw_args;
+        }
+
+        // Skip option-like arguments (starting with '-') into the prefix.
+        if arg.starts_with('-') {
+            prefix.push(arg.clone());
+            i += 1;
+            continue;
+        }
+
+        // At this point, `arg` is the first non-option token.
+        // Handle the explicit /k0mmand3r and k0mmand3r aliases.
+        if (arg.as_str() == "/k0mmand3r" || arg.as_str() == "k0mmand3r") && i + 1 < raw_args.len() {
+            let slash = normalize_slash(&raw_args[i + 1]);
+            let mut normalized = prefix;
+            normalized.push("k0mmand3r".to_string());
+            normalized.push(slash);
+            normalized.extend(raw_args.iter().skip(i + 2).cloned());
             return normalized;
         }
+
+        // Handle direct slash commands like `/whoami`.
+        if arg.starts_with('/') {
+            let mut normalized = prefix;
+            normalized.push("k0mmand3r".to_string());
+            normalized.push(arg.clone());
+            normalized.extend(raw_args.iter().skip(i + 1).cloned());
+            return normalized;
+        }
+
+        // First non-option is not a slash command; nothing to normalize.
+        return raw_args;
     }
 
-    if first.starts_with('/') {
-        let mut normalized = vec![
-            raw_args[0].clone(),
-            "k0mmand3r".to_string(),
-            first.to_string(),
-        ];
-        normalized.extend(raw_args.iter().skip(2).cloned());
-        return normalized;
-    }
-
+    // No eligible token found; return argv unchanged.
     raw_args
 }
 
