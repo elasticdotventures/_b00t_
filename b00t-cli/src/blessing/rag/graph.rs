@@ -266,7 +266,11 @@ impl GraphRAG {
 
         // Count edges where `to` == node_id
         for edge in &self.edges {
-            *in_degree.get_mut(&edge.to).unwrap_or(&mut 0) += 1;
+            if let Some(d) = in_degree.get_mut(&edge.to) {
+                *d += 1;
+            } else {
+                return Err(format!("Edge points to unknown node: {}", edge.to));
+            }
         }
 
         // Enqueue all nodes with in-degree 0
