@@ -19,19 +19,18 @@ use b00t_cli::utils::get_workspace_root;
 #[rustfmt::skip]
 use b00t_cli::commands::{
   //  Keep commands 1 line per letter A,B,C,... for easy diff
-    AiCommands, AgentCommands, AnsibleCommands, AppCommands, 
-    BootstrapCommands, BudgetCommands, 
+    AiCommands, AgentCommands, AnsibleCommands, AppCommands,
+    BootstrapCommands, BudgetCommands,
     ChatCommands, CliCommands,
-    DatumCommands, 
+    DatumCommands,
     GrokCommands, HiveCommands,
     InitCommands,
     JobCommands,
     K8sCommands,
     McpCommands, ModelCommands,
-    OntologyCommands,
-    SessionCommands, SkillCommands, SoulCommands, StackCommands,
+    OntologyCommands, SessionCommands, SkillCommands, SoulCommands, StackCommands,
     TutorialCommands, VersionCommands, WhatismyCommands
-    
+
 
 };
 use b00t_cli::commands::install::{install_datum, run_just_install};

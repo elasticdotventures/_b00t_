@@ -278,6 +278,26 @@ pub fn detect_agent(memory: &SessionMemory, no_env: bool) -> String {
     let pid = std::process::id();
     let ppid = get_parent_pid();
 
+    // 🤖 AAIII: Abstract AI Inference Interface detection
+    // Priority: qwen > claude > codex > gemini > others
+    
+    // Detect Qwen Code CLI (new priority)
+    if memory.get_env_var("QWEN_CODE").is_some()
+        || std::env::vars().any(|(k, _)| k.starts_with("QWEN_"))
+    {
+        return format!("🤖 Qwen Code PID:{}", pid);
+    }
+    
+    // Check if qwen CLI is available and we're in a qwen session
+    if let Ok(output) = duct::cmd!("qwen", "--version").read() {
+        // qwen CLI exists - check if we're being invoked by qwen
+        if let Some(parent_cmd) = get_parent_command() {
+            if parent_cmd.contains("qwen") {
+                return format!("🤖 Qwen Code PID:{}", pid);
+            }
+        }
+    }
+
     // Detect OpenAI Codex sandbox (bun wrapper)
     if memory
         .get_env_var("CODEX_MANAGED_BY_BUN")

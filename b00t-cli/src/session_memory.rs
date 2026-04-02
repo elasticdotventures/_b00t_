@@ -111,35 +111,35 @@ impl SessionMemory {
         Ok(PathBuf::from(git_root).join(".git"))
     }
 
-    /// Ensure _b00t_.toml is in .gitignore (no longer needed since it's in .git/)
-    fn ensure_gitignore_entry() -> Result<()> {
+    /// Ensure _b00t_.toml is in .b00tignore (no longer needed since it's in .git/)
+    fn ensure_b00tignore_entry() -> Result<()> {
         // No longer needed since _b00t_.toml is stored in .git/ directory
         // which is automatically ignored by git
         Ok(())
     }
 
-    fn _unused_ensure_gitignore_entry() -> Result<()> {
+    fn _unused_ensure_b00tignore_entry() -> Result<()> {
         let git_root = get_workspace_root();
-        let gitignore_path = PathBuf::from(git_root).join(".gitignore");
+        let b00tignore_path = PathBuf::from(git_root).join(".b00tignore");
         let target_entry = "_b00t_.toml";
 
-        // Check if .gitignore exists
-        if !gitignore_path.exists() {
-            // Create .gitignore with the entry
+        // Check if .b00tignore exists
+        if !b00tignore_path.exists() {
+            // Create .b00tignore with the entry
             fs::write(
-                &gitignore_path,
+                &b00tignore_path,
                 format!("# b00t session files\n{}\n", target_entry),
             )
-            .context("Failed to create .gitignore")?;
+            .context("Failed to create .b00tignore")?;
             return Ok(());
         }
 
-        // Read existing .gitignore to check if entry exists
-        let file = fs::File::open(&gitignore_path).context("Failed to open .gitignore")?;
+        // Read existing .b00tignore to check if entry exists
+        let file = fs::File::open(&b00tignore_path).context("Failed to open .b00tignore")?;
         let reader = BufReader::new(file);
 
         for line in reader.lines() {
-            let line = line.context("Failed to read line from .gitignore")?;
+            let line = line.context("Failed to read line from .b00tignore")?;
             if line.trim() == target_entry {
                 // Entry already exists
                 return Ok(());
@@ -150,10 +150,10 @@ impl SessionMemory {
         let mut file = fs::OpenOptions::new()
             .create(true)
             .append(true)
-            .open(&gitignore_path)
-            .context("Failed to open .gitignore for writing")?;
+            .open(&b00tignore_path)
+            .context("Failed to open .b00tignore for writing")?;
 
-        writeln!(file, "{}", target_entry).context("Failed to write to .gitignore")?;
+        writeln!(file, "{}", target_entry).context("Failed to write to .b00tignore")?;
 
         Ok(())
     }
@@ -162,8 +162,8 @@ impl SessionMemory {
     pub fn load() -> Result<Self> {
         let config_dir = Self::get_config_path()?;
 
-        // Ensure ._b00t_.toml is in .gitignore before creating/loading
-        Self::ensure_gitignore_entry().context("Failed to ensure .gitignore entry")?;
+        // Ensure ._b00t_.toml is in .b00tignore before creating/loading
+        Self::ensure_b00tignore_entry().context("Failed to ensure .b00tignore entry")?;
 
         // Use confy to load from _b00t_.toml in .git directory
         let mut memory: SessionMemory = confy::load_path(config_dir.join("_b00t_.toml"))
@@ -650,38 +650,38 @@ mod tests {
     }
 
     #[test]
-    fn test_gitignore_entry_creation() -> Result<()> {
+    fn test_b00tignore_entry_creation() -> Result<()> {
         let temp_dir = TempDir::new()?;
-        let gitignore_path = temp_dir.path().join(".gitignore");
+        let b00tignore_path = temp_dir.path().join(".b00tignore");
         let target_entry = "_b00t_.toml";
 
-        // Test creating .gitignore when it doesn't exist
-        assert!(!gitignore_path.exists());
+        // Test creating .b00tignore when it doesn't exist
+        assert!(!b00tignore_path.exists());
 
         // Simulate the functionality manually since we can't easily mock the path
         fs::write(
-            &gitignore_path,
+            &b00tignore_path,
             format!("# b00t session files\n{}\n", target_entry),
         )?;
 
-        assert!(gitignore_path.exists());
-        let content = fs::read_to_string(&gitignore_path)?;
+        assert!(b00tignore_path.exists());
+        let content = fs::read_to_string(&b00tignore_path)?;
         assert!(content.contains(target_entry));
 
         Ok(())
     }
 
     #[test]
-    fn test_gitignore_entry_detection() -> Result<()> {
+    fn test_b00tignore_entry_detection() -> Result<()> {
         let temp_dir = TempDir::new()?;
-        let gitignore_path = temp_dir.path().join(".gitignore");
+        let b00tignore_path = temp_dir.path().join(".b00tignore");
         let target_entry = "_b00t_.toml";
 
-        // Create .gitignore with entry already present
-        fs::write(&gitignore_path, format!("*.log\n{}\n*.tmp\n", target_entry))?;
+        // Create .b00tignore with entry already present
+        fs::write(&b00tignore_path, format!("*.log\n{}\n*.tmp\n", target_entry))?;
 
         // Read and verify the entry exists
-        let content = fs::read_to_string(&gitignore_path)?;
+        let content = fs::read_to_string(&b00tignore_path)?;
         let has_entry = content.lines().any(|line| line.trim() == target_entry);
         assert!(has_entry);
 
