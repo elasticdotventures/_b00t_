@@ -1,6 +1,7 @@
 import { LanguageClient, LanguageClientOptions, StreamInfo, PublishDiagnosticsParams } from 'vscode-languageclient/node';
 import * as cp from 'child_process';
 import * as fs from 'fs';
+import * as os from 'os';
 import * as path from 'path';
 import * as vscode from 'vscode';
 import { Range, Position, Diagnostic } from 'vscode-languageserver';
@@ -63,6 +64,19 @@ function initializeJustLsp(context: vscode.ExtensionContext) {
 	context.subscriptions.push({ dispose: () => lspClient.stop() });
 }
 
+// 🦨 b00t path is hardcoded to ~/.b00t (or %APPDATA%\b00t on Windows).
+// TODO: replace with `b00t config --path` once a global config query command exists.
+// FUTURE: replace polling/init-time path with an IPC/broadcast hook into b00t so the extension
+// (and browser agents outside the node) can receive push notifications from b00t rather than
+// discovering state at startup — this would enable true bi-directional communication across
+// all agents on the same node.
+function getB00tPath(): string {
+	if (process.platform === 'win32') {
+		return path.join(process.env['APPDATA'] ?? path.join(os.homedir(), 'AppData', 'Roaming'), 'b00t');
+	}
+	return path.join(os.homedir(), '.b00t');
+}
+
 // --- b00t LSP Client (new: TOMLLM datum support) ---
 function initializeB00tLsp(context: vscode.ExtensionContext) {
 	let b00tLspPath: string | undefined;
@@ -113,7 +127,7 @@ function initializeB00tLsp(context: vscode.ExtensionContext) {
 			fileEvents: vscode.workspace.createFileSystemWatcher('**/*.{toml,tomllm}')
 		},
 		initializationOptions: {
-			b00t_path: vscode.workspace.workspaceFolders?.[0]?.uri.fsPath,
+			b00t_path: getB00tPath(),
 			dynamic_inspection: true,
 		}
 	};
