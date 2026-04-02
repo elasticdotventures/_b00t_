@@ -156,6 +156,11 @@ impl KvStore {
         Self::new(KvConfig::detect())
     }
 
+    /// Read-only access to resolved KV configuration.
+    pub fn config(&self) -> &KvConfig {
+        &self.config
+    }
+
     /// Get a value from the KV store
     pub fn get(&self, key: &str) -> Result<Option<String>> {
         match self.config.backend {

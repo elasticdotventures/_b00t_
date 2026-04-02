@@ -21,6 +21,7 @@ pub mod model;
 pub mod ontology;
 pub mod quit;
 pub mod redis;
+pub mod redis_cli;
 pub mod script;
 pub mod session;
 pub mod skill;
