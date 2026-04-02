@@ -1,8 +1,13 @@
-use anyhow::Result;
+use anyhow::{Result, anyhow};
 use b00t_cli::{SessionState, UnifiedConfig, load_datum_providers, whoami};
+use b00t_cli::k0mmand3r::K0mmand;
 use clap::Parser;
 use duct::cmd;
+use serde_json::json;
 use std::fs;
+use std::io::Write;
+use std::path::{Path, PathBuf};
+use std::process::Command;
 
 // Import datum types from lib.rs (already declared there as pub mod)
 use b00t_cli::commands::learn::{LearnArgs, handle_learn};
@@ -222,6 +227,22 @@ The system will:
         role: Option<String>,
         #[clap(long, help = "Emit full skill metadata for all skills declared by the role")]
         with_skills: bool,
+    },
+    #[clap(
+        name = "k0mmand3r",
+        hide = true,
+        about = "Hidden slash-command dispatcher for datum-driven and internal commands"
+    )]
+    K0mmand3r {
+        #[clap(help = "Slash command to dispatch, e.g. /whoami or /gh")]
+        slash: String,
+        #[clap(
+            trailing_var_arg = true,
+            allow_hyphen_values = true,
+            num_args = 0..,
+            help = "Arguments passed through to the dispatched command"
+        )]
+        args: Vec<String>,
     },
     #[clap(about = "Create checkpoint: commit all files and run tests")]
     // 🤓 ENTANGLED: b00t-mcp/src/mcp_tools.rs CheckpointCommand
@@ -1110,9 +1131,271 @@ fn check_readme_status(memory: &mut b00t_cli::session_memory::SessionMemory) -> 
     Ok(())
 }
 
+fn normalize_slash(slash: &str) -> String {
+    let trimmed = slash.trim();
+    if trimmed.starts_with('/') {
+        trimmed.to_string()
+    } else {
+        format!("/{}", trimmed)
+    }
+}
+
+fn normalize_slash_args(raw_args: Vec<String>) -> Vec<String> {
+    if raw_args.len() < 2 {
+        return raw_args;
+    }
+
+    let first = raw_args[1].as_str();
+    if first == "/k0mmand3r" || first == "k0mmand3r" {
+        if raw_args.len() >= 3 {
+            let slash = normalize_slash(&raw_args[2]);
+            let mut normalized = vec![raw_args[0].clone(), "k0mmand3r".to_string(), slash];
+            normalized.extend(raw_args.iter().skip(3).cloned());
+            return normalized;
+        }
+    }
+
+    if first.starts_with('/') {
+        let mut normalized = vec![
+            raw_args[0].clone(),
+            "k0mmand3r".to_string(),
+            first.to_string(),
+        ];
+        normalized.extend(raw_args.iter().skip(2).cloned());
+        return normalized;
+    }
+
+    raw_args
+}
+
+fn load_cli_boot_datums(path: &str) -> Result<Vec<b00t_cli::BootDatum>> {
+    let providers = load_datum_providers::<CliDatum>(path, ".cli.toml")?;
+    Ok(providers.into_iter().map(|provider| provider.datum().clone()).collect())
+}
+
+fn datum_slash_aliases(datum: &b00t_cli::BootDatum) -> Vec<String> {
+    let mut aliases = Vec::new();
+    if let Some(cfg) = &datum.k0mmand3r {
+        if let Some(slash) = &cfg.slash {
+            aliases.push(normalize_slash(slash));
+        }
+    }
+    aliases.push(format!("/{}", datum.name));
+    if let Some(raw_aliases) = &datum.aliases {
+        for alias in raw_aliases {
+            aliases.push(normalize_slash(alias));
+        }
+    }
+
+    aliases.sort();
+    aliases.dedup();
+    aliases
+}
+
+fn find_cli_datum_for_slash<'a>(
+    slash: &str,
+    datums: &'a [b00t_cli::BootDatum],
+) -> Option<&'a b00t_cli::BootDatum> {
+    let normalized = normalize_slash(slash);
+    datums
+        .iter()
+        .find(|datum| datum_slash_aliases(datum).iter().any(|alias| alias == &normalized))
+}
+
+fn b00t_home_for_path(_path: &str) -> Result<PathBuf> {
+    if let Ok(explicit) = std::env::var("B00T_LOG_DIR") {
+        return Ok(PathBuf::from(explicit));
+    }
+
+    Ok(std::env::temp_dir().join("b00t"))
+}
+
+fn append_jsonl_record(path: &Path, value: &serde_json::Value) -> Result<()> {
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent)?;
+    }
+    let mut file = fs::OpenOptions::new().create(true).append(true).open(path)?;
+    writeln!(file, "{}", serde_json::to_string(value)?)?;
+    Ok(())
+}
+
+fn log_k0mmand3r_stub(
+    path: &str,
+    mode: &str,
+    slash: &str,
+    target: &str,
+    passthrough_args: &[String],
+    exit_code: i32,
+) -> Result<()> {
+    let b00t_home = b00t_home_for_path(path)?;
+    let timestamp = chrono::Utc::now().to_rfc3339();
+    let session_id = std::env::var("B00T_SESSION_ID").ok();
+    let host = std::env::var("HOSTNAME").ok();
+
+    let metrics_record = json!({
+        "timestamp": timestamp,
+        "mode": mode,
+        "slash": slash,
+        "target": target,
+        "args": passthrough_args,
+        "exit_code": exit_code,
+        "session_id": session_id,
+    });
+    let node_record = json!({
+        "timestamp": timestamp,
+        "event": "k0mmand3r_dispatch",
+        "mode": mode,
+        "slash": slash,
+        "target": target,
+        "args": passthrough_args,
+        "exit_code": exit_code,
+        "session_id": session_id,
+        "host": host,
+    });
+
+    append_jsonl_record(&b00t_home.join("session-metrics.stub.jsonl"), &metrics_record)?;
+    append_jsonl_record(&b00t_home.join("node-log.stub.jsonl"), &node_record)?;
+    Ok(())
+}
+
+fn execute_cli_passthrough(datum: &b00t_cli::BootDatum, passthrough_args: &[String]) -> Result<i32> {
+    let command_spec = datum.command.as_deref().unwrap_or(&datum.name);
+    let mut command_parts = shlex::split(command_spec)
+        .ok_or_else(|| anyhow!("Invalid command declaration for '{}'", datum.name))?;
+
+    if command_parts.is_empty() {
+        anyhow::bail!("Empty command declaration for '{}'", datum.name);
+    }
+
+    let program = command_parts.remove(0);
+    let mut cmd = Command::new(&program);
+    if !command_parts.is_empty() {
+        cmd.args(command_parts);
+    }
+    if let Some(default_args) = &datum.args {
+        cmd.args(default_args);
+    }
+    cmd.args(passthrough_args);
+
+    let status = cmd.status()?;
+    Ok(status.code().unwrap_or(1))
+}
+
+fn execute_internal_slash_alias(slash: &str, passthrough_args: &[String]) -> Result<i32> {
+    let command_name = slash.trim_start_matches('/');
+    if command_name.is_empty() {
+        anyhow::bail!("Empty slash command");
+    }
+
+    let current_exe = std::env::current_exe()?;
+    let status = Command::new(current_exe)
+        .arg(command_name)
+        .args(passthrough_args)
+        .status()?;
+    Ok(status.code().unwrap_or(1))
+}
+
+fn print_visible_k0mmand3r_datums(path: &str) -> Result<()> {
+    let datums = load_cli_boot_datums(path)?;
+    let mut rows: Vec<(String, String)> = Vec::new();
+
+    for datum in datums {
+        let hidden = datum
+            .k0mmand3r
+            .as_ref()
+            .and_then(|cfg| cfg.hidden)
+            .unwrap_or(false);
+        if hidden {
+            continue;
+        }
+
+        let description = datum
+            .k0mmand3r
+            .as_ref()
+            .and_then(|cfg| cfg.description.clone())
+            .unwrap_or_else(|| datum.hint.clone());
+        for slash in datum_slash_aliases(&datum) {
+            rows.push((slash, description.clone()));
+        }
+    }
+
+    rows.sort_by(|a, b| a.0.cmp(&b.0));
+    rows.dedup_by(|a, b| a.0 == b.0);
+
+    for (slash, description) in rows {
+        println!("{}  {}", slash, description);
+    }
+
+    Ok(())
+}
+
+fn execute_k0mmand3r_dispatch(path: &str, slash: &str, passthrough_args: &[String]) -> Result<i32> {
+    let normalized_slash = normalize_slash(slash);
+    if normalized_slash == "/k0mmand3r" {
+        print_visible_k0mmand3r_datums(path)?;
+        return Ok(0);
+    }
+
+    let k0mmand_verbs = ["negotiate", "vote", "delegate", "status", "handshake", "crew"];
+    let verb = normalized_slash.trim_start_matches('/').to_lowercase();
+    if k0mmand_verbs.contains(&verb.as_str()) {
+        let mut raw = normalized_slash.clone();
+        if !passthrough_args.is_empty() {
+            raw.push(' ');
+            raw.push_str(&passthrough_args.join(" "));
+        }
+
+        let k0mmand = K0mmand::parse(&raw).map_err(|e| anyhow!(e))?;
+        k0mmand.validate().map_err(|e| anyhow!(e))?;
+
+        println!("k0mmand3r: {} {}", k0mmand.verb, k0mmand.object);
+        if let Err(e) = log_k0mmand3r_stub(
+            path,
+            "k0mmand",
+            &normalized_slash,
+            &k0mmand.verb,
+            passthrough_args,
+            0,
+        ) {
+            eprintln!("⚠️ k0mmand3r logging stub failed: {}", e);
+        }
+        return Ok(0);
+    }
+
+    let datums = load_cli_boot_datums(path)?;
+    if let Some(datum) = find_cli_datum_for_slash(&normalized_slash, &datums) {
+        let exit_code = execute_cli_passthrough(datum, passthrough_args)?;
+        let target = datum.command.as_deref().unwrap_or(&datum.name).to_string();
+        if let Err(e) = log_k0mmand3r_stub(
+            path,
+            "datum_cli",
+            &normalized_slash,
+            &target,
+            passthrough_args,
+            exit_code,
+        ) {
+            eprintln!("⚠️ k0mmand3r logging stub failed: {}", e);
+        }
+        return Ok(exit_code);
+    }
+
+    let exit_code = execute_internal_slash_alias(&normalized_slash, passthrough_args)?;
+    if let Err(e) = log_k0mmand3r_stub(
+        path,
+        "internal",
+        &normalized_slash,
+        normalized_slash.trim_start_matches('/'),
+        passthrough_args,
+        exit_code,
+    ) {
+            eprintln!("⚠️ k0mmand3r logging stub failed: {}", e);
+        }
+    Ok(exit_code)
+}
+
 #[tokio::main]
 async fn main() {
-    let cli = Cli::parse();
+    let cli = Cli::parse_from(normalize_slash_args(std::env::args().collect()));
 
     if cli.doc {
         generate_documentation();
@@ -1200,6 +1483,16 @@ async fn main() {
             if let Err(e) = whoami::whoami(&cli.path, role.clone(), *with_skills) {
                 eprintln!("Error: {}", e);
                 std::process::exit(1);
+            }
+        }
+        Some(Commands::K0mmand3r { slash, args }) => {
+            match execute_k0mmand3r_dispatch(&cli.path, slash, args) {
+                Ok(0) => {}
+                Ok(code) => std::process::exit(code),
+                Err(e) => {
+                    eprintln!("Error: {}", e);
+                    std::process::exit(1);
+                }
             }
         }
         Some(Commands::Checkpoint {
