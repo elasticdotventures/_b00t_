@@ -141,7 +141,7 @@ impl Inventory {
         use std::process::Command;
 
         let mut tools = BTreeMap::new();
-        let tool_names = vec!["bash", "rust", "python", "git", "b00t-cli"];
+        let tool_names = vec!["bash", "rustc", "python", "git", "b00t-cli"];
 
         for name in tool_names {
             let output = Command::new("which").arg(name).output();
@@ -181,7 +181,7 @@ impl Inventory {
 
         let output = match tool {
             "bash" => Command::new("bash").arg("--version").output()?,
-            "rust" => Command::new("rustc").arg("--version").output()?,
+            "rustc" => Command::new("rustc").arg("--version").output()?,
             "python" => Command::new("python3").arg("--version").output()?,
             "git" => Command::new("git").arg("--version").output()?,
             "b00t-cli" => Command::new("b00t-cli").arg("--version").output()?,

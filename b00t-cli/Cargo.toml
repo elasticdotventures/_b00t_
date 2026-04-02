@@ -91,6 +91,8 @@ async-trait = "0.1"
 
 [features]
 default = []
+# 🤓 dbus: Enable D-Bus IPC via zbus (restored; required by lib.rs, hive.rs, commands/soul.rs)
+dbus = ["b00t-ipc/dbus", "dep:zbus"]
 # 🤓 candle: Enable Candle-based inference (GPU/CPU with CUDA support)
 # 🦨 NOTE: candle-core has unresolved dependency conflicts with current Rust ecosystem
 #   To use: cargo build --features candle (requires resolving upstream issues)

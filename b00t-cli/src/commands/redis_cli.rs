@@ -6,10 +6,9 @@
 //!
 //! This ensures AI agents only see tools they're skilled to use
 
-use anyhow::{Context, Result};
+use anyhow::Result;
 use b00t_c0re_lib::aaiii::SkillFeatureFlags;
 use b00t_c0re_lib::kv_store::{KvConfig, KvStore};
-use b00t_c0re_lib::redis::{RedisConfig, RedisComms};
 use clap::Parser;
 
 #[derive(Parser, Clone)]
