@@ -66,6 +66,7 @@ pass          = "✅ (通过 tōngguò) — capability check passed"
 fail          = "❌ (失败 shībài) — capability missing or mismatch"
 # 🍰 cake — aligned behavior reward
 cake          = "🍰 (蛋糕 dàngāo) — reward for aligned execution"
+cake_shortcode = ":cake: — ASCII shortcode alias for 🍰; executive-only shorthand until generalized"
 # 🥾 boot
 boot          = "🥾 b00t — the framework itself; also: bootstrap"
 
