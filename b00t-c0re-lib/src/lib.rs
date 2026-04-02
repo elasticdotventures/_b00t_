@@ -37,6 +37,7 @@ pub mod datum_ai_model;
 pub mod datum_types;
 pub mod grok;
 pub mod knowledge;
+pub mod kv_store;
 pub mod learn;
 pub mod lfmf;
 pub mod man_page;
