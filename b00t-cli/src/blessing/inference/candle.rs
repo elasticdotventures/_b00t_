@@ -94,18 +94,19 @@ impl CandleBackend {
     /// Sets loaded_at to current UTC time and detects GPU/CPU availability
     pub fn new(model_id: String, embedding_dim: u32) -> Self {
         let device_str = DeviceInfo::available();
-        let available = !device_str.starts_with("cpu");
+        let device_type = device_str.split('-').next().unwrap_or("cpu");
 
         Self {
             model_info: ModelInfo {
                 model_id,
                 embedding_dim,
                 backend_name: "candle".to_string(),
-                available,
+                // Candle can always run on CPU as a fallback, so mark it available.
+                available: true,
             },
             loaded_at: Some(Utc::now()),
             device: DeviceInfo {
-                device_type: device_str.split('-').next().unwrap_or("cpu").to_string(),
+                device_type: device_type.to_string(),
                 version: device_str.to_string(),
             },
         }
