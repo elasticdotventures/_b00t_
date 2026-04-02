@@ -40,11 +40,7 @@
                     "tomllm"
                 ],
                 "extensions": [
-                    ".tomllm",
-                    ".toml"
-                ],
-                "filenames": [
-                    "justfile"
+                    ".tomllm"
                 ],
                 "configuration": "./vscode-tomllm/language-configuration.json"
             }
