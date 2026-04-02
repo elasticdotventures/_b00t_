@@ -38,7 +38,7 @@ MCP equivalents:
 - `b00t_agent_progress` → status
 - `b00t_agent_complete` → finish
 
-`cat /tmp/cake_section_operator.md`## On-Demand Skill Loading
+## On-Demand Skill Loading
 
 Before dispatching a specialist, identify required skills:
 ```bash
