@@ -111,11 +111,10 @@ impl SessionMemory {
         Ok(PathBuf::from(git_root).join(".git"))
     }
 
-    /// Ensure _b00t_.toml is in .b00tignore (no longer needed since it's in .git/)
+    /// Ensure _b00t_.toml is ignored by b00t tooling (backwards-compatible .b00tignore entry)
     fn ensure_b00tignore_entry() -> Result<()> {
-        // No longer needed since _b00t_.toml is stored in .git/ directory
-        // which is automatically ignored by git
-        Ok(())
+        // Delegate to the legacy implementation to keep behavior centralized
+        Self::_unused_ensure_b00tignore_entry()
     }
 
     fn _unused_ensure_b00tignore_entry() -> Result<()> {
