@@ -139,6 +139,18 @@ impl InstallSpec {
 
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Default)]
 #[serde(default)]
+pub struct K0mmand3rDatumConfig {
+    /// Slash command exposed for this datum (for example "/gh" or "/docker").
+    /// If omitted, defaults to "/<b00t.name>".
+    pub slash: Option<String>,
+    /// When true, omit from discovery listings (still invokable directly).
+    pub hidden: Option<bool>,
+    /// Optional dispatch hint for operator-facing help output.
+    pub description: Option<String>,
+}
+
+#[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Default)]
+#[serde(default)]
 pub struct BootDatum {
     pub name: String,
     #[serde(rename = "type")]
@@ -196,6 +208,10 @@ pub struct BootDatum {
 
     // Aliases for CLI commands
     pub aliases: Option<Vec<String>>,
+
+    // Slash-command orchestration metadata for datum-driven /k0mmand3r dispatch
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub k0mmand3r: Option<K0mmand3rDatumConfig>,
 
     // MCP-specific multi-method support - these will be handled by datum_mcp module
     #[serde(skip_serializing_if = "Option::is_none")]
