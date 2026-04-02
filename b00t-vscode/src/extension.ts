@@ -13,11 +13,14 @@ export function activate(context: vscode.ExtensionContext) {
 	}
 	
 	// Register JustTaskProvider for justfile recipes
-	vscode.tasks.registerTaskProvider(JustTaskProvider.JustType, new JustTaskProvider(workspaceRoot));
+	context.subscriptions.push(
+		vscode.tasks.registerTaskProvider(JustTaskProvider.JustType, new JustTaskProvider(workspaceRoot))
+	);
 
 	// Initialize LSP clients
 	initializeJustLsp(context);
-	initializeB00tLsp(context);
+	// TODO: re-enable once b00t-lsp speaks JSON-RPC/Content-Length (tower-lsp pending)
+	// initializeB00tLsp(context);
 }
 
 // --- Just LSP Client (existing functionality) ---

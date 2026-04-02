@@ -103,24 +103,15 @@ impl DatumLspServer {
 }
 
 /// 运行 LSP 服务器 (stdio)
+///
+/// ⚠️ Not yet implemented: requires tower-lsp integration for proper
+/// JSON-RPC/Content-Length framing. Use `b00t-lsp` binary once ready.
 pub async fn run_lsp_server() -> Result<()> {
-    let _server = DatumLspServer::new(DatumLspConfig::default());
-    
-    // 🤓 简化实现：实际 LSP 需要 tower-lsp 完整集成
-    // 这里提供框架，具体 LSP 协议处理在 b00t-lsp bin 中实现
-    
-    use tokio::io::{AsyncBufReadExt, BufReader};
-    let stdin = tokio::io::stdin();
-    let mut reader = BufReader::new(stdin);
-    
-    let mut line = String::new();
-    while reader.read_line(&mut line).await? > 0 {
-        // 🤓 处理 LSP JSON-RPC 消息
-        eprintln!("🤖 LSP received: {}", line.trim());
-        line.clear();
-    }
-    
-    Ok(())
+    Err(anyhow::anyhow!(
+        "b00t LSP server not yet implemented: tower-lsp integration pending. \
+         DatumLspServer schema types are available but the stdio transport \
+         does not yet speak the LSP JSON-RPC protocol."
+    ))
 }
 
 #[cfg(test)]

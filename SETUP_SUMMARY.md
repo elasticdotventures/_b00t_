@@ -8,7 +8,7 @@
 ### 1. Flashbacker Installation ✅
 - **Repository**: https://github.com/PromptExecution/flashbacker-b00t (cloned)
 - **Version**: 2.4.1
-- **Location**: `/home/brianh/promptexecution/app4dog/flashbacker-b00t/`
+- **Location**: `$HOME/promptexecution/app4dog/flashbacker-b00t/`
 - **Global Command**: `flashback`
 - **Installation**: `npm install && npm link` (completed)
 
@@ -18,7 +18,7 @@
 ```bash
 Command: codex mcp-server
 Status: Registered and installed to Claude Code
-Config: /home/brianh/.dotfiles/_b00t_/codex-gpt5.mcp.toml
+Config: $HOME/.dotfiles/_b00t_/codex-gpt5.mcp.toml
 ```
 
 #### Server 2: Third-Party Tool (codex-mcp-tool)
@@ -26,18 +26,18 @@ Config: /home/brianh/.dotfiles/_b00t_/codex-gpt5.mcp.toml
 Package: @trishchuk/codex-mcp-tool@1.2.0
 Command: npx -y @trishchuk/codex-mcp-tool
 Status: Registered and installed to Claude Code
-Config: /home/brianh/.dotfiles/_b00t_/codex-mcp-tool.mcp.toml
+Config: $HOME/.dotfiles/_b00t_/codex-mcp-tool.mcp.toml
 ```
 
 ### 3. Codex Skill ✅
 - **Source**: https://github.com/skills-directory/skill-codex
-- **Cloned to**: `/home/brianh/promptexecution/app4dog/skill-codex/`
+- **Cloned to**: `$HOME/promptexecution/app4dog/skill-codex/`
 - **Files**: SKILL.md, README.md
 - **Installation Target**: `~/.claude/skills/codex/` (ready to install)
 
 ### 4. Documentation Created ✅
 
-**Location: `/home/brianh/.dotfiles/`**
+**Location: `$HOME/.dotfiles/`**
 
 | Document | Size | Lines | Purpose |
 |----------|------|-------|---------|
@@ -217,13 +217,13 @@ export B00T_NATS_URL=nats://c010.promptexecution.com:4222
 - `~/.dotfiles/_b00t_/*.mcp.toml` - MCP server configs
 
 ### Documentation
-- `/home/brianh/.dotfiles/b00t_*.md` - b00t architecture docs
-- `/home/brianh/.dotfiles/codex_*.md` - Codex integration docs
-- `/home/brianh/.dotfiles/k0mmand3r_*.md` - Command interface specs
+- `$HOME/.dotfiles/b00t_*.md` - b00t architecture docs
+- `$HOME/.dotfiles/codex_*.md` - Codex integration docs
+- `$HOME/.dotfiles/k0mmand3r_*.md` - Command interface specs
 
 ### Repositories
-- `/home/brianh/promptexecution/app4dog/flashbacker-b00t/` - Flashbacker
-- `/home/brianh/promptexecution/app4dog/skill-codex/` - Codex skill
+- `$HOME/promptexecution/app4dog/flashbacker-b00t/` - Flashbacker
+- `$HOME/promptexecution/app4dog/skill-codex/` - Codex skill
 
 ## Testing
 
@@ -268,9 +268,9 @@ flashback agent --list
 - **Flashbacker**: https://github.com/agentsea/flashbacker
 
 ### Custom Documentation
-- **b00t IPC Architecture**: `/home/brianh/.dotfiles/b00t_ipc_architecture.md`
-- **Codex Integration**: `/home/brianh/.dotfiles/codex_integration_setup.md`
-- **/k0mmand3r Interface**: `/home/brianh/.dotfiles/k0mmand3r_interface.md`
+- **b00t IPC Architecture**: `$HOME/.dotfiles/b00t_ipc_architecture.md`
+- **Codex Integration**: `$HOME/.dotfiles/codex_integration_setup.md`
+- **/k0mmand3r Interface**: `$HOME/.dotfiles/k0mmand3r_interface.md`
 
 ## Success Criteria ✅
 
