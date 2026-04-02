@@ -38,10 +38,12 @@ impl K0mmand {
 
         let mut i = 1;
 
-        // Parse object (may be at different positions)
-        if i < parts.len() {
-            object = parts[i].to_string();
-            i += 1;
+        // Locate object as the first token that looks like type:id (e.g. blessing:name)
+        for token in parts.iter().skip(1) {
+            if token.contains(':') {
+                object = (*token).to_string();
+                break;
+            }
         }
 
         // Parse modifiers (key value, on <target>, to <target>, from <source>)
