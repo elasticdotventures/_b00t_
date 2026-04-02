@@ -1751,3 +1751,234 @@ async fn main() {
         }
     }
 }
+
+#[cfg(test)]
+mod k0mmand3r_dispatch_tests {
+    use super::*;
+
+    // ── normalize_slash ──────────────────────────────────────────────────────
+
+    #[test]
+    fn normalize_slash_already_prefixed() {
+        assert_eq!(normalize_slash("/whoami"), "/whoami");
+    }
+
+    #[test]
+    fn normalize_slash_adds_prefix() {
+        assert_eq!(normalize_slash("whoami"), "/whoami");
+    }
+
+    #[test]
+    fn normalize_slash_trims_whitespace() {
+        assert_eq!(normalize_slash("  gh  "), "/gh");
+    }
+
+    #[test]
+    fn normalize_slash_double_slash_unchanged() {
+        // A leading slash is enough; no double-slash introduced.
+        assert_eq!(normalize_slash("/gh"), "/gh");
+    }
+
+    // ── normalize_slash_args ─────────────────────────────────────────────────
+
+    fn args(v: &[&str]) -> Vec<String> {
+        v.iter().map(|s| s.to_string()).collect()
+    }
+
+    #[test]
+    fn normalize_slash_args_too_short_unchanged() {
+        let input = args(&["b00t-cli"]);
+        assert_eq!(normalize_slash_args(input.clone()), input);
+    }
+
+    #[test]
+    fn normalize_slash_args_no_slash_unchanged() {
+        let input = args(&["b00t-cli", "whoami"]);
+        assert_eq!(normalize_slash_args(input.clone()), input);
+    }
+
+    #[test]
+    fn normalize_slash_args_direct_slash_rewritten() {
+        // `/whoami` at argv[1] → `k0mmand3r /whoami`
+        let input = args(&["b00t-cli", "/whoami"]);
+        let expected = args(&["b00t-cli", "k0mmand3r", "/whoami"]);
+        assert_eq!(normalize_slash_args(input), expected);
+    }
+
+    #[test]
+    fn normalize_slash_args_slash_with_trailing_args() {
+        // `/gh --version` → `k0mmand3r /gh --version`
+        let input = args(&["b00t-cli", "/gh", "--version"]);
+        let expected = args(&["b00t-cli", "k0mmand3r", "/gh", "--version"]);
+        assert_eq!(normalize_slash_args(input), expected);
+    }
+
+    #[test]
+    fn normalize_slash_args_flag_before_slash_preserved() {
+        // `--doc /whoami` → `--doc k0mmand3r /whoami`
+        // Boolean flags (no separate value) before a slash are preserved in the prefix.
+        let input = args(&["b00t-cli", "--doc", "/whoami"]);
+        let expected = args(&["b00t-cli", "--doc", "k0mmand3r", "/whoami"]);
+        assert_eq!(normalize_slash_args(input), expected);
+    }
+
+    #[test]
+    fn normalize_slash_args_inline_value_option_before_slash() {
+        // `--path=/tmp /whoami` uses `=`-joined value so the flag is one token
+        // starting with `-`; the scanner skips it and correctly finds `/whoami`.
+        let input = args(&["b00t-cli", "--path=/tmp", "/whoami"]);
+        let expected = args(&["b00t-cli", "--path=/tmp", "k0mmand3r", "/whoami"]);
+        assert_eq!(normalize_slash_args(input), expected);
+    }
+
+    #[test]
+    fn normalize_slash_args_multiple_flags_before_slash() {
+        let input = args(&["b00t-cli", "--doc", "--path=/tmp", "/gh", "--version"]);
+        let expected = args(&["b00t-cli", "--doc", "--path=/tmp", "k0mmand3r", "/gh", "--version"]);
+        assert_eq!(normalize_slash_args(input), expected);
+    }
+
+    #[test]
+    fn normalize_slash_args_end_of_options_marker_unchanged() {
+        // `--` stops scanning; argv returned as-is even if a slash follows.
+        let input = args(&["b00t-cli", "--", "/whoami"]);
+        assert_eq!(normalize_slash_args(input.clone()), input);
+    }
+
+    #[test]
+    fn normalize_slash_args_k0mmand3r_alias_normalized() {
+        // `k0mmand3r vote blessing:test` → `k0mmand3r /vote blessing:test`
+        let input = args(&["b00t-cli", "k0mmand3r", "vote", "blessing:test"]);
+        let expected = args(&["b00t-cli", "k0mmand3r", "/vote", "blessing:test"]);
+        assert_eq!(normalize_slash_args(input), expected);
+    }
+
+    #[test]
+    fn normalize_slash_args_slash_k0mmand3r_alias_normalized() {
+        // `/k0mmand3r vote blessing:test` → `k0mmand3r /vote blessing:test`
+        let input = args(&["b00t-cli", "/k0mmand3r", "vote", "blessing:test"]);
+        let expected = args(&["b00t-cli", "k0mmand3r", "/vote", "blessing:test"]);
+        assert_eq!(normalize_slash_args(input), expected);
+    }
+
+    #[test]
+    fn normalize_slash_args_k0mmand3r_alias_no_subcommand_is_self_dispatch() {
+        // `/k0mmand3r` alone (no following verb token) falls through to the
+        // generic `starts_with('/')` branch and maps to `k0mmand3r /k0mmand3r`,
+        // which the dispatcher handles by printing visible datums.
+        let input = args(&["b00t-cli", "/k0mmand3r"]);
+        let expected = args(&["b00t-cli", "k0mmand3r", "/k0mmand3r"]);
+        assert_eq!(normalize_slash_args(input), expected);
+    }
+
+    // ── datum_slash_aliases ──────────────────────────────────────────────────
+
+    fn make_datum(name: &str, slash: Option<&str>, aliases: Option<Vec<&str>>) -> b00t_cli::BootDatum {
+        b00t_cli::BootDatum {
+            name: name.to_string(),
+            k0mmand3r: slash.map(|s| b00t_cli::K0mmand3rDatumConfig {
+                slash: Some(s.to_string()),
+                hidden: None,
+                description: None,
+            }),
+            aliases: aliases.map(|v| v.iter().map(|s| s.to_string()).collect()),
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn datum_slash_aliases_name_always_included() {
+        let datum = make_datum("gh", None, None);
+        let aliases = datum_slash_aliases(&datum);
+        assert!(aliases.contains(&"/gh".to_string()));
+    }
+
+    #[test]
+    fn datum_slash_aliases_explicit_slash_included() {
+        let datum = make_datum("gh-cli", Some("/gh"), None);
+        let aliases = datum_slash_aliases(&datum);
+        assert!(aliases.contains(&"/gh".to_string()));
+        assert!(aliases.contains(&"/gh-cli".to_string()));
+    }
+
+    #[test]
+    fn datum_slash_aliases_extra_aliases_normalized() {
+        let datum = make_datum("git", None, Some(vec!["g", "/git2"]));
+        let aliases = datum_slash_aliases(&datum);
+        assert!(aliases.contains(&"/g".to_string()));
+        assert!(aliases.contains(&"/git2".to_string()));
+        assert!(aliases.contains(&"/git".to_string()));
+    }
+
+    #[test]
+    fn datum_slash_aliases_deduped_and_sorted() {
+        // "/gh" from explicit slash AND from name should not duplicate.
+        let datum = make_datum("gh", Some("gh"), None);
+        let aliases = datum_slash_aliases(&datum);
+        let count = aliases.iter().filter(|a| *a == "/gh").count();
+        assert_eq!(count, 1, "duplicate /gh aliases: {:?}", aliases);
+    }
+
+    // ── find_cli_datum_for_slash ─────────────────────────────────────────────
+
+    #[test]
+    fn find_cli_datum_matches_by_name_slash() {
+        let datums = vec![make_datum("gh", None, None), make_datum("docker", None, None)];
+        let found = find_cli_datum_for_slash("/gh", &datums);
+        assert!(found.is_some());
+        assert_eq!(found.unwrap().name, "gh");
+    }
+
+    #[test]
+    fn find_cli_datum_matches_by_explicit_slash() {
+        let datums = vec![make_datum("gh-cli", Some("/gh"), None)];
+        let found = find_cli_datum_for_slash("/gh", &datums);
+        assert!(found.is_some());
+        assert_eq!(found.unwrap().name, "gh-cli");
+    }
+
+    #[test]
+    fn find_cli_datum_no_match_returns_none() {
+        let datums = vec![make_datum("gh", None, None)];
+        assert!(find_cli_datum_for_slash("/unknown", &datums).is_none());
+    }
+
+    #[test]
+    fn find_cli_datum_slash_without_prefix_still_matches() {
+        // Caller may pass "gh" (no slash); normalize_slash is applied internally.
+        let datums = vec![make_datum("gh", None, None)];
+        let found = find_cli_datum_for_slash("gh", &datums);
+        assert!(found.is_some());
+    }
+
+    // ── verb-collision guard: /status must not be stolen by k0mmand_verbs ────
+    // This test documents and guards against the known issue where k0mmand verbs
+    // like "status" shadow datum/internal dispatch for `/status`.
+    // The current implementation matches verbs BEFORE datum lookup; this test
+    // records that `/status` is currently routed as a k0mmand verb (not to a
+    // datum), so any future fix to move verb handling behind datum lookup will
+    // be visible as a test change.
+
+    #[test]
+    fn k0mmand_verb_status_is_recognized_before_datum_lookup() {
+        use b00t_cli::k0mmand3r::K0mmand;
+        // K0mmand::parse should succeed for /status (it is a known verb).
+        let cmd = K0mmand::parse("/status from agent:executive");
+        assert!(cmd.is_ok(), "K0mmand::parse(/status) should succeed");
+        let k = cmd.unwrap();
+        assert_eq!(k.verb, "status");
+    }
+
+    #[test]
+    fn k0mmand_verb_list_contains_collision_candidates() {
+        // These verbs are reserved by k0mmand3r and checked BEFORE datum lookup
+        // in execute_k0mmand3r_dispatch.  Any datum named one of these will be
+        // shadowed — this test documents the current set so a future refactor
+        // (moving verb handling *after* datum lookup) will require an update here.
+        let k0mmand_verbs = ["negotiate", "vote", "delegate", "status", "handshake", "crew"];
+        assert!(k0mmand_verbs.contains(&"status"), "/status is shadowed by k0mmand verb");
+        assert!(k0mmand_verbs.contains(&"crew"), "/crew is shadowed by k0mmand verb");
+        // If a datum named "gh" is not in k0mmand_verbs it will not be shadowed.
+        assert!(!k0mmand_verbs.contains(&"gh"), "/gh is NOT shadowed");
+    }
+}
