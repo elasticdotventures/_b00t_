@@ -33,9 +33,10 @@ fn version_check_reports_release_status_from_mock_api() -> Result<(), Box<dyn st
     let release_api_url = spawn_release_server(
         r#"{"tag_name":"v9.9.9","html_url":"https://example.invalid/releases/v9.9.9"}"#,
     );
+    let temp_dir = tempdir()?;
 
     let mut cmd = Command::cargo_bin("b00t-cli")?;
-    cmd.current_dir("/home/brianh/.b00t")
+    cmd.current_dir(temp_dir.path())
         .env("B00T_RELEASE_API_URL", release_api_url)
         .arg("version")
         .arg("check");
