@@ -20,6 +20,11 @@ jobs:
           # break CI checkout before tests run.
           submodules: false
 
+      - name: Init required vendor submodules
+        run: |
+          set -euo pipefail
+          git submodule update --init --depth 1 vendor/tomllm vendor/irontology-mcp
+
       - name: install stable
         uses: actions-rs/toolchain@v1
         with:

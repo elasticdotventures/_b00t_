@@ -172,9 +172,9 @@ impl IrontologyBridgeClient {
         let config = NeumannConfig {
             endpoint: "http://localhost:7777".to_string(),
             namespace: ns.clone(),
-            data_dir: Some(data_dir.to_string_lossy().to_string()),
+            data_path: Some(data_dir),
         };
-        let store = Arc::new(NeumannStore::new(config));
+        let store = Arc::new(NeumannStore::try_new(config)?);
         Ok(Self { store, namespace: ns })
     }
 
@@ -383,9 +383,9 @@ mod tests {
         let config = NeumannConfig {
             endpoint: "http://localhost:7777".to_string(),
             namespace: "test".to_string(),
-            data_dir: Some(tmp.path().to_string_lossy().to_string()),
+            data_path: Some(tmp.path().to_path_buf()),
         };
-        let store = Arc::new(NeumannStore::new(config));
+        let store = Arc::new(NeumannStore::try_new(config)?);
         let client = IrontologyBridgeClient {
             store,
             namespace: "test".to_string(),
