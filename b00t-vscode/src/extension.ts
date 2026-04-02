@@ -110,7 +110,7 @@ function initializeB00tLsp(context: vscode.ExtensionContext) {
 			fileEvents: vscode.workspace.createFileSystemWatcher('**/*.{toml,tomllm}')
 		},
 		initializationOptions: {
-			b00t_path: workspaceRoot,
+			b00t_path: vscode.workspace.workspaceFolders?.[0]?.uri.fsPath,
 			dynamic_inspection: true,
 		}
 	};
