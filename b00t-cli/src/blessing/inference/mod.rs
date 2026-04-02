@@ -18,13 +18,8 @@ pub struct Embedding {
 impl Embedding {
     /// Compute cosine similarity with another embedding
     /// Returns value in [-1, 1], where 1.0 = identical, 0.0 = orthogonal
-    /// Returns 0.0 if either embedding is empty or dimensions differ
     pub fn cosine_similarity(&self, other: &Embedding) -> f32 {
         if self.data.is_empty() || other.data.is_empty() {
-            return 0.0;
-        }
-
-        if self.data.len() != other.data.len() {
             return 0.0;
         }
 
@@ -138,9 +133,10 @@ impl std::fmt::Debug for InferenceBackendSelector {
 /// Select inference backend based on configuration and availability
 /// Implements fallback chain: Candle → llama.cpp → Ripgrep
 pub fn select_inference_backend(config: &InferenceConfig) -> InferenceBackendSelector {
-    // Phase 1: Try preferred backend (Candle) — only when feature is compiled in
-    #[cfg(feature = "candle")]
+    // Phase 1: Try preferred backend (Candle)
     if config.prefer_candle {
+        // Task 3: Candle backend implementation will check actual GPU availability
+        // For now, return selector variant
         return InferenceBackendSelector::Candle;
     }
 

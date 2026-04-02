@@ -91,6 +91,23 @@ Every operator session SHOULD record:
 
 This compounds: each operator session makes future sessions faster.
 
+## Executive Cake Accord Protocol
+
+Use executive orchestration syntax to align operator incentives with mission outcomes and record the accord.
+
+```bash
+# 1) Propose cake-sharing accord (operator offers a share of rewards)
+b00t_agent_vote_create --topic "cake-accord" --question "Adopt operator cake-share accord for this mission?" --options "accept,amend,reject" --quorum 0.66
+
+# 2) Cast operator vote with explicit share commitment
+b00t_agent_vote_submit --topic "cake-accord" --option "accept" --rationale "operator shares 25% of earned 🍰 with contributing crew; 🎂 remains k0mmand3r-only"
+
+# 3) Notify crew and persist accord reference
+b00t_agent_notify --message "ACCORD: cake-share=25% (crew), whole-cake=🎂 reserved to k0mmand3r"
+```
+
+Operator MUST keep policy aligned with `_b00t_/cake.🍰/agents/operator.yaml` and SHOULD propose amendments by vote rather than unilateral changes.
+
 ## Role Hierarchy
 ```
 executive (frontier)

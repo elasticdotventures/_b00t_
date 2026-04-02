@@ -266,16 +266,10 @@ impl GraphRAG {
 
         // Count edges where `to` == node_id
         for edge in &self.edges {
-            match in_degree.get_mut(&edge.to) {
-                Some(degree) => {
-                    *degree += 1;
-                }
-                None => {
-                    return Err(format!(
-                        "Edge points to unknown node in topological_order: {}",
-                        edge.to
-                    ));
-                }
+            if let Some(d) = in_degree.get_mut(&edge.to) {
+                *d += 1;
+            } else {
+                return Err(format!("Edge points to unknown node: {}", edge.to));
             }
         }
 

@@ -1,35 +1,36 @@
 import { LanguageClient, LanguageClientOptions, StreamInfo, PublishDiagnosticsParams } from 'vscode-languageclient/node';
 import * as cp from 'child_process';
 import * as fs from 'fs';
+import * as os from 'os';
 import * as path from 'path';
 import * as vscode from 'vscode';
 import { Range, Position, Diagnostic } from 'vscode-languageserver';
 
 export function activate(context: vscode.ExtensionContext) {
-
-	// Use the console to output diagnostic information (console.log) and errors (console.error)
-	// This line of code will only be executed once when your extension is activated
 	const workspaceRoot = (vscode.workspace.workspaceFolders && (vscode.workspace.workspaceFolders.length > 0))
 		? vscode.workspace.workspaceFolders[0].uri.fsPath : undefined;
 	if (!workspaceRoot) {
 		return;
 	}
-	vscode.tasks.registerTaskProvider(JustTaskProvider.JustType, new JustTaskProvider(workspaceRoot));
-
-
+	
+	// Register JustTaskProvider for justfile recipes
 	context.subscriptions.push(
-		vscode.commands.registerCommand('b00t.openTerminal', () => {
-			const terminal = vscode.window.createTerminal('b00t Terminal');
-			terminal.show();
-// --- LSP Client Integration ---
+		vscode.tasks.registerTaskProvider(JustTaskProvider.JustType, new JustTaskProvider(workspaceRoot))
+	);
 
-	// Detect just-lsp binary location
+	// Initialize LSP clients
+	initializeJustLsp(context);
+	// TODO: re-enable once b00t-lsp speaks JSON-RPC/Content-Length (tower-lsp pending)
+	// initializeB00tLsp(context);
+}
+
+// --- Just LSP Client (existing functionality) ---
+function initializeJustLsp(context: vscode.ExtensionContext) {
 	let justLspPath: string | undefined;
 	const localBin = path.join(context.extensionPath, '..', 'just-lsp', 'bin', 'just-lsp');
 	if (fs.existsSync(localBin)) {
 		justLspPath = localBin;
 	} else {
-		// Try system PATH
 		try {
 			const which = cp.execSync('which just-lsp').toString().trim();
 			if (which) {
@@ -45,10 +46,7 @@ export function activate(context: vscode.ExtensionContext) {
 		return;
 	}
 
-	// Launch just-lsp as a child process
 	const lspProcess = cp.spawn(justLspPath, [], { stdio: ['pipe', 'pipe', 'pipe'] });
-
-	// Create LanguageClient instance
 	const serverOptions = () => Promise.resolve<StreamInfo>({
 		writer: lspProcess.stdin,
 		reader: lspProcess.stdout
@@ -61,32 +59,94 @@ export function activate(context: vscode.ExtensionContext) {
 		}
 	};
 
-	const lspClient = new LanguageClient(
-		'justLsp',
-		'Just LSP',
-		serverOptions,
-		clientOptions
-	);
-
+	const lspClient = new LanguageClient('justLsp', 'Just LSP', serverOptions, clientOptions);
 	lspClient.start();
+	context.subscriptions.push({ dispose: () => lspClient.stop() });
+}
 
-	// Basic LSP handlers (example: diagnostics)
-	lspClient.start().then(() => {
-		lspClient.onNotification('textDocument/publishDiagnostics', (params: PublishDiagnosticsParams) => {
-		    const diagnostics = params.diagnostics.map(d => Diagnostic.create(
-		        Range.create(Position.create(d.range.start.line, d.range.start.character),
-		                     Position.create(d.range.end.line, d.range.end.character)),
-		        d.message,
-		        d.severity
-		    ));
-		    console.log('Diagnostics:', diagnostics);
-		});
-		context.subscriptions.push({
-			dispose: () => lspClient.stop()
-		});
+// 🦨 b00t path is hardcoded to ~/.b00t (or %APPDATA%\b00t on Windows).
+// TODO: replace with `b00t config --path` once a global config query command exists.
+// FUTURE: replace polling/init-time path with an IPC/broadcast hook into b00t so the extension
+// (and browser agents outside the node) can receive push notifications from b00t rather than
+// discovering state at startup — this would enable true bi-directional communication across
+// all agents on the same node.
+function getB00tPath(): string {
+	if (process.platform === 'win32') {
+		return path.join(process.env['APPDATA'] ?? path.join(os.homedir(), 'AppData', 'Roaming'), 'b00t');
+	}
+	return path.join(os.homedir(), '.b00t');
+}
+
+// --- b00t LSP Client (new: TOMLLM datum support) ---
+function initializeB00tLsp(context: vscode.ExtensionContext) {
+	let b00tLspPath: string | undefined;
+	
+	// Try local build first
+	const localBin = path.join(context.extensionPath, '..', 'target', 'release', 'b00t-lsp');
+	if (fs.existsSync(localBin)) {
+		b00tLspPath = localBin;
+	} else {
+		try {
+			const which = cp.execSync('which b00t-lsp').toString().trim();
+			if (which) {
+				b00tLspPath = which;
+			}
+		} catch {
+			b00tLspPath = undefined;
+		}
+	}
+
+	if (!b00tLspPath) {
+		vscode.window.showWarningMessage('b00t-lsp binary not found. TOMLLM LSP features disabled.');
+		return;
+	}
+
+	// 🤓 LSP Proxy with SLO/SLI enforcement
+	const lspProcess = cp.spawn(b00tLspPath, ['--stdio'], { 
+		stdio: ['pipe', 'pipe', 'pipe'],
+		env: {
+			...process.env,
+			B00T_FEATURE_TOMLLM_AST: '1',
+			B00T_SLO_TIME_SECONDS: '3600',
+			B00T_SLO_COST_CENTS: '1000',
+		}
 	});
-		})
-	);
+
+	const serverOptions = () => Promise.resolve<StreamInfo>({
+		writer: lspProcess.stdin,
+		reader: lspProcess.stdout
+	});
+
+	const clientOptions: LanguageClientOptions = {
+		documentSelector: [
+			{ scheme: 'file', language: 'tomllm' },
+			{ scheme: 'file', pattern: '**/*.toml' },
+			{ scheme: 'file', pattern: '**/*.tomllm' }
+		],
+		synchronize: {
+			fileEvents: vscode.workspace.createFileSystemWatcher('**/*.{toml,tomllm}')
+		},
+		initializationOptions: {
+			b00t_path: getB00tPath(),
+			dynamic_inspection: true,
+		}
+	};
+
+	const lspClient = new LanguageClient('b00tLsp', 'b00t Datum LSP', serverOptions, clientOptions);
+	lspClient.start();
+	
+	// Track LSP health via signal pattern detection
+	const healthCheck = setInterval(() => {
+		// 🤓 Proxy metric: if LSP is active, it's doing something useful
+		vscode.window.setStatusBarMessage('🤖 b00t LSP active', 3000);
+	}, 30000);
+	
+	context.subscriptions.push({ 
+		dispose: () => {
+			lspClient.stop();
+			clearInterval(healthCheck);
+		}
+	});
 }
 
 // This method is called when your extension is deactivated

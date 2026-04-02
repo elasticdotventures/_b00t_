@@ -8,9 +8,9 @@
 //!
 //! Backend detection: Valkey > Redis > ForgeKV > File
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use b00t_c0re_lib::kv_store::{KvConfig, KvStore, KvBackend};
-use b00t_c0re_lib::redis::BroadcastPriority;
+use b00t_c0re_lib::redis::{AgentMessage, BroadcastPriority, RedisComms, RedisConfig};
 use std::collections::HashMap;
 
 /// Get internal KV store with auto-detected backend

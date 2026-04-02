@@ -28,6 +28,8 @@ pub mod version {
 
 pub mod agent_coordination;
 pub mod agent_manager;
+pub mod aaiii;
+pub mod datum_lsp;
 pub mod dual_grok;
 pub mod irontology_bridge;
 pub mod ai_client;
@@ -37,8 +39,10 @@ pub mod datum_ai_model;
 pub mod datum_types;
 pub mod grok;
 pub mod knowledge;
+pub mod kv_store;
 pub mod learn;
 pub mod lfmf;
+pub mod lsp_proxy;
 pub mod man_page;
 pub mod mcp_proxy;
 pub mod mcp_registry;
