@@ -255,7 +255,8 @@ impl Inventory {
     pub fn missing_blessings(&self) -> Vec<String> {
         let mut missing = Vec::new();
 
-        if self.mcp_servers.is_empty() {
+        let any_mcp_present = self.mcp_servers.values().any(|server| server.present);
+        if !any_mcp_present {
             missing.push("blessing:mcp-ecosystem".to_string());
         }
 
