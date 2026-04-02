@@ -3,26 +3,45 @@ use std::io::{Read, Write};
 use std::net::TcpListener;
 use std::process::Command;
 use std::thread;
+use std::time::{Duration, Instant};
 use tempfile::tempdir;
 
 fn spawn_release_server(response_body: &'static str) -> String {
     let listener = TcpListener::bind("127.0.0.1:0").expect("bind mock release server");
+    listener
+        .set_nonblocking(true)
+        .expect("configure mock release server as non-blocking");
     let address = listener.local_addr().expect("mock release server addr");
 
     thread::spawn(move || {
-        let (mut stream, _) = listener.accept().expect("accept mock release connection");
-        let mut buffer = [0_u8; 1024];
-        let _ = stream.read(&mut buffer);
+        let deadline = Instant::now() + Duration::from_secs(5);
 
-        let response = format!(
-            "HTTP/1.1 200 OK\r\ncontent-type: application/json\r\ncontent-length: {}\r\nconnection: close\r\n\r\n{}",
-            response_body.len(),
-            response_body
-        );
-        stream
-            .write_all(response.as_bytes())
-            .expect("write mock release response");
-        stream.flush().expect("flush mock release response");
+        loop {
+            match listener.accept() {
+                Ok((mut stream, _)) => {
+                    let mut buffer = [0_u8; 1024];
+                    let _ = stream.read(&mut buffer);
+
+                    let response = format!(
+                        "HTTP/1.1 200 OK\r\ncontent-type: application/json\r\ncontent-length: {}\r\nconnection: close\r\n\r\n{}",
+                        response_body.len(),
+                        response_body
+                    );
+                    stream
+                        .write_all(response.as_bytes())
+                        .expect("write mock release response");
+                    stream.flush().expect("flush mock release response");
+                    return;
+                }
+                Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
+                    if Instant::now() >= deadline {
+                        return;
+                    }
+                    thread::sleep(Duration::from_millis(50));
+                }
+                Err(error) => panic!("accept mock release connection: {error}"),
+            }
+        }
     });
 
     format!("http://{}/latest", address)
