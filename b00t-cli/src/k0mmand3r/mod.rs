@@ -59,12 +59,11 @@ impl K0mmand {
                     }
                 }
                 _ => {
-                    // Might be key=value
-                    if key.contains('=') {
-                        let kv: Vec<&str> = key.split('=').collect();
-                        if kv.len() == 2 {
-                            modifiers.insert(kv[0].to_string(), kv[1].to_string());
-                        }
+                    // Might be key=value or key:value
+                    if let Some((k, v)) = key.split_once('=') {
+                        modifiers.insert(k.to_string(), v.to_string());
+                    } else if let Some((k, v)) = key.split_once(':') {
+                        modifiers.insert(k.to_string(), v.to_string());
                     }
                 }
             }
