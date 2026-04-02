@@ -33,7 +33,7 @@ Complete integration of OpenAI Codex (GPT-5/GPT-5-Codex) with b00t operator and 
 
 ### 3. Codex Skill for Claude Code
 - **Source**: https://github.com/skills-directory/skill-codex
-- **Location**: `/home/brianh/promptexecution/app4dog/skill-codex/`
+- **Location**: `$HOME/promptexecution/app4dog/skill-codex/`
 - **Installation Target**: `~/.claude/skills/codex/`
 - **Files**:
   - `SKILL.md`: Operational instructions with YAML frontmatter
