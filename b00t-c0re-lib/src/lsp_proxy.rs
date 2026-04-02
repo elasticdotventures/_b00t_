@@ -159,10 +159,12 @@ impl LspProxy {
 
         // Signal pattern detection (too little activity)
         if self.signal_history.len() > 10 {
-            let recent_changes = self.signal_history.iter().sum::<u64>() as f64 
-                / self.signal_history.len() as f64;
-            if recent_changes < self.config.budgets.signal_changes_per_sec {
-                return Some(TerminationReason::LowActivity);
+            let elapsed_secs = elapsed.as_secs_f64();
+            if elapsed_secs > 0.0 {
+                let recent_rate = self.signal_history.len() as f64 / elapsed_secs;
+                if recent_rate < self.config.budgets.signal_changes_per_sec {
+                    return Some(TerminationReason::LowActivity);
+                }
             }
         }
 
