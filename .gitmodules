@@ -7,15 +7,9 @@
 [submodule "test/test_helper/bats-assert"]
 	path = _b00t_/test/test_helper/bats-assert
 	url = https://github.com/bats-core/bats-assert.git
-[submodule "git.🐙/cli"]
-	path = _b00t_/git.🐙/cli
-	url = https://github.com/cli/cli
 [submodule "vscode.🆚/vscode-docs"]
-	path = _b00t_/vscode.🆚/vscode-docs
+	path = vscode.🆚/vscode-docs
 	url = https://github.com/microsoft/vscode-docs
-[submodule "b00t-vscode/vscode-just"]
-	path = b00t-vscode/vscode-just
-	url = https://github.com/nefrob/vscode-just
 [submodule "b00t-vscode/just-lsp"]
 	path = b00t-vscode/just-lsp
 	url = https://github.com/terror/just-lsp
