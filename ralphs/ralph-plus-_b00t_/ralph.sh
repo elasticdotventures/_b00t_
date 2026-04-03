@@ -149,6 +149,11 @@ run_external_step() {
                 opencode "${prompt}" 2>/dev/null || true
             fi
             ;;
+        pi)
+            if command -v pi >/dev/null 2>&1; then
+                pi -p --provider llama-cpp --model gemma-4-26B-A4B-it-GGUF "${prompt}" 2>/dev/null || true
+            fi
+            ;;
         *)
             ;;
     esac

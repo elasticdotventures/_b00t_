@@ -25,7 +25,7 @@ captain = false
 [b00t.agent.executor]
 # Ralph-specific executor configuration
 cli_path = "_b00t_/ralph/ralph/ralph_cli.py"
-supports_tools = ["amp", "claude", "codex", "opencode"]
+supports_tools = ["amp", "claude", "codex", "opencode", "pi"]
 max_iterations = 10
 requires = ["uv"]
 

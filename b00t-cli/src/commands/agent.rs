@@ -186,7 +186,7 @@ pub enum AgentCommands {
     Ralph {
         #[arg(
             long,
-            help = "Executor tool (codex, claude, amp, opencode, mistralrs)",
+            help = "Executor tool (codex, claude, amp, opencode, mistralrs, pi)",
             default_value = "codex"
         )]
         tool: String,

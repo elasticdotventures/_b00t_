@@ -1,0 +1,56 @@
+# b00t Agent Datum — pi-coding-agent as first-class hive sub-agent
+# 🤓 pi is a lightweight coding agent (~200 token MCP overhead via pi-mcp-adapter)
+#    Wired to local Gemma 4 26B-A4B via llama-cpp provider (port 8001)
+#    Acts as ch0nky executor — implement, refactor, debug tasks
+#    MCP tools available via pi-mcp-adapter (b00t-mcp lazy-loaded)
+
+[b00t]
+name = "pi"
+type = "agent"
+hint = "pi coding agent — ch0nky tier executor; local Gemma 4 via llama-cpp; MCP via pi-mcp-adapter"
+
+[b00t.agent]
+pid = "pi-001"
+branch = "main"
+model = "llama-cpp/gemma-4-26B-A4B-it-GGUF"
+skills = ["code", "refactor", "debug", "edit", "bash", "read", "write", "grep", "find", "ls"]
+personality = "pragmatic"
+humor = "low"
+role = "specialist"
+
+[b00t.agent.ipc]
+# 🤓 pi is invoked via CLI subprocess, not a persistent daemon; socket unused
+socket = "/tmp/b00t/agents/pi.sock"
+pubsub = false
+protocol = "json"
+
+[b00t.agent.crew]
+role = "specialist"
+captain = false
+
+[b00t.agent.executor]
+# Invoked non-interactively via: pi -p --provider llama-cpp --model gemma-4-26B-A4B-it-GGUF "<task>"
+cli_path = "pi"
+cli_args = ["-p", "--provider", "llama-cpp", "--model", "gemma-4-26B-A4B-it-GGUF"]
+supports_tools = ["read", "bash", "edit", "write", "grep", "find", "ls"]
+max_iterations = 1
+requires = ["pi", "vllm-gemma4"]
+
+[b00t.agent.mcp]
+# pi accesses MCP via pi-mcp-adapter (lazy proxy); not a standalone MCP server
+enabled = false
+# 🤓 MCP servers available to pi defined in ~/.pi/agent/mcp.json
+
+[b00t.env]
+AGENT_ID = "pi"
+AGENT_SKILLS = "code,refactor,debug,edit,bash"
+PI_CODING_AGENT_DIR = "~/.pi/agent"
+PI_MODEL = "llama-cpp/gemma-4-26B-A4B-it-GGUF"
+GEMMA4_API_BASE = "http://127.0.0.1:8001/v1"
+
+# b00t:map v1
+# summary: pi coding agent — ch0nky executor via Gemma 4 local LLM, MCP via pi-mcp-adapter
+# tags: pi, agent, gemma4, local-llm, ch0nky, specialist, mcp-adapter
+# tier: ch0nky
+# cmds: b00t up --tool pi, b00t-cli agent ralph --tool pi, pi -p --provider llama-cpp --model gemma-4-26B-A4B-it-GGUF
+# complexity: 5
