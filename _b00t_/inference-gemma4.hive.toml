@@ -1,15 +1,18 @@
 # b00t Hive Profile — Gemma 4 26B-A4B local inference
-# 🤓 Activates vllm-gemma4.service (port 8001) + mistralrs-proxy (liter-llm gateway port 1234)
-# MXFP4_MOE fits RTX 3090 24GB VRAM; ~4B active params → fast inference
-# Activate: b00t hive activate inference-gemma4
+# 🤓 Inline service spec → b00t generates vllm-gemma4 unit dynamically; no static .service file needed
+# Chain: b00t@inference-gemma4 → generates b00t-hive-inference-gemma4.service → starts vllm-gemma4
+# Proxy: b00t@mistralrs-proxy (own hive profile, no static config) added to services_start
+# Grok/RAGLight: OLLAMA_API_URL=http://localhost:1234 → grok appends /v1 → gemma4 embeddings+inference
+# Activate: systemctl --user start b00t@inference-gemma4
+#       OR: b00t hive activate inference-gemma4
 
 [b00t]
 name = "inference-gemma4"
 type = "hive_profile"
-hint = "Gemma 4 26B-A4B MXFP4_MOE local inference — vLLM port 8001, liter-llm proxy port 1234, pi sub-agent ch0nky tier"
+hint = "Gemma 4 26B-A4B MXFP4_MOE — dynamic systemd unit, liter-llm gateway, grok/RAGLight on gemma4"
 
 [b00t.hive.resources]
-# 🤓 MXFP4_MOE ~13-16GB VRAM estimate; + vLLM overhead ~2GB → safe within 24GB
+# 🤓 MXFP4_MOE ~13-16GB VRAM; vLLM overhead ~2GB → safe within 24GB RTX 3090
 ram_gb = 6
 gpu_mb = 18000
 cpu_cores = 2
@@ -20,23 +23,58 @@ gpu_free_mb = 16000
 
 [b00t.hive.exclusion]
 group = "primary-workload"
-priority = 70  # higher priority than sm0l (50); lower than qwen3-coder when available
+priority = 70
 
 [b00t.hive.services]
+# 🤓 b00t@mistralrs-proxy is the liter-llm gateway; started via its own hive profile
+#    (no static .service file — b00t@.service template + mistralrs-proxy.hive.toml inline spec)
 start = [
-  "vllm-gemma4.service",  # 🤓 serves gemma4 at :8001; pi connects via liter-llm at :1234
+  "b00t@mistralrs-proxy.service",
 ]
 stop = []
 
-[b00t.hive.mcp_tools]
-activate = ["vllm-local", "pi-agent"]
+# ── Inline service spec — b00t generates this unit dynamically ──────────────
+# 🤓 b00t@.service template calls `b00t-cli stack activate inference-gemma4`
+#    which reads this spec and writes ~/.config/systemd/user/b00t-hive-inference-gemma4.service
+[b00t.hive.service]
+description = "vLLM Gemma 4 26B-A4B MXFP4_MOE inference node (port 8001)"
+service_type = "simple"
+limit_nofile = 65536
+restart = "on-failure"
+restart_sec = "30s"
+timeout_start_sec = "300"
+after = ["network.target", "b00t@mistralrs-proxy.service"]
+environment = [
+  "PATH=/home/brianh/.venv/bin:/usr/local/bin:/usr/bin:/bin",
+  "HF_HOME=/home/brianh/.cache/huggingface",
+  "VLLM_WORKER_MULTIPROC_METHOD=spawn",
+]
+exec_start_pre = [
+  # 🤓 Resolve refs/main → stable symlink so exec_start path is stable across updates
+  "/bin/bash -c 'hash=$(cat ${HOME}/.cache/huggingface/hub/models--unsloth--gemma-4-26B-A4B-it-GGUF/refs/main 2>/dev/null); [ -n \"$hash\" ] && ln -sfn ${HOME}/.cache/huggingface/hub/models--unsloth--gemma-4-26B-A4B-it-GGUF/snapshots/$hash ${HOME}/.cache/huggingface/hub/models--unsloth--gemma-4-26B-A4B-it-GGUF/snapshots/main || true'",
+]
+exec_start = """/home/brianh/.venv/bin/vllm serve \
+    /home/brianh/.cache/huggingface/hub/models--unsloth--gemma-4-26B-A4B-it-GGUF/snapshots/main/gemma-4-26B-A4B-it-MXFP4_MOE.gguf \
+    --served-model-name gemma4 \
+    --port 8001 \
+    --max-model-len 32768 \
+    --enable-chunked-prefill \
+    --enable-auto-tool-choice \
+    --tool-call-parser pythonic \
+    --override-generation-config '{"temperature": 0.2}'"""
 
 [b00t.hive.env]
 # liter-llm/mistralrs-proxy gateway maps "ch0nky" → gemma4 at :8001
-B00T_AI_CH0NKY_BASE = "http://127.0.0.1:1234/v1"
+B00T_AI_CH0NKY_BASE  = "http://127.0.0.1:1234/v1"
 B00T_AI_CH0NKY_MODEL = "ch0nky"
-GEMMA4_API_BASE = "http://127.0.0.1:8001/v1"
-PI_MODEL = "ch0nky"
+GEMMA4_API_BASE      = "http://127.0.0.1:8001/v1"
+PI_MODEL             = "ch0nky"
+# 🤓 OLLAMA_API_URL drives b00t-grok embedding client (appends /v1 internally)
+#    → grok/RAGLight uses gemma4 for both inference AND embeddings via liter-llm
+OLLAMA_API_URL       = "http://localhost:1234"
+
+[b00t.hive.mcp_tools]
+activate = ["vllm-local", "pi-agent"]
 
 [[b00t.hive.guards]]
 pattern = "pip install"
@@ -49,20 +87,28 @@ action = "warn"
 message = "🦨 use podman (CDI GPU)"
 
 [[b00t.usage]]
-description = "Activate gemma4 inference hive profile"
+description = "Activate via b00t generic service template (preferred)"
+command = "systemctl --user start b00t@inference-gemma4"
+
+[[b00t.usage]]
+description = "Activate via b00t hive CLI"
 command = "b00t hive activate inference-gemma4"
 
 [[b00t.usage]]
-description = "Check hive status after activation"
-command = "b00t hive status"
+description = "Check generated service unit"
+command = "systemctl --user status b00t-hive-inference-gemma4"
 
 [[b00t.usage]]
 description = "Verify gemma4 endpoint"
 command = "curl -s http://localhost:8001/v1/models | python3 -m json.tool"
 
+[[b00t.usage]]
+description = "Verify grok embedding endpoint (via liter-llm :1234)"
+command = "OLLAMA_API_URL=http://localhost:1234 b00t grok status"
+
 # b00t:map v1
-# summary: Gemma 4 inference hive profile — vllm-gemma4.service + liter-llm gateway ch0nky tier
-# tags: gemma4, hive, inference, vllm, liter-llm, pi, ch0nky
+# summary: Gemma 4 inference hive profile — dynamic unit, liter-llm gateway, grok/RAGLight on gemma4
+# tags: gemma4, hive, inference, vllm, liter-llm, pi, ch0nky, grok, raglight, dynamic-service
 # tier: ch0nky
-# cmds: b00t hive activate inference-gemma4
-# complexity: 5
+# cmds: systemctl --user start b00t@inference-gemma4
+# complexity: 6

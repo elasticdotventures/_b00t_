@@ -1,0 +1,79 @@
+# b00t Hive Profile — liter-llm / mistralrs-proxy OpenAI gateway
+# 🤓 NO static .service file — b00t@.service template generates unit from inline spec below.
+# Provides unified OpenAI-compatible API at :1234; routes by model alias:
+#   "frontier" → Anthropic/OpenAI cloud
+#   "ch0nky"   → local Gemma 4 at :8001 (inference-gemma4 hive profile)
+#   "sm0l"     → Qwen2.5-3B or Haiku
+# Cost accounting: all b00t consumers (pi, moltis, grok) share this endpoint.
+# Start: systemctl --user start b00t@mistralrs-proxy
+#    OR: included in inference-gemma4 services_start chain
+
+[b00t]
+name = "mistralrs-proxy"
+type = "hive_profile"
+hint = "liter-llm/mistralrs-proxy gateway at :1234 — soup-of-the-day routing, cost accounting, no static .service"
+
+[b00t.hive.resources]
+ram_gb = 1
+gpu_mb = 0
+cpu_cores = 1
+
+[b00t.hive.resources.gate]
+ram_free_gb = 0.5
+gpu_free_mb = 0
+
+[b00t.hive.exclusion]
+group = "ai-gateway"
+priority = 90  # always on; not exclusive with inference profiles
+
+[b00t.hive.services]
+start = []
+stop  = []
+
+# ── Inline service spec — b00t generates b00t-hive-mistralrs-proxy.service ──
+# 🤓 mistralrs-server binary (EricLBuehler/mistral.rs) must be installed:
+#    cargo install mistralrs-server --features cuda
+#    Until then, this profile acts as a stub — declare intent in knowledge graph.
+[b00t.hive.service]
+description = "liter-llm / mistralrs-proxy OpenAI gateway (port 1234)"
+service_type = "simple"
+restart      = "on-failure"
+restart_sec  = "10s"
+after        = ["network.target"]
+environment  = [
+  "PATH=/home/brianh/.cargo/bin:/usr/local/bin:/usr/bin:/bin",
+  "ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}",
+  "OPENAI_API_KEY=${OPENAI_API_KEY}",
+]
+exec_start = """/home/brianh/.cargo/bin/mistralrs-server \
+    --port 1234 \
+    --served-model-name ch0nky \
+    --prefix-cache-n 16 \
+    plain \
+    --model-id gemma4 \
+    --tok-model-id unsloth/gemma-4-26B-A4B-it-GGUF \
+    --arch gemma4"""
+
+[b00t.hive.env]
+MISTRALRS_API_BASE = "http://127.0.0.1:1234/v1"
+MISTRALRS_API_KEY  = "local-b00t"
+B00T_AI_GATEWAY    = "http://127.0.0.1:1234/v1"
+
+[[b00t.usage]]
+description = "Start liter-llm gateway via b00t generic service"
+command = "systemctl --user start b00t@mistralrs-proxy"
+
+[[b00t.usage]]
+description = "Check gateway models"
+command = "curl -s http://localhost:1234/v1/models | python3 -m json.tool"
+
+[[b00t.usage]]
+description = "Test ch0nky routing (gemma4)"
+command = "curl -s http://localhost:1234/v1/chat/completions -H 'Content-Type: application/json' -d '{\"model\":\"ch0nky\",\"messages\":[{\"role\":\"user\",\"content\":\"ping\"}],\"max_tokens\":5}' | python3 -m json.tool"
+
+# b00t:map v1
+# summary: liter-llm/mistralrs-proxy hive profile — dynamic unit, no static .service file
+# tags: liter-llm, mistralrs, proxy, gateway, openai-compat, cost-accounting, ch0nky
+# tier: frontier
+# cmds: systemctl --user start b00t@mistralrs-proxy
+# complexity: 4
