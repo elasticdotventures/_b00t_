@@ -11,6 +11,7 @@
 //!
 //! Test data: tests/fixtures/grok_test_cases.json
 
+use anyhow::Result;
 use assert_cmd::prelude::*;
 use serde::Deserialize;
 use std::{env, fs, path::PathBuf, process::Command, io::Write};
@@ -38,6 +39,10 @@ fn load_fixtures() -> GrokTestCases {
         .unwrap_or_else(|e| panic!("Invalid fixture JSON: {}", e))
 }
 
+/// Resolve path to the b00t-cli binary as built by Cargo for this test target.
+fn b00t_bin() -> PathBuf {
+    PathBuf::from(env!("CARGO_BIN_EXE_b00t-cli"))
+}
 /// Returns a Command pointing at the b00t-cli binary built by Cargo.
 /// Uses `assert_cmd::prelude::CommandCargoExt` so the binary is always available.
 fn b00t_cmd() -> Command {
@@ -223,6 +228,8 @@ mod cli_integration {
             println!("⚠️  Skipping: set TEST_RAGLIGHT=1");
             return;
         }
+        let bin = b00t_bin();
+        assert!(bin.exists(), "Build binary first: cargo build");
 
         let cases = load_fixtures();
         let case = &cases.digest_cases[0]; // rust + memory safety
@@ -268,6 +275,8 @@ mod cli_integration {
             println!("⚠️  Skipping: set TEST_RAGLIGHT=1");
             return;
         }
+        let bin = b00t_bin();
+        assert!(bin.exists(), "Build binary first");
 
         // Write a temp file with identifiable content
         let mut tmp = tempfile::NamedTempFile::new().expect("tempfile");

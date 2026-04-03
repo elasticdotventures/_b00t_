@@ -22,6 +22,7 @@ b00t grok learn "<content>" -t <topic>          # queue file/inline learning (du
 b00t grok ask "<query>" -t <topic>              # query both backends
 b00t grok ask "<query>"                         # irontology queries all topics; raglite warns without -t
 b00t grok assimilate -t <topic> "<content>"     # store as git blob + write datum TOML
+b00t grok status                                 # backend health check
 ```
 
 ⚠️ `--rag=raglite` forces raglight-only; `--rag=irontology` forces irontology-only.
