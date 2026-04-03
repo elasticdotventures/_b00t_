@@ -813,3 +813,46 @@ irontology-test:
 # Update irontology-mcp submodule to latest upstream
 irontology-update:
     git submodule update --remote vendor/irontology-mcp
+
+# ── Gemma 4 + pi-coding-agent local inference ────────────────────────────────
+
+# Download Gemma 4 26B-A4B MXFP4_MOE GGUF (unsloth/gemma-4-26B-A4B-it-GGUF)
+gemma4-download:
+    hf download unsloth/gemma-4-26B-A4B-it-GGUF --include "*MXFP4_MOE*"
+
+# Serve Gemma 4 via vLLM on port 8001 (requires gemma4-download first)
+# 🤓 MXFP4_MOE ~fits RTX 3090 24GB; --jinja uses Gemma 4 native chat template
+gemma4-serve:
+    #!/usr/bin/env bash
+    BLOB=$(ls ~/.cache/huggingface/hub/models--unsloth--gemma-4-26B-A4B-it-GGUF/blobs/ | grep -v incomplete | head -1)
+    prlimit --nofile=65536:65536 -- vllm serve \
+      ~/.cache/huggingface/hub/models--unsloth--gemma-4-26B-A4B-it-GGUF/blobs/$BLOB \
+      --served-model-name gemma-4-26B-A4B-it-GGUF \
+      --port 8001 \
+      --max-model-len 32768 \
+      --enable-chunked-prefill \
+      --enable-auto-tool-choice \
+      --tool-call-parser pythonic
+
+# Run pi with local Gemma 4 (non-interactive, single prompt)
+# Usage: just pi-gemma4 "your prompt here"
+pi-gemma4 prompt="hello":
+    pi --provider llama-cpp --model gemma-4-26B-A4B-it-GGUF -p "{{prompt}}"
+
+# Run pi interactively with local Gemma 4 + all tools
+pi-gemma4-interactive:
+    pi --provider llama-cpp --model gemma-4-26B-A4B-it-GGUF --tools read,bash,edit,write,grep,find,ls
+
+# Delegate a sub-agent task to pi+gemma4 (b00t hive pattern)
+# Usage: just pi-delegate "implement X in src/foo.rs"
+pi-delegate task="":
+    pi --provider llama-cpp --model gemma-4-26B-A4B-it-GGUF -p --tools read,bash,edit,write "{{task}}"
+
+# Check Gemma 4 server health
+gemma4-status:
+    curl -s http://localhost:8001/v1/models | python3 -m json.tool
+
+# Full gemma4+pi smoke test
+gemma4-test:
+    curl -sf http://localhost:8001/v1/models | python3 -c "import sys,json; m=json.load(sys.stdin); print('✅ serving:', [x['id'] for x in m['data']])"
+    pi --provider llama-cpp --model gemma-4-26B-A4B-it-GGUF -p "respond with exactly: pong"
