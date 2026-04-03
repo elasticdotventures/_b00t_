@@ -45,14 +45,13 @@ environment  = [
   "ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}",
   "OPENAI_API_KEY=${OPENAI_API_KEY}",
 ]
-exec_start = """/home/brianh/.cargo/bin/mistralrs-server \
-    --port 1234 \
+exec_start = """/home/brianh/.cargo/bin/mistralrs serve \
+    -p 1234 \
     --served-model-name ch0nky \
     --prefix-cache-n 16 \
-    plain \
-    --model-id gemma4 \
-    --tok-model-id unsloth/gemma-4-26B-A4B-it-GGUF \
-    --arch gemma4"""
+    -m unsloth/gemma-4-26B-A4B-it-GGUF \
+    --format gguf \
+    -f gemma-4-26B-A4B-it-MXFP4_MOE.gguf"""
 
 [b00t.hive.env]
 MISTRALRS_API_BASE = "http://127.0.0.1:1234/v1"
