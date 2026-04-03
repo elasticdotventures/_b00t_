@@ -12,7 +12,9 @@ hint = "pi coding agent — ch0nky tier executor; local Gemma 4 via llama-cpp; M
 [b00t.agent]
 pid = "pi-001"
 branch = "main"
-model = "llama-cpp/gemma-4-26B-A4B-it-GGUF"
+# 🤓 pi targets liter-llm gateway at :1234; "ch0nky" model routed to Gemma 4 at :8001
+#    Cost accounting and provider routing handled by liter-llm/mistralrs-proxy
+model = "ch0nky"
 skills = ["code", "refactor", "debug", "edit", "bash", "read", "write", "grep", "find", "ls"]
 personality = "pragmatic"
 humor = "low"
@@ -29,12 +31,14 @@ role = "specialist"
 captain = false
 
 [b00t.agent.executor]
-# Invoked non-interactively via: pi -p --provider llama-cpp --model gemma-4-26B-A4B-it-GGUF "<task>"
+# 🤓 pi -p targets liter-llm gateway (:1234) via "ch0nky" model name → Gemma 4 at :8001
+#    hive_requires: vllm-gemma4.service must be running (managed by inference-gemma4 hive profile)
 cli_path = "pi"
-cli_args = ["-p", "--provider", "llama-cpp", "--model", "gemma-4-26B-A4B-it-GGUF"]
+cli_args = ["-p", "--provider", "llama-cpp", "--model", "ch0nky"]
 supports_tools = ["read", "bash", "edit", "write", "grep", "find", "ls"]
 max_iterations = 1
-requires = ["pi", "vllm-gemma4"]
+requires = ["pi", "vllm-gemma4.service"]
+hive_profile = "inference-gemma4"
 
 [b00t.agent.mcp]
 # pi accesses MCP via pi-mcp-adapter (lazy proxy); not a standalone MCP server
@@ -45,8 +49,11 @@ enabled = false
 AGENT_ID = "pi"
 AGENT_SKILLS = "code,refactor,debug,edit,bash"
 PI_CODING_AGENT_DIR = "~/.pi/agent"
-PI_MODEL = "llama-cpp/gemma-4-26B-A4B-it-GGUF"
-GEMMA4_API_BASE = "http://127.0.0.1:8001/v1"
+# 🤓 pi consumes liter-llm gateway at :1234; "ch0nky" routes to Gemma 4 at :8001
+#    Same endpoint used by moltis — shared cost accounting via liter-llm
+PI_MODEL = "ch0nky"
+OPENAI_BASE_URL = "http://127.0.0.1:1234/v1"
+OPENAI_API_KEY = "local-b00t"
 
 # b00t:map v1
 # summary: pi coding agent — ch0nky executor via Gemma 4 local LLM, MCP via pi-mcp-adapter

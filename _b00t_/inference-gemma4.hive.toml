@@ -1,0 +1,68 @@
+# b00t Hive Profile — Gemma 4 26B-A4B local inference
+# 🤓 Activates vllm-gemma4.service (port 8001) + mistralrs-proxy (liter-llm gateway port 1234)
+# MXFP4_MOE fits RTX 3090 24GB VRAM; ~4B active params → fast inference
+# Activate: b00t hive activate inference-gemma4
+
+[b00t]
+name = "inference-gemma4"
+type = "hive_profile"
+hint = "Gemma 4 26B-A4B MXFP4_MOE local inference — vLLM port 8001, liter-llm proxy port 1234, pi sub-agent ch0nky tier"
+
+[b00t.hive.resources]
+# 🤓 MXFP4_MOE ~13-16GB VRAM estimate; + vLLM overhead ~2GB → safe within 24GB
+ram_gb = 6
+gpu_mb = 18000
+cpu_cores = 2
+
+[b00t.hive.resources.gate]
+ram_free_gb = 4
+gpu_free_mb = 16000
+
+[b00t.hive.exclusion]
+group = "primary-workload"
+priority = 70  # higher priority than sm0l (50); lower than qwen3-coder when available
+
+[b00t.hive.services]
+start = [
+  "vllm-gemma4.service",  # 🤓 serves gemma4 at :8001; pi connects via liter-llm at :1234
+]
+stop = []
+
+[b00t.hive.mcp_tools]
+activate = ["vllm-local", "pi-agent"]
+
+[b00t.hive.env]
+# liter-llm/mistralrs-proxy gateway maps "ch0nky" → gemma4 at :8001
+B00T_AI_CH0NKY_BASE = "http://127.0.0.1:1234/v1"
+B00T_AI_CH0NKY_MODEL = "ch0nky"
+GEMMA4_API_BASE = "http://127.0.0.1:8001/v1"
+PI_MODEL = "ch0nky"
+
+[[b00t.hive.guards]]
+pattern = "pip install"
+action = "warn"
+message = "🦨 use uv pip install"
+
+[[b00t.hive.guards]]
+pattern = "docker run"
+action = "warn"
+message = "🦨 use podman (CDI GPU)"
+
+[[b00t.usage]]
+description = "Activate gemma4 inference hive profile"
+command = "b00t hive activate inference-gemma4"
+
+[[b00t.usage]]
+description = "Check hive status after activation"
+command = "b00t hive status"
+
+[[b00t.usage]]
+description = "Verify gemma4 endpoint"
+command = "curl -s http://localhost:8001/v1/models | python3 -m json.tool"
+
+# b00t:map v1
+# summary: Gemma 4 inference hive profile — vllm-gemma4.service + liter-llm gateway ch0nky tier
+# tags: gemma4, hive, inference, vllm, liter-llm, pi, ch0nky
+# tier: ch0nky
+# cmds: b00t hive activate inference-gemma4
+# complexity: 5

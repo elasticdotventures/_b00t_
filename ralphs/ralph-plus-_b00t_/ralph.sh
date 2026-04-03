@@ -150,8 +150,11 @@ run_external_step() {
             fi
             ;;
         pi)
+            # 🤓 pi targets liter-llm gateway at :1234; "ch0nky" routed to Gemma 4 at :8001
             if command -v pi >/dev/null 2>&1; then
-                pi -p --provider llama-cpp --model gemma-4-26B-A4B-it-GGUF "${prompt}" 2>/dev/null || true
+                OPENAI_BASE_URL="${OPENAI_BASE_URL:-http://127.0.0.1:1234/v1}" \
+                OPENAI_API_KEY="${OPENAI_API_KEY:-local-b00t}" \
+                pi -p --provider llama-cpp --model ch0nky "${prompt}" 2>/dev/null || true
             fi
             ;;
         *)

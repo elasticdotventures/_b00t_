@@ -9,6 +9,7 @@
 //! - Amp
 //! - OpenCode
 //! - Mistral.rs (local)
+//! - Pi (pi-coding-agent via local Gemma 4 / liter-llm gateway)
 //!
 //! AAIII enables:
 //! - Service mesh interface for container sandbox wiring
@@ -31,6 +32,7 @@ pub enum AaiiiBackend {
     Amp,       // Amp CLI
     OpenCode,  // OpenCode CLI
     MistralRs, // Local mistral.rs server
+    Pi,        // pi-coding-agent via liter-llm gateway (Gemma 4 local, :1234/v1 ch0nky)
     File,      // Fallback for testing
 }
 
@@ -44,6 +46,7 @@ impl std::fmt::Display for AaiiiBackend {
             AaiiiBackend::Amp => write!(f, "Amp"),
             AaiiiBackend::OpenCode => write!(f, "OpenCode"),
             AaiiiBackend::MistralRs => write!(f, "MistralRs"),
+            AaiiiBackend::Pi => write!(f, "Pi"),
             AaiiiBackend::File => write!(f, "File"),
         }
     }
@@ -139,6 +142,17 @@ impl AaiiiConfig {
             };
         }
 
+        if Self::check_pi() {
+            eprintln!("🤖 AAIII backend detected: Pi (liter-llm gateway ch0nky)");
+            return Self {
+                backend: AaiiiBackend::Pi,
+                // 🤓 pi targets liter-llm/mistralrs-proxy at :1234; model "ch0nky" routes to local Gemma 4
+                base_url: Some("http://localhost:1234/v1".to_string()),
+                model: Some("ch0nky".to_string()),
+                ..Default::default()
+            };
+        }
+
         eprintln!("🤖 AAIII backend: File (no AI CLI detected)");
         Self::default()
     }
@@ -195,6 +209,19 @@ impl AaiiiConfig {
         reqwest::blocking::get("http://localhost:8181/v1/models")
             .map(|r| r.status().is_success())
             .unwrap_or(false)
+    }
+
+    fn check_pi() -> bool {
+        // 🤓 pi requires: (a) pi binary present AND (b) liter-llm gateway responding at :1234
+        let binary_ok = Command::new("pi")
+            .arg("--version")
+            .output()
+            .map(|o| o.status.success())
+            .unwrap_or(false);
+        let gateway_ok = reqwest::blocking::get("http://localhost:1234/v1/models")
+            .map(|r| r.status().is_success())
+            .unwrap_or(false);
+        binary_ok && gateway_ok
     }
 }
 

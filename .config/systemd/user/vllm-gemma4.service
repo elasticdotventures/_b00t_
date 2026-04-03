@@ -1,0 +1,43 @@
+# vLLM hive inference node — Gemma 4 26B-A4B MXFP4_MOE GGUF (port 8001)
+# 🤓 MoE model: only ~4B active params; MXFP4_MOE fits RTX 3090 24GB without CPU offload
+# Install: systemctl --user daemon-reload && systemctl --user enable --now vllm-gemma4
+# Logs:    journalctl --user -u vllm-gemma4 -f
+# HF card: https://huggingface.co/unsloth/gemma-4-26B-A4B-it-GGUF
+
+[Unit]
+Description=vLLM Gemma 4 26B-A4B hive inference node (port 8001)
+After=network.target
+Wants=network.target
+
+[Service]
+Type=simple
+LimitNOFILE=65536
+
+Environment="PATH=/home/brianh/.venv/bin:/usr/local/bin:/usr/bin:/bin"
+Environment="HF_HOME=/home/brianh/.cache/huggingface"
+Environment="VLLM_WORKER_MULTIPROC_METHOD=spawn"
+
+# 🤓 Resolve HF snapshot hash via refs/main → create stable symlink for ExecStart
+ExecStartPre=/bin/bash -c '\
+  hash=$(cat %h/.cache/huggingface/hub/models--unsloth--gemma-4-26B-A4B-it-GGUF/refs/main 2>/dev/null || echo ""); \
+  if [ -n "$hash" ]; then \
+    ln -sfn %h/.cache/huggingface/hub/models--unsloth--gemma-4-26B-A4B-it-GGUF/snapshots/$hash \
+             %h/.cache/huggingface/hub/models--unsloth--gemma-4-26B-A4B-it-GGUF/snapshots/main; \
+  fi'
+
+ExecStart=/home/brianh/.venv/bin/vllm serve \
+    %h/.cache/huggingface/hub/models--unsloth--gemma-4-26B-A4B-it-GGUF/snapshots/main/gemma-4-26B-A4B-it-MXFP4_MOE.gguf \
+    --served-model-name gemma4 \
+    --port 8001 \
+    --max-model-len 32768 \
+    --enable-chunked-prefill \
+    --enable-auto-tool-choice \
+    --tool-call-parser pythonic \
+    --override-generation-config '{"temperature": 0.2}'
+
+Restart=on-failure
+RestartSec=30s
+TimeoutStartSec=300
+
+[Install]
+WantedBy=default.target
