@@ -542,13 +542,7 @@ fn load_role_datum_skills(role: &str) -> Vec<String> {
 
     for path in &candidates {
         if let Ok(content) = std::fs::read_to_string(path) {
-            // Strip tomllm comment lines before TOML parsing
-            let clean: String = content
-                .lines()
-                .filter(|l| !l.trim_start().starts_with("# "))
-                .collect::<Vec<_>>()
-                .join("\n");
-            if let Ok(val) = toml::from_str::<toml::Value>(&clean) {
+            if let Ok(val) = toml::from_str::<toml::Value>(&content) {
                 if let Some(skills) = val.get("skills").and_then(|v| v.as_array()) {
                     return skills
                         .iter()
