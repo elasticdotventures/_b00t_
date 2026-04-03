@@ -31,13 +31,14 @@ role = "specialist"
 captain = false
 
 [b00t.agent.executor]
-# 🤓 pi -p targets liter-llm gateway (:1234) via "ch0nky" model name → Gemma 4 at :8001
-#    hive_requires: vllm-gemma4.service must be running (managed by inference-gemma4 hive profile)
+# 🤓 pi -p targets vLLM directly at :8001 (liter-llm/:1234 not required)
+#    2imi9/gemma-4-E4B-it-NVFP4A16 served as ch0nky; --enforce-eager avoids RTX3090 deadlock
+#    tool calls work: pi emits JSON tool_code blocks; caller must exec them (agentic loop)
 cli_path = "pi"
 cli_args = ["-p", "--provider", "llama-cpp", "--model", "ch0nky"]
 supports_tools = ["read", "bash", "edit", "write", "grep", "find", "ls"]
-max_iterations = 1
-requires = ["pi", "vllm-gemma4.service"]
+max_iterations = 10
+requires = ["pi", "b00t@inference-gemma4.service"]
 hive_profile = "inference-gemma4"
 
 [b00t.agent.mcp]
@@ -52,12 +53,13 @@ PI_CODING_AGENT_DIR = "~/.pi/agent"
 # 🤓 pi consumes liter-llm gateway at :1234; "ch0nky" routes to Gemma 4 at :8001
 #    Same endpoint used by moltis — shared cost accounting via liter-llm
 PI_MODEL = "ch0nky"
-OPENAI_BASE_URL = "http://127.0.0.1:1234/v1"
-OPENAI_API_KEY = "local-b00t"
+# 🤓 :8001 = vLLM direct; :1234 = liter-llm gateway (optional, not required for pi)
+OPENAI_BASE_URL = "http://127.0.0.1:8001/v1"
+OPENAI_API_KEY = "local-gemma4"
 
 # b00t:map v1
 # summary: pi coding agent — ch0nky executor via Gemma 4 local LLM, MCP via pi-mcp-adapter
 # tags: pi, agent, gemma4, local-llm, ch0nky, specialist, mcp-adapter
 # tier: ch0nky
-# cmds: b00t up --tool pi, b00t-cli agent ralph --tool pi, pi -p --provider llama-cpp --model gemma-4-26B-A4B-it-GGUF
+# cmds: OPENAI_BASE_URL=http://127.0.0.1:8001/v1 OPENAI_API_KEY=local-gemma4 pi -p --provider llama-cpp --model ch0nky
 # complexity: 5
