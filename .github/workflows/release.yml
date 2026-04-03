@@ -31,6 +31,13 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          submodules: false
+
+      - name: Init required vendor submodules
+        shell: bash
+        run: |
+          set -euo pipefail
+          git submodule update --init --depth 1 vendor/tomllm vendor/irontology-mcp
 
       - name: Set up Rust toolchain
         if: inputs.run_tests
@@ -67,6 +74,25 @@ jobs:
         if: inputs.run_tests
         run: cargo test --workspace --all-features
 
+      - name: Generate Claude marketplace artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/generate_claude_marketplace.py --repo-root .
+          python3 scripts/generate_claude_marketplace.py --repo-root . --check
+
+      - name: Package Claude marketplace artifacts
+        id: marketplace-artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          ARTIFACT="claude-marketplace-${{ steps.version.outputs.tag }}.tar.gz"
+          tar -czf "${ARTIFACT}" \
+            .claude-plugin \
+            plugins/roles \
+            plugins/skills
+          echo "artifact=${ARTIFACT}" >> "$GITHUB_OUTPUT"
+
       - name: Create annotated tag
         shell: bash
         run: |
@@ -84,3 +110,13 @@ jobs:
             --target "${GITHUB_SHA}" \
             --title "Release ${{ steps.version.outputs.tag }}" \
             --generate-notes
+
+      - name: Upload Claude marketplace asset
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh release upload "${{ steps.version.outputs.tag }}" \
+            "${{ steps.marketplace-artifact.outputs.artifact }}" \
+            --clobber

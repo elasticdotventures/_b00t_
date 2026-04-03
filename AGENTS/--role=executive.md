@@ -13,17 +13,20 @@ Executive context is COSTLY — demand compressed summaries from sm0l/ch0nky tie
 - Technical debt triage: identify, schedule, delegate — never implement inline
 
 ## Grok Knowledge System
-Default backend: **raglight** (Python subprocess, async indexing)
+Default backend: **dual** (irontology + raglight fan-out)
 Commands:
 ```
-b00t grok digest -t <topic> "<content>" --rag   # queue inline content indexing
-b00t grok learn "<content>" -t <topic> --rag    # queue file/inline learning
-b00t grok ask "<query>" -t <topic> --rag        # synchronous semantic query
+b00t grok digest -t <topic> "<content>"         # dual-backend (default)
+b00t grok digest -t <topic> "<content>" --rag   # same as above (both)
+b00t grok learn "<content>" -t <topic>          # queue file/inline learning (dual)
+b00t grok ask "<query>" -t <topic>              # query both backends
+b00t grok ask "<query>"                         # irontology queries all topics; raglite warns without -t
+b00t grok assimilate -t <topic> "<content>"     # store as git blob + write datum TOML
 b00t grok status                                 # backend health check
 ```
 
-⚠️ `--rag` required for raglight backend; without it routes to legacy Qdrant (may be down).
-⚠️ `--topic` required for `ask` and `learn` with `--rag`.
+⚠️ `--rag=raglite` forces raglight-only; `--rag=irontology` forces irontology-only.
+⚠️ `--topic` required for `ask --rag=raglite` and `learn`.
 ⚠️ Topic must be in known datums (rust, python, bash, git, docker, mcp, k8s, just, typescript, acp + ~/.dotfiles/_b00t_/ scan).
 
 ## Release Gate Protocol
@@ -52,8 +55,8 @@ Gate tiers:
 
 <!-- b00t:map v1
 summary: Executive agent role supplement — release gate, grok ops, tier routing
-tags: executive, release-gate, grok, raglight, cognitive-tiers, hive
+tags: executive, release-gate, grok, raglight, irontology, dual-backend, cognitive-tiers, hive
 tier: frontier
-cmds: just cog::release, just pre-release-check, just grok-e2e-unit, b00t grok status
+cmds: just cog::release, just pre-release-check, just grok-e2e-unit, b00t grok digest -t rust "..."
 complexity: 8
 -->

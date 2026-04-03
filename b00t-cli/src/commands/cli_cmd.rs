@@ -159,7 +159,7 @@ fn cli_install(command: &str, path: &str) -> Result<()> {
                     }
 
                     // Install this datum
-                    if let Some(install_cmd) = &datum.install {
+                    if let Some(install_cmd) = datum.install_command() {
                         run_datum_hook(datum.hook_detect.as_deref());
                         run_datum_hook(datum.hook_install.as_deref());
                         println!("🚀 Installing {}...", datum_key);
@@ -185,7 +185,7 @@ fn cli_install(command: &str, path: &str) -> Result<()> {
     }
 
     // No dependencies - install directly
-    if let Some(install_cmd) = &cli_datum.datum.install {
+    if let Some(install_cmd) = cli_datum.datum.install_command() {
         run_hook_install(&cli_datum.datum);
         println!("🚀 Installing {}...", command);
         let result = cmd!("bash", "-c", install_cmd).run();
@@ -252,8 +252,8 @@ fn cli_update(command: &str, path: &str) -> Result<()> {
     let update_cmd = cli_datum
         .datum
         .update
-        .as_ref()
-        .or(cli_datum.datum.install.as_ref());
+        .as_deref()
+        .or(cli_datum.datum.install_command());
 
     if let Some(cmd_str) = update_cmd {
         run_hook_update(&cli_datum.datum);
@@ -356,8 +356,8 @@ fn cli_up(path: &str, yes: bool) -> Result<()> {
                         let update_cmd = cli_datum
                             .datum
                             .update
-                            .as_ref()
-                            .or(cli_datum.datum.install.as_ref());
+                            .as_deref()
+                            .or(cli_datum.datum.install_command());
 
                         if let Some(cmd_str) = update_cmd {
                             match cmd!("bash", "-c", cmd_str).run() {

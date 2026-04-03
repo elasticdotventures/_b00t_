@@ -65,14 +65,13 @@ impl DatumNode {
 
 /// Convert a datum to irontology `FactRecord` triples
 pub trait IntoIrontologyRecord {
-    fn to_fact_records(&self) -> Vec<FactRecord>;
+    fn to_fact_records(&self, id: &str) -> Vec<FactRecord>;
     fn to_edge_records(&self, id: &str) -> Vec<EdgeRecord>;
 }
 
 impl IntoIrontologyRecord for DatumNode {
-    fn to_fact_records(&self) -> Vec<FactRecord> {
-        let id = Uuid::new_v4().to_string();
-        let subject = self.subject_uri(&id);
+    fn to_fact_records(&self, id: &str) -> Vec<FactRecord> {
+        let subject = self.subject_uri(id);
         let mut facts = vec![
             FactRecord {
                 subject: subject.clone(),
@@ -173,16 +172,16 @@ impl IrontologyBridgeClient {
         let config = NeumannConfig {
             endpoint: "http://localhost:7777".to_string(),
             namespace: ns.clone(),
-            data_dir: Some(data_dir.to_string_lossy().to_string()),
+            data_path: Some(data_dir),
         };
-        let store = Arc::new(NeumannStore::new(config));
+        let store = Arc::new(NeumannStore::try_new(config)?);
         Ok(Self { store, namespace: ns })
     }
 
     /// Ingest a `DatumNode` into the neumann store
     pub async fn ingest(&self, datum: &DatumNode) -> Result<IrontologyIngestResult> {
         let id = Uuid::new_v4().to_string();
-        let facts = datum.to_fact_records();
+        let facts = datum.to_fact_records(&id);
         let edges = datum.to_edge_records(&id);
         let fact_count = facts.len();
         let edge_count = edges.len();
@@ -228,7 +227,7 @@ impl IrontologyBridgeClient {
             let entry = subjects.entry(fact.subject.clone()).or_insert_with(|| {
                 let topic_str = fact.subject
                     .split('/')
-                    .nth(2)
+                    .nth(1)
                     .unwrap_or("unknown")
                     .to_string();
                 (topic_str, String::new(), Vec::new())
@@ -355,7 +354,7 @@ mod tests {
             tags: vec!["memory".to_string()],
             predicates: vec![("implements".to_string(), "MemorySafety".to_string())],
         };
-        let facts = n.to_fact_records();
+        let facts = n.to_fact_records("test-id-001");
         // content + class + topic + tag + predicate = 5
         assert_eq!(facts.len(), 5);
         assert!(facts.iter().any(|f| f.predicate == "b00t:hasContent"));
@@ -384,9 +383,9 @@ mod tests {
         let config = NeumannConfig {
             endpoint: "http://localhost:7777".to_string(),
             namespace: "test".to_string(),
-            data_dir: Some(tmp.path().to_string_lossy().to_string()),
+            data_path: Some(tmp.path().to_path_buf()),
         };
-        let store = Arc::new(NeumannStore::new(config));
+        let store = Arc::new(NeumannStore::try_new(config)?);
         let client = IrontologyBridgeClient {
             store,
             namespace: "test".to_string(),

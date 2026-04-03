@@ -31,7 +31,7 @@ timeout_seconds = 300
 [langchain.agents.coder]
 description = "Rust/TypeScript expert with code analysis"
 model = "anthropic/claude-sonnet-4"
-tools = ["github-mcp", "sequential-thinking-mcp", "taskmaster-mcp"]
+tools = ["github-mcp", "sequential-thinking-mcp", "b00t-mcp"]
 middleware = ["human-in-loop"]
 system_prompt = """You are a senior Rust and TypeScript developer for b00t.
 Follow DRY principles, use existing libraries, write idiomatic code.
@@ -42,11 +42,11 @@ timeout_seconds = 600
 [langchain.agents.coordinator]
 description = "Multi-agent coordinator for complex tasks"
 model = "anthropic/claude-sonnet-4"
-tools = ["taskmaster-mcp", "sequential-thinking-mcp"]
+tools = ["github-mcp", "sequential-thinking-mcp", "b00t-mcp"]
 middleware = ["summarization", "human-in-loop"]
 system_prompt = """You coordinate multiple b00t agents to solve complex tasks.
 Break down problems, delegate to specialist agents, synthesize results.
-Use taskmaster to track progress."""
+Use b00t jobs and TODO-next.md to track progress."""
 max_iterations = 20
 timeout_seconds = 900
 peer_agents = ["researcher", "coder"]  # Can invoke other agents
@@ -66,7 +66,7 @@ steps = [
   { agent = "researcher", task = "research", query = "${feature_description}" },
   { agent = "coder", task = "plan", context = "${research_result}" },
   { agent = "coder", task = "implement", plan = "${plan_result}" },
-  { tool = "taskmaster-mcp", action = "track", task = "${feature_description}" }
+  { tool = "grok", action = "digest", input = "${plan_result}" }
 ]
 
 # Middleware configurations
@@ -113,7 +113,7 @@ crawl4ai = { transport = "docker", url = "http://localhost:8001/mcp" }
 github = { transport = "http", url = "http://localhost:8002/mcp" }
 grok = { transport = "stdio", command = "b00t-mcp", args = ["grok"] }
 sequential-thinking = { transport = "stdio", command = "npx", args = ["-y", "@modelcontextprotocol/server-sequential-thinking"] }
-taskmaster = { transport = "stdio", command = "npx", args = ["-y", "taskmaster-ai"] }
+b00t = { transport = "stdio", command = "b00t-mcp", args = [] }
 
 # k0mmand3r IPC configuration
 [langchain.ipc]

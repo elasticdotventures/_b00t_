@@ -405,12 +405,21 @@ impl GrokClient {
         let v: Value = match serde_json::from_str(&text) {
             Ok(v) => v,
             Err(e) => {
+                // Truncate raw payload to avoid excessively large error messages
+                let max_len = 512usize;
+                let raw_snippet: String = text.chars().take(max_len).collect();
                 return Ok(AskResult {
                     success: false,
                     query: query.to_string(),
                     total_found: 0,
                     results: Vec::new(),
-                    message: Some(format!("JSON parse error: {} — raw: {}", e, text)),
+                    message: Some(format!(
+                        "JSON parse error: {} — raw (first {} of {} chars): {}",
+                        e,
+                        raw_snippet.chars().count(),
+                        text.chars().count(),
+                        raw_snippet
+                    )),
                 });
             }
         };

@@ -335,3 +335,12 @@ ralphs/ralph-v1
 .nori-config.json
 .nori/
 libnull.rlib
+.worktrees/
+.bugs/*.jsonl
+
+# Generated MCP server recipes — only essential b00t-core ones are committed
+# All others generated locally via: just marketplace-generate
+# 🤓 can't ignore dir/ then !except files inside — must pattern match files directly
+.claude-plugin/recipes/mcp-servers/*.json
+!.claude-plugin/recipes/mcp-servers/local-b00t-b00t-mcp--b00t-mcp.json
+!.claude-plugin/recipes/mcp-servers/local-b00t-grok-guru--grok-guru.json

@@ -2,54 +2,12 @@
 name = "taskmaster-ai"
 type = "mcp"
 hint = """
-⚠️  DEPRECATED FOR COMPLEX ORCHESTRATION - Consider Azure AI Foundry for enterprise multi-agent workflows
+⚠️  LEGACY / REMOVED FROM ACTIVE B00T WORKFLOWS
 
-TaskMaster: Basic task management suitable for simple project tracking.
+TaskMaster is no longer part of the active b00t backlog path.
+Use `TODO-next.md`, `b00t job`, and Redis-backed agent coordination instead.
 
-For advanced orchestration needs (connected agents, sub-agent delegation, stateful workflows), 
-upgrade to Azure AI Foundry: `b00t cli install azure-ai-foundry`
-
-TaskMaster is ideal for:
-- Simple task lists and project tracking  
-- Basic PRD parsing and task generation
-- Single-agent workflows
-
-Azure AI Foundry excels at:
-- Multi-agent orchestration with connected agents
-- Hierarchical sub-agent delegation (max depth 2)  
-- Stateful workflows with context preservation
-- Enterprise security, observability, and scalability
-
-Change the main, research and fallback models to <model_name>, <model_name> and <model_name> respectively.
-There is a CLI + MCP interface
-
-```bash
-
-# Initialize a new project
-task-master init
-
-# Parse a PRD and generate tasks
-task-master parse-prd your-prd.txt
-
-# List all tasks
-task-master list
-
-# Show the next task to work on
-task-master next
-
-# Show specific task(s) - supports comma-separated IDs
-task-master show 1,3,5
-
-# Research fresh information with project context
-task-master research "What are the latest best practices for JWT authentication?"
-
-# Generate task files
-task-master generate
-
-# Add rules after initialization
-task-master rules add windsurf,roo,vscode
-```
-
+This datum remains only for compatibility with older repos.
 
 """
 [[b00t.mcp.stdio]]
@@ -81,5 +39,5 @@ command = "npx --yes task-master --version"
 regex = "\\d+\\.\\d+"
 
 [roles]
-required_for = ["orchestrator"]
+required_for = []
 optional_for = ["developer"]

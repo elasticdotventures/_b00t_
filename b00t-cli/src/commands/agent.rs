@@ -730,21 +730,9 @@ async fn handle_ralph(
         );
     }
 
-    // Check if taskmaster is initialized
-    let taskmaster_path = root.join(".taskmaster");
-    if !taskmaster_path.exists() {
-        println!("⚠️  TaskMaster not initialized. Initializing now...");
-        cmd!("taskmaster", "init")
-            .dir(&root)
-            .stdout_capture()
-            .stderr_capture()
-            .run()
-            .map_err(|e| anyhow::anyhow!("Failed to initialize taskmaster: {}", e))?;
-    }
-
-    // Create hive validation task if needed
-    if task == "hive-validate" {
-        ensure_hive_validation_task(&root).await?;
+    // TaskMaster was removed from b00t. Keep Ralph pointed at the live markdown backlog instead.
+    if task == "hive-validate" || task == "maintenance" {
+        ensure_todo_next_backlog(&root).await?;
     }
 
     // Run ralph
@@ -794,70 +782,28 @@ fn resolve_ralph_task_id(task: &str) -> Option<String> {
     }
 
     match normalized.as_str() {
-        "hive-validate" => Some("hive-001".to_string()),
-        "maintenance" => Some("hive-002".to_string()),
+        "hive-validate" | "maintenance" => None,
         _ => Some(task.to_string()),
     }
 }
 
-async fn ensure_hive_validation_task(root: &std::path::Path) -> Result<()> {
+async fn ensure_todo_next_backlog(root: &std::path::Path) -> Result<()> {
     use std::fs;
 
-    let tasks_file = root.join(".taskmaster/tasks/tasks.json");
+    let todo_path = root.join("TODO-next.md");
 
-    // Read existing tasks
-    if !tasks_file.exists() {
-        println!("📋 Creating hive validation tasks...");
+    if !todo_path.exists() {
+        println!("📋 Creating TODO-next.md backlog...");
+        fs::write(
+            &todo_path,
+            r#"# TODO-next
 
-        let tasks_dir = tasks_file.parent().unwrap();
-        fs::create_dir_all(tasks_dir)?;
-
-        let initial_tasks = serde_json::json!({
-            "metadata": {
-                "version": "1.0.0",
-                "branchName": "main",
-                "createdAt": chrono::Utc::now().to_rfc3339()
-            },
-            "tasks": [
-                {
-                    "id": "hive-001",
-                    "title": "Hive Validation - b00t System Health",
-                    "description": "As a system operator, I need to validate the b00t hive is healthy and all critical datums are properly configured, so that agents can operate reliably. This includes checking: 1) All submodules are initialized, 2) Critical CLI tools are installed (rust, uv, just, gh), 3) MCP servers are configured, 4) Agent coordination is functional.",
-                    "status": "pending",
-                    "priority": "high",
-                    "tags": ["hive-validate", "system-health"],
-                    "blockedBy": [],
-                    "acceptanceCriteria": [
-                        "Git submodules initialized and up to date",
-                        "Rust toolchain installed and functional",
-                        "UV package manager available",
-                        "Just command runner available",
-                        "GitHub CLI authenticated",
-                        "At least 3 MCP servers configured",
-                        "Redis available for agent coordination"
-                    ]
-                },
-                {
-                    "id": "hive-002",
-                    "title": "Hive Maintenance - Datum Ontology Validation",
-                    "description": "As a system operator, I need to validate that all datum files are properly structured and follow b00t conventions, so that the hive can discover and use capabilities correctly. Validate: 1) TOML syntax, 2) Required fields present, 3) Version detection works, 4) No duplicate datums, 5) Stack dependencies are valid.",
-                    "status": "pending",
-                    "priority": "normal",
-                    "tags": ["hive-validate", "maintenance"],
-                    "blockedBy": ["hive-001"],
-                    "acceptanceCriteria": [
-                        "All .toml files pass syntax validation",
-                        "No missing required fields in datums",
-                        "Version regex patterns are valid",
-                        "Stack dependencies form valid DAG",
-                        "No circular dependencies detected"
-                    ]
-                }
-            ]
-        });
-
-        fs::write(&tasks_file, serde_json::to_string_pretty(&initial_tasks)?)?;
-        println!("✅ Created hive validation tasks");
+## Critical path
+- [ ] Hive validate: submodules, MCPs, Redis, CLI health
+- [ ] Maintenance: datum validation, dependency DAG, duplicate checks
+"#,
+        )?;
+        println!("✅ Created TODO-next.md backlog");
     }
 
     Ok(())
@@ -956,14 +902,8 @@ mod tests {
 
     #[test]
     fn test_resolve_ralph_task_id_mappings() {
-        assert_eq!(
-            resolve_ralph_task_id("hive-validate"),
-            Some("hive-001".to_string())
-        );
-        assert_eq!(
-            resolve_ralph_task_id("maintenance"),
-            Some("hive-002".to_string())
-        );
+        assert_eq!(resolve_ralph_task_id("hive-validate"), None);
+        assert_eq!(resolve_ralph_task_id("maintenance"), None);
         assert_eq!(resolve_ralph_task_id("pending"), None);
         assert_eq!(resolve_ralph_task_id("all"), None);
         assert_eq!(
@@ -973,10 +913,9 @@ mod tests {
     }
 
     #[test]
-    fn test_build_ralph_command_args_uses_task_id_not_filter() {
+    fn test_build_ralph_command_args_omits_task_id_for_named_backlog_views() {
         let args = build_ralph_command_args("codex", 5, "hive-validate");
-        assert!(args.contains(&"--task-id".to_string()));
-        assert!(args.contains(&"hive-001".to_string()));
+        assert!(!args.contains(&"--task-id".to_string()));
         assert!(!args.contains(&"--filter".to_string()));
     }
 

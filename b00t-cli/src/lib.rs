@@ -8,6 +8,7 @@ pub mod bootstrap;
 pub mod budget_controller;
 pub mod cloud_sync;
 pub mod commands;
+pub mod install;
 pub mod datum_ai;
 pub mod datum_ai_model;
 pub mod datum_api;
@@ -33,6 +34,11 @@ pub mod dependency_resolver;
 pub mod entanglement;
 pub mod erp;
 pub mod hive;
+pub mod inventory;
+pub mod blessing;
+pub mod k0mmand3r;
+pub mod step;
+pub mod sandbox;
 #[cfg(feature = "dbus")]
 pub mod dbus_dispatch;
 pub mod hook_engine;
@@ -115,6 +121,34 @@ pub struct OrchestrationConfig {
     pub queue_name: Option<String>,
 }
 
+#[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
+#[serde(untagged)]
+pub enum InstallSpec {
+    Command(String),
+    Metadata { requires: Option<Vec<String>> },
+}
+
+impl InstallSpec {
+    pub fn command(&self) -> Option<&str> {
+        match self {
+            InstallSpec::Command(command) => Some(command),
+            InstallSpec::Metadata { .. } => None,
+        }
+    }
+}
+
+#[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Default)]
+#[serde(default)]
+pub struct K0mmand3rDatumConfig {
+    /// Slash command exposed for this datum (for example "/gh" or "/docker").
+    /// If omitted, defaults to "/<b00t.name>".
+    pub slash: Option<String>,
+    /// When true, omit from discovery listings (still invokable directly).
+    pub hidden: Option<bool>,
+    /// Optional dispatch hint for operator-facing help output.
+    pub description: Option<String>,
+}
+
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Default)]
 #[serde(default)]
 pub struct BootDatum {
@@ -130,7 +164,7 @@ pub struct BootDatum {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub compliance: Option<Vec<String>>,
 
-    pub install: Option<String>,
+    pub install: Option<InstallSpec>,
     pub update: Option<String>,
     pub version: Option<String>,
     pub version_regex: Option<String>,
@@ -174,6 +208,10 @@ pub struct BootDatum {
 
     // Aliases for CLI commands
     pub aliases: Option<Vec<String>>,
+
+    // Slash-command orchestration metadata for datum-driven /k0mmand3r dispatch
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub k0mmand3r: Option<K0mmand3rDatumConfig>,
 
     // MCP-specific multi-method support - these will be handled by datum_mcp module
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -229,6 +267,13 @@ pub struct BootDatum {
     pub hook_install: Option<String>,
     pub hook_update: Option<String>,
     pub hook_learn: Option<String>,
+    // Uninstall lifecycle
+    // 🤓 uninstall: shell script executed by duct::cmd("bash", "-c", script) — same executor as install
+    // 🤓 hook_uninstall: POST-hook (runs AFTER uninstall script, unlike other hooks which are pre-hooks);
+    //    Rhai script errors are surfaced as Warn("hook script error: ...") by run_hook() and treated as fatal by uninstall_datum()
+    //    All other HookResult variants (non-error Warn/Redirect/Info/Missing) are non-fatal: logged and execution continues
+    pub uninstall: Option<String>,
+    pub hook_uninstall: Option<String>,
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
@@ -714,6 +759,10 @@ impl BootDatum {
                 .map(DatumType::from_filename_extension)
                 .unwrap_or(DatumType::Unknown)
         })
+    }
+
+    pub fn install_command(&self) -> Option<&str> {
+        self.install.as_ref().and_then(InstallSpec::command)
     }
 }
 
@@ -1971,4 +2020,36 @@ fn check_readme_status(memory: &mut session_memory::SessionMemory) -> Result<()>
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn test_bootdatum_uninstall_fields_deserialize() {
+        let toml_str = r#"
+[b00t]
+name = "ripgrep"
+type = "cli"
+hint = "fast grep"
+install = "apt-get install -y ripgrep"
+uninstall = "apt-get remove -y ripgrep"
+hook_uninstall = "// Rhai: post-uninstall cleanup\nlet x = 1;"
+"#;
+        let config: crate::UnifiedConfig = toml::from_str(toml_str).unwrap();
+        assert_eq!(config.b00t.uninstall, Some("apt-get remove -y ripgrep".to_string()));
+        assert_eq!(config.b00t.hook_uninstall, Some("// Rhai: post-uninstall cleanup\nlet x = 1;".to_string()));
+    }
+
+    #[test]
+    fn test_bootdatum_uninstall_fields_default_none() {
+        let toml_str = r#"
+[b00t]
+name = "docker"
+type = "cli"
+hint = "containers"
+"#;
+        let config: crate::UnifiedConfig = toml::from_str(toml_str).unwrap();
+        assert!(config.b00t.uninstall.is_none());
+        assert!(config.b00t.hook_uninstall.is_none());
+    }
 }

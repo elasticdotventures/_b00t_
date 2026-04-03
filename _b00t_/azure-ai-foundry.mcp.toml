@@ -1,10 +1,11 @@
 [b00t]
 name = "azure-ai-foundry"
 type = "mcp"
-hint = "Azure AI Foundry MCP server - Enterprise multi-agent orchestration with connected agents, sub-agent delegation, and stateful workflows. Replaces TaskMaster for complex business processes."
+hint = "Azure AI Foundry MCP server - Enterprise multi-agent orchestration with connected agents, sub-agent delegation, and stateful workflows. Replaces lightweight local backlog/job flows for complex business processes."
+lfmf_category = "azure-ai-foundry"
 
 # 🤓 Azure AI Foundry MCP provides enterprise-grade agent orchestration
-# Superior to TaskMaster for multi-agent systems with sub-agent delegation
+# Superior to TODO-next/b00t job for multi-agent systems with sub-agent delegation
 [[b00t.mcp.stdio]]
 command = "npx"
 args = ["-y", "azure-ai-foundry-mcp"]
@@ -60,7 +61,7 @@ content = """
 
 Provides MCP interface to Azure AI Foundry's advanced multi-agent capabilities.
 
-## Advantages Over TaskMaster MCP
+## Advantages Over Local Backlog/Job MCP Patterns
 
 ### Enterprise Multi-Agent Architecture
 - **Connected Agents**: Hierarchical delegation without custom orchestrators
@@ -129,9 +130,9 @@ await mcp.call("azure_foundry.deploy_workflow", {
 - High availability configurations
 - Load balancing for agent workloads
 
-## Migration from TaskMaster
+## Migration from Local Backlog/Jobs
 
-### When to Use TaskMaster
+### When to Use TODO-next + b00t job
 - Simple task lists and project tracking
 - Basic PRD parsing
 - Single-user workflows
@@ -174,7 +175,7 @@ content_workflow = {
 }
 ```
 
-Azure AI Foundry MCP provides enterprise-ready multi-agent orchestration that scales from prototype to production, replacing TaskMaster for complex business automation needs.
+Azure AI Foundry MCP provides enterprise-ready multi-agent orchestration that scales from prototype to production, replacing lightweight local backlog/job patterns for complex business automation needs.
 """
 
 [[b00t.references]]
@@ -188,5 +189,3 @@ url = "https://learn.microsoft.com/azure/architecture/ai-ml/guide/ai-agent-desig
 [[b00t.references]]
 name = "Multi-Agent Orchestration Guide" 
 url = "https://techcommunity.microsoft.com/blog/azure-ai-foundry-blog/building-a-digital-workforce-with-multi-agents-in-azure-ai-foundry-agent-service/4414671"
-
-lfmf_category = "azure-ai-foundry"

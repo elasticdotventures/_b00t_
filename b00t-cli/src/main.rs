@@ -1,8 +1,13 @@
-use anyhow::Result;
+use anyhow::{Result, anyhow};
 use b00t_cli::{SessionState, UnifiedConfig, load_datum_providers, whoami};
+use b00t_cli::k0mmand3r::K0mmand;
 use clap::Parser;
 use duct::cmd;
+use serde_json::json;
 use std::fs;
+use std::io::Write;
+use std::path::{Path, PathBuf};
+use std::process::Command;
 
 // Import datum types from lib.rs (already declared there as pub mod)
 use b00t_cli::commands::learn::{LearnArgs, handle_learn};
@@ -19,22 +24,22 @@ use b00t_cli::utils::get_workspace_root;
 #[rustfmt::skip]
 use b00t_cli::commands::{
   //  Keep commands 1 line per letter A,B,C,... for easy diff
-    AiCommands, AgentCommands, AnsibleCommands, AppCommands, 
-    BootstrapCommands, BudgetCommands, 
+    AiCommands, AgentCommands, AnsibleCommands, AppCommands,
+    BootstrapCommands, BudgetCommands,
     ChatCommands, CliCommands,
-    DatumCommands, 
+    DatumCommands,
     GrokCommands, HiveCommands,
     InitCommands,
     JobCommands,
     K8sCommands,
     McpCommands, ModelCommands,
-    OntologyCommands,
-    SessionCommands, SkillCommands, SoulCommands, StackCommands,
+    OntologyCommands, SessionCommands, SkillCommands, SoulCommands, StackCommands,
     TutorialCommands, VersionCommands, WhatismyCommands
-    
+
 
 };
 use b00t_cli::commands::install::{install_datum, run_just_install};
+use b00t_cli::commands::uninstall::uninstall_datum;
 
 // Re-export commonly used functions for datum modules
 pub use b00t_cli::{
@@ -223,6 +228,22 @@ The system will:
         #[clap(long, help = "Emit full skill metadata for all skills declared by the role")]
         with_skills: bool,
     },
+    #[clap(
+        name = "k0mmand3r",
+        hide = true,
+        about = "Hidden slash-command dispatcher for datum-driven and internal commands"
+    )]
+    K0mmand3r {
+        #[clap(help = "Slash command to dispatch, e.g. /whoami or /gh")]
+        slash: String,
+        #[clap(
+            trailing_var_arg = true,
+            allow_hyphen_values = true,
+            num_args = 0..,
+            help = "Arguments passed through to the dispatched command"
+        )]
+        args: Vec<String>,
+    },
     #[clap(about = "Create checkpoint: commit all files and run tests")]
     // 🤓 ENTANGLED: b00t-mcp/src/mcp_tools.rs CheckpointCommand
     // When this changes, update b00t-mcp CheckpointCommand structure
@@ -308,6 +329,26 @@ The system will:
         name: Option<String>,
         #[clap(long, help = "Show what would be installed for bootstrap mode")]
         dry_run: bool,
+        #[clap(long, help = "Interactive TUI installer for agent runtimes")]
+        interactive: bool,
+        /// Non-interactive: comma-separated runtime IDs (claude,gemini,codex,opencode,copilot)
+        #[clap(long, value_delimiter = ',')]
+        runtimes: Vec<String>,
+        /// Non-interactive: install scope (global or local)
+        #[clap(long, default_value = "global")]
+        scope: String,
+        /// Skip confirmation prompt (non-interactive mode)
+        #[clap(long, short = 'y')]
+        yes: bool,
+    },
+    #[clap(about = "Uninstall a datum by name (use --purge to remove from _b00t_.toml)")]
+    Uninstall {
+        #[clap(help = "Datum name or key, e.g. 'ripgrep' or 'ripgrep.cli'")]
+        name: String,
+        #[clap(long, help = "Also remove datum entry from _b00t_.toml")]
+        purge: bool,
+        #[clap(long, short = 'y', help = "Skip confirmation prompt")]
+        yes: bool,
     },
     #[clap(about = "Bootstrap self-configuring b00t installation (Phase 0: Foundation)")]
     Bootstrap {
@@ -1090,9 +1131,299 @@ fn check_readme_status(memory: &mut b00t_cli::session_memory::SessionMemory) -> 
     Ok(())
 }
 
+fn normalize_slash(slash: &str) -> String {
+    let trimmed = slash.trim();
+    if trimmed.starts_with('/') {
+        trimmed.to_string()
+    } else {
+        format!("/{}", trimmed)
+    }
+}
+
+fn normalize_slash_args(raw_args: Vec<String>) -> Vec<String> {
+    if raw_args.len() < 2 {
+        return raw_args;
+    }
+
+    // Scan argv for the first non-option token that either starts with '/'
+    // or is a /k0mmand3r alias, and normalize it while preserving
+    // leading flags/options.
+    let mut prefix: Vec<String> = Vec::new();
+    // Always keep argv[0] as-is.
+    prefix.push(raw_args[0].clone());
+
+    let mut i = 1;
+    while i < raw_args.len() {
+        let arg = &raw_args[i];
+
+        // Respect end-of-options marker; do not rewrite past `--`.
+        if arg == "--" {
+            return raw_args;
+        }
+
+        // Skip option-like arguments (starting with '-') into the prefix.
+        if arg.starts_with('-') {
+            prefix.push(arg.clone());
+            i += 1;
+            continue;
+        }
+
+        // At this point, `arg` is the first non-option token.
+        // Handle the explicit /k0mmand3r and k0mmand3r aliases.
+        if (arg.as_str() == "/k0mmand3r" || arg.as_str() == "k0mmand3r") && i + 1 < raw_args.len() {
+            let slash = normalize_slash(&raw_args[i + 1]);
+            let mut normalized = prefix;
+            normalized.push("k0mmand3r".to_string());
+            normalized.push(slash);
+            normalized.extend(raw_args.iter().skip(i + 2).cloned());
+            return normalized;
+        }
+
+        // Handle direct slash commands like `/whoami`.
+        if arg.starts_with('/') {
+            let mut normalized = prefix;
+            normalized.push("k0mmand3r".to_string());
+            normalized.push(arg.clone());
+            normalized.extend(raw_args.iter().skip(i + 1).cloned());
+            return normalized;
+        }
+
+        // First non-option is not a slash command; nothing to normalize.
+        return raw_args;
+    }
+
+    // No eligible token found; return argv unchanged.
+    raw_args
+}
+
+fn load_cli_boot_datums(path: &str) -> Result<Vec<b00t_cli::BootDatum>> {
+    let providers = load_datum_providers::<CliDatum>(path, ".cli.toml")?;
+    Ok(providers.into_iter().map(|provider| provider.datum().clone()).collect())
+}
+
+fn datum_slash_aliases(datum: &b00t_cli::BootDatum) -> Vec<String> {
+    let mut aliases = Vec::new();
+    if let Some(cfg) = &datum.k0mmand3r {
+        if let Some(slash) = &cfg.slash {
+            aliases.push(normalize_slash(slash));
+        }
+    }
+    aliases.push(format!("/{}", datum.name));
+    if let Some(raw_aliases) = &datum.aliases {
+        for alias in raw_aliases {
+            aliases.push(normalize_slash(alias));
+        }
+    }
+
+    aliases.sort();
+    aliases.dedup();
+    aliases
+}
+
+fn find_cli_datum_for_slash<'a>(
+    slash: &str,
+    datums: &'a [b00t_cli::BootDatum],
+) -> Option<&'a b00t_cli::BootDatum> {
+    let normalized = normalize_slash(slash);
+    datums
+        .iter()
+        .find(|datum| datum_slash_aliases(datum).iter().any(|alias| alias == &normalized))
+}
+
+fn b00t_home_for_path(_path: &str) -> Result<PathBuf> {
+    if let Ok(explicit) = std::env::var("B00T_LOG_DIR") {
+        return Ok(PathBuf::from(explicit));
+    }
+
+    Ok(std::env::temp_dir().join("b00t"))
+}
+
+fn append_jsonl_record(path: &Path, value: &serde_json::Value) -> Result<()> {
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent)?;
+    }
+    let mut file = fs::OpenOptions::new().create(true).append(true).open(path)?;
+    writeln!(file, "{}", serde_json::to_string(value)?)?;
+    Ok(())
+}
+
+fn log_k0mmand3r_stub(
+    path: &str,
+    mode: &str,
+    slash: &str,
+    target: &str,
+    passthrough_args: &[String],
+    exit_code: i32,
+) -> Result<()> {
+    let b00t_home = b00t_home_for_path(path)?;
+    let timestamp = chrono::Utc::now().to_rfc3339();
+    let session_id = std::env::var("B00T_SESSION_ID").ok();
+    let host = std::env::var("HOSTNAME").ok();
+
+    let metrics_record = json!({
+        "timestamp": timestamp,
+        "mode": mode,
+        "slash": slash,
+        "target": target,
+        "args": passthrough_args,
+        "exit_code": exit_code,
+        "session_id": session_id,
+    });
+    let node_record = json!({
+        "timestamp": timestamp,
+        "event": "k0mmand3r_dispatch",
+        "mode": mode,
+        "slash": slash,
+        "target": target,
+        "args": passthrough_args,
+        "exit_code": exit_code,
+        "session_id": session_id,
+        "host": host,
+    });
+
+    append_jsonl_record(&b00t_home.join("session-metrics.stub.jsonl"), &metrics_record)?;
+    append_jsonl_record(&b00t_home.join("node-log.stub.jsonl"), &node_record)?;
+    Ok(())
+}
+
+fn execute_cli_passthrough(datum: &b00t_cli::BootDatum, passthrough_args: &[String]) -> Result<i32> {
+    let command_spec = datum.command.as_deref().unwrap_or(&datum.name);
+    let mut command_parts = shlex::split(command_spec)
+        .ok_or_else(|| anyhow!("Invalid command declaration for '{}'", datum.name))?;
+
+    if command_parts.is_empty() {
+        anyhow::bail!("Empty command declaration for '{}'", datum.name);
+    }
+
+    let program = command_parts.remove(0);
+    let mut cmd = Command::new(&program);
+    if !command_parts.is_empty() {
+        cmd.args(command_parts);
+    }
+    if let Some(default_args) = &datum.args {
+        cmd.args(default_args);
+    }
+    cmd.args(passthrough_args);
+
+    let status = cmd.status()?;
+    Ok(status.code().unwrap_or(1))
+}
+
+fn execute_internal_slash_alias(slash: &str, passthrough_args: &[String]) -> Result<i32> {
+    let command_name = slash.trim_start_matches('/');
+    if command_name.is_empty() {
+        anyhow::bail!("Empty slash command");
+    }
+
+    let current_exe = std::env::current_exe()?;
+    let status = Command::new(current_exe)
+        .arg(command_name)
+        .args(passthrough_args)
+        .status()?;
+    Ok(status.code().unwrap_or(1))
+}
+
+fn print_visible_k0mmand3r_datums(path: &str) -> Result<()> {
+    let datums = load_cli_boot_datums(path)?;
+    let mut rows: Vec<(String, String)> = Vec::new();
+
+    for datum in datums {
+        let hidden = datum
+            .k0mmand3r
+            .as_ref()
+            .and_then(|cfg| cfg.hidden)
+            .unwrap_or(false);
+        if hidden {
+            continue;
+        }
+
+        let description = datum
+            .k0mmand3r
+            .as_ref()
+            .and_then(|cfg| cfg.description.clone())
+            .unwrap_or_else(|| datum.hint.clone());
+        for slash in datum_slash_aliases(&datum) {
+            rows.push((slash, description.clone()));
+        }
+    }
+
+    rows.sort_by(|a, b| a.0.cmp(&b.0));
+    rows.dedup_by(|a, b| a.0 == b.0);
+
+    for (slash, description) in rows {
+        println!("{}  {}", slash, description);
+    }
+
+    Ok(())
+}
+
+fn execute_k0mmand3r_dispatch(path: &str, slash: &str, passthrough_args: &[String]) -> Result<i32> {
+    let normalized_slash = normalize_slash(slash);
+    if normalized_slash == "/k0mmand3r" {
+        print_visible_k0mmand3r_datums(path)?;
+        return Ok(0);
+    }
+
+    let k0mmand_verbs = ["negotiate", "vote", "delegate", "status", "handshake", "crew"];
+    let verb = normalized_slash.trim_start_matches('/').to_lowercase();
+    if k0mmand_verbs.contains(&verb.as_str()) {
+        let mut raw = normalized_slash.clone();
+        if !passthrough_args.is_empty() {
+            raw.push(' ');
+            raw.push_str(&passthrough_args.join(" "));
+        }
+
+        let k0mmand = K0mmand::parse(&raw).map_err(|e| anyhow!(e))?;
+        k0mmand.validate().map_err(|e| anyhow!(e))?;
+
+        println!("k0mmand3r: {} {}", k0mmand.verb, k0mmand.object);
+        if let Err(e) = log_k0mmand3r_stub(
+            path,
+            "k0mmand",
+            &normalized_slash,
+            &k0mmand.verb,
+            passthrough_args,
+            0,
+        ) {
+            eprintln!("⚠️ k0mmand3r logging stub failed: {}", e);
+        }
+        return Ok(0);
+    }
+
+    let datums = load_cli_boot_datums(path)?;
+    if let Some(datum) = find_cli_datum_for_slash(&normalized_slash, &datums) {
+        let exit_code = execute_cli_passthrough(datum, passthrough_args)?;
+        let target = datum.command.as_deref().unwrap_or(&datum.name).to_string();
+        if let Err(e) = log_k0mmand3r_stub(
+            path,
+            "datum_cli",
+            &normalized_slash,
+            &target,
+            passthrough_args,
+            exit_code,
+        ) {
+            eprintln!("⚠️ k0mmand3r logging stub failed: {}", e);
+        }
+        return Ok(exit_code);
+    }
+
+    let exit_code = execute_internal_slash_alias(&normalized_slash, passthrough_args)?;
+    if let Err(e) = log_k0mmand3r_stub(
+        path,
+        "internal",
+        &normalized_slash,
+        normalized_slash.trim_start_matches('/'),
+        passthrough_args,
+        exit_code,
+    ) {
+            eprintln!("⚠️ k0mmand3r logging stub failed: {}", e);
+        }
+    Ok(exit_code)
+}
+
 #[tokio::main]
 async fn main() {
-    let cli = Cli::parse();
+    let cli = Cli::parse_from(normalize_slash_args(std::env::args().collect()));
 
     if cli.doc {
         generate_documentation();
@@ -1180,6 +1511,16 @@ async fn main() {
             if let Err(e) = whoami::whoami(&cli.path, role.clone(), *with_skills) {
                 eprintln!("Error: {}", e);
                 std::process::exit(1);
+            }
+        }
+        Some(Commands::K0mmand3r { slash, args }) => {
+            match execute_k0mmand3r_dispatch(&cli.path, slash, args) {
+                Ok(0) => {}
+                Ok(code) => std::process::exit(code),
+                Err(e) => {
+                    eprintln!("Error: {}", e);
+                    std::process::exit(1);
+                }
             }
         }
         Some(Commands::Checkpoint {
@@ -1271,8 +1612,48 @@ async fn main() {
                 std::process::exit(1);
             }
         }
-        Some(Commands::Install { name, dry_run }) => {
-            if let Some(name) = name {
+        Some(Commands::Uninstall { name, purge, yes }) => {
+            if let Err(e) = uninstall_datum(&cli.path, &name, *yes, *purge) {
+                eprintln!("Uninstall Error: {}", e);
+                std::process::exit(1);
+            }
+        }
+        Some(Commands::Install { name, dry_run, interactive, runtimes, scope, yes }) => {
+            if *interactive || !runtimes.is_empty() {
+                // Parse runtime IDs from comma-separated --runtimes arg
+                let mut runtime_ids_vec: Vec<b00t_cli::install::RuntimeId> = Vec::new();
+                let mut parse_error = false;
+                for r in runtimes.iter() {
+                    match r.as_str() {
+                        "claude"   => runtime_ids_vec.push(b00t_cli::install::RuntimeId::Claude),
+                        "gemini"   => runtime_ids_vec.push(b00t_cli::install::RuntimeId::Gemini),
+                        "codex"    => runtime_ids_vec.push(b00t_cli::install::RuntimeId::Codex),
+                        "opencode" => runtime_ids_vec.push(b00t_cli::install::RuntimeId::OpenCode),
+                        "copilot"  => runtime_ids_vec.push(b00t_cli::install::RuntimeId::Copilot),
+                        _ => { eprintln!("Install Error: unknown runtime '{}'. Valid: claude,gemini,codex,opencode,copilot", r); parse_error = true; }
+                    }
+                }
+                if parse_error {
+                    std::process::exit(1);
+                }
+                let runtime_ids: Option<Vec<b00t_cli::install::RuntimeId>> = if runtimes.is_empty() { None } else { Some(runtime_ids_vec) };
+                let scope_val = match scope.as_str() {
+                    "local" => {
+                        match std::env::current_dir() {
+                            Ok(dir) => Some(b00t_cli::install::InstallScope::Local(dir)),
+                            Err(e) => {
+                                eprintln!("Install Error: cannot determine current directory: {}", e);
+                                std::process::exit(1);
+                            }
+                        }
+                    }
+                    _       => Some(b00t_cli::install::InstallScope::Global),
+                };
+                if let Err(e) = b00t_cli::install::handle_install_command(*interactive, runtime_ids, scope_val, *yes) {
+                    eprintln!("Install Error: {}", e);
+                    std::process::exit(1);
+                }
+            } else if let Some(name) = name {
                 if let Err(e) = install_datum(&cli.path, name) {
                     eprintln!("Install Error: {}", e);
                     std::process::exit(1);
@@ -1368,5 +1749,236 @@ async fn main() {
             eprintln!("No command provided. Use --help for usage information.");
             std::process::exit(1);
         }
+    }
+}
+
+#[cfg(test)]
+mod k0mmand3r_dispatch_tests {
+    use super::*;
+
+    // ── normalize_slash ──────────────────────────────────────────────────────
+
+    #[test]
+    fn normalize_slash_already_prefixed() {
+        assert_eq!(normalize_slash("/whoami"), "/whoami");
+    }
+
+    #[test]
+    fn normalize_slash_adds_prefix() {
+        assert_eq!(normalize_slash("whoami"), "/whoami");
+    }
+
+    #[test]
+    fn normalize_slash_trims_whitespace() {
+        assert_eq!(normalize_slash("  gh  "), "/gh");
+    }
+
+    #[test]
+    fn normalize_slash_double_slash_unchanged() {
+        // A leading slash is enough; no double-slash introduced.
+        assert_eq!(normalize_slash("/gh"), "/gh");
+    }
+
+    // ── normalize_slash_args ─────────────────────────────────────────────────
+
+    fn args(v: &[&str]) -> Vec<String> {
+        v.iter().map(|s| s.to_string()).collect()
+    }
+
+    #[test]
+    fn normalize_slash_args_too_short_unchanged() {
+        let input = args(&["b00t-cli"]);
+        assert_eq!(normalize_slash_args(input.clone()), input);
+    }
+
+    #[test]
+    fn normalize_slash_args_no_slash_unchanged() {
+        let input = args(&["b00t-cli", "whoami"]);
+        assert_eq!(normalize_slash_args(input.clone()), input);
+    }
+
+    #[test]
+    fn normalize_slash_args_direct_slash_rewritten() {
+        // `/whoami` at argv[1] → `k0mmand3r /whoami`
+        let input = args(&["b00t-cli", "/whoami"]);
+        let expected = args(&["b00t-cli", "k0mmand3r", "/whoami"]);
+        assert_eq!(normalize_slash_args(input), expected);
+    }
+
+    #[test]
+    fn normalize_slash_args_slash_with_trailing_args() {
+        // `/gh --version` → `k0mmand3r /gh --version`
+        let input = args(&["b00t-cli", "/gh", "--version"]);
+        let expected = args(&["b00t-cli", "k0mmand3r", "/gh", "--version"]);
+        assert_eq!(normalize_slash_args(input), expected);
+    }
+
+    #[test]
+    fn normalize_slash_args_flag_before_slash_preserved() {
+        // `--doc /whoami` → `--doc k0mmand3r /whoami`
+        // Boolean flags (no separate value) before a slash are preserved in the prefix.
+        let input = args(&["b00t-cli", "--doc", "/whoami"]);
+        let expected = args(&["b00t-cli", "--doc", "k0mmand3r", "/whoami"]);
+        assert_eq!(normalize_slash_args(input), expected);
+    }
+
+    #[test]
+    fn normalize_slash_args_inline_value_option_before_slash() {
+        // `--path=/tmp /whoami` uses `=`-joined value so the flag is one token
+        // starting with `-`; the scanner skips it and correctly finds `/whoami`.
+        let input = args(&["b00t-cli", "--path=/tmp", "/whoami"]);
+        let expected = args(&["b00t-cli", "--path=/tmp", "k0mmand3r", "/whoami"]);
+        assert_eq!(normalize_slash_args(input), expected);
+    }
+
+    #[test]
+    fn normalize_slash_args_multiple_flags_before_slash() {
+        let input = args(&["b00t-cli", "--doc", "--path=/tmp", "/gh", "--version"]);
+        let expected = args(&["b00t-cli", "--doc", "--path=/tmp", "k0mmand3r", "/gh", "--version"]);
+        assert_eq!(normalize_slash_args(input), expected);
+    }
+
+    #[test]
+    fn normalize_slash_args_end_of_options_marker_unchanged() {
+        // `--` stops scanning; argv returned as-is even if a slash follows.
+        let input = args(&["b00t-cli", "--", "/whoami"]);
+        assert_eq!(normalize_slash_args(input.clone()), input);
+    }
+
+    #[test]
+    fn normalize_slash_args_k0mmand3r_alias_normalized() {
+        // `k0mmand3r vote blessing:test` → `k0mmand3r /vote blessing:test`
+        let input = args(&["b00t-cli", "k0mmand3r", "vote", "blessing:test"]);
+        let expected = args(&["b00t-cli", "k0mmand3r", "/vote", "blessing:test"]);
+        assert_eq!(normalize_slash_args(input), expected);
+    }
+
+    #[test]
+    fn normalize_slash_args_slash_k0mmand3r_alias_normalized() {
+        // `/k0mmand3r vote blessing:test` → `k0mmand3r /vote blessing:test`
+        let input = args(&["b00t-cli", "/k0mmand3r", "vote", "blessing:test"]);
+        let expected = args(&["b00t-cli", "k0mmand3r", "/vote", "blessing:test"]);
+        assert_eq!(normalize_slash_args(input), expected);
+    }
+
+    #[test]
+    fn normalize_slash_args_k0mmand3r_alias_no_subcommand_is_self_dispatch() {
+        // `/k0mmand3r` alone (no following verb token) falls through to the
+        // generic `starts_with('/')` branch and maps to `k0mmand3r /k0mmand3r`,
+        // which the dispatcher handles by printing visible datums.
+        let input = args(&["b00t-cli", "/k0mmand3r"]);
+        let expected = args(&["b00t-cli", "k0mmand3r", "/k0mmand3r"]);
+        assert_eq!(normalize_slash_args(input), expected);
+    }
+
+    // ── datum_slash_aliases ──────────────────────────────────────────────────
+
+    fn make_datum(name: &str, slash: Option<&str>, aliases: Option<Vec<&str>>) -> b00t_cli::BootDatum {
+        b00t_cli::BootDatum {
+            name: name.to_string(),
+            k0mmand3r: slash.map(|s| b00t_cli::K0mmand3rDatumConfig {
+                slash: Some(s.to_string()),
+                hidden: None,
+                description: None,
+            }),
+            aliases: aliases.map(|v| v.iter().map(|s| s.to_string()).collect()),
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn datum_slash_aliases_name_always_included() {
+        let datum = make_datum("gh", None, None);
+        let aliases = datum_slash_aliases(&datum);
+        assert!(aliases.contains(&"/gh".to_string()));
+    }
+
+    #[test]
+    fn datum_slash_aliases_explicit_slash_included() {
+        let datum = make_datum("gh-cli", Some("/gh"), None);
+        let aliases = datum_slash_aliases(&datum);
+        assert!(aliases.contains(&"/gh".to_string()));
+        assert!(aliases.contains(&"/gh-cli".to_string()));
+    }
+
+    #[test]
+    fn datum_slash_aliases_extra_aliases_normalized() {
+        let datum = make_datum("git", None, Some(vec!["g", "/git2"]));
+        let aliases = datum_slash_aliases(&datum);
+        assert!(aliases.contains(&"/g".to_string()));
+        assert!(aliases.contains(&"/git2".to_string()));
+        assert!(aliases.contains(&"/git".to_string()));
+    }
+
+    #[test]
+    fn datum_slash_aliases_deduped_and_sorted() {
+        // "/gh" from explicit slash AND from name should not duplicate.
+        let datum = make_datum("gh", Some("gh"), None);
+        let aliases = datum_slash_aliases(&datum);
+        let count = aliases.iter().filter(|a| *a == "/gh").count();
+        assert_eq!(count, 1, "duplicate /gh aliases: {:?}", aliases);
+    }
+
+    // ── find_cli_datum_for_slash ─────────────────────────────────────────────
+
+    #[test]
+    fn find_cli_datum_matches_by_name_slash() {
+        let datums = vec![make_datum("gh", None, None), make_datum("docker", None, None)];
+        let found = find_cli_datum_for_slash("/gh", &datums);
+        assert!(found.is_some());
+        assert_eq!(found.unwrap().name, "gh");
+    }
+
+    #[test]
+    fn find_cli_datum_matches_by_explicit_slash() {
+        let datums = vec![make_datum("gh-cli", Some("/gh"), None)];
+        let found = find_cli_datum_for_slash("/gh", &datums);
+        assert!(found.is_some());
+        assert_eq!(found.unwrap().name, "gh-cli");
+    }
+
+    #[test]
+    fn find_cli_datum_no_match_returns_none() {
+        let datums = vec![make_datum("gh", None, None)];
+        assert!(find_cli_datum_for_slash("/unknown", &datums).is_none());
+    }
+
+    #[test]
+    fn find_cli_datum_slash_without_prefix_still_matches() {
+        // Caller may pass "gh" (no slash); normalize_slash is applied internally.
+        let datums = vec![make_datum("gh", None, None)];
+        let found = find_cli_datum_for_slash("gh", &datums);
+        assert!(found.is_some());
+    }
+
+    // ── verb-collision guard: /status must not be stolen by k0mmand_verbs ────
+    // This test documents and guards against the known issue where k0mmand verbs
+    // like "status" shadow datum/internal dispatch for `/status`.
+    // The current implementation matches verbs BEFORE datum lookup; this test
+    // records that `/status` is currently routed as a k0mmand verb (not to a
+    // datum), so any future fix to move verb handling behind datum lookup will
+    // be visible as a test change.
+
+    #[test]
+    fn k0mmand_verb_status_is_recognized_before_datum_lookup() {
+        use b00t_cli::k0mmand3r::K0mmand;
+        // K0mmand::parse should succeed for /status (it is a known verb).
+        let cmd = K0mmand::parse("/status from agent:executive");
+        assert!(cmd.is_ok(), "K0mmand::parse(/status) should succeed");
+        let k = cmd.unwrap();
+        assert_eq!(k.verb, "status");
+    }
+
+    #[test]
+    fn k0mmand_verb_list_contains_collision_candidates() {
+        // These verbs are reserved by k0mmand3r and checked BEFORE datum lookup
+        // in execute_k0mmand3r_dispatch.  Any datum named one of these will be
+        // shadowed — this test documents the current set so a future refactor
+        // (moving verb handling *after* datum lookup) will require an update here.
+        let k0mmand_verbs = ["negotiate", "vote", "delegate", "status", "handshake", "crew"];
+        assert!(k0mmand_verbs.contains(&"status"), "/status is shadowed by k0mmand verb");
+        assert!(k0mmand_verbs.contains(&"crew"), "/crew is shadowed by k0mmand verb");
+        // If a datum named "gh" is not in k0mmand_verbs it will not be shadowed.
+        assert!(!k0mmand_verbs.contains(&"gh"), "/gh is NOT shadowed");
     }
 }

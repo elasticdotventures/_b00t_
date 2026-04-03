@@ -24,6 +24,7 @@ mod terraform '_b00t_/terraform.🧊/justfile'
 mod k8s '_b00t_/k8s.🚢/justfile'
 mod pm2-tasker 'pm2-tasker/justfile'
 mod embed '_b00t_/python.🐍/embed/justfile'
+mod qwen-code '_b00t_/qwen-code.justfile'
 
 next-task:
     #!/bin/bash
@@ -153,6 +154,14 @@ release:
     echo "📦 Tagging, release creation, binaries, and crates publishing now flow through GitHub Actions"
     echo "🔗 Check workflow: https://github.com/elasticdotventures/dotfiles/actions"
 
+# Generate deterministic Claude marketplace + MCP role recipes.
+marketplace-generate:
+    python3 scripts/generate_claude_marketplace.py --repo-root .
+
+# Validate generated marketplace artifacts are up-to-date.
+marketplace-check:
+    python3 scripts/generate_claude_marketplace.py --repo-root . --check
+
 
 # 🥾 Bootstrap b00t on a fresh machine (no cargo/just required).
 # 💡例 curl the script and pipe to bash, or run directly:
@@ -164,6 +173,10 @@ bootstrap:
     echo "🥾 b00t bootstrap (b00t-lite)"
     B00T_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
     exec "${B00T_DIR}/b00t-lite.sh" "$@"
+
+# 🥾 Build Node.js hook bundles and distribute to all runtime hook dirs.
+build-hooks:
+    cd _b00t_/runtimes/hooks-src && npm install && node build.js
 
 # 🥾 Install b00t binaries + systemd unit files.
 # 💡 Recommended: sudo just install (sudo enables system-wide b00t@.service)
@@ -237,6 +250,9 @@ install:
         fi
     fi
 
+# Install b00t skills/agents/hooks into agent runtimes (interactive TUI)
+install-runtimes: build-hooks
+    b00t-cli install --interactive
 
 # 💡 Recommended: sudo just installx
 #    sudo path → apt installs system packages; user path → user-local cargo/uv tools only
@@ -718,7 +734,7 @@ orchestrator-k0s-kata MODE="start" INVENTORY="~/.config/b00t/k0s-inventory.yaml"
     K0S_KATA_EXTRA_ARGS="$EXTRA_ARGS" scripts/orchestrators/k0s_kata.sh "$MODE" "$INVENTORY"
 
 # Ralph autonomous agent integration
-# 🤓 Ralph runs TaskMaster workflows autonomously via codex/claude/amp/opencode/mistralrs
+# 🤓 Ralph runs backlog/job workflows autonomously via codex/claude/amp/opencode/mistralrs
 
 # Run ralph hive validation before starting projects
 ralph-hive-validate tool="codex" iterations="5":
@@ -742,7 +758,7 @@ ralph-maintenance tool="codex" iterations="10":
         --max-iterations {{iterations}} \
         --project-root {{repo-root}}
 
-# Run ralph on pending TaskMaster tasks
+# Run ralph on pending backlog items
 ralph-run tool="codex" iterations="10":
     #!/bin/bash
     set -euo pipefail

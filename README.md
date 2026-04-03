@@ -58,9 +58,12 @@ b00t advice rust "PyO3"            # retrieve lessons for a tool+pattern
 # In Claude Code, add the b00t marketplace plugin
 /plugin marketplace add elasticdotventures/_b00t_
 /plugin install b00t@b00t-plugins
+/plugin install skill-document-understanding@b00t-plugins
 ```
 
 Provides `/b00t` skill, context-aware tool dispatch, and all available b00t skills.
+Bundles publish deterministic MCP recipes at `.claude-plugin/recipes/{skills,roles}/*.json`
+(for example: `skill-document-understanding` provides `docling-mcp` + `fetch-url-as-markdown`).
 
 ### Direct MCP Server
 
