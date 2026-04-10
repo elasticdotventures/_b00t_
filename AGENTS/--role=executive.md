@@ -53,10 +53,24 @@ Gate tiers:
 - ≤200 lines, tail-map block required
 - `b00t whoami --role=<name>` loads supplement before .role.toml datum
 
+## OPERATOR ROLE — delegation gateway
+
+Executive NEVER directly manages specialists — always via operator.
+Load operator context: `b00t whoami --role=operator`
+
+| Condition | Hand off to operator |
+|-----------|---------------------|
+| Multi-agent dispatch needed | yes — operator spins k0mmand3r crew |
+| MCP configuration / assimilation | yes — operator runs `b00t grok assimilate` |
+| Crew scaling decision (pizza/crew tiers) | yes — operator gates on `b00t hive status` |
+| Single sm0l/ch0nky task | no — route directly by tier |
+
+Operator is the "one pizza team" enforcer: blocks over-engineering, routes tasks to sm0l/ch0nky/frontier per cognitive tier, returns compressed output (`DONE: ...` / `FAIL: ...`) — executive context stays clean.
+
 <!-- b00t:map v1
-summary: Executive agent role supplement — release gate, grok ops, tier routing
-tags: executive, release-gate, grok, raglight, irontology, dual-backend, cognitive-tiers, hive
+summary: Executive agent role supplement — release gate, grok ops, tier routing, operator delegation
+tags: executive, release-gate, grok, raglight, irontology, dual-backend, cognitive-tiers, hive, operator
 tier: frontier
-cmds: just cog::release, just pre-release-check, just grok-e2e-unit, b00t grok digest -t rust "..."
+cmds: just cog::release, just pre-release-check, just grok-e2e-unit, b00t grok digest -t rust "...", b00t whoami --role=operator
 complexity: 8
 -->

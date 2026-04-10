@@ -135,7 +135,13 @@ pub fn is_validated(datum: &DatumMeta) -> bool {
     if datum.validate.command.is_empty() {
         return false;
     }
-    let parts: Vec<&str> = datum.validate.command.split_whitespace().collect();
+    // Expand ~ to the actual home directory so validate commands like
+    // `git -C ~/.b00t cat-file -e <hash>` work without shell expansion.
+    let home = dirs::home_dir()
+        .map(|p| p.to_string_lossy().into_owned())
+        .unwrap_or_default();
+    let expanded = datum.validate.command.replace('~', &home);
+    let parts: Vec<&str> = expanded.split_whitespace().collect();
     if parts.is_empty() {
         return false;
     }

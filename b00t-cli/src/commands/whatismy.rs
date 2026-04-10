@@ -240,7 +240,7 @@ impl WhatismyCommands {
                     println!("🤖 Agent: {}", agent);
 
                     if let Some(s) = &supplement {
-                        println!("📋 Supplement: {}", s);
+                        println!("\n{}", s);
                     }
 
                     if *show_tools {
@@ -474,7 +474,7 @@ fn tool_is_available(tool_name: &str) -> bool {
 
 // ── Role supplement + skill inference ────────────────────────────────────────
 
-/// Load `AGENTS/--role=<role>.md` supplement — returns the tail-map summary if present
+/// Load `AGENTS/--role=<role>.md` supplement — returns full file content
 fn load_role_supplement(role: &str) -> Option<String> {
     // Search: project-local AGENTS/ first, then ~/.b00t/AGENTS/
     let candidates = [
@@ -487,13 +487,7 @@ fn load_role_supplement(role: &str) -> Option<String> {
 
     for path in &candidates {
         if let Ok(content) = std::fs::read_to_string(path) {
-            // Extract tail-map summary line
-            let summary = content
-                .lines()
-                .find(|l| l.trim_start_matches("# ").starts_with("summary:"))
-                .map(|l| l.trim_start_matches("# ").trim_start_matches("summary:").trim().to_string())
-                .unwrap_or_else(|| format!("{}({:?})", role, path));
-            return Some(summary);
+            return Some(content);
         }
     }
     None

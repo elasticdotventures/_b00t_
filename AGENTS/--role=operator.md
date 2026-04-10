@@ -117,10 +117,61 @@ executive (frontier)
         └─→ frontier agents (security, architecture)
 ```
 
+## MCP ASSIMILATION — `b00t grok assimilate`
+
+Ingest new MCP server patterns into the ontology for future operator recall:
+```bash
+# Canonical flow: fetch README → assimilate → verify
+b00t grok assimilate -t mcp --class mcp-patterns --tags "mcp,stdio,<server-name>" "<content>"
+b00t grok ask "how to configure <mcp-server>" -t mcp   # verify ingestion
+
+# Microsoft MCP ecosystem categories (assimilate under matching tag):
+# cloud-azure      — Azure Resource Manager, Bicep, ACA
+# productivity-m365 — Teams, Outlook, SharePoint, Graph API
+# devtools-github  — GitHub Issues, PRs, Actions, Codespaces
+# data-fabric      — Fabric, Synapse, ADX, Power BI
+# security-sentinel — Sentinel, Defender, Entra ID
+```
+
+Pattern: operator assimilates once → all crew members query via `b00t grok ask`.
+
+## MCP SERVICE DIRECTORY — hive patterns
+
+Active MCPs (from `.mcp.json`):
+| Name | Transport | Notes |
+|------|-----------|-------|
+| `b00t-mcp` | stdio | b00t-native, core hive tools |
+| `context7` | stdio | live library docs via bunx |
+| `github` | stdio | GitHub API via npx |
+| `rust-crate-docs-docker` | stdio | Rust crate docs via Docker |
+| `taskmaster-ai` | stdio | task tracking via bunx |
+
+Transport patterns:
+- **stdio**: declared in `.mcp.json` `mcpServers`, subprocess lifecycle, no network port
+- **HTTP/SSE**: requires `url` + `headers.Authorization` fields in `.mcp.json` entry
+- **b00t-native**: `b00t mcp list` / `b00t mcp add <name>` / `b00t mcp install <name>`
+- **Discovery**: `b00t mcp registry list` shows known-but-uninstalled MCPs
+
+## CREW SCALING — one pizza team rule
+
+Route by task count AFTER `b00t hive status` gates resource availability:
+
+| Scale | Task count | Pattern |
+|-------|------------|---------|
+| `sm0l` | 1 task | single specialist, no orchestration |
+| pizza team | 2-4 tasks | `b00t agent delegate` per specialist |
+| crew | 5+ tasks | spin k0mmand3r with explicit role topology |
+
+Rules:
+- NEVER use frontier model for tasks sm0l/ch0nky can handle
+- ALWAYS run `b00t hive status` before multi-agent dispatch — gate on free RAM/GPU
+- Pizza team max: 4 concurrent specialists; above 4 → k0mmand3r required
+- sm0l output contract: `PASS` or `FAIL: <name> <5-line excerpt>` — no raw output to operator
+
 <!-- b00t:map v1
-summary: Operator role — crew dispatch, k0mmand3r coordination, bug capture, RL loop
-tags: operator, k0mmand3r, crew, acp, dispatch, specialist, bug-capture, rl-loop
+summary: Operator role — crew dispatch, k0mmand3r, bug capture, RL loop, MCP assimilation, hive scaling
+tags: operator, k0mmand3r, crew, acp, dispatch, specialist, bug-capture, rl-loop, mcp, assimilation, hive, scaling
 tier: frontier
-cmds: /k0mmand3r dispatch, b00t_agent_delegate, b00t grok ask, b00t lfmf datum abstract
-complexity: 8
+cmds: /k0mmand3r dispatch, b00t_agent_delegate, b00t grok ask, b00t grok assimilate, b00t mcp list, b00t hive status, b00t lfmf datum abstract
+complexity: 9
 -->

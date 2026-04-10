@@ -57,6 +57,24 @@ pub fn whoami(path: &str, role_override: Option<String>, with_skills: bool) -> R
 
     println!("{}", rendered);
 
+    // Append role supplement (AGENTS/--role=<role>.md) BEFORE role datum summary
+    // 🤓 supplement = full AGENTS/--role=*.md content (MCP patterns, crew scaling, etc.)
+    if let Some(role_name) = resolve_role(role_override.clone()) {
+        let supplement_candidates = [
+            std::path::PathBuf::from("AGENTS").join(format!("--role={}.md", role_name)),
+            dirs::home_dir()
+                .unwrap_or_default()
+                .join(".b00t/AGENTS")
+                .join(format!("--role={}.md", role_name)),
+        ];
+        for p in &supplement_candidates {
+            if let Ok(content) = fs::read_to_string(p) {
+                println!("\n{}", content);
+                break;
+            }
+        }
+    }
+
     // Append role summary from .role.tomllm / .role.toml / .agent.tomllm / .agent.toml datum
     // 🤓 role datums are executable + introspectable: skills, capabilities, entanglements
     // .tomllm extension: TOML + #comment tribal knowledge; toml parser handles it identically
