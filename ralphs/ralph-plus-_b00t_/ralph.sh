@@ -314,7 +314,7 @@ run_external_step() {
             fi
             ;;
         pi)
-            # 🤓 openai provider works against both gateway :1234 and direct vLLM :8001.
+            # 🤓 Use `openai` + `OPENAI_BASE_URL` for the gateway (:1234); use `llama-cpp` + `LLAMA_CPP_BASE_URL` for direct Gemma4/llama.cpp endpoints.
             if command -v pi >/dev/null 2>&1 && resolve_pi_transport; then
                 local _pi_base_url_var
                 [[ "${PI_PROVIDER}" == "llama-cpp" ]] && _pi_base_url_var="LLAMA_CPP_BASE_URL" || _pi_base_url_var="OPENAI_BASE_URL"
