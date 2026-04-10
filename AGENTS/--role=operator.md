@@ -150,7 +150,7 @@ Transport patterns:
 - **stdio**: declared in `.mcp.json` `mcpServers`, subprocess lifecycle, no network port
 - **HTTP/SSE**: requires `url` + `headers.Authorization` fields in `.mcp.json` entry
 - **b00t-native**: `b00t mcp list` / `b00t mcp add <name>` / `b00t mcp install <name>`
-- **Discovery**: `b00t mcp list --available` shows known-but-uninstalled MCPs
+- **Discovery**: `b00t mcp registry list` shows known-but-uninstalled MCPs
 
 ## CREW SCALING — one pizza team rule
 
