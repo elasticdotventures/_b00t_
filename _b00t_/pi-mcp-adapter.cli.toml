@@ -44,13 +44,25 @@ command = "pi -p 'mcp({ search: \"b00t\" })'"
 description = "Invoke b00t tool via pi MCP adapter"
 command = "pi -p 'mcp({ tool: \"b00t_status\", args: \"{}\" })'"
 
+[[b00t.usage]]
+description = "Install pi-mcp-adapter as MCP server into Claude Code (exposes pi tools to Claude)"
+command = "b00t mcp install pi-mcp-adapter claudecode"
+
+[[b00t.usage]]
+description = "Install pi-mcp-adapter as MCP server into repo .mcp.json"
+command = "b00t mcp install pi-mcp-adapter dotmcpjson"
+
+[[b00t.usage]]
+description = "Self-install: pi agent calls b00t mcp install pi-mcp-adapter via MCP tool"
+command = "pi -p 'bash({ cmd: \"b00t mcp install pi-mcp-adapter claudecode\" })'"
+
 [validate]
 command = "pi list"
 regex = "pi-mcp-adapter"
 
 # b00t:map v1
-# summary: pi-mcp-adapter — lazy MCP proxy for pi-coding-agent; saves context tokens
-# tags: pi, mcp, proxy, context-efficiency, b00t-mcp
+# summary: pi-mcp-adapter — token-efficient MCP proxy/server bridge for pi-coding-agent
+# tags: pi, mcp, proxy, context-efficiency, b00t-mcp, self-install
 # tier: sm0l
-# cmds: pi install npm:pi-mcp-adapter
+# cmds: b00t mcp install pi-mcp-adapter claudecode
 # complexity: 3

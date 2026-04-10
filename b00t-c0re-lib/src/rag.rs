@@ -98,9 +98,11 @@ pub struct RagLightConfig {
 pub struct LlmConfig {
     /// Provider type (openai, anthropic, ollama, etc.)
     pub provider: String,
-    /// Model name
+    /// Model name — served by vLLM at api_base
     pub model: String,
-    /// API key (optional, can use environment)
+    /// OpenAI-compatible base URL (vLLM endpoint)
+    pub api_base: String,
+    /// API key (local vLLM accepts any non-empty value)
     pub api_key: Option<String>,
     /// Additional configuration
     pub config: HashMap<String, serde_json::Value>,
@@ -128,11 +130,13 @@ impl RagLightManager {
 
     /// Discover available b00t datums as RAG topics
     fn discover_b00t_topics(_config: &RagLightConfig) -> Result<Vec<String>> {
-        // Scan ~/.dotfiles/_b00t_/ for available topics
-        let b00t_path = dirs::home_dir()
-            .ok_or_else(|| anyhow::anyhow!("Could not find home directory"))?
-            .join(".dotfiles")
-            .join("_b00t_");
+        // 🤓 b00t datums live in ~/.b00t/_b00t_/ (not ~/.dotfiles/_b00t_/)
+        //    B00T_DIR env var overrides; stem of each .toml (minus extension suffixes) = topic
+        let home = dirs::home_dir()
+            .ok_or_else(|| anyhow::anyhow!("Could not find home directory"))?;
+        let b00t_path = std::env::var("B00T_DIR")
+            .map(|d| PathBuf::from(d).join("_b00t_"))
+            .unwrap_or_else(|_| home.join(".b00t").join("_b00t_"));
 
         let mut topics = Vec::new();
 
@@ -142,12 +146,15 @@ impl RagLightManager {
             for entry in entries {
                 let entry = entry?;
                 let path = entry.path();
+                let is_toml = path.extension().map(|e| e == "toml").unwrap_or(false);
 
-                if let Some(stem) = path.file_stem() {
-                    if let Some(name) = stem.to_str() {
-                        // Include TOML configs and learn directories
-                        if path.extension().map(|e| e == "toml").unwrap_or(false) || path.is_dir() {
-                            topics.push(name.to_string());
+                if is_toml || path.is_dir() {
+                    if let Some(fname) = path.file_name().and_then(|n| n.to_str()) {
+                        // 🤓 Strip ALL extensions: "gemma-4-26b-a4b-local.model.toml" → "gemma-4-26b-a4b-local"
+                        //    Also handle "pi.agent.toml" → "pi", "b00t-mcp.mcp.toml" → "b00t-mcp"
+                        let topic = fname.split('.').next().unwrap_or(fname);
+                        if !topic.is_empty() {
+                            topics.push(topic.to_string());
                         }
                     }
                 }
@@ -272,50 +279,60 @@ impl RagLightManager {
         };
 
         // Create RAGLight indexing script arguments
+        // 🤓 raglite API: insert_documents([path_or_url], config=RAGLiteConfig(...))
+        //    db_url uses DuckDB format; llm uses litellm "openai/model" pointing to vLLM :8001
+        //    embedder: llama-cpp bge-m3 GGUF (~2GB VRAM) — concurrent with Gemma4 (12-16GB)
+        let db_url = format!("duckdb:///{}", config.vector_db_path.display());
+        let llm_spec = format!("{}/{}", config.llm_config.provider, config.llm_config.model);
+        let api_base = config.llm_config.api_base.clone();
+        let api_key = config.llm_config.api_key.clone().unwrap_or_else(|| "local".to_string());
+        let loader_type = format!("{:?}", source.loader_type.unwrap_or(LoaderType::Auto)).to_lowercase();
+
         let mut cmd = Command::new(&python_cmd);
         cmd.arg("-c").arg(format!(
             r#"
-import sys
-sys.path.insert(0, '{raglight_path}')
+import os, sys, tempfile
+from pathlib import Path
 
-from raglight import RagLightConfig, RagLight
-import asyncio
+os.environ.setdefault('OPENAI_BASE_URL', '{api_base}')
+os.environ.setdefault('OPENAI_API_KEY', '{api_key}')
 
-async def index_document():
-    # Configure RAGLight
-    config = RagLightConfig(
-        provider='{provider}',
-        model='{model}',
-        k=10,
-        vector_db_path='{vector_db_path}',
-    )
-    
-    # Initialize RAG system
-    rag = RagLight(config)
-    
-    # Load and index document
-    if '{loader_type}' == 'url':
-        await rag.load_url('{source}', topic='{topic}')
-    elif '{loader_type}' == 'git':
-        await rag.load_git_repo('{source}', topic='{topic}')
-    elif '{loader_type}' == 'pdf':
-        await rag.load_pdf('{source}', topic='{topic}')
-    else:
-        await rag.load_text_file('{source}', topic='{topic}')
-    
-    print(f"Successfully indexed {{'{source}'}} into topic {{'{topic}'}}")
+from raglite import RAGLiteConfig, insert_documents
 
-if __name__ == '__main__':
-    asyncio.run(index_document())
+config = RAGLiteConfig(
+    db_url='{db_url}',
+    llm='{llm_spec}',
+    embedder='{embedder}',
+)
+
+loader_type = '{loader_type}'
+source = r'''{source}'''
+
+if loader_type == 'url' or source.startswith('http'):
+    insert_documents([source], config=config)
+elif loader_type in ('pdf', 'markdown') and os.path.isfile(source):
+    insert_documents([Path(source)], config=config)
+elif os.path.isfile(source):
+    insert_documents([Path(source)], config=config)
+else:
+    # raw text content — write to tempfile then ingest
+    with tempfile.NamedTemporaryFile(suffix='.txt', mode='w', delete=False, encoding='utf-8') as f:
+        f.write(source)
+        tmp_path = f.name
+    try:
+        insert_documents([Path(tmp_path)], config=config)
+    finally:
+        os.unlink(tmp_path)
+
+print(f'Indexed into {db_url}')
 "#,
-            raglight_path = config.raglight_path.display(),
-            provider = config.llm_config.provider,
-            model = config.llm_config.model,
-            vector_db_path = config.vector_db_path.display(),
-            loader_type =
-                format!("{:?}", source.loader_type.unwrap_or(LoaderType::Auto)).to_lowercase(),
-            source = source.source,
-            topic = source.topic,
+            api_base = api_base,
+            api_key = api_key,
+            db_url = db_url,
+            llm_spec = llm_spec,
+            embedder = config.embedding_model,
+            loader_type = loader_type,
+            source = source.source.replace("'", r"\'"),
         ));
 
         info!("Running RAGLight indexing for source: {}", source.source);
@@ -349,37 +366,43 @@ if __name__ == '__main__':
             PathBuf::from("python3")
         };
 
+        // 🤓 raglite query: retrieve_chunks → rerank_chunks → print chunk bodies
+        //    No topic filter in raglite (it's global DB); topic used for metadata context only
+        let db_url = format!("duckdb:///{}", self.config.vector_db_path.display());
+        let llm_spec = format!("{}/{}", self.config.llm_config.provider, self.config.llm_config.model);
+        let api_base = self.config.llm_config.api_base.clone();
+        let api_key = self.config.llm_config.api_key.clone().unwrap_or_else(|| "local".to_string());
+
         let mut cmd = Command::new(&python_cmd);
         cmd.arg("-c").arg(format!(
             r#"
-import sys
-sys.path.insert(0, '{raglight_path}')
+import os, sys
+os.environ.setdefault('OPENAI_BASE_URL', '{api_base}')
+os.environ.setdefault('OPENAI_API_KEY', '{api_key}')
 
-from raglight import RagLightConfig, RagLight
-import asyncio
+from raglite import RAGLiteConfig, retrieve_chunks, rerank_chunks
 
-async def query_rag():
-    config = RagLightConfig(
-        provider='{provider}',
-        model='{model}',
-        k={k},
-        vector_db_path='{vector_db_path}',
-    )
-    
-    rag = RagLight(config)
-    result = await rag.query('{query}', topic='{topic}')
-    print(result)
+config = RAGLiteConfig(
+    db_url='{db_url}',
+    llm='{llm_spec}',
+    embedder='{embedder}',
+)
 
-if __name__ == '__main__':
-    asyncio.run(query_rag())
+query = r'''{query}'''
+chunks = retrieve_chunks(query, config=config, num_results={k})
+if len(chunks) > 1:
+    chunks = rerank_chunks(query, chunks)
+for chunk in chunks:
+    print(chunk.body)
+    print('---')
 "#,
-            raglight_path = self.config.raglight_path.display(),
-            provider = self.config.llm_config.provider,
-            model = self.config.llm_config.model,
+            api_base = api_base,
+            api_key = api_key,
+            db_url = db_url,
+            llm_spec = llm_spec,
+            embedder = self.config.embedding_model,
+            query = query.replace("'", r"\'"),
             k = max_results.unwrap_or(10),
-            vector_db_path = self.config.vector_db_path.display(),
-            query = query.replace("'", "\\'"),
-            topic = topic,
         ));
 
         let output = cmd
@@ -428,15 +451,24 @@ impl Default for RagLightConfig {
     fn default() -> Self {
         let home = dirs::home_dir().unwrap_or_else(|| PathBuf::from("."));
         Self {
-            venv_path: None,
-            raglight_path: home.join(".local/lib/python3.12/site-packages"),
-            vector_db_path: home.join(".b00t/raglight/vector_db"),
+            venv_path: Some(home.join(".venv")),
+            // 🤓 raglight_path unused — raglite installed via uv into .venv; kept for compat
+            raglight_path: home.join(".venv/lib/python3.12/site-packages"),
+            // 🤓 DuckDB path: formatted as duckdb:////path at runtime
+            vector_db_path: home.join(".local/share/raglite/raglite.db"),
             max_concurrent_jobs: 3,
-            embedding_model: "sentence-transformers/all-MiniLM-L6-v2".to_string(),
+            // 🤓 bge-m3 GGUF via llama-cpp: ~2GB VRAM, concurrent with Gemma4 (12-16GB) on RTX 3090
+            embedding_model: "llama-cpp-python/lm-kit/bge-m3-gguf/*F16.gguf@512".to_string(),
             llm_config: LlmConfig {
                 provider: "openai".to_string(),
-                model: "gpt-4o-mini".to_string(),
-                api_key: None,
+                // 🤓 ch0nky = Gemma4 served by vLLM at :8001; raglite LLM calls go to same endpoint
+                model: "ch0nky".to_string(),
+                api_base: std::env::var("OPENAI_BASE_URL")
+                    .unwrap_or_else(|_| "http://127.0.0.1:8001/v1".to_string()),
+                api_key: Some(
+                    std::env::var("OPENAI_API_KEY")
+                        .unwrap_or_else(|_| "local-gemma4".to_string()),
+                ),
                 config: HashMap::new(),
             },
         }

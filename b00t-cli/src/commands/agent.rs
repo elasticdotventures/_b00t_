@@ -313,9 +313,11 @@ pub async fn handle_agent_command(cmd: AgentCommands) -> Result<()> {
             max_iterations,
             project_root,
         } => {
-            if tool == "pi" {
-                // 🤓 pi path: deterministic Rust loop via invoke_agent_executor, no Python/uv
-                handle_invoke("pi", &task, None).await
+            if tool == "pi" || tool == "opencode" {
+                // 🤓 pi + opencode are systemd-managed hive services (b00t@<name>-agent.service)
+                //    handle_invoke is a fallback one-shot path only; production path is:
+                //    systemctl --user start b00t@<name>-agent.service → submit task via IPC
+                handle_invoke(tool.as_str(), &task, None).await
             } else {
                 handle_ralph(&tool, &task, max_iterations, project_root.as_deref()).await
             }

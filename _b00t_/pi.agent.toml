@@ -1,19 +1,20 @@
 # b00t Agent Datum — pi-coding-agent as first-class hive sub-agent
-# 🤓 pi is a lightweight coding agent (~200 token MCP overhead via pi-mcp-adapter)
-#    Wired to local Gemma 4 26B-A4B via llama-cpp provider (port 8001)
-#    Acts as ch0nky executor — implement, refactor, debug tasks
+# 🤓 pi is managed as a systemd --user service (b00t hive pattern)
+#    pi --mode rpc runs as a persistent RPC/stdio server; b00t generates the unit
+#    Activate: systemctl --user start b00t@pi-agent.service
+#    Swap:     systemctl --user stop b00t@pi-agent && systemctl --user start b00t@opencode-agent
 #    MCP tools available via pi-mcp-adapter (b00t-mcp lazy-loaded)
+# https://shittycodingagent.ai/ / https://github.com/badlogic/pi-mono
 
 [b00t]
 name = "pi"
 type = "agent"
-hint = "pi coding agent — ch0nky tier executor; local Gemma 4 via llama-cpp; MCP via pi-mcp-adapter"
+hint = "pi coding agent — systemd-managed RPC server; ch0nky tier; swap with opencode via hive stop/start"
 
 [b00t.agent]
 pid = "pi-001"
 branch = "main"
-# 🤓 pi targets liter-llm gateway at :1234; "ch0nky" model routed to Gemma 4 at :8001
-#    Cost accounting and provider routing handled by liter-llm/mistralrs-proxy
+# 🤓 ch0nky = vLLM gemma4 at :8001 via inference-gemma4 hive profile
 model = "ch0nky"
 skills = ["code", "refactor", "debug", "edit", "bash", "read", "write", "grep", "find", "ls"]
 personality = "pragmatic"
@@ -21,45 +22,78 @@ humor = "low"
 role = "specialist"
 
 [b00t.agent.ipc]
-# 🤓 pi is invoked via CLI subprocess, not a persistent daemon; socket unused
+# 🤓 pi --mode rpc exposes stdio RPC; pi-mcp-adapter bridges to MCP clients
 socket = "/tmp/b00t/agents/pi.sock"
 pubsub = false
-protocol = "json"
+protocol = "rpc+stdio"
 
 [b00t.agent.crew]
 role = "specialist"
 captain = false
 
-[b00t.agent.executor]
-# 🤓 pi -p targets vLLM directly at :8001 (liter-llm/:1234 not required)
-#    2imi9/gemma-4-E4B-it-NVFP4A16 served as ch0nky; --enforce-eager avoids RTX3090 deadlock
-#    tool calls work: pi emits JSON tool_code blocks; caller must exec them (agentic loop)
-cli_path = "pi"
-cli_args = ["-p", "--provider", "llama-cpp", "--model", "ch0nky"]
-supports_tools = ["read", "bash", "edit", "write", "grep", "find", "ls"]
-max_iterations = 10
-requires = ["pi", "b00t@inference-gemma4.service"]
-hive_profile = "inference-gemma4"
-
 [b00t.agent.mcp]
-# pi accesses MCP via pi-mcp-adapter (lazy proxy); not a standalone MCP server
-enabled = false
-# 🤓 MCP servers available to pi defined in ~/.pi/agent/mcp.json
+# 🤓 pi-mcp-adapter bridges pi RPC → MCP; servers defined in ~/.pi/agent/mcp.json
+enabled = true
+
+# ── Inline service spec — b00t generates this unit dynamically ───────────────
+# 🤓 b00t@pi-agent.service → `pi --mode rpc` persistent RPC daemon
+#    pi-mcp-adapter must be installed: `pi install npm:pi-mcp-adapter`
+#    Swap pattern: stop this unit, start b00t@opencode-agent.service — same ch0nky slot
+[b00t.hive.service]
+description = "pi coding agent RPC server — ch0nky tier (pi-mcp-adapter)"
+service_type = "simple"
+restart = "on-failure"
+restart_sec = "10s"
+timeout_start_sec = "60"
+after = ["network.target", "b00t-hive-inference-gemma4.service"]
+environment = [
+  "PATH=/home/brianh/.nvm/versions/node/v22.15.1/bin:/usr/local/bin:/usr/bin:/bin",
+  "OPENAI_BASE_URL=http://127.0.0.1:8001/v1",
+  "OPENAI_API_KEY=local-gemma4",
+]
+exec_start = "pi --mode rpc --provider openai --model ch0nky"
+
+[b00t.hive.resources]
+ram_gb = 1
+gpu_mb = 0
+cpu_cores = 1
+
+[b00t.hive.resources.gate]
+ram_free_gb = 1
+gpu_free_mb = 0
+
+[b00t.hive.exclusion]
+# 🤓 only one ch0nky coding-agent service active at a time; pi and opencode are mutually exclusive
+group = "ch0nky-coding-agent"
+priority = 50
 
 [b00t.env]
 AGENT_ID = "pi"
 AGENT_SKILLS = "code,refactor,debug,edit,bash"
 PI_CODING_AGENT_DIR = "~/.pi/agent"
-# 🤓 pi consumes liter-llm gateway at :1234; "ch0nky" routes to Gemma 4 at :8001
-#    Same endpoint used by moltis — shared cost accounting via liter-llm
 PI_MODEL = "ch0nky"
-# 🤓 :8001 = vLLM direct; :1234 = liter-llm gateway (optional, not required for pi)
 OPENAI_BASE_URL = "http://127.0.0.1:8001/v1"
 OPENAI_API_KEY = "local-gemma4"
 
+[[b00t.usage]]
+description = "Start pi agent service (b00t hive)"
+command = "systemctl --user start b00t@pi-agent.service"
+
+[[b00t.usage]]
+description = "Stop pi agent service"
+command = "systemctl --user stop b00t@pi-agent.service"
+
+[[b00t.usage]]
+description = "Swap from opencode to pi (same ch0nky slot)"
+command = "systemctl --user stop b00t@opencode-agent.service && systemctl --user start b00t@pi-agent.service"
+
+[[b00t.usage]]
+description = "Connect to pi RPC server via pi-mcp-adapter (from another agent)"
+command = "b00t mcp install pi-mcp-adapter claudecode"
+
 # b00t:map v1
-# summary: pi coding agent — ch0nky executor via Gemma 4 local LLM, MCP via pi-mcp-adapter
-# tags: pi, agent, gemma4, local-llm, ch0nky, specialist, mcp-adapter
+# summary: pi coding agent — systemd-managed RPC server; ch0nky slot; swap with opencode via hive stop/start
+# tags: pi, agent, gemma4, ch0nky, systemd, rpc, hive, swap, mcp-adapter
 # tier: ch0nky
-# cmds: OPENAI_BASE_URL=http://127.0.0.1:8001/v1 OPENAI_API_KEY=local-gemma4 pi -p --provider llama-cpp --model ch0nky
+# cmds: systemctl --user start b00t@pi-agent.service
 # complexity: 5

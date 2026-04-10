@@ -821,38 +821,78 @@ gemma4-download:
     hf download unsloth/gemma-4-26B-A4B-it-GGUF --include "*MXFP4_MOE*"
 
 # Serve Gemma 4 via vLLM on port 8001 (requires gemma4-download first)
-# 🤓 MXFP4_MOE ~fits RTX 3090 24GB; --jinja uses Gemma 4 native chat template
+# 🤓 2imi9/gemma-4-E4B-it-NVFP4A16: NVFP4A16 quant, native vLLM Gemma4 support (no GGUF)
+# 🤓 --enforce-eager: avoids Triton CUDA graph compilation deadlock on RTX 3090
+# 🤓 served-model-name=ch0nky: aligns with b00t hive ch0nky tier routing
 gemma4-serve:
-    #!/usr/bin/env bash
-    BLOB=$(ls ~/.cache/huggingface/hub/models--unsloth--gemma-4-26B-A4B-it-GGUF/blobs/ | grep -v incomplete | head -1)
     prlimit --nofile=65536:65536 -- vllm serve \
-      ~/.cache/huggingface/hub/models--unsloth--gemma-4-26B-A4B-it-GGUF/blobs/$BLOB \
-      --served-model-name gemma-4-26B-A4B-it-GGUF \
+      2imi9/gemma-4-E4B-it-NVFP4A16 \
+      --served-model-name ch0nky \
       --port 8001 \
-      --max-model-len 32768 \
-      --enable-chunked-prefill \
+      --enforce-eager \
       --enable-auto-tool-choice \
       --tool-call-parser pythonic
 
-# Run pi with local Gemma 4 (non-interactive, single prompt)
-# Usage: just pi-gemma4 "your prompt here"
-pi-gemma4 prompt="hello":
-    pi --provider llama-cpp --model gemma-4-26B-A4B-it-GGUF -p "{{prompt}}"
+# Start Gemma 4 via systemd (preferred over direct serve)
+gemma4-start:
+    systemctl --user start vllm-gemma4.service
 
-# Run pi interactively with local Gemma 4 + all tools
-pi-gemma4-interactive:
-    pi --provider llama-cpp --model gemma-4-26B-A4B-it-GGUF --tools read,bash,edit,write,grep,find,ls
-
-# Delegate a sub-agent task to pi+gemma4 (b00t hive pattern)
-# Usage: just pi-delegate "implement X in src/foo.rs"
-pi-delegate task="":
-    pi --provider llama-cpp --model gemma-4-26B-A4B-it-GGUF -p --tools read,bash,edit,write "{{task}}"
+# Stop Gemma 4 systemd service
+gemma4-stop:
+    systemctl --user stop vllm-gemma4.service
 
 # Check Gemma 4 server health
 gemma4-status:
     curl -s http://localhost:8001/v1/models | python3 -m json.tool
 
-# Full gemma4+pi smoke test
-gemma4-test:
+# ── pi agent — systemd service lifecycle ─────────────────────────────────────
+# 🤓 pi is managed as b00t@pi-agent.service, NOT spawned per-invocation
+pi-agent-start:
+    systemctl --user start b00t@pi-agent.service
+
+pi-agent-stop:
+    systemctl --user stop b00t@pi-agent.service
+
+pi-agent-status:
+    systemctl --user status b00t@pi-agent.service
+
+# Run pi one-shot (interactive, dev/debug only — not the hive path)
+pi-gemma4 prompt="hello":
+    OPENAI_BASE_URL=http://127.0.0.1:8001/v1 OPENAI_API_KEY=local-gemma4 \
+      pi --provider openai --model ch0nky -p "{{prompt}}"
+
+# ── opencode agent — systemd service lifecycle ───────────────────────────────
+# 🤓 opencode is managed as b00t@opencode-agent.service (ACP server :3000)
+opencode-agent-start:
+    systemctl --user start b00t@opencode-agent.service
+
+opencode-agent-stop:
+    systemctl --user stop b00t@opencode-agent.service
+
+opencode-agent-status:
+    systemctl --user status b00t@opencode-agent.service
+
+# Submit task to running opencode ACP server
+# Usage: just opencode-task "implement X"
+opencode-task task="hello":
+    opencode run --model gemma4-local/ch0nky "{{task}}"
+
+# ── ch0nky slot swap (pi ↔ opencode) ─────────────────────────────────────────
+# 🤓 pi and opencode share the ch0nky-coding-agent exclusion group — only one active
+ch0nky-use-pi:
+    systemctl --user stop b00t@opencode-agent.service 2>/dev/null || true
+    systemctl --user start b00t@pi-agent.service
+
+ch0nky-use-opencode:
+    systemctl --user stop b00t@pi-agent.service 2>/dev/null || true
+    systemctl --user start b00t@opencode-agent.service
+
+# ── smoke tests ──────────────────────────────────────────────────────────────
+gemma4-pi-test:
     curl -sf http://localhost:8001/v1/models | python3 -c "import sys,json; m=json.load(sys.stdin); print('✅ serving:', [x['id'] for x in m['data']])"
-    pi --provider llama-cpp --model gemma-4-26B-A4B-it-GGUF -p "respond with exactly: pong"
+    OPENAI_BASE_URL=http://127.0.0.1:8001/v1 OPENAI_API_KEY=local-gemma4 \
+      pi --provider openai --model ch0nky -p "respond with exactly: pong"
+
+gemma4-opencode-test:
+    curl -sf http://localhost:8001/v1/models | python3 -c "import sys,json; m=json.load(sys.stdin); print('✅ serving:', [x['id'] for x in m['data']])"
+    opencode run --model gemma4-local/ch0nky "respond with exactly: pong"
