@@ -463,10 +463,14 @@ impl Default for RagLightConfig {
                 provider: "openai".to_string(),
                 // 🤓 ch0nky = Gemma4 served by vLLM at :8001; raglite LLM calls go to same endpoint
                 model: "ch0nky".to_string(),
-                api_base: std::env::var("OPENAI_BASE_URL")
+                // 🤓 GEMMA4_API_BASE takes precedence: avoids OPENAI_BASE_URL collision
+                //    when direnv is not active (outside ~/.b00t); fallback to :8001
+                api_base: std::env::var("GEMMA4_API_BASE")
+                    .or_else(|_| std::env::var("OPENAI_BASE_URL"))
                     .unwrap_or_else(|_| "http://127.0.0.1:8001/v1".to_string()),
                 api_key: Some(
-                    std::env::var("OPENAI_API_KEY")
+                    std::env::var("GEMMA4_API_KEY")
+                        .or_else(|_| std::env::var("OPENAI_API_KEY"))
                         .unwrap_or_else(|_| "local-gemma4".to_string()),
                 ),
                 config: HashMap::new(),

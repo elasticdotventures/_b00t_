@@ -163,6 +163,20 @@ marketplace-check:
     python3 scripts/generate_claude_marketplace.py --repo-root . --check
 
 
+# Bump patch version + cargo install — always pair these together
+# 🤓 never cargo install without bumping version; tracks deployed vs source
+bump-install:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    current=$(grep '^version' Cargo.toml | head -1 | grep -oP '[\d]+\.[\d]+\.[\d]+')
+    IFS='.' read -r maj min pat <<< "$current"
+    next="$maj.$min.$((pat+1))"
+    sed -i "s/^version = \"$current\"/version = \"$next\"/" Cargo.toml
+    echo "⬆️  $current → $next"
+    cargo install --path b00t-mcp --force
+    cargo install --path b00t-cli --force
+    echo "✅ installed v$next"
+
 # 🥾 Bootstrap b00t on a fresh machine (no cargo/just required).
 # 💡例 curl the script and pipe to bash, or run directly:
 #    ./b00t-lite.sh          — auto-detects OS, installs system deps + rustup
@@ -222,7 +236,10 @@ install:
     export PATH="${CARGO_HOME_VALUE}/bin:${PATH}"
     mkdir -p "${CARGO_HOME_VALUE}/bin"
 
-    # [1] [2] [3]: binaries always installed unconditionally
+    # [1] [2] [3]: bump patch version then install
+    # 🤓 version bump required on every cargo install — tracks deployed vs source state
+    cargo ws version patch --no-git-commit --yes 2>/dev/null || \
+      sed -i 's/^version = "\([0-9]*\)\.\([0-9]*\)\.\([0-9]*\)"/echo "version = \"\1.\2.$((\3+1))\""/e' Cargo.toml
     cargo install --path b00t-mcp  --force
     cargo install --path b00t-cli  --force
     cargo install cocogitto --locked --force

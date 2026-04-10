@@ -740,7 +740,7 @@ dependencies = [
 
 [[package]]
 name = "b00t-azure-cp"
-version = "0.7.35"
+version = "0.7.36"
 dependencies = [
  "anyhow",
  "axum 0.8.8",
@@ -764,7 +764,7 @@ dependencies = [
 
 [[package]]
 name = "b00t-c0re-lib"
-version = "0.7.35"
+version = "0.7.36"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -798,7 +798,7 @@ dependencies = [
 
 [[package]]
 name = "b00t-chat"
-version = "0.7.35"
+version = "0.7.36"
 dependencies = [
  "anyhow",
  "async-nats",
@@ -836,7 +836,7 @@ dependencies = [
 
 [[package]]
 name = "b00t-cli"
-version = "0.7.35"
+version = "0.7.36"
 dependencies = [
  "anyhow",
  "apalis",
@@ -898,7 +898,7 @@ dependencies = [
 
 [[package]]
 name = "b00t-grok"
-version = "0.7.35"
+version = "0.7.36"
 dependencies = [
  "anyhow",
  "async-openai",
@@ -917,7 +917,7 @@ dependencies = [
 
 [[package]]
 name = "b00t-ipc"
-version = "0.7.35"
+version = "0.7.36"
 dependencies = [
  "anyhow",
  "async-nats",
@@ -937,7 +937,7 @@ dependencies = [
 
 [[package]]
 name = "b00t-mcp"
-version = "0.7.35"
+version = "0.7.36"
 dependencies = [
  "anyhow",
  "axum 0.8.8",
@@ -977,7 +977,7 @@ dependencies = [
 
 [[package]]
 name = "b00t-py"
-version = "0.7.35"
+version = "0.7.36"
 dependencies = [
  "anyhow",
  "b00t-c0re-lib",
@@ -3506,7 +3506,7 @@ dependencies = [
 
 [[package]]
 name = "k0mmand3r"
-version = "0.7.35"
+version = "0.7.36"
 dependencies = [
  "decimal-rs",
  "indexmap 2.13.1",
@@ -6598,7 +6598,7 @@ checksum = "a2eb9349b6444b326872e140eb1cf5e7c522154d69e7a0ffb0fb81c06b37543f"
 
 [[package]]
 name = "storage-neumann"
-version = "0.7.35"
+version = "0.7.36"
 dependencies = [
  "anyhow",
  "async-trait",
