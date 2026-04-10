@@ -527,26 +527,33 @@ impl_mcp_tool!(CheckpointCommand, "b00t_checkpoint", ["checkpoint"]);
 /// MCP command for digesting content into chunks about a topic
 /// 🤓 ENTANGLED: b00t-cli/src/commands/grok.rs GrokCommands::Digest
 /// 🤓 Uses --rag raglight by default: full grok stack (Qdrant+Ollama) may not be running
+/// 🤓 content is positional in CLI: `b00t-cli grok digest --topic <TOPIC> <CONTENT>`
 #[derive(Parser, Clone)]
 pub struct GrokDigestCommand {
-    #[arg(long, help = "Topic to digest content about")]
+    #[arg(long, short = 't', help = "Topic to digest content about")]
     pub topic: String,
 
-    #[arg(long, help = "Content to digest")]
+    #[arg(help = "Content to digest (positional)")]
     pub content: String,
 
     #[arg(long, default_value = "raglight", help = "RAG backend (raglight or qdrant)")]
     pub rag: Option<String>,
 }
 
-impl_mcp_tool!(GrokDigestCommand, "b00t_grok_digest", ["grok", "digest"]);
+impl_mcp_tool!(
+    GrokDigestCommand,
+    "b00t_grok_digest",
+    ["grok", "digest"],
+    positionals: ["content"]
+);
 
 /// MCP command for asking questions and searching the knowledgebase
 /// 🤓 ENTANGLED: b00t-cli/src/commands/grok.rs GrokCommands::Ask
 /// 🤓 Uses --rag raglight by default: full grok stack (Qdrant+Ollama) may not be running
+/// 🤓 query is positional in CLI: `b00t-cli grok ask <QUERY>`
 #[derive(Parser, Clone)]
 pub struct GrokAskCommand {
-    #[arg(help = "Query to search for")]
+    #[arg(help = "Query to search for (positional)")]
     pub query: String,
 
     #[arg(long, help = "Optional topic to filter by")]
@@ -559,15 +566,21 @@ pub struct GrokAskCommand {
     pub rag: Option<String>,
 }
 
-impl_mcp_tool!(GrokAskCommand, "b00t_grok_ask", ["grok", "ask"]);
+impl_mcp_tool!(
+    GrokAskCommand,
+    "b00t_grok_ask",
+    ["grok", "ask"],
+    positionals: ["query"]
+);
 
 /// MCP command for learning from URLs or content
 /// 🤓 ENTANGLED: b00t-cli/src/commands/grok.rs GrokCommands::Learn
 /// 🤓 Uses --rag raglight by default: full grok stack (Qdrant+Ollama) may not be running
+/// 🤓 content is positional in CLI: `b00t-cli grok learn [CONTENT]`
 #[derive(Parser, Clone)]
 pub struct GrokLearnCommand {
-    #[arg(long, help = "Content to learn from")]
-    pub content: String,
+    #[arg(help = "Content to learn from (positional; required unless --source is given)")]
+    pub content: Option<String>,
 
     #[arg(short = 't', long, help = "Topic for RAG indexing (required for raglight backend)")]
     pub topic: Option<String>,
@@ -579,7 +592,12 @@ pub struct GrokLearnCommand {
     pub rag: Option<String>,
 }
 
-impl_mcp_tool!(GrokLearnCommand, "b00t_grok_learn", ["grok", "learn"]);
+impl_mcp_tool!(
+    GrokLearnCommand,
+    "b00t_grok_learn",
+    ["grok", "learn"],
+    positionals: ["content"]
+);
 
 /// MCP command for getting grok system status
 #[derive(Parser, Clone)]
