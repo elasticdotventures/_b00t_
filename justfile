@@ -786,6 +786,21 @@ ralph-run tool="codex" iterations="10":
         --max-iterations {{iterations}} \
         --project-root {{repo-root}}
 
+# Run Gemma4-only operator self-improvement loop against local opencode/vLLM.
+gemma4-self-improve iterations="1" restarts="3":
+    #!/bin/bash
+    set -euo pipefail
+    iterations_value="{{iterations}}"
+    restarts_value="{{restarts}}"
+    iterations_value="${iterations_value#*=}"
+    restarts_value="${restarts_value#*=}"
+    echo "🥾 Running Gemma4 self-improvement loop..."
+    cargo run --bin b00t-cli -- up \
+        --tool gemma4 \
+        --role operator \
+        --max-iter "${iterations_value}" \
+        --max-restarts "${restarts_value}"
+
 # Pre-project validation hook - run this before starting any work
 pre-project: ralph-hive-validate
     echo "✅ Hive validated - ready for project work"
@@ -875,8 +890,8 @@ pi-agent-status:
 
 # Run pi one-shot (interactive, dev/debug only — not the hive path)
 pi-gemma4 prompt="hello":
-    OPENAI_BASE_URL=http://127.0.0.1:8001/v1 OPENAI_API_KEY=local-gemma4 \
-      pi --provider openai --model ch0nky -p "{{prompt}}"
+    LLAMA_CPP_BASE_URL=http://127.0.0.1:8001/v1 OPENAI_API_KEY=local-gemma4 \
+      pi --provider llama-cpp --model ch0nky -p "{{prompt}}"
 
 # ── opencode agent — systemd service lifecycle ───────────────────────────────
 # 🤓 opencode is managed as b00t@opencode-agent.service (ACP server :3000)
@@ -907,8 +922,8 @@ ch0nky-use-opencode:
 # ── smoke tests ──────────────────────────────────────────────────────────────
 gemma4-pi-test:
     curl -sf http://localhost:8001/v1/models | python3 -c "import sys,json; m=json.load(sys.stdin); print('✅ serving:', [x['id'] for x in m['data']])"
-    OPENAI_BASE_URL=http://127.0.0.1:8001/v1 OPENAI_API_KEY=local-gemma4 \
-      pi --provider openai --model ch0nky -p "respond with exactly: pong"
+    LLAMA_CPP_BASE_URL=http://127.0.0.1:8001/v1 OPENAI_API_KEY=local-gemma4 \
+      pi --provider llama-cpp --model ch0nky -p "respond with exactly: pong"
 
 gemma4-opencode-test:
     curl -sf http://localhost:8001/v1/models | python3 -c "import sys,json; m=json.load(sys.stdin); print('✅ serving:', [x['id'] for x in m['data']])"

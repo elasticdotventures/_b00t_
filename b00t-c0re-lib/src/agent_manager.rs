@@ -329,7 +329,7 @@ pub struct CrewConfig {
 /// Handle to a running agent.
 pub struct AgentHandle {
     pub config: AgentConfig,
-    pub socket_path: PathBuf,
+    pub socket_path: Option<PathBuf>,
     pub coordinator: AgentCoordinator,
     _listener: Option<UnixListener>,
 }
@@ -341,8 +341,8 @@ impl AgentHandle {
     }
 
     /// Get the socket path.
-    pub fn socket_path(&self) -> &Path {
-        &self.socket_path
+    pub fn socket_path(&self) -> Option<&Path> {
+        self.socket_path.as_deref()
     }
 
     /// Get coordinator reference.
@@ -354,17 +354,30 @@ impl AgentHandle {
 impl Drop for AgentHandle {
     fn drop(&mut self) {
         // Clean up socket file on drop
-        if self.socket_path.exists() {
-            if let Err(e) = std::fs::remove_file(&self.socket_path) {
+        if let Some(socket_path) = &self.socket_path {
+            if !socket_path.exists() {
+                return;
+            }
+
+            if let Err(e) = std::fs::remove_file(socket_path) {
                 error!(
                     "Failed to remove socket {}: {}",
-                    self.socket_path.display(),
+                    socket_path.display(),
                     e
                 );
             } else {
-                info!("🧹 Cleaned up socket: {}", self.socket_path.display());
+                info!("🧹 Cleaned up socket: {}", socket_path.display());
             }
         }
+    }
+}
+
+fn configured_socket_path(config: &AgentConfig) -> Option<PathBuf> {
+    let socket = config.b00t.agent.ipc.socket.trim();
+    if socket.is_empty() {
+        None
+    } else {
+        Some(PathBuf::from(socket))
     }
 }
 
@@ -397,31 +410,40 @@ impl AgentManager {
 
         info!("🚀 Spawning agent: {}", config.b00t.name);
 
-        // Create agent socket
-        let socket_path = PathBuf::from(&config.b00t.agent.ipc.socket);
-        if let Some(parent) = socket_path.parent() {
-            tokio::fs::create_dir_all(parent).await.context(format!(
-                "Failed to create socket directory: {}",
-                parent.display()
-            ))?;
-        }
-
-        // Remove stale socket if exists
-        if socket_path.exists() {
-            tokio::fs::remove_file(&socket_path).await.ok();
-        }
-
-        // Create Unix socket listener
-        let listener = UnixListener::bind(&socket_path).with_context(|| {
-            let mut message = format!("Failed to bind agent socket: {}", socket_path.display());
-            if let Some(hint) = sandbox_root_cause_hint("Unix socket bind") {
-                message.push(' ');
-                message.push_str(&hint);
+        let socket_path = configured_socket_path(&config);
+        let listener = if let Some(socket_path) = socket_path.as_ref() {
+            if let Some(parent) = socket_path.parent() {
+                tokio::fs::create_dir_all(parent).await.context(format!(
+                    "Failed to create socket directory: {}",
+                    parent.display()
+                ))?;
             }
-            message
-        })?;
 
-        info!("🔌 Agent socket bound: {}", socket_path.display());
+            // Remove stale socket if exists
+            if socket_path.exists() {
+                tokio::fs::remove_file(socket_path).await.ok();
+            }
+
+            // Create Unix socket listener
+            let listener = UnixListener::bind(socket_path).with_context(|| {
+                let mut message =
+                    format!("Failed to bind agent socket: {}", socket_path.display());
+                if let Some(hint) = sandbox_root_cause_hint("Unix socket bind") {
+                    message.push(' ');
+                    message.push_str(&hint);
+                }
+                message
+            })?;
+
+            info!("🔌 Agent socket bound: {}", socket_path.display());
+            Some(listener)
+        } else {
+            info!(
+                "🌐 Agent {} uses {} transport without local socket bind",
+                config.b00t.name, config.b00t.agent.ipc.protocol
+            );
+            None
+        };
 
         // Create Redis connection
         let redis = RedisComms::new(self.redis_config.clone(), config.b00t.agent.pid.clone())?;
@@ -448,7 +470,7 @@ impl AgentManager {
             config,
             socket_path,
             coordinator,
-            _listener: Some(listener),
+            _listener: listener,
         })
     }
 
@@ -566,6 +588,35 @@ max_iterations = 10
         assert_eq!(exec.cli_path, "pi");
         assert_eq!(exec.max_iterations, 10);
         assert!(exec.supports_tools.contains(&"bash".to_string()));
+    }
+
+    #[tokio::test]
+    async fn test_load_config_with_empty_socket() {
+        let temp_dir = TempDir::new().unwrap();
+        let config_path = temp_dir.path().join("opencode.agent.toml");
+        let config_content = r#"
+[b00t]
+name = "opencode"
+type = "agent"
+hint = "opencode coding agent"
+
+[b00t.agent]
+pid = "opencode-001"
+skills = ["code"]
+role = "specialist"
+
+[b00t.agent.ipc]
+socket = ""
+pubsub = false
+protocol = "http+acp"
+
+[b00t.agent.crew]
+role = "specialist"
+captain = false
+"#;
+        tokio::fs::write(&config_path, config_content).await.unwrap();
+        let config = AgentManager::load_config(&config_path).await.unwrap();
+        assert_eq!(configured_socket_path(&config), None);
     }
 
     #[test]
