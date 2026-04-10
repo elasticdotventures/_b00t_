@@ -392,7 +392,9 @@ write_status() {
 log "starting b00t Ralph loop: tool=${TOOL} max_iterations=${MAX_ITERATIONS}"
 collect_backlog_snippet
 collect_validation_snippet
-collect_issue_feed
+if is_self_improve_mode; then
+    collect_issue_feed
+fi
 
 if [[ "${MAX_ITERATIONS}" -eq 0 ]]; then
     write_status 0 "completed" "no-op"
