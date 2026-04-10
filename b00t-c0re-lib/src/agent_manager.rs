@@ -90,7 +90,7 @@ struct PiToolOutput {
 
 /// Execute a single tool call. Pure OS operations — no LLM involved.
 /// Returns (tool_name, result_string) for feeding back to the agent.
-pub fn dispatch_tool(call: &ToolCall) -> String {
+fn dispatch_tool(call: &ToolCall) -> String {
     match call.name.as_str() {
         "read" => {
             let path = call.args.get("path")
