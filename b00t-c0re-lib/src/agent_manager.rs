@@ -90,7 +90,7 @@ struct PiToolOutput {
 
 /// Execute a single tool call. Pure OS operations — no LLM involved.
 /// Returns (tool_name, result_string) for feeding back to the agent.
-fn dispatch_tool(call: &ToolCall) -> String {
+pub fn dispatch_tool(call: &ToolCall) -> String {
     match call.name.as_str() {
         "read" => {
             let path = call.args.get("path")
@@ -299,9 +299,8 @@ pub fn invoke_agent_executor(
                     info!("tool {} → {} bytes", call.name, result.len());
                     results.push(format!("[tool:{}]\n{}", call.name, result));
                 }
-                // Re-invoke with accumulated context + newly appended tool results
-                context.push_str("\n\nTool results:\n");
-                context.push_str(&results.join("\n---\n"));
+                // Re-invoke with original prompt + tool results appended
+                context = format!("{}\n\nTool results:\n{}", initial_prompt, results.join("\n---\n"));
             }
             None => {
                 // Final answer — no more tool calls
