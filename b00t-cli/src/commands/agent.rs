@@ -806,7 +806,7 @@ async fn handle_ralph(
         if uses_shell_ralph(tool) && shell_ralph_script.exists() {
             (
                 "bash",
-                build_shell_ralph_command_args(tool, max_iterations),
+                build_shell_ralph_command_args(tool, max_iterations, task),
                 root.clone(),
             )
         } else {
@@ -860,8 +860,8 @@ fn build_ralph_command_args(tool: &str, max_iterations: u32, task: &str) -> Vec<
     args
 }
 
-fn build_shell_ralph_command_args(tool: &str, max_iterations: u32) -> Vec<String> {
-    vec![
+fn build_shell_ralph_command_args(tool: &str, max_iterations: u32, task: &str) -> Vec<String> {
+    let mut args = vec![
         "b00t.sh".to_string(),
         "--tool".to_string(),
         tool.to_string(),
@@ -869,7 +869,14 @@ fn build_shell_ralph_command_args(tool: &str, max_iterations: u32) -> Vec<String
         max_iterations.to_string(),
         "--role".to_string(),
         "operator".to_string(),
-    ]
+    ];
+
+    if let Some(task_id) = resolve_ralph_task_id(task) {
+        args.push("--task-id".to_string());
+        args.push(task_id);
+    }
+
+    args
 }
 
 fn resolve_ralph_task_id(task: &str) -> Option<String> {
@@ -1036,12 +1043,25 @@ mod tests {
 
     #[test]
     fn test_build_shell_ralph_command_args_includes_operator_role() {
-        let args = build_shell_ralph_command_args("pi", 3);
+        let args = build_shell_ralph_command_args("pi", 3, "");
         assert_eq!(args[0], "b00t.sh");
         assert!(args.contains(&"--tool".to_string()));
         assert!(args.contains(&"pi".to_string()));
         assert!(args.contains(&"--role".to_string()));
         assert!(args.contains(&"operator".to_string()));
+    }
+
+    #[test]
+    fn test_build_shell_ralph_command_args_passes_task_id() {
+        let args = build_shell_ralph_command_args("gemma4", 5, "42");
+        assert!(args.contains(&"--task-id".to_string()));
+        assert!(args.contains(&"42".to_string()));
+    }
+
+    #[test]
+    fn test_build_shell_ralph_command_args_omits_empty_task() {
+        let args = build_shell_ralph_command_args("pi", 3, "");
+        assert!(!args.contains(&"--task-id".to_string()));
     }
 
     #[test]

@@ -231,7 +231,7 @@ impl AaiiiConfig {
     fn pi_base_url_candidates() -> Vec<String> {
         let mut candidates = Vec::new();
 
-        for key in ["B00T_AI_CH0NKY_BASE", "PI_BASE_URL", "OPENAI_BASE_URL"] {
+        for key in ["B00T_AI_CH0NKY_BASE", "PI_BASE_URL", "LLAMA_CPP_BASE_URL", "OPENAI_BASE_URL"] {
             if let Ok(value) = env::var(key) {
                 let trimmed = value.trim();
                 if !trimmed.is_empty() && !candidates.iter().any(|existing| existing == trimmed) {
@@ -423,7 +423,7 @@ mod tests {
 
     #[test]
     fn test_pi_base_url_candidates_include_direct_gemma4_fallback() {
-        for key in ["B00T_AI_CH0NKY_BASE", "PI_BASE_URL", "OPENAI_BASE_URL"] {
+        for key in ["B00T_AI_CH0NKY_BASE", "PI_BASE_URL", "LLAMA_CPP_BASE_URL", "OPENAI_BASE_URL"] {
             unsafe {
                 std::env::remove_var(key);
             }

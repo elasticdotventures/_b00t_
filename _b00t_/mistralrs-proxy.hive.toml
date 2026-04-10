@@ -34,8 +34,8 @@ start = []
 stop  = []
 
 # ── Inline service spec — b00t generates b00t-hive-mistralrs-proxy.service ──
-# 🤓 mistralrs-server binary (EricLBuehler/mistral.rs) must be installed:
-#    cargo install mistralrs-server --features cuda
+# 🤓 mistralrs binary (EricLBuehler/mistral.rs) must be installed:
+#    cargo install mistralrs --features cuda
 #    Until then, this profile acts as a stub — declare intent in knowledge graph.
 [b00t.hive.service]
 description = "liter-llm / mistralrs-proxy OpenAI gateway (port 1234)"
