@@ -380,7 +380,7 @@ import os, sys
 os.environ.setdefault('OPENAI_BASE_URL', '{api_base}')
 os.environ.setdefault('OPENAI_API_KEY', '{api_key}')
 
-from raglite import RAGLiteConfig, retrieve_chunks, rerank_chunks
+from raglite import RAGLiteConfig, search_and_rerank_chunks
 
 config = RAGLiteConfig(
     db_url='{db_url}',
@@ -389,9 +389,8 @@ config = RAGLiteConfig(
 )
 
 query = r'''{query}'''
-chunks = retrieve_chunks(query, config=config, num_results={k})
-if len(chunks) > 1:
-    chunks = rerank_chunks(query, chunks)
+# 🤓 raglite API change: retrieve_chunks(query) removed; search_and_rerank_chunks combines hybrid_search + rerank
+chunks = search_and_rerank_chunks(query, num_results={k}, config=config)
 for chunk in chunks:
     print(chunk.body)
     print('---')

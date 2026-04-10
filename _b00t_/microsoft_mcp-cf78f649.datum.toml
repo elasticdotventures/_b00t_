@@ -7,7 +7,9 @@
 topic     = "microsoft-mcp"
 class     = "mcp-patterns"
 tags      = ["mcp", "microsoft", "azure", "patterns", "servers"]
+source_url = "https://github.com/microsoft/mcp"
 git_hash  = "20867f58773cbb384271b220a4f4ff0915afc846"
+encoding  = "raw"  # 🦨 legacy: pre-compression; future assimilations use gzip
 datum_id  = "cf78f649-4d95-46b6-a95d-51e457c9bfef"
 created   = "2026-04-10T06:05:37.806453260+00:00"
 

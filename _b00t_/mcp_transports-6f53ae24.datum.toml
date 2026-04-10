@@ -7,7 +7,9 @@
 topic     = "mcp-transports"
 class     = "mcp-patterns"
 tags      = ["mcp", "stdio", "http", "sse", "transport", "streamable"]
+source_url = "https://raw.githubusercontent.com/microsoft/mcp/main/README.md"
 git_hash  = "4adf64a57a479f40256dc91322a81d5341b077d7"
+encoding  = "raw"  # 🦨 legacy: pre-compression; future assimilations use gzip
 datum_id  = "6f53ae24-fed3-4b92-b4a8-135efc27dc05"
 created   = "2026-04-10T06:05:45.076862335+00:00"
 

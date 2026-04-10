@@ -68,6 +68,7 @@ which = "7"
 inquire = "0.7"
 sha2 = "0.10"
 walkdir = "2"
+flate2 = "1"
 
 # Apalis - Background job processing for workflow execution
 apalis = "1.0.0-rc.3"
