@@ -167,9 +167,9 @@ run_external_step() {
         pi)
             # 🤓 llama-cpp→LLAMA_CPP_BASE_URL; openai→OPENAI_BASE_URL; auto-selected via PI_PROVIDER/PI_BASE_URL
             if command -v pi >/dev/null 2>&1; then
-                local _pi_base_var
-                [[ "${PI_PROVIDER}" == "llama-cpp" ]] && _pi_base_var="LLAMA_CPP_BASE_URL" || _pi_base_var="OPENAI_BASE_URL"
-                env "${_pi_base_var}=${PI_BASE_URL}" \
+                local _pi_base_url_var
+                [[ "${PI_PROVIDER}" == "llama-cpp" ]] && _pi_base_url_var="LLAMA_CPP_BASE_URL" || _pi_base_url_var="OPENAI_BASE_URL"
+                env "${_pi_base_url_var}=${PI_BASE_URL}" \
                 OPENAI_API_KEY="${PI_API_KEY}" \
                 pi -p --provider "${PI_PROVIDER}" --model "${PI_MODEL}" "${prompt}" 2>/dev/null || true
             fi
