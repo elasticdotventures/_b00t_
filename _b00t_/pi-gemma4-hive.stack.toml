@@ -1,10 +1,10 @@
-# b00t Stack — pi + Gemma 4 + liter-llm gateway hive stack
-# 🤓 Full autonomous local inference stack:
+# b00t Stack — pi + Gemma 4 local hive stack
+# 🤓 Working autonomous local inference stack:
 #   1. vllm-gemma4.service → Gemma 4 at :8001 (ch0nky model backend)
-#   2. mistralrs-proxy (liter-llm gateway) → unified OpenAI API at :1234
-#   3. pi-coding-agent → ch0nky executor consuming :1234/ch0nky
-#   4. pi-mcp-adapter → lazy MCP proxy (b00t-mcp wired via ~/.pi/agent/mcp.json)
-#   5. moltis → shares :1234 endpoint for memory/soul ops
+#   2. pi-coding-agent → llama-cpp provider consuming direct :8001/v1
+#   3. pi-mcp-adapter → lazy MCP proxy (b00t-mcp wired via ~/.pi/agent/mcp.json)
+# Optional:
+#   - mistralrs-proxy/liter-llm gateway at :1234 for future cost accounting once Gemma4 MXFP4 is supported
 #
 # Activate: b00t hive activate inference-gemma4
 # Sub-agent: b00t up --tool pi
@@ -13,18 +13,16 @@
 [b00t]
 name = "pi-gemma4-hive"
 type = "stack"
-hint = "pi + Gemma 4 + liter-llm local hive stack — autonomous ch0nky tier with cost accounting"
+hint = "pi + Gemma 4 direct local hive stack — autonomous ch0nky tier via llama-cpp provider"
 members = [
   "gemma-4-26b-a4b-local.model",   # vLLM gemma4 service (port 8001)
   "pi-coding-agent.cli",            # pi executor
   "pi-mcp-adapter.cli",             # MCP proxy for pi
-  "mistralrs-proxy.ai",             # liter-llm gateway (port 1234)
 ]
 
 [b00t.env]
-# All agents target the liter-llm gateway; it routes ch0nky → gemma4 at :8001
-B00T_AI_GATEWAY = "http://127.0.0.1:1234/v1"
-B00T_AI_GATEWAY_KEY = "local-b00t"
+# Direct local Gemma4 path for pi.
+B00T_AI_CH0NKY_BASE = "http://127.0.0.1:8001/v1"
 B00T_AI_CH0NKY_MODEL = "ch0nky"
 PI_PROVIDER = "llama-cpp"
 PI_MODEL = "ch0nky"
@@ -33,14 +31,12 @@ PI_MODEL = "ch0nky"
 # hive profile that manages the systemd lifecycle of this stack
 hive_profile = "inference-gemma4"
 # 🤓 activate via: b00t hive activate inference-gemma4
-#    this starts vllm-gemma4.service; mistralrs-proxy must be started separately
-#    until a dedicated mistralrs-proxy.service unit is added
+#    this starts vllm-gemma4.service; direct :8001 is the working path
 
 [b00t.orchestration.dependencies]
-# Topological order: model server must be up before gateway, gateway before pi
+# Topological order: model server must be up before pi
 order = [
   "vllm-gemma4.service",
-  "mistralrs-proxy",
   "pi-coding-agent",
 ]
 
@@ -53,24 +49,24 @@ description = "Activate the full pi+gemma4 hive stack (starts vllm-gemma4.servic
 command = "b00t hive activate inference-gemma4"
 
 [[b00t.usage]]
-description = "Run pi sub-agent task via liter-llm gateway (ch0nky tier)"
-command = "pi -p --provider llama-cpp --model ch0nky 'implement X'"
+description = "Run pi sub-agent task via direct Gemma4 vLLM (ch0nky tier)"
+command = "LLAMA_CPP_BASE_URL=http://127.0.0.1:8001/v1 pi -p --provider llama-cpp --model ch0nky 'implement X'"
 
 [[b00t.usage]]
 description = "Delegate task to pi via b00t agent subsystem"
 command = "b00t up --tool pi"
 
 [[b00t.usage]]
-description = "Inspect cost accounting via liter-llm gateway"
-command = "curl -s http://localhost:1234/v1/models | python3 -m json.tool"
+description = "Inspect direct Gemma4 endpoint"
+command = "curl -s http://localhost:8001/v1/models | python3 -m json.tool"
 
 [[b00t.usage]]
 description = "Deactivate stack cleanly"
 command = "systemctl --user stop vllm-gemma4.service"
 
 # b00t:map v1
-# summary: pi+gemma4+liter-llm hive stack — ch0nky autonomous local inference with cost accounting
-# tags: pi, gemma4, liter-llm, hive-stack, ch0nky, moltis, openai-proxy, cost-accounting
+# summary: pi+gemma4 direct hive stack — ch0nky autonomous local inference via llama-cpp
+# tags: pi, gemma4, hive-stack, ch0nky, llama-cpp, direct-vllm
 # tier: ch0nky
 # cmds: b00t hive activate inference-gemma4, b00t up --tool pi
 # complexity: 7

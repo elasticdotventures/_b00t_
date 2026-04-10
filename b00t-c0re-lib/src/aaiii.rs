@@ -20,6 +20,7 @@
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::env;
 use std::process::Command;
 
 /// AI Inference Backend types
@@ -32,7 +33,7 @@ pub enum AaiiiBackend {
     Amp,       // Amp CLI
     OpenCode,  // OpenCode CLI
     MistralRs, // Local mistral.rs server
-    Pi,        // pi-coding-agent via liter-llm gateway (Gemma 4 local, :1234/v1 ch0nky)
+    Pi,        // pi-coding-agent via local Gemma 4 (env override, :1234 gateway, or :8001 direct)
     File,      // Fallback for testing
 }
 
@@ -143,11 +144,11 @@ impl AaiiiConfig {
         }
 
         if Self::check_pi() {
-            eprintln!("🤖 AAIII backend detected: Pi (liter-llm gateway ch0nky)");
+            eprintln!("🤖 AAIII backend detected: Pi (local Gemma 4 ch0nky)");
             return Self {
                 backend: AaiiiBackend::Pi,
-                // 🤓 pi targets liter-llm/mistralrs-proxy at :1234; model "ch0nky" routes to local Gemma 4
-                base_url: Some("http://localhost:1234/v1".to_string()),
+                // 🤓 Prefer explicit env override, then gateway :1234 when healthy, then direct vLLM :8001.
+                base_url: Self::detect_pi_base_url(),
                 model: Some("ch0nky".to_string()),
                 ..Default::default()
             };
@@ -212,16 +213,47 @@ impl AaiiiConfig {
     }
 
     fn check_pi() -> bool {
-        // 🤓 pi requires: (a) pi binary present AND (b) liter-llm gateway responding at :1234
+        // 🤓 pi requires: (a) pi binary present AND (b) a reachable OpenAI-compatible local endpoint.
         let binary_ok = Command::new("pi")
             .arg("--version")
             .output()
             .map(|o| o.status.success())
             .unwrap_or(false);
-        let gateway_ok = reqwest::blocking::get("http://localhost:1234/v1/models")
+        binary_ok && Self::detect_pi_base_url().is_some()
+    }
+
+    fn detect_pi_base_url() -> Option<String> {
+        Self::pi_base_url_candidates()
+            .into_iter()
+            .find(|base_url| Self::models_endpoint_ok(base_url))
+    }
+
+    fn pi_base_url_candidates() -> Vec<String> {
+        let mut candidates = Vec::new();
+
+        for key in ["B00T_AI_CH0NKY_BASE", "PI_BASE_URL", "OPENAI_BASE_URL"] {
+            if let Ok(value) = env::var(key) {
+                let trimmed = value.trim();
+                if !trimmed.is_empty() && !candidates.iter().any(|existing| existing == trimmed) {
+                    candidates.push(trimmed.to_string());
+                }
+            }
+        }
+
+        for default_url in ["http://localhost:1234/v1", "http://localhost:8001/v1"] {
+            if !candidates.iter().any(|existing| existing == default_url) {
+                candidates.push(default_url.to_string());
+            }
+        }
+
+        candidates
+    }
+
+    fn models_endpoint_ok(base_url: &str) -> bool {
+        let models_url = format!("{}/models", base_url.trim_end_matches('/'));
+        reqwest::blocking::get(&models_url)
             .map(|r| r.status().is_success())
-            .unwrap_or(false);
-        binary_ok && gateway_ok
+            .unwrap_or(false)
     }
 }
 
@@ -361,8 +393,45 @@ mod tests {
                 | AaiiiBackend::Amp
                 | AaiiiBackend::OpenCode
                 | AaiiiBackend::MistralRs
+                | AaiiiBackend::Pi
                 | AaiiiBackend::File
         ));
+    }
+
+    #[test]
+    fn test_pi_base_url_candidates_prioritize_env_override() {
+        let key = "B00T_AI_CH0NKY_BASE";
+        let previous = std::env::var(key).ok();
+        unsafe {
+            std::env::set_var(key, "http://127.0.0.1:8001/v1");
+        }
+
+        let candidates = AaiiiConfig::pi_base_url_candidates();
+        assert_eq!(candidates.first().map(String::as_str), Some("http://127.0.0.1:8001/v1"));
+        assert!(candidates.iter().any(|candidate| candidate == "http://localhost:1234/v1"));
+
+        if let Some(value) = previous {
+            unsafe {
+                std::env::set_var(key, value);
+            }
+        } else {
+            unsafe {
+                std::env::remove_var(key);
+            }
+        }
+    }
+
+    #[test]
+    fn test_pi_base_url_candidates_include_direct_gemma4_fallback() {
+        for key in ["B00T_AI_CH0NKY_BASE", "PI_BASE_URL", "OPENAI_BASE_URL"] {
+            unsafe {
+                std::env::remove_var(key);
+            }
+        }
+
+        let candidates = AaiiiConfig::pi_base_url_candidates();
+        assert!(candidates.iter().any(|candidate| candidate == "http://localhost:1234/v1"));
+        assert!(candidates.iter().any(|candidate| candidate == "http://localhost:8001/v1"));
     }
 
     #[test]

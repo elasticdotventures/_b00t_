@@ -3,13 +3,16 @@ use crate::commands::ontology::build_ontology;
 use crate::session_memory::SessionMemory;
 use anyhow::{Context, Result};
 use clap::Parser;
+use regex::Regex;
+use serde::Deserialize;
+use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
 #[derive(Parser, Debug)]
 pub struct UpArgs {
     /// AI tool to use for the ralph loop
-    #[clap(long, default_value = "claude", value_parser = ["claude", "amp", "codex", "opencode", "mistralrs", "pi"])]
+    #[clap(long, default_value = "claude", value_parser = ["claude", "amp", "codex", "opencode", "mistralrs", "pi", "gemma4"])]
     pub tool: String,
 
     /// Maximum iterations per ralph session
@@ -42,6 +45,7 @@ impl UpArgs {
         }
 
         let workspace_root = crate::utils::get_workspace_root();
+        let workspace_root_path = PathBuf::from(&workspace_root);
         let ralph_script = format!("{}/b00t.sh", workspace_root);
 
         if !std::path::Path::new(&ralph_script).exists() {
@@ -62,6 +66,7 @@ impl UpArgs {
 
         let mut restart_count = 0u32;
         let mut session = SessionMemory::load().unwrap_or_default();
+        let ralph_state_dir = workspace_root_path.join(".b00t/ralph");
 
         loop {
             println!(
@@ -127,6 +132,18 @@ impl UpArgs {
                     // POSIX TEMPFAIL — agent requests restart
                     restart_count += 1;
                     if restart_count >= self.max_restarts {
+                        if let Some(progress) = read_ralph_progress(&ralph_state_dir) {
+                            if progress_is_success(&progress) {
+                                println!(
+                                    "✅ b00t up: productive tempfail after {} cycle(s)",
+                                    restart_count
+                                );
+                                println!("   next_action: {}", progress.next_action);
+                                let _ = session.set("up.last_next_action", &progress.next_action);
+                                let _ = session.set("up.last_status", "productive_tempfail");
+                                return Ok(());
+                            }
+                        }
                         anyhow::bail!(
                             "b00t up: max restarts ({}) reached. Last exit: 75",
                             self.max_restarts
@@ -143,6 +160,61 @@ impl UpArgs {
             }
         }
     }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct RalphProgress {
+    next_action: String,
+    exit_signal: bool,
+}
+
+#[derive(Debug, Deserialize)]
+struct RalphStatus {
+    #[allow(dead_code)]
+    status: Option<String>,
+    #[allow(dead_code)]
+    last_output: Option<String>,
+}
+
+fn read_ralph_progress(state_dir: &Path) -> Option<RalphProgress> {
+    let _status: Option<RalphStatus> = fs::read_to_string(state_dir.join("status.json"))
+        .ok()
+        .and_then(|contents| serde_json::from_str(&contents).ok());
+
+    let log = fs::read_to_string(state_dir.join("loop.log")).ok()?;
+    let next_action_re = Regex::new(r"(?m)^NEXT_ACTION:\s*(.+)$").ok()?;
+    let exit_signal_re = Regex::new(r"(?m)^EXIT_SIGNAL\s*[:=]\s*(true|false)\s*$").ok()?;
+
+    let next_action = next_action_re
+        .captures_iter(&log)
+        .last()
+        .and_then(|caps| caps.get(1))
+        .map(|m| m.as_str().trim().to_string())?;
+
+    let exit_signal = exit_signal_re
+        .captures_iter(&log)
+        .last()
+        .and_then(|caps| caps.get(1))
+        .map(|m| m.as_str().eq_ignore_ascii_case("true"))
+        .unwrap_or(false);
+
+    Some(RalphProgress {
+        next_action,
+        exit_signal,
+    })
+}
+
+fn progress_is_success(progress: &RalphProgress) -> bool {
+    !progress.exit_signal
+        && !progress.next_action.is_empty()
+        && next_action_is_in_scope(&progress.next_action)
+}
+
+fn next_action_is_in_scope(next_action: &str) -> bool {
+    let lower = next_action.to_ascii_lowercase();
+    !["qwen", "inference-qwen", "qwen3", "mistral-7b", "foundry"]
+        .iter()
+        .any(|needle| lower.contains(needle))
 }
 
 // ── Repo onboarding ───────────────────────────────────────────────────────────
@@ -344,6 +416,8 @@ fn emit_up_heartbeat(cycle: u32, exit_code: i32, role: &Option<String>) {
 mod tests {
     use super::*;
     use clap::Parser;
+    use std::fs;
+    use tempfile::tempdir;
 
     #[test]
     fn test_up_command_parses() {
@@ -355,6 +429,12 @@ mod tests {
     fn test_up_command_parses_mistralrs_tool() {
         let args = UpArgs::try_parse_from(["b00t-cli", "--tool", "mistralrs"]);
         assert!(args.is_ok(), "UpArgs should parse --tool mistralrs");
+    }
+
+    #[test]
+    fn test_up_command_parses_gemma4_tool() {
+        let args = UpArgs::try_parse_from(["b00t-cli", "--tool", "gemma4"]);
+        assert!(args.is_ok(), "UpArgs should parse --tool gemma4");
     }
 
     #[test]
@@ -433,6 +513,43 @@ mod tests {
         }
         assert!(hit_max);
         assert_eq!(restart_count, 3);
+    }
+
+    #[test]
+    fn test_read_ralph_progress_parses_last_next_action() {
+        let temp = tempdir().unwrap();
+        fs::write(
+            temp.path().join("loop.log"),
+            "NEXT_ACTION: first step\nEXIT_SIGNAL=false\nNEXT_ACTION: second step\nEXIT_SIGNAL=false\n",
+        )
+        .unwrap();
+        fs::write(
+            temp.path().join("status.json"),
+            r#"{"status":"tempfail","last_output":"max iterations reached"}"#,
+        )
+        .unwrap();
+
+        let progress = read_ralph_progress(temp.path()).unwrap();
+        assert_eq!(progress.next_action, "second step");
+        assert!(!progress.exit_signal);
+    }
+
+    #[test]
+    fn test_progress_is_success_for_in_scope_tempfail() {
+        let progress = RalphProgress {
+            next_action: "Run `b00t hive status` to validate Gemma4.".to_string(),
+            exit_signal: false,
+        };
+        assert!(progress_is_success(&progress));
+    }
+
+    #[test]
+    fn test_progress_is_not_success_for_off_scope_action() {
+        let progress = RalphProgress {
+            next_action: "Update _b00t_/inference-qwen3.stack.tomllm.".to_string(),
+            exit_signal: false,
+        };
+        assert!(!progress_is_success(&progress));
     }
 
     #[test]

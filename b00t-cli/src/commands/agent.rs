@@ -312,16 +312,7 @@ pub async fn handle_agent_command(cmd: AgentCommands) -> Result<()> {
             task,
             max_iterations,
             project_root,
-        } => {
-            if tool == "pi" || tool == "opencode" {
-                // 🤓 pi + opencode are systemd-managed hive services (b00t@<name>-agent.service)
-                //    handle_invoke is a fallback one-shot path only; production path is:
-                //    systemctl --user start b00t@<name>-agent.service → submit task via IPC
-                handle_invoke(tool.as_str(), &task, None).await
-            } else {
-                handle_ralph(&tool, &task, max_iterations, project_root.as_deref()).await
-            }
-        }
+        } => handle_ralph(&tool, &task, max_iterations, project_root.as_deref()).await,
     }
 }
 
@@ -808,12 +799,27 @@ async fn handle_ralph(
         ensure_todo_next_backlog(&root).await?;
     }
 
-    // Run ralph
+    // Use the shell Ralph loop for self-hosted local tools because it already
+    // knows how to fall back between gateway and direct Gemma4 inference.
+    let (program, ralph_args, working_dir) = if uses_shell_ralph(tool) {
+        (
+            "bash",
+            build_shell_ralph_command_args(tool, max_iterations),
+            root.clone(),
+        )
+    } else {
+        (
+            "uv",
+            build_ralph_command_args(tool, max_iterations, task),
+            ralph_path.clone(),
+        )
+    };
+
     println!("🚀 Starting ralph autonomous loop...");
-    let ralph_args = build_ralph_command_args(tool, max_iterations, task);
-    let ralph_cmd = cmd("uv", ralph_args)
-        .dir(&ralph_path)
-        .env("PROJECT_ROOT", root.to_str().unwrap_or("."));
+    let ralph_cmd = cmd(program, ralph_args)
+        .dir(working_dir)
+        .env("PROJECT_ROOT", root.to_str().unwrap_or("."))
+        .env("B00T_ROLE", "operator");
 
     let output = ralph_cmd
         .stdout_to_stderr()
@@ -827,6 +833,10 @@ async fn handle_ralph(
     }
 
     Ok(())
+}
+
+fn uses_shell_ralph(tool: &str) -> bool {
+    matches!(tool, "pi" | "opencode" | "mistralrs" | "gemma4")
 }
 
 fn build_ralph_command_args(tool: &str, max_iterations: u32, task: &str) -> Vec<String> {
@@ -846,6 +856,18 @@ fn build_ralph_command_args(tool: &str, max_iterations: u32, task: &str) -> Vec<
     }
 
     args
+}
+
+fn build_shell_ralph_command_args(tool: &str, max_iterations: u32) -> Vec<String> {
+    vec![
+        "b00t.sh".to_string(),
+        "--tool".to_string(),
+        tool.to_string(),
+        "--max-iterations".to_string(),
+        max_iterations.to_string(),
+        "--role".to_string(),
+        "operator".to_string(),
+    ]
 }
 
 fn resolve_ralph_task_id(task: &str) -> Option<String> {
@@ -971,7 +993,10 @@ fn load_role_hint(role_name: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{build_enriched_description, build_ralph_command_args, resolve_ralph_task_id};
+    use super::{
+        build_enriched_description, build_ralph_command_args, build_shell_ralph_command_args,
+        resolve_ralph_task_id, uses_shell_ralph,
+    };
 
     #[test]
     fn test_resolve_ralph_task_id_mappings() {
@@ -996,6 +1021,25 @@ mod tests {
     fn test_build_ralph_command_args_omits_task_for_pending() {
         let args = build_ralph_command_args("codex", 5, "pending");
         assert!(!args.contains(&"--task-id".to_string()));
+    }
+
+    #[test]
+    fn test_uses_shell_ralph_for_self_hosted_tools() {
+        assert!(uses_shell_ralph("pi"));
+        assert!(uses_shell_ralph("opencode"));
+        assert!(uses_shell_ralph("mistralrs"));
+        assert!(uses_shell_ralph("gemma4"));
+        assert!(!uses_shell_ralph("codex"));
+    }
+
+    #[test]
+    fn test_build_shell_ralph_command_args_includes_operator_role() {
+        let args = build_shell_ralph_command_args("pi", 3);
+        assert_eq!(args[0], "b00t.sh");
+        assert!(args.contains(&"--tool".to_string()));
+        assert!(args.contains(&"pi".to_string()));
+        assert!(args.contains(&"--role".to_string()));
+        assert!(args.contains(&"operator".to_string()));
     }
 
     #[test]
