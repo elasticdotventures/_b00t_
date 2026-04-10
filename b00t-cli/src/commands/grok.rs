@@ -353,9 +353,9 @@ datum_id   = "{datum_id}"
 created    = "{created}"
 
 [validation]
-validate  = "git cat-file -e {git_hash}"
+validate  = "git -C ~/.b00t cat-file -e {git_hash}"
 # 🤓 Decompress: git -C ~/.b00t cat-file blob {git_hash} | gunzip
-# 🤓 Blob lives in user's ~/.b00t git store; run from within that repo to validate
+# 🤓 Blob lives in user's ~/.b00t git store; ~ is expanded by b00t datum validate
 # 🤓 This validate command is executed by `b00t datum validate` as part of pre-release checks
 
 # b00t:map v1

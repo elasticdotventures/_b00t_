@@ -14,9 +14,9 @@ datum_id  = "cf78f649-4d95-46b6-a95d-51e457c9bfef"
 created   = "2026-04-10T06:05:37.806453260+00:00"
 
 [validation]
-validate  = "git cat-file -e 20867f58773cbb384271b220a4f4ff0915afc846"
+validate  = "git -C ~/.b00t cat-file -e 20867f58773cbb384271b220a4f4ff0915afc846"
 # 🤓 This validate command is executed by `b00t datum validate` as part of pre-release checks
-# 🤓 Blob lives in user's ~/.b00t git store; run from within that repo to validate
+# 🤓 Blob lives in user's ~/.b00t git store; ~ is expanded by b00t datum validate
 
 # b00t:map v1
 # summary: microsoft-mcp datum — assimilated content stored as git blob 20867f58773c
