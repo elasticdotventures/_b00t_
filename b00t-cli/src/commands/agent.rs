@@ -182,11 +182,23 @@ pub enum AgentCommands {
         subject: Option<String>,
     },
 
+    #[clap(about = "Invoke an agent executor directly (deterministic tool-call loop, no Redis)")]
+    Invoke {
+        #[arg(help = "Agent name matching a _b00t_/<name>.agent.toml")]
+        agent: String,
+
+        #[arg(help = "Prompt to send to the agent")]
+        prompt: String,
+
+        #[arg(long, help = "Path to agent TOML (overrides auto-discovery)")]
+        config: Option<PathBuf>,
+    },
+
     #[clap(about = "Run ralph autonomous agent for hive maintenance/validation")]
     Ralph {
         #[arg(
             long,
-            help = "Executor tool (codex, claude, amp, opencode, mistralrs)",
+            help = "Executor tool (codex, claude, amp, opencode, mistralrs, pi)",
             default_value = "codex"
         )]
         tool: String,
@@ -289,12 +301,27 @@ pub async fn handle_agent_command(cmd: AgentCommands) -> Result<()> {
 
         AgentCommands::StartAll { dir } => handle_start_all(&dir).await,
 
+        AgentCommands::Invoke {
+            agent,
+            prompt,
+            config,
+        } => handle_invoke(&agent, &prompt, config.as_deref()).await,
+
         AgentCommands::Ralph {
             tool,
             task,
             max_iterations,
             project_root,
-        } => handle_ralph(&tool, &task, max_iterations, project_root.as_deref()).await,
+        } => {
+            if tool == "pi" || tool == "opencode" {
+                // 🤓 pi + opencode are systemd-managed hive services (b00t@<name>-agent.service)
+                //    handle_invoke is a fallback one-shot path only; production path is:
+                //    systemctl --user start b00t@<name>-agent.service → submit task via IPC
+                handle_invoke(tool.as_str(), &task, None).await
+            } else {
+                handle_ralph(&tool, &task, max_iterations, project_root.as_deref()).await
+            }
+        }
     }
 }
 
@@ -698,6 +725,52 @@ async fn handle_start_all(dir: &PathBuf) -> Result<()> {
     // Keep agents running
     tokio::signal::ctrl_c().await?;
 
+    Ok(())
+}
+
+/// Direct deterministic agent invocation — no Redis, no Python, no ralph.
+/// Loads [b00t.agent.executor] from <agent>.agent.toml, runs invoke_agent_executor() loop.
+async fn handle_invoke(agent: &str, prompt: &str, config_override: Option<&std::path::Path>) -> Result<()> {
+    use b00t_c0re_lib::agent_manager::{AgentManager, invoke_agent_executor};
+
+    // Resolve config path: override → _b00t_/<agent>.agent.toml → cwd search
+    let config_path = if let Some(p) = config_override {
+        p.to_path_buf()
+    } else {
+        let root = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+        let candidate = root.join(format!("_b00t_/{}.agent.toml", agent));
+        if candidate.exists() {
+            candidate
+        } else {
+            anyhow::bail!("No config found for agent '{}' at {}", agent, candidate.display());
+        }
+    };
+
+    let config = AgentManager::load_config(&config_path).await?;
+
+    let executor = config
+        .b00t
+        .agent
+        .executor
+        .as_ref()
+        .ok_or_else(|| anyhow::anyhow!(
+            "Agent '{}' has no [b00t.agent.executor] section in {}",
+            agent, config_path.display()
+        ))?;
+
+    // Merge agent env into process env
+    let mut env: std::collections::HashMap<String, String> = std::env::vars().collect();
+    if let Some(agent_env) = &config.b00t.env {
+        env.extend(agent_env.clone());
+    }
+
+    println!("🤖 Invoking {} (max {} iterations)", agent, executor.max_iterations);
+    println!("   cli: {} {}", executor.cli_path, executor.cli_args.join(" "));
+
+    let result = invoke_agent_executor(executor, &env, prompt)
+        .map_err(|e| anyhow::anyhow!("Agent invocation failed: {}", e))?;
+
+    println!("{}", result);
     Ok(())
 }
 

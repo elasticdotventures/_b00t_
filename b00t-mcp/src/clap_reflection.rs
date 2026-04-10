@@ -88,11 +88,40 @@ pub trait McpExecutor {
     /// Execute the command with the given parameters
     fn execute_mcp_call(params: &HashMap<String, Value>) -> Result<String>;
 
-    /// Convert MCP parameters back to CLAP arguments
+    /// Return positional argument names in declaration order for this command.
+    /// Default: empty (all params treated as --flags).
+    /// Override for commands that use positional args.
+    fn positional_arg_names() -> Vec<&'static str> {
+        vec![]
+    }
+
+    /// Convert MCP parameters back to CLAP arguments.
+    ///
+    /// Positional args (from `positional_arg_names()`) are emitted in order
+    /// without a `--` prefix. All remaining named args are emitted as `--flag value`.
     fn params_to_args(params: &HashMap<String, Value>) -> Vec<String> {
+        let positionals = Self::positional_arg_names();
         let mut args = Vec::new();
 
+        // Emit positionals first, in declaration order
+        for pos_name in &positionals {
+            let key = pos_name.replace('-', "_");
+            if let Some(value) = params.get(key.as_str()).or_else(|| params.get(*pos_name)) {
+                match value {
+                    Value::String(s) => args.push(s.clone()),
+                    Value::Number(n) => args.push(n.to_string()),
+                    _ => args.push(value.to_string().trim_matches('"').to_string()),
+                }
+            }
+        }
+
+        // Emit remaining named (flag) params
         for (key, value) in params {
+            // Skip keys that were already emitted as positionals
+            let normalized = key.replace('-', "_");
+            if positionals.iter().any(|p| p.replace('-', "_") == normalized) {
+                continue;
+            }
             match value {
                 Value::Bool(true) => {
                     args.push(format!("--{}", key.replace('_', "-")));

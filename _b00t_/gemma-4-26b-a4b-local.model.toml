@@ -1,0 +1,56 @@
+# b00t AI Model Datum — Gemma 4 26B-A4B-it GGUF (local vLLM, RTX 3090)
+# 🤓 MoE model: 26B params, only ~4B active per token. MXFP4_MOE fits in 24GB VRAM.
+# HF card: https://huggingface.co/unsloth/gemma-4-26B-A4B-it-GGUF
+# Usage: b00t-cli model download gemma-4-26b-a4b-local && b00t-cli model serve gemma-4-26b-a4b-local
+
+[b00t]
+name = "gemma-4-26b-a4b-local"
+type = "model"
+hint = "Gemma 4 26B-A4B-it GGUF MXFP4_MOE, served locally via vLLM on RTX 3090 (port 8001), jinja chat template"
+aliases = ["gemma4", "gemma-4", "gemma-local"]
+
+[b00t.env]
+VLLM_MODEL_DIR = "~/.cache/huggingface/hub/models--unsloth--gemma-4-26B-A4B-it-GGUF"
+VLLM_DTYPE = "float16"
+VLLM_API_KEY = "local-gemma4"
+OPENAI_BASE_URL = "http://127.0.0.1:8001/v1"
+OPENAI_API_KEY = "local-gemma4"
+GEMMA4_API_BASE = "http://127.0.0.1:8001/v1"
+
+[ai_model]
+provider = "openai_compatible"
+size = "large"
+capabilities = ["chat", "code", "reasoning", "vision", "multimodal"]
+litellm_model = "openai/gemma-4-26B-A4B-it"
+api_base = "http://127.0.0.1:8001/v1"
+api_key_env = "VLLM_API_KEY"
+rpm_limit = 60
+context_window = 131072
+enabled = true
+access_groups = ["default", "local", "hive"]
+
+[ai_model.parameters]
+max_tokens = 8192
+temperature = 0.2
+
+[ai_model.metadata]
+hf_repo = "unsloth/gemma-4-26B-A4B-it-GGUF"
+hf_card = "https://huggingface.co/unsloth/gemma-4-26B-A4B-it-GGUF"
+allow_patterns = "*MXFP4_MOE*"
+# 🤓 MXFP4_MOE = Mixed-Precision Float4 for MoE layers — unsloth-specific quantization
+#    optimized for MoE models; active params ~4B, total params 26B
+gguf_quant = "MXFP4_MOE"
+runtime = "vllm-podman"
+container_runtime = "podman"
+container_mount = "/models/gemma4"
+port = 8001
+gpu = "rtx3090"
+# 🤓 jinja=true enables Gemma 4's native chat template (required for correct formatting)
+vllm_extra_args = "--max-model-len 32768 --enable-chunked-prefill --chat-template /models/gemma4/chat-template.jinja"
+
+# b00t:map v1
+# summary: Gemma 4 26B-A4B MXFP4_MOE local inference — RTX 3090 port 8001
+# tags: gemma4, google, moe, gguf, local-inference, vllm, multimodal
+# tier: frontier
+# cmds: b00t-cli model download gemma-4-26b-a4b-local
+# complexity: 7

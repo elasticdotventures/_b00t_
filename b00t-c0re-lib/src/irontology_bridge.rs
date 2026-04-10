@@ -108,12 +108,30 @@ impl IntoIrontologyRecord for DatumNode {
 
     fn to_edge_records(&self, id: &str) -> Vec<EdgeRecord> {
         let subject = self.subject_uri(id);
-        vec![EdgeRecord {
-            from: subject,
+        let mut edges = vec![EdgeRecord {
+            from: subject.clone(),
             to: format!("b00t:class/{}", self.class),
             kind: EdgeKind::ClassifiedAs,
             weight: 1,
-        }]
+        }];
+        // 🤓 Map "requires" / "dependsOn" predicates → EdgeKind::DependsOn edges.
+        //    Hive profiles declare service deps as predicates; this wires them into
+        //    the knowledge graph so the dependency tree is queryable via irontology.
+        for (pred, val) in &self.predicates {
+            let kind = match pred.as_str() {
+                "requires" | "dependsOn" | "depends_on" => EdgeKind::DependsOn,
+                "storedAt" => EdgeKind::StoredIn,
+                "implements" | "hasPart" => EdgeKind::Related,
+                _ => continue,
+            };
+            edges.push(EdgeRecord {
+                from: subject.clone(),
+                to: format!("b00t:service/{}", val),
+                kind,
+                weight: 1,
+            });
+        }
+        edges
     }
 }
 

@@ -16,6 +16,48 @@
 /// ```
 #[macro_export]
 macro_rules! impl_mcp_tool {
+    // Variant with positional args: impl_mcp_tool!(Cmd, "name", ["a","b"], positionals: ["pos1","pos2"])
+    ($struct_name:ident, $tool_name:expr, [$($path:expr),*], positionals: [$($pos:expr),*]) => {
+        impl crate::clap_reflection::McpReflection for $struct_name {
+            fn mcp_tool_name() -> String {
+                $tool_name.to_string()
+            }
+
+            fn command_path() -> Vec<String> {
+                vec![$($path.to_string()),*]
+            }
+        }
+
+        impl crate::clap_reflection::McpExecutor for $struct_name {
+            fn positional_arg_names() -> Vec<&'static str> {
+                vec![$($pos),*]
+            }
+
+            fn execute_mcp_call(params: &std::collections::HashMap<String, serde_json::Value>) -> anyhow::Result<String> {
+                let args = Self::command_path();
+                let param_args = Self::params_to_args(params);
+
+                // Combine command path with parameters
+                let mut all_args = args;
+                all_args.extend(param_args);
+
+                // Execute b00t-cli with these arguments
+                let output = std::process::Command::new("b00t-cli")
+                    .args(&all_args)
+                    .output()
+                    .map_err(|e| anyhow::anyhow!("Failed to execute b00t-cli: {}", e))?;
+
+                if output.status.success() {
+                    Ok(String::from_utf8_lossy(&output.stdout).to_string())
+                } else {
+                    let stderr = String::from_utf8_lossy(&output.stderr);
+                    anyhow::bail!("b00t-cli command failed: {}", stderr)
+                }
+            }
+        }
+    };
+
+    // Base variant (no positionals — all params become --flags)
     ($struct_name:ident, $tool_name:expr, [$($path:expr),*]) => {
         impl crate::clap_reflection::McpReflection for $struct_name {
             fn mcp_tool_name() -> String {

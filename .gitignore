@@ -259,6 +259,15 @@ dist
 yarn.lock
 agentsea/*
 
+# Local Codex and analysis/worktree noise
+.codex/
+.moltis-worktrees/
+.understand-anything/
+exec-log.jsonl
+neumann/
+raglight/
+rustc-ice-*.txt
+
 dev-debug.log
 # Environment variables
 # Editor directories and files

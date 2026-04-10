@@ -25,8 +25,12 @@ description = "Launch opencode TUI (uses active model config)"
 command = "opencode"
 
 [[b00t.usage]]
-description = "Run one-shot with message against local vllm"
-command = "OPENAI_BASE_URL=http://localhost:8000/v1 OPENAI_API_KEY=local-vllm opencode run 'your task'"
+description = "Run one-shot with local Gemma 4 (gemma4-local provider, vLLM :8001)"
+command = "opencode run --model gemma4-local/ch0nky 'your task'"
+
+[[b00t.usage]]
+description = "Run one-shot with message against local vllm (Qwen3-Coder :8000)"
+command = "opencode run --model vllm-local/qwen3-coder 'your task'"
 
 [[b00t.usage]]
 description = "Start headless ACP server for b00t agent delegation"
@@ -44,6 +48,10 @@ url = "https://github.com/sst/opencode"
 name = "opencode config docs"
 url = "https://opencode.ai/docs/config"
 
+[[b00t.usage]]
+description = "b00t agent invoke opencode (executor loop, headless)"
+command = "b00t agent invoke opencode 'your task here'"
+
 [validate]
 command = "opencode --version"
 regex = "[0-9]+\\.[0-9]+\\.[0-9]+"
@@ -51,3 +59,10 @@ regex = "[0-9]+\\.[0-9]+\\.[0-9]+"
 [roles]
 required_for = ["developer"]
 optional_for = ["orchestrator"]
+
+# b00t:map v1
+# summary: opencode CLI — AI coding TUI + headless run; Gemma4 via gemma4-local/ch0nky provider
+# tags: opencode, coding-agent, sub-agent, local-llm, gemma4, tui, headless, acp
+# tier: ch0nky
+# cmds: opencode run --model gemma4-local/ch0nky "task"
+# complexity: 4

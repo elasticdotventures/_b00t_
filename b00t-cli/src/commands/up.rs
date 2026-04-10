@@ -9,7 +9,7 @@ use std::process::Command;
 #[derive(Parser, Debug)]
 pub struct UpArgs {
     /// AI tool to use for the ralph loop
-    #[clap(long, default_value = "claude", value_parser = ["claude", "amp", "codex", "opencode", "mistralrs"])]
+    #[clap(long, default_value = "claude", value_parser = ["claude", "amp", "codex", "opencode", "mistralrs", "pi"])]
     pub tool: String,
 
     /// Maximum iterations per ralph session

@@ -17,6 +17,21 @@ MISTRALRS_API_BASE="${MISTRALRS_API_BASE:-http://localhost:${MISTRALRS_PORT}/v1}
 MISTRALRS_MODEL_ID="${MISTRALRS_MODEL_ID:-mistralai/Mistral-7B-Instruct-v0.3}"
 MISTRALRS_MODEL_NAME="${MISTRALRS_MODEL_NAME:-mistral}"
 
+# pi / local-inference configuration
+# PI_PROVIDER selects backend: "openai" targets liter-llm gateway (:1234, unified),
+#   "llama-cpp" targets vLLM directly (:8001).  Override any var via env.
+PI_PROVIDER="${PI_PROVIDER:-openai}"
+PI_GATEWAY_PORT="${PI_GATEWAY_PORT:-1234}"
+PI_DIRECT_PORT="${PI_DIRECT_PORT:-8001}"
+if [[ -z "${PI_BASE_URL:-}" ]]; then
+    case "${PI_PROVIDER}" in
+        llama-cpp) PI_BASE_URL="http://127.0.0.1:${PI_DIRECT_PORT}/v1" ;;
+        *)         PI_BASE_URL="http://127.0.0.1:${PI_GATEWAY_PORT}/v1" ;;
+    esac
+fi
+PI_MODEL="${PI_MODEL:-ch0nky}"
+PI_API_KEY="${PI_API_KEY:-local-b00t}"
+
 # Parse CLI args: --tool <tool> [--max-iterations <n>] [<n>]
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -147,6 +162,16 @@ run_external_step() {
         opencode)
             if command -v opencode >/dev/null 2>&1; then
                 opencode "${prompt}" 2>/dev/null || true
+            fi
+            ;;
+        pi)
+            # 🤓 llama-cpp→LLAMA_CPP_BASE_URL; openai→OPENAI_BASE_URL; auto-selected via PI_PROVIDER/PI_BASE_URL
+            if command -v pi >/dev/null 2>&1; then
+                local _pi_base_url_var
+                [[ "${PI_PROVIDER}" == "llama-cpp" ]] && _pi_base_url_var="LLAMA_CPP_BASE_URL" || _pi_base_url_var="OPENAI_BASE_URL"
+                env "${_pi_base_url_var}=${PI_BASE_URL}" \
+                OPENAI_API_KEY="${PI_API_KEY}" \
+                pi -p --provider "${PI_PROVIDER}" --model "${PI_MODEL}" "${prompt}" 2>/dev/null || true
             fi
             ;;
         *)

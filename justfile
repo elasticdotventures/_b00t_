@@ -163,6 +163,20 @@ marketplace-check:
     python3 scripts/generate_claude_marketplace.py --repo-root . --check
 
 
+# Bump patch version + cargo install — always pair these together
+# 🤓 never cargo install without bumping version; tracks deployed vs source
+bump-install:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    current=$(grep '^version' Cargo.toml | head -1 | grep -oP '[\d]+\.[\d]+\.[\d]+')
+    IFS='.' read -r maj min pat <<< "$current"
+    next="$maj.$min.$((pat+1))"
+    sed -i "s/^version = \"$current\"/version = \"$next\"/" Cargo.toml
+    echo "⬆️  $current → $next"
+    cargo install --path b00t-mcp --force
+    cargo install --path b00t-cli --force
+    echo "✅ installed v$next"
+
 # 🥾 Bootstrap b00t on a fresh machine (no cargo/just required).
 # 💡例 curl the script and pipe to bash, or run directly:
 #    ./b00t-lite.sh          — auto-detects OS, installs system deps + rustup
@@ -222,7 +236,10 @@ install:
     export PATH="${CARGO_HOME_VALUE}/bin:${PATH}"
     mkdir -p "${CARGO_HOME_VALUE}/bin"
 
-    # [1] [2] [3]: binaries always installed unconditionally
+    # [1] [2] [3]: bump patch version then install
+    # 🤓 version bump required on every cargo install — tracks deployed vs source state
+    cargo ws version patch --no-git-commit --yes 2>/dev/null || \
+      sed -i 's/^version = "\([0-9]*\)\.\([0-9]*\)\.\([0-9]*\)"/echo "version = \"\1.\2.$((\3+1))\""/e' Cargo.toml
     cargo install --path b00t-mcp  --force
     cargo install --path b00t-cli  --force
     cargo install cocogitto --locked --force
@@ -813,3 +830,101 @@ irontology-test:
 # Update irontology-mcp submodule to latest upstream
 irontology-update:
     git submodule update --remote vendor/irontology-mcp
+
+# ── Gemma 4 + pi-coding-agent local inference ────────────────────────────────
+
+# Download Gemma 4 26B-A4B MXFP4_MOE GGUF (unsloth/gemma-4-26B-A4B-it-GGUF)
+gemma4-download:
+    hf download unsloth/gemma-4-26B-A4B-it-GGUF --include "*MXFP4_MOE*"
+
+# Serve Gemma 4 via vLLM on port 8001 (requires gemma4-download first)
+# 🤓 2imi9/gemma-4-E4B-it-NVFP4A16: NVFP4A16 quant, native vLLM Gemma4 support (no GGUF)
+# 🤓 --enforce-eager: avoids Triton CUDA graph compilation deadlock on RTX 3090
+# 🤓 served-model-name=ch0nky: aligns with b00t hive ch0nky tier routing
+gemma4-serve:
+    prlimit --nofile=65536:65536 -- vllm serve \
+      2imi9/gemma-4-E4B-it-NVFP4A16 \
+      --served-model-name ch0nky \
+      --port 8001 \
+      --enforce-eager \
+      --enable-auto-tool-choice \
+      --tool-call-parser pythonic
+
+# Start Gemma 4 via systemd (preferred over direct serve)
+gemma4-start:
+    systemctl --user start vllm-gemma4.service
+
+# Stop Gemma 4 systemd service
+gemma4-stop:
+    systemctl --user stop vllm-gemma4.service
+
+# Check Gemma 4 server health
+gemma4-status:
+    curl -s http://localhost:8001/v1/models | python3 -m json.tool
+
+# ── pi agent — systemd service lifecycle ─────────────────────────────────────
+# 🤓 pi is managed as b00t@pi-agent.service, NOT spawned per-invocation
+pi-agent-start:
+    systemctl --user start b00t@pi-agent.service
+
+pi-agent-stop:
+    systemctl --user stop b00t@pi-agent.service
+
+pi-agent-status:
+    systemctl --user status b00t@pi-agent.service
+
+# Run pi one-shot (interactive, dev/debug only — not the hive path)
+pi-gemma4 prompt="hello":
+    OPENAI_BASE_URL=http://127.0.0.1:8001/v1 OPENAI_API_KEY=local-gemma4 \
+      pi --provider openai --model ch0nky -p "{{prompt}}"
+
+# ── opencode agent — systemd service lifecycle ───────────────────────────────
+# 🤓 opencode is managed as b00t@opencode-agent.service (ACP server :3000)
+opencode-agent-start:
+    systemctl --user start b00t@opencode-agent.service
+
+opencode-agent-stop:
+    systemctl --user stop b00t@opencode-agent.service
+
+opencode-agent-status:
+    systemctl --user status b00t@opencode-agent.service
+
+# Submit task to running opencode ACP server
+# Usage: just opencode-task "implement X"
+opencode-task task="hello":
+    opencode run --model gemma4-local/ch0nky "{{task}}"
+
+# ── ch0nky slot swap (pi ↔ opencode) ─────────────────────────────────────────
+# 🤓 pi and opencode share the ch0nky-coding-agent exclusion group — only one active
+ch0nky-use-pi:
+    systemctl --user stop b00t@opencode-agent.service 2>/dev/null || true
+    systemctl --user start b00t@pi-agent.service
+
+ch0nky-use-opencode:
+    systemctl --user stop b00t@pi-agent.service 2>/dev/null || true
+    systemctl --user start b00t@opencode-agent.service
+
+# ── smoke tests ──────────────────────────────────────────────────────────────
+gemma4-pi-test:
+    curl -sf http://localhost:8001/v1/models | python3 -c "import sys,json; m=json.load(sys.stdin); print('✅ serving:', [x['id'] for x in m['data']])"
+    OPENAI_BASE_URL=http://127.0.0.1:8001/v1 OPENAI_API_KEY=local-gemma4 \
+      pi --provider openai --model ch0nky -p "respond with exactly: pong"
+
+gemma4-opencode-test:
+    curl -sf http://localhost:8001/v1/models | python3 -c "import sys,json; m=json.load(sys.stdin); print('✅ serving:', [x['id'] for x in m['data']])"
+    opencode run --model gemma4-local/ch0nky "respond with exactly: pong"
+
+# moltis: build the moltis binary from vendor submodule
+moltis-build:
+    cargo build --manifest-path vendor/moltis-b00t/Cargo.toml --release
+
+# moltis: start moltis with b00t soul backend
+moltis-run:
+    MOLTIS_SOUL_URL=http://127.0.0.1:7700 ./vendor/moltis-b00t/target/release/moltis
+
+# moltis: run soul serve + test soul<->moltis K/V roundtrip
+moltis-soul-test:
+    b00t soul serve &
+    sleep 1
+    b00t soul set moltis_test_key "hello_from_b00t"
+    b00t soul get moltis_test_key

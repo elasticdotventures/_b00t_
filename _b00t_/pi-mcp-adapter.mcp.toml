@@ -1,0 +1,42 @@
+# b00t MCP Datum — pi-mcp-adapter (nicobailon/pi-mcp-adapter)
+# 🤓 pi-mcp-adapter is a pi extension installed via `pi install npm:pi-mcp-adapter`
+#    It bridges pi-coding-agent tools → MCP protocol so other agents can call them
+#    Key advantage: ~200 token overhead vs 10k+ for raw MCP tool definitions
+#    pi started in --mode rpc exposes tools (read, bash, edit, write, grep, find, ls)
+#    other agents/MCP clients connect to pi as an MCP server
+# https://github.com/nicobailon/pi-mcp-adapter
+#
+# Install pi-mcp-adapter:
+#   pi install npm:pi-mcp-adapter
+# Wire b00t-mcp into pi's MCP config:
+#   cat > ~/.pi/agent/mcp.json << 'EOF'
+#   { "mcpServers": { "b00t": { "command": "b00t-mcp", "args": [], "lifecycle": "lazy", "idleTimeout": 30 } } }
+#   EOF
+
+[b00t]
+name = "pi-mcp-adapter"
+type = "mcp"
+hint = "pi coding agent as MCP server — exposes read/bash/edit/write tools to other agents via pi-mcp-adapter"
+
+# ── stdio transport: pi in RPC mode with adapter ─────────────────────────────
+[[b00t.mcp.stdio]]
+# 🤓 pi --mode rpc starts pi as an MCP-compatible RPC server
+#    pi-mcp-adapter must be installed first: `pi install npm:pi-mcp-adapter`
+#    --provider openai uses OPENAI_BASE_URL; points directly to vLLM at :8001 (OpenAI-compatible API)
+command = "pi"
+args = ["--mode", "rpc", "--provider", "openai", "--model", "ch0nky", "--no-session"]
+transport = "stdio"
+priority = 0
+requires = ["pi-mcp-adapter", "b00t@inference-gemma4.service"]
+env = { OPENAI_BASE_URL = "http://127.0.0.1:8001/v1", OPENAI_API_KEY = "local-gemma4" }
+
+# ── b00t mcp.json fragment for wiring into Claude Code ───────────────────────
+# Usage: b00t mcp install pi-mcp-adapter claudecode
+# Or:    b00t mcp install pi-mcp-adapter dotmcpjson
+
+# b00t:map v1
+# summary: pi-mcp-adapter MCP datum — pi as MCP server; token-efficient tool bridge for sub-agents
+# tags: pi, mcp, adapter, token-efficient, sub-agent, gemma4, rpc
+# tier: ch0nky
+# cmds: b00t mcp install pi-mcp-adapter claudecode
+# complexity: 3
