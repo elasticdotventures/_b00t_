@@ -16,11 +16,11 @@ Wants=network.target
 Type=simple
 LimitNOFILE=65536
 
-Environment="PATH=/home/brianh/.venv/bin:/usr/local/bin:/usr/bin:/bin"
-Environment="HF_HOME=/home/brianh/.cache/huggingface"
+Environment="PATH=%h/.venv/bin:/usr/local/bin:/usr/bin:/bin"
+Environment="HF_HOME=%h/.cache/huggingface"
 Environment="VLLM_WORKER_MULTIPROC_METHOD=spawn"
 
-ExecStart=/home/brianh/.venv/bin/vllm serve \
+ExecStart=/usr/bin/env vllm serve \
     2imi9/gemma-4-E4B-it-NVFP4A16 \
     --served-model-name ch0nky \
     --port 8001 \
