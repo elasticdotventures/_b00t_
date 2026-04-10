@@ -21,6 +21,16 @@ personality = "pragmatic"
 humor = "low"
 role = "specialist"
 
+[b00t.agent.executor]
+# 🤓 cli_path must be on PATH; pi --mode rpc is the persistent path; this is one-shot fallback via handle_invoke
+cli_path = "pi"
+cli_args = ["-p", "--provider", "llama-cpp", "--model", "ch0nky"]
+supports_tools = ["read", "write", "bash", "grep", "ls"]
+max_iterations = 10
+requires = ["b00t-hive-inference-gemma4.service"]
+# hive_profile activates inference-gemma4 before invocation
+hive_profile = "inference-gemma4"
+
 [b00t.agent.ipc]
 # 🤓 pi --mode rpc exposes stdio RPC; pi-mcp-adapter bridges to MCP clients
 socket = "/tmp/b00t/agents/pi.sock"
@@ -48,10 +58,10 @@ timeout_start_sec = "60"
 after = ["network.target", "b00t-hive-inference-gemma4.service"]
 environment = [
   "PATH=/home/brianh/.nvm/versions/node/v22.15.1/bin:/usr/local/bin:/usr/bin:/bin",
-  "OPENAI_BASE_URL=http://127.0.0.1:8001/v1",
+  "LLAMA_CPP_BASE_URL=http://127.0.0.1:8001/v1",
   "OPENAI_API_KEY=local-gemma4",
 ]
-exec_start = "pi --mode rpc --provider openai --model ch0nky"
+exec_start = "pi --mode rpc --provider llama-cpp --model ch0nky"
 
 [b00t.hive.resources]
 ram_gb = 1
@@ -72,7 +82,7 @@ AGENT_ID = "pi"
 AGENT_SKILLS = "code,refactor,debug,edit,bash"
 PI_CODING_AGENT_DIR = "~/.pi/agent"
 PI_MODEL = "ch0nky"
-OPENAI_BASE_URL = "http://127.0.0.1:8001/v1"
+LLAMA_CPP_BASE_URL = "http://127.0.0.1:8001/v1"
 OPENAI_API_KEY = "local-gemma4"
 
 [[b00t.usage]]

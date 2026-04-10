@@ -913,3 +913,18 @@ gemma4-pi-test:
 gemma4-opencode-test:
     curl -sf http://localhost:8001/v1/models | python3 -c "import sys,json; m=json.load(sys.stdin); print('✅ serving:', [x['id'] for x in m['data']])"
     opencode run --model gemma4-local/ch0nky "respond with exactly: pong"
+
+# moltis: build the moltis binary from vendor submodule
+moltis-build:
+    cargo build --manifest-path vendor/moltis-b00t/Cargo.toml --release
+
+# moltis: start moltis with b00t soul backend
+moltis-run:
+    MOLTIS_SOUL_URL=http://127.0.0.1:7700 ./vendor/moltis-b00t/target/release/moltis
+
+# moltis: run soul serve + test soul<->moltis K/V roundtrip
+moltis-soul-test:
+    b00t soul serve &
+    sleep 1
+    b00t soul set moltis_test_key "hello_from_b00t"
+    b00t soul get moltis_test_key

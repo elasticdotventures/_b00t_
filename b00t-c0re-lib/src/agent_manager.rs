@@ -148,15 +148,108 @@ pub fn dispatch_tool(call: &ToolCall) -> String {
     }
 }
 
-/// Parse pi -p output: returns Some(tool_calls) if tool dispatch needed, None if final answer.
+//// Parse pi -p output: returns Some(tool_calls) if tool dispatch needed, None if final answer.
+///
+/// Handles two formats:
+/// 1. JSON: `{"tool_code": [{"name": "bash", "args": {"command": "..."}}]}`
+/// 2. Pythonic (gemma4/vLLM): `call:toolname{key:val,key2:val2}` — one call per output line
 fn parse_pi_output(raw: &str) -> Option<Vec<ToolCall>> {
-    // pi emits JSON with tool_code key when it wants tool execution
-    if let Ok(parsed) = serde_json::from_str::<PiToolOutput>(raw.trim()) {
-        if !parsed.tool_code.is_empty() {
-            return Some(parsed.tool_code);
+    let trimmed = raw.trim();
+
+    // Format 1: JSON tool_code envelope (legacy / other providers)
+    if trimmed.starts_with('{') {
+        match serde_json::from_str::<PiToolOutput>(trimmed) {
+            Ok(parsed) if !parsed.tool_code.is_empty() => return Some(parsed.tool_code),
+            Ok(_) => {} // valid JSON but empty tool_code — treat as final answer
+            Err(e) => {
+                warn!("parse_pi_output: JSON parse failed (treating as final answer): {}", e);
+            }
+        }
+        return None;
+    }
+
+    // Format 2: pythonic `call:name{...}` — emitted by gemma4 via vLLM
+    // 🤓 gemma4 outputs: call:bash{command:echo hi} or call:write{content:...,path:/foo}
+    //    Multiple calls may appear as multiple lines; collect all.
+    let calls: Vec<ToolCall> = trimmed
+        .lines()
+        .filter_map(|line| parse_pythonic_call(line.trim()))
+        .collect();
+
+    if calls.is_empty() { None } else { Some(calls) }
+}
+
+/// Parse a single `call:toolname{key:val,key2:val2}` line into a ToolCall.
+///
+/// Splitting strategy: find all `,([a-z_]+):` boundaries using regex-free scan.
+/// Values may contain commas (e.g. `content:hello, world,path:/foo`), but key
+/// names are always simple lowercase identifiers — scan for `,word:` patterns.
+fn parse_pythonic_call(line: &str) -> Option<ToolCall> {
+    // Must start with "call:"
+    let rest = line.strip_prefix("call:")?;
+
+    // Split on first `{` to get tool name
+    let brace_pos = rest.find('{')?;
+    let tool_name = rest[..brace_pos].trim().to_string();
+    if tool_name.is_empty() { return None; }
+
+    // Extract interior between `{` and trailing `}`
+    let interior = rest[brace_pos + 1..].strip_suffix('}')?.trim();
+
+    // Build args JSON by splitting on `,identifier:` boundaries
+    let args = parse_pythonic_args(interior);
+
+    Some(ToolCall { name: tool_name, args })
+}
+
+/// Split `key:val,key2:val2` into a serde_json::Value object.
+/// Keys are lowercase ASCII identifiers; values may contain commas.
+/// Strategy: scan for `,<ident>:` boundaries (ident = [a-z_][a-z0-9_]*).
+fn parse_pythonic_args(s: &str) -> serde_json::Value {
+    if s.is_empty() {
+        return serde_json::Value::Object(Default::default());
+    }
+
+    // Find all split positions: index of the comma before each `key:`
+    let mut split_positions: Vec<usize> = vec![0];
+    let bytes = s.as_bytes();
+    let len = bytes.len();
+    let mut i = 0;
+    while i < len {
+        if bytes[i] == b',' {
+            // Check if what follows is `ident:` where ident is [a-z_][a-z0-9_]*
+            let start = i + 1;
+            let mut j = start;
+            while j < len && (bytes[j].is_ascii_lowercase() || bytes[j] == b'_' || (j > start && bytes[j].is_ascii_digit())) {
+                j += 1;
+            }
+            if j > start && j < len && bytes[j] == b':' {
+                // Confirmed: comma at `i` is a key boundary
+                split_positions.push(i + 1); // start of next key
+            }
+        }
+        i += 1;
+    }
+
+    // Extract key-value pairs using split positions
+    let mut map = serde_json::Map::new();
+    for (idx, &start) in split_positions.iter().enumerate() {
+        let end = if idx + 1 < split_positions.len() {
+            split_positions[idx + 1] - 1 // exclude the comma
+        } else {
+            len
+        };
+        let segment = &s[start..end];
+        if let Some(colon) = segment.find(':') {
+            let key = segment[..colon].trim().to_string();
+            let val = segment[colon + 1..].to_string();
+            if !key.is_empty() {
+                map.insert(key, serde_json::Value::String(val));
+            }
         }
     }
-    None
+
+    serde_json::Value::Object(map)
 }
 
 /// Invoke an agent executor in a deterministic tool-call loop.
@@ -181,7 +274,8 @@ pub fn invoke_agent_executor(
 
         // Write context to stdin
         if let Some(mut stdin) = child.stdin.take() {
-            let _ = stdin.write_all(context.as_bytes());
+            stdin.write_all(context.as_bytes())
+                .with_context(|| format!("failed to write stdin to {}", executor.cli_path))?;
         }
 
         let out = child.wait_with_output()
@@ -521,6 +615,61 @@ max_iterations = 10
         // Plain text → no tool calls → final answer
         let raw = "fn add(a: i32, b: i32) -> i32 { a + b }";
         assert!(parse_pi_output(raw).is_none());
+    }
+
+    // ── Pythonic call:name{...} format tests (gemma4/vLLM) ──────────────────
+
+    #[test]
+    fn test_parse_pi_output_pythonic_bash() {
+        let raw = "call:bash{command:echo hello_world}";
+        let calls = parse_pi_output(raw).expect("must parse pythonic bash call");
+        assert_eq!(calls.len(), 1);
+        assert_eq!(calls[0].name, "bash");
+        assert_eq!(calls[0].args.get("command").and_then(|v| v.as_str()), Some("echo hello_world"));
+    }
+
+    #[test]
+    fn test_parse_pi_output_pythonic_write_two_args() {
+        // content value contains a comma — must not split on it
+        let raw = "call:write{content:hello, world,path:/tmp/b00t_test.txt}";
+        let calls = parse_pi_output(raw).expect("must parse pythonic write call");
+        assert_eq!(calls.len(), 1);
+        assert_eq!(calls[0].name, "write");
+        assert_eq!(calls[0].args.get("content").and_then(|v| v.as_str()), Some("hello, world"));
+        assert_eq!(calls[0].args.get("path").and_then(|v| v.as_str()), Some("/tmp/b00t_test.txt"));
+    }
+
+    #[test]
+    fn test_parse_pi_output_pythonic_read() {
+        let raw = "call:read{path:/tmp/b00t_test_pi.txt}";
+        let calls = parse_pi_output(raw).expect("must parse pythonic read call");
+        assert_eq!(calls.len(), 1);
+        assert_eq!(calls[0].name, "read");
+        assert_eq!(calls[0].args.get("path").and_then(|v| v.as_str()), Some("/tmp/b00t_test_pi.txt"));
+    }
+
+    #[test]
+    fn test_parse_pi_output_pythonic_multiple_lines() {
+        // pi may emit multiple calls as separate lines
+        let raw = "call:bash{command:mkdir -p /tmp/b00t}\ncall:write{content:done,path:/tmp/b00t/out.txt}";
+        let calls = parse_pi_output(raw).expect("must parse two pythonic calls");
+        assert_eq!(calls.len(), 2);
+        assert_eq!(calls[0].name, "bash");
+        assert_eq!(calls[1].name, "write");
+    }
+
+    #[test]
+    fn test_parse_pythonic_args_single() {
+        let args = parse_pythonic_args("command:ls -F /tmp");
+        assert_eq!(args.get("command").and_then(|v| v.as_str()), Some("ls -F /tmp"));
+    }
+
+    #[test]
+    fn test_parse_pythonic_args_comma_in_value() {
+        // content:hello, world,path:/foo — comma inside value must not split key
+        let args = parse_pythonic_args("content:hello, world,path:/foo");
+        assert_eq!(args.get("content").and_then(|v| v.as_str()), Some("hello, world"));
+        assert_eq!(args.get("path").and_then(|v| v.as_str()), Some("/foo"));
     }
 
     #[test]

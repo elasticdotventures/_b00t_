@@ -21,15 +21,15 @@ topic = "pi-coding-agent"
 auto_digest = true
 
 # ── Local Gemma-4 via openai-compatible vLLM ─────────────────────────────────
-# 🤓 pi uses --provider openai + OPENAI_BASE_URL; no llama-cpp provider exists in pi
+# 🤓 pi uses --provider llama-cpp + LLAMA_CPP_BASE_URL for local vLLM
 [[b00t.usage]]
 description = "Run pi with local Gemma 4 (requires vLLM serving on :8001)"
-command = "OPENAI_BASE_URL=http://127.0.0.1:8001/v1 OPENAI_API_KEY=local-gemma4 pi --provider openai --model ch0nky"
+command = "LLAMA_CPP_BASE_URL=http://127.0.0.1:8001/v1 pi --provider llama-cpp --model ch0nky"
 
 # ── Non-interactive (sub-agent usage) ────────────────────────────────────────
 [[b00t.usage]]
 description = "Delegate a coding task to pi sub-agent (non-interactive)"
-command = "OPENAI_BASE_URL=http://127.0.0.1:8001/v1 OPENAI_API_KEY=local-gemma4 pi -p --model openai/ch0nky 'implement X in Y'"
+command = "LLAMA_CPP_BASE_URL=http://127.0.0.1:8001/v1 pi -p --provider llama-cpp --model ch0nky 'implement X in Y'"
 
 [[b00t.usage]]
 description = "Install pi-mcp-adapter (enables MCP access from pi)"
@@ -41,7 +41,7 @@ command = "curl -s http://127.0.0.1:8001/v1/models | python3 -m json.tool"
 
 [[b00t.usage]]
 description = "Interactive pi with gemma4 + all tools"
-command = "OPENAI_BASE_URL=http://127.0.0.1:8001/v1 OPENAI_API_KEY=local-gemma4 pi --provider openai --model ch0nky"
+command = "LLAMA_CPP_BASE_URL=http://127.0.0.1:8001/v1 pi --provider llama-cpp --model ch0nky"
 
 [validate]
 command = "pi --version"
@@ -55,5 +55,5 @@ optional_for = ["developer", "hive"]
 # summary: pi-coding-agent CLI datum — local LLM sub-agent with MCP via pi-mcp-adapter
 # tags: pi, coding-agent, sub-agent, local-llm, gemma4, mcp
 # tier: ch0nky
-# cmds: OPENAI_BASE_URL=http://127.0.0.1:8001/v1 OPENAI_API_KEY=local-gemma4 pi --provider openai --model ch0nky -p "task"
+# cmds: LLAMA_CPP_BASE_URL=http://127.0.0.1:8001/v1 pi --provider llama-cpp --model ch0nky -p "task"
 # complexity: 4

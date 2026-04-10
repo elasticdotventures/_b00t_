@@ -217,10 +217,12 @@ pub struct AgentMessageCommand {
     pub ack: bool,
 }
 
+// 🤓 to_agent, subject, content are positional in b00t-cli agent message
 impl_mcp_tool!(
     AgentMessageCommand,
     "b00t_agent_message",
-    ["agent", "message"]
+    ["agent", "message"],
+    positionals: ["to_agent", "subject", "content"]
 );
 
 /// MCP command for task delegation (captain only)
@@ -248,10 +250,12 @@ pub struct AgentDelegateCommand {
     pub blocking: bool,
 }
 
+// 🤓 worker, task_id, description are positional in b00t-cli agent delegate
 impl_mcp_tool!(
     AgentDelegateCommand,
     "b00t_agent_delegate",
-    ["agent", "delegate"]
+    ["agent", "delegate"],
+    positionals: ["worker", "task_id", "description"]
 );
 
 /// MCP command for completing tasks (worker response)
@@ -464,16 +468,15 @@ impl_mcp_tool!(McpInstallCommand, "b00t_mcp_install", ["mcp", "install"]);
 /// Session init command
 // 🤓 ENTANGLED: b00t-cli/src/commands/session.rs SessionCommands::Init
 // When this changes, update b00t-cli SessionCommands::Init structure
+// 🤓 CLI session init accepts only --budget and --name (both flags, no positionals)
+//    time_limit and agent params removed — not present in b00t-cli SessionCommands::Init
 #[derive(Parser, Clone)]
 pub struct SessionInitCommand {
     #[arg(long, help = "Budget limit in dollars")]
     pub budget: Option<f64>,
 
-    #[arg(long, help = "Time limit in minutes")]
-    pub time_limit: Option<u32>,
-
-    #[arg(long, help = "Agent name")]
-    pub agent: Option<String>,
+    #[arg(long, help = "Session name")]
+    pub name: Option<String>,
 }
 
 impl_mcp_tool!(SessionInitCommand, "b00t_session_init", ["session", "init"]);
