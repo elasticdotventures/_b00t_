@@ -299,8 +299,9 @@ pub fn invoke_agent_executor(
                     info!("tool {} → {} bytes", call.name, result.len());
                     results.push(format!("[tool:{}]\n{}", call.name, result));
                 }
-                // Re-invoke with original prompt + tool results appended
-                context = format!("{}\n\nTool results:\n{}", initial_prompt, results.join("\n---\n"));
+                // Re-invoke with accumulated context + newly appended tool results
+                context.push_str("\n\nTool results:\n");
+                context.push_str(&results.join("\n---\n"));
             }
             None => {
                 // Final answer — no more tool calls
