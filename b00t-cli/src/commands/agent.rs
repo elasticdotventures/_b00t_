@@ -801,19 +801,21 @@ async fn handle_ralph(
 
     // Use the shell Ralph loop for self-hosted local tools because it already
     // knows how to fall back between gateway and direct Gemma4 inference.
-    let (program, ralph_args, working_dir) = if uses_shell_ralph(tool) {
-        (
-            "bash",
-            build_shell_ralph_command_args(tool, max_iterations),
-            root.clone(),
-        )
-    } else {
-        (
-            "uv",
-            build_ralph_command_args(tool, max_iterations, task),
-            ralph_path.clone(),
-        )
-    };
+    let shell_ralph_script = root.join("b00t.sh");
+    let (program, ralph_args, working_dir) =
+        if uses_shell_ralph(tool) && shell_ralph_script.exists() {
+            (
+                "bash",
+                build_shell_ralph_command_args(tool, max_iterations),
+                root.clone(),
+            )
+        } else {
+            (
+                "uv",
+                build_ralph_command_args(tool, max_iterations, task),
+                ralph_path.clone(),
+            )
+        };
 
     println!("🚀 Starting ralph autonomous loop...");
     let ralph_cmd = cmd(program, ralph_args)
