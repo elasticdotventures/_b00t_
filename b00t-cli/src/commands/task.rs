@@ -69,6 +69,9 @@ pub struct Task {
     pub dependencies: Vec<u32>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub notes: Option<String>,
+    /// Verifiable exit conditions (R5: GOAL.md fitness contract)
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub acceptance_criteria: Vec<String>,
     pub created_at: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub updated_at: Option<String>,
@@ -171,6 +174,7 @@ fn import_from_legacy(path: &Path) -> Result<TaskStore> {
             priority,
             tags: vec![],
             dependencies: deps,
+            acceptance_criteria: vec![],
             notes: t["details"].as_str().map(str::to_string),
             created_at: ts.clone(),
             updated_at: None,
@@ -202,6 +206,8 @@ pub enum TaskCommands {
         priority: u8,
         #[clap(long, short, help = "Tags (comma-separated)")]
         tags: Option<String>,
+        #[clap(long, short = 'c', help = "Acceptance criteria (repeatable: -c 'tests pass' -c 'lint clean')")]
+        criteria: Vec<String>,
     },
     #[clap(about = "Show next pending task (highest priority)")]
     Next {
@@ -267,7 +273,7 @@ pub enum DepOp {
 pub fn handle_task_command(cmd: TaskCommands) -> Result<()> {
     match cmd {
         TaskCommands::List { status, tag, json } => cmd_list(status.as_deref(), tag.as_deref(), json),
-        TaskCommands::Add { title, description, priority, tags } => cmd_add(title, description, priority, tags),
+        TaskCommands::Add { title, description, priority, tags, criteria } => cmd_add(title, description, priority, tags, criteria),
         TaskCommands::Next { json } => cmd_next(json),
         TaskCommands::Done { id } => cmd_done(id),
         TaskCommands::Update { id, status, title, note, priority } => cmd_update(id, status, title, note, priority),
@@ -311,13 +317,13 @@ fn cmd_list(status_filter: Option<&str>, tag_filter: Option<&str>, json: bool) -
     Ok(())
 }
 
-fn cmd_add(title: String, description: Option<String>, priority: u8, tags_raw: Option<String>) -> Result<()> {
+fn cmd_add(title: String, description: Option<String>, priority: u8, tags_raw: Option<String>, criteria: Vec<String>) -> Result<()> {
     let mut store = load_store()?;
     let id = next_id(&store);
     let tags = tags_raw.map(|t| t.split(',').map(str::trim).map(str::to_string).collect()).unwrap_or_default();
     let task = Task {
         id, title: title.clone(), description, status: TaskStatus::Pending,
-        priority, tags, dependencies: vec![], notes: None, created_at: now_iso(), updated_at: None,
+        priority, tags, dependencies: vec![], acceptance_criteria: criteria, notes: None, created_at: now_iso(), updated_at: None,
     };
     store.tasks.push(task);
     save_store(&store)?;
@@ -461,7 +467,7 @@ mod tests {
     #[test]
     fn test_add_and_list() {
         with_tmp_store(|_| {
-            cmd_add("test task".into(), None, 3, None).unwrap();
+            cmd_add("test task".into(), None, 3, None, vec![]).unwrap();
             let store = load_store().unwrap();
             assert_eq!(store.tasks.len(), 1);
             assert_eq!(store.tasks[0].title, "test task");
@@ -472,7 +478,7 @@ mod tests {
     #[test]
     fn test_done() {
         with_tmp_store(|_| {
-            cmd_add("finish me".into(), None, 2, None).unwrap();
+            cmd_add("finish me".into(), None, 2, None, vec![]).unwrap();
             cmd_done(1).unwrap();
             let store = load_store().unwrap();
             assert!(matches!(store.tasks[0].status, TaskStatus::Done));
@@ -482,8 +488,8 @@ mod tests {
     #[test]
     fn test_next_priority_order() {
         with_tmp_store(|_| {
-            cmd_add("low prio".into(), None, 4, None).unwrap();   // id=1
-            cmd_add("high prio".into(), None, 1, None).unwrap();  // id=2
+            cmd_add("low prio".into(), None, 4, None, vec![]).unwrap();   // id=1
+            cmd_add("high prio".into(), None, 1, None, vec![]).unwrap();  // id=2
             let store = load_store().unwrap();
             let next = store.tasks.iter()
                 .filter(|t| matches!(t.status, TaskStatus::Pending))

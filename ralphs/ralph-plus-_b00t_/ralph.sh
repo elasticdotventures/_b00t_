@@ -40,6 +40,8 @@ VALIDATION_SNIPPET=""
 # R1: Metric gate + rollback (karpathy/autoresearch pattern)
 # 🤓 score = test-pass-rate after each iteration; rollback if regresses vs baseline
 RALPH_METRIC_GATE="${RALPH_METRIC_GATE:-false}"  # enable with RALPH_METRIC_GATE=true
+# R5: GOAL.md fitness contract
+RALPH_REQUIRE_CRITERIA="${RALPH_REQUIRE_CRITERIA:-false}"
 RALPH_TRIAL_BUDGET_SECS="${RALPH_TRIAL_BUDGET_SECS:-300}"  # per-iteration time cap
 SCORES_FILE="${STATE_DIR}/scores.jsonl"           # {ts, loop, metric, value}
 BASELINE_SCORE=""                                  # set on first successful trial
@@ -637,6 +639,142 @@ metric_gate_check() {
     return 0
 }
 
+
+# -- R5: GOAL.md fitness contract (karpathy/lazy-developer) ----------------
+# 🤓 emit_goal_md writes trial intent; check_task_has_criteria enforces AC gate
+emit_goal_md() {
+    local task_title="$1" task_criteria="$2" loop_num="$3"
+    local goal_file="${STATE_DIR}/GOAL-${loop_num}.md"
+    {
+        printf "# GOAL -- loop %s\n\n## Task\n%s\n\n" "${loop_num}" "${task_title}"
+        printf "## Acceptance Criteria\n%s\n\n" "${task_criteria}"
+        printf "## Metric\ntest-pass-rate -- see scores.jsonl\n\n"
+        printf "## Constraint\n- RALPH_TRIAL_BUDGET_SECS=%s\n- TOOL=%s\n" "${RALPH_TRIAL_BUDGET_SECS}" "${TOOL}"
+    } > "${goal_file}"
+    log "goal written: ${goal_file}"
+}
+
+check_task_has_criteria() {
+    local task_json="$1"
+    [[ "${RALPH_REQUIRE_CRITERIA}" != "true" ]] && return 0
+    command -v jq >/dev/null 2>&1 || return 0
+    local n
+    n="$(echo "${task_json}" | jq '.acceptance_criteria | length // 0' 2>/dev/null || echo 0)"
+    if [[ "${n}" -eq 0 ]]; then
+        log "task missing acceptance_criteria -- skipping (RALPH_REQUIRE_CRITERIA=true)"
+        return 1
+    fi
+    return 0
+}
+
+
+# -- R7: Elo scoring for adversarial loop (autoevolve pattern) --------------
+# 🤓 writer_elo and reviewer_elo stored in scores.jsonl; K=32; initial=1200
+#    Pareto front tracked over (test_pass_rate, diff_penalty); used for best-trial selection
+ELO_FILE="${STATE_DIR}/elo.json"  # {"writer":1200,"reviewer":1200}
+
+elo_load() {
+    if [[ -f "${ELO_FILE}" ]] && command -v jq >/dev/null 2>&1; then
+        ELO_WRITER="$(jq -r '.writer // 1200' "${ELO_FILE}" 2>/dev/null || echo 1200)"
+        ELO_REVIEWER="$(jq -r '.reviewer // 1200' "${ELO_FILE}" 2>/dev/null || echo 1200)"
+    else
+        ELO_WRITER=1200; ELO_REVIEWER=1200
+    fi
+}
+
+elo_update() {
+    local verdict="$1"  # PASS or FAIL
+    command -v jq >/dev/null 2>&1 || return 0
+    elo_load
+    local K=32 scale=400
+    # Expected score for writer vs reviewer (logistic)
+    # e_w = 1/(1+10^((r-w)/400));  e_r = 1-e_w
+    local e_w e_r
+    e_w=$(python3 -c "import math; r,w=${ELO_REVIEWER},${ELO_WRITER}; print(round(1/(1+10**((r-w)/400)),4))" 2>/dev/null || echo "0.5")
+    if [[ "${verdict}" == "PASS" ]]; then
+        # Writer wins: writer +, reviewer -
+        ELO_WRITER=$(python3 -c "print(round(${ELO_WRITER}+${K}*(1-${e_w})))" 2>/dev/null || echo "${ELO_WRITER}")
+        ELO_REVIEWER=$(python3 -c "print(round(${ELO_REVIEWER}+${K}*(${e_w}-1)))" 2>/dev/null || echo "${ELO_REVIEWER}")
+    else
+        # Reviewer wins: reviewer +, writer -
+        ELO_WRITER=$(python3 -c "print(round(${ELO_WRITER}+${K}*(0-${e_w})))" 2>/dev/null || echo "${ELO_WRITER}")
+        ELO_REVIEWER=$(python3 -c "print(round(${ELO_REVIEWER}+${K}*(1-${e_w})))" 2>/dev/null || echo "${ELO_REVIEWER}")
+    fi
+    jq -n --argjson w "${ELO_WRITER}" --argjson r "${ELO_REVIEWER}" '{writer:$w,reviewer:$r}' > "${ELO_FILE}" 2>/dev/null || true
+    log "elo update: writer=${ELO_WRITER} reviewer=${ELO_REVIEWER} (${verdict})"
+}
+
+# record_score_with_elo: extends R1 record_score to include Elo and diff_penalty
+record_score_elo() {
+    local loop_num="$1" test_score="$2" diff_lines="$3" verdict="$4"
+    elo_load
+    local ts
+    ts="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+    printf '{"ts":"%s","loop":%s,"metric":"test-pass-rate","value":%s,"diff_penalty":%s,"writer_elo":%s,"reviewer_elo":%s,"verdict":"%s"}\n' \
+        "${ts}" "${loop_num}" "${test_score}" "${diff_lines}" "${ELO_WRITER}" "${ELO_REVIEWER}" "${verdict}" \
+        >> "${SCORES_FILE}" 2>/dev/null || true
+}
+
+
+# -- R3: Trajectory compression -> RL training data (hermes-agent pattern) --
+# 🤓 Captures first 3 + last 4 turns; compresses middle via sm0l summarizer
+#    Writes .b00t/ralph/trajectory-<ts>.jsonl for future fine-tune pipeline
+RALPH_TRAJECTORY_TOKENS="${RALPH_TRAJECTORY_TOKENS:-15250}"
+
+emit_trajectory_jsonl() {
+    local exit_reason="$1"
+    local log_file="${LOG_FILE}"
+    [[ ! -f "${log_file}" ]] && return 0
+
+    local ts
+    ts="$(date -u +%Y%m%dT%H%M%S)"
+    local traj_file="${STATE_DIR}/trajectory-${ts}.jsonl"
+
+    # Load log lines as turns; log format: "[ralph] ..." lines are system, rest are model
+    local total_lines
+    total_lines="$(wc -l < "${log_file}" 2>/dev/null || echo 0)"
+    local protect_first=3 protect_last=4
+
+    # Emit header record
+    printf '{"type":"header","ts":"%s","tool":"%s","role":"%s","loops":%s,"exit":"%s","scores_file":"%s"}\n' \
+        "${ts}" "${TOOL}" "${ROLE}" "${loop:-0}" "${exit_reason}" "${SCORES_FILE}" \
+        > "${traj_file}" 2>/dev/null || return 0
+
+    # Emit first N turns verbatim
+    local line_num=0
+    while IFS= read -r line && [[ "${line_num}" -lt "${protect_first}" ]]; do
+        printf '{"type":"turn","idx":%s,"protected":true,"content":%s}\n' \
+            "${line_num}" "$(printf '%s' "${line}" | jq -Rs . 2>/dev/null || echo 'null')" \
+            >> "${traj_file}" 2>/dev/null
+        line_num=$((line_num + 1))
+    done < "${log_file}"
+
+    # Middle turns: emit compressed placeholder (sm0l summarization deferred to pipeline)
+    local middle_count=$(( total_lines - protect_first - protect_last ))
+    if [[ "${middle_count}" -gt 0 ]]; then
+        printf '{"type":"compressed","start_idx":%s,"end_idx":%s,"line_count":%s,"note":"compress via sm0l"}\n' \
+            "${protect_first}" "$(( total_lines - protect_last ))" "${middle_count}" \
+            >> "${traj_file}" 2>/dev/null
+    fi
+
+    # Emit last N turns verbatim
+    local last_start=$(( total_lines - protect_last + 1 ))
+    [[ "${last_start}" -lt 1 ]] && last_start=1
+    tail -n "${protect_last}" "${log_file}" | while IFS= read -r line; do
+        printf '{"type":"turn","protected":true,"content":%s}\n' \
+            "$(printf '%s' "${line}" | jq -Rs . 2>/dev/null || echo 'null')" \
+            >> "${traj_file}" 2>/dev/null
+    done
+
+    # Append Elo + score summary
+    elo_load 2>/dev/null || true
+    printf '{"type":"footer","writer_elo":%s,"reviewer_elo":%s,"target_tokens":%s}\n' \
+        "${ELO_WRITER:-1200}" "${ELO_REVIEWER:-1200}" "${RALPH_TRAJECTORY_TOKENS}" \
+        >> "${traj_file}" 2>/dev/null
+
+    log "trajectory written: ${traj_file} (${total_lines} turns)"
+}
+
 # 🤓 B00T_TEST_MODE=1: source this script to load functions without executing the main loop
 # Enables: `B00T_TEST_MODE=1 source b00t.sh; restore_task_state` in unit tests
 if [[ "${B00T_TEST_MODE:-}" == "1" ]]; then
@@ -662,6 +800,21 @@ while [[ "${loop}" -le "${MAX_ITERATIONS}" ]]; do
     prompt="$(build_prompt "${loop}")"
     output=""
 
+    # R5: GOAL.md + acceptance_criteria gate
+    if command -v b00t-cli >/dev/null 2>&1; then
+        _task_json="$(b00t-cli task next --json 2>/dev/null || true)"
+        if [[ -n "${_task_json}" && "${_task_json}" != "no actionable"* ]]; then
+            _task_title="$(echo "${_task_json}" | jq -r '.title // empty' 2>/dev/null || true)"
+            _task_criteria="$(echo "${_task_json}" | jq -r '.acceptance_criteria[]?' 2>/dev/null | sed 's/^/- /' || true)"
+            [[ -n "${_task_title}" ]] && emit_goal_md "${_task_title}" "${_task_criteria}" "${loop}"
+            if ! check_task_has_criteria "${_task_json}"; then
+                _skip_id="$(echo "${_task_json}" | jq -r '.id // empty' 2>/dev/null || true)"
+                [[ -n "${_skip_id}" ]] && b00t-cli task update "${_skip_id}" --status deferred 2>/dev/null || true
+                loop=$((loop + 1)); continue
+            fi
+        fi
+    fi
+
     if [[ "${TOOL}" == "mistralrs" ]]; then
         output="$(run_mistralrs_step "${prompt}" || true)"
     else
@@ -681,6 +834,12 @@ EXIT_SIGNAL=false"
         echo "${output}" > "${draft_file}"
         review_result="$(run_adversarial_review "${draft_file}" "$(echo "${prompt}" | head -3)")"
         log "adversarial review loop=${loop}: ${review_result}"
+        # R7: Elo update based on adversarial verdict
+        if echo "${review_result}" | grep -q "^PASS"; then
+            elo_update "PASS"
+        else
+            elo_update "FAIL"
+        fi
         if echo "${review_result}" | grep -q "^FAIL:"; then
             # Append reviewer rejection as friction signal and re-queue
             append_friction_report \
@@ -712,6 +871,7 @@ EXIT_SIGNAL=false"
         if [[ "${ADVERSARIAL}" == "true" ]]; then
             append_friction_report "loop-final" "- Clean exit at iteration ${loop}" "HIGH"
         fi
+        emit_trajectory_jsonl "completed"
         exit 0
     fi
 
@@ -727,4 +887,5 @@ log "max iterations reached; requesting restart via exit 75"
 append_friction_report "loop-tempfail" \
     "- Reached max iterations (${MAX_ITERATIONS}) without EXIT_SIGNAL=true\n- Tool: ${TOOL}, Role: ${ROLE}" \
     "LOW"
+emit_trajectory_jsonl "tempfail"
 exit 75
