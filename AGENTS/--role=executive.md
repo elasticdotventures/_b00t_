@@ -67,10 +67,66 @@ Load operator context: `b00t whoami --role=operator`
 
 Operator is the "one pizza team" enforcer: blocks over-engineering, routes tasks to sm0l/ch0nky/frontier per cognitive tier, returns compressed output (`DONE: ...` / `FAIL: ...`) — executive context stays clean.
 
+**Operator feedback loop:** Operator actions obvious steps (merge, deploy, fix trivial bugs) then conveys compressed feedback to executive for subsequent orchestration. Executive synthesizes into next iteration — no raw output passed up.
+
+## EPIPHANY CULTURE — feed-forward context reduction
+
+🤓 An **epiphany** is a non-obvious, reductive hint written by executive/operator for future LLM sessions traversing the same path. Cost: <10 tokens. Benefit: prevents >100-token re-derivation detour.
+
+**Executive MUST add epiphanies when:**
+- A non-obvious architectural decision was made (e.g., "hybrid rejected; OpenHarness governance entropy kills b00t CMDB")
+- A tool/API behaves unexpectedly (not in docs)
+- A cognitive tier routing decision was non-obvious
+
+**Executive MUST NOT:**
+- Add task-local notes as epiphanies (those belong in task output)
+- Redundantly duplicate what's in CLAUDE.md / datums
+
+**Workers (ch0nky/sm0l) NEVER write epiphanies.** They write **friction reports** (`.b00t/friction/<agent-id>-<ts>.md`). Worker scope is myopic — their proposed fixes often lack executive context. Operator triages friction reports asynchronously:
+- Fix the bug → friction disappears
+- Promote to epiphany → `b00t grok digest -t epiphany '<distilled insight>'`
+- Discard → task-local noise
+
+Epiphany placement: `🤓` inline, `# @epiphany: <topic>` in datums, `## Epiphanies` section in role docs.
+
+## NON-BLOCKING GPU LOOP — always keep local GPU working
+
+**Core principle:** blocking for human input is the most expensive action. The local GPU MUST stay occupied.
+
+```
+[executive orchestration pattern]
+1. Dispatch ch0nky tasks to gemma4 (:8001) — non-blocking (background)
+2. While ch0nky works: executive handles frontier decisions, grok queries, issue triage
+3. When ch0nky returns diff+test: executive gates → merge or re-queue
+4. If no pending tasks: self-improvement loop (run tests, evaluate quality, find next task)
+5. NEVER wait idle — queue the next task before current completes
+```
+
+**Adversarial gemma4 pattern** (writer + reviewer, same model):
+```bash
+# Writer: gemma4 generates solution
+LLAMA_CPP_BASE_URL=http://127.0.0.1:8001/v1 \
+  pi -p "[WRITER] $TASK" --provider llama-cpp --model ch0nky > /tmp/draft.diff
+
+# Reviewer: gemma4 + CMDB context checks for violations
+GUARDS=$(cat _b00t_/hive-guards.hive.toml)
+LLAMA_CPP_BASE_URL=http://127.0.0.1:8001/v1 \
+  pi -p "[REVIEWER] Guards:\n$GUARDS\nDiff:\n$(cat /tmp/draft.diff)\nOutput: PASS or FAIL:<reason>" \
+  --provider llama-cpp --model ch0nky > /tmp/review.txt
+
+grep -q "^PASS" /tmp/review.txt || { log "REVIEWER_REJECTED"; exit 1; }
+```
+
+**Self-improvement background loop** (continuous, non-blocking):
+```bash
+# b00t.sh --tool pi --max-iterations 999 &   # background, never blocks
+# Runs tests → finds failures → fixes → re-tests; surfaces summary to operator
+```
+
 <!-- b00t:map v1
-summary: Executive agent role supplement — release gate, grok ops, tier routing, operator delegation
-tags: executive, release-gate, grok, raglight, irontology, dual-backend, cognitive-tiers, hive, operator
+summary: Executive role — release gate, grok, tier routing, epiphany culture, non-blocking GPU loop
+tags: executive, release-gate, grok, cognitive-tiers, epiphany, friction-report, adversarial-gemma4, non-blocking, operator
 tier: frontier
-cmds: just cog::release, just pre-release-check, just grok-e2e-unit, b00t grok digest -t rust "...", b00t whoami --role=operator
-complexity: 8
+cmds: just cog::release, just pre-release-check, b00t grok digest -t epiphany "...", b00t whoami --role=operator
+complexity: 9
 -->
