@@ -36,6 +36,18 @@ ISSUE_FEED="${B00T_GH_ISSUES:-}"
 BACKLOG_SNIPPET=""
 VALIDATION_SNIPPET=""
 
+# Adversarial gemma4 pattern: writer → reviewer → gate
+# 🤓 REVIEWER needs CMDB context injected — pure LLM judgment on b00t compliance is unreliable
+ADVERSARIAL="${B00T_ADVERSARIAL:-false}"
+ADVERSARIAL_REVIEW_THRESHOLD="${B00T_ADVERSARIAL_THRESHOLD:-50}"  # min lines of diff to trigger review
+
+# Task-state compression: preserve task progress across context compression events
+# 🤓 Port of OpenHarness v0.1.6 pattern: checkpoint task state to disk before compaction
+TASK_STATE_CHECKPOINT="${STATE_DIR}/task_state.json"
+
+# Friction report: worker agents append here; operator triages async
+FRICTION_DIR="${STATE_DIR}/friction"
+
 # Parse CLI args: --tool <tool> [--max-iterations <n>] [<n>]
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -255,6 +267,132 @@ ensure_mistralrs_server() {
     return 1
 }
 
+# ── Adversarial writer→reviewer gate (gemma4 only) ────────────────────────────
+# 🤓 Reviewer receives CMDB guards as context — without this, compliance check is theatre
+run_adversarial_review() {
+    local draft="$1"   # path to draft diff/output file
+    local task="$2"    # original task description (for reviewer context)
+
+    if [[ "${ADVERSARIAL}" != "true" ]]; then
+        echo "PASS"
+        return 0
+    fi
+
+    # Only review if diff is substantial enough to warrant cost
+    local line_count
+    line_count=$(wc -l < "${draft}" 2>/dev/null || echo 0)
+    if [[ "${line_count}" -lt "${ADVERSARIAL_REVIEW_THRESHOLD}" ]]; then
+        echo "PASS (trivial diff, review skipped)"
+        return 0
+    fi
+
+    if ! command -v pi >/dev/null 2>&1; then
+        log "pi not available; skipping adversarial review"
+        echo "PASS (pi unavailable)"
+        return 0
+    fi
+
+    if ! http_ok "http://127.0.0.1:${PI_DIRECT_PORT}/v1/models"; then
+        log "gemma4 not reachable; skipping adversarial review"
+        echo "PASS (gemma4 unavailable)"
+        return 0
+    fi
+
+    local guards=""
+    local guards_file="${B00T_REPO_ROOT:-$(git rev-parse --show-toplevel 2>/dev/null || echo .)}/_b00t_/hive-guards.hive.toml"
+    [[ -f "${guards_file}" ]] && guards="$(cat "${guards_file}")"
+
+    local review_prompt
+    review_prompt="[REVIEWER] You are an adversarial b00t hive compliance reviewer.
+
+Active guards:
+${guards}
+
+Task: ${task}
+
+Draft output (diff/code):
+$(cat "${draft}")
+
+Check ONLY:
+1. Guard violations (e.g., pip install, docker run, rm -rf without justification)
+2. DRY violations (new code that duplicates known OSS functionality)
+3. Non-laconic commentary (platitudes, apologies, over-explanation)
+4. b00t gospel violations (cloud inference, raw template reads, etc.)
+
+Output exactly one line: PASS or FAIL:<specific reason>"
+
+    local result
+    result="$(LLAMA_CPP_BASE_URL="http://127.0.0.1:${PI_DIRECT_PORT}/v1" \
+        OPENAI_API_KEY=local-b00t \
+        pi -p "${review_prompt}" \
+        --provider llama-cpp --model "${PI_MODEL}" \
+        2>/dev/null | tail -1 || echo "PASS (reviewer error)")"
+
+    echo "${result}"
+}
+
+# ── Task-state checkpoint (preserve across context compression) ───────────────
+# 🤓 Checkpoints pending taskmaster tasks + loop state to disk so ralph can resume
+#    after context compression without losing work-in-progress task state.
+checkpoint_task_state() {
+    local loop_num="$1"
+    local tasks_file=".taskmaster/tasks/tasks.json"
+
+    mkdir -p "${STATE_DIR}"
+
+    if command -v jq >/dev/null 2>&1 && [[ -f "${tasks_file}" ]]; then
+        jq -nc \
+            --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            --argjson loop "${loop_num}" \
+            --argjson tasks "$(cat "${tasks_file}")" \
+            '{checkpoint_ts:$ts, loop:$loop, tasks:$tasks}' \
+            > "${TASK_STATE_CHECKPOINT}" 2>/dev/null || true
+    else
+        printf '{"checkpoint_ts":"%s","loop":%s}\n' \
+            "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "${loop_num}" \
+            > "${TASK_STATE_CHECKPOINT}" 2>/dev/null || true
+    fi
+}
+
+restore_task_state() {
+    if [[ ! -f "${TASK_STATE_CHECKPOINT}" ]]; then
+        return 0
+    fi
+
+    local tasks_file=".taskmaster/tasks/tasks.json"
+    if command -v jq >/dev/null 2>&1 && [[ -f "${TASK_STATE_CHECKPOINT}" ]]; then
+        local restored_loop
+        restored_loop="$(jq -r '.loop // 0' "${TASK_STATE_CHECKPOINT}" 2>/dev/null || echo 0)"
+        log "restored task state from checkpoint (loop ${restored_loop})"
+        # Restore taskmaster tasks if present in checkpoint and tasks.json missing
+        if [[ ! -f "${tasks_file}" ]] && jq -e '.tasks' "${TASK_STATE_CHECKPOINT}" >/dev/null 2>&1; then
+            mkdir -p .taskmaster/tasks
+            jq '.tasks' "${TASK_STATE_CHECKPOINT}" > "${tasks_file}" 2>/dev/null || true
+            log "restored .taskmaster/tasks/tasks.json from checkpoint"
+        fi
+    fi
+}
+
+# ── Friction report (worker end-of-session artifact) ──────────────────────────
+# 🤓 Workers append friction here; executive/operator NEVER reads raw reports inline
+append_friction_report() {
+    local agent_id="${AGENT_ID:-ralph-${TOOL}}"
+    local task_summary="${1:-unknown task}"
+    local friction="${2:-none}"
+    local confidence="${3:-MEDIUM}"
+
+    mkdir -p "${FRICTION_DIR}"
+    local report_file="${FRICTION_DIR}/${agent_id}-$(date +%Y%m%dT%H%M%S).md"
+    cat > "${report_file}" << EOF
+## Friction Report — ${agent_id} @ $(date -u +%Y-%m-%dT%H:%M:%SZ)
+### Task: ${task_summary}
+### Friction:
+${friction}
+### Confidence: ${confidence}
+EOF
+    log "friction report written: ${report_file}"
+}
+
 run_mistralrs_step() {
     local prompt="$1"
     ensure_mistralrs_server || return 1
@@ -285,9 +423,44 @@ run_mistralrs_step() {
     echo "${response}" | jq -r '.choices[0].message.content // ""' 2>/dev/null
 }
 
+# ── R2: Keyword tier pre-filter (hermes-agent smart_model_routing pattern) ─────
+# Zero-cost routing: classify task before invoking inference.
+# sm0l: char ≤ 160 OR word_count ≤ 28 AND no complex keywords AND no backticks
+# ch0nky (default): complex keyword hit OR backtick presence OR long prompt
+_COMPLEX_KEYWORDS="debug|implement|architecture|refactor|design|analyze|integrate|migrate|security|performance"
+route_to_tier() {
+    local prompt="$1"
+    local char_count="${#prompt}"
+    local word_count
+    word_count="$(echo "${prompt}" | wc -w)"
+    # backtick → always ch0nky
+    if echo "${prompt}" | grep -q '`'; then
+        echo "ch0nky"; return
+    fi
+    # complex keyword match → ch0nky
+    if echo "${prompt}" | grep -Eiq "${_COMPLEX_KEYWORDS}"; then
+        echo "ch0nky"; return
+    fi
+    # short pure prose → sm0l
+    if [[ "${char_count}" -le 160 || "${word_count}" -le 28 ]]; then
+        echo "sm0l"; return
+    fi
+    echo "ch0nky"
+}
+
 run_external_step() {
     local prompt="$1"
-    case "${TOOL}" in
+    # Keyword gate: override TOOL to sm0l tier when prompt is trivial
+    local effective_tool="${TOOL}"
+    if [[ "${TOOL}" == "pi" || "${TOOL}" == "gemma4" || "${TOOL}" == "opencode" ]]; then
+        local tier
+        tier="$(route_to_tier "${prompt}")"
+        if [[ "${tier}" == "sm0l" ]]; then
+            log "tier-routed: sm0l (keyword-gate) — bypassing ch0nky for this prompt"
+            effective_tool="pi-sm0l"
+        fi
+    fi
+    case "${effective_tool}" in
         claude)
             if command -v claude >/dev/null 2>&1; then
                 claude -p "${prompt}" 2>/dev/null || true
@@ -321,6 +494,15 @@ run_external_step() {
                 env "${_pi_base_url_var}=${PI_BASE_URL}" \
                 OPENAI_API_KEY="${PI_API_KEY}" \
                 pi -p --provider "${PI_PROVIDER}" --model "${PI_MODEL}" "${prompt}" 2>/dev/null || true
+            fi
+            ;;
+        pi-sm0l)
+            # R2: sm0l tier — qwen2.5-3B on :8000 via pi (direct, no gateway)
+            # 🤓 SM0L_PORT=8000; SM0L_MODEL=sm0l; routed here by route_to_tier() keyword gate
+            if command -v pi >/dev/null 2>&1; then
+                LLAMA_CPP_BASE_URL="http://127.0.0.1:8000/v1" \
+                OPENAI_API_KEY="${PI_API_KEY}" \
+                pi -p --provider llama-cpp --model sm0l "${prompt}" 2>/dev/null || true
             fi
             ;;
         *)
@@ -389,9 +571,17 @@ write_status() {
     fi
 }
 
-log "starting b00t Ralph loop: tool=${TOOL} max_iterations=${MAX_ITERATIONS}"
+# 🤓 B00T_TEST_MODE=1: source this script to load functions without executing the main loop
+# Enables: `B00T_TEST_MODE=1 source b00t.sh; restore_task_state` in unit tests
+if [[ "${B00T_TEST_MODE:-}" == "1" ]]; then
+    return 0 2>/dev/null || exit 0
+fi
+
+log "starting b00t Ralph loop: tool=${TOOL} max_iterations=${MAX_ITERATIONS} adversarial=${ADVERSARIAL}"
+mkdir -p "${FRICTION_DIR}"
 collect_backlog_snippet
 collect_validation_snippet
+restore_task_state
 if is_self_improve_mode; then
     collect_issue_feed
 fi
@@ -419,12 +609,36 @@ EXIT_SIGNAL=false"
 
     output="$(sanitize_output "${output}")"
 
+    # Adversarial review gate: write draft, reviewer checks compliance
+    if [[ "${ADVERSARIAL}" == "true" ]]; then
+        draft_file="${STATE_DIR}/draft_${loop}.txt"
+        echo "${output}" > "${draft_file}"
+        review_result="$(run_adversarial_review "${draft_file}" "$(echo "${prompt}" | head -3)")"
+        log "adversarial review loop=${loop}: ${review_result}"
+        if echo "${review_result}" | grep -q "^FAIL:"; then
+            # Append reviewer rejection as friction signal and re-queue
+            append_friction_report \
+                "loop-${loop}" \
+                "- Reviewer rejected output: ${review_result}" \
+                "LOW"
+            output="NEXT_ACTION: reviewer rejected previous output (${review_result}). Revise and retry.
+EXIT_SIGNAL=false"
+        fi
+    fi
+
+    # Checkpoint task state before writing status (survives context compression)
+    checkpoint_task_state "${loop}"
+
     write_status "${loop}" "running" "$(echo "${output}" | head -c 500)"
     echo "${output}" >> "${LOG_FILE}"
 
     if should_exit "${output}"; then
         write_status "${loop}" "completed" "$(echo "${output}" | head -c 500)"
         log "loop completed at iteration ${loop}"
+        # Final friction report on clean exit (captures any residual friction)
+        if [[ "${ADVERSARIAL}" == "true" ]]; then
+            append_friction_report "loop-final" "- Clean exit at iteration ${loop}" "HIGH"
+        fi
         exit 0
     fi
 
@@ -436,4 +650,8 @@ done
 
 write_status "${MAX_ITERATIONS}" "tempfail" "max iterations reached"
 log "max iterations reached; requesting restart via exit 75"
+# Friction report on tempfail: likely a hard problem; operator should inspect
+append_friction_report "loop-tempfail" \
+    "- Reached max iterations (${MAX_ITERATIONS}) without EXIT_SIGNAL=true\n- Tool: ${TOOL}, Role: ${ROLE}" \
+    "LOW"
 exit 75
