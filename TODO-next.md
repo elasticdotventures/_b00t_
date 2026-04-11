@@ -47,21 +47,21 @@
 # Storage: .b00t/tasks.json (taskmaster-ai enshittified; stripped to core primitives)
 # Migration: `b00t task import` reads .taskmaster/tasks/tasks.json
 
-### BT1: b00t-mcp Task MCP tools
+### BT1: b00t-mcp Task MCP tools ✅
 **Why**: ralph loop needs to call `b00t task next/done` via MCP (not just CLI).
 **Acceptance criteria:**
 - Add `task_list`, `task_next`, `task_add`, `task_done`, `task_update` to b00t-mcp MCP tools
 - Match `b00t task` CLI semantics exactly — no new behavior
 - Test: MCP call returns same JSON as `b00t task next --json`
 
-### BT2: Update ralph.sh prompt to use `b00t task`
+### BT2: Update ralph.sh prompt to use `b00t task` ✅
 **Why**: ralph prompt still references taskmaster concepts in backlog/pending count.
 **Acceptance criteria:**
 - Replace `b00t-cli status` calls in ralph with `b00t task next --json`
 - `collect_backlog_snippet()` uses `b00t task list --status active --json`
 - Remove remaining taskmaster-ai references from ralph prompt strings
 
-### BT3: Clean up .taskmaster dirs
+### BT3: Clean up .taskmaster dirs ✅
 **Why**: .taskmaster/ dirs in repo are stale noise post-migration.
 **Acceptance criteria:**
 - `b00t-cli/.taskmaster/` → delete or migrate to `.b00t/tasks.json`
@@ -75,7 +75,7 @@
 # Sources: awesome-autoresearch, hermes-agent, karpathy/autoresearch, forrestchang/karpathy-skills
 # All items are local-model-compatible (no mandatory cloud API) unless flagged FRONTIER
 
-### R1: Metric gate + rollback in ralph loop (karpathy/autoresearch pattern)
+### R1: Metric gate + rollback in ralph loop (karpathy/autoresearch pattern) ✅
 **Why**: ralph currently checkpoints everything; autoresearch only retains improvements.
 **Acceptance criteria:**
 - Add `scores.jsonl` to `.b00t/ralph/` — each trial records `{ts, loop, metric, value}`
@@ -84,7 +84,7 @@
 - Add `RALPH_TRIAL_BUDGET_SECS` env var (default 300) to cap per-iteration time
 - Expose morning digest: `b00t agent notify` with best/worst trial summary
 
-### R2: Keyword-tier pre-filter (hermes-agent smart_model_routing pattern)
+### R2: Keyword-tier pre-filter (hermes-agent smart_model_routing pattern) ✅
 **Why**: b00t's sm0l/ch0nky/frontier tiers exist but task routing hits gemma4 for everything.
 **Acceptance criteria:**
 - Add zero-cost pre-filter BEFORE gemma4 dispatch in ralph loop

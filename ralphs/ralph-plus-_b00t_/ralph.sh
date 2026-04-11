@@ -36,6 +36,13 @@ ISSUE_FEED="${B00T_GH_ISSUES:-}"
 BACKLOG_SNIPPET=""
 VALIDATION_SNIPPET=""
 
+
+# R1: Metric gate + rollback (karpathy/autoresearch pattern)
+# 🤓 score = test-pass-rate after each iteration; rollback if regresses vs baseline
+RALPH_METRIC_GATE="${RALPH_METRIC_GATE:-false}"  # enable with RALPH_METRIC_GATE=true
+RALPH_TRIAL_BUDGET_SECS="${RALPH_TRIAL_BUDGET_SECS:-300}"  # per-iteration time cap
+SCORES_FILE="${STATE_DIR}/scores.jsonl"           # {ts, loop, metric, value}
+BASELINE_SCORE=""                                  # set on first successful trial
 # Adversarial gemma4 pattern: writer → reviewer → gate
 # 🤓 REVIEWER needs CMDB context injected — pure LLM judgment on b00t compliance is unreliable
 ADVERSARIAL="${B00T_ADVERSARIAL:-false}"
@@ -577,6 +584,59 @@ write_status() {
     fi
 }
 
+
+# ── R1: Metric gate helpers (karpathy/autoresearch) ──────────────────────────
+# 🤓 Metric = test-pass-rate: (passing / total) × 100, sourced from cargo test --message-format json
+# If cargo not available, metric = 0 (no regression — don't rollback non-testable changes)
+measure_test_score() {
+    if ! command -v cargo >/dev/null 2>&1; then
+        echo "0"
+        return 0
+    fi
+    local pass=0 fail=0
+    while IFS= read -r line; do
+        local event
+        event="$(echo "${line}" | jq -r '.event // empty' 2>/dev/null)"
+        [[ "${event}" == "test" ]] || continue
+        local result
+        result="$(echo "${line}" | jq -r '.type // empty' 2>/dev/null)"
+        [[ "${result}" == "ok" ]]      && pass=$((pass + 1))
+        [[ "${result}" == "FAILED" ]]  && fail=$((fail + 1))
+    done < <(timeout "${RALPH_TRIAL_BUDGET_SECS}" cargo test --message-format json 2>/dev/null || true)
+    local total=$((pass + fail))
+    if [[ "${total}" -eq 0 ]]; then echo "0"; return 0; fi
+    echo $((pass * 100 / total))
+}
+
+record_score() {
+    local loop_num="$1" score="$2"
+    mkdir -p "${STATE_DIR}"
+    printf '{"ts":"%s","loop":%s,"metric":"test-pass-rate","value":%s}
+'         "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "${loop_num}" "${score}"         >> "${SCORES_FILE}" 2>/dev/null || true
+}
+
+metric_gate_check() {
+    local loop_num="$1"
+    [[ "${RALPH_METRIC_GATE}" != "true" ]] && return 0  # gate disabled
+    local score
+    score="$(measure_test_score)"
+    record_score "${loop_num}" "${score}"
+    log "metric gate loop=${loop_num}: score=${score}% baseline=${BASELINE_SCORE}%"
+    if [[ -z "${BASELINE_SCORE}" ]]; then
+        BASELINE_SCORE="${score}"  # first trial sets baseline
+        log "metric baseline set: ${BASELINE_SCORE}%"
+        return 0
+    fi
+    if [[ "${score}" -lt "${BASELINE_SCORE}" ]]; then
+        log "metric regression: ${score}% < ${BASELINE_SCORE}% — rolling back"
+        git stash 2>/dev/null || true
+        append_friction_report "metric-gate-${loop_num}"             "- Score regressed ${BASELINE_SCORE}% → ${score}%; git stash applied"             "MEDIUM"
+        return 1  # signal rollback
+    fi
+    BASELINE_SCORE="${score}"  # promote new baseline
+    return 0
+}
+
 # 🤓 B00T_TEST_MODE=1: source this script to load functions without executing the main loop
 # Enables: `B00T_TEST_MODE=1 source b00t.sh; restore_task_state` in unit tests
 if [[ "${B00T_TEST_MODE:-}" == "1" ]]; then
@@ -634,6 +694,13 @@ EXIT_SIGNAL=false"
 
     # Checkpoint task state before writing status (survives context compression)
     checkpoint_task_state "${loop}"
+
+    # R1: metric gate — measure test-pass-rate; rollback if regression
+    if ! metric_gate_check "${loop}"; then
+        log "metric gate triggered rollback at loop ${loop}; continuing"
+        output="NEXT_ACTION: metric regression detected and rolled back. Revise approach.
+EXIT_SIGNAL=false"
+    fi
 
     write_status "${loop}" "running" "$(echo "${output}" | head -c 500)"
     echo "${output}" >> "${LOG_FILE}"
