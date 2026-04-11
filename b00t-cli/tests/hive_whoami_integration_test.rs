@@ -1,5 +1,6 @@
 // Integration tests: b00t hive status, b00t whoami, b00t up --help
 // H1 gap-fill (OpenHarness analysis) — elasticdotventures/_b00t_#343
+// 🤓 assert_cmd::cargo_bin invokes the pre-built test binary directly; avoids nested cargo lock contention
 use assert_cmd::prelude::*;
 use std::process::Command;
 
