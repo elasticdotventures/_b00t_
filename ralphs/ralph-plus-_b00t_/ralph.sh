@@ -100,7 +100,7 @@ resolve_pi_transport() {
 }
 
 pending_tasks_count() {
-    local tasks_file=".taskmaster/tasks/tasks.json"
+    local tasks_file=".b00t/tasks.json"
     if [[ ! -f "${tasks_file}" ]]; then
         echo "0"
         return 0
@@ -181,7 +181,7 @@ You are running in b00t Ralph self-improvement loop.
 role=${ROLE}
 tool=${TOOL}
 loop=${loop_number}/${MAX_ITERATIONS}
-pending_taskmaster=${pending}
+pending_tasks=${pending}
 
 Mission:
 - use ONLY self-hosted Gemma4-facing tooling
@@ -225,7 +225,7 @@ EOF
 You are running in b00t Ralph loop.
 role=${ROLE}
 loop=${loop_number}/${MAX_ITERATIONS}
-pending_taskmaster=${pending}
+pending_tasks=${pending}
 
 Return:
 1) NEXT_ACTION: one concise next step
@@ -332,11 +332,11 @@ Output exactly one line: PASS or FAIL:<specific reason>"
 }
 
 # ── Task-state checkpoint (preserve across context compression) ───────────────
-# 🤓 Checkpoints pending taskmaster tasks + loop state to disk so ralph can resume
+# 🤓 Checkpoints pending b00t task state to disk so ralph can resume
 #    after context compression without losing work-in-progress task state.
 checkpoint_task_state() {
     local loop_num="$1"
-    local tasks_file=".taskmaster/tasks/tasks.json"
+    local tasks_file=".b00t/tasks.json"
 
     mkdir -p "${STATE_DIR}"
 
@@ -359,16 +359,16 @@ restore_task_state() {
         return 0
     fi
 
-    local tasks_file=".taskmaster/tasks/tasks.json"
+    local tasks_file=".b00t/tasks.json"
     if command -v jq >/dev/null 2>&1 && [[ -f "${TASK_STATE_CHECKPOINT}" ]]; then
         local restored_loop
         restored_loop="$(jq -r '.loop // 0' "${TASK_STATE_CHECKPOINT}" 2>/dev/null || echo 0)"
         log "restored task state from checkpoint (loop ${restored_loop})"
-        # Restore taskmaster tasks if present in checkpoint and tasks.json missing
+        # Restore b00t tasks if present in checkpoint and tasks.json missing
         if [[ ! -f "${tasks_file}" ]] && jq -e '.tasks' "${TASK_STATE_CHECKPOINT}" >/dev/null 2>&1; then
-            mkdir -p .taskmaster/tasks
+            mkdir -p .b00t
             jq '.tasks' "${TASK_STATE_CHECKPOINT}" > "${tasks_file}" 2>/dev/null || true
-            log "restored .taskmaster/tasks/tasks.json from checkpoint"
+            log "restored .b00t/tasks.json from checkpoint"
         fi
     fi
 }

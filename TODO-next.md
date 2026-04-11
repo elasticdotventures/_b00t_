@@ -15,10 +15,10 @@
 
 ### H2: Task-state checkpoint restore wiring
 **Acceptance criteria:**
-- MUST verify b00t.sh restore_task_state reads .b00t/ralph/task_state.json correctly
-- MUST add a test: write mock task_state.json, run restore, verify tasks.json populated
-- MUST document checkpoint format in _b00t_/ralph.cli.toml as epiphany
-- SHOULD verify checkpoint written every loop iteration
+- ✅ DONE: restore_task_state reads .b00t/ralph/task_state.json
+- ✅ DONE: 2 Rust integration tests pass (checkpoint_restore_test.rs)
+- ✅ DONE: checkpoint format documented in _b00t_/ralph.cli.toml
+- Storage: `.b00t/tasks.json` (was `.taskmaster/tasks/tasks.json` — MIGRATED)
 
 ## MEDIUM PRIORITY
 
@@ -40,6 +40,33 @@
 - Keep diffs tight; run cargo test after each change
 - EXIT_SIGNAL=true only when ALL high-priority items have passing tests
 - Append friction report at END of session
+
+
+## B00T TASK (replaces taskmaster-ai)
+# Status: ✅ IMPLEMENTED — b00t task list|add|next|done|update|show|rm|dep|import
+# Storage: .b00t/tasks.json (taskmaster-ai enshittified; stripped to core primitives)
+# Migration: `b00t task import` reads .taskmaster/tasks/tasks.json
+
+### BT1: b00t-mcp Task MCP tools
+**Why**: ralph loop needs to call `b00t task next/done` via MCP (not just CLI).
+**Acceptance criteria:**
+- Add `task_list`, `task_next`, `task_add`, `task_done`, `task_update` to b00t-mcp MCP tools
+- Match `b00t task` CLI semantics exactly — no new behavior
+- Test: MCP call returns same JSON as `b00t task next --json`
+
+### BT2: Update ralph.sh prompt to use `b00t task`
+**Why**: ralph prompt still references taskmaster concepts in backlog/pending count.
+**Acceptance criteria:**
+- Replace `b00t-cli status` calls in ralph with `b00t task next --json`
+- `collect_backlog_snippet()` uses `b00t task list --status active --json`
+- Remove remaining taskmaster-ai references from ralph prompt strings
+
+### BT3: Clean up .taskmaster dirs
+**Why**: .taskmaster/ dirs in repo are stale noise post-migration.
+**Acceptance criteria:**
+- `b00t-cli/.taskmaster/` → delete or migrate to `.b00t/tasks.json`
+- Add `.taskmaster/` to repo .gitignore entries
+- Document migration path in _b00t_/taskmaster-ai.mcp.toml (already marked LEGACY)
 
 ---
 

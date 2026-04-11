@@ -10,7 +10,7 @@ trap 'rm -rf "${TMPDIR}"' EXIT
 
 # ── Setup temp state and working dirs ─────────────────────────────────────────
 STATE_DIR="${TMPDIR}/ralph"
-TASKS_DIR="${TMPDIR}/.taskmaster/tasks"
+TASKS_DIR="${TMPDIR}/.b00t"
 mkdir -p "${STATE_DIR}" "${TASKS_DIR}"
 
 CHECKPOINT="${STATE_DIR}/task_state.json"
@@ -38,7 +38,7 @@ B00T_TEST_MODE=1 B00T_STATE_DIR="${STATE_DIR}" \
     bash -c "source '${REPO_ROOT}/b00t.sh'; restore_task_state" 2>/dev/null
 
 # Note: tasks.json path is relative to CWD inside b00t.sh's restore_task_state
-# We need to run from TMPDIR so .taskmaster/tasks/tasks.json lands there
+# We need to run from TMPDIR so .b00t/tasks.json lands there
 (
     cd "${TMPDIR}"
     B00T_TEST_MODE=1 B00T_STATE_DIR="${STATE_DIR}" \
@@ -46,7 +46,7 @@ B00T_TEST_MODE=1 B00T_STATE_DIR="${STATE_DIR}" \
 )
 
 # ── Assertions ────────────────────────────────────────────────────────────────
-TASKS_JSON="${TMPDIR}/.taskmaster/tasks/tasks.json"
+TASKS_JSON="${TMPDIR}/.b00t/tasks.json"
 
 if [[ ! -f "${TASKS_JSON}" ]]; then
     echo "FAIL: tasks.json not created at ${TASKS_JSON}" >&2
@@ -61,5 +61,5 @@ if [[ "${TASK_COUNT}" -ne 2 ]]; then
     exit 1
 fi
 
-echo "PASS: restore_task_state correctly populated .taskmaster/tasks/tasks.json (${TASK_COUNT} tasks)"
+echo "PASS: restore_task_state correctly populated .b00t/tasks.json (${TASK_COUNT} tasks)"
 exit 0

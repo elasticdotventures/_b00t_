@@ -144,7 +144,7 @@ Active MCPs (from `.mcp.json`):
 | `context7` | stdio | live library docs via bunx |
 | `github` | stdio | GitHub API via npx |
 | `rust-crate-docs-docker` | stdio | Rust crate docs via Docker |
-| `taskmaster-ai` | stdio | task tracking via bunx |
+| `b00t task`     | native | task tracking via b00t-cli (`b00t task list\|next\|done`) |
 
 Transport patterns:
 - **stdio**: declared in `.mcp.json` `mcpServers`, subprocess lifecycle, no network port
