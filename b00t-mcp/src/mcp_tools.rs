@@ -824,6 +824,68 @@ pub struct UpCommand {
 
 impl_mcp_tool!(UpCommand, "b00t_up", ["up"]);
 
+
+// ── b00t task MCP tools (BT1) — native task management, replaces taskmaster-ai ─
+// 🤓 These proxy directly to `b00t task` CLI subcommands. No external deps.
+
+/// List tasks (active = pending + in-progress by default)
+#[derive(Parser, Clone)]
+pub struct TaskListCommand {
+    #[arg(long, help = "Filter: pending|in-progress|done|blocked|all (default: active)")]
+    pub status: Option<String>,
+    #[arg(long, help = "Filter by tag")]
+    pub tag: Option<String>,
+    #[arg(long, help = "Output as JSON")]
+    pub json: bool,
+}
+impl_mcp_tool!(TaskListCommand, "b00t_task_list", ["task", "list"]);
+
+/// Get next actionable task (highest priority with all deps satisfied)
+#[derive(Parser, Clone)]
+pub struct TaskNextCommand {
+    #[arg(long, help = "Output as JSON")]
+    pub json: bool,
+}
+impl_mcp_tool!(TaskNextCommand, "b00t_task_next", ["task", "next"]);
+
+/// Add a new task
+#[derive(Parser, Clone)]
+pub struct TaskAddCommand {
+    #[arg(help = "Task title")]
+    pub title: String,
+    #[arg(long, short, help = "Description")]
+    pub description: Option<String>,
+    #[arg(long, short, help = "Priority 1-4 (1=critical, 4=low)", default_value = "3")]
+    pub priority: u8,
+    #[arg(long, short, help = "Tags (comma-separated)")]
+    pub tags: Option<String>,
+}
+impl_mcp_tool!(TaskAddCommand, "b00t_task_add", ["task", "add"], positionals: ["title"]);
+
+/// Mark a task done
+#[derive(Parser, Clone)]
+pub struct TaskDoneCommand {
+    #[arg(help = "Task ID")]
+    pub id: u32,
+}
+impl_mcp_tool!(TaskDoneCommand, "b00t_task_done", ["task", "done"], positionals: ["id"]);
+
+/// Update task status, title, or append a note
+#[derive(Parser, Clone)]
+pub struct TaskUpdateCommand {
+    #[arg(help = "Task ID")]
+    pub id: u32,
+    #[arg(long, help = "New status: pending|in-progress|done|blocked|deferred")]
+    pub status: Option<String>,
+    #[arg(long, help = "New title")]
+    pub title: Option<String>,
+    #[arg(long, help = "Append to notes")]
+    pub note: Option<String>,
+    #[arg(long, help = "Priority 1-4")]
+    pub priority: Option<u8>,
+}
+impl_mcp_tool!(TaskUpdateCommand, "b00t_task_update", ["task", "update"], positionals: ["id"]);
+
 /// Create and populate a registry with all available MCP tools
 pub fn create_mcp_registry() -> McpCommandRegistry {
     let mut builder = McpCommandRegistry::builder();
@@ -876,7 +938,13 @@ pub fn create_mcp_registry() -> McpCommandRegistry {
         // Ontology query tool
         .register::<OntologyQueryCommand>()
         // Up command — ralph REPL outer-loop
-        .register::<UpCommand>();
+        .register::<UpCommand>()
+        // b00t task — native task management (replaces taskmaster-ai)
+        .register::<TaskListCommand>()
+        .register::<TaskNextCommand>()
+        .register::<TaskAddCommand>()
+        .register::<TaskDoneCommand>()
+        .register::<TaskUpdateCommand>();
     // ACP Hive coordination tools
     // 🤓 Disabled - acp_hive uses full NATS Agent from old ACP; chat refactor simplified to stubs
     // .register::<AcpHiveJoinCommand>()

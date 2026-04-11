@@ -113,18 +113,24 @@ pending_tasks_count() {
 }
 
 collect_backlog_snippet() {
+    # 🤓 Prefer b00t task list (native) over TODO-next.md; TODO-next.md is human planning doc
+    #    b00t task list --status active --json gives structured pending tasks for ralph
+    if command -v b00t-cli >/dev/null 2>&1; then
+        local task_json
+        task_json="$(b00t-cli task list --status active --json 2>/dev/null || true)"
+        if [[ -n "${task_json}" && "${task_json}" != "[]" && "${task_json}" != "no tasks"* ]]; then
+            BACKLOG_SNIPPET="Active tasks (b00t task):
+${task_json}"
+            return 0
+        fi
+    fi
+    # Fallback: first 20 lines of TODO-next.md
     local todo_file="TODO-next.md"
     if [[ ! -f "${todo_file}" ]]; then
-        BACKLOG_SNIPPET="No TODO-next.md backlog. Start with harness/hive validation."
+        BACKLOG_SNIPPET="No tasks or TODO-next.md backlog. Start with harness/hive validation."
         return 0
     fi
-
-    BACKLOG_SNIPPET="$(
-        sed -n '1,40p' "${todo_file}" \
-        | sed 's/\t/ /g' \
-        | sed 's/[[:space:]]\+/ /g' \
-        | head -20
-    )"
+    BACKLOG_SNIPPET="$(sed -n '1,40p' "${todo_file}" | sed 's/	/ /g' | head -20)"
 }
 
 collect_validation_snippet() {
