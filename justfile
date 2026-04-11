@@ -686,13 +686,22 @@ grok-clean:
 # Validate MCP TOML files against schema
 validate-mcp:
     #!/bin/bash
+    set -euo pipefail
     echo "🔍 Validating MCP TOML files..."
     cd {{repo-root}}/_b00t_
     taplo lint --schema file://$PWD/schema-资源/mcp.json *.mcp.toml
     # M1: pi --mode rpc smoke test — verify pi supports rpc mode (gap-fill #343)
     # 🤓 pi --mode rpc confirmed present in pi 0.x; if this fails pi was downgraded
     echo "🔍 Validating pi --mode rpc support..."
-    pi --help 2>&1 | grep -q "rpc" && echo "✅ pi --mode rpc: supported" || echo "⚠️ pi --mode rpc: NOT found (datum gap in _b00t_/pi.agent.toml)"
+    if command -v pi >/dev/null 2>&1; then
+        if pi --help 2>&1 | grep -q -- "--mode rpc"; then
+            echo "✅ pi --mode rpc: supported"
+        else
+            echo "⚠️ pi --mode rpc: NOT found (datum gap in _b00t_/pi.agent.toml)"
+        fi
+    else
+        echo "⚠️ pi: not installed; skipping --mode rpc smoke test"
+    fi
 
 # Build and package b00t browser extension
 browser-ext-build:
