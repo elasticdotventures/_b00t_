@@ -1,0 +1,53 @@
+# b00t Datum — liter-llm gateway (provider agnosticism layer)
+# 🤓 liter-llm on :1234 is the OPTIONAL unified gateway; gemma4 direct on :8001 is the canonical path
+#    b00t.sh resolve_pi_transport() prefers :1234 if alive, falls back to :8001 automatically
+#    Most local workflows bypass liter-llm and hit vLLM directly — no gateway needed for gemma4
+
+[b00t]
+name = "liter-llm-gateway"
+type = "inference_provider"
+hint = "liter-llm :1234 unified gateway — optional; gemma4 direct :8001 is canonical; auto-fallback in b00t.sh"
+
+# ── Known model aliases ────────────────────────────────────────────────────────
+[b00t.models]
+# 🤓 These aliases work through EITHER the gateway OR direct vLLM — same name, different port
+ch0nky = { description = "gemma4 26B-A4B MXFP4 via vLLM :8001", provider = "gemma4-local", port = 8001 }
+sm0l   = { description = "qwen2.5-3B sm0l tier", provider = "inference-sm0l", port = 8000 }
+
+# ── Transport selection ────────────────────────────────────────────────────────
+[b00t.transport]
+gateway_url  = "http://127.0.0.1:1234/v1"     # liter-llm (optional)
+direct_url   = "http://127.0.0.1:8001/v1"     # gemma4 vLLM (canonical)
+pi_gateway   = { provider = "openai",    base_url_env = "OPENAI_BASE_URL" }
+pi_direct    = { provider = "llama-cpp", base_url_env = "LLAMA_CPP_BASE_URL" }
+
+# 🤓 b00t.sh resolve_pi_transport() auto-selects: gateway → direct → fail
+# To force direct gemma4 (skip gateway probe): PI_PROVIDER=llama-cpp PI_BASE_URL=http://127.0.0.1:8001/v1
+
+# ── Switching patterns ─────────────────────────────────────────────────────────
+[[b00t.usage]]
+description = "Use gateway (if alive)"
+command = "OPENAI_BASE_URL=http://127.0.0.1:1234/v1 pi --provider openai --model ch0nky -p 'task'"
+
+[[b00t.usage]]
+description = "Force direct gemma4 (bypass gateway)"
+command = "LLAMA_CPP_BASE_URL=http://127.0.0.1:8001/v1 pi --provider llama-cpp --model ch0nky -p 'task'"
+
+[[b00t.usage]]
+description = "opencode with gemma4 direct"
+command = "opencode run --model gemma4-local/ch0nky 'task'"
+
+[[b00t.usage]]
+description = "Check which endpoint is alive"
+command = "curl -s http://127.0.0.1:1234/v1/models | jq '.data[].id' 2>/dev/null || echo 'gateway down'; curl -s http://127.0.0.1:8001/v1/models | jq '.data[].id'"
+
+[[b00t.usage]]
+description = "b00t.sh autonomous loop via direct gemma4"
+command = "B00T_ADVERSARIAL=true PI_PROVIDER=llama-cpp ./b00t.sh --tool pi --role operator --max-iterations 20"
+
+# b00t:map v1
+# summary: liter-llm gateway datum — :1234 optional; :8001 direct canonical; auto-fallback in b00t.sh
+# tags: liter-llm, gateway, gemma4, ch0nky, sm0l, provider, vllm, openai-compatible
+# tier: sm0l
+# cmds: curl -s http://127.0.0.1:8001/v1/models | jq '.data[].id'
+# complexity: 2
