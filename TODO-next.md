@@ -93,7 +93,7 @@
 - Backtick presence → ch0nky; pure prose ≤ 160 chars → sm0l
 - Emit `[ralph] tier-routed: sm0l (keyword-gate)` to log
 
-### R3: Trajectory compression → RL training data (hermes-agent pattern)
+### R3: Trajectory compression → RL training data (hermes-agent pattern) ✅
 **Why**: adversarial gemma4 sessions are raw RL signal; no pipeline converts them to training data.
 **Acceptance criteria:**
 - On ralph session end: emit `.b00t/ralph/trajectory-<ts>.jsonl`
@@ -110,7 +110,7 @@
 - Include: task context, gemma4 approach, adversarial reviewer verdict, diff excerpt
 - Gate: skip if diff < 10 lines (trivial) or > 200 lines (too broad to encapsulate)
 
-### R5: GOAL.md fitness contract per ralph trial (lazy-developer + karpathy pattern)
+### R5: GOAL.md fitness contract per ralph trial (lazy-developer + karpathy pattern) ✅
 **Why**: ralph tasks lack verifiable acceptance criteria; gemma4 cannot self-evaluate without a metric.
 **Acceptance criteria:**
 - taskmaster tasks MUST include `acceptance_criteria[]` field (non-empty)
@@ -126,7 +126,7 @@
 - Apply in: b00t.sh prompt construction, b00t whoami context injection
 - Test: verify gemma4 response does not echo memory context as if it were a new task
 
-### R7: Elo/Pareto scoring for adversarial loop (autoevolve pattern)
+### R7: Elo/Pareto scoring for adversarial loop (autoevolve pattern) ✅
 **Why**: adversarial review currently binary PASS/FAIL; no signal for gradient between trials.
 **Acceptance criteria:**
 - Add Elo score to each adversarial verdict in `scores.jsonl`: writer_elo, reviewer_elo
