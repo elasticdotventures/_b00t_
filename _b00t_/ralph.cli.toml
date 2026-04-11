@@ -12,7 +12,7 @@ install = "echo 'ralph is b00t.sh — already present in b00t root'"
 desires = "integrated"
 
 [b00t.capabilities]
-features = ["autonomous-loop", "ooda", "taskmaster-integration", "mistralrs"]
+features = ["autonomous-loop", "ooda", "b00t-task", "mistralrs"]
 requires = ["bash", "jq"]
 
 [b00t.env]
@@ -21,14 +21,14 @@ MAX_ITERATIONS = "10"
 LOOP_SLEEP_SECONDS = "2"
 
 # @epiphany: task-state — checkpoint written every loop iter to .b00t/ralph/task_state.json
-# Contains: {checkpoint_ts, loop, tasks} — tasks is full taskmaster tasks.json snapshot
-# restore_task_state() repopulates .taskmaster/tasks/tasks.json on loop restart (context compress recovery)
+# Contains: {checkpoint_ts, loop, tasks} — tasks is full b00t task JSON snapshot
+# restore_task_state() repopulates .b00t/tasks.json on loop restart (context compress recovery)
 # 🤓 Threshold: checkpoint written unconditionally; restore only if tasks.json missing
 [b00t.task_state_checkpoint]
 path = ".b00t/ralph/task_state.json"
 format = "json"
 fields = ["checkpoint_ts", "loop", "tasks"]
-restore_condition = ".taskmaster/tasks/tasks.json missing on restart"
+restore_condition = ".b00t/tasks.json missing on restart"
 
 [b00t.adversarial]
 # 🤓 B00T_ADVERSARIAL=true enables writer→reviewer gate; reviewer needs CMDB context or it's theatre
@@ -40,7 +40,7 @@ review_output = "PASS or FAIL:<reason>"
 
 # b00t:map v1
 # summary: ralph (b00t.sh) OODA loop — opencode/pi/claude tools; adversarial gate; task-state checkpoint
-# tags: ralph, b00t.sh, autonomous-loop, ooda, taskmaster, adversarial, gemma4, checkpoint
+# tags: ralph, b00t.sh, autonomous-loop, ooda, b00t-task, adversarial, gemma4, checkpoint
 # tier: ch0nky
 # cmds: B00T_ADVERSARIAL=true ./b00t.sh --tool opencode --role operator --max-iterations 20
 # complexity: 6

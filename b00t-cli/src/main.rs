@@ -34,6 +34,7 @@ use b00t_cli::commands::{
     K8sCommands,
     McpCommands, ModelCommands,
     OntologyCommands, SessionCommands, SkillCommands, SoulCommands, StackCommands,
+    TaskCommands,
     TutorialCommands, VersionCommands, WhatismyCommands
 
 
@@ -301,6 +302,11 @@ The system will:
     Job {
         #[clap(subcommand)]
         job_command: JobCommands,
+    },
+    #[clap(about = "Native task management — replaces taskmaster-ai")]
+    Task {
+        #[clap(subcommand)]
+        task_command: TaskCommands,
     },
     #[clap(about = "Agent Coordination Protocol (ACP) - send messages to agents")]
     Chat {
@@ -1582,6 +1588,12 @@ async fn main() {
         }
         Some(Commands::Job { job_command }) => {
             if let Err(e) = job_command.execute_async(&cli.path).await {
+                eprintln!("Error: {}", e);
+                std::process::exit(1);
+            }
+        }
+        Some(Commands::Task { task_command }) => {
+            if let Err(e) = b00t_cli::commands::task::handle_task_command(task_command.clone()) {
                 eprintln!("Error: {}", e);
                 std::process::exit(1);
             }

@@ -61,3 +61,5 @@ pub use uninstall::uninstall_datum;
 pub use up::UpArgs;
 pub use version::VersionCommands;
 pub use whatismy::WhatismyCommands;
+pub mod task;
+pub use task::TaskCommands;

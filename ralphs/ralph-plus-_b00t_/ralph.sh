@@ -36,6 +36,27 @@ ISSUE_FEED="${B00T_GH_ISSUES:-}"
 BACKLOG_SNIPPET=""
 VALIDATION_SNIPPET=""
 
+
+# R1: Metric gate + rollback (karpathy/autoresearch pattern)
+# 🤓 score = test-pass-rate after each iteration; rollback if regresses vs baseline
+RALPH_METRIC_GATE="${RALPH_METRIC_GATE:-false}"  # enable with RALPH_METRIC_GATE=true
+# R5: GOAL.md fitness contract
+RALPH_REQUIRE_CRITERIA="${RALPH_REQUIRE_CRITERIA:-false}"
+RALPH_TRIAL_BUDGET_SECS="${RALPH_TRIAL_BUDGET_SECS:-300}"  # per-iteration time cap
+SCORES_FILE="${STATE_DIR}/scores.jsonl"           # {ts, loop, metric, value}
+BASELINE_SCORE=""                                  # set on first successful trial
+# Adversarial gemma4 pattern: writer → reviewer → gate
+# 🤓 REVIEWER needs CMDB context injected — pure LLM judgment on b00t compliance is unreliable
+ADVERSARIAL="${B00T_ADVERSARIAL:-false}"
+ADVERSARIAL_REVIEW_THRESHOLD="${B00T_ADVERSARIAL_THRESHOLD:-50}"  # min lines of diff to trigger review
+
+# Task-state compression: preserve task progress across context compression events
+# 🤓 Port of OpenHarness v0.1.6 pattern: checkpoint task state to disk before compaction
+TASK_STATE_CHECKPOINT="${STATE_DIR}/task_state.json"
+
+# Friction report: worker agents append here; operator triages async
+FRICTION_DIR="${STATE_DIR}/friction"
+
 # Parse CLI args: --tool <tool> [--max-iterations <n>] [<n>]
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -88,7 +109,7 @@ resolve_pi_transport() {
 }
 
 pending_tasks_count() {
-    local tasks_file=".taskmaster/tasks/tasks.json"
+    local tasks_file=".b00t/tasks.json"
     if [[ ! -f "${tasks_file}" ]]; then
         echo "0"
         return 0
@@ -101,18 +122,24 @@ pending_tasks_count() {
 }
 
 collect_backlog_snippet() {
+    # 🤓 Prefer b00t task list (native) over TODO-next.md; TODO-next.md is human planning doc
+    #    b00t task list --status active --json gives structured pending tasks for ralph
+    if command -v b00t-cli >/dev/null 2>&1; then
+        local task_json
+        task_json="$(b00t-cli task list --status active --json 2>/dev/null || true)"
+        if [[ -n "${task_json}" && "${task_json}" != "[]" && "${task_json}" != "no tasks"* ]]; then
+            BACKLOG_SNIPPET="Active tasks (b00t task):
+${task_json}"
+            return 0
+        fi
+    fi
+    # Fallback: first 20 lines of TODO-next.md
     local todo_file="TODO-next.md"
     if [[ ! -f "${todo_file}" ]]; then
-        BACKLOG_SNIPPET="No TODO-next.md backlog. Start with harness/hive validation."
+        BACKLOG_SNIPPET="No tasks or TODO-next.md backlog. Start with harness/hive validation."
         return 0
     fi
-
-    BACKLOG_SNIPPET="$(
-        sed -n '1,40p' "${todo_file}" \
-        | sed 's/\t/ /g' \
-        | sed 's/[[:space:]]\+/ /g' \
-        | head -20
-    )"
+    BACKLOG_SNIPPET="$(sed -n '1,40p' "${todo_file}" | sed 's/	/ /g' | head -20)"
 }
 
 collect_validation_snippet() {
@@ -169,7 +196,7 @@ You are running in b00t Ralph self-improvement loop.
 role=${ROLE}
 tool=${TOOL}
 loop=${loop_number}/${MAX_ITERATIONS}
-pending_taskmaster=${pending}
+pending_tasks=${pending}
 
 Mission:
 - use ONLY self-hosted Gemma4-facing tooling
@@ -213,7 +240,7 @@ EOF
 You are running in b00t Ralph loop.
 role=${ROLE}
 loop=${loop_number}/${MAX_ITERATIONS}
-pending_taskmaster=${pending}
+pending_tasks=${pending}
 
 Return:
 1) NEXT_ACTION: one concise next step
@@ -255,6 +282,142 @@ ensure_mistralrs_server() {
     return 1
 }
 
+# ── Adversarial writer→reviewer gate (gemma4 only) ────────────────────────────
+# 🤓 Reviewer receives CMDB guards as context — without this, compliance check is theatre
+run_adversarial_review() {
+    local draft="$1"   # path to draft diff/output file
+    local task="$2"    # original task description (for reviewer context)
+
+    if [[ "${ADVERSARIAL}" != "true" ]]; then
+        echo "PASS"
+        return 0
+    fi
+
+    # Only review if diff is substantial enough to warrant cost
+    local line_count
+    line_count=$(wc -l < "${draft}" 2>/dev/null || echo 0)
+    if [[ "${line_count}" -lt "${ADVERSARIAL_REVIEW_THRESHOLD}" ]]; then
+        echo "PASS (trivial diff, review skipped)"
+        return 0
+    fi
+
+    if ! command -v pi >/dev/null 2>&1; then
+        log "pi not available; skipping adversarial review"
+        echo "PASS (pi unavailable)"
+        return 0
+    fi
+
+    if ! http_ok "http://127.0.0.1:${PI_DIRECT_PORT}/v1/models"; then
+        log "gemma4 not reachable; skipping adversarial review"
+        echo "PASS (gemma4 unavailable)"
+        return 0
+    fi
+
+    local guards=""
+    local guards_file="${B00T_REPO_ROOT:-$(git rev-parse --show-toplevel 2>/dev/null || echo .)}/_b00t_/hive-guards.hive.toml"
+    [[ -f "${guards_file}" ]] && guards="$(cat "${guards_file}")"
+
+    local review_prompt
+    review_prompt="[REVIEWER] You are an adversarial b00t hive compliance reviewer.
+
+Active guards:
+${guards}
+
+Task: ${task}
+
+Draft output (diff/code):
+$(cat "${draft}")
+
+Check ONLY:
+1. Guard violations (e.g., pip install, docker run, rm -rf without justification)
+2. DRY violations (new code that duplicates known OSS functionality)
+3. Non-laconic commentary (platitudes, apologies, over-explanation)
+4. b00t gospel violations (cloud inference, raw template reads, etc.)
+
+Output exactly one line: PASS or FAIL:<specific reason>"
+
+    local result
+    result="$(LLAMA_CPP_BASE_URL="http://127.0.0.1:${PI_DIRECT_PORT}/v1" \
+        OPENAI_API_KEY=local-b00t \
+        pi -p "${review_prompt}" \
+        --provider llama-cpp --model "${PI_MODEL}" \
+        2>/dev/null | tail -1 || echo "PASS (reviewer error)")"
+
+    echo "${result}"
+}
+
+# ── Task-state checkpoint (preserve across context compression) ───────────────
+# 🤓 Checkpoints pending b00t task state to disk so ralph can resume
+#    after context compression without losing work-in-progress task state.
+checkpoint_task_state() {
+    local loop_num="$1"
+    local tasks_file=".b00t/tasks.json"
+
+    mkdir -p "${STATE_DIR}"
+
+    local tmp_checkpoint
+    tmp_checkpoint="$(mktemp "${STATE_DIR}/.tmp_checkpoint_XXXXXX")" || return 0
+    if command -v jq >/dev/null 2>&1 && [[ -f "${tasks_file}" ]]; then
+        if jq -nc \
+            --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            --argjson loop "${loop_num}" \
+            --argjson tasks "$(cat "${tasks_file}")" \
+            '{checkpoint_ts:$ts, loop:$loop, tasks:$tasks}' \
+            > "${tmp_checkpoint}" 2>/dev/null; then
+            mv "${tmp_checkpoint}" "${TASK_STATE_CHECKPOINT}"
+        else
+            rm -f "${tmp_checkpoint}"
+        fi
+    else
+        if printf '{"checkpoint_ts":"%s","loop":%s}\n' \
+            "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "${loop_num}" \
+            > "${tmp_checkpoint}" 2>/dev/null; then
+            mv "${tmp_checkpoint}" "${TASK_STATE_CHECKPOINT}"
+        else
+            rm -f "${tmp_checkpoint}"
+        fi
+    fi
+}
+
+restore_task_state() {
+    if [[ ! -f "${TASK_STATE_CHECKPOINT}" ]]; then
+        return 0
+    fi
+
+    local tasks_file=".b00t/tasks.json"
+    if command -v jq >/dev/null 2>&1 && [[ -f "${TASK_STATE_CHECKPOINT}" ]]; then
+        local restored_loop
+        restored_loop="$(jq -r '.loop // 0' "${TASK_STATE_CHECKPOINT}" 2>/dev/null || echo 0)"
+        log "restored task state from checkpoint (loop ${restored_loop})"
+        # Restore b00t tasks if present in checkpoint and tasks.json missing
+        if [[ ! -f "${tasks_file}" ]] && jq -e '.tasks' "${TASK_STATE_CHECKPOINT}" >/dev/null 2>&1; then
+            mkdir -p .b00t
+            jq '.tasks' "${TASK_STATE_CHECKPOINT}" > "${tasks_file}" 2>/dev/null || true
+            log "restored .b00t/tasks.json from checkpoint"
+        fi
+    fi
+}
+
+# ── Friction report (worker end-of-session artifact) ──────────────────────────
+# 🤓 Workers append friction here; executive/operator NEVER reads raw reports inline
+append_friction_report() {
+    local agent_id="${AGENT_ID:-ralph-${TOOL}}"
+    local task_summary="${1:-unknown task}"
+    local friction="${2:-none}"
+    local confidence="${3:-MEDIUM}"
+
+    mkdir -p "${FRICTION_DIR}"
+    local report_file="${FRICTION_DIR}/${agent_id}-$(date +%Y%m%dT%H%M%S).md"
+    cat > "${report_file}" << EOF
+## Friction Report — ${agent_id} @ $(date -u +%Y-%m-%dT%H:%M:%SZ)
+### Task: ${task_summary}
+### Friction:
+${friction}
+### Confidence: ${confidence}
+EOF
+    log "friction report written: ${report_file}"
+}
+
 run_mistralrs_step() {
     local prompt="$1"
     ensure_mistralrs_server || return 1
@@ -285,9 +448,44 @@ run_mistralrs_step() {
     echo "${response}" | jq -r '.choices[0].message.content // ""' 2>/dev/null
 }
 
+# ── R2: Keyword tier pre-filter (hermes-agent smart_model_routing pattern) ─────
+# Zero-cost routing: classify task before invoking inference.
+# sm0l: char ≤ 160 OR word_count ≤ 28 AND no complex keywords AND no backticks
+# ch0nky (default): complex keyword hit OR backtick presence OR long prompt
+_COMPLEX_KEYWORDS="debug|implement|architecture|refactor|design|analyze|integrate|migrate|security|performance"
+route_to_tier() {
+    local prompt="$1"
+    local char_count="${#prompt}"
+    local word_count
+    word_count="$(printf '%s' "${prompt}" | wc -w)"
+    # backtick → always ch0nky
+    if printf '%s' "${prompt}" | grep -q '`'; then
+        echo "ch0nky"; return
+    fi
+    # complex keyword match → ch0nky
+    if printf '%s' "${prompt}" | grep -Eiq "${_COMPLEX_KEYWORDS}"; then
+        echo "ch0nky"; return
+    fi
+    # short pure prose → sm0l
+    if [[ "${char_count}" -le 160 || "${word_count}" -le 28 ]]; then
+        echo "sm0l"; return
+    fi
+    echo "ch0nky"
+}
+
 run_external_step() {
     local prompt="$1"
-    case "${TOOL}" in
+    # Keyword gate: override TOOL to sm0l tier when prompt is trivial
+    local effective_tool="${TOOL}"
+    if [[ "${TOOL}" == "pi" || "${TOOL}" == "gemma4" || "${TOOL}" == "opencode" ]]; then
+        local tier
+        tier="$(route_to_tier "${prompt}")"
+        if [[ "${tier}" == "sm0l" ]]; then
+            log "tier-routed: sm0l (keyword-gate) — bypassing ch0nky for this prompt"
+            effective_tool="pi-sm0l"
+        fi
+    fi
+    case "${effective_tool}" in
         claude)
             if command -v claude >/dev/null 2>&1; then
                 claude -p "${prompt}" 2>/dev/null || true
@@ -321,6 +519,18 @@ run_external_step() {
                 env "${_pi_base_url_var}=${PI_BASE_URL}" \
                 OPENAI_API_KEY="${PI_API_KEY}" \
                 pi -p --provider "${PI_PROVIDER}" --model "${PI_MODEL}" "${prompt}" 2>/dev/null || true
+            fi
+            ;;
+        pi-sm0l)
+            # R2: sm0l tier — routed here by route_to_tier() keyword gate
+            # 🤓 Derive base URL + model from env (B00T_AI_SM0L_BASE / B00T_AI_SM0L_MODEL);
+            #    default port :8000 / model qwen3-coder matches inference-sm0l.hive.toml
+            if command -v pi >/dev/null 2>&1; then
+                local sm0l_base="${B00T_AI_SM0L_BASE:-http://127.0.0.1:8000/v1}"
+                local sm0l_model="${B00T_AI_SM0L_MODEL:-qwen3-coder}"
+                LLAMA_CPP_BASE_URL="${sm0l_base}" \
+                OPENAI_API_KEY="${PI_API_KEY}" \
+                pi -p --provider llama-cpp --model "${sm0l_model}" "${prompt}" 2>/dev/null || true
             fi
             ;;
         *)
@@ -389,9 +599,206 @@ write_status() {
     fi
 }
 
-log "starting b00t Ralph loop: tool=${TOOL} max_iterations=${MAX_ITERATIONS}"
+
+# ── R1: Metric gate helpers (karpathy/autoresearch) ──────────────────────────
+# 🤓 Metric = test-pass-rate: (passing / total) × 100, sourced from cargo test --message-format json
+# If cargo not available, metric = 0 (no regression — don't rollback non-testable changes)
+measure_test_score() {
+    if ! command -v cargo >/dev/null 2>&1; then
+        echo "0"
+        return 0
+    fi
+    local pass=0 fail=0
+    while IFS= read -r line; do
+        local event
+        event="$(echo "${line}" | jq -r '.event // empty' 2>/dev/null)"
+        [[ "${event}" == "test" ]] || continue
+        local result
+        result="$(echo "${line}" | jq -r '.type // empty' 2>/dev/null)"
+        [[ "${result}" == "ok" ]]      && pass=$((pass + 1))
+        [[ "${result}" == "FAILED" ]]  && fail=$((fail + 1))
+    done < <(timeout "${RALPH_TRIAL_BUDGET_SECS}" cargo test --message-format json 2>/dev/null || true)
+    local total=$((pass + fail))
+    if [[ "${total}" -eq 0 ]]; then echo "0"; return 0; fi
+    echo $((pass * 100 / total))
+}
+
+record_score() {
+    local loop_num="$1" score="$2"
+    mkdir -p "${STATE_DIR}"
+    printf '{"ts":"%s","loop":%s,"metric":"test-pass-rate","value":%s}
+'         "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "${loop_num}" "${score}"         >> "${SCORES_FILE}" 2>/dev/null || true
+}
+
+metric_gate_check() {
+    local loop_num="$1"
+    [[ "${RALPH_METRIC_GATE}" != "true" ]] && return 0  # gate disabled
+    local score
+    score="$(measure_test_score)"
+    record_score "${loop_num}" "${score}"
+    log "metric gate loop=${loop_num}: score=${score}% baseline=${BASELINE_SCORE}%"
+    if [[ -z "${BASELINE_SCORE}" ]]; then
+        BASELINE_SCORE="${score}"  # first trial sets baseline
+        log "metric baseline set: ${BASELINE_SCORE}%"
+        return 0
+    fi
+    if [[ "${score}" -lt "${BASELINE_SCORE}" ]]; then
+        log "metric regression: ${score}% < ${BASELINE_SCORE}% — rolling back"
+        git stash 2>/dev/null || true
+        append_friction_report "metric-gate-${loop_num}"             "- Score regressed ${BASELINE_SCORE}% → ${score}%; git stash applied"             "MEDIUM"
+        return 1  # signal rollback
+    fi
+    BASELINE_SCORE="${score}"  # promote new baseline
+    return 0
+}
+
+
+# -- R5: GOAL.md fitness contract (karpathy/lazy-developer) ----------------
+# 🤓 emit_goal_md writes trial intent; check_task_has_criteria enforces AC gate
+emit_goal_md() {
+    local task_title="$1" task_criteria="$2" loop_num="$3"
+    local goal_file="${STATE_DIR}/GOAL-${loop_num}.md"
+    {
+        printf "# GOAL -- loop %s\n\n## Task\n%s\n\n" "${loop_num}" "${task_title}"
+        printf "## Acceptance Criteria\n%s\n\n" "${task_criteria}"
+        printf "## Metric\ntest-pass-rate -- see scores.jsonl\n\n"
+        printf "## Constraint\n- RALPH_TRIAL_BUDGET_SECS=%s\n- TOOL=%s\n" "${RALPH_TRIAL_BUDGET_SECS}" "${TOOL}"
+    } > "${goal_file}"
+    log "goal written: ${goal_file}"
+}
+
+check_task_has_criteria() {
+    local task_json="$1"
+    [[ "${RALPH_REQUIRE_CRITERIA}" != "true" ]] && return 0
+    command -v jq >/dev/null 2>&1 || return 0
+    local n
+    n="$(echo "${task_json}" | jq '.acceptance_criteria | length // 0' 2>/dev/null || echo 0)"
+    if [[ "${n}" -eq 0 ]]; then
+        log "task missing acceptance_criteria -- skipping (RALPH_REQUIRE_CRITERIA=true)"
+        return 1
+    fi
+    return 0
+}
+
+
+# -- R7: Elo scoring for adversarial loop (autoevolve pattern) --------------
+# 🤓 writer_elo and reviewer_elo stored in scores.jsonl; K=32; initial=1200
+#    Pareto front tracked over (test_pass_rate, diff_penalty); used for best-trial selection
+ELO_FILE="${STATE_DIR}/elo.json"  # {"writer":1200,"reviewer":1200}
+
+elo_load() {
+    if [[ -f "${ELO_FILE}" ]] && command -v jq >/dev/null 2>&1; then
+        ELO_WRITER="$(jq -r '.writer // 1200' "${ELO_FILE}" 2>/dev/null || echo 1200)"
+        ELO_REVIEWER="$(jq -r '.reviewer // 1200' "${ELO_FILE}" 2>/dev/null || echo 1200)"
+    else
+        ELO_WRITER=1200; ELO_REVIEWER=1200
+    fi
+}
+
+elo_update() {
+    local verdict="$1"  # PASS or FAIL
+    command -v jq >/dev/null 2>&1 || return 0
+    elo_load
+    local K=32 scale=400
+    # Expected score for writer vs reviewer (logistic)
+    # e_w = 1/(1+10^((r-w)/400));  e_r = 1-e_w
+    local e_w e_r
+    e_w=$(python3 -c "import math; r,w=${ELO_REVIEWER},${ELO_WRITER}; print(round(1/(1+10**((r-w)/400)),4))" 2>/dev/null || echo "0.5")
+    if [[ "${verdict}" == "PASS" ]]; then
+        # Writer wins: writer +, reviewer -
+        ELO_WRITER=$(python3 -c "print(round(${ELO_WRITER}+${K}*(1-${e_w})))" 2>/dev/null || echo "${ELO_WRITER}")
+        ELO_REVIEWER=$(python3 -c "print(round(${ELO_REVIEWER}+${K}*(${e_w}-1)))" 2>/dev/null || echo "${ELO_REVIEWER}")
+    else
+        # Reviewer wins: reviewer +, writer -
+        ELO_WRITER=$(python3 -c "print(round(${ELO_WRITER}+${K}*(0-${e_w})))" 2>/dev/null || echo "${ELO_WRITER}")
+        ELO_REVIEWER=$(python3 -c "print(round(${ELO_REVIEWER}+${K}*(1-${e_w})))" 2>/dev/null || echo "${ELO_REVIEWER}")
+    fi
+    jq -n --argjson w "${ELO_WRITER}" --argjson r "${ELO_REVIEWER}" '{writer:$w,reviewer:$r}' > "${ELO_FILE}" 2>/dev/null || true
+    log "elo update: writer=${ELO_WRITER} reviewer=${ELO_REVIEWER} (${verdict})"
+}
+
+# record_score_with_elo: extends R1 record_score to include Elo and diff_penalty
+record_score_elo() {
+    local loop_num="$1" test_score="$2" diff_lines="$3" verdict="$4"
+    elo_load
+    local ts
+    ts="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+    printf '{"ts":"%s","loop":%s,"metric":"test-pass-rate","value":%s,"diff_penalty":%s,"writer_elo":%s,"reviewer_elo":%s,"verdict":"%s"}\n' \
+        "${ts}" "${loop_num}" "${test_score}" "${diff_lines}" "${ELO_WRITER}" "${ELO_REVIEWER}" "${verdict}" \
+        >> "${SCORES_FILE}" 2>/dev/null || true
+}
+
+
+# -- R3: Trajectory compression -> RL training data (hermes-agent pattern) --
+# 🤓 Captures first 3 + last 4 turns; compresses middle via sm0l summarizer
+#    Writes .b00t/ralph/trajectory-<ts>.jsonl for future fine-tune pipeline
+RALPH_TRAJECTORY_TOKENS="${RALPH_TRAJECTORY_TOKENS:-15250}"
+
+emit_trajectory_jsonl() {
+    local exit_reason="$1"
+    local log_file="${LOG_FILE}"
+    [[ ! -f "${log_file}" ]] && return 0
+
+    local ts
+    ts="$(date -u +%Y%m%dT%H%M%S)"
+    local traj_file="${STATE_DIR}/trajectory-${ts}.jsonl"
+
+    # Load log lines as turns; log format: "[ralph] ..." lines are system, rest are model
+    local total_lines
+    total_lines="$(wc -l < "${log_file}" 2>/dev/null || echo 0)"
+    local protect_first=3 protect_last=4
+
+    # Emit header record
+    printf '{"type":"header","ts":"%s","tool":"%s","role":"%s","loops":%s,"exit":"%s","scores_file":"%s"}\n' \
+        "${ts}" "${TOOL}" "${ROLE}" "${loop:-0}" "${exit_reason}" "${SCORES_FILE}" \
+        > "${traj_file}" 2>/dev/null || return 0
+
+    # Emit first N turns verbatim
+    local line_num=0
+    while IFS= read -r line && [[ "${line_num}" -lt "${protect_first}" ]]; do
+        printf '{"type":"turn","idx":%s,"protected":true,"content":%s}\n' \
+            "${line_num}" "$(printf '%s' "${line}" | jq -Rs . 2>/dev/null || echo 'null')" \
+            >> "${traj_file}" 2>/dev/null
+        line_num=$((line_num + 1))
+    done < "${log_file}"
+
+    # Middle turns: emit compressed placeholder (sm0l summarization deferred to pipeline)
+    local middle_count=$(( total_lines - protect_first - protect_last ))
+    if [[ "${middle_count}" -gt 0 ]]; then
+        printf '{"type":"compressed","start_idx":%s,"end_idx":%s,"line_count":%s,"note":"compress via sm0l"}\n' \
+            "${protect_first}" "$(( total_lines - protect_last ))" "${middle_count}" \
+            >> "${traj_file}" 2>/dev/null
+    fi
+
+    # Emit last N turns verbatim
+    local last_start=$(( total_lines - protect_last + 1 ))
+    [[ "${last_start}" -lt 1 ]] && last_start=1
+    tail -n "${protect_last}" "${log_file}" | while IFS= read -r line; do
+        printf '{"type":"turn","protected":true,"content":%s}\n' \
+            "$(printf '%s' "${line}" | jq -Rs . 2>/dev/null || echo 'null')" \
+            >> "${traj_file}" 2>/dev/null
+    done
+
+    # Append Elo + score summary
+    elo_load 2>/dev/null || true
+    printf '{"type":"footer","writer_elo":%s,"reviewer_elo":%s,"target_tokens":%s}\n' \
+        "${ELO_WRITER:-1200}" "${ELO_REVIEWER:-1200}" "${RALPH_TRAJECTORY_TOKENS}" \
+        >> "${traj_file}" 2>/dev/null
+
+    log "trajectory written: ${traj_file} (${total_lines} turns)"
+}
+
+# 🤓 B00T_TEST_MODE=1: source this script to load functions without executing the main loop
+# Enables: `B00T_TEST_MODE=1 source b00t.sh; restore_task_state` in unit tests
+if [[ "${B00T_TEST_MODE:-}" == "1" ]]; then
+    return 0 2>/dev/null || exit 0
+fi
+
+log "starting b00t Ralph loop: tool=${TOOL} max_iterations=${MAX_ITERATIONS} adversarial=${ADVERSARIAL}"
+mkdir -p "${FRICTION_DIR}"
 collect_backlog_snippet
 collect_validation_snippet
+restore_task_state
 if is_self_improve_mode; then
     collect_issue_feed
 fi
@@ -406,6 +813,21 @@ while [[ "${loop}" -le "${MAX_ITERATIONS}" ]]; do
     prompt="$(build_prompt "${loop}")"
     output=""
 
+    # R5: GOAL.md + acceptance_criteria gate
+    if command -v b00t-cli >/dev/null 2>&1; then
+        _task_json="$(b00t-cli task next --json 2>/dev/null || true)"
+        if [[ -n "${_task_json}" && "${_task_json}" != "no actionable"* ]]; then
+            _task_title="$(echo "${_task_json}" | jq -r '.title // empty' 2>/dev/null || true)"
+            _task_criteria="$(echo "${_task_json}" | jq -r '.acceptance_criteria[]?' 2>/dev/null | sed 's/^/- /' || true)"
+            [[ -n "${_task_title}" ]] && emit_goal_md "${_task_title}" "${_task_criteria}" "${loop}"
+            if ! check_task_has_criteria "${_task_json}"; then
+                _skip_id="$(echo "${_task_json}" | jq -r '.id // empty' 2>/dev/null || true)"
+                [[ -n "${_skip_id}" ]] && b00t-cli task update "${_skip_id}" --status deferred 2>/dev/null || true
+                loop=$((loop + 1)); continue
+            fi
+        fi
+    fi
+
     if [[ "${TOOL}" == "mistralrs" ]]; then
         output="$(run_mistralrs_step "${prompt}" || true)"
     else
@@ -419,12 +841,50 @@ EXIT_SIGNAL=false"
 
     output="$(sanitize_output "${output}")"
 
+    # Adversarial review gate: write draft, reviewer checks compliance
+    if [[ "${ADVERSARIAL}" == "true" ]]; then
+        draft_file="${STATE_DIR}/draft_${loop}.txt"
+        echo "${output}" > "${draft_file}"
+        review_result="$(run_adversarial_review "${draft_file}" "$(echo "${prompt}" | head -3)")"
+        log "adversarial review loop=${loop}: ${review_result}"
+        # R7: Elo update based on adversarial verdict
+        if echo "${review_result}" | grep -q "^PASS"; then
+            elo_update "PASS"
+        else
+            elo_update "FAIL"
+        fi
+        if echo "${review_result}" | grep -q "^FAIL:"; then
+            # Append reviewer rejection as friction signal and re-queue
+            append_friction_report \
+                "loop-${loop}" \
+                "- Reviewer rejected output: ${review_result}" \
+                "LOW"
+            output="NEXT_ACTION: reviewer rejected previous output (${review_result}). Revise and retry.
+EXIT_SIGNAL=false"
+        fi
+    fi
+
+    # Checkpoint task state before writing status (survives context compression)
+    checkpoint_task_state "${loop}"
+
+    # R1: metric gate — measure test-pass-rate; rollback if regression
+    if ! metric_gate_check "${loop}"; then
+        log "metric gate triggered rollback at loop ${loop}; continuing"
+        output="NEXT_ACTION: metric regression detected and rolled back. Revise approach.
+EXIT_SIGNAL=false"
+    fi
+
     write_status "${loop}" "running" "$(echo "${output}" | head -c 500)"
     echo "${output}" >> "${LOG_FILE}"
 
     if should_exit "${output}"; then
         write_status "${loop}" "completed" "$(echo "${output}" | head -c 500)"
         log "loop completed at iteration ${loop}"
+        # Final friction report on clean exit (captures any residual friction)
+        if [[ "${ADVERSARIAL}" == "true" ]]; then
+            append_friction_report "loop-final" "- Clean exit at iteration ${loop}" "HIGH"
+        fi
+        emit_trajectory_jsonl "completed"
         exit 0
     fi
 
@@ -436,4 +896,10 @@ done
 
 write_status "${MAX_ITERATIONS}" "tempfail" "max iterations reached"
 log "max iterations reached; requesting restart via exit 75"
+# Friction report on tempfail: likely a hard problem; operator should inspect
+append_friction_report "loop-tempfail" \
+    "- Reached max iterations (${MAX_ITERATIONS}) without EXIT_SIGNAL=true
+- Tool: ${TOOL}, Role: ${ROLE}" \
+    "LOW"
+emit_trajectory_jsonl "tempfail"
 exit 75

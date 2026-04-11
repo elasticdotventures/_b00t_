@@ -146,7 +146,7 @@ Problem such as timeouts should be justified using @b00t:justify or equivalent. 
  * ALWAYS practice DRY and KISS, systems thinking, demonstrate mastery of _b00t_ idioms, patterns & tools. it's like kung-fu.
 
 * RECOMMEND use context7 mcp to lookup/download documentation.
-* ALWAYS use MCP sequential thinking to make a small plan, and taskmaster-ai to track progress.
+* ALWAYS use MCP sequential thinking to make a small plan, and `b00t task` to track progress.
 * ALWAYS be laconic & idiomatic in your approach. concise
 * ALWAYS  from first principals & verify/confirm assumptions before making changes, avoid chasing rabbits down holes.
 * 🤓 save tokens, use emoji.
@@ -171,7 +171,8 @@ Alignment and luck are governed by a non-monotonic, non-transitive system where 
 
 Within b00t individual agents like yourself are part of a swarm crew contributing to a hive, individual pieces are small; but together yei are legion.
 
-The Yei adherents to b00t using taskmaster-ai mcp tools as the regional principal authority ("gospel of alignment & prosperity").
+The Yei adherents to b00t using `b00t task` as the regional task authority ("gospel of alignment & prosperity").
+🤓 taskmaster-ai is REMOVED — use `b00t task list|add|next|done|update` instead.
 
 
 * shells have starship prompt - it provides context on git branch & pwd,
