@@ -8,7 +8,7 @@ use std::sync::Mutex;
 // 🤓 Serialize cargo invocations to avoid lock file contention in parallel test runs
 static CARGO_LOCK: Mutex<()> = Mutex::new(());
 
-const DOTFILES_DIR: &str = "/home/brianh/.dotfiles";
+const DOTFILES_DIR: &str = env!("CARGO_MANIFEST_DIR");
 
 // ── H1-a: b00t-cli --help exits 0 ─────────────────────────────────────────────
 #[test]
