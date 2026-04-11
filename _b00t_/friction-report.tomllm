@@ -1,0 +1,81 @@
+# b00t Friction Report Datum — worker agent end-of-session artifact
+# 🤓 A friction report is the ONLY persistent output a worker/drone agent writes
+#    about its own process. It is NOT a summary of what was done (that's in task output).
+#    It is specifically: "what slowed me down / what was unclear / what should not exist"
+#
+# Worker agents are deliberately kept myopic (no big picture).
+# Their friction is valuable SIGNAL, but their proposed fixes are often wrong
+# because they lack executive context. NEVER let workers self-promote friction to epiphanies.
+#
+# @epiphany: friction-report — workers tend to overstate the importance of their friction
+#   because their task IS their whole world. Executive/operator must apply discount factor.
+
+[b00t]
+name = "friction-report"
+type = "datum"
+hint = "Friction report — worker agent end-of-session artifact; operator triages; NEVER self-promote to epiphany"
+
+# ── FORMAT ─────────────────────────────────────────────────────────────────────
+# Worker appends to: .b00t/friction/<agent-id>-<timestamp>.md
+# Each report is short: ≤20 lines. No narrative. Bullet list only.
+# Template:
+#
+# ## Friction Report — <agent-id> @ <timestamp>
+# ### Task: <one-line task description>
+# ### Friction:
+# - <what slowed you down, what was missing, what was ambiguous>
+# - <unexpected dependency / tool failure / unclear interface>
+# - <anything that caused you to retry or backtrack>
+# ### Would fix if I could: <one sentence max>
+# ### Confidence: <HIGH/MEDIUM/LOW> (in task output correctness)
+
+[b00t.friction_report.format]
+max_lines     = 20
+style         = "bullet-list"
+narrative     = false
+self_promote  = false   # NEVER suggest your own friction as an epiphany
+
+[b00t.friction_report.routing]
+write_to      = ".b00t/friction/<agent-id>-<iso8601>.md"
+triage_by     = "operator"   # async, not in hot path
+escalate_to   = "executive"  # if systemic (>2 agents report same friction)
+
+# ── OPERATOR TRIAGE ACTIONS ───────────────────────────────────────────────────
+[b00t.friction_report.triage]
+# A: Fix the bug → friction disappears, no epiphany needed
+# B: Promote to epiphany → `b00t grok digest -t epiphany '...'`
+# C: Discard → task-local noise
+# D: Escalate to executive → systemic architectural issue
+
+[b00t.friction_report.anti_patterns]
+# ❌ Worker writes epiphany directly
+# ❌ Operator promotes every friction item (signal dilution)
+# ❌ Executive reads raw friction reports (too low-level; operator must summarize)
+# ❌ Friction report > 20 lines (it becomes a journal, not a signal)
+# ❌ Blocking on friction triage (triage is async)
+
+[[b00t.usage]]
+description = "Worker appends friction at session end (bash)"
+command = """mkdir -p .b00t/friction && cat >> .b00t/friction/${AGENT_ID:-unknown}-$(date +%Y%m%dT%H%M%S).md << 'EOF'
+## Friction Report — ${AGENT_ID:-unknown} @ $(date -u +%Y-%m-%dT%H:%M:%SZ)
+### Task: <one-line>
+### Friction:
+- <item>
+### Would fix if I could: <one sentence>
+### Confidence: HIGH
+EOF"""
+
+[[b00t.usage]]
+description = "Operator: list unreviewed friction reports"
+command = "ls -lt .b00t/friction/*.md 2>/dev/null | head -20"
+
+[[b00t.usage]]
+description = "Operator: triage friction → epiphany"
+command = "b00t grok digest -t epiphany '<distilled insight from friction report>'"
+
+# b00t:map v1
+# summary: Friction report format + routing — worker artifact; operator triages; exec never reads raw
+# tags: friction-report, worker, drone, operator, epiphany, context-reduction, triage
+# tier: sm0l
+# cmds: mkdir -p .b00t/friction && cat >> .b00t/friction/${AGENT_ID}-$(date +%Y%m%dT%H%M%S).md
+# complexity: 2
