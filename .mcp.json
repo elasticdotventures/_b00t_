@@ -30,15 +30,6 @@
         "stdio"
       ],
       "command": "docker"
-    },
-    "taskmaster-ai": {
-      "args": [
-        "-y",
-        "--package=task-master-ai",
-        "task-master-ai"
-      ],
-      "command": "bunx",
-      "env": {}
     }
   }
 }

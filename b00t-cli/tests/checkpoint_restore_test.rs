@@ -7,18 +7,25 @@ use std::sync::Mutex;
 
 static CARGO_LOCK: Mutex<()> = Mutex::new(());
 
-fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+fn repo_root() -> String {
+    if let Ok(r) = std::env::var("_B00T_TEST_ROOT") {
+        return r;
+    }
+    // CARGO_MANIFEST_DIR is b00t-cli/ — parent is repo root
+    let manifest = std::env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR not set");
+    std::path::Path::new(&manifest)
         .parent()
-        .expect("b00t-cli manifest dir should have a workspace root parent")
-        .to_path_buf()
+        .expect("CARGO_MANIFEST_DIR has no parent")
+        .to_string_lossy()
+        .into_owned()
 }
 
 // ── H2-a: checkpoint restore fixture exits 0 (PASS) ──────────────────────────
 #[test]
 fn test_checkpoint_restore_passes() {
     let _lock = CARGO_LOCK.lock().unwrap();
-    let fixture = repo_root().join("b00t-cli/tests/fixtures/test_checkpoint_restore.sh");
+    let root = repo_root();
+    let fixture = format!("{root}/b00t-cli/tests/fixtures/test_checkpoint_restore.sh");
 
     let output = Command::new("bash")
         .arg(&fixture)
@@ -43,13 +50,13 @@ fn test_checkpoint_restore_passes() {
 #[test]
 fn test_b00t_test_mode_skips_loop() {
     // Verify B00T_TEST_MODE=1 causes b00t.sh to exit 0 without running the main loop
-    let b00t_sh = repo_root().join("b00t.sh");
+    let root = repo_root();
+    let b00t_sh = format!("{root}/b00t.sh");
 
     let output = Command::new("bash")
         .arg("-c")
         .arg(format!(
-            "B00T_TEST_MODE=1 B00T_STATE_DIR=/tmp/b00t-test-$$ bash '{}' && echo 'exited-cleanly'",
-            b00t_sh.display()
+            "B00T_TEST_MODE=1 B00T_STATE_DIR=/tmp/b00t-test-$$ bash '{b00t_sh}' && echo 'exited-cleanly'"
         ))
         .output()
         .expect("failed to run b00t.sh in test mode");

@@ -93,10 +93,11 @@ fn tasks_path() -> PathBuf {
     if let Ok(p) = std::env::var("B00T_TASKS_PATH") {
         return PathBuf::from(p);
     }
-    // Anchor repo-local storage at the git workspace root so `b00t task`
-    // works from any subdirectory and never creates stray `.b00t/` dirs.
-    let root = crate::utils::get_workspace_root();
-    PathBuf::from(root).join(".b00t/tasks.json")
+    let local = PathBuf::from(".b00t/tasks.json");
+    if local.parent().map(|p| p.exists()).unwrap_or(false) {
+        return local;
+    }
+    local // will be created on first write
 }
 
 fn load_store() -> Result<TaskStore> {
@@ -129,8 +130,8 @@ fn save_store(store: &TaskStore) -> Result<()> {
 }
 
 fn now_iso() -> String {
-    // Generate UTC timestamp in-process via chrono — avoids platform `date` variance
-    chrono::Utc::now().format("%Y-%m-%dT%H:%M:%SZ").to_string()
+    // Generate ISO-8601/RFC3339 UTC in-process to avoid shelling out to `date`.
+    chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Secs, true)
 }
 
 fn next_id(store: &TaskStore) -> u32 {
@@ -281,24 +282,15 @@ pub fn handle_task_command(cmd: TaskCommands) -> Result<()> {
 }
 
 fn cmd_list(status_filter: Option<&str>, tag_filter: Option<&str>, json: bool) -> Result<()> {
-    enum StatusFilter {
-        Active,
-        All,
-        Exact(TaskStatus),
-    }
-
-    let status_filter = match status_filter {
-        None | Some("active") => StatusFilter::Active,
-        Some("all") => StatusFilter::All,
-        Some(s) => StatusFilter::Exact(<TaskStatus as std::str::FromStr>::from_str(s)?),
-    };
-
     let store = load_store()?;
     let tasks: Vec<&Task> = store.tasks.iter().filter(|t| {
-        let status_ok = match &status_filter {
-            StatusFilter::Active => matches!(t.status, TaskStatus::Pending | TaskStatus::InProgress),
-            StatusFilter::All => true,
-            StatusFilter::Exact(status) => &t.status == status,
+        let status_ok = match status_filter {
+            None | Some("active") => matches!(t.status, TaskStatus::Pending | TaskStatus::InProgress),
+            Some("all")      => true,
+            Some("done")     => matches!(t.status, TaskStatus::Done),
+            Some("pending")  => matches!(t.status, TaskStatus::Pending),
+            Some("blocked")  => matches!(t.status, TaskStatus::Blocked),
+            Some(s)          => t.status.to_string() == s,
         };
         let tag_ok = tag_filter.map_or(true, |f| t.tags.iter().any(|tg| tg == f));
         status_ok && tag_ok
@@ -310,14 +302,7 @@ fn cmd_list(status_filter: Option<&str>, tag_filter: Option<&str>, json: bool) -
     }
 
     if tasks.is_empty() {
-        println!(
-            "no tasks (filter: {})",
-            match status_filter {
-                StatusFilter::Active => "active",
-                StatusFilter::All => "all",
-                StatusFilter::Exact(_) => "custom",
-            }
-        );
+        println!("no tasks (filter: {})", status_filter.unwrap_or("active"));
         return Ok(());
     }
     for t in &tasks {
@@ -329,6 +314,7 @@ fn cmd_list(status_filter: Option<&str>, tag_filter: Option<&str>, json: bool) -
 }
 
 fn cmd_add(title: String, description: Option<String>, priority: u8, tags_raw: Option<String>, criteria: Vec<String>) -> Result<()> {
+    anyhow::ensure!(priority >= 1 && priority <= 4, "priority must be 1–4 (got {priority})");
     let mut store = load_store()?;
     let id = next_id(&store);
     let tags = tags_raw.map(|t| t.split(',').map(str::trim).map(str::to_string).collect()).unwrap_or_default();
@@ -427,6 +413,9 @@ fn cmd_done(id: u32) -> Result<()> {
 }
 
 fn cmd_update(id: u32, status: Option<String>, title: Option<String>, note: Option<String>, priority: Option<u8>) -> Result<()> {
+    if let Some(p) = priority {
+        anyhow::ensure!(p >= 1 && p <= 4, "priority must be 1–4 (got {p})");
+    }
     let mut store = load_store()?;
     let task = store.tasks.iter_mut().find(|t| t.id == id)
         .with_context(|| format!("task #{id} not found"))?;
