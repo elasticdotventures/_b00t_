@@ -1,6 +1,6 @@
 //! b00t task — native task management (replaces taskmaster-ai)
 //!
-//! Storage: `.b00t/tasks.json` relative to the current working directory.
+//! Storage: `.b00t/tasks.json` at the git workspace root (via `get_workspace_root()`).
 //! Schema: minimal CRUD — no AI expansion, no LLM deps, no cloud APIs.
 //! Compat: `b00t task import` migrates from `.taskmaster/tasks/tasks.json`.
 //!
@@ -93,11 +93,10 @@ fn tasks_path() -> PathBuf {
     if let Ok(p) = std::env::var("B00T_TASKS_PATH") {
         return PathBuf::from(p);
     }
-    let local = PathBuf::from(".b00t/tasks.json");
-    if local.parent().map(|p| p.exists()).unwrap_or(false) {
-        return local;
-    }
-    local // will be created on first write
+    // Anchor repo-local storage at the git workspace root so `b00t task`
+    // works from any subdirectory and never creates stray `.b00t/` dirs.
+    let root = crate::utils::get_workspace_root();
+    PathBuf::from(root).join(".b00t/tasks.json")
 }
 
 fn load_store() -> Result<TaskStore> {
@@ -130,14 +129,8 @@ fn save_store(store: &TaskStore) -> Result<()> {
 }
 
 fn now_iso() -> String {
-    // Simple ISO-8601 UTC via date command; avoids chrono dep
-    std::process::Command::new("date")
-        .args(["-u", "+%Y-%m-%dT%H:%M:%SZ"])
-        .output()
-        .ok()
-        .and_then(|o| String::from_utf8(o.stdout).ok())
-        .map(|s| s.trim().to_string())
-        .unwrap_or_else(|| "1970-01-01T00:00:00Z".to_string())
+    // Generate UTC timestamp in-process via chrono — avoids platform `date` variance
+    chrono::Utc::now().format("%Y-%m-%dT%H:%M:%SZ").to_string()
 }
 
 fn next_id(store: &TaskStore) -> u32 {
@@ -202,7 +195,8 @@ pub enum TaskCommands {
         title: String,
         #[clap(long, short, help = "Description")]
         description: Option<String>,
-        #[clap(long, short, help = "Priority 1-4 (1=critical, 4=low)", default_value = "3")]
+        #[clap(long, short, help = "Priority 1-4 (1=critical, 4=low)", default_value = "3",
+               value_parser = clap::value_parser!(u8).range(1..=4))]
         priority: u8,
         #[clap(long, short, help = "Tags (comma-separated)")]
         tags: Option<String>,
@@ -229,7 +223,8 @@ pub enum TaskCommands {
         title: Option<String>,
         #[clap(long, help = "Append to notes")]
         note: Option<String>,
-        #[clap(long, help = "Priority 1-4")]
+        #[clap(long, help = "Priority 1-4",
+               value_parser = clap::value_parser!(u8).range(1..=4))]
         priority: Option<u8>,
     },
     #[clap(about = "Show task details")]

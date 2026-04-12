@@ -222,8 +222,7 @@ async fn provision_aci_resource(
     // The container group name is derived from the lease_id for uniqueness.
     let group_name = format!("b00t-aci-{}", &lease_id[..8]);
 
-    // Extract subscription ID from the resource group ID env var.
-    // Format: /subscriptions/{sub}/resourceGroups/{rg}
+    // subscription_id is a bare UUID sourced from AZURE_SUBSCRIPTION_ID (set by Terraform).
     let subscription_id = config.subscription_id.clone();
 
     let aci_client = azure_mgmt_containerinstance::ClientBuilder::new(_credential)
