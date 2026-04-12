@@ -1,0 +1,22 @@
+#!/usr/bin/env python3
+"""Stub codex CLI for integration testing."""
+
+from __future__ import annotations
+
+import os
+import sys
+from pathlib import Path
+
+def main() -> int:
+    args = sys.argv[1:]
+    for index, arg in enumerate(args):
+        if arg == "--cd" and index + 1 < len(args):
+            os.chdir(Path(args[index + 1]).expanduser())
+            break
+    print("codex-stub: exec", flush=True)
+    print("<promise>COMPLETE</promise>", flush=True)
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
