@@ -597,13 +597,13 @@ measure_test_score() {
     fi
     local pass=0 fail=0
     while IFS= read -r line; do
+        local record_type
+        record_type="$(echo "${line}" | jq -r '.type // empty' 2>/dev/null)"
+        [[ "${record_type}" == "test" ]] || continue
         local event
         event="$(echo "${line}" | jq -r '.event // empty' 2>/dev/null)"
-        [[ "${event}" == "test" ]] || continue
-        local result
-        result="$(echo "${line}" | jq -r '.type // empty' 2>/dev/null)"
-        [[ "${result}" == "ok" ]]      && pass=$((pass + 1))
-        [[ "${result}" == "FAILED" ]]  && fail=$((fail + 1))
+        [[ "${event}" == "ok" ]]      && pass=$((pass + 1))
+        [[ "${event}" == "failed" ]]  && fail=$((fail + 1))
     done < <(timeout "${RALPH_TRIAL_BUDGET_SECS}" cargo test --message-format json 2>/dev/null || true)
     local total=$((pass + fail))
     if [[ "${total}" -eq 0 ]]; then echo "0"; return 0; fi
