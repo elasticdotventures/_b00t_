@@ -1,6 +1,6 @@
 //! b00t task — native task management (replaces taskmaster-ai)
 //!
-//! Storage: `.b00t/tasks.json` (repo-local) or `~/.b00t/tasks.json` (global)
+//! Storage: `.b00t/tasks.json` relative to the current working directory.
 //! Schema: minimal CRUD — no AI expansion, no LLM deps, no cloud APIs.
 //! Compat: `b00t task import` migrates from `.taskmaster/tasks/tasks.json`.
 //!
