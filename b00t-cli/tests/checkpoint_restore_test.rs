@@ -1,18 +1,24 @@
 // H2 integration test: b00t.sh restore_task_state reads task_state.json → populates tasks.json
 // Acceptance criteria from TODO-next.md:
 //   - write mock task_state.json, run restore, verify tasks.json populated
+use std::path::PathBuf;
 use std::process::Command;
 use std::sync::Mutex;
 
 static CARGO_LOCK: Mutex<()> = Mutex::new(());
 
-const REPO_ROOT: &str = "/home/brianh/.b00t";
+fn repo_root() -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .expect("b00t-cli manifest dir should have a workspace root parent")
+        .to_path_buf()
+}
 
 // ── H2-a: checkpoint restore fixture exits 0 (PASS) ──────────────────────────
 #[test]
 fn test_checkpoint_restore_passes() {
     let _lock = CARGO_LOCK.lock().unwrap();
-    let fixture = format!("{REPO_ROOT}/b00t-cli/tests/fixtures/test_checkpoint_restore.sh");
+    let fixture = repo_root().join("b00t-cli/tests/fixtures/test_checkpoint_restore.sh");
 
     let output = Command::new("bash")
         .arg(&fixture)
@@ -37,12 +43,13 @@ fn test_checkpoint_restore_passes() {
 #[test]
 fn test_b00t_test_mode_skips_loop() {
     // Verify B00T_TEST_MODE=1 causes b00t.sh to exit 0 without running the main loop
-    let b00t_sh = format!("{REPO_ROOT}/b00t.sh");
+    let b00t_sh = repo_root().join("b00t.sh");
 
     let output = Command::new("bash")
         .arg("-c")
         .arg(format!(
-            "B00T_TEST_MODE=1 B00T_STATE_DIR=/tmp/b00t-test-$$ bash '{b00t_sh}' && echo 'exited-cleanly'"
+            "B00T_TEST_MODE=1 B00T_STATE_DIR=/tmp/b00t-test-$$ bash '{}' && echo 'exited-cleanly'",
+            b00t_sh.display()
         ))
         .output()
         .expect("failed to run b00t.sh in test mode");
