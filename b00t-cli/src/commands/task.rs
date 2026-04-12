@@ -1,13 +1,13 @@
 //! b00t task — native task management (replaces taskmaster-ai)
 //!
-//! Storage: `.b00t/tasks.json` by default (repo-local), or `B00T_TASKS_PATH` if set.
+//! Storage: `.b00t/tasks.json` at the git workspace root (via `get_workspace_root()`).
 //! Schema: minimal CRUD — no AI expansion, no LLM deps, no cloud APIs.
 //! Compat: `b00t task import` migrates from `.taskmaster/tasks/tasks.json`.
 //!
 //! 🤓 This is the extracted core of taskmaster-ai v0.x (before enshittification).
 //!    Keep it lean: list/add/next/done/update/show/import — nothing else.
 
-use anyhow::{Context, Result};
+use anyhow::{ensure, Context, Result};
 use clap::Parser;
 use serde::{Deserialize, Serialize};
 use std::fs;
@@ -196,7 +196,8 @@ pub enum TaskCommands {
         title: String,
         #[clap(long, short, help = "Description")]
         description: Option<String>,
-        #[clap(long, short, help = "Priority 1-4 (1=critical, 4=low)", default_value = "3")]
+        #[clap(long, short, help = "Priority 1-4 (1=critical, 4=low)", default_value = "3",
+               value_parser = clap::value_parser!(u8).range(1..=4))]
         priority: u8,
         #[clap(long, short, help = "Tags (comma-separated)")]
         tags: Option<String>,
@@ -223,7 +224,8 @@ pub enum TaskCommands {
         title: Option<String>,
         #[clap(long, help = "Append to notes")]
         note: Option<String>,
-        #[clap(long, help = "Priority 1-4")]
+        #[clap(long, help = "Priority 1-4",
+               value_parser = clap::value_parser!(u8).range(1..=4))]
         priority: Option<u8>,
     },
     #[clap(about = "Show task details")]
@@ -369,22 +371,32 @@ fn cmd_rm(id: u32) -> Result<()> {
 
 fn cmd_dep(id: u32, op: DepOp) -> Result<()> {
     let mut store = load_store()?;
-    let task = store.tasks.iter_mut().find(|t| t.id == id)
-        .with_context(|| format!("task #{id} not found"))?;
+    let task_exists = store.tasks.iter().any(|t| t.id == id);
+    ensure!(task_exists, "task #{id} not found");
+
     match op {
         DepOp::Add { dep } => {
+            ensure!(id != dep, "task #{id} cannot depend on itself");
+            let dep_exists = store.tasks.iter().any(|t| t.id == dep);
+            ensure!(dep_exists, "dependency task #{dep} not found");
+
+            let task = store.tasks.iter_mut().find(|t| t.id == id)
+                .with_context(|| format!("task #{id} not found"))?;
             if !task.dependencies.contains(&dep) {
                 task.dependencies.push(dep);
                 task.dependencies.sort();
             }
+            task.updated_at = Some(now_iso());
             println!("#{id} now depends on #{dep}");
         }
         DepOp::Rm { dep } => {
+            let task = store.tasks.iter_mut().find(|t| t.id == id)
+                .with_context(|| format!("task #{id} not found"))?;
             task.dependencies.retain(|&d| d != dep);
+            task.updated_at = Some(now_iso());
             println!("#{id}: removed dep #{dep}");
         }
     }
-    task.updated_at = Some(now_iso());
     save_store(&store)
 }
 

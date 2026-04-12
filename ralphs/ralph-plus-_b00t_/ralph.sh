@@ -355,17 +355,27 @@ checkpoint_task_state() {
 
     mkdir -p "${STATE_DIR}"
 
+    local tmp_checkpoint
+    tmp_checkpoint="$(mktemp "${STATE_DIR}/.tmp_checkpoint_XXXXXX")" || return 0
     if command -v jq >/dev/null 2>&1 && [[ -f "${tasks_file}" ]]; then
-        jq -nc \
+        if jq -nc \
             --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
             --argjson loop "${loop_num}" \
             --argjson tasks "$(cat "${tasks_file}")" \
             '{checkpoint_ts:$ts, loop:$loop, tasks:$tasks}' \
-            > "${TASK_STATE_CHECKPOINT}" 2>/dev/null || true
+            > "${tmp_checkpoint}" 2>/dev/null; then
+            mv "${tmp_checkpoint}" "${TASK_STATE_CHECKPOINT}"
+        else
+            rm -f "${tmp_checkpoint}"
+        fi
     else
-        printf '{"checkpoint_ts":"%s","loop":%s}\n' \
+        if printf '{"checkpoint_ts":"%s","loop":%s}\n' \
             "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "${loop_num}" \
-            > "${TASK_STATE_CHECKPOINT}" 2>/dev/null || true
+            > "${tmp_checkpoint}" 2>/dev/null; then
+            mv "${tmp_checkpoint}" "${TASK_STATE_CHECKPOINT}"
+        else
+            rm -f "${tmp_checkpoint}"
+        fi
     fi
 }
 
@@ -440,8 +450,11 @@ run_mistralrs_step() {
 
 # ── R2: Keyword tier pre-filter (hermes-agent smart_model_routing pattern) ─────
 # Zero-cost routing: classify task before invoking inference.
-# sm0l: char ≤ 160 OR word_count ≤ 28 AND no complex keywords AND no backticks
-# ch0nky (default): complex keyword hit OR backtick presence OR long prompt
+# Routing order is intentional:
+#   1) backtick presence        -> ch0nky
+#   2) complex keyword match    -> ch0nky
+#   3) otherwise, sm0l iff (char_count ≤ 160 OR word_count ≤ 28)
+#   4) else                     -> ch0nky
 _COMPLEX_KEYWORDS="debug|implement|architecture|refactor|design|analyze|integrate|migrate|security|performance"
 route_to_tier() {
     local prompt="$1"
@@ -512,12 +525,15 @@ run_external_step() {
             fi
             ;;
         pi-sm0l)
-            # R2: sm0l tier — qwen2.5-3B on :8000 via pi (direct, no gateway)
-            # 🤓 SM0L_PORT=8000; SM0L_MODEL=sm0l; routed here by route_to_tier() keyword gate
+            # R2: sm0l tier — routed here by route_to_tier() keyword gate
+            # 🤓 Derive base URL + model from env (B00T_AI_SM0L_BASE / B00T_AI_SM0L_MODEL);
+            #    default port :8000 / model qwen3-coder matches inference-sm0l.hive.toml
             if command -v pi >/dev/null 2>&1; then
-                LLAMA_CPP_BASE_URL="http://127.0.0.1:8000/v1" \
+                local sm0l_base="${B00T_AI_SM0L_BASE:-http://127.0.0.1:8000/v1}"
+                local sm0l_model="${B00T_AI_SM0L_MODEL:-qwen3-coder}"
+                LLAMA_CPP_BASE_URL="${sm0l_base}" \
                 OPENAI_API_KEY="${PI_API_KEY}" \
-                pi -p --provider llama-cpp --model sm0l "${prompt}" 2>/dev/null || true
+                pi -p --provider llama-cpp --model "${sm0l_model}" "${prompt}" 2>/dev/null || true
             fi
             ;;
         *)
@@ -597,13 +613,13 @@ measure_test_score() {
     fi
     local pass=0 fail=0
     while IFS= read -r line; do
-        local record_type
-        record_type="$(echo "${line}" | jq -r '.type // empty' 2>/dev/null)"
-        [[ "${record_type}" == "test" ]] || continue
         local event
         event="$(echo "${line}" | jq -r '.event // empty' 2>/dev/null)"
-        [[ "${event}" == "ok" ]]      && pass=$((pass + 1))
-        [[ "${event}" == "failed" ]]  && fail=$((fail + 1))
+        [[ "${event}" == "test" ]] || continue
+        local result
+        result="$(echo "${line}" | jq -r '.type // empty' 2>/dev/null)"
+        [[ "${result}" == "ok" ]]      && pass=$((pass + 1))
+        [[ "${result}" == "FAILED" ]]  && fail=$((fail + 1))
     done < <(timeout "${RALPH_TRIAL_BUDGET_SECS}" cargo test --message-format json 2>/dev/null || true)
     local total=$((pass + fail))
     if [[ "${total}" -eq 0 ]]; then echo "0"; return 0; fi

@@ -855,12 +855,12 @@ pub struct TaskAddCommand {
     pub title: String,
     #[arg(long, short, help = "Description")]
     pub description: Option<String>,
+    #[arg(long = "criteria", short = 'c', help = "Acceptance criteria")]
+    pub acceptance_criteria: Option<String>,
     #[arg(long, short, help = "Priority 1-4 (1=critical, 4=low)", default_value = "3")]
     pub priority: u8,
     #[arg(long, short, help = "Tags (comma-separated)")]
     pub tags: Option<String>,
-    #[arg(short = 'c', long = "criteria", help = "Acceptance criteria (repeatable)")]
-    pub acceptance_criteria: Vec<String>,
 }
 impl_mcp_tool!(TaskAddCommand, "b00t_task_add", ["task", "add"], positionals: ["title"]);
 

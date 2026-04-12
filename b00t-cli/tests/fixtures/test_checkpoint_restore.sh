@@ -22,8 +22,8 @@ cat > "${CHECKPOINT}" << 'JSON'
   "loop": 3,
   "tasks": {
     "tasks": [
-      {"id": 1, "title": "Test task A", "status": "pending"},
-      {"id": 2, "title": "Test task B", "status": "done"}
+      {"id": 1, "title": "Test task A", "status": "pending", "created_at": "2026-01-01T00:00:00Z"},
+      {"id": 2, "title": "Test task B", "status": "done", "created_at": "2026-01-01T00:05:00Z"}
     ]
   }
 }
@@ -32,7 +32,13 @@ JSON
 # ── Source b00t.sh in test mode to load functions only ────────────────────────
 # B00T_TEST_MODE=1 skips the main loop execution
 # B00T_STATE_DIR overrides STATE_DIR inside b00t.sh
-# Run from TMPDIR so .b00t/tasks.json lands there
+
+# shellcheck disable=SC1090
+B00T_TEST_MODE=1 B00T_STATE_DIR="${STATE_DIR}" \
+    bash -c "source '${REPO_ROOT}/b00t.sh'; restore_task_state" 2>/dev/null
+
+# Note: tasks.json path is relative to CWD inside b00t.sh's restore_task_state
+# We need to run from TMPDIR so .b00t/tasks.json lands there
 (
     cd "${TMPDIR}"
     B00T_TEST_MODE=1 B00T_STATE_DIR="${STATE_DIR}" \
