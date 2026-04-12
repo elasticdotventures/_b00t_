@@ -121,12 +121,12 @@ while [[ $# -gt 0 ]]; do
             _RALPH_AGENT="$2"
             shift 2
             ;;
-        [0-9]*)
-            _RALPH_ITERATIONS="$1"
-            shift
-            ;;
         *)
-            _RALPH_EXTRA+=("$1")
+            if [[ "$1" =~ ^[0-9]+$ ]]; then
+                _RALPH_ITERATIONS="$1"
+            else
+                _RALPH_EXTRA+=("$1")
+            fi
             shift
             ;;
     esac
