@@ -54,7 +54,7 @@ serde-wasm-bindgen = { version = "0.6", optional = true }
 
 [dev-dependencies]
 tracing-subscriber = "0.3"
-rand = "0.9"
+rand = "0.8"
 tempfile = "3.0"
 
 [features]

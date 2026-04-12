@@ -54,8 +54,6 @@ mod integration_tests;
 #[derive(Parser)]
 #[clap(version = b00t_c0re_lib::version::VERSION, about, long_about = None)]
 struct Cli {
-    #[clap(subcommand)]
-    command: Option<Commands>,
     #[clap(short, long, env = "_B00T_Path", default_value = "~/.b00t/_b00t_")]
     path: String,
     #[clap(
@@ -63,6 +61,8 @@ struct Cli {
         help = "Output structured markdown documentation about internal structures"
     )]
     doc: bool,
+    #[clap(subcommand)]
+    command: Option<Commands>,
 }
 
 #[derive(Parser)]
@@ -1848,6 +1848,28 @@ mod k0mmand3r_dispatch_tests {
         let input = args(&["b00t-cli", "--doc", "--path=/tmp", "/gh", "--version"]);
         let expected = args(&["b00t-cli", "--doc", "--path=/tmp", "k0mmand3r", "/gh", "--version"]);
         assert_eq!(normalize_slash_args(input), expected);
+    }
+
+    #[test]
+    fn cli_parse_accepts_path_before_subcommand() {
+        let cli = Cli::parse_from(args(&[
+            "b00t-cli",
+            "--path",
+            "/tmp/demo",
+            "uninstall",
+            "--yes",
+            "demo-datum",
+        ]));
+
+        assert_eq!(cli.path, "/tmp/demo");
+        match cli.command {
+            Some(Commands::Uninstall { name, yes, purge }) => {
+                assert_eq!(name, "demo-datum");
+                assert!(yes);
+                assert!(!purge);
+            }
+            _ => panic!("expected uninstall command"),
+        }
     }
 
     #[test]

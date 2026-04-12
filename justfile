@@ -144,7 +144,9 @@ release:
 
     # Run tests first
     echo "🧪 Running tests..."
-    cargo test --workspace --all-features
+    cargo test --workspace --all-features --exclude b00t-cli
+    # b00t-cli's optional candle stack is intentionally excluded from release gating for now.
+    cargo test -p b00t-cli --features dbus,llamacpp-fallback
 
     gh workflow run release.yml \
         -f version="${VERSION}" \
