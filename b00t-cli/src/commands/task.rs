@@ -130,14 +130,8 @@ fn save_store(store: &TaskStore) -> Result<()> {
 }
 
 fn now_iso() -> String {
-    // Simple ISO-8601 UTC via date command; avoids chrono dep
-    std::process::Command::new("date")
-        .args(["-u", "+%Y-%m-%dT%H:%M:%SZ"])
-        .output()
-        .ok()
-        .and_then(|o| String::from_utf8(o.stdout).ok())
-        .map(|s| s.trim().to_string())
-        .unwrap_or_else(|| "1970-01-01T00:00:00Z".to_string())
+    // Generate ISO-8601/RFC3339 UTC in-process to avoid shelling out to `date`.
+    chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Secs, true)
 }
 
 fn next_id(store: &TaskStore) -> u32 {
