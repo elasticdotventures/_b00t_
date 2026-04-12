@@ -286,15 +286,24 @@ pub fn handle_task_command(cmd: TaskCommands) -> Result<()> {
 }
 
 fn cmd_list(status_filter: Option<&str>, tag_filter: Option<&str>, json: bool) -> Result<()> {
+    enum StatusFilter {
+        Active,
+        All,
+        Exact(TaskStatus),
+    }
+
+    let status_filter = match status_filter {
+        None | Some("active") => StatusFilter::Active,
+        Some("all") => StatusFilter::All,
+        Some(s) => StatusFilter::Exact(<TaskStatus as std::str::FromStr>::from_str(s)?),
+    };
+
     let store = load_store()?;
     let tasks: Vec<&Task> = store.tasks.iter().filter(|t| {
-        let status_ok = match status_filter {
-            None | Some("active") => matches!(t.status, TaskStatus::Pending | TaskStatus::InProgress),
-            Some("all")      => true,
-            Some("done")     => matches!(t.status, TaskStatus::Done),
-            Some("pending")  => matches!(t.status, TaskStatus::Pending),
-            Some("blocked")  => matches!(t.status, TaskStatus::Blocked),
-            Some(s)          => t.status.to_string() == s,
+        let status_ok = match &status_filter {
+            StatusFilter::Active => matches!(t.status, TaskStatus::Pending | TaskStatus::InProgress),
+            StatusFilter::All => true,
+            StatusFilter::Exact(status) => &t.status == status,
         };
         let tag_ok = tag_filter.map_or(true, |f| t.tags.iter().any(|tg| tg == f));
         status_ok && tag_ok
@@ -306,7 +315,14 @@ fn cmd_list(status_filter: Option<&str>, tag_filter: Option<&str>, json: bool) -
     }
 
     if tasks.is_empty() {
-        println!("no tasks (filter: {})", status_filter.unwrap_or("active"));
+        println!(
+            "no tasks (filter: {})",
+            match status_filter {
+                StatusFilter::Active => "active",
+                StatusFilter::All => "all",
+                StatusFilter::Exact(_) => "custom",
+            }
+        );
         return Ok(());
     }
     for t in &tasks {
