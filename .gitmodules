@@ -25,9 +25,6 @@
 [submodule "node-ts.🦄/claude.🐳.old/awesome-claude-code-subagents"]
 	path = _b00t_/node-ts.🦄/claude.🐳.old/awesome-claude-code-subagents
 	url = https://github.com/VoltAgent/awesome-claude-code-subagents.git
-[submodule "_b00t_/ralph"]
-	path = _b00t_/ralph
-	url = https://github.com/PromptExecution/b00t-wiggums.git
 [submodule "just-mcp"]
 	path = just-mcp
 	url = https://github.com/PromptExecution/just-mcp
