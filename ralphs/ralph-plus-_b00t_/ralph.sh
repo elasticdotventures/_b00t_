@@ -355,17 +355,27 @@ checkpoint_task_state() {
 
     mkdir -p "${STATE_DIR}"
 
+    local tmp_checkpoint
+    tmp_checkpoint="$(mktemp "${STATE_DIR}/.tmp_checkpoint_XXXXXX")" || return 0
     if command -v jq >/dev/null 2>&1 && [[ -f "${tasks_file}" ]]; then
-        jq -nc \
+        if jq -nc \
             --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
             --argjson loop "${loop_num}" \
             --argjson tasks "$(cat "${tasks_file}")" \
             '{checkpoint_ts:$ts, loop:$loop, tasks:$tasks}' \
-            > "${TASK_STATE_CHECKPOINT}" 2>/dev/null || true
+            > "${tmp_checkpoint}" 2>/dev/null; then
+            mv "${tmp_checkpoint}" "${TASK_STATE_CHECKPOINT}"
+        else
+            rm -f "${tmp_checkpoint}"
+        fi
     else
-        printf '{"checkpoint_ts":"%s","loop":%s}\n' \
+        if printf '{"checkpoint_ts":"%s","loop":%s}\n' \
             "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "${loop_num}" \
-            > "${TASK_STATE_CHECKPOINT}" 2>/dev/null || true
+            > "${tmp_checkpoint}" 2>/dev/null; then
+            mv "${tmp_checkpoint}" "${TASK_STATE_CHECKPOINT}"
+        else
+            rm -f "${tmp_checkpoint}"
+        fi
     fi
 }
 
@@ -515,12 +525,15 @@ run_external_step() {
             fi
             ;;
         pi-sm0l)
-            # R2: sm0l tier — qwen2.5-3B on :8000 via pi (direct, no gateway)
-            # 🤓 SM0L_PORT=8000; SM0L_MODEL=sm0l; routed here by route_to_tier() keyword gate
+            # R2: sm0l tier — routed here by route_to_tier() keyword gate
+            # 🤓 Derive base URL + model from env (B00T_AI_SM0L_BASE / B00T_AI_SM0L_MODEL);
+            #    default port :8000 / model qwen3-coder matches inference-sm0l.hive.toml
             if command -v pi >/dev/null 2>&1; then
-                LLAMA_CPP_BASE_URL="http://127.0.0.1:8000/v1" \
+                local sm0l_base="${B00T_AI_SM0L_BASE:-http://127.0.0.1:8000/v1}"
+                local sm0l_model="${B00T_AI_SM0L_MODEL:-qwen3-coder}"
+                LLAMA_CPP_BASE_URL="${sm0l_base}" \
                 OPENAI_API_KEY="${PI_API_KEY}" \
-                pi -p --provider llama-cpp --model sm0l "${prompt}" 2>/dev/null || true
+                pi -p --provider llama-cpp --model "${sm0l_model}" "${prompt}" 2>/dev/null || true
             fi
             ;;
         *)
