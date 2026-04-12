@@ -16,6 +16,7 @@ import typer
 from dotenv import load_dotenv
 
 from .agent_service import AgentService
+from .b00t_tools import B00tToolset
 from .job_executor import JobExecutor
 from .k0mmand3r import K0mmand3rListener
 from .mcp_tools import MCPToolDiscovery
@@ -67,10 +68,13 @@ async def run_service(
         log.error(f"⚠️  MCP tool discovery failed: {e}")
         log.info("Continuing without MCP tools...")
 
+    native_tools = B00tToolset(Path(datum_path).expanduser()).build_tools()
+    log.info(f"✅ Loaded {len(native_tools)} native b00t tools")
+
     # Initialize Agent Service
     agent_service = AgentService(
         redis_client=redis_client,
-        mcp_tools=mcp_discovery.tools,
+        mcp_tools=[*mcp_discovery.tools, *native_tools],
         datum_path=Path(datum_path).expanduser(),
     )
     await agent_service.initialize()
@@ -148,7 +152,7 @@ def test_agent(
 
         service = AgentService(
             redis_client=None,  # type: ignore
-            mcp_tools=[],
+            mcp_tools=B00tToolset(Path(datum_path).expanduser()).build_tools(),
             datum_path=Path(datum_path).expanduser(),
         )
         await service.initialize()
@@ -180,9 +184,11 @@ def list_tools(
     async def run_list():
         discovery = MCPToolDiscovery(datum_path=Path(datum_path).expanduser())
         await discovery.initialize()
+        native_tools = B00tToolset(Path(datum_path).expanduser()).build_tools()
 
-        typer.echo(f"Found {len(discovery.tools)} MCP tools:\n")
-        for tool in discovery.tools:
+        all_tools = [*discovery.tools, *native_tools]
+        typer.echo(f"Found {len(all_tools)} tools:\n")
+        for tool in all_tools:
             typer.echo(f"  • {tool.name}: {tool.description}")
 
     asyncio.run(run_list())

@@ -9,6 +9,7 @@ skills = [
     "k0mmand3r-dispatch",
     "hive-cmdb-query",
     "one-pizza-team-enforcement",
+    "langchain-tool-routing",
 ]
 
 compliance = [
@@ -16,16 +17,19 @@ compliance = [
     "Route by cognitive tier: sm0l < ch0nky < frontier",
     "Never use frontier model for tasks sm0l/ch0nky can handle",
     "Assimilate new MCP patterns via b00t grok assimilate",
+    "Prefer explicit operator tools/scripts over ad hoc shell dispatch",
 ]
 
 entangled_agents = [
     "pi.agent",
     "moltis.agent",
+    "langchain-operator.agent",
 ]
 
 entangled_cli = [
     "b00t.cli",
     "just.cli",
+    "langchain-agent-pm2.cli",
 ]
 
 entangled_mcp = [
@@ -34,7 +38,7 @@ entangled_mcp = [
     "github.mcp",
 ]
 
-keywords = ["role", "operator", "mcp", "crew", "dispatch", "assimilation"]
+keywords = ["role", "operator", "mcp", "crew", "dispatch", "assimilation", "langchain"]
 
 [b00t.agent_hooks]
 events = [

@@ -1,8 +1,9 @@
 """Tests for Agent Service."""
 
-import pytest
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import MagicMock
+
+import pytest
 
 from b00t_langchain_agent.agent_service import AgentService
 from b00t_langchain_agent.types import AgentConfig
@@ -86,6 +87,76 @@ async def test_agent_service_create_agent():
             pytest.skip("ANTHROPIC_API_KEY not configured")
         else:
             raise
+
+
+@pytest.mark.asyncio
+async def test_agent_service_loads_operator_fields(tmp_path: Path):
+    """Operator config should load decision-tree and script metadata."""
+    (tmp_path / "langchain.ai.toml").write_text(
+        """
+[b00t]
+name = "langchain"
+type = "ai"
+
+[langchain.agents.operator]
+model = "anthropic/claude-sonnet-4"
+tools = ["b00t_stack_control"]
+middleware = ["summarization"]
+system_prompt = "route safely"
+decision_tree = "operator-decision-tree.tomllm"
+bootstrap_script = "scripts/operator-agent.rhai"
+""".strip()
+    )
+
+    service = AgentService(
+        redis_client=None,
+        mcp_tools=[],
+        datum_path=tmp_path,
+    )
+
+    await service.initialize()
+
+    config = service.agent_configs["operator"]
+    assert config.decision_tree == "operator-decision-tree.tomllm"
+    assert config.bootstrap_script == "scripts/operator-agent.rhai"
+
+
+def test_build_system_prompt_includes_operator_context(tmp_path: Path):
+    """Operator prompt should include decision-tree and script context."""
+    (tmp_path / "operator-decision-tree.tomllm").write_text(
+        """
+[b00t]
+name = "operator-decision-tree"
+
+[[decision_tree.rules]]
+name = "inspect-hive"
+match_any = ["hive status"]
+action = "hive.status"
+tool = "b00t_hive_status"
+script = "operator-agent"
+notes = "inspect state"
+""".strip()
+    )
+
+    service = AgentService(
+        redis_client=None,
+        mcp_tools=[],
+        datum_path=tmp_path,
+    )
+    config = AgentConfig(
+        name="operator",
+        model="anthropic/claude-sonnet-4",
+        tools=["b00t_hive_status"],
+        system_prompt="base prompt",
+        decision_tree="operator-decision-tree.tomllm",
+        bootstrap_script="scripts/operator-agent.rhai",
+    )
+
+    prompt = service._build_system_prompt(config)
+
+    assert "base prompt" in prompt
+    assert "Operator decision tree:" in prompt
+    assert "operator-agent.rhai" in prompt
 
 
 @pytest.mark.asyncio

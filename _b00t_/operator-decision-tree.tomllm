@@ -1,0 +1,55 @@
+[b00t]
+name = "operator-decision-tree"
+hint = "Routing policy for the LangChain operator agent."
+
+[[decision_tree.rules]]
+name = "stack-activate"
+match_any = ["start stack", "activate stack", "bring up stack", "start profile", "activate profile"]
+action = "stack.activate"
+tool = "b00t_stack_control"
+script = "operator-agent"
+requires_confirmation = false
+notes = "Use for dev/ops bring-up requests that name a stack or hive profile."
+
+[[decision_tree.rules]]
+name = "stack-deactivate"
+match_any = ["stop stack", "deactivate stack", "shut down stack", "stop profile", "deactivate profile"]
+action = "stack.deactivate"
+tool = "b00t_stack_control"
+script = "operator-agent"
+requires_confirmation = false
+notes = "Use for controlled teardown of a named stack/profile."
+
+[[decision_tree.rules]]
+name = "inspect-hive"
+match_any = ["hive status", "resource status", "gpu status", "cmdb status"]
+action = "hive.status"
+tool = "b00t_hive_status"
+script = "operator-agent"
+requires_confirmation = false
+notes = "Read current system state before dispatching heavier work."
+
+[[decision_tree.rules]]
+name = "capture-bug"
+match_any = ["track bug", "log bug", "queue bug", "add task", "record task"]
+action = "task.capture"
+tool = "b00t_task_capture"
+script = "operator-agent"
+requires_confirmation = false
+notes = "Persist bugs and follow-on work in the native b00t task queue."
+
+[[decision_tree.rules]]
+name = "fallback-script"
+match_any = ["run script", "execute script", "operator script"]
+action = "script.run"
+tool = "b00t_operator_script"
+script = "operator-agent"
+requires_confirmation = false
+notes = "Fallback path when the request should be delegated to the internal operator script."
+
+# b00t:map v1
+# summary: decision tree for langchain operator routing
+# tags: operator, decision-tree, stack, hive, task, script
+# tier: ch0nky
+# cmds: b00t script run operator-agent
+# complexity: 4

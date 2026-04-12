@@ -10,13 +10,14 @@ import tomllib
 from pathlib import Path
 from typing import Any
 
+from langchain.agents import create_agent
 from langchain_anthropic import ChatAnthropic
 from langchain_core.messages import HumanMessage
 from langchain_core.runnables import RunnableConfig
 from langchain_core.tools import BaseTool
-from langgraph.prebuilt import create_react_agent
 from redis.asyncio import Redis
 
+from .b00t_tools import B00tToolset
 from .types import AgentConfig, AgentResult, ChainConfig
 
 log = logging.getLogger(__name__)
@@ -49,6 +50,7 @@ class AgentService:
 
         # Active agents (cached)
         self.agents: dict[str, Any] = {}
+        self.native_toolset = B00tToolset(datum_path)
 
     async def initialize(self) -> None:
         """Load agent and chain configurations from datum."""
@@ -77,6 +79,8 @@ class AgentService:
                     max_iterations=agent_data.get("max_iterations", 10),
                     timeout_seconds=agent_data.get("timeout_seconds", 300),
                     peer_agents=agent_data.get("peer_agents", []),
+                    decision_tree=agent_data.get("decision_tree"),
+                    bootstrap_script=agent_data.get("bootstrap_script"),
                 )
                 self.agent_configs[agent_name] = config
                 log.info(f"  ✅ Loaded agent config: {agent_name}")
@@ -143,12 +147,11 @@ class AgentService:
         # Get tools for this agent
         agent_tools = self._get_tools_for_agent(config)
 
-        # Create agent using LangGraph prebuilt
-        # 🤓: LangChain v1.0 recommendation is to use langgraph.prebuilt.create_react_agent
-        agent = create_react_agent(
-            llm,
-            agent_tools,
-            prompt=config.system_prompt,  # System prompt
+        # LangChain v1 uses `create_agent`; keep the service on the non-deprecated path.
+        agent = create_agent(
+            model=llm,
+            tools=agent_tools,
+            system_prompt=self._build_system_prompt(config),
         )
 
         # Cache agent
@@ -178,6 +181,23 @@ class AgentService:
             log.warning(f"⚠️  No tools found for agent {config.name}")
 
         return tools
+
+    def _build_system_prompt(self, config: AgentConfig) -> str:
+        """Compose prompt with operator-specific routing context."""
+        sections = [config.system_prompt.strip()]
+
+        if config.decision_tree:
+            tree_path = self.datum_path / config.decision_tree
+            if tree_path.exists():
+                sections.append(self.native_toolset.prompt_context())
+
+        if config.bootstrap_script:
+            sections.append(
+                "Internal operator script is available via `b00t_operator_script` "
+                f"and resolves to `{config.bootstrap_script}`."
+            )
+
+        return "\n\n".join(section for section in sections if section)
 
     async def run_agent(
         self,
