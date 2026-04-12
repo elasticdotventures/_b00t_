@@ -141,11 +141,10 @@ def _run_subprocess(
                     process.stdin.close()
 
         # Stream output from child, teeing to stderr and accumulating
+        # tee_stream.write() already mirrors to sys.stderr; no extra write needed
         if process.stdout is not None:
             for line in process.stdout:
                 tee_stream.write(line)
-                sys.stderr.write(line)
-                sys.stderr.flush()
 
         returncode = process.wait()
 

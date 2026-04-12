@@ -223,8 +223,13 @@ def main(argv: list[str] | None = None) -> int:
                 codex_args.extend(shlex.split(codex_extra_args))
             codex_args.append("@ralph-next")
             output = _run_and_capture(codex_args)
+        elif args.agent == "opencode":
+            output = _run_and_capture(
+                ["opencode"],
+                stdin_path=root / "prompt.md",
+            )
         else:
-            # Keep behavior consistent across agents: _run_and_capture already streams output.
+            # claude: _run_and_capture already streams output.
             output = _run_and_capture(
                 [
                     "claude",
@@ -296,10 +301,10 @@ def get_ralph_status() -> dict[str, Any]:
 
 @mcp.tool()
 def get_task_status() -> dict[str, Any]:
-    """Get TaskMaster completion status via taskmaster CLI."""
+    """Get TaskMaster completion status via task-master CLI."""
     try:
         result = subprocess.run(
-            ["taskmaster", "list", "--format", "json"],
+            ["task-master", "list", "--format", "json"],
             capture_output=True,
             text=True,
             check=True,
@@ -321,26 +326,26 @@ def get_task_status() -> dict[str, Any]:
             "completion_percentage": round((completed / total) * 100, 1) if total > 0 else 0,
         }
     except subprocess.CalledProcessError as e:
-        return {"status": "error", "message": f"taskmaster CLI error: {e}"}
+        return {"status": "error", "message": f"task-master CLI error: {e}"}
     except FileNotFoundError:
-        return {"status": "error", "message": "taskmaster CLI not found. Install taskmaster-ai first."}
+        return {"status": "error", "message": "task-master CLI not found. Install taskmaster-ai first."}
 
 
 @mcp.resource("ralph://tasks")
 def get_tasks_resource() -> str:
-    """Get current tasks via taskmaster CLI (not direct file access)."""
+    """Get current tasks via task-master CLI (not direct file access)."""
     try:
         result = subprocess.run(
-            ["taskmaster", "list", "--format", "json"],
+            ["task-master", "list", "--format", "json"],
             capture_output=True,
             text=True,
             check=True,
         )
         return result.stdout
     except subprocess.CalledProcessError:
-        return json.dumps({"error": "Failed to fetch tasks from taskmaster"})
+        return json.dumps({"error": "Failed to fetch tasks from task-master"})
     except FileNotFoundError:
-        return json.dumps({"error": "taskmaster CLI not found"})
+        return json.dumps({"error": "task-master CLI not found"})
 
 
 @mcp.resource("ralph://progress")

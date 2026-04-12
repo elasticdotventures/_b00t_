@@ -41,5 +41,4 @@ __pycache__/
 *.swp
 
 # UV/temporary artifacts
-=3.0.0b1
 .uv-cache/

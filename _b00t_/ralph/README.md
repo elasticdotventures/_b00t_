@@ -5,7 +5,7 @@ Each iteration runs in a fresh agent context until all tasks are done or max ite
 
 Operational details (CLI, MCP mode, and config) live in `OPERATIONS.md`.
 
-Repository: [PromptExecution/b00t-wiggums](https://github.com/PromptExecution/b00t-wiggums)
+Source lives in this repository at `_b00t_/ralph/`.
 
 ## Prerequisites
 
@@ -14,11 +14,11 @@ Repository: [PromptExecution/b00t-wiggums](https://github.com/PromptExecution/b0
 - One agent CLI installed/authenticated (`amp`, `claude`, `codex`, or `opencode`)
 - A git repository for your project
 
-## Install b00t-wiggums
+## Install Ralph
+
+Ralph ships as part of this repository. From the `_b00t_/ralph/` directory:
 
 ```bash
-git clone https://github.com/PromptExecution/b00t-wiggums.git
-cd b00t-wiggums
 uv sync
 ```
 
@@ -122,9 +122,9 @@ uv run ralph list-tasks --filter pending
 Run Ralph as an MCP server:
 
 ```bash
-uv run ralph --mcp --transport stdio
+uv run --script ralphython.py --mcp --transport stdio
 # or HTTP:
-uv run ralph --mcp --transport http --host 127.0.0.1 --port 8000
+uv run --script ralphython.py --mcp --transport http --host 127.0.0.1 --port 8000
 ```
 
 ## Key Files
@@ -148,4 +148,4 @@ npm install
 npm run dev
 ```
 
-Project home: [PromptExecution/b00t-wiggums](https://github.com/PromptExecution/b00t-wiggums)
+Project home: `_b00t_/ralph/` in the [elasticdotventures/_b00t_](https://github.com/elasticdotventures/_b00t_) repository.

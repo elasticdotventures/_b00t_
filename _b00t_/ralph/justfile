@@ -58,8 +58,8 @@ ralph-dry-run TOOL='amp' ITERATIONS='10':
 
 # Run ralph as MCP server (stdio transport)
 ralph-mcp:
-    uv run ralph --mcp
+    uv run --script ralphython.py --mcp
 
 # Run ralph as MCP server (HTTP transport)
 ralph-mcp-http PORT='8000':
-    uv run ralph --mcp --transport http --port {{PORT}}
+    uv run --script ralphython.py --mcp --transport http --port {{PORT}}

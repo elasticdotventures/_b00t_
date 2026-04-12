@@ -56,28 +56,28 @@ Requirements for generated tasks:
 
 ## Running Ralph (CLI)
 
-Preferred (uses the packaged entrypoint):
+Preferred (uses the packaged subcommand entrypoint):
 
 ```bash
-uv run ralph --agent codex 3
-uv run ralph --agent amp 10
-uv run ralph --agent claude 5
+uv run ralph run --tool codex --max-iterations 3
+uv run ralph run --tool amp --max-iterations 10
+uv run ralph run --tool claude --max-iterations 5
 ```
 
-Wrapper (runs preflight + delegates to `uv run ralph ...`):
+Wrapper (runs preflight + translates legacy flags, then delegates to `uv run ralph run --tool ...`):
 
 ```bash
 ./ralph.sh --agent codex 3
 ```
 
-Script entrypoint (equivalent behavior):
+Script entrypoint (legacy `--agent` syntax via `entrypoint.py`):
 
 ```bash
 uv run --script ralphython.py --agent codex 3
 ```
 
 Notes:
-- `--agent` is required (unless using `--mcp`)
+- `--tool` is required for `ralph run` (default: amp)
 - default iterations is 10
 
 ## Running Ralph (MCP Server)
@@ -85,13 +85,13 @@ Notes:
 stdio:
 
 ```bash
-uv run ralph --mcp --transport stdio
+uv run --script ralphython.py --mcp --transport stdio
 ```
 
 http:
 
 ```bash
-uv run ralph --mcp --transport http --host 127.0.0.1 --port 8000
+uv run --script ralphython.py --mcp --transport http --host 127.0.0.1 --port 8000
 ```
 
 MCP tools/resources (current):

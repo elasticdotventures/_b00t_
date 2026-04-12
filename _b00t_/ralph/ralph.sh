@@ -110,4 +110,34 @@ fi
 info "Initialization complete, starting Ralph runtime..."
 echo ""
 
-exec uv run ralph "$@"
+# Translate legacy --agent X [N] wrapper flags to subcommand CLI syntax.
+# ./ralph.sh --agent codex 5  →  uv run ralph run --tool codex --max-iterations 5
+_RALPH_AGENT=""
+_RALPH_ITERATIONS=""
+_RALPH_EXTRA=()
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --agent)
+            _RALPH_AGENT="$2"
+            shift 2
+            ;;
+        [0-9]*)
+            _RALPH_ITERATIONS="$1"
+            shift
+            ;;
+        *)
+            _RALPH_EXTRA+=("$1")
+            shift
+            ;;
+    esac
+done
+
+if [[ -n "$_RALPH_AGENT" ]]; then
+    _RALPH_CMD=(run --tool "$_RALPH_AGENT")
+    [[ -n "$_RALPH_ITERATIONS" ]] && _RALPH_CMD+=(--max-iterations "$_RALPH_ITERATIONS")
+    _RALPH_CMD+=("${_RALPH_EXTRA[@]}")
+else
+    _RALPH_CMD=("${_RALPH_EXTRA[@]}")
+fi
+
+exec uv run ralph "${_RALPH_CMD[@]}"
