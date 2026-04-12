@@ -15,17 +15,18 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::{Context, Result};
-use azure_core::credentials::TokenCredential;
+use azure_core::auth::TokenCredential;
 use azure_data_tables::clients::TableServiceClient;
-use azure_identity::ManagedIdentityCredential;
+use azure_identity::AppServiceManagedIdentityCredential;
 use axum::{Json, Router, extract::Request, http::{StatusCode, header}, middleware, response::{IntoResponse, Response}};
 use chrono::{DateTime, Utc};
-use rmcp::model::{ServerCapabilities, ServerInfo};
+use rmcp::model::{CallToolResult, Content, ServerCapabilities, ServerInfo};
 use rmcp::schemars::JsonSchema;
 use rmcp::transport::streamable_http_server::{
     StreamableHttpServerConfig, StreamableHttpService, session::local::LocalSessionManager,
 };
-use rmcp::{tool, tool_box, Error as McpError, ServerHandler};
+use rmcp::handler::server::{tool::ToolRouter, wrapper::Parameters};
+use rmcp::{tool, tool_handler, tool_router, ErrorData as McpError, ServerHandler};
 use serde::{Deserialize, Serialize};
 use tokio::net::TcpListener;
 use tokio::time;
@@ -168,7 +169,10 @@ async fn upsert_lease(
 ) -> Result<()> {
     let table_client = client.table_client(&config.table_name);
     table_client
-        .insert_or_replace_entity(entity)
+        .partition_key_client(&entity.partition_key)
+        .entity_client(&entity.row_key)
+        .insert_or_replace(entity)
+        .context("failed to serialize lease entity")?
         .await
         .context("failed to upsert lease entity")?;
     Ok(())
@@ -177,7 +181,8 @@ async fn upsert_lease(
 async fn delete_lease(client: &TableServiceClient, config: &Config, lease_id: &str) -> Result<()> {
     let table_client = client.table_client(&config.table_name);
     table_client
-        .entity_client(&config.node_id, lease_id)
+        .partition_key_client(&config.node_id)
+        .entity_client(lease_id)
         .delete()
         .await
         .context("failed to delete lease entity")?;
@@ -189,11 +194,11 @@ async fn list_leases_from_table(
     config: &Config,
 ) -> Result<Vec<LeaseEntity>> {
     let table_client = client.table_client(&config.table_name);
-    let filter = format!("PartitionKey eq '{}'", config.node_id);
+    let filter = azure_data_tables::Filter::new(format!("PartitionKey eq '{}'", config.node_id));
     let mut entities: Vec<LeaseEntity> = Vec::new();
     let mut stream = table_client
         .query()
-        .filter(&filter)
+        .filter(filter)
         .into_stream::<LeaseEntity>();
     use futures::StreamExt;
     while let Some(page) = stream.next().await {
@@ -219,24 +224,22 @@ async fn provision_aci_resource(
 
     // Extract subscription ID from the resource group ID env var.
     // Format: /subscriptions/{sub}/resourceGroups/{rg}
-    let subscription_id = config.subscription_id();
+    let subscription_id = config.subscription_id.clone();
 
-    let aci_client = azure_mgmt_containerinstance::Client::new(
-        format!("https://management.azure.com"),
-        _credential,
-        azure_mgmt_containerinstance::ClientOptions::default(),
-    );
+    let aci_client = azure_mgmt_containerinstance::ClientBuilder::new(_credential)
+        .endpoint(azure_core::Url::parse("https://management.azure.com").unwrap())
+        .build()
+        .context("failed to build ACI client")?;
 
     use azure_mgmt_containerinstance::models::{
-        Container, ContainerGroup, ContainerGroupIpAddress, ContainerGroupProperties,
-        ContainerGroupSubnetId, ContainerPort, ContainerProperties, GpuResource, GpuSku,
-        ImageRegistryCredential, IpAddressType, OperatingSystemTypes, Port, ResourceRequests,
-        ResourceRequirements,
+        Container, ContainerGroup, ContainerGroupProperties, ContainerPort, ContainerProperties,
+        GpuResource, IpAddress, Port, ResourceRequests, ResourceRequirements,
+        container_group_properties, gpu_resource, ip_address,
     };
 
     let mut container_props = ContainerProperties {
-        image: input.image.clone(),
-        resources: ResourceRequirements {
+        image: Some(input.image.clone()),
+        resources: Some(ResourceRequirements {
             requests: ResourceRequests {
                 cpu: input.cpu,
                 memory_in_gb: input.memory_gb,
@@ -244,9 +247,9 @@ async fn provision_aci_resource(
                     Some(GpuResource {
                         count: input.gpu_count as i32,
                         sku: match input.gpu_sku.as_deref().unwrap_or("V100") {
-                            "K80" => GpuSku::K80,
-                            "P100" => GpuSku::P100,
-                            _ => GpuSku::V100,
+                            "K80" => gpu_resource::Sku::K80,
+                            "P100" => gpu_resource::Sku::P100,
+                            _ => gpu_resource::Sku::V100,
                         },
                     })
                 } else {
@@ -254,37 +257,35 @@ async fn provision_aci_resource(
                 },
             },
             limits: None,
-        },
-        ports: Some(vec![ContainerPort {
+        }),
+        ports: vec![ContainerPort {
             port: input.port as i32,
             protocol: None,
-        }]),
+        }],
         ..Default::default()
     };
 
-    let container_group = ContainerGroup {
-        location: Some(config.location.clone()),
-        properties: Some(ContainerGroupProperties {
-            containers: vec![Container {
-                name: group_name.clone(),
-                properties: container_props,
-            }],
-            os_type: OperatingSystemTypes::Linux,
-            ip_address: Some(ContainerGroupIpAddress {
-                r#type: IpAddressType::Public,
-                ports: vec![Port {
-                    port: input.port as i32,
-                    protocol: None,
-                }],
-                ip: None,
-                dns_name_label: Some(group_name.clone()),
-                fqdn: None,
-                auto_generated_domain_name_label_scope: None,
-            }),
-            ..Default::default()
-        }),
-        ..Default::default()
-    };
+    let mut cg_props = container_group_properties::Properties::new(
+        vec![Container {
+            name: group_name.clone(),
+            properties: container_props,
+        }],
+    );
+    cg_props.os_type = Some(container_group_properties::properties::OsType::Linux);
+    cg_props.ip_address = Some(IpAddress {
+        type_: ip_address::Type::Public,
+        ports: vec![Port {
+            port: input.port as i32,
+            protocol: None,
+        }],
+        ip: None,
+        dns_name_label: Some(group_name.clone()),
+        auto_generated_domain_name_label_scope: None,
+        fqdn: None,
+    });
+
+    let mut container_group = ContainerGroup::new(ContainerGroupProperties::new(cg_props));
+    container_group.resource.location = Some(config.location.clone());
 
     let created = aci_client
         .container_groups_client()
@@ -300,9 +301,10 @@ async fn provision_aci_resource(
     // Prefer the FQDN returned by ACI (authoritative); fall back to the
     // deterministic pattern if the API response does not include it yet.
     let endpoint_url = created
+        .container_group_properties
         .properties
+        .ip_address
         .as_ref()
-        .and_then(|p| p.ip_address.as_ref())
         .and_then(|ip| ip.fqdn.as_deref())
         .map(|fqdn| format!("http://{}:{}", fqdn, input.port))
         .unwrap_or_else(|| {
@@ -321,13 +323,12 @@ async fn deprovision_aci_resource(
     credential: Arc<dyn TokenCredential>,
     resource_id: &str,
 ) -> Result<()> {
-    let subscription_id = &config.subscription_id;
+    let subscription_id = config.subscription_id.clone();
 
-    let aci_client = azure_mgmt_containerinstance::Client::new(
-        "https://management.azure.com",
-        credential,
-        azure_mgmt_containerinstance::ClientOptions::default(),
-    );
+    let aci_client = azure_mgmt_containerinstance::ClientBuilder::new(credential)
+        .endpoint(azure_core::Url::parse("https://management.azure.com").unwrap())
+        .build()
+        .context("failed to build ACI client")?;
 
     // resource_id is the container group name (stored in lease entity).
     aci_client
@@ -398,14 +399,16 @@ struct AzureCpServer {
     credential: Arc<dyn TokenCredential>,
     /// Shared HTTP client with connect/request timeouts for Cost Management queries.
     http_client: reqwest::Client,
+    tool_router: ToolRouter<AzureCpServer>,
 }
 
-#[tool_box]
+#[tool_router]
 impl AzureCpServer {
     /// Spin up an ACI container on demand. Returns endpoint_url and lease_id.
     /// The lease expires after the configured TTL unless renewed via heartbeat.
     #[tool(name = "azure.provision_aci")]
-    async fn provision_aci(&self, input: ProvisionAciInput) -> Result<serde_json::Value, McpError> {
+    async fn provision_aci(&self, input: Parameters<ProvisionAciInput>) -> Result<CallToolResult, McpError> {
+        let input = input.0;
         let lease_id = Uuid::new_v4().to_string();
         let ttl = input
             .lease_ttl_minutes
@@ -440,21 +443,23 @@ impl AzureCpServer {
             .await
             .map_err(|e| McpError::internal_error(e.to_string(), None))?;
 
-        Ok(serde_json::json!({
+        {let _mjson = serde_json::json!({
             "lease_id": lease_id,
             "endpoint_url": endpoint_url,
             "expires_at": expires_at.to_rfc3339(),
             "ttl_minutes": ttl,
-        }))
+        }); Ok(CallToolResult::success(vec![Content::json(_mjson).map_err(|e| McpError::internal_error(e.to_string(), None))?]))}
     }
 
     /// Tear down a provisioned resource immediately by lease_id.
     #[tool(name = "azure.deprovision")]
-    async fn deprovision(&self, input: DeprovisionInput) -> Result<serde_json::Value, McpError> {
+    async fn deprovision(&self, input: Parameters<DeprovisionInput>) -> Result<CallToolResult, McpError> {
+        let input = input.0;
         // Look up the lease to get the resource_id.
         let table_client = self.table_client.table_client(&self.config.table_name);
         let entity: LeaseEntity = table_client
-            .entity_client(&self.config.node_id, &input.lease_id)
+            .partition_key_client(&self.config.node_id)
+            .entity_client(&input.lease_id)
             .get()
             .await
             .map_err(|e| McpError::invalid_request(format!("lease not found or inaccessible: {e}"), None))?
@@ -472,18 +477,20 @@ impl AzureCpServer {
             .await
             .map_err(|e| McpError::internal_error(e.to_string(), None))?;
 
-        Ok(serde_json::json!({
+        {let _mjson = serde_json::json!({
             "lease_id": input.lease_id,
             "status": "deprovisioned",
-        }))
+        }); Ok(CallToolResult::success(vec![Content::json(_mjson).map_err(|e| McpError::internal_error(e.to_string(), None))?]))}
     }
 
     /// Renew a lease TTL. Call periodically to keep resources alive past the default TTL.
     #[tool(name = "azure.heartbeat")]
-    async fn heartbeat(&self, input: HeartbeatInput) -> Result<serde_json::Value, McpError> {
+    async fn heartbeat(&self, input: Parameters<HeartbeatInput>) -> Result<CallToolResult, McpError> {
+        let input = input.0;
         let table_client = self.table_client.table_client(&self.config.table_name);
         let mut entity: LeaseEntity = table_client
-            .entity_client(&self.config.node_id, &input.lease_id)
+            .partition_key_client(&self.config.node_id)
+            .entity_client(&input.lease_id)
             .get()
             .await
             .map_err(|e| McpError::internal_error(format!("lease not found: {e}"), None))?
@@ -499,16 +506,16 @@ impl AzureCpServer {
             .await
             .map_err(|e| McpError::internal_error(e.to_string(), None))?;
 
-        Ok(serde_json::json!({
+        {let _mjson = serde_json::json!({
             "lease_id": input.lease_id,
             "new_expires_at": new_expires.to_rfc3339(),
             "ttl_minutes": ttl,
-        }))
+        }); Ok(CallToolResult::success(vec![Content::json(_mjson).map_err(|e| McpError::internal_error(e.to_string(), None))?]))}
     }
 
     /// List all active leases with endpoint URLs, TTLs, and resource identifiers.
     #[tool(name = "azure.list_leases")]
-    async fn list_leases(&self) -> Result<serde_json::Value, McpError> {
+    async fn list_leases(&self) -> Result<CallToolResult, McpError> {
         let leases = list_leases_from_table(&self.table_client, &self.config)
             .await
             .map_err(|e| McpError::internal_error(e.to_string(), None))?;
@@ -532,17 +539,17 @@ impl AzureCpServer {
             })
             .collect();
 
-        Ok(serde_json::json!({
+        {let _mjson = serde_json::json!({
             "node_id": self.config.node_id,
             "lease_count": items.len(),
             "leases": items,
-        }))
+        }); Ok(CallToolResult::success(vec![Content::json(_mjson).map_err(|e| McpError::internal_error(e.to_string(), None))?]))}
     }
 
     /// Estimated current-month Azure spend for the control plane resource group.
     /// Requires Cost Management Reader on the resource group.
     #[tool(name = "azure.cost_estimate")]
-    async fn cost_estimate(&self) -> Result<serde_json::Value, McpError> {
+    async fn cost_estimate(&self) -> Result<CallToolResult, McpError> {
         // Use the Azure Cost Management REST API via azure_core.
         let subscription_id = &self.config.subscription_id;
 
@@ -588,29 +595,34 @@ impl AzureCpServer {
                 .json()
                 .await
                 .map_err(|e| McpError::internal_error(e.to_string(), None))?;
-            Ok(serde_json::json!({
+            {let _mjson = serde_json::json!({
                 "resource_group": self.config.resource_group,
                 "timeframe": "MonthToDate",
                 "data": data,
-            }))
+            }); Ok(CallToolResult::success(vec![Content::json(_mjson).map_err(|e| McpError::internal_error(e.to_string(), None))?]))}
         } else {
             let status = resp.status();
             let text = resp.text().await.unwrap_or_default();
-            Ok(serde_json::json!({
+            {let _mjson = serde_json::json!({
                 "resource_group": self.config.resource_group,
                 "error": format!("HTTP {}: {}", status, text),
                 "note": "Cost Management Reader role required on the resource group.",
-            }))
+            }); Ok(CallToolResult::success(vec![Content::json(_mjson).map_err(|e| McpError::internal_error(e.to_string(), None))?]))}
         }
     }
 }
 
-#[tool_box]
+#[tool_handler]
 impl ServerHandler for AzureCpServer {
     fn get_info(&self) -> ServerInfo {
         ServerInfo {
-            name: "b00t-azure-cp".into(),
-            version: env!("CARGO_PKG_VERSION").into(),
+            server_info: rmcp::model::Implementation {
+                name: "b00t-azure-cp".into(),
+                version: env!("CARGO_PKG_VERSION").into(),
+                title: None,
+                icons: None,
+                website_url: None,
+            },
             capabilities: ServerCapabilities::builder()
                 .enable_tools()
                 .build(),
@@ -635,9 +647,10 @@ async fn main() -> Result<()> {
     let config = Config::from_env().context("failed to load config from environment")?;
     info!(node_id = %config.node_id, "b00t-azure-cp starting");
 
-    // Use managed identity (UserAssigned) when running in ACA.
+    // Use managed identity when running in ACA.
+    // AZURE_CLIENT_ID env var controls user-assigned identity selection at runtime.
     let credential: Arc<dyn TokenCredential> = Arc::new(
-        ManagedIdentityCredential::new(Some(config.client_id.clone()))
+        AppServiceManagedIdentityCredential::create(azure_identity::TokenCredentialOptions::default())
             .context("failed to build managed identity credential")?,
     );
 
@@ -666,6 +679,7 @@ async fn main() -> Result<()> {
             .timeout(Duration::from_secs(30))
             .build()
             .context("failed to build HTTP client")?,
+        tool_router: AzureCpServer::tool_router(),
     };
 
     let port: u16 = env::var("PORT")
@@ -689,7 +703,7 @@ async fn main() -> Result<()> {
         let s = server.clone();
         StreamableHttpService::new(
             move || Ok(s.clone()),
-            LocalSessionManager::default(),
+            Arc::new(LocalSessionManager::default()),
             StreamableHttpServerConfig::default(),
         )
     };
