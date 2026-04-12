@@ -6,13 +6,25 @@ use std::sync::Mutex;
 
 static CARGO_LOCK: Mutex<()> = Mutex::new(());
 
-const REPO_ROOT: &str = "/home/brianh/.b00t";
+fn repo_root() -> String {
+    if let Ok(r) = std::env::var("_B00T_TEST_ROOT") {
+        return r;
+    }
+    // CARGO_MANIFEST_DIR is b00t-cli/ — parent is repo root
+    let manifest = std::env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR not set");
+    std::path::Path::new(&manifest)
+        .parent()
+        .expect("CARGO_MANIFEST_DIR has no parent")
+        .to_string_lossy()
+        .into_owned()
+}
 
 // ── H2-a: checkpoint restore fixture exits 0 (PASS) ──────────────────────────
 #[test]
 fn test_checkpoint_restore_passes() {
     let _lock = CARGO_LOCK.lock().unwrap();
-    let fixture = format!("{REPO_ROOT}/b00t-cli/tests/fixtures/test_checkpoint_restore.sh");
+    let root = repo_root();
+    let fixture = format!("{root}/b00t-cli/tests/fixtures/test_checkpoint_restore.sh");
 
     let output = Command::new("bash")
         .arg(&fixture)
@@ -37,7 +49,8 @@ fn test_checkpoint_restore_passes() {
 #[test]
 fn test_b00t_test_mode_skips_loop() {
     // Verify B00T_TEST_MODE=1 causes b00t.sh to exit 0 without running the main loop
-    let b00t_sh = format!("{REPO_ROOT}/b00t.sh");
+    let root = repo_root();
+    let b00t_sh = format!("{root}/b00t.sh");
 
     let output = Command::new("bash")
         .arg("-c")

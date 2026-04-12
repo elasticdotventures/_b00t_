@@ -312,6 +312,7 @@ fn cmd_list(status_filter: Option<&str>, tag_filter: Option<&str>, json: bool) -
 }
 
 fn cmd_add(title: String, description: Option<String>, priority: u8, tags_raw: Option<String>, criteria: Vec<String>) -> Result<()> {
+    anyhow::ensure!(priority >= 1 && priority <= 4, "priority must be 1–4 (got {priority})");
     let mut store = load_store()?;
     let id = next_id(&store);
     let tags = tags_raw.map(|t| t.split(',').map(str::trim).map(str::to_string).collect()).unwrap_or_default();
@@ -400,6 +401,9 @@ fn cmd_done(id: u32) -> Result<()> {
 }
 
 fn cmd_update(id: u32, status: Option<String>, title: Option<String>, note: Option<String>, priority: Option<u8>) -> Result<()> {
+    if let Some(p) = priority {
+        anyhow::ensure!(p >= 1 && p <= 4, "priority must be 1–4 (got {p})");
+    }
     let mut store = load_store()?;
     let task = store.tasks.iter_mut().find(|t| t.id == id)
         .with_context(|| format!("task #{id} not found"))?;
