@@ -648,7 +648,18 @@ async fn main() -> Result<()> {
     info!(node_id = %config.node_id, "b00t-azure-cp starting");
 
     // Use managed identity when running in ACA.
-    // AZURE_CLIENT_ID env var controls user-assigned identity selection at runtime.
+    // AZURE_CLIENT_ID is optional: when present, the Azure SDK selects a
+    // user-assigned identity; when absent, it falls back to system-assigned.
+    let managed_identity_client_id = env::var("AZURE_CLIENT_ID")
+        .ok()
+        .map(|value| value.trim().to_owned())
+        .filter(|value| !value.is_empty());
+    if let Some(client_id) = managed_identity_client_id.as_deref() {
+        info!(client_id = %client_id, "using user-assigned managed identity");
+    } else {
+        env::remove_var("AZURE_CLIENT_ID");
+        info!("using system-assigned managed identity");
+    }
     let credential: Arc<dyn TokenCredential> = Arc::new(
         AppServiceManagedIdentityCredential::create(azure_identity::TokenCredentialOptions::default())
             .context("failed to build managed identity credential")?,
