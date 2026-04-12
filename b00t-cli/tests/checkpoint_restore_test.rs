@@ -9,9 +9,9 @@ static CARGO_LOCK: Mutex<()> = Mutex::new(());
 
 fn repo_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("..")
-        .canonicalize()
-        .expect("failed to canonicalize repo root")
+        .parent()
+        .expect("b00t-cli manifest dir should have a workspace root parent")
+        .to_path_buf()
 }
 
 // ── H2-a: checkpoint restore fixture exits 0 (PASS) ──────────────────────────

@@ -1,13 +1,13 @@
 //! b00t task — native task management (replaces taskmaster-ai)
 //!
-//! Storage: `.b00t/tasks.json` (repo-local) or `~/.b00t/tasks.json` (global)
+//! Storage: `.b00t/tasks.json` at the git workspace root (via `get_workspace_root()`).
 //! Schema: minimal CRUD — no AI expansion, no LLM deps, no cloud APIs.
 //! Compat: `b00t task import` migrates from `.taskmaster/tasks/tasks.json`.
 //!
 //! 🤓 This is the extracted core of taskmaster-ai v0.x (before enshittification).
 //!    Keep it lean: list/add/next/done/update/show/import — nothing else.
 
-use anyhow::{Context, Result};
+use anyhow::{ensure, Context, Result};
 use clap::Parser;
 use serde::{Deserialize, Serialize};
 use std::fs;
@@ -93,11 +93,10 @@ fn tasks_path() -> PathBuf {
     if let Ok(p) = std::env::var("B00T_TASKS_PATH") {
         return PathBuf::from(p);
     }
-    let local = PathBuf::from(".b00t/tasks.json");
-    if local.parent().map(|p| p.exists()).unwrap_or(false) {
-        return local;
-    }
-    local // will be created on first write
+    // Anchor repo-local storage at the git workspace root so `b00t task`
+    // works from any subdirectory and never creates stray `.b00t/` dirs.
+    let root = crate::utils::get_workspace_root();
+    PathBuf::from(root).join(".b00t/tasks.json")
 }
 
 fn load_store() -> Result<TaskStore> {
@@ -130,14 +129,8 @@ fn save_store(store: &TaskStore) -> Result<()> {
 }
 
 fn now_iso() -> String {
-    // Simple ISO-8601 UTC via date command; avoids chrono dep
-    std::process::Command::new("date")
-        .args(["-u", "+%Y-%m-%dT%H:%M:%SZ"])
-        .output()
-        .ok()
-        .and_then(|o| String::from_utf8(o.stdout).ok())
-        .map(|s| s.trim().to_string())
-        .unwrap_or_else(|| "1970-01-01T00:00:00Z".to_string())
+    // Generate UTC timestamp in-process via chrono — avoids platform `date` variance
+    chrono::Utc::now().format("%Y-%m-%dT%H:%M:%SZ").to_string()
 }
 
 fn next_id(store: &TaskStore) -> u32 {
@@ -202,7 +195,8 @@ pub enum TaskCommands {
         title: String,
         #[clap(long, short, help = "Description")]
         description: Option<String>,
-        #[clap(long, short, help = "Priority 1-4 (1=critical, 4=low)", default_value = "3")]
+        #[clap(long, short, help = "Priority 1-4 (1=critical, 4=low)", default_value = "3",
+               value_parser = clap::value_parser!(u8).range(1..=4))]
         priority: u8,
         #[clap(long, short, help = "Tags (comma-separated)")]
         tags: Option<String>,
@@ -229,7 +223,8 @@ pub enum TaskCommands {
         title: Option<String>,
         #[clap(long, help = "Append to notes")]
         note: Option<String>,
-        #[clap(long, help = "Priority 1-4")]
+        #[clap(long, help = "Priority 1-4",
+               value_parser = clap::value_parser!(u8).range(1..=4))]
         priority: Option<u8>,
     },
     #[clap(about = "Show task details")]
@@ -286,15 +281,24 @@ pub fn handle_task_command(cmd: TaskCommands) -> Result<()> {
 }
 
 fn cmd_list(status_filter: Option<&str>, tag_filter: Option<&str>, json: bool) -> Result<()> {
+    enum StatusFilter {
+        Active,
+        All,
+        Exact(TaskStatus),
+    }
+
+    let status_filter = match status_filter {
+        None | Some("active") => StatusFilter::Active,
+        Some("all") => StatusFilter::All,
+        Some(s) => StatusFilter::Exact(<TaskStatus as std::str::FromStr>::from_str(s)?),
+    };
+
     let store = load_store()?;
     let tasks: Vec<&Task> = store.tasks.iter().filter(|t| {
-        let status_ok = match status_filter {
-            None | Some("active") => matches!(t.status, TaskStatus::Pending | TaskStatus::InProgress),
-            Some("all")      => true,
-            Some("done")     => matches!(t.status, TaskStatus::Done),
-            Some("pending")  => matches!(t.status, TaskStatus::Pending),
-            Some("blocked")  => matches!(t.status, TaskStatus::Blocked),
-            Some(s)          => t.status.to_string() == s,
+        let status_ok = match &status_filter {
+            StatusFilter::Active => matches!(t.status, TaskStatus::Pending | TaskStatus::InProgress),
+            StatusFilter::All => true,
+            StatusFilter::Exact(status) => &t.status == status,
         };
         let tag_ok = tag_filter.map_or(true, |f| t.tags.iter().any(|tg| tg == f));
         status_ok && tag_ok
@@ -306,7 +310,14 @@ fn cmd_list(status_filter: Option<&str>, tag_filter: Option<&str>, json: bool) -
     }
 
     if tasks.is_empty() {
-        println!("no tasks (filter: {})", status_filter.unwrap_or("active"));
+        println!(
+            "no tasks (filter: {})",
+            match status_filter {
+                StatusFilter::Active => "active",
+                StatusFilter::All => "all",
+                StatusFilter::Exact(_) => "custom",
+            }
+        );
         return Ok(());
     }
     for t in &tasks {
@@ -374,22 +385,32 @@ fn cmd_rm(id: u32) -> Result<()> {
 
 fn cmd_dep(id: u32, op: DepOp) -> Result<()> {
     let mut store = load_store()?;
-    let task = store.tasks.iter_mut().find(|t| t.id == id)
-        .with_context(|| format!("task #{id} not found"))?;
+    let task_exists = store.tasks.iter().any(|t| t.id == id);
+    ensure!(task_exists, "task #{id} not found");
+
     match op {
         DepOp::Add { dep } => {
+            ensure!(id != dep, "task #{id} cannot depend on itself");
+            let dep_exists = store.tasks.iter().any(|t| t.id == dep);
+            ensure!(dep_exists, "dependency task #{dep} not found");
+
+            let task = store.tasks.iter_mut().find(|t| t.id == id)
+                .with_context(|| format!("task #{id} not found"))?;
             if !task.dependencies.contains(&dep) {
                 task.dependencies.push(dep);
                 task.dependencies.sort();
             }
+            task.updated_at = Some(now_iso());
             println!("#{id} now depends on #{dep}");
         }
         DepOp::Rm { dep } => {
+            let task = store.tasks.iter_mut().find(|t| t.id == id)
+                .with_context(|| format!("task #{id} not found"))?;
             task.dependencies.retain(|&d| d != dep);
+            task.updated_at = Some(now_iso());
             println!("#{id}: removed dep #{dep}");
         }
     }
-    task.updated_at = Some(now_iso());
     save_store(&store)
 }
 

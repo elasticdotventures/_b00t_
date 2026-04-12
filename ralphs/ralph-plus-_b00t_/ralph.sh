@@ -450,20 +450,23 @@ run_mistralrs_step() {
 
 # ── R2: Keyword tier pre-filter (hermes-agent smart_model_routing pattern) ─────
 # Zero-cost routing: classify task before invoking inference.
-# sm0l: char ≤ 160 OR word_count ≤ 28 AND no complex keywords AND no backticks
-# ch0nky (default): complex keyword hit OR backtick presence OR long prompt
+# Routing order is intentional:
+#   1) backtick presence        -> ch0nky
+#   2) complex keyword match    -> ch0nky
+#   3) otherwise, sm0l iff (char_count ≤ 160 OR word_count ≤ 28)
+#   4) else                     -> ch0nky
 _COMPLEX_KEYWORDS="debug|implement|architecture|refactor|design|analyze|integrate|migrate|security|performance"
 route_to_tier() {
     local prompt="$1"
     local char_count="${#prompt}"
     local word_count
-    word_count="$(printf '%s' "${prompt}" | wc -w)"
+    word_count="$(echo "${prompt}" | wc -w)"
     # backtick → always ch0nky
-    if printf '%s' "${prompt}" | grep -q '`'; then
+    if echo "${prompt}" | grep -q '`'; then
         echo "ch0nky"; return
     fi
     # complex keyword match → ch0nky
-    if printf '%s' "${prompt}" | grep -Eiq "${_COMPLEX_KEYWORDS}"; then
+    if echo "${prompt}" | grep -Eiq "${_COMPLEX_KEYWORDS}"; then
         echo "ch0nky"; return
     fi
     # short pure prose → sm0l
@@ -898,8 +901,7 @@ write_status "${MAX_ITERATIONS}" "tempfail" "max iterations reached"
 log "max iterations reached; requesting restart via exit 75"
 # Friction report on tempfail: likely a hard problem; operator should inspect
 append_friction_report "loop-tempfail" \
-    "- Reached max iterations (${MAX_ITERATIONS}) without EXIT_SIGNAL=true
-- Tool: ${TOOL}, Role: ${ROLE}" \
+    "- Reached max iterations (${MAX_ITERATIONS}) without EXIT_SIGNAL=true\n- Tool: ${TOOL}, Role: ${ROLE}" \
     "LOW"
 emit_trajectory_jsonl "tempfail"
 exit 75
