@@ -22,8 +22,8 @@ cat > "${CHECKPOINT}" << 'JSON'
   "loop": 3,
   "tasks": {
     "tasks": [
-      {"id": 1, "title": "Test task A", "status": "pending"},
-      {"id": 2, "title": "Test task B", "status": "done"}
+      {"id": 1, "title": "Test task A", "status": "pending", "created_at": "2026-01-01T00:00:00Z"},
+      {"id": 2, "title": "Test task B", "status": "done", "created_at": "2026-01-01T00:05:00Z"}
     ]
   }
 }
