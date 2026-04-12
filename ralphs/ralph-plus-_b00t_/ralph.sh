@@ -440,8 +440,11 @@ run_mistralrs_step() {
 
 # ── R2: Keyword tier pre-filter (hermes-agent smart_model_routing pattern) ─────
 # Zero-cost routing: classify task before invoking inference.
-# sm0l: char ≤ 160 OR word_count ≤ 28 AND no complex keywords AND no backticks
-# ch0nky (default): complex keyword hit OR backtick presence OR long prompt
+# Routing order is intentional:
+#   1) backtick presence        -> ch0nky
+#   2) complex keyword match    -> ch0nky
+#   3) otherwise, sm0l iff (char_count ≤ 160 OR word_count ≤ 28)
+#   4) else                     -> ch0nky
 _COMPLEX_KEYWORDS="debug|implement|architecture|refactor|design|analyze|integrate|migrate|security|performance"
 route_to_tier() {
     local prompt="$1"
