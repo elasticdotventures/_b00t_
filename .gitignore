@@ -353,3 +353,10 @@ libnull.rlib
 .claude-plugin/recipes/mcp-servers/*.json
 !.claude-plugin/recipes/mcp-servers/local-b00t-b00t-mcp--b00t-mcp.json
 !.claude-plugin/recipes/mcp-servers/local-b00t-grok-guru--grok-guru.json
+.taskmaster/
+
+# b00t task runtime state — per-repo, not tracked
+.b00t/tasks.json
+.b00t/ralph/
+# nested .b00t dirs inside crates (runtime state)
+b00t-cli/.b00t/
