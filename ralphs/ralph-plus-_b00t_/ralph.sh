@@ -6,6 +6,8 @@ set -euo pipefail
 
 # Defaults (can be overridden by env or flags)
 TOOL="${TOOL:-${B00T_TOOL:-claude}}"
+MODEL_ALIAS="${MODEL_ALIAS:-${B00T_UP_MODEL:-}}"
+PROVIDER_CHAIN="${PROVIDER_CHAIN:-${B00T_UP_PROVIDERS:-}}"
 MAX_ITERATIONS=10
 ROLE="${B00T_ROLE:-developer}"
 LOOP_SLEEP_SECONDS="${LOOP_SLEEP_SECONDS:-3}"
@@ -57,10 +59,19 @@ TASK_STATE_CHECKPOINT="${STATE_DIR}/task_state.json"
 # Friction report: worker agents append here; operator triages async
 FRICTION_DIR="${STATE_DIR}/friction"
 
-# Parse CLI args: --tool <tool> [--max-iterations <n>] [<n>]
+# Parse CLI args: --tool <tool> [--model <alias>] [--provider <name> ...] [--max-iterations <n>] [<n>]
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --tool) TOOL="$2"; shift 2 ;;
+        --model) MODEL_ALIAS="$2"; shift 2 ;;
+        --provider)
+            if [[ -n "${PROVIDER_CHAIN}" ]]; then
+                PROVIDER_CHAIN="${PROVIDER_CHAIN},$2"
+            else
+                PROVIDER_CHAIN="$2"
+            fi
+            shift 2
+            ;;
         --max-iterations) MAX_ITERATIONS="$2"; shift 2 ;;
         --role) ROLE="$2"; shift 2 ;;
         --sleep) LOOP_SLEEP_SECONDS="$2"; shift 2 ;;

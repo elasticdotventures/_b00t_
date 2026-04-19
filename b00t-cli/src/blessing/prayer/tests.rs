@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod prayer_tests {
     use super::super::*;
-    use crate::blessing::{BlessingGraph, BlessingNode, BlessingEdge, LayerMetadata};
+    use crate::blessing::{BlessingEdge, BlessingGraph, BlessingNode, LayerMetadata};
     use std::collections::{BTreeMap, HashSet};
 
     fn sample_blessing_graph() -> BlessingGraph {
@@ -74,7 +74,10 @@ mod prayer_tests {
 
         assert!(result.granted);
         assert!(result.blessing.is_some());
-        assert_eq!(result.blessing.unwrap().id, "blessing:observe-infrastructure");
+        assert_eq!(
+            result.blessing.unwrap().id,
+            "blessing:observe-infrastructure"
+        );
         assert!(result.denial_reason.is_none());
     }
 
@@ -108,7 +111,7 @@ mod prayer_tests {
             blessing_id: "blessing:terraform-apply".to_string(),
             agent_role: "executor".to_string(),
             agent_blessings: vec!["blessing:observe-infrastructure".to_string()],
-            available_budget: 100,  // Need 500
+            available_budget: 100, // Need 500
             executive_override: false,
         };
 
@@ -116,7 +119,12 @@ mod prayer_tests {
 
         assert!(!result.granted);
         assert!(result.denial_reason.is_some());
-        assert!(result.denial_reason.unwrap().contains("Budget insufficient"));
+        assert!(
+            result
+                .denial_reason
+                .unwrap()
+                .contains("Budget insufficient")
+        );
     }
 
     /// Test 4: Agent prayer denied - missing prerequisite
@@ -127,7 +135,7 @@ mod prayer_tests {
         let request = BlessingRequest {
             blessing_id: "blessing:terraform-apply".to_string(),
             agent_role: "executor".to_string(),
-            agent_blessings: vec![],  // Missing observe-infrastructure
+            agent_blessings: vec![], // Missing observe-infrastructure
             available_budget: 1000,
             executive_override: false,
         };
@@ -170,7 +178,7 @@ mod prayer_tests {
             agent_role: "executor".to_string(),
             agent_blessings: vec![],
             available_budget: 10000,
-            executive_override: true,  // Executive says yes
+            executive_override: true, // Executive says yes
         };
 
         let result = evaluator.evaluate_prayer(&request);
@@ -236,7 +244,7 @@ mod prayer_tests {
         let plan = CompositionPlan {
             base_model_id: "meta-llama/Llama-2-7b".to_string(),
             layers: vec![layer1, layer2],
-            total_adapter_params: 147456,  // 768*16*12 + 768*8*12
+            total_adapter_params: 147456, // 768*16*12 + 768*8*12
         };
 
         assert_eq!(plan.base_model_id, "meta-llama/Llama-2-7b");

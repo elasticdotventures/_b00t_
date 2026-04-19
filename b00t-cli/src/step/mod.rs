@@ -1,9 +1,9 @@
 // b00t-cli/src/step/mod.rs
 // Moku type-state machines: serialized .step.toml files
 
+use crate::k0mmand3r::GuardCondition;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
-use crate::k0mmand3r::GuardCondition;
 
 /// Moku step: type-state machine serialized in .tomllm format
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -54,8 +54,8 @@ pub struct IOContract {
 pub struct TransitionRule {
     pub to: String,
     #[serde(default)]
-    pub requires: Vec<String>,  // k0mmand3r commands
-    pub guard: Option<String>,  // Boolean expression
+    pub requires: Vec<String>, // k0mmand3r commands
+    pub guard: Option<String>, // Boolean expression
     pub output_contract: Option<BTreeMap<String, String>>,
 }
 

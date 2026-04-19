@@ -214,23 +214,21 @@ impl DualGrokClient {
         // ── Irontology query ────────────────────────────────────────────────
         if matches!(backend, GrokBackend::Irontology | GrokBackend::Both) {
             match &self.iron {
-                Some(iron) => {
-                    match iron.query(query_str, topic, Some(max)).await {
-                        Ok(iron_items) => {
-                            irontology_ok = true;
-                            for item in iron_items {
-                                items.push(DualQueryItem {
-                                    backend: "irontology".to_string(),
-                                    content: item.content,
-                                    topic: item.topic,
-                                    tags: item.tags,
-                                    score: item.score,
-                                });
-                            }
+                Some(iron) => match iron.query(query_str, topic, Some(max)).await {
+                    Ok(iron_items) => {
+                        irontology_ok = true;
+                        for item in iron_items {
+                            items.push(DualQueryItem {
+                                backend: "irontology".to_string(),
+                                content: item.content,
+                                topic: item.topic,
+                                tags: item.tags,
+                                score: item.score,
+                            });
                         }
-                        Err(e) => warnings.push(format!("Irontology query: {}", e)),
                     }
-                }
+                    Err(e) => warnings.push(format!("Irontology query: {}", e)),
+                },
                 None => {
                     warnings.push("Irontology unavailable".to_string());
                 }
@@ -239,10 +237,17 @@ impl DualGrokClient {
 
         // Deduplicate by content hash (exact duplication from both backends)
         let before = items.len();
-        items.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
+        items.sort_by(|a, b| {
+            b.score
+                .partial_cmp(&a.score)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
         items.dedup_by(|a, b| a.content == b.content);
         if items.len() < before {
-            tracing::debug!("Deduped {} duplicate results across backends", before - items.len());
+            tracing::debug!(
+                "Deduped {} duplicate results across backends",
+                before - items.len()
+            );
         }
         items.truncate(max);
 
@@ -322,20 +327,29 @@ mod tests {
 
     #[test]
     fn test_backend_from_flag_both() {
-        assert_eq!(GrokBackend::from_flag(Some("both")).unwrap(), GrokBackend::Both);
+        assert_eq!(
+            GrokBackend::from_flag(Some("both")).unwrap(),
+            GrokBackend::Both
+        );
     }
 
     #[test]
     fn test_backend_from_flag_raglite() {
         for s in &["raglite", "raglight", "rag-light", "rag_light"] {
-            assert_eq!(GrokBackend::from_flag(Some(s)).unwrap(), GrokBackend::Raglite);
+            assert_eq!(
+                GrokBackend::from_flag(Some(s)).unwrap(),
+                GrokBackend::Raglite
+            );
         }
     }
 
     #[test]
     fn test_backend_from_flag_irontology() {
         for s in &["irontology", "iron"] {
-            assert_eq!(GrokBackend::from_flag(Some(s)).unwrap(), GrokBackend::Irontology);
+            assert_eq!(
+                GrokBackend::from_flag(Some(s)).unwrap(),
+                GrokBackend::Irontology
+            );
         }
     }
 

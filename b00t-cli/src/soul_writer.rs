@@ -198,7 +198,9 @@ mod tests {
     fn file_writer_write_and_append() {
         let dir = tempfile::tempdir().unwrap();
         let writer = FileSoulWriter::new(dir.path().to_path_buf());
-        let r1 = writer.write_memory("SOUL.md", "# Soul\nfirst", false).unwrap();
+        let r1 = writer
+            .write_memory("SOUL.md", "# Soul\nfirst", false)
+            .unwrap();
         assert!(r1.bytes_written > 0);
         let r2 = writer.write_memory("SOUL.md", "second line", true).unwrap();
         let content = std::fs::read_to_string(&r1.location).unwrap();

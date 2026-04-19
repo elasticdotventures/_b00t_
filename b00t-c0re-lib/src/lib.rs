@@ -26,18 +26,18 @@ pub mod version {
     }
 }
 
+pub mod aaiii;
 pub mod agent_coordination;
 pub mod agent_manager;
-pub mod aaiii;
-pub mod datum_lsp;
-pub mod dual_grok;
-pub mod irontology_bridge;
 pub mod ai_client;
 pub mod b00t_config;
 pub mod context;
 pub mod datum_ai_model;
+pub mod datum_lsp;
 pub mod datum_types;
+pub mod dual_grok;
 pub mod grok;
+pub mod irontology_bridge;
 pub mod knowledge;
 pub mod kv_store;
 pub mod learn;
@@ -55,23 +55,27 @@ pub mod template;
 pub mod utils;
 
 // Re-export commonly used types
-pub use agent_manager::{AgentConfig, AgentHandle, AgentManager, ExecutorConfig, invoke_agent_executor, dispatch_tool};
+pub use agent_manager::{
+    AgentConfig, AgentHandle, AgentManager, ExecutorConfig, dispatch_tool, invoke_agent_executor,
+};
 pub use ai_client::{AiClientConfig, AiProviderConfig, B00tAiClient, ChatMessage};
 pub use b00t_config::{AiConfiguration, B00tUnifiedConfig, CloudServicesConfig, UserConfig};
 pub use context::B00tContext;
 pub use datum_types::{LearnMetadata, UsageExample, deserialize_usage};
+pub use dual_grok::{
+    DualGrokClient, DualIngestResult, DualQueryItem, DualQueryResult, GrokBackend,
+};
 pub use grok::{AskResult, ChunkResult, ChunkSummary, DigestResult, GrokClient, LearnResult};
+pub use irontology_bridge::{
+    DatumNode, IntoIrontologyRecord, IntoRagDocument, IrontologyBridgeClient,
+    IrontologyIngestResult, IrontologyQueryItem,
+};
 pub use knowledge::{DisplayOpts, KnowledgeSource};
 pub use lfmf::{Lesson, LfmfConfig, LfmfSystem};
 pub use man_page::{ManPage, ManSection};
 pub use mcp_proxy::{GenericMcpProxy, McpToolDefinition, McpToolRequest, McpToolResponse};
 pub use mcp_registry::{
     McpRegistry, McpServerConfig, McpServerRegistration, create_registration_from_datum,
-};
-pub use dual_grok::{DualGrokClient, DualIngestResult, DualQueryItem, DualQueryResult, GrokBackend};
-pub use irontology_bridge::{
-    DatumNode, IrontologyBridgeClient, IrontologyIngestResult, IrontologyQueryItem,
-    IntoIrontologyRecord, IntoRagDocument,
 };
 pub use rag::{DocumentSource, LoaderType, RagLightConfig, RagLightManager};
 pub use rhai_engine::RhaiEngine;

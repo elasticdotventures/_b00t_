@@ -1,7 +1,7 @@
+use crate::install::manifest::B00tInstallManifest;
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
-use crate::install::manifest::B00tInstallManifest;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ContentPackId {
@@ -14,9 +14,11 @@ pub enum ContentPackId {
 impl ContentPackId {
     pub fn display_name(&self) -> &'static str {
         match self {
-            ContentPackId::Skills        => "Skills & commands",
-            ContentPackId::Agents        => "Agents",
-            ContentPackId::Hooks         => "Hooks (statusline, update-check, context-monitor, datum-guard)",
+            ContentPackId::Skills => "Skills & commands",
+            ContentPackId::Agents => "Agents",
+            ContentPackId::Hooks => {
+                "Hooks (statusline, update-check, context-monitor, datum-guard)"
+            }
             ContentPackId::DatumLifecycle => "Datum lifecycle (b00t install/b00t uninstall)",
         }
     }
@@ -24,9 +26,9 @@ impl ContentPackId {
     /// Stable lowercase key used as `content_pack_id` in the manifest.
     pub fn key(&self) -> &'static str {
         match self {
-            ContentPackId::Skills        => "skills",
-            ContentPackId::Agents        => "agents",
-            ContentPackId::Hooks         => "hooks",
+            ContentPackId::Skills => "skills",
+            ContentPackId::Agents => "agents",
+            ContentPackId::Hooks => "hooks",
             ContentPackId::DatumLifecycle => "datum_lifecycle",
         }
     }
@@ -55,15 +57,19 @@ pub trait ContentPack: Send + Sync {
 pub struct FileCopyPack {
     pub id: ContentPackId,
     pub source_dir: PathBuf,
-    pub target_subdir: String,  // e.g. "skills", "agents"
+    pub target_subdir: String, // e.g. "skills", "agents"
     /// When true, a missing source_dir is a hard error; when false, a warning is emitted instead.
     pub required: bool,
 }
 
 impl ContentPack for FileCopyPack {
-    fn id(&self) -> ContentPackId { self.id.clone() }
+    fn id(&self) -> ContentPackId {
+        self.id.clone()
+    }
 
-    fn source_dir(&self) -> PathBuf { self.source_dir.clone() }
+    fn source_dir(&self) -> PathBuf {
+        self.source_dir.clone()
+    }
 
     fn install_into(&self, target: &Path, manifest: &mut B00tInstallManifest) -> Result<()> {
         if !self.source_dir.exists() {
@@ -103,7 +109,9 @@ impl ContentPack for FileCopyPack {
 
     fn uninstall_from(&self, manifest: &mut B00tInstallManifest) -> Result<()> {
         let pack_key = self.id.key();
-        let to_remove: Vec<PathBuf> = manifest.files.iter()
+        let to_remove: Vec<PathBuf> = manifest
+            .files
+            .iter()
             .filter(|(_, entry)| entry.content_pack_id == pack_key)
             .map(|(path, _)| path.clone())
             .collect();
@@ -115,7 +123,11 @@ impl ContentPack for FileCopyPack {
             } else {
                 // User modified — back up instead of deleting
                 let backup = path.with_extension("b00t-backup");
-                eprintln!("⚠️  {} was modified — backing up to {:?}", path.display(), backup);
+                eprintln!(
+                    "⚠️  {} was modified — backing up to {:?}",
+                    path.display(),
+                    backup
+                );
                 std::fs::copy(&path, &backup).ok();
             }
         }
@@ -126,8 +138,8 @@ impl ContentPack for FileCopyPack {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::install::adapter::{InstallScope, RuntimeId};
     use tempfile::TempDir;
-    use crate::install::adapter::{RuntimeId, InstallScope};
 
     #[test]
     fn test_content_pack_id_all() {
@@ -153,7 +165,8 @@ mod tests {
         };
 
         let mut manifest = crate::install::manifest::B00tInstallManifest::new(
-            RuntimeId::Claude, InstallScope::Global
+            RuntimeId::Claude,
+            InstallScope::Global,
         );
 
         // Install
@@ -181,7 +194,8 @@ mod tests {
             required: true,
         };
         let mut manifest = crate::install::manifest::B00tInstallManifest::new(
-            RuntimeId::Claude, InstallScope::Global
+            RuntimeId::Claude,
+            InstallScope::Global,
         );
         pack.install_into(target_dir.path(), &mut manifest).unwrap();
 
@@ -206,13 +220,24 @@ mod tests {
             required: true,
         };
         let mut manifest = crate::install::manifest::B00tInstallManifest::new(
-            RuntimeId::Claude, InstallScope::Global
+            RuntimeId::Claude,
+            InstallScope::Global,
         );
         let result = pack.install_into(target_dir.path(), &mut manifest);
-        assert!(result.is_err(), "required pack with missing source should return Err");
+        assert!(
+            result.is_err(),
+            "required pack with missing source should return Err"
+        );
         let msg = format!("{}", result.unwrap_err());
-        assert!(msg.contains("does not exist"), "error must mention missing source dir");
-        assert_eq!(manifest.files.len(), 0, "no files should be recorded on error");
+        assert!(
+            msg.contains("does not exist"),
+            "error must mention missing source dir"
+        );
+        assert_eq!(
+            manifest.files.len(),
+            0,
+            "no files should be recorded on error"
+        );
     }
 
     #[test]
@@ -225,10 +250,15 @@ mod tests {
             required: false,
         };
         let mut manifest = crate::install::manifest::B00tInstallManifest::new(
-            RuntimeId::Claude, InstallScope::Global
+            RuntimeId::Claude,
+            InstallScope::Global,
         );
         // optional pack with missing source should succeed with zero files installed
         pack.install_into(target_dir.path(), &mut manifest).unwrap();
-        assert_eq!(manifest.files.len(), 0, "no files installed for missing optional source");
+        assert_eq!(
+            manifest.files.len(),
+            0,
+            "no files installed for missing optional source"
+        );
     }
 }

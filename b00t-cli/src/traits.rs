@@ -1,8 +1,8 @@
 use crate::BootDatum;
 use anyhow::Result;
+use shlex::Shlex;
 use std::path::PathBuf;
 use std::time::Duration;
-use shlex::Shlex;
 
 /// Display trait for generating k8s CRDs from b00t datums
 /// Enables MBSE-based stack → pod transformation
@@ -245,7 +245,7 @@ impl IoMethod {
     pub fn for_sandbox(kind: &SandboxKind) -> Self {
         match kind {
             SandboxKind::None => IoMethod::Stdio,
-            SandboxKind::Ebpf => IoMethod::Stdio,   // eBPF filters syscalls, keeps stdio
+            SandboxKind::Ebpf => IoMethod::Stdio, // eBPF filters syscalls, keeps stdio
             SandboxKind::Container(_) => IoMethod::Pipe,
             SandboxKind::Wasm => IoMethod::Wasi,
         }
@@ -268,7 +268,9 @@ pub trait Sandbox: Send + Sync {
         };
 
         if argv.is_empty() {
-            return Err(anyhow::anyhow!("sandbox run failed: empty command_line in ExecPlan"));
+            return Err(anyhow::anyhow!(
+                "sandbox run failed: empty command_line in ExecPlan"
+            ));
         }
 
         let mut cmd = std::process::Command::new(&argv[0]);
@@ -283,10 +285,12 @@ pub trait Sandbox: Send + Sync {
             .map_err(|e| anyhow::anyhow!("sandbox run failed: {}", e))?;
 
         let output = std::process::Command::new("sh")
-            .arg("-c").arg(&plan.command_line)
+            .arg("-c")
+            .arg(&plan.command_line)
             .current_dir(&plan.working_dir)
             .envs(plan.env.iter().map(|(k, v)| (k.as_str(), v.as_str())))
-            .output().map_err(|e| anyhow::anyhow!("sandbox run failed: {}", e))?;
+            .output()
+            .map_err(|e| anyhow::anyhow!("sandbox run failed: {}", e))?;
         Ok(ExecOutput {
             value: String::from_utf8_lossy(&output.stdout).into_owned(),
             exit_code: output.status.code().unwrap_or(-1),
@@ -303,9 +307,15 @@ pub trait Sandbox: Send + Sync {
 pub struct NoSandbox;
 
 impl Sandbox for NoSandbox {
-    fn kind(&self) -> &SandboxKind { &SandboxKind::None }
-    fn io_method(&self) -> IoMethod { IoMethod::Stdio }
-    fn scope(&self, _reqs: &SandboxRequirements) -> Result<()> { Ok(()) }
+    fn kind(&self) -> &SandboxKind {
+        &SandboxKind::None
+    }
+    fn io_method(&self) -> IoMethod {
+        IoMethod::Stdio
+    }
+    fn scope(&self, _reqs: &SandboxRequirements) -> Result<()> {
+        Ok(())
+    }
 }
 
 /// OCI container sandbox — wraps execution in `docker run`.
@@ -327,20 +337,39 @@ impl ContainerSandbox {
 }
 
 impl Sandbox for ContainerSandbox {
-    fn kind(&self) -> &SandboxKind { &self.kind }
-    fn io_method(&self) -> IoMethod { IoMethod::Pipe }
-    fn scope(&self, _reqs: &SandboxRequirements) -> Result<()> { Ok(()) }
+    fn kind(&self) -> &SandboxKind {
+        &self.kind
+    }
+    fn io_method(&self) -> IoMethod {
+        IoMethod::Pipe
+    }
+    fn scope(&self, _reqs: &SandboxRequirements) -> Result<()> {
+        Ok(())
+    }
     fn run(&self, plan: &ExecPlan) -> Result<ExecOutput<String>> {
         use std::time::Instant;
         let start = Instant::now();
         let mut docker_args: Vec<String> = vec!["run".to_string()];
         docker_args.extend(self.extra_flags.clone());
         let wd = plan.working_dir.display().to_string();
-        docker_args.extend_from_slice(&["-v".to_string(), format!("{}:/workspace", wd), "-w".to_string(), "/workspace".to_string()]);
-        for (k, v) in &plan.env { docker_args.extend_from_slice(&["-e".to_string(), format!("{}={}", k, v)]); }
+        docker_args.extend_from_slice(&[
+            "-v".to_string(),
+            format!("{}:/workspace", wd),
+            "-w".to_string(),
+            "/workspace".to_string(),
+        ]);
+        for (k, v) in &plan.env {
+            docker_args.extend_from_slice(&["-e".to_string(), format!("{}={}", k, v)]);
+        }
         docker_args.push(self.image.clone());
-        docker_args.extend_from_slice(&["sh".to_string(), "-c".to_string(), plan.command_line.clone()]);
-        let output = std::process::Command::new("docker").args(&docker_args).output()
+        docker_args.extend_from_slice(&[
+            "sh".to_string(),
+            "-c".to_string(),
+            plan.command_line.clone(),
+        ]);
+        let output = std::process::Command::new("docker")
+            .args(&docker_args)
+            .output()
             .map_err(|e| anyhow::anyhow!("docker run failed: {}", e))?;
         Ok(ExecOutput {
             value: String::from_utf8_lossy(&output.stdout).into_owned(),
@@ -507,14 +536,20 @@ mod tests {
         assert_eq!(SandboxKind::from_str("none"), SandboxKind::None);
         assert_eq!(SandboxKind::from_str("ebpf"), SandboxKind::Ebpf);
         assert_eq!(SandboxKind::from_str("wasm"), SandboxKind::Wasm);
-        assert_eq!(SandboxKind::from_str("container:img"), SandboxKind::Container("img".to_string()));
+        assert_eq!(
+            SandboxKind::from_str("container:img"),
+            SandboxKind::Container("img".to_string())
+        );
     }
     #[test]
     fn no_sandbox_run_executes_command() {
         let plan = ExecPlan {
             command_line: "echo no-sandbox-works".to_string(),
-            working_dir: PathBuf::from("."), env: vec![], declared_effects: vec![],
-            sandbox_kind: SandboxKind::None, io_method: IoMethod::Stdio,
+            working_dir: PathBuf::from("."),
+            env: vec![],
+            declared_effects: vec![],
+            sandbox_kind: SandboxKind::None,
+            io_method: IoMethod::Stdio,
         };
         let output = NoSandbox.run(&plan).unwrap();
         assert_eq!(output.exit_code, 0);
@@ -526,23 +561,49 @@ mod tests {
         assert_eq!(s.image, "alpine:latest");
     }
     fn make_output(value: &str, network: bool, fs: Vec<&str>) -> ExecOutput<String> {
-        ExecOutput { value: value.to_string(), exit_code: 0, duration_ms: 1,
-            sandbox: SandboxRequirements { network, filesystem: fs.into_iter().map(PathBuf::from).collect(), env_vars: vec![], secrets: vec![], max_duration: None },
-            sandbox_kind: SandboxKind::None, io_method: IoMethod::Stdio, declared_effects: vec![] }
+        ExecOutput {
+            value: value.to_string(),
+            exit_code: 0,
+            duration_ms: 1,
+            sandbox: SandboxRequirements {
+                network,
+                filesystem: fs.into_iter().map(PathBuf::from).collect(),
+                env_vars: vec![],
+                secrets: vec![],
+                max_duration: None,
+            },
+            sandbox_kind: SandboxKind::None,
+            io_method: IoMethod::Stdio,
+            declared_effects: vec![],
+        }
     }
     #[test]
     fn and_then_merges_sandbox_requirements() {
         let a = make_output("a", true, vec!["/workspace"]);
-        let result = a.and_then(|_| Ok(make_output("b", false, vec!["/data"]))).unwrap();
+        let result = a
+            .and_then(|_| Ok(make_output("b", false, vec!["/data"])))
+            .unwrap();
         assert!(result.sandbox.network);
-        assert!(result.sandbox.filesystem.contains(&PathBuf::from("/workspace")));
+        assert!(
+            result
+                .sandbox
+                .filesystem
+                .contains(&PathBuf::from("/workspace"))
+        );
         assert!(result.sandbox.filesystem.contains(&PathBuf::from("/data")));
     }
     #[test]
     fn and_then_no_duplicate_paths() {
         let a = make_output("a", false, vec!["/shared"]);
-        let result = a.and_then(|_| Ok(make_output("b", false, vec!["/shared", "/extra"]))).unwrap();
-        let count = result.sandbox.filesystem.iter().filter(|p| *p == &PathBuf::from("/shared")).count();
+        let result = a
+            .and_then(|_| Ok(make_output("b", false, vec!["/shared", "/extra"])))
+            .unwrap();
+        let count = result
+            .sandbox
+            .filesystem
+            .iter()
+            .filter(|p| *p == &PathBuf::from("/shared"))
+            .count();
         assert_eq!(count, 1);
     }
 }

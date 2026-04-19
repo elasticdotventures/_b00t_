@@ -198,7 +198,11 @@ impl WhatismyCommands {
                 }
                 Ok(())
             }
-            WhatismyCommands::Role { json, show_tools, skills } => {
+            WhatismyCommands::Role {
+                json,
+                show_tools,
+                skills,
+            } => {
                 use crate::session_memory::SessionMemory;
                 let memory = SessionMemory::load()?;
 
@@ -229,7 +233,10 @@ impl WhatismyCommands {
 
                     // Merge skill inference into JSON output
                     if let Some(obj) = role_data.as_object_mut() {
-                        obj.insert("inferred_skills".to_string(), serde_json::json!(inferred_skills));
+                        obj.insert(
+                            "inferred_skills".to_string(),
+                            serde_json::json!(inferred_skills),
+                        );
                         if let Some(s) = &supplement {
                             obj.insert("role_supplement".to_string(), serde_json::json!(s));
                         }
@@ -248,7 +255,10 @@ impl WhatismyCommands {
                     }
 
                     if *skills && !inferred_skills.is_empty() {
-                        println!("\n🎓 Inferred skills for role '{}' (ranked by context):", role);
+                        println!(
+                            "\n🎓 Inferred skills for role '{}' (ranked by context):",
+                            role
+                        );
                         for (i, skill) in inferred_skills.iter().enumerate() {
                             println!("  {}. {}", i + 1, skill);
                         }
@@ -280,14 +290,14 @@ pub fn detect_agent(memory: &SessionMemory, no_env: bool) -> String {
 
     // 🤖 AAIII: Abstract AI Inference Interface detection
     // Priority: qwen > claude > codex > gemini > others
-    
+
     // Detect Qwen Code CLI (new priority)
     if memory.get_env_var("QWEN_CODE").is_some()
         || std::env::vars().any(|(k, _)| k.starts_with("QWEN_"))
     {
         return format!("🤖 Qwen Code PID:{}", pid);
     }
-    
+
     // Check if qwen CLI is available and we're in a qwen session
     if let Ok(output) = duct::cmd!("qwen", "--version").read() {
         // qwen CLI exists - check if we're being invoked by qwen
@@ -528,10 +538,18 @@ fn infer_skills_for_role(role: &str) -> Vec<String> {
 /// Parse `skills = [...]` from `_b00t_/<role>.role.toml(l)` datum
 fn load_role_datum_skills(role: &str) -> Vec<String> {
     let candidates = [
-        dirs::home_dir().unwrap_or_default().join(format!(".dotfiles/_b00t_/{}.role.tomllm", role)),
-        dirs::home_dir().unwrap_or_default().join(format!(".dotfiles/_b00t_/{}.role.toml", role)),
-        dirs::home_dir().unwrap_or_default().join(format!(".b00t/_b00t_/{}.role.tomllm", role)),
-        dirs::home_dir().unwrap_or_default().join(format!(".b00t/_b00t_/{}.role.toml", role)),
+        dirs::home_dir()
+            .unwrap_or_default()
+            .join(format!(".dotfiles/_b00t_/{}.role.tomllm", role)),
+        dirs::home_dir()
+            .unwrap_or_default()
+            .join(format!(".dotfiles/_b00t_/{}.role.toml", role)),
+        dirs::home_dir()
+            .unwrap_or_default()
+            .join(format!(".b00t/_b00t_/{}.role.tomllm", role)),
+        dirs::home_dir()
+            .unwrap_or_default()
+            .join(format!(".b00t/_b00t_/{}.role.toml", role)),
     ];
 
     for path in &candidates {
@@ -562,7 +580,7 @@ fn extract_git_log_topics() -> Result<Vec<String>> {
         .lines()
         .flat_map(|line| {
             line.splitn(2, ' ')
-                .nth(1)  // skip the hash
+                .nth(1) // skip the hash
                 .unwrap_or("")
                 .split(|c: char| !c.is_alphanumeric() && c != '-')
                 .filter(|t| t.len() >= 4)

@@ -50,8 +50,8 @@ pub struct SloBudgets {
 impl Default for SloBudgets {
     fn default() -> Self {
         Self {
-            time_seconds: 3600,      // 1 hour default
-            cost_cents: 1000,        // $10 default
+            time_seconds: 3600,          // 1 hour default
+            cost_cents: 1000,            // $10 default
             no_output_timeout_secs: 300, // 5 minutes
             signal_changes_per_sec: 0.1, // 1 change per 10 seconds
         }
@@ -197,10 +197,20 @@ impl LspProxy {
     pub fn remaining_budget(&self) -> BudgetStatus {
         let elapsed = self.start_time.elapsed();
         BudgetStatus {
-            time_remaining_secs: self.config.budgets.time_seconds.saturating_sub(elapsed.as_secs()),
-            cost_remaining_cents: self.config.budgets.cost_cents
+            time_remaining_secs: self
+                .config
+                .budgets
+                .time_seconds
+                .saturating_sub(elapsed.as_secs()),
+            cost_remaining_cents: self
+                .config
+                .budgets
+                .cost_cents
                 .saturating_sub(self.cost_tracker.estimated_cents),
-            no_output_remaining_secs: self.config.budgets.no_output_timeout_secs
+            no_output_remaining_secs: self
+                .config
+                .budgets
+                .no_output_timeout_secs
                 .saturating_sub(self.last_output_time.elapsed().as_secs()),
         }
     }
@@ -285,7 +295,10 @@ pub struct VariableTransform {
 
 /// Compile third-party crate to WASM
 pub async fn compile_to_wasm(crate_name: &str, target: &str, opt_level: &str) -> Result<String> {
-    eprintln!("🔧 Compiling {} to WASM ({}, opt={})", crate_name, target, opt_level);
+    eprintln!(
+        "🔧 Compiling {} to WASM ({}, opt={})",
+        crate_name, target, opt_level
+    );
 
     // 🤓 This would invoke cargo build --target <target> --release
     // For now, placeholder for actual WASM compilation logic

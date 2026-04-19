@@ -1,9 +1,9 @@
 //! RAGLight integration tests - bringing advanced features to 50% coverage
 //! Tests the RAGLight backend as an alternative to Qdrant
 
-use std::process::Command;
 use std::env;
 use std::fs;
+use std::process::Command;
 use tempfile::TempDir;
 
 fn get_b00t_binary() -> String {
@@ -38,8 +38,14 @@ mod raglight_basic {
             .output()
             .expect("Failed to execute b00t grok digest --rag raglight");
 
-        println!("RAGLight digest stdout: {}", String::from_utf8_lossy(&output.stdout));
-        println!("RAGLight digest stderr: {}", String::from_utf8_lossy(&output.stderr));
+        println!(
+            "RAGLight digest stdout: {}",
+            String::from_utf8_lossy(&output.stdout)
+        );
+        println!(
+            "RAGLight digest stderr: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
 
         // Should succeed or fail gracefully
         if !output.status.success() {
@@ -93,8 +99,14 @@ mod raglight_basic {
             .output()
             .expect("Failed to execute b00t grok ask --rag raglight");
 
-        println!("RAGLight ask stdout: {}", String::from_utf8_lossy(&output.stdout));
-        println!("RAGLight ask stderr: {}", String::from_utf8_lossy(&output.stderr));
+        println!(
+            "RAGLight ask stdout: {}",
+            String::from_utf8_lossy(&output.stdout)
+        );
+        println!(
+            "RAGLight ask stderr: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
 
         // May work or may require setup
         if !output.status.success() {
@@ -123,8 +135,14 @@ mod raglight_basic {
             .output()
             .expect("Failed to execute b00t grok learn --rag raglight");
 
-        println!("RAGLight learn stdout: {}", String::from_utf8_lossy(&output.stdout));
-        println!("RAGLight learn stderr: {}", String::from_utf8_lossy(&output.stderr));
+        println!(
+            "RAGLight learn stdout: {}",
+            String::from_utf8_lossy(&output.stdout)
+        );
+        println!(
+            "RAGLight learn stderr: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
 
         // Should handle gracefully
         let stderr = String::from_utf8_lossy(&output.stderr);
@@ -257,7 +275,9 @@ mod raglight_error_handling {
 
         let stderr = String::from_utf8_lossy(&output.stderr);
         assert!(
-            stderr.contains("Unsupported") || stderr.contains("backend") || stderr.contains("invalid"),
+            stderr.contains("Unsupported")
+                || stderr.contains("backend")
+                || stderr.contains("invalid"),
             "Error should mention unsupported backend"
         );
     }
@@ -279,10 +299,7 @@ mod raglight_error_handling {
             .expect("Failed to execute");
 
         // Should fail requiring topic
-        assert!(
-            !output.status.success(),
-            "Should fail without topic"
-        );
+        assert!(!output.status.success(), "Should fail without topic");
 
         let stderr = String::from_utf8_lossy(&output.stderr);
         assert!(
@@ -357,7 +374,10 @@ mod raglight_vs_qdrant {
             .expect("Failed to execute");
 
         println!("Fallback test: {}", String::from_utf8_lossy(&output.stdout));
-        println!("Fallback stderr: {}", String::from_utf8_lossy(&output.stderr));
+        println!(
+            "Fallback stderr: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
 
         // Should work independently of Qdrant
         let stderr = String::from_utf8_lossy(&output.stderr);

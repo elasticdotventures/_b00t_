@@ -9,7 +9,7 @@
 //! Backend detection: Valkey > Redis > ForgeKV > File
 
 use anyhow::{Context, Result};
-use b00t_c0re_lib::kv_store::{KvConfig, KvStore, KvBackend};
+use b00t_c0re_lib::kv_store::{KvBackend, KvConfig, KvStore};
 use b00t_c0re_lib::redis::{AgentMessage, BroadcastPriority, RedisComms, RedisConfig};
 use std::collections::HashMap;
 
@@ -23,7 +23,10 @@ pub fn get_kv_store() -> KvStore {
 /// Check if a real KV backend is available (not file fallback)
 pub fn has_real_kv_backend() -> bool {
     let store = get_kv_store();
-    matches!(store.backend(), KvBackend::Valkey | KvBackend::Redis | KvBackend::ForgeKV)
+    matches!(
+        store.backend(),
+        KvBackend::Valkey | KvBackend::Redis | KvBackend::ForgeKV
+    )
 }
 
 /// Get the current backend type for logging/debugging
@@ -107,7 +110,10 @@ pub mod session_kv {
     use super::*;
 
     /// Store session data
-    pub fn store_session(session_id: &str, data: &HashMap<String, serde_json::Value>) -> Result<()> {
+    pub fn store_session(
+        session_id: &str,
+        data: &HashMap<String, serde_json::Value>,
+    ) -> Result<()> {
         let key = format!("b00t:sessions:{}", session_id);
         let json = serde_json::to_string(data)?;
         kv::set(&key, &json, Some(3600)) // 1 hour TTL

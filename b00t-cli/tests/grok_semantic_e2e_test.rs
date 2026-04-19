@@ -14,7 +14,7 @@
 use anyhow::Result;
 use assert_cmd::prelude::*;
 use serde::Deserialize;
-use std::{env, fs, path::PathBuf, process::Command, io::Write};
+use std::{env, fs, io::Write, path::PathBuf, process::Command};
 
 // ── fixture types (subset of grok_test_cases.json) ───────────────────────────
 
@@ -31,12 +31,10 @@ struct GrokTestCases {
 }
 
 fn load_fixtures() -> GrokTestCases {
-    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("tests/fixtures/grok_test_cases.json");
-    let json = fs::read_to_string(&path)
-        .unwrap_or_else(|_| panic!("Missing fixture: {:?}", path));
-    serde_json::from_str(&json)
-        .unwrap_or_else(|e| panic!("Invalid fixture JSON: {}", e))
+    let path =
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/grok_test_cases.json");
+    let json = fs::read_to_string(&path).unwrap_or_else(|_| panic!("Missing fixture: {:?}", path));
+    serde_json::from_str(&json).unwrap_or_else(|e| panic!("Invalid fixture JSON: {}", e))
 }
 
 /// Resolve path to the b00t-cli binary as built by Cargo for this test target.
@@ -68,7 +66,13 @@ mod cli_output_format {
     #[test]
     fn test_digest_unknown_topic_dual_backend_partial_success() {
         let out = b00t_cmd()
-            .args(["grok", "digest", "-t", "totally_fake_topic_xyz_9999", "some content"])
+            .args([
+                "grok",
+                "digest",
+                "-t",
+                "totally_fake_topic_xyz_9999",
+                "some content",
+            ])
             .output()
             .expect("failed to run b00t-cli");
 
@@ -79,12 +83,18 @@ mod cli_output_format {
         if out.status.success() {
             // irontology succeeded
             assert!(
-                stdout.contains("Irontology") || stdout.contains("irontology") || stdout.contains("✅"),
-                "Successful dual-backend digest must mention irontology: {}", stdout
+                stdout.contains("Irontology")
+                    || stdout.contains("irontology")
+                    || stdout.contains("✅"),
+                "Successful dual-backend digest must mention irontology: {}",
+                stdout
             );
         } else {
             // both backends failed (e.g. sled lock contention in parallel test run)
-            println!("ℹ️  Both backends failed (expected in parallel test runs): {}", stdout);
+            println!(
+                "ℹ️  Both backends failed (expected in parallel test runs): {}",
+                stdout
+            );
         }
     }
 
@@ -92,7 +102,14 @@ mod cli_output_format {
     #[test]
     fn test_digest_known_topic_output_contains_job_info() {
         let out = b00t_cmd()
-            .args(["grok", "digest", "-t", "rust", "Rust ownership prevents data races", "--rag"])
+            .args([
+                "grok",
+                "digest",
+                "-t",
+                "rust",
+                "Rust ownership prevents data races",
+                "--rag",
+            ])
             .output()
             .expect("failed to run b00t-cli");
 
@@ -102,17 +119,20 @@ mod cli_output_format {
         assert!(
             out.status.success(),
             "Known topic digest must succeed.\nstdout: {}\nstderr: {}",
-            stdout, stderr
+            stdout,
+            stderr
         );
         // Output MUST contain topic name and job UUID indication
         assert!(
             stdout.contains("rust"),
-            "stdout must mention topic 'rust': {}", stdout
+            "stdout must mention topic 'rust': {}",
+            stdout
         );
         // 🤓 raglight queues asynchronously — output contains job_id UUID
         assert!(
             stdout.contains("job") || stdout.contains("Queued") || stdout.contains("job_id"),
-            "stdout must mention job queuing: {}", stdout
+            "stdout must mention job queuing: {}",
+            stdout
         );
     }
 
@@ -154,11 +174,15 @@ mod cli_output_format {
         // Either succeeds with 0 results or exits 0 with warnings
         if !out.status.success() {
             // Both backends unavailable (sled lock in parallel tests) — acceptable
-            println!("ℹ️  Both backends unavailable in test (non-fatal): stderr={}", stderr);
+            println!(
+                "ℹ️  Both backends unavailable in test (non-fatal): stderr={}",
+                stderr
+            );
         } else {
             assert!(
                 stdout.contains("Found") || stdout.contains("results"),
-                "Dual ask must output result count: {}", stdout
+                "Dual ask must output result count: {}",
+                stdout
             );
         }
     }
@@ -167,7 +191,14 @@ mod cli_output_format {
     #[test]
     fn test_learn_known_topic_exits_zero() {
         let out = b00t_cmd()
-            .args(["grok", "learn", "Rust fearless concurrency", "-t", "rust", "--rag"])
+            .args([
+                "grok",
+                "learn",
+                "Rust fearless concurrency",
+                "-t",
+                "rust",
+                "--rag",
+            ])
             .output()
             .expect("failed to run b00t-cli");
 
@@ -176,7 +207,8 @@ mod cli_output_format {
         assert!(
             out.status.success(),
             "learn with known topic must exit 0.\nstdout: {}\nstderr: {}",
-            stdout, stderr
+            stdout,
+            stderr
         );
     }
 
@@ -256,15 +288,20 @@ mod cli_integration {
         assert!(!stdout.trim().is_empty(), "Ask must return results");
 
         // Semantic: result contains at least one expected keyword
-        let found = case.expected_keywords.iter().any(|kw| {
-            stdout.to_lowercase().contains(&kw.to_lowercase())
-        });
+        let found = case
+            .expected_keywords
+            .iter()
+            .any(|kw| stdout.to_lowercase().contains(&kw.to_lowercase()));
         assert!(
             found,
             "Semantic result must contain one of {:?}. Got: {}",
-            case.expected_keywords, &stdout[..stdout.len().min(300)]
+            case.expected_keywords,
+            &stdout[..stdout.len().min(300)]
         );
-        println!("✅ CLI E2E digest→ask: topic='{}' query='{}' ok", case.topic, query);
+        println!(
+            "✅ CLI E2E digest→ask: topic='{}' query='{}' ok",
+            case.topic, query
+        );
     }
 
     /// Learn from file → ask → verify content indexed
@@ -280,13 +317,19 @@ mod cli_integration {
 
         // Write a temp file with identifiable content
         let mut tmp = tempfile::NamedTempFile::new().expect("tempfile");
-        writeln!(tmp, "The borrow checker validates lifetimes at compile time.").ok();
+        writeln!(
+            tmp,
+            "The borrow checker validates lifetimes at compile time."
+        )
+        .ok();
         writeln!(tmp, "Move semantics transfer ownership between scopes.").ok();
         let src_path = tmp.path().to_str().unwrap().to_string();
 
         // Learn from file
         let learn_out = b00t_cmd()
-            .args(["grok", "learn", "dummy", "-s", &src_path, "-t", "rust", "--rag"])
+            .args([
+                "grok", "learn", "dummy", "-s", &src_path, "-t", "rust", "--rag",
+            ])
             .output()
             .expect("learn failed");
         assert!(
@@ -299,7 +342,14 @@ mod cli_integration {
 
         // Query for learned content
         let ask_out = b00t_cmd()
-            .args(["grok", "ask", "borrow checker lifetimes", "-t", "rust", "--rag"])
+            .args([
+                "grok",
+                "ask",
+                "borrow checker lifetimes",
+                "-t",
+                "rust",
+                "--rag",
+            ])
             .output()
             .expect("ask failed");
 

@@ -1,8 +1,8 @@
 use anyhow::{Context, Result};
 use b00t_c0re_lib::{DatumNode, DualGrokClient, GrokBackend, IrontologyBridgeClient};
 use clap::Subcommand;
-use flate2::write::GzEncoder;
 use flate2::Compression;
+use flate2::write::GzEncoder;
 use std::{fs, io::Read, io::Write as IoWrite, path::PathBuf};
 use uuid::Uuid;
 
@@ -119,7 +119,11 @@ pub enum GrokCommands {
 
 pub async fn handle_grok_command(command: GrokCommands) -> Result<()> {
     match command {
-        GrokCommands::Digest { topic, content, rag } => {
+        GrokCommands::Digest {
+            topic,
+            content,
+            rag,
+        } => {
             let backend = GrokBackend::from_flag(rag.as_deref())?;
             match backend {
                 GrokBackend::Both | GrokBackend::Irontology | GrokBackend::Raglite => {
@@ -127,11 +131,21 @@ pub async fn handle_grok_command(command: GrokCommands) -> Result<()> {
                 }
             }
         }
-        GrokCommands::Ask { query, topic, limit, rag } => {
+        GrokCommands::Ask {
+            query,
+            topic,
+            limit,
+            rag,
+        } => {
             let backend = GrokBackend::from_flag(rag.as_deref())?;
             handle_dual_ask(&query, topic.as_deref(), limit, backend).await
         }
-        GrokCommands::Learn { source, content, topic, rag } => {
+        GrokCommands::Learn {
+            source,
+            content,
+            topic,
+            rag,
+        } => {
             let backend = GrokBackend::from_flag(rag.as_deref())?;
             let content_str = match (content.as_deref(), source.as_deref()) {
                 (Some(c), _) => c.to_string(),
@@ -151,9 +165,25 @@ pub async fn handle_grok_command(command: GrokCommands) -> Result<()> {
             };
             handle_dual_learn(source.as_deref(), &content_str, topic.as_deref(), backend).await
         }
-        GrokCommands::Assimilate { topic, content, file, class, tags, ingest, source_url } => {
-            handle_assimilate(&topic, content.as_deref(), file.as_deref(), &class, &tags, ingest, source_url.as_deref())
-                .await
+        GrokCommands::Assimilate {
+            topic,
+            content,
+            file,
+            class,
+            tags,
+            ingest,
+            source_url,
+        } => {
+            handle_assimilate(
+                &topic,
+                content.as_deref(),
+                file.as_deref(),
+                &class,
+                &tags,
+                ingest,
+                source_url.as_deref(),
+            )
+            .await
         }
     }
 }
@@ -195,7 +225,9 @@ async fn handle_dual_ask(
 ) -> Result<()> {
     // --rag=raglite requires --topic; --rag=irontology without topic queries all topics
     if matches!(backend, GrokBackend::Raglite) && topic.is_none() {
-        return Err(anyhow::anyhow!("--topic is required when using --rag=raglite"));
+        return Err(anyhow::anyhow!(
+            "--topic is required when using --rag=raglite"
+        ));
     }
 
     println!(
@@ -232,8 +264,7 @@ async fn handle_dual_learn(
     topic: Option<&str>,
     backend: GrokBackend,
 ) -> Result<()> {
-    let topic = topic
-        .ok_or_else(|| anyhow::anyhow!("--topic is required for grok learn"))?;
+    let topic = topic.ok_or_else(|| anyhow::anyhow!("--topic is required for grok learn"))?;
 
     let source_str = source.unwrap_or("direct_input");
     println!(
@@ -281,14 +312,17 @@ async fn handle_assimilate(
 ) -> Result<()> {
     // Warn early if no source_url — datum will lack deduplication anchor
     if source_url.is_none() {
-        eprintln!("⚠️  No --source-url provided. Datum will be invalid (source required for deduplication).");
+        eprintln!(
+            "⚠️  No --source-url provided. Datum will be invalid (source required for deduplication)."
+        );
     }
 
     // Resolve content: inline | file | stdin
     let content = match (content_inline, file) {
         (Some(c), _) => c.to_string(),
-        (None, Some(f)) => fs::read_to_string(f)
-            .with_context(|| format!("reading file {}", f.display()))?,
+        (None, Some(f)) => {
+            fs::read_to_string(f).with_context(|| format!("reading file {}", f.display()))?
+        }
         (None, None) => {
             let mut buf = String::new();
             std::io::stdin().read_to_string(&mut buf)?;
@@ -300,14 +334,24 @@ async fn handle_assimilate(
         return Err(anyhow::anyhow!("Content is empty — nothing to assimilate"));
     }
 
-    println!("🔮 Assimilating {} bytes for topic '{}'...", content.len(), topic);
+    println!(
+        "🔮 Assimilating {} bytes for topic '{}'...",
+        content.len(),
+        topic
+    );
 
     // Step 1: Gzip-compress content before storing as git blob
     let mut encoder = GzEncoder::new(Vec::new(), Compression::best());
-    encoder.write_all(content.as_bytes()).context("gzip encoding content")?;
+    encoder
+        .write_all(content.as_bytes())
+        .context("gzip encoding content")?;
     let compressed = encoder.finish().context("finalizing gzip stream")?;
 
-    println!("📦 Compressed {} → {} bytes (gzip)", content.len(), compressed.len());
+    println!(
+        "📦 Compressed {} → {} bytes (gzip)",
+        content.len(),
+        compressed.len()
+    );
 
     // Step 2: Store compressed bytes as git blob (content NOT in filesystem)
     let git_hash = store_as_git_blob_bytes(&compressed)?;
@@ -395,7 +439,10 @@ validate  = "git -C ~/.b00t cat-file -e {git_hash}"
         // Irontology ingest
         match IrontologyBridgeClient::new("b00t-grok") {
             Ok(iron) => match iron.ingest(&datum_node).await {
-                Ok(r) => println!("  🕸️  Irontology: {} ({} facts)", r.subject_prefix, r.facts_stored),
+                Ok(r) => println!(
+                    "  🕸️  Irontology: {} ({} facts)",
+                    r.subject_prefix, r.facts_stored
+                ),
                 Err(e) => eprintln!("  ⚠️  Irontology ingest: {}", e),
             },
             Err(e) => eprintln!("  ⚠️  Irontology unavailable: {}", e),
@@ -419,7 +466,10 @@ validate  = "git -C ~/.b00t cat-file -e {git_hash}"
         }
     }
 
-    println!("✅ Assimilation complete — content in git object store, datum at {}", datum_name);
+    println!(
+        "✅ Assimilation complete — content in git object store, datum at {}",
+        datum_name
+    );
     Ok(())
 }
 
@@ -435,7 +485,13 @@ fn store_as_git_blob(content: &str) -> Result<String> {
 fn store_as_git_blob_bytes(bytes: &[u8]) -> Result<String> {
     let repo_root = find_git_root()?;
     let output = std::process::Command::new("git")
-        .args(["-C", repo_root.to_str().unwrap_or("."), "hash-object", "-w", "--stdin"])
+        .args([
+            "-C",
+            repo_root.to_str().unwrap_or("."),
+            "hash-object",
+            "-w",
+            "--stdin",
+        ])
         .stdin(std::process::Stdio::piped())
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped())
@@ -455,7 +511,13 @@ fn store_as_git_blob_bytes(bytes: &[u8]) -> Result<String> {
 fn validate_git_blob(hash: &str) -> Result<()> {
     let repo_root = find_git_root()?;
     let status = std::process::Command::new("git")
-        .args(["-C", repo_root.to_str().unwrap_or("."), "cat-file", "-e", hash])
+        .args([
+            "-C",
+            repo_root.to_str().unwrap_or("."),
+            "cat-file",
+            "-e",
+            hash,
+        ])
         .status()
         .context("git cat-file -e")?;
     if !status.success() {
@@ -524,7 +586,9 @@ impl ChildExt for std::process::Child {
     fn wait_with_output_and_stdin(mut self, stdin_bytes: &[u8]) -> Result<std::process::Output> {
         use std::io::Write;
         if let Some(mut stdin) = self.stdin.take() {
-            stdin.write_all(stdin_bytes).context("writing to git stdin")?;
+            stdin
+                .write_all(stdin_bytes)
+                .context("writing to git stdin")?;
         }
         self.wait_with_output().context("waiting for git")
     }

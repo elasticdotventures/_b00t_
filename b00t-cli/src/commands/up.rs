@@ -11,9 +11,17 @@ use std::process::Command;
 
 #[derive(Parser, Debug)]
 pub struct UpArgs {
-    /// AI tool to use for the ralph loop
+    /// AI tool/agent to use for the ralph loop
     #[clap(long, default_value = "claude", value_parser = ["claude", "amp", "codex", "opencode", "mistralrs", "pi", "gemma4"])]
     pub tool: String,
+
+    /// Local model alias to target for self-hosted tools (e.g. ch0nky, ch1nky)
+    #[clap(long)]
+    pub model: Option<String>,
+
+    /// One or more provider preferences in priority order
+    #[clap(long = "provider")]
+    pub providers: Vec<String>,
 
     /// Maximum iterations per ralph session
     #[clap(long, default_value = "10")]
@@ -28,7 +36,11 @@ pub struct UpArgs {
     pub max_restarts: u32,
 
     /// Onboard a git repo: discover ._b00t_/ datums and symlink into ~/.b00t/_b00t_/
-    #[clap(long, help = "Repo path to onboard (defaults to cwd)", value_name = "PATH")]
+    #[clap(
+        long,
+        help = "Repo path to onboard (defaults to cwd)",
+        value_name = "PATH"
+    )]
     pub repo: Option<Option<String>>,
 
     /// Dry run — show what would be symlinked without writing (repo mode only)
@@ -36,13 +48,57 @@ pub struct UpArgs {
     pub dry_run: bool,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct ResolvedUpTarget {
+    tool: String,
+    model: Option<String>,
+    providers: Vec<String>,
+}
+
 impl UpArgs {
+    fn resolved_target(&self) -> ResolvedUpTarget {
+        let mut tool = self.tool.trim().to_ascii_lowercase();
+        let model = self.model.as_ref().map(|m| canonical_model_alias(m));
+        let providers = canonical_provider_list(&self.providers);
+
+        if tool == "gemma4" {
+            tool = "opencode".to_string();
+            let model = Some(model.unwrap_or_else(|| "ch0nky".to_string()));
+            let providers = if providers.is_empty() {
+                default_providers_for_model(&model)
+            } else {
+                providers
+            };
+            return ResolvedUpTarget { tool, model: Some(model), providers };
+        }
+
+        let needs_local_target = matches!(tool.as_str(), "pi" | "opencode");
+        let model = if needs_local_target {
+            Some(model.unwrap_or_else(|| "ch0nky".to_string()))
+        } else {
+            model
+        };
+        let providers = if let Some(model) = &model {
+            if providers.is_empty() {
+                default_providers_for_model(model)
+            } else {
+                providers
+            }
+        } else {
+            providers
+        };
+
+        ResolvedUpTarget { tool, model, providers }
+    }
+
     pub fn execute(&self) -> Result<()> {
         // Repo onboarding mode: `b00t up --repo [path]`
         if let Some(repo_path) = &self.repo {
             let path = repo_path.as_deref().unwrap_or(".");
             return up_repo(path, self.dry_run);
         }
+
+        let target = self.resolved_target();
 
         let workspace_root = crate::utils::get_workspace_root();
         let workspace_root_path = PathBuf::from(&workspace_root);
@@ -70,16 +126,26 @@ impl UpArgs {
 
         loop {
             println!(
-                "🥾 b00t up: cycle {} (tool={}, max_iter={})",
+                "🥾 b00t up: cycle {} (tool={}, model={}, providers={}, max_iter={})",
                 restart_count + 1,
-                self.tool,
+                target.tool,
+                target.model.as_deref().unwrap_or("-"),
+                if target.providers.is_empty() {
+                    "-".to_string()
+                } else {
+                    target.providers.join(",")
+                },
                 self.max_iter
             );
 
             // Hive stack summary — quick check before launching agent
             let stacks = crate::hive::hive_stacks_status();
             if !stacks.is_empty() {
-                let active: Vec<_> = stacks.iter().filter(|(_, a, _)| *a).map(|(n, _, _)| n.as_str()).collect();
+                let active: Vec<_> = stacks
+                    .iter()
+                    .filter(|(_, a, _)| *a)
+                    .map(|(n, _, _)| n.as_str())
+                    .collect();
                 if active.is_empty() {
                     println!("  🥾 stacks: none active (b00t hive activate <profile>)");
                 } else {
@@ -104,10 +170,15 @@ impl UpArgs {
             let status = Command::new("bash")
                 .arg(&ralph_script)
                 .arg("--tool")
-                .arg(&self.tool)
+                .arg(&target.tool)
+                .args(optional_flag("--model", target.model.as_deref()))
+                .args(repeated_flags("--provider", &target.providers))
                 .arg(self.max_iter.to_string())
                 .env("B00T_ONTOLOGY", &ontology_json)
                 .env("B00T_ROLE", self.role.as_deref().unwrap_or("developer"))
+                .env("B00T_UP_TOOL", &target.tool)
+                .env("B00T_UP_MODEL", target.model.as_deref().unwrap_or(""))
+                .env("B00T_UP_PROVIDERS", target.providers.join(","))
                 .current_dir(&workspace_root)
                 .status()
                 .context(format!("Failed to exec b00t.sh at {}", ralph_script))?;
@@ -116,7 +187,9 @@ impl UpArgs {
 
             // Persist cycle state to session memory; set() auto-saves internally
             let _ = session.set("up.last_exit", &code.to_string());
-            let _ = session.set("up.tool", &self.tool);
+            let _ = session.set("up.tool", &target.tool);
+            let _ = session.set("up.model", target.model.as_deref().unwrap_or(""));
+            let _ = session.set("up.providers", &target.providers.join(","));
             let _ = session.set("up.restart_count", &restart_count.to_string());
             emit_up_heartbeat(restart_count, code, &self.role);
 
@@ -160,6 +233,54 @@ impl UpArgs {
             }
         }
     }
+}
+
+fn canonical_model_alias(model: &str) -> String {
+    match model.trim().to_ascii_lowercase().as_str() {
+        "gemma4" | "gemma-4" | "gemma-local" | "gemma-4-26b-a4b-local" => "ch0nky".to_string(),
+        "qwen3" | "qwen3-coder" | "qwen-local" | "qwen3-coder-local" | "sm0l" => "ch1nky".to_string(),
+        other => other.to_string(),
+    }
+}
+
+fn canonical_provider(provider: &str) -> String {
+    match provider.trim().to_ascii_lowercase().as_str() {
+        "llamacpp" | "llama_cpp" | "direct" => "llama-cpp".to_string(),
+        "openai-compatible" | "openai_compatible" => "openai-compatible".to_string(),
+        "litellm" | "gateway" => "openai".to_string(),
+        other => other.to_string(),
+    }
+}
+
+fn canonical_provider_list(providers: &[String]) -> Vec<String> {
+    let mut normalized = Vec::new();
+    for provider in providers {
+        let provider = canonical_provider(provider);
+        if !normalized.contains(&provider) {
+            normalized.push(provider);
+        }
+    }
+    normalized
+}
+
+fn default_providers_for_model(model: &str) -> Vec<String> {
+    match model {
+        "ch0nky" | "ch1nky" => vec!["llama-cpp".to_string(), "openai-compatible".to_string()],
+        _ => vec!["llama-cpp".to_string()],
+    }
+}
+
+fn optional_flag(flag: &str, value: Option<&str>) -> Vec<String> {
+    value
+        .map(|value| vec![flag.to_string(), value.to_string()])
+        .unwrap_or_default()
+}
+
+fn repeated_flags(flag: &str, values: &[String]) -> Vec<String> {
+    values
+        .iter()
+        .flat_map(|value| [flag.to_string(), value.clone()])
+        .collect()
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -260,7 +381,13 @@ fn find_git_root(start: &Path) -> Option<PathBuf> {
 fn namespace_from_repo(repo_root: &Path) -> String {
     // Try git remote origin URL
     let output = Command::new("git")
-        .args(["-C", &repo_root.to_string_lossy(), "remote", "get-url", "origin"])
+        .args([
+            "-C",
+            &repo_root.to_string_lossy(),
+            "remote",
+            "get-url",
+            "origin",
+        ])
         .output()
         .ok()
         .filter(|o| o.status.success());
@@ -292,7 +419,8 @@ fn namespace_from_repo(repo_root: &Path) -> String {
 
 /// Core repo onboarding: discover ._b00t_/ datums, symlink into ~/.b00t/_b00t_/
 fn up_repo(path: &str, dry_run: bool) -> Result<()> {
-    let start = Path::new(path).canonicalize()
+    let start = Path::new(path)
+        .canonicalize()
         .with_context(|| format!("Cannot resolve path: {}", path))?;
 
     // 1. Find git root (required — we need it for namespace derivation)
@@ -300,11 +428,12 @@ fn up_repo(path: &str, dry_run: bool) -> Result<()> {
         .ok_or_else(|| anyhow::anyhow!("Not inside a git repository: {}", start.display()))?;
 
     // 2. Find datum dir (Postel: multiple candidate names)
-    let datum_dir = find_repo_datum_dir(&git_root)
-        .ok_or_else(|| anyhow::anyhow!(
+    let datum_dir = find_repo_datum_dir(&git_root).ok_or_else(|| {
+        anyhow::anyhow!(
             "No ._b00t_/ directory found in {}.\n  Create one with: mkdir ._b00t_",
             git_root.display()
-        ))?;
+        )
+    })?;
 
     // 3. Derive namespace for symlink prefixing
     let namespace = namespace_from_repo(&git_root);
@@ -322,8 +451,10 @@ fn up_repo(path: &str, dry_run: bool) -> Result<()> {
     let tomllm_files: Vec<PathBuf> = entries
         .filter_map(|e| e.ok())
         .map(|e| e.path())
-        .filter(|p| p.extension().map(|x| x == "tomllm").unwrap_or(false)
-            || p.to_string_lossy().ends_with(".tomllm"))
+        .filter(|p| {
+            p.extension().map(|x| x == "tomllm").unwrap_or(false)
+                || p.to_string_lossy().ends_with(".tomllm")
+        })
         .collect();
 
     if tomllm_files.is_empty() {
@@ -362,8 +493,9 @@ fn up_repo(path: &str, dry_run: bool) -> Result<()> {
                     continue;
                 }
                 // Stale symlink — replace it
-                std::fs::remove_file(&link_path)
-                    .with_context(|| format!("Cannot remove stale link: {}", link_path.display()))?;
+                std::fs::remove_file(&link_path).with_context(|| {
+                    format!("Cannot remove stale link: {}", link_path.display())
+                })?;
             } else {
                 // Real file exists — don't clobber, warn instead
                 println!("   ⚠️  skipped (real file exists): {}", link_path.display());
@@ -378,7 +510,11 @@ fn up_repo(path: &str, dry_run: bool) -> Result<()> {
     }
 
     if !dry_run {
-        println!("   ✅ registered {} datum(s) into {}", registered, b00t_datum_dir.display());
+        println!(
+            "   ✅ registered {} datum(s) into {}",
+            registered,
+            b00t_datum_dir.display()
+        );
         // Persist to session memory so subsequent commands know the active repo
         if let Ok(mut session) = SessionMemory::load() {
             let _ = session.set("up.repo.root", &git_root.to_string_lossy());
@@ -438,9 +574,30 @@ mod tests {
     }
 
     #[test]
+    fn test_up_command_parses_model_and_providers() {
+        let args = UpArgs::try_parse_from([
+            "b00t-cli",
+            "--tool",
+            "pi",
+            "--model",
+            "ch1nky",
+            "--provider",
+            "llama-cpp",
+            "--provider",
+            "openai-compatible",
+        ]);
+        assert!(args.is_ok(), "UpArgs should parse model/provider flags");
+        let args = args.unwrap();
+        assert_eq!(args.model.as_deref(), Some("ch1nky"));
+        assert_eq!(args.providers, vec!["llama-cpp", "openai-compatible"]);
+    }
+
+    #[test]
     fn test_up_command_defaults() {
         let args = UpArgs {
             tool: "claude".to_string(),
+            model: None,
+            providers: vec![],
             max_iter: 10,
             role: None,
             max_restarts: 5,
@@ -451,6 +608,30 @@ mod tests {
         assert_eq!(args.max_iter, 10);
         assert_eq!(args.max_restarts, 5);
         assert!(args.role.is_none());
+    }
+
+    #[test]
+    fn test_resolved_target_maps_legacy_gemma4_to_opencode_ch0nky() {
+        let args = UpArgs::try_parse_from(["b00t-cli", "--tool", "gemma4"]).unwrap();
+        let target = args.resolved_target();
+        assert_eq!(target.tool, "opencode");
+        assert_eq!(target.model.as_deref(), Some("ch0nky"));
+        assert_eq!(target.providers, vec!["llama-cpp", "openai-compatible"]);
+    }
+
+    #[test]
+    fn test_resolved_target_normalizes_qwen_alias_to_ch1nky() {
+        let args = UpArgs::try_parse_from([
+            "b00t-cli",
+            "--tool",
+            "pi",
+            "--model",
+            "qwen3-coder",
+        ])
+        .unwrap();
+        let target = args.resolved_target();
+        assert_eq!(target.tool, "pi");
+        assert_eq!(target.model.as_deref(), Some("ch1nky"));
     }
 
     #[test]

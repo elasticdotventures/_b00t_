@@ -535,7 +535,11 @@ pub struct GrokDigestCommand {
     #[arg(help = "Content to digest (positional)")]
     pub content: String,
 
-    #[arg(long, default_value = "both", help = "RAG backend: raglite | irontology | both (default: both)")]
+    #[arg(
+        long,
+        default_value = "both",
+        help = "RAG backend: raglite | irontology | both (default: both)"
+    )]
     pub rag: Option<String>,
 }
 
@@ -557,10 +561,18 @@ pub struct GrokAskCommand {
     #[arg(long, help = "Optional topic to filter by")]
     pub topic: Option<String>,
 
-    #[arg(long, help = "Maximum number of results to return", default_value = "10")]
+    #[arg(
+        long,
+        help = "Maximum number of results to return",
+        default_value = "10"
+    )]
     pub limit: Option<usize>,
 
-    #[arg(long, default_value = "both", help = "RAG backend: raglite | irontology | both (default: both)")]
+    #[arg(
+        long,
+        default_value = "both",
+        help = "RAG backend: raglite | irontology | both (default: both)"
+    )]
     pub rag: Option<String>,
 }
 
@@ -579,13 +591,21 @@ pub struct GrokLearnCommand {
     #[arg(help = "Content to learn from (positional; required unless --source is given)")]
     pub content: Option<String>,
 
-    #[arg(short = 't', long, help = "Topic for RAG indexing (required for raglite backend)")]
+    #[arg(
+        short = 't',
+        long,
+        help = "Topic for RAG indexing (required for raglite backend)"
+    )]
     pub topic: Option<String>,
 
     #[arg(short = 's', long, help = "Source URL or file path")]
     pub source: Option<String>,
 
-    #[arg(long, default_value = "both", help = "RAG backend: raglite | irontology | both (default: both)")]
+    #[arg(
+        long,
+        default_value = "both",
+        help = "RAG backend: raglite | irontology | both (default: both)"
+    )]
     pub rag: Option<String>,
 }
 
@@ -824,14 +844,16 @@ pub struct UpCommand {
 
 impl_mcp_tool!(UpCommand, "b00t_up", ["up"]);
 
-
 // ── b00t task MCP tools (BT1) — native task management, replaces taskmaster-ai ─
 // 🤓 These proxy directly to `b00t task` CLI subcommands. No external deps.
 
 /// List tasks (active = pending + in-progress by default)
 #[derive(Parser, Clone)]
 pub struct TaskListCommand {
-    #[arg(long, help = "Filter: pending|in-progress|done|blocked|all (default: active)")]
+    #[arg(
+        long,
+        help = "Filter: pending|in-progress|done|blocked|all (default: active)"
+    )]
     pub status: Option<String>,
     #[arg(long, help = "Filter by tag")]
     pub tag: Option<String>,
@@ -857,7 +879,12 @@ pub struct TaskAddCommand {
     pub description: Option<String>,
     #[arg(long = "criteria", short = 'c', help = "Acceptance criteria")]
     pub acceptance_criteria: Option<String>,
-    #[arg(long, short, help = "Priority 1-4 (1=critical, 4=low)", default_value = "3")]
+    #[arg(
+        long,
+        short,
+        help = "Priority 1-4 (1=critical, 4=low)",
+        default_value = "3"
+    )]
     pub priority: u8,
     #[arg(long, short, help = "Tags (comma-separated)")]
     pub tags: Option<String>,
@@ -1012,42 +1039,72 @@ mod tests {
         // Regression test for #339/#330: content must be emitted positionally, not as --content
         let mut params = HashMap::new();
         params.insert("topic".to_string(), serde_json::json!("rust"));
-        params.insert("content".to_string(), serde_json::json!("ownership prevents data races"));
+        params.insert(
+            "content".to_string(),
+            serde_json::json!("ownership prevents data races"),
+        );
 
         let args = GrokDigestCommand::params_to_args(&params);
         // content must appear as a positional value
-        assert!(args.contains(&"ownership prevents data races".to_string()), "content should be positional");
+        assert!(
+            args.contains(&"ownership prevents data races".to_string()),
+            "content should be positional"
+        );
         // must NOT appear as a flag
-        assert!(!args.contains(&"--content".to_string()), "--content flag must not be emitted");
+        assert!(
+            !args.contains(&"--content".to_string()),
+            "--content flag must not be emitted"
+        );
         // topic is a named flag
-        assert!(args.contains(&"--topic".to_string()), "--topic flag must be present");
+        assert!(
+            args.contains(&"--topic".to_string()),
+            "--topic flag must be present"
+        );
     }
 
     #[test]
     fn test_grok_ask_query_is_positional() {
         // Regression test for #339/#330: query must be emitted positionally, not as --query
         let mut params = HashMap::new();
-        params.insert("query".to_string(), serde_json::json!("memory safety patterns"));
+        params.insert(
+            "query".to_string(),
+            serde_json::json!("memory safety patterns"),
+        );
 
         let args = GrokAskCommand::params_to_args(&params);
         // query must appear as a positional value
-        assert!(args.contains(&"memory safety patterns".to_string()), "query should be positional");
+        assert!(
+            args.contains(&"memory safety patterns".to_string()),
+            "query should be positional"
+        );
         // must NOT appear as a flag
-        assert!(!args.contains(&"--query".to_string()), "--query flag must not be emitted");
+        assert!(
+            !args.contains(&"--query".to_string()),
+            "--query flag must not be emitted"
+        );
     }
 
     #[test]
     fn test_grok_learn_content_is_positional() {
         // Regression test for #339/#330: content must be emitted positionally, not as --content
         let mut params = HashMap::new();
-        params.insert("content".to_string(), serde_json::json!("Rust is a systems language"));
+        params.insert(
+            "content".to_string(),
+            serde_json::json!("Rust is a systems language"),
+        );
         params.insert("topic".to_string(), serde_json::json!("rust"));
 
         let args = GrokLearnCommand::params_to_args(&params);
         // content must appear as a positional value
-        assert!(args.contains(&"Rust is a systems language".to_string()), "content should be positional");
+        assert!(
+            args.contains(&"Rust is a systems language".to_string()),
+            "content should be positional"
+        );
         // must NOT appear as a flag
-        assert!(!args.contains(&"--content".to_string()), "--content flag must not be emitted");
+        assert!(
+            !args.contains(&"--content".to_string()),
+            "--content flag must not be emitted"
+        );
     }
 
     #[test]
@@ -1062,11 +1119,31 @@ mod tests {
             let props = tool.input_schema["properties"].as_object().unwrap();
             if let Some(rag_prop) = props.get("rag") {
                 let description = rag_prop["description"].as_str().unwrap_or("");
-                assert!(description.contains("raglite"), "rag description should mention 'raglite' for tool {}", tool.name);
-                assert!(description.contains("irontology"), "rag description should mention 'irontology' for tool {}", tool.name);
-                assert!(description.contains("both"), "rag description should mention 'both' for tool {}", tool.name);
-                assert!(!description.contains("qdrant"), "rag description must not mention 'qdrant' for tool {}", tool.name);
-                assert!(!description.contains("raglight"), "rag description must not mention legacy 'raglight' for tool {}", tool.name);
+                assert!(
+                    description.contains("raglite"),
+                    "rag description should mention 'raglite' for tool {}",
+                    tool.name
+                );
+                assert!(
+                    description.contains("irontology"),
+                    "rag description should mention 'irontology' for tool {}",
+                    tool.name
+                );
+                assert!(
+                    description.contains("both"),
+                    "rag description should mention 'both' for tool {}",
+                    tool.name
+                );
+                assert!(
+                    !description.contains("qdrant"),
+                    "rag description must not mention 'qdrant' for tool {}",
+                    tool.name
+                );
+                assert!(
+                    !description.contains("raglight"),
+                    "rag description must not mention legacy 'raglight' for tool {}",
+                    tool.name
+                );
             }
         }
     }

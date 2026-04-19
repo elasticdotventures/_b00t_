@@ -160,10 +160,14 @@ impl JustfileAst {
         let new_vars: std::collections::HashSet<&str> =
             other.assignments.keys().map(String::as_str).collect();
 
-        let added_variables: Vec<String> =
-            new_vars.difference(&old_vars).map(|s| s.to_string()).collect();
-        let removed_variables: Vec<String> =
-            old_vars.difference(&new_vars).map(|s| s.to_string()).collect();
+        let added_variables: Vec<String> = new_vars
+            .difference(&old_vars)
+            .map(|s| s.to_string())
+            .collect();
+        let removed_variables: Vec<String> = old_vars
+            .difference(&new_vars)
+            .map(|s| s.to_string())
+            .collect();
         let has_changes = !added.is_empty()
             || !removed.is_empty()
             || !modified.is_empty()
@@ -203,9 +207,7 @@ impl JustfileAst {
     }
 
     fn run_dump(path: &Path) -> Result<(JustDump, Option<SystemTime>)> {
-        let mtime = std::fs::metadata(path)
-            .and_then(|m| m.modified())
-            .ok();
+        let mtime = std::fs::metadata(path).and_then(|m| m.modified()).ok();
 
         let working_dir = path.parent().unwrap_or_else(|| Path::new("."));
 
@@ -226,8 +228,8 @@ impl JustfileAst {
             anyhow::bail!("just --dump failed: {}", stderr);
         }
 
-        let dump: JustDump = serde_json::from_slice(&output.stdout)
-            .context("failed to parse just JSON dump")?;
+        let dump: JustDump =
+            serde_json::from_slice(&output.stdout).context("failed to parse just JSON dump")?;
 
         Ok((dump, mtime))
     }
@@ -246,7 +248,10 @@ pub struct AstDiff {
 
 impl AstDiff {
     pub fn empty() -> Self {
-        Self { has_changes: false, ..Default::default() }
+        Self {
+            has_changes: false,
+            ..Default::default()
+        }
     }
 
     pub fn is_empty(&self) -> bool {
@@ -263,13 +268,25 @@ impl AstDiff {
         }
         let mut parts = vec![];
         if !self.added_recipes.is_empty() {
-            parts.push(format!("+{} recipe(s): {}", self.added_recipes.len(), self.added_recipes.join(", ")));
+            parts.push(format!(
+                "+{} recipe(s): {}",
+                self.added_recipes.len(),
+                self.added_recipes.join(", ")
+            ));
         }
         if !self.removed_recipes.is_empty() {
-            parts.push(format!("-{} recipe(s): {}", self.removed_recipes.len(), self.removed_recipes.join(", ")));
+            parts.push(format!(
+                "-{} recipe(s): {}",
+                self.removed_recipes.len(),
+                self.removed_recipes.join(", ")
+            ));
         }
         if !self.modified_recipes.is_empty() {
-            let names: Vec<&str> = self.modified_recipes.iter().map(|d| d.name.as_str()).collect();
+            let names: Vec<&str> = self
+                .modified_recipes
+                .iter()
+                .map(|d| d.name.as_str())
+                .collect();
             parts.push(format!("~{} changed: {}", names.len(), names.join(", ")));
         }
         parts.join("; ")
@@ -311,37 +328,64 @@ mod tests {
 
     fn make_recipe(name: &str, doc: Option<&str>) -> JustRecipe {
         JustRecipe {
-            name: name.to_string(), namepath: name.to_string(),
+            name: name.to_string(),
+            namepath: name.to_string(),
             doc: doc.map(str::to_string),
             body: serde_json::Value::Array(vec![]),
-            dependencies: vec![], parameters: vec![],
-            private: false, quiet: false, shebang: false,
-            attributes: vec![], priors: 0,
+            dependencies: vec![],
+            parameters: vec![],
+            private: false,
+            quiet: false,
+            shebang: false,
+            attributes: vec![],
+            priors: 0,
         }
     }
     fn make_dump(recipes: &[(&str, Option<&str>)]) -> JustDump {
         let mut map = HashMap::new();
-        for (name, doc) in recipes { map.insert(name.to_string(), make_recipe(name, *doc)); }
-        JustDump { aliases: HashMap::new(), assignments: HashMap::new(), first: None,
-            recipes: map, settings: JustSettings::default(), source: None, warnings: vec![] }
+        for (name, doc) in recipes {
+            map.insert(name.to_string(), make_recipe(name, *doc));
+        }
+        JustDump {
+            aliases: HashMap::new(),
+            assignments: HashMap::new(),
+            first: None,
+            recipes: map,
+            settings: JustSettings::default(),
+            source: None,
+            warnings: vec![],
+        }
     }
     #[test]
     fn identical_dumps_produce_empty_diff() {
         let old_dump = make_dump(&[("build", Some("Build")), ("test", None)]);
-        let ast = JustfileAst { path: std::path::PathBuf::from("/fake/justfile"), dump: old_dump, loaded_mtime: None };
+        let ast = JustfileAst {
+            path: std::path::PathBuf::from("/fake/justfile"),
+            dump: old_dump,
+            loaded_mtime: None,
+        };
         let same_dump = make_dump(&[("build", Some("Build")), ("test", None)]);
         let diff = ast.diff_with(&same_dump);
-        assert!(diff.is_empty(), "identical justfiles must produce empty diff");
+        assert!(
+            diff.is_empty(),
+            "identical justfiles must produce empty diff"
+        );
     }
     #[test]
     fn added_recipe_produces_nonempty_diff() {
         let old_dump = make_dump(&[("build", None)]);
-        let ast = JustfileAst { path: std::path::PathBuf::from("/fake/justfile"), dump: old_dump, loaded_mtime: None };
+        let ast = JustfileAst {
+            path: std::path::PathBuf::from("/fake/justfile"),
+            dump: old_dump,
+            loaded_mtime: None,
+        };
         let new_dump = make_dump(&[("build", None), ("test", None)]);
         let diff = ast.diff_with(&new_dump);
         assert!(!diff.is_empty());
         assert!(diff.added_recipes.contains(&"test".to_string()));
     }
     #[test]
-    fn astdiff_empty_is_empty() { assert!(AstDiff::empty().is_empty()); }
+    fn astdiff_empty_is_empty() {
+        assert!(AstDiff::empty().is_empty());
+    }
 }

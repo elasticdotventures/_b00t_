@@ -476,7 +476,10 @@ output_types = [".job.toml", ".md", ".txt"]
         let content = "---\nname: fast-rust\ndescription: Fast, reliable Rust code. Use when writing Rust.\n---\n# Fast Rust\nWrite idiomatic Rust.";
         let (fm, body) = parse_skill_md_frontmatter(content).unwrap();
         assert_eq!(fm.name, "fast-rust");
-        assert_eq!(fm.description, "Fast, reliable Rust code. Use when writing Rust.");
+        assert_eq!(
+            fm.description,
+            "Fast, reliable Rust code. Use when writing Rust."
+        );
         assert!(body.contains("Write idiomatic Rust."));
     }
 
@@ -526,9 +529,16 @@ Instructions here.
         assert_eq!(datum.datum.name, "test-skill-md");
         let cfg = datum.skill_config().unwrap();
         assert_eq!(cfg.description, "Test skill from SKILL.md format.");
-        assert!(cfg.instructions_inline.as_deref().unwrap().contains("Instructions here."));
+        assert!(
+            cfg.instructions_inline
+                .as_deref()
+                .unwrap()
+                .contains("Instructions here.")
+        );
         // load_instructions returns inline content without needing a real path
-        let instructions = datum.load_instructions(&PathBuf::from("/nonexistent")).unwrap();
+        let instructions = datum
+            .load_instructions(&PathBuf::from("/nonexistent"))
+            .unwrap();
         assert!(instructions.contains("Instructions here."));
     }
 

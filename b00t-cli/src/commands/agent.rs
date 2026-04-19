@@ -75,13 +75,22 @@ pub enum AgentCommands {
         #[arg(long, help = "Block until completion")]
         blocking: bool,
 
-        #[arg(long, help = "Inject skill instructions into task context (skill name)")]
+        #[arg(
+            long,
+            help = "Inject skill instructions into task context (skill name)"
+        )]
         skill: Option<String>,
 
-        #[arg(long, help = "Inject role constraints into task context (role datum name)")]
+        #[arg(
+            long,
+            help = "Inject role constraints into task context (role datum name)"
+        )]
         role: Option<String>,
 
-        #[arg(long, help = "Expected output contract enforced at completion (e.g. 'PASS|FAIL:<5lines>')")]
+        #[arg(
+            long,
+            help = "Expected output contract enforced at completion (e.g. 'PASS|FAIL:<5lines>')"
+        )]
         output_contract: Option<String>,
     },
 
@@ -446,7 +455,8 @@ async fn handle_delegate(
     let deadline_duration = deadline.map(|mins| Duration::from_secs(mins * 60));
 
     // Build enriched task description with skill/role context injection
-    let enriched_description = build_enriched_description(description, skill, role, output_contract);
+    let enriched_description =
+        build_enriched_description(description, skill, role, output_contract);
 
     println!("📋 Delegating task {} to {}", task_id, worker);
     if skill.is_some() || role.is_some() {
@@ -721,7 +731,11 @@ async fn handle_start_all(dir: &PathBuf) -> Result<()> {
 
 /// Direct deterministic agent invocation — no Redis, no Python, no ralph.
 /// Loads [b00t.agent.executor] from <agent>.agent.toml, runs invoke_agent_executor() loop.
-async fn handle_invoke(agent: &str, prompt: &str, config_override: Option<&std::path::Path>) -> Result<()> {
+async fn handle_invoke(
+    agent: &str,
+    prompt: &str,
+    config_override: Option<&std::path::Path>,
+) -> Result<()> {
     use b00t_c0re_lib::agent_manager::{AgentManager, invoke_agent_executor};
 
     // Resolve config path: override → _b00t_/<agent>.agent.toml → cwd search
@@ -733,21 +747,23 @@ async fn handle_invoke(agent: &str, prompt: &str, config_override: Option<&std::
         if candidate.exists() {
             candidate
         } else {
-            anyhow::bail!("No config found for agent '{}' at {}", agent, candidate.display());
+            anyhow::bail!(
+                "No config found for agent '{}' at {}",
+                agent,
+                candidate.display()
+            );
         }
     };
 
     let config = AgentManager::load_config(&config_path).await?;
 
-    let executor = config
-        .b00t
-        .agent
-        .executor
-        .as_ref()
-        .ok_or_else(|| anyhow::anyhow!(
+    let executor = config.b00t.agent.executor.as_ref().ok_or_else(|| {
+        anyhow::anyhow!(
             "Agent '{}' has no [b00t.agent.executor] section in {}",
-            agent, config_path.display()
-        ))?;
+            agent,
+            config_path.display()
+        )
+    })?;
 
     // Merge agent env into process env
     let mut env: std::collections::HashMap<String, String> = std::env::vars().collect();
@@ -755,8 +771,15 @@ async fn handle_invoke(agent: &str, prompt: &str, config_override: Option<&std::
         env.extend(agent_env.clone());
     }
 
-    println!("🤖 Invoking {} (max {} iterations)", agent, executor.max_iterations);
-    println!("   cli: {} {}", executor.cli_path, executor.cli_args.join(" "));
+    println!(
+        "🤖 Invoking {} (max {} iterations)",
+        agent, executor.max_iterations
+    );
+    println!(
+        "   cli: {} {}",
+        executor.cli_path,
+        executor.cli_args.join(" ")
+    );
 
     let result = invoke_agent_executor(executor, &env, prompt)
         .map_err(|e| anyhow::anyhow!("Agent invocation failed: {}", e))?;
@@ -1072,7 +1095,8 @@ mod tests {
 
     #[test]
     fn test_build_enriched_description_with_output_contract() {
-        let result = build_enriched_description("run tests", None, None, Some("PASS|FAIL:<5lines>"));
+        let result =
+            build_enriched_description("run tests", None, None, Some("PASS|FAIL:<5lines>"));
         assert!(result.contains("[OUTPUT CONTRACT: PASS|FAIL:<5lines>]"));
         assert!(result.contains("run tests"));
         assert!(result.contains("---"));
@@ -1081,7 +1105,8 @@ mod tests {
     #[test]
     fn test_build_enriched_description_with_missing_skill_graceful() {
         // Skill not found — should not panic, just note it
-        let result = build_enriched_description("do work", Some("nonexistent-skill-xyz"), None, None);
+        let result =
+            build_enriched_description("do work", Some("nonexistent-skill-xyz"), None, None);
         assert!(result.contains("nonexistent-skill-xyz"));
         assert!(result.contains("do work"));
     }

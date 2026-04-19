@@ -45,7 +45,11 @@ pub struct DatumNode {
 }
 
 impl DatumNode {
-    pub fn new(topic: impl Into<String>, class: impl Into<String>, content: impl Into<String>) -> Self {
+    pub fn new(
+        topic: impl Into<String>,
+        class: impl Into<String>,
+        content: impl Into<String>,
+    ) -> Self {
         Self {
             topic: topic.into(),
             class: class.into(),
@@ -193,7 +197,10 @@ impl IrontologyBridgeClient {
             data_path: Some(data_dir),
         };
         let store = Arc::new(NeumannStore::try_new(config)?);
-        Ok(Self { store, namespace: ns })
+        Ok(Self {
+            store,
+            namespace: ns,
+        })
     }
 
     /// Ingest a `DatumNode` into the neumann store
@@ -204,9 +211,13 @@ impl IrontologyBridgeClient {
         let fact_count = facts.len();
         let edge_count = edges.len();
 
-        self.store.upsert_facts(facts).await
+        self.store
+            .upsert_facts(facts)
+            .await
             .with_context(|| format!("upsert_facts for topic '{}'", datum.topic))?;
-        self.store.upsert_edges(edges).await
+        self.store
+            .upsert_edges(edges)
+            .await
             .with_context(|| format!("upsert_edges for topic '{}'", datum.topic))?;
 
         Ok(IrontologyIngestResult {
@@ -226,10 +237,13 @@ impl IrontologyBridgeClient {
         // 🤓 NeumannStore SemanticQuery::Facts uses EXACT subject match (not prefix).
         //    Fetch all facts, then filter by topic prefix in Rust.
         let topic_prefix = topic.map(|t| format!("b00t:datum/{}/", t));
-        let qr = self.store.query(SemanticQuery::Facts {
-            subject: None, // fetch all; prefix-filter below
-            predicate: None,
-        }).await?;
+        let qr = self
+            .store
+            .query(SemanticQuery::Facts {
+                subject: None, // fetch all; prefix-filter below
+                predicate: None,
+            })
+            .await?;
 
         // Group facts by subject → reconstruct DatumNode-like items
         let mut subjects: std::collections::HashMap<String, (String, String, Vec<String>)> =
@@ -243,7 +257,8 @@ impl IrontologyBridgeClient {
                 }
             }
             let entry = subjects.entry(fact.subject.clone()).or_insert_with(|| {
-                let topic_str = fact.subject
+                let topic_str = fact
+                    .subject
                     .split('/')
                     .nth(1)
                     .unwrap_or("unknown")
@@ -277,11 +292,21 @@ impl IrontologyBridgeClient {
             .map(|(subject, (t, content, tags))| {
                 // Simple relevance: count keyword occurrences
                 let score = content.to_lowercase().matches(&query_lower).count() as f32 + 1.0;
-                IrontologyQueryItem { subject, topic: t, content, tags, score }
+                IrontologyQueryItem {
+                    subject,
+                    topic: t,
+                    content,
+                    tags,
+                    score,
+                }
             })
             .collect();
 
-        results.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
+        results.sort_by(|a, b| {
+            b.score
+                .partial_cmp(&a.score)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
         results.truncate(max);
         Ok(results)
     }
@@ -424,7 +449,8 @@ mod tests {
         let results = client.query("ownership", Some("rust"), Some(5)).await?;
         assert!(!results.is_empty(), "Query must find ingested datum");
         assert!(
-            results[0].content.contains("ownership") || results[0].tags.contains(&"ownership".to_string()),
+            results[0].content.contains("ownership")
+                || results[0].tags.contains(&"ownership".to_string()),
             "Result must mention ownership"
         );
         Ok(())

@@ -1,9 +1,9 @@
+use crate::install::adapter::{InstallScope, RuntimeId};
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-use crate::install::adapter::{RuntimeId, InstallScope};
 
 pub const MANIFEST_FILENAME: &str = "b00t-manifest.json";
 pub const MANAGED_BLOCK_START: &str = "# BEGIN B00T MANAGED BLOCK";
@@ -37,7 +37,10 @@ impl B00tInstallManifest {
             b00t_version: env!("CARGO_PKG_VERSION").to_string(),
             installed_at: chrono::Utc::now().to_rfc3339(),
             runtime: format!("{:?}", runtime).to_lowercase(),
-            scope: match scope { InstallScope::Global => "global".into(), InstallScope::Local(p) => p.display().to_string() },
+            scope: match scope {
+                InstallScope::Global => "global".into(),
+                InstallScope::Local(p) => p.display().to_string(),
+            },
             files: HashMap::new(),
             managed_blocks: Vec::new(),
         }
@@ -46,10 +49,13 @@ impl B00tInstallManifest {
     /// Record a file as b00t-owned (absolute path, SHA256 of content, owning pack id)
     pub fn record_file(&mut self, path: &Path, content: &[u8], pack_id: &str) {
         let sha256 = format!("{:x}", Sha256::digest(content));
-        self.files.insert(path.to_path_buf(), ManifestFileEntry {
-            sha256,
-            content_pack_id: pack_id.to_string(),
-        });
+        self.files.insert(
+            path.to_path_buf(),
+            ManifestFileEntry {
+                sha256,
+                content_pack_id: pack_id.to_string(),
+            },
+        );
     }
 
     /// Return true if the file at `path` matches the recorded SHA256
@@ -87,12 +93,23 @@ pub fn inject_managed_block(file_path: &Path, content: &str) -> Result<()> {
         String::new()
     };
 
-    let block = format!("{}\n{}\n{}", MANAGED_BLOCK_START, content, MANAGED_BLOCK_END);
+    let block = format!(
+        "{}\n{}\n{}",
+        MANAGED_BLOCK_START, content, MANAGED_BLOCK_END
+    );
 
     let result = if existing.contains(MANAGED_BLOCK_START) {
         // Replace existing block
-        let before = existing.split(MANAGED_BLOCK_START).next().unwrap_or("").to_string();
-        let after = existing.split(MANAGED_BLOCK_END).nth(1).unwrap_or("").to_string();
+        let before = existing
+            .split(MANAGED_BLOCK_START)
+            .next()
+            .unwrap_or("")
+            .to_string();
+        let after = existing
+            .split(MANAGED_BLOCK_END)
+            .nth(1)
+            .unwrap_or("")
+            .to_string();
         format!("{}{}{}", before, block, after)
     } else {
         // Append block
@@ -108,12 +125,26 @@ pub fn inject_managed_block(file_path: &Path, content: &str) -> Result<()> {
 
 /// Remove the managed block from `file_path`, preserving surrounding content.
 pub fn remove_managed_block(file_path: &Path) -> Result<()> {
-    if !file_path.exists() { return Ok(()); }
+    if !file_path.exists() {
+        return Ok(());
+    }
     let content = std::fs::read_to_string(file_path)?;
-    if !content.contains(MANAGED_BLOCK_START) { return Ok(()); }
+    if !content.contains(MANAGED_BLOCK_START) {
+        return Ok(());
+    }
 
-    let before = content.split(MANAGED_BLOCK_START).next().unwrap_or("").trim_end().to_string();
-    let after = content.split(MANAGED_BLOCK_END).nth(1).unwrap_or("").trim_start().to_string();
+    let before = content
+        .split(MANAGED_BLOCK_START)
+        .next()
+        .unwrap_or("")
+        .trim_end()
+        .to_string();
+    let after = content
+        .split(MANAGED_BLOCK_END)
+        .nth(1)
+        .unwrap_or("")
+        .trim_start()
+        .to_string();
     std::fs::write(file_path, format!("{}\n{}", before, after))?;
     Ok(())
 }
@@ -153,10 +184,13 @@ mod tests {
     fn test_manifest_save_and_load_roundtrip() {
         let dir = TempDir::new().unwrap();
         let mut manifest = B00tInstallManifest::new(RuntimeId::Gemini, InstallScope::Global);
-        manifest.files.insert(dir.path().join("foo.js"), ManifestFileEntry {
-            sha256: "abc123".to_string(),
-            content_pack_id: "skills".to_string(),
-        });
+        manifest.files.insert(
+            dir.path().join("foo.js"),
+            ManifestFileEntry {
+                sha256: "abc123".to_string(),
+                content_pack_id: "skills".to_string(),
+            },
+        );
 
         manifest.save(dir.path()).unwrap();
         let loaded = B00tInstallManifest::load(dir.path()).unwrap();
@@ -173,7 +207,11 @@ mod tests {
 
         // All keys must be absolute
         for path in manifest.files.keys() {
-            assert!(path.is_absolute(), "Expected absolute path, got: {:?}", path);
+            assert!(
+                path.is_absolute(),
+                "Expected absolute path, got: {:?}",
+                path
+            );
         }
     }
 

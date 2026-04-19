@@ -393,10 +393,7 @@ impl JobDatum {
 /// ch0nky   = { models = ["qwen3-coder-next", "sonnet"], tasks = ["implement"] }
 /// frontier = { models = ["claude-opus", "gpt-4o"], tasks = ["architecture"] }
 /// ```
-pub fn resolve_cognitive_tier(
-    tier_name: &str,
-    tier_map: &serde_json::Value,
-) -> Option<String> {
+pub fn resolve_cognitive_tier(tier_name: &str, tier_map: &serde_json::Value) -> Option<String> {
     tier_map
         .get(tier_name)
         .and_then(|t| t.get("models"))
@@ -546,7 +543,10 @@ prompt = "implement foo"
 
         let test_step = &job_config.steps[0];
         assert_eq!(test_step.cognitive_tier.as_deref(), Some("sm0l"));
-        assert_eq!(test_step.output_contract.as_deref(), Some("PASS|FAIL:<5lines>"));
+        assert_eq!(
+            test_step.output_contract.as_deref(),
+            Some("PASS|FAIL:<5lines>")
+        );
 
         let impl_step = &job_config.steps[1];
         assert_eq!(impl_step.cognitive_tier.as_deref(), Some("ch0nky"));
@@ -561,9 +561,18 @@ prompt = "implement foo"
             "frontier": { "models": ["claude-opus", "gpt-4o"], "tasks": ["architecture"] }
         });
 
-        assert_eq!(resolve_cognitive_tier("sm0l", &tier_map).as_deref(), Some("qwen2.5-3b"));
-        assert_eq!(resolve_cognitive_tier("ch0nky", &tier_map).as_deref(), Some("qwen3-coder-next"));
-        assert_eq!(resolve_cognitive_tier("frontier", &tier_map).as_deref(), Some("claude-opus"));
+        assert_eq!(
+            resolve_cognitive_tier("sm0l", &tier_map).as_deref(),
+            Some("qwen2.5-3b")
+        );
+        assert_eq!(
+            resolve_cognitive_tier("ch0nky", &tier_map).as_deref(),
+            Some("qwen3-coder-next")
+        );
+        assert_eq!(
+            resolve_cognitive_tier("frontier", &tier_map).as_deref(),
+            Some("claude-opus")
+        );
         assert!(resolve_cognitive_tier("unknown", &tier_map).is_none());
     }
 }

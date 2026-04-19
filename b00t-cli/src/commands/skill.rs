@@ -10,8 +10,8 @@ use clap::Parser;
 use serde_json::json;
 use std::path::Path;
 
-use crate::skill_resolver::SkillResolver;
 use crate::get_expanded_path;
+use crate::skill_resolver::SkillResolver;
 
 #[derive(Parser)]
 pub enum SkillCommands {
@@ -143,7 +143,10 @@ pub fn handle_skill_command(cmd: &SkillCommands, path: &str) -> Result<()> {
                     println!("   tags: {}", meta.tags.join(", "));
                 }
                 println!("   source: {}", meta.source_dir.display());
-                println!("\n💡 Use `b00t skill activate {}` to load full instructions", name);
+                println!(
+                    "\n💡 Use `b00t skill activate {}` to load full instructions",
+                    name
+                );
             }
             Ok(())
         }
@@ -172,7 +175,10 @@ fn build_resolver(path: &str) -> SkillResolver {
     match get_expanded_path(path) {
         Ok(expanded) => SkillResolver::for_path(&expanded),
         Err(_) => {
-            eprintln!("⚠️  Could not expand path '{}', resolving skills from current directory", path);
+            eprintln!(
+                "⚠️  Could not expand path '{}', resolving skills from current directory",
+                path
+            );
             SkillResolver::default()
         }
     }
@@ -305,10 +311,8 @@ mod tests {
         let original_cwd = std::env::current_dir().expect("failed to get current dir");
 
         // Create a unique temp project directory
-        let temp_root = std::env::temp_dir().join(format!(
-            "b00t_test_find_b00t_dir_{}",
-            std::process::id()
-        ));
+        let temp_root =
+            std::env::temp_dir().join(format!("b00t_test_find_b00t_dir_{}", std::process::id()));
         std::fs::create_dir_all(&temp_root).expect("failed to create temp project dir");
 
         // Create the project-local _b00t_ directory that find_b00t_dir() should discover

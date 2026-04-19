@@ -148,13 +148,16 @@ impl BlessingGraph {
                     .collect();
 
                 // Parse trifecta components
-                let usage_notes = n.get("usage_notes").and_then(|u| u.as_str()).map(|s| s.to_string());
+                let usage_notes = n
+                    .get("usage_notes")
+                    .and_then(|u| u.as_str())
+                    .map(|s| s.to_string());
 
                 let execute_access = n.get("execute_access").and_then(|e| {
                     Some(ExecuteAccess {
                         binary: e.get("binary")?.as_str()?.to_string(),
-                        tool_preference: None,  // TODO: parse from TOML if present
-                        bash_filters: vec![],   // TODO: parse from TOML if present
+                        tool_preference: None, // TODO: parse from TOML if present
+                        bash_filters: vec![],  // TODO: parse from TOML if present
                         allowed_args: e
                             .get("allowed_args")
                             .and_then(|a| a.as_array())
@@ -291,7 +294,9 @@ impl BlessingGraph {
             .iter()
             .filter(|n| {
                 // Node is available if all its requirements are met
-                n.requires.iter().all(|req| inventory.get(req).copied().unwrap_or(false))
+                n.requires
+                    .iter()
+                    .all(|req| inventory.get(req).copied().unwrap_or(false))
             })
             .cloned()
             .collect();
@@ -421,7 +426,10 @@ impl BlessingGraph {
         let mut toml_map = toml::map::Map::new();
 
         let mut b00t_map = toml::map::Map::new();
-        b00t_map.insert("name".to_string(), toml::Value::String("blessing-graph".to_string()));
+        b00t_map.insert(
+            "name".to_string(),
+            toml::Value::String("blessing-graph".to_string()),
+        );
 
         let nodes_array: Vec<toml::Value> = self
             .nodes
@@ -430,7 +438,10 @@ impl BlessingGraph {
                 let mut node_map = toml::map::Map::new();
                 node_map.insert("id".to_string(), toml::Value::String(n.id.clone()));
                 node_map.insert("type".to_string(), toml::Value::String(n.type_.clone()));
-                node_map.insert("cost_tokens".to_string(), toml::Value::Integer(n.cost_tokens as i64));
+                node_map.insert(
+                    "cost_tokens".to_string(),
+                    toml::Value::Integer(n.cost_tokens as i64),
+                );
                 node_map
             })
             .map(toml::Value::Table)
@@ -443,27 +454,27 @@ impl BlessingGraph {
     }
 }
 
-pub mod prompts;
+pub mod inference;
 pub mod irontology;
 pub mod prayer;
-pub mod inference;
+pub mod prompts;
 pub mod rag;
 
 // Export inference module types and functions for public API
 pub use inference::{
-    LLMInference, Embedding, ModelInfo, InferenceConfig, InferenceBackendSelector,
+    Embedding, InferenceBackendSelector, InferenceConfig, LLMInference, ModelInfo,
     select_inference_backend,
 };
 
 // Export rag module types for public API
 pub use rag::{
-    KnowledgeBase, BlessingMetadata, LayerMetadata, SemanticDiscoveryCallback, GraphRAG,
+    BlessingMetadata, GraphRAG, KnowledgeBase, LayerMetadata, SemanticDiscoveryCallback,
 };
 
 // Export prayer module types for public API
 pub use prayer::{
-    CompositionPlan, BlessingPrayerResult, BlessingRequest, BlessingEvaluator, BlessingPolicy,
-    PolicyCheckResult, CompositionValidation, AuditEventEmitter,
+    AuditEventEmitter, BlessingEvaluator, BlessingPolicy, BlessingPrayerResult, BlessingRequest,
+    CompositionPlan, CompositionValidation, PolicyCheckResult,
 };
 
 #[cfg(test)]

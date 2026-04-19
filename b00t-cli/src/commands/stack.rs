@@ -856,7 +856,7 @@ fn stack_deactivate(profile: &str, path: &str, dry_run: bool) -> Result<()> {
         .status();
 
     // Stop the template instance unit
-    let template_unit = format!("b00t@{}.service", profile);
+    let template_unit = crate::hive::stack_template_unit(profile);
     let status = std::process::Command::new("systemctl")
         .args(["--user", "stop", &template_unit])
         .status();
@@ -865,6 +865,15 @@ fn stack_deactivate(profile: &str, path: &str, dry_run: bool) -> Result<()> {
         Ok(s) if s.success() => println!("  stopped {}", template_unit),
         Ok(_) => println!("  {} was not running", template_unit),
         Err(e) => eprintln!("  systemctl stop failed: {}", e),
+    }
+
+    let disable_status = std::process::Command::new("systemctl")
+        .args(["--user", "disable", &template_unit])
+        .status();
+    match disable_status {
+        Ok(s) if s.success() => println!("  disabled {}", template_unit),
+        Ok(_) => println!("  {} remained disabled", template_unit),
+        Err(e) => eprintln!("  systemctl disable failed: {}", e),
     }
 
     // Activate idle/download-mode fallback if present

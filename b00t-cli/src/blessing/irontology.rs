@@ -16,10 +16,10 @@ pub struct ValidationResult {
 /// Validation error - blocks blessing execution
 #[derive(Debug, Clone, PartialEq)]
 pub enum ValidationError {
-    CircularDependency(Vec<String>), // cycle path
+    CircularDependency(Vec<String>),        // cycle path
     UnresolvableDependency(String, String), // blessing, missing requirement
-    InvalidRole(String), // role not in any blessing access list
-    BudgetExceeded(u32, u32), // total, limit
+    InvalidRole(String),                    // role not in any blessing access list
+    BudgetExceeded(u32, u32),               // total, limit
     DuplicateBlessingId(String),
 }
 
@@ -48,9 +48,9 @@ impl std::fmt::Display for ValidationError {
 /// Validation warning - should be addressed
 #[derive(Debug, Clone, PartialEq)]
 pub enum ValidationWarning {
-    UnusedBlessing(String), // not required by anything
+    UnusedBlessing(String),             // not required by anything
     InaccessibleToRole(String, String), // blessing, role
-    HighCostBlessing(String, u32), // blessing, cost
+    HighCostBlessing(String, u32),      // blessing, cost
 }
 
 impl std::fmt::Display for ValidationWarning {
@@ -60,7 +60,11 @@ impl std::fmt::Display for ValidationWarning {
                 write!(f, "Blessing '{}' is not required by any other blessing", id)
             }
             ValidationWarning::InaccessibleToRole(blessing, role) => {
-                write!(f, "Blessing '{}' is not accessible to role '{}'", blessing, role)
+                write!(
+                    f,
+                    "Blessing '{}' is not accessible to role '{}'",
+                    blessing, role
+                )
             }
             ValidationWarning::HighCostBlessing(id, cost) => {
                 write!(f, "Blessing '{}' has high cost: {} tokens", id, cost)
@@ -78,7 +82,10 @@ pub struct BlessingValidator {
 impl BlessingValidator {
     /// Create a new validator for a blessing graph
     pub fn new(graph: BlessingGraph, budget_limit: u32) -> Self {
-        BlessingValidator { graph, budget_limit }
+        BlessingValidator {
+            graph,
+            budget_limit,
+        }
     }
 
     /// Run all validation checks
@@ -109,7 +116,10 @@ impl BlessingValidator {
         // Check 4: Total budget within limits
         let total_cost: u32 = self.graph.nodes.iter().map(|n| n.cost_tokens).sum();
         if total_cost > self.budget_limit {
-            errors.push(ValidationError::BudgetExceeded(total_cost, self.budget_limit));
+            errors.push(ValidationError::BudgetExceeded(
+                total_cost,
+                self.budget_limit,
+            ));
         }
 
         // Warning: Unused blessings
@@ -350,9 +360,9 @@ mod tests {
                 requires: vec!["blessing:missing".to_string()],
                 constraint: None,
                 budget_tokens: None,
-                    usage_notes: None,
-                    execute_access: None,
-                    data_permissions: None,
+                usage_notes: None,
+                execute_access: None,
+                data_permissions: None,
             }],
             edges: vec![],
         };
@@ -361,9 +371,12 @@ mod tests {
         let result = validator.validate();
 
         assert!(!result.valid);
-        assert!(result.errors.iter().any(|e| {
-            matches!(e, ValidationError::UnresolvableDependency(_, _))
-        }));
+        assert!(
+            result
+                .errors
+                .iter()
+                .any(|e| { matches!(e, ValidationError::UnresolvableDependency(_, _)) })
+        );
     }
 
     #[test]
@@ -406,9 +419,12 @@ mod tests {
         let result = validator.validate();
 
         assert!(!result.valid);
-        assert!(result.errors.iter().any(|e| {
-            matches!(e, ValidationError::BudgetExceeded(_, _))
-        }));
+        assert!(
+            result
+                .errors
+                .iter()
+                .any(|e| { matches!(e, ValidationError::BudgetExceeded(_, _)) })
+        );
     }
 
     #[test]
@@ -451,9 +467,12 @@ mod tests {
         let result = validator.validate();
 
         assert!(!result.valid);
-        assert!(result.errors.iter().any(|e| {
-            matches!(e, ValidationError::DuplicateBlessingId(_))
-        }));
+        assert!(
+            result
+                .errors
+                .iter()
+                .any(|e| { matches!(e, ValidationError::DuplicateBlessingId(_)) })
+        );
     }
 
     #[test]
@@ -496,8 +515,11 @@ mod tests {
         let result = validator.validate();
 
         assert!(result.valid);
-        assert!(result.warnings.iter().any(|w| {
-            matches!(w, ValidationWarning::UnusedBlessing(_))
-        }));
+        assert!(
+            result
+                .warnings
+                .iter()
+                .any(|w| { matches!(w, ValidationWarning::UnusedBlessing(_)) })
+        );
     }
 }

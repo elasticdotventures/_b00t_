@@ -36,7 +36,8 @@ fn test_b00t_whoami_runs() -> Result<(), Box<dyn std::error::Error>> {
     // whoami may fail (missing config) but MUST NOT panic (exit 101 = rust panic)
     let exit_code = output.status.code().unwrap_or(0);
     assert_ne!(
-        exit_code, 101,
+        exit_code,
+        101,
         "b00t whoami panicked (exit 101): {}",
         String::from_utf8_lossy(&output.stderr)
     );
@@ -56,7 +57,8 @@ fn test_b00t_hive_status_runs() -> Result<(), Box<dyn std::error::Error>> {
 
     let exit_code = output.status.code().unwrap_or(0);
     assert_ne!(
-        exit_code, 101,
+        exit_code,
+        101,
         "b00t hive status panicked (exit 101): {}",
         String::from_utf8_lossy(&output.stderr)
     );

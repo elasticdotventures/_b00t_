@@ -21,7 +21,9 @@ use anyhow::{Context as _, Result, bail};
 use clap::Parser;
 
 use crate::memory_provider::{FileMemory, MemoryProvider, detect_provider, soul_path};
-use crate::soul_writer::{FileSoulWriter, SoulMemoryWriter, active_soul_dir, global_soul_dir, local_soul_dir};
+use crate::soul_writer::{
+    FileSoulWriter, SoulMemoryWriter, active_soul_dir, global_soul_dir, local_soul_dir,
+};
 
 #[derive(Parser)]
 pub enum SoulCommands {
@@ -199,7 +201,11 @@ pub fn handle_soul_command(cmd: &SoulCommands) -> Result<()> {
                 tokio::runtime::Handle::current().block_on(serve_dbus(use_session, datum_dir))
             })
         }
-        SoulCommands::Distill { model, base_url, dry_run } => {
+        SoulCommands::Distill {
+            model,
+            base_url,
+            dry_run,
+        } => {
             let rt = tokio::runtime::Runtime::new()?;
             rt.block_on(distill_soul(model, base_url.as_deref(), *dry_run))
         }
@@ -212,9 +218,7 @@ pub fn handle_soul_command(cmd: &SoulCommands) -> Result<()> {
             soul_init(&target)
         }
 
-        SoulCommands::Where => {
-            soul_where()
-        }
+        SoulCommands::Where => soul_where(),
     }
 }
 
@@ -251,10 +255,7 @@ struct PrefixQuery {
     prefix: Option<String>,
 }
 
-async fn kv_get(
-    State(s): State<SoulState>,
-    AxumPath(key): AxumPath<String>,
-) -> impl IntoResponse {
+async fn kv_get(State(s): State<SoulState>, AxumPath(key): AxumPath<String>) -> impl IntoResponse {
     match s.provider.read(&key) {
         Ok(Some(val)) => {
             let body = serde_json::to_string(&KvValue { value: val }).unwrap_or_default();
@@ -280,7 +281,7 @@ async fn kv_put(
                 StatusCode::BAD_REQUEST,
                 format!("{{\"error\":\"bad JSON: {e}\"}}"),
             )
-                .into_response()
+                .into_response();
         }
     };
     match s.provider.write(&key, &kv.value) {
@@ -307,10 +308,7 @@ async fn kv_delete(
     }
 }
 
-async fn kv_list(
-    State(s): State<SoulState>,
-    Query(q): Query<PrefixQuery>,
-) -> impl IntoResponse {
+async fn kv_list(State(s): State<SoulState>, Query(q): Query<PrefixQuery>) -> impl IntoResponse {
     let prefix = q.prefix.as_deref().unwrap_or("");
     match s.provider.list_keys(prefix) {
         Ok(keys) => {
@@ -347,10 +345,7 @@ async fn serve_dbus(session: bool, datum_dir: std::path::PathBuf) -> Result<()> 
             let p = crate::hive::load_profile(profile, datum_dir)?;
             let snapshot = crate::hive::SystemSnapshot::capture()?;
             match crate::hive::activate_profile(&p, &snapshot, false, force) {
-                Ok(log) => Ok(StackResult {
-                    success: true,
-                    log,
-                }),
+                Ok(log) => Ok(StackResult { success: true, log }),
                 Err(e) => Ok(StackResult {
                     success: false,
                     log: vec![e.to_string()],
@@ -369,7 +364,10 @@ async fn serve_dbus(session: bool, datum_dir: std::path::PathBuf) -> Result<()> 
                 .status();
             Ok(StackResult {
                 success: true,
-                log: vec![format!("stopped {unit}"), format!("stopped {template_unit}")],
+                log: vec![
+                    format!("stopped {unit}"),
+                    format!("stopped {template_unit}"),
+                ],
             })
         },
     );
@@ -420,8 +418,7 @@ async fn serve_dbus(session: bool, datum_dir: std::path::PathBuf) -> Result<()> 
 /// Create `._b00t_/` workspace soul directory with skeleton files.
 fn soul_init(target: &std::path::Path) -> Result<()> {
     let soul_dir = target.join("._b00t_");
-    std::fs::create_dir_all(&soul_dir)
-        .with_context(|| format!("create {}", soul_dir.display()))?;
+    std::fs::create_dir_all(&soul_dir).with_context(|| format!("create {}", soul_dir.display()))?;
 
     // SOUL.tomllm — K/V identity file
     let tomllm = soul_dir.join("SOUL.tomllm");
@@ -451,7 +448,10 @@ fn soul_init(target: &std::path::Path) -> Result<()> {
                 "# Soul — {}\n\n\
                  Workspace soul initialized {today}.\n\
                  Distilled memories from sessions will be appended here.\n",
-                target.file_name().and_then(|n| n.to_str()).unwrap_or("workspace"),
+                target
+                    .file_name()
+                    .and_then(|n| n.to_str())
+                    .unwrap_or("workspace"),
             ),
         )?;
         println!("soul init: created {}", soul_md.display());
@@ -589,18 +589,15 @@ async fn distill_soul(tier: &str, base_url: Option<&str>, dry_run: bool) -> Resu
         .context("distill LLM response")?;
 
     let body: serde_json::Value = resp.json().await?;
-    let text = body["content"][0]["text"]
-        .as_str()
-        .unwrap_or("")
-        .to_owned();
+    let text = body["content"][0]["text"].as_str().unwrap_or("").to_owned();
 
     if text.is_empty() {
         bail!("soul distill: empty response from LLM");
     }
 
     // Parse TOML output — extract [facts] K/V and [markdown_summary].text
-    let parsed: toml::Value = toml::from_str(&text)
-        .with_context(|| format!("parse distill output as TOML:\n{text}"))?;
+    let parsed: toml::Value =
+        toml::from_str(&text).with_context(|| format!("parse distill output as TOML:\n{text}"))?;
 
     let facts: Vec<(String, String)> = parsed
         .get("facts")
@@ -671,14 +668,15 @@ struct MemoryWriteResponse {
     bytes_written: usize,
 }
 
-async fn memory_write(
-    State(s): State<SoulState>,
-    body: String,
-) -> impl IntoResponse {
+async fn memory_write(State(s): State<SoulState>, body: String) -> impl IntoResponse {
     let req: MemoryWriteRequest = match serde_json::from_str(&body) {
         Ok(r) => r,
         Err(e) => {
-            return (StatusCode::BAD_REQUEST, format!("{{\"error\":\"bad JSON: {e}\"}}")).into_response()
+            return (
+                StatusCode::BAD_REQUEST,
+                format!("{{\"error\":\"bad JSON: {e}\"}}"),
+            )
+                .into_response();
         }
     };
     let writer = crate::soul_writer::FileSoulWriter::detect();
@@ -688,9 +686,17 @@ async fn memory_write(
                 location: r.location,
                 bytes_written: r.bytes_written,
             };
-            (StatusCode::OK, serde_json::to_string(&resp).unwrap_or_default()).into_response()
+            (
+                StatusCode::OK,
+                serde_json::to_string(&resp).unwrap_or_default(),
+            )
+                .into_response()
         }
-        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, format!("{{\"error\":\"{e}\"}}")).into_response(),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("{{\"error\":\"{e}\"}}"),
+        )
+            .into_response(),
     }
 }
 

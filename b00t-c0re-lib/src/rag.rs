@@ -132,8 +132,8 @@ impl RagLightManager {
     fn discover_b00t_topics(_config: &RagLightConfig) -> Result<Vec<String>> {
         // 🤓 b00t datums live in ~/.b00t/_b00t_/ (not ~/.dotfiles/_b00t_/)
         //    B00T_DIR env var overrides; stem of each .toml (minus extension suffixes) = topic
-        let home = dirs::home_dir()
-            .ok_or_else(|| anyhow::anyhow!("Could not find home directory"))?;
+        let home =
+            dirs::home_dir().ok_or_else(|| anyhow::anyhow!("Could not find home directory"))?;
         let b00t_path = std::env::var("B00T_DIR")
             .map(|d| PathBuf::from(d).join("_b00t_"))
             .unwrap_or_else(|_| home.join(".b00t").join("_b00t_"));
@@ -285,8 +285,13 @@ impl RagLightManager {
         let db_url = format!("duckdb:///{}", config.vector_db_path.display());
         let llm_spec = format!("{}/{}", config.llm_config.provider, config.llm_config.model);
         let api_base = config.llm_config.api_base.clone();
-        let api_key = config.llm_config.api_key.clone().unwrap_or_else(|| "local".to_string());
-        let loader_type = format!("{:?}", source.loader_type.unwrap_or(LoaderType::Auto)).to_lowercase();
+        let api_key = config
+            .llm_config
+            .api_key
+            .clone()
+            .unwrap_or_else(|| "local".to_string());
+        let loader_type =
+            format!("{:?}", source.loader_type.unwrap_or(LoaderType::Auto)).to_lowercase();
 
         let mut cmd = Command::new(&python_cmd);
         cmd.arg("-c").arg(format!(
@@ -369,9 +374,17 @@ print(f'Indexed into {db_url}')
         // 🤓 raglite query: retrieve_chunks → rerank_chunks → print chunk bodies
         //    No topic filter in raglite (it's global DB); topic used for metadata context only
         let db_url = format!("duckdb:///{}", self.config.vector_db_path.display());
-        let llm_spec = format!("{}/{}", self.config.llm_config.provider, self.config.llm_config.model);
+        let llm_spec = format!(
+            "{}/{}",
+            self.config.llm_config.provider, self.config.llm_config.model
+        );
         let api_base = self.config.llm_config.api_base.clone();
-        let api_key = self.config.llm_config.api_key.clone().unwrap_or_else(|| "local".to_string());
+        let api_key = self
+            .config
+            .llm_config
+            .api_key
+            .clone()
+            .unwrap_or_else(|| "local".to_string());
 
         let mut cmd = Command::new(&python_cmd);
         cmd.arg("-c").arg(format!(

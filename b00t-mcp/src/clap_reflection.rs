@@ -119,7 +119,10 @@ pub trait McpExecutor {
         for (key, value) in params {
             // Skip keys that were already emitted as positionals
             let normalized = key.replace('-', "_");
-            if positionals.iter().any(|p| p.replace('-', "_") == normalized) {
+            if positionals
+                .iter()
+                .any(|p| p.replace('-', "_") == normalized)
+            {
                 continue;
             }
             match value {

@@ -27,7 +27,7 @@ mod inventory_tests {
 
     /// Test 2: Inventory scan captures all subsystems
     #[test]
-    #[ignore]  // Ignore until implementation ready
+    #[ignore] // Ignore until implementation ready
     fn test_inventory_scan_completes() {
         let result = Inventory::scan();
         assert!(result.is_ok(), "Should scan without error");
