@@ -1,0 +1,17 @@
+{
+  "object": "list",
+  "data": [
+    {
+      "id": "Qwen/Qwen3-Coder-30B-A3B-Instruct",
+      "object": "model",
+      "created": 1710000000,
+      "owned_by": "vllm"
+    },
+    {
+      "id": "qwen3-coder-local-alias",
+      "object": "model",
+      "created": 1710000001,
+      "owned_by": "vllm"
+    }
+  ]
+}

@@ -1,6 +1,6 @@
 use anyhow::{Result, anyhow};
-use b00t_cli::{SessionState, UnifiedConfig, load_datum_providers, whoami};
 use b00t_cli::k0mmand3r::K0mmand;
+use b00t_cli::{SessionState, UnifiedConfig, load_datum_providers, whoami};
 use clap::Parser;
 use duct::cmd;
 use serde_json::json;
@@ -226,7 +226,10 @@ The system will:
     Whoami {
         #[clap(long, help = "Override detected role (matches role datum)")]
         role: Option<String>,
-        #[clap(long, help = "Emit full skill metadata for all skills declared by the role")]
+        #[clap(
+            long,
+            help = "Emit full skill metadata for all skills declared by the role"
+        )]
         with_skills: bool,
     },
     #[clap(
@@ -1204,7 +1207,10 @@ fn normalize_slash_args(raw_args: Vec<String>) -> Vec<String> {
 
 fn load_cli_boot_datums(path: &str) -> Result<Vec<b00t_cli::BootDatum>> {
     let providers = load_datum_providers::<CliDatum>(path, ".cli.toml")?;
-    Ok(providers.into_iter().map(|provider| provider.datum().clone()).collect())
+    Ok(providers
+        .into_iter()
+        .map(|provider| provider.datum().clone())
+        .collect())
 }
 
 fn datum_slash_aliases(datum: &b00t_cli::BootDatum) -> Vec<String> {
@@ -1231,9 +1237,11 @@ fn find_cli_datum_for_slash<'a>(
     datums: &'a [b00t_cli::BootDatum],
 ) -> Option<&'a b00t_cli::BootDatum> {
     let normalized = normalize_slash(slash);
-    datums
-        .iter()
-        .find(|datum| datum_slash_aliases(datum).iter().any(|alias| alias == &normalized))
+    datums.iter().find(|datum| {
+        datum_slash_aliases(datum)
+            .iter()
+            .any(|alias| alias == &normalized)
+    })
 }
 
 fn b00t_home_for_path(_path: &str) -> Result<PathBuf> {
@@ -1248,7 +1256,10 @@ fn append_jsonl_record(path: &Path, value: &serde_json::Value) -> Result<()> {
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent)?;
     }
-    let mut file = fs::OpenOptions::new().create(true).append(true).open(path)?;
+    let mut file = fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(path)?;
     writeln!(file, "{}", serde_json::to_string(value)?)?;
     Ok(())
 }
@@ -1287,12 +1298,18 @@ fn log_k0mmand3r_stub(
         "host": host,
     });
 
-    append_jsonl_record(&b00t_home.join("session-metrics.stub.jsonl"), &metrics_record)?;
+    append_jsonl_record(
+        &b00t_home.join("session-metrics.stub.jsonl"),
+        &metrics_record,
+    )?;
     append_jsonl_record(&b00t_home.join("node-log.stub.jsonl"), &node_record)?;
     Ok(())
 }
 
-fn execute_cli_passthrough(datum: &b00t_cli::BootDatum, passthrough_args: &[String]) -> Result<i32> {
+fn execute_cli_passthrough(
+    datum: &b00t_cli::BootDatum,
+    passthrough_args: &[String],
+) -> Result<i32> {
     let command_spec = datum.command.as_deref().unwrap_or(&datum.name);
     let mut command_parts = shlex::split(command_spec)
         .ok_or_else(|| anyhow!("Invalid command declaration for '{}'", datum.name))?;
@@ -1370,7 +1387,14 @@ fn execute_k0mmand3r_dispatch(path: &str, slash: &str, passthrough_args: &[Strin
         return Ok(0);
     }
 
-    let k0mmand_verbs = ["negotiate", "vote", "delegate", "status", "handshake", "crew"];
+    let k0mmand_verbs = [
+        "negotiate",
+        "vote",
+        "delegate",
+        "status",
+        "handshake",
+        "crew",
+    ];
     let verb = normalized_slash.trim_start_matches('/').to_lowercase();
     if k0mmand_verbs.contains(&verb.as_str()) {
         let mut raw = normalized_slash.clone();
@@ -1422,8 +1446,8 @@ fn execute_k0mmand3r_dispatch(path: &str, slash: &str, passthrough_args: &[Strin
         passthrough_args,
         exit_code,
     ) {
-            eprintln!("⚠️ k0mmand3r logging stub failed: {}", e);
-        }
+        eprintln!("⚠️ k0mmand3r logging stub failed: {}", e);
+    }
     Ok(exit_code)
 }
 
@@ -1492,7 +1516,7 @@ async fn main() {
             }
         }
         Some(Commands::Model { model_command }) => {
-            if let Err(e) = model_command.execute(&cli.path) {
+            if let Err(e) = model_command.execute_async(&cli.path).await {
                 eprintln!("Error: {}", e);
                 std::process::exit(1);
             }
@@ -1545,7 +1569,9 @@ async fn main() {
             }
         }
         Some(Commands::Skill { skill_command }) => {
-            if let Err(e) = b00t_cli::commands::skill::handle_skill_command(skill_command, &cli.path) {
+            if let Err(e) =
+                b00t_cli::commands::skill::handle_skill_command(skill_command, &cli.path)
+            {
                 eprintln!("Error: {}", e);
                 std::process::exit(1);
             }
@@ -1630,38 +1656,59 @@ async fn main() {
                 std::process::exit(1);
             }
         }
-        Some(Commands::Install { name, dry_run, interactive, runtimes, scope, yes }) => {
+        Some(Commands::Install {
+            name,
+            dry_run,
+            interactive,
+            runtimes,
+            scope,
+            yes,
+        }) => {
             if *interactive || !runtimes.is_empty() {
                 // Parse runtime IDs from comma-separated --runtimes arg
                 let mut runtime_ids_vec: Vec<b00t_cli::install::RuntimeId> = Vec::new();
                 let mut parse_error = false;
                 for r in runtimes.iter() {
                     match r.as_str() {
-                        "claude"   => runtime_ids_vec.push(b00t_cli::install::RuntimeId::Claude),
-                        "gemini"   => runtime_ids_vec.push(b00t_cli::install::RuntimeId::Gemini),
-                        "codex"    => runtime_ids_vec.push(b00t_cli::install::RuntimeId::Codex),
+                        "claude" => runtime_ids_vec.push(b00t_cli::install::RuntimeId::Claude),
+                        "gemini" => runtime_ids_vec.push(b00t_cli::install::RuntimeId::Gemini),
+                        "codex" => runtime_ids_vec.push(b00t_cli::install::RuntimeId::Codex),
                         "opencode" => runtime_ids_vec.push(b00t_cli::install::RuntimeId::OpenCode),
-                        "copilot"  => runtime_ids_vec.push(b00t_cli::install::RuntimeId::Copilot),
-                        _ => { eprintln!("Install Error: unknown runtime '{}'. Valid: claude,gemini,codex,opencode,copilot", r); parse_error = true; }
+                        "copilot" => runtime_ids_vec.push(b00t_cli::install::RuntimeId::Copilot),
+                        _ => {
+                            eprintln!(
+                                "Install Error: unknown runtime '{}'. Valid: claude,gemini,codex,opencode,copilot",
+                                r
+                            );
+                            parse_error = true;
+                        }
                     }
                 }
                 if parse_error {
                     std::process::exit(1);
                 }
-                let runtime_ids: Option<Vec<b00t_cli::install::RuntimeId>> = if runtimes.is_empty() { None } else { Some(runtime_ids_vec) };
-                let scope_val = match scope.as_str() {
-                    "local" => {
-                        match std::env::current_dir() {
-                            Ok(dir) => Some(b00t_cli::install::InstallScope::Local(dir)),
-                            Err(e) => {
-                                eprintln!("Install Error: cannot determine current directory: {}", e);
-                                std::process::exit(1);
-                            }
-                        }
-                    }
-                    _       => Some(b00t_cli::install::InstallScope::Global),
+                let runtime_ids: Option<Vec<b00t_cli::install::RuntimeId>> = if runtimes.is_empty()
+                {
+                    None
+                } else {
+                    Some(runtime_ids_vec)
                 };
-                if let Err(e) = b00t_cli::install::handle_install_command(*interactive, runtime_ids, scope_val, *yes) {
+                let scope_val = match scope.as_str() {
+                    "local" => match std::env::current_dir() {
+                        Ok(dir) => Some(b00t_cli::install::InstallScope::Local(dir)),
+                        Err(e) => {
+                            eprintln!("Install Error: cannot determine current directory: {}", e);
+                            std::process::exit(1);
+                        }
+                    },
+                    _ => Some(b00t_cli::install::InstallScope::Global),
+                };
+                if let Err(e) = b00t_cli::install::handle_install_command(
+                    *interactive,
+                    runtime_ids,
+                    scope_val,
+                    *yes,
+                ) {
                     eprintln!("Install Error: {}", e);
                     std::process::exit(1);
                 }
@@ -1846,7 +1893,14 @@ mod k0mmand3r_dispatch_tests {
     #[test]
     fn normalize_slash_args_multiple_flags_before_slash() {
         let input = args(&["b00t-cli", "--doc", "--path=/tmp", "/gh", "--version"]);
-        let expected = args(&["b00t-cli", "--doc", "--path=/tmp", "k0mmand3r", "/gh", "--version"]);
+        let expected = args(&[
+            "b00t-cli",
+            "--doc",
+            "--path=/tmp",
+            "k0mmand3r",
+            "/gh",
+            "--version",
+        ]);
         assert_eq!(normalize_slash_args(input), expected);
     }
 
@@ -1907,7 +1961,11 @@ mod k0mmand3r_dispatch_tests {
 
     // ── datum_slash_aliases ──────────────────────────────────────────────────
 
-    fn make_datum(name: &str, slash: Option<&str>, aliases: Option<Vec<&str>>) -> b00t_cli::BootDatum {
+    fn make_datum(
+        name: &str,
+        slash: Option<&str>,
+        aliases: Option<Vec<&str>>,
+    ) -> b00t_cli::BootDatum {
         b00t_cli::BootDatum {
             name: name.to_string(),
             k0mmand3r: slash.map(|s| b00t_cli::K0mmand3rDatumConfig {
@@ -1957,7 +2015,10 @@ mod k0mmand3r_dispatch_tests {
 
     #[test]
     fn find_cli_datum_matches_by_name_slash() {
-        let datums = vec![make_datum("gh", None, None), make_datum("docker", None, None)];
+        let datums = vec![
+            make_datum("gh", None, None),
+            make_datum("docker", None, None),
+        ];
         let found = find_cli_datum_for_slash("/gh", &datums);
         assert!(found.is_some());
         assert_eq!(found.unwrap().name, "gh");
@@ -2009,9 +2070,22 @@ mod k0mmand3r_dispatch_tests {
         // in execute_k0mmand3r_dispatch.  Any datum named one of these will be
         // shadowed — this test documents the current set so a future refactor
         // (moving verb handling *after* datum lookup) will require an update here.
-        let k0mmand_verbs = ["negotiate", "vote", "delegate", "status", "handshake", "crew"];
-        assert!(k0mmand_verbs.contains(&"status"), "/status is shadowed by k0mmand verb");
-        assert!(k0mmand_verbs.contains(&"crew"), "/crew is shadowed by k0mmand verb");
+        let k0mmand_verbs = [
+            "negotiate",
+            "vote",
+            "delegate",
+            "status",
+            "handshake",
+            "crew",
+        ];
+        assert!(
+            k0mmand_verbs.contains(&"status"),
+            "/status is shadowed by k0mmand verb"
+        );
+        assert!(
+            k0mmand_verbs.contains(&"crew"),
+            "/crew is shadowed by k0mmand verb"
+        );
         // If a datum named "gh" is not in k0mmand_verbs it will not be shadowed.
         assert!(!k0mmand_verbs.contains(&"gh"), "/gh is NOT shadowed");
     }

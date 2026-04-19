@@ -1,14 +1,15 @@
 use anyhow::{Context, Result};
 use chrono::{DateTime, Utc};
 use regex::Regex;
-use serde::{Deserialize, Serialize};
+use serde::de::value::StringDeserializer;
+use serde::{Deserialize, Deserializer, Serialize};
 
 pub mod ansible;
+pub mod blessing;
 pub mod bootstrap;
 pub mod budget_controller;
 pub mod cloud_sync;
 pub mod commands;
-pub mod install;
 pub mod datum_ai;
 pub mod datum_ai_model;
 pub mod datum_api;
@@ -21,36 +22,36 @@ pub mod datum_docker;
 pub mod datum_gemini;
 pub mod datum_job;
 pub mod datum_justfile;
-pub mod just_ast;
 pub mod datum_k8s;
 pub mod datum_mcp;
 pub mod datum_repo;
 pub mod datum_skill;
-pub mod skill_resolver;
 pub mod datum_stack;
 pub mod datum_utils;
 pub mod datum_vscode;
+#[cfg(feature = "dbus")]
+pub mod dbus_dispatch;
 pub mod dependency_resolver;
 pub mod entanglement;
 pub mod erp;
 pub mod hive;
-pub mod inventory;
-pub mod blessing;
-pub mod k0mmand3r;
-pub mod step;
-pub mod sandbox;
-#[cfg(feature = "dbus")]
-pub mod dbus_dispatch;
 pub mod hook_engine;
+pub mod install;
+pub mod inventory;
 pub mod job_executor;
 pub mod job_ipc;
 pub mod job_state;
+pub mod just_ast;
+pub mod k0mmand3r;
 pub mod k8s;
 pub mod memory_provider;
 pub mod model_manager;
-pub mod soul_writer;
 pub mod orchestrator;
+pub mod sandbox;
 pub mod session_memory;
+pub mod skill_resolver;
+pub mod soul_writer;
+pub mod step;
 pub mod traits;
 pub mod utils;
 pub mod whoami;
@@ -153,7 +154,7 @@ pub struct K0mmand3rDatumConfig {
 #[serde(default)]
 pub struct BootDatum {
     pub name: String,
-    #[serde(rename = "type")]
+    #[serde(rename = "type", deserialize_with = "deserialize_datum_type")]
     pub datum_type: Option<DatumType>,
     pub desires: Option<String>,
     #[serde(default)]
@@ -274,6 +275,24 @@ pub struct BootDatum {
     //    All other HookResult variants (non-error Warn/Redirect/Info/Missing) are non-fatal: logged and execution continues
     pub uninstall: Option<String>,
     pub hook_uninstall: Option<String>,
+}
+
+fn deserialize_datum_type<'de, D>(
+    deserializer: D,
+) -> std::result::Result<Option<DatumType>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let raw = Option::<String>::deserialize(deserializer)?;
+    match raw {
+        None => Ok(None),
+        Some(value) if value == "model" => Ok(Some(DatumType::AiModel)),
+        Some(value) => {
+            DatumType::deserialize(StringDeserializer::<serde::de::value::Error>::new(value))
+                .map(Some)
+                .map_err(serde::de::Error::custom)
+        }
+    }
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
@@ -750,7 +769,6 @@ pub fn create_unified_toml_config(datum: &BootDatum, path: &str) -> Result<()> {
     );
     Ok(())
 }
-
 
 impl BootDatum {
     pub fn get_datum_type(&self, filename: Option<&str>) -> DatumType {
@@ -2036,8 +2054,14 @@ uninstall = "apt-get remove -y ripgrep"
 hook_uninstall = "// Rhai: post-uninstall cleanup\nlet x = 1;"
 "#;
         let config: crate::UnifiedConfig = toml::from_str(toml_str).unwrap();
-        assert_eq!(config.b00t.uninstall, Some("apt-get remove -y ripgrep".to_string()));
-        assert_eq!(config.b00t.hook_uninstall, Some("// Rhai: post-uninstall cleanup\nlet x = 1;".to_string()));
+        assert_eq!(
+            config.b00t.uninstall,
+            Some("apt-get remove -y ripgrep".to_string())
+        );
+        assert_eq!(
+            config.b00t.hook_uninstall,
+            Some("// Rhai: post-uninstall cleanup\nlet x = 1;".to_string())
+        );
     }
 
     #[test]
