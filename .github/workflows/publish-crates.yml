@@ -90,10 +90,13 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          cargo test --workspace --all-features --exclude b00t-cli
+          cargo test --workspace --all-features --exclude b00t-cli --exclude b00t-grok
           # b00t-cli's optional candle stack is documented as unsupported until upstream
           # dependency conflicts are resolved, so publish gating only exercises supported features.
           cargo test -p b00t-cli --features dbus,llamacpp-fallback
+          # b00t-grok pyo3 feature requires Python dev headers at link time; not guaranteed in CI.
+          # Gate on default features only; pyo3 binding is an optional extension, not a release invariant.
+          cargo test -p b00t-grok
 
       - name: Publish b00t-chat
         if: github.event_name == 'release' || github.event_name == 'workflow_dispatch'

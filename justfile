@@ -144,9 +144,11 @@ release:
 
     # Run tests first
     echo "🧪 Running tests..."
-    cargo test --workspace --all-features --exclude b00t-cli
+    cargo test --workspace --all-features --exclude b00t-cli --exclude b00t-grok
     # b00t-cli's optional candle stack is intentionally excluded from release gating for now.
     cargo test -p b00t-cli --features dbus,llamacpp-fallback
+    # b00t-grok pyo3 feature requires Python dev headers at link time; not guaranteed in CI.
+    cargo test -p b00t-grok
 
     gh workflow run release.yml \
         -f version="${VERSION}" \
