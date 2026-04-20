@@ -230,6 +230,8 @@ pub struct BootDatum {
     pub entangled_apis: Option<Vec<String>>,
     pub entangled_docker: Option<Vec<String>>,
     pub entangled_k8s: Option<Vec<String>>,
+    // Role-based channel prefix for Redis pub/sub delegation
+    pub channel_prefix: Option<String>,
 
     // Dependency graph
     pub depends_on: Option<Vec<String>>,
