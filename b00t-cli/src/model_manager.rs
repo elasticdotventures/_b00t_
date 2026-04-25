@@ -308,14 +308,27 @@ pub async fn list_served_models(path: &str) -> Result<Vec<ServedEndpointRecord>>
         .context("Failed to construct local inference HTTP client")?;
 
     let mut endpoints = Vec::new();
+    let mut probe_errors = Vec::new();
+
     for candidate in candidates {
-        if let Ok(record) = fetch_served_endpoint(&client, &candidate).await {
-            if !record.models.is_empty() {
-                endpoints.push(record);
+        match fetch_served_endpoint(&client, &candidate).await {
+            Ok(record) => {
+                if !record.models.is_empty() {
+                    endpoints.push(record);
+                }
+            }
+            Err(err) => {
+                probe_errors.push((candidate.base_url.clone(), err.to_string()));
             }
         }
     }
 
+    for (base_url, err) in &probe_errors {
+        eprintln!(
+            "warning: failed to probe served model endpoint {}: {}",
+            base_url, err
+        );
+    }
     endpoints.sort_by(|left, right| left.base_url.cmp(&right.base_url));
     Ok(endpoints)
 }
