@@ -21,12 +21,19 @@ pub struct AiModelDatumEntry {
 
 impl AiModelDatumEntry {
     pub fn from_config(name: &str, base_path: &str) -> Result<Self> {
-        let mut resolved = get_expanded_path(base_path)?;
-        resolved.push(format!("{}.ai_model.toml", name));
-        if !resolved.exists() {
-            anyhow::bail!("AI model '{}' not found at {}", name, resolved.display());
+        let base = get_expanded_path(base_path)?;
+        for suffix in [".model.toml", ".ai_model.toml"] {
+            let resolved = base.join(format!("{}{}", name, suffix));
+            if resolved.exists() {
+                return Self::from_file(&resolved);
+            }
         }
-        Self::from_file(&resolved)
+        anyhow::bail!(
+            "AI model '{}' not found at {} or {}",
+            name,
+            base.join(format!("{}.model.toml", name)).display(),
+            base.join(format!("{}.ai_model.toml", name)).display()
+        );
     }
 
     pub fn from_file(path: &Path) -> Result<Self> {

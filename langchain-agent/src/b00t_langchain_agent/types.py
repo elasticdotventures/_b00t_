@@ -2,6 +2,7 @@
 
 from enum import Enum
 from typing import Any, Literal
+
 from pydantic import BaseModel, Field
 
 
@@ -45,6 +46,8 @@ class AgentConfig(BaseModel):
     max_iterations: int = 10
     timeout_seconds: int = 300
     peer_agents: list[str] = Field(default_factory=list)
+    decision_tree: str | None = None
+    bootstrap_script: str | None = None
 
 
 class ChainConfig(BaseModel):

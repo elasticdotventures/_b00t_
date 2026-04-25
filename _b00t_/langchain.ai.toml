@@ -5,6 +5,10 @@ hint = "LangChain v1.0 - Build agents with LLMs + external tools (helm chart for
 desires = "1.0.0"
 keywords = ["agent", "llm", "mcp", "langgraph", "tools"]
 
+[b00t.provides]
+capability = "langchain-runtime"
+protocol = "langchain-v1"
+
 [b00t.env]
 # LangChain API keys
 required = ["ANTHROPIC_API_KEY"]
@@ -50,6 +54,28 @@ Use b00t jobs and TODO-next.md to track progress."""
 max_iterations = 20
 timeout_seconds = 900
 peer_agents = ["researcher", "coder"]  # Can invoke other agents
+
+[langchain.agents.operator]
+description = "Operator agent for b00t stack lifecycle, scripts, and task capture"
+model = "anthropic/claude-sonnet-4"
+tools = [
+  "b00t_operator_decide",
+  "b00t_stack_control",
+  "b00t_operator_script",
+  "b00t_hive_status",
+  "b00t_task_capture",
+  "github",
+  "b00t",
+]
+middleware = ["summarization", "human-in-loop"]
+system_prompt = """You are the b00t operator agent.
+Prefer explicit b00t-native tools for stack lifecycle, script execution, and task capture.
+Run hive/status checks before heavyweight actions. If a request does not match a direct tool,
+consult the internal decision tree and operator script before improvising shell commands."""
+max_iterations = 12
+timeout_seconds = 600
+decision_tree = "operator-decision-tree.tomllm"
+bootstrap_script = "scripts/operator-agent.rhai"
 
 # Chain presets - predefined workflows
 [langchain.chains.research-and-digest]

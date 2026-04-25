@@ -657,7 +657,9 @@ async fn main() -> Result<()> {
     if let Some(client_id) = managed_identity_client_id.as_deref() {
         info!(client_id = %client_id, "using user-assigned managed identity");
     } else {
-        env::remove_var("AZURE_CLIENT_ID");
+        unsafe {
+            env::remove_var("AZURE_CLIENT_ID");
+        }
         info!("using system-assigned managed identity");
     }
     let credential: Arc<dyn TokenCredential> = Arc::new(

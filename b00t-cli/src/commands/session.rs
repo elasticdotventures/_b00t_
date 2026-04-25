@@ -281,9 +281,49 @@ openai = "🤖 OpenAI"
 #[cfg(test)]
 mod tests {
     use super::*;
+    use once_cell::sync::Lazy;
+    use std::fs;
+    use std::sync::Mutex;
+    use tempfile::TempDir;
+
+    static TEST_ENV_LOCK: Lazy<Mutex<()>> = Lazy::new(|| Mutex::new(()));
+
+    struct TestRootGuard {
+        previous: Option<String>,
+        _dir: TempDir,
+    }
+
+    impl TestRootGuard {
+        fn new() -> Self {
+            let dir = TempDir::new().unwrap();
+            fs::create_dir_all(dir.path().join(".git")).unwrap();
+            let previous = std::env::var("_B00T_TEST_ROOT").ok();
+            unsafe {
+                std::env::set_var("_B00T_TEST_ROOT", dir.path());
+            }
+            Self {
+                previous,
+                _dir: dir,
+            }
+        }
+    }
+
+    impl Drop for TestRootGuard {
+        fn drop(&mut self) {
+            unsafe {
+                if let Some(previous) = &self.previous {
+                    std::env::set_var("_B00T_TEST_ROOT", previous);
+                } else {
+                    std::env::remove_var("_B00T_TEST_ROOT");
+                }
+            }
+        }
+    }
 
     #[test]
     fn test_session_commands_exist() {
+        let _lock = TEST_ENV_LOCK.lock().unwrap();
+        let _guard = TestRootGuard::new();
         let init_cmd = SessionCommands::Init {
             budget: Some(10.0),
             name: Some("test-session".to_string()),

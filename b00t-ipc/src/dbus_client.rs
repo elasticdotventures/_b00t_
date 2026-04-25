@@ -14,7 +14,7 @@ pub const OBJECT_PATH: &str = "/com/promptexecution/b00t1";
     default_service = "com.promptexecution.b00t1",
     default_path = "/com/promptexecution/b00t1"
 )]
-trait B00tControl {
+pub trait B00tControl {
     /// Liveness check
     async fn ping(&self) -> zbus::Result<String>;
 
