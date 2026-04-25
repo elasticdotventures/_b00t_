@@ -281,12 +281,8 @@ openai = "🤖 OpenAI"
 #[cfg(test)]
 mod tests {
     use super::*;
-    use once_cell::sync::Lazy;
     use std::fs;
-    use std::sync::Mutex;
     use tempfile::TempDir;
-
-    static TEST_ENV_LOCK: Lazy<Mutex<()>> = Lazy::new(|| Mutex::new(()));
 
     struct TestRootGuard {
         previous: Option<String>,
@@ -322,7 +318,7 @@ mod tests {
 
     #[test]
     fn test_session_commands_exist() {
-        let _lock = TEST_ENV_LOCK.lock().unwrap();
+        let _lock = crate::test_env::ENV_LOCK.lock().unwrap();
         let _guard = TestRootGuard::new();
         let init_cmd = SessionCommands::Init {
             budget: Some(10.0),

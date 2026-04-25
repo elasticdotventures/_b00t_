@@ -8,6 +8,21 @@ fn env_bool(name, default_val) {
     return default_val;
 }
 
+// Validate that a target string contains only safe characters [A-Za-z0-9._-].
+// Rejects shell metacharacters to prevent command injection via OPERATOR_TARGET.
+// Empty/null targets are allowed here; actions that require a target validate
+// that separately with an explicit throw.
+fn is_safe_target(t) {
+    if t == () || t == "" { return true; }
+    for ch in t.chars() {
+        if !((ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') ||
+             (ch >= '0' && ch <= '9') || ch == '.' || ch == '-' || ch == '_') {
+            return false;
+        }
+    }
+    true
+}
+
 let action = get_env("OPERATOR_ACTION");
 let target = get_env("OPERATOR_TARGET");
 let dry_run = env_bool("OPERATOR_DRY_RUN", true);
@@ -16,6 +31,10 @@ let note = get_env("OPERATOR_NOTE");
 
 if action == null || action == "" {
     throw("OPERATOR_ACTION is required");
+}
+
+if target != () && !is_safe_target(target) {
+    throw("OPERATOR_TARGET contains unsafe characters; only [A-Za-z0-9._-] are allowed");
 }
 
 if note != null && note != "" {

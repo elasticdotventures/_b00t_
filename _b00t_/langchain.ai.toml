@@ -64,8 +64,7 @@ tools = [
   "b00t_operator_script",
   "b00t_hive_status",
   "b00t_task_capture",
-  "github",
-  "b00t",
+  "github-mcp",
 ]
 middleware = ["summarization", "human-in-loop"]
 system_prompt = """You are the b00t operator agent.
