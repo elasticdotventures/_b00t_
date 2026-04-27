@@ -14,7 +14,7 @@ hint = "opencode coding agent — systemd-managed ACP server; ch0nky tier; swap 
 [b00t.agent]
 pid = "opencode-001"
 branch = "main"
-model = "gemma4-local/ch0nky"
+model = "qwen36-local/ch0nky"
 skills = ["code", "refactor", "debug", "edit", "bash", "read", "write", "grep", "find", "ls", "tui"]
 personality = "pragmatic"
 humor = "low"
@@ -45,12 +45,12 @@ service_type = "simple"
 restart = "on-failure"
 restart_sec = "10s"
 timeout_start_sec = "60"
-after = ["network.target", "b00t-hive-inference-gemma4.service"]
+after = ["network.target", "b00t-hive-inference-qwen36-27b.service"]
 environment = [
   "PATH=/home/brianh/.nvm/versions/node/v22.15.1/bin:/usr/local/bin:/usr/bin:/bin",
   "OPENCODE_CONFIG=/home/brianh/.config/opencode/opencode.json",
 ]
-exec_start = "opencode serve --port 3000 --model gemma4-local/ch0nky"
+exec_start = "opencode serve --port 3000 --model qwen36-local/ch0nky"
 
 [b00t.hive.resources]
 ram_gb = 1
@@ -81,7 +81,7 @@ command = "systemctl --user stop b00t@opencode-agent.service"
 
 [[b00t.usage]]
 description = "Submit task to running opencode ACP server"
-command = "opencode run --model gemma4-local/ch0nky 'your task here'"
+command = "opencode run --model qwen36-local/ch0nky 'your task here'"
 
 [[b00t.usage]]
 description = "Swap from pi to opencode (same ch0nky slot)"
@@ -89,7 +89,7 @@ command = "systemctl --user stop b00t@pi-agent.service && systemctl --user start
 
 # b00t:map v1
 # summary: opencode agent — systemd-managed ACP server; ch0nky slot; swap with pi via hive stop/start
-# tags: opencode, agent, gemma4, ch0nky, systemd, acp, hive, swap
+# tags: opencode, agent, qwen36, ch0nky, systemd, acp, hive, swap
 # tier: ch0nky
 # cmds: systemctl --user start b00t@opencode-agent.service
 # complexity: 5

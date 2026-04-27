@@ -63,13 +63,17 @@ impl UpArgs {
 
         if tool == "gemma4" {
             tool = "opencode".to_string();
-            let model = Some(model.unwrap_or_else(|| "ch0nky".to_string()));
+            let model = model.unwrap_or_else(|| "ch0nky".to_string());
             let providers = if providers.is_empty() {
                 default_providers_for_model(&model)
             } else {
                 providers
             };
-            return ResolvedUpTarget { tool, model: Some(model), providers };
+            return ResolvedUpTarget {
+                tool,
+                model: Some(model),
+                providers,
+            };
         }
 
         let needs_local_target = matches!(tool.as_str(), "pi" | "opencode");

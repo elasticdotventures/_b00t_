@@ -683,6 +683,28 @@ pub fn activate_profile(
         }
     }
 
+    // 4c. Enable generated unit directly for autostart.
+    // 🤓 b00t@.service template unit may not exist → systemctl enable b00t@{name} silently fails.
+    //    The generated b00t-hive-{}.service has [Install] WantedBy=default.target so enabling
+    //    it directly gives reliable autostart without requiring the template file.
+    if let Some(ref unit_name) = generated_unit {
+        log.push(format!("enable {}", unit_name));
+        if !dry_run {
+            let result = Command::new("systemctl")
+                .args(["--user", "enable", unit_name])
+                .status();
+            match result {
+                Ok(s) if s.success() => {}
+                Ok(s) => log.push(format!(
+                    "  ⚠️  {} enable exit code {}",
+                    unit_name,
+                    s.code().unwrap_or(-1)
+                )),
+                Err(e) => log.push(format!("  ⚠️  {} enable failed: {}", unit_name, e)),
+            }
+        }
+    }
+
     // Persist autostart via the stable template unit so the profile comes back after reboot.
     let template_unit = stack_template_unit(&profile.name);
     log.push(format!("enable {}", template_unit));

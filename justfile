@@ -506,9 +506,10 @@ hf-download model dest="" revision="":
 		echo "⚠️ set model=<repo>" >&2
 		exit 1
 	fi
-	if ! command -v huggingface-cli >/dev/null 2>&1; then
-		echo "⚠️ huggingface-cli missing; run 'b00t-cli cli install huggingface'" >&2
-		exit 1
+	# 🤓 prefer hf (huggingface_hub>=0.26 alias); auto-install if missing
+	if ! command -v hf >/dev/null 2>&1; then
+		echo "hf not found — auto-installing huggingface_hub[cli] via uv ..." >&2
+		uv tool install --upgrade "huggingface_hub[cli]"
 	fi
 	DEST="{{dest}}"
 	if [[ -z "$DEST" ]]; then
@@ -520,7 +521,7 @@ hf-download model dest="" revision="":
 	if [[ -n "{{revision}}" ]]; then
 		ARGS+=(--revision "{{revision}}")
 	fi
-	huggingface-cli "${ARGS[@]}"
+	hf "${ARGS[@]}"
 	echo "✅ cached $MODEL -> $DEST"
 
 # Invoke b00t-cli to install/cache a datum-backed model
@@ -893,6 +894,38 @@ gemma4-stop:
 # Check Gemma 4 server health
 gemma4-status:
     curl -s http://localhost:8001/v1/models | python3 -m json.tool
+
+
+# ── qwen3.6-27B — download, serve, hive lifecycle ────────────────────────────
+# 🤓 qwen36 replaces gemma4 as ch0nky tier; vLLM primary, llamacpp podman fallback
+# 🤓 PREREQ: activate download-mode first to free VRAM before ~15GB download
+
+# Download Qwen3.6-27B Q4_K_M GGUF (stop vLLM first via download-mode hive)
+qwen36-download:
+    b00t hive activate download-mode
+    hf download unsloth/Qwen3.6-27B-GGUF --include "Qwen3.6-27B-Q4_K_M.gguf"
+    @echo "✅ download done — run: just qwen36-serve  (or just qwen36-serve-llamacpp)"
+
+# Activate Qwen3.6-27B via vLLM (generates + enables systemd unit)
+qwen36-serve:
+    b00t hive activate inference-qwen36-27b
+
+# Activate Qwen3.6-27B via llamacpp podman (GGUF-native fallback when vLLM fails)
+qwen36-serve-llamacpp:
+    b00t hive activate inference-qwen36-27b-llamacpp
+
+# Stop Qwen3.6-27B inference (whichever backend is running)
+qwen36-stop:
+    systemctl --user stop b00t-hive-inference-qwen36-27b.service || true
+    systemctl --user stop b00t-hive-inference-qwen36-27b-llamacpp.service || true
+
+# Check ch0nky endpoint (port 8001)
+qwen36-status:
+    curl -s http://localhost:8001/v1/models | python3 -m json.tool
+
+# Run opencode one-shot against local qwen36-local/ch0nky
+qwen36-test-opencode prompt="say hello in 3 words":
+    opencode run --model qwen36-local/ch0nky "{{prompt}}"
 
 # ── pi agent — systemd service lifecycle ─────────────────────────────────────
 # 🤓 pi is managed as b00t@pi-agent.service, NOT spawned per-invocation

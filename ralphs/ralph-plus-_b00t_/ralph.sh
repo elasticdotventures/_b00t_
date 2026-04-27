@@ -25,6 +25,7 @@ MISTRALRS_MODEL_NAME="${MISTRALRS_MODEL_NAME:-mistral}"
 PI_PROVIDER="${PI_PROVIDER:-openai}"
 PI_GATEWAY_PORT="${PI_GATEWAY_PORT:-1234}"
 PI_DIRECT_PORT="${PI_DIRECT_PORT:-8001}"
+PI_BASE_URL_EXPLICIT="${PI_BASE_URL:-}"
 if [[ -z "${PI_BASE_URL:-}" ]]; then
     PI_BASE_URL="http://127.0.0.1:${PI_GATEWAY_PORT}/v1"
 fi
@@ -32,6 +33,7 @@ PI_MODEL="${PI_MODEL:-ch0nky}"
 PI_API_KEY="${PI_API_KEY:-local-b00t}"
 # 🤓 direct Gemma4 vLLM works through pi's llama-cpp provider; openai provider expects cloud auth semantics.
 PI_DIRECT_PROVIDER="${PI_DIRECT_PROVIDER:-llama-cpp}"
+OPENCODE_MODEL_EXPLICIT="${OPENCODE_MODEL:-}"
 OPENCODE_MODEL="${OPENCODE_MODEL:-gemma4-local/ch0nky}"
 SELF_IMPROVE_MODE="${B00T_SELF_IMPROVE:-auto}"
 ISSUE_FEED="${B00T_GH_ISSUES:-}"
@@ -90,34 +92,127 @@ http_ok() {
     curl -fsS --max-time 2 "${url}" >/dev/null 2>&1
 }
 
-resolve_pi_transport() {
-    if [[ -n "${PI_BASE_URL:-}" && "${PI_BASE_URL}" != "http://127.0.0.1:${PI_GATEWAY_PORT}/v1" ]]; then
-        if [[ -z "${PI_PROVIDER:-}" || "${PI_PROVIDER}" == "openai" ]]; then
-            PI_PROVIDER="${PI_DIRECT_PROVIDER}"
-        fi
-        return 0
-    fi
+canonical_model_alias() {
+    local model="${1:-}"
+    case "${model,,}" in
+        gemma4|gemma-4|gemma-local|gemma-4-26b-a4b-local) echo "ch0nky" ;;
+        qwen3|qwen3-coder|qwen-local|qwen3-coder-local|sm0l) echo "ch1nky" ;;
+        *) echo "${model}" ;;
+    esac
+}
 
-    local gateway_url="http://127.0.0.1:${PI_GATEWAY_PORT}/v1/models"
-    local direct_url="http://127.0.0.1:${PI_DIRECT_PORT}/v1/models"
+canonical_provider_name() {
+    local provider="${1:-}"
+    case "${provider,,}" in
+        llamacpp|llama_cpp|direct) echo "llama-cpp" ;;
+        openai_compatible) echo "openai-compatible" ;;
+        litellm|gateway) echo "openai" ;;
+        *) echo "${provider,,}" ;;
+    esac
+}
 
-    if [[ "${PI_PROVIDER}" != "llama-cpp" ]] && http_ok "${gateway_url}"; then
-        PI_BASE_URL="http://127.0.0.1:${PI_GATEWAY_PORT}/v1"
-        return 0
-    fi
-
-    if http_ok "${direct_url}"; then
-        if [[ "${PI_PROVIDER}" != "${PI_DIRECT_PROVIDER}" ]]; then
-            log "gateway unavailable on :${PI_GATEWAY_PORT}; falling back to direct Gemma4 on :${PI_DIRECT_PORT}"
-        fi
-        PI_PROVIDER="${PI_DIRECT_PROVIDER}"
-        PI_BASE_URL="http://127.0.0.1:${PI_DIRECT_PORT}/v1"
-        return 0
-    fi
-
-    log "no local PI backend reachable (gateway :${PI_GATEWAY_PORT}, direct :${PI_DIRECT_PORT})"
+provider_chain_contains() {
+    local needle
+    needle="$(canonical_provider_name "${1:-}")"
+    local provider
+    IFS=',' read -ra _providers <<< "${PROVIDER_CHAIN:-}"
+    for provider in "${_providers[@]}"; do
+        [[ "$(canonical_provider_name "${provider}")" == "${needle}" ]] && return 0
+    done
     return 1
 }
+
+resolve_local_model_config() {
+    MODEL_ALIAS="$(canonical_model_alias "${MODEL_ALIAS:-}")"
+    if [[ -z "${MODEL_ALIAS}" && ( "${TOOL}" == "pi" || "${TOOL}" == "opencode" || "${TOOL}" == "gemma4" ) ]]; then
+        MODEL_ALIAS="ch0nky"
+    fi
+
+    if [[ -z "${PROVIDER_CHAIN}" && -n "${MODEL_ALIAS}" ]]; then
+        PROVIDER_CHAIN="llama-cpp,openai-compatible"
+    fi
+
+    case "${MODEL_ALIAS}" in
+        ch1nky)
+            PI_DIRECT_PORT="${B00T_AI_CH1NKY_PORT:-${PI_DIRECT_PORT:-8000}}"
+            LOCAL_PI_BASE_URL="${B00T_AI_CH1NKY_BASE:-${B00T_AI_SM0L_BASE:-http://127.0.0.1:8000/v1}}"
+            PI_MODEL="${B00T_AI_CH1NKY_MODEL:-${B00T_AI_SM0L_MODEL:-qwen3-coder}}"
+            if [[ -z "${OPENCODE_MODEL_EXPLICIT}" ]]; then
+                OPENCODE_MODEL="vllm-local/qwen3-coder"
+            fi
+            ;;
+        ch0nky|*)
+            MODEL_ALIAS="${MODEL_ALIAS:-ch0nky}"
+            PI_DIRECT_PORT="${B00T_AI_CH0NKY_PORT:-${PI_DIRECT_PORT:-8001}}"
+            LOCAL_PI_BASE_URL="${B00T_AI_CH0NKY_BASE:-http://127.0.0.1:8001/v1}"
+            PI_MODEL="${B00T_AI_CH0NKY_MODEL:-ch0nky}"
+            if [[ -z "${OPENCODE_MODEL_EXPLICIT}" ]]; then
+                OPENCODE_MODEL="gemma4-local/ch0nky"
+            fi
+            ;;
+    esac
+}
+
+resolve_pi_transport() {
+    local gateway_base="http://127.0.0.1:${PI_GATEWAY_PORT}/v1"
+    local direct_base="${LOCAL_PI_BASE_URL:-http://127.0.0.1:${PI_DIRECT_PORT}/v1}"
+
+    if [[ -n "${PI_BASE_URL_EXPLICIT}" ]]; then
+        PI_BASE_URL="${PI_BASE_URL_EXPLICIT}"
+        if [[ "${PI_BASE_URL}" == "${direct_base}" ]]; then
+            PI_PROVIDER="${PI_DIRECT_PROVIDER}"
+        else
+            PI_PROVIDER="openai"
+        fi
+        return 0
+    fi
+
+    local gateway_url="${gateway_base}/models"
+    local direct_url="${direct_base}/models"
+    local provider
+    IFS=',' read -ra _providers <<< "${PROVIDER_CHAIN:-}"
+    for provider in "${_providers[@]}"; do
+        case "$(canonical_provider_name "${provider}")" in
+            llama-cpp)
+                if http_ok "${direct_url}"; then
+                    PI_PROVIDER="${PI_DIRECT_PROVIDER}"
+                    PI_BASE_URL="${direct_base}"
+                    return 0
+                fi
+                ;;
+            openai-compatible|openai)
+                if http_ok "${gateway_url}"; then
+                    PI_PROVIDER="openai"
+                    PI_BASE_URL="${gateway_base}"
+                    return 0
+                fi
+                ;;
+        esac
+    done
+
+    if http_ok "${direct_url}"; then
+        if ! provider_chain_contains "llama-cpp"; then
+            log "requested providers unavailable; falling back to direct local model on ${direct_base}"
+        fi
+        PI_PROVIDER="${PI_DIRECT_PROVIDER}"
+        PI_BASE_URL="${direct_base}"
+        return 0
+    fi
+
+    if http_ok "${gateway_url}"; then
+        if ! provider_chain_contains "openai-compatible" && ! provider_chain_contains "openai"; then
+            log "requested providers unavailable; falling back to gateway on ${gateway_base}"
+        fi
+        PI_PROVIDER="openai"
+        PI_BASE_URL="${gateway_base}"
+        return 0
+    fi
+
+    log "no local PI backend reachable (gateway :${PI_GATEWAY_PORT}, direct ${direct_base})"
+    return 1
+}
+
+resolve_local_model_config
 
 pending_tasks_count() {
     local tasks_file=".b00t/tasks.json"

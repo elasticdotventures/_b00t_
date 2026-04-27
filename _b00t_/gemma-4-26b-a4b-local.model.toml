@@ -7,7 +7,7 @@
 name = "gemma-4-26b-a4b-local"
 type = "model"
 hint = "Gemma 4 26B-A4B-it GGUF MXFP4_MOE, served locally via vLLM on RTX 3090 (port 8001), jinja chat template"
-aliases = ["gemma4", "gemma-4", "gemma-local"]
+aliases = ["gemma4", "gemma-4", "gemma-local", "ch0nky"]
 
 [b00t.env]
 VLLM_MODEL_DIR = "~/.cache/huggingface/hub/models--unsloth--gemma-4-26B-A4B-it-GGUF"

@@ -641,9 +641,23 @@ pub fn download_model(
         });
     }
 
-    if !check_command_available("huggingface-cli") {
-        anyhow::bail!("huggingface-cli not found. Run 'b00t-cli cli install huggingface' first.");
-    }
+    // 🤓 prefer `hf` (huggingface_hub>=0.26 alias); fall back to `huggingface-cli` (legacy).
+    //    Auto-install via uv if neither found — matches huggingface.cli.toml datum install script.
+    let hf_cmd = if check_command_available("hf") {
+        "hf".to_string()
+    } else if check_command_available("huggingface-cli") {
+        "huggingface-cli".to_string()
+    } else {
+        eprintln!("hf not found — auto-installing huggingface_hub[cli] via uv ...");
+        cmd("uv", &["tool", "install", "--upgrade", "huggingface_hub[cli]"])
+            .run()
+            .context("auto-install of huggingface_hub[cli] failed; run: b00t cli install huggingface")?;
+        if check_command_available("hf") {
+            "hf".to_string()
+        } else {
+            "huggingface-cli".to_string()
+        }
+    };
 
     let repo = entry
         .huggingface_repo()
@@ -688,9 +702,9 @@ pub fn download_model(
         }
     }
 
-    cmd("huggingface-cli", &args)
+    cmd(&hf_cmd, &args)
         .run()
-        .with_context(|| format!("huggingface-cli download failed for {}", repo))?;
+        .with_context(|| format!("{} download failed for {}", hf_cmd, repo))?;
 
     if activate {
         write_active_model(&entry.datum.name)?;
