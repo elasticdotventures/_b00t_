@@ -918,6 +918,37 @@ qwen36-serve-llamacpp:
 qwen36-stop:
     systemctl --user stop b00t-hive-inference-qwen36-27b.service || true
     systemctl --user stop b00t-hive-inference-qwen36-27b-llamacpp.service || true
+    systemctl --user stop b00t-hive-inference-qwen36-35b-a3b-llamacpp.service || true
+
+# Serve 35B-A3B MoE (lighter VRAM than 27B dense; preferred when MXFP4 supported)
+qwen36-serve-35b:
+    b00t hive activate inference-qwen36-35b-a3b-llamacpp
+
+# Eval active ch0nky model (must be serving on :8001)
+ch0nky-eval:
+    bash scripts/ch0nky-eval.sh
+
+# Sequential comparison: 27B dense → eval → 35B-A3B MoE → eval → diff
+# Results written to .b00t/ralph/eval-*.jsonl
+ch0nky-eval-compare:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    echo "=== PHASE 1: Qwen3.6-27B-Q4_K_M (dense) ==="
+    just qwen36-stop
+    just qwen36-serve-llamacpp
+    echo "Waiting for :8001..."
+    until curl -sf http://127.0.0.1:8001/v1/models >/dev/null 2>&1; do sleep 5; done
+    just ch0nky-eval
+    echo ""
+    echo "=== PHASE 2: Qwen3.6-35B-A3B-MXFP4_MOE (MoE) ==="
+    just qwen36-stop
+    just qwen36-serve-35b
+    echo "Waiting for :8001..."
+    until curl -sf http://127.0.0.1:8001/v1/models >/dev/null 2>&1; do sleep 5; done
+    just ch0nky-eval
+    echo ""
+    echo "=== COMPARISON COMPLETE — see .b00t/ralph/eval-*.jsonl ==="
+    ls -t .b00t/ralph/eval-*.jsonl | head -2 | xargs grep "SUMMARY"
 
 # Check ch0nky endpoint (port 8001)
 qwen36-status:

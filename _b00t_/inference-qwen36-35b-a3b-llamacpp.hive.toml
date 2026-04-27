@@ -1,0 +1,106 @@
+# b00t Hive Profile — Qwen3.6-35B-A3B-UD llamacpp podman inference (ch0nky tier)
+# RTX 3090 community-validated: 23GB VRAM, 120 tok/s (source: HF discussion #37)
+# PRE-REQ: hf download unsloth/Qwen3.6-35B-A3B-GGUF --include "Qwen3.6-35B-A3B-UD-Q3_K_M.gguf"
+# Activate: b00t hive activate inference-qwen36-35b-a3b-llamacpp
+
+[b00t]
+name = "inference-qwen36-35b-a3b-llamacpp"
+type = "hive_profile"
+hint = "Qwen3.6-35B-A3B UD-Q3_K_M via llamacpp podman — 23GB VRAM, 120tok/s RTX3090 validated"
+
+[b00t.hive.resources]
+# 🤓 UD-Q3_K_M: 23GB VRAM on RTX 3090 (community validated); MoE so routing is CPU-side
+ram_gb    = 6
+gpu_mb    = 23500
+cpu_cores = 2
+
+[b00t.hive.resources.gate]
+ram_free_gb = 4
+gpu_free_mb = 4000  # CPU offload OK; only need enough GPU for active MoE layers
+
+[b00t.hive.exclusion]
+group    = "primary-workload"
+priority = 80  # highest priority ch0nky; preferred over 27B dense (70) and gemma4 (60)
+
+[b00t.hive.services]
+start = []
+stop  = []
+
+[b00t.hive.service]
+description       = "llamacpp server Qwen3.6-35B-A3B UD-Q3_K_M via podman (port 8001) — ch0nky tier"
+service_type      = "simple"
+limit_nofile      = 65536
+restart           = "on-failure"
+restart_sec       = "30s"
+timeout_start_sec = "600"
+after             = ["network.target"]
+environment       = [
+  "PATH=/usr/local/bin:/usr/bin:/bin",
+]
+exec_start = """/usr/bin/podman run --rm \
+    --device nvidia.com/gpu=all \
+    --security-opt=label=disable \
+    -v /home/brianh/.cache/huggingface/hub:/hf:z \
+    -p 8001:8001 \
+    ghcr.io/ggml-org/llama.cpp:server-cuda \
+    --model /hf/models--unsloth--Qwen3.6-35B-A3B-GGUF/snapshots/a483e9e6cbd595906af30beda3187c2663a1118c/Qwen3.6-35B-A3B-MXFP4_MOE.gguf \
+    --host 0.0.0.0 \
+    --port 8001 \
+    -ngl 999 \
+    -fa on \
+    -c 32768 \
+    -n 4096 \
+    --jinja \
+    --reasoning-format deepseek \
+    --reasoning-budget 4096 \
+    --temp 0.6 \
+    --top-p 0.95 \
+    --top-k 20 \
+    --min-p 0.00 \
+    --presence-penalty 0.0 \
+    --alias ch0nky \
+    --api-key local-b00t"""
+# 🤓 MXFP4_MOE: Unsloth FP4 MoE — tests whether server-cuda supports this quant type
+# 🤓 -ngl 999: try full GPU; llamacpp auto-spills to CPU RAM (31GB avail) if VRAM exceeded
+# 🤓 -fa: flash attention — needed for ctx efficiency on MoE with limited active params
+# 🤓 --reasoning-format deepseek: enables Qwen3 thinking mode (<think> tokens)
+# ⚠️  If MXFP4 unsupported by image, error will say "unknown tensor type" — download Q3_K_M instead
+
+[b00t.hive.env]
+B00T_AI_CH0NKY_BASE  = "http://127.0.0.1:8001/v1"
+B00T_AI_CH0NKY_MODEL = "ch0nky"
+OPENAI_BASE_URL      = "http://127.0.0.1:8001/v1"
+OPENAI_API_KEY       = "local-b00t"
+PI_MODEL             = "ch0nky"
+
+[[b00t.hive.guards]]
+pattern = "pip install"
+action  = "warn"
+message = "🦨 use uv pip install"
+
+[[b00t.usage]]
+description = "Download required quant (Q3_K_M, ~15GB)"
+command     = "hf download unsloth/Qwen3.6-35B-A3B-GGUF --include 'Qwen3.6-35B-A3B-UD-Q3_K_M.gguf'"
+
+[[b00t.usage]]
+description = "Activate this profile"
+command     = "b00t hive activate inference-qwen36-35b-a3b-llamacpp"
+
+[[b00t.usage]]
+description = "Verify ch0nky endpoint"
+command     = "curl -s http://localhost:8001/v1/models | python3 -m json.tool"
+
+[[b00t.usage]]
+description = "Run model comparison eval (27B vs 35B-A3B)"
+command     = "just ch0nky-eval-compare"
+
+[[b00t.usage]]
+description = "Check logs"
+command     = "journalctl --user -u b00t-hive-inference-qwen36-35b-a3b-llamacpp -f --no-pager"
+
+# b00t:map v1
+# summary: Qwen3.6-35B-A3B UD-Q3_K_M llamacpp hive — 23GB VRAM 120tok/s RTX3090-validated ch0nky
+# tags: qwen3.6, moe, llamacpp, podman, ch0nky, hive, inference, gguf, rtx3090, ud-q3km, thinking
+# tier: ch0nky
+# cmds: b00t hive activate inference-qwen36-35b-a3b-llamacpp
+# complexity: 4

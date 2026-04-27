@@ -1188,8 +1188,9 @@ fn normalize_slash_args(raw_args: Vec<String>) -> Vec<String> {
             return normalized;
         }
 
-        // Handle direct slash commands like `/whoami`.
-        if arg.starts_with('/') {
+        // Handle direct slash commands like `/whoami` — single-component only.
+        // Multi-component paths like `/tmp/foo` are flag values, not slash commands.
+        if arg.starts_with('/') && !arg[1..].contains('/') {
             let mut normalized = prefix;
             normalized.push("k0mmand3r".to_string());
             normalized.push(arg.clone());
@@ -1924,6 +1925,14 @@ mod k0mmand3r_dispatch_tests {
             }
             _ => panic!("expected uninstall command"),
         }
+    }
+
+    #[test]
+    fn normalize_slash_args_filesystem_path_value_not_rewritten() {
+        // `--path /tmp/.tmpXXX uninstall` — /tmp/.tmpXXX is a flag value (multi-component path),
+        // NOT a slash command; argv must be returned unchanged so clap parses it correctly.
+        let input = args(&["b00t-cli", "--path", "/tmp/.tmpXXX", "uninstall", "--yes", "foo"]);
+        assert_eq!(normalize_slash_args(input.clone()), input);
     }
 
     #[test]

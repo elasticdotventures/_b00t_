@@ -43,16 +43,17 @@ exec_start = """/usr/bin/podman run --rm \
     --security-opt=label=disable \
     -v /home/brianh/.cache/huggingface/hub:/hf:z \
     -p 8001:8001 \
-    ghcr.io/ggerganov/llama.cpp:server-cuda \
-    --model /hf/models--unsloth--Qwen3.6-27B-GGUF/Qwen3.6-27B-Q4_K_M.gguf \
+    ghcr.io/ggml-org/llama.cpp:server-cuda \
+    --model /hf/models--unsloth--Qwen3.6-27B-GGUF/snapshots/82d411acf4a06cfb8d9b073a5211bf410bfc29bf/Qwen3.6-27B-Q4_K_M.gguf \
     --host 0.0.0.0 \
     --port 8001 \
-    --ctx-size 32768 \
-    --n-gpu-layers 999 \
+    -ngl 999 \
+    -fa on \
+    -c 32768 \
+    -n 4096 \
+    --jinja \
     --alias ch0nky \
-    --api-key local-b00t \
-    --parallel 2 \
-    --cont-batching"""
+    --api-key local-b00t"""
 # 🤓 --n-gpu-layers 999: offloads ALL layers to RTX 3090; Q4_K_M ~15GB fits in 24GB
 # 🤓 --parallel 2: allows 2 concurrent inference requests (balanced for single user)
 # 🤓 --cont-batching: continuous batching for throughput on concurrent requests
@@ -88,7 +89,7 @@ command     = "b00t hive activate inference-qwen36-27b-llamacpp"
 
 [[b00t.usage]]
 description = "Pull llamacpp CUDA image (one-time)"
-command     = "podman pull ghcr.io/ggerganov/llama.cpp:server-cuda"
+command     = "podman pull ghcr.io/ggml-org/llama.cpp:server-cuda"
 
 [[b00t.usage]]
 description = "Verify CDI GPU config exists"
@@ -112,7 +113,7 @@ command     = "opencode run --model vllm-local/ch0nky 'say hello in 3 words'"
 
 [[b00t.usage]]
 description = "Manual one-shot test (no systemd)"
-command     = "podman run --rm --device nvidia.com/gpu=all --security-opt=label=disable -v ~/.cache/huggingface/hub:/hf:z -p 8001:8001 ghcr.io/ggerganov/llama.cpp:server-cuda --model /hf/models--unsloth--Qwen3.6-27B-GGUF/Qwen3.6-27B-Q4_K_M.gguf --host 0.0.0.0 --port 8001 --ctx-size 32768 --n-gpu-layers 999 --alias ch0nky --api-key local-b00t"
+command     = "podman run --rm --device nvidia.com/gpu=all --security-opt=label=disable -v ~/.cache/huggingface/hub:/hf:z -p 8001:8001 ghcr.io/ggml-org/llama.cpp:server-cuda --model /hf/models--unsloth--Qwen3.6-27B-GGUF/snapshots/82d411acf4a06cfb8d9b073a5211bf410bfc29bf/Qwen3.6-27B-Q4_K_M.gguf --host 0.0.0.0 --port 8001 -ngl 999 -fa on -c 32768 -n 4096 --jinja --alias ch0nky --api-key local-b00t"
 
 # b00t:map v1
 # summary: Qwen3.6-27B llamacpp podman hive profile — GGUF-native fallback when vLLM fails; port 8001
