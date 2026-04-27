@@ -121,6 +121,7 @@ pub struct HiveServiceSpec {
     pub restart: Option<String>,     // Restart=
     pub restart_sec: Option<String>, // RestartSec=
     pub timeout_start_sec: Option<String>, // TimeoutStartSec=
+    pub working_directory: Option<String>, // WorkingDirectory=
     pub after: Vec<String>,          // After= dependencies (default: ["network.target"])
 }
 
@@ -253,6 +254,7 @@ struct HiveTomlServiceSpec {
     restart: Option<String>,
     restart_sec: Option<String>,
     timeout_start_sec: Option<String>,
+    working_directory: Option<String>,
     #[serde(default)]
     after: Vec<String>,
 }
@@ -324,6 +326,7 @@ impl HiveProfile {
             restart: s.restart,
             restart_sec: s.restart_sec,
             timeout_start_sec: s.timeout_start_sec,
+            working_directory: s.working_directory,
             after: if s.after.is_empty() {
                 vec!["network.target".to_string()]
             } else {
@@ -492,6 +495,10 @@ pub fn generate_systemd_unit(profile_name: &str, spec: &HiveServiceSpec) -> Stri
 
     for pre in &spec.exec_start_pre {
         unit.push_str(&format!("ExecStartPre={pre}\n"));
+    }
+
+    if let Some(wd) = &spec.working_directory {
+        unit.push_str(&format!("WorkingDirectory={wd}\n"));
     }
 
     // ExecStart: strip leading/trailing whitespace, preserve internal \ continuations
@@ -955,6 +962,7 @@ message = "use uv"
             restart: Some("on-failure".to_string()),
             restart_sec: Some("30s".to_string()),
             timeout_start_sec: Some("300".to_string()),
+            working_directory: Some("/tmp/test-workdir".to_string()),
             after: vec!["network.target".to_string()],
         };
         let unit = generate_systemd_unit("test-profile", &spec);
@@ -962,6 +970,7 @@ message = "use uv"
         assert!(unit.contains("LimitNOFILE=65536"));
         assert!(unit.contains("Environment=\"FOO=bar\""));
         assert!(unit.contains("Restart=on-failure"));
+        assert!(unit.contains("WorkingDirectory=/tmp/test-workdir"));
         assert!(unit.contains("[Install]"));
     }
 
@@ -987,6 +996,7 @@ exec_start = "/usr/bin/sleep 3600"
 environment = ["FOO=bar"]
 limit_nofile = 1024
 restart = "on-failure"
+working_directory = "/tmp/test"
 "#;
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("test-svc.hive.toml");
@@ -996,5 +1006,6 @@ restart = "on-failure"
         let spec = profile.service_spec.unwrap();
         assert_eq!(spec.exec_start, "/usr/bin/sleep 3600");
         assert_eq!(spec.limit_nofile, Some(1024));
+        assert_eq!(spec.working_directory.as_deref(), Some("/tmp/test"));
     }
 }
