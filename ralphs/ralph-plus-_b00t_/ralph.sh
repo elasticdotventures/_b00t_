@@ -931,8 +931,8 @@ while [[ "${loop}" -le "${MAX_ITERATIONS}" ]]; do
     prompt="$(build_prompt "${loop}")"
     output=""
 
-    # R5: GOAL.md + acceptance_criteria gate
-    if command -v b00t-cli >/dev/null 2>&1; then
+    # R5: GOAL.md + acceptance_criteria gate (skip in skill-test mode — uses external prompt)
+    if [[ "${TASK:-}" != "skill-test" ]] && command -v b00t-cli >/dev/null 2>&1; then
         _task_json="$(b00t-cli task next --json 2>/dev/null || true)"
         if [[ -n "${_task_json}" && "${_task_json}" != "no actionable"* ]]; then
             _task_title="$(echo "${_task_json}" | jq -r '.title // empty' 2>/dev/null || true)"
