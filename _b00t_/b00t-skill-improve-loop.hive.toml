@@ -42,10 +42,10 @@ environment       = [
   "HOME=/home/brianh",
   "TASK=skill-test",
   "TOOL=opencode",
-  "ROLE=executive",
+  "ROLE=operator",
   "OPENCODE_MODEL=qwen36-local/ch0nky",
   "MAX_ITERATIONS=5",
-  "LOOP_SLEEP_SECONDS=10",
+  "LOOP_SLEEP_SECONDS=30",
   "RALPH_METRIC_GATE=true",
   "SELF_IMPROVE_MODE=true",
   "OPENAI_BASE_URL=http://127.0.0.1:8001/v1",
@@ -57,7 +57,7 @@ environment       = [
   "GIT_COMMITTER_EMAIL=loop@b00t.local",
 ]
 working_directory = "/home/brianh/.b00t"
-exec_start = """/home/brianh/.b00t/ralphs/ralph-plus-_b00t_/ralph.sh \
+exec_start = """/home/brianh/.b00t/b00t.sh \
     --tool opencode \
     --max-iterations 5"""
 # 🤓 RestartSec=120s: 2min cooldown between batches; prevents hammering ch0nky on :8001
