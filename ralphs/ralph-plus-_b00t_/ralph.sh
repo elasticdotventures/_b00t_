@@ -34,7 +34,7 @@ PI_API_KEY="${PI_API_KEY:-local-b00t}"
 # 🤓 direct Gemma4 vLLM works through pi's llama-cpp provider; openai provider expects cloud auth semantics.
 PI_DIRECT_PROVIDER="${PI_DIRECT_PROVIDER:-llama-cpp}"
 OPENCODE_MODEL_EXPLICIT="${OPENCODE_MODEL:-}"
-OPENCODE_MODEL="${OPENCODE_MODEL:-gemma4-local/ch0nky}"
+OPENCODE_MODEL="${OPENCODE_MODEL:-qwen36-local/ch0nky}"
 SELF_IMPROVE_MODE="${B00T_SELF_IMPROVE:-auto}"
 ISSUE_FEED="${B00T_GH_ISSUES:-}"
 BACKLOG_SNIPPET=""
@@ -296,6 +296,15 @@ build_prompt() {
     local loop_number="$1"
     local pending
     pending="$(pending_tasks_count)"
+    # skill-test task: load external prompt file with variable substitution
+    local task_mode="${TASK:-}"
+    if [[ "${task_mode}" == "skill-test" ]]; then
+        local prompt_file="${RALPH_DIR:-$(dirname "$(realpath "$0")")/}/B00T_SKILL_IMPROVE_PROMPT.md"
+        if [[ -f "${prompt_file}" ]]; then
+            sed -e "s|{{LOOP}}|${loop_number}|g"                 -e "s|{{MAX_ITER}}|${MAX_ITERATIONS}|g"                 -e "s|{{PENDING}}|${pending}|g"                 "${prompt_file}"
+            return
+        fi
+    fi
     if is_self_improve_mode; then
         cat <<EOF
 You are running in b00t Ralph self-improvement loop.

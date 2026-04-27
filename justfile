@@ -927,6 +927,33 @@ qwen36-status:
 qwen36-test-opencode prompt="say hello in 3 words":
     opencode run --model qwen36-local/ch0nky "{{prompt}}"
 
+# ── b00t skill-improvement loop — opencode ch0nky continuous self-improvement ──
+# 🤓 Tests datums, fixes gaps, commits improvements; runs unattended overnight
+
+# One-shot skill improvement run (5 iterations, no systemd)
+b00t-skill-improve iterations="5":
+    TASK=skill-test TOOL=opencode ROLE=executive     OPENCODE_MODEL=qwen36-local/ch0nky     MAX_ITERATIONS={{iterations}} RALPH_METRIC_GATE=true     bash ralphs/ralph-plus-_b00t_/ralph.sh
+
+# Start continuous skill-improve loop as systemd service (unattended)
+b00t-skill-improve-loop:
+    b00t hive activate b00t-skill-improve-loop
+
+# Stop the loop
+b00t-skill-improve-stop:
+    systemctl --user stop b00t-hive-b00t-skill-improve-loop || true
+
+# Tail loop logs live
+b00t-skill-improve-logs:
+    journalctl --user -u b00t-hive-b00t-skill-improve-loop -f --no-pager
+
+# Show improvement scores from last batch
+b00t-skill-improve-scores:
+    @tail -20 .b00t/ralph/scores.jsonl 2>/dev/null | python3 -m json.tool || echo 'no scores yet'
+
+# Show loop commits in git log
+b00t-skill-improve-log:
+    git log --oneline --author='b00t-skill-loop' -20
+
 # ── pi agent — systemd service lifecycle ─────────────────────────────────────
 # 🤓 pi is managed as b00t@pi-agent.service, NOT spawned per-invocation
 pi-agent-start:
