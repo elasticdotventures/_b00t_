@@ -48,7 +48,7 @@ exec_start = """/usr/bin/podman run --rm \
     --port 8001 \
     -ngl 999 \
     -fa on \
-    -c 32768 \
+    -c 131072 \
     -n 4096 \
     --jinja \
     --reasoning-format deepseek \
