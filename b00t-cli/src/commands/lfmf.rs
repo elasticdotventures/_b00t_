@@ -7,7 +7,7 @@ use tiktoken_rs::o200k_base;
 pub async fn handle_lfmf(path: &str, tool: &str, lesson: &str, scope: &str) -> Result<()> {
     // Ensure lessons write into the provided path unless explicitly overridden
     if std::env::var("B00T_LEARN_DIR").is_err() {
-        let learn_dir = std::path::Path::new(path)
+        let learn_dir = crate::get_expanded_path(path)?
             .join("learn")
             .to_string_lossy()
             .to_string();

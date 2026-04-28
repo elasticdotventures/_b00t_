@@ -104,7 +104,7 @@ prompt eval time = 79043.57 ms / 17 tokens (0.22 tokens/second)
 ```bash
 # Option A: podman GPU container (fastest, no build)
 podman run --device nvidia.com/gpu=all --security-opt=label=disable \
-  -p 8000:8000 ghcr.io/ggerganov/llama.cpp:server-cuda \
+  -p 8000:8000 ghcr.io/ggml-org/llama.cpp:server-cuda \
   -m ~/.cache/huggingface/hub/models--Qwen--Qwen3-Coder-Next-GGUF/snapshots/main/Qwen3-Coder-Next-Q4_K_M/Qwen3-Coder-Next-Q4_K_M-00001-of-00004.gguf \
   --alias qwen3-coder -ngl 999 -c 32768 --host 0.0.0.0
 
