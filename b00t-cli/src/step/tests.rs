@@ -22,8 +22,7 @@ input = { current_state = "json", desired_state = "json" }
 output = { plan = "string" }
         "#;
 
-        let step = MokuStep::from_toml(toml_str)
-            .expect("Should parse step TOML");
+        let step = MokuStep::from_toml(toml_str).expect("Should parse step TOML");
 
         assert_eq!(step.name, "execute-transition");
         assert_eq!(step.states.initial, "Planning");
@@ -39,14 +38,12 @@ output = { plan = "string" }
                 variants: vec!["Planning".to_string(), "Done".to_string()],
                 initial: "Planning".to_string(),
             },
-            state_defs: vec![
-                StateDefinition {
-                    name: "Planning".to_string(),
-                    instructions: None,
-                    io: Some(IOContract::default()),
-                    transition: None,
-                },
-            ],
+            state_defs: vec![StateDefinition {
+                name: "Planning".to_string(),
+                instructions: None,
+                io: Some(IOContract::default()),
+                transition: None,
+            }],
         };
 
         let state = step.get_state("Planning");
@@ -170,8 +167,16 @@ output = { plan = "string" }
     #[test]
     fn test_io_contract_validation() {
         let contract = IOContract {
-            input: Some(vec![("state".to_string(), "json".to_string())].into_iter().collect()),
-            output: Some(vec![("plan".to_string(), "json".to_string())].into_iter().collect()),
+            input: Some(
+                vec![("state".to_string(), "json".to_string())]
+                    .into_iter()
+                    .collect(),
+            ),
+            output: Some(
+                vec![("plan".to_string(), "json".to_string())]
+                    .into_iter()
+                    .collect(),
+            ),
         };
 
         assert!(contract.input.is_some());
@@ -187,19 +192,17 @@ output = { plan = "string" }
                 variants: vec!["Planning".to_string(), "Done".to_string()],
                 initial: "Planning".to_string(),
             },
-            state_defs: vec![
-                StateDefinition {
-                    name: "Planning".to_string(),
-                    instructions: None,
-                    io: None,
-                    transition: Some(TransitionRule {
-                        to: "Done".to_string(),
-                        requires: vec![],
-                        guard: None,
-                        output_contract: None,
-                    }),
-                },
-            ],
+            state_defs: vec![StateDefinition {
+                name: "Planning".to_string(),
+                instructions: None,
+                io: None,
+                transition: Some(TransitionRule {
+                    to: "Done".to_string(),
+                    requires: vec![],
+                    guard: None,
+                    output_contract: None,
+                }),
+            }],
         };
 
         let diagram = step.to_mermaid().expect("Should generate Mermaid diagram");

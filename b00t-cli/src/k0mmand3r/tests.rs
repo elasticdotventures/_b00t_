@@ -7,8 +7,7 @@ mod k0mmand3r_guard_tests {
     fn test_parse_k0mmand3r_guard() {
         let guard_str = "/negotiate blessing:observe-infrastructure";
 
-        let cmd = K0mmand::parse(guard_str)
-            .expect("Should parse k0mmand3r command");
+        let cmd = K0mmand::parse(guard_str).expect("Should parse k0mmand3r command");
 
         assert_eq!(cmd.verb, "negotiate");
         assert_eq!(cmd.object, "blessing:observe-infrastructure");
@@ -45,8 +44,7 @@ mod k0mmand3r_guard_tests {
             authorized: false,
         };
 
-        let result = guard.evaluate(&context)
-            .expect("Should evaluate guard");
+        let result = guard.evaluate(&context).expect("Should evaluate guard");
 
         assert!(result, "Guard should be true when blessing is present");
 
@@ -57,7 +55,8 @@ mod k0mmand3r_guard_tests {
             votes: vec![],
             authorized: false,
         };
-        let result = guard.evaluate(&context_no_blessing)
+        let result = guard
+            .evaluate(&context_no_blessing)
             .expect("Should evaluate guard");
 
         assert!(!result, "Guard should be false when blessing is absent");
@@ -109,7 +108,9 @@ mod k0mmand3r_guard_tests {
         };
 
         for (i, guard) in guards.iter().enumerate() {
-            let result = guard.evaluate(&context).expect(&format!("Should evaluate guard {}", i));
+            let result = guard
+                .evaluate(&context)
+                .expect(&format!("Should evaluate guard {}", i));
             assert!(result, "Guard {} should be true", i);
         }
     }
@@ -118,9 +119,7 @@ mod k0mmand3r_guard_tests {
     #[test]
     fn test_guard_failure_message() {
         let guard = GuardCondition {
-            requires: vec![
-                "/negotiate blessing:b00t-sandbox budget:10000".to_string(),
-            ],
+            requires: vec!["/negotiate blessing:b00t-sandbox budget:10000".to_string()],
             expression: "budget_available(10000)".to_string(),
         };
 
@@ -173,8 +172,7 @@ mod k0mmand3r_guard_tests {
         };
 
         let json = serde_json::to_string(&guard).expect("Should serialize");
-        let deserialized: GuardCondition = serde_json::from_str(&json)
-            .expect("Should deserialize");
+        let deserialized: GuardCondition = serde_json::from_str(&json).expect("Should deserialize");
 
         assert_eq!(guard, deserialized);
     }

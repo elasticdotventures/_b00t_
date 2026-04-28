@@ -1,0 +1,2 @@
+---
+Gemma 4 26B-A4B MXFP4_MOE hive stack: (1) download: hf download unsloth/gemma-4-26B-A4B-it-GGUF --include "*MXFP4_MOE*" (2) activate: b00t hive activate inference-gemma4 → starts vllm-gemma4.service on :8001 (3) all agents consume via liter-llm gateway :1234 using model "ch0nky" — shared cost accounting. Stack datum: pi-gemma4-hive.stack.toml. AAIII detection: check_pi() requires pi binary + gateway at :1234 responding. justfiles are TOIL — use b00t hive activate, not just gemma4-serve.

@@ -285,28 +285,34 @@ mod tests {
     #[test]
     fn test_hook_which_returns_string() {
         // which("sh") should find /bin/sh on any POSIX system
-        let result = run_hook(r#"
+        let result = run_hook(
+            r#"
             let p = which("sh");
             if p != "" { "ok" } else { "missing: sh not found" }
-        "#);
+        "#,
+        );
         assert_eq!(result, HookResult::Ok);
     }
 
     #[test]
     fn test_hook_which_missing_binary() {
-        let result = run_hook(r#"
+        let result = run_hook(
+            r#"
             let p = which("this-binary-definitely-does-not-exist-b00t");
             if p == "" { "missing: not found" } else { "ok" }
-        "#);
+        "#,
+        );
         assert_eq!(result, HookResult::Missing("not found".into()));
     }
 
     #[test]
     fn test_hook_exec_runs_command() {
-        let result = run_hook(r#"
+        let result = run_hook(
+            r#"
             let out = exec("echo hello");
             if out == "hello" { "ok" } else { "warn: unexpected: " + out }
-        "#);
+        "#,
+        );
         assert_eq!(result, HookResult::Ok);
     }
 

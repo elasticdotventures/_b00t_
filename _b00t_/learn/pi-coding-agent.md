@@ -1,0 +1,2 @@
+---
+pi targets liter-llm/mistralrs-proxy gateway at: 1234 via model name "ch0nky" — NOT direct llama-cpp endpoint. Gateway routes ch0nky → vllm-gemma4.service at :8001. Set OPENAI_BASE_URL=http://127.0.0.1:1234/v1 OPENAI_API_KEY=local-b00t. Invoke: pi -p --provider llama-cpp --model ch0nky. Hive lifecycle: b00t hive activate inference-gemma4 starts vllm-gemma4.service. Stack: pi-gemma4-hive.stack.toml groups all components. AAIII backend Pi requires both pi binary AND gateway responding at :1234.

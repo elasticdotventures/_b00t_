@@ -1,14 +1,14 @@
 pub mod claude;
-pub mod gemini;
 pub mod codex;
-pub mod opencode;
 pub mod copilot;
+pub mod gemini;
+pub mod opencode;
 
 pub use claude::ClaudeAdapter;
-pub use gemini::GeminiAdapter;
 pub use codex::CodexAdapter;
-pub use opencode::OpenCodeAdapter;
 pub use copilot::CopilotAdapter;
+pub use gemini::GeminiAdapter;
+pub use opencode::OpenCodeAdapter;
 
 use anyhow::Result;
 use std::path::PathBuf;

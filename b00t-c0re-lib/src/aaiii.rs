@@ -81,7 +81,7 @@ impl AaiiiConfig {
     /// Auto-detect available AI backend
     pub fn detect() -> Self {
         // Priority: Qwen > Claude > Codex > Gemini > Amp > OpenCode > MistralRs > File
-        
+
         if Self::check_qwen() {
             eprintln!("🤖 AAIII backend detected: Qwen Code");
             return Self {
@@ -231,7 +231,12 @@ impl AaiiiConfig {
     fn pi_base_url_candidates() -> Vec<String> {
         let mut candidates = Vec::new();
 
-        for key in ["B00T_AI_CH0NKY_BASE", "PI_BASE_URL", "LLAMA_CPP_BASE_URL", "OPENAI_BASE_URL"] {
+        for key in [
+            "B00T_AI_CH0NKY_BASE",
+            "PI_BASE_URL",
+            "LLAMA_CPP_BASE_URL",
+            "OPENAI_BASE_URL",
+        ] {
             if let Ok(value) = env::var(key) {
                 let trimmed = value.trim();
                 if !trimmed.is_empty() && !candidates.iter().any(|existing| existing == trimmed) {
@@ -407,8 +412,15 @@ mod tests {
         }
 
         let candidates = AaiiiConfig::pi_base_url_candidates();
-        assert_eq!(candidates.first().map(String::as_str), Some("http://127.0.0.1:8001/v1"));
-        assert!(candidates.iter().any(|candidate| candidate == "http://localhost:1234/v1"));
+        assert_eq!(
+            candidates.first().map(String::as_str),
+            Some("http://127.0.0.1:8001/v1")
+        );
+        assert!(
+            candidates
+                .iter()
+                .any(|candidate| candidate == "http://localhost:1234/v1")
+        );
 
         if let Some(value) = previous {
             unsafe {
@@ -423,15 +435,28 @@ mod tests {
 
     #[test]
     fn test_pi_base_url_candidates_include_direct_gemma4_fallback() {
-        for key in ["B00T_AI_CH0NKY_BASE", "PI_BASE_URL", "LLAMA_CPP_BASE_URL", "OPENAI_BASE_URL"] {
+        for key in [
+            "B00T_AI_CH0NKY_BASE",
+            "PI_BASE_URL",
+            "LLAMA_CPP_BASE_URL",
+            "OPENAI_BASE_URL",
+        ] {
             unsafe {
                 std::env::remove_var(key);
             }
         }
 
         let candidates = AaiiiConfig::pi_base_url_candidates();
-        assert!(candidates.iter().any(|candidate| candidate == "http://localhost:1234/v1"));
-        assert!(candidates.iter().any(|candidate| candidate == "http://localhost:8001/v1"));
+        assert!(
+            candidates
+                .iter()
+                .any(|candidate| candidate == "http://localhost:1234/v1")
+        );
+        assert!(
+            candidates
+                .iter()
+                .any(|candidate| candidate == "http://localhost:8001/v1")
+        );
     }
 
     #[test]

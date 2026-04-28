@@ -161,7 +161,12 @@ pub fn handle_datum_command(path: &str, datum_command: &DatumCommands) -> Result
                     .enable_all()
                     .build()
                     .expect("tokio build")
-                    .block_on(handle_semantic_search(&path_owned, &query_owned, rebuild, limit))
+                    .block_on(handle_semantic_search(
+                        &path_owned,
+                        &query_owned,
+                        rebuild,
+                        limit,
+                    ))
             })
             .join()
             .map_err(|_| anyhow::anyhow!("semantic-search thread panicked"))?
@@ -549,7 +554,12 @@ fn handle_filter(
             .collect();
         println!("{}", serde_json::to_string_pretty(&arr)?);
     } else {
-        println!("{:<30} {:<12} {}", "KEY", "TYPE", if explain { "REASON / OK" } else { "HINT" });
+        println!(
+            "{:<30} {:<12} {}",
+            "KEY",
+            "TYPE",
+            if explain { "REASON / OK" } else { "HINT" }
+        );
         println!("{}", "-".repeat(72));
         for (key, datum, reason) in &results {
             let type_str = datum
@@ -601,9 +611,7 @@ fn handle_graph(
             graph.nodes.iter().map(|n| n.key.as_str()).collect();
         graph
             .edges
-            .retain(|e| {
-                kept_keys.contains(e.from.as_str()) && kept_keys.contains(e.to.as_str())
-            });
+            .retain(|e| kept_keys.contains(e.from.as_str()) && kept_keys.contains(e.to.as_str()));
     }
 
     let content = if format == "json" {
@@ -622,17 +630,15 @@ fn handle_graph(
     Ok(())
 }
 
-fn handle_neighbors(
-    b00t_path: &str,
-    datum_key: &str,
-    depth: usize,
-    direction: &str,
-) -> Result<()> {
+fn handle_neighbors(b00t_path: &str, datum_key: &str, depth: usize, direction: &str) -> Result<()> {
     let graph = datum_utils::build_datum_graph(b00t_path, None)?;
     let neighbors = datum_utils::graph_neighbors(&graph, datum_key, depth, direction);
 
     if neighbors.is_empty() {
-        println!("No neighbors found for '{}' (depth={}, direction={})", datum_key, depth, direction);
+        println!(
+            "No neighbors found for '{}' (depth={}, direction={})",
+            datum_key, depth, direction
+        );
         return Ok(());
     }
 
@@ -684,11 +690,7 @@ async fn handle_semantic_search(
                 println!("{}", "-".repeat(72));
                 for r in &result.results {
                     let source = r.source.as_deref().unwrap_or(&r.id);
-                    println!(
-                        "{:<30} {}",
-                        truncate(source, 29),
-                        truncate(&r.content, 40),
-                    );
+                    println!("{:<30} {}", truncate(source, 29), truncate(&r.content, 40),);
                 }
                 println!("\n{} result(s)", result.results.len());
             }

@@ -68,7 +68,9 @@ pub struct ExecutorConfig {
     pub hive_profile: Option<String>,
 }
 
-fn default_max_iterations() -> usize { 10 }
+fn default_max_iterations() -> usize {
+    10
+}
 
 // ── Tool call protocol (pi JSON output) ──────────────────────────────────────
 
@@ -93,9 +95,7 @@ struct PiToolOutput {
 pub fn dispatch_tool(call: &ToolCall) -> String {
     match call.name.as_str() {
         "read" => {
-            let path = call.args.get("path")
-                .and_then(|v| v.as_str())
-                .unwrap_or("");
+            let path = call.args.get("path").and_then(|v| v.as_str()).unwrap_or("");
             match std::fs::read_to_string(path) {
                 Ok(content) => format!("file content of {}:\n{}", path, content),
                 Err(e) => format!("error reading {}: {}", path, e),
@@ -103,14 +103,20 @@ pub fn dispatch_tool(call: &ToolCall) -> String {
         }
         "write" | "edit" => {
             let path = call.args.get("path").and_then(|v| v.as_str()).unwrap_or("");
-            let content = call.args.get("content").and_then(|v| v.as_str()).unwrap_or("");
+            let content = call
+                .args
+                .get("content")
+                .and_then(|v| v.as_str())
+                .unwrap_or("");
             match std::fs::write(path, content) {
                 Ok(_) => format!("wrote {} bytes to {}", content.len(), path),
                 Err(e) => format!("error writing {}: {}", path, e),
             }
         }
         "bash" | "shell" | "run" => {
-            let cmd = call.args.get("command")
+            let cmd = call
+                .args
+                .get("command")
                 .or_else(|| call.args.get("cmd"))
                 .or_else(|| call.args.get("shell"))
                 .and_then(|v| v.as_str())
@@ -123,22 +129,39 @@ pub fn dispatch_tool(call: &ToolCall) -> String {
                     if out.status.success() {
                         stdout.into_owned()
                     } else {
-                        format!("exit {}: {}{}", out.status.code().unwrap_or(-1), stdout, stderr)
+                        format!(
+                            "exit {}: {}{}",
+                            out.status.code().unwrap_or(-1),
+                            stdout,
+                            stderr
+                        )
                     }
                 }
                 Err(e) => format!("bash error: {}", e),
             }
         }
         "grep" => {
-            let pattern = call.args.get("pattern").and_then(|v| v.as_str()).unwrap_or("");
-            let path = call.args.get("path").and_then(|v| v.as_str()).unwrap_or(".");
+            let pattern = call
+                .args
+                .get("pattern")
+                .and_then(|v| v.as_str())
+                .unwrap_or("");
+            let path = call
+                .args
+                .get("path")
+                .and_then(|v| v.as_str())
+                .unwrap_or(".");
             match Command::new("grep").args(["-rn", pattern, path]).output() {
                 Ok(out) => String::from_utf8_lossy(&out.stdout).into_owned(),
                 Err(e) => format!("grep error: {}", e),
             }
         }
         "ls" | "find" => {
-            let path = call.args.get("path").and_then(|v| v.as_str()).unwrap_or(".");
+            let path = call
+                .args
+                .get("path")
+                .and_then(|v| v.as_str())
+                .unwrap_or(".");
             match Command::new("ls").arg("-la").arg(path).output() {
                 Ok(out) => String::from_utf8_lossy(&out.stdout).into_owned(),
                 Err(e) => format!("ls error: {}", e),
@@ -162,7 +185,10 @@ fn parse_pi_output(raw: &str) -> Option<Vec<ToolCall>> {
             Ok(parsed) if !parsed.tool_code.is_empty() => return Some(parsed.tool_code),
             Ok(_) => {} // valid JSON but empty tool_code — treat as final answer
             Err(e) => {
-                warn!("parse_pi_output: JSON parse failed (treating as final answer): {}", e);
+                warn!(
+                    "parse_pi_output: JSON parse failed (treating as final answer): {}",
+                    e
+                );
             }
         }
         return None;
@@ -191,7 +217,9 @@ fn parse_pythonic_call(line: &str) -> Option<ToolCall> {
     // Split on first `{` to get tool name
     let brace_pos = rest.find('{')?;
     let tool_name = rest[..brace_pos].trim().to_string();
-    if tool_name.is_empty() { return None; }
+    if tool_name.is_empty() {
+        return None;
+    }
 
     // Extract interior between `{` and trailing `}`
     let interior = rest[brace_pos + 1..].strip_suffix('}')?.trim();
@@ -199,7 +227,10 @@ fn parse_pythonic_call(line: &str) -> Option<ToolCall> {
     // Build args JSON by splitting on `,identifier:` boundaries
     let args = parse_pythonic_args(interior);
 
-    Some(ToolCall { name: tool_name, args })
+    Some(ToolCall {
+        name: tool_name,
+        args,
+    })
 }
 
 /// Split `key:val,key2:val2` into a serde_json::Value object.
@@ -220,7 +251,11 @@ fn parse_pythonic_args(s: &str) -> serde_json::Value {
             // Check if what follows is `ident:` where ident is [a-z_][a-z0-9_]*
             let start = i + 1;
             let mut j = start;
-            while j < len && (bytes[j].is_ascii_lowercase() || bytes[j] == b'_' || (j > start && bytes[j].is_ascii_digit())) {
+            while j < len
+                && (bytes[j].is_ascii_lowercase()
+                    || bytes[j] == b'_'
+                    || (j > start && bytes[j].is_ascii_digit()))
+            {
                 j += 1;
             }
             if j > start && j < len && bytes[j] == b':' {
@@ -274,11 +309,13 @@ pub fn invoke_agent_executor(
 
         // Write context to stdin
         if let Some(mut stdin) = child.stdin.take() {
-            stdin.write_all(context.as_bytes())
+            stdin
+                .write_all(context.as_bytes())
                 .with_context(|| format!("failed to write stdin to {}", executor.cli_path))?;
         }
 
-        let out = child.wait_with_output()
+        let out = child
+            .wait_with_output()
             .with_context(|| format!("agent {} failed", executor.cli_path))?;
 
         let stdout = String::from_utf8_lossy(&out.stdout).into_owned();
@@ -291,7 +328,11 @@ pub fn invoke_agent_executor(
         // Check for tool calls
         match parse_pi_output(&stdout) {
             Some(calls) => {
-                info!("agent tool call [iter {}]: {} call(s)", iteration, calls.len());
+                info!(
+                    "agent tool call [iter {}]: {} call(s)",
+                    iteration,
+                    calls.len()
+                );
                 // Execute each tool, accumulate results
                 let mut results = Vec::new();
                 for call in &calls {
@@ -300,7 +341,11 @@ pub fn invoke_agent_executor(
                     results.push(format!("[tool:{}]\n{}", call.name, result));
                 }
                 // Re-invoke with original prompt + tool results appended
-                context = format!("{}\n\nTool results:\n{}", initial_prompt, results.join("\n---\n"));
+                context = format!(
+                    "{}\n\nTool results:\n{}",
+                    initial_prompt,
+                    results.join("\n---\n")
+                );
             }
             None => {
                 // Final answer — no more tool calls
@@ -310,7 +355,10 @@ pub fn invoke_agent_executor(
         }
     }
 
-    anyhow::bail!("agent exceeded max_iterations ({})", executor.max_iterations)
+    anyhow::bail!(
+        "agent exceeded max_iterations ({})",
+        executor.max_iterations
+    )
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -360,11 +408,7 @@ impl Drop for AgentHandle {
             }
 
             if let Err(e) = std::fs::remove_file(socket_path) {
-                error!(
-                    "Failed to remove socket {}: {}",
-                    socket_path.display(),
-                    e
-                );
+                error!("Failed to remove socket {}: {}", socket_path.display(), e);
             } else {
                 info!("🧹 Cleaned up socket: {}", socket_path.display());
             }
@@ -426,8 +470,7 @@ impl AgentManager {
 
             // Create Unix socket listener
             let listener = UnixListener::bind(socket_path).with_context(|| {
-                let mut message =
-                    format!("Failed to bind agent socket: {}", socket_path.display());
+                let mut message = format!("Failed to bind agent socket: {}", socket_path.display());
                 if let Some(hint) = sandbox_root_cause_hint("Unix socket bind") {
                     message.push(' ');
                     message.push_str(&hint);
@@ -582,7 +625,9 @@ cli_args = ["-p", "--provider", "llama-cpp", "--model", "ch0nky"]
 supports_tools = ["read", "bash", "write"]
 max_iterations = 10
 "#;
-        tokio::fs::write(&config_path, config_content).await.unwrap();
+        tokio::fs::write(&config_path, config_content)
+            .await
+            .unwrap();
         let config = AgentManager::load_config(&config_path).await.unwrap();
         let exec = config.b00t.agent.executor.unwrap();
         assert_eq!(exec.cli_path, "pi");
@@ -614,7 +659,9 @@ protocol = "http+acp"
 role = "specialist"
 captain = false
 "#;
-        tokio::fs::write(&config_path, config_content).await.unwrap();
+        tokio::fs::write(&config_path, config_content)
+            .await
+            .unwrap();
         let config = AgentManager::load_config(&config_path).await.unwrap();
         assert_eq!(configured_socket_path(&config), None);
     }
@@ -628,7 +675,11 @@ captain = false
             args: serde_json::json!({"path": tmp.path().to_str().unwrap()}),
         };
         let result = dispatch_tool(&call);
-        assert!(result.contains("hello b00t"), "read tool must return file content: {}", result);
+        assert!(
+            result.contains("hello b00t"),
+            "read tool must return file content: {}",
+            result
+        );
     }
 
     #[test]
@@ -649,7 +700,11 @@ captain = false
             args: serde_json::json!({"path": tmp.path().to_str().unwrap(), "content": "b00t hive"}),
         };
         let result = dispatch_tool(&call);
-        assert!(result.contains("b00t hive") || result.contains("wrote"), "{}", result);
+        assert!(
+            result.contains("b00t hive") || result.contains("wrote"),
+            "{}",
+            result
+        );
         assert_eq!(std::fs::read_to_string(tmp.path()).unwrap(), "b00t hive");
     }
 
@@ -676,7 +731,10 @@ captain = false
         let calls = parse_pi_output(raw).expect("must parse pythonic bash call");
         assert_eq!(calls.len(), 1);
         assert_eq!(calls[0].name, "bash");
-        assert_eq!(calls[0].args.get("command").and_then(|v| v.as_str()), Some("echo hello_world"));
+        assert_eq!(
+            calls[0].args.get("command").and_then(|v| v.as_str()),
+            Some("echo hello_world")
+        );
     }
 
     #[test]
@@ -686,8 +744,14 @@ captain = false
         let calls = parse_pi_output(raw).expect("must parse pythonic write call");
         assert_eq!(calls.len(), 1);
         assert_eq!(calls[0].name, "write");
-        assert_eq!(calls[0].args.get("content").and_then(|v| v.as_str()), Some("hello, world"));
-        assert_eq!(calls[0].args.get("path").and_then(|v| v.as_str()), Some("/tmp/b00t_test.txt"));
+        assert_eq!(
+            calls[0].args.get("content").and_then(|v| v.as_str()),
+            Some("hello, world")
+        );
+        assert_eq!(
+            calls[0].args.get("path").and_then(|v| v.as_str()),
+            Some("/tmp/b00t_test.txt")
+        );
     }
 
     #[test]
@@ -696,7 +760,10 @@ captain = false
         let calls = parse_pi_output(raw).expect("must parse pythonic read call");
         assert_eq!(calls.len(), 1);
         assert_eq!(calls[0].name, "read");
-        assert_eq!(calls[0].args.get("path").and_then(|v| v.as_str()), Some("/tmp/b00t_test_pi.txt"));
+        assert_eq!(
+            calls[0].args.get("path").and_then(|v| v.as_str()),
+            Some("/tmp/b00t_test_pi.txt")
+        );
     }
 
     #[test]
@@ -712,14 +779,20 @@ captain = false
     #[test]
     fn test_parse_pythonic_args_single() {
         let args = parse_pythonic_args("command:ls -F /tmp");
-        assert_eq!(args.get("command").and_then(|v| v.as_str()), Some("ls -F /tmp"));
+        assert_eq!(
+            args.get("command").and_then(|v| v.as_str()),
+            Some("ls -F /tmp")
+        );
     }
 
     #[test]
     fn test_parse_pythonic_args_comma_in_value() {
         // content:hello, world,path:/foo — comma inside value must not split key
         let args = parse_pythonic_args("content:hello, world,path:/foo");
-        assert_eq!(args.get("content").and_then(|v| v.as_str()), Some("hello, world"));
+        assert_eq!(
+            args.get("content").and_then(|v| v.as_str()),
+            Some("hello, world")
+        );
         assert_eq!(args.get("path").and_then(|v| v.as_str()), Some("/foo"));
     }
 

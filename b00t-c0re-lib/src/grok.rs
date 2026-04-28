@@ -5,6 +5,7 @@
 //! and b00t-mcp.
 
 use anyhow::Result;
+use dirs;
 use rmcp::{
     ServiceExt,
     model::CallToolRequestParam,
@@ -15,7 +16,6 @@ use serde_json::{Map, Value, json};
 use std::borrow::Cow;
 use std::env;
 use tokio::process::Command;
-use dirs;
 
 /// Concrete MCP client running service type
 type McpRunningService = RunningService<rmcp::service::RoleClient, ()>;
@@ -103,7 +103,10 @@ pub struct ChunkSummary {
 impl GrokClient {
     /// Create a new GrokClient; backend selected from GROK_BACKEND env var
     pub fn new() -> Self {
-        Self { mcp_client: None, backend: GrokBackend::from_env() }
+        Self {
+            mcp_client: None,
+            backend: GrokBackend::from_env(),
+        }
     }
 
     /// Initialize MCP client — dispatches to Python or irontology backend
@@ -125,7 +128,10 @@ impl GrokClient {
                 "/tmp".to_string()
             });
         let bin_path = env::var("IRONTOLOGY_BIN").unwrap_or_else(|_| {
-            format!("{}/.b00t/vendor/irontology-mcp/target/release/irontology-mcp", home)
+            format!(
+                "{}/.b00t/vendor/irontology-mcp/target/release/irontology-mcp",
+                home
+            )
         });
         let neumann_data_dir = env::var("NEUMANN_DATA_DIR")
             .unwrap_or_else(|_| format!("{}/.b00t/neumann/default", home));
@@ -231,7 +237,10 @@ impl GrokClient {
                 // 🤓 irontology: repo.index tool — chunk+embed+persist
                 let mut params = Map::new();
                 params.insert("content".to_string(), json!(content));
-                params.insert("source".to_string(), json!(format!("grok:digest:{}", topic)));
+                params.insert(
+                    "source".to_string(),
+                    json!(format!("grok:digest:{}", topic)),
+                );
                 params.insert("topic".to_string(), json!(topic));
                 let request = CallToolRequestParam {
                     name: Cow::Borrowed("repo.index"),
@@ -384,10 +393,7 @@ impl GrokClient {
         let indexed = v.get("indexed").and_then(|x| x.as_bool()).unwrap_or(false);
         Ok(DigestResult {
             success: indexed,
-            chunk_id: format!(
-                "grok:digest:{}::chunk::0",
-                topic
-            ),
+            chunk_id: format!("grok:digest:{}::chunk::0", topic),
             topic: topic.to_string(),
             content_preview: content.chars().take(80).collect(),
             created_at: String::new(),
@@ -430,11 +436,26 @@ impl GrokClient {
                     .filter_map(|item| {
                         let obj = item.as_object()?;
                         Some(ChunkResult {
-                            id: obj.get("id").and_then(|x| x.as_str()).unwrap_or("").to_string(),
-                            content: obj.get("content").and_then(|x| x.as_str()).unwrap_or("").to_string(),
-                            topic: obj.get("topic").and_then(|x| x.as_str()).unwrap_or("").to_string(),
+                            id: obj
+                                .get("id")
+                                .and_then(|x| x.as_str())
+                                .unwrap_or("")
+                                .to_string(),
+                            content: obj
+                                .get("content")
+                                .and_then(|x| x.as_str())
+                                .unwrap_or("")
+                                .to_string(),
+                            topic: obj
+                                .get("topic")
+                                .and_then(|x| x.as_str())
+                                .unwrap_or("")
+                                .to_string(),
                             tags: vec![],
-                            source: obj.get("source").and_then(|x| x.as_str()).map(|s| s.to_string()),
+                            source: obj
+                                .get("source")
+                                .and_then(|x| x.as_str())
+                                .map(|s| s.to_string()),
                             created_at: String::new(),
                         })
                     })
@@ -984,7 +1005,8 @@ mod irontology_parser_tests {
     #[test]
     fn test_parse_digest_valid_indexed() {
         let client = GrokClient::new();
-        let json = r#"{"indexed": true, "source": "s.md", "topic": "rust", "chunks": 3, "embedded": 3}"#;
+        let json =
+            r#"{"indexed": true, "source": "s.md", "topic": "rust", "chunks": 3, "embedded": 3}"#;
         let r = client
             .parse_irontology_digest_response(make_text_result(json), "rust", "content here")
             .unwrap();

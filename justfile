@@ -506,9 +506,10 @@ hf-download model dest="" revision="":
 		echo "⚠️ set model=<repo>" >&2
 		exit 1
 	fi
-	if ! command -v huggingface-cli >/dev/null 2>&1; then
-		echo "⚠️ huggingface-cli missing; run 'b00t-cli cli install huggingface'" >&2
-		exit 1
+	# 🤓 prefer hf (huggingface_hub>=0.26 alias); auto-install if missing
+	if ! command -v hf >/dev/null 2>&1; then
+		echo "hf not found — auto-installing huggingface_hub[cli] via uv ..." >&2
+		uv tool install --upgrade "huggingface_hub[cli]"
 	fi
 	DEST="{{dest}}"
 	if [[ -z "$DEST" ]]; then
@@ -520,7 +521,7 @@ hf-download model dest="" revision="":
 	if [[ -n "{{revision}}" ]]; then
 		ARGS+=(--revision "{{revision}}")
 	fi
-	huggingface-cli "${ARGS[@]}"
+	hf "${ARGS[@]}"
 	echo "✅ cached $MODEL -> $DEST"
 
 # Invoke b00t-cli to install/cache a datum-backed model
@@ -893,6 +894,96 @@ gemma4-stop:
 # Check Gemma 4 server health
 gemma4-status:
     curl -s http://localhost:8001/v1/models | python3 -m json.tool
+
+
+# ── qwen3.6-27B — download, serve, hive lifecycle ────────────────────────────
+# 🤓 qwen36 replaces gemma4 as ch0nky tier; vLLM primary, llamacpp podman fallback
+# 🤓 PREREQ: activate download-mode first to free VRAM before ~15GB download
+
+# Download Qwen3.6-27B Q4_K_M GGUF (stop vLLM first via download-mode hive)
+qwen36-download:
+    b00t hive activate download-mode
+    hf download unsloth/Qwen3.6-27B-GGUF --include "Qwen3.6-27B-Q4_K_M.gguf"
+    @echo "✅ download done — run: just qwen36-serve  (or just qwen36-serve-llamacpp)"
+
+# Activate Qwen3.6-27B via vLLM (generates + enables systemd unit)
+qwen36-serve:
+    b00t hive activate inference-qwen36-27b
+
+# Activate Qwen3.6-27B via llamacpp podman (GGUF-native fallback when vLLM fails)
+qwen36-serve-llamacpp:
+    b00t hive activate inference-qwen36-27b-llamacpp
+
+# Stop Qwen3.6-27B inference (whichever backend is running)
+qwen36-stop:
+    systemctl --user stop b00t-hive-inference-qwen36-27b.service || true
+    systemctl --user stop b00t-hive-inference-qwen36-27b-llamacpp.service || true
+    systemctl --user stop b00t-hive-inference-qwen36-35b-a3b-llamacpp.service || true
+
+# Serve 35B-A3B MoE (lighter VRAM than 27B dense; preferred when MXFP4 supported)
+qwen36-serve-35b:
+    b00t hive activate inference-qwen36-35b-a3b-llamacpp
+
+# Eval active ch0nky model (must be serving on :8001)
+ch0nky-eval:
+    bash scripts/ch0nky-eval.sh
+
+# Sequential comparison: 27B dense → eval → 35B-A3B MoE → eval → diff
+# Results written to .b00t/ralph/eval-*.jsonl
+ch0nky-eval-compare:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    echo "=== PHASE 1: Qwen3.6-27B-Q4_K_M (dense) ==="
+    just qwen36-stop
+    just qwen36-serve-llamacpp
+    echo "Waiting for :8001..."
+    until curl -sf http://127.0.0.1:8001/v1/models >/dev/null 2>&1; do sleep 5; done
+    just ch0nky-eval
+    echo ""
+    echo "=== PHASE 2: Qwen3.6-35B-A3B-MXFP4_MOE (MoE) ==="
+    just qwen36-stop
+    just qwen36-serve-35b
+    echo "Waiting for :8001..."
+    until curl -sf http://127.0.0.1:8001/v1/models >/dev/null 2>&1; do sleep 5; done
+    just ch0nky-eval
+    echo ""
+    echo "=== COMPARISON COMPLETE — see .b00t/ralph/eval-*.jsonl ==="
+    ls -t .b00t/ralph/eval-*.jsonl | head -2 | xargs grep "SUMMARY"
+
+# Check ch0nky endpoint (port 8001)
+qwen36-status:
+    curl -s http://localhost:8001/v1/models | python3 -m json.tool
+
+# Run opencode one-shot against local qwen36-local/ch0nky
+qwen36-test-opencode prompt="say hello in 3 words":
+    opencode run --model qwen36-local/ch0nky "{{prompt}}"
+
+# ── b00t skill-improvement loop — opencode ch0nky continuous self-improvement ──
+# 🤓 Tests datums, fixes gaps, commits improvements; runs unattended overnight
+
+# One-shot skill improvement run (5 iterations, no systemd)
+b00t-skill-improve iterations="5":
+    TASK=skill-test TOOL=opencode ROLE=executive     OPENCODE_MODEL=qwen36-local/ch0nky     MAX_ITERATIONS={{iterations}} RALPH_METRIC_GATE=true     bash ralphs/ralph-plus-_b00t_/ralph.sh
+
+# Start continuous skill-improve loop as systemd service (unattended)
+b00t-skill-improve-loop:
+    b00t hive activate b00t-skill-improve-loop
+
+# Stop the loop
+b00t-skill-improve-stop:
+    systemctl --user stop b00t-hive-b00t-skill-improve-loop || true
+
+# Tail loop logs live
+b00t-skill-improve-logs:
+    journalctl --user -u b00t-hive-b00t-skill-improve-loop -f --no-pager
+
+# Show improvement scores from last batch
+b00t-skill-improve-scores:
+    @tail -20 .b00t/ralph/scores.jsonl 2>/dev/null | python3 -m json.tool || echo 'no scores yet'
+
+# Show loop commits in git log
+b00t-skill-improve-log:
+    git log --oneline --author='b00t-skill-loop' -20
 
 # ── pi agent — systemd service lifecycle ─────────────────────────────────────
 # 🤓 pi is managed as b00t@pi-agent.service, NOT spawned per-invocation

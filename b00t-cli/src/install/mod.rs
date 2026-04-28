@@ -4,11 +4,14 @@ pub mod manifest;
 pub mod runtimes;
 pub mod tui;
 
-pub use adapter::{AdapterRegistry, InstallContext, InstallScope, RuntimeAdapter, RuntimeAdapterTyped, RuntimeConfig, RuntimeId};
+pub use adapter::{
+    AdapterRegistry, InstallContext, InstallScope, RuntimeAdapter, RuntimeAdapterTyped,
+    RuntimeConfig, RuntimeId,
+};
 
+use crate::install::runtimes::*;
 use anyhow::Result;
 use std::path::PathBuf;
-use crate::install::runtimes::*;
 
 /// Build the default adapter registry with all 5 runtimes
 pub fn default_registry() -> AdapterRegistry {
@@ -47,14 +50,14 @@ pub fn handle_install_command(
     let selection = if interactive && !yes {
         tui::run_tui(&registry)?
     } else {
-        let runtimes = runtimes_arg.unwrap_or_else(|| {
-            registry.detected().iter().map(|a| a.id()).collect()
-        });
+        let runtimes =
+            runtimes_arg.unwrap_or_else(|| registry.detected().iter().map(|a| a.id()).collect());
         let scope = scope_arg.unwrap_or(InstallScope::Global);
         let sel = tui::headless_selection(runtimes, scope, content::ContentPackId::all());
         // In headless (non-interactive) mode without --yes, require explicit confirmation
         if !yes {
-            let runtime_names: Vec<&str> = sel.runtimes.iter().map(RuntimeId::display_name).collect();
+            let runtime_names: Vec<&str> =
+                sel.runtimes.iter().map(RuntimeId::display_name).collect();
             let scope_str = match &sel.scope {
                 InstallScope::Global => "globally".to_string(),
                 InstallScope::Local(p) => format!("locally in {}", p.display()),
@@ -76,7 +79,8 @@ pub fn handle_install_command(
     let source_root = runtimes_source_root()?;
 
     for runtime_id in &selection.runtimes {
-        let adapter = registry.get(runtime_id)
+        let adapter = registry
+            .get(runtime_id)
             .ok_or_else(|| anyhow::anyhow!("No adapter for {:?}", runtime_id))?;
 
         let config = adapter.default_config(&selection.scope)?;
@@ -91,7 +95,11 @@ pub fn handle_install_command(
 
         println!("Installing b00t for {}...", runtime_id.display_name());
         let manifest = adapter.install(&ctx)?;
-        println!("{} installed ({} files)", runtime_id.display_name(), manifest.files.len());
+        println!(
+            "{} installed ({} files)",
+            runtime_id.display_name(),
+            manifest.files.len()
+        );
     }
 
     println!("\nb00t installation complete!");
@@ -109,7 +117,9 @@ mod tests {
     struct EnvVarGuard(&'static str);
     impl Drop for EnvVarGuard {
         fn drop(&mut self) {
-            unsafe { std::env::remove_var(self.0); }
+            unsafe {
+                std::env::remove_var(self.0);
+            }
         }
     }
 
@@ -147,7 +157,11 @@ mod tests {
             let result = runtimes_source_root();
             assert!(result.is_err());
             let msg = result.unwrap_err().to_string();
-            assert!(msg.contains("runtimes source directory not found"), "unexpected error: {}", msg);
+            assert!(
+                msg.contains("runtimes source directory not found"),
+                "unexpected error: {}",
+                msg
+            );
         }
     }
 
@@ -163,6 +177,10 @@ mod tests {
         let result = runtimes_source_root();
         assert!(result.is_err());
         let msg = result.unwrap_err().to_string();
-        assert!(msg.contains("runtimes source directory not found"), "unexpected error: {}", msg);
+        assert!(
+            msg.contains("runtimes source directory not found"),
+            "unexpected error: {}",
+            msg
+        );
     }
 }

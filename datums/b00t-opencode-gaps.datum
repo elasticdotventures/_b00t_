@@ -1,0 +1,110 @@
+# b00t-opencode gaps analysis datum
+
+## Executive Summary
+
+b00t provides primitives (datum, grok, hive, task, agent, RHAI). opencode is an AI coding framework. This document identifies gaps and bridges between them.
+
+## b00t Capabilities Tested
+
+| Capability | Status | Notes |
+|------------|--------|-------|
+| b00t status | ✅ Working | Full system dashboard |
+| b00t task list | ✅ Working | 6 pending tasks shown |
+| b00t hive status | ⚠️ Missing | No profiles shown |
+| b00t ontology query | ✅ Working | Developer role: 9 tools |
+| b00t grok ask | ❌ Broken | Requires --topic flag |
+| b00t grok learn | ✅ Working | Needs source + topic |
+| b00t script list | ⚠️ 4 scripts | Found but execution broken |
+| b00t script run | ❌ Broken | All scripts fail to execute |
+| b00t script eval | ❌ Broken | Eval fails |
+| b00t agent discover | ⚠️ ACP not running | |
+| b00t agent delegate | ⚠️ No running agents | |
+
+## Identified Gaps
+
+### Gap 1: RHAI Script Runner Broken
+
+**Symptom**: `b00t script run` and `b00t script eval` fail silently
+
+**Impact**: Cannot execute automation scripts via opencode
+
+**Affected scripts**:
+- operator-agent.rhai
+- setup.rhai
+- github-auth-validate.rhai
+- kubernetes_detect.rhai
+
+**Root cause**: Unknown - needs debugging
+
+### Gap 2: Grok Requires --topic Flag
+
+**Symptom**: `b00t grok ask "query"` fails without --topic
+
+**Impact**: Knowledge base queries require explicit topic
+
+**Workaround**: Use `--topic` flag explicitly
+
+### Gap 3: Hive Profiles Not Active
+
+**Symptom**: `b00t hive status` shows no active profile
+
+**Impact**: Cannot switch resource profiles
+
+**Files**: `*.hive.toml` profiles exist but not loaded
+
+### Gap 4: ACP Agent Server Not Running
+
+**Symptom**: Agent discovery returns no agents
+
+**Impact**: Cannot delegate to b00t agents from opencode
+
+**Fix needed**: Start ACP server via `b00t agent start-all`
+
+## Bridges Created (This Session)
+
+### 1. MCP Integration
+- `b00t-mcp` registered in opencode config
+- `codebase-memory-mcp` also connected
+- Both show as connected: ✓
+
+### 2. opencode Skills
+- b00t-integration - CLI/MCP integration
+- b00t-rhai-bridge - RHAI scripts
+- datum-system - Datum queries
+- codebase-knowledge-graph - Knowledge graph
+
+### 3. Datums
+- opencode.datum - OpenCode integration
+- openagents-control.datum - Full OAC documentation
+
+## Functional Bridge Summary
+
+```
+opencode (AI coding framework)
+    ↓ via MCP
+b00t-mcp → b00t CLI (primitives)
+    ├── task list ✅
+    ├── ontology query ✅
+    ├── grok learn ✅
+    ├── script list ✅
+    └── script run ❌ (broken)
+    ↓ via skills
+.codebase-memory-mcp → knowledge graph
+```
+
+## Needed Fixes
+
+1. **Debug RHAI script runner** - Silent failures
+2. **Enable hive profiles** - Resource management
+3. **Start ACP agent server** - Enable delegation
+4. **Fix grok ask** - Remove --topic requirement
+
+## Version
+
+b00t-cli: 0.7.45
+opencode: 1.14.18
+Date: 2026-04-19
+
+## Tags
+
+#b00t #opencode #gaps #rhai #mcp

@@ -9,7 +9,10 @@
 use anyhow::{Context, Result};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use std::{env, fs, path::Path};
+use std::{
+    env, fs,
+    path::{Path, PathBuf},
+};
 
 use crate::grok::GrokClient;
 
@@ -75,6 +78,20 @@ fn default_learn_dir() -> String {
     "learn".to_string()
 }
 
+fn expand_user_path(path: &str) -> PathBuf {
+    if path == "~" {
+        return dirs::home_dir().unwrap_or_else(|| PathBuf::from(path));
+    }
+
+    if let Some(rest) = path.strip_prefix("~/")
+        && let Some(home) = dirs::home_dir()
+    {
+        return home.join(rest);
+    }
+
+    PathBuf::from(path)
+}
+
 /// A lesson learned from failures - stored in both vector DB and filesystem
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Lesson {
@@ -118,8 +135,8 @@ impl LfmfSystem {
 
     /// Load configuration from TOML file or environment variables
     pub fn load_config(path: &str) -> Result<LfmfConfig> {
-        let config_path = Path::new(path).join("lfmf.toml");
-        let config_dir = Path::new(path);
+        let config_dir = expand_user_path(path);
+        let config_path = config_dir.join("lfmf.toml");
         let config_exists = config_path.exists();
 
         let mut config = if config_exists {
@@ -560,5 +577,16 @@ learn_dir = "custom_learn"
         assert_eq!(config.qdrant.url, "http://custom:6334");
         assert_eq!(config.qdrant.api_key, Some("test-key".to_string()));
         assert_eq!(config.filesystem.learn_dir, "custom_learn");
+    }
+
+    #[test]
+    fn test_load_config_expands_tilde_path() {
+        let home = dirs::home_dir().expect("HOME not set");
+        let config = LfmfSystem::load_config("~/.b00t/_b00t_").unwrap();
+
+        assert_eq!(
+            config.filesystem.learn_dir,
+            home.join(".b00t/_b00t_/learn").to_string_lossy()
+        );
     }
 }

@@ -147,7 +147,7 @@ impl RhaiEngine {
             },
         );
 
-        // Environment variables
+        // Environment variables - return String with empty default (RHAI-friendly)
         engine.register_fn("get_env", |var: &str| -> String {
             std::env::var(var).unwrap_or_default()
         });

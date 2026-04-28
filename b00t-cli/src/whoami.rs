@@ -1,6 +1,6 @@
 use crate::entanglement::parse_entanglement_ref;
-use crate::{DatumType, UnifiedConfig, get_config, get_expanded_path};
 use crate::skill_resolver::SkillResolver;
+use crate::{DatumType, UnifiedConfig, get_config, get_expanded_path};
 use anyhow::{Context, Result};
 use b00t_c0re_lib::TemplateRenderer;
 use std::fs;
@@ -323,7 +323,10 @@ fn print_role_summary(role: &RoleDetails, path: &str, with_skills: bool) {
             );
         }
     } else if let Some(skills_summary) = summarize_list(&role.skills, 5) {
-        println!("🧠 Skills: {} (use --with-skills to resolve)", skills_summary);
+        println!(
+            "🧠 Skills: {} (use --with-skills to resolve)",
+            skills_summary
+        );
     }
 
     if let Some(compliance_summary) = summarize_list(&role.compliance, 3) {
@@ -533,9 +536,11 @@ hint = "ralph mcp"
                 .iter()
                 .any(|c| { c.reference == "ghost.agent" && c.status == CapabilityStatus::Missing })
         );
-        assert!(checks.iter().any(|c| {
-            c.reference == "b00t-mcp.mcp" && c.status == CapabilityStatus::Missing
-        }));
+        assert!(
+            checks.iter().any(|c| {
+                c.reference == "b00t-mcp.mcp" && c.status == CapabilityStatus::Missing
+            })
+        );
     }
 
     #[test]

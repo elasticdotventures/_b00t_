@@ -1,9 +1,9 @@
 //! Comprehensive CLI tests for b00t grok learn command
 //! Tests the full web crawling and document learning workflow
 
-use std::process::Command;
 use std::env;
 use std::fs;
+use std::process::Command;
 use tempfile::TempDir;
 
 fn is_infrastructure_available() -> bool {
@@ -50,14 +50,13 @@ mod cli_grok_learn {
         println!("stdout: {}", String::from_utf8_lossy(&output.stdout));
         println!("stderr: {}", String::from_utf8_lossy(&output.stderr));
 
-        assert!(
-            output.status.success(),
-            "b00t grok learn should succeed"
-        );
+        assert!(output.status.success(), "b00t grok learn should succeed");
 
         let stdout = String::from_utf8_lossy(&output.stdout);
         assert!(
-            stdout.contains("Successfully learned") || stdout.contains("chunks") || stdout.contains("✅"),
+            stdout.contains("Successfully learned")
+                || stdout.contains("chunks")
+                || stdout.contains("✅"),
             "Should indicate successful learning"
         );
     }
@@ -132,8 +131,14 @@ mod cli_grok_learn {
             .output()
             .expect("Failed to execute b00t grok learn");
 
-        println!("URL learning stdout: {}", String::from_utf8_lossy(&output.stdout));
-        println!("URL learning stderr: {}", String::from_utf8_lossy(&output.stderr));
+        println!(
+            "URL learning stdout: {}",
+            String::from_utf8_lossy(&output.stdout)
+        );
+        println!(
+            "URL learning stderr: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
 
         // May succeed or fail depending on network/crawler availability
         // Just verify no panic
@@ -154,7 +159,10 @@ mod cli_grok_learn {
             .output()
             .expect("Failed to execute b00t grok learn");
 
-        println!("Missing topic error: {}", String::from_utf8_lossy(&output.stderr));
+        println!(
+            "Missing topic error: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
 
         // Should fail with helpful error about missing topic
         assert!(
@@ -256,7 +264,9 @@ mod cli_learn_display_flags {
         let stdout = String::from_utf8_lossy(&output.stdout);
         // Check for stable TOC markers based on the known section headings.
         assert!(
-            stdout.contains("Section 1") && stdout.contains("Section 2") && stdout.contains("Section 3"),
+            stdout.contains("Section 1")
+                && stdout.contains("Section 2")
+                && stdout.contains("Section 3"),
             "TOC output did not list expected sections. Output was:\n{}",
             stdout
         );
@@ -285,7 +295,10 @@ mod cli_learn_display_flags {
             .output()
             .expect("Failed to execute b00t learn --section");
 
-        println!("Section output: {}", String::from_utf8_lossy(&output.stdout));
+        println!(
+            "Section output: {}",
+            String::from_utf8_lossy(&output.stdout)
+        );
 
         // Should succeed or fail gracefully
         if !output.status.success() {
@@ -316,7 +329,10 @@ mod cli_learn_display_flags {
             .output()
             .expect("Failed to execute b00t learn --concise");
 
-        println!("Concise output: {}", String::from_utf8_lossy(&output.stdout));
+        println!(
+            "Concise output: {}",
+            String::from_utf8_lossy(&output.stdout)
+        );
 
         // Should produce output (concise mode)
         if output.status.success() {
@@ -371,8 +387,14 @@ mod cli_error_paths {
             .output()
             .expect("Failed to execute b00t learn --search");
 
-        println!("Nonexistent topic: {}", String::from_utf8_lossy(&output.stdout));
-        println!("Nonexistent stderr: {}", String::from_utf8_lossy(&output.stderr));
+        println!(
+            "Nonexistent topic: {}",
+            String::from_utf8_lossy(&output.stdout)
+        );
+        println!(
+            "Nonexistent stderr: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
 
         // Should handle gracefully - either succeed with "no lessons" or fail with clear message
         let stdout = String::from_utf8_lossy(&output.stdout);
@@ -394,10 +416,7 @@ mod cli_error_paths {
             .expect("Failed to execute b00t grok digest");
 
         // Should fail with clear error about missing -t flag
-        assert!(
-            !output.status.success(),
-            "Should fail without topic"
-        );
+        assert!(!output.status.success(), "Should fail without topic");
 
         let stderr = String::from_utf8_lossy(&output.stderr);
         assert!(
@@ -416,7 +435,10 @@ mod cli_error_paths {
             .output()
             .expect("Failed to execute b00t grok ask");
 
-        println!("Ask without topic: {}", String::from_utf8_lossy(&output.stderr));
+        println!(
+            "Ask without topic: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
 
         // Should fail with clear error when RAGLight requires topic
         assert!(

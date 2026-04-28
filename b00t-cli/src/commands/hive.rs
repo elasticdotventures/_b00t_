@@ -95,11 +95,19 @@ pub fn handle_hive_command(cmd: &HiveCommands, path: &str) -> Result<()> {
 
             println!("HIVE STATUS  {}", snapshot.summary_line());
             println!();
-            println!("  RAM:   {:.1}GB avail / {:.1}GB total", snapshot.ram_available_gb, snapshot.ram_total_gb);
-            println!("  Swap:  {:.1}GB free / {:.1}GB total", snapshot.swap_free_gb, snapshot.swap_total_gb);
-            if let (Some(name), Some(free), Some(total)) =
-                (&snapshot.gpu_name, snapshot.gpu_free_mb, snapshot.gpu_total_mb)
-            {
+            println!(
+                "  RAM:   {:.1}GB avail / {:.1}GB total",
+                snapshot.ram_available_gb, snapshot.ram_total_gb
+            );
+            println!(
+                "  Swap:  {:.1}GB free / {:.1}GB total",
+                snapshot.swap_free_gb, snapshot.swap_total_gb
+            );
+            if let (Some(name), Some(free), Some(total)) = (
+                &snapshot.gpu_name,
+                snapshot.gpu_free_mb,
+                snapshot.gpu_total_mb,
+            ) {
                 println!("  GPU:   {} — {}MB free / {}MB total", name, free, total);
             } else {
                 println!("  GPU:   none detected");
@@ -137,7 +145,7 @@ pub fn handle_hive_command(cmd: &HiveCommands, path: &str) -> Result<()> {
                 println!("  Hive stacks:");
                 for (unit, active, enabled) in &stacks {
                     let status = match (active, enabled) {
-                        (true, true)  => "active+enabled",
+                        (true, true) => "active+enabled",
                         (true, false) => "active",
                         (false, true) => "enabled",
                         (false, false) => "inactive",
@@ -180,8 +188,12 @@ pub fn handle_hive_command(cmd: &HiveCommands, path: &str) -> Result<()> {
                     Ok(p) => {
                         let resources = format!(
                             "RAM: {}GB  GPU: {}MB",
-                            p.resources_ram_gb.map(|r| format!("{:.0}", r)).unwrap_or("?".into()),
-                            p.resources_gpu_mb.map(|g| g.to_string()).unwrap_or("?".into()),
+                            p.resources_ram_gb
+                                .map(|r| format!("{:.0}", r))
+                                .unwrap_or("?".into()),
+                            p.resources_gpu_mb
+                                .map(|g| g.to_string())
+                                .unwrap_or("?".into()),
                         );
                         println!("  {:30}  {:30}  {}", name, resources, p.hint);
                     }
@@ -251,7 +263,11 @@ pub fn handle_hive_command(cmd: &HiveCommands, path: &str) -> Result<()> {
             Ok(())
         }
 
-        HiveCommands::Activate { profile, dry_run, force } => {
+        HiveCommands::Activate {
+            profile,
+            dry_run,
+            force,
+        } => {
             let (dry_run, force) = (*dry_run, *force);
             let snapshot = SystemSnapshot::capture()?;
             let p = load_profile(profile, &datum_dir)?;
@@ -279,7 +295,11 @@ pub fn handle_hive_command(cmd: &HiveCommands, path: &str) -> Result<()> {
             }
         }
 
-        HiveCommands::Run { command, strict, dry_run } => {
+        HiveCommands::Run {
+            command,
+            strict,
+            dry_run,
+        } => {
             let (strict, dry_run) = (*strict, *dry_run);
             if command.is_empty() {
                 bail!("no command specified; usage: b00t run <command> [args...]");

@@ -38,9 +38,9 @@
 pub mod transport;
 
 #[cfg(feature = "dbus")]
-pub mod dbus_interface;
-#[cfg(feature = "dbus")]
 pub mod dbus_client;
+#[cfg(feature = "dbus")]
+pub mod dbus_interface;
 
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};

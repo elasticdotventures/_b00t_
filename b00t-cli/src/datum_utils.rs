@@ -176,7 +176,11 @@ fn scan_datums_recursive(
                     if let Ok(config) = toml::from_str::<UnifiedConfig>(&content) {
                         // Strip outer extension (.tomllm or .toml) for datum key
                         // 🤓 .tomllm wins over .toml on key collision (richer tribal context)
-                        let ext = if filename.ends_with(".tomllm") { ".tomllm" } else { ".toml" };
+                        let ext = if filename.ends_with(".tomllm") {
+                            ".tomllm"
+                        } else {
+                            ".toml"
+                        };
                         let datum_key = filename.trim_end_matches(ext).to_string();
                         let path_str = entry_path.to_string_lossy().to_string();
                         if ext == ".tomllm" || !datums.contains_key(&datum_key) {
@@ -350,9 +354,10 @@ pub fn filter_datums(
         // datum_type filter — if types list is non-empty, datum must match one of them
         if !filter.datum_types.is_empty() {
             let matches = match &datum.datum_type {
-                Some(dt) => filter.datum_types.iter().any(|ft| {
-                    std::mem::discriminant(dt) == std::mem::discriminant(ft)
-                }),
+                Some(dt) => filter
+                    .datum_types
+                    .iter()
+                    .any(|ft| std::mem::discriminant(dt) == std::mem::discriminant(ft)),
                 None => false,
             };
             if !matches {
@@ -366,7 +371,10 @@ pub fn filter_datums(
         // require_os
         if let Some(ref required_os) = filter.require_os {
             if !current_os.eq_ignore_ascii_case(required_os) {
-                reasons.push(format!("OS mismatch: need {}, have {}", required_os, current_os));
+                reasons.push(format!(
+                    "OS mismatch: need {}, have {}",
+                    required_os, current_os
+                ));
             }
         }
 
@@ -491,10 +499,7 @@ pub fn graph_to_dot(graph: &DatumGraph) -> String {
         // Escape quotes in labels
         let label = format!("{}\\n{}", node.key, type_label).replace('"', "\\\"");
         let node_key = node.key.replace('"', "\\\"");
-        out.push_str(&format!(
-            "  \"{}\" [label=\"{}\"];\n",
-            node_key, label
-        ));
+        out.push_str(&format!("  \"{}\" [label=\"{}\"];\n", node_key, label));
     }
 
     for edge in &graph.edges {
@@ -1000,7 +1005,10 @@ inline = "This is inline learn content"
             .as_ref()
             .map(|t| format!("{:?}", t))
             .unwrap_or_default();
-        let text = format!("name: {}\ntype: {}\nhint: {}\n", datum.name, type_str, datum.hint);
+        let text = format!(
+            "name: {}\ntype: {}\nhint: {}\n",
+            datum.name, type_str, datum.hint
+        );
         assert!(text.contains("name: rustc"));
         assert!(text.contains("type: Cli"));
         assert!(text.contains("hint: Rust compiler"));

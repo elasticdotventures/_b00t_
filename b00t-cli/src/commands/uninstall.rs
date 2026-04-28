@@ -1,12 +1,12 @@
+use crate::datum_config::B00tConfig;
+use crate::hook_engine::{HookResult, run_hook};
+use crate::{BootDatum, UnifiedConfig};
 use anyhow::{Context, Result, anyhow};
 use duct::cmd;
 use shellexpand;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use toml;
-use crate::{BootDatum, UnifiedConfig};
-use crate::datum_config::B00tConfig;
-use crate::hook_engine::{run_hook, HookResult};
 
 /// Execute uninstall for a named datum.
 /// - Loads datum from `path`
@@ -19,7 +19,8 @@ pub fn uninstall_datum(path: &str, name: &str, yes: bool, purge: bool) -> Result
     let all_datums = load_all_datums(path)?;
 
     // Find matching datum (by name or full key e.g. "ripgrep.cli")
-    let (key, datum) = all_datums.iter()
+    let (key, datum) = all_datums
+        .iter()
         .find(|(k, d)| d.name == name || k.as_str() == name)
         .map(|(k, d)| (k.clone(), d.clone()))
         .ok_or_else(|| anyhow!("Datum '{}' not found", name))?;
@@ -59,12 +60,14 @@ pub fn uninstall_datum(path: &str, name: &str, yes: bool, purge: bool) -> Result
     if let Some(hook_script) = &datum.hook_uninstall {
         println!("Running hook_uninstall for {}...", key);
         match run_hook(hook_script) {
-            HookResult::Ok => {},
+            HookResult::Ok => {}
             HookResult::Warn(msg) if msg.starts_with("hook script error:") => {
                 return Err(anyhow!("hook_uninstall aborted for {}: {}", key, msg));
             }
             HookResult::Warn(msg) => eprintln!("hook_uninstall [{}]: {}", key, msg),
-            HookResult::Redirect(target) => eprintln!("hook_uninstall [{}]: redirect to {}", key, target),
+            HookResult::Redirect(target) => {
+                eprintln!("hook_uninstall [{}]: redirect to {}", key, target)
+            }
             HookResult::Missing(msg) => eprintln!("hook_uninstall [{}]: missing {}", key, msg),
             HookResult::Info(msg) => println!("hook_uninstall [{}]: {}", key, msg),
         }
@@ -86,19 +89,24 @@ pub fn uninstall_datum(path: &str, name: &str, yes: bool, purge: bool) -> Result
 /// 🤓 _b00t_.toml lives at the repo root or ~/.b00t/_b00t_.toml — NOT inside datum_dir.
 ///    Uses B00tConfig::find_config_path() to locate the correct file.
 fn remove_from_manifest(_datum_dir: &str, key: &str) -> Result<()> {
-    let (mut config, config_path) = B00tConfig::load_or_create()
-        .with_context(|| "Failed to locate _b00t_.toml for purge")?;
+    let (mut config, config_path) =
+        B00tConfig::load_or_create().with_context(|| "Failed to locate _b00t_.toml for purge")?;
 
     let name = key.split('.').next().unwrap_or(key);
     let removed_key = config.remove_datum(key);
     let removed_name = config.remove_datum(name);
 
     if removed_key || removed_name {
-        config.save(&config_path)
+        config
+            .save(&config_path)
             .with_context(|| format!("Failed to save {}", config_path.display()))?;
         println!("Removed '{}' from {}", key, config_path.display());
     } else {
-        eprintln!("'{}' not found in {}, skipping purge", key, config_path.display());
+        eprintln!(
+            "'{}' not found in {}, skipping purge",
+            key,
+            config_path.display()
+        );
     }
     Ok(())
 }
@@ -115,13 +123,22 @@ fn load_all_datums(path: &str) -> Result<HashMap<String, BootDatum>> {
         let entry_path = entry.path();
         if entry_path.is_file() {
             if let Some(file_name) = entry_path.file_name().and_then(|s| s.to_str()) {
-                if file_name.ends_with(".stack.toml") { continue; }
+                if file_name.ends_with(".stack.toml") {
+                    continue;
+                }
                 if file_name.ends_with(".toml") {
                     if let Ok(content) = std::fs::read_to_string(&entry_path) {
                         if let Ok(config) = toml::from_str::<UnifiedConfig>(&content) {
                             let datum = config.b00t;
-                            let datum_type = datum.datum_type.as_ref()
-                                .map(|t| serde_json::to_string(t).unwrap_or_else(|_| String::from("\"unknown\"")).trim_matches('"').to_string())
+                            let datum_type = datum
+                                .datum_type
+                                .as_ref()
+                                .map(|t| {
+                                    serde_json::to_string(t)
+                                        .unwrap_or_else(|_| String::from("\"unknown\""))
+                                        .trim_matches('"')
+                                        .to_string()
+                                })
                                 .unwrap_or_else(|| "unknown".to_string());
                             let key = format!("{}.{}", datum.name, datum_type);
                             datums.insert(key, datum);
@@ -140,9 +157,19 @@ mod tests {
     use std::fs;
     use tempfile::TempDir;
 
-    fn write_datum(dir: &TempDir, name: &str, dtype: &str, uninstall: Option<&str>, hook: Option<&str>) {
-        let uninstall_str = uninstall.map(|s| format!("uninstall = {:?}", s)).unwrap_or_default();
-        let hook_str = hook.map(|s| format!("hook_uninstall = {:?}", s)).unwrap_or_default();
+    fn write_datum(
+        dir: &TempDir,
+        name: &str,
+        dtype: &str,
+        uninstall: Option<&str>,
+        hook: Option<&str>,
+    ) {
+        let uninstall_str = uninstall
+            .map(|s| format!("uninstall = {:?}", s))
+            .unwrap_or_default();
+        let hook_str = hook
+            .map(|s| format!("hook_uninstall = {:?}", s))
+            .unwrap_or_default();
         let content = format!(
             "[b00t]\nname = {:?}\ntype = {:?}\nhint = \"test\"\n{}\n{}\n",
             name, dtype, uninstall_str, hook_str
@@ -162,14 +189,15 @@ mod tests {
     #[test]
     fn test_uninstall_datum_missing_uninstall_field() {
         let dir = TempDir::new().unwrap();
-        write_datum(&dir, "docker", "cli", None, None);  // no uninstall field
+        write_datum(&dir, "docker", "cli", None, None); // no uninstall field
         let result = uninstall_datum(dir.path().to_str().unwrap(), "docker", true, false);
         assert!(result.is_err());
         let msg = result.unwrap_err().to_string();
         // Must contain the datum name AND an actionable hint
         assert!(
             msg.contains("docker") && msg.contains("uninstall"),
-            "Expected error naming datum + hinting at uninstall field, got: {}", msg
+            "Expected error naming datum + hinting at uninstall field, got: {}",
+            msg
         );
     }
 
@@ -194,20 +222,34 @@ mod tests {
         // the datum is present in the discovered config (it may not be in a test environment).
         // B00tConfig::remove_datum() behavior is tested in datum_config tests.
         let result = uninstall_datum(dir.path().to_str().unwrap(), "mytool", true, true);
-        assert!(result.is_ok(), "Expected ok with --purge, got: {:?}", result);
+        assert!(
+            result.is_ok(),
+            "Expected ok with --purge, got: {:?}",
+            result
+        );
     }
 
     #[test]
     fn test_uninstall_datum_hook_uninstall_fatal_on_rhai_error() {
         let dir = TempDir::new().unwrap();
         // Rhai script with a syntax error — hook_engine returns Warn("hook script error: ...")
-        write_datum(&dir, "mytool", "cli", Some("echo ok"), Some("this is not valid rhai $$$$"));
+        write_datum(
+            &dir,
+            "mytool",
+            "cli",
+            Some("echo ok"),
+            Some("this is not valid rhai $$$$"),
+        );
         let result = uninstall_datum(dir.path().to_str().unwrap(), "mytool", true, false);
-        assert!(result.is_err(), "hook_uninstall Rhai error should abort with Err");
+        assert!(
+            result.is_err(),
+            "hook_uninstall Rhai error should abort with Err"
+        );
         let msg = result.unwrap_err().to_string();
         assert!(
             msg.contains("hook_uninstall aborted") || msg.contains("hook script error"),
-            "Error should mention hook failure, got: {}", msg
+            "Error should mention hook failure, got: {}",
+            msg
         );
     }
 

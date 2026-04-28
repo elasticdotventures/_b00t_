@@ -308,27 +308,14 @@ pub async fn list_served_models(path: &str) -> Result<Vec<ServedEndpointRecord>>
         .context("Failed to construct local inference HTTP client")?;
 
     let mut endpoints = Vec::new();
-    let mut probe_errors = Vec::new();
-
     for candidate in candidates {
-        match fetch_served_endpoint(&client, &candidate).await {
-            Ok(record) => {
-                if !record.models.is_empty() {
-                    endpoints.push(record);
-                }
-            }
-            Err(err) => {
-                probe_errors.push((candidate.base_url.clone(), err.to_string()));
+        if let Ok(record) = fetch_served_endpoint(&client, &candidate).await {
+            if !record.models.is_empty() {
+                endpoints.push(record);
             }
         }
     }
 
-    for (base_url, err) in &probe_errors {
-        eprintln!(
-            "warning: failed to probe served model endpoint {}: {}",
-            base_url, err
-        );
-    }
     endpoints.sort_by(|left, right| left.base_url.cmp(&right.base_url));
     Ok(endpoints)
 }
@@ -654,9 +641,23 @@ pub fn download_model(
         });
     }
 
-    if !check_command_available("huggingface-cli") {
-        anyhow::bail!("huggingface-cli not found. Run 'b00t-cli cli install huggingface' first.");
-    }
+    // 🤓 prefer `hf` (huggingface_hub>=0.26 alias); fall back to `huggingface-cli` (legacy).
+    //    Auto-install via uv if neither found — matches huggingface.cli.toml datum install script.
+    let hf_cmd = if check_command_available("hf") {
+        "hf".to_string()
+    } else if check_command_available("huggingface-cli") {
+        "huggingface-cli".to_string()
+    } else {
+        eprintln!("hf not found — auto-installing huggingface_hub[cli] via uv ...");
+        cmd("uv", &["tool", "install", "--upgrade", "huggingface_hub[cli]"])
+            .run()
+            .context("auto-install of huggingface_hub[cli] failed; run: b00t cli install huggingface")?;
+        if check_command_available("hf") {
+            "hf".to_string()
+        } else {
+            "huggingface-cli".to_string()
+        }
+    };
 
     let repo = entry
         .huggingface_repo()
@@ -701,9 +702,9 @@ pub fn download_model(
         }
     }
 
-    cmd("huggingface-cli", &args)
+    cmd(&hf_cmd, &args)
         .run()
-        .with_context(|| format!("huggingface-cli download failed for {}", repo))?;
+        .with_context(|| format!("{} download failed for {}", hf_cmd, repo))?;
 
     if activate {
         write_active_model(&entry.datum.name)?;

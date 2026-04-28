@@ -40,10 +40,7 @@ mod session_roundtrip {
         register_test_bridge();
 
         // Use a unique bus name to avoid conflicts with running service
-        let test_bus = format!(
-            "com.promptexecution.b00t1.test{}",
-            std::process::id()
-        );
+        let test_bus = format!("com.promptexecution.b00t1.test{}", std::process::id());
 
         let service = B00tService::new(PathBuf::from("/tmp/b00t-test"));
 

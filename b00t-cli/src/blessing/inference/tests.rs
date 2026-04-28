@@ -180,8 +180,7 @@ mod inference_tests {
         };
 
         let json = serde_json::to_string(&model_info).expect("Should serialize");
-        let _deserialized: ModelInfo =
-            serde_json::from_str(&json).expect("Should deserialize");
+        let _deserialized: ModelInfo = serde_json::from_str(&json).expect("Should deserialize");
     }
 
     /// Test 13: Embedding with different dimensions

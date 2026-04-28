@@ -139,17 +139,14 @@ impl RedisComms {
 
     /// Get Redis connection
     fn get_connection(&self) -> B00tResult<Connection> {
-        let conn = self
-            .client
-            .get_connection()
-            .with_context(|| {
-                let mut message = "Failed to get Redis connection".to_string();
-                if let Some(hint) = sandbox_root_cause_hint("Redis TCP connectivity") {
-                    message.push(' ');
-                    message.push_str(&hint);
-                }
-                message
-            })?;
+        let conn = self.client.get_connection().with_context(|| {
+            let mut message = "Failed to get Redis connection".to_string();
+            if let Some(hint) = sandbox_root_cause_hint("Redis TCP connectivity") {
+                message.push(' ');
+                message.push_str(&hint);
+            }
+            message
+        })?;
 
         // Note: Redis crate handles timeouts internally via connection configuration
         Ok(conn)

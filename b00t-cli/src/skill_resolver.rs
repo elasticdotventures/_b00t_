@@ -80,12 +80,18 @@ impl Default for SkillResolver {
         if let Ok(cwd) = std::env::current_dir() {
             let local_skills = cwd.join("skills");
             if local_skills.is_dir() {
-                dirs.push(SkillDir { path: local_skills, format: SkillFormat::SkillMd });
+                dirs.push(SkillDir {
+                    path: local_skills,
+                    format: SkillFormat::SkillMd,
+                });
             }
             // 2. Project-local b00t datums
             let local_b00t = cwd.join("_b00t_");
             if local_b00t.is_dir() {
-                dirs.push(SkillDir { path: local_b00t, format: SkillFormat::TomlDatum });
+                dirs.push(SkillDir {
+                    path: local_b00t,
+                    format: SkillFormat::TomlDatum,
+                });
             }
         }
 
@@ -93,12 +99,18 @@ impl Default for SkillResolver {
         if let Some(home) = dirs::home_dir() {
             let claude_skills = home.join(".claude").join("skills");
             if claude_skills.is_dir() {
-                dirs.push(SkillDir { path: claude_skills, format: SkillFormat::SkillMd });
+                dirs.push(SkillDir {
+                    path: claude_skills,
+                    format: SkillFormat::SkillMd,
+                });
             }
             // 4. Global b00t datums
             let global_b00t = home.join(".b00t").join("_b00t_");
             if global_b00t.is_dir() {
-                dirs.push(SkillDir { path: global_b00t, format: SkillFormat::TomlDatum });
+                dirs.push(SkillDir {
+                    path: global_b00t,
+                    format: SkillFormat::TomlDatum,
+                });
             }
         }
 
@@ -133,24 +145,36 @@ impl SkillResolver {
         // 1. Project-local SKILL.md skills/
         let local_skills = base.join("skills");
         if local_skills.is_dir() {
-            dirs.push(SkillDir { path: local_skills, format: SkillFormat::SkillMd });
+            dirs.push(SkillDir {
+                path: local_skills,
+                format: SkillFormat::SkillMd,
+            });
         }
         // 2. Project-local b00t datums
         let local_b00t = base.join("_b00t_");
         if local_b00t.is_dir() {
-            dirs.push(SkillDir { path: local_b00t, format: SkillFormat::TomlDatum });
+            dirs.push(SkillDir {
+                path: local_b00t,
+                format: SkillFormat::TomlDatum,
+            });
         }
 
         // 3. Claude Code native skills (global)
         if let Some(home) = dirs::home_dir() {
             let claude_skills = home.join(".claude").join("skills");
             if claude_skills.is_dir() {
-                dirs.push(SkillDir { path: claude_skills, format: SkillFormat::SkillMd });
+                dirs.push(SkillDir {
+                    path: claude_skills,
+                    format: SkillFormat::SkillMd,
+                });
             }
             // 4. Global b00t datums
             let global_b00t = home.join(".b00t").join("_b00t_");
             if global_b00t.is_dir() {
-                dirs.push(SkillDir { path: global_b00t, format: SkillFormat::TomlDatum });
+                dirs.push(SkillDir {
+                    path: global_b00t,
+                    format: SkillFormat::TomlDatum,
+                });
             }
         }
 
@@ -251,7 +275,10 @@ impl SkillResolver {
                 }
             }
         }
-        anyhow::bail!("Skill '{}' not found in any configured skill directory", name)
+        anyhow::bail!(
+            "Skill '{}' not found in any configured skill directory",
+            name
+        )
     }
 }
 
@@ -341,7 +368,12 @@ mod tests {
     fn test_resolver_list_skill_md_dir() {
         let tmp = tempfile::tempdir().unwrap();
         make_skill_md_dir(tmp.path(), "fast-rust", "Fast Rust code", &["rust"]);
-        make_skill_md_dir(tmp.path(), "friendly-python", "Friendly Python", &["python"]);
+        make_skill_md_dir(
+            tmp.path(),
+            "friendly-python",
+            "Friendly Python",
+            &["python"],
+        );
 
         let resolver =
             SkillResolver::with_dirs(vec![(tmp.path().to_path_buf(), SkillFormat::SkillMd)]);
@@ -355,8 +387,18 @@ mod tests {
     #[test]
     fn test_resolver_search_by_query() {
         let tmp = tempfile::tempdir().unwrap();
-        make_skill_md_dir(tmp.path(), "fast-rust", "Fast Rust code. Use for Rust.", &["rust"]);
-        make_skill_md_dir(tmp.path(), "friendly-python", "Friendly Python code.", &["python"]);
+        make_skill_md_dir(
+            tmp.path(),
+            "fast-rust",
+            "Fast Rust code. Use for Rust.",
+            &["rust"],
+        );
+        make_skill_md_dir(
+            tmp.path(),
+            "friendly-python",
+            "Friendly Python code.",
+            &["python"],
+        );
 
         let resolver =
             SkillResolver::with_dirs(vec![(tmp.path().to_path_buf(), SkillFormat::SkillMd)]);

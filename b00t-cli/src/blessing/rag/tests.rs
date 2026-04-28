@@ -72,7 +72,13 @@ mod knowledge_base_tests {
         assert_eq!(layer_metadata.blessing_id, "blessing:terraform-apply");
         assert_eq!(layer_metadata.embedding_dim, 768);
         assert_eq!(layer_metadata.adapter_rank, 8);
-        assert!(layer_metadata.artifact_path.to_str().unwrap().contains(".gguf"));
+        assert!(
+            layer_metadata
+                .artifact_path
+                .to_str()
+                .unwrap()
+                .contains(".gguf")
+        );
     }
 
     #[test]
@@ -86,7 +92,12 @@ mod knowledge_base_tests {
 
         let adapter_path = knowledge_base.adapter_path_for("blessing:observe-infrastructure");
 
-        assert!(adapter_path.to_str().unwrap().contains("blessing_observe_infrastructure"));
+        assert!(
+            adapter_path
+                .to_str()
+                .unwrap()
+                .contains("blessing_observe_infrastructure")
+        );
         assert!(adapter_path.to_str().unwrap().contains(".adapter"));
     }
 
@@ -259,7 +270,13 @@ mod knowledge_base_tests {
         metadata_map.insert(meta2.blessing_id.clone(), meta2);
 
         assert_eq!(metadata_map.len(), 2);
-        assert_eq!(metadata_map.get("blessing:auth").unwrap().quality_score, 0.95);
-        assert_eq!(metadata_map.get("blessing:compute").unwrap().quality_score, 0.88);
+        assert_eq!(
+            metadata_map.get("blessing:auth").unwrap().quality_score,
+            0.95
+        );
+        assert_eq!(
+            metadata_map.get("blessing:compute").unwrap().quality_score,
+            0.88
+        );
     }
 }

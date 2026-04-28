@@ -172,7 +172,9 @@ impl KvStore {
     /// Set a value in the KV store
     pub fn set(&self, key: &str, value: &str, expire_secs: Option<u64>) -> Result<()> {
         match self.config.backend {
-            KvBackend::Valkey | KvBackend::Redis | KvBackend::ForgeKV => self.set_redis(key, value, expire_secs),
+            KvBackend::Valkey | KvBackend::Redis | KvBackend::ForgeKV => {
+                self.set_redis(key, value, expire_secs)
+            }
             KvBackend::File => self.set_file(key, value),
         }
     }
@@ -196,7 +198,9 @@ impl KvStore {
     /// Publish a message to a channel
     pub fn publish(&self, channel: &str, message: &str) -> Result<usize> {
         match self.config.backend {
-            KvBackend::Valkey | KvBackend::Redis | KvBackend::ForgeKV => self.publish_redis(channel, message),
+            KvBackend::Valkey | KvBackend::Redis | KvBackend::ForgeKV => {
+                self.publish_redis(channel, message)
+            }
             KvBackend::File => Ok(0), // File backend doesn't support pub/sub
         }
     }
@@ -240,7 +244,10 @@ impl KvStore {
             .context("Failed to execute redis-cli DEL")?;
 
         let result = String::from_utf8_lossy(&output.stdout);
-        result.trim().parse::<usize>().context("Failed to parse DEL result")
+        result
+            .trim()
+            .parse::<usize>()
+            .context("Failed to parse DEL result")
     }
 
     fn exists_redis(&self, key: &str) -> Result<bool> {
@@ -255,32 +262,49 @@ impl KvStore {
 
     fn publish_redis(&self, channel: &str, message: &str) -> Result<usize> {
         let output = Command::new("redis-cli")
-            .args(["-p", &self.config.port.to_string(), "PUBLISH", channel, message])
+            .args([
+                "-p",
+                &self.config.port.to_string(),
+                "PUBLISH",
+                channel,
+                message,
+            ])
             .output()
             .context("Failed to execute redis-cli PUBLISH")?;
 
         let result = String::from_utf8_lossy(&output.stdout);
-        result.trim().parse::<usize>().context("Failed to parse PUBLISH result")
+        result
+            .trim()
+            .parse::<usize>()
+            .context("Failed to parse PUBLISH result")
     }
 
     // File backend implementations
     fn get_file(&self, key: &str) -> Result<Option<String>> {
-        let file_path = self.config.file_path.as_deref().unwrap_or("~/.b00t/kv-store.json");
+        let file_path = self
+            .config
+            .file_path
+            .as_deref()
+            .unwrap_or("~/.b00t/kv-store.json");
         let expanded = shellexpand::tilde(file_path);
 
         if !Path::new(expanded.as_ref()).exists() {
             return Ok(None);
         }
 
-        let content = fs::read_to_string(expanded.as_ref())
-            .context("Failed to read KV store file")?;
-        
+        let content =
+            fs::read_to_string(expanded.as_ref()).context("Failed to read KV store file")?;
+
         let data: HashMap<String, String> = serde_json::from_str(&content).unwrap_or_default();
         Ok(data.get(key).cloned())
     }
 
     fn set_file(&self, key: &str, value: &str) -> Result<()> {
-        let file_path = self.config.file_path.as_deref().unwrap_or("~/.b00t/kv-store.json");
+        let file_path = self
+            .config
+            .file_path
+            .as_deref()
+            .unwrap_or("~/.b00t/kv-store.json");
         let expanded = shellexpand::tilde(file_path);
         let path = Path::new(expanded.as_ref());
 
@@ -301,12 +325,16 @@ impl KvStore {
         data.insert(key.to_string(), value.to_string());
         let json = serde_json::to_string_pretty(&data)?;
         fs::write(path, json)?;
-        
+
         Ok(())
     }
 
     fn del_file(&self, key: &str) -> Result<usize> {
-        let file_path = self.config.file_path.as_deref().unwrap_or("~/.b00t/kv-store.json");
+        let file_path = self
+            .config
+            .file_path
+            .as_deref()
+            .unwrap_or("~/.b00t/kv-store.json");
         let expanded = shellexpand::tilde(file_path);
         let path = Path::new(expanded.as_ref());
 
@@ -316,9 +344,9 @@ impl KvStore {
 
         let content = fs::read_to_string(path)?;
         let mut data: HashMap<String, String> = serde_json::from_str(&content).unwrap_or_default();
-        
+
         let existed = data.remove(key).is_some();
-        
+
         if existed {
             let json = serde_json::to_string_pretty(&data)?;
             fs::write(path, json)?;
@@ -329,9 +357,13 @@ impl KvStore {
     }
 
     fn exists_file(&self, key: &str) -> Result<bool> {
-        let file_path = self.config.file_path.as_deref().unwrap_or("~/.b00t/kv-store.json");
+        let file_path = self
+            .config
+            .file_path
+            .as_deref()
+            .unwrap_or("~/.b00t/kv-store.json");
         let expanded = shellexpand::tilde(file_path);
-        
+
         if !std::path::Path::new(expanded.as_ref()).exists() {
             return Ok(false);
         }
@@ -360,10 +392,14 @@ impl KvStore {
             }
             KvBackend::File => {
                 // File backend is always "available" if we can write to it
-                let file_path = self.config.file_path.as_deref().unwrap_or("~/.b00t/kv-store.json");
+                let file_path = self
+                    .config
+                    .file_path
+                    .as_deref()
+                    .unwrap_or("~/.b00t/kv-store.json");
                 let expanded = shellexpand::tilde(file_path);
                 let path = std::path::Path::new(expanded.as_ref());
-                
+
                 if let Some(parent) = path.parent() {
                     Ok(parent.exists() || std::fs::create_dir_all(parent).is_ok())
                 } else {
@@ -382,7 +418,10 @@ mod tests {
     fn test_kv_config_detect() {
         let config = KvConfig::detect();
         // Should always return a valid config (may be File backend)
-        assert!(matches!(config.backend, KvBackend::Valkey | KvBackend::Redis | KvBackend::ForgeKV | KvBackend::File));
+        assert!(matches!(
+            config.backend,
+            KvBackend::Valkey | KvBackend::Redis | KvBackend::ForgeKV | KvBackend::File
+        ));
     }
 
     #[test]

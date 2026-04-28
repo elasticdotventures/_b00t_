@@ -178,3 +178,26 @@ hooks:
 - Skill frontmatter hooks are scoped — clean separation from global hooks
 - Hook deduplication means b00t dispatcher can safely register for all events
 - `once: true` in frontmatter hooks = useful for one-time session setup
+
+## Imported Stray Notes
+
+---
+exit-code protocol: exit 2 blocks (stderr to model), exit 0+JSON allows/decides, exit 1 non-blocking warn only
+
+---
+blocking events: UserPromptSubmit, PreToolUse, PermissionRequest, Stop, SubagentStop, WorktreeCreate, ConfigChange, Elicitation can all be blocked with exit 2
+
+---
+SubagentStop fields: agent_type, agent_id, agent_transcript_path, last_assistant_message — use last_assistant_message to avoid parsing transcript
+
+---
+SessionStart env injection: write 'export KEY=val' lines to CLAUDE_ENV_FILE — only way to persist env vars across the session from a hook
+
+---
+hook deduplication: identical command strings run once per event scope — safe to register dispatch.sh for all events without duplication concern
+
+---
+skill frontmatter hooks: once:true runs hook once per session — use for one-time setup; hooks scoped to skill lifetime, auto-cleaned on skill exit
+
+---
+PreToolUse updatedInput: return hookSpecificOutput.updatedInput to sanitize/rewrite tool input before Claude executes — mutation without blocking

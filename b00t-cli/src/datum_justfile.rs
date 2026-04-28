@@ -24,17 +24,27 @@ impl JustfileDatum {
         let (config, _filename) = get_config(name, path).map_err(|e| anyhow!("{}", e))?;
         let datum = config.b00t;
         let justfile_path = Self::resolve_justfile_path(&datum, path)?;
-        Ok(JustfileDatum { datum, justfile_path, ast: Mutex::new(None) })
+        Ok(JustfileDatum {
+            datum,
+            justfile_path,
+            ast: Mutex::new(None),
+        })
     }
 
     pub fn from_datum(datum: BootDatum, base_dir: &Path) -> Result<Self> {
         let justfile_path = Self::resolve_justfile_path(&datum, &base_dir.display().to_string())?;
-        Ok(JustfileDatum { datum, justfile_path, ast: Mutex::new(None) })
+        Ok(JustfileDatum {
+            datum,
+            justfile_path,
+            ast: Mutex::new(None),
+        })
     }
 
     fn ensure_ast(&self) -> Result<()> {
         let mut g = self.ast.lock().unwrap();
-        if g.is_none() { *g = Some(JustfileAst::load(&self.justfile_path)?); }
+        if g.is_none() {
+            *g = Some(JustfileAst::load(&self.justfile_path)?);
+        }
         Ok(())
     }
 
@@ -195,7 +205,11 @@ impl CliExecutor for JustfileDatum {
             exit_code,
             duration_ms: start.elapsed().as_millis() as u64,
             sandbox: self.sandbox_requirements(),
-            sandbox_kind: self.allowed_sandboxes().into_iter().next().unwrap_or(SandboxKind::None),
+            sandbox_kind: self
+                .allowed_sandboxes()
+                .into_iter()
+                .next()
+                .unwrap_or(SandboxKind::None),
             io_method: self.io_method(),
             declared_effects: if self.justfile_config().allow_side_effects.unwrap_or(true) {
                 vec!["filesystem-write".to_string()]
@@ -213,11 +227,17 @@ impl CliExecutor for JustfileDatum {
         ];
         just_args.extend_from_slice(args);
 
-        let working_dir = self.justfile_path.parent()
+        let working_dir = self
+            .justfile_path
+            .parent()
             .map(PathBuf::from)
             .unwrap_or_else(|| PathBuf::from("."));
 
-        let sandbox_kind = self.allowed_sandboxes().into_iter().next().unwrap_or(SandboxKind::None);
+        let sandbox_kind = self
+            .allowed_sandboxes()
+            .into_iter()
+            .next()
+            .unwrap_or(SandboxKind::None);
         let io_method = IoMethod::for_sandbox(&sandbox_kind);
 
         Ok(ExecPlan {
@@ -238,24 +258,33 @@ impl CliExecutor for JustfileDatum {
         self.with_ast(|ast| {
             let mut recipes = ast.recipes_sorted();
             recipes.retain(|r| !r.private);
-            recipes.iter().map(|r| CommandSignature {
-                name: r.name.clone(),
-                description: r.doc.clone(),
-                parameters: r.parameters.iter().map(|p| ParameterSignature {
-                    name: p.name.clone(),
-                    default_value: p.default.clone(),
-                    required: p.default.is_none() && p.kind == "singular",
-                    kind: p.kind.clone(),
-                }).collect(),
-                dependencies: r.dependencies.clone(),
-                private: r.private,
-            }).collect()
+            recipes
+                .iter()
+                .map(|r| CommandSignature {
+                    name: r.name.clone(),
+                    description: r.doc.clone(),
+                    parameters: r
+                        .parameters
+                        .iter()
+                        .map(|p| ParameterSignature {
+                            name: p.name.clone(),
+                            default_value: p.default.clone(),
+                            required: p.default.is_none() && p.kind == "singular",
+                            kind: p.kind.clone(),
+                        })
+                        .collect(),
+                    dependencies: r.dependencies.clone(),
+                    private: r.private,
+                })
+                .collect()
         })
     }
 
     fn sandbox_requirements(&self) -> SandboxRequirements {
         let caps = self.justfile_config().capabilities.unwrap_or_default();
-        let justfile_dir = self.justfile_path.parent()
+        let justfile_dir = self
+            .justfile_path
+            .parent()
             .map(PathBuf::from)
             .unwrap_or_else(|| PathBuf::from("."));
 
@@ -265,7 +294,8 @@ impl CliExecutor for JustfileDatum {
                 let path = if Path::new(&p).is_absolute() {
                     PathBuf::from(&p)
                 } else {
-                    self.justfile_path.parent()
+                    self.justfile_path
+                        .parent()
                         .unwrap_or_else(|| Path::new("."))
                         .join(&p)
                 };
@@ -297,7 +327,11 @@ impl CliExecutor for JustfileDatum {
     }
 
     fn io_method(&self) -> IoMethod {
-        let preferred_sandbox = self.allowed_sandboxes().into_iter().next().unwrap_or(SandboxKind::None);
+        let preferred_sandbox = self
+            .allowed_sandboxes()
+            .into_iter()
+            .next()
+            .unwrap_or(SandboxKind::None);
         IoMethod::for_sandbox(&preferred_sandbox)
     }
 }
@@ -308,10 +342,16 @@ mod tests {
     use std::io::Write;
     use tempfile::NamedTempFile;
     fn tmp(c: &str) -> NamedTempFile {
-        let mut f = NamedTempFile::new().unwrap(); write!(f, "{}", c).unwrap(); f
+        let mut f = NamedTempFile::new().unwrap();
+        write!(f, "{}", c).unwrap();
+        f
     }
     fn mkd(path: &std::path::Path) -> JustfileDatum {
-        JustfileDatum { datum: BootDatum::default(), justfile_path: path.to_path_buf(), ast: Mutex::new(None) }
+        JustfileDatum {
+            datum: BootDatum::default(),
+            justfile_path: path.to_path_buf(),
+            ast: Mutex::new(None),
+        }
     }
     #[test]
     fn list_commands_uses_ast_cache() {

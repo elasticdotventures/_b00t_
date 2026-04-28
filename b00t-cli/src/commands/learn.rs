@@ -98,8 +98,8 @@ pub async fn handle_learn(path: &str, args: LearnArgs) -> Result<()> {
     }
 
     // Default: display knowledge
-    let topic = topic_val
-        .ok_or_else(|| anyhow::anyhow!("Topic required. Use: b00t learn <topic>"))?;
+    let topic =
+        topic_val.ok_or_else(|| anyhow::anyhow!("Topic required. Use: b00t learn <topic>"))?;
 
     handle_display(
         path,
@@ -281,7 +281,7 @@ async fn handle_display(path: &str, topic: &str, opts: DisplayOpts) -> Result<()
     // Run hook_learn if present in datum
     if let Ok((config, _)) = crate::get_config(topic, path) {
         if let Some(script) = config.b00t.hook_learn {
-            use crate::hook_engine::{run_hook, HookResult};
+            use crate::hook_engine::{HookResult, run_hook};
             match run_hook(&script) {
                 HookResult::Ok => {}
                 HookResult::Info(msg) | HookResult::Warn(msg) => println!("{}", msg),

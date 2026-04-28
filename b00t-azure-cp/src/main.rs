@@ -15,18 +15,24 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::{Context, Result};
+use axum::{
+    Json, Router,
+    extract::Request,
+    http::{StatusCode, header},
+    middleware,
+    response::{IntoResponse, Response},
+};
 use azure_core::auth::TokenCredential;
 use azure_data_tables::clients::TableServiceClient;
 use azure_identity::AppServiceManagedIdentityCredential;
-use axum::{Json, Router, extract::Request, http::{StatusCode, header}, middleware, response::{IntoResponse, Response}};
 use chrono::{DateTime, Utc};
+use rmcp::handler::server::{tool::ToolRouter, wrapper::Parameters};
 use rmcp::model::{CallToolResult, Content, ServerCapabilities, ServerInfo};
 use rmcp::schemars::JsonSchema;
 use rmcp::transport::streamable_http_server::{
     StreamableHttpServerConfig, StreamableHttpService, session::local::LocalSessionManager,
 };
-use rmcp::handler::server::{tool::ToolRouter, wrapper::Parameters};
-use rmcp::{tool, tool_handler, tool_router, ErrorData as McpError, ServerHandler};
+use rmcp::{ErrorData as McpError, ServerHandler, tool, tool_handler, tool_router};
 use serde::{Deserialize, Serialize};
 use tokio::net::TcpListener;
 use tokio::time;
@@ -60,8 +66,7 @@ impl Config {
             node_id: env::var("B00T_NODE_ID").context("B00T_NODE_ID not set")?,
             storage_account: env::var("AZURE_STORAGE_ACCOUNT_NAME")
                 .context("AZURE_STORAGE_ACCOUNT_NAME not set")?,
-            table_name: env::var("AZURE_TABLE_NAME")
-                .unwrap_or_else(|_| "b00tLeases".to_string()),
+            table_name: env::var("AZURE_TABLE_NAME").unwrap_or_else(|_| "b00tLeases".to_string()),
             resource_group: env::var("AZURE_RESOURCE_GROUP")
                 .context("AZURE_RESOURCE_GROUP not set")?,
             subscription_id: env::var("AZURE_SUBSCRIPTION_ID")
@@ -155,7 +160,10 @@ struct HeartbeatInput {
 // Azure Table Storage helpers
 // ---------------------------------------------------------------------------
 
-fn table_service_client(config: &Config, credential: Arc<dyn TokenCredential>) -> TableServiceClient {
+fn table_service_client(
+    config: &Config,
+    credential: Arc<dyn TokenCredential>,
+) -> TableServiceClient {
     TableServiceClient::new(
         format!("https://{}.table.core.windows.net", config.storage_account),
         credential,
@@ -265,12 +273,10 @@ async fn provision_aci_resource(
         ..Default::default()
     };
 
-    let mut cg_props = container_group_properties::Properties::new(
-        vec![Container {
-            name: group_name.clone(),
-            properties: container_props,
-        }],
-    );
+    let mut cg_props = container_group_properties::Properties::new(vec![Container {
+        name: group_name.clone(),
+        properties: container_props,
+    }]);
     cg_props.os_type = Some(container_group_properties::properties::OsType::Linux);
     cg_props.ip_address = Some(IpAddress {
         type_: ip_address::Type::Public,
@@ -376,9 +382,7 @@ async fn run_watchdog(
                         {
                             error!(lease_id = %lease.row_key, error = %e, "watchdog: deprovision failed");
                         }
-                        if let Err(e) =
-                            delete_lease(&table_client, &config, &lease.row_key).await
-                        {
+                        if let Err(e) = delete_lease(&table_client, &config, &lease.row_key).await {
                             error!(lease_id = %lease.row_key, error = %e, "watchdog: lease delete failed");
                         }
                     }
@@ -407,7 +411,10 @@ impl AzureCpServer {
     /// Spin up an ACI container on demand. Returns endpoint_url and lease_id.
     /// The lease expires after the configured TTL unless renewed via heartbeat.
     #[tool(name = "azure.provision_aci")]
-    async fn provision_aci(&self, input: Parameters<ProvisionAciInput>) -> Result<CallToolResult, McpError> {
+    async fn provision_aci(
+        &self,
+        input: Parameters<ProvisionAciInput>,
+    ) -> Result<CallToolResult, McpError> {
         let input = input.0;
         let lease_id = Uuid::new_v4().to_string();
         let ttl = input
@@ -443,17 +450,25 @@ impl AzureCpServer {
             .await
             .map_err(|e| McpError::internal_error(e.to_string(), None))?;
 
-        {let _mjson = serde_json::json!({
-            "lease_id": lease_id,
-            "endpoint_url": endpoint_url,
-            "expires_at": expires_at.to_rfc3339(),
-            "ttl_minutes": ttl,
-        }); Ok(CallToolResult::success(vec![Content::json(_mjson).map_err(|e| McpError::internal_error(e.to_string(), None))?]))}
+        {
+            let _mjson = serde_json::json!({
+                "lease_id": lease_id,
+                "endpoint_url": endpoint_url,
+                "expires_at": expires_at.to_rfc3339(),
+                "ttl_minutes": ttl,
+            });
+            Ok(CallToolResult::success(vec![
+                Content::json(_mjson).map_err(|e| McpError::internal_error(e.to_string(), None))?,
+            ]))
+        }
     }
 
     /// Tear down a provisioned resource immediately by lease_id.
     #[tool(name = "azure.deprovision")]
-    async fn deprovision(&self, input: Parameters<DeprovisionInput>) -> Result<CallToolResult, McpError> {
+    async fn deprovision(
+        &self,
+        input: Parameters<DeprovisionInput>,
+    ) -> Result<CallToolResult, McpError> {
         let input = input.0;
         // Look up the lease to get the resource_id.
         let table_client = self.table_client.table_client(&self.config.table_name);
@@ -462,7 +477,9 @@ impl AzureCpServer {
             .entity_client(&input.lease_id)
             .get()
             .await
-            .map_err(|e| McpError::invalid_request(format!("lease not found or inaccessible: {e}"), None))?
+            .map_err(|e| {
+                McpError::invalid_request(format!("lease not found or inaccessible: {e}"), None)
+            })?
             .entity;
 
         deprovision_aci_resource(
@@ -477,15 +494,23 @@ impl AzureCpServer {
             .await
             .map_err(|e| McpError::internal_error(e.to_string(), None))?;
 
-        {let _mjson = serde_json::json!({
-            "lease_id": input.lease_id,
-            "status": "deprovisioned",
-        }); Ok(CallToolResult::success(vec![Content::json(_mjson).map_err(|e| McpError::internal_error(e.to_string(), None))?]))}
+        {
+            let _mjson = serde_json::json!({
+                "lease_id": input.lease_id,
+                "status": "deprovisioned",
+            });
+            Ok(CallToolResult::success(vec![
+                Content::json(_mjson).map_err(|e| McpError::internal_error(e.to_string(), None))?,
+            ]))
+        }
     }
 
     /// Renew a lease TTL. Call periodically to keep resources alive past the default TTL.
     #[tool(name = "azure.heartbeat")]
-    async fn heartbeat(&self, input: Parameters<HeartbeatInput>) -> Result<CallToolResult, McpError> {
+    async fn heartbeat(
+        &self,
+        input: Parameters<HeartbeatInput>,
+    ) -> Result<CallToolResult, McpError> {
         let input = input.0;
         let table_client = self.table_client.table_client(&self.config.table_name);
         let mut entity: LeaseEntity = table_client
@@ -496,9 +521,7 @@ impl AzureCpServer {
             .map_err(|e| McpError::internal_error(format!("lease not found: {e}"), None))?
             .entity;
 
-        let ttl = input
-            .ttl_minutes
-            .unwrap_or(self.config.lease_ttl_minutes);
+        let ttl = input.ttl_minutes.unwrap_or(self.config.lease_ttl_minutes);
         let new_expires = Utc::now() + chrono::Duration::minutes(ttl);
         entity.expires_at = new_expires.to_rfc3339();
 
@@ -506,11 +529,16 @@ impl AzureCpServer {
             .await
             .map_err(|e| McpError::internal_error(e.to_string(), None))?;
 
-        {let _mjson = serde_json::json!({
-            "lease_id": input.lease_id,
-            "new_expires_at": new_expires.to_rfc3339(),
-            "ttl_minutes": ttl,
-        }); Ok(CallToolResult::success(vec![Content::json(_mjson).map_err(|e| McpError::internal_error(e.to_string(), None))?]))}
+        {
+            let _mjson = serde_json::json!({
+                "lease_id": input.lease_id,
+                "new_expires_at": new_expires.to_rfc3339(),
+                "ttl_minutes": ttl,
+            });
+            Ok(CallToolResult::success(vec![
+                Content::json(_mjson).map_err(|e| McpError::internal_error(e.to_string(), None))?,
+            ]))
+        }
     }
 
     /// List all active leases with endpoint URLs, TTLs, and resource identifiers.
@@ -539,11 +567,16 @@ impl AzureCpServer {
             })
             .collect();
 
-        {let _mjson = serde_json::json!({
-            "node_id": self.config.node_id,
-            "lease_count": items.len(),
-            "leases": items,
-        }); Ok(CallToolResult::success(vec![Content::json(_mjson).map_err(|e| McpError::internal_error(e.to_string(), None))?]))}
+        {
+            let _mjson = serde_json::json!({
+                "node_id": self.config.node_id,
+                "lease_count": items.len(),
+                "leases": items,
+            });
+            Ok(CallToolResult::success(vec![
+                Content::json(_mjson).map_err(|e| McpError::internal_error(e.to_string(), None))?,
+            ]))
+        }
     }
 
     /// Estimated current-month Azure spend for the control plane resource group.
@@ -595,19 +628,31 @@ impl AzureCpServer {
                 .json()
                 .await
                 .map_err(|e| McpError::internal_error(e.to_string(), None))?;
-            {let _mjson = serde_json::json!({
-                "resource_group": self.config.resource_group,
-                "timeframe": "MonthToDate",
-                "data": data,
-            }); Ok(CallToolResult::success(vec![Content::json(_mjson).map_err(|e| McpError::internal_error(e.to_string(), None))?]))}
+            {
+                let _mjson = serde_json::json!({
+                    "resource_group": self.config.resource_group,
+                    "timeframe": "MonthToDate",
+                    "data": data,
+                });
+                Ok(CallToolResult::success(vec![
+                    Content::json(_mjson)
+                        .map_err(|e| McpError::internal_error(e.to_string(), None))?,
+                ]))
+            }
         } else {
             let status = resp.status();
             let text = resp.text().await.unwrap_or_default();
-            {let _mjson = serde_json::json!({
-                "resource_group": self.config.resource_group,
-                "error": format!("HTTP {}: {}", status, text),
-                "note": "Cost Management Reader role required on the resource group.",
-            }); Ok(CallToolResult::success(vec![Content::json(_mjson).map_err(|e| McpError::internal_error(e.to_string(), None))?]))}
+            {
+                let _mjson = serde_json::json!({
+                    "resource_group": self.config.resource_group,
+                    "error": format!("HTTP {}: {}", status, text),
+                    "note": "Cost Management Reader role required on the resource group.",
+                });
+                Ok(CallToolResult::success(vec![
+                    Content::json(_mjson)
+                        .map_err(|e| McpError::internal_error(e.to_string(), None))?,
+                ]))
+            }
         }
     }
 }
@@ -623,9 +668,7 @@ impl ServerHandler for AzureCpServer {
                 icons: None,
                 website_url: None,
             },
-            capabilities: ServerCapabilities::builder()
-                .enable_tools()
-                .build(),
+            capabilities: ServerCapabilities::builder().enable_tools().build(),
             ..Default::default()
         }
     }
@@ -663,8 +706,10 @@ async fn main() -> Result<()> {
         info!("using system-assigned managed identity");
     }
     let credential: Arc<dyn TokenCredential> = Arc::new(
-        AppServiceManagedIdentityCredential::create(azure_identity::TokenCredentialOptions::default())
-            .context("failed to build managed identity credential")?,
+        AppServiceManagedIdentityCredential::create(
+            azure_identity::TokenCredentialOptions::default(),
+        )
+        .context("failed to build managed identity credential")?,
     );
 
     let table_credential = Arc::clone(&credential);
@@ -707,8 +752,10 @@ async fn main() -> Result<()> {
     // be authenticated when external_ingress = true in Terraform.
     let auth_token: Option<String> = server.config.auth_token.clone();
     if auth_token.is_none() {
-        warn!("B00T_CP_AUTH_TOKEN is not set — MCP endpoint is unauthenticated. \
-               Only acceptable when external_ingress = false restricts public access.");
+        warn!(
+            "B00T_CP_AUTH_TOKEN is not set — MCP endpoint is unauthenticated. \
+               Only acceptable when external_ingress = false restricts public access."
+        );
     }
 
     // Build StreamableHttpService from the MCP server handler.
@@ -725,35 +772,38 @@ async fn main() -> Result<()> {
     // Terraform's external_ingress = false / ip_security_restriction controls).
     let app = Router::new()
         .nest_service("/mcp", mcp_service)
-        .layer(middleware::from_fn(move |req: Request, next: middleware::Next| {
-            let expected = auth_token.clone();
-            async move {
-                if let Some(ref token) = expected {
-                    let provided = req
-                        .headers()
-                        .get(header::AUTHORIZATION)
-                        .and_then(|v| v.to_str().ok())
-                        .and_then(|v| v.strip_prefix("Bearer "));
-                    // Constant-time comparison to avoid timing side-channels.
-                    // Seeds acc with the length-mismatch bit so a prefix match never passes.
-                    let ta = provided.unwrap_or("").as_bytes();
-                    let tb = token.as_bytes();
-                    let max_len = ta.len().max(tb.len());
-                    let mut acc: u8 = (ta.len() != tb.len()) as u8;
-                    for i in 0..max_len {
-                        acc |= ta.get(i).copied().unwrap_or(0) ^ tb.get(i).copied().unwrap_or(0);
+        .layer(middleware::from_fn(
+            move |req: Request, next: middleware::Next| {
+                let expected = auth_token.clone();
+                async move {
+                    if let Some(ref token) = expected {
+                        let provided = req
+                            .headers()
+                            .get(header::AUTHORIZATION)
+                            .and_then(|v| v.to_str().ok())
+                            .and_then(|v| v.strip_prefix("Bearer "));
+                        // Constant-time comparison to avoid timing side-channels.
+                        // Seeds acc with the length-mismatch bit so a prefix match never passes.
+                        let ta = provided.unwrap_or("").as_bytes();
+                        let tb = token.as_bytes();
+                        let max_len = ta.len().max(tb.len());
+                        let mut acc: u8 = (ta.len() != tb.len()) as u8;
+                        for i in 0..max_len {
+                            acc |=
+                                ta.get(i).copied().unwrap_or(0) ^ tb.get(i).copied().unwrap_or(0);
+                        }
+                        if acc != 0 {
+                            return (
+                                StatusCode::UNAUTHORIZED,
+                                Json(serde_json::json!({"error": "unauthorized"})),
+                            )
+                                .into_response();
+                        }
                     }
-                    if acc != 0 {
-                        return (
-                            StatusCode::UNAUTHORIZED,
-                            Json(serde_json::json!({"error": "unauthorized"})),
-                        )
-                            .into_response();
-                    }
+                    next.run(req).await
                 }
-                next.run(req).await
-            }
-        }));
+            },
+        ));
 
     let listener = TcpListener::bind(&bind_addr)
         .await

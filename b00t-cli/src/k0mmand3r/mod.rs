@@ -7,8 +7,8 @@ use std::collections::BTreeMap;
 /// k0mmand3r command: slash command for agent coordination
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct K0mmand {
-    pub verb: String,       // negotiate, vote, delegate, status, etc.
-    pub object: String,     // blessing:name, step:name, agent:name
+    pub verb: String,   // negotiate, vote, delegate, status, etc.
+    pub object: String, // blessing:name, step:name, agent:name
     pub modifiers: BTreeMap<String, String>,
 }
 
@@ -90,8 +90,8 @@ impl K0mmand {
 /// Guard condition: evaluates to true/false based on agent blessings, budget, votes
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct GuardCondition {
-    pub requires: Vec<String>,      // k0mmand3r commands to negotiate
-    pub expression: String,         // boolean expression to evaluate
+    pub requires: Vec<String>, // k0mmand3r commands to negotiate
+    pub expression: String,    // boolean expression to evaluate
 }
 
 /// Evaluation context: agent's current state
@@ -99,7 +99,7 @@ pub struct GuardCondition {
 pub struct EvaluationContext {
     pub agent_blessings: Vec<String>,
     pub available_budget: u32,
-    pub votes: Vec<(String, String)>,   // (agent_id, vote: yes/no/abstain)
+    pub votes: Vec<(String, String)>, // (agent_id, vote: yes/no/abstain)
     pub authorized: bool,
 }
 
@@ -112,7 +112,7 @@ impl GuardCondition {
         if self.expression.contains("has_blessing") {
             // Extract blessing name from expression: has_blessing(blessing:name)
             if let Some(start) = self.expression.find("has_blessing(") {
-                let remainder = &self.expression[start + 13..];  // "has_blessing(" is 13 chars
+                let remainder = &self.expression[start + 13..]; // "has_blessing(" is 13 chars
                 if let Some(end) = remainder.find(')') {
                     let blessing_str = remainder[..end].trim();
                     let has_it = context.agent_blessings.iter().any(|b| b == blessing_str);
@@ -124,7 +124,7 @@ impl GuardCondition {
         if self.expression.contains("budget_available") {
             // Extract budget amount: budget_available(amount)
             if let Some(start) = self.expression.find("budget_available(") {
-                let remainder = &self.expression[start + 17..];  // "budget_available(" is 17 chars
+                let remainder = &self.expression[start + 17..]; // "budget_available(" is 17 chars
                 if let Some(end) = remainder.find(')') {
                     let amount_str = remainder[..end].trim();
                     if let Ok(amount) = amount_str.parse::<u32>() {

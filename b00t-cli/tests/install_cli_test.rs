@@ -16,7 +16,10 @@ fn test_install_help_shows_new_flags() -> Result<(), Box<dyn std::error::Error>>
     );
 
     let stdout = String::from_utf8(output.stdout)?;
-    assert!(stdout.contains("--interactive"), "missing --interactive flag");
+    assert!(
+        stdout.contains("--interactive"),
+        "missing --interactive flag"
+    );
     assert!(stdout.contains("--runtimes"), "missing --runtimes flag");
     assert!(stdout.contains("--scope"), "missing --scope flag");
     assert!(
@@ -64,7 +67,8 @@ fn test_install_unknown_runtime_exits_nonzero() -> Result<(), Box<dyn std::error
 
 /// A comma-separated list containing an unknown runtime must also exit non-zero.
 #[test]
-fn test_install_mixed_runtimes_with_unknown_exits_nonzero() -> Result<(), Box<dyn std::error::Error>> {
+fn test_install_mixed_runtimes_with_unknown_exits_nonzero() -> Result<(), Box<dyn std::error::Error>>
+{
     let dir = tempdir()?;
 
     let mut cmd = Command::cargo_bin("b00t-cli")?;

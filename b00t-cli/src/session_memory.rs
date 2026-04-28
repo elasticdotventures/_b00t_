@@ -740,7 +740,10 @@ mod tests {
         let target_entry = "_b00t_.toml";
 
         // Create .b00tignore with entry already present
-        fs::write(&b00tignore_path, format!("*.log\n{}\n*.tmp\n", target_entry))?;
+        fs::write(
+            &b00tignore_path,
+            format!("*.log\n{}\n*.tmp\n", target_entry),
+        )?;
 
         // Read and verify the entry exists
         let content = fs::read_to_string(&b00tignore_path)?;

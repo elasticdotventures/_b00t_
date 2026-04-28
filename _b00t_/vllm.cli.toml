@@ -5,13 +5,13 @@
 [b00t]
 name = "vllm"
 type = "cli"
-desires = "0.17.1"
-hint = "vLLM 0.17.1 OpenAI-compat inference; GGUF, GPTQ, FP8, CPU offload for oversized models"
+desires = "0.19.1"
+hint = "vLLM 0.19.1 OpenAI-compat inference; GGUF, GPTQ, FP8, CPU offload for oversized models"
 install = """
-uv pip install vllm==0.17.1
+uv pip install vllm==0.19.1
 """
 update = """
-uv pip install --upgrade vllm==0.17.1
+uv pip install --upgrade vllm==0.19.1
 """
 version = "vllm --version"
 version_regex = '([0-9]+\\.[0-9]+\\.[0-9]+)'
