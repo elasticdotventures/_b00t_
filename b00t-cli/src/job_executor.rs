@@ -390,3 +390,270 @@ command = "echo 'Test passed'"
         assert!(result.is_ok(), "Job execution failed: {:?}", result.err());
     }
 }
+
+// ============================================================================
+/// Session metadata for git checkpoints
+/// Stores session info in git tag messages for resume functionality
+// ============================================================================
+
+/// Session metadata to store in git checkpoint tags
+#[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
+pub struct CheckpointMetadata {
+    /// Current session ID
+    pub session_id: String,
+    /// Current role (from _B00T_ROLE env var)
+    pub role: Option<String>,
+    /// Number of checkpoints created in this session
+    pub checkpoint_count: i64,
+    /// List of loaded capabilities with their use counts
+    pub capabilities_loaded: Vec<CapabilityInfo>,
+}
+
+/// Individual capability info
+#[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
+pub struct CapabilityInfo {
+    pub name: String,
+    pub use_count: i64,
+}
+
+impl JobExecutor {
+    /// Create git checkpoint with session metadata
+    fn create_checkpoint_with_metadata(
+        &self,
+        job_name: &str,
+        step_name: &str,
+        checkpoint_name: &str,
+        metadata: &CheckpointMetadata,
+    ) -> Result<()> {
+        use duct::cmd;
+
+        // Format capabilities as a readable string
+        let capabilities_str = if metadata.capabilities_loaded.is_empty() {
+            "none".to_string()
+        } else {
+            metadata
+                .capabilities_loaded
+                .iter()
+                .map(|c| format!("{}:{}", c.name, c.use_count))
+                .collect::<Vec<_>>()
+                .join(",")
+        };
+
+        // Format role (use "none" if not set)
+        let role_str = metadata.role.as_deref().unwrap_or("none");
+
+        // Create enriched tag message with session metadata
+        let tag_name = format!("checkpoint/{}/{}", job_name, checkpoint_name);
+        let message = format!(
+            "Checkpoint: {} - {} | session:{} role:{} checkpoint_count:{} capabilities:{}",
+            step_name,
+            checkpoint_name,
+            &metadata.session_id[..8.min(metadata.session_id.len())],
+            role_str,
+            metadata.checkpoint_count,
+            capabilities_str
+        );
+
+        // Create git tag
+        let result = cmd!("git", "tag", "-a", &tag_name, "-m", &message)
+            .dir(&self.project_root)
+            .stdout_to_stderr()
+            .run();
+
+        match result {
+            Ok(_) => {
+                println!("   ✅ Checkpoint created: {}", tag_name);
+                Ok(())
+            }
+            Err(e) => {
+                // Don't fail job if checkpoint creation fails
+                eprintln!("   ⚠️  Failed to create checkpoint: {}", e);
+                Ok(())
+            }
+        }
+    }
+
+    /// Resume from a checkpoint - parse tag message and restore session state
+    pub fn resume_from_checkpoint(&self, tag_name: &str) -> Result<CheckpointMetadata> {
+        use duct::cmd;
+
+        // Get tag message
+        let output = cmd!("git", "tag", "-l", "--format=%contents", tag_name)
+            .dir(&self.project_root)
+            .read()
+            .context(format!("Failed to read tag: {}", tag_name))?;
+
+        // Parse metadata from tag message
+        // Format: "Checkpoint: step - name | session:xxx role:xxx checkpoint_count:xxx capabilities:xxx"
+        let metadata = parse_checkpoint_message(&output)?;
+
+        println!("📂 Resuming from checkpoint: {}", tag_name);
+        println!("   Session: {}", metadata.session_id);
+        if let Some(ref role) = metadata.role {
+            println!("   Role: {}", role);
+        }
+        println!("   Checkpoint #: {}", metadata.checkpoint_count);
+        if !metadata.capabilities_loaded.is_empty() {
+            println!(
+                "   Capabilities: {}",
+                metadata
+                    .capabilities_loaded
+                    .iter()
+                    .map(|c| c.name.clone())
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            );
+        }
+
+        Ok(metadata)
+    }
+
+    /// List all checkpoint tags for a job
+    pub fn list_checkpoints(&self, job_name: Option<&str>) -> Result<Vec<CheckpointInfo>> {
+        use duct::cmd;
+
+        let pattern = if let Some(name) = job_name {
+            format!("checkpoint/{}/*", name)
+        } else {
+            "checkpoint/*/*".to_string()
+        };
+
+        let output = cmd!("git", "tag", "-l", &pattern)
+            .dir(&self.project_root)
+            .read()
+            .context("Failed to list checkpoint tags")?;
+
+        let mut checkpoints = Vec::new();
+        for tag in output.lines() {
+            if tag.trim().is_empty() {
+                continue;
+            }
+
+            // Get tag message for metadata
+            if let Ok(msg_output) = cmd!("git", "tag", "-l", "--format=%contents", tag)
+                .dir(&self.project_root)
+                .read()
+            {
+                if let Ok(metadata) = parse_checkpoint_message(&msg_output) {
+                    checkpoints.push(CheckpointInfo {
+                        tag_name: tag.to_string(),
+                        metadata,
+                    });
+                }
+            }
+        }
+
+        Ok(checkpoints)
+    }
+}
+
+/// Checkpoint info from git tag
+#[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
+pub struct CheckpointInfo {
+    pub tag_name: String,
+    pub metadata: CheckpointMetadata,
+}
+
+/// Parse checkpoint message to extract metadata
+fn parse_checkpoint_message(message: &str) -> Result<CheckpointMetadata> {
+    let mut metadata = CheckpointMetadata::default();
+
+    // Extract session_id: after "session:" before " role:" or " checkpoint_count:"
+    if let Some(start) = message.find("session:") {
+        let rest = &message[start + 8..];
+        let end = rest
+            .find(' ')
+            .or_else(|| rest.find('|'))
+            .unwrap_or(rest.len());
+        metadata.session_id = rest[..end].to_string();
+    }
+
+    // Extract role: after "role:" before " checkpoint_count:"
+    if let Some(start) = message.find("role:") {
+        let rest = &message[start + 5..];
+        let end = rest
+            .find(' ')
+            .or_else(|| rest.find('|'))
+            .unwrap_or(rest.len());
+        let role = rest[..end].to_string();
+        if role != "none" {
+            metadata.role = Some(role);
+        }
+    }
+
+    // Extract checkpoint_count: after "checkpoint_count:" before " capabilities:"
+    if let Some(start) = message.find("checkpoint_count:") {
+        let rest = &message[start + 17..];
+        let end = rest
+            .find(' ')
+            .or_else(|| rest.find('|'))
+            .unwrap_or(rest.len());
+        metadata.checkpoint_count = rest[..end].parse().unwrap_or(0);
+    }
+
+    // Extract capabilities: after "capabilities:" to end
+    if let Some(start) = message.find("capabilities:") {
+        let rest = &message[start + 14..];
+        let capabilities_str = rest.trim();
+
+        if capabilities_str != "none" && !capabilities_str.is_empty() {
+            for cap in capabilities_str.split(',') {
+                let parts: Vec<&str> = cap.split(':').collect();
+                if parts.len() == 2 {
+                    metadata.capabilities_loaded.push(CapabilityInfo {
+                        name: parts[0].to_string(),
+                        use_count: parts[1].parse().unwrap_or(1),
+                    });
+                } else {
+                    metadata.capabilities_loaded.push(CapabilityInfo {
+                        name: cap.to_string(),
+                        use_count: 1,
+                    });
+                }
+            }
+        }
+    }
+
+    if metadata.session_id.is_empty() {
+        anyhow::bail!("Failed to parse checkpoint message: missing session_id");
+    }
+
+    Ok(metadata)
+}
+
+// ============================================================================
+// Tests
+// ============================================================================
+
+#[cfg(test)]
+mod checkpoint_tests {
+    use super::*;
+
+    #[test]
+    fn test_parse_checkpoint_message() {
+        let message = "Checkpoint: step1 - complete | session:abc123 role:captain checkpoint_count:3 capabilities:git:5,bash:10";
+
+        let metadata = parse_checkpoint_message(message).unwrap();
+
+        assert_eq!(metadata.session_id, "abc123");
+        assert_eq!(metadata.role, Some("captain".to_string()));
+        assert_eq!(metadata.checkpoint_count, 3);
+        assert_eq!(metadata.capabilities_loaded.len(), 2);
+        assert_eq!(metadata.capabilities_loaded[0].name, "git");
+        assert_eq!(metadata.capabilities_loaded[0].use_count, 5);
+        assert_eq!(metadata.capabilities_loaded[1].name, "bash");
+        assert_eq!(metadata.capabilities_loaded[1].use_count, 10);
+    }
+
+    #[test]
+    fn test_parse_checkpoint_message_no_role() {
+        let message = "Checkpoint: step1 - complete | session:abc123 role:none checkpoint_count:1 capabilities:none";
+
+        let metadata = parse_checkpoint_message(message).unwrap();
+
+        assert_eq!(metadata.session_id, "abc123");
+        assert!(metadata.role.is_none());
+        assert_eq!(metadata.checkpoint_count, 1);
+        assert!(metadata.capabilities_loaded.is_empty());
+    }
+}

@@ -172,11 +172,11 @@ impl<T: Transport + 'static> JobIpcListener<T> {
 
         let from_step = msg.params.get("from_step").map(|s| s.as_str());
         let to_step = msg.params.get("to_step").map(|s| s.as_str());
-        let resume = msg
+        let resume_tag = msg
             .params
             .get("resume")
-            .map(|s| s == "true")
-            .unwrap_or(false);
+            .filter(|s| !s.is_empty())
+            .map(|s| s.as_str());
         let dry_run = msg
             .params
             .get("dry_run")
@@ -210,7 +210,7 @@ impl<T: Transport + 'static> JobIpcListener<T> {
             to_step,
             dry_run,
             no_checkpoint,
-            resume,
+            resume_tag,
             &env_vars,
         )
         .await;

@@ -4,6 +4,8 @@
 "use strict";
 
 // b00t-datum-guard.ts
+var import_fs = require("fs");
+var import_path = require("path");
 var input = JSON.parse(process.argv[2] || "{}");
 var command = input?.input?.command ?? "";
 var PACKAGE_MANAGER_PATTERNS = [
@@ -13,6 +15,48 @@ var PACKAGE_MANAGER_PATTERNS = [
   { regex: /^\s*brew\s+install\b/, hint: "b00t cli install <datum-name>.cli" },
   { regex: /^\s*cargo\s+install\b/, hint: "b00t cli install <datum-name>.cli" }
 ];
+var INSTALL_REGEX = /^\s*b00t\s+(?:cli\s+)?install\s+/i;
+function datumExists(datumName, b00tDir) {
+  const suffixes = ["", ".cli", ".mcp", ".agent", ".model", ".stack", ".job", ".docker", ".api", ".role", ".datum"];
+  const baseName = datumName.replace(/\.cli$/, "");
+  for (const suffix of suffixes) {
+    const checkName = baseName + suffix;
+    for (const ext of [".toml", ""]) {
+      const checkPath = (0, import_path.join)(b00tDir, checkName + ext);
+      if ((0, import_fs.existsSync)(checkPath))
+        return true;
+    }
+  }
+  return false;
+}
+function parseDependsOn(tomlContent) {
+  const deps = [];
+  const regex = /depends_on\s*=\s*\[([^\]]*)\]/g;
+  const match = regex.exec(tomlContent);
+  if (match && match[1]) {
+    const items = match[1].match(/"([^"]+)"/g);
+    if (items) {
+      for (const item of items) {
+        deps.push(item.replace(/"/g, "").trim());
+      }
+    }
+  }
+  return deps;
+}
+function findB00tDir(hookDir) {
+  let dir = hookDir;
+  for (let i = 0; i < 10; i++) {
+    const check = (0, import_path.join)(dir, "_b00t_");
+    if ((0, import_fs.existsSync)(check))
+      return check;
+    const prev = (0, import_path.dirname)(dir);
+    if (prev === dir)
+      break;
+    dir = prev;
+  }
+  return null;
+}
+var B00T_DIR = findB00tDir(__dirname);
 var advisory = null;
 for (const { regex, hint } of PACKAGE_MANAGER_PATTERNS) {
   if (regex.test(command)) {
@@ -20,6 +64,46 @@ for (const { regex, hint } of PACKAGE_MANAGER_PATTERNS) {
 Check available datums with \`b00t cli desires\`.
 Direct install will work but won't be tracked in the b00t hive.`;
     break;
+  }
+}
+if (!advisory && INSTALL_REGEX.test(command)) {
+  const match = command.match(/^\s*b00t\s+(?:cli\s+)?install\s+(\S+)/);
+  if (match && match[1]) {
+    const datumName = match[1].trim();
+    if (!B00T_DIR) {
+      advisory = "\u26A0\uFE0F b00t datum-guard: could not locate _b00t_/ directory";
+    } else {
+      const suffixes = ["", ".cli", ".mcp", ".agent", ".model", ".stack", ".job", ".docker", ".api", ".role", ".datum"];
+      let tomlPath = null;
+      for (const suffix of suffixes) {
+        const path = (0, import_path.join)(B00T_DIR, datumName + suffix + ".toml");
+        if ((0, import_fs.existsSync)(path)) {
+          tomlPath = path;
+          break;
+        }
+      }
+      if (!tomlPath) {
+        advisory = `\u26A0\uFE0F b00t datum-guard: datum '${datumName}' not found in _b00t_/`;
+      } else {
+        const tomlContent = (0, import_fs.readFileSync)(tomlPath, "utf-8");
+        const dependencies = parseDependsOn(tomlContent);
+        if (dependencies.length === 0) {
+          advisory = `ok`;
+        } else {
+          const missingDeps = [];
+          for (const dep of dependencies) {
+            if (!datumExists(dep, B00T_DIR)) {
+              missingDeps.push(dep);
+            }
+          }
+          if (missingDeps.length > 0) {
+            advisory = `\u26A0\uFE0F b00t datum-guard: missing dependencies for '${datumName}' \u2014 install dependency${missingDeps.length > 1 ? "s" : ""} first: ${missingDeps.join(", ")}`;
+          } else {
+            advisory = `ok`;
+          }
+        }
+      }
+    }
   }
 }
 if (advisory) {
