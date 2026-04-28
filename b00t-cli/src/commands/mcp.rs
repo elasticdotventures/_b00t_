@@ -1,5 +1,6 @@
 use anyhow::Result;
 use clap::Parser;
+use std::collections::HashSet;
 
 #[derive(Parser)]
 pub enum McpCommands {
@@ -99,6 +100,16 @@ pub enum McpCommands {
     Registry {
         #[clap(subcommand)]
         action: RegistryAction,
+    },
+    #[clap(
+        about = "Show dependency chain for an MCP server",
+        long_about = "Show the dependency chain for an MCP server datum.\n\nExamples:\n  b00t-cli mcp depends filesystem\n  b00t-cli mcp depends brave-search --installed"
+    )]
+    Depends {
+        #[clap(help = "MCP server name")]
+        name: String,
+        #[clap(long, help = "Show only installed dependencies")]
+        installed: bool,
     },
     #[clap(
         about = "Execute MCP tool via stdio transport",
@@ -233,6 +244,18 @@ impl McpCommands {
                 stdio_command,
                 httpstream,
             } => {
+                // First resolve dependencies before installation
+                let deps = resolve_depends_on_chain(name, path)?;
+                
+                // Check if all dependencies are satisfied
+                if !deps.is_empty() {
+                    let missing = find_missing_dependencies(&deps, path)?;
+                    if !missing.is_empty() {
+                        eprintln!("⚠️  missing: install dependencies first: {}", missing.join(", "));
+                        // Continue anyway - just warn
+                    }
+                }
+
                 match target.as_str() {
                     "claudecode" | "claude" => crate::claude_code_install_mcp(name, path),
                     "vscode" => crate::vscode_install_mcp(name, path),
@@ -357,6 +380,10 @@ impl McpCommands {
                 crate::mcp_output(path, use_mcp_servers_wrapper, servers)
             }
             McpCommands::Registry { action } => action.execute_async().await,
+            McpCommands::Depends { name, installed } => {
+                let expanded = crate::get_expanded_path(path)?;
+                show_dependency_chain(&name, &expanded, *installed)
+            },
             McpCommands::Execute {
                 server_or_tool,
                 tool,
@@ -619,6 +646,137 @@ impl RegistryAction {
         }
     }
 }
+
+
+/// Resolve dependencies for an MCP datum, returning ordered list: [dep1, dep2, <datum>]
+/// Loads TOML, extracts depends_on field, recursively resolves
+pub fn resolve_depends_on_chain(datum_name: &str, path: &str) -> Result<Vec<String>> {
+    use crate::get_mcp_config;
+    use crate::get_expanded_path;
+    
+    let expanded = get_expanded_path(path)?;
+    let mut resolved = Vec::new();
+    let mut visited = HashSet::new();
+    
+    resolve_recursive(datum_name, &expanded, &mut resolved, &mut visited)?;
+    
+    // Final list: dependencies first, datum last (reverse from DFS for correct order)
+    // We want deps first, so reverse the collected order
+    if resolved.len() > 1 {
+        resolved.reverse();
+    }
+    
+    Ok(resolved)
+}
+
+fn resolve_recursive(
+    name: &str,
+    path: &std::path::Path,
+    resolved: &mut Vec<String>,
+    visited: &mut HashSet<String>,
+) -> Result<()> {
+    if visited.contains(name) {
+        return Ok(());
+    }
+    
+    visited.insert(name.to_string());
+    
+    // Load datum to get dependencies
+    let config_path = path.join(format!("{}.mcp.toml", name));
+    let cli_config_path = path.join(format!("{}.cli.toml", name));
+    
+    if !config_path.exists() && !cli_config_path.exists() {
+        anyhow::bail!("Datum not found: {}", name);
+    }
+    
+    // Actually load and parse for depends_on
+    let datum = crate::get_mcp_config(name, path.to_str().unwrap_or(""))?;
+    
+    // Recursively resolve dependencies first
+    if let Some(deps) = &datum.depends_on {
+        for dep in deps {
+            resolve_recursive(dep, path, resolved, visited)?;
+        }
+    }
+    
+    // Add this datum (if not already)
+    if !resolved.contains(&name.to_string()) {
+        resolved.push(name.to_string());
+    }
+    
+    Ok(())
+}
+
+/// Find dependencies that are not installed (missing their TOML files)
+pub fn find_missing_dependencies(dep_names: &[String], path: &str) -> Result<Vec<String>> {
+    use crate::get_expanded_path;
+    
+    let expanded = get_expanded_path(path)?;
+    let mut missing = Vec::new();
+    
+    for dep in dep_names {
+        let mcp_path = expanded.join(format!("{}.mcp.toml", dep));
+        let cli_path = expanded.join(format!("{}.cli.toml", dep));
+        
+        if !mcp_path.exists() && !cli_path.exists() {
+            missing.push(dep.clone());
+        }
+    }
+    
+    Ok(missing)
+}
+
+/// Show dependency chain for an MCP server
+pub fn show_dependency_chain(name: &str, path: &std::path::Path, installed_only: bool) -> Result<()> {
+    use crate::get_mcp_config;
+    
+    let path_str = path.to_str().unwrap_or("");
+    
+    // Try to load the datum config
+    let datum = match get_mcp_config(name, path_str) {
+        Ok(d) => d,
+        Err(e) => {
+            // Try .cli.toml as fallback
+            let cli_path = path.join(format!("{}.cli.toml", name));
+            if cli_path.exists() {
+                anyhow::bail!("MCP server '{}' not found (tried .mcp.toml). Error: {}", name, e)
+            } else {
+                anyhow::bail!("MCP server '{}' not found: {}", name, e)
+            }
+        }
+    };
+    
+    println!("📦 MCP Server: {}", name);
+    println!("   Type: {:?}", datum.datum_type);
+    println!("   Hint: {}", datum.hint);
+    
+    if let Some(deps) = &datum.depends_on {
+        if deps.is_empty() {
+            println!("   Dependencies: (none)");
+        } else {
+            println!("   Dependencies:");
+            for dep in deps {
+                // Check if dependency is installed
+                let mcp_path = path.join(format!("{}.mcp.toml", dep));
+                let cli_path = path.join(format!("{}.cli.toml", dep));
+                let status = if mcp_path.exists() || cli_path.exists() {
+                    "✓ installed"
+                } else if installed_only {
+                    continue;
+                } else {
+                    "✗ missing"
+                };
+                println!("     - {} [{}]", dep, status);
+            }
+        }
+    } else {
+        println!("   Dependencies: (none defined)");
+    }
+    
+    Ok(())
+}
+
+
 
 #[cfg(test)]
 mod tests {

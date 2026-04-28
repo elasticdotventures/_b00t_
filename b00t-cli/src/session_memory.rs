@@ -576,6 +576,69 @@ impl SessionMemory {
             .to_string())
         }
     }
+
+    // ===== Capability tracking methods =====
+
+    /// Track a capability as loaded - records load time and increments use_count
+    /// Uses key format: "capability:NAME" with value "loaded_at:TIMESTAMP,use_count:N"
+    pub fn track_capability_loaded(&mut self, name: &str) -> Result<()> {
+        let key = format!("capability:{}", name);
+        let use_count_key = format!("capability:{}:use_count", name);
+
+        // Get current use_count or default to 0
+        let use_count = self.numbers.get(&use_count_key).copied().unwrap_or(0) + 1;
+
+        // Update use_count in numbers HashMap
+        self.numbers.insert(use_count_key, use_count);
+
+        // Update string record with timestamp and use_count
+        let now = chrono::Utc::now().to_rfc3339();
+        let value = format!("loaded_at:{},use_count:{}", now, use_count);
+        self.strings.insert(key, value);
+
+        self.metadata.updated_at = chrono::Utc::now();
+        self.save()
+    }
+
+    /// Get the use_count for a capability
+    pub fn get_capability_use_count(&self, name: &str) -> i64 {
+        let use_count_key = format!("capability:{}:use_count", name);
+        self.numbers.get(&use_count_key).copied().unwrap_or(0)
+    }
+
+    /// List all loaded capabilities with use_count > 0
+    /// Returns Vec<(capability_name, use_count)>
+    pub fn list_loaded_capabilities(&self) -> Vec<(String, i64)> {
+        let mut capabilities = Vec::new();
+
+        for (key, &use_count) in &self.numbers {
+            if key.starts_with("capability:") && key.ends_with(":use_count") && use_count > 0 {
+                // Extract capability name from key "capability:NAME:use_count"
+                if let Some(name) = key.strip_prefix("capability:").and_then(|s| s.strip_suffix(":use_count")) {
+                    capabilities.push((name.to_string(), use_count));
+                }
+            }
+        }
+
+        capabilities.sort_by(|a, b| a.0.cmp(&b.0));
+        capabilities
+    }
+
+    /// Unload a capability - clears use_count
+    pub fn unload_capability(&mut self, name: &str) -> Result<()> {
+        let string_key = format!("capability:{}", name);
+        let use_count_key = format!("capability:{}:use_count", name);
+
+        // Remove the string record
+        self.strings.remove(&string_key);
+
+        // Set use_count to 0
+        self.numbers.insert(use_count_key, 0);
+
+        self.metadata.updated_at = chrono::Utc::now();
+        self.save()
+    }
+
 }
 
 /// Agent context for OODA loop decision making

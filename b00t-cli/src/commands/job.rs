@@ -41,7 +41,8 @@ pub enum JobCommands {
 
     #[clap(
         about = "Execute job workflow",
-        long_about = "Execute job workflow with checkpoint support and sub-agent spawning.\n\nExamples:\n  b00t job run build-release\n  b00t job run example-workflow --from-step lint\n  b00t job run build-release --dry-run\n  b00t job run example-workflow --no-checkpoint"
+        long_about = "Execute job workflow with checkpoint support and sub-agent spawning.\n\nExamples:\n  b00t job run build-release\n  b00t job run example-workflow --from-step lint\n  b00t job run build-release --dry-run\n  b00t job run example-workflow --no-checkpoint
+  b00t job run build-release --resume=job/build-release/step1-complete"
     )]
     Run {
         #[clap(help = "Job name (without .job.toml extension)")]
@@ -59,8 +60,8 @@ pub enum JobCommands {
         #[clap(long, help = "Skip checkpoint creation")]
         no_checkpoint: bool,
 
-        #[clap(long, help = "Continue from last checkpoint")]
-        resume: bool,
+        #[clap(long, help = "Resume from checkpoint tag (e.g., job/myjob/step1-complete)")]
+        resume_tag: Option<String>,
 
         #[clap(short, long, help = "Environment variables (KEY=VALUE)")]
         env: Vec<String>,
@@ -129,7 +130,7 @@ impl JobCommands {
                 to_step,
                 dry_run,
                 no_checkpoint,
-                resume,
+                resume_tag,
                 env,
             } => {
                 run_job(
@@ -139,7 +140,7 @@ impl JobCommands {
                     to_step.as_deref(),
                     *dry_run,
                     *no_checkpoint,
-                    *resume,
+                    resume_tag.as_deref(),
                     env,
                 )
                 .await
@@ -331,7 +332,7 @@ async fn run_job(
     to_step: Option<&str>,
     dry_run: bool,
     no_checkpoint: bool,
-    resume: bool,
+    resume_from_tag: Option<&str>,
     env_vars: &[String],
 ) -> Result<()> {
     use crate::datum_job::JobDatum;
@@ -355,16 +356,37 @@ async fn run_job(
     let mut execution_order = datum.execution_order()?;
 
     // Create or resume job state
-    let mut job_state = if resume {
-        match JobState::load_latest(path, name) {
-            Ok(state) => {
-                println!("📂 Resuming from previous run ({})", state.run_id);
-                println!("   Started: {}", state.started_at);
-                println!("   Status: {:?}", state.status);
-                state
+    // Handle resume from checkpoint tag or start fresh
+    let mut job_state = if resume_from_tag.is_some() {
+        // Resume from git checkpoint tag - load session metadata
+        match crate::job_executor::JobExecutor::new(&b00t_path_str.as_ref()).await {
+            Ok(executor) => {
+                match executor.resume_from_checkpoint(resume_from_tag.unwrap()) {
+                    Ok(metadata) => {
+                        println!("   Session ID: {}", metadata.session_id);
+                        if let Some(role) = metadata.role {
+                            println!("   Restored role: {}", role);
+                        }
+                        println!("   Capabilities: {}", metadata.capabilities_loaded.len());
+                        // TODO: Re-load capabilities via b00t learn
+                        JobState::new(
+                            name.to_string(),
+                            config.config.mode.clone(),
+                            execution_order.len(),
+                        )
+                    }
+                    Err(e) => {
+                        eprintln!("   Warning: Failed to parse checkpoint: {}", e);
+                        JobState::new(
+                            name.to_string(),
+                            config.config.mode.clone(),
+                            execution_order.len(),
+                        )
+                    }
+                }
             }
-            Err(_) => {
-                println!("⚠️  No previous run found, starting fresh");
+            Err(e) => {
+                eprintln!("   Warning: Failed to create executor: {}", e);
                 JobState::new(
                     name.to_string(),
                     config.config.mode.clone(),
@@ -432,7 +454,7 @@ async fn run_job(
         }
 
         // Skip if resuming and step already completed
-        if resume {
+        if resume_from_tag.is_some() {
             if let Some(step_state) = job_state.steps.get(step_name.as_str()) {
                 if step_state.status == StepStatus::Completed {
                     println!("   ⏭️  Skipping (already completed)");
@@ -1147,7 +1169,7 @@ pub async fn run_job_internal(
     to_step: Option<&str>,
     dry_run: bool,
     no_checkpoint: bool,
-    resume: bool,
+    resume_from_tag: Option<&str>,
     env_vars: &[String],
 ) -> Result<()> {
     run_job(
@@ -1157,7 +1179,7 @@ pub async fn run_job_internal(
         to_step,
         dry_run,
         no_checkpoint,
-        resume,
+        resume_from_tag,
         env_vars,
     )
     .await
