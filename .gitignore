@@ -355,7 +355,20 @@ libnull.rlib
 !.claude-plugin/recipes/mcp-servers/local-b00t-grok-guru--grok-guru.json
 .taskmaster/
 
+# b00t
+
+# Build artifacts & temp directories
+tmp/
+*.pyc
+__pycache__/
+*.egg-info/
+node_modules/
+dist/
+build/
+.venv/
+venv/
 # b00t task runtime state — per-repo, not tracked
+ralph/
 .b00t/tasks.json
 .b00t/ralph/
 # nested .b00t dirs inside crates (runtime state)

@@ -1,0 +1,23 @@
+[b00t]
+name = "codex-cli"
+desires = "0.125.0"
+install = "bunx codex-cli"
+update = "bunx codex-cli self-update"
+version = "codex --version"
+version_regex = "(\\d+\\.\\d+\\.\\d+)"
+hint = "OpenAI Codex CLI — AI pair programming via bunx codex-cli"
+
+[validate]
+command = "codex --version"
+regex = "Codex"
+
+[roles]
+required_for = ["developer"]
+optional_for = ["executive"]
+
+# b00t:map v1
+# summary: OpenAI Codex CLI datum — AI pair programming assistant
+# tags: codex, openai, cli, ai-coding
+# tier: frontier
+# cmds: b00t cli install codex
+# complexity: 3
