@@ -9,12 +9,17 @@
 [b00t]
 name = "pi"
 type = "agent"
+desires = "latest"
 hint = "pi coding agent — systemd-managed RPC server; ch0nky tier; swap with opencode via hive stop/start"
+install = "npm install -g @mariozechner/pi-coding-agent@latest"
+update = "npm install -g @mariozechner/pi-coding-agent@latest"
+version = "pi --version"
+version_regex = '([0-9]+\\.[0-9]+\\.[0-9]+)'
 
 [b00t.agent]
 pid = "pi-001"
 branch = "main"
-# 🤓 ch0nky = vLLM gemma4 at :8001 via inference-gemma4 hive profile
+# 🤓 ch0nky is a logical local big-model slot on :8001. As of 2026-04-30 the verified path is qwen36-local/ch0nky via llama.cpp.
 model = "ch0nky"
 skills = ["code", "refactor", "debug", "edit", "bash", "read", "write", "grep", "find", "ls"]
 personality = "pragmatic"
@@ -27,9 +32,9 @@ cli_path = "pi"
 cli_args = ["-p", "--provider", "llama-cpp", "--model", "ch0nky"]
 supports_tools = ["read", "write", "bash", "grep", "ls"]
 max_iterations = 10
-requires = ["b00t-hive-inference-gemma4.service"]
-# hive_profile activates inference-gemma4 before invocation
-hive_profile = "inference-gemma4"
+requires = ["b00t-hive-inference-qwen36-35b-a3b-llamacpp.service"]
+# hive_profile activates the currently preferred ch0nky local model before invocation
+hive_profile = "inference-qwen36-35b-a3b-llamacpp"
 
 [b00t.agent.ipc]
 # 🤓 pi --mode rpc exposes stdio RPC; pi-mcp-adapter bridges to MCP clients
@@ -55,11 +60,11 @@ service_type = "simple"
 restart = "on-failure"
 restart_sec = "10s"
 timeout_start_sec = "60"
-after = ["network.target", "b00t-hive-inference-gemma4.service"]
+after = ["network.target", "b00t-hive-inference-qwen36-35b-a3b-llamacpp.service"]
 environment = [
   "PATH=/home/brianh/.nvm/versions/node/v22.15.1/bin:/usr/local/bin:/usr/bin:/bin",
   "LLAMA_CPP_BASE_URL=http://127.0.0.1:8001/v1",
-  "OPENAI_API_KEY=local-gemma4",
+  "OPENAI_API_KEY=local-b00t",
 ]
 exec_start = "pi --mode rpc --provider llama-cpp --model ch0nky"
 
@@ -83,11 +88,31 @@ AGENT_SKILLS = "code,refactor,debug,edit,bash"
 PI_CODING_AGENT_DIR = "~/.pi/agent"
 PI_MODEL = "ch0nky"
 LLAMA_CPP_BASE_URL = "http://127.0.0.1:8001/v1"
-OPENAI_API_KEY = "local-gemma4"
+OPENAI_API_KEY = "local-b00t"
 
 [[b00t.usage]]
 description = "Start pi agent service (b00t hive)"
 command = "systemctl --user start b00t@pi-agent.service"
+
+[[b00t.usage]]
+description = "Install or update pi to latest published version"
+command = "npm install -g @mariozechner/pi-coding-agent@latest"
+
+[[b00t.usage]]
+description = "Verify the installed pi version"
+command = "pi --version"
+
+[[b00t.usage]]
+description = "Verify the local ch0nky model is registered in pi"
+command = "pi --list-models ch0nky"
+
+[[b00t.usage]]
+description = "Repair ~/.pi/agent/models.json for the current local qwen36 API key"
+command = "sed -i 's/local-gemma4/local-b00t/g' ~/.pi/agent/models.json && sed -n '1,120p' ~/.pi/agent/models.json"
+
+[[b00t.usage]]
+description = "Probe the local ch0nky model through pi (verified 2026-04-30)"
+command = "pi -p --provider llama-cpp --model ch0nky 'Reply with READY and the model alias only.'"
 
 [[b00t.usage]]
 description = "Stop pi agent service"

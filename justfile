@@ -963,7 +963,7 @@ qwen36-test-opencode prompt="say hello in 3 words":
 
 # One-shot skill improvement run (5 iterations, no systemd)
 b00t-skill-improve iterations="5":
-    TASK=skill-test TOOL=opencode ROLE=executive     OPENCODE_MODEL=qwen36-local/ch0nky     MAX_ITERATIONS={{iterations}} RALPH_METRIC_GATE=true     bash ralphs/ralph-plus-_b00t_/ralph.sh
+    TASK=skill-test TOOL=opencode ROLE=executive     OPENCODE_MODEL=qwen36-local/ch0nky     MAX_ITERATIONS={{iterations}} RALPH_METRIC_GATE=true     bash b00t.sh
 
 # Start continuous skill-improve loop as systemd service (unattended)
 b00t-skill-improve-loop:
@@ -998,7 +998,7 @@ pi-agent-status:
 
 # Run pi one-shot (interactive, dev/debug only — not the hive path)
 pi-gemma4 prompt="hello":
-    LLAMA_CPP_BASE_URL=http://127.0.0.1:8001/v1 OPENAI_API_KEY=local-gemma4 \
+    LLAMA_CPP_BASE_URL=http://127.0.0.1:8001/v1 OPENAI_API_KEY=local-b00t \
       pi --provider llama-cpp --model ch0nky -p "{{prompt}}"
 
 # ── opencode agent — systemd service lifecycle ───────────────────────────────
@@ -1030,7 +1030,7 @@ ch0nky-use-opencode:
 # ── smoke tests ──────────────────────────────────────────────────────────────
 gemma4-pi-test:
     curl -sf http://localhost:8001/v1/models | python3 -c "import sys,json; m=json.load(sys.stdin); print('✅ serving:', [x['id'] for x in m['data']])"
-    LLAMA_CPP_BASE_URL=http://127.0.0.1:8001/v1 OPENAI_API_KEY=local-gemma4 \
+    LLAMA_CPP_BASE_URL=http://127.0.0.1:8001/v1 OPENAI_API_KEY=local-b00t \
       pi --provider llama-cpp --model ch0nky -p "respond with exactly: pong"
 
 gemma4-opencode-test:

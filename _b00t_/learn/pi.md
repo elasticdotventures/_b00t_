@@ -1,5 +1,2 @@
 ---
-local LLM provider: pi has no llama-cpp provider. Use --provider openai with OPENAI_BASE_URL=http://127.0.0.1:8001/v1. Model name: ch0nky. RPC server mode: pi --mode rpc.
-
----
-pi local vLLM: use --provider llama-cpp + LLAMA_CPP_BASE_URL=:8001/v1, NOT openai/OPENAI_BASE_URL
+pi local model memo (verified 2026-04-30): ~/.pi/agent/models.json defines provider "llama-cpp" with api=openai-completions, baseUrl=http://localhost:8001/v1, apiKey=local-b00t, model id ch0nky. Invoke: pi -p --provider llama-cpp --model ch0nky 'task'. If pi returns 401 Invalid API Key, check ~/.pi/agent/models.json first; stale local-gemma4 was the root cause after switching the ch0nky slot to qwen36.
