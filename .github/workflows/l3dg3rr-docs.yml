@@ -1,0 +1,57 @@
+name: l3dg3rr Docs
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'vendor/l3dg3rr/**'
+      - '.github/workflows/l3dg3rr-docs.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'vendor/l3dg3rr/**'
+      - '.github/workflows/l3dg3rr-docs.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-docs:
+    name: Build l3dg3rr docs
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install just
+        run: cargo install just --locked
+
+      - name: Setup mdBook
+        uses: jontze/action-mdbook@v3
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          use-mermaid: true
+
+      - name: Install mdBook plugins
+        run: |
+          cd vendor/l3dg3rr
+          cargo install mdbook mdbook-mermaid mdbook-admonish --locked
+          cargo install --path crates/mdbook-rhai-mermaid
+
+      - name: Build l3dg3rr docs
+        run: |
+          cd vendor/l3dg3rr
+          just docgen
+
+      - name: Verify output
+        run: |
+          cd vendor/l3dg3rr
+          test -d book/book && echo "✓ book/book directory exists" || { echo "✗ docs build failed"; exit 1; }
+          test -f book/book/theory.html && echo "✓ theory.html generated" || { echo "✗ theory.html missing"; exit 1; }
+          test -f book/book/index.html && echo "✓ index.html generated" || { echo "✗ index.html missing"; exit 1; }
