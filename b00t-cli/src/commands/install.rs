@@ -80,7 +80,7 @@ pub fn run_just_install(dry_run: bool) -> Result<()> {
 pub fn install_datum(path: &str, name: &str) -> Result<()> {
     let all_datums = load_all_datums(path)?;
 
-    // Prefer exact key match. For plain-name collisions (e.g. pi.agent vs pi-coding-agent.cli),
+    // Prefer exact key match. When multiple datums share the same plain `b00t.name`,
     // prefer an installable datum over a non-installable one.
     let target_key = if all_datums.contains_key(name) {
         name.to_string()
