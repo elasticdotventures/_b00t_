@@ -1,10 +1,10 @@
 [b00t]
 name = "ralph-stack"
 type = "stack"
-hint = "Complete autonomous agent workflow stack with Ralph, TODO-next backlog, and b00t jobs"
+hint = "Complete agent workflow stack with commodity next-loop execution, TODO-next backlog, and b00t jobs"
 
 [b00t.stack]
-description = "Ralph autonomous agent loop with TODO-next backlog and b00t job integration"
+description = "Legacy Ralph-inspired loop stack now folded into b00t.sh with TODO-next backlog and b00t job integration"
 category = "agent-workflow"
 
 [b00t.stack.components]
