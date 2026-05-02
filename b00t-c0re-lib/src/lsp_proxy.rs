@@ -3,7 +3,7 @@
 //! 🤓 Proxies existing LSP servers (just-mcp, datum-lsp, etc.)
 //! with unified interface for:
 //! - IaC serialization with variable pipelines
-//! - Feature-flagged .tomllm LSP (macro-generated from AST)
+//! - Feature-flagged .tomllm/.tomllmd LSP (macro-generated from AST)
 //! - Dynamic option population via jpath/tomllm-path
 //! - SLO/SLI budget enforcement (time/cost)
 //! - Sandbox lifetime management
@@ -25,7 +25,7 @@ pub struct LspProxyConfig {
     pub command: String,
     /// Command arguments
     pub args: Vec<String>,
-    /// Feature flags (e.g., "tomllm-ast", "slo-enforcement")
+    /// Feature flags (e.g., "tomllm-ast", "tomllmd-diagram-dsl", "slo-enforcement")
     pub features: Vec<String>,
     /// SLO/SLI budgets
     pub budgets: SloBudgets,
@@ -245,7 +245,7 @@ pub struct BudgetStatus {
 /// TOMLLM LSP configuration (feature-flagged)
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TomllmLspConfig {
-    /// Enable .tomllm LSP
+    /// Enable .tomllm / downgraded .tomllmd LSP
     pub enabled: bool,
     /// Generate LSP from TOMLLM AST
     pub generate_from_ast: bool,

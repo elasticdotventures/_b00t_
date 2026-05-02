@@ -160,7 +160,7 @@ fn scan_datums_recursive(
             scan_datums_recursive(&entry_path, datums, current_depth + 1, max_depth)?;
         } else if matches!(
             entry_path.extension().and_then(|s| s.to_str()),
-            Some("toml") | Some("tomllm") // 🤓 .tomllm = .toml + # comment annotations; TOML parses identically
+            Some("toml") | Some("tomllm") | Some("tomllmd") // 🤓 .tomllmd currently downgrades to the generic .tomllm parser path
         ) {
             if let Some(filename) = entry_path.file_name().and_then(|s| s.to_str()) {
                 // Skip non-datum files
@@ -174,16 +174,35 @@ fn scan_datums_recursive(
                 // Try to parse as unified config
                 if let Ok(content) = fs::read_to_string(&entry_path) {
                     if let Ok(config) = toml::from_str::<UnifiedConfig>(&content) {
-                        // Strip outer extension (.tomllm or .toml) for datum key
-                        // 🤓 .tomllm wins over .toml on key collision (richer tribal context)
-                        let ext = if filename.ends_with(".tomllm") {
+                        // Strip outer extension (.tomllmd / .tomllm / .toml) for datum key.
+                        // 🤓 precedence: .tomllmd > .tomllm > .toml.
+                        let ext = if filename.ends_with(".tomllmd") {
+                            ".tomllmd"
+                        } else if filename.ends_with(".tomllm") {
                             ".tomllm"
                         } else {
                             ".toml"
                         };
                         let datum_key = filename.trim_end_matches(ext).to_string();
                         let path_str = entry_path.to_string_lossy().to_string();
-                        if ext == ".tomllm" || !datums.contains_key(&datum_key) {
+                        let new_rank = match ext {
+                            ".tomllmd" => 3,
+                            ".tomllm" => 2,
+                            _ => 1,
+                        };
+                        let current_rank = datums
+                            .get(&datum_key)
+                            .map(|(_, existing_path)| {
+                                if existing_path.ends_with(".tomllmd") {
+                                    3
+                                } else if existing_path.ends_with(".tomllm") {
+                                    2
+                                } else {
+                                    1
+                                }
+                            })
+                            .unwrap_or(0);
+                        if new_rank >= current_rank {
                             datums.insert(datum_key, (config.b00t, path_str));
                         }
                     }
@@ -1046,5 +1065,61 @@ output = "Building..."
         assert_eq!(usage[0].description, "List recipes");
         assert_eq!(usage[0].command, "just -l");
         assert_eq!(usage[1].output, Some("Building...".to_string()));
+    }
+
+    // ── tomllmd precedence tests ──────────────────────────────────────────────
+
+    #[test]
+    fn test_tomllmd_wins_over_tomllm_and_toml_same_key() {
+        // .tomllmd > .tomllm > .toml for the same datum key
+        let temp_dir = TempDir::new().unwrap();
+        let b00t_path = temp_dir.path().to_str().unwrap();
+
+        // All three variants present for the same key "tool.cli"
+        create_test_datum_file(
+            temp_dir.path(),
+            "tool.cli.toml",
+            "[b00t]\nname = \"tool-toml\"\ntype = \"cli\"\nhint = \"toml variant\"\n",
+        );
+        create_test_datum_file(
+            temp_dir.path(),
+            "tool.cli.tomllm",
+            "[b00t]\nname = \"tool-tomllm\"\ntype = \"cli\"\nhint = \"tomllm variant\"\n",
+        );
+        create_test_datum_file(
+            temp_dir.path(),
+            "tool.cli.tomllmd",
+            "[b00t]\nname = \"tool-tomllmd\"\ntype = \"cli\"\nhint = \"tomllmd variant\"\n",
+        );
+
+        let datums = get_all_datums_with_paths(b00t_path, Some(0)).unwrap();
+        // The key strips the outer extension, so all three map to "tool.cli"
+        assert!(datums.contains_key("tool.cli"), "key tool.cli must exist");
+        let (datum, path) = datums.get("tool.cli").unwrap();
+        assert_eq!(datum.name, "tool-tomllmd", ".tomllmd must win");
+        assert!(path.ends_with(".tomllmd"), "path must end with .tomllmd");
+    }
+
+    #[test]
+    fn test_tomllm_wins_over_toml_same_key() {
+        let temp_dir = TempDir::new().unwrap();
+        let b00t_path = temp_dir.path().to_str().unwrap();
+
+        create_test_datum_file(
+            temp_dir.path(),
+            "tool.cli.toml",
+            "[b00t]\nname = \"tool-toml\"\ntype = \"cli\"\nhint = \"toml variant\"\n",
+        );
+        create_test_datum_file(
+            temp_dir.path(),
+            "tool.cli.tomllm",
+            "[b00t]\nname = \"tool-tomllm\"\ntype = \"cli\"\nhint = \"tomllm variant\"\n",
+        );
+
+        let datums = get_all_datums_with_paths(b00t_path, Some(0)).unwrap();
+        assert!(datums.contains_key("tool.cli"));
+        let (datum, path) = datums.get("tool.cli").unwrap();
+        assert_eq!(datum.name, "tool-tomllm", ".tomllm must win over .toml");
+        assert!(path.ends_with(".tomllm"));
     }
 }

@@ -352,7 +352,11 @@ fn get_parent_pid() -> Option<u32> {
     {
         unsafe {
             let ppid = libc::getppid();
-            if ppid > 0 { Some(ppid as u32) } else { None }
+            if ppid > 0 {
+                Some(ppid as u32)
+            } else {
+                None
+            }
         }
     }
     #[cfg(not(unix))]
@@ -540,10 +544,16 @@ fn load_role_datum_skills(role: &str) -> Vec<String> {
     let candidates = [
         dirs::home_dir()
             .unwrap_or_default()
+            .join(format!(".dotfiles/_b00t_/{}.role.tomllmd", role)),
+        dirs::home_dir()
+            .unwrap_or_default()
             .join(format!(".dotfiles/_b00t_/{}.role.tomllm", role)),
         dirs::home_dir()
             .unwrap_or_default()
             .join(format!(".dotfiles/_b00t_/{}.role.toml", role)),
+        dirs::home_dir()
+            .unwrap_or_default()
+            .join(format!(".b00t/_b00t_/{}.role.tomllmd", role)),
         dirs::home_dir()
             .unwrap_or_default()
             .join(format!(".b00t/_b00t_/{}.role.tomllm", role)),
