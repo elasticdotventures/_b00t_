@@ -54,8 +54,10 @@ pub mod soul_writer;
 pub mod step;
 pub mod traits;
 pub mod utils;
+pub mod viz;
 pub mod whoami;
 pub use traits::*;
+pub use datum_utils::VisualizationSpec;
 
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Default)]
 pub struct ApiProvides {

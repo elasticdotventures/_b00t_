@@ -15,6 +15,24 @@ use std::path::Path;
 /// Maximum recursion depth for datum discovery
 const DEFAULT_MAX_DEPTH: usize = 10;
 
+/// Visualization specification for diagram rendering
+/// Schema extension for [sections.visualization] in .tomllmd files
+/// Part of b00t ↔ l3dg3rr integration (Phase 1)
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct VisualizationSpec {
+    /// Diagram type: "rhai_dsl" | "mermaid" | "plantuml" | "auto"
+    #[serde(rename = "type")]
+    pub viz_type: String,
+
+    /// Rendering options: "isometric", "mermaid_fallback", "no_cache", etc.
+    #[serde(default)]
+    pub render_opts: Vec<String>,
+
+    /// Auto-detection hint for diagram scope: "graph" | "dag" | "state_machine"
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub auto_scope: Option<String>,
+}
+
 /// Datum search result with file path metadata
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DatumSearchResult {
