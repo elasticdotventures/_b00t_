@@ -169,7 +169,12 @@ impl InvariantGraph {
             if !ids.contains(edge.to.as_str()) {
                 return Err(GraphValidationError::MissingEdgeEndpoint(edge.to.clone()));
             }
-            if edge.from == edge.to && edge.label.is_none() {
+            if edge.from == edge.to
+                && edge
+                    .label
+                    .as_deref()
+                    .is_none_or(|label| label.trim().is_empty())
+            {
                 return Err(GraphValidationError::UnlabelledSelfEdge(edge.from.clone()));
             }
         }
