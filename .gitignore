@@ -375,3 +375,4 @@ ralph/
 # nested .b00t dirs inside crates (runtime state)
 b00t-cli/.b00t/
 vendor/l3dg3rr/
+/plantuml-server
