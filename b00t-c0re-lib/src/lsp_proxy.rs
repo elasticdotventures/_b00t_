@@ -15,7 +15,6 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::process::Stdio;
 use tokio::process::{Child, Command};
-use tokio::sync::mpsc;
 
 /// LSP Proxy configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
