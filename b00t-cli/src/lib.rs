@@ -428,7 +428,11 @@ impl DatumType {
             DatumType::Ai,
             DatumType::Justfile,
         ] {
-            if filename.ends_with(t.base_suffix()) {
+            let base = t.base_suffix();
+            if filename.ends_with(base)
+                || filename.ends_with(&format!("{base}.toml"))
+                || filename.ends_with(&format!("{base}.tomllm"))
+            {
                 return *t;
             }
         }
@@ -2106,6 +2110,15 @@ fn check_readme_status(memory: &mut session_memory::SessionMemory) -> Result<()>
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn test_datum_type_from_filename_accepts_typed_toml_extensions() {
+        assert_eq!(crate::DatumType::from_filename("b00t.cli"), crate::DatumType::Cli);
+        assert_eq!(crate::DatumType::from_filename("b00t.cli.toml"), crate::DatumType::Cli);
+        assert_eq!(crate::DatumType::from_filename("executive.role.tomllm"), crate::DatumType::Role);
+        assert_eq!(crate::DatumType::from_filename("irontology.mcp.toml"), crate::DatumType::Mcp);
+        assert_eq!(crate::DatumType::from_filename("unknown.toml"), crate::DatumType::Unknown);
+    }
+
     #[test]
     fn test_bootdatum_uninstall_fields_deserialize() {
         let toml_str = r#"
