@@ -36,6 +36,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
+          CURRENT_PR: ${{ github.event.pull_request.number || '' }}
         run: |
           set -eo pipefail
           declare -a success
@@ -82,5 +83,13 @@ jobs:
 
           if [ "${#failed[@]}" -gt 0 ]; then
             echo "::warning title=Conflicts detected::⚠️ Unable to integrate PRs #${failed[*]}." # output: summary warning
-            exit 1
+            if [ -z "$CURRENT_PR" ]; then
+              exit 1
+            fi
+            for pr in "${failed[@]}"; do
+              if [ "$pr" = "$CURRENT_PR" ]; then
+                exit 1
+              fi
+            done
+            echo "::notice title=Current PR integrated::PR #$CURRENT_PR merged into next; unrelated conflicts did not fail this check." # output: current PR status
           fi
