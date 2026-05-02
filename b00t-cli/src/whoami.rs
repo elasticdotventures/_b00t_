@@ -93,14 +93,15 @@ pub fn whoami(path: &str, role_override: Option<String>, with_skills: bool) -> R
 }
 
 #[derive(Clone, Debug, PartialEq)]
-struct RoleDetails {
-    name: String,
-    hint: String,
-    skills: Vec<String>,
-    compliance: Vec<String>,
-    entangled_agents: Vec<String>,
-    entangled_cli: Vec<String>,
-    entangled_mcp: Vec<String>,
+pub struct RoleDetails {
+    pub name: String,
+    pub hint: String,
+    pub skills: Vec<String>,
+    pub compliance: Vec<String>,
+    pub entangled_agents: Vec<String>,
+    pub entangled_cli: Vec<String>,
+    pub entangled_mcp: Vec<String>,
+    pub channel_prefix: Option<String>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -143,6 +144,7 @@ fn load_role_datum(role: &str, path: &str) -> Option<RoleDetails> {
     let entangled_agents = datum.entangled_agents.unwrap_or_default();
     let entangled_cli = datum.entangled_cli.unwrap_or_default();
     let entangled_mcp = datum.entangled_mcp.unwrap_or_default();
+    let channel_prefix = datum.channel_prefix;
 
     Some(RoleDetails {
         name: datum.name,
@@ -152,6 +154,7 @@ fn load_role_datum(role: &str, path: &str) -> Option<RoleDetails> {
         entangled_agents,
         entangled_cli,
         entangled_mcp,
+        channel_prefix,
     })
 }
 
@@ -459,6 +462,7 @@ compliance = ["monitor chat"]
 entangled_agents = ["ralph.agent"]
 entangled_cli = ["b00t.cli"]
 entangled_mcp = ["ralph.mcp"]
+channel_prefix = "agent:executive:"
 "#,
         )
         .unwrap();
@@ -468,6 +472,7 @@ entangled_mcp = ["ralph.mcp"]
         assert_eq!(role.entangled_agents, vec!["ralph.agent".to_string()]);
         assert_eq!(role.entangled_cli, vec!["b00t.cli".to_string()]);
         assert_eq!(role.entangled_mcp, vec!["ralph.mcp".to_string()]);
+        assert_eq!(role.channel_prefix, Some("agent:executive:".to_string()));
     }
 
     #[test]

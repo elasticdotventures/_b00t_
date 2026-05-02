@@ -6,15 +6,10 @@ use std::fs;
 use std::process::Command;
 use tempfile::TempDir;
 
+mod common;
+
 fn is_infrastructure_available() -> bool {
     env::var("TEST_WITH_QDRANT").is_ok() || env::var("QDRANT_URL").is_ok()
-}
-
-fn get_b00t_binary() -> String {
-    env::var("CARGO_BIN_EXE_b00t-cli").unwrap_or_else(|_| {
-        let manifest_dir = env::var("CARGO_MANIFEST_DIR").unwrap();
-        format!("{}/target/debug/b00t-cli", manifest_dir)
-    })
 }
 
 fn setup_temp_dir() -> TempDir {
@@ -33,7 +28,7 @@ mod cli_grok_learn {
             return;
         }
 
-        let b00t = get_b00t_binary();
+        let b00t = common::get_b00t_binary();
 
         // Test learning from direct content
         let output = Command::new(&b00t)
@@ -79,7 +74,7 @@ mod cli_grok_learn {
         )
         .expect("Failed to write test file");
 
-        let b00t = get_b00t_binary();
+        let b00t = common::get_b00t_binary();
 
         // Read the file contents so we pass the actual string, not a shell expansion literal.
         let file_contents = fs::read_to_string(&test_file).expect("Failed to read test file");
@@ -117,7 +112,7 @@ mod cli_grok_learn {
             return;
         }
 
-        let b00t = get_b00t_binary();
+        let b00t = common::get_b00t_binary();
 
         // Test learning from URL (using httpbin for testing)
         let output = Command::new(&b00t)
@@ -151,7 +146,7 @@ mod cli_grok_learn {
 
     #[test]
     fn test_cli_grok_learn_missing_topic() {
-        let b00t = get_b00t_binary();
+        let b00t = common::get_b00t_binary();
 
         // Try to learn without specifying topic
         let output = Command::new(&b00t)
@@ -185,7 +180,7 @@ mod cli_grok_learn {
             return;
         }
 
-        let b00t = get_b00t_binary();
+        let b00t = common::get_b00t_binary();
         let topic = "grok_workflow_test";
 
         println!("\n=== STEP 1: Learn from content ===");
@@ -233,7 +228,7 @@ mod cli_learn_display_flags {
     fn test_cli_learn_toc_flag() {
         let temp_dir = setup_temp_dir();
         let temp_path = temp_dir.path().to_str().unwrap();
-        let b00t = get_b00t_binary();
+        let b00t = common::get_b00t_binary();
 
         // Create a test learn file with multiple sections
         let learn_dir = temp_dir.path().join("learn");
@@ -262,12 +257,12 @@ mod cli_learn_display_flags {
         );
 
         let stdout = String::from_utf8_lossy(&output.stdout);
-        // Check for stable TOC markers based on the known section headings.
+        // Check for stable TOC markers based on the CLI's top-level knowledge sections.
         assert!(
-            stdout.contains("Section 1")
-                && stdout.contains("Section 2")
-                && stdout.contains("Section 3"),
-            "TOC output did not list expected sections. Output was:\n{}",
+            stdout.contains("Table of Contents: test_topic")
+                && stdout.contains("Learn Content (_b00t_/learn/test_topic.md)")
+                && stdout.contains("Use: b00t learn test_topic --section <num>"),
+            "TOC output did not list expected knowledge sections. Output was:\n{}",
             stdout
         );
     }
@@ -276,7 +271,7 @@ mod cli_learn_display_flags {
     fn test_cli_learn_section_flag() {
         let temp_dir = setup_temp_dir();
         let temp_path = temp_dir.path().to_str().unwrap();
-        let b00t = get_b00t_binary();
+        let b00t = common::get_b00t_binary();
 
         let learn_dir = temp_dir.path().join("learn");
         fs::create_dir_all(&learn_dir).expect("Failed to create learn dir");
@@ -314,7 +309,7 @@ mod cli_learn_display_flags {
     fn test_cli_learn_concise_flag() {
         let temp_dir = setup_temp_dir();
         let temp_path = temp_dir.path().to_str().unwrap();
-        let b00t = get_b00t_binary();
+        let b00t = common::get_b00t_binary();
 
         let learn_dir = temp_dir.path().join("learn");
         fs::create_dir_all(&learn_dir).expect("Failed to create learn dir");
@@ -348,7 +343,7 @@ mod cli_learn_display_flags {
     fn test_cli_learn_invalid_section() {
         let temp_dir = setup_temp_dir();
         let temp_path = temp_dir.path().to_str().unwrap();
-        let b00t = get_b00t_binary();
+        let b00t = common::get_b00t_binary();
 
         // Try to access section 99 that doesn't exist
         let output = Command::new(&b00t)
@@ -374,7 +369,7 @@ mod cli_error_paths {
     fn test_cli_learn_search_nonexistent_topic() {
         let temp_dir = setup_temp_dir();
         let temp_path = temp_dir.path().to_str().unwrap();
-        let b00t = get_b00t_binary();
+        let b00t = common::get_b00t_binary();
 
         let output = Command::new(&b00t)
             .args(&[
@@ -408,7 +403,7 @@ mod cli_error_paths {
 
     #[test]
     fn test_cli_grok_digest_without_topic() {
-        let b00t = get_b00t_binary();
+        let b00t = common::get_b00t_binary();
 
         let output = Command::new(&b00t)
             .args(&["grok", "digest", "some content"])
@@ -427,7 +422,7 @@ mod cli_error_paths {
 
     #[test]
     fn test_cli_grok_ask_without_topic_when_required() {
-        let b00t = get_b00t_binary();
+        let b00t = common::get_b00t_binary();
 
         // When using --rag, topic is required
         let output = Command::new(&b00t)
@@ -461,7 +456,7 @@ mod cli_error_paths {
             return;
         }
 
-        let b00t = get_b00t_binary();
+        let b00t = common::get_b00t_binary();
 
         // Test multiple concurrent digest operations
         let handles: Vec<_> = (0..3)

@@ -1,6 +1,19 @@
 use assert_cmd::prelude::*;
+use std::fs;
 use std::process::Command;
 use tempfile::tempdir;
+
+fn write_claude_runtime_fixture(root: &std::path::Path) -> std::io::Result<()> {
+    let claude_root = root.join("_b00t_/runtimes/claude");
+    fs::create_dir_all(claude_root.join("skills"))?;
+    fs::create_dir_all(claude_root.join("agents"))?;
+    fs::create_dir_all(claude_root.join("hooks"))?;
+    fs::write(claude_root.join("skills/test.md"), "# test skill\n")?;
+    fs::write(claude_root.join("agents/test.md"), "# test agent\n")?;
+    fs::write(claude_root.join("hooks/test.js"), "console.log('test');\n")?;
+    fs::write(claude_root.join("settings_fragment.json"), "{}\n")?;
+    Ok(())
+}
 
 /// Verify that `b00t-cli install --help` exposes all new flag surface area.
 #[test]
@@ -91,18 +104,18 @@ fn test_install_mixed_runtimes_with_unknown_exits_nonzero() -> Result<(), Box<dy
     Ok(())
 }
 
-/// `--runtimes claude --scope local --yes` with an empty B00T_ROOT should exit 0.
-/// Source files are absent so FileCopyPack silently skips, but argument parsing
-/// and the runtime dispatch path must succeed end-to-end.
+/// `--runtimes claude --scope local --yes` with runtime-source fixtures should exit 0.
+/// Content packs are required, so the fixture must include minimal source dirs.
 #[test]
 fn test_install_valid_runtime_local_scope_exits_zero() -> Result<(), Box<dyn std::error::Error>> {
     let b00t_root = tempdir()?;
     let work_dir = tempdir()?;
+    write_claude_runtime_fixture(b00t_root.path())?;
+    let runtimes_source_root = b00t_root.path().join("_b00t_/runtimes");
 
     let mut cmd = Command::cargo_bin("b00t-cli")?;
     cmd.current_dir(work_dir.path())
-        // B00T_ROOT controls runtimes_source_root(); empty dir → silent skip for all packs
-        .env("B00T_ROOT", b00t_root.path())
+        .env("B00T_RUNTIMES_SOURCE_ROOT", &runtimes_source_root)
         .args([
             "--path",
             b00t_root.path().to_str().unwrap(),
@@ -132,10 +145,12 @@ fn test_install_valid_runtime_local_scope_exits_zero() -> Result<(), Box<dyn std
 fn test_install_comma_separated_runtimes_parsed() -> Result<(), Box<dyn std::error::Error>> {
     let b00t_root = tempdir()?;
     let work_dir = tempdir()?;
+    write_claude_runtime_fixture(b00t_root.path())?;
+    let runtimes_source_root = b00t_root.path().join("_b00t_/runtimes");
 
     let mut cmd = Command::cargo_bin("b00t-cli")?;
     cmd.current_dir(work_dir.path())
-        .env("B00T_ROOT", b00t_root.path())
+        .env("B00T_RUNTIMES_SOURCE_ROOT", &runtimes_source_root)
         .args([
             "--path",
             b00t_root.path().to_str().unwrap(),
@@ -170,9 +185,11 @@ fn test_install_scope_global_explicit_accepted() -> Result<(), Box<dyn std::erro
     let b00t_root = tempdir()?;
     // Redirect global target to a temp ~/.claude equivalent via HOME override
     let fake_home = tempdir()?;
+    write_claude_runtime_fixture(b00t_root.path())?;
+    let runtimes_source_root = b00t_root.path().join("_b00t_/runtimes");
 
     let mut cmd = Command::cargo_bin("b00t-cli")?;
-    cmd.env("B00T_ROOT", b00t_root.path())
+    cmd.env("B00T_RUNTIMES_SOURCE_ROOT", &runtimes_source_root)
         .env("HOME", fake_home.path())
         .args([
             "--path",
