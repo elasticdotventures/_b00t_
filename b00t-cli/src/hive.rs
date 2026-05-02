@@ -1043,4 +1043,75 @@ working_directory = "/tmp/test"
         assert_eq!(spec.limit_nofile, Some(1024));
         assert_eq!(spec.working_directory.as_deref(), Some("/tmp/test"));
     }
+
+    // ── load_profile precedence tests ─────────────────────────────────────────
+
+    fn minimal_hive_content(name: &str, hint: &str) -> String {
+        format!(
+            "[b00t]\nname = \"{}\"\ntype = \"hive_profile\"\nhint = \"{}\"\n",
+            name, hint
+        )
+    }
+
+    fn write_profile_file(dir: &std::path::Path, name: &str, ext: &str, hint: &str) {
+        std::fs::write(
+            dir.join(format!("{}{}", name, ext)),
+            minimal_hive_content(name, hint),
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn test_load_profile_prefers_hive_tomllmd() {
+        let dir = tempfile::tempdir().unwrap();
+        let name = "myprofile";
+
+        // All five candidates present
+        write_profile_file(dir.path(), name, ".hive.toml", "hive-toml");
+        write_profile_file(dir.path(), name, ".hive.tomllm", "hive-tomllm");
+        write_profile_file(dir.path(), name, ".stack.tomllm", "stack-tomllm");
+        write_profile_file(dir.path(), name, ".stack.tomllmd", "stack-tomllmd");
+        write_profile_file(dir.path(), name, ".hive.tomllmd", "hive-tomllmd");
+
+        let profile = load_profile(name, dir.path()).unwrap();
+        assert_eq!(profile.hint, "hive-tomllmd", ".hive.tomllmd must win");
+    }
+
+    #[test]
+    fn test_load_profile_prefers_hive_tomllm_over_stack_and_toml() {
+        let dir = tempfile::tempdir().unwrap();
+        let name = "myprofile";
+
+        write_profile_file(dir.path(), name, ".hive.toml", "hive-toml");
+        write_profile_file(dir.path(), name, ".hive.tomllm", "hive-tomllm");
+        write_profile_file(dir.path(), name, ".stack.tomllm", "stack-tomllm");
+
+        let profile = load_profile(name, dir.path()).unwrap();
+        assert_eq!(profile.hint, "hive-tomllm");
+    }
+
+    #[test]
+    fn test_load_profile_prefers_stack_tomllmd_over_stack_tomllm_and_hive_toml() {
+        let dir = tempfile::tempdir().unwrap();
+        let name = "myprofile";
+
+        write_profile_file(dir.path(), name, ".hive.toml", "hive-toml");
+        write_profile_file(dir.path(), name, ".stack.tomllm", "stack-tomllm");
+        write_profile_file(dir.path(), name, ".stack.tomllmd", "stack-tomllmd");
+
+        let profile = load_profile(name, dir.path()).unwrap();
+        assert_eq!(profile.hint, "stack-tomllmd");
+    }
+
+    #[test]
+    fn test_load_profile_not_found_error_lists_tried_extensions() {
+        let dir = tempfile::tempdir().unwrap();
+        let err = load_profile("ghost", dir.path()).unwrap_err();
+        let msg = err.to_string();
+        assert!(msg.contains(".hive.tomllmd"), "error must mention .hive.tomllmd");
+        assert!(msg.contains(".hive.tomllm"), "error must mention .hive.tomllm");
+        assert!(msg.contains(".stack.tomllmd"), "error must mention .stack.tomllmd");
+        assert!(msg.contains(".stack.tomllm"), "error must mention .stack.tomllm");
+        assert!(msg.contains(".hive.toml"), "error must mention .hive.toml");
+    }
 }

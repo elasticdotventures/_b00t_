@@ -656,7 +656,7 @@ mod tests {
 
     #[test]
     fn test_whatismy_commands_exist() {
-        let _lock = TEST_ENV_LOCK.lock().unwrap();
+        let _lock = crate::test_env::ENV_LOCK.lock().unwrap();
         let _guard = TestRootGuard::new();
         let agent_cmd = WhatismyCommands::Agent {
             no_env: false,

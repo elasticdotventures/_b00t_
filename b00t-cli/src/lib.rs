@@ -2127,6 +2127,17 @@ fn check_readme_status(memory: &mut session_memory::SessionMemory) -> Result<()>
     Ok(())
 }
 
+/// Crate-wide lock for tests that mutate process-wide environment variables.
+/// A per-module lock cannot prevent concurrent mutations from tests in *other*
+/// modules; this single static is the authoritative guard for all env-var
+/// manipulation across the entire `b00t_cli` test suite.
+#[cfg(test)]
+pub mod test_env {
+    use once_cell::sync::Lazy;
+    use std::sync::Mutex;
+    pub static ENV_LOCK: Lazy<Mutex<()>> = Lazy::new(|| Mutex::new(()));
+}
+
 #[cfg(test)]
 mod tests {
     #[test]
@@ -2190,5 +2201,55 @@ hint = "containers"
         let config: crate::UnifiedConfig = toml::from_str(toml_str).unwrap();
         assert!(config.b00t.uninstall.is_none());
         assert!(config.b00t.hook_uninstall.is_none());
+    }
+
+    // ── get_config tomllmd precedence ─────────────────────────────────────────
+
+    #[test]
+    fn test_get_config_prefers_tomllmd_over_tomllm_and_toml() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().to_str().unwrap();
+
+        // Write all three extension variants for the same datum
+        std::fs::write(
+            dir.path().join("mytool.cli.toml"),
+            "[b00t]\nname = \"mytool-toml\"\ntype = \"cli\"\nhint = \"toml\"\n",
+        )
+        .unwrap();
+        std::fs::write(
+            dir.path().join("mytool.cli.tomllm"),
+            "[b00t]\nname = \"mytool-tomllm\"\ntype = \"cli\"\nhint = \"tomllm\"\n",
+        )
+        .unwrap();
+        std::fs::write(
+            dir.path().join("mytool.cli.tomllmd"),
+            "[b00t]\nname = \"mytool-tomllmd\"\ntype = \"cli\"\nhint = \"tomllmd\"\n",
+        )
+        .unwrap();
+
+        let (config, filename) = crate::get_config("mytool", path).unwrap();
+        assert_eq!(config.b00t.name, "mytool-tomllmd", ".tomllmd must be returned first");
+        assert!(filename.ends_with(".tomllmd"), "filename must end with .tomllmd, got {}", filename);
+    }
+
+    #[test]
+    fn test_get_config_falls_back_to_tomllm_when_no_tomllmd() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().to_str().unwrap();
+
+        std::fs::write(
+            dir.path().join("mytool.cli.toml"),
+            "[b00t]\nname = \"mytool-toml\"\ntype = \"cli\"\nhint = \"toml\"\n",
+        )
+        .unwrap();
+        std::fs::write(
+            dir.path().join("mytool.cli.tomllm"),
+            "[b00t]\nname = \"mytool-tomllm\"\ntype = \"cli\"\nhint = \"tomllm\"\n",
+        )
+        .unwrap();
+
+        let (config, filename) = crate::get_config("mytool", path).unwrap();
+        assert_eq!(config.b00t.name, "mytool-tomllm");
+        assert!(filename.ends_with(".tomllm"), "got {}", filename);
     }
 }
