@@ -52,6 +52,20 @@ jobs:
           mkdir -p public/l3dg3rr
           cp -R target/doc/* public/l3dg3rr/
           cp docs/l3dg3rr-visualization-utility.md public/l3dg3rr/README.md
+          cat > public/index.html <<'EOF'
+          <!DOCTYPE html>
+          <html lang="en">
+          <head>
+            <meta charset="utf-8" />
+            <meta http-equiv="refresh" content="0; url=./l3dg3rr/" />
+            <meta name="viewport" content="width=device-width, initial-scale=1" />
+            <title>l3dg3rr Utility Docs</title>
+          </head>
+          <body>
+            <p>Redirecting to <a href="./l3dg3rr/">l3dg3rr Utility Docs</a>…</p>
+          </body>
+          </html>
+          EOF
 
       - name: Upload docs artifact
         uses: actions/upload-artifact@v4
