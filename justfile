@@ -1,7 +1,6 @@
 # justfile for Rust Development Environment
 # Alias to get the Git repository root
 repo-root := env_var_or_default("JUST_REPO_ROOT", `git rev-parse --show-toplevel 2>/dev/null || echo .`)
-workspace_version := `if command -v toml >/dev/null 2>&1; then toml get Cargo.toml workspace.package.version | tr -d '"' ; else echo "0.0.0-unknown"; fi`
 
 
 
@@ -132,7 +131,7 @@ claim-crates:
 release:
     #!/bin/bash
     set -euo pipefail
-    VERSION="{{workspace_version}}"
+    VERSION=$(grep '^version = ' Cargo.toml | grep -oP '[\d]+\.[\d]+\.[\d]+')
 
     echo "🚀 Dispatching GitHub-native release for v${VERSION}..."
 
@@ -240,10 +239,7 @@ install:
     export PATH="${CARGO_HOME_VALUE}/bin:${PATH}"
     mkdir -p "${CARGO_HOME_VALUE}/bin"
 
-    # [1] [2] [3]: bump patch version then install
-    # 🤓 version bump required on every cargo install — tracks deployed vs source state
-    cargo ws version patch --no-git-commit --yes 2>/dev/null || \
-      sed -i 's/^version = "\([0-9]*\)\.\([0-9]*\)\.\([0-9]*\)"/echo "version = \"\1.\2.$((\3+1))\""/e' Cargo.toml
+    # [1] [2] [3]: install binaries (skip version bump - use `just bump` for that)
     cargo install --path b00t-mcp  --force
     cargo install --path b00t-cli  --force
     cargo install cocogitto --locked --force
@@ -437,7 +433,7 @@ clean-workflows:
         /repos/elasticdotventures/dotfiles/actions/runs/{}
 
 version:
-    echo "{{workspace_version}}"
+    @grep '^version = ' Cargo.toml | grep -oP '[\d]+\.[\d]+\.[\d]+'
 
 commit-hook:
     echo "removed"

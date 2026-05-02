@@ -35,7 +35,7 @@ tempfile = "3.13.0"
 rhai = { workspace = true }
 b00t-c0re-lib = { workspace = true }
 b00t-grok = { workspace = true }
-tomllm = { workspace = true }
+openssl-sys = { workspace = true }
 duct = "1.0"
 shellexpand = "3.1.0"
 shlex = "1.3"
