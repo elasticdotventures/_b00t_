@@ -275,7 +275,7 @@ prompt = "Validate all TOML files in _b00t_/ have required fields and valid synt
 
 ## Migration Path
 
-**From**: taskmaster-ai (b00t-wiggums dependency)
+**From**: taskmaster-ai via the now-sunset `b00t-wiggums` experiment
 ```
 PRD → taskmaster init → tasks.json → ralph loop
 ```

@@ -1,0 +1,2 @@
+---
+pi coding-agent memo (verified 2026-04-30): direct local path works via custom provider "llama-cpp" from ~/.pi/agent/models.json, not via the old :1234 gateway assumption. Required config: baseUrl=http://localhost:8001/v1, api=openai-completions, apiKey=local-b00t, model id ch0nky. Installed pi version validated: 0.70.6. Verification command: `pi -p --provider llama-cpp --model ch0nky 'Reply with READY and the model alias only.'` → `READY ch0nky`. Failure mode: 401 Invalid API Key means models.json still contains stale local-gemma4.

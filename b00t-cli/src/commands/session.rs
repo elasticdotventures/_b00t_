@@ -281,8 +281,12 @@ openai = "🤖 OpenAI"
 #[cfg(test)]
 mod tests {
     use super::*;
+    use once_cell::sync::Lazy;
     use std::fs;
+    use std::sync::Mutex;
     use tempfile::TempDir;
+
+    static TEST_ENV_LOCK: Lazy<Mutex<()>> = Lazy::new(|| Mutex::new(()));
 
     struct TestRootGuard {
         previous: Option<String>,

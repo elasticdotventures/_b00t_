@@ -38,8 +38,8 @@ impl TutorialCommands {
 pub fn default_role_path(role: &str) -> Vec<String> {
     let path: &[&str] = match role {
         "orchestrator" => &["gh", "just", "context7", "argo-cli"],
-        "analyst"      => &["gh", "uv", "context7"],
-        _              => &["gh", "just", "uv", "rustc", "context7"], // developer
+        "analyst" => &["gh", "uv", "context7"],
+        _ => &["gh", "just", "uv", "rustc", "context7"], // developer
     };
     path.iter().map(|s| s.to_string()).collect()
 }

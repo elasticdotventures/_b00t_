@@ -9,7 +9,7 @@
 use anyhow::{Context, Result};
 use b00t_c0re_lib::aaiii::SkillFeatureFlags;
 use b00t_c0re_lib::kv_store::{KvConfig, KvStore};
-use b00t_c0re_lib::redis::{RedisConfig, RedisComms};
+use b00t_c0re_lib::redis::{RedisComms, RedisConfig};
 use clap::Parser;
 
 #[derive(Parser, Clone)]
@@ -74,39 +74,31 @@ pub async fn handle_redis_command(cmd: RedisCommands, _force: bool) -> Result<()
         RedisCommands::Status => {
             println!("🔍 KV Store Status");
             println!("Backend: {}", backend);
-            println!("Host: {}:{}" , store.config().host, store.config().port);
+            println!("Host: {}:{}", store.config().host, store.config().port);
             match store.ping() {
                 Ok(true) => println!("Status: ✅ Connected"),
                 Ok(false) => println!("Status: ❌ Not responding"),
                 Err(e) => println!("Status: ❌ Error: {}", e),
             }
         }
-        RedisCommands::Ping => {
-            match store.ping() {
-                Ok(true) => println!("✅ PONG"),
-                Ok(false) => println!("❌ No response"),
-                Err(e) => println!("❌ Error: {}", e),
-            }
-        }
-        RedisCommands::Get { key } => {
-            match store.get(&key) {
-                Ok(Some(value)) => println!("{} = {}", key, value),
-                Ok(None) => println!("{} = (nil)", key),
-                Err(e) => eprintln!("Error: {}", e),
-            }
-        }
-        RedisCommands::Set { key, value, expire } => {
-            match store.set(&key, &value, expire) {
-                Ok(_) => println!("✅ OK"),
-                Err(e) => eprintln!("Error: {}", e),
-            }
-        }
-        RedisCommands::Del { key } => {
-            match store.del(&key) {
-                Ok(count) => println!("Deleted {} keys", count),
-                Err(e) => eprintln!("Error: {}", e),
-            }
-        }
+        RedisCommands::Ping => match store.ping() {
+            Ok(true) => println!("✅ PONG"),
+            Ok(false) => println!("❌ No response"),
+            Err(e) => println!("❌ Error: {}", e),
+        },
+        RedisCommands::Get { key } => match store.get(&key) {
+            Ok(Some(value)) => println!("{} = {}", key, value),
+            Ok(None) => println!("{} = (nil)", key),
+            Err(e) => eprintln!("Error: {}", e),
+        },
+        RedisCommands::Set { key, value, expire } => match store.set(&key, &value, expire) {
+            Ok(_) => println!("✅ OK"),
+            Err(e) => eprintln!("Error: {}", e),
+        },
+        RedisCommands::Del { key } => match store.del(&key) {
+            Ok(count) => println!("Deleted {} keys", count),
+            Err(e) => eprintln!("Error: {}", e),
+        },
     }
 
     Ok(())

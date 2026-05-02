@@ -25,7 +25,11 @@ Examples:\n\
   B00T_AGENT_PID=12345 b00t quit"
 )]
 pub struct QuitArgs {
-    #[clap(long, help = "Signal to send (default: SIGTERM=15)", default_value = "15")]
+    #[clap(
+        long,
+        help = "Signal to send (default: SIGTERM=15)",
+        default_value = "15"
+    )]
     pub signal: i32,
     #[clap(long, help = "Dry-run: print target PID without sending signal")]
     pub dry_run: bool,
@@ -36,11 +40,17 @@ pub fn handle_quit(args: &QuitArgs) -> Result<()> {
     let target_pid = resolve_agent_pid()?;
 
     if args.dry_run {
-        println!("[dry-run] would send signal {} to pid {}", args.signal, target_pid);
+        println!(
+            "[dry-run] would send signal {} to pid {}",
+            args.signal, target_pid
+        );
         return Ok(());
     }
 
-    println!("🔴 b00t quit: sending signal {} to agent pid={}", args.signal, target_pid);
+    println!(
+        "🔴 b00t quit: sending signal {} to agent pid={}",
+        args.signal, target_pid
+    );
 
     // Safety: can only target our own process tree (non-root)
     let ret = libc_kill(target_pid as i32, args.signal);
@@ -105,11 +115,13 @@ fn walk_to_agent(start_pid: u32) -> Option<u32> {
 #[cfg(target_os = "linux")]
 fn get_ppid(pid: u32) -> Result<u32> {
     let path = format!("/proc/{}/status", pid);
-    let content = std::fs::read_to_string(&path)
-        .map_err(|e| anyhow::anyhow!("read {}: {}", path, e))?;
+    let content =
+        std::fs::read_to_string(&path).map_err(|e| anyhow::anyhow!("read {}: {}", path, e))?;
     for line in content.lines() {
         if let Some(rest) = line.strip_prefix("PPid:") {
-            return Ok(rest.trim().parse::<u32>()
+            return Ok(rest
+                .trim()
+                .parse::<u32>()
                 .map_err(|_| anyhow::anyhow!("parse PPid from {}", path))?);
         }
     }

@@ -2,7 +2,8 @@
 
 fn env_bool(name, default_val) {
     let v = get_env(name);
-    if v == null { return default_val; }
+    // Check for empty string, not null (get_env returns "" for missing vars)
+    if v == "" { return default_val; }
     if v == "true" || v == "1" || v == "yes" || v == "y" || v == "TRUE" || v == "YES" || v == "Y" { return true; }
     if v == "false" || v == "0" || v == "no" || v == "n" || v == "FALSE" || v == "NO" || v == "N" { return false; }
     return default_val;

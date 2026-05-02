@@ -11,7 +11,7 @@ use b00t_c0re_lib::agent_coordination::{
 };
 use b00t_c0re_lib::redis::{AgentStatus, RedisComms, RedisConfig};
 use clap::Parser;
-use std::collections::HashMap;
+use std::collections::{HashMap, BTreeMap};
 use std::path::PathBuf;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
@@ -75,13 +75,22 @@ pub enum AgentCommands {
         #[arg(long, help = "Block until completion")]
         blocking: bool,
 
-        #[arg(long, help = "Inject skill instructions into task context (skill name)")]
+        #[arg(
+            long,
+            help = "Inject skill instructions into task context (skill name)"
+        )]
         skill: Option<String>,
 
-        #[arg(long, help = "Inject role constraints into task context (role datum name)")]
+        #[arg(
+            long,
+            help = "Inject role constraints into task context (role datum name)"
+        )]
         role: Option<String>,
 
-        #[arg(long, help = "Expected output contract enforced at completion (e.g. 'PASS|FAIL:<5lines>')")]
+        #[arg(
+            long,
+            help = "Expected output contract enforced at completion (e.g. 'PASS|FAIL:<5lines>')"
+        )]
         output_contract: Option<String>,
     },
 
@@ -446,7 +455,8 @@ async fn handle_delegate(
     let deadline_duration = deadline.map(|mins| Duration::from_secs(mins * 60));
 
     // Build enriched task description with skill/role context injection
-    let enriched_description = build_enriched_description(description, skill, role, output_contract);
+    let enriched_description =
+        build_enriched_description(description, skill, role, output_contract);
 
     println!("📋 Delegating task {} to {}", task_id, worker);
     if skill.is_some() || role.is_some() {
@@ -721,7 +731,11 @@ async fn handle_start_all(dir: &PathBuf) -> Result<()> {
 
 /// Direct deterministic agent invocation — no Redis, no Python, no ralph.
 /// Loads [b00t.agent.executor] from <agent>.agent.toml, runs invoke_agent_executor() loop.
-async fn handle_invoke(agent: &str, prompt: &str, config_override: Option<&std::path::Path>) -> Result<()> {
+async fn handle_invoke(
+    agent: &str,
+    prompt: &str,
+    config_override: Option<&std::path::Path>,
+) -> Result<()> {
     use b00t_c0re_lib::agent_manager::{AgentManager, invoke_agent_executor};
 
     // Resolve config path: override → _b00t_/<agent>.agent.toml → cwd search
@@ -733,21 +747,23 @@ async fn handle_invoke(agent: &str, prompt: &str, config_override: Option<&std::
         if candidate.exists() {
             candidate
         } else {
-            anyhow::bail!("No config found for agent '{}' at {}", agent, candidate.display());
+            anyhow::bail!(
+                "No config found for agent '{}' at {}",
+                agent,
+                candidate.display()
+            );
         }
     };
 
     let config = AgentManager::load_config(&config_path).await?;
 
-    let executor = config
-        .b00t
-        .agent
-        .executor
-        .as_ref()
-        .ok_or_else(|| anyhow::anyhow!(
+    let executor = config.b00t.agent.executor.as_ref().ok_or_else(|| {
+        anyhow::anyhow!(
             "Agent '{}' has no [b00t.agent.executor] section in {}",
-            agent, config_path.display()
-        ))?;
+            agent,
+            config_path.display()
+        )
+    })?;
 
     // Merge agent env into process env
     let mut env: std::collections::HashMap<String, String> = std::env::vars().collect();
@@ -755,8 +771,15 @@ async fn handle_invoke(agent: &str, prompt: &str, config_override: Option<&std::
         env.extend(agent_env.clone());
     }
 
-    println!("🤖 Invoking {} (max {} iterations)", agent, executor.max_iterations);
-    println!("   cli: {} {}", executor.cli_path, executor.cli_args.join(" "));
+    println!(
+        "🤖 Invoking {} (max {} iterations)",
+        agent, executor.max_iterations
+    );
+    println!(
+        "   cli: {} {}",
+        executor.cli_path,
+        executor.cli_args.join(" ")
+    );
 
     let result = invoke_agent_executor(executor, &env, prompt)
         .map_err(|e| anyhow::anyhow!("Agent invocation failed: {}", e))?;
@@ -1072,7 +1095,8 @@ mod tests {
 
     #[test]
     fn test_build_enriched_description_with_output_contract() {
-        let result = build_enriched_description("run tests", None, None, Some("PASS|FAIL:<5lines>"));
+        let result =
+            build_enriched_description("run tests", None, None, Some("PASS|FAIL:<5lines>"));
         assert!(result.contains("[OUTPUT CONTRACT: PASS|FAIL:<5lines>]"));
         assert!(result.contains("run tests"));
         assert!(result.contains("---"));
@@ -1081,8 +1105,109 @@ mod tests {
     #[test]
     fn test_build_enriched_description_with_missing_skill_graceful() {
         // Skill not found — should not panic, just note it
-        let result = build_enriched_description("do work", Some("nonexistent-skill-xyz"), None, None);
+        let result =
+            build_enriched_description("do work", Some("nonexistent-skill-xyz"), None, None);
         assert!(result.contains("nonexistent-skill-xyz"));
         assert!(result.contains("do work"));
     }
+}
+
+/// Establish Redis pub/sub channels for role-based delegation to entangled agents.
+///
+/// Creates channels in format: `agent:{role}:{agent_name}` for each entangled agent.
+/// Enables captain→worker delegation through role-specific channels.
+pub async fn setup_entangled_channels(
+    role_datum: &crate::whoami::RoleDetails,
+    path: &str,
+) -> Result<BTreeMap<String, String>> {
+    let mut channels = BTreeMap::new();
+    let role = &role_datum.name;
+    
+    // Get channel_prefix from role datum, default to "agent:{role}:"
+    let prefix = role_datum.channel_prefix.clone()
+        .unwrap_or_else(|| format!("agent:{}:", role));
+
+    for agent_name in &role_datum.entangled_agents {
+        let channel = format!("{}{}", prefix, agent_name);
+        println!("📡 Channel: {}", channel);
+        channels.insert(agent_name.clone(), channel);
+    }
+
+    Ok(channels)
+}
+
+/// Get the delegation channel for a specific worker agent.
+/// Falls back to default global channel if role not set or doesn't have entangled_agents.
+fn get_delegation_channel(
+    worker: &str,
+    role: Option<&str>,
+    entangled_channels: &BTreeMap<String, String>,
+) -> String {
+    // First check if we have a role-specific channel for this worker
+    if let Some(channel) = entangled_channels.get(worker) {
+        return channel.clone();
+    }
+    
+    // Fallback to default global channel
+    format!("agent:captain:{}", worker)
+}
+
+/// Resolve entangled channels for a role from the datum system.
+async fn resolve_role_channels(
+    role_name: Option<&str>,
+    path: &str,
+) -> Result<(Option<String>, BTreeMap<String, String>)> {
+    let mut channels = BTreeMap::new();
+    let channel_prefix = if let Some(role) = role_name {
+        // Try to load role datum
+        let b00t_dirs: Vec<_> = [
+            std::env::current_dir().ok().map(|d| d.join("_b00t_")),
+            dirs::home_dir().map(|d| d.join(".b00t").join("_b00t_")),
+        ]
+        .into_iter()
+        .flatten()
+        .filter(|p| p.is_dir())
+        .collect();
+
+        for dir in &b00t_dirs {
+            let role_path = dir.join(format!("{}.role.toml", role));
+            if role_path.exists() {
+                // Try to load from file
+                if let Ok(content) = std::fs::read_to_string(&role_path) {
+                    if let Ok(value) = toml::from_str::<toml::Value>(&content) {
+                        let datum = value.get("b00t");
+                        let entangled = datum.and_then(|d| d.get("entangled_agents"))
+                            .and_then(|a| a.as_array())
+                            .map(|arr| {
+                                arr.iter()
+                                    .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                                    .collect::<Vec<_>>()
+                            });
+                        
+                        let prefix = datum.and_then(|d| d.get("channel_prefix"))
+                            .and_then(|p| p.as_str())
+                            .map(|s| s.to_string());
+                        
+                        let prefix = prefix.clone();  // Clone for later use
+                        
+                        if let Some(agents) = entangled {
+                            let prefix = prefix.as_ref().map(|p| p.to_string())
+                                .unwrap_or_else(|| format!("agent:{}:", role));
+                            for agent_name in agents {
+                                let channel = format!("{}{}", prefix, agent_name);
+                                channels.insert(agent_name.clone(), channel);
+                            }
+                        }
+                        
+                        return Ok((prefix, channels));
+                    }
+                }
+            }
+        }
+        None
+    } else {
+        None
+    };
+
+    Ok((channel_prefix, channels))
 }

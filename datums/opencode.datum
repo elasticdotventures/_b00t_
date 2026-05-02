@@ -1,0 +1,69 @@
+# opencode datum
+
+## Overview
+
+**opencode** is an open-source AI coding framework that serves as the primary agent harness for b00t. It provides AI-powered code generation, context-aware execution, and extensible agent workflows.
+
+## Integration
+
+- **CLI**: `/home/brianh/.local/share/pnpm/opencode` (v1.14.18+)
+- **MCP**: `b00t-mcp` registered as MCP server in opencode config
+- **Context**: `.opencode/context/` for project standards
+- **Agents**: OpenAgent, OpenCoder, TaskManager, etc.
+
+## Commands
+
+```bash
+opencode --agent <agent>     # Use specific agent
+opencode mcp list          # List MCP servers
+opencode mcp add <server>  # Add MCP server
+opencode serve             # Headless server mode
+opencode run <message>    # Run with message
+```
+
+## MCP Servers Config
+
+```json
+{
+  "mcp": {
+    "b00t-mcp": {
+      "enabled": true,
+      "type": "local",
+      "command": ["/home/brianh/.local/bin/b00t-mcp", "stdio"]
+    }
+  }
+}
+```
+
+## Available Agents
+
+| Agent | Purpose |
+|-------|---------|
+| OpenAgent | Universal orchestration |
+| OpenCoder | Production code |
+| TaskManager | Task breakdown |
+| ContextScout | Context discovery |
+| ExternalScout | Live docs |
+| TestEngineer | TDD |
+| CodeReviewer | Security review |
+
+## Context Files
+
+- `.opencode/context/core/standards/code-quality.md`
+- `.opencode/context/core/standards/documentation.md`
+- `.opencode/context/core/standards/test-coverage.md`
+- `.opencode/context/core/workflows/task-delegation-basics.md`
+
+## Skills
+
+- `codebase-memory` — Knowledge graph
+- `context7` — Live library docs
+- `task-management` — Task tracking
+
+## Date
+
+2026-04-19
+
+## Tags
+
+#opencode #agent-harness #mcp #ai-coding #context-aware

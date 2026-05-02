@@ -5,7 +5,7 @@
 //! Based on berriai/litellm configuration patterns.
 
 use anyhow::Result;
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
 use std::collections::HashMap;
 
 /// Model size classification for resource planning and capability routing  
@@ -33,8 +33,10 @@ pub enum ModelCapability {
     /// Code generation and analysis
     Code,
     /// Image analysis and vision tasks
+    #[serde(alias = "multimodal")]
     Vision,
     /// Function/tool calling
+    #[serde(alias = "tool_use")]
     Tools,
     /// JSON structured output
     JsonMode,
@@ -175,7 +177,7 @@ pub struct AiModelDatum {
     pub parameters: HashMap<String, serde_json::Value>,
 
     /// Model metadata and tags  
-    #[serde(default)]
+    #[serde(default, deserialize_with = "deserialize_string_map")]
     pub metadata: HashMap<String, String>,
 
     /// Rate limiting (requests per minute)
@@ -195,6 +197,26 @@ pub struct AiModelDatum {
 
 fn default_true() -> bool {
     true
+}
+
+fn deserialize_string_map<'de, D>(
+    deserializer: D,
+) -> std::result::Result<HashMap<String, String>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let raw = HashMap::<String, serde_json::Value>::deserialize(deserializer)?;
+    let normalized = raw
+        .into_iter()
+        .map(|(key, value)| {
+            let value = match value {
+                serde_json::Value::String(text) => text,
+                other => other.to_string(),
+            };
+            (key, value)
+        })
+        .collect();
+    Ok(normalized)
 }
 
 impl AiModelDatum {

@@ -8,7 +8,6 @@ members = [
     "k0mmand3r",
     "b00t-py",
     "b00t-ipc",
-    "vendor/tomllm",
     "b00t-azure-cp",
 ]
 resolver = "2"
@@ -16,7 +15,7 @@ resolver = "2"
 [workspace.package]
 # 🤓 Version management centralized in b00t-c0re-lib
 # All workspace crates inherit from the single source of truth
-version = "0.7.45"
+version = "0.7.48"
 edition = "2024"
 authors = ["Brian Horakh <brian@promptexecution.com>"]
 license = "MIT"
@@ -28,7 +27,7 @@ b00t-cli = { path = "b00t-cli" }
 b00t-c0re-lib = { path = "b00t-c0re-lib" }
 b00t-grok = { path = "b00t-grok", default-features = false }
 b00t-chat = { path = "b00t-lib-chat" }
-tomllm = { path = "vendor/tomllm" }
+# tomllm = { path = "vendor/tomllm" }
 
 # Rhai scripting engine — used for datum hooks (detect, install guards, etc.)
 rhai = { version = "1", features = ["sync"] }
@@ -46,6 +45,8 @@ rmcp = { version = "0.8.5", features = ["client", "transport-io", "server", "mac
 tracing = "0.1"
 async-trait = "0.1"
 zbus = { version = "5", default-features = false, features = ["tokio"] }
+openssl = "0.10"
+openssl-sys = { version = "0.9", features = ["vendored"] }
 
 [workspace.lints.rust]
 unused_must_use = "warn"

@@ -3,11 +3,11 @@
 // Phase 7: KnowledgeBase struct + metadata + Phase 8 integration hooks
 // Phase 8: Semantic discovery pipeline (assimilate integration)
 
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
-use chrono::{DateTime, Utc};
 
 /// Metadata about a discovered blessing capability
 /// Stores discovery context and quality metrics from prayer workflow
@@ -128,7 +128,11 @@ impl KnowledgeBase {
     /// 1. Store blessing metadata in HashMap
     /// 2. Save to index_dir (Phase 9 persistence)
     /// 3. Invoke discovery_callback if registered (Phase 8)
-    pub async fn discover_capability(&mut self, blessing: BlessingMetadata, context: &serde_json::Value) {
+    pub async fn discover_capability(
+        &mut self,
+        blessing: BlessingMetadata,
+        context: &serde_json::Value,
+    ) {
         let blessing_id = blessing.blessing_id.clone();
 
         // Store in metadata HashMap
@@ -164,14 +168,15 @@ impl KnowledgeBase {
         let layer = LayerMetadata {
             blessing_id: blessing_id.to_string(),
             artifact_path,
-            embedding_dim: 768,  // 🤓 Standard embedding dimension (LLAMA 3.1)
-            adapter_rank: 8,      // 🤓 Standard LoRA rank
+            embedding_dim: 768, // 🤓 Standard embedding dimension (LLAMA 3.1)
+            adapter_rank: 8,    // 🤓 Standard LoRA rank
             generated_at: Utc::now(),
-            quality_score: 0.85,  // 🤓 Default quality score
+            quality_score: 0.85, // 🤓 Default quality score
         };
 
         // Cache the layer
-        self.layer_cache.insert(blessing_id.to_string(), layer.clone());
+        self.layer_cache
+            .insert(blessing_id.to_string(), layer.clone());
 
         layer
     }
@@ -191,7 +196,9 @@ impl KnowledgeBase {
             .replace("-", "_")
             .to_lowercase();
 
-        self.index_dir.join("adapters").join(format!("{}.adapter", normalized))
+        self.index_dir
+            .join("adapters")
+            .join(format!("{}.adapter", normalized))
     }
 
     /// Register a semantic discovery callback (Phase 8)
@@ -235,7 +242,7 @@ impl KnowledgeBase {
 pub mod graph;
 
 // Export graph module types for public API
-pub use graph::{GraphRAG, GraphRAGNode, GraphRAGEdge};
+pub use graph::{GraphRAG, GraphRAGEdge, GraphRAGNode};
 
 #[cfg(test)]
 mod tests;

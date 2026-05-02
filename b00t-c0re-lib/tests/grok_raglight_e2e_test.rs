@@ -87,8 +87,7 @@ fn load_test_cases() -> GrokTestCases {
 
     let json = fs::read_to_string(&fixtures_path)
         .unwrap_or_else(|_| panic!("Missing test fixtures: {:?}", fixtures_path));
-    serde_json::from_str(&json)
-        .unwrap_or_else(|e| panic!("Invalid test fixtures JSON: {}", e))
+    serde_json::from_str(&json).unwrap_or_else(|e| panic!("Invalid test fixtures JSON: {}", e))
 }
 
 fn is_raglight_integration_enabled() -> bool {
@@ -146,14 +145,12 @@ mod unit {
                 metadata: None,
             };
             let result = manager.add_document(doc).await;
-            assert!(
-                result.is_err(),
-                "add_document MUST reject unknown topic"
-            );
+            assert!(result.is_err(), "add_document MUST reject unknown topic");
             let err_msg = result.unwrap_err().to_string();
             assert!(
                 err_msg.contains("not found") || err_msg.contains("Topic"),
-                "Error must mention topic validation: {}", err_msg
+                "Error must mention topic validation: {}",
+                err_msg
             );
         });
     }
@@ -180,7 +177,11 @@ mod unit {
             };
             let result = manager.add_document(doc).await;
             // Job queuing must succeed (async Python indexing may fail separately)
-            assert!(result.is_ok(), "add_document with known topic must queue job: {:?}", result.err());
+            assert!(
+                result.is_ok(),
+                "add_document with known topic must queue job: {:?}",
+                result.err()
+            );
             let job_id = result.unwrap();
             assert!(!job_id.is_empty(), "job_id must be non-empty UUID");
 
@@ -207,14 +208,19 @@ mod unit {
             };
             let job_id = manager.add_document(doc).await.expect("add_document");
             let cancel_result = manager.cancel_job(&job_id);
-            assert!(cancel_result.is_ok(), "cancel_job must succeed: {:?}", cancel_result.err());
+            assert!(
+                cancel_result.is_ok(),
+                "cancel_job must succeed: {:?}",
+                cancel_result.err()
+            );
 
             let job = manager.get_job_status(&job_id).expect("job after cancel");
             // Status should indicate cancellation
             let status_str = format!("{:?}", job.status);
             assert!(
                 status_str.contains("Cancelled"),
-                "Cancelled job must have Cancelled status, got: {}", status_str
+                "Cancelled job must have Cancelled status, got: {}",
+                status_str
             );
         });
     }
@@ -238,7 +244,11 @@ mod unit {
                 };
                 manager.add_document(doc).await.expect("add_document");
             }
-            assert_eq!(manager.list_jobs().len(), 3, "3 jobs expected after 3 add_document calls");
+            assert_eq!(
+                manager.list_jobs().len(),
+                3,
+                "3 jobs expected after 3 add_document calls"
+            );
         });
     }
 
@@ -248,13 +258,31 @@ mod unit {
         let config = RagLightConfig::default();
         let manager = RagLightManager::new(config).expect("manager");
 
-        struct Case { source: &'static str, expected: &'static str }
+        struct Case {
+            source: &'static str,
+            expected: &'static str,
+        }
         let cases = [
-            Case { source: "doc.pdf",    expected: "Pdf" },
-            Case { source: "notes.md",   expected: "Markdown" },
-            Case { source: "data.txt",   expected: "Text" },
-            Case { source: "https://github.com/foo/bar.git", expected: "Git" },
-            Case { source: "https://docs.rs/foo", expected: "Url" },
+            Case {
+                source: "doc.pdf",
+                expected: "Pdf",
+            },
+            Case {
+                source: "notes.md",
+                expected: "Markdown",
+            },
+            Case {
+                source: "data.txt",
+                expected: "Text",
+            },
+            Case {
+                source: "https://github.com/foo/bar.git",
+                expected: "Git",
+            },
+            Case {
+                source: "https://docs.rs/foo",
+                expected: "Url",
+            },
         ];
 
         // 🤓 detect_loader_type is private; exercised indirectly via add_document with None loader
@@ -270,10 +298,19 @@ mod unit {
     fn test_test_fixtures_load_correctly() {
         // The fixture JSON must parse without panic — validates test data integrity
         let cases = load_test_cases();
-        assert!(!cases.digest_cases.is_empty(), "digest_cases must be non-empty");
-        assert!(!cases.learn_cases.is_empty(), "learn_cases must be non-empty");
+        assert!(
+            !cases.digest_cases.is_empty(),
+            "digest_cases must be non-empty"
+        );
+        assert!(
+            !cases.learn_cases.is_empty(),
+            "learn_cases must be non-empty"
+        );
         assert!(!cases.ask_cases.is_empty(), "ask_cases must be non-empty");
-        assert!(!cases.topic_isolation_cases.is_empty(), "topic_isolation_cases must be non-empty");
+        assert!(
+            !cases.topic_isolation_cases.is_empty(),
+            "topic_isolation_cases must be non-empty"
+        );
         assert!(!cases.edge_cases.is_empty(), "edge_cases must be non-empty");
     }
 
@@ -324,7 +361,11 @@ mod integration {
                 metadata: None,
             };
             let job_id = manager.add_document(doc).await?;
-            assert!(!job_id.is_empty(), "job_id must be non-empty for topic '{}'", case.topic);
+            assert!(
+                !job_id.is_empty(),
+                "job_id must be non-empty for topic '{}'",
+                case.topic
+            );
 
             // Allow async indexing to complete
             tokio::time::sleep(tokio::time::Duration::from_secs(3)).await;
@@ -341,16 +382,22 @@ mod integration {
             );
 
             // Semantic check: result must contain at least one expected keyword
-            let found = case.expected_keywords.iter().any(|kw| {
-                raw.to_lowercase().contains(&kw.to_lowercase())
-            });
+            let found = case
+                .expected_keywords
+                .iter()
+                .any(|kw| raw.to_lowercase().contains(&kw.to_lowercase()));
             assert!(
                 found,
                 "Query result for topic '{}' must semantically relate to expected keywords {:?}. Got: {}",
-                case.topic, case.expected_keywords, &raw[..raw.len().min(200)]
+                case.topic,
+                case.expected_keywords,
+                &raw[..raw.len().min(200)]
             );
 
-            println!("✅ digest→ask roundtrip: topic='{}' query='{}' ok", case.topic, query);
+            println!(
+                "✅ digest→ask roundtrip: topic='{}' query='{}' ok",
+                case.topic, query
+            );
         }
         Ok(())
     }
@@ -390,10 +437,14 @@ mod integration {
             assert!(
                 !raw.trim().is_empty(),
                 "Learn '{}' for topic '{}' must produce queryable content",
-                case.source, case.topic
+                case.source,
+                case.topic
             );
 
-            println!("✅ learn: source='{}' topic='{}' ok", case.source, case.topic);
+            println!(
+                "✅ learn: source='{}' topic='{}' ok",
+                case.source, case.topic
+            );
         }
         Ok(())
     }
@@ -423,7 +474,9 @@ mod integration {
             tokio::time::sleep(tokio::time::Duration::from_secs(3)).await;
 
             // Query the WRONG topic — must not find the ingested content
-            let raw = manager.query(&case.query_topic, &case.query, Some(5)).await?;
+            let raw = manager
+                .query(&case.query_topic, &case.query, Some(5))
+                .await?;
 
             if case.expect_cross_topic_results == 0 {
                 // If result is empty or doesn't contain the specific content, isolation holds
@@ -435,7 +488,9 @@ mod integration {
                 assert!(
                     !cross_contaminated,
                     "Topic isolation violated: content from '{}' found when querying '{}'. Result: {}",
-                    case.ingest_topic, case.query_topic, &raw[..raw.len().min(200)]
+                    case.ingest_topic,
+                    case.query_topic,
+                    &raw[..raw.len().min(200)]
                 );
             }
             println!(
@@ -473,7 +528,11 @@ mod integration {
         };
         let result = manager.add_document(doc).await;
         if unicode_case.expected_success {
-            assert!(result.is_ok(), "Unicode content add_document must succeed: {:?}", result.err());
+            assert!(
+                result.is_ok(),
+                "Unicode content add_document must succeed: {:?}",
+                result.err()
+            );
         }
         println!("✅ unicode content handled");
         Ok(())

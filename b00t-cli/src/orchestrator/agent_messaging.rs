@@ -1,23 +1,23 @@
 // orchestrator/agent_messaging.rs
 // Secure message passing between agents with k0mmand3r authorization
 
+use crate::k0mmand3r::{EvaluationContext, GuardCondition};
+use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
-use chrono::Utc;
-use crate::k0mmand3r::{GuardCondition, EvaluationContext};
 
 /// Agent message for inter-agent communication
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct AgentMessage {
     pub id: String,
-    pub from: String,           // Agent ID
-    pub to: String,             // Agent ID or broadcast
+    pub from: String, // Agent ID
+    pub to: String,   // Agent ID or broadcast
     pub subject: String,
     pub body: String,
     #[serde(default)]
     pub metadata: BTreeMap<String, String>,
-    pub timestamp: String,      // ISO8601
-    pub requires_blessing: Option<String>,  // k0mmand3r blessing needed to deliver
+    pub timestamp: String,                 // ISO8601
+    pub requires_blessing: Option<String>, // k0mmand3r blessing needed to deliver
     #[serde(default)]
     pub audit_trail: Vec<AuditEntry>,
 }
@@ -57,12 +57,7 @@ impl MessageRouter {
     }
 
     /// Create a message from one agent to another
-    pub fn create_message(
-        from: &str,
-        to: &str,
-        subject: &str,
-        body: &str,
-    ) -> AgentMessage {
+    pub fn create_message(from: &str, to: &str, subject: &str, body: &str) -> AgentMessage {
         AgentMessage {
             id: format!("msg:{}", uuid::Uuid::new_v4()),
             from: from.to_string(),
@@ -87,7 +82,8 @@ impl MessageRouter {
 
         // Check authorization if required
         if let Some(guard_condition) = guard {
-            let authorized = guard_condition.evaluate(auth_context)
+            let authorized = guard_condition
+                .evaluate(auth_context)
                 .map_err(|e| format!("Authorization evaluation failed: {}", e))?;
 
             if !authorized {
@@ -150,9 +146,7 @@ impl MessageRouter {
 
     /// Receive messages for an agent
     pub fn receive(&mut self, agent_id: &str) -> Vec<AgentMessage> {
-        self.mailboxes
-            .remove(agent_id)
-            .unwrap_or_default()
+        self.mailboxes.remove(agent_id).unwrap_or_default()
     }
 
     /// Peek at messages without consuming them
@@ -210,12 +204,8 @@ mod tests {
     fn test_send_message_without_auth() {
         let mut router = MessageRouter::new();
 
-        let msg = MessageRouter::create_message(
-            "agent:executive",
-            "agent:executor",
-            "test",
-            "test body",
-        );
+        let msg =
+            MessageRouter::create_message("agent:executive", "agent:executor", "test", "test body");
 
         let context = EvaluationContext {
             agent_blessings: vec!["blessing:execute".to_string()],
@@ -224,15 +214,10 @@ mod tests {
             authorized: true,
         };
 
-        let result = router
-            .send(msg, None, &context)
-            .expect("Should send");
+        let result = router.send(msg, None, &context).expect("Should send");
 
         assert!(result.delivered);
-        assert_eq!(
-            router.count_pending("agent:executor"),
-            1
-        );
+        assert_eq!(router.count_pending("agent:executor"), 1);
     }
 
     #[test]
@@ -322,12 +307,7 @@ mod tests {
     fn test_receive_consumes_messages() {
         let mut router = MessageRouter::new();
 
-        let msg = MessageRouter::create_message(
-            "agent:sender",
-            "agent:receiver",
-            "test",
-            "test",
-        );
+        let msg = MessageRouter::create_message("agent:sender", "agent:receiver", "test", "test");
 
         let context = EvaluationContext::default();
         router.send(msg, None, &context).expect("Should send");
@@ -343,12 +323,7 @@ mod tests {
     fn test_peek_does_not_consume() {
         let mut router = MessageRouter::new();
 
-        let msg = MessageRouter::create_message(
-            "agent:sender",
-            "agent:receiver",
-            "test",
-            "test",
-        );
+        let msg = MessageRouter::create_message("agent:sender", "agent:receiver", "test", "test");
 
         let context = EvaluationContext::default();
         router.send(msg, None, &context).expect("Should send");
@@ -365,12 +340,7 @@ mod tests {
     fn test_audit_trail_on_send() {
         let mut router = MessageRouter::new();
 
-        let msg = MessageRouter::create_message(
-            "agent:sender",
-            "agent:receiver",
-            "test",
-            "test",
-        );
+        let msg = MessageRouter::create_message("agent:sender", "agent:receiver", "test", "test");
 
         let msg_id = msg.id.clone();
         let context = EvaluationContext::default();
@@ -385,19 +355,9 @@ mod tests {
     fn test_agent_audit_log() {
         let mut router = MessageRouter::new();
 
-        let msg1 = MessageRouter::create_message(
-            "agent:sender",
-            "agent:receiver1",
-            "msg1",
-            "body",
-        );
+        let msg1 = MessageRouter::create_message("agent:sender", "agent:receiver1", "msg1", "body");
 
-        let msg2 = MessageRouter::create_message(
-            "agent:sender",
-            "agent:receiver2",
-            "msg2",
-            "body",
-        );
+        let msg2 = MessageRouter::create_message("agent:sender", "agent:receiver2", "msg2", "body");
 
         let context = EvaluationContext::default();
         router.send(msg1, None, &context).expect("Should send msg1");

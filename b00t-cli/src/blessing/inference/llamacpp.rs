@@ -7,7 +7,7 @@
 #[cfg(feature = "llamacpp-fallback")]
 use super::{Embedding, LLMInference, ModelInfo};
 #[cfg(feature = "llamacpp-fallback")]
-use anyhow::{anyhow, Result, Context};
+use anyhow::{Context, Result, anyhow};
 #[cfg(feature = "llamacpp-fallback")]
 use async_trait::async_trait;
 #[cfg(feature = "llamacpp-fallback")]

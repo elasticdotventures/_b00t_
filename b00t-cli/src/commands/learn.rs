@@ -7,6 +7,9 @@ use b00t_c0re_lib::{DisplayOpts, GrokClient, KnowledgeSource, LfmfSystem, ManPag
 use clap::Parser;
 use std::fs;
 use tiktoken_rs::o200k_base;
+use toml::{self, Value};
+
+use crate::get_expanded_path;
 
 /// Arguments for the unified learn command.
 ///
@@ -56,35 +59,47 @@ pub struct LearnArgs {
 
     #[arg(long, help = "Query RAG knowledgebase")]
     pub ask: Option<String>,
+
+// Unified capability routing
+    #[arg(long, help = "List capabilities by type: skill|role|all")]
+    pub list: bool,
+
+    #[arg(long = "capability-type", help = "Filter by capability type")]
+    pub capability_type: Option<String>,
 }
 
 pub async fn handle_learn(path: &str, args: LearnArgs) -> Result<()> {
     // 🤓 merge positional topic + --topic flag; --topic wins (MCP compat: passes named flags)
     let topic_val = args.topic_flag.or(args.topic);
 
-    // Record lesson
-    if let Some(lesson) = args.record {
+// Record lesson
+    if let Some(ref lesson) = args.record {
         return handle_record(path, topic_val.as_deref(), &lesson, args.global).await;
     }
 
     // Search lessons
-    if let Some(query) = args.search {
+    if let Some(ref query) = args.search {
         return handle_search(path, topic_val.as_deref(), &query, args.limit).await;
     }
 
     // Digest to RAG
-    if let Some(content) = args.digest {
+    if let Some(ref content) = args.digest {
         return handle_digest(path, topic_val.as_deref(), &content).await;
     }
 
     // Query RAG
-    if let Some(query) = args.ask {
+    if let Some(ref query) = args.ask {
         return handle_ask(path, topic_val.as_deref(), &query, args.limit).await;
     }
 
+    // Unified capability routing: --capability-type=skill|role|all
+    if args.list || args.capability_type.is_some() {
+        return handle_capability_list(path, args.list, args.capability_type.as_deref()).await;
+    }
+
     // Default: display knowledge
-    let topic = topic_val
-        .ok_or_else(|| anyhow::anyhow!("Topic required. Use: b00t learn <topic>"))?;
+    let topic =
+        topic_val.ok_or_else(|| anyhow::anyhow!("Topic required. Use: b00t learn <topic>"))?;
 
     handle_display(
         path,
@@ -97,6 +112,147 @@ pub async fn handle_learn(path: &str, args: LearnArgs) -> Result<()> {
         },
     )
     .await
+}
+
+async fn handle_capability_list(path: &str, _list: bool, filter_type: Option<&str>) -> Result<()> {
+    let registry_path = get_registry_path(path)?;
+    if !registry_path.exists() {
+        println!("No capability registry found. Run: b00t registry sync");
+        return Ok(());
+    }
+
+    let content = fs::read_to_string(&registry_path)?;
+    // Strip comment lines and empty lines for parsing
+    let content_filtered: String = content
+        .lines()
+        .map(|l| l.trim_end())
+        .filter(|l| !l.is_empty() && !l.starts_with('#'))
+        .collect::<Vec<_>>()
+        .join("\n");
+
+    let registry: Value = match toml::from_str(&content_filtered) {
+        Ok(v) => v,
+        Err(e) => {
+            eprintln!("Warning: Failed to parse registry: {}. Run: b00t registry sync", e);
+            return Ok(());
+        }
+    };
+
+    let cap_type = filter_type.unwrap_or("all");
+
+    fn get_desc(val: &toml::map::Map<String, toml::Value>) -> String {
+        val.get("description")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .to_string()
+    }
+
+    fn get_tags_map(val: &toml::map::Map<String, toml::Value>) -> Vec<String> {
+        val.get("tags")
+            .and_then(|v| v.as_array())
+            .map(|arr| {
+                arr.iter()
+                    .filter_map(|v| v.as_str().map(String::from))
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+
+    let capabilities = registry.get("capabilities");
+
+    let show_all = cap_type == "all";
+    let show_skills = show_all || cap_type == "skill";
+    let show_roles = show_all || cap_type == "role";
+    let show_datums = show_all || cap_type == "datum";
+    let show_mcp = show_all || cap_type == "mcp";
+
+    // Helper to get a section table
+    fn get_section<'a>(registry: &'a toml::Value, section: &str) -> Option<&'a toml::map::Map<String, toml::Value>> {
+        registry.get(section).and_then(|v| v.as_table())
+    }
+
+    if show_skills {
+        if let Some(skills_map) = get_section(&registry, "skills") {
+            println!("## Skills");
+            for (name, val) in skills_map {
+                if let Some(val_map) = val.as_table() {
+                    let desc = get_desc(val_map);
+                    let tags_vec = get_tags_map(val_map);
+                    let tag_str = if tags_vec.is_empty() {
+                        String::new()
+                    } else {
+                        format!(" [{}]", tags_vec.join(", "))
+                    };
+                    println!("  • {} — {}{}", name, desc, tag_str);
+                }
+            }
+            println!();
+        }
+    }
+
+    if show_roles {
+        if let Some(roles_map) = get_section(&registry, "roles") {
+            println!("## Roles");
+            for (name, val) in roles_map {
+                if let Some(val_map) = val.as_table() {
+                    let desc = get_desc(val_map);
+                    let deps: Vec<String> = val_map.get("depends_on")
+                        .and_then(|v| v.as_array())
+                        .map(|arr| arr.iter().filter_map(|v| v.as_str().map(String::from)).collect())
+                        .unwrap_or_default();
+                    let dep_str = if deps.is_empty() {
+                        String::new()
+                    } else {
+                        format!(" (→ {})", deps.join(", "))
+                    };
+                    println!("  • {}{} — {}", name, dep_str, desc);
+                }
+            }
+            println!();
+        }
+    }
+
+    if show_datums {
+        if let Some(datums_map) = get_section(&registry, "datums") {
+            println!("## Datums");
+            for (name, val) in datums_map {
+                if let Some(val_map) = val.as_table() {
+                    let desc = get_desc(val_map);
+                    let tags_vec = get_tags_map(val_map);
+                    let tag_str = if tags_vec.is_empty() {
+                        String::new()
+                    } else {
+                        format!(" [{}]", tags_vec.join(", "))
+                    };
+                    println!("  • {} — {}{}", name, desc, tag_str);
+                }
+            }
+            println!();
+        }
+    }
+
+    if show_mcp {
+        if let Some(mcps_map) = get_section(&registry, "mcp") {
+            println!("## MCP Servers");
+            for (name, val) in mcps_map {
+                if let Some(val_map) = val.as_table() {
+                    let desc = get_desc(val_map);
+                    println!("  • {} — {}", name, desc);
+                }
+            }
+            println!();
+        }
+    }
+
+    println!("Run: b00t learn <name> to load a capability");
+    println!("Run: b00t learn --capability-type=<type> to filter");
+
+    Ok(())
+}
+
+fn get_registry_path(path: &str) -> Result<std::path::PathBuf> {
+    let expanded = get_expanded_path(path)?;
+    Ok(expanded.join("capability-registry.toml"))
 }
 
 async fn handle_display(path: &str, topic: &str, opts: DisplayOpts) -> Result<()> {
@@ -125,7 +281,7 @@ async fn handle_display(path: &str, topic: &str, opts: DisplayOpts) -> Result<()
     // Run hook_learn if present in datum
     if let Ok((config, _)) = crate::get_config(topic, path) {
         if let Some(script) = config.b00t.hook_learn {
-            use crate::hook_engine::{run_hook, HookResult};
+            use crate::hook_engine::{HookResult, run_hook};
             match run_hook(&script) {
                 HookResult::Ok => {}
                 HookResult::Info(msg) | HookResult::Warn(msg) => println!("{}", msg),

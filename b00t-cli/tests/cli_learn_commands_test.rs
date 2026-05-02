@@ -11,34 +11,10 @@ use std::env;
 use std::process::Command;
 use tempfile::TempDir;
 
+mod common;
+
 fn is_infrastructure_available() -> bool {
     env::var("TEST_WITH_QDRANT").is_ok() || env::var("QDRANT_URL").is_ok()
-}
-
-fn get_b00t_binary() -> String {
-    let manifest_dir = env::var("CARGO_MANIFEST_DIR").unwrap();
-    let mut candidates = vec![];
-
-    // Cargo sets CARGO_BIN_EXE_<name> with '-' replaced by '_'
-    if let Ok(path) = env::var("CARGO_BIN_EXE_b00t_cli") {
-        candidates.push(path);
-    }
-    if let Ok(path) = env::var("CARGO_BIN_EXE_b00t-cli") {
-        candidates.push(path);
-    }
-
-    // Common local build outputs
-    candidates.push(format!("{}/target/debug/b00t-cli", manifest_dir));
-    candidates.push(format!("{}/../target/debug/b00t-cli", manifest_dir)); // workspace root
-    candidates.push(format!("{}/target/debug/deps/b00t-cli", manifest_dir));
-
-    for path in &candidates {
-        if std::path::Path::new(path).exists() {
-            return path.clone();
-        }
-    }
-
-    panic!("b00t binary not found; tried: {:?}", candidates);
 }
 
 fn setup_temp_dir() -> TempDir {
@@ -57,7 +33,7 @@ mod cli_learn_digest {
             return;
         }
 
-        let b00t = get_b00t_binary();
+        let b00t = common::get_b00t_binary();
 
         let output = Command::new(&b00t)
             .args(&[
@@ -96,7 +72,7 @@ mod cli_learn_digest {
             return;
         }
 
-        let b00t = get_b00t_binary();
+        let b00t = common::get_b00t_binary();
 
         let output = Command::new(&b00t)
             .args(&["learn", "rust_cli_test", "--digest", ""])
@@ -132,7 +108,7 @@ mod cli_learn_ask {
             return;
         }
 
-        let b00t = get_b00t_binary();
+        let b00t = common::get_b00t_binary();
 
         // First digest some content
         let digest_output = Command::new(&b00t)
@@ -186,7 +162,7 @@ mod cli_learn_ask {
             return;
         }
 
-        let b00t = get_b00t_binary();
+        let b00t = common::get_b00t_binary();
 
         // Ask for something very unlikely to exist
         let output = Command::new(&b00t)
@@ -230,7 +206,7 @@ mod cli_learn_record_search {
 
         let temp_dir = setup_temp_dir();
         let temp_path = temp_dir.path().to_str().unwrap();
-        let b00t = get_b00t_binary();
+        let b00t = common::get_b00t_binary();
 
         // Record a lesson
         let record_output = Command::new(&b00t)
@@ -297,7 +273,7 @@ mod cli_learn_record_search {
 
         let temp_dir = setup_temp_dir();
         let temp_path = temp_dir.path().to_str().unwrap();
-        let b00t = get_b00t_binary();
+        let b00t = common::get_b00t_binary();
 
         // Try to record a lesson with body exceeding 250 tokens
         let very_long_body = "word ".repeat(300);
@@ -346,7 +322,7 @@ mod cli_end_to_end_workflow {
 
         let temp_dir = setup_temp_dir();
         let temp_path = temp_dir.path().to_str().unwrap();
-        let b00t = get_b00t_binary();
+        let b00t = common::get_b00t_binary();
         let topic = "workflow_test";
 
         println!("\n=== STEP 1: Record LFMF Lesson ===");
@@ -422,7 +398,7 @@ mod cli_end_to_end_workflow {
         // Test graceful degradation
         let temp_dir = setup_temp_dir();
         let temp_path = temp_dir.path().to_str().unwrap();
-        let b00t = get_b00t_binary();
+        let b00t = common::get_b00t_binary();
         let topic = "offline_test";
 
         // Remove Qdrant env vars to simulate offline
@@ -480,7 +456,7 @@ mod cli_error_handling {
 
     #[test]
     fn test_cli_learn_missing_topic() {
-        let b00t = get_b00t_binary();
+        let b00t = common::get_b00t_binary();
 
         let output = Command::new(&b00t)
             .args(&["learn"])
@@ -504,7 +480,7 @@ mod cli_error_handling {
 
     #[test]
     fn test_cli_learn_invalid_flag_combination() {
-        let b00t = get_b00t_binary();
+        let b00t = common::get_b00t_binary();
 
         // Try to use --digest and --ask together (invalid)
         let output = Command::new(&b00t)
@@ -534,7 +510,7 @@ mod cli_error_handling {
     fn test_cli_learn_record_invalid_format() {
         let temp_dir = setup_temp_dir();
         let temp_path = temp_dir.path().to_str().unwrap();
-        let b00t = get_b00t_binary();
+        let b00t = common::get_b00t_binary();
 
         // Record without "topic: body" format
         let output = Command::new(&b00t)
@@ -583,7 +559,7 @@ mod cross_language_integration {
             return;
         }
 
-        let b00t = get_b00t_binary();
+        let b00t = common::get_b00t_binary();
 
         // This tests Rust CLI → Rust GrokClient → Python b00t-grok-py MCP server
         let output = Command::new(&b00t)
@@ -626,7 +602,7 @@ mod cross_language_integration {
             return;
         }
 
-        let b00t = get_b00t_binary();
+        let b00t = common::get_b00t_binary();
 
         // Test that Python errors are properly propagated to Rust
         // (This assumes some invalid operation that Python will reject)

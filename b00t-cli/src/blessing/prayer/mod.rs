@@ -3,7 +3,7 @@
 // Path 1: Agent prayer - /negotiate blessing:X with policy checks
 // Path 2: Executive grant - direct /negotiate blessing:X override
 
-use crate::blessing::{BlessingGraph, BlessingNode, ExecuteAccess, DataPermissions, LayerMetadata};
+use crate::blessing::{BlessingGraph, BlessingNode, DataPermissions, ExecuteAccess, LayerMetadata};
 use std::collections::{BTreeMap, HashSet};
 
 /// Composition Plan: Model layers stacked to serve blessing
@@ -22,11 +22,12 @@ impl CompositionPlan {
     /// Estimate tokens per inference (base overhead + adapter overhead)
     /// Rough approximation: base (2048) + adapter overhead (embedding_dim * adapter_rank / 1000)
     pub fn estimated_tokens_per_inference(&self) -> usize {
-        let mut total = 2048;  // Base model overhead
+        let mut total = 2048; // Base model overhead
 
         for layer in &self.layers {
             // Adapter overhead: embedding_dim * adapter_rank / 1000 (conservative estimate)
-            let adapter_overhead = (layer.embedding_dim as usize * layer.adapter_rank as usize) / 1000;
+            let adapter_overhead =
+                (layer.embedding_dim as usize * layer.adapter_rank as usize) / 1000;
             total += adapter_overhead;
         }
 
@@ -36,12 +37,13 @@ impl CompositionPlan {
     /// Check if composition plan fits in memory budget (MB)
     /// Rough estimate: 7B base model (~14GB) + adapters (embedding_dim * adapter_rank * 4 bytes / 1M)
     pub fn fits_in_budget(&self, budget_mb: usize) -> bool {
-        let base_model_memory = 14000;  // 7B model ≈ 14GB
+        let base_model_memory = 14000; // 7B model ≈ 14GB
 
         let mut adapter_memory = 0;
         for layer in &self.layers {
             // Adapter memory: embedding_dim * adapter_rank * 4 bytes / (1024*1024)
-            let adapter_mb = (layer.embedding_dim as usize * layer.adapter_rank as usize * 4) / (1024 * 1024);
+            let adapter_mb =
+                (layer.embedding_dim as usize * layer.adapter_rank as usize * 4) / (1024 * 1024);
             adapter_memory += adapter_mb;
         }
 
@@ -68,9 +70,9 @@ pub struct BlessingPrayerResult {
 #[derive(Debug, Clone, PartialEq)]
 pub enum PolicyCheckResult {
     Approved,
-    DeniedRoleNotAllowed(String),     // role doesn't have access
-    DeniedBlessingMissing(String),    // blessing doesn't exist
-    DeniedBudgetInsufficient(u32, u32),  // available, required
+    DeniedRoleNotAllowed(String),       // role doesn't have access
+    DeniedBlessingMissing(String),      // blessing doesn't exist
+    DeniedBudgetInsufficient(u32, u32), // available, required
     DeniedPrerequisiteMissing(String),  // required blessing
     DeniedExecutiveVoteRequired,        // needs voting
 }
@@ -83,15 +85,17 @@ impl PolicyCheckResult {
     pub fn denial_reason(&self) -> Option<String> {
         match self {
             PolicyCheckResult::Approved => None,
-            PolicyCheckResult::DeniedRoleNotAllowed(role) => {
-                Some(format!("Role '{}' not allowed to request this blessing", role))
-            }
+            PolicyCheckResult::DeniedRoleNotAllowed(role) => Some(format!(
+                "Role '{}' not allowed to request this blessing",
+                role
+            )),
             PolicyCheckResult::DeniedBlessingMissing(id) => {
                 Some(format!("Blessing '{}' does not exist", id))
             }
-            PolicyCheckResult::DeniedBudgetInsufficient(avail, required) => {
-                Some(format!("Budget insufficient: {} available, {} required", avail, required))
-            }
+            PolicyCheckResult::DeniedBudgetInsufficient(avail, required) => Some(format!(
+                "Budget insufficient: {} available, {} required",
+                avail, required
+            )),
             PolicyCheckResult::DeniedPrerequisiteMissing(prereq) => {
                 Some(format!("Missing prerequisite blessing: {}", prereq))
             }
@@ -133,7 +137,12 @@ pub trait AuditEventEmitter: Send + Sync {
     /// Emit composition audit event when blessing granted or denied
     /// granted: true if blessing approved, false if denied
     /// plan: optional composition plan (only present if granted)
-    async fn emit_composition_audit(&self, blessing_id: &str, granted: bool, plan: Option<&CompositionPlan>);
+    async fn emit_composition_audit(
+        &self,
+        blessing_id: &str,
+        granted: bool,
+        plan: Option<&CompositionPlan>,
+    );
 
     /// Emit denial audit event for Kaizen feedback loop
     /// reason: why blessing was denied
@@ -174,7 +183,8 @@ impl BlessingEvaluator {
             return BlessingPrayerResult {
                 granted: false,
                 blessing: None,
-                denial_reason: PolicyCheckResult::DeniedBlessingMissing(req.blessing_id.clone()).denial_reason(),
+                denial_reason: PolicyCheckResult::DeniedBlessingMissing(req.blessing_id.clone())
+                    .denial_reason(),
                 suggestions: vec![
                     "Check available blessings with: /negotiate list".to_string(),
                     "Request executive to create this blessing".to_string(),
@@ -203,8 +213,11 @@ impl BlessingEvaluator {
                 return BlessingPrayerResult {
                     granted: false,
                     blessing: None,
-                    denial_reason: PolicyCheckResult::DeniedBudgetInsufficient(req.available_budget, cost)
-                        .denial_reason(),
+                    denial_reason: PolicyCheckResult::DeniedBudgetInsufficient(
+                        req.available_budget,
+                        cost,
+                    )
+                    .denial_reason(),
                     suggestions: vec!["Wait for daily budget refresh".to_string()],
                     composition_plan: None,
                 };
@@ -217,7 +230,8 @@ impl BlessingEvaluator {
                 return BlessingPrayerResult {
                     granted: false,
                     blessing: None,
-                    denial_reason: PolicyCheckResult::DeniedPrerequisiteMissing(prereq.clone()).denial_reason(),
+                    denial_reason: PolicyCheckResult::DeniedPrerequisiteMissing(prereq.clone())
+                        .denial_reason(),
                     suggestions: vec![format!("Request blessing first: /negotiate {}", prereq)],
                     composition_plan: None,
                 };
@@ -230,7 +244,9 @@ impl BlessingEvaluator {
                 granted: false,
                 blessing: None,
                 denial_reason: PolicyCheckResult::DeniedExecutiveVoteRequired.denial_reason(),
-                suggestions: vec!["This blessing requires /vote approval from executive".to_string()],
+                suggestions: vec![
+                    "This blessing requires /vote approval from executive".to_string(),
+                ],
                 composition_plan: None,
             };
         }
@@ -248,7 +264,13 @@ impl BlessingEvaluator {
     /// Check if role is allowed to request this blessing
     fn check_role_access(&self, role: &str, blessing_id: &str) -> PolicyCheckResult {
         // First check: blessing must exist
-        if self.graph.nodes.iter().find(|n| n.id == blessing_id).is_none() {
+        if self
+            .graph
+            .nodes
+            .iter()
+            .find(|n| n.id == blessing_id)
+            .is_none()
+        {
             return PolicyCheckResult::DeniedBlessingMissing(blessing_id.to_string());
         }
 
@@ -257,7 +279,10 @@ impl BlessingEvaluator {
             if allowed.contains(blessing_id) {
                 return PolicyCheckResult::Approved;
             } else {
-                return PolicyCheckResult::DeniedRoleNotAllowed(format!("{} cannot request {}", role, blessing_id));
+                return PolicyCheckResult::DeniedRoleNotAllowed(format!(
+                    "{} cannot request {}",
+                    role, blessing_id
+                ));
             }
         }
 

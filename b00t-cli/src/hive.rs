@@ -28,8 +28,8 @@ pub struct SystemSnapshot {
     pub gpu_total_mb: Option<u32>,
     pub gpu_free_mb: Option<u32>,
     pub cpu_cores: u32,
-    pub active_downloads: Vec<String>,  // PIDs/paths of active HF downloads
-    pub active_services: Vec<String>,   // running systemd --user units
+    pub active_downloads: Vec<String>, // PIDs/paths of active HF downloads
+    pub active_services: Vec<String>,  // running systemd --user units
     pub active_profile: Option<String>, // from HIVE_STATE_PATH
     pub timestamp: String,
 }
@@ -37,8 +37,7 @@ pub struct SystemSnapshot {
 impl SystemSnapshot {
     /// Capture current system state
     pub fn capture() -> Result<Self> {
-        let meminfo = fs::read_to_string("/proc/meminfo")
-            .context("reading /proc/meminfo")?;
+        let meminfo = fs::read_to_string("/proc/meminfo").context("reading /proc/meminfo")?;
 
         let ram_total_kb = parse_meminfo_kb(&meminfo, "MemTotal");
         let ram_avail_kb = parse_meminfo_kb(&meminfo, "MemAvailable");
@@ -114,15 +113,16 @@ impl SystemSnapshot {
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct HiveServiceSpec {
     pub description: Option<String>,
-    pub service_type: String,                // systemd Type= (default: "simple")
-    pub exec_start: String,                  // ExecStart= (may be multi-line with \ continuation)
-    pub exec_start_pre: Vec<String>,         // ExecStartPre= lines
-    pub environment: Vec<String>,            // Environment= lines (each "KEY=VALUE")
-    pub limit_nofile: Option<u32>,           // LimitNOFILE=
-    pub restart: Option<String>,             // Restart=
-    pub restart_sec: Option<String>,         // RestartSec=
-    pub timeout_start_sec: Option<String>,   // TimeoutStartSec=
-    pub after: Vec<String>,                  // After= dependencies (default: ["network.target"])
+    pub service_type: String,        // systemd Type= (default: "simple")
+    pub exec_start: String,          // ExecStart= (may be multi-line with \ continuation)
+    pub exec_start_pre: Vec<String>, // ExecStartPre= lines
+    pub environment: Vec<String>,    // Environment= lines (each "KEY=VALUE")
+    pub limit_nofile: Option<u32>,   // LimitNOFILE=
+    pub restart: Option<String>,     // Restart=
+    pub restart_sec: Option<String>, // RestartSec=
+    pub timeout_start_sec: Option<String>, // TimeoutStartSec=
+    pub working_directory: Option<String>, // WorkingDirectory=
+    pub after: Vec<String>,          // After= dependencies (default: ["network.target"])
 }
 
 // ─── Hive Profile (from .hive.toml datums) ────────────────────────────────────
@@ -254,6 +254,7 @@ struct HiveTomlServiceSpec {
     restart: Option<String>,
     restart_sec: Option<String>,
     timeout_start_sec: Option<String>,
+    working_directory: Option<String>,
     #[serde(default)]
     after: Vec<String>,
 }
@@ -261,11 +262,10 @@ struct HiveTomlServiceSpec {
 impl HiveProfile {
     /// Load from a .hive.toml or .hive.tomllm file
     pub fn from_file(path: &Path) -> Result<Self> {
-        let content = fs::read_to_string(path)
-            .context(format!("reading {}", path.display()))?;
+        let content = fs::read_to_string(path).context(format!("reading {}", path.display()))?;
 
-        let raw: HiveToml = toml::from_str(&content)
-            .context(format!("parsing hive TOML: {}", path.display()))?;
+        let raw: HiveToml =
+            toml::from_str(&content).context(format!("parsing hive TOML: {}", path.display()))?;
 
         let hive = raw.b00t.hive.unwrap_or_else(|| HiveTomlHive {
             resources: None,
@@ -290,10 +290,7 @@ impl HiveProfile {
         };
 
         let (services_start, services_stop) = if let Some(s) = hive.services {
-            (
-                s.start.unwrap_or_default(),
-                s.stop.unwrap_or_default(),
-            )
+            (s.start.unwrap_or_default(), s.stop.unwrap_or_default())
         } else {
             (vec![], vec![])
         };
@@ -311,7 +308,10 @@ impl HiveProfile {
             .collect();
 
         let (mcp_activate, mcp_deactivate) = if let Some(m) = hive.mcp_tools {
-            (m.activate.unwrap_or_default(), m.deactivate.unwrap_or_default())
+            (
+                m.activate.unwrap_or_default(),
+                m.deactivate.unwrap_or_default(),
+            )
         } else {
             (vec![], vec![])
         };
@@ -326,7 +326,12 @@ impl HiveProfile {
             restart: s.restart,
             restart_sec: s.restart_sec,
             timeout_start_sec: s.timeout_start_sec,
-            after: if s.after.is_empty() { vec!["network.target".to_string()] } else { s.after },
+            working_directory: s.working_directory,
+            after: if s.after.is_empty() {
+                vec!["network.target".to_string()]
+            } else {
+                s.after
+            },
         });
 
         Ok(HiveProfile {
@@ -389,7 +394,10 @@ pub fn load_profile(name: &str, datum_dir: &Path) -> Result<HiveProfile> {
     } else if hive_toml_path.exists() {
         hive_toml_path
     } else {
-        bail!("profile '{}' not found (tried .hive.tomllm, .stack.tomllm, .hive.toml)", name);
+        bail!(
+            "profile '{}' not found (tried .hive.tomllm, .stack.tomllm, .hive.toml)",
+            name
+        );
     };
     HiveProfile::from_file(&path)
 }
@@ -430,8 +438,13 @@ fn read_active_profile() -> Option<String> {
 
 pub enum GuardResult {
     Allow,
-    Warn { message: String, redirect: Option<String> },
-    Block { message: String },
+    Warn {
+        message: String,
+        redirect: Option<String>,
+    },
+    Block {
+        message: String,
+    },
 }
 
 /// Check a command string against a list of guards; returns first match
@@ -459,8 +472,7 @@ pub fn check_guards(command: &str, guards: &[HiveGuard]) -> GuardResult {
 /// Generate systemd unit file content from an inline service spec.
 /// Unit name: `b00t-hive-{profile_name}.service`
 pub fn generate_systemd_unit(profile_name: &str, spec: &HiveServiceSpec) -> String {
-    let description = spec.description.as_deref()
-        .unwrap_or(profile_name);
+    let description = spec.description.as_deref().unwrap_or(profile_name);
     let after = if spec.after.is_empty() {
         "network.target".to_string()
     } else {
@@ -485,6 +497,10 @@ pub fn generate_systemd_unit(profile_name: &str, spec: &HiveServiceSpec) -> Stri
         unit.push_str(&format!("ExecStartPre={pre}\n"));
     }
 
+    if let Some(wd) = &spec.working_directory {
+        unit.push_str(&format!("WorkingDirectory={wd}\n"));
+    }
+
     // ExecStart: strip leading/trailing whitespace, preserve internal \ continuations
     let exec = spec.exec_start.trim();
     unit.push_str(&format!("ExecStart={exec}\n"));
@@ -503,6 +519,10 @@ pub fn generate_systemd_unit(profile_name: &str, spec: &HiveServiceSpec) -> Stri
     unit
 }
 
+pub fn stack_template_unit(profile_name: &str) -> String {
+    format!("b00t@{profile_name}.service")
+}
+
 // ─── Hive Stack Status ────────────────────────────────────────────────────────
 
 /// Query systemd for b00t@*.service and b00t-hive-*.service status.
@@ -513,7 +533,14 @@ pub fn hive_stacks_status() -> Vec<(String, bool, bool)> {
 
     for pattern in &patterns {
         let output = Command::new("systemctl")
-            .args(["--user", "list-units", pattern, "--all", "--no-legend", "--plain"])
+            .args([
+                "--user",
+                "list-units",
+                pattern,
+                "--all",
+                "--no-legend",
+                "--plain",
+            ])
             .output();
         if let Ok(o) = output {
             for line in String::from_utf8_lossy(&o.stdout).lines() {
@@ -608,8 +635,7 @@ pub fn activate_profile(
                 let systemd_user_dir = dirs::home_dir()
                     .unwrap_or_else(|| std::path::PathBuf::from("/tmp"))
                     .join(".config/systemd/user");
-                fs::create_dir_all(&systemd_user_dir)
-                    .context("creating ~/.config/systemd/user")?;
+                fs::create_dir_all(&systemd_user_dir).context("creating ~/.config/systemd/user")?;
                 let unit_path = systemd_user_dir.join(&unit_name);
                 fs::write(&unit_path, &unit_content)
                     .context(format!("writing {}", unit_path.display()))?;
@@ -633,7 +659,11 @@ pub fn activate_profile(
                 .status();
             match result {
                 Ok(s) if s.success() => {}
-                Ok(s) => log.push(format!("  ⚠️  {} exit code {}", unit, s.code().unwrap_or(-1))),
+                Ok(s) => log.push(format!(
+                    "  ⚠️  {} exit code {}",
+                    unit,
+                    s.code().unwrap_or(-1)
+                )),
                 Err(e) => log.push(format!("  ⚠️  {} failed: {}", unit, e)),
             }
         }
@@ -649,10 +679,54 @@ pub fn activate_profile(
                     .status();
                 match result {
                     Ok(s) if s.success() => {}
-                    Ok(s) => log.push(format!("  ⚠️  {} exit code {}", unit_name, s.code().unwrap_or(-1))),
+                    Ok(s) => log.push(format!(
+                        "  ⚠️  {} exit code {}",
+                        unit_name,
+                        s.code().unwrap_or(-1)
+                    )),
                     Err(e) => log.push(format!("  ⚠️  {} failed: {}", unit_name, e)),
                 }
             }
+        }
+    }
+
+    // 4c. Enable generated unit directly for autostart.
+    // 🤓 b00t@.service template unit may not exist → systemctl enable b00t@{name} silently fails.
+    //    The generated b00t-hive-{}.service has [Install] WantedBy=default.target so enabling
+    //    it directly gives reliable autostart without requiring the template file.
+    if let Some(ref unit_name) = generated_unit {
+        log.push(format!("enable {}", unit_name));
+        if !dry_run {
+            let result = Command::new("systemctl")
+                .args(["--user", "enable", unit_name])
+                .status();
+            match result {
+                Ok(s) if s.success() => {}
+                Ok(s) => log.push(format!(
+                    "  ⚠️  {} enable exit code {}",
+                    unit_name,
+                    s.code().unwrap_or(-1)
+                )),
+                Err(e) => log.push(format!("  ⚠️  {} enable failed: {}", unit_name, e)),
+            }
+        }
+    }
+
+    // Persist autostart via the stable template unit so the profile comes back after reboot.
+    let template_unit = stack_template_unit(&profile.name);
+    log.push(format!("enable {}", template_unit));
+    if !dry_run {
+        let result = Command::new("systemctl")
+            .args(["--user", "enable", &template_unit])
+            .status();
+        match result {
+            Ok(s) if s.success() => {}
+            Ok(s) => log.push(format!(
+                "  ⚠️  {} enable exit code {}",
+                template_unit,
+                s.code().unwrap_or(-1)
+            )),
+            Err(e) => log.push(format!("  ⚠️  {} enable failed: {}", template_unit, e)),
         }
     }
 
@@ -741,19 +815,23 @@ fn find_active_downloads() -> Vec<String> {
 
 fn query_systemd_user_services() -> Vec<String> {
     let output = Command::new("systemctl")
-        .args(["--user", "list-units", "--state=running", "--no-legend", "--plain"])
+        .args([
+            "--user",
+            "list-units",
+            "--state=running",
+            "--no-legend",
+            "--plain",
+        ])
         .output();
 
     match output {
-        Ok(o) if o.status.success() => {
-            String::from_utf8_lossy(&o.stdout)
-                .lines()
-                .filter_map(|l| {
-                    let parts: Vec<&str> = l.split_whitespace().collect();
-                    parts.first().map(|s| s.to_string())
-                })
-                .collect()
-        }
+        Ok(o) if o.status.success() => String::from_utf8_lossy(&o.stdout)
+            .lines()
+            .filter_map(|l| {
+                let parts: Vec<&str> = l.split_whitespace().collect();
+                parts.first().map(|s| s.to_string())
+            })
+            .collect(),
         _ => vec![],
     }
 }
@@ -787,10 +865,7 @@ mod tests {
             message: Some("🚫 blocked".to_string()),
             redirect: None,
         }];
-        matches!(
-            check_guards("rm -rf /", &guards),
-            GuardResult::Block { .. }
-        );
+        matches!(check_guards("rm -rf /", &guards), GuardResult::Block { .. });
     }
 
     #[test]
@@ -801,10 +876,7 @@ mod tests {
             message: None,
             redirect: None,
         }];
-        matches!(
-            check_guards("cargo build", &guards),
-            GuardResult::Allow
-        );
+        matches!(check_guards("cargo build", &guards), GuardResult::Allow);
     }
 
     #[test]
@@ -890,6 +962,7 @@ message = "use uv"
             restart: Some("on-failure".to_string()),
             restart_sec: Some("30s".to_string()),
             timeout_start_sec: Some("300".to_string()),
+            working_directory: Some("/tmp/test-workdir".to_string()),
             after: vec!["network.target".to_string()],
         };
         let unit = generate_systemd_unit("test-profile", &spec);
@@ -897,7 +970,16 @@ message = "use uv"
         assert!(unit.contains("LimitNOFILE=65536"));
         assert!(unit.contains("Environment=\"FOO=bar\""));
         assert!(unit.contains("Restart=on-failure"));
+        assert!(unit.contains("WorkingDirectory=/tmp/test-workdir"));
         assert!(unit.contains("[Install]"));
+    }
+
+    #[test]
+    fn test_stack_template_unit_name() {
+        assert_eq!(
+            stack_template_unit("inference-gemma4"),
+            "b00t@inference-gemma4.service"
+        );
     }
 
     #[test]
@@ -914,6 +996,7 @@ exec_start = "/usr/bin/sleep 3600"
 environment = ["FOO=bar"]
 limit_nofile = 1024
 restart = "on-failure"
+working_directory = "/tmp/test"
 "#;
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("test-svc.hive.toml");
@@ -923,5 +1006,6 @@ restart = "on-failure"
         let spec = profile.service_spec.unwrap();
         assert_eq!(spec.exec_start, "/usr/bin/sleep 3600");
         assert_eq!(spec.limit_nofile, Some(1024));
+        assert_eq!(spec.working_directory.as_deref(), Some("/tmp/test"));
     }
 }

@@ -80,16 +80,26 @@ pub fn run_just_install(dry_run: bool) -> Result<()> {
 pub fn install_datum(path: &str, name: &str) -> Result<()> {
     let all_datums = load_all_datums(path)?;
 
-    // Find matching datum key (supports suffix or plain name)
-    let mut target_key: Option<String> = None;
-    for (key, datum) in &all_datums {
-        if datum.name == name || key == name {
-            target_key = Some(key.clone());
-            break;
-        }
-    }
+    // Prefer exact key match. When multiple datums share the same plain `b00t.name`,
+    // prefer an installable datum over a non-installable one.
+    let target_key = if all_datums.contains_key(name) {
+        name.to_string()
+    } else {
+        let matches: Vec<(&String, &BootDatum)> = all_datums
+            .iter()
+            .filter(|(_, datum)| datum.name == name)
+            .collect();
 
-    let target_key = target_key.ok_or_else(|| anyhow!("Datum '{}' not found", name))?;
+        if matches.is_empty() {
+            return Err(anyhow!("Datum '{}' not found", name));
+        }
+
+        if let Some((key, _)) = matches.iter().find(|(_, datum)| datum.install_command().is_some()) {
+            (*key).clone()
+        } else {
+            matches[0].0.clone()
+        }
+    };
 
     // Resolve dependencies using datum graph
     let datum_refs: Vec<&BootDatum> = all_datums.values().collect();
@@ -381,6 +391,44 @@ hint = "Test stack"
                     .unwrap_err()
                     .to_string()
                     .contains("Failed to install")
+        );
+    }
+
+    #[test]
+    fn test_install_datum_prefers_installable_name_collision() {
+        let temp_dir = TempDir::new().unwrap();
+        let path = temp_dir.path().to_str().unwrap();
+
+        // Non-installable datum: no install command; depends on a non-existent datum so
+        // that if it is wrongly selected, dependency resolution fails and the test fails.
+        create_test_datum_file(
+            &temp_dir,
+            "pi",
+            "agent",
+            Some(vec!["nonexistent-dep.cli".to_string()]),
+            None,
+            None,
+        )
+        .unwrap();
+
+        // Installable datum: has an install command that creates a sentinel file so we can
+        // assert it was actually executed.
+        let sentinel = temp_dir.path().join("pi-cli-installed");
+        create_test_datum_file(
+            &temp_dir,
+            "pi",
+            "cli",
+            None,
+            Some(&format!("touch {}", sentinel.display())),
+            None,
+        )
+        .unwrap();
+
+        let result = install_datum(path, "pi");
+        assert!(result.is_ok(), "expected installable datum to be selected: {:?}", result.err());
+        assert!(
+            sentinel.exists(),
+            "install command was not executed — non-installable datum may have been selected"
         );
     }
 

@@ -1,0 +1,117 @@
+# b00t Hive Profile — continuous skill-improvement loop via opencode + ch0nky
+# Runs ralph.sh in TASK=skill-test mode: survey datums → test → fix → validate → commit
+# Systemd restarts after each batch (5 iterations); loop runs indefinitely
+# Activate: b00t hive activate b00t-skill-improve-loop
+# Logs:     journalctl --user -u b00t-hive-b00t-skill-improve-loop -f --no-pager
+# Scores:   tail -f .b00t/ralph/scores.jsonl
+
+[b00t]
+name = "b00t-skill-improve-loop"
+type = "hive_profile"
+hint = "Continuous b00t self-improvement via opencode ch0nky — tests datums, fixes gaps, commits improvements"
+
+[b00t.hive.resources]
+# 🤓 CPU-only for ralph loop; GPU consumed by ch0nky inference on :8001 (shared with inference profile)
+ram_gb    = 2
+gpu_mb    = 0
+cpu_cores = 1
+
+[b00t.hive.resources.gate]
+ram_free_gb = 1
+gpu_free_mb = 0
+
+[b00t.hive.exclusion]
+# 🤓 different group from primary-workload — runs alongside inference, not instead of it
+group    = "skill-improve"
+priority = 10
+
+[b00t.hive.services]
+start = []
+stop  = []
+
+# ─── Inline service spec ─────────────────────────────────────────────────────
+[b00t.hive.service]
+description       = "b00t continuous skill-improvement loop — opencode ch0nky, TASK=skill-test"
+service_type      = "simple"
+restart           = "always"
+restart_sec       = "120s"
+timeout_start_sec = "600"
+after             = ["network.target"]
+environment       = [
+  "PATH=/home/brianh/.local/share/pnpm:/home/brianh/.nvm/versions/node/v22.15.1/bin:/home/brianh/.cargo/bin:/home/brianh/.venv/bin:/usr/local/bin:/usr/bin:/bin",
+  "HOME=/home/brianh",
+  "TASK=skill-test",
+  "TOOL=opencode",
+  "ROLE=operator",
+  "OPENCODE_MODEL=qwen36-local/ch0nky",
+  "MAX_ITERATIONS=5",
+  "LOOP_SLEEP_SECONDS=30",
+  "RALPH_METRIC_GATE=true",
+  "SELF_IMPROVE_MODE=true",
+  "OPENAI_BASE_URL=http://127.0.0.1:8001/v1",
+  "OPENAI_API_KEY=local-b00t",
+  "B00T_STATE_DIR=.b00t/ralph",
+  "GIT_AUTHOR_NAME=b00t-skill-loop",
+  "GIT_AUTHOR_EMAIL=loop@b00t.local",
+  "GIT_COMMITTER_NAME=b00t-skill-loop",
+  "GIT_COMMITTER_EMAIL=loop@b00t.local",
+]
+working_directory = "/home/brianh/.b00t"
+exec_start = """/home/brianh/.b00t/b00t.sh \
+    --tool opencode \
+    --max-iterations 5"""
+# 🤓 RestartSec=120s: 2min cooldown between batches; prevents hammering ch0nky on :8001
+# 🤓 MAX_ITERATIONS=5: short batches; systemd restart gives clean state each batch
+# 🤓 RALPH_METRIC_GATE=true: rollback on test regression; safe for unattended overnight run
+# 🤓 GIT_AUTHOR_*: commits attributed to loop so operator can identify them in git log
+
+[b00t.hive.env]
+TASK             = "skill-test"
+OPENCODE_MODEL   = "qwen36-local/ch0nky"
+B00T_SKILL_LOOP  = "active"
+
+[[b00t.hive.guards]]
+pattern = "pip install"
+action  = "warn"
+message = "🦨 use uv pip install"
+
+[[b00t.hive.guards]]
+pattern = "docker run"
+action  = "warn"
+message = "🦨 use podman (CDI GPU)"
+
+# ─── Usage recipes ───────────────────────────────────────────────────────────
+[[b00t.usage]]
+description = "Activate continuous skill-improve loop (starts systemd service)"
+command     = "b00t hive activate b00t-skill-improve-loop"
+
+[[b00t.usage]]
+description = "Check loop service status"
+command     = "systemctl --user status b00t-hive-b00t-skill-improve-loop"
+
+[[b00t.usage]]
+description = "Tail loop logs"
+command     = "journalctl --user -u b00t-hive-b00t-skill-improve-loop -f --no-pager"
+
+[[b00t.usage]]
+description = "Check improvement scores"
+command     = "tail -20 .b00t/ralph/scores.jsonl 2>/dev/null || echo 'no scores yet'"
+
+[[b00t.usage]]
+description = "Stop the loop"
+command     = "systemctl --user stop b00t-hive-b00t-skill-improve-loop"
+
+[[b00t.usage]]
+description = "View loop git commits"
+command     = "git log --oneline --author='b00t-skill-loop' -20"
+
+[[b00t.usage]]
+description = "One-shot (no systemd) — 5 iterations"
+command     = "TASK=skill-test TOOL=opencode ROLE=executive OPENCODE_MODEL=qwen36-local/ch0nky MAX_ITERATIONS=5 bash ralphs/ralph-plus-_b00t_/ralph.sh"
+
+# b00t:map v1
+# summary: continuous b00t skill-improvement loop — opencode ch0nky tests+fixes datums overnight
+# tags: skill-improve, ralph, opencode, ch0nky, self-improving, systemd, loop, hive
+# tier: ch0nky
+# cmds: b00t hive activate b00t-skill-improve-loop
+# complexity: 6

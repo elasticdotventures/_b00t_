@@ -98,26 +98,17 @@ impl B00tService {
     /// Activate a hive profile — JSON StackResult
     async fn stack_activate(&self, profile: &str, force: bool) -> zbus::fdo::Result<String> {
         validate_profile_name(profile)?;
-        let result = dbus_hive_bridge::activate_profile_bridge(
-            profile,
-            &self.datum_dir,
-            force,
-        )
-        .map_err(|e| zbus::fdo::Error::Failed(format!("activate: {e}")))?;
-        serde_json::to_string(&result)
-            .map_err(|e| zbus::fdo::Error::Failed(format!("json: {e}")))
+        let result = dbus_hive_bridge::activate_profile_bridge(profile, &self.datum_dir, force)
+            .map_err(|e| zbus::fdo::Error::Failed(format!("activate: {e}")))?;
+        serde_json::to_string(&result).map_err(|e| zbus::fdo::Error::Failed(format!("json: {e}")))
     }
 
     /// Deactivate a hive profile — JSON StackResult
     async fn stack_deactivate(&self, profile: &str) -> zbus::fdo::Result<String> {
         validate_profile_name(profile)?;
-        let result = dbus_hive_bridge::deactivate_profile_bridge(
-            profile,
-            &self.datum_dir,
-        )
-        .map_err(|e| zbus::fdo::Error::Failed(format!("deactivate: {e}")))?;
-        serde_json::to_string(&result)
-            .map_err(|e| zbus::fdo::Error::Failed(format!("json: {e}")))
+        let result = dbus_hive_bridge::deactivate_profile_bridge(profile, &self.datum_dir)
+            .map_err(|e| zbus::fdo::Error::Failed(format!("deactivate: {e}")))?;
+        serde_json::to_string(&result).map_err(|e| zbus::fdo::Error::Failed(format!("json: {e}")))
     }
 }
 
@@ -155,10 +146,8 @@ pub mod dbus_hive_bridge {
     use std::sync::OnceLock;
 
     type CaptureFn = Box<dyn Fn() -> Result<String> + Send + Sync>;
-    type ActivateFn =
-        Box<dyn Fn(&str, &Path, bool) -> Result<StackResult> + Send + Sync>;
-    type DeactivateFn =
-        Box<dyn Fn(&str, &Path) -> Result<StackResult> + Send + Sync>;
+    type ActivateFn = Box<dyn Fn(&str, &Path, bool) -> Result<StackResult> + Send + Sync>;
+    type DeactivateFn = Box<dyn Fn(&str, &Path) -> Result<StackResult> + Send + Sync>;
 
     static CAPTURE: OnceLock<CaptureFn> = OnceLock::new();
     static ACTIVATE: OnceLock<ActivateFn> = OnceLock::new();
@@ -193,10 +182,7 @@ pub mod dbus_hive_bridge {
         f(profile, datum_dir, force)
     }
 
-    pub fn deactivate_profile_bridge(
-        profile: &str,
-        datum_dir: &Path,
-    ) -> Result<StackResult> {
+    pub fn deactivate_profile_bridge(profile: &str, datum_dir: &Path) -> Result<StackResult> {
         let f = DEACTIVATE
             .get()
             .ok_or_else(|| anyhow::anyhow!("bridge not registered"))?;

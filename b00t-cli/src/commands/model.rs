@@ -1,6 +1,7 @@
 use crate::model_manager::{
-    ModelOperation, ModelRecord, ServeOptions, activate_model, describe_model, download_model,
-    export_model_env, list_models, remove_model, serve_model, stop_model,
+    ModelOperation, ModelRecord, ServeOptions, ServedEndpointRecord, activate_model,
+    describe_model, download_model, export_model_env, list_models, list_served_models,
+    remove_model, serve_model, stop_model,
 };
 use anyhow::{Result, anyhow};
 use clap::Parser;
@@ -13,6 +14,14 @@ pub enum ModelCommands {
         long_about = "Enumerate AI model datums discovered in the _b00t_ directory."
     )]
     List {
+        #[clap(long, help = "Emit JSON instead of human-readable output")]
+        json: bool,
+    },
+    #[clap(
+        about = "List models currently served by local inference endpoints",
+        long_about = "Discover local OpenAI-compatible inference endpoints from model datums and query each endpoint's /v1/models response."
+    )]
+    Served {
         #[clap(long, help = "Emit JSON instead of human-readable output")]
         json: bool,
     },
@@ -40,8 +49,6 @@ pub enum ModelCommands {
     },
     #[clap(
         about = "Download/cache model weights defined by the datum",
-        alias = "install",
-        visible_alias = "install",
         long_about = "Use huggingface-cli to pull weights into the cache directory defined by the datum."
     )]
     Download {
@@ -108,6 +115,9 @@ impl ModelCommands {
     pub fn execute(&self, path: &str) -> Result<()> {
         match self {
             ModelCommands::List { json } => list_models_cmd(path, *json),
+            ModelCommands::Served { .. } => {
+                unreachable!("use ModelCommands::execute_async for served")
+            }
             ModelCommands::Info { name, json } => info_cmd(path, name.as_deref(), *json),
             ModelCommands::Env { name, plain, json } => {
                 env_cmd(path, name.as_deref(), *plain, *json)
@@ -144,6 +154,13 @@ impl ModelCommands {
             ModelCommands::Stop { container } => stop_cmd(path, container.as_deref()),
         }
     }
+
+    pub async fn execute_async(&self, path: &str) -> Result<()> {
+        match self {
+            ModelCommands::Served { json } => served_cmd(path, *json).await,
+            _ => self.execute(path),
+        }
+    }
 }
 
 fn list_models_cmd(path: &str, json_output: bool) -> Result<()> {
@@ -154,7 +171,9 @@ fn list_models_cmd(path: &str, json_output: bool) -> Result<()> {
     }
 
     if models.is_empty() {
-        println!("No AI model datums found. Create *.ai_model.toml files in _b00t_.");
+        println!(
+            "No AI model datums found. Create *.model.toml or *.ai_model.toml files in _b00t_."
+        );
         return Ok(());
     }
 
@@ -163,6 +182,25 @@ fn list_models_cmd(path: &str, json_output: bool) -> Result<()> {
         print_record_summary(&record);
     }
     println!("\nUse 'b00t-cli model info <name>' for details.");
+    Ok(())
+}
+
+async fn served_cmd(path: &str, json_output: bool) -> Result<()> {
+    let endpoints = list_served_models(path).await?;
+    if json_output {
+        println!("{}", serde_json::to_string_pretty(&endpoints)?);
+        return Ok(());
+    }
+
+    if endpoints.is_empty() {
+        println!("No local inference models are currently reachable.");
+        return Ok(());
+    }
+
+    println!("📡 Local Inference Models:\n");
+    for endpoint in &endpoints {
+        print_served_endpoint(endpoint);
+    }
     Ok(())
 }
 
@@ -325,6 +363,30 @@ fn stop_cmd(path: &str, container: Option<&str>) -> Result<()> {
     Ok(())
 }
 
+fn print_served_endpoint(endpoint: &ServedEndpointRecord) {
+    let mut details = Vec::new();
+    if let Some(gpu) = &endpoint.gpu {
+        details.push(format!("gpu={}", gpu));
+    }
+    if let Some(port) = endpoint.port {
+        details.push(format!("port={}", port));
+    }
+    if !endpoint.source_models.is_empty() {
+        details.push(format!("datum={}", endpoint.source_models.join(",")));
+    }
+
+    if details.is_empty() {
+        println!("{}", endpoint.base_url);
+    } else {
+        println!("{}  ({})", endpoint.base_url, details.join(", "));
+    }
+
+    for model in &endpoint.models {
+        println!("  - {}", model.id);
+    }
+    println!();
+}
+
 fn shell_quote(value: &str) -> String {
     if value
         .chars()
@@ -342,5 +404,19 @@ fn shell_quote(value: &str) -> String {
         }
         quoted.push('\'');
         quoted
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_served_command_parses_json_flag() {
+        let command = ModelCommands::try_parse_from(["model", "served", "--json"]).unwrap();
+        match command {
+            ModelCommands::Served { json } => assert!(json),
+            other => panic!("unexpected command: {:?}", std::mem::discriminant(&other)),
+        }
     }
 }

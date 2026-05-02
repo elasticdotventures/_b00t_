@@ -37,11 +37,71 @@ try {
   contextPct = bridge.remaining_pct ?? 100;
 } catch {
 }
+function findGitRoot(cwd) {
+  let dir = cwd;
+  for (let i = 0; i < 20; i++) {
+    const gitDir = path.join(dir, ".git");
+    if (fs.existsSync(gitDir) && fs.statSync(gitDir).isDirectory()) {
+      return dir;
+    }
+    const parent = path.dirname(dir);
+    if (parent === dir)
+      break;
+    dir = parent;
+  }
+  return null;
+}
+function getCapabilityUseCounts(gitRoot2) {
+  const tomlPath = path.join(gitRoot2, ".git", "_b00t_.toml");
+  if (!fs.existsSync(tomlPath)) {
+    return [];
+  }
+  const content = fs.readFileSync(tomlPath, "utf8");
+  const capabilities2 = [];
+  const numbersMatch = content.match(/\[numbers\]([\s\S]*?)(?:# |\n\[|$)/);
+  if (!numbersMatch)
+    return [];
+  const numbersSection = numbersMatch[1];
+  const capRegex = /^capability:([^:]+):use_count\s*=\s*(\d+)/gm;
+  let match;
+  while ((match = capRegex.exec(numbersSection)) !== null) {
+    const name = match[1];
+    const useCount = parseInt(match[2], 10);
+    if (useCount > 0) {
+      capabilities2.push({ name, useCount });
+    }
+  }
+  capabilities2.sort((a, b) => a.useCount - b.useCount);
+  return capabilities2;
+}
+function suggestUnloading(capabilities2) {
+  if (capabilities2.length < 1)
+    return null;
+  const bottom = capabilities2.slice(0, Math.min(3, capabilities2.length));
+  if (bottom.length === 0)
+    return null;
+  const suggestions = bottom.filter((c) => c.useCount > 0).map((c) => `${c.name} (used ${c.useCount})`).join(", ");
+  if (!suggestions)
+    return null;
+  return suggestions;
+}
+var gitRoot = findGitRoot(process.cwd());
+var capabilities = gitRoot ? getCapabilityUseCounts(gitRoot) : [];
+var unloadSuggestion = contextPct <= 35 && capabilities.length > 0 ? suggestUnloading(capabilities) : null;
 var advisory = null;
 if (contextPct <= 25) {
-  advisory = `\u{1F6A8} CONTEXT CRITICAL: Only ${contextPct}% context remaining. Run /compact or finish current task.`;
+  const critical = "CRITICAL";
+  advisory = `\u{1F6A8} ${critical} CONTEXT: Only ${contextPct}% remaining.`;
+  if (unloadSuggestion) {
+    advisory += ` Consider unloading: ${unloadSuggestion}`;
+  } else {
+    advisory += " Run /compact or finish task.";
+  }
 } else if (contextPct <= 35) {
-  advisory = `\u26A0\uFE0F CONTEXT WARNING: ${contextPct}% context remaining. Consider /compact soon.`;
+  advisory = `\u26A0\uFE0F CONTEXT: ${contextPct}% remaining.`;
+  if (unloadSuggestion) {
+    advisory += ` Consider unloading: ${unloadSuggestion}`;
+  }
 }
 if (advisory) {
   process.stdout.write(JSON.stringify({ additionalContext: advisory }));

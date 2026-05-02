@@ -379,9 +379,21 @@ mod tests {
         let mut graph = GraphRAG::new();
 
         // Create nodes: A -> B -> C
-        graph.add_node("A".to_string(), "blessing".to_string(), serde_json::json!({}));
-        graph.add_node("B".to_string(), "blessing".to_string(), serde_json::json!({}));
-        graph.add_node("C".to_string(), "blessing".to_string(), serde_json::json!({}));
+        graph.add_node(
+            "A".to_string(),
+            "blessing".to_string(),
+            serde_json::json!({}),
+        );
+        graph.add_node(
+            "B".to_string(),
+            "blessing".to_string(),
+            serde_json::json!({}),
+        );
+        graph.add_node(
+            "C".to_string(),
+            "blessing".to_string(),
+            serde_json::json!({}),
+        );
 
         // Create edges: A requires B, B requires C
         graph.add_edge("B".to_string(), "A".to_string(), "requires".to_string());
@@ -420,9 +432,21 @@ mod tests {
         let mut graph = GraphRAG::new();
 
         // Create acyclic graph: A -> B -> C
-        graph.add_node("A".to_string(), "blessing".to_string(), serde_json::json!({}));
-        graph.add_node("B".to_string(), "blessing".to_string(), serde_json::json!({}));
-        graph.add_node("C".to_string(), "blessing".to_string(), serde_json::json!({}));
+        graph.add_node(
+            "A".to_string(),
+            "blessing".to_string(),
+            serde_json::json!({}),
+        );
+        graph.add_node(
+            "B".to_string(),
+            "blessing".to_string(),
+            serde_json::json!({}),
+        );
+        graph.add_node(
+            "C".to_string(),
+            "blessing".to_string(),
+            serde_json::json!({}),
+        );
 
         graph.add_edge("A".to_string(), "B".to_string(), "requires".to_string());
         graph.add_edge("B".to_string(), "C".to_string(), "requires".to_string());
@@ -437,9 +461,21 @@ mod tests {
         let mut graph = GraphRAG::new();
 
         // Create cyclic graph: A -> B -> C -> A
-        graph.add_node("A".to_string(), "blessing".to_string(), serde_json::json!({}));
-        graph.add_node("B".to_string(), "blessing".to_string(), serde_json::json!({}));
-        graph.add_node("C".to_string(), "blessing".to_string(), serde_json::json!({}));
+        graph.add_node(
+            "A".to_string(),
+            "blessing".to_string(),
+            serde_json::json!({}),
+        );
+        graph.add_node(
+            "B".to_string(),
+            "blessing".to_string(),
+            serde_json::json!({}),
+        );
+        graph.add_node(
+            "C".to_string(),
+            "blessing".to_string(),
+            serde_json::json!({}),
+        );
 
         graph.add_edge("A".to_string(), "B".to_string(), "requires".to_string());
         graph.add_edge("B".to_string(), "C".to_string(), "requires".to_string());
@@ -461,9 +497,21 @@ mod tests {
         //   B
         //   |
         //   A
-        graph.add_node("A".to_string(), "blessing".to_string(), serde_json::json!({}));
-        graph.add_node("B".to_string(), "blessing".to_string(), serde_json::json!({}));
-        graph.add_node("C".to_string(), "blessing".to_string(), serde_json::json!({}));
+        graph.add_node(
+            "A".to_string(),
+            "blessing".to_string(),
+            serde_json::json!({}),
+        );
+        graph.add_node(
+            "B".to_string(),
+            "blessing".to_string(),
+            serde_json::json!({}),
+        );
+        graph.add_node(
+            "C".to_string(),
+            "blessing".to_string(),
+            serde_json::json!({}),
+        );
 
         // C depends on B, B depends on A
         graph.add_edge("B".to_string(), "C".to_string(), "requires".to_string());
@@ -486,8 +534,16 @@ mod tests {
         let mut graph = GraphRAG::new();
 
         // Create cyclic graph: A -> B -> A
-        graph.add_node("A".to_string(), "blessing".to_string(), serde_json::json!({}));
-        graph.add_node("B".to_string(), "blessing".to_string(), serde_json::json!({}));
+        graph.add_node(
+            "A".to_string(),
+            "blessing".to_string(),
+            serde_json::json!({}),
+        );
+        graph.add_node(
+            "B".to_string(),
+            "blessing".to_string(),
+            serde_json::json!({}),
+        );
 
         graph.add_edge("A".to_string(), "B".to_string(), "requires".to_string());
         graph.add_edge("B".to_string(), "A".to_string(), "requires".to_string());

@@ -123,9 +123,64 @@ grep -q "^PASS" /tmp/review.txt || { log "REVIEWER_REJECTED"; exit 1; }
 # Runs tests → finds failures → fixes → re-tests; surfaces summary to operator
 ```
 
+## DELEGATION LANGUAGE — frontier↔worker abstract protocol
+<!-- synthesized from: ralphex, agentic-stack, beads — 2026-04-27 -->
+
+### Delegation Contract (REQUIRED fields for every sub-agent call)
+```toml
+[delegate]
+goal        = "<one sentence>"          # what to achieve
+constraints = ["never push to main"]   # hard limits list
+return_format = "SCORE: PASS|FAIL|SKIP|STALE:<datum>:<result>\nEXIT_SIGNAL: true|false"
+budget      = { tokens = 8000, tool_calls = 10, wall_time_s = 60, max_depth = 2 }
+```
+Executive MUST NOT inject diff/context — worker fetches own context (`git diff`, `b00t status`).
+
+### Extended Output Contract
+```
+SCORE: PASS:<datum>:<result>    # work done, gate passed
+SCORE: FAIL:<datum>:<reason>    # work failed
+SCORE: SKIP:<reason>            # no applicable gap found
+SCORE: STALE:<N>:<datum>        # N consecutive rounds, no progress
+EXIT_SIGNAL: true               # executive should not re-queue this worker
+EXIT_SIGNAL: false              # re-queue for next iteration
+DELEGATE: <tier>:<datum>:<goal> # worker requests escalation/delegation
+```
+
+### Stale-Loop Termination (ralphex pattern)
+- Track consecutive rounds with SCORE:FAIL or SCORE:SKIP AND no git commits.
+- After `LOOP_PATIENCE` (default: 3) consecutive stale rounds → emit `SCORE: STALE:N:<datum>` + `EXIT_SIGNAL: true`.
+- Prevents frontier token burn on stuck workers.
+- Set via env: `LOOP_PATIENCE=3` in hive profile.
+
+### Parallel Named-Agent Fan-out (ralphex pattern)
+```bash
+# Fan out named review agents; each fetches own diff
+b00t agent delegate --agents=quality,implementation,testing --invoke=parallel --datum=<pr>
+# Each agent: receives goal+constraints+budget; returns SCORE: PASS|FAIL:<agent>:<5-line>
+# Executive: gate passes only when ALL agents return PASS
+```
+
+### Task Schema (beads pattern)
+- Hash IDs prevent multi-agent merge conflicts: `t-a3f2dd` (SHA256[:6])
+- Hierarchical subtasks: `t-a3f2dd.1.2` (max depth 3)
+- `b00t task ready` — lists only tasks with deps satisfied + `defer_until < now`
+- Task close records `session_id` for orphan detection (`b00t task doctor`)
+
+### Declarative Skill Selection (agentic-stack pattern)
+Skills declare `triggers[]` in their datum — harness auto-loads matching skills without
+`b00t learn` imperative. Overrides: explicit `b00t learn <skill>` still forces load.
+```toml
+[[b00t.skill]]
+triggers = ["commit", "push", "PR"]
+auto_load = true
+budget_tokens = 4096
+constraints = ["never force push to main"]
+```
+
 <!-- b00t:map v1
-summary: Executive role — release gate, grok, tier routing, epiphany culture, non-blocking GPU loop
-tags: executive, release-gate, grok, cognitive-tiers, epiphany, friction-report, adversarial-gemma4, non-blocking, operator
+summary: Executive role — release gate, grok, tier routing, epiphany culture, non-blocking GPU loop, delegation language
+tags: executive, release-gate, grok, cognitive-tiers, epiphany, friction-report, adversarial-gemma4, non-blocking, operator, delegation, stale-detection, parallel-agents, beads, ralphex, agentic-stack
 tier: frontier
 cmds: just cog::release, just pre-release-check, b00t grok digest -t epiphany "...", b00t whoami --role=operator
 complexity: 9

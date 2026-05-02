@@ -6,6 +6,8 @@ set -euo pipefail
 
 # Defaults (can be overridden by env or flags)
 TOOL="${TOOL:-${B00T_TOOL:-claude}}"
+MODEL_ALIAS="${MODEL_ALIAS:-${B00T_UP_MODEL:-}}"
+PROVIDER_CHAIN="${PROVIDER_CHAIN:-${B00T_UP_PROVIDERS:-}}"
 MAX_ITERATIONS=10
 ROLE="${B00T_ROLE:-developer}"
 LOOP_SLEEP_SECONDS="${LOOP_SLEEP_SECONDS:-3}"
@@ -23,6 +25,7 @@ MISTRALRS_MODEL_NAME="${MISTRALRS_MODEL_NAME:-mistral}"
 PI_PROVIDER="${PI_PROVIDER:-openai}"
 PI_GATEWAY_PORT="${PI_GATEWAY_PORT:-1234}"
 PI_DIRECT_PORT="${PI_DIRECT_PORT:-8001}"
+PI_BASE_URL_EXPLICIT="${PI_BASE_URL:-}"
 if [[ -z "${PI_BASE_URL:-}" ]]; then
     PI_BASE_URL="http://127.0.0.1:${PI_GATEWAY_PORT}/v1"
 fi
@@ -30,7 +33,8 @@ PI_MODEL="${PI_MODEL:-ch0nky}"
 PI_API_KEY="${PI_API_KEY:-local-b00t}"
 # 🤓 direct Gemma4 vLLM works through pi's llama-cpp provider; openai provider expects cloud auth semantics.
 PI_DIRECT_PROVIDER="${PI_DIRECT_PROVIDER:-llama-cpp}"
-OPENCODE_MODEL="${OPENCODE_MODEL:-gemma4-local/ch0nky}"
+OPENCODE_MODEL_EXPLICIT="${OPENCODE_MODEL:-}"
+OPENCODE_MODEL="${OPENCODE_MODEL:-qwen36-local/ch0nky}"
 SELF_IMPROVE_MODE="${B00T_SELF_IMPROVE:-auto}"
 ISSUE_FEED="${B00T_GH_ISSUES:-}"
 BACKLOG_SNIPPET=""
@@ -57,10 +61,19 @@ TASK_STATE_CHECKPOINT="${STATE_DIR}/task_state.json"
 # Friction report: worker agents append here; operator triages async
 FRICTION_DIR="${STATE_DIR}/friction"
 
-# Parse CLI args: --tool <tool> [--max-iterations <n>] [<n>]
+# Parse CLI args: --tool <tool> [--model <alias>] [--provider <name> ...] [--max-iterations <n>] [<n>]
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --tool) TOOL="$2"; shift 2 ;;
+        --model) MODEL_ALIAS="$2"; shift 2 ;;
+        --provider)
+            if [[ -n "${PROVIDER_CHAIN}" ]]; then
+                PROVIDER_CHAIN="${PROVIDER_CHAIN},$2"
+            else
+                PROVIDER_CHAIN="$2"
+            fi
+            shift 2
+            ;;
         --max-iterations) MAX_ITERATIONS="$2"; shift 2 ;;
         --role) ROLE="$2"; shift 2 ;;
         --sleep) LOOP_SLEEP_SECONDS="$2"; shift 2 ;;
@@ -79,34 +92,127 @@ http_ok() {
     curl -fsS --max-time 2 "${url}" >/dev/null 2>&1
 }
 
-resolve_pi_transport() {
-    if [[ -n "${PI_BASE_URL:-}" && "${PI_BASE_URL}" != "http://127.0.0.1:${PI_GATEWAY_PORT}/v1" ]]; then
-        if [[ -z "${PI_PROVIDER:-}" || "${PI_PROVIDER}" == "openai" ]]; then
-            PI_PROVIDER="${PI_DIRECT_PROVIDER}"
-        fi
-        return 0
-    fi
+canonical_model_alias() {
+    local model="${1:-}"
+    case "${model,,}" in
+        gemma4|gemma-4|gemma-local|gemma-4-26b-a4b-local) echo "ch0nky" ;;
+        qwen3|qwen3-coder|qwen-local|qwen3-coder-local|sm0l) echo "ch1nky" ;;
+        *) echo "${model}" ;;
+    esac
+}
 
-    local gateway_url="http://127.0.0.1:${PI_GATEWAY_PORT}/v1/models"
-    local direct_url="http://127.0.0.1:${PI_DIRECT_PORT}/v1/models"
+canonical_provider_name() {
+    local provider="${1:-}"
+    case "${provider,,}" in
+        llamacpp|llama_cpp|direct) echo "llama-cpp" ;;
+        openai_compatible) echo "openai-compatible" ;;
+        litellm|gateway) echo "openai" ;;
+        *) echo "${provider,,}" ;;
+    esac
+}
 
-    if [[ "${PI_PROVIDER}" != "llama-cpp" ]] && http_ok "${gateway_url}"; then
-        PI_BASE_URL="http://127.0.0.1:${PI_GATEWAY_PORT}/v1"
-        return 0
-    fi
-
-    if http_ok "${direct_url}"; then
-        if [[ "${PI_PROVIDER}" != "${PI_DIRECT_PROVIDER}" ]]; then
-            log "gateway unavailable on :${PI_GATEWAY_PORT}; falling back to direct Gemma4 on :${PI_DIRECT_PORT}"
-        fi
-        PI_PROVIDER="${PI_DIRECT_PROVIDER}"
-        PI_BASE_URL="http://127.0.0.1:${PI_DIRECT_PORT}/v1"
-        return 0
-    fi
-
-    log "no local PI backend reachable (gateway :${PI_GATEWAY_PORT}, direct :${PI_DIRECT_PORT})"
+provider_chain_contains() {
+    local needle
+    needle="$(canonical_provider_name "${1:-}")"
+    local provider
+    IFS=',' read -ra _providers <<< "${PROVIDER_CHAIN:-}"
+    for provider in "${_providers[@]}"; do
+        [[ "$(canonical_provider_name "${provider}")" == "${needle}" ]] && return 0
+    done
     return 1
 }
+
+resolve_local_model_config() {
+    MODEL_ALIAS="$(canonical_model_alias "${MODEL_ALIAS:-}")"
+    if [[ -z "${MODEL_ALIAS}" && ( "${TOOL}" == "pi" || "${TOOL}" == "opencode" || "${TOOL}" == "gemma4" ) ]]; then
+        MODEL_ALIAS="ch0nky"
+    fi
+
+    if [[ -z "${PROVIDER_CHAIN}" && -n "${MODEL_ALIAS}" ]]; then
+        PROVIDER_CHAIN="llama-cpp,openai-compatible"
+    fi
+
+    case "${MODEL_ALIAS}" in
+        ch1nky)
+            PI_DIRECT_PORT="${B00T_AI_CH1NKY_PORT:-${PI_DIRECT_PORT:-8000}}"
+            LOCAL_PI_BASE_URL="${B00T_AI_CH1NKY_BASE:-${B00T_AI_SM0L_BASE:-http://127.0.0.1:8000/v1}}"
+            PI_MODEL="${B00T_AI_CH1NKY_MODEL:-${B00T_AI_SM0L_MODEL:-qwen3-coder}}"
+            if [[ -z "${OPENCODE_MODEL_EXPLICIT}" ]]; then
+                OPENCODE_MODEL="vllm-local/qwen3-coder"
+            fi
+            ;;
+        ch0nky|*)
+            MODEL_ALIAS="${MODEL_ALIAS:-ch0nky}"
+            PI_DIRECT_PORT="${B00T_AI_CH0NKY_PORT:-${PI_DIRECT_PORT:-8001}}"
+            LOCAL_PI_BASE_URL="${B00T_AI_CH0NKY_BASE:-http://127.0.0.1:8001/v1}"
+            PI_MODEL="${B00T_AI_CH0NKY_MODEL:-ch0nky}"
+            if [[ -z "${OPENCODE_MODEL_EXPLICIT}" ]]; then
+                OPENCODE_MODEL="gemma4-local/ch0nky"
+            fi
+            ;;
+    esac
+}
+
+resolve_pi_transport() {
+    local gateway_base="http://127.0.0.1:${PI_GATEWAY_PORT}/v1"
+    local direct_base="${LOCAL_PI_BASE_URL:-http://127.0.0.1:${PI_DIRECT_PORT}/v1}"
+
+    if [[ -n "${PI_BASE_URL_EXPLICIT}" ]]; then
+        PI_BASE_URL="${PI_BASE_URL_EXPLICIT}"
+        if [[ "${PI_BASE_URL}" == "${direct_base}" ]]; then
+            PI_PROVIDER="${PI_DIRECT_PROVIDER}"
+        else
+            PI_PROVIDER="openai"
+        fi
+        return 0
+    fi
+
+    local gateway_url="${gateway_base}/models"
+    local direct_url="${direct_base}/models"
+    local provider
+    IFS=',' read -ra _providers <<< "${PROVIDER_CHAIN:-}"
+    for provider in "${_providers[@]}"; do
+        case "$(canonical_provider_name "${provider}")" in
+            llama-cpp)
+                if http_ok "${direct_url}"; then
+                    PI_PROVIDER="${PI_DIRECT_PROVIDER}"
+                    PI_BASE_URL="${direct_base}"
+                    return 0
+                fi
+                ;;
+            openai-compatible|openai)
+                if http_ok "${gateway_url}"; then
+                    PI_PROVIDER="openai"
+                    PI_BASE_URL="${gateway_base}"
+                    return 0
+                fi
+                ;;
+        esac
+    done
+
+    if http_ok "${direct_url}"; then
+        if ! provider_chain_contains "llama-cpp"; then
+            log "requested providers unavailable; falling back to direct local model on ${direct_base}"
+        fi
+        PI_PROVIDER="${PI_DIRECT_PROVIDER}"
+        PI_BASE_URL="${direct_base}"
+        return 0
+    fi
+
+    if http_ok "${gateway_url}"; then
+        if ! provider_chain_contains "openai-compatible" && ! provider_chain_contains "openai"; then
+            log "requested providers unavailable; falling back to gateway on ${gateway_base}"
+        fi
+        PI_PROVIDER="openai"
+        PI_BASE_URL="${gateway_base}"
+        return 0
+    fi
+
+    log "no local PI backend reachable (gateway :${PI_GATEWAY_PORT}, direct ${direct_base})"
+    return 1
+}
+
+resolve_local_model_config
 
 pending_tasks_count() {
     local tasks_file=".b00t/tasks.json"
@@ -190,6 +296,15 @@ build_prompt() {
     local loop_number="$1"
     local pending
     pending="$(pending_tasks_count)"
+    # skill-test task: load external prompt file with variable substitution
+    local task_mode="${TASK:-}"
+    if [[ "${task_mode}" == "skill-test" ]]; then
+        local prompt_file="${RALPH_DIR:-$(dirname "$(realpath "$0")")/}/B00T_SKILL_IMPROVE_PROMPT.md"
+        if [[ -f "${prompt_file}" ]]; then
+            sed -e "s|{{LOOP}}|${loop_number}|g"                 -e "s|{{MAX_ITER}}|${MAX_ITERATIONS}|g"                 -e "s|{{PENDING}}|${pending}|g"                 "${prompt_file}"
+            return
+        fi
+    fi
     if is_self_improve_mode; then
         cat <<EOF
 You are running in b00t Ralph self-improvement loop.
@@ -611,16 +726,14 @@ measure_test_score() {
         echo "0"
         return 0
     fi
-    local pass=0 fail=0
-    while IFS= read -r line; do
-        local event
-        event="$(echo "${line}" | jq -r '.event // empty' 2>/dev/null)"
-        [[ "${event}" == "test" ]] || continue
-        local result
-        result="$(echo "${line}" | jq -r '.type // empty' 2>/dev/null)"
-        [[ "${result}" == "ok" ]]      && pass=$((pass + 1))
-        [[ "${result}" == "FAILED" ]]  && fail=$((fail + 1))
-    done < <(timeout "${RALPH_TRIAL_BUDGET_SECS}" cargo test --message-format json 2>/dev/null || true)
+    # Parse "test result: ok. N passed; M failed;" from standard text output
+    local summary
+    summary="$(timeout "${RALPH_TRIAL_BUDGET_SECS}" cargo test 2>&1 | grep -E '^test result:' | tail -1)"
+    if [[ -z "${summary}" ]]; then echo "0"; return 0; fi
+    local pass fail
+    pass="$(echo "${summary}" | grep -oP '\d+(?= passed)')"
+    fail="$(echo "${summary}" | grep -oP '\d+(?= failed)')"
+    pass="${pass:-0}"; fail="${fail:-0}"
     local total=$((pass + fail))
     if [[ "${total}" -eq 0 ]]; then echo "0"; return 0; fi
     echo $((pass * 100 / total))
@@ -816,8 +929,8 @@ while [[ "${loop}" -le "${MAX_ITERATIONS}" ]]; do
     prompt="$(build_prompt "${loop}")"
     output=""
 
-    # R5: GOAL.md + acceptance_criteria gate
-    if command -v b00t-cli >/dev/null 2>&1; then
+    # R5: GOAL.md + acceptance_criteria gate (skip in skill-test mode — uses external prompt)
+    if [[ "${TASK:-}" != "skill-test" ]] && command -v b00t-cli >/dev/null 2>&1; then
         _task_json="$(b00t-cli task next --json 2>/dev/null || true)"
         if [[ -n "${_task_json}" && "${_task_json}" != "no actionable"* ]]; then
             _task_title="$(echo "${_task_json}" | jq -r '.title // empty' 2>/dev/null || true)"

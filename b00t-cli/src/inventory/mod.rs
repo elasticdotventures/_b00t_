@@ -1,9 +1,9 @@
 // b00t-cli/src/inventory/mod.rs
 // System state scanning: tools, MCPs, auth, hive profile
 
+use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
-use chrono::Utc;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Inventory {
@@ -246,7 +246,12 @@ impl Inventory {
             ))
             .exists();
 
-        auth.insert("github".to_string(), AuthToken { present: github_present });
+        auth.insert(
+            "github".to_string(),
+            AuthToken {
+                present: github_present,
+            },
+        );
 
         Ok(auth)
     }
@@ -260,7 +265,12 @@ impl Inventory {
             missing.push("blessing:mcp-ecosystem".to_string());
         }
 
-        if !self.auth.get("anthropic").map(|a| a.present).unwrap_or(false) {
+        if !self
+            .auth
+            .get("anthropic")
+            .map(|a| a.present)
+            .unwrap_or(false)
+        {
             missing.push("blessing:anthropic-auth".to_string());
         }
 

@@ -57,7 +57,7 @@ exec_start = """/home/brianh/.venv/bin/vllm serve \
     --port 8001 \
     --enforce-eager \
     --enable-auto-tool-choice \
-    --tool-call-parser pythonic"""
+    --tool-call-parser gemma4"""
 # 🤓 2imi9/gemma-4-E4B-it-NVFP4A16: NVFP4A16 quant, vLLM 0.19.0 native Gemma 4 support
 # 🤓 --enforce-eager: avoids Triton CUDA graph compilation deadlock on RTX 3090
 # 🤓 unsloth MXFP4_MOE.gguf unsupported: transformers gemma4 GGUF arch not yet mapped

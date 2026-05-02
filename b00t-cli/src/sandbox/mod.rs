@@ -132,7 +132,11 @@ impl SandboxManager {
     }
 
     /// Request reconfiguration with new MCPs
-    pub fn request_reload(&mut self, sandbox_id: &str, new_servers: Vec<String>) -> Result<(), String> {
+    pub fn request_reload(
+        &mut self,
+        sandbox_id: &str,
+        new_servers: Vec<String>,
+    ) -> Result<(), String> {
         let instance = self
             .instances
             .get_mut(sandbox_id)
@@ -159,7 +163,11 @@ impl SandboxManager {
     }
 
     /// Perform the actual reload operation
-    pub fn perform_reload(&mut self, sandbox_id: &str, new_servers: Vec<String>) -> Result<(), String> {
+    pub fn perform_reload(
+        &mut self,
+        sandbox_id: &str,
+        new_servers: Vec<String>,
+    ) -> Result<(), String> {
         let instance = self
             .instances
             .get_mut(sandbox_id)
@@ -415,9 +423,7 @@ mod tests {
         let instance = manager.initialize(config).expect("Should initialize");
         let sandbox_id = instance.id.clone();
 
-        manager
-            .shutdown(&sandbox_id)
-            .expect("Should shutdown");
+        manager.shutdown(&sandbox_id).expect("Should shutdown");
 
         let updated = manager.get(&sandbox_id).unwrap();
         assert_eq!(updated.state, SandboxState::Shutdown);

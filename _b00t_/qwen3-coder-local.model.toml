@@ -5,7 +5,7 @@
 name = "qwen3-coder-local"
 type = "model"
 hint = "Qwen3-Coder-30B-A3B-Instruct GGUF, served locally via vLLM/podman on RTX 3090 (port 8000)"
-aliases = ["qwen3-coder", "qwen-local", "qwen3"]
+aliases = ["qwen3-coder", "qwen-local", "qwen3", "ch1nky"]
 
 [b00t.env]
 VLLM_MODEL_DIR = "~/.b00t/models/qwen3-coder-30b-a3b"

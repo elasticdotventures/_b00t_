@@ -18,11 +18,7 @@ pub struct PromptContext {
 
 impl PromptContext {
     /// Build context from role, blessing graph, and inventory
-    pub fn build(
-        role: &str,
-        graph: &BlessingGraph,
-        inventory: &Inventory,
-    ) -> Self {
+    pub fn build(role: &str, graph: &BlessingGraph, inventory: &Inventory) -> Self {
         // Filter blessings by role
         let filtered = graph.filter_by_role(role);
 
@@ -81,10 +77,7 @@ impl PromptContext {
 
 /// System blessing inventory prompt - what can this agent do?
 pub fn capability_summary(ctx: &PromptContext) -> String {
-    let mut prompt = format!(
-        "## Your Blessings as {} Agent\n\n",
-        ctx.agent_role
-    );
+    let mut prompt = format!("## Your Blessings as {} Agent\n\n", ctx.agent_role);
 
     if !ctx.current_blessings.is_empty() {
         prompt.push_str("### ✅ Available Capabilities\n");
@@ -114,10 +107,7 @@ pub fn capability_summary(ctx: &PromptContext) -> String {
 }
 
 /// Decision support prompt - should I attempt this action?
-pub fn decision_guard_prompt(
-    ctx: &PromptContext,
-    required_blessings: &[String],
-) -> String {
+pub fn decision_guard_prompt(ctx: &PromptContext, required_blessings: &[String]) -> String {
     let mut prompt = String::from("## Can I Execute This Action?\n\n");
 
     let mut has_all = true;
@@ -146,28 +136,24 @@ pub fn decision_guard_prompt(
 }
 
 /// Discovery prompt - what can I learn about?
-pub fn discovery_prompt(
-    ctx: &PromptContext,
-    graph: &BlessingGraph,
-) -> String {
+pub fn discovery_prompt(ctx: &PromptContext, graph: &BlessingGraph) -> String {
     let mut prompt = String::from("## Blessing Discovery\n\n");
     prompt.push_str("As a ");
     prompt.push_str(&ctx.agent_role);
     prompt.push_str(" agent, you can work toward these capabilities:\n\n");
 
     for node in &graph.nodes {
-        if ctx
-            .available_blessings
-            .iter()
-            .any(|b| b == &node.id)
-        {
+        if ctx.available_blessings.iter().any(|b| b == &node.id) {
             let status = if ctx.current_blessings.contains(&node.id) {
                 "✅"
             } else {
                 "⏳"
             };
 
-            prompt.push_str(&format!("{} **{}** (costs {} tokens)\n", status, node.id, node.cost_tokens));
+            prompt.push_str(&format!(
+                "{} **{}** (costs {} tokens)\n",
+                status, node.id, node.cost_tokens
+            ));
 
             // Show requires
             if !node.requires.is_empty() {
@@ -270,10 +256,7 @@ mod tests {
             available_budget: 500,
         };
 
-        let prompt = decision_guard_prompt(
-            &ctx,
-            &vec!["blessing:execute-transition".to_string()],
-        );
+        let prompt = decision_guard_prompt(&ctx, &vec!["blessing:execute-transition".to_string()]);
 
         assert!(prompt.contains("❌"));
         assert!(prompt.contains("Cannot proceed"));
@@ -303,10 +286,7 @@ mod tests {
         let ctx = PromptContext {
             agent_role: "observer".to_string(),
             current_blessings: vec!["blessing:observe".to_string()],
-            available_blessings: vec![
-                "blessing:observe".to_string(),
-                "blessing:audit".to_string(),
-            ],
+            available_blessings: vec!["blessing:observe".to_string(), "blessing:audit".to_string()],
             missing_blessings: vec!["blessing:audit".to_string()],
             total_budget: 1000,
             available_budget: 500,

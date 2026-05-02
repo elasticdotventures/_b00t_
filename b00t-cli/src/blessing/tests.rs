@@ -30,8 +30,7 @@ to = "agent:b00t-sandbox"
 relationship = "enables"
         "#;
 
-        let graph = BlessingGraph::from_toml(toml_str)
-            .expect("Should parse blessing graph TOML");
+        let graph = BlessingGraph::from_toml(toml_str).expect("Should parse blessing graph TOML");
 
         assert_eq!(graph.nodes.len(), 2);
         assert_eq!(graph.edges.len(), 1);
@@ -74,9 +73,18 @@ relationship = "enables"
     fn test_detect_circular_dependencies() {
         let graph = BlessingGraph {
             nodes: vec![
-                BlessingNode { id: "A".to_string(), ..Default::default() },
-                BlessingNode { id: "B".to_string(), ..Default::default() },
-                BlessingNode { id: "C".to_string(), ..Default::default() },
+                BlessingNode {
+                    id: "A".to_string(),
+                    ..Default::default()
+                },
+                BlessingNode {
+                    id: "B".to_string(),
+                    ..Default::default()
+                },
+                BlessingNode {
+                    id: "C".to_string(),
+                    ..Default::default()
+                },
             ],
             edges: vec![
                 BlessingEdge {
@@ -154,9 +162,18 @@ relationship = "enables"
     fn test_topological_sort_blessings() {
         let graph = BlessingGraph {
             nodes: vec![
-                BlessingNode { id: "A".to_string(), ..Default::default() },
-                BlessingNode { id: "B".to_string(), ..Default::default() },
-                BlessingNode { id: "C".to_string(), ..Default::default() },
+                BlessingNode {
+                    id: "A".to_string(),
+                    ..Default::default()
+                },
+                BlessingNode {
+                    id: "B".to_string(),
+                    ..Default::default()
+                },
+                BlessingNode {
+                    id: "C".to_string(),
+                    ..Default::default()
+                },
             ],
             edges: vec![
                 BlessingEdge {
@@ -228,7 +245,11 @@ relationship = "enables"
             binary: "/usr/bin/terraform".to_string(),
             tool_preference: None,
             bash_filters: vec![],
-            allowed_args: vec!["apply".to_string(), "plan".to_string(), "destroy".to_string()],
+            allowed_args: vec![
+                "apply".to_string(),
+                "plan".to_string(),
+                "destroy".to_string(),
+            ],
             denied_args: vec!["login".to_string()],
             timeout_seconds: 600,
             max_cpu_percent: 80,
@@ -252,9 +273,17 @@ relationship = "enables"
             requires_vpn: true,
         };
 
-        assert!(data_perms.readable_paths.contains(&".terraform/".to_string()));
+        assert!(
+            data_perms
+                .readable_paths
+                .contains(&".terraform/".to_string())
+        );
         assert!(data_perms.blocked_paths.contains(&"/root".to_string()));
-        assert!(data_perms.requires_blessings.contains(&"blessing:aws-credentials".to_string()));
+        assert!(
+            data_perms
+                .requires_blessings
+                .contains(&"blessing:aws-credentials".to_string())
+        );
     }
 
     /// Test 13: Blessing node with complete trifecta
@@ -318,8 +347,8 @@ requires_blessings = ["blessing:aws-credentials"]
 requires_vpn = false
         "#;
 
-        let graph = BlessingGraph::from_toml(toml_str)
-            .expect("Should parse blessing trifecta TOML");
+        let graph =
+            BlessingGraph::from_toml(toml_str).expect("Should parse blessing trifecta TOML");
 
         assert!(graph.nodes.len() > 0);
         let node = &graph.nodes[0];
@@ -383,14 +412,12 @@ requires_vpn = false
                 tools: vec!["tofu".to_string(), "terraform".to_string()],
                 require_preferred: false,
             }),
-            bash_filters: vec![
-                BashSafetyFilter {
-                    role: "executor".to_string(),
-                    allowed_commands: vec!["apply".to_string(), "plan".to_string()],
-                    denied_commands: vec!["destroy".to_string()],
-                    deny_by_default: true,
-                },
-            ],
+            bash_filters: vec![BashSafetyFilter {
+                role: "executor".to_string(),
+                allowed_commands: vec!["apply".to_string(), "plan".to_string()],
+                denied_commands: vec!["destroy".to_string()],
+                deny_by_default: true,
+            }],
             allowed_args: vec!["apply".to_string()],
             denied_args: vec![],
             timeout_seconds: 600,

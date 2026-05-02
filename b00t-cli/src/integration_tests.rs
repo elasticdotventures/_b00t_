@@ -372,8 +372,8 @@ baz = "learn/baz.md"
 #[cfg(test)]
 mod uninstall_integration {
     use assert_cmd::Command;
-    use tempfile::TempDir;
     use std::fs;
+    use tempfile::TempDir;
 
     fn write_uninstall_datum(dir: &TempDir, name: &str, script: &str) {
         let content = format!(
@@ -387,7 +387,13 @@ mod uninstall_integration {
     fn test_uninstall_command_not_found() {
         let dir = TempDir::new().unwrap();
         let mut cmd = Command::cargo_bin("b00t-cli").unwrap();
-        cmd.args(["--path", dir.path().to_str().unwrap(), "uninstall", "--yes", "nonexistent"]);
+        cmd.args([
+            "--path",
+            dir.path().to_str().unwrap(),
+            "uninstall",
+            "--yes",
+            "nonexistent",
+        ]);
         let output = cmd.output().unwrap();
         assert!(!output.status.success());
         let stderr = String::from_utf8_lossy(&output.stderr);
@@ -400,7 +406,13 @@ mod uninstall_integration {
         let marker = dir.path().join("removed.txt");
         write_uninstall_datum(&dir, "mytool", &format!("touch {}", marker.display()));
         let mut cmd = Command::cargo_bin("b00t-cli").unwrap();
-        cmd.args(["--path", dir.path().to_str().unwrap(), "uninstall", "--yes", "mytool"]);
+        cmd.args([
+            "--path",
+            dir.path().to_str().unwrap(),
+            "uninstall",
+            "--yes",
+            "mytool",
+        ]);
         cmd.assert().success();
         assert!(marker.exists());
     }

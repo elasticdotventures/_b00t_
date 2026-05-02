@@ -1,7 +1,6 @@
 # justfile for Rust Development Environment
 # Alias to get the Git repository root
 repo-root := env_var_or_default("JUST_REPO_ROOT", `git rev-parse --show-toplevel 2>/dev/null || echo .`)
-workspace_version := `if command -v toml >/dev/null 2>&1; then toml get Cargo.toml workspace.package.version | tr -d '"' ; else echo "0.0.0-unknown"; fi`
 
 
 
@@ -132,7 +131,7 @@ claim-crates:
 release:
     #!/bin/bash
     set -euo pipefail
-    VERSION="{{workspace_version}}"
+    VERSION=$(grep '^version = ' Cargo.toml | grep -oP '[\d]+\.[\d]+\.[\d]+')
 
     echo "🚀 Dispatching GitHub-native release for v${VERSION}..."
 
@@ -240,10 +239,7 @@ install:
     export PATH="${CARGO_HOME_VALUE}/bin:${PATH}"
     mkdir -p "${CARGO_HOME_VALUE}/bin"
 
-    # [1] [2] [3]: bump patch version then install
-    # 🤓 version bump required on every cargo install — tracks deployed vs source state
-    cargo ws version patch --no-git-commit --yes 2>/dev/null || \
-      sed -i 's/^version = "\([0-9]*\)\.\([0-9]*\)\.\([0-9]*\)"/echo "version = \"\1.\2.$((\3+1))\""/e' Cargo.toml
+    # [1] [2] [3]: install binaries (skip version bump - use `just bump` for that)
     cargo install --path b00t-mcp  --force
     cargo install --path b00t-cli  --force
     cargo install cocogitto --locked --force
@@ -437,7 +433,7 @@ clean-workflows:
         /repos/elasticdotventures/dotfiles/actions/runs/{}
 
 version:
-    echo "{{workspace_version}}"
+    @grep '^version = ' Cargo.toml | grep -oP '[\d]+\.[\d]+\.[\d]+'
 
 commit-hook:
     echo "removed"
@@ -506,9 +502,10 @@ hf-download model dest="" revision="":
 		echo "⚠️ set model=<repo>" >&2
 		exit 1
 	fi
-	if ! command -v huggingface-cli >/dev/null 2>&1; then
-		echo "⚠️ huggingface-cli missing; run 'b00t-cli cli install huggingface'" >&2
-		exit 1
+	# 🤓 prefer hf (huggingface_hub>=0.26 alias); auto-install if missing
+	if ! command -v hf >/dev/null 2>&1; then
+		echo "hf not found — auto-installing huggingface_hub[cli] via uv ..." >&2
+		uv tool install --upgrade "huggingface_hub[cli]"
 	fi
 	DEST="{{dest}}"
 	if [[ -z "$DEST" ]]; then
@@ -520,7 +517,7 @@ hf-download model dest="" revision="":
 	if [[ -n "{{revision}}" ]]; then
 		ARGS+=(--revision "{{revision}}")
 	fi
-	huggingface-cli "${ARGS[@]}"
+	hf "${ARGS[@]}"
 	echo "✅ cached $MODEL -> $DEST"
 
 # Invoke b00t-cli to install/cache a datum-backed model
@@ -863,6 +860,17 @@ irontology-test:
 irontology-update:
     git submodule update --remote vendor/irontology-mcp
 
+# Inspect the local side of the sm3lly NATS ACP route without publishing credentials
+acp-sm3lly-status:
+    #!/bin/bash
+    set -euo pipefail
+    _nats_raw="${NATS_URL:-nats://c010.promptexecution.com:4222}"
+    _nats_redacted="$(echo "$_nats_raw" | sed 's|//[^@]*@|//<redacted>@|')"
+    echo "NATS_URL=${_nats_redacted}"
+    b00t chat info
+    b00t hive status
+    b00t whoami --role=executive | sed -n '/Capability check:/,$p'
+
 # ── Gemma 4 + pi-coding-agent local inference ────────────────────────────────
 
 # Download Gemma 4 26B-A4B MXFP4_MOE GGUF (unsloth/gemma-4-26B-A4B-it-GGUF)
@@ -894,6 +902,96 @@ gemma4-stop:
 gemma4-status:
     curl -s http://localhost:8001/v1/models | python3 -m json.tool
 
+
+# ── qwen3.6-27B — download, serve, hive lifecycle ────────────────────────────
+# 🤓 qwen36 replaces gemma4 as ch0nky tier; vLLM primary, llamacpp podman fallback
+# 🤓 PREREQ: activate download-mode first to free VRAM before ~15GB download
+
+# Download Qwen3.6-27B Q4_K_M GGUF (stop vLLM first via download-mode hive)
+qwen36-download:
+    b00t hive activate download-mode
+    hf download unsloth/Qwen3.6-27B-GGUF --include "Qwen3.6-27B-Q4_K_M.gguf"
+    @echo "✅ download done — run: just qwen36-serve  (or just qwen36-serve-llamacpp)"
+
+# Activate Qwen3.6-27B via vLLM (generates + enables systemd unit)
+qwen36-serve:
+    b00t hive activate inference-qwen36-27b
+
+# Activate Qwen3.6-27B via llamacpp podman (GGUF-native fallback when vLLM fails)
+qwen36-serve-llamacpp:
+    b00t hive activate inference-qwen36-27b-llamacpp
+
+# Stop Qwen3.6-27B inference (whichever backend is running)
+qwen36-stop:
+    systemctl --user stop b00t-hive-inference-qwen36-27b.service || true
+    systemctl --user stop b00t-hive-inference-qwen36-27b-llamacpp.service || true
+    systemctl --user stop b00t-hive-inference-qwen36-35b-a3b-llamacpp.service || true
+
+# Serve 35B-A3B MoE (lighter VRAM than 27B dense; preferred when MXFP4 supported)
+qwen36-serve-35b:
+    b00t hive activate inference-qwen36-35b-a3b-llamacpp
+
+# Eval active ch0nky model (must be serving on :8001)
+ch0nky-eval:
+    bash scripts/ch0nky-eval.sh
+
+# Sequential comparison: 27B dense → eval → 35B-A3B MoE → eval → diff
+# Results written to .b00t/ralph/eval-*.jsonl
+ch0nky-eval-compare:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    echo "=== PHASE 1: Qwen3.6-27B-Q4_K_M (dense) ==="
+    just qwen36-stop
+    just qwen36-serve-llamacpp
+    echo "Waiting for :8001..."
+    until curl -sf http://127.0.0.1:8001/v1/models >/dev/null 2>&1; do sleep 5; done
+    just ch0nky-eval
+    echo ""
+    echo "=== PHASE 2: Qwen3.6-35B-A3B-MXFP4_MOE (MoE) ==="
+    just qwen36-stop
+    just qwen36-serve-35b
+    echo "Waiting for :8001..."
+    until curl -sf http://127.0.0.1:8001/v1/models >/dev/null 2>&1; do sleep 5; done
+    just ch0nky-eval
+    echo ""
+    echo "=== COMPARISON COMPLETE — see .b00t/ralph/eval-*.jsonl ==="
+    ls -t .b00t/ralph/eval-*.jsonl | head -2 | xargs grep "SUMMARY"
+
+# Check ch0nky endpoint (port 8001)
+qwen36-status:
+    curl -s http://localhost:8001/v1/models | python3 -m json.tool
+
+# Run opencode one-shot against local qwen36-local/ch0nky
+qwen36-test-opencode prompt="say hello in 3 words":
+    opencode run --model qwen36-local/ch0nky "{{prompt}}"
+
+# ── b00t skill-improvement loop — opencode ch0nky continuous self-improvement ──
+# 🤓 Tests datums, fixes gaps, commits improvements; runs unattended overnight
+
+# One-shot skill improvement run (5 iterations, no systemd)
+b00t-skill-improve iterations="5":
+    TASK=skill-test TOOL=opencode ROLE=executive     OPENCODE_MODEL=qwen36-local/ch0nky     RALPH_METRIC_GATE=true     bash b00t.sh --max-iterations {{iterations}}
+
+# Start continuous skill-improve loop as systemd service (unattended)
+b00t-skill-improve-loop:
+    b00t hive activate b00t-skill-improve-loop
+
+# Stop the loop
+b00t-skill-improve-stop:
+    systemctl --user stop b00t-hive-b00t-skill-improve-loop || true
+
+# Tail loop logs live
+b00t-skill-improve-logs:
+    journalctl --user -u b00t-hive-b00t-skill-improve-loop -f --no-pager
+
+# Show improvement scores from last batch
+b00t-skill-improve-scores:
+    @tail -20 .b00t/ralph/scores.jsonl 2>/dev/null | python3 -m json.tool || echo 'no scores yet'
+
+# Show loop commits in git log
+b00t-skill-improve-log:
+    git log --oneline --author='b00t-skill-loop' -20
+
 # ── pi agent — systemd service lifecycle ─────────────────────────────────────
 # 🤓 pi is managed as b00t@pi-agent.service, NOT spawned per-invocation
 pi-agent-start:
@@ -906,8 +1004,8 @@ pi-agent-status:
     systemctl --user status b00t@pi-agent.service
 
 # Run pi one-shot (interactive, dev/debug only — not the hive path)
-pi-gemma4 prompt="hello":
-    LLAMA_CPP_BASE_URL=http://127.0.0.1:8001/v1 OPENAI_API_KEY=local-gemma4 \
+pi-ch0nky prompt="hello":
+    LLAMA_CPP_BASE_URL=http://127.0.0.1:8001/v1 OPENAI_API_KEY="${OPENAI_API_KEY:-local-b00t}" \
       pi --provider llama-cpp --model ch0nky -p "{{prompt}}"
 
 # ── opencode agent — systemd service lifecycle ───────────────────────────────
@@ -937,9 +1035,9 @@ ch0nky-use-opencode:
     systemctl --user start b00t@opencode-agent.service
 
 # ── smoke tests ──────────────────────────────────────────────────────────────
-gemma4-pi-test:
+ch0nky-pi-test:
     curl -sf http://localhost:8001/v1/models | python3 -c "import sys,json; m=json.load(sys.stdin); print('✅ serving:', [x['id'] for x in m['data']])"
-    LLAMA_CPP_BASE_URL=http://127.0.0.1:8001/v1 OPENAI_API_KEY=local-gemma4 \
+    LLAMA_CPP_BASE_URL=http://127.0.0.1:8001/v1 OPENAI_API_KEY="${OPENAI_API_KEY:-local-b00t}" \
       pi --provider llama-cpp --model ch0nky -p "respond with exactly: pong"
 
 gemma4-opencode-test:

@@ -58,11 +58,11 @@ pub struct ExecArgs {
 
 #[derive(Serialize, Deserialize)]
 struct AuditLogEntry {
-    ts: String,          // ISO8601
-    cmd: String,         // full command string
-    result: String,      // "allow" | "warn" | "block-rejected" | "block-forced" | "background"
+    ts: String,     // ISO8601
+    cmd: String,    // full command string
+    result: String, // "allow" | "warn" | "block-rejected" | "block-forced" | "background"
     guard_msg: Option<String>,
-    pid: Option<u32>,    // child PID if executed
+    pid: Option<u32>, // child PID if executed
 }
 
 /// Load block-cache: cmd_key → unix timestamp of first rejection
@@ -84,18 +84,28 @@ fn append_audit_log(log_path: &PathBuf, entry: &AuditLogEntry) {
     if let Ok(mut line) = serde_json::to_string(entry) {
         line.push('\n');
         use std::io::Write;
-        if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(log_path) {
+        if let Ok(mut f) = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(log_path)
+        {
             let _ = f.write_all(line.as_bytes());
         }
     }
 }
 
 fn now_unix() -> u64 {
-    SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_secs()
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs()
 }
 
 /// Load guards (universal hive-guards + active profile guards)
-fn load_all_guards(datum_dir: &std::path::Path, snapshot: &SystemSnapshot) -> Vec<crate::hive::HiveGuard> {
+fn load_all_guards(
+    datum_dir: &std::path::Path,
+    snapshot: &SystemSnapshot,
+) -> Vec<crate::hive::HiveGuard> {
     let mut guards = Vec::new();
     if let Ok(g) = load_profile("hive-guards", datum_dir) {
         guards.extend(g.guards);
@@ -115,7 +125,7 @@ pub fn handle_exec(args: &ExecArgs, path: &str) -> Result<()> {
 
     let datum_dir = PathBuf::from(shellexpand::tilde(path).to_string());
     let cache_path = PathBuf::from(shellexpand::tilde(AUDIT_CACHE_FILE).to_string());
-    let log_path   = PathBuf::from(shellexpand::tilde(AUDIT_LOG_FILE).to_string());
+    let log_path = PathBuf::from(shellexpand::tilde(AUDIT_LOG_FILE).to_string());
 
     // ensure ~/.b00t/ exists
     if let Some(parent) = cache_path.parent() {
@@ -168,18 +178,24 @@ pub fn handle_exec(args: &ExecArgs, path: &str) -> Result<()> {
             match cache.get(&cmd_str).copied() {
                 Some(first_ts) if now.saturating_sub(first_ts) < BLOCK_TTL_SECS => {
                     // Re-submission within TTL → force-execute with audit warning
-                    eprintln!("🔶 BLOCK-OVERRIDE: {} (re-submission within {}s TTL)", message, BLOCK_TTL_SECS);
+                    eprintln!(
+                        "🔶 BLOCK-OVERRIDE: {} (re-submission within {}s TTL)",
+                        message, BLOCK_TTL_SECS
+                    );
                     eprintln!("   Executing with audit trail.");
                     cache.remove(&cmd_str); // consume the bypass
                     save_block_cache(&cache_path, &cache);
 
-                    append_audit_log(&log_path, &AuditLogEntry {
-                        ts: Utc::now().to_rfc3339(),
-                        cmd: cmd_str.clone(),
-                        result: "block-forced".into(),
-                        guard_msg: Some(message.clone()),
-                        pid: None,
-                    });
+                    append_audit_log(
+                        &log_path,
+                        &AuditLogEntry {
+                            ts: Utc::now().to_rfc3339(),
+                            cmd: cmd_str.clone(),
+                            result: "block-forced".into(),
+                            guard_msg: Some(message.clone()),
+                            pid: None,
+                        },
+                    );
                     // fall through to execution below
                 }
                 _ => {
@@ -187,16 +203,22 @@ pub fn handle_exec(args: &ExecArgs, path: &str) -> Result<()> {
                     cache.insert(cmd_str.clone(), now);
                     save_block_cache(&cache_path, &cache);
 
-                    append_audit_log(&log_path, &AuditLogEntry {
-                        ts: Utc::now().to_rfc3339(),
-                        cmd: cmd_str.clone(),
-                        result: "block-rejected".into(),
-                        guard_msg: Some(message.clone()),
-                        pid: None,
-                    });
+                    append_audit_log(
+                        &log_path,
+                        &AuditLogEntry {
+                            ts: Utc::now().to_rfc3339(),
+                            cmd: cmd_str.clone(),
+                            result: "block-rejected".into(),
+                            guard_msg: Some(message.clone()),
+                            pid: None,
+                        },
+                    );
 
                     eprintln!("🚫 BLOCKED: {}", message);
-                    eprintln!("   Re-submit within {}s to force execution.", BLOCK_TTL_SECS);
+                    eprintln!(
+                        "   Re-submit within {}s to force execution.",
+                        BLOCK_TTL_SECS
+                    );
                     std::process::exit(1);
                 }
             }
@@ -211,13 +233,16 @@ pub fn handle_exec(args: &ExecArgs, path: &str) -> Result<()> {
         // Apply the requested delay before spawning the background process.
         std::thread::sleep(std::time::Duration::from_secs(sleep_secs));
 
-        append_audit_log(&log_path, &AuditLogEntry {
-            ts: Utc::now().to_rfc3339(),
-            cmd: cmd_str.clone(),
-            result: "background".into(),
-            guard_msg: None,
-            pid: None,
-        });
+        append_audit_log(
+            &log_path,
+            &AuditLogEntry {
+                ts: Utc::now().to_rfc3339(),
+                cmd: cmd_str.clone(),
+                result: "background".into(),
+                guard_msg: None,
+                pid: None,
+            },
+        );
 
         // Spawn detached — double-fork idiom via std::process::Command
         let child = std::process::Command::new(&command_clone[0])
@@ -229,7 +254,10 @@ pub fn handle_exec(args: &ExecArgs, path: &str) -> Result<()> {
             .map_err(|e| anyhow::anyhow!("spawn failed '{}': {}", command_clone[0], e))?;
 
         let pid = child.id();
-        println!("🔄 background pid={} delay={}s cmd={}", pid, sleep_secs, cmd_str);
+        println!(
+            "🔄 background pid={} delay={}s cmd={}",
+            pid, sleep_secs, cmd_str
+        );
 
         // Return immediately; OS manages child lifetime
         std::mem::forget(child); // don't wait
@@ -256,13 +284,16 @@ pub fn handle_exec(args: &ExecArgs, path: &str) -> Result<()> {
 
     let pid = child.id();
 
-    append_audit_log(&log_path, &AuditLogEntry {
-        ts: Utc::now().to_rfc3339(),
-        cmd: cmd_str,
-        result: result_label.into(),
-        guard_msg,
-        pid: Some(pid),
-    });
+    append_audit_log(
+        &log_path,
+        &AuditLogEntry {
+            ts: Utc::now().to_rfc3339(),
+            cmd: cmd_str,
+            result: result_label.into(),
+            guard_msg,
+            pid: Some(pid),
+        },
+    );
 
     let status = child.wait()?;
     std::process::exit(status.code().unwrap_or(1));
@@ -271,13 +302,21 @@ pub fn handle_exec(args: &ExecArgs, path: &str) -> Result<()> {
 /// Parse simple duration string: "30s", "2m", "1h" → seconds
 fn parse_duration(s: &str) -> Result<u64> {
     if let Some(n) = s.strip_suffix('s') {
-        return Ok(n.parse::<u64>().map_err(|_| anyhow::anyhow!("invalid duration: {}", s))?);
+        return Ok(n
+            .parse::<u64>()
+            .map_err(|_| anyhow::anyhow!("invalid duration: {}", s))?);
     }
     if let Some(n) = s.strip_suffix('m') {
-        return Ok(n.parse::<u64>().map_err(|_| anyhow::anyhow!("invalid duration: {}", s))? * 60);
+        return Ok(n
+            .parse::<u64>()
+            .map_err(|_| anyhow::anyhow!("invalid duration: {}", s))?
+            * 60);
     }
     if let Some(n) = s.strip_suffix('h') {
-        return Ok(n.parse::<u64>().map_err(|_| anyhow::anyhow!("invalid duration: {}", s))? * 3600);
+        return Ok(n
+            .parse::<u64>()
+            .map_err(|_| anyhow::anyhow!("invalid duration: {}", s))?
+            * 3600);
     }
     bail!("invalid duration '{}'; use 30s, 2m, 1h", s);
 }
