@@ -1,6 +1,6 @@
 use crate::install::adapter::*;
 use crate::install::content::{ContentPack, ContentPackId, FileCopyPack};
-use crate::install::manifest::{B00tInstallManifest, remove_managed_block};
+use crate::install::manifest::{remove_managed_block, B00tInstallManifest};
 use anyhow::{Context, Result};
 use std::path::PathBuf;
 use std::sync::Arc;

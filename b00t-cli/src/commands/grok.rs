@@ -1,8 +1,8 @@
 use anyhow::{Context, Result};
 use b00t_c0re_lib::{DatumNode, DualGrokClient, GrokBackend, IrontologyBridgeClient};
 use clap::Subcommand;
-use flate2::Compression;
 use flate2::write::GzEncoder;
+use flate2::Compression;
 use std::{fs, io::Read, io::Write as IoWrite, path::PathBuf};
 use uuid::Uuid;
 
@@ -573,7 +573,11 @@ fn sanitize_for_filename(input: &str) -> String {
     while s.contains("__") {
         s = s.replace("__", "_");
     }
-    if s.is_empty() { "topic".to_string() } else { s }
+    if s.is_empty() {
+        "topic".to_string()
+    } else {
+        s
+    }
 }
 
 // ── git stdin helper ──────────────────────────────────────────────────────────

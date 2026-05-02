@@ -1,5 +1,5 @@
 use crate::traits::*;
-use crate::{BootDatum, check_command_available, get_config};
+use crate::{check_command_available, get_config, BootDatum};
 use anyhow::Result;
 use duct::cmd;
 use reqwest::Url;

@@ -5,7 +5,7 @@ use std::fs;
 use std::path::PathBuf;
 
 use crate::utils::get_workspace_root;
-use crate::{BootDatum, get_mcp_config};
+use crate::{get_mcp_config, BootDatum};
 
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]

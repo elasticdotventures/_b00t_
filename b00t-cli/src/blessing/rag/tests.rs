@@ -72,13 +72,11 @@ mod knowledge_base_tests {
         assert_eq!(layer_metadata.blessing_id, "blessing:terraform-apply");
         assert_eq!(layer_metadata.embedding_dim, 768);
         assert_eq!(layer_metadata.adapter_rank, 8);
-        assert!(
-            layer_metadata
-                .artifact_path
-                .to_str()
-                .unwrap()
-                .contains(".gguf")
-        );
+        assert!(layer_metadata
+            .artifact_path
+            .to_str()
+            .unwrap()
+            .contains(".gguf"));
     }
 
     #[test]
@@ -92,12 +90,10 @@ mod knowledge_base_tests {
 
         let adapter_path = knowledge_base.adapter_path_for("blessing:observe-infrastructure");
 
-        assert!(
-            adapter_path
-                .to_str()
-                .unwrap()
-                .contains("blessing_observe_infrastructure")
-        );
+        assert!(adapter_path
+            .to_str()
+            .unwrap()
+            .contains("blessing_observe_infrastructure"));
         assert!(adapter_path.to_str().unwrap().contains(".adapter"));
     }
 

@@ -1,6 +1,6 @@
 use crate::datum_cli::CliDatum;
 use crate::dependency_resolver::DependencyResolver;
-use crate::hook_engine::{HookResult, run_hook};
+use crate::hook_engine::{run_hook, HookResult};
 use crate::load_datum_providers;
 use crate::traits::*;
 use crate::{BootDatum, UnifiedConfig};

@@ -59,9 +59,8 @@ struct CapabilityRegistry {
 }
 
 /// Global cache for the parsed capability registry
-static CAPABILITY_REGISTRY: LazyLock<Option<CapabilityRegistry>> = LazyLock::new(|| {
-    load_capability_registry().ok()
-});
+static CAPABILITY_REGISTRY: LazyLock<Option<CapabilityRegistry>> =
+    LazyLock::new(|| load_capability_registry().ok());
 
 /// Get the path to the capability registry file
 fn capability_registry_path() -> Option<PathBuf> {
@@ -69,10 +68,10 @@ fn capability_registry_path() -> Option<PathBuf> {
     let b00t_path = std::env::var("_B00T_Path")
         .ok()
         .unwrap_or_else(|| "~/.b00t/_b00t_".to_string());
-    
+
     let expanded = shellexpand::tilde(&b00t_path);
     let registry_path = PathBuf::from(expanded.as_ref()).join("capability-registry.toml");
-    
+
     if registry_path.exists() {
         Some(registry_path)
     } else {
@@ -91,7 +90,7 @@ fn load_capability_registry() -> Result<CapabilityRegistry, Box<dyn std::error::
 /// Look up a capability by name across all sections (skills, roles, datums, mcp)
 fn lookup_capability(name: &str) -> Option<CapabilityInfo> {
     let registry = CAPABILITY_REGISTRY.as_ref()?;
-    
+
     // Search skills section
     if let Some(val) = registry.skills.get(name) {
         return parse_capability_entry(name, "skill", val);
@@ -108,20 +107,22 @@ fn lookup_capability(name: &str) -> Option<CapabilityInfo> {
     if let Some(val) = registry.mcp.get(name) {
         return parse_capability_entry(name, "mcp", val);
     }
-    
+
     None
 }
 
 /// Parse a capability entry from a TOML value
 fn parse_capability_entry(name: &str, section_type: &str, val: &Value) -> Option<CapabilityInfo> {
     let table = val.as_table()?;
-    
-    let capability_type = table.get("type")
+
+    let capability_type = table
+        .get("type")
         .and_then(|v| v.as_str())
         .unwrap_or(section_type)
         .to_string();
-    
-    let depends_on = table.get("depends_on")
+
+    let depends_on = table
+        .get("depends_on")
         .and_then(|v| v.as_array())
         .map(|arr| {
             arr.iter()
@@ -129,8 +130,9 @@ fn parse_capability_entry(name: &str, section_type: &str, val: &Value) -> Option
                 .collect()
         })
         .unwrap_or_default();
-    
-    let tags = table.get("tags")
+
+    let tags = table
+        .get("tags")
         .and_then(|v| v.as_array())
         .map(|arr| {
             arr.iter()
@@ -138,7 +140,7 @@ fn parse_capability_entry(name: &str, section_type: &str, val: &Value) -> Option
                 .collect()
         })
         .unwrap_or_default();
-    
+
     Some(CapabilityInfo {
         name: name.to_string(),
         capability_type,
@@ -226,23 +228,27 @@ fn build_engine() -> Engine {
     });
 
     // which_capability(name: &str) → String — "yes" if capability exists, "" if not
-    engine.register_fn("which_capability", |name: ImmutableString| -> ImmutableString {
-        if query_capability_registry(name.as_str()).is_some() {
-            ImmutableString::from("yes")
-        } else {
-            ImmutableString::from("")
-        }
-    });
+    engine.register_fn(
+        "which_capability",
+        |name: ImmutableString| -> ImmutableString {
+            if query_capability_registry(name.as_str()).is_some() {
+                ImmutableString::from("yes")
+            } else {
+                ImmutableString::from("")
+            }
+        },
+    );
 
     // capability_depends(name: &str) → String — comma-separated depends_on or "" if none/missing
-    engine.register_fn("capability_depends", |name: ImmutableString| -> ImmutableString {
-        match query_capability_registry(name.as_str()) {
-            Some(info) if !info.depends_on.is_empty() => {
-                info.depends_on.join(",").into()
+    engine.register_fn(
+        "capability_depends",
+        |name: ImmutableString| -> ImmutableString {
+            match query_capability_registry(name.as_str()) {
+                Some(info) if !info.depends_on.is_empty() => info.depends_on.join(",").into(),
+                _ => ImmutableString::from(""),
             }
-            _ => ImmutableString::from(""),
-        }
-    });
+        },
+    );
 
     // 🤓 disable file access — hooks must not read/write filesystem directly
     engine.set_max_expr_depths(64, 32);
@@ -325,20 +331,24 @@ mod tests {
     #[test]
     fn test_query_capability_registry_skills() {
         // Test querying a skill from capability-registry.toml via hook (which loads registry lazily)
-        let result = run_hook(r#"
+        let result = run_hook(
+            r#"
             let exists = which_capability("bash");
             if exists == "yes" { "ok" } else { "warn: bash not found" }
-        "#);
+        "#,
+        );
         assert_eq!(result, HookResult::Ok);
     }
 
     #[test]
     fn test_query_capability_registry_roles() {
         // Test querying a role with depends_on via hook
-        let result = run_hook(r#"
+        let result = run_hook(
+            r#"
             let exists = which_capability("orchestrator");
             if exists == "yes" { "ok" } else { "warn: orchestrator not found" }
-        "#);
+        "#,
+        );
         assert_eq!(result, HookResult::Ok);
     }
 
@@ -351,20 +361,24 @@ mod tests {
     #[test]
     fn test_which_capability_hook_function() {
         // Test the which_capability Rhai function returns "yes" for existing capability
-        let result = run_hook(r#"
+        let result = run_hook(
+            r#"
             let exists = which_capability("bash");
             if exists == "yes" { "ok" } else { "warn: bash not found" }
-        "#);
+        "#,
+        );
         assert_eq!(result, HookResult::Ok);
     }
 
     #[test]
     fn test_which_capability_hook_function_not_found() {
         // Test the which_capability Rhai function returns "" for missing capability
-        let result = run_hook(r#"
+        let result = run_hook(
+            r#"
             let exists = which_capability("nonexistent-xyz-capability");
             if exists == "" { "ok" } else { "warn: should be empty" }
-        "#);
+        "#,
+        );
         assert_eq!(result, HookResult::Ok);
     }
 
@@ -372,21 +386,25 @@ mod tests {
     fn test_capability_depends_hook_function() {
         // Test the capability_depends Rhai function - returns depends for capabilities that have them
         // Note: orchestrator exists in both skills (no deps) and roles (with deps), skills found first
-        let result = run_hook(r#"
+        let result = run_hook(
+            r#"
             let deps = capability_depends("bash");
             // bash has no depends_on, so should return empty
             if deps == "" { "ok" } else { "warn: expected empty deps, got: " + deps }
-        "#);
+        "#,
+        );
         assert_eq!(result, HookResult::Ok);
     }
 
     #[test]
     fn test_capability_depends_hook_function_not_found() {
         // Test the capability_depends Rhai function returns "" for missing capability
-        let result = run_hook(r#"
+        let result = run_hook(
+            r#"
             let deps = capability_depends("nonexistent-xyz-capability");
             if deps == "" { "ok" } else { "warn: expected empty deps, got: " + deps }
-        "#);
+        "#,
+        );
         assert_eq!(result, HookResult::Ok);
     }
 }

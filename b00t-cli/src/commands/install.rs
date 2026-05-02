@@ -1,6 +1,6 @@
 use crate::dependency_resolver::DependencyResolver;
 use crate::{BootDatum, UnifiedConfig};
-use anyhow::{Context, Result, anyhow};
+use anyhow::{anyhow, Context, Result};
 use clap::Parser;
 use duct::cmd;
 use shellexpand;
@@ -94,7 +94,10 @@ pub fn install_datum(path: &str, name: &str) -> Result<()> {
             return Err(anyhow!("Datum '{}' not found", name));
         }
 
-        if let Some((key, _)) = matches.iter().find(|(_, datum)| datum.install_command().is_some()) {
+        if let Some((key, _)) = matches
+            .iter()
+            .find(|(_, datum)| datum.install_command().is_some())
+        {
             (*key).clone()
         } else {
             matches[0].0.clone()
@@ -425,7 +428,11 @@ hint = "Test stack"
         .unwrap();
 
         let result = install_datum(path, "pi");
-        assert!(result.is_ok(), "expected installable datum to be selected: {:?}", result.err());
+        assert!(
+            result.is_ok(),
+            "expected installable datum to be selected: {:?}",
+            result.err()
+        );
         assert!(
             sentinel.exists(),
             "install command was not executed — non-installable datum may have been selected"

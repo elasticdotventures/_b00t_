@@ -584,12 +584,10 @@ mod tests {
             .and_then(|_| Ok(make_output("b", false, vec!["/data"])))
             .unwrap();
         assert!(result.sandbox.network);
-        assert!(
-            result
-                .sandbox
-                .filesystem
-                .contains(&PathBuf::from("/workspace"))
-        );
+        assert!(result
+            .sandbox
+            .filesystem
+            .contains(&PathBuf::from("/workspace")));
         assert!(result.sandbox.filesystem.contains(&PathBuf::from("/data")));
     }
     #[test]

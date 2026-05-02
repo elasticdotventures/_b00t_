@@ -273,17 +273,13 @@ relationship = "enables"
             requires_vpn: true,
         };
 
-        assert!(
-            data_perms
-                .readable_paths
-                .contains(&".terraform/".to_string())
-        );
+        assert!(data_perms
+            .readable_paths
+            .contains(&".terraform/".to_string()));
         assert!(data_perms.blocked_paths.contains(&"/root".to_string()));
-        assert!(
-            data_perms
-                .requires_blessings
-                .contains(&"blessing:aws-credentials".to_string())
-        );
+        assert!(data_perms
+            .requires_blessings
+            .contains(&"blessing:aws-credentials".to_string()));
     }
 
     /// Test 13: Blessing node with complete trifecta

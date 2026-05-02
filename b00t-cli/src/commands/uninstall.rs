@@ -1,7 +1,7 @@
 use crate::datum_config::B00tConfig;
-use crate::hook_engine::{HookResult, run_hook};
+use crate::hook_engine::{run_hook, HookResult};
 use crate::{BootDatum, UnifiedConfig};
-use anyhow::{Context, Result, anyhow};
+use anyhow::{anyhow, Context, Result};
 use duct::cmd;
 use shellexpand;
 use std::collections::HashMap;

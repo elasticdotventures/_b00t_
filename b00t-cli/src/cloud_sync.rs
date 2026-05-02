@@ -3,7 +3,7 @@
 //! Syncs AI provider configurations from b00t-website cloud service
 //! to local b00t-cli sessions for unified model management.
 
-use anyhow::{Result, anyhow};
+use anyhow::{anyhow, Result};
 use b00t_c0re_lib::AiClientConfig;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
