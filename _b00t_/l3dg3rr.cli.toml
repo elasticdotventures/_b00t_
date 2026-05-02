@@ -8,10 +8,11 @@ Authoritative local source library for `.tomllmd` validation and visualization r
 generic `.tomllm` path in core parsing. Advanced diagram/DSL/structured-markdown
 semantics should be validated and visualized against `l3dg3rr`.
 """
-
-[b00t.cli]
+# 🤓 All operational fields MUST be at [b00t] level — UnifiedConfig only deserializes
+# [b00t] into BootDatum; sub-tables like [b00t.cli] are not part of the schema.
+# hook_detect (not "detect") and version (not "version_cmd") match the BootDatum field names.
 command = "just"
-detect = """
+hook_detect = """
 if [ -f vendor/l3dg3rr/Cargo.toml ]; then
   echo "vendor/l3dg3rr"
 elif command -v ledgerr-mcp-server >/dev/null 2>&1; then
@@ -20,7 +21,7 @@ else
   exit 1
 fi
 """
-version_cmd = """
+version = """
 if [ -f vendor/l3dg3rr/Cargo.toml ]; then
   awk -F'"' '/^version = / { print $2; exit }' vendor/l3dg3rr/Cargo.toml
 else

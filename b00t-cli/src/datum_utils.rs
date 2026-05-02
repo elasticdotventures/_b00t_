@@ -1066,4 +1066,60 @@ output = "Building..."
         assert_eq!(usage[0].command, "just -l");
         assert_eq!(usage[1].output, Some("Building...".to_string()));
     }
+
+    // ── tomllmd precedence tests ──────────────────────────────────────────────
+
+    #[test]
+    fn test_tomllmd_wins_over_tomllm_and_toml_same_key() {
+        // .tomllmd > .tomllm > .toml for the same datum key
+        let temp_dir = TempDir::new().unwrap();
+        let b00t_path = temp_dir.path().to_str().unwrap();
+
+        // All three variants present for the same key "tool.cli"
+        create_test_datum_file(
+            temp_dir.path(),
+            "tool.cli.toml",
+            "[b00t]\nname = \"tool-toml\"\ntype = \"cli\"\nhint = \"toml variant\"\n",
+        );
+        create_test_datum_file(
+            temp_dir.path(),
+            "tool.cli.tomllm",
+            "[b00t]\nname = \"tool-tomllm\"\ntype = \"cli\"\nhint = \"tomllm variant\"\n",
+        );
+        create_test_datum_file(
+            temp_dir.path(),
+            "tool.cli.tomllmd",
+            "[b00t]\nname = \"tool-tomllmd\"\ntype = \"cli\"\nhint = \"tomllmd variant\"\n",
+        );
+
+        let datums = get_all_datums_with_paths(b00t_path, Some(0)).unwrap();
+        // The key strips the outer extension, so all three map to "tool.cli"
+        assert!(datums.contains_key("tool.cli"), "key tool.cli must exist");
+        let (datum, path) = datums.get("tool.cli").unwrap();
+        assert_eq!(datum.name, "tool-tomllmd", ".tomllmd must win");
+        assert!(path.ends_with(".tomllmd"), "path must end with .tomllmd");
+    }
+
+    #[test]
+    fn test_tomllm_wins_over_toml_same_key() {
+        let temp_dir = TempDir::new().unwrap();
+        let b00t_path = temp_dir.path().to_str().unwrap();
+
+        create_test_datum_file(
+            temp_dir.path(),
+            "tool.cli.toml",
+            "[b00t]\nname = \"tool-toml\"\ntype = \"cli\"\nhint = \"toml variant\"\n",
+        );
+        create_test_datum_file(
+            temp_dir.path(),
+            "tool.cli.tomllm",
+            "[b00t]\nname = \"tool-tomllm\"\ntype = \"cli\"\nhint = \"tomllm variant\"\n",
+        );
+
+        let datums = get_all_datums_with_paths(b00t_path, Some(0)).unwrap();
+        assert!(datums.contains_key("tool.cli"));
+        let (datum, path) = datums.get("tool.cli").unwrap();
+        assert_eq!(datum.name, "tool-tomllm", ".tomllm must win over .toml");
+        assert!(path.ends_with(".tomllm"));
+    }
 }

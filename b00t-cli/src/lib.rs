@@ -2202,4 +2202,54 @@ hint = "containers"
         assert!(config.b00t.uninstall.is_none());
         assert!(config.b00t.hook_uninstall.is_none());
     }
+
+    // ── get_config tomllmd precedence ─────────────────────────────────────────
+
+    #[test]
+    fn test_get_config_prefers_tomllmd_over_tomllm_and_toml() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().to_str().unwrap();
+
+        // Write all three extension variants for the same datum
+        std::fs::write(
+            dir.path().join("mytool.cli.toml"),
+            "[b00t]\nname = \"mytool-toml\"\ntype = \"cli\"\nhint = \"toml\"\n",
+        )
+        .unwrap();
+        std::fs::write(
+            dir.path().join("mytool.cli.tomllm"),
+            "[b00t]\nname = \"mytool-tomllm\"\ntype = \"cli\"\nhint = \"tomllm\"\n",
+        )
+        .unwrap();
+        std::fs::write(
+            dir.path().join("mytool.cli.tomllmd"),
+            "[b00t]\nname = \"mytool-tomllmd\"\ntype = \"cli\"\nhint = \"tomllmd\"\n",
+        )
+        .unwrap();
+
+        let (config, filename) = crate::get_config("mytool", path).unwrap();
+        assert_eq!(config.b00t.name, "mytool-tomllmd", ".tomllmd must be returned first");
+        assert!(filename.ends_with(".tomllmd"), "filename must end with .tomllmd, got {}", filename);
+    }
+
+    #[test]
+    fn test_get_config_falls_back_to_tomllm_when_no_tomllmd() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().to_str().unwrap();
+
+        std::fs::write(
+            dir.path().join("mytool.cli.toml"),
+            "[b00t]\nname = \"mytool-toml\"\ntype = \"cli\"\nhint = \"toml\"\n",
+        )
+        .unwrap();
+        std::fs::write(
+            dir.path().join("mytool.cli.tomllm"),
+            "[b00t]\nname = \"mytool-tomllm\"\ntype = \"cli\"\nhint = \"tomllm\"\n",
+        )
+        .unwrap();
+
+        let (config, filename) = crate::get_config("mytool", path).unwrap();
+        assert_eq!(config.b00t.name, "mytool-tomllm");
+        assert!(filename.ends_with(".tomllm"), "got {}", filename);
+    }
 }
