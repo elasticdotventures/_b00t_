@@ -60,7 +60,7 @@ pub struct LearnArgs {
     #[arg(long, help = "Query RAG knowledgebase")]
     pub ask: Option<String>,
 
-// Unified capability routing
+    // Unified capability routing
     #[arg(long, help = "List capabilities by type: skill|role|all")]
     pub list: bool,
 
@@ -72,7 +72,7 @@ pub async fn handle_learn(path: &str, args: LearnArgs) -> Result<()> {
     // 🤓 merge positional topic + --topic flag; --topic wins (MCP compat: passes named flags)
     let topic_val = args.topic_flag.or(args.topic);
 
-// Record lesson
+    // Record lesson
     if let Some(ref lesson) = args.record {
         return handle_record(path, topic_val.as_deref(), &lesson, args.global).await;
     }
@@ -133,7 +133,10 @@ async fn handle_capability_list(path: &str, _list: bool, filter_type: Option<&st
     let registry: Value = match toml::from_str(&content_filtered) {
         Ok(v) => v,
         Err(e) => {
-            eprintln!("Warning: Failed to parse registry: {}. Run: b00t registry sync", e);
+            eprintln!(
+                "Warning: Failed to parse registry: {}. Run: b00t registry sync",
+                e
+            );
             return Ok(());
         }
     };
@@ -167,7 +170,10 @@ async fn handle_capability_list(path: &str, _list: bool, filter_type: Option<&st
     let show_mcp = show_all || cap_type == "mcp";
 
     // Helper to get a section table
-    fn get_section<'a>(registry: &'a toml::Value, section: &str) -> Option<&'a toml::map::Map<String, toml::Value>> {
+    fn get_section<'a>(
+        registry: &'a toml::Value,
+        section: &str,
+    ) -> Option<&'a toml::map::Map<String, toml::Value>> {
         registry.get(section).and_then(|v| v.as_table())
     }
 
@@ -196,9 +202,14 @@ async fn handle_capability_list(path: &str, _list: bool, filter_type: Option<&st
             for (name, val) in roles_map {
                 if let Some(val_map) = val.as_table() {
                     let desc = get_desc(val_map);
-                    let deps: Vec<String> = val_map.get("depends_on")
+                    let deps: Vec<String> = val_map
+                        .get("depends_on")
                         .and_then(|v| v.as_array())
-                        .map(|arr| arr.iter().filter_map(|v| v.as_str().map(String::from)).collect())
+                        .map(|arr| {
+                            arr.iter()
+                                .filter_map(|v| v.as_str().map(String::from))
+                                .collect()
+                        })
                         .unwrap_or_default();
                     let dep_str = if deps.is_empty() {
                         String::new()
@@ -281,7 +292,7 @@ async fn handle_display(path: &str, topic: &str, opts: DisplayOpts) -> Result<()
     // Run hook_learn if present in datum
     if let Ok((config, _)) = crate::get_config(topic, path) {
         if let Some(script) = config.b00t.hook_learn {
-            use crate::hook_engine::{HookResult, run_hook};
+            use crate::hook_engine::{run_hook, HookResult};
             match run_hook(&script) {
                 HookResult::Ok => {}
                 HookResult::Info(msg) | HookResult::Warn(msg) => println!("{}", msg),

@@ -462,8 +462,8 @@ pub mod rag;
 
 // Export inference module types and functions for public API
 pub use inference::{
-    Embedding, InferenceBackendSelector, InferenceConfig, LLMInference, ModelInfo,
-    select_inference_backend,
+    select_inference_backend, Embedding, InferenceBackendSelector, InferenceConfig, LLMInference,
+    ModelInfo,
 };
 
 // Export rag module types for public API

@@ -160,7 +160,7 @@ fn scan_datums_recursive(
             scan_datums_recursive(&entry_path, datums, current_depth + 1, max_depth)?;
         } else if matches!(
             entry_path.extension().and_then(|s| s.to_str()),
-            Some("toml") | Some("tomllm") // 🤓 .tomllm = .toml + # comment annotations; TOML parses identically
+            Some("toml") | Some("tomllm") | Some("tomllmd") // 🤓 .tomllmd currently downgrades to the generic .tomllm parser path
         ) {
             if let Some(filename) = entry_path.file_name().and_then(|s| s.to_str()) {
                 // Skip non-datum files
@@ -174,16 +174,35 @@ fn scan_datums_recursive(
                 // Try to parse as unified config
                 if let Ok(content) = fs::read_to_string(&entry_path) {
                     if let Ok(config) = toml::from_str::<UnifiedConfig>(&content) {
-                        // Strip outer extension (.tomllm or .toml) for datum key
-                        // 🤓 .tomllm wins over .toml on key collision (richer tribal context)
-                        let ext = if filename.ends_with(".tomllm") {
+                        // Strip outer extension (.tomllmd / .tomllm / .toml) for datum key.
+                        // 🤓 precedence: .tomllmd > .tomllm > .toml.
+                        let ext = if filename.ends_with(".tomllmd") {
+                            ".tomllmd"
+                        } else if filename.ends_with(".tomllm") {
                             ".tomllm"
                         } else {
                             ".toml"
                         };
                         let datum_key = filename.trim_end_matches(ext).to_string();
                         let path_str = entry_path.to_string_lossy().to_string();
-                        if ext == ".tomllm" || !datums.contains_key(&datum_key) {
+                        let new_rank = match ext {
+                            ".tomllmd" => 3,
+                            ".tomllm" => 2,
+                            _ => 1,
+                        };
+                        let current_rank = datums
+                            .get(&datum_key)
+                            .map(|(_, existing_path)| {
+                                if existing_path.ends_with(".tomllmd") {
+                                    3
+                                } else if existing_path.ends_with(".tomllm") {
+                                    2
+                                } else {
+                                    1
+                                }
+                            })
+                            .unwrap_or(0);
+                        if new_rank >= current_rank {
                             datums.insert(datum_key, (config.b00t, path_str));
                         }
                     }

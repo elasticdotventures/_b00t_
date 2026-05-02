@@ -614,7 +614,10 @@ impl SessionMemory {
         for (key, &use_count) in &self.numbers {
             if key.starts_with("capability:") && key.ends_with(":use_count") && use_count > 0 {
                 // Extract capability name from key "capability:NAME:use_count"
-                if let Some(name) = key.strip_prefix("capability:").and_then(|s| s.strip_suffix(":use_count")) {
+                if let Some(name) = key
+                    .strip_prefix("capability:")
+                    .and_then(|s| s.strip_suffix(":use_count"))
+                {
                     capabilities.push((name.to_string(), use_count));
                 }
             }
@@ -638,7 +641,6 @@ impl SessionMemory {
         self.metadata.updated_at = chrono::Utc::now();
         self.save()
     }
-
 }
 
 /// Agent context for OODA loop decision making

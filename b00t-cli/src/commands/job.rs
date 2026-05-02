@@ -60,7 +60,10 @@ pub enum JobCommands {
         #[clap(long, help = "Skip checkpoint creation")]
         no_checkpoint: bool,
 
-        #[clap(long, help = "Resume from checkpoint tag (e.g., job/myjob/step1-complete)")]
+        #[clap(
+            long,
+            help = "Resume from checkpoint tag (e.g., job/myjob/step1-complete)"
+        )]
         resume_tag: Option<String>,
 
         #[clap(short, long, help = "Environment variables (KEY=VALUE)")]
@@ -613,7 +616,7 @@ async fn execute_bash(
     timeout_ms: Option<u64>,
 ) -> Result<()> {
     use tokio::process::Command;
-    use tokio::time::{Duration, timeout};
+    use tokio::time::{timeout, Duration};
 
     let mut cmd = Command::new("bash");
     cmd.arg("-c")
@@ -668,7 +671,7 @@ async fn execute_agent(
     timeout_ms: Option<u64>,
 ) -> Result<()> {
     use tokio::process::Command;
-    use tokio::time::{Duration, timeout};
+    use tokio::time::{timeout, Duration};
 
     println!("   🤖 Executing LangChain agent: {}", agent_type);
 

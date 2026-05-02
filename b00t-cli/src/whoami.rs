@@ -1,6 +1,6 @@
 use crate::entanglement::parse_entanglement_ref;
 use crate::skill_resolver::SkillResolver;
-use crate::{DatumType, UnifiedConfig, get_config, get_expanded_path};
+use crate::{get_config, get_expanded_path, DatumType, UnifiedConfig};
 use anyhow::{Context, Result};
 use b00t_c0re_lib::TemplateRenderer;
 use std::fs;
@@ -75,9 +75,10 @@ pub fn whoami(path: &str, role_override: Option<String>, with_skills: bool) -> R
         }
     }
 
-    // Append role summary from .role.tomllm / .role.toml / .agent.tomllm / .agent.toml datum
+    // Append role summary from .role.tomllmd / .role.tomllm / .role.toml
+    // and .agent.tomllmd / .agent.tomllm / .agent.toml datum.
     // 🤓 role datums are executable + introspectable: skills, capabilities, entanglements
-    // .tomllm extension: TOML + #comment tribal knowledge; toml parser handles it identically
+    // .tomllmd currently downgrades to the generic .tomllm/TOML path.
     if let Some(role) = resolve_role(role_override) {
         if let Some(role_details) = load_role_datum(&role, path) {
             print_role_summary(&role_details, path, with_skills);
@@ -127,7 +128,7 @@ fn resolve_role(role_override: Option<String>) -> Option<String> {
 }
 
 fn load_role_datum(role: &str, path: &str) -> Option<RoleDetails> {
-    // 🤓 prefer .role.tomllm / .role.toml over other typed datums with same name
+    // 🤓 prefer .role.tomllmd / .role.tomllm / .role.toml over other typed datums with same name
     let (config, _) = get_config_with_type_preference(role, &DatumType::Role, path).ok()?;
     let datum = config.b00t;
 
@@ -243,14 +244,14 @@ fn get_config_with_type_preference(
     get_config(name, path)
 }
 
-/// Try typed extensions for `name` — .tomllm first, then .toml.
+/// Try typed extensions for `name` — .tomllmd first, then .tomllm, then .toml.
 /// Returns the first match, or falls back to generic get_config.
 fn get_config_typed<'a>(
     name: &str,
     base: &str,
     expanded_path: &std::path::Path,
 ) -> Option<(UnifiedConfig, String)> {
-    for ext in [".tomllm", ".toml"] {
+    for ext in [".tomllmd", ".tomllm", ".toml"] {
         let filename = format!("{}{}{}", name, base, ext);
         let config_path = expanded_path.join(&filename);
         if config_path.exists() {

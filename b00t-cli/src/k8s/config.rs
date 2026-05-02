@@ -192,11 +192,9 @@ mod tests {
         assert_eq!(config.namespace, "default");
         assert_eq!(config.timeout_seconds, 60);
         assert!(config.auto_create_namespace);
-        assert!(
-            config
-                .default_labels
-                .contains_key("app.kubernetes.io/managed-by")
-        );
+        assert!(config
+            .default_labels
+            .contains_key("app.kubernetes.io/managed-by"));
     }
 
     #[test]

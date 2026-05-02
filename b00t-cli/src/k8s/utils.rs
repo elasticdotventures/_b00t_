@@ -5,8 +5,8 @@ use std::collections::BTreeMap;
 use tracing::{debug, info, warn};
 
 use crate::k8s::{
-    MANAGED_BY_LABEL, MANAGED_BY_VALUE,
     error::{Error, Result},
+    MANAGED_BY_LABEL, MANAGED_BY_VALUE,
 };
 
 /// Utility functions for working with Kubernetes resources
@@ -259,7 +259,7 @@ impl K8sUtils {
         F: FnMut() -> Fut,
         Fut: std::future::Future<Output = Result<bool>>,
     {
-        use tokio::time::{Duration, sleep};
+        use tokio::time::{sleep, Duration};
 
         let mut delay = initial_delay_ms;
         let mut attempts_made = 0;

@@ -371,9 +371,27 @@ pub enum DatumType {
 impl DatumType {
     pub fn all_base_suffixes() -> Vec<&'static str> {
         vec![
-            ".database", ".hive", ".agent", ".config", ".docker", ".skill", ".stack",
-            ".repo", ".role", ".bash", ".vscode", ".k8s", ".apt", ".nix",
-            ".mcp", ".cli", ".api", ".job", ".ai_model", ".ai", ".justfile",
+            ".database",
+            ".hive",
+            ".agent",
+            ".config",
+            ".docker",
+            ".skill",
+            ".stack",
+            ".repo",
+            ".role",
+            ".bash",
+            ".vscode",
+            ".k8s",
+            ".apt",
+            ".nix",
+            ".mcp",
+            ".cli",
+            ".api",
+            ".job",
+            ".ai_model",
+            ".ai",
+            ".justfile",
         ]
     }
 
@@ -431,6 +449,7 @@ impl DatumType {
             let base = t.base_suffix();
             if filename.ends_with(base)
                 || filename.ends_with(&format!("{base}.toml"))
+                || filename.ends_with(&format!("{base}.tomllmd"))
                 || filename.ends_with(&format!("{base}.tomllm"))
             {
                 return *t;
@@ -631,14 +650,12 @@ fn create_mcp_datum_from_json(
             }),
         // Convert legacy command/args to new multi-method format
         mcp: Some(McpMethods {
-            stdio: Some(vec![
-                cli_method
-                    .as_object()
-                    .unwrap()
-                    .iter()
-                    .map(|(k, v)| (k.clone(), v.clone()))
-                    .collect(),
-            ]),
+            stdio: Some(vec![cli_method
+                .as_object()
+                .unwrap()
+                .iter()
+                .map(|(k, v)| (k.clone(), v.clone()))
+                .collect()]),
             httpstream: None,
         }),
         ..BootDatum::default()
@@ -820,8 +837,8 @@ pub fn create_unified_toml_config(datum: &BootDatum, path: &str) -> Result<()> {
         DatumType::Skill => ".skill.toml",
         DatumType::HiveProfile => ".hive.toml",
         DatumType::Justfile => ".justfile",
-        // 🤓 .tomllm = valid TOML + # comment annotations for tribal knowledge
-        // tomllm crate strips comments for data pipelines; tail-map enables fast executive scanning
+        // 🤓 .tomllmd currently degrades to .tomllm semantics in b00t core:
+        // valid TOML + richer comment/diagram/markdown affordances handled by external tooling.
         DatumType::Unknown => ".toml",
     };
 
@@ -919,20 +936,22 @@ pub fn get_config(
     let dir = std::path::Path::new(expanded.as_ref());
 
     for base in DatumType::all_base_suffixes() {
-        let toml_path = dir.join(format!("{}{}.toml", command, base));
-        if toml_path.exists() {
-            let filename = toml_path
-                .file_name()
-                .and_then(|s| s.to_str())
-                .unwrap_or("")
-                .to_string();
-            let content = std::fs::read_to_string(&toml_path)?;
-            let config: UnifiedConfig = toml::from_str(&content)?;
-            return Ok((config, filename));
+        for ext in [".tomllmd", ".tomllm", ".toml"] {
+            let path = dir.join(format!("{}{}{}", command, base, ext));
+            if path.exists() {
+                let filename = path
+                    .file_name()
+                    .and_then(|s| s.to_str())
+                    .unwrap_or("")
+                    .to_string();
+                let content = std::fs::read_to_string(&path)?;
+                let config: UnifiedConfig = toml::from_str(&content)?;
+                return Ok((config, filename));
+            }
         }
     }
-    // fallback: plain .tomllm then .toml (Unknown type — no typed suffix)
-    for ext in [".tomllm", ".toml"] {
+    // fallback: plain .tomllmd then .tomllm then .toml (Unknown type — no typed suffix)
+    for ext in [".tomllmd", ".tomllm", ".toml"] {
         let plain = dir.join(format!("{}{}", command, ext));
         if plain.exists() {
             let filename = format!("{}{}", command, ext);
@@ -2112,11 +2131,30 @@ fn check_readme_status(memory: &mut session_memory::SessionMemory) -> Result<()>
 mod tests {
     #[test]
     fn test_datum_type_from_filename_accepts_typed_toml_extensions() {
-        assert_eq!(crate::DatumType::from_filename("b00t.cli"), crate::DatumType::Cli);
-        assert_eq!(crate::DatumType::from_filename("b00t.cli.toml"), crate::DatumType::Cli);
-        assert_eq!(crate::DatumType::from_filename("executive.role.tomllm"), crate::DatumType::Role);
-        assert_eq!(crate::DatumType::from_filename("irontology.mcp.toml"), crate::DatumType::Mcp);
-        assert_eq!(crate::DatumType::from_filename("unknown.toml"), crate::DatumType::Unknown);
+        assert_eq!(
+            crate::DatumType::from_filename("b00t.cli"),
+            crate::DatumType::Cli
+        );
+        assert_eq!(
+            crate::DatumType::from_filename("b00t.cli.toml"),
+            crate::DatumType::Cli
+        );
+        assert_eq!(
+            crate::DatumType::from_filename("executive.role.tomllmd"),
+            crate::DatumType::Role
+        );
+        assert_eq!(
+            crate::DatumType::from_filename("executive.role.tomllm"),
+            crate::DatumType::Role
+        );
+        assert_eq!(
+            crate::DatumType::from_filename("irontology.mcp.toml"),
+            crate::DatumType::Mcp
+        );
+        assert_eq!(
+            crate::DatumType::from_filename("unknown.toml"),
+            crate::DatumType::Unknown
+        );
     }
 
     #[test]

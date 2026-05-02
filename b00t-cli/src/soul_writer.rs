@@ -13,7 +13,7 @@
 
 use std::path::{Component, Path, PathBuf};
 
-use anyhow::{Context as _, Result, bail};
+use anyhow::{bail, Context as _, Result};
 
 /// Default max bytes per soul memory file (64 KiB).
 pub const SOUL_FILE_MAX_BYTES: usize = 64 * 1024;

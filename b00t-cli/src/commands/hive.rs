@@ -6,13 +6,13 @@
 //! run      — run a command through guard evaluation
 //! list     — list available hive profiles
 
-use anyhow::{Result, bail};
+use anyhow::{bail, Result};
 use clap::Parser;
 use std::path::{Path, PathBuf};
 
 use crate::hive::{
-    GuardResult, HiveProfile, SystemSnapshot, activate_profile, check_guards, discover_profiles,
-    hive_stacks_status, load_profile,
+    activate_profile, check_guards, discover_profiles, hive_stacks_status, load_profile,
+    GuardResult, HiveProfile, SystemSnapshot,
 };
 
 #[derive(Parser)]

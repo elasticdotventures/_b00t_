@@ -1,5 +1,5 @@
 use crate::traits::*;
-use crate::{BootDatum, check_command_available, get_expanded_path};
+use crate::{check_command_available, get_expanded_path, BootDatum};
 use anyhow::{Context, Result};
 use b00t_c0re_lib::datum_ai_model::{AiModelDatum, ModelProvider};
 use serde::Deserialize;

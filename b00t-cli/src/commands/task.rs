@@ -7,7 +7,7 @@
 //! 🤓 This is the extracted core of taskmaster-ai v0.x (before enshittification).
 //!    Keep it lean: list/add/next/done/update/show/import — nothing else.
 
-use anyhow::{Context, Result, ensure};
+use anyhow::{ensure, Context, Result};
 use clap::Parser;
 use serde::{Deserialize, Serialize};
 use std::fs;

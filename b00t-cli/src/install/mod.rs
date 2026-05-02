@@ -40,10 +40,7 @@ pub fn runtimes_source_root() -> Result<PathBuf> {
                 root.display()
             );
         }
-        anyhow::bail!(
-            "runtimes source directory not found: {}",
-            root.display()
-        );
+        anyhow::bail!("runtimes source directory not found: {}", root.display());
     }
 
     let root = PathBuf::from(crate::utils::get_workspace_root()).join("_b00t_/runtimes");
@@ -169,7 +166,9 @@ mod tests {
     impl EnvVarRestoreGuard {
         fn remove(name: &'static str) -> Self {
             let original = std::env::var(name).ok();
-            unsafe { std::env::remove_var(name); }
+            unsafe {
+                std::env::remove_var(name);
+            }
             Self { name, original }
         }
     }

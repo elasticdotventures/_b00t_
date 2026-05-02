@@ -1,7 +1,7 @@
 use crate::datum_ai_model::AiModelDatumEntry;
 use crate::traits::DatumChecker; // 🦨 Fix: trait needed for is_installed() method
 use crate::{check_command_available, get_expanded_path};
-use anyhow::{Context, Result, anyhow};
+use anyhow::{anyhow, Context, Result};
 use duct::cmd;
 use serde::Serialize;
 use serde_json::Value;
@@ -649,9 +649,14 @@ pub fn download_model(
         "huggingface-cli".to_string()
     } else {
         eprintln!("hf not found — auto-installing huggingface_hub[cli] via uv ...");
-        cmd("uv", &["tool", "install", "--upgrade", "huggingface_hub[cli]"])
-            .run()
-            .context("auto-install of huggingface_hub[cli] failed; run: b00t cli install huggingface")?;
+        cmd(
+            "uv",
+            &["tool", "install", "--upgrade", "huggingface_hub[cli]"],
+        )
+        .run()
+        .context(
+            "auto-install of huggingface_hub[cli] failed; run: b00t cli install huggingface",
+        )?;
         if check_command_available("hf") {
             "hf".to_string()
         } else {

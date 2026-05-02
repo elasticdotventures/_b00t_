@@ -3,7 +3,7 @@ use crate::traits::{
     AffinityRules, AffinityStrategy, BudgetConstraints, DatumCrdDisplay, ResourceRequirements,
 };
 use crate::{BootDatum, DatumType};
-use anyhow::{Context, Result, bail};
+use anyhow::{bail, Context, Result};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 

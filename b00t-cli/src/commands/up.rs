@@ -92,7 +92,11 @@ impl UpArgs {
             providers
         };
 
-        ResolvedUpTarget { tool, model, providers }
+        ResolvedUpTarget {
+            tool,
+            model,
+            providers,
+        }
     }
 
     pub fn execute(&self) -> Result<()> {
@@ -242,7 +246,9 @@ impl UpArgs {
 fn canonical_model_alias(model: &str) -> String {
     match model.trim().to_ascii_lowercase().as_str() {
         "gemma4" | "gemma-4" | "gemma-local" | "gemma-4-26b-a4b-local" => "ch0nky".to_string(),
-        "qwen3" | "qwen3-coder" | "qwen-local" | "qwen3-coder-local" | "sm0l" => "ch1nky".to_string(),
+        "qwen3" | "qwen3-coder" | "qwen-local" | "qwen3-coder-local" | "sm0l" => {
+            "ch1nky".to_string()
+        }
         other => other.to_string(),
     }
 }
@@ -448,7 +454,7 @@ fn up_repo(path: &str, dry_run: bool) -> Result<()> {
         println!("   mode      : dry-run (no changes written)");
     }
 
-    // 4. Find all .tomllm files in the datum dir
+    // 4. Find all .tomllmd / .tomllm files in the datum dir
     let entries = std::fs::read_dir(&datum_dir)
         .with_context(|| format!("Cannot read {}", datum_dir.display()))?;
 
@@ -456,13 +462,19 @@ fn up_repo(path: &str, dry_run: bool) -> Result<()> {
         .filter_map(|e| e.ok())
         .map(|e| e.path())
         .filter(|p| {
-            p.extension().map(|x| x == "tomllm").unwrap_or(false)
+            p.extension()
+                .map(|x| x == "tomllm" || x == "tomllmd")
+                .unwrap_or(false)
+                || p.to_string_lossy().ends_with(".tomllmd")
                 || p.to_string_lossy().ends_with(".tomllm")
         })
         .collect();
 
     if tomllm_files.is_empty() {
-        println!("   ⚠️  no .tomllm files found in {}", datum_dir.display());
+        println!(
+            "   ⚠️  no .tomllmd/.tomllm files found in {}",
+            datum_dir.display()
+        );
         return Ok(());
     }
 
@@ -625,14 +637,8 @@ mod tests {
 
     #[test]
     fn test_resolved_target_normalizes_qwen_alias_to_ch1nky() {
-        let args = UpArgs::try_parse_from([
-            "b00t-cli",
-            "--tool",
-            "pi",
-            "--model",
-            "qwen3-coder",
-        ])
-        .unwrap();
+        let args =
+            UpArgs::try_parse_from(["b00t-cli", "--tool", "pi", "--model", "qwen3-coder"]).unwrap();
         let target = args.resolved_target();
         assert_eq!(target.tool, "pi");
         assert_eq!(target.model.as_deref(), Some("ch1nky"));

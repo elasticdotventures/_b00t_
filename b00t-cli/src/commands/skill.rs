@@ -187,8 +187,8 @@ fn build_resolver(path: &str) -> SkillResolver {
 /// Load skill names declared by a role datum from _b00t_/*.role.toml(l)
 fn load_role_skill_list(role_name: &str, base_path: &str) -> Result<Vec<String>> {
     let b00t_dir = find_b00t_dir_for(base_path)?;
-    // Try <role>.role.tomllm, <role>.role.toml
-    for ext in &["role.tomllm", "role.toml"] {
+    // Try <role>.role.tomllmd, <role>.role.tomllm, <role>.role.toml
+    for ext in &["role.tomllmd", "role.tomllm", "role.toml"] {
         let path = b00t_dir.join(format!("{}.{}", role_name, ext));
         if path.exists() {
             let content = std::fs::read_to_string(&path)?;
@@ -223,7 +223,7 @@ fn load_role_skill_list(role_name: &str, base_path: &str) -> Result<Vec<String>>
 fn load_role_context_summary(role_name: &str) -> Result<String> {
     let b00t_dir = find_b00t_dir()?;
 
-    for ext in &["role.tomllm", "role.toml"] {
+    for ext in &["role.tomllmd", "role.tomllm", "role.toml"] {
         let path = b00t_dir.join(format!("{}.{}", role_name, ext));
         if path.exists() {
             let content = std::fs::read_to_string(&path)?;

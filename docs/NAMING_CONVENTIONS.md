@@ -56,13 +56,13 @@ alias = "sm0l"
 
 ---
 
-### 4. `.toml` vs `.tomllm` extension inconsistency
+### 4. `.toml` vs `.tomllm` / `.tomllmd` extension inconsistency
 
 **Current:** `orchestrator.role.toml` and `executive.role.tomllm` — same type, different extension.
 
-**Problem:** `.tomllm` is the enriched format with `# @tribal:` annotations and `b00t:map` blocks. `.toml` is plain. But they're not consistently applied — `orchestrator.role` didn't get upgraded.
+**Problem:** `.tomllm` is the enriched format with `# @tribal:` annotations and `b00t:map` blocks. `.tomllmd` is the theorized superset for diagram/DSL/structured-markdown affordances and currently downgrades to generic `.tomllm` handling in b00t core. `.toml` is plain. But they're not consistently applied — `orchestrator.role` didn't get upgraded.
 
-**Fix:** Migration rule — any datum with `# @tribal:` or `# b00t:map` annotations SHOULD use `.tomllm`. Plain config-only datums use `.toml`. Add to CLAUDE.md.
+**Fix:** Migration rule — any datum with `# @tribal:` or `# b00t:map` annotations SHOULD use `.tomllm`. Any datum that also needs diagram/DSL/structured-markdown affordances MAY use `.tomllmd`, but MUST remain compatible with downgrade to `.tomllm` until specialized parser support is enabled. Plain config-only datums use `.toml`.
 
 ---
 

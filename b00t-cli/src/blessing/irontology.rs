@@ -371,12 +371,10 @@ mod tests {
         let result = validator.validate();
 
         assert!(!result.valid);
-        assert!(
-            result
-                .errors
-                .iter()
-                .any(|e| { matches!(e, ValidationError::UnresolvableDependency(_, _)) })
-        );
+        assert!(result
+            .errors
+            .iter()
+            .any(|e| { matches!(e, ValidationError::UnresolvableDependency(_, _)) }));
     }
 
     #[test]
@@ -419,12 +417,10 @@ mod tests {
         let result = validator.validate();
 
         assert!(!result.valid);
-        assert!(
-            result
-                .errors
-                .iter()
-                .any(|e| { matches!(e, ValidationError::BudgetExceeded(_, _)) })
-        );
+        assert!(result
+            .errors
+            .iter()
+            .any(|e| { matches!(e, ValidationError::BudgetExceeded(_, _)) }));
     }
 
     #[test]
@@ -467,12 +463,10 @@ mod tests {
         let result = validator.validate();
 
         assert!(!result.valid);
-        assert!(
-            result
-                .errors
-                .iter()
-                .any(|e| { matches!(e, ValidationError::DuplicateBlessingId(_)) })
-        );
+        assert!(result
+            .errors
+            .iter()
+            .any(|e| { matches!(e, ValidationError::DuplicateBlessingId(_)) }));
     }
 
     #[test]
@@ -515,11 +509,9 @@ mod tests {
         let result = validator.validate();
 
         assert!(result.valid);
-        assert!(
-            result
-                .warnings
-                .iter()
-                .any(|w| { matches!(w, ValidationWarning::UnusedBlessing(_)) })
-        );
+        assert!(result
+            .warnings
+            .iter()
+            .any(|w| { matches!(w, ValidationWarning::UnusedBlessing(_)) }));
     }
 }

@@ -4,7 +4,7 @@
 //! Ensures referenced datums exist and match their declared stereotypes (types).
 
 use crate::{BootDatum, DatumType};
-use anyhow::{Context, Result, bail};
+use anyhow::{bail, Context, Result};
 use std::collections::{HashMap, HashSet};
 
 /// Parse an entanglement reference into (name, optional_type)
