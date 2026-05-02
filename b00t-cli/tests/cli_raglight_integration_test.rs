@@ -1,27 +1,10 @@
 //! RAGLight integration tests - bringing advanced features to 50% coverage
 //! Tests the RAGLight backend as an alternative to Qdrant
 
-use std::env;
-use std::fs;
 use std::process::Command;
 use tempfile::TempDir;
 
-fn get_b00t_binary() -> String {
-    if let Ok(path) = env::var("CARGO_BIN_EXE_b00t-cli") {
-        return path;
-    }
-
-    let manifest_dir = env::var("CARGO_MANIFEST_DIR").unwrap();
-    let candidates = [
-        format!("{}/target/debug/b00t-cli", manifest_dir),
-        format!("{}/../target/debug/b00t-cli", manifest_dir),
-    ];
-
-    candidates
-        .into_iter()
-        .find(|path| std::path::Path::new(path).exists())
-        .expect("b00t-cli binary not found; run cargo test so Cargo builds it first")
-}
+mod common;
 
 fn setup_temp_dir() -> TempDir {
     tempfile::tempdir().expect("Failed to create temp directory")
@@ -33,7 +16,7 @@ mod raglight_basic {
 
     #[test]
     fn test_grok_digest_with_raglight_backend() {
-        let b00t = get_b00t_binary();
+        let b00t = common::get_b00t_binary();
 
         let output = Command::new(&b00t)
             .args(&[
@@ -77,7 +60,7 @@ mod raglight_basic {
 
     #[test]
     fn test_grok_ask_with_raglight_backend() {
-        let b00t = get_b00t_binary();
+        let b00t = common::get_b00t_binary();
 
         // First digest some content
         let _ = Command::new(&b00t)
@@ -130,7 +113,7 @@ mod raglight_basic {
 
     #[test]
     fn test_grok_learn_with_raglight_backend() {
-        let b00t = get_b00t_binary();
+        let b00t = common::get_b00t_binary();
 
         let output = Command::new(&b00t)
             .args(&[
@@ -169,7 +152,7 @@ mod raglight_workflow {
 
     #[test]
     fn test_raglight_complete_workflow() {
-        let b00t = get_b00t_binary();
+        let b00t = common::get_b00t_binary();
         let topic = "raglight_workflow";
 
         println!("\n=== RAGLight Workflow Test ===");
@@ -222,7 +205,7 @@ mod raglight_workflow {
     #[test]
     fn test_raglight_file_storage() {
         // Test that RAGLight stores files in expected location
-        let b00t = get_b00t_binary();
+        let b00t = common::get_b00t_binary();
 
         let output = Command::new(&b00t)
             .args(&[
@@ -262,7 +245,7 @@ mod raglight_error_handling {
 
     #[test]
     fn test_raglight_invalid_backend_name() {
-        let b00t = get_b00t_binary();
+        let b00t = common::get_b00t_binary();
 
         let output = Command::new(&b00t)
             .args(&[
@@ -294,7 +277,7 @@ mod raglight_error_handling {
 
     #[test]
     fn test_raglight_missing_topic() {
-        let b00t = get_b00t_binary();
+        let b00t = common::get_b00t_binary();
 
         // RAGLight operations should require topic
         let output = Command::new(&b00t)
@@ -320,7 +303,7 @@ mod raglight_error_handling {
 
     #[test]
     fn test_raglight_concurrent_access() {
-        let b00t = get_b00t_binary();
+        let b00t = common::get_b00t_binary();
 
         // Test multiple concurrent RAGLight operations
         let handles: Vec<_> = (0..3)
@@ -366,7 +349,7 @@ mod raglight_vs_qdrant {
 
     #[test]
     fn test_raglight_as_fallback() {
-        let b00t = get_b00t_binary();
+        let b00t = common::get_b00t_binary();
 
         // When Qdrant is unavailable, RAGLight can be used as fallback
         let output = Command::new(&b00t)
@@ -399,7 +382,7 @@ mod raglight_vs_qdrant {
 
     #[test]
     fn test_explicit_backend_selection() {
-        let b00t = get_b00t_binary();
+        let b00t = common::get_b00t_binary();
 
         // Test that --rag flag properly selects backend
         let raglight_output = Command::new(&b00t)

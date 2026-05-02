@@ -868,7 +868,9 @@ irontology-update:
 acp-sm3lly-status:
     #!/bin/bash
     set -euo pipefail
-    echo "NATS_URL=${NATS_URL:-nats://c010.promptexecution.com:4222}"
+    _nats_raw="${NATS_URL:-nats://c010.promptexecution.com:4222}"
+    _nats_redacted="$(echo "$_nats_raw" | sed 's|//[^@]*@|//<redacted>@|')"
+    echo "NATS_URL=${_nats_redacted}"
     b00t chat info
     b00t hive status
     b00t whoami --role=executive | sed -n '/Capability check:/,$p'

@@ -1,29 +1,13 @@
-use std::env;
 use std::fs;
 use std::path::Path;
 use std::process::Command;
 use std::sync::Mutex;
 use tempfile::TempDir;
 
+mod common;
+
 // 🤓 Prevent cargo lock contention - serialize b00t-cli execution
 static CARGO_LOCK: Mutex<()> = Mutex::new(());
-
-fn get_b00t_binary() -> String {
-    if let Ok(path) = env::var("CARGO_BIN_EXE_b00t-cli") {
-        return path;
-    }
-
-    let manifest_dir = env::var("CARGO_MANIFEST_DIR").unwrap();
-    let candidates = [
-        format!("{manifest_dir}/target/debug/b00t-cli"),
-        format!("{manifest_dir}/../target/debug/b00t-cli"),
-    ];
-
-    candidates
-        .into_iter()
-        .find(|path| Path::new(path).exists())
-        .expect("b00t-cli binary not found; run cargo test so Cargo builds it first")
-}
 
 fn setup_test_environment(temp_dir: &Path) -> Result<(), std::io::Error> {
     // Create minimal _b00t_ directory structure
@@ -39,7 +23,7 @@ fn setup_test_environment(temp_dir: &Path) -> Result<(), std::io::Error> {
 
 #[test]
 fn test_hello_world_with_skip_all_flags() {
-    let b00t = get_b00t_binary();
+    let b00t = common::get_b00t_binary();
 
     // Test hello-world command help output to verify it works
     let output = Command::new(&b00t)
@@ -62,7 +46,7 @@ fn test_hello_world_with_skip_all_flags() {
 
 #[test]
 fn test_hello_world_mcp_introspection() {
-    let b00t = get_b00t_binary();
+    let b00t = common::get_b00t_binary();
 
     // Test that MCP introspection functionality works by testing MCP list directly
     let output = Command::new(&b00t)
@@ -87,7 +71,7 @@ fn test_hello_world_mcp_introspection() {
 
 #[test]
 fn test_hello_world_session_memory_tracking() {
-    let b00t = get_b00t_binary();
+    let b00t = common::get_b00t_binary();
 
     // Test session memory operations directly
     let output = Command::new(&b00t)
@@ -111,7 +95,7 @@ fn test_hello_world_system_preferences() {
     let _lock = CARGO_LOCK.lock().unwrap_or_else(|poisoned| poisoned.into_inner()); // 🤓 Prevent cargo contention
 
     let temp_dir = TempDir::new().unwrap();
-    let b00t = get_b00t_binary();
+    let b00t = common::get_b00t_binary();
 
     // Initialize git repo and test environment
     Command::new("git")
@@ -155,7 +139,7 @@ fn test_hello_world_agent_detection() {
     let _lock = CARGO_LOCK.lock().unwrap_or_else(|poisoned| poisoned.into_inner()); // 🤓 Prevent cargo contention
 
     let temp_dir = TempDir::new().unwrap();
-    let b00t = get_b00t_binary();
+    let b00t = common::get_b00t_binary();
 
     // Initialize git repo and test environment
     Command::new("git")
@@ -198,7 +182,7 @@ fn test_hello_world_agent_detection() {
 
 #[test]
 fn test_hello_world_help_output() {
-    let b00t = get_b00t_binary();
+    let b00t = common::get_b00t_binary();
 
     let output = Command::new(&b00t)
         .args(["init", "hello-world", "--help"])

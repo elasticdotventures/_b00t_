@@ -31,8 +31,14 @@ pub fn default_registry() -> AdapterRegistry {
 pub fn runtimes_source_root() -> Result<PathBuf> {
     if let Ok(source_root) = std::env::var("B00T_RUNTIMES_SOURCE_ROOT") {
         let root = PathBuf::from(source_root);
-        if root.exists() {
+        if root.is_dir() {
             return Ok(root);
+        }
+        if root.exists() {
+            anyhow::bail!(
+                "runtimes source path exists but is not a directory: {}",
+                root.display()
+            );
         }
         anyhow::bail!(
             "runtimes source directory not found: {}",
@@ -154,14 +160,37 @@ mod tests {
         assert_eq!(selection.runtimes.len(), detected.len());
     }
 
+    /// RAII guard that saves the current value of an env var and restores it on drop.
+    struct EnvVarRestoreGuard {
+        name: &'static str,
+        original: Option<String>,
+    }
+
+    impl EnvVarRestoreGuard {
+        fn remove(name: &'static str) -> Self {
+            let original = std::env::var(name).ok();
+            unsafe { std::env::remove_var(name); }
+            Self { name, original }
+        }
+    }
+
+    impl Drop for EnvVarRestoreGuard {
+        fn drop(&mut self) {
+            unsafe {
+                match &self.original {
+                    Some(val) => std::env::set_var(self.name, val),
+                    None => std::env::remove_var(self.name),
+                }
+            }
+        }
+    }
+
     #[test]
     fn test_runtimes_source_root_from_workspace() {
         // When run from within the repo, runtimes_source_root() is anchored at the
         // git workspace root. Verify the returned path ends with _b00t_/runtimes.
         let _lock = ENV_MUTEX.lock().unwrap();
-        unsafe {
-            std::env::remove_var("B00T_RUNTIMES_SOURCE_ROOT");
-        }
+        let _restore = EnvVarRestoreGuard::remove("B00T_RUNTIMES_SOURCE_ROOT");
         let root = crate::utils::get_workspace_root();
         let expected = PathBuf::from(&root).join("_b00t_/runtimes");
         if expected.exists() {
@@ -186,8 +215,8 @@ mod tests {
         // Override workspace root to a temp dir that has no _b00t_/runtimes.
         let tmp = tempfile::tempdir().unwrap();
         let _lock = ENV_MUTEX.lock().unwrap();
+        let _restore = EnvVarRestoreGuard::remove("B00T_RUNTIMES_SOURCE_ROOT");
         unsafe {
-            std::env::remove_var("B00T_RUNTIMES_SOURCE_ROOT");
             std::env::set_var("_B00T_TEST_ROOT", tmp.path().to_str().unwrap());
         }
         let _cleanup = EnvVarGuard("_B00T_TEST_ROOT");
