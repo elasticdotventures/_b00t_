@@ -11,7 +11,7 @@ hint = "pi — lightweight AI coding agent; local model support via openai-compl
 install = "npm install -g @mariozechner/pi-coding-agent"
 update = "npm install -g @mariozechner/pi-coding-agent"
 version = "pi --version"
-version_regex = '([0-9]+\\.[0-9]+\\.[0-9]+)'
+version_regex = "([0-9]+\\.[0-9]+\\.[0-9]+)"
 
 [b00t.env]
 PI_CODING_AGENT_DIR = "~/.pi/agent"
@@ -44,7 +44,7 @@ description = "Install pi-mcp-adapter (enables MCP access from pi)"
 command = "pi install npm:pi-mcp-adapter"
 
 [[b00t.usage]]
-description = "Probe available models from local vLLM endpoint"
+description = "Probe available models from local OpenAI-compatible endpoint on :8001"
 command = "curl -s http://127.0.0.1:8001/v1/models | python3 -m json.tool"
 
 [[b00t.usage]]

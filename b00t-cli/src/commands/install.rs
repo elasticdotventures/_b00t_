@@ -399,28 +399,37 @@ hint = "Test stack"
         let temp_dir = TempDir::new().unwrap();
         let path = temp_dir.path().to_str().unwrap();
 
+        // Non-installable datum: no install command; depends on a non-existent datum so
+        // that if it is wrongly selected, dependency resolution fails and the test fails.
         create_test_datum_file(
             &temp_dir,
             "pi",
             "agent",
-            None,
+            Some(vec!["nonexistent-dep.cli".to_string()]),
             None,
             None,
         )
         .unwrap();
 
+        // Installable datum: has an install command that creates a sentinel file so we can
+        // assert it was actually executed.
+        let sentinel = temp_dir.path().join("pi-cli-installed");
         create_test_datum_file(
             &temp_dir,
             "pi",
             "cli",
             None,
-            Some("echo 'Installing pi cli'"),
+            Some(&format!("touch {}", sentinel.display())),
             None,
         )
         .unwrap();
 
         let result = install_datum(path, "pi");
-        assert!(result.is_ok(), "expected installable datum to be selected");
+        assert!(result.is_ok(), "expected installable datum to be selected: {:?}", result.err());
+        assert!(
+            sentinel.exists(),
+            "install command was not executed — non-installable datum may have been selected"
+        );
     }
 
     #[test]

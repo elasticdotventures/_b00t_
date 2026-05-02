@@ -14,7 +14,7 @@ hint = "pi coding agent — systemd-managed RPC server; ch0nky tier; swap with o
 install = "npm install -g @mariozechner/pi-coding-agent@latest"
 update = "npm install -g @mariozechner/pi-coding-agent@latest"
 version = "pi --version"
-version_regex = '([0-9]+\\.[0-9]+\\.[0-9]+)'
+version_regex = "([0-9]+\\.[0-9]+\\.[0-9]+)"
 
 [b00t.agent]
 pid = "pi-001"
@@ -64,7 +64,8 @@ after = ["network.target", "b00t-hive-inference-qwen36-35b-a3b-llamacpp.service"
 environment = [
   "PATH=/home/brianh/.nvm/versions/node/v22.15.1/bin:/usr/local/bin:/usr/bin:/bin",
   "LLAMA_CPP_BASE_URL=http://127.0.0.1:8001/v1",
-  "OPENAI_API_KEY=local-b00t",
+  # 🤓 OPENAI_API_KEY sourced from .env / CMDB; local llama.cpp proxy accepts any non-empty string
+  "OPENAI_API_KEY=${OPENAI_API_KEY:-local-b00t}",
 ]
 exec_start = "pi --mode rpc --provider llama-cpp --model ch0nky"
 
@@ -88,7 +89,8 @@ AGENT_SKILLS = "code,refactor,debug,edit,bash"
 PI_CODING_AGENT_DIR = "~/.pi/agent"
 PI_MODEL = "ch0nky"
 LLAMA_CPP_BASE_URL = "http://127.0.0.1:8001/v1"
-OPENAI_API_KEY = "local-b00t"
+# 🤓 OPENAI_API_KEY falls back to "local-b00t"; override via .env / CMDB for non-local deployments
+OPENAI_API_KEY = "${OPENAI_API_KEY:-local-b00t}"
 
 [[b00t.usage]]
 description = "Start pi agent service (b00t hive)"
