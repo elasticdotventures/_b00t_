@@ -2108,6 +2108,17 @@ fn check_readme_status(memory: &mut session_memory::SessionMemory) -> Result<()>
     Ok(())
 }
 
+/// Crate-wide lock for tests that mutate process-wide environment variables.
+/// A per-module lock cannot prevent concurrent mutations from tests in *other*
+/// modules; this single static is the authoritative guard for all env-var
+/// manipulation across the entire `b00t_cli` test suite.
+#[cfg(test)]
+pub mod test_env {
+    use once_cell::sync::Lazy;
+    use std::sync::Mutex;
+    pub static ENV_LOCK: Lazy<Mutex<()>> = Lazy::new(|| Mutex::new(()));
+}
+
 #[cfg(test)]
 mod tests {
     #[test]

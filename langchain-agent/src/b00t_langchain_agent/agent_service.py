@@ -18,6 +18,7 @@ from langchain_core.tools import BaseTool
 from redis.asyncio import Redis
 
 from .b00t_tools import B00tToolset
+from .decision_tree import DecisionTree
 from .types import AgentConfig, AgentResult, ChainConfig
 
 log = logging.getLogger(__name__)
@@ -147,6 +148,9 @@ class AgentService:
         # Get tools for this agent
         agent_tools = self._get_tools_for_agent(config)
 
+        # De-duplicate by tool name; some LangChain constructors reject duplicate names.
+        agent_tools = list({t.name: t for t in agent_tools}.values())
+
         # LangChain v1 uses `create_agent`; keep the service on the non-deprecated path.
         agent = create_agent(
             model=llm,
@@ -189,7 +193,8 @@ class AgentService:
         if config.decision_tree:
             tree_path = self.datum_path / config.decision_tree
             if tree_path.exists():
-                sections.append(self.native_toolset.prompt_context())
+                tree = DecisionTree.from_file(tree_path)
+                sections.append(tree.summary())
 
         if config.bootstrap_script:
             sections.append(

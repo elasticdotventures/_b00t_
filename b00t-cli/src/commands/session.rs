@@ -322,7 +322,7 @@ mod tests {
 
     #[test]
     fn test_session_commands_exist() {
-        let _lock = TEST_ENV_LOCK.lock().unwrap();
+        let _lock = crate::test_env::ENV_LOCK.lock().unwrap();
         let _guard = TestRootGuard::new();
         let init_cmd = SessionCommands::Init {
             budget: Some(10.0),

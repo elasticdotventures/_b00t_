@@ -119,6 +119,8 @@ class B00tToolset:
         description: str = "",
     ) -> str:
         """Capture a task in the native b00t queue."""
+        if not 1 <= priority <= 4:
+            raise ValueError(f"priority must be 1-4, got {priority}")
         args = ["task", "add", "-p", str(priority)]
         if tags:
             args.extend(["-t", tags])
