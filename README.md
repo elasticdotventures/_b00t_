@@ -89,9 +89,9 @@ b00t acp hive ready mission-id 2   # signal readiness for step 2
 
 ---
 
-## 🔁 Ralph — OODA Loop Runner
+## 🔁 Next Loop Interface
 
-`b00t.sh` implements the Ralph autonomous task loop (Observe→Orient→Decide→Act):
+`b00t.sh` carries forward the useful Ralph/OODA loop lessons, but the standalone `b00t-wiggums` repo is sunset. The loop interface is now treated as a commodity execution surface, with higher-level research/orchestration living in `b00t.sh` and `karpathy/autoresearch`.
 
 ```bash
 # Run with default claude tool, 10 iterations
