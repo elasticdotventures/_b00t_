@@ -376,3 +376,4 @@ ralph/
 b00t-cli/.b00t/
 vendor/l3dg3rr/
 /plantuml-server
+.worktrees/
