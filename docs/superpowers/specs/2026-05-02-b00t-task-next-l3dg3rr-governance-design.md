@@ -9,9 +9,9 @@
 
 ## Executive Summary
 
-Enable `b00t task --next` to search multiple task sources (local queue → GitHub issues) with **governance enforcement at the boundary**. l3dg3rr acts as middleware: validates state transitions, checks authorization, logs all I/O to OpenTelemetry, and returns transaction proof.
+Enable `b00t task --next` to search multiple task sources (local queue → GitHub issues) with **governance enforcement at the boundary**. b00t embeds a governance proxy layer (l3dg3rr-mcp, an internal MCP service) that validates state transitions, checks authorization, logs all I/O to OpenTelemetry, and returns transaction proof.
 
-**Key design principle**: Invariant-based governance using Rust traits. Rules are codified as trait implementations on `TaskQueueState`, making them testable, composable, and extensible without refactoring the core pattern.
+**Key design principle**: Invariant-based governance using Rust traits. Rules are codified as trait implementations, making them testable, composable, and extensible. **b00t's l3dg3rr-mcp acts as a pass-thru/proxy governance layer**: all downstream service calls (GitHub, task APIs, OTel) flow through governed authorization gates before execution.
 
 ---
 
@@ -37,44 +37,52 @@ Currently, `b00t task --next` only searches the local `.b00t/tasks.json` queue. 
 ┌─────────────────────────────────────────────────────┐
 │ b00t-cli (surface)                                  │
 │ ├─ task --next                                      │
-│ └─ calls l3dg3rr MCP service                        │
+│ └─ calls b00t's l3dg3rr-mcp (internal)              │
 └─────────────────────┬───────────────────────────────┘
                       │
-┌─────────────────────▼───────────────────────────────┐
-│ l3dg3rr MCP Server (governance + execution)         │
-│ ├─ task/next RPC endpoint                           │
-│ ├─ orchestrates: queue check → gate check → fetch   │
-│ ├─ logs all decisions to OTel                       │
-│ └─ returns (Task, TransactionProof)                 │
-└─────────────────────┬───────────────────────────────┘
+┌─────────────────────▼───────────────────────────────────────────┐
+│ b00t (integrated system)                                        │
+│ ├─ b00t-cli (frontend)                                          │
+│ ├─ task subsystem (CRUD)                                        │
+│ ├─ l3dg3rr-mcp (internal MCP service)                          │
+│ │  └─ task/next RPC endpoint                                   │
+│ │  ├─ orchestrates: queue check → gate check → proxy to services
+│ │  ├─ logs all decisions to OTel                               │
+│ │  └─ returns (Task, TransactionProof)                         │
+│ └─ passes requests to downstream services via l3dg3rr governance
+└─────────────────────┬───────────────────────────────────────────┘
                       │
         ┌─────────────┼─────────────┐
         │             │             │
     ┌───▼──┐   ┌─────▼─────┐   ┌──▼────┐
     │Local │   │ GitHub    │   │OTel   │
     │Queue │   │ MCP       │   │Logging│
+    │APIs  │   │(proxied)  │   │(built-in)
     └──────┘   └───────────┘   └───────┘
 ```
 
-**Layers**:
+**Architecture**:
 
 1. **b00t-cli** — CLI surface, thin wrapper
-   - Calls `l3dg3rr.task_next()` via MCP
+   - Calls `b00t's internal l3dg3rr-mcp.task_next()` via local MCP
    - Displays result + transaction proof
    - No business logic
 
-2. **l3dg3rr-core** (new crate) — Governance primitives
+2. **l3dg3rr-core** — Governance primitives (shared library)
    - Traits for invariants and gates
    - Transaction logging
    - Solver (future: constraint satisfaction)
-   - No I/O here (pure logic)
+   - No I/O, no service coupling
+   - Used by both b00t and l3dg3rr
 
-3. **l3dg3rr MCP server** — Execution + orchestration
+3. **b00t's l3dg3rr-mcp** — Internal MCP service (defined by b00t)
    - Implements `task/next` RPC endpoint
-   - Calls b00t APIs (queue read, task import)
-   - Calls GitHub MCP for issue fetch
+   - **Pass-thru/proxy governance layer**: all downstream calls (GitHub, task APIs, OTel) flow through governed authorization
+   - Calls b00t's task APIs (queue read, task import)
+   - Proxies GitHub MCP calls through governance gates
    - Orchestrates state transitions
    - Logs to OTel
+   - Returns task + transaction proof
 
 ---
 
@@ -444,22 +452,27 @@ $ OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318 \
 
 ### New Crates
 
-- **l3dg3rr-core** — Governance traits, no I/O, minimal deps
+- **l3dg3rr-core** (new, standalone) — Governance traits, no I/O, minimal deps
   - `serde` (task serialization)
   - `uuid` (transaction IDs)
   - `thiserror` (error types)
 
-- **l3dg3rr-mcp** — MCP server + orchestration
-  - `modelcontextprotocol` (MCP service definition)
-  - `opentelemetry` + `tracing` (OTel logging)
-  - `tokio` (async runtime)
-  - `l3dg3rr-core` (trait definitions)
+### Modified Crates
+
+- **b00t-cli** — Add l3dg3rr-mcp internal MCP service
+  - Adds `modelcontextprotocol` dep (MCP service definition)
+  - Adds `opentelemetry` + `tracing` (OTel logging)
+  - Already has: `tokio`, `serde`, task CRUD
+  - Extends `src/` with:
+    - `mcp/l3dg3rr_service.rs` — task/next endpoint + governance orchestration
+    - `mcp/governance.rs` — gate implementations
+  - CLI calls internal l3dg3rr-mcp service instead of external endpoint
 
 ### Existing Dependencies
 
-- **b00t-cli** — already has task CRUD, extends with l3dg3rr call
-- **GitHub MCP** — assumed available, used for issue fetch
+- **GitHub MCP** — assumed available, called via l3dg3rr governance proxy
 - **OTel stack** — assumed available (collector, exporter)
+- **b00t task APIs** — already exist, used by l3dg3rr-mcp for queue state
 
 ---
 
