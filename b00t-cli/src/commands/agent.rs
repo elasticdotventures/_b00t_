@@ -4,14 +4,14 @@
 //! agent coordination infrastructure.
 
 use anyhow::Result;
-use b00t_c0re_lib::AgentManager;
 use b00t_c0re_lib::agent_coordination::{
     AgentCoordinator, AgentMetadata, MessageFilter, RequestUrgency, TaskCompletionStatus,
     TaskPriority,
 };
 use b00t_c0re_lib::redis::{AgentStatus, RedisComms, RedisConfig};
+use b00t_c0re_lib::AgentManager;
 use clap::Parser;
-use std::collections::{HashMap, BTreeMap};
+use std::collections::{BTreeMap, HashMap};
 use std::path::PathBuf;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
@@ -736,7 +736,7 @@ async fn handle_invoke(
     prompt: &str,
     config_override: Option<&std::path::Path>,
 ) -> Result<()> {
-    use b00t_c0re_lib::agent_manager::{AgentManager, invoke_agent_executor};
+    use b00t_c0re_lib::agent_manager::{invoke_agent_executor, AgentManager};
 
     // Resolve config path: override → _b00t_/<agent>.agent.toml → cwd search
     let config_path = if let Some(p) = config_override {
@@ -1003,7 +1003,7 @@ fn load_role_hint(role_name: &str) -> String {
     .collect();
 
     for dir in &b00t_dirs {
-        for ext in &["role.tomllm", "role.toml"] {
+        for ext in &["role.tomllmd", "role.tomllm", "role.toml"] {
             let path = dir.join(format!("{}.{}", role_name, ext));
             if path.exists() {
                 if let Ok(content) = std::fs::read_to_string(&path) {
@@ -1122,9 +1122,11 @@ pub async fn setup_entangled_channels(
 ) -> Result<BTreeMap<String, String>> {
     let mut channels = BTreeMap::new();
     let role = &role_datum.name;
-    
+
     // Get channel_prefix from role datum, default to "agent:{role}:"
-    let prefix = role_datum.channel_prefix.clone()
+    let prefix = role_datum
+        .channel_prefix
+        .clone()
         .unwrap_or_else(|| format!("agent:{}:", role));
 
     for agent_name in &role_datum.entangled_agents {
@@ -1147,7 +1149,7 @@ fn get_delegation_channel(
     if let Some(channel) = entangled_channels.get(worker) {
         return channel.clone();
     }
-    
+
     // Fallback to default global channel
     format!("agent:captain:{}", worker)
 }
@@ -1176,29 +1178,33 @@ async fn resolve_role_channels(
                 if let Ok(content) = std::fs::read_to_string(&role_path) {
                     if let Ok(value) = toml::from_str::<toml::Value>(&content) {
                         let datum = value.get("b00t");
-                        let entangled = datum.and_then(|d| d.get("entangled_agents"))
+                        let entangled = datum
+                            .and_then(|d| d.get("entangled_agents"))
                             .and_then(|a| a.as_array())
                             .map(|arr| {
                                 arr.iter()
                                     .filter_map(|v| v.as_str().map(|s| s.to_string()))
                                     .collect::<Vec<_>>()
                             });
-                        
-                        let prefix = datum.and_then(|d| d.get("channel_prefix"))
+
+                        let prefix = datum
+                            .and_then(|d| d.get("channel_prefix"))
                             .and_then(|p| p.as_str())
                             .map(|s| s.to_string());
-                        
-                        let prefix = prefix.clone();  // Clone for later use
-                        
+
+                        let prefix = prefix.clone(); // Clone for later use
+
                         if let Some(agents) = entangled {
-                            let prefix = prefix.as_ref().map(|p| p.to_string())
+                            let prefix = prefix
+                                .as_ref()
+                                .map(|p| p.to_string())
                                 .unwrap_or_else(|| format!("agent:{}:", role));
                             for agent_name in agents {
                                 let channel = format!("{}{}", prefix, agent_name);
                                 channels.insert(agent_name.clone(), channel);
                             }
                         }
-                        
+
                         return Ok((prefix, channels));
                     }
                 }

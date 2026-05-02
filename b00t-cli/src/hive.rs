@@ -3,10 +3,11 @@
 //! Reads real system resources (RAM, GPU, systemd services) and manages
 //! hive profile transitions (download-mode ↔ inference-qwen3 ↔ inference-sm0l).
 //!
-//! Profile datums: _b00t_/*.hive.toml  OR  _b00t_/*.hive.tomllm  (.tomllm wins)
+//! Profile datums: _b00t_/*.hive.toml OR *.hive.tomllm OR *.hive.tomllmd
+//! precedence: .hive.tomllmd > .hive.tomllm > .stack.tomllmd > .stack.tomllm > .hive.toml
 //! State file: /tmp/b00t/hive-state.json (volatile; reset on reboot)
 
-use anyhow::{Context, Result, bail};
+use anyhow::{bail, Context, Result};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
@@ -355,22 +356,49 @@ impl HiveProfile {
 
 // ─── Profile Discovery ────────────────────────────────────────────────────────
 
-/// Find all .hive.toml / .hive.tomllm / .stack.tomllm datums; priority: .hive.tomllm > .stack.tomllm > .hive.toml
+/// Find all .hive.toml / .hive.tomllm / .hive.tomllmd / .stack.tomllm / .stack.tomllmd
+/// datums; priority: .hive.tomllmd > .hive.tomllm > .stack.tomllmd > .stack.tomllm > .hive.toml
 pub fn discover_profiles(datum_dir: &Path) -> Vec<(String, PathBuf)> {
     let mut profiles: HashMap<String, PathBuf> = HashMap::new();
     if let Ok(entries) = fs::read_dir(datum_dir) {
         for entry in entries.flatten() {
             let path = entry.path();
             if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
-                if name.ends_with(".hive.tomllm") {
-                    let profile_name = name.trim_end_matches(".hive.tomllm").to_string();
-                    profiles.insert(profile_name, path); // .hive.tomllm wins
+                let profile = if name.ends_with(".hive.tomllmd") {
+                    Some((name.trim_end_matches(".hive.tomllmd").to_string(), 5))
+                } else if name.ends_with(".hive.tomllm") {
+                    Some((name.trim_end_matches(".hive.tomllm").to_string(), 4))
+                } else if name.ends_with(".stack.tomllmd") {
+                    Some((name.trim_end_matches(".stack.tomllmd").to_string(), 3))
                 } else if name.ends_with(".stack.tomllm") {
-                    let profile_name = name.trim_end_matches(".stack.tomllm").to_string();
-                    profiles.entry(profile_name).or_insert(path); // .stack.tomllm only if no .hive.tomllm
+                    Some((name.trim_end_matches(".stack.tomllm").to_string(), 2))
                 } else if name.ends_with(".hive.toml") {
-                    let profile_name = name.trim_end_matches(".hive.toml").to_string();
-                    profiles.entry(profile_name).or_insert(path); // .toml only if no .tomllm variants
+                    Some((name.trim_end_matches(".hive.toml").to_string(), 1))
+                } else {
+                    None
+                };
+
+                if let Some((profile_name, new_rank)) = profile {
+                    let current_rank = profiles
+                        .get(&profile_name)
+                        .and_then(|existing| existing.file_name().and_then(|n| n.to_str()))
+                        .map(|existing_name| {
+                            if existing_name.ends_with(".hive.tomllmd") {
+                                5
+                            } else if existing_name.ends_with(".hive.tomllm") {
+                                4
+                            } else if existing_name.ends_with(".stack.tomllmd") {
+                                3
+                            } else if existing_name.ends_with(".stack.tomllm") {
+                                2
+                            } else {
+                                1
+                            }
+                        })
+                        .unwrap_or(0);
+                    if new_rank >= current_rank {
+                        profiles.insert(profile_name, path);
+                    }
                 }
             }
         }
@@ -380,22 +408,29 @@ pub fn discover_profiles(datum_dir: &Path) -> Vec<(String, PathBuf)> {
     result
 }
 
-/// Load a named profile from datum dir — prefers .hive.tomllm > .stack.tomllm > .hive.toml
+/// Load a named profile from datum dir — prefers
+/// .hive.tomllmd > .hive.tomllm > .stack.tomllmd > .stack.tomllm > .hive.toml
 pub fn load_profile(name: &str, datum_dir: &Path) -> Result<HiveProfile> {
-    // 🤓 priority: .hive.tomllm (explicit hive) > .stack.tomllm (sysconfig profile with inline service spec) > .hive.toml (fallback)
+    // 🤓 .tomllmd currently downgrades to the generic .tomllm/TOML handling path.
+    let hive_tomllmd_path = datum_dir.join(format!("{}.hive.tomllmd", name));
     let hive_tomllm_path = datum_dir.join(format!("{}.hive.tomllm", name));
+    let stack_tomllmd_path = datum_dir.join(format!("{}.stack.tomllmd", name));
     let stack_tomllm_path = datum_dir.join(format!("{}.stack.tomllm", name));
     let hive_toml_path = datum_dir.join(format!("{}.hive.toml", name));
 
-    let path = if hive_tomllm_path.exists() {
+    let path = if hive_tomllmd_path.exists() {
+        hive_tomllmd_path
+    } else if hive_tomllm_path.exists() {
         hive_tomllm_path
+    } else if stack_tomllmd_path.exists() {
+        stack_tomllmd_path
     } else if stack_tomllm_path.exists() {
         stack_tomllm_path
     } else if hive_toml_path.exists() {
         hive_toml_path
     } else {
         bail!(
-            "profile '{}' not found (tried .hive.tomllm, .stack.tomllm, .hive.toml)",
+            "profile '{}' not found (tried .hive.tomllmd, .hive.tomllm, .stack.tomllmd, .stack.tomllm, .hive.toml)",
             name
         );
     };

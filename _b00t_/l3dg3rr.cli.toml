@@ -1,0 +1,72 @@
+[b00t]
+name = "l3dg3rr"
+type = "cli"
+hint = """
+Authoritative local source library for `.tomllmd` validation and visualization rules.
+
+`b00t` treats `.tomllmd` as a richer superset of `.tomllm` and downgrades it to the
+generic `.tomllm` path in core parsing. Advanced diagram/DSL/structured-markdown
+semantics should be validated and visualized against `l3dg3rr`.
+"""
+
+[b00t.cli]
+command = "just"
+detect = """
+if [ -f vendor/l3dg3rr/Cargo.toml ]; then
+  echo "vendor/l3dg3rr"
+elif command -v ledgerr-mcp-server >/dev/null 2>&1; then
+  echo "ledgerr-mcp-server"
+else
+  exit 1
+fi
+"""
+version_cmd = """
+if [ -f vendor/l3dg3rr/Cargo.toml ]; then
+  awk -F'"' '/^version = / { print $2; exit }' vendor/l3dg3rr/Cargo.toml
+else
+  ledgerr-mcp-server --version
+fi
+"""
+version_regex = '(\\d+\\.\\d+\\.\\d+)'
+install = "echo 'l3dg3rr is authoritative but intentionally kept as an external/local source library; clone PromptExecution/l3dg3rr into vendor/l3dg3rr if needed.'"
+desires = "local-authority"
+
+[b00t.capabilities]
+features = [
+  "tomllmd-validation",
+  "tomllmd-visualization",
+  "diagram-dsl",
+  "structured-markdown",
+  "lsp-asp-shapes",
+]
+requires = ["just", "rust"]
+
+[b00t.authority]
+scope = [".tomllmd"]
+fallback = ".tomllm"
+validation_source = "vendor/l3dg3rr"
+visualization_source = "vendor/l3dg3rr"
+notes = [
+  "Use generic b00t TOML parsing for baseline compatibility.",
+  "Use l3dg3rr as the authoritative source for advanced validation and visualization semantics.",
+]
+
+[[b00t.usage]]
+description = "Validate docs/diagram semantics in local l3dg3rr checkout"
+command = "cd vendor/l3dg3rr && just docgen-check"
+
+[[b00t.usage]]
+description = "Run local authoritative tests for validation and visualization flows"
+command = "cd vendor/l3dg3rr && just test"
+
+[[b00t.usage]]
+description = "Start the ledgerr MCP surface for supervised local tooling"
+command = "cd vendor/l3dg3rr && just mcp-start"
+
+[[b00t.references]]
+name = "PromptExecution/l3dg3rr"
+url = "https://github.com/PromptExecution/l3dg3rr"
+
+[[b00t.references]]
+name = "l3dg3rr live documentation"
+url = "https://promptexecution.github.io/l3dg3rr/"

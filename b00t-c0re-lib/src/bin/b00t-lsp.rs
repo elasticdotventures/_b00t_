@@ -6,7 +6,7 @@
 //! VS Code settings.json:
 //! ```json
 //! {
-//!   "languages": [{"id": "toml", "extensions": [".toml", ".tomllm"]}],
+//!   "languages": [{"id": "toml", "extensions": [".toml", ".tomllm", ".tomllmd"]}],
 //!   "server": {"command": "b00t-lsp", "args": ["--stdio"]}
 //! }
 //! ```
