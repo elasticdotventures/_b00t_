@@ -559,8 +559,9 @@ fn parse_checkpoint_message(message: &str) -> Result<CheckpointMetadata> {
     let mut metadata = CheckpointMetadata::default();
 
     // Extract session_id: after "session:" before " role:" or " checkpoint_count:"
-    if let Some(start) = message.find("session:") {
-        let rest = &message[start + 8..];
+    const SESSION_PREFIX: &str = "session:";
+    if let Some(start) = message.find(SESSION_PREFIX) {
+        let rest = &message[start + SESSION_PREFIX.len()..];
         let end = rest
             .find(' ')
             .or_else(|| rest.find('|'))
@@ -569,8 +570,9 @@ fn parse_checkpoint_message(message: &str) -> Result<CheckpointMetadata> {
     }
 
     // Extract role: after "role:" before " checkpoint_count:"
-    if let Some(start) = message.find("role:") {
-        let rest = &message[start + 5..];
+    const ROLE_PREFIX: &str = "role:";
+    if let Some(start) = message.find(ROLE_PREFIX) {
+        let rest = &message[start + ROLE_PREFIX.len()..];
         let end = rest
             .find(' ')
             .or_else(|| rest.find('|'))
@@ -582,8 +584,9 @@ fn parse_checkpoint_message(message: &str) -> Result<CheckpointMetadata> {
     }
 
     // Extract checkpoint_count: after "checkpoint_count:" before " capabilities:"
-    if let Some(start) = message.find("checkpoint_count:") {
-        let rest = &message[start + 17..];
+    const CHECKPOINT_COUNT_PREFIX: &str = "checkpoint_count:";
+    if let Some(start) = message.find(CHECKPOINT_COUNT_PREFIX) {
+        let rest = &message[start + CHECKPOINT_COUNT_PREFIX.len()..];
         let end = rest
             .find(' ')
             .or_else(|| rest.find('|'))
@@ -592,8 +595,9 @@ fn parse_checkpoint_message(message: &str) -> Result<CheckpointMetadata> {
     }
 
     // Extract capabilities: after "capabilities:" to end
-    if let Some(start) = message.find("capabilities:") {
-        let rest = &message[start + 14..];
+    const CAPABILITIES_PREFIX: &str = "capabilities:";
+    if let Some(start) = message.find(CAPABILITIES_PREFIX) {
+        let rest = &message[start + CAPABILITIES_PREFIX.len()..];
         let capabilities_str = rest.trim();
 
         if capabilities_str != "none" && !capabilities_str.is_empty() {

@@ -11,10 +11,20 @@ fn is_infrastructure_available() -> bool {
 }
 
 fn get_b00t_binary() -> String {
-    env::var("CARGO_BIN_EXE_b00t-cli").unwrap_or_else(|_| {
-        let manifest_dir = env::var("CARGO_MANIFEST_DIR").unwrap();
-        format!("{}/target/debug/b00t-cli", manifest_dir)
-    })
+    if let Ok(path) = env::var("CARGO_BIN_EXE_b00t-cli") {
+        return path;
+    }
+
+    let manifest_dir = env::var("CARGO_MANIFEST_DIR").unwrap();
+    let candidates = [
+        format!("{}/target/debug/b00t-cli", manifest_dir),
+        format!("{}/../target/debug/b00t-cli", manifest_dir),
+    ];
+
+    candidates
+        .into_iter()
+        .find(|path| std::path::Path::new(path).exists())
+        .expect("b00t-cli binary not found; run cargo test so Cargo builds it first")
 }
 
 fn setup_temp_dir() -> TempDir {
@@ -262,12 +272,12 @@ mod cli_learn_display_flags {
         );
 
         let stdout = String::from_utf8_lossy(&output.stdout);
-        // Check for stable TOC markers based on the known section headings.
+        // Check for stable TOC markers based on the CLI's top-level knowledge sections.
         assert!(
-            stdout.contains("Section 1")
-                && stdout.contains("Section 2")
-                && stdout.contains("Section 3"),
-            "TOC output did not list expected sections. Output was:\n{}",
+            stdout.contains("Table of Contents: test_topic")
+                && stdout.contains("Learn Content (_b00t_/learn/test_topic.md)")
+                && stdout.contains("Use: b00t learn test_topic --section <num>"),
+            "TOC output did not list expected knowledge sections. Output was:\n{}",
             stdout
         );
     }

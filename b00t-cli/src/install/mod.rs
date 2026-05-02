@@ -24,10 +24,22 @@ pub fn default_registry() -> AdapterRegistry {
     ])
 }
 
-/// Source root for runtime content: _b00t_/runtimes/ relative to workspace root.
-/// Uses get_workspace_root() (git rev-parse) so it works from any cwd, consistent
-/// with run_just_install. Returns Err when the directory does not exist.
+/// Source root for runtime content.
+///
+/// Defaults to `_b00t_/runtimes/` relative to the workspace root. Tests and
+/// controlled installers may override with `B00T_RUNTIMES_SOURCE_ROOT`.
 pub fn runtimes_source_root() -> Result<PathBuf> {
+    if let Ok(source_root) = std::env::var("B00T_RUNTIMES_SOURCE_ROOT") {
+        let root = PathBuf::from(source_root);
+        if root.exists() {
+            return Ok(root);
+        }
+        anyhow::bail!(
+            "runtimes source directory not found: {}",
+            root.display()
+        );
+    }
+
     let root = PathBuf::from(crate::utils::get_workspace_root()).join("_b00t_/runtimes");
     if !root.exists() {
         anyhow::bail!(
@@ -146,6 +158,10 @@ mod tests {
     fn test_runtimes_source_root_from_workspace() {
         // When run from within the repo, runtimes_source_root() is anchored at the
         // git workspace root. Verify the returned path ends with _b00t_/runtimes.
+        let _lock = ENV_MUTEX.lock().unwrap();
+        unsafe {
+            std::env::remove_var("B00T_RUNTIMES_SOURCE_ROOT");
+        }
         let root = crate::utils::get_workspace_root();
         let expected = PathBuf::from(&root).join("_b00t_/runtimes");
         if expected.exists() {
@@ -171,6 +187,7 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         let _lock = ENV_MUTEX.lock().unwrap();
         unsafe {
+            std::env::remove_var("B00T_RUNTIMES_SOURCE_ROOT");
             std::env::set_var("_B00T_TEST_ROOT", tmp.path().to_str().unwrap());
         }
         let _cleanup = EnvVarGuard("_B00T_TEST_ROOT");
@@ -182,5 +199,21 @@ mod tests {
             "unexpected error: {}",
             msg
         );
+    }
+
+    #[test]
+    fn test_runtimes_source_root_explicit_override() {
+        let tmp = tempfile::tempdir().unwrap();
+        let source_root = tmp.path().join("_b00t_/runtimes");
+        std::fs::create_dir_all(&source_root).unwrap();
+
+        let _lock = ENV_MUTEX.lock().unwrap();
+        unsafe {
+            std::env::set_var("B00T_RUNTIMES_SOURCE_ROOT", &source_root);
+        }
+        let _cleanup = EnvVarGuard("B00T_RUNTIMES_SOURCE_ROOT");
+
+        let result = runtimes_source_root().unwrap();
+        assert_eq!(result, source_root);
     }
 }

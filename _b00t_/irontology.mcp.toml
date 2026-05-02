@@ -1,0 +1,18 @@
+[b00t]
+name = "irontology"
+type = "mcp"
+hint = "Alias datum for irontology-mcp so role entanglement `irontology.mcp` resolves in whoami capability checks"
+
+[[b00t.mcp.stdio]]
+command = "vendor/irontology-mcp/target/release/irontology-mcp"
+args = []
+transport = "stdio"
+priority = 0
+requires = ["vendor/irontology-mcp"]
+
+# b00t:map v1
+# summary: irontology MCP alias datum — resolves executive entanglement irontology.mcp
+# tags: mcp, irontology, whoami, semantic-rag
+# tier: frontier
+# cmds: b00t whoami --role=executive
+# complexity: 2

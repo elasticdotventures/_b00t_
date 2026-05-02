@@ -864,6 +864,15 @@ irontology-test:
 irontology-update:
     git submodule update --remote vendor/irontology-mcp
 
+# Inspect the local side of the sm3lly NATS ACP route without publishing credentials
+acp-sm3lly-status:
+    #!/bin/bash
+    set -euo pipefail
+    echo "NATS_URL=${NATS_URL:-nats://c010.promptexecution.com:4222}"
+    b00t chat info
+    b00t hive status
+    b00t whoami --role=executive | sed -n '/Capability check:/,$p'
+
 # ── Gemma 4 + pi-coding-agent local inference ────────────────────────────────
 
 # Download Gemma 4 26B-A4B MXFP4_MOE GGUF (unsloth/gemma-4-26B-A4B-it-GGUF)

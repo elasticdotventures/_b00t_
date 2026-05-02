@@ -1,12 +1,29 @@
-use b00t_c0re_lib::version;
 use std::env;
 use std::fs;
 use std::path::Path;
+use std::process::Command;
 use std::sync::Mutex;
 use tempfile::TempDir;
 
 // 🤓 Prevent cargo lock contention - serialize b00t-cli execution
 static CARGO_LOCK: Mutex<()> = Mutex::new(());
+
+fn get_b00t_binary() -> String {
+    if let Ok(path) = env::var("CARGO_BIN_EXE_b00t-cli") {
+        return path;
+    }
+
+    let manifest_dir = env::var("CARGO_MANIFEST_DIR").unwrap();
+    let candidates = [
+        format!("{manifest_dir}/target/debug/b00t-cli"),
+        format!("{manifest_dir}/../target/debug/b00t-cli"),
+    ];
+
+    candidates
+        .into_iter()
+        .find(|path| Path::new(path).exists())
+        .expect("b00t-cli binary not found; run cargo test so Cargo builds it first")
+}
 
 fn setup_test_environment(temp_dir: &Path) -> Result<(), std::io::Error> {
     // Create minimal _b00t_ directory structure
@@ -17,37 +34,16 @@ fn setup_test_environment(temp_dir: &Path) -> Result<(), std::io::Error> {
     let session_dir = temp_dir.join(".git");
     fs::create_dir_all(&session_dir)?;
 
-    // Create minimal _b00t_.toml to prevent session memory errors
-    let toml_content = format!(
-        r#"
-[session]
-initialized = true
-agent_type = "test"
-
-[b00t]
-version = "{version}"
-"#,
-        version = version::VERSION
-    );
-    fs::write(session_dir.join("_b00t_.toml"), toml_content)?;
-
     Ok(())
 }
 
 #[test]
 fn test_hello_world_with_skip_all_flags() {
+    let b00t = get_b00t_binary();
+
     // Test hello-world command help output to verify it works
-    let output = std::process::Command::new("cargo")
-        .args(&[
-            "run",
-            "--bin",
-            "b00t-cli",
-            "--",
-            "init",
-            "hello-world",
-            "--help",
-        ])
-        .current_dir("/home/brianh/.dotfiles")
+    let output = Command::new(&b00t)
+        .args(["init", "hello-world", "--help"])
         .output()
         .expect("Failed to execute command");
 
@@ -66,10 +62,11 @@ fn test_hello_world_with_skip_all_flags() {
 
 #[test]
 fn test_hello_world_mcp_introspection() {
+    let b00t = get_b00t_binary();
+
     // Test that MCP introspection functionality works by testing MCP list directly
-    let output = std::process::Command::new("cargo")
-        .args(&["run", "--bin", "b00t-cli", "--", "mcp", "list"])
-        .current_dir("/home/brianh/.dotfiles")
+    let output = Command::new(&b00t)
+        .args(["mcp", "list"])
         .output()
         .expect("Failed to execute MCP list command");
 
@@ -90,10 +87,11 @@ fn test_hello_world_mcp_introspection() {
 
 #[test]
 fn test_hello_world_session_memory_tracking() {
+    let b00t = get_b00t_binary();
+
     // Test session memory operations directly
-    let output = std::process::Command::new("cargo")
-        .args(&["run", "--bin", "b00t-cli", "--", "session", "keys"])
-        .current_dir("/home/brianh/.dotfiles")
+    let output = Command::new(&b00t)
+        .args(["session", "keys"])
         .output()
         .expect("Failed to execute session keys command");
 
@@ -110,33 +108,30 @@ fn test_hello_world_session_memory_tracking() {
 
 #[test]
 fn test_hello_world_system_preferences() {
-    let _lock = CARGO_LOCK.lock().unwrap(); // 🤓 Prevent cargo contention
+    let _lock = CARGO_LOCK.lock().unwrap_or_else(|poisoned| poisoned.into_inner()); // 🤓 Prevent cargo contention
 
     let temp_dir = TempDir::new().unwrap();
-    let original_dir = env::current_dir().unwrap();
-    env::set_current_dir(&temp_dir).unwrap();
+    let b00t = get_b00t_binary();
 
     // Initialize git repo and test environment
-    std::process::Command::new("git")
-        .args(&["init"])
+    Command::new("git")
+        .args(["init"])
+        .current_dir(temp_dir.path())
         .output()
         .unwrap();
     setup_test_environment(temp_dir.path()).unwrap();
 
     // Test hello-world command
-    let output = std::process::Command::new("cargo")
+    let output = Command::new(&b00t)
         .args(&[
-            "run",
-            "--bin",
-            "b00t-cli",
-            "--",
             "init",
             "hello-world",
             "--skip-redis",
             "--skip-diagnostics",
             "--skip-tour",
         ])
-        .current_dir("/home/brianh/.dotfiles")
+        .current_dir(temp_dir.path())
+        .env("_B00T_TEST_ROOT", temp_dir.path())
         .output()
         .expect("Failed to execute command");
 
@@ -153,40 +148,35 @@ fn test_hello_world_system_preferences() {
         stdout.contains("🔧 Phase 3: Tool & Service Discovery")
             || stdout.contains("✅ Agent enlightenment complete!")
     );
-
-    env::set_current_dir(original_dir).unwrap();
 }
 
 #[test]
 fn test_hello_world_agent_detection() {
-    let _lock = CARGO_LOCK.lock().unwrap(); // 🤓 Prevent cargo contention
+    let _lock = CARGO_LOCK.lock().unwrap_or_else(|poisoned| poisoned.into_inner()); // 🤓 Prevent cargo contention
 
     let temp_dir = TempDir::new().unwrap();
-    let original_dir = env::current_dir().unwrap();
-    env::set_current_dir(&temp_dir).unwrap();
+    let b00t = get_b00t_binary();
 
     // Initialize git repo and test environment
-    std::process::Command::new("git")
-        .args(&["init"])
+    Command::new("git")
+        .args(["init"])
+        .current_dir(temp_dir.path())
         .output()
         .unwrap();
     setup_test_environment(temp_dir.path()).unwrap();
 
     // Test with CLAUDECODE environment variable
-    let output = std::process::Command::new("cargo")
+    let output = Command::new(&b00t)
         .env("CLAUDECODE", "1")
         .args(&[
-            "run",
-            "--bin",
-            "b00t-cli",
-            "--",
             "init",
             "hello-world",
             "--skip-redis",
             "--skip-diagnostics",
             "--skip-tour",
         ])
-        .current_dir("/home/brianh/.dotfiles")
+        .current_dir(temp_dir.path())
+        .env("_B00T_TEST_ROOT", temp_dir.path())
         .output()
         .expect("Failed to execute command");
 
@@ -204,23 +194,14 @@ fn test_hello_world_agent_detection() {
             || stdout.contains("🏷️  Role:")
             || stdout.contains("✅ Agent enlightenment complete!")
     );
-
-    env::set_current_dir(original_dir).unwrap();
 }
 
 #[test]
 fn test_hello_world_help_output() {
-    let output = std::process::Command::new("cargo")
-        .args(&[
-            "run",
-            "--bin",
-            "b00t-cli",
-            "--",
-            "init",
-            "hello-world",
-            "--help",
-        ])
-        .current_dir("/home/brianh/.dotfiles")
+    let b00t = get_b00t_binary();
+
+    let output = Command::new(&b00t)
+        .args(["init", "hello-world", "--help"])
         .output()
         .expect("Failed to execute command");
 
