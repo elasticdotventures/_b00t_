@@ -504,9 +504,16 @@ fn register_stage_guard_py(py: Python<'_>, stage: &str, callback: PyObject) -> P
         Box::new(move |state| {
             Python::with_gil(|py| {
                 let dict = pyo3::types::PyDict::new(py);
-                let _ = dict.set_item("verb", state.verb.as_deref().unwrap_or(""));
-                let _ = dict.set_item("raw_input", &state.raw_input);
-                let _ = dict.set_item("stage", stage_copy.to_string());
+                // Best-effort dict population; log individual failures but don't abort
+                if let Err(e) = dict.set_item("verb", state.verb.as_deref().unwrap_or("")) {
+                    eprintln!("⚠️ stage guard: failed to set 'verb' in callback dict: {e}");
+                }
+                if let Err(e) = dict.set_item("raw_input", &state.raw_input) {
+                    eprintln!("⚠️ stage guard: failed to set 'raw_input' in callback dict: {e}");
+                }
+                if let Err(e) = dict.set_item("stage", stage_copy.to_string()) {
+                    eprintln!("⚠️ stage guard: failed to set 'stage' in callback dict: {e}");
+                }
 
                 match cb.call1(py, (dict,)) {
                     Ok(result) => {

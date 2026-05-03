@@ -234,7 +234,8 @@ impl<'i> KmdLine<'i> {
     }
 
     pub fn parse(input: &mut &'i str) -> winnow::Result<Self> {
-        // Capture the original input once so all stage guards see the same raw_input
+        // Capture the original input once so ParseState.raw_input is the full
+        // original command for all stage guards — not the remaining unparsed suffix.
         let original_input = *input;
 
         // Helper: run a stage guard; on block, surface the message and fail the parse

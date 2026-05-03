@@ -70,7 +70,19 @@ impl ElementCollector {
 fn vis_to_string(vis: &Visibility) -> String {
     match vis {
         Visibility::Public(_) => "pub".to_string(),
-        Visibility::Restricted(r) => quote::quote!(#r).to_string(),
+        Visibility::Restricted(r) => {
+            // Convert pub(crate), pub(super), pub(in path) without the quote! macro
+            let path = &r.path;
+            if path.is_ident("crate") {
+                "pub(crate)".to_string()
+            } else if path.is_ident("super") {
+                "pub(super)".to_string()
+            } else if path.is_ident("self") {
+                "pub(self)".to_string()
+            } else {
+                format!("pub(in {})", quote::quote!(#path))
+            }
+        }
         Visibility::Inherited => "private".to_string(),
     }
 }
