@@ -140,7 +140,7 @@ message = "🚫 blocked: pushing to main — create a PR instead"
 redirect = "gh pr create"
 
 [[b00t.hive.guards]]
-pattern = { rhai = "cmd.contains(\"git merge\") && cmd.contains(\"main\")" }
+pattern = { rhai = "cmd.contains(\"git merge\") && (cmd.contains(\" main\") || cmd.contains(\" origin/main\"))" }
 action = "block"
 message = "🚫 blocked: merging main — use gh pr merge or rebase flow"
 
@@ -161,4 +161,3 @@ command = "b00t run <your-command>"
 [[b00t.usage]]
 description = "List all active guards"
 command = "b00t hive status --guards"
-
