@@ -36,8 +36,13 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
 
+      - name: Cache Rust/cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: vendor/l3dg3rr
+
       - name: Install just
-        run: cargo install just --locked
+        uses: extractions/setup-just@v1
 
       - name: Setup mdBook
         uses: jontze/action-mdbook@v3
