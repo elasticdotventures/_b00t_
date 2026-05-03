@@ -531,17 +531,13 @@ impl GuardPattern {
                     }
                 }
             }
-            GuardPattern::K0mmand3rStage(stage) => {
-                // Stage guards are registered as callbacks in k0mmand3r::parser_stages.
-                // At parse time, parse_stages::run_stage() invokes all guards registered
-                // for that stage. This matches() method is a registration helper:
-                // returning true here would mean "this guard fires on any command at this stage"
-                // which is always the case for stage-based guards — the actual filtering
-                // happens in the callback, not the pattern match.
+            GuardPattern::K0mmand3rStage(_stage) => {
+                // Stage guards are registered and invoked through k0mmand3r parser stage hooks.
+                // They must not participate in generic command matching via check_guards(),
+                // or they would match every command and apply their action unconditionally.
                 //
-                // Stage guards that want filter logic use RhaiExpr or JsonRegexPattern instead.
-                // K0mmand3rStage is for unconditional parse-time interception.
-                true
+                // Any parse-time interception logic belongs in the stage callback path.
+                false
             }
         }
     }
