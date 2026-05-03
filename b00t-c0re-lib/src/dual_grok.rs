@@ -215,7 +215,7 @@ impl ControlEventSink for LedgerrControlEventSink {
         });
 
         let mut child = match Command::new(&self.command)
-            .args(&self.args)
+            .args(self.args.iter())
             .stdin(Stdio::piped())
             .stdout(Stdio::null())
             .stderr(Stdio::piped())
@@ -456,13 +456,12 @@ impl DualGrokClient {
             }
         }
 
-        // Deduplicate by content hash (exact duplication from both backends)
+        // Deduplicate by content (exact duplication from both backends).
+        // 🤓 dedup_by only removes *consecutive* equal elements; must sort by
+        //    content first, dedup, then re-sort by score so cross-backend
+        //    duplicates are actually adjacent during dedup.
         let before = items.len();
-        items.sort_by(|a, b| {
-            b.score
-                .partial_cmp(&a.score)
-                .unwrap_or(std::cmp::Ordering::Equal)
-        });
+        items.sort_unstable_by(|a, b| a.content.cmp(&b.content));
         items.dedup_by(|a, b| a.content == b.content);
         if items.len() < before {
             tracing::debug!(
@@ -470,6 +469,11 @@ impl DualGrokClient {
                 before - items.len()
             );
         }
+        items.sort_unstable_by(|a, b| {
+            b.score
+                .partial_cmp(&a.score)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
         items.truncate(max);
 
         let total = items.len();
@@ -485,7 +489,7 @@ impl DualGrokClient {
             .collect();
         Ok(DualQueryResult {
             query: query_str.to_string(),
-            topic: topic.map(|t| t.to_string()),
+            topic: topic.map(str::to_string),
             total_found: total,
             items,
             raglite_ok,
@@ -544,18 +548,22 @@ fn sanitize_topic(input: &str) -> String {
         .chars()
         .map(|c| if c.is_ascii_alphanumeric() { c } else { '_' })
         .collect();
-    let s = s.trim_matches('_').to_string();
-    if s.is_empty() { "topic".to_string() } else { s }
+    let trimmed = s.trim_matches('_');
+    if trimmed.is_empty() { "topic".to_string() } else { trimmed.to_string() }
 }
 
 fn stable_log_ref(source: &str, warning: &str) -> String {
-    use std::collections::hash_map::DefaultHasher;
-    use std::hash::{Hash, Hasher};
+    // 🤓 FNV-1a 64-bit: deterministic across Rust versions & processes.
+    //    DefaultHasher is SipHash-1-3 with a *randomized* seed — NOT stable.
+    const FNV_OFFSET: u64 = 14_695_981_039_346_656_037;
+    const FNV_PRIME: u64 = 1_099_511_628_211;
 
-    let mut hasher = DefaultHasher::new();
-    source.hash(&mut hasher);
-    warning.hash(&mut hasher);
-    format!("b00t:grok:error:{:016x}", hasher.finish())
+    let mut h = FNV_OFFSET;
+    for &b in source.as_bytes().iter().chain(b":").chain(warning.as_bytes()) {
+        h ^= b as u64;
+        h = h.wrapping_mul(FNV_PRIME);
+    }
+    format!("b00t:grok:error:{h:016x}")
 }
 
 #[cfg(test)]
