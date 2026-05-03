@@ -80,11 +80,13 @@ this is just content, no verb!
 
 */
 
-#![allow(non_snake_case)]
-#![allow(unused_imports)]
-#![allow(dead_code)]
-#![allow(unused_variables)]
 //use indexmap::IndexMap;
+
+pub mod emoji_registry;
+pub use emoji_registry::{EmojiEntry, EmojiRegistry, parse_entries_from_content, extract_schema_version};
+
+pub mod parser_stages;
+pub use parser_stages::{ParseStage, ParseState, StageAction, register_stage_guard, run_stage, clear_guards};
 
 use decimal_rs::Decimal;
 use std::collections::HashMap;
@@ -211,24 +213,58 @@ impl<'i> KmdParams<'i> {
 #[derive(Debug, PartialEq, Serialize)]
 pub struct KmdLine<'i> {
     // Verb of the command; None if it's just content
-    verb: Option<String>,
+    pub verb: Option<String>,
     // Parameters of the command; None if there are no parameters
-    params: Option<KmdParams<'i>>,
+    pub params: Option<KmdParams<'i>>,
     // Content; None if there is no content
-    content: Option<String>,
+    pub content: Option<String>,
 }
 
 impl<'i> KmdLine<'i> {
+    /// Run a parser stage guard. Returns Ok if allowed.
+    fn run_stage_or_block(stage: ParseStage, raw: &str, verb: Option<&str>) -> Result<(), ()> {
+        let state = ParseState {
+            verb: verb.map(|s| s.to_string()),
+            params: Vec::new(),
+            content: None,
+            raw_input: raw.to_string(),
+        };
+        match run_stage(stage, &state) {
+            StageAction::Allow => Ok(()),
+            StageAction::Block { .. } => Err(()),
+        }
+    }
+
     pub fn parse(input: &mut &'i str) -> winnow::Result<Self> {
+        // Helper: convert a guard result into a parse failure
+        macro_rules! guard {
+            ($stage:expr, $raw:expr, $verb:expr) => {
+                if Self::run_stage_or_block($stage, $raw, $verb).is_err() {
+                    // Use fail parser to produce the correct error type
+                    return winnow::combinator::fail.parse_next(input);
+                }
+            };
+        }
+
+        // Stage: PreParse — before any processing
+        guard!(ParseStage::PreParse, *input, None);
+
         let trimmed_input = input.trim();
+
+        // Stage: PreVerb — before verb identification
+        guard!(ParseStage::PreVerb, *input, None);
 
         if trimmed_input.starts_with('/') {
             // Parse the verb
             let verb = Some(parse_slashcommand(input)?.to_string());
 
+            // Stage: PostVerb — after verb extracted
+            if let Some(ref v) = verb {
+                guard!(ParseStage::PostVerb, *input, Some(v));
+            }
+
             // Check if the remaining input is empty after parsing the verb
             if input.trim().is_empty() {
-                // If yes, return with verb only, no params and content
                 return Ok(KmdLine {
                     verb,
                     params: None,
@@ -239,14 +275,26 @@ impl<'i> KmdLine<'i> {
             // Consume whitespace before parsing params
             let _ = multispace0.parse_next(input)?;
 
+            // Stage: PreParams — before parameter parsing
+            guard!(ParseStage::PreParams, *input, verb.as_deref());
+
             // Parse parameters
             let params = opt(KmdParams::parse).parse_next(input)?;
+
+            // Stage: PostParams — after parameters collected
+            guard!(ParseStage::PostParams, *input, verb.as_deref());
 
             // Consume whitespace before parsing content
             let _ = multispace0.parse_next(input)?;
 
+            // Stage: PreContent — before content parsing
+            guard!(ParseStage::PreContent, *input, verb.as_deref());
+
             // Parse remaining content
             let content = opt(parse_content).parse_next(input)?.map(|c| c.to_string());
+
+            // Stage: PostParse — before returning
+            guard!(ParseStage::PostParse, *input, verb.as_deref());
 
             Ok(KmdLine {
                 verb,
@@ -255,8 +303,11 @@ impl<'i> KmdLine<'i> {
             })
         } else {
             // If it's not a verb, treat the entire input as content
-            // parse_content(input).map(|content| KmdLine::Content(content.to_string()))
             let content = Some(parse_content(input)?.to_string());
+
+            // Stage: PostParse for non-verb path
+            guard!(ParseStage::PostParse, *input, None);
+
             Ok(KmdLine {
                 verb: None,
                 params: None,

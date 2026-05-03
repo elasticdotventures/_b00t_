@@ -69,20 +69,71 @@ grok-e2e-integration:
 grok-e2e: grok-e2e-unit
 	@echo "✅ grok-e2e unit tier complete (run grok-e2e-integration for full pipeline)"
 
-# Pre-release gate: runs grok E2E + full cargo test suite
+# l3dg3rr docgen proxy — query knowledge graph, emit .tomllm / rustdoc
+# 🌐 Docgen UI server: cd vendor/... && ./build/c/codebase-memory-mcp --ui=true --port=9749
+docgen: project="home-brianh-.b00t-vendor-codebase-memory-mcp-b00t-ir0n-ledg3rr" format="tomllm" limit="20"
+	@echo "📚 Querying l3dg3rr knowledge graph (project={{project}}, format={{format}}, limit={{limit}})..."
+	@python3 ../vendor/codebase-memory-mcp-b00t-ir0n-ledg3rr/_b00t_/scripts/l3dg3rr-doc-proxy.py \
+		--project={{project}} --format={{format}} --limit={{limit}}
+
+# l3dg3rr docgen: quick toml export (default)
+docgen-toml:
+	@just docgen
+
+# l3dg3rr docgen: rustdoc-style export
+docgen-rustdoc:
+	@just docgen "" rustdoc
+
+# l3dg3rr docgen: raw JSON graph dump
+docgen-json:
+	@just docgen "" json 50
+
+# 🔌 Promote b00t as Hermes terminal backend (guard-gated execution)
+# Symlinks the b00t environment backend into Hermes and activates it.
+hermes-backend-enable:
+	@echo "🔌 Installing b00t environment backend into Hermes..."
+	@ln -sf ~/.hermes/skills/devops/b00t-hermes-env/scripts/b00t_env_backend.py \
+		~/.hermes/hermes-agent/tools/environments/b00t.py
+	@echo "   Symlink created. To activate:"
+	@echo "   hermes config set terminal.backend b00t"
+	@echo "   hermes config set terminal.timeout 180"
+	@echo "   Then restart: hermes (CLI) or systemctl --user restart hermes-gateway"
+	@echo ""
+	@echo "📋 All terminal commands now route through b00t guard system:"
+	@echo "   pip install  → 🦨 uv pip install"
+	@echo "   docker run   → 🦨 podman run"
+	@echo "   rm -rf /     → 🚫 BLOCKED"
+
+hermes-backend-disable:
+	@echo "🔌 Removing b00t environment backend..."
+	@rm -f ~/.hermes/hermes-agent/tools/environments/b00t.py
+	@echo "   hermes config set terminal.backend local
+
+# 🛡️ Guard lint — validates every .hive.toml datum shipped with b00t
+# Scans all shipped datums, verifies every Rhai expression compiles and
+# evaluates correctly. Run on version bump or before merge to main.
+lint-guards:
+	@echo "🔍 Scanning all shipped .hive.toml guard datums..."
+	cargo test -p b00t-cli --lib -- guard_expr_coverage --nocapture 2>&1 | tail -5
+	@echo "✅ guard lint passed"
+
+# Pre-release gate: runs grok E2E + guard lint + full cargo test suite
 # Wire to cog pre-bump-hook or call manually before any version bump
 pre-release-check:
 	#!/usr/bin/env bash
 	set -euo pipefail
 	echo "🚦 Pre-release checks starting..."
 	echo ""
-	echo "1/3 cargo test (full suite)..."
+	echo "1/4 cargo test (full suite)..."
 	cargo test 2>&1
 	echo ""
-	echo "2/3 grok E2E unit tests..."
+	echo "2/4 guard lint (Rhai expression coverage)..."
+	just lint-guards
+	echo ""
+	echo "3/4 grok E2E unit tests..."
 	just grok-e2e-unit
 	echo ""
-	echo "3/3 b00t-c0re-lib tests..."
+	echo "4/4 b00t-c0re-lib tests..."
 	cd .. && cargo test --package b00t-c0re-lib 2>&1
 	echo ""
 	echo "✅ All pre-release checks passed — safe to bump version"

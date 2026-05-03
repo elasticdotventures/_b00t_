@@ -7,6 +7,7 @@ pub mod budget;
 pub mod chat;
 pub mod cli_cmd;
 pub mod datum;
+pub mod docgen;
 pub mod exec;
 pub mod grok;
 pub mod hive;

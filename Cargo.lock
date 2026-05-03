@@ -739,6 +739,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "b00t-ast"
+version = "0.7.49"
+dependencies = [
+ "anyhow",
+ "clap",
+ "proc-macro2",
+ "quote",
+ "serde",
+ "serde_json",
+ "syn",
+ "tempfile",
+ "toml",
+ "walkdir",
+]
+
+[[package]]
 name = "b00t-azure-cp"
 version = "0.7.49"
 dependencies = [
@@ -784,10 +800,12 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_yaml",
+ "shell-words",
  "shellexpand",
  "tempfile",
  "tokio",
  "tokio-test",
+ "tokio-util",
  "toml",
  "tracing",
  "tracing-subscriber",
@@ -811,7 +829,7 @@ dependencies = [
  "jsonwebtoken",
  "k0mmand3r",
  "notify",
- "opentelemetry",
+ "opentelemetry 0.31.0",
  "opentelemetry-otlp",
  "opentelemetry_sdk",
  "pyo3",
@@ -861,6 +879,7 @@ dependencies = [
  "glob",
  "hf-hub",
  "inquire",
+ "k0mmand3r",
  "k8s-openapi",
  "kube",
  "libc",
@@ -868,6 +887,7 @@ dependencies = [
  "ndarray",
  "once_cell",
  "openssl-sys",
+ "opentelemetry 0.27.1",
  "regex",
  "reqwest",
  "rhai",
@@ -936,6 +956,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "b00t-l3dg3rr-viz"
+version = "0.7.49"
+dependencies = [
+ "serde",
+]
+
+[[package]]
 name = "b00t-mcp"
 version = "0.7.49"
 dependencies = [
@@ -982,6 +1009,7 @@ dependencies = [
  "anyhow",
  "b00t-c0re-lib",
  "b00t-cli",
+ "k0mmand3r",
  "pyo3",
  "pyo3-build-config",
  "serde",
@@ -4314,6 +4342,20 @@ dependencies = [
 
 [[package]]
 name = "opentelemetry"
+version = "0.27.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ab70038c28ed37b97d8ed414b6429d343a8bbf44c9f79ec854f3a643029ba6d7"
+dependencies = [
+ "futures-core",
+ "futures-sink",
+ "js-sys",
+ "pin-project-lite",
+ "thiserror 1.0.69",
+ "tracing",
+]
+
+[[package]]
+name = "opentelemetry"
 version = "0.31.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b84bcd6ae87133e903af7ef497404dda70c60d0ea14895fc8a5e6722754fc2a0"
@@ -4335,7 +4377,7 @@ dependencies = [
  "async-trait",
  "bytes",
  "http 1.4.0",
- "opentelemetry",
+ "opentelemetry 0.31.0",
  "reqwest",
 ]
 
@@ -4346,7 +4388,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1f69cd6acbb9af919df949cd1ec9e5e7fdc2ef15d234b6b795aaa525cc02f71f"
 dependencies = [
  "http 1.4.0",
- "opentelemetry",
+ "opentelemetry 0.31.0",
  "opentelemetry-http",
  "opentelemetry-proto",
  "opentelemetry_sdk",
@@ -4362,7 +4404,7 @@ version = "0.31.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a7175df06de5eaee9909d4805a3d07e28bb752c34cab57fa9cff549da596b30f"
 dependencies = [
- "opentelemetry",
+ "opentelemetry 0.31.0",
  "opentelemetry_sdk",
  "prost 0.14.3",
  "tonic 0.14.5",
@@ -4378,7 +4420,7 @@ dependencies = [
  "futures-channel",
  "futures-executor",
  "futures-util",
- "opentelemetry",
+ "opentelemetry 0.31.0",
  "percent-encoding",
  "rand 0.9.4",
  "thiserror 2.0.18",
@@ -6069,6 +6111,12 @@ name = "shared_thread"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "52b86057fcb5423f5018e331ac04623e32d6b5ce85e33300f92c79a1973928b0"
+
+[[package]]
+name = "shell-words"
+version = "1.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "dc6fe69c597f9c37bfeeeeeb33da3530379845f10be461a66d16d03eca2ded77"
 
 [[package]]
 name = "shellexpand"
