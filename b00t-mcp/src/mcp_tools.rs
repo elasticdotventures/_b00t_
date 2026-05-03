@@ -1,6 +1,9 @@
-use crate::clap_reflection::{McpCommandRegistry, McpReflection};
+use crate::clap_reflection::{McpCommandRegistry, McpExecutor, McpReflection};
 use crate::impl_mcp_tool;
+use anyhow::Result;
 use clap::Parser;
+use serde_json::{json, Map, Value};
+use std::collections::HashMap;
 // use b00t_c0re_lib::GrokClient;
 
 // Re-export b00t-cli command structures for MCP use
@@ -985,6 +988,203 @@ pub fn create_mcp_registry() -> McpCommandRegistry {
     // .register::<AcpHiveShowCommand>()
     // .register::<AcpHiveLeaveCommand>();
 
+    builder.build()
+}
+
+// ┌──────────────────────────────────────────────────────────────────────────────┐
+// │ Code Mode: search() + execute() consolidation (SDD-007)                  │
+// └──────────────────────────────────────────────────────────────────────────────┘
+
+/// Global full registry for Code Mode search/execute to dispatch against.
+/// Contains all ~40 b00t tools. SearchCommand and ExecuteCommand use this
+/// internally while only exposing two tools via MCP.
+use std::sync::Mutex;
+
+lazy_static::lazy_static! {
+    static ref FULL_REGISTRY: Mutex<McpCommandRegistry> = Mutex::new(create_mcp_registry());
+}
+
+/// MCP command for searching the b00t command registry
+#[derive(Parser, Clone)]
+pub struct SearchCommand {
+    #[arg(help = "Keyword to search across command names, descriptions, and tags")]
+    pub query: String,
+
+    #[arg(long, help = "Filter by category")]
+    pub category: Option<String>,
+
+    #[arg(long, default_value = "10", help = "Maximum results to return")]
+    pub limit: Option<usize>,
+}
+
+impl McpReflection for SearchCommand {
+    fn mcp_tool_name() -> String {
+        "b00t_search".to_string()
+    }
+
+    fn command_path() -> Vec<String> {
+        vec!["search".to_string()]
+    }
+}
+
+impl McpExecutor for SearchCommand {
+    fn execute_mcp_call(params: &HashMap<String, Value>) -> Result<String> {
+        let query = params
+            .get("query")
+            .and_then(|v| v.as_str())
+            .unwrap_or("");
+        let category = params.get("category").and_then(|v| v.as_str());
+        let limit = params
+            .get("limit")
+            .and_then(|v| v.as_u64())
+            .unwrap_or(10) as usize;
+
+        let registry = FULL_REGISTRY
+            .lock()
+            .map_err(|e| anyhow::anyhow!("Registry lock poisoned: {}", e))?;
+        let results = registry.search_tools(query, category, limit);
+
+        let json_results: Vec<Value> = results
+            .into_iter()
+            .map(|r| {
+                json!({
+                    "name": r.name,
+                    "description": r.description,
+                    "category": r.category,
+                    "schema": r.schema,
+                })
+            })
+            .collect();
+
+        let response = json!({
+            "success": true,
+            "query": query,
+            "results": json_results,
+            "total": json_results.len(),
+        });
+
+        Ok(response.to_string())
+    }
+}
+
+/// MCP command for executing any b00t command by name
+#[derive(Parser, Clone)]
+pub struct ExecuteCommand {
+    #[arg(help = "Exact command name from b00t_search")]
+    pub command: String,
+
+    #[arg(help = "Command parameters as a JSON object string")]
+    pub params: Option<String>,
+}
+
+impl McpReflection for ExecuteCommand {
+    fn mcp_tool_name() -> String {
+        "b00t_execute".to_string()
+    }
+
+    fn command_path() -> Vec<String> {
+        vec!["execute".to_string()]
+    }
+
+    /// Override schema to advertise `params` as an object, not a string
+    fn generate_json_schema() -> Map<String, Value> {
+        let mut schema = Map::new();
+        let mut properties = Map::new();
+
+        schema.insert("type".to_string(), json!("object"));
+
+        let mut cmd_schema = Map::new();
+        cmd_schema.insert("type".to_string(), json!("string"));
+        cmd_schema.insert(
+            "description".to_string(),
+            json!("Exact command name from b00t_search (e.g., 'b00t_grok_ask')"),
+        );
+        properties.insert("command".to_string(), Value::Object(cmd_schema));
+
+        let mut params_schema = Map::new();
+        params_schema.insert("type".to_string(), json!("object"));
+        params_schema.insert(
+            "description".to_string(),
+            json!("Command parameters as a JSON object matching the command's schema"),
+        );
+        properties.insert("params".to_string(), Value::Object(params_schema));
+
+        schema.insert("properties".to_string(), Value::Object(properties));
+        schema.insert(
+            "required".to_string(),
+            json!(["command"]),
+        );
+
+        schema
+    }
+}
+
+impl McpExecutor for ExecuteCommand {
+    fn execute_mcp_call(params: &HashMap<String, Value>) -> Result<String> {
+        let command_name = params
+            .get("command")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| anyhow::anyhow!("Missing required 'command' parameter"))?;
+
+        // Parse the params value: may be a JSON object or a JSON string
+        let inner_params: HashMap<String, Value> = match params.get("params") {
+            Some(Value::Object(obj)) => obj.clone().into_iter().collect(),
+            Some(Value::String(s)) => {
+                serde_json::from_str(s).map_err(|e| {
+                    anyhow::anyhow!("Failed to parse params JSON string: {}", e)
+                })?
+            }
+            Some(other) => {
+                return Err(anyhow::anyhow!(
+                    "params must be a JSON object or JSON string, got: {}",
+                    other
+                ));
+            }
+            None => HashMap::new(),
+        };
+
+        let registry = FULL_REGISTRY
+            .lock()
+            .map_err(|e| anyhow::anyhow!("Registry lock poisoned: {}", e))?;
+
+        match registry.execute(command_name, &inner_params) {
+            Ok(output) => Ok(output),
+            Err(e) => {
+                // Generate Levenshtein-like suggestions from available tool names
+                let available: Vec<String> = registry
+                    .get_tools()
+                    .into_iter()
+                    .map(|t| t.name.as_ref().to_string())
+                    .filter(|n| {
+                        // Simple substring similarity
+                        let lower_cmd = command_name.to_lowercase();
+                        let lower_name = n.to_lowercase();
+                        lower_name.contains(&lower_cmd) || lower_cmd.contains(&lower_name)
+                    })
+                    .take(3)
+                    .collect();
+
+                let err_response = json!({
+                    "success": false,
+                    "error": {
+                        "type": "unknown_command",
+                        "message": format!("Command '{}' not found: {}", command_name, e),
+                    },
+                    "suggestions": available,
+                });
+
+                Ok(err_response.to_string())
+            }
+        }
+    }
+}
+
+/// Create a Code Mode registry containing only search() + execute()
+pub fn create_code_mode_registry() -> McpCommandRegistry {
+    let mut builder = McpCommandRegistry::builder();
+    builder
+        .register::<SearchCommand>()
+        .register::<ExecuteCommand>();
     builder.build()
 }
 
