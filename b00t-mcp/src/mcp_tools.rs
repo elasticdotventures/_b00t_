@@ -1042,16 +1042,45 @@ impl McpExecutor for SearchCommand {
         let registry = FULL_REGISTRY
             .lock()
             .map_err(|e| anyhow::anyhow!("Registry lock poisoned: {}", e))?;
-        let results = registry.search_tools(query, category, limit);
+        // Filter tools by query string (name/description) and optional category
+        let all_tools = registry.get_tools();
+        let query_lower = query.to_lowercase();
+        let results: Vec<_> = all_tools
+            .into_iter()
+            .filter(|t| {
+                let name_match = t.name.to_lowercase().contains(&query_lower);
+                let desc_match = t
+                    .description
+                    .as_ref()
+                    .map(|d| d.to_lowercase().contains(&query_lower))
+                    .unwrap_or(false);
+                if !(name_match || desc_match) {
+                    return false;
+                }
+                if let Some(cat) = category {
+                    // Category encoded as name prefix up to first underscore
+                    let cat_prefix = t
+                        .name
+                        .split('_')
+                        .next()
+                        .unwrap_or("")
+                        .to_lowercase();
+                    cat_prefix == cat.to_lowercase()
+                } else {
+                    true
+                }
+            })
+            .take(limit)
+            .collect();
 
         let json_results: Vec<Value> = results
             .into_iter()
             .map(|r| {
                 json!({
                     "name": r.name,
-                    "description": r.description,
-                    "category": r.category,
-                    "schema": r.schema,
+                    "description": r.description.as_deref().unwrap_or(""),
+                    "category": r.name.split('_').next().unwrap_or(""),
+                    "schema": null,
                 })
             })
             .collect();

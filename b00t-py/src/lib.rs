@@ -471,31 +471,74 @@ fn parse_k0mmand3r(input_str: &str) -> PyResult<String> {
 }
 
 /// Register a stage guard callback from Python.
-/// The callback receives a Python dict with parse state and returns "allow" or "block".
+/// The callback receives a Python dict with parse state keys (verb, raw_input)
+/// and must return "allow" or "block:<message>".
 /// Stage must be one of: pre_parse, pre_verb, post_verb, pre_params, post_params,
 /// pre_content, post_content, post_parse.
+///
+/// The callback is invoked from within Rust's stage guard system, acquiring the
+/// GIL via `Python::with_gil` each time a guarded parse stage is reached.
 #[pyfunction]
 #[pyo3(signature = (stage, callback))]
 fn register_stage_guard_py(py: Python<'_>, stage: &str, callback: PyObject) -> PyResult<String> {
-    use k0mmand3r::parser_stages::ParseStage;
+    use k0mmand3r::parser_stages::{ParseStage, StageAction};
 
     let parse_stage = ParseStage::from_name(stage)
         .ok_or_else(|| B00tError::new_err(format!("Unknown stage: {stage}")))?;
 
-    // We store the callback but can't invoke it from the Rust guard thread
-    // because PyO3 requires the GIL. This registers a marker that the Python
-    // side can check. For actual invocation, use the standalone guard_check()
-    // function which returns the correct action.
-    //
-    // The callback is stored for documentation/introspection purposes.
-    // Real stage guard execution happens through:
-    //   b00t_py.guard_check(command, guards_json)
-    // which calls into the Rust guard system.
+    // Validate that the callback is callable before registering
+    if !callback.bind(py).is_callable() {
+        return Err(B00tError::new_err(format!(
+            "callback must be callable, got: {:?}",
+            callback.bind(py).get_type()
+        )));
+    }
+
+    // Clone the PyObject so it can be moved into the guard closure.
+    // The closure acquires the GIL via Python::with_gil on each invocation.
+    let cb = callback.clone_ref(py);
+    let stage_copy = parse_stage;
+
+    k0mmand3r::register_stage_guard(
+        stage_copy,
+        Box::new(move |state| {
+            Python::with_gil(|py| {
+                let dict = pyo3::types::PyDict::new(py);
+                let _ = dict.set_item("verb", state.verb.as_deref().unwrap_or(""));
+                let _ = dict.set_item("raw_input", &state.raw_input);
+                let _ = dict.set_item("stage", stage_copy.to_string());
+
+                match cb.call1(py, (dict,)) {
+                    Ok(result) => {
+                        let s: String = result
+                            .extract(py)
+                            .unwrap_or_else(|_| "allow".to_string());
+                        if s == "allow" || s.is_empty() {
+                            StageAction::Allow
+                        } else if let Some(msg) = s.strip_prefix("block:") {
+                            StageAction::Block {
+                                message: msg.to_string(),
+                            }
+                        } else if s == "block" {
+                            StageAction::Block {
+                                message: format!("Python guard blocked at stage {stage_copy}"),
+                            }
+                        } else {
+                            StageAction::Allow
+                        }
+                    }
+                    Err(e) => {
+                        eprintln!("⚠️ Python stage guard error at {stage_copy}: {e}");
+                        StageAction::Allow
+                    }
+                }
+            })
+        }),
+    );
 
     Ok(serde_json::json!({
         "registered": true,
         "stage": parse_stage.to_string(),
-        "callback_type": format!("{:?}", callback.bind(py).get_type()),
     })
     .to_string())
 }

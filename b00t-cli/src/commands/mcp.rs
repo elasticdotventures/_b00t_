@@ -595,7 +595,14 @@ impl McpCommands {
 }
 
 /// Query dynamic MCP status: loaded servers, installed datums, available registry.
+/// Uses `datum_root` as the base directory for `*.mcp.toml` discovery — consistent
+/// with other CLI commands that accept `--path` (default: `~/.dotfiles/_b00t_`).
 pub fn mcp_status() -> serde_json::Value {
+    mcp_status_for_path("~/.dotfiles/_b00t_")
+}
+
+/// Inner implementation: query MCP status using a specific datum root path.
+pub fn mcp_status_for_path(datum_root: &str) -> serde_json::Value {
     use serde_json::json;
     let mut status = serde_json::Map::new();
 
@@ -627,10 +634,9 @@ pub fn mcp_status() -> serde_json::Value {
     };
     status.insert("loaded".to_string(), json!(loaded));
 
-    // Installed: _b00t_/*.mcp.toml datums (runtime discovery via home dir)
-    let b00t_dir = dirs::home_dir()
-        .map(|h| h.join(".b00t").join("_b00t_"))
-        .unwrap_or_else(|| std::path::PathBuf::from("."));
+    // Installed: *.mcp.toml datums from the configured datum root
+    let expanded = shellexpand::tilde(datum_root).to_string();
+    let b00t_dir = std::path::PathBuf::from(expanded);
     let installed: Vec<serde_json::Value> = match std::fs::read_dir(&b00t_dir) {
         Ok(entries) => entries
             .filter_map(|e| e.ok())

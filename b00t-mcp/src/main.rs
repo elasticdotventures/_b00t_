@@ -102,7 +102,7 @@ async fn main() -> Result<()> {
         // );
 
         // No stderr output in stdio mode as it breaks the MCP protocol
-        let server = B00tMcpServerRusty::new(working_path, &config_path)?;
+        let server = B00tMcpServerRusty::new_flat(working_path, &config_path)?;
         let running_service = server.serve(stdio()).await?;
 
         // Keep the server running
@@ -114,7 +114,7 @@ async fn main() -> Result<()> {
         eprintln!("🌐 Starting HTTP MCP server on http://{}", addr);
         eprintln!(
             "🦀 Rusty MCP server with {} compile-time tools",
-            B00tMcpServerRusty::new(working_path, &config_path)?.tool_count()
+            B00tMcpServerRusty::new_flat(working_path, &config_path)?.tool_count()
         );
 
         // Create HTTP service with CORS support
@@ -126,7 +126,7 @@ async fn main() -> Result<()> {
         let service: StreamableHttpService<B00tMcpServerRusty, LocalSessionManager> =
             StreamableHttpService::new(
                 move || {
-                    B00tMcpServerRusty::new(&working_dir_clone, &config_path_clone)
+                    B00tMcpServerRusty::new_flat(&working_dir_clone, &config_path_clone)
                         .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))
                 },
                 Default::default(),

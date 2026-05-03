@@ -99,8 +99,6 @@ use winnow::combinator::alt; // encapsulates if/then/else ladder pattern
 use winnow::combinator::opt; // basic if then else
 use winnow::combinator::preceded; // an easy way to discard the prefix, using a provided combinators
 use winnow::combinator::{delimited, repeat, separated, separated_pair, *};
-use winnow::error::ErrMode;
-use winnow::error::ParserError;
 use winnow::prelude::*;
 use winnow::seq;
 use winnow::stream::Stream; // choose between two parsers; and we're happy with either being used.
@@ -221,8 +219,8 @@ pub struct KmdLine<'i> {
 }
 
 impl<'i> KmdLine<'i> {
-    /// Run a parser stage guard. Returns Ok if allowed.
-    fn run_stage_or_block(stage: ParseStage, raw: &str, verb: Option<&str>) -> Result<(), ()> {
+    /// Run a parser stage guard. Returns Ok if allowed, Err with block message if blocked.
+    fn run_stage_or_block(stage: ParseStage, raw: &str, verb: Option<&str>) -> Result<(), String> {
         let state = ParseState {
             verb: verb.map(|s| s.to_string()),
             params: Vec::new(),
@@ -231,28 +229,35 @@ impl<'i> KmdLine<'i> {
         };
         match run_stage(stage, &state) {
             StageAction::Allow => Ok(()),
-            StageAction::Block { .. } => Err(()),
+            StageAction::Block { message } => Err(message),
         }
     }
 
     pub fn parse(input: &mut &'i str) -> winnow::Result<Self> {
-        // Helper: convert a guard result into a parse failure
+        // Capture the original input once so all stage guards see the same raw_input
+        let original_input = *input;
+
+        // Helper: run a stage guard; on block, surface the message and fail the parse
         macro_rules! guard {
-            ($stage:expr, $raw:expr, $verb:expr) => {
-                if Self::run_stage_or_block($stage, $raw, $verb).is_err() {
-                    // Use fail parser to produce the correct error type
-                    return winnow::combinator::fail.parse_next(input);
+            ($stage:expr, $verb:expr) => {
+                match Self::run_stage_or_block($stage, original_input, $verb) {
+                    Ok(()) => {}
+                    Err(msg) => {
+                        // Surface the block reason before failing — callers see it on stderr
+                        eprintln!("🛡 stage guard blocked at {:?}: {}", $stage, msg);
+                        return winnow::combinator::fail.parse_next(input);
+                    }
                 }
             };
         }
 
         // Stage: PreParse — before any processing
-        guard!(ParseStage::PreParse, *input, None);
+        guard!(ParseStage::PreParse, None);
 
         let trimmed_input = input.trim();
 
         // Stage: PreVerb — before verb identification
-        guard!(ParseStage::PreVerb, *input, None);
+        guard!(ParseStage::PreVerb, None);
 
         if trimmed_input.starts_with('/') {
             // Parse the verb
@@ -260,7 +265,7 @@ impl<'i> KmdLine<'i> {
 
             // Stage: PostVerb — after verb extracted
             if let Some(ref v) = verb {
-                guard!(ParseStage::PostVerb, *input, Some(v));
+                guard!(ParseStage::PostVerb, Some(v.as_str()));
             }
 
             // Check if the remaining input is empty after parsing the verb
@@ -276,25 +281,28 @@ impl<'i> KmdLine<'i> {
             let _ = multispace0.parse_next(input)?;
 
             // Stage: PreParams — before parameter parsing
-            guard!(ParseStage::PreParams, *input, verb.as_deref());
+            guard!(ParseStage::PreParams, verb.as_deref());
 
             // Parse parameters
             let params = opt(KmdParams::parse).parse_next(input)?;
 
             // Stage: PostParams — after parameters collected
-            guard!(ParseStage::PostParams, *input, verb.as_deref());
+            guard!(ParseStage::PostParams, verb.as_deref());
 
             // Consume whitespace before parsing content
             let _ = multispace0.parse_next(input)?;
 
             // Stage: PreContent — before content parsing
-            guard!(ParseStage::PreContent, *input, verb.as_deref());
+            guard!(ParseStage::PreContent, verb.as_deref());
 
             // Parse remaining content
             let content = opt(parse_content).parse_next(input)?.map(|c| c.to_string());
 
+            // Stage: PostContent — after content parsed
+            guard!(ParseStage::PostContent, verb.as_deref());
+
             // Stage: PostParse — before returning
-            guard!(ParseStage::PostParse, *input, verb.as_deref());
+            guard!(ParseStage::PostParse, verb.as_deref());
 
             Ok(KmdLine {
                 verb,
@@ -305,8 +313,11 @@ impl<'i> KmdLine<'i> {
             // If it's not a verb, treat the entire input as content
             let content = Some(parse_content(input)?.to_string());
 
+            // Stage: PostContent for non-verb path
+            guard!(ParseStage::PostContent, None);
+
             // Stage: PostParse for non-verb path
-            guard!(ParseStage::PostParse, *input, None);
+            guard!(ParseStage::PostParse, None);
 
             Ok(KmdLine {
                 verb: None,

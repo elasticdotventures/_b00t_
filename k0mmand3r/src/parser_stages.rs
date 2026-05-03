@@ -123,7 +123,9 @@ thread_local! {
 }
 
 /// Register a guard callback at a specific parser stage.
-/// Returns a guard ID that can be used to unregister.
+/// Guards at the same stage are invoked in registration order; the first
+/// `StageAction::Block` short-circuits remaining guards at that stage.
+/// To remove guards (e.g., in tests), use `clear_guards()`.
 pub fn register_stage_guard(stage: ParseStage, guard: StageGuardFn) {
     STAGE_GUARDS.with(|guards| {
         let mut map = guards.borrow_mut();

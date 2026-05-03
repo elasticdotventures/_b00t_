@@ -518,7 +518,13 @@ impl GuardPattern {
     /// Rhai variants also receive the full guard context (env vars, session state).
     pub fn matches(&self, command: &str, context: &GuardContext) -> bool {
         match self {
-            GuardPattern::JsonRegexPattern(p) => command.contains(p),
+            GuardPattern::JsonRegexPattern(p) => {
+                // Compile and apply regex; fall back to substring match for invalid patterns
+                match regex::Regex::new(p) {
+                    Ok(re) => re.is_match(command),
+                    Err(_) => command.contains(p.as_str()),
+                }
+            }
             GuardPattern::RhaiExpr(expr) => {
                 match eval_rhai_expr(&expr.rhai, command, context) {
                     RhaiEvalResult::Match => true,
@@ -686,15 +692,16 @@ pub fn check_guards(command: &str, guards: &[HiveGuard], context: &GuardContext)
 
             // Persist violation count for 🦨→💩 escalation tracking.
             // Writes to ~/.b00t/guard-violations.jsonl.
-            let _ = GuardViolationCounter::load(&default_violations_path())
+            let new_count = GuardViolationCounter::load(&default_violations_path())
                 .increment_persist(&pattern_display);
 
-            // 🦨→💩 escalation: if repeat_threshold is set and violation count >= threshold,
-            // escalate Warn/Redirect to Block
+            // 🦨→💩 escalation: if repeat_threshold is set and persisted violation
+            // count exceeds the threshold, escalate Warn/Redirect to Block.
+            // repeat_threshold=1 means: warn on 1st hit, block from 2nd hit onward.
             let (effective_message, effective_action) =
                 match (&guard.action, guard.repeat_threshold) {
                     (HiveGuardAction::Warn | HiveGuardAction::Redirect, Some(threshold))
-                        if context.violation_count >= threshold =>
+                        if new_count > threshold =>
                     {
                         // Escalate to Block, replace 🦨 with 💩 in message
                         let escalated = message

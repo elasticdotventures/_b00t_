@@ -35,7 +35,7 @@ struct ElementCollector {
 }
 
 impl ElementCollector {
-    fn add(&mut self, kind: CodeElementKind, name: &str, start: usize, end: usize, attrs: &[Attribute]) {
+    fn add(&mut self, kind: CodeElementKind, name: &str, start: usize, end: usize, visibility: String, attrs: &[Attribute]) {
         let qualified = if self.current_module.is_empty() || name.starts_with(|c: char| c.is_uppercase()) {
             // Top-level items and uppercase names use simple path
             if self.current_module.is_empty() {
@@ -46,8 +46,6 @@ impl ElementCollector {
         } else {
             format!("{}::{}", self.current_module, name)
         };
-
-        let visibility = extract_visibility(attrs);
 
         let doc_comment = extract_doc_comment(attrs);
 
@@ -68,10 +66,13 @@ impl ElementCollector {
     }
 }
 
-fn extract_visibility(_attrs: &[Attribute]) -> String {
-    // Visibility is a property of the item, not attributes
-    // Overridden per-item-kind during visit
-    "pub".to_string()
+/// Convert a syn Visibility to its string representation.
+fn vis_to_string(vis: &Visibility) -> String {
+    match vis {
+        Visibility::Public(_) => "pub".to_string(),
+        Visibility::Restricted(r) => quote::quote!(#r).to_string(),
+        Visibility::Inherited => "private".to_string(),
+    }
 }
 
 fn extract_doc_comment(attrs: &[Attribute]) -> String {
@@ -152,6 +153,7 @@ impl<'ast> syn::visit::Visit<'ast> for ElementCollector {
                     &sig.ident.to_string(),
                     start,
                     end,
+                    vis_to_string(&func.vis),
                     &func.attrs,
                 );
             }
@@ -179,6 +181,7 @@ impl<'ast> syn::visit::Visit<'ast> for ElementCollector {
                     &st.ident.to_string(),
                     start,
                     end,
+                    vis_to_string(&st.vis),
                     &st.attrs,
                 );
             }
@@ -224,6 +227,7 @@ impl<'ast> syn::visit::Visit<'ast> for ElementCollector {
                     &en.ident.to_string(),
                     start,
                     end,
+                    vis_to_string(&en.vis),
                     &en.attrs,
                 );
             }
@@ -265,6 +269,7 @@ impl<'ast> syn::visit::Visit<'ast> for ElementCollector {
                     &tr.ident.to_string(),
                     start,
                     end,
+                    vis_to_string(&tr.vis),
                     &tr.attrs,
                 );
             }
@@ -297,6 +302,7 @@ impl<'ast> syn::visit::Visit<'ast> for ElementCollector {
                     &display_name,
                     start,
                     end,
+                    "pub".to_string(), // impls have no visibility qualifier
                     &imp.attrs,
                 );
             }
@@ -310,6 +316,7 @@ impl<'ast> syn::visit::Visit<'ast> for ElementCollector {
                     &c.ident.to_string(),
                     start,
                     end,
+                    vis_to_string(&c.vis),
                     &c.attrs,
                 );
             }
@@ -323,6 +330,7 @@ impl<'ast> syn::visit::Visit<'ast> for ElementCollector {
                     &ty.ident.to_string(),
                     start,
                     end,
+                    vis_to_string(&ty.vis),
                     &ty.attrs,
                 );
             }
@@ -343,6 +351,7 @@ impl<'ast> syn::visit::Visit<'ast> for ElementCollector {
                     "macro",
                     start,
                     end,
+                    "private".to_string(), // macros: check #[macro_export] for public scope
                     &mac.attrs,
                 );
             }
@@ -376,6 +385,7 @@ impl<'ast> syn::visit::Visit<'ast> for ElementCollector {
                     &mod_item.ident.to_string(),
                     start,
                     end,
+                    vis_to_string(&mod_item.vis),
                     &mod_item.attrs,
                 );
             }

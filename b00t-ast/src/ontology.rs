@@ -10,7 +10,7 @@
 // Output format matches the codebase-memory-mcp index_repository input schema
 // for direct integration in Phase 4.
 
-use crate::{CodeElement, CodeElementKind, ExtractionResult};
+use crate::{CodeElementKind, ExtractionResult};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
@@ -101,7 +101,7 @@ impl OntologyGraph {
                 CodeElementKind::Impl(impl_info) => {
                     // Implements relationship: impl Foo for Bar → IMPLEMENTS
                     if let Some(ref trait_name) = impl_info.trait_name {
-                        let trait_qn = find_qualified(&impl_info.self_ty, name_to_id.clone());
+                        let trait_qn = find_qualified(trait_name, name_to_id.clone());
                         if let Some(to_id) = trait_qn {
                             graph.edges.push(OntologyEdge {
                                 from: from_id.clone(),

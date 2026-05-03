@@ -93,10 +93,21 @@ pub fn run_docgen(args: &DocgenArgs) -> Result<String> {
 }
 
 fn find_cbm_binary() -> Result<String> {
+    // Allow overriding via environment variable for CI / out-of-tree setups
+    if let Ok(path) = std::env::var("B00T_CBM_BINARY") {
+        if !path.is_empty() {
+            return Ok(path);
+        }
+    }
+
     // Check standard build location first
     let candidates = [
-        // Relative to CARGO_MANIFEST_DIR
-        "../vendor/codebase-memory-mcp-b00t-ir0n-ledg3rr/build/c/codebase-memory-mcp",
+        // Relative to CARGO_MANIFEST_DIR (set at compile time) so invocation
+        // location does not affect resolution
+        concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../vendor/codebase-memory-mcp-b00t-ir0n-ledg3rr/build/c/codebase-memory-mcp"
+        ),
         // Expanded home path
         "~/vendor/codebase-memory-mcp-b00t-ir0n-ledg3rr/build/c/codebase-memory-mcp",
         // In PATH
@@ -121,7 +132,10 @@ fn find_cbm_binary() -> Result<String> {
         }
     }
 
-    anyhow::bail!("codebase-memory-mcp binary not found. Build it: cd vendor/... && make -f Makefile.cbm cbm")
+    anyhow::bail!(
+        "codebase-memory-mcp binary not found. Set B00T_CBM_BINARY env var, \
+         add it to PATH, or build it: cd vendor/... && make -f Makefile.cbm cbm"
+    )
 }
 
 fn format_tomllm(functions: &[Value]) -> String {

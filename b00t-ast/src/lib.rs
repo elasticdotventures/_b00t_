@@ -18,7 +18,6 @@ pub mod ontology;
 
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::path::PathBuf;
 
 /// A single code element extracted from the AST
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -165,6 +164,9 @@ impl ExtractionResult {
 pub fn run_extraction(project_root: &str) -> Result<ExtractionResult, anyhow::Error> {
     let root = std::path::Path::new(project_root);
     let config = walker::WalkConfig::default();
+    // Count source files separately so file_count reflects files scanned, not elements found
+    let source_files = walker::collect_source_files(root, &config);
+    let file_count = source_files.len();
     let elements = walker::walk_and_extract(root, &config)?;
 
     let mut counts = HashMap::new();
@@ -185,7 +187,7 @@ pub fn run_extraction(project_root: &str) -> Result<ExtractionResult, anyhow::Er
 
     Ok(ExtractionResult {
         project_root: project_root.to_string(),
-        file_count: elements.len(),
+        file_count,
         elements,
         counts,
         errors: vec![],
