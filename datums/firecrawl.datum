@@ -1,0 +1,278 @@
+# firecrawl datum
+
+## Overview
+
+**Firecrawl** is a web scraping/crawling API that converts pages to clean, LLM-ready markdown, JSON, or structured data. It handles JS rendering, proxies, and rate limiting automatically. The Firecrawl MCP server (`firecrawl-mcp`) exposes these capabilities to AI agents via the Model Context Protocol.
+
+## Integration Options
+
+### Option A: Firecrawl MCP (Official) - Cloud
+
+Fastest setup. Requires API key from firecrawl.dev.
+
+```bash
+# Add to MCP config
+{
+  "mcpServers": {
+    "firecrawl": {
+      "command": "npx",
+      "args": ["-y", "firecrawl-mcp"],
+      "env": {
+        "FIRECRAWL_API_KEY": "fc-YOUR_API_KEY"
+      }
+    }
+  }
+}
+```
+
+### Option B: Firecrawl MCP + Self-Hosted Backend
+
+Full control, no external API dependency. Requires Docker.
+
+**1. Deploy Firecrawl backend:**
+
+```bash
+git clone https://github.com/firecrawl/firecrawl
+cd firecrawl
+
+# Create .env (see SELF_HOST.md)
+cat > .env << 'EOF'
+PORT=3002
+HOST=0.0.0.0
+USE_DB_AUTHENTICATION=false
+BULL_AUTH_KEY=your-secret-key
+EOF
+
+# Start services (Redis, Postgres, Playwright)
+docker compose up -d
+```
+
+**2. Configure MCP client:**
+
+```bash
+{
+  "mcpServers": {
+    "firecrawl": {
+      "command": "npx",
+      "args": ["-y", "firecrawl-mcp"],
+      "env": {
+        "FIRECRAWL_API_URL": "http://localhost:3002"
+      }
+    }
+  }
+}
+```
+
+### Option C: CRW (Recommended for Self-Hosted)
+
+Rust-based Firecrawl alternative. Single binary, 6MB RAM, embedded mode (no server needed).
+
+**Advantages over Firecrawl self-host:**
+- Single binary vs 5+ Docker containers
+- 6MB RAM vs 4GB+ RAM
+- No Redis, Postgres, or Playwright services needed
+- Embedded mode: no server process required
+- Firecrawl-compatible API (`/v1/scrape`, `/v1/crawl`, `/v1/map`)
+
+**Installation:**
+
+```bash
+# One-line install
+curl -fsSL https://raw.githubusercontent.com/us/crw/main/install.sh | CRW_BINARY=crw sh
+
+# Or via Homebrew
+brew install us/crw/crw
+
+# Or via Cargo
+cargo install crw
+```
+
+**MCP Config (Embedded - No Server):**
+
+```json
+{
+  "mcpServers": {
+    "crw": {
+      "command": "npx",
+      "args": ["crw-mcp"]
+    }
+  }
+}
+```
+
+**MCP Config (Cloud with Web Search):**
+
+```json
+{
+  "mcpServers": {
+    "crw": {
+      "command": "npx",
+      "args": ["crw-mcp"],
+      "env": {
+        "CRW_API_URL": "https://fastcrw.com/api",
+        "CRW_API_KEY": "your-api-key"
+      }
+    }
+  }
+}
+```
+
+## Available Tools
+
+### Firecrawl MCP Tools
+
+| Tool | Description |
+|------|-------------|
+| `firecrawl_scrape` | Scrape single URL → markdown/JSON/HTML |
+| `firecrawl_batch_scrape` | Scrape multiple URLs asynchronously |
+| `firecrawl_crawl` | Async BFS website crawler |
+| `firecrawl_check_crawl_status` | Poll crawl job status |
+| `firecrawl_map` | Discover all URLs on a site |
+| `firecrawl_search` | Web search + content scraping |
+| `firecrawl_extract` | LLM-powered structured extraction |
+| `firecrawl_agent` | Autonomous web research agent |
+| `firecrawl_interact` | Interact with scraped pages |
+
+### CRW MCP Tools
+
+| Tool | Mode | Description |
+|------|------|-------------|
+| `crw_scrape` | Embedded + Cloud | Scrape URL → markdown/HTML/JSON |
+| `crw_crawl` | Embedded + Cloud | Async BFS crawler |
+| `crw_check_crawl_status` | Embedded + Cloud | Poll crawl status |
+| `crw_map` | Embedded + Cloud | Discover URLs on site |
+| `crw_search` | Cloud only | Web search + scraping |
+
+## Installation Requirements
+
+### Firecrawl MCP (Cloud)
+
+| Requirement | Notes |
+|-------------|-------|
+| Node.js >= 18.0.0 | Required for npx |
+| Firecrawl API Key | Get from firecrawl.dev/app/api-keys |
+| npm/npx | For running firecrawl-mcp |
+
+### Firecrawl Self-Hosted
+
+| Requirement | Notes |
+|-------------|-------|
+| Docker | Container runtime |
+| Docker Compose | Orchestration |
+| 4GB+ RAM | Recommended |
+| OpenAI API Key | Optional, for LLM extraction |
+
+### CRW (Self-Hosted)
+
+| Requirement | Notes |
+|-------------|-------|
+| Node.js >= 18 | For npx mode |
+| OR Rust/Cargo | For native build |
+| 6MB RAM | Minimal footprint |
+
+## Usage Examples
+
+### Scrape a URL (JSON format)
+
+```json
+{
+  "name": "firecrawl_scrape",
+  "arguments": {
+    "url": "https://example.com",
+    "formats": [{
+      "type": "json",
+      "prompt": "Extract product info",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "title": {"type": "string"},
+          "price": {"type": "number"}
+        }
+      }
+    }]
+  }
+}
+```
+
+### Crawl a Website
+
+```json
+{
+  "name": "firecrawl_crawl",
+  "arguments": {
+    "url": "https://example.com/blog/*",
+    "maxDepth": 2,
+    "limit": 100
+  }
+}
+```
+
+### Search the Web
+
+```json
+{
+  "name": "firecrawl_search",
+  "arguments": {
+    "query": "latest AI research 2025",
+    "limit": 5,
+    "scrapeOptions": {
+      "formats": ["markdown"],
+      "onlyMainContent": true
+    }
+  }
+}
+```
+
+## Environment Variables
+
+### Firecrawl MCP
+
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `FIRECRAWL_API_KEY` | Cloud | - | API key from firecrawl.dev |
+| `FIRECRAWL_API_URL` | Self-host | - | Custom API endpoint |
+| `FIRECRAWL_RETRY_MAX_ATTEMPTS` | No | 3 | Max retry attempts |
+| `FIRECRAWL_RETRY_INITIAL_DELAY` | No | 1000 | Initial retry delay (ms) |
+
+### CRW MCP
+
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `CRW_API_URL` | Cloud | - | API endpoint (fastcrw.com) |
+| `CRW_API_KEY` | Cloud | - | API key for cloud |
+| (none) | Embedded | - | No config needed |
+
+## Performance Comparison
+
+| Metric | Firecrawl Self-Host | CRW Self-Host | Firecrawl Cloud |
+|--------|---------------------|---------------|-----------------|
+| RAM (idle) | ~500MB+ | 6.6 MB | 0 (managed) |
+| Containers | 5+ | 0 | 0 (managed) |
+| Cold Start | 30-60s | 85ms | 0 (always-on) |
+| Avg Latency | ~4.6s | 833ms | ~4.6s |
+| Setup | Complex | Single binary | API key only |
+
+## When to Use Which
+
+| Scenario | Recommended |
+|----------|-------------|
+| Quick prototyping | Firecrawl Cloud (API key) |
+| Production self-hosted | CRW (single binary) |
+| Enterprise compliance | Firecrawl Self-Hosted |
+| Minimal resources | CRW Embedded |
+| Web search needed | Firecrawl Cloud or CRW Cloud |
+
+## Upstream
+
+- Firecrawl: https://github.com/firecrawl/firecrawl
+- Firecrawl MCP: https://github.com/firecrawl/firecrawl-mcp-server
+- CRW: https://github.com/us/crw
+- npm: firecrawl-mcp (v3.14.1+)
+
+## Date
+
+2026-05-03
+
+## Tags
+
+#firecrawl #web-scraping #mcp #self-hosted #crw #rag #llm-ready

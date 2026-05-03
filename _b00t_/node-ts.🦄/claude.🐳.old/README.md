@@ -8,7 +8,7 @@ Docker-backed Claude CLI with persistent credentials, shared npm cache, and auto
 - **Persistent Credentials**: `~/.claude` credentials survive container restarts
 - **Shared NPM Cache**: Reuses npm cache from `npm.🐳` setup
 - **Persistent Workspace**: `~/.claude-tmp` for read/write temporary files
-- **Gospel Access**: `~/.b00t` mounted (read-only) for b00t source of truth
+- **G0spell Access**: `~/.b00t` mounted (read-only) for b00t source of truth
 - **Auto-Detection**: Supports both Docker and Podman runtimes
 - **Docker-in-Docker**: Socket mounting for building b00t containers from within Claude
 - **Autonomous Subagents**: 100+ production-ready subagents from [awesome-claude-code-subagents](https://github.com/VoltAgent/awesome-claude-code-subagents)
@@ -45,7 +45,7 @@ source claude.🐳/env.sh
 
 # Now Claude can build containers
 claude
-# Inside Claude: I can run ./docker.🐳/b00t/build-from-gospel.sh
+# Inside Claude: I can run ./docker.🐳/b00t/build-from-g0spell.sh
 ```
 
 ## Auto-Detection: Docker vs Podman
@@ -130,7 +130,7 @@ claude --agents '{"reviewer": {"description": "Custom reviewer"}}'
 | `$PWD` | `$PWD` | Working directory (chroot) |
 | `~/.claude` | `/home/node/.claude` | Credentials & settings |
 | `~/.claude-tmp` | `/home/node/.tmp` | Persistent temp workspace |
-| `~/.b00t` | `/home/node/.b00t` | Gospel (read-only) - b00t source of truth |
+| `~/.b00t` | `/home/node/.b00t` | G0spell (read-only) - b00t source of truth |
 | `~/.npm` | `/home/node/.npm` | NPM cache (shared) |
 | `~/.cache/node` | `/home/node/.cache` | Node cache |
 | `claude.🐳/awesome-claude-code-subagents/categories` | `/home/node/.claude/agents` | Subagent definitions (read-only) |
@@ -142,19 +142,19 @@ Once you've built and are running the `claude-with-docker` image, Claude can bui
 
 ```bash
 # Inside Claude session:
-./docker.🐳/b00t/build-from-gospel.sh
+./docker.🐳/b00t/build-from-g0spell.sh
 ```
 
 This script:
 - Auto-detects docker or podman runtime
-- Reads version from gospel `b00t-c0re-lib/Cargo.toml`
-- Uses gospel's `Dockerfile.b00t-cli` (source of truth)
+- Reads version from g0spell `b00t-c0re-lib/Cargo.toml`
+- Uses g0spell's `Dockerfile.b00t-cli` (source of truth)
 - Mirrors GitHub Actions workflow (DRY principle)
 - Builds multi-stage Rust container
 - Tests the built container
 - Tags as `b00t-cli:latest`, `b00t-cli:v{version}`, `b00t-cli:aarch64`
 
-**Gospel Integration**: The build script uses the gospel (`~/.b00t`) as the source of truth, ensuring builds match the CI/CD workflow defined in `.github/workflows/b00t-cli-container.yml`.
+**G0spell Integration**: The build script uses the g0spell (`~/.b00t`) as the source of truth, ensuring builds match the CI/CD workflow defined in `.github/workflows/b00t-cli-container.yml`.
 
 ## Configuration
 

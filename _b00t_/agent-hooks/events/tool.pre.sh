@@ -86,7 +86,7 @@ if [ "$TOOL" = "Write" ] && [ -n "$CONTENT" ]; then
             hookSpecificOutput: {
                 hookEventName: "PreToolUse",
                 permissionDecision: "ask",
-                permissionDecisionReason: ("b00t: file has " + ($lines | tostring) + " lines — b00t gospel max is 800. Split into modules?"),
+                permissionDecisionReason: ("b00t: file has " + ($lines | tostring) + " lines — b00t g0spell max is 800. Split into modules?"),
                 additionalContext: "b00t alignment: prefer many small files over few large files (200-400 lines ideal, 800 hard cap)"
             }
         }'

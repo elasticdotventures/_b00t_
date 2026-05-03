@@ -1,0 +1,243 @@
+# b00t Recurring Task Schema Datum
+# @tribal: this datum defines the canonical shape of cron-like recurring tasks native to b00t.
+#   It is consumed by `b00t task` (CLI) and the cronjob MCP server to schedule,
+#   guard, and retry automated work.  A recurring task IS a b00t task with a
+#   schedule + recurrence_rule; all `b00t task` fields (title, description, priority,
+#   tags, acceptance_criteria) are inherited implicitly.
+# 🤓 Integration points:
+#   - `b00t task add` reads [task] blocks and creates one-shot tasks.
+#   - `b00t task next` polls pending tasks; recurring tasks emit next_execution_at.
+#   - cronjob MCP exposes tools: cronjob_schedule, cronjob_unschedule, cronjob_list.
+#   - b00t-cli translates this datum into systemd timers, cron lines, or MCP calls.
+# ⚠️需 schedule and recurrence_rule are mutually supportive, not redundant:
+#   schedule = "when to run" (cron expr or natural language)
+#   recurrence_rule = "how to repeat" (RFC 5545 iCalendar RRULE semantics)
+# 💡例 b00t task add --recurring --datum _b00t_/datums/RECURRING-TASK-SCHEMA.tomllm
+# 🔗参 https://datatracker.ietf.org/doc/html/rfc5545#section-3.3.10 (RRULE)
+# 🔗参 systemd.timer(5) for OnCalendar= syntax used by linux backend
+
+[b00t]
+name = "RECURRING-TASK-SCHEMA"
+type = "schema"
+hint = "Canonical specification for cron-like recurring tasks native to b00t — integrates with `b00t task` and cronjob MCP"
+
+# ── Schema Version & Conformance ──────────────────────────────────────────────
+[b00t.recurring_task]
+version = "1.0.0"
+conformance = "Any .tomllm containing a [task.recurring] block MUST declare schedule and recurrence_rule."
+
+# ── Field Definitions ─────────────────────────────────────────────────────────
+[b00t.recurring_task.schema.fields.schedule]
+# 🤓 schedule is the human+machine readable trigger expression.
+#   It is parsed by the cronjob MCP into a concrete next-execution timestamp.
+#   Supports three dialects; the parser tries each in order: systemd, cron, natural.
+type = "string"
+required = true
+# @tribal: natural-language schedules are resolved by the cronjob MCP via
+#   a small local model (sm0l tier) so they do NOT hit frontier APIs.
+dialects = ["systemd OnCalendar", "cron V7", "natural language"]
+examples = [
+    "Mon *-*-01 03:00:00",      # systemd OnCalendar: 1st of month at 03:00
+    "0 3 1 * *",                # cron: same semantics
+    "every monday at 9am",      # natural language
+    "*/15 * * * *",             # every 15 minutes
+]
+
+[b00t.recurring_task.schema.fields.recurrence_rule]
+# 🤓 recurrence_rule encodes structured repetition using RFC 5545 RRULE semantics.
+#   It is the MACHINE-CANONICAL form; schedule is the human-friendly form.
+#   The cronjob MCP validates that schedule and recurrence_rule are CONSISTENT.
+# @tribal: if schedule and recurrence_rule disagree, recurrence_rule WINS
+#   because it is unambiguous.  Guard_conditions may override both.
+type = "string"
+required = true
+format = "RRULE as defined in RFC 5545"
+examples = [
+    "FREQ=DAILY;BYHOUR=3;BYMINUTE=0",
+    "FREQ=WEEKLY;BYDAY=MO;BYHOUR=9;BYMINUTE=0",
+    "FREQ=MONTHLY;BYMONTHDAY=1;BYHOUR=3;BYMINUTE=0",
+    "FREQ=MINUTELY;INTERVAL=15",
+]
+# @tribal: RRULE strings are validated by the cronjob MCP using rrule.js or python-dateutil.
+#   Invalid RRULEs are rejected at schedule-time, NOT at runtime.
+
+[b00t.recurring_task.schema.fields.guard_conditions]
+# 🤓 guard_conditions are predicates that MUST all evaluate to true before the task
+#   is allowed to execute.  They prevent runs during maintenance windows, resource
+#   exhaustion, or when upstream dependencies are unhealthy.
+#   Each guard is a named expression evaluated by the cronjob MCP or b00t-cli.
+type = "array of tables"
+required = false
+default = []
+# @tribal: guard evaluation is idempotent and side-effect free.  Guards that
+#   perform I/O must declare a timeout; missing timeout defaults to 5s.
+
+[[b00t.recurring_task.schema.fields.guard_conditions.examples]]
+name = "hive_resource_ok"
+expression = "b00t hive status --json | jq '.ram_available_gb > 2'"
+timeout_sec = 5
+on_failure = "skip"   # skip | retry | fail
+
+[[b00t.recurring_task.schema.fields.guard_conditions.examples]]
+name = "no_maintenance_window"
+expression = "! b00t hive maintenance --active"
+timeout_sec = 3
+on_failure = "skip"
+
+[[b00t.recurring_task.schema.fields.guard_conditions.examples]]
+name = "upstream_healthy"
+expression = "curl -fsS http://localhost:8080/health >/dev/null"
+timeout_sec = 10
+on_failure = "retry"
+
+[b00t.recurring_task.schema.fields.max_retries]
+# 🤓 max_retries controls how many times a FAILED execution is retried before
+#   the task is marked blocked and notify_on_failure triggers.
+#   Retries use exponential backoff: base_delay * 2^attempt.
+type = "integer"
+required = false
+default = 3
+min = 0
+max = 10
+backoff_base_delay_sec = 60
+
+[b00t.recurring_task.schema.fields.notify_on_failure]
+# 🤓 notify_on_failure defines the escalation path when a task exhausts max_retries
+#   or encounters a fatal error (non-zero exit, timeout, or guard hard-fail).
+#   Channels are tried in order until one succeeds.
+type = "array of tables"
+required = false
+default = []
+
+[[b00t.recurring_task.schema.fields.notify_on_failure.examples]]
+channel = "mcp_notify"
+target = "b00t-mcp"
+message_template = "Recurring task {{task.id}} failed after {{retries}} retries: {{error}}"
+
+[[b00t.recurring_task.schema.fields.notify_on_failure.examples]]
+channel = "slack_webhook"
+# webhook_url pulled from env: B00T_SLACK_WEBHOOK_URL
+target = "${B00T_SLACK_WEBHOOK_URL}"
+message_template = ":x: Task {{task.title}} failed — see `b00t task show {{task.id}}`"
+
+[[b00t.recurring_task.schema.fields.notify_on_failure.examples]]
+channel = "email"
+target = "ops@example.com"
+message_template = "[b00t] Recurring task failure: {{task.title}}"
+
+[b00t.recurring_task.schema.fields.dependencies]
+# 🤓 dependencies lists OTHER b00t task IDs that must be in status "done" before
+#   this recurring task is eligible to run.  Cyclic dependencies are rejected at
+#   validation time.
+#   For recurring tasks, dependencies are checked at EACH scheduled invocation.
+type = "array of strings"
+required = false
+default = []
+item_format = "b00t task ID (uuid or short slug)"
+# @tribal: a recurring task with dependencies behaves like a conditional scheduled
+#   job: the schedule wakes it, but dependencies gate actual execution.
+
+# ── Integration: b00t task ────────────────────────────────────────────────────
+[b00t.recurring_task.integrations.b00t_task]
+# 🤓 `b00t task` treats recurring tasks as first-class citizens.
+#   One-shot tasks use [task]; recurring tasks use [task.recurring].
+cli_commands = [
+    "b00t task add --recurring <title>",
+    "b00t task next --include-recurring",
+    "b00t task update <id> --reschedule '0 9 * * 1'",
+    "b00t task done <id> --archive-recurring",
+]
+# @tribal: `b00t task done` on a recurring task does NOT delete it; it archives
+#   the current occurrence and schedules the next.  To DELETE a recurring task,
+#   use `b00t task rm --force <id>`.
+
+# ── Integration: cronjob MCP ──────────────────────────────────────────────────
+[b00t.recurring_task.integrations.cronjob_mcp]
+# 🤓 The cronjob MCP server exposes tools that operate on recurring task datums.
+#   It maintains a persistent schedule registry (SQLite by default) and handles
+#   next-execution computation, guard evaluation, and retry bookkeeping.
+tools = [
+    "cronjob_schedule",
+    "cronjob_unschedule",
+    "cronjob_list",
+    "cronjob_run_now",
+    "cronjob_status",
+]
+# @tribal: cronjob MCP stores the RAW [task.recurring] TOML block in its registry.
+#   This preserves tribal comments and guard expressions for later audit.
+registry_backend = "sqlite"
+registry_path = "${B00T_STATE_DIR}/cronjob_registry.db"
+
+# ── Concrete Example ──────────────────────────────────────────────────────────
+[b00t.recurring_task.example]
+# A complete recurring task datum that conforms to this schema.
+
+[b00t.recurring_task.example.task]
+title = "Daily model-cache warming"
+description = "Pre-load frequently requested models into vLLM to reduce cold-start latency."
+priority = 2
+tags = ["inference", "vllm", "cache", "automation"]
+acceptance_criteria = "vLLM reports all warmed models as LOADED within 5 minutes of task start."
+
+[b00t.recurring_task.example.task.recurring]
+schedule = "0 4 * * *"
+recurrence_rule = "FREQ=DAILY;BYHOUR=4;BYMINUTE=0"
+max_retries = 2
+
+[[b00t.recurring_task.example.task.recurring.guard_conditions]]
+name = "vllm_online"
+expression = "b00t hive status --json | jq '.vllm_status == \"running\"'"
+timeout_sec = 5
+on_failure = "skip"
+
+[[b00t.recurring_task.example.task.recurring.guard_conditions]]
+name = "gpu_available"
+expression = "nvidia-smi --query-gpu=memory.free --format=csv,noheader,nounits | awk '{s+=$1} END {print (s/1024 > 8)}'"
+timeout_sec = 5
+on_failure = "skip"
+
+[[b00t.recurring_task.example.task.recurring.notify_on_failure]]
+channel = "mcp_notify"
+target = "b00t-mcp"
+message_template = "Cache-warming failed for {{task.title}}: {{error}}"
+
+dependencies = ["nightly-backup"]
+
+# ── Anti-patterns ─────────────────────────────────────────────────────────────
+[b00t.recurring_task.anti_patterns]
+# ❌ Setting max_retries > 10 — creates noise and hides systemic failures.
+# ❌ Omitting guard_conditions for resource-intensive tasks.
+# ❌ Using dependencies to enforce ordering between recurring tasks that share
+#    a schedule — use a single task with multiple steps instead.
+# ❌ Notifying on every retry instead of final failure — floods channels.
+# ❌ Hard-coding secrets in guard expression strings — use env interpolation.
+
+# ── Usage ─────────────────────────────────────────────────────────────────────
+[[b00t.usage]]
+description = "Define a new recurring task in a project datum"
+command = """
+# In any .tomllm, add a [task.recurring] block:
+[task.recurring]
+schedule = "0 3 * * 1"
+recurrence_rule = "FREQ=WEEKLY;BYDAY=MO;BYHOUR=3;BYMINUTE=0"
+max_retries = 3
+"""
+
+[[b00t.usage]]
+description = "List all recurring tasks via cronjob MCP"
+command = "b00t mcp call cronjob_list --arg status=active"
+
+[[b00t.usage]]
+description = "Force-run a recurring task now (bypass schedule, respect guards)"
+command = "b00t mcp call cronjob_run_now --arg task_id=<id> --arg respect_guards=true"
+
+[[b00t.usage]]
+description = "Validate a recurring task datum without scheduling it"
+command = "b00t task validate --recurring _b00t_/datums/my-task.tomllm"
+
+# b00t:map v1
+# summary: Recurring task schema — cron-like scheduled tasks for b00t integrating with `b00t task` and cronjob MCP
+# tags: recurring-task, schema, cron, cronjob, mcp, task, scheduling, rrule, guard
+# tier: sm0l
+# cmds: b00t task add --recurring, b00t mcp call cronjob_list, b00t task validate --recurring
+# complexity: 4

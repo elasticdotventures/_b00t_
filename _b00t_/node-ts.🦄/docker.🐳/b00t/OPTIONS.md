@@ -36,12 +36,12 @@ Choose the best approach for your needs.
 
 ## Option B: Build Unified Container (Recommended)
 
-**What it does:** Builds both b00t-cli and b00t-mcp from gospel source
+**What it does:** Builds both b00t-cli and b00t-mcp from g0spell source
 
 **Pros:**
 - ✅ Both binaries in one container
 - ✅ b00t-cli, b00t-mcp, and b00t alias
-- ✅ Build from local gospel (latest changes)
+- ✅ Build from local g0spell (latest changes)
 - ✅ Full MCP server support
 - ✅ Native aarch64 build
 
@@ -57,17 +57,17 @@ Choose the best approach for your needs.
 **Use when:**
 - You need b00t-mcp MCP server
 - You want Claude → b00t integration
-- You have local gospel changes
+- You have local g0spell changes
 - You want complete setup
 
 **Recommended for most users.**
 
 ## Option C: Build CLI Only (Legacy)
 
-**What it does:** Builds only b00t-cli from gospel
+**What it does:** Builds only b00t-cli from g0spell
 
 **Pros:**
-- ✅ Native build from gospel
+- ✅ Native build from g0spell
 - ✅ Mirrors GitHub Actions workflow
 
 **Cons:**
@@ -78,7 +78,7 @@ Choose the best approach for your needs.
 **Commands:**
 ```bash
 ./docker.🐳/b00t/quick-build-aarch64.sh  # Fast version
-./docker.🐳/b00t/build-from-gospel.sh    # DRY version
+./docker.🐳/b00t/build-from-g0spell.sh    # DRY version
 ```
 
 **Use when:**
@@ -140,7 +140,7 @@ Also tagged as:
 Do you need b00t-mcp MCP server?
   ├─ Yes → Option B (Build Unified)
   └─ No
-      ├─ Need latest gospel changes?
+      ├─ Need latest g0spell changes?
       │   ├─ Yes → Option B or C (build locally)
       │   └─ No → Option A (Pull GHCR)
       └─ Want fastest setup?

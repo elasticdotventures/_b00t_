@@ -1,19 +1,19 @@
 # b00t-cli Container Build
 
-Build b00t-cli and b00t-mcp containers from gospel source using Docker/Podman.
+Build b00t-cli and b00t-mcp containers from g0spell source using Docker/Podman.
 
 ## Structure
 
 ```
 docker.🐳/b00t/
-├── build-from-gospel.sh    # DRY build script (mirrors GitHub Actions)
+├── build-from-g0spell.sh    # DRY build script (mirrors GitHub Actions)
 ├── quick-build-aarch64.sh  # Fast native ARM64 build
 ├── BUILD-AARCH64.md        # aarch64-specific guide
 ├── env.sh                  # Docker wrapper (deprecated - use b00t-cli container)
 └── README.md              # This file
 ```
 
-Gospel Dockerfile (source of truth):
+G0spell Dockerfile (source of truth):
 ```
 ~/.b00t/Dockerfile.b00t-cli
 ```
@@ -75,11 +75,11 @@ If you only need b00t-cli (not recommended):
 ./docker.🐳/b00t/quick-build-aarch64.sh
 ```
 
-## Gospel Convention
+## G0spell Convention
 
 b00t follows a specific directory convention:
 
-- **`~/.b00t`**: Hidden gospel (canonical source code)
+- **`~/.b00t`**: Hidden g0spell (canonical source code)
   - Contains actual b00t source: b00t-cli, b00t-mcp, b00t-acp
   - Hidden from `ls` (chmod 700)
   - Only accessed if task-relevant
@@ -94,7 +94,7 @@ b00t follows a specific directory convention:
 | Host Path | Container Path | Purpose |
 |-----------|---------------|---------|
 | `$PWD` | `$PWD` | Working directory |
-| `~/.b00t` | `/home/b00t/.b00t` | Gospel (hidden source) |
+| `~/.b00t` | `/home/b00t/.b00t` | G0spell (hidden source) |
 | `~/_b00t_` | `/home/b00t/_b00t_` | Agent workspace (visible) |
 
 ## Group-Based Skills
@@ -129,7 +129,7 @@ b00t.alice.rust-node/propose
 b00t.bob.python-docker/step
 ```
 
-## Building from Gospel (All Platforms)
+## Building from G0spell (All Platforms)
 
 ### DRY-Compliant Build
 
@@ -137,20 +137,20 @@ The comprehensive build script that mirrors GitHub Actions:
 
 ```bash
 cd ~/homeassistant/_b00t_/node-ts.🦄
-./docker.🐳/b00t/build-from-gospel.sh
+./docker.🐳/b00t/build-from-g0spell.sh
 ```
 
 This script:
 - Mirrors `~/.b00t/.github/workflows/b00t-cli-container.yml`
 - Auto-detects docker or podman
-- Uses gospel's `Dockerfile.b00t-cli` as source of truth
-- Reads version from gospel `b00t-c0re-lib/Cargo.toml`
+- Uses g0spell's `Dockerfile.b00t-cli` as source of truth
+- Reads version from g0spell `b00t-c0re-lib/Cargo.toml`
 - Tests the built container
 - Tags: `b00t-cli:latest`, `b00t-cli:v{version}`, `b00t-cli:{arch}`
 
 ### Architecture Support
 
-The gospel Dockerfile is multi-arch compatible:
+The g0spell Dockerfile is multi-arch compatible:
 
 - **aarch64/arm64**: Native build (recommended for ARM64 hosts)
 - **x86_64/amd64**: Native build (recommended for x86 hosts)
@@ -164,7 +164,7 @@ No cross-compilation needed - builds natively on your architecture.
 |--------|---------|-------------|
 | `build-unified.sh` | **Unified b00t container** (CLI + MCP) | **Recommended** - One container, both binaries |
 | `quick-build-aarch64.sh` | Fast native ARM64 build (CLI only) | Legacy - builds only b00t-cli |
-| `build-from-gospel.sh` | Full DRY-compliant build (CLI only) | Legacy - production b00t-cli only |
+| `build-from-g0spell.sh` | Full DRY-compliant build (CLI only) | Legacy - production b00t-cli only |
 
 **Recommendation**: Use `build-unified.sh` - it builds both b00t-cli and b00t-mcp in a single container with convenient aliases.
 
@@ -209,7 +209,7 @@ claude
 
 See [B00T-ARCHITECTURE.md](../../B00T-ARCHITECTURE.md) for complete system design including:
 - Group-based skills system
-- Gospel convention (~/.b00t vs ~/_b00t_)
+- G0spell convention (~/.b00t vs ~/_b00t_)
 - MQTT coordination protocol
 - Agent memoization patterns
 - Multi-agent workflows
@@ -244,7 +244,7 @@ docker info | grep -i memory
 # For Docker Desktop: Settings → Resources → Memory
 ```
 
-### Gospel not found
+### G0spell not found
 
 ```bash
 ls -la ~/.b00t
@@ -253,7 +253,7 @@ ls -la ~/.b00t
 
 ### Build context too large
 
-The gospel contains all workspace members (b00t-cli, b00t-mcp, b00t-c0re-lib, etc.). This is intentional and required by the Dockerfile.
+The g0spell contains all workspace members (b00t-cli, b00t-mcp, b00t-c0re-lib, etc.). This is intentional and required by the Dockerfile.
 
 ## Next Steps
 
@@ -275,7 +275,7 @@ The gospel contains all workspace members (b00t-cli, b00t-mcp, b00t-c0re-lib, et
    # Start MCP server
    docker run --rm -it b00t:latest b00t-mcp
 
-   # Or use gospel justfile
+   # Or use g0spell justfile
    cd ~/.b00t
    just inspect-mcp
    ```
@@ -303,11 +303,11 @@ The gospel contains all workspace members (b00t-cli, b00t-mcp, b00t-c0re-lib, et
 
 ## References
 
-- Gospel Dockerfile: `~/.b00t/Dockerfile.b00t-cli`
+- G0spell Dockerfile: `~/.b00t/Dockerfile.b00t-cli`
 - GitHub Workflow: `~/.b00t/.github/workflows/b00t-cli-container.yml`
 - aarch64 Guide: `./BUILD-AARCH64.md`
 - Architecture: `../../B00T-ARCHITECTURE.md`
-- b00t Gospel: `~/.b00t/AGENTS.md`
+- b00t G0spell: `~/.b00t/AGENTS.md`
 
 ---
 

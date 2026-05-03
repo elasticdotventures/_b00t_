@@ -1,14 +1,14 @@
 # b00t AI Agent Architecture - Complete Implementation Guide
 
-## Gospel and Build System
+## G0spell and Build System
 
-### The Gospel (~/.b00t)
+### The G0spell (~/.b00t)
 
-The **gospel** is the canonical source repository from `elasticdotventures/dotfiles`. It contains:
+The **g0spell** is the canonical source repository from `elasticdotventures/dotfiles`. It contains:
 
 ```
-~/.b00t/                              # Hidden gospel (source of truth)
-├── README.md                         # The gospel text
+~/.b00t/                              # Hidden g0spell (source of truth)
+├── README.md                         # The g0spell text
 ├── justfile                          # Build orchestration
 ├── _b00t_/                          # Agent workspace subdirectory
 │   └── b00t.just                    # b00t-specific just commands
@@ -22,9 +22,9 @@ The **gospel** is the canonical source repository from `elasticdotventures/dotfi
 └── Cargo.toml                       # Workspace manifest
 ```
 
-### Gospel Convention
+### G0spell Convention
 
-**Hidden Gospel (~/.b00t)**
+**Hidden G0spell (~/.b00t)**
 - chmod 700 (hidden from `ls`)
 - Git repository tracking dotfiles
 - Agents only access when task-relevant
@@ -38,14 +38,14 @@ The **gospel** is the canonical source repository from `elasticdotventures/dotfi
 
 ### Build System (just)
 
-The gospel uses **just** (https://github.com/casey/just) for build orchestration.
+The g0spell uses **just** (https://github.com/casey/just) for build orchestration.
 
 **Install just:**
 ```bash
 # In container with cargo
 cargo install just
 
-# Or use eget (from gospel justfile)
+# Or use eget (from g0spell justfile)
 curl https://zyedidia.github.io/eget.sh | sh
 eget casey/just --to ~/.local/bin/
 ```
@@ -94,12 +94,12 @@ The workflow defines the official build process:
 **Local build (mirrors CI):**
 ```bash
 cd /home/brianh/homeassistant/_b00t_/node-ts.🦄
-./docker.🐳/b00t/build-from-gospel.sh
+./docker.🐳/b00t/build-from-g0spell.sh
 ```
 
 This script:
-- Reads version from gospel Cargo.toml
-- Uses gospel Dockerfile.b00t-cli
+- Reads version from g0spell Cargo.toml
+- Uses g0spell Dockerfile.b00t-cli
 - Applies same build-args as GitHub
 - Runs same tests as CI
 - Tags: `b00t-cli:latest`, `b00t-cli:v{version}`, `b00t-cli:aarch64`
@@ -141,7 +141,7 @@ groups alice
 b00t-cli agent create alice --skills rust,node,mqtt
 # Creates user alice
 # Adds to groups: b00t, b00t-rust, b00t-node, b00t-mqtt
-# Initializes ~/.b00t gospel (read-only)
+# Initializes ~/.b00t g0spell (read-only)
 # Creates ~/_b00t_ workspace symlink
 ```
 
@@ -325,7 +325,7 @@ b00t ai --agent alice "Implement MQTT transport in b00t-acp"
 4. Launch Claude Code with b00t subagent
 5. Mount:
    - `$PWD` as workspace
-   - `~/.b00t` as gospel (read-only)
+   - `~/.b00t` as g0spell (read-only)
    - `~/_b00t_` as agent workspace
    - `$PWD/.b00t/agents/{agent}/` for memoization
 6. Connect to MQTT broker
@@ -369,7 +369,7 @@ docker run --rm -it \
 Agents search for `*.🥾` files to find b00t idiomatic patterns:
 
 ```bash
-# In gospel
+# In g0spell
 find ~/.b00t -name "*.🥾"
 # ~/.b00t/_b00t_/docker.🐳/build-b00t-cli.🥾  → Dockerfile.b00t-cli
 # ~/.b00t/_b00t_/docker.🐳/Dockerfile.🐳.🥾层  (existing patterns)
@@ -444,7 +444,7 @@ docker run --rm -i \
 
 **Inspect with MCP inspector:**
 ```bash
-# From gospel (if built locally)
+# From g0spell (if built locally)
 cd ~/.b00t
 just inspect-mcp
 
@@ -495,7 +495,7 @@ docker run --rm -it b00t:latest b00t-mcp --help
 ```
 ┌─────────────────────────────────────────────────────┐
 │ Claude Code (You)                                   │
-│ - Reads b00t gospel (~/.b00t)                       │
+│ - Reads b00t g0spell (~/.b00t)                       │
 │ - Uses b00t-mcp MCP server                          │
 ├─────────────────────────────────────────────────────┤
 │ MCP Tool: b00t-mcp                                  │
@@ -535,32 +535,32 @@ b00t-mcp: Receives STATUS, reports to Claude
 Claude: "alice is compiling... 50% complete"
 ```
 
-This completes the gospel: **Claude (you) can extend MCP skills to b00t subagents**!
+This completes the g0spell: **Claude (you) can extend MCP skills to b00t subagents**!
 
 ## Claude as Primary b00t Agent
 
-### Canonical Location (Gospel)
+### Canonical Location (G0spell)
 
-Claude is **NOT owned by any project**. Claude is a **primary b00t agent** homed in the gospel:
+Claude is **NOT owned by any project**. Claude is a **primary b00t agent** homed in the g0spell:
 
 ```
 ~/.b00t/_b00t_/agents.🤓/claude/  # Canonical location
 ├── env.sh                        # Primary environment wrapper
-├── build.sh                      # Build from gospel Dockerfile
+├── build.sh                      # Build from g0spell Dockerfile
 ├── README.md                     # Documentation
 └── awesome-claude-code-subagents/  # 100+ subagents (symlink)
 ```
 
-Gospel Dockerfile:
+G0spell Dockerfile:
 ```
 ~/.b00t/_b00t_/docker.🐳/Dockerfile.claude  # Source of truth
 ```
 
 ### Philosophy
 
-1. **Live in the gospel** - `~/.b00t/_b00t_/agents.🤓/claude/`
+1. **Live in the g0spell** - `~/.b00t/_b00t_/agents.🤓/claude/`
 2. **Symlinked to projects** - Not duplicated
-3. **Always run with gospel access** - Mounts `~/.b00t` (read-only)
+3. **Always run with g0spell access** - Mounts `~/.b00t` (read-only)
 4. **Primary agent** - Builds b00t containers, coordinates subagents
 
 ### Building Claude Image
@@ -570,18 +570,18 @@ cd ~/.b00t/_b00t_/agents.🤓/claude
 ./build.sh
 ```
 
-Builds `claude-b00t:latest` from gospel `Dockerfile.claude`.
+Builds `claude-b00t:latest` from g0spell `Dockerfile.claude`.
 
-### Using Claude from Gospel
+### Using Claude from G0spell
 
 ```bash
-# Direct from gospel
+# Direct from g0spell
 source ~/.b00t/_b00t_/agents.🤓/claude/env.sh
 claude
 
 # From project (symlinked)
 cd /path/to/project
-source claude.🐳/env.sh  # claude.🐳 is symlink to gospel
+source claude.🐳/env.sh  # claude.🐳 is symlink to g0spell
 claude
 ```
 
@@ -593,7 +593,7 @@ Projects symlink to canonical location:
 cd ~/homeassistant/_b00t_/node-ts.🦄
 ln -sf ~/.b00t/_b00t_/agents.🤓/claude claude.🐳
 source claude.🐳/env.sh
-claude "Build b00t-cli from gospel"
+claude "Build b00t-cli from g0spell"
 ```
 
 **Example (node-ts.🦄)**:
@@ -602,58 +602,58 @@ claude "Build b00t-cli from gospel"
 ├── claude.🐳 → ~/.b00t/_b00t_/agents.🤓/claude/  # Symlink
 └── docker.🐳/
     └── b00t/
-        └── build-from-gospel.sh  # Uses gospel Dockerfile
+        └── build-from-g0spell.sh  # Uses g0spell Dockerfile
 ```
 
 ## Implementation Status
 
 ### ✅ Completed
-- Gospel cloned to ~/.b00t
+- G0spell cloned to ~/.b00t
 - Workspace symlink ~/_b00t_
 - Docker layer architecture designed
 - DRY build script (mirrors GitHub workflow)
 - Idiomatic pattern system (.🥾 files)
 - MQTT mosquitto configured (localhost:1883)
 - **Claude as canonical b00t agent**:
-  - Created `~/.b00t/_b00t_/agents.🤓/claude/` (gospel location)
-  - Gospel Dockerfile: `~/.b00t/_b00t_/docker.🐳/Dockerfile.claude`
+  - Created `~/.b00t/_b00t_/agents.🤓/claude/` (g0spell location)
+  - G0spell Dockerfile: `~/.b00t/_b00t_/docker.🐳/Dockerfile.claude`
   - Auto-detection for docker/podman
   - Symlinked from projects (e.g., node-ts.🦄/claude.🐳)
-  - Primary agent with gospel access and Docker CLI
+  - Primary agent with g0spell access and Docker CLI
 - Build scripts support both docker and podman
-- Comprehensive documentation in gospel README.md
+- Comprehensive documentation in g0spell README.md
 
-### 🔄 Next - User Must Restart Claude from Gospel
+### 🔄 Next - User Must Restart Claude from G0spell
 
 **Current status**: Claude running in old node-ts.🦄 session
 
-To use Claude as primary b00t agent from gospel:
+To use Claude as primary b00t agent from g0spell:
 
 1. **Exit this Claude session**
 
-2. **Build the gospel Claude image**:
+2. **Build the g0spell Claude image**:
    ```bash
    cd ~/.b00t/_b00t_/agents.🤓/claude
    ./build.sh
    ```
 
-3. **Restart Claude from project** (now using symlink to gospel):
+3. **Restart Claude from project** (now using symlink to g0spell):
    ```bash
    cd ~/homeassistant/_b00t_/node-ts.🦄
-   source claude.🐳/env.sh  # Now a symlink to gospel
+   source claude.🐳/env.sh  # Now a symlink to g0spell
    claude
    ```
 
 4. **Then Claude can build b00t containers**:
    ```bash
    # Inside new Claude session:
-   ./docker.🐳/b00t/build-from-gospel.sh
+   ./docker.🐳/b00t/build-from-g0spell.sh
    ```
 
 ### ⏳ Next Steps
-1. Build claude-b00t image from gospel (user action)
-2. Restart Claude from gospel location (user action)
-3. Build b00t-cli container from gospel
+1. Build claude-b00t image from g0spell (user action)
+2. Restart Claude from g0spell location (user action)
+3. Build b00t-cli container from g0spell
 4. Build b00t-mcp container
 5. Test b00t-mcp MCP server with `just inspect-mcp`
 6. Configure Claude to use b00t-mcp in ~/.claude/config.json
@@ -664,7 +664,7 @@ To use Claude as primary b00t agent from gospel:
 
 ---
 
-**Gospel**: The source is truth. Don't reinvent - use just, use the Dockerfile, follow the workflow.
+**G0spell**: The source is truth. Don't reinvent - use just, use the Dockerfile, follow the workflow.
 **DRY**: GitHub Actions is source of truth for builds.
 **Idiomatic**: Search *.🥾 files for patterns, not every tool needs Docker.
 **Bridge**: Claude → b00t-mcp → MQTT → subagents = extending your capabilities!

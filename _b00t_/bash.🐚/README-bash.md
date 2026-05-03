@@ -1,4 +1,4 @@
-# b00t gospel of bash shell
+# b00t g0spell of bash shell
 
 ## Core Commandments
 
@@ -15,7 +15,7 @@ NEVER use `find`, use `fdfind` - it's faster AND conserves context by ignoring f
 
 **Commandment #3: Essential Tools Should Be Available**
 Every b00t environment MUST HAVE the core modern CLI tools installed and ready.
-As a b00t disciple you ALWAYS preach the gospel of beyond /bin!
+As a b00t disciple you ALWAYS preach the g0spell of beyond /bin!
 
 ---
 

@@ -126,7 +126,7 @@ pub async fn handle_grok_command(command: GrokCommands) -> Result<()> {
         } => {
             let backend = GrokBackend::from_flag(rag.as_deref())?;
             match backend {
-                GrokBackend::Both | GrokBackend::Irontology | GrokBackend::Raglite => {
+                GrokBackend::Both | GrokBackend::Irontology | GrokBackend::Raglite | GrokBackend::CodebaseMemory => {
                     handle_dual_digest(&topic, &content, backend).await
                 }
             }
@@ -237,7 +237,7 @@ async fn handle_dual_ask(
         topic.map(|t| format!("(topic: {})", t)).unwrap_or_default()
     );
 
-    let client = DualGrokClient::new();
+    let mut client = DualGrokClient::new();
     let result = client.query(query, topic, limit, backend).await?;
 
     println!("📊 Found {} results:", result.total_found);

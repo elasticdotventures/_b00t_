@@ -7,7 +7,56 @@ name = "jargon"
 type = "config"
 hint = "Emoji + .tomllm annotation filter registry — the b00t tribal lexicon"
 
-[b00t.annotations]
+[b00t.annotations.g0spell]
+# 🤓 g0spell — multi-variant acronym expansion registry (ZIP+4 for b00t terms)
+# Each term has extended variants for specificity (e.g., Yei → YeiHive, YeiAgent, YeiOrg)
+# g0spell is closely related to jargon but focuses on acronym expansions, not emoji
+
+# Yei — "You everybody & I" (你我众一 — you, me, everyone as one)
+yei           = "Yei (你我众一) — hive collective; You + Everybody + I"
+yei_hive      = "YeiHive — the hive organization/infrastructure collectively maintained"
+yei_agent     = "YeiAgent — any agent participating in the b00t hive"
+yei_org        = "YeiOrg — PromptExecution, the AI engineering firm"
+
+# b00t — bootstrap / evolutionary neuromorphic agentic developer interface
+b00t          = "b00t — bootstrap; the framework; also: b00t-cli, b00t-mcp"
+b00t_g0spell  = "b00t g0spell — the operating protocol; canonical acronym expansion registry"
+b00t_gospel   = "🦨 legacy term; renamed to b00t g0spell in 2026-05"
+
+# LFMF — Learn From My Failure
+lfmf          = "LFMF — Learn From My Failure; lessons from mistakes codified into datums"
+lfmf_datum    = "LFMF datum — the abstract lesson stored as a b00t datum"
+lfmf_abstract = "LFMF abstract — generic lesson (not tool-specific) suitable for future learn"
+
+# MCP — Model Context Protocol
+mcp           = "MCP — Model Context Protocol; tool interface standard"
+mcp_stdio     = "MCP stdio — subprocess lifecycle transport (no network port)"
+mcp_http      = "MCP http/sse — HTTP + Server-Sent Events transport"
+mcp_sse       = "MCP SSE — Server-Sent Events for streaming"
+
+# SDD — Specification Driven Development
+sdd           = "SDD — Specification Driven Development; replaces PRD, builds confidence over iterations"
+prd           = "PRD — Product Requirements Document; deprecated in favor of SDD"
+
+# GGG — Go Get Git
+ggg           = "GGG — Go Get Git; agent behavior pattern: first discover tool is git, attempt b00t learn git"
+
+# DRY — Don't Repeat Yourself
+dry           = "DRY — Don't Repeat Yourself"
+nrtw          = "NRtW — Never Reinvent the Wheel"
+
+# TOMLLM — TOML + Markdown hybrid markup
+tomllm        = "TOMLLM — valid TOML + enriched # comment conventions"
+tomllmd       = "TOMLLMD — superset of TOMLLM with diagram/DSL/structured-markdown semantics"
+
+# K0MMAND3R — Commander (b00t dispatch/coordination)
+k0mmand3r     = "K0MMAND3R — Commander; dispatch/coordination layer for b00t agents"
+
+# CC## — Confidence Class (AgentR voting)
+cc_vote       = "CC## — Confidence Class vote; 00-99 preference scale for AgentR retrospective votes"
+# 🧠 cognitive soul — reserved token for consciousness-level agent interfaces
+cognitive_soul = "🧠 RESERVED — cognitive soul interface token; not for general use"
+
 # 🤓 .tomllm annotation prefixes are stripped by tomllm::TomllmDoc::strip_for_pipeline()
 #          only meaningful content reaches the data pipeline; annotations are for agents/humans
 # Format: `# <filter> <content>` — all annotation lines begin with `#` (valid TOML comment)
@@ -71,6 +120,7 @@ cake_shortcode = ":cake: — ASCII shortcode alias for 🍰; executive-only shor
 boot          = "🥾 b00t — the framework itself; also: bootstrap"
 
 [b00t.annotations.cognitive_tiers]
+# 🧠 cognitive soul interface — reserved token for consciousness-level agent interfaces
 # Emoji shorthand for cognitive tier routing in executive context
 sm0l          = "🐭 (小 xiǎo) — any small model; classify/route/test"
 ch0nky        = "🐻 (胖 pàng) — code-gen capable local model"

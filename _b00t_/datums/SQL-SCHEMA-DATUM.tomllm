@@ -1,0 +1,380 @@
+# b00t SQL Schema Datum
+# @tribal: this datum defines a format for embedding SQL schema definitions
+#   (SQLite, PostgreSQL, or both) inside a .tomllm file.  It is NOT a schema
+#   itself — it is the CONTAINER FORMAT.  Projects declare their actual schemas
+#   by creating datums that follow these conventions.
+#
+#   Design goals:
+#   - Keep schema close to b00t tribal knowledge (same repo, same review flow).
+#   - Support migrations as versioned, reversible SQL blocks.
+#   - Enable semantic querying: "which table stores task state?" → answer
+#     via [sql_schema.semantic_map] without parsing raw CREATE TABLE.
+#   - Allow dialect-specific overrides (postgres has jsonb, sqlite does not).
+#
+# 🤓 A SQL schema datum is a .tomllm file with type = "sql_schema" containing:
+#   [sql_schema.dialects]      — which engines are supported
+#   [sql_schema.migrations]    — versioned up/down SQL
+#   [sql_schema.tables]        — CREATE TABLE definitions per dialect
+#   [sql_schema.indexes]       — CREATE INDEX definitions per dialect
+#   [sql_schema.semantic_map]  — natural-language → table/column/relationship map
+# ⚠️需 Migrations MUST be idempotent where possible (IF NOT EXISTS, OR REPLACE).
+# ⚠️需 Never store credentials in schema datums — use env interpolation ${DB_URL}.
+# 💡例 b00t learn sql-schema-datum
+# 💡例 b00t grok ask "which datum defines the task registry schema?"
+# 🔗参 https://www.sqlite.org/lang.html
+# 🔗参 https://www.postgresql.org/docs/current/sql.html
+
+[b00t]
+name = "SQL-SCHEMA-DATUM"
+type = "schema"
+hint = "Container format for embedding SQL schema definitions (SQLite/PostgreSQL) inside a b00t datum — includes migrations, tables, indexes, and semantic query map"
+
+# ── Format Conventions ─────────────────────────────────────────────────────────────
+[b00t.sql_schema.format]
+# 🤓 Each SQL schema datum MUST declare its dialects and a migrations baseline.
+#   The datum filename convention: <purpose>-sql-schema.tomllm
+#   Example: task-registry-sql-schema.tomllm, cronjob-registry-sql-schema.tomllm
+version = "1.0.0"
+filename_convention = "<purpose>-sql-schema.tomllm"
+required_sections = ["dialects", "migrations", "tables", "semantic_map"]
+optional_sections = ["indexes", "views", "triggers", "policies"]
+
+[b00t.sql_schema.format.dialects]
+# 🤓 Declare which SQL engines this schema targets.  Each dialect key under
+#   [sql_schema.tables.<table>] and [sql_schema.indexes] MUST match a dialect here.
+supported = ["sqlite", "postgres"]
+default = "sqlite"
+# @tribal: if a dialect is declared but no dialect-specific block exists for a
+#   table, the "default" dialect block is used.  This avoids duplicating common
+#   schemas but allows overrides for jsonb, arrays, or custom types.
+
+# ── Migrations ─────────────────────────────────────────────────────────────────────
+[b00t.sql_schema.migrations]
+# 🤓 Migrations are ordered, versioned, and reversible.  Each migration has an
+#   "up" block (apply) and a "down" block (rollback).  Version strings use
+#   semver or ISO-8601 datestamp (YYYY-MM-DD).  Datestamp is preferred for
+#   linear evolution; semver for library schemas with branching releases.
+convention = "datestamp_YYYYMMDD_description"
+ordering = "lexicographic on version key"
+reversible = true
+# @tribal: b00t-cli migration runner stores applied versions in a
+#   __schema_migrations table automatically.  Do NOT create this table manually.
+
+[[b00t.sql_schema.migrations.examples]]
+version = "2026-05-01_init"
+description = "Create task registry tables"
+author = "b00t-operator"
+dialect = "sqlite"
+up = """
+CREATE TABLE IF NOT EXISTS tasks (
+    id TEXT PRIMARY KEY,
+    title TEXT NOT NULL,
+    description TEXT,
+    status TEXT NOT NULL DEFAULT 'pending',
+    priority INTEGER NOT NULL DEFAULT 3,
+    tags TEXT, -- JSON array stored as text in sqlite
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+CREATE TABLE IF NOT EXISTS task_notes (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    task_id TEXT NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+    note TEXT NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+"""
+down = """
+DROP TABLE IF EXISTS task_notes;
+DROP TABLE IF EXISTS tasks;
+"""
+
+[[b00t.sql_schema.migrations.examples]]
+version = "2026-05-03_add_recurring"
+description = "Add recurring task support"
+author = "b00t-operator"
+dialect = "sqlite"
+up = """
+CREATE TABLE IF NOT EXISTS recurring_tasks (
+    task_id TEXT PRIMARY KEY REFERENCES tasks(id) ON DELETE CASCADE,
+    schedule TEXT NOT NULL,
+    recurrence_rule TEXT NOT NULL,
+    max_retries INTEGER NOT NULL DEFAULT 3,
+    next_execution_at DATETIME,
+    last_execution_at DATETIME,
+    last_status TEXT
+);
+"""
+down = "DROP TABLE IF EXISTS recurring_tasks;"
+
+# ── Table Definitions ──────────────────────────────────────────────────────────────────
+[b00t.sql_schema.tables]
+# 🤓 Tables are defined per-dialect under [sql_schema.tables.<name>.<dialect>].
+#   Each block contains:
+#     - description: human-readable purpose
+#     - columns: array of {name, type, constraints, description}
+#     - constraints: primary_key, foreign_keys, unique, check
+#   SQL generation is deterministic: columns + constraints → CREATE TABLE.
+# @tribal: keep column descriptions short; they feed the semantic_map and
+#   are extracted by `b00t grok ask` to answer "what does column X mean?"
+
+[b00t.sql_schema.tables.tasks.sqlite]
+description = "Core task registry — one row per b00t task"
+
+[[b00t.sql_schema.tables.tasks.sqlite.columns]]
+name = "id"
+type = "TEXT"
+constraints = "PRIMARY KEY"
+description = "UUIDv4 or b00t short-slug unique identifier"
+
+[[b00t.sql_schema.tables.tasks.sqlite.columns]]
+name = "title"
+type = "TEXT"
+constraints = "NOT NULL"
+description = "Human-readable task title"
+
+[[b00t.sql_schema.tables.tasks.sqlite.columns]]
+name = "status"
+type = "TEXT"
+constraints = "NOT NULL DEFAULT 'pending'"
+description = "pending | in-progress | done | blocked | deferred"
+
+[[b00t.sql_schema.tables.tasks.sqlite.columns]]
+name = "priority"
+type = "INTEGER"
+constraints = "NOT NULL DEFAULT 3"
+description = "1=critical, 2=high, 3=normal, 4=low"
+
+[[b00t.sql_schema.tables.tasks.sqlite.columns]]
+name = "tags"
+type = "TEXT"
+constraints = ""
+description = "JSON array of tag strings; sqlite stores as TEXT, parsed by consumer"
+
+[[b00t.sql_schema.tables.tasks.sqlite.columns]]
+name = "created_at"
+type = "DATETIME"
+constraints = "DEFAULT CURRENT_TIMESTAMP"
+description = "Row creation timestamp"
+
+[b00t.sql_schema.tables.tasks.postgres]
+# @tribal: postgres variant uses native jsonb for tags and GENERATED ALWAYS
+#   for updated_at triggers.  The semantic_map remains identical across dialects.
+description = "Core task registry — postgres dialect with jsonb"
+
+[[b00t.sql_schema.tables.tasks.postgres.columns]]
+name = "id"
+type = "UUID"
+constraints = "PRIMARY KEY DEFAULT gen_random_uuid()"
+description = "UUIDv4 generated by postgres"
+
+[[b00t.sql_schema.tables.tasks.postgres.columns]]
+name = "title"
+type = "VARCHAR(255)"
+constraints = "NOT NULL"
+description = "Human-readable task title"
+
+[[b00t.sql_schema.tables.tasks.postgres.columns]]
+name = "status"
+type = "VARCHAR(32)"
+constraints = "NOT NULL DEFAULT 'pending'"
+description = "pending | in-progress | done | blocked | deferred"
+
+[[b00t.sql_schema.tables.tasks.postgres.columns]]
+name = "priority"
+type = "SMALLINT"
+constraints = "NOT NULL DEFAULT 3"
+description = "1=critical, 2=high, 3=normal, 4=low"
+
+[[b00t.sql_schema.tables.tasks.postgres.columns]]
+name = "tags"
+type = "JSONB"
+constraints = "DEFAULT '[]'::jsonb"
+description = "Native JSONB array of tag strings"
+
+[[b00t.sql_schema.tables.tasks.postgres.columns]]
+name = "created_at"
+type = "TIMESTAMPTZ"
+constraints = "DEFAULT CURRENT_TIMESTAMP"
+description = "Row creation timestamp with timezone"
+
+[b00t.sql_schema.tables.tasks.postgres.constraints]
+# @tribal: postgres-specific constraints beyond column-level declarations.
+foreign_keys = []
+check = ["priority BETWEEN 1 AND 4"]
+
+# ── Index Definitions ─────────────────────────────────────────────────────────────────────
+[b00t.sql_schema.indexes]
+# 🤓 Indexes are declared per-dialect under [sql_schema.indexes.<name>.<dialect>].
+#   Each index block contains:
+#     - table: target table name
+#     - columns: ordered list of indexed columns
+#     - type: btree (default), hash, gin, gist (postgres only)
+#     - unique: boolean
+#     - condition: partial index WHERE clause (optional)
+# @tribal: index names should be descriptive; b00t-cli can generate them as
+#   idx_<table>_<col1>_<col2> if name is omitted.
+
+[b00t.sql_schema.indexes.idx_tasks_status_priority.sqlite]
+table = "tasks"
+columns = ["status", "priority"]
+type = "btree"
+unique = false
+condition = ""
+# @tribal: composite index (status, priority) accelerates `b00t task next`
+#   which filters by status IN ('pending','in-progress') ORDER BY priority.
+
+[b00t.sql_schema.indexes.idx_tasks_tags_gin.postgres]
+table = "tasks"
+columns = ["tags"]
+type = "gin"
+unique = false
+condition = ""
+# @tribal: GIN index on jsonb tags enables fast @> (contains) queries
+#   for tag filtering in `b00t task list --tag=cronjob`.
+
+# ── Semantic Query Map ──────────────────────────────────────────────────────────────────
+[b00t.sql_schema.semantic_map]
+# 🤓 The semantic map lets agents answer questions about the schema without
+#   parsing raw CREATE TABLE statements.  Each entry maps a natural-language
+#   concept to a concrete table/column/relationship triple.
+#   Keys are kebab-case topic slugs; values are structured descriptors.
+#   This section is consumed by `b00t grok ask` and the irontology MCP.
+# @tribal: semantic_map is the PRIMARY interface for agent discovery.  When an
+#   agent asks "where is task state stored?", b00t grok reads this section,
+#   NOT the raw SQL blocks.  Keep it accurate and current.
+
+[b00t.sql_schema.semantic_map.task_identity]
+concept = "task identity"
+table = "tasks"
+column = "id"
+relationship = "PRIMARY KEY"
+description = "Unique identifier for every b00t task"
+
+[b00t.sql_schema.semantic_map.task_status]
+concept = "task lifecycle state"
+table = "tasks"
+column = "status"
+relationship = "column"
+description = "Current state: pending, in-progress, done, blocked, deferred"
+
+[b00t.sql_schema.semantic_map.task_priority]
+concept = "task urgency"
+table = "tasks"
+column = "priority"
+relationship = "column"
+description = "Numerical priority 1-4; lower is more urgent"
+
+[b00t.sql_schema.semantic_map.task_tags]
+concept = "task categorization"
+table = "tasks"
+column = "tags"
+relationship = "column"
+description = "List of string tags; sqlite=JSON TEXT, postgres=JSONB"
+
+[b00t.sql_schema.semantic_map.recurring_schedule]
+concept = "recurring task schedule"
+table = "recurring_tasks"
+column = "schedule"
+relationship = "column"
+description = "Cron expression or natural-language schedule string"
+
+[b00t.sql_schema.semantic_map.recurring_next_run]
+concept = "next scheduled execution"
+table = "recurring_tasks"
+column = "next_execution_at"
+relationship = "column"
+description = "Computed timestamp of the next invocation"
+
+[b00t.sql_schema.semantic_map.task_to_notes]
+concept = "task notes"
+source_table = "tasks"
+source_column = "id"
+target_table = "task_notes"
+target_column = "task_id"
+relationship = "ONE-TO-MANY"
+description = "A task may have many notes; deleting a task cascades to notes"
+
+[b00t.sql_schema.semantic_map.task_to_recurring]
+concept = "recurring task binding"
+source_table = "tasks"
+source_column = "id"
+target_table = "recurring_tasks"
+target_column = "task_id"
+relationship = "ONE-TO-ONE"
+description = "A task may have zero or one recurring metadata row"
+
+# ── Concrete Example: Task Registry SQL Schema Datum ───────────────────────────
+[b00t.sql_schema.example]
+# This is what a project-specific schema datum looks like.
+# File: _b00t_/datums/task-registry-sql-schema.tomllm
+
+[b00t.sql_schema.example.b00t]
+name = "task-registry-sql-schema"
+type = "sql_schema"
+hint = "SQLite schema for the b00t task and recurring-task registry"
+
+[b00t.sql_schema.example.sql_schema.dialects]
+supported = ["sqlite"]
+default = "sqlite"
+
+[[b00t.sql_schema.example.sql_schema.migrations]]
+version = "2026-05-01_init"
+description = "Bootstrap task registry"
+dialect = "sqlite"
+up = """
+CREATE TABLE IF NOT EXISTS tasks ( ... );
+CREATE TABLE IF NOT EXISTS task_notes ( ... );
+"""
+down = "DROP TABLE IF EXISTS task_notes; DROP TABLE IF EXISTS tasks;"
+
+[b00t.sql_schema.example.sql_schema.tables.tasks.sqlite]
+description = "Core task registry"
+# ... (columns as defined above)
+
+[b00t.sql_schema.example.sql_schema.semantic_map.task_identity]
+concept = "task identity"
+table = "tasks"
+column = "id"
+relationship = "PRIMARY KEY"
+description = "Unique task identifier"
+
+# ── Anti-patterns ─────────────────────────────────────────────────────────────────────
+[b00t.sql_schema.anti_patterns]
+# ❌ Embedding raw .sql files by reference only — breaks the "single source of
+#    tribal truth" principle.  SQL MUST be inline in the datum or generated
+#    deterministically from the structured tables/indexes blocks.
+# ❌ Omitting the semantic_map — forces agents to regex-parse CREATE TABLE.
+# ❌ Storing migration state in the datum itself — state belongs in the DB
+#    (__schema_migrations table) or in b00t state dir, NOT in version control.
+# ❌ Mixing dialects without explicit dialect keys — leads to silent sqlite/postgres
+#    incompatibilities (e.g., JSON vs JSONB).
+# ❌ Writing irreversible migrations — always provide a down block, even if it
+#    is a no-op comment.
+
+# ── Usage ─────────────────────────────────────────────────────────────────────────────
+[[b00t.usage]]
+description = "Generate CREATE TABLE SQL from a schema datum"
+command = "b00t sql generate --from _b00t_/datums/task-registry-sql-schema.tomllm --dialect sqlite"
+
+[[b00t.usage]]
+description = "Run pending migrations for a schema datum"
+command = "b00t sql migrate --from _b00t_/datums/task-registry-sql-schema.tomllm --db ${B00T_STATE_DIR}/registry.db"
+
+[[b00t.usage]]
+description = "Rollback one migration"
+command = "b00t sql migrate --rollback 1 --from _b00t_/datums/task-registry-sql-schema.tomllm --db ${B00T_STATE_DIR}/registry.db"
+
+[[b00t.usage]]
+description = "Ask a semantic question about the schema"
+command = "b00t grok ask 'which table stores task tags?' --topic sql-schema"
+
+[[b00t.usage]]
+description = "Validate a schema datum (lint SQL, check semantic_map coverage)"
+command = "b00t sql validate _b00t_/datums/task-registry-sql-schema.tomllm"
+
+# b00t:map v1
+# summary: SQL schema datum format — embed SQLite/PostgreSQL schemas inside .tomllm with migrations, tables, indexes, and semantic query map
+# tags: sql-schema, schema, sqlite, postgres, migration, datum, tomllm, semantic-map, database
+# tier: sm0l
+# cmds: b00t sql generate, b00t sql migrate, b00t sql validate, b00t grok ask --topic sql-schema
+# complexity: 5

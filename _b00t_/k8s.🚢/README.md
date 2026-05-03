@@ -228,7 +228,7 @@ tests/
 ├── unit/           # Individual component tests
 ├── integration/    # kube-rs integration tests  
 ├── e2e/           # Full workflow tests with minikube
-└── fixtures/      # Test data (JSON-based per b00t gospel)
+└── fixtures/      # Test data (JSON-based per b00t g0spell)
 ```
 
 ### Coverage Goals
@@ -238,7 +238,7 @@ tests/
 - **Error Cases**: All error paths tested
 
 ### Test Data Management
-Per b00t gospel - all test data stored in JSON files:
+Per b00t g0spell - all test data stored in JSON files:
 ```
 tests/fixtures/
 ├── pods/

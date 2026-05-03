@@ -37,14 +37,14 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 GOSPEL="${HOME}/.b00t"
 DOCKERFILE="${SCRIPT_DIR}/Dockerfile.b00t"
 
-# Verify gospel exists
+# Verify g0spell exists
 if [ ! -d "$GOSPEL" ]; then
-    echo -e "${YELLOW}ERROR: Gospel not found at ${GOSPEL}${NC}"
+    echo -e "${YELLOW}ERROR: G0spell not found at ${GOSPEL}${NC}"
     echo "Clone from: https://github.com/elasticdotventures/dotfiles"
     exit 1
 fi
 
-echo -e "${GREEN}✓${NC} Gospel found: ${GOSPEL}"
+echo -e "${GREEN}✓${NC} G0spell found: ${GOSPEL}"
 
 # Verify unified Dockerfile exists
 if [ ! -f "$DOCKERFILE" ]; then
@@ -54,7 +54,7 @@ fi
 
 echo -e "${GREEN}✓${NC} Unified Dockerfile: ${DOCKERFILE}"
 
-# Get version from gospel
+# Get version from g0spell
 VERSION=$(grep '^version =' "${GOSPEL}/b00t-c0re-lib/Cargo.toml" | head -1 | cut -d'"' -f2)
 echo -e "${GREEN}✓${NC} Version: ${VERSION}"
 

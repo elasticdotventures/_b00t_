@@ -1,0 +1,11 @@
+[b00t]
+name = "codebase-memory"
+type = "mcp"
+hint = "Codebase memory MCP server - knowledge graph for code indexing, search, and analysis"
+
+[[b00t.mcp.stdio]]
+command = "/home/brianh/.b00t/vendor/codebase-memory-mcp-b00t-ir0n-ledg3rr/build/c/codebase-memory-mcp"
+args = []
+transport = "stdio"
+priority = 0
+requires = []

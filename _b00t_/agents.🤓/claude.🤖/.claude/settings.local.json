@@ -6,7 +6,7 @@
       "Read(//home/node/**)",
       "Bash(echo $HOME)",
       "Bash(chmod:*)",
-      "Bash(./docker.🐳/b00t/build-from-gospel.sh)",
+      "Bash(./docker.🐳/b00t/build-from-g0spell.sh)",
       "Bash(command -v:*)",
       "Bash(cargo --version)"
     ],

@@ -1,7 +1,7 @@
 #!/bin/bash
 # Ralph Wiggum + b00t - Enhanced AI agent with NRtW/DRY principles
-# Enhanced version integrating b00t gospel, role-based capabilities, and self-learning
-# Fork of ralph-plus-_b00t_ with b00t gospel integration
+# Enhanced version integrating b00t g0spell, role-based capabilities, and self-learning
+# Fork of ralph-plus-_b00t_ with b00t g0spell integration
 
 set -euo pipefail
 
@@ -53,11 +53,11 @@ ralph_whoami() {
     echo ""
 
     if [[ "$B00T_INTEGRATION" == "true" ]]; then
-        echo "B00t Gospel Status:"
+        echo "B00t G0spell Status:"
         if [[ -d "$B00T_GOSPEL_PATH" ]]; then
-            echo "  ✓ Gospel path: $B00T_GOSPEL_PATH"
+            echo "  ✓ G0spell path: $B00T_GOSPEL_PATH"
         else
-            echo "  ✗ Gospel path not found: $B00T_GOSPEL_PATH"
+            echo "  ✗ G0spell path not found: $B00T_GOSPEL_PATH"
         fi
 
         if [[ -d "$B00T_WORKSPACE_PATH" ]]; then
@@ -101,7 +101,7 @@ OPTIONS:
     --discover LANGUAGE         Discover recommended libraries for language
     --no-nrtw                   Disable Never Reinvent the Wheel mode
     --no-dry                    Disable DRY enforcement
-    --no-b00t-integration       Disable b00t gospel integration
+    --no-b00t-integration       Disable b00t g0spell integration
     --help, -h                  Show this help message
 
 ROLES:
@@ -128,7 +128,7 @@ EXAMPLES:
     ./ralph-b00t-enhanced.sh --whoami
 
 B00T INTEGRATION:
-    The enhanced Ralph integrates with b00t gospel for:
+    The enhanced Ralph integrates with b00t g0spell for:
     - Capability loading based on agent roles
     - Library discovery using NRtW principles
     - DRY pattern enforcement
@@ -221,11 +221,11 @@ ralph_whoami() {
     echo ""
 
     if [[ "$B00T_INTEGRATION" == "true" ]]; then
-        echo "B00t Gospel Status:"
+        echo "B00t G0spell Status:"
         if [[ -d "$B00T_GOSPEL_PATH" ]]; then
-            echo "  ✓ Gospel path: $B00T_GOSPEL_PATH"
+            echo "  ✓ G0spell path: $B00T_GOSPEL_PATH"
         else
-            echo "  ✗ Gospel path not found: $B00T_GOSPEL_PATH"
+            echo "  ✗ G0spell path not found: $B00T_GOSPEL_PATH"
         fi
 
         if [[ -d "$B00T_WORKSPACE_PATH" ]]; then
@@ -269,7 +269,7 @@ OPTIONS:
     --discover LANGUAGE         Discover recommended libraries for language
     --no-nrtw                   Disable Never Reinvent the Wheel mode
     --no-dry                    Disable DRY enforcement
-    --no-b00t-integration       Disable b00t gospel integration
+    --no-b00t-integration       Disable b00t g0spell integration
     --help, -h                  Show this help message
 
 ROLES:
@@ -296,7 +296,7 @@ EXAMPLES:
     ./ralph-b00t-enhanced.sh --whoami
 
 B00T INTEGRATION:
-    The enhanced Ralph integrates with b00t gospel for:
+    The enhanced Ralph integrates with b00t g0spell for:
     - Capability loading based on agent roles
     - Library discovery using NRtW principles
     - DRY pattern enforcement
@@ -350,7 +350,7 @@ Date: $(date)
 
 ## Recommendations for Future
 
-## B00t Gospel Integration
+## B00t G0spell Integration
 - Relevant b00t skills:
 - Recommended tools:
 - NRtW applications:
@@ -443,7 +443,7 @@ ralph_b00t_integration() {
         return 0
     fi
 
-    echo "🔗 Integrating with b00t gospel..."
+    echo "🔗 Integrating with b00t g0spell..."
 
     # Check if b00t-cli is available
     if ! command -v b00t-cli &> /dev/null; then
@@ -571,7 +571,7 @@ for i in $(seq 1 "$MAX_ITERATIONS"); do
         if [[ "$B00T_INTEGRATION" == "true" ]]; then
             CODEX_PROMPT_CONTENT+="
 
-## B00t Gospel Integration
+## B00t G0spell Integration
 You are running with b00t integration enabled. Follow these principles:
 - Use 'b00t learn' to load skills when needed
 - Apply NRtW (Never Reinvent the Wheel) - prefer existing libraries
@@ -599,7 +599,7 @@ You are running with b00t integration enabled. Follow these principles:
             cat "$SCRIPT_DIR/CLAUDE.md" > "$ENHANCED_CLAUDE_PROMPT"
             cat >> "$ENHANCED_CLAUDE_PROMPT" << EOF
 
-## B00t Gospel Compliance ($AGENT_ROLE Role)
+## B00t G0spell Compliance ($AGENT_ROLE Role)
 
 ### NRtW (Never Reinvent the Wheel)
 - Before implementing anything, search for existing solutions
@@ -615,7 +615,7 @@ You are running with b00t integration enabled. Follow these principles:
 
 ### B00t Integration
 - Use 'b00t learn' to load relevant skills
-- Follow b00t gospel principles and patterns
+- Follow b00t g0spell principles and patterns
 - Document b00t-specific learnings in progress.txt
 - Use b00t-cli for project management tasks
 

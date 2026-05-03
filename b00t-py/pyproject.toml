@@ -34,7 +34,7 @@ Issues = "https://github.com/elasticdotventures/dotfiles/issues"
 
 [tool.maturin]
 features = ["pyo3/extension-module"]
-module-name = "b00t_py"
+module-name = "b00t_py._core"
 python-source = "python"
 
 [tool.pytest.ini_options]

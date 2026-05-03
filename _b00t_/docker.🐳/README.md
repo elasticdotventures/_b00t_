@@ -38,7 +38,7 @@ docker.🐳/
 
 ## Quick Start
 
-### 1. Clone Gospel
+### 1. Clone G0spell
 
 ```bash
 git clone https://github.com/elasticdotventures/dotfiles.git ~/.b00t
@@ -282,7 +282,7 @@ docker rmi b00t:aarch64 b00t:latest
 
 This layer system supports the b00t architecture:
 
-- **Gospel Convention**: `~/.b00t` mounted read-only
+- **G0spell Convention**: `~/.b00t` mounted read-only
 - **Agent Workspace**: `~/_b00t_` mounted read-write
 - **Skills**: Each skill (rust, node, python) is a layer
 - **MQTT**: mosquitto-clients layer for coordination
@@ -305,7 +305,7 @@ docker images | grep "b00t-layer/"
 ### b00t Build Fails
 
 ```bash
-# Check gospel exists
+# Check g0spell exists
 ls -la ~/.b00t
 
 # Rebuild layers

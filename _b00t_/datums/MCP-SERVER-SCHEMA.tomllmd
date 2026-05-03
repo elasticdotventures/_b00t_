@@ -1,0 +1,165 @@
+# b00t MCP Server Schema datum — canonical specification
+# 🤓 .tomllmd format (NOT .tomllm — uses mdtable for column-stable serialization)
+# schema: 1 | bump ONLY on field definition changes, NOT on new server entries
+# last_updated: 2026-05-03 | authoritative metadata via git notes
+#
+# Defines the canonical shape of MCP server configuration datums.
+# Every _b00t_/*.mcp.toml file MUST conform to this schema.
+#
+# 🔗参 _b00t_/*.mcp.toml — 44 installed MCP server datums
+# 🔗参 b00t-cli/src/commands/install.rs — MCP install dispatch
+# 🔗参 b00t-cli/src/commands/mcp.rs — MCP list, add, install, output
+# 🔗参 ~/.hermes/config.yaml — Hermes mcp_servers: section
+# 🔗参 https://modelcontextprotocol.io — MCP spec
+
+[b00t]
+name = "MCP-SERVER-SCHEMA"
+type = "schema"
+hint = "Canonical MCP server configuration datum — transport, install, health, guard integration"
+
+[b00t.version]
+schema = 1
+content = "stable"
+
+## ── Datum-level fields ───────────────────────────────────────────────────────
+
+| field | type | required | default | description |
+|-------|------|----------|---------|-------------|
+| name | string | yes | — | Unique server name (lowercase, kebab-case) |
+| type | string | yes | "mcp" | MUST be "mcp" for MCP server datums |
+| hint | string | yes | — | One-line human description |
+| lfmf_category | string | no | — | Tool category for b00t lfmf lessons |
+| transport | table | yes | — | Transport definition (see Transport mdtable) |
+| env | table | no | — | Environment variables the server reads |
+| requires | string[] | no | [] | System commands required (e.g. ["node","python3"]) |
+| guards | array | no | [] | Hive guards for this server's commands |
+| discover | table | no | — | Tool discovery configuration (for \`b00t mcp registry\`) |
+
+## ── Transport types ──────────────────────────────────────────────────────────
+
+### stdio transport (default)
+| field | type | required | default | description |
+|-------|------|----------|---------|-------------|
+| command | string | yes | — | Executable path or name |
+| args | string[] | no | [] | CLI arguments |
+| transport | string | yes | "stdio" | MUST be "stdio" |
+| priority | u8 | no | 0 | Selection priority for multi-source MCPs (0=off, 1=fallback, 10=preferred) |
+| env | table | no | — | Extra env vars for this transport only |
+| working_dir | string | no | — | Working directory |
+
+### http / sse transport
+| field | type | required | default | description |
+|-------|------|----------|---------|-------------|
+| url | string | yes | — | Server endpoint URL |
+| transport | string | yes | "http" | "http" or "sse" |
+| headers | table | no | — | Extra HTTP headers |
+| auth_token_env | string | no | — | Env var name for auth bearer token |
+| timeout_sec | u32 | no | 30 | Connection timeout |
+
+## ── Install targets ──────────────────────────────────────────────────────────
+
+A single MCP datum can install to multiple targets. Each target maps to a
+different config file/directory.
+
+| target | config file | command |
+|--------|------------|---------|
+| hermes | ~/.hermes/config.yaml | \`b00t mcp install <name> hermes\` (auto with b00t install hermes) |
+| claudecode | ~/.claude/claude_desktop_config.json | \`b00t mcp install <name> claudecode\` |
+| vscode | ~/.config/Code/User/globalStorage/.../claude_mcp.json | \`b00t mcp install <name> vscode\` |
+| geminicli (repo) | .mcp.json in repo root | \`b00t mcp install <name> geminicli --repo\`\ |
+| geminicli (user) | ~/.gemini/mcp.json | \`b00t mcp install <name> geminicli --user\` |
+| dotmcpjson | .mcp.json in repo root | \`b00t mcp install <name> dotmcpjson [--stdio-command <cmd>\|--httpstream]\` |
+
+## ── Guard integration ────────────────────────────────────────────────────────
+
+MCP server datums can embed guards that fire when the server's binary is invoked
+via \`b00t hive run\` or when Hermes calls the server's binary:
+
+```toml
+[[b00t.guards]]
+pattern = { rhai = "pip_guard" }
+action = "warn"
+message = "🦨 use uv pip install"
+redirect = "uv pip install"
+repeat_threshold = 1
+```
+
+See hive-guards.hive.toml for the full guard reference.
+Guards defined in MCP datums are profile-specific (not universal like hive-guards).
+They load when \`b00t hive activate <profile>\` activates the MCP's hive profile.
+
+## ── Discovery configuration ──────────────────────────────────────────────────
+
+For \`b00t mcp registry list\` and \`b00t mcp install <name>\`:
+
+```toml
+[b00t.discover]
+# npm package name (install via npx)
+npm_package = "@modelcontextprotocol/server-filesystem"
+# pip package (install via uv pip)
+pip_package = "mcp-server-filesystem"
+# cargo install
+cargo_crate = "mcp-server-filesystem"
+# binary download URL patterns
+download_urls = ["https://github.com/org/server/releases/latest/download/mcp-server-{os}-{arch}"]
+# Tags for registry search
+tags = ["filesystem", "fs", "storage"]
+```
+
+## ── Example: stdio server ────────────────────────────────────────────────────
+
+```toml
+[b00t]
+name = "filesystem"
+type = "mcp"
+hint = "Filesystem MCP server — read/write/search files"
+lfmf_category = "filesystem"
+requires = ["node"]
+
+ [[b00t.mcp.stdio]]
+command = "npx"
+args = ["-y", "@modelcontextprotocol/server-filesystem"]
+transport = "stdio"
+priority = 10
+
+[b00t.discover]
+npm_package = "@modelcontextprotocol/server-filesystem"
+tags = ["filesystem", "fs", "storage"]
+```
+
+## ── Example: HTTP server ─────────────────────────────────────────────────────
+
+```toml
+[b00t]
+name = "grok-raglight"
+type = "mcp"
+hint = "Grok RAG service — HTTP SSE MCP server"
+
+[[b00t.mcp.http]]
+url = "http://localhost:45205/sse"
+transport = "sse"
+timeout_sec = 60
+auth_token_env = "GROK_API_KEY"
+```
+
+## ── Field reference ──────────────────────────────────────────────────────────
+
+### b00t.mcp.stdio fields (serde deserialization target)
+
+These map directly to Rust struct HiveTomlMcpStdio in b00t-cli/src/hive.rs:
+
+| Rust field | TOML path | type | description |
+|-----------|-----------|------|-------------|
+| command | b00t.mcp.stdio[].command | String | Binary/script to execute |
+| args | b00t.mcp.stdio[].args | Vec<String> | CLI arguments |
+| transport | b00t.mcp.stdio[].transport | String | "stdio" |
+| priority | b00t.mcp.stdio[].priority | u32 | Selection ordering |
+| env | b00t.mcp.stdio[].env | Option<HashMap<String,String>> | Extra env vars |
+| working_dir | b00t.mcp.stdio[].working_dir | Option<String> | Working directory |
+
+# b00t:map v1
+# summary: Canonical MCP server schema datum — transport definitions (stdio/http/sse), install targets (hermes/claudecode/vscode/geminicli), guard integration, discovery config
+# tags: mcp, schema, datum, tomllmd, transport, stdio, http, sse, install, guard
+# tier: ch0nky
+# cmds: b00t mcp install <name> <target>, b00t mcp list, b00t mcp add <json>, b00t mcp registry list
+# complexity: 5

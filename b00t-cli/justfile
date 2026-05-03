@@ -110,13 +110,60 @@ hermes-backend-disable:
 	@echo "   hermes config set terminal.backend local"
 	@echo "   Then restart: hermes (CLI) or systemctl --user restart hermes-gateway"
 
-# 🛡️ Guard lint — validates every .hive.toml datum shipped with b00t
+# b00t-ast: Rust AST extraction and ontology graph builder
+# Usage: b00t-ast dir <path> [--format json|mcp|counts] [--limit N]
+ast-extract dir="." format="json":
+	@echo "🔍 Extracting AST from $(dir)..."
+	@cargo run -p b00t-ast -- dir "$(dir)" --format "$(format)"
+
+# b00t-ast: ontology graph in MCP-compatible payload format
+ast-ontology dir=".":
+	@just ast-extract "$(dir)" mcp
+
+# b00t-ast: index b00t-ast's own source tree
+ast-self:
+	@echo "🔍 Self-indexing b00t-ast..."
+	@cargo run -p b00t-ast -- self
+
+# b00t-ast: index a Rust directory into the codebase-memory-mcp knowledge graph
+# Builds the ontology graph and pipes it into index_repository.
+# Requires codebase-memory-mcp binary in PATH or at vendor path.
+ast-index dir=".":
+	@echo "🔍 Extracting AST from $(dir) and indexing into knowledge graph..."
+	@cargo run -p b00t-ast -- dir "$(dir)" --format mcp | \
+		codebase-memory-mcp cli index_repository - 2>&1 || \
+		echo "⚠️  codebase-memory-mcp not found or CLI failed. Run: just ast-extract $(dir) mcp"
+
 # Scans all shipped datums, verifies every Rhai expression compiles and
 # evaluates correctly. Run on version bump or before merge to main.
 lint-guards:
 	@echo "🔍 Scanning all shipped .hive.toml guard datums..."
 	cargo test -p b00t-cli --lib -- guard_expr_coverage --nocapture 2>&1 | tail -5
 	@echo "✅ guard lint passed"
+
+# Compact guard violation counters from append-mode JSONL
+# Merges duplicate pattern counts; call periodically to bound file growth
+guard-compact:
+	@echo "📊 Compacting guard violation counters..."
+	@python3 -c "
+import json, os, collections
+path = os.path.expanduser('~/.b00t/guard-violations.jsonl')
+if not os.path.exists(path):
+    print('  No violations file found')
+    exit(0)
+counts = collections.Counter()
+with open(path) as f:
+    for line in f:
+        try:
+            entry = json.loads(line)
+            counts[entry['pattern']] += 1
+        except: pass
+with open(path, 'w') as f:
+    for pattern, count in sorted(counts.items()):
+        f.write(json.dumps({'pattern': pattern, 'count': count}) + '\n')
+print(f'  Compacted {sum(counts.values())} violations across {len(counts)} patterns')
+print(f'  File: {path}')
+"
 
 # Pre-release gate: runs grok E2E + guard lint + full cargo test suite
 # Wire to cog pre-bump-hook or call manually before any version bump
