@@ -125,6 +125,8 @@ message = "⚠️ ulimit only affects current shell; systemd services use LimitN
 # Enforced via `b00t hive run` before any command reaches git.
 # Prevents accidental main-branch work and non-conventional commits.
 # Ref: _b00t_/schema/SCM-CONVENTIONS.tomllmd
+# Uses simple cmd.contains() — regex_match(cmd, pattern) also available
+# for more precise matching if needed (registered on Rhai engine).
 
 [[b00t.hive.guards]]
 pattern = { rhai = "cmd.contains(\"git checkout\") && (cmd.contains(\" main\") || cmd.contains(\" master\"))" }
@@ -138,7 +140,7 @@ message = "🚫 blocked: pushing to main — create a PR instead"
 redirect = "gh pr create"
 
 [[b00t.hive.guards]]
-pattern = { rhai = "cmd.contains(\"git merge\") && (cmd.contains(\" main\") || cmd.contains(\" origin/main\"))" }
+pattern = { rhai = "cmd.contains(\"git merge\") && cmd.contains(\"main\")" }
 action = "block"
 message = "🚫 blocked: merging main — use gh pr merge or rebase flow"
 

@@ -9,6 +9,7 @@
 
 use anyhow::{Context, Result, bail};
 use serde::{Deserialize, Serialize};
+use regex::Regex;
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -778,6 +779,11 @@ impl RhaiEvalResult {
 pub fn eval_rhai_expr(expr: &str, command: &str, context: &GuardContext) -> RhaiEvalResult {
     use rhai::{Engine, Scope};
     let mut engine = Engine::new();
+    // Register regex_match(cmd, pattern) for guard pattern matching.
+    // Allows guards like: pattern = { rhai = "regex_match(cmd, 'git checkout -b (feat|fix)/')" }
+    engine.register_fn("regex_match", |s: &str, pattern: &str| -> bool {
+        Regex::new(pattern).map(|re| re.is_match(s)).unwrap_or(false)
+    });
     let mut scope = Scope::new();
     scope.push("cmd", command.to_string());
     scope.push("violations", context.violation_count as i64);
