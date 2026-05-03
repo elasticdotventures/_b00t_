@@ -145,3 +145,4 @@ Version drift: Audit pinned dependency versions quarterly. candle-core 0.4 sat b
 
 ---
 Naming is deployment: The l3dg3rr→ledgerr-mcp→ledg3rr→ledgrrr polyseme maps to proto→linux→cloud→windows. A single codebase with platform-suffix builds prevents fork drift. Use the trait system to abstract platform differences (systemd vs docker for WSL, stdio vs gRPC for cloud).
+complexity: 6
