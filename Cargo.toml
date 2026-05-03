@@ -9,6 +9,7 @@ members = [
     "b00t-py",
     "b00t-ipc",
     "b00t-azure-cp",
+    "b00t-l3dg3rr-viz",
 ]
 resolver = "2"
 
@@ -27,6 +28,7 @@ b00t-cli = { path = "b00t-cli" }
 b00t-c0re-lib = { path = "b00t-c0re-lib" }
 b00t-grok = { path = "b00t-grok", default-features = false }
 b00t-chat = { path = "b00t-lib-chat" }
+b00t-l3dg3rr-viz = { path = "b00t-l3dg3rr-viz" }
 # tomllm = { path = "vendor/tomllm" }
 
 # Rhai scripting engine — used for datum hooks (detect, install guards, etc.)
