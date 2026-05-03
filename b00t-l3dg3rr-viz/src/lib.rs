@@ -195,10 +195,9 @@ impl InvariantGraph {
             ));
         }
         for edge in &self.edges {
-            let label = edge
-                .label
-                .as_ref()
-                .map_or(String::new(), |label| format!("|{}|", escape_mermaid(label)));
+            let label = edge.label.as_ref().map_or(String::new(), |label| {
+                format!("|{}|", escape_mermaid(label))
+            });
             out.push_str(&format!(
                 "  {} -->{} {}\n",
                 mermaid_id(&edge.from),
@@ -287,7 +286,6 @@ impl InvariantGraph {
         out.push_str("</svg>");
         out
     }
-
 }
 
 /// A host system can implement this trait to provide visualization without
@@ -362,7 +360,11 @@ mod tests {
     #[test]
     fn valid_graph_renders_mermaid_and_svg() {
         let graph = InvariantGraph::new("b00t")
-            .with_node(InvariantNode::new("datum", "Datum", VisualizationRole::Ingest))
+            .with_node(InvariantNode::new(
+                "datum",
+                "Datum",
+                VisualizationRole::Ingest,
+            ))
             .with_node(InvariantNode::new(
                 "verify",
                 "Verify",

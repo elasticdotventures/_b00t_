@@ -7,7 +7,11 @@ struct B00tDatumFlow;
 impl L3dg3rrVisualizable for B00tDatumFlow {
     fn invariant_graph(&self) -> InvariantGraph {
         InvariantGraph::new("b00t datum flow")
-            .with_node(InvariantNode::new("load", "Load", VisualizationRole::Ingest))
+            .with_node(InvariantNode::new(
+                "load",
+                "Load",
+                VisualizationRole::Ingest,
+            ))
             .with_node(InvariantNode::new(
                 "classify",
                 "Classify",
@@ -27,7 +31,9 @@ impl L3dg3rrVisualizable for B00tDatumFlow {
 fn implementors_get_visualization_after_invariant_validation() {
     let graph = B00tDatumFlow.invariant_graph();
 
-    graph.validate().expect("sample graph satisfies l3dg3rr invariants");
+    graph
+        .validate()
+        .expect("sample graph satisfies l3dg3rr invariants");
 
     let mermaid = graph.to_mermaid();
     let svg = graph.to_svg();

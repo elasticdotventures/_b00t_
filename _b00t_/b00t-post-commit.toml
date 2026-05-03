@@ -1,0 +1,22 @@
+# b00t-post-commit datum — cross-platform compatibility validation
+# Policy: pwsh.🪟/NTFS_RESERVED_CHARS.md
+
+[datum]
+name = "b00t-post-commit"
+type = "hook"
+description = "Post-commit hook for cross-platform lint"
+source = "pwsh.🪟/NTFS_RESERVED_CHARS.md"
+
+[datum.tags]
+lint = ["ntfs"]
+platform = ["windows", "cross-platform"]
+
+# Hook: runs after commit in CI or pre-clone
+[datum.hook_detect]
+# Returns "fail: NTFS_invalid_paths" if git note refs detected
+# Returns "ok" if clean
+script = '''
+let refs = exec("git ls-tree -r HEAD --name-only | grep ':[0-9a-f]*:'");
+if refs != "" { "fail: " + refs }
+else { "ok" }
+'''

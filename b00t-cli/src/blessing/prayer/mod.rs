@@ -245,7 +245,7 @@ impl BlessingEvaluator {
                 blessing: None,
                 denial_reason: PolicyCheckResult::DeniedExecutiveVoteRequired.denial_reason(),
                 suggestions: vec![
-                    "This blessing requires /vote approval from executive".to_string()
+                    "This blessing requires /vote approval from executive".to_string(),
                 ],
                 composition_plan: None,
             };
