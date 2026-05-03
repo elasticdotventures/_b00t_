@@ -936,6 +936,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "b00t-l3dg3rr-viz"
+version = "0.7.49"
+dependencies = [
+ "serde",
+]
+
+[[package]]
 name = "b00t-mcp"
 version = "0.7.49"
 dependencies = [
