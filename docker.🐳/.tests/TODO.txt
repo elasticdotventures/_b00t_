@@ -1,3 +1,0 @@
-do all Docker layer files have a 
-# syntax=docker/dockerfile:1
-at the top.

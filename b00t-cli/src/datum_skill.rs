@@ -529,11 +529,12 @@ Instructions here.
         assert_eq!(datum.datum.name, "test-skill-md");
         let cfg = datum.skill_config().unwrap();
         assert_eq!(cfg.description, "Test skill from SKILL.md format.");
-        assert!(cfg
-            .instructions_inline
-            .as_deref()
-            .unwrap()
-            .contains("Instructions here."));
+        assert!(
+            cfg.instructions_inline
+                .as_deref()
+                .unwrap()
+                .contains("Instructions here.")
+        );
         // load_instructions returns inline content without needing a real path
         let instructions = datum
             .load_instructions(&PathBuf::from("/nonexistent"))

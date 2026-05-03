@@ -4,12 +4,12 @@
 //! agent coordination infrastructure.
 
 use anyhow::Result;
+use b00t_c0re_lib::AgentManager;
 use b00t_c0re_lib::agent_coordination::{
     AgentCoordinator, AgentMetadata, MessageFilter, RequestUrgency, TaskCompletionStatus,
     TaskPriority,
 };
 use b00t_c0re_lib::redis::{AgentStatus, RedisComms, RedisConfig};
-use b00t_c0re_lib::AgentManager;
 use clap::Parser;
 use std::collections::{BTreeMap, HashMap};
 use std::path::PathBuf;
@@ -736,7 +736,7 @@ async fn handle_invoke(
     prompt: &str,
     config_override: Option<&std::path::Path>,
 ) -> Result<()> {
-    use b00t_c0re_lib::agent_manager::{invoke_agent_executor, AgentManager};
+    use b00t_c0re_lib::agent_manager::{AgentManager, invoke_agent_executor};
 
     // Resolve config path: override → _b00t_/<agent>.agent.toml → cwd search
     let config_path = if let Some(p) = config_override {

@@ -1,5 +1,0 @@
-[b00t]
-name = "rust-analyzer"
-type = "vscode"
-hint = "Rust language support for VSCode"
-vsix_id = "rust-lang.rust-analyzer"

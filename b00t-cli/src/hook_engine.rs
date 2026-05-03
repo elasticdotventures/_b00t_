@@ -31,7 +31,7 @@ use rhai::{Engine, EvalAltResult, ImmutableString};
 use serde::Deserialize;
 use std::path::PathBuf;
 use std::sync::LazyLock;
-use toml::{map::Map, Value};
+use toml::{Value, map::Map};
 
 /// Capability info extracted from capability-registry.toml
 #[derive(Debug, Clone, PartialEq, Deserialize)]

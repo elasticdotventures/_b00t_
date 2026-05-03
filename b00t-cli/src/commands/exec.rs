@@ -10,7 +10,7 @@
 //!
 //! `--sleep=<duration>` → spawn background detached process; returns immediately
 
-use anyhow::{bail, Result};
+use anyhow::{Result, bail};
 use chrono::Utc;
 use clap::Parser;
 use serde::{Deserialize, Serialize};
@@ -18,7 +18,7 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use crate::hive::{check_guards, load_profile, GuardResult, SystemSnapshot};
+use crate::hive::{GuardResult, SystemSnapshot, check_guards, load_profile};
 
 const AUDIT_CACHE_FILE: &str = "~/.b00t/exec-audit.json";
 const AUDIT_LOG_FILE: &str = "~/.b00t/exec-log.jsonl";

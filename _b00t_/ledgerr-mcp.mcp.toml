@@ -1,0 +1,12 @@
+[b00t]
+name = "ledgerr-mcp"
+type = "mcp"
+hint = "MCP server"
+requires_sudo = false
+
+[[b00t.mcp.stdio]]
+requires = []
+args = []
+priority = 0
+transport = "stdio"
+command = "/home/brianh/.b00t/vendor/l3dg3rr/target/debug/ledgerr-mcp-server"

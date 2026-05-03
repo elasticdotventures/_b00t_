@@ -1,5 +1,5 @@
 use crate::traits::*;
-use crate::{get_expanded_path, BootDatum};
+use crate::{BootDatum, get_expanded_path};
 use anyhow::Result;
 
 pub struct ApiDatum {

@@ -78,7 +78,7 @@ impl DatumLspServer {
         match trigger {
             "root" => self.schemas.iter().map(|s| s.name.clone()).collect(),
             "b00t" => {
-                let mut fields = vec!["name", "type", "hint", "install", "env", "learn"];
+                let mut fields = ["name", "type", "hint", "install", "env", "learn"];
                 fields.iter().map(|s| s.to_string()).collect()
             }
             _ => vec![],

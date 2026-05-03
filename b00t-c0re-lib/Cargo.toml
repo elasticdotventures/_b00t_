@@ -27,6 +27,7 @@ path = "src/bin/b00t-lsp.rs"
 [features]
 default = []
 python = ["pyo3"]
+ledgerr-events = []
 
 [dependencies]
 pyo3 = { version = "0.27", features = ["extension-module"], optional = true }
@@ -65,4 +66,3 @@ futures = "0.3"
 tempfile = "3.10"
 tokio-test = "0.4"
 tracing-subscriber = "0.3"
-

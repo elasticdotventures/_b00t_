@@ -650,12 +650,14 @@ fn create_mcp_datum_from_json(
             }),
         // Convert legacy command/args to new multi-method format
         mcp: Some(McpMethods {
-            stdio: Some(vec![cli_method
-                .as_object()
-                .unwrap()
-                .iter()
-                .map(|(k, v)| (k.clone(), v.clone()))
-                .collect()]),
+            stdio: Some(vec![
+                cli_method
+                    .as_object()
+                    .unwrap()
+                    .iter()
+                    .map(|(k, v)| (k.clone(), v.clone()))
+                    .collect(),
+            ]),
             httpstream: None,
         }),
         ..BootDatum::default()
@@ -2228,8 +2230,15 @@ hint = "containers"
         .unwrap();
 
         let (config, filename) = crate::get_config("mytool", path).unwrap();
-        assert_eq!(config.b00t.name, "mytool-tomllmd", ".tomllmd must be returned first");
-        assert!(filename.ends_with(".tomllmd"), "filename must end with .tomllmd, got {}", filename);
+        assert_eq!(
+            config.b00t.name, "mytool-tomllmd",
+            ".tomllmd must be returned first"
+        );
+        assert!(
+            filename.ends_with(".tomllmd"),
+            "filename must end with .tomllmd, got {}",
+            filename
+        );
     }
 
     #[test]

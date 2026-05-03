@@ -18,6 +18,8 @@
 
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
+#[cfg(feature = "ledgerr-events")]
+use serde_json::json;
 
 use crate::{
     irontology_bridge::IrontologyBridgeClient,
@@ -85,6 +87,7 @@ pub struct DualQueryResult {
     pub raglite_ok: bool,
     pub irontology_ok: bool,
     pub warnings: Vec<String>,
+    pub control_events: Vec<ControlCodeEvent>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -94,6 +97,224 @@ pub struct DualQueryItem {
     pub topic: String,
     pub tags: Vec<String>,
     pub score: f32,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ControlCodeEvent {
+    pub action_code: String,
+    pub severity: String,
+    pub source: String,
+    pub target: String,
+    pub request: String,
+    pub log_ref: String,
+    pub reply: ControlReply,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum ControlReply {
+    Immediate,
+    Queued { queue: String },
+    Promise { promise_id: String },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ControlEventCapability {
+    pub name: String,
+    pub backend: String,
+    pub active: bool,
+    pub tags: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ControlEventReceipt {
+    pub capability: ControlEventCapability,
+    pub delivered: bool,
+    pub reply: ControlReply,
+    pub message: String,
+}
+
+pub trait ControlEventSink: Send + Sync {
+    fn capability(&self) -> ControlEventCapability;
+    fn emit(&self, event: &ControlCodeEvent) -> ControlEventReceipt;
+}
+
+#[derive(Debug, Default)]
+pub struct StubControlEventSink;
+
+impl ControlEventSink for StubControlEventSink {
+    fn capability(&self) -> ControlEventCapability {
+        ControlEventCapability {
+            name: "control-event-sink".to_string(),
+            backend: "stub".to_string(),
+            active: false,
+            tags: vec![
+                "control-code".to_string(),
+                "stub".to_string(),
+                "minimal-init".to_string(),
+            ],
+        }
+    }
+
+    fn emit(&self, event: &ControlCodeEvent) -> ControlEventReceipt {
+        ControlEventReceipt {
+            capability: self.capability(),
+            delivered: false,
+            reply: event.reply.clone(),
+            message: "ledgerr-events feature/config unavailable; event retained for local handling"
+                .to_string(),
+        }
+    }
+}
+
+#[cfg(feature = "ledgerr-events")]
+pub struct LedgerrControlEventSink {
+    command: String,
+    args: Vec<String>,
+}
+
+#[cfg(feature = "ledgerr-events")]
+impl LedgerrControlEventSink {
+    pub fn new(command: impl Into<String>, args: Vec<String>) -> Self {
+        Self {
+            command: command.into(),
+            args,
+        }
+    }
+}
+
+#[cfg(feature = "ledgerr-events")]
+impl ControlEventSink for LedgerrControlEventSink {
+    fn capability(&self) -> ControlEventCapability {
+        ControlEventCapability {
+            name: "control-event-sink".to_string(),
+            backend: "ledgerr-mcp".to_string(),
+            active: true,
+            tags: vec![
+                "control-code".to_string(),
+                "ledgerr".to_string(),
+                "event-log".to_string(),
+                "classification".to_string(),
+                "visualization".to_string(),
+            ],
+        }
+    }
+
+    fn emit(&self, event: &ControlCodeEvent) -> ControlEventReceipt {
+        use std::io::Write;
+        use std::process::{Command, Stdio};
+
+        let payload = json!({
+            "action_code": event.action_code,
+            "severity": event.severity,
+            "source": event.source,
+            "target": event.target,
+            "request": event.request,
+            "log_ref": event.log_ref,
+            "reply": event.reply.clone(),
+        });
+
+        let mut child = match Command::new(&self.command)
+            .args(&self.args)
+            .stdin(Stdio::piped())
+            .stdout(Stdio::null())
+            .stderr(Stdio::piped())
+            .spawn()
+        {
+            Ok(child) => child,
+            Err(e) => {
+                return ControlEventReceipt {
+                    capability: self.capability(),
+                    delivered: false,
+                    reply: event.reply.clone(),
+                    message: format!("ledgerr event command spawn failed: {e}"),
+                };
+            }
+        };
+
+        if let Some(stdin) = child.stdin.as_mut() {
+            if let Err(e) = writeln!(stdin, "{payload}") {
+                return ControlEventReceipt {
+                    capability: self.capability(),
+                    delivered: false,
+                    reply: event.reply.clone(),
+                    message: format!("ledgerr event command write failed: {e}"),
+                };
+            }
+        }
+
+        match child.wait_with_output() {
+            Ok(output) if output.status.success() => ControlEventReceipt {
+                capability: self.capability(),
+                delivered: true,
+                reply: event.reply.clone(),
+                message: "delivered to ledgerr event command".to_string(),
+            },
+            Ok(output) => ControlEventReceipt {
+                capability: self.capability(),
+                delivered: false,
+                reply: event.reply.clone(),
+                message: format!(
+                    "ledgerr event command failed: {}",
+                    String::from_utf8_lossy(&output.stderr).trim()
+                ),
+            },
+            Err(e) => ControlEventReceipt {
+                capability: self.capability(),
+                delivered: false,
+                reply: event.reply.clone(),
+                message: format!("ledgerr event command wait failed: {e}"),
+            },
+        }
+    }
+}
+
+pub fn default_control_event_sink() -> Box<dyn ControlEventSink> {
+    #[cfg(feature = "ledgerr-events")]
+    {
+        if let Ok(command) = std::env::var("B00T_LEDGERR_EVENT_COMMAND") {
+            let args = std::env::var("B00T_LEDGERR_EVENT_ARGS")
+                .ok()
+                .map(|raw| raw.split_whitespace().map(str::to_string).collect())
+                .unwrap_or_default();
+            return Box::new(LedgerrControlEventSink::new(command, args));
+        }
+    }
+
+    Box::<StubControlEventSink>::default()
+}
+
+impl ControlCodeEvent {
+    fn from_backend_warning(source: &str, warning: &str) -> Option<Self> {
+        let lower = warning.to_lowercase();
+        let is_backend_error = lower.contains("failed")
+            || lower.contains("error")
+            || lower.contains("unavailable")
+            || lower.contains("could not set lock")
+            || lower.contains("conflicting lock");
+
+        if !is_backend_error {
+            return None;
+        }
+
+        Some(Self {
+            action_code: "|e|".to_string(),
+            severity: if lower.contains("could not set lock") || lower.contains("conflicting lock")
+            {
+                "degraded".to_string()
+            } else {
+                "warning".to_string()
+            },
+            source: source.to_string(),
+            target: "ledgerr_review".to_string(),
+            request: "inspect backend error log and recommend fallback/state-machine action"
+                .to_string(),
+            log_ref: stable_log_ref(source, warning),
+            reply: ControlReply::Queued {
+                queue: "b00t.control.errors".to_string(),
+            },
+        })
+    }
 }
 
 // ── Dual client ───────────────────────────────────────────────────────────────
@@ -252,6 +473,16 @@ impl DualGrokClient {
         items.truncate(max);
 
         let total = items.len();
+        let control_events = warnings
+            .iter()
+            .filter_map(|warning| {
+                let source = warning
+                    .split_once(':')
+                    .map(|(source, _)| source)
+                    .unwrap_or("grok");
+                ControlCodeEvent::from_backend_warning(source, warning)
+            })
+            .collect();
         Ok(DualQueryResult {
             query: query_str.to_string(),
             topic: topic.map(|t| t.to_string()),
@@ -260,6 +491,7 @@ impl DualGrokClient {
             raglite_ok,
             irontology_ok,
             warnings,
+            control_events,
         })
     }
 
@@ -316,6 +548,16 @@ fn sanitize_topic(input: &str) -> String {
     if s.is_empty() { "topic".to_string() } else { s }
 }
 
+fn stable_log_ref(source: &str, warning: &str) -> String {
+    use std::collections::hash_map::DefaultHasher;
+    use std::hash::{Hash, Hasher};
+
+    let mut hasher = DefaultHasher::new();
+    source.hash(&mut hasher);
+    warning.hash(&mut hasher);
+    format!("b00t:grok:error:{:016x}", hasher.finish())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -361,5 +603,61 @@ mod tests {
     #[test]
     fn test_dual_grok_client_new_does_not_panic() {
         let _ = DualGrokClient::new();
+    }
+
+    #[test]
+    fn test_control_event_for_raglite_duckdb_lock() {
+        let warning = "RAGLight query: RAGLight query failed: IO Error: Could not set lock on file \"/home/brianh/.local/share/raglite/raglite.db\": Conflicting lock is held in /usr/bin/python3.12 (PID 53200)";
+        let event = ControlCodeEvent::from_backend_warning("RAGLight query", warning)
+            .expect("RAGLite lock must emit a control-code error event");
+
+        assert_eq!(event.action_code, "|e|");
+        assert_eq!(event.severity, "degraded");
+        assert_eq!(event.target, "ledgerr_review");
+        assert!(event.log_ref.starts_with("b00t:grok:error:"));
+        assert_eq!(
+            event.request,
+            "inspect backend error log and recommend fallback/state-machine action"
+        );
+        assert_eq!(
+            event.reply,
+            ControlReply::Queued {
+                queue: "b00t.control.errors".to_string()
+            }
+        );
+    }
+
+    #[test]
+    fn test_stub_control_event_sink_reports_minimal_capability() {
+        let warning = "Irontology query: Irontology unavailable";
+        let event = ControlCodeEvent::from_backend_warning("Irontology query", warning).unwrap();
+        let sink = StubControlEventSink;
+        let receipt = sink.emit(&event);
+
+        assert!(!receipt.delivered);
+        assert_eq!(receipt.capability.backend, "stub");
+        assert!(!receipt.capability.active);
+        assert!(
+            receipt
+                .capability
+                .tags
+                .contains(&"minimal-init".to_string())
+        );
+        assert!(
+            receipt
+                .message
+                .contains("ledgerr-events feature/config unavailable")
+        );
+    }
+
+    #[cfg(feature = "ledgerr-events")]
+    #[test]
+    fn test_ledgerr_control_event_sink_reports_active_capability() {
+        let sink = LedgerrControlEventSink::new("ledgerr-mcp-server", Vec::new());
+        let capability = sink.capability();
+
+        assert_eq!(capability.backend, "ledgerr-mcp");
+        assert!(capability.active);
+        assert!(capability.tags.contains(&"event-log".to_string()));
     }
 }

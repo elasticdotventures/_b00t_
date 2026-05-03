@@ -1,3 +1,0 @@
-Completed: all Docker layer files now include '# syntax=docker/dockerfile:1' at line 1.
-Verification command:
-find _b00t_/docker.🐳 -type f \( -name 'Dockerfile' -o -name 'Dockerfile.*' \) | sort | while read -r f; do head -n1 "$f" | grep -qx '# syntax=docker/dockerfile:1' || echo "$f"; done

@@ -1,3 +1,0 @@
-/command --param1=value1 --param2=value2 --tag random content
-/anothercommand --user=@john_doe --channel=#general
-this is just content

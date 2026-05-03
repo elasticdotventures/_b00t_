@@ -1,5 +1,0 @@
-[b00t]
-name = "curl"
-type = "apt"
-hint = "Command line tool for transferring data with URLs"
-package_name = "curl"

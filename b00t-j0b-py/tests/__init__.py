@@ -1,1 +1,0 @@
-# Tests for b00t-j0b-py
