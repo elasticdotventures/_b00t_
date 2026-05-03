@@ -4,12 +4,16 @@ on:
   push:
     branches: [main]
     paths:
+      - 'vendor/l3dg3rr'
       - 'vendor/l3dg3rr/**'
+      - '.gitmodules'
       - '.github/workflows/l3dg3rr-docs.yml'
   pull_request:
     branches: [main]
     paths:
+      - 'vendor/l3dg3rr'
       - 'vendor/l3dg3rr/**'
+      - '.gitmodules'
       - '.github/workflows/l3dg3rr-docs.yml'
   workflow_dispatch:
 
@@ -24,13 +28,21 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          submodules: recursive
+          submodules: false
+
+      - name: Initialize l3dg3rr submodule
+        run: git submodule update --init --recursive vendor/l3dg3rr
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
 
+      - name: Cache Rust/cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: vendor/l3dg3rr
+
       - name: Install just
-        run: cargo install just --locked
+        uses: extractions/setup-just@v1
 
       - name: Setup mdBook
         uses: jontze/action-mdbook@v3
