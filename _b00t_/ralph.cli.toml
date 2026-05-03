@@ -1,0 +1,46 @@
+[b00t]
+name = "ralph"
+type = "cli"
+hint = "OODA loop autonomous task runner — b00t.sh; supports claude/codex/amp/opencode/mistralrs tools"
+
+[b00t.cli]
+command = "b00t.sh"
+detect = "test -f b00t.sh && echo 'ralph via b00t.sh'"
+version_cmd = "bash b00t.sh --help 2>&1 | head -1"
+version_regex = "ralph"
+install = "echo 'ralph is b00t.sh — already present in b00t root'"
+desires = "integrated"
+
+[b00t.capabilities]
+features = ["autonomous-loop", "ooda", "b00t-task", "mistralrs"]
+requires = ["bash", "jq"]
+
+[b00t.env]
+TOOL = "claude"
+MAX_ITERATIONS = "10"
+LOOP_SLEEP_SECONDS = "2"
+
+# @epiphany: task-state — checkpoint written every loop iter to .b00t/ralph/task_state.json
+# Contains: {checkpoint_ts, loop, tasks} — tasks is full b00t task JSON snapshot
+# restore_task_state() repopulates .b00t/tasks.json on loop restart (context compress recovery)
+# 🤓 Threshold: checkpoint written unconditionally; restore only if tasks.json missing
+[b00t.task_state_checkpoint]
+path = ".b00t/ralph/task_state.json"
+format = "json"
+fields = ["checkpoint_ts", "loop", "tasks"]
+restore_condition = ".b00t/tasks.json missing on restart"
+
+[b00t.adversarial]
+# 🤓 B00T_ADVERSARIAL=true enables writer→reviewer gate; reviewer needs CMDB context or it's theatre
+# Threshold: 50 lines — trivial diffs skip review to save GPU cycles
+env_var = "B00T_ADVERSARIAL"
+threshold_lines = 50
+reviewer_context = "_b00t_/hive-guards.hive.toml"
+review_output = "PASS or FAIL:<reason>"
+
+# b00t:map v1
+# summary: ralph (b00t.sh) OODA loop — opencode/pi/claude tools; adversarial gate; task-state checkpoint
+# tags: ralph, b00t.sh, autonomous-loop, ooda, b00t-task, adversarial, gemma4, checkpoint
+# tier: ch0nky
+# cmds: B00T_ADVERSARIAL=true ./b00t.sh --tool opencode --role operator --max-iterations 20
+# complexity: 6

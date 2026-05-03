@@ -1,0 +1,119 @@
+[skills]
+bash = { type = "skill", source = "_b00t_/learn/bash.md", description = "Bash/shell operations", tags = ["shell", "cli"] }
+
+[skills.rust]
+type = "skill"
+source = "_b00t_/learn/rust.md"
+description = "Rust language"
+tags = ["systems", "rust"]
+
+[skills.python]
+type = "skill"
+source = "_b00t_/learn/python.🐍/"
+description = "Python ecosystem"
+tags = ["scripting"]
+
+[skills.git]
+type = "skill"
+source = "_b00t_/learn/git/"
+description = "Git version control"
+tags = ["vcs"]
+
+[skills.just]
+type = "skill"
+source = "_b00t_/learn/just.md"
+description = "Just runner"
+tags = ["task-runner"]
+
+[skills.docker]
+type = "skill"
+source = "_b00t_/learn/docker.md"
+description = "Docker patterns"
+tags = ["container"]
+
+[skills.orchestrator]
+type = "skill"
+source = "_b00t_/learn/orchestrator.md"
+description = "Orchestrator role"
+tags = ["role"]
+
+[skills.lfmf]
+type = "skill"
+source = "_b00t_/learn/lfmf.md"
+description = "LFMF pattern"
+tags = ["tribal"]
+
+[roles.orchestrator]
+type = "role"
+source = "_b00t_/orchestrator.role.toml"
+description = "Hive orchestrator"
+tags = ["role"]
+depends_on = ["memory.mcp"]
+
+[datums.git]
+type = "datum"
+source = "_b00t_/git.cli.toml"
+description = "Git CLI"
+tags = ["vcs"]
+
+[datums.uv]
+type = "datum"
+source = "_b00t_/uv.cli.toml"
+description = "UV package manager"
+tags = ["python"]
+
+[datums.just]
+type = "datum"
+source = "_b00t_/justfile"
+description = "Just runner"
+tags = ["task-runner"]
+
+[datums.podman]
+type = "datum"
+source = "_b00t_/podman-mcp-server.mcp.toml"
+description = "Podman MCP"
+tags = ["container"]
+
+[datums.ollama]
+type = "datum"
+source = "_b00t_/ollama.ai.toml"
+description = "Local LLM"
+tags = ["ai"]
+
+[datums.context7]
+type = "datum"
+source = "_b00t_/context7.mcp.toml"
+description = "Context7 MCP"
+tags = ["mcp"]
+
+[mcp.b00t]
+type = "mcp"
+source = "_b00t_/b00t-mcp.mcp.toml"
+description = "b00t MCP"
+tags = ["core"]
+
+[tags.roles]
+orchestration = ["orchestrator"]
+
+[tags.skills]
+shell = ["bash"]
+systems = ["rust"]
+scripting = ["python"]
+vcs = ["git"]
+task-runner = ["just"]
+container = ["docker", "podman"]
+
+[tags.datums]
+vcs = ["git"]
+python = ["uv"]
+task-runner = ["just"]
+container = ["podman"]
+ai = ["ollama"]
+mcp = ["context7", "b00t"]
+
+[aliases]
+learn = "skill"
+skill = "skill"
+role = "role"
+datum = "datum"
+mcp = "mcp"

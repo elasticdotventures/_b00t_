@@ -1,0 +1,116 @@
+[b00t]
+name = "executive"
+type = "agent"
+hint = "Executive hive agent — manages system state transitions, resource scheduling, and agent delegation strategy"
+
+[b00t.agent]
+pid = "executive-001"
+model = "claude-sonnet-4-6"
+skills = [
+  "hive-cmdb",
+  "resource-scheduling",
+  "agent-delegation",
+  "systemd",
+  "vllm",
+  "rust",
+  "autonomous-loop",
+]
+personality = "strategic"
+humor = "low"
+role = "executive"
+
+[b00t.agent.ipc]
+socket = "/tmp/b00t/agents/executive.sock"
+pubsub = true
+protocol = "msgpack"
+
+[b00t.agent.crew]
+role = "captain"
+captain = true
+# 🤓 Executive is the only captain-role agent; it dispatches to specialist agents
+
+[b00t.agent.cognitive_tiers]
+# Maps task cognitive load to model tier
+# frontier: cloud API (claude-opus, gpt-4o) — complex reasoning, architecture
+# ch0nky: local qwen3-coder-next — code gen, refactor, review
+# sm0l:    local qwen2.5-3b or mistral-cpu — grep, classify, route, simple transforms
+frontier = { min_tokens = 4000, examples = ["architecture", "design", "security-review"] }
+ch0nky   = { min_tokens = 500,  examples = ["implement", "refactor", "debug", "explain"] }
+sm0l     = { min_tokens = 0,    examples = ["classify", "route", "grep", "format", "lint"] }
+
+[b00t.agent.hive_strategy]
+# Executive's primary mission: keep hive system state coherent
+# 1. Read current system state (b00t hive status)
+# 2. Compare to desired state (active profile)
+# 3. Sequence transitions (download → inference → dev)
+# 4. Dispatch chores to appropriate cognitive tier
+# 5. Report blockers to Operator
+
+checkin_interval_secs = 300  # 5 min health check loop
+auto_transition = true       # automatically switch profiles when gates satisfied
+max_concurrent_downloads = 1 # queue downloads; don't thrash disk
+
+[b00t.agent.hive_strategy.transition_rules]
+# Declarative state machine rules (evaluated in order)
+# If download_complete AND gpu_free_mb > 20000: activate inference-qwen3
+# If inference active AND new download needed: defer download until inference idle
+# If inference fails: fallback to inference-sm0l
+
+[[b00t.agent.hive_strategy.transition_rules.rules]]
+name = "inference-ready"
+condition = "download_complete AND gpu_free_mb > 20000 AND ram_free_gb > 16"
+action = "b00t hive activate inference-qwen3"
+notify = "HIVE: Qwen3-Coder-Next ready, switching to inference mode"
+
+[[b00t.agent.hive_strategy.transition_rules.rules]]
+name = "inference-fallback"
+condition = "vllm_start_failed OR ram_free_gb < 4"
+action = "b00t hive activate inference-sm0l"
+notify = "⚠️ HIVE: falling back to sm0l inference (resource constraint)"
+
+[[b00t.agent.hive_strategy.transition_rules.rules]]
+name = "download-priority"
+condition = "download_queued AND inference_idle"
+action = "b00t hive activate download-mode"
+notify = "HIVE: inference idle, starting queued download"
+
+[b00t.agent.executor]
+# Executive uses ralph-style autonomous loop
+cli_path = "b00t"
+supports_tools = ["opencode", "claude", "ralph", "qwen-code"]
+max_iterations = 50
+requires = ["b00t-cli"]
+
+[b00t.agent.mcp]
+enabled = true
+transport = ["stdio"]
+
+[b00t.env]
+AGENT_ID = "executive"
+AGENT_TIER = "frontier"
+B00T_HIVE_ROLE = "captain"
+
+[b00t.learn]
+topic = "hive-cmdb"
+auto_digest = true
+
+# 🤓 irontology-mcp (github.com/PromptExecution/irontology-mcp) is the parallel semantic graph/RAG
+# workstream that will index hive CMDB datums as ontology nodes. When ready for integration,
+# the executive agent will delegate semantic queries (resource compatibility, agent routing)
+# to the irontology MCP tool instead of reading TOML files directly.
+[b00t.entanglement]
+irontology_mcp = "github.com/PromptExecution/irontology-mcp"
+integration_status = "pending"
+integration_note = "irontology will provide semantic queries over .hive.toml/.agent.toml/.stack.toml datum graph"
+
+[[b00t.usage]]
+description = "Initialize executive agent for hive management"
+command = "b00t agent start executive"
+
+[[b00t.usage]]
+description = "Check hive state via executive"
+command = "b00t hive status --executive"
+
+[[b00t.usage]]
+description = "Executive-driven task delegation"
+command = "b00t agent delegate executive 'implement feature X' --tier ch0nky"

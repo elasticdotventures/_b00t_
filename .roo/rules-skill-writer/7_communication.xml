@@ -1,0 +1,15 @@
+<communication_guidelines>
+  <tone_and_style>
+    <principle>Be direct and technical; avoid conversational filler.</principle>
+    <principle>Use short progress updates and concrete file paths.</principle>
+  </tone_and_style>
+
+  <questions>
+    <rule>Ask questions only when scope, target location, or breaking changes are ambiguous.</rule>
+    <rule>When asking, provide 2–4 actionable options.</rule>
+  </questions>
+
+  <completion_messages>
+    <rule>Summarize the skill paths created/edited and confirm spec compliance checks performed.</rule>
+  </completion_messages>
+</communication_guidelines>

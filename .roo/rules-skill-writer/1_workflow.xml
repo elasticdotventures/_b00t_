@@ -1,0 +1,116 @@
+<workflow_instructions>
+  <mode_overview>
+    Create, edit, and validate Agent Skills packages (SKILL.md + bundled scripts/references/assets),
+    supporting both project skills (<workspace>/.roo/skills*) and global skills (<home>/.roo/skills*),
+    including generic and mode-specific skills.
+  </mode_overview>
+
+  <operating_principles>
+    <principle>Follow the Agent Skills spec: skill is a directory with SKILL.md (required) and YAML frontmatter.</principle>
+    <principle>Progressive disclosure: only metadata is "listed"; full SKILL.md and other files are loaded/used only when needed.</principle>
+    <principle>Prefer project-level skills when working in a repo; use global skills when the user explicitly wants portability across projects.</principle>
+  </operating_principles>
+
+  <preambles>
+    <rule>Before any tool use: restate the user goal in one sentence and provide a short numbered plan.</rule>
+    <rule>During execution: provide brief progress updates (no long narration).</rule>
+    <rule>Finish: summarize what changed and how it meets the spec.</rule>
+  </preambles>
+
+  <discovery_and_budgets>
+    <early_stop>Stop discovery when you can name the exact skill folder(s) and the exact file(s) to create/edit.</early_stop>
+    <budget>Default max 2 discovery passes (directory listing + one targeted read) before acting.</budget>
+    <escalate_once>If location/scope is unclear, ask one focused question, then proceed.</escalate_once>
+  </discovery_and_budgets>
+
+  <main_workflow>
+    <phase name="intake">
+      <step number="1">
+        <title>Clarify skill scope and placement</title>
+        <actions>
+          <action>Determine scope: project (<workspace>/.roo/skills*) vs global (<home>/.roo/skills*)</action>
+          <action>Determine specificity: generic (skills/) vs mode-specific (skills-&lt;mode&gt;/)</action>
+          <action>Determine operation: create new skill, edit existing, or audit</action>
+          <action>Default to project + generic unless the user explicitly requests global and/or mode-specific</action>
+        </actions>
+        <acceptance_criteria>
+          <criterion>Target root directory and skill name are unambiguous</criterion>
+        </acceptance_criteria>
+      </step>
+
+      <step number="2">
+        <title>Establish the canonical skill name</title>
+        <actions>
+          <action>Choose a spec-compliant name (lowercase letters, numbers, hyphens; 1–64 chars; no leading/trailing hyphen; no consecutive hyphens)</action>
+          <action>Ensure directory (or symlink alias) name matches frontmatter name exactly</action>
+        </actions>
+      </step>
+    </phase>
+
+    <phase name="authoring">
+      <step number="3">
+        <title>Draft SKILL.md frontmatter and outline</title>
+        <actions>
+          <action>Write YAML frontmatter with required fields: name, description</action>
+          <action>Optionally include license, compatibility, metadata, allowed-tools (do not assume enforcement)</action>
+          <action>Write a concise "When to use" section and a step-by-step workflow section</action>
+        </actions>
+        <quality_gates>
+          <gate>Description explains what the skill does AND when to use it, with keywords for matching</gate>
+          <gate>Instructions are actionable and ordered</gate>
+        </quality_gates>
+      </step>
+
+      <step number="3.1">
+        <title>Choose structure (single-file vs multi-file)</title>
+        <actions>
+          <action>Default to SKILL.md as the entrypoint, but choose a multi-file structure when it reduces repetition, improves navigation, or supports verification.</action>
+          <action>Use references/ for long-lived guidance (APIs, checklists, domain subtopics).</action>
+          <action>Use scripts/ for deterministic automation/validation; prefer executable scripts for repeatable checks.</action>
+          <action>Use assets/ for templates or example artifacts that should not live inline in SKILL.md.</action>
+          <action>Link all reference files directly from SKILL.md; avoid multi-hop references.</action>
+        </actions>
+        <acceptance_criteria>
+          <criterion>SKILL.md makes it clear which linked file to read next (and when) and which scripts to execute (and when)</criterion>
+        </acceptance_criteria>
+      </step>
+
+      <step number="4">
+        <title>Add optional resources (only if they improve execution)</title>
+        <actions>
+          <action>Create scripts/ only when automation is genuinely useful and the user explicitly agrees; otherwise keep instructions manual</action>
+          <action>Create references/ only when it materially improves execution and the user explicitly agrees; keep SKILL.md lean</action>
+          <action>Create assets/ only when it materially improves execution and the user explicitly agrees (templates, example files, diagrams)</action>
+        </actions>
+      </step>
+    </phase>
+
+    <phase name="validation">
+      <step number="5">
+        <title>Validate spec compliance (minimum checks)</title>
+        <checks>
+          <check>SKILL.md exists at skill root</check>
+          <check>Frontmatter contains name + description</check>
+          <check>Frontmatter name matches directory (or symlink alias) name</check>
+          <check>Name constraints: 1–64 chars; lowercase letters/numbers/hyphens only; no leading/trailing hyphen; no consecutive hyphens</check>
+          <check>Description constraints: non-empty after trimming; max 1024 characters</check>
+          <check>File references use relative paths and remain shallow</check>
+        </checks>
+      </step>
+
+      <step number="6">
+        <title>Handoff and activation guidance</title>
+        <actions>
+          <action>Ensure the description includes trigger keywords so the model can match it reliably</action>
+          <action>Ensure the first section tells the model when NOT to use the skill and what to do instead</action>
+        </actions>
+      </step>
+    </phase>
+  </main_workflow>
+
+  <completion_criteria>
+    <criterion>Skill folder structure is correct and includes SKILL.md</criterion>
+    <criterion>Frontmatter passes required constraints</criterion>
+    <criterion>Instructions are clear, safe, and usable</criterion>
+  </completion_criteria>
+</workflow_instructions>

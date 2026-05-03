@@ -1,0 +1,71 @@
+# b00t CLI Datum — pi coding agent (@mariozechner/pi-coding-agent)
+# 🤓 Lightweight AI coding assistant; supports local models via openai-completions API
+# Wired as b00t hive sub-agent for sm0l/ch0nky tier tasks
+# https://github.com/badlogic/pi-mono/
+
+[b00t]
+name = "pi-coding-agent"
+type = "cli"
+desires = "latest"
+hint = "pi — lightweight AI coding agent; local model support via openai-completions; MCP via pi-mcp-adapter"
+install = "npm install -g @mariozechner/pi-coding-agent"
+update = "npm install -g @mariozechner/pi-coding-agent"
+version = "pi --version"
+version_regex = "([0-9]+\\.[0-9]+\\.[0-9]+)"
+
+[b00t.env]
+PI_CODING_AGENT_DIR = "~/.pi/agent"
+
+[b00t.learn]
+topic = "pi-coding-agent"
+auto_digest = true
+
+# ── Local ch0nky via custom llama-cpp provider in ~/.pi/agent/models.json ───
+# 🤓 verified 2026-04-30: ~/.pi/agent/models.json MUST use apiKey=local-b00t for the qwen36 ch0nky slot
+[[b00t.usage]]
+description = "Install or update pi to latest published version"
+command = "npm install -g @mariozechner/pi-coding-agent@latest"
+
+# ── Non-interactive (sub-agent usage) ────────────────────────────────────────
+[[b00t.usage]]
+description = "Repair ~/.pi/agent/models.json for the current local qwen36 API key"
+command = "sed -i 's/local-gemma4/local-b00t/g' ~/.pi/agent/models.json && sed -n '1,120p' ~/.pi/agent/models.json"
+
+[[b00t.usage]]
+description = "List the local ch0nky model from pi's model registry"
+command = "pi --list-models ch0nky"
+
+[[b00t.usage]]
+description = "Delegate a coding task to pi sub-agent (non-interactive, verified local path)"
+command = "pi -p --provider llama-cpp --model ch0nky 'implement X in Y'"
+
+[[b00t.usage]]
+description = "Install pi-mcp-adapter (enables MCP access from pi)"
+command = "pi install npm:pi-mcp-adapter"
+
+[[b00t.usage]]
+description = "Probe available models from local OpenAI-compatible endpoint on :8001"
+command = "curl -s http://127.0.0.1:8001/v1/models | python3 -m json.tool"
+
+[[b00t.usage]]
+description = "Interactive pi with the current local ch0nky slot"
+command = "pi --provider llama-cpp --model ch0nky"
+
+[[b00t.usage]]
+description = "Probe the local ch0nky model through pi (verified 2026-04-30)"
+command = "pi -p --provider llama-cpp --model ch0nky 'Reply with READY and the model alias only.'"
+
+[validate]
+command = "pi --version"
+regex = "[0-9]+"
+
+[roles]
+required_for = ["local-inference", "sub-agent"]
+optional_for = ["developer", "hive"]
+
+# b00t:map v1
+# summary: pi-coding-agent CLI datum — local LLM sub-agent with MCP via pi-mcp-adapter
+# tags: pi, coding-agent, sub-agent, local-llm, qwen36, ch0nky, mcp
+# tier: ch0nky
+# cmds: LLAMA_CPP_BASE_URL=http://127.0.0.1:8001/v1 pi --provider llama-cpp --model ch0nky -p "task"
+# complexity: 4

@@ -1,0 +1,66 @@
+"""Tests for native b00t LangChain tools."""
+
+from pathlib import Path
+
+from b00t_langchain_agent.b00t_tools import B00tToolset
+
+
+def _write_decision_tree(tmp_path: Path) -> None:
+    (tmp_path / "operator-decision-tree.tomllm").write_text(
+        """
+[b00t]
+name = "operator-decision-tree"
+
+[[decision_tree.rules]]
+name = "stack-activate"
+match_any = ["start stack", "activate profile"]
+action = "stack.activate"
+tool = "b00t_stack_control"
+script = "operator-agent"
+notes = "bring up stack"
+""".strip()
+    )
+
+
+def test_operator_decide_matches_rule(tmp_path: Path) -> None:
+    """Decision tree should route common operator requests."""
+    _write_decision_tree(tmp_path)
+    toolset = B00tToolset(tmp_path, runner=lambda *_args, **_kwargs: "")
+
+    result = toolset.operator_decide("please start stack inference-qwen3")
+
+    assert "rule=stack-activate" in result
+    assert "action=stack.activate" in result
+    assert "tool=b00t_stack_control" in result
+
+
+def test_stack_control_builds_activate_command(tmp_path: Path) -> None:
+    """Stack control should build the expected activate invocation."""
+    calls: list[tuple[list[str], dict[str, str] | None]] = []
+
+    def runner(args: list[str], env=None) -> str:
+        calls.append((args, env))
+        return "ok"
+
+    toolset = B00tToolset(tmp_path, runner=runner)
+    toolset.stack_control("activate", "inference-qwen3", dry_run=False, force=True)
+
+    assert calls == [(["stack", "activate", "inference-qwen3", "--force"], None)]
+
+
+def test_operator_script_sets_env(tmp_path: Path) -> None:
+    """Operator script tool should route through env-driven Rhai dispatch."""
+    calls: list[tuple[list[str], dict[str, str] | None]] = []
+
+    def runner(args: list[str], env=None) -> str:
+        calls.append((args, env))
+        return "ok"
+
+    toolset = B00tToolset(tmp_path, runner=runner)
+    toolset.operator_script("stack.deactivate", "download-mode", dry_run=True, note="teardown")
+
+    assert calls[0][0] == ["script", "run", "operator-agent"]
+    assert calls[0][1]["OPERATOR_ACTION"] == "stack.deactivate"
+    assert calls[0][1]["OPERATOR_TARGET"] == "download-mode"
+    assert calls[0][1]["OPERATOR_DRY_RUN"] == "true"
+    assert calls[0][1]["OPERATOR_NOTE"] == "teardown"

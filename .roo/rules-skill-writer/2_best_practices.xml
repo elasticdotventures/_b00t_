@@ -1,0 +1,94 @@
+<best_practices>
+  <authoring>
+    <guideline priority="high">
+      <rule>Assume the agent already understands common concepts; only include context that changes decisions or prevents mistakes.</rule>
+      <rationale>Reduces token load after a skill is selected and keeps instructions focused on what is unique to the workflow or project.</rationale>
+    </guideline>
+
+    <guideline priority="high">
+      <rule>Write the frontmatter description in third person, and include both what the skill does and when to use it.</rule>
+      <rationale>The description is injected into the system prompt and is used for skill selection; point-of-view drift reduces match quality.</rationale>
+    </guideline>
+
+    <guideline priority="high">
+      <rule>Keep SKILL.md as an entrypoint: a concise overview + clear navigation to any linked reference files.</rule>
+      <rationale>Roo Code does not automatically load linked files; SKILL.md must make it obvious which file to read next (and why).</rationale>
+    </guideline>
+
+    <guideline priority="high">
+      <rule>Choose an appropriate degree of freedom: use strict, step-by-step instructions for fragile workflows; use heuristics when multiple approaches are valid.</rule>
+      <rationale>Overly rigid skills break in novel contexts; overly loose skills skip validation in high-stakes workflows.</rationale>
+    </guideline>
+
+    <guideline priority="high">
+      <rule>Write descriptions for retrieval: include concrete keywords, tools, file types, and user phrasing triggers.</rule>
+      <rationale>Improves selection accuracy during skill matching.</rationale>
+    </guideline>
+
+    <guideline priority="high">
+      <rule>Make the description actionable: describe what the skill DOES and when to use it.</rule>
+      <rationale>Vague descriptions reduce match quality and increase false positives/negatives.</rationale>
+    </guideline>
+
+    <guideline priority="high">
+      <rule>Start SKILL.md with "When to use" and "When NOT to use".</rule>
+      <rationale>Prevents accidental activation and reduces false positives.</rationale>
+    </guideline>
+
+    <guideline priority="high">
+      <rule>Prefer short, numbered steps with explicit inputs/outputs.</rule>
+      <rationale>Agents follow procedural instructions more reliably than prose.</rationale>
+    </guideline>
+
+    <guideline priority="medium">
+      <rule>Use progressive disclosure: keep SKILL.md concise; move deep reference into references/.</rule>
+      <rationale>Minimizes context usage while preserving detail on demand.</rationale>
+    </guideline>
+
+    <guideline priority="medium">
+      <rule>Prefer a single recommended default approach with an explicit escape hatch (only add multiple alternatives when necessary).</rule>
+      <rationale>Too many options reduces reliability and increases variance in execution.</rationale>
+    </guideline>
+
+    <guideline priority="medium">
+      <rule>When referencing files, use forward slashes in paths (even on Windows) and keep references one level deep from SKILL.md.</rule>
+      <rationale>Forward slashes are cross-platform, and shallow references reduce accidental partial/irrelevant reads.</rationale>
+    </guideline>
+
+    <guideline priority="low">
+      <rule>For longer reference files, include a short table of contents near the top to make selective reading easier.</rule>
+      <rationale>Helps the agent jump to the correct section without reading the entire file.</rationale>
+    </guideline>
+
+    <guideline priority="low">
+      <rule>Heuristic size rule: keep SKILL.md skimmable; if it approaches ~500 lines, split detailed content into references/ and link from SKILL.md.</rule>
+      <rationale>Roo Code does not enforce a SKILL.md line limit, but long entrypoint files increase context cost when the skill is selected.</rationale>
+    </guideline>
+
+    <example_refinement>
+      <user_phrase>I want a skill for making API docs</user_phrase>
+      <refined_description>Generate OpenAPI documentation from TypeScript/JavaScript source using JSDoc comments</refined_description>
+    </example_refinement>
+  </authoring>
+
+  <structure>
+    <guideline priority="high">
+      <rule>Keep skill names stable; treat renames as breaking changes.</rule>
+    </guideline>
+
+    <guideline priority="medium">
+      <rule>Prefer one-level file references from SKILL.md (e.g., references/REFERENCE.md, scripts/run.sh).</rule>
+    </guideline>
+
+    <guideline priority="medium">
+      <rule>Make intent explicit for scripts: state whether the agent should execute the script or read it as reference.</rule>
+      <rationale>Most scripts should be executed for deterministic behavior; reading is only needed when understanding the logic matters.</rationale>
+    </guideline>
+  </structure>
+
+  <compatibility>
+    <guideline priority="medium">
+      <rule>Use the optional compatibility field only when it meaningfully constrains runtime requirements.</rule>
+    </guideline>
+  </compatibility>
+</best_practices>

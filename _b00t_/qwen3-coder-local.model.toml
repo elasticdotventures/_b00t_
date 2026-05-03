@@ -1,0 +1,46 @@
+# b00t AI Model Datum - Qwen3-Coder-30B-A3B local via vLLM + podman
+# RTX 3090 24GB VRAM: Q4_K_XL ~20GB fits; use `b00t-cli model download qwen3-coder-local` first
+
+[b00t]
+name = "qwen3-coder-local"
+type = "model"
+hint = "Qwen3-Coder-30B-A3B-Instruct GGUF, served locally via vLLM/podman on RTX 3090 (port 8000)"
+aliases = ["qwen3-coder", "qwen-local", "qwen3", "ch1nky"]
+
+[b00t.env]
+VLLM_MODEL_DIR = "~/.b00t/models/qwen3-coder-30b-a3b"
+VLLM_MODEL_PATH = "/models/qwen3-coder"
+VLLM_DTYPE = "float16"
+VLLM_API_KEY = "local-vllm"
+OPENAI_BASE_URL = "http://127.0.0.1:8000/v1"
+OPENAI_API_KEY = "local-vllm"
+
+[ai_model]
+provider = "openai_compatible"
+size = "large"
+capabilities = ["chat", "code", "reasoning", "tool_use"]
+litellm_model = "openai/qwen3-coder"
+api_base = "http://127.0.0.1:8000/v1"
+api_key_env = "VLLM_API_KEY"
+rpm_limit = 60
+context_window = 32768
+enabled = true
+access_groups = ["default", "local"]
+
+[ai_model.parameters]
+max_tokens = 8192
+temperature = 0.25
+
+[ai_model.metadata]
+hf_repo = "unsloth/Qwen3-Coder-30B-A3B-Instruct-GGUF"
+allow_patterns = "Qwen3-Coder-30B-A3B-Instruct-UD-Q4_K_XL.gguf"
+# 🤓 allow_patterns drives `huggingface-cli download --allow-patterns` to fetch only this file
+gguf_file = "Qwen3-Coder-30B-A3B-Instruct-UD-Q4_K_XL.gguf"
+runtime = "vllm-podman"
+container_runtime = "podman"
+container_mount = "/models/qwen3-coder"
+# vllm_model_arg overrides --model in container (full container-side path to .gguf)
+vllm_model_arg = "/models/qwen3-coder/Qwen3-Coder-30B-A3B-Instruct-UD-Q4_K_XL.gguf"
+# 🤓 vllm GGUF: requires --max-model-len to avoid OOM on 24GB; chunked-prefill improves throughput
+vllm_extra_args = "--max-model-len 32768 --enable-chunked-prefill --override-generation-config '{\"temperature\": 0.25, \"min_p\": 0, \"top_p\": 0.8}'"
+gpu = "rtx3090"

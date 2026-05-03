@@ -1,0 +1,24 @@
+# b00t sysconfig stack template unit
+# 🤓 hive = node-to-node trust + CMDB; stack = local sysconfig + service lifecycle
+# Usage: systemctl --user enable --now b00t@<profile>
+# ExecStart: b00t stack activate — checks resource gates, starts declared services
+# ExecStop:  b00t stack deactivate — stops services, transitions to idle
+
+[Unit]
+Description=b00t sysconfig stack: %i
+Documentation=https://github.com/PromptExecution/b00t
+After=network.target
+# Stop the specific generated service on unit stop
+PropagatesStopTo=b00t-hive-%i.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+# 🤓 PATH searched in order: cargo (default), venv, pkgx, nix-profile, local, system
+# 💡例 b00t-cli installed via: cargo install / pkgx / ~/.local/bin — all covered
+Environment="PATH=%h/.cargo/bin:%h/.venv/bin:%h/.local/bin:%h/.pkgx/bin:%h/.nix-profile/bin:/usr/local/bin:/usr/bin:/bin"
+ExecStart=/bin/sh -c 'exec b00t-cli stack activate "%i"'
+ExecStop=/bin/sh -c 'exec b00t-cli stack deactivate "%i"'
+
+[Install]
+WantedBy=default.target

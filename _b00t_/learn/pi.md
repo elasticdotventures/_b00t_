@@ -1,0 +1,2 @@
+---
+pi local model memo (verified 2026-04-30): ~/.pi/agent/models.json defines provider "llama-cpp" with api=openai-completions, baseUrl=http://localhost:8001/v1, apiKey=local-b00t, model id ch0nky. Invoke: pi -p --provider llama-cpp --model ch0nky 'task'. If pi returns 401 Invalid API Key, check ~/.pi/agent/models.json first; stale local-gemma4 was the root cause after switching the ch0nky slot to qwen36.

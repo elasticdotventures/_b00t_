@@ -1,0 +1,68 @@
+# b00t CLI Datum - opencode (sst/opencode)
+# Terminal AI coding agent; configurable against any OpenAI-compatible endpoint
+
+[b00t]
+name = "opencode"
+type = "cli"
+desires = "latest"
+hint = "opencode terminal AI coding agent - use with local vLLM or cloud via mistralrs proxy"
+install = """
+pnpm add -g opencode-ai
+"""
+update = """
+pnpm update -g opencode-ai
+"""
+version = "opencode --version"
+version_regex = '([0-9]+\\.[0-9]+\\.[0-9]+)'
+lfmf_category = "opencode"
+
+[b00t.learn]
+topic = "opencode"
+auto_digest = true
+
+[[b00t.usage]]
+description = "Launch opencode TUI (uses active model config)"
+command = "opencode"
+
+[[b00t.usage]]
+description = "Run one-shot with local Gemma 4 (gemma4-local provider, vLLM :8001)"
+command = "opencode run --model gemma4-local/ch0nky 'your task'"
+
+[[b00t.usage]]
+description = "Run one-shot with message against local vllm (Qwen3-Coder :8000)"
+command = "opencode run --model vllm-local/qwen3-coder 'your task'"
+
+[[b00t.usage]]
+description = "Start headless ACP server for b00t agent delegation"
+command = "opencode serve --port 3000"
+
+[[b00t.usage]]
+description = "List configured models"
+command = "opencode models"
+
+[[b00t.references]]
+name = "opencode GitHub"
+url = "https://github.com/sst/opencode"
+
+[[b00t.references]]
+name = "opencode config docs"
+url = "https://opencode.ai/docs/config"
+
+[[b00t.usage]]
+description = "b00t agent invoke opencode (executor loop, headless)"
+command = "b00t agent invoke opencode 'your task here'"
+
+[validate]
+command = "opencode --version"
+regex = "[0-9]+\\.[0-9]+\\.[0-9]+"
+
+[roles]
+required_for = ["developer"]
+optional_for = ["orchestrator"]
+
+# b00t:map v1
+# summary: opencode CLI — AI coding TUI + headless run; Gemma4 via gemma4-local/ch0nky provider
+# tags: opencode, coding-agent, sub-agent, local-llm, gemma4, tui, headless, acp
+# tier: ch0nky
+# cmds: opencode run --model gemma4-local/ch0nky "task"
+# complexity: 4
