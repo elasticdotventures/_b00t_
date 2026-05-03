@@ -24,7 +24,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          submodules: recursive
+          submodules: false
+
+      - name: Initialize l3dg3rr submodule
+        run: git submodule update --init --recursive vendor/l3dg3rr
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
