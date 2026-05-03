@@ -7,7 +7,7 @@
 //! render Mermaid or deterministic SVG documentation.
 
 use serde::{Deserialize, Serialize};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 /// Stable visual category shared by l3dg3rr docs and b00t capability graphs.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -169,7 +169,12 @@ impl InvariantGraph {
             if !ids.contains(edge.to.as_str()) {
                 return Err(GraphValidationError::MissingEdgeEndpoint(edge.to.clone()));
             }
-            if edge.from == edge.to && edge.label.is_none() {
+            if edge.from == edge.to
+                && edge
+                    .label
+                    .as_deref()
+                    .is_none_or(|label| label.trim().is_empty())
+            {
                 return Err(GraphValidationError::UnlabelledSelfEdge(edge.from.clone()));
             }
         }
@@ -190,10 +195,9 @@ impl InvariantGraph {
             ));
         }
         for edge in &self.edges {
-            let label = edge
-                .label
-                .as_ref()
-                .map_or(String::new(), |label| format!("|{}|", escape_mermaid(label)));
+            let label = edge.label.as_ref().map_or(String::new(), |label| {
+                format!("|{}|", escape_mermaid(label))
+            });
             out.push_str(&format!(
                 "  {} -->{} {}\n",
                 mermaid_id(&edge.from),
@@ -232,9 +236,19 @@ impl InvariantGraph {
         out.push_str(r##"<rect width="100%" height="100%" fill="#f8fafc"/>"##);
         out.push_str(r##"<defs><marker id="arrow" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M 0 0 L 10 5 L 0 10 Z" fill="#455a64"/></marker></defs>"##);
 
+        // Build a single O(N) lookup table so edge rendering is O(E) not O(E·N).
+        let node_index_map: HashMap<&str, usize> = self
+            .nodes
+            .iter()
+            .enumerate()
+            .map(|(i, n)| (n.id.as_str(), i))
+            .collect();
+
         for edge in &self.edges {
-            let from = self.node_index(&edge.from).unwrap_or(0);
-            let to = self.node_index(&edge.to).unwrap_or(0);
+            // Fallback to index 0 is unreachable for validated graphs (validate()
+            // guarantees all edge endpoints reference known nodes).
+            let from = node_index_map.get(edge.from.as_str()).copied().unwrap_or(0);
+            let to = node_index_map.get(edge.to.as_str()).copied().unwrap_or(0);
             let x1 = node_x(from) + 140;
             let x2 = node_x(to);
             let y = 110;
@@ -311,13 +325,21 @@ fn node_x(index: usize) -> i32 {
     40 + i32::try_from(index).unwrap_or(0) * 180
 }
 
+/// Produce a collision-free Mermaid node identifier.
+///
+/// Alphanumeric ASCII and `_` are kept verbatim.  Every other byte is
+/// hex-encoded as `_HH` so that `a-b` → `n_a_2db` and `a_b` → `n_a_b`
+/// — distinct, even though both contain a non-alphanumeric separator.
 fn mermaid_id(id: &str) -> String {
     let mut value = String::from("n_");
-    for ch in id.chars() {
-        if ch.is_ascii_alphanumeric() || ch == '_' {
-            value.push(ch);
+    for byte in id.bytes() {
+        if byte.is_ascii_alphanumeric() || byte == b'_' {
+            value.push(byte as char);
         } else {
+            // nibble is always 0-15, so from_digit with radix 16 is infallible
             value.push('_');
+            value.push(char::from_digit((byte >> 4) as u32, 16).expect("nibble 0-15"));
+            value.push(char::from_digit((byte & 0xf) as u32, 16).expect("nibble 0-15"));
         }
     }
     value
@@ -342,7 +364,11 @@ mod tests {
     #[test]
     fn valid_graph_renders_mermaid_and_svg() {
         let graph = InvariantGraph::new("b00t")
-            .with_node(InvariantNode::new("datum", "Datum", VisualizationRole::Ingest))
+            .with_node(InvariantNode::new(
+                "datum",
+                "Datum",
+                VisualizationRole::Ingest,
+            ))
             .with_node(InvariantNode::new(
                 "verify",
                 "Verify",
@@ -387,5 +413,16 @@ mod tests {
             .with_edge(InvariantEdge::new("a", "a").with_label("retry budget"));
 
         assert_eq!(graph.validate(), Ok(()));
+    }
+
+    #[test]
+    fn mermaid_ids_are_collision_free() {
+        // "a-b" and "a_b" would both map to "n_a_b" with the old naive encoder;
+        // with hex encoding "a-b" becomes "n_a_2db" (dash = 0x2d).
+        assert_ne!(mermaid_id("a-b"), mermaid_id("a_b"));
+        assert_eq!(mermaid_id("a-b"), "n_a_2db");
+        assert_eq!(mermaid_id("a_b"), "n_a_b");
+        // Pure alphanumeric IDs are unchanged.
+        assert_eq!(mermaid_id("datum"), "n_datum");
     }
 }

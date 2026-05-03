@@ -1,7 +1,7 @@
 use crate::just_ast::{AstDiff, JustfileAst};
 use crate::traits::*;
-use crate::{check_command_available, get_config, BootDatum, JustfileConfig};
-use anyhow::{anyhow, Context, Result};
+use crate::{BootDatum, JustfileConfig, check_command_available, get_config};
+use anyhow::{Context, Result, anyhow};
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use std::time::Instant;

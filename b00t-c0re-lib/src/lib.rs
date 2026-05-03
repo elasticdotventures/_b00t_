@@ -63,7 +63,9 @@ pub use b00t_config::{AiConfiguration, B00tUnifiedConfig, CloudServicesConfig, U
 pub use context::B00tContext;
 pub use datum_types::{LearnMetadata, UsageExample, deserialize_usage};
 pub use dual_grok::{
+    ControlCodeEvent, ControlEventCapability, ControlEventReceipt, ControlEventSink, ControlReply,
     DualGrokClient, DualIngestResult, DualQueryItem, DualQueryResult, GrokBackend,
+    StubControlEventSink, default_control_event_sink,
 };
 pub use grok::{AskResult, ChunkResult, ChunkSummary, DigestResult, GrokClient, LearnResult};
 pub use irontology_bridge::{

@@ -1,5 +1,5 @@
 use crate::BootDatum;
-use anyhow::{bail, Result};
+use anyhow::{Result, bail};
 use std::collections::{HashMap, HashSet};
 
 /// Dependency resolver with topological sort and cycle detection
@@ -250,10 +250,12 @@ mod tests {
 
         let result = resolver.resolve("a.cli");
         assert!(result.is_err());
-        assert!(result
-            .unwrap_err()
-            .to_string()
-            .contains("Circular dependency"));
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("Circular dependency")
+        );
     }
 
     #[test]
@@ -265,10 +267,12 @@ mod tests {
 
         let result = resolver.resolve("a.cli");
         assert!(result.is_err());
-        assert!(result
-            .unwrap_err()
-            .to_string()
-            .contains("Circular dependency"));
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("Circular dependency")
+        );
     }
 
     #[test]

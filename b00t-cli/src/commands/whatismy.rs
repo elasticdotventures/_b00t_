@@ -352,11 +352,7 @@ fn get_parent_pid() -> Option<u32> {
     {
         unsafe {
             let ppid = libc::getppid();
-            if ppid > 0 {
-                Some(ppid as u32)
-            } else {
-                None
-            }
+            if ppid > 0 { Some(ppid as u32) } else { None }
         }
     }
     #[cfg(not(unix))]

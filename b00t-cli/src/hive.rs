@@ -7,7 +7,7 @@
 //! precedence: .hive.tomllmd > .hive.tomllm > .stack.tomllmd > .stack.tomllm > .hive.toml
 //! State file: /tmp/b00t/hive-state.json (volatile; reset on reboot)
 
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result, bail};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
@@ -1670,10 +1670,22 @@ working_directory = "/tmp/test"
         let dir = tempfile::tempdir().unwrap();
         let err = load_profile("ghost", dir.path()).unwrap_err();
         let msg = err.to_string();
-        assert!(msg.contains(".hive.tomllmd"), "error must mention .hive.tomllmd");
-        assert!(msg.contains(".hive.tomllm"), "error must mention .hive.tomllm");
-        assert!(msg.contains(".stack.tomllmd"), "error must mention .stack.tomllmd");
-        assert!(msg.contains(".stack.tomllm"), "error must mention .stack.tomllm");
+        assert!(
+            msg.contains(".hive.tomllmd"),
+            "error must mention .hive.tomllmd"
+        );
+        assert!(
+            msg.contains(".hive.tomllm"),
+            "error must mention .hive.tomllm"
+        );
+        assert!(
+            msg.contains(".stack.tomllmd"),
+            "error must mention .stack.tomllmd"
+        );
+        assert!(
+            msg.contains(".stack.tomllm"),
+            "error must mention .stack.tomllm"
+        );
         assert!(msg.contains(".hive.toml"), "error must mention .hive.toml");
     }
 }

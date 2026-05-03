@@ -1947,7 +1947,14 @@ mod k0mmand3r_dispatch_tests {
     fn normalize_slash_args_filesystem_path_value_not_rewritten() {
         // `--path /tmp/.tmpXXX uninstall` — /tmp/.tmpXXX is a flag value (multi-component path),
         // NOT a slash command; argv must be returned unchanged so clap parses it correctly.
-        let input = args(&["b00t-cli", "--path", "/tmp/.tmpXXX", "uninstall", "--yes", "foo"]);
+        let input = args(&[
+            "b00t-cli",
+            "--path",
+            "/tmp/.tmpXXX",
+            "uninstall",
+            "--yes",
+            "foo",
+        ]);
         assert_eq!(normalize_slash_args(input.clone()), input);
     }
 

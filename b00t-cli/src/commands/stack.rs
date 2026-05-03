@@ -1,14 +1,14 @@
-use anyhow::{anyhow, Context, Result};
+use anyhow::{Context, Result, anyhow};
 use clap::Parser;
 use regex::Regex;
 use std::collections::HashMap;
 
 use crate::datum_stack::StackDatum;
 use crate::dependency_resolver::DependencyResolver;
-use crate::hive::{activate_profile, load_profile, SystemSnapshot};
+use crate::hive::{SystemSnapshot, activate_profile, load_profile};
 use crate::traits::DatumCrdDisplay;
 use crate::{
-    ansible::run_playbook, ansible::AnsibleConfig, get_config, get_expanded_path, BootDatum,
+    BootDatum, ansible::AnsibleConfig, ansible::run_playbook, get_config, get_expanded_path,
 };
 
 #[derive(Parser)]

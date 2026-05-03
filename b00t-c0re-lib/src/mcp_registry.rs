@@ -756,7 +756,7 @@ impl McpRegistry {
     async fn install_docker(&self) -> Result<()> {
         info!("🐳 Installing Docker via b00t cli");
         let output = tokio::process::Command::new("b00t-cli")
-            .args(&["cli", "install", "docker"])
+            .args(["cli", "install", "docker"])
             .output()
             .await
             .context("Failed to run b00t-cli install docker")?;
@@ -773,7 +773,7 @@ impl McpRegistry {
     async fn install_node(&self, _min_version: &Option<String>) -> Result<()> {
         info!("📦 Installing Node.js via b00t cli");
         let output = tokio::process::Command::new("b00t-cli")
-            .args(&["cli", "install", "node"])
+            .args(["cli", "install", "node"])
             .output()
             .await
             .context("Failed to run b00t-cli install node")?;
@@ -796,7 +796,7 @@ impl McpRegistry {
     async fn install_python(&self, _min_version: &Option<String>) -> Result<()> {
         info!("🐍 Installing Python via b00t cli");
         let output = tokio::process::Command::new("b00t-cli")
-            .args(&["cli", "install", "python"])
+            .args(["cli", "install", "python"])
             .output()
             .await
             .context("Failed to run b00t-cli install python")?;
@@ -819,7 +819,7 @@ impl McpRegistry {
     async fn install_rust(&self) -> Result<()> {
         info!("🦀 Installing Rust via b00t cli");
         let output = tokio::process::Command::new("b00t-cli")
-            .args(&["cli", "install", "rust"])
+            .args(["cli", "install", "rust"])
             .output()
             .await
             .context("Failed to run b00t-cli install rust")?;
@@ -836,7 +836,7 @@ impl McpRegistry {
     async fn install_system_package(&self, package: &str) -> Result<()> {
         info!("📦 Installing system package '{}' via b00t cli", package);
         let output = tokio::process::Command::new("b00t-cli")
-            .args(&["cli", "install", package])
+            .args(["cli", "install", package])
             .output()
             .await
             .context(format!("Failed to run b00t-cli install {}", package))?;

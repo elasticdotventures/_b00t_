@@ -9,8 +9,8 @@ use std::collections::BTreeMap;
 use uuid::Uuid;
 
 use crate::k8s::{
-    error::{Error, Result},
     LABEL_PREFIX, MANAGED_BY_LABEL, MANAGED_BY_VALUE,
+    error::{Error, Result},
 };
 
 /// Builder for creating Kubernetes Pod specifications
