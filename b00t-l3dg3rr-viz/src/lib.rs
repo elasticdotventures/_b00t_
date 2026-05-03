@@ -334,9 +334,10 @@ fn mermaid_id(id: &str) -> String {
         if byte.is_ascii_alphanumeric() || byte == b'_' {
             value.push(byte as char);
         } else {
+            // nibble is always 0-15, so from_digit with radix 16 is infallible
             value.push('_');
-            value.push(char::from_digit((byte >> 4) as u32, 16).unwrap_or('0'));
-            value.push(char::from_digit((byte & 0xf) as u32, 16).unwrap_or('0'));
+            value.push(char::from_digit((byte >> 4) as u32, 16).expect("nibble 0-15"));
+            value.push(char::from_digit((byte & 0xf) as u32, 16).expect("nibble 0-15"));
         }
     }
     value
