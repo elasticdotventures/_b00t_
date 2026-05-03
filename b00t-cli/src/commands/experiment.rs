@@ -968,7 +968,7 @@ pub fn governance_gate(prompt: &str) -> Result<String, String> {
     }
     // Use word-boundary regex for "token" to avoid false-positive matches
     // on "tokenizer", "tokenization", "Token count" etc.
-    let cred_patterns = [".env", "credentials", "secret", "password", "api_key"];
+    let cred_patterns = [".env", "credentials", "secret", "token", "password", "api_key"];
     for pattern in &cred_patterns {
         if prompt.to_lowercase().contains(pattern) {
             return Err(format!(

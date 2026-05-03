@@ -459,6 +459,7 @@ mod tests {
         assert!(result.is_err());
     }
 
+
     #[test]
     fn test_validate_jsonl_valid_file() {
         let dir = std::env::temp_dir().join("b00t-test-validate-jsonl");
