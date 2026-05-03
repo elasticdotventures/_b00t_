@@ -1,0 +1,19 @@
+[layer]
+name = "mosquitto-clients"
+version = "2.0"
+description = "MQTT client tools"
+
+[provides]
+binaries = ["mosquitto_pub", "mosquitto_sub", "mosquitto_rr"]
+libraries = []
+paths = ["/usr/bin"]
+
+[requires]
+layers = ["debian-base"]
+
+[runtime]
+layers = ["debian-base"]
+
+[aliases]
+mosquitto_pub = "mosquitto_pub"
+mosquitto_sub = "mosquitto_sub"

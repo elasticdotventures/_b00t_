@@ -1,0 +1,417 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "MCP TOML Configuration Schema",
+  "description": "Schema for validating b00t MCP datum TOML files",
+  "type": "object",
+  "properties": {
+    "b00t": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "type": {
+          "type": "string",
+          "enum": ["mcp"]
+        },
+        "hint": {
+          "type": "string"
+        },
+        "lfmf_category": {
+          "type": "string"
+        },
+        "desires": {
+          "type": "string"
+        },
+        "install": {
+          "oneOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "object",
+              "properties": {
+                "requires": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              },
+              "additionalProperties": false
+            }
+          ]
+        },
+        "update": {
+          "type": "string"
+        },
+        "version": {
+          "type": "string"
+        },
+        "version_regex": {
+          "type": "string"
+        },
+        "homepage": {
+          "type": "string"
+        },
+        "keywords": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "entangled_cli": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "pre_start": {
+          "type": "string"
+        },
+        "env": {
+          "$ref": "#/definitions/envVars"
+        },
+        "depends_on": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_.-]+\\.[A-Za-z0-9_.-]+$"
+          }
+        },
+        "requires": {
+          "type": "object",
+          "patternProperties": {
+            "^[A-Za-z0-9_.-]+$": {
+              "$ref": "#/definitions/capabilityRequirement"
+            }
+          },
+          "additionalProperties": false
+        },
+        "learn": {
+          "$ref": "#/definitions/learnBlock"
+        },
+        "usage": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/usageItem"
+          }
+        },
+        "references": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/referenceItem"
+          }
+        },
+        "mcp": {
+          "type": "object",
+          "properties": {
+            "protocol_version": {
+              "type": "string"
+            },
+            "stdio": {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/stdioMethod"
+              }
+            },
+            "httpstream": {
+              "$ref": "#/definitions/httpstreamMethod"
+            },
+            "server": {
+              "type": "object",
+              "properties": {
+                "stdio": {
+                  "$ref": "#/definitions/stdioMethod"
+                },
+                "http": {
+                  "$ref": "#/definitions/serverHttpMethod"
+                }
+              },
+              "additionalProperties": false
+            },
+            "capabilities": {
+              "type": "object",
+              "properties": {
+                "tools": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "prompts": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "resources": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              },
+              "additionalProperties": false
+            },
+            "tools": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "string"
+              }
+            }
+          },
+          "additionalProperties": false
+        },
+        "meta": {
+          "type": "object",
+          "properties": {
+            "capabilities": {
+              "$ref": "#/definitions/looseObject"
+            },
+            "agent": {
+              "$ref": "#/definitions/looseObject"
+            },
+            "mcp_syntax": {
+              "$ref": "#/definitions/looseObject"
+            },
+            "sync": {
+              "$ref": "#/definitions/looseObject"
+            },
+            "namespace": {
+              "$ref": "#/definitions/looseObject"
+            }
+          },
+          "additionalProperties": true
+        }
+      },
+      "required": ["name", "type"],
+      "additionalProperties": false
+    },
+    "validate": {
+      "type": "object",
+      "properties": {
+        "command": {
+          "type": "string"
+        },
+        "regex": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "roles": {
+      "type": "object",
+      "properties": {
+        "required_for": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "optional_for": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "env": {
+      "$ref": "#/definitions/envVars"
+    }
+  },
+  "required": ["b00t"],
+  "additionalProperties": false,
+  "definitions": {
+    "envVars": {
+      "type": "object",
+      "patternProperties": {
+        "^[A-Za-z_][A-Za-z0-9_]*$": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "stdioMethod": {
+      "type": "object",
+      "properties": {
+        "command": {
+          "type": "string"
+        },
+        "args": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "transport": {
+          "type": "string",
+          "enum": ["stdio"]
+        },
+        "priority": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "requires": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "env": {
+          "$ref": "#/definitions/envVars"
+        },
+        "pre_start": {
+          "type": "string"
+        },
+        "entangled_cli": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": ["command"],
+      "additionalProperties": false
+    },
+    "httpstreamMethod": {
+      "type": "object",
+      "properties": {
+        "url": {
+          "type": "string",
+          "format": "uri"
+        },
+        "transport": {
+          "type": "string",
+          "enum": ["httpstream"]
+        },
+        "priority": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "requires": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "requires_internet": {
+          "type": "boolean"
+        },
+        "requires_auth": {
+          "type": "boolean"
+        }
+      },
+      "required": ["url"],
+      "additionalProperties": false
+    },
+    "serverHttpMethod": {
+      "type": "object",
+      "properties": {
+        "command": {
+          "type": "string"
+        },
+        "args": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "env": {
+          "$ref": "#/definitions/envVars"
+        }
+      },
+      "required": ["command"],
+      "additionalProperties": false
+    },
+    "capabilityRequirement": {
+      "type": "object",
+      "properties": {
+        "capability": {
+          "type": "string"
+        },
+        "protocol": {
+          "type": "string"
+        },
+        "prefer": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "fallback": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "learnBlock": {
+      "type": "object",
+      "properties": {
+        "topic": {
+          "type": "string"
+        },
+        "auto_digest": {
+          "type": "boolean"
+        },
+        "content": {
+          "type": "string"
+        },
+        "inline": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "usageItem": {
+      "type": "object",
+      "properties": {
+        "description": {
+          "type": "string"
+        },
+        "command": {
+          "type": "string"
+        }
+      },
+      "required": ["description", "command"],
+      "additionalProperties": false
+    },
+    "referenceItem": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "url": {
+          "type": "string"
+        },
+        "homepage": {
+          "type": "string"
+        }
+      },
+      "required": ["name"],
+      "additionalProperties": false
+    },
+    "looseObject": {
+      "type": "object",
+      "additionalProperties": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "boolean"
+          },
+          {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        ]
+      }
+    }
+  }
+}

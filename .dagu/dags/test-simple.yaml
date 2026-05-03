@@ -1,0 +1,21 @@
+name: test-simple
+description: Simple test workflow to verify Dagu is working
+
+env:
+  - PROJECT_ROOT: /home/brianh/.dotfiles
+
+steps:
+  - name: check-git-status
+    command: git status --short
+    dir: /home/brianh/.dotfiles
+
+  - name: check-rust-version
+    command: rustc --version
+    depends:
+      - check-git-status
+
+  - name: list-cargo-projects
+    command: find . -name Cargo.toml -maxdepth 2
+    dir: /home/brianh/.dotfiles
+    depends:
+      - check-rust-version

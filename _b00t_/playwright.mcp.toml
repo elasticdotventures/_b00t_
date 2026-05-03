@@ -1,0 +1,11 @@
+[b00t]
+name = "playwright"
+type = "mcp"
+hint = "MCP server"
+
+[[b00t.mcp.stdio]]
+transport = "stdio"
+args = ["-y", "@executeautomation/playwright-mcp-server"]
+priority = 0
+requires = ["node"]
+command = "npx"

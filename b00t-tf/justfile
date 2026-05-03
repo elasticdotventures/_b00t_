@@ -1,0 +1,128 @@
+# b00t-tf Development Justfile
+# Memoizes OpenTofu infrastructure development commands
+
+set dotenv-load
+
+# Default recipe - show available commands
+default:
+    @just --list
+
+# === DEVELOPMENT ===
+
+# Install MCP SDK dependencies
+install-deps:
+    npm install
+    @echo "✅ MCP SDK dependencies installed"
+
+# Test MCP server locally
+test-server: install-deps
+    @echo "🧪 Testing MCP server locally..."
+    node proxy-server.js --help || echo "Server startup test complete"
+
+# Test self-bootstrapping functionality
+test-bootstrapping: install-deps
+    @./scripts/test-bootstrapping.sh
+
+# === TERRAFORM/OPENTOFU ===
+
+# Initialize OpenTofu
+tf-init:
+    tofu init
+    @echo "✅ OpenTofu initialized"
+
+# Plan infrastructure changes
+tf-plan: tf-init
+    tofu plan
+    @echo "📋 OpenTofu plan complete"
+
+# Apply infrastructure (requires confirmation)
+tf-apply: tf-init
+    tofu apply
+    @echo "🚀 Infrastructure applied"
+
+# Destroy infrastructure (requires confirmation)
+tf-destroy: tf-init
+    tofu destroy
+    @echo "💥 Infrastructure destroyed"
+
+# === VALIDATION ===
+
+# Validate manifest.json schema
+validate-manifest:
+    @echo "🔍 Validating manifest.json..."
+    @which jq >/dev/null || (echo "❌ jq not found - install with: sudo apt install jq" && exit 1)
+    jq . manifest.json > /dev/null && echo "✅ manifest.json is valid JSON"
+
+# Validate all configuration files
+validate: validate-manifest
+    @echo "🔍 Validating _b00t_.toml..."
+    @test -f _b00t_.toml && echo "✅ _b00t_.toml exists"
+    @echo "🔍 Validating .env.template..."
+    @test -f .env.template && echo "✅ .env.template exists"
+
+# === BASE TEMPLATE GENERATION ===
+
+# Create base .dxt template for Cloudflare Worker modification
+create-base-template: install-deps
+    #!/usr/bin/env bash
+    echo "📦 Creating base .dxt template..."
+    mkdir -p template
+    
+    # Check for zip command
+    if ! which zip >/dev/null 2>&1; then
+        echo "❌ zip command not found. Install with: sudo apt install zip"
+        exit 1
+    fi
+    
+    # Create base template zip (without user-specific _b00t_.toml)
+    zip -r template/b00t-base.dxt \
+        manifest.json \
+        package.json \
+        proxy-server.js \
+        main.tf \
+        modules/ \
+        .env.template \
+        node_modules/
+    
+    echo "✅ Base template created: template/b00t-base.dxt"
+    ls -lh template/b00t-base.dxt
+
+# Test base template contents
+test-base-template:
+    @echo "🔍 Testing base template contents..."
+    @test -f template/b00t-base.dxt || (echo "❌ Base template not found. Run: just create-base-template" && exit 1)
+    unzip -l template/b00t-base.dxt | head -15
+    @echo ""
+    @echo "📊 Base template size:"
+    ls -lh template/b00t-base.dxt
+
+# === UTILITIES ===
+
+# Clean build artifacts
+clean:
+    rm -rf node_modules/
+    rm -rf .terraform/
+    rm -f .terraform.lock.hcl
+    rm -rf template/
+    @echo "🧹 Cleaned build artifacts"
+
+# Setup development environment
+setup: install-deps tf-init validate
+    @echo "✅ Development environment ready"
+
+# Show current status
+status:
+    @echo "📊 b00t-tf Status:"
+    @echo "OpenTofu: $(which tofu || echo 'not installed')"
+    @echo "Node.js: $(node --version 2>/dev/null || echo 'not installed')"
+    @echo "NPM: $(npm --version 2>/dev/null || echo 'not installed')"
+    @test -d node_modules && echo "Dependencies: ✅ installed" || echo "Dependencies: ❌ missing"
+    @test -f .terraform.lock.hcl && echo "OpenTofu: ✅ initialized" || echo "OpenTofu: ❌ not initialized"
+
+# === ALIASES ===
+
+alias s := status
+alias c := clean
+alias v := validate
+alias template := create-base-template
+alias test-template := test-base-template

@@ -1,0 +1,130 @@
+# .github/workflows/browser-ext-release.yml
+name: b00t Browser Extension Release
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'b00t-browser-ext/**'
+      - '.github/workflows/browser-ext-release.yml'
+  release:
+    types: [created]
+
+jobs:
+  build-and-package:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: b00t-browser-ext/package-lock.json
+          
+      - name: Get package version
+        id: version
+        run: |
+          cd b00t-browser-ext
+          VERSION=$(node -p "require('./package.json').version")
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Extension version: $VERSION"
+          
+      - name: Install dependencies
+        run: |
+          cd b00t-browser-ext
+          npm ci
+          
+      - name: Build extension for production
+        run: |
+          cd b00t-browser-ext
+          npm run build
+          
+      - name: Package Chrome extension
+        run: |
+          cd b00t-browser-ext
+          npm run package
+          
+      - name: Create release artifacts
+        run: |
+          cd b00t-browser-ext
+          # Create versioned artifacts
+          mkdir -p ../artifacts
+          
+          # Copy build directory with version
+          cp -r build/chrome-mv3-prod ../artifacts/b00t-browser-ext-chrome-v${{ steps.version.outputs.version }}
+          
+          # Create ZIP package
+          cd build/chrome-mv3-prod
+          zip -r "../../artifacts/b00t-browser-ext-chrome-v${{ steps.version.outputs.version }}.zip" .
+          
+          # Create Firefox package if available
+          if [ -d "../firefox-mv3-prod" ]; then
+            cd ../firefox-mv3-prod
+            zip -r "../../artifacts/b00t-browser-ext-firefox-v${{ steps.version.outputs.version }}.zip" .
+          fi
+          
+      - name: Upload Chrome extension artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: b00t-browser-ext-chrome-v${{ steps.version.outputs.version }}
+          path: artifacts/b00t-browser-ext-chrome-v${{ steps.version.outputs.version }}.zip
+          retention-days: 90
+          
+      - name: Upload build directory
+        uses: actions/upload-artifact@v4
+        with:
+          name: b00t-browser-ext-build-v${{ steps.version.outputs.version }}
+          path: artifacts/b00t-browser-ext-chrome-v${{ steps.version.outputs.version }}/
+          retention-days: 90
+          
+      - name: Create GitHub Release (on tag)
+        if: github.event_name == 'release'
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            artifacts/b00t-browser-ext-chrome-v${{ steps.version.outputs.version }}.zip
+            artifacts/b00t-browser-ext-firefox-v${{ steps.version.outputs.version }}.zip
+          name: b00t Browser Extension v${{ steps.version.outputs.version }}
+          body: |
+            # b00t Browser Extension v${{ steps.version.outputs.version }}
+            
+            🥾 Operator telemetry and agent integration browser extension
+            
+            ## Installation
+            
+            ### Chrome/Edge/Brave
+            1. Download `b00t-browser-ext-chrome-v${{ steps.version.outputs.version }}.zip`
+            2. Extract the ZIP file
+            3. Open Chrome → Extensions → Enable Developer Mode
+            4. Click "Load Unpacked" → Select extracted folder
+            
+            ### Firefox  
+            1. Download `b00t-browser-ext-firefox-v${{ steps.version.outputs.version }}.zip` (if available)
+            2. Open Firefox → Add-ons → Install from file
+            
+            ## Features
+            - 🎯 Click-triggered telemetry capture
+            - 🔍 DOM state analysis 
+            - 🛡️ Site-specific authorization
+            - 🤖 b00t agent integration ready
+            - 📊 Network request monitoring
+            
+            ## Privacy
+            All your base belong to b00t. Extension operates within b00t ecosystem trust boundary.
+            
+            ---
+            Generated with b00t CI/CD pipeline 🤖
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          
+      - name: Package Summary
+        run: |
+          echo "📦 b00t Browser Extension v${{ steps.version.outputs.version }} packaged successfully!"
+          echo "🎯 Artifacts created:"
+          ls -la artifacts/
+          echo ""
+          echo "🚀 Ready for distribution and testing"

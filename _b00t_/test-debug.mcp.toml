@@ -1,0 +1,11 @@
+[b00t]
+name = "test-debug"
+type = "mcp"
+hint = "MCP server"
+
+[[b00t.mcp.stdio]]
+transport = "stdio"
+args = ["-y", "@test/debug"]
+command = "npx"
+requires = ["node"]
+priority = 0

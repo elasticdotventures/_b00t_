@@ -1,0 +1,88 @@
+{
+  "dxt_version": "0.1",
+  "name": "b00t-infrastructure-proxy",
+  "version": "1.0.0",
+  "description": "Self-bootstrapping MCP server for b00t infrastructure management and AI provider configuration",
+  "author": "PromptExecution",
+  "homepage": "https://b00t.promptexecution.com",
+  "mcpServers": {
+    "b00t": {
+      "command": "node",
+      "args": ["proxy-server.js"],
+      "env": {}
+    }
+  },
+  "server": {
+    "type": "node",
+    "entry_point": "proxy-server.js"
+  },
+  "user_config": {
+    "type": "object",
+    "properties": {
+      "anthropic_api_key": {
+        "type": "string",
+        "description": "Anthropic API key for Claude models",
+        "secret": true
+      },
+      "cloudflare_api_token": {
+        "type": "string",
+        "description": "Cloudflare API token for infrastructure provisioning",
+        "secret": true
+      },
+      "openrouter_api_key": {
+        "type": "string",
+        "description": "OpenRouter API key (optional)",
+        "secret": true
+      },
+      "proxy_port": {
+        "type": "integer",
+        "description": "Local proxy server port",
+        "default": 8787,
+        "minimum": 1024,
+        "maximum": 65535
+      },
+      "auto_bootstrap": {
+        "type": "boolean",
+        "description": "Automatically bootstrap tools and infrastructure on first run",
+        "default": true
+      }
+    },
+    "required": ["anthropic_api_key"]
+  },
+  "tools": [
+    {
+      "name": "bootstrap_b00t",
+      "description": "Bootstrap b00t capabilities, install tools, and setup infrastructure modules"
+    },
+    {
+      "name": "install_tool", 
+      "description": "Install CLI tools like just, gh, tofu automatically"
+    },
+    {
+      "name": "provision_infrastructure",
+      "description": "Provision cloud infrastructure using OpenTofu modules"
+    },
+    {
+      "name": "configure_provider",
+      "description": "Configure AI model providers and API keys"
+    },
+    {
+      "name": "detect_tools",
+      "description": "Detect installed CLI tools with version information"
+    },
+    {
+      "name": "get_status",
+      "description": "Get system status, installed tools, and configuration"
+    }
+  ],
+  "capabilities": [
+    "infrastructure_provisioning",
+    "tool_installation", 
+    "provider_configuration",
+    "self_bootstrapping"
+  ],
+  "requirements": {
+    "node": ">=18.0.0",
+    "os": ["linux", "darwin", "win32"]
+  }
+}

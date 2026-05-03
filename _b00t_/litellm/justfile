@@ -1,0 +1,110 @@
+# LiteLLM Proxy Management - b00t integrated
+# Secure, environment-driven proxy server for unified LLM API access
+
+# Tool detection (handled in external script)
+# Complex shell logic moved to generate_litellm_config_from_b00t_datums.sh
+
+# Aliases for common operations
+alias s := run
+alias start := run
+alias up := run
+
+# Start LiteLLM proxy server with generated configuration
+run:
+	@echo "🚀 Starting LiteLLM proxy server..."
+	@just _scan-models > litellm_generated_config.yaml
+	@echo "⚙️  Configuration generated"
+	podman run --replace --name litellm-proxy \
+		--rm -d \
+		-v {{justfile_directory()}}/litellm_generated_config.yaml:/app/config.yaml \
+		-p 4000:4000 \
+		-e LITELLM_MASTER_KEY \
+		-e ANTHROPIC_API_KEY \
+		-e OPENROUTER_API_KEY \
+		-e OPENAI_API_KEY \
+		ghcr.io/berriai/litellm:main-latest \
+		--config /app/config.yaml --detailed_debug
+	@echo "✅ LiteLLM proxy started on http://localhost:4000"
+	@echo "🌐 Web UI: http://localhost:4000/ui"
+
+# Stop LiteLLM proxy server
+stop:
+	@echo "🛑 Stopping LiteLLM proxy..."
+	-podman stop litellm-proxy
+	@echo "✅ LiteLLM proxy stopped"
+
+# Restart proxy (stop + start)
+restart:
+	@just stop
+	@sleep 2
+	@just run
+
+# Show proxy logs
+logs:
+	podman logs -f litellm-proxy
+
+# Test proxy with health check and completion
+test:
+	@echo "🔍 Testing LiteLLM proxy health..."
+	@curl -s http://localhost:4000/health -H "Authorization: Bearer $$LITELLM_MASTER_KEY" > /dev/null && echo "✅ Proxy healthy" || echo "❌ Proxy not responding"
+	@echo "🧪 Testing model completion..."
+	@just _test-completion
+
+# Run comprehensive integration tests
+test-integration:
+	@echo "🧪 Running comprehensive integration tests..."
+	@python3 integration_test_openai_sdk_validation.py
+
+# Run curl-based completion tests (legacy)
+test-curl:
+	@echo "🧪 Running curl completion tests..."
+	@bash curl_completion_test_fireworks_models.sh
+
+# Generate LiteLLM configuration from b00t AI model datums
+config:
+	@echo "⚙️  Generating LiteLLM config from b00t AI model datums..."
+	@just _scan-models > litellm_generated_config.yaml
+	@echo "✅ Configuration generated: litellm_generated_config.yaml"
+
+# Show available models from b00t datums
+models:
+	@echo "📋 Available AI models in b00t registry:"
+	@find {{parent_directory(justfile_directory())}} -name "*.ai_model.toml" -exec basename {} .ai_model.toml \; | sort
+
+# Show proxy status and endpoints
+status:
+	@echo "📊 LiteLLM Proxy Status:"
+	@echo "Container: $(podman ps --filter name=litellm-proxy --format 'table {{{{.Names}}}}\t{{{{.Status}}}}\t{{{{.Ports}}}}' 2>/dev/null || echo 'Not running')"
+	@echo ""
+	@curl -s http://localhost:4000/v1/models 2>/dev/null | jq -r '.data[] | "• " + .id' 2>/dev/null || echo "❌ Proxy not responding"
+
+# Check environment variables are loaded via direnv
+init:
+	@echo "🔧 Checking environment setup..."
+	@echo "LITELLM_MASTER_KEY: $${LITELLM_MASTER_KEY:-❌ Not set}"
+	@echo "OPENROUTER_API_KEY: $${OPENROUTER_API_KEY:-❌ Not set}" 
+	@echo "ANTHROPIC_API_KEY: $${ANTHROPIC_API_KEY:-❌ Not set}"
+	@echo "✅ Environment managed by direnv"
+
+# Clean up generated files and containers
+clean:
+	@echo "🧹 Cleaning up LiteLLM resources..."
+	-podman rm -f litellm-proxy
+	-rm -f litellm_generated_config.yaml
+	@echo "✅ Cleanup complete"
+
+# Private: Generate LiteLLM config from b00t AI model datums
+_scan-models:
+	@bash generate_litellm_config_from_b00t_datums.sh
+
+
+# Private: Test completion with a simple model
+_test-completion:
+	@curl -s --location 'http://localhost:4000/chat/completions' \
+		--header 'Content-Type: application/json' \
+		--header "Authorization: Bearer $$LITELLM_MASTER_KEY" \
+		--data '{ \
+			"model": "claude-3-5-sonnet", \
+			"messages": [{"role": "user", "content": "Hello! Respond with just: b00t integrated ✅"}], \
+			"max_tokens": 10 \
+		}' | jq -r '.choices[0].message.content' 2>/dev/null || echo "❌ Test failed"

@@ -1,0 +1,12 @@
+[b00t]
+name = "claude-plugin"
+type = "mcp"
+hint = "Launches the Claude desktop plugin via the MCP stream with b00t-aware agents."
+lfmf_category = "claude"
+
+[[b00t.mcp.stdio]]
+command = "scripts/run-claude-mcp.sh"
+args = []
+transport = "stdio"
+priority = 0
+requires = ["b00t-cli"]

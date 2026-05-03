@@ -1,0 +1,129 @@
+[b00t]
+name = "crewai"
+type = "ai"
+hint = "Multi-agent AI framework for collaborative task execution"
+version = "crewai --version"
+version_regex = '\d+\.\d+\.\d+'
+install = "pip install crewai crewai-tools"
+update = "pip install --upgrade crewai crewai-tools"
+
+[b00t.ai]
+provider = "crewai"
+api_type = "multi-agent-framework"
+models = ["gpt-4", "gpt-3.5-turbo", "claude-3", "groq"]  # Supports various LLM backends
+context_window = 128000  # Depends on underlying LLM
+pricing_model = "pass-through"  # Uses underlying LLM pricing
+
+[b00t.python]
+min_version = "3.10"
+max_version = "3.13"
+package_manager = "uv"  # Preferred, or pip
+dependencies = [
+    "crewai",
+    "crewai-tools",
+    "python-dotenv",
+]
+
+[b00t.env]
+OPENAI_API_KEY = "${OPENAI_API_KEY}"
+GROQ_API_KEY = "${GROQ_API_KEY}"
+ANTHROPIC_API_KEY = "${ANTHROPIC_API_KEY}"
+
+[b00t.learn]
+topic = "crewai"
+auto_digest = true
+
+[[b00t.usage]]
+example = "Initialize CrewAI project"
+command = "crewai create crew jollyroger"
+
+[[b00t.usage]]
+example = "Install dependencies"
+command = "crewai install"
+
+[[b00t.usage]]
+example = "Run crew"
+command = "crewai run"
+
+[[b00t.usage]]
+example = "Create custom agent with UV"
+command = "uv add crewai crewai-tools"
+
+[[b00t.references]]
+name = "Official Documentation"
+url = "https://docs.crewai.com"
+type = "docs"
+
+[[b00t.references]]
+name = "GitHub Repository"
+url = "https://github.com/joaomdmoura/crewai"
+type = "source"
+
+[[b00t.references]]
+name = "Discord Community"
+url = "https://discord.com/invite/X4JWnZnxPb"
+type = "community"
+
+[[b00t.references]]
+name = "Chat with Docs"
+url = "https://chatg.pt/DWjSBZn"
+type = "support"
+
+[[b00t.references]]
+name = "DeepLearning.AI Course - Practical Multi-AI Agents"
+url = "https://www.deeplearning.ai/short-courses/practical-multi-ai-agents-and-advanced-use-cases-with-crewai/"
+type = "course"
+
+[[b00t.references]]
+name = "LangChain Blog - CrewAI Unleashed"
+url = "https://blog.langchain.dev/crewai-unleashed-future-of-ai-agent-teams/"
+type = "article"
+
+[[b00t.references]]
+name = "Geeky Gadgets - Build AI Workers"
+url = "https://www.geeky-gadgets.com/build-ai-workers-using-crewai/"
+type = "tutorial"
+
+[[b00t.references]]
+name = "Analytics Vidhya - Agentic Workflow with CrewAI and Groq"
+url = "https://www.analyticsvidhya.com/blog/2024/06/agentic-workflow-with-crewai-and-groq/"
+type = "tutorial"
+
+[[b00t.references]]
+name = "YouTube - CrewAI Overview"
+url = "https://www.youtube.com/watch?v=i-txsBoTJtI"
+type = "video"
+
+[[b00t.references]]
+name = "YouTube - Step-by-Step CrewAI Build"
+url = "https://search.app/Emfs"
+type = "video"
+
+[[b00t.references]]
+name = "YouTube - Human-Friendly Adaptable Agent Communities"
+url = "https://youtube.com/watch?v=F3usuxs2p1Y&si=_Jp2zMKpFsjZedMH"
+type = "video"
+
+[[b00t.references]]
+name = "TaskGen - Task-Based Agentic Framework (AutoGen competitor)"
+url = "https://github.com/tanchongmin/agentjo"
+type = "related"
+
+[[b00t.references]]
+name = "Beehive AI - Collaborative AI Applications"
+url = "https://github.com/BeehiveHQ/beehive-ai"
+type = "related"
+
+[b00t.metadata]
+category = "ai-agents"
+tags = ["multi-agent", "crew", "collaboration", "agentic-workflow", "python"]
+maturity = "stable"
+license = "MIT"
+
+# 🤓 Project structure when using crewai create:
+# agents.yaml - Define AI agents and their roles
+# tasks.yaml - Set up agent tasks and workflows
+# .env - Store API keys and environment variables
+# main.py - Project entry point and execution flow
+# crew.py - Crew orchestration and coordination
+# tools/ - Directory for custom agent tools

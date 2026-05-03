@@ -1,0 +1,19 @@
+apiVersion: v2
+name: valkey
+description: A Helm chart for Valkey (Redis-compatible) in-memory data store
+type: application
+version: 1.0.0
+appVersion: "7.2.5"
+home: https://valkey.io
+sources:
+  - https://github.com/valkey-io/valkey
+keywords:
+  - redis
+  - valkey
+  - cache
+  - inmemory
+  - database
+  - key-value
+maintainers:
+  - name: b00t
+    email: b00t@promptexecution.com

@@ -1,0 +1,35 @@
+[b00t]
+name = "qdrant-api"
+type = "api"
+hint = "Qdrant vector database API via local Docker container"
+desires = "latest"
+
+# Protocol specification
+protocol = "qdrant-rest-v1"
+implements = ["vector-db-base"]
+
+# Infrastructure dependencies
+depends_on = ["qdrant.docker"]
+
+# Capability provision
+[b00t.provides]
+capability = "vector-db"
+endpoints = ["/collections", "/points"]
+operations = [
+    "create_collection",
+    "delete_collection",
+    "upsert_points",
+    "search_points",
+    "scroll_points"
+]
+
+# Vector DB features
+[b00t.provides.models]
+features = ["cosine_similarity", "euclidean_distance", "dot_product"]
+max_vector_size = 4096
+
+# Environment variables
+[b00t.env]
+QDRANT_URL = "http://localhost:6333"
+QDRANT_API_KEY = ""
+QDRANT_COLLECTION = "b00t_grok"

@@ -1,0 +1,94 @@
+# Changelog
+All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
+
+- - -
+## 0.7.0 - 2025-08-03
+#### 🐛 Bug fixes
+- b00t-mcp more rusty (#58) - (499f678) - Brian Horakh
+#### 🔧 Miscellaneous
+- update b00t docs - (f342182) - elasticdotventures
+#### 🚀 Features
+- implement multi-method MCP datums with priority-based selection - (c827eba) - elasticdotventures
+- add session memory with get/set/incr/decr operations and README tracking (#56) - (d8b67a3) - Brian Horakh
+
+- - -
+
+## 0.1.2 - 2025-08-01
+#### 🐛 Bug fixes
+- **(cog)** use default template to avoid remote configuration issues - (3c9d305) - elasticdotventures
+- **(cog)** use owner and repository fields for remote template - (0f20690) - elasticdotventures
+- **(cog)** add remote repository URL for changelog generation - (9133ecb) - elasticdotventures
+#### 🚀 Features
+- allow wip: conventional commit - (49d1ca6) - elasticdotventures
+- auto add ._b00t_.toml to .ignore before creating file - (f99f88d) - elasticdotventures
+
+- - -
+
+## 0.1.1 - 2025-07-31
+#### Bug Fixes
+- added stdio (non --stdio) option - (86e4a15) - elasticdotventures
+
+- - -
+
+## 0.1.0 - 2025-07-31
+#### Bug Fixes
+- b00t-mcp has no commands - (8f79209) - elasticdotventures
+- include b00t-mcp workspace member in Docker build - (481f2dd) - elasticdotventures
+- resolve CLI config file path resolution bug (closes #53) - (587fdef) - elasticdotventures
+- bad merge - (099aa1d) - elasticdotventures
+#### Features
+- implement generic command dispatcher for b00t-mcp with full b00t-cli coverage - (d50e3dc) - elasticdotventures
+- cli type, hello_world - (765bd07) - elasticdotventures
+- implement comprehensive b00t init hello-world protocol - (1d13ba1) - elasticdotventures
+- add comprehensive tests for session memory and fix failing unit tests - (0ebb7b6) - elasticdotventures
+- add session memory with get/set/incr/decr operations and README tracking - (392cffd) - elasticdotventures
+- implement kubernetes mcp deployment and cli commands (#48) - (74b76f4) - Brian Horakh
+- create cargo workspace for centralized rust project management (#47) - (a72b488) - Brian Horakh
+- uplift docker and k8s datum types with resource management (#43) - (e5fef61) - Brian Horakh
+- add docker usage documentation (#42) - (b56f8d6) - Brian Horakh
+#### Miscellaneous Chores
+- testing b00t-mcp - (99ad8af) - elasticdotventures
+#### Refactoring
+- modularize b00t-cli main.rs into composable command modules (#50) - (38a4128) - Brian Horakh
+
+- - -
+
+## 0.0.1 - 2025-07-26
+#### Bug Fixes
+- Add uv to PATH in Dockerfile - (fa73bcd) - elasticdotventures
+- Make justfile repo-root more robust for Docker builds - (203f7ce) - elasticdotventures
+- Securely pass GH_TOKEN to Docker build using BuildKit secrets - (35fa9ba) - elasticdotventures
+- Revert gh extension install conditional logic, rely on GH_TOKEN - (dbd0b16) - elasticdotventures
+- Correctly detect Docker build environment in setup.sh - (a981378) - elasticdotventures
+- Skip gh extension install in CI/Docker builds - (7932250) - elasticdotventures
+- Conditionally skip gh extension install in CI if GITHUB_TOKEN is not set - (3dd50b8) - elasticdotventures
+- Use GITHUB_TOKEN directly in setup.sh and remove GH_TOKEN build arg - (0e70d78) - elasticdotventures
+- Pass GH_TOKEN to Docker build for gh CLI authentication - (67ff202) - elasticdotventures
+- install missing dependencies and ensure path for setup.sh - (93614b3) - elasticdotventures
+#### Features
+- add VS Code extension management commands (#29) (#41) - (558c970) - Brian Horakh
+- add set -ex to setup.sh for verbose logging - (88961ff) - elasticdotventures
+- Improve Docker build workflow and update gitignore - (3cb1ff9) - elasticdotventures
+
+- - -
+
+## 0.0.1 - 2025-07-26
+#### Bug Fixes
+- Add uv to PATH in Dockerfile - (fa73bcd) - elasticdotventures
+- Make justfile repo-root more robust for Docker builds - (203f7ce) - elasticdotventures
+- Securely pass GH_TOKEN to Docker build using BuildKit secrets - (35fa9ba) - elasticdotventures
+- Revert gh extension install conditional logic, rely on GH_TOKEN - (dbd0b16) - elasticdotventures
+- Correctly detect Docker build environment in setup.sh - (a981378) - elasticdotventures
+- Skip gh extension install in CI/Docker builds - (7932250) - elasticdotventures
+- Conditionally skip gh extension install in CI if GITHUB_TOKEN is not set - (3dd50b8) - elasticdotventures
+- Use GITHUB_TOKEN directly in setup.sh and remove GH_TOKEN build arg - (0e70d78) - elasticdotventures
+- Pass GH_TOKEN to Docker build for gh CLI authentication - (67ff202) - elasticdotventures
+- install missing dependencies and ensure path for setup.sh - (93614b3) - elasticdotventures
+#### Features
+- add VS Code extension management commands - (666bb32) - elasticdotventures
+- add set -ex to setup.sh for verbose logging - (88961ff) - elasticdotventures
+- Improve Docker build workflow and update gitignore - (3cb1ff9) - elasticdotventures
+
+- - -
+
+Changelog generated by [cocogitto](https://github.com/cocogitto/cocogitto).

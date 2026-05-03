@@ -1,0 +1,20 @@
+[b00t]
+name = "qdrant"
+type = "docker"
+hint = "Qdrant vector database for semantic search and RAG applications"
+desires = "latest"
+
+# Docker-specific fields
+image = "qdrant/qdrant:latest"
+docker_args = [
+    "-p", "6333:6333",
+    "-p", "6334:6334",
+    "-v", "qdrant_storage:/qdrant/storage:z"
+]
+
+# Environment variables
+[b00t.env]
+QDRANT_URL = "http://localhost:6333"
+QDRANT_API_KEY = ""
+QDRANT_GRPC_PORT = "6334"
+QDRANT_HTTP_PORT = "6333"

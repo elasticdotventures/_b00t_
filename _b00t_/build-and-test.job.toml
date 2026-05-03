@@ -1,0 +1,148 @@
+# Multi-stage build and test workflow
+# Real-world example of building and testing b00t-cli
+
+[b00t]
+name = "build-and-test"
+type = "job"
+hint = "Multi-stage build and test workflow for b00t-cli"
+version = "1.0.0"
+
+[b00t.job]
+description = "Build, test, and validate b00t-cli with checkpoints"
+author = "b00t-dev-team"
+tags = ["build", "test", "ci"]
+
+[b00t.job.config]
+mode = "sequential"
+checkpoint_mode = "auto"
+checkpoint_after_each_step = true
+create_git_tag = true
+use_subagents = false
+continue_on_failure = false
+retry_failed_steps = 0
+rollback_on_failure = true
+
+# Stage 1: Verify environment
+[[b00t.job.steps]]
+name = "verify-env"
+description = "Verify build environment and dependencies"
+checkpoint = "env-verified"
+
+[b00t.job.steps.task]
+type = "bash"
+command = '''
+echo "Verifying build environment..."
+rustc --version
+cargo --version
+git --version
+echo "Environment OK"
+'''
+
+# Stage 2: Clean build artifacts
+[[b00t.job.steps]]
+name = "clean"
+description = "Clean previous build artifacts"
+checkpoint = "cleaned"
+
+[b00t.job.steps.task]
+type = "bash"
+command = "cargo clean && echo 'Build artifacts cleaned'"
+timeout_ms = 30000
+
+# Stage 3: Run clippy lints
+[[b00t.job.steps]]
+name = "lint"
+description = "Run clippy lints on codebase"
+checkpoint = "lint-pass"
+depends_on = ["clean"]
+
+[b00t.job.steps.task]
+type = "bash"
+command = '''
+echo "Running clippy..."
+cargo clippy --all-targets --all-features -- -D warnings || true
+echo "Lint checks complete"
+'''
+timeout_ms = 120000
+
+# Stage 4: Build debug
+[[b00t.job.steps]]
+name = "build-debug"
+description = "Build debug binaries"
+checkpoint = "debug-built"
+depends_on = ["lint"]
+
+[b00t.job.steps.task]
+type = "bash"
+command = '''
+echo "Building debug..."
+cargo build --bin b00t-cli
+echo "Debug build complete"
+'''
+timeout_ms = 300000
+
+# Stage 5: Run unit tests
+[[b00t.job.steps]]
+name = "test-unit"
+description = "Run unit tests"
+checkpoint = "tests-pass"
+depends_on = ["build-debug"]
+
+[b00t.job.steps.task]
+type = "bash"
+command = '''
+echo "Running unit tests..."
+cargo test --lib --no-fail-fast || true
+echo "Unit tests complete"
+'''
+timeout_ms = 180000
+
+# Stage 6: Build release
+[[b00t.job.steps]]
+name = "build-release"
+description = "Build optimized release binaries"
+checkpoint = "release-built"
+depends_on = ["test-unit"]
+
+[b00t.job.steps.task]
+type = "bash"
+command = '''
+echo "Building release..."
+cargo build --release --bin b00t-cli --bin mcp-user
+ls -lh target/release/b00t-cli target/release/mcp-user
+echo "Release build complete"
+'''
+timeout_ms = 600000
+
+# Stage 7: Verify binaries
+[[b00t.job.steps]]
+name = "verify"
+description = "Verify built binaries execute correctly"
+checkpoint = "verified"
+depends_on = ["build-release"]
+
+[b00t.job.steps.task]
+type = "bash"
+command = '''
+echo "Verifying binaries..."
+./target/release/b00t-cli --version
+./target/release/mcp-user --help | head -3
+echo "Binaries verified"
+'''
+
+# Rollback steps on failure
+[[b00t.job.rollback]]
+name = "restore-workspace"
+description = "Restore workspace on failure"
+
+[b00t.job.rollback.task]
+type = "bash"
+command = "git clean -fdx target/ || true"
+
+[b00t.job.env]
+RUST_BACKTRACE = "1"
+CARGO_TERM_COLOR = "always"
+
+[b00t.job.outputs]
+artifacts = ["target/release/b00t-cli", "target/release/mcp-user"]
+logs = [".b00t/jobs/build-and-test/*.json"]

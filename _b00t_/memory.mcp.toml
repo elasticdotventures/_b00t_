@@ -1,0 +1,11 @@
+[b00t]
+name = "memory"
+type = "mcp"
+hint = "MCP server"
+
+[[b00t.mcp.stdio]]
+transport = "stdio"
+command = "npx"
+args = ["-y", "@buger/probe-mcp"]
+priority = 0
+requires = ["node"]

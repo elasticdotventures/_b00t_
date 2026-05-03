@@ -1,0 +1,5 @@
+[b00t]
+name = "google-chrome"
+type = "bash"
+hint = "Install Google Chrome browser on Ubuntu"
+script = "ubuntu.🐧/google-chrome.sh"

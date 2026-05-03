@@ -1,0 +1,20 @@
+[b00t]
+name = "postgres"
+type = "docker"
+hint = "PostgreSQL database server via Docker container"
+desires = "16-alpine"
+
+# Docker-specific fields
+image = "postgres:16-alpine"
+docker_args = [
+    "-e", "POSTGRES_PASSWORD=password",
+    "-e", "POSTGRES_DB=testdb", 
+    "-p", "5432:5432",
+    "-v", "postgres_data:/var/lib/postgresql/data"
+]
+
+# Environment variables
+[b00t.env]
+POSTGRES_PASSWORD = ""
+POSTGRES_DB = "testdb"
+POSTGRES_PORT = "5432"

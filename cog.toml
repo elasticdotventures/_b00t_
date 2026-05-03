@@ -1,0 +1,26 @@
+# Cocogitto configuration
+# This config only affects changelog generation and commit type validation
+# Range validation is handled by the justfile commands
+
+ignore_merge_commits = true
+
+[commit_types]
+# Standard conventional commit types
+feat = { changelog_title = "🚀 Features" }
+fix = { changelog_title = "🐛 Bug fixes" }
+docs = { changelog_title = "📚 Documentation" }
+style = { changelog_title = "💅 Style" }
+refactor = { changelog_title = "♻️ Refactor" }
+perf = { changelog_title = "⚡ Performance" }
+test = { changelog_title = "🧪 Tests" }
+build = { changelog_title = "🏗️ Build" }
+ci = { changelog_title = "👷 CI" }
+chore = { changelog_title = "🔧 Miscellaneous" }
+revert = { changelog_title = "⏪ Reverts" }
+
+# WIP commits (will be squashed, should not appear in changelog)
+wip = { changelog_title = "🚧 Work in Progress", omit_from_changelog = true }
+
+[changelog]
+path = "CHANGELOG.md"
+template = "default"

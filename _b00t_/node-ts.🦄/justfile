@@ -1,0 +1,12 @@
+env:
+	source ~/_b00t_/npm.🐳/env.sh
+
+install:
+	#!/usr/bin/env bash
+	# ✅ Safe: prefer corepack (bundled with Node.js >=16.10) to manage pnpm.
+	# corepack|pnpm is the preferred package manager; bun as optional fast alternative.
+	if command -v corepack >/dev/null 2>&1; then \
+	  corepack enable pnpm && corepack install -g pnpm@latest; \
+	else \
+	  npm install -g pnpm; \
+	fi

@@ -1,0 +1,62 @@
+# Justfile for embed_anything semantic search integration
+
+# Install embed_anything with GPU support if available
+install:
+    #!/bin/bash
+    set -euo pipefail
+    echo "📦 Installing embed_anything..."
+    if command -v uv &> /dev/null; then
+        echo "Using uv..."
+        uv pip install embed-anything-gpu || uv pip install embed-anything
+    else
+        echo "Using pip3..."
+        pip3 install embed-anything-gpu || pip3 install embed-anything
+    fi
+    echo "✅ embed_anything installed"
+
+# Check embed_anything version
+version:
+    @python3 -c "import embed_anything; print(f'embed_anything version: {embed_anything.__version__}')" || echo "❌ Not installed"
+
+# Embed all datums and save to JSON
+embed-all output="datum_embeddings.json":
+    #!/bin/bash
+    set -euo pipefail
+    echo "🧠 Embedding all b00t datums..."
+    python3 ~/.b00t/_b00t_/python.🐍/embed/semantic_datum_search.py \
+        --embed-all \
+        --output {{output}}
+    echo "✅ Saved embeddings to {{output}}"
+
+# Semantic search across datums
+search query top_k="5":
+    #!/bin/bash
+    set -euo pipefail
+    if [ -f "datum_embeddings.json" ]; then
+        echo "📂 Using cached embeddings..."
+        python3 ~/.b00t/_b00t_/python.🐍/embed/semantic_datum_search.py \
+            --query "{{query}}" \
+            --input datum_embeddings.json \
+            --top-k {{top_k}}
+    else
+        echo "🔄 Generating embeddings on-the-fly..."
+        python3 ~/.b00t/_b00t_/python.🐍/embed/semantic_datum_search.py \
+            --query "{{query}}" \
+            --top-k {{top_k}}
+    fi
+
+# Search with custom model
+search-model query model top_k="5":
+    python3 ~/.b00t/_b00t_/python.🐍/embed/semantic_datum_search.py \
+        --query "{{query}}" \
+        --model "{{model}}" \
+        --top-k {{top_k}}
+
+# Test with example query
+test:
+    just search "how to install kubernetes" 3
+
+# Clean cached embeddings
+clean:
+    rm -f datum_embeddings.json
+    @echo "✅ Cleaned cached embeddings"

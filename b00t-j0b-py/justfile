@@ -1,0 +1,82 @@
+# b00t-j0b-py justfile - Task runner for web crawler system
+
+# Default recipe lists available commands
+default:
+    @just --list
+
+# Install dependencies and setup environment
+install:
+    uv sync
+    @echo "✅ Dependencies installed"
+    @if [ ! -f .env ]; then cp .env.example .env && echo "📄 Created .env file - configure as needed"; fi
+
+# Run all tests
+test:
+    uv run pytest tests/ -v
+
+# Run tests with coverage
+test-cov:
+    uv run pytest tests/ -v --cov=b00t_j0b_py --cov-report=term-missing
+
+# Run linting checks
+lint:
+    uv run ruff check src/
+    uv run mypy src/
+
+# Format code
+fmt:
+    uv run ruff format src/
+
+# Check system status and available parsers
+status:
+    uv run b00t-j0b parsers
+    @echo ""
+    uv run b00t-j0b status
+
+# Test crawl of GitHub repo (sync mode)
+test-github:
+    uv run b00t-j0b crawl https://github.com/microsoft/vscode --sync
+
+# Test crawl of PyPI package (sync mode)
+test-pypi:
+    uv run b00t-j0b crawl https://pypi.org/project/requests --sync
+
+# Test crawl of NPM package (sync mode)
+test-npm:
+    uv run b00t-j0b crawl https://npmjs.com/package/react --sync
+
+# Start worker in burst mode (processes queued jobs then exits)
+worker-burst:
+    uv run b00t-j0b worker --burst
+
+# Start worker daemon (keeps running)
+worker:
+    uv run b00t-j0b worker
+
+# Clear all queues (with confirmation)
+clear-queues:
+    uv run b00t-j0b clear-queue --queue default
+    uv run b00t-j0b clear-queue --queue high
+    uv run b00t-j0b clear-queue --queue low
+
+# Run digestive crawl on a test site
+digest-test:
+    uv run b00t-j0b digest https://httpbin.org --depth 2 --sync
+
+# Build package
+build:
+    uv build
+
+# Clean build artifacts
+clean:
+    rm -rf dist/ build/ *.egg-info/
+    find . -name "*.pyc" -delete
+    find . -name "__pycache__" -delete
+
+# Run quick integration test
+integration-test: install
+    @echo "🧪 Running integration test..."
+    uv run b00t-j0b parsers
+    uv run b00t-j0b crawl https://httpbin.org/html --sync
+    uv run b00t-j0b status
+    @echo "✅ Integration test passed!"

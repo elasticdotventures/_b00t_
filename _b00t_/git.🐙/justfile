@@ -1,0 +1,27 @@
+# Git 🐙 Version Control
+# b00t git workflows and configuration
+# 🤓: TURBO AGILE - checkpoint often, clean history later
+
+# Install git and essential git tools
+install:
+    #!/bin/bash
+    if ! command -v git >/dev/null 2>&1; then
+        echo "📦 Installing git..."
+        sudo apt-get update
+        sudo apt-get install -y git
+    else
+        echo "✅ git already installed: $(git --version)"
+    fi
+    # Install git-delta (better diff viewer)
+    if ! command -v delta >/dev/null 2>&1; then
+        cargo install git-delta || true
+    fi
+    # Install gh (GitHub CLI)
+    if ! command -v gh >/dev/null 2>&1 && command -v curl >/dev/null 2>&1; then
+        curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | sudo dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg
+        sudo chmod go+r /usr/share/keyrings/githubcli-archive-keyring.gpg
+        echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null
+        sudo apt update
+        sudo apt install -y gh
+    fi
+    echo "✅ Git tools installed"

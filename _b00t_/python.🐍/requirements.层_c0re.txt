@@ -1,0 +1,16 @@
+##* * * * * *//
+#
+#  c0de is the development environment
+#  it includes 
+#       requirements.层_test.txt
+#  which in turn calls: 
+#       requirements.txt
+#
+##* * * * * *\\
+docopt
+
+numpy
+
+-r requirements.层_test.txt
+
+

@@ -1,0 +1,2 @@
+winget search Microsoft.PowerShell
+

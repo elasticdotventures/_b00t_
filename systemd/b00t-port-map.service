@@ -1,0 +1,31 @@
+[Unit]
+Description=b00t Port Mapping Service (80->8080, 443->8443)
+Documentation=man:socat(1)
+After=network.target
+Wants=network.target
+Conflicts=apache2.service nginx.service
+
+[Service]
+Type=exec
+User=root
+Group=root
+ExecStart=${DOTFILES_DIR}/scripts/port-map.sh
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+# Security hardening
+NoNewPrivileges=false
+PrivateTmp=true
+ProtectSystem=false
+ProtectHome=false
+CapabilityBoundingSet=CAP_NET_BIND_SERVICE
+AmbientCapabilities=CAP_NET_BIND_SERVICE
+
+# Network security
+PrivateNetwork=false
+RestrictAddressFamilies=AF_INET AF_INET6
+
+[Install]
+WantedBy=multi-user.target

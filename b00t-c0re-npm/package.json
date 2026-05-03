@@ -1,0 +1,44 @@
+{
+  "name": "b00t-c0re",
+  "version": "0.1.0",
+  "description": "🥾 b00t-c0re - Core Rust functionality with WebAssembly bindings for b00t framework",
+  "main": "pkg/b00t_c0re.js",
+  "types": "pkg/b00t_c0re.d.ts",
+  "files": [
+    "pkg",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "wasm-pack build --target nodejs --scope promptexecution",
+    "build:web": "wasm-pack build --target web --scope promptexecution",
+    "test": "wasm-pack test --node",
+    "prepublishOnly": "npm run build"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/elasticdotventures/dotfiles.git",
+    "directory": "b00t-c0re"
+  },
+  "keywords": [
+    "b00t",
+    "rust",
+    "wasm",
+    "webassembly",
+    "core",
+    "cli",
+    "framework",
+    "promptexecution"
+  ],
+  "author": "Brian Horakh <brian@promptexecution.com>",
+  "license": "MIT",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "devDependencies": {
+    "wasm-pack": "^0.12.1"
+  }
+}

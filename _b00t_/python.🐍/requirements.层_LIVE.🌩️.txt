@@ -1,0 +1,7 @@
+##* * * * * *//
+# TEST
+##* * * * * *\\
+
+-r requirements.txt
+pytest>=4.2.0
+

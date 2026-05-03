@@ -1,0 +1,26 @@
+[b00t]
+name = "beta"
+type = "agent"
+hint = "Pragmatic agent specializing in Docker & deployment"
+
+[b00t.agent]
+pid = "01QR79jKinPGYGza4dPvj3jK"
+branch = "claude/multi-agent-boot-poc-01QR79jKinPGYGza4dPvj3jK"
+model = "claude-sonnet-4-5"
+skills = ["docker", "deploy", "kubernetes", "ci-cd"]
+personality = "pragmatic"
+humor = "low"
+role = "specialist"
+
+[b00t.agent.ipc]
+socket = "/tmp/b00t/agents/beta.sock"
+pubsub = true
+protocol = "msgpack"
+
+[b00t.agent.crew]
+role = "specialist"
+captain = false
+
+[b00t.env]
+AGENT_ID = "beta"
+AGENT_SKILLS = "docker,deploy,kubernetes,ci-cd"

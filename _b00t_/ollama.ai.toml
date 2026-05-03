@@ -1,0 +1,24 @@
+[b00t]
+name = "ollama"
+type = "ai"
+hint = "Self-hosted Ollama server for local AI inference"
+
+[models.llama2]
+capabilities = "text,chat"
+context_length = 4096
+cost_per_token = 0.0
+
+[models.codellama]
+capabilities = "code,chat"
+context_length = 16384
+cost_per_token = 0.0
+
+[models.mistral]
+capabilities = "text,chat,multilingual"
+context_length = 8192
+cost_per_token = 0.0
+
+[env]
+OPENAI_API_BASE = "http://localhost:11434"
+OPENAI_API_KEY = ""
+OLLAMA_HOST = "localhost:11434"

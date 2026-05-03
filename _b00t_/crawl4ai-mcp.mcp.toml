@@ -1,0 +1,14 @@
+[b00t]
+name = "crawl4ai-mcp"
+type = "mcp"
+hint = "MCP server"
+
+[b00t.env]
+CRAWL4AI_MCP_LOG = "INFO"
+
+[[b00t.mcp.stdio]]
+requires = ["docker"]
+command = "docker"
+transport = "stdio"
+args = ["run", "--rm", "-i", "--volume", "./crawls:/app/crawls", "uysalsadi/crawl4ai-mcp-server:latest"]
+priority = 0

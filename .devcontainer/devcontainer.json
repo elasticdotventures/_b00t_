@@ -1,0 +1,11 @@
+{
+  "name": "Development Container",
+  "image": "ghcr.io/elasticdotventures/dotfiles:latest", // Replace `latest` with the desired tag if needed
+  "features": {},
+  "remoteUser": "vscode", // Optional: Set the default user inside the container
+  "postCreateCommand": "setup.sh", // Optional: Run setup commands after container creation
+  "mounts": [
+    "source=${localWorkspaceFolder},target=/workspace,type=bind"
+  ],
+  "workspaceFolder": "/workspace"
+}

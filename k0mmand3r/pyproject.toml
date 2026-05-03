@@ -1,0 +1,16 @@
+[build-system]
+requires = ["maturin>=1.0,<2.0", "cffi"]
+build-backend = "maturin"
+
+[project]
+name = "k0mmand3r"
+version = "0.1.5"
+authors = [{name="Brian H.", email="<brianh@elastic.ventures>"}]
+license = "MIT"
+readme = "README.md"
+classifiers = [
+    "Programming Language :: Python",
+    "Programming Language :: Rust",
+    "Operating System :: OS Independent",
+]
+

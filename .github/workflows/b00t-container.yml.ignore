@@ -1,0 +1,85 @@
+name: Build and Publish _b00t_ Container
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'setup.sh'
+      - '_b00t_/docker.🐳/Dockerfile'
+      - '.github/workflows/b00t-container.yml.ignore'
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'setup.sh'
+      - '_b00t_/docker.🐳/Dockerfile'
+  schedule:
+    - cron: '0 0 * * 0'  # Weekly build on Sundays at midnight
+  workflow_dispatch:  # Allow manual trigger
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: elasticdotventures/dotfiles
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract Docker metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: type=raw,value=latest
+
+      - name: Use variables
+        run: |
+          echo "repository variable : $REPOSITORY_VAR"
+          echo "organization variable : $ORGANIZATION_VAR"
+          echo "overridden variable : $OVERRIDE_VAR"
+          echo "variable from shell environment : $env_var"
+          echo "github ref: ${{ github.ref }}"
+          echo "runner: $RUNNER_OS"
+          #echo "vars.ci: ${{ vars.CI }}"
+          #echo "env.ci: ${{ env.CI }}"
+          echo "ci: $CI"
+        env:
+          REPOSITORY_VAR: ${{ vars.REPOSITORY_VAR }}
+          ORGANIZATION_VAR: ${{ vars.ORGANIZATION_VAR }}
+          OVERRIDE_VAR: ${{ vars.OVERRIDE_VAR }}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        env:
+          BUILD_CI: true
+        with:
+          context: .
+          file: _b00t_/docker.🐳/Dockerfile
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            CI=${{ env.BUILD_CI }}
+            GITHUB_ACTIONS=${{ github.actions }}
+          secrets: |
+            GH_TOKEN=${{ github.token }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

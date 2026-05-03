@@ -1,0 +1,65 @@
+#!/bin/bash
+# forward-port.sh
+set shell := ["ksh", "-cu"]
+# set -e
+
+# socat exec
+tcp-forward $BIND_ADDR="0.0.0.0" $TARGET_ADDR="sm3lly.lan" $PORT="11434":
+	@echo "Forwarding $BIND_ADDR:$PORT to $TARGET_ADDR:$PORT..."
+	exec socat TCP-LISTEN:{{PORT}},bind={{BIND_ADDR}},reuseaddr,fork TCP:{{TARGET_ADDR}}:{{PORT}}
+
+python-server:
+    python3 -m http.server 8000
+
+watch-logs:
+    tail -f /data/data/com.termux/files/home/server/logs.txt
+
+node-dev:
+    cd ~/projects/app && npm run dev
+
+# https://www.cyberciti.biz/tips/nohup-execute-commands-after-you-exit-from-a-shell-prompt.html
+# nohup command-name &
+show-jobs:
+	just -l
+
+# stdbuf Run COMMAND, with modified buffering operations for its standard streams
+stdbuf:
+	stdbuf -oL -eL -i0 "$@"
+
+background-job-example +pause:
+	# Run a command in the background and pause it
+	#!/usr/bin/env bash
+	@just stdbuf "$@" || sleep 86400 &
+	# attach socat to a background job
+	# TODO send those logs to a streaming server
+	# TODO use mcp to access the logs
+	# appears in jobs
+	disown -r # all running jobs
+	disown %1 #
+	disown -h %1 # wait for sighup
+
+
+
+
+termux:
+	# Android Shell
+	# Termux specific commands
+	#termux-wake-lock
+	#termux-wake-unlock
+	#termux-toast "Hello from Termux!"https://wiki.termux.com/wiki/Termux:API
+
+	# /system/bin/am broadcast ${BROADCAST_RECEIVER} --es socket_input ${INPUT_SOCKET} --es socket_output ${OUTPUT_SOCKET}
+
+	# termux-api (access sensors, location, etc.)
+	# am, pm, dumpsys wrappers
+	# socat, netcat, or slirp to simulate networking
+	# proot to simulate file system jail
+
+# screen:
+#b00t sesh -S pirate-session:
+#	# Start a detached screen session named "pirate-session"
+#	screen -S pirate-session -d -m
+
+#sesh-resume:
+#	# Resume a detached screen session
+#	screen -r
