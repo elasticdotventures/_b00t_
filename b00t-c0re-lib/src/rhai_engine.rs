@@ -252,11 +252,9 @@ impl RhaiEngine {
         );
 
         // Knowledge graph query (stub) — probes irontology-mcp via raw stdio pipe.
-        // ⚠️  This does NOT form a JSON-RPC request; `query_val` is piped as raw text.
-        // Returns `{}` silently on any error. Intended as a placeholder until proper
+        // ⚠️  This does NOT form a JSON-RPC request; query_val is piped as raw text.
+        // Returns {} silently on any error. Intended as placeholder until proper
         // JSON-RPC framing is added to the irontology bridge.
-        // kg_query("subject", "b00t:datum/github-mcp") -> raw stdout from b00t-mcp
-        // kg_query("facts", "b00t:hasStatus") -> raw stdout from b00t-mcp
         engine.register_fn(
             "kg_query",
             |query_kind: &str, query_val: &str| -> Result<String, Box<rhai::EvalAltResult>> {

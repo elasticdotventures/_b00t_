@@ -2,6 +2,7 @@ use anyhow::{Context, Result};
 use chrono::{DateTime, Utc};
 use regex::Regex;
 use std::io::Write;
+use std::process;
 
 /// ANSI color helpers — auto-disable when stdout is not a terminal.
 pub mod ansi {
@@ -281,8 +282,7 @@ pub struct BootDatum {
 
     // Gate preconditions — late-binding conditions evaluated by install pipeline.
     // Each gate is a struct with one or more condition kinds; all must pass.
-    // ⚠️  TODO: gate evaluation is not yet wired into install_datum(); schema only.
-    //    Once wired, call gate_check() for each GateSpec before installing deps.
+<<<<<<< HEAD
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub gate: Option<Vec<GateSpec>>,
 
@@ -1124,6 +1124,8 @@ pub fn get_mcp_toml_files(path: &str) -> Result<Vec<String>> {
 
 pub fn mcp_list(path: &str, json_output: bool, filter: McpListFilter) -> Result<()> {
     use anyhow::Context;
+    use std::sync::atomic::{AtomicBool, Ordering};
+    use std::sync::Arc;
 
     let mcp_files = get_mcp_toml_files(path)?;
     let total_count = mcp_files.len();
