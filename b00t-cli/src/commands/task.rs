@@ -95,7 +95,7 @@ pub struct TaskStore {
 
 // ── Storage helpers ────────────────────────────────────────────────────────────
 
-fn tasks_path() -> PathBuf {
+pub(crate) fn tasks_path() -> PathBuf {
     // B00T_TASKS_PATH env override — used in tests to avoid CWD conflicts
     if let Ok(p) = std::env::var("B00T_TASKS_PATH") {
         return PathBuf::from(p);
@@ -107,7 +107,7 @@ fn tasks_path() -> PathBuf {
     local // will be created on first write
 }
 
-fn load_store() -> Result<TaskStore> {
+pub(crate) fn load_store() -> Result<TaskStore> {
     let path = tasks_path();
     if !path.exists() {
         // Transparent migration from .taskmaster — only when not overridden by env

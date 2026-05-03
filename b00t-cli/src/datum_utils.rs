@@ -3,9 +3,11 @@
 //! Provides recursive datum discovery, pattern search, constraint filtering,
 //! and graph export capabilities for the b00t datum system.
 
+pub use crate::VisualizationSpec;
 use crate::{BootDatum, DatumType, UnifiedConfig};
 use anyhow::Result;
 use b00t_c0re_lib::lfmf::DatumLookup;
+use bstr::ByteSlice;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -132,6 +134,129 @@ pub fn get_all_datums_with_paths(
     Ok(datums)
 }
 
+/// Merge `b00t.*` Git attributes into a parsed datum without mutating the datum file.
+///
+/// Example `_b00t_/.gitattributes` entry:
+/// `plantuml.mcp.toml b00t.status=sunset b00t.enabled=false b00t.status_msg=java-too-heavy`
+pub fn apply_git_attributes_to_config(config: &mut UnifiedConfig, datum_path: &Path) {
+    let attrs = match git_b00t_attributes(datum_path) {
+        Ok(attrs) => attrs,
+        Err(_) => return,
+    };
+    if attrs.is_empty() {
+        return;
+    }
+
+    if let Some(value) = attrs.get("status") {
+        config.b00t.status = Some(value.clone());
+    }
+    if let Some(value) = attrs.get("enabled") {
+        config.b00t.enabled = parse_bool_attr(value);
+    }
+    if let Some(value) = attrs.get("status_msg") {
+        config.b00t.status_msg = Some(value.clone());
+    }
+    if let Some(value) = attrs.get("replacement") {
+        config.b00t.replacement = Some(value.clone());
+    }
+    config.b00t.git_attributes.extend(attrs);
+}
+
+fn parse_bool_attr(value: &str) -> Option<bool> {
+    match value {
+        "true" | "1" | "yes" | "on" | "set" => Some(true),
+        "false" | "0" | "no" | "off" | "unset" => Some(false),
+        _ => None,
+    }
+}
+
+fn git_b00t_attributes(datum_path: &Path) -> Result<HashMap<String, String>> {
+    let Some(repo_root) = find_git_worktree_root(datum_path) else {
+        return Ok(HashMap::new());
+    };
+    let relative_path = datum_path
+        .strip_prefix(&repo_root)
+        .unwrap_or(datum_path)
+        .to_string_lossy()
+        .replace('\\', "/");
+    let mut search = gix_attributes::Search::default();
+    let mut collection = gix_attributes::search::MetadataCollection::default();
+    let mut has_attributes = false;
+    for attr_path in gitattributes_chain(&repo_root, datum_path) {
+        let attr_bytes = fs::read(&attr_path)?;
+        search.add_patterns_buffer(
+            &attr_bytes,
+            attr_path,
+            Some(&repo_root),
+            &mut collection,
+            true,
+        );
+        has_attributes = true;
+    }
+    if !has_attributes {
+        return Ok(HashMap::new());
+    }
+
+    let mut outcome = gix_attributes::search::Outcome::default();
+    outcome.initialize(&collection);
+    if !search.pattern_matching_relative_path(
+        relative_path.as_bytes().as_bstr(),
+        gix_attributes::glob::pattern::Case::Sensitive,
+        Some(false),
+        &mut outcome,
+    ) {
+        return Ok(HashMap::new());
+    }
+
+    let mut attrs = HashMap::new();
+    for attr_match in outcome.iter() {
+        let name = attr_match.assignment.name.as_str();
+        if let Some(key) = name.strip_prefix("b00t.") {
+            let value = match attr_match.assignment.state {
+                gix_attributes::StateRef::Set => "set".to_string(),
+                gix_attributes::StateRef::Unset => "unset".to_string(),
+                gix_attributes::StateRef::Unspecified => "unspecified".to_string(),
+                gix_attributes::StateRef::Value(value) => value.as_bstr().to_str_lossy().into_owned(),
+            };
+            attrs.insert(key.to_string(), value);
+        }
+    }
+    Ok(attrs)
+}
+
+fn gitattributes_chain(repo_root: &Path, datum_path: &Path) -> Vec<std::path::PathBuf> {
+    let start = if datum_path.is_dir() {
+        datum_path
+    } else {
+        datum_path.parent().unwrap_or(repo_root)
+    };
+    let mut dirs: Vec<_> = start
+        .ancestors()
+        .take_while(|ancestor| *ancestor != repo_root)
+        .collect();
+    dirs.push(repo_root);
+    dirs.reverse();
+
+    dirs.into_iter()
+        .map(|dir| dir.join(".gitattributes"))
+        .filter(|path| path.exists())
+        .collect()
+}
+
+fn find_git_worktree_root(path: &Path) -> Option<std::path::PathBuf> {
+    let start = if path.is_dir() {
+        path
+    } else {
+        path.parent().unwrap_or_else(|| Path::new("."))
+    };
+    for ancestor in start.ancestors() {
+        if ancestor.join(".git").exists() {
+            return Some(ancestor.to_path_buf());
+        }
+    }
+    None
+}
+
 /// Recursive scanner for datum files
 fn scan_datums_recursive(
     dir: &Path,
@@ -173,7 +298,8 @@ fn scan_datums_recursive(
 
                 // Try to parse as unified config
                 if let Ok(content) = fs::read_to_string(&entry_path) {
-                    if let Ok(config) = toml::from_str::<UnifiedConfig>(&content) {
+                    if let Ok(mut config) = toml::from_str::<UnifiedConfig>(&content) {
+                        apply_git_attributes_to_config(&mut config, &entry_path);
                         // Strip outer extension (.tomllmd / .tomllm / .toml) for datum key.
                         // 🤓 precedence: .tomllmd > .tomllm > .toml.
                         let ext = if filename.ends_with(".tomllmd") {
@@ -1065,6 +1191,70 @@ output = "Building..."
         assert_eq!(usage[0].description, "List recipes");
         assert_eq!(usage[0].command, "just -l");
         assert_eq!(usage[1].output, Some("Building...".to_string()));
+    }
+
+    #[test]
+    fn test_git_attributes_overlay_operational_metadata() {
+        let temp_dir = TempDir::new().unwrap();
+        std::process::Command::new("git")
+            .arg("init")
+            .current_dir(temp_dir.path())
+            .output()
+            .unwrap();
+        create_test_datum_file(
+            temp_dir.path(),
+            "plantuml.mcp.toml",
+            "[b00t]\nname = \"plantuml\"\ntype = \"mcp\"\nhint = \"PlantUML\"\n",
+        );
+        std::fs::write(
+            temp_dir.path().join(".gitattributes"),
+            "plantuml.mcp.toml b00t.status=sunset b00t.enabled=false b00t.status_msg=java-too-heavy b00t.replacement=b00t-viz\n",
+        )
+        .unwrap();
+
+        let datums = get_all_datums_with_paths(temp_dir.path().to_str().unwrap(), Some(0)).unwrap();
+        let (datum, _) = datums.get("plantuml.mcp").unwrap();
+        assert_eq!(datum.status.as_deref(), Some("sunset"));
+        assert_eq!(datum.enabled, Some(false));
+        assert_eq!(datum.status_msg.as_deref(), Some("java-too-heavy"));
+        assert_eq!(datum.replacement.as_deref(), Some("b00t-viz"));
+        assert_eq!(
+            datum.git_attributes.get("status_msg").map(String::as_str),
+            Some("java-too-heavy")
+        );
+    }
+
+    #[test]
+    fn test_nested_git_attributes_overlay_operational_metadata() {
+        let temp_dir = TempDir::new().unwrap();
+        std::process::Command::new("git")
+            .arg("init")
+            .current_dir(temp_dir.path())
+            .output()
+            .unwrap();
+        let b00t_dir = temp_dir.path().join("_b00t_");
+        std::fs::create_dir(&b00t_dir).unwrap();
+        create_test_datum_file(
+            &b00t_dir,
+            "plantuml.mcp.toml",
+            "[b00t]\nname = \"plantuml\"\ntype = \"mcp\"\nhint = \"PlantUML\"\n",
+        );
+        std::fs::write(temp_dir.path().join(".gitattributes"), "* -text\n").unwrap();
+        std::fs::write(
+            b00t_dir.join(".gitattributes"),
+            "plantuml.mcp.toml b00t.status=sunset b00t.enabled=false b00t.status_msg=java-too-heavy b00t.search=exclude\n",
+        )
+        .unwrap();
+
+        let datums = get_all_datums_with_paths(b00t_dir.to_str().unwrap(), Some(0)).unwrap();
+        let (datum, _) = datums.get("plantuml.mcp").unwrap();
+        assert_eq!(datum.status.as_deref(), Some("sunset"));
+        assert_eq!(datum.enabled, Some(false));
+        assert_eq!(datum.status_msg.as_deref(), Some("java-too-heavy"));
+        assert_eq!(
+            datum.git_attributes.get("search").map(String::as_str),
+            Some("exclude")
+        );
     }
 
     // ── tomllmd precedence tests ──────────────────────────────────────────────

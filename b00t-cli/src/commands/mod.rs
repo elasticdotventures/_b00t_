@@ -32,6 +32,7 @@ pub mod tutorial;
 pub mod uninstall;
 pub mod up;
 pub mod version;
+pub mod viz;
 pub mod whatismy;
 
 pub use agent::AgentCommands;
@@ -60,6 +61,7 @@ pub use tutorial::TutorialCommands;
 pub use uninstall::uninstall_datum;
 pub use up::UpArgs;
 pub use version::VersionCommands;
+pub use viz::VizCommands;
 pub use whatismy::WhatismyCommands;
 pub mod task;
 pub use task::TaskCommands;

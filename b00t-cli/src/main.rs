@@ -35,7 +35,7 @@ use b00t_cli::commands::{
     McpCommands, ModelCommands,
     OntologyCommands, SessionCommands, SkillCommands, SoulCommands, StackCommands,
     TaskCommands,
-    TutorialCommands, VersionCommands, WhatismyCommands
+    TutorialCommands, VersionCommands, VizCommands, WhatismyCommands
 
 
 };
@@ -375,6 +375,11 @@ The system will:
     Ontology {
         #[clap(subcommand)]
         ontology_command: OntologyCommands,
+    },
+    #[clap(about = "Visualize b00t graphs using l3dg3rr-shaped scene output")]
+    Viz {
+        #[clap(subcommand)]
+        viz_command: VizCommands,
     },
     #[clap(about = "Tutorial progression tracking for role-based datum onboarding")]
     Tutorial {
@@ -1737,6 +1742,12 @@ async fn main() {
         }
         Some(Commands::Ontology { ontology_command }) => {
             if let Err(e) = ontology_command.execute() {
+                eprintln!("Error: {}", e);
+                std::process::exit(1);
+            }
+        }
+        Some(Commands::Viz { viz_command }) => {
+            if let Err(e) = b00t_cli::commands::viz::handle_viz_command(&cli.path, viz_command) {
                 eprintln!("Error: {}", e);
                 std::process::exit(1);
             }

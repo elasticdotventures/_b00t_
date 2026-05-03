@@ -30,6 +30,11 @@ next-task:
     set -euo pipefail
     echo "Next up: extend Gremlin graph (role/capability edges) and wire GraalVM Gremlin server."
 
+viz-entangle datum="l3dg3rr" format="mermaid":
+    #!/bin/bash
+    set -euo pipefail
+    cargo run -p b00t-cli --bin b00t-cli -- --path _b00t_ viz entangle --datum "{{datum}}" --format "{{format}}"
+
 gremlin-graalvm-build:
     docker build -t graalvm-gremlin:latest docker/graalvm-gremlin
 
