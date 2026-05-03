@@ -34,11 +34,25 @@ pub enum McpCommands {
     },
     #[clap(
         about = "List available MCP server configurations",
-        long_about = "List available MCP server configurations.\n\nExamples:\n  b00t-cli mcp list\n  b00t-cli mcp list --json"
+        long_about = "List available MCP server configurations with status icons and filters.\n\nStatus icons:\n  ▶️  running   📋  installed (not running)   ⏸️  suspended   ❌  not installed / error\n\nWhen the number of servers exceeds the threshold (default: 10, configurable via session or --max-threshold), you MUST provide --search or a filter flag.\n\nFilter Examples:\n  b00t-cli mcp list --search github       # search by name match\n  b00t-cli mcp list --installed            # only installed servers\n  b00t-cli mcp list --is-installed=true    # same, explicit bool\n  b00t-cli mcp list --is-installed=false   # only uninstalled servers\n  b00t-cli mcp list --is-running=true      # only servers currently running\n  b00t-cli mcp list --is-suspended=false   # exclude suspended\n  b00t-cli mcp list --max-threshold 20     # override threshold for this invocation\n  b00t-cli mcp list --all                  # bypass the threshold guard\n  b00t-cli mcp list --json --installed     # JSON output of installed servers\n\nPipe to filter:\n  b00t-cli mcp list --all | grep docker   # find docker-related servers\n  b00t-cli mcp list --all --json | jq '.servers[] | select(.is_running)'  # JSON query"
     )]
     List {
         #[clap(long, help = "Output in JSON format")]
         json: bool,
+        #[clap(long, help = "Search filter — only show servers whose name contains this string (case-insensitive)")]
+        search: Option<String>,
+        #[clap(long, help = "Shorthand: show only installed servers (equivalent to --is-installed=true)")]
+        installed: bool,
+        #[clap(long, help = "Filter by installation status: true=installed, false=uninstalled")]
+        is_installed: Option<bool>,
+        #[clap(long, help = "Filter by running status: true=running, false=not running")]
+        is_running: Option<bool>,
+        #[clap(long, help = "Filter by suspension status: true=suspended, false=not suspended")]
+        is_suspended: Option<bool>,
+        #[clap(long, help = "Override the max-items threshold for this invocation")]
+        max_threshold: Option<i64>,
+        #[clap(long, help = "Bypass the threshold guard and show all servers")]
+        all: bool,
     },
     #[clap(
         about = "Install MCP server to a target (claudecode, vscode, geminicli, dotmcpjson, roocode, codex, stdout)",
@@ -235,7 +249,27 @@ impl McpCommands {
                     }
                 }
             }
-            McpCommands::List { json } => crate::mcp_list(path, *json),
+            McpCommands::List {
+                json,
+                search,
+                installed,
+                is_installed,
+                is_running,
+                is_suspended,
+                max_threshold,
+                all,
+            } => {
+                let effective_installed = *installed || is_installed.unwrap_or(false);
+                let filter = crate::McpListFilter {
+                    search: search.clone(),
+                    is_installed: if *installed { Some(true) } else { *is_installed },
+                    is_running: *is_running,
+                    is_suspended: *is_suspended,
+                    max_threshold: *max_threshold,
+                    bypass_threshold: *all,
+                };
+                crate::mcp_list(path, *json, filter)
+            }
             McpCommands::Install {
                 name,
                 target,

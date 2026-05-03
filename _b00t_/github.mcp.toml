@@ -38,6 +38,18 @@ requires = ["node"]
 transport = "stdio"
 args = ["-y", "@modelcontextprotocol/server-github"]
 
+[[b00t.gate]]
+command = "gh"
+hint = "GitHub CLI (gh) required for auth"
+
+[[b00t.gate]]
+env = "GITHUB_TOOLSETS"
+hint = "Set GITHUB_TOOLSETS in .env (e.g. issues,pull_requests,actions)"
+
+[[b00t.gate]]
+rhai = "command_exists(\"npx\")"
+hint = "npx required to run github-mcp-server"
+
 [[b00t.usage]]
 description = "Run with gh CLI token (avoids storing PAT)"
 command = "GITHUB_PERSONAL_ACCESS_TOKEN=\"$(gh auth token)\" GITHUB_TOOLSETS=\"all\" npx -y github-mcp-server"

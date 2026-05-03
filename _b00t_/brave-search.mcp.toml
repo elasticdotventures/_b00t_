@@ -9,3 +9,7 @@ args = ["-y", "@modelcontextprotocol/server-brave-search"]
 transport = "stdio"
 priority = 0
 requires = ["node"]
+
+[[b00t.gate]]
+env = "BRAVE_API_KEY"
+hint = "BRAVE_API_KEY required in .env (get from dashboard.search.brave.com)"

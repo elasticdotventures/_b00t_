@@ -156,6 +156,15 @@ impl RhaiEngine {
             std::env::set_var(var, value);
         });
 
+        // String utilities
+        engine.register_fn("str_trim", |s: &str| -> String {
+            s.trim().to_string()
+        });
+
+        engine.register_fn("str_downcase", |s: &str| -> String {
+            s.to_lowercase()
+        });
+
         // Logging
         engine.register_fn("log_info", |msg: &str| {
             println!("ℹ️  {}", msg);
@@ -172,6 +181,124 @@ impl RhaiEngine {
         engine.register_fn("log_success", |msg: &str| {
             println!("✅ {}", msg);
         });
+
+        // Gate precondition evaluation
+        // gate_check("command", "docker") → true if docker on PATH
+        // gate_check("file", "~/.aws/credentials") → true if file exists (expands ~)
+        // gate_check("env", "AWS_REGION") → true if env var or .env entry is set
+        // gate_check("rhai", "command_exists(\"docker\")") → evaluates arbitrary rhai
+        engine.register_fn(
+            "gate_check",
+            |kind: &str, spec: &str| -> Result<bool, Box<rhai::EvalAltResult>> {
+                let result = match kind {
+                    "command" => {
+                        Command::new("which")
+                            .arg(spec)
+                            .output()
+                            .map(|o| o.status.success())
+                            .unwrap_or(false)
+                    }
+                    "file" => {
+                        let expanded = if spec.starts_with('~') {
+                            let home = std::env::var("HOME").unwrap_or_default();
+                            Path::new(&home).join(spec.strip_prefix("~/").unwrap_or(spec))
+                        } else {
+                            Path::new(spec).to_path_buf()
+                        };
+                        expanded.exists()
+                    }
+                    "env" => {
+                        let direct = std::env::var(spec);
+                        if direct.is_ok() && !direct.unwrap_or_default().is_empty() {
+                            true
+                        } else {
+                            // check .env at WORKSPACE_ROOT or HOME
+                            let ws = std::env::var("WORKSPACE_ROOT")
+                                .or_else(|_| std::env::var("HOME"))
+                                .unwrap_or_default();
+                            let env_path = Path::new(&ws).join(".env");
+                            if env_path.exists() {
+                                if let Ok(content) = std::fs::read_to_string(&env_path) {
+                                    let prefix = format!("{}=", spec);
+                                    for line in content.lines() {
+                                        if line.trim().starts_with(&prefix) {
+                                            let val = line.trim()[prefix.len()..].trim();
+                                            return Ok(!val.is_empty()
+                                                && !val.starts_with('#'));
+                                        }
+                                    }
+                                }
+                            }
+                            false
+                        }
+                    }
+                    "rhai" => {
+                        // Evaluate arbitrary rhai expression in a fresh sub-engine
+                        let sub_engine = Engine::new();
+                        let ast = sub_engine.compile(spec)
+                            .map_err(|e| format!("gate rhai compile error: {}", e))?;
+                        let result = sub_engine.eval_ast::<bool>(&ast)
+                            .map_err(|e| format!("gate rhai eval error: {}", e))?;
+                        result
+                    }
+                    _ => return Err(format!("unknown gate kind: {}", kind).into()),
+                };
+                Ok(result)
+            },
+        );
+
+        // Knowledge graph query: query irontology MCP server for runtime state
+        // kg_query("subject", "b00t:datum/github-mcp") -> JSON string of facts
+        // kg_query("facts", "b00t:hasStatus") -> array of matching predicates
+        engine.register_fn(
+            "kg_query",
+            |query_kind: &str, query_val: &str| -> Result<String, Box<rhai::EvalAltResult>> {
+                match query_kind {
+                    "subject" | "facts" => {
+                        // Try irontology-mcp via stdio; fallback to empty result
+                        let result = Command::new("sh")
+                            .arg("-c")
+                            .arg(&format!(
+                                "printf '{}' | b00t-mcp --stdio 2>/dev/null || echo '{{}}'",
+                                query_val
+                            ))
+                            .output();
+                        match result {
+                            Ok(output) => Ok(String::from_utf8_lossy(&output.stdout).to_string()),
+                            Err(_) => Ok("{}".to_string()),
+                        }
+                    }
+                    _ => Err(format!("unknown kg_query kind: {}", query_kind).into()),
+                }
+            },
+        );
+
+        // Telemetry: track events to ~/.b00t/telemetry.jsonl
+        // session_track("mcp_install", "github:installed") appends a JSON line
+        engine.register_fn(
+            "session_track",
+            |event: &str, detail: &str| -> Result<(), Box<rhai::EvalAltResult>> {
+                let home = std::env::var("HOME").unwrap_or_default();
+                let dir = std::path::Path::new(&home).join(".b00t");
+                let _ = std::fs::create_dir_all(&dir);
+                let path = dir.join("telemetry.jsonl");
+                use std::io::Write;
+                if let Ok(mut file) = std::fs::OpenOptions::new()
+                    .create(true)
+                    .append(true)
+                    .open(&path)
+                {
+                    let entry = serde_json::json!({
+                        "ts": chrono::Utc::now().to_rfc3339(),
+                        "event": event,
+                        "detail": detail,
+                        "pid": std::process::id(),
+                    });
+                    let _ = writeln!(file, "{}", entry);
+                }
+                Ok(())
+            },
+        );
 
         Ok(())
     }
