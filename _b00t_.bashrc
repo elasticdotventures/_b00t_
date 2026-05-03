@@ -841,6 +841,7 @@ fi
 # 🤓 https://github.com/pixelb/crudini/blob/master/EXAMPLES
 # CRUDINI is used to store b00t config:
 
+: "${SUDO_CMD:=}"
 if n0ta_xfile_📁_好不好 "/usr/bin/crudini" ; then 
     log_📢_记录 "🥳 need crudini to save data, installing now"  
     $SUDO_CMD apt-get install -y crudini bc
