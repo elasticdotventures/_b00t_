@@ -109,12 +109,6 @@ action = "warn"
 message = "🦨 huggingface-cli is deprecated; use: hf download"
 redirect = "hf download"
 
-# --- Parse-time stage guards ---
-[[b00t.hive.guards]]
-pattern = { stage = "pre_parse" }
-action = "block"
-message = "🚫 blocked at parse time"
-
 [[b00t.hive.guards]]
 pattern = "ulimit -n"
 action = "warn"
