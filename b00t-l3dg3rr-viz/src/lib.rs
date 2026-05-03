@@ -7,7 +7,7 @@
 //! render Mermaid or deterministic SVG documentation.
 
 use serde::{Deserialize, Serialize};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 /// Stable visual category shared by l3dg3rr docs and b00t capability graphs.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -237,9 +237,17 @@ impl InvariantGraph {
         out.push_str(r##"<rect width="100%" height="100%" fill="#f8fafc"/>"##);
         out.push_str(r##"<defs><marker id="arrow" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M 0 0 L 10 5 L 0 10 Z" fill="#455a64"/></marker></defs>"##);
 
+        // Build a single O(N) lookup table so edge rendering is O(E) not O(E·N).
+        let node_idx: HashMap<&str, usize> = self
+            .nodes
+            .iter()
+            .enumerate()
+            .map(|(i, n)| (n.id.as_str(), i))
+            .collect();
+
         for edge in &self.edges {
-            let from = self.node_index(&edge.from).unwrap_or(0);
-            let to = self.node_index(&edge.to).unwrap_or(0);
+            let from = node_idx.get(edge.from.as_str()).copied().unwrap_or(0);
+            let to = node_idx.get(edge.to.as_str()).copied().unwrap_or(0);
             let x1 = node_x(from) + 140;
             let x2 = node_x(to);
             let y = 110;
@@ -278,9 +286,6 @@ impl InvariantGraph {
         out
     }
 
-    fn node_index(&self, id: &str) -> Option<usize> {
-        self.nodes.iter().position(|node| node.id == id)
-    }
 }
 
 /// A host system can implement this trait to provide visualization without
