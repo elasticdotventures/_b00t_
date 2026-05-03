@@ -323,13 +323,20 @@ fn node_x(index: usize) -> i32 {
     40 + i32::try_from(index).unwrap_or(0) * 180
 }
 
+/// Produce a collision-free Mermaid node identifier.
+///
+/// Alphanumeric ASCII and `_` are kept verbatim.  Every other byte is
+/// hex-encoded as `_HH` so that `a-b` → `n_a_2db` and `a_b` → `n_a_b`
+/// — distinct, even though both contain a non-alphanumeric separator.
 fn mermaid_id(id: &str) -> String {
     let mut value = String::from("n_");
-    for ch in id.chars() {
-        if ch.is_ascii_alphanumeric() || ch == '_' {
-            value.push(ch);
+    for byte in id.bytes() {
+        if byte.is_ascii_alphanumeric() || byte == b'_' {
+            value.push(byte as char);
         } else {
             value.push('_');
+            value.push(char::from_digit((byte >> 4) as u32, 16).unwrap_or('0'));
+            value.push(char::from_digit((byte & 0xf) as u32, 16).unwrap_or('0'));
         }
     }
     value
@@ -399,5 +406,16 @@ mod tests {
             .with_edge(InvariantEdge::new("a", "a").with_label("retry budget"));
 
         assert_eq!(graph.validate(), Ok(()));
+    }
+
+    #[test]
+    fn mermaid_ids_are_collision_free() {
+        // "a-b" and "a_b" would both map to "n_a_b" with the old naive encoder;
+        // with hex encoding "a-b" becomes "n_a_2db" (dash = 0x2d).
+        assert_ne!(mermaid_id("a-b"), mermaid_id("a_b"));
+        assert_eq!(mermaid_id("a-b"), "n_a_2db");
+        assert_eq!(mermaid_id("a_b"), "n_a_b");
+        // Pure alphanumeric IDs are unchanged.
+        assert_eq!(mermaid_id("datum"), "n_datum");
     }
 }
