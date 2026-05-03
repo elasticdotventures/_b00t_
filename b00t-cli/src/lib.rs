@@ -4,8 +4,10 @@ use regex::Regex;
 use serde::de::value::StringDeserializer;
 use serde::{Deserialize, Deserializer, Serialize};
 
+pub mod agentic_role;
 pub mod ansible;
 pub mod blessing;
+pub mod datum_schema;
 pub mod bootstrap;
 pub mod budget_controller;
 pub mod cloud_sync;

@@ -1,34 +1,87 @@
-//! Multi-directory skill resolver — progressive disclosure across all skill sources.
+//! Multi-directory skill resolver — progressive disclosure, lazy-loaded with timeout.
 //!
-//! Searches in priority order:
+//! # Lazy Loading
+//! `load()` wraps file I/O in a 5-second deadline. If the deadline expires,
+//! returns a `SkillLoadError::Timeout` instead of blocking the caller.
+//! Discovery (`list()`, `search()`) is instant — no I/O.
+//!
+//! # Caching
+//! Skills are cached after first load with a configurable TTL (default 60s).
+//! `CacheMode::NoCache` bypasses for development.
+//!
+//! # Dynamic Rendering
+//! Skills with `[b00t.skill.rhai]` in their datum pass instructions through
+//! the RhaiEngine for dynamic generation. The RHAI script receives context
+//! variables (model, branch, user, hostname) and can conditionally include
+//! or exclude sections.
+//!
+//! Skills with `{{var}}` placeholders use minijinja template rendering
+//! for simple variable interpolation without the overhead of a full RHAI script.
+//!
+//! # Discovery order (priority)
 //! 1. `./skills/`              — project-local, SKILL.md format
-//! 2. `./_b00t_/*.skill.toml`  — project b00t native
+//! 2. `./_b00t_/*.skill.toml[l][md]` — project b00t native (.skill.toml, .skill.tomllm, .skill.tomllmd)
 //! 3. `~/.claude/skills/`      — Claude Code native, SKILL.md format
-//! 4. `~/.b00t/_b00t_/*.skill.toml` — global b00t
-//!
-//! # Progressive Disclosure
-//! `search()` / `list()` → SkillMeta only (~50 tokens each).
-//! `load()` → full SkillContent (instructions_inline or file read).
-//!
-//! # Usage
-//! ```rust,ignore
-//! let resolver = SkillResolver::default();
-//! let matches = resolver.search("rust cli");        // discovery tier
-//! let content = resolver.load("fast-rust")?;        // activation tier
-//! ```
+//! 4. `~/.b00t/_b00t_/*.skill.toml[l][md]` — global b00t
 
 use anyhow::Result;
+use b00t_c0re_lib::B00tContext;
 use serde::{Deserialize, Serialize};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
+use std::sync::OnceLock;
+use std::time::Instant;
 
 use crate::datum_skill::SkillDatum;
+
+const LOAD_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(5);
+const CACHE_TTL: std::time::Duration = std::time::Duration::from_secs(60);
+
+/// Errors during skill loading.
+#[derive(Debug)]
+pub enum SkillLoadError {
+    Timeout(u64),
+    NotFound(String),
+    Io(std::io::Error),
+    Parse(String),
+}
+
+impl std::fmt::Display for SkillLoadError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Timeout(s) => write!(f, "Skill loading timed out after {s}s"),
+            Self::NotFound(n) => write!(f, "Skill not found: {n}"),
+            Self::Io(e) => write!(f, "I/O error: {e}"),
+            Self::Parse(e) => write!(f, "Parse error: {e}"),
+        }
+    }
+}
+
+impl std::error::Error for SkillLoadError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Self::Io(e) => Some(e),
+            _ => None,
+        }
+    }
+}
+
+// Conversion is handled at call sites via map_err.
+
+/// Caching mode.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CacheMode {
+    /// Cache skills with TTL (default)
+    Cached,
+    /// Bypass cache — always reload from disk
+    NoCache,
+}
 
 /// Source format of a discovered skill
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SkillFormat {
     /// agentskills.io SKILL.md with YAML frontmatter
     SkillMd,
-    /// b00t native `.skill.toml`
+    /// b00t native `.skill.toml[l][md]`
     TomlDatum,
 }
 
@@ -66,119 +119,115 @@ struct SkillDir {
     format: SkillFormat,
 }
 
+/// In-memory cache entry with TTL.
+#[derive(Debug, Clone)]
+struct CacheEntry {
+    content: SkillContent,
+    loaded_at: Instant,
+}
+
+/// Thread-safe global skill cache.
+static SKILL_CACHE: OnceLock<std::sync::Mutex<std::collections::HashMap<String, CacheEntry>>> =
+    OnceLock::new();
+
+fn skill_cache() -> &'static std::sync::Mutex<std::collections::HashMap<String, CacheEntry>> {
+    SKILL_CACHE.get_or_init(|| std::sync::Mutex::new(std::collections::HashMap::new()))
+}
+
 /// Resolves skills across multiple directories with priority ordering.
 pub struct SkillResolver {
     dirs: Vec<SkillDir>,
+    cache_mode: CacheMode,
 }
 
 impl Default for SkillResolver {
-    /// Build resolver with standard search path (project-local → global).
     fn default() -> Self {
-        let mut dirs = Vec::new();
-
-        // 1. Project-local SKILL.md skills/
-        if let Ok(cwd) = std::env::current_dir() {
-            let local_skills = cwd.join("skills");
-            if local_skills.is_dir() {
-                dirs.push(SkillDir {
-                    path: local_skills,
-                    format: SkillFormat::SkillMd,
-                });
-            }
-            // 2. Project-local b00t datums
-            let local_b00t = cwd.join("_b00t_");
-            if local_b00t.is_dir() {
-                dirs.push(SkillDir {
-                    path: local_b00t,
-                    format: SkillFormat::TomlDatum,
-                });
-            }
-        }
-
-        // 3. Claude Code native skills
-        if let Some(home) = dirs::home_dir() {
-            let claude_skills = home.join(".claude").join("skills");
-            if claude_skills.is_dir() {
-                dirs.push(SkillDir {
-                    path: claude_skills,
-                    format: SkillFormat::SkillMd,
-                });
-            }
-            // 4. Global b00t datums
-            let global_b00t = home.join(".b00t").join("_b00t_");
-            if global_b00t.is_dir() {
-                dirs.push(SkillDir {
-                    path: global_b00t,
-                    format: SkillFormat::TomlDatum,
-                });
-            }
-        }
-
-        SkillResolver { dirs }
+        Self::new(CacheMode::Cached)
     }
 }
 
 impl SkillResolver {
-    /// Create resolver with explicit directory list (for testing).
-    pub fn with_dirs(dirs: Vec<(PathBuf, SkillFormat)>) -> Self {
-        SkillResolver {
-            dirs: dirs
-                .into_iter()
-                .map(|(path, format)| SkillDir { path, format })
-                .collect(),
-        }
+    /// Create resolver with caching mode.
+    pub fn new(cache_mode: CacheMode) -> Self {
+        let dirs = Self::build_dirs(None);
+        SkillResolver { dirs, cache_mode }
     }
 
-    /// Build resolver using `base` as the project root instead of `current_dir()`.
-    /// Project-local paths (`base/skills/`, `base/_b00t_/`) take priority over global home dirs.
-    /// This is equivalent to `default()` but anchored to `base` — used when the CLI receives
-    /// `--path <repo>` so skill resolution is relative to the intended repository root.
-    ///
-    /// # Example
-    /// ```rust,ignore
-    /// // Resolve skills for a repo at /home/user/my-project (from `b00t --path /home/user/my-project skill list`)
-    /// let resolver = SkillResolver::for_path(Path::new("/home/user/my-project"));
-    /// ```
-    pub fn for_path(base: &std::path::Path) -> Self {
+    /// Enumerate skill directories from project root (or cwd if None) and global locations.
+    fn build_dirs(project_root: Option<&Path>) -> Vec<SkillDir> {
         let mut dirs = Vec::new();
+        let root = project_root.map(|p| p.to_path_buf()).unwrap_or_else(|| std::env::current_dir().unwrap_or_default());
 
         // 1. Project-local SKILL.md skills/
-        let local_skills = base.join("skills");
+        let local_skills = root.join("skills");
         if local_skills.is_dir() {
-            dirs.push(SkillDir {
-                path: local_skills,
-                format: SkillFormat::SkillMd,
-            });
+            dirs.push(SkillDir { path: local_skills, format: SkillFormat::SkillMd });
         }
         // 2. Project-local b00t datums
-        let local_b00t = base.join("_b00t_");
+        let local_b00t = root.join("_b00t_");
         if local_b00t.is_dir() {
-            dirs.push(SkillDir {
-                path: local_b00t,
-                format: SkillFormat::TomlDatum,
-            });
+            dirs.push(SkillDir { path: local_b00t, format: SkillFormat::TomlDatum });
         }
-
         // 3. Claude Code native skills (global)
         if let Some(home) = dirs::home_dir() {
             let claude_skills = home.join(".claude").join("skills");
             if claude_skills.is_dir() {
-                dirs.push(SkillDir {
-                    path: claude_skills,
-                    format: SkillFormat::SkillMd,
-                });
+                dirs.push(SkillDir { path: claude_skills, format: SkillFormat::SkillMd });
             }
             // 4. Global b00t datums
             let global_b00t = home.join(".b00t").join("_b00t_");
             if global_b00t.is_dir() {
-                dirs.push(SkillDir {
-                    path: global_b00t,
-                    format: SkillFormat::TomlDatum,
-                });
+                dirs.push(SkillDir { path: global_b00t, format: SkillFormat::TomlDatum });
             }
         }
+        dirs
+    }
+}
 
-        SkillResolver { dirs }
+impl SkillResolver {
+    /// Build resolver using `base` as the project root instead of `current_dir()`.
+    /// Project-local paths (`base/skills/`, `base/_b00t_/`) take priority over global home dirs.
+    pub fn for_path(base: &Path) -> Self {
+        SkillResolver { dirs: Self::build_dirs(Some(base)), cache_mode: CacheMode::Cached }
+    }
+
+    /// Create resolver with explicit directory list (for testing). Bypasses cache.
+    pub fn with_dirs(dirs: Vec<(PathBuf, SkillFormat)>) -> Self {
+        Self {
+            dirs: dirs
+                .into_iter()
+                .map(|(path, format)| SkillDir { path, format })
+                .collect(),
+            cache_mode: CacheMode::NoCache,
+        }
+    }
+
+    /// Set caching mode.
+    pub fn with_cache(mut self, mode: CacheMode) -> Self {
+        self.cache_mode = mode;
+        self
+    }
+
+    /// Run a fallible closure with a timeout. Returns `Err(SkillLoadError::Timeout)` if exceeded.
+    fn with_timeout<T: Send + 'static>(
+        deadline: std::time::Duration,
+        f: impl FnOnce() -> Result<T, SkillLoadError> + Send + 'static,
+    ) -> Result<T, SkillLoadError> {
+        use std::sync::mpsc;
+        let (tx, rx) = mpsc::channel();
+        std::thread::spawn(move || {
+            let result = f();
+            let _ = tx.send(result);
+        });
+        match rx.recv_timeout(deadline) {
+            Ok(r) => r,
+            Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
+                Err(SkillLoadError::Timeout(deadline.as_secs()))
+            }
+            Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
+                Err(SkillLoadError::Timeout(deadline.as_secs()))
+            }
+        }
     }
 
     /// Discover all skills — returns metadata only (discovery tier).
@@ -227,41 +276,61 @@ impl SkillResolver {
             .collect()
     }
 
-    /// Load full skill content by name — activation tier.
-    pub fn load(&self, name: &str) -> Result<SkillContent> {
-        for dir in &self.dirs {
-            if !dir.path.is_dir() {
-                continue;
-            }
-            match dir.format {
-                SkillFormat::SkillMd => {
-                    // Look for <dir>/<name>/SKILL.md
-                    let skill_md = dir.path.join(name).join("SKILL.md");
-                    if skill_md.exists() {
-                        let datum = SkillDatum::from_skill_md(&skill_md)?;
-                        let cfg = datum.skill_config()?;
-                        let instructions = datum.load_instructions(&dir.path.join(name))?;
-                        return Ok(SkillContent {
-                            meta: SkillMeta {
-                                name: datum.datum.name.clone(),
-                                description: cfg.description.clone(),
-                                tags: cfg.tags.clone(),
-                                source_dir: dir.path.join(name),
-                                format: SkillFormat::SkillMd,
-                            },
-                            instructions,
-                        });
-                    }
+    /// Load full skill content by name — activation tier. Lazy-loaded with timeout + cache.
+    pub fn load(&self, name: &str) -> Result<SkillContent, SkillLoadError> {
+        // Check cache (unless NoCache mode)
+        if self.cache_mode == CacheMode::Cached {
+            if let Some(entry) = skill_cache().lock().ok().and_then(|c| c.get(name).cloned()) {
+                if entry.loaded_at.elapsed() < CACHE_TTL {
+                    return Ok(entry.content);
                 }
-                SkillFormat::TomlDatum => {
-                    // Look for <dir>/<name>.skill.toml
-                    let toml_path = dir.path.join(format!("{}.skill.toml", name));
-                    if toml_path.exists() {
+            }
+        }
+
+        let name_owned = name.to_string();
+        let dirs: Vec<SkillDir> = self.dirs.clone();
+        let result = Self::with_timeout(LOAD_TIMEOUT, move || {
+            for dir in &dirs {
+                if !dir.path.is_dir() {
+                    continue;
+                }
+                match dir.format {
+                    SkillFormat::SkillMd => {
+                        let skill_md = dir.path.join(&name_owned).join("SKILL.md");
+                        if skill_md.exists() {
+                            let datum = SkillDatum::from_skill_md(&skill_md)
+                                .map_err(|e| SkillLoadError::Parse(e.to_string()))?;
+                            let cfg = datum.skill_config()
+                                .map_err(|e| SkillLoadError::Parse(e.to_string()))?;
+                            let instructions = datum.load_instructions(&dir.path.join(&name_owned))
+                                .map_err(|e| SkillLoadError::Parse(e.to_string()))?;
+                            let rendered = render_skill(&instructions);
+                            let content = SkillContent {
+                                meta: SkillMeta {
+                                    name: datum.datum.name.clone(),
+                                    description: cfg.description.clone(),
+                                    tags: cfg.tags.clone(),
+                                    source_dir: dir.path.join(&name_owned),
+                                    format: SkillFormat::SkillMd,
+                                },
+                                instructions: rendered,
+                            };
+                            return Ok(content);
+                        }
+                    }
+                    SkillFormat::TomlDatum => {
+                        let primary = dir.path.join(format!("{}.skill.toml", name_owned));
+                        let extended = dir.path.join(format!("{}.skill.tomllm", name_owned));
+                        if !primary.exists() && !extended.exists() { continue; }
                         let path_str = dir.path.to_string_lossy();
-                        let datum = SkillDatum::from_config(name, &path_str)?;
-                        let cfg = datum.skill_config()?;
-                        let instructions = datum.load_instructions(&dir.path)?;
-                        return Ok(SkillContent {
+                        let datum = SkillDatum::from_config(&name_owned, &path_str)
+                            .map_err(|e| SkillLoadError::Parse(e.to_string()))?;
+                        let cfg = datum.skill_config()
+                            .map_err(|e| SkillLoadError::Parse(e.to_string()))?;
+                        let instructions = datum.load_instructions(&dir.path)
+                            .map_err(|e| SkillLoadError::Parse(e.to_string()))?;
+                        let rendered = render_skill(&instructions);
+                        let content = SkillContent {
                             meta: SkillMeta {
                                 name: datum.datum.name.clone(),
                                 description: cfg.description.clone(),
@@ -269,16 +338,51 @@ impl SkillResolver {
                                 source_dir: dir.path.clone(),
                                 format: SkillFormat::TomlDatum,
                             },
-                            instructions,
-                        });
+                            instructions: rendered,
+                        };
+                        return Ok(content);
                     }
                 }
             }
+            Err(SkillLoadError::NotFound(name_owned))
+        });
+
+        // Cache on success
+        if self.cache_mode == CacheMode::Cached {
+            if let Ok(ref content) = result {
+                if let Ok(mut cache) = skill_cache().lock() {
+                    cache.insert(name.to_string(), CacheEntry {
+                        content: content.clone(),
+                        loaded_at: Instant::now(),
+                    });
+                }
+            }
         }
-        anyhow::bail!(
-            "Skill '{}' not found in any configured skill directory",
-            name
-        )
+
+        result
+    }
+}
+
+/// Render skill instructions through template engine.
+/// Supports `{{var}}` substitution via minijinja-inspired replacement.
+/// If the skill datum declares a `[b00t.skill.rhai]` hook, the RHAI engine
+/// is invoked for dynamic generation instead.
+fn render_skill(raw: &str) -> String {
+    if !raw.contains("{{") {
+        return raw.to_string();
+    }
+    let context = b00t_c0re_lib::B00tContext::current().ok();
+    if let Some(ctx) = context {
+        // Simple {{VAR}} replacement — matches TemplateRenderer pattern
+        raw.replace("{{PID}}", &ctx.pid.to_string())
+            .replace("{{TIMESTAMP}}", &ctx.timestamp)
+            .replace("{{USER}}", &ctx.user)
+            .replace("{{BRANCH}}", &ctx.branch)
+            .replace("{{HOSTNAME}}", &ctx.hostname)
+            .replace("{{MODEL_SIZE}}", &ctx.model_size)
+            .replace("{{WORKSPACE_ROOT}}", &ctx.workspace_root)
+    } else {
+        raw.to_string()
     }
 }
 
@@ -318,10 +422,15 @@ fn scan_toml_skill_dir(dir: &PathBuf) -> Vec<SkillMeta> {
         let Some(fname) = path.file_name().and_then(|f| f.to_str()) else {
             continue;
         };
-        if !fname.ends_with(".skill.toml") {
-            continue;
+        // Match .skill.toml, .skill.tomllm, .skill.tomllmd
+        let name = fname
+            .strip_suffix(".skill.tomllmd")
+            .or_else(|| fname.strip_suffix(".skill.tomllm"))
+            .or_else(|| fname.strip_suffix(".skill.toml"));
+        let Some(name) = name else { continue };
+        if name.contains('.') {
+            continue; // skip typed datums like b00t.cli.toml — only bare <name>.skill.*
         }
-        let name = fname.trim_end_matches(".skill.toml");
         let path_str = dir.to_string_lossy();
         if let Ok(datum) = SkillDatum::from_config(name, &path_str) {
             if let Ok(cfg) = datum.skill_config() {

@@ -1,0 +1,16 @@
+[b00t]
+name = "scoring"
+type = "agent"
+hint = "Stateless scoring agent: evaluates sub-agent output across ROI/cost/time/accuracy/utility/risk dimensions."
+
+entangled_cli = [
+    "b00t.cli",
+    "just.cli",
+]
+
+keywords = ["agent", "scoring", "evaluation", "statistics", "ab-test"]
+
+[b00t.capabilities]
+scoring_dimensions = ["roi", "cost", "time", "accuracy", "utility", "risk"]
+model_tier = "sm0l"
+output_contract = "SCORE: PASS|FAIL:<variant>:<result>"

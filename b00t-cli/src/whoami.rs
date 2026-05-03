@@ -1,3 +1,4 @@
+use crate::agentic_role::resolve_role;
 use crate::entanglement::parse_entanglement_ref;
 use crate::skill_resolver::SkillResolver;
 use crate::{get_config, get_expanded_path, DatumType, UnifiedConfig};
@@ -58,36 +59,30 @@ pub fn whoami(path: &str, role_override: Option<String>, with_skills: bool) -> R
     println!("{}", rendered);
 
     // Append role supplement (AGENTS/--role=<role>.md) BEFORE role datum summary
-    // 🤓 supplement = full AGENTS/--role=*.md content (MCP patterns, crew scaling, etc.)
-    if let Some(role_name) = resolve_role(role_override.clone()) {
-        let supplement_candidates = [
-            std::path::PathBuf::from("AGENTS").join(format!("--role={}.md", role_name)),
-            dirs::home_dir()
-                .unwrap_or_default()
-                .join(".b00t/AGENTS")
-                .join(format!("--role={}.md", role_name)),
-        ];
-        for p in &supplement_candidates {
-            if let Ok(content) = fs::read_to_string(p) {
-                println!("\n{}", content);
-                break;
-            }
+    let role = resolve_role(role_override.clone());
+    let role_name = role.name();
+    let supplement_candidates = [
+        std::path::PathBuf::from("AGENTS").join(format!("--role={}.md", role_name)),
+        dirs::home_dir()
+            .unwrap_or_default()
+            .join(".b00t/AGENTS")
+            .join(format!("--role={}.md", role_name)),
+    ];
+    for p in &supplement_candidates {
+        if let Ok(content) = fs::read_to_string(p) {
+            println!("\n{}", content);
+            break;
         }
     }
 
     // Append role summary from .role.tomllmd / .role.tomllm / .role.toml
-    // and .agent.tomllmd / .agent.tomllm / .agent.toml datum.
-    // 🤓 role datums are executable + introspectable: skills, capabilities, entanglements
-    // .tomllmd currently downgrades to the generic .tomllm/TOML path.
-    if let Some(role) = resolve_role(role_override) {
-        if let Some(role_details) = load_role_datum(&role, path) {
-            print_role_summary(&role_details, path, with_skills);
-        } else {
-            println!(
-                "⚠️ Role datum '{}' not found or missing required fields",
-                role
-            );
-        }
+    if let Some(role_details) = load_role_datum(role_name, path) {
+        print_role_summary(&role_details, path, with_skills);
+    } else {
+        println!(
+            "⚠️ Role datum '{}' not found or missing required fields",
+            role_name
+        );
     }
 
     Ok(())
@@ -118,13 +113,6 @@ enum CapabilityStatus {
     Missing,
     TypeMismatch { found: DatumType },
     InvalidReference,
-}
-
-fn resolve_role(role_override: Option<String>) -> Option<String> {
-    role_override
-        .filter(|r| !r.trim().is_empty())
-        .or_else(|| std::env::var("_B00T_ROLE").ok())
-        .map(|r| r.to_lowercase())
 }
 
 fn load_role_datum(role: &str, path: &str) -> Option<RoleDetails> {
@@ -426,11 +414,48 @@ mod tests {
 
     #[test]
     fn test_resolve_role_prefers_override() {
+        let _guard = ENV_MUTEX.lock().unwrap();
         unsafe {
             std::env::set_var("_B00T_ROLE", "captain");
         }
         let resolved = resolve_role(Some("executive".to_string()));
-        assert_eq!(resolved, Some("executive".to_string()));
+        assert_eq!(resolved, "executive");
+        unsafe {
+            std::env::remove_var("_B00T_ROLE");
+        }
+    }
+
+    #[test]
+    fn test_resolve_role_empty_override_falls_back() {
+        let _guard = ENV_MUTEX.lock().unwrap();
+        unsafe {
+            std::env::set_var("_B00T_ROLE", "operator");
+        }
+        let resolved = resolve_role(Some("".to_string()));
+        assert_eq!(resolved, "operator");
+        unsafe {
+            std::env::remove_var("_B00T_ROLE");
+        }
+    }
+
+    #[test]
+    fn test_resolve_role_defaults_to_worker() {
+        let _guard = ENV_MUTEX.lock().unwrap();
+        unsafe {
+            std::env::remove_var("_B00T_ROLE");
+        }
+        let resolved = resolve_role(None);
+        assert_eq!(resolved, "worker");
+    }
+
+    #[test]
+    fn test_resolve_role_uses_env_var() {
+        let _guard = ENV_MUTEX.lock().unwrap();
+        unsafe {
+            std::env::set_var("_B00T_ROLE", "executive");
+        }
+        let resolved = resolve_role(None);
+        assert_eq!(resolved, "executive");
         unsafe {
             std::env::remove_var("_B00T_ROLE");
         }

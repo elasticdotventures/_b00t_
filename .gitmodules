@@ -40,3 +40,6 @@
 [submodule "vendor/tomllm"]
 	path = vendor/tomllm
 	url = https://github.com/PromptExecution/tomllm.git
+[submodule "vendor/opencode-b00t"]
+	path = vendor/opencode-b00t
+	url = https://github.com/PromptExecution/opencode-b00t.git

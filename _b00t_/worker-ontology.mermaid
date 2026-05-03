@@ -1,0 +1,174 @@
+```mermaid
+graph TD
+    %% 🥾 b00t worker agent start sequence — l3dg3rr ontological phygital-twin graph
+    %% Each node is a select-to-interact phygital-twin status point
+    %% Generated for: b00t whoami --role=worker
+
+    subgraph ENTRY["🚪 Entry — b00t whoami"]
+        A1["b00t whoami<br/>(no --role)"]:::entry
+        A2["bash b00t() → b00t-cli"]:::entry
+        A3["clap: Commands::Whoami<br/>role: None"]:::entry
+    end
+
+    subgraph RESOLVE["🎭 Role Resolution"]
+        B1["resolve_role(None)"]:::resolve
+        B2["_B00T_ROLE env?<br/>→ not set"]:::resolve
+        B3["→ default: 'worker'"]:::resolve_d
+        B4["resolve_role → Some('worker')"]:::resolve
+    end
+
+    subgraph TEMPLATE["📄 AGENT.md Template"]
+        C1["read _b00t_/AGENT.md"]:::template
+        C2["B00tContext::current()"]:::template
+        C2a["PID: process::id()"]:::ctx
+        C2b["TIMESTAMP: Utc::now()"]:::ctx
+        C2c["BRANCH: git rev-parse"]:::ctx
+        C2d["HOSTNAME / USER / MODEL"]:::ctx
+        C3["TemplateRenderer::render()"]:::template
+        C4["replace {{PID}}, {{TIMESTAMP}}…"]:::template
+        COUT["📤 Stage A: Rendered template → stdout"]:::output
+    end
+
+    subgraph SUPPLEMENT["📋 Stage B: Role Supplement"]
+        D1["resolve_role → Some('worker')"]:::supplement
+        D2["read AGENTS/--role=worker.md"]:::supplement
+        D2a["Mission: default worker agent"]:::supp
+        D2b["Phygital-twin ontology graph"]:::supp
+        D2c["A/B experiment dispatch pattern"]:::supp
+        D2d["Governance safety gates"]:::supp
+        D2e["Stateless scoring contract"]:::supp
+        D2f["Cognitive tier routing"]:::supp
+        DOUT["📤 Supplement → stdout"]:::output
+    end
+
+    subgraph DATUM["⚙️ Stage C: Role Datum"]
+        E1["load_role_datum('worker')"]:::datum
+        E2["find worker.role.toml"]:::datum
+        E3["parse RoleDetails"]:::datum
+        E3a["skills: [worker-execution,<br/>ab-experiment-dispatch, …]"]:::det
+        E3b["compliance: [governance-gate,<br/>structured-status, …]"]:::det
+        E3c["entangled_agents: [experiment-controller,<br/>scoring]"]:::det
+        E3d["agent_hooks: [agent.start,<br/>experiment.dispatch, …]"]:::det
+        E3e["phygital: node_type=worker-agent<br/>state_machine=[7 states]"]:::det
+        E3f["ab_experiment: [control/treatment,<br/>6 scoring dims]"]:::det
+        E3g["governance: [4 safety gates,<br/>audit_log]"]:::det
+    end
+
+    subgraph CAPCHECK["🩺 Capability Check"]
+        F1["experiment-controller.agent"]:::cap
+        F2["scoring.agent"]:::cap
+        F3["b00t.cli"]:::cap
+        F4["b00t-mcp.mcp"]:::cap
+        F5["context7.mcp"]:::cap
+        FCHECK{"all ready?"}:::gate
+        FOK["✅ All capabilities ready"]:::cap_ok
+        FMISS["❌ Missing capability"]:::cap_miss
+    end
+
+    subgraph OUTPUT["📤 Final Output"]
+        G1["AGENT.md rendered identity"]:::final
+        G2["Worker supplement text"]:::final
+        G3["🎭 Role: worker + 💡 hint"]:::final
+        G4["🧠 Skills summary"]:::final
+        G5["⚖️ Compliance rules"]:::final
+        G6["🩺 Capability results"]:::final
+        GALL["Full whoami → stdout"]:::final_ok
+    end
+
+    subgraph PHYGITAL["🔄 Phygital-Twin Ontology"]
+        H1["node_id: worker-<session>"]:::phy
+        H2["state: idle|dispatching|…"]:::phy
+        H3["last_heartbeat: ISO-8601"]:::phy
+        H4["gate_result: pass|block|warn"]:::phy
+        H5["experiment_id: <optional>"]:::phy
+    end
+
+    subgraph GOVERNANCE["🛡️ Governance Safety Gate"]
+        I1["validate-input-sanitization"]:::gate_node
+        I2["check-credential-exposure"]:::gate_node
+        I3["verify-output-contract"]:::gate_node
+        I4["rate-limit-check"]:::gate_node
+        ILOG[".b00t/worker-audit.jsonl"]:::audit
+    end
+
+    subgraph EXPERIMENT["🧪 A/B Experiment Dispatch"]
+        J1["ExperimentConfig"]:::exp
+        J2["control prompt variant"]:::exp_v
+        J3["treatment prompt variant"]:::exp_v
+        J4["dispatch both in parallel"]:::exp
+        J5["experiment-controller.agent"]:::exp
+        J6["collect results (timeout: 120s)"]:::exp
+        J7["scoring.agent (sm0l tier)"]:::exp
+        J8["score: ROI/COST/TIME/ACC/UTIL/RISK"]:::exp
+        J9["compute deltas"]:::exp
+        J10["recommendation"]:::exp_d
+    end
+
+    %% ── edges ──
+    A1 --> A2 --> A3 --> B1
+    B1 --> B2 --> B3 --> B4
+    B4 --> C1 --> C2
+    C2 --> C2a & C2b & C2c & C2d
+    C2a --> C3
+    C2b --> C3
+    C2c --> C3
+    C2d --> C3
+    C3 --> C4 --> COUT
+
+    B4 --> D1 --> D2
+    D2 --> D2a & D2b & D2c & D2d & D2e & D2f
+    D2a --> DOUT
+    D2b --> DOUT
+    D2c --> DOUT
+    D2d --> DOUT
+    D2e --> DOUT
+    D2f --> DOUT
+
+    B4 --> E1 --> E2 --> E3
+    E3 --> E3a & E3b & E3c & E3d & E3e & E3f & E3g
+
+    E3c --> F1 & F2
+    E3a --> F3
+    E3g --> F4 & F5
+    F1 & F2 & F3 & F4 & F5 --> FCHECK
+    FCHECK -->|all good| FOK
+    FCHECK -->|missing| FMISS
+
+    COUT & DOUT & E3 & FOK --> G1 & G2 & G3 & G4 & G5 & G6
+    G1 & G2 & G3 & G4 & G5 & G6 --> GALL
+
+    GALL --> H1 & H2 & H3 & H4 & H5
+    H1 & H2 & H3 & H4 & H5 --> I1 --> I2 --> I3 --> I4
+    I4 --> ILOG
+
+    ILOG --> J1
+    J1 --> J2 & J3
+    J2 & J3 --> J4
+    J4 --> J5 --> J6
+    J6 --> J7 --> J8
+    J8 --> J9 --> J10
+
+    %% ── styles ──
+    classDef entry fill:#4fc3f7,stroke:#0288d1,color:#fff
+    classDef resolve fill:#66bb6a,stroke:#388e3c,color:#fff
+    classDef resolve_d fill:#ffa726,stroke:#f57c00,color:#fff
+    classDef template fill:#ab47bc,stroke:#7b1fa2,color:#fff
+    classDef ctx fill:#ce93d8,stroke:#7b1fa2,color:#333
+    classDef output fill:#26c6da,stroke:#00838f,color:#fff
+    classDef supplement fill:#42a5f5,stroke:#1565c0,color:#fff
+    classDef supp fill:#90caf9,stroke:#1565c0,color:#333
+    classDef datum fill:#ef5350,stroke:#c62828,color:#fff
+    classDef det fill:#ef9a9a,stroke:#c62828,color:#333
+    classDef cap fill:#78909c,stroke:#37474f,color:#fff
+    classDef cap_ok fill:#66bb6a,stroke:#2e7d32,color:#fff
+    classDef cap_miss fill:#ef5350,stroke:#c62828,color:#fff
+    classDef gate fill:#ffa726,stroke:#e65100,color:#fff
+    classDef final fill:#26c6da,stroke:#00838f,color:#fff
+    classDef final_ok fill:#66bb6a,stroke:#2e7d32,color:#fff
+    classDef phy fill:#78909c,stroke:#37474f,color:#fff
+    classDef gate_node fill:#ff7043,stroke:#bf360c,color:#fff
+    classDef audit fill:#8d6e63,stroke:#4e342e,color:#fff
+    classDef exp fill:#7c4dff,stroke:#4527a0,color:#fff
+    classDef exp_v fill:#b388ff,stroke:#4527a0,color:#333
+    classDef exp_d fill:#ffd54f,stroke:#f57f17,color:#333
+```

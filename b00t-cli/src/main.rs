@@ -376,7 +376,7 @@ The system will:
         #[clap(subcommand)]
         ontology_command: OntologyCommands,
     },
-    #[clap(about = "Visualize b00t graphs using l3dg3rr-shaped scene output")]
+    #[clap(about = "Visualize b00t graphs using ledgrrr-shaped scene output (l3dg3rr proto)")]
     Viz {
         #[clap(subcommand)]
         viz_command: VizCommands,
@@ -386,13 +386,52 @@ The system will:
         #[clap(subcommand)]
         tutorial_command: TutorialCommands,
     },
+    #[clap(about = "Validate t00n-serialized FOCUS records against reqif.yaml via sm0l model")]
+    Validate {
+        #[clap(flatten)]
+        validate_args: b00t_cli::commands::validate::ValidateArgs,
+    },
+    #[clap(about = "Dispatch A/B experiments with parallel sub-agents and stateless scoring")]
+    Experiment {
+        #[clap(subcommand)]
+        experiment_command: ExperimentCommands,
+    },
     #[clap(
         about = "Execute command with guard enforcement and broad-authority audit log",
         long_about = "Audited execution: Allow→run, Warn→run with warning, Block→reject first time / force on re-submit within 5min.\nAll executions logged to ~/.b00t/exec-log.jsonl.\n\nUse --sleep=<duration> for background execution (returns immediately)."
     )]
     Exec(b00t_cli::commands::exec::ExecArgs),
+    #[clap(about = "Schema datum management (generate, validate)")]
+    Schema {
+        #[clap(subcommand)]
+        schema_command: SchemaSubcommands,
+    },
     #[clap(about = "Killswitch: terminate upper agent instance and return CLI to prompt")]
     Quit(b00t_cli::commands::quit::QuitArgs),
+}
+
+#[derive(clap::Parser, Clone)]
+pub enum SchemaSubcommands {
+    #[clap(about = "Generate focus.schema.tomllmd from FocusSchema code")]
+    Generate {
+        #[clap(flatten)]
+        args: b00t_cli::datum_schema::SchemaGenerateArgs,
+    },
+}
+
+#[derive(clap::Parser, Clone)]
+pub enum ExperimentCommands {
+    #[clap(about = "Run an A/B experiment with control and treatment variants")]
+    Run {
+        #[clap(long, help = "Experiment ID")]
+        id: String,
+        #[clap(long, help = "Control variant prompt")]
+        control: String,
+        #[clap(long, help = "Treatment variant prompt")]
+        treatment: String,
+    },
+    #[clap(about = "Show experiment status (phygital-twin heartbeat)")]
+    Status,
 }
 
 // Using unified config from lib.rs
@@ -1804,10 +1843,71 @@ async fn main() {
                 std::process::exit(1);
             }
         }
+        Some(Commands::Validate { validate_args }) => {
+            if let Err(e) = b00t_cli::commands::validate::handle_validate(validate_args) {
+                eprintln!("validation error: {e}");
+                std::process::exit(1);
+            }
+        }
+        Some(Commands::Experiment { experiment_command }) => {
+            match experiment_command {
+                ExperimentCommands::Run { id, control, treatment } => {
+                    use b00t_cli::commands::experiment;
+                    let config = experiment::ExperimentConfig {
+                        id: id.clone(),
+                        control_prompt: control.clone(),
+                        treatment_prompt: treatment.clone(),
+                        variants: vec!["control".into(), "treatment".into()],
+                        personalities: experiment::default_personalities(),
+                    };
+                    if let Err(gate_err) = experiment::governance_gate(&config.control_prompt) {
+                        eprintln!("{gate_err}");
+                        std::process::exit(1);
+                    }
+                    if let Err(gate_err) = experiment::governance_gate(&config.treatment_prompt) {
+                        eprintln!("{gate_err}");
+                        std::process::exit(1);
+                    }
+                    match experiment::dispatch_experiment(&config) {
+                        Ok(cmp) => {
+                            println!("{}", experiment::format_comparison(&cmp));
+                            // emit ledgrrr FOCUS records
+                            let cf = experiment::create_focus_record(&cmp.experiment_id, "control", "sm0l-ctl", "experiment-eval", &cmp.control.scores);
+                            let tf = experiment::create_focus_record(&cmp.experiment_id, "treatment", "sm0l-trt", "experiment-eval", &cmp.treatment.scores);
+                            eprintln!("[ledgrrr] {}", experiment::focus_record_to_ledgrrr(&cf));
+                            eprintln!("[ledgrrr] {}", experiment::focus_record_to_ledgrrr(&tf));
+                        }
+                        Err(e) => {
+                            eprintln!("Experiment failed: {e}");
+                            std::process::exit(1);
+                        }
+                    }
+                }
+                ExperimentCommands::Status => {
+                    use b00t_cli::commands::experiment;
+                    let status = experiment::phygital_status("worker-cli", "idle", "pass", None, 0.0);
+                    println!("node_id: {}", status.node_id);
+                    println!("state: {}", status.state);
+                    println!("last_heartbeat: {}", status.last_heartbeat);
+                    println!("gate_result: {}", status.gate_result);
+                    println!("focus_balance: {:.2}", status.focus_balance);
+                }
+            }
+        }
         Some(Commands::Exec(args)) => {
             if let Err(e) = b00t_cli::commands::exec::handle_exec(args, &cli.path) {
                 eprintln!("Error: {}", e);
                 std::process::exit(1);
+            }
+        }
+        Some(Commands::Schema { schema_command }) => {
+            match schema_command {
+                SchemaSubcommands::Generate { args } => {
+                    if let Err(e) = b00t_cli::datum_schema::handle_schema_generate(args) {
+                        eprintln!("Error: {e}");
+                        std::process::exit(1);
+                    }
+                }
             }
         }
         Some(Commands::Quit(args)) => {

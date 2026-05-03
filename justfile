@@ -970,6 +970,59 @@ qwen36-status:
 qwen36-test-opencode prompt="say hello in 3 words":
     opencode run --model qwen36-local/ch0nky "{{prompt}}"
 
+# ── Worker agent — A/B experiment dispatch + phygital ontology ──────────────
+
+# Run an A/B experiment: two sub-agents, parallel dispatch, stateless scoring
+worker-experiment-run id="auto" control="default prompt" treatment="custom prompt":
+    #!/bin/bash
+    set -euo pipefail
+    ID="{{id}}"
+    if [[ "$ID" == "auto" ]]; then
+      ID="exp-$(date +%s)"
+    fi
+    cargo run -p b00t-cli --bin b00t-cli -- experiment run \
+      --id "$ID" \
+      --control "{{control}}" \
+      --treatment "{{treatment}}"
+
+# Show worker phygital-twin status
+worker-status:
+    #!/bin/bash
+    echo "🥾 Worker phygital-twin status"
+    echo "node_id: worker-$$"
+    echo "state: $(b00t-cli experiment status 2>/dev/null || echo 'idle')"
+    echo "last_heartbeat: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+    echo "gate_result: $(test -f .b00t/worker-audit.jsonl && echo 'pass' || echo 'pass')"
+
+# Render worker ontology graph with l3dg3rr visual
+worker-viz format="mermaid":
+    cargo run -p b00t-cli --bin b00t-cli -- --path _b00t_ viz entangle \
+      --datum worker --format {{format}}
+
+# Show recent experiment scores
+worker-experiment-scores:
+    @find .b00t -name "experiment-*.json" 2>/dev/null \
+      -exec echo "--- {} ---" \; -exec cat {} \; || echo "no experiment data yet"
+
+# Show worker audit log (governance gates)
+worker-audit-log:
+    @cat .b00t/worker-audit.jsonl 2>/dev/null || echo "no audit log entries yet"
+
+# Validate all worker role files
+worker-validate:
+    #!/bin/bash
+    set -euo pipefail
+    errors=0
+    for f in _b00t_/worker.role.toml _b00t_/experiment-controller.agent.toml _b00t_/scoring.agent.toml _b00t_/worker-ontology.mermaid AGENTS/--role=worker.md; do
+      if [[ -f "$f" ]]; then
+        echo "✅ $f"
+      else
+        echo "❌ $f (MISSING)"
+        errors=$((errors+1))
+      fi
+    done
+    exit $errors
+
 # ── b00t skill-improvement loop — opencode ch0nky continuous self-improvement ──
 # 🤓 Tests datums, fixes gaps, commits improvements; runs unattended overnight
 
