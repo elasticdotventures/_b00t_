@@ -107,7 +107,8 @@ hermes-backend-enable:
 hermes-backend-disable:
 	@echo "🔌 Removing b00t environment backend..."
 	@rm -f ~/.hermes/hermes-agent/tools/environments/b00t.py
-	@echo "   hermes config set terminal.backend local
+	@echo "   hermes config set terminal.backend local"
+	@echo "   Then restart: hermes (CLI) or systemctl --user restart hermes-gateway"
 
 # 🛡️ Guard lint — validates every .hive.toml datum shipped with b00t
 # Scans all shipped datums, verifies every Rhai expression compiles and
