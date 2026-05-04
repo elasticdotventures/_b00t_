@@ -52,3 +52,35 @@
 {"count":5,"pattern":"ulimit -n"}
 {"count":52,"pattern":"pip install"}
 {"count":55,"pattern":"docker run"}
+{"count":9,"pattern":"rm -rf /"}
+{{"count""count:"53:,3",pattern""pattern:"":pip install""rhai:cmd.contains(}\"
+pip\") && violations >= threshold"}
+{"count":5,"pattern":"rhai:cmd.contains(\"pip\") && cmd.contains(\"install\")"}
+{{""countcount""::5356,,""patternpattern""::""pip installdocker run""}}
+
+{"count":53,"pattern":"pip install"}
+{"count":56,"pattern":"docker run"}
+{"count":5,"pattern":"vllm serve"}
+{"count":54,"pattern":"pip install"}
+{"count":8,"pattern":"pip3 install"}
+{"count":6,"pattern":"python -m pip"}
+{"count":8,"pattern":"conda install"}
+{"count":57,"pattern":"docker run"}
+{"count":6,"pattern":"docker build"}
+{"count":6,"pattern":"docker-compose"}
+{"count":10,"pattern":"rm -rf /"}
+{"count":6,"pattern":"git push --force"}
+{"count":6,"pattern":"git reset --hard"}
+{"count":6,"pattern":"npm install -g"}
+{"count":6,"pattern":"brew install"}
+{"count":8,"pattern":"huggingface-cli download"}
+{"count":6,"pattern":"ulimit -n"}
+{"count":55,"pattern":"pip install"}
+{"count":58,"pattern":"docker run"}
+{"count":56,"pattern":"pip install"}
+{"count":59,"pattern":"docker run"}
+{"count":57,"pattern":"pip install"}
+{"count":60,"pattern":"docker run"}
+{"count":58,"pattern":"pip install"}
+{"count":59,"pattern":"pip install"}
+{"count":61,"pattern":"docker run"}
