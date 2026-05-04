@@ -233,7 +233,11 @@ impl RhaiEngine {
                         }
                     }
                     "rhai" => {
-                        // Evaluate arbitrary rhai expression in a fresh sub-engine
+                        // Evaluate arbitrary rhai expression in a fresh sub-engine.
+                        // ⚠️  Custom b00t fns (gate_check, command_exists, etc.) are NOT available
+                        // in the sub-engine — only built-in rhai primitives.
+                        // Use gate_check("command", ...) / gate_check("file", ...) / gate_check("env", ...)
+                        // for those checks; reserve "rhai" for pure-logic expressions only.
                         let sub_engine = Engine::new();
                         let ast = sub_engine.compile(spec)
                             .map_err(|e| format!("gate rhai compile error: {}", e))?;
@@ -247,9 +251,12 @@ impl RhaiEngine {
             },
         );
 
-        // Knowledge graph query: query irontology MCP server for runtime state
-        // kg_query("subject", "b00t:datum/github-mcp") -> JSON string of facts
-        // kg_query("facts", "b00t:hasStatus") -> array of matching predicates
+        // Knowledge graph query (stub) — probes irontology-mcp via raw stdio pipe.
+        // ⚠️  This does NOT form a JSON-RPC request; `query_val` is piped as raw text.
+        // Returns `{}` silently on any error. Intended as a placeholder until proper
+        // JSON-RPC framing is added to the irontology bridge.
+        // kg_query("subject", "b00t:datum/github-mcp") -> raw stdout from b00t-mcp
+        // kg_query("facts", "b00t:hasStatus") -> raw stdout from b00t-mcp
         engine.register_fn(
             "kg_query",
             |query_kind: &str, query_val: &str| -> Result<String, Box<rhai::EvalAltResult>> {

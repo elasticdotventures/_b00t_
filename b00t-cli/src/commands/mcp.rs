@@ -267,10 +267,9 @@ impl McpCommands {
                 max_threshold,
                 all,
             } => {
-                let effective_installed = *installed || is_installed.unwrap_or(false);
                 let filter = crate::McpListFilter {
                     search: search.clone(),
-                    is_installed: if *installed { Some(true) } else { *is_installed },
+                    is_installed: if *installed || is_installed.unwrap_or(false) { Some(true) } else { *is_installed },
                     is_running: *is_running,
                     is_suspended: *is_suspended,
                     max_threshold: *max_threshold,
