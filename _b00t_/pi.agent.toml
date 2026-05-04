@@ -16,6 +16,9 @@ update = "npm install -g @mariozechner/pi-coding-agent@latest"
 version = "pi --version"
 version_regex = "([0-9]+\\.[0-9]+\\.[0-9]+)"
 
+[[b00t.agent.inherits]]
+from = "++abstract.agent"
+
 [b00t.agent]
 pid = "pi-001"
 branch = "main"

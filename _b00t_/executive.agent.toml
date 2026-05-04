@@ -3,6 +3,9 @@ name = "executive"
 type = "agent"
 hint = "Executive hive agent — manages system state transitions, resource scheduling, and agent delegation strategy"
 
+[[b00t.agent.inherits]]
+from = "++abstract.agent"
+
 [b00t.agent]
 pid = "executive-001"
 model = "claude-sonnet-4-6"

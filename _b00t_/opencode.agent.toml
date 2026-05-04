@@ -11,6 +11,9 @@ name = "opencode"
 type = "agent"
 hint = "opencode coding agent — systemd-managed ACP server; ch0nky tier; swap with pi via hive stop/start"
 
+[[b00t.agent.inherits]]
+from = "++abstract.agent"
+
 [b00t.agent]
 pid = "opencode-001"
 branch = "main"

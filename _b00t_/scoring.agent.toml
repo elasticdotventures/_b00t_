@@ -10,6 +10,9 @@ entangled_cli = [
 
 keywords = ["agent", "scoring", "evaluation", "statistics", "ab-test"]
 
+[[b00t.agent.inherits]]
+from = "++abstract.agent"
+
 [b00t.capabilities]
 scoring_dimensions = ["roi", "cost", "time", "accuracy", "utility", "risk"]
 model_tier = "sm0l"

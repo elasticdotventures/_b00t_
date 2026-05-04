@@ -11,6 +11,9 @@ name = "moltis"
 type = "agent"
 hint = "Rust-native claw — sandboxed, secure, auditable. Voice, memory, MCP tools, multi-channel."
 
+[[b00t.agent.inherits]]
+from = "++abstract.agent"
+
 [b00t.agent]
 pid = "moltis-001"
 branch = "main"

@@ -3,6 +3,9 @@ name = "ralph"
 type = "agent"
 hint = "Autonomous agent loop runner for TODO-next.md and b00t job workflows"
 
+[[b00t.agent.inherits]]
+from = "++abstract.agent"
+
 [b00t.agent]
 pid = "ralph-001"
 branch = "main"

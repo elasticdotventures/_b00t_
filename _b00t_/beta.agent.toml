@@ -3,6 +3,9 @@ name = "beta"
 type = "agent"
 hint = "Pragmatic agent specializing in Docker & deployment"
 
+[[b00t.agent.inherits]]
+from = "++abstract.agent"
+
 [b00t.agent]
 pid = "01QR79jKinPGYGza4dPvj3jK"
 branch = "claude/multi-agent-boot-poc-01QR79jKinPGYGza4dPvj3jK"

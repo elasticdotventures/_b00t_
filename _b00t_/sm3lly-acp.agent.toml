@@ -5,6 +5,9 @@ name = "sm3lly-acp"
 type = "agent"
 hint = "Remote sm3llsl1k3s0ld3r solar+battery node route for ch0nky Qwen36 ACP delegation over NATS"
 
+[[b00t.agent.inherits]]
+from = "++abstract.agent"
+
 [b00t.agent]
 pid = "sm3lly-001"
 model = "qwen36/ch0nky"

@@ -3,6 +3,9 @@ name = "alpha"
 type = "agent"
 hint = "Curious agent specializing in Rust & testing"
 
+[[b00t.agent.inherits]]
+from = "++abstract.agent"
+
 [b00t.agent]
 pid = "01QR79jKinPGYGza4dPvj3jJ"
 branch = "claude/multi-agent-boot-poc-01QR79jKinPGYGza4dPvj3jJ"

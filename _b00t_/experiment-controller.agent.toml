@@ -13,6 +13,9 @@ entangled_mcp = [
 
 keywords = ["agent", "experiment", "ab-test", "dispatch", "parallel"]
 
+[[b00t.agent.inherits]]
+from = "++abstract.agent"
+
 [b00t.capabilities]
 dispatch_mode = "parallel"
 max_parallel = 2
