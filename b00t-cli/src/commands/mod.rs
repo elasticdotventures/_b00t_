@@ -1,4 +1,5 @@
 pub mod agent;
+pub mod bouncer;
 pub mod ai;
 pub mod ansible;
 pub mod app;
@@ -46,6 +47,7 @@ pub mod viz;
 pub mod whatismy;
 
 pub use agent::AgentCommands;
+pub use bouncer::{BouncerArgs, BouncerCommands};
 pub use ai::AiCommands;
 pub use ansible::AnsibleCommands;
 pub use app::AppCommands;

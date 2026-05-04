@@ -34,6 +34,7 @@ tempfile = "3.13.0"
 # b00t-cli specific dependencies
 rhai = { workspace = true }
 b00t-c0re-lib = { workspace = true }
+b00t-bouncer = { path = "../b00t-bouncer" }
 b00t-grok = { workspace = true }
 k0mmand3r = { workspace = true }
 openssl-sys = { workspace = true }

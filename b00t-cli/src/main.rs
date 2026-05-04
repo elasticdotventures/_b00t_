@@ -33,7 +33,7 @@ use b00t_cli::utils::get_workspace_root;
 use b00t_cli::commands::{
   //  Keep commands 1 line per letter A,B,C,... for easy diff
     AiCommands, AgentCommands, AnsibleCommands, AppCommands, AuditCommands,
-    BootstrapCommands, BudgetCommands,
+    BouncerArgs, BouncerCommands, BootstrapCommands, BudgetCommands,
     ChatCommands, CliCommands, ConfigCommands,
     DataCommands, DatumCommands, DoctorCommands,
     FocusCommands,
@@ -199,6 +199,11 @@ The system will:
     Cli {
         #[clap(subcommand)]
         cli_command: CliCommands,
+    },
+    #[clap(about = "Bouncer pattern gatekeeper for input/output validation")]
+    Bouncer {
+        #[clap(subcommand)]
+        bouncer_command: BouncerCommands,
     },
     #[clap(name = "config", about = "Project configuration and scaffolding")]
     Configure {
@@ -1643,6 +1648,13 @@ async fn main() {
         }
         Some(Commands::Cli { cli_command }) => {
             if let Err(e) = cli_command.execute(&cli.path) {
+                eprintln!("Error: {}", e);
+                std::process::exit(1);
+            }
+        }
+        Some(Commands::Bouncer { bouncer_command }) => {
+            let args = BouncerArgs { command: bouncer_command.clone() };
+            if let Err(e) = b00t_cli::commands::bouncer::handle_bouncer(&args) {
                 eprintln!("Error: {}", e);
                 std::process::exit(1);
             }
