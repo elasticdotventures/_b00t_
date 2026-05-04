@@ -286,8 +286,6 @@ togaf-cli/
 togaf-dsl/
 var/
 vendor/l3dg3rr/
-# Session/temporary caches
-cache/
 venv.bak/
 venv/
 web_modules/
@@ -295,5 +293,3 @@ wheels/
 yarn-debug.log*
 yarn-error.log*
 yarn.lock
-/plantuml-server
-.worktrees/
