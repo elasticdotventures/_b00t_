@@ -1,0 +1,95 @@
+# b00t SCM Conventions datum
+# .tomllmd — mdtable format for column-stable serialization
+# schema: 1 | bump ONLY on column layout change, not on row addition
+# last_updated: 2026-05-04
+#
+# 🤓 Schema for conventional commit types, branch naming patterns, and
+#    security tier conventions. Used by SCM guard Rhai functions and
+#    k0mmand3r SCM subcommands.
+#
+# 🔗参 _b00t_/hive-guards.hive.toml — SCM guard patterns (regex, rhai)
+# 🔗参 b00t-cli/src/hook_engine.rs — Rhai engine with regex_match()
+# 🔗参 k0mmand3r::scm_conventions!() — compile-time deserialization
+
+[b00t]
+name = "SCM-CONVENTIONS"
+type = "schema"
+hint = "SCM conventions — commit types, branch naming, security tiers; schema for SCM guard validation"
+
+[b00t.version]
+schema = 1
+content = "stable"
+
+## Conventional Commit Types
+## schema_version=1: these 5 columns in this order.
+## Columns: type | description | bump | scope_required | prerelease
+
+| type | description | bump | scope_required | prerelease |
+|------|-------------|------|----------------|-----------|
+| feat | A new feature | minor | false | false |
+| fix | A bug fix | patch | false | false |
+| chore | Maintenance, tooling, deps | none | false | true |
+| docs | Documentation only | none | false | false |
+| refactor | Code change with no functional change | none | false | false |
+| test | Adding or fixing tests | none | false | false |
+| style | Formatting, whitespace, typos | none | false | false |
+| ci | CI/CD pipeline changes | none | true | true |
+| perf | Performance improvement | patch | false | false |
+| revert | Reverting a previous change | none | true | false |
+| security | Security fix or hardening | patch | true | false |
+| experiment | Experimental — may be reverted | none | false | true |
+| release | Release commit — bump version | custom | false | true |
+| merge | Merge branch into branch | none | false | true |
+
+## Branch Naming Conventions
+## schema_version=1: these 4 columns in this order.
+## Columns: pattern | description | allowed_on | protected
+
+| pattern | description | allowed_on | protected |
+|---------|-------------|------------|-----------|
+| feat/* | New feature branches | feature branches | false |
+| fix/* | Bug fix branches | feature branches | false |
+| chore/* | Maintenance branches | feature branches | false |
+| docs/* | Documentation branches | feature branches | false |
+| refactor/* | Refactoring branches | feature branches | false |
+| experiment/* | Experimental branches | feature branches | false |
+| main | Production branch | always | true |
+| dev | Development branch | always | true |
+| release/* | Release branches | protected | true |
+| pr-* | Auto-generated PR refs | CI-only | true |
+| dependabot/* | Dep update branches | CI-only | true |
+
+## Security Escalation Tiers
+## schema_version=1: these 5 columns in this order.
+## Columns: tier | guard_action | emoji | shortcode | effect
+
+| tier | guard_action | emoji | shortcode | effect |
+|------|-------------|-------|-----------|--------|
+| 0 | pass | ✅ | :pass: | Allow — no intervention |
+| 1 | warn+redirect | 🦨 | :skunk: | Warning + redirect command |
+| 2 | block+escalate | 💩 | :poop: | Block command, escalate to operator |
+| 3 | deny+firewall | 🚫 | :block: | Permanent denial, block at gateway |
+
+## Commit Scope Convention
+## schema_version=1: these 3 columns in this order.
+## Columns: scope | description | example
+
+| scope | description | example |
+|-------|-------------|---------|
+| (none) | General changes not scoped to a crate | `fix: correct typo in docs` |
+| b00t-cli | CLI crate changes | `feat(b00t-cli): add guard violation command` |
+| b00t-mcp | MCP server crate changes | `fix(b00t-mcp): handle empty tool list` |
+| b00t-py | Python bindings changes | `feat(b00t-py): add mcp_list binding` |
+| b00t-c0re-lib | Core library changes | `refactor(b00t-c0re-lib): deduplicate rhai engine` |
+| l3dg3rr | Ledgerr vendor integration | `chore(l3dg3rr): update submodule to ledgrrr` |
+| hive | Hive peer/CMDB changes | `feat(hive): wire gossip loop into init` |
+| ci | CI/CD changes | `ci: fix release gate branch filter` |
+| guards | Guard pipeline changes | `feat(guards): add SCM convention guards` |
+| schema | Schema datum changes | `docs(schema): add SCM-CONVENTIONS schema` |
+
+# b00t:map v1
+# summary: SCM Conventions — commit types, branch naming, security tiers, scope registry for guard validation
+# tags: scm, conventions, commit, branch, security, guard, schema, tomllmd
+# tier: sm0l
+# cmds: b00t hive run --strict "git commit -m 'fix: ...'", k0mmand3r::scm_conventions!(), grep "security" _b00t_/schema/SCM-CONVENTIONS.tomllmd
+# complexity: 2

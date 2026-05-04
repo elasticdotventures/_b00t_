@@ -1,0 +1,82 @@
+# b00t git workflow datum — GGG (Go Get Git) pattern
+# New agents encountering b00t should learn git first to understand the system.
+#
+# 🔗参 _b00t_/schema/SCM-CONVENTIONS.tomllmd — commit types, branch naming
+# 🔗参 _b00t_/hive-guards.hive.toml — SCM guard patterns
+# 🔗参 AGENTS.md — b00t gospel (extreme XP programming)
+
+[b00t]
+name = "git"
+type = "learn"
+hint = "GGG (Go Get Git) — git workflow for b00t hive agents"
+
+[b00t.version]
+schema = 1
+content = "draft"
+
+## Core git workflow for b00t agents
+
+| step | command | purpose |
+|------|---------|---------|
+| 1 | `git checkout -b feat/<name>` | Create feature branch (never work on main) |
+| 2 | `git add <files>` | Stage changes |
+| 3 | `git commit -m "type(scope): message"` | Commit with conventional commit format |
+| 4 | `git push origin feat/<name>` | Push branch |
+| 5 | `gh pr create --fill` | Open PR (or `b00t checkpoint`) |
+| 🦨 | `git push --force-with-lease` | ONLY for PR rebase — never on shared branches |
+
+## Conventional commit format
+
+Format: `type(scope): description`
+
+```
+feat(b00t-cli): add guard violation command
+fix(hive): handle empty peer list
+chore(deps): update ed25519-dalek to 2.2.0
+docs(schema): add SCM-CONVENTIONS datum
+refactor(hive): deduplicate peer store functions
+```
+
+## Branch naming
+
+| prefix | purpose |
+|--------|---------|
+| feat/* | New features |
+| fix/* | Bug fixes |
+| chore/* | Maintenance |
+| docs/* | Documentation |
+| refactor/* | Code restructuring |
+| experiment/* | Experimental (may be reverted) |
+
+## b00t checkpoint shortcut
+
+Instead of manual git commands, you can use:
+```
+b00t checkpoint       # git add -A + git commit + git push
+b00t checkpoint --skip-tests   # skip test run during checkpoint
+```
+
+## 🦨 Pitfalls
+
+- NEVER commit directly to main/dev — always branch first
+- NEVER force-push without `--force-with-lease`
+- ALWAYS run `cargo check` before committing
+- Use `git status` before and after to verify state
+- If rebase needed: use `git rebase main` NOT `git rebase origin/main`
+
+## GGG checklist
+
+Before opening a PR:
+- [x] cargo check passes
+- [x] cargo test --lib passes (or justified skip)
+- [x] Branch name follows conventional format
+- [x] Commit messages follow conventional format
+- [x] No leftover merge conflict markers (<<<<<<<)
+- [x] No debug println! or dbg! calls
+
+# b00t:map v1
+# summary: Git workflow datum — GGG pattern, conventional commits, branch naming, checkpoint shortcut for b00t agents
+# tags: git, workflow, scm, conventional-commit, ggg, checkpoint
+# tier: sm0l
+# cmds: b00t checkpoint, git checkout -b feat/<name>, b00t learn git
+# complexity: 1

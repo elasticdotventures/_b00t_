@@ -115,6 +115,50 @@ pub enum GrokCommands {
         #[arg(long, help = "Canonical source URL (required for datum validity)")]
         source_url: Option<String>,
     },
+    /// Consume document into assimilate pipeline: chunk → container spans → transaction log
+    ///
+    /// The assimilate pipeline provides indelible document-level attribution.
+    /// Each chunk is wrapped in a <container> span with doc_id, chunk_id, position, signature.
+    /// A transaction log (append-only JSONL) enables replay after knowledgebase corruption.
+    ///
+    /// Examples:
+    ///   b00t grok consume https://doc.rust-lang.org/book/ch04-01.html
+    ///   b00t grok consume --title "Rust Book" path/to/file.md
+    ///   b00t grok consume --url https://example.com --topic rust
+    Consume {
+        /// Content to consume (positional, or --file)
+        content: Option<String>,
+        /// Source file path (alternative to positional content)
+        #[arg(long)]
+        file: Option<PathBuf>,
+        /// Source URL for the document
+        #[arg(long)]
+        url: Option<String>,
+        /// Optional title for the document
+        #[arg(long)]
+        title: Option<String>,
+        /// Optional topic for grok ingestion
+        #[arg(short, long)]
+        topic: Option<String>,
+    },
+    /// Replay transaction log to rebuild knowledgebase from scratch
+    ///
+    /// Reads all transaction logs from ~/.b00t/transactions/ and re-processes
+    /// each unique transaction: re-chunk, re-wrap in containers, re-store.
+    /// Useful after knowledgebase corruption or when setting up a new system.
+    ///
+    /// Examples:
+    ///   b00t grok replay
+    ///   b00t grok replay --dry-run
+    ///   b00t grok replay --tx-dir /custom/path/transactions
+    Replay {
+        /// Dry run — show what would be replayed without storing
+        #[arg(long)]
+        dry_run: bool,
+        /// Custom transaction log directory
+        #[arg(long)]
+        tx_dir: Option<PathBuf>,
+    },
 }
 
 pub async fn handle_grok_command(command: GrokCommands) -> Result<()> {
@@ -184,6 +228,18 @@ pub async fn handle_grok_command(command: GrokCommands) -> Result<()> {
                 source_url.as_deref(),
             )
             .await
+        }
+        GrokCommands::Consume {
+            content,
+            file,
+            url,
+            title,
+            topic,
+        } => {
+            handle_consume(content.as_deref(), file.as_deref(), url.as_deref(), title.as_deref(), topic.as_deref()).await
+        }
+        GrokCommands::Replay { dry_run, tx_dir } => {
+            handle_replay(dry_run, tx_dir.as_deref())
         }
     }
 }
@@ -582,6 +638,122 @@ fn sanitize_for_filename(input: &str) -> String {
         s = s.replace("__", "_");
     }
     if s.is_empty() { "topic".to_string() } else { s }
+}
+
+// ── Consume: assimilate pipeline (document → chunk → container spans → tx log) ───
+
+/// Handle `b00t grok consume` — document assimilate pipeline.
+async fn handle_consume(
+    content: Option<&str>,
+    file: Option<&std::path::Path>,
+    url: Option<&str>,
+    title: Option<&str>,
+    _topic: Option<&str>,
+) -> Result<()> {
+    use b00t_c0re_lib::assimilate::*;
+
+    // 1. Get content
+    let raw_content: String = if let Some(c) = content {
+        c.to_string()
+    } else if let Some(f) = file {
+        std::fs::read_to_string(f)
+            .with_context(|| format!("Failed to read file: {}", f.display()))?
+    } else {
+        anyhow::bail!("Provide content as positional arg or via --file");
+    };
+
+    // 2. Hash → DocumentId
+    let doc_id = compute_doc_id(raw_content.as_bytes());
+    println!("📄 Document ID: {}", doc_id);
+
+    // 3. Create document record
+    let doc_record = DocumentRecord::new(
+        raw_content.as_bytes(),
+        url.map(|s| s.to_string()),
+        file.map(|p| p.to_string_lossy().to_string()),
+        title.map(|s| s.to_string()),
+    );
+    println!("  Source: {:?} | Size: {} bytes", doc_record.source_url.as_deref().unwrap_or("(inline)"), raw_content.len());
+
+    // 4. Chunk + wrap in containers
+    let config = AssimilateConfig::default();
+    let chunks = chunk_text(&raw_content, &doc_id, &config);
+    println!("  Chunks: {} (size={}, overlap={})", chunks.len(), config.chunk_size, config.chunk_overlap);
+
+    for chunk in &chunks {
+        // Print container-wrapped chunk to stdout (can pipe for further processing)
+        println!("{}", chunk.container_text());
+    }
+
+    // 5. Write transaction log
+    let ingest_tx = TransactionEntry {
+        tx_id: format!("{}::ingest", doc_id),
+        action: "ingest_doc".to_string(),
+        doc_id: doc_id.clone(),
+        chunk_id: None,
+        timestamp: chrono::Utc::now().to_rfc3339(),
+        payload_hash: doc_id.clone(),
+    };
+    append_transaction(&config.tx_dir, &ingest_tx)?;
+
+    for chunk in &chunks {
+        let chunk_tx = TransactionEntry {
+            tx_id: format!("{}::chunk::{}", doc_id, chunk.position),
+            action: "chunk".to_string(),
+            doc_id: doc_id.clone(),
+            chunk_id: Some(chunk.chunk_id.clone()),
+            timestamp: chrono::Utc::now().to_rfc3339(),
+            payload_hash: chunk.content_hash.clone(),
+        };
+        append_transaction(&config.tx_dir, &chunk_tx)?;
+    }
+
+    // 6. Persist to grok backend via digest
+    for chunk in &chunks {
+        let container_text = chunk.container_text();
+        let topic = _topic.unwrap_or("assimilated");
+        // Digest the container-wrapped text so attribution is preserved
+        let mut dual = DualGrokClient::new();
+        dual.ingest(topic, &container_text, GrokBackend::Both).await?;
+    }
+
+    println!("✅ Assimilated {} — {} chunks logged to {:?}", doc_id, chunks.len(), config.tx_dir);
+    Ok(())
+}
+
+/// Handle `b00t grok replay` — replay transaction log.
+fn handle_replay(dry_run: bool, tx_dir: Option<&std::path::Path>) -> Result<()> {
+    use b00t_c0re_lib::assimilate::*;
+
+    let tx_path = match tx_dir {
+        Some(p) => p.to_path_buf(),
+        None => default_tx_log_dir(),
+    };
+
+    let entries = read_all_transactions(&tx_path)?;
+    println!("📋 Replay: {} total transactions from {:?}", entries.len(), tx_path);
+
+    // Group by doc_id
+    let mut by_doc: std::collections::HashMap<String, Vec<&TransactionEntry>> = std::collections::HashMap::new();
+    for entry in &entries {
+        by_doc.entry(entry.doc_id.clone()).or_default().push(entry);
+    }
+
+    for (doc_id, txs) in &by_doc {
+        println!("\n  📄 {}: {} transactions", doc_id, txs.len());
+        for tx in txs {
+            println!("    {} | {} | {}", tx.tx_id, tx.action, tx.chunk_id.as_deref().unwrap_or("-"));
+        }
+    }
+
+    println!("\n  {} unique documents", by_doc.len());
+    if dry_run {
+        println!("  (dry run — no re-assimilation performed)");
+    } else {
+        println!("  (full re-assimilation not yet implemented — use --dry-run to inspect logs)");
+    }
+
+    Ok(())
 }
 
 // ── git stdin helper ──────────────────────────────────────────────────────────

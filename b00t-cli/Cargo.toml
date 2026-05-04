@@ -71,7 +71,7 @@ glob = "0.3.3"
 which = "7"
 inquire = "0.7"
 sha2 = "0.10"
-ed25519-dalek = "2"
+ed25519-dalek = { version = "2", features = ["rand_core"] }
 zeroize = { version = "1", features = ["alloc"] }
 hex = "0.4"
 walkdir = "2"

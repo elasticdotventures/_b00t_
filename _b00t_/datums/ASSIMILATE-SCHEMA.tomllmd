@@ -1,0 +1,108 @@
+# b00t Assimilate Schema datum
+# .tomllmd — mdtable format for column-stable serialization
+# schema: 1 | bump ONLY on field definition changes
+# last_updated: 2026-05-04
+#
+# 🤓 The Assimilate pipeline provides indelible document-level attribution for
+#    grok knowledge. Every knowledge chunk traces back to its source document
+#    via content-addressed DocumentId and position-stamped chunk containers.
+#    A transaction log (append-only JSONL) enables replay to rebuild the
+#    knowledgebase from scratch after corruption.
+#
+# 🔗参 b00t-c0re-lib/src/assimilate.rs — core types (DocumentRecord, ChunkRecord, TransactionLog)
+# 🔗参 b00t-cli/src/commands/grok.rs — `b00t grok assimilate` CLI command
+# 🔗参 vendor/l3dg3rr/crates/ledgerr-focus/ — FOCUS chunking (future: ledgrrr chunker)
+# 🔗参 _b00t_/transactions/ — stored transaction logs (append-only JSONL)
+
+[b00t]
+name = "ASSIMILATE-SCHEMA"
+type = "schema"
+hint = "Assimilate pipeline schema — document ingestion, chunk attribution, transaction log, replay protocol for indelible grok knowledge"
+
+[b00t.version]
+schema = 1
+content = "stable"
+
+## Assimilate Pipeline Phases
+## schema_version=1: these 4 columns in this order.
+
+| phase | description | output |
+|-------|-------------|--------|
+| fetch | Download document from URL or read local file | raw bytes |
+| hash | Compute blake3 content hash → DocumentId | doc_id (hex) |
+| chunk | Split document into position-stamped chunks via ledgrrr | Vec<ChunkRecord> |
+| wrap | Wrap each chunk in <container> span with doc_id, chunk_id, pos, sig | Vec<String> container spans |
+| store | Write transaction(s) to log + persist to irontology | tx_log entry |
+
+## DocumentRecord — source attribution for ingested documents
+## schema_version=1: these 7 fields in this order.
+
+| field | type | description |
+|-------|------|-------------|
+| doc_id | string | Content-addressed ID = blake3(content) hex |
+| source_url | string? | URL where document was fetched (None for local files) |
+| source_path | string? | Local file path (None for URLs) |
+| title | string? | Document title (auto-detected or user-provided) |
+| content_length | u64 | Size of original content in bytes |
+| ingested_at | string | ISO 8601 timestamp of ingestion |
+| content_hash | string | blake3 hash of normalized content (same as doc_id) |
+
+## ChunkRecord — position-attested chunk with container span
+## schema_version=1: these 7 fields in this order.
+
+| field | type | description |
+|-------|------|-------------|
+| chunk_id | string | Qualified ID: `{doc_id}::chunk::{N}` |
+| doc_id | string | Parent document ID |
+| position | u32 | 0-indexed position within document |
+| total_chunks | u32 | Total number of chunks for this document |
+| container | string | Container span tag: `<container doc="{doc_id}" chunk="{chunk_id}" pos="{N}/{T}" sig="{content_hash}">` |
+| content | string | The chunk text content |
+| content_hash | string | blake3 hash of this chunk's content |
+
+## Container Span Format
+## schema_version=1: these 5 attributes on the <container> tag.
+
+The container span wraps each chunk to maintain attribution through processing:
+
+```
+<container doc="<doc_id>" chunk="<chunk_id>" pos="<N>/<T>" sig="<content_hash>">
+  ...chunk text content...
+</container>
+```
+
+Where:
+- `doc` — content-addressed DocumentId (blake3 of full document)
+- `chunk` — qualified chunk ID: doc_id::chunk::N
+- `pos` — position within document: "N/T" where N=0-indexed, T=total
+- `sig` — blake3 hash of this chunk's content (inner integrity check)
+
+## Transaction Log Entry
+## schema_version=1: these 6+ fields in this order.
+## Append-only JSONL at ~/.b00t/transactions/YYYY-MM-DD.jsonl
+
+| field | type | description |
+|-------|------|-------------|
+| tx_id | string | Transaction ID = `{date}::{seq}` where seq is auto-incrementing per day |
+| action | string | One of: ingest_doc, chunk, learn, verify |
+| doc_id | string | Document ID being acted upon |
+| chunk_id | string? | Chunk ID if action=chunk |
+| timestamp | string | ISO 8601 timestamp |
+| payload_hash | string | blake3 hash of the full transaction payload |
+
+## Replay Protocol
+## schema_version=1: these 4 columns in this order.
+
+| step | action | description |
+|------|--------|-------------|
+| 1 | scan | Read all .jsonl files from ~/.b00t/transactions/ sorted by date |
+| 2 | dedup | Skip duplicate tx_ids by checking payload_hash |
+| 3 | re-assimilate | For each unique transaction, re-process: ingest_doc → re-chunk → re-store |
+| 4 | verify | Compare chunk content_hash against stored hash — detect corruption |
+
+# b00t:map v1
+# summary: Assimilate pipeline schema — DocumentId (content-addressed blake3), ChunkRecord with container spans, append-only transaction log (JSONL), replay protocol for indelible knowledge
+# tags: assimilate, grok, document, chunk, container, transaction-log, replay, blake3, irontology
+# tier: ch0nky
+# cmds: b00t grok assimilate <url>, b00t grok replay, cat ~/.b00t/transactions/$(date -u +%Y-%m-%d).jsonl
+# complexity: 6

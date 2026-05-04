@@ -348,6 +348,18 @@ __all__ = [
     "EmojiRegistry",
     "check_guards",
     "parse_kmdline",
+    # Guard system (new API)
+    "guard_check",
+    "guard_violations",
+    "guard_reset",
+    "guard_coverage",
+    # Emoji registry
+    "emoji_lookup",
+    "emoji_list",
+    # Parser stage guards
+    "register_stage_guard",
+    # K0mmand3r parser (new API)
+    "parse_k0mmand3r",
     # Existing MCP API
     "mcp_list",
     "mcp_output",

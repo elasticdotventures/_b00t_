@@ -105,6 +105,9 @@ async fn main() -> Result<()> {
         let server = B00tMcpServerRusty::new_flat(working_path, &config_path)?;
         let running_service = server.serve(stdio()).await?;
 
+        // Advertise this node via mDNS in the background
+        b00t_cli::hive::advertise_hive_peer(9749);
+
         // Keep the server running
         running_service.waiting().await?;
     } else if is_http_mode {
@@ -185,6 +188,9 @@ async fn main() -> Result<()> {
         eprintln!("🐙 GitHub Auth endpoints:");
         eprintln!("    Login: http://{}/auth/github", addr);
         eprintln!("    Callback: http://{}/auth/github/callback", addr);
+
+        // Advertise this node via mDNS in the background
+        b00t_cli::hive::advertise_hive_peer(port);
 
         axum::serve(listener, app).await?;
     } else {

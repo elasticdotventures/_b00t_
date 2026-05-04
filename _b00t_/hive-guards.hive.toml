@@ -14,7 +14,11 @@ group = "guards"  # not a workload profile; always active
 # Each macro becomes `let <name> = <expr>;` in Rhai scope before guard evaluation.
 # Guards reference macros by bare name: pattern = { rhai = "pip_guard" }
 # Compose with || &&:          pattern = { rhai = "pip_guard || docker_guard" }
+# Pipe-compatible functions (fn form) enable `|>` operator for functional chaining:
+#   cmd |> is_docker() |> is_run()
+# Function forms are defined as `fn name(cmd) = expr` and registered via Rhai engine.
 [b00t.hive.rhai_macros]
+# Expression-form macros (legacy, `let <name> = <expr>`)
 pip_guard = "cmd.contains(\"pip\") && cmd.contains(\"install\")"
 pip3_guard = "cmd.contains(\"pip3\") && cmd.contains(\"install\")"
 pip_mod_guard = "cmd.contains(\"python -m pip\") || cmd.contains(\"python3 -m pip\")"
@@ -30,6 +34,12 @@ brew_guard = "cmd.contains(\"brew\") && cmd.contains(\"install\")"
 hf_download_guard = "cmd.contains(\"huggingface-cli\") && cmd.contains(\"download\")"
 ulimit_guard = "cmd.contains(\"ulimit\") && cmd.contains(\"-n\")"
 rm_rf_guard = "cmd.contains(\"rm\") && cmd.contains(\"-rf\") && cmd.contains(\"/ \")"
+
+# Pipe-compatible function-form macros (registered as Rhai functions)
+# These enable `|>` pipe operator: cmd | is_docker() | is_run()
+# @tribal: function-form macros are registered via Rhai engine.register_fn() in hook_engine.rs.
+# Expression-form macros compose via `||` / `&&` — function-form macros compose via `|>`.
+# Both forms coexist; guards can reference either.
 
 # --- Python/pip guards ---
 [[b00t.hive.guards]]

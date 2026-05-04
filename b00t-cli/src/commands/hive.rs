@@ -82,6 +82,8 @@ pub enum HiveCommands {
         #[clap(subcommand)]
         peer_command: PeerCommands,
     },
+    #[clap(subcommand)]
+    Cyber(HiveCyberCommands),
 }
 
 
@@ -127,8 +129,11 @@ pub enum PeerCommands {
         #[clap(long, help = "Subnet to scan (e.g. 192.168.1.0/24)")]
         subnet: Option<String>,
     },
-    #[clap(subcommand)]
-    Cyber(HiveCyberCommands),
+    #[clap(about = "Advertise this node as a b00t hive peer via mDNS")]
+    Advertise {
+        #[clap(long, help = "Port to advertise", default_value = "9749")]
+        port: u16,
+    },
 }
 
 #[derive(Parser, Clone)]
@@ -355,6 +360,7 @@ pub fn handle_hive_command(cmd: &HiveCommands, path: &str) -> Result<()> {
             }
         }
 
+        HiveCommands::Peers { peer_command } => handle_peers_command(peer_command, &datum_dir),
         HiveCommands::Cyber(cyber_cmd) => handle_cyber_command(cyber_cmd),
         HiveCommands::Run {
             command,
@@ -409,6 +415,148 @@ pub fn handle_hive_command(cmd: &HiveCommands, path: &str) -> Result<()> {
                 .map_err(|e| anyhow::anyhow!("failed to execute '{}': {}", command[0], e))?;
 
             std::process::exit(status.code().unwrap_or(1));
+        }
+    }
+}
+
+fn handle_peers_command(cmd: &PeerCommands, datum_dir: &Path) -> Result<()> {
+    match cmd {
+        PeerCommands::List { json, health } => {
+            let peers = crate::hive::load_peers()?;
+            if peers.is_empty() {
+                println!("No peers in store.");
+                return Ok(());
+            }
+
+            if *health {
+                // Health-check all peers in parallel
+                println!("Health-checking {} peers ...", peers.len());
+                let mut results: Vec<(&crate::hive::HivePeer, Option<std::time::Duration>)> = Vec::new();
+                for p in &peers {
+                    match crate::hive::peer_health_check(&p.address) {
+                        Ok(dur) => {
+                            results.push((p, Some(dur)));
+                        }
+                        Err(e) => {
+                            eprintln!("  {} @ {}: unhealthy — {}", p.id, p.address, e);
+                            results.push((p, None));
+                        }
+                    }
+                }
+
+                if *json {
+                    println!("{}", serde_json::to_string_pretty(&peers)?);
+                } else {
+                    println!();
+                    println!("Peer list ({} total):", peers.len());
+                    for (p, healthy) in results {
+                        let status = match healthy {
+                            Some(dur) => format!("OK ({}.{:03}s)", dur.as_secs(), dur.subsec_millis()),
+                            None => "UNREACHABLE".to_string(),
+                        };
+                        println!("  {}  {}", crate::hive::format_peer(p), status);
+                    }
+                }
+            } else {
+                if *json {
+                    println!("{}", serde_json::to_string_pretty(&peers)?);
+                } else {
+                    println!("Peers ({}):", peers.len());
+                    for p in &peers {
+                        println!("  {}", crate::hive::format_peer(p));
+                    }
+                }
+            }
+
+            Ok(())
+        }
+        PeerCommands::Add { id, address, auth_type } => {
+            let mut peer = crate::hive::HivePeer::new(id.clone(), address.clone());
+            if let Some(auth) = auth_type {
+                peer.label = Some(format!("auth:{}", auth));
+            }
+            crate::hive::add_peer(peer)?;
+            println!("Peer '{}' added at {}", id, address);
+            Ok(())
+        }
+        PeerCommands::Remove { id } => {
+            crate::hive::remove_peer(id)?;
+            println!("Peer '{}' removed", id);
+            Ok(())
+        }
+        PeerCommands::Status { id } => {
+            let peers = crate::hive::load_peers()?;
+            match peers.iter().find(|p| p.id == *id) {
+                Some(peer) => {
+                    println!("Peer: {}", peer.id);
+                    println!("  Address:  {}", peer.address);
+                    println!("  Zone:     {}", peer.trust_zone);
+                    match &peer.last_seen {
+                        Some(ts) => println!("  Seen:     {}", ts),
+                        None => println!("  Seen:     never"),
+                    }
+                    match &peer.label {
+                        Some(l) => println!("  Label:    {}", l),
+                        None => {}
+                    }
+
+                    // Health check
+                    match crate::hive::peer_health_check(&peer.address) {
+                        Ok(dur) => println!(
+                            "  Health:   OK ({}.{:03}s)",
+                            dur.as_secs(),
+                            dur.subsec_millis()
+                        ),
+                        Err(e) => println!("  Health:   UNREACHABLE — {}", e),
+                    }
+                }
+                None => println!("Peer '{}' not found in store", id),
+            }
+            Ok(())
+        }
+        PeerCommands::Gossip => {
+            let log = crate::hive::gossip()?;
+            for line in &log {
+                println!("{}", line);
+            }
+            Ok(())
+        }
+        PeerCommands::Prune { older_than } => {
+            let log = crate::hive::prune_peers(older_than)?;
+            for line in &log {
+                println!("{}", line);
+            }
+            Ok(())
+        }
+        PeerCommands::Discover { subnet } => {
+            let subnet_desc = subnet.as_deref().unwrap_or("local network");
+            println!("Scanning {} for b00t hive nodes via mDNS ...", subnet_desc);
+
+            let peers = crate::hive::discover_hive_peers_mdns(5);
+
+            if peers.is_empty() {
+                println!("  No b00t hive nodes found via mDNS.");
+                // Fallback: mention the gossip command as an alternative
+                println!("  Use `b00t hive peers gossip` to discover known peers from the ledger.");
+            } else {
+                println!("  Found {} b00t hive peer(s):", peers.len());
+                for p in &peers {
+                    let zone = format!("[{}]", p.trust_zone);
+                    println!("    {:20} {:8} {:22}", p.id, zone, p.address);
+                }
+                // Optionally save discovered peers to the store
+                for p in &peers {
+                    if let Err(e) = crate::hive::add_peer(p.clone()) {
+                        eprintln!("    Could not save peer '{}': {e}", p.id);
+                    }
+                }
+            }
+            Ok(())
+        }
+        PeerCommands::Advertise { port } => {
+            crate::hive::advertise_hive_peer(*port);
+            println!("Advertising this node as b00t hive peer on port {} (background)", port);
+            Ok(())
         }
     }
 }

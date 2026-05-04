@@ -36,6 +36,8 @@ pub enum GrokBackend {
     Irontology,
     /// Fan-out to both (default)
     Both,
+    /// CodebaseMemory MCP-backed knowledge graph
+    CodebaseMemory,
 }
 
 impl GrokBackend {
@@ -47,8 +49,9 @@ impl GrokBackend {
                 Ok(Self::Raglite)
             }
             Some("irontology") | Some("iron") => Ok(Self::Irontology),
+            Some("codebase") | Some("codebase-memory") | Some("cbm") => Ok(Self::CodebaseMemory),
             Some(other) => Err(anyhow::anyhow!(
-                "Unknown --rag backend '{}'. Valid: raglite, irontology, both",
+                "Unknown --rag backend '{}'. Valid: raglite, irontology, codebase, both",
                 other
             )),
         }
@@ -59,6 +62,7 @@ impl GrokBackend {
             Self::Raglite => "RAGLight",
             Self::Irontology => "Irontology",
             Self::Both => "RAGLight+Irontology",
+            Self::CodebaseMemory => "CodebaseMemory",
         }
     }
 }
@@ -75,6 +79,7 @@ pub struct DualIngestResult {
     pub irontology_subject: Option<String>,
     pub raglite_ok: bool,
     pub irontology_ok: bool,
+    pub cbm_ok: bool,
     pub warnings: Vec<String>,
 }
 
@@ -86,6 +91,7 @@ pub struct DualQueryResult {
     pub items: Vec<DualQueryItem>,
     pub raglite_ok: bool,
     pub irontology_ok: bool,
+    pub cbm_ok: bool,
     pub warnings: Vec<String>,
     pub control_events: Vec<ControlCodeEvent>,
 }
@@ -319,10 +325,12 @@ impl ControlCodeEvent {
 
 // ── Dual client ───────────────────────────────────────────────────────────────
 
-/// Fan-out grok client dispatching to raglite and/or irontology
+/// Fan-out grok client dispatching to raglite, irontology, and/or codebase-memory
 pub struct DualGrokClient {
     // 🤓 both backends are lazily initialized; failure on init is non-fatal
     iron: Option<IrontologyBridgeClient>,
+    /// CodebaseMemory client — initialized lazily; binary may not be installed
+    cbm: Option<crate::codebase_memory::CodebaseMemoryClient>,
 }
 
 impl DualGrokClient {
@@ -334,7 +342,11 @@ impl DualGrokClient {
                 e
             })
             .ok();
-        Self { iron }
+        let cbm = Some(crate::codebase_memory::CodebaseMemoryClient::new(
+            std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from(".")),
+            None,
+        ));
+        Self { iron, cbm }
     }
 
     /// Ingest content to the specified backend(s)
@@ -354,6 +366,7 @@ impl DualGrokClient {
             irontology_subject: None,
             raglite_ok: false,
             irontology_ok: false,
+            cbm_ok: false,
             warnings: Vec::new(),
         };
 
@@ -393,12 +406,19 @@ impl DualGrokClient {
             }
         }
 
+        // ── CodebaseMemory path ────────────────────────────────────────────
+        if matches!(backend, GrokBackend::CodebaseMemory) {
+            result
+                .warnings
+                .push("CodebaseMemory ingest not yet supported — use b00t grok learn".to_string());
+        }
+
         Ok(result)
     }
 
     /// Query across the specified backend(s), merging and deduplicating results
     pub async fn query(
-        &self,
+        &mut self,
         query_str: &str,
         topic: Option<&str>,
         limit: Option<usize>,
@@ -408,6 +428,7 @@ impl DualGrokClient {
         let mut warnings: Vec<String> = Vec::new();
         let mut raglite_ok = false;
         let mut irontology_ok = false;
+        let mut cbm_ok = false;
         let max = limit.unwrap_or(10);
 
         // ── Raglite query ───────────────────────────────────────────────────
@@ -456,6 +477,31 @@ impl DualGrokClient {
             }
         }
 
+        // ── CodebaseMemory path ────────────────────────────────────────────
+        if matches!(backend, GrokBackend::CodebaseMemory) {
+            let project = topic.unwrap_or("b00t");
+            match &mut self.cbm {
+                Some(cbm) => match cbm.search(query_str, project).await {
+                    Ok(search_resp) => {
+                        cbm_ok = true;
+                        for cbm_item in search_resp.results {
+                            items.push(DualQueryItem {
+                                backend: "codebase-memory".to_string(),
+                                content: cbm_item.content_snippet,
+                                topic: project.to_string(),
+                                tags: vec![cbm_item.name, cbm_item.file_path],
+                                score: 1.0,
+                            });
+                        }
+                    }
+                    Err(e) => warnings.push(format!("CodebaseMemory query: {}", e)),
+                },
+                None => {
+                    warnings.push("CodebaseMemory client not initialized".to_string());
+                }
+            }
+        }
+
         // Deduplicate by content (exact duplication from both backends).
         // 🤓 dedup_by only removes *consecutive* equal elements; must sort by
         //    content first, dedup, then re-sort by score so cross-backend
@@ -494,6 +540,7 @@ impl DualGrokClient {
             items,
             raglite_ok,
             irontology_ok,
+            cbm_ok,
             warnings,
             control_events,
         })

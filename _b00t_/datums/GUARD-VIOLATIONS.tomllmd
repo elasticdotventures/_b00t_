@@ -1,0 +1,67 @@
+# b00t Guard Violations datum
+# .tomllmd — mdtable format for column-stable serialization
+# schema: 1 | bump ONLY on field definition changes
+# last_updated: 2026-05-04
+#
+# 🤓 Documents the guard-violations.jsonl persistence format used by
+#    GuardViolationCounter and the `b00t guard violations list` CLI command.
+#    File is append-only JSONL — each line is one JSON object.
+#    Path: ~/.b00t/guard-violations.jsonl
+#
+# 🔗参 b00t-cli/src/hive.rs — GuardViolationCounter (load, increment, save)
+# 🔗参 b00t-cli/src/commands/guard.rs — `b00t guard violations list` CLI
+# 🔗参 _b00t_/hive-guards.hive.toml — guard definitions with repeat_threshold
+
+[b00t]
+name = "GUARD-VIOLATIONS"
+type = "schema"
+hint = "Guard violations persistence format — JSONL schema for guard-violations.jsonl; used by GuardViolationCounter and guard CLI"
+
+[b00t.version]
+schema = 1
+content = "stable"
+
+## Guard Violation Record Fields
+## schema_version=1: these 3 fields in this order.
+## Each line in guard-violations.jsonl is a JSON object with these keys.
+## Append-mode only — never overwrite the file.
+
+| field | type | description |
+|-------|------|-------------|
+| pattern | string | Guard pattern that matched (e.g. "pip install", or Rhai expr name) |
+| count | u32 | Running violation count for this pattern since last reset |
+| last_violation | string | ISO 8601 timestamp of most recent violation (e.g. "2026-05-04T05:30:00Z") |
+
+## Example record
+## {
+##     "pattern": "pip install",
+##     "count": 3,
+##     "last_violation": "2026-05-04T05:30:00Z"
+## }
+
+## Escalation Logic
+## schema_version=1: these 4 columns in this order.
+## The GuardViolationCounter implements the 🦨 → 💩 escalation pattern.
+
+| threshold | hit_count | emoji | action |
+|-----------|-----------|-------|--------|
+| repeat_threshold=None | any | 🦨 | Always warn (no escalation) |
+| repeat_threshold=N | count <= N | 🦨 | Warn + redirect |
+| repeat_threshold=N | count > N | 💩 | Block + escalate to operator |
+
+## File format notes
+##
+## - Path: ~/.b00t/guard-violations.jsonl
+## - Created on first violation if file doesn't exist
+## - Parent directory (~/.b00t/) created automatically
+## - OpenOptions::append() — never truncates, never rewrites entire file
+## - Loaded on each GuardViolationCounter::load() call via read_to_string + line-by-line parse
+## - Reset via GuardViolationCounter::reset_key() — rewrites file excluding the reset pattern
+## - Race condition: no locking — single-threaded CLI usage only
+
+# b00t:map v1
+# summary: Guard Violations schema — JSONL format for guard-violations.jsonl; escalation logic for 🦨→💩; field reference for GuardViolationCounter
+# tags: guard, violations, schema, jsonl, escalation, persistence, tomllmd
+# tier: sm0l
+# cmds: b00t guard violations list, b00t guard violations list --json, grep "guard-violations.jsonl" b00t-cli/src/hive.rs
+# complexity: 1

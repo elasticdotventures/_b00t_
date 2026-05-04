@@ -27,6 +27,7 @@ pub mod version {
 }
 
 pub mod aaiii;
+pub mod assimilate;
 pub mod agent_coordination;
 pub mod agent_manager;
 pub mod ai_client;

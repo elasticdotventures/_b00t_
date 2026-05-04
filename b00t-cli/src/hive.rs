@@ -1179,6 +1179,557 @@ fn query_systemd_user_services() -> Vec<String> {
     }
 }
 
+// ─── Peer / Gossip Infrastructure ─────────────────────────────────────────────
+//
+// Hive peers are discovered b00t nodes across trust zones (local, LAN, VPN, internet).
+// Peer data is a gossip-protocol ledger: peers exchange their known peer lists
+// to converge on a shared view of the hive.
+
+/// Trust zone classification for hive peers — determines access level and routing.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub enum TrustZone {
+    /// Unix socket or loopback interface (this machine)
+    Local,
+    /// Private IP on same subnet (192.168.x.x, 10.x.x.x, 172.16-31.x.x)
+    Lan,
+    /// Connected via VPN interface (tun, tap, wg)
+    Vpn,
+    /// Public internet address
+    Internet,
+}
+
+impl Default for TrustZone {
+    fn default() -> Self {
+        TrustZone::Internet
+    }
+}
+
+impl std::fmt::Display for TrustZone {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            TrustZone::Local => write!(f, "local"),
+            TrustZone::Lan => write!(f, "LAN"),
+            TrustZone::Vpn => write!(f, "VPN"),
+            TrustZone::Internet => write!(f, "internet"),
+        }
+    }
+}
+
+/// Check if an IP address is in a private range (RFC 1918 for IPv4).
+fn is_private_ip(ip: std::net::IpAddr) -> bool {
+    match ip {
+        std::net::IpAddr::V4(v4) => {
+            let o = v4.octets();
+            o[0] == 10
+                || (o[0] == 172 && (16..=31).contains(&o[1]))
+                || (o[0] == 192 && o[1] == 168)
+        }
+        std::net::IpAddr::V6(_) => false,
+    }
+}
+
+/// Classify a socket address into a trust zone using standard IP ranges.
+pub fn classify_trust_zone(addr: &std::net::SocketAddr) -> TrustZone {
+    match addr {
+        a if a.ip().is_loopback() => TrustZone::Local,
+        a if is_private_ip(a.ip()) => TrustZone::Lan,
+        a if is_vpn_ip(a.ip()) => TrustZone::Vpn,
+        _ => TrustZone::Internet,
+    }
+}
+
+fn is_vpn_ip(ip: std::net::IpAddr) -> bool {
+    match ip {
+        std::net::IpAddr::V4(v4) => {
+            let octets = v4.octets();
+            // Common VPN / tunnel subnets
+            (octets[0] == 10 && octets[1] == 8)       // 10.8.x.x (OpenVPN default)
+            || (octets[0] == 10 && octets[1] == 0 && octets[2] == 8) // 10.0.8.x
+            || (octets[0] == 100 && octets[1] >= 64 && octets[1] <= 127) // 100.64.x.x (CGNAT)
+        }
+        std::net::IpAddr::V6(_) => false,
+    }
+}
+
+/// A hive peer node with identity, address, and trust metadata.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct HivePeer {
+    /// Unique peer identifier (hostname or UUID)
+    pub id: String,
+    /// Address host:port or URL
+    pub address: String,
+    /// Inferred trust zone
+    #[serde(default)]
+    pub trust_zone: TrustZone,
+    /// ISO timestamp of last successful contact
+    #[serde(default)]
+    pub last_seen: Option<String>,
+    /// Signature over `id:address` from this peer's keypair
+    #[serde(default)]
+    pub signature: Option<String>,
+    /// Human-readable label
+    #[serde(default)]
+    pub label: Option<String>,
+}
+
+impl HivePeer {
+    /// Create a new peer, auto-classifying its trust zone.
+    pub fn new(id: String, address: String) -> Self {
+        let trust_zone = address
+            .parse::<std::net::SocketAddr>()
+            .map(|a| classify_trust_zone(&a))
+            .unwrap_or(TrustZone::Internet);
+        HivePeer {
+            id,
+            address,
+            trust_zone,
+            last_seen: None,
+            signature: None,
+            label: None,
+        }
+    }
+}
+
+/// Hive identity for cryptographic signing of peer messages.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct HiveIdentity {
+    /// Ed25519 signing key (raw bytes)
+    pub secret_key: Vec<u8>,
+    /// Corresponding public key (hex-encoded)
+    pub public_key: String,
+}
+
+impl HiveIdentity {
+    /// Load identity from file or generate a new one.
+    pub fn load_or_generate(path: &Path) -> Result<Self> {
+        if path.exists() {
+            let bytes = std::fs::read(path)?;
+            let identity: HiveIdentity =
+                serde_json::from_slice(&bytes).context("failed to parse hive identity")?;
+            Ok(identity)
+        } else {
+            let identity = Self::generate();
+            if let Some(parent) = path.parent() {
+                std::fs::create_dir_all(parent)?;
+            }
+            let json = serde_json::to_string_pretty(&identity)?;
+            std::fs::write(path, &json)?;
+            Ok(identity)
+        }
+    }
+
+    /// Generate a new Ed25519 identity.
+    pub fn generate() -> Self {
+        use ed25519_dalek::SigningKey;
+        use rand::rngs::OsRng;
+        let mut csprng = OsRng;
+        let signing_key = SigningKey::generate(&mut csprng);
+        let verifying_key = signing_key.verifying_key();
+        HiveIdentity {
+            secret_key: signing_key.to_bytes().to_vec(),
+            public_key: hex::encode(verifying_key.to_bytes()),
+        }
+    }
+    /// Sign a message with this identity.
+    pub fn sign(&self, message: &[u8]) -> String {
+        use ed25519_dalek::Signer;
+        use ed25519_dalek::SigningKey;
+        let key_bytes: [u8; 32] = self.secret_key[..32]
+            .try_into()
+            .expect("valid 32-byte secret key");
+        let signing_key: SigningKey = (&key_bytes).into();
+        let signature = signing_key.sign(message);
+        hex::encode(signature.to_bytes())
+    }
+
+    /// Verify a signature against the public key.
+    pub fn verify(public_key_hex: &str, message: &[u8], signature_hex: &str) -> bool {
+        use ed25519_dalek::{Signature, VerifyingKey};
+        use ed25519_dalek::Verifier;
+        let pk_bytes = match hex::decode(public_key_hex) {
+            Ok(b) => b,
+            Err(_) => return false,
+        };
+        let pk_bytes_arr: [u8; 32] = match pk_bytes.try_into() {
+            Ok(arr) => arr,
+            Err(_) => return false,
+        };
+        let pk = match VerifyingKey::from_bytes(&pk_bytes_arr) {
+            Ok(k) => k,
+            Err(_) => return false,
+        };
+        let sig_bytes = match hex::decode(signature_hex) {
+            Ok(b) => b,
+            Err(_) => return false,
+        };
+        let sig = match Signature::from_slice(&sig_bytes) {
+            Ok(s) => s,
+            Err(_) => return false,
+        };
+        pk.verify(message, &sig).is_ok()
+    }
+}
+
+/// Peer store path: ~/.b00t/peers.json
+pub fn default_peer_store_path() -> PathBuf {
+    dirs::home_dir()
+        .unwrap_or_else(|| PathBuf::from("."))
+        .join(".b00t")
+        .join("peers.json")
+}
+
+/// Save peers to the peer store file.
+pub fn save_peers(peers: &[HivePeer]) -> Result<()> {
+    let path = default_peer_store_path();
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    let json = serde_json::to_string_pretty(peers)?;
+    std::fs::write(&path, json)?;
+    Ok(())
+}
+
+/// Load peers from the peer store file.
+pub fn load_peers() -> Result<Vec<HivePeer>> {
+    let path = default_peer_store_path();
+    if !path.exists() {
+        return Ok(Vec::new());
+    }
+    let json = std::fs::read_to_string(&path)?;
+    let peers: Vec<HivePeer> = serde_json::from_str(&json)?;
+    Ok(peers)
+}
+
+/// Add a peer to the store (upsert by id).
+pub fn add_peer(peer: HivePeer) -> Result<()> {
+    let mut peers = load_peers()?;
+    peers.retain(|p| p.id != peer.id);
+    peers.push(peer);
+    save_peers(&peers)
+}
+
+/// Remove a peer from the store by id.
+pub fn remove_peer(id: &str) -> Result<()> {
+    let mut peers = load_peers()?;
+    peers.retain(|p| p.id != id);
+    save_peers(&peers)
+}
+
+/// Health-check a peer by attempting a TCP connection.
+pub fn peer_health_check(address: &str) -> Result<std::time::Duration> {
+    use std::net::TcpStream;
+    use std::time::Duration;
+    let start = std::time::Instant::now();
+    let addr: std::net::SocketAddr = address
+        .parse()
+        .map_err(|e| anyhow::anyhow!("invalid address '{}': {}", address, e))?;
+    let _stream = TcpStream::connect_timeout(&addr, Duration::from_secs(5))?;
+    Ok(start.elapsed())
+}
+
+/// Gossip with a random peer: query their peer list and merge unknown peers.
+pub fn gossip() -> Result<Vec<String>> {
+    let mut log = Vec::new();
+    let peers = load_peers()?;
+
+    if peers.is_empty() {
+        log.push("no peers in store — nothing to gossip with".to_string());
+        return Ok(log);
+    }
+
+    // Pick a random peer
+    use rand::Rng;
+    let idx = rand::thread_rng().gen_range(0..peers.len());
+    let target = &peers[idx];
+
+    log.push(format!("gossiping with {} @ {}", target.id, target.address));
+
+    // Try to fetch their peer list via HTTP
+    let url = if target.address.contains("://") {
+        format!("{}/peers", target.address.trim_end_matches('/'))
+    } else {
+        format!("http://{}/peers", target.address)
+    };
+
+    match reqwest::blocking::Client::builder()
+        .timeout(std::time::Duration::from_secs(10))
+        .build()
+    {
+        Ok(client) => match client.get(&url).send() {
+            Ok(resp) => {
+                if resp.status().is_success() {
+                    match resp.json::<Vec<HivePeer>>() {
+                        Ok(remote_peers) => {
+                            let mut local_peers = load_peers()?;
+                            let local_ids: std::collections::HashSet<String> =
+                                local_peers.iter().map(|p| p.id.clone()).collect();
+                            let mut new_count = 0;
+                            for rp in &remote_peers {
+                                if !local_ids.contains(&rp.id) {
+                                    local_peers.push(rp.clone());
+                                    new_count += 1;
+                                    log.push(format!("  discovered new peer: {} @ {}", rp.id, rp.address));
+                                }
+                            }
+                            if new_count > 0 {
+                                save_peers(&local_peers)?;
+                                log.push(format!("  merged {} new peers", new_count));
+                            } else {
+                                log.push("  no new peers discovered".to_string());
+                            }
+                            // Update last_seen for the target peer
+                            for lp in &mut local_peers {
+                                if lp.id == target.id {
+                                    lp.last_seen = Some(chrono::Utc::now().to_rfc3339());
+                                }
+                            }
+                            save_peers(&local_peers)?;
+                        }
+                        Err(e) => log.push(format!("  peer returned invalid JSON: {}", e)),
+                    }
+                } else {
+                    log.push(format!("  peer responded with HTTP {}", resp.status()));
+                }
+            }
+            Err(e) => log.push(format!("  connection failed: {}", e)),
+        },
+        Err(e) => log.push(format!("  client build failed: {}", e)),
+    }
+
+    Ok(log)
+}
+
+/// Prune peers not seen since the specified cutoff.
+pub fn prune_peers(older_than: &str) -> Result<Vec<String>> {
+    let mut log = Vec::new();
+    let peers = load_peers()?;
+    let now = chrono::Utc::now();
+
+    let before = peers.len();
+    let remaining: Vec<HivePeer> = peers
+        .into_iter()
+        .filter(|p| match &p.last_seen {
+            Some(ts) => match chrono::DateTime::parse_from_rfc3339(ts) {
+                Ok(t) => {
+                    let age = now.signed_duration_since(t);
+                    // Keep if younger than cutoff — parse from string
+                    let cutoff_dur = parse_duration(older_than);
+                    !(age > cutoff_dur)
+                }
+                Err(_) => true, // can't parse, keep
+            },
+            None => false, // never seen, remove
+        })
+        .collect();
+
+    let removed = before - remaining.len();
+    save_peers(&remaining)?;
+    log.push(format!("pruned {} peers (cutoff: {})", removed, older_than));
+
+    Ok(log)
+}
+
+/// Parse a human-readable duration like "30d", "7d", "24h" into chrono::Duration.
+fn parse_duration(s: &str) -> chrono::Duration {
+    let s = s.trim();
+    if let Some(val) = s.strip_suffix('d') {
+        let days: i64 = val.parse().unwrap_or(30);
+        chrono::Duration::days(days)
+    } else if let Some(val) = s.strip_suffix('h') {
+        let hours: i64 = val.parse().unwrap_or(24);
+        chrono::Duration::hours(hours)
+    } else if let Some(val) = s.strip_suffix('m') {
+        let minutes: i64 = val.parse().unwrap_or(60);
+        chrono::Duration::minutes(minutes)
+    } else if let Some(val) = s.strip_suffix('w') {
+        let weeks: i64 = val.parse().unwrap_or(4);
+        chrono::Duration::weeks(weeks)
+    } else {
+        // default: treat as days
+        let days: i64 = s.parse().unwrap_or(30);
+        chrono::Duration::days(days)
+    }
+}
+
+/// Display a peer in human-readable format.
+pub fn format_peer(p: &HivePeer) -> String {
+    let zone = format!("[{}]", p.trust_zone);
+    let seen = match &p.last_seen {
+        Some(ts) => match chrono::DateTime::parse_from_rfc3339(ts) {
+            Ok(t) => format!("last seen: {}", t.format("%Y-%m-%d %H:%M")),
+            Err(_) => "last seen: unknown".to_string(),
+        },
+        None => "never seen".to_string(),
+    };
+    let label = match &p.label {
+        Some(l) => format!(" ({})", l),
+        None => String::new(),
+    };
+    format!(
+        "{:20} {:8} {:22} {}{}",
+        p.id, zone, p.address, seen, label
+    )
+}
+
+// ─── mDNS Advertisement & Discovery ───────────────────────────────────────────
+//
+// Uses the mdns-sd crate (v0.19) to advertise this node as a b00t hive peer
+// on the local network, and to discover other b00t hive peers via mDNS.
+
+/// Default port for b00t hive mDNS advertisement (same as codebase-memory-mcp port)
+pub const HIVE_MDNS_PORT: u16 = 9749;
+/// mDNS service type for b00t hive peer discovery
+pub const HIVE_MDNS_SERVICE_TYPE: &str = "_b00t-hive._tcp.local.";
+
+/// Register this node as a b00t hive peer via mDNS (non-blocking, background thread).
+///
+/// Creates an `mdns-sd::ServiceDaemon`, registers a `ServiceInfo` for
+/// `_b00t-hive._tcp.local.`, and keeps the daemon alive in a background thread.
+/// Prints startup message via stderr.
+///
+/// # Arguments
+/// * `port` - The TCP port this node listens on (default: [`HIVE_MDNS_PORT`]).
+pub fn advertise_hive_peer(port: u16) {
+    std::thread::spawn(move || {
+        let daemon = match mdns_sd::ServiceDaemon::new() {
+            Ok(d) => d,
+            Err(e) => {
+                eprintln!("mDNS: failed to start daemon: {e}");
+                return;
+            }
+        };
+
+        let hostname = whoami::hostname();
+        let instance_name = format!("b00t-hive-{}", hostname);
+
+        let mut properties = std::collections::HashMap::new();
+        properties.insert("hostname".to_string(), hostname.clone());
+        properties.insert(
+            "version".to_string(),
+            b00t_c0re_lib::version::VERSION.to_string(),
+        );
+        properties.insert("trust_zone".to_string(), "local".to_string());
+
+        let service_info = match mdns_sd::ServiceInfo::new(
+            HIVE_MDNS_SERVICE_TYPE,
+            &instance_name,
+            &format!("{}.local.", hostname),
+            "", // empty → let mdns-sd auto-discover addresses
+            port,
+            Some(properties),
+        ) {
+            Ok(info) => info.enable_addr_auto(),
+            Err(e) => {
+                eprintln!("mDNS: failed to create service info: {e}");
+                return;
+            }
+        };
+
+        match daemon.register(service_info) {
+            Ok(()) => {
+                eprintln!(
+                    "mDNS: advertised as '{}' on _b00t-hive._tcp port {}",
+                    instance_name, port
+                );
+            }
+            Err(e) => {
+                eprintln!("mDNS: failed to register service: {e}");
+                return;
+            }
+        }
+
+        // Keep daemon alive indefinitely — when the handle drops, the service
+        // is un-advertised. Use a blocking recv() on a dangling channel.
+        // (Box::leak would work too, but this is more idiomatic for threads.)
+        let (_tx, rx) = std::sync::mpsc::channel::<()>();
+        let _ = rx.recv();
+    });
+}
+
+/// Browse the local network for b00t hive peers via mDNS.
+///
+/// Starts browsing for `_b00t-hive._tcp.local.` services, collects
+/// [`ServiceEvent::ServiceResolved`] events, and converts them into
+/// [`HivePeer`] entries.  Times out after `timeout_secs` seconds.
+///
+/// # Arguments
+/// * `timeout_secs` - Maximum seconds to wait for responses.
+///
+/// # Returns
+/// `Vec<HivePeer>` — discovered peers (empty on error or timeout).
+pub fn discover_hive_peers_mdns(timeout_secs: u64) -> Vec<HivePeer> {
+    let daemon = match mdns_sd::ServiceDaemon::new() {
+        Ok(d) => d,
+        Err(e) => {
+            eprintln!("mDNS discover: failed to start daemon: {e}");
+            return Vec::new();
+        }
+    };
+
+    let receiver = match daemon.browse(HIVE_MDNS_SERVICE_TYPE) {
+        Ok(r) => r,
+        Err(e) => {
+            eprintln!("mDNS discover: failed to browse: {e}");
+            return Vec::new();
+        }
+    };
+
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(timeout_secs);
+    let mut peers: Vec<HivePeer> = Vec::new();
+    let mut seen: std::collections::HashSet<String> = std::collections::HashSet::new();
+
+    loop {
+        let remaining = deadline.saturating_duration_since(std::time::Instant::now());
+        if remaining.is_zero() {
+            break;
+        }
+        match receiver.recv_timeout(remaining) {
+            Ok(event) => match event {
+                mdns_sd::ServiceEvent::ServiceResolved(resolved) => {
+                    let instance_name = resolved
+                        .get_fullname()
+                        .split('.')
+                        .next()
+                        .unwrap_or("unknown")
+                        .to_string();
+                    if seen.contains(&instance_name) {
+                        continue;
+                    }
+                    seen.insert(instance_name.clone());
+                    // Pick the first IP address if available
+                    let addr: Option<std::net::IpAddr> =
+                        resolved
+                            .get_addresses()
+                            .iter()
+                            .find_map(|scoped| match scoped {
+                                mdns_sd::ScopedIp::V4(sv4) => {
+                                    Some(std::net::IpAddr::V4(*sv4.addr()))
+                                }
+                                mdns_sd::ScopedIp::V6(sv6) => {
+                                    Some(std::net::IpAddr::V6(*sv6.addr()))
+                                }
+                                _ => None,
+                            });
+
+                    if let Some(ip) = addr {
+                        let sock_addr =
+                            std::net::SocketAddr::new(ip, resolved.get_port());
+                        let peer = HivePeer::new(instance_name, sock_addr.to_string());
+                        peers.push(peer);
+                    }
+                }
+                _ => { /* ignore SearchStarted, ServiceFound, etc. */ }
+            },
+            Err(_) => break, // includes flume::RecvTimeoutError::Timeout and Disconnected
+        }
+    }
+
+    // Clean up the browse session
+    let _ = daemon.stop_browse(HIVE_MDNS_SERVICE_TYPE);
+
+    peers
+}
+
 // ─── Tests ────────────────────────────────────────────────────────────────────
 
 #[cfg(test)]
