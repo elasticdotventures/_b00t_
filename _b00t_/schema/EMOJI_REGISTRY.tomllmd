@@ -33,6 +33,7 @@ content = "stable"  # never changes; hash is git's job, not the datum's
 | 🦨 | :skunk: | skunk | 1 | warn+redirect | First offense — show warning, execute redirect |
 | 💩 | :poop: | antipattern | 2 | block+escalate | Repeat offense — block command, escalate to operator |
 | 🚫 | :block: | block | 0 | deny | Permanent denial — no retry, no escalation |
+| 🥾 | :b00t: | b00t | 0 | interpose | b00t guard interposition — command routed through guard DAG |
 | 🍰 | :cake: | cake | 0 | reward | Aligned behavior reward |
 | 🐛 | :bug: | bug | 0 | log | Known bug — noted, not yet fixed |
 | 🚩 | :cybersec: | cybersec_flag | 0 | log | Security flag — potential data disclosure |

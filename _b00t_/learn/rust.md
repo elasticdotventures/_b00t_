@@ -113,3 +113,8 @@ tags: rust, mcp, clap, reflection, traits, server-handler, client-detection, wor
 tier: ch0nky
 cmds: cargo check, cargo test, b00t learn rust
 complexity: 6
+---
+network types: Use std::net types (IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr) instead of raw String for addresses. String matching on IP patterns (h.starts_with("192.168.")) is fragile and wrong. Rust std provides is_loopback(), is_private(), is_link_local(), is_unique_local() on IpAddr — use them. For hostnames, use a PeerAddr enum with type variants, not string parsing. url crate available for URL addresses. Trait-based matching over enum variants beats string match every time.
+
+---
+access-control: Implement trust zones and peer permissions as Zanzibar-style relation tuples (user:node relation:can_access object:resource), not ad-hoc enum match. OpenFGA/Auth0 FGA provide existing Rust SDKs. Relation tuples compose naturally across trust zones: zone becomes an object attribute. Use existing std::net types (IpAddr::is_loopback(), is_private()) + url::Host (already in tree) instead of hand-rolled string IP parsing.
