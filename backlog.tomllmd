@@ -1,0 +1,79 @@
+# b00t hive backlog — generated 2026-05-04
+# Priority: P0 (blocking) > P1 (this sprint) > P2 (next) > P3 (backlog)
+# Each task: id | tier | description | assignee | deps | est
+
+# ── P0: Integration & pipeline ────────────────────────────────────────────────
+
+# T1 | frontier | Daemonize ledgerr-mcp as systemd --user service
+#   The focus_tool MCP handler is wired in contract.rs, mcp_adapter.rs, and
+#   server.rs but the ledgerr-mcp binary isn't running as a daemon.
+#   Create b00t@ledgerr-mcp.service, start on boot, expose ledgerr_focus tool.
+#   Deps: T2
+#   Files: vendor/l3dg3rr/crates/ledgerr-mcp/src/bin/ledgerr-mcp-server.rs
+#          .config/systemd/user/b00t@.service
+#   Est: 4h
+
+# T2 | ch0nky | Wire b00t-cli experiment run → ledgerr-mcp MCP call
+#   Currently experiment emits [ledgrrr] lines to stderr but never calls
+#   the MCP server. After experiment, call ledgerr_focus/append_focus_record
+#   via the MCP protocol. Validate against FocusSchema before persisting.
+#   Deps: T1
+#   Files: b00t-cli/src/commands/experiment.rs
+#   Est: 3h
+
+# ── P1: Schema & validation ──────────────────────────────────────────────────
+
+# T3 | ch0nky | Implement FocusSchema::load() from .tomllmd
+#   Currently FocusSchema::new() hardcodes 43 headers in Rust.
+#   Add FocusSchema::load(path) that reads [b00t.schema.focus.headers]
+#   from the auto-generated .tomllmd file. This lets custom x_ columns
+#   be added by editing the file alone — no recompilation.
+#   Must validate: every mandatory header in the file must match the struct.
+#   Deps: none
+#   Files: b00t-cli/src/datum_schema.rs, _b00t_/focus.schema.tomllmd
+#   Est: 2h
+
+# T4 | sm0l | Wire FocusJsonlSequence into validate command
+#   FocusJsonlSequence exists in datum_schema.rs as an AbDataSequence impl
+#   but isn't connected to the validate command. Pipe sequence output
+#   through FocusSchema::validate() before sending to sm0l model.
+#   Deps: T3
+#   Files: b00t-cli/src/commands/validate.rs, b00t-cli/src/datum_schema.rs
+#   Est: 2h
+
+# ── P2: Real experiments ──────────────────────────────────────────────────────
+
+# T5 | ch0nky | Replace simulate_sub_agent sin() with real sm0l model call
+#   dispatch_experiment() calls simulate_sub_agent() which uses
+#   sin(seed * offset * 7.3) for deterministic fake scores.
+#   Replace with actual curl to localhost:8001 (ch0nky) or haiku API,
+#   passing the control/treatment prompts as messages and scoring
+#   the responses across ROI/cost/time/accuracy/utility/risk.
+#   Deps: none
+#   Files: b00t-cli/src/commands/experiment.rs
+#   Est: 6h
+
+# T6 | frontier | Unsloth training for FOCUS validation sm0l model
+#   Specialize a sm0l model (qwen2.5-3B) on FOCUS validation examples
+#   so PASS/FAIL reasoning is faster and more accurate than general
+#   model calls. Use unsloth for LoRA fine-tuning.
+#   Dataset: t00n-serialized FOCUS records + expected PASS/FAIL labels.
+#   Deps: T4
+#   Files: scripts/unsloth/ (new dir)
+#   Est: 12h
+
+# ── P3: Polish ────────────────────────────────────────────────────────────────
+
+# T7 | sm0l | Integration test: experiment → MCP → validation → FOCUS persist
+#   End-to-end test: run experiment, capture [ledgrrr] output, call
+#   ledgerr-mcp, validate response, check focus_records.jsonl exists.
+#   Deps: T1, T2
+#   Files: b00t-cli/tests/worker_ab_experiment_test.rs
+#   Est: 3h
+
+# T8 | sm0l | Clean up stale .tomllmd drift detection in CI
+#   The test_focus_schema_file_matches_generated test exists.
+#   Add it to the justfile test recipes so CI gates on it.
+#   Deps: none
+#   Files: justfile
+#   Est: 0.5h

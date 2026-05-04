@@ -163,136 +163,151 @@ impl LLMInference for CandleBackend {
 }
 
 #[cfg(feature = "candle")]
-/// Generate text using Candle inference with a HuggingFace model (Qwen2.5-0.5B-Instruct).
-/// Uses DeviceInfo::available() for GPU detection (nvidia-smi → env → CPU fallback).
-/// Downloads model weights via hf-hub on first run (cached in ~/.cache/huggingface/hub).
-pub fn generate_text(prompt: &str) -> Result<String> {
-    use candle_core::{Device, DType, Tensor};
-    use candle_nn::VarBuilder;
-    use candle_transformers::models::qwen2::{Config, Model};
-    use hf_hub::api::sync::Api;
-    use tokenizers::Tokenizer;
+/// A loaded Candle model that holds weights, tokenizer, and device in memory.
+/// Load the model once via `CandleModel::load()`, then call `generate()` 
+/// multiple times without re-downloading or rebuilding the computation graph.
+pub struct CandleModel {
+    model: candle_transformers::models::qwen2::Model,
+    tokenizer: tokenizers::Tokenizer,
+    device: candle_core::Device,
+    eos_id: u32,
+}
 
-    // Phase 1: Device detection (GPU via nvidia-smi, CPU fallback)
-    let device_str = DeviceInfo::available();
-    let device = if device_str.starts_with("cuda") {
-        Device::new_cuda(0).map_err(|e| anyhow!("CUDA init: {e}"))?
-    } else {
-        Device::Cpu
-    };
+#[cfg(feature = "candle")]
+impl CandleModel {
+    /// Load Qwen2.5-0.5B-Instruct from HuggingFace hub (cached after first download).
+    /// Returns a model singleton that can generate text without re-initializing.
+    pub fn load() -> Result<Self> {
+        use candle_core::{Device, DType};
+        use candle_nn::VarBuilder;
+        use candle_transformers::models::qwen2::{Config, Model};
+        use hf_hub::api::sync::Api;
+        use tokenizers::Tokenizer;
 
-    // Phase 2: Download/load model from Hugging Face hub
-    let api = Api::new().map_err(|e| anyhow!("HF Hub init (check HF_TOKEN or network): {e}"))?;
-    let repo = api.model("Qwen/Qwen2.5-0.5B-Instruct".to_string());
-
-    // Phase 3: Load tokenizer
-    let tokenizer_path = repo
-        .get("tokenizer.json")
-        .map_err(|e| anyhow!("Download tokenizer.json: {e}"))?;
-    let tokenizer = Tokenizer::from_file(tokenizer_path)
-        .map_err(|e| anyhow!("Tokenizer load: {e}"))?;
-
-    // Phase 4: Load model config
-    let config_path = repo
-        .get("config.json")
-        .map_err(|e| anyhow!("Download config.json: {e}"))?;
-    let config_str = std::fs::read_to_string(config_path)?;
-    let config: Config =
-        serde_json::from_str(&config_str).map_err(|e| anyhow!("Parse Qwen2 config: {e}"))?;
-
-    // Phase 5: Load model weights (single or sharded safetensors)
-    let vb = if let Ok(path) = repo.get("model.safetensors") {
-        // Single-file weights
-        unsafe { VarBuilder::from_mmaped_safetensors(&[path], DType::F32, &device) }
-            .map_err(|e| anyhow!("Load model.safetensors: {e}"))?
-    } else {
-        // Sharded weights — read index to discover all shard files
-        let index_path = repo
-            .get("model.safetensors.index.json")
-            .map_err(|e| anyhow!("No model.safetensors or index.json: {e}"))?;
-        let index_content = std::fs::read_to_string(index_path)?;
-        let index: serde_json::Value = serde_json::from_str(&index_content)?;
-        let weight_map = index["weight_map"]
-            .as_object()
-            .ok_or_else(|| anyhow!("Missing weight_map in model.safetensors.index.json"))?;
-
-        let mut shards: Vec<std::path::PathBuf> = weight_map
-            .values()
-            .filter_map(|v| v.as_str())
-            .map(|f| repo.get(f).unwrap_or_else(|_| std::path::PathBuf::from(f)))
-            .collect();
-        shards.sort();
-        shards.dedup();
-
-        unsafe { VarBuilder::from_mmaped_safetensors(&shards, DType::F32, &device) }
-            .map_err(|e| anyhow!("Load {} shard files: {e}", shards.len()))?
-    };
-
-    // Phase 6: Build model from weights
-    let mut model = Model::new(&config, vb).map_err(|e| anyhow!("Build Qwen2 model: {e}"))?;
-
-    // Phase 7: Tokenize input with Qwen2.5 chat template
-    let formatted = format!(
-        "<|im_start|>user\n{}<|im_end|>\n<|im_start|>assistant\n",
-        prompt
-    );
-    let encoding = tokenizer
-        .encode(formatted, true)
-        .map_err(|e| anyhow!("Tokenize: {e}"))?;
-    let input_ids: Vec<u32> = encoding.get_ids().to_vec();
-    let input_len = input_ids.len();
-    let mut tokens: Vec<u32> = input_ids.clone();
-    let eos_id: u32 = tokenizer.token_to_id("<|im_end|>").unwrap_or(151645);
-    let max_new: usize = 200;
-
-    // Phase 8: Autoregressive generation loop (greedy / argmax)
-    let mut next_token: u32 = 0;
-    for i in 0..max_new {
-        // First step: full input; subsequent steps: single new token (KV cache)
-        let input = if i == 0 {
-            Tensor::new(input_ids.as_slice(), &device)
-                .map_err(|e| anyhow!("Create input tensor: {e}"))?
-                .unsqueeze(0)?
+        let device_str = DeviceInfo::available();
+        let device = if device_str.starts_with("cuda") {
+            Device::new_cuda(0).map_err(|e| anyhow!("CUDA init: {e}"))?
         } else {
-            Tensor::new(&[next_token], &device)
-                .map_err(|e| anyhow!("Create token tensor: {e}"))?
-                .unsqueeze(0)?
+            Device::Cpu
         };
 
-        let logits = model
-            .forward(&input, i, None::<&candle_core::Tensor>)
-            .map_err(|e| anyhow!("Forward pass step {i}: {e}"))?;
+        let api = Api::new().map_err(|e| anyhow!("HF Hub init: {e}"))?;
+        let repo = api.model("Qwen/Qwen2.5-0.5B-Instruct".to_string());
 
-        // logits: [1, seq_len, vocab_size] → extract last token → [vocab_size]
-        let next_logit = logits
-            .squeeze(0)
-            .map_err(|e| anyhow!("Squeeze batch dim step {i}: {e}"))?;
-        let seq_len = next_logit.dims()[0];
-        let next_logit = next_logit
-            .narrow(0, seq_len - 1, 1)
-            .map_err(|e| anyhow!("Narrow last token step {i}: {e}"))?
-            .squeeze(0)
-            .map_err(|e| anyhow!("Squeeze seq dim step {i}: {e}"))?;
+        let tokenizer_path = repo.get("tokenizer.json")
+            .map_err(|e| anyhow!("Download tokenizer.json: {e}"))?;
+        let tokenizer = Tokenizer::from_file(tokenizer_path)
+            .map_err(|e| anyhow!("Tokenizer load: {e}"))?;
+        let eos_id = tokenizer.token_to_id("<|im_end|>").unwrap_or(151645);
 
-        // argmax over vocab dimension → scalar token index (u32)
-        next_token = next_logit
-            .argmax(0)
-            .map_err(|e| anyhow!("Argmax step {i}: {e}"))?
-            .to_scalar::<u32>()
-            .map_err(|e| anyhow!("Token scalar step {i}: {e}"))?;
+        let config_path = repo.get("config.json")
+            .map_err(|e| anyhow!("Download config.json: {e}"))?;
+        let config_str = std::fs::read_to_string(config_path)?;
+        let config: Config = serde_json::from_str(&config_str)
+            .map_err(|e| anyhow!("Parse Qwen2 config: {e}"))?;
 
-        tokens.push(next_token);
+        let vb = if let Ok(path) = repo.get("model.safetensors") {
+            unsafe { VarBuilder::from_mmaped_safetensors(&[path], DType::F32, &device) }
+                .map_err(|e| anyhow!("Load model.safetensors: {e}"))?
+        } else {
+            let index_path = repo.get("model.safetensors.index.json")
+                .map_err(|e| anyhow!("No model.safetensors or index.json: {e}"))?;
+            let index_content = std::fs::read_to_string(index_path)?;
+            let index: serde_json::Value = serde_json::from_str(&index_content)?;
+            let weight_map = index["weight_map"].as_object()
+                .ok_or_else(|| anyhow!("Missing weight_map in index.json"))?;
+            let mut shards: Vec<std::path::PathBuf> = weight_map.values()
+                .filter_map(|v| v.as_str())
+                .map(|f| repo.get(f).unwrap_or_else(|_| std::path::PathBuf::from(f)))
+                .collect();
+            shards.sort();
+            shards.dedup();
+            unsafe { VarBuilder::from_mmaped_safetensors(&shards, DType::F32, &device) }
+                .map_err(|e| anyhow!("Load {} shard files: {e}", shards.len()))?
+        };
 
-        if next_token == eos_id {
-            break;
-        }
+        let model = Model::new(&config, vb)
+            .map_err(|e| anyhow!("Build Qwen2 model: {e}"))?;
+
+        Ok(Self { model, tokenizer, device, eos_id })
     }
 
-    // Phase 9: Decode only the newly generated tokens
-    let generated = &tokens[input_len..];
-    let output = tokenizer
-        .decode(generated, true)
-        .map_err(|e| anyhow!("Decode output: {e}"))?;
+    /// Generate text from a prompt using the already-loaded model.
+    /// Only tokenizes and runs inference — no model loading overhead.
+    pub fn generate(&mut self, prompt: &str) -> Result<String> {
+        use candle_core::Tensor;
 
-    Ok(output.trim().to_string())
+        let formatted = format!(
+            "<|im_start|>user\n{}<|im_end|>\n<|im_start|>assistant\n", prompt
+        );
+        let encoding = self.tokenizer.encode(formatted, true)
+            .map_err(|e| anyhow!("Tokenize: {e}"))?;
+        let input_ids: Vec<u32> = encoding.get_ids().to_vec();
+        let input_len = input_ids.len();
+        let mut tokens: Vec<u32> = input_ids.clone();
+        let mut next_token: u32 = 0;
+
+        for i in 0..200 {
+            let input = if i == 0 {
+                Tensor::new(input_ids.as_slice(), &self.device)
+                    .map_err(|e| anyhow!("Create input tensor: {e}"))?
+                    .unsqueeze(0)?
+            } else {
+                Tensor::new(&[next_token], &self.device)
+                    .map_err(|e| anyhow!("Create token tensor: {e}"))?
+                    .unsqueeze(0)?
+            };
+
+            let logits = self.model.forward(&input, i, None::<&candle_core::Tensor>)
+                .map_err(|e| anyhow!("Forward pass step {i}: {e}"))?;
+
+            let next_logit = logits.squeeze(0)
+                .map_err(|e| anyhow!("Squeeze batch dim step {i}: {e}"))?;
+            let seq_len = next_logit.dims()[0];
+            let next_logit = next_logit.narrow(0, seq_len - 1, 1)
+                .map_err(|e| anyhow!("Narrow last token step {i}: {e}"))?
+                .squeeze(0)
+                .map_err(|e| anyhow!("Squeeze seq dim step {i}: {e}"))?;
+
+            next_token = next_logit.argmax(0)
+                .map_err(|e| anyhow!("Argmax step {i}: {e}"))?
+                .to_scalar::<u32>()
+                .map_err(|e| anyhow!("Token scalar step {i}: {e}"))?;
+            tokens.push(next_token);
+            if next_token == self.eos_id { break; }
+        }
+
+        let generated = &tokens[input_len..];
+        let output = self.tokenizer.decode(generated, true)
+            .map_err(|e| anyhow!("Decode output: {e}"))?;
+        Ok(output.trim().to_string())
+    }
+}
+
+/// Thread-safe singleton for the loaded Candle model.
+/// Call `get_candle_model()` to get or initialize the model once per process.
+static CANDLE_MODEL: std::sync::OnceLock<std::sync::Mutex<Option<CandleModel>>> =
+    std::sync::OnceLock::new();
+
+fn get_candle_model() -> Result<std::sync::MutexGuard<'static, Option<CandleModel>>> {
+    let lock = CANDLE_MODEL.get_or_init(|| std::sync::Mutex::new(None));
+    let mut guard = lock.lock().map_err(|e| anyhow!("candle model lock poisoned: {e}"))?;
+    if guard.is_none() {
+        let model = CandleModel::load()?;
+        *guard = Some(model);
+    }
+    Ok(guard)
+}
+
+/// Generate text using the cached CandleModel singleton.
+/// Loads the model once per process lifetime — subsequent calls reuse the
+/// loaded weights, tokenizer, and device. First call downloads model weights
+/// (~1.5GB) via HuggingFace hub and may take 10-60s.
+pub fn generate_text(prompt: &str) -> Result<String> {
+    let mut guard = get_candle_model()?;
+    if let Some(ref mut model) = *guard {
+        model.generate(prompt)
+    } else {
+        Err(anyhow!("candle model not loaded"))
+    }
 }

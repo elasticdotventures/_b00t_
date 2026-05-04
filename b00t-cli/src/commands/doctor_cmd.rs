@@ -221,12 +221,12 @@ fn check_ledgerr_service() -> Value {
 
 /// Check 6: Local model endpoint reachable
 fn check_model_endpoint() -> Value {
-    let reachable = reqwest::blocking::Client::builder()
-        .timeout(std::time::Duration::from_secs(5))
-        .build()
+    // Use curl instead of reqwest::blocking to avoid tokio runtime panic (#[tokio::main])
+    let reachable = std::process::Command::new("curl")
+        .args(["-s", "--max-time", "3", "-o", "/dev/null", "-w", "%{http_code}", "http://localhost:8001/v1/models"])
+        .output()
         .ok()
-        .and_then(|client| client.get("http://localhost:8001/v1/models").send().ok())
-        .map(|resp| resp.status().is_success())
+        .map(|o| String::from_utf8_lossy(&o.stdout).trim() == "200")
         .unwrap_or(false);
 
     json!({
@@ -235,7 +235,7 @@ fn check_model_endpoint() -> Value {
         "detail": if reachable {
             "reachable".to_string()
         } else {
-            "not reachable (is vllm running?)".to_string()
+            "not reachable (is vllm/ch0nky running?)".to_string()
         }
     })
 }

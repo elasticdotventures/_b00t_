@@ -102,57 +102,11 @@ pub trait DesignHeuristicCheck: Send + Sync {
 
 // ─── Concrete check implementations ──────────────────────────────────────────
 
-pub struct CandleBuildCheck;
-impl BuildIntegrityCheck for CandleBuildCheck {
-    fn name(&self) -> &str { "candle feature compiles" }
-    fn run(&self) -> CheckResult {
-        let status = std::process::Command::new("cargo")
-            .args(["check", "--features", "candle", "-p", "b00t-cli"])
-            .stdout(std::process::Stdio::null())
-            .stderr(std::process::Stdio::null())
-            .status();
-        match status {
-            Ok(s) if s.success() => CheckResult {
-                name: self.name().into(), category: CheckCategory::BuildIntegrity,
-                passed: true, detail: "cargo check --features candle succeeded".into(),
-            },
-            Ok(s) => CheckResult {
-                name: self.name().into(), category: CheckCategory::BuildIntegrity,
-                passed: false, detail: format!("exit code {:?}", s.code()),
-            },
-            Err(e) => CheckResult {
-                name: self.name().into(), category: CheckCategory::BuildIntegrity,
-                passed: false, detail: format!("spawn failed: {e}"),
-            },
-        }
-    }
-}
-
-pub struct DefaultBuildCheck;
-impl BuildIntegrityCheck for DefaultBuildCheck {
-    fn name(&self) -> &str { "default build compiles" }
-    fn run(&self) -> CheckResult {
-        let status = std::process::Command::new("cargo")
-            .args(["check", "-p", "b00t-cli"])
-            .stdout(std::process::Stdio::null())
-            .stderr(std::process::Stdio::null())
-            .status();
-        match status {
-            Ok(s) if s.success() => CheckResult {
-                name: self.name().into(), category: CheckCategory::BuildIntegrity,
-                passed: true, detail: "cargo check succeeded".into(),
-            },
-            Ok(s) => CheckResult {
-                name: self.name().into(), category: CheckCategory::BuildIntegrity,
-                passed: false, detail: format!("exit code {:?}", s.code()),
-            },
-            Err(e) => CheckResult {
-                name: self.name().into(), category: CheckCategory::BuildIntegrity,
-                passed: false, detail: format!("spawn failed: {e}"),
-            },
-        }
-    }
-}
+// Build integrity checks are implemented as RHAI scripts at
+// _b00t_/scripts/wow/check-candle-build.rhai and check-default-build.rhai.
+// The Rust trait implementations were removed — they spawned `cargo check` as
+// a subprocess which caused 2+ minute test times. RHAI is the canonical path
+// for slow integration checks.
 
 pub struct KnownRoleCheck;
 impl TypeInvariantCheck for KnownRoleCheck {
@@ -359,9 +313,10 @@ pub fn format_spline(results: &[CheckResult]) -> String {
 }
 
 /// Initialize default checks. Called at startup.
+/// Build integrity checks (candle feature, default build) are RHAI-only
+/// (_b00t_/scripts/wow/check-*.rhai) — they spawn cargo subprocesses and
+/// would cause multi-minute test times as Rust unit tests.
 pub fn init_default_checks() {
-    register_build(CandleBuildCheck);
-    register_build(DefaultBuildCheck);
     register_type(KnownRoleCheck);
     register_boundary(VendorDockerfileCheck);
     register_deployment(DualRuntimeCheck);
@@ -416,8 +371,6 @@ mod tests {
     }
 
     // Individual wow_test! invocations — each generates a #[test] + doc example
-    wow_test!(test_candle_build, CandleBuildCheck, BuildIntegrityCheck, "candle feature compiles");
-    wow_test!(test_default_build, DefaultBuildCheck, BuildIntegrityCheck, "default build compiles");
     wow_test!(test_known_role, KnownRoleCheck, TypeInvariantCheck, "KnownRole enum is exhaustive");
     wow_test!(test_vendor_dockerfile, VendorDockerfileCheck, BoundaryCheck, "vendor dockerfile exists");
     wow_test!(test_dual_runtime, DualRuntimeCheck, DeploymentCheck, "dual runtime datum");
