@@ -140,3 +140,42 @@ fn test_phygital_ontology_graph_renderable() {
         "ontology should contain experiment dispatch"
     );
 }
+
+#[test]
+fn test_experiment_focus_pipeline() {
+    let _guard = INTEGRATION_MUTEX.lock().unwrap();
+    let output = Command::new("cargo")
+        .args([
+            "run",
+            "-p",
+            "b00t-cli",
+            "--",
+            "experiment",
+            "run",
+            "--id=integ-focus-pipe",
+            "--control=hello",
+            "--treatment=world",
+        ])
+        .output()
+        .expect("failed to run experiment");
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+
+    assert!(
+        output.status.success(),
+        "experiment should exit 0\nstdout:\n{stdout}\nstderr:\n{stderr}"
+    );
+    assert!(
+        stdout.contains("A/B RESULT"),
+        "stdout should contain A/B RESULT:\n{stdout}"
+    );
+    assert!(
+        stderr.contains("[ledgrrr]"),
+        "stderr should contain [ledgrrr] FOCUS records:\n{stderr}"
+    );
+    assert!(
+        stderr.contains("focus_delta"),
+        "stderr should contain focus_delta comparison:\n{stderr}"
+    );
+}

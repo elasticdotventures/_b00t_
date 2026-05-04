@@ -15,15 +15,17 @@
 //! PASS: <requirement-id>
 //! FAIL: <requirement-id>: <reason>
 
-use crate::datum_schema::{AbDataRequirement, FocusSchema};
+use crate::datum_schema::{AbDataRequirement, AbDataSchema, FocusJsonlSequence, FocusSchema, MatchMode, SchemaError};
 use anyhow::{Context, Result};
 use clap::Parser;
 use std::collections::HashMap;
-use std::io::Read;
+use std::fs::{self, OpenOptions};
+use std::io::{Read, Write};
 use std::path::PathBuf;
 
 const SM0L_MODEL: &str = "ch0nky";
 const SM0L_TIMEOUT_SEC: u64 = 30;
+const FSL_STORE: &str = ".b00t/fsl/focus-examples.jsonl";
 
 #[derive(Parser, Clone)]
 pub struct ValidateArgs {
@@ -38,6 +40,24 @@ pub struct ValidateArgs {
 
     #[arg(long, help = "Output raw PASS/FAIL without explanation")]
     pub quiet: bool,
+
+    #[arg(long, help = "Read FOCUS records from JSONL file and validate against FocusSchema")]
+    pub jsonl: Option<PathBuf>,
+
+    #[arg(long, help = "Skip the sm0l model call, only validate schema conformance")]
+    pub skip_model: bool,
+
+    #[arg(long, help = "Auto-train model when FSL failures exceed threshold (default: 10)")]
+    pub auto_train: bool,
+
+    #[arg(long, help = "Training datum name for --auto-train (default: focus-validator)")]
+    pub train_name: Option<String>,
+
+    #[arg(long, help = "FSL failure threshold to trigger auto-train (default: 10)")]
+    pub train_threshold: Option<usize>,
+
+    #[arg(long, help = "Schema datum name (default: focus). Loads _b00t_/<name>.schema.tomllmd")]
+    pub schema: Option<String>,
 }
 
 // ── Validation result ────────────────────────────────────────────────────────
@@ -50,6 +70,29 @@ struct ValidationResult {
 }
 
 // ── Prompt construction ──────────────────────────────────────────────────────
+
+/// Load prior failure examples from the few-shot learning store.
+/// Returns up to `max` examples, newest first.
+fn load_fsl_examples(max: usize) -> Vec<String> {
+    let path = PathBuf::from(FSL_STORE);
+    let content = match fs::read_to_string(&path) {
+        Ok(c) => c,
+        Err(_) => return Vec::new(),
+    };
+    content.lines().rev().take(max).map(|l| l.to_string()).collect()
+}
+
+/// Save a failed validation as a new few-shot example.
+/// Format: `t00n_input|requirement_id|reason`
+fn save_fsl_failure(t00n_data: &str, req_id: &str, reason: &str) {
+    let path = PathBuf::from(FSL_STORE);
+    if let Some(parent) = path.parent() {
+        let _ = fs::create_dir_all(parent);
+    }
+    let line = format!("{}|{}|{}\n", t00n_data.lines().next().unwrap_or(""), req_id, reason);
+    let _ = OpenOptions::new().create(true).append(true).open(&path)
+        .and_then(|mut f| f.write_all(line.as_bytes()));
+}
 
 fn build_validation_prompt(t00n_data: &str, reqs: &[AbDataRequirement]) -> String {
     let mut prompt = String::from(
@@ -156,9 +199,47 @@ fn parse_validation_response(response: &str, reqs: &[AbDataRequirement]) -> Vec<
     results
 }
 
+// ── Schema resolution ─────────────────────────────────────────────────────────
+
+/// Resolve a `FocusSchema` from a schema datum name.
+/// - `None` or `"focus"` → `FocusSchema::new()` (built-in default)
+/// - Other names → load `_b00t_/<name>.schema.tomllmd` from project or home
+fn resolve_schema(name: Option<&str>) -> Result<FocusSchema> {
+    match name {
+        None | Some("focus") => Ok(FocusSchema::new()),
+        Some(schema_name) => {
+            // Search: cwd/_b00t_/, then ~/.dotfiles/_b00t_/
+            let candidates = [
+                std::env::current_dir()
+                    .ok()
+                    .map(|d| d.join("_b00t_").join(format!("{schema_name}.schema.tomllmd"))),
+                dirs::home_dir()
+                    .map(|h| h.join(".dotfiles").join("_b00t_").join(format!("{schema_name}.schema.tomllmd"))),
+            ];
+
+            for candidate in candidates.iter().flatten() {
+                if candidate.exists() {
+                    return FocusSchema::load(&candidate.to_string_lossy())
+                        .with_context(|| format!("load schema datum from {candidate:?}"));
+                }
+            }
+
+            anyhow::bail!(
+                "Schema '{schema_name}' not found at _b00t_/{schema_name}.schema.tomllmd \
+                 (searched cwd/_b00t_/ and ~/.dotfiles/_b00t_/)"
+            );
+        }
+    }
+}
+
 // ── Main handler ─────────────────────────────────────────────────────────────
 
 pub fn handle_validate(args: &ValidateArgs) -> Result<()> {
+    // ── JSONL branch ──────────────────────────────────────────────────────────
+    if let Some(path) = &args.jsonl {
+        return validate_jsonl(args, path);
+    }
+
     let t00n_data = if args.stdin {
         let mut buf = String::new();
         std::io::stdin().read_to_string(&mut buf)?;
@@ -166,16 +247,123 @@ pub fn handle_validate(args: &ValidateArgs) -> Result<()> {
     } else if let Some(path) = &args.t00n {
         std::fs::read_to_string(path).context("read t00n file")?
     } else {
-        anyhow::bail!("provide --t00n <file> or --stdin");
+        anyhow::bail!("provide --t00n <file>, --stdin, or --jsonl <file>");
     };
 
     // Requirements come from the schema datum itself — zero drift.
-    let schema = FocusSchema::new();
+    let schema = resolve_schema(args.schema.as_deref())?;
     let reqs = schema.requirements();
 
+    // Build prompt with few-shot learning examples from prior failures
+    let fsl_examples = load_fsl_examples(5);
+    let extended_input = if fsl_examples.is_empty() {
+        t00n_data.clone()
+    } else {
+        format!("Prior validation failures (learn from these):\n{}\n\nNew records:\n{}",
+            fsl_examples.join("\n"), t00n_data)
+    };
+
     let endpoint = args.endpoint.clone().unwrap_or_else(|| "http://localhost:8001".to_string());
-    let prompt = build_validation_prompt(&t00n_data, &reqs);
+    let prompt = build_validation_prompt(&extended_input, &reqs);
     let response = call_sm0l_model(&prompt, &endpoint).context("sm0l model call failed — is ch0nky running on :8001?")?;
+    let results = parse_validation_response(&response, &reqs);
+
+    let passed = results.iter().filter(|r| r.passed).count();
+    let failed = results.iter().filter(|r| !r.passed).count();
+
+    for r in &results {
+        if r.passed {
+            println!("PASS: {}", r.requirement_id);
+        } else {
+            // Save failures as few-shot examples for next validation
+            save_fsl_failure(&t00n_data, &r.requirement_id, &r.reason);
+            if args.quiet {
+                println!("FAIL: {}", r.requirement_id);
+            } else {
+                println!("FAIL: {}: {}", r.requirement_id, r.reason);
+            }
+        }
+    }
+
+    eprintln!("validation complete: {passed} passed, {failed} failed (fsl examples: {})", fsl_examples.len());
+
+    // Auto-train trigger: when failures exceed threshold, kick off `b00t model train`
+    if failed > 0 && args.auto_train {
+        let threshold = args.train_threshold.unwrap_or(10);
+        let current = load_fsl_examples(usize::MAX).len();
+        if current >= threshold {
+            let train_name = args.train_name.as_deref().unwrap_or("focus-validator");
+            eprintln!("   FSL store ({current}) ≥ threshold ({threshold}) — triggering auto-train for '{train_name}'...");
+            let status = std::process::Command::new("b00t-cli")
+                .args(["model", "train", train_name])
+                .status();
+            match status {
+                Ok(s) if s.success() => eprintln!("   ✅ auto-train complete"),
+                Ok(s) => eprintln!("   ⚠️  auto-train failed (exit={:?})", s.code()),
+                Err(e) => eprintln!("   ⚠️  auto-train error: {e}"),
+            }
+        } else {
+            eprintln!("   FSL store ({current}) below threshold ({threshold}) — no auto-train");
+        }
+    }
+
+    if failed > 0 { std::process::exit(1); }
+    Ok(())
+}
+
+// ── JSONL validation ─────────────────────────────────────────────────────────
+
+/// Validate a JSONL file against FocusSchema, then optionally pass to sm0l model.
+fn validate_jsonl(args: &ValidateArgs, path: &PathBuf) -> Result<()> {
+    let schema = resolve_schema(args.schema.as_deref())?;
+    let mut seq = FocusJsonlSequence::open(&path.to_string_lossy())
+        .with_context(|| format!("open JSONL file '{}'", path.display()))?;
+
+    let mut errors: Vec<SchemaError> = Vec::new();
+    let mut frame_count = 0;
+
+    for result in &mut seq {
+        match result {
+            Ok(frame) => {
+                frame_count += 1;
+                if let Err(frame_errors) = schema.validate(frame, MatchMode::ByName) {
+                    errors.extend(frame_errors);
+                }
+            }
+            Err(e) => {
+                errors.push(e.clone());
+            }
+        }
+    }
+
+    // Report schema validation results
+    if errors.is_empty() {
+        println!("PASS: {} frames validated against FocusSchema", frame_count);
+    } else {
+        for err in &errors {
+            println!("FAIL: SchemaError: {}", err.0);
+        }
+    }
+
+    eprintln!("schema validation complete: {} frames, {} errors", frame_count, errors.len());
+
+    if !errors.is_empty() {
+        std::process::exit(1);
+    }
+
+    // ── Skip model if requested ───────────────────────────────────────────────
+    if args.skip_model {
+        return Ok(());
+    }
+
+    // ── Proceed to sm0l model call ────────────────────────────────────────────
+    let jsonl_data = std::fs::read_to_string(path)
+        .with_context(|| format!("read JSONL file '{}'", path.display()))?;
+    let reqs = schema.requirements();
+    let endpoint = args.endpoint.clone().unwrap_or_else(|| "http://localhost:8001".to_string());
+    let prompt = build_validation_prompt(&jsonl_data, &reqs);
+    let response = call_sm0l_model(&prompt, &endpoint)
+        .context("sm0l model call failed — is ch0nky running on :8001?")?;
     let results = parse_validation_response(&response, &reqs);
 
     let passed = results.iter().filter(|r| r.passed).count();
@@ -191,7 +379,7 @@ pub fn handle_validate(args: &ValidateArgs) -> Result<()> {
         }
     }
 
-    eprintln!("validation complete: {passed} passed, {failed} failed");
+    eprintln!("model validation complete: {passed} passed, {failed} failed");
     if failed > 0 { std::process::exit(1); }
     Ok(())
 }
@@ -269,5 +457,53 @@ mod tests {
     fn test_call_sm0l_model_returns_error_when_curl_fails() {
         let result = call_sm0l_model("test", "http://localhost:1");
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_validate_jsonl_valid_file() {
+        let dir = std::env::temp_dir().join("b00t-test-validate-jsonl");
+        let _ = std::fs::create_dir_all(&dir);
+        let path = dir.join("valid.jsonl");
+
+        // A valid JSONL record: all required (non-nullable) FocusSchema fields present
+        let record = r#"{"BillingAccountId":"acct1","BillingCurrency":"USD","ServiceProviderName":"AWS","ServiceName":"EC2","SkuId":"sku-1","BilledCost":10.0,"EffectiveCost":9.0,"ChargeCategory":"Usage","ChargeFrequency":"UsageBased","ChargePeriodStart":"2024-01-01","ChargePeriodEnd":"2024-01-02","BillingPeriodStart":"2024-01-01","BillingPeriodEnd":"2024-02-01"}"#;
+        std::fs::write(&path, record).unwrap();
+
+        let args = ValidateArgs {
+            t00n: None,
+            stdin: false,
+            endpoint: None,
+            quiet: false,
+            jsonl: Some(path),
+            skip_model: true,
+            auto_train: false,
+            train_name: None,
+            train_threshold: None,
+            schema: None,
+        };
+
+        let result = handle_validate(&args);
+        assert!(result.is_ok(), "valid JSONL should pass: {result:?}");
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn test_validate_jsonl_missing_file() {
+        let args = ValidateArgs {
+            t00n: None,
+            stdin: false,
+            endpoint: None,
+            quiet: false,
+            jsonl: Some(PathBuf::from("/tmp/b00t-test-nonexistent-file.jsonl")),
+            skip_model: true,
+            auto_train: false,
+            train_name: None,
+            train_threshold: None,
+            schema: None,
+        };
+
+        let result = handle_validate(&args);
+        assert!(result.is_err(), "missing JSONL should fail: {result:?}");
     }
 }

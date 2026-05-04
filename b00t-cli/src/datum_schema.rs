@@ -27,6 +27,7 @@ use anyhow::Result;
 use clap::Parser;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use toml::Value;
 
 #[derive(Parser, Clone)]
 pub struct SchemaGenerateArgs {
@@ -300,6 +301,45 @@ impl FocusSchema {
             h("x_ReasoningReview",  DataType::String,   true,  "ledgrrr: reviewer verdict"),
         ]}
     }
+
+    /// Load FocusSchema from a `.tomllmd` file at runtime.
+    /// Reads the `[b00t.schema.focus.headers]` table and constructs
+    /// AbDataHeader entries with type mapping:
+    /// - `"metric"` → `DataType::Decimal`
+    /// - `"dimension"` → `DataType::String`
+    pub fn load(path: &str) -> Result<Self> {
+        let content = std::fs::read_to_string(path)?;
+        let root: Value = toml::from_str(&content)?;
+
+        let headers_table = root
+            .get("b00t")
+            .and_then(|v| v.get("schema"))
+            .and_then(|v| v.get("focus"))
+            .and_then(|v| v.get("headers"))
+            .and_then(|v| v.as_table())
+            .ok_or_else(|| anyhow::anyhow!("missing [b00t.schema.focus.headers] in {path}"))?;
+
+        let mut headers: Vec<AbDataHeader> = Vec::new();
+        for (name, entry) in headers_table {
+            let tbl = entry
+                .as_table()
+                .ok_or_else(|| anyhow::anyhow!("header {name} value is not a table"))?;
+
+            let type_str = tbl.get("type").and_then(|v| v.as_str()).unwrap_or("dimension");
+            let data_type = match type_str {
+                "metric" => DataType::Decimal,
+                _ => DataType::String,
+            };
+
+            let nullable = tbl.get("nullable").and_then(|v| v.as_bool()).unwrap_or(true);
+            let ordinal = tbl.get("ordinal").and_then(|v| v.as_integer()).unwrap_or(0) as usize;
+
+            headers.push(AbDataHeader::new(name, data_type, nullable, "", ordinal));
+        }
+
+        headers.sort_by_key(|h| h.ordinal);
+        Ok(Self { headers })
+    }
 }
 
 impl FocusSchema {
@@ -552,6 +592,19 @@ mod tests {
             generated_normalized, on_disk_normalized,
             "focus.schema.tomllmd is stale — regenerate with `b00t schema generate`"
         );
+    }
+
+    #[test]
+    fn test_focus_schema_load_from_file() {
+        let root = std::env::var("CARGO_MANIFEST_DIR")
+            .or_else(|_| std::env::current_dir().map(|p| p.to_string_lossy().to_string()))
+            .unwrap_or_else(|_| ".".to_string());
+        let path = format!("{root}/../_b00t_/focus.schema.tomllmd");
+        let s = FocusSchema::load(&path).expect("should load focus.schema.tomllmd");
+        assert_eq!(s.headers().len(), 43, "expected 43 headers from file");
+        let billed = s.header("BilledCost").expect("BilledCost header should exist");
+        assert_eq!(billed.data_type, DataType::Decimal, "BilledCost: metric -> Decimal");
+        assert_eq!(billed.nullable, false, "BilledCost should be non-nullable");
     }
 
     #[test]

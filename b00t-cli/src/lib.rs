@@ -58,6 +58,7 @@ pub mod traits;
 pub mod utils;
 pub mod viz;
 pub mod whoami;
+pub mod wow;
 pub use traits::*;
 
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Default)]

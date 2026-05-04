@@ -4,13 +4,18 @@
 //! - `list` / `search` → metadata only (~50 tokens per skill)
 //! - `load`            → metadata + applies_to summary
 //! - `activate`        → full instruction body → stdout for LLM injection
+//! - `serve`           → HTTP server for remote skill loading by opencode
 
 use anyhow::Result;
 use clap::Parser;
 use serde_json::json;
-use std::path::Path;
+use std::io::{Read, Write};
+use std::net::TcpListener;
+use std::path::PathBuf;
+use std::sync::Arc;
 
 use crate::get_expanded_path;
+use crate::skill_resolver::SkillFormat;
 use crate::skill_resolver::SkillResolver;
 
 #[derive(Parser)]
@@ -47,6 +52,22 @@ pub enum SkillCommands {
         name: String,
         #[clap(long, help = "Prefix with role context from named role datum")]
         role: Option<String>,
+    },
+
+    #[clap(about = "Serve skills via HTTP for remote loading by opencode")]
+    Serve {
+        #[clap(long, default_value = "4097", help = "Port to listen on")]
+        port: u16,
+        #[clap(long, default_value = "127.0.0.1", help = "Host to bind to")]
+        host: String,
+    },
+
+    #[clap(about = "Pull skills from a remote opencode-compatible URL")]
+    Sync {
+        #[clap(long, help = "Remote URL serving /index.json (e.g. http://localhost:4097)")]
+        url: String,
+        #[clap(long, help = "Output directory for downloaded skills", default_value = ".opencode/skills")]
+        output: PathBuf,
     },
 }
 
@@ -167,6 +188,10 @@ pub fn handle_skill_command(cmd: &SkillCommands, path: &str) -> Result<()> {
             println!("{}", content.instructions);
             Ok(())
         }
+
+        SkillCommands::Serve { port, host } => handle_serve(*port, host, path),
+
+        SkillCommands::Sync { url, output } => handle_sync(url, output),
     }
 }
 
@@ -272,6 +297,345 @@ fn find_b00t_dir() -> Result<std::path::PathBuf> {
         }
     }
     anyhow::bail!("No _b00t_ directory found (tried project-local and ~/.b00t/_b00t_/)")
+}
+
+// ── HTTP serve (b00t skill serve) ──────────────────────────────────────────
+
+/// Serve skills via HTTP for opencode's remote skill URL mechanism.
+fn handle_serve(port: u16, host: &str, base_path: &str) -> Result<()> {
+    // Build standard resolver
+    let resolver = build_resolver(base_path);
+    let mut skills = resolver.list();
+
+    // Also include .opencode/skills/ — the primary b00t skill directory
+    // (not in the resolver's standard search paths by default)
+    if let Ok(base) = get_expanded_path(base_path) {
+        let opencode_dir = base.join(".opencode").join("skills");
+        if opencode_dir.is_dir() {
+            let extra =
+                SkillResolver::with_dirs(vec![(opencode_dir, SkillFormat::SkillMd)]);
+            let seen: std::collections::HashSet<String> =
+                skills.iter().map(|s| s.name.clone()).collect();
+            for s in extra.list() {
+                if !seen.contains(&s.name) {
+                    skills.push(s);
+                }
+            }
+        }
+    }
+
+    let skills = Arc::new(skills);
+    let addr = format!("{}:{}", host, port);
+    let listener = TcpListener::bind(&addr)
+        .map_err(|e| anyhow::anyhow!("Cannot bind to {}: {}", addr, e))?;
+
+    println!("🥾 b00t skill server — http://{}", addr);
+    println!("   {} skills available", skills.len());
+    println!("   GET /index.json                              → skill manifest");
+    println!("   GET /skills/<name>/<file>                     → skill file");
+    println!("   Press Ctrl+C to stop");
+
+    for stream in listener.incoming() {
+        let skills = Arc::clone(&skills);
+        match stream {
+            Ok(mut stream) => {
+                std::thread::spawn(move || {
+                    if let Err(e) = serve_connection(&mut stream, &skills) {
+                        eprintln!("⚠️  Serve error: {}", e);
+                    }
+                });
+            }
+            Err(e) => eprintln!("⚠️  Accept error: {}", e),
+        }
+    }
+
+    Ok(())
+}
+
+/// Handle a single HTTP connection.
+fn serve_connection(
+    stream: &mut std::net::TcpStream,
+    skills: &[crate::skill_resolver::SkillMeta],
+) -> Result<()> {
+    let mut buf = [0u8; 8192];
+    let n = stream.read(&mut buf)?;
+    if n == 0 {
+        return Ok(());
+    }
+
+    let request = String::from_utf8_lossy(&buf[..n]);
+    let response = route_request(&request, skills);
+
+    stream.write_all(response.as_bytes())?;
+    Ok(())
+}
+
+/// Parse the HTTP request and dispatch to the appropriate handler.
+fn route_request(request: &str, skills: &[crate::skill_resolver::SkillMeta]) -> String {
+    // Parse request line: "GET /path HTTP/1.1"
+    let path = request
+        .lines()
+        .next()
+        .and_then(|line| line.split_whitespace().nth(1))
+        .unwrap_or("/");
+
+    match path {
+        "/" | "/index.json" => serve_index_json(skills),
+        _ => {
+            // Support two URL schemes:
+            //   1. /skills/<name>/<file>  (task-specified format)
+            //   2. /<name>/<file>          (opencode native format)
+            let trimmed = path.trim_start_matches('/');
+            if let Some(rest) = trimmed.strip_prefix("skills/") {
+                serve_skill_file(rest, skills)
+            } else if trimmed.contains('/') {
+                // Direct /<name>/<file> — but only if first component is not "index"
+                let first = trimmed.split('/').next().unwrap_or("");
+                if first == "index" || first == "index.json" {
+                    serve_index_json(skills)
+                } else {
+                    serve_skill_file(trimmed, skills)
+                }
+            } else {
+                http_response(
+                    "400 Bad Request",
+                    "text/plain",
+                    "Invalid path. Use /index.json or /<name>/<file>",
+                )
+            }
+        }
+    }
+}
+
+/// Build the manifest JSON in opencode's remote skill format.
+fn serve_index_json(skills: &[crate::skill_resolver::SkillMeta]) -> String {
+    let entries: Vec<serde_json::Value> = skills
+        .iter()
+        .map(|skill| {
+            let files = list_skill_files(skill);
+            json!({
+                "name": skill.name,
+                "files": files,
+                "description": skill.description,
+            })
+        })
+        .collect();
+
+    let body = serde_json::to_string_pretty(&json!({ "skills": entries }))
+        .unwrap_or_else(|_| "{}".to_string());
+    http_response("200 OK", "application/json", &body)
+}
+
+/// Serve a skill file: path is "<name>/<filename>".
+fn serve_skill_file(
+    path: &str,
+    skills: &[crate::skill_resolver::SkillMeta],
+) -> String {
+    let parts: Vec<&str> = path.splitn(2, '/').collect();
+    if parts.len() < 2 || parts[0].is_empty() || parts[1].is_empty() {
+        return http_response(
+            "400 Bad Request",
+            "text/plain",
+            "Expected path format: <skill_name>/<file_name>",
+        );
+    }
+
+    let skill_name = parts[0];
+    let file_name = parts[1];
+
+    // Security: prevent path traversal
+    if file_name.contains("..") || file_name.contains('/') || file_name.contains('\\') {
+        return http_response("400 Bad Request", "text/plain", "Invalid file name");
+    }
+
+    // Find the skill
+    let skill = match skills.iter().find(|s| s.name == skill_name) {
+        Some(s) => s,
+        None => {
+            return http_response(
+                "404 Not Found",
+                "text/plain",
+                &format!("Skill '{}' not found", skill_name),
+            )
+        }
+    };
+
+    let file_path = skill.source_dir.join(file_name);
+    if !file_path.exists() || !file_path.is_file() {
+        return http_response(
+            "404 Not Found",
+            "text/plain",
+            &format!("File '{}' not found in skill '{}'", file_name, skill_name),
+        );
+    }
+
+    match std::fs::read_to_string(&file_path) {
+        Ok(content) => {
+            let mime = mime_type(file_name);
+            http_response("200 OK", mime, &content)
+        }
+        Err(e) => http_response(
+            "500 Internal Server Error",
+            "text/plain",
+            &format!("Error reading file: {}", e),
+        ),
+    }
+}
+
+/// List non-hidden files in a skill's source directory.
+fn list_skill_files(skill: &crate::skill_resolver::SkillMeta) -> Vec<String> {
+    match skill.format {
+        SkillFormat::SkillMd => {
+            let mut files = Vec::new();
+            if let Ok(entries) = std::fs::read_dir(&skill.source_dir) {
+                for entry in entries.flatten() {
+                    let path = entry.path();
+                    if path.is_file() {
+                        if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
+                            if !name.starts_with('.') {
+                                files.push(name.to_string());
+                            }
+                        }
+                    }
+                }
+            }
+            files.sort();
+            files
+        }
+        SkillFormat::TomlDatum => {
+            // Source dir is the shared _b00t_ dir; find the specific skill datum file
+            for ext in &[".skill.tomllmd", ".skill.tomllm", ".skill.toml"] {
+                let path = skill.source_dir.join(format!("{}{}", skill.name, ext));
+                if path.exists() {
+                    return vec![format!("{}{}", skill.name, ext)];
+                }
+            }
+            vec![]
+        }
+    }
+}
+
+/// Build a minimal HTTP response string.
+fn http_response(status: &str, content_type: &str, body: &str) -> String {
+    format!(
+        "HTTP/1.1 {}\r\n\
+         Content-Type: {}\r\n\
+         Content-Length: {}\r\n\
+         Access-Control-Allow-Origin: *\r\n\
+         Connection: close\r\n\
+         \r\n\
+         {}",
+        status,
+        content_type,
+        body.len(),
+        body
+    )
+}
+
+/// Guess MIME type from file extension.
+fn mime_type(filename: &str) -> &'static str {
+    if filename.ends_with(".md") {
+        "text/markdown"
+    } else if filename.ends_with(".json") {
+        "application/json"
+    } else if filename.ends_with(".sh") || filename.ends_with(".bash") {
+        "text/plain"
+    } else if filename.ends_with(".toml") || filename.ends_with(".tomllm")
+        || filename.ends_with(".tomllmd")
+    {
+        "text/plain"
+    } else if filename.ends_with(".html") || filename.ends_with(".htm") {
+        "text/html"
+    } else if filename.ends_with(".css") {
+        "text/css"
+    } else if filename.ends_with(".js") || filename.ends_with(".mjs") {
+        "application/javascript"
+    } else if filename.ends_with(".ts") || filename.ends_with(".tsx") {
+        "text/plain"
+    } else if filename.ends_with(".yaml") || filename.ends_with(".yml") {
+        "text/plain"
+    } else {
+        "application/octet-stream"
+    }
+}
+
+// ── Sync (b00t skill sync) ────────────────────────────────────────────
+
+/// Pull skills from a remote opencode-compatible URL.
+/// Fetches `{url}/index.json` manifest, then downloads each skill file.
+fn handle_sync(url: &str, output: &std::path::PathBuf) -> Result<()> {
+    let base_url = url.trim_end_matches('/');
+
+    // ── Fetch index.json ──────────────────────────────────────────────
+    let manifest_url = format!("{}/index.json", base_url);
+    let index_output = std::process::Command::new("curl")
+        .args(["-s", "-f", &manifest_url])
+        .output()
+        .map_err(|e| anyhow::anyhow!("curl failed to fetch index.json: {}", e))?;
+
+    if !index_output.status.success() {
+        anyhow::bail!(
+            "curl exited {:?} fetching {manifest_url} — is the remote server running?",
+            index_output.status.code()
+        );
+    }
+
+    let index: serde_json::Value = serde_json::from_slice(&index_output.stdout)
+        .map_err(|e| anyhow::anyhow!("index.json parse error: {}", e))?;
+
+    let skills = index["skills"]
+        .as_array()
+        .ok_or_else(|| anyhow::anyhow!("index.json missing 'skills' array"))?;
+
+    // ── Download each skill ───────────────────────────────────────────
+    let mut total_files = 0usize;
+
+    for skill_val in skills {
+        let name = skill_val["name"]
+            .as_str()
+            .ok_or_else(|| anyhow::anyhow!("skill entry missing 'name'"))?;
+
+        let files = skill_val["files"]
+            .as_array()
+            .ok_or_else(|| anyhow::anyhow!("skill '{name}' missing 'files' array"))?;
+
+        let skill_dir = output.join(name);
+        std::fs::create_dir_all(&skill_dir)
+            .map_err(|e| anyhow::anyhow!("cannot create {skill_dir:?}: {e}"))?;
+
+        for file_val in files {
+            let file = file_val
+                .as_str()
+                .ok_or_else(|| anyhow::anyhow!("file entry in '{name}' is not a string"))?;
+
+            let file_url = format!("{base_url}/skills/{name}/{file}");
+            let dest = skill_dir.join(file);
+
+            let dl = std::process::Command::new("curl")
+                .args(["-s", "-f", "-o", &dest.to_string_lossy(), &file_url])
+                .output()
+                .map_err(|e| anyhow::anyhow!("curl failed downloading {name}/{file}: {e}"))?;
+
+            if !dl.status.success() {
+                anyhow::bail!(
+                    "curl exited {:?} downloading {name}/{file} from {file_url}",
+                    dl.status.code()
+                );
+            }
+
+            total_files += 1;
+            println!("  ✓ {name}/{file}");
+        }
+
+        println!("  ✓ skill '{name}' ({} files)", files.len());
+    }
+
+    println!(
+        "\nSynced {} skill(s) with {total_files} file(s) to {}",
+        skills.len(),
+        output.display()
+    );
+    Ok(())
 }
 
 #[cfg(test)]

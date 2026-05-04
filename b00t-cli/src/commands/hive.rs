@@ -66,17 +66,23 @@ pub enum HiveCommands {
         long_about = "Checks command against active profile guards + universal guards.\nWarns on misaligned patterns (pip→uv, docker→podman, etc.).\n\nExamples:\n  b00t run pip install requests\n  b00t run docker run --rm ubuntu echo hello\n  b00t run -- rm -rf /tmp/foo"
     )]
     Run {
-        #[clap(
-            help = "Command and arguments to evaluate",
-            trailing_var_arg = true,
-            allow_hyphen_values = true,
-            num_args = 1..,
-        )]
+        #[clap(required = true, help = "Command to evaluate")]
         command: Vec<String>,
         #[clap(long, help = "Strict mode: block on warn (default: warn and proceed)")]
         strict: bool,
         #[clap(long, help = "Dry-run: evaluate guards but don't execute")]
         dry_run: bool,
+    },
+    #[clap(subcommand)]
+    Cyber(HiveCyberCommands),
+}
+
+#[derive(Parser, Clone)]
+pub enum HiveCyberCommands {
+    #[clap(about = "Show trust boundary status (OS_GUEST/OS_ROOT/LAN)")]
+    RingFence {
+        #[clap(long, help = "Emit as JSON")]
+        json: bool,
     },
 }
 
@@ -295,6 +301,7 @@ pub fn handle_hive_command(cmd: &HiveCommands, path: &str) -> Result<()> {
             }
         }
 
+        HiveCommands::Cyber(cyber_cmd) => handle_cyber_command(cyber_cmd),
         HiveCommands::Run {
             command,
             strict,
@@ -342,6 +349,23 @@ pub fn handle_hive_command(cmd: &HiveCommands, path: &str) -> Result<()> {
                 .map_err(|e| anyhow::anyhow!("failed to execute '{}': {}", command[0], e))?;
 
             std::process::exit(status.code().unwrap_or(1));
+        }
+    }
+}
+
+fn handle_cyber_command(cmd: &HiveCyberCommands) -> Result<()> {
+    match cmd {
+        HiveCyberCommands::RingFence { json } => {
+            let is_root = unsafe { libc::geteuid() == 0 };
+            let mode = if is_root { "OS_ROOT" } else { "OS_GUEST" };
+
+            if *json {
+                println!(r#"{{"mode":"{mode}","is_root":{is_root}}}"#);
+            } else {
+                println!("🔒 Trust boundary: {mode}");
+                println!("   is_root: {is_root}");
+            }
+            Ok(())
         }
     }
 }

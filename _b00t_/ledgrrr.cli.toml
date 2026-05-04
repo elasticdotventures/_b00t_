@@ -1,17 +1,16 @@
 [b00t]
 name = "ledgrrr"
 type = "cli"
-hint = "Canonical FinOps ledger client — consumes/produces FOCUS records via gRPC/Arrow transport. Polyseme: l3dg3rr[#proto] → ledg3rr[#stable] → ledgrrr[#lts]. Vendored at vendor/l3dg3rr/crates/ledgerr-mcp/."
+hint = "FinOps ledger — consumes/produces FOCUS records. Polyseme: l3dg3rr[#proto] → ledgerr-mcp[#linux] → ledg3rr[#cloud] → ledgrrr[#windows]. Vendored at vendor/l3dg3rr/crates/ledgerr-mcp/."
 
-# @tribal: polyseme unification map — l3dg3rr is the repo/proto name,
-# ledgerr is the actual vendored crate prefix (e.g. ledgerr-mcp),
-# ledgrrr is the canonical LTS CLI name.
-# @tribal: FOCUS (FinOps Cost Usage Specification) crate TBD — do NOT
-# reinvent here; route FOCUS records through ledgerr-mcp when available.
-
-# Proto phase: l3dg3rr — local visual ontology + experiment scaffolding
-# Stable phase: ledg3rr — gRPC/Arrow transport, MCP contract
-# LTS phase: ledgrrr — production FinOps ledger with FOCUS crate
+# @tribal: polyseme mapping — platform-targeted variants of the same ledger:
+#   l3dg3rr      — proto/repo name (vendor/l3dg3rr/)
+#   ledgerr-mcp  — Linux native (vendored crate prefix, stdio MCP transport)
+#   ledg3rr      — cloud/remote (gRPC/Arrow, SaaS deployment)
+#   ledgrrr      — Windows native (tray-icon, Slint desktop host, Credential Manager)
+# @tribal: FOCUS records route through ledgerr-mcp (Linux) as the canonical
+# MCP transport. ledg3rr (cloud) and ledgrrr (Windows) share the same FOCUS
+# crate but use different transport/UI backends.
 
 detect = [
     "test -f vendor/l3dg3rr/Cargo.toml",
@@ -49,6 +48,19 @@ record_types = ["CostAndUsage", "ContractCommitment"]
 scoring_dimensions = ["roi", "cost", "time", "accuracy", "utility", "risk"]
 
 [b00t.providers.mcp]
-legacy_names = ["l3dg3rr", "ledg3rr"]
-canonical_name = "ledgrrr"
+legacy_names = ["l3dg3rr"]
+platform_names = { linux = "ledgerr-mcp", cloud = "ledg3rr", windows = "ledgrrr" }
+canonical_name = "ledgerr-mcp"
 tool_prefix = "ledgerr_"
+
+# 🦨 Runtime orchestration: we need BOTH systemd AND podman/docker (possibly
+# others) as backends for starting/stopping ledgerr-mcp. The datum should
+# declare available runtimes and let the active hive profile choose.
+#
+# The Dockerfile and build CI belong upstream at PromptExecution/l3dg3rr
+# (.github/actions/docker-build.yml + Dockerfile at repo root).
+# This fork/vendor only tracks the source — the upstream owns packaging.
+[b00t.providers.runtime]
+backends = ["systemd", "docker", "podman"]
+prefer = "auto"
+detect_order = ["systemctl", "docker", "podman"]

@@ -1,0 +1,42 @@
+[b00t]
+name = "wow-check"
+type = "wow"
+version = "1.0"
+hint = "WOW integrity check suite — validates b00t invariants at build/test time. Loaded by `b00t wow check`."
+
+# @tribal: This datum declares which WOW checks to run and their expected outcomes.
+# The Rust trait implementations live in b00t-cli/src/wow.rs.
+# Each check maps to one of the MECE categories: BuildIntegrity, TypeInvariant,
+# Boundary, Deployment, DesignHeuristic, SessionHygiene.
+
+keywords = ["wow", "integrity", "check", "spline", "invariant"]
+
+[b00t.wow]
+spec_version = "1.0"
+# Registered checks are initialized by wow::init_default_checks().
+# The datum is the source of truth for which checks exist.
+check_count = 6
+
+[b00t.wow.checks]
+# Category A — Build Integrity
+candle_build = { category = "BuildIntegrity", description = "cargo check --features candle must compile", severity = "blocker" }
+default_build = { category = "BuildIntegrity", description = "cargo check (default features) must compile", severity = "blocker" }
+
+# Category B — Type Invariants
+known_role = { category = "TypeInvariant", description = "KnownRole enum must have all 4 variants", severity = "blocker" }
+
+# Category C — Boundary
+vendor_dockerfile = { category = "Boundary", description = "Dockerfile must live in vendor tree", severity = "warning" }
+
+# Category D — Deployment
+dual_runtime = { category = "Deployment", description = "ledgrrr datum must declare dual runtime", severity = "warning" }
+
+# Category E — Design Heuristics
+just_modules = { category = "DesignHeuristic", description = "justfile must have b00t/ledgrrr/irontology modules", severity = "advisory" }
+
+# b00t:map v1
+# summary: WOW integrity check datum — 6 checks across 5 MECE categories, loaded by b00t wow check
+# tags: wow, integrity, check, spline, invariant
+# tier: frontier
+# cmds: b00t wow check, b00t wow list
+# complexity: 3
