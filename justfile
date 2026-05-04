@@ -13,6 +13,7 @@ mod sudo 'b00t-service.just'
 # this is an antipattern (litellm is early-stage AI infra, skip for now)
 mod litellm '_b00t_/litellm/justfile'
 mod b00t-mcp-npm
+mod irontology 'vendor/irontology-mcp/irontology.just'
 
 # Datum justfiles (install recipes for core tech stacks)
 mod python '_b00t_/python.🐍/justfile'
@@ -29,6 +30,11 @@ next-task:
     #!/bin/bash
     set -euo pipefail
     echo "Next up: extend Gremlin graph (role/capability edges) and wire GraalVM Gremlin server."
+
+viz-entangle datum="l3dg3rr" format="mermaid":
+    #!/bin/bash
+    set -euo pipefail
+    cargo run -p b00t-cli --bin b00t-cli -- --path _b00t_ viz entangle --datum "{{datum}}" --format "{{format}}"
 
 gremlin-graalvm-build:
     docker build -t graalvm-gremlin:latest docker/graalvm-gremlin
@@ -610,36 +616,6 @@ mistralrs-chat prompt="hello from b00t" port="1234" model_name="mistral-local":
 # Captain's Command Arsenal - Memoized Agent Operations
 
 # Role switching commands
-captain:
-    #!/bin/bash
-    export _B00T_ROLE="captain"
-    echo "🎯 Switched to Captain role"
-    cargo run --bin b00t-cli -- whatismy role --show-tools
-
-operator:
-    #!/bin/bash
-    export _B00T_ROLE="operator"
-    echo "⚙️ Switched to Operator role"
-    cargo run --bin b00t-cli -- whatismy role --show-tools
-
-# Agent creation commands (for future operator use)
-create-coder LANG:
-    #!/bin/bash
-    echo "🛠️ Creating {{LANG}} coder agent..."
-    echo "TODO: Implement agent creation via operator"
-
-create-tester:
-    #!/bin/bash
-    echo "🧪 Creating test specialist agent..."
-    echo "TODO: Implement test agent creation"
-
-# Communication setup
-setup-redis:
-    #!/bin/bash
-    echo "💾 Setting up Redis pub/sub for agent communication..."
-    echo "TODO: Implement Redis agent channels"
-
-# Session management
 session-status:
     #!/bin/bash
     cargo run --bin b00t-cli -- whatismy status
@@ -649,42 +625,6 @@ session-build:
     cargo run --bin b00t-cli -- session build
 
 # Tool installation (for operators)
-install-tool TOOL:
-    #!/bin/bash
-    echo "📦 Installing tool: {{TOOL}}"
-    echo "TODO: Implement tool installation via b00t cli"
-
-# Qdrant vector database
-qdrant-run:
-    podman run -d --name qdrant-container -p 6333:6333 -p 6334:6334 -e QDRANT__SERVICE__GRPC_PORT="6334" docker.io/qdrant/qdrant:latest
-
-qdrant-stop:
-    podman stop qdrant-container && podman rm qdrant-container
-
-# 🤓 PyO3/Maturin build commands for b00t-grok-py
-grok-build:
-    #!/bin/bash
-    # 🤓 Critical: unset CONDA_PREFIX to avoid environment conflicts with uv
-    # This prevents "Both VIRTUAL_ENV and CONDA_PREFIX are set" error
-    echo "🦀🐍 Building b00t-grok with PyO3 bindings..."
-    unset CONDA_PREFIX
-    cd b00t-grok-py
-    uv run maturin develop
-
-grok-dev: grok-build
-    #!/bin/bash
-    echo "🚀 Starting b00t-grok-py development server..."
-    cd b00t-grok-py
-    unset CONDA_PREFIX
-    uv run python -m uvicorn main:app --reload --port 8001
-
-grok-clean:
-    #!/bin/bash
-    echo "🧹 Cleaning b00t-grok build artifacts..."
-    cargo clean --package b00t-grok
-    cd b00t-grok-py && rm -rf build/ dist/ *.egg-info/
-
-# Validate MCP TOML files against schema
 validate-mcp:
 	#!/bin/bash
 	set -euo pipefail
@@ -726,28 +666,6 @@ lint-ntfs:
 	echo "✅ No NTFS-invalid paths (git note refs) found"
 
 # Build and package b00t browser extension
-browser-ext-build:
-    #!/bin/bash
-    echo "🥾 Building b00t browser extension..."
-    cd {{repo-root}}/b00t-browser-ext
-    npm ci
-    npm run build
-    echo "✅ Extension built in build/chrome-mv3-prod/"
-
-browser-ext-package:
-    #!/bin/bash
-    echo "📦 Packaging b00t browser extension..."
-    cd {{repo-root}}/b00t-browser-ext
-    npm run package
-    VERSION=$(node -p "require('./package.json').version")
-    echo "✅ Extension packaged as b00t-browser-ext-chrome-v${VERSION}.zip"
-
-browser-ext-dev:
-    #!/bin/bash
-    echo "🚀 Starting b00t browser extension dev server..."
-    cd {{repo-root}}/b00t-browser-ext
-    npm run dev
-
 socks5:
     {{repo-root}}/scripts/socks5.sh
 
@@ -822,21 +740,6 @@ ralph-run tool="codex" iterations="10":
         --project-root {{repo-root}}
 
 # Run Gemma4-only operator self-improvement loop against local opencode/vLLM.
-gemma4-self-improve iterations="1" restarts="3":
-    #!/bin/bash
-    set -euo pipefail
-    iterations_value="{{iterations}}"
-    restarts_value="{{restarts}}"
-    iterations_value="${iterations_value#*=}"
-    restarts_value="${restarts_value#*=}"
-    echo "🥾 Running Gemma4 self-improvement loop..."
-    cargo run --bin b00t-cli -- up \
-        --tool gemma4 \
-        --role operator \
-        --max-iter "${iterations_value}" \
-        --max-restarts "${restarts_value}"
-
-# Pre-project validation hook - run this before starting any work
 pre-project: ralph-hive-validate
     echo "✅ Hive validated - ready for project work"
 
@@ -869,18 +772,6 @@ hive-ralph-loop max_iter="10":
         --max-budget-usd 0.10 \
         "$(cat {{repo-root}}/HIVE_MAINTENANCE_PROMPT.md)"
 
-# Build irontology-mcp from submodule
-irontology-build:
-    cargo build --release --manifest-path vendor/irontology-mcp/Cargo.toml
-
-# Run irontology-mcp tests
-irontology-test:
-    cargo test --manifest-path vendor/irontology-mcp/Cargo.toml
-
-# Update irontology-mcp submodule to latest upstream
-irontology-update:
-    git submodule update --remote vendor/irontology-mcp
-
 # Inspect the local side of the sm3lly NATS ACP route without publishing credentials
 acp-sm3lly-status:
     #!/bin/bash
@@ -895,40 +786,6 @@ acp-sm3lly-status:
 # ── Gemma 4 + pi-coding-agent local inference ────────────────────────────────
 
 # Download Gemma 4 26B-A4B MXFP4_MOE GGUF (unsloth/gemma-4-26B-A4B-it-GGUF)
-gemma4-download:
-    hf download unsloth/gemma-4-26B-A4B-it-GGUF --include "*MXFP4_MOE*"
-
-# Serve Gemma 4 via vLLM on port 8001 (requires gemma4-download first)
-# 🤓 2imi9/gemma-4-E4B-it-NVFP4A16: NVFP4A16 quant, native vLLM Gemma4 support (no GGUF)
-# 🤓 --enforce-eager: avoids Triton CUDA graph compilation deadlock on RTX 3090
-# 🤓 served-model-name=ch0nky: aligns with b00t hive ch0nky tier routing
-gemma4-serve:
-    prlimit --nofile=65536:65536 -- vllm serve \
-      2imi9/gemma-4-E4B-it-NVFP4A16 \
-      --served-model-name ch0nky \
-      --port 8001 \
-      --enforce-eager \
-      --enable-auto-tool-choice \
-      --tool-call-parser pythonic
-
-# Start Gemma 4 via systemd (preferred over direct serve)
-gemma4-start:
-    systemctl --user start vllm-gemma4.service
-
-# Stop Gemma 4 systemd service
-gemma4-stop:
-    systemctl --user stop vllm-gemma4.service
-
-# Check Gemma 4 server health
-gemma4-status:
-    curl -s http://localhost:8001/v1/models | python3 -m json.tool
-
-
-# ── qwen3.6-27B — download, serve, hive lifecycle ────────────────────────────
-# 🤓 qwen36 replaces gemma4 as ch0nky tier; vLLM primary, llamacpp podman fallback
-# 🤓 PREREQ: activate download-mode first to free VRAM before ~15GB download
-
-# Download Qwen3.6-27B Q4_K_M GGUF (stop vLLM first via download-mode hive)
 qwen36-download:
     b00t hive activate download-mode
     hf download unsloth/Qwen3.6-27B-GGUF --include "Qwen3.6-27B-Q4_K_M.gguf"
@@ -953,32 +810,6 @@ qwen36-serve-35b:
     b00t hive activate inference-qwen36-35b-a3b-llamacpp
 
 # Eval active ch0nky model (must be serving on :8001)
-ch0nky-eval:
-    bash scripts/ch0nky-eval.sh
-
-# Sequential comparison: 27B dense → eval → 35B-A3B MoE → eval → diff
-# Results written to .b00t/ralph/eval-*.jsonl
-ch0nky-eval-compare:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    echo "=== PHASE 1: Qwen3.6-27B-Q4_K_M (dense) ==="
-    just qwen36-stop
-    just qwen36-serve-llamacpp
-    echo "Waiting for :8001..."
-    until curl -sf http://127.0.0.1:8001/v1/models >/dev/null 2>&1; do sleep 5; done
-    just ch0nky-eval
-    echo ""
-    echo "=== PHASE 2: Qwen3.6-35B-A3B-MXFP4_MOE (MoE) ==="
-    just qwen36-stop
-    just qwen36-serve-35b
-    echo "Waiting for :8001..."
-    until curl -sf http://127.0.0.1:8001/v1/models >/dev/null 2>&1; do sleep 5; done
-    just ch0nky-eval
-    echo ""
-    echo "=== COMPARISON COMPLETE — see .b00t/ralph/eval-*.jsonl ==="
-    ls -t .b00t/ralph/eval-*.jsonl | head -2 | xargs grep "SUMMARY"
-
-# Check ch0nky endpoint (port 8001)
 qwen36-status:
     curl -s http://localhost:8001/v1/models | python3 -m json.tool
 
@@ -986,86 +817,25 @@ qwen36-status:
 qwen36-test-opencode prompt="say hello in 3 words":
     opencode run --model qwen36-local/ch0nky "{{prompt}}"
 
-# ── b00t skill-improvement loop — opencode ch0nky continuous self-improvement ──
-# 🤓 Tests datums, fixes gaps, commits improvements; runs unattended overnight
+# ── Worker agent — A/B experiment dispatch + phygital ontology ──────────────
 
-# One-shot skill improvement run (5 iterations, no systemd)
-b00t-skill-improve iterations="5":
-    TASK=skill-test TOOL=opencode ROLE=executive     OPENCODE_MODEL=qwen36-local/ch0nky     RALPH_METRIC_GATE=true     bash b00t.sh --max-iterations {{iterations}}
+# Run an A/B experiment: two sub-agents, parallel dispatch, stateless scoring
+test-schema-drift:
+    cargo test -p b00t-cli --lib -- datum_schema::tests::test_focus_schema_file_matches_generated
 
-# Start continuous skill-improve loop as systemd service (unattended)
-b00t-skill-improve-loop:
-    b00t hive activate b00t-skill-improve-loop
-
-# Stop the loop
-b00t-skill-improve-stop:
-    systemctl --user stop b00t-hive-b00t-skill-improve-loop || true
-
-# Tail loop logs live
-b00t-skill-improve-logs:
-    journalctl --user -u b00t-hive-b00t-skill-improve-loop -f --no-pager
-
-# Show improvement scores from last batch
-b00t-skill-improve-scores:
-    @tail -20 .b00t/ralph/scores.jsonl 2>/dev/null | python3 -m json.tool || echo 'no scores yet'
-
-# Show loop commits in git log
-b00t-skill-improve-log:
-    git log --oneline --author='b00t-skill-loop' -20
+# ── ledgrrr — ledgerr-mcp lifecycle (just module) ─────────────────────────
+# 🦨 Symlink: vendor/ledgrrr -> vendor/l3dg3rr (polyseme mapping)
+# Module docs: https://just.systems/man/en/modules.html
+# Invocation:  just ledgrrr build | docker-build | docker-run | docker-stop | …
+mod ledgrrr 'vendor/ledgrrr/ledgrrr.just'
 
 # ── pi agent — systemd service lifecycle ─────────────────────────────────────
 # 🤓 pi is managed as b00t@pi-agent.service, NOT spawned per-invocation
-pi-agent-start:
-    systemctl --user start b00t@pi-agent.service
-
-pi-agent-stop:
-    systemctl --user stop b00t@pi-agent.service
-
-pi-agent-status:
-    systemctl --user status b00t@pi-agent.service
-
-# Run pi one-shot (interactive, dev/debug only — not the hive path)
-pi-ch0nky prompt="hello":
-    LLAMA_CPP_BASE_URL=http://127.0.0.1:8001/v1 OPENAI_API_KEY="${OPENAI_API_KEY:-local-b00t}" \
-      pi --provider llama-cpp --model ch0nky -p "{{prompt}}"
-
-# ── opencode agent — systemd service lifecycle ───────────────────────────────
-# 🤓 opencode is managed as b00t@opencode-agent.service (ACP server :3000)
-opencode-agent-start:
-    systemctl --user start b00t@opencode-agent.service
-
-opencode-agent-stop:
-    systemctl --user stop b00t@opencode-agent.service
-
-opencode-agent-status:
-    systemctl --user status b00t@opencode-agent.service
-
-# Submit task to running opencode ACP server
-# Usage: just opencode-task "implement X"
 opencode-task task="hello":
     opencode run --model gemma4-local/ch0nky "{{task}}"
 
 # ── ch0nky slot swap (pi ↔ opencode) ─────────────────────────────────────────
 # 🤓 pi and opencode share the ch0nky-coding-agent exclusion group — only one active
-ch0nky-use-pi:
-    systemctl --user stop b00t@opencode-agent.service 2>/dev/null || true
-    systemctl --user start b00t@pi-agent.service
-
-ch0nky-use-opencode:
-    systemctl --user stop b00t@pi-agent.service 2>/dev/null || true
-    systemctl --user start b00t@opencode-agent.service
-
-# ── smoke tests ──────────────────────────────────────────────────────────────
-ch0nky-pi-test:
-    curl -sf http://localhost:8001/v1/models | python3 -c "import sys,json; m=json.load(sys.stdin); print('✅ serving:', [x['id'] for x in m['data']])"
-    LLAMA_CPP_BASE_URL=http://127.0.0.1:8001/v1 OPENAI_API_KEY="${OPENAI_API_KEY:-local-b00t}" \
-      pi --provider llama-cpp --model ch0nky -p "respond with exactly: pong"
-
-gemma4-opencode-test:
-    curl -sf http://localhost:8001/v1/models | python3 -c "import sys,json; m=json.load(sys.stdin); print('✅ serving:', [x['id'] for x in m['data']])"
-    opencode run --model gemma4-local/ch0nky "respond with exactly: pong"
-
-# moltis: build the moltis binary from vendor submodule
 moltis-build:
     cargo build --manifest-path vendor/moltis-b00t/Cargo.toml --release
 

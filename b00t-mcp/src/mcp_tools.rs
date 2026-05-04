@@ -204,6 +204,22 @@ impl_mcp_tool!(
     ["agent", "discover"]
 );
 
+/// MCP command for listing b00t skills
+#[derive(Parser, Clone)]
+pub struct SkillListCommand {
+    #[arg(long, help = "Filter by agent role")]
+    pub role: Option<String>,
+
+    #[arg(long, help = "Output in JSON format")]
+    pub json: bool,
+}
+
+impl_mcp_tool!(
+    SkillListCommand,
+    "b00t_skill_list",
+    ["skill", "list"]
+);
+
 /// MCP command for sending messages to agents
 #[derive(Parser, Clone)]
 pub struct AgentMessageCommand {
@@ -959,6 +975,8 @@ pub fn create_mcp_registry() -> McpCommandRegistry {
         .register::<AgentWaitCommand>()
         .register::<AgentNotifyCommand>()
         .register::<AgentCapabilityCommand>()
+        // Skill discovery tools
+        .register::<SkillListCommand>()
         // Grok knowledgebase tools
         .register::<GrokDigestCommand>()
         .register::<GrokAskCommand>()

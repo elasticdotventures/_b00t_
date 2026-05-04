@@ -22,6 +22,9 @@
 [submodule "email/himalaya"]
 	path = email/himalaya
 	url = https://github.com/pimalaya/himalaya.git
+[submodule "foundry-samples"]
+	path = foundry-samples
+	url = https://github.com/azure-ai-foundry/foundry-samples
 [submodule "node-ts.🦄/claude.🐳.old/awesome-claude-code-subagents"]
 	path = _b00t_/node-ts.🦄/claude.🐳.old/awesome-claude-code-subagents
 	url = https://github.com/VoltAgent/awesome-claude-code-subagents.git
@@ -37,6 +40,9 @@
 [submodule "vendor/tomllm"]
 	path = vendor/tomllm
 	url = https://github.com/PromptExecution/tomllm.git
+[submodule "vendor/opencode-b00t"]
+	path = vendor/opencode-b00t
+	url = https://github.com/PromptExecution/opencode-b00t.git
 [submodule "vendor/l3dg3rr"]
 	path = vendor/l3dg3rr
 	url = https://github.com/PromptExecution/l3dg3rr.git

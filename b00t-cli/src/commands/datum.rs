@@ -193,6 +193,46 @@ fn handle_show(b00t_path: &str, datum_name: &str) -> Result<()> {
     println!("**Hint:** {}", datum.hint);
     println!();
 
+    if datum.status.is_some()
+        || datum.enabled.is_some()
+        || datum.status_msg.is_some()
+        || datum.replacement.is_some()
+        || !datum.git_attributes.is_empty()
+    {
+        println!("## Operational Metadata");
+        println!();
+        if let Some(status) = &datum.status {
+            println!("**Status:** {}", status);
+        }
+        if let Some(enabled) = datum.enabled {
+            println!("**Enabled:** {}", enabled);
+        }
+        if let Some(message) = &datum.status_msg {
+            println!("**Status Message:** {}", message);
+        }
+        if let Some(replacement) = &datum.replacement {
+            println!("**Replacement:** {}", replacement);
+        }
+        let extra_attrs: std::collections::BTreeMap<_, _> = datum
+            .git_attributes
+            .iter()
+            .filter(|(key, _)| {
+                !matches!(
+                    key.as_str(),
+                    "status" | "enabled" | "status_msg" | "replacement"
+                )
+            })
+            .collect();
+        if !extra_attrs.is_empty() {
+            println!();
+            println!("**Git Attributes:**");
+            for (key, value) in extra_attrs {
+                println!("- b00t.{}: {}", key, value);
+            }
+        }
+        println!();
+    }
+
     // LFMF category
     if let Some(category) = &datum.lfmf_category {
         println!("**LFMF Category:** {}", category);

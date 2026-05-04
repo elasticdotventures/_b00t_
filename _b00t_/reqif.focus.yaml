@@ -1,0 +1,58 @@
+# reqif.yaml: focus-contract/v1
+# Requirements schema for FOCUS contract validation via t00n encoding.
+# This schema defines the required fields and constraints for
+# experiment cost/usage records.  sm0l models validate that
+# t00n-serialized data fulfills these requirements.
+spec_version: "1.0"
+target_format: "t00n"
+canonical_spec: "https://focus.finops.org/focus-specification/v1-3/"
+toon_spec: "https://github.com/toon-format/spec"
+
+requirements:
+  - id: "REQ-FOCUS-001"
+    statement: "Every record MUST have a BillingAccountId"
+    field: "BillingAccountId"
+    constraint: "required"
+    validation: "sm0l"
+
+  - id: "REQ-FOCUS-002"
+    statement: "Every record MUST have a non-null BilledCost"
+    field: "BilledCost"
+    constraint: "required"
+    validation: "sm0l"
+
+  - id: "REQ-FOCUS-003"
+    statement: "Control/treatment variants MUST have matching experiment_id"
+    field: "x_ExperimentId"
+    constraint: "pairwise_match"
+    validation: "sm0l"
+
+  - id: "REQ-FOCUS-004"
+    statement: "At least 2 rows per experiment (N+1 redundancy)"
+    field: "_row_count"
+    constraint: "min_count:2"
+    validation: "sm0l"
+
+  - id: "REQ-FOCUS-005"
+    statement: "ChargeCategory MUST be one of: Usage, Purchase, Tax, Credit, Adjustment"
+    field: "ChargeCategory"
+    constraint: "enum:[Usage,Purchase,Tax,Credit,Adjustment]"
+    validation: "sm0l"
+
+  - id: "REQ-FOCUS-006"
+    statement: "EffectiveCost MUST be <= BilledCost (discounts can't increase cost)"
+    field: "EffectiveCost"
+    constraint: "lte:BilledCost"
+    validation: "sm0l"
+
+  - id: "REQ-FOCUS-007"
+    statement: "TOON [N] declaration MUST match actual row count"
+    field: "_tabular_length"
+    constraint: "declared_count_matches_actual"
+    validation: "structural"
+
+  - id: "REQ-FOCUS-008"
+    statement: "A recommendation MUST be present when focus_delta is computed"
+    field: "recommendation"
+    constraint: "required"
+    validation: "sm0l"
