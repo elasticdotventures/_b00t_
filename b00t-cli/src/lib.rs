@@ -282,7 +282,6 @@ pub struct BootDatum {
 
     // Gate preconditions — late-binding conditions evaluated by install pipeline.
     // Each gate is a struct with one or more condition kinds; all must pass.
-<<<<<<< HEAD
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub gate: Option<Vec<GateSpec>>,
 
@@ -388,6 +387,99 @@ pub struct GateSpec {
     pub rhai: Option<String>,
     /// Freeform description shown when gate fails
     pub hint: Option<String>,
+}
+
+/// Result of evaluating a single gate precondition.
+#[derive(Debug, Clone, PartialEq)]
+pub struct GateResult {
+    pub passed: bool,
+    pub reason: String,
+}
+
+/// Evaluate all gates for a datum. Returns a Vec of GateResults, one per gate.
+/// If any gate fails, the datum should be skipped.
+pub fn evaluate_gates(gates: &[GateSpec], path: &str) -> Vec<GateResult> {
+    let mut results = Vec::new();
+    for gate in gates {
+        let mut passed = true;
+        let mut reasons = Vec::new();
+
+        // Command gate: check if command exists on PATH
+        if let Some(ref cmd) = gate.command {
+            if !check_command_available(cmd) {
+                passed = false;
+                reasons.push(format!("command '{}' not found on PATH", cmd));
+            }
+        }
+
+        // File gate: check if file exists (supports ~ expansion)
+        if let Some(ref file) = gate.file {
+            let expanded = shellexpand::tilde(file).to_string();
+            if !std::path::Path::new(&expanded).exists() {
+                passed = false;
+                reasons.push(format!("file '{}' does not exist", file));
+            }
+        }
+
+        // Env gate: check if env var or .env entry is set
+        if let Some(ref env_var) = gate.env {
+            let direct = std::env::var(env_var);
+            let env_ok = direct.is_ok() && !direct.unwrap_or_default().is_empty();
+            if !env_ok {
+                // Fallback: check .env at WORKSPACE_ROOT
+                let ws = std::env::var("WORKSPACE_ROOT")
+                    .or_else(|_| std::env::var("HOME"))
+                    .unwrap_or_default();
+                let env_path = std::path::Path::new(&ws).join(".env");
+                let env_file_ok = if env_path.exists() {
+                    if let Ok(content) = std::fs::read_to_string(&env_path) {
+                        let prefix = format!("{}=", env_var);
+                        content.lines().any(|line| {
+                            let trimmed = line.trim();
+                            trimmed.starts_with(&prefix)
+                                && !trimmed[prefix.len()..].trim().is_empty()
+                                && !trimmed[prefix.len()..].trim().starts_with('#')
+                        })
+                    } else {
+                        false
+                    }
+                } else {
+                    false
+                };
+                if !env_file_ok {
+                    passed = false;
+                    reasons.push(format!("env var '{}' not set", env_var));
+                }
+            }
+        }
+
+        // Rhai gate: evaluate rhai expression
+        if let Some(ref rhai_expr) = gate.rhai {
+            // Simple rhai evaluation using a sub-engine
+            let rhai_ok = evaluate_rhai_gate(rhai_expr);
+            if !rhai_ok {
+                passed = false;
+                reasons.push(format!("rhai gate '{}' returned false", rhai_expr));
+            }
+        }
+
+        let reason = if reasons.is_empty() {
+            gate.hint.clone().unwrap_or_else(|| "gate passed".to_string())
+        } else {
+            gate.hint.clone().map(|h| format!("{}: {}", h, reasons.join("; ")))
+                .unwrap_or_else(|| reasons.join("; "))
+        };
+
+        results.push(GateResult { passed, reason });
+    }
+    results
+}
+
+/// Evaluate a simple rhai boolean expression.
+fn evaluate_rhai_gate(expr: &str) -> bool {
+    use rhai::Engine;
+    let engine = Engine::new();
+    engine.eval::<bool>(expr).unwrap_or(false)
 }
 
 /// Sandbox capabilities declared by a justfile datum.
@@ -733,7 +825,7 @@ fn create_mcp_datum_from_json(
     BootDatum {
         name,
         datum_type: Some(DatumType::Mcp),
-        hint: hint.unwrap_or_else(|| "MCP server".to_string()),
+        hint: hint.or_else(|| server_config.get("hint").and_then(|v| v.as_str()).map(|s| s.to_string())).unwrap_or_else(|| "MCP server".to_string()),
         env: server_config
             .get("env")
             .and_then(|v| v.as_object())
@@ -763,6 +855,29 @@ fn create_mcp_datum_from_json(
             ]),
             httpstream: None,
         }),
+        // Parse gates from JSON if present
+        gate: server_config
+            .get("gate")
+            .and_then(|v| v.as_array())
+            .map(|arr| {
+                arr.iter().filter_map(|g| {
+                    let cmd = g.get("command").and_then(|v| v.as_str());
+                    let file = g.get("file").and_then(|v| v.as_str());
+                    let env = g.get("env").and_then(|v| v.as_str());
+                    let rhai = g.get("rhai").and_then(|v| v.as_str());
+                    let hint = g.get("hint").and_then(|v| v.as_str()).map(|s| s.to_string());
+                    if cmd.is_none() && file.is_none() && env.is_none() && rhai.is_none() {
+                        return None;
+                    }
+                    Some(GateSpec {
+                        command: cmd.map(|s| s.to_string()),
+                        file: file.map(|s| s.to_string()),
+                        env: env.map(|s| s.to_string()),
+                        rhai: rhai.map(|s| s.to_string()),
+                        hint,
+                    })
+                }).collect()
+            }),
         ..BootDatum::default()
     }
 }

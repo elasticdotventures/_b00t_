@@ -13,6 +13,8 @@ pub enum McpCommands {
         name_or_json: String,
         #[clap(long, help = "Description/hint for the MCP server")]
         hint: Option<String>,
+        #[clap(long, help = "Add a gate precondition (format: command:<cmd> or env:<VAR> or file:<path>")]
+        gate: Vec<String>,
         #[clap(long, help = "Remove the MCP server configuration")]
         remove: bool,
         #[clap(
@@ -216,7 +218,8 @@ impl McpCommands {
         match self {
             McpCommands::Register {
                 name_or_json,
-                hint: _,
+                hint,
+                gate,
                 remove,
                 dwiw,
                 no_dwiw,
@@ -242,12 +245,36 @@ impl McpCommands {
                             vec![]
                         };
 
-                        let json_str = serde_json::json!({
+                        let mut json_obj = serde_json::json!({
                             "name": server_name,
                             "command": command,
-                            "args": args
-                        })
-                        .to_string();
+                            "args": args,
+                            "hint": hint.as_deref().unwrap_or("MCP server"),
+                        });
+                        // Add gates from --gate flags
+                        if !gate.is_empty() {
+                            let gates: Vec<serde_json::Value> = gate.iter().map(|g| {
+                                let parts: Vec<&str> = g.splitn(2, ':').collect();
+                                if parts.len() == 2 {
+                                    let kind = parts[0];
+                                    let spec = parts[1];
+                                    let hint = match kind {
+                                        "command" => format!("{} not on PATH — install or add to $PATH", spec),
+                                        "env" => format!("{} not set — add to .env or environment", spec),
+                                        "file" => format!("{} not found", spec),
+                                        _ => format!("gate: {} {}", kind, spec),
+                                    };
+                                    serde_json::json!({
+                                        kind: spec,
+                                        "hint": hint,
+                                    })
+                                } else {
+                                    serde_json::json!({"rhai": g})
+                                }
+                            }).collect();
+                            json_obj["gate"] = serde_json::json!(gates);
+                        }
+                        let json_str = json_obj.to_string();
 
                         crate::mcp_add_json(&json_str, actual_dwiw, path)
                     } else {

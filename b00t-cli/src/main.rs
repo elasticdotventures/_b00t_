@@ -42,7 +42,7 @@ use b00t_cli::commands::{
     JobCommands,
     K8sCommands,
     McpCommands, ModelCommands,
-    OntologyCommands, SessionCommands, SkillCommands, SoulCommands, StackCommands,
+    ObservabilityCommands, OntologyCommands, SessionCommands, SkillCommands, SoulCommands, StackCommands,
     TaskCommands,
     TutorialCommands, VersionCommands, VizCommands, WhatismyCommands
 
@@ -398,6 +398,11 @@ The system will:
         #[clap(subcommand)]
         ontology_command: OntologyCommands,
     },
+    #[clap(about = "Observability: events, guard violations, and telemetry")]
+    Observability {
+        #[clap(subcommand)]
+        observability_command: ObservabilityCommands,
+    },
     #[clap(about = "WOW integrity checks — run, list, spline")]
     Wow {
         #[clap(subcommand)]
@@ -453,77 +458,6 @@ The system will:
     Doctor {
         #[clap(subcommand)]
         doctor_command: DoctorCommands,
-    },
-}
-
-#[derive(clap::Parser, Clone)]
-pub enum WowSubcommands {
-    #[clap(about = "Run all WOW integrity checks")]
-    Check {
-        #[clap(long, help = "Emit JSON results")]
-        json: bool,
-    },
-    #[clap(about = "List registered WOW checks")]
-    List,
-}
-
-#[derive(clap::Parser, Clone)]
-pub enum SchemaSubcommands {
-    #[clap(about = "Generate focus.schema.tomllmd from FocusSchema code")]
-    Generate {
-        #[clap(flatten)]
-        args: b00t_cli::datum_schema::SchemaGenerateArgs,
-    },
-    #[clap(about = "Diff two schema datums")]
-    Diff {
-        #[clap(help = "First schema name (e.g. focus)")]
-        schema_a: String,
-        #[clap(help = "Second schema name (e.g. focus-v2)")]
-        schema_b: String,
-    },
-    #[clap(about = "Import schema from JSON file")]
-    Import {
-        #[clap(help = "Path to JSON schema file")]
-        path: PathBuf,
-        #[clap(long, help = "Output name for the schema datum")]
-        name: String,
-        #[clap(long, help = "Output directory (default: _b00t_)")]
-        output: Option<PathBuf>,
-    },
-}
-
-#[derive(clap::Parser, Clone)]
-pub enum ExperimentCommands {
-    #[clap(about = "Run an A/B experiment with control and treatment variants")]
-    Run {
-        #[clap(long, help = "Experiment ID")]
-        id: String,
-        #[clap(long, help = "Control variant prompt")]
-        control: String,
-        #[clap(long, help = "Treatment variant prompt")]
-        treatment: String,
-        #[clap(long, help = "Model endpoint URL [default: http://localhost:8001]")]
-        endpoint: Option<String>,
-        #[clap(long, help = "Path to trained LoRA adapter (from `b00t model train`)")]
-        adapter: Option<String>,
-    },
-    #[clap(about = "Show experiment status (phygital-twin heartbeat)")]
-    Status,
-    #[clap(about = "List past experiments from persisted FOCUS records")]
-    History {
-        #[clap(long, help = "Number of recent experiments to show", default_value_t = 10)]
-        limit: usize,
-        #[clap(long, help = "Emit as JSON")]
-        json: bool,
-    },
-    #[clap(about = "Compare two experiment results side by side")]
-    Compare {
-        #[clap(help = "First experiment ID")]
-        exp_a: String,
-        #[clap(help = "Second experiment ID")]
-        exp_b: String,
-        #[clap(long, help = "Path to FOCUS records JSONL file", default_value = "focus_records.jsonl")]
-        path: std::path::PathBuf,
     },
 }
 
@@ -1920,7 +1854,7 @@ async fn main() {
                     Ok(datum) => {
                         // Direct datum install: install dependencies first, then MCP to default target
                         println!("🚀 Installing MCP datum '{}'...", filter);
-                        if let Err(e) = install_datum(&cli.path, filter) {
+                        if let Err(e) = install_datum(&cli.path, filter, false) {
                             eprintln!("Install Error: datum install failed for {}: {}", filter, e);
                             std::process::exit(1);
                         }
@@ -2053,6 +1987,14 @@ async fn main() {
         }
         Some(Commands::Ontology { ontology_command }) => {
             if let Err(e) = ontology_command.execute() {
+                eprintln!("Error: {}", e);
+                std::process::exit(1);
+            }
+        }
+        Some(Commands::Observability {
+            observability_command,
+        }) => {
+            if let Err(e) = observability_command.execute() {
                 eprintln!("Error: {}", e);
                 std::process::exit(1);
             }

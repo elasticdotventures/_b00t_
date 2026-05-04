@@ -1,0 +1,217 @@
+# b00t × Arbor bridge datum — exploration & integration plan
+# 🤓 Arbor: native Rust/GPUI desktop app for agentic coding (worktrees, terminals, diffs, MCP server)
+#    github.com/penso/arbor — MIT license, nightly Rust, 728★
+#
+# This datum documents the integration surface and TODO backlog.
+# NOT committed yet — exploratory state.
+#
+# schema: draft.1 | last_updated: 2026-05-04
+
+[b00t]
+name = "ARBOR-BRIDGE"
+type = "schema"
+hint = "b00t × Arbor integration plan — bridge crate, MCP registration, guard interop, observability"
+
+[b00t.version]
+schema = "draft.1"
+content = "exploratory"
+
+## ── Context ──────────────────────────────────────────────────────────────────
+##
+## Arbor is a fully native Rust desktop app for agentic coding workflows.
+## It has: daemon (arbor-httpd), CLI (arbor-cli), MCP server (arbor-mcp),
+## desktop GUI (arbor-gui), and a web dashboard (arbor-web-ui).
+## All communicate with `arbor-httpd` as a shared daemon.
+##
+## b00t can integrate with Arbor WITHOUT modifying Arbor's source code,
+## by using Arbor's existing daemon API, MCP protocol, and CLI interface.
+##
+## Architecture:
+##
+##   ┌─────────────────────┐     MCP stdio      ┌──────────────────┐
+##   │  Agent (Claude/etc) │◄───────────────────│  arbor-mcp       │
+##   └─────────────────────┘                    │  (existing)      │
+##                                              └────────┬─────────┘
+##                                                       │ HTTP
+##                                              ┌────────▼─────────┐
+##                                              │  arbor-httpd     │
+##                                              │  (daemon)        │
+##                                              └──┬────┬────┬─────┘
+##                                      ┌──────────┘    │    └──────────┐
+##                               ┌──────▼─────┐  ┌──────▼─────┐  ┌─────▼──────┐
+##                               │ arbor-cli   │  │ arbor-gui  │  │ b00t-arbor │
+##                               │ (existing)  │  │ (existing) │  │ (NEW)      │
+##                               └─────────────┘  └─────────────┘  └────────────┘
+##
+## The bridge crate `b00t-arbor` wraps Arbor's daemon API → b00t datums.
+
+## ── Integration surface ──────────────────────────────────────────────────────
+
+### Immediate wins (zero Arbor code changes)
+
+| layer | what | effort | value | status |
+|-------|------|--------|-------|--------|
+| datum | Register arbor-mcp as a b00t `.mcp.toml` datum | 5 min | HIGH | 🆕 TODO |
+| datum | Add arbor-mcp to `--mcp=recommended` pipeline | 5 min | HIGH | 🆕 TODO |
+| datum | Add `[[b00t.gate]] command = "arbor-mcp"` gate | 5 min | MED | 🆕 TODO |
+| guard | Arbor worktree `git checkout` → evaluated by b00t hive guards | 0 min (already works) | MED | ✅ existing |
+| cli | `b00t arbor <cmd>` passthrough via `arbor-cli` | 30 min | MED | 🆕 TODO |
+| observability | `b00t observability` reads Arbor daemon API for agent state | 2 hr | MED | 🆕 TODO |
+
+### Bridge crate (`b00t-arbor`, moderate effort, no Arbor changes)
+
+| crate | what | effort | value |
+|-------|------|--------|-------|
+| b00t-arbor | HTTP client for arbor-httpd REST API | 4 hr | HIGH |
+| b00t-arbor/src/worktrees.rs | List/create/delete worktrees from b00t | 2 hr | MED |
+| b00t-arbor/src/agents.rs | Read agent activity (Claude/Codex/OpenCode state) | 1 hr | MED |
+| b00t-arbor/src/tasks.rs | Trigger Arbor tasks from b00t job workflows | 3 hr | LOW |
+| b00t-arbor/src/guards.rs | Push b00t guard violations → Arbor notifications | 2 hr | MED |
+
+### Deep integration (requires Arbor patches, high effort)
+
+| change | what | effort |
+|--------|------|--------|
+| Arbor reads `_b00t_/*.toml` for config | Datum schema → `arbor.toml` mapping | 1 week |
+| Arbor embeds b00t rhai engine for hooks | `rhai::Engine` init + scope injection | 1 week |
+| Arbor agent visibility → b00t hive gossip | Protobuf + mDNS | 2 weeks |
+| Arbor tasks ↔ b00t jobs bidirectional | Schema alignment | 1 week |
+
+## ── Priority backlog ─────────────────────────────────────────────────────────
+
+### P0 — Ship this week
+
+- [ ] TODO: Create `_b00t_/arbor.mcp.toml` datum
+  ```toml
+  [b00t]
+  name = "arbor"
+  type = "mcp"
+  hint = "Arbor — native agentic coding desktop app (worktrees, terminals, diffs, MCP)"
+  requires = ["arbor-httpd"]
+  
+  [[b00t.mcp.stdio]]
+  command = "arbor-mcp"
+  args = []
+  transport = "stdio"
+  priority = 0
+  
+  [[b00t.gate]]
+  command = "arbor-mcp"
+  hint = "arbor-mcp binary not on PATH — install Arbor first: brew install penso/arbor/arbor"
+  
+  [[b00t.gate]]
+  command = "arbor-httpd"
+  hint = "Arbor daemon not running — start with: arbor-httpd &"
+  ```
+- [ ] TODO: Add `arbor` to `_b00t_/scripts/install-mcp-recommended.rhai` skip list or let gates handle it
+- [ ] TODO: Test `b00t mcp install arbor claudecode` → verify claude picks up worktree tools
+- [ ] TODO: Verify `b00t mcp list --search arbor` shows it with status icons
+
+### P1 — Ship this sprint
+
+- [ ] TODO: Create `b00t-arbor/` crate in workspace
+  - Cargo.toml with `reqwest`, `serde`, `tokio` deps
+  - `src/lib.rs` with `ArborClient` struct wrapping `ARBOR_DAEMON_URL`
+  - `src/worktrees.rs`: `list()`, `create()`, `delete()` methods
+  - `src/agents.rs`: `list_agents()`, `agent_status()` methods
+  - Integration test that pings a running arbor-httpd
+- [ ] TODO: Wire `b00t-arbor` into `b00t-cli/src/commands/` as a new subcommand group
+  - `b00t arbor worktrees list` → calls ArborClient::list_worktrees()
+  - `b00t arbor agents status` → calls ArborClient::list_agents()
+- [ ] TODO: Add `b00t checkpoint --worktree` that creates an Arbor worktree + checkpoints
+- [ ] TODO: Read Arbor daemon port from `~/.config/arbor/config.toml` or env
+- [ ] TODO: Test bridge against a running local `arbor-httpd`
+
+### P2 — Ship this month
+
+- [ ] TODO: Arbor's `arbor.toml` `[[branch]]` naming rules → generated from b00t's SCM-CONVENTIONS datum
+  ```python
+  # Pseudo: b00t generates arbor.toml from datum
+  b00t_arbor_scm_conventions = load_datum("SCM-CONVENTIONS")
+  arbor_toml = {
+    "branch": {
+      "prefix_mode": b00t_arbor_scm_conventions["prefix_mode"],
+      "patterns": b00t_arbor_scm_conventions["allowed_patterns"],
+    }
+  }
+  ```
+- [ ] TODO: `b00t observability events` — add `--source arbor` filter to read Arbor agent activity from daemon API
+- [ ] TODO: b00t hive guard violations → Arbor desktop notification
+  - Guard fires in b00t → writes `~/.b00t/events.jsonl`
+  - b00t-arbor poller reads events.jsonl → pushes to Arbor notification webhook
+  - Arbor shows desktop toast: "🚫 blocked: git push to main"
+- [ ] TODO: Arbor worktree create → b00t hive guard evaluation
+  - `arbor-cli worktrees create ...` → b00t hive run evaluates git command
+  - Protected branches (main/master) blocked by existing guards (already works)
+  - Test and document this flow
+
+### P3 — Icebox
+
+- [ ] TODO: Arbor reads `_b00t_/*.mcp.toml` for MCP server config
+  - Feature request to penso/arbor: optional b00t datum directory scan
+  - Arbor MCP panel discovers servers from datum directory
+- [ ] TODO: b00t hive peer store → Arbor remote daemon discovery
+  - b00t hive gossip discovers other machines
+  - Arbor's remote outposts (SSH/mosh) could use hive peer list
+- [ ] TODO: Arbor task scheduler → b00t job workflow
+  - Arbor `[[tasks]]` with agent triggers
+  - b00t `job` modules with checkpoint support
+  - Bidirectional: Arbor task triggers b00t job, b00t job creates Arbor worktree
+- [ ] TODO: Arbor embeds b00t rhai engine for `arbor.toml` hook scripts
+  - Arbor `[scripts] setup/teardown` could be rhai instead of bash
+  - b00t gate_check() available in Arbor hook scripts
+
+## ── API surface (arbor-httpd) ────────────────────────────────────────────────
+
+| endpoint | method | returns | used by |
+|----------|--------|--------|---------|
+| `/health` | GET | `{"status":"ok"}` | b00t-arbor ping check |
+| `/api/worktrees` | GET | `[{id, repo, branch, path, last_git_activity}]` | b00t arbor worktrees list |
+| `/api/worktrees` | POST | `{id, path}` | b00t checkpoint --worktree |
+| `/api/worktrees/{id}` | DELETE | `{}` | b00t arbor worktrees delete |
+| `/api/agents` | GET | `[{name, status, session_id}]` | b00t arbor agents status |
+| `/api/processes` | GET | `[{name, status, memory}]` | b00t arbor processes list |
+| `/api/tasks` | GET | `[{name, schedule, enabled}]` | b00t arbor tasks list |
+
+Environment:
+- `ARBOR_DAEMON_URL` (default: `http://127.0.0.1:8787`)
+- `ARBOR_DAEMON_AUTH_TOKEN` (optional, for remote daemons)
+
+## ── Reference links ─────────────────────────────────────────────────────────
+
+- 🔗参 https://github.com/penso/arbor — Arbor source
+- 🔗参 https://penso.github.io/arbor/docs — Arbor documentation
+- 🔗参 b00t-cli/src/commands/mcp.rs — b00t MCP registration + install
+- 🔗参 b00t-cli/src/commands/hive.rs — b00t guard evaluation
+- 🔗参 b00t-cli/src/commands/observability.rs — b00t events pipeline
+- 🔗参 b00t-cli/src/commands/install.rs — install_datum with gate evaluation
+- 🔗参 _b00t_/scripts/install-mcp-recommended.rhai — MCP discovery pipeline
+- 🔗参 _b00t_/hive-guards.hive.toml — guard patterns (git checkout/push/merge blocked)
+- 🔗参 _b00t_/schema/SCM-CONVENTIONS.tomllmd — branch naming conventions (TBD)
+
+## ── Unresolved questions ─────────────────────────────────────────────────────
+
+- [ ] Q: Should b00t-arbor be a separate crate in the workspace, or a module in b00t-cli?
+  - Separate crate → cleaner dependency boundary, can be disabled with feature flag
+  - Module in b00t-cli → fewer compilation units, tighter integration, but clutters CLI
+  - Current leaning: separate crate (b00t-arbor/), feature-gated in CLI
+- [ ] Q: Arbor's daemon API is internal/undocumented — risk of breaking changes?
+  - Arbor is pre-1.0 (nightly Rust, weekly releases)
+  - Mitigation: pin Arbor version in datum, accept that bridge may need updates
+- [ ] Q: Auth token handling — b00t secrets management or Arbor's config?
+  - Arbor uses `ARBOR_DAEMON_AUTH_TOKEN` env var
+  - b00t could store it in `~/.b00t/secrets.toml` and inject
+- [ ] Q: Should `b00t checkpoint --worktree` replace or supplement existing checkpoint?
+  - Supplement: creates Arbor worktree at {repo}/.worktrees/checkpoint-{timestamp}
+  - Then runs existing checkpoint (commit, test) inside worktree
+- [ ] Q: Arbor web UI vs b00t dashboard — overlapping or complementary?
+  - Arbor web UI: worktree management, terminals, agent visibility
+  - b00t dashboard: system state, hive CMDB, guard status, MCP registry
+  - Complementary — different audiences (developer vs operator)
+
+# b00t:map v1
+# summary: b00t × Arbor integration — bridge crate, MCP registration, guard interop, observability
+# tags: arbor, bridge, mcp, worktree, guard, integration, p0
+# tier: ch0nky
+# cmds: b00t mcp register arbor, b00t arbor worktrees list, b00t checkpoint --worktree
+# complexity: 6

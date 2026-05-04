@@ -3,6 +3,10 @@ name = "browser-use"
 type = "mcp"
 hint = "Browser automation MCP server for web interactions"
 
+[[b00t.gate]]
+env = "OPENAI_API_KEY"
+hint = "OPENAI_API_KEY required for browser-use MCP server"
+
 [[b00t.mcp.stdio]]
 command = "uvx"
 args = ["browser-use[cli]", "--mcp"]
