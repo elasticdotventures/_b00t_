@@ -27,6 +27,22 @@ role = "specialist"
 captain = false
 tier = "ch0nky"
 
+
+[b00t.agent.bouncer]
+enabled = true
+audit_log = ".b00t/bouncer-audit.jsonl"
+
+[b00t.agent.bouncer.input_gates]
+sanitize = { enabled = true, rules = ["no-shell-injection", "no-credential-exposure"] }
+credential_check = { enabled = true, check_env = true }
+permission_check = { enabled = true, check_role = true }
+rate_limit = { enabled = true, max_concurrent = 10 }
+
+[b00t.agent.bouncer.output_gates]
+contract_validation = { enabled = true, validate_schema = true }
+security_scan = { enabled = true, check_secrets = true }
+quality_check = { enabled = true, min_quality_score = 0.8 }
+
 [b00t.agent.exchange]
 local_offer = "run sm0l toil models/tasks locally for sm3llyd0s"
 remote_offer = "run qwen36 ch0nky compile/test/install sessions for b00t"
