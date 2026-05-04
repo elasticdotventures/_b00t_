@@ -1,7 +1,15 @@
 use anyhow::{Result, anyhow};
+use b00t_cli::exit_code;
 use b00t_cli::k0mmand3r::K0mmand;
 use b00t_cli::{SessionState, UnifiedConfig, load_datum_providers, whoami};
+
+/// Exit with code, printing error context to stderr.
+fn die(code: i32, msg: impl std::fmt::Display) -> ! {
+    eprintln!("Error: {}", msg);
+    std::process::exit(code);
+}
 use clap::Parser;
+use dirs;
 use duct::cmd;
 use serde_json::json;
 use std::fs;
@@ -238,6 +246,8 @@ The system will:
             help = "Emit full skill metadata for all skills declared by the role"
         )]
         with_skills: bool,
+        #[clap(long, help = "Output identity as JSON (structured)")]
+        json: bool,
     },
     #[clap(
         name = "k0mmand3r",
@@ -357,6 +367,10 @@ The system will:
         /// Skip confirmation prompt (non-interactive mode)
         #[clap(long, short = 'y')]
         yes: bool,
+        /// Install MCP server(s). Use --mcp=recommended for bulk-install via rhai pipeline,
+        /// or --mcp=<server-name> to install a single MCP datum directly (e.g. --mcp=github).
+        #[clap(long)]
+        mcp: Option<String>,
     },
     #[clap(about = "Uninstall a datum by name (use --purge to remove from _b00t_.toml)")]
     Uninstall {
@@ -1652,8 +1666,29 @@ async fn main() {
                 std::process::exit(1);
             }
         }
-        Some(Commands::Whoami { role, with_skills }) => {
-            if let Err(e) = whoami::whoami(&cli.path, role.clone(), *with_skills) {
+        Some(Commands::Whoami { role, with_skills, json }) => {
+            if *json {
+                use b00t_c0re_lib::B00tContext;
+                match B00tContext::current() {
+                    Ok(ctx) => {
+                        let output = serde_json::json!({
+                            "agent": ctx.agent,
+                            "pid": ctx.pid,
+                            "hostname": ctx.hostname,
+                            "user": ctx.user,
+                            "branch": ctx.branch,
+                            "workspace_root": ctx.workspace_root,
+                            "is_git_repo": ctx.is_git_repo,
+                            "model_size": ctx.model_size,
+                            "privacy": ctx.privacy,
+                            "timestamp": ctx.timestamp,
+                            "role": role.clone().or_else(|| std::env::var("_B00T_ROLE").ok()),
+                        });
+                        println!("{}", serde_json::to_string_pretty(&output).unwrap());
+                    }
+                    Err(e) => die(exit_code::ERROR, format!("failed to get b00t context: {}", e)),
+                }
+            } else if let Err(e) = whoami::whoami(&cli.path, role.clone(), *with_skills) {
                 eprintln!("Error: {}", e);
                 std::process::exit(1);
             }
@@ -1778,8 +1813,84 @@ async fn main() {
             runtimes,
             scope,
             yes,
+            mcp,
         }) => {
-            if *interactive || !runtimes.is_empty() {
+            // --mcp=<filter_or_name>: install MCP server(s), or list/search
+            if let Some(mcp_filter) = mcp {
+                let filter = mcp_filter.as_str();
+                // Special aliases: --mcp=list
+                if filter == "list" {
+                        if let Err(e) = mcp_list(&cli.path, false, b00t_cli::McpListFilter {
+                        bypass_threshold: true,
+                        ..Default::default()
+                    }) {
+                        die(exit_code::MCP, e);
+                    }
+                    return;
+                }
+                // First, try as a direct MCP datum name
+                let mcp_datum_path = get_mcp_config(filter, &cli.path);
+                match mcp_datum_path {
+                    Ok(datum) => {
+                        // Direct datum install: install dependencies first, then MCP to default target
+                        println!("🚀 Installing MCP datum '{}'...", filter);
+                        if let Err(e) = install_datum(&cli.path, filter) {
+                            eprintln!("Install Error: datum install failed for {}: {}", filter, e);
+                            std::process::exit(1);
+                        }
+                        let target = "claudecode";
+                        println!("🔌 Installing MCP server '{}' to {}...", filter, target);
+                        // Try claude code; exit code 1 from `claude mcp add-json` usually
+                        // means the server is already registered — treat as non-fatal.
+                        match claude_code_install_mcp(filter, &cli.path) {
+                            Ok(_) => println!("✅ Installed MCP server '{}' via --mcp", filter),
+                            Err(e) => {
+                                let msg = e.to_string();
+                                // "already exists" or exit code 1 = already registered
+                                if msg.contains("already exists") || msg.contains("exited with code 1") {
+                                    println!("✅ MCP server '{}' already installed", filter);
+                                } else {
+                                    eprintln!("Install Error: mcp install failed for {}: {}", filter, msg);
+                                    std::process::exit(1);
+                                }
+                            }
+                        }
+                    }
+                    Err(_) if filter == "recommended" => {
+                        // rhai pipeline: discover + dynamic filter + batch install
+                        use b00t_c0re_lib::{B00tContext, RhaiEngine};
+                        let context = match B00tContext::current() {
+                            Ok(c) => c,
+                            Err(e) => die(exit_code::ERROR, format!("failed to get b00t context: {}", e)),
+                        };
+                        let ws_root = b00t_cli::utils::get_workspace_root();
+                        let script_paths = [
+                            PathBuf::from(&ws_root).join("_b00t_").join("scripts").join("install-mcp-recommended.rhai"),
+                            dirs::home_dir().unwrap_or_default().join(".dotfiles").join("_b00t_").join("scripts").join("install-mcp-recommended.rhai"),
+                            PathBuf::from("install-mcp-recommended.rhai"),
+                        ];
+                        let resolved = script_paths.iter().find(|p| p.exists()).cloned().unwrap_or_else(||
+                            die(exit_code::NOT_FOUND, "script install-mcp-recommended.rhai not found (tried workspace, ~/.dotfiles, cwd)")
+                        );
+                        let engine = match RhaiEngine::new(context) {
+                            Ok(e) => e,
+                            Err(e) => die(exit_code::ERROR, format!("failed to init rhai engine: {}", e)),
+                        };
+                        match engine.execute_file(&resolved) {
+                            Ok(val) => {
+                                let count: i64 = val.as_int().unwrap_or(0);
+                                if count > 0 {
+                                    println!("✅ Installed {} MCP server(s) via --mcp=recommended", count);
+                                } else {
+                                    println!("⚠️  No MCP servers matched 'recommended' criteria");
+                                }
+                            }
+                            Err(e) => die(exit_code::MCP, format!("rhai pipeline failed for --mcp=recommended: {}", e)),
+                        }
+                    }
+                    Err(_) => die(exit_code::NOT_FOUND, format!("MCP server '{}' not found and not a known pipeline filter. Use --mcp=recommended or a valid MCP server name.", filter)),
+                }
+            } else if *interactive || !runtimes.is_empty() {
                 // Parse runtime IDs from comma-separated --runtimes arg
                 let mut runtime_ids_vec: Vec<b00t_cli::install::RuntimeId> = Vec::new();
                 let mut parse_error = false;
