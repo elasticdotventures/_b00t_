@@ -4,7 +4,7 @@
 export B00T_DOCKER_IMAGE="${B00T_DOCKER_IMAGE:-b00t:aarch64}"
 export B00T_DOCKER_PLATFORM="${B00T_DOCKER_PLATFORM:-}"   # e.g. linux/arm64
 
-# Ensure gospel and workspace exist
+# Ensure g0spell and workspace exist
 mkdir -p "$HOME/.b00t" "$HOME/.b00t/_b00t_"
 
 # Create symlink if it doesn't exist
@@ -14,7 +14,7 @@ fi
 
 _b00t_docker() {
     # Usage: _b00t_docker [args...]
-    # Mount PWD as workspace, persist .b00t gospel and _b00t_ workspace
+    # Mount PWD as workspace, persist .b00t g0spell and _b00t_ workspace
     docker run --rm -it \
         ${B00T_DOCKER_PLATFORM:+--platform "$B00T_DOCKER_PLATFORM"} \
         -v "$PWD":"$PWD" -w "$PWD" \

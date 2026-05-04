@@ -1,13 +1,13 @@
 # Ralph Wiggum + b00t Enhanced Configuration
-# B00t gospel integration for Ralph agent system
+# B00t g0spell integration for Ralph agent system
 
 [b00t]
 name = "ralph-b00t-enhanced"
 type = "agent"
-hint = "Enhanced Ralph Wiggum AI agent with b00t gospel integration, NRtW/DRY principles, and role-based capabilities"
+hint = "Enhanced Ralph Wiggum AI agent with b00t g0spell integration, NRtW/DRY principles, and role-based capabilities"
 
 [b00t.agent]
-description = "Self-learning AI agent with b00t gospel compliance"
+description = "Self-learning AI agent with b00t g0spell compliance"
 version = "2.0.0"
 author = "b00t-hive"
 license = "MIT"
@@ -19,7 +19,7 @@ core = [
     "role-based-execution",
     "nrtw-enforcement",
     "dry-pattern-detection",
-    "b00t-gospel-integration",
+    "b00t-g0spell-integration",
     "library-discovery",
     "pattern-memoization"
 ]
@@ -56,10 +56,10 @@ pattern_consolidation = true
 cross_project_learning = true
 learning_retention_days = 90
 
-# B00t gospel integration settings
+# B00t g0spell integration settings
 [b00t.agent.b00t_integration]
 enabled = true
-gospel_path = "~/.b00t"
+g0spell_path = "~/.b00t"
 workspace_path = "~/_b00t_"
 auto_skill_loading = true
 compliance_checking = true
@@ -95,7 +95,7 @@ nrtw_focus = ["general-purpose"]
 [b00t.agent.quality_gates]
 nrtw_compliance = true
 dry_compliance = true
-b00t_gospel_compliance = true
+b00t_g0spell_compliance = true
 testing_required = true
 documentation_required = true
 
@@ -127,7 +127,7 @@ B00T_WORKSPACE_PATH = "~/_b00t_"
 
 # Usage examples and documentation
 [b00t.usage]
-description = "Enhanced Ralph agent with b00t gospel integration"
+description = "Enhanced Ralph agent with b00t g0spell integration"
 
 [[b00t.usage.examples]]
 description = "Run as architect with NRtW enforcement"
@@ -152,11 +152,11 @@ command = "./ralph-b00t-enhanced.sh --no-b00t-integration"
 # References and links
 [b00t.references]
 original_ralph = "https://github.com/snarktank/ralph"
-b00t_gospel = "https://github.com/elasticdotventures/dotfiles"
+b00t_g0spell = "https://github.com/elasticdotventures/dotfiles"
 nrtw_principles = "https://en.wikipedia.org/wiki/Don%27t_repeat_yourself"
 
 [[b00t.references.documentation]]
-name = "B00t Gospel"
+name = "B00t G0spell"
 url = "https://github.com/elasticdotventures/dotfiles/blob/main/AGENT.md"
 description = "Core b00t operating principles and agent guidelines"
 

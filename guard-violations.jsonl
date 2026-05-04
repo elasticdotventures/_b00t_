@@ -1,0 +1,54 @@
+{"count":6,"pattern":"pip3 install"}
+{"count":1,"pattern":"npm inst"}
+{"count":6,"pattern":"conda install"}
+{"count":7,"pattern":"rm -rf /"}
+{"count":4,"pattern":"docker build"}
+{"count":4,"pattern":"docker-compose"}
+{"count":47,"pattern":"docker run"}
+{"count":4,"pattern":"npm install -g"}
+{"count":7,"pattern":"stage:pre_parse"}
+{"count":4,"pattern":"rhai:cmd.contains(\"pip\") && cmd.contains(\"install\")"}
+{"count":4,"pattern":"python -m pip"}
+{"count":4,"pattern":"ulimit -n"}
+{"count":1,"pattern":"rhai:cmd.conta"}
+{"count":3,"pattern":"vllm serve"}
+{"count":2,"pattern":"rhai:cmd.contains(\"pip\") && violations >= threshold"}
+{"count":4,"pattern":"git push --force"}
+{"count":6,"pattern":"huggingface-cli download"}
+{"count":3,"pattern":"echo"}
+{"count":4,"pattern":"git reset --hard"}
+{"count":43,"pattern":"pip install"}
+{"count":1,"pattern":"pip inst"}
+{"count":4,"pattern":"brew install"}
+{"count":3,"pattern":"pip"}
+{"count":44,"pattern":"pip install"}
+{"count":48,"pattern":"docker run"}
+{"count":45,"pattern":"pip install"}
+{"count":49,"pattern":"docker run"}
+{"count":46,"pattern":"pip install"}
+{"count":47,"pattern":"pip install"}
+{"count":50,"pattern":"docker run"}
+{"count":48,"pattern":"pip install"}
+{"count":51,"pattern":"docker run"}
+{"count":4,"pattern":"vllm serve"}
+{"count":49,"pattern":"pip install"}
+{"count":52,"pattern":"docker run"}
+{"count":50,"pattern":"pip install"}
+{"count":53,"pattern":"docker run"}
+{"count":51,"pattern":"pip install"}
+{"count":7,"pattern":"pip3 install"}
+{"count":5,"pattern":"python -m pip"}
+{"count":7,"pattern":"conda install"}
+{"count":54,"pattern":"docker run"}
+{"count":5,"pattern":"docker build"}
+{"count":5,"pattern":"docker-compose"}
+{"count":8,"pattern":"rm -rf /"}
+{"count":5,"pattern":"git push --force"}
+{"count":5,"pattern":"git reset --hard"}
+{"count":5,"pattern":"npm install -g"}
+{"count":5,"pattern":"brew install"}
+{"count":7,"pattern":"huggingface-cli download"}
+{"count":8,"pattern":"stage:pre_parse"}
+{"count":5,"pattern":"ulimit -n"}
+{"count":52,"pattern":"pip install"}
+{"count":55,"pattern":"docker run"}

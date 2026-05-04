@@ -884,7 +884,7 @@ fn list_ai_models(path: &str) -> PyResult<Vec<String>> {
 
 /// Python module for b00t-cli bindings
 #[pymodule]
-fn b00t_py(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
+fn _core(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     // Classes
     m.add_class::<PyEmojiRegistry>()?;
 

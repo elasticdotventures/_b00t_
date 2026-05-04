@@ -800,10 +800,12 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_yaml",
+ "shell-words",
  "shellexpand",
  "tempfile",
  "tokio",
  "tokio-test",
+ "tokio-util",
  "toml",
  "tracing",
  "tracing-subscriber",
@@ -872,11 +874,13 @@ dependencies = [
  "confy",
  "dirs",
  "duct",
+ "ed25519-dalek",
  "env_logger",
  "flate2",
  "fs2",
  "gix-attributes",
  "glob",
+ "hex",
  "hf-hub",
  "inquire",
  "k0mmand3r",
@@ -884,10 +888,12 @@ dependencies = [
  "kube",
  "libc",
  "llama_cpp_sys",
+ "mdns-sd",
  "ndarray",
  "once_cell",
  "openssl-sys",
  "opentelemetry",
+ "rand 0.8.6",
  "regex",
  "reqwest",
  "rhai",
@@ -914,6 +920,7 @@ dependencies = [
  "which 7.0.3",
  "whoami",
  "zbus",
+ "zeroize",
 ]
 
 [[package]]
@@ -3422,6 +3429,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "if-addrs"
+version = "0.15.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c0a05c691e1fae256cf7013d99dad472dc52d5543322761f83ec8d47eab40d2b"
+dependencies = [
+ "libc",
+ "windows-sys 0.61.2",
+]
+
+[[package]]
 name = "ignore"
 version = "0.4.25"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4043,6 +4060,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "mdns-sd"
+version = "0.19.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c2bb8ce26633738d98ffcef71ec58bff967c6675be50229823c2835f6316e67e"
+dependencies = [
+ "fastrand 2.4.1",
+ "flume",
+ "if-addrs",
+ "log",
+ "mio 1.2.0",
+ "socket-pktinfo",
+ "socket2 0.6.3",
+]
+
+[[package]]
 name = "memchr"
 version = "2.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4128,6 +4160,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "50b7e5b27aa02a74bac8c3f23f448f8d87ff11f92d3aac1a6ed369ee08cc56c1"
 dependencies = [
  "libc",
+ "log",
  "wasi 0.11.1+wasi-snapshot-preview1",
  "windows-sys 0.61.2",
 ]
@@ -6275,6 +6308,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "52b86057fcb5423f5018e331ac04623e32d6b5ce85e33300f92c79a1973928b0"
 
 [[package]]
+name = "shell-words"
+version = "1.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "dc6fe69c597f9c37bfeeeeeb33da3530379845f10be461a66d16d03eca2ded77"
+
+[[package]]
 name = "shellexpand"
 version = "3.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6432,6 +6471,17 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn",
+]
+
+[[package]]
+name = "socket-pktinfo"
+version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "927136cc2ae6a1b0e66ac6b1210902b75c3f726db004a73bc18686dcd0dcd22f"
+dependencies = [
+ "libc",
+ "socket2 0.6.3",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]

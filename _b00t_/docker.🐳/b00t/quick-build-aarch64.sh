@@ -31,15 +31,15 @@ fi
 
 echo -e "${GREEN}✓${NC} Using runtime: ${RUNTIME}"
 
-# Verify gospel exists
+# Verify g0spell exists
 GOSPEL="${HOME}/.b00t"
 if [ ! -d "$GOSPEL" ]; then
-    echo -e "${YELLOW}ERROR: Gospel not found at ${GOSPEL}${NC}"
+    echo -e "${YELLOW}ERROR: G0spell not found at ${GOSPEL}${NC}"
     echo "Clone from: https://github.com/elasticdotventures/dotfiles"
     exit 1
 fi
 
-echo -e "${GREEN}✓${NC} Gospel found: ${GOSPEL}"
+echo -e "${GREEN}✓${NC} G0spell found: ${GOSPEL}"
 
 # Verify Dockerfile exists
 DOCKERFILE="${GOSPEL}/Dockerfile.b00t-cli"

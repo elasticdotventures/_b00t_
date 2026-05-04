@@ -1,0 +1,1 @@
+Adding guard violations CLI command. Files: guard.rs, mod.rs, main.rs

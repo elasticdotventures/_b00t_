@@ -36,6 +36,8 @@ pub mod datum_ai_model;
 pub mod datum_lsp;
 pub mod datum_types;
 pub mod dual_grok;
+pub mod dual_install;
+pub mod codebase_memory;
 pub mod grok;
 pub mod irontology_bridge;
 pub mod knowledge;

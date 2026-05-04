@@ -177,3 +177,220 @@ mod k0mmand3r_guard_tests {
         assert_eq!(guard, deserialized);
     }
 }
+
+#[cfg(test)]
+mod k0mmand3r_typed_cmd_tests {
+    use super::super::*;
+
+    #[test]
+    fn test_parse_negotiate_positional() {
+        let cmd = K0mmand3rCmd::parse("/negotiate blessing observe-infra").unwrap();
+        match cmd {
+            K0mmand3rCmd::Negotiate { resource, id, modifiers } => {
+                assert_eq!(resource, "blessing");
+                assert_eq!(id, "observe-infra");
+                assert!(modifiers.is_empty());
+            }
+            _ => panic!("Expected Negotiate"),
+        }
+    }
+
+    #[test]
+    fn test_parse_negotiate_modifier() {
+        let cmd = K0mmand3rCmd::parse("/negotiate blessing:observe-infra").unwrap();
+        match cmd {
+            K0mmand3rCmd::Negotiate { resource, id, .. } => {
+                assert_eq!(resource, "blessing");
+                assert_eq!(id, "observe-infra");
+            }
+            _ => panic!("Expected Negotiate"),
+        }
+    }
+
+    #[test]
+    fn test_parse_vote() {
+        let cmd = K0mmand3rCmd::parse("/vote proposal-123 yes because reasons").unwrap();
+        match cmd {
+            K0mmand3rCmd::Vote { proposal, choice, reason } => {
+                assert_eq!(proposal, "proposal-123");
+                assert_eq!(choice, b00t_ipc::VoteChoice::Yes);
+                assert_eq!(reason, Some("because reasons".to_string()));
+            }
+            _ => panic!("Expected Vote"),
+        }
+    }
+
+    #[test]
+    fn test_parse_vote_abstain() {
+        let cmd = K0mmand3rCmd::parse("/vote on proposal-456 choice abstain").unwrap();
+        match cmd {
+            K0mmand3rCmd::Vote { proposal, choice, .. } => {
+                assert_eq!(proposal, "proposal-456");
+                assert_eq!(choice, b00t_ipc::VoteChoice::Abstain);
+            }
+            _ => panic!("Expected Vote"),
+        }
+    }
+
+    #[test]
+    fn test_parse_delegate() {
+        let cmd = K0mmand3rCmd::parse("/delegate agent:b00t-sandbox budget:5000").unwrap();
+        match cmd {
+            K0mmand3rCmd::Delegate { agent, budget } => {
+                assert_eq!(agent, "b00t-sandbox");
+                assert_eq!(budget, 5000);
+            }
+            _ => panic!("Expected Delegate"),
+        }
+    }
+
+    #[test]
+    fn test_parse_handshake_positional() {
+        let cmd = K0mmand3rCmd::parse("/handshake executive propose deal").unwrap();
+        match cmd {
+            K0mmand3rCmd::Handshake { agent, proposal } => {
+                assert_eq!(agent, "executive");
+                assert_eq!(proposal, Some("propose deal".to_string()));
+            }
+            _ => panic!("Expected Handshake"),
+        }
+    }
+
+    #[test]
+    fn test_parse_handshake_modifier() {
+        let cmd = K0mmand3rCmd::parse("/handshake to agent:observer").unwrap();
+        match cmd {
+            K0mmand3rCmd::Handshake { agent, proposal } => {
+                assert_eq!(agent, "observer");
+                assert_eq!(proposal, None);
+            }
+            _ => panic!("Expected Handshake"),
+        }
+    }
+
+    #[test]
+    fn test_parse_handshake_missing_agent() {
+        let result = K0mmand3rCmd::parse("/handshake");
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("agent"));
+    }
+
+    #[test]
+    fn test_parse_loop_spec_positional() {
+        let cmd = K0mmand3rCmd::parse("/loop goal:deploy metric:uptime verify:healthcheck max:5").unwrap();
+        match cmd {
+            K0mmand3rCmd::Loop { spec } => {
+                assert_eq!(spec.goal, "deploy");
+                assert_eq!(spec.metric, "uptime");
+                assert_eq!(spec.verify, "healthcheck");
+                assert_eq!(spec.max, Some(5));
+            }
+            _ => panic!("Expected Loop"),
+        }
+    }
+
+    #[test]
+    fn test_parse_loop_spec_modifiers() {
+        let cmd = K0mmand3rCmd::parse("/loop with goal=deploy metric=uptime verify=healthcheck").unwrap();
+        match cmd {
+            K0mmand3rCmd::Loop { spec } => {
+                assert_eq!(spec.goal, "deploy");
+                assert_eq!(spec.metric, "uptime");
+                assert_eq!(spec.verify, "healthcheck");
+            }
+            _ => panic!("Expected Loop"),
+        }
+    }
+
+    #[test]
+    fn test_parse_loop_spec_missing_goal() {
+        let result = K0mmand3rCmd::parse("/loop metric:uptime");
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("goal"));
+    }
+
+    #[test]
+    fn test_parse_crew_form() {
+        let cmd = K0mmand3rCmd::parse("/crew form alice bob charlie").unwrap();
+        match cmd {
+            K0mmand3rCmd::Crew { action, members } => {
+                assert_eq!(action, CrewAction::Form);
+                assert_eq!(members, vec!["alice", "bob", "charlie"]);
+            }
+            _ => panic!("Expected Crew"),
+        }
+    }
+
+    #[test]
+    fn test_parse_unknown() {
+        let cmd = K0mmand3rCmd::parse("/foobar something").unwrap();
+        match cmd {
+            K0mmand3rCmd::Unknown { raw } => {
+                assert_eq!(raw, "/foobar something");
+            }
+            _ => panic!("Expected Unknown"),
+        }
+    }
+
+    #[test]
+    fn test_parse_empty_command() {
+        let result = K0mmand3rCmd::parse("/");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_parse_missing_slash() {
+        let result = K0mmand3rCmd::parse("handshake agent:test");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_loop_spec_from_tokens_positional() {
+        let positional = vec!["goal:build|metric:compile-time|verify:tests-pass|max:10"];
+        let modifiers = std::collections::BTreeMap::new();
+        let spec = LoopSpec::from_tokens(&positional, &modifiers).unwrap();
+        assert_eq!(spec.goal, "build");
+        assert_eq!(spec.metric, "compile-time");
+        assert_eq!(spec.verify, "tests-pass");
+        assert_eq!(spec.max, Some(10));
+        assert_eq!(spec.guard, None);
+    }
+
+    #[test]
+    fn test_loop_spec_from_tokens_modifiers() {
+        let positional: Vec<&str> = vec![];
+        let mut modifiers = std::collections::BTreeMap::new();
+        modifiers.insert("goal".to_string(), "deploy".to_string());
+        modifiers.insert("metric".to_string(), "latency".to_string());
+        modifiers.insert("guard".to_string(), "budget<100".to_string());
+        let spec = LoopSpec::from_tokens(&positional, &modifiers).unwrap();
+        assert_eq!(spec.goal, "deploy");
+        assert_eq!(spec.metric, "latency");
+        assert_eq!(spec.guard, Some("budget<100".to_string()));
+    }
+
+    #[test]
+    fn test_loop_spec_from_tokens_missing_goal() {
+        let positional: Vec<&str> = vec![];
+        let modifiers = std::collections::BTreeMap::new();
+        let result = LoopSpec::from_tokens(&positional, &modifiers);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("goal"));
+    }
+
+    #[test]
+    fn test_handshake_validation() {
+        let cmd = K0mmand3rCmd::parse("/handshake agent:executive").unwrap();
+        assert_eq!(cmd.verb(), "handshake");
+        assert_eq!(cmd.object(), "agent:executive");
+
+        let cmd = K0mmand3rCmd::parse("/handshake observer do the thing").unwrap();
+        match cmd {
+            K0mmand3rCmd::Handshake { agent, proposal } => {
+                assert_eq!(agent, "observer");
+                assert_eq!(proposal, Some("do the thing".to_string()));
+            }
+            _ => panic!("Expected Handshake"),
+        }
+    }
+}

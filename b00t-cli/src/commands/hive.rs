@@ -73,6 +73,60 @@ pub enum HiveCommands {
         #[clap(long, help = "Dry-run: evaluate guards but don't execute")]
         dry_run: bool,
     },
+
+    #[clap(
+        about = "List and manage hive peer nodes across trust zones",
+        long_about = "Hive peers are discovered b00t nodes across trust zones (local, LAN, VPN, internet)."
+    )]
+    Peers {
+        #[clap(subcommand)]
+        peer_command: PeerCommands,
+    },
+}
+
+
+
+
+#[derive(Parser)]
+pub enum PeerCommands {
+    #[clap(about = "List all known hive peers with trust zone and health status")]
+    List {
+        #[clap(long, help = "Output as JSON")]
+        json: bool,
+        #[clap(long, help = "Health-check all peers in parallel (5s timeout per peer)")]
+        health: bool,
+    },
+    #[clap(about = "Register a peer in the hive ledger")]
+    Add {
+        #[clap(help = "Peer identifier")]
+        id: String,
+        #[clap(help = "Address (host:port or URL)")]
+        address: String,
+        #[clap(long, help = "Authentication type (ssh, tls, jwt)")]
+        auth_type: Option<String>,
+    },
+    #[clap(about = "Remove a peer from the hive ledger")]
+    Remove {
+        #[clap(help = "Peer ID to remove")]
+        id: String,
+    },
+    #[clap(about = "Health-check a specific peer")]
+    Status {
+        #[clap(help = "Peer ID to check")]
+        id: String,
+    },
+    #[clap(about = "Gossip with a random peer to discover new nodes")]
+    Gossip,
+    #[clap(about = "Remove peers that haven't been seen since a cutoff")]
+    Prune {
+        #[clap(long, help = "Cutoff age (e.g. 30d, 7d, 24h)", default_value = "30d")]
+        older_than: String,
+    },
+    #[clap(about = "Scan local network for b00t hive nodes")]
+    Discover {
+        #[clap(long, help = "Subnet to scan (e.g. 192.168.1.0/24)")]
+        subnet: Option<String>,
+    },
     #[clap(subcommand)]
     Cyber(HiveCyberCommands),
 }

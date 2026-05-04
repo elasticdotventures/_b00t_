@@ -177,4 +177,4 @@ These resources help ralph improve over iterations and avoid repeating mistakes.
 
 ---
 
-🥾 Generated via b00t gospel alignment
+🥾 Generated via b00t g0spell alignment

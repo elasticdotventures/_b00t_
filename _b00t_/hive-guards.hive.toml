@@ -109,10 +109,50 @@ action = "warn"
 message = "🦨 huggingface-cli is deprecated; use: hf download"
 redirect = "hf download"
 
+# --- Parse-time stage guards ---
+[[b00t.hive.guards]]
+pattern = { stage = "pre_parse" }
+action = "block"
+message = "🚫 blocked at parse time"
+
 [[b00t.hive.guards]]
 pattern = "ulimit -n"
 action = "warn"
 message = "⚠️ ulimit only affects current shell; systemd services use LimitNOFILE=65536 in unit file; for persistent system fix: sudo bash -c 'echo \"* soft nofile 65536\" >> /etc/security/limits.conf'"
+
+
+# --- SCM branch/commit conventions ---
+# Enforced via `b00t hive run` before any command reaches git.
+# Prevents accidental main-branch work and non-conventional commits.
+# Ref: _b00t_/schema/SCM-CONVENTIONS.tomllmd
+# Uses simple cmd.contains() — regex_match(cmd, pattern) also available
+# for more precise matching if needed (registered on Rhai engine).
+
+[[b00t.hive.guards]]
+pattern = { rhai = "cmd.contains(\"git checkout\") && (cmd.contains(\" main\") || cmd.contains(\" master\"))" }
+action = "block"
+message = "🚫 blocked: switching to main/master — work on a feature branch (feat/, fix/, chore/)"
+
+[[b00t.hive.guards]]
+pattern = { rhai = "cmd.contains(\"git push\") && cmd.contains(\"origin main\")" }
+action = "block"
+message = "🚫 blocked: pushing to main — create a PR instead"
+redirect = "gh pr create"
+
+[[b00t.hive.guards]]
+pattern = { rhai = "cmd.contains(\"git merge\") && cmd.contains(\"main\")" }
+action = "block"
+message = "🚫 blocked: merging main — use gh pr merge or rebase flow"
+
+[[b00t.hive.guards]]
+pattern = { rhai = "cmd.contains(\"git checkout -b\") && !cmd.contains(\"/\")" }
+action = "warn"
+message = "🦨 branch name should use type/description format (e.g. feat/add-widget, fix/login-crash)"
+
+[[b00t.hive.guards]]
+pattern = { rhai = "cmd.contains(\"git commit\") && cmd.contains(\"-m\") && !cmd.contains(\":\")" }
+action = "warn"
+message = "🦨 commit message should follow Conventional Commits: type(scope): description (e.g. feat: add widget)"
 
 [[b00t.usage]]
 description = "Check a command against universal guards"
@@ -121,3 +161,4 @@ command = "b00t run <your-command>"
 [[b00t.usage]]
 description = "List all active guards"
 command = "b00t hive status --guards"
+
