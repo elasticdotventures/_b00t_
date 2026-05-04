@@ -4,6 +4,14 @@ type = "mcp"
 hint = "Azure AI Foundry MCP server - Enterprise multi-agent orchestration with connected agents, sub-agent delegation, and stateful workflows. Replaces lightweight local backlog/job flows for complex business processes."
 lfmf_category = "azure-ai-foundry"
 
+[[b00t.gate]]
+command = "azure-cli"
+hint = "Azure CLI (az) required for auth"
+
+[[b00t.gate]]
+file = "~/.azure/azureProfile.json"
+hint = "Azure credentials not found — run 'az login'"
+
 # 🤓 Azure AI Foundry MCP provides enterprise-grade agent orchestration
 # Superior to TODO-next/b00t job for multi-agent systems with sub-agent delegation
 [[b00t.mcp.stdio]]

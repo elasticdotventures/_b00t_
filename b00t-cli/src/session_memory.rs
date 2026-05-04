@@ -38,6 +38,8 @@ pub struct SessionConfig {
     pub count_shell_starts: bool,
     /// Tera template for status output (OODA loop context) - optional, uses default if None
     pub status_template: Option<String>,
+    /// Max MCP servers to show without a search/filter query
+    pub mcp_list_threshold: i64,
 }
 
 impl Default for SessionConfig {
@@ -72,6 +74,7 @@ impl Default for SessionConfig {
             use_env_overrides: true,
             count_shell_starts: true,
             status_template: None, // Uses default template if None
+            mcp_list_threshold: 10,
         }
     }
 }
