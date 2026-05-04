@@ -66,19 +66,13 @@ pub enum HiveCommands {
         long_about = "Checks command against active profile guards + universal guards.\nWarns on misaligned patterns (pip→uv, docker→podman, etc.).\n\nExamples:\n  b00t run pip install requests\n  b00t run docker run --rm ubuntu echo hello\n  b00t run -- rm -rf /tmp/foo"
     )]
     Run {
-        #[clap(
-            help = "Command and arguments to evaluate",
-            trailing_var_arg = true,
-            allow_hyphen_values = true,
-            num_args = 1..,
-        )]
+        #[clap(required = true, help = "Command to evaluate")]
         command: Vec<String>,
         #[clap(long, help = "Strict mode: block on warn (default: warn and proceed)")]
         strict: bool,
         #[clap(long, help = "Dry-run: evaluate guards but don't execute")]
         dry_run: bool,
     },
-=======
 
     #[clap(
         about = "List and manage hive peer nodes across trust zones",
@@ -133,7 +127,17 @@ pub enum PeerCommands {
         #[clap(long, help = "Subnet to scan (e.g. 192.168.1.0/24)")]
         subnet: Option<String>,
     },
->>>>>>> 520584d (hive-peers: gossip, mDNS discover, list --health, peer GC)
+    #[clap(subcommand)]
+    Cyber(HiveCyberCommands),
+}
+
+#[derive(Parser, Clone)]
+pub enum HiveCyberCommands {
+    #[clap(about = "Show trust boundary status (OS_GUEST/OS_ROOT/LAN)")]
+    RingFence {
+        #[clap(long, help = "Emit as JSON")]
+        json: bool,
+    },
 }
 
 pub fn handle_hive_command(cmd: &HiveCommands, path: &str) -> Result<()> {
@@ -351,6 +355,7 @@ pub fn handle_hive_command(cmd: &HiveCommands, path: &str) -> Result<()> {
             }
         }
 
+        HiveCommands::Cyber(cyber_cmd) => handle_cyber_command(cyber_cmd),
         HiveCommands::Run {
             command,
             strict,
@@ -408,6 +413,23 @@ pub fn handle_hive_command(cmd: &HiveCommands, path: &str) -> Result<()> {
     }
 }
 
+fn handle_cyber_command(cmd: &HiveCyberCommands) -> Result<()> {
+    match cmd {
+        HiveCyberCommands::RingFence { json } => {
+            let is_root = unsafe { libc::geteuid() == 0 };
+            let mode = if is_root { "OS_ROOT" } else { "OS_GUEST" };
+
+            if *json {
+                println!(r#"{{"mode":"{mode}","is_root":{is_root}}}"#);
+            } else {
+                println!("🔒 Trust boundary: {mode}");
+                println!("   is_root: {is_root}");
+            }
+            Ok(())
+        }
+    }
+}
+
 /// Load universal guards from hive-guards.hive.toml + active profile guards
 fn load_all_guards(datum_dir: &Path, snapshot: &SystemSnapshot) -> Vec<crate::hive::HiveGuard> {
     let mut guards = Vec::new();
@@ -426,4 +448,3 @@ fn load_all_guards(datum_dir: &Path, snapshot: &SystemSnapshot) -> Vec<crate::hi
 
     guards
 }
-<<<<<<< HEAD

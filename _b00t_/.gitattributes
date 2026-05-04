@@ -1,0 +1,5 @@
+# b00t datum operational overlays live beside the datum corpus.
+# Attributes are semantic to b00t, not Git; b00t reads b00t.* via gix-attributes.
+plantuml.mcp.toml b00t.status=sunset b00t.enabled=false b00t.status_msg=java-too-heavy b00t.replacement=b00t-viz-mermaid-rhai-svg b00t.search=exclude
+plantuml-queue.stack.toml b00t.status=sunset b00t.enabled=false b00t.status_msg=java-too-heavy b00t.replacement=b00t-viz-mermaid-rhai-svg b00t.search=exclude
+plantuml-server-b00t.docker.toml b00t.status=sunset b00t.enabled=false b00t.status_msg=java-too-heavy b00t.replacement=b00t-viz-mermaid-rhai-svg b00t.search=exclude

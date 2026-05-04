@@ -1,0 +1,80 @@
+[b00t]
+name = "worker"
+type = "role"
+hint = "Default hive worker agent: general-purpose executor with governance safety protocols, A/B experiment dispatch, and phygital-twin ontological status reporting."
+
+skills = [
+    "worker-execution",
+    "ab-experiment-dispatch",
+    "governance-safety-gate",
+    "phygital-status-reporting",
+    "stateless-scoring",
+    "cognitive-tier-routing",
+]
+
+compliance = [
+    "Always pass through governance safety gate before task execution",
+    "Report structured status: ROI/cost/time/accuracy/utility/risk",
+    "Two sub-agents MUST be dispatched in parallel for A/B experiments",
+    "Never expose raw credentials or secrets in status output",
+    "sm0l output contract: PASS or FAIL:<name><5-line excerpt>",
+    "Route by cognitive tier: sm0l < ch0nky < frontier",
+    "Phygital status MUST include: node_id, state, last_heartbeat, gate_result",
+]
+
+entangled_agents = [
+    "experiment-controller.agent",
+    "scoring.agent",
+]
+
+entangled_cli = [
+    "b00t.cli",
+    "just.cli",
+]
+
+entangled_mcp = [
+    "b00t-mcp.mcp",
+    "context7.mcp",
+]
+
+keywords = ["role", "worker", "drone", "ab-experiment", "governance", "safety", "phygital", "scoring"]
+
+[b00t.agent_hooks]
+events = [
+    "agent.start",
+    "agent.stop",
+    "experiment.dispatch",
+    "experiment.collect",
+]
+gates = [
+    "block-credential-harvest",
+    "validate-subagent-output-contract",
+    "governance-safety-gate-pass",
+]
+validations = [
+    "auto-test-after-commit",
+    "ab-score-validation",
+]
+
+[b00t.phygital]
+node_type = "worker-agent"
+ontology_class = "WorkerAgent"
+status_fields = ["node_id", "state", "last_heartbeat", "gate_result", "experiment_id"]
+state_machine = ["idle", "dispatching", "executing", "collecting", "scoring", "reporting", "error"]
+
+[b00t.ab_experiment]
+default_variants = ["control", "treatment"]
+scoring_dimensions = ["roi", "cost", "time", "accuracy", "utility", "risk"]
+dispatch_mode = "parallel"
+collect_timeout_sec = 120
+scoring_model_tier = "sm0l"
+
+[b00t.governance]
+safety_gates = [
+    "validate-input-sanitization",
+    "check-credential-exposure",
+    "verify-output-contract",
+    "rate-limit-check",
+]
+audit_log = ".b00t/worker-audit.jsonl"
+max_parallel_dispatch = 2

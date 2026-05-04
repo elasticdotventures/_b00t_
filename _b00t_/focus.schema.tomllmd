@@ -1,0 +1,114 @@
+generated_by = "FocusSchema::generate_tomllmd()"
+# 🤖 AUTO-GENERATED — DO NOT EDIT
+# Regenerate: b00t schema generate
+# Source: 43 headers from datum_schema.rs FocusSchema struct
+
+[b00t]
+name = "focus"
+type = "schema"
+version = "1.3"
+hint = "FOCUS v1.3 CostAndUsage — auto-generated. DO NOT EDIT."
+keywords = ["focus", "finops", "schema", "auto-gen"]
+
+[b00t.spec]
+canonical = "https://focus.finops.org/focus-specification/v1-3/"
+license = "CC-BY-4.0"
+
+[b00t.schema.focus]
+spec_version = "1.3"
+header_count = 43
+
+[b00t.schema.focus.headers]
+
+# BillingAccountId: Provider-assigned billing account identifier (Dimension | Mandatory | nullable=false)
+BillingAccountId = { type = "dimension", feature = "mandatory", nullable = false, ordinal = 0 }
+# BillingCurrency: ISO 4217 currency code (Dimension | Mandatory | nullable=false)
+BillingCurrency = { type = "dimension", feature = "mandatory", nullable = false, ordinal = 1 }
+# ServiceProviderName: Service provider name (Dimension | Mandatory | nullable=false)
+ServiceProviderName = { type = "dimension", feature = "mandatory", nullable = false, ordinal = 2 }
+# ServiceName: Service name (Dimension | Mandatory | nullable=false)
+ServiceName = { type = "dimension", feature = "mandatory", nullable = false, ordinal = 3 }
+# SkuId: SKU identifier (Dimension | Mandatory | nullable=false)
+SkuId = { type = "dimension", feature = "mandatory", nullable = false, ordinal = 4 }
+# BilledCost: Invoice-basis cost after discounts (Metric | Mandatory | nullable=false)
+BilledCost = { type = "metric", feature = "mandatory", nullable = false, ordinal = 5 }
+# EffectiveCost: Cost after all discounts and amortization (Metric | Mandatory | nullable=false)
+EffectiveCost = { type = "metric", feature = "mandatory", nullable = false, ordinal = 6 }
+# ChargeCategory: Usage/Purchase/Tax/Credit/Adjustment (Dimension | Mandatory | nullable=false)
+ChargeCategory = { type = "dimension", feature = "mandatory", nullable = false, ordinal = 7 }
+# ChargeFrequency: OneTime/Recurring/UsageBased (Dimension | Mandatory | nullable=false)
+ChargeFrequency = { type = "dimension", feature = "mandatory", nullable = false, ordinal = 8 }
+# ChargePeriodStart: Charge period start (Dimension | Mandatory | nullable=false)
+ChargePeriodStart = { type = "dimension", feature = "mandatory", nullable = false, ordinal = 9 }
+# ChargePeriodEnd: Charge period end (Dimension | Mandatory | nullable=false)
+ChargePeriodEnd = { type = "dimension", feature = "mandatory", nullable = false, ordinal = 10 }
+# BillingPeriodStart: Billing period start (Dimension | Mandatory | nullable=false)
+BillingPeriodStart = { type = "dimension", feature = "mandatory", nullable = false, ordinal = 11 }
+# BillingPeriodEnd: Billing period end (Dimension | Mandatory | nullable=false)
+BillingPeriodEnd = { type = "dimension", feature = "mandatory", nullable = false, ordinal = 12 }
+# BillingAccountName: Billing account display name (Dimension | Optional | nullable=true)
+BillingAccountName = { type = "dimension", feature = "optional", nullable = true, ordinal = 13 }
+# ChargeClass: Correction or null (Dimension | Optional | nullable=true)
+ChargeClass = { type = "dimension", feature = "optional", nullable = true, ordinal = 14 }
+# ChargeDescription: Human-readable description (Dimension | Optional | nullable=true)
+ChargeDescription = { type = "dimension", feature = "optional", nullable = true, ordinal = 15 }
+# ConsumedQuantity: Resources consumed (Metric | Optional | nullable=true)
+ConsumedQuantity = { type = "metric", feature = "optional", nullable = true, ordinal = 16 }
+# ConsumedUnit: Unit for consumed qty (Dimension | Optional | nullable=true)
+ConsumedUnit = { type = "dimension", feature = "optional", nullable = true, ordinal = 17 }
+# ContractedCost: Cost after contracted discounts (Metric | Optional | nullable=true)
+ContractedCost = { type = "metric", feature = "optional", nullable = true, ordinal = 18 }
+# InvoiceId: Invoice identifier (Dimension | Optional | nullable=true)
+InvoiceId = { type = "dimension", feature = "optional", nullable = true, ordinal = 19 }
+# InvoiceIssuerName: Invoice issuer (Dimension | Optional | nullable=true)
+InvoiceIssuerName = { type = "dimension", feature = "optional", nullable = true, ordinal = 20 }
+# ListCost: Undiscounted list price (Metric | Optional | nullable=true)
+ListCost = { type = "metric", feature = "optional", nullable = true, ordinal = 21 }
+# PricingQuantity: Pricing quantity (Metric | Optional | nullable=true)
+PricingQuantity = { type = "metric", feature = "optional", nullable = true, ordinal = 22 }
+# PricingUnit: Pricing unit (Dimension | Optional | nullable=true)
+PricingUnit = { type = "dimension", feature = "optional", nullable = true, ordinal = 23 }
+# RegionId: Region ID (Dimension | Optional | nullable=true)
+RegionId = { type = "dimension", feature = "optional", nullable = true, ordinal = 24 }
+# RegionName: Region name (Dimension | Optional | nullable=true)
+RegionName = { type = "dimension", feature = "optional", nullable = true, ordinal = 25 }
+# ResourceId: Resource ID (Dimension | Optional | nullable=true)
+ResourceId = { type = "dimension", feature = "optional", nullable = true, ordinal = 26 }
+# ResourceName: Resource name (Dimension | Optional | nullable=true)
+ResourceName = { type = "dimension", feature = "optional", nullable = true, ordinal = 27 }
+# ServiceCategory: Service category (Dimension | Optional | nullable=true)
+ServiceCategory = { type = "dimension", feature = "optional", nullable = true, ordinal = 28 }
+# ServiceSubcategory: Service subcategory (Dimension | Optional | nullable=true)
+ServiceSubcategory = { type = "dimension", feature = "optional", nullable = true, ordinal = 29 }
+# SubAccountId: Sub-account ID (Dimension | Optional | nullable=true)
+SubAccountId = { type = "dimension", feature = "optional", nullable = true, ordinal = 30 }
+# SubAccountName: Sub-account name (Dimension | Optional | nullable=true)
+SubAccountName = { type = "dimension", feature = "optional", nullable = true, ordinal = 31 }
+# AvailabilityZone: Availability zone (Dimension | Optional | nullable=true)
+AvailabilityZone = { type = "dimension", feature = "optional", nullable = true, ordinal = 32 }
+# CommitmentDiscountId: Commitment discount ID (Dimension | Optional | nullable=true)
+CommitmentDiscountId = { type = "dimension", feature = "optional", nullable = true, ordinal = 33 }
+# CommitmentDiscountType: Commitment discount type (Dimension | Optional | nullable=true)
+CommitmentDiscountType = { type = "dimension", feature = "optional", nullable = true, ordinal = 34 }
+# CommitmentDiscountStatus: Used/Unused (Dimension | Optional | nullable=true)
+CommitmentDiscountStatus = { type = "dimension", feature = "optional", nullable = true, ordinal = 35 }
+# HostProviderName: Host provider (Dimension | Optional | nullable=true)
+HostProviderName = { type = "dimension", feature = "optional", nullable = true, ordinal = 36 }
+# x_ExperimentId: ledgrrr: experiment ID (Dimension | Optional | nullable=true)
+x_ExperimentId = { type = "dimension", feature = "optional", nullable = true, ordinal = 37 }
+# x_Variant: ledgrrr: control/treatment (Dimension | Optional | nullable=true)
+x_Variant = { type = "dimension", feature = "optional", nullable = true, ordinal = 38 }
+# x_Personality: ledgrrr: psychometric label (Dimension | Optional | nullable=true)
+x_Personality = { type = "dimension", feature = "optional", nullable = true, ordinal = 39 }
+# x_ExperimentScore: ledgrrr: 0.0–1.0 (Metric | Optional | nullable=true)
+x_ExperimentScore = { type = "metric", feature = "optional", nullable = true, ordinal = 40 }
+# x_AgentId: ledgrrr: agent ID (Dimension | Optional | nullable=true)
+x_AgentId = { type = "dimension", feature = "optional", nullable = true, ordinal = 41 }
+# x_ReasoningReview: ledgrrr: reviewer verdict (Dimension | Optional | nullable=true)
+x_ReasoningReview = { type = "dimension", feature = "optional", nullable = true, ordinal = 42 }
+
+# b00t:map v1
+# summary: FOCUS v1.3 CostAndUsage — 43 headers, auto-generated. Source: FocusSchema struct.
+# tags: focus, finops, schema, v1.3, auto-gen
+# tier: frontier
+# cmds: b00t schema generate

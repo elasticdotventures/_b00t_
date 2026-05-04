@@ -40,8 +40,10 @@ pub mod exit_code {
 use serde::de::value::StringDeserializer;
 use serde::{Deserialize, Deserializer, Serialize};
 
+pub mod agentic_role;
 pub mod ansible;
 pub mod blessing;
+pub mod datum_schema;
 pub mod bootstrap;
 pub mod budget_controller;
 pub mod cloud_sync;
@@ -90,7 +92,9 @@ pub mod soul_writer;
 pub mod step;
 pub mod traits;
 pub mod utils;
+pub mod viz;
 pub mod whoami;
+pub mod wow;
 pub use traits::*;
 
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Default)]
@@ -115,6 +119,17 @@ pub struct McpConfig {
 pub struct UnifiedConfig {
     pub b00t: BootDatum,
     pub env: Option<std::collections::HashMap<String, String>>,
+    #[serde(default)]
+    pub sections: Option<std::collections::HashMap<String, serde_json::Value>>,
+}
+
+#[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Default)]
+#[serde(default)]
+pub struct VisualizationSpec {
+    #[serde(rename = "type")]
+    pub viz_type: String,
+    pub render_opts: Vec<String>,
+    pub auto_scope: Option<String>,
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Default)]
@@ -192,6 +207,16 @@ pub struct BootDatum {
     pub name: String,
     #[serde(rename = "type", deserialize_with = "deserialize_datum_type")]
     pub datum_type: Option<DatumType>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub status: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub enabled: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub status_msg: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub replacement: Option<String>,
+    #[serde(default, skip_serializing_if = "std::collections::HashMap::is_empty")]
+    pub git_attributes: std::collections::HashMap<String, String>,
     pub desires: Option<String>,
     #[serde(default)]
     pub auto_install: Option<bool>,
@@ -889,6 +914,7 @@ pub fn create_unified_toml_config(datum: &BootDatum, path: &str) -> Result<()> {
     let config = UnifiedConfig {
         b00t: datum.clone(),
         env: None,
+        sections: None,
     };
 
     let toml_content = toml::to_string(&config).context("Failed to serialize config to TOML")?;
@@ -1025,7 +1051,8 @@ pub fn get_config(
                     .unwrap_or("")
                     .to_string();
                 let content = std::fs::read_to_string(&path)?;
-                let config: UnifiedConfig = toml::from_str(&content)?;
+                let mut config: UnifiedConfig = toml::from_str(&content)?;
+                crate::datum_utils::apply_git_attributes_to_config(&mut config, &path);
                 return Ok((config, filename));
             }
         }
@@ -1036,7 +1063,8 @@ pub fn get_config(
         if plain.exists() {
             let filename = format!("{}{}", command, ext);
             let content = std::fs::read_to_string(&plain)?;
-            let config: UnifiedConfig = toml::from_str(&content)?;
+            let mut config: UnifiedConfig = toml::from_str(&content)?;
+            crate::datum_utils::apply_git_attributes_to_config(&mut config, &plain);
             return Ok((config, filename));
         }
     }
@@ -1063,8 +1091,9 @@ pub fn get_mcp_config(name: &str, path: &str) -> Result<BootDatum> {
         path_buf.display()
     ))?;
 
-    let config: UnifiedConfig =
+    let mut config: UnifiedConfig =
         toml::from_str(&content).context("Failed to parse MCP config TOML")?;
+    crate::datum_utils::apply_git_attributes_to_config(&mut config, &path_buf);
 
     Ok(config.b00t)
 }

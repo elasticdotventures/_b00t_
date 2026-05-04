@@ -1,0 +1,66 @@
+[b00t]
+name = "ledgrrr"
+type = "cli"
+hint = "FinOps ledger — consumes/produces FOCUS records. Polyseme: l3dg3rr[#proto] → ledgerr-mcp[#linux] → ledg3rr[#cloud] → ledgrrr[#windows]. Vendored at vendor/l3dg3rr/crates/ledgerr-mcp/."
+
+# @tribal: polyseme mapping — platform-targeted variants of the same ledger:
+#   l3dg3rr      — proto/repo name (vendor/l3dg3rr/)
+#   ledgerr-mcp  — Linux native (vendored crate prefix, stdio MCP transport)
+#   ledg3rr      — cloud/remote (gRPC/Arrow, SaaS deployment)
+#   ledgrrr      — Windows native (tray-icon, Slint desktop host, Credential Manager)
+# @tribal: FOCUS records route through ledgerr-mcp (Linux) as the canonical
+# MCP transport. ledg3rr (cloud) and ledgrrr (Windows) share the same FOCUS
+# crate but use different transport/UI backends.
+
+detect = [
+    "test -f vendor/l3dg3rr/Cargo.toml",
+    "echo '0.1.0-proto'",
+]
+version_regex = '(?P<version>[\\d.]+)'
+
+# @tribal: `b00t learn ledgrrr` to load ledgrrr ontology skills
+name = "ledgrrr"
+desires = "0.1.0-proto"
+hint = "Ledgerr CLI — FOCUS FinOps records, gRPC/Arrow transport, ontology graph visualization"
+repo = "PromptExecution/l3dg3rr"
+# 🔌 ledgerr-mcp opens port 0 (OS-assigned) and advertises via discovery
+# 5s connect window on dedicated MCP port
+# Preferred transport: gRPC + Apache Arrow DataFrames via DataFusion
+
+[b00t.providers.transport]
+protocol = "grpc"
+data_format = "apache-arrow"
+discovery_port = 0
+connect_timeout_sec = 5
+stream_type = "dataframe"
+
+[b00t.providers.focus]
+# FOCUS v1.3 crate at vendor/l3dg3rr/crates/ledgerr-focus/
+# Full spec: https://focus.finops.org/focus-specification/v1-3/
+# GitHub: https://github.com/FinOps-Open-Cost-and-Usage-Spec/FOCUS_Spec
+# CostAndUsage dataset: BilledCost, EffectiveCost, ChargeCategory, etc.
+# Custom columns via x_ prefix: x_ExperimentId, x_Variant, x_Score
+crate_status = "stable"
+crate_name = "ledgerr-focus"
+spec_version = "1.3"
+polyseme_tier = "lts"
+record_types = ["CostAndUsage", "ContractCommitment"]
+scoring_dimensions = ["roi", "cost", "time", "accuracy", "utility", "risk"]
+
+[b00t.providers.mcp]
+legacy_names = ["l3dg3rr"]
+platform_names = { linux = "ledgerr-mcp", cloud = "ledg3rr", windows = "ledgrrr" }
+canonical_name = "ledgerr-mcp"
+tool_prefix = "ledgerr_"
+
+# 🦨 Runtime orchestration: we need BOTH systemd AND podman/docker (possibly
+# others) as backends for starting/stopping ledgerr-mcp. The datum should
+# declare available runtimes and let the active hive profile choose.
+#
+# The Dockerfile and build CI belong upstream at PromptExecution/l3dg3rr
+# (.github/actions/docker-build.yml + Dockerfile at repo root).
+# This fork/vendor only tracks the source — the upstream owns packaging.
+[b00t.providers.runtime]
+backends = ["systemd", "docker", "podman"]
+prefer = "auto"
+detect_order = ["systemctl", "docker", "podman"]

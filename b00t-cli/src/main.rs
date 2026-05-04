@@ -34,8 +34,9 @@ use b00t_cli::commands::{
   //  Keep commands 1 line per letter A,B,C,... for easy diff
     AiCommands, AgentCommands, AnsibleCommands, AppCommands,
     BootstrapCommands, BudgetCommands,
-    ChatCommands, CliCommands,
+    ChatCommands, CliCommands, ConfigCommands,
     DatumCommands,
+    FocusCommands,
     GrokCommands, HiveCommands,
     InitCommands,
     JobCommands,
@@ -43,7 +44,7 @@ use b00t_cli::commands::{
     McpCommands, ModelCommands,
     OntologyCommands, SessionCommands, SkillCommands, SoulCommands, StackCommands,
     TaskCommands,
-    TutorialCommands, VersionCommands, WhatismyCommands
+    TutorialCommands, VersionCommands, VizCommands, WhatismyCommands
 
 
 };
@@ -193,10 +194,16 @@ The system will:
         #[clap(subcommand)]
         app_command: AppCommands,
     },
+
     #[clap(about = "CLI script management")]
     Cli {
         #[clap(subcommand)]
         cli_command: CliCommands,
+    },
+    #[clap(name = "config", about = "Project configuration and scaffolding")]
+    Configure {
+        #[clap(subcommand)]
+        config_command: ConfigCommands,
     },
     #[clap(about = "Run Ansible playbooks")]
     Ansible {
@@ -330,6 +337,7 @@ The system will:
     // 🤓 ENTANGLED (synchronized): b00t-mcp/src/mcp_tools.rs LearnCommand now uses LearnArgs wrapper, matching CLI structure.
     // Unified knowledge command: LFMF lessons, learn docs, man pages, RAG
     Learn(LearnArgs),
+
     #[clap(about = "Datum management and inspection")]
     Datum {
         #[clap(subcommand)]
@@ -390,20 +398,118 @@ The system will:
         #[clap(subcommand)]
         ontology_command: OntologyCommands,
     },
+    #[clap(about = "WOW integrity checks — run, list, spline")]
+    Wow {
+        #[clap(subcommand)]
+        wow_command: WowSubcommands,
+    },
+    #[clap(about = "Visualize b00t graphs using ledgrrr-shaped scene output (l3dg3rr proto)")]
+    Viz {
+        #[clap(subcommand)]
+        viz_command: VizCommands,
+    },
     #[clap(about = "Tutorial progression tracking for role-based datum onboarding")]
     Tutorial {
         #[clap(subcommand)]
         tutorial_command: TutorialCommands,
     },
+    #[clap(about = "Validate t00n-serialized FOCUS records against reqif.yaml via sm0l model")]
+    Validate {
+        #[clap(flatten)]
+        validate_args: b00t_cli::commands::validate::ValidateArgs,
+    },
+    #[clap(about = "Dispatch A/B experiments with parallel sub-agents and stateless scoring")]
+    Experiment {
+        #[clap(subcommand)]
+        experiment_command: ExperimentCommands,
+    },
+    #[clap(subcommand)]
+    Focus(FocusCommands),
     #[clap(
         about = "Execute command with guard enforcement and broad-authority audit log",
         long_about = "Audited execution: Allow→run, Warn→run with warning, Block→reject first time / force on re-submit within 5min.\nAll executions logged to ~/.b00t/exec-log.jsonl.\n\nUse --sleep=<duration> for background execution (returns immediately)."
     )]
     Exec(b00t_cli::commands::exec::ExecArgs),
+    #[clap(about = "Schema datum management (generate, validate)")]
+    Schema {
+        #[clap(subcommand)]
+        schema_command: SchemaSubcommands,
+    },
     #[clap(about = "Killswitch: terminate upper agent instance and return CLI to prompt")]
     Quit(b00t_cli::commands::quit::QuitArgs),
     #[clap(about = "l3dg3rr docgen proxy — query knowledge graph and emit .tomllm / rustdoc / json")]
     Docgen(b00t_cli::commands::docgen::DocgenArgs),
+}
+
+#[derive(clap::Parser, Clone)]
+pub enum WowSubcommands {
+    #[clap(about = "Run all WOW integrity checks")]
+    Check {
+        #[clap(long, help = "Emit JSON results")]
+        json: bool,
+    },
+    #[clap(about = "List registered WOW checks")]
+    List,
+}
+
+#[derive(clap::Parser, Clone)]
+pub enum SchemaSubcommands {
+    #[clap(about = "Generate focus.schema.tomllmd from FocusSchema code")]
+    Generate {
+        #[clap(flatten)]
+        args: b00t_cli::datum_schema::SchemaGenerateArgs,
+    },
+    #[clap(about = "Diff two schema datums")]
+    Diff {
+        #[clap(help = "First schema name (e.g. focus)")]
+        schema_a: String,
+        #[clap(help = "Second schema name (e.g. focus-v2)")]
+        schema_b: String,
+    },
+    #[clap(about = "Import schema from JSON file")]
+    Import {
+        #[clap(help = "Path to JSON schema file")]
+        path: PathBuf,
+        #[clap(long, help = "Output name for the schema datum")]
+        name: String,
+        #[clap(long, help = "Output directory (default: _b00t_)")]
+        output: Option<PathBuf>,
+    },
+}
+
+#[derive(clap::Parser, Clone)]
+pub enum ExperimentCommands {
+    #[clap(about = "Run an A/B experiment with control and treatment variants")]
+    Run {
+        #[clap(long, help = "Experiment ID")]
+        id: String,
+        #[clap(long, help = "Control variant prompt")]
+        control: String,
+        #[clap(long, help = "Treatment variant prompt")]
+        treatment: String,
+        #[clap(long, help = "Model endpoint URL [default: http://localhost:8001]")]
+        endpoint: Option<String>,
+        #[clap(long, help = "Path to trained LoRA adapter (from `b00t model train`)")]
+        adapter: Option<String>,
+    },
+    #[clap(about = "Show experiment status (phygital-twin heartbeat)")]
+    Status,
+    #[clap(about = "List past experiments from persisted FOCUS records")]
+    History {
+        #[clap(long, help = "Number of recent experiments to show", default_value_t = 10)]
+        limit: usize,
+        #[clap(long, help = "Emit as JSON")]
+        json: bool,
+    },
+    #[clap(about = "Compare two experiment results side by side")]
+    Compare {
+        #[clap(help = "First experiment ID")]
+        exp_a: String,
+        #[clap(help = "Second experiment ID")]
+        exp_b: String,
+        #[clap(long, help = "Path to FOCUS records JSONL file", default_value = "focus_records.jsonl")]
+        path: std::path::PathBuf,
+    },
 }
 
 // Using unified config from lib.rs
@@ -1526,6 +1632,12 @@ async fn main() {
                 std::process::exit(1);
             }
         }
+        Some(Commands::Configure { config_command }) => {
+            if let Err(e) = b00t_cli::commands::config_cmd::handle_config_command(config_command, &cli.path).await {
+                eprintln!("Error: {}", e);
+                std::process::exit(1);
+            }
+        }
         Some(Commands::Ansible { ansible_command }) => {
             if let Err(e) = ansible_command.execute(&cli.path) {
                 eprintln!("Error: {}", e);
@@ -1859,6 +1971,36 @@ async fn main() {
                 std::process::exit(1);
             }
         }
+        Some(Commands::Wow { wow_command }) => {
+            match wow_command {
+                WowSubcommands::Check { json } => {
+                    b00t_cli::wow::init_default_checks();
+                    let results = b00t_cli::wow::run_all();
+                    if *json {
+                        println!("{}", serde_json::to_string_pretty(&results).unwrap());
+                    } else {
+                        println!("{}", b00t_cli::wow::format_spline(&results));
+                    }
+                    let passed = results.iter().filter(|r| r.passed).count();
+                    let total = results.len();
+                    if passed != total { std::process::exit(1); }
+                }
+                WowSubcommands::List => {
+                    b00t_cli::wow::init_default_checks();
+                    let results = b00t_cli::wow::run_all();
+                    for r in &results {
+                        let mark = if r.passed { "✅" } else { "❌" };
+                        println!(" {mark} [{}] {}", r.category, r.name);
+                    }
+                }
+            }
+        }
+        Some(Commands::Viz { viz_command }) => {
+            if let Err(e) = b00t_cli::commands::viz::handle_viz_command(&cli.path, viz_command) {
+                eprintln!("Error: {}", e);
+                std::process::exit(1);
+            }
+        }
         Some(Commands::Lfmf {
             tool,
             lesson,
@@ -1911,10 +2053,118 @@ async fn main() {
                 std::process::exit(1);
             }
         }
+        Some(Commands::Validate { validate_args }) => {
+            if let Err(e) = b00t_cli::commands::validate::handle_validate(validate_args) {
+                eprintln!("validation error: {e}");
+                std::process::exit(1);
+            }
+        }
+        Some(Commands::Experiment { experiment_command }) => {
+            match experiment_command {
+                ExperimentCommands::Run { id, control, treatment, endpoint, adapter } => {
+                    use b00t_cli::commands::experiment;
+                    let config = experiment::ExperimentConfig {
+                        id: id.clone(),
+                        control_prompt: control.clone(),
+                        treatment_prompt: treatment.clone(),
+                        variants: vec!["control".into(), "treatment".into()],
+                        personalities: experiment::default_personalities(),
+                        model_endpoint: endpoint.clone().unwrap_or_else(|| "http://localhost:8001".into()),
+                        adapter: adapter.clone(),
+                    };
+                    if let Err(gate_err) = experiment::governance_gate(&config.control_prompt) {
+                        eprintln!("{gate_err}");
+                        std::process::exit(1);
+                    }
+                    if let Err(gate_err) = experiment::governance_gate(&config.treatment_prompt) {
+                        eprintln!("{gate_err}");
+                        std::process::exit(1);
+                    }
+                    match experiment::dispatch_experiment(&config) {
+                        Ok(cmp) => {
+                            println!("{}", experiment::format_comparison(&cmp));
+                            // emit ledgrrr FOCUS records
+                            let cf = experiment::create_focus_record(&cmp.experiment_id, "control", "sm0l-ctl", "experiment-eval", &cmp.control.scores);
+                            let tf = experiment::create_focus_record(&cmp.experiment_id, "treatment", "sm0l-trt", "experiment-eval", &cmp.treatment.scores);
+                            eprintln!("[ledgrrr] {}", experiment::focus_record_to_ledgrrr(&cf));
+                            eprintln!("[ledgrrr] {}", experiment::focus_record_to_ledgrrr(&tf));
+                            // emit FOCUS records to ledgerr-mcp MCP server (best-effort)
+                            experiment::emit_focus_to_ledgerr_mcp(&cmp, "http://localhost:8001");
+                        }
+                        Err(e) => {
+                            eprintln!("Experiment failed: {e}");
+                            std::process::exit(1);
+                        }
+                    }
+                }
+                ExperimentCommands::Status => {
+                    use b00t_cli::commands::experiment;
+                    let status = experiment::phygital_status("worker-cli", "idle", "pass", None, 0.0);
+                    println!("node_id: {}", status.node_id);
+                    println!("state: {}", status.state);
+                    println!("last_heartbeat: {}", status.last_heartbeat);
+                    println!("gate_result: {}", status.gate_result);
+                    println!("focus_balance: {:.2}", status.focus_balance);
+                }
+                ExperimentCommands::History { limit, json } => {
+                    use b00t_cli::commands::focus::handle_focus_command;
+                    use b00t_cli::commands::focus::FocusCommands;
+                    let args = FocusCommands::History {
+                        limit: *limit,
+                        json: *json,
+                    };
+                    if let Err(e) = handle_focus_command(&args) {
+                        eprintln!("Error: {}", e);
+                        std::process::exit(1);
+                    }
+                }
+                ExperimentCommands::Compare { exp_a, exp_b, path } => {
+                    use b00t_cli::commands::experiment;
+                    if let Err(e) = experiment::handle_experiment_compare(exp_a, exp_b, path) {
+                        eprintln!("Error: {}", e);
+                        std::process::exit(1);
+                    }
+                }
+            }
+        }
+        Some(Commands::Focus(args)) => {
+            if let Err(e) = b00t_cli::commands::focus::handle_focus_command(args) {
+                eprintln!("Error: {}", e);
+                std::process::exit(1);
+            }
+        }
         Some(Commands::Exec(args)) => {
             if let Err(e) = b00t_cli::commands::exec::handle_exec(args, &cli.path) {
                 eprintln!("Error: {}", e);
                 std::process::exit(1);
+            }
+        }
+        Some(Commands::Schema { schema_command }) => {
+            match schema_command {
+                SchemaSubcommands::Generate { args } => {
+                    if let Err(e) = b00t_cli::datum_schema::handle_schema_generate(args) {
+                        eprintln!("Error: {e}");
+                        std::process::exit(1);
+                    }
+                }
+                SchemaSubcommands::Diff { schema_a, schema_b } => {
+                    use b00t_cli::commands::schema::handle_schema_diff;
+                    if let Err(e) = handle_schema_diff(&cli.path, schema_a, schema_b) {
+                        eprintln!("Error: {e}");
+                        std::process::exit(1);
+                    }
+                }
+                SchemaSubcommands::Import { path, name, output } => {
+                    use b00t_cli::commands::schema::handle_schema_import;
+                    if let Err(e) = handle_schema_import(
+                        &path.to_string_lossy(),
+                        name,
+                        output.clone(),
+                    ) {
+                        eprintln!("Error: {e}");
+                        std::process::exit(1);
+                    }
+                }
             }
         }
         Some(Commands::Quit(args)) => {

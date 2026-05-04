@@ -1,0 +1,19 @@
+[b00t]
+name = "experiment-controller"
+type = "agent"
+hint = "Manages parallel A/B experiment dispatch: spawns control+treatment sub-agents, collects results, enforces timeout."
+
+entangled_cli = [
+    "b00t.cli",
+]
+
+entangled_mcp = [
+    "b00t-mcp.mcp",
+]
+
+keywords = ["agent", "experiment", "ab-test", "dispatch", "parallel"]
+
+[b00t.capabilities]
+dispatch_mode = "parallel"
+max_parallel = 2
+collect_timeout_sec = 120

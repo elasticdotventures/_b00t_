@@ -1,0 +1,26 @@
+# complementary notes for focus.schema.tomllmd
+# These are NOT part of the auto-generated schema — they supplement it.
+# The schema itself is generated from FocusSchema in datum_schema.rs.
+
+# ── Spec provenance ──────────────────────────────────────────────────────────
+# Canonical: https://focus.finops.org/focus-specification/v1-3/
+# Columns:   https://focus.finops.org/focus-columns/
+# Validator: https://github.com/finopsfoundation/focus_validator
+# License:   CC-BY-4.0 — FinOps Foundation FOCUS Project
+# Maintainers: Christopher Harris (Datadog), Michael Flanakin (Microsoft/Salesforce),
+#              Mike Fuller (FinOps Foundation)
+
+# ── krateo mapping ───────────────────────────────────────────────────────────
+# krateoplatformops/finops-operator-focus maps the same FOCUS columns as a K8s CRD.
+# b00t uses the same column model without K8s — datums are the schema layer.
+# The FocusConfig CRD spec.focusSpec maps 1:1 to these headers.
+
+# ── VFS future design ───────────────────────────────────────────────────────
+# Candidate crates (all on crates.io):
+#   fuse-backend-rs = "0.14"  — production FUSE server + virtio-fs
+#   io-uring = "0.7"          — kernel-bypass async I/O for sandbox page faults
+#   memfs = "0.1"             — in-memory filesystem structure
+#   bare-vfs = "0.3"          — no_std virtual filesystem for WASM sandboxes
+# Design: SkillStorage trait (DiskStorage | MemStorage | FuseStorage | RemoteStorage)
+# FuseStorage would mount t00n-serialized records as POSIX files via fuse-backend-rs.
+# io_uring variant: share page-cache between b00t-mcp and sandbox via registered buffers.
