@@ -1,0 +1,68 @@
+# wrkflw datum
+
+## Overview
+
+**wrkflw** is a Rust CLI tool (v0.8.0) for validating and executing GitHub Actions workflows locally before pushing to GitHub. It supports Docker, Podman, emulation, and secure-emulation runtimes with a TUI interface, diff-aware filtering, expression evaluation, artifacts/cache, matrix builds, and remote triggering.
+
+## Integration
+
+- **CLI**: `cargo install wrkflw` (crates.io) or `brew install wrkflw`
+- **Runtime**: Docker (default), Podman, emulation (no containers), secure-emulation
+- **Repo**: https://github.com/bahdotsh/wrkflw
+- **Workspace**: 17 crates (`wrkflw`, `wrkflw-executor`, `wrkflw-parser`, `wrkflw-validators`, `wrkflw-runtime`, `wrkflw-trigger-filter`, `wrkflw-watcher`, `wrkflw-ui`, `wrkflw-models`, `wrkflw-matrix`, `wrkflw-secrets`, `wrkflw-github`, `wrkflw-gitlab`, `wrkflw-logging`, `wrkflw-utils`, `wrkflw-evaluator`, `wrkflw-secrets`)
+
+## Commands
+
+```bash
+wrkflw                          # Launch TUI
+wrkflw validate                 # Validate all workflows
+wrkflw run <workflow.yml>       # Execute workflow locally
+wrkflw run --runtime emulation  # No-container mode
+wrkflw run --job <job>          # Single job
+wrkflw run --diff --event push  # Diff-aware execution
+wrkflw watch                    # Auto-rerun on file changes
+wrkflw list                     # List detected workflows
+wrkflw trigger <name>           # Remote trigger via API
+wrkflw validate .gitlab-ci.yml --gitlab  # GitLab support
+```
+
+## Runtime Modes
+
+| Mode | Description | Best for |
+|------|-------------|----------|
+| Docker (default) | Full container isolation | Production, CI/CD |
+| Podman | Rootless containers | Security-conscious |
+| Emulation | No containers needed | Quick local testing |
+| Secure Emulation | Sandboxed host processes | Untrusted workflows |
+
+## Key Features
+
+- Workflow validation with CI/CD-friendly exit codes
+- Expression evaluation (`${{ ... }}` including toJSON, fromJSON, contains, startsWith)
+- Container actions, JavaScript actions, composite actions (with output propagation)
+- Reusable workflows (local + remote `owner/repo/path@ref`)
+- Artifacts, cache, inter-job outputs (`needs.<id>.outputs.*`)
+- GitHub context emulation (`GITHUB_OUTPUT`, `GITHUB_ENV`, `GITHUB_PATH`, `GITHUB_STEP_SUMMARY`)
+- Matrix builds (include, exclude, max-parallel, fail-fast)
+- Secrets management (env, file, Vault, AWS, Azure, GCP) with masking + AES-256-GCM
+- Watch mode with trigger-aware re-execution
+- Interactive TUI with Workflows, Execution, DAG, Logs, Trigger, Secrets, Help tabs
+
+## b00t Crew Roles
+
+- **developer**: validate and test CI workflows locally before push
+- **orchestrator**: evaluate CI pipeline changes across repos
+- **analyst**: audit workflow correctness and coverage
+
+## Agent Skill Coverage (Testing/CI)
+
+Primary skill for agents that need to validate or run CI/CD workflows:
+- `wrkflw validate` — structural/syntax check (pre-push gate)
+- `wrkflw run --diff --event push` — simulation with change-set filtering
+- `wrkflw run --runtime emulation --job <job>` — targeted job without containers
+
+## Version
+
+Current: 0.8.0 (2026-04-21)
+License: MIT
+Repository: https://github.com/bahdotsh/wrkflw

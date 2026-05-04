@@ -210,16 +210,16 @@ pub fn aggregate_focus_delta(control: &ExperimentResult, treatment: &ExperimentR
     t_net - c_net
 }
 
-/// After an experiment, emit FOCUS records to ledgerr-mcp via MCP protocol.
-/// Uses curl to call the ledgerr-mcp stdin endpoint.
+/// After an experiment, emit FOCUS records to ledgrrr-mcp via MCP protocol.
+/// Uses curl to call the ledgrrr-mcp stdin endpoint.
 /// This is a non-blocking best-effort call — failures are logged but don't
 /// fail the experiment itself.
-pub fn emit_focus_to_ledgerr_mcp(cmp: &ExperimentComparison, _endpoint: &str) {
-    // ledgerr-mcp uses stdio MCP transport — no HTTP endpoint.
-    // Records are persisted when ledgerr-mcp is running as a subprocess of b00t-mcp
+pub fn emit_focus_to_ledgrrr_mcp(cmp: &ExperimentComparison, _endpoint: &str) {
+    // ledgrrr-mcp uses stdio MCP transport — no HTTP endpoint.
+    // Records are persisted when ledgrrr-mcp is running as a subprocess of b00t-mcp
     // or as a standalone daemon. The [ledgrrr] stderr output from main.rs is the
     // primary persistence path; this function is a best-effort secondary path.
-    // TODO: pipe JSON-RPC payload to ledgerr-mcp stdin when running as subprocess.
+    // TODO: pipe JSON-RPC payload to ledgrrr-mcp stdin when running as subprocess.
     let tmp = std::env::temp_dir().join(format!("b00t-mcp-payload-{}.json", cmp.experiment_id));
     if let Ok(mut f) = std::fs::File::create(&tmp) {
         use std::io::Write;
@@ -254,7 +254,7 @@ pub fn emit_focus_to_ledgerr_mcp(cmp: &ExperimentComparison, _endpoint: &str) {
             "id": 1
         });
         let _ = f.write_all(serde_json::to_string_pretty(&payload).unwrap_or_default().as_bytes());
-        eprintln!("[ledgerr-mcp] payload written to {} — pipe to ledgerr-mcp when daemon is running", tmp.display());
+        eprintln!("[ledgrrr-mcp] payload written to {} — pipe to ledgrrr-mcp when daemon is running", tmp.display());
     }
 }
 

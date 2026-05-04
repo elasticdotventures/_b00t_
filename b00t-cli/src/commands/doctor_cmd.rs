@@ -41,8 +41,8 @@ pub fn handle_doctor_command(args: &DoctorCommands, b00t_path: &str) -> Result<(
             // 4. Focus schema datum exists (_b00t_/focus.schema.tomllmd)
             results.push(check_focus_schema(b00t_path));
 
-            // 5. ledgerr-mcp service status
-            results.push(check_ledgerr_service());
+            // 5. ledgrrr-mcp service status
+            results.push(check_ledgrrr_service());
 
             // 6. Local model endpoint reachable
             results.push(check_model_endpoint());
@@ -193,10 +193,10 @@ fn check_focus_schema(b00t_path: &str) -> Value {
     })
 }
 
-/// Check 5: ledgerr-mcp service status
-fn check_ledgerr_service() -> Value {
+/// Check 5: ledgrrr-mcp service status
+fn check_ledgrrr_service() -> Value {
     let output = Command::new("systemctl")
-        .args(["--user", "is-active", "ledgerr-mcp"])
+        .args(["--user", "is-active", "ledgrrr-mcp"])
         .output();
 
     match output {
@@ -204,14 +204,14 @@ fn check_ledgerr_service() -> Value {
             let status = String::from_utf8_lossy(&o.stdout).trim().to_string();
             let active = status == "active" || o.status.success();
             json!({
-                "check": "ledgerr-mcp service",
+                "check": "ledgrrr-mcp service",
                 "status": if active { "ok" } else { "fail" },
                 "detail": if active { "active".to_string() } else { status }
             })
         }
         Err(e) => {
             json!({
-                "check": "ledgerr-mcp service",
+                "check": "ledgrrr-mcp service",
                 "status": "fail",
                 "detail": format!("systemctl not available: {}", e)
             })

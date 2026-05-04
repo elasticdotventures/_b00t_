@@ -27,7 +27,7 @@ path = "src/bin/b00t-lsp.rs"
 [features]
 default = []
 python = ["pyo3"]
-ledgerr-events = []
+ledgrrr-events = []
 
 [dependencies]
 pyo3 = { version = "0.27", features = ["extension-module"], optional = true }
