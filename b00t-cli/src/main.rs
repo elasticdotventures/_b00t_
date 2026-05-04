@@ -402,6 +402,8 @@ The system will:
     Exec(b00t_cli::commands::exec::ExecArgs),
     #[clap(about = "Killswitch: terminate upper agent instance and return CLI to prompt")]
     Quit(b00t_cli::commands::quit::QuitArgs),
+    #[clap(about = "l3dg3rr docgen proxy — query knowledge graph and emit .tomllm / rustdoc / json")]
+    Docgen(b00t_cli::commands::docgen::DocgenArgs),
 }
 
 // Using unified config from lib.rs
@@ -1825,7 +1827,12 @@ async fn main() {
                     std::process::exit(1);
                 }
             } else if let Some(name) = name {
-                if let Err(e) = install_datum(&cli.path, name) {
+                if name == "hermes" {
+                    if let Err(e) = b00t_cli::commands::install::hermes_special_install(*dry_run) {
+                        eprintln!("Install Error: {}", e);
+                        std::process::exit(1);
+                    }
+                } else if let Err(e) = install_datum(&cli.path, name, *dry_run) {
                     eprintln!("Install Error: {}", e);
                     std::process::exit(1);
                 }
@@ -1912,8 +1919,17 @@ async fn main() {
         }
         Some(Commands::Quit(args)) => {
             if let Err(e) = b00t_cli::commands::quit::handle_quit(args) {
-                eprintln!("Error: {}", e);
+                eprintln!("Error: {e}");
                 std::process::exit(1);
+            }
+        }
+        Some(Commands::Docgen(args)) => {
+            match b00t_cli::commands::docgen::run_docgen(args) {
+                Ok(output) => println!("{output}"),
+                Err(e) => {
+                    eprintln!("docgen error: {e}");
+                    std::process::exit(1);
+                }
             }
         }
         None => {

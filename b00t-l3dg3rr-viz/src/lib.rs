@@ -286,6 +286,10 @@ impl InvariantGraph {
         out.push_str("</svg>");
         out
     }
+
+    fn node_index(&self, id: &str) -> Option<usize> {
+        self.nodes.iter().position(|node| node.id == id)
+    }
 }
 
 /// A host system can implement this trait to provide visualization without
