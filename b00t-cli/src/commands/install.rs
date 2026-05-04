@@ -1,4 +1,5 @@
 use crate::dependency_resolver::DependencyResolver;
+use crate::hook_engine::HookResult;
 use crate::{BootDatum, UnifiedConfig};
 use anyhow::{Context, Result, anyhow};
 use clap::Parser;
@@ -129,6 +130,30 @@ pub fn install_datum(path: &str, name: &str, dry_run: bool) -> Result<()> {
         let datum = all_datums
             .get(&key)
             .ok_or_else(|| anyhow!("Missing datum during install: {}", key))?;
+
+        // Evaluate hook_detect if set (e.g. hook_detect = "gates")
+        if let Some(hook) = &datum.hook_detect {
+            // Set env vars so gates.rhai can find the datum file
+            let datum_file = format!("{}/{}.toml", shellexpand::tilde(path), key.replace('.', "."));
+            unsafe { std::env::set_var("_B00T_DATUM_FILE", &datum_file); }
+            unsafe { std::env::set_var("_B00T_DATUM_NAME", &datum.name); }
+            let result = crate::hook_engine::run_hook(hook);
+            match &result {
+                crate::hook_engine::HookResult::Ok => {},
+                crate::hook_engine::HookResult::Warn(msg) => {
+                    eprintln!("⚠️  {} hook_detect: {}", key, msg);
+                }
+                crate::hook_engine::HookResult::Redirect(alt) => {
+                    eprintln!("⏭️  {} redirected to {} by hook_detect", key, alt);
+                    continue;
+                }
+                crate::hook_engine::HookResult::Missing(msg) => {
+                    eprintln!("⏭️  {} hook_detect: {}", key, msg);
+                    continue;
+                }
+                _ => {}
+            }
+        }
 
         // Skip if already installed (best-effort using version command)
         if let Some(version_cmd) = &datum.version {

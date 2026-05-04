@@ -34,6 +34,8 @@ pub enum GrokBackend {
     Raglite,
     /// Irontology NeumannStore only
     Irontology,
+    /// Codebase memory MCP knowledge graph
+    CodebaseMemory,
     /// Fan-out to both (default)
     Both,
 }
@@ -58,6 +60,7 @@ impl GrokBackend {
         match self {
             Self::Raglite => "RAGLight",
             Self::Irontology => "Irontology",
+            Self::CodebaseMemory => "CodebaseMemory",
             Self::Both => "RAGLight+Irontology",
         }
     }

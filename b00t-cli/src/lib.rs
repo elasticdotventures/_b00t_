@@ -282,7 +282,6 @@ pub struct BootDatum {
 
     // Gate preconditions — late-binding conditions evaluated by install pipeline.
     // Each gate is a struct with one or more condition kinds; all must pass.
-<<<<<<< HEAD
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub gate: Option<Vec<GateSpec>>,
 
