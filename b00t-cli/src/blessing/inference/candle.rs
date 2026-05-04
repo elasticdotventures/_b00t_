@@ -164,7 +164,7 @@ impl LLMInference for CandleBackend {
 
 #[cfg(feature = "candle")]
 /// A loaded Candle model that holds weights, tokenizer, and device in memory.
-/// Load the model once via `CandleModel::load()`, then call `generate()`
+/// Load the model once via `CandleModel::load()`, then call `generate()` 
 /// multiple times without re-downloading or rebuilding the computation graph.
 pub struct CandleModel {
     model: candle_transformers::models::qwen2::Model,
@@ -194,33 +194,28 @@ impl CandleModel {
         let api = Api::new().map_err(|e| anyhow!("HF Hub init: {e}"))?;
         let repo = api.model("Qwen/Qwen2.5-0.5B-Instruct".to_string());
 
-        // Phase 3: Load tokenizer
         let tokenizer_path = repo.get("tokenizer.json")
             .map_err(|e| anyhow!("Download tokenizer.json: {e}"))?;
         let tokenizer = Tokenizer::from_file(tokenizer_path)
             .map_err(|e| anyhow!("Tokenizer load: {e}"))?;
         let eos_id = tokenizer.token_to_id("<|im_end|>").unwrap_or(151645);
 
-        // Phase 4: Load model config
         let config_path = repo.get("config.json")
             .map_err(|e| anyhow!("Download config.json: {e}"))?;
         let config_str = std::fs::read_to_string(config_path)?;
         let config: Config = serde_json::from_str(&config_str)
             .map_err(|e| anyhow!("Parse Qwen2 config: {e}"))?;
 
-        // Phase 5: Load model weights (single or sharded safetensors)
         let vb = if let Ok(path) = repo.get("model.safetensors") {
-            // Single-file weights
             unsafe { VarBuilder::from_mmaped_safetensors(&[path], DType::F32, &device) }
                 .map_err(|e| anyhow!("Load model.safetensors: {e}"))?
         } else {
-            // Sharded weights — read index to discover all shard files
             let index_path = repo.get("model.safetensors.index.json")
                 .map_err(|e| anyhow!("No model.safetensors or index.json: {e}"))?;
             let index_content = std::fs::read_to_string(index_path)?;
             let index: serde_json::Value = serde_json::from_str(&index_content)?;
             let weight_map = index["weight_map"].as_object()
-                .ok_or_else(|| anyhow!("Missing weight_map in model.safetensors.index.json"))?;
+                .ok_or_else(|| anyhow!("Missing weight_map in index.json"))?;
             let mut shards: Vec<std::path::PathBuf> = weight_map.values()
                 .filter_map(|v| v.as_str())
                 .map(|f| repo.get(f).unwrap_or_else(|_| std::path::PathBuf::from(f)))
@@ -250,10 +245,9 @@ impl CandleModel {
         let input_ids: Vec<u32> = encoding.get_ids().to_vec();
         let input_len = input_ids.len();
         let mut tokens: Vec<u32> = input_ids.clone();
-
-        let max_new: usize = 200;
         let mut next_token: u32 = 0;
-        for i in 0..max_new {
+
+        for i in 0..200 {
             let input = if i == 0 {
                 Tensor::new(input_ids.as_slice(), &self.device)
                     .map_err(|e| anyhow!("Create input tensor: {e}"))?
@@ -267,7 +261,6 @@ impl CandleModel {
             let logits = self.model.forward(&input, i, None::<&candle_core::Tensor>)
                 .map_err(|e| anyhow!("Forward pass step {i}: {e}"))?;
 
-            // logits: [1, seq_len, vocab_size] → extract last token → [vocab_size]
             let next_logit = logits.squeeze(0)
                 .map_err(|e| anyhow!("Squeeze batch dim step {i}: {e}"))?;
             let seq_len = next_logit.dims()[0];
@@ -276,7 +269,6 @@ impl CandleModel {
                 .squeeze(0)
                 .map_err(|e| anyhow!("Squeeze seq dim step {i}: {e}"))?;
 
-            // argmax over vocab dimension → scalar token index (u32)
             next_token = next_logit.argmax(0)
                 .map_err(|e| anyhow!("Argmax step {i}: {e}"))?
                 .to_scalar::<u32>()

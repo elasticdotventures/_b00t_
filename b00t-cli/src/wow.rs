@@ -105,7 +105,8 @@ pub trait DesignHeuristicCheck: Send + Sync {
 // Build integrity checks are implemented as RHAI scripts at
 // _b00t_/scripts/wow/check-candle-build.rhai and check-default-build.rhai.
 // They spawn `cargo check` as a subprocess which can cause multi-minute test times.
-// Rust struct implementations are also retained for direct programmatic use.
+// Rust struct implementations are retained for direct programmatic use, but RHAI
+// scripts (_b00t_/scripts/wow/check-*.rhai) are the canonical path for slow checks.
 pub struct CandleBuildCheck;
 impl BuildIntegrityCheck for CandleBuildCheck {
     fn name(&self) -> &str { "candle feature compiles" }
@@ -374,8 +375,6 @@ pub fn format_spline(results: &[CheckResult]) -> String {
 /// Rust trait impls and RHAI scripts (_b00t_/scripts/wow/check-*.rhai).
 /// The RHAI variants avoid multi-minute cargo subprocess times in test suites.
 pub fn init_default_checks() {
-    register_build(CandleBuildCheck);
-    register_build(DefaultBuildCheck);
     register_type(KnownRoleCheck);
     register_boundary(VendorDockerfileCheck);
     register_deployment(DualRuntimeCheck);
@@ -438,8 +437,6 @@ mod tests {
     }
 
     // Individual wow_test! invocations — each generates a #[test] + doc example
-    wow_test!(test_candle_build, CandleBuildCheck, BuildIntegrityCheck, "candle feature compiles");
-    wow_test!(test_default_build, DefaultBuildCheck, BuildIntegrityCheck, "default build compiles");
     wow_test!(test_known_role, KnownRoleCheck, TypeInvariantCheck, "KnownRole enum is exhaustive");
     // Vendor dockerfile check: skip assertion if vendor submodule not cloned.
     // The test itself logs a clear message; the spline aggregate tolerates it
