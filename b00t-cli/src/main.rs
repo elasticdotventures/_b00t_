@@ -32,10 +32,10 @@ use b00t_cli::utils::get_workspace_root;
 #[rustfmt::skip]
 use b00t_cli::commands::{
   //  Keep commands 1 line per letter A,B,C,... for easy diff
-    AiCommands, AgentCommands, AnsibleCommands, AppCommands,
+    AiCommands, AgentCommands, AnsibleCommands, AppCommands, AuditCommands,
     BootstrapCommands, BudgetCommands,
     ChatCommands, CliCommands, ConfigCommands,
-    DatumCommands,
+    DataCommands, DatumCommands, DoctorCommands,
     FocusCommands,
     GrokCommands, HiveCommands,
     InitCommands,
@@ -439,6 +439,21 @@ The system will:
     Quit(b00t_cli::commands::quit::QuitArgs),
     #[clap(about = "l3dg3rr docgen proxy — query knowledge graph and emit .tomllm / rustdoc / json")]
     Docgen(b00t_cli::commands::docgen::DocgenArgs),
+    #[clap(about = "Read audit trail from .b00t/audit.jsonl")]
+    Audit {
+        #[clap(subcommand)]
+        audit_command: AuditCommands,
+    },
+    #[clap(about = "Inspect AbDataFrame JSONL files")]
+    Data {
+        #[clap(subcommand)]
+        data_command: DataCommands,
+    },
+    #[clap(about = "Run system diagnostics for b00t infrastructure")]
+    Doctor {
+        #[clap(subcommand)]
+        doctor_command: DoctorCommands,
+    },
 }
 
 #[derive(clap::Parser, Clone)]
@@ -2251,6 +2266,24 @@ async fn main() {
                     eprintln!("docgen error: {e}");
                     std::process::exit(1);
                 }
+            }
+        }
+        Some(Commands::Audit { audit_command }) => {
+            if let Err(e) = b00t_cli::commands::audit::handle_audit_command(audit_command) {
+                eprintln!("Error: {e}");
+                std::process::exit(1);
+            }
+        }
+        Some(Commands::Data { data_command }) => {
+            if let Err(e) = b00t_cli::commands::data_cmd::handle_data_command(data_command) {
+                eprintln!("Error: {e}");
+                std::process::exit(1);
+            }
+        }
+        Some(Commands::Doctor { doctor_command }) => {
+            if let Err(e) = b00t_cli::commands::doctor_cmd::handle_doctor_command(doctor_command, &cli.path) {
+                eprintln!("Error: {e}");
+                std::process::exit(1);
             }
         }
         None => {
