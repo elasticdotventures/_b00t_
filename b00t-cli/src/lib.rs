@@ -1,6 +1,42 @@
 use anyhow::{Context, Result};
 use chrono::{DateTime, Utc};
 use regex::Regex;
+use std::io::Write;
+
+/// ANSI color helpers — auto-disable when stdout is not a terminal.
+pub mod ansi {
+    pub fn enabled() -> bool {
+        use std::io::IsTerminal;
+        std::io::stdout().is_terminal()
+    }
+    pub fn green(s: &str) -> String { if enabled() { format!("\x1b[32m{}\x1b[0m", s) } else { s.to_string() } }
+    pub fn yellow(s: &str) -> String { if enabled() { format!("\x1b[33m{}\x1b[0m", s) } else { s.to_string() } }
+    pub fn red(s: &str) -> String { if enabled() { format!("\x1b[31m{}\x1b[0m", s) } else { s.to_string() } }
+    pub fn cyan(s: &str) -> String { if enabled() { format!("\x1b[36m{}\x1b[0m", s) } else { s.to_string() } }
+    pub fn dim(s: &str) -> String { if enabled() { format!("\x1b[2m{}\x1b[0m", s) } else { s.to_string() } }
+    pub fn bold(s: &str) -> String { if enabled() { format!("\x1b[1m{}\x1b[0m", s) } else { s.to_string() } }
+}
+
+/// Exit codes for b00t-cli — used by main.rs dispatch.
+/// Scripts can inspect $? to distinguish error classes.
+pub mod exit_code {
+    /// Generic / unknown error
+    pub const ERROR: i32 = 1;
+    /// Datum or resource not found
+    pub const NOT_FOUND: i32 = 2;
+    /// Invalid arguments or syntax
+    pub const USAGE: i32 = 3;
+    /// Permission / auth / credential failure
+    pub const ACCESS: i32 = 4;
+    /// Gate precondition not satisfied (command/env/file missing)
+    pub const GATE: i32 = 10;
+    /// Dependency resolution failure
+    pub const DEP: i32 = 11;
+    /// MCP server not found or install failed
+    pub const MCP: i32 = 20;
+    /// Network / connectivity failure
+    pub const NETWORK: i32 = 30;
+}
 use serde::de::value::StringDeserializer;
 use serde::{Deserialize, Deserializer, Serialize};
 
@@ -218,6 +254,13 @@ pub struct BootDatum {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub mcp: Option<McpMethods>,
 
+    // Gate preconditions — late-binding conditions evaluated by install pipeline.
+    // Each gate is a struct with one or more condition kinds; all must pass.
+    // ⚠️  TODO: gate evaluation is not yet wired into install_datum(); schema only.
+    //    Once wired, call gate_check() for each GateSpec before installing deps.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub gate: Option<Vec<GateSpec>>,
+
     // Source control metadata
     pub url: Option<String>,
     pub branch: Option<String>,
@@ -303,6 +346,23 @@ pub struct McpMethods {
     pub stdio: Option<Vec<std::collections::HashMap<String, serde_json::Value>>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub httpstream: Option<std::collections::HashMap<String, serde_json::Value>>,
+}
+
+/// A single gate precondition — late-binding condition evaluated at install time.
+/// All fields are optional; any present field must pass for the gate to open.
+#[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Default)]
+pub struct GateSpec {
+    /// Command that must exist on PATH for this gate to pass
+    pub command: Option<String>,
+    /// File path (supports ~) that must exist
+    pub file: Option<String>,
+    /// Environment variable (or .env key) that must be set to a non-empty value
+    pub env: Option<String>,
+    /// Rhai expression to evaluate; must return true for gate to pass
+    /// Available vars: name, datum_type, path
+    pub rhai: Option<String>,
+    /// Freeform description shown when gate fails
+    pub hint: Option<String>,
 }
 
 /// Sandbox capabilities declared by a justfile datum.
@@ -469,6 +529,9 @@ impl std::fmt::Display for DatumType {
 pub struct McpListOutput {
     pub servers: Vec<McpListItem>,
     pub path: String,
+    pub truncated: bool,
+    pub threshold: i64,
+    pub total_count: usize,
 }
 
 #[derive(Serialize, Debug)]
@@ -478,6 +541,21 @@ pub struct McpListItem {
     pub args: Option<Vec<String>>,
     pub hint: Option<String>,
     pub error: Option<String>,
+    pub is_installed: bool,
+    pub is_running: bool,
+    pub is_suspended: bool,
+    pub transport: Option<String>,
+    pub restart_hint: Option<String>,
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct McpListFilter {
+    pub search: Option<String>,
+    pub is_installed: Option<bool>,
+    pub is_running: Option<bool>,
+    pub is_suspended: Option<bool>,
+    pub max_threshold: Option<i64>,
+    pub bypass_threshold: bool,
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
@@ -1015,16 +1093,27 @@ pub fn get_mcp_toml_files(path: &str) -> Result<Vec<String>> {
     Ok(mcp_files)
 }
 
-pub fn mcp_list(path: &str, json_output: bool) -> Result<()> {
+pub fn mcp_list(path: &str, json_output: bool, filter: McpListFilter) -> Result<()> {
     use anyhow::Context;
 
     let mcp_files = get_mcp_toml_files(path)?;
-    let mut mcp_items = Vec::new();
+    let total_count = mcp_files.len();
+    let mut mcp_items: Vec<McpListItem> = Vec::new();
+
+    if total_count > 20 && !json_output {
+        eprint!("🔍 Checking {} MCP servers...", total_count);
+        let _ = std::io::stderr().flush();
+    }
+    let mut checked = 0usize;
 
     for server_name in mcp_files {
+        checked += 1;
+        if total_count > 20 && !json_output && checked % 10 == 0 {
+            eprint!(" {}/{}", checked, total_count);
+            let _ = std::io::stderr().flush();
+        }
         match get_mcp_config(&server_name, path) {
             Ok(datum) => {
-                // Extract command and args from MCP structure (prioritizing stdio methods)
                 let (command, args) =
                     if let Some(mcp) = &datum.mcp {
                         if let Some(stdio_methods) = &mcp.stdio {
@@ -1055,26 +1144,203 @@ pub fn mcp_list(path: &str, json_output: bool) -> Result<()> {
                             (None, None)
                         }
                     } else {
-                        // Fallback to legacy fields for backwards compatibility
                         (datum.command.clone(), datum.args.clone())
                     };
 
-                mcp_items.push(McpListItem {
-                    name: server_name,
+                // is_installed: command on PATH OR registered in claude/vscode config
+                let is_installed = command
+                    .as_deref()
+                    .map(|c| {
+                        if c == "HTTP" {
+                            return true;
+                        }
+                        if check_command_available(c) {
+                            return true;
+                        }
+                        // also check if registered in claude config
+                        let claude_cfg = dirs::home_dir()
+                            .map(|h| h.join(".claude").join("settings.json"))
+                            .filter(|p| p.exists());
+                        if let Some(cfg) = claude_cfg {
+                            if let Ok(content) = std::fs::read_to_string(&cfg) {
+                                if content.contains(&format!("\"{}\"", server_name)) {
+                                    return true;
+                                }
+                            }
+                        }
+                        false
+                    })
+                    .unwrap_or(false);
+                // is_running: check if a process with the command name exists
+                let is_running = command
+                    .as_deref()
+                    .and_then(|c| {
+                        if c == "HTTP" { return Some(false); }
+                        let cname = std::path::Path::new(c)
+                            .file_stem()
+                            .and_then(|s| s.to_str())
+                            .unwrap_or(c);
+                        // try exact match first, then -f for full cmdline
+                        let pgrep_result = duct::cmd!("pgrep", "-x", cname)
+                            .stderr_null()
+                            .read()
+                            .ok()
+                            .map(|s| !s.trim().is_empty());
+                        if pgrep_result == Some(true) {
+                            return Some(true);
+                        }
+                        duct::cmd!("pgrep", "-f", &format!("[{}]{}", &cname[..1], &cname[1..]))
+                            .stderr_null()
+                            .read()
+                            .ok()
+                            .map(|s| !s.trim().is_empty())
+                    })
+                    .unwrap_or(false);
+
+                // Check if the datum has a suspended marker
+                let is_suspended = datum
+                    .mcp
+                    .as_ref()
+                    .and_then(|m| m.stdio.as_ref())
+                    .and_then(|methods| methods.first())
+                    .and_then(|m| m.get("enabled"))
+                    .and_then(|v| v.as_bool())
+                    .map(|enabled| !enabled)
+                    .unwrap_or(false);
+
+                // Generate restart hint for not-running servers
+                let restart_hint = if is_installed && !is_running && !is_suspended {
+                    let cmd = command.as_deref().unwrap_or("");
+                    if let Some(mcp) = &datum.mcp {
+                        if let Some(http) = &mcp.httpstream {
+                            http.get("url")
+                                .and_then(|v| v.as_str())
+                                .map(|url| format!("restart: connect to httpstream at {}", url))
+                        } else if let Some(methods) = &mcp.stdio {
+                            methods.first().map(|m| {
+                                let cmd = m.get("command").and_then(|v| v.as_str()).unwrap_or(cmd);
+                                let args: Vec<&str> = m.get("args")
+                                    .and_then(|v| v.as_array())
+                                    .map(|a| a.iter().filter_map(|v| v.as_str()).collect())
+                                    .unwrap_or_default();
+                                format!("restart: {} {}", cmd, args.join(" "))
+                            })
+                        } else {
+                            None
+                        }
+                    } else {
+                        None
+                    }
+                } else {
+                    None
+                };
+
+                // Determine transport type
+                let transport = datum.mcp.as_ref().map(|m| {
+                    if m.httpstream.is_some() {
+                        "httpstream"
+                    } else {
+                        "stdio"
+                    }
+                }).map(|s| s.to_string());
+
+                let item = McpListItem {
+                    name: server_name.clone(),
                     command,
                     args,
                     hint: Some(datum.hint.clone()),
                     error: None,
-                });
+                    is_installed,
+                    is_running,
+                    is_suspended,
+                    transport,
+                    restart_hint,
+                };
+
+                // Apply filters
+                let search_pass = filter
+                    .search
+                    .as_ref()
+                    .map(|q| item.name.to_lowercase().contains(&q.to_lowercase()))
+                    .unwrap_or(true);
+                let installed_pass = filter
+                    .is_installed
+                    .map(|f| item.is_installed == f)
+                    .unwrap_or(true);
+                let running_pass = filter
+                    .is_running
+                    .map(|f| item.is_running == f)
+                    .unwrap_or(true);
+                let suspended_pass = filter
+                    .is_suspended
+                    .map(|f| item.is_suspended == f)
+                    .unwrap_or(true);
+
+                if search_pass && installed_pass && running_pass && suspended_pass {
+                    mcp_items.push(item);
+                }
             }
             Err(e) => {
-                mcp_items.push(McpListItem {
+                let item = McpListItem {
                     name: server_name,
                     command: None,
                     args: None,
                     hint: None,
                     error: Some(e.to_string()),
-                });
+                    is_installed: false,
+                    is_running: false,
+                    is_suspended: false,
+                    transport: None,
+                    restart_hint: None,
+                };
+                mcp_items.push(item);
+            }
+        }
+    }
+
+    // Threshold guard: if no explicit filter and count exceeds threshold, warn and demand filter
+    let threshold = filter.max_threshold.unwrap_or_else(|| {
+        session_memory::SessionMemory::load()
+            .ok()
+            .and_then(|m| {
+                let t = m.config.mcp_list_threshold;
+                if t > 0 { Some(t) } else { None }
+            })
+            .unwrap_or(10)
+    });
+
+    let has_active_filter = filter.search.is_some()
+        || filter.is_installed.is_some()
+        || filter.is_running.is_some()
+        || filter.is_suspended.is_some();
+
+    let truncated = !filter.bypass_threshold
+        && !has_active_filter
+        && mcp_items.len() > threshold as usize;
+
+    if truncated {
+        // Show filtered items that match the threshold guard (application-role aware)
+        // We limit to threshold items and show a warning
+        mcp_items.truncate(threshold as usize);
+        // Check if role-based filtering can auto-select
+        if let Ok(memory) = session_memory::SessionMemory::load() {
+            if let Some(role) = memory.strings.get("last_role") {
+                let role_lower = role.to_lowercase();
+                let matching: Vec<&McpListItem> = mcp_items
+                    .iter()
+                    .filter(|item| {
+                        item.name.to_lowercase().contains(&role_lower)
+                            || item
+                                .hint
+                                .as_deref()
+                                .unwrap_or("")
+                                .to_lowercase()
+                                .contains(&role_lower)
+                    })
+                    .collect();
+                if !matching.is_empty() {
+                    eprintln!("🎯 {role} role matched {count}/{total} MCP servers", role = role, count = matching.len(), total = total_count);
+                }
             }
         }
     }
@@ -1084,34 +1350,114 @@ pub fn mcp_list(path: &str, json_output: bool) -> Result<()> {
         let output = McpListOutput {
             servers: mcp_items,
             path: expanded_path.display().to_string(),
+            truncated,
+            threshold,
+            total_count,
         };
         let json_str = serde_json::to_string_pretty(&output)
             .context("Failed to serialize MCP list to JSON")?;
         println!("{}", json_str);
     } else {
+        // clear progress line if we showed one
+        if total_count > 20 {
+            eprint!("\r\x1b[K");
+        }
         let expanded_path = get_expanded_path(path)?;
-        if mcp_items.is_empty() {
+        if mcp_items.is_empty() && total_count == 0 {
             println!(
-                "No MCP server configurations found in {}",
+                "{}  No MCP server configurations found in {}",
+                crate::ansi::yellow("⚠️"),
                 expanded_path.display()
             );
-            println!("Use 'b00t-cli mcp add <json>' to add MCP server configurations.");
+            println!("   Use 'b00t-cli mcp add <json>' to add MCP server configurations.");
+        } else if mcp_items.is_empty() && total_count > 0 {
+            println!(
+                "{}  No MCP servers match your filters ({} total available).",
+                crate::ansi::yellow("⚠️"),
+                crate::ansi::bold(&total_count.to_string()),
+            );
+            println!("   {}  Try: b00t-cli mcp list --all", crate::ansi::dim("💡"));
         } else {
-            println!("Available MCP servers in {}:", expanded_path.display());
+            if truncated {
+                println!(
+                    "{}  Showing {shown}/{total} MCP servers (threshold={threshold}). Use --search or --installed/--running/--suspended to filter.",
+                    crate::ansi::yellow("⚠️"),
+                    shown = mcp_items.len(),
+                    total = total_count,
+                    threshold = threshold,
+                );
+                println!("   {}  Override: --max-threshold <N> or --all to bypass guard.", crate::ansi::dim("ℹ️"));
+                println!();
+            }
+            // count summary
+            let installed_count = mcp_items.iter().filter(|i| i.is_installed).count();
+            let running_count = mcp_items.iter().filter(|i| i.is_running).count();
+            let suspended_count = mcp_items.iter().filter(|i| i.is_suspended).count();
+            if has_active_filter || total_count > threshold as usize {
+                println!(
+                    "{}  {} shown  {}  {} total  {}  {} installed  {}  {} running  {}  {} suspended",
+                    crate::ansi::bold("📊"),
+                    crate::ansi::cyan(&mcp_items.len().to_string()),
+                    crate::ansi::dim("|"),
+                    crate::ansi::bold(&total_count.to_string()),
+                    crate::ansi::dim("|"),
+                    crate::ansi::green(&installed_count.to_string()),
+                    crate::ansi::dim("|"),
+                    crate::ansi::green(&running_count.to_string()),
+                    crate::ansi::dim("|"),
+                    crate::ansi::yellow(&suspended_count.to_string()),
+                );
+            } else {
+                println!("{}  Available MCP servers in {}:  ({})",
+                    crate::ansi::bold("📋"),
+                    crate::ansi::cyan(&expanded_path.display().to_string()),
+                    crate::ansi::bold(&format!("{} total", total_count)),
+                );
+            }
+            if !truncated && total_count > threshold as usize {
+                println!("  (all {total} shown)", total = total_count);
+            }
             println!();
-            for item in mcp_items {
+            for item in &mcp_items {
+                let status = if item.is_suspended {
+                    "⏸️"
+                } else if item.is_running {
+                    "▶️"
+                } else if item.is_installed {
+                    "📋"
+                } else {
+                    "❌"
+                };
                 match (&item.command, &item.args) {
                     (Some(command), Some(args)) => {
-                        println!("📋 {} ({})", item.name, command);
+                        println!("{status} {} ({command})", item.name);
                         if !args.is_empty() {
                             println!("   args: {}", args.join(" "));
                         }
+                        if item.is_suspended {
+                            println!("   ⏸️  SUSPENDED — enable with: b00t-cli mcp register --restore {}", item.name);
+                        }
+                        if !item.is_running && !item.is_suspended && item.is_installed {
+                            if let Some(hint) = &item.restart_hint {
+                                println!("   🔄  Not running — {hint}");
+                            }
+                        }
                     }
                     _ => {
-                        println!("❌ {} (error reading config)", item.name);
+                        println!("{status} {} (error reading config)", item.name);
                     }
                 }
             }
+            if truncated {
+                println!();
+                println!("💡 {total} total servers, showing first {threshold}. Use --search, --installed, --is-running, or --all to see more.", total = total_count, threshold = threshold);
+            }
+            // log view to telemetry (non-fatal)
+            let _ = session_memory::SessionMemory::load().map(|mut m| {
+                let key = format!("mcp_list_view_{}", chrono::Utc::now().format("%Y%m%d"));
+                let _ = m.incr(&key);
+                let _ = m.set("mcp_last_view_count", &total_count.to_string());
+            });
             println!();
             println!("To install to VSCode: b00t-cli vscode install mcp <name>");
             println!("To install to Claude Code: b00t-cli claude-code install mcp <name>");
