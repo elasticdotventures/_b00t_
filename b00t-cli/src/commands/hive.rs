@@ -355,7 +355,8 @@ pub fn handle_hive_command(cmd: &HiveCommands, path: &str) -> Result<()> {
             }
         }
 
-        HiveCommands::Cyber(cyber_cmd) => handle_cyber_command(cyber_cmd),
+        HiveCommands::Peers { peer_command: PeerCommands::Cyber(cyber_cmd) } => handle_cyber_command(cyber_cmd),
+        HiveCommands::Peers { .. } => Ok(()),
         HiveCommands::Run {
             command,
             strict,
