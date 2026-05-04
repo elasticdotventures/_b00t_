@@ -1,9 +1,9 @@
 use crate::model_manager::{
-    activate_model, describe_model, download_model, export_model_env, list_models,
-    list_served_models, remove_model, serve_model, stop_model, ModelOperation, ModelRecord,
-    ServeOptions, ServedEndpointRecord,
+    ModelOperation, ModelRecord, ServeOptions, ServedEndpointRecord, activate_model,
+    describe_model, download_model, export_model_env, list_models, list_served_models,
+    remove_model, serve_model, stop_model,
 };
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use clap::Parser;
 use serde_json::json;
 

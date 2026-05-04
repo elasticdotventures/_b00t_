@@ -1,5 +1,5 @@
 use crate::{ansible::run_playbook, get_config};
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use clap::{ArgAction, Parser};
 use shellexpand;
 use std::collections::HashMap;

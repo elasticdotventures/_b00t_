@@ -11,6 +11,7 @@ pub mod config_cmd;
 pub mod data_cmd;
 pub mod datum;
 pub mod doctor_cmd;
+pub mod docgen;
 pub mod exec;
 pub mod experiment;
 pub mod focus;

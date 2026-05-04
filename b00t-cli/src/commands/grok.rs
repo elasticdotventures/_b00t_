@@ -1,8 +1,8 @@
 use anyhow::{Context, Result};
 use b00t_c0re_lib::{DatumNode, DualGrokClient, GrokBackend, IrontologyBridgeClient};
 use clap::Subcommand;
-use flate2::write::GzEncoder;
 use flate2::Compression;
+use flate2::write::GzEncoder;
 use std::{fs, io::Read, io::Write as IoWrite, path::PathBuf};
 use uuid::Uuid;
 
@@ -251,6 +251,14 @@ async fn handle_dual_ask(
     }
     for warn in &result.warnings {
         eprintln!("  ⚠️  {}", warn);
+    }
+    let control_sink = b00t_c0re_lib::default_control_event_sink();
+    for event in &result.control_events {
+        let receipt = control_sink.emit(event);
+        eprintln!(
+            "  {} {} -> {} [{}] {}",
+            event.action_code, event.source, event.target, event.log_ref, receipt.message
+        );
     }
     if result.total_found == 0 && !result.warnings.is_empty() {
         eprintln!("❌ No results — all backends returned warnings");
@@ -573,11 +581,7 @@ fn sanitize_for_filename(input: &str) -> String {
     while s.contains("__") {
         s = s.replace("__", "_");
     }
-    if s.is_empty() {
-        "topic".to_string()
-    } else {
-        s
-    }
+    if s.is_empty() { "topic".to_string() } else { s }
 }
 
 // ── git stdin helper ──────────────────────────────────────────────────────────

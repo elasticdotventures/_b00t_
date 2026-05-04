@@ -1,5 +1,4 @@
 /// Shared helpers for b00t-cli integration tests.
-
 use std::env;
 
 /// Resolve the path to the compiled `b00t-cli` binary.

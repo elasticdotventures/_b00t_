@@ -616,7 +616,7 @@ async fn execute_bash(
     timeout_ms: Option<u64>,
 ) -> Result<()> {
     use tokio::process::Command;
-    use tokio::time::{timeout, Duration};
+    use tokio::time::{Duration, timeout};
 
     let mut cmd = Command::new("bash");
     cmd.arg("-c")
@@ -671,7 +671,7 @@ async fn execute_agent(
     timeout_ms: Option<u64>,
 ) -> Result<()> {
     use tokio::process::Command;
-    use tokio::time::{timeout, Duration};
+    use tokio::time::{Duration, timeout};
 
     println!("   🤖 Executing LangChain agent: {}", agent_type);
 

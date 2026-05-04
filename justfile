@@ -626,23 +626,44 @@ session-build:
 
 # Tool installation (for operators)
 validate-mcp:
-    #!/bin/bash
-    set -euo pipefail
-    echo "🔍 Validating MCP TOML files..."
-    cd {{repo-root}}/_b00t_
-    taplo lint --schema file://$PWD/schema-资源/mcp.json *.mcp.toml
-    # M1: pi --mode rpc smoke test — verify pi supports rpc mode (gap-fill #343)
-    # 🤓 pi --mode rpc confirmed present in pi 0.x; if this fails pi was downgraded
-    echo "🔍 Validating pi --mode rpc support..."
-    if command -v pi >/dev/null 2>&1; then
-        if pi --help 2>&1 | grep -q -- "--mode rpc"; then
-            echo "✅ pi --mode rpc: supported"
-        else
-            echo "⚠️ pi --mode rpc: NOT found (datum gap in _b00t_/pi.agent.toml)"
-        fi
-    else
-        echo "⚠️ pi: not installed; skipping --mode rpc smoke test"
-    fi
+	#!/bin/bash
+	set -euo pipefail
+	echo "🔍 Validating MCP TOML files..."
+	cd {{repo-root}}/_b00t_
+	taplo lint --schema file://$PWD/schema-资源/mcp.json *.mcp.toml
+	# M1: pi --mode rpc smoke test — verify pi supports rpc mode (gap-fill #343)
+	# 🤓 pi --mode rpc confirmed present in pi 0.x; if this fails pi was downgraded
+	echo "🔍 Validating pi --mode rpc support..."
+	if command -v pi >/dev/null 2>&1; then
+		if pi --help 2>&1 | grep -q -- "--mode rpc"; then
+			echo "✅ pi --mode rpc: supported"
+		else
+			echo "⚠️ pi --mode rpc: NOT found (datum gap in _b00t_/pi.agent.toml)"
+		fi
+	else
+		echo "⚠️ pi: not installed; skipping --mode rpc smoke test"
+	fi
+
+# Lint: NTFS invalid character scan — fail if paths contain reserved chars
+# Policy: pwsh.🪟/NTFS_RESERVED_CHARS.md
+# 🤓 Excludes emoji dirs (_b00t_/🐚/) — those render as unicode, not literal chars
+lint-ntfs:
+	#!/bin/bash
+	set -euo pipefail
+	echo "🔍 NTFS compatibility scan..."
+	cd {{repo-root}}
+	# Scan for LITERAL reserved chars (: | ? * < > "), not unicode/emoji
+	OFFENDERS=$(git ls-tree -r HEAD --name-only | grep -F ':' | grep -v '^[^:]*$' || true)
+	# 🤓 More precise: filter git note refs (format: filename:commit:path)
+	GIT_NOTE_REFS=$(git ls-tree -r HEAD --name-only | grep ':[0-9a-f]*:' || true)
+	if [[ -n "$GIT_NOTE_REFS" ]]; then
+		echo "🚫 Git note refs detected (NTFS-invalid):"
+		echo "$GIT_NOTE_REFS" | head -10
+		echo ""
+		echo "💡 See: pwsh.🪟/NTFS_RESERVED_CHARS.md"
+		exit 1
+	fi
+	echo "✅ No NTFS-invalid paths (git note refs) found"
 
 # Build and package b00t browser extension
 socks5:

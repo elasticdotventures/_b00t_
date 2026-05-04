@@ -27,7 +27,7 @@ use std::path::Path;
 use tracing::{debug, error, info};
 
 use crate::clap_reflection::McpCommandRegistry;
-use crate::{chat::ChatRuntime, mcp_tools::create_mcp_registry};
+use crate::{chat::ChatRuntime, mcp_tools::{create_code_mode_registry, create_mcp_registry}};
 use b00t_c0re_lib::{B00tContext, utils};
 
 /// Rusty b00t MCP server with compile-time generated tools
@@ -39,17 +39,37 @@ pub struct B00tMcpServerRusty {
     working_dir: std::path::PathBuf,
     registry: McpCommandRegistry,
     chat_runtime: ChatRuntime,
+    /// Captured from MCP initialize request — identifies the host client
+    /// (e.g., "hermes", "claude-code", "opencode") for response customization.
+    client_info: std::sync::Arc<std::sync::Mutex<Option<rmcp::model::Implementation>>>,
 }
 
 impl B00tMcpServerRusty {
-    pub fn new<P: AsRef<Path>>(working_dir: P, _config_path: &str) -> Result<Self> {
+    pub fn new<P: AsRef<Path>>(working_dir: P, _config_path: &str, code_mode: bool) -> Result<Self> {
         let working_dir = working_dir.as_ref().to_path_buf();
+
+        let registry = if code_mode {
+            create_code_mode_registry()
+        } else {
+            create_mcp_registry()
+        };
 
         Ok(Self {
             working_dir,
-            registry: create_mcp_registry(),
+            registry,
             chat_runtime: ChatRuntime::global(),
+            client_info: std::sync::Arc::new(std::sync::Mutex::new(None)),
         })
+    }
+
+    /// Convenience constructor for flat mode (backward compatible)
+    pub fn new_flat<P: AsRef<Path>>(working_dir: P, config_path: &str) -> Result<Self> {
+        Self::new(working_dir, config_path, false)
+    }
+
+    /// Convenience constructor for code mode
+    pub fn new_code_mode<P: AsRef<Path>>(working_dir: P, config_path: &str) -> Result<Self> {
+        Self::new(working_dir, config_path, true)
     }
 
     /// Get the number of available tools
@@ -133,13 +153,22 @@ impl ServerHandler for B00tMcpServerRusty {
     async fn call_tool(
         &self,
         request: CallToolRequestParam,
-        _context: RequestContext<RoleServer>,
+        context: RequestContext<RoleServer>,
     ) -> Result<CallToolResult, McpError> {
         let tool_name = request.name.as_ref();
+
+        // Extract client identity for response customization
+        let client_name = context.peer.peer_info()
+            .map(|p| p.client_info.name.clone())
+            .unwrap_or_default();
 
         // Convert request arguments to HashMap
         let params: HashMap<String, serde_json::Value> =
             request.arguments.unwrap_or_default().into_iter().collect();
+
+        if !client_name.is_empty() {
+            debug!("🦀 call_tool: {} via client: {}", tool_name, client_name);
+        }
 
         info!(
             "🦀 Executing compile-time tool: {} with params: {:?}",
@@ -286,8 +315,21 @@ impl ServerHandler for B00tMcpServerRusty {
 
     async fn on_initialized(
         &self,
-        _context: rmcp::service::NotificationContext<rmcp::service::RoleServer>,
+        context: rmcp::service::NotificationContext<rmcp::service::RoleServer>,
     ) {
+        // Capture client info from peer metadata (hermes, claude-code, opencode, etc.)
+        if let Some(peer_info) = context.peer.peer_info() {
+            let client_name = peer_info.client_info.name.clone();
+            let client_version = peer_info.client_info.version.clone();
+            if let Ok(mut info) = self.client_info.lock() {
+                *info = Some(peer_info.client_info.clone());
+            }
+            info!(
+                "🦀 b00t-mcp connected to client: {} v{}",
+                client_name, client_version
+            );
+        }
+
         info!("🦀 Rusty b00t-mcp server initialized successfully");
 
         let tools = self.registry.get_tools();
@@ -411,7 +453,7 @@ mod tests {
     fn test_server_creation() {
         with_tokio_runtime(|| {
             let temp_dir = TempDir::new().unwrap();
-            let server = B00tMcpServerRusty::new(temp_dir.path(), "").unwrap();
+            let server = B00tMcpServerRusty::new_flat(temp_dir.path(), "").unwrap();
 
             assert_eq!(server.working_dir, temp_dir.path());
 
@@ -425,7 +467,7 @@ mod tests {
     fn test_server_info() {
         with_tokio_runtime(|| {
             let temp_dir = TempDir::new().unwrap();
-            let server = B00tMcpServerRusty::new(temp_dir.path(), "").unwrap();
+            let server = B00tMcpServerRusty::new_flat(temp_dir.path(), "").unwrap();
 
             let info = server.get_info();
             assert!(info.instructions.unwrap().contains("🦀 Rusty MCP server"));
@@ -437,7 +479,7 @@ mod tests {
     // #[tokio::test]
     // async fn test_list_tools() {
     //     let temp_dir = TempDir::new().unwrap();
-    //     let server = B00tMcpServerRusty::new(temp_dir.path(), "").unwrap();
+    //     let server = B00tMcpServerRusty::new_flat(temp_dir.path(), "").unwrap();
     //
     //     // Need to create proper RequestContext - RequestContext::default() doesn't exist
     //     // let result = server.list_tools(None, context).await;
@@ -447,7 +489,7 @@ mod tests {
     // #[tokio::test]
     // async fn test_ping() {
     //     let temp_dir = TempDir::new().unwrap();
-    //     let server = B00tMcpServerRusty::new(temp_dir.path(), "").unwrap();
+    //     let server = B00tMcpServerRusty::new_flat(temp_dir.path(), "").unwrap();
     //
     //     // Need to create proper RequestContext - RequestContext::default() doesn't exist
     //     // let result = server.ping(context).await;
@@ -458,7 +500,7 @@ mod tests {
     fn test_result_creation() {
         with_tokio_runtime(|| {
             let temp_dir = TempDir::new().unwrap();
-            let server = B00tMcpServerRusty::new(temp_dir.path(), "").unwrap();
+            let server = B00tMcpServerRusty::new_flat(temp_dir.path(), "").unwrap();
 
             let indicator = "<🥾>{ \"chat\": { \"msgs\": 0 } }</🥾>";
             let success_result = server.create_success_result("Test output", indicator);

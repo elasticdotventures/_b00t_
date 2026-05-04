@@ -32,7 +32,7 @@ status = { policy = "allow" }
         let config_path_str = config_path.to_str().unwrap();
 
         // Test server creation with new rusty server
-        let server = B00tMcpServerRusty::new(".", config_path_str);
+        let server = B00tMcpServerRusty::new_flat(".", config_path_str);
         match &server {
             Ok(_) => {}
             Err(e) => {

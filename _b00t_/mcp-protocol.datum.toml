@@ -1,0 +1,20 @@
+[datum]
+topic     = "mcp-protocol"
+class     = "core-infrastructure"
+tags      = ["mcp", "protocol", "stdio", "transport", "tool-discovery"]
+source_url = "https://modelcontextprotocol.io"
+git_hash  = "auto-generated"
+encoding  = "raw"
+datum_id  = "mcp-protocol-canonical"
+created   = "2026-05-03T00:00:00.000000000+00:00"
+
+[validation]
+# Validate MCP protocol compliance
+validate  = "echo '{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2024-11-05\",\"capabilities\":{},\"clientInfo\":{\"name\":\"test\",\"version\":\"1.0\"}}}' | $MCP_SERVER 2>&1 | jq -e '.result.serverInfo.name'"
+
+# b00t:map v1
+# summary: MCP protocol datum — canonical protocol reference
+# tags: mcp, stdio, transport, tools, resources
+# tier: sm0l
+# cmds: b00t mcp registry list, b00t mcp install <name> <target>
+# complexity: 3

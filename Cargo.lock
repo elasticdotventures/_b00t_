@@ -739,6 +739,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "b00t-ast"
+version = "0.7.49"
+dependencies = [
+ "anyhow",
+ "clap",
+ "proc-macro2",
+ "quote",
+ "serde",
+ "serde_json",
+ "syn",
+ "tempfile",
+ "toml",
+ "walkdir",
+]
+
+[[package]]
 name = "b00t-azure-cp"
 version = "0.7.49"
 dependencies = [
@@ -863,6 +879,7 @@ dependencies = [
  "glob",
  "hf-hub",
  "inquire",
+ "k0mmand3r",
  "k8s-openapi",
  "kube",
  "libc",
@@ -870,6 +887,7 @@ dependencies = [
  "ndarray",
  "once_cell",
  "openssl-sys",
+ "opentelemetry",
  "regex",
  "reqwest",
  "rhai",
@@ -938,6 +956,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "b00t-l3dg3rr-viz"
+version = "0.7.49"
+dependencies = [
+ "serde",
+]
+
+[[package]]
 name = "b00t-mcp"
 version = "0.7.49"
 dependencies = [
@@ -984,6 +1009,7 @@ dependencies = [
  "anyhow",
  "b00t-c0re-lib",
  "b00t-cli",
+ "k0mmand3r",
  "pyo3",
  "pyo3-build-config",
  "serde",

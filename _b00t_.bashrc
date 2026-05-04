@@ -841,6 +841,7 @@ fi
 # 🤓 https://github.com/pixelb/crudini/blob/master/EXAMPLES
 # CRUDINI is used to store b00t config:
 
+: "${SUDO_CMD:=}"
 if n0ta_xfile_📁_好不好 "/usr/bin/crudini" ; then 
     log_📢_记录 "🥳 need crudini to save data, installing now"  
     $SUDO_CMD apt-get install -y crudini bc
@@ -937,7 +938,7 @@ function has_sudo() {
         # https://stackoverflow.com/questions/18215973/how-to-check-if-running-as-root-in-a-bash-script
         log_📢_记录 "👹 please don't b00t as r00t"
         SUDO_CMD=""
-    elif [ -f "./dockerenv" ] ; then
+    elif [ -f "/.dockerenv" ] || [ -f "./dockerenv" ] ; then
         # https://stackoverflow.com/questions/23513045/how-to-check-if-a-process-is-running-inside-docker-container#:~:text=To%20check%20inside%20a%20Docker,%2Fproc%2F1%2Fcgroup%20.
         log_📢_记录 "🐳😁 found DOCKER"  
     elif [ -f "$SUDO_CMD" ] ; then 

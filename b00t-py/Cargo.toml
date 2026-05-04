@@ -17,6 +17,7 @@ crate-type = ["cdylib"]
 # Workspace dependencies
 b00t-cli = { path = "../b00t-cli" }
 b00t-c0re-lib = { path = "../b00t-c0re-lib", features = ["python"] }
+k0mmand3r = { path = "../k0mmand3r" }
 serde.workspace = true
 serde_json.workspace = true
 anyhow.workspace = true

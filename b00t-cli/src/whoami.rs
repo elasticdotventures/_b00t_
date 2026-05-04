@@ -1,7 +1,7 @@
 use crate::agentic_role::resolve_role;
 use crate::entanglement::parse_entanglement_ref;
 use crate::skill_resolver::SkillResolver;
-use crate::{get_config, get_expanded_path, DatumType, UnifiedConfig};
+use crate::{DatumType, UnifiedConfig, get_config, get_expanded_path};
 use anyhow::{Context, Result};
 use b00t_c0re_lib::TemplateRenderer;
 use std::fs;
@@ -549,18 +549,26 @@ hint = "ralph mcp"
         let role = load_role_datum("orchestrator", path.to_str().unwrap()).unwrap();
         let checks = collect_capability_checks(&role, path.to_str().unwrap());
 
-        assert!(checks
-            .iter()
-            .any(|c| { c.reference == "ralph.agent" && c.status == CapabilityStatus::Ready }));
-        assert!(checks
-            .iter()
-            .any(|c| { c.reference == "b00t.cli" && c.status == CapabilityStatus::Ready }));
-        assert!(checks
-            .iter()
-            .any(|c| { c.reference == "ghost.agent" && c.status == CapabilityStatus::Missing }));
-        assert!(checks
-            .iter()
-            .any(|c| { c.reference == "b00t-mcp.mcp" && c.status == CapabilityStatus::Missing }));
+        assert!(
+            checks
+                .iter()
+                .any(|c| { c.reference == "ralph.agent" && c.status == CapabilityStatus::Ready })
+        );
+        assert!(
+            checks
+                .iter()
+                .any(|c| { c.reference == "b00t.cli" && c.status == CapabilityStatus::Ready })
+        );
+        assert!(
+            checks
+                .iter()
+                .any(|c| { c.reference == "ghost.agent" && c.status == CapabilityStatus::Missing })
+        );
+        assert!(
+            checks.iter().any(|c| {
+                c.reference == "b00t-mcp.mcp" && c.status == CapabilityStatus::Missing
+            })
+        );
     }
 
     #[test]

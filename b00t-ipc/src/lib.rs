@@ -179,7 +179,7 @@ pub enum Message {
     },
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum VoteChoice {
     Yes,
     No,

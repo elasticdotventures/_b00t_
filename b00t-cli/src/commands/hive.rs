@@ -6,13 +6,13 @@
 //! run      — run a command through guard evaluation
 //! list     — list available hive profiles
 
-use anyhow::{bail, Result};
+use anyhow::{Result, bail};
 use clap::Parser;
 use std::path::{Path, PathBuf};
 
 use crate::hive::{
-    activate_profile, check_guards, discover_profiles, hive_stacks_status, load_profile,
-    GuardResult, HiveProfile, SystemSnapshot,
+    GuardContext, GuardResult, HiveProfile, SystemSnapshot, activate_profile, check_guards,
+    discover_profiles, hive_stacks_status, load_profile,
 };
 
 #[derive(Parser)]
@@ -315,8 +315,14 @@ pub fn handle_hive_command(cmd: &HiveCommands, path: &str) -> Result<()> {
             let cmd_str = command.join(" ");
             let snapshot = SystemSnapshot::capture()?;
             let all_guards = load_all_guards(&datum_dir, &snapshot);
+            let guard_ctx = GuardContext {
+                command: cmd_str.clone(),
+                violation_count: 0,
+                repeat_threshold: None,
+                rhai_macros: std::collections::HashMap::new(),
+            };
 
-            match check_guards(&cmd_str, &all_guards) {
+            match check_guards(&cmd_str, &all_guards, &guard_ctx) {
                 GuardResult::Allow => {
                     // pass-through
                 }

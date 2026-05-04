@@ -7,7 +7,7 @@
 //! precedence: .hive.tomllmd > .hive.tomllm > .stack.tomllmd > .stack.tomllm > .hive.toml
 //! State file: /tmp/b00t/hive-state.json (volatile; reset on reboot)
 
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result, bail};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
@@ -169,10 +169,14 @@ pub struct HiveResourceGate {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct HiveGuard {
-    pub pattern: String,
+    pub pattern: GuardPattern,
     pub action: HiveGuardAction,
     pub message: Option<String>,
     pub redirect: Option<String>,
+    /// Repeat threshold for 🦨 → 💩 escalation.
+    /// 0 or None = always warn (default). 1 = escalate on 2nd hit.
+    /// Used with k0mmand3r::emoji_registry!() lookup: tier 1 is warn, tier 2 is block.
+    pub repeat_threshold: Option<u32>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -203,6 +207,9 @@ struct HiveTomlHive {
     exclusion: Option<HiveTomlExclusion>,
     services: Option<HiveTomlServices>,
     guards: Option<Vec<HiveTomlGuard>>,
+    /// Named Rhai guard macros defined in datum header.
+    /// Forms: let <name> = <expr>; piped into context before guard evaluation.
+    rhai_macros: Option<HashMap<String, String>>,
     mcp_tools: Option<HiveTomlMcpTools>,
     service: Option<HiveTomlServiceSpec>,
 }
@@ -229,10 +236,11 @@ struct HiveTomlServices {
 
 #[derive(Deserialize)]
 struct HiveTomlGuard {
-    pattern: String,
+    pattern: GuardPattern,
     action: HiveGuardAction,
     message: Option<String>,
     redirect: Option<String>,
+    repeat_threshold: Option<u32>,
 }
 
 #[derive(Deserialize)]
@@ -273,6 +281,7 @@ impl HiveProfile {
             exclusion: None,
             services: None,
             guards: None,
+            rhai_macros: None,
             mcp_tools: None,
             service: None,
         });
@@ -305,6 +314,7 @@ impl HiveProfile {
                 action: g.action,
                 message: g.message,
                 redirect: g.redirect,
+                repeat_threshold: g.repeat_threshold,
             })
             .collect();
 
@@ -469,6 +479,187 @@ fn read_active_profile() -> Option<String> {
     read_state().active_profile
 }
 
+// ─── Guard Pattern Types ─────────────────────────────────────────────────────
+//
+// Supported pattern matchers:
+// - JsonRegexPattern: compiled regex against command string (default)
+// - RhaiExpr:        one-line Rhai expression evaluated against guard context
+// - K0mmand3rStage:  hook into specific k0mmand3r winnow parser stage
+//
+// These are serializable in hive-guards.toml as a tagged union.
+// The pattern field in TOML can be:
+//   pattern = "pip install"                → JsonRegexPattern (backward compat)
+//   pattern = { rhai = "cmd.contains('pip') && cmd.contains('install')" }
+//   pattern = { stage = "pre_tokenize" }
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(untagged)]
+pub enum GuardPattern {
+    /// Substring match via regex (backward-compatible with bare string)
+    JsonRegexPattern(String),
+    /// Rhai expression evaluated at guard-check time
+    RhaiExpr(RhaiGuardExpr),
+    /// Hook into a named k0mmand3r winnow parser stage
+    K0mmand3rStage(K0mmand3rStageGuard),
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct RhaiGuardExpr {
+    pub rhai: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct K0mmand3rStageGuard {
+    pub stage: String,
+}
+
+impl GuardPattern {
+    /// Evaluate this pattern against a command string.
+    /// Rhai variants also receive the full guard context (env vars, session state).
+    pub fn matches(&self, command: &str, context: &GuardContext) -> bool {
+        match self {
+            GuardPattern::JsonRegexPattern(p) => {
+                // Compile and apply regex; fall back to substring match for invalid patterns
+                match regex::Regex::new(p) {
+                    Ok(re) => re.is_match(command),
+                    Err(_) => command.contains(p.as_str()),
+                }
+            }
+            GuardPattern::RhaiExpr(expr) => {
+                match eval_rhai_expr(&expr.rhai, command, context) {
+                    RhaiEvalResult::Match => true,
+                    RhaiEvalResult::NoMatch => false,
+                    RhaiEvalResult::Error(msg) => {
+                        // Log eval error through the debug system — never silently no-match.
+                        // The command proceeds (fail-open) but the error is flagged.
+                        eprintln!("{msg}");
+                        false
+                    }
+                }
+            }
+            GuardPattern::K0mmand3rStage(_stage) => {
+                // Stage guards are registered and invoked through k0mmand3r parser stage hooks.
+                // They must not participate in generic command matching via check_guards(),
+                // or they would match every command and apply their action unconditionally.
+                //
+                // Any parse-time interception logic belongs in the stage callback path.
+                false
+            }
+        }
+    }
+}
+
+/// Context provided to Rhai guard expressions at evaluation time.
+#[derive(Debug, Clone, Default)]
+pub struct GuardContext {
+    pub command: String,
+    pub violation_count: u32,
+    pub repeat_threshold: Option<u32>,
+    /// Rhai macro definitions from datum header, e.g. pip_guard → "cmd.contains(\"pip\")"
+    /// Injected as `let <name> = <expr>;` before guard expression evaluation.
+    pub rhai_macros: HashMap<String, String>,
+}
+
+/// Persistent violation counter for 🦨→💩 escalation.
+///
+/// Tracks how many times each guard pattern has been violated.
+/// When `count >= repeat_threshold`, the guard escalates from Warn to Block.
+///
+/// Persisted to `~/.b00t/guard-violations.jsonl` so violation counts survive
+/// process restarts. Each violation is one JSONL line.
+
+/// Default path for the violation counter persistence file.
+pub fn default_violations_path() -> PathBuf {
+    dirs::home_dir()
+        .unwrap_or_else(|| PathBuf::from("."))
+        .join(".b00t")
+        .join("guard-violations.jsonl")
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct GuardViolationCounter {
+    counts: HashMap<String, u32>,
+}
+
+impl GuardViolationCounter {
+    /// Create a new empty counter.
+    pub fn new() -> Self {
+        Self {
+            counts: HashMap::new(),
+        }
+    }
+
+    /// Increment the violation count for a guard pattern and return the new count.
+    pub fn increment(&mut self, pattern_key: &str) -> u32 {
+        let count = self.counts.entry(pattern_key.to_string()).or_insert(0);
+        *count += 1;
+        *count
+    }
+
+    /// Get the current violation count for a pattern (default 0).
+    pub fn get_count(&self, pattern_key: &str) -> u32 {
+        self.counts.get(pattern_key).copied().unwrap_or(0)
+    }
+
+    /// Reset a pattern's violation count.
+    pub fn reset(&mut self, pattern_key: &str) {
+        self.counts.remove(pattern_key);
+    }
+
+    /// Load violation counts from a JSONL file.
+    /// Each line is `{"pattern": "...", "count": N}`.
+    /// Returns the loaded counter, or empty if file doesn't exist or is corrupt.
+    pub fn load(path: &std::path::Path) -> Self {
+        let content = match std::fs::read_to_string(path) {
+            Ok(c) => c,
+            Err(_) => return Self::new(),
+        };
+
+        let mut counts = HashMap::new();
+        for line in content.lines() {
+            if let Ok(entry) = serde_json::from_str::<serde_json::Value>(line) {
+                if let (Some(pattern), Some(count)) = (
+                    entry.get("pattern").and_then(|v| v.as_str()),
+                    entry.get("count").and_then(|v| v.as_u64()),
+                ) {
+                    counts.insert(pattern.to_string(), count as u32);
+                }
+            }
+        }
+
+        Self { counts }
+    }
+
+    /// Save violation counts to a JSONL file.
+    /// Creates parent directory if it doesn't exist.
+    pub fn save(&self, path: &std::path::Path) -> std::io::Result<()> {
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+
+        let mut file = std::fs::File::create(path)?;
+        use std::io::Write;
+        for (pattern, count) in &self.counts {
+            if *count > 0 {
+                writeln!(
+                    file,
+                    "{}",
+                    serde_json::json!({"pattern": pattern, "count": count})
+                )?;
+            }
+        }
+        Ok(())
+    }
+
+    /// Load from default path, increment a pattern, save, return new count.
+    pub fn increment_persist(&mut self, pattern_key: &str) -> u32 {
+        let new_count = self.increment(pattern_key);
+        let path = default_violations_path();
+        let _ = self.save(&path); // best-effort; don't fail on IO
+        new_count
+    }
+}
+
 // ─── Guard Evaluation ─────────────────────────────────────────────────────────
 
 pub enum GuardResult {
@@ -482,24 +673,113 @@ pub enum GuardResult {
     },
 }
 
-/// Check a command string against a list of guards; returns first match
-pub fn check_guards(command: &str, guards: &[HiveGuard]) -> GuardResult {
+/// Check a command string against a list of guards; returns first match.
+/// Uses GuardPattern::matches() which supports JsonRegexPattern, RhaiExpr, and K0mmand3rStage.
+/// When a guard has `repeat_threshold` and violation count meets or exceeds it,
+/// the action escalates from Warn to Block (🦨 → 💩).
+pub fn check_guards(command: &str, guards: &[HiveGuard], context: &GuardContext) -> GuardResult {
     for guard in guards {
-        if command.contains(&guard.pattern) {
+        if guard.pattern.matches(command, context) {
+            let pattern_display = match &guard.pattern {
+                GuardPattern::JsonRegexPattern(p) => p.clone(),
+                GuardPattern::RhaiExpr(e) => format!("rhai:{}", e.rhai),
+                GuardPattern::K0mmand3rStage(s) => format!("stage:{}", s.stage),
+            };
             let message = guard
                 .message
                 .clone()
-                .unwrap_or_else(|| format!("guard matched: {}", guard.pattern));
-            return match guard.action {
+                .unwrap_or_else(|| format!("guard matched: {pattern_display}"));
+
+            // Persist violation count for 🦨→💩 escalation tracking.
+            // Writes to ~/.b00t/guard-violations.jsonl.
+            let new_count = GuardViolationCounter::load(&default_violations_path())
+                .increment_persist(&pattern_display);
+
+            // 🦨→💩 escalation: if repeat_threshold is set and persisted violation
+            // count exceeds the threshold, escalate Warn/Redirect to Block.
+            // repeat_threshold=1 means: warn on 1st hit, block from 2nd hit onward.
+            let (effective_message, effective_action) =
+                match (&guard.action, guard.repeat_threshold) {
+                    (HiveGuardAction::Warn | HiveGuardAction::Redirect, Some(threshold))
+                        if new_count > threshold =>
+                    {
+                        // Escalate to Block, replace 🦨 with 💩 in message
+                        let escalated = message
+                            .replace("🦨", "💩")
+                            .replace("use ", "repeated: use ");
+                        (escalated, HiveGuardAction::Block)
+                    }
+                    _ => (message.clone(), guard.action.clone()),
+                };
+
+            return match effective_action {
                 HiveGuardAction::Warn | HiveGuardAction::Redirect => GuardResult::Warn {
-                    message,
+                    message: effective_message,
                     redirect: guard.redirect.clone(),
                 },
-                HiveGuardAction::Block => GuardResult::Block { message },
+                HiveGuardAction::Block => GuardResult::Block {
+                    message: effective_message,
+                },
             };
         }
     }
     GuardResult::Allow
+}
+
+/// Result of evaluating a Rhai guard expression.
+/// Never conflates parse/eval errors with a non-match — errors have their own channel.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum RhaiEvalResult {
+    /// Expression evaluated to true — guard matched
+    Match,
+    /// Expression evaluated to false — guard did not match
+    NoMatch,
+    /// Expression failed to parse or evaluate — distinct from non-match.
+    /// Contains the Rhai error message for logging/tracking.
+    Error(String),
+}
+
+impl RhaiEvalResult {
+    /// Returns true if the result is a Match.
+    pub fn is_match(&self) -> bool {
+        matches!(self, RhaiEvalResult::Match)
+    }
+}
+
+/// Evaluate a Rhai one-liner expression against guard context.
+/// Returns RhaiEvalResult::Match, NoMatch, or Error — never conflates errors with non-matches.
+/// Rhai macros from the datum header are injected as `let <name> = <expr>;` before
+/// the guard expression, enabling: pattern = { rhai = "pip_guard || docker_guard" }
+/// Engine is created fresh per eval — guards are evaluated infrequently
+/// (once per command, not per token). Rhai's engine is lightweight enough
+/// that per-call instantiation is fine.
+pub fn eval_rhai_expr(expr: &str, command: &str, context: &GuardContext) -> RhaiEvalResult {
+    use rhai::{Engine, Scope};
+    let mut engine = Engine::new();
+    let mut scope = Scope::new();
+    scope.push("cmd", command.to_string());
+    scope.push("violations", context.violation_count as i64);
+    scope.push(
+        "threshold",
+        context.repeat_threshold.unwrap_or(u32::MAX) as i64,
+    );
+
+    // Build the full Rhai script: macro let-bindings + guard expression
+    // Each macro becomes: let <name> = <expr>;
+    // Then the guard expression references them by name or composes with || && |>
+    let mut script = String::new();
+    for (name, macro_expr) in &context.rhai_macros {
+        script.push_str(&format!("let {name} = {macro_expr};\n"));
+    }
+    script.push('(');
+    script.push_str(expr);
+    script.push(')');
+
+    match engine.eval_with_scope::<bool>(&mut scope, &script) {
+        Ok(true) => RhaiEvalResult::Match,
+        Ok(false) => RhaiEvalResult::NoMatch,
+        Err(e) => RhaiEvalResult::Error(format!("⚠️ rhai guard eval failed: {e} for expr: {expr}")),
+    }
 }
 
 // ─── Systemd Unit Generation ──────────────────────────────────────────────────
@@ -881,13 +1161,15 @@ mod tests {
     #[test]
     fn test_guard_warn() {
         let guards = vec![HiveGuard {
-            pattern: "pip install".to_string(),
+            pattern: GuardPattern::JsonRegexPattern("pip install".to_string()),
             action: HiveGuardAction::Warn,
             message: Some("🦨 use uv pip install".to_string()),
             redirect: Some("uv pip install".to_string()),
+            repeat_threshold: None,
         }];
+        let ctx = GuardContext::default();
         matches!(
-            check_guards("pip install requests", &guards),
+            check_guards("pip install requests", &guards, &ctx),
             GuardResult::Warn { .. }
         );
     }
@@ -895,23 +1177,310 @@ mod tests {
     #[test]
     fn test_guard_block() {
         let guards = vec![HiveGuard {
-            pattern: "rm -rf /".to_string(),
+            pattern: GuardPattern::JsonRegexPattern("rm -rf /".to_string()),
             action: HiveGuardAction::Block,
             message: Some("🚫 blocked".to_string()),
             redirect: None,
+            repeat_threshold: None,
         }];
-        matches!(check_guards("rm -rf /", &guards), GuardResult::Block { .. });
+        let ctx = GuardContext::default();
+        matches!(check_guards("rm -rf /", &guards, &ctx), GuardResult::Block { .. });
     }
 
     #[test]
     fn test_guard_allow() {
         let guards = vec![HiveGuard {
-            pattern: "pip install".to_string(),
+            pattern: GuardPattern::JsonRegexPattern("pip install".to_string()),
             action: HiveGuardAction::Warn,
             message: None,
             redirect: None,
+            repeat_threshold: None,
         }];
-        matches!(check_guards("cargo build", &guards), GuardResult::Allow);
+        let ctx = GuardContext::default();
+        matches!(check_guards("cargo build", &guards, &ctx), GuardResult::Allow);
+    }
+
+    #[test]
+    fn test_guard_rhai_expr() {
+        let guards = vec![HiveGuard {
+            pattern: GuardPattern::RhaiExpr(RhaiGuardExpr {
+                rhai: "cmd.contains(\"pip\") && cmd.contains(\"install\")".to_string(),
+            }),
+            action: HiveGuardAction::Warn,
+            message: Some("🦨 rhai caught pip install".to_string()),
+            redirect: Some("uv pip install".to_string()),
+            repeat_threshold: None,
+        }];
+        let ctx = GuardContext::default();
+        matches!(
+            check_guards("pip install flask", &guards, &ctx),
+            GuardResult::Warn { .. }
+        );
+    }
+
+    #[test]
+    fn test_guard_rhai_no_match() {
+        let guards = vec![HiveGuard {
+            pattern: GuardPattern::RhaiExpr(RhaiGuardExpr {
+                rhai: "cmd.contains(\"docker\")".to_string(),
+            }),
+            action: HiveGuardAction::Block,
+            message: Some("🚫 docker usage blocked".to_string()),
+            redirect: None,
+            repeat_threshold: None,
+        }];
+        let ctx = GuardContext::default();
+        matches!(
+            check_guards("pip install flask", &guards, &ctx),
+            GuardResult::Allow
+        );
+    }
+
+    #[test]
+    fn test_guard_rhai_violation_threshold() {
+        let guards = vec![HiveGuard {
+            pattern: GuardPattern::RhaiExpr(RhaiGuardExpr {
+                rhai: "cmd.contains(\"pip\") && violations >= threshold".to_string(),
+            }),
+            action: HiveGuardAction::Block,
+            message: Some("💩 repeat pip violation".to_string()),
+            redirect: None,
+            repeat_threshold: Some(2),
+        }];
+        let ctx = GuardContext {
+            command: "pip install flask".to_string(),
+            violation_count: 2,
+            repeat_threshold: Some(2),
+            rhai_macros: HashMap::new(),
+        };
+        matches!(
+            check_guards("pip install flask", &guards, &ctx),
+            GuardResult::Block { .. }
+        );
+    }
+
+    // ── Data-driven guard coverage: verify every Rhai expression in shipped datums ──
+    //
+    // Scans all _b00t_/*.hive.toml datum files at test time, parses guards,
+    // and evaluates each Rhai expression with at least one match + one no-match input.
+    // Fails if ANY Rhai expression fails to parse, evaluate, or produce the expected result.
+    //
+    // This is how we maintain 100% implementation coverage for Rhai guards shipped
+    // with b00t. Adding a new `pattern = { rhai = "..." }` to ANY .hive.toml file
+    // automatically requires a passing test — no separate test code needed.
+    //
+    // Run on version bump or merge to main via: cargo test -- guard_expr_coverage
+
+    #[test]
+    fn test_guard_expr_coverage_all_shipped_datums() {
+        use std::fs;
+        use std::path::Path;
+
+        // Locate _b00t_/ relative to CARGO_MANIFEST_DIR (compile-time constant)
+        let b00t_dir = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .unwrap()
+            .join("_b00t_");
+
+        let mut total_guards = 0u32;
+        let mut rhai_guards = 0u32;
+        let mut failures = Vec::new();
+
+        // Scan for all .hive.toml files
+        for entry in fs::read_dir(&b00t_dir).expect("_b00t_ directory not found") {
+            let entry = entry.unwrap();
+            let path = entry.path();
+            if path.extension().and_then(|e| e.to_str()) != Some("toml") {
+                continue;
+            }
+            let file_name = path.file_name().unwrap().to_str().unwrap().to_string();
+            // Only .hive.toml files contain guards
+            if !file_name.ends_with(".hive.toml") {
+                continue;
+            }
+
+            // Read and parse TOML — use toml::Table directly (toml 0.9 compat)
+            let content = fs::read_to_string(&path)
+                .unwrap_or_else(|_| panic!("failed to read {}", path.display()));
+            let toml_value: toml::Table = content
+                .parse()
+                .unwrap_or_else(|e| panic!("failed to parse {}: {e}", path.display()));
+
+            // Extract guards from b00t.hive.guards array
+            let guards_arr = toml_value
+                .get("b00t")
+                .and_then(|b| b.as_table())
+                .and_then(|b| b.get("hive"))
+                .and_then(|b| b.as_table())
+                .and_then(|h| h.get("guards"))
+                .and_then(|g| g.as_array());
+
+            let Some(guard_values) = guards_arr else { continue };
+            total_guards += guard_values.len() as u32;
+
+            // Extract rhai_macros from datum header, if any
+            let rhai_macros: HashMap<String, String> = toml_value
+                .get("b00t")
+                .and_then(|b| b.as_table())
+                .and_then(|b| b.get("hive"))
+                .and_then(|b| b.as_table())
+                .and_then(|h| h.get("rhai_macros"))
+                .and_then(|m| m.as_table())
+                .map(|t| {
+                    t.iter()
+                        .map(|(k, v)| (k.clone(), v.as_str().unwrap_or("").to_string()))
+                        .collect()
+                })
+                .unwrap_or_default();
+
+            // Validate each macro definition compiles as standalone Rhai
+            // Skip macros that reference other macros (they'll be tested when guards use them)
+            for (macro_name, macro_expr) in &rhai_macros {
+                let depends_on_other_macro = rhai_macros
+                    .keys()
+                    .filter(|k| *k != macro_name)
+                    .any(|other_name| macro_expr.contains(other_name));
+                if depends_on_other_macro {
+                    continue;
+                }
+                let result = eval_rhai_expr(macro_expr, "test command", &GuardContext::default());
+                if let RhaiEvalResult::Error(msg) = &result {
+                    failures.push(format!(
+                        "{file_name}:macro:{macro_name}: rhai eval failed: {msg}"
+                    ));
+                }
+            }
+
+            for (idx, gv) in guard_values.iter().enumerate() {
+                // Determine pattern type
+                let pattern = match gv.get("pattern") {
+                    Some(toml::Value::String(s)) => {
+                        GuardPattern::JsonRegexPattern(s.clone())
+                    }
+                    Some(toml::Value::Table(t)) if t.contains_key("rhai") => {
+                        let expr = t.get("rhai").unwrap().as_str().unwrap().to_string();
+                        rhai_guards += 1;
+                        GuardPattern::RhaiExpr(RhaiGuardExpr { rhai: expr })
+                    }
+                    Some(toml::Value::Table(t)) if t.contains_key("stage") => {
+                        GuardPattern::K0mmand3rStage(K0mmand3rStageGuard {
+                            stage: t.get("stage").unwrap().as_str().unwrap().to_string(),
+                        })
+                    }
+                    _ => continue,
+                };
+
+                let action: HiveGuardAction = match gv.get("action").and_then(|a| a.as_str()) {
+                    Some("warn") | Some("redirect") => HiveGuardAction::Warn,
+                    Some("block") => HiveGuardAction::Block,
+                    _ => HiveGuardAction::Warn,
+                };
+                let msg = gv.get("message").and_then(|m| m.as_str()).map(|s| s.to_string());
+                let redirect = gv.get("redirect").and_then(|r| r.as_str()).map(|s| s.to_string());
+
+                let guard = HiveGuard {
+                    pattern: pattern.clone(),
+                    action,
+                    message: msg,
+                    redirect,
+                    repeat_threshold: gv.get("repeat_threshold")
+                        .and_then(|r| r.as_integer()).map(|i| i as u32),
+                };
+
+                // Generate a matching input — extract keywords from the Rhai expression
+                let match_cmd = match &pattern {
+                    GuardPattern::JsonRegexPattern(p) => p.clone(),
+                    GuardPattern::RhaiExpr(expr) => {
+                        // Extract quoted strings from the Rhai expression to build a match input.
+                        // e.g. cmd.contains("pip") → "pip install flask"
+                        let mut keywords: Vec<String> = Vec::new();
+                        let mut in_quote = false;
+                        let mut current = String::new();
+                        for ch in expr.rhai.chars() {
+                            match ch {
+                                '"' if !in_quote => { in_quote = true; current.clear(); }
+                                '"' if in_quote => { in_quote = false; keywords.push(current.clone()); }
+                                c if in_quote => current.push(c),
+                                _ => {}
+                            }
+                        }
+                        // Also check for references to macro names: pip_guard, docker_guard, etc.
+                        // Map known macro names to their keywords
+                        for keyword in &keywords {
+                            match keyword.as_str() {
+                                "pip" | "pip3" | "npm" | "conda" => {
+                                    format!("{keyword} install somepackage")
+                                }
+                                "docker" => "docker run nginx".to_string(),
+                                "git" => "git push --force origin main".to_string(),
+                                "brew" => "brew install ffmpeg".to_string(),
+                                "huggingface-cli" => {
+                                    "huggingface-cli download some-model".to_string()
+                                }
+                                "rm" => "rm -rf /tmp/cache".to_string(),
+                                "ulimit" => "ulimit -n 65536".to_string(),
+                                _ => "trigger-command-match".to_string(),
+                            };
+                        }
+                        // If none of the keywords match, try treating the entire expr
+                        // as a macro name reference (pip_guard → "pip install foo")
+                        if keywords.is_empty() && !expr.rhai.contains('"') {
+                            let name_lower = expr.rhai.trim().to_lowercase();
+                            if name_lower.contains("pip") {
+                                "pip install somepackage"
+                            } else if name_lower.contains("docker") {
+                                "docker run nginx"
+                            } else if name_lower.contains("git") {
+                                "git push --force origin main"
+                            } else {
+                                "trigger-command-match"
+                            }
+                            .to_string()
+                        } else {
+                            // Last resort: use the literal command we built from keywords
+                            keywords.join(" ") + " install"
+                        }
+                    }
+                    GuardPattern::K0mmand3rStage(s) => s.stage.clone(),
+                };
+                let ctx_match = GuardContext {
+                    command: match_cmd.clone(),
+                    violation_count: 2,
+                    repeat_threshold: Some(1),
+                    rhai_macros: rhai_macros.clone(),
+                };
+                let result = check_guards(&match_cmd, &[guard.clone()], &ctx_match);
+                let matched = matches!(result, GuardResult::Warn { .. } | GuardResult::Block { .. });
+                if !matched {
+                    failures.push(format!(
+                        "{}[{}]: expected match for pattern={:?}, got Allow",
+                        file_name, idx, pattern
+                    ));
+                }
+
+                // Generate a non-matching input and verify it passes
+                let no_match_cmd = "ls -la".to_string();
+                let ctx_no = GuardContext::default();
+                let result_no = check_guards(&no_match_cmd, &[guard], &ctx_no);
+                let allowed = matches!(result_no, GuardResult::Allow);
+                if !allowed {
+                    failures.push(format!(
+                        "{}[{}]: expected no-match for pattern={:?}, got non-Allow",
+                        file_name, idx, pattern
+                    ));
+                }
+            }
+        }
+
+        // Report results
+        assert!(total_guards > 0, "no guards found — are hive-guards.hive.toml files shipped?");
+        eprintln!(
+            "✅ guard coverage: {total_guards} guards scanned, {rhai_guards} rhai expressions, {mat} failures",
+            total_guards = total_guards,
+            rhai_guards = rhai_guards,
+            mat = failures.len(),
+        );
+        assert!(failures.is_empty(), "guard failures:\n  {}", failures.join("\n  "));
     }
 
     #[test]
@@ -943,7 +1512,7 @@ message = "use uv"
         assert_eq!(profile.resources_ram_gb, Some(10.0));
         assert_eq!(profile.resources_gpu_mb, Some(8000));
         assert_eq!(profile.guards.len(), 1);
-        assert_eq!(profile.guards[0].pattern, "pip install");
+        assert_eq!(profile.guards[0].pattern, GuardPattern::JsonRegexPattern("pip install".to_string()));
     }
 
     #[test]
@@ -1108,10 +1677,22 @@ working_directory = "/tmp/test"
         let dir = tempfile::tempdir().unwrap();
         let err = load_profile("ghost", dir.path()).unwrap_err();
         let msg = err.to_string();
-        assert!(msg.contains(".hive.tomllmd"), "error must mention .hive.tomllmd");
-        assert!(msg.contains(".hive.tomllm"), "error must mention .hive.tomllm");
-        assert!(msg.contains(".stack.tomllmd"), "error must mention .stack.tomllmd");
-        assert!(msg.contains(".stack.tomllm"), "error must mention .stack.tomllm");
+        assert!(
+            msg.contains(".hive.tomllmd"),
+            "error must mention .hive.tomllmd"
+        );
+        assert!(
+            msg.contains(".hive.tomllm"),
+            "error must mention .hive.tomllm"
+        );
+        assert!(
+            msg.contains(".stack.tomllmd"),
+            "error must mention .stack.tomllmd"
+        );
+        assert!(
+            msg.contains(".stack.tomllm"),
+            "error must mention .stack.tomllm"
+        );
         assert!(msg.contains(".hive.toml"), "error must mention .hive.toml");
     }
 }

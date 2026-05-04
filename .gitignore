@@ -377,3 +377,5 @@ b00t-cli/.b00t/
 vendor/l3dg3rr/
 # Session/temporary caches
 cache/
+/plantuml-server
+.worktrees/
