@@ -483,33 +483,6 @@ The system will:
 }
 
 #[derive(clap::Parser, Clone)]
-pub enum SchemaSubcommands {
-    #[clap(about = "Generate focus.schema.tomllmd from FocusSchema code")]
-    Generate {
-        #[clap(flatten)]
-        args: b00t_cli::datum_schema::SchemaGenerateArgs,
-    },
-}
-
-#[derive(clap::Parser, Clone)]
-pub enum ExperimentCommands {
-    #[clap(about = "Run an A/B experiment with control and treatment variants")]
-    Run {
-        #[clap(long, help = "Experiment ID")]
-        id: String,
-        #[clap(long, help = "Control variant prompt")]
-        control: String,
-        #[clap(long, help = "Treatment variant prompt")]
-        treatment: String,
-    },
-    #[clap(about = "Show experiment status (phygital-twin heartbeat)")]
-    Status,
-}
-
-// Using unified config from lib.rs
-type Config = UnifiedConfig;
-
-#[derive(clap::Parser, Clone)]
 pub enum WowSubcommands {
     #[clap(about = "Run all WOW integrity checks")]
     Check {

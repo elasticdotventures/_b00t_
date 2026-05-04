@@ -60,6 +60,7 @@ scoring_dimensions = ["roi", "cost", "time", "accuracy", "utility", "risk"]
 legacy_names = ["l3dg3rr", "ledg3rr"]
 platform_names = { linux = "ledgerr-mcp", cloud = "ledg3rr", windows = "ledgrrr" }
 canonical_name = "ledgrrr"
+# @tribal: incoming branch canonical_name="ledgerr-mcp" — ledgrrr is the LTS name
 tool_prefix = "ledgerr_"
 
 # 🦨 Runtime orchestration: we need BOTH systemd AND podman/docker (possibly

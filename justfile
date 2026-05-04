@@ -822,17 +822,8 @@ qwen36-test-opencode prompt="say hello in 3 words":
 # ── Worker agent — A/B experiment dispatch + phygital ontology ──────────────
 
 # Run an A/B experiment: two sub-agents, parallel dispatch, stateless scoring
-worker-experiment-run id="auto" control="default prompt" treatment="custom prompt":
-    #!/bin/bash
-    set -euo pipefail
-    ID="{{id}}"
-    if [[ "$ID" == "auto" ]]; then
-      ID="exp-$(date +%s)"
-    fi
-    cargo run -p b00t-cli --bin b00t-cli -- experiment run \
-      --id "$ID" \
-      --control "{{control}}" \
-      --treatment "{{treatment}}"
+test-schema-drift:
+    cargo test -p b00t-cli --lib -- datum_schema::tests::test_focus_schema_file_matches_generated
 
 # Show worker phygital-twin status
 worker-status:
@@ -874,11 +865,6 @@ worker-validate:
 
 # ── b00t skill-improvement loop — opencode ch0nky continuous self-improvement ──
 # 🤓 Tests datums, fixes gaps, commits improvements; runs unattended overnight
-
-# Run an A/B experiment: two sub-agents, parallel dispatch, stateless scoring
-test-schema-drift:
-    cargo test -p b00t-cli --lib -- datum_schema::tests::test_focus_schema_file_matches_generated
-
 # ── ledgrrr — ledgerr-mcp lifecycle (just module) ─────────────────────────
 # 🦨 Symlink: vendor/ledgrrr -> vendor/l3dg3rr (polyseme mapping)
 # Module docs: https://just.systems/man/en/modules.html

@@ -193,6 +193,10 @@ fn test_experiment_focus_pipeline() {
         stderr.contains("focus append"),
         "stderr should contain focus append comparison:\n{stderr}"
     );
+    assert!(
+        stderr.contains("focus_delta"),
+        "stderr should contain focus_delta comparison:\n{stderr}"
+    );
 }
 
 #[test]
