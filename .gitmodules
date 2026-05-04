@@ -45,4 +45,6 @@
 	url = https://github.com/PromptExecution/opencode-b00t.git
 [submodule "vendor/l3dg3rr"]
 	path = vendor/l3dg3rr
-	url = https://github.com/PromptExecution/l3dg3rr.git
+	url = git@github.com:PromptExecution/ledgrrr.git
+[submodule "vendor/hermes-agent-b00t"]
+	branch = b00t

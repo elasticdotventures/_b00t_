@@ -118,6 +118,7 @@ network types: Use std::net types (IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr) inste
 
 ---
 access-control: Implement trust zones and peer permissions as Zanzibar-style relation tuples (user:node relation:can_access object:resource), not ad-hoc enum match. OpenFGA/Auth0 FGA provide existing Rust SDKs. Relation tuples compose naturally across trust zones: zone becomes an object attribute. Use existing std::net types (IpAddr::is_loopback(), is_private()) + url::Host (already in tree) instead of hand-rolled string IP parsing.
+<<<<<<< HEAD
 
 ---
 agentic role invariant: Use sealed trait + const NAME + Cow str + KnownRole enum for type-level role invariants. RoleRef<T>::new() validates at construction. resolve_role() returns KnownRole sum type (zero-cost), not RoleRef<Worker> (which subverts the invariant).
@@ -145,3 +146,4 @@ Version drift: Audit pinned dependency versions quarterly. candle-core 0.4 sat b
 
 ---
 Naming is deployment: The l3dg3rr→ledgerr-mcp→ledg3rr→ledgrrr polyseme maps to proto→linux→cloud→windows. A single codebase with platform-suffix builds prevents fork drift. Use the trait system to abstract platform differences (systemd vs docker for WSL, stdio vs gRPC for cloud).
+complexity: 6
