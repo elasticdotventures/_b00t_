@@ -1,0 +1,135 @@
+name: l3dg3rr Utility Docs
+
+on:
+  pull_request:
+    paths:
+      - "b00t-l3dg3rr-viz/**"
+      - "docs/l3dg3rr-visualization-utility.md"
+      - ".github/workflows/l3dg3rr-docs.yml"
+      - "Cargo.toml"
+      - "Cargo.lock"
+  push:
+    branches: [main]
+    paths:
+      - "b00t-l3dg3rr-viz/**"
+      - "docs/l3dg3rr-visualization-utility.md"
+      - ".github/workflows/l3dg3rr-docs.yml"
+      - "Cargo.toml"
+      - "Cargo.lock"
+name: l3dg3rr Docs
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'vendor/l3dg3rr'
+      - 'vendor/l3dg3rr/**'
+      - '.gitmodules'
+      - '.github/workflows/l3dg3rr-docs.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'vendor/l3dg3rr'
+      - 'vendor/l3dg3rr/**'
+      - '.gitmodules'
+      - '.github/workflows/l3dg3rr-docs.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: l3dg3rr-docs-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  RUSTDOCFLAGS: "-D warnings"
+
+jobs:
+  docs:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+
+jobs:
+  build-docs:
+    name: Build l3dg3rr docs
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+
+      - name: Set up Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Build utility docs
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo test -p b00t-l3dg3rr-viz
+          cargo doc -p b00t-l3dg3rr-viz --no-deps
+          mkdir -p public/l3dg3rr
+          cp -R target/doc/* public/l3dg3rr/
+          cp docs/l3dg3rr-visualization-utility.md public/l3dg3rr/README.md
+
+      - name: Upload docs artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: l3dg3rr-utility-docs
+          path: public
+
+      - name: Configure GitHub Pages
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: actions/configure-pages@v5
+
+      - name: Upload GitHub Pages artifact
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: public
+
+      - name: Deploy GitHub Pages
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: actions/deploy-pages@v4
+      - name: Initialize l3dg3rr submodule
+        run: git submodule update --init --recursive vendor/l3dg3rr
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust/cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: vendor/l3dg3rr
+
+      - name: Install just
+        uses: extractions/setup-just@v1
+
+      - name: Setup mdBook
+        uses: jontze/action-mdbook@v3
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          use-mermaid: true
+
+      - name: Install mdBook plugins
+        run: |
+          cd vendor/l3dg3rr
+          cargo install mdbook mdbook-mermaid mdbook-admonish --locked
+          cargo install --path crates/mdbook-rhai-mermaid
+
+      - name: Build l3dg3rr docs
+        run: |
+          cd vendor/l3dg3rr
+          just docgen
+
+      - name: Verify output
+        run: |
+          cd vendor/l3dg3rr
+          test -d book/book && echo "✓ book/book directory exists" || { echo "✗ docs build failed"; exit 1; }
+          test -f book/book/theory.html && echo "✓ theory.html generated" || { echo "✗ theory.html missing"; exit 1; }
+          test -f book/book/index.html && echo "✓ index.html generated" || { echo "✗ index.html missing"; exit 1; }

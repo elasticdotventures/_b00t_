@@ -6,13 +6,13 @@
 //! run      — run a command through guard evaluation
 //! list     — list available hive profiles
 
-use anyhow::{bail, Result};
+use anyhow::{Result, bail};
 use clap::Parser;
 use std::path::{Path, PathBuf};
 
 use crate::hive::{
-    activate_profile, check_guards, discover_profiles, hive_stacks_status, load_profile,
-    GuardResult, HiveProfile, SystemSnapshot,
+    GuardContext, GuardResult, HiveProfile, SystemSnapshot, activate_profile, check_guards,
+    discover_profiles, hive_stacks_status, load_profile,
 };
 
 #[derive(Parser)]
@@ -72,6 +72,60 @@ pub enum HiveCommands {
         strict: bool,
         #[clap(long, help = "Dry-run: evaluate guards but don't execute")]
         dry_run: bool,
+    },
+
+    #[clap(
+        about = "List and manage hive peer nodes across trust zones",
+        long_about = "Hive peers are discovered b00t nodes across trust zones (local, LAN, VPN, internet)."
+    )]
+    Peers {
+        #[clap(subcommand)]
+        peer_command: PeerCommands,
+    },
+}
+
+
+
+
+#[derive(Parser)]
+pub enum PeerCommands {
+    #[clap(about = "List all known hive peers with trust zone and health status")]
+    List {
+        #[clap(long, help = "Output as JSON")]
+        json: bool,
+        #[clap(long, help = "Health-check all peers in parallel (5s timeout per peer)")]
+        health: bool,
+    },
+    #[clap(about = "Register a peer in the hive ledger")]
+    Add {
+        #[clap(help = "Peer identifier")]
+        id: String,
+        #[clap(help = "Address (host:port or URL)")]
+        address: String,
+        #[clap(long, help = "Authentication type (ssh, tls, jwt)")]
+        auth_type: Option<String>,
+    },
+    #[clap(about = "Remove a peer from the hive ledger")]
+    Remove {
+        #[clap(help = "Peer ID to remove")]
+        id: String,
+    },
+    #[clap(about = "Health-check a specific peer")]
+    Status {
+        #[clap(help = "Peer ID to check")]
+        id: String,
+    },
+    #[clap(about = "Gossip with a random peer to discover new nodes")]
+    Gossip,
+    #[clap(about = "Remove peers that haven't been seen since a cutoff")]
+    Prune {
+        #[clap(long, help = "Cutoff age (e.g. 30d, 7d, 24h)", default_value = "30d")]
+        older_than: String,
+    },
+    #[clap(about = "Scan local network for b00t hive nodes")]
+    Discover {
+        #[clap(long, help = "Subnet to scan (e.g. 192.168.1.0/24)")]
+        subnet: Option<String>,
     },
     #[clap(subcommand)]
     Cyber(HiveCyberCommands),
@@ -315,8 +369,14 @@ pub fn handle_hive_command(cmd: &HiveCommands, path: &str) -> Result<()> {
             let cmd_str = command.join(" ");
             let snapshot = SystemSnapshot::capture()?;
             let all_guards = load_all_guards(&datum_dir, &snapshot);
+            let guard_ctx = GuardContext {
+                command: cmd_str.clone(),
+                violation_count: 0,
+                repeat_threshold: None,
+                rhai_macros: std::collections::HashMap::new(),
+            };
 
-            match check_guards(&cmd_str, &all_guards) {
+            match check_guards(&cmd_str, &all_guards, &guard_ctx) {
                 GuardResult::Allow => {
                     // pass-through
                 }

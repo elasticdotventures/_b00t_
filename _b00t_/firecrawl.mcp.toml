@@ -1,0 +1,18 @@
+[b00t]
+name = "firecrawl"
+type = "mcp"
+hint = "Web scraping and crawling MCP server - cloud and self-hosted support"
+requires_sudo = false
+
+[[b00t.mcp.stdio]]
+transport = "stdio"
+command = "npx"
+requires = ["node"]
+priority = 0
+args = ["-y", "firecrawl-mcp"]
+
+[b00t.mcp.stdio.env]
+# Required for cloud API - get from https://firecrawl.dev/app/api-keys
+FIRECRAWL_API_KEY = "${FIRECRAWL_API_KEY}"
+# Optional for self-hosted - set to your instance URL
+# FIRECRAWL_API_URL = "http://localhost:3002"

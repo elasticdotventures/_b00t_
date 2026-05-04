@@ -119,10 +119,12 @@ mod prayer_tests {
 
         assert!(!result.granted);
         assert!(result.denial_reason.is_some());
-        assert!(result
-            .denial_reason
-            .unwrap()
-            .contains("Budget insufficient"));
+        assert!(
+            result
+                .denial_reason
+                .unwrap()
+                .contains("Budget insufficient")
+        );
     }
 
     /// Test 4: Agent prayer denied - missing prerequisite

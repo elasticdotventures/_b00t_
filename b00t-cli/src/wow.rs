@@ -107,6 +107,57 @@ pub trait DesignHeuristicCheck: Send + Sync {
 // The Rust trait implementations were removed — they spawned `cargo check` as
 // a subprocess which caused 2+ minute test times. RHAI is the canonical path
 // for slow integration checks.
+pub struct CandleBuildCheck;
+impl BuildIntegrityCheck for CandleBuildCheck {
+    fn name(&self) -> &str { "candle feature compiles" }
+    fn run(&self) -> CheckResult {
+        let status = std::process::Command::new("cargo")
+            .args(["check", "--features", "candle", "-p", "b00t-cli"])
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .status();
+        match status {
+            Ok(s) if s.success() => CheckResult {
+                name: self.name().into(), category: CheckCategory::BuildIntegrity,
+                passed: true, detail: "cargo check --features candle succeeded".into(),
+            },
+            Ok(s) => CheckResult {
+                name: self.name().into(), category: CheckCategory::BuildIntegrity,
+                passed: false, detail: format!("exit code {:?}", s.code()),
+            },
+            Err(e) => CheckResult {
+                name: self.name().into(), category: CheckCategory::BuildIntegrity,
+                passed: false, detail: format!("spawn failed: {e}"),
+            },
+        }
+    }
+}
+
+pub struct DefaultBuildCheck;
+impl BuildIntegrityCheck for DefaultBuildCheck {
+    fn name(&self) -> &str { "default build compiles" }
+    fn run(&self) -> CheckResult {
+        let status = std::process::Command::new("cargo")
+            .args(["check", "-p", "b00t-cli"])
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .status();
+        match status {
+            Ok(s) if s.success() => CheckResult {
+                name: self.name().into(), category: CheckCategory::BuildIntegrity,
+                passed: true, detail: "cargo check succeeded".into(),
+            },
+            Ok(s) => CheckResult {
+                name: self.name().into(), category: CheckCategory::BuildIntegrity,
+                passed: false, detail: format!("exit code {:?}", s.code()),
+            },
+            Err(e) => CheckResult {
+                name: self.name().into(), category: CheckCategory::BuildIntegrity,
+                passed: false, detail: format!("spawn failed: {e}"),
+            },
+        }
+    }
+}
 
 pub struct KnownRoleCheck;
 impl TypeInvariantCheck for KnownRoleCheck {

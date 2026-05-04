@@ -93,7 +93,7 @@ docker.🐳/
 2. **b00t/build.sh**
    - Checks layer availability
    - Auto-builds missing layers
-   - Validates ~/.b00t gospel exists
+   - Validates ~/.b00t g0spell exists
    - Composes b00t from layers
 
 3. **test-layers.sh**
@@ -163,7 +163,7 @@ COPY --from=builder /build/target/release/b00t-mcp /usr/local/bin/
 
 ### Build Everything
 ```bash
-# Clone gospel
+# Clone g0spell
 git clone https://github.com/elasticdotventures/dotfiles.git ~/.b00t
 
 # Build layers
@@ -203,10 +203,10 @@ b00t-mcp --help
 
 The layer system supports the full b00t architecture:
 
-### Gospel Convention
-- `~/.b00t` mounted read-only (hidden gospel)
+### G0spell Convention
+- `~/.b00t` mounted read-only (hidden g0spell)
 - `~/_b00t_` symlink to visible workspace
-- Agents access gospel when task-relevant
+- Agents access g0spell when task-relevant
 
 ### Group-Based Skills
 Each skill is a layer:

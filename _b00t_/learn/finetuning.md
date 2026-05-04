@@ -1,0 +1,2 @@
+---
+fine-tuning corpus pipeline: Three sources feed unsloth training: (1) guard violation logs at ~/.b00t/guard-violations.jsonl — instruction/input/output triples for command classification. (2) ADR triples from codebase-memory-mcp manage_adr — architecture decisions. (3) Rhai guard macro expansions — each macro documents intent. Export via b00t-cli docgen --format=jsonl --scope=adr. Priority domain: guard classification (28 patterns × 10 variants = 280 examples).

@@ -1,6 +1,6 @@
 # 🎂==🍰*?? Cake Induction
 
-## the gospel of cake; concept (not fully implemented)
+## the g0spell of cake; concept (not fully implemented)
 
 Welcome to Prompt Execution!  This is the general induction (v2).  
 Respond "/READY!" to asynchronously wiat for BEGIN announcement. 

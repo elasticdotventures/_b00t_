@@ -1,0 +1,19 @@
+[b00t]
+name = "peers"
+type = "hive_profile"
+hint = "Hive peer registry — discovered b00t nodes across trust zones"
+
+[b00t.hive.exclusion]
+group = "peers"
+
+# ─── Hive Peer Nodes ─────────────────────────────────────────────────
+# Trust zone is inferred from address via IntoTrustZone (std::net methods).
+# To override: set B00T_ZONE env var or use ledger MCP.
+#
+# [[b00t.hive.peers]]
+# id = "hermes-desktop"
+# address = "192.168.1.50:8080"
+#
+# [[b00t.hive.peers]]
+# id = "cloud-worker"
+# address = "worker.b00t.promptexecution.com:443"

@@ -138,7 +138,7 @@ When updating documentation:
 
 ## Related
 
-- b00t gospel: DRY principle (Don't Repeat Yourself)
+- b00t g0spell: DRY principle (Don't Repeat Yourself)
 - LFMF: Python package management patterns
 - Documentation: `_b00t_/python.🐍/README.md`
 

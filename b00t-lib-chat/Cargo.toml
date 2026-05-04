@@ -1,7 +1,7 @@
 [package]
 name = "b00t-chat"
 version.workspace = true
-edition = "2021"
+edition = "2024"
 description = "b00t chat coordination system with multi-transport support"
 license.workspace = true
 repository.workspace = true
@@ -38,8 +38,8 @@ notify = { version = "6.1", default-features = false, features = ["macos_fsevent
 async-trait = "0.1"
 async-stream = "0.3"
 
-# OpenTelemetry observability
-opentelemetry = { version = "0.31", features = ["metrics", "trace"] }
+# OpenTelemetry observability — workspace version + extra features for chat runtime
+opentelemetry = { workspace = true, features = ["metrics"] }
 opentelemetry_sdk = { version = "0.31", features = ["rt-tokio", "metrics", "trace"] }
 opentelemetry-otlp = { version = "0.31", features = ["metrics", "trace"] }
 

@@ -1,0 +1,21 @@
+{
+  "tasks": [
+    {
+      "id": 1,
+      "title": "SDD-001: Karpathy autoresearch self-reinforcing loop — create research pipeline that crawls URL, classifies, assimilates into b00t datum store, loops on classification results",
+      "status": "pending",
+      "priority": 3,
+      "tags": [],
+      "created_at": "2026-05-03T04:13:41Z"
+    },
+    {
+      "id": 2,
+      "title": "SDD-002: curl-fallback grok provider — grok-compatible API surface using curl fallback when native grok unavailable",
+      "status": "pending",
+      "priority": 3,
+      "tags": [],
+      "created_at": "2026-05-03T04:13:53Z"
+    }
+  ],
+  "version": "1"
+}

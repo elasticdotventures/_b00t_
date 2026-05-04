@@ -19,6 +19,7 @@ detect = [
 version_regex = '(?P<version>[\\d.]+)'
 
 # @tribal: `b00t learn ledgrrr` to load ledgrrr ontology skills
+name = "ledgrrr"
 desires = "0.1.0-proto"
 hint = "Ledgerr CLI — FOCUS FinOps records, gRPC/Arrow transport, ontology graph visualization"
 repo = "PromptExecution/l3dg3rr"

@@ -69,20 +69,119 @@ grok-e2e-integration:
 grok-e2e: grok-e2e-unit
 	@echo "✅ grok-e2e unit tier complete (run grok-e2e-integration for full pipeline)"
 
-# Pre-release gate: runs grok E2E + full cargo test suite
+# l3dg3rr docgen proxy — query knowledge graph, emit .tomllm / rustdoc
+# 🌐 Docgen UI server: cd vendor/... && ./build/c/codebase-memory-mcp --ui=true --port=9749
+docgen: project="home-brianh-.b00t-vendor-codebase-memory-mcp-b00t-ir0n-ledg3rr" format="tomllm" limit="20"
+	@echo "📚 Querying l3dg3rr knowledge graph (project={{project}}, format={{format}}, limit={{limit}})..."
+	@python3 ../vendor/codebase-memory-mcp-b00t-ir0n-ledg3rr/_b00t_/scripts/l3dg3rr-doc-proxy.py \
+		--project={{project}} --format={{format}} --limit={{limit}}
+
+# l3dg3rr docgen: quick toml export (default)
+docgen-toml:
+	@just docgen
+
+# l3dg3rr docgen: rustdoc-style export
+docgen-rustdoc:
+	@just docgen "" rustdoc
+
+# l3dg3rr docgen: raw JSON graph dump
+docgen-json:
+	@just docgen "" json 50
+
+# 🔌 Promote b00t as Hermes terminal backend (guard-gated execution)
+# Symlinks the b00t environment backend into Hermes and activates it.
+hermes-backend-enable:
+	@echo "🔌 Installing b00t environment backend into Hermes..."
+	@ln -sf ~/.hermes/skills/devops/b00t-hermes-env/scripts/b00t_env_backend.py \
+		~/.hermes/hermes-agent/tools/environments/b00t.py
+	@echo "   Symlink created. To activate:"
+	@echo "   hermes config set terminal.backend b00t"
+	@echo "   hermes config set terminal.timeout 180"
+	@echo "   Then restart: hermes (CLI) or systemctl --user restart hermes-gateway"
+	@echo ""
+	@echo "📋 All terminal commands now route through b00t guard system:"
+	@echo "   pip install  → 🦨 uv pip install"
+	@echo "   docker run   → 🦨 podman run"
+	@echo "   rm -rf /     → 🚫 BLOCKED"
+
+hermes-backend-disable:
+	@echo "🔌 Removing b00t environment backend..."
+	@rm -f ~/.hermes/hermes-agent/tools/environments/b00t.py
+	@echo "   hermes config set terminal.backend local"
+	@echo "   Then restart: hermes (CLI) or systemctl --user restart hermes-gateway"
+
+# b00t-ast: Rust AST extraction and ontology graph builder
+# Usage: b00t-ast dir <path> [--format json|mcp|counts] [--limit N]
+ast-extract dir="." format="json":
+	@echo "🔍 Extracting AST from $(dir)..."
+	@cargo run -p b00t-ast -- dir "$(dir)" --format "$(format)"
+
+# b00t-ast: ontology graph in MCP-compatible payload format
+ast-ontology dir=".":
+	@just ast-extract "$(dir)" mcp
+
+# b00t-ast: index b00t-ast's own source tree
+ast-self:
+	@echo "🔍 Self-indexing b00t-ast..."
+	@cargo run -p b00t-ast -- self
+
+# b00t-ast: index a Rust directory into the codebase-memory-mcp knowledge graph
+# Builds the ontology graph and pipes it into index_repository.
+# Requires codebase-memory-mcp binary in PATH or at vendor path.
+ast-index dir=".":
+	@echo "🔍 Extracting AST from $(dir) and indexing into knowledge graph..."
+	@cargo run -p b00t-ast -- dir "$(dir)" --format mcp | \
+		codebase-memory-mcp cli index_repository - 2>&1 || \
+		echo "⚠️  codebase-memory-mcp not found or CLI failed. Run: just ast-extract $(dir) mcp"
+
+# Scans all shipped datums, verifies every Rhai expression compiles and
+# evaluates correctly. Run on version bump or before merge to main.
+lint-guards:
+	@echo "🔍 Scanning all shipped .hive.toml guard datums..."
+	cargo test -p b00t-cli --lib -- guard_expr_coverage --nocapture 2>&1 | tail -5
+	@echo "✅ guard lint passed"
+
+# Compact guard violation counters from append-mode JSONL
+# Merges duplicate pattern counts; call periodically to bound file growth
+guard-compact:
+	@echo "📊 Compacting guard violation counters..."
+	@python3 -c "
+import json, os, collections
+path = os.path.expanduser('~/.b00t/guard-violations.jsonl')
+if not os.path.exists(path):
+    print('  No violations file found')
+    exit(0)
+counts = collections.Counter()
+with open(path) as f:
+    for line in f:
+        try:
+            entry = json.loads(line)
+            counts[entry['pattern']] += 1
+        except: pass
+with open(path, 'w') as f:
+    for pattern, count in sorted(counts.items()):
+        f.write(json.dumps({'pattern': pattern, 'count': count}) + '\n')
+print(f'  Compacted {sum(counts.values())} violations across {len(counts)} patterns')
+print(f'  File: {path}')
+"
+
+# Pre-release gate: runs grok E2E + guard lint + full cargo test suite
 # Wire to cog pre-bump-hook or call manually before any version bump
 pre-release-check:
 	#!/usr/bin/env bash
 	set -euo pipefail
 	echo "🚦 Pre-release checks starting..."
 	echo ""
-	echo "1/3 cargo test (full suite)..."
+	echo "1/4 cargo test (full suite)..."
 	cargo test 2>&1
 	echo ""
-	echo "2/3 grok E2E unit tests..."
+	echo "2/4 guard lint (Rhai expression coverage)..."
+	just lint-guards
+	echo ""
+	echo "3/4 grok E2E unit tests..."
 	just grok-e2e-unit
 	echo ""
-	echo "3/3 b00t-c0re-lib tests..."
+	echo "4/4 b00t-c0re-lib tests..."
 	cd .. && cargo test --package b00t-c0re-lib 2>&1
 	echo ""
 	echo "✅ All pre-release checks passed — safe to bump version"

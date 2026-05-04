@@ -34,11 +34,25 @@ pub enum McpCommands {
     },
     #[clap(
         about = "List available MCP server configurations",
-        long_about = "List available MCP server configurations.\n\nExamples:\n  b00t-cli mcp list\n  b00t-cli mcp list --json"
+        long_about = "List available MCP server configurations with status icons and filters.\n\nStatus icons:\n  ▶️  running   📋  installed (not running)   ⏸️  suspended   ❌  not installed / error\n\nWhen the number of servers exceeds the threshold (default: 10, configurable via session or --max-threshold), you MUST provide --search or a filter flag.\n\nFilter Examples:\n  b00t-cli mcp list --search github       # search by name match\n  b00t-cli mcp list --installed            # only installed servers\n  b00t-cli mcp list --is-installed=true    # same, explicit bool\n  b00t-cli mcp list --is-installed=false   # only uninstalled servers\n  b00t-cli mcp list --is-running=true      # only servers currently running\n  b00t-cli mcp list --is-suspended=false   # exclude suspended\n  b00t-cli mcp list --max-threshold 20     # override threshold for this invocation\n  b00t-cli mcp list --all                  # bypass the threshold guard\n  b00t-cli mcp list --json --installed     # JSON output of installed servers\n\nPipe to filter:\n  b00t-cli mcp list --all | grep docker   # find docker-related servers\n  b00t-cli mcp list --all --json | jq '.servers[] | select(.is_running)'  # JSON query"
     )]
     List {
         #[clap(long, help = "Output in JSON format")]
         json: bool,
+        #[clap(long, help = "Search filter — only show servers whose name contains this string (case-insensitive)")]
+        search: Option<String>,
+        #[clap(long, help = "Shorthand: show only installed servers (equivalent to --is-installed=true)")]
+        installed: bool,
+        #[clap(long, help = "Filter by installation status: true=installed, false=uninstalled")]
+        is_installed: Option<bool>,
+        #[clap(long, help = "Filter by running status: true=running, false=not running")]
+        is_running: Option<bool>,
+        #[clap(long, help = "Filter by suspension status: true=suspended, false=not suspended")]
+        is_suspended: Option<bool>,
+        #[clap(long, help = "Override the max-items threshold for this invocation")]
+        max_threshold: Option<i64>,
+        #[clap(long, help = "Bypass the threshold guard and show all servers")]
+        all: bool,
     },
     #[clap(
         about = "Install MCP server to a target (claudecode, vscode, geminicli, dotmcpjson, roocode, codex, stdout)",
@@ -143,6 +157,14 @@ pub enum McpCommands {
         #[clap(short = 'f', long, help = "Output format: json, text (default: text)")]
         format: Option<String>,
     },
+    #[clap(
+        about = "Show dynamic MCP status — loaded/installed/available",
+        long_about = "Query actual MCP server state:\n  loaded: servers active in ~/.hermes/config.yaml\n  installed: datums in _b00t_/*.mcp.toml\n  available: servers in registry index\n\nExamples:\n  b00t mcp status\n  b00t mcp status --json"
+    )]
+    Status {
+        #[clap(long, help = "Output in JSON format")]
+        json: bool,
+    },
 }
 
 #[derive(Parser)]
@@ -235,7 +257,26 @@ impl McpCommands {
                     }
                 }
             }
-            McpCommands::List { json } => crate::mcp_list(path, *json),
+            McpCommands::List {
+                json,
+                search,
+                installed,
+                is_installed,
+                is_running,
+                is_suspended,
+                max_threshold,
+                all,
+            } => {
+                let filter = crate::McpListFilter {
+                    search: search.clone(),
+                    is_installed: if *installed || is_installed.unwrap_or(false) { Some(true) } else { *is_installed },
+                    is_running: *is_running,
+                    is_suspended: *is_suspended,
+                    max_threshold: *max_threshold,
+                    bypass_threshold: *all,
+                };
+                crate::mcp_list(path, *json, filter)
+            }
             McpCommands::Install {
                 name,
                 target,
@@ -554,8 +595,112 @@ impl McpCommands {
 
                 Ok(())
             }
+            McpCommands::Status { json } => {
+                let status = mcp_status();
+                if *json {
+                    println!("{}", serde_json::to_string_pretty(&status)?);
+                } else {
+                    println!("📡 MCP Server Status\n");
+
+                    if let Some(loaded) = status.get("loaded").and_then(|v| v.as_array()) {
+                        println!("🔵 Loaded ({} in ~/.hermes/config.yaml):", loaded.len());
+                        for srv in loaded {
+                            let name = srv.get("name").and_then(|v| v.as_str()).unwrap_or("?");
+                            let cmd = srv.get("command").and_then(|v| v.as_str()).unwrap_or("");
+                            println!("  {name:<20} {cmd}");
+                        }
+                        println!();
+                    }
+
+                    if let Some(installed) = status.get("installed").and_then(|v| v.as_array()) {
+                        println!("📦 Installed ({} _b00t_/*.mcp.toml datums):", installed.len());
+                        for srv in installed {
+                            let name = srv.get("name").and_then(|v| v.as_str()).unwrap_or("?");
+                            let hint = srv.get("hint").and_then(|v| v.as_str()).unwrap_or("");
+                            println!("  {name:<20} {hint}");
+                        }
+                    }
+                }
+                Ok(())
+            }
         }
     }
+}
+
+/// Query dynamic MCP status: loaded servers, installed datums, available registry.
+/// Uses `datum_root` as the base directory for `*.mcp.toml` discovery — consistent
+/// with other CLI commands that accept `--path` (default: `~/.dotfiles/_b00t_`).
+pub fn mcp_status() -> serde_json::Value {
+    mcp_status_for_path("~/.dotfiles/_b00t_")
+}
+
+/// Inner implementation: query MCP status using a specific datum root path.
+pub fn mcp_status_for_path(datum_root: &str) -> serde_json::Value {
+    use serde_json::json;
+    let mut status = serde_json::Map::new();
+
+    // Loaded: MCP servers in ~/.hermes/config.yaml
+    let hermes_config = dirs::home_dir()
+        .map(|h| h.join(".hermes").join("config.yaml"));
+    let loaded: Vec<serde_json::Value> = match &hermes_config {
+        Some(path) if path.exists() => {
+            let content = std::fs::read_to_string(path).unwrap_or_default();
+            let yaml: serde_json::Value = serde_yaml::from_str(&content).unwrap_or(json!({}));
+            yaml.get("mcp_servers")
+                .and_then(|v| v.as_object())
+                .map(|obj| {
+                    obj.iter()
+                        .map(|(name, cfg)| {
+                            json!({
+                                "name": name,
+                                "command": cfg.get("command").and_then(|c| c.as_str()).unwrap_or(""),
+                                "args": cfg.get("args").and_then(|a| a.as_array())
+                                    .map(|a| a.iter().filter_map(|v| v.as_str().map(|s| s.to_string())).collect::<Vec<_>>())
+                                    .unwrap_or_default(),
+                            })
+                        })
+                        .collect()
+                })
+                .unwrap_or_default()
+        }
+        _ => vec![],
+    };
+    status.insert("loaded".to_string(), json!(loaded));
+
+    // Installed: *.mcp.toml datums from the configured datum root
+    let expanded = shellexpand::tilde(datum_root).to_string();
+    let b00t_dir = std::path::PathBuf::from(expanded);
+    let installed: Vec<serde_json::Value> = match std::fs::read_dir(&b00t_dir) {
+        Ok(entries) => entries
+            .filter_map(|e| e.ok())
+            .filter(|e| {
+                e.path()
+                    .extension()
+                    .and_then(|ext| ext.to_str())
+                    .map(|ext| ext == "toml")
+                    .unwrap_or(false)
+                    && e.path().file_name()
+                        .and_then(|n| n.to_str())
+                        .map(|n| n.ends_with(".mcp.toml"))
+                        .unwrap_or(false)
+            })
+            .filter_map(|e| {
+                let content = std::fs::read_to_string(e.path()).ok()?;
+                let table: toml::Table = content.parse().ok()?;
+                let b00t = table.get("b00t")?.as_table()?;
+                let name = b00t.get("name")?.as_str()?.to_string();
+                let hint = b00t.get("hint").and_then(|v| v.as_str()).unwrap_or("").to_string();
+                Some(json!({ "name": name, "hint": hint }))
+            })
+            .collect(),
+        Err(_) => vec![],
+    };
+    status.insert("installed".to_string(), json!(installed));
+
+    // Available: from registry (simplified — McpRegistry is async, skip here)
+    status.insert("available".to_string(), json!([]));
+
+    serde_json::Value::Object(status)
 }
 
 impl RegistryAction {

@@ -17,12 +17,12 @@
 //! - GET    /v1/kv?prefix=<pfx>  → `{"keys": [...]}`
 //! - GET    /healthz              → `{"status": "ok"}`
 
-use anyhow::{bail, Context as _, Result};
+use anyhow::{Context as _, Result, bail};
 use clap::Parser;
 
-use crate::memory_provider::{detect_provider, soul_path, FileMemory, MemoryProvider};
+use crate::memory_provider::{FileMemory, MemoryProvider, detect_provider, soul_path};
 use crate::soul_writer::{
-    active_soul_dir, global_soul_dir, local_soul_dir, FileSoulWriter, SoulMemoryWriter,
+    FileSoulWriter, SoulMemoryWriter, active_soul_dir, global_soul_dir, local_soul_dir,
 };
 
 #[derive(Parser)]
@@ -227,11 +227,11 @@ pub fn handle_soul_command(cmd: &SoulCommands) -> Result<()> {
 use std::sync::Arc;
 
 use axum::{
+    Router,
     extract::{Path as AxumPath, Query, State},
     http::StatusCode,
     response::IntoResponse,
     routing::get,
-    Router,
 };
 use serde::{Deserialize, Serialize};
 
@@ -331,7 +331,7 @@ async fn healthz() -> impl IntoResponse {
 
 #[cfg(feature = "dbus")]
 async fn serve_dbus(session: bool, datum_dir: std::path::PathBuf) -> Result<()> {
-    use b00t_ipc::dbus_interface::{dbus_hive_bridge, B00tService, StackResult};
+    use b00t_ipc::dbus_interface::{B00tService, StackResult, dbus_hive_bridge};
 
     // Register bridge functions so B00tService methods can call hive logic
     dbus_hive_bridge::register(

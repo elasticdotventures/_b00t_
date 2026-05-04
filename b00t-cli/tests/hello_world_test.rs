@@ -92,7 +92,9 @@ fn test_hello_world_session_memory_tracking() {
 
 #[test]
 fn test_hello_world_system_preferences() {
-    let _lock = CARGO_LOCK.lock().unwrap_or_else(|poisoned| poisoned.into_inner()); // 🤓 Prevent cargo contention
+    let _lock = CARGO_LOCK
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner()); // 🤓 Prevent cargo contention
 
     let temp_dir = TempDir::new().unwrap();
     let b00t = common::get_b00t_binary();
@@ -136,7 +138,9 @@ fn test_hello_world_system_preferences() {
 
 #[test]
 fn test_hello_world_agent_detection() {
-    let _lock = CARGO_LOCK.lock().unwrap_or_else(|poisoned| poisoned.into_inner()); // 🤓 Prevent cargo contention
+    let _lock = CARGO_LOCK
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner()); // 🤓 Prevent cargo contention
 
     let temp_dir = TempDir::new().unwrap();
     let b00t = common::get_b00t_binary();

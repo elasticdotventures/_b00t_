@@ -6,7 +6,7 @@
 #[cfg(feature = "candle")]
 use super::{Embedding, LLMInference, ModelInfo};
 #[cfg(feature = "candle")]
-use anyhow::{anyhow, Context, Result};
+use anyhow::{Context, Result, anyhow};
 #[cfg(feature = "candle")]
 use async_trait::async_trait;
 #[cfg(feature = "candle")]

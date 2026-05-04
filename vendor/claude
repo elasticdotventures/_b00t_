@@ -1,0 +1,7 @@
+
+  1. Fix compilation errors in both new crates
+  2. Test b00t-mcp proxy to discover ledgerr-mcp tools
+  3. Phase 4: Codebase Integration - Connect to codebase-memory-mcp indexing
+  4. Phase 5: Ontology Graph - Integrate AST + datum parsing
+
+claude --resume 7ac4dc93-6b91-471d-86c0-a0451609b4e5

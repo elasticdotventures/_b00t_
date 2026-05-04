@@ -1,0 +1,12 @@
+[b00t]
+name = "checkpoint"
+type = "cli"
+hint = "A checkpoint is a point in the write-ahead log sequence at which all        data files have been updated to reflect the information in the log. All        data files will be flushed to disk. Refer to Section 30.5 for more"
+desires = "latest"
+lfmf_category = "checkpoint"
+
+[b00t.learn]
+inline = "See: man checkpoint"
+
+# Auto-generated from man page
+# Edit to add usage examples, dependencies, etc.

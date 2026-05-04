@@ -1,0 +1,24 @@
+[package]
+name = "b00t-ast"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Rust AST extraction — syn-based parser for function signatures, types, docs, ontology graph construction"
+keywords = ["b00t", "ast", "syn", "ontology", "code-analysis", "rust"]
+categories = ["development-tools", "parsing"]
+
+[dependencies]
+clap = { workspace = true }
+syn = { version = "2", features = ["full", "extra-traits", "visit"] }
+quote = "1"
+proc-macro2 = { version = "1", features = ["span-locations"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+anyhow = "1"
+walkdir = "2"
+toml = { workspace = true }
+
+[dev-dependencies]
+tempfile = "3"

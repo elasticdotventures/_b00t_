@@ -2,17 +2,17 @@
 
 use k8s_openapi::api::core::v1::{Namespace, Pod};
 use kube::{
+    Client, Config,
     api::{Api, DeleteParams, ListParams, PostParams},
     config::{KubeConfigOptions, Kubeconfig},
-    Client, Config,
 };
 use std::collections::BTreeMap;
 use tracing::{debug, info, warn};
 
 use crate::k8s::{
+    MANAGED_BY_LABEL, MANAGED_BY_VALUE,
     config::K8sConfig,
     error::{Error, Result},
-    MANAGED_BY_LABEL, MANAGED_BY_VALUE,
 };
 
 /// b00t Kubernetes client wrapper
@@ -291,7 +291,7 @@ impl K8sClient {
 
     /// Wait for a pod to be ready
     pub async fn wait_for_pod_ready(&self, name: &str) -> Result<()> {
-        use tokio::time::{sleep, Duration};
+        use tokio::time::{Duration, sleep};
 
         let timeout = Duration::from_secs(self.config.timeout_seconds);
         let poll_interval = Duration::from_secs(2);
@@ -365,11 +365,7 @@ impl K8sClient {
             }
         }
 
-        if map.is_empty() {
-            None
-        } else {
-            Some(map)
-        }
+        if map.is_empty() { None } else { Some(map) }
     }
 }
 

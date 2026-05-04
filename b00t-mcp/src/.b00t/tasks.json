@@ -1,0 +1,13 @@
+{
+  "tasks": [
+    {
+      "id": 1,
+      "title": "SDD-003: b00t-mcp client detection — identify hermes+model+session from MCP initialize handshake, propagate context to tools",
+      "status": "pending",
+      "priority": 3,
+      "tags": [],
+      "created_at": "2026-05-03T04:34:03Z"
+    }
+  ],
+  "version": "1"
+}

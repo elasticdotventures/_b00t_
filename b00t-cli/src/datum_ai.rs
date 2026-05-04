@@ -1,5 +1,5 @@
 use crate::traits::*;
-use crate::{get_expanded_path, AiConfig, BootDatum};
+use crate::{AiConfig, BootDatum, get_expanded_path};
 use anyhow::Result;
 use std::collections::HashMap;
 

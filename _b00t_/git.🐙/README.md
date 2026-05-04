@@ -1,4 +1,4 @@
-# b00t gospel of git 🥾💖🐙 & github
+# b00t g0spell of git 🥾💖🐙 & github
 
 - Pre-commit hooks MUST run tests & linting (`cargo fmt`, clippy, husky, cocogitto).
 - Use modern `gh` CLI for GitHub.

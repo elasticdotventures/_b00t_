@@ -1,5 +1,5 @@
 #!/bin/bash
-# Build b00t-cli and b00t-mcp using gospel Dockerfile (DRY - matches .github/workflows)
+# Build b00t-cli and b00t-mcp using g0spell Dockerfile (DRY - matches .github/workflows)
 # This script mirrors the GitHub Actions workflow for local builds
 
 set -euo pipefail
@@ -45,16 +45,16 @@ detect_container_runtime() {
 CONTAINER_CMD=$(detect_container_runtime)
 log_info "Using container runtime: ${CONTAINER_CMD}"
 
-# Check gospel exists
+# Check g0spell exists
 if [ ! -d "${GOSPEL_DIR}" ]; then
-    log_error "Gospel not found at ${GOSPEL_DIR}"
-    log_info "The gospel is the source repository from elasticdotventures/dotfiles"
+    log_error "G0spell not found at ${GOSPEL_DIR}"
+    log_info "The g0spell is the source repository from elasticdotventures/dotfiles"
     exit 1
 fi
 
 # Check Dockerfile exists
 if [ ! -f "${GOSPEL_DIR}/Dockerfile.b00t-cli" ]; then
-    log_error "Dockerfile.b00t-cli not found in gospel"
+    log_error "Dockerfile.b00t-cli not found in g0spell"
     exit 1
 fi
 
@@ -67,7 +67,7 @@ log_info "Version: ${VERSION}"
 BUILD_COMMIT=$(cd "${GOSPEL_DIR}" && git rev-parse HEAD 2>/dev/null || echo "local")
 BUILD_DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 
-log_step "Building b00t-cli container from gospel"
+log_step "Building b00t-cli container from g0spell"
 log_info "Dockerfile: ${GOSPEL_DIR}/Dockerfile.b00t-cli"
 log_info "Context: ${GOSPEL_DIR}"
 log_info "Version: ${VERSION}"

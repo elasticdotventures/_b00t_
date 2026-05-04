@@ -10,24 +10,48 @@ hint = "Universal command guards — always active regardless of hive profile; e
 [b00t.hive.exclusion]
 group = "guards"  # not a workload profile; always active
 
+# 🤓 rhai_macros — named guard expressions defined in datum header.
+# Each macro becomes `let <name> = <expr>;` in Rhai scope before guard evaluation.
+# Guards reference macros by bare name: pattern = { rhai = "pip_guard" }
+# Compose with || &&:          pattern = { rhai = "pip_guard || docker_guard" }
+[b00t.hive.rhai_macros]
+pip_guard = "cmd.contains(\"pip\") && cmd.contains(\"install\")"
+pip3_guard = "cmd.contains(\"pip3\") && cmd.contains(\"install\")"
+pip_mod_guard = "cmd.contains(\"python -m pip\") || cmd.contains(\"python3 -m pip\")"
+conda_guard = "cmd.contains(\"conda\") && cmd.contains(\"install\")"
+docker_guard = "cmd.contains(\"docker\")"
+docker_run_guard = "docker_guard && cmd.contains(\"run\")"
+docker_build_guard = "docker_guard && cmd.contains(\"build\")"
+docker_compose_guard = "cmd.contains(\"docker-compose\") || cmd.contains(\"docker compose\")"
+force_push_guard = "cmd.contains(\"git\") && cmd.contains(\"push\") && cmd.contains(\"--force\")"
+hard_reset_guard = "cmd.contains(\"git\") && cmd.contains(\"reset\") && cmd.contains(\"--hard\")"
+npm_global_guard = "cmd.contains(\"npm\") && cmd.contains(\"install\") && cmd.contains(\"-g\")"
+brew_guard = "cmd.contains(\"brew\") && cmd.contains(\"install\")"
+hf_download_guard = "cmd.contains(\"huggingface-cli\") && cmd.contains(\"download\")"
+ulimit_guard = "cmd.contains(\"ulimit\") && cmd.contains(\"-n\")"
+rm_rf_guard = "cmd.contains(\"rm\") && cmd.contains(\"-rf\") && cmd.contains(\"/ \")"
+
 # --- Python/pip guards ---
 [[b00t.hive.guards]]
 pattern = "pip install"
 action = "warn"
 message = "🦨 use uv pip install (faster, reproducible, respects .python-version)"
 redirect = "uv pip install"
+repeat_threshold = 1
 
 [[b00t.hive.guards]]
 pattern = "pip3 install"
 action = "warn"
 message = "🦨 use uv pip install"
 redirect = "uv pip install"
+repeat_threshold = 1
 
 [[b00t.hive.guards]]
 pattern = "python -m pip"
 action = "warn"
 message = "🦨 use uv pip"
 redirect = "uv pip"
+repeat_threshold = 1
 
 [[b00t.hive.guards]]
 pattern = "conda install"
@@ -85,10 +109,50 @@ action = "warn"
 message = "🦨 huggingface-cli is deprecated; use: hf download"
 redirect = "hf download"
 
+# --- Parse-time stage guards ---
+[[b00t.hive.guards]]
+pattern = { stage = "pre_parse" }
+action = "block"
+message = "🚫 blocked at parse time"
+
 [[b00t.hive.guards]]
 pattern = "ulimit -n"
 action = "warn"
 message = "⚠️ ulimit only affects current shell; systemd services use LimitNOFILE=65536 in unit file; for persistent system fix: sudo bash -c 'echo \"* soft nofile 65536\" >> /etc/security/limits.conf'"
+
+
+# --- SCM branch/commit conventions ---
+# Enforced via `b00t hive run` before any command reaches git.
+# Prevents accidental main-branch work and non-conventional commits.
+# Ref: _b00t_/schema/SCM-CONVENTIONS.tomllmd
+# Uses simple cmd.contains() — regex_match(cmd, pattern) also available
+# for more precise matching if needed (registered on Rhai engine).
+
+[[b00t.hive.guards]]
+pattern = { rhai = "cmd.contains(\"git checkout\") && (cmd.contains(\" main\") || cmd.contains(\" master\"))" }
+action = "block"
+message = "🚫 blocked: switching to main/master — work on a feature branch (feat/, fix/, chore/)"
+
+[[b00t.hive.guards]]
+pattern = { rhai = "cmd.contains(\"git push\") && cmd.contains(\"origin main\")" }
+action = "block"
+message = "🚫 blocked: pushing to main — create a PR instead"
+redirect = "gh pr create"
+
+[[b00t.hive.guards]]
+pattern = { rhai = "cmd.contains(\"git merge\") && cmd.contains(\"main\")" }
+action = "block"
+message = "🚫 blocked: merging main — use gh pr merge or rebase flow"
+
+[[b00t.hive.guards]]
+pattern = { rhai = "cmd.contains(\"git checkout -b\") && !cmd.contains(\"/\")" }
+action = "warn"
+message = "🦨 branch name should use type/description format (e.g. feat/add-widget, fix/login-crash)"
+
+[[b00t.hive.guards]]
+pattern = { rhai = "cmd.contains(\"git commit\") && cmd.contains(\"-m\") && !cmd.contains(\":\")" }
+action = "warn"
+message = "🦨 commit message should follow Conventional Commits: type(scope): description (e.g. feat: add widget)"
 
 [[b00t.usage]]
 description = "Check a command against universal guards"
@@ -97,3 +161,4 @@ command = "b00t run <your-command>"
 [[b00t.usage]]
 description = "List all active guards"
 command = "b00t hive status --guards"
+

@@ -225,5 +225,5 @@ Ralph integrates with these existing datums:
 
 ---
 
-🥾 Generated via b00t gospel alignment
+🥾 Generated via b00t g0spell alignment
 🤓 Ralph datum ontology provides comprehensive capability mapping

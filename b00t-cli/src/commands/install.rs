@@ -1,6 +1,6 @@
 use crate::dependency_resolver::DependencyResolver;
 use crate::{BootDatum, UnifiedConfig};
-use anyhow::{anyhow, Context, Result};
+use anyhow::{Context, Result, anyhow};
 use clap::Parser;
 use duct::cmd;
 use shellexpand;
@@ -77,7 +77,7 @@ pub fn run_just_install(dry_run: bool) -> Result<()> {
 }
 
 /// Install any datum (cli/mcp/ai/etc) by name with dependency resolution.
-pub fn install_datum(path: &str, name: &str) -> Result<()> {
+pub fn install_datum(path: &str, name: &str, dry_run: bool) -> Result<()> {
     let all_datums = load_all_datums(path)?;
 
     // Prefer exact key match. When multiple datums share the same plain `b00t.name`,
@@ -110,6 +110,14 @@ pub fn install_datum(path: &str, name: &str) -> Result<()> {
     let install_order = resolver
         .resolve(&target_key)
         .context(format!("Failed to resolve dependencies for {}", name))?;
+
+    if dry_run {
+        println!("[dry-run] would install {} items:", install_order.len());
+        for (idx, item) in install_order.iter().enumerate() {
+            println!("   {}. {}", idx + 1, item);
+        }
+        return Ok(());
+    }
 
     println!("📋 Installation order ({} items):", install_order.len());
     for (idx, item) in install_order.iter().enumerate() {
@@ -149,6 +157,34 @@ pub fn install_datum(path: &str, name: &str) -> Result<()> {
         }
     }
 
+    Ok(())
+}
+
+/// Hermes terminal install helper: configure hermes to use local terminal backend.
+/// Hermes is the AI terminal; this sets it up for local inference mode.
+pub fn hermes_special_install(dry_run: bool) -> Result<()> {
+    if dry_run {
+        println!("[dry-run] would configure hermes: hermes config set terminal.backend local");
+        return Ok(());
+    }
+    let output = std::process::Command::new("hermes")
+        .args(["config", "set", "terminal.backend", "local"])
+        .output();
+    match output {
+        Ok(out) if out.status.success() => {
+            println!("✅ Hermes configured: terminal.backend = local");
+        }
+        Ok(out) => {
+            let stderr = String::from_utf8_lossy(&out.stderr);
+            anyhow::bail!("hermes config failed: {stderr}");
+        }
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+            anyhow::bail!(
+                "hermes not found in PATH. Install it first: https://github.com/hermes-tui/hermes"
+            );
+        }
+        Err(e) => anyhow::bail!("failed to run hermes: {e}"),
+    }
     Ok(())
 }
 
@@ -337,7 +373,7 @@ hint = "Test stack"
 
         create_test_datum_file(&temp_dir, "docker", "cli", None, None, None).unwrap();
 
-        let result = install_datum(path, "nonexistent");
+        let result = install_datum(path, "nonexistent", false);
         assert!(result.is_err());
         let err = result.unwrap_err();
         assert!(err.to_string().contains("not found"));
@@ -358,7 +394,7 @@ hint = "Test stack"
         )
         .unwrap();
 
-        let result = install_datum(path, "docker");
+        let result = install_datum(path, "docker", false);
         // This will succeed in finding the datum but may fail on actual install
         // We're testing the lookup logic here
         assert!(
@@ -385,7 +421,7 @@ hint = "Test stack"
         )
         .unwrap();
 
-        let result = install_datum(path, "docker.cli");
+        let result = install_datum(path, "docker.cli", false);
         // This will succeed in finding the datum but may fail on actual install
         // We're testing the lookup logic here
         assert!(
@@ -427,7 +463,7 @@ hint = "Test stack"
         )
         .unwrap();
 
-        let result = install_datum(path, "pi");
+        let result = install_datum(path, "pi", false);
         assert!(
             result.is_ok(),
             "expected installable datum to be selected: {:?}",
@@ -475,7 +511,7 @@ hint = "Test stack"
         )
         .unwrap();
 
-        let result = install_datum(path, "a");
+        let result = install_datum(path, "a", false);
         assert!(result.is_err());
         let err = result.unwrap_err();
         let err_msg = format!("{:?}", err).to_lowercase();
@@ -503,7 +539,7 @@ hint = "Test stack"
         )
         .unwrap();
 
-        let result = install_datum(path, "a");
+        let result = install_datum(path, "a", false);
         assert!(result.is_err());
         let err = result.unwrap_err();
         let err_msg = format!("{:?}", err).to_lowercase();
@@ -531,7 +567,7 @@ hint = "Test stack"
         )
         .unwrap();
 
-        let result = install_datum(path, "app");
+        let result = install_datum(path, "app", false);
         assert!(result.is_err());
         let err = result.unwrap_err();
         let err_msg = format!("{:?}", err).to_lowercase();
@@ -579,7 +615,7 @@ hint = "Test stack"
         )
         .unwrap();
 
-        let result = install_datum(path, "c");
+        let result = install_datum(path, "c", false);
         // Test will succeed in resolving dependencies
         // Actual installation may fail but that's OK for this test
         assert!(
@@ -637,7 +673,7 @@ hint = "Test stack"
         )
         .unwrap();
 
-        let result = install_datum(path, "d");
+        let result = install_datum(path, "d", false);
         // Test will succeed in resolving dependencies
         assert!(
             result.is_ok()

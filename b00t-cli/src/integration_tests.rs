@@ -1,5 +1,6 @@
 #[cfg(test)]
 mod integration_tests {
+    use b00t_cli::McpListFilter;
     use crate::{UnifiedConfig, get_mcp_config, mcp_add_json};
     use b00t_cli::datum_mcp::McpDatum;
     use serde_json::Value;
@@ -249,7 +250,7 @@ baz = "learn/baz.md"
         let temp_path = temp_dir.path().to_str().unwrap();
 
         // mcp_list should not error on empty directory
-        let result = crate::mcp_list(temp_path, false);
+        let result = crate::mcp_list(temp_path, false, McpListFilter { bypass_threshold: true, ..Default::default() });
         assert!(result.is_ok());
     }
 
@@ -267,10 +268,10 @@ baz = "learn/baz.md"
         mcp_add_json(json2, false, temp_path).unwrap();
 
         // List should work without error (both text and JSON)
-        let result = crate::mcp_list(temp_path, false);
+        let result = crate::mcp_list(temp_path, false, McpListFilter { bypass_threshold: true, ..Default::default() });
         assert!(result.is_ok());
 
-        let result_json = crate::mcp_list(temp_path, true);
+        let result_json = crate::mcp_list(temp_path, true, McpListFilter { bypass_threshold: true, ..Default::default() });
         assert!(result_json.is_ok());
     }
 

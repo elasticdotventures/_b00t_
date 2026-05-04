@@ -5,7 +5,7 @@ Quick start guide for building b00t-cli on ARM64 architecture using Docker/Podma
 ## Prerequisites
 
 - Docker or Podman installed
-- Gospel cloned to `~/.b00t` from elasticdotventures/dotfiles
+- G0spell cloned to `~/.b00t` from elasticdotventures/dotfiles
 - At least 2GB free disk space for Rust toolchain
 
 ## Quick Build
@@ -14,18 +14,18 @@ The existing build script works on aarch64:
 
 ```bash
 cd ~/homeassistant/_b00t_/node-ts.🦄
-./docker.🐳/b00t/build-from-gospel.sh
+./docker.🐳/b00t/build-from-g0spell.sh
 ```
 
 This script:
 - Auto-detects docker or podman
-- Uses gospel's `Dockerfile.b00t-cli` (multi-arch compatible)
+- Uses g0spell's `Dockerfile.b00t-cli` (multi-arch compatible)
 - Builds native aarch64 binary via rust:1.88-slim
 - Tags as `b00t-cli:aarch64`
 
 ## Architecture Detection
 
-The gospel Dockerfile uses `FROM rust:1.88-slim` which automatically:
+The g0spell Dockerfile uses `FROM rust:1.88-slim` which automatically:
 - Pulls the correct aarch64 image on ARM64 hosts
 - Uses native ARM64 Rust toolchain
 - Produces native ARM64 binaries
@@ -80,7 +80,7 @@ podman system info | grep -i memory
 ```bash
 # Clear cache and rebuild
 docker system prune -a
-./docker.🐳/b00t/build-from-gospel.sh
+./docker.🐳/b00t/build-from-g0spell.sh
 ```
 
 ## Platform Override
@@ -125,6 +125,6 @@ After building b00t-cli:
 
 ## References
 
-- Gospel Dockerfile: `~/.b00t/Dockerfile.b00t-cli`
-- Build script: `./docker.🐳/b00t/build-from-gospel.sh`
+- G0spell Dockerfile: `~/.b00t/Dockerfile.b00t-cli`
+- Build script: `./docker.🐳/b00t/build-from-g0spell.sh`
 - GitHub workflow: `~/.b00t/.github/workflows/b00t-cli-container.yml`

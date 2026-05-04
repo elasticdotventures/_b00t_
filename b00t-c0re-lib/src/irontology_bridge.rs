@@ -246,7 +246,10 @@ impl IrontologyBridgeClient {
             data_path: Some(data_dir),
         };
         let store = std::sync::Arc::new(NeumannStore::try_new(config)?);
-        Ok(Self { store, namespace: ns })
+        Ok(Self {
+            store,
+            namespace: ns,
+        })
     }
 
     /// Ingest a `DatumNode` into the neumann store
@@ -275,10 +278,13 @@ impl IrontologyBridgeClient {
         limit: Option<usize>,
     ) -> anyhow::Result<Vec<IrontologyQueryItem>> {
         let topic_prefix = topic.map(|t| format!("b00t:datum/{}/", t));
-        let qr = self.store.query(SemanticQuery {
-            subject: None,
-            predicate: None,
-        }).await?;
+        let qr = self
+            .store
+            .query(SemanticQuery {
+                subject: None,
+                predicate: None,
+            })
+            .await?;
 
         let mut subjects: std::collections::HashMap<String, (String, String, Vec<String>)> =
             std::collections::HashMap::new();

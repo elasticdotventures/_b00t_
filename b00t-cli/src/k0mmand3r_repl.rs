@@ -18,6 +18,26 @@ pub struct Repl {
     bus: Arc<MessageBus>,
 }
 
+/// Resolve executable templates `<|:code:|>` in a command string.
+/// Each template is replaced with the stdout of executing the inner code via sh.
+fn resolve_templates(input: &str) -> Result<String, String> {
+    let mut result = input.to_string();
+    let re = regex::Regex::new(r"<\|:(.*?):\|>").map_err(|e| e.to_string())?;
+    loop {
+        let Some(caps) = re.captures(&result) else { break };
+        let full_match = caps.get(0).unwrap().as_str();
+        let code = caps.get(1).unwrap().as_str().trim();
+        let output = std::process::Command::new("sh")
+            .arg("-c")
+            .arg(code)
+            .output()
+            .map_err(|e| format!("template exec failed: {}", e))?;
+        let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
+        result = result.replacen(full_match, &stdout, 1);
+    }
+    Ok(result)
+}
+
 impl Repl {
     pub async fn new(agent_id: String, skills: Vec<String>) -> Result<Self> {
         let agent = Agent::new(agent_id, skills);
@@ -43,6 +63,16 @@ impl Repl {
             if input.is_empty() {
                 continue;
             }
+
+            // Resolve executable templates `<|:code:|>` before command handling
+            let resolved = match resolve_templates(input) {
+                Ok(r) => r,
+                Err(e) => {
+                    eprintln!("⚠️  Template resolution failed: {}", e);
+                    continue;
+                }
+            };
+            let input = resolved.as_str();
 
             match self.handle_command(input).await {
                 Ok(should_continue) => {

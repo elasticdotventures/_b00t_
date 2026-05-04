@@ -1,6 +1,6 @@
 use crate::traits::*;
-use crate::{check_command_available, get_config, BootDatum};
-use anyhow::{anyhow, Result};
+use crate::{BootDatum, check_command_available, get_config};
+use anyhow::{Result, anyhow};
 use duct::cmd;
 use std::path::PathBuf;
 use std::time::Instant;
