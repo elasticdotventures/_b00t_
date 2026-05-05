@@ -63,6 +63,19 @@ asymmetric_naming_guard = "cmd.contains(\"enum\") && (cmd.contains(\"Command\") 
 # Triggers on // or /// lines with trivially descriptive language
 why_comment_guard = "cmd.contains(\"//\") && regex_match(cmd, \"(increment|decrement|set |get |add |remove |calls |creates )\")"
 
+# GUARD 2: OOM redirect for cargo test -p b00t-cli (without --lib)
+# Warns about OOM risk when running full binary test suite on b00t-cli
+oom_test_guard = "cmd.contains(\"cargo test\") && cmd.contains(\"-p b00t-cli\") && !cmd.contains(\"--lib\")"
+
+# GUARD 6 (meta): guard message quality check
+# Detects when agent is authoring/editing guard entries with short messages
+# in hive-guards.hive.toml — nudges toward standard WHAT/WHY/WHAT-TO-DO format
+meta_guard_quality = "cmd.contains(\"hive-guards.hive.toml\") && (cmd.contains(\"message = \\\"\") || cmd.contains(\"[[b00t.hive.guards]]\"))"
+
+# GUARD 9: don't-write-code heuristic — detects creation of new .rs files
+# Prompts agent to consider existing solutions before writing new Rust code
+new_rs_guard = "(cmd.contains(\"touch\") || cmd.contains(\"git add\")) && cmd.contains(\".rs\")"
+
 # --- Python/pip guards ---
 [[b00t.hive.guards]]
 pattern = "pip install"
@@ -425,7 +438,6 @@ message = "🦨 Release builds take a long time — use --debug for development 
 pattern = { rhai = "rename_refs_guard" }
 action = "warn"
 message = "🦨 git mv detected — renaming without grepping references first leaves stale imports, broken bindings, and silent runtime errors. First grep for all occurrences, then rename. Run: grep -rn 'old_name' --include='*.rs' --include='*.toml' --include='*.md'"
-redirect = "git mv"
 repeat_threshold = 1
 
 # ================================================================
@@ -479,6 +491,8 @@ pattern = { rhai = "why_comment_guard" }
 action = "warn"
 message = "🦨 Comment likely describes WHAT not WHY (triggered by trivially descriptive pattern: increment/decrement/set/get/add/remove). WHAT-comments add noise without value — they rot when code changes and waste reader attention. Good comments explain intent, invariants, edge cases, and non-obvious tradeoffs. Delete the comment or rewrite it to explain WHY this code exists."
 
+# ================================================================
+
 # ── Federated Idiomatics ──────────────────────────────────────────
 # Each idiomatic is a pattern that saves agent context. Declared here
 # so `b00t idiomap` can build the federated map.
@@ -511,3 +525,47 @@ principle = "LLM inference in guards introduces latency, cost, and non-determini
 context_saved = "~2s latency per inference-based guard check × number of guards per command"
 topic = "guard-design"
 priority = "S"
+
+# GUARD #2: OOM redirect for cargo test -p b00t-cli (without --lib)
+# Pattern: cargo test with -p b00t-cli but no --lib flag
+# Warns about OOM risk and redirects to lib-only test variant
+# ================================================================
+[[b00t.hive.guards]]
+pattern = { rhai = "oom_test_guard" }
+action = "warn"
+message = "🦨 [OOM RISK] [cargo test -p b00t-cli links full binary including candle/llama cpp — consuming >8GB RAM; on memory-constrained hosts this triggers OOM killer] [Use `just test-cli-lib` instead — runs lib tests only, avoids linking the full binary, uses <1GB RAM]"
+redirect = "just test-cli-lib"
+repeat_threshold = 1
+
+# ================================================================
+# GUARD #6 (meta): guard message quality check
+# Pattern: agent editing hive-guards.hive.toml guard entries
+# Meta-guard: catches newly-authored guards with short/incomplete messages
+# ================================================================
+[[b00t.hive.guards]]
+pattern = { rhai = "meta_guard_quality" }
+action = "warn"
+message = "🦨 [SHORT GUARD MESSAGE] [Guard messages <50 chars or missing WHAT/WHY/WHAT-TO-DO structure fail as learning moments — agents skip past terse messages] [Follow standard format: [WHAT] [WHY] [WHAT-TO-DO] — explain the anti-pattern, why it matters, and what to do instead. Target 100-300 chars, include emoji prefix and actionable advice.]"
+repeat_threshold = 2
+
+# ================================================================
+# GUARD #8: Already encoded as guards — no action needed
+# The existing guard system (this entire file + Rhai macros + hook_engine.rs)
+# IS the encoding of lessons into executable guard patterns.
+# Every guard entry here represents a lesson about tool usage, safety,
+# or engineering standards, encoded as a command-time intervention.
+# No additional encoding needed — the system is already in place.
+# ================================================================
+
+# ================================================================
+# GUARD #9: Don't-write-code heuristic
+# Pattern: creation of new .rs files (touch or git add)
+# Prompts agent to consider existing solutions before writing new Rust code
+# ================================================================
+[[b00t.hive.guards]]
+pattern = { rhai = "new_rs_guard" }
+action = "warn"
+message = "🦨 [NEW RUST FILE] [Adding a new .rs file when an existing module, trait, or crate might already solve the problem — new code adds maintenance burden, increases compile time, and fragments the codebase] [Before writing new Rust code: (1) grep for existing types/traits that match your need, (2) check if an existing module can be extended, (3) consider if an external crate handles this. Run: grep -rn 'trait\|struct\|enum' --include='*.rs' | grep -i <keyword>]"
+repeat_threshold = 3
+
+

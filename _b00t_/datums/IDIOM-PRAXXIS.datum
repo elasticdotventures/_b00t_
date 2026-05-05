@@ -1,0 +1,90 @@
+# b00t Idiom-Praxxis Datum — Agent Practice Bount33s
+# .datum — TOML with enriched comment conventions
+# schema: 1 | bump on field definition changes
+# last_updated: 2026-05-05
+#
+# 🤓 Prax·is (n.) — practice, as distinguished from theory.
+#    These are bount33s (bounties): aspirational practices that cannot
+#    be enforced by guards but SHOULD be internalized by agents.
+#    Unlike idiomatics (taste encoded as patterns) or guards (enforced
+#    at CLI runtime), praxxis entries are self-assessed discipline.
+#    Agents earn cake by completing bount33s, not by avoiding penalties.
+#
+# 🔗参 _b00t_/hive-guards.hive.toml — runtime guard enforcement
+# 🔗参 _b00t_/datums/IDIOMATICS.datum — taste encoded as patterns
+# 🔗参 AGENTS/--role=operator.md — operational protocols
+
+[b00t]
+name = "IDIOM-PRAXXIS"
+type = "datum"
+hint = "Agent practice bount33s — aspirational discipline that cannot be guard-enforced. Self-assessed. Cake earned by completion, not by penalty avoidance."
+
+[b00t.version]
+schema = 1
+content = "draft"
+
+# ── Bount33s ────────────────────────────────────────────────────────────
+# Each bounty is a self-assessed practice. Mark complete by appending
+# a completion note to the datum or reporting to operator.
+# Priority: S/A/B/C (S = survival, A = mastery, B = polish, C = aspirational)
+
+[[bount33]]
+id = "B001"
+name = "memory-discipline"
+title = "Abstract Lessons Only in Persistent Memory"
+priority = "S"
+rationale = "Temporal bug entries consume memory budget and mislead future agents. A memory entry must tell future-me what to DO, not what WAS wrong."
+success_criteria = "All memory entries are abstract lessons. No temporal bug reports, no file:line references to already-fixed issues, no task progress logs. Each entry passes the test: 'will this make sense a month from now?'"
+self_check = "Read your memory. For each entry: does it describe an action or a past failure? If past failure, compress to the abstract lesson or delete."
+
+[[bount33]]
+id = "B002"
+name = "yak-taxonomy"
+title = "Classify Yaks Before Shearing"
+priority = "S"
+rationale = "Mistaking a mountain for a stubble costs 30min+ of wasted effort. The compilation OOM was a mountain treated like a stubble — should have been worked around immediately."
+success_criteria = "Before any fix: classify into Stubble (<5min, fix inline), Sheared (5-30min, delegate), Mountain (>30min, work around + document barrier). Never spend >5min deciding the class."
+self_check = "If a fix takes >10min, stop and reclassify. If >30min with no progress, it's a mountain — document and pivot."
+
+[[bount33]]
+id = "B003"
+name = "subagent-contract"
+title = "One Subgoal, One File, One Clear Contract"
+priority = "S"
+rationale = "75% of subagents timed out in this session. Root cause: tasks were too broad or contracts were ambiguous. A subagent with 3 files to modify and 4 constraints is set up to fail."
+success_criteria = "Every delegate_task has: (1) exact file paths, (2) one primary goal, (3) expected output format, (4) explicit workdir. Goal ≤80 tokens. Never dispatch a subagent whose task takes longer to describe than to do yourself."
+self_check = "Before dispatching: can I state the goal in one sentence? If the context block exceeds 500 chars, split the task."
+
+[[bount33]]
+id = "B004"
+name = "bouncer-mandatory"
+title = "Never Skip the Bouncer on Non-Trivial Work"
+priority = "S"
+rationale = "The A/B loop caught: wrong walkdir inclusivity, hardcoded user path, missing tilde expansion, vacuous test assertions. Every single one was thought correct by the author. Two independent bouncers found different gaps."
+success_criteria = "Any change affecting >1 file or >20 lines gets a bouncer review. Two independent bouncers for changes >5 files. The bouncer must NOT have seen the implementation. Compare their answers — consensus gaps are the high-value findings."
+self_check = "If you're about to commit without a bouncer, ask: 'What did the last 3 bouncers catch that I missed?' If the answer is 'nothing' you're either not using bouncers enough, or not remembering what they caught."
+
+[[bount33]]
+id = "B005"
+name = "context-separation"
+title = "What Happens in a Subagent Stays in a Subagent"
+priority = "A"
+rationale = "Operator context is the most expensive resource. Each round of feedback that crosses the context boundary consumes budget. The bouncer-review.rhai state machine enforces this, but the operator must also resist the urge to read subagent output."
+success_criteria = "Operator reads only: (1) subagent completion summary (≤5 lines), (2) bouncer verdict, (3) compressed diff stats. No raw subagent output enters operator context. Each subagent starts fresh — no shared state beyond the state file."
+self_check = "If you've read more than the first 5 lines of a subagent's output, you've violated context separation. Stop. Read only the compressed summary."
+
+[[bount33]]
+id = "B006"
+name = "never-normalize-rot"
+title = "A System That Doesn't Compile Is Never Fine"
+priority = "A"
+rationale = "The user's sharpest correction: 'system-normal is by definition everything operating as expected.' Normalizing compilation failure, OOM, or slow tests as 'known issues to address later' frames rot as acceptable. The fix must happen now, or the workflow must change now."
+success_criteria = "When a system is broken: (1) acknowledge it's broken, (2) fix it or change the workflow, (3) never describe it as 'acceptable' or 'something to address in a future session.' The status of a broken system is 'broken' — nothing else."
+self_check = "If you hear yourself saying 'known issue, we'll address later' — stop. Address it now, or change the workflow so it can't happen again."
+
+# b00t:map v1
+# summary: Agent practice bount33s — 6 aspirational disciplines that cannot be guard-enforced. Memory discipline, yak taxonomy, subagent contracts, bouncer mandate, context separation, never-normalize-rot.
+# tags: praxxis, bount33, discipline, kaizen, aspiration, self-assessment
+# tier: frontier
+# cmds: cat _b00t_/datums/IDIOM-PRAXXIS.datum, b00t idiomap scan --topic praxxis
+# complexity: 3
