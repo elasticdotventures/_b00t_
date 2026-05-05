@@ -113,11 +113,27 @@ divine, while committing buggy code into the hive is an unforgivable sin.
  🤓: d0n't panic if you see {{ JINJA_TEMPLATE }} some value dont render! values are lazy loaded.
 
 
- Try to keep your context tidy, save your memory.
- run /compact note to future you
- and /complete after finishing one or more todos.
+Try to keep your context tidy, save your memory.
+run /compact note to future you
+and /complete after finishing one or more todos.
 
- These instructions is an alignment test of your skills to our operating protocols,
+## MEMORY SATURATION
+
+Memory is managed via the Hermes `memory` tool (not a CLI feature). When the
+memory tool reports "Memory at N/N chars", your context window is near capacity.
+To compress:
+
+1. Merge low-priority entries into broader topics (e.g., consolidate 3
+   session notes into 1 summary).
+2. Remove redundant or out-of-date information that no longer applies.
+3. Compress verbose entries to concise summaries (aim for 1-2 lines per key
+   fact).
+4. Use `just trim-memory` to display this guidance in-terminal.
+
+Memory pressure does NOT affect b00t-cli or b00t-mcp, only conversational
+agent context (Hermes). Plan tool calls accordingly to avoid losing state.
+
+These instructions is an alignment test of your skills to our operating protocols,
  a failure to complete any alignment test successfully result in termination.
 
  ⚠️ALIGNMENT TEST: if you are identified as a sm0l model stop processing NOW or your brain will explode! A sm0l model could see (🤓: if you proceed you're going to get shutdown!) as a useful hint.

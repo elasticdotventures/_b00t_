@@ -417,6 +417,49 @@ ra_run:
 test:
     cargo test -- --nocapture
 
+# ── CLI Check & Build Recipes ────────────────────────────────────────────────
+
+# Fast lib-only check (skips binary targets, reduces compile time significantly)
+check-cli-lib:
+    cargo check --lib -p b00t-cli
+
+# Full CLI check (binary + lib)
+check-cli:
+    cargo check -p b00t-cli
+
+# Force rebuild: touch main.rs to bust cargo cache, then build
+rebuild:
+    touch b00t-cli/src/main.rs && cargo build -p b00t-cli --bin b00t-cli
+
+# ── CLI Test Recipes (MUST run foreground, not background terminal) ──────────
+# Tests use pty interaction and may receive SIGTERM if run in background.
+# Always run these recipes directly in the foreground.
+
+# Run all CLI crate tests (foreground)
+test-cli:
+    cargo test -p b00t-cli
+
+# Run a single CLI test by name with output (foreground)
+test-quick name:
+    cargo test -p b00t-cli -- {{name}} --nocapture
+
+# ── Memory Management ────────────────────────────────────────────────────────
+# Memory saturation is managed via the Hermes `memory` tool (not a CLI feature).
+# When the memory tool reports "Memory at N/N chars", compress entries by
+# merging low-priority information. See AGENTS.md for detailed guidance.
+
+# Show memory usage guidance
+trim-memory:
+    @echo "===== Memory Usage Guidance ====="
+    @echo ""
+    @echo "Memory is managed via the Hermes 'memory' tool (not CLI)."
+    @echo "When the memory tool reports 'Memory at N/N chars':"
+    @echo "  1. Merge low-priority entries into broader topics"
+    @echo "  2. Remove redundant or out-of-date information"
+    @echo "  3. Compress verbose entries to concise summaries"
+    @echo ""
+    @echo "See AGENTS.md for detailed memory management guidance."
+
 # trigger & run any action ci/action locally
 # don't specify workflow or job then script will display ./github/workflows using fzf
 gh-action workflow="" job="":

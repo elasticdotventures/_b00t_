@@ -108,3 +108,5 @@
 {"count":5,"pattern":"rhai:cmd.contains(\"cargo test\") && !cmd.contains(\"--no-run\") && !cmd.contains(\"::\")"}
 {"count":6,"pattern":"rhai:cmd.contains(\"cargo test\") && !cmd.contains(\"--no-run\") && !cmd.contains(\"::\")"}
 {"count":7,"pattern":"rhai:cmd.contains(\"cargo test\") && !cmd.contains(\"--no-run\") && !cmd.contains(\"::\")"}
+{"count":8,"pattern":"rhai:cmd.contains(\"cargo test\") && !cmd.contains(\"--no-run\") && !cmd.contains(\"::\")"}
+{"count":9,"pattern":"rhai:cmd.contains(\"cargo test\") && !cmd.contains(\"--no-run\") && !cmd.contains(\"::\")"}

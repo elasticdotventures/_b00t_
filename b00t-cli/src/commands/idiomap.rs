@@ -564,4 +564,88 @@ mod tests {
             results.len()
         );
     }
+
+    #[test]
+    fn test_scan_finds_subdirectory_entries() {
+        // Create temp dir with files at various depths
+        // Only depth-3 files have [[b00t.idiomatic]] sections
+        // Verify scan_all_idiomatics() finds them with depth-appropriate exclusion
+        use std::fs;
+        use std::path::PathBuf;
+
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+
+        // Helper: write a datum TOML file
+        fn write_datum(path: &PathBuf, has_idiomatic: bool) {
+            let content = if has_idiomatic {
+                r#"[b00t]
+name = "test-datum"
+type = "datum"
+hint = "test"
+
+[[b00t.idiomatic]]
+name = "test-idiomatic"
+principle = "Always test walkdir depth"
+pattern = "test-*"
+topic = "testing"
+"#
+            } else {
+                "[b00t]\nname = \"test-datum\"\ntype = \"datum\"\nhint = \"test\"\n"
+            };
+            fs::write(path, content).unwrap();
+        }
+
+        // depth 1: root-level file (no idiomatic)
+        write_datum(&root.join("depth1.toml"), false);
+
+        // depth 2: subdirectory file (no idiomatic)
+        fs::create_dir_all(root.join("sub1")).unwrap();
+        write_datum(&root.join("sub1/depth2.toml"), false);
+
+        // depth 3: nested files WITH idiomatic sections
+        fs::create_dir_all(root.join("sub1/sub2")).unwrap();
+        write_datum(&root.join("sub1/sub2/depth3.toml"), true);
+
+        // depth 4: WalkDir max_depth is inclusive — file at depth 4 IS found
+        fs::create_dir_all(root.join("sub1/sub2/sub3")).unwrap();
+        write_datum(&root.join("sub1/sub2/sub3/depth4.toml"), true);
+
+        // Run scan_all_idiomatics on the temp dir
+        let path_str = root.to_string_lossy().to_string();
+        let results = scan_all_idiomatics(&path_str).unwrap();
+
+        // Should find the depth-3 entry
+        let depth3_count = results
+            .iter()
+            .filter(|e| e.source_file == "depth3.toml")
+            .count();
+        assert_eq!(
+            depth3_count, 1,
+            "should find exactly 1 idiomatic in depth3.toml, found {}",
+            depth3_count
+        );
+
+        // WalkDir max_depth(4) includes depth 4 — depth4.toml IS found
+        let depth4_count = results
+            .iter()
+            .filter(|e| e.source_file == "depth4.toml")
+            .count();
+        assert_eq!(
+            depth4_count, 1,
+            "should find exactly 1 idiomatic in depth4.toml (depth 4 is max_depth inclusive), found {}",
+            depth4_count
+        );
+
+        // Should have exactly 1 total entry (only depth3.toml had idiomatic sections AND is within depth)
+        assert_eq!(
+            results.len(),
+            1,
+            "expected exactly 1 total idiomatic entry, found {}",
+            results.len()
+        );
+
+        // Verify the found entry has the expected name
+        assert_eq!(results[0].entry.name, "test-idiomatic");
+    }
 }
