@@ -74,14 +74,14 @@ repeat_threshold = 1
 [[b00t.hive.guards]]
 pattern = "pip3 install"
 action = "warn"
-message = "🦨 use uv pip install"
+message = "🦨 pip3 install detected — pip3 is slower and less reproducible than uv. Use uv pip install instead (10x faster, respects .python-version, has lockfile support)"
 redirect = "uv pip install"
 repeat_threshold = 1
 
 [[b00t.hive.guards]]
 pattern = "python -m pip"
 action = "warn"
-message = "🦨 use uv pip"
+message = "🦨 python -m pip detected — uv is the canonical Python package manager for b00t hive. Use uv pip instead (10x faster, deterministic installs via uv.lock)"
 redirect = "uv pip"
 repeat_threshold = 1
 
@@ -99,13 +99,13 @@ message = "🦨 use podman run (CDI GPU passthrough: --device nvidia.com/gpu=all
 [[b00t.hive.guards]]
 pattern = "docker build"
 action = "warn"
-message = "🦨 use podman build"
+message = "🦨 docker build detected — b00t hive uses podman for rootless builds and CDI GPU passthrough. Use `podman build` instead (same Dockerfile syntax, no Docker daemon required)"
 redirect = "podman build"
 
 [[b00t.hive.guards]]
 pattern = "docker-compose"
 action = "warn"
-message = "🦨 use podman-compose or podman play kube"
+message = "🦨 docker-compose detected — b00t hive uses podman. Use podman-compose or podman play kube instead for multi-container orchestration"
 
 # --- Destructive operations ---
 # Per-path explicit guards (for simple string matching + per-path messages)
@@ -172,7 +172,7 @@ message = "🚫 blocked: destructive recursive deletion of critical system path"
 [[b00t.hive.guards]]
 pattern = "git push --force"
 action = "warn"
-message = "⚠️ force push detected — confirm branch is not main/master"
+message = "⚠️ git push --force detected — force push rewrites remote history, corrupting collaborators' branches. Use `git push --force-with-lease` instead (it checks if your remote is stale and refuses if someone else pushed), or create a new branch + PR for the changes"
 
 [[b00t.hive.guards]]
 pattern = "git reset --hard"
@@ -424,7 +424,7 @@ message = "🦨 Release builds take a long time — use --debug for development 
 [[b00t.hive.guards]]
 pattern = { rhai = "rename_refs_guard" }
 action = "warn"
-message = "🦨 git mv detected — did you grep for all references first? Run: grep -rn 'old_name' --include='*.rs' --include='*.toml' --include='*.md'"
+message = "🦨 git mv detected — renaming without grepping references first leaves stale imports, broken bindings, and silent runtime errors. First grep for all occurrences, then rename. Run: grep -rn 'old_name' --include='*.rs' --include='*.toml' --include='*.md'"
 redirect = "git mv"
 repeat_threshold = 1
 
@@ -436,7 +436,7 @@ repeat_threshold = 1
 [[b00t.hive.guards]]
 pattern = { rhai = "long_err_guard" }
 action = "warn"
-message = "🦨 Error strings should be <120 chars. Long errors waste context and hide root cause. Use structured error types with context fields instead."
+message = "🦨 Error strings should be <120 chars (triggered by bail!/anyhow!/eprintln! with long messages). Long error strings waste context budget and hide root cause in scrollback. Use structured error types with context fields (thiserror + #[error(...)]) instead — they compose better in match arms and From impls."
 repeat_threshold = 2
 
 # ================================================================
@@ -447,7 +447,7 @@ repeat_threshold = 2
 [[b00t.hive.guards]]
 pattern = { rhai = "help_drift_guard" }
 action = "warn"
-message = "🦨 Help text may drift from impl. If adding/moving args, update both #[clap(about)] and actual handler/match arms. Run: grep -n 'about\\|long_about' to audit."
+message = "🦨 Help text may drift from impl (triggered by clap about=/long_about= usage). Mismatched help text misleads users and wastes debug cycles on flags that dont exist. If adding/moving args, update both #[clap(about)] and actual handler/match arms. Audit with: grep -nE 'about|long_about' b00t-cli/src/commands/"
 
 # ================================================================
 # GUARD 3: boolean-over-enum
@@ -457,7 +457,7 @@ message = "🦨 Help text may drift from impl. If adding/moving args, update bot
 [[b00t.hive.guards]]
 pattern = { rhai = "enum_flag_guard" }
 action = "warn"
-message = "🦨 Boolean flags with '--type'/'--severity'/'--mode' suggests non-standard arg handling. Prefer clap's ValueEnum for type-safe, documented options."
+message = "🦨 Boolean flags with '--type'/'--severity'/'--mode' suggests non-standard arg handling that bypasses clap validation. This leads to silent typos, missing --help docs, and brittle parser code. Prefer clap's ValueEnum for type-safe, auto-documented options with possible_values and tab-completion."
 
 # ================================================================
 # GUARD 5: asymmetric-naming
@@ -467,7 +467,7 @@ message = "🦨 Boolean flags with '--type'/'--severity'/'--mode' suggests non-s
 [[b00t.hive.guards]]
 pattern = { rhai = "asymmetric_naming_guard" }
 action = "warn"
-message = "🦨 Subcommand variant name looks singular but no plural alias found. Keep naming consistent: append 'Command' suffix or add plural alias: #[clap(alias = \"tasks\")]"
+message = "🦨 Subcommand variant name looks singular but no plural alias found (triggered by enum variant naming pattern). Inconsistent naming forces users to guess the right variant name, causing CLI friction. Fix: append 'Command' suffix (e.g. TaskCommand) or add plural alias: #[clap(alias = \"tasks\")]. Check b00t-cli/src/commands/ for the enum definition."
 
 # ================================================================
 # GUARD 6: why-over-what
@@ -477,7 +477,7 @@ message = "🦨 Subcommand variant name looks singular but no plural alias found
 [[b00t.hive.guards]]
 pattern = { rhai = "why_comment_guard" }
 action = "warn"
-message = "🦨 Comment likely describes WHAT not WHY. Good comments explain intent and invariants. Bad comments restate the code. Consider: is this comment earning its keep?"
+message = "🦨 Comment likely describes WHAT not WHY (triggered by trivially descriptive pattern: increment/decrement/set/get/add/remove). WHAT-comments add noise without value — they rot when code changes and waste reader attention. Good comments explain intent, invariants, edge cases, and non-obvious tradeoffs. Delete the comment or rewrite it to explain WHY this code exists."
 
 # ── Federated Idiomatics ──────────────────────────────────────────
 # Each idiomatic is a pattern that saves agent context. Declared here

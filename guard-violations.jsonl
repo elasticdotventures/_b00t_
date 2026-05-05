@@ -110,3 +110,4 @@
 {"count":7,"pattern":"rhai:cmd.contains(\"cargo test\") && !cmd.contains(\"--no-run\") && !cmd.contains(\"::\")"}
 {"count":8,"pattern":"rhai:cmd.contains(\"cargo test\") && !cmd.contains(\"--no-run\") && !cmd.contains(\"::\")"}
 {"count":9,"pattern":"rhai:cmd.contains(\"cargo test\") && !cmd.contains(\"--no-run\") && !cmd.contains(\"::\")"}
+{"count":3,"pattern":"pip3 install"}

@@ -427,9 +427,64 @@ check-cli-lib:
 check-cli:
     cargo check -p b00t-cli
 
-# Force rebuild: touch main.rs to bust cargo cache, then build
+# force rebuild: touch main.rs to bust cargo cache, then build
 rebuild:
     touch b00t-cli/src/main.rs && cargo build -p b00t-cli --bin b00t-cli
+
+# Rhai files (_b00t_/rhai/*.rhai, _b00t_/hive-guards.hive.toml) are loaded
+# at RUNTIME by b00t-cli — no rebuild needed. This recipe only serves
+# as a reminder that rhai changes take effect immediately (no build step).
+rebuild-rhai:
+    @echo "Rhai files are runtime-loaded. Changes take effect immediately — no rebuild needed."
+    @echo "  _b00t_/rhai/*.rhai (scripts)"
+    @echo "  _b00t_/hive-guards.hive.toml (guard macros)"
+
+# Audit side effects: show files created or modified by a subagent run
+# Captures git status before, user runs subagent, then compares
+# Usage: just audit-side-effects <snapshot-file>
+#   just audit-side-effects save    — take a snapshot of current git status
+#   just audit-side-effects diff    — show files changed since last snapshot
+audit-side-effects action="diff":
+    #!/bin/bash
+    set -euo pipefail
+    SNAPSHOT=".git/_side_effect_snapshot"
+    case "{{action}}" in
+        save)
+            echo "📸 Taking git status snapshot..."
+            git diff --stat --name-only > "$SNAPSHOT" 2>/dev/null || true
+            git ls-files --others --exclude-standard >> "$SNAPSHOT" 2>/dev/null || true
+            sort -u "$SNAPSHOT" -o "$SNAPSHOT"
+            echo "   Snapshot saved ($(wc -l < "$SNAPSHOT") files tracked)"
+            ;;
+        diff)
+            if [ ! -f "$SNAPSHOT" ]; then
+                echo "❌ No snapshot found. Run 'just audit-side-effects save' first."
+                exit 1
+            fi
+            echo "🔍 Comparing current state against snapshot..."
+            BEFORE=$(mktemp)
+            AFTER=$(mktemp)
+            cat "$SNAPSHOT" > "$BEFORE"
+            git diff --stat --name-only > "$AFTER" 2>/dev/null || true
+            git ls-files --others --exclude-standard >> "$AFTER" 2>/dev/null || true
+            sort -u "$AFTER" -o "$AFTER"
+            echo ""
+            echo "=== Files created or modified since snapshot ==="
+            comm -13 "$BEFORE" "$AFTER" 2>/dev/null || diff --new-line-format='%L' --unchanged-line-format='' "$BEFORE" "$AFTER" 2>/dev/null || grep -Fxvf "$BEFORE" "$AFTER" || true
+            echo ""
+            echo "=== All currently modified/untracked files ==="
+            cat "$AFTER"
+            echo ""
+            echo "💡 Check for unexpected files (not in expected change set)"
+            rm -f "$BEFORE" "$AFTER"
+            ;;
+        *)
+            echo "Usage: just audit-side-effects [save|diff]"
+            echo "  save  — take a snapshot of current git status"
+            echo "  diff  — show files changed since last snapshot"
+            exit 1
+            ;;
+    esac
 
 # ── CLI Test Recipes (MUST run foreground, not background terminal) ──────────
 # Tests use pty interaction and may receive SIGTERM if run in background.

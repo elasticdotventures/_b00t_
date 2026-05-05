@@ -61,6 +61,51 @@ ALWAYS load a skill via `skill_view()` before dispatching a subagent rather than
 ❌ #include full API docs in context    — re-read every time, burns budget
 ```
 
+### Subagent Instruction Completeness Checklist
+
+Before dispatching a subagent, fill this checklist. Every missing item causes wasted cycles, wrong paths, or partial work.
+
+```
+[before dispatch — check all]
+[ ] goal + file paths:        which files to create/modify, absolute paths
+[ ] expected output format:   PASS/FAIL? JSON? summary? line count?
+[ ] toolsets:                 which tools allowed (patch, read_file, cargo, etc.)
+[ ] workdir:                  default is repo root; override if different
+[ ] negative/edge cases:      what should NOT happen (e.g. wrong path, stale file)
+[ ] files NOT to modify:      files off-limits (e.g. Cargo.lock, vendor/*)
+```
+
+**Common instruction failures (captured from actual sessions):**
+
+| Failure | Symptom | Fix |
+|---------|---------|-----|
+| Missing workdir | Subagent writes to /workspace/ instead of actual path | Always specify `WORKSPACE PATH: /home/brianh/.b00t` |
+| Missing file paths | Subagent searches for files instead of editing them | List exact paths + line ranges |
+| Missing negative cases | Subagent modifies files it shouldn't | Add "files NOT to modify" section |
+| Vague output format | Subagent returns markdown instead of concise summary | Specify "Be concise — return summary to parent agent" |
+| No edge cases | Subagent handles happy path only | Add "what should NOT happen" examples |
+
+### Test Assertion Validation Principle
+
+Test assertions that compile but assert the wrong thing are a meta-failure mode — they look correct to the author and reviewer, and CI passes.
+
+**Rule:** Every non-trivial assertion must be bounded — assert that the positive condition holds AND that preconditions make the assertion meaningful. A common mistake is asserting `count == 0` when the test setup didn't actually create any data that would produce a non-zero count (vacuous assertion).
+
+```rust
+// BAD — passes even if depth filtering is entirely broken
+assert_eq!(depth4_count, 0);
+// (because maybe the walk produced no files at all)
+
+// GOOD — asserts both the presence and the constraint
+let files_under_depth4: Vec<_> = walker.into_iter().filter(|e| e.depth() <= 4).collect();
+assert!(files_under_depth4.len() > 0, "expected at least one file at depth <= 4");
+let depth4_files: Vec<_> = files_under_depth4.iter().filter(|e| e.depth() == 4).collect();
+assert_eq!(depth4_files.len(), 0, "expected no files exactly at depth 4 when max_depth=4 means inclusive?");
+// TODO: verify max_depth semantics — is 4 inclusive or exclusive?
+```
+
+**Token-efficient alternative** for simple assertions: add a `// TODO: verify this assertion — is the inverse also correct?` comment on any assertion where the inverse would also pass.
+
 ### b00t Auto-Generation Philosophy
 
 b00t avoids drift by auto-generating everything on the fly. New AI tools come out daily. b00t doesn't maintain stale configs — it generates them from datums dynamically.
