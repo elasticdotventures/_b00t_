@@ -220,7 +220,7 @@ fn scan_all_idiomatics(b00t_path: &str) -> Result<Vec<ScannedIdiomatic>> {
     let path = Path::new(b00t_path);
     let mut all_entries = Vec::new();
 
-    // Scan _b00t_/*.toml and _b00t_/*.tomllm
+    // Scan _b00t_/*.toml, _b00t_/*.tomllm, and _b00t_/datums/*.datum
     if path.is_dir() {
         for entry in walkdir::WalkDir::new(path)
             .max_depth(4)
@@ -264,7 +264,7 @@ fn handle_scan(
     check: bool,
     b00t_path: &str,
 ) -> Result<()> {
-    let b00t_path = shellexpand::tilde(b00t_path).to_string();
+    let b00t_path = tilde(b00t_path).to_string();
     let entries = scan_all_idiomatics(&b00t_path)?;
 
     // Filter by topic
@@ -417,7 +417,8 @@ fn handle_scan(
 }
 
 fn handle_quiz(topic: &str, b00t_path: &str) -> Result<()> {
-    let entries = scan_all_idiomatics(b00t_path)?;
+    let b00t_path = tilde(b00t_path).to_string();
+    let entries = scan_all_idiomatics(&b00t_path)?;
 
     // Filter to topic
     let t_lower = topic.to_lowercase();

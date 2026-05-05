@@ -3,10 +3,13 @@
 let ctx_file = if ARGS.len() > 0 { ARGS[0] } else { "context.md" };
 let sf = ".bouncer-state.toml";
 
-// Assert: we're in the expected workdir
-let expected_prefix = "/home/brianh/.b00t";
+// Assert: we're in the expected workdir (relative to $HOME)
+let home = get_env("HOME");
+let expected_prefix = home + "/.b00t";
 let cwd = get_env("PWD");
-if !cwd.starts_with(expected_prefix) {
+if cwd == "" {
+    log_warn("PWD not set — cannot verify workdir");
+} else if !cwd.starts_with(expected_prefix) {
     log_warn(`Workdir drift detected! Expected ${expected_prefix}*, got ${cwd}. Files may land in wrong location.`);
 }
 
