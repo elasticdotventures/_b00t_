@@ -574,6 +574,7 @@ mod tests {
             train_name: None,
             train_threshold: None,
             schema: None,
+            datum: false,
         };
 
         let result = handle_validate(&args);
@@ -595,6 +596,7 @@ mod tests {
             train_name: None,
             train_threshold: None,
             schema: None,
+            datum: false,
         };
 
         let result = handle_validate(&args);

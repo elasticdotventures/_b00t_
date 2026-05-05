@@ -2146,6 +2146,7 @@ message = "use uv"
             mcp_activate: vec![],
             mcp_deactivate: vec![],
             service_spec: None,
+            rhai_macros: HashMap::new(),
         };
         let issues = snapshot.satisfies_gate(&profile);
         assert!(!issues.is_empty(), "should fail gate with only 2GB free");
