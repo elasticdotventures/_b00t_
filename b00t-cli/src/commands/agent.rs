@@ -4,11 +4,11 @@
 //! agent coordination infrastructure.
 
 use anyhow::Result;
-use b00t_c0re_lib::AgentManager;
 use b00t_c0re_lib::agent_coordination::{
     AgentCoordinator, AgentMetadata, MessageFilter, RequestUrgency, TaskCompletionStatus,
     TaskPriority,
 };
+use b00t_c0re_lib::{AgentManager, DelegationLimiter};
 use b00t_c0re_lib::redis::{AgentStatus, RedisComms, RedisConfig};
 use clap::Parser;
 use std::collections::{BTreeMap, HashMap};
@@ -92,6 +92,13 @@ pub enum AgentCommands {
             help = "Expected output contract enforced at completion (e.g. 'PASS|FAIL:<5lines>')"
         )]
         output_contract: Option<String>,
+
+        #[arg(
+            long,
+            help = "Max concurrent delegates (default: 8, 0 = unlimited)",
+            default_value = "8"
+        )]
+        max_concurrent: usize,
     },
 
     #[clap(about = "Report task completion")]
@@ -254,6 +261,7 @@ pub async fn handle_agent_command(cmd: AgentCommands) -> Result<()> {
             skill,
             role,
             output_contract,
+            max_concurrent,
         } => {
             handle_delegate(
                 &worker,
@@ -266,6 +274,7 @@ pub async fn handle_agent_command(cmd: AgentCommands) -> Result<()> {
                 skill.as_deref(),
                 role.as_deref(),
                 output_contract.as_deref(),
+                max_concurrent,
             )
             .await
         }
@@ -420,6 +429,7 @@ async fn handle_delegate(
     skill: Option<&str>,
     role: Option<&str>,
     output_contract: Option<&str>,
+    max_concurrent: usize,
 ) -> Result<()> {
     let config = RedisConfig::default();
     let redis = RedisComms::new(config, "cli-captain".into())?;
@@ -436,6 +446,52 @@ async fn handle_delegate(
     };
 
     let mut coordinator = AgentCoordinator::new(redis, metadata);
+
+    // ── Apply delegation backpressure ──────────────────────────────────
+    // If max_concurrent > 0, create a limiter and acquire a permit.
+    // If 0, skip backpressure (unlimited mode).
+    let _limiter_guard: Option<tokio::sync::OwnedSemaphorePermit>;
+    if max_concurrent > 0 {
+        let limiter = DelegationLimiter::new(max_concurrent);
+        match limiter.try_acquire() {
+            Some(permit) => {
+                _limiter_guard = Some(permit);
+                println!(
+                    "   🔒 Delegation slot acquired ({} permit(s) remaining)",
+                    limiter.available_permits()
+                );
+            }
+            None => {
+                // At capacity — try with a short timeout, then bail with "busy"
+                println!(
+                    "   ⏳ All {} delegation slots busy, waiting...",
+                    max_concurrent
+                );
+                match limiter
+                    .acquire_timeout(std::time::Duration::from_secs(30))
+                    .await
+                {
+                    Some(permit) => {
+                        _limiter_guard = Some(permit);
+                        println!(
+                            "   🔒 Slot acquired after waiting ({} remaining)",
+                            limiter.available_permits()
+                        );
+                    }
+                    None => {
+                        anyhow::bail!(
+                            "All {} delegation slots are busy and request timed out after 30s. \
+                             Try again later or increase --max-concurrent.",
+                            max_concurrent
+                        );
+                    }
+                }
+            }
+        }
+    } else {
+        println!("   🔓 Unlimited mode (no backpressure)");
+        _limiter_guard = None;
+    }
 
     // Parse priority
     let priority = match priority_str.to_lowercase().as_str() {

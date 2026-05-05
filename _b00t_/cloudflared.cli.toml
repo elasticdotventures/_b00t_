@@ -1,0 +1,12 @@
+[b00t]
+name = "cloudflared"
+type = "cli"
+hint = "Cloudflare Tunnel client — Zero Trust tunnels, no open ports needed"
+
+detect = ["cloudflared version"]
+version_regex = '(?P<version>[\d.]+)'
+desires = "latest"
+repo = "cloudflare/cloudflared"
+
+[[b00t.install.apt]]
+packages = ["cloudflared"]

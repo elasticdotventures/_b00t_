@@ -1,0 +1,215 @@
+# b00t tomllmsdd — Structured Data Definition Documents
+# .tomllmsdd — valid TOML + markdown tables + SQL schema + plan definitions
+# schema: 1 | bump on field definition changes
+# last_updated: 2026-05-04
+#
+# 🤓 tomllmsdd extends .tomllmd with structured project plan tables,
+#    SQL schema definitions, and DataFrame serialization. It enables
+#    semantic updates via the toon adapter (pgwire SQL connector).
+#
+#    A tomllmsdd document can be:
+#    - Read as a project plan (semantic tables + milestones)
+#    - Queried via SQL (pgwire protocol → toon → tomllmsdd data)
+#    - Updated semantically (INSERT/UPDATE/DELETE on plan tables)
+#    - Exported as DataFrame (Apache Arrow columnar format)
+#
+# 🔗参 vendor/tomllm/ — base tomllm crate (TOML + LLM comment conventions)
+# 🔗参 _b00t_/datums/cloudflare.datum — example .tomllmd consumed via toon
+# 🔗参 b00t-c0re-lib/src/cloud/provider.rs — AbstractCloudProvider trait
+# 🔗参 ~/.b00t/toon/ — toon SQL adapter (pgwire server)
+
+[b00t]
+name = "TOMLLMSDD"
+type = "schema"
+hint = "Structured Data Definition Documents — extends .tomllmd with project plan tables, SQL schemas, DataFrame serialization, and toon pgwire adapter"
+
+[b00t.version]
+schema = 1
+content = "draft"
+
+# ── tomllmsdd Document Structure ──────────────────────────────────────────
+# A .tomllmsdd file is valid .tomllmd with additional sections:
+#
+# [plan]           — Project plan metadata
+# [[plan.phases]]  — Project phases with milestones
+# [[plan.tasks]]   — Work breakdown structure
+# [sql]            — SQL schema definitions
+# [[sql.tables]]   — Table definitions (column, type, constraints)
+# [toon]           — pgwire adapter configuration (DSN, mock mode)
+# [dataframes]     — DataFrame columnar data export/import specs
+# [toon.dsn]       — DSN-based routing (postgres://, sqlite://, mock://)
+#
+# The tail-map block is always present for agent scanning.
+
+# ── Project Plan Section ──────────────────────────────────────────────────
+# 🤓 Structured project plan with phases, tasks, dependencies, and status.
+#    Queried via SQL: SELECT * FROM plan_tasks WHERE status = 'pending'
+[plan]
+name = "cloudflare-datum"
+version = "1.0.0"
+
+[[plan.phases]]
+name = "research"
+description = "Cloudflare product survey and capability mapping"
+status = "done"
+started = "2026-05-04"
+completed = "2026-05-04"
+
+[[plan.phases]]
+name = "implement"
+description = "AbstractCloudProvider trait + CloudflareProvider + toon adapter"
+status = "in-progress"
+started = "2026-05-04"
+dependencies = ["research"]
+
+[[plan.phases]]
+name = "integrate"
+description = "Wire into b00t doctor, MCP, ledgrrr cost tracking"
+status = "pending"
+dependencies = ["implement"]
+
+# ── SQL Schema Section ────────────────────────────────────────────────────
+# 🤓 The toon adapter serves these table definitions over pgwire.
+#    Tables are virtual — data lives in the .tomllmsdd file and toon cache.
+[sql]
+engine = "toon"
+version = "1"
+
+[[sql.tables]]
+name = "plan_phases"
+description = "Project phases with status tracking"
+columns = [
+    { name = "id", type = "INTEGER PRIMARY KEY", description = "Auto-increment phase ID" },
+    { name = "name", type = "TEXT NOT NULL UNIQUE", description = "Phase name (kebab-case)" },
+    { name = "description", type = "TEXT", description = "Phase description" },
+    { name = "status", type = "TEXT CHECK(status IN ('pending','in-progress','done','cancelled'))", description = "Current status" },
+    { name = "started", type = "DATE", description = "Start date" },
+    { name = "completed", type = "DATE", description = "Completion date" },
+    { name = "dependencies", type = "TEXT[]", description = "Phase names this depends on" },
+]
+
+[[sql.tables]]
+name = "plan_tasks"
+description = "Work breakdown structure"
+columns = [
+    { name = "id", type = "INTEGER PRIMARY KEY", description = "Auto-increment task ID" },
+    { name = "phase", type = "TEXT REFERENCES plan_phases(name)", description = "Owning phase" },
+    { name = "title", type = "TEXT NOT NULL", description = "Task title" },
+    { name = "description", type = "TEXT", description = "Task description" },
+    { name = "status", type = "TEXT CHECK(status IN ('pending','in-progress','done','cancelled'))", description = "Current status" },
+    { name = "priority", type = "INTEGER CHECK(priority BETWEEN 1 AND 4)", description = "1=critical, 4=low" },
+]
+
+[[sql.tables]]
+name = "env_vars"
+description = "Detected environment variables and their status"
+columns = [
+    { name = "name", type = "TEXT PRIMARY KEY", description = "Env var name" },
+    { name = "detected", type = "BOOLEAN", description = "Whether the var is set" },
+    { name = "hint", type = "TEXT", description = "Description of what the var is for" },
+]
+
+[[sql.tables]]
+name = "cloud_services"
+description = "Cloud provider service inventory (from abstract provider)"
+columns = [
+    { name = "name", type = "TEXT PRIMARY KEY", description = "Service name" },
+    { name = "kind", type = "TEXT", description = "Service kind (inference, database, storage, ...)" },
+    { name = "status", type = "TEXT", description = "Active, beta, preview" },
+    { name = "plan", type = "TEXT", description = "Free, paid" },
+    { name = "endpoint", type = "TEXT", description = "API endpoint URL" },
+]
+
+# ── Toon Adapter Configuration ────────────────────────────────────────────
+# 🤓 The toon adapter connects AbstractCloudProvider to a SQL interface.
+#    DSN-based routing determines the backend:
+#      postgres:// → listen mode, generates mock responses for testing
+#      sqlite://   → local SQLite file
+#      memory://   → in-memory SQLite
+#      mock://     → pure mock (random responses, no persistence)
+[toon]
+enabled = true
+version = "1"
+
+[toon.dsn]
+# Default DSN — uses mock:// when no real backend is available
+default = "mock://tomllmsdd"
+# Examples:
+# postgres://user:pass@localhost:5432/b00t_plan
+# sqlite://~/.b00t/toon/b00t.db
+# memory://b00t
+
+[toon.mock]
+enabled = true
+# When a conventional postgres:// DSN is provided, toon listens on the port
+# and generates random (mock) responses for testing ledgrrr self-tests.
+listen_port = 5432
+listen_host = "127.0.0.1"
+response_mode = "random-valid-sql"  # random-valid-sql | deterministic | record-replay
+
+[toon.transport]
+protocol = "pgwire"
+version = "3.0"
+features = ["simple-query", "extended-query", "ready-for-query", "parameter-description"]
+auth = "trust"  # trust | password | scram-sha-256 (TODO: password support via env)
+
+[toon.metrics]
+expose = "prometheus"
+path = "/metrics"
+port = 9090
+
+# ── DataFrame Export Specification ────────────────────────────────────────
+# 🤓 tomllmsdd data can be exported as Apache Arrow DataFrames for
+#    ledgrrr FOCUS record consumption and data pipeline processing.
+[dataframes]
+format = "apache-arrow"
+default_export = "parquet"
+
+[[dataframes.exports]]
+name = "plan_phases"
+query = "SELECT * FROM plan_phases"
+format = "parquet"
+destination = "r2://b00t-artifacts/plans/plan_phases.parquet"
+
+[[dataframes.exports]]
+name = "cloud_services"
+query = "SELECT * FROM cloud_services"
+format = "jsonl"
+destination = "~/.b00t/toon/exports/cloud_services.jsonl"
+
+# ── Trait Implementation Mapping ──────────────────────────────────────────
+# 🤓 Each AbstractCloudProvider method maps to a SQL operation or mock.
+#    The toon adapter dispatches through the trait and serves results over pgwire.
+[toon.trait_mappings]
+provider_info = "SELECT provider_name, account_id, plan FROM provider_info"
+env_health = "SELECT name, detected, hint FROM env_vars"
+list_services = "SELECT * FROM cloud_services"
+service_status = "SELECT name, available, latency_ms, error FROM service_health WHERE name = $1"
+run_inference = "CALL run_inference($1, $2)"  # mock: returns random token counts
+kv_get = "SELECT value FROM kv_store WHERE namespace = $1 AND key = $2"
+kv_put = "INSERT INTO kv_store (namespace, key, value) VALUES ($1, $2, $3) ON CONFLICT (namespace, key) DO UPDATE SET value = $3"
+tunnel_list = "SELECT * FROM tunnels WHERE status = 'active'"
+
+# ── Self-Test Protocol ────────────────────────────────────────────────────
+# 🤓 ledgrrr tests itself by connecting to toon with a postgres:// DSN.
+#    The toon generates random valid SQL responses for verification.
+[toon.selftest]
+description = "ledgrrr self-test: connect to toon with postgres:// DSN, verify SQL responses"
+steps = [
+    "CONNECT postgres://localhost:5432/b00t_plan",
+    "QUERY SELECT * FROM plan_phases WHERE status = 'done'",
+    "VERIFY response is valid SQLite/Postgres result set",
+    "QUERY SELECT COUNT(*) FROM env_vars WHERE detected = true",
+    "VERIFY count >= 0 (mock returns random count)",
+    "QUERY SELECT * FROM cloud_services WHERE kind = 'inference'",
+    "VERIFY response includes workers-ai",
+    "DISCONNECT",
+]
+expected = "ALL_QUERIES_RETURN_VALID_SQL_RESULTS"
+
+# b00t:map v1
+# summary: tomllmsdd — Structured Data Definition Documents extending .tomllmd with project plan tables (phases/tasks), SQL schemas (plan_phases, plan_tasks, env_vars, cloud_services), toon pgwire adapter (DSN routing: postgres:// mock mode, sqlite://, memory://, mock://), DataFrames (Apache Arrow parquet/JSONL export), AbstractCloudProvider trait mapping, ledgrrr self-test protocol
+# tags: tomllmsdd, sql, pgwire, dataframe, toon, mock, abstract-provider, plan, schema
+# tier: frontier
+# cmds: b00t toon serve, b00t toon query "SELECT * FROM plan_phases", b00t toon mock --port 5432, b00t toon export --format parquet
+# complexity: 7

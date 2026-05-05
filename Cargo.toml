@@ -28,6 +28,7 @@ repository = "https://github.com/elasticdotventures/_b00t_"
 b00t-cli = { path = "b00t-cli" }
 b00t-c0re-lib = { path = "b00t-c0re-lib" }
 k0mmand3r = { path = "k0mmand3r" }
+once_cell = "1"
 b00t-grok = { path = "b00t-grok", default-features = false }
 b00t-chat = { path = "b00t-lib-chat" }
 b00t-l3dg3rr-viz = { path = "b00t-l3dg3rr-viz" }

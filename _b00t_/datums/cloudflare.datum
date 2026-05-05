@@ -1,0 +1,703 @@
+# b00t Cloudflare Datum — Semantic Truth Source for Cloudflare Infrastructure
+# .tomllmd — valid TOML with enriched comment conventions
+# schema: 1 | bump on field definition changes
+# last_updated: 2026-05-04
+# 🤓 This datum is the canonical source of truth for all Cloudflare infrastructure
+#    consumed by b00t agents. It documents the provider topology, credential paths,
+#    service inventory, and integration contracts.
+#
+# 🔗参 _b00t_/datums/CLOUDFLARE-EXTERNAL-INTERFACE.tomllmd — Rust trait contracts
+# 🔗参 _b00t_/env.d — generated env var bindings
+# 🔗参 vendor/l3dg3rr/crates/b00t-iface/ — lifecycle management interfaces
+# 🔗参 https://developers.cloudflare.com/
+
+[b00t]
+name = "CLOUDFLARE"
+type = "datum"
+hint = "Cloudflare infrastructure datum — provider topology, credential paths, service inventory, integration contracts for b00t's cloud layer"
+
+[b00t.version]
+schema = 1
+content = "draft"
+
+# ── Provider Identity ──────────────────────────────────────────────────────
+[cloudflare.provider]
+name = "cloudflare"
+kind = "AbstractCloudProvider"
+version = "1"
+account_id = "f00c391669432ae2a423c04a001dab2d"
+zone_id = "df9acd5c921098ee3a6bb9ecff5b500f"
+plan = "workers-paid"
+region = "global"
+description = "Cloudflare — global edge network, 180+ cities, Workers AI GPU compute"
+
+# ── Env Var Bindings (detected from ~/.b00t/.env) ─────────────────────────
+# 🤓 These env vars are auto-detected by `b00t doctor` and used by cloudflare
+#    subcommands and MCP integrations. Set in ~/.b00t/.env or ~/.hermes/.env.
+[cloudflare.env]
+CLOUDFLARE_API_TOKEN = { type = "api-token", hint = "CF API Token with worker/d1/r2/kv/vectorize permissions", detected = false }
+CLOUDFLARE_ACCOUNT_ID = { type = "string", hint = "Account ID: f00c391669432ae2a423c04a001dab2d", detected = false }
+CLOUDFLARE_ZONE_ID = { type = "string", hint = "Zone ID: df9acd5c921098ee3a6bb9ecff5b500f", detected = false }
+CLOUDFLARE_TUNNEL_TOKEN = { type = "secret", hint = "cloudflared tunnel token for Zero Trust", detected = false }
+CLOUDFLARE_EMAIL = { type = "email", hint = "Cloudflare account email", detected = false }
+CLOUDFLARE_API_KEY = { type = "api-key", hint = "Legacy API key (prefer API Token)", detected = false }
+CLOUDFLARE_R2_ACCESS_KEY = { type = "access-key", hint = "R2 S3-compatible access key", detected = false }
+CLOUDFLARE_R2_SECRET_KEY = { type = "secret", hint = "R2 S3-compatible secret key", detected = false }
+CLOUDFLARE_R2_ENDPOINT = { type = "url", hint = "R2 S3 endpoint URL", detected = false }
+CLOUDFLARE_D1_TOKEN = { type = "api-token", hint = "D1 database API token", detected = false }
+CLOUDFLARE_WORKERS_AI_TOKEN = { type = "api-token", hint = "Workers AI API token", detected = false }
+CLOUDFLARE_WORKERS_AI_ACCOUNT_ID = { type = "string", hint = "Workers AI account (same as CLOUDFLARE_ACCOUNT_ID)", detected = false }
+MCP_REMOTE_CLIENT_ID = { type = "oauth-client", hint = "OAuth client ID for remote MCP", detected = false }
+MCP_REMOTE_CLIENT_SECRET = { type = "secret", hint = "OAuth client secret for remote MCP", detected = false }
+CF_ACCESS_CLIENT_ID = { type = "access-client", hint = "Cloudflare Access service token ID", detected = false }
+CF_ACCESS_CLIENT_SECRET = { type = "secret", hint = "Cloudflare Access service token secret", detected = false }
+
+# ── Service Inventory ──────────────────────────────────────────────────────
+# Each service is a capability that b00t can discover and use.
+[cloudflare.services.ai]
+name = "Workers AI"
+kind = "inference"
+status = "active"
+plan = "paid"
+endpoint = "https://api.cloudflare.com/client/v4/accounts/{account_id}/ai/run/{model}"
+models = ["@cf/meta/llama-3.1-70b-instruct", "@cf/meta/llama-3.3-70b-instruct", "@hf/nousresearch/hermes-2-pro-mistral-7b"]
+capabilities = ["chat", "embedding", "image-generation", "transcription", "tts", "reranking", "tool-calling", "structured-output", "streaming"]
+features = ["128k-context", "80-tps", "gpu-180-cities", "auto-rag"]
+sdk = { rust = "cloudflare-ai", js = "workers-ai-provider" }
+
+[cloudflare.services.agents]
+name = "Cloudflare Agents"
+kind = "agent-framework"
+status = "active"
+plan = "workers-paid"
+sdk = { js = "@cloudflare/agents" }
+patterns = ["prompt-chaining", "routing", "parallelization", "orchestrator-workers", "evaluator-optimizer"]
+storage = ["durable-objects", "d1-sql", "kv", "r2"]
+comms = ["websockets", "queues", "email"]
+features = ["mcp-server", "scheduling", "stateful-sessions", "auto-rag"]
+
+[cloudflare.services.d1]
+name = "D1"
+kind = "database"
+status = "active"
+plan = "paid"
+type = "sqlite"
+endpoint = "https://api.cloudflare.com/client/v4/accounts/{account_id}/d1/database/{db_id}/query"
+sdk = { rust = "cloudflare-rs", js = "d1" }
+features = ["sql", "backups", "time-travel-restore", "replication"]
+
+[cloudflare.services.r2]
+name = "R2"
+kind = "storage"
+status = "active"
+plan = "paid"
+type = "s3-compatible"
+endpoint = "https://{account}.r2.cloudflarestorage.com/{bucket}"
+sdk = { rust = "aws-sdk-s3", js = "@aws-sdk/client-s3" }
+features = ["s3-api", "no-egress-fees", "public-buckets", "custom-domains"]
+
+[cloudflare.services.kv]
+name = "Workers KV"
+kind = "key-value-store"
+status = "active"
+plan = "paid"
+endpoint = "https://api.cloudflare.com/client/v4/accounts/{account_id}/storage/kv/namespaces/{ns_id}/values/{key}"
+sdk = { rust = "cloudflare-rs", js = "kv" }
+features = ["global-replication", "ttl", "bulk-writes"]
+
+[cloudflare.services.vectorize]
+name = "Vectorize"
+kind = "vector-database"
+status = "active"
+plan = "paid"
+endpoint = "https://api.cloudflare.com/client/v4/accounts/{account_id}/vectorize/v2/indexes/{index}/query"
+sdk = { rust = "cloudflare-rs", js = "vectorize" }
+features = ["cosine-similarity", "euclidean-distance", "dot-product", "metadata-filtering"]
+
+[cloudflare.services.queues]
+name = "Queues"
+kind = "message-queue"
+status = "active"
+plan = "paid"
+type = "pull-based"
+features = ["at-least-once", "batch-processing", "dead-letter-queues", "consumer-workers"]
+
+[cloudflare.services.durable_objects]
+name = "Durable Objects"
+kind = "stateful-compute"
+status = "active"
+plan = "paid"
+features = ["single-writer", "transactions", "websockets", "alarms", "storage-api"]
+
+[cloudflare.services.ai_gateway]
+name = "AI Gateway"
+kind = "llm-proxy"
+status = "active"
+plan = "paid"
+features = ["caching", "rate-limiting", "observability", "cost-tracking", "fallback-routing"]
+
+[cloudflare.services.autorag]
+name = "AutoRAG"
+kind = "rag-pipeline"
+status = "beta"
+plan = "paid"
+features = ["auto-chunking", "auto-embedding", "vectorize-index", "r2-ingestion", "semantic-search"]
+
+[cloudflare.services.secrets_store]
+name = "Secrets Store"
+kind = "secret-management"
+status = "beta"
+plan = "paid"
+features = ["dek-kek-encryption", "shared-across-workers", "wrangler-cli", "versioning"]
+
+[cloudflare.services.tunnel]
+name = "Cloudflare Tunnel"
+kind = "network-tunnel"
+status = "active"
+plan = "free"
+binary = "cloudflared"
+features = ["zero-trust", "no-open-ports", "load-balancing", "argo-tunnel", "warp-connector"]
+
+[cloudflare.services.container_platform]
+name = "Container Platform"
+kind = "container-orchestration"
+status = "preview"
+plan = "paid"
+features = ["gpu-support", "smart-placement", "docker-compatible"]
+
+[cloudflare.services.realtime]
+name = "RealtimeKit"
+kind = "real-time-communication"
+status = "active"
+plan = "paid"
+features = ["webrtc", "mobile-sdks", "voice-video", "transcription", "recording"]
+
+[cloudflare.services.artifacts]
+name = "Artifacts"
+kind = "versioned-storage"
+status = "private-beta"
+plan = "paid"
+features = ["git-compatible", "rest-api", "workers-binding", "fork", "import-from-github", "per-session-repos", "10k-forks"]
+
+[cloudflare.services.email]
+name = "Email Service"
+kind = "email"
+status = "public-beta"
+plan = "paid"
+features = ["send-receive", "workers-binding", "rest-api", "spf-dkim-dmarc-auto", "sdk-typescript-python-go", "agents-sdk-onemail-hook", "bidirectional"]
+
+[cloudflare.services.workflows]
+name = "Workflows"
+kind = "durable-execution"
+status = "ga"
+plan = "paid"
+features = ["v2-control-plane", "souschef-gatekeeper", "agents-sdk-integration", "per-step-retry", "human-in-the-loop", "high-throughput-instances"]
+
+# ── Credential Provider Chain ──────────────────────────────────────────────
+# 🤓 Resolution order: Worker bindings > ~/.b00t/.env > ~/.hermes/.env > env
+[cloudflare.credentials]
+provider = "env-chain"
+resolution_order = [
+    { source = "worker-binding", priority = 1, hint = "env.AI, env.DB during Worker execution" },
+    { source = "env-b00t", priority = 2, path = "~/.b00t/.env" },
+    { source = "env-hermes", priority = 3, path = "~/.hermes/.env" },
+    { source = "process-env", priority = 4, hint = "std::env::var fallback" },
+    { source = "wrangler-toml", priority = 5, hint = "wrangler.toml [vars] section" },
+    { source = "secrets-store", priority = 6, hint = "Cloudflare Secrets Store (beta)" },
+]
+
+# ── Capability Target — b00t Agent Dispatch ────────────────────────────────
+# 🤓 Agents dispatched to Cloudflare targets use these capabilities
+[cloudflare.agent]
+dispatch_role = "cloudflare-operator"
+capabilities = [
+    "workers-ai-inference",
+    "d1-query",
+    "r2-storage",
+    "kv-cache",
+    "vectorize-search",
+    "queue-publish",
+    "durable-object-invoke",
+    "tunnel-manage",
+    "ai-gateway-route",
+    "autorag-query",
+    "dns-manage",
+]
+default_model = "@cf/meta/llama-3.1-70b-instruct"
+default_tools = ["workers-ai", "d1", "r2", "kv", "vectorize", "queues", "kv"]
+mcp_transport = { type = "remote-sse", base_url = "https://mcp.{zone}.workers.dev", auth = "cf-access-oauth" }
+
+# ── Infrastructure Registration — ledgrrr coordination ────────────────────
+# 🤓 b00t coordinates with infrastructure manager via ledgrrr ledger entries.
+#    Each resource type has a registration pattern that gets logged as a
+#    FOCUS CostAndUsage record for cost attribution.
+[cloudflare.resources]
+root_domain = "promptexecution.com"
+zone_id = "df9acd5c921098ee3a6bb9ecff5b500f"
+account_id = "f00c391669432ae2a423c04a001dab2d"
+
+[[cloudflare.resources.workers]]
+name = "b00t-cloud-api"
+runtime = "javascript"
+plan = "paid"
+endpoint = "https://b00t.promptexecution.com"
+bindings = ["AI", "D1", "R2", "KV", "Vectorize", "Queues"]
+
+[[cloudflare.resources.workers]]
+name = "b00t-mcp-remote"
+runtime = "javascript"
+plan = "paid"
+endpoint = "https://mcp.promptexecution.com/sse"
+bindings = ["D1", "KV", "AI"]
+
+[[cloudflare.resources.d1_databases]]
+name = "b00t-state"
+type = "sqlite"
+plan = "paid"
+
+[[cloudflare.resources.r2_buckets]]
+name = "b00t-artifacts"
+type = "s3"
+plan = "paid"
+
+[[cloudflare.resources.r2_buckets]]
+name = "b00t-logs"
+type = "s3"
+plan = "paid"
+
+# ── MCP Server Template — Remote MCP over SSE ──────────────────────────────
+# 🤓 Use mcp-remote to bridge stdio MCP servers to remote HTTP/SSE:
+#    npx mcp-remote@latest https://mcp.promptexecution.com/sse
+#    See: https://github.com/geelen/mcp-remote
+#    OAuth config at: https://developers.cloudflare.com/agents/guides/remote-mcp-server/
+[cloudflare.mcp]
+transport = "remote-sse"
+client = "mcp-remote"
+install = "npx mcp-remote@latest"
+oauth = { provider = "cf-access", flow = "authorization-code", pkce = true }
+
+[[cloudflare.mcp.servers]]
+name = "cloudflare-workers-ai"
+command = "npx"
+args = ["mcp-remote@latest", "https://ai.promptexecution.com/sse"]
+description = "Cloudflare Workers AI MCP — LLM inference, embeddings, image gen"
+
+[[cloudflare.mcp.servers]]
+name = "cloudflare-vectorize"
+command = "npx"
+args = ["mcp-remote@latest", "https://vectorize.promptexecution.com/sse"]
+description = "Vectorize MCP — semantic search across indexed knowledge"
+
+[[cloudflare.mcp.servers]]
+name = "cloudflare-d1"
+command = "npx"
+args = ["mcp-remote@latest", "https://d1.promptexecution.com/sse"]
+description = "D1 MCP — SQL query access to b00t-state database"
+
+# ── Official Cloudflare MCP Servers (remote HTTPS, OAuth) ─────────────────
+# 🤓 Cloudflare publishes 5 official MCP servers at mcp.cloudflare.com.
+#    These are remote HTTPS servers with automatic OAuth via CF Zero Trust.
+#    Setup: https://developers.cloudflare.com/agent-setup/
+#    Quick setup prompt: curl https://developers.cloudflare.com/agent-setup/prompt.md
+#    OAuth triggers automatically on first tool use.
+[[cloudflare.mcp.servers]]
+name = "cloudflare"
+url = "https://mcp.cloudflare.com/mcp"
+description = "Cloudflare platform MCP — manage Workers, D1, R2, KV, Queues, AI Gateway, DNS, Zones. OAuth via Cloudflare Zero Trust"
+transport = "remote-https"
+auth = "cf-oauth"
+
+[[cloudflare.mcp.servers]]
+name = "cloudflare-docs"
+url = "https://docs.mcp.cloudflare.com/mcp"
+description = "Cloudflare Docs MCP — search and query official Cloudflare documentation. Public, no authentication required"
+transport = "remote-https"
+auth = "none"
+
+[[cloudflare.mcp.servers]]
+name = "cloudflare-bindings"
+url = "https://bindings.mcp.cloudflare.com/mcp"
+description = "Cloudflare Bindings MCP — manage Worker bindings (D1, R2, KV, Queues, AI, Vectorize). OAuth required"
+transport = "remote-https"
+auth = "cf-oauth"
+
+[[cloudflare.mcp.servers]]
+name = "cloudflare-builds"
+url = "https://builds.mcp.cloudflare.com/mcp"
+description = "Cloudflare Builds MCP — deploy and manage Worker builds, wrangler integration. OAuth required"
+transport = "remote-https"
+auth = "cf-oauth"
+
+[[cloudflare.mcp.servers]]
+name = "cloudflare-observability"
+url = "https://observability.mcp.cloudflare.com/mcp"
+description = "Cloudflare Observability MCP — query Worker logs, traces, metrics, and error reporting. OAuth required"
+transport = "remote-https"
+auth = "cf-oauth"
+
+# ── Claude Code Plugin ─────────────────────────────────────────────────────
+# 🤓 Claude Code users can install Cloudflare agent tooling via plugins:
+#    claude plugin marketplace add cloudflare/skills
+#    claude plugin install cloudflare@cloudflare
+#    Then /reload-plugins in Claude Code session.
+
+# ── Monitoring Configuration ───────────────────────────────────────────────
+# 🤓 Cloudflare is one of the first companies b00t monitors.
+#    Service health and cost tracking are logged to R2 + ledgrrr.
+[cloudflare.monitoring]
+enabled = true
+interval = "1h"
+log_target = "r2://b00t-logs/cloudflare-monitoring"
+cost_tracking = { enabled = true, provider = "ledgrrr-focus", schema = "FOCUS v1.3" }
+
+[cloudflare.monitoring.services]
+workers_ai = { check = "health", endpoint = "https://api.cloudflare.com/client/v4/accounts/{id}/ai/run/@cf/meta/llama-3.1-70b-instruct", method = "POST" }
+d1 = { check = "health", endpoint = "https://api.cloudflare.com/client/v4/accounts/{id}/d1/database" }
+r2 = { check = "health", endpoint = "https://{account}.r2.cloudflarestorage.com" }
+tunnel = { check = "process", command = "cloudflared tunnel list" }
+
+# ── External Repository Cache ──────────────────────────────────────────────
+# 🤓 Links are maintained with a small summary and last_retrieved timestamp.
+#    Agent queries this table before re-fetching.
+[[cloudflare.repos]]
+url = "https://github.com/cloudflare/ai"
+summary = "Cloudflare AI SDK — Vercel AI SDK providers for Workers AI: chat, embeddings, image gen, TTS, transcription, reranking"
+last_retrieved = "2026-05-04T08:00:00Z"
+tags = ["ai", "sdk", "workers-ai", "vercel-ai"]
+
+[[cloudflare.repos]]
+url = "https://github.com/cloudflare/agents"
+summary = "Cloudflare Agents SDK — TypeScript agent framework on Durable Objects: SQL DB, WebSockets, scheduling, MCP, tools, 5 anthropic patterns"
+last_retrieved = "2026-05-04T08:00:00Z"
+tags = ["agents", "sdk", "durable-objects", "mcp", "websockets"]
+
+[[cloudflare.repos]]
+url = "https://github.com/cloudflare/cloudflare-rs"
+summary = "Cloudflare Rust SDK (v0.14.1) — async + blocking HTTP clients for CF v4 API: KV, DNS, D1, workers, zones"
+last_retrieved = "2026-05-04T08:00:00Z"
+tags = ["rust", "sdk", "api-client"]
+
+[[cloudflare.repos]]
+url = "https://github.com/cloudflare/foundations"
+summary = "Cloudflare Foundations — Rust infrastructure library: logging, tracing, metrics, jemalloc, seccomp sandbox, service config (1.6k stars)"
+last_retrieved = "2026-05-04T08:00:00Z"
+tags = ["rust", "infrastructure", "logging", "tracing"]
+
+[[cloudflare.repos]]
+url = "https://github.com/cloudflare/rustwasm-worker-template"
+summary = "Rust WASM Worker template — wrangler build/dev/publish for wasm32-unknown-unknown Workers"
+last_retrieved = "2026-05-04T08:00:00Z"
+tags = ["rust", "wasm", "worker", "template"]
+
+[[cloudflare.repos]]
+url = "https://github.com/geelen/mcp-remote"
+summary = "MCP Remote client — bridges stdio-only MCP to remote HTTP/SSE with OAuth. RFC 9728 discovery, 4 transport strategies, token persistence (1.4k stars)"
+last_retrieved = "2026-05-04T08:00:00Z"
+tags = ["mcp", "remote", "oauth", "sse", "http"]
+
+[[cloudflare.repos]]
+url = "https://github.com/ChrispyBacon-dev/DockFlare"
+summary = "DockFlare — Docker Compose automation for cloudflared tunnels: label-based tunnel management, DNS, no open ports (2k stars)"
+last_retrieved = "2026-05-04T08:00:00Z"
+tags = ["docker", "tunnel", "cloudflared", "compose"]
+
+[[cloudflare.repos]]
+url = "https://github.com/TimeSurgeLabs/athenadb"
+summary = "AthenaDB — Serverless vector DB on Workers AI + D1 + Vectorize. REST API insert/query, requires $5/mo Workers Paid"
+last_retrieved = "2026-05-04T08:00:00Z"
+tags = ["vector-db", "serverless", "workers", "ai"]
+
+[[cloudflare.repos]]
+url = "https://github.com/good-lly/lowstorage"
+summary = "LowStorage — Low-level storage library for Cloudflare Workers"
+last_retrieved = "2026-05-04T08:00:00Z"
+tags = ["storage", "workers", "durable-objects"]
+
+[[cloudflare.repos]]
+url = "https://github.com/d6e/cratedocs-mcp"
+summary = "CrateDocs MCP — Rust crate documentation MCP server for Cursor/Claude"
+last_retrieved = "2026-05-04T08:00:00Z"
+tags = ["mcp", "rust", "docs", "crates"]
+
+[[cloudflare.repos]]
+url = "https://github.com/geelen/mcp-remote"
+summary = "MCP Remote — Remote MCP client with OAuth support"
+last_retrieved = "2026-05-04T08:02:00Z"
+tags = ["mcp", "remote", "oauth", "streamable-http"]
+
+[[cloudflare.repos]]
+url = "https://developers.cloudflare.com/agents/"
+summary = "Cloudflare Agents docs — MCP server, remote MCP with OAuth, Durable Objects stateful agents, createMcpHandler()"
+last_retrieved = "2026-05-04T08:02:00Z"
+tags = ["docs", "agents", "mcp", "oauth"]
+
+[[cloudflare.repos]]
+url = "https://developers.cloudflare.com/agents/guides/remote-mcp-server/"
+summary = "Remote MCP Server on Cloudflare guide — HTTP/SSE transport, OAuth via CF Access, stateful McpAgent per-session DO"
+last_retrieved = "2026-05-04T08:02:00Z"
+tags = ["docs", "mcp", "remote", "oauth", "sse"]
+
+[[cloudflare.repos]]
+url = "https://blog.cloudflare.com/build-ai-agents-on-cloudflare/"
+summary = "Building AI Agents on Cloudflare — agents-sdk, Durable Objects state, MCP protocol, scheduling, Queues, Workers AI"
+last_retrieved = "2026-05-04T08:02:00Z"
+tags = ["blog", "agents", "ai", "workers"]
+
+[[cloudflare.repos]]
+url = "https://blog.cloudflare.com/workers-ai-bigger-better-faster"
+summary = "Workers AI update — Llama 3.1 70B on GPUs in 180+ cities, 80+ TPS, 128K context, structured outputs, tool calling"
+last_retrieved = "2026-05-04T08:02:00Z"
+tags = ["blog", "workers-ai", "llama", "gpu"]
+
+[[cloudflare.repos]]
+url = "https://blog.cloudflare.com/introducing-autorag-on-cloudflare/"
+summary = "AutoRAG on Cloudflare — managed RAG pipeline: R2 ingestion, auto-chunking, Workers AI embeddings, Vectorize indexes"
+last_retrieved = "2026-05-04T08:02:00Z"
+tags = ["blog", "rag", "vectorize", "workers-ai", "r2"]
+
+[[cloudflare.repos]]
+url = "https://blog.cloudflare.com/secrets-store-beta/"
+summary = "Secrets Store beta — centralized secrets with DEK+KEK encryption, shared across Workers, wrangler CLI"
+last_retrieved = "2026-05-04T08:02:00Z"
+tags = ["blog", "secrets", "security", "beta"]
+
+[[cloudflare.repos]]
+url = "https://blog.cloudflare.com/container-platform-preview/"
+summary = "Container Platform preview — GPU support, Smart Placement, Docker-compatible orchestration on Cloudflare"
+last_retrieved = "2026-05-04T08:02:00Z"
+tags = ["blog", "containers", "gpu", "preview"]
+
+[[cloudflare.repos]]
+url = "https://blog.cloudflare.com/introducing-cloudflare-realtime-and-realtimekit/"
+summary = "RealtimeKit — WebRTC SDKs (iOS, Android, React Native, Flutter, Web) for voice/video/AI apps with recording and transcription"
+last_retrieved = "2026-05-04T08:02:00Z"
+tags = ["blog", "webrtc", "realtime", "sdk"]
+
+[[cloudflare.repos]]
+url = "https://blog.cloudflare.com/startup-program-250k-credits/"
+summary = "Cloudflare Startup Program — up to $250k in credits for startups with $50k-$5M funding. Accelerator: #scylla-vc"
+last_retrieved = "2026-05-04T08:02:00Z"
+tags = ["blog", "startup", "credits", "funding"]
+
+[[cloudflare.repos]]
+url = "https://reconfigured.io/blog/cloudflare-infrastructure-for-ai-applications"
+summary = "Cloudflare infrastructure for AI applications — architecture patterns for Workers AI, D1, R2, Vectorize in production AI apps"
+last_retrieved = "2026-05-04T08:02:00Z"
+tags = ["blog", "infrastructure", "ai", "architecture"]
+
+[[cloudflare.repos]]
+url = "https://flaredup.substack.com/p/the-ultimate-guide-to-cloudflares"
+summary = "Ultimate guide to Cloudflare Tunnels — cloudflared setup, Zero Trust, load balancing, Docker integration, DNS management"
+last_retrieved = "2026-05-04T08:02:00Z"
+tags = ["guide", "tunnels", "cloudflared", "zero-trust"]
+
+[[cloudflare.repos]]
+url = "https://fusionauth.io/articles/oauth/modern-guide-to-oauth"
+summary = "Modern guide to OAuth 2.0 — authorization code flow, PKCE, client credentials, refresh tokens, best practices"
+last_retrieved = "2026-05-04T08:02:00Z"
+tags = ["oauth", "auth", "guide", "security"]
+
+[[cloudflare.repos]]
+url = "https://neilmadden.blog/2025/06/06/a-look-at-cloudflares-ai-coded-oauth-library/"
+summary = "Neil Madden's review of Cloudflare's AI-coded OAuth library — PKCE auth code flow recommended, notes YOLO CORS and missing security headers"
+last_retrieved = "2026-05-04T08:02:00Z"
+tags = ["oauth", "review", "security", "ai-coded"]
+
+[[cloudflare.repos]]
+url = "https://blog.cloudflare.com/automatically-generating-cloudflares-terraform-provider/"
+summary = "Auto-generating Cloudflare's Terraform provider — OpenAPI schema to terraform-plugin-framework migration"
+last_retrieved = "2026-05-04T08:02:00Z"
+tags = ["blog", "terraform", "iac", "openapi"]
+
+[[cloudflare.repos]]
+url = "https://blog.cloudflare.com/an-overview-of-cloudflares-logging-pipeline/"
+summary = "Cloudflare logging pipeline — Kafka-based evolution: syslog → syslog-ng → log-x → Kafka Mirror Maker → OTel Logs"
+last_retrieved = "2026-05-04T08:02:00Z"
+tags = ["blog", "logging", "pipeline", "kafka", "otel"]
+
+[[cloudflare.repos]]
+url = "https://blog.cloudflare.com/virtual-networking-101-understanding-tap/"
+summary = "Virtual networking 101 — TAP/TUN interfaces, WireGuard, Cloudflare's virtual network layer"
+last_retrieved = "2026-05-04T08:02:00Z"
+tags = ["blog", "networking", "tap", "tun", "wireguard"]
+
+[[cloudflare.repos]]
+url = "https://blog.cloudflare.com/meta-llama-3-available-on-cloudflare-workers-ai"
+summary = "Meta Llama 3 available on Cloudflare Workers AI — open models on global GPU network"
+last_retrieved = "2026-05-04T08:02:00Z"
+tags = ["blog", "llama", "workers-ai", "meta"]
+
+[[cloudflare.repos]]
+url = "https://blog.cloudflare.com/mlops/"
+summary = "MLOps on Cloudflare — model deployment, monitoring, A/B testing, and CI/CD pipelines on Workers AI"
+last_retrieved = "2026-05-04T08:02:00Z"
+tags = ["blog", "mlops", "ci-cd", "workers-ai"]
+
+[[cloudflare.repos]]
+url = "https://www.infoq.com/news/2024/07/cloudflare-one-load-balancing/"
+summary = "Cloudflare One load balancing — global traffic steering, health checks, failover across origins"
+last_retrieved = "2026-05-04T08:02:00Z"
+tags = ["news", "load-balancing", "cloudflare-one"]
+
+[[cloudflare.repos]]
+url = "https://github.com/cloudflare/vibesdk"
+summary = "Cloudflare Vibe SDK — open-source AI vibe coding platform built on Cloudflare stack: Workers, Durable Objects, D1, R2, KV, AI Gateway, Containers. Generate and deploy React+TypeScript apps from natural language with one-click deploy"
+last_retrieved = "2026-05-04T11:05:00Z"
+tags = ["github", "ai", "vibe-coding", "sandboxes", "full-stack", "reference-app"]
+
+[[cloudflare.repos]]
+url = "https://blog.cloudflare.com/deploy-your-own-ai-vibe-coding-platform/"
+summary = "Cloudflare blog: Deploy your own AI vibe coding platform with VibeSDK — one-click deploy of a full vibe coding platform using Cloudflare Sandboxes for safe AI-generated code execution, Agents SDK, Workers for Platforms"
+last_retrieved = "2026-05-04T11:05:00Z"
+tags = ["blog", "vibe-coding", "sandboxes", "ai", "agents-sdk"]
+
+[[cloudflare.repos]]
+url = "https://blog.prateekjain.dev/cloudflare-containers-a-deep-dive-into-the-future-of-edge-computing-2ba982229fb9"
+summary = "Cloudflare Containers deep dive — Firecracker microVM-based container platform at the edge. Instance types from lite (256MB) to standard-4 (4 vCPU). Use cases: sandboxed code execution, CI/CD, app hosting"
+last_retrieved = "2026-05-04T11:05:00Z"
+tags = ["blog", "containers", "edge-computing", "firecracker", "deep-dive"]
+
+[[cloudflare.repos]]
+url = "https://ingau.me/blog/how-i-write-my-blogs-in-obsidian-and-publish-instantly/"
+summary = "Blog publishing workflow: Obsidian as local-first markdown editor → Hugo static site generator with Bear Blog theme → GitHub → Cloudflare Pages. Toggle draft flag in Obsidian front matter to publish instantly"
+last_retrieved = "2026-05-04T11:05:00Z"
+tags = ["blog", "obsidian", "hugo", "cloudflare-pages", "workflow", "tutorial"]
+
+[[cloudflare.repos]]
+url = "https://openworkers.com/introducing-openworkers"
+summary = "OpenWorkers — self-hosted Cloudflare Workers runtime in Rust using V8 isolates. Supports KV, PostgreSQL, S3/R2 bindings, cron scheduling, service bindings. Docker Compose deployment, no per-request pricing, compatible Workers syntax"
+last_retrieved = "2026-05-04T11:05:00Z"
+tags = ["open-source", "workers", "rust", "self-hosted", "v8-isolates", "runtime"]
+
+[[cloudflare.repos]]
+url = "https://developers.cloudflare.com/agent-setup/"
+summary = "Cloudflare Agent Setup — central hub for installing AI coding agents (Claude Code, Codex, Cursor, Copilot, OpenCode) with Cloudflare Skills plugin and 5 official remote MCP servers (cloudflare, cloudflare-docs, cloudflare-bindings, cloudflare-builds, cloudflare-observability). Quick setup prompt at /agent-setup/prompt.md"
+last_retrieved = "2026-05-04T10:46:00Z"
+tags = ["docs", "agent-setup", "mcp", "skills", "claude-code", "codex", "cursor"]
+
+[[cloudflare.repos]]
+url = "https://blog.cloudflare.com/making-rust-workers-reliable/"
+summary = "Making Rust Workers reliable — panic and abort recovery in wasm-bindgen. WebAssembly Exception Handling proposals for panic=unwind, abort recovery mechanisms, contributed back to wasm-bindgen. Enables reliable stateful Durable Objects in Rust Workers. By Guy Bedford, Hood Chatham, Logan Gatlin (Apr 2026)"
+last_retrieved = "2026-05-04T10:46:00Z"
+tags = ["blog", "rust", "wasm", "workers", "reliability", "panic", "wasm-bindgen", "durable-objects"]
+
+[[cloudflare.repos]]
+url = "https://blog.cloudflare.com/moq/"
+summary = "MoQ: Refactoring the Internet's real-time media stack — Cloudflare launched the first Media over QUIC (MoQ) relay network on every server in 330+ cities. Open IETF protocol combining WebRTC low-latency interactivity with HLS/DASH scalability on a single QUIC transport. Replaces RTMP/HLS/WebRTC patchwork with one architecture. By Mike English, Renan Dincer (Aug 2025)"
+last_retrieved = "2026-05-04T10:50:00Z"
+tags = ["blog", "moq", "quic", "media", "streaming", "webrtc", "realtime"]
+
+[[cloudflare.repos]]
+url = "https://www.infoq.com/news/2025/09/cloudflare-node-http-workers/"
+summary = "Cloudflare adds Node.js HTTP Servers to Workers — implements node:http client and server APIs, enabling Express.js, Koa.js, and other Node.js frameworks to run on Workers with zero cold starts. Uses fetch() wrapper internally. Server listen(port) bridges to Workers request model. No TCP server, no TLS options. By Yagiz Nizipli, James M Snell (Sep 2025)"
+last_retrieved = "2026-05-04T10:50:00Z"
+tags = ["news", "nodejs", "workers", "http", "express", "serverless", "compatibility"]
+
+[[cloudflare.repos]]
+url = "https://developers.cloudflare.com/cloudflare-one/networks/connectors/cloudflare-tunnel/configure-tunnels/tunnel-with-firewall/"
+summary = "Cloudflare Tunnel with firewall — positive security model: block all ingress, allow only cloudflared egress. Required ports: 7844 (QUIC), 80/443 (HTTP fallback). Firewall configs for cloud VMs and OS-level (iptables/nftables). Test connectivity with dig or PowerShell. FedRAMP High region endpoints documented"
+last_retrieved = "2026-05-04T10:50:00Z"
+tags = ["docs", "tunnel", "firewall", "cloudflared", "zero-trust", "networking", "ports"]
+
+[[cloudflare.repos]]
+url = "https://blog.cloudflare.com/deploy-your-own-ai-vibe-coding-platform/"
+summary = "Deploy your own AI Vibe Coding Platform — Cloudflare blog announcing Vibe SDK. Build and deploy React+TypeScript apps from natural language using Workers, D1, R2, KV, AI Gateway, and Containers. One-click deploy, open source at github.com/cloudflare/vibesdk"
+last_retrieved = "2026-05-04T10:50:00Z"
+tags = ["blog", "vibe-coding", "ai", "workers", "containers", "vibesdk"]
+
+[[cloudflare.repos]]
+url = "https://blog.cloudflare.com/markdown-for-agents/"
+summary = "Markdown for Agents — Cloudflare auto-converts HTML to markdown at the edge for AI agents. Add Accept: text/markdown header to any request on an enabled zone. 80% token reduction (16,180→3,150 tokens for this blog post). Returns x-markdown-tokens header with estimated token count. Content Signals policy for AI training opt-in/out. Claude Code and OpenCode already send these accept headers (Feb 2026)"
+last_retrieved = "2026-05-04T11:10:00Z"
+tags = ["blog", "markdown", "agents", "ai", "content-negotiation", "tokens", "content-signals"]
+
+[[cloudflare.repos]]
+url = "https://github.com/cloudflare/moltworker"
+summary = "Moltworker — Run OpenClaw (formerly Moltbot, formerly Clawdbot) on Cloudflare Workers. 9.9k stars, 1.8k forks. AI agent sandbox with browser automation, container support, AI Gateway integration. Runs on Workers with Durable Objects for stateful sessions"
+last_retrieved = "2026-05-04T11:10:00Z"
+tags = ["github", "agents", "openclaw", "moltbot", "workers", "sandbox", "browser-automation"]
+
+[[cloudflare.repos]]
+url = "https://github.com/miantiao-me/cloud-code"
+summary = "Cloud Code — running OpenCode on Cloudflare to build a dedicated cloud agent. 538 stars. Docker-based deployment with OpenCode configured for Cloudflare platform access. Reference for deploying AI coding agents on Cloudflare infrastructure"
+last_retrieved = "2026-05-04T11:10:00Z"
+tags = ["github", "opencode", "cloud-agent", "docker", "cloudflare"]
+
+[[cloudflare.repos]]
+url = "https://developers.cloudflare.com/browser-rendering/rest-api/crawl-endpoint/"
+summary = "Cloudflare /crawl endpoint — one API call crawls an entire website. Returns HTML, Markdown, or JSON. Configurable depth, page limit, pattern filters. Supports auth, dynamic content wait, Content Signals opt-in/out. Part of Browser Run Quick Actions API (Mar 2026)"
+last_retrieved = "2026-05-04T11:15:00Z"
+tags = ["docs", "crawl", "browser-rendering", "scraping", "markdown", "api"]
+
+[[cloudflare.repos]]
+url = "https://blog.cloudflare.com/code-mode-mcp/"
+summary = "Code Mode MCP — give agents the entire Cloudflare API in ~1,000 tokens. Uses 2 MCP tools (search + execute) with dynamic JavaScript execution against the Cloudflare OpenAPI spec. Server-side Dynamic Worker Loader. No thousands of tools, just code. By Matt Carey (Feb 2026)"
+last_retrieved = "2026-05-04T11:15:00Z"
+tags = ["blog", "mcp", "code-mode", "openapi", "agents", "dynamic-worker", "api"]
+
+[[cloudflare.repos]]
+url = "https://github.com/miantiao-me/cloud-claw"
+summary = "Cloud Claw — Run OpenClaw with one click on Cloudflare Containers to create a personal AI agent. 258 stars. Docker-based deployment of OpenClaw on CF Container Platform with CDP browser proxy support"
+last_retrieved = "2026-05-04T11:15:00Z"
+tags = ["github", "openclaw", "containers", "agent", "docker", "browser-cdp"]
+
+[[cloudflare.repos]]
+url = "https://developers.cloudflare.com/agents/model-context-protocol/"
+summary = "Cloudflare MCP documentation — official MCP server patterns for CF platform: tools with Zod validation, Streamable HTTP transport, OAuth authorization via CF Access, MCP governance policies. Supports createMcpHandler (stateless) and McpAgent (stateful per-session DO). Best practices: fewer, well-designed tools outperform many granular ones"
+last_retrieved = "2026-05-04T11:20:00Z"
+tags = ["docs", "mcp", "agents", "tools", "oauth", "transport"]
+
+[[cloudflare.repos]]
+url = "https://www.xda-developers.com/cloudflare-tunnels-are-powerful-but-you-should-never-use-them-for-these-things/"
+summary = "Cloudflare Tunnel anti-patterns — 4 things never to expose via tunnel: (1) admin panels/router UIs/NAS management, (2) LAN-only services, (3) unauthenticated database ports, (4) IoT device controls. Tunnel does not equal safe — still needs strong auth, patching, and access control. By Ty Sherback (Mar 2026)"
+last_retrieved = "2026-05-04T11:15:00Z"
+tags = ["article", "tunnel", "security", "anti-patterns", "self-hosting", "cloudflared"]
+
+[[cloudflare.repos]]
+url = "https://blog.cloudflare.com/shedding-old-code-with-ecdysis/"
+summary = "Ecdysis — graceful restarts for Rust services at Cloudflare. Zero-downtime code reloading for long-lived Rust services. Named after the shedding process in arthropods. Enables rolling updates without connection drops or state loss"
+last_retrieved = "2026-05-04T11:15:00Z"
+tags = ["blog", "rust", "graceful-restart", "reliability", "infrastructure"]
+
+[[cloudflare.repos]]
+url = "https://blog.cloudflare.com/artifacts-git-for-agents-beta/"
+summary = "Artifacts: versioned storage that speaks Git — versioned filesystem built for AI agents. REST API + Workers binding. Create repos programmatically, fork, import from GitHub, clone via any Git client. Per-agent-session repos, per-sandbox repos, 10k forks from known-good starting points. Private beta (Apr 2026). By Dillon Mulroy, Matt Carey, Matt Silverlock"
+last_retrieved = "2026-05-04T11:25:00Z"
+tags = ["blog", "artifacts", "git", "agents", "storage", "versioned-filesystem"]
+
+[[cloudflare.repos]]
+url = "https://blog.cloudflare.com/email-for-agents/"
+summary = "Cloudflare Email Service: public beta — Email Sending native Workers binding, REST API, TypeScript/Python/Go SDKs. SPF/DKIM/DMARC auto-configured. Agents SDK onEmail hook for bidirectional email agents: receive → process → reply. Customer support agents, invoice processing, multi-agent workflows over email (Apr 2026). By Thomas Gauvin, Eric Falcão"
+last_retrieved = "2026-05-04T11:25:00Z"
+tags = ["blog", "email", "agents", "sdk", "public-beta"]
+
+[[cloudflare.repos]]
+url = "https://blog.cloudflare.com/workflows-v2/"
+summary = "Workflows V2 — rearchitected control plane for agentic era. SousChef + Gatekeeper architecture scales instance creation from 4,500/min to much higher. Agents SDK integration spawns workflow instances for durable multi-step agent tasks. Durable execution engine with per-step retry, human-in-the-loop approval, survival across failures (Apr 2026). By Luís Duarte, Mia Malden, André Venceslau"
+last_retrieved = "2026-05-04T11:25:00Z"
+tags = ["blog", "workflows", "agents", "durable-execution", "v2", "scalability"]
+
+[[cloudflare.repos]]
+url = "https://github.com/cloudflare/moltworker"
+summary = "Moltworker — Run OpenClaw (formerly Moltbot/Clawdbot) on Cloudflare Workers. 9.9k stars, 1.8k forks. AI agent sandbox with browser automation, containers, AI Gateway, Durable Objects for stateful sessions. TypeScript Workers deployment"
+last_retrieved = "2026-05-04T11:40:00Z"
+tags = ["github", "moltworker", "openclaw", "workers", "sandbox", "browser"]
+
+[[cloudflare.repos]]
+url = "https://github.com/moltis-org/moltis"
+summary = "Moltis — Rust-native persistent personal agent server. One binary: sandboxed execution, multi-provider LLMs, voice, memory, Telegram/WhatsApp/Discord/Teams gateways, MCP tools, browser automation, cron. 2.6k stars, 311 forks. Forked to elasticdotventures/moltis-b00t at vendor/moltis-b00t"
+last_retrieved = "2026-05-04T11:40:00Z"
+tags = ["github", "moltis", "rust", "agent", "gateway", "mcp", "voice", "memory"]
+
+[[cloudflare.repos]]
+url = "https://www.moltis.org/"
+summary = "Moltis website — A Rust-native claw you can trust. One binary, sandboxed, secure, auditable. Voice, memory, MCP tools, multi-channel access built-in"
+last_retrieved = "2026-05-04T11:40:00Z"
+tags = ["website", "moltis", "rust", "agent"]
+
+# b00t:map v1
+# summary: Cloudflare infrastructure datum — provider identity, env var bindings, service inventory (Workers AI, D1, R2, KV, Vectorize, Queues, DO, AI Gateway, AutoRAG, Secrets Store, Tunnels, Container Platform, RealtimeKit, Artifacts, Email Service, Workflows), credential provider chain, agent capability target with dispatch_role, MCP remote server templates, monitoring config with cost tracking via ledgrrr FOCUS, external repository cache with summaries and last_retrieved timestamps for 46+ repos/guides
+# tags: cloudflare, datum, infrastructure, provider, workers-ai, d1, r2, kv, vectorize, queues, durable-objects, ai-gateway, autorag, secrets-store, tunnels, mcp, oauth, terraform, webrtc, logging, mlops
+# tier: frontier
+# cmds: b00t grok ask "cloudflare infrastructure" -t cloudflare, b00t doctor --cloudflare, b00t hive run "cloudflared tunnel list", b00t grok consume https://developers.cloudflare.com/agents/ --topic cloudflare --title "CF Agents Docs"
+# complexity: 8

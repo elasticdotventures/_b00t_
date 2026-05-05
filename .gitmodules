@@ -33,7 +33,7 @@
 	url = https://github.com/PromptExecution/just-mcp
 [submodule "vendor/moltis-b00t"]
 	path = vendor/moltis-b00t
-	url = https://github.com/promptexecution/moltis-b00t.git
+	url = https://github.com/elasticdotventures/moltis-b00t.git
 [submodule "vendor/irontology-mcp"]
 	path = vendor/irontology-mcp
 	url = https://github.com/PromptExecution/irontology-mcp.git
@@ -48,3 +48,4 @@
 	url = git@github.com:PromptExecution/ledgrrr.git
 [submodule "vendor/hermes-agent-b00t"]
 	branch = b00t
+	url = https://github.com/PromptExecution/hermes-agent-b00t.git

@@ -1,0 +1,9 @@
+{
+  "description": "pip guard fires on editable installs",
+  "guard_id": "hive-guards.hive.toml:35",
+  "reported_at": "2026-05-04T23:22:34.596168636+00:00",
+  "reported_by": "b00t agent",
+  "severity": "waste",
+  "suggestion": "Add --editable exclusion",
+  "type": "guard-report"
+}

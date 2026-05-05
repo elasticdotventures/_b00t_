@@ -140,6 +140,12 @@ pub enum GrokCommands {
         /// Optional topic for grok ingestion
         #[arg(short, long)]
         topic: Option<String>,
+        /// Content name for logical path addressing (e.g. openai/chat). Alternative to topic taxonomy.
+        #[arg(long)]
+        name: Option<String>,
+        /// Language variant (e.g. py, rs, ts, js). Used with --name for variant-pinned lookups.
+        #[arg(long)]
+        lang: Option<String>,
     },
     /// Replay transaction log to rebuild knowledgebase from scratch
     ///
@@ -235,8 +241,10 @@ pub async fn handle_grok_command(command: GrokCommands) -> Result<()> {
             url,
             title,
             topic,
+            name,
+            lang,
         } => {
-            handle_consume(content.as_deref(), file.as_deref(), url.as_deref(), title.as_deref(), topic.as_deref()).await
+            handle_consume(content.as_deref(), file.as_deref(), url.as_deref(), title.as_deref(), topic.as_deref(), name.as_deref(), lang.as_deref()).await
         }
         GrokCommands::Replay { dry_run, tx_dir } => {
             handle_replay(dry_run, tx_dir.as_deref())
@@ -649,6 +657,8 @@ async fn handle_consume(
     url: Option<&str>,
     title: Option<&str>,
     _topic: Option<&str>,
+    name: Option<&str>,
+    lang: Option<&str>,
 ) -> Result<()> {
     use b00t_c0re_lib::assimilate::*;
 
@@ -662,8 +672,22 @@ async fn handle_consume(
         anyhow::bail!("Provide content as positional arg or via --file");
     };
 
-    // 2. Hash → DocumentId
-    let doc_id = compute_doc_id(raw_content.as_bytes());
+    // 2a. Show logical name if provided
+    let logical_name: Option<&str> = name.or_else(|| title.as_deref());
+    if let Some(n) = logical_name {
+        match lang {
+            Some(l) => println!("📄 Document: {} (--lang {})", n, l),
+            None => println!("📄 Document: {}", n),
+        }
+    }
+
+    // 2b. Hash → DocumentId (use logical name as doc_id prefix if --name given)
+    let content_hash = compute_doc_id(raw_content.as_bytes());
+    let doc_id = if let Some(n) = name {
+        format!("{}::{}", n, &content_hash[..12])
+    } else {
+        content_hash.clone()
+    };
     println!("📄 Document ID: {}", doc_id);
 
     // 3. Create document record
@@ -686,9 +710,13 @@ async fn handle_consume(
     }
 
     // 5. Write transaction log
+    let action_str = match lang {
+        Some(l) => format!("ingest_doc --lang {}", l),
+        None => "ingest_doc".to_string(),
+    };
     let ingest_tx = TransactionEntry {
         tx_id: format!("{}::ingest", doc_id),
-        action: "ingest_doc".to_string(),
+        action: action_str,
         doc_id: doc_id.clone(),
         chunk_id: None,
         timestamp: chrono::Utc::now().to_rfc3339(),

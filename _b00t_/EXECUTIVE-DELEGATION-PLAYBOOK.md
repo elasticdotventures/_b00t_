@@ -15,7 +15,7 @@ Task Request
 │
 ├─ Research/Documentation? ────────────> USE best-practices-researcher
 ├─ Architecture Analysis? ─────────────> USE architecture-strategist
-├─ Code Review? ───────────────────────> USE kieran-*-reviewer OR google-cloud-agent-registry (C-priority cloud option)
+├─ Code Review? ───────────────────────> USE kieran-*-reviewer OR google-cloud-agent-registry (C-priority cloud option; datum: datums/gcp-agent-registry.datum)
 ├─ Pattern Recognition? ───────────────> USE pattern-recognition-specialist
 ├─ Repository Analysis? ───────────────> USE repo-research-analyst (Explore)
 ├─ Security Audit? ────────────────────> USE security-sentinel
@@ -30,7 +30,7 @@ Task Request
 3. **Codebase Exploration** → Explore agent (quick/medium/thorough)
 4. **Design Patterns** → pattern-recognition-specialist
 5. **Security/Performance** → security-sentinel / performance-oracle
-6. **Code Review** → kieran-*-reviewer (language-specific) OR google-cloud-agent-registry (C-priority cloud option; https://docs.cloud.google.com/agent-registry/overview)
+6. **Code Review** → kieran-*-reviewer (language-specific) OR google-cloud-agent-registry (C-priority cloud option; datum: datums/gcp-agent-registry.datum)
 
 ## When NOT to Delegate
 

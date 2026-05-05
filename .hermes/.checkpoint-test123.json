@@ -1,0 +1,6 @@
+{
+  "task": "test123",
+  "files": ["file1.txt","file2.txt"],
+  "intent": "Test checkpoint creation\n",
+  "started": "2026-05-04T15:45:50+00:00"
+}

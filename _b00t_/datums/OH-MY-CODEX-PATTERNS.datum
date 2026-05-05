@@ -1,0 +1,104 @@
+# b00t Oh-My-Codex (OMX) Patterns Datum
+# Extracted patterns from oh-my-codex workflow layer
+# Schema: 1
+# last_updated: 2026-05-04
+#
+# 🤓 oh-my-codex (github.com/Yeachan-Heo/oh-my-codex) is a workflow layer
+#    atop OpenAI Codex CLI. Its core patterns (Ralph loop, authority lease,
+#    role-based prompts, event-sourced state) are directly applicable to b00t.
+#
+# 🔗参 https://github.com/Yeachan-Heo/oh-my-codex
+# 🔗参 vendor/oh-my-codex/ (if cloned)
+# 🔗参 _b00t_/AGENTS/--role=operator.md — operator delegation patterns
+
+[b00t]
+name = "OH-MY-CODEX-PATTERNS"
+type = "datum"
+hint = "Oh-My-Codex extracted patterns — Ralph loop, authority lease, role-based prompts, event-sourced state for b00t adoption"
+
+[b00t.version]
+schema = 1
+content = "draft"
+
+[omx]
+name = "oh-my-codex"
+url = "https://github.com/Yeachan-Heo/oh-my-codex"
+language = "TypeScript + Rust runtime"
+author = "Yeachan Heo"
+description = "Workflow layer for OpenAI Codex CLI. Adds $deep-interview, $ralplan, $team/$ralph loops, 30 role prompts."
+
+# ── Extracted Patterns ───────────────────────────────────────────────────
+
+[[omx.patterns]]
+id = "RALPH-LOOP"
+name = "Ralph Loop — Bounded Persistent Worker"
+omx = "$ralph: a persistent single-owner worker loop. Sisyphus-lite variant for bounded low-overhead tasks. Worker continues until task is done or abandoned."
+b00t_adopt = "b00t's delegate_task currently does one-shot dispatch. Add --ralph flag: keeps retrying with autoresearch on failure (max 5 attempts). Bouncer verifies after success."
+
+[[omx.patterns]]
+id = "THREE-STAGE-PIPELINE"
+name = "Three-Stage Pipeline"
+omx = "$deep-interview (clarify scope) → $ralplan (approve plan with tradeoffs) → $team/$ralph (execute)"
+b00t_adopt = "b00t's current flow is monolithic: delegate_task with inline instructions. Adopt explicit clarify→plan→execute stages. `b00t agent clarify <task>` → `b00t agent plan <task>` → `b00t agent execute <task>`"
+
+[[omx.patterns]]
+id = "AUTHORITY-LEASE"
+name = "Authority Lease System"
+omx = "acquire/renew/release/mark_stale lifecycle per worker. Prevents conflicting concurrent operations."
+b00t_adopt = "b00t task system lacks distributed lease semantics. Add lease concept to hive peer coordination: `b00t task claim <id>` → `b00t task release <id>`"
+
+[[omx.patterns]]
+id = "ROLE-PROMPTS"
+name = "Role-Based Prompt Specialization"
+omx = "30 prompt files with frontmatter: identity, constraints (scope_guard, ask_gate), execution_loop, verification_loop, tool_persistence, output_contract"
+b00t_adopt = "b00t has 3 roles (developer/orchestrator/analyst) but no per-role execution loop or verification loop. Add `execution_loop`, `verification_loop`, `output_contract` to .role.toml datums."
+
+[[omx.patterns]]
+id = "EVENT-SOURCED-STATE"
+name = "Event-Sourced Runtime Engine"
+omx = "All state transitions logged as JSON events. Replayable. Snapshot + compact (GC terminal events). Views: snapshot.json, authority.json, backlog.json, mailbox.json."
+b00t_adopt = "b00t checkpoint system could adopt event-sourced recovery. Currently in-memory state. Add JSON event log to hive transactions."
+
+[[omx.patterns]]
+id = "DISPATCH-SM"
+name = "Dispatch State Machine"
+omx = "Pending → Notified → Delivered → Failed. Strict transition validation."
+b00t_adopt = "b00t task lifecycle: pending → in-progress → done. Add Notified/Failed states for better traceability."
+
+# ── Ralph Loop Specification (for b00t) ─────────────────────────────────
+# Adapted from OMX $ralph pattern + user's requirements
+[ralph_loop]
+description = "Subagent-driven iterative improvement loop with autoresearch and bouncer verification"
+max_attempts = 5
+
+[[ralph_loop.stages]]
+stage = 1
+name = "clarify"
+action = "Break the large task into small pieces. Each piece must be: 1 file, 1 change, testable in <60s."
+output = "List of tasks with file paths and success criteria"
+
+[[ralph_loop.stages]]
+stage = 2
+name = "execute"
+action = "For each piece: make change → run tests → pass→next, fail→autoresearch→retry (max 5x)"
+loop = "Agent A (builder) does this. Context stays in subagent. Operator sees: 'TASK: X | attempt N/5 | PASS/FAIL'"
+output = "Done/blocked status per piece"
+
+[[ralph_loop.stages]]
+stage = 3
+name = "verify"
+action = "Agent B (bouncer) independently runs same tests. Fresh context — has NOT seen Agent A's work."
+output = "VERIFIED or BOUNCE (with specific failure)"
+
+[[ralph_loop.stages]]
+stage = 4
+name = "report"
+action = "Operator receives: 'DONE: N files changed | tests: PASS | bouncer: VERIFIED'"
+output = "Compressed 1-line summary"
+
+# b00t:map v1
+# summary: Oh-My-Codex extracted patterns — Ralph loop, 3-stage pipeline, authority lease, role prompts, event-sourced state, dispatch SM. b00t adaptation: ralph flag, clarify/plan/execute stages, task lease, role verification loops, event log
+# tags: omx, ralph, loop, autoresearch, bouncer, delegation, workflow, pipeline
+# tier: frontier
+# cmds: b00t agent delegate --ralph, b00t task claim <id>
+# complexity: 6

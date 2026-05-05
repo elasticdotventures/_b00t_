@@ -34,17 +34,21 @@ use b00t_cli::commands::{
   //  Keep commands 1 line per letter A,B,C,... for easy diff
     AiCommands, AgentCommands, AnsibleCommands, AppCommands, AuditCommands,
     BootstrapCommands, BudgetCommands,
-    ChatCommands, CliCommands, ConfigCommands,
+    ChatCommands, CheckpointGateCommands, CliCommands, ConfigCommands,
     DataCommands, DatumCommands, DoctorCommands,
     FocusCommands,
     GrokCommands, GuardCommands, HiveCommands,
+    IdiomapCommands,
     InitCommands,
     JobCommands,
     K8sCommands,
     McpCommands, ModelCommands,
     OntologyCommands, SessionCommands, SkillCommands, SoulCommands, StackCommands,
     TaskCommands,
-    TutorialCommands, VersionCommands, VizCommands, WhatismyCommands
+    TestCommands,
+    ToonCommands,
+    TutorialCommands, VersionCommands, VizCommands, WhatismyCommands,
+    CloudCommands
 
 
 };
@@ -179,6 +183,11 @@ The system will:
         #[clap(subcommand)]
         hive_command: HiveCommands,
     },
+    #[clap(about = "Federated idiomatics — scan datums, map patterns, validate guards")]
+    Idiomap {
+        #[clap(subcommand)]
+        idiomap_command: IdiomapCommands,
+    },
     #[clap(about = "Software stack management")]
     Stack {
         #[clap(subcommand)]
@@ -274,6 +283,11 @@ The system will:
         #[clap(long, help = "Skip running tests (not recommended)")]
         skip_tests: bool,
     },
+    #[clap(about = "Checkpoint-gate: subagent checkpoint lifecycle management")]
+    CheckpointGate {
+        #[clap(subcommand)]
+        gate_command: CheckpointGateCommands,
+    },
     #[clap(about = "Agentic soul — persistent identity & memory (~/._b00t_/SOUL.tomllm)")]
     Soul {
         #[clap(subcommand)]
@@ -328,10 +342,25 @@ The system will:
         #[clap(subcommand)]
         task_command: TaskCommands,
     },
+    #[clap(about = "Run tests with fast binary reuse — compile once, run many")]
+    Test {
+        #[clap(subcommand)]
+        test_command: TestCommands,
+    },
+    #[clap(about = "b00t toon — pgwire SQL adapter with mock mode for ledgrrr self-tests")]
+    Toon {
+        #[clap(subcommand)]
+        toon_command: ToonCommands,
+    },
     #[clap(about = "Agent Coordination Protocol (ACP) - send messages to agents")]
     Chat {
         #[clap(subcommand)]
         chat_command: ChatCommands,
+    },
+    #[clap(about = "Cloud provider management and MCP serving")]
+    Cloud {
+        #[clap(subcommand)]
+        cloud_command: CloudCommands,
     },
     #[clap(about = "Learn about topics with unified knowledge management")]
     // 🤓 ENTANGLED (synchronized): b00t-mcp/src/mcp_tools.rs LearnCommand now uses LearnArgs wrapper, matching CLI structure.
@@ -1628,6 +1657,15 @@ async fn main() {
                 std::process::exit(1);
             }
         }
+        Some(Commands::Idiomap { idiomap_command }) => {
+            if let Err(e) = b00t_cli::commands::idiomap::handle_idiomap_command(
+                idiomap_command,
+                &cli.path,
+            ) {
+                eprintln!("Error: {}", e);
+                std::process::exit(1);
+            }
+        }
         Some(Commands::Stack { stack_command }) => {
             if let Err(e) = stack_command.execute(&cli.path) {
                 eprintln!("Error: {}", e);
@@ -1732,6 +1770,14 @@ async fn main() {
                 std::process::exit(1);
             }
         }
+        Some(Commands::CheckpointGate { gate_command }) => {
+            if let Err(e) = b00t_cli::commands::checkpoint::handle_checkpoint_gate_command(
+                gate_command.clone(),
+            ) {
+                eprintln!("Error: {}", e);
+                std::process::exit(1);
+            }
+        }
         Some(Commands::Soul { soul_command }) => {
             if let Err(e) = b00t_cli::commands::soul::handle_soul_command(soul_command) {
                 eprintln!("Error: {}", e);
@@ -1794,8 +1840,32 @@ async fn main() {
                 std::process::exit(1);
             }
         }
+        Some(Commands::Test { test_command }) => {
+            match test_command {
+                TestCommands::Fast { crate_name, filter } => {
+                    if let Err(e) = b00t_cli::commands::test::handle_test_fast(&crate_name, &filter) {
+                        eprintln!("Error: {:#}", e);
+                        std::process::exit(1);
+                    }
+                }
+            }
+        }
+        Some(Commands::Toon { toon_command }) => {
+            if let Err(e) = b00t_cli::commands::toon::handle_toon_command(toon_command) {
+                eprintln!("Error: {}", e);
+                std::process::exit(1);
+            }
+        }
         Some(Commands::Chat { chat_command }) => {
             if let Err(e) = chat_command.execute().await {
+                eprintln!("Error: {}", e);
+                std::process::exit(1);
+            }
+        }
+        Some(Commands::Cloud { cloud_command }) => {
+            if let Err(e) = tokio::task::block_in_place(|| {
+                b00t_cli::commands::cloud::handle_cloud_command(cloud_command)
+            }) {
                 eprintln!("Error: {}", e);
                 std::process::exit(1);
             }
@@ -2215,7 +2285,9 @@ async fn main() {
             }
         }
         Some(Commands::Doctor { doctor_command }) => {
-            if let Err(e) = b00t_cli::commands::doctor_cmd::handle_doctor_command(doctor_command, &cli.path) {
+            if let Err(e) = tokio::task::block_in_place(|| {
+                b00t_cli::commands::doctor_cmd::handle_doctor_command(doctor_command, &cli.path)
+            }) {
                 eprintln!("Error: {e}");
                 std::process::exit(1);
             }

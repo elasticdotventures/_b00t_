@@ -1,0 +1,9 @@
+[b00t]
+name = "wrangler"
+type = "cli"
+hint = "Cloudflare Workers CLI — deploy, D1, R2, KV, Secrets management"
+
+detect = ["wrangler --version"]
+desires = "latest"
+repo = "cloudflare/workers-sdk"
+install_url = "npm install -g wrangler"

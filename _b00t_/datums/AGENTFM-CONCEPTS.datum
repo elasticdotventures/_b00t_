@@ -1,0 +1,166 @@
+# b00t AgentFM Datum — Extracted Concepts for b00t Enhancement
+# .datum — valid TOML with enriched comment conventions
+# schema: 1 | bump on field definition changes
+# last_updated: 2026-05-04
+#
+# 🤓 agentfm-core is a Go-based P2P compute grid (libp2p mesh) for
+#    distributed LLM inference. We are NOT integrating it directly.
+#    Instead, we extract its design concepts that would streamline or
+#    enhance b00t's existing delegation and peer infrastructure.
+#
+# 🔗参 vendor/agentfm-core/agentfm-go/ — cloned source
+# 🔗参 b00t-cli/src/hive.rs — b00t peer infrastructure
+# 🔗参 b00t-c0re-lib/src/agent_manager.rs — b00t agent delegation
+
+[b00t]
+name = "AGENTFM-CONCEPTS"
+type = "datum"
+hint = "AgentFM extracted concepts — design patterns from agentfm-core's P2P compute grid that could streamline/enhance b00t"
+
+[b00t.version]
+schema = 1
+content = "draft"
+
+# ── Overview ──────────────────────────────────────────────────────────────
+[agentfm]
+name = "agentfm-core"
+language = "Go 1.25+"
+protocol = "libp2p (custom streams + pubsub)"
+architecture = "Boss/Worker mesh with DHT discovery"
+verdict = "WATCH — not integrating directly, extracting concepts"
+source = "vendor/agentfm-core/agentfm-go/"
+docs = "https://github.com/Agent-FM/agentfm-core"
+
+# ── Extracted Concepts for b00t Enhancement ──────────────────────────────
+# Each concept is: what agentfm does → what b00t does → what b00t should adopt
+
+[[agentfm.concepts]]
+id = "CONCEPT-001"
+name = "worker-profile"
+agentfm = "WorkerProfile struct with CPU cores, RAM free, GPU memory, current/max tasks, model name. Broadcast via pubsub telemetry every 2s."
+b00t = "b00t hive peers list shows peers but no hardware profile. No load-aware routing."
+adopt = "Add HivePeerProfile struct to hive.rs: { cpu_cores, ram_free_gb, gpu_total_gb, gpu_free_gb, current_tasks, max_tasks, model }. Include in gossip protocol so peers broadcast load alongside identity."
+effort = "medium — extends existing HivePeer struct, gossip protocol already wired"
+priority = "P3"
+
+[[agentfm.concepts]]
+id = "CONCEPT-002"
+name = "load-aware-routing"
+agentfm = "Boss.selectWorkerInteractive() picks least-loaded worker by CPU/RAM/GPU/task ratio. OpenAI API gateway routes to available worker."
+b00t = "b00t_agent_delegate dispatches by agent_id or capability. No load consideration."
+adopt = "Add optional load-based routing to b00t_agent_delegate: --prefer-idle routes to agent with lowest current_tasks/max_tasks ratio. Requires CONCEPT-001 for profile data."
+effort = "small — add sort by load to existing delegate dispatch"
+priority = "P3"
+
+[[agentfm.concepts]]
+id = "CONCEPT-003"
+name = "async-backpressure"
+agentfm = "MaxInflightAsyncTasks = 256. Buffered channel gates goroutine spawns; returns 503 when full. Prevents resource exhaustion."
+b00t = "b00t_agent_delegate has no concurrency limit. Subagents can pile up on the same target."
+adopt = "Add MaxConcurrentDelegates config to b00t-cli. Default 8. When exceeded, new delegates queue or return 'busy' status. Use tokio::sync::Semaphore."
+effort = "small — add Semaphore to agent_manager.rs"
+priority = "P2"
+
+[[agentfm.concepts]]
+id = "CONCEPT-004"
+name = "telemetry-pubsub"
+agentfm = "2s heartbeat over libp2p GossipSub. WorkerProfile broadcast to mesh. Boss updates activeWorkers map from telemetry stream."
+b00t = "hive gossip protocol is pull-based (query random peer). No push telemetry."
+adopt = "Add optional push telemetry to gossip. Workers broadcast HivePeerProfile on a configurable interval (default: 30s). Receivers update local peer store without manual gossip request."
+effort = "medium — extends existing gossip() function in hive.rs"
+priority = "P3"
+
+[[agentfm.concepts]]
+id = "CONCEPT-005"
+name = "task-envelope"
+agentfm = "TaskPayload{ Version, Task, Data, TaskID } — minimal JSON envelope. Version field enables protocol evolution."
+b00t = "ACP messages are structured but verbose (delegate/complete/progress/wait variants with many fields)."
+adopt = "Add optional 'minimal' mode to b00t_agent_delegate that sends compact TaskPayload-style messages instead of full ACP. Reduces token overhead for simple tasks."
+effort = "small — new serialization format in agent_manager.rs"
+priority = "P4"
+
+[[agentfm.concepts]]
+id = "CONCEPT-006"
+name = "artifact-streaming"
+agentfm = "Live zip transfer over libp2p stream (ArtifactProtocol). Worker streams output back to Boss as it's generated."
+b00t = "Artifacts are path references in completion messages. No live streaming."
+adopt = "Add --stream flag to b00t_agent_delegate. Worker streams stdout to captain in real-time via NATS or MCP notifications. Useful for long-running code generation tasks."
+effort = "large — requires MCP notification support or NATS stream integration"
+priority = "P4"
+
+[[agentfm.concepts]]
+id = "CONCEPT-007"
+name = "container-sandbox"
+agentfm = "Workers execute in Podman containers. Image name + agent dir configurable. Network host mode with security warnings."
+b00t = "Agents run as subprocesses or MCP tool calls. No sandboxing."
+adopt = "Add optional `--sandbox podman` flag to b00t run that executes commands in a disposable container. Leverages existing hive guard system for image allowlisting."
+effort = "medium — container lifecycle management, image pull, volume mounts"
+priority = "P4"
+
+[[agentfm.concepts]]
+id = "CONCEPT-008"
+name = "dht-auto-discovery"
+agentfm = "Kademlia DHT + mDNS for zero-config peer discovery. NAT traversal via circuit-relay v2 + hole-punching."
+b00t = "mDNS discover (stub) + manual peer add. No DHT, no NAT traversal."
+adopt = "Evaluate rust-libp2p for DHT-based peer discovery. Adds automatic peer discovery across subnet boundaries."
+effort = "large — libp2p dependency, DHT bootstrap nodes, NAT traversal"
+priority = "P5"
+
+# ── Minimum Integration ──────────────────────────────────────────────────
+# 🤓 The minimum viable integration: b00t spawns agentfm's API gateway as a
+#    subprocess, then routes LLM prompts to the mesh via HTTP.
+#
+#    This gives b00t access to distributed compute WITHOUT rewriting
+#    agentfm in Rust or embedding libp2p.
+[agentfm.minimum_integration]
+name = "agentfm-gateway-bridge"
+description = "Spawn agentfm in -mode api, route prompts via HTTP"
+components = [
+    "agentfm binary (pre-built or go build)",
+    "b00t subprocess manager (stdin/stdout lifecycle)",
+    "HTTP client to agentfm gateway (openai-compatible API)",
+]
+
+[[agentfm.minimum_integration.steps]]
+step = 1
+action = "Build agentfm binary"
+command = "cd vendor/agentfm-core/agentfm-go && go build -o ../../target/release/agentfm ./cmd/agentfm"
+note = "One-time. Requires Go 1.25+. Binary ~25MB with all deps."
+
+[[agentfm.minimum_integration.steps]]
+step = 2
+action = "Spawn agentfm as b00t daemon"
+command = "b00t hive run 'agentfm -mode api -port 8899'"
+note = "Starts OpenAI-compatible API gateway. Discovers workers via DHT + mDNS."
+
+[[agentfm.minimum_integration.steps]]
+step = 3
+action = "Register as LLM provider in b00t"
+command = "b00t-cli model add agentfm --base-url http://localhost:8899 --provider openai-compatible"
+note = "b00t agents can now use agentfm workers via standard OpenAI API calls."
+
+[[agentfm.minimum_integration.steps]]
+step = 4
+action = "Route inference to mesh"
+command = "b00t inference run --model agentfm --prompt '...'"
+note = "b00t calls agentfm gateway; gateway routes to least-loaded worker on mesh."
+
+# ── b00t-py Hook for agentfm ─────────────────────────────────────────────
+# 🤓 b00t can provide a Python hook for agentfm via b00t-py:
+#    agentfm calls b00t-py for guard evaluation, datum lookup, etc.
+[agentfm.b00t_py_hooks]
+hook_name = "b00t-guard-eval"
+description = "agentfm workers call b00t-py before executing prompts to check safety guards"
+python_api = "from b00t_py import check_guards; result = check_guards(prompt, guards)"
+integration = "agentfm's sandbox.sh or Dockerfile entrypoint imports b00t-py"
+value = "gives agentfm works the same guard interposition (pip→uv, docker→podman, etc.) as b00t hive"
+
+# ── Changelog ────────────────────────────────────────────────────────────
+# 2026-05-04: Initial datum. Extracted 8 concepts (P2-P5).
+
+# b00t:map v1
+# summary: AgentFM extracted concepts — 8 design patterns (worker-profile, load-aware-routing, async-backpressure, telemetry-pubsub, task-envelope, artifact-streaming, container-sandbox, dht-auto-discovery) with effort estimates and priorities; minimum integration via gateway subprocess; b00t-py hooks for guard interposition
+# tags: agentfm, p2p, libp2p, delegation, concepts, extraction, distributed-compute, mesh
+# tier: ch0nky
+# cmds: b00t model add agentfm --base-url http://localhost:8899, b00t inference run --model agentfm --prompt "..."
+# complexity: 5

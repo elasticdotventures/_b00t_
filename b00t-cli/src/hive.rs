@@ -154,6 +154,9 @@ pub struct HiveProfile {
     // command guards
     pub guards: Vec<HiveGuard>,
 
+    /// Rhai guard macros defined in datum header, e.g. pip_guard → "cmd.contains(\"pip\")"
+    pub rhai_macros: HashMap<String, String>,
+
     // MCP tool activation
     pub mcp_activate: Vec<String>,
     pub mcp_deactivate: Vec<String>,
@@ -361,6 +364,7 @@ impl HiveProfile {
             mcp_activate,
             mcp_deactivate,
             service_spec,
+            rhai_macros: hive.rhai_macros.unwrap_or_default(),
         })
     }
 }

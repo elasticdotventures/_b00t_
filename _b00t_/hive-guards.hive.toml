@@ -478,3 +478,36 @@ message = "🦨 Subcommand variant name looks singular but no plural alias found
 pattern = { rhai = "why_comment_guard" }
 action = "warn"
 message = "🦨 Comment likely describes WHAT not WHY. Good comments explain intent and invariants. Bad comments restate the code. Consider: is this comment earning its keep?"
+
+# ── Federated Idiomatics ──────────────────────────────────────────
+# Each idiomatic is a pattern that saves agent context. Declared here
+# so `b00t idiomap` can build the federated map.
+
+[[b00t.idiomatic]]
+name = "guard-as-doc"
+pattern = "guard message IS the documentation"
+guard_ids = ["hive-guards.hive.toml:guard-doc-fail"]
+principle = "self-contained learning moment, no separate doc search"
+context_saved = "160 chars max per guard message"
+topic = "guard-design"
+priority = "S"
+
+[[b00t.idiomatic]]
+name = "escalation-🦨→💩"
+pattern = "escalate from warn (🦨) to block (💩) after repeat_threshold hits"
+guard_ids = [
+    "hive-guards.hive.toml:escalation-🦨→💩",
+]
+principle = "first encounter warns, repeated violations escalate — agent must not persist in blocked patterns"
+context_saved = "eliminates redisambiguation; agent knows after first warn that retry is futile after threshold"
+topic = "guard-design"
+priority = "A"
+
+[[b00t.idiomatic]]
+name = "no-llm-in-guards"
+pattern = "guard conditions must not use LLM inference — pure string/rhai only"
+guard_ids = ["hive-guards.hive.toml:no-llm-in-guards"]
+principle = "LLM inference in guards introduces latency, cost, and non-determinism; guards must be fast, predictable, and free"
+context_saved = "~2s latency per inference-based guard check × number of guards per command"
+topic = "guard-design"
+priority = "S"

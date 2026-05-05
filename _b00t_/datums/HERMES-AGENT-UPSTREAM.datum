@@ -1,0 +1,78 @@
+# b00t Hermes Agent Upstream
+# This datum records the canonical upstream configuration for Hermes Agent
+# as used by b00t ecosystem. The PromptExecution fork is the preferred source.
+#
+# 🔗参 https://github.com/PromptExecution/hermes-agent-b00t
+# 🔗参 vendor/hermes-agent-b00t/ — git submodule at 74e6304e
+
+[b00t]
+name = "HERMES-AGENT-UPSTREAM"
+type = "datum"
+hint = "Canonical Hermes Agent upstream configuration — PromptExecution fork is the preferred/official source for b00t"
+
+[b00t.version]
+schema = 1
+content = "stable"
+
+[hermes_upstream]
+preferred_origin = "PromptExecution/hermes-agent-b00t"
+preferred_url = "https://github.com/PromptExecution/hermes-agent-b00t"
+official_upstream = "NousResearch/hermes-agent"
+official_url = "https://github.com/NousResearch/hermes-agent"
+vendor_path = "vendor/hermes-agent-b00t"
+current_commit = "74e6304e"
+branch = "b00t"
+
+[hermes_upstream.remotes]
+origin = "git@github.com:PromptExecution/hermes-agent-b00t.git"
+upstream = "https://github.com/NousResearch/hermes-agent.git"
+
+# ── PR Status ────────────────────────────────────────────────────────────
+[hermes_upstream.pr_19305]
+title = "feat: add pre_tool_call rewrite support for plugin tool arg transformation"
+state = "OPEN"
+mergeable = "MERGEABLE"
+incorporated_at = "7f36a402"
+description = "Adds get_pre_tool_call_directives() returning (block_msg, rewritten_args) tuple. 5 files, +249/-35. Backward-compat aliases preserved."
+local_status = "✅ Incorporated in fork (7f36a402) + 2 additional b00t commits"
+
+# ── Related Issues ───────────────────────────────────────────────────────
+[hermes_upstream.issue_18988]
+title = "pre_tool_call rewrite action"
+state = "CLOSED_BY_PR_19305"
+description = "Allow plugins to rewrite tool args via {action: 'rewrite', args: {...}}. Implemented by PR #19305."
+local_status = "✅ Done"
+
+[hermes_upstream.issue_18148]
+title = "Runtime extension hooks"
+state = "OPEN — NOT YET IMPLEMENTED"
+description = "Broad proposal: transform_user_input, before_llm_call, intercept_tool_call hooks with Python hook registry. Config option: extensions.enabled"
+local_status = "⏳ Not implemented in fork — substantial feature (5+ files, new hook architecture)"
+priority = "P4 — valuable but large. Consider after PR #19305 merges upstream."
+
+[hermes_upstream.issue_11816]
+title = "pre_tool_call approve action + plugin mode"
+state = "OPEN — NOT YET IMPLEMENTED"
+description = "Add {action: 'approve'} directive. Plugin approval mode skips built-in security checks."
+local_status = "⏳ Not implemented in fork — smaller scoped than #18148, could be added as extension to PR #19305's get_pre_tool_call_directives()"
+priority = "P3 — adds 'approve' directive to existing pre_tool_call hook surface"
+
+# ── Sync Strategy ────────────────────────────────────────────────────────
+[hermes_upstream.sync]
+pattern = "rebase-on-upstream"
+steps = [
+    "cd vendor/hermes-agent-b00t",
+    "git fetch upstream",
+    "git rebase upstream/main",
+    "git push origin --force-with-lease",
+    "cd /home/brianh/.b00t",
+    "git add vendor/hermes-agent-b00t",
+    "git commit -m 'chore: sync hermes-agent-b00t with upstream'",
+]
+
+# b00t:map v1
+# summary: Hermes Agent upstream datum — PromptExecution/hermes-agent-b00t is the preferred/official fork for b00t. PR #19305 incorporated (pre_tool_call rewrite). #18988 done. #18148 (runtime hooks) and #11816 (approve action) not yet implemented.
+# tags: hermes, upstream, fork, promptexecution, pr-19305, hooks, extensions
+# tier: ch0nky
+# cmds: cd vendor/hermes-agent-b00t && git fetch upstream, git log --oneline upstream/main..HEAD
+# complexity: 2

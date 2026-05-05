@@ -1,0 +1,788 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>b00t — Isometric OTel Guard Viz</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: #0a0a1a;
+    color: #ccc;
+    font-family: 'Courier New', monospace;
+    overflow: hidden;
+    width: 100vw;
+    height: 100vh;
+  }
+
+  /* ---- Header ---- */
+  #header {
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    z-index: 100;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 24px;
+    background: linear-gradient(180deg, #0d0d24 0%, transparent 100%);
+    pointer-events: none;
+  }
+  #header h1 {
+    font-size: 14px;
+    font-weight: normal;
+    color: #666;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+  }
+  #header .status {
+    font-size: 11px;
+    color: #555;
+    pointer-events: auto;
+  }
+  #header .status .dot {
+    display: inline-block;
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    margin-right: 6px;
+    vertical-align: middle;
+    background: #333;
+    transition: background 0.3s;
+  }
+  #header .status .dot.live { background: #4CAF50; box-shadow: 0 0 8px #4CAF50; }
+  #header .status .dot.fallback { background: #FFC107; box-shadow: 0 0 8px #FF9800; }
+  #header .status .dot.error { background: #F44336; box-shadow: 0 0 8px #F44336; }
+
+  /* ---- 3D Scene ---- */
+  #scene-wrapper {
+    position: fixed;
+    top: 0; left: 0;
+    width: 100vw;
+    height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    perspective: 1200px;
+  }
+
+  #scene {
+    transform-style: preserve-3d;
+    transform: rotateX(48deg) rotateZ(-40deg);
+    position: relative;
+    width: 1px;
+    height: 1px;
+  }
+
+  /* ---- Grid ---- */
+  #grid {
+    position: absolute;
+    transform-style: preserve-3d;
+    left: -400px; top: -400px;
+    width: 800px; height: 800px;
+  }
+
+  .grid-cell {
+    position: absolute;
+    border: 0.5px solid rgba(60, 60, 120, 0.25);
+    background: rgba(20, 20, 50, 0.3);
+  }
+
+  .grid-label {
+    position: absolute;
+    color: rgba(100, 100, 170, 0.4);
+    font-size: 8px;
+    font-family: 'Courier New', monospace;
+    white-space: nowrap;
+    transform: translate(-50%, -50%);
+    pointer-events: none;
+  }
+
+  /* ---- Bar ---- */
+  .bar-group {
+    position: absolute;
+    transform-style: preserve-3d;
+    cursor: pointer;
+    transition: transform 0.5s ease;
+  }
+
+  .bar-group:hover {
+    transform: translateZ(20px) !important;
+  }
+
+  .bar-group .tooltip {
+    position: absolute;
+    bottom: 100%;
+    left: 50%;
+    transform: translateX(-50%) translateZ(10px);
+    background: rgba(0,0,0,0.85);
+    border: 1px solid #333;
+    color: #ccc;
+    padding: 6px 10px;
+    font-size: 10px;
+    white-space: nowrap;
+    border-radius: 3px;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.2s;
+    z-index: 10;
+    font-family: 'Courier New', monospace;
+  }
+  .bar-group:hover .tooltip { opacity: 1; }
+
+  .bar-3d {
+    position: absolute;
+    transform-style: preserve-3d;
+    transition: height 0.4s ease;
+  }
+
+  /* Bar faces */
+  .bar-face {
+    position: absolute;
+    left: 0; top: 0;
+  }
+
+  .bar-face-front {
+    transform: translateZ(12px);
+  }
+  .bar-face-back {
+    transform: translateZ(-12px);
+  }
+  .bar-face-left {
+    transform: rotateY(-90deg) translateZ(-12px);
+  }
+  .bar-face-right {
+    transform: rotateY(90deg) translateZ(12px);
+  }
+  .bar-face-top {
+    transform: rotateX(-90deg) translateZ(0px);
+  }
+
+  /* ---- Animation keyframes ---- */
+  @keyframes spin-y-slow {
+    from { transform: rotateY(0deg); }
+    to { transform: rotateY(360deg); }
+  }
+  @keyframes spin-y-med {
+    from { transform: rotateY(0deg); }
+    to { transform: rotateY(360deg); }
+  }
+  @keyframes spin-y-fast {
+    from { transform: rotateY(0deg); }
+    to { transform: rotateY(360deg); }
+  }
+  @keyframes spin-y-race {
+    from { transform: rotateY(0deg); }
+    to { transform: rotateY(360deg); }
+  }
+  @keyframes pulse-glow {
+    0%, 100% { opacity: 0.7; filter: brightness(1); }
+    50% { opacity: 1; filter: brightness(1.3); }
+  }
+
+  .spin-slow { animation: spin-y-slow 8s linear infinite; }
+  .spin-med  { animation: spin-y-med  4s linear infinite; }
+  .spin-fast { animation: spin-y-fast 2s linear infinite; }
+  .spin-race { animation: spin-y-race 0.8s linear infinite; }
+
+  .pulse-anim { animation: pulse-glow 2s ease-in-out infinite; }
+
+  /* ---- Emoji badges ---- */
+  .bar-emoji {
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%) translateZ(14px);
+    font-size: 18px;
+    pointer-events: none;
+    filter: drop-shadow(0 0 6px rgba(0,0,0,0.8));
+    z-index: 5;
+  }
+
+  .bar-count {
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%) translateZ(14px);
+    font-size: 10px;
+    font-weight: bold;
+    color: #fff;
+    text-shadow: 0 0 8px rgba(0,0,0,0.9);
+    pointer-events: none;
+    z-index: 5;
+    font-family: 'Courier New', monospace;
+  }
+
+  /* ---- Legend ---- */
+  #legend {
+    position: fixed;
+    bottom: 24px;
+    left: 24px;
+    z-index: 100;
+    background: rgba(10, 10, 26, 0.85);
+    border: 1px solid #1a1a3e;
+    border-radius: 6px;
+    padding: 12px 16px;
+    font-size: 10px;
+    line-height: 1.8;
+    backdrop-filter: blur(8px);
+    pointer-events: none;
+  }
+  #legend .row { display: flex; align-items: center; gap: 8px; }
+  #legend .swatch {
+    display: inline-block;
+    width: 10px; height: 10px;
+    border-radius: 2px;
+    flex-shrink: 0;
+  }
+  #legend .label { color: #666; }
+
+  /* ---- Count summary ---- */
+  #summary {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    z-index: 100;
+    background: rgba(10, 10, 26, 0.85);
+    border: 1px solid #1a1a3e;
+    border-radius: 6px;
+    padding: 12px 16px;
+    font-size: 10px;
+    line-height: 1.8;
+    backdrop-filter: blur(8px);
+    text-align: right;
+    pointer-events: none;
+  }
+  #summary .total { color: #888; }
+  #summary .blocked-count { color: #F44336; }
+  #summary .warn-count { color: #FFC107; }
+  #summary .ok-count { color: #4CAF50; }
+
+  /* ---- Connection error overlay ---- */
+  #error-overlay {
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(10, 10, 26, 0.9);
+    z-index: 200;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.5s;
+  }
+  #error-overlay.visible { opacity: 1; }
+  #error-overlay .msg {
+    background: rgba(30, 10, 10, 0.9);
+    border: 1px solid #4a1a1a;
+    border-radius: 8px;
+    padding: 24px 32px;
+    text-align: center;
+    max-width: 400px;
+  }
+  #error-overlay .msg .title {
+    color: #F44336;
+    font-size: 16px;
+    margin-bottom: 8px;
+  }
+  #error-overlay .msg .detail {
+    color: #888;
+    font-size: 11px;
+    line-height: 1.6;
+  }
+
+  /* ---- Loading ---- */
+  #loading {
+    position: fixed;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 150;
+    color: #333;
+    font-size: 12px;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+  }
+  #loading.hidden { display: none; }
+</style>
+</head>
+<body>
+
+<div id="header">
+  <h1>⦿ b00t · Guard Telemetry</h1>
+  <div class="status">
+    <span class="dot" id="status-dot"></span>
+    <span id="status-text">initializing…</span>
+  </div>
+</div>
+
+<div id="loading">Loading…</div>
+
+<div id="scene-wrapper">
+  <div id="scene">
+    <div id="grid"></div>
+    <div id="bars"></div>
+  </div>
+</div>
+
+<div id="error-overlay">
+  <div class="msg">
+    <div class="title">⚠ Connection Lost</div>
+    <div class="detail" id="error-detail">Unable to reach data source.</div>
+  </div>
+</div>
+
+<div id="legend">
+  <div class="row"><span class="swatch" style="background:#4CAF50"></span><span class="label">Idle (count=0)</span></div>
+  <div class="row"><span class="swatch" style="background:#FFC107"></span><span class="label">Watching (count=1)</span></div>
+  <div class="row"><span class="swatch" style="background:#FF9800"></span><span class="label">Escalating (count=2)</span></div>
+  <div class="row"><span class="swatch" style="background:#F44336"></span><span class="label">Blocked (count≥3) — spinning</span></div>
+  <div style="margin-top:6px;color:#444;font-size:9px">Hover bars for details · Auto-refresh 5s</div>
+</div>
+
+<div id="summary">
+  <div class="total">patterns: <span id="count-total">0</span></div>
+  <div class="blocked-count">blocked: <span id="count-blocked">0</span></div>
+  <div class="warn-count">watching: <span id="count-warn">0</span></div>
+  <div class="ok-count">idle: <span id="count-idle">0</span></div>
+</div>
+
+<script>
+(function() {
+  'use strict';
+
+  // ─── Constants ────────────────────────────────────────────────────────
+  const GRID_SIZE    = 6;       // 6x6 grid
+  const CELL_SIZE    = 80;      // pixels per cell
+  const BAR_WIDTH    = 40;      // width of bar
+  const BAR_DEPTH    = 24;      // depth of bar
+  const MAX_BAR_HEIGHT = 280;   // max pixel height
+  const MIN_BAR_HEIGHT = 8;     // min pixel height
+  const HEIGHT_SCALE  = 4;      // pixels per count unit
+  const REFRESH_MS    = 5000;   // auto-refresh interval
+
+  // Thresholds
+  const THRESHOLD_WARN  = 1;    // count >= 1 -> watching
+  const THRESHOLD_ESC   = 2;    // count >= 2 -> escalating
+  const THRESHOLD_BLOCK = 3;    // count >= 3 -> blocked
+
+  // Data source URLs (tried in order)
+  // NOTE: file:// protocol blocks fetch(). Serve via HTTP:
+  //   cd ~/.b00t && python3 -m http.server 8080
+  // Then open: http://localhost:8080/_b00t_/scripts/isometric-otel-viz.html
+  const DATA_SOURCES = [
+    { name: 'rotel (OTel span stream)', url: 'http://localhost:4318/v1/traces' },
+    { name: 'guard-violations.jsonl (relative)',   url: '../guard-violations.jsonl' },
+    { name: 'guard-violations.jsonl (cwd)', url: 'guard-violations.jsonl' }
+  ];
+
+  // Color scheme
+  const COLORS = {
+    idle:       { fill: '#4CAF50', dark: '#2E7D32', light: '#81C784' },
+    watching:   { fill: '#FFC107', dark: '#F57F17', light: '#FFD54F' },
+    escalating: { fill: '#FF9800', dark: '#E65100', light: '#FFB74D' },
+    blocked:    { fill: '#F44336', dark: '#B71C1C', light: '#EF9A9A' }
+  };
+
+  // ─── DOM refs ─────────────────────────────────────────────────────────
+  const gridEl      = document.getElementById('grid');
+  const barsEl      = document.getElementById('bars');
+  const statusDot   = document.getElementById('status-dot');
+  const statusText  = document.getElementById('status-text');
+  const loadingEl   = document.getElementById('loading');
+  const errorOverlay= document.getElementById('error-overlay');
+  const errorDetail = document.getElementById('error-detail');
+
+  const elTotal     = document.getElementById('count-total');
+  const elBlocked   = document.getElementById('count-blocked');
+  const elWarn      = document.getElementById('count-warn');
+  const elIdle      = document.getElementById('count-idle');
+
+  // ─── State ────────────────────────────────────────────────────────────
+  let currentSource = '';
+  let dataHistory   = [];       // array of {pattern, count, timestamp}
+
+  // ─── Build grid ───────────────────────────────────────────────────────
+  function buildGrid() {
+    gridEl.innerHTML = '';
+    const half = GRID_SIZE / 2;
+    for (let row = 0; row < GRID_SIZE; row++) {
+      for (let col = 0; col < GRID_SIZE; col++) {
+        const cell = document.createElement('div');
+        cell.className = 'grid-cell';
+        const x = (col - half) * CELL_SIZE;
+        const y = (row - half) * CELL_SIZE;
+        cell.style.left = x + 'px';
+        cell.style.top  = y + 'px';
+        cell.style.width  = CELL_SIZE + 'px';
+        cell.style.height = CELL_SIZE + 'px';
+        gridEl.appendChild(cell);
+
+        // Axis labels on edges
+        if (row === 0 && col % 2 === 0) {
+          const lbl = document.createElement('div');
+          lbl.className = 'grid-label';
+          lbl.textContent = col - half;
+          lbl.style.left = (x + CELL_SIZE/2) + 'px';
+          lbl.style.top  = (y - 12) + 'px';
+          gridEl.appendChild(lbl);
+        }
+        if (col === 0 && row % 2 === 0) {
+          const lbl = document.createElement('div');
+          lbl.className = 'grid-label';
+          lbl.textContent = row - half;
+          lbl.style.left = (x - 12) + 'px';
+          lbl.style.top  = (y + CELL_SIZE/2) + 'px';
+          gridEl.appendChild(lbl);
+        }
+      }
+    }
+  }
+
+  // ─── Color helpers ────────────────────────────────────────────────────
+  function getState(count) {
+    if (count >= THRESHOLD_BLOCK) return 'blocked';
+    if (count >= THRESHOLD_ESC)   return 'escalating';
+    if (count >= THRESHOLD_WARN)  return 'watching';
+    return 'idle';
+  }
+
+  function getEmoji(count) {
+    if (count >= THRESHOLD_BLOCK) return '💩';
+    if (count >= THRESHOLD_ESC)   return '⚠️';
+    if (count >= THRESHOLD_WARN)  return '🦨';
+    return '✅';
+  }
+
+  function getSpinClass(count) {
+    if (count >= 10) return 'spin-race';
+    if (count >= 5)  return 'spin-fast';
+    if (count >= 3)  return 'spin-med';
+    return '';
+  }
+
+  function getBarHeight(count) {
+    const raw = count * HEIGHT_SCALE;
+    return Math.max(MIN_BAR_HEIGHT, Math.min(MAX_BAR_HEIGHT, raw));
+  }
+
+  // ─── Render bars ──────────────────────────────────────────────────────
+  function renderBars(records) {
+    barsEl.innerHTML = '';
+    if (!records || records.length === 0) {
+      const msg = document.createElement('div');
+      msg.style.cssText = 'color:#444;font-size:12px;transform:translate(-50%,-50%);position:absolute;left:0;top:0;white-space:nowrap;';
+      msg.textContent = '⏳ No guard data yet…';
+      barsEl.appendChild(msg);
+      return;
+    }
+
+    const half = GRID_SIZE / 2;
+    const maxIdx = Math.min(records.length, GRID_SIZE * GRID_SIZE);
+
+    for (let i = 0; i < maxIdx; i++) {
+      const rec = records[i];
+      const count = rec.count;
+      const pattern = rec.pattern || 'unknown';
+      const state = getState(count);
+      const color = COLORS[state];
+      const emoji = getEmoji(count);
+      const spinClass = getSpinClass(count);
+      const height = getBarHeight(count);
+
+      const row = Math.floor(i / GRID_SIZE);
+      const col = i % GRID_SIZE;
+      const gx = (col - half) * CELL_SIZE + CELL_SIZE/2;
+      const gy = (row - half) * CELL_SIZE + CELL_SIZE/2;
+
+      // Bar group
+      const group = document.createElement('div');
+      group.className = 'bar-group' + (spinClass ? ' ' + spinClass : '');
+      group.style.left = gx + 'px';
+      group.style.top  = gy + 'px';
+
+      // Tooltip
+      const tip = document.createElement('div');
+      tip.className = 'tooltip';
+      tip.textContent = `${emoji} ${pattern} — count: ${count} (${state})`;
+      group.appendChild(tip);
+
+      // Emoji
+      const emojiEl = document.createElement('div');
+      emojiEl.className = 'bar-emoji';
+      emojiEl.textContent = emoji;
+      emojiEl.style.top = (-height - 28) + 'px';
+      group.appendChild(emojiEl);
+
+      // Count label
+      const countEl = document.createElement('div');
+      countEl.className = 'bar-count';
+      countEl.textContent = count;
+      countEl.style.top = (-height - 10) + 'px';
+      group.appendChild(countEl);
+
+      // ── 3D Bar faces ──
+      // We build each face as a div.
+      // All faces positioned relative to bar-group origin.
+      // Bar extends from y=0 (ground) up to y=-height.
+
+      // Front face
+      const front = document.createElement('div');
+      front.className = 'bar-face bar-face-front';
+      front.style.cssText = `
+        width:${BAR_WIDTH}px; height:${height}px;
+        background: linear-gradient(180deg, ${color.light}, ${color.fill});
+        border: 1px solid ${color.dark};
+        border-radius: 2px 2px 0 0;
+        top: ${-height}px;
+      `;
+      group.appendChild(front);
+
+      // Right face (side)
+      const right = document.createElement('div');
+      right.className = 'bar-face bar-face-right';
+      right.style.cssText = `
+        width:${BAR_DEPTH}px; height:${height}px;
+        left: ${BAR_WIDTH}px;
+        top: ${-height}px;
+        background: linear-gradient(180deg, ${color.dark}, rgba(0,0,0,0.4));
+        border: 1px solid ${color.dark};
+        border-radius: 0 2px 2px 0;
+      `;
+      group.appendChild(right);
+
+      // Left face (side)
+      const left = document.createElement('div');
+      left.className = 'bar-face bar-face-left';
+      left.style.cssText = `
+        width:${BAR_DEPTH}px; height:${height}px;
+        top: ${-height}px;
+        background: linear-gradient(180deg, rgba(0,0,0,0.2), ${color.dark});
+        border: 1px solid ${color.dark};
+        border-radius: 0 2px 2px 0;
+      `;
+      group.appendChild(left);
+
+      // Top face
+      const top = document.createElement('div');
+      top.className = 'bar-face bar-face-top';
+      top.style.cssText = `
+        width:${BAR_WIDTH}px; height:${BAR_DEPTH}px;
+        top: ${-height}px;
+        background: ${color.light};
+        border: 1px solid ${color.dark};
+        border-radius: 2px;
+        opacity: 0.9;
+      `;
+      group.appendChild(top);
+
+      barsEl.appendChild(group);
+    }
+
+    // Update summary counts
+    let blocked = 0, warn = 0, idle = 0;
+    for (const r of records) {
+      const s = getState(r.count);
+      if (s === 'blocked') blocked++;
+      else if (s === 'watching' || s === 'escalating') warn++;
+      else idle++;
+    }
+    elTotal.textContent = records.length;
+    elBlocked.textContent = blocked;
+    elWarn.textContent = warn;
+    elIdle.textContent = idle;
+  }
+
+  // ─── Data processing ─────────────────────────────────────────────────
+  function deduplicateByPattern(records) {
+    // Keep latest count per pattern
+    const map = new Map();
+    for (const r of records) {
+      map.set(r.pattern, r.count);
+    }
+    // Convert to array and sort by count descending
+    const result = [];
+    for (const [pattern, count] of map.entries()) {
+      result.push({ pattern, count });
+    }
+    result.sort((a, b) => b.count - a.count);
+    return result;
+  }
+
+  function fetchRotelSpan() {
+    return fetch('http://localhost:4318/v1/traces')
+      .then(r => {
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        return r.json();
+      })
+      .then(data => {
+        // OTel trace format: extract guard-related data from spans
+        // Look for span attributes with guard info
+        const guards = [];
+        if (data && data.resourceSpans) {
+          for (const rs of data.resourceSpans) {
+            if (rs.scopeSpans) {
+              for (const ss of rs.scopeSpans) {
+                if (ss.spans) {
+                  for (const span of ss.spans) {
+                    // Check for guard-related attributes
+                    if (span.attributes) {
+                      let pattern = null;
+                      let count = null;
+                      for (const attr of span.attributes) {
+                        if (attr.key === 'guard.pattern' || attr.key === 'guard_pattern') {
+                          pattern = attr.value.stringValue || attr.value;
+                        }
+                        if (attr.key === 'guard.count' || attr.key === 'guard_count' || attr.key === 'violation_count') {
+                          count = parseInt(attr.value.intValue || attr.value, 10);
+                        }
+                      }
+                      if (pattern && count !== null) {
+                        guards.push({ pattern, count });
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+        if (guards.length === 0) throw new Error('No guard spans found');
+        return guards;
+      });
+  }
+
+  function fetchJsonl(url) {
+    return fetch(url)
+      .then(r => {
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        return r.text();
+      })
+      .then(text => {
+        const lines = text.trim().split('\n').filter(Boolean);
+        const records = [];
+        for (const line of lines) {
+          try {
+            const parsed = JSON.parse(line);
+            if (parsed && typeof parsed.count === 'number' && parsed.pattern) {
+              records.push({ pattern: parsed.pattern, count: parsed.count });
+            }
+          } catch (e) {
+            // skip malformed lines
+          }
+        }
+        if (records.length === 0) throw new Error('No valid JSONL records found');
+        return records;
+      });
+  }
+
+  function loadSampleEmbeddedData() {
+    // Embedded fallback data from real guard-violations.jsonl
+    return deduplicateByPattern([
+      {"count":62,"pattern":"docker run"},
+      {"count":60,"pattern":"pip install"},
+      {"count":9,"pattern":"rm -rf /"},
+      {"count":8,"pattern":"pip3 install"},
+      {"count":8,"pattern":"conda install"},
+      {"count":8,"pattern":"huggingface-cli download"},
+      {"count":7,"pattern":"stage:pre_parse"},
+      {"count":6,"pattern":"python -m pip"},
+      {"count":6,"pattern":"docker build"},
+      {"count":6,"pattern":"docker-compose"},
+      {"count":6,"pattern":"git push --force"},
+      {"count":6,"pattern":"git reset --hard"},
+      {"count":6,"pattern":"npm install -g"},
+      {"count":6,"pattern":"brew install"},
+      {"count":6,"pattern":"ulimit -n"},
+      {"count":5,"pattern":"vllm serve"},
+      {"count":5,"pattern":"rhai:cmd.contains(\"pip\") && cmd.contains(\"install\")"},
+      {"count":3,"pattern":"rhai:cmd.contains(\"pip\") && violations >= threshold"},
+      {"count":1,"pattern":"npm inst"},
+      {"count":1,"pattern":"rhai:cmd.conta"},
+      {"count":1,"pattern":"rhai:cmd.contains(\"git commit\") && cmd.contains(\"-m\") && !cmd.contains(\":\")"}
+    ]);
+  }
+
+  // ─── Main update loop ─────────────────────────────────────────────────
+  async function updateData() {
+    loadingEl.classList.remove('hidden');
+
+    let records = null;
+    let sourceUsed = '';
+
+    // Try data sources in order
+    for (const src of DATA_SOURCES) {
+      try {
+        if (src.name.startsWith('rotel')) {
+          records = await fetchRotelSpan();
+          sourceUsed = 'rotel (OTel)';
+        } else {
+          records = await fetchJsonl(src.url);
+          sourceUsed = src.name;
+        }
+        if (records && records.length > 0) break;
+      } catch (e) {
+        console.warn(`Source ${src.name} failed:`, e.message);
+        continue;
+      }
+    }
+
+    // Fallback to embedded data if all fetches failed
+    if (!records || records.length === 0) {
+      records = loadSampleEmbeddedData();
+      sourceUsed = 'embedded fallback';
+      statusDot.className = 'dot fallback';
+      statusText.textContent = '📁 embedded data (no live source)';
+      errorDetail.textContent = 'Could not reach rotel or guard-violations.jsonl. Showing embedded sample data.';
+      errorOverlay.classList.remove('visible');
+    } else {
+      records = deduplicateByPattern(records);
+      statusDot.className = 'dot live';
+      statusText.textContent = `📡 ${sourceUsed} · ${records.length} patterns`;
+      errorOverlay.classList.remove('visible');
+    }
+
+    currentSource = sourceUsed;
+    renderBars(records);
+    dataHistory = records;
+    loadingEl.classList.add('hidden');
+  }
+
+  // ─── Initialize ───────────────────────────────────────────────────────
+  buildGrid();
+  renderBars([]);
+
+  // Initial load
+  setTimeout(() => {
+    updateData().catch(err => {
+      console.error('Initial load error:', err);
+      const records = loadSampleEmbeddedData();
+      renderBars(records);
+      statusDot.className = 'dot error';
+      statusText.textContent = '⚠ error loading data · showing fallback';
+      loadingEl.classList.add('hidden');
+    });
+  }, 300);
+
+  // Auto-refresh
+  setInterval(() => {
+    updateData().catch(err => {
+      console.error('Refresh error:', err);
+      // Keep showing last known data
+    });
+  }, REFRESH_MS);
+
+  // ─── Window resize handler ────────────────────────────────────────────
+  function handleResize() {
+    const w = window.innerWidth;
+    const h = window.innerHeight;
+    const scene = document.getElementById('scene');
+    // Scale scene to fit viewport
+    const scale = Math.min(w / 900, h / 700, 1.2);
+    scene.style.transform = `rotateX(48deg) rotateZ(-40deg) scale(${scale})`;
+  }
+  window.addEventListener('resize', handleResize);
+  handleResize();
+
+  console.log('b00t Isometric Guard Viz initialized');
+  console.log(`Refresh interval: ${REFRESH_MS/1000}s`);
+})();
+</script>
+</body>
+</html>

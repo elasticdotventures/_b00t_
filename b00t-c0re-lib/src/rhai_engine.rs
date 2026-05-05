@@ -123,6 +123,30 @@ impl RhaiEngine {
             Path::new(path).exists()
         });
 
+        // Datum-based tool detection — uses b00t's own tool inventory
+        // Returns (is_installed, method_name) where method is e.g. "podman", "docker", "apt"
+        engine.register_fn(
+            "tool_installed",
+            |tool: &str| -> String {
+                let output = Command::new("b00t-cli")
+                    .arg("detect")
+                    .arg(tool)
+                    .output();
+                match output {
+                    Ok(o) if o.status.success() => {
+                        let stdout = String::from_utf8_lossy(&o.stdout);
+                        // Parse: "podman - installed (podman 5.4.4)" or "podman - not found"
+                        if stdout.contains("installed") {
+                            format!("installed:{}", tool)
+                        } else {
+                            String::new()
+                        }
+                    }
+                    _ => String::new(),
+                }
+            },
+        );
+
         engine.register_fn(
             "create_dir",
             |path: &str| -> Result<(), Box<rhai::EvalAltResult>> {

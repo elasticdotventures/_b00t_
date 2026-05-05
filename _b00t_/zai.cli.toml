@@ -1,0 +1,19 @@
+[b00t]
+name = "zai"
+type = "cli"
+hint = "ZAI Coding Helper — npx @z_ai/coding-helper; AI coding assistant with ZAI_API_KEY auth. Run directly in terminal."
+
+detect = [
+    "echo 'zai (via npx @z_ai/coding-helper)'",
+    "echo '1.0.0'",
+]
+version_regex = '(?P<version>[\d.]+)'
+desires = "latest"
+
+# 🤓 ZAI_API_KEY env var enables the coding helper.
+#    When detected, b00t loads the 'zai' alias automatically.
+#    Run: npx @z_ai/coding-helper
+#    Or via b00t: b00t run "zai <prompt>"
+[[b00t.install.npm]]
+package = "@z_ai/coding-helper"
+global = true

@@ -202,6 +202,26 @@ pub struct K0mmand3rDatumConfig {
     pub description: Option<String>,
 }
 
+/// A single [[b00t.idiomatic]] entry — a federated idiomatic pattern declaration.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct IdiomaticEntry {
+    pub name: String,
+    #[serde(default)]
+    pub guard_ids: Option<Vec<String>>,
+    #[serde(default)]
+    pub pattern: Option<String>,
+    #[serde(default)]
+    pub principle: Option<String>,
+    #[serde(default)]
+    pub context_saved: Option<String>,
+    #[serde(default)]
+    pub topic: Option<String>,
+    #[serde(default)]
+    pub synonyms: Option<Vec<String>>,
+    #[serde(default)]
+    pub priority: Option<String>,
+}
+
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Default)]
 #[serde(default)]
 pub struct BootDatum {
@@ -226,6 +246,11 @@ pub struct BootDatum {
     pub skills: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub compliance: Option<Vec<String>>,
+
+    // Federated idiomatics — each datum can declare [[b00t.idiomatic]] sections.
+    // The `b00t idiomap` command scans ALL datums and builds a federated map.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub idiomatic: Option<Vec<IdiomaticEntry>>,
 
     pub install: Option<InstallSpec>,
     pub update: Option<String>,

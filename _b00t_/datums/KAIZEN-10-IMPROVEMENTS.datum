@@ -1,0 +1,184 @@
+# b00t Kaizen: 10 Improvements for Idiomatic, Context-Saving Agents
+
+## Session observations distilled into concrete technical and process changes.
+
+---
+
+### 1. Checkpoint-Gate for Subagent Work
+
+**Problem:** Subagents hit 600s timeout. Work is lost. Next subagent starts cold — no memory of what failed or what was attempted.
+
+**Fix:** Before spawning a subagent, write a checkpoint artifact:
+```bash
+echo '{"task":"<hash>","files":["path1","path2"],"intent":"<goal>"}' > .hermes/.checkpoint-$(date +%s).json
+```
+On subagent timeout, the next agent reads the checkpoint, knows what was done, and resumes. On success, `rm .hermes/.checkpoint-*` cleans up.
+
+**Kaizen:** `b00t agent delegate --checkpoint` flag auto-creates/resumes from checkpoint files.
+
+---
+
+### 2. Auto-Compile-Cache Warming
+
+**Problem:** Adding `duckdb = { features = ["bundled"] }` triggers a 5-minute C++ compile on first build. The agent context budget is consumed waiting for the compiler — not doing useful work.
+
+**Fix:** When a new dependency is added to Cargo.toml, auto-warm the cache in background BEFORE spawning implementation agents:
+```bash
+cargo check -p <crate> 2>&1 &  # background build
+# spawn agents in parallel while build runs
+```
+
+**Kaizen:** `b00t install --warm-cache` detects new deps and pre-builds in background. Agents spawned with `delegate_task` wait on completion signal, not on wall clock.
+
+---
+
+### 3. Targeted Test Runner (Not Full Suite)
+
+**Problem:** `cargo test -p b00t-c0re-lib --lib sql::` compiles DuckDB every time, even when only tests change. The test binary is rebuilt even for one-line fixes.
+
+**Fix:** After `cargo test --no-run`, run the binary directly:
+```bash
+target/debug/deps/b00t_c0re_lib-<hash> sql::
+```
+This skips the linker for subsequent runs. The binary only needs rebuilding when types/imports change, not when test assertions change.
+
+**Kaizen:** Add `b00t test --binary <crate> <module>` that detects the compiled binary and runs it directly, skipping compile if no source changes detected.
+
+---
+
+### 4. Four-Verb Grok Surface (Like Chub)
+
+**Problem:** b00t grok has 6+ verbs with overlapping semantics:
+```
+digest | ask | learn | assimilate | consume | replay | status
+```
+Agents waste context deciding which verb to use. Chub has 4 clean verbs: `search | get | annotate | feedback`.
+
+**Fix:** Consolidate to 4 verbs:
+```
+b00t grok search <query>     # replaces ask + digest (combined)
+b00t grok get <name>         # replaces consume --by-name (lightweight read)
+b00t grok note <id> "<text>" # replaces lfmf --local (local annotation)
+b00t grok rate <id> up|down  # new — upvote/downvote feedback
+```
+Legacy verbs kept as aliases for backward compat.
+
+**Kaizen:** Agent spends 0 tokens deciding which verb. "Search" always works. "Get" is always a read. "Note" is always local.
+
+---
+
+### 5. Logical Content Addressing
+
+**Problem:** `b00t grok ask "OpenAI chat API" -t openai` requires topic taxonomy knowledge. The agent must know the topic name "openai" exists.
+
+**Fix:** Add `--name` flag that uses logical path instead of topic search:
+```bash
+b00t grok get --name openai/chat --lang py
+```
+Path is `vendor/provider/tool`. No taxonomy. No semantic search. Agent knows the tool name → fetches the docs.
+
+**Kaizen:** Reduces topic-discovery overhead. `--name` is a direct lookup; `-t` is a fallback semantic search.
+
+---
+
+### 6. Language-Variant Content Tags
+
+**Problem:** b00t's assimilate pipeline has no language metadata. Content is stored without language context. An agent asking for "Python OpenAI docs" gets the same result as "JavaScript OpenAI docs".
+
+**Fix:** Add `--lang py|rs|ts|js` to assimilate/consume. Tags content with language. Query with `--lang` filter:
+```bash
+b00t grok get --name openai/chat --lang py
+# Returns: only Python-variant docs for openai/chat
+```
+
+**Kaizen:** Agent specifies language once → always gets language-appropriate docs. No more "this code snippet is in JavaScript but I asked for Python."
+
+---
+
+### 7. Async Backpressure for Delegation
+
+**Problem:** `b00t_agent_delegate` has no concurrency limits. Spawning 20 subagents at once exhausts context, slows system, and wastes tokens on failed/timed-out tasks.
+
+**Fix:** Add `MaxConcurrentDelegates` (default 8) using `tokio::sync::Semaphore`. When exceeded, new delegates queue or return `status: "busy"`:
+```bash
+b00t_agent_delegate --max-concurrent 8  # session limit
+b00t_agent_delegate --slot-timeout 30s  # per-slot timeout
+```
+
+**Kaizen:** Agent doesn't waste context on queued tasks. Clear "busy" signal → agent can re-prioritize or wait.
+
+---
+
+### 8. Worker Health Profile in Hive Peers
+
+**Problem:** `b00t hive peers list` shows peer identity but no load information. Agent can't route tasks based on capacity.
+
+**Fix:** Extend `HivePeer` with `WorkerProfile`: CPU cores, RAM free, GPU memory, current/max tasks, model name. Broadcast via gossip protocol:
+```json
+{
+  "peer_id": "...",
+  "cpu_cores": 8,
+  "ram_free_gb": 24.5,
+  "gpu_total_gb": 24,
+  "current_tasks": 2,
+  "max_tasks": 8
+}
+```
+
+**Kaizen:** Agent queries `b00t hive peers list --health` → gets load-aware peer list → routes to least-loaded peer. No more dispatching to an overloaded node.
+
+---
+
+### 9. Test-Only Rebuild (Skip Deps)
+
+**Problem:** Changing one assertion in a test file triggers recompilation of all dependencies, including DuckDB C++ bindings. 5-minute wait for a one-line change.
+
+**Fix:** Use `cargo test --no-run` + direct binary execution pattern. The binary is rebuilt only when types/imports/signatures change, not when test bodies change. For unit tests:
+```bash
+# First compile + run:
+cargo test -p <crate> --lib <module>
+# Subsequent runs (if only test body changed):
+target/debug/deps/<binary> <module>::
+```
+
+**Kaizen:** Add `b00t test --fast <crate> <module>` that auto-detects the correct binary path and skips the compiler for test-body-only changes.
+
+---
+
+### 10. Subagent Output Contract Enforcement
+
+**Problem:** Subagents return verbose narrative summaries. The operator's context budget is consumed reading "I did X, then Y, then Z" when only "PASS" or "FAIL: <5-line excerpt>" is needed.
+
+**Fix:** Enforce structured output contracts per cognitive tier:
+```
+sm0l:    "PASS" or "FAIL: <name> <5-line excerpt>"
+ch0nky:  "DONE: <1-line outcome> | <N files> | tests: PASS"
+frontier: structured decision (JSON with options, rationale, recommendation)
+```
+
+**Kaizen:** Operator reads 1 line per subagent result, not a paragraph. Context saved: 60-80% per subagent result.
+
+---
+
+## Summary
+
+| # | Improvement | Context Saved | Effort |
+|---|-------------|--------------|--------|
+| 1 | Checkpoint-gate for subagents | Prevents complete redo on timeout | Small |
+| 2 | Auto-compile-cache warming | 5 min per new dep compile | Small |
+| 3 | Targeted test binary runner | 30s-5 min per test cycle | Small |
+| 4 | Four-verb grok surface | Agent verb-selection cost | Medium |
+| 5 | Logical content addressing | Topic discovery overhead | Medium |
+| 6 | Language-variant tags | Wrong-language doc cost | Medium |
+| 7 | Async backpressure | Task-queue management cost | Small |
+| 8 | Worker health profile | Load-blind routing cost | Medium |
+| 9 | Test-only rebuild | 5 min wait per test change | Small |
+| 10 | Subagent output contracts | 60-80% summary bloat | Trivial (process) |
+
+<!-- b00t:map v1
+summary: 10 kaizen improvements — checkpoint-gate for subagents, auto-compile-cache warming, targeted test runner, 4-verb grok surface, logical content addressing, language-variant tags, async backpressure, worker health profiles, test-only rebuild, subagent output contracts
+tags: kaizen, improvement, context-saving, idiomatic, subagent, build, test, grok, delegation, hive
+tier: frontier
+cmds: b00t agent delegate --checkpoint, b00t grok get --name openai/chat --lang py, b00t test --fast b00t-c0re-lib sql::
+complexity: 6
+-->

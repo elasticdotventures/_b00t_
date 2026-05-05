@@ -1,0 +1,202 @@
+# b00t Cloudflare External Interface — AbstractCloudProvider Trait Contract
+# .tomllmd — valid TOML with enriched comments
+# schema: 1
+# last_updated: 2026-05-04
+#
+# 🤓 This datum defines the AbstractCloudProvider trait interface and its
+#    Cloudflare implementation contract. The trait lives in b00t-c0re-lib
+#    and enables b00t agents to interact with ANY cloud provider through
+#    a uniform interface. Cloudflare is the first implementation.
+#
+# 🔗参 b00t-c0re-lib/src/cloud/provider.rs — AbstractCloudProvider trait
+# 🔗参 b00t-c0re-lib/src/cloud/cloudflare.rs — CloudflareProvider impl
+# 🔗参 _b00t_/datums/cloudflare.datum — Cloudflare datum (semantic source of truth)
+# 🔗参 vendor/l3dg3rr/crates/b00t-iface/ — ProcessSurface lifecycle trait
+
+[b00t]
+name = "CLOUDFLARE-EXTERNAL-INTERFACE"
+type = "schema"
+hint = "AbstractCloudProvider trait contract — uniform interface for cloud provider operations; Cloudflare first implementation"
+
+[b00t.version]
+schema = 1
+content = "draft"
+
+# ── AbstractCloudProvider Trait ────────────────────────────────────────────
+# 🤓 All Rust trait methods below. The implementation lives in
+#    b00t-c0re-lib/src/cloud/provider.rs.
+#    Each method returns Result<T> where T is the response type.
+#    Credential resolution follows the env-chain from cloudflare.datum.
+#
+#    Adapter pattern: providers implement AbstractCloudProvider,
+#    b00t agents dispatch through the trait, never call providers directly.
+[cloudflare.trait]
+name = "AbstractCloudProvider"
+module = "b00t_c0re_lib::cloud"
+file = "b00t-c0re-lib/src/cloud/mod.rs"
+
+[[cloudflare.trait.methods]]
+name = "provider_name"
+signature = "fn provider_name(&self) -> &str"
+description = "Returns the provider name (e.g. 'cloudflare', 'aws')"
+output = "&str"
+
+[[cloudflare.trait.methods]]
+name = "account_info"
+signature = "fn account_info(&self) -> Result<ProviderAccountInfo>"
+description = "Returns account metadata: account_id, zone_id, plan, region"
+output = "ProviderAccountInfo { account_id, zone_id, plan, region, email }"
+
+[[cloudflare.trait.methods]]
+name = "env_health"
+signature = "fn env_health(&self) -> Vec<EnvVarStatus>"
+description = "Scans provider env vars and reports which are set/missing"
+output = "Vec<EnvVarStatus { name, detected: bool, hint }>"
+
+[[cloudflare.trait.methods]]
+name = "list_services"
+signature = "fn list_services(&self) -> Result<Vec<CloudService>>"
+description = "Returns available services from the provider datum"
+output = "Vec<CloudService { name, kind, status, endpoint }>"
+
+[[cloudflare.trait.methods]]
+name = "service_status"
+signature = "fn service_status(&self, service: &str) -> Result<ServiceHealth>"
+description = "Health check for a specific service (e.g. 'workers-ai', 'd1')"
+output = "ServiceHealth { name, available: bool, latency_ms: u64, error: Option<String> }"
+
+[[cloudflare.trait.methods]]
+name = "run_inference"
+signature = "fn run_inference(&self, model: &str, input: &InferenceInput) -> Result<InferenceOutput>"
+description = "Run LLM inference via Workers AI"
+output = "InferenceOutput { text, usage, model }"
+
+[[cloudflare.trait.methods]]
+name = "kv_get"
+signature = "fn kv_get(&self, namespace: &str, key: &str) -> Result<Option<String>>"
+description = "Read a KV value (if KV service is available)"
+output = "Option<String>"
+
+[[cloudflare.trait.methods]]
+name = "kv_put"
+signature = "fn kv_put(&self, namespace: &str, key: &str, value: &str, ttl_secs: Option<u64>) -> Result<()>"
+description = "Write a KV value with optional TTL"
+output = "()"
+
+[[cloudflare.trait.methods]]
+name = "d1_query"
+signature = "fn d1_query(&self, sql: &str, params: &[serde_json::Value]) -> Result<Vec<serde_json::Value>>"
+description = "Execute SQL query against D1 database"
+output = "Vec<serde_json::Value>"
+
+[[cloudflare.trait.methods]]
+name = "r2_list"
+signature = "fn r2_list(&self, bucket: &str, prefix: Option<&str>) -> Result<Vec<R2Object>>"
+description = "List objects in an R2 bucket"
+output = "Vec<R2Object { key, size, etag, last_modified }>"
+
+[[cloudflare.trait.methods]]
+name = "vectorize_search"
+signature = "fn vectorize_search(&self, index: &str, vector: &[f32], top_k: usize) -> Result<Vec<VectorMatch>>"
+description = "Semantic search against Vectorize index"
+output = "Vec<VectorMatch { id, score, metadata }>"
+
+[[cloudflare.trait.methods]]
+name = "tunnel_list"
+signature = "fn tunnel_list(&self) -> Result<Vec<TunnelInfo>>"
+description = "List active Cloudflare tunnels"
+output = "Vec<TunnelInfo { id, name, status, connections }>"
+
+# ── Supporting Types ──────────────────────────────────────────────────────
+# 🤓 These types are part of the trait's public API.
+
+[cloudflare.types.provider_account_info]
+description = "Provider-level account metadata"
+fields = [
+    { name = "account_id", type = "String" },
+    { name = "zone_id", type = "String" },
+    { name = "plan", type = "String" },
+    { name = "region", type = "String", default = "global" },
+    { name = "email", type = "Option<String>" },
+]
+
+[cloudflare.types.env_var_status]
+description = "Env var detection status"
+fields = [
+    { name = "name", type = "String" },
+    { name = "detected", type = "bool" },
+    { name = "hint", type = "String" },
+]
+
+[cloudflare.types.cloud_service]
+description = "Cloud service descriptor"
+fields = [
+    { name = "name", type = "String" },
+    { name = "kind", type = "String" },
+    { name = "status", type = "String" },
+    { name = "endpoint", type = "Option<String>" },
+    { name = "plan", type = "String" },
+]
+
+[cloudflare.types.service_health]
+description = "Service health check result"
+fields = [
+    { name = "name", type = "String" },
+    { name = "available", type = "bool" },
+    { name = "latency_ms", type = "u64" },
+    { name = "error", type = "Option<String>" },
+]
+
+[cloudflare.types.inference_input]
+description = "LLM inference request"
+fields = [
+    { name = "messages", type = "Vec<ChatMessage>" },
+    { name = "max_tokens", type = "Option<u64>", default = 4096 },
+    { name = "temperature", type = "Option<f64>", default = 0.7 },
+    { name = "stream", type = "bool", default = false },
+]
+
+[cloudflare.types.inference_output]
+description = "LLM inference response"
+fields = [
+    { name = "text", type = "String" },
+    { name = "usage", type = "TokenUsage" },
+    { name = "model", type = "String" },
+]
+
+[cloudflare.types.tunnel_info]
+description = "Cloudflare tunnel status"
+fields = [
+    { name = "id", type = "String" },
+    { name = "name", type = "String" },
+    { name = "status", type = "String" },
+    { name = "connections", type = "u32" },
+]
+
+[cloudflare.types.vector_match]
+description = "Vectorize search result"
+fields = [
+    { name = "id", type = "String" },
+    { name = "score", type = "f64" },
+    { name = "metadata", type = "Option<serde_json::Value>" },
+]
+
+# ── Env Detection Command ──────────────────────────────────────────────────
+# 🤓 Run `b00t doctor --cloudflare` to detect and report env var status.
+#    Generates _b00t_/env.d/CLOUDFLARE.tomllmd with current status.
+[cloudflare.doctor]
+command = "b00t doctor --cloudflare"
+output = "_b00t_/env.d/CLOUDFLARE.tomllmd"
+checks = [
+    { name = "api-token", var = "CLOUDFLARE_API_TOKEN", method = "regex", pattern = "^[a-zA-Z0-9_-]{40}$" },
+    { name = "account-id", var = "CLOUDFLARE_ACCOUNT_ID", method = "literal", value = "f00c391669432ae2a423c04a001dab2d" },
+    { name = "tunnel-token", var = "CLOUDFLARE_TUNNEL_TOKEN", method = "exists" },
+    { name = "r2-credentials", var = "CLOUDFLARE_R2_ACCESS_KEY", method = "pair_with", pair = "CLOUDFLARE_R2_SECRET_KEY" },
+]
+
+# b00t:map v1
+# summary: Cloudflare External Interface — AbstractCloudProvider trait contract with 12 methods (provider_name, account_info, env_health, list_services, service_status, run_inference, kv_get/put, d1_query, r2_list, vectorize_search, tunnel_list), 9 supporting types, env detection, doctor check integration
+# tags: cloudflare, trait, interface, provider, abstract, rust, api, contract, env, doctor
+# tier: frontier
+# cmds: b00t doctor --cloudflare, b00t grok ask "AbstractCloudProvider trait" -t cloudflare
+# complexity: 7

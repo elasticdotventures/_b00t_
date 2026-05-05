@@ -77,5 +77,14 @@ command = "b00t grok digest -t epiphany '<distilled insight from friction report
 # summary: Friction report format + routing — worker artifact; operator triages; exec never reads raw
 # tags: friction-report, worker, drone, operator, epiphany, context-reduction, triage
 # tier: sm0l
+
+[[b00t.idiomatic]]
+name = "report-is-signal-not-solution"
+pattern = "friction reports are SIGNAL about what slowed the worker, not SOLUTIONS proposed by the worker"
+guard_ids = ["friction-report.tomllm:worker-epiphany-self-promote"]
+principle = "Workers lack executive context. Their friction is valuable signal, but their proposed fixes are often wrong. Never let workers self-promote friction to epiphanies."
+context_saved = "Operator doesn't waste time evaluating worker-proposed solutions that will be rejected. ~30 tokens per friction item."
+topic = "worker-communication"
+priority = "A"
 # cmds: mkdir -p .b00t/friction && cat >> .b00t/friction/${AGENT_ID}-$(date +%Y%m%dT%H%M%S).md
 # complexity: 2

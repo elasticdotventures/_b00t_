@@ -1,0 +1,22 @@
+[b00t]
+name = "context-hub"
+type = "mcp"
+hint = "Context Hub (chub) by Andrew Ng — curated API docs for coding agents via MCP. 5 tools: chub_search, chub_get, chub_list, chub_annotate, chub_feedback."
+requires_sudo = false
+
+# 🤓 chub v0.x provides a native MCP server via `chub mcp`.
+#    Exposes 5 tools for searching, fetching, and annotating API docs.
+#    Install: npm install -g @aisuite/chub
+[[b00t.mcp.stdio]]
+requires = []
+args = ["mcp"]
+priority = 0
+transport = "stdio"
+command = "chub"
+
+# ── Tools available via chub MCP ─────────────────────────────────────────
+# chub_search(query?, tags?, lang?, limit?)  — Search docs and skills
+# chub_get(id, lang?, version?, full?, file?) — Fetch doc content by ID
+# chub_list()                                 — List all available categories
+# chub_annotate(id, note)                     — Attach persistent local note
+# chub_feedback(id, rating, label?)           — Rate docs up or down

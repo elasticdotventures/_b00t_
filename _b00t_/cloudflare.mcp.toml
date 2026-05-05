@@ -1,0 +1,33 @@
+[b00t]
+name = "cloudflare"
+type = "mcp"
+hint = "Cloudflare MCP — manage Workers, D1, R2, KV, Queues, AI Gateway, DNS, Zones via AbstractCloudProvider trait; also registers 5 official remote MCP servers"
+requires_sudo = false
+
+# 🤓 Stdio transport via b00t-cli cloud serve — provides Cloudflare API access
+#    through the AbstractCloudProvider trait. Requires CLOUDFLARE_API_TOKEN.
+[[b00t.mcp.stdio]]
+requires = ["CLOUDFLARE_API_TOKEN"]
+args = ["cloud", "serve", "--provider", "cloudflare"]
+priority = 0
+transport = "stdio"
+command = "b00t-cli"
+
+# Fallback: show hint even without API token
+[[b00t.mcp.stdio]]
+requires = []
+args = ["cloud", "serve", "--provider", "cloudflare"]
+priority = 1
+transport = "stdio"
+command = "b00t-cli"
+
+# 🔗 Official Cloudflare remote MCP servers (HTTP, OAuth):
+#    cloudflare       → https://mcp.cloudflare.com/mcp  (OAuth)
+#    cloudflare-docs  → https://docs.mcp.cloudflare.com/mcp  (public)
+#    cloudflare-bindings  → https://bindings.mcp.cloudflare.com/mcp  (OAuth)
+#    cloudflare-builds    → https://builds.mcp.cloudflare.com/mcp  (OAuth)
+#    cloudflare-observability → https://observability.mcp.cloudflare.com/mcp  (OAuth)
+#
+# These are registered in Hermes config under mcp_servers:
+#   hermes config set mcp_servers.cloudflare.url https://mcp.cloudflare.com/mcp
+#   hermes config set mcp_servers.cloudflare.transport streamable-http

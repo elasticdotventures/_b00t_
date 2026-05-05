@@ -375,11 +375,16 @@ pub fn handle_hive_command(cmd: &HiveCommands, path: &str) -> Result<()> {
             let cmd_str = command.join(" ");
             let snapshot = SystemSnapshot::capture()?;
             let all_guards = load_all_guards(&datum_dir, &snapshot);
+            // Load rhai_macros from datum so guard patterns can reference them
+            let macros = load_profile("hive-guards", &datum_dir)
+                .ok()
+                .map(|p| p.rhai_macros)
+                .unwrap_or_default();
             let guard_ctx = GuardContext {
                 command: cmd_str.clone(),
                 violation_count: 0,
                 repeat_threshold: None,
-                rhai_macros: std::collections::HashMap::new(),
+                rhai_macros: macros,
             };
 
             match check_guards(&cmd_str, &all_guards, &guard_ctx) {

@@ -21,34 +21,44 @@ pub enum DoctorCommands {
         fix: bool,
         #[clap(long, help = "Emit JSON report")]
         json: bool,
+        #[clap(long, help = "Check Cloudflare provider setup")]
+        cloudflare: bool,
     },
 }
 
 pub fn handle_doctor_command(args: &DoctorCommands, b00t_path: &str) -> Result<()> {
     match args {
-        DoctorCommands::Check { fix, json } => {
+        DoctorCommands::Check { fix, json, cloudflare } => {
             let mut results: Vec<Value> = Vec::new();
 
-            // 1. b00t-cli binary exists and version
-            results.push(check_b00t_cli());
+            if *cloudflare {
+                // Cloudflare-specific diagnostics
+                results.push(check_cloudflare_provider());
+            } else {
+                // 1. b00t-cli binary exists and version
+                results.push(check_b00t_cli());
 
-            // 2. _b00t_ directory exists with datums
-            results.push(check_b00t_dir(b00t_path, *fix));
+                // 2. _b00t_ directory exists with datums
+                results.push(check_b00t_dir(b00t_path, *fix));
 
-            // 3. .opencode/ directory exists with skills
-            results.push(check_opencode_dir(*fix));
+                // 3. .opencode/ directory exists with skills
+                results.push(check_opencode_dir(*fix));
 
-            // 4. Focus schema datum exists (_b00t_/focus.schema.tomllmd)
-            results.push(check_focus_schema(b00t_path));
+                // 4. Focus schema datum exists (_b00t_/focus.schema.tomllmd)
+                results.push(check_focus_schema(b00t_path));
 
-            // 5. ledgerr-mcp service status
-            results.push(check_ledgerr_service());
+                // 5. ledgerr-mcp service status
+                results.push(check_ledgerr_service());
 
-            // 6. Local model endpoint reachable
-            results.push(check_model_endpoint());
+                // 6. Local model endpoint reachable
+                results.push(check_model_endpoint());
 
-            // 7. .b00t/fsl/ directory exists for FSL examples
-            results.push(check_fsl_dir(*fix));
+                // 7. .b00t/fsl/ directory exists for FSL examples
+                results.push(check_fsl_dir(*fix));
+
+                // 8. Cloudflare provider setup
+                results.push(check_cloudflare_provider());
+            }
 
             if *json {
                 println!("{}", serde_json::to_string_pretty(&results)?);
@@ -261,5 +271,56 @@ fn check_fsl_dir(fix: bool) -> Value {
         } else {
             "not found".to_string()
         }
+    })
+}
+
+/// Check 8: Cloudflare provider setup
+fn check_cloudflare_provider() -> Value {
+    use b00t_c0re_lib::cloud::CloudflareProvider;
+    use b00t_c0re_lib::cloud::AbstractCloudProvider;
+    let cf = CloudflareProvider::new();
+
+    let health = cf.env_health();
+    let detected_count = health.iter().filter(|v| v.detected).count();
+    let total_count = health.len();
+
+    let all_detected = detected_count == total_count;
+
+    let var_details: Vec<String> = health
+        .iter()
+        .map(|v| {
+            let emoji = if v.detected { "✅" } else { "❌" };
+            format!("{} {} — {}", emoji, v.name, v.hint)
+        })
+        .collect();
+
+    let detail = format!(
+        "Env vars: {}/{} detected\n  {}",
+        detected_count,
+        total_count,
+        var_details.join("\n  ")
+    );
+
+    let mut services_detail = String::new();
+    if let Ok(services) = cf.list_services() {
+        let service_lines: Vec<String> = services
+            .iter()
+            .map(|s| {
+                let status_emoji = match s.status.as_str() {
+                    "active" => "✅",
+                    "beta" => "🧪",
+                    "preview" => "🔮",
+                    _ => "❓",
+                };
+                format!("{} {} ({})", status_emoji, s.name, s.kind)
+            })
+            .collect();
+        services_detail = format!("\n  Available services:\n    {}", service_lines.join("\n    "));
+    }
+
+    json!({
+        "check": "cloudflare provider",
+        "status": if all_detected { "ok" } else { "warn" },
+        "detail": format!("{}{}", detail, services_detail)
     })
 }

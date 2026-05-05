@@ -107,5 +107,14 @@ command = "OLLAMA_API_URL=http://localhost:1234 b00t grok status"
 # summary: Gemma 4 inference hive profile — dynamic unit, liter-llm gateway, grok/RAGLight on gemma4
 # tags: gemma4, hive, inference, vllm, liter-llm, pi, ch0nky, grok, raglight, dynamic-service
 # tier: ch0nky
+
+[[b00t.idiomatic]]
+name = "local-model-first"
+pattern = "prefer local inference (gemma4 on vLLM :8001) over cloud inference; no cloud API fallback"
+guard_ids = ["inference-gemma4.hive.toml:cloud-inference-detected"]
+principle = "Local inference is free, private, and deterministic. Cloud inference adds latency, cost, and data-exposure risk. Gemma4 26B-A4B handles all grok/RAGLight needs locally."
+context_saved = "~500ms latency per local call vs ~5s for cloud round-trip; $0 inference cost"
+topic = "inference-strategy"
+priority = "S"
 # cmds: systemctl --user start b00t@inference-gemma4
 # complexity: 6

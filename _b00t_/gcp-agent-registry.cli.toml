@@ -1,0 +1,185 @@
+[b00t]
+name = "gcp-agent-registry"
+type = "cli"
+hint = "Google Cloud Agent Registry - Centralized catalog for MCP servers, tools, and AI agents. C-priority code review delegation target for cloud-native agent discovery and governance."
+desires = "latest"
+keywords = ["gcp", "agent-registry", "mcp", "a2a", "agents", "google-cloud", "code-review", "c-priority", "governance"]
+
+# Google Cloud Agent Registry is a Pre-GA managed service for storing, discovering,
+# and governing MCP servers, tools, and AI agents within Google Cloud.
+# Part of the Gemini Enterprise Agent Platform.
+#
+# Interface: gcloud CLI + REST API (no dedicated gcloud agent-registry command group yet)
+# Python SDK: google-cloud-agent-registry
+
+install = '''
+echo "Installing Google Cloud Agent Registry tooling..."
+
+# Prerequisite: gcloud CLI
+if ! command -v gcloud >/dev/null 2>&1; then
+    echo "ERROR: gcloud CLI is required. Install it first:"
+    echo "  curl https://sdk.cloud.google.com | bash"
+    exit 1
+fi
+
+# Enable the Agent Registry API
+echo "Enabling Agent Registry API..."
+gcloud services enable agentregistry.googleapis.com --project="${GCP_PROJECT_ID:-$(gcloud config get project)}" 2>/dev/null || echo "WARNING: Could not enable API. Set GCP_PROJECT_ID or run 'gcloud auth login' first."
+
+# Install Python SDK
+echo "Installing Python SDK..."
+if command -v uv >/dev/null 2>&1; then
+    uv pip install google-cloud-agent-registry
+elif command -v pip >/dev/null 2>&1; then
+    pip install google-cloud-agent-registry
+else
+    echo "WARNING: Python package manager not found. Install google-cloud-agent-registry manually."
+fi
+
+echo "Agent Registry tooling installed."
+echo "Next: Set GCP_PROJECT_ID env var and run 'gcloud auth application-default login'"
+echo "Docs: https://docs.cloud.google.com/agent-registry/overview"
+'''
+
+update = '''
+echo "Updating Agent Registry Python SDK..."
+if command -v uv >/dev/null 2>&1; then
+    uv pip install --upgrade google-cloud-agent-registry
+elif command -v pip >/dev/null 2>&1; then
+    pip install --upgrade google-cloud-agent-registry
+fi
+echo "Agent Registry SDK updated."
+'''
+
+version = '''
+gcloud services list --enabled --filter="NAME:agentregistry" --format="value(config.name)" 2>/dev/null || echo "not-enabled"
+'''
+
+depends_on = ["python"]
+
+[b00t.env]
+# Google Cloud Agent Registry configuration
+GCP_PROJECT_ID = ""
+GCP_AGENT_REGISTRY_LOCATION = "global"
+GOOGLE_APPLICATION_CREDENTIALS = ""
+GCP_AGENT_REGISTRY_API_ENDPOINT = "agentregistry.googleapis.com"
+
+[[b00t.usage]]
+description = "Authenticate with gcloud for Agent Registry access"
+command = "gcloud auth application-default login"
+
+[[b00t.usage]]
+description = "Enable Agent Registry API"
+command = "gcloud services enable agentregistry.googleapis.com --project=${GCP_PROJECT_ID}"
+
+[[b00t.usage]]
+description = "List registered agents in project"
+command = '''
+TOKEN=$(gcloud auth print-access-token)
+curl -H "Authorization: Bearer $TOKEN" \
+  "https://${GCP_AGENT_REGISTRY_API_ENDPOINT}/v1/projects/${GCP_PROJECT_ID}/locations/${GCP_AGENT_REGISTRY_LOCATION}/agents"
+'''
+
+[[b00t.usage]]
+description = "List registered MCP servers"
+command = '''
+TOKEN=$(gcloud auth print-access-token)
+curl -H "Authorization: Bearer $TOKEN" \
+  "https://${GCP_AGENT_REGISTRY_API_ENDPOINT}/v1/projects/${GCP_PROJECT_ID}/locations/${GCP_AGENT_REGISTRY_LOCATION}/mcpServers"
+'''
+
+[[b00t.usage]]
+description = "Discover agents with code-review skill"
+command = '''
+TOKEN=$(gcloud auth print-access-token)
+curl -X GET \
+  -H "Authorization: Bearer $TOKEN" \
+  "https://${GCP_AGENT_REGISTRY_API_ENDPOINT}/v1/projects/${GCP_PROJECT_ID}/locations/${GCP_AGENT_REGISTRY_LOCATION}/agents?filter=skills:code-review"
+'''
+
+[[b00t.usage]]
+description = "Register a new service (agent/MCP server/endpoint)"
+command = '''
+TOKEN=$(gcloud auth print-access-token)
+curl -X POST \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "displayName": "my-review-agent",
+    "description": "Code review agent",
+    "agentType": "AGENT",
+    "skills": ["code-review", "security-scan"]
+  }' \
+  "https://${GCP_AGENT_REGISTRY_API_ENDPOINT}/v1/projects/${GCP_PROJECT_ID}/locations/${GCP_AGENT_REGISTRY_LOCATION}/services"
+'''
+
+[[b00t.usage]]
+description = "Query agents by annotation (e.g., PR number)"
+command = '''
+TOKEN=$(gcloud auth print-access-token)
+curl -X GET \
+  -H "Authorization: Bearer $TOKEN" \
+  "https://${GCP_AGENT_REGISTRY_API_ENDPOINT}/v1/projects/${GCP_PROJECT_ID}/locations/${GCP_AGENT_REGISTRY_LOCATION}/mcpServers?filter=annotations.pr:1234"
+'''
+
+[[b00t.references]]
+name = "Agent Registry Overview"
+url = "https://docs.cloud.google.com/agent-registry/overview"
+
+[[b00t.references]]
+name = "Gemini Enterprise Agent Platform"
+url = "https://cloud.google.com/gemini-enterprise-agent-platform"
+
+[[b00t.references]]
+name = "gcloud CLI Reference"
+url = "https://cloud.google.com/sdk/gcloud"
+
+[[b00t.references]]
+name = "Python SDK (google-cloud-agent-registry)"
+url = "https://pypi.org/project/google-cloud-agent-registry/"
+
+[[b00t.references]]
+name = "Delegation Playbook (b00t)"
+url = "file:///home/brianh/.b00t/_b00t_/EXECUTIVE-DELEGATION-PLAYBOOK.md"
+
+[[b00t.references]]
+name = "Delegation Targets (b00t)"
+url = "file:///home/brianh/.b00t/_b00t_/EXECUTIVE-DELEGATION-TARGETS.md"
+
+[b00t.learn]
+topic = "gcp-agent-registry"
+auto_digest = true
+content = """
+# Google Cloud Agent Registry - C-Priority Code Review Delegation Target
+
+## What It Is
+Agent Registry is a centralized catalog for MCP servers, tools, and AI agents
+within Google Cloud. Part of Gemini Enterprise Agent Platform. Pre-GA/Preview.
+
+## Why C-Priority for Code Review
+- Cloud-native agent discovery and governance
+- Standardized MCP/A2A protocol integration
+- Enables code review via discovered review agents
+- Fallback when language-specific reviewers unavailable
+
+## Key Concepts
+- **Service** (writable): Create/update/delete entries
+- **Agent** (read-only): Query autonomous agents by skills
+- **McpServer** (read-only): Query MCP servers by tools
+- **Endpoint** (read-only): Query REST API endpoints
+- **Skills**: High-level agent capabilities (e.g., code-review)
+- **Tools**: Deterministic functions exposed by MCP servers
+
+## Integration with b00t Delegation
+Use mcp_b00t_mcp_b00t_agent_delegate with:
+- priority: "C"
+- capabilities: "code-review,agent-discovery,mcp-scan"
+- worker: agent selected from registry
+
+## Auth
+- Service account key (GOOGLE_APPLICATION_CREDENTIALS)
+- Workload identity federation (CI/CD)
+- gcloud ADC (development)
+"""
+
+lfmf_category = "gcp-agent-registry"

@@ -1,0 +1,167 @@
+# b00t Context Hub (chub) Datum
+# .datum — extended TOML + markdown conventions
+# schema: 1 | bump on field definition changes
+# last_updated: 2026-05-04
+#
+# 🤓 Context Hub by Andrew Ng — curated, versioned API documentation for
+#    coding agents. Cleaner semantics than b00t in several areas (see below).
+#    This datum documents the tool and extracts patterns b00t should adopt.
+#
+# 🔗参 https://github.com/andrewyng/context-hub
+# 🔗参 npm package: @aisuite/chub
+# 🔗参 _b00t_/datums/ASSIMILATE-SCHEMA.tomllmd — b00t's assimilate pipeline
+# 🔗参 _b00t_/datums/cloudflare.datum — b00t's external repo cache
+
+[b00t]
+name = "CONTEXT-HUB"
+type = "datum"
+hint = "Context Hub (chub) by Andrew Ng — curated API docs for coding agents; extracted semantics for b00t improvement"
+
+[b00t.version]
+schema = 1
+content = "draft"
+
+# ── Overview ──────────────────────────────────────────────────────────────
+[chub]
+name = "context-hub"
+cli = "chub"
+package = "@aisuite/chub"
+lang = "TypeScript (Node.js)"
+license = "MIT"
+stars = "active development"
+author = "Andrew Ng"
+description = "Curated, versioned API documentation for coding agents. Agents fetch docs via CLI, annotate gaps locally, and feedback to maintainers."
+docs = "https://github.com/andrewyng/context-hub"
+
+# ── CLI Surface ───────────────────────────────────────────────────────────
+# 🤓 chub's CLI is the cleanest agent-tool interface b00t has seen.
+#    Four verbs. No flags beyond --lang. Pipes naturally.
+[chub.cli]
+install = "npm install -g @aisuite/chub"
+usage = "Run from terminal or prompt your agent: 'Use chub to get the latest API docs'"
+
+[[chub.cli.commands]]
+verb = "search"
+args = "[query]"
+description = "Search docs and skills. No query = list all."
+example = "chub search openai"
+notes = "Returns short IDs + descriptions. Agent picks which doc to fetch."
+
+[[chub.cli.commands]]
+verb = "get"
+args = "<id> [--lang py|js]"
+description = "Fetch docs by ID with language-specific variant."
+example = "chub get openai/chat --lang py"
+notes = "Content-addressable by logical path (e.g. openai/chat, stripe/api). Incremental fetch with --file flag."
+
+[[chub.cli.commands]]
+verb = "annotate"
+args = "<id> <note> | --list | --clear"
+description = "Attach a persistent local note to a doc. Survives across sessions."
+example = "chub annotate stripe/api 'Needs raw body for webhook verification'"
+notes = "Critical for agent self-improvement. Next session: annotation appears automatically on chub get."
+
+[[chub.cli.commands]]
+verb = "feedback"
+args = "<id> <up|down>"
+description = "Vote docs up or down. Sent to maintainers to improve content."
+example = "chub feedback openai/chat up"
+notes = "Creates a feedback loop between agent usage and doc quality."
+
+# ── Content Architecture ─────────────────────────────────────────────────
+# 🤓 500+ tool directories in content/. Each has:
+#    - README.md with YAML frontmatter (name, version, description, language)
+#    - Language-specific variants (py/ subdir for Python, js/ for JavaScript)
+#    - Reference files beyond main entry point (incremental fetch)
+[chub.content]
+total_dirs = "500+"
+format = "markdown + YAML frontmatter"
+language_variants = ["py", "js"]
+storage = "git repo (no database)"
+update_model = "PR-based contributions + automatic sync from upstream"
+
+# ── Clean Semantics — What b00t Should Adopt ─────────────────────────────
+# 🤓 Context Hub's design is cleaner than b00t's equivalent features in
+#    several ways. These are the patterns we should extract and adopt.
+#
+#    Core insight: chub's simplicity comes from ASYMMETRIC DESIGN.
+#    Reading docs (search, get) is free and universal. Writing docs
+#    (annotate, feedback) is local-first, async, and opt-in.
+#    b00t's grok has no such asymmetry — assimilate, digest, learn all
+#    write to shared backends with the same weight.
+[chub.semantics]
+
+[[chub.semantics.patterns]]
+name = "logical-content-addressing"
+chub = "chub get openai/chat    # content-addressable by logical name"
+b00t = "b00t grok ask 'OpenAI chat API' -t openai   # topic-based"
+better = "chub's approach: agent knows the name of the tool it needs (openai/chat). No topic taxonomy, no semantic search. Just fetch by name. Works because: (1) agents know what tool they're using, (2) doc names are obvious, (3) no taxonomy maintenance."
+adopt = "Add `--by-name` flag to `b00t grok consume` for direct logical-name addressing: `b00t grok consume openai/chat --by-name`. Falls back to topic search if name not found."
+
+[[chub.semantics.patterns]]
+name = "annotation-as-local-memory"
+chub = "chub annotate stripe/api '<note>'  # local, persistent, session-crossing"
+b00t = "b00t lfmf stripe '<lesson>'         # global, shared across hive"
+better = "chub's annotations are LOCAL — they survive only on this machine. b00t's LFMF lessons are GLOBAL — shared across the hive. Both have value. But chub's design is safer: agents can annotate without worrying about polluting shared knowledge."
+adopt = "Add `--local` flag to `b00t lfmf` for machine-local lessons that don't sync to irontology. Local annotations are GC'd after 30 days unless promoted with `b00t lfmf --promote`."
+
+[[chub.semantics.patterns]]
+name = "language-variant-docs"
+chub = "chub get openai/chat --lang py  # automatic Python variant"
+b00t = "b00t grok assimilate -t rust '...'   # topic as proxy for language"
+better = "chub separates CONTENT from LANGUAGE VARIANT. Same doc, different language bindings. b00t mixes topic and language into one axis."
+adopt = "Add `--lang py|rs|ts` to assimilate pipeline. Tags content with language variant metadata. Query with `--lang` filter."
+
+[[chub.semantics.patterns]]
+name = "asymmetric-read-write"
+chub = "search/get = free; annotate/feedback = local-first, lightweight"
+b00t = "assimilate/digest/learn = all write to shared backends with same weight"
+better = "chub makes reading zero-friction (no auth, no taxonomy, just fetch). Writing is local by default, only promoted to shared on opt-in. b00t's grok has no distinction."
+adopt = "Add `b00t grok fetch <name>` — lightweight read-only fetch that doesn't create datums or transaction log entries. Just get the content and display it."
+
+[[chub.semantics.patterns]]
+name = "four-verb-surface"
+chub = "search | get | annotate | feedback"
+b00t = "digest | ask | learn | assimilate | consume | replay | status"
+better = "chub has 4 verbs. b00t grok has 6+ with overlapping semantics. Fewer verbs = less agent stumbling."
+adopt = "Consolidate b00t grok verbs. Map: search→ask, get→consume --by-name, annotate→lfmf --local, feedback→groked (stub: upvote/downvote datums)."
+
+# ── Integration with b00t ────────────────────────────────────────────────
+# 🤓 chub can feed b00t's assimilate pipeline directly:
+#    chub get openai/chat --lang py | b00t grok consume --name openai/chat --lang py
+#
+#    Or b00t can wrap chub as a data source:
+#    b00t grok consume --chub openai/chat --lang py
+[chub.integration]
+method = "pipe-via-cli"
+command = "chub get {id} --lang {lang} | b00t grok consume --name {id} --topic api-docs"
+requires = ["npm", "@aisuite/chub"]
+
+[[chub.integration.examples]]
+id = "openai/chat"
+lang = "py"
+command = "chub get openai/chat --lang py | b00t grok consume --name openai/chat --topic openai --lang py"
+
+[[chub.integration.examples]]
+id = "cloudflare/api"
+lang = "js"
+command = "chub get cloudflare/api --lang js | b00t grok consume --name cloudflare/api --topic cloudflare --lang js"
+
+# ── Changelog ────────────────────────────────────────────────────────────
+# 2026-05-04: Initial datum. Extracted 5 clean semantics patterns.
+
+# b00t:map v1
+# summary: Context Hub (chub) datum — CLI surface (search/get/annotate/feedback), 500+ curated API docs, clean semantics extraction (logical-content-addressing, annotation-as-local-memory, language-variant-docs, asymmetric-read-write, four-verb-surface), integration via pipe to assimilate pipeline
+# tags: context-hub, chub, andrew-ng, api-docs, cli, annotations, feedback, semantics, pattern-extraction
+# tier: ch0nky
+# cmds: chub search openai, chub get openai/chat --lang py, chub annotate stripe/api "note", b00t grok consume --chub openai/chat
+# complexity: 3
+
+[[b00t.idiomatic]]
+name = "context-is-ephemeral"
+pattern = "context hub annotations are LOCAL and ephemeral — they survive on this machine only, GC'd after 30 days"
+guard_ids = ["CONTEXT-HUB.datum:annotation-gc-expired"]
+principle = "Local annotations are safer than global shared knowledge. Agents can annotate without worrying about polluting shared knowledge. Promote to global with `b00t lfmf --promote`."
+context_saved = "Agent doesn't second-guess whether a local observation is globally useful. ~15 tokens per annotation."
+topic = "knowledge-management"
+priority = "B"

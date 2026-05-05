@@ -7,6 +7,100 @@
 
 **b00t** is a context-aware agentic operating layer: tool discovery, version management, tribal knowledge, multi-agent coordination, and MCP integration — batteries included.
 
+## 🛡️ b00t + Ledgrrr = Agentic Shell Governance Layer ⚙️
+
+Not "alignment" as abstract policy text — but **runtime alignment at the command boundary**:
+
+```
+LLM intent → shell command proposal → b00t hook interception
+    → Ledgrrr policy / memory / provenance checks
+    → guided execution, denial, rewrite, or audit trail
+```
+
+Shell hooks are the **last-mile control plane for agentic systems**. Why it matters:
+
+| Property | What it means |
+|----------|--------------|
+| **Interception point** | Commands, filesystem writes, env mutation, network calls, git ops |
+| **Guidance loop** | Not just block/allow — suggest safer, idiomatic alternatives |
+| **Provenance** | Ledgrrr records *why* an action happened, not merely *that* it happened |
+| **Alignment surface** | Policy becomes executable constraints *near the actual side effects* |
+| **Composable primitive** | Works under Codex, Claude Code, aider, custom agents, CI bots, and human operators |
+
+**Core thesis:** b00t turns the shell into an alignment boundary. Ledgrrr turns every boundary decision into accountable memory.
+
+### How It Works
+
+```
+Agent types: "pip install flask"
+    ↓
+b00t hive run "pip install flask"
+    ↓
+Guard pipeline evaluates 61+ deterministic rules:
+  ├── pip_guard → match → 🦨 "use uv pip install"
+  ├── docker_guard → no match
+  ├── rm_rf_guard → no match  
+  ├── cargo_clean → no match
+  └── ...
+    ↓
+Result: 🦨 warn + redirect to "uv pip install flask"
+    ↓
+Command executes (transformed) — agent learns the idiom
+```
+
+### What Makes It Different
+
+| Traditional sandbox | b00t guard system |
+|-------------------|-------------------|
+| Blocks or allows | **Guides** with redirects |
+| Security boundaries | **Behavioral conventions** |
+| Static allow/deny lists | **Executable Rhai logic** |
+| Human-maintained | **Datum-driven, auto-generated** |
+| OS-brittle path checks | **`tool_installed()` via datum registry** — cross-platform |
+| Opaque failure | **Explanatory messages with alternatives** |
+
+### Deterministic Only — No LLM in the Loop
+
+Every guard is an executable pattern or Rhai expression — never an LLM call. Guards are:
+- **Pattern-based**: `pattern = "pip install"` → substring match
+- **Rhai-based**: `pattern = { rhai = "cmd.contains(\"git\") && cmd.contains(\"--force\")" }` → boolean expression
+- **Macro-based**: `pattern = { rhai = "pip_guard || docker_guard" }` → composes named macros
+- **Steering-based**: `tool_installed("podman")` → datum-probed runtime branching
+
+**61 guards** across 8 categories:
+
+| Category | Guards | Example |
+|----------|--------|---------|
+| Package managers | 6 | pip → uv, conda, brew, npm global, apt -y |
+| Containers | 4 | docker → podman, compose, build |
+| Destructive ops | 12 | rm -rf /etc, /var, /bin, chown -R, sudo rm -rf |
+| Git safety | 8 | force push, main branch, conventional commits |
+| API/Secret exposure | 4 | --token, --api-key, --password, export SECRET |
+| Code safety | 4 | curl | bash, chmod 777, sed -i backup |
+| Build optimization | 4 | cargo test --no-run, cargo clean, npx --yes |
+| SCM conventions | 5 | branch naming, commit format, PR workflow |
+
+### Ledgrrr Integration
+
+Ledgrrr provides the **FOCUS v1.3** record schema for cost attribution and the `b00t-iface` lifecycle interface. Every guard violation is logged as a structured event — auditable, replayable, attributable to the agent that triggered it.
+
+```toml
+# Guard violation log entry (~/.b00t/guard-violations.jsonl)
+{"pattern": "pip install", "count": 3, "last_violation": "2026-05-04T22:30:00Z"}
+```
+
+The fine-tuning corpus at `~/.b00t/fine-tuning/guard-classification.jsonl` (301 examples) enables models to learn guard behavior directly — reducing violations over time.
+
+### For Agents Reading This
+
+When you operate in a b00t environment:
+1. **Every command is guarded** — `b00t hive run <cmd>` evaluates 61+ deterministic rules
+2. **Guards don't block arbitrarily** — they guide with idiomatic alternatives
+3. **The guards encode team conventions** — `docker` → `podman`, `pip` → `uv`, `main` → PR
+4. **Violations are counted** — repeat offenses escalate (🦨 → 💩)
+5. **You can query the guard system**: `b00t hive status --guards` to see all active rules
+6. **tool_installed("name")** probes the datum registry — always prefer this over `which` or `file_exists`
+
 ---
 
 ## ⚡ Install

@@ -32,10 +32,13 @@ pub mod agent_coordination;
 pub mod agent_manager;
 pub mod ai_client;
 pub mod b00t_config;
+pub mod cloud;
 pub mod context;
+pub mod sql;
 pub mod datum_ai_model;
 pub mod datum_lsp;
 pub mod datum_types;
+pub mod delegation_limiter;
 pub mod dual_grok;
 pub mod dual_install;
 pub mod codebase_memory;
@@ -65,6 +68,7 @@ pub use ai_client::{AiClientConfig, AiProviderConfig, B00tAiClient, ChatMessage}
 pub use b00t_config::{AiConfiguration, B00tUnifiedConfig, CloudServicesConfig, UserConfig};
 pub use context::B00tContext;
 pub use datum_types::{LearnMetadata, UsageExample, deserialize_usage};
+pub use delegation_limiter::DelegationLimiter;
 pub use dual_grok::{
     ControlCodeEvent, ControlEventCapability, ControlEventReceipt, ControlEventSink, ControlReply,
     DualGrokClient, DualIngestResult, DualQueryItem, DualQueryResult, GrokBackend,

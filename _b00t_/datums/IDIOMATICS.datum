@@ -1,0 +1,213 @@
+# b00t Idiomatics Datum — Agent Style Guide & Context Ministry
+# .datum — TOML with enriched comment conventions
+# schema: 1 | bump on field definition changes
+# last_updated: 2026-05-04
+#
+# 🤓 Idio·matics (n.) — a class of amorphous contextual knowledge about
+#    patterns & anti-patterns that cannot be schema'd into a strict format.
+#    They are the g0spell (gospel way of working): jargon, naming conventions,
+#    and pragmatic idiomatic guidance that agents must absorb to speak the
+#    tribe's language without wasting context.
+#
+#    Unlike schema datums (which define data structures) or capability datums
+#    (which define tool APIs), idiomatics encode TASTE — the collective
+#    judgment of "that's how we do it here."
+#
+#    Idiomatics are a STYLE GUIDE for agents. They reduce context spend by
+#    making the right choice the obvious choice. A well-internalized idiomatic
+#    pattern eliminates entire deliberation chains from agent reasoning.
+#
+# 🔗参 b00t-cli/src/commands/guard.rs — GuardCommands::Flag with --bug/--waste/--gap
+# 🔗参 _b00t_/hive-guards.hive.toml — guard definitions with repeat_threshold
+# 🔗参 _b00t_/friction-report.tomllm — friction report routing & anti-patterns
+# 🔗参 AGENTS/--role=operator.md — operator delegation patterns
+# 🔗参 b00t-cli/src/commands/toon.rs — toon format output conventions
+
+[b00t]
+name = "IDIOMATICS"
+type = "datum"
+hint = "Idiomatics — agent style guide: naming conventions, context-ministry patterns, jargon g0spell, entangled with guard enforcement. Not a schema, not a capability — amorphous taste encoded as TOML."
+
+[b00t.version]
+schema = 1
+content = "draft"
+
+# ── Core Principle ───────────────────────────────────────────────────────
+# Idiomatics are anti-schema. They resist strict typing because they deal
+# with TASTE. The value is in the examples and the reasoning, not the fields.
+#
+# Every idiomatic entry must answer: "what context does this save?"
+#
+# ⚖️ Tradeoff: encoding taste prevents bad choices, but can calcify into
+#    cargo-culting if not periodically revisited. Idiomatics have a half-life.
+#    Revisit when the guard system emits a pattern that contradicts an idiomatic.
+
+# ── Pattern: Polyseme Purge ────────────────────────────────────────────
+# If a command name has >1 plausible meaning in its context, rename it.
+# An agent spends 0 tokens choosing the right meaning if there IS only one.
+# Context cost: every polyseme forces a disambiguation check in agent reasoning.
+
+[[idiomatics.patterns]]
+name = "polyseme-purge"
+problem = "A noun that means both an output and an input (e.g. 'report' = generated artifact vs incoming submission)"
+principle = "Choose a verb that describes the ACTION, not the artifact. Verbs have fewer polysemes than nouns."
+example_good = "`b00t guard flag <id> --bug` — flag is the action: raise an issue"
+example_bad = "`b00t guard report <id> --severity bug` — report is ambiguous: file a report? generate a report?"
+context_saved = "Agent doesn't disambiguate between 'write to stdout' vs 'file a ticket'. ~20 tokens per reference."
+guard_enforcement = "guard docs footer references `b00t guard flag` not `b00t guard report`"
+
+# ── Pattern: Type Flags Over Severity Flags ─────────────────────────────
+# Severity (high/med/low) describes IMPACT. Type (bug/waste/gap) describes
+# CATEGORY. These are orthogonal axes. Using --severity for both conflates
+# what kind of issue it is with how bad it is.
+
+[[idiomatics.patterns]]
+name = "type-over-severity"
+problem = "Using --severity high|med|low when the real question is 'what kind of thing is this?'"
+principle = "Use orthogonal boolean flags for TYPE. Severity is a separate concern, often internal. If severity is needed, add --severity as a second axis, not a replacement."
+example_good = "`b00t guard flag <id> --bug --waste` — two types can be true simultaneously. Bitwise composable."
+example_bad = "`b00t guard flag <id> --severity bug` — 'bug' is not a severity level. Bug is a type. High is a severity."
+context_saved = "Agent doesn't need to map categories onto severity scale. ~30 tokens saved per flag usage."
+guard_enforcement = "`b00t guard flag` subcommand uses --bug --waste --gap boolean flags, not --severity"
+
+# ── Pattern: Bitwise Flag Composition ───────────────────────────────────
+# When types are orthogonal, use boolean flags that can be combined.
+# This avoids compound enum variants (Bug|Waste|Gap|BugAndWaste|...) and
+# allows agents to express complex issues in one call.
+
+[[idiomatics.patterns]]
+name = "bitwise-flags"
+problem = "Compound enum values explode in N*(N-1) combinations when types overlap"
+principle = "Use independent boolean --flags for orthogonal categories. Combine freely. The handler aggregates."
+example_good = "`--bug --waste` = a buggy guard that also wastes tokens. Single command, two bits set."
+example_bad = "`--type bug-and-waste` or `--severity bug-waste` — invented categories, grep-hostile."
+context_saved = "No enum-table lookup. Agent just sets bits. ~15 tokens saved per command design."
+
+# ── Pattern: Verb-Only Subcommand Surface ──────────────────────────────
+# Prefer verbs over nouns for subcommand names. Verbs describe what the
+# agent IS DOING. Nouns describe what the agent IS LOOKING AT.
+# Agent cognition is action-oriented — verbs match the mental model.
+
+[[idiomatics.patterns]]
+name = "verb-surface"
+problem = "Noun subcommands create ambiguity between 'get info about X' and 'do operation X'"
+principle = "CLI subcommands should be verbs: flag, list, docs, check. NOT nouns: report, ticket, record."
+example_good = "`b00t guard flag` (action), `b00t guard docs` (action: document)"
+example_bad = "`b00t guard report` (noun — what is report? a file? a submission?)"
+context_saved = "Agent maps subcommand directly to intent. No disambiguation step."
+
+# ── Anti-Patterns ──────────────────────────────────────────────────────
+
+[[idiomatics.anti_patterns]]
+name = "severity-tunneling"
+pattern = "Using --severity with non-severity values (bug, waste, gap, etc.)"
+why = "Agents trained on 'severity means high/med/low' will misparse. Non-standard severity dimensions cause semantic confusion."
+fix = "Add a --type flag or individual boolean flags for categories. Keep --severity for its actual meaning (impact level)."
+
+[[idiomatics.anti_patterns]]
+name = "report-polyseme"
+pattern = "Using 'report' as a CLI subcommand when the operation is 'file a report' not 'generate a report'"
+why = "report is the canonical polyseme: output artifact vs incoming submission. Agent must context-switch between reader and writer mode."
+fix = "Use 'flag' for filing issues, 'log' for recording events, 'emit' for generating output."
+
+[[idiomatics.anti_patterns]]
+name = "severity-as-type"
+pattern = "Encoding type information (bug/waste/gap) as values of a severity flag"
+why = "Severity measures magnitude, not category. An agent can't filter 'all bugs' vs 'all high-severity issues' with the same flag."
+fix = "Add type flags (--bug, --waste, --gap) orthogonal to --severity (--severity high). Both can be used together."
+
+[[idiomatics.anti_patterns]]
+name = "jargon-drift"
+pattern = "Using a term one way in code, another way in docs, another way in conversation"
+why = "Agents learn from all three sources. Inconsistency forces disambiguation every session."
+fix = "Entangle with guard system: if docs say one thing and CLI help says another, the mismatch is a guardable error. Enforced by `b00t guard docs` consistency check."
+
+# ── Guard Entanglement ──────────────────────────────────────────────────
+# Idiomatics are not just advisory — they are enforced through the guard
+# system. When a guard fires with a warning, it should cite the relevant
+# idiomatic. When an idiomatic is violated in the codebase, it should
+# surface as a guard violation.
+
+[idiomatics.guard_entanglement]
+description = "Guards enforce idiomatics at runtime. Idiomatics guide guard design at authoring time."
+pattern = "Every guard violation message SHOULD reference the idiomatic it enforces. Every idiomatic SHOULD have a guard_enforcement field."
+circular_guard = "Guard that checks if a guard message cites its idiomatic reference. Meta — but valid."
+example = "pip install guard → '🦨 use uv pip install (idiomatic: uv-over-pip)'"
+
+# Every idiomatic SHOULD have at least one guard that enforces it.
+# The guard ID (from b00t guard docs) SHOULD be referenced here.
+[[idiomatics.guard_entanglement.enforcements]]
+idiomatic = "polyseme-purge"
+guard_id = "hive-guards.hive.toml:report-polyseme"
+description = "Guard detects CLI help text or docs using 'report' as ambiguous subcommand"
+
+[[idiomatics.guard_entanglement.enforcements]]
+idiomatic = "type-over-severity"
+guard_id = "hive-guards.hive.toml:severity-type-mismatch"
+description = "Guard detects --severity being used with non-severity category values"
+
+# ── G0spell — Gospel Way of Working ────────────────────────────────────
+# These are the tribal knowledge items that transcend individual patterns.
+# They're the "why" behind the "what" in the guards.
+
+[[idiomatics.g0spell]]
+name = "context-ministry"
+tier = "tenet"
+doctrine = "Every agent decision must be justifiable in context tokens saved vs spent. If a pattern doesn't save at least ~15 tokens per encounter, it's not idiomatic — it's preference."
+razor = "Context-cost-of-ambiguity < token-saved-by-convention → adopt. Otherwise → don't."
+
+[[idiomatics.g0spell]]
+name = "guard-as-doc"
+tier = "principle"
+doctrine = "The guard message IS the documentation. An agent that hits a guard learns the idiomatic immediately — no separate doc search needed. Guard messages must be self-contained learning moments."
+razor = "A guard message that says 'see docs' is a failed guard. Every guard must explain WHAT, WHY, and WHAT-TO-DO-INSTEAD ≤ 160 chars."
+
+[[idiomatics.g0spell]]
+name = "verb-over-noun"
+tier = "principle"
+doctrine = "CLIs are conversations with agents. Agents think in verbs (what do I DO next?). Noun-heavy surfaces force a translation step from user intent to command syntax."
+evidence = "`b00t guard flag` — agent reads 'flag' and knows it's an action. `b00t guard report` — agent must decide: do I read or write?"
+
+[[idiomatics.g0spell]]
+name = "single-axis-flags"
+tier = "preference"
+doctrine = "Each flag axis should be orthogonal. --bug, --waste, --gap are independent. --severity is a second axis. Don't make flags that imply each other or overlap."
+evidence = "A guard that has a bug AND wastes tokens: --bug --waste. No compound enum variant needed."
+
+# ── Jargon Glossary ────────────────────────────────────────────────────
+# Terms that have specific meanings in the b00t context that differ from
+# general English usage. Agents MUST use these terms precisely.
+
+[idiomatics.jargon]
+flag = "Verb: file a structured issue report. NOT a noun meaning 'a boolean toggle.' Usage: `b00t guard flag <id> --bug`."
+report = "⚠️ POLYSEME — avoid as command name. Use 'flag' for filing, 'emit' for generating, 'log' for recording."
+severity = "Impact level: high/med/low ONLY. NOT a type axis. Not interchangeable with 'bug', 'waste', or 'gap'."
+bug = "A guard fires when it shouldn't, or doesn't fire when it should."
+waste = "A guard wastes tokens or agent context — message too long, unnecessary check."
+gap = "A guard should exist for a common pattern but doesn't."
+idiomatic = "A context-saving convention. Not a rule, not a preference — a proven token-minimization pattern."
+
+# b00t:map v1
+# summary: Idiomatics — agent style guide for b00t. Polyseme purge, type-over-severity, bitwise flags, verb-surface. Entangled with guard enforcement. Context-ministry tenet: every pattern justified in tokens saved. Report→flag rename case study. Guard capability entangled via guard_enforcement field.
+# tags: idiomatics, style-guide, g0spell, context-ministry, guard, anti-pattern, polyseme, bitwise, naming, jargon, taste
+# tier: frontier
+# cmds: b00t guard docs, b00t guard flag <id> --bug --description "...", b00t guard flag <id> --waste --gap
+# complexity: 6
+
+[[b00t.idiomatic]]
+name = "polyseme-purge"
+pattern = "if a command name has >1 plausible meaning, rename it"
+guard_ids = ["IDIOMATICS.datum:polyseme-detected"]
+principle = "A noun that means both an output and an input forces agent disambiguation. Choose a verb that describes the ACTION."
+context_saved = "~20 tokens per reference — agent doesn't disambiguate between 'write to stdout' vs 'file a ticket'"
+topic = "naming-conventions"
+priority = "S"
+
+[[b00t.idiomatic]]
+name = "type-over-severity"
+pattern = "severity describes IMPACT; type describes CATEGORY — use orthogonal boolean flags for type"
+guard_ids = ["IDIOMATICS.datum:severity-type-mismatch"]
+principle = "Using --severity for both conflates what kind of issue it is with how bad it is. Add --bug/--waste/--gap boolean flags orthogonal to --severity."
+context_saved = "~30 tokens saved per flag usage — agent doesn't need to map categories onto severity scale"
+topic = "flag-design"
+priority = "A"

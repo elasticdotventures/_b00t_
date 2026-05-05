@@ -79,7 +79,7 @@ b00t learn gemini
 | Architecture analysis | High | architecture-strategist | TOGAF expertise |
 | Security audit | Medium | security-sentinel | OWASP compliance |
 | Code review | Medium | kieran-*-reviewer | Language-specific |
-| Code review (cloud) | Medium | google-cloud-agent-registry | Google Cloud Agent Registry — C-priority recommended option for agent-based code review |
+| Code review (cloud) | Medium | google-cloud-agent-registry | Google Cloud Agent Registry — C-priority recommended option for agent-based code review. Datum: datums/gcp-agent-registry.datum |
 | Performance analysis | Medium | performance-oracle | Profiling expertise |
 | Simple edits (<50 LOC) | Low | **Executive** | Direct action faster |
 | User interaction | Low | **Executive** | Context required |
@@ -211,6 +211,7 @@ I, the next executive agent, hereby commit to:
 - `B00T-CAPABILITY-MAP.md` - Strategic capability inventory
 - `openai-codex-mcp.mcp.toml` - Codex configuration
 - `gemini-mcp-tool.mcp.toml` - Gemini configuration
+- `datums/gcp-agent-registry.datum` - GCP Agent Registry datum
 
 ---
 

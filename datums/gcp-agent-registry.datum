@@ -1,0 +1,255 @@
+# gcp-agent-registry datum
+
+## Overview
+
+**Google Cloud Agent Registry** is a centralized, unified catalog that lets you
+store, discover, and govern Model Context Protocol (MCP) servers, tools, and AI
+agents within Google Cloud. It corresponds to the governance pillar and
+inventory of your agents, servers, and endpoints in Gemini Enterprise Agent
+Platform.
+
+**Status**: Pre-GA (Preview). Subject to Pre-GA Offerings Terms.
+
+**URL**: https://docs.cloud.google.com/agent-registry/overview
+
+## Purpose in b00t
+
+GCP Agent Registry is designated as a **C-priority delegation target** for
+cloud-based code review in the b00t executive delegation system. It allows
+agents to:
+
+- Discover and reuse existing agent skills and MCP tools across an organization
+- Query the registry to identify available agent capabilities for code review
+- Enforce governance boundaries across agentic fleets
+- Standardize on MCP or A2A protocols for agent-to-agent communication
+
+Referenced in:
+- `EXECUTIVE-DELEGATION-TARGETS.md` — Code review (cloud) row
+- `EXECUTIVE-DELEGATION-PLAYBOOK.md` — Delegation decision tree, item 6
+
+## Priority Classification
+
+| Priority | Type | Use Case |
+|----------|------|----------|
+| C | Cloud code review | When language-specific reviewers (kieran-*-reviewer) are unavailable or cloud-native review needed |
+
+## Data Model
+
+Agent Registry separates read and write operations:
+
+- **Service** (writable) — Create, update, delete agent/MCP server/endpoint entries
+- **Agent** (read-only) — Get, list, and search for autonomous AI agents
+- **McpServer** (read-only) — Get, list, and search for MCP protocol servers
+- **Endpoint** (read-only) — Get, list, and search for REST API endpoint targets
+
+### Service Types
+
+| Type | Description |
+|------|-------------|
+| Agents | Autonomous actors with skills (high-level capabilities) |
+| MCP servers | Providers of standardized data resources and tools |
+| Endpoints | Target URLs (REST APIs) accessed by agents |
+
+## Auth Requirements
+
+### GCP Service Account (Recommended)
+
+```bash
+# Create service account
+gcloud iam service-accounts create agent-registry-sa \
+    --display-name="Agent Registry Service Account"
+
+# Grant Agent Registry roles
+gcloud projects add-iam-policy-binding <PROJECT_ID> \
+    --member="serviceAccount:agent-registry-sa@<PROJECT_ID>.iam.gserviceaccount.com" \
+    --role="roles/agentregistry.serviceAgent"
+
+# Download key
+gcloud iam service-accounts keys create ~/.b00t/gcp-agent-registry-key.json \
+    --iam-account=agent-registry-sa@<PROJECT_ID>.iam.gserviceaccount.com
+```
+
+### Workload Identity Federation (Alternative)
+
+```bash
+# For GitHub Actions, GitLab CI, or other workload providers
+gcloud iam workload-identity-pools create agent-registry-pool \
+    --location="global" \
+    --display-name="Agent Registry Pool"
+
+gcloud iam workload-identity-pools providers create-oidc <PROVIDER> \
+    --location="global" \
+    --workload-identity-pool="agent-registry-pool" \
+    --issuer-uri="https://token.actions.githubusercontent.com" \
+    --attribute-mapping="google.subject=assertion.sub"
+```
+
+## Integration with b00t Delegation System
+
+### Via mcp_b00t_mcp_b00t_agent_delegate
+
+When delegating code review to GCP Agent Registry, use the standard
+delegation contract from `delegation-language.datum.toml`:
+
+```json
+{
+  "description": "Code review via GCP Agent Registry",
+  "worker": "gcp-agent-registry",
+  "capabilities": "code-review,agent-discovery,mcp-scan",
+  "priority": "C",
+  "deadline": "30"
+}
+```
+
+### SCORE/EXIT signal format
+
+```text
+SCORE: PASS:gcp-agent-registry:review-complete
+SCORE: FAIL:gcp-agent-registry:<reason>
+EXIT_SIGNAL: true
+```
+
+## How to Use as a Code Reviewer Target
+
+### 1. Discover Available Review Agents
+
+Query the registry for agents with code-review skills:
+
+```bash
+curl -X GET \
+  -H "Authorization: Bearer $(gcloud auth print-access-token)" \
+  "https://agentregistry.googleapis.com/v1/projects/<PROJECT>/locations/global/agents?filter=skills:code-review"
+```
+
+### 2. Submit Code for Review
+
+Register a code review task as an endpoint or MCP server resource:
+
+```bash
+curl -X POST \
+  -H "Authorization: Bearer $(gcloud auth print-access-token)" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "displayName": "PR #1234 Review",
+    "description": "Review changes in PR #1234 for security and quality",
+    "agentType": "MCP_SERVER",
+    "skills": ["code-review", "security-scan"],
+    "annotations": {
+      "repo": "my-org/my-repo",
+      "pr": "1234",
+      "priority": "C"
+    }
+  }' \
+  "https://agentregistry.googleapis.com/v1/projects/<PROJECT>/locations/global/services"
+```
+
+### 3. Query Review Results
+
+```bash
+curl -X GET \
+  -H "Authorization: Bearer $(gcloud auth print-access-token)" \
+  "https://agentregistry.googleapis.com/v1/projects/<PROJECT>/locations/global/mcpServers?filter=annotations.pr:1234"
+```
+
+## Env Vars Needed
+
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `GOOGLE_APPLICATION_CREDENTIALS` | Yes* | - | Path to service account JSON key |
+| `GCP_PROJECT_ID` | Yes | - | GCP project ID for Agent Registry |
+| `GCP_AGENT_REGISTRY_LOCATION` | No | `global` | Location (global or region) |
+| `GCP_AGENT_REGISTRY_API_ENDPOINT` | No | `agentregistry.googleapis.com` | API endpoint |
+
+*Required unless using workload identity federation or gcloud ADC.
+
+## CLI Interface
+
+The primary interface is the **gcloud CLI** + Agent Registry REST API.
+There is no dedicated `gcloud agent-registry` command group yet (Pre-GA).
+Use the REST API with gcloud auth tokens:
+
+```bash
+# Get auth token
+TOKEN=$(gcloud auth print-access-token)
+
+# List agents in project
+curl -H "Authorization: Bearer $TOKEN" \
+  "https://agentregistry.googleapis.com/v1/projects/$GCP_PROJECT_ID/locations/$GCP_AGENT_REGISTRY_LOCATION/agents"
+
+# List MCP servers
+curl -H "Authorization: Bearer $TOKEN" \
+  "https://agentregistry.googleapis.com/v1/projects/$GCP_PROJECT_ID/locations/$GCP_AGENT_REGISTRY_LOCATION/mcpServers"
+```
+
+## Client Libraries
+
+### Python (google-cloud-agent-registry)
+
+```python
+from google.cloud import agentregistry
+
+client = agentregistry.AgentRegistryClient()
+parent = f"projects/{project_id}/locations/global"
+
+# List agents
+agents = client.list_agents(parent=parent)
+for agent in agents:
+    print(f"Agent: {agent.display_name}")
+    print(f"  Skills: {agent.skills}")
+
+# List MCP servers
+servers = client.list_mcp_servers(parent=parent)
+for server in servers:
+    print(f"MCP Server: {server.display_name}")
+    print(f"  Tools: {server.tools}")
+```
+
+### Installation
+
+```bash
+pip install google-cloud-agent-registry
+# or with uv
+uv pip install google-cloud-agent-registry
+```
+
+## gcloud Setup
+
+```bash
+# Ensure gcloud is installed and authenticated
+gcloud auth application-default login
+
+# Enable the Agent Registry API
+gcloud services enable agentregistry.googleapis.com \
+    --project=<PROJECT_ID>
+
+# Verify API is enabled
+gcloud services list --enabled \
+    --filter="NAME:agentregistry" \
+    --project=<PROJECT_ID>
+```
+
+## Upstream
+
+- Documentation: https://docs.cloud.google.com/agent-registry/overview
+- API Reference: https://cloud.google.com/agent-registry/docs/reference
+- Gemini Enterprise Agent Platform: https://cloud.google.com/gemini-enterprise-agent-platform
+
+## Date
+
+2026-05-04
+
+## Tags
+
+#gcp #agent-registry #code-review #delegation #c-priority #mcp #a2a #google-cloud #agents
+
+## b00t:map v1
+
+```yaml
+# b00t:map v1
+summary: GCP Agent Registry — centralized catalog for MCP servers, tools, and AI agents; C-priority cloud code review delegation target
+tags: gcp, agent-registry, code-review, delegation, c-priority, mcp, a2a, google-cloud, agents
+tier: cloud
+priority: C
+cmds: gcloud auth print-access-token, curl to agentregistry.googleapis.com, pip install google-cloud-agent-registry
+complexity: 4
+```
