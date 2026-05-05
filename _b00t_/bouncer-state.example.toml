@@ -1,0 +1,22 @@
+[meta]
+created = "2026-05-05T01:02:00Z"
+context_file = "context.md"
+
+[state]
+phase = "research"
+turn = 0
+max_turns = 5
+agent_a = "developer"
+agent_b = "reviewer"
+
+[results]
+agent_a_ready = false
+agent_b_approved = false
+agent_a_fixes = 0
+review_round = 0
+
+[artifacts]
+test_files = []
+stub_files = []
+last_review = ""
+last_revision = ""

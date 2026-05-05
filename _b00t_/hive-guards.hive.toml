@@ -33,13 +33,35 @@ npm_global_guard = "cmd.contains(\"npm\") && cmd.contains(\"install\") && cmd.co
 brew_guard = "cmd.contains(\"brew\") && cmd.contains(\"install\")"
 hf_download_guard = "cmd.contains(\"huggingface-cli\") && cmd.contains(\"download\")"
 ulimit_guard = "cmd.contains(\"ulimit\") && cmd.contains(\"-n\")"
-rm_rf_guard = "cmd.contains(\"rm\") && cmd.contains(\"-rf\") && cmd.contains(\"/ \")"
+rm_rf_guard = "cmd.contains(\"rm\") && cmd.contains(\"-rf\") && (cmd.contains(\" /etc\") || cmd.contains(\" /var\") || cmd.contains(\" /bin\") || cmd.contains(\" /boot\") || cmd.contains(\" /dev\") || cmd.contains(\" /lib\") || cmd.contains(\" /proc\") || cmd.contains(\" /sys\") || cmd.contains(\" /usr\") || cmd.contains(\" / \"))"
 
 # Pipe-compatible function-form macros (registered as Rhai functions)
 # These enable `|>` pipe operator: cmd | is_docker() | is_run()
 # @tribal: function-form macros are registered via Rhai engine.register_fn() in hook_engine.rs.
 # Expression-form macros compose via `||` / `&&` — function-form macros compose via `|>`.
 # Both forms coexist; guards can reference either.
+
+# --- Idiomatic Guard Macros (8 concepts from Plan) ---
+
+# GUARD 4: rename-all-references — catches git mv without prior reference grep
+rename_refs_guard = "cmd.contains(\"git mv\") || cmd.contains(\"git rename\")"
+
+# GUARD 1: agent-format-errors — catches bail!/anyhow! with >120 char messages
+# Also catches cargo doc / write ops that introduce long error strings
+long_err_guard = "cmd.contains(\"bail!\") || cmd.contains(\"anyhow!\") || cmd.contains(\"eprintln!\") || (cmd.contains(\"error\") && cmd.len() > 120)"
+
+# GUARD 2: help-from-impl — catches clap about=/long_about= that may drift
+help_drift_guard = "cmd.contains(\"clap\") && (cmd.contains(\"about\") || cmd.contains(\"long_about\"))"
+
+# GUARD 3: boolean-over-enum — catches --type/--severity/--mode flags
+enum_flag_guard = "cmd.contains(\"--type\") || cmd.contains(\"--severity\") || cmd.contains(\"--mode\") || cmd.contains(\"--kind\")"
+
+# GUARD 5: asymmetric-naming — catches singular subcommand without plural
+asymmetric_naming_guard = "cmd.contains(\"enum\") && (cmd.contains(\"Command\") || cmd.contains(\"Subcommand\"))"
+
+# GUARD 6: why-over-what — catches comment patterns that describe WHAT not WHY
+# Triggers on // or /// lines with trivially descriptive language
+why_comment_guard = "cmd.contains(\"//\") && regex_match(cmd, \"(increment|decrement|set |get |add |remove |calls |creates )\")"
 
 # --- Python/pip guards ---
 [[b00t.hive.guards]]
@@ -86,10 +108,66 @@ action = "warn"
 message = "🦨 use podman-compose or podman play kube"
 
 # --- Destructive operations ---
+# Per-path explicit guards (for simple string matching + per-path messages)
 [[b00t.hive.guards]]
-pattern = "rm -rf /"
+pattern = "rm -rf / "
 action = "block"
-message = "🚫 blocked: destructive root deletion"
+message = "🚫 blocked: destructive root deletion (rm -rf / with trailing space)"
+
+[[b00t.hive.guards]]
+pattern = "rm -rf /etc"
+action = "block"
+message = "🚫 blocked: destructive system path (/etc)"
+
+[[b00t.hive.guards]]
+pattern = "rm -rf /var"
+action = "block"
+message = "🚫 blocked: destructive system path (/var)"
+
+[[b00t.hive.guards]]
+pattern = "rm -rf /bin"
+action = "block"
+message = "🚫 blocked: destructive system path (/bin)"
+
+[[b00t.hive.guards]]
+pattern = "rm -rf /boot"
+action = "block"
+message = "🚫 blocked: destructive system path (/boot)"
+
+[[b00t.hive.guards]]
+pattern = "rm -rf /dev"
+action = "block"
+message = "🚫 blocked: destructive system path (/dev)"
+
+[[b00t.hive.guards]]
+pattern = "rm -rf /lib"
+action = "block"
+message = "🚫 blocked: destructive system path (/lib)"
+
+[[b00t.hive.guards]]
+pattern = "rm -rf /proc"
+action = "block"
+message = "🚫 blocked: destructive system path (/proc)"
+
+[[b00t.hive.guards]]
+pattern = "rm -rf /sys"
+action = "block"
+message = "🚫 blocked: destructive system path (/sys)"
+
+[[b00t.hive.guards]]
+pattern = "rm -rf /usr"
+action = "block"
+message = "🚫 blocked: destructive system path (/usr)"
+
+# Comprehensive rm_rf guard using Rhai macro — catches ALL dangerous paths
+# including /home, /root, /opt, /sbin, /srv, /mnt, /media, /run, /lost+found
+# plus system paths listed above. This is the catch-all; individual per-path
+# guards above provide more specific error messages for common targets.
+# The rm_rf_guard macro is defined in [b00t.hive.rhai_macros] section.
+[[b00t.hive.guards]]
+pattern = { rhai = "rm_rf_guard" }
+action = "block"
+message = "🚫 blocked: destructive recursive deletion of critical system path"
 
 [[b00t.hive.guards]]
 pattern = "git push --force"
@@ -171,3 +249,232 @@ command = "b00t run <your-command>"
 [[b00t.usage]]
 description = "List all active guards"
 command = "b00t hive status --guards"
+
+# ================================================================
+# CATEGORY A: API Key / Secret Exposure (guards 1-4)
+# ================================================================
+[[b00t.hive.guards]]
+pattern = "--token "
+action = "warn"
+message = "🦨 API token in command — use env var or .env instead"
+
+[[b00t.hive.guards]]
+pattern = "--api-key "
+action = "warn"
+message = "🦨 API key in command — use env var instead"
+
+[[b00t.hive.guards]]
+pattern = "--password "
+action = "warn"
+message = "🦨 Password in command — use stdin or env var"
+
+[[b00t.hive.guards]]
+pattern = { rhai = "cmd.contains(\"export\") && (cmd.contains(\"SECRET\") || cmd.contains(\"TOKEN\") || cmd.contains(\"API_KEY\"))" }
+action = "block"
+message = "🚫 Blocked: exporting secrets to env — use .env file instead"
+
+# ================================================================
+# CATEGORY B: Code Review / Safety (guards 5-8)
+# ================================================================
+[[b00t.hive.guards]]
+pattern = "chmod 777"
+action = "block"
+message = "🚫 Blocked: chmod 777 is a security risk — use more restrictive permissions"
+
+[[b00t.hive.guards]]
+pattern = { rhai = "cmd.contains(\"curl\") && (cmd.contains(\"| bash\") || cmd.contains(\"| sh\"))" }
+action = "warn"
+message = "🦨 Piping curl to shell is dangerous — verify the source first"
+
+[[b00t.hive.guards]]
+pattern = "sudo rm -rf"
+action = "block"
+message = "🚫 Blocked: sudo rm -rf — use precise paths, never force delete with sudo"
+
+[[b00t.hive.guards]]
+pattern = "> /dev/null 2>&1"
+action = "warn"
+message = "🦨 Suppressing errors — you may miss important failures"
+
+# ================================================================
+# CATEGORY C: Agent Context / State (guards 9-12)
+# ================================================================
+[[b00t.hive.guards]]
+pattern = "kill -9"
+action = "warn"
+message = "🦨 kill -9 prevents clean shutdown — try kill -15 first"
+
+[[b00t.hive.guards]]
+pattern = "pkill -f"
+action = "warn"
+message = "🦨 pkill -f is broad — use specific process names"
+
+[[b00t.hive.guards]]
+pattern = { rhai = "cmd.contains(\"rm -rf .git\") && !cmd.contains(\".gitignore\") && !cmd.contains(\".gitmodules\") && !cmd.contains(\".gitconfig\") && !cmd.contains(\".gitkeep\") && !cmd.contains(\".gitattributes\")" }
+action = "block"
+message = "🚫 Blocked: deleting .git destroys version history — use git clean instead"
+
+[[b00t.hive.guards]]
+pattern = "git clean -fd"
+action = "warn"
+message = "🦨 git clean -fd removes untracked files — irreversible"
+
+# ================================================================
+# CATEGORY D: Configuration / Secrets (guards 13-16)
+# ================================================================
+[[b00t.hive.guards]]
+pattern = "git config --global user.email"
+action = "warn"
+message = "🦨 Setting global git email — use --local for project-specific"
+
+[[b00t.hive.guards]]
+pattern = "npm config set registry"
+action = "warn"
+message = "🦨 Changing npm registry globally — use --scope or .npmrc instead"
+
+[[b00t.hive.guards]]
+pattern = "pip config set global.index-url"
+action = "warn"
+message = "🦨 Changing pip index globally — use --index-url per command instead"
+
+[[b00t.hive.guards]]
+pattern = { rhai = "cmd.contains(\"echo\") && cmd.contains(\"> /etc/\")" }
+action = "block"
+message = "🚫 Blocked: writing to /etc/ requires sudo — use proper config management"
+
+# ================================================================
+# CATEGORY E: Resource Abuse (guards 17-20)
+# ================================================================
+[[b00t.hive.guards]]
+pattern = ":(){ :|:& };:"
+action = "block"
+message = "🚫 Blocked: fork bomb detected"
+
+[[b00t.hive.guards]]
+pattern = "dd if=/dev/urandom"
+action = "warn"
+message = "🦨 dd with /dev/urandom can exhaust entropy — use fallocate or truncate"
+
+[[b00t.hive.guards]]
+pattern = { rhai = "cmd.contains(\"cargo test\") && !cmd.contains(\"--no-run\") && !cmd.contains(\"::\")" }
+action = "warn"
+message = "🦨 Bare cargo test recompiles deps (5+ min with DuckDB). Use `cargo test --no-run && ./target/debug/deps/... <filter>::` for fast iteration"
+
+[[b00t.hive.guards]]
+pattern = { rhai = "cmd.contains(\"npx\") && !cmd.contains(\"--yes\") && !cmd.contains(\"-y\")" }
+action = "warn"
+message = "🦨 npx without --yes will prompt interactively. Add --yes or -y for non-interactive execution"
+
+[[b00t.hive.guards]]
+pattern = { rhai = "cmd.contains(\"apt install\") && !cmd.contains(\"-y\") && !cmd.contains(\"--assume-yes\")" }
+action = "warn"
+message = "🦨 apt install without -y will prompt. Add -y for non-interactive: sudo apt install -y <pkg>"
+
+[[b00t.hive.guards]]
+pattern = "cargo clean"
+action = "warn"
+message = "🦨 cargo clean destroys build cache (5+ min rebuild with DuckDB). Use `cargo check` first, or clean specific package: `cargo clean -p <crate>`"
+
+[[b00t.hive.guards]]
+pattern = { rhai = "cmd.contains(\"sed -i\") && !cmd.contains(\".bak\") && !cmd.contains(\"--follow-symlinks\")" }
+action = "warn"
+message = "🦨 sed -i without backup (.bak) can destroy files. Add `-i.bak` to keep backup: sed -i.bak 's/foo/bar/' file"
+
+[[b00t.hive.guards]]
+pattern = { rhai = "cmd.contains(\"git push\") && !cmd.contains(\"origin\")" }
+action = "warn"
+message = "🦨 git push without remote specified — will use push.default. Explicit: git push origin <branch>"
+
+[[b00t.hive.guards]]
+pattern = { rhai = "cmd.contains(\"chown\") && cmd.contains(\"-R\")" }
+action = "block"
+message = "🚫 Blocked: recursive chown -R is destructive. Use `find . -user old -exec chown new {} +` instead"
+
+[[b00t.hive.guards]]
+pattern = { rhai = "cmd.contains(\"curl\") && cmd.contains(\"-o\") && cmd.contains(\" /usr/\")" }
+action = "block"
+message = "🚫 Blocked: curl to /usr/ requires sudo and can overwrite system files. Download to ~/ instead"
+
+[[b00t.hive.guards]]
+pattern = "cargo build --release"
+action = "warn"
+message = "🦨 Release builds take a long time — use --debug for development iterations"
+
+# ================================================================
+# IDIOMATIC GUARDS: 8 Concepts from Plan
+# ================================================================
+#
+# 6 guardable patterns (enforced via command guard + Rhai macro):
+#   1. agent-format-errors        → error strings >120 chars
+#   2. help-from-impl             → clap help vs impl drift
+#   3. boolean-over-enum          → --type/--severity non-enum
+#   4. rename-all-references      → pre-grep before git mv
+#   5. asymmetric-naming          → singular subcommand no plural
+#   6. why-over-what              → comment heuristics
+#
+# 2 agent-discipline (documented, not guardable by code):
+#   7. precise-response           → see references/agent-disciplines.md
+#   8. prefer-parameter-rich-tools → see references/kaizen-patterns.md
+#
+# ================================================================
+# GUARD 4: rename-all-references
+# Pattern: git mv detected without prior grep for references
+# Reminds agent to grep for all references BEFORE renaming
+# ================================================================
+[[b00t.hive.guards]]
+pattern = { rhai = "rename_refs_guard" }
+action = "warn"
+message = "🦨 git mv detected — did you grep for all references first? Run: grep -rn 'old_name' --include='*.rs' --include='*.toml' --include='*.md'"
+redirect = "git mv"
+repeat_threshold = 1
+
+# ================================================================
+# GUARD 1: agent-format-errors
+# Pattern: detect overlength error strings in Rust source
+# Triggers when agent tries to create/commit overly verbose error messages
+# ================================================================
+[[b00t.hive.guards]]
+pattern = { rhai = "long_err_guard" }
+action = "warn"
+message = "🦨 Error strings should be <120 chars. Long errors waste context and hide root cause. Use structured error types with context fields instead."
+repeat_threshold = 2
+
+# ================================================================
+# GUARD 2: help-from-impl
+# Pattern: detect when clap help text references args that don't exist
+# Checks for help text / impl drift in new or modified clap commands
+# ================================================================
+[[b00t.hive.guards]]
+pattern = { rhai = "help_drift_guard" }
+action = "warn"
+message = "🦨 Help text may drift from impl. If adding/moving args, update both #[clap(about)] and actual handler/match arms. Run: grep -n 'about\\|long_about' to audit."
+
+# ================================================================
+# GUARD 3: boolean-over-enum
+# Pattern: detects --type/--severity/--mode flags with ad-hoc values
+# that should be proper Enum arguments with possible_values
+# ================================================================
+[[b00t.hive.guards]]
+pattern = { rhai = "enum_flag_guard" }
+action = "warn"
+message = "🦨 Boolean flags with '--type'/'--severity'/'--mode' suggests non-standard arg handling. Prefer clap's ValueEnum for type-safe, documented options."
+
+# ================================================================
+# GUARD 5: asymmetric-naming
+# Pattern: detects singular noun subcommand enum variants that
+# lack a corresponding plural variant (e.g. 'Task' but no 'Tasks')
+# ================================================================
+[[b00t.hive.guards]]
+pattern = { rhai = "asymmetric_naming_guard" }
+action = "warn"
+message = "🦨 Subcommand variant name looks singular but no plural alias found. Keep naming consistent: append 'Command' suffix or add plural alias: #[clap(alias = \"tasks\")]"
+
+# ================================================================
+# GUARD 6: why-over-what
+# Pattern: comment heuristics — detects comments that describe
+# WHAT instead of WHY (e.g. "increment counter" instead of "track retry budget")
+# ================================================================
+[[b00t.hive.guards]]
+pattern = { rhai = "why_comment_guard" }
+action = "warn"
+message = "🦨 Comment likely describes WHAT not WHY. Good comments explain intent and invariants. Bad comments restate the code. Consider: is this comment earning its keep?"
