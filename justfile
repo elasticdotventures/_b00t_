@@ -486,9 +486,13 @@ audit-side-effects action="diff":
 # Tests use pty interaction and may receive SIGTERM if run in background.
 # Always run these recipes directly in the foreground.
 
-# Run all CLI crate tests (foreground)
+# Run all CLI crate tests (foreground) — links full binary, may OOM
 test-cli:
     cargo test -p b00t-cli
+
+# Run CLI lib tests only — smaller binary, avoids integration test OOM
+test-cli-lib:
+    cargo test -p b00t-cli --lib
 
 # Run a single CLI test by name with output (foreground)
 test-quick name:
