@@ -637,11 +637,11 @@ topic = "testing"
             depth4_count
         );
 
-        // Should have exactly 1 total entry (only depth3.toml had idiomatic sections AND is within depth)
+        // Both depth3 and depth4 have idiomatic sections, both within max_depth(4)
         assert_eq!(
             results.len(),
-            1,
-            "expected exactly 1 total idiomatic entry, found {}",
+            2,
+            "expected exactly 2 total idiomatic entries (depth3 + depth4), found {}",
             results.len()
         );
 
