@@ -451,9 +451,7 @@ audit-side-effects action="diff":
     case "{{action}}" in
         save)
             echo "📸 Taking git status snapshot..."
-            git diff --stat --name-only > "$SNAPSHOT" 2>/dev/null || true
-            git ls-files --others --exclude-standard >> "$SNAPSHOT" 2>/dev/null || true
-            sort -u "$SNAPSHOT" -o "$SNAPSHOT"
+            git status --porcelain > "$SNAPSHOT" 2>/dev/null || true
             echo "   Snapshot saved ($(wc -l < "$SNAPSHOT") files tracked)"
             ;;
         diff)
@@ -465,9 +463,7 @@ audit-side-effects action="diff":
             BEFORE=$(mktemp)
             AFTER=$(mktemp)
             cat "$SNAPSHOT" > "$BEFORE"
-            git diff --stat --name-only > "$AFTER" 2>/dev/null || true
-            git ls-files --others --exclude-standard >> "$AFTER" 2>/dev/null || true
-            sort -u "$AFTER" -o "$AFTER"
+            git status --porcelain > "$AFTER" 2>/dev/null || true
             echo ""
             echo "=== Files created or modified since snapshot ==="
             comm -13 "$BEFORE" "$AFTER" 2>/dev/null || diff --new-line-format='%L' --unchanged-line-format='' "$BEFORE" "$AFTER" 2>/dev/null || grep -Fxvf "$BEFORE" "$AFTER" || true

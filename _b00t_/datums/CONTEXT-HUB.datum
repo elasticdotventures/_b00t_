@@ -24,7 +24,6 @@ content = "draft"
 # ── Overview ──────────────────────────────────────────────────────────────
 [chub]
 name = "context-hub"
-cli = "chub"
 package = "@aisuite/chub"
 lang = "TypeScript (Node.js)"
 license = "MIT"
