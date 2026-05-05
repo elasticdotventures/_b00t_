@@ -24,38 +24,6 @@ version_regex = "^(\\d+\\.\\d+\\.\\d+)"
 aliases = ["pm2-list", "pm2-logs", "pm2-mon", "pm2-stop-all", "pm2-delete-all", "pm2-restart-all", "pm2-save", "pm2-resurrect"]
 depends_on = ["node.cli"]
 
-
-[[b00t.aliases]]
-name = "pm2-list"
-cmd = "pm2 list"
-
-[[b00t.aliases]]
-name = "pm2-logs"
-cmd = "pm2 logs"
-
-[[b00t.aliases]]
-name = "pm2-mon"
-cmd = "pm2 monit"
-
-[[b00t.aliases]]
-name = "pm2-stop-all"
-cmd = "pm2 stop all"
-
-[[b00t.aliases]]
-name = "pm2-delete-all"
-cmd = "pm2 delete all"
-
-[[b00t.aliases]]
-name = "pm2-restart-all"
-cmd = "pm2 restart all"
-
-[[b00t.aliases]]
-name = "pm2-save"
-cmd = "pm2 save"
-
-[[b00t.aliases]]
-name = "pm2-resurrect"
-cmd = "pm2 resurrect"
 [b00t.env]
 # PM2 home directory
 PM2_HOME = "~/.pm2"
