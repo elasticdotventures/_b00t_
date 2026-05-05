@@ -2292,4 +2292,33 @@ working_directory = "/tmp/test"
         );
         assert!(msg.contains(".hive.toml"), "error must mention .hive.toml");
     }
+
+    #[test]
+    fn test_load_profile_wires_rhai_macros() {
+        let dir = tempfile::tempdir().unwrap();
+        let name = "rhaitest";
+        let toml_content = format!(
+            r#"[b00t]
+name = "{}"
+type = "hive_profile"
+hint = "rhai macro wiring test"
+
+[b00t.hive.rhai_macros]
+pip_guard = "cmd.contains(\"pip\") && cmd.contains(\"install\")"
+rm_rf_guard = "cmd.contains(\"rm\") && cmd.contains(\"-rf\")"
+
+[[b00t.hive.guards]]
+pattern = {{ rhai = "pip_guard" }}
+action = "warn"
+"#,
+            name
+        );
+        std::fs::write(dir.path().join(format!("{}.hive.toml", name)), toml_content).unwrap();
+
+        let profile = load_profile(name, dir.path()).unwrap();
+        assert_eq!(profile.rhai_macros.len(), 2, "rhai_macros must be wired from TOML into HiveProfile");
+        assert!(profile.rhai_macros.contains_key("pip_guard"), "pip_guard must be in rhai_macros");
+        assert!(profile.rhai_macros.contains_key("rm_rf_guard"), "rm_rf_guard must be in rhai_macros");
+        assert_eq!(profile.guards.len(), 1, "guard must be loaded alongside macros");
+    }
 }

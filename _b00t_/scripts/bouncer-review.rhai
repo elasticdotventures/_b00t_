@@ -3,6 +3,13 @@
 let ctx_file = if ARGS.len() > 0 { ARGS[0] } else { "context.md" };
 let sf = ".bouncer-state.toml";
 
+// Assert: we're in the expected workdir
+let expected_prefix = "/home/brianh/.b00t";
+let cwd = get_env("PWD");
+if !cwd.starts_with(expected_prefix) {
+    log_warn(`Workdir drift detected! Expected ${expected_prefix}*, got ${cwd}. Files may land in wrong location.`);
+}
+
 fn toml_val(s, sec, key) {
     let in_sec = false;
     for line in s.split("\n") {
@@ -15,6 +22,7 @@ fn toml_val(s, sec, key) {
 }
 fn save(phase, turn, max_t, a_rdy, b_app, fixes, rnd) {
     write_file(sf, `[meta]\ncreated = "${get_env("TIMESTAMP")}"\ncontext = "${ctx_file}"\n\n[state]\nphase = "${phase}"\nturn = ${turn}\nmax = ${max_t}\n\n[results]\na_ready = ${a_rdy}\nb_approved = ${b_app}\nfixes = ${fixes}\nround = ${rnd}\n`);
+    log_info(`CHECKPOINT: ${sf} written — phase=${phase} turn=${turn} round=${rnd}. Resume: b00t script run bouncer-review ${ctx_file}`);
 }
 
 let phase = "research"; let turn = 0; let max_t = 5;

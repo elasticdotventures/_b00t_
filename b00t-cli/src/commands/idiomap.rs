@@ -223,7 +223,7 @@ fn scan_all_idiomatics(b00t_path: &str) -> Result<Vec<ScannedIdiomatic>> {
     // Scan _b00t_/*.toml and _b00t_/*.tomllm
     if path.is_dir() {
         for entry in walkdir::WalkDir::new(path)
-            .max_depth(2)
+            .max_depth(4)
             .into_iter()
             .filter_map(|e| e.ok())
         {
@@ -535,6 +535,18 @@ mod tests {
         if !found {
             eprintln!("hive-guards.hive.toml not found, skipping scan test");
         }
+    }
+
+    #[test]
+    fn test_tilde_expansion_in_path() {
+        // Path::new("~/.b00t/...") should NOT be used without shellexpand.
+        // Verify the default path is not literal tilde.
+        let tilde_path = Path::new("~/.b00t/_b00t_");
+        assert!(!tilde_path.is_dir(), "literal tilde path should not resolve");
+        // Verify expanded path exists
+        let expanded = shellexpand::tilde("~/.b00t/_b00t_");
+        let expanded_path = Path::new(expanded.as_ref());
+        assert!(expanded_path.is_dir(), "expanded tilde path should resolve to _b00t_ dir");
     }
 
     #[test]
