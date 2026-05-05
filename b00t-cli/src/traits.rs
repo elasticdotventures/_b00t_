@@ -117,6 +117,20 @@ pub trait DatumProvider: DatumChecker + StatusProvider + FilterLogic + Send + Sy
     fn datum(&self) -> &BootDatum;
 }
 
+/// Datum validation handler — datum-specific structural and semantic validation.
+/// Each datum type implements this to check its own internal consistency.
+/// Dispatch via `validate.handler` field in datum TOML (e.g. handler = "idiomatics").
+pub trait DatumValidator: DatumProvider {
+    /// Validate the datum's internal structure and semantics.
+    /// Returns empty vec on success, list of error messages on failure.
+    fn validate(&self) -> Vec<String> {
+        Vec::new()
+    }
+
+    /// Get the handler name for dispatch (e.g. "job", "skill", "idiomatics").
+    fn handler_name(&self) -> &'static str;
+}
+
 /// Factory-style trait for interactive datum creation
 pub trait DatumCreator {
     fn create_interactive(name: &str, path: &str) -> Result<BootDatum>;

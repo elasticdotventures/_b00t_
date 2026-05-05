@@ -13,15 +13,16 @@
 //! # Gate protocol
 //! Output: one line per requirement
 //! PASS: <requirement-id>
-//! FAIL: <requirement-id>: <reason>
-
-use crate::datum_schema::{AbDataRequirement, AbDataSchema, FocusJsonlSequence, FocusSchema, MatchMode, SchemaError};
+use crate::datum_schema::{
+    AbDataRequirement, AbDataSchema, FocusJsonlSequence, FocusSchema, MatchMode, SchemaError,
+};
+use crate::UnifiedConfig;
 use anyhow::{Context, Result};
 use clap::Parser;
 use std::collections::HashMap;
 use std::fs::{self, OpenOptions};
 use std::io::{Read, Write};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 const SM0L_MODEL: &str = "ch0nky";
 const SM0L_TIMEOUT_SEC: u64 = 30;
@@ -58,6 +59,9 @@ pub struct ValidateArgs {
 
     #[arg(long, help = "Schema datum name (default: focus). Loads _b00t_/<name>.schema.tomllmd")]
     pub schema: Option<String>,
+
+    #[arg(long, help = "Validate datum structural integrity using registered validators")]
+    pub datum: bool,
 }
 
 // ── Validation result ────────────────────────────────────────────────────────
@@ -235,6 +239,11 @@ fn resolve_schema(name: Option<&str>) -> Result<FocusSchema> {
 // ── Main handler ─────────────────────────────────────────────────────────────
 
 pub fn handle_validate(args: &ValidateArgs) -> Result<()> {
+    // ── Datum validation branch ──────────────────────────────────────────────
+    if args.datum {
+        return handle_validate_datums();
+    }
+
     // ── JSONL branch ──────────────────────────────────────────────────────────
     if let Some(path) = &args.jsonl {
         return validate_jsonl(args, path);
@@ -384,9 +393,94 @@ fn validate_jsonl(args: &ValidateArgs, path: &PathBuf) -> Result<()> {
     Ok(())
 }
 
+// ── Datum validation handler ────────────────────────────────────────────────
+
+/// Scan datum files and validate each using registered validators.
+fn handle_validate_datums() -> Result<()> {
+    // Search datum directory: ~/.dotfiles/_b00t_/ (priority), then ~/.b00t/_b00t_/
+    let datum_dirs = [
+        dirs::home_dir()
+            .map(|h| h.join(".dotfiles").join("_b00t_")),
+        dirs::home_dir()
+            .map(|h| h.join(".b00t").join("_b00t_")),
+    ];
+
+    let datum_dir = datum_dirs.iter().flatten().find(|d| d.exists());
+    let datum_dir = match datum_dir {
+        Some(d) => d.clone(),
+        None => {
+            eprintln!("No datum directory found (searched ~/.dotfiles/_b00t_/, ~/.b00t/_b00t_/)");
+            return Ok(());
+        }
+    };
+
+    let mut total_errors = 0;
+    let mut total_validated = 0;
+
+    if let Ok(entries) = std::fs::read_dir(&datum_dir) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if !path.is_file() {
+                continue;
+            }
+            // Support .toml, .datum, .tomllm extensions
+            let ext = path.extension();
+            let is_valid = ext.map_or(false, |e| {
+                e == std::ffi::OsStr::new("toml")
+                    || e == std::ffi::OsStr::new("datum")
+                    || e == std::ffi::OsStr::new("tomllm")
+            });
+            if !is_valid {
+                continue;
+            }
+
+            match std::fs::read_to_string(&path) {
+                Ok(content) => {
+                    match toml::from_str::<UnifiedConfig>(&content) {
+                        Ok(config) => {
+                            total_validated += 1;
+                            let errors = crate::validators::validate_datum(&config.b00t);
+                            if errors.is_empty() {
+                                println!("OK:   {}", config.b00t.name);
+                            } else {
+                                total_errors += errors.len();
+                                println!("FAIL: {} ({} errors)", config.b00t.name, errors.len());
+                                for err in &errors {
+                                    println!("  - {}", err);
+                                }
+                            }
+                        }
+                        Err(_) => {
+                            // Try parsing as DatumMeta for ontology datums
+                            if let Ok(datum) = toml::from_str::<crate::commands::ontology::DatumMeta>(&content) {
+                                total_validated += 1;
+                                if datum.validate.command.is_empty() {
+                                    println!("OK:   {}", datum.b00t.name);
+                                } else {
+                                    println!("SKIP: {} (ontology datum with validate section)", datum.b00t.name);
+                                }
+                            }
+                        }
+                    }
+                }
+                Err(e) => {
+                    eprintln!("WARN: Cannot read {}: {}", path.display(), e);
+                }
+            }
+        }
+    }
+
+    eprintln!("datum validation complete: {total_validated} checked, {total_errors} errors");
+    if total_errors > 0 {
+        std::process::exit(1);
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::{BootDatum, ValidateSpec};
 
     fn sample_reqs() -> Vec<AbDataRequirement> {
         vec![
@@ -505,5 +599,80 @@ mod tests {
 
         let result = handle_validate(&args);
         assert!(result.is_err(), "missing JSONL should fail: {result:?}");
+    }
+
+    // ── Datum validation tests ────────────────────────────────────────────────
+
+    #[test]
+    fn test_validate_datum_no_handler_error() {
+        // A datum with validate.handler set to a non-existent handler should error
+        let datum = BootDatum {
+            name: "test-datum".to_string(),
+            validate: Some(ValidateSpec {
+                handler: Some("nonexistent".to_string()),
+                command: None,
+                regex: None,
+                requirements: None,
+            }),
+            ..Default::default()
+        };
+        let errors = crate::validators::validate_datum(&datum);
+        assert!(!errors.is_empty(), "should report unknown handler");
+        assert!(errors[0].contains("nonexistent"));
+    }
+
+    #[test]
+    fn test_validate_datum_idiomatics_empty_name() {
+        // A datum with handler "idiomatics" and empty name should error
+        let datum = BootDatum {
+            name: "".to_string(),
+            validate: Some(ValidateSpec {
+                handler: Some("idiomatics".to_string()),
+                command: None,
+                regex: None,
+                requirements: None,
+            }),
+            ..Default::default()
+        };
+        // Initialize validators registry
+        crate::validators::init();
+        let errors = crate::validators::validate_datum(&datum);
+        assert!(!errors.is_empty(), "should report empty name");
+        assert!(errors.iter().any(|e| e.contains("name")));
+    }
+
+    #[test]
+    fn test_validate_datum_shell_command_failure() {
+        // A datum with a shell command that fails should report errors
+        let datum = BootDatum {
+            name: "test-cmd".to_string(),
+            validate: Some(ValidateSpec {
+                handler: None,
+                command: Some("exit 42".to_string()),
+                regex: None,
+                requirements: None,
+            }),
+            ..Default::default()
+        };
+        let errors = crate::validators::validate_datum(&datum);
+        assert!(!errors.is_empty(), "should report command failure");
+        assert!(errors.iter().any(|e| e.contains("exit 42")));
+    }
+
+    #[test]
+    fn test_validate_datum_shell_command_success() {
+        // A datum with a successful shell command and a matching regex
+        let datum = BootDatum {
+            name: "test-cmd-ok".to_string(),
+            validate: Some(ValidateSpec {
+                handler: None,
+                command: Some("echo hello".to_string()),
+                regex: Some("hello".to_string()),
+                requirements: None,
+            }),
+            ..Default::default()
+        };
+        let errors = crate::validators::validate_datum(&datum);
+        assert!(errors.is_empty(), "should pass: {:?}", errors);
     }
 }

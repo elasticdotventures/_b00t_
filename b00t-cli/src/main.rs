@@ -1632,6 +1632,9 @@ async fn main() {
         return;
     }
 
+    // Initialize pluggable datum validators
+    b00t_cli::validators::init();
+
     match &cli.command {
         Some(Commands::Tiktoken { text }) => {
             if let Err(e) = b00t_cli::commands::tiktoken::handle_tiktoken(text) {

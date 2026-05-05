@@ -118,7 +118,11 @@ pub fn scan_datums(datum_dir: &str) -> Result<Vec<DatumMeta>> {
     for entry in fs::read_dir(datum_dir)? {
         let entry = entry?;
         let path = entry.path();
-        if path.extension().map_or(false, |e| e == "toml") {
+        if path.extension().map_or(false, |e| {
+            e == std::ffi::OsStr::new("toml")
+                || e == std::ffi::OsStr::new("datum")
+                || e == std::ffi::OsStr::new("tomllm")
+        }) {
             if let Ok(content) = fs::read_to_string(&path) {
                 if let Ok(datum) = toml::from_str::<DatumMeta>(&content) {
                     if !datum.b00t.name.is_empty() {

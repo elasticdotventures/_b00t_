@@ -93,6 +93,7 @@ pub mod soul_writer;
 pub mod step;
 pub mod traits;
 pub mod utils;
+pub mod validators;
 pub mod viz;
 pub mod whoami;
 pub mod wow;
@@ -202,6 +203,22 @@ pub struct K0mmand3rDatumConfig {
     pub description: Option<String>,
 }
 
+/// Validation specification for datum structural validation.
+/// Each datum can declare how it should be validated:
+/// - `command` + `regex`: shell command whose output is checked against a regex
+/// - `handler`: named Rust handler for structural validation (e.g. "idiomatics", "job")
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct ValidateSpec {
+    #[serde(default)]
+    pub command: Option<String>,
+    #[serde(default)]
+    pub regex: Option<String>,
+    #[serde(default)]
+    pub handler: Option<String>,
+    #[serde(default)]
+    pub requirements: Option<Vec<String>>,
+}
+
 /// A single [[b00t.idiomatic]] entry — a federated idiomatic pattern declaration.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct IdiomaticEntry {
@@ -251,6 +268,11 @@ pub struct BootDatum {
     // The `b00t idiomap` command scans ALL datums and builds a federated map.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub idiomatic: Option<Vec<IdiomaticEntry>>,
+
+    /// Validation spec — shell command + regex or handler name for structural validation.
+    /// Each datum type implements DatumValidator to check its own internal consistency.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub validate: Option<ValidateSpec>,
 
     pub install: Option<InstallSpec>,
     pub update: Option<String>,
