@@ -111,3 +111,18 @@
 {"count":8,"pattern":"rhai:cmd.contains(\"cargo test\") && !cmd.contains(\"--no-run\") && !cmd.contains(\"::\")"}
 {"count":9,"pattern":"rhai:cmd.contains(\"cargo test\") && !cmd.contains(\"--no-run\") && !cmd.contains(\"::\")"}
 {"count":3,"pattern":"pip3 install"}
+{"count":4,"pattern":"pip3 install"}
+{"count":3,"pattern":"pip install"}
+{"count":10,"pattern":"rhai:cmd.contains(\"cargo test\") && !cmd.contains(\"--no-run\") && !cmd.contains(\"::\")"}
+{"count":11,"pattern":"rhai:cmd.contains(\"cargo test\") && !cmd.contains(\"--no-run\") && !cmd.contains(\"::\")"}
+{"count":12,"pattern":"rhai:cmd.contains(\"cargo test\") && !cmd.contains(\"--no-run\") && !cmd.contains(\"::\")"}
+{"count":13,"pattern":"rhai:cmd.contains(\"cargo test\") && !cmd.contains(\"--no-run\") && !cmd.contains(\"::\")"}
+{"count":14,"pattern":"rhai:cmd.contains(\"cargo test\") && !cmd.contains(\"--no-run\") && !cmd.contains(\"::\")"}
+{"count":15,"pattern":"rhai:cmd.contains(\"cargo test\") && !cmd.contains(\"--no-run\") && !cmd.contains(\"::\")"}
+{"count":16,"pattern":"rhai:cmd.contains(\"cargo test\") && !cmd.contains(\"--no-run\") && !cmd.contains(\"::\")"}
+{"count":17,"pattern":"rhai:cmd.contains(\"cargo test\") && !cmd.contains(\"--no-run\") && !cmd.contains(\"::\")"}
+{"count":18,"pattern":"rhai:cmd.contains(\"cargo test\") && !cmd.contains(\"--no-run\") && !cmd.contains(\"::\")"}
+{"count":19,"pattern":"rhai:cmd.contains(\"cargo test\") && !cmd.contains(\"--no-run\") && !cmd.contains(\"::\")"}
+{"count":20,"pattern":"rhai:cmd.contains(\"cargo test\") && !cmd.contains(\"--no-run\") && !cmd.contains(\"::\")"}
+{"count":21,"pattern":"rhai:cmd.contains(\"cargo test\") && !cmd.contains(\"--no-run\") && !cmd.contains(\"::\")"}
+{"count":22,"pattern":"rhai:cmd.contains(\"cargo test\") && !cmd.contains(\"--no-run\") && !cmd.contains(\"::\")"}
