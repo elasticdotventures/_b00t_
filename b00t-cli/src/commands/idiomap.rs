@@ -1,6 +1,7 @@
 use anyhow::{Context, Result};
 use clap::Parser;
 use serde::{Deserialize, Serialize};
+use shellexpand::tilde;
 use std::collections::HashMap;
 use std::path::Path;
 
@@ -263,7 +264,8 @@ fn handle_scan(
     check: bool,
     b00t_path: &str,
 ) -> Result<()> {
-    let entries = scan_all_idiomatics(b00t_path)?;
+    let b00t_path = shellexpand::tilde(b00t_path).to_string();
+    let entries = scan_all_idiomatics(&b00t_path)?;
 
     // Filter by topic
     let mut entries = entries;
