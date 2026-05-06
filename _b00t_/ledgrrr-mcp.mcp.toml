@@ -1,5 +1,5 @@
 [b00t]
-name = "ledgerr-mcp"
+name = "ledgrrr-mcp"
 type = "mcp"
 hint = "MCP server"
 requires_sudo = false
@@ -9,4 +9,4 @@ requires = []
 args = []
 priority = 0
 transport = "stdio"
-command = "/home/brianh/.b00t/vendor/l3dg3rr/target/release/ledgerr-mcp-server"
+command = "/home/brianh/.b00t/vendor/l3dg3rr/target/release/ledgrrr-mcp-server"

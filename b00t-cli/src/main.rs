@@ -2137,8 +2137,8 @@ async fn main() {
                             let tf = experiment::create_focus_record(&cmp.experiment_id, "treatment", "sm0l-trt", "experiment-eval", &cmp.treatment.scores);
                             eprintln!("[ledgrrr] {}", experiment::focus_record_to_ledgrrr(&cf));
                             eprintln!("[ledgrrr] {}", experiment::focus_record_to_ledgrrr(&tf));
-                            // emit FOCUS records to ledgerr-mcp MCP server (best-effort)
-                            experiment::emit_focus_to_ledgerr_mcp(&cmp, "http://localhost:8001");
+                            // emit FOCUS records to ledgrrr-mcp MCP server (best-effort)
+                            experiment::emit_focus_to_ledgrrr_mcp(&cmp, "http://localhost:8001");
                             // Calculate and issue cake payout
                             experiment::calculate_and_issue_cake(&cmp);
                         }

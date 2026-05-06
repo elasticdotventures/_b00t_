@@ -192,20 +192,20 @@ pub struct VendorDockerfileCheck;
 impl BoundaryCheck for VendorDockerfileCheck {
     fn name(&self) -> &str { "vendor dockerfile exists" }
     fn run(&self) -> CheckResult {
-        let candidates = ["vendor/ledgrrr/Dockerfile.ledgerr-mcp", "vendor/l3dg3rr/Dockerfile.ledgerr-mcp"];
+        let candidates = ["vendor/ledgrrr/Dockerfile.ledgrrr-mcp", "vendor/l3dg3rr/Dockerfile.ledgrrr-mcp"];
         let manifest = std::env::var("CARGO_MANIFEST_DIR").ok();
         let exists = candidates.iter().any(|rel| {
             let p = manifest.as_ref().map(|m| std::path::Path::new(m).join("..").join(rel)).unwrap_or_else(|| std::path::PathBuf::from(rel));
             p.exists()
         }) || std::fs::read_dir("vendor").map(|mut e| e.any(|f| f.ok().and_then(|f| {
-            let p = f.path().join("Dockerfile.ledgerr-mcp");
+            let p = f.path().join("Dockerfile.ledgrrr-mcp");
             if p.exists() { Some(()) } else { None }
         }).is_some())).unwrap_or(false);
         CheckResult {
             name: self.name().into(), category: CheckCategory::Boundary,
             passed: exists,
-            detail: if exists { "Dockerfile.ledgerr-mcp present".into() }
-                    else { "vendor/*/Dockerfile.ledgerr-mcp not found (vendor submodule may not be cloned)".into() },
+            detail: if exists { "Dockerfile.ledgrrr-mcp present".into() }
+                    else { "vendor/*/Dockerfile.ledgrrr-mcp not found (vendor submodule may not be cloned)".into() },
         }
     }
 }
