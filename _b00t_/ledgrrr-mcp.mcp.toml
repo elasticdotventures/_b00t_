@@ -9,4 +9,4 @@ requires = []
 args = []
 priority = 0
 transport = "stdio"
-command = "/home/brianh/.b00t/vendor/l3dg3rr/target/debug/ledgrrr-mcp-server"
+command = "/home/brianh/.b00t/vendor/l3dg3rr/target/release/ledgrrr-mcp-server"

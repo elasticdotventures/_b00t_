@@ -34,7 +34,7 @@ use b00t_cli::commands::{
   //  Keep commands 1 line per letter A,B,C,... for easy diff
     AiCommands, AgentCommands, AnsibleCommands, AppCommands, AuditCommands,
     BootstrapCommands, BudgetCommands,
-    ChatCommands, CliCommands, ConfigCommands,
+    ChatCommands, CliCommands, ConfigCommands, CrewCommand,
     DataCommands, DatumCommands, DoctorCommands,
     FocusCommands,
     GrokCommands, HiveCommands,
@@ -42,7 +42,7 @@ use b00t_cli::commands::{
     JobCommands,
     K8sCommands,
     McpCommands, ModelCommands,
-    OntologyCommands, SessionCommands, SkillCommands, SoulCommands, StackCommands,
+    ObservabilityCommands, OntologyCommands, SessionCommands, SkillCommands, SoulCommands, StackCommands,
     TaskCommands,
     TutorialCommands, VersionCommands, VizCommands, WhatismyCommands
 
@@ -333,6 +333,11 @@ The system will:
         #[clap(subcommand)]
         chat_command: ChatCommands,
     },
+    #[clap(about = "Crew management — Operator-Player-Captain hierarchy")]
+    Crew {
+        #[clap(subcommand)]
+        crew_command: CrewCommand,
+    },
     #[clap(about = "Learn about topics with unified knowledge management")]
     // 🤓 ENTANGLED (synchronized): b00t-mcp/src/mcp_tools.rs LearnCommand now uses LearnArgs wrapper, matching CLI structure.
     // Unified knowledge command: LFMF lessons, learn docs, man pages, RAG
@@ -397,6 +402,11 @@ The system will:
     Ontology {
         #[clap(subcommand)]
         ontology_command: OntologyCommands,
+    },
+    #[clap(about = "Observability: events, guard violations, and telemetry")]
+    Observability {
+        #[clap(subcommand)]
+        observability_command: ObservabilityCommands,
     },
     #[clap(about = "WOW integrity checks — run, list, spline")]
     Wow {
@@ -1795,6 +1805,9 @@ async fn main() {
                 std::process::exit(1);
             }
         }
+        Some(Commands::Crew { crew_command }) => {
+            b00t_cli::commands::crew_handler::handle_crew_command(crew_command);
+        }
         Some(Commands::Learn(args)) => {
             if let Err(e) = handle_learn(&cli.path, args.clone()).await {
                 eprintln!("Error: {}", e);
@@ -1986,6 +1999,14 @@ async fn main() {
                 std::process::exit(1);
             }
         }
+        Some(Commands::Observability {
+            observability_command,
+        }) => {
+            if let Err(e) = observability_command.execute() {
+                eprintln!("Error: {}", e);
+                std::process::exit(1);
+            }
+        }
         Some(Commands::Wow { wow_command }) => {
             match wow_command {
                 WowSubcommands::Check { json } => {
@@ -2105,6 +2126,8 @@ async fn main() {
                             eprintln!("[ledgrrr] {}", experiment::focus_record_to_ledgrrr(&tf));
                             // emit FOCUS records to ledgrrr-mcp MCP server (best-effort)
                             experiment::emit_focus_to_ledgrrr_mcp(&cmp, "http://localhost:8001");
+                            // Calculate and issue cake payout
+                            experiment::calculate_and_issue_cake(&cmp);
                         }
                         Err(e) => {
                             eprintln!("Experiment failed: {e}");

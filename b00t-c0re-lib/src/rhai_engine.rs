@@ -260,16 +260,27 @@ impl RhaiEngine {
             |query_kind: &str, query_val: &str| -> Result<String, Box<rhai::EvalAltResult>> {
                 match query_kind {
                     "subject" | "facts" => {
-                        // Try irontology-mcp via stdio; fallback to empty result
-                        let result = Command::new("sh")
-                            .arg("-c")
-                            .arg(&format!(
-                                "printf '{}' | b00t-mcp --stdio 2>/dev/null || echo '{{}}'",
-                                query_val
-                            ))
-                            .output();
-                        match result {
-                            Ok(output) => Ok(String::from_utf8_lossy(&output.stdout).to_string()),
+                        // Pipe query_val to b00t-mcp --stdio via stdin.
+                        // ⚠️  NEVER use sh -c with string interpolation here — query_val
+                        // comes from a rhai script and could be attacker-controlled.
+                        use std::io::Write;
+                        let mut child = match Command::new("b00t-mcp")
+                            .arg("--stdio")
+                            .stdin(std::process::Stdio::piped())
+                            .stdout(std::process::Stdio::piped())
+                            .stderr(std::process::Stdio::null())
+                            .spawn()
+                        {
+                            Ok(c) => c,
+                            Err(_) => return Ok("{}".to_string()),
+                        };
+                        let _ = child.stdin.take()
+                            .and_then(|mut stdin| stdin.write_all(query_val.as_bytes()).ok());
+                        match child.wait_with_output() {
+                            Ok(output) => match String::from_utf8(output.stdout) {
+                                Ok(s) => Ok(s),
+                                Err(_) => Ok("{}".to_string()),
+                            },
                             Err(_) => Ok("{}".to_string()),
                         }
                     }
@@ -286,12 +297,28 @@ impl RhaiEngine {
                 let home = std::env::var("HOME").unwrap_or_default();
                 let dir = std::path::Path::new(&home).join(".b00t");
                 let _ = std::fs::create_dir_all(&dir);
-                let path = dir.join("telemetry.jsonl");
+                // Write to unified events.jsonl (primary)
+                let events_path = dir.join("events.jsonl");
                 use std::io::Write;
                 if let Ok(mut file) = std::fs::OpenOptions::new()
                     .create(true)
                     .append(true)
-                    .open(&path)
+                    .open(&events_path)
+                {
+                    let entry = serde_json::json!({
+                        "ts": chrono::Utc::now().to_rfc3339(),
+                        "event": event,
+                        "detail": detail,
+                        "pid": std::process::id(),
+                    });
+                    let _ = writeln!(file, "{}", entry);
+                }
+                // Also write to legacy telemetry.jsonl for backward compatibility
+                let legacy_path = dir.join("telemetry.jsonl");
+                if let Ok(mut file) = std::fs::OpenOptions::new()
+                    .create(true)
+                    .append(true)
+                    .open(&legacy_path)
                 {
                     let entry = serde_json::json!({
                         "ts": chrono::Utc::now().to_rfc3339(),

@@ -1,0 +1,51 @@
+name: Vendor l3dg3rr Tests
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'vendor/l3dg3rr/**'
+      - '.gitmodules'
+      - '.github/workflows/vendor-l3dg3rr-tests.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'vendor/l3dg3rr/**'
+      - '.gitmodules'
+      - '.github/workflows/vendor-l3dg3rr-tests.yml'
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+jobs:
+  test:
+    name: cargo test --workspace
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: vendor/l3dg3rr
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+
+      - name: Initialize l3dg3rr submodule
+        run: |
+          git submodule update --init --depth 1 vendor/l3dg3rr
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: vendor/l3dg3rr
+
+      - name: Build tests (compile check only)
+        run: cargo test --workspace --no-run
+
+      - name: Run tests
+        run: cargo test --workspace

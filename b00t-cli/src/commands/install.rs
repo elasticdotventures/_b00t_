@@ -1,5 +1,5 @@
 use crate::dependency_resolver::DependencyResolver;
-use crate::{BootDatum, UnifiedConfig};
+use crate::{BootDatum, GateResult, UnifiedConfig, evaluate_gates};
 use anyhow::{Context, Result, anyhow};
 use clap::Parser;
 use duct::cmd;
@@ -146,6 +146,22 @@ pub fn install_datum(path: &str, name: &str, dry_run: bool) -> Result<()> {
             }
         }
 
+        // Evaluate gates before installing
+        if let Some(ref gates) = datum.gate {
+            if !gates.is_empty() {
+                let gate_results = evaluate_gates(gates, path);
+                let all_passed = gate_results.iter().all(|r| r.passed);
+                if !all_passed {
+                    for result in &gate_results {
+                        if !result.passed {
+                            println!("⏭️  {} gate blocked: {}", key, result.reason);
+                        }
+                    }
+                    continue;
+                }
+            }
+        }
+
         if let Some(install_cmd) = datum.install_command() {
             println!("🚀 Installing {}...", key);
             cmd!("bash", "-c", install_cmd)
@@ -231,7 +247,7 @@ fn load_all_datums(path: &str) -> Result<HashMap<String, BootDatum>> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::DatumType;
+    use crate::{DatumType, GateSpec};
     use std::fs;
     use tempfile::TempDir;
 
@@ -702,6 +718,86 @@ hint = "Test stack"
         // Should skip invalid file and still load the valid one
         assert_eq!(datums.len(), 1);
         assert!(datums.contains_key("docker.cli"));
+    }
+
+    // ── Gate evaluation tests ────────────────────────────────────────────────
+
+    #[test]
+    fn test_gate_command_fails() {
+        // A gate requiring a non-existent command should fail
+        let gates = vec![GateSpec {
+            command: Some("this-command-definitely-does-not-exist-xyzzy".to_string()),
+            file: None,
+            env: None,
+            rhai: None,
+            hint: Some("test command gate".to_string()),
+        }];
+        let results = evaluate_gates(&gates, "/tmp");
+        assert!(!results[0].passed);
+        assert!(results[0].reason.contains("not found"));
+    }
+
+    #[test]
+    fn test_gate_file_passes() {
+        // A gate requiring an existing file should pass
+        let temp_dir = TempDir::new().unwrap();
+        let file_path = temp_dir.path().join("test_file.txt");
+        fs::write(&file_path, "test content").unwrap();
+
+        let gates = vec![GateSpec {
+            command: None,
+            file: Some(file_path.to_str().unwrap().to_string()),
+            env: None,
+            rhai: None,
+            hint: Some("test file gate".to_string()),
+        }];
+        let results = evaluate_gates(&gates, "/tmp");
+        assert!(results[0].passed);
+    }
+
+    #[test]
+    fn test_gate_env_fails() {
+        // A gate requiring a non-existent env var should fail
+        let gates = vec![GateSpec {
+            command: None,
+            file: None,
+            env: Some("THIS_ENV_VAR_DOES_NOT_EXIST_12345".to_string()),
+            rhai: None,
+            hint: Some("test env gate".to_string()),
+        }];
+        let results = evaluate_gates(&gates, "/tmp");
+        assert!(!results[0].passed);
+        assert!(results[0].reason.contains("not set"));
+    }
+
+    #[test]
+    fn test_multiple_gates_all_pass() {
+        // Multiple gates that should all pass (file exists + env var that exists)
+        let temp_dir = TempDir::new().unwrap();
+        let file_path = temp_dir.path().join("multi_test.txt");
+        fs::write(&file_path, "test").unwrap();
+
+        // PATH is always set
+        let gates = vec![
+            GateSpec {
+                command: None,
+                file: Some(file_path.to_str().unwrap().to_string()),
+                env: None,
+                rhai: None,
+                hint: Some("file gate".to_string()),
+            },
+            GateSpec {
+                command: None,
+                file: None,
+                env: Some("PATH".to_string()),
+                rhai: None,
+                hint: Some("env gate".to_string()),
+            },
+        ];
+        let results = evaluate_gates(&gates, "/tmp");
+        assert!(results.len() == 2);
+        assert!(results[0].passed, "file gate should pass: {}", results[0].reason);
+        assert!(results[1].passed, "env gate should pass: {}", results[1].reason);
     }
 
     #[test]
