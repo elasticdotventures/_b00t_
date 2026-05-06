@@ -252,6 +252,19 @@ impl K0mmand3rCmd {
             i += 1;
         }
 
+        // Expand certain keyword modifiers back into individual k=v pairs
+        // for typed commands that need granular access.
+        // e.g. "with goal=deploy metric=uptime" → {"goal": "deploy", "metric": "uptime"}
+        if let Some(with_val) = modifiers.remove("with") {
+            for segment in with_val.split_whitespace() {
+                if let Some((k, v)) = segment.split_once('=') {
+                    modifiers.insert(k.to_string(), v.to_string());
+                } else if let Some((k, v)) = segment.split_once(':') {
+                    modifiers.insert(k.to_string(), v.to_string());
+                }
+            }
+        }
+
         match verb.as_str() {
             "negotiate" => {
                 if positional.len() >= 2 {
@@ -277,16 +290,34 @@ impl K0mmand3rCmd {
                 }
             }
             "vote" => {
+                let on_value = modifiers.remove("on");
                 let proposal = positional
                     .first()
                     .map(|s| s.to_string())
                     .or_else(|| modifiers.remove("proposal"))
-                    .or_else(|| modifiers.remove("on"))
+                    .or_else(|| {
+                        on_value.as_ref().and_then(|v| v.split_whitespace().next().map(|s| s.to_string()))
+                    })
                     .ok_or("Usage: /vote <proposal> <yes|no|abstain>")?;
                 let choice_str = positional
                     .get(1)
                     .map(|s| s.to_string())
                     .or_else(|| modifiers.remove("choice"))
+                    .or_else(|| {
+                        on_value.as_ref().and_then(|v| {
+                            let parts: Vec<&str> = v.split_whitespace().collect();
+                            // Look for "choice" keyword in the on-value: "proposal-456 choice abstain"
+                            let choice_idx = parts.iter().position(|&p| p == "choice");
+                            if let Some(idx) = choice_idx {
+                                parts.get(idx + 1).map(|s| s.to_string())
+                            } else if parts.len() >= 2 {
+                                // No "choice" keyword, try second token as choice
+                                Some(parts[1].to_string())
+                            } else {
+                                None
+                            }
+                        })
+                    })
                     .ok_or("Missing vote choice")?;
                 let choice = match choice_str.to_lowercase().as_str() {
                     "yes" | "y" => VoteChoice::Yes,
@@ -297,7 +328,23 @@ impl K0mmand3rCmd {
                 let reason = if positional.len() > 2 {
                     Some(positional[2..].join(" "))
                 } else {
-                    modifiers.remove("reason")
+                    modifiers.remove("reason").or_else(|| {
+                        on_value.as_ref().and_then(|v| {
+                            let parts: Vec<&str> = v.split_whitespace().collect();
+                            let choice_idx = parts.iter().position(|&p| p == "choice");
+                            if let Some(idx) = choice_idx {
+                                if idx + 2 < parts.len() {
+                                    Some(parts[idx + 2..].join(" "))
+                                } else {
+                                    None
+                                }
+                            } else if parts.len() >= 3 {
+                                Some(parts[2..].join(" "))
+                            } else {
+                                None
+                            }
+                        })
+                    })
                 };
                 Ok(K0mmand3rCmd::Vote {
                     proposal,
@@ -334,7 +381,16 @@ impl K0mmand3rCmd {
                     .first()
                     .map(|s| s.to_string())
                     .or_else(|| modifiers.remove("agent"))
-                    .or_else(|| modifiers.remove("to"))
+                    .or_else(|| {
+                        modifiers.remove("to").map(|v| {
+                            // Parse "agent:observer" or "agent=observer" → "observer"
+                            v.split(':')
+                                .last()
+                                .or_else(|| v.split('=').last())
+                                .unwrap_or(&v)
+                                .to_string()
+                        })
+                    })
                     .ok_or("Usage: /handshake <agent>")?;
                 let proposal = if positional.len() > 1 {
                     Some(positional[1..].join(" "))

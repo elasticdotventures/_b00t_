@@ -1,0 +1,39 @@
+- name: Build demo environment
+  hosts: localhost
+  gather_facts: true
+  vars:
+    demo_dir: "{{ lookup('env', 'HOME') }}/rustfs-demo"
+    demo_script: "{{ demo_dir }}/hello.sh"
+  tasks:
+    - name: Ensure demo directory exists
+      file:
+        path: "{{ demo_dir }}"
+        state: directory
+        mode: '0755'
+
+    - name: Install python3
+      apt:
+        name: python3
+        state: present
+        update_cache: true
+      when: ansible_facts.pkg_mgr == 'apt'
+
+    - name: Install curl for health tests
+      package:
+        name: curl
+        state: present
+      when: ansible_facts.pkg_mgr in ['apt', 'dnf', 'yum']
+
+    - name: Render hello script
+      copy:
+        dest: "{{ demo_script }}"
+        content: |
+          #!/bin/bash
+          echo "RustFS Demo up for skill: {{ skill | default('unknown') }}"
+          date
+          ls -l "{{ demo_dir }}"
+        mode: '0755'
+
+    - name: Show demo info
+      command: bash -c "{{ demo_script }}"
+      changed_when: false

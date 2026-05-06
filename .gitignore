@@ -245,6 +245,7 @@ env.bak/
 env/
 exec-log.jsonl
 google-cloud-sdk/
+guard-violations.jsonl
 htmlcov/
 instance/
 integrations/plantuml-server--b00t--togaf--mcp/

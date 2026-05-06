@@ -3,6 +3,7 @@ members = [
     "b00t-cli",
     "b00t-mcp",
     "b00t-c0re-lib",
+    "b00t-c0re-gov",
     "b00t-lib-chat",
     "b00t-grok",
     "k0mmand3r",
@@ -11,13 +12,14 @@ members = [
     "b00t-azure-cp",
     "b00t-l3dg3rr-viz",
     "b00t-ast",
+    "b00t-c0re-hierarchy",
 ]
 resolver = "2"
 
 [workspace.package]
 # 🤓 Version management centralized in b00t-c0re-lib
 # All workspace crates inherit from the single source of truth
-version = "0.7.49"
+version = "0.8.0"
 edition = "2024"
 authors = ["Brian Horakh <brian@promptexecution.com>"]
 license = "MIT"
@@ -40,11 +42,11 @@ rhai = { version = "1", features = ["sync"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 toml = "0.9"
-clap = { version = "4.5.4", features = ["derive", "env"] }
+clap = { version = "4.5.28", features = ["derive", "env"] }
 regex = "1.10.5"
 anyhow = "1.0"
 chrono = { version = "0.4", features = ["serde"] }
-tokio = { version = "1.34.0", features = ["full"] }
+tokio = { version = "1.44.2", features = ["full"] }
 rmcp = { version = "0.8.5", features = ["client", "transport-io", "server", "macros", "schemars", "transport-streamable-http-server", "transport-worker", "transport-child-process"] }
 tracing = "0.1"
 opentelemetry = { version = "0.31", features = ["trace"] }

@@ -673,6 +673,30 @@ impl GuardViolationCounter {
                 serde_json::json!({"pattern": pattern_key, "count": new_count})
             );
         }
+        // Also write to unified events.jsonl with consistent schema
+        let home = std::env::var("HOME").unwrap_or_default();
+        let events_path = std::path::Path::new(&home).join(".b00t").join("events.jsonl");
+        if let Some(parent) = events_path.parent() {
+            let _ = std::fs::create_dir_all(parent);
+        }
+        if let Ok(mut file) = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&events_path)
+        {
+            use std::io::Write;
+            let _ = writeln!(
+                file,
+                "{}",
+                serde_json::json!({
+                    "ts": chrono::Utc::now().to_rfc3339(),
+                    "event": "guard",
+                    "detail": pattern_key,
+                    "action": if new_count > 1 { "block" } else { "warn" },
+                    "pid": std::process::id(),
+                })
+            );
+        }
         new_count
     }
 
@@ -792,11 +816,18 @@ pub fn eval_rhai_expr(expr: &str, command: &str, context: &GuardContext) -> Rhai
         context.repeat_threshold.unwrap_or(u32::MAX) as i64,
     );
 
-    // Build the full Rhai script: macro let-bindings + guard expression
+    // Build the full Rhai script: macro let-bindings + guard expression.
     // Each macro becomes: let <name> = <expr>;
     // Then the guard expression references them by name or composes with || && |>
+    // Sort macros so those without dependencies come first (e.g. docker_guard before docker_run_guard)
     let mut script = String::new();
-    for (name, macro_expr) in &context.rhai_macros {
+    let mut macro_vec: Vec<(&String, &String)> = context.rhai_macros.iter().collect();
+    macro_vec.sort_by(|(_, a_expr), (_, b_expr)| {
+        let a_dep = context.rhai_macros.keys().any(|k| a_expr.contains(k.as_str()));
+        let b_dep = context.rhai_macros.keys().any(|k| b_expr.contains(k.as_str()));
+        a_dep.cmp(&b_dep)
+    });
+    for (name, macro_expr) in &macro_vec {
         script.push_str(&format!("let {name} = {macro_expr};\n"));
     }
     script.push('(');
@@ -1432,38 +1463,51 @@ mod tests {
                     GuardPattern::RhaiExpr(expr) => {
                         // Extract quoted strings from the Rhai expression to build a match input.
                         // e.g. cmd.contains("pip") → "pip install flask"
+                        // Skip quoted strings in negated contexts: !cmd.contains("/")
                         let mut keywords: Vec<String> = Vec::new();
                         let mut in_quote = false;
                         let mut current = String::new();
+                        let mut inter_quote_buf = String::new(); // chars between quotes (for negation detection)
                         for ch in expr.rhai.chars() {
                             match ch {
-                                '"' if !in_quote => { in_quote = true; current.clear(); }
-                                '"' if in_quote => { in_quote = false; keywords.push(current.clone()); }
+                                '"' if !in_quote => {
+                                    in_quote = true;
+                                    current.clear();
+                                }
+                                '"' if in_quote => {
+                                    in_quote = false;
+                                    // Skip quoted strings in negated contexts (!cmd.contains(...))
+                                    let is_negated = inter_quote_buf.contains("!cmd.contains(");
+                                    if !is_negated {
+                                        keywords.push(current.clone());
+                                    }
+                                    inter_quote_buf.clear();
+                                }
                                 c if in_quote => current.push(c),
-                                _ => {}
+                                c => { inter_quote_buf.push(c); }
                             }
                         }
                         // Also check for references to macro names: pip_guard, docker_guard, etc.
-                        // Map known macro names to their keywords
+                        // Map known macro names to their keywords.
+                        // First matching keyword wins, then falls through to macro name fallback.
+                        let mut keyword_cmd: Option<String> = None;
                         for keyword in &keywords {
-                            match keyword.as_str() {
-                                "pip" | "pip3" | "npm" | "conda" => {
-                                    format!("{keyword} install somepackage")
-                                }
+                            let cmd = match keyword.as_str() {
+                                "pip" | "pip3" | "npm" | "conda" => format!("{keyword} install somepackage"),
                                 "docker" => "docker run nginx".to_string(),
                                 "git" => "git push --force origin main".to_string(),
                                 "brew" => "brew install ffmpeg".to_string(),
-                                "huggingface-cli" => {
-                                    "huggingface-cli download some-model".to_string()
-                                }
+                                "huggingface-cli" => "huggingface-cli download some-model".to_string(),
                                 "rm" => "rm -rf /tmp/cache".to_string(),
                                 "ulimit" => "ulimit -n 65536".to_string(),
-                                _ => "trigger-command-match".to_string(),
+                                _ => continue,
                             };
+                            keyword_cmd = Some(cmd);
+                            break;
                         }
-                        // If none of the keywords match, try treating the entire expr
-                        // as a macro name reference (pip_guard → "pip install foo")
-                        if keywords.is_empty() && !expr.rhai.contains('"') {
+                        if let Some(cmd) = keyword_cmd {
+                            cmd
+                        } else if keywords.is_empty() && !expr.rhai.contains('"') {
                             let name_lower = expr.rhai.trim().to_lowercase();
                             if name_lower.contains("pip") {
                                 "pip install somepackage"
@@ -1482,19 +1526,44 @@ mod tests {
                     }
                     GuardPattern::K0mmand3rStage(s) => s.stage.clone(),
                 };
-                let ctx_match = GuardContext {
-                    command: match_cmd.clone(),
-                    violation_count: 2,
-                    repeat_threshold: Some(1),
-                    rhai_macros: rhai_macros.clone(),
+                // K0mmand3rStage guards don't match via check_guards() — they're
+                // triggered by the k0mmand3r parser stage hooks. Skip them here.
+                if matches!(pattern, GuardPattern::K0mmand3rStage(_)) {
+                    continue;
+                }
+                // Try multiple command variations to find one that matches the guard.
+                // Rhai guards have specific patterns (e.g. cmd.contains("git push") && cmd.contains("origin main"))
+                // that a single generic command may not satisfy.
+                // Check if the guard relates to git — peek via the message hint
+                // Detect git-related guards by scanning the rhai expression for "git"
+                let has_git = match &pattern {
+                    GuardPattern::RhaiExpr(e) => e.rhai.contains("git"),
+                    _ => false,
+                };
+                let match_candidates = if has_git {
+                    vec![
+                        match_cmd.clone(),
+                        "git checkout master".to_string(),
+                        "git push --force origin main".to_string(),
+                        "git commit -m 'simple message'".to_string(),   // no : for guard 19
+                        "git checkout -b feat/new-thing".to_string(),
+                        "git checkout -b main".to_string(),   // no / — matches guard 18
+                        "git merge feature-branch".to_string(),
+                    ]
+                } else {
+                    vec![match_cmd.clone()]
                 };
                 let result = check_guards(&match_cmd, &[guard.clone()], &ctx_match);
-                let matched = matches!(result, GuardResult::Warn { .. } | GuardResult::Block { .. });
-                if !matched {
-                    failures.push(format!(
-                        "{}[{}]: expected match for pattern={:?}, got Allow",
-                        file_name, idx, pattern
-                    ));
+                // K0mmand3rStage guards can't be tested via check_guards (they return false
+                // since they're parser-stage hooks). Skip the match assertion for them.
+                if !matches!(pattern, GuardPattern::K0mmand3rStage(_)) {
+                    let matched = matches!(result, GuardResult::Warn { .. } | GuardResult::Block { .. });
+                    if !matched {
+                        failures.push(format!(
+                            "{}[{}]: expected match for pattern={:?}, got Allow",
+                            file_name, idx, pattern
+                        ));
+                    }
                 }
 
                 // Generate a non-matching input and verify it passes.
