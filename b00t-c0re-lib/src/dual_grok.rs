@@ -49,8 +49,11 @@ impl GrokBackend {
                 Ok(Self::Raglite)
             }
             Some("irontology") | Some("iron") => Ok(Self::Irontology),
+            Some("codebase-memory") | Some("codebase_memory") => {
+                Ok(Self::CodebaseMemory)
+            }
             Some(other) => Err(anyhow::anyhow!(
-                "Unknown --rag backend '{}'. Valid: raglite, irontology, both",
+                "Unknown --rag backend '{}'. Valid: raglite, irontology, codebase-memory, both",
                 other
             )),
         }
@@ -602,6 +605,16 @@ mod tests {
             assert_eq!(
                 GrokBackend::from_flag(Some(s)).unwrap(),
                 GrokBackend::Irontology
+            );
+        }
+    }
+
+    #[test]
+    fn test_backend_from_flag_codebase_memory() {
+        for s in &["codebase-memory", "codebase_memory"] {
+            assert_eq!(
+                GrokBackend::from_flag(Some(s)).unwrap(),
+                GrokBackend::CodebaseMemory
             );
         }
     }

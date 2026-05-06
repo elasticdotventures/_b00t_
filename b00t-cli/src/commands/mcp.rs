@@ -13,7 +13,7 @@ pub enum McpCommands {
         name_or_json: String,
         #[clap(long, help = "Description/hint for the MCP server")]
         hint: Option<String>,
-        #[clap(long, help = "Add a gate precondition (format: command:<cmd> or env:<VAR> or file:<path>")]
+        #[clap(long, help = "Add a gate precondition (format: command:<cmd> or env:<VAR> or file:<path>)")]
         gate: Vec<String>,
         #[clap(long, help = "Remove the MCP server configuration")]
         remove: bool,
@@ -985,6 +985,7 @@ transport = "stdio"
             name_or_json: r#"{"name":"test-server","command":"npx","args":["-y","@test/package"]}"#
                 .to_string(),
             hint: None,
+            gate: vec![],
             remove: false,
             dwiw: false,
             no_dwiw: false,

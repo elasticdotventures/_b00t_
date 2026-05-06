@@ -1525,12 +1525,6 @@ mod tests {
                     }
                     GuardPattern::K0mmand3rStage(s) => s.stage.clone(),
                 };
-                let ctx_match = GuardContext {
-                    command: match_cmd.clone(),
-                    violation_count: 2,
-                    repeat_threshold: Some(1),
-                    rhai_macros: rhai_macros.clone(),
-                };
                 // K0mmand3rStage guards don't match via check_guards() — they're
                 // triggered by the k0mmand3r parser stage hooks. Skip them here.
                 if matches!(pattern, GuardPattern::K0mmand3rStage(_)) {
@@ -1570,11 +1564,6 @@ mod tests {
                     if matches!(result, GuardResult::Warn { .. } | GuardResult::Block { .. }) {
                         matched = true;
                         break;
-                    }
-                    // Debug: check why by evaluating directly
-                    if let GuardPattern::RhaiExpr(ex) = &pattern {
-                        let er = eval_rhai_expr(&ex.rhai, mc, &ctx_try);
-                        eprintln!("    debug[{}]: cmd={:?} rhai={:?} result={:?}", idx, mc, ex.rhai, er);
                     }
                 }
                 if !matched {

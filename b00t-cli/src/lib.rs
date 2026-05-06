@@ -412,10 +412,22 @@ pub fn evaluate_gates(gates: &[GateSpec], path: &str) -> Vec<GateResult> {
             }
         }
 
-        // File gate: check if file exists (supports ~ expansion)
+        // File gate: check if file exists (supports ~ expansion and relative paths)
         if let Some(ref file) = gate.file {
             let expanded = shellexpand::tilde(file).to_string();
-            if !std::path::Path::new(&expanded).exists() {
+            let exists = if std::path::Path::new(&expanded).is_absolute() {
+                std::path::Path::new(&expanded).exists()
+            } else {
+                // Try relative to datum directory (path may be a file; use parent if so).
+                // Fall back to current working directory.
+                let base = {
+                    let p = std::path::Path::new(path);
+                    if p.is_dir() { p.to_path_buf() } else { p.parent().map(|q| q.to_path_buf()).unwrap_or_else(|| std::path::PathBuf::from(".")) }
+                };
+                base.join(&expanded).exists()
+                    || std::path::Path::new(&expanded).exists()
+            };
+            if !exists {
                 passed = false;
                 reasons.push(format!("file '{}' does not exist", file));
             }
