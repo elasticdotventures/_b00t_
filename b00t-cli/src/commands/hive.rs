@@ -129,7 +129,7 @@ pub enum PeerCommands {
         subnet: Option<String>,
     },
     #[clap(subcommand)]
-    Cyber(HiveCyberCommands),
+    Cyber(Box<HiveCyberCommands>),
 }
 
 #[derive(Parser, Clone)]

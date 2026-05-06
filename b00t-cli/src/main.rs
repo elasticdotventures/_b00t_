@@ -42,7 +42,7 @@ use b00t_cli::commands::{
     JobCommands,
     K8sCommands,
     McpCommands, ModelCommands,
-    OntologyCommands, SessionCommands, SkillCommands, SoulCommands, StackCommands,
+    ObservabilityCommands, OntologyCommands, SessionCommands, SkillCommands, SoulCommands, StackCommands,
     TaskCommands,
     TutorialCommands, VersionCommands, VizCommands, WhatismyCommands
 
@@ -402,6 +402,11 @@ The system will:
     Ontology {
         #[clap(subcommand)]
         ontology_command: OntologyCommands,
+    },
+    #[clap(about = "Observability: events, guard violations, and telemetry")]
+    Observability {
+        #[clap(subcommand)]
+        observability_command: ObservabilityCommands,
     },
     #[clap(about = "WOW integrity checks — run, list, spline")]
     Wow {
@@ -1990,6 +1995,14 @@ async fn main() {
         }
         Some(Commands::Ontology { ontology_command }) => {
             if let Err(e) = ontology_command.execute() {
+                eprintln!("Error: {}", e);
+                std::process::exit(1);
+            }
+        }
+        Some(Commands::Observability {
+            observability_command,
+        }) => {
+            if let Err(e) = observability_command.execute() {
                 eprintln!("Error: {}", e);
                 std::process::exit(1);
             }

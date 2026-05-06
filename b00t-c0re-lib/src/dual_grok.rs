@@ -34,6 +34,8 @@ pub enum GrokBackend {
     Raglite,
     /// Irontology NeumannStore only
     Irontology,
+    /// Codebase memory MCP knowledge graph
+    CodebaseMemory,
     /// Fan-out to both (default)
     Both,
     /// Codebase Memory MCP (codebase memory graph)
@@ -61,6 +63,7 @@ impl GrokBackend {
         match self {
             Self::Raglite => "RAGLight",
             Self::Irontology => "Irontology",
+            Self::CodebaseMemory => "CodebaseMemory",
             Self::Both => "RAGLight+Irontology",
             Self::CodebaseMemory => "CodebaseMemory",
         }
@@ -603,6 +606,16 @@ mod tests {
             assert_eq!(
                 GrokBackend::from_flag(Some(s)).unwrap(),
                 GrokBackend::Irontology
+            );
+        }
+    }
+
+    #[test]
+    fn test_backend_from_flag_codebase_memory() {
+        for s in &["codebase-memory", "codebase_memory"] {
+            assert_eq!(
+                GrokBackend::from_flag(Some(s)).unwrap(),
+                GrokBackend::CodebaseMemory
             );
         }
     }

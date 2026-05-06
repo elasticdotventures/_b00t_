@@ -251,6 +251,8 @@ install:
     cargo install cocogitto --locked --force
     just install-commit-hook
     echo "  ✅ binaries installed"
+    echo "🔌 Installing recommended MCP servers (gated by environment)..."
+    b00t-cli install --mcp=recommended || echo "⚠️  MCP install skipped (no matching servers)"
 
     # [2] [3]: systemd service
     if [[ "$CHOICE" == "2" || "$CHOICE" == "a" ]]; then

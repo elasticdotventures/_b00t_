@@ -1,0 +1,24 @@
+[b00t]
+name = "arbor"
+type = "mcp"
+hint = "Arbor — native agentic coding desktop (worktrees, terminals, diffs, MCP)"
+requires_sudo = false
+
+[[b00t.mcp.stdio]]
+args = []
+command = "arbor-mcp"
+priority = 0
+transport = "stdio"
+requires = []
+
+[[b00t.gate]]
+command = "arbor-mcp"
+hint = "arbor-mcp not on PATH — install or add to $PATH"
+
+[[b00t.gate]]
+command = "arbor-httpd"
+hint = "arbor-httpd not on PATH — install or add to $PATH"
+
+[[b00t.gate]]
+env = "ARBOR_DAEMON_URL"
+hint = "ARBOR_DAEMON_URL not set — add to .env or environment"
