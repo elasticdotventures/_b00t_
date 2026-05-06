@@ -1,6 +1,6 @@
 // b00t-cli/src/commands/docgen.rs
 //
-// l3dg3rr docgen proxy — MCP client that queries codebase-memory-mcp
+// ledgrrr docgen proxy — MCP client that queries codebase-memory-mcp
 // and emits .tomllm / rustdoc / json output.
 //
 // Run via: b00t-cli docgen --format=tomllm --project=<name> --limit=30
@@ -15,7 +15,7 @@ use serde_json::Value;
 
 #[derive(Parser, Debug)]
 pub struct DocgenArgs {
-    /// Project name in the l3dg3rr knowledge graph
+    /// Project name in the ledgrrr knowledge graph
     #[arg(long, default_value = "home-brianh-.b00t-vendor-codebase-memory-mcp-b00t-ir0n-ledg3rr")]
     pub project: String,
 
@@ -47,7 +47,7 @@ impl std::str::FromStr for DocgenFormat {
     }
 }
 
-/// Run the docgen command: query l3dg3rr graph, format output
+/// Run the docgen command: query ledgrrr graph, format output
 pub fn run_docgen(args: &DocgenArgs) -> Result<String> {
     let cbm_path = find_cbm_binary()?;
 
@@ -140,7 +140,7 @@ fn find_cbm_binary() -> Result<String> {
 
 fn format_tomllm(functions: &[Value]) -> String {
     let mut out = String::new();
-    out.push_str("# l3dg3rr docgen export — .tomllm format\n");
+    out.push_str("# ledgrrr docgen export — .tomllm format\n");
     out.push_str("# schema: docgen-v1 | Auto-generated from knowledge graph\n\n");
 
     for f in functions {
@@ -166,7 +166,7 @@ fn format_tomllm(functions: &[Value]) -> String {
     }
 
     out.push_str("# b00t:map v1\n");
-    out.push_str("# summary: l3dg3rr function documentation export\n");
+    out.push_str("# summary: ledgrrr function documentation export\n");
     out.push_str("# tags: l3dg3rr, docgen, auto-export\n");
     out.push_str("# tier: sm0l\n");
     out.push_str("# cmds: b00t-cli docgen --format=tomllm\n");
@@ -176,7 +176,7 @@ fn format_tomllm(functions: &[Value]) -> String {
 
 fn format_rustdoc(functions: &[Value]) -> String {
     let mut out = String::new();
-    out.push_str("// l3dg3rr docgen export — rustdoc style\n\n");
+    out.push_str("// ledgrrr docgen export — rustdoc style\n\n");
 
     for f in functions {
         let name = f.get("name").and_then(|v| v.as_str()).unwrap_or("unknown");

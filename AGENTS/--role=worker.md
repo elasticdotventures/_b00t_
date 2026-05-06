@@ -104,7 +104,7 @@ just worker-experiment-scores              # show recent score history
 just worker-viz                            # render ontology graph
 ```
 
-## Phygital Dashboard — l3dg3rr ontology graph
+## Phygital Dashboard — ledgrrr ontology graph
 
 The worker ontology graph is renderable via `b00t viz entangle --datum worker --format mermaid`.
 Each node represents a phygital-twin component with interactive status.

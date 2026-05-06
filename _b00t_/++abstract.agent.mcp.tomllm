@@ -1,0 +1,188 @@
+# b00t Agent MCP Implementations — Shared across all agents
+# This file defines the common MCP tool implementations that every agent inherits
+# from `++abstract.agent`
+
+# b00t:map v1
+# summary: Shared MCP tool implementations for all b00t hive agents
+# tags: agent, mcp, tools, shared, inheritance, abstract
+# tier: frontier
+# cmds: b00t mcp list
+# complexity: 5
+
+# ── CORE TOOLS (available to ALL agents) ────────────────────────────────────
+
+[b00t.agent.mcp.tools.core]
+# File operations
+read = {
+    description = "Read file content with line numbers",
+    parameters = {
+        path = { type = "string", required = true, description = "Absolute or relative file path" },
+        offset = { type = "integer", default = 1, description = "Starting line number (1-indexed)" },
+        limit = { type = "integer", default = 500, description = "Maximum lines to read" }
+    },
+    returns = "File content with line numbers"
+}
+
+write = {
+    description = "Write content to file, creating directories as needed",
+    parameters = {
+        path = { type = "string", required = true, description = "Absolute or relative file path" },
+        content = { type = "string", required = true, description = "File content to write" }
+    },
+    returns = "Success/failure status"
+}
+
+# Shell operations
+bash = {
+    description = "Execute shell commands with timeout and working directory",
+    parameters = {
+        command = { type = "string", required = true, description = "Shell command to execute" },
+        timeout = { type = "integer", default = 180, description = "Timeout in seconds" },
+        workdir = { type = "string", default = "", description = "Working directory" },
+        background = { type = "boolean", default = false, description = "Run in background" }
+    },
+    returns = "Command output and exit code"
+}
+
+grep = {
+    description = "Search file contents using regex patterns",
+    parameters = {
+        pattern = { type = "string", required = true, description = "Regex pattern to search" },
+        target = { type = "string", default = "content", description = "Search target: content or files" },
+        path = { type = "string", default = ".", description = "Directory to search in" },
+        limit = { type = "integer", default = 50, description = "Maximum results" }
+    },
+    returns = "Matching lines or file paths"
+}
+
+find = {
+    description = "Find files by name pattern",
+    parameters = {
+        pattern = { type = "string", required = true, description = "Glob pattern (e.g., '*.py')" },
+        path = { type = "string", default = ".", description = "Directory to search in" },
+        limit = { type = "integer", default = 50, description = "Maximum results" }
+    },
+    returns = "Matching file paths"
+}
+
+ls = {
+    description = "List directory contents",
+    parameters = {
+        path = { type = "string", default = ".", description = "Directory to list" },
+        recursive = { type = "boolean", default = false, description = "List recursively" },
+        details = { type = "boolean", default = true, description = "Include file details" }
+    },
+    returns = "Directory listing"
+}
+
+# ── EXTENDED TOOLS (optional, agent-specific) ──────────────────────────────
+
+[b00t.agent.mcp.tools.extended]
+mcp = {
+    description = "Manage MCP servers and tools",
+    parameters = {
+        action = { type = "string", required = true, description = "Action: list, add, remove, update" },
+        server = { type = "string", default = "", description = "MCP server identifier" }
+    },
+    returns = "MCP server status"
+}
+
+vision = {
+    description = "Analyze images and visual content",
+    parameters = {
+        image_url = { type = "string", required = true, description = "Image URL or file path" },
+        question = { type = "string", required = true, description = "Question about the image" }
+    },
+    returns = "Image analysis"
+}
+
+web = {
+    description = "Search the web and fetch web content",
+    parameters = {
+        query = { type = "string", required = true, description = "Search query" },
+        max_results = { type = "integer", default = 10, description = "Maximum results" }
+    },
+    returns = "Search results"
+}
+
+search = {
+    description = "Search session history and memory",
+    parameters = {
+        query = { type = "string", required = true, description = "Search query" },
+        limit = { type = "integer", default = 10, description = "Maximum results" }
+    },
+    returns = "Search results"
+}
+
+delegate_task = {
+    description = "Spawn subagents for parallel work",
+    parameters = {
+        goal = { type = "string", required = true, description = "Task goal" },
+        context = { type = "string", default = "", description = "Background context" },
+        toolsets = { type = "array", default = [], description = "Toolsets to enable" }
+    },
+    returns = "Subagent results"
+}
+
+cronjob = {
+    description = "Manage scheduled cron jobs",
+    parameters = {
+        action = { type = "string", required = true, description = "Action: create, list, update, pause, resume, remove, run" },
+        job_id = { type = "string", default = "", description = "Job identifier" },
+        prompt = { type = "string", default = "", description = "Job prompt" }
+    },
+    returns = "Job status"
+}
+
+memory = {
+    description = "Save and retrieve durable memory",
+    parameters = {
+        action = { type = "string", required = true, description = "Action: add, replace, remove" },
+        target = { type = "string", required = true, description = "Target: memory or user" },
+        content = { type = "string", default = "", description = "Memory content" }
+    },
+    returns = "Memory status"
+}
+
+# ── COMMUNICATION TOOLS (available to captain and executor agents) ──────────
+
+[b00t.agent.mcp.tools.comms]
+send_message = {
+    description = "Send messages to other agents or users",
+    parameters = {
+        recipient = { type = "string", required = true, description = "Agent or user identifier" },
+        message = { type = "string", required = true, description = "Message content" },
+        transport = { type = "string", default = "http", description = "Transport protocol" }
+    },
+    returns = "Message status"
+}
+
+clarify = {
+    description = "Ask clarifying questions to the user",
+    parameters = {
+        question = { type = "string", required = true, description = "Question to ask" },
+        choices = { type = "array", default = [], description = "Answer choices" }
+    },
+    returns = "User response"
+}
+
+text_to_speech = {
+    description = "Convert text to speech audio",
+    parameters = {
+        text = { type = "string", required = true, description = "Text to convert" },
+        output_path = { type = "string", default = "", description = "Output file path" }
+    },
+    returns = "Audio file path"
+}
+
+# ── INHERITANCE RULES ──────────────────────────────────────────────────────
+
+[b00t.agent.mcp.inheritance]
+# All agents inherit core tools by default
+core_inherited = true
+# Extended tools are optional (agent-specific)
+extended_inherited = false
+# Communication tools are only for captain/executor agents
+comms_inherited = false
+# Agents can override tool availability via [[b00t.agent.mcp.tools.override]]
+override_allowed = true

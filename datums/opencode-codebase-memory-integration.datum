@@ -1,0 +1,71 @@
+# Foreign Variant Datum — opencode × codebase-memory-mcp
+#
+# This datum acknowledges that ~/.b00t is a foreign dotfile variant specific to
+# PromptExecution (@promptexecution) and elasticventures (@elasticdotventures)
+# hive nodes. Other nodes in the b00t mesh may have different dotfile layouts,
+# agent harnesses, or MCP mesh compositions. This datum captures one such variant
+# at one node (wendy@LappyX86) with a known Rust lifetime (session duration).
+
+[node]
+identity = "wendy@l3dg3rr"
+host = "LappyX86"
+os = "WSL2/Ubuntu"
+variant_id = "promptexecution-elasticventures-20260502"
+rust_lifetime = "session"  # this datum is valid for the duration of this agent session
+role = "empirical TRIZ/MECE/systems polymath AI Rust coder"
+
+[bridges]
+primary_harness = "opencode v1.14.17"
+workspace = "/mnt/d/Projects/l3dg3rr"
+mcp_mesh = [
+    "codebase-memory-mcp v0.6.0 (DeusData)",
+    "b00t-mcp (hive orchestration)",
+    "ledgerr-mcp (tax ledger — rename pending brand alignment to ledg3rr-mcp)",
+]
+
+[dependencies]
+codebase_memory_binary = "/home/wendy/.local/bin/codebase-memory-mcp"
+b00t_repo = "/home/wendy/.b00t"
+
+[syntax_sugar]
+# opencode runtime dispatches tools; codebase-memory-mcp provides a graph query
+# plane. Together they shift the computational primitive from filesystem O(n) to
+# graph O(log n) for code understanding. The type-level invariant: prefer a
+# graph query over a file read when the symbol is known.
+insight = """
+opencode (runtime) dispatches → codebase-memory-mcp (knowledge graph)
+  ├─ search_graph(label, name_pattern)   — O(log n) symbol lookup
+  ├─ trace_call_path(function_name, dir) — O(1) BFS from node
+  ├─ get_architecture()                  — O(1) precomputed overview
+  ├─ detect_changes()                    — O(1) git diff → symbol impact
+  └─ query_graph(cypher)                 — O(path length) traversal
+This replaces: grep (O(files)), read (O(lines)), glob (O(entries)).
+"""
+
+[type_invariants]
+# The opencode config schema is a type algebra. Each MCP tool, agent, plugin,
+# and permission entry has a deterministic shape. This datum records the
+# abstract handler pattern rather than concrete Rust code (which belongs in
+# the b00t learning system, not in the l3dg3rr repo).
+pattern = "foreign_variant_handler"
+handler_trait = """
+trait ForeignVariantHandler {
+    type NodeId: Display;         // node identity (e.g. wendy@l3dg3rr)
+    type DotfileLayout: Display;  // variant-specific dotfile schema
+    type Lifetime;                // scope for which the variant is valid
+
+    fn snapshot(self) -> VariantSnapshot<Self>;
+    fn merge(&mut self, other: Self) -> Result<(), VariantConflict>;
+    fn genericize(self) -> GenericHandler;
+}
+"""
+invariants = [
+    "Every MCP tool in the mesh has a deterministic id",
+    "Agent permission sets are partial-ordered by rank (superset invariant)",
+    "No two variants may conflict on the same dotfile path without explicit merge",
+]
+
+[tags]
+#opencode #codebase-memory-mcp #foreign-variant #dotfiles #b00t-datum
+#promptexecution #elasticventures #type-invariants #mcp #rust-lifetime
+#generic-handler

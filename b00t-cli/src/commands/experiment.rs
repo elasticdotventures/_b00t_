@@ -215,18 +215,18 @@ pub fn aggregate_focus_delta(control: &ExperimentResult, treatment: &ExperimentR
     t_net - c_net
 }
 
-/// After an experiment, emit FOCUS records to ledgerr-mcp via MCP stdio subprocess.
-/// Spawns the ledgerr-mcp-server from its MCP config, sends a JSON-RPC initialize
+/// After an experiment, emit FOCUS records to ledgrrr-mcp via MCP stdio subprocess.
+/// Spawns the ledgrrr-mcp-server from its MCP config, sends a JSON-RPC initialize
 /// handshake followed by a tools/call with the FOCUS record payload.
 /// This is a best-effort call — failures are logged but don't fail the experiment.
 /// Falls back to writing a temp file if the MCP server can't be started.
-pub fn emit_focus_to_ledgerr_mcp(cmp: &ExperimentComparison, _endpoint: &str) {
+pub fn emit_focus_to_ledgrrr_mcp(cmp: &ExperimentComparison, _endpoint: &str) {
     // ── Build the JSON-RPC tools/call payload ───────────────────────────────
     let payload = serde_json::json!({
         "jsonrpc": "2.0",
         "method": "tools/call",
         "params": {
-            "name": "ledgerr_focus",
+            "name": "ledgrrr_focus",
             "arguments": {
                 "action": "append_focus_record",
                 "records": [{
@@ -262,24 +262,24 @@ pub fn emit_focus_to_ledgerr_mcp(cmp: &ExperimentComparison, _endpoint: &str) {
     let tmp = std::env::temp_dir().join(format!("b00t-mcp-payload-{}.json", cmp.experiment_id));
     if let Ok(mut f) = std::fs::File::create(&tmp) {
         let _ = f.write_all(serde_json::to_string_pretty(&payload).unwrap_or_default().as_bytes());
-        eprintln!("[ledgerr-mcp] payload written to {} — pipe to ledgerr-mcp when daemon is running", tmp.display());
+        eprintln!("[ledgrrr-mcp] payload written to {} — pipe to ledgrrr-mcp when daemon is running", tmp.display());
     }
 }
 
-/// Try to find the ledgerr-mcp-server command from the MCP config file.
+/// Try to find the ledgrrr-mcp-server command from the MCP config file.
 /// Checks several known locations for the config.
-fn find_ledgerr_mcp_command() -> Option<(String, Vec<String>)> {
+fn find_ledgrrr_mcp_command() -> Option<(String, Vec<String>)> {
     // Config file search paths
     let candidate_paths = [
         // Expand ~ via std::env::var("HOME")
         std::env::var("HOME").ok().map(|h| {
             std::path::Path::new(&h)
-                .join(".dotfiles/_b00t_/ledgerr-mcp.mcp.toml")
+                .join(".dotfiles/_b00t_/ledgrrr-mcp.mcp.toml")
         }),
         // Relative to CARGO_MANIFEST_DIR (available at compile time)
-        Some(std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("_b00t_/ledgerr-mcp.mcp.toml")),
+        Some(std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("_b00t_/ledgrrr-mcp.mcp.toml")),
         // Relative to current directory
-        Some(std::path::Path::new("_b00t_/ledgerr-mcp.mcp.toml").to_path_buf()),
+        Some(std::path::Path::new("_b00t_/ledgrrr-mcp.mcp.toml").to_path_buf()),
     ];
 
     for path_opt in &candidate_paths {
@@ -293,7 +293,7 @@ fn find_ledgerr_mcp_command() -> Option<(String, Vec<String>)> {
     None
 }
 
-/// Minimal structs for parsing the ledgerr-mcp MCP config TOML.
+/// Minimal structs for parsing the ledgrrr-mcp MCP config TOML.
 #[derive(Deserialize)]
 struct McpConfigFile {
     b00t: McpConfigBoot,
@@ -330,26 +330,26 @@ fn parse_mcp_command(content: &str) -> Option<(String, Vec<String>)> {
     Some((method.command, method.args))
 }
 
-/// Send a JSON-RPC payload to ledgerr-mcp via MCP stdio subprocess.
+/// Send a JSON-RPC payload to ledgrrr-mcp via MCP stdio subprocess.
 /// Returns true if the message was sent and acknowledged.
 fn send_via_mcp_subprocess(payload: &serde_json::Value) -> bool {
     // Allow test environments to skip MCP subprocess entirely
-    if std::env::var("LEDGERR_MCP_DISABLE").is_ok() {
-        eprintln!("[ledgerr-mcp] disabled via LEDGERR_MCP_DISABLE env var");
+    if std::env::var("LEDGRRR_MCP_DISABLE").is_ok() {
+        eprintln!("[ledgrrr-mcp] disabled via LEDGRRR_MCP_DISABLE env var");
         return false;
     }
 
-    let (command, args) = match find_ledgerr_mcp_command() {
+    let (command, args) = match find_ledgrrr_mcp_command() {
         Some(cmd) => cmd,
         None => {
-            eprintln!("[ledgerr-mcp] config not found — falling back to temp file");
+            eprintln!("[ledgrrr-mcp] config not found — falling back to temp file");
             return false;
         }
     };
 
     // Check that the binary exists before trying to spawn
     if !std::path::Path::new(&command).exists() {
-        eprintln!("[ledgerr-mcp] binary not found: {command} — falling back to temp file");
+        eprintln!("[ledgrrr-mcp] binary not found: {command} — falling back to temp file");
         return false;
     }
 
@@ -363,7 +363,7 @@ fn send_via_mcp_subprocess(payload: &serde_json::Value) -> bool {
     {
         Ok(c) => c,
         Err(e) => {
-            eprintln!("[ledgerr-mcp] failed to spawn subprocess: {e}");
+            eprintln!("[ledgrrr-mcp] failed to spawn subprocess: {e}");
             return false;
         }
     };
@@ -371,7 +371,7 @@ fn send_via_mcp_subprocess(payload: &serde_json::Value) -> bool {
     let stdin = match child.stdin.as_mut() {
         Some(s) => s,
         None => {
-            eprintln!("[ledgerr-mcp] no stdin on child process");
+            eprintln!("[ledgrrr-mcp] no stdin on child process");
             let _ = child.kill();
             return false;
         }
@@ -380,7 +380,7 @@ fn send_via_mcp_subprocess(payload: &serde_json::Value) -> bool {
     let stdout = match child.stdout.take() {
         Some(s) => s,
         None => {
-            eprintln!("[ledgerr-mcp] no stdout on child process");
+            eprintln!("[ledgrrr-mcp] no stdout on child process");
             let _ = child.kill();
             return false;
         }
@@ -402,7 +402,7 @@ fn send_via_mcp_subprocess(payload: &serde_json::Value) -> bool {
     });
 
     if writeln!(stdin, "{}", serde_json::to_string(&init_request).unwrap()).is_err() {
-        eprintln!("[ledgerr-mcp] failed to write initialize request");
+        eprintln!("[ledgrrr-mcp] failed to write initialize request");
         let _ = child.kill();
         return false;
     }
@@ -413,7 +413,7 @@ fn send_via_mcp_subprocess(payload: &serde_json::Value) -> bool {
     let deadline = Instant::now() + Duration::from_secs(5);
     let init_response = loop {
         if Instant::now() > deadline {
-            eprintln!("[ledgerr-mcp] timeout waiting for initialize response");
+            eprintln!("[ledgrrr-mcp] timeout waiting for initialize response");
             let _ = child.kill();
             return false;
         }
@@ -431,16 +431,16 @@ fn send_via_mcp_subprocess(payload: &serde_json::Value) -> bool {
                 // empty line, keep reading
             }
             Err(e) => {
-                eprintln!("[ledgerr-mcp] error reading initialize response: {e}");
+                eprintln!("[ledgrrr-mcp] error reading initialize response: {e}");
                 break None;
             }
         }
     };
 
     if let Some(ref resp) = init_response {
-        eprintln!("[ledgerr-mcp] initialize OK: {resp}");
+        eprintln!("[ledgrrr-mcp] initialize OK: {resp}");
     } else {
-        eprintln!("[ledgerr-mcp] no initialize response — server may have closed");
+        eprintln!("[ledgrrr-mcp] no initialize response — server may have closed");
         let _ = child.kill();
         return false;
     }
@@ -455,7 +455,7 @@ fn send_via_mcp_subprocess(payload: &serde_json::Value) -> bool {
 
     // ── Step 3: Send the tools/call payload ────────────────────────────────
     if writeln!(stdin, "{}", serde_json::to_string(payload).unwrap()).is_err() {
-        eprintln!("[ledgerr-mcp] failed to write tools/call payload");
+        eprintln!("[ledgrrr-mcp] failed to write tools/call payload");
         let _ = child.kill();
         return false;
     }
@@ -467,7 +467,7 @@ fn send_via_mcp_subprocess(payload: &serde_json::Value) -> bool {
     let mut response_lines = Vec::new();
     loop {
         if Instant::now() > deadline {
-            eprintln!("[ledgerr-mcp] timeout waiting for tools/call response");
+            eprintln!("[ledgrrr-mcp] timeout waiting for tools/call response");
             let _ = child.kill();
             return false;
         }
@@ -481,7 +481,7 @@ fn send_via_mcp_subprocess(payload: &serde_json::Value) -> bool {
                 }
             }
             Err(e) => {
-                eprintln!("[ledgerr-mcp] error reading response: {e}");
+                eprintln!("[ledgrrr-mcp] error reading response: {e}");
                 break;
             }
         }
@@ -492,16 +492,16 @@ fn send_via_mcp_subprocess(payload: &serde_json::Value) -> bool {
     let _ = child.wait();
 
     if response_lines.is_empty() {
-        eprintln!("[ledgerr-mcp] no response received (server may have processed silently)");
+        eprintln!("[ledgrrr-mcp] no response received (server may have processed silently)");
         // Still consider it a success — the payload was sent
-        eprintln!("[ledgerr-mcp] FOCUS records transmitted via MCP subprocess");
+        eprintln!("[ledgrrr-mcp] FOCUS records transmitted via MCP subprocess");
         return true;
     }
 
     for line in &response_lines {
-        eprintln!("[ledgerr-mcp] response: {line}");
+        eprintln!("[ledgrrr-mcp] response: {line}");
     }
-    eprintln!("[ledgerr-mcp] FOCUS records transmitted via MCP subprocess");
+    eprintln!("[ledgrrr-mcp] FOCUS records transmitted via MCP subprocess");
     true
 }
 

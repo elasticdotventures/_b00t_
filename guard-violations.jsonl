@@ -57,11 +57,13 @@
 {"count":5,"pattern":"rhai:cmd.contains(\"pip\") && cmd.contains(\"install\")"}
 {"count":54,"pattern":"pip install"}
 {"count":3,"pattern":"rhai:cmd.contains(\"pip\") && violations >= threshold"}
+{"count":56,"pattern":"docker run"}
+{"count":5,"pattern":"vllm serve"}
 {"count":55,"pattern":"pip install"}
 {"count":8,"pattern":"pip3 install"}
 {"count":6,"pattern":"python -m pip"}
 {"count":8,"pattern":"conda install"}
-{"count":56,"pattern":"docker run"}
+{"count":57,"pattern":"docker run"}
 {"count":6,"pattern":"docker build"}
 {"count":6,"pattern":"docker-compose"}
 {"count":10,"pattern":"rm -rf /"}
@@ -75,7 +77,6 @@
 {"count":1,"pattern":"rhai:cmd.contains(\"git push\") && cmd.contains(\"origin main\")"}
 {"count":1,"pattern":"rhai:cmd.contains(\"git merge\") && cmd.contains(\"main\")"}
 {"count":56,"pattern":"pip install"}
-{"count":57,"pattern":"docker run"}
 {"count":57,"pattern":"pip install"}
 {"count":58,"pattern":"docker run"}
 {"count":58,"pattern":"pip install"}
@@ -84,7 +85,6 @@
 {"count":60,"pattern":"docker run"}
 {"count":60,"pattern":"pip install"}
 {"count":61,"pattern":"docker run"}
-{"count":5,"pattern":"vllm serve"}
 {"count":61,"pattern":"pip install"}
 {"count":62,"pattern":"docker run"}
 {"count":11,"pattern":"rm -rf /"}
@@ -92,11 +92,13 @@
 {"count":6,"pattern":"rhai:cmd.contains(\"pip\") && cmd.contains(\"install\")"}
 {"count":63,"pattern":"pip install"}
 {"count":4,"pattern":"rhai:cmd.contains(\"pip\") && violations >= threshold"}
+{"count":63,"pattern":"docker run"}
+{"count":6,"pattern":"vllm serve"}
 {"count":64,"pattern":"pip install"}
 {"count":9,"pattern":"pip3 install"}
 {"count":7,"pattern":"python -m pip"}
 {"count":9,"pattern":"conda install"}
-{"count":63,"pattern":"docker run"}
+{"count":64,"pattern":"docker run"}
 {"count":7,"pattern":"docker build"}
 {"count":7,"pattern":"docker-compose"}
 {"count":12,"pattern":"rm -rf /"}
@@ -107,7 +109,6 @@
 {"count":9,"pattern":"huggingface-cli download"}
 {"count":7,"pattern":"ulimit -n"}
 {"count":65,"pattern":"pip install"}
-{"count":64,"pattern":"docker run"}
 {"count":66,"pattern":"pip install"}
 {"count":65,"pattern":"docker run"}
 {"count":67,"pattern":"pip install"}
@@ -116,7 +117,6 @@
 {"count":67,"pattern":"docker run"}
 {"count":69,"pattern":"pip install"}
 {"count":68,"pattern":"docker run"}
-{"count":6,"pattern":"vllm serve"}
 {"count":70,"pattern":"pip install"}
 {"count":69,"pattern":"docker run"}
 {"count":13,"pattern":"rm -rf /"}
@@ -294,7 +294,6 @@
 {"count":104,"pattern":"docker run"}
 {"count":23,"pattern":"rm -rf /"}
 {"count":116,"pattern":"pip install"}
-{"count":116,"pattern":"pip install"}
 {"count":12,"pattern":"rhai:cmd.contains(\"pip\") && cmd.contains(\"install\")"}
 {"count":10,"pattern":"rhai:cmd.contains(\"pip\") && violations >= threshold"}
 {"count":117,"pattern":"pip install"}
@@ -330,7 +329,6 @@
 {"count":123,"pattern":"pip install"}
 {"count":111,"pattern":"docker run"}
 {"count":25,"pattern":"rm -rf /"}
-{"count":124,"pattern":"pip install"}
 {"count":124,"pattern":"pip install"}
 {"count":13,"pattern":"rhai:cmd.contains(\"pip\") && cmd.contains(\"install\")"}
 {"count":11,"pattern":"rhai:cmd.contains(\"pip\") && violations >= threshold"}
@@ -405,7 +403,6 @@
 {"count":125,"pattern":"docker run"}
 {"count":29,"pattern":"rm -rf /"}
 {"count":141,"pattern":"pip install"}
-{"count":141,"pattern":"pip install"}
 {"count":15,"pattern":"rhai:cmd.contains(\"pip\") && cmd.contains(\"install\")"}
 {"count":13,"pattern":"rhai:cmd.contains(\"pip\") && violations >= threshold"}
 {"count":142,"pattern":"pip install"}
@@ -441,7 +438,6 @@
 {"count":148,"pattern":"pip install"}
 {"count":132,"pattern":"docker run"}
 {"count":31,"pattern":"rm -rf /"}
-{"count":149,"pattern":"pip install"}
 {"count":149,"pattern":"pip install"}
 {"count":16,"pattern":"rhai:cmd.contains(\"pip\") && cmd.contains(\"install\")"}
 {"count":14,"pattern":"rhai:cmd.contains(\"pip\") && violations >= threshold"}
@@ -626,22 +622,16 @@ patternrhai:cmd.contains("\":pip"\"pip install") && violations >= threshold}"
 {"count":190,"pattern":"pip install"}
 {"count":167,"pattern":"docker run"}
 {{""countcount""::19140,,""patternpattern""::""pip installrm -rf /""}}
-
 {"count":40,"pattern":"rm -rf /"}
 {"count":191,"pattern":"pip install"}
 {{{"""countcountcount""":::41,41192",,pattern"""patternpattern:"""::rm -rf /"""pip installrm -rf /}""
 }}
-
 {"count":192,"pattern":"pip install"}
 {{""countcount""::4141,,""patternpattern""::""rm -rf /rm -rf /""}}
-
-{"count":193,"pattern":"pip install"}
 {"count":193,"pattern":"pip install"}
 {{{"""countcountcount""":::4141194,,,"""patternpatternpattern""":::""{"rm -rf /rm -rf /"pip install""count"}}"}
-
 :
 194,"pattern":"pip install"}
 {{""countcount""::41194,,""patternpattern""::""rm -rf /pip install""}}
-
 {"count":41,"pattern":"rm -rf /"}
 {"count":194,"pattern":"pip install"}

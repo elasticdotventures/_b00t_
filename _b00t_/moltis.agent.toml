@@ -11,6 +11,9 @@ name = "moltis"
 type = "agent"
 hint = "Rust-native claw — sandboxed, secure, auditable. Voice, memory, MCP tools, multi-channel."
 
+[[b00t.agent.inherits]]
+from = "++abstract.agent"
+
 [b00t.agent]
 pid = "moltis-001"
 branch = "main"
@@ -40,6 +43,22 @@ protocol = "http+openai"
 [b00t.agent.crew]
 role = "specialist"
 captain = false
+
+
+[b00t.agent.bouncer]
+enabled = true
+audit_log = ".b00t/bouncer-audit.jsonl"
+
+[b00t.agent.bouncer.input_gates]
+sanitize = { enabled = true, rules = ["no-shell-injection", "no-credential-exposure"] }
+credential_check = { enabled = true, check_env = true }
+permission_check = { enabled = true, check_role = true }
+rate_limit = { enabled = true, max_concurrent = 10 }
+
+[b00t.agent.bouncer.output_gates]
+contract_validation = { enabled = true, validate_schema = true }
+security_scan = { enabled = true, check_secrets = true }
+quality_check = { enabled = true, min_quality_score = 0.8 }
 
 [b00t.agent.mcp]
 # 🤓 moltis has built-in MCP tool support via its own crates/tools layer

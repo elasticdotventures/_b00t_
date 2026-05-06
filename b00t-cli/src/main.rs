@@ -33,10 +33,10 @@ use b00t_cli::utils::get_workspace_root;
 use b00t_cli::commands::{
   //  Keep commands 1 line per letter A,B,C,... for easy diff
     AiCommands, AgentCommands, AnsibleCommands, AppCommands, AuditCommands,
-    BootstrapCommands, BudgetCommands,
+    BouncerArgs, BouncerCommands, BootstrapCommands, BudgetCommands,
     ChatCommands, CliCommands, ConfigCommands, CrewCommand,
     DataCommands, DatumCommands, DoctorCommands,
-    FocusCommands,
+    FocusCommands, GatesCommands,
     GrokCommands, HiveCommands,
     InitCommands,
     JobCommands,
@@ -199,6 +199,11 @@ The system will:
     Cli {
         #[clap(subcommand)]
         cli_command: CliCommands,
+    },
+    #[clap(about = "Bouncer pattern gatekeeper for input/output validation")]
+    Bouncer {
+        #[clap(subcommand)]
+        bouncer_command: BouncerCommands,
     },
     #[clap(name = "config", about = "Project configuration and scaffolding")]
     Configure {
@@ -403,11 +408,6 @@ The system will:
         #[clap(subcommand)]
         ontology_command: OntologyCommands,
     },
-    #[clap(about = "Observability: events, guard violations, and telemetry")]
-    Observability {
-        #[clap(subcommand)]
-        observability_command: ObservabilityCommands,
-    },
     #[clap(about = "WOW integrity checks — run, list, spline")]
     Wow {
         #[clap(subcommand)]
@@ -463,6 +463,22 @@ The system will:
     Doctor {
         #[clap(subcommand)]
         doctor_command: DoctorCommands,
+    },
+    #[clap(
+        about = "List [[b00t.gate]] declarations across MCP datums",
+        long_about = "Scan all .mcp.toml files and show gate preconditions with status indicators.\n\nExamples:\n  b00t gates list\n  b00t gates list --search github\n  b00t gates list --by-kind env\n  b00t gates list --json"
+    )]
+    Gates {
+        #[clap(subcommand)]
+        gates_command: GatesCommands,
+    },
+    #[clap(
+        about = "Observability: events, guard violations, and telemetry",
+        long_about = "View events from unified events.jsonl and guard violation statistics.\n\nExamples:\n  b00t observability events\n  b00t observability events --since 5\n  b00t observability events --event mcp_install\n  b00t observability events --follow\n  b00t observability guards\n  b00t observability guards --escalated"
+    )]
+    Observability {
+        #[clap(subcommand)]
+        observability_command: ObservabilityCommands,
     },
 }
 
@@ -1657,6 +1673,13 @@ async fn main() {
                 std::process::exit(1);
             }
         }
+        Some(Commands::Bouncer { bouncer_command }) => {
+            let args = BouncerArgs { command: bouncer_command.clone() };
+            if let Err(e) = b00t_cli::commands::bouncer::handle_bouncer(&args) {
+                eprintln!("Error: {}", e);
+                std::process::exit(1);
+            }
+        }
         Some(Commands::Configure { config_command }) => {
             if let Err(e) = b00t_cli::commands::config_cmd::handle_config_command(config_command, &cli.path).await {
                 eprintln!("Error: {}", e);
@@ -1999,14 +2022,6 @@ async fn main() {
                 std::process::exit(1);
             }
         }
-        Some(Commands::Observability {
-            observability_command,
-        }) => {
-            if let Err(e) = observability_command.execute() {
-                eprintln!("Error: {}", e);
-                std::process::exit(1);
-            }
-        }
         Some(Commands::Wow { wow_command }) => {
             match wow_command {
                 WowSubcommands::Check { json } => {
@@ -2124,8 +2139,8 @@ async fn main() {
                             let tf = experiment::create_focus_record(&cmp.experiment_id, "treatment", "sm0l-trt", "experiment-eval", &cmp.treatment.scores);
                             eprintln!("[ledgrrr] {}", experiment::focus_record_to_ledgrrr(&cf));
                             eprintln!("[ledgrrr] {}", experiment::focus_record_to_ledgrrr(&tf));
-                            // emit FOCUS records to ledgerr-mcp MCP server (best-effort)
-                            experiment::emit_focus_to_ledgerr_mcp(&cmp, "http://localhost:8001");
+                            // emit FOCUS records to ledgrrr-mcp MCP server (best-effort)
+                            experiment::emit_focus_to_ledgrrr_mcp(&cmp, "http://localhost:8001");
                             // Calculate and issue cake payout
                             experiment::calculate_and_issue_cake(&cmp);
                         }
@@ -2234,6 +2249,18 @@ async fn main() {
         }
         Some(Commands::Doctor { doctor_command }) => {
             if let Err(e) = b00t_cli::commands::doctor_cmd::handle_doctor_command(doctor_command, &cli.path) {
+                eprintln!("Error: {e}");
+                std::process::exit(1);
+            }
+        }
+        Some(Commands::Gates { gates_command }) => {
+            if let Err(e) = gates_command.execute(&cli.path) {
+                eprintln!("Error: {e}");
+                std::process::exit(1);
+            }
+        }
+        Some(Commands::Observability { observability_command }) => {
+            if let Err(e) = observability_command.execute() {
                 eprintln!("Error: {e}");
                 std::process::exit(1);
             }
