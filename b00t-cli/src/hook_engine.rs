@@ -64,19 +64,28 @@ static CAPABILITY_REGISTRY: LazyLock<Option<CapabilityRegistry>> =
 
 /// Get the path to the capability registry file
 fn capability_registry_path() -> Option<PathBuf> {
-    // Try _B00T_Path env var first, fallback to default
-    let b00t_path = std::env::var("_B00T_Path")
-        .ok()
-        .unwrap_or_else(|| "~/.b00t/_b00t_".to_string());
+    // Try _B00T_Path env var first, fallback to workspace root, then default
+    let candidates: Vec<String> = vec![
+        std::env::var("_B00T_Path").ok().map(|p| {
+            let expanded = shellexpand::tilde(&p);
+            expanded.into_owned()
+        }),
+        // Workspace-relative path for dev/CI environments (git root)
+        crate::utils::get_workspace_root()
+            .parse::<String>()
+            .ok()
+            .map(|r| format!("{}/_b00t_", r)),
+        // Legacy default
+        Some(shellexpand::tilde("~/.b00t/_b00t_").into_owned()),
+    ]
+    .into_iter()
+    .flatten()
+    .collect();
 
-    let expanded = shellexpand::tilde(&b00t_path);
-    let registry_path = PathBuf::from(expanded.as_ref()).join("capability-registry.toml");
-
-    if registry_path.exists() {
-        Some(registry_path)
-    } else {
-        None
-    }
+    candidates.into_iter().find_map(|base| {
+        let p = PathBuf::from(&base).join("capability-registry.toml");
+        if p.exists() { Some(p) } else { None }
+    })
 }
 
 /// Load and parse the capability registry TOML file

@@ -3,20 +3,33 @@
 //! error handling when the hermes binary is not available.
 //!
 //! Run with:
-//!   cd /home/brianh/.b00t/b00t-cli && cargo test --test install_hermes_tests
+//!   cargo test --test install_hermes_tests
 
 use std::io::Write;
 use std::path::Path;
 use tempfile::TempDir;
 
 // ---------------------------------------------------------------------------
-// Constants duplicated from src/commands/install.rs (not pub there).
-// Keep in sync with the source.
+// Helpers mirroring constants from src/commands/install.rs (resolved at runtime
+// from $HOME so tests pass on any machine, not just the original developer's).
 // ---------------------------------------------------------------------------
-const HERMES_B00T_MCP_COMMAND: &str = "/home/brianh/.cargo/bin/b00t-mcp";
-const HERMES_B00T_MCP_ARGS: &[&str] = &["stdio", "-d", "/home/brianh/.b00t"];
-const CODEBASE_MEMORY_MCP_PATH: &str =
-    "/home/brianh/.b00t/vendor/codebase-memory-mcp-b00t-ir0n-ledg3rr/build/c/codebase-memory-mcp";
+fn hermes_b00t_mcp_command() -> String {
+    let home = std::env::var("HOME").unwrap_or_default();
+    format!("{}/.cargo/bin/b00t-mcp", home)
+}
+
+fn hermes_b00t_mcp_args() -> Vec<String> {
+    let home = std::env::var("HOME").unwrap_or_default();
+    vec!["stdio".into(), "-d".into(), format!("{}/.b00t", home)]
+}
+
+fn codebase_memory_mcp_path() -> String {
+    let home = std::env::var("HOME").unwrap_or_default();
+    format!(
+        "{}/.b00t/vendor/codebase-memory-mcp-b00t-ir0n-ledg3rr/build/c/codebase-memory-mcp",
+        home
+    )
+}
 
 // ---------------------------------------------------------------------------
 // Helper: run `b00t-cli install hermes` as a subprocess.
@@ -209,7 +222,7 @@ mcp_servers:
         .as_str()
         .unwrap();
     assert_eq!(
-        cmd, HERMES_B00T_MCP_COMMAND,
+        cmd, hermes_b00t_mcp_command(),
         "b00t-mcp command must be overwritten with canonical value"
     );
 }
@@ -253,11 +266,11 @@ mcp_servers:
         .unwrap()
         .as_str()
         .unwrap();
-    assert_eq!(b00t_cmd, HERMES_B00T_MCP_COMMAND);
+    assert_eq!(b00t_cmd, hermes_b00t_mcp_command());
 
     // codebase-memory: if the binary exists it's overwritten; if not, the
     // pre-existing entry survives untouched.
-    if std::path::Path::new(CODEBASE_MEMORY_MCP_PATH).exists() {
+    if std::path::Path::new(&codebase_memory_mcp_path()).exists() {
         let cm = servers
             .get(&serde_yaml::Value::String("codebase-memory".into()))
             .unwrap()
@@ -268,7 +281,7 @@ mcp_servers:
             .unwrap()
             .as_str()
             .unwrap();
-        assert_eq!(cm_cmd, CODEBASE_MEMORY_MCP_PATH);
+        assert_eq!(cm_cmd, codebase_memory_mcp_path());
     } else {
         // Binary doesn't exist — function won't touch codebase-memory entry.
         let cm = servers
@@ -515,7 +528,7 @@ fn test_config_parsing_yields_correct_structure() {
         .unwrap()
         .as_str()
         .unwrap();
-    assert_eq!(cmd, HERMES_B00T_MCP_COMMAND);
+    assert_eq!(cmd, hermes_b00t_mcp_command());
 
     // args field
     assert!(
@@ -527,11 +540,11 @@ fn test_config_parsing_yields_correct_structure() {
         .unwrap()
         .as_sequence()
         .unwrap();
-    assert_eq!(args.len(), HERMES_B00T_MCP_ARGS.len());
-    for (i, expected) in HERMES_B00T_MCP_ARGS.iter().enumerate() {
+    assert_eq!(args.len(), hermes_b00t_mcp_args().len());
+    for (i, expected) in hermes_b00t_mcp_args().iter().enumerate() {
         assert_eq!(
             args[i].as_str().unwrap(),
-            *expected,
+            expected.as_str(),
             "arg {} mismatch",
             i
         );
@@ -577,7 +590,7 @@ fn test_config_parsing_codebase_memory() {
         .as_mapping()
         .unwrap();
 
-    if std::path::Path::new(CODEBASE_MEMORY_MCP_PATH).exists() {
+    if std::path::Path::new(&codebase_memory_mcp_path()).exists() {
         assert!(
             servers.contains_key(&serde_yaml::Value::String("codebase-memory".into())),
             "codebase-memory must be present when the binary exists"
@@ -592,7 +605,7 @@ fn test_config_parsing_codebase_memory() {
             .unwrap()
             .as_str()
             .unwrap();
-        assert_eq!(cm_cmd, CODEBASE_MEMORY_MCP_PATH);
+        assert_eq!(cm_cmd, codebase_memory_mcp_path());
         let cm_args = cm
             .get(&serde_yaml::Value::String("args".into()))
             .unwrap()
