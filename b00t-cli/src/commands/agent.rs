@@ -25,7 +25,11 @@ static DELEGATION_LIMITERS: Lazy<Mutex<HashMap<usize, Arc<DelegationLimiter>>>> 
 
 /// Get-or-create a shared `DelegationLimiter` for the given concurrency cap.
 fn get_shared_limiter(max_concurrent: usize) -> Arc<DelegationLimiter> {
-    let mut map = DELEGATION_LIMITERS.lock().unwrap_or_else(|e| e.into_inner());
+    let mut map = DELEGATION_LIMITERS.lock().unwrap_or_else(|e| {
+        eprintln!("⚠️  DELEGATION_LIMITERS mutex was poisoned — recovering. \
+                   A previous delegation thread may have panicked.");
+        e.into_inner()
+    });
     map.entry(max_concurrent)
         .or_insert_with(|| Arc::new(DelegationLimiter::new(max_concurrent)))
         .clone()

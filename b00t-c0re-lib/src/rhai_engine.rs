@@ -129,7 +129,10 @@ impl RhaiEngine {
         engine.register_fn(
             "tool_installed",
             |tool: &str| -> String {
-                let exe = std::env::current_exe().unwrap_or_else(|_| std::path::PathBuf::from("b00t-cli"));
+                let exe = std::env::current_exe().unwrap_or_else(|e| {
+                    eprintln!("⚠️  tool_installed: current_exe() failed ({e}), falling back to 'b00t-cli' on PATH");
+                    std::path::PathBuf::from("b00t-cli")
+                });
                 let output = Command::new(&exe)
                     .arg("detect")
                     .arg(tool)
