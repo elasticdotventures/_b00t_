@@ -1,0 +1,10 @@
+[b00t]
+name = "ansible-demo"
+type = "stack"
+hint = "Demo stack that runs an Ansible playbook to bootstrap a skill folder and small script."
+depends_on = ["ansible.stack"]
+lfmf_category = "ansible-demo"
+
+[b00t.usage]
+description = "Run demo playbook" 
+command = "b00t stack ansible --run script ansible/playbooks/demo-install.yaml -- skill=demo"

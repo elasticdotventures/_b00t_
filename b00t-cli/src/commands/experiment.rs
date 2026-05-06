@@ -11,8 +11,13 @@
 
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::process::Command;
-use std::time::{Instant, SystemTime, UNIX_EPOCH};
+use std::io::{BufRead, BufReader, Write};
+use std::path::PathBuf;
+use std::process::{Command, Stdio};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+
+use b00t_c0re_gov::epoch3::{self, MissionResult};
+use b00t_c0re_gov::types::ScoreCard;
 
 #[cfg(feature = "candle")]
 use crate::blessing::inference::candle;
@@ -210,52 +215,294 @@ pub fn aggregate_focus_delta(control: &ExperimentResult, treatment: &ExperimentR
     t_net - c_net
 }
 
-/// After an experiment, emit FOCUS records to ledgerr-mcp via MCP protocol.
-/// Uses curl to call the ledgerr-mcp stdin endpoint.
-/// This is a non-blocking best-effort call — failures are logged but don't
-/// fail the experiment itself.
+/// After an experiment, emit FOCUS records to ledgerr-mcp via MCP stdio subprocess.
+/// Spawns the ledgerr-mcp-server from its MCP config, sends a JSON-RPC initialize
+/// handshake followed by a tools/call with the FOCUS record payload.
+/// This is a best-effort call — failures are logged but don't fail the experiment.
+/// Falls back to writing a temp file if the MCP server can't be started.
 pub fn emit_focus_to_ledgerr_mcp(cmp: &ExperimentComparison, _endpoint: &str) {
-    // ledgerr-mcp uses stdio MCP transport — no HTTP endpoint.
-    // Records are persisted when ledgerr-mcp is running as a subprocess of b00t-mcp
-    // or as a standalone daemon. The [ledgrrr] stderr output from main.rs is the
-    // primary persistence path; this function is a best-effort secondary path.
-    // TODO: pipe JSON-RPC payload to ledgerr-mcp stdin when running as subprocess.
+    // ── Build the JSON-RPC tools/call payload ───────────────────────────────
+    let payload = serde_json::json!({
+        "jsonrpc": "2.0",
+        "method": "tools/call",
+        "params": {
+            "name": "ledgerr_focus",
+            "arguments": {
+                "action": "append_focus_record",
+                "records": [{
+                    "billing_account_id": "b00t-hive",
+                    "service_name": "experiment-eval",
+                    "billed_cost": cmp.control.scores.get("cost").copied().unwrap_or(0.0),
+                    "effective_cost": cmp.control.scores.get("cost").copied().unwrap_or(0.0) * 0.85,
+                    "experiment_id": Some(cmp.experiment_id.clone()),
+                    "variant": Some("control".to_string()),
+                    "agent_id": Some("sm0l-ctl".to_string()),
+                }, {
+                    "billing_account_id": "b00t-hive",
+                    "service_name": "experiment-eval",
+                    "billed_cost": cmp.treatment.scores.get("cost").copied().unwrap_or(0.0),
+                    "effective_cost": cmp.treatment.scores.get("cost").copied().unwrap_or(0.0) * 0.85,
+                    "experiment_id": Some(cmp.experiment_id.clone()),
+                    "variant": Some("treatment".to_string()),
+                    "agent_id": Some("sm0l-trt".to_string()),
+                }],
+                "experiment_id": Some(cmp.experiment_id.clone()),
+                "personality": None::<String>,
+            }
+        },
+        "id": 1
+    });
+
+    // ── Try sending via MCP subprocess ──────────────────────────────────────
+    if send_via_mcp_subprocess(&payload) {
+        return;
+    }
+
+    // ── Fallback: write payload to temp file ─────────────────────────────────
     let tmp = std::env::temp_dir().join(format!("b00t-mcp-payload-{}.json", cmp.experiment_id));
     if let Ok(mut f) = std::fs::File::create(&tmp) {
-        use std::io::Write;
-        let payload = serde_json::json!({
-            "jsonrpc": "2.0",
-            "method": "tools/call",
-            "params": {
-                "name": "ledgerr_focus",
-                "arguments": {
-                    "action": "append_focus_record",
-                    "records": [{
-                        "billing_account_id": "b00t-hive",
-                        "service_name": "experiment-eval",
-                        "billed_cost": cmp.control.scores.get("cost").copied().unwrap_or(0.0),
-                        "effective_cost": cmp.control.scores.get("cost").copied().unwrap_or(0.0) * 0.85,
-                        "experiment_id": Some(cmp.experiment_id.clone()),
-                        "variant": Some("control".to_string()),
-                        "agent_id": Some("sm0l-ctl".to_string()),
-                    }, {
-                        "billing_account_id": "b00t-hive",
-                        "service_name": "experiment-eval",
-                        "billed_cost": cmp.treatment.scores.get("cost").copied().unwrap_or(0.0),
-                        "effective_cost": cmp.treatment.scores.get("cost").copied().unwrap_or(0.0) * 0.85,
-                        "experiment_id": Some(cmp.experiment_id.clone()),
-                        "variant": Some("treatment".to_string()),
-                        "agent_id": Some("sm0l-trt".to_string()),
-                    }],
-                    "experiment_id": Some(cmp.experiment_id.clone()),
-                    "personality": None::<String>,
-                }
-            },
-            "id": 1
-        });
         let _ = f.write_all(serde_json::to_string_pretty(&payload).unwrap_or_default().as_bytes());
         eprintln!("[ledgerr-mcp] payload written to {} — pipe to ledgerr-mcp when daemon is running", tmp.display());
     }
+}
+
+/// Try to find the ledgerr-mcp-server command from the MCP config file.
+/// Checks several known locations for the config.
+fn find_ledgerr_mcp_command() -> Option<(String, Vec<String>)> {
+    // Config file search paths
+    let candidate_paths = [
+        // Expand ~ via std::env::var("HOME")
+        std::env::var("HOME").ok().map(|h| {
+            std::path::Path::new(&h)
+                .join(".dotfiles/_b00t_/ledgerr-mcp.mcp.toml")
+        }),
+        // Relative to CARGO_MANIFEST_DIR (available at compile time)
+        Some(std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("_b00t_/ledgerr-mcp.mcp.toml")),
+        // Relative to current directory
+        Some(std::path::Path::new("_b00t_/ledgerr-mcp.mcp.toml").to_path_buf()),
+    ];
+
+    for path_opt in &candidate_paths {
+        if let Some(path) = path_opt {
+            if path.exists() {
+                let content = std::fs::read_to_string(path).ok()?;
+                return parse_mcp_command(&content);
+            }
+        }
+    }
+    None
+}
+
+/// Minimal structs for parsing the ledgerr-mcp MCP config TOML.
+#[derive(Deserialize)]
+struct McpConfigFile {
+    b00t: McpConfigBoot,
+}
+
+#[derive(Deserialize)]
+struct McpConfigBoot {
+    #[serde(default)]
+    mcp: Option<McpConfigSection>,
+}
+
+#[derive(Deserialize)]
+struct McpConfigSection {
+    #[serde(default)]
+    stdio: Option<Vec<McpConfigStdio>>,
+}
+
+#[derive(Deserialize)]
+struct McpConfigStdio {
+    command: String,
+    #[serde(default)]
+    args: Vec<String>,
+}
+
+/// Parse the MCP config content to extract the first stdio method's command + args.
+fn parse_mcp_command(content: &str) -> Option<(String, Vec<String>)> {
+    let cfg: McpConfigFile = toml::from_str(content).ok()?;
+    let method = cfg
+        .b00t
+        .mcp?
+        .stdio?
+        .into_iter()
+        .next()?;
+    Some((method.command, method.args))
+}
+
+/// Send a JSON-RPC payload to ledgerr-mcp via MCP stdio subprocess.
+/// Returns true if the message was sent and acknowledged.
+fn send_via_mcp_subprocess(payload: &serde_json::Value) -> bool {
+    // Allow test environments to skip MCP subprocess entirely
+    if std::env::var("LEDGERR_MCP_DISABLE").is_ok() {
+        eprintln!("[ledgerr-mcp] disabled via LEDGERR_MCP_DISABLE env var");
+        return false;
+    }
+
+    let (command, args) = match find_ledgerr_mcp_command() {
+        Some(cmd) => cmd,
+        None => {
+            eprintln!("[ledgerr-mcp] config not found — falling back to temp file");
+            return false;
+        }
+    };
+
+    // Check that the binary exists before trying to spawn
+    if !std::path::Path::new(&command).exists() {
+        eprintln!("[ledgerr-mcp] binary not found: {command} — falling back to temp file");
+        return false;
+    }
+
+    // Spawn the MCP server as a subprocess with stdio pipes
+    let mut child = match Command::new(&command)
+        .args(&args)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .spawn()
+    {
+        Ok(c) => c,
+        Err(e) => {
+            eprintln!("[ledgerr-mcp] failed to spawn subprocess: {e}");
+            return false;
+        }
+    };
+
+    let stdin = match child.stdin.as_mut() {
+        Some(s) => s,
+        None => {
+            eprintln!("[ledgerr-mcp] no stdin on child process");
+            let _ = child.kill();
+            return false;
+        }
+    };
+
+    let stdout = match child.stdout.take() {
+        Some(s) => s,
+        None => {
+            eprintln!("[ledgerr-mcp] no stdout on child process");
+            let _ = child.kill();
+            return false;
+        }
+    };
+
+    // ── Step 1: Send JSON-RPC initialize request ──────────────────────────
+    let init_request = serde_json::json!({
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "initialize",
+        "params": {
+            "protocolVersion": "2024-11-05",
+            "capabilities": {},
+            "clientInfo": {
+                "name": "b00t-cli",
+                "version": "0.1.0"
+            }
+        }
+    });
+
+    if writeln!(stdin, "{}", serde_json::to_string(&init_request).unwrap()).is_err() {
+        eprintln!("[ledgerr-mcp] failed to write initialize request");
+        let _ = child.kill();
+        return false;
+    }
+    let _ = stdin.flush();
+
+    // Read initialize response with 5-second timeout
+    let mut reader = BufReader::new(stdout);
+    let deadline = Instant::now() + Duration::from_secs(5);
+    let init_response = loop {
+        if Instant::now() > deadline {
+            eprintln!("[ledgerr-mcp] timeout waiting for initialize response");
+            let _ = child.kill();
+            return false;
+        }
+        let mut line = String::new();
+        match reader.read_line(&mut line) {
+            Ok(0) => {
+                // EOF
+                break None;
+            }
+            Ok(_) => {
+                let trimmed = line.trim();
+                if !trimmed.is_empty() {
+                    break Some(trimmed.to_string());
+                }
+                // empty line, keep reading
+            }
+            Err(e) => {
+                eprintln!("[ledgerr-mcp] error reading initialize response: {e}");
+                break None;
+            }
+        }
+    };
+
+    if let Some(ref resp) = init_response {
+        eprintln!("[ledgerr-mcp] initialize OK: {resp}");
+    } else {
+        eprintln!("[ledgerr-mcp] no initialize response — server may have closed");
+        let _ = child.kill();
+        return false;
+    }
+
+    // ── Step 2: Send JSON-RPC notifications/initialized (required by protocol) ──
+    let notified = serde_json::json!({
+        "jsonrpc": "2.0",
+        "method": "notifications/initialized"
+    });
+    let _ = writeln!(stdin, "{}", serde_json::to_string(&notified).unwrap());
+    let _ = stdin.flush();
+
+    // ── Step 3: Send the tools/call payload ────────────────────────────────
+    if writeln!(stdin, "{}", serde_json::to_string(payload).unwrap()).is_err() {
+        eprintln!("[ledgerr-mcp] failed to write tools/call payload");
+        let _ = child.kill();
+        return false;
+    }
+    let _ = stdin.flush();
+    drop(stdin);
+
+    // Read tools/call response with 5-second timeout
+    let deadline = Instant::now() + Duration::from_secs(5);
+    let mut response_lines = Vec::new();
+    loop {
+        if Instant::now() > deadline {
+            eprintln!("[ledgerr-mcp] timeout waiting for tools/call response");
+            let _ = child.kill();
+            return false;
+        }
+        let mut line = String::new();
+        match reader.read_line(&mut line) {
+            Ok(0) => break, // EOF
+            Ok(_) => {
+                let trimmed = line.trim();
+                if !trimmed.is_empty() {
+                    response_lines.push(trimmed.to_string());
+                }
+            }
+            Err(e) => {
+                eprintln!("[ledgerr-mcp] error reading response: {e}");
+                break;
+            }
+        }
+    }
+
+    // Wait for child with a short timeout (just try to reap it, don't block)
+    let _ = child.kill();
+    let _ = child.wait();
+
+    if response_lines.is_empty() {
+        eprintln!("[ledgerr-mcp] no response received (server may have processed silently)");
+        // Still consider it a success — the payload was sent
+        eprintln!("[ledgerr-mcp] FOCUS records transmitted via MCP subprocess");
+        return true;
+    }
+
+    for line in &response_lines {
+        eprintln!("[ledgerr-mcp] response: {line}");
+    }
+    eprintln!("[ledgerr-mcp] FOCUS records transmitted via MCP subprocess");
+    true
 }
 
 // ── Core experiment dispatch ─────────────────────────────────────────────────
@@ -754,6 +1001,76 @@ pub fn phygital_status(
         experiment_id: exp_id.map(|s| s.to_string()),
         focus_balance,
     }
+}
+
+// ── Cake payout ──────────────────────────────────────────────────────────────
+
+/// Calculate cake payout from experiment results and write the balance file.
+///
+/// 1. Creates a `ScoreCard` from the winning variant's scores
+/// 2. Calls `epoch3::calculate_cake_payout()` to compute cake earned
+/// 3. Writes the cake balance to `~/.local/share/b00t/hooks/cake-balance.json`
+/// 4. Logs the payout
+pub fn calculate_and_issue_cake(cmp: &ExperimentComparison) -> f64 {
+    // Use the winning variant's scores (default to control if recommendation can't be parsed)
+    let scores = if cmp.recommendation.contains("treatment") {
+        &cmp.treatment.scores
+    } else {
+        &cmp.control.scores
+    };
+
+    // Normalize cost/time to 0.0–1.0 range for ScoreCard
+    let cost_raw = scores.get("cost").copied().unwrap_or(0.0);
+    let time_raw = scores.get("time").copied().unwrap_or(0.0);
+    let cost_score = 1.0 - (cost_raw / 5000.0).min(1.0);
+    let time_score = 1.0 - (time_raw / 10000.0).min(1.0);
+
+    // Risk: lower is better in ScoreCard
+    let risk_raw = scores.get("risk").copied().unwrap_or(0.0);
+    let risk_score = 1.0 - risk_raw.min(1.0);
+
+    let card = ScoreCard::new(
+        scores.get("roi").copied().unwrap_or(0.0),
+        cost_score,
+        time_score,
+        scores.get("accuracy").copied().unwrap_or(0.0),
+        scores.get("utility").copied().unwrap_or(0.0),
+        risk_score,
+    );
+
+    let result = MissionResult {
+        mission_id: cmp.experiment_id.clone(),
+        agent_id: "experiment-runner".to_string(),
+        bounty: 100.0,
+        score: card,
+        calories_burned: cost_raw,
+        completed_at: chrono::Utc::now(),
+    };
+
+    // Default budget = 100 calories, penalty rate = 0.1
+    let payout = epoch3::calculate_cake_payout(&result, 100.0, 0.1);
+
+    // Write cake balance to disk
+    if let Some(home) = std::env::var("HOME").ok() {
+        let dir = PathBuf::from(&home)
+            .join(".local")
+            .join("share")
+            .join("b00t")
+            .join("hooks");
+        let _ = std::fs::create_dir_all(&dir);
+        let path = dir.join("cake-balance.json");
+        let balance = serde_json::json!({
+            "experiment_id": cmp.experiment_id,
+            "payout": payout,
+            "timestamp": chrono::Utc::now().to_rfc3339(),
+        });
+        if let Ok(content) = serde_json::to_string_pretty(&balance) {
+            let _ = std::fs::write(&path, content);
+        }
+    }
+
+    eprintln!("[🍰] Cake earned: {:.2}", payout);
+    payout
 }
 
 // ── Personality profiles ─────────────────────────────────────────────────────

@@ -34,7 +34,7 @@ use b00t_cli::commands::{
   //  Keep commands 1 line per letter A,B,C,... for easy diff
     AiCommands, AgentCommands, AnsibleCommands, AppCommands, AuditCommands,
     BootstrapCommands, BudgetCommands,
-    ChatCommands, CliCommands, ConfigCommands,
+    ChatCommands, CliCommands, ConfigCommands, CrewCommand,
     DataCommands, DatumCommands, DoctorCommands,
     FocusCommands,
     GrokCommands, HiveCommands,
@@ -332,6 +332,11 @@ The system will:
     Chat {
         #[clap(subcommand)]
         chat_command: ChatCommands,
+    },
+    #[clap(about = "Crew management — Operator-Player-Captain hierarchy")]
+    Crew {
+        #[clap(subcommand)]
+        crew_command: CrewCommand,
     },
     #[clap(about = "Learn about topics with unified knowledge management")]
     // 🤓 ENTANGLED (synchronized): b00t-mcp/src/mcp_tools.rs LearnCommand now uses LearnArgs wrapper, matching CLI structure.
@@ -1800,6 +1805,9 @@ async fn main() {
                 std::process::exit(1);
             }
         }
+        Some(Commands::Crew { crew_command }) => {
+            b00t_cli::commands::crew_handler::handle_crew_command(crew_command);
+        }
         Some(Commands::Learn(args)) => {
             if let Err(e) = handle_learn(&cli.path, args.clone()).await {
                 eprintln!("Error: {}", e);
@@ -2118,6 +2126,8 @@ async fn main() {
                             eprintln!("[ledgrrr] {}", experiment::focus_record_to_ledgrrr(&tf));
                             // emit FOCUS records to ledgerr-mcp MCP server (best-effort)
                             experiment::emit_focus_to_ledgerr_mcp(&cmp, "http://localhost:8001");
+                            // Calculate and issue cake payout
+                            experiment::calculate_and_issue_cake(&cmp);
                         }
                         Err(e) => {
                             eprintln!("Experiment failed: {e}");

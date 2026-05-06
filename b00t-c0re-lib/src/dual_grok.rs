@@ -38,6 +38,8 @@ pub enum GrokBackend {
     CodebaseMemory,
     /// Fan-out to both (default)
     Both,
+    /// Codebase Memory MCP (codebase memory graph)
+    CodebaseMemory,
 }
 
 impl GrokBackend {
@@ -49,9 +51,7 @@ impl GrokBackend {
                 Ok(Self::Raglite)
             }
             Some("irontology") | Some("iron") => Ok(Self::Irontology),
-            Some("codebase-memory") | Some("codebase_memory") => {
-                Ok(Self::CodebaseMemory)
-            }
+            Some("codebase-memory") | Some("codebase") | Some("cb") => Ok(Self::CodebaseMemory),
             Some(other) => Err(anyhow::anyhow!(
                 "Unknown --rag backend '{}'. Valid: raglite, irontology, codebase-memory, both",
                 other
@@ -65,6 +65,7 @@ impl GrokBackend {
             Self::Irontology => "Irontology",
             Self::CodebaseMemory => "CodebaseMemory",
             Self::Both => "RAGLight+Irontology",
+            Self::CodebaseMemory => "CodebaseMemory",
         }
     }
 }

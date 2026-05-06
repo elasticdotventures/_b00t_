@@ -1,0 +1,38 @@
+name: Strip NSFW from upstream
+on:
+  schedule:
+    - cron: '0 6 * * 1'  # Every Monday at 6am UTC
+  workflow_dispatch:  # Manual trigger
+
+jobs:
+  strip:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: elasticdotventures/_b00t_
+          token: ${{ secrets.PAT_TOKEN }}
+
+      - name: Strip NSFW from inspiration.yaml
+        run: |
+          grep -Ev '^\s+"(anal|buttstuff|penetrate|vagina|jizz|moist|lubricated)"' \
+            r3src_资源/inspiration.yaml > _b00t_/schema/inspiration.yaml
+          echo "NSFW stripped, SFW file written"
+
+      - name: Set variant to core
+        run: |
+          cat > _b00t_/schema/variant.toml << 'EOF'
+          [b00t.variant]
+          name = "core"
+          description = "SFW public variant — stripped from upstream, no crypto"
+          features = ["sfw", "no-crypto"]
+          EOF
+          echo "Variant set to core"
+
+      - name: Commit if changed
+        run: |
+          git config user.name "b00t CI Bot"
+          git config user.email "ci@promptexecution.com"
+          git add _b00t_/schema/inspiration.yaml _b00t_/schema/variant.toml
+          git diff --cached --quiet || git commit -m "chore: strip NSFW from upstream inspiration [skip ci]"
+          git push

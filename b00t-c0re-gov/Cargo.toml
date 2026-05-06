@@ -1,0 +1,17 @@
+[package]
+name = "b00t-c0re-gov"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+uuid = { version = "1", features = ["v4", "serde"] }
+chrono = { workspace = true }
+tokio = { workspace = true }
+anyhow = { workspace = true }
+thiserror = "2"
+async-trait = { workspace = true }
+
+[dev-dependencies]
+tempfile = "3"
