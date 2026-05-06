@@ -38,8 +38,6 @@ pub enum GrokBackend {
     CodebaseMemory,
     /// Fan-out to both (default)
     Both,
-    /// Codebase Memory MCP (codebase memory graph)
-    CodebaseMemory,
 }
 
 impl GrokBackend {
@@ -65,7 +63,6 @@ impl GrokBackend {
             Self::Irontology => "Irontology",
             Self::CodebaseMemory => "CodebaseMemory",
             Self::Both => "RAGLight+Irontology",
-            Self::CodebaseMemory => "CodebaseMemory",
         }
     }
 }
