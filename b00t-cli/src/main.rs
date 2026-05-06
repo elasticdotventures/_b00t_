@@ -33,13 +33,8 @@ use b00t_cli::utils::get_workspace_root;
 use b00t_cli::commands::{
   //  Keep commands 1 line per letter A,B,C,... for easy diff
     AiCommands, AgentCommands, AnsibleCommands, AppCommands, AuditCommands,
-<<<<<<< HEAD
-    BootstrapCommands, BudgetCommands,
-    ChatCommands, CliCommands, ConfigCommands, CrewCommand,
-=======
     BouncerArgs, BouncerCommands, BootstrapCommands, BudgetCommands,
-    ChatCommands, CliCommands, ConfigCommands,
->>>>>>> origin/bouncer-pattern
+    ChatCommands, CliCommands, ConfigCommands, CrewCommand,
     DataCommands, DatumCommands, DoctorCommands,
     FocusCommands, GatesCommands,
     GrokCommands, HiveCommands,
