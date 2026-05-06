@@ -472,7 +472,6 @@ The system will:
         #[clap(subcommand)]
         gates_command: GatesCommands,
     },
-<<<<<<< HEAD
     #[clap(
         about = "Observability: events, guard violations, and telemetry",
         long_about = "View events from unified events.jsonl and guard violation statistics.\n\nExamples:\n  b00t observability events\n  b00t observability events --since 5\n  b00t observability events --event mcp_install\n  b00t observability events --follow\n  b00t observability guards\n  b00t observability guards --escalated"
@@ -480,7 +479,16 @@ The system will:
     Observability {
         #[clap(subcommand)]
         observability_command: ObservabilityCommands,
-=======
+    },
+}
+
+#[derive(clap::Parser, Clone)]
+pub enum WowSubcommands {
+    #[clap(about = "Run all WOW integrity checks")]
+    Check {
+        #[clap(long, help = "Emit JSON results")]
+        json: bool,
+    },
     #[clap(about = "List registered WOW checks")]
     List,
 }
@@ -542,7 +550,6 @@ pub enum ExperimentCommands {
         exp_b: String,
         #[clap(long, help = "Path to FOCUS records JSONL file", default_value = "focus_records.jsonl")]
         path: std::path::PathBuf,
->>>>>>> origin/bouncer-pattern
     },
 }
 
