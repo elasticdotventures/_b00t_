@@ -230,7 +230,7 @@ impl ControlEventSink for LedgrrrControlEventSink {
                     capability: self.capability(),
                     delivered: false,
                     reply: event.reply.clone(),
-                    message: format!("ledgerr event command spawn failed: {e}"),
+                    message: format!("ledgrrr event command spawn failed: {e}"),
                 };
             }
         };
@@ -241,7 +241,7 @@ impl ControlEventSink for LedgrrrControlEventSink {
                     capability: self.capability(),
                     delivered: false,
                     reply: event.reply.clone(),
-                    message: format!("ledgerr event command write failed: {e}"),
+                    message: format!("ledgrrr event command write failed: {e}"),
                 };
             }
         }
@@ -251,14 +251,14 @@ impl ControlEventSink for LedgrrrControlEventSink {
                 capability: self.capability(),
                 delivered: true,
                 reply: event.reply.clone(),
-                message: "delivered to ledgerr event command".to_string(),
+                message: "delivered to ledgrrr event command".to_string(),
             },
             Ok(output) => ControlEventReceipt {
                 capability: self.capability(),
                 delivered: false,
                 reply: event.reply.clone(),
                 message: format!(
-                    "ledgerr event command failed: {}",
+                    "ledgrrr event command failed: {}",
                     String::from_utf8_lossy(&output.stderr).trim()
                 ),
             },
@@ -266,7 +266,7 @@ impl ControlEventSink for LedgrrrControlEventSink {
                 capability: self.capability(),
                 delivered: false,
                 reply: event.reply.clone(),
-                message: format!("ledgerr event command wait failed: {e}"),
+                message: format!("ledgrrr event command wait failed: {e}"),
             },
         }
     }
@@ -275,8 +275,8 @@ impl ControlEventSink for LedgrrrControlEventSink {
 pub fn default_control_event_sink() -> Box<dyn ControlEventSink> {
     #[cfg(feature = "ledgrrr-events")]
     {
-        if let Ok(command) = std::env::var("B00T_LEDGERR_EVENT_COMMAND") {
-            let args = std::env::var("B00T_LEDGERR_EVENT_ARGS")
+        if let Ok(command) = std::env::var("B00T_LEDGRRR_EVENT_COMMAND") {
+            let args = std::env::var("B00T_LEDGRRR_EVENT_ARGS")
                 .ok()
                 .map(|raw| raw.split_whitespace().map(str::to_string).collect())
                 .unwrap_or_default();
@@ -309,7 +309,7 @@ impl ControlCodeEvent {
                 "warning".to_string()
             },
             source: source.to_string(),
-            target: "ledgerr_review".to_string(),
+            target: "ledgrrr_review".to_string(),
             request: "inspect backend error log and recommend fallback/state-machine action"
                 .to_string(),
             log_ref: stable_log_ref(source, warning),
@@ -624,7 +624,7 @@ mod tests {
 
         assert_eq!(event.action_code, "|e|");
         assert_eq!(event.severity, "degraded");
-        assert_eq!(event.target, "ledgerr_review");
+        assert_eq!(event.target, "ledgrrr_review");
         assert!(event.log_ref.starts_with("b00t:grok:error:"));
         assert_eq!(
             event.request,
@@ -664,7 +664,7 @@ mod tests {
     #[cfg(feature = "ledgrrr-events")]
     #[test]
     fn test_ledgrrr_control_event_sink_reports_active_capability() {
-        let sink = LedgrrrControlEventSink::new("ledgerr-mcp-server", Vec::new());
+        let sink = LedgrrrControlEventSink::new("ledgrrr-mcp-server", Vec::new());
         let capability = sink.capability();
 
         assert_eq!(capability.backend, "ledgrrr-mcp");

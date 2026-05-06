@@ -193,16 +193,16 @@ impl BoundaryCheck for VendorDockerfileCheck {
     fn name(&self) -> &str { "vendor dockerfile exists" }
     fn run(&self) -> CheckResult {
         let path = if let Ok(manifest) = std::env::var("CARGO_MANIFEST_DIR") {
-            std::path::Path::new(&manifest).join("..").join("vendor/l3dg3rr/Dockerfile.ledgerr-mcp")
+            std::path::Path::new(&manifest).join("..").join("vendor/l3dg3rr/Dockerfile.ledgrrr-mcp")
         } else {
-            std::path::PathBuf::from("vendor/l3dg3rr/Dockerfile.ledgerr-mcp")
+            std::path::PathBuf::from("vendor/l3dg3rr/Dockerfile.ledgrrr-mcp")
         };
         let exists = path.exists();
         CheckResult {
             name: self.name().into(), category: CheckCategory::Boundary,
             passed: exists,
-            detail: if exists { "Dockerfile.ledgerr-mcp present".into() }
-                    else { "vendor/l3dg3rr/Dockerfile.ledgerr-mcp not found".into() },
+            detail: if exists { "Dockerfile.ledgrrr-mcp present".into() }
+                    else { "vendor/l3dg3rr/Dockerfile.ledgrrr-mcp not found".into() },
         }
     }
 }

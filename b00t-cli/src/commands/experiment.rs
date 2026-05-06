@@ -227,7 +227,7 @@ pub fn emit_focus_to_ledgrrr_mcp(cmp: &ExperimentComparison, _endpoint: &str) {
             "jsonrpc": "2.0",
             "method": "tools/call",
             "params": {
-                "name": "ledgerr_focus",
+                "name": "ledgrrr_focus",
                 "arguments": {
                     "action": "append_focus_record",
                     "records": [{
