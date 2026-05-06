@@ -779,6 +779,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "b00t-bouncer"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "regex",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "toml",
+ "tracing",
+]
+
+[[package]]
 name = "b00t-c0re-gov"
 version = "0.1.0"
 dependencies = [
@@ -887,6 +901,7 @@ dependencies = [
  "assert_cmd",
  "async-trait",
  "axum 0.7.9",
+ "b00t-bouncer",
  "b00t-c0re-gov",
  "b00t-c0re-hierarchy",
  "b00t-c0re-lib",

@@ -12,6 +12,7 @@ members = [
     "b00t-azure-cp",
     "b00t-l3dg3rr-viz",
     "b00t-ast",
+    "b00t-bouncer",
     "b00t-c0re-hierarchy",
 ]
 resolver = "2"

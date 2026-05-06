@@ -33,8 +33,13 @@ use b00t_cli::utils::get_workspace_root;
 use b00t_cli::commands::{
   //  Keep commands 1 line per letter A,B,C,... for easy diff
     AiCommands, AgentCommands, AnsibleCommands, AppCommands, AuditCommands,
+<<<<<<< HEAD
     BootstrapCommands, BudgetCommands,
     ChatCommands, CliCommands, ConfigCommands, CrewCommand,
+=======
+    BouncerArgs, BouncerCommands, BootstrapCommands, BudgetCommands,
+    ChatCommands, CliCommands, ConfigCommands,
+>>>>>>> origin/bouncer-pattern
     DataCommands, DatumCommands, DoctorCommands,
     FocusCommands, GatesCommands,
     GrokCommands, HiveCommands,
@@ -199,6 +204,11 @@ The system will:
     Cli {
         #[clap(subcommand)]
         cli_command: CliCommands,
+    },
+    #[clap(about = "Bouncer pattern gatekeeper for input/output validation")]
+    Bouncer {
+        #[clap(subcommand)]
+        bouncer_command: BouncerCommands,
     },
     #[clap(name = "config", about = "Project configuration and scaffolding")]
     Configure {
@@ -467,6 +477,7 @@ The system will:
         #[clap(subcommand)]
         gates_command: GatesCommands,
     },
+<<<<<<< HEAD
     #[clap(
         about = "Observability: events, guard violations, and telemetry",
         long_about = "View events from unified events.jsonl and guard violation statistics.\n\nExamples:\n  b00t observability events\n  b00t observability events --since 5\n  b00t observability events --event mcp_install\n  b00t observability events --follow\n  b00t observability guards\n  b00t observability guards --escalated"
@@ -474,6 +485,69 @@ The system will:
     Observability {
         #[clap(subcommand)]
         observability_command: ObservabilityCommands,
+=======
+    #[clap(about = "List registered WOW checks")]
+    List,
+}
+
+#[derive(clap::Parser, Clone)]
+pub enum SchemaSubcommands {
+    #[clap(about = "Generate focus.schema.tomllmd from FocusSchema code")]
+    Generate {
+        #[clap(flatten)]
+        args: b00t_cli::datum_schema::SchemaGenerateArgs,
+    },
+    #[clap(about = "Diff two schema datums")]
+    Diff {
+        #[clap(help = "First schema name (e.g. focus)")]
+        schema_a: String,
+        #[clap(help = "Second schema name (e.g. focus-v2)")]
+        schema_b: String,
+    },
+    #[clap(about = "Import schema from JSON file")]
+    Import {
+        #[clap(help = "Path to JSON schema file")]
+        path: PathBuf,
+        #[clap(long, help = "Output name for the schema datum")]
+        name: String,
+        #[clap(long, help = "Output directory (default: _b00t_)")]
+        output: Option<PathBuf>,
+    },
+}
+
+#[derive(clap::Parser, Clone)]
+pub enum ExperimentCommands {
+    #[clap(about = "Run an A/B experiment with control and treatment variants")]
+    Run {
+        #[clap(long, help = "Experiment ID")]
+        id: String,
+        #[clap(long, help = "Control variant prompt")]
+        control: String,
+        #[clap(long, help = "Treatment variant prompt")]
+        treatment: String,
+        #[clap(long, help = "Model endpoint URL [default: http://localhost:8001]")]
+        endpoint: Option<String>,
+        #[clap(long, help = "Path to trained LoRA adapter (from `b00t model train`)")]
+        adapter: Option<String>,
+    },
+    #[clap(about = "Show experiment status (phygital-twin heartbeat)")]
+    Status,
+    #[clap(about = "List past experiments from persisted FOCUS records")]
+    History {
+        #[clap(long, help = "Number of recent experiments to show", default_value_t = 10)]
+        limit: usize,
+        #[clap(long, help = "Emit as JSON")]
+        json: bool,
+    },
+    #[clap(about = "Compare two experiment results side by side")]
+    Compare {
+        #[clap(help = "First experiment ID")]
+        exp_a: String,
+        #[clap(help = "Second experiment ID")]
+        exp_b: String,
+        #[clap(long, help = "Path to FOCUS records JSONL file", default_value = "focus_records.jsonl")]
+        path: std::path::PathBuf,
+>>>>>>> origin/bouncer-pattern
     },
 }
 
@@ -1593,6 +1667,13 @@ async fn main() {
         }
         Some(Commands::Cli { cli_command }) => {
             if let Err(e) = cli_command.execute(&cli.path) {
+                eprintln!("Error: {}", e);
+                std::process::exit(1);
+            }
+        }
+        Some(Commands::Bouncer { bouncer_command }) => {
+            let args = BouncerArgs { command: bouncer_command.clone() };
+            if let Err(e) = b00t_cli::commands::bouncer::handle_bouncer(&args) {
                 eprintln!("Error: {}", e);
                 std::process::exit(1);
             }

@@ -1,0 +1,107 @@
+# b00t Agent Metatype — `++abstract.agent`
+# Universal base pattern for all b00t hive agents
+# All agent datums MUST inherit from this metatype via [[b00t.agent.inherits]]
+
+# b00t:map v1
+# summary: Abstract agent metatype — base class for all b00t hive agents
+# tags: agent, abstract, metatype, hive, base, inheritance, bouncer
+# tier: frontier
+# cmds: b00t datum list --type agent
+# complexity: 8
+
+# ── REQUIRED FIELDS (all agents MUST define these) ──────────────────────────
+
+[b00t]
+name = "agent-name"           # Unique agent identifier (lowercase, alphanumeric)
+type = "agent"                # Fixed: must be "agent"
+hint = "One-line agent purpose"  # Human-readable description
+
+[b00t.agent]
+pid = "agent-001"             # Unique process ID (format: {name}-{counter})
+model = "model-identifier"    # Model tier or specific model identifier
+skills = ["skill1", "skill2"] # Ordered list of agent capabilities
+personality = "strategic"     # Agent temperament: strategic|pragmatic|curious|laconic|persistent
+humor = "low"                 # Humor level: low|moderate|high
+role = "specialist"           # Agent role: captain|executor|specialist
+
+[b00t.agent.ipc]
+socket = "/tmp/b00t/agents/{name}.sock"  # Unix socket path (empty string if HTTP-only)
+pubsub = true                 # Enable message bus pubsub
+protocol = "msgpack"          # IPC protocol: msgpack|rpc+stdio|http+openai|nats+acp
+
+[b00t.agent.crew]
+role = "specialist"           # Must match [b00t.agent.role]
+captain = false               # true only for captain-role agents
+
+# ── SHARED MCP IMPLEMENTATIONS (all agents inherit these) ───────────────────
+
+[b00t.agent.mcp]
+enabled = true                # All agents support MCP by default
+transport = ["stdio", "http"] # Default transport modes
+port = 8000                   # Default HTTP MCP port
+
+# Shared MCP tool categories (inherited by all agents)
+[b00t.agent.mcp.tools]
+# Core tools available to ALL agents
+core = ["read", "write", "bash", "grep", "find", "ls"]
+# Optional tools (agent-specific)
+extended = ["mcp", "vision", "web", "search", "delegate_task", "cronjob", "memory"]
+# Communication tools
+comms = ["send_message", "clarify", "text_to_speech"]
+
+# ── BOUNCER PATTERN (all agents inherit these) ─────────────────────────────
+
+[b00t.agent.bouncer]
+enabled = true                # All agents use bouncer pattern by default
+audit_log = ".b00t/bouncer-audit.jsonl"  # Audit trail path
+
+[b00t.agent.bouncer.input_gates]
+sanitize = { enabled = true, rules = ["no-shell-injection", "no-credential-exposure"] }
+credential_check = { enabled = true, check_env = true }
+permission_check = { enabled = true, check_role = true }
+rate_limit = { enabled = true, max_concurrent = 10 }
+
+[b00t.agent.bouncer.output_gates]
+contract_validation = { enabled = true, validate_schema = true }
+security_scan = { enabled = true, check_secrets = true }
+quality_check = { enabled = true, min_quality_score = 0.8 }
+
+# ── INHERITANCE PATTERN ────────────────────────────────────────────────────
+
+# Derived agents declare inheritance via:
+[[b00t.agent.inherits]]
+from = "++abstract.agent"
+# Fields not overridden inherit from the abstract base
+# Fields explicitly defined override the base
+
+# ── EXAMPLE DERIVED AGENT ──────────────────────────────────────────────────
+
+# Example: specialist agent inheriting from abstract base
+[[b00t.agent.example]]
+name = "example-specialist"
+inherits_from = "++abstract.agent"
+# Overrides only what's different from the base
+model = "ch0nky"
+skills = ["code", "refactor", "debug"]
+personality = "pragmatic"
+role = "specialist"
+# Inherits: pid format, socket path, pubsub, protocol, crew role, MCP tools, bouncer
+
+# ── VALIDATION RULES ───────────────────────────────────────────────────────
+
+[b00t.agent.validate]
+# All agents MUST have these fields
+required_fields = ["name", "type", "hint", "pid", "model", "skills", "personality", "humor", "role"]
+# Type constraints
+type_values = ["agent"]
+role_values = ["captain", "executor", "specialist"]
+personality_values = ["strategic", "pragmatic", "curious", "laconic", "persistent"]
+humor_values = ["low", "moderate", "high"]
+# PID format: {name}-{counter}
+pid_pattern = "^[a-z]+-[0-9]+$"
+# Skills must be non-empty
+skills_min_length = 1
+# MCP must be enabled by default
+mcp_enabled_default = true
+# Bouncer must be enabled by default
+bouncer_enabled_default = true

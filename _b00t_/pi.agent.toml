@@ -16,6 +16,9 @@ update = "npm install -g @mariozechner/pi-coding-agent@latest"
 version = "pi --version"
 version_regex = "([0-9]+\\.[0-9]+\\.[0-9]+)"
 
+[[b00t.agent.inherits]]
+from = "++abstract.agent"
+
 [b00t.agent]
 pid = "pi-001"
 branch = "main"
@@ -45,6 +48,22 @@ protocol = "rpc+stdio"
 [b00t.agent.crew]
 role = "specialist"
 captain = false
+
+
+[b00t.agent.bouncer]
+enabled = true
+audit_log = ".b00t/bouncer-audit.jsonl"
+
+[b00t.agent.bouncer.input_gates]
+sanitize = { enabled = true, rules = ["no-shell-injection", "no-credential-exposure"] }
+credential_check = { enabled = true, check_env = true }
+permission_check = { enabled = true, check_role = true }
+rate_limit = { enabled = true, max_concurrent = 10 }
+
+[b00t.agent.bouncer.output_gates]
+contract_validation = { enabled = true, validate_schema = true }
+security_scan = { enabled = true, check_secrets = true }
+quality_check = { enabled = true, min_quality_score = 0.8 }
 
 [b00t.agent.mcp]
 # 🤓 pi-mcp-adapter bridges pi RPC → MCP; servers defined in ~/.pi/agent/mcp.json

@@ -16,6 +16,19 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 pub const HIVE_STATE_PATH: &str = "/tmp/b00t/hive-state.json";
+pub const HIVE_LEDGER_PATH: &str = "/tmp/b00t/hive-peers.json";
+
+// ─── Peer Entry ──────────────────────────────────────────────────────────────
+
+/// A peer node in the hive mesh
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PeerEntry {
+    pub id: String,
+    pub address: String,
+    pub auth_type: String,
+    pub zone: String,
+    pub last_seen: String,
+}
 
 // ─── System Snapshot ─────────────────────────────────────────────────────────
 
@@ -33,6 +46,7 @@ pub struct SystemSnapshot {
     pub active_downloads: Vec<String>, // PIDs/paths of active HF downloads
     pub active_services: Vec<String>,  // running systemd --user units
     pub active_profile: Option<String>, // from HIVE_STATE_PATH
+    pub hive_ledger_path: Option<String>, // path to peer ledger JSON
     pub timestamp: String,
 }
 
@@ -64,6 +78,7 @@ impl SystemSnapshot {
             active_downloads,
             active_services,
             active_profile,
+            hive_ledger_path: Some(HIVE_LEDGER_PATH.to_string()),
             timestamp: chrono::Utc::now().to_rfc3339(),
         })
     }
