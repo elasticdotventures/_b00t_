@@ -49,7 +49,7 @@ impl GrokBackend {
                 Ok(Self::Raglite)
             }
             Some("irontology") | Some("iron") => Ok(Self::Irontology),
-            Some("codebase-memory") | Some("codebase") | Some("cb") => Ok(Self::CodebaseMemory),
+            Some("codebase-memory") | Some("codebase") | Some("cb") | Some("codebase_memory") => Ok(Self::CodebaseMemory),
             Some(other) => Err(anyhow::anyhow!(
                 "Unknown --rag backend '{}'. Valid: raglite, irontology, codebase-memory, both",
                 other
