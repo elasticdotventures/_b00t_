@@ -293,3 +293,9 @@ wheels/
 yarn-debug.log*
 yarn-error.log*
 yarn.lock
+
+# Auto-generated guard reports (timestamped, local debug artifacts)
+guard-reports/
+
+# Ephemeral hermes checkpoint files
+.hermes/.checkpoint-*.json

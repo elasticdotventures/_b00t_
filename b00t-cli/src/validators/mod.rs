@@ -22,7 +22,12 @@ pub fn register(name: &'static str, factory: ValidatorFactory) {
 
 /// Validate a datum by dispatching to its registered handler.
 /// Falls back to shell command + regex validation.
-pub fn validate_datum(datum: &BootDatum) -> Vec<String> {
+///
+/// # Security
+/// Shell-command validation (`validate.command`) runs arbitrary code via `sh -c`.
+/// Set `allow_command_validation = true` only when the caller explicitly opts in
+/// (e.g. via `--allow-command-validation` CLI flag or in trusted test contexts).
+pub fn validate_datum(datum: &BootDatum, allow_command_validation: bool) -> Vec<String> {
     let mut errors = Vec::new();
 
     // If datum has a named handler, dispatch
@@ -42,17 +47,33 @@ pub fn validate_datum(datum: &BootDatum) -> Vec<String> {
             }
             return errors;
         }
-        // Shell command validation
+        // Shell command validation — gated behind allow_command_validation
         if let Some(ref cmd) = spec.command {
+            if !allow_command_validation {
+                errors.push(format!(
+                    "Shell command validation is disabled for '{}'. \
+                     Re-run with --allow-command-validation to permit sh -c execution.",
+                    cmd
+                ));
+                return errors;
+            }
             match std::process::Command::new("sh").arg("-c").arg(cmd).output() {
                 Ok(output) => {
                     let stdout = String::from_utf8_lossy(&output.stdout);
                     if let Some(ref regex_str) = spec.regex {
-                        if let Ok(re) = regex::Regex::new(regex_str) {
-                            if !re.is_match(&stdout) {
+                        match regex::Regex::new(regex_str) {
+                            Ok(re) => {
+                                if !re.is_match(&stdout) {
+                                    errors.push(format!(
+                                        "Shell command output did not match regex: {}",
+                                        regex_str
+                                    ));
+                                }
+                            }
+                            Err(e) => {
                                 errors.push(format!(
-                                    "Shell command output did not match regex: {}",
-                                    regex_str
+                                    "Invalid regex '{}': {}",
+                                    regex_str, e
                                 ));
                             }
                         }

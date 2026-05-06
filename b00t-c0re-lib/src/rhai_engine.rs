@@ -125,10 +125,12 @@ impl RhaiEngine {
 
         // Datum-based tool detection — uses b00t's own tool inventory
         // Returns (is_installed, method_name) where method is e.g. "podman", "docker", "apt"
+        // Uses current executable to avoid depending on `b00t-cli` being on PATH.
         engine.register_fn(
             "tool_installed",
             |tool: &str| -> String {
-                let output = Command::new("b00t-cli")
+                let exe = std::env::current_exe().unwrap_or_else(|_| std::path::PathBuf::from("b00t-cli"));
+                let output = Command::new(&exe)
                     .arg("detect")
                     .arg(tool)
                     .output();

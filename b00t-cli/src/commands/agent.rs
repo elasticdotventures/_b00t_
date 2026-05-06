@@ -11,9 +11,25 @@ use b00t_c0re_lib::agent_coordination::{
 use b00t_c0re_lib::{AgentManager, DelegationLimiter};
 use b00t_c0re_lib::redis::{AgentStatus, RedisComms, RedisConfig};
 use clap::Parser;
+use once_cell::sync::Lazy;
 use std::collections::{BTreeMap, HashMap};
 use std::path::PathBuf;
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
+
+/// Global delegation limiters keyed by max_concurrent.
+/// Shared across all `handle_delegate` calls in the same process so that
+/// concurrent invocations contend on the same semaphore.
+static DELEGATION_LIMITERS: Lazy<Mutex<HashMap<usize, Arc<DelegationLimiter>>>> =
+    Lazy::new(|| Mutex::new(HashMap::new()));
+
+/// Get-or-create a shared `DelegationLimiter` for the given concurrency cap.
+fn get_shared_limiter(max_concurrent: usize) -> Arc<DelegationLimiter> {
+    let mut map = DELEGATION_LIMITERS.lock().unwrap_or_else(|e| e.into_inner());
+    map.entry(max_concurrent)
+        .or_insert_with(|| Arc::new(DelegationLimiter::new(max_concurrent)))
+        .clone()
+}
 
 /// Agent management and coordination commands
 #[derive(Parser, Clone)]
@@ -448,11 +464,11 @@ async fn handle_delegate(
     let mut coordinator = AgentCoordinator::new(redis, metadata);
 
     // ── Apply delegation backpressure ──────────────────────────────────
-    // If max_concurrent > 0, create a limiter and acquire a permit.
-    // If 0, skip backpressure (unlimited mode).
+    // Shared limiter (keyed by max_concurrent) ensures concurrent callers
+    // in the same process contend on the same semaphore.
     let _limiter_guard: Option<tokio::sync::OwnedSemaphorePermit>;
     if max_concurrent > 0 {
-        let limiter = DelegationLimiter::new(max_concurrent);
+        let limiter = get_shared_limiter(max_concurrent);
         match limiter.try_acquire() {
             Some(permit) => {
                 _limiter_guard = Some(permit);

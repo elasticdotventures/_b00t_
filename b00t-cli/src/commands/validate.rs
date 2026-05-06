@@ -62,6 +62,20 @@ pub struct ValidateArgs {
 
     #[arg(long, help = "Validate datum structural integrity using registered validators")]
     pub datum: bool,
+
+    #[arg(
+        long,
+        help = "Allow shell-command validation (sh -c) when running --datum. \
+                Required for datums with a validate.command field; \
+                omit to disable for untrusted datum sources."
+    )]
+    pub allow_command_validation: bool,
+
+    #[arg(
+        long,
+        help = "Directory to scan for datum files (overrides default ~/.dotfiles/_b00t_ / ~/.b00t/_b00t_)"
+    )]
+    pub datum_dir: Option<PathBuf>,
 }
 
 // ── Validation result ────────────────────────────────────────────────────────
@@ -241,7 +255,7 @@ fn resolve_schema(name: Option<&str>) -> Result<FocusSchema> {
 pub fn handle_validate(args: &ValidateArgs) -> Result<()> {
     // ── Datum validation branch ──────────────────────────────────────────────
     if args.datum {
-        return handle_validate_datums();
+        return handle_validate_datums(args.datum_dir.as_deref(), args.allow_command_validation);
     }
 
     // ── JSONL branch ──────────────────────────────────────────────────────────
@@ -396,21 +410,28 @@ fn validate_jsonl(args: &ValidateArgs, path: &PathBuf) -> Result<()> {
 // ── Datum validation handler ────────────────────────────────────────────────
 
 /// Scan datum files and validate each using registered validators.
-fn handle_validate_datums() -> Result<()> {
-    // Search datum directory: ~/.dotfiles/_b00t_/ (priority), then ~/.b00t/_b00t_/
-    let datum_dirs = [
-        dirs::home_dir()
-            .map(|h| h.join(".dotfiles").join("_b00t_")),
-        dirs::home_dir()
-            .map(|h| h.join(".b00t").join("_b00t_")),
-    ];
+fn handle_validate_datums(datum_dir_override: Option<&std::path::Path>, allow_command_validation: bool) -> Result<()> {
+    // Resolve datum directory: explicit override → ~/.dotfiles/_b00t_/ → ~/.b00t/_b00t_/
+    let datum_dir: std::path::PathBuf = if let Some(d) = datum_dir_override {
+        if !d.exists() {
+            anyhow::bail!("Specified --datum-dir does not exist: {}", d.display());
+        }
+        d.to_path_buf()
+    } else {
+        let datum_dirs = [
+            dirs::home_dir()
+                .map(|h| h.join(".dotfiles").join("_b00t_")),
+            dirs::home_dir()
+                .map(|h| h.join(".b00t").join("_b00t_")),
+        ];
 
-    let datum_dir = datum_dirs.iter().flatten().find(|d| d.exists());
-    let datum_dir = match datum_dir {
-        Some(d) => d.clone(),
-        None => {
-            eprintln!("No datum directory found (searched ~/.dotfiles/_b00t_/, ~/.b00t/_b00t_/)");
-            return Ok(());
+        match datum_dirs.iter().flatten().find(|d| d.exists()) {
+            Some(d) => d.clone(),
+            None => {
+                eprintln!("No datum directory found (searched ~/.dotfiles/_b00t_/, ~/.b00t/_b00t_/). \
+                           Use --datum-dir to specify a path.");
+                return Ok(());
+            }
         }
     };
 
@@ -439,7 +460,7 @@ fn handle_validate_datums() -> Result<()> {
                     match toml::from_str::<UnifiedConfig>(&content) {
                         Ok(config) => {
                             total_validated += 1;
-                            let errors = crate::validators::validate_datum(&config.b00t);
+                            let errors = crate::validators::validate_datum(&config.b00t, allow_command_validation);
                             if errors.is_empty() {
                                 println!("OK:   {}", config.b00t.name);
                             } else {
@@ -575,6 +596,8 @@ mod tests {
             train_threshold: None,
             schema: None,
             datum: false,
+            allow_command_validation: false,
+            datum_dir: None,
         };
 
         let result = handle_validate(&args);
@@ -597,6 +620,8 @@ mod tests {
             train_threshold: None,
             schema: None,
             datum: false,
+            allow_command_validation: false,
+            datum_dir: None,
         };
 
         let result = handle_validate(&args);
@@ -618,7 +643,7 @@ mod tests {
             }),
             ..Default::default()
         };
-        let errors = crate::validators::validate_datum(&datum);
+        let errors = crate::validators::validate_datum(&datum, false);
         assert!(!errors.is_empty(), "should report unknown handler");
         assert!(errors[0].contains("nonexistent"));
     }
@@ -638,7 +663,7 @@ mod tests {
         };
         // Initialize validators registry
         crate::validators::init();
-        let errors = crate::validators::validate_datum(&datum);
+        let errors = crate::validators::validate_datum(&datum, false);
         assert!(!errors.is_empty(), "should report empty name");
         assert!(errors.iter().any(|e| e.contains("name")));
     }
@@ -656,7 +681,7 @@ mod tests {
             }),
             ..Default::default()
         };
-        let errors = crate::validators::validate_datum(&datum);
+        let errors = crate::validators::validate_datum(&datum, true);
         assert!(!errors.is_empty(), "should report command failure");
         assert!(errors.iter().any(|e| e.contains("exit 42")));
     }
@@ -674,7 +699,7 @@ mod tests {
             }),
             ..Default::default()
         };
-        let errors = crate::validators::validate_datum(&datum);
+        let errors = crate::validators::validate_datum(&datum, true);
         assert!(errors.is_empty(), "should pass: {:?}", errors);
     }
 }

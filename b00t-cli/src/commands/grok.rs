@@ -736,12 +736,12 @@ async fn handle_consume(
         append_transaction(&config.tx_dir, &chunk_tx)?;
     }
 
-    // 6. Persist to grok backend via digest
+    // 6. Persist to grok backend via digest — one client shared across all chunks
+    let topic = _topic.unwrap_or("assimilated");
+    let mut dual = DualGrokClient::new();
     for chunk in &chunks {
         let container_text = chunk.container_text();
-        let topic = _topic.unwrap_or("assimilated");
         // Digest the container-wrapped text so attribution is preserved
-        let mut dual = DualGrokClient::new();
         dual.ingest(topic, &container_text, GrokBackend::Both).await?;
     }
 

@@ -11,6 +11,7 @@ members = [
     "b00t-azure-cp",
     "b00t-l3dg3rr-viz",
     "b00t-ast",
+    "cloudflare-b00t",
 ]
 resolver = "2"
 
