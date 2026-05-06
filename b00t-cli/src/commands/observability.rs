@@ -1,6 +1,6 @@
 use anyhow::Result;
 use clap::Parser;
-use std::io::{BufRead, BufReader};
+use std::io::{BufRead, BufReader, Seek, SeekFrom};
 use std::path::PathBuf;
 use std::time::{Duration, SystemTime};
 
@@ -69,25 +69,21 @@ impl ObservabilityCommands {
 
                 if *follow {
                     // tail -f mode: read existing, then follow
-                    let file = std::fs::File::open(&path)?;
-                    let reader = BufReader::new(&file);
                     let cutoff = SystemTime::now() - Duration::from_secs(*since * 60);
+                    let mut file = std::fs::File::open(&path)?;
 
-                    // Read existing content
-                    let mut lines: Vec<String> = Vec::new();
-                    for line in reader.lines() {
-                        if let Ok(l) = line { lines.push(l); }
-                    }
+                    // Read and display existing content within the time window
+                    let lines: Vec<String> = BufReader::new(&file)
+                        .lines()
+                        .flatten()
+                        .collect();
 
-                    // Filter and display
                     let filtered: Vec<&String> = lines.iter().filter(|l| {
                         if let Ok(val) = serde_json::from_str::<serde_json::Value>(l) {
                             let ts = val.get("ts").and_then(|v| v.as_str()).unwrap_or("");
                             let ev = val.get("event").and_then(|v| v.as_str()).unwrap_or("");
                             let detail = val.get("detail").and_then(|v| v.as_str()).unwrap_or("");
-                            let time_ok = parse_ts(ts).map(|t| {
-                                t >= (SystemTime::now() - Duration::from_secs(*since * 60))
-                            }).unwrap_or(true);
+                            let time_ok = parse_ts(ts).map(|t| t >= cutoff).unwrap_or(true);
                             let event_ok = event.as_ref().map(|e| ev == e).unwrap_or(true);
                             let fail_ok = !failed || detail.to_lowercase().contains("fail");
                             time_ok && event_ok && fail_ok
@@ -101,20 +97,26 @@ impl ObservabilityCommands {
                         }
                     }
 
-                    // Now follow: tail -f
+                    // Seek to end-of-file, then poll for new appended lines
                     println!("👀 Following events (Ctrl+C to stop)...");
-                    let file = std::fs::File::open(&path)?;
-                    let reader = BufReader::new(file);
-                    for line in reader.lines() {
-                        if let Ok(l) = line {
-                            if let Ok(val) = serde_json::from_str::<serde_json::Value>(&l) {
-                                let ev = val.get("event").and_then(|v| v.as_str()).unwrap_or("");
-                                let event_ok = event.as_ref().map(|e| ev == e).unwrap_or(true);
-                                let detail = val.get("detail").and_then(|v| v.as_str()).unwrap_or("");
-                                let fail_ok = !failed || detail.to_lowercase().contains("fail");
-                                if event_ok && fail_ok {
-                                    display_event(&l);
-                                }
+                    file.seek(SeekFrom::End(0))?;
+                    let mut reader = BufReader::new(file);
+                    let mut partial = String::new();
+                    loop {
+                        let n = reader.read_line(&mut partial)?;
+                        if n == 0 {
+                            std::thread::sleep(Duration::from_millis(250));
+                            continue;
+                        }
+                        let l = partial.trim_end_matches('\n').trim_end_matches('\r').to_string();
+                        partial.clear();
+                        if let Ok(val) = serde_json::from_str::<serde_json::Value>(&l) {
+                            let ev = val.get("event").and_then(|v| v.as_str()).unwrap_or("");
+                            let event_ok = event.as_ref().map(|e| ev == e).unwrap_or(true);
+                            let detail = val.get("detail").and_then(|v| v.as_str()).unwrap_or("");
+                            let fail_ok = !failed || detail.to_lowercase().contains("fail");
+                            if event_ok && fail_ok {
+                                display_event(&l);
                             }
                         }
                     }
