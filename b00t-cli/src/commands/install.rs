@@ -213,22 +213,24 @@ pub fn hermes_special_install(dry_run: bool) -> Result<()> {
 }
 
 // Canonical paths for hermes MCP config — resolved from $HOME at runtime.
-// Tests duplicate these constants to verify round-trip correctness.
+// Tests duplicate these functions to verify round-trip correctness.
+fn home_dir_str() -> String {
+    std::env::var("HOME").unwrap_or_default()
+}
+
 fn hermes_b00t_mcp_command() -> String {
-    let home = std::env::var("HOME").unwrap_or_default();
-    format!("{}/.cargo/bin/b00t-mcp", home)
+    format!("{}/.cargo/bin/b00t-mcp", home_dir_str())
 }
 
 fn hermes_b00t_mcp_args() -> Vec<String> {
-    let home = std::env::var("HOME").unwrap_or_default();
+    let home = home_dir_str();
     vec!["stdio".into(), "-d".into(), format!("{}/.b00t", home)]
 }
 
 fn codebase_memory_mcp_path() -> String {
-    let home = std::env::var("HOME").unwrap_or_default();
     format!(
         "{}/.b00t/vendor/codebase-memory-mcp-b00t-ir0n-ledg3rr/build/c/codebase-memory-mcp",
-        home
+        home_dir_str()
     )
 }
 

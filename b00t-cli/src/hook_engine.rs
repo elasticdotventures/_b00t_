@@ -71,10 +71,7 @@ fn capability_registry_path() -> Option<PathBuf> {
             expanded.into_owned()
         }),
         // Workspace-relative path for dev/CI environments (git root)
-        crate::utils::get_workspace_root()
-            .parse::<String>()
-            .ok()
-            .map(|r| format!("{}/_b00t_", r)),
+        Some(format!("{}/_b00t_", crate::utils::get_workspace_root())),
         // Legacy default
         Some(shellexpand::tilde("~/.b00t/_b00t_").into_owned()),
     ]
