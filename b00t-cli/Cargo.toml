@@ -65,6 +65,8 @@ env_logger = "0.11"
 mdns-sd = "0.19.1"
 rand = "0.8"
 b00t-ipc = { path = "../b00t-ipc" }
+b00t-c0re-gov = { path = "../b00t-c0re-gov" }
+b00t-c0re-hierarchy = { path = "../b00t-c0re-hierarchy" }
 zbus = { workspace = true, optional = true }
 url = "2.5"
 glob = "0.3.3"

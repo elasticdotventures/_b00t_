@@ -379,7 +379,8 @@ pub fn init_default_checks() {
 /// Generate a test + doc example from a WOW check struct.
 ///
 /// ```rust
-/// wow_test!(CandleBuildCheck, BuildIntegrityCheck, "candle feature compiles");
+/// use b00t_cli::wow_test;
+/// wow_test!(test_candle_build, CandleBuildCheck, BuildIntegrityCheck, "candle feature compiles");
 /// ```
 ///
 /// Expands to:

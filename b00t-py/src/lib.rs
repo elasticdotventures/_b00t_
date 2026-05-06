@@ -613,7 +613,7 @@ fn emoji_list() -> PyResult<String> {
 #[pyfunction]
 #[pyo3(signature = (path = "~/.dotfiles/_b00t_", json_output = false))]
 fn mcp_list_py(path: &str, json_output: bool) -> PyResult<String> {
-    match mcp_list(path, json_output) {
+    match mcp_list(path, json_output, b00t_cli::McpListFilter::default()) {
         Ok(()) => Ok("MCP servers listed successfully".to_string()),
         Err(e) => Err(B00tError::new_err(format!(
             "Failed to list MCP servers: {e}"

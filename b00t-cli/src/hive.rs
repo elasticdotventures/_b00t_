@@ -795,8 +795,15 @@ pub fn eval_rhai_expr(expr: &str, command: &str, context: &GuardContext) -> Rhai
     // Build the full Rhai script: macro let-bindings + guard expression
     // Each macro becomes: let <name> = <expr>;
     // Then the guard expression references them by name or composes with || && |>
+    // Sort macros so those without dependencies come first (e.g. docker_guard before docker_run_guard)
     let mut script = String::new();
-    for (name, macro_expr) in &context.rhai_macros {
+    let mut macro_vec: Vec<(&String, &String)> = context.rhai_macros.iter().collect();
+    macro_vec.sort_by(|(_, a_expr), (_, b_expr)| {
+        let a_dep = context.rhai_macros.keys().any(|k| a_expr.contains(k.as_str()));
+        let b_dep = context.rhai_macros.keys().any(|k| b_expr.contains(k.as_str()));
+        a_dep.cmp(&b_dep)
+    });
+    for (name, macro_expr) in &macro_vec {
         script.push_str(&format!("let {name} = {macro_expr};\n"));
     }
     script.push('(');
@@ -1432,15 +1439,28 @@ mod tests {
                     GuardPattern::RhaiExpr(expr) => {
                         // Extract quoted strings from the Rhai expression to build a match input.
                         // e.g. cmd.contains("pip") → "pip install flask"
+                        // Skip quoted strings in negated contexts: !cmd.contains("/")
                         let mut keywords: Vec<String> = Vec::new();
                         let mut in_quote = false;
                         let mut current = String::new();
+                        let mut inter_quote_buf = String::new(); // chars between quotes (for negation detection)
                         for ch in expr.rhai.chars() {
                             match ch {
-                                '"' if !in_quote => { in_quote = true; current.clear(); }
-                                '"' if in_quote => { in_quote = false; keywords.push(current.clone()); }
+                                '"' if !in_quote => {
+                                    in_quote = true;
+                                    current.clear();
+                                }
+                                '"' if in_quote => {
+                                    in_quote = false;
+                                    // Skip quoted strings in negated contexts (!cmd.contains(...))
+                                    let is_negated = inter_quote_buf.contains("!cmd.contains(");
+                                    if !is_negated {
+                                        keywords.push(current.clone());
+                                    }
+                                    inter_quote_buf.clear();
+                                }
                                 c if in_quote => current.push(c),
-                                _ => {}
+                                c => { inter_quote_buf.push(c); }
                             }
                         }
                         // Also check for references to macro names: pip_guard, docker_guard, etc.
@@ -1489,12 +1509,16 @@ mod tests {
                     rhai_macros: rhai_macros.clone(),
                 };
                 let result = check_guards(&match_cmd, &[guard.clone()], &ctx_match);
-                let matched = matches!(result, GuardResult::Warn { .. } | GuardResult::Block { .. });
-                if !matched {
-                    failures.push(format!(
-                        "{}[{}]: expected match for pattern={:?}, got Allow",
-                        file_name, idx, pattern
-                    ));
+                // K0mmand3rStage guards can't be tested via check_guards (they return false
+                // since they're parser-stage hooks). Skip the match assertion for them.
+                if !matches!(pattern, GuardPattern::K0mmand3rStage(_)) {
+                    let matched = matches!(result, GuardResult::Warn { .. } | GuardResult::Block { .. });
+                    if !matched {
+                        failures.push(format!(
+                            "{}[{}]: expected match for pattern={:?}, got Allow",
+                            file_name, idx, pattern
+                        ));
+                    }
                 }
 
                 // Generate a non-matching input and verify it passes.

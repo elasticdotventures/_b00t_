@@ -82,9 +82,10 @@ pub enum HiveCommands {
         #[clap(subcommand)]
         peer_command: PeerCommands,
     },
+
+    #[clap(subcommand)]
+    Cyber(HiveCyberCommands),
 }
-
-
 
 
 #[derive(Parser)]
@@ -356,6 +357,7 @@ pub fn handle_hive_command(cmd: &HiveCommands, path: &str) -> Result<()> {
         }
 
         HiveCommands::Cyber(cyber_cmd) => handle_cyber_command(cyber_cmd),
+        HiveCommands::Peers { peer_command } => handle_peer_command(peer_command),
         HiveCommands::Run {
             command,
             strict,
@@ -427,6 +429,41 @@ fn handle_cyber_command(cmd: &HiveCyberCommands) -> Result<()> {
             }
             Ok(())
         }
+    }
+}
+
+fn handle_peer_command(cmd: &PeerCommands) -> Result<()> {
+    match cmd {
+        PeerCommands::List { json, health } => {
+            println!("Peer list (json={}, health={})", json, health);
+            // TODO: implement full peer list logic
+            Ok(())
+        }
+        PeerCommands::Add { id, address, auth_type } => {
+            println!("Add peer {} at {} (auth: {:?})", id, address, auth_type);
+            Ok(())
+        }
+        PeerCommands::Remove { id } => {
+            println!("Remove peer {}", id);
+            Ok(())
+        }
+        PeerCommands::Status { id } => {
+            println!("Status peer {}", id);
+            Ok(())
+        }
+        PeerCommands::Gossip => {
+            println!("Gossip with random peer");
+            Ok(())
+        }
+        PeerCommands::Prune { older_than } => {
+            println!("Prune peers older than {}", older_than);
+            Ok(())
+        }
+        PeerCommands::Discover { subnet } => {
+            println!("Discover peers on subnet {:?}", subnet);
+            Ok(())
+        }
+        PeerCommands::Cyber(c) => handle_cyber_command(c),
     }
 }
 

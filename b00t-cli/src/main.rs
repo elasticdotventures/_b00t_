@@ -34,7 +34,7 @@ use b00t_cli::commands::{
   //  Keep commands 1 line per letter A,B,C,... for easy diff
     AiCommands, AgentCommands, AnsibleCommands, AppCommands, AuditCommands,
     BootstrapCommands, BudgetCommands,
-    ChatCommands, CliCommands, ConfigCommands,
+    ChatCommands, CliCommands, ConfigCommands, CrewCommand,
     DataCommands, DatumCommands, DoctorCommands,
     FocusCommands,
     GrokCommands, HiveCommands,
@@ -333,6 +333,11 @@ The system will:
         #[clap(subcommand)]
         chat_command: ChatCommands,
     },
+    #[clap(about = "Crew management — Operator-Player-Captain hierarchy")]
+    Crew {
+        #[clap(subcommand)]
+        crew_command: CrewCommand,
+    },
     #[clap(about = "Learn about topics with unified knowledge management")]
     // 🤓 ENTANGLED (synchronized): b00t-mcp/src/mcp_tools.rs LearnCommand now uses LearnArgs wrapper, matching CLI structure.
     // Unified knowledge command: LFMF lessons, learn docs, man pages, RAG
@@ -453,77 +458,6 @@ The system will:
     Doctor {
         #[clap(subcommand)]
         doctor_command: DoctorCommands,
-    },
-}
-
-#[derive(clap::Parser, Clone)]
-pub enum WowSubcommands {
-    #[clap(about = "Run all WOW integrity checks")]
-    Check {
-        #[clap(long, help = "Emit JSON results")]
-        json: bool,
-    },
-    #[clap(about = "List registered WOW checks")]
-    List,
-}
-
-#[derive(clap::Parser, Clone)]
-pub enum SchemaSubcommands {
-    #[clap(about = "Generate focus.schema.tomllmd from FocusSchema code")]
-    Generate {
-        #[clap(flatten)]
-        args: b00t_cli::datum_schema::SchemaGenerateArgs,
-    },
-    #[clap(about = "Diff two schema datums")]
-    Diff {
-        #[clap(help = "First schema name (e.g. focus)")]
-        schema_a: String,
-        #[clap(help = "Second schema name (e.g. focus-v2)")]
-        schema_b: String,
-    },
-    #[clap(about = "Import schema from JSON file")]
-    Import {
-        #[clap(help = "Path to JSON schema file")]
-        path: PathBuf,
-        #[clap(long, help = "Output name for the schema datum")]
-        name: String,
-        #[clap(long, help = "Output directory (default: _b00t_)")]
-        output: Option<PathBuf>,
-    },
-}
-
-#[derive(clap::Parser, Clone)]
-pub enum ExperimentCommands {
-    #[clap(about = "Run an A/B experiment with control and treatment variants")]
-    Run {
-        #[clap(long, help = "Experiment ID")]
-        id: String,
-        #[clap(long, help = "Control variant prompt")]
-        control: String,
-        #[clap(long, help = "Treatment variant prompt")]
-        treatment: String,
-        #[clap(long, help = "Model endpoint URL [default: http://localhost:8001]")]
-        endpoint: Option<String>,
-        #[clap(long, help = "Path to trained LoRA adapter (from `b00t model train`)")]
-        adapter: Option<String>,
-    },
-    #[clap(about = "Show experiment status (phygital-twin heartbeat)")]
-    Status,
-    #[clap(about = "List past experiments from persisted FOCUS records")]
-    History {
-        #[clap(long, help = "Number of recent experiments to show", default_value_t = 10)]
-        limit: usize,
-        #[clap(long, help = "Emit as JSON")]
-        json: bool,
-    },
-    #[clap(about = "Compare two experiment results side by side")]
-    Compare {
-        #[clap(help = "First experiment ID")]
-        exp_a: String,
-        #[clap(help = "Second experiment ID")]
-        exp_b: String,
-        #[clap(long, help = "Path to FOCUS records JSONL file", default_value = "focus_records.jsonl")]
-        path: std::path::PathBuf,
     },
 }
 
@@ -1866,6 +1800,9 @@ async fn main() {
                 std::process::exit(1);
             }
         }
+        Some(Commands::Crew { crew_command }) => {
+            b00t_cli::commands::crew_handler::handle_crew_command(crew_command);
+        }
         Some(Commands::Learn(args)) => {
             if let Err(e) = handle_learn(&cli.path, args.clone()).await {
                 eprintln!("Error: {}", e);
@@ -1920,7 +1857,7 @@ async fn main() {
                     Ok(datum) => {
                         // Direct datum install: install dependencies first, then MCP to default target
                         println!("🚀 Installing MCP datum '{}'...", filter);
-                        if let Err(e) = install_datum(&cli.path, filter) {
+                        if let Err(e) = install_datum(&cli.path, filter, false) {
                             eprintln!("Install Error: datum install failed for {}: {}", filter, e);
                             std::process::exit(1);
                         }
@@ -2176,6 +2113,8 @@ async fn main() {
                             eprintln!("[ledgrrr] {}", experiment::focus_record_to_ledgrrr(&tf));
                             // emit FOCUS records to ledgerr-mcp MCP server (best-effort)
                             experiment::emit_focus_to_ledgerr_mcp(&cmp, "http://localhost:8001");
+                            // Calculate and issue cake payout
+                            experiment::calculate_and_issue_cake(&cmp);
                         }
                         Err(e) => {
                             eprintln!("Experiment failed: {e}");

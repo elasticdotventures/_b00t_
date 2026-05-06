@@ -740,7 +740,7 @@ dependencies = [
 
 [[package]]
 name = "b00t-ast"
-version = "0.7.49"
+version = "0.8.0"
 dependencies = [
  "anyhow",
  "clap",
@@ -756,7 +756,7 @@ dependencies = [
 
 [[package]]
 name = "b00t-azure-cp"
-version = "0.7.49"
+version = "0.8.0"
 dependencies = [
  "anyhow",
  "axum 0.8.9",
@@ -779,8 +779,34 @@ dependencies = [
 ]
 
 [[package]]
+name = "b00t-c0re-gov"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "chrono",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror 2.0.18",
+ "tokio",
+ "uuid",
+]
+
+[[package]]
+name = "b00t-c0re-hierarchy"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
+ "uuid",
+]
+
+[[package]]
 name = "b00t-c0re-lib"
-version = "0.7.49"
+version = "0.8.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -815,7 +841,7 @@ dependencies = [
 
 [[package]]
 name = "b00t-chat"
-version = "0.7.49"
+version = "0.8.0"
 dependencies = [
  "anyhow",
  "async-nats",
@@ -853,7 +879,7 @@ dependencies = [
 
 [[package]]
 name = "b00t-cli"
-version = "0.7.49"
+version = "0.8.0"
 dependencies = [
  "anyhow",
  "apalis",
@@ -861,6 +887,8 @@ dependencies = [
  "assert_cmd",
  "async-trait",
  "axum 0.7.9",
+ "b00t-c0re-gov",
+ "b00t-c0re-hierarchy",
  "b00t-c0re-lib",
  "b00t-chat",
  "b00t-grok",
@@ -925,7 +953,7 @@ dependencies = [
 
 [[package]]
 name = "b00t-grok"
-version = "0.7.49"
+version = "0.8.0"
 dependencies = [
  "anyhow",
  "async-openai",
@@ -944,7 +972,7 @@ dependencies = [
 
 [[package]]
 name = "b00t-ipc"
-version = "0.7.49"
+version = "0.8.0"
 dependencies = [
  "anyhow",
  "async-nats",
@@ -964,14 +992,14 @@ dependencies = [
 
 [[package]]
 name = "b00t-l3dg3rr-viz"
-version = "0.7.49"
+version = "0.8.0"
 dependencies = [
  "serde",
 ]
 
 [[package]]
 name = "b00t-mcp"
-version = "0.7.49"
+version = "0.8.0"
 dependencies = [
  "anyhow",
  "axum 0.8.9",
@@ -1011,7 +1039,7 @@ dependencies = [
 
 [[package]]
 name = "b00t-py"
-version = "0.7.49"
+version = "0.8.0"
 dependencies = [
  "anyhow",
  "b00t-c0re-lib",
@@ -3715,7 +3743,7 @@ dependencies = [
 
 [[package]]
 name = "k0mmand3r"
-version = "0.7.49"
+version = "0.8.0"
 dependencies = [
  "decimal-rs",
  "indexmap 2.14.0",
