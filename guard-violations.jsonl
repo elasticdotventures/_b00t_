@@ -54,10 +54,6 @@
 {"count":55,"pattern":"docker run"}
 {"count":9,"pattern":"rm -rf /"}
 {"count":53,"pattern":"pip install"}
-{{{{""""countcountcountcount""""::::565543,,,,""""patternpatternpatternpattern""""::::""""docker runrhai:cmd.contains(pip installrhai:cmd.contains("\""\"}pip}pip
-\"
-\") && cmd.contains() && violations >= threshold\""install}\"
-)"}
 {"count":54,"pattern":"pip install"}
 {"count":56,"pattern":"docker run"}
 {"count":5,"pattern":"vllm serve"}
@@ -89,8 +85,6 @@
 {"count":61,"pattern":"docker run"}
 {"count":11,"pattern":"rm -rf /"}
 {"count":61,"pattern":"pip install"}
-{{""countcount":"3:,5",pattern""pattern:"":rhai:cmd.contains("\"rhai:cmd.contains(pip\"\"pip) && violations >= threshold"\"}) && cmd.contains(
-\"install\")"}
 {"count":62,"pattern":"docker run"}
 {"count":62,"pattern":"pip install"}
 {"count":63,"pattern":"pip install"}

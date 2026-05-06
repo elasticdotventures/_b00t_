@@ -5,7 +5,7 @@ use clap::Parser;
 pub enum GatesCommands {
     #[clap(
         about = "List all [[b00t.gate]] declarations across MCP datums",
-        long_about = "Scan all .mcp.toml files and show their gate preconditions, both explicit ([[b00t.gate]]) and auto-derived (requires, env).\n\nExamples:\n  b00t gates list\n  b00t gates list --search github\n  b00t gates list --by-kind env\n  b00t gates list --json"
+        long_about = "Scan all .mcp.toml/.mcp.tomllm/.mcp.tomllmd files and show their gate preconditions, both explicit ([[b00t.gate]]) and auto-derived (requires, env).\n\nExamples:\n  b00t gates list\n  b00t gates list --search github\n  b00t gates list --by-kind env\n  b00t gates list --json"
     )]
     List {
         #[clap(long, help = "Filter by datum name or hint (case-insensitive)")]
@@ -20,9 +20,8 @@ pub enum GatesCommands {
 impl GatesCommands {
     pub fn execute(&self, path: &str) -> Result<()> {
         match self {
-            GatesCommands::List { search, by_kind, json } => {
+            GatesCommands::List { search, by_kind, json: as_json } => {
                 let all = crate::list_gates(path, search.as_deref())?;
-                let json = *json;
 
                 let filtered: Vec<_> = if let Some(kind) = by_kind {
                     all.into_iter().filter(|g| g.kind == *kind).collect()
@@ -30,7 +29,7 @@ impl GatesCommands {
                     all
                 };
 
-                if json {
+                if *as_json {
                     println!("{}", serde_json::to_string_pretty(&filtered)?);
                 } else if filtered.is_empty() {
                     println!("No gates found.");
@@ -72,8 +71,12 @@ impl GatesCommands {
                                 "auto:env" => "📦",
                                 _ => "  ",
                             };
-                            let status = check_gate_status(g);
-                            println!("    {} {}  {}  {}  {}", status, origin_icon, g.kind, g.spec, crate::ansi::dim(&format!("({})", g.origin)));
+                            let status_icon = match g.status {
+                                "pass" => "✅",
+                                "fail" => "⏳",
+                                _ => "❓",
+                            };
+                            println!("    {} {}  {}  {}  {}", status_icon, origin_icon, g.kind, g.spec, crate::ansi::dim(&format!("({})", g.origin)));
                             if let Some(hint) = &g.hint {
                                 println!("           {}", crate::ansi::yellow(&format!("↳ {hint}")));
                             }
@@ -85,49 +88,5 @@ impl GatesCommands {
                 Ok(())
             }
         }
-    }
-}
-
-/// Check if a gate's precondition is currently satisfied on this system.
-fn check_gate_status(g: &crate::GateReport) -> &'static str {
-    match g.kind.as_str() {
-        "command" => {
-            if crate::check_command_available(&g.spec) { "✅" } else { "⏳" }
-        }
-        "env" => {
-            let val = std::env::var(&g.spec);
-            if val.is_ok() && !val.unwrap_or_default().is_empty() {
-                "✅"
-            } else {
-                // check .env
-                let ws = std::env::var("WORKSPACE_ROOT").or_else(|_| std::env::var("HOME")).unwrap_or_default();
-                let env_path = std::path::Path::new(&ws).join(".env");
-                if env_path.exists() {
-                    if let Ok(content) = std::fs::read_to_string(&env_path) {
-                        let prefix = format!("{}=", g.spec);
-                        for line in content.lines() {
-                            if line.trim().starts_with(&prefix) {
-                                let val = line.trim()[prefix.len()..].trim();
-                                if !val.is_empty() && !val.starts_with('#') {
-                                    return "✅";
-                                }
-                            }
-                        }
-                    }
-                }
-                "⏳"
-            }
-        }
-        "file" => {
-            let expanded = if g.spec.starts_with('~') {
-                let home = std::env::var("HOME").unwrap_or_default();
-                std::path::Path::new(&home).join(g.spec.strip_prefix("~/").unwrap_or(&g.spec))
-            } else {
-                std::path::Path::new(&g.spec).to_path_buf()
-            };
-            if expanded.exists() { "✅" } else { "⏳" }
-        }
-        "rhai" => "❓", // can't evaluate without context
-        _ => "  ",
     }
 }

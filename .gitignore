@@ -244,6 +244,7 @@ eggs/
 env.bak/
 env/
 exec-log.jsonl
+guard-violations.jsonl
 google-cloud-sdk/
 htmlcov/
 instance/

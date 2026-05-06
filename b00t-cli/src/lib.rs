@@ -397,10 +397,63 @@ pub struct GateReport {
     pub spec: String,
     pub origin: String, // "explicit" or "auto:requires" or "auto:env"
     pub hint: Option<String>,
+    /// "pass" | "fail" | "unknown" — populated at scan time
+    pub status: &'static str,
 }
 
-/// Scan all .mcp.toml files in path, extract explicit + auto-derived gates.
-/// Returns a flat Vec of GateReport.
+/// Expand a leading `~/` in a path using the HOME env var.
+fn expand_tilde_path(spec: &str) -> std::path::PathBuf {
+    if spec.starts_with('~') {
+        let home = std::env::var("HOME").unwrap_or_default();
+        std::path::Path::new(&home)
+            .join(spec.strip_prefix("~/").unwrap_or(spec))
+    } else {
+        std::path::Path::new(spec).to_path_buf()
+    }
+}
+
+/// Returns "pass", "fail", or "unknown" for a gate condition checked at scan time.
+pub fn eval_gate_status(kind: &str, spec: &str) -> &'static str {
+    match kind {
+        "command" => {
+            if check_command_available(spec) { "pass" } else { "fail" }
+        }
+        "env" => {
+            if std::env::var(spec).ok().map_or(false, |v| !v.is_empty()) {
+                return "pass";
+            }
+            // check .env in workspace root
+            let ws = std::env::var("WORKSPACE_ROOT")
+                .or_else(|_| std::env::var("HOME"))
+                .unwrap_or_default();
+            let env_path = std::path::Path::new(&ws).join(".env");
+            if env_path.exists() {
+                if let Ok(content) = std::fs::read_to_string(env_path) {
+                    let prefix = format!("{}=", spec);
+                    for line in content.lines() {
+                        let trimmed = line.trim();
+                        if let Some(rest) = trimmed.strip_prefix(prefix.as_str()) {
+                            let val = rest.trim();
+                            if !val.is_empty() && !val.starts_with('#') {
+                                return "pass";
+                            }
+                        }
+                    }
+                }
+            }
+            "fail"
+        }
+        "file" => {
+            if expand_tilde_path(spec).exists() { "pass" } else { "fail" }
+        }
+        "rhai" => "unknown",
+        _ => "unknown",
+    }
+}
+
+/// Scan datum files in `path` (.mcp.toml, .mcp.tomllm, .mcp.tomllmd),
+/// extract explicit [[b00t.gate]] declarations and auto-derived gates,
+/// and evaluate their current status.
 pub fn list_gates(path: &str, search: Option<&str>) -> Result<Vec<GateReport>> {
     let expanded = get_expanded_path(path)?;
     let mut gates = Vec::new();
@@ -409,64 +462,89 @@ pub fn list_gates(path: &str, search: Option<&str>) -> Result<Vec<GateReport>> {
         .map_err(|e| anyhow::anyhow!("Error reading {}: {}", expanded.display(), e))?
     {
         let entry = entry?;
-        let path = entry.path();
-        if path.extension().map(|e| e == "toml").unwrap_or(false)
-            && path.file_name().and_then(|s| s.to_str()).map(|s| s.ends_with(".mcp.toml")).unwrap_or(false)
-        {
-            let name = path.file_stem().and_then(|s| s.to_str())
-                .map(|s| s.trim_end_matches(".mcp").to_string())
-                .unwrap_or_default();
-            if name.is_empty() { continue; }
+        let fpath = entry.path();
+        let fname = match fpath.file_name().and_then(|s| s.to_str()) {
+            Some(n) => n.to_string(),
+            None => continue,
+        };
 
-            let content = std::fs::read_to_string(&path)?;
-            let config: Result<UnifiedConfig, _> = toml::from_str(&content);
-            let datum = match config {
-                Ok(c) => c.b00t,
-                Err(_) => continue,
-            };
+        // Accept .mcp.toml, .mcp.tomllm, .mcp.tomllmd
+        let is_mcp_datum = fname.ends_with(".mcp.toml")
+            || fname.ends_with(".mcp.tomllm")
+            || fname.ends_with(".mcp.tomllmd");
+        if !is_mcp_datum {
+            continue;
+        }
 
-            // apply search filter
-            if let Some(q) = search {
-                if !name.to_lowercase().contains(&q.to_lowercase())
-                    && !datum.hint.to_lowercase().contains(&q.to_lowercase())
-                {
-                    continue;
+        let name = fname
+            .trim_end_matches(".tomllmd")
+            .trim_end_matches(".tomllm")
+            .trim_end_matches(".toml")
+            .trim_end_matches(".mcp")
+            .to_string();
+        if name.is_empty() {
+            continue;
+        }
+
+        let content = std::fs::read_to_string(&fpath)?;
+        let config: Result<UnifiedConfig, _> = toml::from_str(&content);
+        let datum = match config {
+            Ok(c) => c.b00t,
+            Err(_) => continue,
+        };
+
+        // apply search filter
+        if let Some(q) = search {
+            if !name.to_lowercase().contains(&q.to_lowercase())
+                && !datum.hint.to_lowercase().contains(&q.to_lowercase())
+            {
+                continue;
+            }
+        }
+
+        let mut push_gate = |kind: &str, spec: &str, origin: &str, hint: Option<String>| {
+            gates.push(GateReport {
+                datum: name.clone(),
+                kind: kind.to_string(),
+                spec: spec.to_string(),
+                origin: origin.to_string(),
+                hint,
+                status: eval_gate_status(kind, spec),
+            });
+        };
+
+        // explicit gates from [[b00t.gate]]
+        if let Some(explicit) = &datum.gate {
+            for g in explicit {
+                if let Some(cmd) = &g.command {
+                    push_gate("command", cmd, "explicit", g.hint.clone());
+                }
+                if let Some(f) = &g.file {
+                    push_gate("file", f, "explicit", g.hint.clone());
+                }
+                if let Some(e) = &g.env {
+                    push_gate("env", e, "explicit", g.hint.clone());
+                }
+                if let Some(r) = &g.rhai {
+                    push_gate("rhai", r, "explicit", g.hint.clone());
                 }
             }
+        }
 
-            // explicit gates from [[b00t.gate]]
-            if let Some(explicit) = &datum.gate {
-                for g in explicit {
-                    if let Some(cmd) = &g.command {
-                        gates.push(GateReport { datum: name.clone(), kind: "command".into(), spec: cmd.clone(), origin: "explicit".into(), hint: g.hint.clone() });
-                    }
-                    if let Some(f) = &g.file {
-                        gates.push(GateReport { datum: name.clone(), kind: "file".into(), spec: f.clone(), origin: "explicit".into(), hint: g.hint.clone() });
-                    }
-                    if let Some(e) = &g.env {
-                        gates.push(GateReport { datum: name.clone(), kind: "env".into(), spec: e.clone(), origin: "explicit".into(), hint: g.hint.clone() });
-                    }
-                    if let Some(r) = &g.rhai {
-                        gates.push(GateReport { datum: name.clone(), kind: "rhai".into(), spec: r.clone(), origin: "explicit".into(), hint: g.hint.clone() });
-                    }
+        // auto-derived from requires
+        if let Some(req) = &datum.require {
+            for r in req {
+                if r != "internet" {
+                    push_gate("command", r, "auto:requires", None);
                 }
             }
+        }
 
-            // auto-derived from requires
-            if let Some(req) = &datum.require {
-                for r in req {
-                    if r != "internet" {
-                        gates.push(GateReport { datum: name.clone(), kind: "command".into(), spec: r.clone(), origin: "auto:requires".into(), hint: None });
-                    }
-                }
-            }
-
-            // auto-derived from top-level env
-            if let Some(env_map) = &datum.env {
-                for (k, _) in env_map {
-                    if !k.starts_with("LOG_") && !k.starts_with("FAST") {
-                        gates.push(GateReport { datum: name.clone(), kind: "env".into(), spec: k.clone(), origin: "auto:env".into(), hint: None });
-                    }
+        // auto-derived from top-level env
+        if let Some(env_map) = &datum.env {
+            for (k, _) in env_map {
+                if !k.starts_with("LOG_") && !k.starts_with("FAST") {
+                    push_gate("env", k, "auto:env", None);
                 }
             }
         }
