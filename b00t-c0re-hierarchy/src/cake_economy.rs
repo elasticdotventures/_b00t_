@@ -344,6 +344,8 @@ mod tests {
         let mut ledger = CakeLedger::new();
         let mut agent = make_agent("bob", 0.0, true);
         ledger.mint(&mut agent, 100.0, "Setup").unwrap();
+        assert_eq!(agent.cake_balance, 100.0);
+        assert_eq!(ledger.total_supply(), 100.0);
 
         let tx = ledger.spend(&mut agent, 30.0, "Coffee").unwrap();
         assert_eq!(agent.cake_balance, 70.0);
