@@ -1,0 +1,20 @@
+[package]
+name = "b00t-c0re-a2a"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "A2A (Agent-to-Agent) Protocol Rust SDK core — AgentCard, Task lifecycle, Artifact/Message types, file-backed AgentStore, SkillRegistry. Foundation for agent interoperability per A2A v1.0 spec."
+
+[lints]
+workspace = true
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+uuid = { version = "1", features = ["v4", "serde"] }
+chrono = { workspace = true }
+thiserror = "2"
+url = { version = "2", features = ["serde"] }
+tokio = { workspace = true }

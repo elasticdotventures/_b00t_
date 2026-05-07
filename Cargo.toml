@@ -14,6 +14,7 @@ members = [
     "b00t-ast",
     "b00t-bouncer",
     "b00t-c0re-hierarchy",
+    "b00t-c0re-a2a",
 ]
 resolver = "2"
 

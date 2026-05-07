@@ -1,7 +1,9 @@
 //! Calorie and Cake accounting — the economic engine.
 
+use serde::{Deserialize, Serialize};
+
 /// Agent tier determines calorie burn rate per operation.
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub enum AgentTier {
     GAI,       // 100x  — GPT-4, Claude Opus
     LLM,       // 10x   — GPT-4o-mini, Llama 3

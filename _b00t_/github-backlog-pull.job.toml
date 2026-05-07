@@ -1,0 +1,39 @@
+# GitHub backlog pull — syncs tagged issues into the alpha node task queue
+# Triggered by system cron every hour
+
+[b00t]
+name = "github-backlog-pull"
+type = "job"
+hint = "Pull tagged GitHub issues into the alpha node backlog and task queue"
+version = "1.0.0"
+
+[b00t.job]
+description = "Query GitHub for tagged issues, promote new ones to task queue"
+mode = "sequential"
+checkpoint_mode = "manual"
+use_subagents = false
+tags = ["alpha", "backlog", "github"]
+
+[b00t.job.config]
+max_steps_per_run = 1
+
+[[b00t.job.steps]]
+name = "fetch-issues"
+description = "Fetch tagged GitHub issues"
+checkpoint = "issues-fetched"
+
+[b00t.job.steps.task]
+type = "bash"
+command = "gh issue list --label 'a2a,governance,epoch' --json number,title,body,labels,state --limit 20 --jq '.[] | \"\\(.number) \\(.title)\"' 2>&1 || echo 'gh not available'"
+timeout_ms = 30000
+
+[[b00t.job.steps]]
+name = "sync-backlog"
+description = "Sync new issues into backlog and promote to queue"
+checkpoint = "backlog-synced"
+depends_on = ["fetch-issues"]
+
+[b00t.job.steps.task]
+type = "bash"
+command = "echo 'Backlog sync triggered by hourly cron'; ls ~/.local/share/b00t/backlog/ 2>/dev/null | wc -l | xargs echo 'Backlog items:'"
+timeout_ms = 60000

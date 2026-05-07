@@ -1,3 +1,4 @@
+use b00t_c0re_gov::errors::StoreResult;
 use b00t_c0re_gov::store::ContextStore;
 use b00t_c0re_gov::types::{AgentContext, HookToken, HookType};
 use chrono::Utc;
@@ -27,7 +28,7 @@ fn test_context(token: &HookToken) -> AgentContext {
 }
 
 #[test]
-fn test_store_save_load_delete() -> anyhow::Result<()> {
+fn test_store_save_load_delete() -> StoreResult<()> {
     let tmpdir = tempfile::tempdir()?;
     let store = ContextStore::with_path(tmpdir.path().join("hooks"));
 
@@ -52,7 +53,7 @@ fn test_store_save_load_delete() -> anyhow::Result<()> {
 }
 
 #[test]
-fn test_store_list_pending() -> anyhow::Result<()> {
+fn test_store_list_pending() -> StoreResult<()> {
     let tmpdir = tempfile::tempdir()?;
     let store = ContextStore::with_path(tmpdir.path().join("hooks"));
 
@@ -68,7 +69,7 @@ fn test_store_list_pending() -> anyhow::Result<()> {
 }
 
 #[test]
-fn test_store_crash_safety() -> anyhow::Result<()> {
+fn test_store_crash_safety() -> StoreResult<()> {
     let tmpdir = tempfile::tempdir()?;
     let dir = tmpdir.path().join("hooks");
     std::fs::create_dir_all(&dir)?;

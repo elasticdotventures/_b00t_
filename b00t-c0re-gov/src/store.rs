@@ -2,8 +2,7 @@ use std::fs;
 use std::io::Write;
 use std::path::PathBuf;
 
-use anyhow::{Context, Result};
-
+use crate::errors::StoreResult;
 use crate::types::{AgentContext, HookToken};
 
 pub struct ContextStore {
@@ -12,9 +11,9 @@ pub struct ContextStore {
 
 impl ContextStore {
     /// Default: ~/.local/share/b00t/hooks/
-    pub fn new() -> Result<Self> {
+    pub fn new() -> StoreResult<Self> {
         let dir = dirs_data_dir()?.join("b00t").join("hooks");
-        fs::create_dir_all(&dir).context("Failed to create hooks directory")?;
+        fs::create_dir_all(&dir)?;
         Ok(ContextStore { dir })
     }
 
@@ -24,87 +23,78 @@ impl ContextStore {
     }
 
     /// Atomic save: write to .tmp, rename to .json
-    pub fn save(&self, token: &HookToken, context: &AgentContext) -> Result<()> {
+    pub fn save(&self, token: &HookToken, context: &AgentContext) -> StoreResult<()> {
         let hook_id = token.id;
         let json_path = self.dir.join(format!("{}.json", hook_id));
         let tmp_path = self.dir.join(format!("{}.json.tmp", hook_id));
 
-        let json_content =
-            serde_json::to_string_pretty(context).context("Failed to serialize context")?;
+        let json_content = serde_json::to_string_pretty(context)?;
 
         // Ensure directory exists
-        fs::create_dir_all(&self.dir).context("Failed to create hooks directory")?;
+        fs::create_dir_all(&self.dir)?;
 
         // Write to .tmp
         {
-            let mut tmp_file =
-                fs::File::create(&tmp_path).context("Failed to create tmp file")?;
-            tmp_file
-                .write_all(json_content.as_bytes())
-                .context("Failed to write tmp file")?;
-            tmp_file
-                .sync_all()
-                .context("Failed to sync tmp file to disk")?;
+            let mut tmp_file = fs::File::create(&tmp_path)?;
+            tmp_file.write_all(json_content.as_bytes())?;
+            tmp_file.sync_all()?;
         }
 
         // Atomic rename
-        fs::rename(&tmp_path, &json_path).context("Failed to rename tmp to json")?;
+        fs::rename(&tmp_path, &json_path)?;
 
         Ok(())
     }
 
     /// Load context for a hook token
-    pub fn load(&self, token: &HookToken) -> Result<Option<AgentContext>> {
+    pub fn load(&self, token: &HookToken) -> StoreResult<Option<AgentContext>> {
         let hook_id = token.id;
         let path = self.dir.join(format!("{}.json", hook_id));
         if !path.exists() {
             return Ok(None);
         }
-        let content = fs::read_to_string(&path).context("Failed to read context file")?;
-        let context: AgentContext =
-            serde_json::from_str(&content).context("Failed to deserialize context")?;
+        let content = fs::read_to_string(&path)?;
+        let context: AgentContext = serde_json::from_str(&content)?;
         Ok(Some(context))
     }
 
     /// Load by hook ID (useful for hook fire callbacks)
-    pub fn load_by_id(&self, hook_id: &uuid::Uuid) -> Result<Option<AgentContext>> {
+    pub fn load_by_id(&self, hook_id: &uuid::Uuid) -> StoreResult<Option<AgentContext>> {
         let path = self.dir.join(format!("{}.json", hook_id));
         if !path.exists() {
             return Ok(None);
         }
-        let content = fs::read_to_string(&path).context("Failed to read context file")?;
-        let context: AgentContext =
-            serde_json::from_str(&content).context("Failed to deserialize context")?;
+        let content = fs::read_to_string(&path)?;
+        let context: AgentContext = serde_json::from_str(&content)?;
         Ok(Some(context))
     }
 
     /// Delete context (after hook fires and agent resumes)
-    pub fn delete(&self, hook_id: &uuid::Uuid) -> Result<()> {
+    pub fn delete(&self, hook_id: &uuid::Uuid) -> StoreResult<()> {
         let json_path = self.dir.join(format!("{}.json", hook_id));
         let tmp_path = self.dir.join(format!("{}.json.tmp", hook_id));
 
         if json_path.exists() {
-            fs::remove_file(&json_path).context("Failed to delete context file")?;
+            fs::remove_file(&json_path)?;
         }
         if tmp_path.exists() {
-            fs::remove_file(&tmp_path).context("Failed to delete tmp file")?;
+            fs::remove_file(&tmp_path)?;
         }
         Ok(())
     }
 
     /// List all pending hooks
-    pub fn list_pending(&self) -> Result<Vec<HookToken>> {
+    pub fn list_pending(&self) -> StoreResult<Vec<HookToken>> {
         let mut tokens = Vec::new();
         if !self.dir.exists() {
             return Ok(tokens);
         }
-        for entry in fs::read_dir(&self.dir).context("Failed to read hooks directory")? {
-            let entry = entry.context("Failed to read directory entry")?;
+        for entry in fs::read_dir(&self.dir)? {
+            let entry = entry?;
             let path = entry.path();
             if path.extension().and_then(|e| e.to_str()) == Some("json") {
                 // Skip .tmp files
-                let content =
-                    fs::read_to_string(&path).context("Failed to read hook file")?;
+                let content = fs::read_to_string(&path)?;
                 if let Ok(context) = serde_json::from_str::<AgentContext>(&content) {
                     tokens.push(context.hook_token);
                 }
@@ -114,13 +104,13 @@ impl ContextStore {
     }
 
     /// Total stored hook count
-    pub fn count(&self) -> Result<usize> {
+    pub fn count(&self) -> StoreResult<usize> {
         let mut count = 0usize;
         if !self.dir.exists() {
             return Ok(0);
         }
-        for entry in fs::read_dir(&self.dir).context("Failed to read hooks directory")? {
-            let entry = entry.context("Failed to read directory entry")?;
+        for entry in fs::read_dir(&self.dir)? {
+            let entry = entry?;
             let path = entry.path();
             if path.extension().and_then(|e| e.to_str()) == Some("json") {
                 count += 1;
@@ -130,7 +120,7 @@ impl ContextStore {
     }
 }
 
-fn dirs_data_dir() -> Result<PathBuf> {
+fn dirs_data_dir() -> StoreResult<PathBuf> {
     // Try XDG_DATA_HOME first, fall back to ~/.local/share
     if let Ok(dir) = std::env::var("XDG_DATA_HOME") {
         Ok(PathBuf::from(dir))
@@ -173,7 +163,7 @@ mod unit_tests {
     }
 
     #[test]
-    fn test_save_and_load() -> Result<()> {
+    fn test_save_and_load() -> StoreResult<()> {
         let tmpdir = tempfile::tempdir().unwrap();
         let store = ContextStore::with_path(tmpdir.path().join("hooks"));
 
@@ -190,7 +180,7 @@ mod unit_tests {
     }
 
     #[test]
-    fn test_load_nonexistent() -> Result<()> {
+    fn test_load_nonexistent() -> StoreResult<()> {
         let tmpdir = tempfile::tempdir().unwrap();
         let store = ContextStore::with_path(tmpdir.path().join("hooks"));
 
@@ -202,7 +192,7 @@ mod unit_tests {
     }
 
     #[test]
-    fn test_load_by_id() -> Result<()> {
+    fn test_load_by_id() -> StoreResult<()> {
         let tmpdir = tempfile::tempdir().unwrap();
         let store = ContextStore::with_path(tmpdir.path().join("hooks"));
 
@@ -217,7 +207,7 @@ mod unit_tests {
     }
 
     #[test]
-    fn test_delete() -> Result<()> {
+    fn test_delete() -> StoreResult<()> {
         let tmpdir = tempfile::tempdir().unwrap();
         let store = ContextStore::with_path(tmpdir.path().join("hooks"));
 
@@ -233,7 +223,7 @@ mod unit_tests {
     }
 
     #[test]
-    fn test_list_pending() -> Result<()> {
+    fn test_list_pending() -> StoreResult<()> {
         let tmpdir = tempfile::tempdir().unwrap();
         let store = ContextStore::with_path(tmpdir.path().join("hooks"));
 
@@ -252,7 +242,7 @@ mod unit_tests {
     }
 
     #[test]
-    fn test_count() -> Result<()> {
+    fn test_count() -> StoreResult<()> {
         let tmpdir = tempfile::tempdir().unwrap();
         let store = ContextStore::with_path(tmpdir.path().join("hooks"));
 
@@ -267,7 +257,7 @@ mod unit_tests {
     }
 
     #[test]
-    fn test_crash_safety_partial_tmp() -> Result<()> {
+    fn test_crash_safety_partial_tmp() -> StoreResult<()> {
         // Simulate crash safety: a partial .tmp file should not show up as .json
         let tmpdir = tempfile::tempdir().unwrap();
         let dir = tmpdir.path().join("hooks");

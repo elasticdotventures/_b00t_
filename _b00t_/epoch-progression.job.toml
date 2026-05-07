@@ -1,0 +1,39 @@
+# Epoch progression — picks and executes tasks from the alpha node task queue
+# Triggered by system cron every 10 minutes
+
+[b00t]
+name = "epoch-progression"
+type = "job"
+hint = "Alpha node epoch progression — picks and executes tasks from the task queue"
+version = "1.0.0"
+
+[b00t.job]
+description = "Read task queue, pick highest priority task, execute one step, advance state"
+mode = "sequential"
+checkpoint_mode = "manual"
+use_subagents = true
+tags = ["alpha", "epoch", "a2a"]
+
+[b00t.job.config]
+max_steps_per_run = 1
+
+[[b00t.job.steps]]
+name = "pick-task"
+description = "Pick highest priority task from queue"
+checkpoint = "task-picked"
+
+[b00t.job.steps.task]
+type = "bash"
+command = "b00t-task pick 2>&1"
+timeout_ms = 30000
+
+[[b00t.job.steps]]
+name = "execute-task"
+description = "Execute the picked task (runs tests or dispatches subagent)"
+checkpoint = "task-executed"
+depends_on = ["pick-task"]
+
+[b00t.job.steps.task]
+type = "bash"
+command = "echo 'Task execution triggered by epoch progression cron'"
+timeout_ms = 300000

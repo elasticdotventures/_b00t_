@@ -73,6 +73,7 @@ pub mod dbus_dispatch;
 pub mod dependency_resolver;
 pub mod entanglement;
 pub mod erp;
+pub mod errors;
 pub mod governance;
 pub mod guards;
 pub mod hive;
@@ -99,6 +100,8 @@ pub mod variant;
 pub mod viz;
 pub mod whoami;
 pub mod wow;
+pub mod calorie_tracker;
+pub mod a2a_gates;
 pub use traits::*;
 
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Default)]

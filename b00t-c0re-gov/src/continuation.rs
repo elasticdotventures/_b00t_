@@ -1,8 +1,7 @@
-use anyhow::Result;
-use uuid::Uuid;
-
+use crate::errors::StoreResult;
 use crate::store::ContextStore;
 use crate::types::{AgentContext, HookToken};
+use uuid::Uuid;
 
 /// AgentContinuation handles snapshot/restore of agent state.
 ///
@@ -24,7 +23,7 @@ impl AgentContinuation {
     }
 
     /// Create an AgentContinuation with the default store path.
-    pub fn with_default_store() -> Result<Self> {
+    pub fn with_default_store() -> StoreResult<Self> {
         let store = ContextStore::new()?;
         Ok(AgentContinuation { store })
     }
@@ -49,7 +48,7 @@ impl AgentContinuation {
         reasoning: &str,
         token: &HookToken,
         continuation: &str,
-    ) -> Result<AgentContext> {
+    ) -> StoreResult<AgentContext> {
         let store = ContextStore::new()?;
 
         let context = AgentContext {
@@ -77,7 +76,7 @@ impl AgentContinuation {
         reasoning: &str,
         token: &HookToken,
         continuation: &str,
-    ) -> Result<AgentContext> {
+    ) -> StoreResult<AgentContext> {
         let context = AgentContext {
             agent_id: agent_id.to_string(),
             task: task.to_string(),
@@ -97,26 +96,26 @@ impl AgentContinuation {
     ///
     /// Looks up the saved context by hook ID.
     /// Returns `None` if no context is found (e.g. already consumed or never saved).
-    pub fn restore(hook_id: &Uuid) -> Result<Option<AgentContext>> {
+    pub fn restore(hook_id: &Uuid) -> StoreResult<Option<AgentContext>> {
         let store = ContextStore::new()?;
         store.load_by_id(hook_id)
     }
 
     /// Restore agent state using an existing store instance.
-    pub fn restore_with_store(&self, hook_id: &Uuid) -> Result<Option<AgentContext>> {
+    pub fn restore_with_store(&self, hook_id: &Uuid) -> StoreResult<Option<AgentContext>> {
         self.store.load_by_id(hook_id)
     }
 
     /// Resume — delete the context after successfully restoring.
     ///
     /// Should be called after `restore()` succeeds, to clean up state.
-    pub fn resume(hook_id: &Uuid) -> Result<()> {
+    pub fn resume(hook_id: &Uuid) -> StoreResult<()> {
         let store = ContextStore::new()?;
         store.delete(hook_id)
     }
 
     /// Resume using an existing store instance.
-    pub fn resume_with_store(&self, hook_id: &Uuid) -> Result<()> {
+    pub fn resume_with_store(&self, hook_id: &Uuid) -> StoreResult<()> {
         self.store.delete(hook_id)
     }
 
@@ -126,7 +125,7 @@ impl AgentContinuation {
     }
 
     /// List all pending (unresumed) hook contexts.
-    pub fn list_pending(&self) -> Result<Vec<HookToken>> {
+    pub fn list_pending(&self) -> StoreResult<Vec<HookToken>> {
         self.store.list_pending()
     }
 }
@@ -148,7 +147,7 @@ mod unit_tests {
     }
 
     #[test]
-    fn test_snapshot_and_restore() -> Result<()> {
+    fn test_snapshot_and_restore() -> StoreResult<()> {
         let tmpdir = tempdir()?;
         let store = ContextStore::with_path(tmpdir.path().join("hooks"));
         let continuation = AgentContinuation::new(store);
@@ -185,7 +184,7 @@ mod unit_tests {
     }
 
     #[test]
-    fn test_snapshot_static_method() -> Result<()> {
+    fn test_snapshot_static_method() -> StoreResult<()> {
         let token = test_token();
 
         let context = AgentContinuation::snapshot(
@@ -207,7 +206,7 @@ mod unit_tests {
     }
 
     #[test]
-    fn test_restore_nonexistent() -> Result<()> {
+    fn test_restore_nonexistent() -> StoreResult<()> {
         let tmpdir = tempdir()?;
         let store = ContextStore::with_path(tmpdir.path().join("hooks"));
         let continuation = AgentContinuation::new(store);
@@ -219,7 +218,7 @@ mod unit_tests {
     }
 
     #[test]
-    fn test_list_pending() -> Result<()> {
+    fn test_list_pending() -> StoreResult<()> {
         let tmpdir = tempdir()?;
         let store = ContextStore::with_path(tmpdir.path().join("hooks"));
         let continuation = AgentContinuation::new(store);

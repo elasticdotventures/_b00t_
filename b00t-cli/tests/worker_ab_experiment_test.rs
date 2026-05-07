@@ -241,10 +241,10 @@ fn test_focus_fallback_creates_temp_file() {
         stderr.contains("[ledgrrr]"),
         "stderr should contain [ledgrrr] FOCUS records:\n{stderr}"
     );
-    // Fallback temp-file message from emit_focus_to_ledgerr_mcp
+    // Fallback temp-file message from emit_focus_to_ledgrrr_mcp
     assert!(
-        stderr.contains("[ledgerr-mcp]"),
-        "stderr should contain [ledgerr-mcp] fallback message:\n{stderr}"
+        stderr.contains("[ledgrrr-mcp]"),
+        "stderr should contain [ledgrrr-mcp] fallback message:\n{stderr}"
     );
     // Temp file was actually created
     assert!(
@@ -316,8 +316,8 @@ fn test_focus_emit_creates_valid_json_payload() {
     // Validate params structure
     let params = &parsed["params"];
     assert_eq!(
-        params["name"], "ledgerr_focus",
-        "params.name should be 'ledgerr_focus'"
+        params["name"], "ledgrrr_focus",
+        "params.name should be 'ledgrrr_focus'"
     );
 
     let arguments = &params["arguments"];

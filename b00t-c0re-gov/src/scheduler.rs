@@ -4,6 +4,7 @@ use std::sync::Arc;
 use tokio::sync::broadcast;
 use uuid::Uuid;
 
+use crate::errors::SchedResult;
 use crate::ring::HookRing;
 use crate::types::*;
 
@@ -63,7 +64,7 @@ impl EventScheduler {
 
     /// Register a hook. If the hook has AnyOf/AllOf children, they are also
     /// registered and linked back to the parent.
-    pub fn register(&mut self, token: HookToken) -> anyhow::Result<()> {
+    pub fn register(&mut self, token: HookToken) -> SchedResult<()> {
         let id = token.id;
 
         // Register the hook itself
@@ -104,7 +105,7 @@ impl EventScheduler {
 
     /// Cancel a hook by its ID. Also cancels any children (if composite) or
     /// notifies the parent (if child of composite).
-    pub fn cancel(&mut self, hook_id: Uuid) -> anyhow::Result<()> {
+    pub fn cancel(&mut self, hook_id: Uuid) -> SchedResult<()> {
         if let Some(hook) = self.hooks.remove(&hook_id) {
             // If it has children, remove them too
             for child_id in &hook.children {

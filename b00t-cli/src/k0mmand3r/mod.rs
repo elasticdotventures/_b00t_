@@ -383,12 +383,8 @@ impl K0mmand3rCmd {
                     .or_else(|| modifiers.remove("agent"))
                     .or_else(|| {
                         modifiers.remove("to").map(|v| {
-                            // Parse "agent:observer" or "agent=observer" → "observer"
-                            v.split(':')
-                                .last()
-                                .or_else(|| v.split('=').last())
-                                .unwrap_or(&v)
-                                .to_string()
+                            // `to` modifier value is the full target identifier
+                            v
                         })
                     })
                     .ok_or("Usage: /handshake <agent>")?;

@@ -1005,13 +1005,18 @@ pub fn phygital_status(
 
 // ── Cake payout ──────────────────────────────────────────────────────────────
 
-/// Calculate cake payout from experiment results and write the balance file.
+/// Calculate cake payout from experiment results, write the balance file,
+/// update the agent's calorie record, and return the result as an A2A Artifact.
 ///
 /// 1. Creates a `ScoreCard` from the winning variant's scores
 /// 2. Calls `epoch3::calculate_cake_payout()` to compute cake earned
 /// 3. Writes the cake balance to `~/.local/share/b00t/hooks/cake-balance.json`
-/// 4. Logs the payout
-pub fn calculate_and_issue_cake(cmp: &ExperimentComparison) -> f64 {
+/// 4. Updates the agent's calorie record (adds calories for successful completion)
+/// 5. Logs the payout with [🍰] prefix
+/// 6. Returns the result as an A2A Artifact
+pub fn calculate_and_issue_cake(cmp: &ExperimentComparison) -> b00t_c0re_a2a::task::Artifact {
+    use crate::calorie_tracker::CalorieTracker;
+    use b00t_c0re_a2a::task::Artifact;
     // Use the winning variant's scores (default to control if recommendation can't be parsed)
     let scores = if cmp.recommendation.contains("treatment") {
         &cmp.treatment.scores
@@ -1070,7 +1075,20 @@ pub fn calculate_and_issue_cake(cmp: &ExperimentComparison) -> f64 {
     }
 
     eprintln!("[🍰] Cake earned: {:.2}", payout);
-    payout
+
+    // Update agent calorie record from cake payout
+    let tracker = CalorieTracker::new();
+    if let Err(e) = tracker.add_calories("experiment-runner", payout) {
+        eprintln!("[🍰] Warning: failed to update calorie record: {}", e);
+    }
+
+    // Return as A2A Artifact
+    Artifact::json("cake-payout", serde_json::json!({
+        "experiment_id": cmp.experiment_id,
+        "payout": payout,
+        "agent": "experiment-runner",
+        "timestamp": chrono::Utc::now().to_rfc3339(),
+    }))
 }
 
 // ── Personality profiles ─────────────────────────────────────────────────────

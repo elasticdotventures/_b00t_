@@ -1523,17 +1523,49 @@ mod tests {
                         if let Some(cmd) = keyword_cmd {
                             cmd
                         } else if keywords.is_empty() && !expr.rhai.contains('"') {
-                            let name_lower = expr.rhai.trim().to_lowercase();
-                            if name_lower.contains("pip") {
-                                "pip install somepackage"
-                            } else if name_lower.contains("docker") {
-                                "docker run nginx"
-                            } else if name_lower.contains("git") {
-                                "git push --force origin main"
+                            // Bare macro name reference (e.g. "ledgerr_mcp_guard") or
+                            // a composition of macros without literal strings.
+                            // Try to resolve through rhai_macros to extract keywords.
+                            let macro_resolved = if !rhai_macros.is_empty() {
+                                let trimmed = expr.rhai.trim();
+                                if let Some(macro_expr) = rhai_macros.get(trimmed) {
+                                    // Extract quoted strings from the macro definition
+                                    let mut macro_keywords: Vec<String> = Vec::new();
+                                    let mut in_q = false;
+                                    let mut cur = String::new();
+                                    for ch in macro_expr.chars() {
+                                        match ch {
+                                            '"' if !in_q => { in_q = true; cur.clear(); }
+                                            '"' if in_q => { in_q = false; macro_keywords.push(cur.clone()); }
+                                            c if in_q => cur.push(c),
+                                            _ => {}
+                                        }
+                                    }
+                                    if !macro_keywords.is_empty() {
+                                        Some(macro_keywords.join(" "))
+                                    } else {
+                                        None
+                                    }
+                                } else {
+                                    None
+                                }
                             } else {
-                                "trigger-command-match"
+                                None
+                            };
+                            if let Some(cmd) = macro_resolved {
+                                cmd
+                            } else {
+                                let name_lower = expr.rhai.trim().to_lowercase();
+                                if name_lower.contains("pip") {
+                                    "pip install somepackage".to_string()
+                                } else if name_lower.contains("docker") {
+                                    "docker run nginx".to_string()
+                                } else if name_lower.contains("git") {
+                                    "git push --force origin main".to_string()
+                                } else {
+                                    "trigger-command-match".to_string()
+                                }
                             }
-                            .to_string()
                         } else {
                             // Last resort: use the literal command we built from keywords
                             keywords.join(" ") + " install"
@@ -1568,6 +1600,12 @@ mod tests {
                 } else {
                     vec![match_cmd.clone()]
                 };
+                let ctx_match = GuardContext {
+                    command: match_cmd.clone(),
+                    rhai_macros: rhai_macros.clone(),
+                    violation_count: 0,
+                    repeat_threshold: None,
+                };
                 let result = check_guards(&match_cmd, &[guard.clone()], &ctx_match);
                 // K0mmand3rStage guards can't be tested via check_guards (they return false
                 // since they're parser-stage hooks). Skip the match assertion for them.
@@ -1585,7 +1623,12 @@ mod tests {
                 // Skip no-match test for K0mmand3rStage guards (they always match).
                 if !matches!(pattern, GuardPattern::K0mmand3rStage(_)) {
                     let no_match_cmd = "ls -la".to_string();
-                    let ctx_no = GuardContext::default();
+                    let ctx_no = GuardContext {
+                        command: no_match_cmd.clone(),
+                        rhai_macros: rhai_macros.clone(),
+                        violation_count: 0,
+                        repeat_threshold: None,
+                    };
                     let result_no = check_guards(&no_match_cmd, &[guard], &ctx_no);
                     let allowed = matches!(result_no, GuardResult::Allow);
                     if !allowed {
@@ -1655,6 +1698,7 @@ message = "use uv"
             active_downloads: vec![],
             active_services: vec![],
             active_profile: None,
+            hive_ledger_path: None,
             timestamp: "2026-01-01".to_string(),
         };
         let profile = HiveProfile {

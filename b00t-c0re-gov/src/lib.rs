@@ -7,3 +7,4 @@ pub mod gates;
 pub mod continuation;
 pub mod scoring;
 pub mod epoch3;
+pub mod errors;

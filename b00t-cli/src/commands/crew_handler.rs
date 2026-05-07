@@ -1,27 +1,217 @@
 //! Handlers for crew subcommands — recruit, hire, roster
+//!
+//! Uses A2A AgentStore as the persistent agent backing store.
+//! Each agent is stored as an AgentCard (A2A format) with an accompanying
+//! crew metadata file for hierarchy-specific fields (role, manager, cake, etc.).
 
+use std::collections::HashMap;
+use std::path::PathBuf;
+
+use b00t_c0re_a2a::agent_card::{AgentCard, Skill};
+use b00t_c0re_a2a::agent_store::AgentStore;
+use b00t_c0re_a2a::A2AResult;
 use b00t_c0re_hierarchy::recruitment::*;
 use b00t_c0re_hierarchy::roles::*;
+use serde::{Deserialize, Serialize};
+use url::Url;
 
 use crate::commands::crew::CrewCommand;
 
-pub fn handle_crew_command(cmd: &CrewCommand) {
-    match cmd {
-        CrewCommand::Recruit { skills, limit } => handle_recruit(skills, *limit),
-        CrewCommand::Hire { agent_id, role } => handle_hire(agent_id, role.as_deref()),
-        CrewCommand::Roster => handle_roster(),
+/// Metadata for crew-specific fields not present in AgentCard.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct CrewMeta {
+    role: Role,
+    manager_id: Option<String>,
+    cake_balance: f64,
+    is_alive: bool,
+}
+
+impl Default for CrewMeta {
+    fn default() -> Self {
+        Self {
+            role: Role::Player,
+            manager_id: None,
+            cake_balance: 100.0,
+            is_alive: true,
+        }
     }
 }
 
-fn handle_recruit(skills: &str, limit: usize) {
+/// Convert an AgentCard + CrewMeta into a hierarchy Agent.
+fn to_agent(card: &AgentCard, meta: &CrewMeta) -> Agent {
+    Agent {
+        id: card.name.clone(),
+        role: meta.role.clone(),
+        skills: card.skills.iter().map(|s| s.name.clone()).collect(),
+        cake_balance: meta.cake_balance,
+        is_alive: meta.is_alive,
+        manager_id: meta.manager_id.clone(),
+    }
+}
+
+/// Build an AgentCard from a hierarchy Agent (inverse of to_agent).
+fn card_from_agent(agent: &Agent) -> AgentCard {
+    let url = Url::parse("stdio://local").unwrap();
+    let mut card = AgentCard::new(&agent.id, &format!("{} agent", agent.id), url);
+    for skill_name in &agent.skills {
+        card = card.with_skill(Skill::new(
+            skill_name,
+            skill_name,
+            &format!("{} skill", skill_name),
+            serde_json::json!({}),
+            serde_json::json!({}),
+        ));
+    }
+    card
+}
+
+/// Default data directory: ~/.local/share/b00t/agents/
+fn default_store_dir() -> PathBuf {
+    if let Some(home) = std::env::var_os("HOME") {
+        let mut p = PathBuf::from(home);
+        p.push(".local");
+        p.push("share");
+        p.push("b00t");
+        p.push("agents");
+        p
+    } else {
+        PathBuf::from("/tmp/b00t/agents")
+    }
+}
+
+/// Path to the crew metadata file (stored alongside AgentCards).
+fn meta_path(store_dir: &PathBuf) -> PathBuf {
+    store_dir.join("_crew_meta.json")
+}
+
+/// Load crew metadata from disk.
+fn load_meta(path: &PathBuf) -> HashMap<String, CrewMeta> {
+    if path.exists() {
+        std::fs::read_to_string(path)
+            .ok()
+            .and_then(|s| serde_json::from_str(&s).ok())
+            .unwrap_or_default()
+    } else {
+        HashMap::new()
+    }
+}
+
+/// Save crew metadata to disk.
+fn save_meta(path: &PathBuf, meta: &HashMap<String, CrewMeta>) {
+    if let Some(parent) = path.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    if let Ok(json) = serde_json::to_string_pretty(meta) {
+        let _ = std::fs::write(path, json);
+    }
+}
+
+/// Seed 3 initial demo agents if the store is empty.
+fn seed_if_empty(store: &AgentStore) {
+    let count = store.count().unwrap_or(0);
+    if count > 0 {
+        return;
+    }
+
+    let url = Url::parse("stdio://local").unwrap();
+
+    // RustCoder
+    let rc_card = AgentCard::new("RustCoder", "Systems-level Rust developer", url.clone())
+        .with_skill(Skill::new("rust", "rust", "Rust programming language", serde_json::json!({}), serde_json::json!({})))
+        .with_skill(Skill::new("typescript", "typescript", "TypeScript/JavaScript", serde_json::json!({}), serde_json::json!({})));
+    let rc_meta = CrewMeta { role: Role::Player, manager_id: None, cake_balance: 100.0, is_alive: true };
+
+    // DataEngineer
+    let de_card = AgentCard::new("DataEngineer", "Data pipeline engineer", url.clone())
+        .with_skill(Skill::new("python", "python", "Python programming", serde_json::json!({}), serde_json::json!({})))
+        .with_skill(Skill::new("sql", "sql", "SQL queries", serde_json::json!({}), serde_json::json!({})))
+        .with_skill(Skill::new("data-engineering", "data-engineering", "Data pipeline engineering", serde_json::json!({}), serde_json::json!({})));
+    let de_meta = CrewMeta { role: Role::Player, manager_id: None, cake_balance: 150.0, is_alive: true };
+
+    // DevOpsBot
+    let db_card = AgentCard::new("DevOpsBot", "DevOps automation bot", url.clone())
+        .with_skill(Skill::new("docker", "docker", "Container management", serde_json::json!({}), serde_json::json!({})))
+        .with_skill(Skill::new("k8s", "k8s", "Kubernetes orchestration", serde_json::json!({}), serde_json::json!({})))
+        .with_skill(Skill::new("ci/cd", "ci/cd", "CI/CD pipelines", serde_json::json!({}), serde_json::json!({})));
+    let db_meta = CrewMeta { role: Role::Player, manager_id: None, cake_balance: 80.0, is_alive: true };
+
+    // Save cards to AgentStore
+    if let Err(e) = store.save(&rc_card) {
+        eprintln!("Warning: failed to seed RustCoder: {e}");
+    }
+    if let Err(e) = store.save(&de_card) {
+        eprintln!("Warning: failed to seed DataEngineer: {e}");
+    }
+    if let Err(e) = store.save(&db_card) {
+        eprintln!("Warning: failed to seed DevOpsBot: {e}");
+    }
+
+    // Save metadata
+    let mut m = HashMap::new();
+    m.insert("RustCoder".to_string(), rc_meta);
+    m.insert("DataEngineer".to_string(), de_meta);
+    m.insert("DevOpsBot".to_string(), db_meta);
+    let mp = meta_path(store.dir());
+    save_meta(&mp, &m);
+}
+
+/// Collect all agents from the store with their crew metadata.
+fn all_agents(store: &AgentStore) -> Vec<Agent> {
+    let mp = meta_path(store.dir());
+    let meta = load_meta(&mp);
+
+    let cards = match store.list() {
+        Ok(c) => c,
+        Err(e) => {
+            eprintln!("Warning: failed to list agents: {e}");
+            return Vec::new();
+        }
+    };
+
+    cards
+        .into_iter()
+        .map(|card| {
+            let m = meta.get(&card.name).cloned().unwrap_or_default();
+            to_agent(&card, &m)
+        })
+        .collect()
+}
+
+/// Update crew metadata for an agent.
+fn update_meta(store: &AgentStore, name: &str, f: impl FnOnce(&mut CrewMeta)) {
+    let mp = meta_path(store.dir());
+    let mut meta = load_meta(&mp);
+    let mut entry = meta.remove(name).unwrap_or_default();
+    f(&mut entry);
+    meta.insert(name.to_string(), entry);
+    save_meta(&mp, &meta);
+}
+
+// ---------------------------------------------------------------------------
+// Public entry point
+// ---------------------------------------------------------------------------
+
+pub fn handle_crew_command(cmd: &CrewCommand) {
+    // Initialize the AgentStore
+    let dir = default_store_dir();
+    let store = AgentStore::with_path(dir.clone());
+    let _ = std::fs::create_dir_all(&dir);
+
+    // Seed demo agents if this is a first run
+    seed_if_empty(&store);
+
+    match cmd {
+        CrewCommand::Recruit { skills, limit } => handle_recruit(&store, skills, *limit),
+        CrewCommand::Hire { agent_id, role } => handle_hire(&store, agent_id, role.as_deref()),
+        CrewCommand::Roster => handle_roster(&store),
+    }
+}
+
+fn handle_recruit(store: &AgentStore, skills: &str, limit: usize) {
     let required: Vec<String> = skills.split(',').map(|s| s.trim().to_string()).collect();
 
-    // For now, create some demo agents (in production, read from a store)
-    let available = vec![
-        Agent { id: "RustCoder".into(), role: Role::Player, skills: vec!["rust".into(), "typescript".into()], cake_balance: 100.0, is_alive: true, manager_id: None },
-        Agent { id: "DataEngineer".into(), role: Role::Player, skills: vec!["python".into(), "sql".into(), "data-engineering".into()], cake_balance: 150.0, is_alive: true, manager_id: None },
-        Agent { id: "DevOpsBot".into(), role: Role::Player, skills: vec!["docker".into(), "k8s".into(), "ci/cd".into()], cake_balance: 80.0, is_alive: true, manager_id: None },
-    ];
+    // Gather all agents
+    let available = all_agents(store);
 
     let request = RecruitRequest {
         captain_id: "captain".into(),
@@ -43,19 +233,65 @@ fn handle_recruit(skills: &str, limit: usize) {
     }
 }
 
-fn handle_hire(agent_id: &str, role: Option<&str>) {
+fn handle_hire(store: &AgentStore, agent_id: &str, role: Option<&str>) {
     let target_role = match role {
         Some("mate") => Role::Mate,
         _ => Role::Player,
     };
+
+    // Update the agent's role and manager in the metadata
+    update_meta(store, agent_id, |meta| {
+        meta.role = target_role.clone();
+        meta.manager_id = Some("captain".to_string());
+    });
+
     println!("Hired {} as {:?}", agent_id, target_role);
-    // In production: update the agent store
 }
 
-fn handle_roster() {
-    // In production: read from agent store
-    println!("Current roster:");
-    println!("  Captain: you");
-    println!("  Mates: (none)");
-    println!("  Players: RustCoder, DataEngineer, DevOpsBot");
+fn handle_roster(store: &AgentStore) {
+    let agents = all_agents(store);
+    println!("Current roster ({} agents):", agents.len());
+
+    // Separate by role
+    let mut captains = Vec::new();
+    let mut mates = Vec::new();
+    let mut players = Vec::new();
+
+    for agent in &agents {
+        match agent.role {
+            Role::Captain => captains.push(agent),
+            Role::Mate => mates.push(agent),
+            Role::Player => players.push(agent),
+            Role::Operator => players.push(agent),
+        }
+    }
+
+    println!("  Captain:");
+    if captains.is_empty() {
+        println!("    you");
+    } else {
+        for a in &captains {
+            println!("    {} (cake: {:.1})", a.id, a.cake_balance);
+        }
+    }
+
+    println!("  Mates:");
+    if mates.is_empty() {
+        println!("    (none)");
+    } else {
+        for a in &mates {
+            let mgr = a.manager_id.as_deref().unwrap_or("none");
+            println!("    {} (manager: {}, cake: {:.1})", a.id, mgr, a.cake_balance);
+        }
+    }
+
+    println!("  Players:");
+    if players.is_empty() {
+        println!("    (none)");
+    } else {
+        for a in &players {
+            let mgr = a.manager_id.as_deref().unwrap_or("none");
+            println!("    {} (manager: {}, cake: {:.1})", a.id, mgr, a.cake_balance);
+        }
+    }
 }
