@@ -132,6 +132,9 @@ pub async fn handle_grok_command(command: GrokCommands) -> Result<()> {
                 | GrokBackend::CodebaseMemory => {
                     handle_dual_digest(&topic, &content, backend).await
                 }
+                GrokBackend::CodebaseMemory => Err(anyhow::anyhow!(
+                    "--rag=codebase-memory is not supported for digest; use ask/search queries"
+                )),
             }
         }
         GrokCommands::Ask {
