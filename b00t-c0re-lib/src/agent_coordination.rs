@@ -57,6 +57,23 @@ pub enum CoordinationMessage {
         deadline: Option<u64>,
         required_capabilities: Vec<String>,
         blocking: bool, // Captain waits for completion
+        approval: Option<ApprovalGate>, // Optional approval gate
+    },
+
+    /// Task approval notification (captain to worker)
+    TaskApproval {
+        captain_id: String,
+        worker_id: String,
+        task_id: String,
+        approver: String,
+    },
+
+    /// Task rejection notification (captain to worker)
+    TaskRejection {
+        captain_id: String,
+        worker_id: String,
+        task_id: String,
+        reason: String,
     },
 
     /// Task completion notification
@@ -286,6 +303,7 @@ impl AgentCoordinator {
         deadline: Option<Duration>,
         required_capabilities: Vec<String>,
         blocking: bool,
+        approval: Option<ApprovalGate>,
     ) -> B00tResult<Option<TaskCompletion>> {
         let deadline_timestamp = deadline.map(|d| {
             SystemTime::now()
@@ -294,6 +312,13 @@ impl AgentCoordinator {
                 .as_secs()
                 + d.as_secs()
         });
+
+        // If approval gate is present and not yet approved, return pending approval
+        if let Some(ref gate) = approval {
+            if !gate.is_approved() {
+                anyhow::bail!("Task {} requires approval before delegation (pending approval)", task_id);
+            }
+        }
 
         let message = CoordinationMessage::TaskDelegation {
             captain_id: self.agent_metadata.agent_id.clone(),
@@ -304,6 +329,7 @@ impl AgentCoordinator {
             deadline: deadline_timestamp,
             required_capabilities,
             blocking,
+            approval,
         };
 
         // Set up completion listener if blocking
@@ -351,6 +377,44 @@ impl AgentCoordinator {
         };
 
         self.send_coordination_message(&format!("b00t:agent:{}", captain_id), &message)
+            .await?;
+        Ok(())
+    }
+
+    /// Approve a pending task delegation (captain functionality)
+    pub async fn approve_task(
+        &self,
+        worker_id: &str,
+        task_id: &str,
+        approver: &str,
+    ) -> B00tResult<()> {
+        let message = CoordinationMessage::TaskApproval {
+            captain_id: self.agent_metadata.agent_id.clone(),
+            worker_id: worker_id.to_string(),
+            task_id: task_id.to_string(),
+            approver: approver.to_string(),
+        };
+
+        self.send_coordination_message(&format!("b00t:agent:{}", worker_id), &message)
+            .await?;
+        Ok(())
+    }
+
+    /// Reject a pending task delegation (captain functionality)
+    pub async fn reject_task(
+        &self,
+        worker_id: &str,
+        task_id: &str,
+        reason: &str,
+    ) -> B00tResult<()> {
+        let message = CoordinationMessage::TaskRejection {
+            captain_id: self.agent_metadata.agent_id.clone(),
+            worker_id: worker_id.to_string(),
+            task_id: task_id.to_string(),
+            reason: reason.to_string(),
+        };
+
+        self.send_coordination_message(&format!("b00t:agent:{}", worker_id), &message)
             .await?;
         Ok(())
     }
@@ -638,14 +702,54 @@ impl AgentCoordinator {
                         worker_id,
                         task_description,
                         priority,
+                        ref approval,
                         ..
                     } => {
                         if worker_id == agent_id {
+                            if let Some(gate) = approval {
+                                if !gate.is_approved() {
+                                    info!(
+                                        "📋 Task delegation received: {} (priority: {:?}, pending approval)",
+                                        task_description, priority
+                                    );
+                                    return Ok(());
+                                }
+                            }
                             info!(
                                 "📋 Task delegation received: {} (priority: {:?})",
                                 task_description, priority
                             );
                             // Worker agents should handle this by processing the task
+                        }
+                    }
+
+                    CoordinationMessage::TaskApproval {
+                        worker_id,
+                        task_id,
+                        approver,
+                        ..
+                    } => {
+                        if worker_id == agent_id {
+                            info!(
+                                "✅ Task {} approved by {}",
+                                task_id, approver
+                            );
+                            // Worker can now proceed with the task
+                        }
+                    }
+
+                    CoordinationMessage::TaskRejection {
+                        worker_id,
+                        task_id,
+                        reason,
+                        ..
+                    } => {
+                        if worker_id == agent_id {
+                            info!(
+                                "❌ Task {} rejected: {}",
+                                task_id, reason
+                            );
+                            // Worker should not proceed with the task
                         }
                     }
 
@@ -757,6 +861,42 @@ pub struct TaskCompletion {
     pub worker_id: String,
 }
 
+/// Approval gate for task delegation.
+/// Worker must receive approval before starting work.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ApprovalGate {
+    pub required_approvals: u32,
+    pub approved_by: Vec<String>,
+    pub rejected: bool,
+    pub rejection_reason: Option<String>,
+}
+
+impl ApprovalGate {
+    pub fn new(required: u32) -> Self {
+        Self {
+            required_approvals: required,
+            approved_by: Vec::new(),
+            rejected: false,
+            rejection_reason: None,
+        }
+    }
+
+    pub fn is_approved(&self) -> bool {
+        self.approved_by.len() >= self.required_approvals as usize && !self.rejected
+    }
+
+    pub fn approve(&mut self, approver: &str) {
+        if !self.approved_by.contains(&approver.to_string()) {
+            self.approved_by.push(approver.to_string());
+        }
+    }
+
+    pub fn reject(&mut self, reason: &str) {
+        self.rejected = true;
+        self.rejection_reason = Some(reason.to_string());
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -818,5 +958,105 @@ mod tests {
 
         let coordinator = AgentCoordinator::new(redis, metadata);
         assert_eq!(coordinator.agent_metadata.agent_id, "test-agent");
+    }
+
+    // --- ApprovalGate tests ---
+
+    #[test]
+    fn test_approval_gate_new_not_approved() {
+        let gate = ApprovalGate::new(2);
+        assert_eq!(gate.required_approvals, 2);
+        assert!(gate.approved_by.is_empty());
+        assert!(!gate.rejected);
+        assert!(gate.rejection_reason.is_none());
+        assert!(!gate.is_approved());
+    }
+
+    #[test]
+    fn test_approval_gate_approve_single() {
+        let mut gate = ApprovalGate::new(1);
+        assert!(!gate.is_approved());
+
+        gate.approve("alice");
+        assert!(gate.is_approved());
+        assert_eq!(gate.approved_by, vec!["alice"]);
+    }
+
+    #[test]
+    fn test_approval_gate_requires_multiple_approvals() {
+        let mut gate = ApprovalGate::new(2);
+
+        gate.approve("alice");
+        assert!(!gate.is_approved());
+
+        gate.approve("bob");
+        assert!(gate.is_approved());
+        assert_eq!(gate.approved_by.len(), 2);
+    }
+
+    #[test]
+    fn test_approval_gate_deduplicates_approvers() {
+        let mut gate = ApprovalGate::new(2);
+
+        gate.approve("alice");
+        gate.approve("alice"); // same approver, should not add duplicate
+        assert_eq!(gate.approved_by.len(), 1);
+        assert!(!gate.is_approved());
+
+        gate.approve("bob");
+        assert!(gate.is_approved());
+        assert_eq!(gate.approved_by.len(), 2);
+    }
+
+    #[test]
+    fn test_approval_gate_reject() {
+        let mut gate = ApprovalGate::new(1);
+
+        gate.approve("alice");
+        assert!(gate.is_approved());
+
+        gate.reject("not enough information");
+        assert!(!gate.is_approved());
+        assert!(gate.rejected);
+        assert_eq!(
+            gate.rejection_reason.as_deref(),
+            Some("not enough information")
+        );
+    }
+
+    #[test]
+    fn test_approval_gate_reject_before_approval() {
+        let mut gate = ApprovalGate::new(1);
+
+        gate.reject("policy violation");
+        assert!(!gate.is_approved());
+        assert!(gate.rejected);
+
+        // Approval after rejection should not change rejection status
+        gate.approve("alice");
+        assert!(!gate.is_approved()); // still rejected
+        assert!(gate.rejected);
+    }
+
+    #[test]
+    fn test_approval_gate_serialization_roundtrip() {
+        let mut gate = ApprovalGate::new(2);
+        gate.approve("alice");
+        gate.approve("bob");
+
+        let json = serde_json::to_string(&gate).unwrap();
+        let deserialized: ApprovalGate = serde_json::from_str(&json).unwrap();
+
+        assert!(deserialized.is_approved());
+        assert_eq!(deserialized.approved_by.len(), 2);
+        assert!(deserialized.approved_by.contains(&"alice".to_string()));
+        assert!(deserialized.approved_by.contains(&"bob".to_string()));
+    }
+
+    #[test]
+    fn test_approval_gate_new_with_zero_required() {
+        let gate = ApprovalGate::new(0);
+        // With 0 required approvals, an empty approved_by list satisfies the threshold
+        assert!(gate.is_approved());
     }
 }

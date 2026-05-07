@@ -687,6 +687,10 @@ pub struct JustfileConfig {
     pub path: Option<String>,
     /// MCP server datum name that introspects this justfile (e.g. "just-mcp")
     pub mcp_server: Option<String>,
+    /// Role pattern that selects this justfile — role-aware path resolution.
+    /// Simple exact match or `*` wildcard for all roles. When set, this justfile
+    /// is only returned by `justfile_for_role()` when the role name matches.
+    pub role_pattern: Option<String>,
     /// Logical recipe groups for agent navigation (e.g. ["dev", "ci", "ml"])
     pub recipe_groups: Option<Vec<String>>,
     /// Execution context: "local" | "container" | "wasm" (backward compat — single preferred sandbox)

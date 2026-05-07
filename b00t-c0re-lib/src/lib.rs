@@ -48,6 +48,7 @@ pub mod lsp_proxy;
 pub mod man_page;
 pub mod mcp_proxy;
 pub mod mcp_registry;
+pub mod ooda;
 pub mod rag;
 pub mod redis;
 pub mod rhai_engine;
@@ -81,6 +82,7 @@ pub use mcp_proxy::{GenericMcpProxy, McpToolDefinition, McpToolRequest, McpToolR
 pub use mcp_registry::{
     McpRegistry, McpServerConfig, McpServerRegistration, create_registration_from_datum,
 };
+pub use ooda::*;
 pub use rag::{DocumentSource, LoaderType, RagLightConfig, RagLightManager};
 pub use rhai_engine::RhaiEngine;
 pub use secret_validation::{
