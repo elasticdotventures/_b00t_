@@ -475,6 +475,7 @@ async fn handle_delegate(
             deadline_duration,
             required_caps,
             blocking,
+            None, // approval gate — not yet wired at CLI level
         )
         .await?;
 
