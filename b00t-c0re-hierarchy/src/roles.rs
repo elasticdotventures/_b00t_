@@ -43,7 +43,7 @@ impl Team {
 
     /// Add an agent ID to the mate roster.
     pub fn add_mate(&mut self, id: &str) {
-        if !self.mate_ids.contains(&id.to_string()) {
+        if !self.mate_ids.iter().any(|m| m == id) {
             self.mate_ids.push(id.to_string());
         }
     }
@@ -55,7 +55,7 @@ impl Team {
 
     /// Add a player ID to the player roster.
     pub fn add_player(&mut self, id: &str) {
-        if !self.player_ids.contains(&id.to_string()) {
+        if !self.player_ids.iter().any(|p| p == id) {
             self.player_ids.push(id.to_string());
         }
     }

@@ -18,7 +18,7 @@
 //! let mut ledger = CakeLedger::new();
 //! let mut alice = Agent {
 //!     id: "alice".into(), role: Role::Captain, skills: vec![],
-//!     cake_balance: 0.0, is_alive: true, manager_id: None,
+//!     cake_balance: 0.0, is_alive: true, manager_id: None, is_player: false,
 //! };
 //!
 //! ledger.mint(&mut alice, 100.0, "Genesis grant").unwrap();
@@ -326,6 +326,7 @@ mod tests {
             cake_balance: balance,
             is_alive: alive,
             manager_id: None,
+            is_player: true, // Role::Player → human user
         }
     }
 

@@ -40,7 +40,12 @@ impl GovernanceGate for CronGate {
             id: Uuid::new_v4(),
             hook_type: HookType::Cron(cron_expr.clone()),
             created_at: chrono::Utc::now(),
-            ttl_ms: Some(86_400_000), // 24h default TTL for cron hooks
+            // ttl_ms: None — cron schedules are ongoing; a fixed TTL would cause
+            // reap_expired_hooks() to discard long-lived schedules prematurely.
+            // NOTE: EventScheduler currently skips HookType::Cron hooks
+            // ("Cron not yet implemented — skip"); route to an external cron runner
+            // (e.g. systemd timer, crond) to actually fire HookEvent::Fired.
+            ttl_ms: None,
             description: format!(
                 "Cron gate '{}': scheduled '{}' at cron '{}'",
                 self.name, action, cron_expr
@@ -72,7 +77,7 @@ mod unit_tests {
         match result {
             GateResult::Hook(token) => {
                 assert_eq!(token.hook_type, HookType::Cron("0 9 * * *".to_string()));
-                assert!(token.ttl_ms.is_some());
+                assert!(token.ttl_ms.is_none(), "cron hooks must have no fixed TTL");
                 assert!(token.description.contains("daily-task"));
                 assert!(token.description.contains("0 9 * * *"));
             }

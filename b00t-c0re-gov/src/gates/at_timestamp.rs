@@ -35,11 +35,20 @@ impl GovernanceGate for AtTimestampGate {
             .and_then(|v| v.as_i64())
             .unwrap_or(0);
 
+        let now_secs = chrono::Utc::now().timestamp();
+        // TTL = (target - now) ms + 60 s grace so the hook stays valid until it can fire.
+        // If timestamp is in the past or zero, use None (hook fires immediately or is ignored).
+        let ttl_ms = if timestamp > now_secs {
+            Some(((timestamp - now_secs) as u64) * 1_000 + 60_000)
+        } else {
+            None
+        };
+
         GateResult::Hook(HookToken {
             id: Uuid::new_v4(),
             hook_type: HookType::AtTimestamp(timestamp),
             created_at: chrono::Utc::now(),
-            ttl_ms: Some(86_400_000), // 24h default TTL for timestamp hooks
+            ttl_ms,
             description: format!(
                 "AtTimestamp gate '{}': paused '{}' until Unix timestamp {}",
                 self.name, action, timestamp
@@ -59,7 +68,8 @@ mod unit_tests {
     #[tokio::test]
     async fn test_at_timestamp_gate_returns_hook_with_timestamp_from_metadata() {
         let gate = AtTimestampGate::new("release-window", "Only allow after release date");
-        let timestamp: i64 = 1_756_300_000; // Some future date
+        // Use a timestamp 7 days in the future so this test stays valid regardless of wall time.
+        let timestamp: i64 = chrono::Utc::now().timestamp() + 7 * 86_400;
         let context = GateCheckContext {
             agent_id: "test-agent".to_string(),
             task: "test task".to_string(),
@@ -72,7 +82,12 @@ mod unit_tests {
         match result {
             GateResult::Hook(token) => {
                 assert_eq!(token.hook_type, HookType::AtTimestamp(timestamp));
-                assert!(token.ttl_ms.is_some());
+                // timestamp is in the future → TTL must be set and exceed 24h
+                assert!(token.ttl_ms.is_some(), "future timestamp must have a TTL");
+                assert!(
+                    token.ttl_ms.unwrap() > 86_400_000,
+                    "TTL should exceed 24h for a far-future timestamp"
+                );
                 assert!(token.description.contains("release-window"));
                 assert!(token.description.contains(&timestamp.to_string()));
             }
@@ -95,6 +110,8 @@ mod unit_tests {
         match result {
             GateResult::Hook(token) => {
                 assert_eq!(token.hook_type, HookType::AtTimestamp(0));
+                // timestamp 0 is in the past → no TTL
+                assert!(token.ttl_ms.is_none(), "past/zero timestamp must have no TTL");
             }
             _ => panic!("Expected Hook result, got {:?}", result),
         }

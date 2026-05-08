@@ -742,6 +742,19 @@ async fn handle_invoke(
     use b00t_c0re_lib::agent_manager::{AgentManager, invoke_agent_executor};
     use b00t_c0re_gov::errors::GovernanceError;
 
+    // Reject agent names with path separators or characters that could escape the store dir.
+    // Allowed: alphanumeric, dash, underscore, dot (no slashes, backslashes, or null bytes).
+    if agent.is_empty()
+        || !agent
+            .chars()
+            .all(|c| c.is_alphanumeric() || c == '-' || c == '_' || c == '.')
+    {
+        anyhow::bail!(
+            "Invalid agent name '{}': only alphanumeric characters, dashes, underscores and dots are allowed",
+            agent
+        );
+    }
+
     // ── Governance + calorie check ──
     let gov = GovernanceRuntime::init().await?;
     let tracker = CalorieTracker::new();
@@ -793,7 +806,10 @@ async fn handle_invoke(
         agent,
         b00t_c0re_gov::scoring::AgentTier::LLM,
         50.0,
-        || invoke_agent_executor(executor, &env, prompt),
+        || {
+            invoke_agent_executor(executor, &env, prompt)
+                .map_err(|e| GovernanceError::InvocationFailed(e.to_string()))
+        },
     )?;
 
     println!("{}", result);
