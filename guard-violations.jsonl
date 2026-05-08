@@ -638,3 +638,5 @@ patternrhai:cmd.contains("\":pip"\"pip install") && violations >= threshold}"
 {"count":15,"pattern":"rhai:cmd.contains(\"git checkout\") && (cmd.contains(\" main\") || cmd.contains(\" master\"))"}
 {"count":14,"pattern":"rhai:cmd.contains(\"git merge\") && cmd.contains(\"main\")"}
 {"count":15,"pattern":"rhai:cmd.contains(\"git checkout\") && (cmd.contains(\" main\") || cmd.contains(\" master\"))"}
+{"count":16,"pattern":"rhai:cmd.contains(\"git checkout\") && (cmd.contains(\" main\") || cmd.contains(\" master\"))"}
+{"count":17,"pattern":"rhai:cmd.contains(\"git checkout\") && (cmd.contains(\" main\") || cmd.contains(\" master\"))"}
