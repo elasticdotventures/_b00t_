@@ -321,7 +321,7 @@ mod tests {
     fn make_agent(id: &str, balance: f64, alive: bool) -> Agent {
         Agent {
             id: id.to_string(),
-            role: Role::Player,
+            role: Role::Executor,
             skills: vec![],
             cake_balance: balance,
             is_alive: alive,

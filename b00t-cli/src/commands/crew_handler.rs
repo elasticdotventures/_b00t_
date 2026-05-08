@@ -29,7 +29,7 @@ struct CrewMeta {
 impl Default for CrewMeta {
     fn default() -> Self {
         Self {
-            role: Role::Player,
+            role: Role::Executor,
             manager_id: None,
             cake_balance: 100.0,
             is_alive: true,
@@ -119,21 +119,21 @@ fn seed_if_empty(store: &AgentStore) {
     let rc_card = AgentCard::new("RustCoder", "Systems-level Rust developer", url.clone())
         .with_skill(Skill::new("rust", "rust", "Rust programming language", serde_json::json!({}), serde_json::json!({})))
         .with_skill(Skill::new("typescript", "typescript", "TypeScript/JavaScript", serde_json::json!({}), serde_json::json!({})));
-    let rc_meta = CrewMeta { role: Role::Player, manager_id: None, cake_balance: 100.0, is_alive: true };
+    let rc_meta = CrewMeta { role: Role::Executor, manager_id: None, cake_balance: 100.0, is_alive: true };
 
     // DataEngineer
     let de_card = AgentCard::new("DataEngineer", "Data pipeline engineer", url.clone())
         .with_skill(Skill::new("python", "python", "Python programming", serde_json::json!({}), serde_json::json!({})))
         .with_skill(Skill::new("sql", "sql", "SQL queries", serde_json::json!({}), serde_json::json!({})))
         .with_skill(Skill::new("data-engineering", "data-engineering", "Data pipeline engineering", serde_json::json!({}), serde_json::json!({})));
-    let de_meta = CrewMeta { role: Role::Player, manager_id: None, cake_balance: 150.0, is_alive: true };
+    let de_meta = CrewMeta { role: Role::Executor, manager_id: None, cake_balance: 150.0, is_alive: true };
 
     // DevOpsBot
     let db_card = AgentCard::new("DevOpsBot", "DevOps automation bot", url.clone())
         .with_skill(Skill::new("docker", "docker", "Container management", serde_json::json!({}), serde_json::json!({})))
         .with_skill(Skill::new("k8s", "k8s", "Kubernetes orchestration", serde_json::json!({}), serde_json::json!({})))
         .with_skill(Skill::new("ci/cd", "ci/cd", "CI/CD pipelines", serde_json::json!({}), serde_json::json!({})));
-    let db_meta = CrewMeta { role: Role::Player, manager_id: None, cake_balance: 80.0, is_alive: true };
+    let db_meta = CrewMeta { role: Role::Executor, manager_id: None, cake_balance: 80.0, is_alive: true };
 
     // Save cards to AgentStore
     if let Err(e) = store.save(&rc_card) {
@@ -235,8 +235,9 @@ fn handle_recruit(store: &AgentStore, skills: &str, limit: usize) {
 
 fn handle_hire(store: &AgentStore, agent_id: &str, role: Option<&str>) {
     let target_role = match role {
-        Some("mate") => Role::Mate,
-        _ => Role::Player,
+        Some("executor") => Role::Executor,
+        Some("specialist") => Role::Specialist,
+        _ => Role::Executor,
     };
 
     // Update the agent's role and manager in the metadata
@@ -254,15 +255,18 @@ fn handle_roster(store: &AgentStore) {
 
     // Separate by role
     let mut captains = Vec::new();
-    let mut mates = Vec::new();
-    let mut players = Vec::new();
+    let mut executors = Vec::new();
+    let mut operators = Vec::new();
+    let mut specialists = Vec::new();
+    let mut bouncers = Vec::new();
 
     for agent in &agents {
         match agent.role {
             Role::Captain => captains.push(agent),
-            Role::Mate => mates.push(agent),
-            Role::Player => players.push(agent),
-            Role::Operator => players.push(agent),
+            Role::Executor => executors.push(agent),
+            Role::Operator => operators.push(agent),
+            Role::Specialist => specialists.push(agent),
+            Role::Bouncer => bouncers.push(agent),
         }
     }
 
@@ -275,21 +279,41 @@ fn handle_roster(store: &AgentStore) {
         }
     }
 
-    println!("  Mates:");
-    if mates.is_empty() {
+    println!("  Executors:");
+    if executors.is_empty() {
         println!("    (none)");
     } else {
-        for a in &mates {
+        for a in &executors {
             let mgr = a.manager_id.as_deref().unwrap_or("none");
             println!("    {} (manager: {}, cake: {:.1})", a.id, mgr, a.cake_balance);
         }
     }
 
-    println!("  Players:");
-    if players.is_empty() {
+    println!("  Operators:");
+    if operators.is_empty() {
         println!("    (none)");
     } else {
-        for a in &players {
+        for a in &operators {
+            let mgr = a.manager_id.as_deref().unwrap_or("none");
+            println!("    {} (manager: {}, cake: {:.1})", a.id, mgr, a.cake_balance);
+        }
+    }
+
+    println!("  Bouncers:");
+    if bouncers.is_empty() {
+        println!("    (none)");
+    } else {
+        for a in &bouncers {
+            let mgr = a.manager_id.as_deref().unwrap_or("none");
+            println!("    {} (manager: {}, cake: {:.1})", a.id, mgr, a.cake_balance);
+        }
+    }
+
+    println!("  Specialists:");
+    if specialists.is_empty() {
+        println!("    (none)");
+    } else {
+        for a in &specialists {
             let mgr = a.manager_id.as_deref().unwrap_or("none");
             println!("    {} (manager: {}, cake: {:.1})", a.id, mgr, a.cake_balance);
         }
