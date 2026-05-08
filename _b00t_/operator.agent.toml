@@ -1,0 +1,113 @@
+# b00t Agent Datum — operator agent
+# 🤓 Operator is deployed by executive to scout, recruit, train, and register
+#    agents into the hive crew. It acts as the executive's talent acquisition
+#    and training arm — finding agents (internal + external), enlisting them
+#    with role definitions, executing training plans via b00t grok learn,
+#    and reporting back with crew manifests + training status.
+#
+# External references:
+#   agency-agents (github.com/msitarzewski/agency-agents) — curated AI agent personalities
+#   skillsgate (github.com/skillsgate/skillsgate) — 91k+ skills catalog, agents, TUI
+#
+# 🔗参 _b00t_/datums/CREW-ROLES.tomllmd — crew role schema
+# 🔗参 _b00t_/datums/AGENT-REGISTRY.tomllmd — registry protocol
+# 🔗参 _b00t_/datums/AGENT-RECRUITMENT.tomllmd — recruitment system
+# 🔗参 _b00t_/learn/operator.md — operator role learn entry
+
+[b00t]
+name = "operator"
+type = "agent"
+hint = "Operator agent — scouts, recruits, trains, and registers agents into hive crew; executive's talent acquisition and training arm"
+
+[[b00t.agent.inherits]]
+from = "++abstract.agent"
+
+[b00t.agent]
+pid = "operator-001"
+model = "claude-sonnet-4-6"
+skills = [
+  "agent-discovery",
+  "agent-recruitment",
+  "crew-formation",
+  "training-plan-execution",
+  "capability-assessment",
+  "ontology-query",
+  "grok-learn",
+  "b00t-hive",
+  "search",
+]
+personality = "meticulous"
+humor = "low"
+role = "operator"
+
+[b00t.agent.ipc]
+socket = "/tmp/b00t/agents/operator.sock"
+pubsub = true
+protocol = "msgpack"
+
+[b00t.agent.crew]
+# 🤓 Operator scouts and recruits agents; not a captain, but has recruitment authority
+role = "operator"
+captain = false
+
+[b00t.agent.bouncer]
+enabled = true
+audit_log = ".b00t/bouncer-audit.jsonl"
+
+[b00t.agent.bouncer.input_gates]
+sanitize = { enabled = true, rules = ["no-shell-injection", "no-credential-exposure"] }
+credential_check = { enabled = true, check_env = true }
+permission_check = { enabled = true, check_role = true }
+rate_limit = { enabled = true, max_concurrent = 10 }
+
+[b00t.agent.bouncer.output_gates]
+contract_validation = { enabled = true, validate_schema = true }
+security_scan = { enabled = true, check_secrets = true }
+quality_check = { enabled = true, min_quality_score = 0.8 }
+
+[b00t.agent.executor]
+# Operator uses b00t CLI for grok learn, ontology query, agent discovery
+cli_path = "b00t"
+supports_tools = ["b00t", "b00t-cli", "grok", "ontology"]
+max_iterations = 30
+requires = ["b00t-cli"]
+
+[b00t.agent.mcp]
+enabled = true
+transport = ["stdio"]
+
+[b00t.env]
+AGENT_ID = "operator"
+AGENT_TIER = "frontier"
+B00T_HIVE_ROLE = "recruiter"
+OPERATOR_AUDIT_LOG = ".b00t/operator-audit.jsonl"
+
+[b00t.learn]
+topic = "operator"
+auto_digest = true
+
+# ── Operator mission protocol ──────────────────────────────────────────────────
+# Deployed by executive to perform these operations:
+#
+# 1. SCOUT:   Find candidate agents via internal ontology query + external search
+#             Internal: b00t ontology query / agent discover
+#             External: agency-agents profiles, skillsgate catalog
+#
+# 2. ENLIST:  Register found agents as crew members with role definitions
+#             Creates crew binding with capability contract + role assignment
+#
+# 3. TRAIN:   Execute training plan via b00t grok learn
+#             Phase 1: b00t grok learn -t <role> "<skill context>"
+#             Phase 2: Validate via crew role schema
+#             Phase 3: Register as sub-agent with capability manifest
+#             Phase 4: Bouncer verification
+#
+# 4. REPORT:  Return crew manifest + training status to executive
+#             Manifest includes: agent_id, role, capability scores, training progress
+#
+# b00t:map v1
+# summary: Operator agent — scouts, recruits, trains, and registers agents into hive crew; executive's talent acquisition and training arm
+# tags: operator, agent, recruiter, scout, training, crew, hive, grok-learn, ontology
+# tier: frontier
+# cmds: b00t agent discover, b00t ontology query, b00t grok learn, b00t agent start operator
+# complexity: 5
