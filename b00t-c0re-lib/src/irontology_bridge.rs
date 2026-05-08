@@ -63,7 +63,7 @@ impl DatumNode {
     }
 }
 
-// ── Stub types (pending vendor/irontology-mcp/crates/storage-neumann) ───────
+// ── Bridge types ─────────────────────────────────────────────────────────────
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FactRecord {
@@ -156,23 +156,108 @@ impl KnowledgeStoreBackend for MissingKnowledgeStore {
 }
 
 #[cfg(feature = "store-neumann")]
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct NeumannStore {
-    data_path: std::path::PathBuf,
+    inner: std::sync::Arc<storage_neumann::NeumannStore>,
 }
 
 #[cfg(feature = "store-neumann")]
 impl NeumannStore {
     pub fn try_new(config: StoreConfig) -> anyhow::Result<Self> {
-        let data_path = config.data_path.unwrap_or_else(|| {
+        Ok(Self {
+            inner: std::sync::Arc::new(storage_neumann::NeumannStore::try_new(
+                config.into_vendor_neumann_config(),
+            )?),
+        })
+    }
+}
+
+#[cfg(feature = "store-neumann")]
+impl StoreConfig {
+    fn into_vendor_neumann_config(self) -> storage_neumann::NeumannConfig {
+        let data_path = self.data_path.or_else(|| {
             dirs::home_dir()
-                .unwrap_or_else(|| std::path::PathBuf::from("."))
-                .join(".b00t")
-                .join("neumann")
-                .join(config.namespace)
+                .map(|home| home.join(".b00t").join("neumann").join(&self.namespace))
         });
-        std::fs::create_dir_all(&data_path)?;
-        Ok(Self { data_path })
+        storage_neumann::NeumannConfig {
+            endpoint: self.endpoint,
+            namespace: self.namespace,
+            data_path,
+        }
+    }
+}
+
+#[cfg(feature = "store-neumann")]
+impl From<FactRecord> for storage_neumann::FactRecord {
+    fn from(value: FactRecord) -> Self {
+        Self {
+            subject: value.subject,
+            predicate: value.predicate,
+            object: value.object,
+        }
+    }
+}
+
+#[cfg(feature = "store-neumann")]
+impl From<storage_neumann::FactRecord> for FactRecord {
+    fn from(value: storage_neumann::FactRecord) -> Self {
+        Self {
+            subject: value.subject,
+            predicate: value.predicate,
+            object: value.object,
+        }
+    }
+}
+
+#[cfg(feature = "store-neumann")]
+impl From<EdgeKind> for storage_neumann::EdgeKind {
+    fn from(value: EdgeKind) -> Self {
+        match value {
+            EdgeKind::ClassifiedAs => Self::ClassifiedAs,
+            EdgeKind::DependsOn => Self::DependsOn,
+            EdgeKind::StoredIn => Self::StoredIn,
+            EdgeKind::Related => Self::Related,
+        }
+    }
+}
+
+#[cfg(feature = "store-neumann")]
+impl From<storage_neumann::EdgeKind> for EdgeKind {
+    fn from(value: storage_neumann::EdgeKind) -> Self {
+        match value {
+            storage_neumann::EdgeKind::ClassifiedAs => Self::ClassifiedAs,
+            storage_neumann::EdgeKind::DependsOn => Self::DependsOn,
+            storage_neumann::EdgeKind::StoredIn => Self::StoredIn,
+            storage_neumann::EdgeKind::Related
+            | storage_neumann::EdgeKind::Defines
+            | storage_neumann::EdgeKind::Calls
+            | storage_neumann::EdgeKind::Tests
+            | storage_neumann::EdgeKind::Contains => Self::Related,
+        }
+    }
+}
+
+#[cfg(feature = "store-neumann")]
+impl From<EdgeRecord> for storage_neumann::EdgeRecord {
+    fn from(value: EdgeRecord) -> Self {
+        Self {
+            from: value.from,
+            to: value.to,
+            kind: value.kind.into(),
+            weight: value.weight.max(0.0).round() as u32,
+        }
+    }
+}
+
+#[cfg(feature = "store-neumann")]
+impl From<storage_neumann::EdgeRecord> for EdgeRecord {
+    fn from(value: storage_neumann::EdgeRecord) -> Self {
+        Self {
+            from: value.from,
+            to: value.to,
+            kind: value.kind.into(),
+            weight: value.weight as f32,
+        }
     }
 }
 
@@ -184,60 +269,34 @@ impl KnowledgeStoreBackend for NeumannStore {
     }
 
     async fn query(&self, query: SemanticQuery) -> anyhow::Result<QueryResult> {
-        let facts_path = self.data_path.join("facts.jsonl");
-        let content = match std::fs::read_to_string(&facts_path) {
-            Ok(content) => content,
-            Err(err) if err.kind() == std::io::ErrorKind::NotFound => String::new(),
-            Err(err) => return Err(err.into()),
-        };
+        use storage_neumann::KnowledgeStore;
 
-        let mut facts = Vec::new();
-        for line in content.lines() {
-            if line.trim().is_empty() {
-                continue;
-            }
-            let fact: FactRecord = serde_json::from_str(line)?;
-            if let Some(subject) = &query.subject {
-                if &fact.subject != subject {
-                    continue;
-                }
-            }
-            if let Some(predicate) = &query.predicate {
-                if &fact.predicate != predicate {
-                    continue;
-                }
-            }
-            facts.push(fact);
-        }
-        Ok(QueryResult { facts })
+        let result = self
+            .inner
+            .query(storage_neumann::SemanticQuery::Facts {
+                subject: query.subject,
+                predicate: query.predicate,
+            })
+            .await?;
+        Ok(QueryResult {
+            facts: result.facts.into_iter().map(Into::into).collect(),
+        })
     }
 
     async fn upsert_facts(&self, facts: Vec<FactRecord>) -> anyhow::Result<()> {
-        use std::io::Write;
+        use storage_neumann::KnowledgeStore;
 
-        let facts_path = self.data_path.join("facts.jsonl");
-        let mut file = std::fs::OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(facts_path)?;
-        for fact in facts {
-            writeln!(file, "{}", serde_json::to_string(&fact)?)?;
-        }
-        Ok(())
+        self.inner
+            .upsert_facts(facts.into_iter().map(Into::into).collect())
+            .await
     }
 
     async fn upsert_edges(&self, edges: Vec<EdgeRecord>) -> anyhow::Result<()> {
-        use std::io::Write;
+        use storage_neumann::KnowledgeStore;
 
-        let edges_path = self.data_path.join("edges.jsonl");
-        let mut file = std::fs::OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(edges_path)?;
-        for edge in edges {
-            writeln!(file, "{}", serde_json::to_string(&edge)?)?;
-        }
-        Ok(())
+        self.inner
+            .upsert_edges(edges.into_iter().map(Into::into).collect())
+            .await
     }
 }
 
