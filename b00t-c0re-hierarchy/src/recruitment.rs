@@ -89,7 +89,6 @@ mod tests {
     use super::*;
 
     fn make_agent(id: &str, role: Role, skills: &[&str], alive: bool) -> Agent {
-        let is_player = matches!(role, Role::Player);
         Agent {
             id: id.to_string(),
             role,
@@ -97,7 +96,7 @@ mod tests {
             cake_balance: 100.0,
             is_alive: alive,
             manager_id: None,
-            is_player,
+            is_player: false,
         }
     }
 
@@ -190,7 +189,7 @@ mod tests {
             bounty_share: 10.0,
         };
 
-        let agents = vec![make_agent("a1", Role::Mate, &["rust"], true)];
+        let agents = vec![make_agent("a1", Role::Specialist, &["rust"], true)];
 
         let response = process_recruit_request(&request, &agents, "operator-42");
         assert_eq!(response.operator_id, "operator-42");

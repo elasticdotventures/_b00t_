@@ -9,21 +9,19 @@ use serde::{Deserialize, Serialize};
 /// | Operator   | Recruitment + training | Scouts/finds agents, enlists, executes training plans |
 /// | Specialist | Domain expertise | Domain-specific work (coding, research, analysis) |
 /// | Bouncer    | Quality gates | Validates inputs/outputs, enforces contracts, security |
-/// | Mate       | Any non-captain agent (assistant, executive, specialist) |
-/// | Player     | Human/user (not an agent software role) |
+///
+/// ## Historical aliases
+/// - **Mate** — any non-captain agent; conceptually maps to Executor or Specialist.
+/// - **Player** — human/user; tracked via `Agent::is_player` / `Team::player_ids`.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum Role {
     /// Captain — leader of a team, holds command authority
     Captain,
-    /// Mate = any non-captain agent (assistant, executive, specialist)
-    Mate,
-    /// Player = human/user (not an agent software role)
-    Player,
-    /// Executor — runs autonomous task loops
+    /// Executor — runs autonomous task loops, executes backlog items
     Executor,
     /// Operator — system operator with administrative privileges
     Operator,
-    /// Specialist — domain-specific work
+    /// Specialist — domain-specific work (coding, research, analysis)
     Specialist,
     /// Bouncer — quality gates, security validation
     Bouncer,
@@ -43,12 +41,11 @@ pub struct Agent {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Team {
     pub captain_id: String,
-    pub mate_ids: Vec<String>,
-    pub player_ids: Vec<String>,
     pub executor_ids: Vec<String>,
     pub operator_ids: Vec<String>,
     pub specialist_ids: Vec<String>,
     pub bouncer_ids: Vec<String>,
+    pub player_ids: Vec<String>, // human users (not agent software roles)
 }
 
 impl Team {
@@ -56,28 +53,63 @@ impl Team {
     pub fn new(captain_id: &str) -> Self {
         Self {
             captain_id: captain_id.to_string(),
-            mate_ids: Vec::new(),
-            player_ids: Vec::new(),
             executor_ids: Vec::new(),
             operator_ids: Vec::new(),
             specialist_ids: Vec::new(),
             bouncer_ids: Vec::new(),
+            player_ids: Vec::new(),
         }
     }
 
-    /// Add an agent ID to the mate roster.
-    pub fn add_mate(&mut self, id: &str) {
-        if !self.mate_ids.iter().any(|m| m == id) {
-            self.mate_ids.push(id.to_string());
+    /// Add an agent ID to the executor roster.
+    pub fn add_executor(&mut self, id: &str) {
+        if !self.executor_ids.iter().any(|m| m == id) {
+            self.executor_ids.push(id.to_string());
         }
     }
 
-    /// Remove an agent ID from the mate roster.
-    pub fn remove_mate(&mut self, id: &str) {
-        self.mate_ids.retain(|m| m != id);
+    /// Remove an agent ID from the executor roster.
+    pub fn remove_executor(&mut self, id: &str) {
+        self.executor_ids.retain(|m| m != id);
     }
 
-    /// Add a player ID to the player roster.
+    /// Add an agent ID to the specialist roster.
+    pub fn add_specialist(&mut self, id: &str) {
+        if !self.specialist_ids.iter().any(|s| s == id) {
+            self.specialist_ids.push(id.to_string());
+        }
+    }
+
+    /// Remove an agent ID from the specialist roster.
+    pub fn remove_specialist(&mut self, id: &str) {
+        self.specialist_ids.retain(|s| s != id);
+    }
+
+    /// Add an agent ID to the operator roster.
+    pub fn add_operator(&mut self, id: &str) {
+        if !self.operator_ids.iter().any(|o| o == id) {
+            self.operator_ids.push(id.to_string());
+        }
+    }
+
+    /// Remove an agent ID from the operator roster.
+    pub fn remove_operator(&mut self, id: &str) {
+        self.operator_ids.retain(|o| o != id);
+    }
+
+    /// Add an agent ID to the bouncer roster.
+    pub fn add_bouncer(&mut self, id: &str) {
+        if !self.bouncer_ids.iter().any(|b| b == id) {
+            self.bouncer_ids.push(id.to_string());
+        }
+    }
+
+    /// Remove an agent ID from the bouncer roster.
+    pub fn remove_bouncer(&mut self, id: &str) {
+        self.bouncer_ids.retain(|b| b != id);
+    }
+
+    /// Add a player ID to the player roster (human user).
     pub fn add_player(&mut self, id: &str) {
         if !self.player_ids.iter().any(|p| p == id) {
             self.player_ids.push(id.to_string());

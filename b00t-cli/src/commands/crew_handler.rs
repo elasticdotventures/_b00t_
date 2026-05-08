@@ -24,6 +24,7 @@ struct CrewMeta {
     manager_id: Option<String>,
     cake_balance: f64,
     is_alive: bool,
+    is_player: bool,
 }
 
 impl Default for CrewMeta {
@@ -33,6 +34,7 @@ impl Default for CrewMeta {
             manager_id: None,
             cake_balance: 100.0,
             is_alive: true,
+            is_player: false,
         }
     }
 }
@@ -46,7 +48,7 @@ fn to_agent(card: &AgentCard, meta: &CrewMeta) -> Agent {
         cake_balance: meta.cake_balance,
         is_alive: meta.is_alive,
         manager_id: meta.manager_id.clone(),
-        is_player: matches!(meta.role, Role::Player),
+        is_player: meta.is_player,
     }
 }
 
@@ -120,21 +122,21 @@ fn seed_if_empty(store: &AgentStore) {
     let rc_card = AgentCard::new("RustCoder", "Systems-level Rust developer", url.clone())
         .with_skill(Skill::new("rust", "rust", "Rust programming language", serde_json::json!({}), serde_json::json!({})))
         .with_skill(Skill::new("typescript", "typescript", "TypeScript/JavaScript", serde_json::json!({}), serde_json::json!({})));
-    let rc_meta = CrewMeta { role: Role::Executor, manager_id: None, cake_balance: 100.0, is_alive: true };
+    let rc_meta = CrewMeta { role: Role::Executor, manager_id: None, cake_balance: 100.0, is_alive: true, is_player: false };
 
     // DataEngineer
     let de_card = AgentCard::new("DataEngineer", "Data pipeline engineer", url.clone())
         .with_skill(Skill::new("python", "python", "Python programming", serde_json::json!({}), serde_json::json!({})))
         .with_skill(Skill::new("sql", "sql", "SQL queries", serde_json::json!({}), serde_json::json!({})))
         .with_skill(Skill::new("data-engineering", "data-engineering", "Data pipeline engineering", serde_json::json!({}), serde_json::json!({})));
-    let de_meta = CrewMeta { role: Role::Executor, manager_id: None, cake_balance: 150.0, is_alive: true };
+    let de_meta = CrewMeta { role: Role::Executor, manager_id: None, cake_balance: 150.0, is_alive: true, is_player: false };
 
     // DevOpsBot
     let db_card = AgentCard::new("DevOpsBot", "DevOps automation bot", url.clone())
         .with_skill(Skill::new("docker", "docker", "Container management", serde_json::json!({}), serde_json::json!({})))
         .with_skill(Skill::new("k8s", "k8s", "Kubernetes orchestration", serde_json::json!({}), serde_json::json!({})))
         .with_skill(Skill::new("ci/cd", "ci/cd", "CI/CD pipelines", serde_json::json!({}), serde_json::json!({})));
-    let db_meta = CrewMeta { role: Role::Executor, manager_id: None, cake_balance: 80.0, is_alive: true };
+    let db_meta = CrewMeta { role: Role::Executor, manager_id: None, cake_balance: 80.0, is_alive: true, is_player: false };
 
     // Save cards to AgentStore
     if let Err(e) = store.save(&rc_card) {
