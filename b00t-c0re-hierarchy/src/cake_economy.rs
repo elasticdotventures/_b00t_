@@ -79,12 +79,14 @@ pub enum CakeError {
         balance: f64,
         requested: f64,
     },
-    /// Invalid amount (zero or negative)
+    /// Invalid amount (zero, negative, NaN, or infinite)
     InvalidAmount(f64),
     /// Agent is not alive
     AgentDead(String),
     /// Cannot send to self
     SelfTransfer(String),
+    /// Transaction record is malformed (bad semantics or non-finite amount)
+    InvalidTransaction(String),
 }
 
 impl std::fmt::Display for CakeError {
@@ -110,6 +112,9 @@ impl std::fmt::Display for CakeError {
             CakeError::SelfTransfer(id) => {
                 write!(f, "agent '{}' cannot transfer cake to itself", id)
             }
+            CakeError::InvalidTransaction(msg) => {
+                write!(f, "invalid transaction: {}", msg)
+            }
         }
     }
 }
@@ -123,6 +128,7 @@ impl std::error::Error for CakeError {}
 ///
 /// This is a minimal implementation — no persistence layer here.
 /// Callers may serialize `transactions()` for durable storage.
+#[derive(Debug)]
 pub struct CakeLedger {
     /// Total cake supply (sum of all mints minus burns)
     total_supply: f64,
@@ -140,7 +146,25 @@ impl CakeLedger {
     }
 
     /// Create a ledger with an initial transaction history (for deserialization).
-    pub fn with_history(transactions: Vec<CakeTransaction>) -> Self {
+    ///
+    /// Validates that every transaction has a finite positive amount and that
+    /// the mint/burn/transfer semantics are consistent (from/to emptiness).
+    /// Returns `Err(CakeError::InvalidTransaction)` on the first bad record.
+    pub fn with_history(transactions: Vec<CakeTransaction>) -> Result<Self, CakeError> {
+        for tx in &transactions {
+            if !tx.amount.is_finite() || tx.amount <= 0.0 {
+                return Err(CakeError::InvalidTransaction(format!(
+                    "non-positive or non-finite amount {:.2} in transaction from '{}' to '{}'",
+                    tx.amount, tx.from, tx.to
+                )));
+            }
+            if tx.from.is_empty() && tx.to.is_empty() {
+                return Err(CakeError::InvalidTransaction(
+                    "transaction has both 'from' and 'to' empty (neither mint, burn, nor transfer)"
+                        .into(),
+                ));
+            }
+        }
         let total_supply = transactions
             .iter()
             .map(|t| {
@@ -153,10 +177,10 @@ impl CakeLedger {
                 }
             })
             .sum();
-        Self {
+        Ok(Self {
             total_supply,
             transactions,
-        }
+        })
     }
 
     /// Mint new cake tokens into an agent's balance.
@@ -168,7 +192,7 @@ impl CakeLedger {
         amount: f64,
         reason: &str,
     ) -> Result<CakeTransaction, CakeError> {
-        if amount <= 0.0 {
+        if !amount.is_finite() || amount <= 0.0 {
             return Err(CakeError::InvalidAmount(amount));
         }
         if !agent.is_alive {
@@ -192,7 +216,7 @@ impl CakeLedger {
         amount: f64,
         reason: &str,
     ) -> Result<CakeTransaction, CakeError> {
-        if amount <= 0.0 {
+        if !amount.is_finite() || amount <= 0.0 {
             return Err(CakeError::InvalidAmount(amount));
         }
         if !agent.is_alive {
@@ -224,7 +248,7 @@ impl CakeLedger {
         amount: f64,
         reason: &str,
     ) -> Result<CakeTransaction, CakeError> {
-        if amount <= 0.0 {
+        if !amount.is_finite() || amount <= 0.0 {
             return Err(CakeError::InvalidAmount(amount));
         }
         if from.id == to.id {
@@ -318,11 +342,14 @@ mod tests {
     #[test]
     fn test_spend_decreases_balance_and_supply() {
         let mut ledger = CakeLedger::new();
-        let mut agent = make_agent("bob", 100.0, true);
+        let mut agent = make_agent("bob", 0.0, true);
+        ledger.mint(&mut agent, 100.0, "Setup").unwrap();
+        assert_eq!(agent.cake_balance, 100.0);
+        assert_eq!(ledger.total_supply(), 100.0);
 
         let tx = ledger.spend(&mut agent, 30.0, "Coffee").unwrap();
         assert_eq!(agent.cake_balance, 70.0);
-        assert_eq!(ledger.total_supply(), -30.0);
+        assert_eq!(ledger.total_supply(), 70.0); // 100 minted - 30 burned
         assert_eq!(tx.from, "bob");
         assert_eq!(tx.to, "");
         assert_eq!(tx.amount, 30.0);
@@ -383,6 +410,18 @@ mod tests {
             CakeError::InvalidAmount(_)
         ));
         assert!(matches!(
+            ledger.mint(&mut agent, f64::NAN, "NaN").unwrap_err(),
+            CakeError::InvalidAmount(_)
+        ));
+        assert!(matches!(
+            ledger.mint(&mut agent, f64::INFINITY, "Inf").unwrap_err(),
+            CakeError::InvalidAmount(_)
+        ));
+        assert!(matches!(
+            ledger.spend(&mut agent, f64::NAN, "NaN spend").unwrap_err(),
+            CakeError::InvalidAmount(_)
+        ));
+        assert!(matches!(
             ledger.spend(&mut agent, 0.0, "Zero").unwrap_err(),
             CakeError::InvalidAmount(_)
         ));
@@ -391,6 +430,12 @@ mod tests {
         assert!(matches!(
             ledger.transfer(&mut agent, &mut dup, 10.0, "Self").unwrap_err(),
             CakeError::SelfTransfer(_)
+        ));
+        // NaN in transfer
+        let mut bob = make_agent("bob", 0.0, true);
+        assert!(matches!(
+            ledger.transfer(&mut agent, &mut bob, f64::NAN, "NaN transfer").unwrap_err(),
+            CakeError::InvalidAmount(_)
         ));
     }
 
@@ -442,8 +487,49 @@ mod tests {
             CakeTransaction::mint("b".into(), 50.0, "M2".into()),
             CakeTransaction::burn("a".into(), 20.0, "B1".into()),
         ];
-        let ledger = CakeLedger::with_history(txs);
+        let ledger = CakeLedger::with_history(txs).unwrap();
         assert_eq!(ledger.total_supply(), 130.0);
+    }
+
+    #[test]
+    fn test_with_history_rejects_nan_amount() {
+        let txs = vec![CakeTransaction::mint("a".into(), f64::NAN, "bad".into())];
+        assert!(matches!(
+            CakeLedger::with_history(txs).unwrap_err(),
+            CakeError::InvalidTransaction(_)
+        ));
+    }
+
+    #[test]
+    fn test_with_history_rejects_infinite_amount() {
+        let txs = vec![CakeTransaction::mint("a".into(), f64::INFINITY, "bad".into())];
+        assert!(matches!(
+            CakeLedger::with_history(txs).unwrap_err(),
+            CakeError::InvalidTransaction(_)
+        ));
+    }
+
+    #[test]
+    fn test_with_history_rejects_zero_amount() {
+        let txs = vec![CakeTransaction::mint("a".into(), 0.0, "bad".into())];
+        assert!(matches!(
+            CakeLedger::with_history(txs).unwrap_err(),
+            CakeError::InvalidTransaction(_)
+        ));
+    }
+
+    #[test]
+    fn test_with_history_rejects_empty_from_and_to() {
+        let txs = vec![CakeTransaction::new(
+            String::new(),
+            String::new(),
+            10.0,
+            "bad".into(),
+        )];
+        assert!(matches!(
+            CakeLedger::with_history(txs).unwrap_err(),
+            CakeError::InvalidTransaction(_)
+        ));
     }
 
     #[test]
