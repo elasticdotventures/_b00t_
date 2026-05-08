@@ -46,7 +46,7 @@ fn to_agent(card: &AgentCard, meta: &CrewMeta) -> Agent {
         cake_balance: meta.cake_balance,
         is_alive: meta.is_alive,
         manager_id: meta.manager_id.clone(),
-        is_player: true, // crew agents default to player (human) unless overridden
+        is_player: matches!(meta.role, Role::Player),
     }
 }
 
