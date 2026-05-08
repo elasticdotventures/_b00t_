@@ -18,6 +18,7 @@
 
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
+use std::time::Instant;
 
 // ---------------------------------------------------------------------------
 // Part 1: OODA phase states with validated transitions
@@ -160,12 +161,30 @@ pub fn check_peer_handshake() -> Option<String> {
     .flatten()
     .collect();
 
-    for path in &paths {
+    check_peer_handshake_inner(&paths)
+}
+
+/// Inner implementation that accepts an injectable path list.
+/// Used by `check_peer_handshake()` and tests.
+fn check_peer_handshake_inner(paths: &[PathBuf]) -> Option<String> {
+    for path in paths {
         if path.exists() {
             if let Ok(content) = std::fs::read_to_string(path) {
-                if let Ok(document) = serde_json::from_str::<serde_json::Value>(&content) {
-                    if let Some(variant) = document.get("variant_id").and_then(|value| value.as_str()) {
+                // Try structured JSON parse first — reliable against whitespace,
+                // key ordering, and escape sequences.
+                if let Ok(json) = serde_json::from_str::<serde_json::Value>(&content) {
+                    if let Some(variant) = json.get("variant_id").and_then(|v| v.as_str()) {
                         return Some(variant.to_string());
+                    }
+                }
+                // Fall back to simple "key: value" line parsing for plain-text
+                // handshake documents (non-JSON format).
+                for line in content.lines() {
+                    let mut parts = line.splitn(2, ':');
+                    if let (Some(key), Some(val)) = (parts.next(), parts.next()) {
+                        if key.trim() == "variant_id" {
+                            return Some(val.trim().to_string());
+                        }
                     }
                 }
             }
@@ -355,6 +374,7 @@ impl OodaLoop {
     {
         let mut last: Option<OodaIteration> = None;
         let limit = self.guard_rails.max_iterations;
+        let start = Instant::now();
 
         // Start with Idle -> Observing
         if let Err(e) = self.transition_to(OodaPhase::Observing) {
@@ -372,9 +392,20 @@ impl OodaLoop {
         }
 
         for i in 0..limit {
-            // --- Guard: max_duration ---
-            // (actual wall-clock enforcement is left to the caller via
-            //  `max_duration_secs` — we check the failure limit here.)
+            // --- Guard: max_duration_secs ---
+            if start.elapsed().as_secs() >= self.guard_rails.max_duration_secs {
+                let failed = OodaIteration {
+                    phase: format!("{:?}", OodaPhase::Failed("max_duration_secs exceeded".into())),
+                    observation: "max_duration_secs exceeded".into(),
+                    orientation: String::new(),
+                    decision: String::new(),
+                    action: String::new(),
+                    success: false,
+                };
+                self.iterations.push(failed.clone());
+                self.current_phase = OodaPhase::Failed("max_duration_secs exceeded".into());
+                return Some(failed);
+            }
 
             // Invoke the user callback with the current phase.
             let (mut iteration, next_phase) = cycle(&self.current_phase, i);
@@ -438,9 +469,9 @@ impl OodaLoop {
                     phase: format!("{:?}", next_phase),
                     ..iteration
                 };
-                self.iterations.push(failed);
+                self.iterations.push(failed.clone());
                 self.current_phase = OodaPhase::Failed(failed_reason);
-                return last;
+                return Some(failed);
             }
 
             // Validate and apply the phase transition.
@@ -450,10 +481,10 @@ impl OodaLoop {
                     observation: e,
                     ..iteration
                 };
-                self.iterations.push(failed);
+                self.iterations.push(failed.clone());
                 self.current_phase =
                     OodaPhase::Failed("invalid phase transition".into());
-                return last;
+                return Some(failed);
             }
         }
 
@@ -857,9 +888,33 @@ mod tests {
 
     #[test]
     fn check_peer_handshake_no_file() {
-        // When no handshake file exists, should return None
-        let result = check_peer_handshake();
+        // Use an empty path list — deterministic regardless of the environment.
+        // (The real check_peer_handshake() reads ~/.b00t/mesh/... which may
+        //  exist on developer machines; this variant is always None.)
+        let result = check_peer_handshake_inner(&[]);
         assert!(result.is_none());
+    }
+
+    #[test]
+    fn check_peer_handshake_json_parsing() {
+        use std::io::Write;
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("handshake.json");
+        let mut f = std::fs::File::create(&path).unwrap();
+        writeln!(f, r#"{{"variant_id": "test-variant-42", "other": "data"}}"#).unwrap();
+        let result = check_peer_handshake_inner(&[path]);
+        assert_eq!(result.as_deref(), Some("test-variant-42"));
+    }
+
+    #[test]
+    fn check_peer_handshake_plaintext_fallback() {
+        use std::io::Write;
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("handshake.txt");
+        let mut f = std::fs::File::create(&path).unwrap();
+        writeln!(f, "variant_id: plain-text-variant").unwrap();
+        let result = check_peer_handshake_inner(&[path]);
+        assert_eq!(result.as_deref(), Some("plain-text-variant"));
     }
 
     #[test]
