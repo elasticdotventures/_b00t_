@@ -793,10 +793,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "b00t-c0re-a2a"
+version = "0.8.0"
+dependencies = [
+ "chrono",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
+ "tokio",
+ "url",
+ "uuid",
+]
+
+[[package]]
 name = "b00t-c0re-gov"
 version = "0.1.0"
 dependencies = [
- "anyhow",
  "async-trait",
  "chrono",
  "serde",
@@ -902,6 +914,7 @@ dependencies = [
  "async-trait",
  "axum 0.7.9",
  "b00t-bouncer",
+ "b00t-c0re-a2a",
  "b00t-c0re-gov",
  "b00t-c0re-hierarchy",
  "b00t-c0re-lib",
@@ -952,6 +965,7 @@ dependencies = [
  "sqlx",
  "tempfile",
  "tera",
+ "thiserror 2.0.18",
  "tiktoken-rs",
  "tokenizers",
  "tokio",

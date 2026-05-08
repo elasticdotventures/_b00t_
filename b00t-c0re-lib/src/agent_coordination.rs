@@ -57,6 +57,23 @@ pub enum CoordinationMessage {
         deadline: Option<u64>,
         required_capabilities: Vec<String>,
         blocking: bool, // Captain waits for completion
+        approval: Option<ApprovalGate>, // Optional approval gate
+    },
+
+    /// Task approval notification (captain to worker)
+    TaskApproval {
+        captain_id: String,
+        worker_id: String,
+        task_id: String,
+        approver: String,
+    },
+
+    /// Task rejection notification (captain to worker)
+    TaskRejection {
+        captain_id: String,
+        worker_id: String,
+        task_id: String,
+        reason: String,
     },
 
     /// Task completion notification
@@ -182,6 +199,9 @@ pub struct AgentCoordinator {
     _message_handlers: HashMap<String, mpsc::UnboundedSender<CoordinationMessage>>,
     pending_tasks: HashMap<String, oneshot::Sender<TaskCompletion>>,
     pending_votes: HashMap<String, oneshot::Sender<HashMap<String, VoteChoice>>>,
+    /// Worker-side store of received TaskDelegation messages awaiting approval.
+    /// Keyed by task_id; value is a brief description for resumption logging.
+    pending_delegations: HashMap<String, String>,
 }
 
 impl AgentCoordinator {
@@ -193,6 +213,7 @@ impl AgentCoordinator {
             _message_handlers: HashMap::new(),
             pending_tasks: HashMap::new(),
             pending_votes: HashMap::new(),
+            pending_delegations: HashMap::new(),
         }
     }
 
@@ -286,6 +307,7 @@ impl AgentCoordinator {
         deadline: Option<Duration>,
         required_capabilities: Vec<String>,
         blocking: bool,
+        approval: Option<ApprovalGate>,
     ) -> B00tResult<Option<TaskCompletion>> {
         let deadline_timestamp = deadline.map(|d| {
             SystemTime::now()
@@ -294,6 +316,12 @@ impl AgentCoordinator {
                 .as_secs()
                 + d.as_secs()
         });
+
+        // Send the delegation message regardless of approval state.  If a gate
+        // is present and not yet approved the worker will store it as pending
+        // and wait for a TaskApproval message before executing.  Callers that
+        // need to know whether the task is pending vs. approved can inspect
+        // the returned `Option<TaskCompletion>` (None == pending / non-blocking).
 
         let message = CoordinationMessage::TaskDelegation {
             captain_id: self.agent_metadata.agent_id.clone(),
@@ -304,6 +332,7 @@ impl AgentCoordinator {
             deadline: deadline_timestamp,
             required_capabilities,
             blocking,
+            approval,
         };
 
         // Set up completion listener if blocking
@@ -351,6 +380,44 @@ impl AgentCoordinator {
         };
 
         self.send_coordination_message(&format!("b00t:agent:{}", captain_id), &message)
+            .await?;
+        Ok(())
+    }
+
+    /// Approve a pending task delegation (captain functionality)
+    pub async fn approve_task(
+        &self,
+        worker_id: &str,
+        task_id: &str,
+        approver: &str,
+    ) -> B00tResult<()> {
+        let message = CoordinationMessage::TaskApproval {
+            captain_id: self.agent_metadata.agent_id.clone(),
+            worker_id: worker_id.to_string(),
+            task_id: task_id.to_string(),
+            approver: approver.to_string(),
+        };
+
+        self.send_coordination_message(&format!("b00t:agent:{}", worker_id), &message)
+            .await?;
+        Ok(())
+    }
+
+    /// Reject a pending task delegation (captain functionality)
+    pub async fn reject_task(
+        &self,
+        worker_id: &str,
+        task_id: &str,
+        reason: &str,
+    ) -> B00tResult<()> {
+        let message = CoordinationMessage::TaskRejection {
+            captain_id: self.agent_metadata.agent_id.clone(),
+            worker_id: worker_id.to_string(),
+            task_id: task_id.to_string(),
+            reason: reason.to_string(),
+        };
+
+        self.send_coordination_message(&format!("b00t:agent:{}", worker_id), &message)
             .await?;
         Ok(())
     }
@@ -548,6 +615,8 @@ impl AgentCoordinator {
 
         let pending_tasks = Arc::new(Mutex::new(std::mem::take(&mut self.pending_tasks)));
         let pending_votes = Arc::new(Mutex::new(std::mem::take(&mut self.pending_votes)));
+        let pending_delegations =
+            Arc::new(Mutex::new(std::mem::take(&mut self.pending_delegations)));
         let agent_id = self.agent_metadata.agent_id.clone();
 
         tokio::spawn(async move {
@@ -557,6 +626,7 @@ impl AgentCoordinator {
                     &agent_id,
                     &pending_tasks,
                     &pending_votes,
+                    &pending_delegations,
                 )
                 .await
                 {
@@ -574,6 +644,7 @@ impl AgentCoordinator {
         agent_id: &str,
         pending_tasks: &Arc<Mutex<HashMap<String, oneshot::Sender<TaskCompletion>>>>,
         _pending_votes: &Arc<Mutex<HashMap<String, oneshot::Sender<HashMap<String, VoteChoice>>>>>,
+        pending_delegations: &Arc<Mutex<HashMap<String, String>>>,
     ) -> B00tResult<()> {
         // Parse the AgentMessage envelope
         let agent_msg: crate::redis::AgentMessage = serde_json::from_str(&msg.payload)?;
@@ -636,16 +707,75 @@ impl AgentCoordinator {
 
                     CoordinationMessage::TaskDelegation {
                         worker_id,
+                        task_id,
                         task_description,
                         priority,
+                        ref approval,
                         ..
                     } => {
                         if worker_id == agent_id {
+                            if let Some(gate) = approval {
+                                if !gate.is_approved() {
+                                    info!(
+                                        "📋 Task delegation received: {} (priority: {:?}, pending approval) — stored for later",
+                                        task_description, priority
+                                    );
+                                    // Store the pending delegation so TaskApproval can trigger it.
+                                    pending_delegations
+                                        .lock()
+                                        .await
+                                        .insert(task_id.clone(), task_description.clone());
+                                    return Ok(());
+                                }
+                            }
                             info!(
                                 "📋 Task delegation received: {} (priority: {:?})",
                                 task_description, priority
                             );
                             // Worker agents should handle this by processing the task
+                        }
+                    }
+
+                    CoordinationMessage::TaskApproval {
+                        worker_id,
+                        task_id,
+                        approver,
+                        ..
+                    } => {
+                        if worker_id == agent_id {
+                            let desc = pending_delegations
+                                .lock()
+                                .await
+                                .remove(&task_id);
+                            if let Some(task_desc) = desc {
+                                info!(
+                                    "✅ Task {} approved by {} — triggering execution: {}",
+                                    task_id, approver, task_desc
+                                );
+                                // Task can now proceed; execution logic is caller-supplied.
+                            } else {
+                                info!("✅ Task {} approved by {} (no pending delegation found)", task_id, approver);
+                            }
+                        }
+                    }
+
+                    CoordinationMessage::TaskRejection {
+                        worker_id,
+                        task_id,
+                        reason,
+                        ..
+                    } => {
+                        if worker_id == agent_id {
+                            let removed = pending_delegations
+                                .lock()
+                                .await
+                                .remove(&task_id)
+                                .is_some();
+                            if removed {
+                                info!("❌ Task {} rejected: {} — removed from pending delegations", task_id, reason);
+                            } else {
+                                info!("❌ Task {} rejected: {}", task_id, reason);
+                            }
                         }
                     }
 
@@ -757,6 +887,42 @@ pub struct TaskCompletion {
     pub worker_id: String,
 }
 
+/// Approval gate for task delegation.
+/// Worker must receive approval before starting work.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ApprovalGate {
+    pub required_approvals: u32,
+    pub approved_by: Vec<String>,
+    pub rejected: bool,
+    pub rejection_reason: Option<String>,
+}
+
+impl ApprovalGate {
+    pub fn new(required: u32) -> Self {
+        Self {
+            required_approvals: required,
+            approved_by: Vec::new(),
+            rejected: false,
+            rejection_reason: None,
+        }
+    }
+
+    pub fn is_approved(&self) -> bool {
+        self.approved_by.len() >= self.required_approvals as usize && !self.rejected
+    }
+
+    pub fn approve(&mut self, approver: &str) {
+        if !self.approved_by.contains(&approver.to_string()) {
+            self.approved_by.push(approver.to_string());
+        }
+    }
+
+    pub fn reject(&mut self, reason: &str) {
+        self.rejected = true;
+        self.rejection_reason = Some(reason.to_string());
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -818,5 +984,105 @@ mod tests {
 
         let coordinator = AgentCoordinator::new(redis, metadata);
         assert_eq!(coordinator.agent_metadata.agent_id, "test-agent");
+    }
+
+    // --- ApprovalGate tests ---
+
+    #[test]
+    fn test_approval_gate_new_not_approved() {
+        let gate = ApprovalGate::new(2);
+        assert_eq!(gate.required_approvals, 2);
+        assert!(gate.approved_by.is_empty());
+        assert!(!gate.rejected);
+        assert!(gate.rejection_reason.is_none());
+        assert!(!gate.is_approved());
+    }
+
+    #[test]
+    fn test_approval_gate_approve_single() {
+        let mut gate = ApprovalGate::new(1);
+        assert!(!gate.is_approved());
+
+        gate.approve("alice");
+        assert!(gate.is_approved());
+        assert_eq!(gate.approved_by, vec!["alice"]);
+    }
+
+    #[test]
+    fn test_approval_gate_requires_multiple_approvals() {
+        let mut gate = ApprovalGate::new(2);
+
+        gate.approve("alice");
+        assert!(!gate.is_approved());
+
+        gate.approve("bob");
+        assert!(gate.is_approved());
+        assert_eq!(gate.approved_by.len(), 2);
+    }
+
+    #[test]
+    fn test_approval_gate_deduplicates_approvers() {
+        let mut gate = ApprovalGate::new(2);
+
+        gate.approve("alice");
+        gate.approve("alice"); // same approver, should not add duplicate
+        assert_eq!(gate.approved_by.len(), 1);
+        assert!(!gate.is_approved());
+
+        gate.approve("bob");
+        assert!(gate.is_approved());
+        assert_eq!(gate.approved_by.len(), 2);
+    }
+
+    #[test]
+    fn test_approval_gate_reject() {
+        let mut gate = ApprovalGate::new(1);
+
+        gate.approve("alice");
+        assert!(gate.is_approved());
+
+        gate.reject("not enough information");
+        assert!(!gate.is_approved());
+        assert!(gate.rejected);
+        assert_eq!(
+            gate.rejection_reason.as_deref(),
+            Some("not enough information")
+        );
+    }
+
+    #[test]
+    fn test_approval_gate_reject_before_approval() {
+        let mut gate = ApprovalGate::new(1);
+
+        gate.reject("policy violation");
+        assert!(!gate.is_approved());
+        assert!(gate.rejected);
+
+        // Approval after rejection should not change rejection status
+        gate.approve("alice");
+        assert!(!gate.is_approved()); // still rejected
+        assert!(gate.rejected);
+    }
+
+    #[test]
+    fn test_approval_gate_serialization_roundtrip() {
+        let mut gate = ApprovalGate::new(2);
+        gate.approve("alice");
+        gate.approve("bob");
+
+        let json = serde_json::to_string(&gate).unwrap();
+        let deserialized: ApprovalGate = serde_json::from_str(&json).unwrap();
+
+        assert!(deserialized.is_approved());
+        assert_eq!(deserialized.approved_by.len(), 2);
+        assert!(deserialized.approved_by.contains(&"alice".to_string()));
+        assert!(deserialized.approved_by.contains(&"bob".to_string()));
+    }
+
+    #[test]
+    fn test_approval_gate_new_with_zero_required() {
+        let gate = ApprovalGate::new(0);
+        // With 0 required approvals, an empty approved_by list satisfies the threshold
+        assert!(gate.is_approved());
     }
 }

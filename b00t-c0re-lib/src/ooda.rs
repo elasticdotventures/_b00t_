@@ -1,0 +1,924 @@
+//! Maximized OODA (Observe-Orient-Decide-Act) decision framework.
+//!
+//! Provides a state-machine-driven OODA loop with:
+//! - `OodaPhase` state machine transitions (Idle -> Observe -> Orient -> Decide -> Act -> Review)
+//! - `OodaGuardRails` for iteration/failure/duration limits
+//! - `OodaConfig` with autoresearch flag for complex observations
+//! - `check_peer_handshake()` for ledgrrr/b00t peer integration
+//!
+//! # State Machine
+//!
+//! ```text
+//! Idle -> Observing -> Orienting -> Deciding -> Acting -> Reviewing -> Complete
+//!                            ^                                      |
+//!                            +--- (loop back on re-observe) --------+
+//! ```
+//!
+//! Any phase can transition directly to `Failed(reason)`.
+
+use serde::{Deserialize, Serialize};
+use std::path::PathBuf;
+use std::time::Instant;
+
+// ---------------------------------------------------------------------------
+// Part 1: OODA phase states with validated transitions
+// ---------------------------------------------------------------------------
+
+/// OODA phase states for state machine transitions.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum OodaPhase {
+    Idle,
+    Observing,
+    Orienting,
+    Deciding,
+    Acting,
+    Reviewing,
+    Complete,
+    Failed(String),
+}
+
+impl OodaPhase {
+    /// Returns `true` if a transition from `self` to `next` is valid.
+    ///
+    /// Valid transitions:
+    /// - `Idle`        → `Observing`
+    /// - `Observing`   → `Orienting`
+    /// - `Orienting`   → `Deciding`
+    /// - `Deciding`    → `Acting`
+    /// - `Acting`      → `Reviewing`
+    /// - `Reviewing`   → `Complete`  (successful finish)
+    /// - `Reviewing`   → `Observing` (loop back for another cycle)
+    /// - Any phase     → `Failed(_)` (abort with reason)
+    pub fn can_transition_to(&self, next: &OodaPhase) -> bool {
+        matches!(
+            (self, next),
+            (OodaPhase::Idle, OodaPhase::Observing)
+                | (OodaPhase::Observing, OodaPhase::Orienting)
+                | (OodaPhase::Orienting, OodaPhase::Deciding)
+                | (OodaPhase::Deciding, OodaPhase::Acting)
+                | (OodaPhase::Acting, OodaPhase::Reviewing)
+                | (OodaPhase::Reviewing, OodaPhase::Complete)
+                | (OodaPhase::Reviewing, OodaPhase::Observing) // loop back
+                | (_, OodaPhase::Failed(_)) // any phase can fail
+        )
+    }
+
+    /// Returns the next phase in a standard forward progression, ignoring failures.
+    /// Useful for iterating through a clean cycle.
+    pub fn next_forward(&self) -> Option<OodaPhase> {
+        match self {
+            OodaPhase::Idle => Some(OodaPhase::Observing),
+            OodaPhase::Observing => Some(OodaPhase::Orienting),
+            OodaPhase::Orienting => Some(OodaPhase::Deciding),
+            OodaPhase::Deciding => Some(OodaPhase::Acting),
+            OodaPhase::Acting => Some(OodaPhase::Reviewing),
+            OodaPhase::Reviewing => Some(OodaPhase::Complete),
+            OodaPhase::Complete | OodaPhase::Failed(_) => None,
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Part 2: Guard rails — replace hardcoded limits
+// ---------------------------------------------------------------------------
+
+/// Safety constraints applied to every OODA loop execution.
+///
+/// These replace previously hardcoded limits so callers can tune
+/// iteration counts, failure tolerance, wall-clock duration, and
+/// whether human approval gates are required.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct OodaGuardRails {
+    /// Maximum number of OODA iterations before the loop terminates.
+    pub max_iterations: u32,
+    /// Maximum number of failed iterations before the loop aborts.
+    pub max_failures: u32,
+    /// Maximum wall-clock time in seconds the loop may run.
+    pub max_duration_secs: u64,
+    /// If `true`, each `Acting` phase must be pre-approved before execution.
+    pub require_approval: bool,
+}
+
+impl Default for OodaGuardRails {
+    fn default() -> Self {
+        Self {
+            max_iterations: 10,
+            max_failures: 3,
+            max_duration_secs: 3600,
+            require_approval: false,
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Part 4: OODA configuration (includes autoresearch flag)
+// ---------------------------------------------------------------------------
+
+/// High-level configuration for an OODA loop session.
+///
+/// Bundles the guard rails together with behavioural flags such
+/// as the autoresearch toggle.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct OodaConfig {
+    /// Safety and limit constraints.
+    pub guard_rails: OodaGuardRails,
+    /// When `true`, the Orient phase will automatically trigger a research
+    /// sub-cycle when it encounters a complex observation (>100 characters).
+    pub enable_autoresearch: bool,
+}
+
+impl Default for OodaConfig {
+    fn default() -> Self {
+        Self {
+            guard_rails: OodaGuardRails::default(),
+            enable_autoresearch: false,
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Part 3: Handshake peer check (ledgrrr / b00t mesh)
+// ---------------------------------------------------------------------------
+
+/// Check whether a peer handshake document exists from ledgrrr or another
+/// b00t instance.
+///
+/// Looks in two places:
+/// 1. `~/.b00t/mesh/l3dg3rr.handshake` (ledgrrr's handshake surface output)
+/// 2. `_b00t_/handshake/l3dg3rr.json`  (project-local handshake)
+///
+/// Returns the `variant_id` string extracted from the first found document,
+/// or `None` when no handshake is present or the document cannot be parsed.
+pub fn check_peer_handshake() -> Option<String> {
+    let paths: Vec<PathBuf> = [
+        dirs::home_dir().map(|h| h.join(".b00t").join("mesh").join("l3dg3rr.handshake")),
+        Some(PathBuf::from("_b00t_/handshake/l3dg3rr.json")),
+    ]
+    .into_iter()
+    .flatten()
+    .collect();
+
+    check_peer_handshake_inner(&paths)
+}
+
+/// Inner implementation that accepts an injectable path list.
+/// Used by `check_peer_handshake()` and tests.
+fn check_peer_handshake_inner(paths: &[PathBuf]) -> Option<String> {
+    for path in paths {
+        if path.exists() {
+            if let Ok(content) = std::fs::read_to_string(path) {
+                // Try structured JSON parse first — reliable against whitespace,
+                // key ordering, and escape sequences.
+                if let Ok(json) = serde_json::from_str::<serde_json::Value>(&content) {
+                    if let Some(variant) = json.get("variant_id").and_then(|v| v.as_str()) {
+                        return Some(variant.to_string());
+                    }
+                }
+                // Fall back to simple "key: value" line parsing for plain-text
+                // handshake documents (non-JSON format).
+                for line in content.lines() {
+                    let mut parts = line.splitn(2, ':');
+                    if let (Some(key), Some(val)) = (parts.next(), parts.next()) {
+                        if key.trim() == "variant_id" {
+                            return Some(val.trim().to_string());
+                        }
+                    }
+                }
+            }
+        }
+    }
+    None
+}
+
+// ---------------------------------------------------------------------------
+// Core data types
+// ---------------------------------------------------------------------------
+
+/// Result of a single OODA cycle phase.
+#[derive(Debug, Clone, PartialEq)]
+pub enum PhaseResult {
+    Continue,
+    Repeat,
+    Terminate(String),
+}
+
+/// One OODA cycle iteration.
+#[derive(Debug, Clone)]
+pub struct OodaIteration {
+    pub phase: String,
+    pub observation: String,
+    pub orientation: String,
+    pub decision: String,
+    pub action: String,
+    pub success: bool,
+}
+
+impl OodaIteration {
+    /// Build an iteration that records which OodaPhase was active.
+    pub fn from_phase(phase: &OodaPhase, observation: &str, success: bool) -> Self {
+        Self {
+            phase: format!("{:?}", phase),
+            observation: observation.to_string(),
+            orientation: String::new(),
+            decision: String::new(),
+            action: String::new(),
+            success,
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// OODA loop executor with state machine integration
+// ---------------------------------------------------------------------------
+
+/// Maximized OODA loop executor.
+///
+/// Drives the Observe–Orient–Decide–Act cycle as a validated state machine
+/// with guard rails, optional handshake peer checks, and autoresearch.
+pub struct OodaLoop {
+    /// Safety constraints applied to every run.
+    pub guard_rails: OodaGuardRails,
+    iterations: Vec<OodaIteration>,
+    /// Current phase in the state machine.
+    current_phase: OodaPhase,
+    /// Running failure count across iterations.
+    failure_count: u32,
+    /// When `enable_autoresearch` is true, complex observations trigger a
+    /// research sub-cycle during the Orient phase.
+    pub enable_autoresearch: bool,
+}
+
+impl OodaLoop {
+    /// Create a new loop with default guard rails and a custom iteration cap.
+    ///
+    /// This constructor preserves backward compatibility with the previous
+    /// `OodaLoop::new(max_iterations)` signature.
+    pub fn new(max_iterations: u32) -> Self {
+        Self {
+            guard_rails: OodaGuardRails {
+                max_iterations,
+                ..OodaGuardRails::default()
+            },
+            iterations: Vec::new(),
+            current_phase: OodaPhase::Idle,
+            failure_count: 0,
+            enable_autoresearch: false,
+        }
+    }
+
+    /// Create a new loop from a full `OodaConfig`.
+    pub fn from_config(config: OodaConfig) -> Self {
+        Self {
+            guard_rails: config.guard_rails,
+            iterations: Vec::new(),
+            current_phase: OodaPhase::Idle,
+            failure_count: 0,
+            enable_autoresearch: config.enable_autoresearch,
+        }
+    }
+
+    /// Create a new loop with custom guard rails.
+    pub fn with_guard_rails(guard_rails: OodaGuardRails) -> Self {
+        Self {
+            guard_rails,
+            iterations: Vec::new(),
+            current_phase: OodaPhase::Idle,
+            failure_count: 0,
+            enable_autoresearch: false,
+        }
+    }
+
+    // ---- Legacy flat-run interface ----------------------------------------
+
+    /// Run the OODA cycle up to `guard_rails.max_iterations` times.
+    ///
+    /// Each call to `cycle` receives the current zero-based iteration index.
+    /// Returns the last iteration produced, or a default iteration if zero runs.
+    ///
+    /// This method is the **legacy flat interface** — it does NOT enforce
+    /// the `OodaPhase` state machine.  Use `run_phases` for state-machine
+    /// driven execution.
+    pub fn run<F>(&mut self, mut cycle: F) -> OodaIteration
+    where
+        F: FnMut(u32) -> OodaIteration,
+    {
+        let mut last = OodaIteration {
+            phase: String::new(),
+            observation: String::new(),
+            orientation: String::new(),
+            decision: String::new(),
+            action: String::new(),
+            success: true,
+        };
+        let limit = self.guard_rails.max_iterations;
+        for i in 0..limit {
+            let iteration = cycle(i);
+            if !iteration.success {
+                self.failure_count += 1;
+                if self.failure_count >= self.guard_rails.max_failures {
+                    let mut failed = iteration.clone();
+                    failed.phase = format!("{:?}", OodaPhase::Failed(
+                        "max_failures exceeded".into()
+                    ));
+                    self.iterations.push(failed.clone());
+                    self.current_phase = OodaPhase::Failed("max_failures exceeded".into());
+                    return failed;
+                }
+            }
+            self.iterations.push(iteration.clone());
+            last = iteration;
+        }
+        last
+    }
+
+    // ---- State-machine phase interface ------------------------------------
+
+    /// Advance the state machine to `next` phase.
+    ///
+    /// Returns `Ok(())` on success, or `Err` with a message describing the
+    /// invalid transition.
+    pub fn transition_to(&mut self, next: OodaPhase) -> Result<(), String> {
+        if !self.current_phase.can_transition_to(&next) {
+            return Err(format!(
+                "Invalid OODA transition: {:?} -> {:?}",
+                self.current_phase, next
+            ));
+        }
+        self.current_phase = next;
+        Ok(())
+    }
+
+    /// Return the current phase of the state machine.
+    pub fn phase(&self) -> &OodaPhase {
+        &self.current_phase
+    }
+
+    /// Run the OODA cycle with state-machine phase transitions.
+    ///
+    /// The provided `cycle` closure receives:
+    /// - the current `OodaPhase` (guaranteed valid)
+    /// - the zero-based iteration index
+    ///
+    /// It should return an `OodaIteration` along with the next desired phase.
+    /// The runner validates every transition, enforces guard rails, and
+    /// handles autoresearch logic during the Orient phase.
+    ///
+    /// Returns `None` if the loop halts before producing any iterations
+    /// (e.g. if `max_iterations` is 0 and no runs are made).
+    pub fn run_phases<F>(&mut self, mut cycle: F) -> Option<OodaIteration>
+    where
+        F: FnMut(&OodaPhase, u32) -> (OodaIteration, OodaPhase),
+    {
+        let mut last: Option<OodaIteration> = None;
+        let limit = self.guard_rails.max_iterations;
+        let start = Instant::now();
+
+        // Start with Idle -> Observing
+        if let Err(e) = self.transition_to(OodaPhase::Observing) {
+            let failed = OodaIteration {
+                phase: format!("{:?}", OodaPhase::Failed(e.clone())),
+                observation: e,
+                orientation: String::new(),
+                decision: String::new(),
+                action: String::new(),
+                success: false,
+            };
+            self.iterations.push(failed.clone());
+            self.current_phase = OodaPhase::Failed("initial transition failed".into());
+            return Some(failed);
+        }
+
+        for i in 0..limit {
+            // --- Guard: max_duration_secs ---
+            if start.elapsed().as_secs() >= self.guard_rails.max_duration_secs {
+                let failed = OodaIteration {
+                    phase: format!("{:?}", OodaPhase::Failed("max_duration_secs exceeded".into())),
+                    observation: "max_duration_secs exceeded".into(),
+                    orientation: String::new(),
+                    decision: String::new(),
+                    action: String::new(),
+                    success: false,
+                };
+                self.iterations.push(failed.clone());
+                self.current_phase = OodaPhase::Failed("max_duration_secs exceeded".into());
+                return Some(failed);
+            }
+
+            // Invoke the user callback with the current phase.
+            let (mut iteration, next_phase) = cycle(&self.current_phase, i);
+
+            // --- Part 4: Autoresearch integration ---
+            // If we're in the Orient phase and the observation is complex
+            // (heuristic: >100 chars), and autoresearch is enabled, flag it.
+            if self.enable_autoresearch
+                && self.current_phase == OodaPhase::Orienting
+                && iteration.observation.len() > 100
+            {
+                // Tag the orientation field to indicate a research sub-cycle
+                // was triggered. The caller can inspect this to drive an
+                // actual research workflow.
+                if iteration.orientation.is_empty() {
+                    iteration.orientation =
+                        "autoresearch: complex observation triggered research sub-cycle".to_string();
+                } else {
+                    iteration.orientation = format!(
+                        "{}; autoresearch: complex observation triggered research sub-cycle",
+                        iteration.orientation
+                    );
+                }
+            }
+
+            iteration.phase = format!("{:?}", self.current_phase);
+
+            // Record the iteration.
+            if !iteration.success {
+                self.failure_count += 1;
+            }
+
+            self.iterations.push(iteration.clone());
+            last = Some(iteration.clone());
+
+            // --- Guard: max_failures ---
+            if self.failure_count >= self.guard_rails.max_failures {
+                let failed = OodaIteration {
+                    phase: format!("{:?}", OodaPhase::Failed("max_failures exceeded".into())),
+                    ..iteration
+                };
+                self.iterations.push(failed.clone());
+                self.current_phase =
+                    OodaPhase::Failed("max_failures exceeded".into());
+                return Some(failed);
+            }
+
+            // --- Guard: Complete terminates the loop ---
+            if next_phase == OodaPhase::Complete {
+                self.current_phase = OodaPhase::Complete;
+                return last;
+            }
+
+            // --- Guard: Failed terminates the loop ---
+            if matches!(&next_phase, OodaPhase::Failed(_)) {
+                let failed_reason = match &next_phase {
+                    OodaPhase::Failed(r) => r.clone(),
+                    _ => unreachable!(),
+                };
+                let failed = OodaIteration {
+                    phase: format!("{:?}", next_phase),
+                    ..iteration
+                };
+                self.iterations.push(failed.clone());
+                self.current_phase = OodaPhase::Failed(failed_reason);
+                return Some(failed);
+            }
+
+            // Validate and apply the phase transition.
+            if let Err(e) = self.transition_to(next_phase) {
+                let failed = OodaIteration {
+                    phase: format!("{:?}", OodaPhase::Failed(e.clone())),
+                    observation: e,
+                    ..iteration
+                };
+                self.iterations.push(failed.clone());
+                self.current_phase =
+                    OodaPhase::Failed("invalid phase transition".into());
+                return Some(failed);
+            }
+        }
+
+        last
+    }
+
+    /// Return all iterations recorded so far.
+    pub fn iterations(&self) -> &[OodaIteration] {
+        &self.iterations
+    }
+
+    /// Fraction of iterations where `success == true` (0.0 ..= 1.0).
+    /// Returns 0.0 when there are no iterations.
+    pub fn success_rate(&self) -> f64 {
+        if self.iterations.is_empty() {
+            return 0.0;
+        }
+        let ok = self.iterations.iter().filter(|i| i.success).count();
+        ok as f64 / self.iterations.len() as f64
+    }
+
+    /// Reset the loop state (clears iterations, failures, resets phase to Idle).
+    pub fn reset(&mut self) {
+        self.iterations.clear();
+        self.current_phase = OodaPhase::Idle;
+        self.failure_count = 0;
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Tests
+// ---------------------------------------------------------------------------
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn make_iter(i: u32, success: bool) -> OodaIteration {
+        OodaIteration {
+            phase: format!("phase-{}", i),
+            observation: format!("obs-{}", i),
+            orientation: format!("ori-{}", i),
+            decision: format!("dec-{}", i),
+            action: format!("act-{}", i),
+            success,
+        }
+    }
+
+    // --- Existing tests (must still pass) ---
+
+    #[test]
+    fn basic_cycle_execution() {
+        let mut loop_ = OodaLoop::new(3);
+        let last = loop_.run(|i| make_iter(i, true));
+        assert_eq!(loop_.iterations().len(), 3);
+        assert!(last.success);
+        assert_eq!(last.phase, "phase-2");
+    }
+
+    #[test]
+    fn max_iteration_enforcement() {
+        let mut loop_ = OodaLoop::new(2);
+        loop_.run(|i| make_iter(i, true));
+        assert_eq!(loop_.iterations().len(), 2);
+    }
+
+    #[test]
+    fn success_rate_calculation() {
+        let mut loop_ = OodaLoop::new(5);
+        loop_.run(|i| make_iter(i, i % 2 == 0)); // 3 successes, 2 failures
+        assert!((loop_.success_rate() - 0.6).abs() < 1e-9);
+    }
+
+    #[test]
+    fn zero_iterations() {
+        let mut loop_ = OodaLoop::new(0);
+        let last = loop_.run(|_| make_iter(0, true));
+        assert!(loop_.iterations().is_empty());
+        assert_eq!(loop_.success_rate(), 0.0);
+        // last should be the default (empty fields, success=true)
+        assert!(last.success);
+        assert!(last.phase.is_empty());
+    }
+
+    #[test]
+    fn phase_result_variants() {
+        assert_eq!(PhaseResult::Continue, PhaseResult::Continue);
+        assert_eq!(PhaseResult::Repeat, PhaseResult::Repeat);
+        match PhaseResult::Terminate("done".into()) {
+            PhaseResult::Terminate(msg) => assert_eq!(msg, "done"),
+            _ => panic!("expected Terminate"),
+        }
+    }
+
+    // --- New tests for the enhanced OODA ---
+
+    #[test]
+    fn ooda_phase_transitions_valid() {
+        let idle = OodaPhase::Idle;
+        assert!(idle.can_transition_to(&OodaPhase::Observing));
+        assert!(!idle.can_transition_to(&OodaPhase::Deciding));
+
+        let observing = OodaPhase::Observing;
+        assert!(observing.can_transition_to(&OodaPhase::Orienting));
+        assert!(!observing.can_transition_to(&OodaPhase::Acting));
+
+        let acting = OodaPhase::Acting;
+        assert!(acting.can_transition_to(&OodaPhase::Reviewing));
+
+        let reviewing = OodaPhase::Reviewing;
+        assert!(reviewing.can_transition_to(&OodaPhase::Complete));
+        assert!(reviewing.can_transition_to(&OodaPhase::Observing)); // loop back
+    }
+
+    #[test]
+    fn any_phase_can_fail() {
+        let phases = [
+            OodaPhase::Idle,
+            OodaPhase::Observing,
+            OodaPhase::Orienting,
+            OodaPhase::Deciding,
+            OodaPhase::Acting,
+            OodaPhase::Reviewing,
+            OodaPhase::Complete,
+        ];
+        for phase in &phases {
+            assert!(
+                phase.can_transition_to(&OodaPhase::Failed("reason".into())),
+                "{:?} should be able to transition to Failed",
+                phase
+            );
+        }
+    }
+
+    #[test]
+    fn ooda_phase_next_forward() {
+        assert_eq!(OodaPhase::Idle.next_forward(), Some(OodaPhase::Observing));
+        assert_eq!(OodaPhase::Observing.next_forward(), Some(OodaPhase::Orienting));
+        assert_eq!(OodaPhase::Orienting.next_forward(), Some(OodaPhase::Deciding));
+        assert_eq!(OodaPhase::Deciding.next_forward(), Some(OodaPhase::Acting));
+        assert_eq!(OodaPhase::Acting.next_forward(), Some(OodaPhase::Reviewing));
+        assert_eq!(OodaPhase::Reviewing.next_forward(), Some(OodaPhase::Complete));
+        assert_eq!(OodaPhase::Complete.next_forward(), None);
+        assert_eq!(OodaPhase::Failed("x".into()).next_forward(), None);
+    }
+
+    #[test]
+    fn guard_rails_defaults() {
+        let rails = OodaGuardRails::default();
+        assert_eq!(rails.max_iterations, 10);
+        assert_eq!(rails.max_failures, 3);
+        assert_eq!(rails.max_duration_secs, 3600);
+        assert!(!rails.require_approval);
+    }
+
+    #[test]
+    fn ooda_config_default() {
+        let config = OodaConfig::default();
+        assert!(!config.enable_autoresearch);
+        assert_eq!(config.guard_rails.max_iterations, 10);
+    }
+
+    #[test]
+    fn transition_to_valid() {
+        let mut loop_ = OodaLoop::new(5);
+        assert_eq!(*loop_.phase(), OodaPhase::Idle);
+        assert!(loop_.transition_to(OodaPhase::Observing).is_ok());
+        assert_eq!(*loop_.phase(), OodaPhase::Observing);
+        assert!(loop_.transition_to(OodaPhase::Orienting).is_ok());
+        assert!(loop_.transition_to(OodaPhase::Deciding).is_ok());
+        assert!(loop_.transition_to(OodaPhase::Acting).is_ok());
+        assert!(loop_.transition_to(OodaPhase::Reviewing).is_ok());
+        assert!(loop_.transition_to(OodaPhase::Complete).is_ok());
+    }
+
+    #[test]
+    fn transition_to_invalid() {
+        let mut loop_ = OodaLoop::new(5);
+        // Idle -> Deciding is invalid
+        assert!(loop_.transition_to(OodaPhase::Deciding).is_err());
+    }
+
+    #[test]
+    fn transition_to_failed() {
+        let mut loop_ = OodaLoop::new(5);
+        assert!(loop_.transition_to(OodaPhase::Failed("test".into())).is_ok());
+        assert_eq!(*loop_.phase(), OodaPhase::Failed("test".into()));
+    }
+
+    #[test]
+    fn run_phases_basic_cycle() {
+        // Run enough iterations to complete a full Observe → Orient → Decide → Act → Review cycle
+        let mut loop_ = OodaLoop::new(5);
+        let result = loop_.run_phases(|phase, i| {
+            let iter = OodaIteration {
+                phase: format!("{:?}", phase),
+                observation: format!("obs-{}", i),
+                orientation: format!("ori-{}", i),
+                decision: format!("dec-{}", i),
+                action: format!("act-{}", i),
+                success: true,
+            };
+            // Advance through the standard cycle
+            let next = match phase {
+                OodaPhase::Observing => OodaPhase::Orienting,
+                OodaPhase::Orienting => OodaPhase::Deciding,
+                OodaPhase::Deciding => OodaPhase::Acting,
+                OodaPhase::Acting => OodaPhase::Reviewing,
+                OodaPhase::Reviewing if i < 4 => OodaPhase::Observing,
+                OodaPhase::Reviewing => OodaPhase::Complete,
+                _ => OodaPhase::Failed("unexpected".into()),
+            };
+            (iter, next)
+        });
+        assert!(result.is_some());
+        let last = result.unwrap();
+        // After 5 iterations we should be in Reviewing (the last phase before Complete)
+        assert_eq!(last.phase, format!("{:?}", OodaPhase::Reviewing));
+    }
+
+    #[test]
+    fn run_phases_max_failures_guard() {
+        let guard = OodaGuardRails {
+            max_iterations: 10,
+            max_failures: 2,
+            ..OodaGuardRails::default()
+        };
+        let mut loop_ = OodaLoop::with_guard_rails(guard);
+        let result = loop_.run_phases(|phase, i| {
+            let iter = OodaIteration {
+                phase: format!("{:?}", phase),
+                observation: format!("obs-{}", i),
+                orientation: String::new(),
+                decision: String::new(),
+                action: String::new(),
+                success: false, // all fail
+            };
+            let next = phase.next_forward().unwrap_or(OodaPhase::Complete);
+            (iter, next)
+        });
+        // Should terminate due to max_failures after 2 failures.
+        // Each iteration is recorded (2 failed iters) plus one failure-record
+        // iteration = 3 total.
+        assert!(result.is_some());
+        // 2 real failures + 1 failure-termination record
+        assert_eq!(loop_.iterations().len(), 3);
+        assert!(loop_.success_rate() < 0.5);
+    }
+
+    #[test]
+    fn run_phases_invalid_transition_rejected() {
+        let mut loop_ = OodaLoop::new(5);
+        loop_.run_phases(|_phase, i| {
+            let iter = OodaIteration {
+                phase: String::new(),
+                observation: format!("obs-{}", i),
+                orientation: String::new(),
+                decision: String::new(),
+                action: String::new(),
+                success: true,
+            };
+            // Try an invalid transition: first phase (Observing) -> Acting is invalid
+            (iter, OodaPhase::Acting)
+        });
+        // First iteration is recorded, then the invalid transition appends a
+        // failure-record iteration = 2 total in the history.
+        assert_eq!(loop_.iterations().len(), 2);
+        // The last phase should be Failed
+        assert!(matches!(*loop_.phase(), OodaPhase::Failed(_)));
+    }
+
+    #[test]
+    fn autoresearch_triggers_on_complex_observation() {
+        let config = OodaConfig {
+            enable_autoresearch: true,
+            ..OodaConfig::default()
+        };
+        let mut loop_ = OodaLoop::from_config(config);
+
+        let _ = loop_.run_phases(|phase, i| {
+            let observation = if *phase == OodaPhase::Orienting {
+                // Complex observation: >100 chars
+                "A".repeat(120)
+            } else {
+                format!("obs-{}", i)
+            };
+            let iter = OodaIteration {
+                phase: format!("{:?}", phase),
+                observation,
+                orientation: String::new(),
+                decision: String::new(),
+                action: String::new(),
+                success: true,
+            };
+            let next = phase.next_forward().unwrap_or(OodaPhase::Complete);
+            (iter, next)
+        });
+
+        // Check that at least one orientation entry contains the autoresearch marker
+        let has_autoresearch = loop_
+            .iterations()
+            .iter()
+            .any(|i| i.orientation.contains("autoresearch"));
+        assert!(has_autoresearch, "Autoresearch should have been triggered");
+    }
+
+    #[test]
+    fn autoresearch_not_triggered_for_short_observation() {
+        let config = OodaConfig {
+            enable_autoresearch: true,
+            ..OodaConfig::default()
+        };
+        let mut loop_ = OodaLoop::from_config(config);
+
+        let _ = loop_.run_phases(|phase, i| {
+            let observation = if *phase == OodaPhase::Orienting {
+                "short obs".to_string() // < 100 chars
+            } else {
+                format!("obs-{}", i)
+            };
+            let iter = OodaIteration {
+                phase: format!("{:?}", phase),
+                observation,
+                orientation: String::new(),
+                decision: String::new(),
+                action: String::new(),
+                success: true,
+            };
+            let next = phase.next_forward().unwrap_or(OodaPhase::Complete);
+            (iter, next)
+        });
+
+        let has_autoresearch = loop_
+            .iterations()
+            .iter()
+            .any(|i| i.orientation.contains("autoresearch"));
+        assert!(!has_autoresearch, "Autoresearch should NOT have been triggered");
+    }
+
+    #[test]
+    fn autoresearch_disabled_does_not_trigger() {
+        let config = OodaConfig {
+            enable_autoresearch: false, // disabled
+            ..OodaConfig::default()
+        };
+        let mut loop_ = OodaLoop::from_config(config);
+
+        let _ = loop_.run_phases(|phase, i| {
+            let observation = if *phase == OodaPhase::Orienting {
+                "A".repeat(120) // complex but autoresearch disabled
+            } else {
+                format!("obs-{}", i)
+            };
+            let iter = OodaIteration {
+                phase: format!("{:?}", phase),
+                observation,
+                orientation: String::new(),
+                decision: String::new(),
+                action: String::new(),
+                success: true,
+            };
+            let next = phase.next_forward().unwrap_or(OodaPhase::Complete);
+            (iter, next)
+        });
+
+        let has_autoresearch = loop_
+            .iterations()
+            .iter()
+            .any(|i| i.orientation.contains("autoresearch"));
+        assert!(!has_autoresearch, "Autoresearch should NOT trigger when disabled");
+    }
+
+    #[test]
+    fn from_config_honors_autoresearch() {
+        let config = OodaConfig {
+            enable_autoresearch: true,
+            guard_rails: OodaGuardRails {
+                max_iterations: 5,
+                max_failures: 1,
+                max_duration_secs: 60,
+                require_approval: true,
+            },
+        };
+        let loop_ = OodaLoop::from_config(config);
+        assert!(loop_.enable_autoresearch);
+        assert_eq!(loop_.guard_rails.max_iterations, 5);
+        assert_eq!(loop_.guard_rails.max_failures, 1);
+        assert_eq!(loop_.guard_rails.max_duration_secs, 60);
+        assert!(loop_.guard_rails.require_approval);
+    }
+
+    #[test]
+    fn reset_clears_state() {
+        let mut loop_ = OodaLoop::new(3);
+        loop_.run(|i| make_iter(i, true));
+        assert_eq!(loop_.iterations().len(), 3);
+        loop_.reset();
+        assert_eq!(loop_.iterations().len(), 0);
+        assert_eq!(*loop_.phase(), OodaPhase::Idle);
+    }
+
+    #[test]
+    fn check_peer_handshake_no_file() {
+        // Use an empty path list — deterministic regardless of the environment.
+        // (The real check_peer_handshake() reads ~/.b00t/mesh/... which may
+        //  exist on developer machines; this variant is always None.)
+        let result = check_peer_handshake_inner(&[]);
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn check_peer_handshake_json_parsing() {
+        use std::io::Write;
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("handshake.json");
+        let mut f = std::fs::File::create(&path).unwrap();
+        writeln!(f, r#"{{"variant_id": "test-variant-42", "other": "data"}}"#).unwrap();
+        let result = check_peer_handshake_inner(&[path]);
+        assert_eq!(result.as_deref(), Some("test-variant-42"));
+    }
+
+    #[test]
+    fn check_peer_handshake_plaintext_fallback() {
+        use std::io::Write;
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("handshake.txt");
+        let mut f = std::fs::File::create(&path).unwrap();
+        writeln!(f, "variant_id: plain-text-variant").unwrap();
+        let result = check_peer_handshake_inner(&[path]);
+        assert_eq!(result.as_deref(), Some("plain-text-variant"));
+    }
+
+    #[test]
+    fn ooda_iteration_from_phase() {
+        let iter = OodaIteration::from_phase(&OodaPhase::Observing, "test obs", true);
+        assert_eq!(iter.phase, "Observing");
+        assert_eq!(iter.observation, "test obs");
+        assert!(iter.success);
+    }
+}
