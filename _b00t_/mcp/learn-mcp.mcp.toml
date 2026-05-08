@@ -1,0 +1,86 @@
+[b00t]
+name = "learn-mcp"
+type = "mcp"
+hint = "Microsoft Learn MCP server — AI agents access real-time official Microsoft docs & code samples. Free, no auth required, HTTP Streamable endpoint."
+lfmf_category = "learn-mcp"
+
+# 🤓: PREFERRED - Remote HTTP Streamable endpoint (no-local-server, zero-config)
+# No API keys, no logins, no sign-ups. Plug & play.
+[[b00t.mcp.httpstream]]
+priority = 0
+transport = "httpstream"
+url = "https://learn.microsoft.com/api/mcp"
+requires_internet = true
+requires_auth = false
+
+# 🤓: Experimental: OpenAI-compatible endpoint for Deep Research model support
+# [[b00t.mcp.httpstream]]
+# priority = 10
+# transport = "httpstream"
+# url = "https://learn.microsoft.com/api/mcp/openai-compatible"
+# requires_internet = true
+# requires_auth = false
+
+# 🤓: Token budget control - append ?maxTokenBudget=N to limit tokens in search results
+# Example: https://learn.microsoft.com/api/mcp?maxTokenBudget=2000
+
+# 🤓: CLI alternative via @microsoft/learn-cli (not MCP, but same tools in terminal)
+[[b00t.mcp.stdio]]
+priority = 20
+command = "npx"
+args = ["@microsoft/learn-cli", "search"]
+requires = ["node", "internet"]
+transport = "stdio"
+hint = "CLI fallback via npx @microsoft/learn-cli (not MCP protocol, terminal-only)"
+
+[b00t.learn]
+topic = "learn-mcp"
+auto_digest = true
+
+[[b00t.gate]]
+internet = true
+hint = "Internet connection required for remote MCP endpoint"
+
+[[b00t.usage]]
+description = "Install in VS Code (one-click)"
+command = "Use VS Code 'Install Microsoft Learn MCP' badge or search @mcp learn in Extensions"
+
+[[b00t.usage]]
+description = "Install in GitHub Copilot CLI"
+command = "/plugin install microsoftdocs/mcp"
+
+[[b00t.usage]]
+description = "Claude Desktop config (remote HTTP)"
+command = 'Add to claude_desktop_config.json: {"mcpServers":{"microsoft-learn":{"type":"http","url":"https://learn.microsoft.com/api/mcp"}}}'
+
+[[b00t.usage]]
+description = "Codex CLI install"
+command = 'codex mcp add "microsoft-learn" --url "https://learn.microsoft.com/api/mcp"'
+
+[[b00t.usage]]
+description = "CLI search (no MCP client needed)"
+command = "npx @microsoft/learn-cli search 'azure functions timeout'"
+
+[[b00t.usage]]
+description = "CLI search with JSON output"
+command = 'npx @microsoft/learn-cli search "azure openai" --json | jq ".results[].title"'
+
+[[b00t.usage]]
+description = "Install global CLI"
+command = "npm install -g @microsoft/learn-cli && mslearn search 'azure functions timeout'"
+
+[[b00t.references]]
+name = "MicrosoftDocs/mcp (GitHub)"
+url = "https://github.com/MicrosoftDocs/mcp"
+
+[[b00t.references]]
+name = "Microsoft Learn MCP Server product docs"
+url = "https://learn.microsoft.com/training/support/mcp"
+
+[[b00t.references]]
+name = "Microsoft MCP Servers org"
+url = "https://github.com/microsoft/mcp"
+
+[[b00t.references]]
+name = "@microsoft/learn-cli on npm"
+url = "https://www.npmjs.com/package/@microsoft/learn-cli"

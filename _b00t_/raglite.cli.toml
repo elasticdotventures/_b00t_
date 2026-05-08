@@ -1,0 +1,64 @@
+[b00t]
+name = "raglite"
+type = "cli"
+desires = "1.0.0"
+depends_on = ["python.cli", "uv.cli"]
+hint = "RAGLite Python backend used by b00t grok for local DuckDB + GGUF embedding search"
+lfmf_category = "raglite"
+install = "b00t script run grok-readiness"
+update = "uv pip install --python ${B00T_GROK_VENV:-$HOME/.venv}/bin/python --upgrade raglite llama-cpp-python"
+version = "${B00T_GROK_VENV:-$HOME/.venv}/bin/python -c \"import importlib.metadata; print(importlib.metadata.version('raglite'))\" 2>/dev/null || echo 'not installed'"
+version_regex = '(?P<version>\\d+\\.\\d+\\.\\d+)'
+
+[b00t.learn]
+topic = "raglite"
+auto_digest = false
+
+[b00t.rhai]
+readiness = "grok-readiness"
+repair = "grok-readiness"
+
+[b00t.raglite]
+venv_env = "B00T_GROK_VENV"
+default_venv = "$HOME/.venv"
+workspace_venv = "$B00T_DIR/.venv"
+data_dir = "$HOME/.local/share/raglite"
+db_url = "duckdb:///$HOME/.local/share/raglite/raglite.db"
+llm = "openai/ch0nky"
+embedder = "llama-cpp-python/lm-kit/bge-m3-gguf/*F16.gguf@512"
+repair_strategy = "uv-pip"
+
+[b00t.py.imports]
+modules = ["raglite"]
+
+[[b00t.py.imports.packages]]
+module = "llama_cpp"
+package = "llama-cpp-python"
+required_when = "embedder contains llama-cpp or gguf"
+
+[[b00t.gate]]
+command = "uv"
+hint = "uv is required to repair/install raglite dependencies"
+
+[[b00t.gate]]
+rhai = "command_exists(\"uv\")"
+hint = "run `b00t install uv` before grok readiness repair"
+
+[[b00t.usage]]
+description = "Run grok readiness guard and repair missing Python components"
+command = "b00t script run grok-readiness"
+
+[[b00t.usage]]
+description = "Validate imports used by current b00t grok RagLightConfig"
+command = "$HOME/.venv/bin/python -c 'import raglite, llama_cpp; print(\"ok\")'"
+
+[[b00t.usage]]
+description = "Run a raglite-only grok query"
+command = "b00t grok ask \"query\" -t mcp --rag=raglite"
+
+# b00t:map v1
+# summary: RAGLite app datum — grok readiness, repair, import gates
+# tags: raglite, grok, raglight, rhai, guard, uv, llama-cpp-python
+# tier: ch0nky
+# cmds: b00t script run grok-readiness, b00t grok ask "query" -t mcp --rag=raglite
+# complexity: 5

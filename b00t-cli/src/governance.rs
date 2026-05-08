@@ -110,6 +110,36 @@ impl GovernanceRuntime {
         })
     }
 
+    /// Emit a system.stop event — fired before the agent process is terminated.
+    /// Any hooks registered for the `system.stop` event will fire, allowing
+    /// graceful shutdown (save state, flush logs, notify peers).
+    pub fn emit_stop_event(&self) {
+        self.emit_event("system.stop");
+    }
+
+    /// Register a hook that fires when `system.stop` is emitted.
+    /// Returns the hook ID (`Uuid`) so the caller can cancel it later.
+    ///
+    /// The caller's `context.hook_token` is overwritten with the newly generated
+    /// token so that `ContextStore` filename keys and `list_pending()` results
+    /// are always consistent with the returned `Uuid`.
+    pub fn register_stop_hook(&self, mut context: AgentContext, ttl_ms: Option<u64>) -> Result<uuid::Uuid> {
+        let id = uuid::Uuid::new_v4();
+        let token = HookToken {
+            id,
+            hook_type: HookType::Event("system.stop".to_string()),
+            created_at: Utc::now(),
+            ttl_ms,
+            description: "system stop hook".to_string(),
+        };
+        // Align context snapshot so the store key (token.id) and
+        // context.hook_token.id are identical — required for list_pending() and expiry cleanup.
+        context.hook_token = token.clone();
+        self.register_hook(token, context)
+            .context("failed to register stop hook")?;
+        Ok(id)
+    }
+
     /// Drain any fired hook notifications from the ring (non-blocking).
     ///
     /// Call this from the agent loop each iteration to discover hooks that
@@ -478,5 +508,81 @@ mod tests {
         // No pending hooks remain
         let pending = store.list_pending().unwrap();
         assert!(pending.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_stop_hook_fires_on_emit_stop_event() {
+        let tmpdir = tempfile::tempdir().unwrap();
+        let gov = GovernanceRuntime::init_with_store_path(tmpdir.path().join("hooks"))
+            .await
+            .unwrap();
+
+        let token = HookToken {
+            id: uuid::Uuid::new_v4(),
+            hook_type: HookType::Event("system.stop".to_string()),
+            created_at: Utc::now(),
+            ttl_ms: None,
+            description: "stop hook test".to_string(),
+        };
+        let context = test_context(&token);
+        gov.register_hook(token.clone(), context).unwrap();
+
+        // Emit the stop event
+        gov.emit_stop_event();
+        tokio::time::sleep(Duration::from_millis(100)).await;
+
+        let fired = gov.check_hooks();
+        let matched = fired.iter().any(|n| n.hook_id == token.id);
+        assert!(matched, "Expected stop hook to fire on emit_stop_event()");
+    }
+
+    #[tokio::test]
+    async fn test_register_stop_hook_convenience() {
+        let tmpdir = tempfile::tempdir().unwrap();
+        let gov = GovernanceRuntime::init_with_store_path(tmpdir.path().join("hooks"))
+            .await
+            .unwrap();
+
+        let context = AgentContext {
+            agent_id: "test-agent".to_string(),
+            task: "graceful shutdown".to_string(),
+            gate: "stop-hook".to_string(),
+            result_so_far: serde_json::json!({"status": "shutting_down"}),
+            reasoning: "stop hook fired".to_string(),
+            created_at: Utc::now(),
+            hook_token: HookToken {
+                id: uuid::Uuid::new_v4(),
+                hook_type: HookType::Event("system.stop".to_string()),
+                created_at: Utc::now(),
+                ttl_ms: Some(5000),
+                description: "stop hook".to_string(),
+            },
+            continuation: "resume_after_stop".to_string(),
+        };
+
+        let hook_id = gov.register_stop_hook(context, Some(5000)).unwrap();
+
+        // Verify context.hook_token.id was aligned to the returned hook_id
+        // by checking list_pending() — mismatch here would indicate a store key bug.
+        let pending = gov.store.list_pending().unwrap();
+        assert!(
+            pending.iter().any(|t| t.id == hook_id),
+            "list_pending() must return the hook with id matching the registered hook_id"
+        );
+        // Also verify the persisted context has the correct hook_token.id
+        let loaded = gov.store.load_by_id(&hook_id).unwrap();
+        assert!(loaded.is_some(), "store should have context keyed by hook_id");
+        assert_eq!(
+            loaded.unwrap().hook_token.id,
+            hook_id,
+            "stored context.hook_token.id must equal the returned hook_id"
+        );
+
+        gov.emit_stop_event();
+        tokio::time::sleep(Duration::from_millis(100)).await;
+
+        let fired = gov.check_hooks();
+        let matched = fired.iter().any(|n| n.hook_id == hook_id);
+        assert!(matched, "Expected convenience-registered stop hook to fire");
     }
 }

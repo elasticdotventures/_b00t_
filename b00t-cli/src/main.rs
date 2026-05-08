@@ -2221,6 +2221,19 @@ async fn main() {
             }
         }
         Some(Commands::Quit(args)) => {
+            // Wire the governance stop callback so registered stop hooks fire
+            // before SIGTERM is sent to the agent process.
+            match b00t_cli::governance::GovernanceRuntime::init().await {
+                Ok(gov) => {
+                    let gov = std::sync::Arc::new(gov);
+                    b00t_cli::commands::quit::set_stop_callback(Box::new(move || {
+                        gov.emit_stop_event();
+                    }));
+                }
+                Err(e) => {
+                    eprintln!("⚠️  governance init failed; stop hooks will not fire: {e}");
+                }
+            }
             if let Err(e) = b00t_cli::commands::quit::handle_quit(args) {
                 eprintln!("Error: {e}");
                 std::process::exit(1);
