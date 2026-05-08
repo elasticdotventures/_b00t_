@@ -160,14 +160,10 @@ pub fn check_peer_handshake() -> Option<String> {
     for path in &paths {
         if path.exists() {
             if let Ok(content) = std::fs::read_to_string(path) {
-                // Naive JSON extraction of the "variant_id" string value.
-                // Avoids pulling in a JSON parser dependency for this single lookup.
-                if let Some(variant) = content
-                    .split("variant_id")
-                    .nth(1)
-                    .and_then(|s| s.split('"').nth(1))
-                {
-                    return Some(variant.to_string());
+                if let Ok(document) = serde_json::from_str::<serde_json::Value>(&content) {
+                    if let Some(variant) = document.get("variant_id").and_then(|v| v.as_str()) {
+                        return Some(variant.to_string());
+                    }
                 }
             }
         }
