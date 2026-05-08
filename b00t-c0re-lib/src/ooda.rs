@@ -855,9 +855,69 @@ mod tests {
         assert_eq!(*loop_.phase(), OodaPhase::Idle);
     }
 
+    struct TestHomeDir {
+        path: std::path::PathBuf,
+    }
+
+    impl TestHomeDir {
+        fn new() -> Self {
+            let mut path = std::env::temp_dir();
+            let unique = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("system time should be after UNIX_EPOCH")
+                .as_nanos();
+            path.push(format!("b00t-ooda-test-{}-{}", std::process::id(), unique));
+            std::fs::create_dir_all(&path).expect("temp home dir should be created");
+            Self { path }
+        }
+
+        fn path(&self) -> &std::path::Path {
+            &self.path
+        }
+    }
+
+    impl Drop for TestHomeDir {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.path);
+        }
+    }
+
+    struct EnvVarGuard {
+        key: &'static str,
+        original: Option<std::ffi::OsString>,
+    }
+
+    impl EnvVarGuard {
+        fn set_path(key: &'static str, value: &std::path::Path) -> Self {
+            let original = std::env::var_os(key);
+            unsafe {
+                std::env::set_var(key, value);
+            }
+            Self { key, original }
+        }
+    }
+
+    impl Drop for EnvVarGuard {
+        fn drop(&mut self) {
+            match &self.original {
+                Some(value) => unsafe {
+                    std::env::set_var(self.key, value);
+                },
+                None => unsafe {
+                    std::env::remove_var(self.key);
+                },
+            }
+        }
+    }
+
     #[test]
     fn check_peer_handshake_no_file() {
-        // When no handshake file exists, should return None
+        // When no handshake file exists, should return None.
+        // 🤓 Force home resolution into a fresh temp dir so this test cannot observe a real ~/.b00t handshake.
+        let test_home = TestHomeDir::new();
+        let _home_guard = EnvVarGuard::set_path("HOME", test_home.path());
+        let _userprofile_guard = EnvVarGuard::set_path("USERPROFILE", test_home.path());
+
         let result = check_peer_handshake();
         assert!(result.is_none());
     }
