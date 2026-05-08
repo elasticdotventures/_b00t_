@@ -9,18 +9,23 @@ use serde::{Deserialize, Serialize};
 /// | Operator   | Recruitment + training | Scouts/finds agents, enlists, executes training plans |
 /// | Specialist | Domain expertise | Domain-specific work (coding, research, analysis) |
 /// | Bouncer    | Quality gates | Validates inputs/outputs, enforces contracts, security |
+/// | Mate       | Any non-captain agent (assistant, executive, specialist) |
+/// | Player     | Human/user (not an agent software role) |
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum Role {
     /// Captain — leader of a team, holds command authority
     Captain,
-    Executor,
     /// Mate = any non-captain agent (assistant, executive, specialist)
     Mate,
     /// Player = human/user (not an agent software role)
     Player,
+    /// Executor — runs autonomous task loops
+    Executor,
     /// Operator — system operator with administrative privileges
     Operator,
+    /// Specialist — domain-specific work
     Specialist,
+    /// Bouncer — quality gates, security validation
     Bouncer,
 }
 
@@ -38,6 +43,8 @@ pub struct Agent {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Team {
     pub captain_id: String,
+    pub mate_ids: Vec<String>,
+    pub player_ids: Vec<String>,
     pub executor_ids: Vec<String>,
     pub operator_ids: Vec<String>,
     pub specialist_ids: Vec<String>,
@@ -46,12 +53,15 @@ pub struct Team {
 
 impl Team {
     /// Create a new Team with the given captain.
-    /// Mate and player lists start empty.
     pub fn new(captain_id: &str) -> Self {
         Self {
             captain_id: captain_id.to_string(),
             mate_ids: Vec::new(),
             player_ids: Vec::new(),
+            executor_ids: Vec::new(),
+            operator_ids: Vec::new(),
+            specialist_ids: Vec::new(),
+            bouncer_ids: Vec::new(),
         }
     }
 

@@ -17,12 +17,12 @@ fn make_agent(id: &str, role: Role, skills: &[&str], alive: bool) -> Agent {
 #[test]
 fn test_captain_creates_team() {
     let captain = make_agent("cap1", Role::Captain, &["leadership"], true);
-    let specialist = make_agent("spec1", Role::Specialist, &["navigation"], true);
-    let executor = make_agent("ex1", Role::Executor, &["rust"], true);
+    let specialist = make_agent("spec1", Role::Mate, &["navigation"], true);
+    let executor = make_agent("ex1", Role::Player, &["rust"], true);
 
     let mut team = Team::new(&captain.id);
-    team.add_mate(&mate.id);
-    team.add_player(&player.id);
+    team.add_mate("mate1");
+    team.add_player("p1");
 
     assert_eq!(team.captain_id, "cap1");
     assert_eq!(team.mate_ids.len(), 1);
@@ -108,7 +108,6 @@ fn test_recruit_request_ranks_by_skill() {
     let response = process_recruit_request(&request, &agents, "op1");
 
     assert_eq!(response.candidates.len(), 2);
-    // a2 has 3 matching skills, a3 has 2 — a2 should be first
     assert_eq!(response.candidates[0].id, "a2");
     assert_eq!(response.candidates[1].id, "a3");
     assert_eq!(response.operator_fee_pct, 20.0);

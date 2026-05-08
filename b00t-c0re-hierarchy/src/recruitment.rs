@@ -23,7 +23,7 @@ pub struct RecruitResponse {
 pub struct HireAction {
     pub captain_id: String,
     pub agent_id: String,
-    pub role: Role, // Executor or Specialist
+    pub role: Role,
 }
 
 /// Score an agent's skill match against required skills.
@@ -126,7 +126,6 @@ mod tests {
         let response = process_recruit_request(&request, &agents, "op1");
 
         assert_eq!(response.candidates.len(), 2);
-        // a2 has 3 matching skills, a3 has 2 — a2 should be first
         assert_eq!(response.candidates[0].id, "a2");
         assert_eq!(response.candidates[1].id, "a3");
     }
