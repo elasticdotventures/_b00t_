@@ -531,7 +531,9 @@ impl IrontologyBridgeClient {
             namespace: ns.clone(),
             data_path: Some(data_dir),
         };
-        let store = std::sync::Arc::new(ActiveKnowledgeStore::try_new(config)?);
+        let store = std::sync::Arc::new(
+            <ActiveKnowledgeStore as KnowledgeStoreBackend>::try_new(config)?,
+        );
         Ok(Self {
             store,
             namespace: ns,
