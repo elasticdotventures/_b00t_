@@ -43,6 +43,7 @@ fn skill_match_score(agent: &Agent, required_skills: &[String]) -> usize {
 pub fn process_recruit_request(
     request: &RecruitRequest,
     available_agents: &[Agent],
+    operator_id: &str,
 ) -> RecruitResponse {
     // Score and collect candidates that have at least one matching skill
     let mut scored: Vec<(usize, &Agent)> = available_agents
@@ -67,7 +68,7 @@ pub fn process_recruit_request(
 
     RecruitResponse {
         candidates,
-        operator_id: String::new(), // Operator identity — to be filled by caller
+        operator_id: operator_id.to_string(),
         operator_fee_pct: 20.0,
     }
 }
@@ -95,6 +96,7 @@ mod tests {
             cake_balance: 100.0,
             is_alive: alive,
             manager_id: None,
+            is_player: false,
         }
     }
 
@@ -120,7 +122,7 @@ mod tests {
             make_agent("a3", Role::Player, &["python", "docker"], true),
         ];
 
-        let response = process_recruit_request(&request, &agents);
+        let response = process_recruit_request(&request, &agents, "op1");
 
         assert_eq!(response.candidates.len(), 2);
         // a2 has 3 matching skills, a3 has 2 — a2 should be first
@@ -142,7 +144,7 @@ mod tests {
             make_agent("a2", Role::Player, &["python"], true),
         ];
 
-        let response = process_recruit_request(&request, &agents);
+        let response = process_recruit_request(&request, &agents, "op1");
         assert!(response.candidates.is_empty());
     }
 
@@ -174,8 +176,23 @@ mod tests {
             make_agent("a2", Role::Player, &["rust"], true),  // alive
         ];
 
-        let response = process_recruit_request(&request, &agents);
+        let response = process_recruit_request(&request, &agents, "op1");
         assert_eq!(response.candidates.len(), 1);
         assert_eq!(response.candidates[0].id, "a2");
+    }
+
+    #[test]
+    fn test_operator_id_is_set_on_response() {
+        let request = RecruitRequest {
+            captain_id: "cap1".to_string(),
+            required_skills: vec!["rust".to_string()],
+            max_players: 2,
+            bounty_share: 10.0,
+        };
+
+        let agents = vec![make_agent("a1", Role::Mate, &["rust"], true)];
+
+        let response = process_recruit_request(&request, &agents, "operator-42");
+        assert_eq!(response.operator_id, "operator-42");
     }
 }

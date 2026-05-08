@@ -46,6 +46,7 @@ fn to_agent(card: &AgentCard, meta: &CrewMeta) -> Agent {
         cake_balance: meta.cake_balance,
         is_alive: meta.is_alive,
         manager_id: meta.manager_id.clone(),
+        is_player: true, // crew agents default to player (human) unless overridden
     }
 }
 
@@ -220,7 +221,7 @@ fn handle_recruit(store: &AgentStore, skills: &str, limit: usize) {
         bounty_share: 0.1,
     };
 
-    let response = process_recruit_request(&request, &available);
+    let response = process_recruit_request(&request, &available, "crew-cli");
 
     if response.candidates.is_empty() {
         println!("No suitable candidates found.");

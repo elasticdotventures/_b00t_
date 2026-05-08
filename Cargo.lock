@@ -823,6 +823,7 @@ dependencies = [
 name = "b00t-c0re-hierarchy"
 version = "0.1.0"
 dependencies = [
+ "b00t-c0re-gov",
  "chrono",
  "serde",
  "serde_json",
