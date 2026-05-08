@@ -118,7 +118,7 @@ impl GovernanceRuntime {
     }
 
     /// Register a hook that fires when `system.stop` is emitted.
-    /// Returns the HookToken so the caller can cancel it later.
+    /// Returns the hook ID (`Uuid`) so the caller can cancel it later.
     pub fn register_stop_hook(&self, context: AgentContext, ttl_ms: Option<u64>) -> Result<uuid::Uuid> {
         let id = uuid::Uuid::new_v4();
         let token = HookToken {
