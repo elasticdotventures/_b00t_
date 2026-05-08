@@ -862,6 +862,7 @@ hint = "Test stack"
             file: None,
             env: None,
             rhai: None,
+            knowledge_backend: None,
             hint: Some("test command gate".to_string()),
         }];
         let results = evaluate_gates(&gates, "/tmp");
@@ -881,6 +882,7 @@ hint = "Test stack"
             file: Some(file_path.to_str().unwrap().to_string()),
             env: None,
             rhai: None,
+            knowledge_backend: None,
             hint: Some("test file gate".to_string()),
         }];
         let results = evaluate_gates(&gates, "/tmp");
@@ -895,11 +897,45 @@ hint = "Test stack"
             file: None,
             env: Some("THIS_ENV_VAR_DOES_NOT_EXIST_12345".to_string()),
             rhai: None,
+            knowledge_backend: None,
             hint: Some("test env gate".to_string()),
         }];
         let results = evaluate_gates(&gates, "/tmp");
         assert!(!results[0].passed);
         assert!(results[0].reason.contains("not set"));
+    }
+
+    #[test]
+    fn test_gate_knowledge_backend_passes_for_compiled_backend() {
+        let gates = vec![GateSpec {
+            command: None,
+            file: None,
+            env: None,
+            rhai: None,
+            knowledge_backend: Some(b00t_c0re_lib::compiled_knowledge_backend().to_string()),
+            hint: Some("knowledge backend gate".to_string()),
+        }];
+        let results = evaluate_gates(&gates, "/tmp");
+        assert!(results[0].passed);
+    }
+
+    #[test]
+    fn test_gate_knowledge_backend_fails_for_mismatch() {
+        let mismatched = match b00t_c0re_lib::compiled_knowledge_backend() {
+            "neumann" => "oxigraph",
+            _ => "neumann",
+        };
+        let gates = vec![GateSpec {
+            command: None,
+            file: None,
+            env: None,
+            rhai: None,
+            knowledge_backend: Some(mismatched.to_string()),
+            hint: Some("knowledge backend gate".to_string()),
+        }];
+        let results = evaluate_gates(&gates, "/tmp");
+        assert!(!results[0].passed);
+        assert!(results[0].reason.contains("compiled backend"));
     }
 
     #[test]
@@ -916,6 +952,7 @@ hint = "Test stack"
                 file: Some(file_path.to_str().unwrap().to_string()),
                 env: None,
                 rhai: None,
+                knowledge_backend: None,
                 hint: Some("file gate".to_string()),
             },
             GateSpec {
@@ -923,6 +960,7 @@ hint = "Test stack"
                 file: None,
                 env: Some("PATH".to_string()),
                 rhai: None,
+                knowledge_backend: None,
                 hint: Some("env gate".to_string()),
             },
         ];

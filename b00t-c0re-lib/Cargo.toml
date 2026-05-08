@@ -25,9 +25,12 @@ name = "b00t-lsp"
 path = "src/bin/b00t-lsp.rs"
 
 [features]
-default = []
+default = ["store-neumann"]
 python = ["pyo3"]
 ledgrrr-events = []
+store-neumann = ["dep:storage-neumann"]
+store-oxigraph = ["dep:oxigraph"]
+oxigraph = ["store-oxigraph"]
 
 [dependencies]
 pyo3 = { version = "0.27", features = ["extension-module"], optional = true }
@@ -40,10 +43,6 @@ regex.workspace = true
 rmcp.workspace = true
 toml.workspace = true
 serde_yaml = "0.9"
-
-# Irontology semantic bridge — direct library integration (no MCP subprocess)
-# 🤓 binary pending (vendor/irontology-mcp has no main.rs yet); lib-only path works today
-# storage-neumann = { path = "../vendor/irontology-mcp/crates/storage-neumann" }
 
 # Core lib specific dependencies
 shellexpand = "3.1.0"
@@ -63,6 +62,9 @@ tracing.workspace = true
 lazy_static = "1.5.0"
 async-trait = "0.1"
 futures = "0.3"
+cfg-if = "1.0.4"
+oxigraph = { version = "0.5.8", optional = true }
+storage-neumann = { version = "0.8.0", path = "../vendor/irontology-mcp/crates/storage-neumann", optional = true }
 
 [dev-dependencies]
 tempfile = "3.10"

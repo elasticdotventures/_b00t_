@@ -1,15 +1,27 @@
 use serde::{Deserialize, Serialize};
 
+/// Canonical crew roles matching the CREW-ROLES.tomllmd schema.
+///
+/// | Variant    | Authority | Description |
+/// |------------|-----------|-------------|
+/// | Captain    | Full command | Commands the crew, sets mission, delegates tasks |
+/// | Executor   | Task execution | Runs autonomous task loops, executes backlog items |
+/// | Operator   | Recruitment + training | Scouts/finds agents, enlists, executes training plans |
+/// | Specialist | Domain expertise | Domain-specific work (coding, research, analysis) |
+/// | Bouncer    | Quality gates | Validates inputs/outputs, enforces contracts, security |
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum Role {
     /// Captain — leader of a team, holds command authority
     Captain,
+    Executor,
     /// Mate = any non-captain agent (assistant, executive, specialist)
     Mate,
     /// Player = human/user (not an agent software role)
     Player,
     /// Operator — system operator with administrative privileges
     Operator,
+    Specialist,
+    Bouncer,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -26,8 +38,10 @@ pub struct Agent {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Team {
     pub captain_id: String,
-    pub mate_ids: Vec<String>,
-    pub player_ids: Vec<String>,
+    pub executor_ids: Vec<String>,
+    pub operator_ids: Vec<String>,
+    pub specialist_ids: Vec<String>,
+    pub bouncer_ids: Vec<String>,
 }
 
 impl Team {

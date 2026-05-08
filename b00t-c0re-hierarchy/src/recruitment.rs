@@ -23,7 +23,7 @@ pub struct RecruitResponse {
 pub struct HireAction {
     pub captain_id: String,
     pub agent_id: String,
-    pub role: Role, // Mate or Player
+    pub role: Role, // Executor or Specialist
 }
 
 /// Score an agent's skill match against required skills.
@@ -103,7 +103,7 @@ mod tests {
 
     #[test]
     fn test_skill_match_score() {
-        let agent = make_agent("a1", Role::Player, &["rust", "python", "docker"], true);
+        let agent = make_agent("a1", Role::Executor, &["rust", "python", "docker"], true);
         let required = vec!["rust".to_string(), "kubernetes".to_string()];
         assert_eq!(skill_match_score(&agent, &required), 1);
     }
@@ -118,9 +118,9 @@ mod tests {
         };
 
         let agents = vec![
-            make_agent("a1", Role::Player, &["rust"], true),
-            make_agent("a2", Role::Player, &["rust", "python", "docker"], true),
-            make_agent("a3", Role::Player, &["python", "docker"], true),
+            make_agent("a1", Role::Executor, &["rust"], true),
+            make_agent("a2", Role::Executor, &["rust", "python", "docker"], true),
+            make_agent("a3", Role::Executor, &["python", "docker"], true),
         ];
 
         let response = process_recruit_request(&request, &agents, "op1");
@@ -141,8 +141,8 @@ mod tests {
         };
 
         let agents = vec![
-            make_agent("a1", Role::Player, &["rust"], true),
-            make_agent("a2", Role::Player, &["python"], true),
+            make_agent("a1", Role::Executor, &["rust"], true),
+            make_agent("a2", Role::Executor, &["python"], true),
         ];
 
         let response = process_recruit_request(&request, &agents, "op1");
@@ -151,15 +151,15 @@ mod tests {
 
     #[test]
     fn test_hire_updates_role_and_manager() {
-        let mut agent = make_agent("a1", Role::Player, &["rust"], true);
+        let mut agent = make_agent("a1", Role::Executor, &["rust"], true);
         let action = HireAction {
             captain_id: "cap1".to_string(),
             agent_id: "a1".to_string(),
-            role: Role::Mate,
+            role: Role::Specialist,
         };
 
         hire_agent(&mut agent, &action);
-        assert_eq!(agent.role, Role::Mate);
+        assert_eq!(agent.role, Role::Specialist);
         assert_eq!(agent.manager_id, Some("cap1".to_string()));
     }
 
@@ -173,8 +173,8 @@ mod tests {
         };
 
         let agents = vec![
-            make_agent("a1", Role::Player, &["rust"], false), // dead
-            make_agent("a2", Role::Player, &["rust"], true),  // alive
+            make_agent("a1", Role::Executor, &["rust"], false), // dead
+            make_agent("a2", Role::Executor, &["rust"], true),  // alive
         ];
 
         let response = process_recruit_request(&request, &agents, "op1");

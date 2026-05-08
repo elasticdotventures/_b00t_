@@ -8,7 +8,7 @@
 
 fn shell_quote(s) {
     let out = s;
-    out.replace("'", "'\\''");
+    out = out.replace("'", "'\\''");
     "'" + out + "'"
 }
 

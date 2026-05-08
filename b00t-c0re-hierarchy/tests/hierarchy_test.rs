@@ -17,8 +17,8 @@ fn make_agent(id: &str, role: Role, skills: &[&str], alive: bool) -> Agent {
 #[test]
 fn test_captain_creates_team() {
     let captain = make_agent("cap1", Role::Captain, &["leadership"], true);
-    let mate = make_agent("mate1", Role::Mate, &["navigation"], true);
-    let player = make_agent("p1", Role::Player, &["rust"], true);
+    let specialist = make_agent("spec1", Role::Specialist, &["navigation"], true);
+    let executor = make_agent("ex1", Role::Executor, &["rust"], true);
 
     let mut team = Team::new(&captain.id);
     team.add_mate(&mate.id);
@@ -100,9 +100,9 @@ fn test_recruit_request_ranks_by_skill() {
     };
 
     let agents = vec![
-        make_agent("a1", Role::Player, &["rust"], true),
-        make_agent("a2", Role::Player, &["rust", "python", "docker"], true),
-        make_agent("a3", Role::Player, &["python", "docker"], true),
+        make_agent("a1", Role::Executor, &["rust"], true),
+        make_agent("a2", Role::Executor, &["rust", "python", "docker"], true),
+        make_agent("a3", Role::Executor, &["python", "docker"], true),
     ];
 
     let response = process_recruit_request(&request, &agents, "op1");
@@ -116,22 +116,22 @@ fn test_recruit_request_ranks_by_skill() {
 
 #[test]
 fn test_hire_updates_role() {
-    let mut agent = make_agent("a1", Role::Player, &["rust"], true);
+    let mut agent = make_agent("a1", Role::Executor, &["rust"], true);
     let action = HireAction {
         captain_id: "cap1".to_string(),
         agent_id: "a1".to_string(),
-        role: Role::Mate,
+        role: Role::Specialist,
     };
 
     hire_agent(&mut agent, &action);
-    assert_eq!(agent.role, Role::Mate);
+    assert_eq!(agent.role, Role::Specialist);
     assert_eq!(agent.manager_id, Some("cap1".to_string()));
 }
 
 #[test]
 fn test_agent_death_detection() {
-    let alive = make_agent("a1", Role::Player, &["rust"], true);
-    let dead = make_agent("a2", Role::Player, &["rust"], false);
+    let alive = make_agent("a1", Role::Executor, &["rust"], true);
+    let dead = make_agent("a2", Role::Executor, &["rust"], false);
 
     assert!(!is_dead(&alive));
     assert!(is_dead(&dead));
@@ -147,8 +147,8 @@ fn test_recruit_no_candidates_returns_empty() {
     };
 
     let agents = vec![
-        make_agent("a1", Role::Player, &["rust"], true),
-        make_agent("a2", Role::Player, &["python"], true),
+        make_agent("a1", Role::Executor, &["rust"], true),
+        make_agent("a2", Role::Executor, &["python"], true),
     ];
 
     let response = process_recruit_request(&request, &agents, "op1");

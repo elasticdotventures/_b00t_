@@ -323,7 +323,7 @@ mod tests {
         let is_player = matches!(role, Role::Player);
         Agent {
             id: id.to_string(),
-            role,
+            role: Role::Executor,
             skills: vec![],
             cake_balance: balance,
             is_alive: alive,
