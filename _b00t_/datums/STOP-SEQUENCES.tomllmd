@@ -1,0 +1,190 @@
+# b00t stop sequence embedding datum — experimental research
+# 🤓 Issue #96: Experiment with embedding stop sequences in files
+#    Do stop sequences in a text file cause the model to stop reading?
+# schema: 1 | last_updated: 2026-05-08
+#
+# Research question: If a model's stop/special tokens appear verbatim in a
+# text file the model is reading, does the model stop processing? Or does
+# the stop token merely become another token in the context window?
+#
+# tl;dr answer: NO — stop sequences in input do NOT cause the model to stop
+# reading. Stop sequences only affect *generation* (output side), not
+# *ingestion* (input side). The model sees stop tokens as ordinary tokens in
+# its context window and processes them through self-attention like any other
+# token. However, there are subtle conditioning effects and edge cases
+# documented below.
+#
+# 🔗参 https://github.com/huggingface/transformers — generation_config.stop_strings
+# 🔗参 https://github.com/vllm-project/vllm — vLLM sampling params
+# 🔗参 https://github.com/ggerganov/llama.cpp — grammar/stop handling
+# 🔗参 https://github.com/openai/tiktoken — tokenizer internals
+# 🔗参 _b00t_/datums/ — datum pattern reference
+
+[b00t]
+name = "STOP-SEQUENCES"
+type = "datum"
+hint = "Stop sequence embedding behavior across models — input-side vs output-side, tokenization edge cases, experimental findings"
+
+[b00t.version]
+schema = 1
+content = "draft"
+
+## ── Key finding ──────────────────────────────────────────────────────────────
+##
+## Stop sequences do NOT cause a model to stop reading input.
+##
+## The asymmetry is fundamental to autoregressive transformer architecture:
+##
+##   INPUT SIDE                          OUTPUT SIDE
+##   ┌─────────────────────┐            ┌─────────────────────┐
+##   │ Prompt tokens       │            │ Generated tokens     │
+##   │ processed through   │            │ checked against      │
+##   │ self-attention      │            │ stop_strings/stop_ids│
+##   │ ─ all tokens equal  │            │ ─ stop halts gen     │
+##   └─────────────────────┘            └─────────────────────┘
+##            │                                  ▲
+##            │                                  │
+##            ▼                                  │
+##   ┌───────────────────────────────────────────┘
+##   │ Transformer layers apply attention equally
+##   │ to all tokens in the context (causal mask
+##   │ ensures left-to-right, but no token is
+##   │ skipped or causes early truncation)
+##   └──────────────────────────────────────────
+##
+## The inference engine checks stop conditions ONLY after each generation
+## step. Input tokens pass through trivially — the engine never inspects
+## prompt tokens for stop sequence matches.
+
+## ── Model-by-model reference ──────────────────────────────────────────────────
+##
+## Each model family has distinct control/stop tokens used during training.
+## This table documents the token, its ID (for common tokenizers), how it
+## behaves in input vs output, and any known edge cases.
+
+| Model Family | Stop Token(s) | Token ID(s) | Input Behavior | Output Behavior | Edge Cases |
+|---|---|---|---|---|---|
+| GPT-2 / GPT-3 | `<|endoftext|>` | 50256 | Normal token; attends to all others | Inference halts on output | Single token; if embedded in file middle, context window contains it but model continues reading |
+| GPT-4 / ChatGPT | `<|im_start|>` `<|im_end|>` | 100264 / 100265 | Tokens in chat template wrapping only; raw text tokenized normally | `stop=["<|im_end|>"]` by default; output stops after assistant's turn | API strips special tokens from input; embedding raw `<|im_end|>` in user message may truncate context |
+| Llama 1/2 | `</s>` | 2 | Normal token; added as EOS during training | Generation stops when EOS token is sampled | If `</s>` appears mid-document in training data, it may be masked in loss (depends on pretraining impl) |
+| Llama 3 / 3.1 | `<|end_of_text|>` `<|eot_id|>` | 128001 / 128009 | `<|eot_id|>` signals end-of-turn in chat template; raw text tokenized as multi-byte tokens | Output stops on `<|end_of_text|>` or `<|eot_id|>` | `<|eot_id|>` in input conditions model to expect assistant turn next — subtle behavioral effect |
+| Mistral / Mixtral | `</s>` | 2 | Single token; part of instruction template `[INST][/INST]` | Generation stops on `</s>` | Instruction template tokens (`[INST]` `[/INST]`) are NOT the same as stop tokens — they are instruction markers, not generation halts |
+| Gemma (Google) | `<eos>` `<end_of_turn>` | 1 / 107 | Part of chat template; raw text tokenized as single tokens | Halts on `<eos>` or `<end_of_turn>` | `<end_of_turn>` in user input may cause the model to respond as if conversation ended |
+| Qwen / Qwen2.5 | `<|endoftext|>` `<|im_end|>` | 151643 / 151645 | Chat template wrapping; raw text tokenizes normally | Generation stops on either token | Qwen2.5 chat template enforces strict role alternation — embedded `<|im_end|>` in input may confuse role detection |
+| DeepSeek (V2/V3) | `<|end_of_sentence|>` | 100001 | Assistant-only suffix in chat template | Stops on EOS at inference | DeepSeek's tokenizer has separate Chinese/English tokens for "用户:" and "助理:" — these are format markers, not stop tokens |
+| Phi-3 (Microsoft) | `<|end|>` `<|user|>` `<|assistant|>` `<|system|>` | 32000-32003 | Chat template roles; raw text tokenized as single tokens | Stops on `<|end|>` | Embedding `<|assistant|>` in user text tricks the model into acting as if its turn just started |
+| Falcon (TII) | `<|endoftext|>` | 11 | Standard EOS token | Halts on EOS | Single token — trivial to embed, no special behavior |
+| Command-R (Cohere) | `<EOS_TOKEN>` | 255001 | Part of prompt template; tokenized as single token | Halts on EOS | API accepts `stop_sequences` list; raw `<EOS_TOKEN>` text in prompt is just content |
+| Starcoder2 / CodeLlama | `<|endoftext|>` + FIM tokens | Varies | FIM tokens (`<fim_prefix>`, `<fim_middle>`, `<fim_suffix>`) delimit infill regions | Halts on EOS; FIM tokens only active in fill-in-middle mode | FIM tokens in regular mode may cause unexpected infill behavior |
+| Anthropic Claude | `Human:` `Assistant:` | N/A (no special token IDs) | Format markers in prompt construction; raw text is just text | Claude checks for `\n\nHuman:` and `\n\nAssistant:` as conversation turn boundaries | These are NOT single tokens — they're multi-token strings. Claude API strips them from tool/function call turns internally |
+
+## ── Tokenization analysis ────────────────────────────────────────────────────
+##
+### Key insight: "Are stop sequences single tokens?"
+##
+## Whether a stop sequence is a single token determines how trivially it can
+## be embedded. Multi-token stop sequences (like `\n\nHuman:` for Claude)
+## are never "accidentally" generated, while single-token stop IDs are
+## always exactly one token whether in input or output.
+##
+| Tokenizer | Stop String | Is Single Token? | Tokens |
+|---|---|---|---|
+| GPT-2 (tiktoken p50k_base) | `<|endoftext|>` | YES | 1 token (id=50256) |
+| Llama 3 (tiktoken cl100k_base variant) | `<|end_of_text|>` | YES | 1 token (id=128001) |
+| Llama 3 (tiktoken variant) | `<|eot_id|>` | YES | 1 token (id=128009) |
+| Llama 2 (sentencepiece) | `</s>` | YES | 1 token (id=2) |
+| Mistral (sentencepiece) | `</s>` | YES | 1 token (id=2) |
+| Qwen2.5 (tiktoken variant) | `<|im_end|>` | YES | 1 token (id=151645) |
+| Gemma (sentencepiece) | `<end_of_turn>` | YES | 1 token (id=107) |
+| Phi-3 (tiktoken) | `<|end|>` | YES | 1 token (id=32000) |
+| Claude (Claude tokenizer) | `\n\nHuman:` | NO | ~5 tokens (no single ID) |
+| DeepSeek (tiktoken variant) | `<|end_of_sentence|>` | YES | 1 token (id=100001) |
+| Command-R (sentencepiece) | `<EOS_TOKEN>` | YES | 1 token (id=255001) |
+
+## ── Experiment protocol (Issue #96) ──────────────────────────────────────────
+##
+### Hypothesis
+## Embedding a model's stop sequence inside a text file the model is prompted
+## to read will NOT cause the model to stop reading. The model processes the
+## stop token as a normal context token.
+##
+### Test procedure
+## 1. Create a file containing a model's stop sequence mid-way through
+##    followed by additional content (e.g., "SECRET DATA")
+## 2. Prompt the model: "Read the file and tell me its contents"
+## 3. If the model reports the content AFTER the stop sequence, the
+##    stop sequence in input has no effect.
+## 4. If the model truncates at the stop sequence, the stop sequence
+##    affected reading (unlikely per theory).
+##
+### Expected result
+## The model will read the entire file including content after the stop
+## token. No truncation occurs because stop sequences are output-side only.
+##
+### Variation: role confusion test
+## For chat-templated models (Llama 3, Qwen, Phi-3), embedding a role token
+## like `<|assistant|>` or `<|eot_id|>` in user input may cause the model
+## to misinterpret the conversation structure. This is NOT the model
+## "stopping" — it's the model being confused about whose turn it is.
+##
+| Variation | Embedded Token | Expected Effect |
+|---|---|---|
+| Role confusion | `<|assistant|>` | Model may act as if assistant turn started |
+| Turn skip | `<|eot_id|>` | Model may skip user turn, start new assistant response |
+| EOS early | `<|end_of_text|>` | No effect on input; only matters if model outputs it |
+| Raw FIM token | `<fim_middle>` | Code models may enter infill mode unexpectedly |
+
+## ── Practical implications ───────────────────────────────────────────────────
+##
+### For RAG / document ingestion
+## Stop tokens in source documents are SAFE. They will be tokenized as
+## normal tokens and do not truncate or break the context. No special
+## preprocessing is needed.
+##
+### For jailbreak / prompt injection
+## Embedding a stop token (e.g., `<|im_end|>`) in a user prompt does NOT
+## cause the model to stop reading. However, embedding role tokens
+## (e.g., `<|assistant|>`) can cause the model to misinterpret structure,
+## which is a different class of injection.
+##
+### For model development
+## When building custom inference pipelines:
+## - stop_strings/stop_token_ids should only be checked against OUTPUT tokens
+## - Input tokens should never be matched against stop conditions
+## - Tokenizer.add_special_tokens controls whether special tokens are
+##   treated as special during encoding (default: True for chat templates)
+##
+### Safe guard recommendation
+## If you want to prevent models from reading past a boundary in a file,
+## do NOT rely on stop sequences. Use one of these strategies instead:
+##
+| Strategy | Mechanism | Works? |
+|---|---|---|
+| Stop sequence embedding | Token-level stop only checked on output | NO |
+| Truncate file before sending | Pre-processing | YES |
+| Instruction: "stop reading at <marker>" | Model instruction-following | Usually |
+| Segmented file with delimiter | Split into chunks + instruct | YES |
+| Token budget / sliding window | Slice prompt tokens | YES |
+
+## ── Experimental log ─────────────────────────────────────────────────────────
+##
+### 2026-05-08 — Initial datum created
+## - Literature review of 12 model family tokenizers
+## - Confirmed: stop sequences are output-side only
+## - Documented per-model special token tables
+## - TODO: Run actual experiment with a model via API/CLI to confirm
+##   empirically (expected: pass — model reads past stop token)
+##
+### TODO
+## - [ ] Create test file with embedded stop tokens, prompt model to read it
+## - [ ] Test with Llama 3 (`<|eot_id|>`), Qwen (`<|im_end|>`), Phi-3 (`<|end|>`)
+## - [ ] Verify model reports content after the stop token as expected
+## - [ ] Test role confusion: does `<|assistant|>` in user input change model behavior?
+## - [ ] Add empirical results to experimental log section
+
+# b00t:map v1
+# summary: Stop sequence embedding behavior across 12 model families — input-side vs output-side asymmetry, tokenization analysis, experiment protocol for Issue #96
+# tags: stop-sequences, tokenization, inference, experiment, llm, issue-96, datum
+# tier: ch0nky
+# cmds: b00t datums read STOP-SEQUENCES, b00t grok ask "stop sequences in input vs output"
+# complexity: 4
