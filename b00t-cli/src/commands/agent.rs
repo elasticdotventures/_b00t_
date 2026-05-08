@@ -745,12 +745,6 @@ async fn handle_invoke(
     // ── Governance + calorie check ──
     let gov = GovernanceRuntime::init().await?;
     let tracker = CalorieTracker::new();
-    if !tracker.is_alive(agent)? {
-        anyhow::bail!(
-            "Agent '{}' has no calories remaining — cannot invoke",
-            agent
-        );
-    }
 
     // Resolve config path: override → _b00t_/<agent>.agent.toml → cwd search
     let config_path = if let Some(p) = config_override {
