@@ -562,7 +562,7 @@ mod tests {
             .execute_script("compiled_knowledge_backend()")
             .unwrap()
             .cast::<String>();
-        assert!(["neumann", "oxigraph", "none"].contains(&backend.as_str()));
+        assert!(["neumann", "oxigraph"].contains(&backend.as_str()));
 
         let result = engine
             .execute_script("knowledge_backend_matches(compiled_knowledge_backend())")
