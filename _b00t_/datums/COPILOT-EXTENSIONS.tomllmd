@@ -1,0 +1,516 @@
+# b00t GitHub Copilot Extensions datum — integration & implementation plan
+# 🤓 Issue #30: b00t-cli support for GitHub Copilot Extensions
+# schema: 1 | bump ONLY on field definition changes, NOT on new integration entries
+# last_updated: 2026-05-08 | authoritative metadata via git notes
+#
+# Defines how b00t-cli can support GitHub Copilot Extensions — making b00t tools,
+# MCP servers, and agent capabilities available to the GitHub Copilot platform
+# (Copilot CLI, Copilot cloud agent on GitHub.com, and Copilot in IDEs).
+#
+# 🔗参 https://docs.github.com/en/copilot — GitHub Copilot docs hub
+# 🔗参 https://docs.github.com/en/copilot/concepts/agents/copilot-cli/about-copilot-cli — CLI docs
+# 🔗参 https://docs.github.com/en/copilot/concepts/agents/cloud-agent/about-cloud-agent — Cloud agent docs
+# 🔗参 https://docs.github.com/en/copilot/concepts/agents/cloud-agent/about-custom-agents — Custom agents
+# 🔗参 https://docs.github.com/en/copilot/concepts/agents/cloud-agent/mcp-and-cloud-agent — MCP + cloud agent
+# 🔗参 https://docs.github.com/en/copilot/concepts/agents/cloud-agent/about-hooks — Hooks
+# 🔗参 https://docs.github.com/en/copilot/concepts/agents/about-agent-skills — Agent skills
+# 🔗参 https://docs.github.com/en/copilot/concepts/agents/copilot-cli/about-cli-plugins — CLI plugins
+# 🔗参 https://docs.github.com/en/copilot/reference/custom-agents-configuration — Agent config reference
+# 🔗参 _b00t_/datums/MCP-SERVER-SCHEMA.tomllmd — Canonical MCP server datum schema
+# 🔗参 _b00t_/datums/ANTHROPIC-DESKTOP-EXTENSIONS.tomllmd — MCPB packaging pattern
+# 🔗参 b00t-cli/src/commands/mcp.rs — MCP list, add, install, output
+# 🔗参 b00t-cli/src/install/runtimes/copilot.rs — Existing Copilot runtime adapter
+# 🔗参 _b00t_/runtimes/copilot/hooks/ — Existing Copilot hook scripts
+# 🔗参 b00t-cli/src/commands/install.rs — CLI install dispatch
+# 🔗参 https://github.com/github/copilot-cli — Copilot CLI source (npm: @github/copilot)
+
+[b00t]
+name = "COPILOT-EXTENSIONS"
+type = "specification"
+hint = "b00t-cli GitHub Copilot Extensions integration — custom agents, MCP registration, skills, hooks, plugins, and implementation plan for Issue #30"
+
+[b00t.version]
+schema = 1
+content = "draft"
+
+## ── Overview ───────────────────────────────────────────────────────────────────
+
+GitHub Copilot has evolved beyond IDE autocomplete into a full agent platform with
+multiple extension points. b00t-cli should act as a bridge between the b00t
+ecosystem (datums, MCP servers, tools, agents) and the GitHub Copilot platform,
+enabling b00t's capabilities to be available wherever users interact with Copilot.
+
+### Copilot surfaces b00t should target
+
+| Surface | Entry Point | Extension Mechanism | Priority |
+|---------|------------|---------------------|----------|
+| **Copilot CLI** | `copilot` in terminal | MCP servers, custom agents (.agent.md), skills (SKILL.md), hooks, plugins | HIGH |
+| **Copilot cloud agent** | GitHub.com agents panel | Repository MCP config, custom agents (.md), hooks, skills | HIGH |
+| **VS Code / JetBrains / Xcode** | IDE Copilot Chat | MCP servers (via .mcp.json), custom agents (.agent.md) | MEDIUM |
+| **gh copilot** | `gh copilot` CLI | MCP servers, custom agents | MEDIUM |
+
+### Extension points at a glance
+
+| Mechanism | What it does | File Format | Location |
+|-----------|-------------|-------------|----------|
+| **MCP servers** | Add collections of tools | JSON / YAML | Repo settings, agent profile, .mcp.json |
+| **Custom agents** | Specialized AI sub-agents | .agent.md (YAML frontmatter + markdown) | `.github/agents/`, `~/.copilot/agents/` |
+| **Skills** | Task-specific instructions + scripts | SKILL.md in skill directories | `.github/skills/`, `.claude/skills/`, `~/.copilot/skills/` |
+| **Hooks** | Lifecycle event handlers | JSON hook configs | `.github/hooks/*.json` |
+| **Plugins** | Installable bundles of agents/skills/hooks/MCP | Directory with standard structure | Marketplace, repo, local path |
+| **Custom instructions** | Persistent behavioral guidance | .md files | `.github/copilot-instructions.md`, `~/.copilot/copilot-instructions.md` |
+| **Copilot Memory** | Persistent context store | Built-in (no user files) | Internal to Copilot |
+
+## ── Architecture ────────────────────────────────────────────────────────────────
+
+### How b00t-cli maps to Copilot extension points
+
+```
+b00t-cli
+  │
+  ├── b00t mcp install <name> copilot    ──►  Writes .mcp.json / repo MCP config
+  │
+  ├── b00t copilot agent create          ──►  Generates .agent.md profile
+  │
+  ├── b00t copilot skill install         ──►  Installs SKILL.md + scripts
+  │
+  ├── b00t copilot hook install          ──►  Writes hooks JSON config
+  │
+  ├── b00t copilot plugin build          ──►  Bundles into plugin package
+  │
+  └── b00t copilot discover              ──►  Scans b00t datums → recommends Copilot configs
+```
+
+### Existing foundation
+
+b00t-cli already has:
+
+1. **MCP install infrastructure** — `b00t mcp install <name> <target>` dispatches
+   to claudecode, vscode, geminicli, dotmcpjson, roocode, codex, stdout.
+   Adding `copilot` as a target follows this pattern exactly.
+
+2. **Copilot runtime adapter** — `b00t-cli/src/install/runtimes/copilot.rs`
+   already implements `RuntimeAdapter` for Copilot with:
+   - `target_dir()` → `~/.copilot/` (global) or `<repo>/.copilot/` (local)
+   - `settings_path()` → `~/.copilot/copilot-instructions.md`
+   - `hooks_dir()` → `~/.copilot/hooks/`
+   - `agents_dir()` → `~/.copilot/agents/`
+   - `skills_dir()` → `~/.copilot/skills/`
+   - Detection via `~/.copilot/` directory existence
+
+3. **Copilot hook scripts** — Five compiled JavaScript hooks in
+   `_b00t_/runtimes/copilot/hooks/`: b00t-bug-capture, b00t-context-monitor,
+   b00t-datum-guard, b00t-statusline, b00t-update-check.
+
+4. **gh-copilot CLI extension** — `gh extension install github/gh-copilot` is
+   run during `setup.sh`.
+
+## ── MCP server registration for Copilot ────────────────────────────────────────
+
+### The problem
+
+Copilot cloud agent supports MCP servers but with a different configuration format
+than Claude Code / VS Code. Copilot's config is:
+
+1. **Repository-level**: JSON config entered via GitHub.com repo Settings → Copilot → Cloud agent
+   OR via `.github/copilot-mcp.json`
+2. **Agent-level**: YAML in custom agent profile frontmatter (`mcp-servers` property)
+3. **CLI-level**: `.mcp.json` file (same format as VS Code)
+
+### Configuration format for Copilot cloud agent (repo-level)
+
+```json
+{
+  "mcpServers": {
+    "b00t-tools": {
+      "type": "local",
+      "command": "b00t",
+      "args": ["mcp", "serve"],
+      "tools": ["*"],
+      "env": {
+        "B00T_HOME": "$COPILOT_MCP_B00T_HOME"
+      }
+    },
+    "b00t-grok": {
+      "type": "local",
+      "command": "b00t",
+      "args": ["grok", "mcp-serve"],
+      "tools": ["search", "ask", "digest"],
+      "env": {
+        "B00T_HOME": "$COPILOT_MCP_B00T_HOME"
+      }
+    }
+  }
+}
+```
+
+### Configuration format for Copilot CLI (.mcp.json)
+
+Same `.mcp.json` format used by VS Code and Claude Code:
+
+```json
+{
+  "mcpServers": {
+    "b00t-tools": {
+      "command": "b00t",
+      "args": ["mcp", "serve"],
+      "env": {}
+    }
+  }
+}
+```
+
+### Key differences from Claude Code MCP config
+
+| Aspect | Claude Code / VS Code | Copilot cloud agent |
+|--------|----------------------|---------------------|
+| Config location | `~/.claude/claude_desktop_config.json` or `.mcp.json` | GitHub.com repo settings or agent profile YAML |
+| `type` field | Not used (stdio assumed) | Required: `"local"`, `"stdio"`, `"http"`, or `"sse"` |
+| `tools` field | Not used | Required: array of tool names or `["*"]` |
+| `env` secrets | Plain env vars | `$COPILOT_MCP_*` prefix, Agents secrets |
+| Variable syntax | `${ENV_VAR}` | `$VAR`, `${VAR}`, `${VAR:-default}`, `${{ secrets.NAME }}` |
+| OAuth support | Yes | Not yet supported for remote MCP |
+
+### b00t mcp install copilot target
+
+New install target `copilot` will:
+
+1. **For Copilot CLI** (`b00t mcp install <name> copilot --cli`): Write to
+   `.mcp.json` in repo root or `~/.copilot/.mcp.json`
+2. **For Copilot cloud agent** (`b00t mcp install <name> copilot --cloud`):
+   - Generate the JSON config snippet
+   - Print instructions for adding via GitHub.com repo settings
+   - Optionally write to `.github/copilot-mcp-config.json` for reference
+3. **For agent-level** (`b00t mcp install <name> copilot --agent <agent-name>`):
+   - Generate YAML `mcp-servers` block for custom agent profile
+   - Append or create `.agent.md` file
+
+## ── Custom agents ──────────────────────────────────────────────────────────────
+
+### Agent profile format
+
+Custom agents for Copilot CLI use `.agent.md` files with YAML frontmatter:
+
+```markdown
+---
+name: b00t-expert
+description: Agent that uses b00t-cli tools and MCP servers for system management
+tools: ["read", "edit", "search", "execute"]
+mcp-servers:
+  b00t-tools:
+    type: "local"
+    command: "b00t"
+    args: ["mcp", "serve"]
+    tools: ["*"]
+    env:
+      B00T_HOME: "${{ secrets.COPILOT_MCP_B00T_HOME }}"
+---
+
+You are a b00t system management expert. You have access to b00t-cli's full
+tool suite via MCP. Use b00t tools to:
+
+- Install and manage CLI tools via `b00t cli install`
+- Register and configure MCP servers via `b00t mcp install`
+- Query the b00t knowledgebase via `b00t grok ask`
+- Learn new topics via `b00t grok learn`
+- Check tool versions via `b00t cli detect`
+
+When the user asks about system setup, tool installation, or b00t management,
+use the appropriate MCP tools. Always prefer b00t-managed installation over
+manual steps.
+```
+
+### Custom agents for Copilot cloud agent
+
+Cloud agent uses `.md` files (not `.agent.md`) in `.github/agents/`:
+
+```markdown
+---
+name: b00t-sysadmin
+description: System administrator agent with b00t-cli access for managing tools and MCP servers
+---
+
+You are a system administrator with access to b00t-cli. Your capabilities include:
+- Installing development tools
+- Managing MCP server configurations
+- Diagnosing system issues
+- Keeping tools updated
+```
+
+### b00t copilot agent commands
+
+| Command | Action |
+|---------|--------|
+| `b00t copilot agent create <name>` | Generate .agent.md profile from template |
+| `b00t copilot agent list` | List installed custom agents |
+| `b00t copilot agent install <agent-file>` | Copy .agent.md to agents directory |
+| `b00t copilot agent init` | Create default b00t agent profile |
+
+## ── Skills ─────────────────────────────────────────────────────────────────────
+
+### Skill format
+
+Skills are directories containing a `SKILL.md` file:
+
+```markdown
+---
+name: b00t-tool-install
+description: Install CLI tools using b00t-cli. Use when asked to install programming languages, tools, or runtimes.
+allowed-tools: shell
+---
+
+When asked to install a tool:
+
+1. Check if the tool is available via `b00t cli detect <tool>`
+2. If not installed, run `b00t cli install <tool>`
+3. Verify installation with `b00t cli detect <tool>`
+4. If the tool isn't in b00t's registry, suggest adding it via `b00t cli add`
+```
+
+### b00t copilot skill commands
+
+| Command | Action |
+|---------|--------|
+| `b00t copilot skill list` | List available skills |
+| `b00t copilot skill install <name>` | Install a b00t-provided skill |
+| `b00t copilot skill create <name>` | Create a new skill from template |
+| `b00t copilot skill build <datum>` | Convert a b00t datum into a skill |
+
+### Default b00t skills for Copilot
+
+| Skill | Description |
+|-------|-------------|
+| `b00t-tool-install` | Install CLI tools via b00t |
+| `b00t-mcp-manage` | Manage MCP server installations |
+| `b00t-grok-query` | Query b00t knowledgebase |
+| `b00t-datum-validate` | Validate and check datum conformance |
+| `b00t-sysdiag` | System diagnostics and version checking |
+
+## ── Hooks ──────────────────────────────────────────────────────────────────────
+
+### Hook format for Copilot
+
+Hooks are JSON files in `.github/hooks/*.json`:
+
+```json
+{
+  "version": 1,
+  "hooks": {
+    "sessionStart": [
+      {
+        "type": "command",
+        "bash": "b00t status",
+        "timeoutSec": 5
+      }
+    ],
+    "preToolUse": [
+      {
+        "type": "command",
+        "bash": "_b00t_/runtimes/copilot/hooks/b00t-datum-guard.js \"$INPUT\"",
+        "timeoutSec": 10
+      }
+    ],
+    "sessionEnd": [
+      {
+        "type": "command",
+        "bash": "b00t session end",
+        "timeoutSec": 5
+      }
+    ]
+  }
+}
+```
+
+### Existing hooks ready for Copilot
+
+The hooks already compiled in `_b00t_/runtimes/copilot/hooks/` are compatible
+with Copilot's hook system. They need a Copilot-specific hook JSON config:
+
+| Hook | Hook Type | Purpose |
+|------|-----------|---------|
+| `b00t-bug-capture.js` | errorOccurred | Capture and log errors |
+| `b00t-context-monitor.js` | sessionStart / sessionEnd | Track context usage |
+| `b00t-datum-guard.js` | preToolUse | Guard dangerous commands |
+| `b00t-statusline.js` | sessionStart | Display b00t status |
+| `b00t-update-check.js` | sessionStart | Check for tool updates |
+
+### b00t copilot hook commands
+
+| Command | Action |
+|---------|--------|
+| `b00t copilot hook install` | Install hook JSON config to `.github/hooks/` |
+| `b00t copilot hook list` | List installed hooks |
+| `b00t copilot hook enable <name>` | Enable a specific hook |
+| `b00t copilot hook disable <name>` | Disable a specific hook |
+
+## ── Plugins ─────────────────────────────────────────────────────────────────────
+
+### Plugin structure
+
+A Copilot CLI plugin is a directory with a standard structure:
+
+```
+b00t-copilot-plugin/
+├── plugin.json             # Plugin manifest (required)
+├── README.md               # Documentation
+├── agents/                 # Custom agent profiles
+│   ├── b00t-expert.agent.md
+│   └── b00t-diagnostician.agent.md
+├── skills/                 # Skill directories
+│   ├── b00t-tool-install/
+│   │   └── SKILL.md
+│   └── b00t-mcp-manage/
+│       └── SKILL.md
+├── hooks/                  # Hook JSON configs
+│   └── b00t-hooks.json
+└── .mcp.json               # MCP server config
+```
+
+### plugin.json manifest
+
+```json
+{
+  "name": "b00t",
+  "version": "0.1.0",
+  "description": "b00t system management tools for Copilot CLI",
+  "agents": ["b00t-expert", "b00t-diagnostician"],
+  "skills": ["b00t-tool-install", "b00t-mcp-manage"],
+  "hooks": ["b00t-hooks"],
+  "mcp_servers": ["b00t-tools"]
+}
+```
+
+### b00t copilot plugin commands
+
+| Command | Action |
+|---------|--------|
+| `b00t copilot plugin build` | Build plugin from b00t datums |
+| `b00t copilot plugin install` | Install plugin to Copilot CLI |
+| `b00t copilot plugin publish` | Publish to marketplace (future) |
+
+## ── Datum-to-Copilot mapping ───────────────────────────────────────────────────
+
+b00t datums contain everything needed to generate Copilot configurations:
+
+| b00t Datum Type | Copilot Extension | Generation Method |
+|-----------------|-------------------|-------------------|
+| `.cli.toml` (CLI tool) | Skill (tool install guide) + MCP tool | Generate SKILL.md + add tool to MCP config |
+| `.mcp.toml` (MCP server) | MCP server config | Generate Copilot-format JSON/YAML config |
+| `.agent.toml` (agent profile) | Custom agent .agent.md | Translate TOML to YAML frontmatter |
+| `.role.toml` (agent role) | Custom agent | Generate agent profile with role prompt |
+| Datum collection | Plugin | Bundle multiple datums into plugin dir |
+
+## ── Implementation plan ─────────────────────────────────────────────────────────
+
+### Phase 1: MCP install target for Copilot (HIGH priority)
+
+**Goal**: `b00t mcp install <name> copilot` works and generates correct config.
+
+Steps:
+1. Add `"copilot"` to the list of valid install targets in
+   `b00t-cli/src/commands/mcp.rs`
+2. Create installation logic that:
+   - For Copilot CLI: writes to `.mcp.json` (same format as VS Code)
+   - For cloud agent: generates JSON snippet with `type`, `tools`, `env` fields
+   - Handles `$COPILOT_MCP_*` env var prefix for secrets
+3. Add `--cli` and `--cloud` flags to distinguish targets
+4. Write Copilot-format config generator function in
+   `b00t-cli/src/install/runtimes/copilot.rs` or new module
+5. Add tests for config generation
+
+**Files to modify**:
+- `b00t-cli/src/commands/mcp.rs` — Add "copilot" target
+- `b00t-cli/src/install/runtimes/copilot.rs` — Add MCP config generation
+- `b00t-cli/CLAUDE.md` — Document new target
+
+### Phase 2: Custom agent generation (HIGH priority)
+
+**Goal**: `b00t copilot agent create <name>` generates valid `.agent.md` files.
+
+Steps:
+1. Create `b00t-cli/src/commands/copilot.rs` with `CopilotCommands` enum
+2. Implement agent profile template engine
+3. Add `agent create`, `agent list`, `agent install` subcommands
+4. Register in `b00t-cli/src/commands/mod.rs`
+
+**Files to create**:
+- `b00t-cli/src/commands/copilot.rs` — Copilot subcommands
+
+**Files to modify**:
+- `b00t-cli/src/commands/mod.rs` — Register CopilotCommands
+
+### Phase 3: Skill management (MEDIUM priority)
+
+**Goal**: `b00t copilot skill install` installs b00t skills for Copilot.
+
+Steps:
+1. Create default skill templates in `_b00t_/runtimes/copilot/skills/`
+2. Implement skill install/ls/create commands
+3. Map b00t datums to skill SKILL.md files
+
+**Files to create**:
+- `_b00t_/runtimes/copilot/skills/b00t-tool-install/SKILL.md`
+- `_b00t_/runtimes/copilot/skills/b00t-mcp-manage/SKILL.md`
+- `_b00t_/runtimes/copilot/skills/b00t-grok-query/SKILL.md`
+- `_b00t_/runtimes/copilot/skills/b00t-datum-validate/SKILL.md`
+- `_b00t_/runtimes/copilot/skills/b00t-sysdiag/SKILL.md`
+
+### Phase 4: Hook installation (MEDIUM priority)
+
+**Goal**: Existing b00t hooks are installable to Copilot CLI via `b00t copilot hook install`.
+
+Steps:
+1. Create Copilot-specific hook JSON config file
+2. Implement hook install command
+3. Map existing `_b00t_/runtimes/copilot/hooks/*.js` to Copilot hook types
+
+**Files to create**:
+- `_b00t_/runtimes/copilot/hooks.json` — Copilot hook config
+
+### Phase 5: Plugin packaging (LOW priority)
+
+**Goal**: `b00t copilot plugin build` creates a Copilot CLI plugin from datums.
+
+Steps:
+1. Create plugin manifest template
+2. Implement plugin build command that collects agents, skills, hooks, MCP configs
+3. Create plugin install command
+4. Optionally publish to a marketplace
+
+### Phase 6: Discovery & auto-config (LOW priority)
+
+**Goal**: `b00t copilot discover` scans installed MCP servers and recommends
+Copilot configurations.
+
+Steps:
+1. Scan `_b00t_/*.mcp.toml` files
+2. Generate Copilot-format config snippets
+3. Print recommendations and setup instructions
+
+## ── Security considerations ────────────────────────────────────────────────────
+
+| Concern | Mitigation |
+|---------|------------|
+| **Secret exposure** | Use `$COPILOT_MCP_*` prefix for secrets stored as Agents secrets |
+| **Dangerous tools** | Copilot cloud agent requires explicit `tools` allowlist — b00t should default to read-only tools |
+| **Command injection** | Hook scripts should validate and sanitize input from Copilot |
+| **Trust boundary** | Copilot CLI asks for directory trust — b00t hooks should respect existing trust settings |
+| **MCP tool access** | Copilot uses MCP tools autonomously without approval — only register safe tools |
+
+## ── Future considerations ───────────────────────────────────────────────────────
+
+| Area | Description |
+|------|-------------|
+| **Copilot Memory** | b00t could seed Copilot Memory with b00t conventions and tool knowledge |
+| **VS Code custom agents** | Copilot custom agents also work in VS Code — agent profiles generated by b00t should be compatible |
+| **Enterprise agents** | Organization-level custom agents via `.github-private` repo |
+| **Cross-platform MCP** | b00t MCP servers running as HTTP/SSE could be registered with Copilot cloud agent as remote MCP |
+| **Plugin marketplace** | b00t plugin could be published to github/copilot-plugins marketplace |
+| **OAuth for remote MCP** | When Copilot supports OAuth for remote MCP, b00t could offer an HTTP MCP endpoint |
+
+# b00t:map v1
+# summary: GitHub Copilot Extensions integration for b00t-cli — MCP server registration (copilot install target), custom agents (.agent.md generation), skills (SKILL.md), hooks (JSON config), plugins (bundled distribution), and 6-phase implementation plan mapping all 7 Copilot extension points
+# tags: copilot, extensions, github, mcp, custom-agents, skills, hooks, plugins, integration, issue-30, implementation-plan
+# tier: ch0nky
+# cmds: b00t mcp install <name> copilot, b00t copilot agent create <name>, b00t copilot skill install <name>, b00t copilot hook install, b00t copilot plugin build, b00t copilot discover
+# complexity: 5
