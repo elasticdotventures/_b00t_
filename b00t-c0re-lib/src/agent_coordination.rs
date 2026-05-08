@@ -317,11 +317,16 @@ impl AgentCoordinator {
                 + d.as_secs()
         });
 
-        // Send the delegation message regardless of approval state.  If a gate
-        // is present and not yet approved the worker will store it as pending
-        // and wait for a TaskApproval message before executing.  Callers that
-        // need to know whether the task is pending vs. approved can inspect
-        // the returned `Option<TaskCompletion>` (None == pending / non-blocking).
+        // Delegate even when approval is still pending so the worker can track
+        // and handle the task in a pending-approval state.
+        if let Some(ref gate) = approval {
+            if !gate.is_approved() {
+                info!(
+                    "Delegating task {} to worker {} with approval still pending",
+                    task_id, worker_id
+                );
+            }
+        }
 
         let message = CoordinationMessage::TaskDelegation {
             captain_id: self.agent_metadata.agent_id.clone(),

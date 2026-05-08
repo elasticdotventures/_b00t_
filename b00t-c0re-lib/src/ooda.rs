@@ -82,23 +82,23 @@ impl OodaPhase {
 // Part 2: Guard rails — replace hardcoded limits
 // ---------------------------------------------------------------------------
 
-/// Safety-related configuration for OODA loop execution.
+/// Guard-rail and policy configuration for an OODA loop.
 ///
-/// These replace previously hardcoded limits so callers can tune
-/// iteration counts, failure tolerance, and optional executor-level
-/// policies such as wall-clock duration caps or approval gates.
-///
-/// Note: this type only carries configuration. Enforcement of any given
-/// field depends on the executor implementation that consumes it.
+/// This struct carries execution limits and higher-level policy metadata.
+/// In this module, callers MUST NOT assume every field is enforced by
+/// `run_phases()`: duration and approval settings are declarative unless an
+/// external orchestrator or future implementation explicitly applies them.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct OodaGuardRails {
     /// Maximum number of OODA iterations before the loop terminates.
     pub max_iterations: u32,
     /// Maximum number of failed iterations before the loop aborts.
     pub max_failures: u32,
-    /// Requested wall-clock time limit in seconds for executors that enforce one.
+    /// Declarative maximum wall-clock time in seconds for integrations that
+    /// enforce runtime duration limits; not enforced by `run_phases()`.
     pub max_duration_secs: u64,
-    /// Whether executors should require approval before entering `Acting`.
+    /// Declarative approval-gate requirement for integrations that enforce
+    /// human review before `Acting`; not enforced by `run_phases()`.
     pub require_approval: bool,
 }
 
@@ -170,21 +170,9 @@ fn check_peer_handshake_inner(paths: &[PathBuf]) -> Option<String> {
     for path in paths {
         if path.exists() {
             if let Ok(content) = std::fs::read_to_string(path) {
-                // Try structured JSON parse first — reliable against whitespace,
-                // key ordering, and escape sequences.
-                if let Ok(json) = serde_json::from_str::<serde_json::Value>(&content) {
-                    if let Some(variant) = json.get("variant_id").and_then(|v| v.as_str()) {
+                if let Ok(document) = serde_json::from_str::<serde_json::Value>(&content) {
+                    if let Some(variant) = document.get("variant_id").and_then(|v| v.as_str()) {
                         return Some(variant.to_string());
-                    }
-                }
-                // Fall back to simple "key: value" line parsing for plain-text
-                // handshake documents (non-JSON format).
-                for line in content.lines() {
-                    let mut parts = line.splitn(2, ':');
-                    if let (Some(key), Some(val)) = (parts.next(), parts.next()) {
-                        if key.trim() == "variant_id" {
-                            return Some(val.trim().to_string());
-                        }
                     }
                 }
             }
@@ -886,12 +874,70 @@ mod tests {
         assert_eq!(*loop_.phase(), OodaPhase::Idle);
     }
 
+    struct TestHomeDir {
+        path: std::path::PathBuf,
+    }
+
+    impl TestHomeDir {
+        fn new() -> Self {
+            let mut path = std::env::temp_dir();
+            let unique = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("system time should be after UNIX_EPOCH")
+                .as_nanos();
+            path.push(format!("b00t-ooda-test-{}-{}", std::process::id(), unique));
+            std::fs::create_dir_all(&path).expect("temp home dir should be created");
+            Self { path }
+        }
+
+        fn path(&self) -> &std::path::Path {
+            &self.path
+        }
+    }
+
+    impl Drop for TestHomeDir {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.path);
+        }
+    }
+
+    struct EnvVarGuard {
+        key: &'static str,
+        original: Option<std::ffi::OsString>,
+    }
+
+    impl EnvVarGuard {
+        fn set_path(key: &'static str, value: &std::path::Path) -> Self {
+            let original = std::env::var_os(key);
+            unsafe {
+                std::env::set_var(key, value);
+            }
+            Self { key, original }
+        }
+    }
+
+    impl Drop for EnvVarGuard {
+        fn drop(&mut self) {
+            match &self.original {
+                Some(value) => unsafe {
+                    std::env::set_var(self.key, value);
+                },
+                None => unsafe {
+                    std::env::remove_var(self.key);
+                },
+            }
+        }
+    }
+
     #[test]
     fn check_peer_handshake_no_file() {
-        // Use an empty path list — deterministic regardless of the environment.
-        // (The real check_peer_handshake() reads ~/.b00t/mesh/... which may
-        //  exist on developer machines; this variant is always None.)
-        let result = check_peer_handshake_inner(&[]);
+        // When no handshake file exists, should return None.
+        // 🤓 Force home resolution into a fresh temp dir so this test cannot observe a real ~/.b00t handshake.
+        let test_home = TestHomeDir::new();
+        let _home_guard = EnvVarGuard::set_path("HOME", test_home.path());
+        let _userprofile_guard = EnvVarGuard::set_path("USERPROFILE", test_home.path());
+
+        let result = check_peer_handshake();
         assert!(result.is_none());
     }
 
