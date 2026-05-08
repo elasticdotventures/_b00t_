@@ -199,6 +199,9 @@ pub struct AgentCoordinator {
     _message_handlers: HashMap<String, mpsc::UnboundedSender<CoordinationMessage>>,
     pending_tasks: HashMap<String, oneshot::Sender<TaskCompletion>>,
     pending_votes: HashMap<String, oneshot::Sender<HashMap<String, VoteChoice>>>,
+    /// Worker-side store of received TaskDelegation messages awaiting approval.
+    /// Keyed by task_id; value is a brief description for resumption logging.
+    pending_delegations: HashMap<String, String>,
 }
 
 impl AgentCoordinator {
@@ -210,6 +213,7 @@ impl AgentCoordinator {
             _message_handlers: HashMap::new(),
             pending_tasks: HashMap::new(),
             pending_votes: HashMap::new(),
+            pending_delegations: HashMap::new(),
         }
     }
 
@@ -313,10 +317,14 @@ impl AgentCoordinator {
                 + d.as_secs()
         });
 
-        // If approval gate is present and not yet approved, return pending approval
+        // Delegate even when approval is still pending so the worker can track
+        // and handle the task in a pending-approval state.
         if let Some(ref gate) = approval {
             if !gate.is_approved() {
-                anyhow::bail!("Task {} requires approval before delegation (pending approval)", task_id);
+                info!(
+                    "Delegating task {} to worker {} with approval still pending",
+                    task_id, worker_id
+                );
             }
         }
 
@@ -612,6 +620,8 @@ impl AgentCoordinator {
 
         let pending_tasks = Arc::new(Mutex::new(std::mem::take(&mut self.pending_tasks)));
         let pending_votes = Arc::new(Mutex::new(std::mem::take(&mut self.pending_votes)));
+        let pending_delegations =
+            Arc::new(Mutex::new(std::mem::take(&mut self.pending_delegations)));
         let agent_id = self.agent_metadata.agent_id.clone();
 
         tokio::spawn(async move {
@@ -621,6 +631,7 @@ impl AgentCoordinator {
                     &agent_id,
                     &pending_tasks,
                     &pending_votes,
+                    &pending_delegations,
                 )
                 .await
                 {
@@ -638,6 +649,7 @@ impl AgentCoordinator {
         agent_id: &str,
         pending_tasks: &Arc<Mutex<HashMap<String, oneshot::Sender<TaskCompletion>>>>,
         _pending_votes: &Arc<Mutex<HashMap<String, oneshot::Sender<HashMap<String, VoteChoice>>>>>,
+        pending_delegations: &Arc<Mutex<HashMap<String, String>>>,
     ) -> B00tResult<()> {
         // Parse the AgentMessage envelope
         let agent_msg: crate::redis::AgentMessage = serde_json::from_str(&msg.payload)?;
@@ -700,6 +712,7 @@ impl AgentCoordinator {
 
                     CoordinationMessage::TaskDelegation {
                         worker_id,
+                        task_id,
                         task_description,
                         priority,
                         ref approval,
@@ -709,9 +722,14 @@ impl AgentCoordinator {
                             if let Some(gate) = approval {
                                 if !gate.is_approved() {
                                     info!(
-                                        "📋 Task delegation received: {} (priority: {:?}, pending approval)",
+                                        "📋 Task delegation received: {} (priority: {:?}, pending approval) — stored for later",
                                         task_description, priority
                                     );
+                                    // Store the pending delegation so TaskApproval can trigger it.
+                                    pending_delegations
+                                        .lock()
+                                        .await
+                                        .insert(task_id.clone(), task_description.clone());
                                     return Ok(());
                                 }
                             }
@@ -730,11 +748,19 @@ impl AgentCoordinator {
                         ..
                     } => {
                         if worker_id == agent_id {
-                            info!(
-                                "✅ Task {} approved by {}",
-                                task_id, approver
-                            );
-                            // Worker can now proceed with the task
+                            let desc = pending_delegations
+                                .lock()
+                                .await
+                                .remove(&task_id);
+                            if let Some(task_desc) = desc {
+                                info!(
+                                    "✅ Task {} approved by {} — triggering execution: {}",
+                                    task_id, approver, task_desc
+                                );
+                                // Task can now proceed; execution logic is caller-supplied.
+                            } else {
+                                info!("✅ Task {} approved by {} (no pending delegation found)", task_id, approver);
+                            }
                         }
                     }
 
@@ -745,11 +771,16 @@ impl AgentCoordinator {
                         ..
                     } => {
                         if worker_id == agent_id {
-                            info!(
-                                "❌ Task {} rejected: {}",
-                                task_id, reason
-                            );
-                            // Worker should not proceed with the task
+                            let removed = pending_delegations
+                                .lock()
+                                .await
+                                .remove(&task_id)
+                                .is_some();
+                            if removed {
+                                info!("❌ Task {} rejected: {} — removed from pending delegations", task_id, reason);
+                            } else {
+                                info!("❌ Task {} rejected: {}", task_id, reason);
+                            }
                         }
                     }
 

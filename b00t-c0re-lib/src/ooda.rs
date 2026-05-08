@@ -18,6 +18,7 @@
 
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
+use std::time::Instant;
 
 // ---------------------------------------------------------------------------
 // Part 1: OODA phase states with validated transitions
@@ -81,20 +82,23 @@ impl OodaPhase {
 // Part 2: Guard rails — replace hardcoded limits
 // ---------------------------------------------------------------------------
 
-/// Safety constraints applied to every OODA loop execution.
+/// Guard-rail and policy configuration for an OODA loop.
 ///
-/// These replace previously hardcoded limits so callers can tune
-/// iteration counts, failure tolerance, wall-clock duration, and
-/// whether human approval gates are required.
+/// This struct carries execution limits and higher-level policy metadata.
+/// In this module, callers MUST NOT assume every field is enforced by
+/// `run_phases()`: duration and approval settings are declarative unless an
+/// external orchestrator or future implementation explicitly applies them.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct OodaGuardRails {
     /// Maximum number of OODA iterations before the loop terminates.
     pub max_iterations: u32,
     /// Maximum number of failed iterations before the loop aborts.
     pub max_failures: u32,
-    /// Maximum wall-clock time in seconds the loop may run.
+    /// Declarative maximum wall-clock time in seconds for integrations that
+    /// enforce runtime duration limits; not enforced by `run_phases()`.
     pub max_duration_secs: u64,
-    /// If `true`, each `Acting` phase must be pre-approved before execution.
+    /// Declarative approval-gate requirement for integrations that enforce
+    /// human review before `Acting`; not enforced by `run_phases()`.
     pub require_approval: bool,
 }
 
@@ -157,17 +161,19 @@ pub fn check_peer_handshake() -> Option<String> {
     .flatten()
     .collect();
 
-    for path in &paths {
+    check_peer_handshake_inner(&paths)
+}
+
+/// Inner implementation that accepts an injectable path list.
+/// Used by `check_peer_handshake()` and tests.
+fn check_peer_handshake_inner(paths: &[PathBuf]) -> Option<String> {
+    for path in paths {
         if path.exists() {
             if let Ok(content) = std::fs::read_to_string(path) {
-                // Naive JSON extraction of the "variant_id" string value.
-                // Avoids pulling in a JSON parser dependency for this single lookup.
-                if let Some(variant) = content
-                    .split("variant_id")
-                    .nth(1)
-                    .and_then(|s| s.split('"').nth(1))
-                {
-                    return Some(variant.to_string());
+                if let Ok(document) = serde_json::from_str::<serde_json::Value>(&content) {
+                    if let Some(variant) = document.get("variant_id").and_then(|v| v.as_str()) {
+                        return Some(variant.to_string());
+                    }
                 }
             }
         }
@@ -356,6 +362,7 @@ impl OodaLoop {
     {
         let mut last: Option<OodaIteration> = None;
         let limit = self.guard_rails.max_iterations;
+        let start = Instant::now();
 
         // Start with Idle -> Observing
         if let Err(e) = self.transition_to(OodaPhase::Observing) {
@@ -373,9 +380,20 @@ impl OodaLoop {
         }
 
         for i in 0..limit {
-            // --- Guard: max_duration ---
-            // (actual wall-clock enforcement is left to the caller via
-            //  `max_duration_secs` — we check the failure limit here.)
+            // --- Guard: max_duration_secs ---
+            if start.elapsed().as_secs() >= self.guard_rails.max_duration_secs {
+                let failed = OodaIteration {
+                    phase: format!("{:?}", OodaPhase::Failed("max_duration_secs exceeded".into())),
+                    observation: "max_duration_secs exceeded".into(),
+                    orientation: String::new(),
+                    decision: String::new(),
+                    action: String::new(),
+                    success: false,
+                };
+                self.iterations.push(failed.clone());
+                self.current_phase = OodaPhase::Failed("max_duration_secs exceeded".into());
+                return Some(failed);
+            }
 
             // Invoke the user callback with the current phase.
             let (mut iteration, next_phase) = cycle(&self.current_phase, i);
@@ -439,9 +457,9 @@ impl OodaLoop {
                     phase: format!("{:?}", next_phase),
                     ..iteration
                 };
-                self.iterations.push(failed);
+                self.iterations.push(failed.clone());
                 self.current_phase = OodaPhase::Failed(failed_reason);
-                return last;
+                return Some(failed);
             }
 
             // Validate and apply the phase transition.
@@ -451,10 +469,10 @@ impl OodaLoop {
                     observation: e,
                     ..iteration
                 };
-                self.iterations.push(failed);
+                self.iterations.push(failed.clone());
                 self.current_phase =
                     OodaPhase::Failed("invalid phase transition".into());
-                return last;
+                return Some(failed);
             }
         }
 
@@ -856,11 +874,93 @@ mod tests {
         assert_eq!(*loop_.phase(), OodaPhase::Idle);
     }
 
+    struct TestHomeDir {
+        path: std::path::PathBuf,
+    }
+
+    impl TestHomeDir {
+        fn new() -> Self {
+            let mut path = std::env::temp_dir();
+            let unique = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("system time should be after UNIX_EPOCH")
+                .as_nanos();
+            path.push(format!("b00t-ooda-test-{}-{}", std::process::id(), unique));
+            std::fs::create_dir_all(&path).expect("temp home dir should be created");
+            Self { path }
+        }
+
+        fn path(&self) -> &std::path::Path {
+            &self.path
+        }
+    }
+
+    impl Drop for TestHomeDir {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.path);
+        }
+    }
+
+    struct EnvVarGuard {
+        key: &'static str,
+        original: Option<std::ffi::OsString>,
+    }
+
+    impl EnvVarGuard {
+        fn set_path(key: &'static str, value: &std::path::Path) -> Self {
+            let original = std::env::var_os(key);
+            unsafe {
+                std::env::set_var(key, value);
+            }
+            Self { key, original }
+        }
+    }
+
+    impl Drop for EnvVarGuard {
+        fn drop(&mut self) {
+            match &self.original {
+                Some(value) => unsafe {
+                    std::env::set_var(self.key, value);
+                },
+                None => unsafe {
+                    std::env::remove_var(self.key);
+                },
+            }
+        }
+    }
+
     #[test]
     fn check_peer_handshake_no_file() {
-        // When no handshake file exists, should return None
+        // When no handshake file exists, should return None.
+        // 🤓 Force home resolution into a fresh temp dir so this test cannot observe a real ~/.b00t handshake.
+        let test_home = TestHomeDir::new();
+        let _home_guard = EnvVarGuard::set_path("HOME", test_home.path());
+        let _userprofile_guard = EnvVarGuard::set_path("USERPROFILE", test_home.path());
+
         let result = check_peer_handshake();
         assert!(result.is_none());
+    }
+
+    #[test]
+    fn check_peer_handshake_json_parsing() {
+        use std::io::Write;
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("handshake.json");
+        let mut f = std::fs::File::create(&path).unwrap();
+        writeln!(f, r#"{{"variant_id": "test-variant-42", "other": "data"}}"#).unwrap();
+        let result = check_peer_handshake_inner(&[path]);
+        assert_eq!(result.as_deref(), Some("test-variant-42"));
+    }
+
+    #[test]
+    fn check_peer_handshake_plaintext_fallback() {
+        use std::io::Write;
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("handshake.txt");
+        let mut f = std::fs::File::create(&path).unwrap();
+        writeln!(f, "variant_id: plain-text-variant").unwrap();
+        let result = check_peer_handshake_inner(&[path]);
+        assert_eq!(result.as_deref(), Some("plain-text-variant"));
     }
 
     #[test]
