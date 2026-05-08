@@ -5,6 +5,8 @@
 
 use anyhow::Result;
 use b00t_c0re_lib::AgentManager;
+use crate::calorie_tracker::CalorieTracker;
+use crate::governance::GovernanceRuntime;
 use b00t_c0re_lib::agent_coordination::{
     AgentCoordinator, AgentMetadata, MessageFilter, RequestUrgency, TaskCompletionStatus,
     TaskPriority,
@@ -738,6 +740,24 @@ async fn handle_invoke(
     config_override: Option<&std::path::Path>,
 ) -> Result<()> {
     use b00t_c0re_lib::agent_manager::{AgentManager, invoke_agent_executor};
+    use b00t_c0re_gov::errors::GovernanceError;
+
+    // Reject agent names with path separators or characters that could escape the store dir.
+    // Allowed: alphanumeric, dash, underscore, dot (no slashes, backslashes, or null bytes).
+    if agent.is_empty()
+        || !agent
+            .chars()
+            .all(|c| c.is_alphanumeric() || c == '-' || c == '_' || c == '.')
+    {
+        anyhow::bail!(
+            "Invalid agent name '{}': only alphanumeric characters, dashes, underscores and dots are allowed",
+            agent
+        );
+    }
+
+    // ── Governance + calorie check ──
+    let gov = GovernanceRuntime::init().await?;
+    let tracker = CalorieTracker::new();
 
     // Resolve config path: override → _b00t_/<agent>.agent.toml → cwd search
     let config_path = if let Some(p) = config_override {
@@ -782,10 +802,27 @@ async fn handle_invoke(
         executor.cli_args.join(" ")
     );
 
-    let result = invoke_agent_executor(executor, &env, prompt)
-        .map_err(|e| anyhow::anyhow!("Agent invocation failed: {}", e))?;
+    let result = tracker.execute_with_calories(
+        agent,
+        b00t_c0re_gov::scoring::AgentTier::LLM,
+        50.0,
+        || {
+            invoke_agent_executor(executor, &env, prompt)
+                .map_err(|e| GovernanceError::InvocationFailed(e.to_string()))
+        },
+    )?;
 
     println!("{}", result);
+
+    // ── Check for fired hooks ──
+    let fired = gov.check_hooks();
+    if !fired.is_empty() {
+        println!("⚠️  Fired governance hooks:");
+        for h in &fired {
+            println!("   - hook {}: {:?}", h.hook_id, h.event);
+        }
+    }
+
     Ok(())
 }
 
