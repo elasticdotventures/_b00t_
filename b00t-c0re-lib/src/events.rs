@@ -67,7 +67,11 @@ pub fn write_event(event: &str, detail: &str) {
         .open(&path)
     {
         let entry = B00tEvent::new(event, detail);
-        let _ = writeln!(file, "{}", entry.to_json_line());
+        // Single write_all + newline = one atomic syscall on Linux (PIPE_BUF safe).
+        // writeln! may issue two syscalls (data + '\n'), risking interleaved lines
+        // when multiple b00t processes append concurrently.
+        let line = format!("{}\n", entry.to_json_line());
+        let _ = std::io::Write::write_all(&mut file, line.as_bytes());
     }
 }
 
@@ -82,7 +86,8 @@ pub fn write_event_obj(event: &B00tEvent) {
         .append(true)
         .open(&path)
     {
-        let _ = writeln!(file, "{}", event.to_json_line());
+        let line = format!("{}\n", event.to_json_line());
+        let _ = std::io::Write::write_all(&mut file, line.as_bytes());
     }
 }
 
