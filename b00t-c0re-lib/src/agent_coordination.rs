@@ -313,10 +313,14 @@ impl AgentCoordinator {
                 + d.as_secs()
         });
 
-        // If approval gate is present and not yet approved, return pending approval
+        // Delegate even when approval is still pending so the worker can track
+        // and handle the task in a pending-approval state.
         if let Some(ref gate) = approval {
             if !gate.is_approved() {
-                anyhow::bail!("Task {} requires approval before delegation (pending approval)", task_id);
+                info!(
+                    "Delegating task {} to worker {} with approval still pending",
+                    task_id, worker_id
+                );
             }
         }
 
