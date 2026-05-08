@@ -81,20 +81,23 @@ impl OodaPhase {
 // Part 2: Guard rails — replace hardcoded limits
 // ---------------------------------------------------------------------------
 
-/// Safety constraints applied to every OODA loop execution.
+/// Guard-rail and policy configuration for an OODA loop.
 ///
-/// These replace previously hardcoded limits so callers can tune
-/// iteration counts, failure tolerance, wall-clock duration, and
-/// whether human approval gates are required.
+/// This struct carries execution limits and higher-level policy metadata.
+/// In this module, callers MUST NOT assume every field is enforced by
+/// `run_phases()`: duration and approval settings are declarative unless an
+/// external orchestrator or future implementation explicitly applies them.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct OodaGuardRails {
     /// Maximum number of OODA iterations before the loop terminates.
     pub max_iterations: u32,
     /// Maximum number of failed iterations before the loop aborts.
     pub max_failures: u32,
-    /// Maximum wall-clock time in seconds the loop may run.
+    /// Declarative maximum wall-clock time in seconds for integrations that
+    /// enforce runtime duration limits; not enforced by `run_phases()`.
     pub max_duration_secs: u64,
-    /// If `true`, each `Acting` phase must be pre-approved before execution.
+    /// Declarative approval-gate requirement for integrations that enforce
+    /// human review before `Acting`; not enforced by `run_phases()`.
     pub require_approval: bool,
 }
 
