@@ -2,6 +2,7 @@ use b00t_c0re_hierarchy::recruitment::*;
 use b00t_c0re_hierarchy::roles::*;
 
 fn make_agent(id: &str, role: Role, skills: &[&str], alive: bool) -> Agent {
+    let is_player = matches!(role, Role::Player);
     Agent {
         id: id.to_string(),
         role,
@@ -9,6 +10,7 @@ fn make_agent(id: &str, role: Role, skills: &[&str], alive: bool) -> Agent {
         cake_balance: 100.0,
         is_alive: alive,
         manager_id: None,
+        is_player,
     }
 }
 
@@ -18,15 +20,74 @@ fn test_captain_creates_team() {
     let mate = make_agent("mate1", Role::Mate, &["navigation"], true);
     let player = make_agent("p1", Role::Player, &["rust"], true);
 
-    let team = Team {
-        captain_id: captain.id.clone(),
-        mate_ids: vec![mate.id.clone()],
-        player_ids: vec![player.id.clone()],
-    };
+    let mut team = Team::new(&captain.id);
+    team.add_mate(&mate.id);
+    team.add_player(&player.id);
 
     assert_eq!(team.captain_id, "cap1");
     assert_eq!(team.mate_ids.len(), 1);
     assert_eq!(team.player_ids.len(), 1);
+    assert!(team.mate_ids.contains(&"mate1".to_string()));
+    assert!(team.player_ids.contains(&"p1".to_string()));
+}
+
+#[test]
+fn test_team_add_remove_mate() {
+    let mut team = Team::new("cap1");
+
+    team.add_mate("mate1");
+    team.add_mate("mate2");
+    assert_eq!(team.mate_ids.len(), 2);
+
+    // Duplicate add should not increase count
+    team.add_mate("mate1");
+    assert_eq!(team.mate_ids.len(), 2);
+
+    team.remove_mate("mate1");
+    assert_eq!(team.mate_ids.len(), 1);
+    assert_eq!(team.mate_ids[0], "mate2");
+}
+
+#[test]
+fn test_team_add_remove_player() {
+    let mut team = Team::new("cap1");
+
+    team.add_player("p1");
+    team.add_player("p2");
+    assert_eq!(team.player_ids.len(), 2);
+
+    team.remove_player("p1");
+    assert_eq!(team.player_ids.len(), 1);
+    assert_eq!(team.player_ids[0], "p2");
+}
+
+#[test]
+fn test_mission_topic_lifecycle() {
+    let mut mission = MissionTopic::new(
+        "m1",
+        500.0,
+        "Build the navigation module",
+        vec!["rust".to_string(), "navigation".to_string()],
+    );
+
+    assert_eq!(mission.status, TopicStatus::Open);
+    assert_eq!(mission.bounty, 500.0);
+    assert_eq!(mission.description, "Build the navigation module");
+    assert_eq!(mission.required_skills.len(), 2);
+
+    mission.start();
+    assert_eq!(mission.status, TopicStatus::InProgress);
+
+    mission.complete();
+    assert_eq!(mission.status, TopicStatus::Completed);
+}
+
+#[test]
+fn test_mission_abandon() {
+    let mut mission = MissionTopic::new("m2", 250.0, "Scout the perimeter", vec!["stealth".to_string()]);
+    mission.start();
+    mission.abandon();
+    assert_eq!(mission.status, TopicStatus::Abandoned);
 }
 
 #[test]
@@ -44,7 +105,7 @@ fn test_recruit_request_ranks_by_skill() {
         make_agent("a3", Role::Player, &["python", "docker"], true),
     ];
 
-    let response = process_recruit_request(&request, &agents);
+    let response = process_recruit_request(&request, &agents, "op1");
 
     assert_eq!(response.candidates.len(), 2);
     // a2 has 3 matching skills, a3 has 2 — a2 should be first
@@ -90,6 +151,7 @@ fn test_recruit_no_candidates_returns_empty() {
         make_agent("a2", Role::Player, &["python"], true),
     ];
 
-    let response = process_recruit_request(&request, &agents);
+    let response = process_recruit_request(&request, &agents, "op1");
     assert!(response.candidates.is_empty());
+    assert_eq!(response.operator_id, "op1");
 }

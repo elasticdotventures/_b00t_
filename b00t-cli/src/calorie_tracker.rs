@@ -192,16 +192,16 @@ mod tests {
     #[test]
     fn test_insufficient_calories_error() {
         let (tracker, _tmp) = setup_tracker();
-        // Algorithmic tier: 0.01x multiplier on base_cost=10 => 0.1 cost
-        // Starting with 1000 calories, try to burn 10000 * 0.01 = 100
-        let result = tracker.execute_with_calories("algo-agent", AgentTier::Algorithmic, 100_000.0, || {
+        // Algorithmic tier: 0.01x multiplier on base_cost=200_000 => 2000 cost
+        // Starting with 1000 calories, 2000 required → InsufficientCalories
+        let result = tracker.execute_with_calories("algo-agent", AgentTier::Algorithmic, 200_000.0, || {
             Ok::<_, GovernanceError>("should not run")
         });
         assert!(result.is_err());
         match result.unwrap_err() {
             GovernanceError::InsufficientCalories { available, required } => {
                 assert!((available - 1000.0).abs() < f64::EPSILON);
-                assert!((required - 1000.0).abs() < f64::EPSILON); // 100_000 * 0.01 = 1000
+                assert!((required - 2000.0).abs() < f64::EPSILON); // 200_000 * 0.01 = 2000
             }
             e => panic!("Expected InsufficientCalories, got: {}", e),
         }

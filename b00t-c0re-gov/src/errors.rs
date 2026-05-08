@@ -17,6 +17,9 @@ pub enum GovernanceError {
     
     #[error("Insufficient calories: {available:.1} available, {required:.1} required")]
     InsufficientCalories { available: f64, required: f64 },
+
+    #[error("Agent invocation failed: {0}")]
+    InvocationFailed(String),
     
     #[error("IO error: {0}")]
     Io(#[from] std::io::Error),
