@@ -120,41 +120,25 @@ cfg_if::cfg_if! {
     if #[cfg(feature = "store-oxigraph")] {
         pub type ActiveKnowledgeStore = OxigraphStore;
         pub const COMPILED_KNOWLEDGE_BACKEND: &str = "oxigraph";
-    } else if #[cfg(feature = "store-neumann")] {
-        pub type ActiveKnowledgeStore = NeumannStore;
-        pub const COMPILED_KNOWLEDGE_BACKEND: &str = "neumann";
-    } else {
-        pub type ActiveKnowledgeStore = MissingKnowledgeStore;
-        pub const COMPILED_KNOWLEDGE_BACKEND: &str = "none";
     }
 }
+
+#[cfg(feature = "store-neumann")]
+pub type ActiveKnowledgeStore = NeumannStore;
+
+#[cfg(feature = "store-neumann")]
+pub const COMPILED_KNOWLEDGE_BACKEND: &str = "neumann";
 
 pub fn compiled_knowledge_backend() -> &'static str {
     COMPILED_KNOWLEDGE_BACKEND
 }
 
-#[cfg(not(any(feature = "store-neumann", feature = "store-oxigraph")))]
-#[derive(Debug, Clone)]
-pub struct MissingKnowledgeStore;
-
-#[cfg(not(any(feature = "store-neumann", feature = "store-oxigraph")))]
-#[async_trait::async_trait]
-impl KnowledgeStoreBackend for MissingKnowledgeStore {
-    fn try_new(_config: StoreConfig) -> anyhow::Result<Self> {
-        anyhow::bail!("no b00t-c0re-lib storage backend enabled")
-    }
-
-    async fn query(&self, _query: SemanticQuery) -> anyhow::Result<QueryResult> {
-        anyhow::bail!("no b00t-c0re-lib storage backend enabled")
-    }
-
-    async fn upsert_facts(&self, _facts: Vec<FactRecord>) -> anyhow::Result<()> {
-        anyhow::bail!("no b00t-c0re-lib storage backend enabled")
-    }
-
-    async fn upsert_edges(&self, _edges: Vec<EdgeRecord>) -> anyhow::Result<()> {
-        anyhow::bail!("no b00t-c0re-lib storage backend enabled")
-    }
+fn compiled_knowledge_backend_data_path(namespace: &str) -> anyhow::Result<std::path::PathBuf> {
+    Ok(dirs::home_dir()
+        .ok_or_else(|| anyhow::anyhow!("Cannot resolve $HOME"))?
+        .join(".b00t")
+        .join(compiled_knowledge_backend())
+        .join(namespace))
 }
 
 #[cfg(feature = "store-neumann")]
@@ -509,7 +493,7 @@ pub struct IrontologyQueryItem {
     pub score: f32,
 }
 
-/// Client wrapping a shared `NeumannStore` for b00t grok operations
+/// Client wrapping the compiled knowledge-store backend for b00t grok operations
 #[derive(Clone)]
 pub struct IrontologyBridgeClient {
     store: std::sync::Arc<ActiveKnowledgeStore>,
@@ -517,14 +501,10 @@ pub struct IrontologyBridgeClient {
 }
 
 impl IrontologyBridgeClient {
-    /// Create with sled persistence at `~/.b00t/neumann/<namespace>/`
+    /// Create with backend-specific persistence at `~/.b00t/<backend>/<namespace>/`
     pub fn new(namespace: impl Into<String>) -> anyhow::Result<Self> {
         let ns: String = namespace.into();
-        let data_dir = dirs::home_dir()
-            .ok_or_else(|| anyhow::anyhow!("Cannot resolve $HOME"))?
-            .join(".b00t")
-            .join("neumann")
-            .join(&ns);
+        let data_dir = compiled_knowledge_backend_data_path(&ns)?;
 
         std::fs::create_dir_all(&data_dir)?;
 
@@ -542,7 +522,7 @@ impl IrontologyBridgeClient {
         })
     }
 
-    /// Ingest a `DatumNode` into the neumann store
+    /// Ingest a `DatumNode` into the compiled knowledge store
     pub async fn ingest(&self, datum: &DatumNode) -> anyhow::Result<IrontologyIngestResult> {
         let id = uuid::Uuid::new_v4().to_string();
         let facts = datum.to_fact_records(&id);
@@ -739,6 +719,15 @@ mod tests {
         assert_eq!(compiled_knowledge_backend(), "oxigraph");
     }
 
+    #[test]
+    fn test_compiled_knowledge_backend_data_path_uses_backend_name() {
+        let path = compiled_knowledge_backend_data_path("test").expect("path");
+        let suffix = std::path::Path::new(".b00t")
+            .join(compiled_knowledge_backend())
+            .join("test");
+        assert!(path.ends_with(suffix));
+    }
+
     #[tokio::test]
     async fn test_active_store_persists_facts_for_later_queries() {
         let tmp = tempfile::tempdir().expect("tempdir");
@@ -747,7 +736,8 @@ mod tests {
             namespace: "test".to_string(),
             data_path: Some(tmp.path().to_path_buf()),
         };
-        let store = ActiveKnowledgeStore::try_new(config.clone()).expect("store");
+        let store = <ActiveKnowledgeStore as KnowledgeStoreBackend>::try_new(config.clone())
+            .expect("store");
         store
             .upsert_facts(vec![FactRecord {
                 subject: "b00t:datum/mcp/orchid".to_string(),
@@ -758,7 +748,8 @@ mod tests {
             .expect("upsert");
 
         drop(store);
-        let reloaded = ActiveKnowledgeStore::try_new(config).expect("reload");
+        let reloaded =
+            <ActiveKnowledgeStore as KnowledgeStoreBackend>::try_new(config).expect("reload");
         let result = reloaded
             .query(SemanticQuery {
                 subject: None,
@@ -774,7 +765,7 @@ mod tests {
     #[tokio::test]
     async fn test_bridge_ingest_then_query_returns_content() {
         let tmp = tempfile::tempdir().expect("tempdir");
-        let store = ActiveKnowledgeStore::try_new(StoreConfig {
+        let store = <ActiveKnowledgeStore as KnowledgeStoreBackend>::try_new(StoreConfig {
             endpoint: "local".to_string(),
             namespace: "test".to_string(),
             data_path: Some(tmp.path().to_path_buf()),
