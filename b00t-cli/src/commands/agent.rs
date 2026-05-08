@@ -793,10 +793,7 @@ async fn handle_invoke(
         agent,
         b00t_c0re_gov::scoring::AgentTier::LLM,
         50.0,
-        || {
-            invoke_agent_executor(executor, &env, prompt)
-                .map_err(|e| GovernanceError::ContextCorrupt(e.to_string()))
-        },
+        || invoke_agent_executor(executor, &env, prompt),
     )?;
 
     println!("{}", result);
