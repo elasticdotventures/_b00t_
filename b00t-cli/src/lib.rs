@@ -210,6 +210,15 @@ pub struct K0mmand3rDatumConfig {
 
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Default)]
 #[serde(default)]
+pub struct KnowledgeConfig {
+    pub backend: Option<String>,
+    pub namespace: Option<String>,
+    pub data_path: Option<String>,
+    pub xor_group: Option<String>,
+}
+
+#[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Default)]
+#[serde(default)]
 pub struct BootDatum {
     pub name: String,
     #[serde(rename = "type", deserialize_with = "deserialize_datum_type")]
@@ -281,6 +290,9 @@ pub struct BootDatum {
     // Slash-command orchestration metadata for datum-driven /k0mmand3r dispatch
     #[serde(skip_serializing_if = "Option::is_none")]
     pub k0mmand3r: Option<K0mmand3rDatumConfig>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub knowledge: Option<KnowledgeConfig>,
 
     // MCP-specific multi-method support - these will be handled by datum_mcp module
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -391,6 +403,8 @@ pub struct GateSpec {
     /// Rhai expression to evaluate; must return true for gate to pass
     /// Available vars: name, datum_type, path
     pub rhai: Option<String>,
+    /// Knowledge backend that must match the compiled b00t-c0re-lib backend
+    pub knowledge_backend: Option<String>,
     /// Freeform description shown when gate fails
     pub hint: Option<String>,
 }
@@ -481,6 +495,17 @@ pub fn evaluate_gates(gates: &[GateSpec], path: &str) -> Vec<GateResult> {
             }
         }
 
+        if let Some(ref backend) = gate.knowledge_backend {
+            if b00t_c0re_lib::compiled_knowledge_backend() != backend {
+                passed = false;
+                reasons.push(format!(
+                    "knowledge backend '{}' does not match compiled backend '{}'",
+                    backend,
+                    b00t_c0re_lib::compiled_knowledge_backend()
+                ));
+            }
+        }
+
         let reason = if reasons.is_empty() {
             gate.hint.clone().unwrap_or_else(|| "gate passed".to_string())
         } else {
@@ -556,6 +581,9 @@ pub fn eval_gate_status(kind: &str, spec: &str) -> &'static str {
         }
         "file" => {
             if expand_tilde_path(spec).exists() { "pass" } else { "fail" }
+        }
+        "knowledge_backend" => {
+            if b00t_c0re_lib::compiled_knowledge_backend() == spec { "pass" } else { "fail" }
         }
         "rhai" => "unknown",
         _ => "unknown",
@@ -639,6 +667,20 @@ pub fn list_gates(path: &str, search: Option<&str>) -> Result<Vec<GateReport>> {
                 if let Some(r) = &g.rhai {
                     push_gate("rhai", r, "explicit", g.hint.clone());
                 }
+                if let Some(backend) = &g.knowledge_backend {
+                    push_gate("knowledge_backend", backend, "explicit", g.hint.clone());
+                }
+            }
+        }
+
+        if let Some(knowledge) = &datum.knowledge {
+            if let Some(backend) = &knowledge.backend {
+                push_gate(
+                    "knowledge_backend",
+                    backend,
+                    "auto:knowledge",
+                    Some("datum knowledge backend must match compiled b00t-c0re-lib backend".to_string()),
+                );
             }
         }
 
@@ -1051,8 +1093,9 @@ fn create_mcp_datum_from_json(
                     let file = g.get("file").and_then(|v| v.as_str());
                     let env = g.get("env").and_then(|v| v.as_str());
                     let rhai = g.get("rhai").and_then(|v| v.as_str());
+                    let knowledge_backend = g.get("knowledge_backend").and_then(|v| v.as_str());
                     let hint = g.get("hint").and_then(|v| v.as_str()).map(|s| s.to_string());
-                    if cmd.is_none() && file.is_none() && env.is_none() && rhai.is_none() {
+                    if cmd.is_none() && file.is_none() && env.is_none() && rhai.is_none() && knowledge_backend.is_none() {
                         return None;
                     }
                     Some(GateSpec {
@@ -1060,6 +1103,7 @@ fn create_mcp_datum_from_json(
                         file: file.map(|s| s.to_string()),
                         env: env.map(|s| s.to_string()),
                         rhai: rhai.map(|s| s.to_string()),
+                        knowledge_backend: knowledge_backend.map(|s| s.to_string()),
                         hint,
                     })
                 }).collect()

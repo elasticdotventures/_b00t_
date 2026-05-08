@@ -25,9 +25,12 @@ name = "b00t-lsp"
 path = "src/bin/b00t-lsp.rs"
 
 [features]
-default = []
+default = ["store-neumann"]
 python = ["pyo3"]
 ledgrrr-events = []
+store-neumann = []
+store-oxigraph = ["dep:oxigraph"]
+oxigraph = ["store-oxigraph"]
 
 [dependencies]
 pyo3 = { version = "0.27", features = ["extension-module"], optional = true }
@@ -63,6 +66,8 @@ tracing.workspace = true
 lazy_static = "1.5.0"
 async-trait = "0.1"
 futures = "0.3"
+cfg-if = "1.0.4"
+oxigraph = { version = "0.5.8", optional = true }
 
 [dev-dependencies]
 tempfile = "3.10"

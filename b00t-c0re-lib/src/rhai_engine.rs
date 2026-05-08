@@ -152,6 +152,14 @@ impl RhaiEngine {
             std::env::var(var).unwrap_or_default()
         });
 
+        engine.register_fn("compiled_knowledge_backend", || -> String {
+            crate::compiled_knowledge_backend().to_string()
+        });
+
+        engine.register_fn("knowledge_backend_matches", |expected: &str| -> bool {
+            crate::compiled_knowledge_backend() == expected
+        });
+
         engine.register_fn("set_env", |var: &str, value: &str| unsafe {
             std::env::set_var(var, value);
         });
@@ -198,6 +206,7 @@ impl RhaiEngine {
                             .map(|o| o.status.success())
                             .unwrap_or(false)
                     }
+                    "knowledge_backend" => crate::compiled_knowledge_backend() == spec,
                     "file" => {
                         let expanded = if spec.starts_with('~') {
                             let home = std::env::var("HOME").unwrap_or_default();
@@ -541,6 +550,23 @@ mod tests {
         "#;
 
         let result = engine.execute_script(script).unwrap();
+        assert!(result.cast::<bool>());
+    }
+
+    #[test]
+    fn test_knowledge_backend_functions() {
+        let context = create_test_context();
+        let engine = RhaiEngine::new(context).unwrap();
+
+        let backend = engine
+            .execute_script("compiled_knowledge_backend()")
+            .unwrap()
+            .cast::<String>();
+        assert!(["neumann", "oxigraph", "none"].contains(&backend.as_str()));
+
+        let result = engine
+            .execute_script("knowledge_backend_matches(compiled_knowledge_backend())")
+            .unwrap();
         assert!(result.cast::<bool>());
     }
 }

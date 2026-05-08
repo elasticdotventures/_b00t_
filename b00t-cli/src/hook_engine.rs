@@ -303,6 +303,7 @@ fn build_engine() -> Engine {
     engine.register_fn("gate_check", |kind: &str, spec: &str| -> Result<bool, Box<EvalAltResult>> {
         let result = match kind {
             "command" => std::process::Command::new("which").arg(spec).output().map(|o| o.status.success()).unwrap_or(false),
+            "knowledge_backend" => b00t_c0re_lib::compiled_knowledge_backend() == spec,
             "file" => {
                 let expanded = if spec.starts_with('~') {
                     let home = std::env::var("HOME").unwrap_or_default();

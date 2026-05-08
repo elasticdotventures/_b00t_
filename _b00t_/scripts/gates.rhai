@@ -8,6 +8,7 @@
 //
 // Auto-derived gates:
 //   requires = ["docker","node"] → gate_check("command", "docker")
+//   [b00t.knowledge] backend     → gate_check("knowledge_backend", backend)
 //   [b00t.env] KEY = "VAL"       → gate_check("env", "KEY")
 //   [[b00t.mcp.stdio]] env       → gate_check("env", key) for each env entry
 //   Explicit [[b00t.gate]]       → command/file/env/rhai from datum metadata
@@ -47,6 +48,7 @@ fn derive_gates(content) {
     let gates = [];
     let lines = content.split("\n");
     let in_env_block = false;
+    let in_knowledge_block = false;
     let in_stdio_env = false;
     let in_explicit_gate = false;
     let mut ckind = "";
@@ -57,16 +59,17 @@ fn derive_gates(content) {
         let t = strip(line);
 
         if t == "[b00t.env]" { in_env_block = true; continue; }
+        if t == "[b00t.knowledge]" { in_knowledge_block = true; continue; }
         if t == "[b00t.mcp.stdio.env]" { in_stdio_env = true; continue; }
         if t.starts_with("[[b00t.gate]]") {
             in_explicit_gate = true; ckind = ""; cspec = ""; chint = "";
             continue;
         }
-        if t.starts_with("[") && (in_env_block || in_stdio_env || in_explicit_gate) {
+        if t.starts_with("[") && (in_env_block || in_knowledge_block || in_stdio_env || in_explicit_gate) {
             if in_explicit_gate && ckind != "" && cspec != "" {
                 gates = gates + #{ kind: ckind, spec: cspec, hint: chint };
             }
-            in_env_block = false; in_stdio_env = false; in_explicit_gate = false;
+            in_env_block = false; in_knowledge_block = false; in_stdio_env = false; in_explicit_gate = false;
         }
 
         // requires → command gates
@@ -97,6 +100,15 @@ fn derive_gates(content) {
             }
         }
 
+        if in_knowledge_block && t.starts_with("backend = ") {
+            let backend = unquote(t.sub_string(10));
+            if backend != "" {
+                let exists = false;
+                for g in gates { if g.kind == "knowledge_backend" && g.spec == backend { exists = true; } }
+                if !exists { gates = gates + #{ kind: "knowledge_backend", spec: backend, hint: "compiled knowledge backend mismatch" }; }
+            }
+        }
+
         // [[b00t.mcp.stdio]] env field → env gates
         if (t.starts_with("env = ") || t.starts_with("env={")) && !in_env_block {
             let raw = if t.starts_with("env = ") { t.sub_string(6) } else { t.sub_string(5) };
@@ -120,6 +132,7 @@ fn derive_gates(content) {
             if t.starts_with("file = ") { ckind = "file"; cspec = unquote(t.sub_string(7)); }
             if t.starts_with("env = ") { ckind = "env"; cspec = unquote(t.sub_string(5)); }
             if t.starts_with("rhai = ") { ckind = "rhai"; cspec = unquote(t.sub_string(7)); }
+            if t.starts_with("knowledge_backend = ") { ckind = "knowledge_backend"; cspec = unquote(t.sub_string(20)); }
             if t.starts_with("hint = ") { chint = unquote(t.sub_string(7)); }
         }
     }
