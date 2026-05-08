@@ -119,7 +119,11 @@ impl GovernanceRuntime {
 
     /// Register a hook that fires when `system.stop` is emitted.
     /// Returns the hook ID (`Uuid`) so the caller can cancel it later.
-    pub fn register_stop_hook(&self, context: AgentContext, ttl_ms: Option<u64>) -> Result<uuid::Uuid> {
+    ///
+    /// The caller's `context.hook_token` is overwritten with the newly generated
+    /// token so that `ContextStore` filename keys and `list_pending()` results
+    /// are always consistent with the returned `Uuid`.
+    pub fn register_stop_hook(&self, mut context: AgentContext, ttl_ms: Option<u64>) -> Result<uuid::Uuid> {
         let id = uuid::Uuid::new_v4();
         let token = HookToken {
             id,
@@ -128,6 +132,9 @@ impl GovernanceRuntime {
             ttl_ms,
             description: "system stop hook".to_string(),
         };
+        // Align context snapshot so the store key (token.id) and
+        // context.hook_token.id are identical — required for list_pending() and expiry cleanup.
+        context.hook_token = token.clone();
         self.register_hook(token, context)
             .context("failed to register stop hook")?;
         Ok(id)
@@ -554,6 +561,23 @@ mod tests {
         };
 
         let hook_id = gov.register_stop_hook(context, Some(5000)).unwrap();
+
+        // Verify context.hook_token.id was aligned to the returned hook_id
+        // by checking list_pending() — mismatch here would indicate a store key bug.
+        let pending = gov.store.list_pending().unwrap();
+        assert!(
+            pending.iter().any(|t| t.id == hook_id),
+            "list_pending() must return the hook with id matching the registered hook_id"
+        );
+        // Also verify the persisted context has the correct hook_token.id
+        let loaded = gov.store.load_by_id(&hook_id).unwrap();
+        assert!(loaded.is_some(), "store should have context keyed by hook_id");
+        assert_eq!(
+            loaded.unwrap().hook_token.id,
+            hook_id,
+            "stored context.hook_token.id must equal the returned hook_id"
+        );
+
         gov.emit_stop_event();
         tokio::time::sleep(Duration::from_millis(100)).await;
 
