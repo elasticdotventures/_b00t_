@@ -37,10 +37,6 @@ hint = "CLI fallback via npx @microsoft/learn-cli (not MCP protocol, terminal-on
 topic = "learn-mcp"
 auto_digest = true
 
-[[b00t.gate]]
-internet = true
-hint = "Internet connection required for remote MCP endpoint"
-
 [[b00t.usage]]
 description = "Install in VS Code (one-click)"
 command = "Use VS Code 'Install Microsoft Learn MCP' badge or search @mcp learn in Extensions"
