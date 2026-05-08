@@ -5,7 +5,9 @@
 //! - `b00t_datum!` macro: declarative DSL → `DatumNode` literal
 //! - `IrontologyBridgeClient`: wraps the active store backend for ingest/query without MCP subprocess
 //!   (MCP transport pending: vendor/irontology-mcp has no main.rs yet)
-//! - Storage: Cargo-selected backend at `~/.b00t/neumann/<namespace>/`
+//! - Storage: Cargo-selected backend, using default paths
+//!   `~/.b00t/neumann/<namespace>/` for Neumann and
+//!   `~/.b00t/oxigraph/<namespace>/` for Oxigraph
 //!
 //! # Semantic mapping
 //! b00t datum → irontology `FactRecord` triples:
