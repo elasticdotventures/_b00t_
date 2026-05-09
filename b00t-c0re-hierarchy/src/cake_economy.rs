@@ -319,8 +319,6 @@ mod tests {
     use crate::roles::Role;
 
     fn make_agent(id: &str, balance: f64, alive: bool) -> Agent {
-        let role = Role::Player;
-        let is_player = matches!(role, Role::Player);
         Agent {
             id: id.to_string(),
             role: Role::Executor,
@@ -328,7 +326,7 @@ mod tests {
             cake_balance: balance,
             is_alive: alive,
             manager_id: None,
-            is_player,
+            is_player: false,
         }
     }
 

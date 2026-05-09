@@ -47,7 +47,7 @@ mod tests {
     fn make_agent(id: &str) -> Agent {
         Agent {
             id: id.to_string(),
-            role: Role::Mate,
+            role: Role::Specialist,
             skills: vec!["rust".to_string(), "governance".to_string()],
             cake_balance: 50.0,
             is_alive: true,

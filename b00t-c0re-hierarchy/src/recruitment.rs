@@ -23,7 +23,12 @@ pub struct RecruitResponse {
 pub struct HireAction {
     pub captain_id: String,
     pub agent_id: String,
-    pub role: Role, // Executor or Specialist
+    /// Expected hireable role for the recruited agent.
+    /// Recruitment normally assigns operational roles such as
+    /// `Role::Executor` or `Role::Specialist`; callers should avoid
+    /// passing unrelated roles unless the processing path explicitly
+    /// supports them.
+    pub role: Role,
 }
 
 /// Score an agent's skill match against required skills.
@@ -89,7 +94,6 @@ mod tests {
     use super::*;
 
     fn make_agent(id: &str, role: Role, skills: &[&str], alive: bool) -> Agent {
-        let is_player = matches!(role, Role::Player);
         Agent {
             id: id.to_string(),
             role,
@@ -97,7 +101,7 @@ mod tests {
             cake_balance: 100.0,
             is_alive: alive,
             manager_id: None,
-            is_player,
+            is_player: false,
         }
     }
 
@@ -126,7 +130,6 @@ mod tests {
         let response = process_recruit_request(&request, &agents, "op1");
 
         assert_eq!(response.candidates.len(), 2);
-        // a2 has 3 matching skills, a3 has 2 — a2 should be first
         assert_eq!(response.candidates[0].id, "a2");
         assert_eq!(response.candidates[1].id, "a3");
     }
@@ -191,7 +194,7 @@ mod tests {
             bounty_share: 10.0,
         };
 
-        let agents = vec![make_agent("a1", Role::Mate, &["rust"], true)];
+        let agents = vec![make_agent("a1", Role::Specialist, &["rust"], true)];
 
         let response = process_recruit_request(&request, &agents, "operator-42");
         assert_eq!(response.operator_id, "operator-42");

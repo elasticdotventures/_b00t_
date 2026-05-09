@@ -39,7 +39,7 @@ impl GovernanceGate for AtTimestampGate {
         // TTL = (target - now) ms + 60 s grace so the hook stays valid until it can fire.
         // If timestamp is in the past or zero, use None (hook fires immediately or is ignored).
         let ttl_ms = if timestamp > now_secs {
-            let diff_secs = (timestamp - now_secs) as u64; // safe: we verified timestamp > now_secs
+            let diff_secs = (timestamp - now_secs) as u64;
             Some(diff_secs.saturating_mul(1_000).saturating_add(60_000))
         } else {
             None
