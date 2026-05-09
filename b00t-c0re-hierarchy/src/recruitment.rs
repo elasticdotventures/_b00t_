@@ -23,6 +23,11 @@ pub struct RecruitResponse {
 pub struct HireAction {
     pub captain_id: String,
     pub agent_id: String,
+    /// Expected hireable role for the recruited agent.
+    /// Recruitment normally assigns operational roles such as
+    /// `Role::Executor` or `Role::Specialist`; callers should avoid
+    /// passing unrelated roles unless the processing path explicitly
+    /// supports them.
     pub role: Role,
 }
 
