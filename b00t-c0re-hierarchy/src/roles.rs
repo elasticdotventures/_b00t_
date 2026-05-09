@@ -19,6 +19,12 @@ pub enum Role {
     Captain,
     /// Executor — runs autonomous task loops, executes backlog items
     Executor,
+    /// Legacy alias kept for backward wire/storage compatibility.
+    /// Prefer `Executor` or `Specialist` for new writes.
+    Mate,
+    /// Legacy human/user marker kept for backward wire/storage compatibility.
+    /// Prefer `Agent::is_player` / `Team::player_ids` for new writes.
+    Player,
     /// Operator — system operator with administrative privileges
     Operator,
     /// Specialist — domain-specific work (coding, research, analysis)
@@ -45,6 +51,7 @@ pub struct Team {
     pub operator_ids: Vec<String>,
     pub specialist_ids: Vec<String>,
     pub bouncer_ids: Vec<String>,
+    #[serde(default)]
     pub player_ids: Vec<String>, // human users (not agent software roles)
 }
 

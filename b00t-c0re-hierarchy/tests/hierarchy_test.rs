@@ -1,5 +1,6 @@
 use b00t_c0re_hierarchy::recruitment::*;
 use b00t_c0re_hierarchy::roles::*;
+use serde_json::json;
 
 fn make_agent(id: &str, role: Role, skills: &[&str], alive: bool, is_player: bool) -> Agent {
     Agent {
@@ -90,4 +91,27 @@ fn test_recruit_no_candidates_returns_empty() {
 
     let response = process_recruit_request(&request, &agents, "op1");
     assert!(response.candidates.is_empty());
+}
+
+#[test]
+fn test_team_deserializes_without_player_ids() {
+    let legacy_team = json!({
+        "captain_id": "cap1",
+        "executor_ids": [],
+        "operator_ids": [],
+        "specialist_ids": [],
+        "bouncer_ids": []
+    });
+
+    let team: Team = serde_json::from_value(legacy_team).expect("legacy payload must deserialize");
+    assert!(team.player_ids.is_empty());
+}
+
+#[test]
+fn test_legacy_role_variants_still_deserialize() {
+    let mate: Role = serde_json::from_str("\"Mate\"").expect("Mate must deserialize");
+    let player: Role = serde_json::from_str("\"Player\"").expect("Player must deserialize");
+
+    assert_eq!(mate, Role::Mate);
+    assert_eq!(player, Role::Player);
 }
