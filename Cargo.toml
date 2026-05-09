@@ -15,6 +15,7 @@ members = [
     "b00t-bouncer",
     "b00t-c0re-hierarchy",
     "b00t-c0re-a2a",
+    "b00t-embed",
 ]
 resolver = "2"
 
@@ -54,8 +55,17 @@ tracing = "0.1"
 opentelemetry = { version = "0.31", features = ["trace"] }
 async-trait = "0.1"
 zbus = { version = "5", default-features = false, features = ["tokio"] }
+thiserror = "2"
 openssl = "0.10"
 openssl-sys = { version = "0.9", features = ["vendored"] }
+
+# b00t-embed — unified embedding adapter
+b00t-embed = { path = "b00t-embed" }
+
+[patch.crates-io]
+candle-core = "0.10.2"
+candle-nn = "0.10.2"
+candle-transformers = "0.10.2"
 
 [workspace.lints.rust]
 unused_must_use = "warn"
