@@ -1,9 +1,11 @@
-//! Unified event writer for b00t telemetry.
+//! Shared event writer for b00t telemetry.
 //!
-//! All telemetry sources (session_track, GuardViolationCounter, mcp_list_view)
-//! write to a single `~/.b00t/events.jsonl` file via this module.
+//! Callers that use this module append JSONL records to
+//! `~/.b00t/events.jsonl` using the [`B00tEvent`] schema.
 //!
-//! Each line is a JSON object with `ts`, `event`, `detail`, and `pid` fields.
+//! Records written via this module contain `ts`, `event`, `detail`, and `pid`
+//! fields. The file may also contain legacy/direct-writer entries with
+//! different shapes.
 
 use serde::{Deserialize, Serialize};
 use std::io::Write;
