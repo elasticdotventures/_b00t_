@@ -67,6 +67,7 @@ env_logger = "0.11"
 mdns-sd = "0.19.1"
 rand = "0.8"
 b00t-ipc = { path = "../b00t-ipc" }
+b00t-embed = { workspace = true }
 b00t-c0re-gov = { path = "../b00t-c0re-gov" }
 b00t-c0re-hierarchy = { path = "../b00t-c0re-hierarchy" }
 b00t-c0re-a2a = { path = "../b00t-c0re-a2a" }

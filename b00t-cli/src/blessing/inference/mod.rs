@@ -117,6 +117,10 @@ pub enum InferenceBackendSelector {
     /// Ripgrep BM25 fallback: Keyword-based retrieval (no embeddings)
     /// Always available, lowest quality but guaranteed to work
     Ripgrep,
+
+    /// b00t-embed backend: HuggingFace/ONNX/Cloud model inference via embed_anything
+    /// Wraps b00t_embed::EmbedBackend for unified embedding across providers
+    EmbedAnything,
 }
 
 impl std::fmt::Debug for InferenceBackendSelector {
@@ -126,6 +130,7 @@ impl std::fmt::Debug for InferenceBackendSelector {
             #[cfg(feature = "llamacpp-fallback")]
             InferenceBackendSelector::LlamaCpp => write!(f, "LlamaCpp"),
             InferenceBackendSelector::Ripgrep => write!(f, "Ripgrep"),
+            InferenceBackendSelector::EmbedAnything => write!(f, "EmbedAnything"),
         }
     }
 }
@@ -165,6 +170,9 @@ pub mod llamacpp;
 
 // Task 5: Ripgrep BM25 fallback implementation
 pub mod fallback;
+
+// b00t-embed backend: HuggingFace/ONNX/Cloud embedding via embed_anything adapter
+pub mod embed_anything;
 
 // Test suite
 #[cfg(test)]
