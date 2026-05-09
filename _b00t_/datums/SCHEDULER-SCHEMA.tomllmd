@@ -1,0 +1,90 @@
+# b00t Scheduler Schema datum — canonical SQLite DDL
+# 🤓 .tomllmd format — schema definition datum, NOT executable code
+# schema: 1 | bump ONLY on field definition changes
+# last_updated: 2026-05-09 | authoritative metadata via git notes
+#
+# Defines the canonical SQLite schema for the b00t scheduler subsystem.
+# The scheduler manages cron/interval/oneshot job schedules with agent dispatch.
+#
+# DB path: ~/.local/share/b00t/scheduler/scheduler.db (Linux)
+#           ~/Library/Application Support/b00t/scheduler/scheduler.db (macOS)
+#
+# 🔗参 b00t-cli/src/commands/scheduler.rs — SchedulerDb init() executes this DDL
+# 🔗参 _b00t_/datums/SCHEDULER-SCHEMA.tomllmd — canonical source of truth
+
+[b00t]
+name = "SCHEDULER-SCHEMA"
+type = "schema"
+hint = "Canonical SQLite DDL for the b00t scheduler — schedules, runs, agents tables"
+
+[b00t.version]
+schema = 1
+content = "stable"
+
+## ── schedules table ────────────────────────────────────────────────────────────
+# One row per scheduled job definition.  schedule_kind determines which timing
+# column(s) are active (interval_mins, cron_expr, or oneshot_at).
+
+```sql
+CREATE TABLE IF NOT EXISTS schedules (
+    id                    TEXT PRIMARY KEY,          -- sched_<uuid>
+    name                  TEXT NOT NULL,
+    description           TEXT DEFAULT '',
+    schedule_kind         TEXT NOT NULL CHECK(schedule_kind IN ('interval','cron','oneshot')),
+    interval_mins         INTEGER,                   -- for interval kind
+    cron_expr             TEXT,                      -- for cron kind (5-field cron)
+    oneshot_at            TEXT,                      -- for oneshot kind (ISO-8601)
+    max_runs              INTEGER DEFAULT -1,        -- -1 = unlimited
+    run_count             INTEGER DEFAULT 0,
+    required_capabilities TEXT,                      -- JSON array or NULL
+    required_agent        TEXT,                      -- specific agent ID or NULL
+    agent_type            TEXT DEFAULT 'llm',
+    agent_config          TEXT,                      -- JSON
+    prompt                TEXT NOT NULL,
+    command               TEXT,                      -- optional shell command
+    workdir               TEXT,                      -- optional working directory
+    enabled               INTEGER DEFAULT 1,         -- 1=active, 0=paused
+    created_at            TEXT NOT NULL,             -- ISO-8601
+    updated_at            TEXT                       -- ISO-8601
+);
+```
+
+## ── runs table ─────────────────────────────────────────────────────────────────
+# One row per execution attempt of a schedule.  Tracks lifecycle from claim
+# through completion or failure.
+
+```sql
+CREATE TABLE IF NOT EXISTS runs (
+    id            TEXT PRIMARY KEY,                -- run_<uuid>
+    schedule_id   TEXT NOT NULL REFERENCES schedules(id),
+    claimed_by    TEXT NOT NULL,                    -- agent ID that claimed this run
+    status        TEXT NOT NULL CHECK(status IN ('claimed','running','success','failed','timed_out','cancelled')),
+    started_at    TEXT,                             -- ISO-8601
+    finished_at   TEXT,                             -- ISO-8601
+    exit_code     INTEGER,
+    output_path   TEXT,                             -- path to captured output
+    summary       TEXT,                             -- short result summary
+    error         TEXT                              -- error message if failed
+);
+
+CREATE INDEX IF NOT EXISTS idx_runs_schedule_id ON runs(schedule_id);
+CREATE INDEX IF NOT EXISTS idx_runs_status ON runs(status);
+```
+
+## ── agents table ───────────────────────────────────────────────────────────────
+# Registry of scheduler-aware agents available for job dispatch.
+
+```sql
+CREATE TABLE IF NOT EXISTS agents (
+    id              TEXT PRIMARY KEY,
+    agent_type      TEXT,
+    status          TEXT DEFAULT 'offline' CHECK(status IN ('online','offline','busy','error')),
+    capabilities    TEXT DEFAULT '[]',              -- JSON array
+    label           TEXT,
+    last_heartbeat  TEXT,                           -- ISO-8601
+    current_job_id  TEXT,                           -- run ID currently assigned
+    metadata        TEXT                            -- arbitrary JSON
+);
+
+CREATE INDEX IF NOT EXISTS idx_agents_status ON agents(status);
+```

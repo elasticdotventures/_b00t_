@@ -42,7 +42,7 @@ use b00t_cli::commands::{
     JobCommands,
     K8sCommands,
     McpCommands, ModelCommands,
-    ObservabilityCommands, OntologyCommands, SessionCommands, SkillCommands, SoulCommands, StackCommands,
+    ObservabilityCommands, OntologyCommands, SchedulerCommands, SessionCommands, SkillCommands, SoulCommands, StackCommands,
     TaskCommands,
     TutorialCommands, VersionCommands, VizCommands, WhatismyCommands
 
@@ -444,6 +444,11 @@ The system will:
     Schema {
         #[clap(subcommand)]
         schema_command: SchemaSubcommands,
+    },
+    #[clap(about = "SQLite-backed job scheduler — create, list, and manage scheduled jobs")]
+    Scheduler {
+        #[clap(subcommand)]
+        scheduler_command: SchedulerCommands,
     },
     #[clap(about = "Killswitch: terminate upper agent instance and return CLI to prompt")]
     Quit(b00t_cli::commands::quit::QuitArgs),
@@ -2218,6 +2223,12 @@ async fn main() {
                         std::process::exit(1);
                     }
                 }
+            }
+        }
+        Some(Commands::Scheduler { scheduler_command }) => {
+            if let Err(e) = b00t_cli::commands::scheduler::handle_scheduler_command(scheduler_command) {
+                eprintln!("Error: {e}");
+                std::process::exit(1);
             }
         }
         Some(Commands::Quit(args)) => {
