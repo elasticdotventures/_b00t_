@@ -128,10 +128,12 @@ pub async fn handle_grok_command(command: GrokCommands) -> Result<()> {
             match backend {
                 GrokBackend::Both
                 | GrokBackend::Irontology
-                | GrokBackend::Raglite
-                | GrokBackend::CodebaseMemory => {
+                | GrokBackend::Raglite => {
                     handle_dual_digest(&topic, &content, backend).await
                 }
+                GrokBackend::CodebaseMemory => Err(anyhow::anyhow!(
+                    "--rag=codebase-memory is not supported for digest; use ask/search queries"
+                )),
             }
         }
         GrokCommands::Ask {
