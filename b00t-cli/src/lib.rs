@@ -90,6 +90,7 @@ pub mod memory_provider;
 pub mod model_manager;
 pub mod orchestrator;
 pub mod sandbox;
+pub mod scheduler;
 pub mod session_memory;
 pub mod skill_resolver;
 pub mod soul_writer;

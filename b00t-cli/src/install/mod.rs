@@ -1,4 +1,5 @@
 pub mod adapter;
+pub mod capability;
 pub mod content;
 pub mod manifest;
 pub mod runtimes;

@@ -5,6 +5,7 @@ pub mod adapter;
 pub mod agent_messaging;
 pub mod detection;
 pub mod k8s_adapter;
+pub mod maintenance;
 
 pub use adapter::{AdapterOutput, McpCommand, Orchestrator, OrchestratorAdapter};
 pub use agent_messaging::{AgentMessage, DeliveryResult, MessageRouter};
