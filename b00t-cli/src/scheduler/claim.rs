@@ -73,8 +73,10 @@ pub fn try_claim(
     let claim_result = try_claim_inner(&conn, agent_id, capabilities);
 
     match &claim_result {
-        Ok(ClaimResult::Claimed(_)) | Ok(ClaimResult::NotDue)
-        | Ok(ClaimResult::CapabilityMismatch) | Ok(ClaimResult::AlreadyClaimed) => {
+        Ok(ClaimResult::Claimed(_))
+        | Ok(ClaimResult::NotDue)
+        | Ok(ClaimResult::CapabilityMismatch)
+        | Ok(ClaimResult::AlreadyClaimed) => {
             conn.execute_batch("COMMIT")
                 .context("commit claim transaction")?;
         }
@@ -200,10 +202,83 @@ fn try_claim_inner(
 
     if !has_capability_match {
         Ok(ClaimResult::CapabilityMismatch)
-    } else if candidates.is_empty() {
-        Ok(ClaimResult::NotDue)
     } else {
-        Ok(ClaimResult::AlreadyClaimed)
+        Ok(ClaimResult::NotDue)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use chrono::Duration;
+    use rusqlite::Connection;
+
+    fn create_test_schema(conn: &Connection) {
+        conn.execute_batch(
+            "
+            CREATE TABLE schedules (
+                id                    TEXT PRIMARY KEY,
+                name                  TEXT NOT NULL,
+                description           TEXT DEFAULT '',
+                schedule_kind         TEXT NOT NULL CHECK(schedule_kind IN ('interval','cron','oneshot')),
+                interval_mins         INTEGER,
+                cron_expr             TEXT,
+                oneshot_at            TEXT,
+                max_runs              INTEGER DEFAULT -1,
+                run_count             INTEGER DEFAULT 0,
+                required_capabilities TEXT,
+                required_agent        TEXT,
+                agent_type            TEXT DEFAULT 'llm',
+                agent_config          TEXT,
+                prompt                TEXT NOT NULL,
+                command               TEXT,
+                workdir               TEXT,
+                enabled               INTEGER DEFAULT 1,
+                created_at            TEXT NOT NULL,
+                updated_at            TEXT
+            );
+
+            CREATE TABLE runs (
+                id            TEXT PRIMARY KEY,
+                schedule_id   TEXT NOT NULL REFERENCES schedules(id),
+                claimed_by    TEXT NOT NULL,
+                status        TEXT NOT NULL CHECK(status IN ('claimed','running','success','failed','timed_out','cancelled')),
+                started_at    TEXT,
+                finished_at   TEXT,
+                exit_code     INTEGER,
+                output_path   TEXT,
+                summary       TEXT,
+                error         TEXT
+            );
+            ",
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn interval_schedule_not_due_returns_not_due() {
+        let conn = Connection::open_in_memory().unwrap();
+        create_test_schema(&conn);
+        let now = Utc::now();
+        let created_at =
+            (now - Duration::minutes(10)).to_rfc3339_opts(chrono::SecondsFormat::Secs, true);
+        let started_at = now.to_rfc3339_opts(chrono::SecondsFormat::Secs, true);
+
+        conn.execute(
+            "INSERT INTO schedules (id, name, schedule_kind, interval_mins, max_runs, run_count, prompt, created_at)
+             VALUES ('sched_1', 'recent interval', 'interval', 60, -1, 1, 'do work', ?1)",
+            params![created_at],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO runs (id, schedule_id, claimed_by, status, started_at)
+             VALUES ('run_1', 'sched_1', 'agent_1', 'success', ?1)",
+            params![started_at],
+        )
+        .unwrap();
+
+        let result = try_claim_inner(&conn, "agent_2", &[]).unwrap();
+        assert_eq!(result, ClaimResult::NotDue);
     }
 }
 

@@ -255,9 +255,7 @@ pub fn row_to_schedule_def(row: &Row) -> rusqlite::Result<ScheduleDef> {
 /// Direct extraction from a `&Row` — returns `rusqlite::Result<ScheduleDef>`.
 pub fn row_to_schedule_def_direct(row: &Row) -> rusqlite::Result<ScheduleDef> {
     FromRow::from_row(row).map_err(|e| {
-        rusqlite::Error::ToSqlConversionFailure(
-            format!("mapping error: {}", e).into(),
-        )
+        rusqlite::Error::ToSqlConversionFailure(format!("mapping error: {}", e).into())
     })
 }
 
@@ -302,9 +300,7 @@ impl FromRow for RunRecord {
 /// Direct extraction — convenience wrapper.
 pub fn row_to_run_record(row: &Row) -> rusqlite::Result<RunRecord> {
     FromRow::from_row(row).map_err(|e| {
-        rusqlite::Error::ToSqlConversionFailure(
-            format!("mapping error: {}", e).into(),
-        )
+        rusqlite::Error::ToSqlConversionFailure(format!("mapping error: {}", e).into())
     })
 }
 
@@ -313,7 +309,7 @@ pub fn row_to_run_record(row: &Row) -> rusqlite::Result<RunRecord> {
 impl FromRow for AgentRegistration {
     fn from_row(row: &Row) -> Result<Self> {
         // Columns: 0=id, 1=agent_type, 2=status, 3=capabilities,
-        // 4=label, 5=last_heartbeat, 6=current_job_id, 7=current_capability, 8=metadata
+        // 4=label, 5=last_heartbeat, 6=current_job_id, 7=metadata.
         let id: String = row.get(0)?;
         let agent_type: String = row.get(1)?;
         let status_str: String = row.get(2)?;
@@ -321,16 +317,6 @@ impl FromRow for AgentRegistration {
         let label: Option<String> = row.get(4)?;
         let heartbeat_raw: Option<String> = row.get(5)?;
         let current_job_id: Option<String> = row.get(6)?;
-        let current_capability: Option<String> = row.get(7)?;
-        // Column 8 is an optional metadata — but in the DDL the agents table
-        // has: id, agent_type, status, capabilities, label, last_heartbeat,
-        // current_job_id, metadata (7 columns, 0-indexed: 0-7).
-        // Wait, the DDL has 8 columns: 0=id, 1=agent_type, 2=status,
-        // 3=capabilities, 4=label, 5=last_heartbeat, 6=current_job_id, 7=metadata
-        // But `current_capability` is not in the DDL — it's an extra field from
-        // the task description struct.
-
-        // Re-read: column 7 in our query is metadata.
         let metadata_raw: Option<String> = row.get(7)?;
 
         let status = parse_agent_status(&status_str)?;
@@ -346,7 +332,7 @@ impl FromRow for AgentRegistration {
             label,
             last_heartbeat,
             current_job_id,
-            current_capability,
+            current_capability: None,
             metadata,
         })
     }
@@ -355,8 +341,52 @@ impl FromRow for AgentRegistration {
 /// Direct extraction — convenience wrapper.
 pub fn row_to_agent_registration(row: &Row) -> rusqlite::Result<AgentRegistration> {
     FromRow::from_row(row).map_err(|e| {
-        rusqlite::Error::ToSqlConversionFailure(
-            format!("mapping error: {}", e).into(),
-        )
+        rusqlite::Error::ToSqlConversionFailure(format!("mapping error: {}", e).into())
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use rusqlite::Connection;
+
+    #[test]
+    fn agent_registration_maps_metadata_without_current_capability_column() {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch(
+            "
+            CREATE TABLE agents (
+                id              TEXT PRIMARY KEY,
+                agent_type      TEXT,
+                status          TEXT DEFAULT 'offline',
+                capabilities    TEXT DEFAULT '[]',
+                label           TEXT,
+                last_heartbeat  TEXT,
+                current_job_id  TEXT,
+                metadata        TEXT
+            );
+            INSERT INTO agents (
+                id, agent_type, status, capabilities, label, last_heartbeat,
+                current_job_id, metadata
+            ) VALUES (
+                'agent_1', 'llm', 'online', '[\"rust\"]', 'builder',
+                '2026-05-09T22:00:00Z', 'run_1', '{\"zone\":\"local\"}'
+            );
+            ",
+        )
+        .unwrap();
+
+        let agent = conn
+            .query_row(
+                "SELECT id, agent_type, status, capabilities, label, last_heartbeat,
+                        current_job_id, metadata
+                 FROM agents WHERE id = 'agent_1'",
+                [],
+                row_to_agent_registration,
+            )
+            .unwrap();
+
+        assert_eq!(agent.current_capability, None);
+        assert_eq!(agent.metadata.unwrap()["zone"], "local");
+    }
 }
