@@ -3,7 +3,7 @@ pub mod config;
 pub mod error;
 
 pub use backends::EmbedAnythingBackend;
-pub use config::EmbedConfig;
+pub use config::{EmbedConfig, EmbedProvider};
 pub use error::EmbedError;
 
 use anyhow::Result;

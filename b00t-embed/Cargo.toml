@@ -8,7 +8,7 @@ repository.workspace = true
 description = "Unified embedding adapter wrapping embed_anything for b00t, ledgrrr, and irontology-mcp"
 
 [dependencies]
-embed_anything = "0.6.7"
+embed_anything = { path = "../vendor/embed-anything-b00t/rust" }
 anyhow = "1"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"

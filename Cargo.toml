@@ -59,13 +59,12 @@ thiserror = "2"
 openssl = "0.10"
 openssl-sys = { version = "0.9", features = ["vendored"] }
 
-# b00t-embed — unified embedding adapter
+# b00t-embed — unified embedding adapter  
 b00t-embed = { path = "b00t-embed" }
 
-[patch.crates-io]
-candle-core = "0.10.2"
-candle-nn = "0.10.2"
-candle-transformers = "0.10.2"
+
+
+
 
 [workspace.lints.rust]
 unused_must_use = "warn"

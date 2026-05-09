@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use anyhow::Result;
 use async_trait::async_trait;
-use embed_anything::embeddings::embed::{EmbedData, Embedder};
+use embed_anything::embeddings::embed::Embedder;
 
 use crate::{EmbedBackend, EmbedConfig, Embedding, EmbedProvider};
 
