@@ -1,0 +1,20 @@
+{
+  "tasks": [
+    {
+      "id": 1,
+      "title": "Implement kreuzberg integration (Stage 1 of #341) — MCP datum for document intelligence",
+      "description": "Issue #398 (latent space) identified that kreuzberg integration (issue #341) is at 0% implementation. Stage 1: Create _b00t_/kreuzberg.mcp.toml datum, register kreuzberg MCP server, validate text extraction from PDFs. Blocks paper parsing end-to-end in b00t ecosystem.",
+      "status": "pending",
+      "priority": 3,
+      "tags": [
+        "paper-parsing",
+        "kreuzberg",
+        "dogfood",
+        "issue-398",
+        "issue-341"
+      ],
+      "created_at": "2026-05-09T05:03:16Z"
+    }
+  ],
+  "version": "1"
+}

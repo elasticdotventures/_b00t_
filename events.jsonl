@@ -155,3 +155,5 @@
 {"detail":"test-debug:fail:Command failed: ","event":"mcp_install","pid":507572,"ts":"2026-05-04T12:34:43.708334361+00:00"}
 {"detail":"test-http:fail:Command failed: ","event":"mcp_install","pid":507572,"ts":"2026-05-04T12:34:44.068125115+00:00"}
 {"detail":"test-new:fail:Command failed: ","event":"mcp_install","pid":507572,"ts":"2026-05-04T12:34:44.428192930+00:00"}
+{"action":"warn","detail":"rm -rf /","event":"guard","pid":216949,"ts":"2026-05-09T04:20:24.459191168+00:00"}
+{"action":"block","detail":"rhai:cmd.contains(\"git checkout\") && (cmd.contains(\" main\") || cmd.contains(\" master\"))","event":"guard","pid":252343,"ts":"2026-05-09T05:30:19.370860725+00:00"}
