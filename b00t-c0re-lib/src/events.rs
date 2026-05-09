@@ -9,7 +9,7 @@
 
 use serde::{Deserialize, Serialize};
 use std::io::Write;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 /// A single telemetry event written to events.jsonl.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -43,8 +43,10 @@ impl B00tEvent {
 
 /// Resolve the path to the events.jsonl file.
 pub fn events_path() -> PathBuf {
-    let home = std::env::var("HOME").unwrap_or_default();
-    Path::new(&home).join(".b00t").join("events.jsonl")
+    dirs::home_dir()
+        .unwrap_or_default()
+        .join(".b00t")
+        .join("events.jsonl")
 }
 
 /// Ensure the `~/.b00t/` directory exists.
@@ -69,9 +71,10 @@ pub fn write_event(event: &str, detail: &str) {
         .open(&path)
     {
         let entry = B00tEvent::new(event, detail);
-        // Single write_all + newline = one atomic syscall on Linux (PIPE_BUF safe).
-        // writeln! may issue two syscalls (data + '\n'), risking interleaved lines
-        // when multiple b00t processes append concurrently.
+        // Single write_all with a pre-formatted line reduces interleaving risk
+        // compared to separate writeln! calls, but does not guarantee atomicity
+        // for regular files. Use an explicit file lock (flock) if strict
+        // cross-process line atomicity is required.
         let line = format!("{}\n", entry.to_json_line());
         let _ = std::io::Write::write_all(&mut file, line.as_bytes());
     }

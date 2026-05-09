@@ -282,6 +282,7 @@ sdist/
 share/python-wheels/
 target/
 telemetry.jsonl
+events.jsonl
 test_*.json
 tmp/
 togaf-cli/
