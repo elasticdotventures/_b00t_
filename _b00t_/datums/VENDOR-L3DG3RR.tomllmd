@@ -1,0 +1,82 @@
+# b00t Vendor Datum — l3dg3rr (Ledger/Governance System)
+# 🤓 Rust ledger and governance system for b00t — accounting, audit, Xero integration
+#    Repo: github.com/PromptExecution/ledgrrr
+#    Language: Rust
+#    Path: vendor/l3dg3rr
+
+[b00t]
+name = "VENDOR-L3DG3RR"
+type = "vendor"
+hint = "l3dg3rr — Rust ledger/governance system: bookkeeping, audit trails, Xero integration, and desktop host"
+
+[b00t.version]
+schema = 1
+content = "stable"
+
+[b00t.vendor]
+path = "vendor/l3dg3rr"
+upstream = "git@github.com:PromptExecution/ledgrrr.git"
+branch = "main"
+build_command = "cargo build --manifest-path vendor/l3dg3rr/Cargo.toml --release"
+install_command = "cp vendor/l3dg3rr/target/release/ledgerr-mcp ~/.local/bin/ && cp vendor/l3dg3rr/target/release/host-tauri ~/.local/bin/"
+health_check = "vendor/l3dg3rr/target/release/ledgerr-mcp --version || test -x vendor/l3dg3rr/target/release/ledgerr-mcp"
+required_tools = ["rustc", "cargo", "just"]
+
+[b00t.maintenance]
+update_frequency = "weekly"
+review_required = true
+
+# ── l3dg3rr — Ledger & Governance System ────────────────────────────────────
+
+## What is it?
+
+l3dg3rr is the b00t ledger and governance subsystem — a Rust workspace providing
+bookkeeping, audit trails, Xero integration, and a desktop control plane. It
+implements the arc-kit evidence traceability model for provenance-verified
+accounting workflows.
+
+## Key Binaries
+
+- **ledgerr-mcp** — MCP server exposing TurboLedgerService tools
+- **host-tauri** — Tauri desktop host (primary UI)
+- **host-tray** — System tray/menubar control surface
+- **host-window** — Slint desktop window (legacy UI)
+- **ontology-extractor** — Ontology extraction from bookkeeping sources
+- **rotel-visual** — Evidence graph visualization
+- **mdbook-rhai-mermaid** — Rhai+Mermaid book rendering
+- **lfmf-stats** — LFMF counter statistics
+
+## Key Interfaces (MCP Tools)
+
+- `ledgerr_documents` — Document ingest (PDF, CSV, XLSX)
+- `ledgerr_review` — Transaction review and classification
+- `ledgerr_reconciliation` — Account reconciliation
+- `ledgerr_workflow` — Workflow orchestration
+- `ledgerr_audit` — Audit trail queries
+- `ledgerr_tax` — Tax preparation
+- `ledgerr_ontology` — Ledger ontology queries
+- `ledgerr_xero` — Xero accounting integration
+
+## Dependencies
+
+- Rust 2024 edition
+- Tauri (desktop host)
+- Slint (legacy UI)
+- Rhai scripting engine (rule evaluation)
+- arc-kit-au evidence graph library
+
+## Build Notes
+
+Build all binaries:
+```
+cargo build --manifest-path vendor/l3dg3rr/Cargo.toml --release
+```
+
+Tauri desktop host requires system libs (webkit2gtk on Linux).
+
+## Security Considerations
+
+- MCP tools enforce deterministic tx_id hashing via Blake3
+- Xero credentials should be mediated through MCP worker processes,
+  not exposed directly to models
+- Audit trail is append-only with cryptographic evidence graph

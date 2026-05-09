@@ -1,0 +1,78 @@
+# b00t Vendor Datum — hermes-agent-b00t (Hermes Agent fork)
+# 🤓 Fork of NousResearch/hermes-agent tailored for b00t hive integration
+#    Repo: github.com/PromptExecution/hermes-agent-b00t (b00t branch)
+#    Upstream: github.com/NousResearch/hermes-agent
+#    Language: Python
+#    Path: vendor/hermes-agent-b00t
+
+[b00t]
+name = "VENDOR-HERMES-AGENT-B00T"
+type = "vendor"
+hint = "Hermes Agent — self-improving AI agent (b00t fork). Skills from experience, runs anywhere, MCP gateway + CLI"
+
+[b00t.version]
+schema = 1
+content = "stable"
+
+[b00t.vendor]
+path = "vendor/hermes-agent-b00t"
+upstream = "git@github.com:PromptExecution/hermes-agent-b00t.git"
+branch = "b00t"
+build_command = "uv pip install -e vendor/hermes-agent-b00t/ or pip install -e vendor/hermes-agent-b00t/"
+install_command = "uv pip install -e vendor/hermes-agent-b00t/"
+health_check = "hermes --help || python3 vendor/hermes-agent-b00t/cli.py --help"
+required_tools = ["python3", "uv", "pip"]
+
+[b00t.maintenance]
+update_frequency = "monthly"
+review_required = true
+
+# ── hermes-agent-b00t — Self-Improving AI Agent ─────────────────────────────
+
+## What is it?
+
+A fork of Nous Research's Hermes Agent adapted for the b00t hive ecosystem.
+Hermes is a self-improving AI agent that creates skills from experience,
+improves them during use, and runs on any platform. The b00t fork adds
+hive awareness, MCP gateway integration, and b00t ontology alignment.
+
+## Key Interfaces
+
+- **CLI interface** — `hermes` or `python3 cli.py` with rich terminal UI
+- **MCP server** — `mcp_serve.py` exposes Hermes as an MCP tool server
+- **SSE gateway** — Multi-platform messaging (Telegram, Discord, Slack, etc.)
+- **Plugin system** — Pluggable memory backends, context engines, tool modules
+- **ACP protocol** — VS Code / Zed / JetBrains integration via acp_adapter
+- **Skill system** — Auto-improving skills stored in ~/.hermes/skills/
+
+## Dependencies
+
+- Python 3.11+
+- uv (preferred) or pip
+- OpenAI SDK, Anthropic SDK, and various optional providers
+- PyYAML, Pydantic, Rich, prompt_toolkit, Jinja2
+
+## Build Notes
+
+Editable install:
+```
+uv pip install -e vendor/hermes-agent-b00t/
+```
+
+Or with pip:
+```
+pip install -e vendor/hermes-agent-b00t/
+```
+
+Run tests:
+```
+bash vendor/hermes-agent-b00t/scripts/run_tests.sh
+```
+
+## Security Considerations
+
+- Credential pool manages API keys across providers
+- Plugin sandboxing via tool registry pattern
+- Gateway Multi-platform support means surface area includes message
+  ingress from 15+ chat platforms
+- Bouncer module provides input/output gate validation

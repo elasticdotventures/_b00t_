@@ -1,0 +1,49 @@
+# b00t Vendor Datum — opencode-b00t (OpenCode Integration)
+# 🤓 OpenCode integration for b00t hive — currently empty, pending initialization
+#    Repo: github.com/PromptExecution/opencode-b00t
+#    Language: TBD
+#    Path: vendor/opencode-b00t
+
+[b00t]
+name = "VENDOR-OPENCODE-B00T"
+type = "vendor"
+hint = "opencode-b00t — OpenCode integration for b00t hive (pending initialization)"
+
+[b00t.version]
+schema = 1
+content = "draft"
+
+[b00t.vendor]
+path = "vendor/opencode-b00t"
+upstream = "https://github.com/PromptExecution/opencode-b00t.git"
+branch = "main"
+build_command = "echo 'vendor not yet initialized'"
+install_command = "echo 'vendor not yet initialized'"
+health_check = "test -d vendor/opencode-b00t && ls vendor/opencode-b00t/ | wc -l | grep -v '^0$'"
+required_tools = ["git"]
+
+[b00t.maintenance]
+update_frequency = "monthly"
+review_required = false
+
+# ── opencode-b00t — OpenCode Integration (Not Yet Initialized) ──────────────
+
+## What is it?
+
+Placeholder for the OpenCode integration with the b00t hive. OpenCode is an
+open-source AI coding assistant. This submodule will integrate OpenCode's
+capabilities into the b00t ecosystem.
+
+## Current Status
+
+- Submodule registered in .gitmodules
+- Remote URL: https://github.com/PromptExecution/opencode-b00t.git
+- Working directory is currently empty — needs `git submodule update --init`
+  or manual checkout
+
+## When Initialized
+
+Once populated, this vendor will likely provide:
+- OpenCode CLI integration as a b00t agent
+- MCP tool surface for code generation and editing
+- Multi-model support via litellm gateway

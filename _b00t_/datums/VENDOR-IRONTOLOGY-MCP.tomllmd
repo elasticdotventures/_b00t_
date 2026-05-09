@@ -1,0 +1,81 @@
+# b00t Vendor Datum — irontology-mcp (Semantic Ontology MCP Server)
+# 🤓 Rust MCP server providing semantic ontology, code graph, and fusion retrieval
+#    Repo: github.com/PromptExecution/irontology-mcp
+#    Language: Rust
+#    Path: vendor/irontology-mcp
+
+[b00t]
+name = "VENDOR-IRONTOLOGY-MCP"
+type = "vendor"
+hint = "irontology-mcp — semantic ontology MCP server for b00t knowledge graph with fusion retrieval and code analysis"
+
+[b00t.version]
+schema = 1
+content = "stable"
+
+[b00t.vendor]
+path = "vendor/irontology-mcp"
+upstream = "https://github.com/PromptExecution/irontology-mcp"
+branch = "main"
+build_command = "cargo build --manifest-path vendor/irontology-mcp/Cargo.toml --release -p mcp-server"
+install_command = "cp vendor/irontology-mcp/target/release/mcp-server ~/.local/bin/irontology-mcp"
+health_check = "irontology-mcp --version || test -x vendor/irontology-mcp/target/release/mcp-server"
+required_tools = ["rustc", "cargo", "just"]
+
+[b00t.maintenance]
+update_frequency = "weekly"
+review_required = true
+
+# ── irontology-mcp — Semantic Ontology & Code Knowledge Graph ───────────────
+
+## What is it?
+
+A Rust MCP server that provides semantic ontology capabilities for the b00t
+knowledge graph. Includes: ontology graph querying with semantic predicates,
+code repository indexing with fusion retrieval (BM25 + embedding), and
+semantic runtime for knowledge navigation.
+
+## Key Interfaces (MCP Tools)
+
+- **ontology_list_classes** — List available ontology classes
+- **ontology_related_resources** — Resolve semantic objects via predicates
+- **repo_search** — Fusion retrieval search over code repositories
+- **repo_read_symbol** — Read symbol metadata by identifier
+
+## Key Crates
+
+- `mcp-server` — Main MCP server binary (the primary interface)
+- `cli` — CLI tool for ontology management
+- `dsl` — Ontology DSL for defining semantic rules
+- `indexer` — Code repository indexing engine
+- `retrieval` — Fusion retrieval (BM25 + vector search)
+- `semantic-runtime` — Ontology evaluation runtime
+- `tomllm` — TOML/LLM comment format parser
+- `intake` — Document intake pipeline
+- `storage-neumann` — Persistent storage using neumann backend
+
+## Dependencies
+
+- Rust 2024 edition
+- Cargo workspace with 20+ crates
+- Neural DB (for vector embeddings)
+- CodeGraph (for AST extraction)
+
+## Build Notes
+
+Build just the MCP server:
+```
+cargo build --manifest-path vendor/irontology-mcp/Cargo.toml --release -p mcp-server
+```
+
+Build all:
+```
+cargo build --manifest-path vendor/irontology-mcp/Cargo.toml --release
+```
+
+## Security Considerations
+
+- Retrieval engine handles potentially sensitive code from indexed repos
+- Fusion retrieval combines local and remote embeddings — data stays local
+  by default
+- MCP transport over stdio; no network port exposure by default

@@ -1,0 +1,47 @@
+# b00t Vendor Datum — ledgrrr (Ledger/Governance System, direct checkout)
+# 🤓 Same codebase as l3dg3rr but a separate git checkout at vendor/ledgrrr
+#    Repo: github.com/PromptExecution/ledgrrr
+#    Language: Rust
+#    Path: vendor/ledgrrr
+
+[b00t]
+name = "VENDOR-LEDGRRR"
+type = "vendor"
+hint = "ledgrrr — Rust ledger/governance system (direct checkout of PromptExecution/ledgrrr)"
+
+[b00t.version]
+schema = 1
+content = "stable"
+
+[b00t.vendor]
+path = "vendor/ledgrrr"
+upstream = "git@github.com:PromptExecution/ledgrrr.git"
+branch = "main"
+build_command = "cargo build --manifest-path vendor/ledgrrr/Cargo.toml --release"
+install_command = "cp vendor/ledgrrr/target/release/ledgerr-mcp ~/.local/bin/"
+health_check = "vendor/ledgrrr/target/release/ledgerr-mcp --version || test -x vendor/ledgrrr/target/release/ledgerr-mcp"
+required_tools = ["rustc", "cargo"]
+
+[b00t.maintenance]
+update_frequency = "weekly"
+review_required = true
+
+# ── ledgrrr — Ledger & Governance System (Direct Checkout) ──────────────────
+
+## What is it?
+
+A direct git checkout of the same PromptExecution/ledgrrr repository that
+vendor/l3dg3rr references as a submodule. This separate checkout exists for
+development workflows that need an independent working tree.
+
+## Notes
+
+- Shares identical codebase with vendor/l3dg3rr
+- Same build commands, binaries, and interfaces
+- Used for parallel development or testing without affecting the submodule
+- See VENDOR-L3DG3RR.tomllmd for full documentation of capabilities
+
+## Key Binaries
+
+Same as l3dg3rr: ledgerr-mcp, host-tauri, host-tray, host-window,
+ontology-extractor, rotel-visual, lfmf-stats

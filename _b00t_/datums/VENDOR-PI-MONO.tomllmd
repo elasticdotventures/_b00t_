@@ -1,0 +1,47 @@
+# b00t Vendor Datum — pi-mono (Pi Agent)
+# 🤓 Pi agent integration for b00t hive — currently empty, pending setup
+#    Path: vendor/pi-mono
+
+[b00t]
+name = "VENDOR-PI-MONO"
+type = "vendor"
+hint = "pi-mono — Pi agent integration for b00t hive (pending setup)"
+
+[b00t.version]
+schema = 1
+content = "draft"
+
+[b00t.vendor]
+path = "vendor/pi-mono"
+upstream = ""
+branch = "main"
+build_command = "echo 'vendor not yet initialized'"
+install_command = "echo 'vendor not yet initialized'"
+health_check = "test -d vendor/pi-mono && ls vendor/pi-mono/ | wc -l | grep -v '^0$'"
+required_tools = ["git"]
+
+[b00t.maintenance]
+update_frequency = "monthly"
+review_required = false
+
+# ── pi-mono — Pi Agent Integration (Not Yet Initialized) ────────────────────
+
+## What is it?
+
+Placeholder for the Pi agent integration with the b00t hive. Pi is a personal
+AI assistant. This vendor slot will integrate Pi's capabilities into the b00t
+ecosystem.
+
+## Current Status
+
+- Empty directory at vendor/pi-mono
+- Not registered as a git submodule
+- No upstream URL configured
+- Requires manual setup or initialization
+
+## When Initialized
+
+Once populated, this vendor will likely provide:
+- Pi agent integration as a b00t agent
+- Voice and conversational capabilities
+- Personal assistant features within the hive
