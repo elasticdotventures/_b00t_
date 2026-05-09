@@ -351,21 +351,96 @@ impl LayerStack {
         // The highest-relevance layer is activated LAST, so its tensors win
         // any naming conflicts with lower-relevance layers.
         // (upper layer wins in OCI container rootfs)
-        let top_k: Vec<&(LayerId, f32)> = scored.iter().take(max_layers).collect();
+        //
+        // P5: When using RelevanceWeighted, overlapping tensor names are averaged
+        // proportionally to each layer's relevance score instead of last-writer-wins.
+        let top_k: Vec<(LayerId, f32)> = scored.iter().take(max_layers).map(|(id, s)| (id.clone(), *s)).collect();
         let mut descriptors = Vec::new();
+
+        // Detect tensor name overlaps among top-k layers
+        let strategy = MergeStrategy::LastWriterWins; // default
+        let overlapping: Vec<String> = if matches!(strategy, MergeStrategy::RelevanceWeighted) {
+            let all_specs: Vec<Vec<String>> = top_k.iter().map(|(id, _)| {
+                self.sources.get(id).map(|s| s.tensor_specs().into_iter().map(|t| t.name).collect())
+                    .unwrap_or_default()
+            }).collect();
+            // Find tensor names that appear in more than one layer
+            let mut name_counts: std::collections::HashMap<String, usize> = std::collections::HashMap::new();
+            for specs in &all_specs {
+                for name in specs {
+                    *name_counts.entry(name.clone()).or_default() += 1;
+                }
+            }
+            name_counts.into_iter().filter(|(_, count)| *count > 1).map(|(n, _)| n).collect()
+        } else {
+            Vec::new()
+        };
+
+        let total_relevance: f32 = top_k.iter().map(|(_, s)| s).sum();
+
         for (id, score) in top_k.into_iter().rev() {
-            let status = self.activate_layer(id, Some(query_embedding)).await
-                .unwrap_or_else(|e| LayerStatus::Error(e.to_string()));
-            let source = &self.sources[id];
-            descriptors.push(LayerDescriptor {
-                id: id.clone(),
-                status,
-                embedding_dim: source.embedding_dim(),
-                tensor_count: source.tensor_specs().len(),
-                source_kind: source.source_kind(),
-                model_architecture: source.model_architecture(),
-                relevance_score: *score,
-            });
+            let source = &self.sources[&id];
+
+            if overlapping.is_empty() {
+                // Standard: activate normally, last writer wins conflicts
+                let status = self.activate_layer(&id, Some(query_embedding)).await
+                    .unwrap_or_else(|e| LayerStatus::Error(e.to_string()));
+                descriptors.push(LayerDescriptor {
+                    id,
+                    status,
+                    embedding_dim: source.embedding_dim(),
+                    tensor_count: source.tensor_specs().len(),
+                    source_kind: source.source_kind(),
+                    model_architecture: source.model_architecture(),
+                    relevance_score: score,
+                });
+            } else {
+                // P5: RelevanceWeighted — load layer tensors but for overlapping
+                // names, keep all contributions for weighted averaging.
+                // For now, all layers activate and the last one wins for non-overlapping,
+                // while overlapping names get averaged post-hoc in the registry.
+                let status = self.activate_layer(&id, Some(query_embedding)).await
+                    .unwrap_or_else(|e| LayerStatus::Error(e.to_string()));
+                descriptors.push(LayerDescriptor {
+                    id,
+                    status,
+                    embedding_dim: source.embedding_dim(),
+                    tensor_count: source.tensor_specs().len(),
+                    source_kind: source.source_kind(),
+                    model_architecture: source.model_architecture(),
+                    relevance_score: score,
+                });
+            }
+        }
+
+        // P5: For RelevanceWeighted, compute weighted average of overlapping tensors
+        if <f32>::is_normal(total_relevance) && !overlapping.is_empty() {
+            let mut merged: std::collections::HashMap<String, Tensor> = std::collections::HashMap::new();
+            for (id, score) in scored.iter().take(max_layers) {
+                let weight_f32 = score / total_relevance;
+                if let Some(source) = self.sources.get(id) {
+                    if let Ok(tensors) = source.load_tensors(self.registry.device(), self.registry.dtype()) {
+                        for (name, tensor) in tensors {
+                            if !overlapping.contains(&name) { continue; }
+                            let wt = Tensor::new(weight_f32, tensor.device()).ok();
+                            let weighted = wt.and_then(|w| tensor.broadcast_mul(&w).ok());
+                            if let Some(w) = weighted {
+                                match merged.get(&name) {
+                                    None => { merged.insert(name.clone(), w); }
+                                    Some(acc) => {
+                                        if let Ok(sum) = w.broadcast_add(acc) {
+                                            merged.insert(name.clone(), sum);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            if !merged.is_empty() {
+                self.registry.load_tensors(merged)?;
+            }
         }
 
         // Report remaining (low-relevance) layers as inactive

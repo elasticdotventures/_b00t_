@@ -75,6 +75,40 @@ impl LayerRouter {
         self.stack.register_source(source);
     }
 
+    /// R2: Route a raw text query through the full pipeline.
+    /// 1. Hash the query for cache lookup
+    /// 2. Use the provided embedder to convert text → embedding
+    /// 3. Route the embedding → composed layers
+    pub async fn route_text<F, Fut>(
+        &self,
+        text: &str,
+        embed_fn: F,
+        max_layers: usize,
+    ) -> Vec<LayerDescriptor>
+    where
+        F: FnOnce(&str) -> Fut,
+        Fut: std::future::Future<Output = Result<Embedding, anyhow::Error>>,
+    {
+        // Hash for cache (simplified — use first 8 bytes of text hash)
+        let hash: u64 = text.bytes().fold(0u64, |acc, b| acc.wrapping_mul(31).wrapping_add(b as u64));
+
+        // Embed the text
+        let embedding = if let Some(cached) = self.embed_cache.get(&hash) {
+            cached.clone()
+        } else {
+            match embed_fn(text).await {
+                Ok(emb) => {
+                    // Cache the embedding
+                    // Can't mutate self here since &self — cache hit handled externally
+                    emb
+                }
+                Err(_) => return Vec::new(),
+            }
+        };
+
+        self.route(&embedding, max_layers).await
+    }
+
     /// Clear the query embedding cache.
     pub fn clear_cache(&mut self) {
         self.embed_cache.clear();

@@ -114,22 +114,27 @@ impl Qwen3Composable {
             .map_err(|e| anyhow::anyhow!("tokenizer config: {e}"))?;
 
         let device = Device::Cpu;
-        let dtype = DType::F32;
+
+        // Discover the actual dtype from the safetensors file header.
+        // Qwen3-Embedding-0.6B stores all tensors as BF16.
+        let model_dtype = detect_safetensors_dtype(&weights_path)?;
+        println!("  Detected model dtype: {model_dtype:?}");
 
         // Step 1: Create VarMap and build model with VarBuilder::from_varmap()
-        // VarBuilder clones the VarMap (Arc increment), so the MutexGuard
-        // can be dropped immediately after creating the builder.
+        // using the model's native dtype so varmap.load() doesn't fail on mismatch.
         let varmap = Arc::new(Mutex::new(VarMap::new()));
         let model = {
             let vm = varmap.lock().unwrap();
-            let vb = VarBuilder::from_varmap(&vm, dtype, &device);
+            let vb = VarBuilder::from_varmap(&vm, model_dtype, &device);
             let m = Model::new(&config, vb)
                 .context("failed to build Qwen3 model with VarMap")?;
             drop(vm);
             m
         };
 
-        // Step 2: Load actual weights from safetensors into existing Vars
+        // Step 2: Load actual weights from safetensors into existing Vars.
+        // varmap.load() copies each tensor from the safetensors file into
+        // the corresponding VarMap entry. Dtype must match (both BF16).
         {
             let mut vm = varmap.lock().unwrap();
             vm.load(&weights_path)
@@ -158,7 +163,7 @@ impl Qwen3Composable {
         let registry = TensorRegistry::new(
             reg_varmap,
             device.clone(),
-            dtype,
+            model_dtype,
             base_weights.clone(),
         );
         let gatekeeper = LayerGateKeeper::with_architectures(vec!["qwen3", "llama", "mistral"]);
@@ -349,8 +354,20 @@ impl EmbedBackend for Qwen3Composable {
                             t.copy().ok()
                         })
                     };
-                    if let Some(tensor) = maybe_tensor {
+                    if let Some(mut tensor) = maybe_tensor {
                         let mut model_vm = self.varmap.lock().unwrap();
+                        // Match the VarMap entry's dtype (model may be BF16 but
+                        // source layers may be F32 after dequantization).
+                        let var_dtype = {
+                            let inner = model_vm.data().lock().unwrap();
+                            inner.get(&tname).map(|v| v.dtype())
+                        };
+                        if let Some(target_dtype) = var_dtype {
+                            if tensor.dtype() != target_dtype {
+                                tensor = tensor.to_dtype(target_dtype)
+                                    .map_err(|e| anyhow::anyhow!("dtype cast for set_one: {e}"))?;
+                            }
+                        }
                         let _ = model_vm.set_one(&tname, &tensor);
                     }
                 }
@@ -379,6 +396,37 @@ impl EmbedBackend for Qwen3Composable {
 fn normalize_l2(t: Tensor) -> Result<Tensor> {
     let norm = t.sqr()?.sum_keepdim(1)?.sqrt()?;
     Ok(t.broadcast_div(&norm)?)
+}
+
+/// Detect the predominant dtype from a safetensors file header.
+/// Reads the first tensor's dtype to determine model weight format.
+fn detect_safetensors_dtype(path: &std::path::Path) -> Result<DType> {
+    let content = std::fs::read(path).context("read safetensors for dtype detection")?;
+    if content.len() < 8 {
+        anyhow::bail!("file too short");
+    }
+    let header_len = u64::from_le_bytes(content[0..8].try_into().unwrap()) as usize;
+    if 8 + header_len > content.len() {
+        anyhow::bail!("header exceeds file");
+    }
+    let header: serde_json::Value = serde_json::from_slice(&content[8..8 + header_len])
+        .context("parse safetensors header")?;
+    let obj = header.as_object().ok_or_else(|| anyhow::anyhow!("header not object"))?;
+
+    // Find first non-metadata tensor and read its dtype
+    for (key, val) in obj {
+        if key == "__metadata__" { continue; }
+        if let Some(dtype_str) = val.get("dtype").and_then(|v| v.as_str()) {
+            return Ok(match dtype_str {
+                "F32" => DType::F32,
+                "F16" => DType::F16,
+                "BF16" => DType::BF16,
+                "F64" => DType::F64,
+                _ => DType::F32,
+            });
+        }
+    }
+    Ok(DType::F32) // fallback
 }
 
 #[cfg(test)]
