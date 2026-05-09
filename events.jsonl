@@ -155,3 +155,71 @@
 {"detail":"test-debug:fail:Command failed: ","event":"mcp_install","pid":507572,"ts":"2026-05-04T12:34:43.708334361+00:00"}
 {"detail":"test-http:fail:Command failed: ","event":"mcp_install","pid":507572,"ts":"2026-05-04T12:34:44.068125115+00:00"}
 {"detail":"test-new:fail:Command failed: ","event":"mcp_install","pid":507572,"ts":"2026-05-04T12:34:44.428192930+00:00"}
+{"ts":"2026-05-08T15:07:06.043965261+00:00","event":"guard","detail":"pip install","pid":743179}
+{"ts":"2026-05-08T15:07:06.051809341+00:00","event":"guard","detail":"docker run","pid":743179}
+{"ts":"2026-05-08T15:07:06.068949080+00:00","event":"guard","detail":"vllm serve","pid":743179}
+{"ts":"2026-05-08T15:07:06.113415387+00:00","event":"guard","detail":"pip install","pid":743179}
+{"ts":"2026-05-08T15:07:06.128690916+00:00","event":"guard","detail":"pip3 install","pid":743179}
+{"ts":"2026-05-08T15:07:06.141582178+00:00","event":"guard","detail":"python -m pip","pid":743179}
+{"ts":"2026-05-08T15:07:06.151988215+00:00","event":"guard","detail":"conda install","pid":743179}
+{"ts":"2026-05-08T15:07:06.162057477+00:00","event":"guard","detail":"docker run","pid":743179}
+{"ts":"2026-05-08T15:07:06.173040833+00:00","event":"guard","detail":"docker build","pid":743179}
+{"ts":"2026-05-08T15:07:06.185588362+00:00","event":"guard","detail":"docker-compose","pid":743179}
+{"ts":"2026-05-08T15:07:06.197212219+00:00","event":"guard","detail":"rm -rf /","pid":743179}
+{"ts":"2026-05-08T15:07:06.214192286+00:00","event":"guard","detail":"git push --force","pid":743179}
+{"ts":"2026-05-08T15:07:06.224844381+00:00","event":"guard","detail":"git reset --hard","pid":743179}
+{"ts":"2026-05-08T15:07:06.238457713+00:00","event":"guard","detail":"npm install -g","pid":743179}
+{"ts":"2026-05-08T15:07:06.248353959+00:00","event":"guard","detail":"brew install","pid":743179}
+{"ts":"2026-05-08T15:07:06.257881734+00:00","event":"guard","detail":"huggingface-cli download","pid":743179}
+{"ts":"2026-05-08T15:07:06.269800804+00:00","event":"guard","detail":"ulimit -n","pid":743179}
+{"ts":"2026-05-08T15:07:06.283736190+00:00","event":"guard","detail":"rhai:cmd.contains(\"git checkout\") && (cmd.contains(\" main\") || cmd.contains(\" master\"))","pid":743179}
+{"ts":"2026-05-08T15:07:06.297315651+00:00","event":"guard","detail":"rhai:cmd.contains(\"git push\") && cmd.contains(\"origin main\")","pid":743179}
+{"ts":"2026-05-08T15:07:06.311392429+00:00","event":"guard","detail":"rhai:cmd.contains(\"git merge\") && cmd.contains(\"main\")","pid":743179}
+{"ts":"2026-05-08T15:07:06.324499415+00:00","event":"guard","detail":"rhai:cmd.contains(\"git checkout -b\") && !cmd.contains(\"/\")","pid":743179}
+{"ts":"2026-05-08T15:07:06.339093187+00:00","event":"guard","detail":"rhai:cmd.contains(\"git commit\") && cmd.contains(\"-m\") && !cmd.contains(\":\")","pid":743179}
+{"ts":"2026-05-08T15:07:06.353383362+00:00","event":"guard","detail":"rhai:ledgerr_mcp_guard","pid":743179}
+{"ts":"2026-05-08T15:07:06.368148494+00:00","event":"guard","detail":"rhai:ledgerr_port_guard","pid":743179}
+{"ts":"2026-05-08T15:07:06.382071786+00:00","event":"guard","detail":"rhai:ledgerr_just_guard","pid":743179}
+{"ts":"2026-05-08T15:07:06.424404488+00:00","event":"guard","detail":"pip install","pid":743179}
+{"ts":"2026-05-08T15:07:06.441481530+00:00","event":"guard","detail":"docker run","pid":743179}
+{"ts":"2026-05-08T15:07:06.458889171+00:00","event":"guard","detail":"pip install","pid":743179}
+{"ts":"2026-05-08T15:07:06.468371095+00:00","event":"guard","detail":"docker run","pid":743179}
+{"ts":"2026-05-08T15:07:06.499223032+00:00","event":"guard","detail":"pip install","pid":743179}
+{"ts":"2026-05-08T15:07:06.510800208+00:00","event":"guard","detail":"docker run","pid":743179}
+{"ts":"2026-05-08T15:07:06.530804060+00:00","event":"guard","detail":"pip install","pid":743179}
+{"ts":"2026-05-08T15:07:06.548436968+00:00","event":"guard","detail":"pip install","pid":743179}
+{"ts":"2026-05-08T15:07:06.560964725+00:00","event":"guard","detail":"docker run","pid":743179}
+{"ts":"2026-05-08T15:11:14.067032212+00:00","event":"guard","detail":"rhai:cmd.contains(\"pip\") && violations >= threshold","pid":746117}
+{"ts":"2026-05-08T15:11:14.085070482+00:00","event":"guard","detail":"rhai:cmd.contains(\"pip\") && cmd.contains(\"install\")","pid":746117}
+{"ts":"2026-05-08T15:11:14.095035130+00:00","event":"guard","detail":"pip install","pid":746117}
+{"ts":"2026-05-08T15:11:14.109358345+00:00","event":"guard","detail":"pip3 install","pid":746117}
+{"ts":"2026-05-08T15:11:14.122285585+00:00","event":"guard","detail":"python -m pip","pid":746117}
+{"ts":"2026-05-08T15:11:14.133515717+00:00","event":"guard","detail":"conda install","pid":746117}
+{"ts":"2026-05-08T15:11:14.145433713+00:00","event":"guard","detail":"docker run","pid":746117}
+{"ts":"2026-05-08T15:11:14.158771060+00:00","event":"guard","detail":"docker build","pid":746117}
+{"ts":"2026-05-08T15:11:14.173730158+00:00","event":"guard","detail":"docker-compose","pid":746117}
+{"ts":"2026-05-08T15:11:14.184985612+00:00","event":"guard","detail":"rm -rf /","pid":746117}
+{"ts":"2026-05-08T15:11:14.198307904+00:00","event":"guard","detail":"git push --force","pid":746117}
+{"ts":"2026-05-08T15:11:14.211220636+00:00","event":"guard","detail":"git reset --hard","pid":746117}
+{"ts":"2026-05-08T15:11:14.224976348+00:00","event":"guard","detail":"npm install -g","pid":746117}
+{"ts":"2026-05-08T15:11:14.235933654+00:00","event":"guard","detail":"brew install","pid":746117}
+{"ts":"2026-05-08T15:11:14.249286774+00:00","event":"guard","detail":"huggingface-cli download","pid":746117}
+{"ts":"2026-05-08T15:11:14.262531507+00:00","event":"guard","detail":"ulimit -n","pid":746117}
+{"ts":"2026-05-08T15:11:14.281771060+00:00","event":"guard","detail":"rhai:cmd.contains(\"git checkout\") && (cmd.contains(\" main\") || cmd.contains(\" master\"))","pid":746117}
+{"ts":"2026-05-08T15:11:14.297187391+00:00","event":"guard","detail":"rhai:cmd.contains(\"git push\") && cmd.contains(\"origin main\")","pid":746117}
+{"ts":"2026-05-08T15:11:14.311203621+00:00","event":"guard","detail":"rhai:cmd.contains(\"git merge\") && cmd.contains(\"main\")","pid":746117}
+{"ts":"2026-05-08T15:11:14.325507564+00:00","event":"guard","detail":"rhai:cmd.contains(\"git checkout -b\") && !cmd.contains(\"/\")","pid":746117}
+{"ts":"2026-05-08T15:11:14.339535267+00:00","event":"guard","detail":"rhai:cmd.contains(\"git commit\") && cmd.contains(\"-m\") && !cmd.contains(\":\")","pid":746117}
+{"ts":"2026-05-08T15:11:14.352437887+00:00","event":"guard","detail":"rhai:ledgerr_mcp_guard","pid":746117}
+{"ts":"2026-05-08T15:11:14.365854217+00:00","event":"guard","detail":"rhai:ledgerr_port_guard","pid":746117}
+{"ts":"2026-05-08T15:11:14.380764665+00:00","event":"guard","detail":"rhai:ledgerr_just_guard","pid":746117}
+{"ts":"2026-05-08T15:11:14.394940973+00:00","event":"guard","detail":"pip install","pid":746117}
+{"ts":"2026-05-08T15:11:14.407719179+00:00","event":"guard","detail":"docker run","pid":746117}
+{"ts":"2026-05-08T15:11:14.419442730+00:00","event":"guard","detail":"pip install","pid":746117}
+{"ts":"2026-05-08T15:11:14.434359887+00:00","event":"guard","detail":"docker run","pid":746117}
+{"ts":"2026-05-08T15:11:14.456375220+00:00","event":"guard","detail":"pip install","pid":746117}
+{"ts":"2026-05-08T15:11:14.470897634+00:00","event":"guard","detail":"docker run","pid":746117}
+{"ts":"2026-05-08T15:11:14.484211922+00:00","event":"guard","detail":"pip install","pid":746117}
+{"ts":"2026-05-08T15:11:14.497885803+00:00","event":"guard","detail":"pip install","pid":746117}
+{"ts":"2026-05-08T15:11:14.509903824+00:00","event":"guard","detail":"docker run","pid":746117}
+{"ts":"2026-05-08T15:25:46.135102747+00:00","event":"mcp_install","detail":"github:installed","pid":754732}

@@ -1068,3 +1068,14 @@ h3rmes action="status":
 # Alias: just hermes -> just h3rmes
 hermes action="status":
     just h3rmes {{action}}
+
+# ── wrkflw skill — b00t learn wrkflw verification ─────────────────────────
+# Verify the wrkflw skill loads correctly via b00t learn
+skill-wrkflw-test:
+    @echo "=== Testing b00t learn wrkflw skill ==="
+    b00t learn wrkflw | head -5
+    @echo "✓ wrkflw skill loads"
+
+# Verify wrkflw skill is listed in available topics
+skill-wrkflw-list:
+    @b00t learn --list 2>/dev/null | grep -i wrkflw && echo "✓ wrkflw in learn topics" || echo "⚠ wrkflw not found in list — check learn.toml"
