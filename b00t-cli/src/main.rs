@@ -482,9 +482,6 @@ The system will:
     },
 }
 
-// Using unified config from lib.rs
-type Config = UnifiedConfig;
-
 #[derive(clap::Parser, Clone)]
 pub enum WowSubcommands {
     #[clap(about = "Run all WOW integrity checks")]
