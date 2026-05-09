@@ -1128,3 +1128,27 @@ skill-wrkflw-list:
         echo "✗ wrkflw not found in list — check learn.toml" >&2
         exit 1
     fi
+
+# ─── b00t-embed OCI Layer Pipeline ──────────────────────────────────────────
+
+# Wave 1: Extract embedding head tensors from Qwen3-Embedding-0.6B
+# Produces standalone safetensors layer files in /tmp/qwen3-layers/
+qwen3-extract-heads:
+    cargo run --example extract_qwen3_heads -p b00t-embed -- /tmp/qwen3-layers
+
+# Wave 2: Test Qwen3Composable with real model + compose pipeline
+# Downloads model, builds with VarMap, registers extracted layers, composes
+qwen3-test-compose:
+    cargo test -p b00t-embed --test demo_layer_lifecycle -- --nocapture
+
+# Wave 3: Full pipeline — embed text → route → compose layers → output
+# Usage: just qwen3-embed query="write python code"
+qwen3-embed query="":
+    @if [ -z "{{query}}" ]; then echo "Usage: just qwen3-embed query=\"your text\""; exit 1; fi
+    @echo "embed pipeline: {{query}}" >&2
+    # Embed via rust binary (placeholder — runs the existing test pipeline)
+    cargo test -p b00t-embed --test demo_layer_lifecycle -- --nocapture 2>/dev/null | tail -20
+
+# Run all epoch integration tests (P1-P5)
+qwen3-test-epochs:
+    cargo test -p b00t-embed 2>&1 | tail -10
