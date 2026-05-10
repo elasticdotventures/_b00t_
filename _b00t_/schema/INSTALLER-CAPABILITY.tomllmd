@@ -1,0 +1,365 @@
+# b00t Installer Capability Check & Remediation datum
+# 🤓 Comprehensive health-check and self-healing system for every tool,
+#    language runtime, vendor binary, and MCP server in the b00t ecosystem.
+#    Designed to run standalone or as the Observe phase of the DAILY-MAINTENANCE OODA loop.
+#
+# 🔗参 _b00t_/datums/DAILY-MAINTENANCE.tomllmd — consumes this datum in Observe phase
+# 🔗参 _b00t_/datums/VENDOR-*.tomllmd — vendor build/install/health_check specs
+# 🔗参 _b00t_/datums/SCHEDULER-SCHEMA.tomllmd — scheduler integration for auto-execution
+# 🔗参 b00t-cli/src/commands/install.rs — CLI install dispatch
+#
+# schema: 1 | bump on field definition changes
+# last_updated: 2026-05-09
+
+[b00t]
+name = "INSTALLER-CAPABILITY"
+type = "schema"
+hint = "Installer capability check & remediation — verify every tool works, fix if broken across the b00t ecosystem"
+
+[b00t.version]
+schema = 1
+content = "stable"
+
+# ── Language runtimes & system tools ──────────────────────────────────────────
+# Each [[b00t.check]] entry defines one check: name, check_command (exit 0 = OK),
+# remediation (shell command to fix), required (true = block on failure),
+# and vendor_datum (empty for system tools, or VENDOR-* for vendor binaries).
+
+[[b00t.check]]
+name = "rustc"
+check_command = "rustc --version && cargo --version"
+remediation = "curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y && source ~/.cargo/env"
+required = true
+vendor_datum = ""
+
+[[b00t.check]]
+name = "python3"
+check_command = "python3 --version && python3 -c 'import sys; assert sys.version_info >= (3,11)'"
+remediation = "echo 'Install Python 3.11+ from https://www.python.org/downloads/' && exit 1"
+required = true
+vendor_datum = ""
+
+[[b00t.check]]
+name = "uv"
+check_command = "uv --version"
+remediation = "curl -LsSf https://astral.sh/uv/install.sh | sh"
+required = true
+vendor_datum = ""
+
+[[b00t.check]]
+name = "pip"
+check_command = "pip3 --version || pip --version"
+remediation = "python3 -m ensurepip --upgrade || curl https://bootstrap.pypa.io/get-pip.py | python3"
+required = true
+vendor_datum = ""
+
+[[b00t.check]]
+name = "node"
+check_command = "node --version && npm --version"
+remediation = "curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash - && sudo apt-get install -y nodejs"
+required = false
+vendor_datum = ""
+
+[[b00t.check]]
+name = "git"
+check_command = "git --version && git config user.name && git config user.email"
+remediation = "sudo apt-get install -y git && git config --global user.name 'b00t' && git config --global user.email 'b00t@promptexecution.com'"
+required = true
+vendor_datum = ""
+
+[[b00t.check]]
+name = "gh"
+check_command = "gh --version && gh auth status"
+remediation = "curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | sudo dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg && echo 'deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main' | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null && sudo apt-get update && sudo apt-get install -y gh && gh auth login"
+required = true
+vendor_datum = ""
+
+[[b00t.check]]
+name = "just"
+check_command = "just --version"
+remediation = "cargo install just || curl -LSfs https://just.systems/install.sh | bash -s -- --to ~/.local/bin"
+required = true
+vendor_datum = ""
+
+[[b00t.check]]
+name = "gcc"
+check_command = "gcc --version"
+remediation = "sudo apt-get install -y build-essential gcc"
+required = false
+vendor_datum = "VENDOR-CODEBASE-MEMORY-MCP"
+
+[[b00t.check]]
+name = "make"
+check_command = "make --version"
+remediation = "sudo apt-get install -y build-essential make"
+required = false
+vendor_datum = "VENDOR-CODEBASE-MEMORY-MCP"
+
+[[b00t.check]]
+name = "go"
+check_command = "go version"
+remediation = "wget https://go.dev/dl/go1.25.linux-amd64.tar.gz && sudo rm -rf /usr/local/go && sudo tar -C /usr/local -xzf go1.25.linux-amd64.tar.gz && echo 'export PATH=$PATH:/usr/local/go/bin' >> ~/.bashrc"
+required = false
+vendor_datum = "VENDOR-AGENTFM-CORE"
+
+[[b00t.check]]
+name = "podman"
+check_command = "podman --version"
+remediation = "sudo apt-get install -y podman"
+required = false
+vendor_datum = "VENDOR-AGENTFM-CORE"
+
+[[b00t.check]]
+name = "docker"
+check_command = "docker --version"
+remediation = "curl -fsSL https://get.docker.com | bash"
+required = false
+vendor_datum = "VENDOR-MOLTIS-B00T"
+
+[[b00t.check]]
+name = "biome"
+check_command = "biome --version"
+remediation = "npm install -g @biomejs/biome || cargo install biome"
+required = false
+vendor_datum = "VENDOR-MOLTIS-B00T"
+
+[[b00t.check]]
+name = "libgit2"
+check_command = "pkg-config --libs libgit2 2>/dev/null || ldconfig -p | grep libgit2"
+remediation = "sudo apt-get install -y libgit2-dev"
+required = false
+vendor_datum = "VENDOR-CODEBASE-MEMORY-MCP"
+
+# ── b00t core binaries ───────────────────────────────────────────────────────
+
+[[b00t.check]]
+name = "b00t-cli"
+check_command = "b00t-cli --version"
+remediation = "cargo build --manifest-path b00t-cli/Cargo.toml --release && cp target/release/b00t-cli ~/.local/bin/"
+required = true
+vendor_datum = ""   # part of repo root, not a vendor submodule
+
+[[b00t.check]]
+name = "b00t-binary"
+check_command = "b00t --version || command -v b00t"
+remediation = "ln -sf ~/.local/bin/b00t-cli ~/.local/bin/b00t || cp target/release/b00t-cli ~/.local/bin/b00t"
+required = false
+vendor_datum = ""
+
+[[b00t.check]]
+name = "just-mcp-binary"
+check_command = "just-mcp --help"
+remediation = "cargo build --manifest-path just-mcp/Cargo.toml --release && cp just-mcp/target/release/just-mcp ~/.local/bin/"
+required = true
+vendor_datum = "VENDOR-JUST-MCP"
+
+# ── Vendor Rust binaries (require rustc + cargo) ─────────────────────────────
+
+[[b00t.check]]
+name = "irontology-mcp"
+check_command = "irontology-mcp --version || test -x vendor/irontology-mcp/target/release/mcp-server"
+remediation = "cargo build --manifest-path vendor/irontology-mcp/Cargo.toml --release -p mcp-server && cp vendor/irontology-mcp/target/release/mcp-server ~/.local/bin/irontology-mcp"
+required = true
+vendor_datum = "VENDOR-IRONTOLOGY-MCP"
+
+[[b00t.check]]
+name = "codebase-memory-mcp"
+check_command = "codebase-memory-mcp --version || test -x vendor/codebase-memory-mcp-b00t-ir0n-ledg3rr/build/c/codebase-memory-mcp"
+remediation = "just -f vendor/codebase-memory-mcp-b00t-ir0n-ledg3rr/justfile cbm && cp vendor/codebase-memory-mcp-b00t-ir0n-ledg3rr/build/c/codebase-memory-mcp ~/.local/bin/"
+required = true
+vendor_datum = "VENDOR-CODEBASE-MEMORY-MCP"
+
+[[b00t.check]]
+name = "moltis"
+check_command = "moltis --help || test -x vendor/moltis-b00t/target/release/moltis"
+remediation = "cargo build --manifest-path vendor/moltis-b00t/Cargo.toml --release && cp vendor/moltis-b00t/target/release/moltis ~/.local/bin/"
+required = true
+vendor_datum = "VENDOR-MOLTIS-B00T"
+
+[[b00t.check]]
+name = "ledgrrr-mcp"
+check_command = "vendor/ledgrrr/target/release/ledgerr-mcp --version || test -x vendor/ledgrrr/target/release/ledgerr-mcp"
+remediation = "cargo build --manifest-path vendor/ledgrrr/Cargo.toml --release && cp vendor/ledgrrr/target/release/ledgerr-mcp ~/.local/bin/"
+required = true
+vendor_datum = "VENDOR-LEDGRRR"
+
+[[b00t.check]]
+name = "l3dg3rr-mcp"
+check_command = "vendor/l3dg3rr/target/release/ledgerr-mcp --version || test -x vendor/l3dg3rr/target/release/ledgerr-mcp"
+remediation = "cargo build --manifest-path vendor/l3dg3rr/Cargo.toml --release && cp vendor/l3dg3rr/target/release/ledgerr-mcp ~/.local/bin/ && cp vendor/l3dg3rr/target/release/host-tauri ~/.local/bin/"
+required = true
+vendor_datum = "VENDOR-L3DG3RR"
+
+[[b00t.check]]
+name = "tomllm"
+check_command = "tomllm --help || test -x vendor/tomllm/target/release/tomllm"
+remediation = "cargo build --manifest-path vendor/tomllm/Cargo.toml --release && cp vendor/tomllm/target/release/tomllm ~/.local/bin/ && (uv pip install vendor/tomllm/ || pip install vendor/tomllm/)"
+required = true
+vendor_datum = "VENDOR-TOMLLM"
+
+# ── Vendor non-Rust binaries ─────────────────────────────────────────────────
+
+[[b00t.check]]
+name = "agentfm"
+check_command = "agentfm --version || test -x vendor/agentfm-core/agentfm-go/build/agentfm"
+remediation = "make -C vendor/agentfm-core/agentfm-go build && sudo make -C vendor/agentfm-core/agentfm-go install"
+required = false
+vendor_datum = "VENDOR-AGENTFM-CORE"
+
+[[b00t.check]]
+name = "hermes-agent"
+check_command = "hermes --help || python3 vendor/hermes-agent-b00t/cli.py --help"
+remediation = "uv pip install -e vendor/hermes-agent-b00t/"
+required = false
+vendor_datum = "VENDOR-HERMES-AGENT-B00T"
+
+# ── Pending vendors (check at least the directory exists) ─────────────────────
+
+[[b00t.check]]
+name = "opencode-b00t"
+check_command = "test -d vendor/opencode-b00t && ls vendor/opencode-b00t/ | wc -l | grep -v '^0$'"
+remediation = "git submodule update --init vendor/opencode-b00t 2>/dev/null || echo 'WARN: opencode-b00t not initialized, pending setup'"
+required = false
+vendor_datum = "VENDOR-OPENCODE-B00T"
+
+[[b00t.check]]
+name = "pi-mono"
+check_command = "test -d vendor/pi-mono && ls vendor/pi-mono/ | wc -l | grep -v '^0$'"
+remediation = "echo 'WARN: pi-mono not configured, pending manual setup'"
+required = false
+vendor_datum = "VENDOR-PI-MONO"
+
+# ── MCP server registration check ────────────────────────────────────────────
+
+[[b00t.check]]
+name = "mcp-servers-registered"
+check_command = "b00t mcp list --json 2>/dev/null | head -20 | grep -q 'irontology-mcp' && b00t mcp list --json 2>/dev/null | head -20 | grep -q 'codebase-memory'"
+remediation = "echo 'WARN: MCP servers not fully registered — run `b00t mcp install irontology-mcp hermes` and `b00t mcp install codebase-memory-mcp hermes`'"
+required = false
+vendor_datum = ""
+
+[[b00t.check]]
+name = "ledgrrr-availability"
+check_command = "b00t mcp list --json 2>/dev/null | grep -q 'ledgerr' || test -x ~/.local/bin/ledgerr-mcp"
+remediation = "echo 'WARN: ledgrrr MCP server not registered — run `b00t mcp install l3dg3rr-mcp hermes`'"
+required = true
+vendor_datum = "VENDOR-LEDGRRR"
+
+# ── Disk health checks ───────────────────────────────────────────────────────
+
+[[b00t.check]]
+name = "disk-usage-tmp"
+check_command = "df -h /tmp | tail -1 | awk '{print \$5}' | sed 's/%//' | awk '\$1 < 80'"
+remediation = "echo 'WARN: /tmp usage above 80% — clean up: find /tmp -atime +1 -delete'"
+required = false
+vendor_datum = ""
+
+[[b00t.check]]
+name = "disk-usage-target"
+check_command = "test -d target && du -sh target/ 2>/dev/null | awk '{print \$1}' | grep -v '^[0-9]*G' || true"
+remediation = "echo 'INFO: target/ dir may be large — consider `cargo clean` if >5G'"
+required = false
+vendor_datum = ""
+
+[[b00t.check]]
+name = "disk-usage-hermes-logs"
+check_command = "test -d .hermes/logs && du -sh .hermes/logs/ 2>/dev/null | awk '{print \$1}' | grep -v '^[0-9]*G' || true"
+remediation = "echo 'INFO: .hermes/logs/ may be large — consider log rotation'"
+required = false
+vendor_datum = ""
+
+# ── Runtime check: all required_tools from vendor datums ────────────────────
+# This aggregates unique required_tools across all VENDOR-*.tomllmd datums
+# and verifies each is on $PATH.
+
+[[b00t.check]]
+name = "vendor-required-tools"
+check_command = "echo 'Checking vendor required_tools...' && for tool in rustc cargo python3 uv pip just git gh gcc make go podman docker biome; do command -v \"\$tool\" >/dev/null 2>&1 || echo \"MISSING: \$tool\"; done"
+remediation = "echo 'See individual tool remediations above — run `b00t-cli grok ask \"how to install missing b00t tool\"`'"
+required = true
+vendor_datum = ""
+
+# ── Daily routine configuration ──────────────────────────────────────────────
+# Scheduled via scheduler: 06:00 daily, 15-min max, parallel where possible.
+# Runs under ledgrrr governance sandbox for audit-trail provenance.
+
+[b00t.daily_routine]
+enabled = true
+time = "06:00"
+max_duration_minutes = 15
+parallel = true
+sandbox = "ledgrrr"
+report_to = "gh-issue"
+
+# ── Escalation rules ─────────────────────────────────────────────────────────
+
+[b00t.remediation]
+max_retries = 2
+cooldown_seconds = 300
+escalation = "gh-issue"
+escalation_threshold = 3    # Number of subsequent failures before filing issue
+escalation_label = "installer-capability"
+escalation_assignee = "@b00t"
+
+# ── How the check loop works ─────────────────────────────────────────────────
+#
+# 1. OBSERVE — Iterate all [[b00t.check]] entries in order. For each:
+#    a. Run check_command in a shell
+#    b. If exit code != 0 → register failure
+#    c. If exit code == 0 → mark PASS, skip remediation
+#
+# 2. ORIENT — Classify failures:
+#    - required = true → HALT (system is broken)
+#    - required = false → WARN (log and continue)
+#    - Failure count > escalation_threshold → escalate to GH issue
+#
+# 3. DECIDE — For each failed check:
+#    - Run remediation command
+#    - Re-run check_command to verify fix
+#    - If still failing after max_retries → escalate
+#
+# 4. ACT — Execute remediations:
+#    - Parallel for independent tools (non-overlapping deps)
+#    - Serial for dependent chain (e.g. rustc → cargo → vendor builds)
+#    - Log all results to .b00t/installer-capability.log (JSONL)
+#
+# ── Integration with scheduler ───────────────────────────────────────────────
+#
+# The SCHEDULER-SCHEMA.tomllmd defines the scheduler DDL. Schedule this
+# datum's daily routine via:
+#
+# ```
+# b00t schedule add --name installer-capability-check \
+#   --cron "0 6 * * *" \
+#   --prompt "Run INSTALLER-CAPABILITY check loop" \
+#   --command "b00t-cli check capability-datum _b00t_/datums/INSTALLER-CAPABILITY.tomllmd"
+# ```
+#
+# Or use the @b00t() syntax for inline scheduling:
+#   @b00t(installer-capability, cron="0 6 * * *")
+#
+# ── Escalation path ──────────────────────────────────────────────────────────
+#
+# When remediation fails after max_retries:
+# 1. Log full failure details to .b00t/installer-capability.failures.jsonl
+# 2. File a GH issue using `gh issue create` with:
+#    - Title: "[b00t] Installer capability failure: {check_name}"
+#    - Label: installer-capability
+#    - Body: Full check_command, remediation attempted, error output
+# 3. Assign to @b00t for review
+# 4. If 3+ subsequent failures → escalate to operator via @b00t notify
+#
+# ── Running manually ─────────────────────────────────────────────────────────
+#
+# ```
+#   b00t-cli check capability-datum _b00t_/datums/INSTALLER-CAPABILITY.tomllmd
+#   # or
+#   b00t schedule run installer-capability-check
+# ```
+
+# b00t:map v1
+# summary: Installer capability check and remediation datum — 25+ check entries covering language runtimes (rustc, python3, uv, pip, node, go), system tools (git, gh, just, gcc, make, podman, docker, biome, libgit2), b00t core binaries (b00t-cli, b00t, just-mcp), vendor binaries (irontology-mcp, codebase-memory-mcp, moltis, ledgrrr, l3dg3rr, tomllm, agentfm, hermes), pending vendors (opencode, pi-mono), MCP registration, disk health, and aggregated vendor required-tools validation. Daily 06:00 schedule under ledgrrr sandbox with GH-issue escalation after 3 failures.
+# tags: installer, capability, check, remediation, vendor, mcp, ooda, maintenance
+# tier: ch0nky
+# cmds: b00t-cli check capability-datum, b00t schedule add, b00t schedule run
+# complexity: 5

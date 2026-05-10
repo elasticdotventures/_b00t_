@@ -1,0 +1,314 @@
+# b00t Daily Maintenance OODA Loop datum
+# 🤓 Self-reflective maintenance system using Observe-Orient-Decide-Act (OODA)
+#    loop design pattern. Multi-layer process modeling via INCOSE V-model for
+#    system health, vendor freshness, capability gaps, quality metrics, and
+#    security posture. Governed by ledgrrr sandbox with GH-issue escalation.
+#
+# 🔗参 _b00t_/datums/INSTALLER-CAPABILITY.tomllmd — consumed in Observe phase
+# 🔗参 _b00t_/datums/VENDOR-*.tomllmd — vendor freshness checks
+# 🔗参 _b00t_/datums/SCHEDULER-SCHEMA.tomllmd — scheduler DDL for auto-execution
+# 🔗参 _b00t_/datums/AGENT-REGISTRY.tomllmd — agent registry for capability gaps
+# 🔗参 _b00t_/datums/MCP-SERVER-SCHEMA.tomllmd — MCP server health checks
+# 🔗参 b00t-cli/src/commands/install.rs — vendor install dispatch
+#
+# schema: 1 | bump on field definition changes
+# last_updated: 2026-05-09
+
+[b00t]
+name = "DAILY-MAINTENANCE"
+type = "schema"
+hint = "Daily self-reflective maintenance OODA loop — installer checks, vendor updates, cleanliness, capability gaps, quality metrics, security"
+
+[b00t.version]
+schema = 1
+content = "stable"
+
+# ── OODA Loop Configuration ─────────────────────────────────────────────────
+# Runs at 06:00 daily, 30-min max, under ledgrrr governance sandbox.
+# Uses INCOSE V-model for process layers — system-level decomposition with
+# verification/validation gates between layers.
+
+[b00t.ooda]
+enabled = true
+schedule = "06:00 daily"
+max_duration_minutes = 30
+sandbox = "ledgrrr"
+governance_model = "incose-v"   # INCOSE V-model for process layer decomposition
+
+[b00t.ooda.observe]
+# Phase 1: Collect data from all system surfaces
+# Each task maps to one or more [[b00t.check]] entries, datum reads, or shell commands
+tasks = [
+  "check all installers (via INSTALLER-CAPABILITY datum — 25+ check entries)",
+  "check vendor datums for upstream drift (git fetch + compare SHA in vendor/*)",
+  "check disk usage /tmp, target/, .hermes/logs/, .b00t/",
+  "check submodule freshness (git submodule status in vendor/ and just-mcp)",
+  "check MCP server availability (ping each registered MCP server's health endpoint)",
+  "check model pass/fail rates from A/B grading (b00t-cli ab-grading results)",
+  "check bouncer audit log for recent violations (.b00t/bouncer-audit.jsonl tail)",
+  "check open issue count for installer-capability label",
+  "check vendor required_tools aggregated availability",
+  "check for stale running processes (orphaned cargo builds, server processes)",
+]
+
+[b00t.ooda.orient]
+# Phase 2: Multi-layer process modeling — INCOSE V-model decomposition
+# Each layer builds on the previous; verification gates between layers.
+# Output: prioritized list of findings with severity classification.
+layers = [
+  "Layer 1: System health (installers, disk, services) — CRITICAL: block on failure",
+  "Layer 2: Vendor freshness (submodule pins vs upstream) — WARN: flag drift >2 versions",
+  "Layer 3: Capability gaps (missing datums, stubs, incomplete vendor init) — WARN: file issue",
+  "Layer 4: Quality metrics (bouncer pass rates, model grading, test outcomes) — INFO: trend analysis",
+  "Layer 5: Security (vendor review queue, open issues, credential exposure) — CRITICAL: escalate immediately",
+]
+
+# ── Layer classification ────────────────────────────────────────────────────
+# Each layer in the OODA orientation phase is classified by severity and
+# mapped to the appropriate response path.
+
+[[b00t.ooda.orient.layer]]
+id = 1
+name = "System health"
+severity = "CRITICAL"
+description = "Runtime availability of core tooling — rustc, cargo, python3, uv, pip, git, gh, just, b00t-cli, all vendor binaries, MCP servers, disk space"
+verification_gate = "All required=true checks from INSTALLER-CAPABILITY must pass"
+on_failure = "block: do not proceed to Layer 2 until resolved"
+escalation = "immediate-gh-issue"
+max_retries = 2
+
+[[b00t.ooda.orient.layer]]
+id = 2
+name = "Vendor freshness"
+severity = "WARN"
+description = "Submodule and vendor repo pin synchronization with upstream branches"
+verification_gate = "All vendor upstream SHAs within 2 commits of local HEAD"
+on_failure = "flag for update in Decide phase"
+escalation = "gh-issue-if-persistent"
+
+[[b00t.ooda.orient.layer]]
+id = 3
+name = "Capability gaps"
+severity = "WARN"
+description = "Missing datums, uninitialized vendors (opencode-b00t, pi-mono), incomplete agent registrations"
+verification_gate = "No draft-status vendor datums with stale age >30d"
+on_failure = "file issue in Decide phase"
+escalation = "gh-issue-if-persistent"
+
+[[b00t.ooda.orient.layer]]
+id = 4
+name = "Quality metrics"
+severity = "INFO"
+description = "Bouncer audit pass rates, A/B model grading results, test suite pass/fail rates, LFMF frequency"
+verification_gate = "All metrics within acceptable thresholds (pass rate >95%, bouncer violations <5/day)"
+on_failure = "log only; file issue if trend indicates degradation"
+escalation = "weekly-digest"
+
+[[b00t.ooda.orient.layer]]
+id = 5
+name = "Security posture"
+severity = "CRITICAL"
+description = "Open security issues, vendor review queue backlog, credential exposure events, guard violations"
+verification_gate = "No unaddressed CRITICAL security issues; vendor review queue <48h old"
+on_failure = "block: escalate immediately to operator"
+escalation = "immediate-notify"
+
+[b00t.ooda.decide]
+# Phase 3: Route findings to actions based on model capability tier
+# Uses A/B grading model routing — complex decisions to frontier model,
+# routine checks to ch0nky model.
+routing_model = "ab-grading"
+default_model = "frontier"       # For complex decisions, novel failures
+fallback_model = "ch0nky"        # For routine checks, known remediation patterns
+max_delegations = 5               # Max concurrent subagent delegations per cycle
+
+# ── Decision rules ──────────────────────────────────────────────────────────
+# Each rule maps a finding pattern to a response action.
+
+[[b00t.ooda.decide.rule]]
+match = "system-health:required-failure"
+action = "remediate-installer"
+model = "frontier"          # Complex — may need novel fix
+delegate = true
+timeout_minutes = 10
+
+[[b00t.ooda.decide.rule]]
+match = "vendor-freshness:drift-detected"
+action = "update-submodule"
+model = "ch0nky"            # Routine — git fetch + merge
+delegate = false             # Can run inline
+timeout_minutes = 5
+
+[[b00t.ooda.decide.rule]]
+match = "capability-gap:missing-datum"
+action = "file-issue"
+model = "ch0nky"            # Routine — gather context + create issue
+delegate = true
+timeout_minutes = 3
+
+[[b00t.ooda.decide.rule]]
+match = "quality:metric-degradation"
+action = "log-and-trend"
+model = "frontier"          # May need trend analysis
+delegate = false
+timeout_minutes = 10
+
+[[b00t.ooda.decide.rule]]
+match = "security:critical-issue"
+action = "immediate-escalate"
+model = "frontier"          # Must handle with full capability
+delegate = true
+timeout_minutes = 5
+priority = "critical"
+
+[b00t.ooda.act]
+# Phase 4: Execute remediation actions
+# Actions are ordered by severity, then by dependency chain.
+# Results logged to .b00t/maintenance-ooda.log (JSONL).
+actions = [
+  "remediate failed installers (run INSTALLER-CAPABILITY remediation commands)",
+  "update stale submodules (git submodule update --remote vendor/*)",
+  "file issues for new capability gaps (gh issue create with template)",
+  "clean disk space (/tmp, target/, .hermes/logs/ rotation)",
+  "restart failed MCP servers (b00t mcp install <name> hermes)",
+  "escalate persistent failures to GH issue (3+ subsequent cycle failures)",
+  "run l3dg3rr (ledgrrr) audit if maintenance threshold exceeded (>5 failures/cycle)",
+  "prune stale agent registrations from registry (.b00t/agent-registry.jsonl archiving)",
+  "rotate logs (.b00t/*.log.* files older than 7 days)",
+]
+
+[b00t.ooda.act.post_action]
+# Behavior after each action completes
+on_failure = "gh_issue"         # File a GitHub issue with full context
+on_success = "log_only"         # Append to maintenance log, no notification
+max_retries = 2                  # Per action
+cooldown_minutes = 60            # Between retries of the same action
+
+# ── Post-maintenance processing ──────────────────────────────────────────────
+
+[b00t.maintenance]
+log_path = ".b00t/maintenance-ooda.log"
+failure_log = ".b00t/maintenance-ooda.failures.jsonl"
+state_file = ".b00t/maintenance-ooda.state.json"   # Persist state between cycles
+history_retention_days = 90
+
+[b00t.maintenance.reporting]
+# How to report maintenance outcomes
+format = "markdown"
+sections = [
+  "Summary: passes, failures, escalations",
+  "Layer-by-layer breakdown",
+  "Actions taken and their outcomes",
+  "Escalations filed",
+  "Trend analysis (7-day moving average)",
+]
+output_path = ".b00t/maintenance-ooda.report.md"
+
+[b00t.maintenance.escalation]
+# When to escalate beyond normal GH issue filing
+threshold_persistent_failures = 3    # Same check fails 3+ consecutive cycles
+threshold_total_failures = 10        # Total failures in a single cycle
+escalate_to = "operator"             # Notify operator via agent message
+escalate_via = "gh-issue"            # Also file a critical-priority GH issue
+escalation_label = "maintenance-critical"
+escalation_label_persistent = "maintenance-persistent"
+
+# ── Integration with scheduler datum ─────────────────────────────────────────
+#
+# This datum is consumed by the b00t scheduler (SCHEDULER-SCHEMA.tomllmd).
+# The scheduler creates a cron schedule at 06:00 daily with:
+#
+# ```
+# b00t schedule add --name daily-maintenance-ooda \
+#   --cron "0 6 * * *" \
+#   --prompt "Run daily OODA maintenance loop per DAILY-MAINTENANCE.tomllmd" \
+#   --command "b00t-cli ooda run _b00t_/datums/DAILY-MAINTENANCE.tomllmd" \
+#   --required-capabilities "[\"system-health\",\"vendor-freshness\",\"capability-gaps\",\"quality\",\"security\"]"
+# ```
+#
+# @b00t() inline scheduling syntax:
+#   @b00t(daily-maintenance-ooda, cron="0 6 * * *", sandbox="ledgrrr")
+#
+# ── The OODA loop design ────────────────────────────────────────────────────
+#
+# The OODA loop is John Boyd's strategic decision-making framework adapted
+# for self-reflective system maintenance:
+#
+# OBSERVE    Gather raw data from all system surfaces
+#              → INSTALLER-CAPABILITY checks, vendor datums, disk usage,
+#                submodule status, MCP health, A/B grading, bouncer audit
+#              → No filtering, no prioritization — just collect
+#
+# ORIENT     Filter, classify, and prioritize findings through multi-layer model
+#              → INCOSE V-model: 5 layers from system health (L1) to security (L5)
+#              → Each layer has severity (CRITICAL, WARN, INFO) and verification gate
+#              → Layer N+1 does not proceed until Layer N passes its gate
+#              → Produces a prioritized finding list with severity tags
+#
+# DECIDE     Route findings to appropriate response actions
+#              → A/B grading model routing: frontier for complex, ch0nky for routine
+#              → Rules-based decision matrix matching finding patterns to actions
+#              → Delegation control: some actions run inline, others via subagent
+#              → Max 5 concurrent delegations per cycle
+#
+# ACT        Execute remediations in dependency order
+#              → Retry with exponential backoff (max 2 retries, 60-min cooldown)
+#              → Log all outcomes to maintenance log
+#              → File GH issues for failures, log only for successes
+#              → If persistent (3+ cycles) or severe (10+ failures), escalate to operator
+#
+# ── Multi-layer process modeling (INCOSE V) ──────────────────────────────────
+#
+# The INCOSE V-model decomposes the maintenance process into levels of abstraction:
+#
+# L1: System health ──────── Runtime availability
+#        ↓ verify ↑ validate
+# L2: Vendor freshness ──── Source code currency
+#        ↓ verify ↑ validate
+# L3: Capability gaps ───── Feature completeness
+#        ↓ verify ↑ validate
+# L4: Quality metrics ───── Performance & reliability
+#        ↓ verify ↑ validate
+# L5: Security posture ──── Threat & compliance
+#
+# Each layer verifies downward (ensuring lower layers are healthy) and
+# validates upward (ensuring higher-layer concerns are addressed).
+# The OODA loop always resolves L1 before L2, L2 before L3, etc.
+#
+# ── How ledgrrr provides governance/sandbox ─────────────────────────────────
+#
+# ledgrrr runs as the governance sandbox for the entire OODA loop:
+# - All actions are executed under ledgrrr's audit trail
+# - Remediation commands are logged with deterministic tx_id hashing (Blake3)
+# - The maintenance state file (.b00t/maintenance-ooda.state.json) is
+#   checksummed and appended to the ledgrrr evidence graph
+# - If maintenance threshold exceeded (>5 failures/cycle), ledgrrr performs
+#   a full audit and files a governance report
+# - See VENDOR-LEDGRRR.tomllmd and VENDOR-L3DG3RR.tomllmd for full details
+#
+# ── @b00t() daily routine syntax ────────────────────────────────────────────
+#
+# The @b00t() inline syntax registers this datum with the scheduler:
+#
+# ```
+# @b00t(daily-maintenance-ooda,
+#   cron="0 6 * * *",
+#   sandbox="ledgrrr",
+#   max_duration_minutes=30,
+#   on_failure="gh_issue",
+#   notify_on_escalation=true)
+# ```
+#
+# Parameters:
+#   cron          — Standard 5-field cron expression (default: "0 6 * * *")
+#   sandbox       — Governance sandbox (default: "ledgrrr")
+#   max_duration  — Maximum runtime in minutes (default: 30)
+#   on_failure    — Response to failure: "gh_issue", "log_only", "notify" (default: "gh_issue")
+#   notify_on     — Trigger notification after N consecutive failures (default: 3)
+
+# b00t:map v1
+# summary: Daily self-reflective maintenance OODA loop — 5-layer INCOSE V-model decomposition (system health CRITICAL, vendor freshness WARN, capability gaps WARN, quality metrics INFO, security CRITICAL) with A/B grading model routing (frontier for complex, ch0nky for routine), ledgrrr governance sandbox, GH-issue escalation, 06:00 daily schedule, 30-min max, 9 observe tasks, 9 act actions, rule-based decision matrix, retry with cooldown, trend analysis reporting
+# tags: ooda, maintenance, incose, v-model, governance, ledgrrr, scheduler, installer, vendor, quality, security, daily
+# tier: frontier
+# cmds: b00t-cli ooda run, b00t schedule add, b00t schedule run, b00t mcp list
+# complexity: 5

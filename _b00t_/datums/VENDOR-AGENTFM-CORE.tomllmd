@@ -1,0 +1,66 @@
+# b00t Vendor Datum — agentfm-core (Agent Foundation Model core)
+# 🤓 agentfm-core is a peer-to-peer compute grid for containerized agents
+#    Repo: github.com/Agent-FM/agentfm-core
+#    Language: Go
+#    Path: vendor/agentfm-core
+
+[b00t]
+name = "VENDOR-AGENTFM-CORE"
+type = "vendor"
+hint = "AgentFM — P2P compute grid for sandboxed AI agents with libp2p, Podman, and OpenAI-compatible API"
+
+[b00t.version]
+schema = 1
+content = "stable"
+
+[b00t.vendor]
+path = "vendor/agentfm-core"
+upstream = "https://github.com/Agent-FM/agentfm-core"
+branch = "main"
+build_command = "make -C vendor/agentfm-core/agentfm-go build"
+install_command = "sudo make -C vendor/agentfm-core/agentfm-go install"
+health_check = "agentfm --version || test -x vendor/agentfm-core/agentfm-go/build/agentfm"
+required_tools = ["go", "make", "podman"]
+
+[b00t.maintenance]
+update_frequency = "monthly"
+review_required = false
+
+# ── agentfm-core — Peer-to-Peer Agent Compute Grid ──────────────────────────
+
+## What is it?
+
+agentfm-core is a P2P compute grid that lets AI agents run on remote hardware.
+Think "SETI@Home for AI" — it discovers idle compute via libp2p DHT and
+schedules sandboxed (Podman) agent jobs across the network.
+
+## Key Interfaces
+
+- **agentfm** — CLI daemon that registers node, accepts jobs, hosts agents
+- **relay** — Lightweight relay node for NAT traversal
+- **OpenAI-compatible API** — Remote agents accessed via standard /v1/chat interface
+- **AgentFM SDK** — Go SDK for building grid-aware agents (agentfm-go/agent-sdk)
+- **REST API** — Job submission, status polling, artifact streaming
+
+## Dependencies
+
+- Go 1.25+ (required for build)
+- Podman or Docker (for sandboxed execution)
+- libp2p (vendored via go modules)
+- Make (build system)
+
+## Build Notes
+
+Build the agentfm binary:
+```
+make -C vendor/agentfm-core/agentfm-go build
+```
+
+This produces `build/agentfm` in the agentfm-go directory.
+
+## Security Considerations
+
+- Agents run in Podman containers with configurable resource limits
+- P2P network uses libp2p noise handshake for transport encryption
+- Job artifacts are streamed live; no persistent storage on remote nodes
+- Relay nodes are untrusted — no plaintext flows through them

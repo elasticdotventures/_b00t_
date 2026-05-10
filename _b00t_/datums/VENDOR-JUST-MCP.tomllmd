@@ -1,0 +1,68 @@
+# b00t Vendor Datum — just-mcp (Just MCP Server)
+# 🤓 MCP server that exposes just recipes as typed MCP tools
+#    Repo: github.com/PromptExecution/just-mcp
+#    Language: Rust
+#    Path: just-mcp (submodule in repo root, not vendor/)
+
+[b00t]
+name = "VENDOR-JUST-MCP"
+type = "vendor"
+hint = "just-mcp — MCP server that exposes just recipes as typed, callable tools for AI agents"
+
+[b00t.version]
+schema = 1
+content = "stable"
+
+[b00t.vendor]
+path = "just-mcp"
+upstream = "https://github.com/PromptExecution/just-mcp"
+branch = "main"
+build_command = "cargo build --manifest-path just-mcp/Cargo.toml --release"
+install_command = "cp just-mcp/target/release/just-mcp ~/.local/bin/"
+health_check = "just-mcp --help || test -x just-mcp/target/release/just-mcp"
+required_tools = ["rustc", "cargo"]
+
+[b00t.maintenance]
+update_frequency = "monthly"
+review_required = false
+
+# ── just-mcp — Just Recipe MCP Server ───────────────────────────────────────
+
+## What is it?
+
+A lightweight Rust MCP server that reads justfiles and exposes each recipe as a
+typed MCP tool. This allows AI agents to discover and invoke project-specific
+just recipes through the Model Context Protocol without needing to parse
+justfiles manually.
+
+## Key Interfaces (MCP Tools)
+
+- **just_recipes** — Lists all available recipes from the project justfile
+- **just_run** — Executes a specific recipe with optional arguments
+- **just_describe** — Gets the description and dependencies of a recipe
+
+## How It Works
+
+1. Reads the `.justfile` or `justfile` in the project root
+2. Parses recipe names, descriptions, and arguments
+3. Registers each recipe as a dynamic MCP tool
+4. Executes recipes via the `just` binary when invoked
+
+## Dependencies
+
+- Rust 2024 edition
+- `rmcp` (optional, MCP framework)
+- `toml` (TOML parsing)
+- `serde` / `serde_json` (serialization)
+
+## Build Notes
+
+```
+cargo build --manifest-path just-mcp/Cargo.toml --release
+```
+
+## Security Considerations
+
+- Executes local just recipes — only as safe as the justfile allows
+- Stdio transport only; no network exposure
+- Recipes inherit the calling user's permissions

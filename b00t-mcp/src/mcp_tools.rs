@@ -9,22 +9,22 @@ use std::collections::HashMap;
 // Re-export b00t-cli command structures for MCP use
 // This creates a compile-time dependency but ensures type safety
 
-/// MCP command for listing MCP servers
+/// List MCP servers
 #[derive(Parser, Clone)]
 pub struct McpListCommand {
-    #[arg(long, help = "Output in JSON format")]
+    #[arg(long, help = "JSON output")]
     pub json: bool,
 }
 
 impl_mcp_tool!(McpListCommand, "b00t_mcp_list", ["mcp", "list"]);
 
-/// MCP command for adding MCP servers
+/// Add MCP server
 #[derive(Parser, Clone)]
 pub struct McpAddCommand {
-    #[arg(help = "MCP server configuration JSON or '-' for stdin")]
+    #[arg(help = "MCP server config JSON or '-' for stdin")]
     pub json: String,
 
-    #[arg(long, help = "Enable Do What I Want mode for enhanced parsing")]
+    #[arg(long, help = "Enable DWIW enhanced parsing")]
     pub dwiw: bool,
 
     #[arg(long, help = "Server hint/description")]
@@ -33,46 +33,46 @@ pub struct McpAddCommand {
 
 impl_mcp_tool!(McpAddCommand, "b00t_mcp_add", ["mcp", "register"]);
 
-/// MCP command for MCP server output generation
+/// Generate MCP server output
 #[derive(Parser, Clone)]
 pub struct McpOutputCommand {
-    #[arg(help = "Comma-separated list of server names")]
+    #[arg(help = "Comma-separated server names")]
     pub servers: String,
 
-    #[arg(long, help = "Output raw JSON instead of mcpServers wrapper")]
+    #[arg(long, help = "Output raw JSON, not mcpServers wrapper")]
     pub json: bool,
 }
 
 impl_mcp_tool!(McpOutputCommand, "b00t_mcp_output", ["mcp", "output"]);
 
-/// CLI detect command
+/// Detect CLI tool version
 #[derive(Parser, Clone)]
 pub struct CliDetectCommand {
-    #[arg(help = "Command to detect version for")]
+    #[arg(help = "Command to detect")]
     pub command: String,
 }
 
 impl_mcp_tool!(CliDetectCommand, "b00t_cli_detect", ["cli", "detect"]);
 
-/// CLI desires command
+/// Show desired CLI version
 #[derive(Parser, Clone)]
 pub struct CliDesiresCommand {
-    #[arg(help = "Command to show desired version for")]
+    #[arg(help = "Command name")]
     pub command: String,
 }
 
 impl_mcp_tool!(CliDesiresCommand, "b00t_cli_desires", ["cli", "desires"]);
 
-/// CLI check command
+/// Check CLI version alignment
 #[derive(Parser, Clone)]
 pub struct CliCheckCommand {
-    #[arg(help = "Command to check version alignment for")]
+    #[arg(help = "Command to check")]
     pub command: String,
 }
 
 impl_mcp_tool!(CliCheckCommand, "b00t_cli_check", ["cli", "check"]);
 
-/// CLI install command
+/// Install CLI tool
 #[derive(Parser, Clone)]
 pub struct CliInstallCommand {
     #[arg(help = "Command to install")]
@@ -81,7 +81,7 @@ pub struct CliInstallCommand {
 
 impl_mcp_tool!(CliInstallCommand, "b00t_cli_install", ["cli", "install"]);
 
-/// CLI update command
+/// Update CLI tool
 #[derive(Parser, Clone)]
 pub struct CliUpdateCommand {
     #[arg(help = "Command to update")]
@@ -90,7 +90,7 @@ pub struct CliUpdateCommand {
 
 impl_mcp_tool!(CliUpdateCommand, "b00t_cli_update", ["cli", "update"]);
 
-/// CLI up command (update all)
+/// Update all CLI tools
 #[derive(Parser, Clone)]
 pub struct CliUpCommand {
     #[arg(long, help = "Dry run - show what would be updated")]
@@ -99,76 +99,74 @@ pub struct CliUpCommand {
 
 impl_mcp_tool!(CliUpCommand, "b00t_cli_up", ["cli", "up"]);
 
-/// LFMF command
+/// Record lesson from mistake
 #[derive(Parser, Clone)]
 pub struct LfmfCommand {
     #[arg(long, help = "Tool name")]
     pub tool: String,
-    #[arg(long, help = "Summary hint or lesson learned")]
+    #[arg(long, help = "Lesson learned")]
     pub lesson: String,
-    #[arg(long, group = "scope", help = "Record lesson for this repo (default)")]
+    #[arg(long, group = "scope", help = "Record for this repo (default)")]
     pub repo: bool,
     #[arg(
         long,
         group = "scope",
-        help = "Record lesson globally (mutually exclusive with --repo)"
+        help = "Record globally (mutually exclusive with --repo)"
     )]
     pub global: bool,
 }
 
 impl_mcp_tool!(LfmfCommand, "b00t_lfmf", ["lfmf"]);
 
-/// MCP command for advice/syntax therapist functionality
+/// Get syntax advice for errors
 #[derive(Parser, Clone)]
 pub struct AdviceCommand {
     #[arg(help = "Tool name")]
     pub tool: String,
     #[arg(
-        help = "Error pattern to get advice for, 'list' to show all lessons, or 'search <query>'"
+        help = "Error pattern, 'list', or 'search <query>'"
     )]
     pub query: String,
-    #[arg(long, help = "Maximum number of results to return (default: 5)")]
+    #[arg(long, help = "Max results (default: 5)")]
     pub count: Option<usize>,
 }
 
 impl_mcp_tool!(AdviceCommand, "b00t_advice", ["advice"]);
 
-/// Whoami command
+/// Show identity
 #[derive(Parser, Clone)]
 pub struct WhoamiCommand;
 
 impl_mcp_tool!(WhoamiCommand, "b00t_whoami", ["whoami"]);
 
-/// Status command
-// 🤓 ENTANGLED: b00t-cli/src/main.rs Commands::Status
-// When this changes, update b00t-cli Status command structure
+/// Show system status
 #[derive(Parser, Clone)]
 pub struct StatusCommand {
     #[arg(long, help = "Filter by subsystem")]
     pub filter: Option<String>,
 
-    #[arg(long, help = "Show only installed tools")]
+    #[arg(long, help = "Only installed tools")]
     pub installed: bool,
 
-    #[arg(long, help = "Show only available tools")]
+    #[arg(long, help = "Only available tools")]
     pub available: bool,
 }
 
 impl_mcp_tool!(StatusCommand, "b00t_status", ["status"]);
 
-/// AI list command
+/// List AI providers
 #[derive(Parser, Clone)]
 pub struct AiListCommand {
-    #[arg(long, help = "Output in JSON format")]
+    #[arg(long, help = "JSON output")]
     pub json: bool,
 }
 
 impl_mcp_tool!(AiListCommand, "b00t_ai_list", ["ai", "list"]);
 
-/// AI output command
+/// Show AI provider config
 #[derive(Parser, Clone)]
 pub struct AiOutputCommand {
-    #[arg(help = "Comma-separated list of AI provider names")]
+    #[arg(help = "Comma-separated AI providers")]
     pub providers: String,
 
     #[arg(long, help = "Output key-value pairs")]
@@ -204,13 +202,13 @@ impl_mcp_tool!(
     ["agent", "discover"]
 );
 
-/// MCP command for listing b00t skills
+/// List b00t skills
 #[derive(Parser, Clone)]
 pub struct SkillListCommand {
     #[arg(long, help = "Filter by agent role")]
     pub role: Option<String>,
 
-    #[arg(long, help = "Output in JSON format")]
+    #[arg(long, help = "JSON output")]
     pub json: bool,
 }
 
@@ -543,21 +541,21 @@ impl_mcp_tool!(CheckpointCommand, "b00t_checkpoint", ["checkpoint"]);
 
 // Grok knowledgebase MCP tools
 
-/// MCP command for digesting content into chunks about a topic
+/// Digest content into chunks about a topic
 /// 🤓 ENTANGLED: b00t-cli/src/commands/grok.rs GrokCommands::Digest
 /// 🤓 content is positional in CLI: `b00t-cli grok digest --topic <TOPIC> <CONTENT>`
 #[derive(Parser, Clone)]
 pub struct GrokDigestCommand {
-    #[arg(long, short = 't', help = "Topic to digest content about")]
+    #[arg(long, short = 't', help = "Topic to digest about")]
     pub topic: String,
 
-    #[arg(help = "Content to digest (positional)")]
+    #[arg(help = "Content to digest")]
     pub content: String,
 
     #[arg(
         long,
         default_value = "both",
-        help = "RAG backend: raglite | irontology | both (default: both)"
+        help = "RAG: raglite | irontology | both"
     )]
     pub rag: Option<String>,
 }
@@ -569,20 +567,20 @@ impl_mcp_tool!(
     positionals: ["content"]
 );
 
-/// MCP command for asking questions and searching the knowledgebase
+/// Ask questions and search the knowledgebase
 /// 🤓 ENTANGLED: b00t-cli/src/commands/grok.rs GrokCommands::Ask
 /// 🤓 query is positional in CLI: `b00t-cli grok ask <QUERY>`
 #[derive(Parser, Clone)]
 pub struct GrokAskCommand {
-    #[arg(help = "Query to search for (positional)")]
+    #[arg(help = "Query to search for")]
     pub query: String,
 
-    #[arg(long, help = "Optional topic to filter by")]
+    #[arg(long, help = "Filter by topic")]
     pub topic: Option<String>,
 
     #[arg(
         long,
-        help = "Maximum number of results to return",
+        help = "Max results",
         default_value = "10"
     )]
     pub limit: Option<usize>,
@@ -590,7 +588,7 @@ pub struct GrokAskCommand {
     #[arg(
         long,
         default_value = "both",
-        help = "RAG backend: raglite | irontology | both (default: both)"
+        help = "RAG: raglite | irontology | both"
     )]
     pub rag: Option<String>,
 }
@@ -602,18 +600,18 @@ impl_mcp_tool!(
     positionals: ["query"]
 );
 
-/// MCP command for learning from URLs or content
+/// Learn from URLs or content
 /// 🤓 ENTANGLED: b00t-cli/src/commands/grok.rs GrokCommands::Learn
 /// 🤓 content is positional in CLI: `b00t-cli grok learn [CONTENT]`
 #[derive(Parser, Clone)]
 pub struct GrokLearnCommand {
-    #[arg(help = "Content to learn from (positional; required unless --source is given)")]
+    #[arg(help = "Content to learn from")]
     pub content: Option<String>,
 
     #[arg(
         short = 't',
         long,
-        help = "Topic for RAG indexing (required for raglite backend)"
+        help = "Topic for RAG indexing"
     )]
     pub topic: Option<String>,
 
@@ -623,7 +621,7 @@ pub struct GrokLearnCommand {
     #[arg(
         long,
         default_value = "both",
-        help = "RAG backend: raglite | irontology | both (default: both)"
+        help = "RAG: raglite | irontology | both"
     )]
     pub rag: Option<String>,
 }
@@ -822,14 +820,14 @@ impl_mcp_tool!(
     ["tutorial", "next"]
 );
 
-/// Ontology query command — query live capability ontology from datum TOMLs
+/// Query live capability ontology from datum TOMLs
 // 🤓 ENTANGLED: b00t-cli/src/commands/ontology.rs OntologyCommands::Query
 #[derive(Parser, Clone)]
 pub struct OntologyQueryCommand {
-    #[arg(long, help = "Filter by agent role (developer|orchestrator|analyst)")]
+    #[arg(long, help = "Filter by role (developer|orchestrator|analyst)")]
     pub role: Option<String>,
 
-    #[arg(long, help = "Output format: table or json", default_value = "json")]
+    #[arg(long, help = "Output: table or json", default_value = "json")]
     pub format: Option<String>,
 }
 
@@ -839,25 +837,25 @@ impl_mcp_tool!(
     ["ontology", "query"]
 );
 
-/// Up command — launch ralph agent REPL outer-loop
+/// Launch ralph agent REPL outer-loop
 // 🤓 ENTANGLED: b00t-cli/src/commands/up.rs UpArgs
 #[derive(Parser, Clone)]
 pub struct UpCommand {
     #[arg(
         long,
-        help = "AI tool to use for the ralph loop",
+        help = "AI tool for ralph loop",
         default_value = "claude"
     )]
     pub tool: Option<String>,
 
     #[arg(
         long,
-        help = "Maximum iterations per ralph session",
+        help = "Max iterations per session",
         default_value = "10"
     )]
     pub max_iter: Option<u32>,
 
-    #[arg(long, help = "Agent role (filters ontology + tutorial path)")]
+    #[arg(long, help = "Agent role filter")]
     pub role: Option<String>,
 }
 
@@ -1022,16 +1020,16 @@ lazy_static::lazy_static! {
     static ref FULL_REGISTRY: Mutex<McpCommandRegistry> = Mutex::new(create_mcp_registry());
 }
 
-/// MCP command for searching the b00t command registry
+/// Search the b00t command registry
 #[derive(Parser, Clone)]
 pub struct SearchCommand {
-    #[arg(help = "Keyword to search across command names, descriptions, and tags")]
+    #[arg(help = "Search keyword across names, descriptions, tags")]
     pub query: String,
 
     #[arg(long, help = "Filter by category")]
     pub category: Option<String>,
 
-    #[arg(long, default_value = "10", help = "Maximum results to return")]
+    #[arg(long, default_value = "10", help = "Max results")]
     pub limit: Option<usize>,
 }
 

@@ -1,0 +1,78 @@
+# b00t Vendor Datum — codebase-memory-mcp (Codebase Memory MCP server)
+# 🤓 Pure C MCP server providing knowledge-graph-augmented code search
+#    Repo: github.com/PromptExecution/codebase-memory-mcp-b00t-ir0n-ledg3rr
+#    Language: C (with vendored tree-sitter)
+#    Path: vendor/codebase-memory-mcp-b00t-ir0n-ledg3rr
+
+[b00t]
+name = "VENDOR-CODEBASE-MEMORY-MCP"
+type = "vendor"
+hint = "Codebase Memory MCP — pure C MCP server with tree-sitter code graph and knowledge graph for semantic code search"
+
+[b00t.version]
+schema = 1
+content = "stable"
+
+[b00t.vendor]
+path = "vendor/codebase-memory-mcp-b00t-ir0n-ledg3rr"
+upstream = "git@github.com:PromptExecution/codebase-memory-mcp-b00t-ir0n-ledg3rr.git"
+branch = "main"
+build_command = "just -f vendor/codebase-memory-mcp-b00t-ir0n-ledg3rr/justfile cbm"
+install_command = "cp vendor/codebase-memory-mcp-b00t-ir0n-ledg3rr/build/c/codebase-memory-mcp ~/.local/bin/"
+health_check = "codebase-memory-mcp --version || test -x vendor/codebase-memory-mcp-b00t-ir0n-ledg3rr/build/c/codebase-memory-mcp"
+required_tools = ["make", "gcc", "just", "libgit2"]
+
+[b00t.maintenance]
+update_frequency = "weekly"
+review_required = true
+
+# ── codebase-memory-mcp — Pure C Knowledge Graph MCP Server ────────────────
+
+## What is it?
+
+A high-performance, pure C implementation of an MCP server that indexes codebases
+into a knowledge graph. Uses tree-sitter for AST extraction, xxhash for fast
+hashing, yyjson for JSON parsing, and SQLite for persistence. Provides graph-
+augmented code search, dependency tracing, and architecture discovery.
+
+## Key Interfaces (MCP Tools)
+
+- **search_graph** — BM25 full-text search with structural label boosting
+- **search_code** — Grep + graph enrichment with deduplication
+- **trace_path** — Caller/callee/data-flow tracing through code graphs
+- **get_code_snippet** — Read source by qualified symbol name
+- **get_architecture** — High-level project structure overview
+- **index_repository** — Multi-mode indexing (fast/moderate/full/cross-repo)
+- **detect_changes** — Git-aware change impact analysis
+
+## Dependencies
+
+- GCC or Clang (C11 required)
+- Make (build system)
+- libgit2 (optional, faster git history; falls back to git popen)
+- tree-sitter (vendored in internal/cbm/vendored/)
+- yyjson, xxhash, SQLite (all vendored)
+
+## Build Notes
+
+Build the production binary:
+```
+just -f vendor/codebase-memory-mcp-b00t-ir0n-ledg3rr/justfile cbm
+```
+
+With embedded graph UI:
+```
+just -f vendor/codebase-memory-mcp-b00t-ir0n-ledg3rr/justfile cbm-with-ui
+```
+
+Test suite:
+```
+just -f vendor/codebase-memory-mcp-b00t-ir0n-ledg3rr/justfile test
+```
+
+## Security Considerations
+
+- Compiled C binary with no runtime dependencies (self-contained)
+- ASan/UBSan builds available for test/debug
+- Cross-repo indexing creates CALLS edges between projects — review before
+  enabling cross-repo intelligence mode on sensitive codebases

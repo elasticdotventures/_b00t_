@@ -1,0 +1,99 @@
+# b00t Vendor Datum — moltis-b00t (Rust-native Claw Agent)
+# 🤓 Rust-native sandboxed agent with voice, memory, MCP tools, multi-channel
+#    Repo: github.com/promptexecution/moltis-b00t
+#    Language: Rust
+#    Path: vendor/moltis-b00t
+
+[b00t]
+name = "VENDOR-MOLTIS-B00T"
+type = "vendor"
+hint = "moltis-b00t — Rust-native sandboxed AI agent with voice, memory, MCP tools, multi-channel, and soul K/V backend"
+
+[b00t.version]
+schema = 1
+content = "stable"
+
+[b00t.vendor]
+path = "vendor/moltis-b00t"
+upstream = "https://github.com/promptexecution/moltis-b00t.git"
+branch = "main"
+build_command = "cargo build --manifest-path vendor/moltis-b00t/Cargo.toml --release"
+install_command = "cp vendor/moltis-b00t/target/release/moltis ~/.local/bin/"
+health_check = "moltis --help || test -x vendor/moltis-b00t/target/release/moltis"
+required_tools = ["rustc", "cargo", "just", "biome"]
+
+[b00t.maintenance]
+update_frequency = "weekly"
+review_required = true
+
+# ── moltis-b00t — Rust-Native Claw Agent ────────────────────────────────────
+
+## What is it?
+
+Moltis is a Rust-native AI agent (the successor to OpenClaw) that runs as a
+sandboxed, secure, auditable binary. It provides voice interaction, persistent
+memory via b00t soul K/V backend, MCP tool integration, and multi-channel
+communication (Discord, Slack, Telegram, WhatsApp, Matrix, and more).
+
+## Key Interfaces
+
+- **CLI binary** — `moltis` with auth, sandbox, and provider setup commands
+- **HTTP API** — OpenAI-compatible chat completions endpoint
+- **MCP tools** — Built-in MCP tool support for file I/O, bash, git, etc.
+- **Web UI** — Browser interface with Tailwind CSS (crates/web)
+- **Memory** — Soul K/V backend at http://127.0.0.1:7700
+- **Voice** — Multi-provider voice support
+- **Multi-channel** — Discord, Slack, Telegram, SMS, email, MS Teams + more
+
+## Key Crates (50+)
+
+- `cli` — CLI binary (the main entry point)
+- `gateway` — Multi-platform gateway
+- `mcp` — MCP tool integration
+- `memory` — Persistent memory via soul K/V
+- `voice` — Voice I/O
+- `channels` — Per-channel message routers
+- `tools` — Sandboxed tool executions
+- `web` — Web UI assets (Preact + Tailwind)
+- `providers` — LLM provider adapters
+- `config` — Schema and validation
+
+## Dependencies
+
+- Rust 2024 edition (nightly nightly-2025-11-30 for formatting)
+- Docker or Apple Containers (sandbox execution)
+- biome (JS/TS formatting)
+- taplo (TOML formatting)
+- Playwright (E2E tests)
+- litellm gateway at :1234 (shared with hive)
+
+## Build Notes
+
+Debug build:
+```
+cargo build --manifest-path vendor/moltis-b00t/Cargo.toml
+```
+
+Release build:
+```
+cargo build --manifest-path vendor/moltis-b00t/Cargo.toml --release
+```
+
+Format check:
+```
+just -f vendor/moltis-b00t/justfile format-check
+```
+
+Release preflight:
+```
+just -f vendor/moltis-b00t/justfile release-preflight
+```
+
+## Security Considerations
+
+- Sandbox execution via Docker/Apple Containers
+- SSRF protection: blocks loopback/private/link-local IPs
+- WebSocket origin validation (cross-origin rejected)
+- Secrets: `secrecy::Secret<String>` for all credentials
+- Audit log via bouncer module (.b00t/bouncer-audit.jsonl)
+- Password + passkey auth (WebAuthn)
