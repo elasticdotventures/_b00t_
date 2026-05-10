@@ -29,7 +29,6 @@ version_regex = '(?P<version>[\\d.]+)'
 
 # @tribal: `b00t learn ledgrrr` to load ledgrrr ontology skills
 desires = "0.1.0-proto"
-hint = "Ledgerr CLI — FOCUS FinOps records, gRPC/Arrow transport, ontology graph visualization"
 repo = "PromptExecution/l3dg3rr"
 # 🔌 ledgerr-mcp opens port 0 (OS-assigned) and advertises via discovery
 # 5s connect window on dedicated MCP port

@@ -81,11 +81,17 @@ pub trait LLMInference: Send + Sync {
     /// Output: Embedding struct with normalized f32 vector
     async fn embed(&self, text: &str) -> Result<Embedding>;
 
-    /// Compose multiple blessing layers into unified representation
-    /// Input: slice of blessing IDs to retrieve from knowledge base
-    /// Output: Unified vector representation or error
-    /// 🤓 "Layers" = blessings with overlapping roles/capabilities
-    ///    Composition = intersection/union of permission sets
+    /// Compose OCI-style embedding layers by blessing domain.
+    ///
+    /// Each `blessing_id` maps to a registered embedding layer source.
+    /// Composition = ordered merge from source files into Candle VarMap:
+    ///   1. Score all registered layers by relevance to the blessing context
+    ///   2. Activate top-k layers (bouncer-gated pre-load validation)
+    ///   3. Swap tensors in VarMap (model sees new weights on next embed)
+    ///   4. Verify embedding coherence (bouncer-gated post-swap check)
+    ///
+    /// 🤓 OCI container rootfs analogy: base model = image base layer,
+    ///    embedding heads = overlay diffs, compose = merge into unified view.
     async fn compose_layers(&mut self, blessing_ids: &[&str]) -> Result<()>;
 
     /// Check if backend is available and ready to use
@@ -94,8 +100,9 @@ pub trait LLMInference: Send + Sync {
     /// Get model metadata (ID, dimension, backend name)
     fn model_info(&self) -> ModelInfo;
 
-    /// Clear cached layers and reset internal state
-    /// Default implementation: no-op (overridden by backends with caching)
+    /// Deactivate all composed layers and restore base state.
+    /// Default implementation: no-op (overridden by backends with
+    /// LayerStack-based activation).
     fn clear_layers(&mut self) -> Result<()> {
         Ok(())
     }
@@ -117,6 +124,10 @@ pub enum InferenceBackendSelector {
     /// Ripgrep BM25 fallback: Keyword-based retrieval (no embeddings)
     /// Always available, lowest quality but guaranteed to work
     Ripgrep,
+
+    /// b00t-embed backend: HuggingFace/ONNX/Cloud model inference via embed_anything
+    /// Wraps b00t_embed::EmbedBackend for unified embedding across providers
+    EmbedAnything,
 }
 
 impl std::fmt::Debug for InferenceBackendSelector {
@@ -126,6 +137,7 @@ impl std::fmt::Debug for InferenceBackendSelector {
             #[cfg(feature = "llamacpp-fallback")]
             InferenceBackendSelector::LlamaCpp => write!(f, "LlamaCpp"),
             InferenceBackendSelector::Ripgrep => write!(f, "Ripgrep"),
+            InferenceBackendSelector::EmbedAnything => write!(f, "EmbedAnything"),
         }
     }
 }
@@ -165,6 +177,9 @@ pub mod llamacpp;
 
 // Task 5: Ripgrep BM25 fallback implementation
 pub mod fallback;
+
+// b00t-embed backend: HuggingFace/ONNX/Cloud embedding via embed_anything adapter
+pub mod embed_anything;
 
 // Test suite
 #[cfg(test)]
