@@ -2,7 +2,7 @@
     "schema_version": 1,
     "commit": "43779ff810ac7dbd341e97829c21aeb7851d30ee",
     "indexed_at": "2026-05-09T07:39:58Z",
-    "project": "home-brianh-.dotfiles-b00t-cli",
+    "project": "~/.dotfiles/b00t-cli",
     "nodes": 5375,
     "edges": 12750,
     "original_size": 11468800,

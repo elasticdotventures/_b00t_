@@ -424,7 +424,7 @@ mod tests {
         let results = run_all();
         // The vendor dockerfile check is optional (vendor submodule may not be cloned).
         let mandatory = results.iter().filter(|r| {
-            !r.detail.contains("not cloned") && !r.detail.contains("not found (vendor") && !r.detail.contains("not found (vendor")
+            !r.detail.contains("not cloned") && !r.detail.contains("not found (vendor")
         }).collect::<Vec<_>>();
         let passed_mandatory = mandatory.iter().filter(|r| r.passed).count();
         let total_mandatory = mandatory.len();
