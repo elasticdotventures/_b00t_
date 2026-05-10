@@ -104,9 +104,9 @@ pub trait DesignHeuristicCheck: Send + Sync {
 
 // Build integrity checks are implemented as RHAI scripts at
 // _b00t_/scripts/wow/check-candle-build.rhai and check-default-build.rhai.
-// The Rust trait implementations were removed — they spawned `cargo check` as
-// a subprocess which caused 2+ minute test times. RHAI is the canonical path
-// for slow integration checks.
+// They spawn `cargo check` as a subprocess which can cause multi-minute test times.
+// Rust struct implementations are retained for direct programmatic use, but RHAI
+// scripts (_b00t_/scripts/wow/check-*.rhai) are the canonical path for slow checks.
 pub struct CandleBuildCheck;
 impl BuildIntegrityCheck for CandleBuildCheck {
     fn name(&self) -> &str { "candle feature compiles" }
@@ -192,7 +192,11 @@ pub struct VendorDockerfileCheck;
 impl BoundaryCheck for VendorDockerfileCheck {
     fn name(&self) -> &str { "vendor dockerfile exists" }
     fn run(&self) -> CheckResult {
-        let candidates = ["vendor/ledgrrr/Dockerfile.ledgrrr-mcp", "vendor/l3dg3rr/Dockerfile.ledgrrr-mcp"];
+        let candidates = [
+            "vendor/ledgrrr/Dockerfile.ledgrrr-mcp",
+            "vendor/l3dg3rr/Dockerfile.ledgrrr-mcp",
+            "vendor/l3dg3rr/Dockerfile.ledgerr-mcp",
+        ];
         let manifest = std::env::var("CARGO_MANIFEST_DIR").ok();
         let exists = candidates.iter().any(|rel| {
             let p = manifest.as_ref().map(|m| std::path::Path::new(m).join("..").join(rel)).unwrap_or_else(|| std::path::PathBuf::from(rel));
@@ -204,8 +208,8 @@ impl BoundaryCheck for VendorDockerfileCheck {
         CheckResult {
             name: self.name().into(), category: CheckCategory::Boundary,
             passed: exists,
-            detail: if exists { "Dockerfile.ledgrrr-mcp present".into() }
-                    else { "vendor/*/Dockerfile.ledgrrr-mcp not found (vendor submodule may not be cloned)".into() },
+            detail: if exists { "Dockerfile present (ledgrrr-mcp or ledgerr-mcp)".into() }
+                    else { "vendor/*/Dockerfile.ledgrrr-mcp / Dockerfile.ledgerr-mcp not found (vendor submodule may not be cloned)".into() },
         }
     }
 }
@@ -367,9 +371,9 @@ pub fn format_spline(results: &[CheckResult]) -> String {
 }
 
 /// Initialize default checks. Called at startup.
-/// Build integrity checks (candle feature, default build) are RHAI-only
-/// (_b00t_/scripts/wow/check-*.rhai) — they spawn cargo subprocesses and
-/// would cause multi-minute test times as Rust unit tests.
+/// Build integrity checks (candle feature, default build) are available as both
+/// Rust trait impls and RHAI scripts (_b00t_/scripts/wow/check-*.rhai).
+/// The RHAI variants avoid multi-minute cargo subprocess times in test suites.
 pub fn init_default_checks() {
     register_type(KnownRoleCheck);
     register_boundary(VendorDockerfileCheck);
@@ -420,7 +424,7 @@ mod tests {
         let results = run_all();
         // The vendor dockerfile check is optional (vendor submodule may not be cloned).
         let mandatory = results.iter().filter(|r| {
-            !r.detail.contains("not cloned") && !r.detail.contains("not found (vendor")
+            !r.detail.contains("not cloned") && !r.detail.contains("not found (vendor") && !r.detail.contains("not found (vendor")
         }).collect::<Vec<_>>();
         let passed_mandatory = mandatory.iter().filter(|r| r.passed).count();
         let total_mandatory = mandatory.len();

@@ -558,9 +558,6 @@ pub enum ExperimentCommands {
     },
 }
 
-// Using unified config from lib.rs
-type Config = UnifiedConfig;
-
 #[derive(Debug, Clone)]
 struct ToolStatus {
     name: String,

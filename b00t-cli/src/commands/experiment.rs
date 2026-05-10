@@ -215,13 +215,14 @@ pub fn aggregate_focus_delta(control: &ExperimentResult, treatment: &ExperimentR
     t_net - c_net
 }
 
-/// After an experiment, emit FOCUS records to ledgrrr-mcp via MCP stdio subprocess.
+/// After an experiment, emit FOCUS records to ledgrrr-mcp (aka ledgerr-mcp) via MCP stdio subprocess.
 /// Spawns the ledgrrr-mcp-server from its MCP config, sends a JSON-RPC initialize
 /// handshake followed by a tools/call with the FOCUS record payload.
 /// This is a best-effort call — failures are logged but don't fail the experiment.
-/// Falls back to writing a temp file if the MCP server can't be started.
-pub fn emit_focus_to_ledgrrr_mcp(cmp: &ExperimentComparison, _endpoint: &str) {
+/// Falls back to writing a temp file or using curl if the MCP server can't be started.
+pub fn emit_focus_to_ledgrrr_mcp(cmp: &ExperimentComparison, endpoint: &str) {
     // ── Build the JSON-RPC tools/call payload ───────────────────────────────
+
     let payload = serde_json::json!({
         "jsonrpc": "2.0",
         "method": "tools/call",
@@ -258,8 +259,68 @@ pub fn emit_focus_to_ledgrrr_mcp(cmp: &ExperimentComparison, _endpoint: &str) {
         return;
     }
 
-    // ── Fallback: write payload to temp file ─────────────────────────────────
+    // ── Write payload to temp file for curl attempt ─────────────────────────
     let tmp = std::env::temp_dir().join(format!("b00t-mcp-payload-{}.json", cmp.experiment_id));
+    if let Ok(mut f) = std::fs::File::create(&tmp) {
+        use std::io::Write;
+        let payload = serde_json::json!({
+            "jsonrpc": "2.0",
+            "method": "tools/call",
+            "params": {
+                "name": "ledgerr_focus",
+                "arguments": {
+                    "action": "append_focus_record",
+                    "records": [{
+                        "billing_account_id": "b00t-hive",
+                        "service_name": "experiment-eval",
+                        "billed_cost": cmp.control.scores.get("cost").copied().unwrap_or(0.0),
+                        "effective_cost": cmp.control.scores.get("cost").copied().unwrap_or(0.0) * 0.85,
+                        "experiment_id": Some(cmp.experiment_id.clone()),
+                        "variant": Some("control".to_string()),
+                        "agent_id": Some("sm0l-ctl".to_string()),
+                    }, {
+                        "billing_account_id": "b00t-hive",
+                        "service_name": "experiment-eval",
+                        "billed_cost": cmp.treatment.scores.get("cost").copied().unwrap_or(0.0),
+                        "effective_cost": cmp.treatment.scores.get("cost").copied().unwrap_or(0.0) * 0.85,
+                        "experiment_id": Some(cmp.experiment_id.clone()),
+                        "variant": Some("treatment".to_string()),
+                        "agent_id": Some("sm0l-trt".to_string()),
+                    }],
+                    "experiment_id": Some(cmp.experiment_id.clone()),
+                    "personality": None::<String>,
+                }
+            },
+            "id": 1
+        });
+        let _ = f.write_all(serde_json::to_string_pretty(&payload).unwrap_or_default().as_bytes());
+        eprintln!("[ledgrrr-mcp] payload written to {} — curl attempt follows", tmp.display());
+    }
+
+    // ── Try sending via curl ────────────────────────────────────────────────
+    let output = Command::new("curl")
+        .args(["-s", "--max-time", "5",
+               "-H", "content-type: application/json",
+               "-d", &format!("@{}", tmp.display()),
+               &format!("{}/v1/chat/completions", endpoint)])
+        .output();
+    let _ = std::fs::remove_file(&tmp);
+
+    match output {
+        Ok(o) if o.status.success() => {
+            eprintln!("[ledgrrr-mcp] FOCUS records persisted via curl for experiment {}", cmp.experiment_id);
+            return;
+        }
+        Ok(o) => {
+            eprintln!("[ledgrrr-mcp] curl call returned {} — writing temp file",
+                o.status.code().unwrap_or(-1));
+        }
+        Err(e) => {
+            eprintln!("[ledgrrr-mcp] curl error: {e}");
+        }
+    }
+
+    // ── Fallback: write payload to temp file ─────────────────────────────────
     if let Ok(mut f) = std::fs::File::create(&tmp) {
         let _ = f.write_all(serde_json::to_string_pretty(&payload).unwrap_or_default().as_bytes());
         eprintln!("[ledgrrr-mcp] payload written to {} — pipe to ledgrrr-mcp when daemon is running", tmp.display());
@@ -968,6 +1029,7 @@ pub fn governance_gate(prompt: &str) -> Result<String, String> {
     }
     // Use word-boundary regex for "token" to avoid false-positive matches
     // on "tokenizer", "tokenization", "Token count" etc.
+    // "token" handled separately with word-boundary check below (avoids false positives on "tokenizer")
     let cred_patterns = [".env", "credentials", "secret", "password", "api_key"];
     for pattern in &cred_patterns {
         if prompt.to_lowercase().contains(pattern) {

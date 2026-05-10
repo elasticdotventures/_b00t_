@@ -282,6 +282,7 @@ sdist/
 share/python-wheels/
 target/
 telemetry.jsonl
+events.jsonl
 test_*.json
 tmp/
 togaf-cli/
@@ -295,3 +296,5 @@ wheels/
 yarn-debug.log*
 yarn-error.log*
 yarn.lock
+# Session/temporary caches
+cache/

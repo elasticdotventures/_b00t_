@@ -298,45 +298,13 @@ impl RhaiEngine {
             },
         );
 
-        // Telemetry: track events to ~/.b00t/telemetry.jsonl
+        // Telemetry: track events to ~/.b00t/events.jsonl
         // session_track("mcp_install", "github:installed") appends a JSON line
+        // 🤓 legacy telemetry.jsonl write removed — unified to events.jsonl
         engine.register_fn(
             "session_track",
             |event: &str, detail: &str| -> Result<(), Box<rhai::EvalAltResult>> {
-                let home = std::env::var("HOME").unwrap_or_default();
-                let dir = std::path::Path::new(&home).join(".b00t");
-                let _ = std::fs::create_dir_all(&dir);
-                // Write to unified events.jsonl (primary)
-                let events_path = dir.join("events.jsonl");
-                use std::io::Write;
-                if let Ok(mut file) = std::fs::OpenOptions::new()
-                    .create(true)
-                    .append(true)
-                    .open(&events_path)
-                {
-                    let entry = serde_json::json!({
-                        "ts": chrono::Utc::now().to_rfc3339(),
-                        "event": event,
-                        "detail": detail,
-                        "pid": std::process::id(),
-                    });
-                    let _ = writeln!(file, "{}", entry);
-                }
-                // Also write to legacy telemetry.jsonl for backward compatibility
-                let legacy_path = dir.join("telemetry.jsonl");
-                if let Ok(mut file) = std::fs::OpenOptions::new()
-                    .create(true)
-                    .append(true)
-                    .open(&legacy_path)
-                {
-                    let entry = serde_json::json!({
-                        "ts": chrono::Utc::now().to_rfc3339(),
-                        "event": event,
-                        "detail": detail,
-                        "pid": std::process::id(),
-                    });
-                    let _ = writeln!(file, "{}", entry);
-                }
+                crate::events::write_event(event, detail);
                 Ok(())
             },
         );
@@ -451,7 +419,48 @@ impl RhaiEngine {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::path::PathBuf;
+    use std::sync::{Mutex, MutexGuard};
     use tempfile::tempdir;
+
+    static HOME_LOCK: Mutex<()> = Mutex::new(());
+
+    struct TempHome {
+        _guard: MutexGuard<'static, ()>,
+        old_home: Option<String>,
+        _temp_dir: tempfile::TempDir,
+        b00t_dir: PathBuf,
+    }
+
+    impl TempHome {
+        fn new() -> Self {
+            let guard = HOME_LOCK.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+            let temp_dir = tempdir().unwrap();
+            let b00t_dir = temp_dir.path().join(".b00t");
+            std::fs::create_dir_all(&b00t_dir).unwrap();
+            let old_home = std::env::var("HOME").ok();
+            unsafe {
+                std::env::set_var("HOME", temp_dir.path().to_str().unwrap());
+            }
+
+            Self {
+                _guard: guard,
+                old_home,
+                _temp_dir: temp_dir,
+                b00t_dir,
+            }
+        }
+    }
+
+    impl Drop for TempHome {
+        fn drop(&mut self) {
+            if let Some(old) = &self.old_home {
+                unsafe { std::env::set_var("HOME", old); }
+            } else {
+                unsafe { std::env::remove_var("HOME"); }
+            }
+        }
+    }
 
     fn create_test_context() -> B00tContext {
         B00tContext {
@@ -568,5 +577,55 @@ mod tests {
             .execute_script("knowledge_backend_matches(compiled_knowledge_backend())")
             .unwrap();
         assert!(result.cast::<bool>());
+    }
+
+    #[test]
+    fn test_session_track_writes_events() {
+        use std::fs;
+
+        let temp_home = TempHome::new();
+
+        let context = create_test_context();
+        let engine = RhaiEngine::new(context).unwrap();
+
+        let script = r#"
+            session_track("mcp_install", "github:installed")
+        "#;
+
+        let result = engine.execute_script(script);
+        assert!(result.is_ok(), "session_track should succeed");
+
+        // Verify events.jsonl was written
+        let events_path = temp_home.b00t_dir.join("events.jsonl");
+        assert!(events_path.exists(), "events.jsonl should exist");
+        let content = fs::read_to_string(&events_path).unwrap();
+        let line = content.lines().next().unwrap();
+        let parsed: serde_json::Value = serde_json::from_str(line).unwrap();
+        assert_eq!(parsed["event"], "mcp_install");
+        assert_eq!(parsed["detail"], "github:installed");
+        assert!(parsed["ts"].as_str().is_some());
+        assert!(parsed["pid"].as_u64().is_some());
+    }
+
+    #[test]
+    fn test_session_track_no_legacy_telemetry() {
+        let temp_home = TempHome::new();
+
+        let context = create_test_context();
+        let engine = RhaiEngine::new(context).unwrap();
+
+        let script = r#"
+            session_track("test_event", "test_detail")
+        "#;
+
+        let result = engine.execute_script(script);
+        assert!(result.is_ok());
+
+        // Verify legacy telemetry.jsonl is NOT created
+        let legacy_path = temp_home.b00t_dir.join("telemetry.jsonl");
+        assert!(
+            !legacy_path.exists(),
+            "legacy telemetry.jsonl should NOT be created"
+        );
     }
 }

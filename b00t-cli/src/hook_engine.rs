@@ -344,21 +344,13 @@ fn build_engine() -> Engine {
         std::fs::read_to_string(path).map_err(|e| format!("read_file error: {}", e).into())
     });
     engine.register_fn("log_info", |msg: &str| println!("ℹ️  {}", msg));
+    // session_track: rhai-callable telemetry sink → unified ~/.b00t/events.jsonl
+    // Uses shared b00t_c0re_lib::write_event so all three telemetry sources
+    // (session_track, GuardViolationCounter, mcp_list_view) go through one writer.
+    // DO NOT inline-reimplement the file write here — the shared writer owns
+    // schema, rotation, and format stability for events.jsonl.
     engine.register_fn("session_track", |event: &str, detail: &str| {
-        let home = std::env::var("HOME").unwrap_or_default();
-        let dir = std::path::Path::new(&home).join(".b00t");
-        let _ = std::fs::create_dir_all(&dir);
-        let path = dir.join("events.jsonl");
-        if let Ok(mut file) = std::fs::OpenOptions::new().create(true).append(true).open(&path) {
-            use std::io::Write;
-            let entry = serde_json::json!({
-                "ts": chrono::Utc::now().to_rfc3339(),
-                "event": event,
-                "detail": detail,
-                "pid": std::process::id(),
-            });
-            let _ = writeln!(file, "{}", entry);
-        }
+        b00t_c0re_lib::write_event(event, detail);
     });
 
     engine.set_max_expr_depths(128, 64);

@@ -1,7 +1,7 @@
 [b00t]
 name = "ledgrrr"
 type = "cli"
-hint = "FinOps ledger — consumes/produces FOCUS records. Polyseme: l3dg3rr[#proto] → ledgerr-mcp[#linux] → ledg3rr[#cloud] → ledgrrr[#windows]. Vendored at vendor/l3dg3rr/crates/ledgerr-mcp/."
+hint = "FinOps ledger — consumes/produces FOCUS records via gRPC/Arrow transport. Polyseme: l3dg3rr[#proto] → ledgerr-mcp[#linux] → ledg3rr[#cloud/stable] → ledgrrr[#windows/lts]. Vendored at vendor/l3dg3rr/crates/ledgerr-mcp/."
 
 # @tribal: polyseme mapping — platform-targeted variants of the same ledger:
 #   l3dg3rr      — proto/repo name (vendor/l3dg3rr/)
@@ -11,6 +11,15 @@ hint = "FinOps ledger — consumes/produces FOCUS records. Polyseme: l3dg3rr[#pr
 # @tribal: FOCUS records route through ledgerr-mcp (Linux) as the canonical
 # MCP transport. ledg3rr (cloud) and ledgrrr (Windows) share the same FOCUS
 # crate but use different transport/UI backends.
+# @tribal: polyseme unification map — l3dg3rr is the repo/proto name,
+# ledgerr is the actual vendored crate prefix (e.g. ledgerr-mcp),
+# ledgrrr is the canonical LTS CLI name.
+# @tribal: FOCUS (FinOps Cost Usage Specification) crate TBD — do NOT
+# reinvent here; route FOCUS records through ledgerr-mcp when available.
+
+# Proto phase: l3dg3rr — local visual ontology + experiment scaffolding
+# Stable phase: ledg3rr — gRPC/Arrow transport, MCP contract
+# LTS phase: ledgrrr — production FinOps ledger with FOCUS crate
 
 detect = [
     "test -f vendor/l3dg3rr/Cargo.toml",
@@ -19,7 +28,6 @@ detect = [
 version_regex = '(?P<version>[\\d.]+)'
 
 # @tribal: `b00t learn ledgrrr` to load ledgrrr ontology skills
-name = "ledgrrr"
 desires = "0.1.0-proto"
 hint = "Ledgerr CLI — FOCUS FinOps records, gRPC/Arrow transport, ontology graph visualization"
 repo = "PromptExecution/l3dg3rr"
@@ -48,9 +56,10 @@ record_types = ["CostAndUsage", "ContractCommitment"]
 scoring_dimensions = ["roi", "cost", "time", "accuracy", "utility", "risk"]
 
 [b00t.providers.mcp]
-legacy_names = ["l3dg3rr"]
+legacy_names = ["l3dg3rr", "ledg3rr"]
 platform_names = { linux = "ledgerr-mcp", cloud = "ledg3rr", windows = "ledgrrr" }
-canonical_name = "ledgerr-mcp"
+canonical_name = "ledgrrr"
+# @tribal: incoming branch canonical_name="ledgerr-mcp" — ledgrrr is the LTS name
 tool_prefix = "ledgerr_"
 
 # 🦨 Runtime orchestration: we need BOTH systemd AND podman/docker (possibly
