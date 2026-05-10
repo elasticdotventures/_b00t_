@@ -832,7 +832,7 @@ worker-status:
     echo "node_id: worker-$$"
     echo "state: $(b00t-cli experiment status 2>/dev/null || echo 'idle')"
     echo "last_heartbeat: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
-    echo "gate_result: $(test -f .b00t/worker-audit.jsonl && echo 'pass' || echo 'pass')"
+    echo "gate_result: $(test -f .b00t/worker-audit.jsonl && echo 'pass' || echo 'missing')"
 
 # Render worker ontology graph with l3dg3rr visual
 worker-viz format="mermaid":
