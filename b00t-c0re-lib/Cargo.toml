@@ -64,7 +64,7 @@ async-trait = "0.1"
 futures = "0.3"
 cfg-if = "1.0.4"
 oxigraph = { version = "0.5.8", optional = true }
-storage-neumann = { version = "0.8.0", path = "../vendor/irontology-mcp/crates/storage-neumann", optional = true }
+storage-neumann = { version = "0.1", optional = true }
 
 [dev-dependencies]
 tempfile = "3.10"

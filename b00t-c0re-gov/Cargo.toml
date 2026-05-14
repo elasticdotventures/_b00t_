@@ -1,7 +1,11 @@
 [package]
 name = "b00t-c0re-gov"
-version = "0.1.0"
+version.workspace = true
 edition = "2024"
+description = "Event-driven governance gates for b00t agentic systems — Allow/Deny/Hook triple-return, SPSC ring buffer notifications, Eisenhower priority matrix"
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
 
 [dependencies]
 serde = { workspace = true }

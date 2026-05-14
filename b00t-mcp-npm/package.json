@@ -14,14 +14,14 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/elasticdotventures/dotfiles.git",
+    "url": "git+https://github.com/elasticdotventures/dotfiles.git",
     "directory": "b00t-mcp"
   },
   "keywords": [
-    "mcp", 
-    "b00t", 
-    "cli", 
-    "proxy", 
+    "mcp",
+    "b00t",
+    "cli",
+    "proxy",
     "acl",
     "rust",
     "model-context-protocol"
@@ -41,15 +41,16 @@
     "arm64"
   ],
   "files": [
-    "bin/",
+    "bin/b00t-mcp",
     "scripts/",
-    "dist/",
     "README.md",
     "LICENSE"
   ],
+  "dependencies": {
+    "tar": "^7.0.0"
+  },
   "devDependencies": {
     "axios": "^1.6.0",
-    "tar": "^7.0.0",
     "which": "^4.0.0"
   },
   "preferGlobal": true,

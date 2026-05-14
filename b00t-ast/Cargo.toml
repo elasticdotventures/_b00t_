@@ -6,7 +6,7 @@ authors.workspace = true
 license.workspace = true
 repository.workspace = true
 description = "Rust AST extraction — syn-based parser for function signatures, types, docs, ontology graph construction"
-keywords = ["b00t", "ast", "syn", "ontology", "code-analysis", "rust"]
+keywords = ["b00t", "ast", "syn", "ontology", "rust"]
 categories = ["development-tools", "parsing"]
 
 [dependencies]

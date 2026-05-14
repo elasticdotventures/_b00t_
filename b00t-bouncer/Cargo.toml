@@ -1,6 +1,6 @@
 [package]
 name = "b00t-bouncer"
-version = "0.1.0"
+version.workspace = true
 edition = "2024"
 authors = ["Brian Horakh <brian@promptexecution.com>"]
 license = "MIT"

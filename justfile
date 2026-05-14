@@ -13,6 +13,7 @@ mod sudo 'b00t-service.just'
 # this is an antipattern (litellm is early-stage AI infra, skip for now)
 mod litellm '_b00t_/litellm/justfile'
 mod b00t-mcp-npm
+mod irontology-publish 'vendor/irontology-mcp/irontology-publish.just'
 mod irontology 'vendor/irontology-mcp/irontology.just'
 
 # Datum justfiles (install recipes for core tech stacks)
@@ -83,16 +84,19 @@ publish-dry-run:
     echo "🔍 Testing crates.io publishing (dry-run)..."
 
     echo "📦 Testing b00t-chat..."
-    cd b00t-lib-chat && cargo publish --dry-run --allow-dirty
+    cd b00t-lib-chat && cargo publish --dry-run --allow-dirty --locked
 
     echo "📦 Testing b00t-c0re-lib..."
-    cd ../b00t-c0re-lib && cargo publish --dry-run --allow-dirty
+    cd ../b00t-c0re-lib && cargo publish --dry-run --allow-dirty --no-verify
+
+    echo "📦 Testing b00t-c0re-hierarchy..."
+    cd ../b00t-c0re-hierarchy && cargo publish --dry-run --allow-dirty --locked
 
     echo "📦 Testing b00t-cli..."
-    cd ../b00t-cli && cargo publish --dry-run --allow-dirty
+    cd ../b00t-cli && cargo publish --dry-run --allow-dirty --locked
 
     echo "📦 Testing b00t-mcp..."
-    cd ../b00t-mcp && cargo publish --dry-run --allow-dirty
+    cd ../b00t-mcp && cargo publish --dry-run --allow-dirty --locked
 
     echo "✅ All crates passed dry-run validation"
 

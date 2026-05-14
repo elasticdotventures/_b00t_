@@ -65,7 +65,7 @@ async function installFromGitHubReleases(target) {
   
   const extension = platform === 'win32' ? '.exe' : '';
   const binaryName = `b00t-mcp${extension}`;
-  const archiveName = `b00t-mcp-${target}.tar.gz`;
+  const archiveName = `b00t-${target}.tar.gz`;
   
   // 🤓 GitHub releases pattern following b00t conventions
   const releaseUrl = `https://github.com/elasticdotventures/dotfiles/releases/download/v${version}/${archiveName}`;

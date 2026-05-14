@@ -900,7 +900,7 @@ fn check_other_tool_status(tool_name: &str, subsystem: &str, path: &str) -> Resu
     }
 
     let config_result = fs::read_to_string(&path_buf).and_then(|content| {
-        toml::from_str::<Config>(&content)
+        toml::from_str::<serde_json::Value>(&content)
             .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))
     });
 
@@ -910,7 +910,7 @@ fn check_other_tool_status(tool_name: &str, subsystem: &str, path: &str) -> Resu
             let installed = match subsystem {
                 "apt" => {
                     // Check if the package is installed via dpkg
-                    if let Some(package_name) = &config.b00t.package_name {
+                    if let Some(package_name) = config["b00t"]["package_name"].as_str() {
                         cmd!("dpkg", "-l", package_name).read().is_ok()
                     } else {
                         check_command_available(tool_name)
@@ -945,7 +945,7 @@ fn check_other_tool_status(tool_name: &str, subsystem: &str, path: &str) -> Resu
                     None
                 },
                 desired_version: None,
-                hint: config.b00t.hint,
+                hint: config["b00t"]["hint"].as_str().unwrap_or("").to_string(),
             })
         }
         Err(_) => Ok(ToolStatus {
@@ -1721,6 +1721,7 @@ async fn main() {
                 use b00t_c0re_lib::B00tContext;
                 match B00tContext::current() {
                     Ok(ctx) => {
+                        let health = b00t_cli::commands::doctor_cmd::health_json();
                         let output = serde_json::json!({
                             "agent": ctx.agent,
                             "pid": ctx.pid,
@@ -1733,6 +1734,7 @@ async fn main() {
                             "privacy": ctx.privacy,
                             "timestamp": ctx.timestamp,
                             "role": role.clone().or_else(|| std::env::var("_B00T_ROLE").ok()),
+                            "health": health,
                         });
                         println!("{}", serde_json::to_string_pretty(&output).unwrap());
                     }
