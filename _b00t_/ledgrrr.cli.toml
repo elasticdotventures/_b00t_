@@ -72,3 +72,45 @@ tool_prefix = "ledgerr_"
 backends = ["systemd", "docker", "podman"]
 prefer = "auto"
 detect_order = ["systemctl", "docker", "podman"]
+
+# ── Legacy l3dg3rr capabilities (now part of ledgrrr) ──────────────────────
+
+[[b00t.capabilities]]
+features = [
+  "tomllmd-validation",
+  "tomllmd-visualization",
+  "diagram-dsl",
+  "structured-markdown",
+  "lsp-asp-shapes",
+]
+requires = ["just", "rust"]
+
+[b00t.authority]
+scope = [".tomllmd"]
+fallback = ".tomllm"
+validation_source = "vendor/ledgrrr"
+visualization_source = "vendor/ledgrrr"
+notes = [
+  "Use generic b00t TOML parsing for baseline compatibility.",
+  "Use ledgrrr as the authoritative source for advanced validation and visualization semantics.",
+]
+
+[[b00t.usage]]
+description = "Validate docs/diagram semantics in local ledgrrr checkout"
+command = "cd vendor/ledgrrr && just docgen-check"
+
+[[b00t.usage]]
+description = "Run local authoritative tests for validation and visualization flows"
+command = "cd vendor/ledgrrr && just test"
+
+[[b00t.usage]]
+description = "Start the ledgrrr MCP surface for supervised local tooling"
+command = "cd vendor/ledgrrr && just mcp-start"
+
+[[b00t.references]]
+name = "PromptExecution/ledgrrr"
+url = "https://github.com/PromptExecution/ledgrrr"
+
+[[b00t.references]]
+name = "ledgrrr live documentation"
+url = "https://promptexecution.github.io/ledgrrr/"

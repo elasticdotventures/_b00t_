@@ -47,6 +47,8 @@
 	path = vendor/l3dg3rr
 	url = git@github.com:PromptExecution/ledgrrr.git
 [submodule "vendor/hermes-agent-b00t"]
+	path = vendor/hermes-agent-b00t
+	url = git@github.com:PromptExecution/hermes-agent-b00t.git
 	branch = b00t
 [submodule "vendor/embed-anything-b00t"]
 	path = vendor/embed-anything-b00t
