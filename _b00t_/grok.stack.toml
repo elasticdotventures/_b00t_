@@ -5,7 +5,6 @@ hint = "Complete grok RAG knowledgebase stack with dependencies"
 
 # Stack members - services needed for grok to function
 members = [
-    "raglite.cli",
     "qdrant.docker",
     "ollama.docker",
     "grok-guru.mcp",
@@ -23,7 +22,3 @@ QDRANT_API_KEY = "${QDRANT_API_KEY}"
 # Pass through from ollama.docker datum
 OLLAMA_API_URL = "${OLLAMA_API_URL}"
 OLLAMA_URL = "${OLLAMA_URL}"
-
-[[b00t.usage]]
-description = "Validate and repair local grok RAG prerequisites"
-command = "b00t script run grok-readiness"

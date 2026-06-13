@@ -43,6 +43,9 @@ exec_start = """/usr/bin/podman run --rm \
     --security-opt=label=disable \
     -v /home/brianh/.cache/huggingface/hub:/hf:z \
     -p 8001:8001 \
+    --health-cmd "curl -fsS http://localhost:8001/health" \
+    --health-interval 30s \
+    --health-timeout 30s \
     ghcr.io/ggml-org/llama.cpp:server-cuda \
     --model /hf/models--unsloth--Qwen3.6-27B-GGUF/snapshots/82d411acf4a06cfb8d9b073a5211bf410bfc29bf/Qwen3.6-27B-Q4_K_M.gguf \
     --host 0.0.0.0 \

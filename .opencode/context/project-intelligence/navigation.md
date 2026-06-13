@@ -1,4 +1,4 @@
-<!-- Context: project-intelligence/nav | Priority: critical | Version: 1.1 | Updated: 2026-05-04 -->
+<!-- Context: project-intelligence/nav | Priority: high | Version: 1.0 | Updated: 2025-01-12 -->
 
 # Project Intelligence
 
@@ -26,16 +26,6 @@
 | Know the context | `decisions-log.md` | Why decisions were made |
 | Current state | `living-notes.md` | Active issues and open questions |
 | All of the above | Read all files in order | Full project intelligence |
-
-## Deep Dives
-
-| Topic | File | Priority |
-|-------|------|----------|
-| Tech stack, CLI architecture, datum system | `technical-domain.md` | critical |
-| Business context, problem statement | `business-domain.md` | high |
-| Business-to-technical mapping | `business-tech-bridge.md` | high |
-| Decision history with rationale | `decisions-log.md` | medium |
-| Active issues and open questions | `living-notes.md` | medium |
 
 ## Usage
 

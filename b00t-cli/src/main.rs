@@ -33,16 +33,16 @@ use b00t_cli::utils::get_workspace_root;
 use b00t_cli::commands::{
   //  Keep commands 1 line per letter A,B,C,... for easy diff
     AiCommands, AgentCommands, AnsibleCommands, AppCommands, AuditCommands,
-    BouncerArgs, BouncerCommands, BootstrapCommands, BudgetCommands,
-    ChatCommands, CliCommands, ConfigCommands, CrewCommand,
+    BootstrapCommands, BudgetCommands,
+    ChatCommands, CliCommands, ConfigCommands,
     DataCommands, DatumCommands, DoctorCommands,
-    FocusCommands, GatesCommands,
+    FocusCommands,
     GrokCommands, HiveCommands,
     InitCommands,
     JobCommands,
     K8sCommands,
     McpCommands, ModelCommands,
-    ObservabilityCommands, OntologyCommands, SessionCommands, SkillCommands, SoulCommands, StackCommands,
+    OntologyCommands, SessionCommands, SkillCommands, SoulCommands, StackCommands,
     TaskCommands,
     TutorialCommands, VersionCommands, VizCommands, WhatismyCommands
 
@@ -200,11 +200,6 @@ The system will:
         #[clap(subcommand)]
         cli_command: CliCommands,
     },
-    #[clap(about = "Bouncer pattern gatekeeper for input/output validation")]
-    Bouncer {
-        #[clap(subcommand)]
-        bouncer_command: BouncerCommands,
-    },
     #[clap(name = "config", about = "Project configuration and scaffolding")]
     Configure {
         #[clap(subcommand)]
@@ -338,11 +333,6 @@ The system will:
         #[clap(subcommand)]
         chat_command: ChatCommands,
     },
-    #[clap(about = "Crew management — Operator-Player-Captain hierarchy")]
-    Crew {
-        #[clap(subcommand)]
-        crew_command: CrewCommand,
-    },
     #[clap(about = "Learn about topics with unified knowledge management")]
     // 🤓 ENTANGLED (synchronized): b00t-mcp/src/mcp_tools.rs LearnCommand now uses LearnArgs wrapper, matching CLI structure.
     // Unified knowledge command: LFMF lessons, learn docs, man pages, RAG
@@ -464,21 +454,76 @@ The system will:
         #[clap(subcommand)]
         doctor_command: DoctorCommands,
     },
-    #[clap(
-        about = "List [[b00t.gate]] declarations across MCP datums",
-        long_about = "Scan all .mcp.toml files and show gate preconditions with status indicators.\n\nExamples:\n  b00t gates list\n  b00t gates list --search github\n  b00t gates list --by-kind env\n  b00t gates list --json"
-    )]
-    Gates {
-        #[clap(subcommand)]
-        gates_command: GatesCommands,
+}
+
+#[derive(clap::Parser, Clone)]
+pub enum WowSubcommands {
+    #[clap(about = "Run all WOW integrity checks")]
+    Check {
+        #[clap(long, help = "Emit JSON results")]
+        json: bool,
     },
-    #[clap(
-        about = "Observability: events, guard violations, and telemetry",
-        long_about = "View events from unified events.jsonl and guard violation statistics.\n\nExamples:\n  b00t observability events\n  b00t observability events --since 5\n  b00t observability events --event mcp_install\n  b00t observability events --follow\n  b00t observability guards\n  b00t observability guards --escalated"
-    )]
-    Observability {
-        #[clap(subcommand)]
-        observability_command: ObservabilityCommands,
+    #[clap(about = "List registered WOW checks")]
+    List,
+}
+
+#[derive(clap::Parser, Clone)]
+pub enum SchemaSubcommands {
+    #[clap(about = "Generate focus.schema.tomllmd from FocusSchema code")]
+    Generate {
+        #[clap(flatten)]
+        args: b00t_cli::datum_schema::SchemaGenerateArgs,
+    },
+    #[clap(about = "Diff two schema datums")]
+    Diff {
+        #[clap(help = "First schema name (e.g. focus)")]
+        schema_a: String,
+        #[clap(help = "Second schema name (e.g. focus-v2)")]
+        schema_b: String,
+    },
+    #[clap(about = "Import schema from JSON file")]
+    Import {
+        #[clap(help = "Path to JSON schema file")]
+        path: PathBuf,
+        #[clap(long, help = "Output name for the schema datum")]
+        name: String,
+        #[clap(long, help = "Output directory (default: _b00t_)")]
+        output: Option<PathBuf>,
+    },
+}
+
+#[derive(clap::Parser, Clone)]
+pub enum ExperimentCommands {
+    #[clap(about = "Run an A/B experiment with control and treatment variants")]
+    Run {
+        #[clap(long, help = "Experiment ID")]
+        id: String,
+        #[clap(long, help = "Control variant prompt")]
+        control: String,
+        #[clap(long, help = "Treatment variant prompt")]
+        treatment: String,
+        #[clap(long, help = "Model endpoint URL [default: http://localhost:8001]")]
+        endpoint: Option<String>,
+        #[clap(long, help = "Path to trained LoRA adapter (from `b00t model train`)")]
+        adapter: Option<String>,
+    },
+    #[clap(about = "Show experiment status (phygital-twin heartbeat)")]
+    Status,
+    #[clap(about = "List past experiments from persisted FOCUS records")]
+    History {
+        #[clap(long, help = "Number of recent experiments to show", default_value_t = 10)]
+        limit: usize,
+        #[clap(long, help = "Emit as JSON")]
+        json: bool,
+    },
+    #[clap(about = "Compare two experiment results side by side")]
+    Compare {
+        #[clap(help = "First experiment ID")]
+        exp_a: String,
+        #[clap(help = "Second experiment ID")]
+        exp_b: String,
+        #[clap(long, help = "Path to FOCUS records JSONL file", default_value = "focus_records.jsonl")]
+        path: std::path::PathBuf,
     },
 }
 
@@ -552,6 +597,9 @@ pub enum ExperimentCommands {
         path: std::path::PathBuf,
     },
 }
+
+// Using unified config from lib.rs
+type Config = UnifiedConfig;
 
 #[derive(Debug, Clone)]
 struct ToolStatus {
@@ -1670,13 +1718,6 @@ async fn main() {
                 std::process::exit(1);
             }
         }
-        Some(Commands::Bouncer { bouncer_command }) => {
-            let args = BouncerArgs { command: bouncer_command.clone() };
-            if let Err(e) = b00t_cli::commands::bouncer::handle_bouncer(&args) {
-                eprintln!("Error: {}", e);
-                std::process::exit(1);
-            }
-        }
         Some(Commands::Configure { config_command }) => {
             if let Err(e) = b00t_cli::commands::config_cmd::handle_config_command(config_command, &cli.path).await {
                 eprintln!("Error: {}", e);
@@ -1825,9 +1866,6 @@ async fn main() {
                 std::process::exit(1);
             }
         }
-        Some(Commands::Crew { crew_command }) => {
-            b00t_cli::commands::crew_handler::handle_crew_command(crew_command);
-        }
         Some(Commands::Learn(args)) => {
             if let Err(e) = handle_learn(&cli.path, args.clone()).await {
                 eprintln!("Error: {}", e);
@@ -1882,7 +1920,7 @@ async fn main() {
                     Ok(datum) => {
                         // Direct datum install: install dependencies first, then MCP to default target
                         println!("🚀 Installing MCP datum '{}'...", filter);
-                        if let Err(e) = install_datum(&cli.path, filter, false) {
+                        if let Err(e) = install_datum(&cli.path, filter) {
                             eprintln!("Install Error: datum install failed for {}: {}", filter, e);
                             std::process::exit(1);
                         }
@@ -2136,10 +2174,8 @@ async fn main() {
                             let tf = experiment::create_focus_record(&cmp.experiment_id, "treatment", "sm0l-trt", "experiment-eval", &cmp.treatment.scores);
                             eprintln!("[ledgrrr] {}", experiment::focus_record_to_ledgrrr(&cf));
                             eprintln!("[ledgrrr] {}", experiment::focus_record_to_ledgrrr(&tf));
-                            // emit FOCUS records to ledgrrr-mcp MCP server (best-effort)
-                            experiment::emit_focus_to_ledgrrr_mcp(&cmp, "http://localhost:8001");
-                            // Calculate and issue cake payout
-                            experiment::calculate_and_issue_cake(&cmp);
+                            // emit FOCUS records to ledgerr-mcp MCP server (best-effort)
+                            experiment::emit_focus_to_ledgerr_mcp(&cmp, "http://localhost:8001");
                         }
                         Err(e) => {
                             eprintln!("Experiment failed: {e}");
@@ -2218,19 +2254,6 @@ async fn main() {
             }
         }
         Some(Commands::Quit(args)) => {
-            // Wire the governance stop callback so registered stop hooks fire
-            // before SIGTERM is sent to the agent process.
-            match b00t_cli::governance::GovernanceRuntime::init().await {
-                Ok(gov) => {
-                    let gov = std::sync::Arc::new(gov);
-                    b00t_cli::commands::quit::set_stop_callback(Box::new(move || {
-                        gov.emit_stop_event();
-                    }));
-                }
-                Err(e) => {
-                    eprintln!("⚠️  governance init failed; stop hooks will not fire: {e}");
-                }
-            }
             if let Err(e) = b00t_cli::commands::quit::handle_quit(args) {
                 eprintln!("Error: {e}");
                 std::process::exit(1);
@@ -2259,18 +2282,6 @@ async fn main() {
         }
         Some(Commands::Doctor { doctor_command }) => {
             if let Err(e) = b00t_cli::commands::doctor_cmd::handle_doctor_command(doctor_command, &cli.path) {
-                eprintln!("Error: {e}");
-                std::process::exit(1);
-            }
-        }
-        Some(Commands::Gates { gates_command }) => {
-            if let Err(e) = gates_command.execute(&cli.path) {
-                eprintln!("Error: {e}");
-                std::process::exit(1);
-            }
-        }
-        Some(Commands::Observability { observability_command }) => {
-            if let Err(e) = observability_command.execute() {
                 eprintln!("Error: {e}");
                 std::process::exit(1);
             }

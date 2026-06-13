@@ -42,7 +42,7 @@ redis = { enabled = false, auto_start = false, datum = "_b00t_/redis.docker.toml
 
 [bootstrap.mcp_servers]
 # MCP servers to enable by default
-github = { enabled = false, auto_install = false, datum = "_b00t_/github.mcp.toml" }
+github = { enabled = false, auto_install = false, datum = "_b00t_/mcp/github.mcp.toml" }
 
 [bootstrap.network]
 # Network discovery settings

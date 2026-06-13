@@ -3,9 +3,6 @@ name = "context7"
 type = "mcp"
 hint = "MCP server"
 
-[[b00t.gate]]
-command = "bunx"
-
 [[b00t.mcp.stdio]]
 command = "bunx"
 requires = []

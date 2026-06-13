@@ -244,9 +244,7 @@ eggs/
 env.bak/
 env/
 exec-log.jsonl
-guard-violations.jsonl
 google-cloud-sdk/
-guard-violations.jsonl
 htmlcov/
 instance/
 integrations/plantuml-server--b00t--togaf--mcp/
@@ -282,7 +280,6 @@ sdist/
 share/python-wheels/
 target/
 telemetry.jsonl
-events.jsonl
 test_*.json
 tmp/
 togaf-cli/
@@ -296,5 +293,3 @@ wheels/
 yarn-debug.log*
 yarn-error.log*
 yarn.lock
-# Session/temporary caches
-cache/

@@ -30,12 +30,10 @@ regex = { workspace = true }
 anyhow = { workspace = true }
 chrono = { workspace = true, features = ["serde"] }
 tempfile = "3.13.0"
-thiserror = "2"
 
 # b00t-cli specific dependencies
 rhai = { workspace = true }
 b00t-c0re-lib = { workspace = true }
-b00t-bouncer = { path = "../b00t-bouncer" }
 b00t-grok = { workspace = true }
 k0mmand3r = { workspace = true }
 openssl-sys = { workspace = true }
@@ -67,10 +65,6 @@ env_logger = "0.11"
 mdns-sd = "0.19.1"
 rand = "0.8"
 b00t-ipc = { path = "../b00t-ipc" }
-b00t-embed = { workspace = true }
-b00t-c0re-gov = { path = "../b00t-c0re-gov" }
-b00t-c0re-hierarchy = { path = "../b00t-c0re-hierarchy" }
-b00t-c0re-a2a = { path = "../b00t-c0re-a2a" }
 zbus = { workspace = true, optional = true }
 url = "2.5"
 glob = "0.3.3"

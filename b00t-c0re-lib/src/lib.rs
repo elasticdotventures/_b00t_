@@ -37,7 +37,6 @@ pub mod datum_lsp;
 pub mod datum_types;
 pub mod dual_grok;
 pub mod dual_install;
-pub mod events;
 pub mod codebase_memory;
 pub mod grok;
 pub mod irontology_bridge;
@@ -49,7 +48,6 @@ pub mod lsp_proxy;
 pub mod man_page;
 pub mod mcp_proxy;
 pub mod mcp_registry;
-pub mod ooda;
 pub mod rag;
 pub mod redis;
 pub mod rhai_engine;
@@ -71,11 +69,10 @@ pub use dual_grok::{
     DualGrokClient, DualIngestResult, DualQueryItem, DualQueryResult, GrokBackend,
     StubControlEventSink, default_control_event_sink,
 };
-pub use events::{B00tEvent, write_event, write_event_obj, events_path};
 pub use grok::{AskResult, ChunkResult, ChunkSummary, DigestResult, GrokClient, LearnResult};
 pub use irontology_bridge::{
     DatumNode, IntoIrontologyRecord, IntoRagDocument, IrontologyBridgeClient,
-    IrontologyIngestResult, IrontologyQueryItem, compiled_knowledge_backend,
+    IrontologyIngestResult, IrontologyQueryItem,
 };
 pub use knowledge::{DisplayOpts, KnowledgeSource};
 pub use lfmf::{Lesson, LfmfConfig, LfmfSystem};
@@ -84,7 +81,6 @@ pub use mcp_proxy::{GenericMcpProxy, McpToolDefinition, McpToolRequest, McpToolR
 pub use mcp_registry::{
     McpRegistry, McpServerConfig, McpServerRegistration, create_registration_from_datum,
 };
-pub use ooda::*;
 pub use rag::{DocumentSource, LoaderType, RagLightConfig, RagLightManager};
 pub use rhai_engine::RhaiEngine;
 pub use secret_validation::{

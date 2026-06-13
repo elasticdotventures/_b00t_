@@ -41,9 +41,8 @@ pub fn handle_doctor_command(args: &DoctorCommands, b00t_path: &str) -> Result<(
             // 4. Focus schema datum exists (_b00t_/focus.schema.tomllmd)
             results.push(check_focus_schema(b00t_path));
 
-            // 5. ledgrrr-mcp / ledgerr-mcp service status
-            results.push(check_ledgrrr_service());
-            // results.push(check_ledgerr_service()); // alternate name from incoming
+            // 5. ledgerr-mcp service status
+            results.push(check_ledgerr_service());
 
             // 6. Local model endpoint reachable
             results.push(check_model_endpoint());
@@ -194,11 +193,10 @@ fn check_focus_schema(b00t_path: &str) -> Value {
     })
 }
 
-/// Check 5: ledgrrr-mcp / ledgerr-mcp service status
-fn check_ledgrrr_service() -> Value {
+/// Check 5: ledgerr-mcp service status
+fn check_ledgerr_service() -> Value {
     let output = Command::new("systemctl")
-        .args(["--user", "is-active", "ledgrrr-mcp"])
-
+        .args(["--user", "is-active", "ledgerr-mcp"])
         .output();
 
     match output {
@@ -206,14 +204,14 @@ fn check_ledgrrr_service() -> Value {
             let status = String::from_utf8_lossy(&o.stdout).trim().to_string();
             let active = status == "active" || o.status.success();
             json!({
-                "check": "ledgrrr-mcp service", // alt: ledgerr-mcp
+                "check": "ledgerr-mcp service",
                 "status": if active { "ok" } else { "fail" },
                 "detail": if active { "active".to_string() } else { status }
             })
         }
         Err(e) => {
             json!({
-                "check": "ledgrrr-mcp service", // alt: ledgerr-mcp
+                "check": "ledgerr-mcp service",
                 "status": "fail",
                 "detail": format!("systemctl not available: {}", e)
             })
@@ -223,13 +221,12 @@ fn check_ledgrrr_service() -> Value {
 
 /// Check 6: Local model endpoint reachable
 fn check_model_endpoint() -> Value {
-    // Use curl (preferred) to avoid tokio runtime panic (#[tokio::main]); reqwest fallback commented below
+    // Use curl instead of reqwest::blocking to avoid tokio runtime panic (#[tokio::main])
     let reachable = std::process::Command::new("curl")
         .args(["-s", "--max-time", "3", "-o", "/dev/null", "-w", "%{http_code}", "http://localhost:8001/v1/models"])
         .output()
         .ok()
         .map(|o| String::from_utf8_lossy(&o.stdout).trim() == "200")
-        // alt: reqwest::blocking::Client::builder().timeout(std::time::Duration::from_secs(5)).build()...
         .unwrap_or(false);
 
     json!({

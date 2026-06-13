@@ -3,9 +3,6 @@ name = "executive"
 type = "agent"
 hint = "Executive hive agent — manages system state transitions, resource scheduling, and agent delegation strategy"
 
-[[b00t.agent.inherits]]
-from = "++abstract.agent"
-
 [b00t.agent]
 pid = "executive-001"
 model = "claude-sonnet-4-6"
@@ -31,22 +28,6 @@ protocol = "msgpack"
 role = "captain"
 captain = true
 # 🤓 Executive is the only captain-role agent; it dispatches to specialist agents
-
-
-[b00t.agent.bouncer]
-enabled = true
-audit_log = ".b00t/bouncer-audit.jsonl"
-
-[b00t.agent.bouncer.input_gates]
-sanitize = { enabled = true, rules = ["no-shell-injection", "no-credential-exposure"] }
-credential_check = { enabled = true, check_env = true }
-permission_check = { enabled = true, check_role = true }
-rate_limit = { enabled = true, max_concurrent = 10 }
-
-[b00t.agent.bouncer.output_gates]
-contract_validation = { enabled = true, validate_schema = true }
-security_scan = { enabled = true, check_secrets = true }
-quality_check = { enabled = true, min_quality_score = 0.8 }
 
 [b00t.agent.cognitive_tiers]
 # Maps task cognitive load to model tier

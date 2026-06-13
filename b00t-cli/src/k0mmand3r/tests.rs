@@ -222,7 +222,7 @@ mod k0mmand3r_typed_cmd_tests {
 
     #[test]
     fn test_parse_vote_abstain() {
-        let cmd = K0mmand3rCmd::parse("/vote proposal-456 abstain").unwrap();
+        let cmd = K0mmand3rCmd::parse("/vote on proposal-456 choice abstain").unwrap();
         match cmd {
             K0mmand3rCmd::Vote { proposal, choice, .. } => {
                 assert_eq!(proposal, "proposal-456");
@@ -261,7 +261,7 @@ mod k0mmand3r_typed_cmd_tests {
         let cmd = K0mmand3rCmd::parse("/handshake to agent:observer").unwrap();
         match cmd {
             K0mmand3rCmd::Handshake { agent, proposal } => {
-                assert_eq!(agent, "agent:observer");
+                assert_eq!(agent, "observer");
                 assert_eq!(proposal, None);
             }
             _ => panic!("Expected Handshake"),
@@ -291,10 +291,7 @@ mod k0mmand3r_typed_cmd_tests {
 
     #[test]
     fn test_parse_loop_spec_modifiers() {
-        // Pipe syntax in the first positional: goal:deploy|metric:uptime|verify:healthcheck
-        // The `:` goes into modifiers but the pipe is part of the value.
-        // Instead use the modifier key=value syntax.
-        let cmd = K0mmand3rCmd::parse("/loop goal=deploy metric=uptime verify=healthcheck").unwrap();
+        let cmd = K0mmand3rCmd::parse("/loop with goal=deploy metric=uptime verify=healthcheck").unwrap();
         match cmd {
             K0mmand3rCmd::Loop { spec } => {
                 assert_eq!(spec.goal, "deploy");

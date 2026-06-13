@@ -36,12 +36,6 @@
                   "items": {
                     "type": "string"
                   }
-                },
-                "command": {
-                  "type": "string"
-                },
-                "note": {
-                  "type": "string"
                 }
               },
               "additionalProperties": false
@@ -93,18 +87,6 @@
             }
           },
           "additionalProperties": false
-        },
-        "requires_sudo": {
-          "type": "boolean"
-        },
-        "hook_detect": {
-          "type": "string"
-        },
-        "gate": {
-          "type": "array",
-          "items": {
-            "$ref": "#/definitions/gateItem"
-          }
         },
         "learn": {
           "$ref": "#/definitions/learnBlock"
@@ -289,12 +271,6 @@
           "items": {
             "type": "string"
           }
-        },
-        "enabled_tools": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
         }
       },
       "required": ["command"],
@@ -369,41 +345,6 @@
           "type": "string"
         }
       },
-      "additionalProperties": false
-    },
-    "gateItem": {
-      "type": "object",
-      "properties": {
-        "command": {
-          "type": "string"
-        },
-        "env": {
-          "type": "string"
-        },
-        "file": {
-          "type": "string"
-        },
-        "rhai": {
-          "type": "string"
-        },
-        "hint": {
-          "type": "string"
-        }
-      },
-      "oneOf": [
-        {
-          "required": ["command"]
-        },
-        {
-          "required": ["env"]
-        },
-        {
-          "required": ["file"]
-        },
-        {
-          "required": ["rhai"]
-        }
-      ],
       "additionalProperties": false
     },
     "learnBlock": {

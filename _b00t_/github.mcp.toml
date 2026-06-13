@@ -3,7 +3,6 @@ name = "github"
 type = "mcp"
 hint = "GitHub MCP server"
 lfmf_category = "github-mcp"
-hook_detect = "gates"
 
 [b00t.learn]
 topic = "github-mcp"

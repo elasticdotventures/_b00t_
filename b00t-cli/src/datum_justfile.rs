@@ -170,43 +170,6 @@ impl DatumProvider for JustfileDatum {
 
 // ── CliExecutor impl ──────────────────────────────────────────────────────────
 
-/// Select justfile paths from a list that match the given role.
-///
-/// Role-aware path resolution: if a `JustfileConfig.role_pattern` is set,
-/// the justfile is only included when the pattern matches `role`.
-/// Patterns are either exact match or `*` (matches all roles).
-/// If no `role_pattern` is set, the justfile is always included (general purpose).
-///
-/// # Examples
-///
-/// ```
-/// use b00t_cli::datum_justfile::justfile_for_role;
-/// use b00t_cli::JustfileConfig;
-/// let jf_config = JustfileConfig {
-///     role_pattern: Some("developer".into()),
-///     ..Default::default()
-/// };
-/// // In real usage you'd pass actual JustfileDatum instances.
-/// // This just validates the logic compiles.
-/// assert_eq!(jf_config.role_pattern.as_deref(), Some("developer"));
-/// ```
-pub fn justfile_for_role<'a>(
-    role: &str,
-    justfiles: &'a [JustfileDatum],
-) -> Vec<&'a JustfileDatum> {
-    justfiles
-        .iter()
-        .filter(|jf| {
-            let config = jf.datum.justfile.as_ref();
-            match config.and_then(|c| c.role_pattern.as_ref()) {
-                Some(pattern) if pattern == "*" => true,
-                Some(pattern) => pattern == role,
-                None => true, // no role_pattern = general purpose = always included
-            }
-        })
-        .collect()
-}
-
 impl CliExecutor for JustfileDatum {
     fn execute(&self, args: &[String]) -> Result<ExecOutput<String>> {
         if !self.justfile_path.exists() {

@@ -104,9 +104,9 @@ pub trait DesignHeuristicCheck: Send + Sync {
 
 // Build integrity checks are implemented as RHAI scripts at
 // _b00t_/scripts/wow/check-candle-build.rhai and check-default-build.rhai.
-// They spawn `cargo check` as a subprocess which can cause multi-minute test times.
-// Rust struct implementations are retained for direct programmatic use, but RHAI
-// scripts (_b00t_/scripts/wow/check-*.rhai) are the canonical path for slow checks.
+// The Rust trait implementations were removed — they spawned `cargo check` as
+// a subprocess which caused 2+ minute test times. RHAI is the canonical path
+// for slow integration checks.
 pub struct CandleBuildCheck;
 impl BuildIntegrityCheck for CandleBuildCheck {
     fn name(&self) -> &str { "candle feature compiles" }
@@ -192,24 +192,17 @@ pub struct VendorDockerfileCheck;
 impl BoundaryCheck for VendorDockerfileCheck {
     fn name(&self) -> &str { "vendor dockerfile exists" }
     fn run(&self) -> CheckResult {
-        let candidates = [
-            "vendor/ledgrrr/Dockerfile.ledgrrr-mcp",
-            "vendor/l3dg3rr/Dockerfile.ledgrrr-mcp",
-            "vendor/l3dg3rr/Dockerfile.ledgerr-mcp",
-        ];
-        let manifest = std::env::var("CARGO_MANIFEST_DIR").ok();
-        let exists = candidates.iter().any(|rel| {
-            let p = manifest.as_ref().map(|m| std::path::Path::new(m).join("..").join(rel)).unwrap_or_else(|| std::path::PathBuf::from(rel));
-            p.exists()
-        }) || std::fs::read_dir("vendor").map(|mut e| e.any(|f| f.ok().and_then(|f| {
-            let p = f.path().join("Dockerfile.ledgrrr-mcp");
-            if p.exists() { Some(()) } else { None }
-        }).is_some())).unwrap_or(false);
+        let path = if let Ok(manifest) = std::env::var("CARGO_MANIFEST_DIR") {
+            std::path::Path::new(&manifest).join("..").join("vendor/l3dg3rr/Dockerfile.ledgerr-mcp")
+        } else {
+            std::path::PathBuf::from("vendor/l3dg3rr/Dockerfile.ledgerr-mcp")
+        };
+        let exists = path.exists();
         CheckResult {
             name: self.name().into(), category: CheckCategory::Boundary,
             passed: exists,
-            detail: if exists { "Dockerfile present (ledgrrr-mcp or ledgerr-mcp)".into() }
-                    else { "vendor/*/Dockerfile.ledgrrr-mcp / Dockerfile.ledgerr-mcp not found (vendor submodule may not be cloned)".into() },
+            detail: if exists { "Dockerfile.ledgerr-mcp present".into() }
+                    else { "vendor/l3dg3rr/Dockerfile.ledgerr-mcp not found".into() },
         }
     }
 }
@@ -371,9 +364,9 @@ pub fn format_spline(results: &[CheckResult]) -> String {
 }
 
 /// Initialize default checks. Called at startup.
-/// Build integrity checks (candle feature, default build) are available as both
-/// Rust trait impls and RHAI scripts (_b00t_/scripts/wow/check-*.rhai).
-/// The RHAI variants avoid multi-minute cargo subprocess times in test suites.
+/// Build integrity checks (candle feature, default build) are RHAI-only
+/// (_b00t_/scripts/wow/check-*.rhai) — they spawn cargo subprocesses and
+/// would cause multi-minute test times as Rust unit tests.
 pub fn init_default_checks() {
     register_type(KnownRoleCheck);
     register_boundary(VendorDockerfileCheck);
@@ -386,8 +379,7 @@ pub fn init_default_checks() {
 /// Generate a test + doc example from a WOW check struct.
 ///
 /// ```rust
-/// use b00t_cli::wow_test;
-/// wow_test!(test_candle_build, CandleBuildCheck, BuildIntegrityCheck, "candle feature compiles");
+/// wow_test!(CandleBuildCheck, BuildIntegrityCheck, "candle feature compiles");
 /// ```
 ///
 /// Expands to:
@@ -422,35 +414,16 @@ mod tests {
     fn test_wow_spline_all_pass() {
         setup();
         let results = run_all();
-        // The vendor dockerfile check is optional (vendor submodule may not be cloned).
-        let mandatory = results.iter().filter(|r| {
-            !r.detail.contains("not cloned") && !r.detail.contains("not found (vendor")
-        }).collect::<Vec<_>>();
-        let passed_mandatory = mandatory.iter().filter(|r| r.passed).count();
-        let total_mandatory = mandatory.len();
+        let passed = results.iter().filter(|r| r.passed).count();
+        let total = results.len();
         let spline = format_spline(&results);
         println!("{spline}");
-        if total_mandatory != results.len() {
-            println!("⚠️  {} WOW check(s) skipped (vendor not cloned)", results.len() - total_mandatory);
-        }
-        assert_eq!(passed_mandatory, total_mandatory, "mandatory WOW checks must pass:\n{spline}");
+        assert_eq!(passed, total, "all WOW checks must pass:\n{spline}");
     }
 
     // Individual wow_test! invocations — each generates a #[test] + doc example
     wow_test!(test_known_role, KnownRoleCheck, TypeInvariantCheck, "KnownRole enum is exhaustive");
-    // Vendor dockerfile check: skip assertion if vendor submodule not cloned.
-    // The test itself logs a clear message; the spline aggregate tolerates it
-    // when the check reports `!passed` with a "not cloned" detail.
-    #[test]
-    fn test_vendor_dockerfile() {
-        let check = VendorDockerfileCheck;
-        let result = check.run();
-        if !result.passed {
-            println!("⚠️  WOW boundary check skipped: {}", result.detail);
-            return; // ok — vendor may not be cloned in CI/shallow checkout
-        }
-        assert!(result.passed, "{}", result.detail);
-    }
+    wow_test!(test_vendor_dockerfile, VendorDockerfileCheck, BoundaryCheck, "vendor dockerfile exists");
     wow_test!(test_dual_runtime, DualRuntimeCheck, DeploymentCheck, "dual runtime datum");
     wow_test!(test_just_modules, JustModulesCheck, DesignHeuristicCheck, "justfile modules exist");
 }

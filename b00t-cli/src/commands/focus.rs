@@ -1,6 +1,6 @@
-//! `b00t focus` — query persisted FOCUS records from ledgrrr-mcp / ledgerr-mcp JSONL files.
+//! `b00t focus` — query persisted FOCUS records from ledgerr-mcp JSONL files.
 //!
-//! FOCUS records are written to `focus_records.jsonl` by the ledgrrr-mcp server.
+//! FOCUS records are written to `focus_records.jsonl` by the ledgerr-mcp server.
 //! This command reads them back via `FocusJsonlSequence`, which yields
 //! `AbDataFrame`s conforming to `FocusSchema`.
 //!

@@ -30,9 +30,6 @@ brew_guard = "cmd.contains(\"brew\") && cmd.contains(\"install\")"
 hf_download_guard = "cmd.contains(\"huggingface-cli\") && cmd.contains(\"download\")"
 ulimit_guard = "cmd.contains(\"ulimit\") && cmd.contains(\"-n\")"
 rm_rf_guard = "cmd.contains(\"rm\") && cmd.contains(\"-rf\") && cmd.contains(\"/ \")"
-ledgerr_mcp_guard = "cmd.contains(\"ledgerr-mcp\")"
-ledgerr_port_guard = "cmd.contains(\"rotel-visual\")"
-ledgerr_just_guard = "cmd.contains(\"just\") && cmd.contains(\"ledgrrr::\")"
 
 # --- Python/pip guards ---
 [[b00t.hive.guards]]
@@ -156,23 +153,6 @@ message = "🦨 branch name should use type/description format (e.g. feat/add-wi
 pattern = { rhai = "cmd.contains(\"git commit\") && cmd.contains(\"-m\") && !cmd.contains(\":\")" }
 action = "warn"
 message = "🦨 commit message should follow Conventional Commits: type(scope): description (e.g. feat: add widget)"
-
-# --- Ledgerr/l3dg3rr guards ---
-
-[[b00t.hive.guards]]
-pattern = { rhai = "ledgerr_mcp_guard" }
-action = "warn"
-message = "🦨 ledgerr-mcp requires env vars: LEDGERR_MCP_DISABLE (optional), plus MCP transport config (stdio/tcp). Ensure your .env or hive profile has the needed environment."
-
-[[b00t.hive.guards]]
-pattern = { rhai = "ledgerr_port_guard" }
-action = "warn"
-message = "🦨 rotel-visual binds to port 4318 by default. Check conflict: ss -tlnp 'sport = :4318' or lsof -i :4318. Override with ROTEL_PORT env var."
-
-[[b00t.hive.guards]]
-pattern = { rhai = "ledgerr_just_guard" }
-action = "warn"
-message = "🦨 just ledgrrr:: module may not be loaded. Verify with: just ledgrrr::list-commands 2>&1 || echo 'just ledgrrr module not loaded'"
 
 [[b00t.usage]]
 description = "Check a command against universal guards"

@@ -4,9 +4,6 @@ use regex::Regex;
 use std::io::Write;
 use std::process;
 
-// 🤓 write_event moved to b00t-c0re-lib::events — unified telemetry writer
-pub use b00t_c0re_lib::write_event;
-
 /// ANSI color helpers — auto-disable when stdout is not a terminal.
 pub mod ansi {
     pub fn enabled() -> bool {
@@ -76,9 +73,6 @@ pub mod dbus_dispatch;
 pub mod dependency_resolver;
 pub mod entanglement;
 pub mod erp;
-pub mod errors;
-pub mod governance;
-pub mod guards;
 pub mod hive;
 pub mod hook_engine;
 pub mod install;
@@ -99,12 +93,9 @@ pub mod soul_writer;
 pub mod step;
 pub mod traits;
 pub mod utils;
-pub mod variant;
 pub mod viz;
 pub mod whoami;
 pub mod wow;
-pub mod calorie_tracker;
-pub mod a2a_gates;
 pub use traits::*;
 
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Default)]
@@ -213,15 +204,6 @@ pub struct K0mmand3rDatumConfig {
 
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Default)]
 #[serde(default)]
-pub struct KnowledgeConfig {
-    pub backend: Option<String>,
-    pub namespace: Option<String>,
-    pub data_path: Option<String>,
-    pub xor_group: Option<String>,
-}
-
-#[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Default)]
-#[serde(default)]
 pub struct BootDatum {
     pub name: String,
     #[serde(rename = "type", deserialize_with = "deserialize_datum_type")]
@@ -293,9 +275,6 @@ pub struct BootDatum {
     // Slash-command orchestration metadata for datum-driven /k0mmand3r dispatch
     #[serde(skip_serializing_if = "Option::is_none")]
     pub k0mmand3r: Option<K0mmand3rDatumConfig>,
-
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub knowledge: Option<KnowledgeConfig>,
 
     // MCP-specific multi-method support - these will be handled by datum_mcp module
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -406,307 +385,8 @@ pub struct GateSpec {
     /// Rhai expression to evaluate; must return true for gate to pass
     /// Available vars: name, datum_type, path
     pub rhai: Option<String>,
-    /// Knowledge backend that must match the compiled b00t-c0re-lib backend
-    pub knowledge_backend: Option<String>,
     /// Freeform description shown when gate fails
     pub hint: Option<String>,
-}
-
-/// Result of evaluating a single gate precondition.
-#[derive(Debug, Clone, PartialEq)]
-pub struct GateResult {
-    pub passed: bool,
-    pub reason: String,
-}
-
-/// Evaluate all gates for a datum. Returns a Vec of GateResults, one per gate.
-/// If any gate fails, the datum should be skipped.
-pub fn evaluate_gates(gates: &[GateSpec], path: &str) -> Vec<GateResult> {
-    let mut results = Vec::new();
-    for gate in gates {
-        let mut passed = true;
-        let mut reasons = Vec::new();
-
-        // Command gate: check if command exists on PATH
-        if let Some(ref cmd) = gate.command {
-            if !check_command_available(cmd) {
-                passed = false;
-                reasons.push(format!("command '{}' not found on PATH", cmd));
-            }
-        }
-
-        // File gate: check if file exists (supports ~ expansion and relative paths)
-        if let Some(ref file) = gate.file {
-            let expanded = shellexpand::tilde(file).to_string();
-            let exists = if std::path::Path::new(&expanded).is_absolute() {
-                std::path::Path::new(&expanded).exists()
-            } else {
-                // Try relative to datum directory (path may be a file; use parent if so).
-                // Fall back to current working directory.
-                let base = {
-                    let p = std::path::Path::new(path);
-                    if p.is_dir() { p.to_path_buf() } else { p.parent().map(|q| q.to_path_buf()).unwrap_or_else(|| std::path::PathBuf::from(".")) }
-                };
-                base.join(&expanded).exists()
-                    || std::path::Path::new(&expanded).exists()
-            };
-            if !exists {
-                passed = false;
-                reasons.push(format!("file '{}' does not exist", file));
-            }
-        }
-
-        // Env gate: check if env var or .env entry is set
-        if let Some(ref env_var) = gate.env {
-            let direct = std::env::var(env_var);
-            let env_ok = direct.is_ok() && !direct.unwrap_or_default().is_empty();
-            if !env_ok {
-                // Fallback: check .env at WORKSPACE_ROOT
-                let ws = std::env::var("WORKSPACE_ROOT")
-                    .or_else(|_| std::env::var("HOME"))
-                    .unwrap_or_default();
-                let env_path = std::path::Path::new(&ws).join(".env");
-                let env_file_ok = if env_path.exists() {
-                    if let Ok(content) = std::fs::read_to_string(&env_path) {
-                        let prefix = format!("{}=", env_var);
-                        content.lines().any(|line| {
-                            let trimmed = line.trim();
-                            trimmed.starts_with(&prefix)
-                                && !trimmed[prefix.len()..].trim().is_empty()
-                                && !trimmed[prefix.len()..].trim().starts_with('#')
-                        })
-                    } else {
-                        false
-                    }
-                } else {
-                    false
-                };
-                if !env_file_ok {
-                    passed = false;
-                    reasons.push(format!("env var '{}' not set", env_var));
-                }
-            }
-        }
-
-        // Rhai gate: evaluate rhai expression
-        if let Some(ref rhai_expr) = gate.rhai {
-            // Simple rhai evaluation using a sub-engine
-            let rhai_ok = evaluate_rhai_gate(rhai_expr);
-            if !rhai_ok {
-                passed = false;
-                reasons.push(format!("rhai gate '{}' returned false", rhai_expr));
-            }
-        }
-
-        if let Some(ref backend) = gate.knowledge_backend {
-            if b00t_c0re_lib::compiled_knowledge_backend() != backend {
-                passed = false;
-                reasons.push(format!(
-                    "knowledge backend '{}' does not match compiled backend '{}'",
-                    backend,
-                    b00t_c0re_lib::compiled_knowledge_backend()
-                ));
-            }
-        }
-
-        let reason = if reasons.is_empty() {
-            gate.hint.clone().unwrap_or_else(|| "gate passed".to_string())
-        } else {
-            gate.hint.clone().map(|h| format!("{}: {}", h, reasons.join("; ")))
-                .unwrap_or_else(|| reasons.join("; "))
-        };
-
-        results.push(GateResult { passed, reason });
-    }
-    results
-}
-
-/// Evaluate a simple rhai boolean expression.
-fn evaluate_rhai_gate(expr: &str) -> bool {
-    use rhai::Engine;
-    let engine = Engine::new();
-    engine.eval::<bool>(expr).unwrap_or(false)
-}
-
-/// A single gate with its origin (explicit or auto-derived)
-#[derive(Debug, Clone, Serialize)]
-pub struct GateReport {
-    pub datum: String,
-    pub kind: String,
-    pub spec: String,
-    pub origin: String, // "explicit" or "auto:requires" or "auto:env"
-    pub hint: Option<String>,
-    /// "pass" | "fail" | "unknown" — populated at scan time
-    pub status: &'static str,
-}
-
-/// Expand a leading `~/` in a path using the HOME env var.
-fn expand_tilde_path(spec: &str) -> std::path::PathBuf {
-    if spec.starts_with('~') {
-        let home = std::env::var("HOME").unwrap_or_default();
-        std::path::Path::new(&home)
-            .join(spec.strip_prefix("~/").unwrap_or(spec))
-    } else {
-        std::path::Path::new(spec).to_path_buf()
-    }
-}
-
-/// Returns "pass", "fail", or "unknown" for a gate condition checked at scan time.
-pub fn eval_gate_status(kind: &str, spec: &str) -> &'static str {
-    match kind {
-        "command" => {
-            if check_command_available(spec) { "pass" } else { "fail" }
-        }
-        "env" => {
-            if std::env::var(spec).ok().map_or(false, |v| !v.is_empty()) {
-                return "pass";
-            }
-            // check .env in workspace root
-            let ws = std::env::var("WORKSPACE_ROOT")
-                .or_else(|_| std::env::var("HOME"))
-                .unwrap_or_default();
-            let env_path = std::path::Path::new(&ws).join(".env");
-            if env_path.exists() {
-                if let Ok(content) = std::fs::read_to_string(env_path) {
-                    let prefix = format!("{}=", spec);
-                    for line in content.lines() {
-                        let trimmed = line.trim();
-                        if let Some(rest) = trimmed.strip_prefix(prefix.as_str()) {
-                            let val = rest.trim();
-                            if !val.is_empty() && !val.starts_with('#') {
-                                return "pass";
-                            }
-                        }
-                    }
-                }
-            }
-            "fail"
-        }
-        "file" => {
-            if expand_tilde_path(spec).exists() { "pass" } else { "fail" }
-        }
-        "knowledge_backend" => {
-            if b00t_c0re_lib::compiled_knowledge_backend() == spec { "pass" } else { "fail" }
-        }
-        "rhai" => "unknown",
-        _ => "unknown",
-    }
-}
-
-/// Scan datum files in `path` (.mcp.toml, .mcp.tomllm, .mcp.tomllmd),
-/// extract explicit [[b00t.gate]] declarations and auto-derived gates,
-/// and evaluate their current status.
-pub fn list_gates(path: &str, search: Option<&str>) -> Result<Vec<GateReport>> {
-    let expanded = get_expanded_path(path)?;
-    let mut gates = Vec::new();
-
-    for entry in std::fs::read_dir(&expanded)
-        .map_err(|e| anyhow::anyhow!("Error reading {}: {}", expanded.display(), e))?
-    {
-        let entry = entry?;
-        let fpath = entry.path();
-        let fname = match fpath.file_name().and_then(|s| s.to_str()) {
-            Some(n) => n.to_string(),
-            None => continue,
-        };
-
-        // Accept .mcp.toml, .mcp.tomllm, .mcp.tomllmd
-        let is_mcp_datum = fname.ends_with(".mcp.toml")
-            || fname.ends_with(".mcp.tomllm")
-            || fname.ends_with(".mcp.tomllmd");
-        if !is_mcp_datum {
-            continue;
-        }
-
-        let name = fname
-            .trim_end_matches(".tomllmd")
-            .trim_end_matches(".tomllm")
-            .trim_end_matches(".toml")
-            .trim_end_matches(".mcp")
-            .to_string();
-        if name.is_empty() {
-            continue;
-        }
-
-        let content = std::fs::read_to_string(&fpath)?;
-        let config: Result<UnifiedConfig, _> = toml::from_str(&content);
-        let datum = match config {
-            Ok(c) => c.b00t,
-            Err(_) => continue,
-        };
-
-        // apply search filter
-        if let Some(q) = search {
-            if !name.to_lowercase().contains(&q.to_lowercase())
-                && !datum.hint.to_lowercase().contains(&q.to_lowercase())
-            {
-                continue;
-            }
-        }
-
-        let mut push_gate = |kind: &str, spec: &str, origin: &str, hint: Option<String>| {
-            gates.push(GateReport {
-                datum: name.clone(),
-                kind: kind.to_string(),
-                spec: spec.to_string(),
-                origin: origin.to_string(),
-                hint,
-                status: eval_gate_status(kind, spec),
-            });
-        };
-
-        // explicit gates from [[b00t.gate]]
-        if let Some(explicit) = &datum.gate {
-            for g in explicit {
-                if let Some(cmd) = &g.command {
-                    push_gate("command", cmd, "explicit", g.hint.clone());
-                }
-                if let Some(f) = &g.file {
-                    push_gate("file", f, "explicit", g.hint.clone());
-                }
-                if let Some(e) = &g.env {
-                    push_gate("env", e, "explicit", g.hint.clone());
-                }
-                if let Some(r) = &g.rhai {
-                    push_gate("rhai", r, "explicit", g.hint.clone());
-                }
-                if let Some(backend) = &g.knowledge_backend {
-                    push_gate("knowledge_backend", backend, "explicit", g.hint.clone());
-                }
-            }
-        }
-
-        if let Some(knowledge) = &datum.knowledge {
-            if let Some(backend) = &knowledge.backend {
-                push_gate(
-                    "knowledge_backend",
-                    backend,
-                    "auto:knowledge",
-                    Some("datum knowledge backend must match compiled b00t-c0re-lib backend".to_string()),
-                );
-            }
-        }
-
-        // auto-derived from requires
-        if let Some(req) = &datum.require {
-            for r in req {
-                if r != "internet" {
-                    push_gate("command", r, "auto:requires", None);
-                }
-            }
-        }
-
-        // auto-derived from top-level env
-        if let Some(env_map) = &datum.env {
-            for (k, _) in env_map {
-                if !k.starts_with("LOG_") && !k.starts_with("FAST") {
-                    push_gate("env", k, "auto:env", None);
-                }
-            }
-        }
-    }
-
-    Ok(gates)
 }
 
 /// Sandbox capabilities declared by a justfile datum.
@@ -732,10 +412,6 @@ pub struct JustfileConfig {
     pub path: Option<String>,
     /// MCP server datum name that introspects this justfile (e.g. "just-mcp")
     pub mcp_server: Option<String>,
-    /// Role pattern that selects this justfile — role-aware path resolution.
-    /// Simple exact match or `*` wildcard for all roles. When set, this justfile
-    /// is only returned by `justfile_for_role()` when the role name matches.
-    pub role_pattern: Option<String>,
     /// Logical recipe groups for agent navigation (e.g. ["dev", "ci", "ml"])
     pub recipe_groups: Option<Vec<String>>,
     /// Execution context: "local" | "container" | "wasm" (backward compat — single preferred sandbox)
@@ -1056,7 +732,7 @@ fn create_mcp_datum_from_json(
     BootDatum {
         name,
         datum_type: Some(DatumType::Mcp),
-        hint: hint.or_else(|| server_config.get("hint").and_then(|v| v.as_str()).map(|s| s.to_string())).unwrap_or_else(|| "MCP server".to_string()),
+        hint: hint.unwrap_or_else(|| "MCP server".to_string()),
         env: server_config
             .get("env")
             .and_then(|v| v.as_object())
@@ -1086,31 +762,6 @@ fn create_mcp_datum_from_json(
             ]),
             httpstream: None,
         }),
-        // Parse gates from JSON if present
-        gate: server_config
-            .get("gate")
-            .and_then(|v| v.as_array())
-            .map(|arr| {
-                arr.iter().filter_map(|g| {
-                    let cmd = g.get("command").and_then(|v| v.as_str());
-                    let file = g.get("file").and_then(|v| v.as_str());
-                    let env = g.get("env").and_then(|v| v.as_str());
-                    let rhai = g.get("rhai").and_then(|v| v.as_str());
-                    let knowledge_backend = g.get("knowledge_backend").and_then(|v| v.as_str());
-                    let hint = g.get("hint").and_then(|v| v.as_str()).map(|s| s.to_string());
-                    if cmd.is_none() && file.is_none() && env.is_none() && rhai.is_none() && knowledge_backend.is_none() {
-                        return None;
-                    }
-                    Some(GateSpec {
-                        command: cmd.map(|s| s.to_string()),
-                        file: file.map(|s| s.to_string()),
-                        env: env.map(|s| s.to_string()),
-                        rhai: rhai.map(|s| s.to_string()),
-                        knowledge_backend: knowledge_backend.map(|s| s.to_string()),
-                        hint,
-                    })
-                }).collect()
-            }),
         ..BootDatum::default()
     }
 }
@@ -1837,8 +1488,6 @@ pub fn mcp_list(path: &str, json_output: bool, filter: McpListFilter) -> Result<
                 let _ = m.incr(&key);
                 let _ = m.set("mcp_last_view_count", &total_count.to_string());
             });
-            // also write to unified events.jsonl
-            write_event("mcp_list_view", &total_count.to_string());
             println!();
             println!("To install to VSCode: b00t-cli vscode install mcp <name>");
             println!("To install to Claude Code: b00t-cli claude-code install mcp <name>");
@@ -2869,48 +2518,6 @@ pub mod test_env {
 
 #[cfg(test)]
 mod tests {
-    use std::path::PathBuf;
-    use std::sync::{Mutex, MutexGuard};
-
-    static HOME_LOCK: Mutex<()> = Mutex::new(());
-
-    struct TempHome {
-        _guard: MutexGuard<'static, ()>,
-        old_home: Option<String>,
-        _temp_dir: tempfile::TempDir,
-        b00t_dir: PathBuf,
-    }
-
-    impl TempHome {
-        fn new() -> Self {
-            let guard = HOME_LOCK.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
-            let temp_dir = tempfile::tempdir().unwrap();
-            let b00t_dir = temp_dir.path().join(".b00t");
-            std::fs::create_dir_all(&b00t_dir).unwrap();
-            let old_home = std::env::var("HOME").ok();
-            unsafe {
-                std::env::set_var("HOME", temp_dir.path().to_str().unwrap());
-            }
-
-            Self {
-                _guard: guard,
-                old_home,
-                _temp_dir: temp_dir,
-                b00t_dir,
-            }
-        }
-    }
-
-    impl Drop for TempHome {
-        fn drop(&mut self) {
-            if let Some(old) = &self.old_home {
-                unsafe { std::env::set_var("HOME", old); }
-            } else {
-                unsafe { std::env::remove_var("HOME"); }
-            }
-        }
-    }
-
     #[test]
     fn test_datum_type_from_filename_accepts_typed_toml_extensions() {
         assert_eq!(
@@ -3029,25 +2636,5 @@ hint = "containers"
         let (config, filename) = crate::get_config("mytool", path).unwrap();
         assert_eq!(config.b00t.name, "mytool-tomllm");
         assert!(filename.ends_with(".tomllm"), "got {}", filename);
-    }
-
-    // ── write_event re-export from c0re-lib ────────────────────────────────────
-
-    #[test]
-    fn test_write_event_reexport_from_c0re_lib() {
-        use std::fs;
-
-        let temp_home = TempHome::new();
-
-        // write_event is re-exported from b00t_c0re_lib
-        crate::write_event("mcp_list_view", "42");
-
-        let events_path = temp_home.b00t_dir.join("events.jsonl");
-        assert!(events_path.exists(), "events.jsonl should exist");
-        let content = fs::read_to_string(&events_path).unwrap();
-        let line = content.lines().next().unwrap();
-        let parsed: serde_json::Value = serde_json::from_str(line).unwrap();
-        assert_eq!(parsed["event"], "mcp_list_view");
-        assert_eq!(parsed["detail"], "42");
     }
 }

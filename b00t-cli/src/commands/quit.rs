@@ -12,18 +12,6 @@ use clap::Parser;
 
 const AGENT_NAMES: &[&str] = &["claude", "opencode", "aider", "ralph", "cursor"];
 
-/// Optional stop-event callback — set by the governance runtime at startup.
-/// If set, emit_stop() is called before the quit command sends SIGTERM,
-/// allowing registered stop hooks to fire (save state, flush logs, etc.).
-static STOP_CALLBACK: std::sync::OnceLock<Box<dyn Fn() + Send + Sync>> =
-    std::sync::OnceLock::new();
-
-/// Set the stop-event callback so that `b00t quit` emits a stop event
-/// through the governance runtime before terminating the agent.
-pub fn set_stop_callback(cb: Box<dyn Fn() + Send + Sync>) {
-    let _ = STOP_CALLBACK.set(cb);
-}
-
 #[derive(Parser)]
 #[clap(
     about = "Killswitch: terminate upper agent instance and return CLI to prompt",
@@ -50,12 +38,6 @@ pub struct QuitArgs {
 #[cfg(target_os = "linux")]
 pub fn handle_quit(args: &QuitArgs) -> Result<()> {
     let target_pid = resolve_agent_pid()?;
-
-    // Fire stop hook callback before signalling the agent
-    if let Some(cb) = STOP_CALLBACK.get() {
-        eprintln!("🔔 emitting system.stop event...");
-        cb();
-    }
 
     if args.dry_run {
         println!(

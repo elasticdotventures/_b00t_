@@ -1,5 +1,5 @@
 use crate::dependency_resolver::DependencyResolver;
-use crate::{BootDatum, GateResult, UnifiedConfig, evaluate_gates};
+use crate::{BootDatum, UnifiedConfig};
 use anyhow::{Context, Result, anyhow};
 use clap::Parser;
 use duct::cmd;
@@ -130,30 +130,6 @@ pub fn install_datum(path: &str, name: &str, dry_run: bool) -> Result<()> {
             .get(&key)
             .ok_or_else(|| anyhow!("Missing datum during install: {}", key))?;
 
-        // Evaluate hook_detect if set (e.g. hook_detect = "gates")
-        if let Some(hook) = &datum.hook_detect {
-            // Set env vars so gates.rhai can find the datum file
-            let datum_file = format!("{}/{}.toml", shellexpand::tilde(path), key.replace('.', "."));
-            unsafe { std::env::set_var("_B00T_DATUM_FILE", &datum_file); }
-            unsafe { std::env::set_var("_B00T_DATUM_NAME", &datum.name); }
-            let result = crate::hook_engine::run_hook(hook);
-            match &result {
-                crate::hook_engine::HookResult::Ok => {},
-                crate::hook_engine::HookResult::Warn(msg) => {
-                    eprintln!("⚠️  {} hook_detect: {}", key, msg);
-                }
-                crate::hook_engine::HookResult::Redirect(alt) => {
-                    eprintln!("⏭️  {} redirected to {} by hook_detect", key, alt);
-                    continue;
-                }
-                crate::hook_engine::HookResult::Missing(msg) => {
-                    eprintln!("⏭️  {} hook_detect: {}", key, msg);
-                    continue;
-                }
-                _ => {}
-            }
-        }
-
         // Skip if already installed (best-effort using version command)
         if let Some(version_cmd) = &datum.version {
             match cmd!("bash", "-c", version_cmd).run() {
@@ -166,22 +142,6 @@ pub fn install_datum(path: &str, name: &str, dry_run: bool) -> Result<()> {
                         "⚠️  Version check for '{}' failed: {}. Proceeding with installation.",
                         key, e
                     );
-                }
-            }
-        }
-
-        // Evaluate gates before installing
-        if let Some(ref gates) = datum.gate {
-            if !gates.is_empty() {
-                let gate_results = evaluate_gates(gates, path);
-                let all_passed = gate_results.iter().all(|r| r.passed);
-                if !all_passed {
-                    for result in &gate_results {
-                        if !result.passed {
-                            println!("⏭️  {} gate blocked: {}", key, result.reason);
-                        }
-                    }
-                    continue;
                 }
             }
         }
@@ -204,7 +164,7 @@ pub fn install_datum(path: &str, name: &str, dry_run: bool) -> Result<()> {
 /// Hermes is the AI terminal; this sets it up for local inference mode.
 pub fn hermes_special_install(dry_run: bool) -> Result<()> {
     if dry_run {
-        println!("🔍 Dry run: would configure hermes: hermes config set terminal.backend local");
+        println!("[dry-run] would configure hermes: hermes config set terminal.backend local");
         return Ok(());
     }
     let output = std::process::Command::new("hermes")
@@ -225,114 +185,6 @@ pub fn hermes_special_install(dry_run: bool) -> Result<()> {
         }
         Err(e) => anyhow::bail!("failed to run hermes: {e}"),
     }
-    Ok(())
-}
-
-// Canonical paths for hermes MCP config — resolved from $HOME at runtime.
-// Tests duplicate these functions to verify round-trip correctness.
-fn home_dir_str() -> String {
-    std::env::var("HOME").unwrap_or_default()
-}
-
-fn hermes_b00t_mcp_command() -> String {
-    format!("{}/.cargo/bin/b00t-mcp", home_dir_str())
-}
-
-fn hermes_b00t_mcp_args() -> Vec<String> {
-    let home = home_dir_str();
-    vec!["stdio".into(), "-d".into(), format!("{}/.b00t", home)]
-}
-
-fn codebase_memory_mcp_path() -> String {
-    format!(
-        "{}/.b00t/vendor/codebase-memory-mcp-b00t-ir0n-ledg3rr/build/c/codebase-memory-mcp",
-        home_dir_str()
-    )
-}
-
-/// Update (or create) the hermes `config.yaml` at `config_path` with canonical
-/// b00t MCP server entries.
-///
-/// - Creates parent directories if needed.
-/// - Parses the existing YAML if the file exists.
-/// - Merges/overwrites the `b00t-mcp` entry with canonical `command` and `args`.
-/// - Adds the `codebase-memory` entry if the binary exists on disk.
-/// - Preserves all other top-level keys and unrelated `mcp_servers` entries.
-/// - Returns `Err` if the parent cannot be created, YAML is unparseable, or
-///   `mcp_servers` is not a mapping.
-pub fn update_hermes_mcp_config(config_path: &std::path::Path) -> Result<()> {
-    // Ensure parent directory exists.
-    if let Some(parent) = config_path.parent() {
-        std::fs::create_dir_all(parent)
-            .with_context(|| format!("cannot create directory: {}", parent.display()))?;
-    }
-
-    // Load existing YAML or start with an empty mapping.
-    let mut doc: serde_yaml::Mapping = if config_path.exists() {
-        let raw = std::fs::read_to_string(config_path)
-            .with_context(|| format!("cannot read {}", config_path.display()))?;
-        if raw.trim().is_empty() {
-            serde_yaml::Mapping::new()
-        } else {
-            serde_yaml::from_str::<serde_yaml::Mapping>(&raw)
-                .with_context(|| format!("cannot parse YAML: {}", config_path.display()))?
-        }
-    } else {
-        serde_yaml::Mapping::new()
-    };
-
-    // Get or create the mcp_servers mapping.
-    let servers_key = serde_yaml::Value::String("mcp_servers".into());
-    let servers = doc
-        .entry(servers_key)
-        .or_insert_with(|| serde_yaml::Value::Mapping(serde_yaml::Mapping::new()));
-    let servers = servers
-        .as_mapping_mut()
-        .context("mcp_servers must be a mapping")?;
-
-    // Build canonical b00t-mcp entry.
-    let mut b00t_entry = serde_yaml::Mapping::new();
-    b00t_entry.insert(
-        serde_yaml::Value::String("command".into()),
-        serde_yaml::Value::String(hermes_b00t_mcp_command()),
-    );
-    b00t_entry.insert(
-        serde_yaml::Value::String("args".into()),
-        serde_yaml::Value::Sequence(
-            hermes_b00t_mcp_args()
-                .into_iter()
-                .map(serde_yaml::Value::String)
-                .collect(),
-        ),
-    );
-    servers.insert(
-        serde_yaml::Value::String("b00t-mcp".into()),
-        serde_yaml::Value::Mapping(b00t_entry),
-    );
-
-    // Add codebase-memory entry only when the binary is present on disk.
-    let cm_path = codebase_memory_mcp_path();
-    if std::path::Path::new(&cm_path).exists() {
-        let mut cm_entry = serde_yaml::Mapping::new();
-        cm_entry.insert(
-            serde_yaml::Value::String("command".into()),
-            serde_yaml::Value::String(cm_path),
-        );
-        cm_entry.insert(
-            serde_yaml::Value::String("args".into()),
-            serde_yaml::Value::Sequence(vec![]),
-        );
-        servers.insert(
-            serde_yaml::Value::String("codebase-memory".into()),
-            serde_yaml::Value::Mapping(cm_entry),
-        );
-    }
-
-    // Write back.
-    let yaml_out = serde_yaml::to_string(&doc).context("cannot serialize YAML")?;
-    std::fs::write(config_path, yaml_out)
-        .with_context(|| format!("cannot write {}", config_path.display()))?;
-
     Ok(())
 }
 
@@ -379,7 +231,7 @@ fn load_all_datums(path: &str) -> Result<HashMap<String, BootDatum>> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{DatumType, GateSpec};
+    use crate::DatumType;
     use std::fs;
     use tempfile::TempDir;
 
@@ -850,124 +702,6 @@ hint = "Test stack"
         // Should skip invalid file and still load the valid one
         assert_eq!(datums.len(), 1);
         assert!(datums.contains_key("docker.cli"));
-    }
-
-    // ── Gate evaluation tests ────────────────────────────────────────────────
-
-    #[test]
-    fn test_gate_command_fails() {
-        // A gate requiring a non-existent command should fail
-        let gates = vec![GateSpec {
-            command: Some("this-command-definitely-does-not-exist-xyzzy".to_string()),
-            file: None,
-            env: None,
-            rhai: None,
-            knowledge_backend: None,
-            hint: Some("test command gate".to_string()),
-        }];
-        let results = evaluate_gates(&gates, "/tmp");
-        assert!(!results[0].passed);
-        assert!(results[0].reason.contains("not found"));
-    }
-
-    #[test]
-    fn test_gate_file_passes() {
-        // A gate requiring an existing file should pass
-        let temp_dir = TempDir::new().unwrap();
-        let file_path = temp_dir.path().join("test_file.txt");
-        fs::write(&file_path, "test content").unwrap();
-
-        let gates = vec![GateSpec {
-            command: None,
-            file: Some(file_path.to_str().unwrap().to_string()),
-            env: None,
-            rhai: None,
-            knowledge_backend: None,
-            hint: Some("test file gate".to_string()),
-        }];
-        let results = evaluate_gates(&gates, "/tmp");
-        assert!(results[0].passed);
-    }
-
-    #[test]
-    fn test_gate_env_fails() {
-        // A gate requiring a non-existent env var should fail
-        let gates = vec![GateSpec {
-            command: None,
-            file: None,
-            env: Some("THIS_ENV_VAR_DOES_NOT_EXIST_12345".to_string()),
-            rhai: None,
-            knowledge_backend: None,
-            hint: Some("test env gate".to_string()),
-        }];
-        let results = evaluate_gates(&gates, "/tmp");
-        assert!(!results[0].passed);
-        assert!(results[0].reason.contains("not set"));
-    }
-
-    #[test]
-    fn test_gate_knowledge_backend_passes_for_compiled_backend() {
-        let gates = vec![GateSpec {
-            command: None,
-            file: None,
-            env: None,
-            rhai: None,
-            knowledge_backend: Some(b00t_c0re_lib::compiled_knowledge_backend().to_string()),
-            hint: Some("knowledge backend gate".to_string()),
-        }];
-        let results = evaluate_gates(&gates, "/tmp");
-        assert!(results[0].passed);
-    }
-
-    #[test]
-    fn test_gate_knowledge_backend_fails_for_mismatch() {
-        let mismatched = match b00t_c0re_lib::compiled_knowledge_backend() {
-            "neumann" => "oxigraph",
-            _ => "neumann",
-        };
-        let gates = vec![GateSpec {
-            command: None,
-            file: None,
-            env: None,
-            rhai: None,
-            knowledge_backend: Some(mismatched.to_string()),
-            hint: Some("knowledge backend gate".to_string()),
-        }];
-        let results = evaluate_gates(&gates, "/tmp");
-        assert!(!results[0].passed);
-        assert!(results[0].reason.contains("compiled backend"));
-    }
-
-    #[test]
-    fn test_multiple_gates_all_pass() {
-        // Multiple gates that should all pass (file exists + env var that exists)
-        let temp_dir = TempDir::new().unwrap();
-        let file_path = temp_dir.path().join("multi_test.txt");
-        fs::write(&file_path, "test").unwrap();
-
-        // PATH is always set
-        let gates = vec![
-            GateSpec {
-                command: None,
-                file: Some(file_path.to_str().unwrap().to_string()),
-                env: None,
-                rhai: None,
-                knowledge_backend: None,
-                hint: Some("file gate".to_string()),
-            },
-            GateSpec {
-                command: None,
-                file: None,
-                env: Some("PATH".to_string()),
-                rhai: None,
-                knowledge_backend: None,
-                hint: Some("env gate".to_string()),
-            },
-        ];
-        let results = evaluate_gates(&gates, "/tmp");
-        assert!(results.len() == 2);
-        assert!(results[0].passed, "file gate should pass: {}", results[0].reason);
-        assert!(results[1].passed, "env gate should pass: {}", results[1].reason);
     }
 
     #[test]

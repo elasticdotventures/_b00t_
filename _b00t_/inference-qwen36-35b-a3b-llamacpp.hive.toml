@@ -42,6 +42,9 @@ exec_start = """/usr/bin/podman run --rm \
     --security-opt=label=disable \
     -v /home/brianh/.cache/huggingface/hub:/hf:z \
     -p 8001:8001 \
+    --health-cmd "curl -fsS http://localhost:8001/health" \
+    --health-interval 30s \
+    --health-timeout 30s \
     ghcr.io/ggml-org/llama.cpp:server-cuda \
     --model /hf/models--unsloth--Qwen3.6-35B-A3B-GGUF/snapshots/a483e9e6cbd595906af30beda3187c2663a1118c/Qwen3.6-35B-A3B-MXFP4_MOE.gguf \
     --host 0.0.0.0 \
@@ -65,6 +68,7 @@ exec_start = """/usr/bin/podman run --rm \
 # 🤓 -ngl 999: try full GPU; llamacpp auto-spills to CPU RAM (31GB avail) if VRAM exceeded
 # 🤓 -fa: flash attention — needed for ctx efficiency on MoE with limited active params
 # 🤓 --reasoning-format deepseek: enables Qwen3 thinking mode (<think> tokens)
+# 🤓 llama.cpp image defaults healthcheck to :8080; this profile serves :8001.
 # ⚠️  If MXFP4 unsupported by image, error will say "unknown tensor type" — download Q3_K_M instead
 
 [b00t.hive.env]

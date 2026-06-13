@@ -3,12 +3,6 @@ name = "filesystem"
 type = "mcp"
 hint = "MCP server"
 
-[[b00t.gate]]
-command = "npx"
-
-[[b00t.gate]]
-env = "FILESYSTEM_ACCESS"
-
 [[b00t.mcp.stdio]]
 args = ["-y", "@modelcontextprotocol/server-filesystem"]
 command = "npx"
