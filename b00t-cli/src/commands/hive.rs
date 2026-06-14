@@ -6,8 +6,9 @@
 //! run      — run a command through guard evaluation
 //! list     — list available hive profiles
 
-use anyhow::{Result, bail};
+use anyhow::{Context, Result, bail};
 use clap::Parser;
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
 use crate::hive::{
@@ -83,8 +84,43 @@ pub enum HiveCommands {
         peer_command: PeerCommands,
     },
 
+    #[clap(about = "Manage hive guard patterns (GuardManager authority gate)")]
+    Guard {
+        #[clap(subcommand)]
+        guard_command: GuardManagerCommands,
+    },
+
     #[clap(subcommand)]
     Cyber(HiveCyberCommands),
+}
+
+/// Guard Manager commands — privileged write access to hive-guards.hive.toml.
+/// Future: requires ed25519 signature from executive role (PRD-ARCH guard-manager datum).
+#[derive(Parser)]
+pub enum GuardManagerCommands {
+    #[clap(about = "List all active guards (universal + active profile)")]
+    List {
+        #[clap(long, help = "Output in JSON format")]
+        json: bool,
+    },
+    #[clap(about = "Append a new guard to hive-guards.hive.toml")]
+    Add {
+        #[clap(help = "Pattern string (exact) or rhai expression")]
+        pattern: String,
+        #[clap(long, default_value = "warn", value_parser = ["warn", "block", "redirect"])]
+        action: String,
+        #[clap(long, help = "Warning message shown to agent")]
+        message: String,
+        #[clap(long, help = "Redirect suggestion (for warn/redirect actions)")]
+        redirect: Option<String>,
+    },
+    #[clap(about = "Show guard violation statistics from guard-violations.jsonl")]
+    Audit {
+        #[clap(long, help = "Show last N violations", default_value = "20")]
+        limit: usize,
+        #[clap(long, help = "Output in JSON format")]
+        json: bool,
+    },
 }
 
 #[derive(Parser)]
@@ -358,6 +394,7 @@ pub fn handle_hive_command(cmd: &HiveCommands, path: &str) -> Result<()> {
 
         HiveCommands::Peers { peer_command } => handle_peer_command(peer_command),
         HiveCommands::Cyber(cyber_cmd) => handle_cyber_command(cyber_cmd),
+        HiveCommands::Guard { guard_command } => handle_guard_command(guard_command, path),
         HiveCommands::Run {
             command,
             strict,
@@ -369,13 +406,32 @@ pub fn handle_hive_command(cmd: &HiveCommands, path: &str) -> Result<()> {
             }
 
             let cmd_str = command.join(" ");
+
+            // Expand @tier: delegation prefix before guard evaluation
+            let (cmd_str, delegation) = {
+                let parsed = crate::delegation_macros::parse_delegation_prefix(&cmd_str);
+                match parsed {
+                    Some(ref m) => {
+                        let expanded = crate::delegation_macros::expand(m);
+                        if dry_run {
+                            println!("[dry-run] @{tier}: expanded → {expanded}", tier = m.tier);
+                            if let Some(task) = &m.task_id {
+                                println!("  task update: b00t task done {task} on completion");
+                            }
+                        }
+                        (expanded, parsed)
+                    }
+                    None => (cmd_str.clone(), None),
+                }
+            };
+
             let snapshot = SystemSnapshot::capture()?;
-            let all_guards = load_all_guards(&datum_dir, &snapshot);
+            let (all_guards, rhai_macros) = load_all_guard_state(&datum_dir, &snapshot);
             let guard_ctx = GuardContext {
                 command: cmd_str.clone(),
                 violation_count: 0,
                 repeat_threshold: None,
-                rhai_macros: std::collections::HashMap::new(),
+                rhai_macros,
             };
 
             match check_guards(&cmd_str, &all_guards, &guard_ctx) {
@@ -405,10 +461,20 @@ pub fn handle_hive_command(cmd: &HiveCommands, path: &str) -> Result<()> {
             }
 
             // Execute the command
-            let status = std::process::Command::new(&command[0])
-                .args(&command[1..])
+            let exec_command = if delegation.is_some() {
+                shlex::split(&cmd_str)
+                    .ok_or_else(|| anyhow::anyhow!("failed to parse expanded command: {cmd_str}"))?
+            } else {
+                command.clone()
+            };
+            if exec_command.is_empty() {
+                bail!("expanded command is empty");
+            }
+
+            let status = std::process::Command::new(&exec_command[0])
+                .args(&exec_command[1..])
                 .status()
-                .map_err(|e| anyhow::anyhow!("failed to execute '{}': {}", command[0], e))?;
+                .map_err(|e| anyhow::anyhow!("failed to execute '{}': {}", exec_command[0], e))?;
 
             std::process::exit(status.code().unwrap_or(1));
         }
@@ -455,19 +521,206 @@ fn handle_cyber_command(cmd: &HiveCyberCommands) -> Result<()> {
 
 /// Load universal guards from hive-guards.hive.toml + active profile guards
 fn load_all_guards(datum_dir: &Path, snapshot: &SystemSnapshot) -> Vec<crate::hive::HiveGuard> {
+    load_all_guard_state(datum_dir, snapshot).0
+}
+
+/// Load universal guards, active profile guards, and their Rhai macro table.
+fn load_all_guard_state(
+    datum_dir: &Path,
+    snapshot: &SystemSnapshot,
+) -> (Vec<crate::hive::HiveGuard>, HashMap<String, String>) {
     let mut guards = Vec::new();
+    let mut rhai_macros = HashMap::new();
 
     // 1. Universal guards
     if let Ok(g) = load_profile("hive-guards", datum_dir) {
+        rhai_macros.extend(g.rhai_macros);
         guards.extend(g.guards);
     }
 
     // 2. Active profile guards
     if let Some(active) = &snapshot.active_profile {
         if let Ok(p) = load_profile(active, datum_dir) {
+            rhai_macros.extend(p.rhai_macros);
             guards.extend(p.guards);
         }
     }
 
-    guards
+    (guards, rhai_macros)
+}
+
+// ── Guard Manager ─────────────────────────────────────────────────────────────
+
+fn handle_guard_command(cmd: &GuardManagerCommands, path: &str) -> Result<()> {
+    match cmd {
+        GuardManagerCommands::List { json } => guard_list(path, *json),
+        GuardManagerCommands::Add {
+            pattern,
+            action,
+            message,
+            redirect,
+        } => guard_add(path, pattern, action, message, redirect.as_deref()),
+        GuardManagerCommands::Audit { limit, json } => guard_audit(path, *limit, *json),
+    }
+}
+
+fn guard_list(path: &str, as_json: bool) -> Result<()> {
+    use crate::hive::SystemSnapshot;
+
+    let datum_dir = std::path::PathBuf::from(shellexpand::tilde(path).to_string());
+    let snapshot = SystemSnapshot::capture()?;
+    let (guards, _macros) = load_all_guard_state(&datum_dir, &snapshot);
+
+    if as_json {
+        println!("{}", serde_json::to_string_pretty(&guards)?);
+        return Ok(());
+    }
+
+    println!("{:<5} {:<12} {}", "IDX", "ACTION", "PATTERN");
+    println!("{}", "-".repeat(70));
+    for (i, g) in guards.iter().enumerate() {
+        let pat_str = match &g.pattern {
+            crate::hive::GuardPattern::JsonRegexPattern(s) => s.clone(),
+            crate::hive::GuardPattern::RhaiExpr(e) => format!("rhai:{}", e.rhai),
+            crate::hive::GuardPattern::K0mmand3rStage(s) => format!("stage:{}", s.stage),
+        };
+        println!("{:<5} {:<12} {}", i, format!("{:?}", g.action), pat_str);
+    }
+    println!("\n{} guards active", guards.len());
+    Ok(())
+}
+
+fn guard_add(
+    path: &str,
+    pattern: &str,
+    action: &str,
+    message: &str,
+    redirect: Option<&str>,
+) -> Result<()> {
+    let datum_dir = shellexpand::tilde(path).to_string();
+    let guards_file = format!("{datum_dir}/_b00t_/hive-guards.hive.toml");
+
+    let append_block = format!(
+        "\n[[b00t.hive.guards]]\npattern = {pattern_toml}\naction = \"{action}\"\nmessage = \"{message}\"\n{redirect_line}",
+        pattern_toml = format_pattern_toml(pattern),
+        redirect_line = redirect
+            .map(|r| format!("redirect = \"{r}\"\n"))
+            .unwrap_or_default(),
+    );
+
+    // Validate the pattern is non-empty
+    if pattern.trim().is_empty() {
+        anyhow::bail!("guard pattern must not be empty");
+    }
+
+    // Append to file (preserves existing content + comments)
+    use std::io::Write;
+    let mut f = std::fs::OpenOptions::new()
+        .append(true)
+        .open(&guards_file)
+        .with_context(|| format!("opening {guards_file}"))?;
+    f.write_all(append_block.as_bytes())?;
+
+    // Append audit log entry
+    append_guard_audit_log("add", pattern, action, message);
+
+    eprintln!("✅ guard added to {guards_file}");
+    eprintln!("   pattern: {pattern}  action: {action}");
+    eprintln!("   validate: b00t hive guard list");
+    Ok(())
+}
+
+fn format_pattern_toml(pattern: &str) -> String {
+    // If pattern looks like a Rhai expression, wrap as inline table
+    if pattern.starts_with('{') {
+        pattern.to_owned()
+    } else {
+        format!("\"{}\"", pattern.replace('"', "\\\""))
+    }
+}
+
+fn guard_audit(path: &str, limit: usize, as_json: bool) -> Result<()> {
+    let datum_dir = shellexpand::tilde(path).to_string();
+    let violations_file = format!("{datum_dir}/guard-violations.jsonl");
+    let audit_file = format!("{datum_dir}/guard-manager-audit.jsonl");
+
+    // Parse guard-violations.jsonl
+    let mut violations: Vec<serde_json::Value> = Vec::new();
+    if let Ok(content) = std::fs::read_to_string(&violations_file) {
+        for line in content.lines().rev().take(limit) {
+            if let Ok(v) = serde_json::from_str::<serde_json::Value>(line) {
+                violations.push(v);
+            }
+        }
+    }
+
+    // Parse guard manager audit log
+    let mut audit_entries: Vec<serde_json::Value> = Vec::new();
+    if let Ok(content) = std::fs::read_to_string(&audit_file) {
+        for line in content.lines().rev().take(10) {
+            if let Ok(v) = serde_json::from_str::<serde_json::Value>(line) {
+                audit_entries.push(v);
+            }
+        }
+    }
+
+    if as_json {
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&serde_json::json!({
+                "violations": violations,
+                "guard_manager_audit": audit_entries,
+            }))?
+        );
+        return Ok(());
+    }
+
+    println!("Guard violations (last {limit}):");
+    if violations.is_empty() {
+        println!("  (none)");
+    } else {
+        for v in &violations {
+            let cmd = v.get("command").and_then(|c| c.as_str()).unwrap_or("?");
+            let guard = v.get("guard").and_then(|g| g.as_str()).unwrap_or("?");
+            let ts = v.get("timestamp").and_then(|t| t.as_str()).unwrap_or("?");
+            println!("  [{ts}] {guard}: {cmd}");
+        }
+    }
+
+    if !audit_entries.is_empty() {
+        println!("\nGuard Manager audit (last 10 changes):");
+        for e in &audit_entries {
+            let op = e.get("op").and_then(|o| o.as_str()).unwrap_or("?");
+            let pat = e.get("pattern").and_then(|p| p.as_str()).unwrap_or("?");
+            let ts = e.get("timestamp").and_then(|t| t.as_str()).unwrap_or("?");
+            println!("  [{ts}] {op}: {pat}");
+        }
+    }
+
+    println!(
+        "\n{} violations | guard-manager-audit: {} entries",
+        violations.len(),
+        audit_entries.len()
+    );
+    Ok(())
+}
+
+fn append_guard_audit_log(op: &str, pattern: &str, action: &str, message: &str) {
+    let datum_dir = shellexpand::tilde("~/.b00t").to_string();
+    let audit_file = format!("{datum_dir}/guard-manager-audit.jsonl");
+    let entry = serde_json::json!({
+        "timestamp": chrono::Utc::now().to_rfc3339(),
+        "op": op,
+        "pattern": pattern,
+        "action": action,
+        "message": message,
+    });
+    if let Ok(mut f) = std::fs::OpenOptions::new()
+        .append(true)
+        .create(true)
+        .open(&audit_file)
+    {
+        use std::io::Write;
+        let _ = writeln!(f, "{}", entry);
+    }
 }

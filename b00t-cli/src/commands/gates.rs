@@ -4,13 +4,13 @@ use clap::Parser;
 #[derive(Parser)]
 pub enum GatesCommands {
     #[clap(
-        about = "List all [[b00t.gate]] declarations across MCP datums",
-        long_about = "Scan all .mcp.toml/.mcp.tomllm/.mcp.tomllmd files and show their gate preconditions, both explicit ([[b00t.gate]]) and auto-derived (requires, env).\n\nExamples:\n  b00t gates list\n  b00t gates list --search github\n  b00t gates list --by-kind env\n  b00t gates list --json"
+        about = "List gate and requirement declarations across datums",
+        long_about = "Scan datum files and show capability preconditions, both explicit ([[b00t.gate]], [[b00t.requirements]]) and auto-derived (requires, env).\n\nExamples:\n  b00t gates list\n  b00t gates list --search github\n  b00t gates list --by-kind env\n  b00t gates list --json"
     )]
     List {
         #[clap(long, help = "Filter by datum name or hint (case-insensitive)")]
         search: Option<String>,
-        #[clap(long, help = "Filter by gate kind: command, env, file, rhai")]
+        #[clap(long, help = "Filter by gate kind: command, env, file, path_glob, file_contains, file_contains_live_glob, datum, service_user, tcp_port, shell, rhai")]
         by_kind: Option<String>,
         #[clap(long, help = "Output in JSON format")]
         json: bool,
@@ -92,6 +92,12 @@ impl GatesCommands {
                                 println!(
                                     "           {}",
                                     crate::ansi::yellow(&format!("↳ {hint}"))
+                                );
+                            }
+                            if let Some(solve) = &g.solve {
+                                println!(
+                                    "           {}",
+                                    crate::ansi::cyan(&format!("↳ solve: {solve}"))
                                 );
                             }
                         }

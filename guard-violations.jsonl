@@ -523,3 +523,150 @@
 {"count":177,"pattern":"pip install"}
 {"count":160,"pattern":"docker run"}
 {"count":19,"pattern":"vllm serve"}
+{"count":29,"pattern":"rm -rf /"}
+{"count":178,"pattern":"pip install"}
+{"count":10,"pattern":"rhai:cmd.contains(\"pip\") && cmd.contains(\"install\")"}
+{"count":179,"pattern":"pip install"}
+{"count":161,"pattern":"docker run"}
+{"count":180,"pattern":"pip install"}
+{"count":162,"pattern":"docker run"}
+{"count":8,"pattern":"rhai:cmd.contains(\"pip\") && violations >= threshold"}
+{"count":181,"pattern":"pip install"}
+{"count":182,"pattern":"pip install"}
+{"count":23,"pattern":"pip3 install"}
+{"count":21,"pattern":"python -m pip"}
+{"count":23,"pattern":"conda install"}
+{"count":163,"pattern":"docker run"}
+{"count":21,"pattern":"docker build"}
+{"count":21,"pattern":"docker-compose"}
+{"count":30,"pattern":"rm -rf /"}
+{"count":21,"pattern":"git push --force"}
+{"count":21,"pattern":"git reset --hard"}
+{"count":21,"pattern":"npm install -g"}
+{"count":21,"pattern":"brew install"}
+{"count":23,"pattern":"huggingface-cli download"}
+{"count":21,"pattern":"ulimit -n"}
+{"count":8,"pattern":"rhai:cmd.contains(\"git checkout\") && (cmd.contains(\" main\") || cmd.contains(\" master\"))"}
+{"count":8,"pattern":"rhai:cmd.contains(\"git push\") && cmd.contains(\"origin main\")"}
+{"count":8,"pattern":"rhai:cmd.contains(\"git merge\") && cmd.contains(\"main\")"}
+{"count":6,"pattern":"rhai:cmd.contains(\"git checkout -b\") && !cmd.contains(\"/\")"}
+{"count":6,"pattern":"rhai:cmd.contains(\"git commit\") && cmd.contains(\"-m\") && !cmd.contains(\":\")"}
+{"count":183,"pattern":"pip install"}
+{"count":164,"pattern":"docker run"}
+{"count":184,"pattern":"pip install"}
+{"count":165,"pattern":"docker run"}
+{"count":185,"pattern":"pip install"}
+{"count":166,"pattern":"docker run"}
+{"count":186,"pattern":"pip install"}
+{"count":167,"pattern":"docker run"}
+{"count":20,"pattern":"vllm serve"}
+{"count":187,"pattern":"pip install","tags":["guard","warn"]}
+{"count":188,"pattern":"pip install","tags":["guard","warn"]}
+{"count":168,"pattern":"docker run","tags":["guard","warn"]}
+{"count":189,"pattern":"pip install","tags":["guard","warn"]}
+{"count":169,"pattern":"docker run","tags":["guard","warn"]}
+{"count":190,"pattern":"pip install","tags":["guard","repeat","aberrant","abberant","panopticon","kill"]}
+{"count":24,"pattern":"pip3 install","tags":["guard","repeat","aberrant","abberant","panopticon","kill"]}
+{"count":22,"pattern":"python -m pip","tags":["guard","repeat","aberrant","abberant","panopticon","kill"]}
+{"count":24,"pattern":"conda install","tags":["guard","warn"]}
+{"count":170,"pattern":"docker run","tags":["guard","warn"]}
+{"count":22,"pattern":"docker build","tags":["guard","warn"]}
+{"count":22,"pattern":"docker-compose","tags":["guard","warn"]}
+{"count":31,"pattern":"rm -rf /","tags":["guard","warn"]}
+{"count":22,"pattern":"git push --force","tags":["guard","warn"]}
+{"count":22,"pattern":"git reset --hard","tags":["guard","warn"]}
+{"count":22,"pattern":"npm install -g","tags":["guard","warn"]}
+{"count":22,"pattern":"brew install","tags":["guard","warn"]}
+{"count":24,"pattern":"huggingface-cli download","tags":["guard","warn"]}
+{"count":22,"pattern":"ulimit -n","tags":["guard","warn"]}
+{"count":1,"pattern":"rhai:raw_sed_guard","tags":["guard","warn"]}
+{"count":9,"pattern":"rhai:cmd.contains(\"git checkout\") && (cmd.contains(\" main\") || cmd.contains(\" master\"))","tags":["guard","warn"]}
+{"count":9,"pattern":"rhai:cmd.contains(\"git push\") && cmd.contains(\"origin main\")","tags":["guard","warn"]}
+{"count":9,"pattern":"rhai:cmd.contains(\"git merge\") && cmd.contains(\"main\")","tags":["guard","warn"]}
+{"count":7,"pattern":"rhai:cmd.contains(\"git checkout -b\") && !cmd.contains(\"/\")","tags":["guard","warn"]}
+{"count":7,"pattern":"rhai:cmd.contains(\"git commit\") && cmd.contains(\"-m\") && !cmd.contains(\":\")","tags":["guard","warn"]}
+{"count":191,"pattern":"pip install","tags":["guard","warn"]}
+{"count":171,"pattern":"docker run","tags":["guard","warn"]}
+{"count":192,"pattern":"pip install","tags":["guard","warn"]}
+{"count":172,"pattern":"docker run","tags":["guard","warn"]}
+{"count":193,"pattern":"pip install","tags":["guard","warn"]}
+{"count":173,"pattern":"docker run","tags":["guard","warn"]}
+{"count":194,"pattern":"pip install","tags":["guard","warn"]}
+{"count":174,"pattern":"docker run","tags":["guard","warn"]}
+{"count":21,"pattern":"vllm serve","tags":["guard","warn"]}
+{"count":32,"pattern":"rm -rf /","tags":["guard","warn"]}
+{"count":11,"pattern":"rhai:cmd.contains(\"pip\") && cmd.contains(\"install\")","tags":["guard","warn"]}
+{"count":195,"pattern":"pip install","tags":["guard","warn"]}
+{"count":9,"pattern":"rhai:cmd.contains(\"pip\") && violations >= threshold","tags":["guard","repeat","aberrant","abberant","panopticon","kill"]}
+{"count":33,"pattern":"rm -rf /","tags":["guard","warn"]}
+{"count":12,"pattern":"rhai:cmd.contains(\"pip\") && cmd.contains(\"install\")","tags":["guard","warn"]}
+{"count":196,"pattern":"pip install","tags":["guard","warn"]}
+{"count":10,"pattern":"rhai:cmd.contains(\"pip\") && violations >= threshold","tags":["guard","repeat","aberrant","abberant","panopticon","kill"]}
+{"count":34,"pattern":"rm -rf /","tags":["guard","warn"]}
+{"count":13,"pattern":"rhai:cmd.contains(\"pip\") && cmd.contains(\"install\")","tags":["guard","warn"]}
+{"count":11,"pattern":"rhai:cmd.contains(\"pip\") && violations >= threshold","tags":["guard","repeat","aberrant","abberant","panopticon","kill"]}
+{"count":197,"pattern":"pip install","tags":["guard","warn"]}
+{"count":35,"pattern":"rm -rf /","tags":["guard","warn"]}
+{"count":14,"pattern":"rhai:cmd.contains(\"pip\") && cmd.contains(\"install\")","tags":["guard","warn"]}
+{"count":12,"pattern":"rhai:cmd.contains(\"pip\") && violations >= threshold","tags":["guard","repeat","aberrant","abberant","panopticon","kill"]}
+{"count":198,"pattern":"pip install","tags":["guard","warn"]}
+{"count":36,"pattern":"rm -rf /","tags":["guard","warn"]}
+{"count":15,"pattern":"rhai:cmd.contains(\"pip\") && cmd.contains(\"install\")","tags":["guard","warn"]}
+{"count":13,"pattern":"rhai:cmd.contains(\"pip\") && violations >= threshold","tags":["guard","repeat","aberrant","abberant","panopticon","kill"]}
+{"count":199,"pattern":"pip install","tags":["guard","warn"]}
+{"count":37,"pattern":"rm -rf /","tags":["guard","warn"]}
+{"count":16,"pattern":"rhai:cmd.contains(\"pip\") && cmd.contains(\"install\")","tags":["guard","warn"]}
+{"count":14,"pattern":"rhai:cmd.contains(\"pip\") && violations >= threshold","tags":["guard","repeat","aberrant","abberant","panopticon","kill"]}
+{"count":200,"pattern":"pip install","tags":["guard","warn"]}
+{"count":38,"pattern":"rm -rf /","tags":["guard","warn"]}
+{"count":17,"pattern":"rhai:cmd.contains(\"pip\") && cmd.contains(\"install\")","tags":["guard","warn"]}
+{"count":15,"pattern":"rhai:cmd.contains(\"pip\") && violations >= threshold","tags":["guard","repeat","aberrant","abberant","panopticon","kill"]}
+{"count":201,"pattern":"pip install","tags":["guard","warn"]}
+{"count":39,"pattern":"rm -rf /","tags":["guard","warn"]}
+{"count":18,"pattern":"rhai:cmd.contains(\"pip\") && cmd.contains(\"install\")","tags":["guard","warn"]}
+{"count":202,"pattern":"pip install","tags":["guard","warn"]}
+{"count":16,"pattern":"rhai:cmd.contains(\"pip\") && violations >= threshold","tags":["guard","repeat","aberrant","abberant","panopticon","kill"]}
+{"count":40,"pattern":"rm -rf /","tags":["guard","warn"]}
+{"count":19,"pattern":"rhai:cmd.contains(\"pip\") && cmd.contains(\"install\")","tags":["guard","warn"]}
+{"count":17,"pattern":"rhai:cmd.contains(\"pip\") && violations >= threshold","tags":["guard","repeat","aberrant","abberant"{,""countpanopticon"":,203",kill""pattern]"}:
+"pip install","tags":["guard","warn"]}
+{"count":41,"pattern":"rm -rf /","tags":["guard","warn"]}
+{"count":20,"pattern":"rhai:cmd.contains(\"pip\") && cmd.contains(\"install\")","tags":["guard","warn"]}
+{"count":17,"pattern":"rhai:cmd.contains(\"pip\") && violations >= threshold","tags":["guard","repeat","aberrant","abberant","panopticon","kill"]}
+{"count":203,"pattern":"pip install","tags":["guard","warn"]}
+{"count":42,"pattern":"rm -rf /","tags":["guard","warn"]}
+{"count":21,"pattern":"rhai:cmd.contains(\"pip\") && cmd.contains(\"install\")","tags":["guard","warn"]}
+{"count":18,"pattern":"rhai:cmd.contains(\"pip\") && violations >= threshold","tags":["guard","repeat","aberrant","abberant","panopticon","kill"]}
+{"count":204,"pattern":"pip install","tags":["guard","warn"]}
+{"count":43,"pattern":"rm -rf /","tags":["guard","warn"]}
+{"count":22,"pattern":"rhai:cmd.contains(\"pip\") && cmd.contains(\"install\")","tags":["guard","warn"]}
+{"count":19,"pattern":"rhai:cmd.contains(\"pip\") && violations >= threshold","tags":["guard","repeat","aberrant","abberant","panopticon","kill"]}
+{"count":205,"pattern":"pip install","tags":["guard","warn"]}
+{"count":44,"pattern":"rm -rf /","tags":["guard","warn"]}
+{"count":23,"pattern":"rhai:cmd.contains(\"pip\") && cmd.contains(\"install\")","tags":["guard","warn"]}
+{"count":206,"pattern":"pip install","tags":["guard","warn"]}
+{"count":20,"pattern":"rhai:cmd.contains(\"pip\") && violations >= threshold","tags":["guard","repeat","aberrant","abberant","panopticon","kill"]}
+{"count":21,"pattern":"rhai:cmd.contains(\"pip\") && violations >= threshold","tags":["guard","repeat","aberrant","abberant","panopticon","kill"]}
+{"count":45,"pattern":"rm -rf /","tags":["guard","warn"]}
+{"count":24,"pattern":"rhai:cmd.contains(\"pip\") && cmd.contains(\"install\")","tags":["guard","warn"]}
+{"count":207,"pattern":"pip install","tags":["guard","warn"]}
+{"count":{25,""pattern"count:"":rhai:cmd.contains(46\",pip"pattern":"rm -rf /","tags":["guard","warn"]}
+\") && cmd.contains(\"install\")","tags":["guard","warn"]}
+{"count":208,"pattern":"pip install","tags":["guard","warn"]}
+{"count":22,"pattern":"rhai:cmd.contains(\"pip\") && violations >= threshold","tags":["guard","repeat","aberrant","abberant","panopticon","kill"]}
+{"count":46,"pattern":"rm -rf /","tags":["guard","warn"]}
+{"count":25,"pattern":"rhai:cmd.contains(\"pip\") && cmd.contains(\"install\")","tags":["guard","warn"]}
+{"count":209,"pattern":"pip install","tags":["guard","warn"]}
+{"count":23,"pattern":"rhai:cmd.contains(\"pip\") && violations >= threshold","tags":["guard","repeat","aberrant","abberant","panopticon","kill"]}
+{"count":47,"pattern":"rm -rf /","tags":["guard","warn"]}
+{"count":26,"pattern":"rhai:cmd.contains(\"pip\") && cmd.contains(\"install\")","tags":["guard","warn"]}
+{"count":210,"pattern":"pip install","tags":["guard","warn"]}
+{"count":24,"pattern":"rhai:cmd.contains(\"pip\") && violations >= threshold","tags":["guard","repeat","aberrant","abberant","panopticon","kill"]}
+{"count":48,"pattern":"rm -rf /","tags":["guard","warn"]}
+{"count":27,"pattern":"rhai:cmd.contains(\"pip\") && cmd.contains(\"install\")","tags":["guard","warn"]}
+{"count":25,"pattern":"rhai:cmd.contains(\"pip\") && violations >= threshold","tags":["guard","repeat","aberrant","abberant","panopticon","kill"]}
+{"count":211,"pattern":"pip install","tags":["guard","warn"]}
+{"count":49,"pattern":"rm -rf /","tags":["guard","warn"]}
+{"count":28,"pattern":"rhai:cmd.contains(\"pip\") && cmd.contains(\"install\")","tags":["guard","warn"]}
+{"count":26,"pattern":"rhai:cmd.contains(\"pip\") && violations >= threshold","tags":["guard","repeat","aberrant","abberant","panopticon","kill"]}
+{"count":212,"pattern":"pip install","tags":["guard","warn"]}

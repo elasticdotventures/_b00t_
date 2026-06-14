@@ -30,6 +30,7 @@ brew_guard = "cmd.contains(\"brew\") && cmd.contains(\"install\")"
 hf_download_guard = "cmd.contains(\"huggingface-cli\") && cmd.contains(\"download\")"
 ulimit_guard = "cmd.contains(\"ulimit\") && cmd.contains(\"-n\")"
 rm_rf_guard = "cmd.contains(\"rm\") && cmd.contains(\"-rf\") && cmd.contains(\"/ \")"
+find_guard = "regex_match(cmd, \"(^|[|;&(][ ]*)find([ ]|$)\")"
 
 # --- Python/pip guards ---
 [[b00t.hive.guards]]
@@ -119,6 +120,21 @@ message = "🚫 blocked at parse time"
 pattern = "ulimit -n"
 action = "warn"
 message = "⚠️ ulimit only affects current shell; systemd services use LimitNOFILE=65536 in unit file; for persistent system fix: sudo bash -c 'echo \"* soft nofile 65536\" >> /etc/security/limits.conf'"
+
+# --- Text search/edit guardrails ---
+[[b00t.hive.guards]]
+pattern = { rhai = "find_guard" }
+action = "warn"
+message = "🦨 fdfind <pattern> [path] — .gitignore-aware, faster; fdfind --help"
+redirect = "fdfind"
+repeat_threshold = 1
+
+[[b00t.hive.guards]]
+pattern = { rhai = "regex_match(cmd, \"(^|[|;&(][ ]*)sed([ ]|$)\")" }
+action = "warn"
+message = "🦨 rg -n 'PAT' FILE — use rg not sed; Edit tool for in-place substitution"
+redirect = 'rg -n "PATTERN" PATH'
+repeat_threshold = 1
 
 
 # --- SCM branch/commit conventions ---

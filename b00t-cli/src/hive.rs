@@ -153,6 +153,7 @@ pub struct HiveProfile {
 
     // command guards
     pub guards: Vec<HiveGuard>,
+    pub rhai_macros: HashMap<String, String>,
 
     // MCP tool activation
     pub mcp_activate: Vec<String>,
@@ -318,6 +319,7 @@ impl HiveProfile {
                 repeat_threshold: g.repeat_threshold,
             })
             .collect();
+        let rhai_macros = hive.rhai_macros.unwrap_or_default();
 
         let (mcp_activate, mcp_deactivate) = if let Some(m) = hive.mcp_tools {
             (
@@ -358,6 +360,7 @@ impl HiveProfile {
             services_start,
             services_stop,
             guards,
+            rhai_macros,
             mcp_activate,
             mcp_deactivate,
             service_spec,
@@ -656,8 +659,21 @@ impl GuardViolationCounter {
     /// Uses append-mode IO — each violation is one JSONL line.
     /// Does NOT rewrite the file (O(1) per violation).
     pub fn increment_persist(&mut self, pattern_key: &str) -> u32 {
+        self.increment_persist_with_tags(pattern_key, &[])
+    }
+
+    /// Increment a pattern and persist guard audit tags for downstream panopticon analysis.
+    pub fn increment_persist_with_tags(&mut self, pattern_key: &str, tags: &[&str]) -> u32 {
+        self.increment_persist_with_tags_at(pattern_key, tags, &default_violations_path())
+    }
+
+    fn increment_persist_with_tags_at(
+        &mut self,
+        pattern_key: &str,
+        tags: &[&str],
+        path: &Path,
+    ) -> u32 {
         let new_count = self.increment(pattern_key);
-        let path = default_violations_path();
         if let Some(parent) = path.parent() {
             let _ = std::fs::create_dir_all(parent);
         }
@@ -667,11 +683,12 @@ impl GuardViolationCounter {
             .open(&path)
         {
             use std::io::Write;
-            let _ = writeln!(
-                file,
-                "{}",
+            let record = if tags.is_empty() {
                 serde_json::json!({"pattern": pattern_key, "count": new_count})
-            );
+            } else {
+                serde_json::json!({"pattern": pattern_key, "count": new_count, "tags": tags})
+            };
+            let _ = writeln!(file, "{}", record);
         }
         new_count
     }
@@ -685,6 +702,7 @@ impl GuardViolationCounter {
 
 // ─── Guard Evaluation ─────────────────────────────────────────────────────────
 
+#[derive(Debug)]
 pub enum GuardResult {
     Allow,
     Warn {
@@ -698,9 +716,18 @@ pub enum GuardResult {
 
 /// Check a command string against a list of guards; returns first match.
 /// Uses GuardPattern::matches() which supports JsonRegexPattern, RhaiExpr, and K0mmand3rStage.
-/// When a guard has `repeat_threshold` and violation count meets or exceeds it,
+/// When a guard has `repeat_threshold` and violation count exceeds it,
 /// the action escalates from Warn to Block (🦨 → 💩).
 pub fn check_guards(command: &str, guards: &[HiveGuard], context: &GuardContext) -> GuardResult {
+    check_guards_with_violations_path(command, guards, context, &default_violations_path())
+}
+
+fn check_guards_with_violations_path(
+    command: &str,
+    guards: &[HiveGuard],
+    context: &GuardContext,
+    violations_path: &Path,
+) -> GuardResult {
     for guard in guards {
         if guard.pattern.matches(command, context) {
             let pattern_display = match &guard.pattern {
@@ -714,9 +741,29 @@ pub fn check_guards(command: &str, guards: &[HiveGuard], context: &GuardContext)
                 .unwrap_or_else(|| format!("guard matched: {pattern_display}"));
 
             // Persist violation count for 🦨→💩 escalation tracking.
-            // Writes to ~/.b00t/guard-violations.jsonl.
-            let new_count = GuardViolationCounter::load(&default_violations_path())
-                .increment_persist(&pattern_display);
+            // Production writes to ~/.b00t/guard-violations.jsonl; tests inject a temp path.
+            let mut counter = GuardViolationCounter::load(violations_path);
+            let next_count = counter.get_count(&pattern_display) + 1;
+            let repeat_escalates = guard
+                .repeat_threshold
+                .is_some_and(|threshold| next_count > threshold);
+            let audit_tags: &[&str] = if repeat_escalates {
+                &[
+                    "guard",
+                    "repeat",
+                    "aberrant",
+                    "abberant",
+                    "panopticon",
+                    "kill",
+                ]
+            } else {
+                &["guard", "warn"]
+            };
+            let new_count = counter.increment_persist_with_tags_at(
+                &pattern_display,
+                audit_tags,
+                violations_path,
+            );
 
             // 🦨→💩 escalation: if repeat_threshold is set and persisted violation
             // count exceeds the threshold, escalate Warn/Redirect to Block.
@@ -726,7 +773,6 @@ pub fn check_guards(command: &str, guards: &[HiveGuard], context: &GuardContext)
                     (HiveGuardAction::Warn | HiveGuardAction::Redirect, Some(threshold))
                         if new_count > threshold =>
                     {
-                        // Escalate to Block, replace 🦨 with 💩 in message
                         let escalated = message
                             .replace("🦨", "💩")
                             .replace("use ", "repeated: use ");
@@ -798,7 +844,8 @@ pub fn eval_rhai_expr(expr: &str, command: &str, context: &GuardContext) -> Rhai
     // This handles cases where macro definitions reference other macros by name
     // e.g., docker_run_guard = "docker_guard && cmd.contains(\"run\")"
     // The macro reference needs to be replaced with the full expression
-    let resolved_macros = resolve_macro_references(&context.rhai_macros, &mut std::collections::HashSet::new());
+    let resolved_macros =
+        resolve_macro_references(&context.rhai_macros, &mut std::collections::HashSet::new());
 
     // Build the full Rhai script: macro let-bindings + guard expression
     // Each macro becomes: let <name> = <expr>;
@@ -1336,6 +1383,68 @@ mod tests {
         );
     }
 
+    #[test]
+    fn test_guard_raw_sed_recommends_rg_and_escalates_repeat() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let violations_path = temp_dir.path().join("guard-violations.jsonl");
+        let guards = vec![HiveGuard {
+            pattern: GuardPattern::RhaiExpr(RhaiGuardExpr {
+                rhai: "regex_match(cmd, \"(^|[|;&(][ ]*)sed([ ]|$)\")".to_string(),
+            }),
+            action: HiveGuardAction::Warn,
+            message: Some(
+                "🦨 raw sed guarded; use rg -n \"PATTERN\" PATH or rg -n -A 3 -B 3 \"PATTERN\" FILE"
+                    .to_string(),
+            ),
+            redirect: Some("rg -n \"PATTERN\" PATH".to_string()),
+            repeat_threshold: Some(1),
+        }];
+        let ctx = GuardContext {
+            command: "sed -n '1,2p' AGENTS.md".to_string(),
+            violation_count: 0,
+            repeat_threshold: Some(1),
+            rhai_macros: HashMap::new(),
+        };
+
+        match check_guards_with_violations_path(
+            "sed -n '1,2p' AGENTS.md",
+            &guards,
+            &ctx,
+            &violations_path,
+        ) {
+            GuardResult::Warn { message, redirect } => {
+                assert!(message.contains("rg -n \"PATTERN\" PATH"));
+                assert!(message.contains("rg -n -A 3 -B 3 \"PATTERN\" FILE"));
+                assert_eq!(redirect.as_deref(), Some("rg -n \"PATTERN\" PATH"));
+            }
+            other => panic!("expected first raw sed hit to warn, got {other:?}"),
+        }
+
+        match check_guards_with_violations_path(
+            "sed -n '1,2p' AGENTS.md",
+            &guards,
+            &ctx,
+            &violations_path,
+        ) {
+            GuardResult::Block { message } => {
+                assert!(message.contains("repeated: use rg -n"));
+            }
+            other => panic!("expected repeat raw sed hit to block, got {other:?}"),
+        }
+
+        let records: Vec<serde_json::Value> = std::fs::read_to_string(&violations_path)
+            .unwrap()
+            .lines()
+            .map(|line| serde_json::from_str(line).unwrap())
+            .collect();
+        assert_eq!(records.len(), 2);
+        assert_eq!(records[0]["tags"], serde_json::json!(["guard", "warn"]));
+        let repeat_tags = records[1]["tags"].as_array().unwrap();
+        for expected in ["guard", "repeat", "aberrant", "panopticon", "kill"] {
+            assert!(repeat_tags.iter().any(|tag| tag == expected));
+        }
+    }
+
     // ── Data-driven guard coverage: verify every Rhai expression in shipped datums ──
     //
     // Scans all _b00t_/*.hive.toml datum files at test time, parses guards,
@@ -1362,6 +1471,8 @@ mod tests {
         let mut total_guards = 0u32;
         let mut rhai_guards = 0u32;
         let mut failures = Vec::new();
+        let temp_dir = tempfile::tempdir().unwrap();
+        let violations_path = temp_dir.path().join("guard-coverage-violations.jsonl");
 
         // Scan for all .hive.toml files
         for entry in fs::read_dir(&b00t_dir).expect("_b00t_ directory not found") {
@@ -1498,15 +1609,24 @@ mod tests {
                         let expr_lower = expr.rhai.to_lowercase();
 
                         // Handle git-related patterns with proper command generation
-                        if expr_lower.contains("git checkout -b") && expr_lower.contains("!cmd.contains(\"/\")") {
+                        if expr_lower.contains("git checkout -b")
+                            && expr_lower.contains("!cmd.contains(\"/\")")
+                        {
                             "git checkout -b simple-branch".to_string()
-                        } else if expr_lower.contains("git checkout") && (expr_lower.contains("main") || expr_lower.contains("master")) {
+                        } else if expr_lower.contains("git checkout")
+                            && (expr_lower.contains("main") || expr_lower.contains("master"))
+                        {
                             "git checkout main".to_string()
-                        } else if expr_lower.contains("git push") && expr_lower.contains("origin main") {
+                        } else if expr_lower.contains("git push")
+                            && expr_lower.contains("origin main")
+                        {
                             "git push origin main".to_string()
                         } else if expr_lower.contains("git merge") && expr_lower.contains("main") {
                             "git merge main".to_string()
-                        } else if expr_lower.contains("git commit") && expr_lower.contains("-m") && expr_lower.contains("!cmd.contains(\":\")") {
+                        } else if expr_lower.contains("git commit")
+                            && expr_lower.contains("-m")
+                            && expr_lower.contains("!cmd.contains(\":\")")
+                        {
                             "git commit -m bad-message".to_string()
                         } else if expr_lower.contains("git") {
                             "git push --force origin main".to_string()
@@ -1514,6 +1634,14 @@ mod tests {
                             "pip install flask".to_string()
                         } else if expr_lower.contains("docker") && expr_lower.contains("run") {
                             "docker run nginx".to_string()
+                        } else if expr_lower.contains("raw_sed_guard")
+                            || (expr_lower.contains("regex_match") && expr_lower.contains("sed"))
+                        {
+                            "sed -n '1,2p' AGENTS.md".to_string()
+                        } else if expr_lower.contains("find_guard")
+                            || (expr_lower.contains("regex_match") && expr_lower.contains("find"))
+                        {
+                            "find . -name '*.rs'".to_string()
                         } else {
                             // Generic fallback for other expressions
                             "trigger-command-match".to_string()
@@ -1542,7 +1670,12 @@ mod tests {
                     repeat_threshold: Some(1),
                     rhai_macros: rhai_macros.clone(),
                 };
-                let result = check_guards(&match_cmd, &[guard.clone()], &ctx_match);
+                let result = check_guards_with_violations_path(
+                    &match_cmd,
+                    &[guard.clone()],
+                    &ctx_match,
+                    &violations_path,
+                );
                 let matched =
                     matches!(result, GuardResult::Warn { .. } | GuardResult::Block { .. });
                 if !matched {
@@ -1556,8 +1689,18 @@ mod tests {
                 // Skip no-match test for K0mmand3rStage guards (they always match).
                 if !matches!(pattern, GuardPattern::K0mmand3rStage(_)) {
                     let no_match_cmd = "ls -la".to_string();
-                    let ctx_no = GuardContext::default();
-                    let result_no = check_guards(&no_match_cmd, &[guard], &ctx_no);
+                    let ctx_no = GuardContext {
+                        command: no_match_cmd.clone(),
+                        violation_count: 0,
+                        repeat_threshold: None,
+                        rhai_macros: rhai_macros.clone(),
+                    };
+                    let result_no = check_guards_with_violations_path(
+                        &no_match_cmd,
+                        &[guard],
+                        &ctx_no,
+                        &violations_path,
+                    );
                     let allowed = matches!(result_no, GuardResult::Allow);
                     if !allowed {
                         failures.push(format!(
@@ -1653,6 +1796,7 @@ message = "use uv"
             services_start: vec![],
             services_stop: vec![],
             guards: vec![],
+            rhai_macros: HashMap::new(),
             mcp_activate: vec![],
             mcp_deactivate: vec![],
             service_spec: None,
