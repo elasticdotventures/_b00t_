@@ -4,12 +4,15 @@
 
 use anyhow::{Context, Result};
 use b00t_c0re_lib::{DisplayOpts, GrokClient, KnowledgeSource, LfmfSystem, ManPage};
+use reqwest;
 use clap::Parser;
 use std::fs;
 use tiktoken_rs::o200k_base;
 use toml::{self, Value};
 
-use crate::get_expanded_path;
+use crate::datum_cli::CliDatum;
+use crate::traits::DatumChecker;
+use crate::{BootDatum, DatumType, get_config, get_expanded_path};
 
 /// Arguments for the unified learn command.
 ///
@@ -82,9 +85,14 @@ pub async fn handle_learn(path: &str, args: LearnArgs) -> Result<()> {
         return handle_search(path, topic_val.as_deref(), &query, args.limit).await;
     }
 
-    // Digest to RAG
+    // Digest to RAG — if content looks like a URL, fetch via Markdown-for-Agents first
     if let Some(ref content) = args.digest {
-        return handle_digest(path, topic_val.as_deref(), &content).await;
+        let resolved = if content.starts_with("http://") || content.starts_with("https://") {
+            fetch_as_markdown(content).await?
+        } else {
+            content.clone()
+        };
+        return handle_digest(path, topic_val.as_deref(), &resolved).await;
     }
 
     // Query RAG
@@ -268,6 +276,7 @@ fn get_registry_path(path: &str) -> Result<std::path::PathBuf> {
 
 async fn handle_display(path: &str, topic: &str, opts: DisplayOpts) -> Result<()> {
     let knowledge = KnowledgeSource::gather(topic, path).await?;
+    let datum_insight = gather_datum_insight(path, topic);
 
     // Auto-create datum if man page exists but no datum
     if knowledge.man_page.is_some() && !datum_exists(path, topic)? {
@@ -278,7 +287,7 @@ async fn handle_display(path: &str, topic: &str, opts: DisplayOpts) -> Result<()
     }
 
     // Check if any knowledge exists
-    if !knowledge.has_knowledge() {
+    if !knowledge.has_knowledge() && datum_insight.is_none() {
         anyhow::bail!(
             "No knowledge found for '{}'. Try:\n  • b00t learn {} --record \"<topic>: <body>\"\n  • b00t learn {} --man (if man page exists)",
             topic,
@@ -288,6 +297,9 @@ async fn handle_display(path: &str, topic: &str, opts: DisplayOpts) -> Result<()
     }
 
     knowledge.display(&opts)?;
+    if let Some(insight) = datum_insight {
+        display_datum_insight(&insight);
+    }
 
     // Run hook_learn if present in datum
     if let Ok((config, _)) = crate::get_config(topic, path) {
@@ -303,6 +315,187 @@ async fn handle_display(path: &str, topic: &str, opts: DisplayOpts) -> Result<()
     }
 
     Ok(())
+}
+
+#[derive(Debug, Clone)]
+struct DatumInsight {
+    topic: String,
+    selected_key: String,
+    selected_file: String,
+    datum_type: DatumType,
+    hint: String,
+    current_version: Option<String>,
+    desired_version: Option<String>,
+    version_emoji: Option<&'static str>,
+    install_source: Option<&'static str>,
+    references: Vec<(String, String)>,
+    usages: Vec<(String, String)>,
+    variants: Vec<String>,
+}
+
+fn gather_datum_insight(path: &str, topic: &str) -> Option<DatumInsight> {
+    let variants = datum_variants(path, topic).ok()?;
+    if variants.is_empty() {
+        return None;
+    }
+
+    let selected_key = preferred_learn_variant(&variants);
+    let (config, filename) = get_config(&selected_key, path).ok()?;
+    let datum = config.b00t;
+    let datum_type = datum.get_datum_type(Some(&filename));
+    let version_probe = cli_version_probe(path, &selected_key, &datum);
+
+    Some(DatumInsight {
+        topic: topic.to_string(),
+        selected_key,
+        selected_file: filename,
+        datum_type,
+        hint: datum.hint.clone(),
+        current_version: version_probe.as_ref().and_then(|v| v.0.clone()),
+        desired_version: version_probe.as_ref().and_then(|v| v.1.clone()),
+        version_emoji: version_probe.as_ref().map(|v| v.2),
+        install_source: install_source_label(&datum),
+        references: datum
+            .references
+            .unwrap_or_default()
+            .into_iter()
+            .map(|r| (r.name, r.url))
+            .collect(),
+        usages: datum
+            .usage
+            .unwrap_or_default()
+            .into_iter()
+            .map(|u| (u.description, u.command))
+            .collect(),
+        variants,
+    })
+}
+
+fn cli_version_probe(
+    path: &str,
+    selected_key: &str,
+    datum: &BootDatum,
+) -> Option<(Option<String>, Option<String>, &'static str)> {
+    let cli_key = if selected_key.ends_with(".cli") {
+        Some(selected_key.to_string())
+    } else if datum.datum_type == Some(DatumType::Cli) {
+        Some(selected_key.to_string())
+    } else {
+        None
+    }?;
+
+    let cli = CliDatum::from_config(&cli_key, path).ok()?;
+    let status = cli.version_status();
+    Some((cli.current_version(), cli.desired_version(), status.emoji()))
+}
+
+fn install_source_label(datum: &BootDatum) -> Option<&'static str> {
+    let install = datum.install_command()?;
+    if install.contains("opencode.ai/install") {
+        Some("upstream CLI installer")
+    } else if install.contains("opencode-ai@latest") {
+        Some("npm package opencode-ai")
+    } else if install.contains("pnpm") {
+        Some("pnpm package install")
+    } else {
+        Some("custom install command")
+    }
+}
+
+fn preferred_learn_variant(variants: &[String]) -> String {
+    variants
+        .iter()
+        .find(|v| v.ends_with(".cli"))
+        .cloned()
+        .unwrap_or_else(|| variants[0].clone())
+}
+
+fn datum_variants(path: &str, topic: &str) -> Result<Vec<String>> {
+    let expanded = get_expanded_path(path)?;
+    let mut variants = Vec::new();
+
+    if let Ok(entries) = fs::read_dir(expanded) {
+        for entry in entries {
+            let entry = entry?;
+            let file_name = match entry.file_name().to_str() {
+                Some(name) => name.to_string(),
+                None => continue,
+            };
+            if let Some(key) = datum_variant_key_for_topic(topic, &file_name) {
+                variants.push(key);
+            }
+        }
+    }
+
+    variants.sort();
+    variants.dedup();
+    Ok(variants)
+}
+
+fn datum_variant_key_for_topic(topic: &str, file_name: &str) -> Option<String> {
+    for ext in [".tomllmd", ".tomllm", ".toml"] {
+        let Some(stem) = file_name.strip_suffix(ext) else {
+            continue;
+        };
+        if stem == topic || !stem.starts_with(&format!("{topic}.")) {
+            continue;
+        }
+        if stem.ends_with(".stack") {
+            continue;
+        }
+        return Some(stem.to_string());
+    }
+    None
+}
+
+fn display_datum_insight(insight: &DatumInsight) {
+    println!("## 🧩 Datum Inquiry\n");
+    println!("- Topic: `{}`", insight.topic);
+    println!("- Selected datum: `{}`", insight.selected_key);
+    println!(
+        "- Type: `{}` from `{}`",
+        insight.datum_type.base_suffix().trim_start_matches('.'),
+        insight.selected_file
+    );
+    println!("- Hint: {}", insight.hint);
+
+    if let Some(source) = insight.install_source {
+        println!("- Install source: {}", source);
+    }
+
+    if let Some(current) = &insight.current_version {
+        let status = insight.version_emoji.unwrap_or("");
+        if let Some(desired) = &insight.desired_version {
+            println!(
+                "- Version: {} current=`{}` desired=`{}`",
+                status, current, desired
+            );
+        } else {
+            println!("- Version: {} current=`{}`", status, current);
+        }
+    } else if let Some(desired) = &insight.desired_version {
+        println!("- Version: desired=`{}` current=not-detected", desired);
+    }
+
+    if !insight.variants.is_empty() {
+        println!("- Variants: {}", insight.variants.join(", "));
+    }
+
+    if !insight.references.is_empty() {
+        println!("\n### References\n");
+        for (name, url) in insight.references.iter().take(4) {
+            println!("- {} — {}", name, url);
+        }
+    }
+
+    if !insight.usages.is_empty() {
+        println!("\n### Executable Skills\n");
+        for (description, command) in insight.usages.iter().take(4) {
+            println!("- {}: `{}`", description, command);
+        }
+    }
+
+    println!();
 }
 
 async fn handle_record(path: &str, topic: Option<&str>, lesson: &str, global: bool) -> Result<()> {
@@ -419,6 +612,41 @@ async fn handle_search(path: &str, topic: Option<&str>, query: &str, limit: usiz
     Ok(())
 }
 
+/// Fetch a URL preferring `text/markdown` (Cloudflare Markdown-for-Agents / content negotiation).
+/// Sends `Accept: text/markdown, text/html;q=0.9` — servers that support it return markdown
+/// directly (80% token reduction vs HTML). Falls back to raw body for non-markdown responses.
+/// Logs `x-markdown-tokens` hint when available.
+async fn fetch_as_markdown(url: &str) -> Result<String> {
+    let client = reqwest::Client::builder()
+        .user_agent("b00t-cli/learn (Mozilla/5.0 compatible; AI agent)")
+        .build()
+        .context("Failed to build HTTP client")?;
+
+    let resp = client
+        .get(url)
+        .header(reqwest::header::ACCEPT, "text/markdown, text/html;q=0.9, */*;q=0.8")
+        .send()
+        .await
+        .with_context(|| format!("Failed to fetch {}", url))?;
+
+    let content_type = resp
+        .headers()
+        .get(reqwest::header::CONTENT_TYPE)
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("")
+        .to_string();
+
+    if let Some(tokens) = resp.headers().get("x-markdown-tokens").and_then(|v| v.to_str().ok()) {
+        eprintln!("📄 Markdown-for-Agents: ~{} tokens ({})", tokens, url);
+    } else if content_type.contains("text/markdown") {
+        eprintln!("📄 text/markdown received from {}", url);
+    } else {
+        eprintln!("📄 Fetched {} ({}) — no markdown negotiation", url, content_type);
+    }
+
+    resp.text().await.with_context(|| format!("Failed to read response body from {}", url))
+}
+
 async fn handle_digest(_path: &str, topic: Option<&str>, content: &str) -> Result<()> {
     let topic = topic
         .ok_or_else(|| anyhow::anyhow!("Topic required for digesting content to RAG"))?
@@ -484,6 +712,7 @@ fn datum_path(path: &str, topic: &str) -> Result<std::path::PathBuf> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::fs;
 
     #[test]
     fn datum_path_expands_home_directory() {
@@ -491,5 +720,53 @@ mod tests {
         let path = datum_path("~/.b00t/_b00t_", "git").expect("expected expanded datum path");
 
         assert_eq!(path, home.join(".b00t/_b00t_/git.cli.toml"));
+    }
+
+    #[test]
+    fn datum_variant_key_for_topic_extracts_typed_variants() {
+        assert_eq!(
+            datum_variant_key_for_topic("opencode", "opencode.cli.toml"),
+            Some("opencode.cli".to_string())
+        );
+        assert_eq!(
+            datum_variant_key_for_topic("opencode", "opencode.agent.tomllmd"),
+            Some("opencode.agent".to_string())
+        );
+        assert_eq!(
+            datum_variant_key_for_topic("opencode", "other.cli.toml"),
+            None
+        );
+    }
+
+    #[test]
+    fn preferred_learn_variant_prefers_cli() {
+        let variants = vec!["opencode.agent".to_string(), "opencode.cli".to_string()];
+        assert_eq!(preferred_learn_variant(&variants), "opencode.cli");
+    }
+
+    #[test]
+    fn datum_variants_lists_topic_variants() {
+        let dir = tempfile::tempdir().unwrap();
+        fs::write(
+            dir.path().join("opencode.cli.toml"),
+            "[b00t]\nname=\"opencode\"\ntype=\"cli\"\nhint=\"x\"\n",
+        )
+        .unwrap();
+        fs::write(
+            dir.path().join("opencode.agent.toml"),
+            "[b00t]\nname=\"opencode\"\ntype=\"agent\"\nhint=\"x\"\n",
+        )
+        .unwrap();
+        fs::write(
+            dir.path().join("other.cli.toml"),
+            "[b00t]\nname=\"other\"\ntype=\"cli\"\nhint=\"x\"\n",
+        )
+        .unwrap();
+
+        let variants = datum_variants(dir.path().to_str().unwrap(), "opencode").unwrap();
+        assert_eq!(
+            variants,
+            vec!["opencode.agent".to_string(), "opencode.cli".to_string()]
+        );
     }
 }
