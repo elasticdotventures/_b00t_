@@ -1,0 +1,74 @@
+[b00t]
+name = "grit"
+type = "cli"
+desires = "0.4.7"
+hint = "Rust reimplementation of git (git-next-gen). grit = git binary; gs = grit shell companion CLI"
+
+# @tribal: grit IS a drop-in git binary replacement (same interface as git)
+# gs is the simplified companion shell CLI with shortlog, status etc.
+# website: https://grit-scm.com/  github: https://github.com/gitbutlerapp/grit
+# b00t pattern: use gs shortlog to audit branch commits before PR sequencing
+
+version = "git version"
+version_regex = 'grit-(\d+\.\d+\.\d+)'
+
+install = """
+set -eu
+GRIT_VERSION=0.4.7
+OS=$(uname -s | tr '[:upper:]' '[:lower:]')
+ARCH=$(uname -m)
+case "$ARCH" in
+  x86_64)  ARCH_TAG="x86_64" ;;
+  aarch64) ARCH_TAG="aarch64" ;;
+  *) echo "Unsupported arch: $ARCH" >&2; exit 1 ;;
+esac
+GRIT_URL="https://github.com/gitbutlerapp/grit/releases/download/v${GRIT_VERSION}/grit-${ARCH_TAG}-unknown-linux-gnu.tar.gz"
+GS_URL="https://github.com/gitbutlerapp/grit/releases/download/v${GRIT_VERSION}/gs-${ARCH_TAG}-unknown-linux-gnu.tar.gz"
+DEST="${HOME}/.local/bin"
+mkdir -p "$DEST"
+curl -sL "$GRIT_URL" | tar -xz -C "$DEST" grit
+curl -sL "$GS_URL"  | tar -xz -C "$DEST" gs
+chmod +x "$DEST/grit" "$DEST/gs"
+echo "✅ grit $GRIT_VERSION + gs installed to $DEST"
+"""
+
+update = """
+b00t install grit
+"""
+
+[[b00t.requirements]]
+name = "curl"
+kind = "command"
+command = "curl"
+hint = "curl required for downloading grit releases"
+
+[[b00t.usages]]
+description = "Check branch status (b00t shortlog audit before PR)"
+command = "gs status"
+
+[[b00t.usages]]
+description = "Show commits on current branch not on main"
+command = "gs shortlog"
+
+[[b00t.usages]]
+description = "Use as drop-in git replacement"
+command = "grit log --oneline -10"
+
+[[b00t.references]]
+name = "grit-scm website"
+url = "https://grit-scm.com/"
+
+[[b00t.references]]
+name = "gitbutlerapp/grit GitHub"
+url = "https://github.com/gitbutlerapp/grit"
+
+[[b00t.references]]
+name = "True Grit blog post (gitbutler)"
+url = "https://blog.gitbutler.com/true-grit"
+
+# b00t:map v1
+# summary: grit (git-next-gen Rust) + gs companion CLI for branch audit + PR sequencing
+# tags: git, grit, gs, branch, changelog, commit-organization, rust
+# tier: sm0l
+# cmds: gs status, gs shortlog, grit log --oneline
+# complexity: 2

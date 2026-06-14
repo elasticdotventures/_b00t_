@@ -1,0 +1,100 @@
+[b00t]
+name = "nvidia-cdi-gpu"
+type = "config"
+hint = "Root-level NVIDIA CDI spec repair for Podman GPU workloads when /dev/dri/card* drifts"
+install = '''
+set -eu
+
+if ! command -v nvidia-ctk >/dev/null 2>&1; then
+  echo "❌ nvidia-ctk missing. Install nvidia-container-toolkit first." >&2
+  exit 1
+fi
+
+actual="$(ls /dev/dri/card* 2>/dev/null | head -1 || true)"
+if [ -z "$actual" ]; then
+  echo "❌ no /dev/dri/card* device found on host." >&2
+  exit 1
+fi
+
+echo "observe: host DRM node = $actual"
+echo "act: regenerating /etc/cdi/nvidia.yaml as root"
+sudo nvidia-ctk cdi generate --output=/etc/cdi/nvidia.yaml
+
+if grep -Eq '^[[:space:]]*additionalGids:' /etc/cdi/nvidia.yaml; then
+  echo "orient: stripping incompatible additionalGids entries from /etc/cdi/nvidia.yaml"
+  tmp="$(mktemp)"
+  perl -0pe 's/^[ \t]*additionalGids:\s*\[[^\n]*\]\n//mg; s/^[ \t]*additionalGids:\s*\n(?:^[ \t]+-\s*[^\n]*\n)+//mg' /etc/cdi/nvidia.yaml > "$tmp"
+  sudo install -m 0644 "$tmp" /etc/cdi/nvidia.yaml
+  rm -f "$tmp"
+fi
+
+if ! grep -q "$actual" /etc/cdi/nvidia.yaml; then
+  echo "❌ regenerated /etc/cdi/nvidia.yaml does not reference $actual" >&2
+  exit 1
+fi
+
+if grep -Eq '^[[:space:]]*additionalGids:' /etc/cdi/nvidia.yaml; then
+  echo "❌ /etc/cdi/nvidia.yaml still contains incompatible additionalGids entries" >&2
+  exit 1
+fi
+
+echo "✅ CDI spec regenerated for $actual"
+'''
+update = '''
+set -eu
+b00t install nvidia-cdi-gpu
+'''
+version = '''
+actual="$(ls /dev/dri/card* 2>/dev/null | head -1 | xargs -r basename || true)"
+if [ -n "$actual" ] && [ -f /etc/cdi/nvidia.yaml ] \
+  && grep -q "/dev/dri/$actual" /etc/cdi/nvidia.yaml \
+  && ! grep -Eq '^[[:space:]]*additionalGids:' /etc/cdi/nvidia.yaml; then
+  echo "$actual"
+fi
+'''
+version_regex = 'card\\d+'
+
+[b00t.learn]
+topic = "nvidia-cdi-gpu"
+
+[[b00t.requirements]]
+name = "host-drm-node"
+capability = "gpu.drm"
+kind = "path_glob"
+pattern = "/dev/dri/card*"
+hint = "Host must expose at least one DRM card device"
+
+[[b00t.requirements]]
+name = "nvidia-ctk-command"
+capability = "gpu.cdi.regenerate"
+kind = "command"
+command = "nvidia-ctk"
+hint = "nvidia-ctk is required to regenerate the CDI spec"
+
+[[b00t.requirements]]
+name = "cdi-parser-compatible"
+capability = "gpu.cdi.parser-compatible"
+kind = "shell"
+pattern = "! grep -Eq '^[[:space:]]*additionalGids:' /etc/cdi/nvidia.yaml"
+hint = "Podman CDI parser on this node rejects generated specs containing additionalGids"
+solve = "b00t install nvidia-cdi-gpu"
+
+[[b00t.usage]]
+description = "Observe host DRM node and current CDI mapping"
+command = "printf 'host: '; ls /dev/dri/card* && printf '\\ncdi: '; grep -o '/dev/dri/card[0-9]\\+' /etc/cdi/nvidia.yaml | sort -u"
+
+[[b00t.usage]]
+description = "Detect the known Podman/CDI parser mismatch"
+command = "grep -nE '^[[:space:]]*additionalGids:' /etc/cdi/nvidia.yaml"
+
+[[b00t.usage]]
+description = "Repair stale CDI after /dev/dri/card* drift"
+command = "b00t install nvidia-cdi-gpu"
+
+[[b00t.usage]]
+description = "Repair stale CDI manually, then restart qwen36 llama.cpp"
+command = "sudo nvidia-ctk cdi generate --output=/etc/cdi/nvidia.yaml && systemctl --user restart b00t-hive-inference-qwen36-35b-a3b-llamacpp.service"
+
+[[b00t.usage]]
+description = "Verify OpenAI-compatible endpoint after CDI repair"
+command = "curl -sf http://127.0.0.1:8001/v1/models"

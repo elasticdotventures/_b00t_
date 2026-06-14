@@ -1,0 +1,22 @@
+[b00t]
+name = "crun"
+type = "cli"
+desires = "1.14.3"
+version = "crun --version"
+version_regex = '\\d+\\.\\d+(\\.\\d+)?'
+hint = "OCI runtime used by Podman. Its CDI support level can affect GPU container resolution."
+lfmf_category = "podman"
+
+[[b00t.requirements]]
+name = "podman-runtime"
+capability = "runtime.podman"
+kind = "command"
+command = "podman"
+hint = "crun matters here because Podman uses it as the OCI runtime"
+
+[[b00t.usage]]
+description = "Show crun version"
+command = "crun --version"
+
+[b00t.learn]
+inline = "Use with podman GPU/CDI debugging; verify version when CDI parsing fails."

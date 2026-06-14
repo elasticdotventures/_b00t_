@@ -1,0 +1,30 @@
+[b00t]
+name = "nvidia-ctk"
+type = "cli"
+desires = "1.17.0"
+version = "nvidia-ctk --version"
+version_regex = '\\d+\\.\\d+\\.\\d+'
+hint = "NVIDIA Container Toolkit CLI. Required for CDI spec generation and GPU container runtime setup."
+lfmf_category = "nvidia-cdi-gpu"
+
+[[b00t.requirements]]
+name = "nvidia-driver-device"
+capability = "gpu.nvidia.device"
+kind = "path_glob"
+pattern = "/dev/nvidia*"
+hint = "Host must expose NVIDIA device nodes"
+
+[[b00t.usage]]
+description = "Show toolkit version"
+command = "nvidia-ctk --version"
+
+[[b00t.usage]]
+description = "List CDI devices"
+command = "nvidia-ctk cdi list"
+
+[[b00t.usage]]
+description = "Generate CDI spec as root"
+command = "sudo nvidia-ctk cdi generate --output=/etc/cdi/nvidia.yaml"
+
+[b00t.learn]
+topic = "nvidia-cdi-gpu"

@@ -1,0 +1,12 @@
+[b00t]
+name = "podman"
+type = "cli"
+hint = "Podman (Pod Manager) is a fully featured container engine that is a simple daemonless tool.  Podman provides a Docker-CLI comparable command line that eases the transition from        other  container engines and allows the management of pods, containers and images.  Simply put: alias docker=podman.  Most Podman commands can be run as a regular user, without        requiring additional privileges."
+desires = "ersion"
+lfmf_category = "podman"
+
+[b00t.learn]
+inline = "See: man podman"
+
+# Auto-generated from man page
+# Edit to add usage examples, dependencies, etc.

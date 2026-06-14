@@ -1,0 +1,210 @@
+[b00t]
+name = "quadlet-podman-kube"
+type = "config"
+desires = "1.0.0"
+hint = "Rootless systemd + quadlet + podman kube pattern for this node"
+
+[[b00t.requirements]]
+name = "podman-runtime"
+capability = "runtime.podman"
+kind = "command"
+command = "podman"
+hint = "Podman is required for quadlet kube workloads"
+
+[[b00t.requirements]]
+name = "systemd-user"
+capability = "runtime.systemd-user"
+kind = "command"
+command = "systemctl"
+hint = "systemd user services are required for quadlet workloads"
+
+[[b00t.requirements]]
+name = "cgroup-v2"
+capability = "runtime.cgroup-v2"
+kind = "shell"
+pattern = "test \"$(podman info --format '{{.Host.CgroupsVersion}}' 2>/dev/null || true)\" = \"v2\""
+hint = "Quadlet requires Podman on cgroup v2"
+install = """
+set -eu
+
+if ! command -v podman >/dev/null 2>&1; then
+  echo "❌ podman missing. Install podman first." >&2
+  exit 1
+fi
+
+if ! command -v systemctl >/dev/null 2>&1; then
+  echo "❌ systemctl missing. quadlet requires systemd user services." >&2
+  exit 1
+fi
+
+CGROUPS="$(podman info --format '{{.Host.CgroupsVersion}}' 2>/dev/null || true)"
+if [ "$CGROUPS" != "v2" ]; then
+  echo "❌ quadlet requires cgroup v2. got: ${CGROUPS:-unknown}" >&2
+  exit 1
+fi
+
+CONFIG_HOME="${XDG_CONFIG_HOME:-$HOME/.config}"
+QUADLET_DIR="$CONFIG_HOME/containers/systemd"
+WORKLOAD_DIR="$QUADLET_DIR/b00t-kube"
+EXAMPLES_DIR="$WORKLOAD_DIR/examples"
+TEMPLATE="$QUADLET_DIR/b00t-kube@.kube"
+README="$QUADLET_DIR/README-b00t-kube.txt"
+EXAMPLE_YAML="$EXAMPLES_DIR/hello-pod.yaml"
+
+mkdir -p "$EXAMPLES_DIR"
+
+cat > "$TEMPLATE" <<EOF
+[Unit]
+Description=b00t podman kube workload %i
+Wants=network-online.target
+After=network-online.target
+
+[Kube]
+Yaml=$WORKLOAD_DIR/%i.yaml
+SetWorkingDirectory=yaml
+LogDriver=journald
+KubeDownForce=true
+ExitCodePropagation=any
+
+[Service]
+Restart=on-failure
+RestartSec=5
+TimeoutStartSec=900
+
+[Install]
+WantedBy=default.target
+EOF
+
+cat > "$EXAMPLE_YAML" <<'EOF'
+apiVersion: v1
+kind: Pod
+metadata:
+  name: hello-pod
+  labels:
+    app.kubernetes.io/name: hello-pod
+    app.kubernetes.io/managed-by: b00t
+spec:
+  restartPolicy: Always
+  containers:
+    - name: hello
+      image: quay.io/podman/hello:latest
+EOF
+
+cat > "$README" <<EOF
+b00t quadlet podman kube pattern
+================================
+
+Managed files:
+- $TEMPLATE
+- $WORKLOAD_DIR/*.yaml
+
+Create a workload:
+1. Copy a pod manifest to: $WORKLOAD_DIR/<name>.yaml
+2. Instantiate the template:
+   ln -sfn b00t-kube@.kube "$QUADLET_DIR/b00t-kube@<name>.kube"
+3. Reload + start:
+   systemctl --user daemon-reload
+   systemctl --user start b00t-kube@<name>.service
+
+Enable at login/boot:
+- the instantiated .kube symlink plus WantedBy=default.target is enough after daemon-reload
+- if you need user services without an active login session:
+  sudo loginctl enable-linger "$USER"
+
+Stop + remove one workload:
+  systemctl --user stop b00t-kube@<name>.service
+  rm -f "$QUADLET_DIR/b00t-kube@<name>.kube"
+  systemctl --user daemon-reload
+EOF
+
+systemctl --user daemon-reload
+echo "✅ quadlet podman kube pattern installed in $QUADLET_DIR"
+echo "   Template: $TEMPLATE"
+echo "   Workloads: $WORKLOAD_DIR/<name>.yaml"
+"""
+update = """
+set -eu
+CONFIG_HOME="${XDG_CONFIG_HOME:-$HOME/.config}"
+if [ -f "$CONFIG_HOME/containers/systemd/b00t-kube@.kube" ]; then
+  echo "♻️ reapplying quadlet-podman-kube"
+fi
+b00t install quadlet-podman-kube
+"""
+uninstall = """
+set -eu
+
+CONFIG_HOME="${XDG_CONFIG_HOME:-$HOME/.config}"
+QUADLET_DIR="$CONFIG_HOME/containers/systemd"
+WORKLOAD_DIR="$QUADLET_DIR/b00t-kube"
+EXAMPLES_DIR="$WORKLOAD_DIR/examples"
+TEMPLATE="$QUADLET_DIR/b00t-kube@.kube"
+README="$QUADLET_DIR/README-b00t-kube.txt"
+HAVE_SYSTEMCTL=0
+
+if command -v systemctl >/dev/null 2>&1; then
+  HAVE_SYSTEMCTL=1
+fi
+
+for link in "$QUADLET_DIR"/b00t-kube@*.kube; do
+  if [ ! -L "$link" ]; then
+    continue
+  fi
+
+  target="$(readlink "$link" || true)"
+  if [ "$target" = "b00t-kube@.kube" ] || [ "$target" = "$TEMPLATE" ]; then
+    unit="$(basename "$link" .kube).service"
+    if [ "$HAVE_SYSTEMCTL" -eq 1 ]; then
+      systemctl --user stop "$unit" >/dev/null 2>&1 || true
+    fi
+    rm -f "$link"
+  fi
+done
+
+rm -f "$TEMPLATE" "$README" "$EXAMPLES_DIR/hello-pod.yaml"
+rmdir "$EXAMPLES_DIR" 2>/dev/null || true
+rmdir "$WORKLOAD_DIR" 2>/dev/null || true
+if [ "$HAVE_SYSTEMCTL" -eq 1 ]; then
+  systemctl --user daemon-reload >/dev/null 2>&1 || true
+fi
+
+echo "✅ quadlet podman kube pattern removed from $QUADLET_DIR"
+"""
+version = """
+CONFIG_HOME="${XDG_CONFIG_HOME:-$HOME/.config}"
+TEMPLATE="$CONFIG_HOME/containers/systemd/b00t-kube@.kube"
+if [ -f "$TEMPLATE" ]; then
+  echo "1.0.0"
+fi
+"""
+version_regex = '(\\d+\\.\\d+\\.\\d+)'
+
+[b00t.learn]
+topic = "quadlet-podman-kube"
+
+[[b00t.references]]
+label = "Podman quadlet unit reference"
+url = "https://docs.podman.io/en/latest/markdown/podman-systemd.unit.5.html"
+
+[[b00t.references]]
+label = "Podman kube quadlet reference"
+url = "https://docs.podman.io/en/latest/markdown/podman-kube.unit.5.html"
+
+[[b00t.usage]]
+description = "Install the node orchestration pattern"
+command = "b00t install quadlet-podman-kube"
+
+[[b00t.usage]]
+description = "Repair Podman GPU CDI after /dev/dri/card* drift"
+command = "b00t install nvidia-cdi-gpu"
+
+[[b00t.usage]]
+description = "Create one managed kube workload from a YAML manifest"
+command = "cp ./my-workload.yaml ~/.config/containers/systemd/b00t-kube/my-workload.yaml && ln -sfn b00t-kube@.kube ~/.config/containers/systemd/b00t-kube@my-workload.kube && systemctl --user daemon-reload && systemctl --user start b00t-kube@my-workload.service"
+
+[[b00t.usage]]
+description = "Remove one managed kube workload"
+command = "systemctl --user stop b00t-kube@my-workload.service && rm -f ~/.config/containers/systemd/b00t-kube@my-workload.kube && systemctl --user daemon-reload"
+
+[[b00t.usage]]
+description = "Allow rootless quadlet workloads to start without an interactive login"
+command = "sudo loginctl enable-linger $USER"
