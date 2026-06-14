@@ -1,126 +1,219 @@
 #!/usr/bin/env python3
 """
-b00t sm0l-filter — pipe stdin through a sm0l LLM, output only error lines.
+b00t pipe-agent — route deterministic process output through sm0l local LLM.
+Emits ONLY errors/warnings. Deduplicates. Never silently passes raw output.
 
-Priority endpoint discovery (ControlFlow<Break, Continue> semantics):
-  1. B00T_AI_SM0L_BASE env (explicit override)
-  2. localhost:8001/v1  (b00t hive ch0nky vllm)
-  3. localhost:8000/v1  (local llama-server / any OpenAI-compat)
+Pattern: executive frontier model delegates noisy process output to sm0l tier.
+sm0l collapses 50k-token cargo/podman output to <200 relevant tokens.
+
+Priority endpoint chain (ControlFlow<Break, Continue>):
+  1. B00T_AI_SM0L_BASE env  (explicit override)
+  2. localhost:8001/v1      (b00t hive ch0nky — currently serving Qwen3.6-27B MTP)
+  3. localhost:8000/v1      (any local OpenAI-compat server)
   4. HuggingFace Inference API (serverless, requires HF_TOKEN)
-  5. Exit 2 (no endpoint) — never silently pass through unfiltered
+  5. exit 2                 (governance gate — never silently pass-through)
 
-Usage (just recipes call this):
-  cargo test 2>&1 | python3 sm0l-filter.py --model sm0l
-  cargo build 2>&1 | python3 sm0l-filter.py --model ch0nky --task "output only lines with error:"
+Task templates (--task <name>):
+  cargo     — cargo build/test/clippy: extract error[E*], panics, test failures
+  podman    — container lifecycle: pull errors, permission denied, OOM
+  systemd   — journalctl/systemctl: Failed, Error, killed
+  rust      — alias for cargo
+  hive      — b00t hive activate/plan: gate failures, resource conflicts
+  general   — default: any error/failure/panic line
+
+Usage:
+  cargo test 2>&1            | python3 sm0l-filter.py --task cargo
+  podman pull image 2>&1     | python3 sm0l-filter.py --task podman
+  journalctl -u svc 2>&1     | python3 sm0l-filter.py --task systemd
+  <any cmd> 2>&1             | python3 sm0l-filter.py
+  <any cmd> 2>&1             | python3 sm0l-filter.py --quiet  # CI: silent on success
 """
-import sys, os, argparse, http.client, json, urllib.request
+import sys, os, re, hashlib, argparse, json, urllib.request
 
-SYSTEM_PROMPT = (
-    "You are a terse error extractor. "
-    "Output ONLY lines from the input that contain errors, failures, or panics. "
-    "Never repeat a line. Never add commentary. If there are no errors, output nothing."
+# ─── Task templates ───────────────────────────────────────────────────────────
+_SUFFIX = (
+    " Return ONLY the matching lines verbatim. "
+    "If there are no matching lines: respond with exactly the two characters: -\n"
+    "Do NOT write 'no errors', 'no issues', 'clean', or any other commentary. "
+    "Two characters: hyphen newline. That is all."
 )
 
-def probe_openai_endpoint(base_url: str) -> bool:
-    """Return True if the endpoint responds to /health or /v1/models."""
+TASKS = {
+    "cargo": (
+        "You are a Rust build/test log filter. "
+        "Extract ONLY lines indicating: compile errors (error[E*]), test failures (FAILED, panicked at), "
+        "linker errors, missing crate errors. "
+        "If the same error code appears multiple times output it ONCE with count suffix ×N. "
+        "Suppress: warnings, note:, help:, ---> source paths (unless on the same line as error:)."
+        + _SUFFIX
+    ),
+    "podman": (
+        "You are a container runtime log filter. "
+        "Extract ONLY: pull failures, image not found, permission denied, OOM killed, "
+        "exec format error, exit code non-zero, CDI errors, ERRO level log lines."
+        + _SUFFIX
+    ),
+    "systemd": (
+        "You are a systemd/journalctl log filter. "
+        "Extract ONLY lines containing: Failed, failed, Error, error, killed, segfault, "
+        "start-limit-hit, dependency failed."
+        + _SUFFIX
+    ),
+    "hive": (
+        "You are a b00t hive log filter. "
+        "Extract ONLY: resource gate failures (insufficient RAM/GPU/CPU), "
+        "service start failures, exclusion group conflicts, guard BLOCK violations."
+        + _SUFFIX
+    ),
+    "general": (
+        "You are a terse error extractor. "
+        "Extract ONLY lines containing the words: error, failed, panic, fatal, denied, killed "
+        "(case-insensitive). Deduplicate repeated lines with count suffix ×N."
+        + _SUFFIX
+    ),
+}
+TASKS["rust"] = TASKS["cargo"]
+
+# ─── ANSI strip + normalize ───────────────────────────────────────────────────
+_ANSI_RE = re.compile(r"\x1b\[[0-9;]*[mGKH]")
+
+def _normalize(line: str) -> str:
+    return _ANSI_RE.sub("", line).strip()
+
+def preprocess(raw: str, max_unique: int = 500) -> tuple[str, dict]:
+    """Deduplicate + strip ANSI before sending to LLM. Returns (text, stats)."""
+    seen: dict[str, int] = {}
+    order: list[str] = []
+    for line in raw.splitlines():
+        norm = _normalize(line)
+        if not norm:
+            continue
+        h = hashlib.md5(norm.encode()).hexdigest()[:8]
+        if h not in seen:
+            seen[h] = 0
+            order.append(norm)
+        seen[h] += 1
+        if len(order) >= max_unique:
+            break
+
+    lines_with_counts = []
+    for norm in order:
+        h = hashlib.md5(norm.encode()).hexdigest()[:8]
+        n = seen[h]
+        lines_with_counts.append(f"{norm}" if n == 1 else f"{norm}  ×{n}")
+
+    return "\n".join(lines_with_counts), {
+        "raw_lines": len(raw.splitlines()),
+        "unique_lines": len(order),
+        "truncated": len(order) >= max_unique,
+    }
+
+# ─── Endpoint discovery ───────────────────────────────────────────────────────
+def _probe(url: str) -> bool:
     for path in ("/health", "/v1/models"):
         try:
-            req = urllib.request.Request(base_url.rstrip("/") + path, method="GET")
-            with urllib.request.urlopen(req, timeout=2) as r:
+            with urllib.request.urlopen(url.rstrip("/") + path, timeout=2) as r:
                 return r.status < 500
         except Exception:
             pass
     return False
 
+def discover_endpoint(model_hint: str) -> tuple[str, str, str]:
+    """(base_url, model, api_key)"""
+    override = os.environ.get("B00T_AI_SM0L_BASE")
+    if override:
+        m = os.environ.get("B00T_AI_SM0L_MODEL", model_hint or "sm0l")
+        return override, m, os.environ.get("B00T_AI_SM0L_KEY", "local-b00t")
 
-def call_openai(base_url: str, model: str, api_key: str, content: str, task: str) -> str:
-    prompt = task or SYSTEM_PROMPT
+    for url, default_model in [
+        ("http://127.0.0.1:8001/v1", "ch0nky"),
+        ("http://127.0.0.1:8000/v1", "sm0l"),
+    ]:
+        if _probe(url):
+            return url, model_hint or default_model, "local-b00t"
+
+    hf_token = os.environ.get("HF_TOKEN", "")
+    if hf_token:
+        return "hf://", model_hint or "Qwen/Qwen2.5-3B-Instruct", hf_token
+
+    print(
+        "[pipe-agent] ERROR: no endpoint at :8001/:8000 and no HF_TOKEN.\n"
+        "  Run: b00t hive activate inference-qwen36-27b-mtp-podman",
+        file=sys.stderr,
+    )
+    sys.exit(2)
+
+# ─── LLM call ─────────────────────────────────────────────────────────────────
+def call_openai(base_url: str, model: str, api_key: str, system: str, content: str) -> str:
     payload = json.dumps({
         "model": model,
         "messages": [
-            {"role": "system", "content": prompt},
-            {"role": "user", "content": content},
+            {"role": "system", "content": system},
+            {"role": "user",   "content": content},
         ],
-        "max_tokens": 2048,
+        "max_tokens": 1024,
         "temperature": 0.0,
     }).encode()
     req = urllib.request.Request(
         base_url.rstrip("/") + "/chat/completions",
         data=payload,
-        headers={
-            "Content-Type": "application/json",
-            "Authorization": f"Bearer {api_key}",
-        },
+        headers={"Content-Type": "application/json", "Authorization": f"Bearer {api_key}"},
         method="POST",
     )
-    with urllib.request.urlopen(req, timeout=30) as r:
-        resp = json.loads(r.read())
-    return resp["choices"][0]["message"]["content"].strip()
+    with urllib.request.urlopen(req, timeout=60) as r:
+        return json.loads(r.read())["choices"][0]["message"]["content"].strip()
 
-
-def call_hf_inference(model_id: str, content: str, task: str) -> str:
-    """Fallback: HuggingFace Inference API (serverless)."""
+def call_hf(model_id: str, token: str, system: str, content: str) -> str:
     try:
         from huggingface_hub import InferenceClient  # type: ignore
     except ImportError:
-        print("[sm0l-filter] ERROR: huggingface_hub not installed. Run: uv pip install huggingface-hub", file=sys.stderr)
+        print("[pipe-agent] ERROR: uv pip install huggingface-hub", file=sys.stderr)
         sys.exit(2)
-    prompt = task or SYSTEM_PROMPT
-    client = InferenceClient(model=model_id, token=os.environ.get("HF_TOKEN"))
-    result = client.text_generation(
-        f"<|system|>\n{prompt}\n<|user|>\n{content}\n<|assistant|>\n",
-        max_new_tokens=2048,
+    client = InferenceClient(model=model_id, token=token)
+    result = client.chat_completion(
+        messages=[{"role": "system", "content": system}, {"role": "user", "content": content}],
+        max_tokens=1024,
         temperature=0.01,
     )
-    return result.strip()
+    return result.choices[0].message.content.strip()
 
-
-def discover_endpoint(model_hint: str) -> tuple[str, str, str]:
-    """Return (base_url, model_name, api_key) using priority order."""
-    override = os.environ.get("B00T_AI_SM0L_BASE")
-    if override:
-        m = os.environ.get("B00T_AI_SM0L_MODEL", "sm0l")
-        return override, m, os.environ.get("B00T_AI_SM0L_KEY", "local-b00t")
-
-    for url, model, key in [
-        ("http://127.0.0.1:8001/v1", "ch0nky",   "local-b00t"),
-        ("http://127.0.0.1:8000/v1", "sm0l",      "local-b00t"),
-    ]:
-        if probe_openai_endpoint(url):
-            return url, model_hint or model, key
-
-    # HF Inference API fallback
-    hf_token = os.environ.get("HF_TOKEN", "")
-    if hf_token:
-        return "hf://", model_hint or "Qwen/Qwen2-0.5B-Instruct", hf_token
-
-    print("[sm0l-filter] ERROR: no local endpoint at :8001/:8000 and no HF_TOKEN. "
-          "Run: b00t hive activate inference-qwen36-27b", file=sys.stderr)
-    sys.exit(2)
-
-
+# ─── Main ─────────────────────────────────────────────────────────────────────
 def main():
-    ap = argparse.ArgumentParser(description="sm0l LLM stdin filter")
-    ap.add_argument("--model", default="", help="Model name override")
-    ap.add_argument("--task",  default="", help="Custom system prompt override")
-    ap.add_argument("--max-bytes", type=int, default=32000,
-                    help="Max stdin bytes (truncate to fit context)")
+    ap = argparse.ArgumentParser(description="b00t pipe-agent: sm0l LLM error filter")
+    ap.add_argument("--task",      default="general", choices=list(TASKS),
+                    help="Task template (cargo|podman|systemd|hive|rust|general)")
+    ap.add_argument("--model",     default="", help="Model name override")
+    ap.add_argument("--max-bytes", type=int, default=48_000,
+                    help="Max stdin bytes before truncation")
+    ap.add_argument("--quiet",     action="store_true",
+                    help="No output at all on success (CI mode)")
+    ap.add_argument("--stats",     action="store_true",
+                    help="Print line-count stats to stderr")
     args = ap.parse_args()
 
-    stdin_data = sys.stdin.buffer.read(args.max_bytes).decode("utf-8", errors="replace")
-    if not stdin_data.strip():
+    raw = sys.stdin.buffer.read(args.max_bytes).decode("utf-8", errors="replace")
+    if not raw.strip():
         sys.exit(0)
 
+    deduplicated, stats = preprocess(raw)
+    if args.stats:
+        trunc = " [TRUNCATED]" if stats["truncated"] else ""
+        print(
+            f"[pipe-agent] {stats['raw_lines']} raw → {stats['unique_lines']} unique{trunc}",
+            file=sys.stderr,
+        )
+
     base_url, model, api_key = discover_endpoint(args.model)
+    system_prompt = TASKS[args.task]
 
     if base_url == "hf://":
-        result = call_hf_inference(model, stdin_data, args.task)
+        result = call_hf(model, api_key, system_prompt, deduplicated)
     else:
-        result = call_openai(base_url, model, api_key, stdin_data, args.task)
+        result = call_openai(base_url, model, api_key, system_prompt, deduplicated)
 
-    if result:
+    # Sentinel: model returns "-\n" to signal clean/no-errors
+    if result and result.strip() not in ("-", ""):
         print(result)
-
 
 if __name__ == "__main__":
     main()
