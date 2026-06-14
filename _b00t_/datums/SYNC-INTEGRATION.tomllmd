@@ -20,184 +20,184 @@ name = "SYNC-INTEGRATION"
 type = "specification"
 hint = "Test-gated dispatch notification pipeline for upstream-to-downstream b00t sync — BATS validation gates, dispatch protocol, and downstream integration"
 
-[b00t.version]
+[b00t.schema]
 schema = 1
 content = "draft"
 
 ## ── Problem statement ──────────────────────────────────────────────────────────
 
-Upstream b00t (this repository) evolves continuously — new datums, changed
-agent hooks, updated gate scripts, modified job definitions. Downstream
-__b00t__ directories (external projects that embed b00t as an AI agent
-framework) depend on these changes functioning correctly. Currently:
+# Upstream b00t (this repository) evolves continuously — new datums, changed
+# agent hooks, updated gate scripts, modified job definitions. Downstream
+# __b00t__ directories (external projects that embed b00t as an AI agent
+# framework) depend on these changes functioning correctly. Currently:
 
-| Risk | Impact |
-|------|--------|
-| No test gating before dispatch | Broken upstream changes propagate silently to downstream __b00t__ dirs |
-| No notification channel | Downstream __b00t__ has no way to know upstream changed |
-| No validation contract | Downstream doesn't know which tests must pass before accepting |
-| Manual propagation | Operators must manually copy changes and run validation |
+# | Risk | Impact |
+# |------|--------|
+# | No test gating before dispatch | Broken upstream changes propagate silently to downstream __b00t__ dirs |
+# | No notification channel | Downstream __b00t__ has no way to know upstream changed |
+# | No validation contract | Downstream doesn't know which tests must pass before accepting |
+# | Manual propagation | Operators must manually copy changes and run validation |
 
-The sync integration solves these with a test-gated dispatch notification
-pipeline that runs BATS tests BEFORE any downstream notification is sent.
+# The sync integration solves these with a test-gated dispatch notification
+# pipeline that runs BATS tests BEFORE any downstream notification is sent.
 
 ## ── Existing test structure (discovery findings) ───────────────────────────────
 
 ### BATS test framework
 
-The existing test suite lives at `_b00t_/test/` and uses BATS (Bash Automated
-Testing System) with the following structure:
+# The existing test suite lives at `_b00t_/test/` and uses BATS (Bash Automated
+# Testing System) with the following structure:
 
-```
-_b00t_/test/
-  moltls_soul_integration.bats     # HTTP K/V soul serve integration tests
-  test_helper/
-    bats-support/                   # Support library (output, error, lang)
-      load.bash
-      src/output.bash
-      src/error.bash
-      src/lang.bash
-      test/                        # Inner tests for bats-support itself
-    bats-assert/                    # Assertion library
-      load.bash
-      src/assert.bash
-      src/refute.bash
-      src/assert_output.bash
-      src/assert_success.bash
-      src/assert_failure.bash
-      src/assert_line.bash
-      src/refute_output.bash
-      src/refute_line.bash
-      src/assert_equal.bash
-      test/                        # Inner tests for bats-assert itself
-  bats/                             # Bats project test fixtures
-    test/junit-formatter.bats      # JUnit formatter tests
-```
+# ```
+# _b00t_/test/
+#   moltls_soul_integration.bats     # HTTP K/V soul serve integration tests
+#   test_helper/
+#     bats-support/                   # Support library (output, error, lang)
+#       load.bash
+#       src/output.bash
+#       src/error.bash
+#       src/lang.bash
+#       test/                        # Inner tests for bats-support itself
+#     bats-assert/                    # Assertion library
+#       load.bash
+#       src/assert.bash
+#       src/refute.bash
+#       src/assert_output.bash
+#       src/assert_success.bash
+#       src/assert_failure.bash
+#       src/assert_line.bash
+#       src/refute_output.bash
+#       src/refute_line.bash
+#       src/assert_equal.bash
+#       test/                        # Inner tests for bats-assert itself
+#   bats/                             # Bats project test fixtures
+#     test/junit-formatter.bats      # JUnit formatter tests
+# ```
 
 ### Test pattern reference (moltis_soul_integration.bats)
 
-The existing integration test follows this pattern:
+# The existing integration test follows this pattern:
 
-```bash
+# ```bash
 #!/usr/bin/env bats
-load 'test_helper/bats-support/load'
-load 'test_helper/bats-assert/load'
+# load 'test_helper/bats-support/load'
+# load 'test_helper/bats-assert/load'
 
-setup() {
+# setup() {
   # Start service under test, capture PID
-  b00t soul serve &
-  echo $! > /tmp/bats-soul-serve.pid
-  sleep 2   # Wait for service readiness
-}
+#   b00t soul serve &
+#   echo $! > /tmp/bats-soul-serve.pid
+#   sleep 2   # Wait for service readiness
+# }
 
-teardown() {
+# teardown() {
   # Kill service, clean up PID file
-  kill "$(cat /tmp/bats-soul-serve.pid)" 2>/dev/null
-  wait "$(cat /tmp/bats-soul-serve.pid)" 2>/dev/null
-  rm -f /tmp/bats-soul-serve.pid
-}
+#   kill "$(cat /tmp/bats-soul-serve.pid)" 2>/dev/null
+#   wait "$(cat /tmp/bats-soul-serve.pid)" 2>/dev/null
+#   rm -f /tmp/bats-soul-serve.pid
+# }
 
-@test "set key" {
-  run curl -s -o /dev/null -w "%{http_code}" -X POST ...
-  assert_output "200"
-}
+# @test "set key" {
+#   run curl -s -o /dev/null -w "%{http_code}" -X POST ...
+#   assert_output "200"
+# }
 
-@test "get key returns ok" {
-  run curl -s http://127.0.0.1:7700/v1/kv/...
-  assert_output --partial "ok"
-}
-```
+# @test "get key returns ok" {
+#   run curl -s http://127.0.0.1:7700/v1/kv/...
+#   assert_output --partial "ok"
+# }
+# ```
 
-Key observations about the BATS pattern:
-- `setup/teardown` lifecycle for service management and cleanup
-- `run` captures command output and exit code
-- `assert_output` checks stdout against expected value
-- `assert_output --partial` for substring matching
-- PID file pattern for clean shutdown
-- No BATS test currently exists for sync/dispatch/notification
+# Key observations about the BATS pattern:
+# - `setup/teardown` lifecycle for service management and cleanup
+# - `run` captures command output and exit code
+# - `assert_output` checks stdout against expected value
+# - `assert_output --partial` for substring matching
+# - PID file pattern for clean shutdown
+# - No BATS test currently exists for sync/dispatch/notification
 
 ## ── Existing dispatch mechanisms ───────────────────────────────────────────────
 
 ### Agent event hooks (`agent-hooks/`)
 
-```
-agent-hooks/
-  dispatch.sh              # Central event router — routes tool-agnostic events
-  install-claude-hooks.sh  # Hook registration helper
-  adapters/
-    claude-code.sh          # Normalizes Claude Code events to b00t canonical
-    opencode.sh             # Normalizes OpenCode events to b00t canonical
-  events/
-    session.start.sh        # Fires on session start — injects role context
-    agent.start.sh          # Fires on subagent spawn — logs/injects tier context
-    agent.stop.sh           # Fires on subagent stop — result gating
-    tool.pre.sh             # Fires before tool use — security gates (exit 2 = block)
-    tool.post.sh            # Fires after tool use — result inspection
-    prompt.pre.sh           # Fires before prompt — context injection
-  roles/
-    executive/
-      agent.start.sh        # Executive-tier agent start (tier routing, output contracts)
-      agent.stop.sh         # Executive-tier agent stop
-```
+# ```
+# agent-hooks/
+#   dispatch.sh              # Central event router — routes tool-agnostic events
+#   install-claude-hooks.sh  # Hook registration helper
+#   adapters/
+#     claude-code.sh          # Normalizes Claude Code events to b00t canonical
+#     opencode.sh             # Normalizes OpenCode events to b00t canonical
+#   events/
+#     session.start.sh        # Fires on session start — injects role context
+#     agent.start.sh          # Fires on subagent spawn — logs/injects tier context
+#     agent.stop.sh           # Fires on subagent stop — result gating
+#     tool.pre.sh             # Fires before tool use — security gates (exit 2 = block)
+#     tool.post.sh            # Fires after tool use — result inspection
+#     prompt.pre.sh           # Fires before prompt — context injection
+#   roles/
+#     executive/
+#       agent.start.sh        # Executive-tier agent start (tier routing, output contracts)
+#       agent.stop.sh         # Executive-tier agent stop
+# ```
 
-The dispatch.sh router operates via:
-1. Tool detection (CLAUDE_PROJECT_DIR, OPENCODE_PROJECT_DIR, or unknown)
-2. Event normalization (PascalCase vs snake_case via adapter)
-3. Role-specific hooks first (`roles/<role>/<event>.sh`)
-4. Generic event hooks fallback (`events/<event>.sh`)
-5. Exit codes: 0=allow, 2=block, 1=warn
+# The dispatch.sh router operates via:
+# 1. Tool detection (CLAUDE_PROJECT_DIR, OPENCODE_PROJECT_DIR, or unknown)
+# 2. Event normalization (PascalCase vs snake_case via adapter)
+# 3. Role-specific hooks first (`roles/<role>/<event>.sh`)
+# 4. Generic event hooks fallback (`events/<event>.sh`)
+# 5. Exit codes: 0=allow, 2=block, 1=warn
 
 ### Rhai gate evaluation (`scripts/gates.rhai`)
 
-The gates.rhai script provides reusable gate evaluation for datum hooks:
-- `derive_gates(content)` — Parses datum TOML to extract gates from `requires`, `[b00t.env]`, `[[b00t.gate]]`
-- `evaluate_gates(name, datum_content)` — Runs all derived gates, returns false if any fail
-- Gate types: command (binary exists), file (path exists), env (variable set), rhai (custom expression)
+# The gates.rhai script provides reusable gate evaluation for datum hooks:
+# - `derive_gates(content)` — Parses datum TOML to extract gates from `requires`, `[b00t.env]`, `[[b00t.gate]]`
+# - `evaluate_gates(name, datum_content)` — Runs all derived gates, returns false if any fail
+# - Gate types: command (binary exists), file (path exists), env (variable set), rhai (custom expression)
 
 ## ── No existing sync/dispatch notification infrastructure ─────────────────────
 
-Key finding: There is NO existing infrastructure for:
+# Key finding: There is NO existing infrastructure for:
 
-| Missing Component | Evidence |
-|-------------------|----------|
-| Sync notification channel | No files matching `*sync*` or `*notif*` in `_b00t_/` |
-| Test-gated dispatch | No BATS tests reference dispatch or sync |
-| Downstream notification protocol | No webhook, pub/sub, or callback mechanism exists |
-| Upstream change detection | No git hooks, file watchers, or CI integration for sync |
-| Dispatch config/enablement | No job definition or datum for sync dispatch |
+# | Missing Component | Evidence |
+# |-------------------|----------|
+# | Sync notification channel | No files matching `*sync*` or `*notif*` in `_b00t_/` |
+# | Test-gated dispatch | No BATS tests reference dispatch or sync |
+# | Downstream notification protocol | No webhook, pub/sub, or callback mechanism exists |
+# | Upstream change detection | No git hooks, file watchers, or CI integration for sync |
+# | Dispatch config/enablement | No job definition or datum for sync dispatch |
 
-This is exactly what Issue #167 needs to build.
+# This is exactly what Issue #167 needs to build.
 
 ## ── Plan: test-gated dispatch notifications ────────────────────────────────────
 
 ### Phase 1: Create sync BATS test suite
 
-Create `_b00t_/test/sync_dispatch.bats` with test gates for the dispatch
-pipeline. These tests validate that sync events are correctly formed,
-filtered, and delivered.
+# Create `_b00t_/test/sync_dispatch.bats` with test gates for the dispatch
+# pipeline. These tests validate that sync events are correctly formed,
+# filtered, and delivered.
 
-| Test case | Description | Priority |
-|-----------|-------------|----------|
-| `dispatch event is well-formed` | Verify sync event JSON has required fields (type, source, payload, timestamp) | P0 |
-| `dispatch only fired on changed files` | Verify unchanged files don't trigger dispatch | P0 |
-| `dispatch respects test gate` | Verify dispatch is blocked when BATS tests fail | P0 |
-| `dispatch passes when tests pass` | Verify dispatch fires when all BATS tests pass | P0 |
-| `dispatch payload contains diff` | Verify sync event includes the change diff | P1 |
-| `dispatch targets configured downstreams` | Verify destinations from config are notified | P1 |
-| `dispatch retries on failure` | Verify delivery retry logic after transient failure | P2 |
-| `dispatch idempotency` | Verify duplicate events are deduplicated | P2 |
+# | Test case | Description | Priority |
+# |-----------|-------------|----------|
+# | `dispatch event is well-formed` | Verify sync event JSON has required fields (type, source, payload, timestamp) | P0 |
+# | `dispatch only fired on changed files` | Verify unchanged files don't trigger dispatch | P0 |
+# | `dispatch respects test gate` | Verify dispatch is blocked when BATS tests fail | P0 |
+# | `dispatch passes when tests pass` | Verify dispatch fires when all BATS tests pass | P0 |
+# | `dispatch payload contains diff` | Verify sync event includes the change diff | P1 |
+# | `dispatch targets configured downstreams` | Verify destinations from config are notified | P1 |
+# | `dispatch retries on failure` | Verify delivery retry logic after transient failure | P2 |
+# | `dispatch idempotency` | Verify duplicate events are deduplicated | P2 |
 
 ### Phase 2: Create sync dispatch script
 
-Create `_b00t_/agent-hooks/events/sync.dispatch.sh` — the core dispatch
-engine that:
+# Create `_b00t_/agent-hooks/events/sync.dispatch.sh` — the core dispatch
+# engine that:
 
-1. Accepts a change event on stdin (JSON with {source, type, files, diff})
-2. Runs the BATS sync test suite (`bats _b00t_/test/sync_dispatch*.bats`)
-3. If tests pass — fire notification to downstream __b00t__ directories
-4. If tests fail — block dispatch, log failure, notify operator
+# 1. Accepts a change event on stdin (JSON with {source, type, files, diff})
+# 2. Runs the BATS sync test suite (`bats _b00t_/test/sync_dispatch*.bats`)
+# 3. If tests pass — fire notification to downstream __b00t__ directories
+# 4. If tests fail — block dispatch, log failure, notify operator
 
-```bash
+# ```bash
 # Pseudocode for sync.dispatch.sh:
 # 1. Parse input: jq -r '.source, .type, .files[], .diff'
 # 2. Validate input structure (check required fields)
@@ -205,256 +205,256 @@ engine that:
 # 4. If BATS exit != 0 → exit 2 (block), stderr shows test failures
 # 5. If BATS passes → construct notification, deliver to downstreams
 # 6. Log the dispatch event with timestamp and result
-```
+# ```
 
-Exit protocol follows existing agent-hook conventions:
-- exit 0 + JSON to stdout = dispatch succeeded
-- exit 2 = dispatch blocked (test failure), stderr sent as reason
-- exit 1 = non-blocking warning (e.g., downstream unreachable)
+# Exit protocol follows existing agent-hook conventions:
+# - exit 0 + JSON to stdout = dispatch succeeded
+# - exit 2 = dispatch blocked (test failure), stderr sent as reason
+# - exit 1 = non-blocking warning (e.g., downstream unreachable)
 
 ### Phase 3: Define dispatch notification protocol
 
-Define the protocol for how downstream __b00t__ directories receive and
-acknowledge sync notifications.
+# Define the protocol for how downstream __b00t__ directories receive and
+# acknowledge sync notifications.
 
 #### Notification payload schema
 
-```json
-{
-  "sync_notification": {
-    "schema_version": "1.0",
-    "source": "<upstream-identifier>",
-    "timestamp": "2026-05-08T12:00:00Z",
-    "event_type": "update | create | delete",
-    "changes": [
-      {
-        "path": "_b00t_/datums/NEW-DATUM.tomllmd",
-        "change_type": "create",
-        "hash": "sha256:abc123..."
-      }
-    ],
-    "test_results": {
-      "passed": 5,
-      "failed": 0,
-      "skipped": 1,
-      "total": 6
-    },
-    "metadata": {
-      "commit": "abc123def",
-      "branch": "main",
-      "operator": "agent-ralph"
-    }
-  }
-}
-```
+# ```json
+# {
+#   "sync_notification": {
+#     "schema_version": "1.0",
+#     "source": "<upstream-identifier>",
+#     "timestamp": "2026-05-08T12:00:00Z",
+#     "event_type": "update | create | delete",
+#     "changes": [
+#       {
+#         "path": "_b00t_/datums/NEW-DATUM.tomllmd",
+#         "change_type": "create",
+#         "hash": "sha256:abc123..."
+#       }
+#     ],
+#     "test_results": {
+#       "passed": 5,
+#       "failed": 0,
+#       "skipped": 1,
+#       "total": 6
+#     },
+#     "metadata": {
+#       "commit": "abc123def",
+#       "branch": "main",
+#       "operator": "agent-ralph"
+#     }
+#   }
+# }
+# ```
 
 #### Delivery methods (ordered by preference)
 
-| Method | Mechanism | Required infrastructure |
-|--------|-----------|------------------------|
-| File touch | Write `.sync-ready` marker in downstream __b00t__/.sync/ | None — filesystem only |
-| Agent hook | Fire `sync.notification` event via downstream agent-hooks | Downstream has dispatch.sh installed |
-| MCP notification | Call downstream MCP tool `sync_ingest` | Downstream runs MCP server |
-| Webhook | POST to configured URL | Network access + URL config |
+# | Method | Mechanism | Required infrastructure |
+# |--------|-----------|------------------------|
+# | File touch | Write `.sync-ready` marker in downstream __b00t__/.sync/ | None — filesystem only |
+# | Agent hook | Fire `sync.notification` event via downstream agent-hooks | Downstream has dispatch.sh installed |
+# | MCP notification | Call downstream MCP tool `sync_ingest` | Downstream runs MCP server |
+# | Webhook | POST to configured URL | Network access + URL config |
 
 #### File touch delivery (simplest, recommended first)
 
-```
-downstream/.b00t/__b00t__/.sync/
-  upstream-ready.sync         # Touch file: upstream has changes ready
-  upstream-last-sync.json     # Last successful sync metadata
-  downstream-status.json      # Downstream sync acceptance status
-```
+# ```
+# downstream/.b00t/__b00t__/.sync/
+#   upstream-ready.sync         # Touch file: upstream has changes ready
+#   upstream-last-sync.json     # Last successful sync metadata
+#   downstream-status.json      # Downstream sync acceptance status
+# ```
 
 ### Phase 4: Create sync configuration datum
 
-Create `_b00t_/sync-config.mcp.toml` or include sync configuration in
-the existing job/agent infrastructure. Configuration includes:
+# Create `_b00t_/sync-config.mcp.toml` or include sync configuration in
+# the existing job/agent infrastructure. Configuration includes:
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `enabled` | bool | Master switch for sync dispatch |
-| `downstreams` | string[] | Paths to downstream __b00t__ directories |
-| `test_gate` | string | BATS glob pattern for gate tests (default: `test/sync_dispatch*.bats`) |
-| `delivery_method` | string | `file-touch` | `agent-hook` | `mcp` | `webhook` |
-| `delivery_config` | table | Method-specific configuration |
-| `block_on_fail` | bool | Whether test failure blocks dispatch (default: true) |
-| `retry_max` | int | Max delivery attempts before giving up |
-| `retry_delay_sec` | int | Seconds between retries |
+# | Field | Type | Description |
+# |-------|------|-------------|
+# | `enabled` | bool | Master switch for sync dispatch |
+# | `downstreams` | string[] | Paths to downstream __b00t__ directories |
+# | `test_gate` | string | BATS glob pattern for gate tests (default: `test/sync_dispatch*.bats`) |
+# | `delivery_method` | string | `file-touch` | `agent-hook` | `mcp` | `webhook` |
+# | `delivery_config` | table | Method-specific configuration |
+# | `block_on_fail` | bool | Whether test failure blocks dispatch (default: true) |
+# | `retry_max` | int | Max delivery attempts before giving up |
+# | `retry_delay_sec` | int | Seconds between retries |
 
-Example configuration:
+# Example configuration:
 
-```toml
-[b00t.sync]
-enabled = true
-test_gate = "test/sync_dispatch*.bats"
-block_on_fail = true
+# ```toml
+# [b00t.sync]
+# enabled = true
+# test_gate = "test/sync_dispatch*.bats"
+# block_on_fail = true
 
-[[b00t.sync.downstreams]]
-path = "/path/to/downstream-project/.b00t/__b00t__"
-delivery_method = "file-touch"
-sync_dir = ".sync/"
+# [[b00t.sync.downstreams]]
+# path = "/path/to/downstream-project/.b00t/__b00t__"
+# delivery_method = "file-touch"
+# sync_dir = ".sync/"
 
-[[b00t.sync.downstreams]]
-path = "/path/to/other-downstream/.b00t/__b00t__"
-delivery_method = "agent-hook"
-event_name = "sync.notification"
-```
+# [[b00t.sync.downstreams]]
+# path = "/path/to/other-downstream/.b00t/__b00t__"
+# delivery_method = "agent-hook"
+# event_name = "sync.notification"
+# ```
 
 ### Phase 5: Register sync dispatch in job system
 
-Create or extend a job definition to trigger sync dispatch on relevant
-upstream changes. Two integration paths:
+# Create or extend a job definition to trigger sync dispatch on relevant
+# upstream changes. Two integration paths:
 
 #### Option A: New cronjob in epoch-progression.job.toml
 
-Add a step to `epoch-progression.job.toml` that periodically checks for
-changes and triggers sync dispatch:
+# Add a step to `epoch-progression.job.toml` that periodically checks for
+# changes and triggers sync dispatch:
 
-```toml
-[[b00t.job.steps]]
-name = "sync-dispatch"
-description = "Check for upstream changes and dispatch to downstream __b00t__ dirs"
-checkpoint = "sync-dispatched"
-depends_on = ["execute-task"]
+# ```toml
+# [[b00t.job.steps]]
+# name = "sync-dispatch"
+# description = "Check for upstream changes and dispatch to downstream __b00t__ dirs"
+# checkpoint = "sync-dispatched"
+# depends_on = ["execute-task"]
 
-[b00t.job.steps.task]
-type = "bash"
-command = "b00t sync dispatch 2>&1 || echo 'Sync dispatch skipped (no changes or gate failed)'"
-timeout_ms = 60000
-```
+# [b00t.job.steps.task]
+# type = "bash"
+# command = "b00t sync dispatch 2>&1 || echo 'Sync dispatch skipped (no changes or gate failed)'"
+# timeout_ms = 60000
+# ```
 
 #### Option B: Standalone sync job `sync-dispatch.job.toml`
 
-```toml
-[b00t]
-name = "sync-dispatch"
-type = "job"
-hint = "Test-gated dispatch of upstream b00t changes to downstream __b00t__ directories"
-version = "1.0.0"
+# ```toml
+# [b00t]
+# name = "sync-dispatch"
+# type = "job"
+# hint = "Test-gated dispatch of upstream b00t changes to downstream __b00t__ directories"
+# version = "1.0.0"
 
-[b00t.job]
-description = "Run BATS gates on upstream changes, then dispatch notifications to downstream __b00t__"
-mode = "sequential"
-checkpoint_mode = "manual"
-use_subagents = false
-tags = ["sync", "dispatch", "downstream", "notification"]
+# [b00t.job]
+# description = "Run BATS gates on upstream changes, then dispatch notifications to downstream __b00t__"
+# mode = "sequential"
+# checkpoint_mode = "manual"
+# use_subagents = false
+# tags = ["sync", "dispatch", "downstream", "notification"]
 
-[b00t.job.config]
-max_steps_per_run = 1
+# [b00t.job.config]
+# max_steps_per_run = 1
 
-[[b00t.job.steps]]
-name = "detect-changes"
-description = "Detect changed files in _b00t_/ since last sync"
-checkpoint = "changes-detected"
+# [[b00t.job.steps]]
+# name = "detect-changes"
+# description = "Detect changed files in _b00t_/ since last sync"
+# checkpoint = "changes-detected"
 
-[b00t.job.steps.task]
-type = "bash"
-command = "b00t sync detect --since-last 2>&1"
-timeout_ms = 30000
+# [b00t.job.steps.task]
+# type = "bash"
+# command = "b00t sync detect --since-last 2>&1"
+# timeout_ms = 30000
 
-[[b00t.job.steps]]
-name = "run-test-gate"
-description = "Run BATS test gate before allowing dispatch"
-checkpoint = "test-gate-passed"
-depends_on = ["detect-changes"]
+# [[b00t.job.steps]]
+# name = "run-test-gate"
+# description = "Run BATS test gate before allowing dispatch"
+# checkpoint = "test-gate-passed"
+# depends_on = ["detect-changes"]
 
-[b00t.job.steps.task]
-type = "bash"
-command = "bats _b00t_/test/sync_dispatch*.bats 2>&1"
-timeout_ms = 60000
+# [b00t.job.steps.task]
+# type = "bash"
+# command = "bats _b00t_/test/sync_dispatch*.bats 2>&1"
+# timeout_ms = 60000
 
-[[b00t.job.steps]]
-name = "dispatch-notification"
-description = "Send sync notification to downstream __b00t__ directories"
-checkpoint = "notification-dispatched"
-depends_on = ["run-test-gate"]
+# [[b00t.job.steps]]
+# name = "dispatch-notification"
+# description = "Send sync notification to downstream __b00t__ directories"
+# checkpoint = "notification-dispatched"
+# depends_on = ["run-test-gate"]
 
-[b00t.job.steps.task]
-type = "bash"
-command = "b00t sync dispatch 2>&1"
-timeout_ms = 60000
-```
+# [b00t.job.steps.task]
+# type = "bash"
+# command = "b00t sync dispatch 2>&1"
+# timeout_ms = 60000
+# ```
 
 ### Phase 6: Downstream integration guide
 
-Downstream __b00t__ directories should:
+# Downstream __b00t__ directories should:
 
-1. **Create `.sync/` directory** at `__b00t__/.sync/` with status markers
-2. **Poll or watch** for `.sync-ready` touch files from upstream
-3. **Run local validation** before accepting changes (same BATS test suite)
-4. **Acknowledge** by writing acceptance status to `.sync/downstream-status.json`
-5. **Signal readiness** by removing `.sync-ready` after ingestion
+# 1. **Create `.sync/` directory** at `__b00t__/.sync/` with status markers
+# 2. **Poll or watch** for `.sync-ready` touch files from upstream
+# 3. **Run local validation** before accepting changes (same BATS test suite)
+# 4. **Acknowledge** by writing acceptance status to `.sync/downstream-status.json`
+# 5. **Signal readiness** by removing `.sync-ready` after ingestion
 
-```bash
+# ```bash
 # Downstream ingestion script (run periodically or on file watch)
-if [ -f "__b00t__/.sync/upstream-ready.sync" ]; then
-    echo "Upstream changes detected, running validation..."
-    bats __b00t__/test/sync_dispatch*.bats && {
+# if [ -f "__b00t__/.sync/upstream-ready.sync" ]; then
+#     echo "Upstream changes detected, running validation..."
+#     bats __b00t__/test/sync_dispatch*.bats && {
         # Accept changes
-        cp -r __b00t__/.sync/incoming/* __b00t__/
-        echo '{"status":"accepted","timestamp":"...","test_results":"..."}' \
-            > __b00t__/.sync/downstream-status.json
-        rm __b00t__/.sync/upstream-ready.sync
-        echo "Sync accepted and applied."
-    } || {
-        echo '{"status":"rejected","timestamp":"...","failures":"..."}' \
-            > __b00t__/.sync/downstream-status.json
-        echo "Sync rejected — test gate failed."
-    }
-fi
-```
+#         cp -r __b00t__/.sync/incoming/* __b00t__/
+#         echo '{"status":"accepted","timestamp":"...","test_results":"..."}' \
+#             > __b00t__/.sync/downstream-status.json
+#         rm __b00t__/.sync/upstream-ready.sync
+#         echo "Sync accepted and applied."
+#     } || {
+#         echo '{"status":"rejected","timestamp":"...","failures":"..."}' \
+#             > __b00t__/.sync/downstream-status.json
+#         echo "Sync rejected — test gate failed."
+#     }
+# fi
+# ```
 
 ## ── Implementation order ──────────────────────────────────────────────────────
 
-| Step | What | Depends on | Estimated effort |
-|------|------|------------|------------------|
-| 1 | Create `_b00t_/test/sync_dispatch.bats` with Phase 1 test cases | Existing BATS framework | 2-3 hours |
-| 2 | Create `_b00t_/agent-hooks/events/sync.dispatch.sh` with Phase 2 dispatch logic | Phase 1 tests passing | 3-4 hours |
-| 3 | Create sync configuration schema (Phase 4) | Phase 2 dispatch script | 1 hour |
-| 4 | Create `sync-dispatch.job.toml` or extend epoch-progression (Phase 5) | Phase 3 config schema | 1 hour |
-| 5 | End-to-end integration test: change → test gate → dispatch → downstream receives | All above | 2 hours |
-| 6 | Documentation: datum + downstream integration guide (Phase 6) | End-to-end passing | 1 hour |
+# | Step | What | Depends on | Estimated effort |
+# |------|------|------------|------------------|
+# | 1 | Create `_b00t_/test/sync_dispatch.bats` with Phase 1 test cases | Existing BATS framework | 2-3 hours |
+# | 2 | Create `_b00t_/agent-hooks/events/sync.dispatch.sh` with Phase 2 dispatch logic | Phase 1 tests passing | 3-4 hours |
+# | 3 | Create sync configuration schema (Phase 4) | Phase 2 dispatch script | 1 hour |
+# | 4 | Create `sync-dispatch.job.toml` or extend epoch-progression (Phase 5) | Phase 3 config schema | 1 hour |
+# | 5 | End-to-end integration test: change → test gate → dispatch → downstream receives | All above | 2 hours |
+# | 6 | Documentation: datum + downstream integration guide (Phase 6) | End-to-end passing | 1 hour |
 
-Total estimated effort: 10-12 hours
+# Total estimated effort: 10-12 hours
 
 ## ── Integration points ─────────────────────────────────────────────────────────
 
-| Existing component | Integration role |
-|--------------------|------------------|
-| `_b00t_/test/moltis_soul_integration.bats` | Reference BATS pattern — new sync tests follow same structure |
-| `_b00t_/test/test_helper/` | Reuses bats-support and bats-assert libraries |
-| `_b00t_/agent-hooks/dispatch.sh` | Event routing — sync.dispatch.sh registers as new event hook |
-| `_b00t_/agent-hooks/events/tool.pre.sh` | Exit protocol reference (exit 0/2/1 pattern) |
-| `_b00t_/agent-hooks/roles/` | Role-based sync dispatch (e.g., executive-only sync) |
-| `_b00t_/scripts/gates.rhai` | Gate evaluation for datum-based sync configuration |
-| `_b00t_/epoch-progression.job.toml` | Job step integration point for periodic sync dispatch |
-| `_b00t_/datums/` | Datum format reference for the sync-config datum |
-| `_b00t_/bootstrap.toml` | Could reference sync as optional service in future |
+# | Existing component | Integration role |
+# |--------------------|------------------|
+# | `_b00t_/test/moltis_soul_integration.bats` | Reference BATS pattern — new sync tests follow same structure |
+# | `_b00t_/test/test_helper/` | Reuses bats-support and bats-assert libraries |
+# | `_b00t_/agent-hooks/dispatch.sh` | Event routing — sync.dispatch.sh registers as new event hook |
+# | `_b00t_/agent-hooks/events/tool.pre.sh` | Exit protocol reference (exit 0/2/1 pattern) |
+# | `_b00t_/agent-hooks/roles/` | Role-based sync dispatch (e.g., executive-only sync) |
+# | `_b00t_/scripts/gates.rhai` | Gate evaluation for datum-based sync configuration |
+# | `_b00t_/epoch-progression.job.toml` | Job step integration point for periodic sync dispatch |
+# | `_b00t_/datums/` | Datum format reference for the sync-config datum |
+# | `_b00t_/bootstrap.toml` | Could reference sync as optional service in future |
 
 ## ── Risks and mitigations ──────────────────────────────────────────────────────
 
-| Risk | Likelihood | Mitigation |
-|------|------------|------------|
-| Downstream unreachable | Medium | Retry with backoff, log failure, don't block upstream |
-| Test gate false positives | Low | Keep sync tests focused on dispatch contract, not content |
-| Test gate false negatives | Low | Review gate coverage when adding new dispatch features |
-| File touch race condition | Low | Use atomic writes (write to .tmp, then rename) |
-| Circular sync (downstream -> upstream) | Low | One-way sync only; downstream never dispatches back |
-| Stale downstream state | Medium | Downstream validates independently; rejection doesn't block upstream |
+# | Risk | Likelihood | Mitigation |
+# |------|------------|------------|
+# | Downstream unreachable | Medium | Retry with backoff, log failure, don't block upstream |
+# | Test gate false positives | Low | Keep sync tests focused on dispatch contract, not content |
+# | Test gate false negatives | Low | Review gate coverage when adding new dispatch features |
+# | File touch race condition | Low | Use atomic writes (write to .tmp, then rename) |
+# | Circular sync (downstream -> upstream) | Low | One-way sync only; downstream never dispatches back |
+# | Stale downstream state | Medium | Downstream validates independently; rejection doesn't block upstream |
 
 ## ── Future considerations ──────────────────────────────────────────────────────
 
-| Area | Description |
-|------|-------------|
-| **Webhook delivery** | HTTP POST to downstream CI/CD pipelines |
-| **MCP-based sync** | Downstream runs MCP server with `sync_ingest` tool |
-| **Sync backpressure** | Downstream signals "busy" to throttle upstream dispatches |
-| **Multi-version sync** | Multiple upstream branches tracked in downstream `.sync/` |
-| **Selective sync** | Downstream subscribes to specific datum types or path patterns |
-| **Sync audit log** | Chronological log of all sync events in upstream `.sync/audit.log` |
-| **Encryption** | Signed payloads for verified authenticity of sync events |
-| **Git-based transport** | Use git notes/refs as a sync transport mechanism |
+# | Area | Description |
+# |------|-------------|
+# | **Webhook delivery** | HTTP POST to downstream CI/CD pipelines |
+# | **MCP-based sync** | Downstream runs MCP server with `sync_ingest` tool |
+# | **Sync backpressure** | Downstream signals "busy" to throttle upstream dispatches |
+# | **Multi-version sync** | Multiple upstream branches tracked in downstream `.sync/` |
+# | **Selective sync** | Downstream subscribes to specific datum types or path patterns |
+# | **Sync audit log** | Chronological log of all sync events in upstream `.sync/audit.log` |
+# | **Encryption** | Signed payloads for verified authenticity of sync events |
+# | **Git-based transport** | Use git notes/refs as a sync transport mechanism |
 
 # b00t:map v1
 # summary: Sync integration specification — test-gated dispatch notification pipeline for upstream b00t changes to downstream __b00t__ directories. Documents existing BATS test structure, agent-hook dispatch mechanisms, and presents a 6-phase implementation plan: BATS test suite, dispatch script, notification protocol, config schema, job integration, and downstream ingestion guide.

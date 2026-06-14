@@ -19,130 +19,130 @@ name = "AGENT-RECRUITMENT"
 type = "schema"
 hint = "Agent recruitment system — scouting (internal+external), evaluation (capability scoring), enlistment (contract binding) for hive crew formation"
 
-[b00t.version]
+[b00t.schema]
 schema = 1
 content = "stable"
 
 ## ── Recruitment Sources ─────────────────────────────────────────────────────────
 
-The operator scouts agents from these sources:
+# The operator scouts agents from these sources:
 
 ### 1. Internal — b00t Ontology
-Query the live capability ontology from agent datums.
+# Query the live capability ontology from agent datums.
 
-| Source | Method | Returns |
-|--------|--------|---------|
-| `b00t ontology query --role <role>` | Structured query | Agent datums matching role with skill lists |
-| `b00t agent discover --capabilities <...>` | Capability-based discovery | Agents with matching capability scores |
-| `_b00t_/*.agent.toml` | Direct datum scan | Full agent configuration metadata |
+# | Source | Method | Returns |
+# |--------|--------|---------|
+# | `b00t ontology query --role <role>` | Structured query | Agent datums matching role with skill lists |
+# | `b00t agent discover --capabilities <...>` | Capability-based discovery | Agents with matching capability scores |
+# | `_b00t_/*.agent.toml` | Direct datum scan | Full agent configuration metadata |
 
 ### 2. External — agency-agents (github.com/msitarzewski/agency-agents)
-Curated AI agent personality profiles with identity, mission, workflows, deliverables.
+# Curated AI agent personality profiles with identity, mission, workflows, deliverables.
 
-| Profile Format | Key Fields | Recruitment Mapping |
-|----------------|------------|---------------------|
-| Markdown files | identity, mission, workflows, deliverables | Maps to b00t agent: personality, skills, crew role |
-| Agent archetypes | "Researcher", "Writer", "Analyst", "Strategist" | Maps to specialist or executor roles |
+# | Profile Format | Key Fields | Recruitment Mapping |
+# |----------------|------------|---------------------|
+# | Markdown files | identity, mission, workflows, deliverables | Maps to b00t agent: personality, skills, crew role |
+# | Agent archetypes | "Researcher", "Writer", "Analyst", "Strategist" | Maps to specialist or executor roles |
 
-**Recruitment Process:**
-1. Clone/search agency-agents repo for matching profiles
-2. Parse profile markdown for capability signals (tools, frameworks, domains)
-3. Score against open crew roles
-4. Generate agent datum skeleton from parsed profile
-5. Present to captain for enlistment approval
+# **Recruitment Process:**
+# 1. Clone/search agency-agents repo for matching profiles
+# 2. Parse profile markdown for capability signals (tools, frameworks, domains)
+# 3. Score against open crew roles
+# 4. Generate agent datum skeleton from parsed profile
+# 5. Present to captain for enlistment approval
 
 ### 3. External — skillsgate (github.com/skillsgate/skillsgate)
-91,000+ skills catalog with 20+ agent archetypes, desktop app, TUI.
+# 91,000+ skills catalog with 20+ agent archetypes, desktop app, TUI.
 
-| Feature | Description | Recruitment Value |
-|---------|-------------|-------------------|
-| Skills catalog | 91k+ skills organized by domain | Fill skill gaps in crew |
-| Agent archetypes | 20+ pre-built agent personalities | Quick crew composition |
-| Desktop app + TUI | Interactive agent/skill browsing | Manual exploration |
+# | Feature | Description | Recruitment Value |
+# |---------|-------------|-------------------|
+# | Skills catalog | 91k+ skills organized by domain | Fill skill gaps in crew |
+# | Agent archetypes | 20+ pre-built agent personalities | Quick crew composition |
+# | Desktop app + TUI | Interactive agent/skill browsing | Manual exploration |
 
-**Recruitment Process:**
-1. Search skillsgate catalog by skill domain
-2. Match agent archetypes to open roles
-3. Extract skill lists for training plan generation
-4. Cross-reference with existing b00t agents to avoid duplicates
-5. Generate integration recommendation
+# **Recruitment Process:**
+# 1. Search skillsgate catalog by skill domain
+# 2. Match agent archetypes to open roles
+# 3. Extract skill lists for training plan generation
+# 4. Cross-reference with existing b00t agents to avoid duplicates
+# 5. Generate integration recommendation
 
 ## ── Scouting Workflow ───────────────────────────────────────────────────────────
 
-When captain invokes operator for scouting:
+# When captain invokes operator for scouting:
 
-```
-CAPTAIN → OPERATOR: scout(role="specialist", capabilities=["code","refactor","debug"])
-OPERATOR → INTERNAL:  b00t ontology query --role specialist
-OPERATOR → INTERNAL:  b00t agent discover --capabilities code,refactor,debug
-OPERATOR → EXTERNAL:  search agency-agents for "coding agent" profiles
-OPERATOR → EXTERNAL:  search skillsgate for "code" + "refactor" skills
-OPERATOR -> CAPTAIN:   candidates = [pi-001 (score 0.92), opencode (score 0.88), ...]
+# ```
+# CAPTAIN → OPERATOR: scout(role="specialist", capabilities=["code","refactor","debug"])
+# OPERATOR → INTERNAL:  b00t ontology query --role specialist
+# OPERATOR → INTERNAL:  b00t agent discover --capabilities code,refactor,debug
+# OPERATOR → EXTERNAL:  search agency-agents for "coding agent" profiles
+# OPERATOR → EXTERNAL:  search skillsgate for "code" + "refactor" skills
+# OPERATOR -> CAPTAIN:   candidates = [pi-001 (score 0.92), opencode (score 0.88), ...]
 
-CAPTAIN -> OPERATOR: enlist(agent_id="pi-001", role="specialist")
-OPERATOR → REGISTRY:  enlist("pi-001", "specialist", contract={...})
-OPERATOR → CAPTAIN:   crew binding complete for pi-001 as specialist
-```
+# CAPTAIN -> OPERATOR: enlist(agent_id="pi-001", role="specialist")
+# OPERATOR → REGISTRY:  enlist("pi-001", "specialist", contract={...})
+# OPERATOR → CAPTAIN:   crew binding complete for pi-001 as specialist
+# ```
 
 ## ── Capability Scoring ──────────────────────────────────────────────────────────
 
-Candidate agents are scored on these dimensions:
+# Candidate agents are scored on these dimensions:
 
-| Dimension | Weight | Description | Measurement |
-|-----------|--------|-------------|-------------|
-| skill_match | 0.40 | Direct skill overlap with requirements | Jaccard similarity of skill sets |
-| role_fit | 0.25 | Role alignment with crew need | Exact match or nearest role |
-| tier_appropriateness | 0.15 | Model tier matches task complexity | frontier=1.0, ch0nky=0.7, sm0l=0.4 |
-| availability | 0.10 | Agent is not already deployed | 1.0 if available, 0.0 if deployed |
-| past_performance | 0.10 | Historical readiness scores | Average of last 3 readiness scores |
+# | Dimension | Weight | Description | Measurement |
+# |-----------|--------|-------------|-------------|
+# | skill_match | 0.40 | Direct skill overlap with requirements | Jaccard similarity of skill sets |
+# | role_fit | 0.25 | Role alignment with crew need | Exact match or nearest role |
+# | tier_appropriateness | 0.15 | Model tier matches task complexity | frontier=1.0, ch0nky=0.7, sm0l=0.4 |
+# | availability | 0.10 | Agent is not already deployed | 1.0 if available, 0.0 if deployed |
+# | past_performance | 0.10 | Historical readiness scores | Average of last 3 readiness scores |
 
-**Total Score** = Σ(weight_i × score_i) — range [0.0, 1.0]
+# **Total Score** = Σ(weight_i × score_i) — range [0.0, 1.0]
 
 ## ── Enlistment Contract ─────────────────────────────────────────────────────────
 
-When operator enlists an agent, a capability contract is created:
+# When operator enlists an agent, a capability contract is created:
 
-```toml
-[contract]
+# ```toml
+# [contract]
 # Agent identification
-agent_id = "pi-001"
+# agent_id = "pi-001"
 # Assigned crew role
-role = "specialist"
+# role = "specialist"
 # Whether this agent is captain
-captain = false
+# captain = false
 # Declared capabilities
-capabilities = ["code", "refactor", "debug", "edit", "bash", "read", "write"]
+# capabilities = ["code", "refactor", "debug", "edit", "bash", "read", "write"]
 # Bouncer gates required for this agent
-gates = ["sanitize", "credential-check", "security-scan"]
+# gates = ["sanitize", "credential-check", "security-scan"]
 # Minimum quality thresholds
-thresholds = { min_quality_score = 0.8, max_response_time_ms = 30000 }
+# thresholds = { min_quality_score = 0.8, max_response_time_ms = 30000 }
 # Availability commitment
-availability = "on-demand"
+# availability = "on-demand"
 # Contract expiry (rotation trigger)
-rotation_period_days = 90
-```
+# rotation_period_days = 90
+# ```
 
 ## ── Recruitment Audit Log ──────────────────────────────────────────────────────
 
-All recruitment actions are logged to `.b00t/recruitment-audit.jsonl`:
+# All recruitment actions are logged to `.b00t/recruitment-audit.jsonl`:
 
-```jsonl
-{"ts":"2026-05-08T00:00:00Z","action":"scout","query":"code,refactor,debug","source":"internal","results":["pi-001","opencode"]}
-{"ts":"2026-05-08T00:01:00Z","action":"enlist","agent_id":"pi-001","role":"specialist","score":0.92}
-{"ts":"2026-05-08T00:02:00Z","action":"train-start","agent_id":"pi-001","phases":["context-ingest","skill-validation","capability-register","bouncer-verify"]}
-{"ts":"2026-05-08T00:05:00Z","action":"train-complete","agent_id":"pi-001","readiness":0.95}
-```
+# ```jsonl
+# {"ts":"2026-05-08T00:00:00Z","action":"scout","query":"code,refactor,debug","source":"internal","results":["pi-001","opencode"]}
+# {"ts":"2026-05-08T00:01:00Z","action":"enlist","agent_id":"pi-001","role":"specialist","score":0.92}
+# {"ts":"2026-05-08T00:02:00Z","action":"train-start","agent_id":"pi-001","phases":["context-ingest","skill-validation","capability-register","bouncer-verify"]}
+# {"ts":"2026-05-08T00:05:00Z","action":"train-complete","agent_id":"pi-001","readiness":0.95}
+# ```
 
 ## ── Crew Composition Rules ─────────────────────────────────────────────────────
 
-| Rule | Description | Enforcement |
-|------|-------------|-------------|
-| No duplicate roles | Only one agent per role in same crew scope | Operator warns, captain overrides |
-| Captain mandatory | Every crew needs exactly 1 captain | Executive auto-assigned as captain |
-| Specialist optional | Zero or more specialists per crew | No minimum |
-| Operator on-demand | Operator is not standing crew; deployed by captain | Spawned per recruitment mission |
-| Bouncer default | All agents have bouncer gates | Embedded in agent datum |
-| Rotation period | Agents rotate after contract period | 90 days default, configurable |
+# | Rule | Description | Enforcement |
+# |------|-------------|-------------|
+# | No duplicate roles | Only one agent per role in same crew scope | Operator warns, captain overrides |
+# | Captain mandatory | Every crew needs exactly 1 captain | Executive auto-assigned as captain |
+# | Specialist optional | Zero or more specialists per crew | No minimum |
+# | Operator on-demand | Operator is not standing crew; deployed by captain | Spawned per recruitment mission |
+# | Bouncer default | All agents have bouncer gates | Embedded in agent datum |
+# | Rotation period | Agents rotate after contract period | 90 days default, configurable |
 
 # b00t:map v1
 # summary: Agent recruitment system — scouting (internal ontology + external agency-agents/skillsgate), capability scoring (skill_match, role_fit, tier, availability, past_performance), enlistment contracts, recruitment audit logging for hive crew formation

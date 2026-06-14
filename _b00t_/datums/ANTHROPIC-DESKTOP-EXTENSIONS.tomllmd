@@ -18,360 +18,360 @@ name = "ANTHROPIC-DESKTOP-EXTENSIONS"
 type = "specification"
 hint = "Anthropic Desktop Extensions (.mcpb) — one-click MCP server packaging, manifest spec, toolchain, and security model"
 
-[b00t.version]
+[b00t.schema]
 schema = 1
 content = "stable"
 
 ## ── Overview ───────────────────────────────────────────────────────────────────
 
-Anthropic Desktop Extensions (`.mcpb` files, formerly `.dxt`) solve the MCP server
-installation problem by bundling an entire MCP server — including all dependencies —
-into a single installable package. Users install with one double-click instead of
-manually editing JSON config files, installing runtimes, and resolving dependencies.
+# Anthropic Desktop Extensions (`.mcpb` files, formerly `.dxt`) solve the MCP server
+# installation problem by bundling an entire MCP server — including all dependencies —
+# into a single installable package. Users install with one double-click instead of
+# manually editing JSON config files, installing runtimes, and resolving dependencies.
 
-Published: 2025-06-26
-File extension update: 2025-09-11 (`.dxt` → `.mcpb`)
-Manifest spec version: 0.3 (as of 2025-12-02)
+# Published: 2025-06-26
+# File extension update: 2025-09-11 (`.dxt` → `.mcpb`)
+# Manifest spec version: 0.3 (as of 2025-12-02)
 
 ### Before vs. After
 
-| Before | After |
-|--------|-------|
-| Install Node.js/Python first | Download a `.mcpb` file |
-| `npm install -g @example/mcp-server` | Double-click to open with Claude Desktop |
-| Edit `~/.claude/claude_desktop_config.json` manually | Click "Install" |
-| Restart Claude Desktop | Done |
-| Hope it works | No terminal, no config files, no dependency conflicts |
+# | Before | After |
+# |--------|-------|
+# | Install Node.js/Python first | Download a `.mcpb` file |
+# | `npm install -g @example/mcp-server` | Double-click to open with Claude Desktop |
+# | Edit `~/.claude/claude_desktop_config.json` manually | Click "Install" |
+# | Restart Claude Desktop | Done |
+# | Hope it works | No terminal, no config files, no dependency conflicts |
 
 ## ── Architecture ────────────────────────────────────────────────────────────────
 
-A Desktop Extension is a **zip archive** (`.mcpb` extension) containing:
+# A Desktop Extension is a **zip archive** (`.mcpb` extension) containing:
 
-1. **manifest.json** — Required. Describes everything Claude Desktop needs to know
-2. **Server code** — The actual MCP server implementation with bundled dependencies
-3. **Assets** — Icons, screenshots, localization resources
+# 1. **manifest.json** — Required. Describes everything Claude Desktop needs to know
+# 2. **Server code** — The actual MCP server implementation with bundled dependencies
+# 3. **Assets** — Icons, screenshots, localization resources
 
 ### Server types supported
 
-| type | runtime | dependency model | bundle size |
-|------|---------|-----------------|-------------|
-| `node` | Node.js | Bundled `node_modules/` | Larger (deps included) |
-| `python` | Python | Bundled `server/lib/` or `server/venv/` | Larger (deps included) |
-| `binary` | None (self-contained) | Pre-compiled executable | Platform-specific |
-| `uv` | UV runtime (v0.4+) | Declared in `pyproject.toml` | ~100 KB (deps streamed) |
+# | type | runtime | dependency model | bundle size |
+# |------|---------|-----------------|-------------|
+# | `node` | Node.js | Bundled `node_modules/` | Larger (deps included) |
+# | `python` | Python | Bundled `server/lib/` or `server/venv/` | Larger (deps included) |
+# | `binary` | None (self-contained) | Pre-compiled executable | Platform-specific |
+# | `uv` | UV runtime (v0.4+) | Declared in `pyproject.toml` | ~100 KB (deps streamed) |
 
-The `uv` server type is the most portable — dependencies are declared in
-`pyproject.toml` and installed by the host app via UV at install time. No bundled
-`.venv` or `server/lib/` directory.
+# The `uv` server type is the most portable — dependencies are declared in
+# `pyproject.toml` and installed by the host app via UV at install time. No bundled
+# `.venv` or `server/lib/` directory.
 
 ## ── Manifest.json specification ────────────────────────────────────────────────
 
-The `manifest.json` is the sole required file. It declares:
+# The `manifest.json` is the sole required file. It declares:
 
 ### Required fields
 
-| field | type | description |
-|-------|------|-------------|
-| `manifest_version` | string | Spec version this extension conforms to (e.g. "0.3") |
-| `name` | string | Machine-readable name (used for CLI, APIs) |
-| `version` | string | Semantic version (semver) |
-| `description` | string | Brief description of what the extension does (localizable) |
-| `author` | object | Author info: `name` (required, localizable), `email`, `url` |
-| `server` | object | Server configuration (see Server Configuration section) |
+# | field | type | description |
+# |-------|------|-------------|
+# | `manifest_version` | string | Spec version this extension conforms to (e.g. "0.3") |
+# | `name` | string | Machine-readable name (used for CLI, APIs) |
+# | `version` | string | Semantic version (semver) |
+# | `description` | string | Brief description of what the extension does (localizable) |
+# | `author` | object | Author info: `name` (required, localizable), `email`, `url` |
+# | `server` | object | Server configuration (see Server Configuration section) |
 
 ### Optional fields
 
-| field | type | description |
-|-------|------|-------------|
-| `display_name` | string | Human-friendly name for UI (localizable) |
-| `long_description` | string | Detailed markdown description for extension stores (localizable) |
-| `icon` | string | Path to PNG icon (relative or `https://` URL) |
-| `icons` | array | Array of icon descriptors: `src`, `size`, optional `theme` |
-| `screenshots` | array | Array of screenshot paths |
-| `repository` | object | Source code repository: `type` and `url` |
-| `homepage` | string | Extension homepage URL |
-| `documentation` | string | Documentation URL |
-| `support` | string | Support/issues URL |
-| `tools` | array | Array of tools the extension provides (localizable) |
-| `tools_generated` | bool | Server generates additional tools at runtime (default: false) |
-| `prompts` | array | Array of prompts the extension provides (localizable) |
-| `prompts_generated` | bool | Server generates additional prompts at runtime (default: false) |
-| `keywords` | array | Search keywords (localizable) |
-| `license` | string | License identifier (e.g. "MIT") |
-| `privacy_policies` | array | URLs to privacy policies for external services handling user data |
-| `compatibility` | object | Client, platform, and runtime requirements |
-| `user_config` | object | User-configurable options the host app collects via UI |
-| `localization` | object | Per-locale resource files for translation |
-| `_meta` | object | Platform-specific client metadata (reverse-DNS keys) |
+# | field | type | description |
+# |-------|------|-------------|
+# | `display_name` | string | Human-friendly name for UI (localizable) |
+# | `long_description` | string | Detailed markdown description for extension stores (localizable) |
+# | `icon` | string | Path to PNG icon (relative or `https://` URL) |
+# | `icons` | array | Array of icon descriptors: `src`, `size`, optional `theme` |
+# | `screenshots` | array | Array of screenshot paths |
+# | `repository` | object | Source code repository: `type` and `url` |
+# | `homepage` | string | Extension homepage URL |
+# | `documentation` | string | Documentation URL |
+# | `support` | string | Support/issues URL |
+# | `tools` | array | Array of tools the extension provides (localizable) |
+# | `tools_generated` | bool | Server generates additional tools at runtime (default: false) |
+# | `prompts` | array | Array of prompts the extension provides (localizable) |
+# | `prompts_generated` | bool | Server generates additional prompts at runtime (default: false) |
+# | `keywords` | array | Search keywords (localizable) |
+# | `license` | string | License identifier (e.g. "MIT") |
+# | `privacy_policies` | array | URLs to privacy policies for external services handling user data |
+# | `compatibility` | object | Client, platform, and runtime requirements |
+# | `user_config` | object | User-configurable options the host app collects via UI |
+# | `localization` | object | Per-locale resource files for translation |
+# | `_meta` | object | Platform-specific client metadata (reverse-DNS keys) |
 
 ### Server configuration object
 
-```json
-{
-  "server": {
-    "type": "node",
-    "entry_point": "server/index.js",
-    "mcp_config": {
-      "command": "node",
-      "args": ["${__dirname}/server/index.js"],
-      "env": {
-        "API_KEY": "${user_config.api_key}"
-      },
-      "platform_overrides": {
-        "win32": {
-          "command": "server/my-server.exe"
-        }
-      }
-    }
-  }
-}
-```
+# ```json
+# {
+#   "server": {
+#     "type": "node",
+#     "entry_point": "server/index.js",
+#     "mcp_config": {
+#       "command": "node",
+#       "args": ["${__dirname}/server/index.js"],
+#       "env": {
+#         "API_KEY": "${user_config.api_key}"
+#       },
+#       "platform_overrides": {
+#         "win32": {
+#           "command": "server/my-server.exe"
+#         }
+#       }
+#     }
+#   }
+# }
+# ```
 
-| field | type | description |
-|-------|------|-------------|
-| `type` | string | One of: `node`, `python`, `binary`, `uv` |
-| `entry_point` | string | Relative path to main server file |
-| `mcp_config` | object | MCP server execution config (replaces manual JSON config) |
-| `mcp_config.command` | string | Command to run |
-| `mcp_config.args` | array | CLI arguments (supports variable substitution) |
-| `mcp_config.env` | object | Environment variables (supports variable substitution) |
-| `mcp_config.platform_overrides` | object | Per-platform `{command, args, env}` overrides |
+# | field | type | description |
+# |-------|------|-------------|
+# | `type` | string | One of: `node`, `python`, `binary`, `uv` |
+# | `entry_point` | string | Relative path to main server file |
+# | `mcp_config` | object | MCP server execution config (replaces manual JSON config) |
+# | `mcp_config.command` | string | Command to run |
+# | `mcp_config.args` | array | CLI arguments (supports variable substitution) |
+# | `mcp_config.env` | object | Environment variables (supports variable substitution) |
+# | `mcp_config.platform_overrides` | object | Per-platform `{command, args, env}` overrides |
 
 ### Variable substitution
 
-The following variables are replaced at install/launch time:
+# The following variables are replaced at install/launch time:
 
-| variable | resolves to |
-|----------|-------------|
-| `${__dirname}` | Absolute path to the extension's unpacked directory |
-| `${HOME}` | User's home directory |
-| `${DESKTOP}` | User's desktop directory |
-| `${DOCUMENTS}` | User's documents directory |
-| `${DOWNLOADS}` | User's downloads directory |
-| `${pathSeparator}` or `${/}` | Platform path separator |
-| `${user_config.KEY}` | User-provided value for configuration KEY |
+# | variable | resolves to |
+# |----------|-------------|
+# | `${__dirname}` | Absolute path to the extension's unpacked directory |
+# | `${HOME}` | User's home directory |
+# | `${DESKTOP}` | User's desktop directory |
+# | `${DOCUMENTS}` | User's documents directory |
+# | `${DOWNLOADS}` | User's downloads directory |
+# | `${pathSeparator}` or `${/}` | Platform path separator |
+# | `${user_config.KEY}` | User-provided value for configuration KEY |
 
 ### User configuration (user_config)
 
-Extensions can declare configuration options collected via the host app's UI.
-Supported types: `string`, `number`, `boolean`, `directory`, `file`.
+# Extensions can declare configuration options collected via the host app's UI.
+# Supported types: `string`, `number`, `boolean`, `directory`, `file`.
 
-| field | description |
-|-------|-------------|
-| `type` | Data type: `string`, `number`, `boolean`, `directory`, `file` |
-| `title` | Display name in UI |
-| `description` | Help text explaining the option |
-| `required` | Must be provided (default: false) |
-| `default` | Default value (supports variable substitution) |
-| `multiple` | Allow multiple selections (directory/file types, default: false) |
-| `sensitive` | Mask input and store in OS keychain (string types, default: false) |
-| `min` / `max` | Numeric validation constraints |
+# | field | description |
+# |-------|-------------|
+# | `type` | Data type: `string`, `number`, `boolean`, `directory`, `file` |
+# | `title` | Display name in UI |
+# | `description` | Help text explaining the option |
+# | `required` | Must be provided (default: false) |
+# | `default` | Default value (supports variable substitution) |
+# | `multiple` | Allow multiple selections (directory/file types, default: false) |
+# | `sensitive` | Mask input and store in OS keychain (string types, default: false) |
+# | `min` / `max` | Numeric validation constraints |
 
 ### Compatibility object
 
-```json
-{
-  "compatibility": {
-    "claude_desktop": ">=1.0.0",
-    "platforms": ["darwin", "win32", "linux"],
-    "runtimes": {
-      "python": ">=3.8",
-      "node": ">=16.0.0"
-    }
-  }
-}
-```
+# ```json
+# {
+#   "compatibility": {
+#     "claude_desktop": ">=1.0.0",
+#     "platforms": ["darwin", "win32", "linux"],
+#     "runtimes": {
+#       "python": ">=3.8",
+#       "node": ">=16.0.0"
+#     }
+#   }
+# }
+# ```
 
 ### Localization
 
-Localized strings live in per-locale resource files without bloating the manifest:
+# Localized strings live in per-locale resource files without bloating the manifest:
 
-```json
-"localization": {
-  "resources": "mcpb-resources/${locale}.json",
-  "default_locale": "en-US"
-}
-```
+# ```json
+# "localization": {
+#   "resources": "mcpb-resources/${locale}.json",
+#   "default_locale": "en-US"
+# }
+# ```
 
-Fields marked 🌎 in the spec are localizable. The default locale's values stay in
-the manifest; locale-specific files only need override values.
+# Fields marked 🌎 in the spec are localizable. The default locale's values stay in
+# the manifest; locale-specific files only need override values.
 
 ## ── Toolchain (dxt CLI) ────────────────────────────────────────────────────────
 
-Anthropic open-sourced the toolchain at https://github.com/anthropics/dxt:
+# Anthropic open-sourced the toolchain at https://github.com/anthropics/dxt:
 
-| command | purpose |
-|---------|---------|
-| `npx @anthropic-ai/dxt init` | Initialize manifest.json (interactive) |
-| `npx @anthropic-ai/dxt init --yes` | Speed-run minimal manifest.json |
-| `npx @anthropic-ai/dxt build` | Bundle everything into `.mcpb` file |
-| `npx @anthropic-ai/dxt validate` | Validate manifest and packaging |
-| `npx @anthropic-ai/dxt watch` | Watch mode for development |
+# | command | purpose |
+# |---------|---------|
+# | `npx @anthropic-ai/dxt init` | Initialize manifest.json (interactive) |
+# | `npx @anthropic-ai/dxt init --yes` | Speed-run minimal manifest.json |
+# | `npx @anthropic-ai/dxt build` | Bundle everything into `.mcpb` file |
+# | `npx @anthropic-ai/dxt validate` | Validate manifest and packaging |
+# | `npx @anthropic-ai/dxt watch` | Watch mode for development |
 
-What `dxt build` does:
-1.  Validates manifest.json
-2.  Copies server files
-3.  Installs dependencies (npm install, pip install)
-4.  Creates platform-specific builds
-5.  Outputs a .mcpb archive
+# What `dxt build` does:
+# 1.  Validates manifest.json
+# 2.  Copies server files
+# 3.  Installs dependencies (npm install, pip install)
+# 4.  Creates platform-specific builds
+# 5.  Outputs a .mcpb archive
 
 ## ── Extension directory / marketplace ──────────────────────────────────────────
 
-Claude Desktop ships with a curated extension directory where users can browse,
-search, and install with one click. Submission process:
+# Claude Desktop ships with a curated extension directory where users can browse,
+# search, and install with one click. Submission process:
 
-1.  Ensure the extension follows submission guidelines
-2.  Test across Windows and macOS
-3.  Anthropic team reviews for quality and security
-4.  Published to the directory
+# 1.  Ensure the extension follows submission guidelines
+# 2.  Test across Windows and macOS
+# 3.  Anthropic team reviews for quality and security
+# 4.  Published to the directory
 
 ## ── Security model ─────────────────────────────────────────────────────────────
 
-| feature | description |
-|---------|-------------|
-| OS keychain storage | Sensitive user config values stored in OS secret vault |
-| Automatic updates | Extensions can declare `update_url` in manifest for self-update |
-| Auditability | Users can see what extensions are installed |
-| Group Policy (Windows) | IT admins can manage extensions via Group Policy |
-| MDM (macOS) | Mobile Device Management support for enterprise |
-| Pre-approved extensions | Admins can pre-install approved extensions |
-| Blocklist | Block specific extensions or publishers |
-| Directory disable | Disable the extension directory entirely |
-| Private directories | Deploy private extension directories for enterprises |
+# | feature | description |
+# |---------|-------------|
+# | OS keychain storage | Sensitive user config values stored in OS secret vault |
+# | Automatic updates | Extensions can declare `update_url` in manifest for self-update |
+# | Auditability | Users can see what extensions are installed |
+# | Group Policy (Windows) | IT admins can manage extensions via Group Policy |
+# | MDM (macOS) | Mobile Device Management support for enterprise |
+# | Pre-approved extensions | Admins can pre-install approved extensions |
+# | Blocklist | Block specific extensions or publishers |
+# | Directory disable | Disable the extension directory entirely |
+# | Private directories | Deploy private extension directories for enterprises |
 
 ## ── Open-source commitment ─────────────────────────────────────────────────────
 
-Anthropic open-sourced the following:
+# Anthropic open-sourced the following:
 
-- Complete MCPB specification
-- Packaging and validation tools (`dxt` CLI)
-- Reference implementation code
-- TypeScript types and schemas
-- All in https://github.com/anthropics/dxt (versioned 0.1, community-driven evolution)
+# - Complete MCPB specification
+# - Packaging and validation tools (`dxt` CLI)
+# - Reference implementation code
+# - TypeScript types and schemas
+# - All in https://github.com/anthropics/dxt (versioned 0.1, community-driven evolution)
 
 ## ── Integration with b00t MCP system ───────────────────────────────────────────
 
-b00t's MCP infrastructure (see `_b00t_/datums/MCP-SERVER-SCHEMA.tomllmd`) uses
-`.mcpb` files as an alternative install pathway. Where traditional MCP servers
-require manual `b00t mcp add` with stdio/http config, Desktop Extensions can be:
+# b00t's MCP infrastructure (see `_b00t_/datums/MCP-SERVER-SCHEMA.tomllmd`) uses
+# `.mcpb` files as an alternative install pathway. Where traditional MCP servers
+# require manual `b00t mcp add` with stdio/http config, Desktop Extensions can be:
 
-1. **Discovered** — Via Claude Desktop's built-in extension directory
-2. **Installed** — Via double-click `.mcpb` → Claude Desktop handles all config
-3. **Managed** — b00t can detect and interact with extensions installed in
-   `~/.claude/claude_desktop_config.json` alongside traditional MCP servers
+# 1. **Discovered** — Via Claude Desktop's built-in extension directory
+# 2. **Installed** — Via double-click `.mcpb` → Claude Desktop handles all config
+# 3. **Managed** — b00t can detect and interact with extensions installed in
+#    `~/.claude/claude_desktop_config.json` alongside traditional MCP servers
 
-The `mcp_config.command` / `mcp_config.args` in a `.mcpb` manifest.json maps
-directly to the `command` / `args` fields in b00t's MCP server transport schema.
+# The `mcp_config.command` / `mcp_config.args` in a `.mcpb` manifest.json maps
+# directly to the `command` / `args` fields in b00t's MCP server transport schema.
 
 ### Installation targets comparison
 
-| target | config file | install method |
-|--------|------------|----------------|
-| hermes | `~/.hermes/config.yaml` | `b00t mcp install <name> hermes` |
-| claudecode | `~/.claude/claude_desktop_config.json` | `b00t mcp install <name> claudecode` OR `.mcpb` double-click |
-| vscode | `~/.config/Code/.../claude_mcp.json` | `b00t mcp install <name> vscode` |
-| geminicli | `.mcp.json` or `~/.gemini/mcp.json` | `b00t mcp install <name> geminicli` |
+# | target | config file | install method |
+# |--------|------------|----------------|
+# | hermes | `~/.hermes/config.yaml` | `b00t mcp install <name> hermes` |
+# | claudecode | `~/.claude/claude_desktop_config.json` | `b00t mcp install <name> claudecode` OR `.mcpb` double-click |
+# | vscode | `~/.config/Code/.../claude_mcp.json` | `b00t mcp install <name> vscode` |
+# | geminicli | `.mcp.json` or `~/.gemini/mcp.json` | `b00t mcp install <name> geminicli` |
 
 ## ── Example: Minimal manifest.json ─────────────────────────────────────────────
 
-```json
-{
-  "manifest_version": "0.3",
-  "name": "my-extension",
-  "version": "1.0.0",
-  "description": "A simple MCP extension",
-  "author": {
-    "name": "Extension Author"
-  },
-  "server": {
-    "type": "node",
-    "entry_point": "server/index.js",
-    "mcp_config": {
-      "command": "node",
-      "args": ["${__dirname}/server/index.js"]
-    }
-  }
-}
-```
+# ```json
+# {
+#   "manifest_version": "0.3",
+#   "name": "my-extension",
+#   "version": "1.0.0",
+#   "description": "A simple MCP extension",
+#   "author": {
+#     "name": "Extension Author"
+#   },
+#   "server": {
+#     "type": "node",
+#     "entry_point": "server/index.js",
+#     "mcp_config": {
+#       "command": "node",
+#       "args": ["${__dirname}/server/index.js"]
+#     }
+#   }
+# }
+# ```
 
 ## ── Example: Full manifest.json ────────────────────────────────────────────────
 
-```json
-{
-  "manifest_version": "0.3",
-  "name": "filesystem-server",
-  "display_name": "Filesystem Server",
-  "version": "1.0.0",
-  "description": "Give Claude access to your file system",
-  "author": {
-    "name": "Example Developer",
-    "email": "dev@example.com"
-  },
-  "server": {
-    "type": "node",
-    "entry_point": "server/index.js",
-    "mcp_config": {
-      "command": "node",
-      "args": [
-        "${__dirname}/server/index.js",
-        "${user_config.allowed_directories}"
-      ]
-    }
-  },
-  "compatibility": {
-    "claude_desktop": ">=1.0.0",
-    "platforms": ["darwin", "win32"],
-    "runtimes": {
-      "node": ">=18.0.0"
-    }
-  },
-  "user_config": {
-    "allowed_directories": {
-      "type": "directory",
-      "title": "Allowed Directories",
-      "description": "Directories the server can access",
-      "multiple": true,
-      "required": true,
-      "default": ["${HOME}/Desktop", "${HOME}/Documents"]
-    }
-  },
-  "tools": [
-    { "name": "list_directory", "description": "List files in a directory" },
-    { "name": "read_file", "description": "Read a file's contents" },
-    { "name": "write_file", "description": "Write content to a file" }
-  ],
-  "keywords": ["filesystem", "file", "directory"],
-  "license": "MIT"
-}
-```
+# ```json
+# {
+#   "manifest_version": "0.3",
+#   "name": "filesystem-server",
+#   "display_name": "Filesystem Server",
+#   "version": "1.0.0",
+#   "description": "Give Claude access to your file system",
+#   "author": {
+#     "name": "Example Developer",
+#     "email": "dev@example.com"
+#   },
+#   "server": {
+#     "type": "node",
+#     "entry_point": "server/index.js",
+#     "mcp_config": {
+#       "command": "node",
+#       "args": [
+#         "${__dirname}/server/index.js",
+#         "${user_config.allowed_directories}"
+#       ]
+#     }
+#   },
+#   "compatibility": {
+#     "claude_desktop": ">=1.0.0",
+#     "platforms": ["darwin", "win32"],
+#     "runtimes": {
+#       "node": ">=18.0.0"
+#     }
+#   },
+#   "user_config": {
+#     "allowed_directories": {
+#       "type": "directory",
+#       "title": "Allowed Directories",
+#       "description": "Directories the server can access",
+#       "multiple": true,
+#       "required": true,
+#       "default": ["${HOME}/Desktop", "${HOME}/Documents"]
+#     }
+#   },
+#   "tools": [
+#     { "name": "list_directory", "description": "List files in a directory" },
+#     { "name": "read_file", "description": "Read a file's contents" },
+#     { "name": "write_file", "description": "Write content to a file" }
+#   ],
+#   "keywords": ["filesystem", "file", "directory"],
+#   "license": "MIT"
+# }
+# ```
 
 ## ── Getting started for developers ─────────────────────────────────────────────
 
-```bash
+# ```bash
 # 1. Initialize a manifest
-npx @anthropic-ai/dxt init
+# npx @anthropic-ai/dxt init
 
 # 2. Declare user config (API keys, allowed directories, etc.)
 #    Edit manifest.json to add user_config section
 
 # 3. Bundle
-npx @anthropic-ai/dxt build
+# npx @anthropic-ai/dxt build
 
 # 4. Test — drag .mcpb into Claude Desktop Settings → Extensions
 #    OR double-click the .mcpb file
 
 # 5. Submit for the directory
 #    https://forms.gle/tyiAZvch1kDADKoP9
-```
+# ```
 
 ## ── Building with Claude Code ──────────────────────────────────────────────────
 
-Claude Code can generate Desktop Extensions with minimal intervention. Recommended
-prompt context:
+# Claude Code can generate Desktop Extensions with minimal intervention. Recommended
+# prompt context:
 
-> Build an MCPB extension. Run `npx @anthropic-ai/dxt init --yes` to create the
-> manifest, then modify it appropriately for the server's needs. After writing
-> the server code, run `npx @anthropic-ai/dxt build` to create the `.mcpb` file.
+# > Build an MCPB extension. Run `npx @anthropic-ai/dxt init --yes` to create the
+# > manifest, then modify it appropriately for the server's needs. After writing
+# > the server code, run `npx @anthropic-ai/dxt build` to create the `.mcpb` file.
 
 # b00t:map v1
 # summary: Anthropic Desktop Extensions (.mcpb) specification — one-click MCP server packaging, manifest.json schema (v0.3), server types (node/python/binary/uv), user_config, variable substitution, platform overrides, localization, security model, extension directory, toolchain (dxt CLI), and integration with b00t's MCP infrastructure

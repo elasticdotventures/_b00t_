@@ -18,80 +18,80 @@ name = "CREW-ROLES"
 type = "schema"
 hint = "Canonical hive crew role schema — captain, executor, operator, specialist, bouncer roles with lifecycle FORM→ASSIGN→TRAIN→DEPLOY→REVIEW→ROTATE"
 
-[b00t.version]
+[b00t.schema]
 schema = 1
 content = "stable"
 
 ## ── Crew Role Definitions ──────────────────────────────────────────────────────
 
-Each crew member has a `role` (authority tier) and optional `captain` flag.
-Only one agent per crew has `captain = true`.
+# Each crew member has a `role` (authority tier) and optional `captain` flag.
+# Only one agent per crew has `captain = true`.
 
-| Role | Captain? | Authority | Description | Agent Examples |
-|------|----------|-----------|-------------|----------------|
-| captain | true (only one) | Full command | Commands the crew, sets mission, delegates tasks, manages lifecycle | executive |
-| executor | false | Task execution | Runs autonomous task loops, executes backlog items, processes workflows | ralph, pi |
-| operator | false | Recruitment + training | Scouts/finds agents, enlists them with role definitions, executes training plans | operator (new) |
-| specialist | false | Domain expertise | Domain-specific work (coding, research, analysis, inference) | alpha, beta, langchain-operator, experiment-controller |
-| bouncer | false | Quality gates | Validates inputs/outputs, enforces contracts, security scanning | (embedded in agent datums) |
+# | Role | Captain? | Authority | Description | Agent Examples |
+# |------|----------|-----------|-------------|----------------|
+# | captain | true (only one) | Full command | Commands the crew, sets mission, delegates tasks, manages lifecycle | executive |
+# | executor | false | Task execution | Runs autonomous task loops, executes backlog items, processes workflows | ralph, pi |
+# | operator | false | Recruitment + training | Scouts/finds agents, enlists them with role definitions, executes training plans | operator (new) |
+# | specialist | false | Domain expertise | Domain-specific work (coding, research, analysis, inference) | alpha, beta, langchain-operator, experiment-controller |
+# | bouncer | false | Quality gates | Validates inputs/outputs, enforces contracts, security scanning | (embedded in agent datums) |
 
 ## ── Assignment Rules ────────────────────────────────────────────────────────────
 
-These rules are evaluated by the operator during crew formation:
+# These rules are evaluated by the operator during crew formation:
 
-| Rule | Condition | Action |
-|------|-----------|--------|
-| unique-captain | Only one agent with `captain = true` per crew | Reject duplicate captains |
-| role-unique | No duplicate roles for identical crew scope | Warn on duplicate roles |
-| captain-mandatory | Every crew must have exactly one captain | Executive is always the default |
-| operator-optional | Operator is deployed on-demand by captain | Not part of standing crew |
-| bouncer-default | Bouncer gates enabled by default for all agents | Embedded in each agent datum |
+# | Rule | Condition | Action |
+# |------|-----------|--------|
+# | unique-captain | Only one agent with `captain = true` per crew | Reject duplicate captains |
+# | role-unique | No duplicate roles for identical crew scope | Warn on duplicate roles |
+# | captain-mandatory | Every crew must have exactly one captain | Executive is always the default |
+# | operator-optional | Operator is deployed on-demand by captain | Not part of standing crew |
+# | bouncer-default | Bouncer gates enabled by default for all agents | Embedded in each agent datum |
 
 ## ── Crew Lifecycle ──────────────────────────────────────────────────────────────
 
-Every crew member progresses through these lifecycle stages:
+# Every crew member progresses through these lifecycle stages:
 
-| Phase | Trigger | Description | Responsible |
-|-------|---------|-------------|-------------|
-| FORM | Captain initiates crew formation | Define crew mission, identify required roles | Captain |
-| ASSIGN | Operator scouts candidates | Match candidates to roles via capability assessment | Operator |
-| TRAIN | Operator executes training plans | grok learn for role-specific skills, context ingestion | Operator |
-| DEPLOY | Captain activates crew | Register sub-agents, establish IPC channels, enable bouncer | Captain |
-| REVIEW | Captain or Operator evaluates | Performance review, capability score update, rotation decision | Captain/Operator |
-| ROTATE | Captain decides | Reassign roles, cycle agents, archive performance data | Captain |
+# | Phase | Trigger | Description | Responsible |
+# |-------|---------|-------------|-------------|
+# | FORM | Captain initiates crew formation | Define crew mission, identify required roles | Captain |
+# | ASSIGN | Operator scouts candidates | Match candidates to roles via capability assessment | Operator |
+# | TRAIN | Operator executes training plans | grok learn for role-specific skills, context ingestion | Operator |
+# | DEPLOY | Captain activates crew | Register sub-agents, establish IPC channels, enable bouncer | Captain |
+# | REVIEW | Captain or Operator evaluates | Performance review, capability score update, rotation decision | Captain/Operator |
+# | ROTATE | Captain decides | Reassign roles, cycle agents, archive performance data | Captain |
 
 ## ── Agent Datum Crew Section ────────────────────────────────────────────────────
 
-Every agent datum MUST include a `[b00t.agent.crew]` section:
+# Every agent datum MUST include a `[b00t.agent.crew]` section:
 
-```toml
+# ```toml
 [b00t.agent.crew]
 role = "executor"   # captain | executor | operator | specialist | bouncer
 captain = false     # true only for the single captain agent
-```
+# ```
 
 ## ── Field Reference ─────────────────────────────────────────────────────────────
 
-| TOML Path | Type | Required | Default | Description |
-|-----------|------|----------|---------|-------------|
-| b00t.agent.crew.role | string | yes | — | One of: captain, executor, operator, specialist, bouncer |
-| b00t.agent.crew.captain | bool | yes | false | True only for the single crew captain |
+# | TOML Path | Type | Required | Default | Description |
+# |-----------|------|----------|---------|-------------|
+# | b00t.agent.crew.role | string | yes | — | One of: captain, executor, operator, specialist, bouncer |
+# | b00t.agent.crew.captain | bool | yes | false | True only for the single crew captain |
 
 ## ── Capability Requirements by Role ─────────────────────────────────────────────
 
-| Role | Required Skills | Min Model Tier | Example Skills |
-|------|----------------|----------------|----------------|
-| captain | hive-cmdb, resource-scheduling, agent-delegation | frontier | systemd, vllm, rust, autonomous-loop |
-| executor | autonomous-loop, workflow-execution | ch0nky | todo-backlog, prd-parsing |
-| operator | agent-discovery, agent-recruitment, crew-formation, training-plan-execution | frontier | ontology-query, grok-learn, search |
-| specialist | domain-specific expertise | ch0nky or sm0l | code, refactor, debug (pi); experiment-controller (experiment-controller) |
-| bouncer | security-audit, contract-validation | sm0l | sanitize, credential-check, rate-limit |
+# | Role | Required Skills | Min Model Tier | Example Skills |
+# |------|----------------|----------------|----------------|
+# | captain | hive-cmdb, resource-scheduling, agent-delegation | frontier | systemd, vllm, rust, autonomous-loop |
+# | executor | autonomous-loop, workflow-execution | ch0nky | todo-backlog, prd-parsing |
+# | operator | agent-discovery, agent-recruitment, crew-formation, training-plan-execution | frontier | ontology-query, grok-learn, search |
+# | specialist | domain-specific expertise | ch0nky or sm0l | code, refactor, debug (pi); experiment-controller (experiment-controller) |
+# | bouncer | security-audit, contract-validation | sm0l | sanitize, credential-check, rate-limit |
 
 ## ── Crew Manifest Format ────────────────────────────────────────────────────────
 
-When operator reports to captain, the crew manifest follows this structure:
+# When operator reports to captain, the crew manifest follows this structure:
 
-```toml
+# ```toml
 # crew-manifest.toml — generated by operator after FORM→ASSIGN→TRAIN
 [[crew.members]]
 id = "executive-001"
@@ -113,7 +113,7 @@ role = "specialist"
 captain = false
 status = "active"
 tier = "ch0nky"
-```
+# ```
 
 # b00t:map v1
 # summary: Canonical hive crew role schema — captain, executor, operator, specialist, bouncer roles with lifecycle FORM→ASSIGN→TRAIN→DEPLOY→REVIEW→ROTATE

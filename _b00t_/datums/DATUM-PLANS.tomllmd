@@ -22,527 +22,527 @@ name = "DATUM-PLANS"
 type = "specification"
 hint = "Datum Plans — SDD pattern for connecting datums, specifications, and execution plans"
 
-[b00t.version]
+[b00t.schema]
 schema = 1
 content = "draft"
 
 ## ── What is a Datum Plan? ─────────────────────────────────────────────────────
 
-A **datum plan** is a bridge between a concept datum (the _what_) and an
-execution plan (the _how and when_). In the b00t specification-driven development
-(SDD) pattern, work flows through three layers:
+# A **datum plan** is a bridge between a concept datum (the _what_) and an
+# execution plan (the _how and when_). In the b00t specification-driven development
+# (SDD) pattern, work flows through three layers:
 
-```
-  _b00t_/datums/       →  _b00t_/sdd/        →  _b00t_/plans/
-  (concept/spec)          (specification)        (execution plan)
-       │                        │                       │
-       │ defines the            │ defines the           │ schedules steps,
-       │ concept, terms,        │ interface,            │ assigns agents,
-       │ and semantics          │ architecture,         │ tracks progress,
-       │                        │ and invariants        │ produces artifacts
-       ▼                        ▼                       ▼
-  "WHAT are we            "HOW does it            "WHEN do we build
-   building?"              work?"                  it, and who does it?"
-```
+# ```
+#   _b00t_/datums/       →  _b00t_/sdd/        →  _b00t_/plans/
+#   (concept/spec)          (specification)        (execution plan)
+#        │                        │                       │
+#        │ defines the            │ defines the           │ schedules steps,
+#        │ concept, terms,        │ interface,            │ assigns agents,
+#        │ and semantics          │ architecture,         │ tracks progress,
+#        │                        │ and invariants        │ produces artifacts
+#        ▼                        ▼                       ▼
+#   "WHAT are we            "HOW does it            "WHEN do we build
+#    building?"              work?"                  it, and who does it?"
+# ```
 
-A datum plan resolves an issue into actionable work by:
-1. Defining the datum (concept/specification/schema/research)
-2. Optionally producing an SDD for detailed specification
-3. Creating a dated plan in _b00t_/plans/ for execution
-4. Mapping to b00t tasks for tracking
+# A datum plan resolves an issue into actionable work by:
+# 1. Defining the datum (concept/specification/schema/research)
+# 2. Optionally producing an SDD for detailed specification
+# 3. Creating a dated plan in _b00t_/plans/ for execution
+# 4. Mapping to b00t tasks for tracking
 
 ### Key principles
 
-| principle | description |
-|-----------|-------------|
-| **Spec-first** | Every plan begins with a datum definition, not implementation |
-| **Three layers** | Datums (what), SDDs (how), Plans (when) — each has its own directory |
-| **Dated plans** | Plans are organized by date for audit trail and rollback |
-| **Issue-driven** | Each plan traces back to an issue (issue-#) for provenance |
-| **Executable** | Plans contain concrete steps that map to b00t tasks |
-| **Self-documenting** | The plan IS the documentation — no separate project management tool |
+# | principle | description |
+# |-----------|-------------|
+# | **Spec-first** | Every plan begins with a datum definition, not implementation |
+# | **Three layers** | Datums (what), SDDs (how), Plans (when) — each has its own directory |
+# | **Dated plans** | Plans are organized by date for audit trail and rollback |
+# | **Issue-driven** | Each plan traces back to an issue (issue-#) for provenance |
+# | **Executable** | Plans contain concrete steps that map to b00t tasks |
+# | **Self-documenting** | The plan IS the documentation — no separate project management tool |
 
 ## ── How datums relate to plans ───────────────────────────────────────────────
 
 ### Datums as plan sources
 
-Every plan in _b00t_/plans/ originates from a datum in _b00t_/datums/. The datum
-provides the conceptual foundation; the plan provides the execution blueprint.
+# Every plan in _b00t_/plans/ originates from a datum in _b00t_/datums/. The datum
+# provides the conceptual foundation; the plan provides the execution blueprint.
 
-| datum type | plan purpose | example |
-|------------|-------------|---------|
-| `specification` | Define architecture, interfaces, and invariants | PAIR-CONCEPT → plan to implement pair management |
-| `schema` | Define data structures and validation rules | MCP-SERVER-SCHEMA → plan to add new transport type |
-| `datum` | Define research findings or experimental results | STOP-SEQUENCES → plan to run experiment protocol |
-| `concept` | Define a new b00t concept or pattern | DATUM-PLANS (this file) → plan to implement plan system |
+# | datum type | plan purpose | example |
+# |------------|-------------|---------|
+# | `specification` | Define architecture, interfaces, and invariants | PAIR-CONCEPT → plan to implement pair management |
+# | `schema` | Define data structures and validation rules | MCP-SERVER-SCHEMA → plan to add new transport type |
+# | `datum` | Define research findings or experimental results | STOP-SEQUENCES → plan to run experiment protocol |
+# | `concept` | Define a new b00t concept or pattern | DATUM-PLANS (this file) → plan to implement plan system |
 
 ### Datum-to-plan mapping
 
-A single datum can produce multiple plans (e.g., phase 1, phase 2), and a single
-plan can reference multiple datums. The mapping is many-to-many but always
-explicit:
+# A single datum can produce multiple plans (e.g., phase 1, phase 2), and a single
+# plan can reference multiple datums. The mapping is many-to-many but always
+# explicit:
 
-| relationship | direction | how it's recorded |
-|-------------|-----------|-------------------|
-| Plan references datum | plan → datum | `🔗参` link in plan header |
-| Datum references plan | datum → plan | `plans:` field or `🔗参` in datum footer |
-| SDD references both | sdd → datum + plan | SDD header includes `Datum:` and `Plan:` fields |
-| Issue references all | issue → datum + sdd + plan | Issue body or issue file links |
+# | relationship | direction | how it's recorded |
+# |-------------|-----------|-------------------|
+# | Plan references datum | plan → datum | `🔗参` link in plan header |
+# | Datum references plan | datum → plan | `plans:` field or `🔗参` in datum footer |
+# | SDD references both | sdd → datum + plan | SDD header includes `Datum:` and `Plan:` fields |
+# | Issue references all | issue → datum + sdd + plan | Issue body or issue file links |
 
 ### Plan lifecycle stage in datum
 
-Each datum can declare its plan status in the `[b00t.version]` section:
+# Each datum can declare its plan status in the `[b00t.version]` section:
 
-```toml
-[b00t.version]
-schema = 1
-content = "draft"       # draft | stable | archived
+# ```toml
+# [b00t.version]
+# schema = 1
+# content = "draft"       # draft | stable | archived
 # Plan stage can be tracked in a separate field:
 # stage = "proposed"    # proposed | reviewing | executing | verifying | complete
-```
+# ```
 
-The `content` field tracks the datum's stability, while the plan stage is
-tracked in the plan file itself (see lifecycle below).
+# The `content` field tracks the datum's stability, while the plan stage is
+# tracked in the plan file itself (see lifecycle below).
 
 ## ── Plan lifecycle ───────────────────────────────────────────────────────────
 
-Every datum plan progresses through a four-phase lifecycle. The lifecycle is
-inspired by the specification-driven development (SDD) pattern seen in
-_b00t_/sdd/ documents, extended to cover the full plan.
+# Every datum plan progresses through a four-phase lifecycle. The lifecycle is
+# inspired by the specification-driven development (SDD) pattern seen in
+# _b00t_/sdd/ documents, extended to cover the full plan.
 
-```
-  ┌──────────────────────────────────────────────────────┐
-  │                                                       │
-  ▼                                                       │
-PROPOSE ──► REVIEW ──► EXECUTE ──► VERIFY ───────────────┘
-```
+# ```
+#   ┌──────────────────────────────────────────────────────┐
+#   │                                                       │
+#   ▼                                                       │
+# PROPOSE ──► REVIEW ──► EXECUTE ──► VERIFY ───────────────┘
+# ```
 
 ### Phase 1: PROPOSE
 
-**Trigger:** An issue is opened or a gap is identified in the b00t system.
+# **Trigger:** An issue is opened or a gap is identified in the b00t system.
 
-1. Author creates a datum in _b00t_/datums/ defining the concept, schema, or
-   specification
-2. Optionally creates an SDD in _b00t_/sdd/ for detailed architecture design
-3. Creates a dated plan file in _b00t_/plans/ with:
-   - Plan metadata (date, author, issue reference)
-   - Datum reference (which datum this plan implements)
-   - SDD reference (if applicable)
-   - Concrete steps with acceptance criteria
-   - Estimated effort (sm0l / ch0nky / thicc)
-4. Plan is marked as `status = "proposed"`
+# 1. Author creates a datum in _b00t_/datums/ defining the concept, schema, or
+#    specification
+# 2. Optionally creates an SDD in _b00t_/sdd/ for detailed architecture design
+# 3. Creates a dated plan file in _b00t_/plans/ with:
+#    - Plan metadata (date, author, issue reference)
+#    - Datum reference (which datum this plan implements)
+#    - SDD reference (if applicable)
+#    - Concrete steps with acceptance criteria
+#    - Estimated effort (sm0l / ch0nky / thicc)
+# 4. Plan is marked as `status = "proposed"`
 
-**Output:** `_b00t_/plans/YYYY-MM-DD-slug-plan.md` with `status = "proposed"`
+# **Output:** `_b00t_/plans/YYYY-MM-DD-slug-plan.md` with `status = "proposed"`
 
 ### Phase 2: REVIEW
 
-**Trigger:** Plan is submitted for review (usually by a pair or captain).
+# **Trigger:** Plan is submitted for review (usually by a pair or captain).
 
-1. Reviewer(s) examine the plan for:
-   - Completeness: Are all steps defined with clear acceptance criteria?
-   - Feasibility: Is the effort estimate realistic?
-   - Consistency: Does the plan align with the datum and SDD?
-   - Dependencies: Are prerequisite tasks identified?
-2. Reviewer approves, requests changes, or rejects
-3. On approval, plan status advances to `status = "approved"`
-4. Plan may be broken into b00t tasks via `b00t task add`
+# 1. Reviewer(s) examine the plan for:
+#    - Completeness: Are all steps defined with clear acceptance criteria?
+#    - Feasibility: Is the effort estimate realistic?
+#    - Consistency: Does the plan align with the datum and SDD?
+#    - Dependencies: Are prerequisite tasks identified?
+# 2. Reviewer approves, requests changes, or rejects
+# 3. On approval, plan status advances to `status = "approved"`
+# 4. Plan may be broken into b00t tasks via `b00t task add`
 
-**Output:** `status = "approved"` plan file, optionally with linked b00t tasks
+# **Output:** `status = "approved"` plan file, optionally with linked b00t tasks
 
 ### Phase 3: EXECUTE
 
-**Trigger:** Plan is approved and prioritized for execution.
+# **Trigger:** Plan is approved and prioritized for execution.
 
-1. Steps are assigned to agents (via pair assignment or direct assignment)
-2. Each step is tracked as a b00t task (or subtask)
-3. Progress is updated in the plan file: `progress = "30%"`
-4. Completed steps are marked with `[x]` and a date
-5. Blockers are documented with `[blocked: reason]` annotations
-6. Plan status is updated: `status = "executing"`
+# 1. Steps are assigned to agents (via pair assignment or direct assignment)
+# 2. Each step is tracked as a b00t task (or subtask)
+# 3. Progress is updated in the plan file: `progress = "30%"`
+# 4. Completed steps are marked with `[x]` and a date
+# 5. Blockers are documented with `[blocked: reason]` annotations
+# 6. Plan status is updated: `status = "executing"`
 
-**Execution modes:**
+# **Execution modes:**
 
-| mode | description | use case |
-|------|-------------|----------|
-| **Sequential** | Steps execute one after another | Dependent steps, infrastructure setup |
-| **Parallel** | Steps execute concurrently | Independent features, refactoring |
-| **Iterative** | Steps repeat with refinement | Research, experimentation |
-| **Delegated** | Steps farmed out to sub-agents | Large plans across subsystems |
+# | mode | description | use case |
+# |------|-------------|----------|
+# | **Sequential** | Steps execute one after another | Dependent steps, infrastructure setup |
+# | **Parallel** | Steps execute concurrently | Independent features, refactoring |
+# | **Iterative** | Steps repeat with refinement | Research, experimentation |
+# | **Delegated** | Steps farmed out to sub-agents | Large plans across subsystems |
 
 ### Phase 4: VERIFY
 
-**Trigger:** All plan steps are complete.
+# **Trigger:** All plan steps are complete.
 
-1. Verify acceptance criteria for each step
-2. Run tests, check output artifacts, validate against the datum spec
-3. Update the datum's `content` field if the specification has been validated
-   (e.g., `draft` → `stable`)
-4. Archive the plan with `status = "complete"` or `status = "archived"`
-5. Write a retrospective (optional but recommended for ch0nky+ plans)
-6. Close or update the originating issue
+# 1. Verify acceptance criteria for each step
+# 2. Run tests, check output artifacts, validate against the datum spec
+# 3. Update the datum's `content` field if the specification has been validated
+#    (e.g., `draft` → `stable`)
+# 4. Archive the plan with `status = "complete"` or `status = "archived"`
+# 5. Write a retrospective (optional but recommended for ch0nky+ plans)
+# 6. Close or update the originating issue
 
-**Output:** `status = "complete"` plan, potentially updated datum or SDD
+# **Output:** `status = "complete"` plan, potentially updated datum or SDD
 
 ### Plan status values
 
-| status | meaning | next status |
-|--------|---------|-------------|
-| `proposed` | Plan created, awaiting review | `approved` or `rejected` |
-| `approved` | Plan reviewed and accepted | `executing` |
-| `executing` | Work in progress | `complete` or `blocked` |
-| `blocked` | Execution stalled, needs resolution | `executing` or `cancelled` |
-| `complete` | All steps verified and done | (terminal) |
-| `cancelled` | Plan abandoned | (terminal) |
-| `archived` | Completed plan, preserved for audit | (terminal) |
-| `rejected` | Plan rejected during review | (terminal, may be revised) |
+# | status | meaning | next status |
+# |--------|---------|-------------|
+# | `proposed` | Plan created, awaiting review | `approved` or `rejected` |
+# | `approved` | Plan reviewed and accepted | `executing` |
+# | `executing` | Work in progress | `complete` or `blocked` |
+# | `blocked` | Execution stalled, needs resolution | `executing` or `cancelled` |
+# | `complete` | All steps verified and done | (terminal) |
+# | `cancelled` | Plan abandoned | (terminal) |
+# | `archived` | Completed plan, preserved for audit | (terminal) |
+# | `rejected` | Plan rejected during review | (terminal, may be revised) |
 
 ## ── Directory relationships ─────────────────────────────────────────────────
 
-The three directories form a pipeline from concept to execution:
+# The three directories form a pipeline from concept to execution:
 
-```
-_b00t_/
-  ├── datums/          ← Concept hub (what)
-  │   ├── PAIR-CONCEPT.tomllmd
-  │   ├── MCP-SERVER-SCHEMA.tomllmd
-  │   ├── STOP-SEQUENCES.tomllmd
-  │   ├── ANTHROPIC-DESKTOP-EXTENSIONS.tomllmd
-  │   └── DATUM-PLANS.tomllmd         ← this file
-  │
-  ├── sdd/             ← Specification hub (how)
-  │   ├── SDD-004-install-dual-method.md
-  │   ├── SDD-006-ledg3rr-grok-chain.md
-  │   └── (new SDDs created from datum plans)
-  │
-  ├── plans/           ← Execution hub (when)
-  │   ├── 2026-05-08-datum-plans-implementation.md
-  │   └── (dated plan files per issue)
-  │
-  ├── issues/          ← Origination (why)
-  │   └── issue-89.md
-  │
-  └── (other b00t system files)
-```
+# ```
+# _b00t_/
+#   ├── datums/          ← Concept hub (what)
+#   │   ├── PAIR-CONCEPT.tomllmd
+#   │   ├── MCP-SERVER-SCHEMA.tomllmd
+#   │   ├── STOP-SEQUENCES.tomllmd
+#   │   ├── ANTHROPIC-DESKTOP-EXTENSIONS.tomllmd
+#   │   └── DATUM-PLANS.tomllmd         ← this file
+#   │
+#   ├── sdd/             ← Specification hub (how)
+#   │   ├── SDD-004-install-dual-method.md
+#   │   ├── SDD-006-ledg3rr-grok-chain.md
+#   │   └── (new SDDs created from datum plans)
+#   │
+#   ├── plans/           ← Execution hub (when)
+#   │   ├── 2026-05-08-datum-plans-implementation.md
+#   │   └── (dated plan files per issue)
+#   │
+#   ├── issues/          ← Origination (why)
+#   │   └── issue-89.md
+#   │
+#   └── (other b00t system files)
+# ```
 
 ### _b00t_/datums/ — Concept definitions
 
-| aspect | description |
-|--------|-------------|
-| **Format** | `.tomllmd` (TOML + Markdown) or `.tomllm` for simpler datums |
-| **Purpose** | Define concepts, schemas, specifications, and research findings |
-| **Stability** | `[b00t.version.content]` = `draft` | `stable` | `archived` |
-| **Lifecycle** | Created independently of plans; updated by plans |
-| **Cross-refs** | `🔗参` links to related datums, SDDs, plans, code |
-| **Footer** | `# b00t:map v1` with summary, tags, tier, cmds, complexity |
+# | aspect | description |
+# |--------|-------------|
+# | **Format** | `.tomllmd` (TOML + Markdown) or `.tomllm` for simpler datums |
+# | **Purpose** | Define concepts, schemas, specifications, and research findings |
+# | **Stability** | `[b00t.version.content]` = `draft` | `stable` | `archived` |
+# | **Lifecycle** | Created independently of plans; updated by plans |
+# | **Cross-refs** | `🔗参` links to related datums, SDDs, plans, code |
+# | **Footer** | `# b00t:map v1` with summary, tags, tier, cmds, complexity |
 
-Datums are the **source of truth** for what b00t knows. They are written in
-`.tomllmd` format — TOML frontmatter for structured metadata, Markdown body for
-human-readable specification.
+# Datums are the **source of truth** for what b00t knows. They are written in
+# `.tomllmd` format — TOML frontmatter for structured metadata, Markdown body for
+# human-readable specification.
 
 ### _b00t_/sdd/ — Specification-driven development documents
 
-| aspect | description |
-|--------|-------------|
-| **Format** | `.md` (Markdown) |
-| **Naming** | `SDD-NNN-slug.md` (sequentially numbered) |
-| **Purpose** | Deep architectural specifications with interface contracts, invariants, and implementation guidance |
-| **Status** | Embedded in document header: RESEARCH COMPLETE | IMPLEMENTED | DRAFT |
-| **Structure** | Problem → Questions (resolved/unresolved) → Specification (interface contract, pseudo-code, integration points) → Stage Gates → Retrospective |
-| **Stage gates** | Each SDD has gates (e.g., SDD written, types implemented, tests passing, integration verified) that must pass to advance confidence |
+# | aspect | description |
+# |--------|-------------|
+# | **Format** | `.md` (Markdown) |
+# | **Naming** | `SDD-NNN-slug.md` (sequentially numbered) |
+# | **Purpose** | Deep architectural specifications with interface contracts, invariants, and implementation guidance |
+# | **Status** | Embedded in document header: RESEARCH COMPLETE | IMPLEMENTED | DRAFT |
+# | **Structure** | Problem → Questions (resolved/unresolved) → Specification (interface contract, pseudo-code, integration points) → Stage Gates → Retrospective |
+# | **Stage gates** | Each SDD has gates (e.g., SDD written, types implemented, tests passing, integration verified) that must pass to advance confidence |
 
-SDDs are created when a datum plan requires detailed architecture design beyond
-what fits in the datum or plan file. The SDD pattern (seen in SDD-004 and
-SDD-006) includes:
+# SDDs are created when a datum plan requires detailed architecture design beyond
+# what fits in the datum or plan file. The SDD pattern (seen in SDD-004 and
+# SDD-006) includes:
 
-1. **Problem statement** — What problem is being solved
-2. **Questions** — Resolved (increases confidence) and unresolved
-3. **Specification** — Interface contract, Rust pseudo-code, integration points
-4. **Stage gates** — Checkpoints that must pass (documented with [x] or [ ])
-5. **Confidence tracker** — Iteration-by-iteration confidence score
-6. **Retrospective** — What was attempted, result, root cause if failure
+# 1. **Problem statement** — What problem is being solved
+# 2. **Questions** — Resolved (increases confidence) and unresolved
+# 3. **Specification** — Interface contract, Rust pseudo-code, integration points
+# 4. **Stage gates** — Checkpoints that must pass (documented with [x] or [ ])
+# 5. **Confidence tracker** — Iteration-by-iteration confidence score
+# 6. **Retrospective** — What was attempted, result, root cause if failure
 
 ### _b00t_/plans/ — Execution plans
 
-| aspect | description |
-|--------|-------------|
-| **Format** | `.md` (Markdown) |
-| **Naming** | `YYYY-MM-DD-slug-plan.md` (dated for chronological ordering) |
-| **Purpose** | Concrete execution plans with steps, assignments, and progress tracking |
-| **Status** | Embedded in plan header (see lifecycle above) |
-| **Structure** | Header (dates, references, status) → Goals → Steps (with acceptance criteria) → Progress → Retrospective |
+# | aspect | description |
+# |--------|-------------|
+# | **Format** | `.md` (Markdown) |
+# | **Naming** | `YYYY-MM-DD-slug-plan.md` (dated for chronological ordering) |
+# | **Purpose** | Concrete execution plans with steps, assignments, and progress tracking |
+# | **Status** | Embedded in plan header (see lifecycle above) |
+# | **Structure** | Header (dates, references, status) → Goals → Steps (with acceptance criteria) → Progress → Retrospective |
 
-The `_b00t_/plans/` directory is populated by the plan creation process. Each
-plan file captures:
+# The `_b00t_/plans/` directory is populated by the plan creation process. Each
+# plan file captures:
 
-```
+# ```
 ## Plan: [slug]
-- **Created:** YYYY-MM-DD
-- **Status:** proposed | approved | executing | complete | ...
-- **Datum:** _b00t_/datums/DATUM-NAME.tomllmd
-- **SDD:** _b00t_/sdd/SDD-NNN-slug.md (optional)
-- **Issue:** #89
-- **Author:** agent-name
+# - **Created:** YYYY-MM-DD
+# - **Status:** proposed | approved | executing | complete | ...
+# - **Datum:** _b00t_/datums/DATUM-NAME.tomllmd
+# - **SDD:** _b00t_/sdd/SDD-NNN-slug.md (optional)
+# - **Issue:** #89
+# - **Author:** agent-name
 
 ## Goals
-- Clear, measurable goals this plan achieves
+# - Clear, measurable goals this plan achieves
 
 ## Steps
-- [ ] Step 1: Description (acceptance criteria)
-- [ ] Step 2: Description (acceptance criteria)
+# - [ ] Step 1: Description (acceptance criteria)
+# - [ ] Step 2: Description (acceptance criteria)
 
 ## Progress: 0%
-```
+# ```
 
 ### Data flow between directories
 
-```
-Issue (#89) ─────┐
-                  ▼
-         ┌───────────────┐
-         │  _b00t_/datums │  ← Concept datum created
-         │  /DATUM-PLANS  │
-         └───────┬───────┘
-                  │  references
-                  ▼
-         ┌───────────────┐
-         │  _b00t_/sdd/   │  ← Optional: SDD for complex specs
-         │  SDD-NNN-*     │
-         └───────┬───────┘
-                  │  implements
-                  ▼
-         ┌───────────────┐
-         │  _b00t_/plans/ │  ← Execution plan created
-         │  YYYY-MM-DD-*  │
-         └───────┬───────┘
-                  │  mapped to
-                  ▼
-         ┌───────────────┐
-         │  b00t tasks    │  ← Steps tracked via b00t task system
-         │  (task add)    │
-         └───────────────┘
-```
+# ```
+# Issue (#89) ─────┐
+#                   ▼
+#          ┌───────────────┐
+#          │  _b00t_/datums │  ← Concept datum created
+#          │  /DATUM-PLANS  │
+#          └───────┬───────┘
+#                   │  references
+#                   ▼
+#          ┌───────────────┐
+#          │  _b00t_/sdd/   │  ← Optional: SDD for complex specs
+#          │  SDD-NNN-*     │
+#          └───────┬───────┘
+#                   │  implements
+#                   ▼
+#          ┌───────────────┐
+#          │  _b00t_/plans/ │  ← Execution plan created
+#          │  YYYY-MM-DD-*  │
+#          └───────┬───────┘
+#                   │  mapped to
+#                   ▼
+#          ┌───────────────┐
+#          │  b00t tasks    │  ← Steps tracked via b00t task system
+#          │  (task add)    │
+#          └───────────────┘
+# ```
 
 ### When each directory is used
 
-| scenario | datum | sdd | plan |
-|----------|-------|-----|------|
-| Simple concept (fits in a datum) | Required | Optional | Optional |
-| Complex feature (needs architecture) | Required | Required | Required |
-| Research / experiment | Required | Optional | Optional |
-| Schema definition | Required | Optional | Optional |
-| Multi-step implementation | Required | Optional | Required |
-| Cross-cutting change | Required | Required | Required |
+# | scenario | datum | sdd | plan |
+# |----------|-------|-----|------|
+# | Simple concept (fits in a datum) | Required | Optional | Optional |
+# | Complex feature (needs architecture) | Required | Required | Required |
+# | Research / experiment | Required | Optional | Optional |
+# | Schema definition | Required | Optional | Optional |
+# | Multi-step implementation | Required | Optional | Required |
+# | Cross-cutting change | Required | Required | Required |
 
 ## ── Plan file naming convention ──────────────────────────────────────────────
 
-Plan files in _b00t_/plans/ follow a strict naming convention for sortability:
+# Plan files in _b00t_/plans/ follow a strict naming convention for sortability:
 
-```
-YYYY-MM-DD-slug-plan.md
-```
+# ```
+# YYYY-MM-DD-slug-plan.md
+# ```
 
-| component | format | example |
-|-----------|--------|---------|
-| Date | `YYYY-MM-DD` | `2026-05-08` |
-| Slug | kebab-case | `datum-plans-implementation` |
-| Suffix | `-plan.md` | `-plan.md` |
+# | component | format | example |
+# |-----------|--------|---------|
+# | Date | `YYYY-MM-DD` | `2026-05-08` |
+# | Slug | kebab-case | `datum-plans-implementation` |
+# | Suffix | `-plan.md` | `-plan.md` |
 
-Examples:
-- `2026-05-08-datum-plans-implementation.md` — implementing the datum plans system
-- `2026-05-08-pair-concept-phase-1.md` — phase 1 of pair concept implementation
-- `2026-05-09-mcp-schema-extension.md` — extending MCP server schema
+# Examples:
+# - `2026-05-08-datum-plans-implementation.md` — implementing the datum plans system
+# - `2026-05-08-pair-concept-phase-1.md` — phase 1 of pair concept implementation
+# - `2026-05-09-mcp-schema-extension.md` — extending MCP server schema
 
-Multiple plans can exist for the same date; use a distinct slug.
+# Multiple plans can exist for the same date; use a distinct slug.
 
 ## ── SDD integration pattern ─────────────────────────────────────────────────
 
-When a datum plan requires an SDD, the integration follows this pattern:
+# When a datum plan requires an SDD, the integration follows this pattern:
 
-1. **Datum** defines the concept (e.g., "Datum Plans" — what the pattern is)
-2. **SDD** defines the implementation architecture (e.g., plan file schema, plan
-   lifecycle state machine, b00t task integration)
-3. **Plan** schedules the work (e.g., "create datum, write SDD, implement
-   parser, wire to task system, test")
+# 1. **Datum** defines the concept (e.g., "Datum Plans" — what the pattern is)
+# 2. **SDD** defines the implementation architecture (e.g., plan file schema, plan
+#    lifecycle state machine, b00t task integration)
+# 3. **Plan** schedules the work (e.g., "create datum, write SDD, implement
+#    parser, wire to task system, test")
 
-The SDD's stage gates map naturally to plan steps:
+# The SDD's stage gates map naturally to plan steps:
 
-| SDD gate | plan step |
-|----------|-----------|
-| Gate 1: SDD Written | Step 1: Write SDD document |
-| Gate 2: Types implemented | Step 2: Implement core types |
-| Gate 3: Tests passing | Step 3: Write and run tests |
-| Gate 4: Integration | Step 4: Wire to CLI/task system |
-| Gate 5: Verification | Step 5: Verify end-to-end |
+# | SDD gate | plan step |
+# |----------|-----------|
+# | Gate 1: SDD Written | Step 1: Write SDD document |
+# | Gate 2: Types implemented | Step 2: Implement core types |
+# | Gate 3: Tests passing | Step 3: Write and run tests |
+# | Gate 4: Integration | Step 4: Wire to CLI/task system |
+# | Gate 5: Verification | Step 5: Verify end-to-end |
 
-This creates a traceable chain:
-```
-Issue → Datum → SDD (gates) → Plan (steps) → Tasks → Done
-```
+# This creates a traceable chain:
+# ```
+# Issue → Datum → SDD (gates) → Plan (steps) → Tasks → Done
+# ```
 
 ## ── Plan templates ───────────────────────────────────────────────────────────
 
 ### Minimal plan template (sm0l)
 
-```markdown
+# ```markdown
 # Plan: [Slug]
-- **Created:** YYYY-MM-DD
-- **Status:** proposed
-- **Datum:** _b00t_/datums/DATUM-NAME.tomllmd
-- **Issue:** #NN
-- **Author:** agent-name
+# - **Created:** YYYY-MM-DD
+# - **Status:** proposed
+# - **Datum:** _b00t_/datums/DATUM-NAME.tomllmd
+# - **Issue:** #NN
+# - **Author:** agent-name
 
 ## Goals
-- [goal 1]
+# - [goal 1]
 
 ## Steps
-- [ ] Step 1
-- [ ] Step 2
+# - [ ] Step 1
+# - [ ] Step 2
 
 ## Progress: 0%
-```
+# ```
 
 ### Full plan template (ch0nky+)
 
-```markdown
+# ```markdown
 # Plan: [Slug]
-- **Created:** YYYY-MM-DD
-- **Updated:** YYYY-MM-DD
-- **Status:** proposed
-- **Datum:** _b00t_/datums/DATUM-NAME.tomllmd
-- **SDD:** _b00t_/sdd/SDD-NNN-slug.md
-- **Issue:** #NN
-- **Author:** agent-name
-- **Assignee:** agent-name
-- **Tier:** sm0l | ch0nky | thicc
-- **Estimated:** N hours
+# - **Created:** YYYY-MM-DD
+# - **Updated:** YYYY-MM-DD
+# - **Status:** proposed
+# - **Datum:** _b00t_/datums/DATUM-NAME.tomllmd
+# - **SDD:** _b00t_/sdd/SDD-NNN-slug.md
+# - **Issue:** #NN
+# - **Author:** agent-name
+# - **Assignee:** agent-name
+# - **Tier:** sm0l | ch0nky | thicc
+# - **Estimated:** N hours
 
 ## Goals
-- [goal 1]
-- [goal 2]
+# - [goal 1]
+# - [goal 2]
 
 ## Dependencies
-- [prerequisite plan or task]
+# - [prerequisite plan or task]
 
 ## Steps
-- [ ] Step 1: Description
-  - Acceptance criteria: [criteria]
-  - Assigned to: agent-name
-- [ ] Step 2: Description
-  - Acceptance criteria: [criteria]
-  - Assigned to: agent-name
+# - [ ] Step 1: Description
+#   - Acceptance criteria: [criteria]
+#   - Assigned to: agent-name
+# - [ ] Step 2: Description
+#   - Acceptance criteria: [criteria]
+#   - Assigned to: agent-name
 
 ## Progress: 0%
 ## Notes
-- [freeform notes, blockers, decisions]
-```
+# - [freeform notes, blockers, decisions]
+# ```
 
 ## ── Integration with b00t task system ───────────────────────────────────────
 
-Plan steps can be converted to b00t tasks for tracking:
+# Plan steps can be converted to b00t tasks for tracking:
 
-```bash
+# ```bash
 # Create a task for a plan step
-b00t task add \
-  --title "Implement datum plan lifecycle" \
-  --description "Implement the propose/review/execute/verify lifecycle from DATUM-PLANS" \
-  --priority 2 \
-  --tags "datum-plans,lifecycle"
+# b00t task add \
+#   --title "Implement datum plan lifecycle" \
+#   --description "Implement the propose/review/execute/verify lifecycle from DATUM-PLANS" \
+#   --priority 2 \
+#   --tags "datum-plans,lifecycle"
 
 # Link plan to task (in plan notes section)
 # Task #NN: b00t task show <id>
-```
+# ```
 
-Plan status and task status should be kept in sync. When all tasks for a plan
-are done, the plan moves to `complete`.
+# Plan status and task status should be kept in sync. When all tasks for a plan
+# are done, the plan moves to `complete`.
 
 ## ── Plan lifecycle state machine ─────────────────────────────────────────────
 
-```
-                  ┌─────────┐
-                  │ proposed │
-                  └────┬────┘
-                       │ review
-                       ▼
-                  ┌─────────┐
-           ┌─────│ approved │──────┐
-           │     └────┬────┘      │
-           │          │ execute    │ reject
-           │          ▼           │
-           │     ┌───────────┐    │
-           │     │ executing │    │
-           │     └───┬───┬───┘    │
-           │         │   │        │
-           │     block│   │done   │
-           │         │   │        │
-           │         ▼   ▼        │
-           │  ┌────────┐          │
-           │  │ blocked│          │
-           │  └───┬────┘          │
-           │      │ unblock       │
-           │      └──────────────┘
-           │
-           │ (from approved or executing)
-           ▼
-     ┌───────────┐     ┌───────────┐
-     │ cancelled │     │ rejected  │
-     └───────────┘     └───────────┘
+# ```
+#                   ┌─────────┐
+#                   │ proposed │
+#                   └────┬────┘
+#                        │ review
+#                        ▼
+#                   ┌─────────┐
+#            ┌─────│ approved │──────┐
+#            │     └────┬────┘      │
+#            │          │ execute    │ reject
+#            │          ▼           │
+#            │     ┌───────────┐    │
+#            │     │ executing │    │
+#            │     └───┬───┬───┘    │
+#            │         │   │        │
+#            │     block│   │done   │
+#            │         │   │        │
+#            │         ▼   ▼        │
+#            │  ┌────────┐          │
+#            │  │ blocked│          │
+#            │  └───┬────┘          │
+#            │      │ unblock       │
+#            │      └──────────────┘
+#            │
+#            │ (from approved or executing)
+#            ▼
+#      ┌───────────┐     ┌───────────┐
+#      │ cancelled │     │ rejected  │
+#      └───────────┘     └───────────┘
 
-     (from executing → verify)
-           │
-           ▼
-     ┌──────────┐     ┌──────────┐
-     │ complete │────►│ archived │
-     └──────────┘     └──────────┘
-```
+#      (from executing → verify)
+#            │
+#            ▼
+#      ┌──────────┐     ┌──────────┐
+#      │ complete │────►│ archived │
+#      └──────────┘     └──────────┘
+# ```
 
 ## ── Example: Creating a datum plan flow ───────────────────────────────────────
 
-Here is the complete flow for creating a datum plan, using this datum as an
-example:
+# Here is the complete flow for creating a datum plan, using this datum as an
+# example:
 
-1. **Issue #89** is opened: "Create Datum Plans concept datum"
-2. **Datum created:** `_b00t_/datums/DATUM-PLANS.tomllmd` (this file)
-   - Defines the Datum Plans concept, lifecycle, and directory relationships
-3. **SDD (optional):** If the implementation is complex, an SDD would be written
-   at `_b00t_/sdd/SDD-XXX-datum-plans.md`
-   - Specifies plan file schema, state machine, CLI integration
-4. **Plan created:** `_b00t_/plans/2026-05-08-datum-plans-implementation.md`
-   - Steps: create datum, write SDD, implement parser, wire CLI, test
-5. **Tasks created** via `b00t task add` for each plan step
-6. **Execution:** Agents work through plan steps, updating progress
-7. **Verification:** Acceptance criteria checked, datum updated to `stable`
-8. **Issue #89** updated to reflect completion
+# 1. **Issue #89** is opened: "Create Datum Plans concept datum"
+# 2. **Datum created:** `_b00t_/datums/DATUM-PLANS.tomllmd` (this file)
+#    - Defines the Datum Plans concept, lifecycle, and directory relationships
+# 3. **SDD (optional):** If the implementation is complex, an SDD would be written
+#    at `_b00t_/sdd/SDD-XXX-datum-plans.md`
+#    - Specifies plan file schema, state machine, CLI integration
+# 4. **Plan created:** `_b00t_/plans/2026-05-08-datum-plans-implementation.md`
+#    - Steps: create datum, write SDD, implement parser, wire CLI, test
+# 5. **Tasks created** via `b00t task add` for each plan step
+# 6. **Execution:** Agents work through plan steps, updating progress
+# 7. **Verification:** Acceptance criteria checked, datum updated to `stable`
+# 8. **Issue #89** updated to reflect completion
 
-Flow diagram:
+# Flow diagram:
 
-```
-Issue #89
-  │
-  ├──→ _b00t_/datums/DATUM-PLANS.tomllmd       (this datum)
-  │         ↑ defines the concept
-  │
-  ├──→ _b00t_/sdd/SDD-XXX-datum-plans.md        (optional SDD)
-  │         ↑ specifies the architecture
-  │
-  ├──→ _b00t_/plans/2026-05-08-*.md             (execution plan)
-  │         ↑ schedules the work
-  │
-  └──→ b00t tasks                                (tracking)
-            ↑ tracks progress
-```
+# ```
+# Issue #89
+#   │
+#   ├──→ _b00t_/datums/DATUM-PLANS.tomllmd       (this datum)
+#   │         ↑ defines the concept
+#   │
+#   ├──→ _b00t_/sdd/SDD-XXX-datum-plans.md        (optional SDD)
+#   │         ↑ specifies the architecture
+#   │
+#   ├──→ _b00t_/plans/2026-05-08-*.md             (execution plan)
+#   │         ↑ schedules the work
+#   │
+#   └──→ b00t tasks                                (tracking)
+#             ↑ tracks progress
+# ```
 
 ## ── Future considerations ────────────────────────────────────────────────────
 
-| area | description |
-|------|-------------|
-| **Automatic plan generation** | Agent generates plan from datum + issue automatically |
-| **Plan → task mapping CLI** | `b00t plan convert <plan-file>` auto-creates tasks from steps |
-| **Plan dependency graphs** | Visualize plan dependencies across multiple plans |
-| **Plan expiration** | Auto-archive plans with no activity for N days |
-| **Plan health metrics** | Track plan completion rate, cycle time, block frequency |
-| **Multi-agent plan assignment** | Distribute plan steps across pair members |
-| **SDD gate automation** | Auto-check SDD gates against plan step completion |
-| **Plan template registry** | Shareable plan templates for common patterns |
+# | area | description |
+# |------|-------------|
+# | **Automatic plan generation** | Agent generates plan from datum + issue automatically |
+# | **Plan → task mapping CLI** | `b00t plan convert <plan-file>` auto-creates tasks from steps |
+# | **Plan dependency graphs** | Visualize plan dependencies across multiple plans |
+# | **Plan expiration** | Auto-archive plans with no activity for N days |
+# | **Plan health metrics** | Track plan completion rate, cycle time, block frequency |
+# | **Multi-agent plan assignment** | Distribute plan steps across pair members |
+# | **SDD gate automation** | Auto-check SDD gates against plan step completion |
+# | **Plan template registry** | Shareable plan templates for common patterns |
 
 # b00t:map v1
 # summary: Datum Plans concept — specification-driven development pattern: how datums relate to plans, plan lifecycle (propose → review → execute → verify), directory relationships between _b00t_/datums/ (what), _b00t_/sdd/ (how), and _b00t_/plans/ (when), plan file templates, SDD integration, and state machine
