@@ -1,0 +1,13 @@
+incubating = [
+    "routing",
+    "agent.cli",
+    "inference_provider",
+    "datum",
+    "project",
+    "schema",
+    "wow",
+    "mcp_server",
+    "github_org",
+    "ai_provider",
+    "install"
+]
