@@ -7,3 +7,6 @@ rustc version upgrades: When dependencies require newer rustc (e.g., rig-core ne
 
 just module invocation: Justfile modules (e.g., 'mod b00t') must be invoked from the justfile root where module is declared. Use 'just b00t::recipe' not 'just recipe' when in subdirectory. cd to project root or use -f flag.
 
+
+---
+task add priority: use positional TITLE then flags: -p 1|2|3|4 (P1-P4 not yet accepted — Postel fix tracked in task 31). b00t task add foo -d desc -p 2 -t tags,csv -c 'criterion'

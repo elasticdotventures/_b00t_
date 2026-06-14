@@ -6,3 +6,6 @@ PascalCase naming: .tomllm files MUST use PascalCase filenames (e.g. Vllm.Infere
 
 ---
 mcp.tomllm format: MCP server datums use .mcp.tomllm extension (not .mcp.toml). Fields: [b00t.mcp] with name, type (stdio/httpstream), url or command. Auth tokens via env var references. Install via `b00t mcp install &lt;Name&gt; claudecode|vscode|dotmcpjson`. httpstream MCPs need url+headers; stdio MCPs need command+args.
+
+---
+DRY datums: tables/vocabularies belong in ONE datum; others 🔗参 it. Duplicating BFO/SysMLv2 tables across PRDs = maintenance toil. Write once in a *-SUPPLEMENT datum; cross-reference everywhere else.

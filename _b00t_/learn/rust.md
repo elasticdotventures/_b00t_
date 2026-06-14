@@ -99,6 +99,31 @@ CallToolResult::success(vec![Content::text(serde_json::to_string_pretty(&B00tOut
 - `b00t lfmf datum abstract` for lesson capture
 - Always update learn/rust.md when discovering new patterns
 
+## Crate Selection — Blessed Crates
+
+**MUST use [blessed.rs/crates](https://blessed.rs/crates) as the authoritative source for stable, community-endorsed crates.**
+
+b00t aspires to be on this list — use its criteria as our quality bar:
+- Maintained, responsive to issues, minimal open PRs
+- Apache/MIT/BSD licensed, flourishing community
+- Prefer crates already in the blessed list over alternatives
+
+Quick reference (blessed picks relevant to b00t):
+| Domain | Blessed pick | Avoid |
+|--------|-------------|-------|
+| CLI args | `clap` | `structopt` (merged into clap) |
+| Async runtime | `tokio` | `async-std` |
+| HTTP client | `reqwest` | raw `hyper` unless low-level needed |
+| Serialization | `serde` + `serde_json` / `toml` | hand-rolled |
+| Error handling | `anyhow` (apps), `thiserror` (libs) | `Box<dyn Error>` |
+| Regex | `regex` | `fancy-regex` unless lookahead needed |
+| Tracing | `tracing` + `tracing-subscriber` | `log` |
+| Date/time | `chrono` or `time` | hand-rolled epoch math |
+| Path/glob | `globset` / `walkdir` | custom recursion |
+| Config | `config` crate or `toml` | custom parsers |
+
+🤓 When a crate isn't on blessed.rs, check: stars >1k, last commit <6mo, issues responsive.
+
 ## Pitfalls
 - 🦨 `rustc` standalone lint fails on `async fn` (edition not set) — use `cargo check`
 - PyO3 transitive features may not respect `default-features=false`
