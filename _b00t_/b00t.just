@@ -297,3 +297,25 @@ ch0nky-activate:
 # Check ch0nky vllm logs
 ch0nky-logs:
     journalctl --user -u b00t-hive-inference-qwen36-27b -f --no-pager
+
+# ─── club-3090 refresh ────────────────────────────────────────────────────────
+# Checks for new model additions, engine image updates, CHANGELOG diff
+# Run weekly or after new model announcements
+
+club-3090-refresh:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    echo "=== club-3090 refresh $(date -u +%Y-%m-%dT%H:%M:%SZ) ==="
+    echo "--- recent commits ---"
+    gh api repos/noonghunna/club-3090/commits --jq '.[0:5]|.[]|{sha:.sha[:7],msg:.commit.message[:80],date:.commit.author.date}' 2>/dev/null || echo "gh not authenticated"
+    echo "--- new models since last check ---"
+    gh api "repos/noonghunna/club-3090/commits?since=$(date -d '7 days ago' +%Y-%m-%dT%H:%M:%SZ)" \
+      --jq '[.[]|select(.commit.message|test("model|add|support";"i"))|{sha:.sha[:7],msg:.commit.message[:60]}]' 2>/dev/null || true
+    echo "--- latest llama.cpp image tag (check vs pinned b9246) ---"
+    gh api "repos/ggerganov/llama.cpp/releases?per_page=3" --jq '.[].tag_name' 2>/dev/null | head -3 || true
+    echo "=== done — update _b00t_/datums/club-3090.tomllmd last_checked if new models found ==="
+
+club-3090-latest-compose:
+    #!/usr/bin/env bash
+    gh api repos/noonghunna/club-3090/contents/models/qwen3.6-27b/llama-cpp/compose/single/unsloth-q4km/mtp.yml \
+      --jq '.content' | base64 -d 2>/dev/null || echo "gh api failed"
