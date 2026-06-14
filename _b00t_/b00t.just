@@ -269,34 +269,56 @@ nvidia-cdi-install:
 
 SM0L_FILTER := "_b00t_/scripts/sm0l-filter.py"
 
-# Filter cargo test output — only emit failures/errors (saves frontier context budget)
+# ─── pipe-agent: OpenHarness passive sm0l observer pattern ───────────────────
+# Route deterministic process output through sm0l local LLM — errors only.
+# Tasks: cargo|podman|systemd|hive|rust|general  (default: general)
+# Executive frontier model delegates noisy output → sm0l collapses to <200 tokens.
+# Ref: openharness.tomllmd — "The model is the agent. The code is the harness."
+
+# Filter cargo test output — only emit failures/panics
 cargo-test-sm0l *ARGS:
-    cargo test {{ARGS}} 2>&1 | python3 {{SM0L_FILTER}} --model sm0l
+    cargo test {{ARGS}} 2>&1 | python3 {{SM0L_FILTER}} --task cargo --stats
 
-# Filter cargo build output — only emit errors
+# Filter cargo build output — only emit compile errors
 cargo-build-sm0l *ARGS:
-    cargo build {{ARGS}} 2>&1 | python3 {{SM0L_FILTER}} --model sm0l
+    cargo build {{ARGS}} 2>&1 | python3 {{SM0L_FILTER}} --task cargo --stats
 
-# Generic sm0l filter: pipe any command through the LLM error extractor
-# Usage: just sm0l-filter "cargo clippy 2>&1"
-sm0l-filter CMD:
-    {{CMD}} 2>&1 | python3 {{SM0L_FILTER}}
+# Filter cargo clippy — only emit deny-level warnings/errors
+cargo-clippy-sm0l *ARGS:
+    cargo clippy {{ARGS}} 2>&1 | python3 {{SM0L_FILTER}} --task cargo --stats
 
-# Probe available sm0l endpoints (shows which tier will be used)
+# Filter podman run/pull/build output — container lifecycle errors only
+podman-sm0l CMD:
+    {{CMD}} 2>&1 | python3 {{SM0L_FILTER}} --task podman --stats
+
+# Filter journalctl/systemctl output — systemd service errors only
+systemd-sm0l CMD:
+    {{CMD}} 2>&1 | python3 {{SM0L_FILTER}} --task systemd --stats
+
+# Filter b00t hive activate output — resource gate failures only
+hive-sm0l CMD:
+    {{CMD}} 2>&1 | python3 {{SM0L_FILTER}} --task hive --stats
+
+# Generic pipe-agent: any command → sm0l error filter
+# Usage: just pipe-agent "cargo clippy 2>&1" [task]
+pipe-agent CMD TASK="general":
+    {{CMD}} 2>&1 | python3 {{SM0L_FILTER}} --task {{TASK}} --stats
+
+# Probe available pipe-agent endpoints (shows which tier will be used)
 sm0l-status:
     #!/usr/bin/env bash
-    curl -sf http://127.0.0.1:8001/v1/health >/dev/null 2>&1 && echo "✅ :8001 ch0nky (vllm)" || echo "⬜ :8001 ch0nky (offline)"
+    curl -sf http://127.0.0.1:8001/v1/health >/dev/null 2>&1 && echo "✅ :8001 ch0nky (llamacpp MTP)" || echo "⬜ :8001 ch0nky (offline)"
     curl -sf http://127.0.0.1:8000/v1/health >/dev/null 2>&1 && echo "✅ :8000 sm0l (local)" || echo "⬜ :8000 sm0l (offline)"
     [ -n "${HF_TOKEN:-}" ] && echo "HF_TOKEN: set (HF Inference API available)" || echo "HF_TOKEN: NOT SET"
-    echo "activate ch0nky: b00t hive activate inference-qwen36-27b"
+    echo "activate ch0nky: b00t hive activate inference-qwen36-27b-mtp-podman"
 
-# Activate ch0nky (vllm Qwen3.6-27B) via b00t governance
+# Activate ch0nky (llamacpp MTP Qwen3.6-27B) via b00t governance
 ch0nky-activate:
-    b00t hive activate inference-qwen36-27b
+    b00t hive activate inference-qwen36-27b-mtp-podman
 
-# Check ch0nky vllm logs
+# Check ch0nky llamacpp MTP logs
 ch0nky-logs:
-    journalctl --user -u b00t-hive-inference-qwen36-27b -f --no-pager
+    podman logs -f b00t-ch0nky-llamacpp
 # ─── club-3090 refresh ────────────────────────────────────────────────────────
 # Checks for new model additions, engine image updates, CHANGELOG diff
 # Run weekly or after new model announcements

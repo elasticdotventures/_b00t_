@@ -1,0 +1,106 @@
+# OpenHarness — Open Agent Harness (HKUDS, 13856★, active)
+# Assimilated 2026-06-14 for b00t pipe-agent pattern alignment
+# Repo: https://github.com/HKUDS/OpenHarness
+
+[b00t.schema]
+version   = "1"
+type      = "reference"
+type_tags = ["reference", "agent-harness", "pipe-agent", "swarm", "openai-compat"]
+
+[resource]
+name    = "OpenHarness"
+repo    = "https://github.com/HKUDS/OpenHarness"
+stars   = 13856
+lang    = "Python"
+status  = "active"
+last_checked = "2026-06-14"
+
+# ─── Core philosophy ──────────────────────────────────────────────────────────
+[resource.philosophy]
+# @tribal: "The model is the agent. The code is the harness."
+# The harness provides hands (tools), eyes (observations), memory, and safety
+# boundaries. The LLM provides reasoning. Keep them cleanly separated.
+mantra = "The model is the agent. The code is the harness."
+
+# ─── Relevant architecture for b00t assimilation ─────────────────────────────
+[resource.architecture]
+# 10 subsystems: Engine, Tools, Skills, Plugins, Permissions, Hooks,
+#   Commands, MCP, Memory, Coordinator
+# Key for b00t: swarm + coordinator + pipe pattern
+
+[resource.architecture.agent_loop]
+# Core loop — maps to b00t pipe-agent dispatch:
+# while model_not_done:
+#   response = api.stream(messages, tools)
+#   if stop_reason == "tool_use": execute_tool → append result → continue
+#   else: done
+pattern = "observe → evaluate → act → observe (OODA)"
+composable = true  # decouples model decisions from harness execution
+
+[resource.architecture.swarm]
+# TeammateExecutor + TeammateSpawnConfig → BackendRegistry → SubprocessBackend
+# Mailbox: TeammateMailbox, MailboxMessage (typed), get_agent_mailbox_dir()
+# Permission sync: SwarmPermissionRequest/Response — controlled delegation
+pattern = "subprocess-per-agent + directory mailbox"
+b00t_analog = "b00t agent message / b00t task"
+
+[resource.architecture.pipe_agent]
+# OpenHarness insight: subagents can be PASSIVE (no tool calls, read-only)
+# Pipe agents receive observation (stdin), emit compressed summary, exit.
+# Distinct from interactive agents: no memory, no tool calls, single-shot.
+# THIS is the b00t sm0l filter pattern formalized:
+#   cargo build 2>&1 | pipe-agent --task cargo → errors only → executive
+b00t_implementation = "_b00t_/scripts/sm0l-filter.py"
+datum = "_b00t_/datums/SM0L-FILTER-PATTERN.tomllmd"
+
+[resource.architecture.skills]
+# On-demand knowledge from .md files (same format as b00t learn)
+# b00t align: `b00t learn` ↔ OpenHarness skills system
+b00t_analog = "b00t learn <topic>"
+
+[resource.architecture.hooks]
+# PreToolUse / PostToolUse lifecycle events
+# b00t align: hive guards + pre/post hooks in b00t task
+b00t_analog = "b00t hive guards + b00t task hooks"
+
+# ─── What to borrow vs. ignore ────────────────────────────────────────────────
+[resource.b00t_assimilation]
+
+[resource.b00t_assimilation.borrow]
+# 1. Pipe-agent pattern (formalized passive sm0l observer — already in sm0l-filter.py)
+# 2. harness-eval skill (real API calls, no mocks, multi-turn validation)
+# 3. Dry-run preview (b00t hive plan already does this)
+# 4. Named task templates (cargo/podman/systemd/hive) in sm0l-filter
+pipe_agent_templates = ["cargo", "podman", "systemd", "hive", "rust", "general"]
+
+[resource.b00t_assimilation.ignore]
+# ohmo gateway (Feishu/Slack/Telegram) — not b00t's scope
+# autopilot dashboard — b00t has its own agent dashboard
+# harness provider abstraction — b00t uses MCP + b00t-mcp directly
+# Python agent runtime — b00t is Rust-first
+
+[resource.b00t_assimilation.future]
+# Swarm mailbox pattern (directory-based inter-agent comms) — interesting for
+# b00t agent channels; current b00t agent message uses JSON over stdio
+# TeammateExecutor pattern — could replace ad-hoc subagent spawning in b00t hive
+# Permission sync (SwarmPermissionRequest) — analog to b00t hive guard votes
+
+# ─── Usages ──────────────────────────────────────────────────────────────────
+[[resource.usages]]
+description = "Pipe cargo output through sm0l (OpenHarness pipe-agent pattern)"
+command     = "cargo build 2>&1 | python3 _b00t_/scripts/sm0l-filter.py --task cargo --stats"
+
+[[resource.usages]]
+description = "Pipe podman output through sm0l"
+command     = "podman pull image 2>&1 | python3 _b00t_/scripts/sm0l-filter.py --task podman"
+
+[[resource.usages]]
+description = "Check OpenHarness swarm test suite for b00t alignment ideas"
+command     = "gh api repos/HKUDS/OpenHarness/contents/tests/test_swarm --jq '.[].name'"
+
+# b00t:map v1
+# summary: OpenHarness 13856★ — passive pipe-agent pattern + swarm mailbox; assimilated 2026-06-14
+# tags: openharness, pipe-agent, swarm, harness, sm0l, cognitive-tier, context-budget
+# tier: sm0l
+# cmds: cargo build 2>&1 | python3 _b00t_/scripts/sm0l-filter.py --task cargo
+# complexity: 3
