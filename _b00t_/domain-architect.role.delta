@@ -1,0 +1,42 @@
+# domain-architect.role.delta
+# Minimal delta from ++abstract.agent.tomllm for the domain-architect role.
+# PRD-ARCH-002 dogfood: proves delta reduces tokens vs full AGENTS.md reload.
+# Usage: b00t datum patch _b00t_/++abstract.agent.tomllm _b00t_/domain-architect.role.delta
+
+[delta]
+base = "_b00t_/++abstract.agent.tomllm"
+
+[[delta.ops]]
+op = "replace"
+path = "b00t.name"
+value = "domain-architect"
+
+[[delta.ops]]
+op = "replace"
+path = "b00t.hint"
+value = "Domain architect — system design, PRD authorship, OODA loop orchestration"
+
+[[delta.ops]]
+op = "set"
+path = "b00t.agent.role"
+value = "domain-architect"
+
+[[delta.ops]]
+op = "set"
+path = "b00t.agent.tier"
+value = "frontier"
+
+[[delta.ops]]
+op = "append"
+path = "b00t.agent.skills"
+value = "okr-routing"
+
+[[delta.ops]]
+op = "append"
+path = "b00t.agent.skills"
+value = "delegation-macros"
+
+[[delta.ops]]
+op = "set"
+path = "b00t.agent.output_contract"
+value = "structured decision + task list"
