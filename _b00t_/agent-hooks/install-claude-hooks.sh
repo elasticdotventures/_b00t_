@@ -67,7 +67,7 @@ read -r -d '' B00T_HOOKS_JSON <<'HOOKS_JSON' || true
   ],
   "PreToolUse": [
     {
-      "matcher": "Bash|Edit|Write",
+      "matcher": "Bash|Edit|Write|MultiEdit",
       "hooks": [
         {
           "type": "command",
@@ -80,7 +80,7 @@ read -r -d '' B00T_HOOKS_JSON <<'HOOKS_JSON' || true
   ],
   "PostToolUse": [
     {
-      "matcher": "Bash|Edit|Write",
+      "matcher": "Bash|Edit|Write|MultiEdit",
       "hooks": [
         {
           "type": "command",

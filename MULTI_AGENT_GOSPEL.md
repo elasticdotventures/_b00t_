@@ -101,6 +101,33 @@ Alignment demonstrated through tests:
 - All tests MUST pass before commit
 - Coverage is virtue, untested code is sin
 
+### Chapter 11: True Grit Swarm Discipline
+
+Large swarms need more than parallelism. They need explicit objectives, measurable checks, resource gates, and handoff state.
+
+Before a captain spawns long-running agents:
+- Define the Objective and Key Results.
+- Record the baseline test/harness state.
+- Split work bottom-up by dependency order.
+- Put every slice in `b00t task`.
+- Run `b00t hive status` when work may compile, download, or run models in parallel.
+- Assign narrow agents to exploration and verification so the captain keeps only compressed findings.
+
+During swarm work:
+- Watch for cheating: pass-through calls, fixture-only hacks, and metadata-only support.
+- Treat sudden pass-rate collapse as a possible harness/config failure.
+- Prefer short focused agents for isolated files and long-running agents for coherent test families.
+- Route external commands through `b00t hive run --strict -- <cmd>`; raw `sed` is guarded, prefer `rg`.
+- Treat Postel/DWIW as deterministic command routing, never fuzzy silent execution.
+- Merge and verify in small batches.
+
+Handoff contract:
+- Current task id and objective.
+- Artifacts changed.
+- Verification command and result.
+- Blockers and risky assumptions.
+- Next dependency-ordered slice.
+
 ### Commandments for Multi-Agent Systems
 
 1. **Thou shalt declare thy skills honestly** - No agent claims expertise falsely
@@ -113,6 +140,8 @@ Alignment demonstrated through tests:
 8. **Thou shalt document thy datums** - Future agents must understand
 9. **Thou shalt handshake before demanding** - Respect precedes cooperation
 10. **Thou shalt exit gracefully** - /quit cleanly, not via panic
+11. **Thou shalt not cheat the harness** - Passing tests must represent real behavior
+12. **Thou shalt hand off state, not vibes** - Future agents need evidence
 
 ### Appendix A: Message Protocol
 

@@ -247,3 +247,17 @@ gemma4-opencode-test:
     curl -sf http://localhost:8001/v1/models | python3 -c \
       "import sys,json; m=json.load(sys.stdin); print('✅ serving:', [x['id'] for x in m['data']])"
     opencode run --model gemma4-local/ch0nky "respond with: pong"
+
+# Rootless node orchestration pattern: systemd + quadlet + podman kube
+quadlet-node-install:
+    b00t install quadlet-podman-kube
+
+quadlet-node-uninstall:
+    b00t uninstall quadlet-podman-kube
+
+nvidia-cdi-observe:
+    printf 'host: '; ls /dev/dri/card*
+    printf '\ncdi: '; grep -o '/dev/dri/card[0-9]\+' /etc/cdi/nvidia.yaml | sort -u
+
+nvidia-cdi-install:
+    b00t install nvidia-cdi-gpu

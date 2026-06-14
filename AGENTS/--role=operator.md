@@ -65,6 +65,45 @@ MCP equivalents:
 - `b00t_agent_progress` → status
 - `b00t_agent_complete` → finish
 
+## Capability Evidence Loop — 80% Operator Default
+
+Operator SHOULD bias most sessions toward this loop:
+
+```text
+Action -> Trait/DSL -> Recipe -> Validation Artifact -> Bouncer Evidence
+```
+
+Probability hint, displayed to bias goal-loop behavior without claiming certainty:
+
+```text
+P(memoize_action_as_capability_pipeline | role=operator) = 0.80
+```
+
+For any nontrivial action, operator SHOULD ask:
+
+1. **Intent** — What `b00t task`, PRD datum, or explicit request owns this?
+2. **Capability** — Which Rust trait, macro DSL, datum type, or MCP tool does this instantiate?
+3. **Recipe** — What deterministic `b00t` or `just` pipeline would replay it?
+4. **Validation** — What artifact proves it worked: test, dry-run, diff, JSONL, dashboard row?
+5. **Bouncer** — What PASS/FAIL contract can a verifier check without raw logs?
+
+Default trait shape for reusable capability work:
+
+```rust
+trait B00tCapability {
+    type Intent;
+    type Plan;
+    type Evidence;
+    type Error;
+
+    fn observe(&self, intent: Self::Intent) -> Result<Self::Plan, Self::Error>;
+    fn orient(&self, plan: Self::Plan) -> Result<Self::Plan, Self::Error>;
+    fn decide(&self, plan: Self::Plan) -> Result<Self::Plan, Self::Error>;
+    fn act(&self, plan: Self::Plan) -> Result<Self::Evidence, Self::Error>;
+    fn validate(&self, evidence: &Self::Evidence) -> Result<(), Self::Error>;
+}
+```
+
 ## 🏷️ TOPICS — 5 KEY OPERATOR DIRECTIVES
 
 Each directive below includes a `#️⃣ topic` that an agentic might stumble onto and find utility. Topic names are greppable; an agent executing `b00t(task)` or `b00t grok ask "<topic>"` discovers the matching section.
@@ -439,9 +478,9 @@ Rules:
 - sm0l output contract: `PASS` or `FAIL: <name> <5-line excerpt>` — no raw output to operator
 
 <!-- b00t:map v1
-summary: Operator role — 5 directives (checkpoint-gate, just-mcp-task-surface, otel-span-requirement, repl-template-guards, hermes-cmdb-bootstrap), crew dispatch (adversarial A/B/R bounce loop), k0mmand3r, b00t * wildcard entry, debug levels, MCP directory, crew scaling, recurring task/SQL schemas
-tags: operator, checkpoint-gate, just-mcp, otel, repl, cmdb, rust2024, k0mmand3r, crew, acp, dispatch, specialist, adversarial-loop, bouncer, reviewer, vote, hive, scaling, bounce-loop, schema, recurring-task, sql-datum
+summary: Operator role — capability-evidence loop, 5 directives (checkpoint-gate, just-mcp-task-surface, otel-span-requirement, repl-template-guards, hermes-cmdb-bootstrap), crew dispatch, k0mmand3r, debug levels, MCP directory, crew scaling
+tags: operator, capability-evidence, trait, macro-dsl, recipe, validation, probability, checkpoint-gate, just-mcp, otel, repl, cmdb, rust2024, k0mmand3r, crew, acp, bouncer, hive, scaling
 tier: frontier
-cmds: checkpoint-gate, b00t install hermes --dry-run, b00t hive status, just-mcp serve, b00t whoami --role=operator, b00t grok ask "#️⃣ topic: checkpoint-gate", b00t task add --recurring --datum _b00t_/datums/RECURRING-TASK-SCHEMA.tomllm
+cmds: b00t whoami --role=operator, checkpoint-gate, b00t install hermes --dry-run, b00t hive status, just-mcp serve, b00t task add --recurring --datum _b00t_/datums/RECURRING-TASK-SCHEMA.tomllm
 complexity: 9
 -->

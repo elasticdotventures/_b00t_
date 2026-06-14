@@ -11,9 +11,9 @@
 set -euo pipefail
 
 INPUT="${B00T_HOOK_INPUT:-$(cat)}"
-TOOL="$(     echo "$INPUT" | jq -r '.tool_name           // ""' 2>/dev/null)"
-COMMAND="$(  echo "$INPUT" | jq -r '.tool_input.command  // ""' 2>/dev/null)"
-FILE_PATH="$(echo "$INPUT" | jq -r '.tool_input.file_path // ""' 2>/dev/null)"
+TOOL="$(     echo "$INPUT" | jq -r '.tool_name                         // ""' 2>/dev/null)"
+COMMAND="$(  echo "$INPUT" | jq -r '.tool_input.command                // ""' 2>/dev/null)"
+FILE_PATH="$(echo "$INPUT" | jq -r '.tool_input.file_path // .tool_input.path // ""' 2>/dev/null)"
 STDOUT="$(   echo "$INPUT" | jq -r '.tool_response.output // ""' 2>/dev/null || echo "")"
 
 # ─── Auto-test after git commit ──────────────────────────────────────────────
@@ -68,19 +68,59 @@ printf '%s | session=%s tool=%s cmd=%.120s\n' \
     "$COMMAND$FILE_PATH" \
     >> "$AUDIT_LOG" 2>/dev/null || true
 
-# ─── Lint-on-save for Rust files ─────────────────────────────────────────────
-if [ "$TOOL" = "Edit" ] || [ "$TOOL" = "Write" ]; then
-    if echo "$FILE_PATH" | grep -qE '\.rs$'; then
-        # Make clippy-on-save opt-in and only run in Rust projects
-        if [ "${B00T_CLIPPY_ON_SAVE:-0}" = "1" ]; then
-            CWD="${CLAUDE_PROJECT_DIR:-$(pwd)}"
-            if [ -f "$CWD/Cargo.toml" ]; then
-                CLIPPY_OUT="$(cd "$CWD" && cargo clippy --quiet 2>&1 | grep -E '^error' | head -10 || true)"
-                if [ -n "$CLIPPY_OUT" ]; then
-                    echo "⚠️  b00t: clippy errors after edit:" >&2
-                    echo "$CLIPPY_OUT" >&2
-                    exit 2
-                fi
+# ─── Format/lint-on-save for Rust files ──────────────────────────────────────
+rustfmt_targets() {
+    CWD="${CLAUDE_PROJECT_DIR:-$(pwd)}"
+    case "$TOOL" in
+        Edit|Write|MultiEdit)
+            case "$FILE_PATH" in
+                *.rs)
+                    [ -f "$FILE_PATH" ] && printf '%s\n' "$FILE_PATH"
+                    [ -f "$CWD/$FILE_PATH" ] && printf '%s\n' "$CWD/$FILE_PATH"
+                    ;;
+            esac
+            ;;
+        Bash)
+            case "$COMMAND" in
+                *apply_patch*|*'git apply'*)
+                    if git -C "$CWD" rev-parse --show-toplevel >/dev/null 2>&1; then
+                        git -C "$CWD" diff --name-only -- '*.rs' 2>/dev/null \
+                            | while IFS= read -r path; do
+                                [ -f "$CWD/$path" ] && printf '%s\n' "$CWD/$path"
+                              done
+                    fi
+                    ;;
+            esac
+            ;;
+    esac
+
+    true
+}
+
+RUSTFMT_TARGETS="$(rustfmt_targets | sort -u)"
+if [ -n "$RUSTFMT_TARGETS" ]; then
+    if ! command -v rustfmt >/dev/null 2>&1; then
+        echo "⚠️  b00t: rustfmt unavailable after Rust patch" >&2
+        exit 2
+    fi
+
+    echo "🧹 b00t: rustfmt after Rust patch" >&2
+    FORMAT_OUT="$(printf '%s\n' "$RUSTFMT_TARGETS" | xargs rustfmt --edition 2024 2>&1 || true)"
+    if [ -n "$FORMAT_OUT" ]; then
+        echo "$FORMAT_OUT" >&2
+        exit 2
+    fi
+    echo "✅ b00t: rustfmt applied" >&2
+
+    # Make clippy-on-save opt-in and only run in Rust projects.
+    if [ "${B00T_CLIPPY_ON_SAVE:-0}" = "1" ]; then
+        CWD="${CLAUDE_PROJECT_DIR:-$(pwd)}"
+        if [ -f "$CWD/Cargo.toml" ]; then
+            CLIPPY_OUT="$(cd "$CWD" && cargo clippy --quiet 2>&1 | grep -E '^error' | head -10 || true)"
+            if [ -n "$CLIPPY_OUT" ]; then
+                echo "⚠️  b00t: clippy errors after edit:" >&2
+                echo "$CLIPPY_OUT" >&2
+                exit 2
             fi
         fi
     fi

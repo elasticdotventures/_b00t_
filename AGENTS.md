@@ -37,6 +37,37 @@ b00t to delegate cognitive code driven tasks to your sub-agents.
 * REQUEST linear walkthroughs to rebuild code understanding.
 * BUILD interactive explanations to reduce cognitive debt.
 
+## TRUE GRIT AGENT DYNAMICS
+
+Source pattern: GitButler "Grit: rewriting Git in Rust with agents"
+<https://blog.gitbutler.com/true-grit>
+
+When b00t runs long-lived or parallel agent work, agents MUST use narrow subagents for exploration/verification and this control loop:
+
+1. **Objective**: state the system outcome in one sentence.
+2. **Key Results**: declare measurable checks before spawning agents.
+3. **Ground Rules**: ban shortcut implementations that only satisfy visible tests.
+4. **Baseline**: run or record the current test/harness state before edits.
+5. **Directed Work**: assign bottom-up dependency slices, not random test files.
+6. **Coordination**: track each slice in `b00t task`; shared markdown checklists are secondary.
+7. **Resource Gate**: run `b00t hive status` before parallel compile, model, or download work.
+8. **Handoff**: write explicit next-state, artifacts, blockers, and verification evidence.
+9. **Cost Guard**: stop or re-scope when token/cost per passing check degrades.
+10. **Harness Audit**: if pass rate drops sharply, suspect test harness/config breakage before assuming product regression.
+
+Anti-cheat constraints:
+- Agents MUST NOT shell out to the reference implementation to fake feature support unless the task explicitly permits adapter behavior.
+- Agents MUST NOT implement metadata-only support when semantic support is required.
+- Agents MUST add or identify at least one behavioral check that would fail for a superficial implementation.
+
+OKR practice:
+- Objective: make agent swarms produce durable, tested b00t capability without corrupting shared state.
+- KR1: every swarm phase names baseline, target checks, and stop conditions.
+- KR2: every delegated slice has an owner, task id, expected artifact, and verification command.
+- KR3: every handoff names what changed, what was tested, and what remains risky.
+- KR4: every resource-heavy run has an explicit `b00t hive status` or profile decision.
+- KR5: executive context receives compressed findings, not raw subagent logs.
+
 👋 @ PromptExecution.com WE MUST ALWAYS ...
  * Follow IETF RFC 2119 word precision & laconic phrasing while presuming significant technical literacy of your pair.
  	- 🤓 RFC 2119 is the IETF RFC syntax nomenclature for standards MUST vs SHOULD.
@@ -252,7 +283,7 @@ b00t hive status             # RAM/GPU/CPU/downloads/active-profile snapshot
 b00t hive list               # available .hive.toml profiles
 b00t hive plan=<profile>     # dry-run: resource gate check + service diff
 b00t hive activate=<profile> # transition system state (stops conflicts, starts required)
-b00t hive run=<cmd>          # guard evaluation before execution
+b00t hive run --strict -- <cmd> # canonical guarded CLI execution
 ```
 
 Profiles in `_b00t_/*.hive.toml`. Each profile declares:
@@ -264,7 +295,7 @@ Profiles in `_b00t_/*.hive.toml`. Each profile declares:
 
 ## COGNITIVE TIERS
 
-Route tasks by cognitive complexity — NEVER pass full sub-agent output to executive context:
+Route tasks by cognitive complexity. Use narrow subagents for exploration, grep-class search, and verification; NEVER pass full sub-agent output to executive context:
 
 | Tier | Models | Tasks | Output contract to executive |
 |---|---|---|---|
@@ -311,14 +342,25 @@ pip install    → 🦨 use uv pip install
 docker run     → 🦨 use podman --device nvidia.com/gpu=all --security-opt=label=disable
 rm -rf /       → 🚫 BLOCKED
 huggingface-cli → 🦨 deprecated; use hf download
+raw sed        → 🦨 prefer rg, structured parsers, or reviewed recipes
 ```
-Use `--strict` to block on any warning. Guards defined in `_b00t_/hive-guards.hive.toml`.
+Use `b00t hive run --strict -- <cmd>` to block on any warning. Guards defined in `_b00t_/hive-guards.hive.toml`.
+
+## AGENT DASHBOARD
+
+Executives review `b00t agent dashboard --limit <N>` before allocating cake. The default output is TOON-style rows for context saving; `--json` emits machine-readable evidence. The dashboard MUST be defensive: parse failures are counted as evidence fields, not fatal output breakers.
+
+Agent datums MUST distinguish runtime carrier from name. Use `b00t.type = "agent"` for the generic metatype and concrete cardinal subtypes `agent.cli`, `agent.sdk`, `agent.ide.vsix`, or `agent.gui` when known. Matching `[b00t.agent.traits]` flags SHOULD be set so Rust macros can validate trait conformance later.
+
+## POSTEL / DWIW ROUTING
+
+Postel/DWIW in b00t means deterministic intent routing: accept humane input, normalize it to a known command, show the route, and execute only the guarded target. It MUST NOT mean fuzzy silent execution.
 
 
 <!-- b00t:map v1
 summary: b00t hive AGENTS.md — XP agent operating protocol with CMDB, cognitive tiers, tomllm, guards
 tags: b00t, hive, executive, cmdb, cognitive-tiers, tomllm, guards, vllm, rust
 tier: frontier
-cmds: b00t whoami --role=executive, b00t hive status, b00t hive list
+cmds: b00t whoami --role=executive, b00t hive status, b00t hive run --strict -- <cmd>
 complexity: 9
 -->

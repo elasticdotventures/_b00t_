@@ -87,6 +87,22 @@ b00t acp hive sync mission-id 1    # barrier: wait for all agents at step 1
 b00t acp hive ready mission-id 2   # signal readiness for step 2
 ```
 
+## 🛡 Guarded CLI & Agent Routing
+
+```bash
+b00t hive run --strict -- rg -n "pattern" path   # guarded command path
+rg -n -A2 -B2 "pattern" path                     # prefer rg context over raw sed
+b00t agent dashboard --limit 12                  # TOON quota/status/infraction view
+b00t agent dashboard --json                      # machine-readable evidence
+```
+
+- Raw `sed` is guarded. Use `rg`, structured parsers, or approved recipes unless mutation is intentional and reviewed.
+- Use narrow subagents for exploration, grep-class work, and verification; executive context should receive compressed findings only.
+- Postel/DWIW means deterministic routing from intent to known commands, not fuzzy silent execution.
+- `b00t agent dashboard` is defensive: malformed agent datums and JSONL lines are skipped and counted, not allowed to break review output.
+- Agent datums now support cardinal subtypes: `agent.cli`, `agent.sdk`, `agent.ide.vsix`, and `agent.gui`; dashboard output includes `kind` so duplicate names like `claude` can be disambiguated by runtime carrier.
+- True Grit + Knowledge Catalog/OKF framing belongs in `SOUL.md`: objectives, KRs, provenance, handoff, and verification evidence.
+
 ---
 
 ## 🔁 Next Loop Interface
