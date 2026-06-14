@@ -1,0 +1,103 @@
+# club-3090 — homelab LLM configs for RTX 3090 (1337★, active)
+# Periodic refresh required: new models added frequently (check weekly)
+# Repo: https://github.com/noonghunna/club-3090
+
+[b00t.schema]
+version   = "1"
+type      = "reference"
+type_tags = ["reference", "homelab", "inference", "rtx3090", "vllm", "llamacpp"]
+
+[resource]
+name    = "club-3090"
+repo    = "https://github.com/noonghunna/club-3090"
+branch  = "master"
+stars   = 1337
+last_checked = "2026-06-14"
+update_cadence = "weekly"   # new models / engine patches arrive frequently
+
+# ─── What this repo contains ─────────────────────────────────────────────────
+[resource.scope]
+description = """
+Recipes for serving LLMs locally on RTX 3090s.
+Multi-engine: vLLM, llama.cpp, ik_llama.cpp, SGLang, ktransformers.
+Multi-model, model-agnostic by design. Includes:
+- docker-compose service configs per model+engine combination
+- KV cache math + VRAM budget calculator (tools/kv-calc.py)
+- Benchmark data (BENCHMARKS.md) — calibrated on real hardware
+- DTYPE_MATRIX.md — what quant/dtype runs on which GPU class natively
+- INFERENCE_ENGINES.md — engine selection picker by workload
+- HARDWARE.md — RTX 3090 specific notes, dual-card, VRAM headroom
+- scripts/setup.sh + scripts/launch.sh — model picker + boot wizard
+- Image Studio bundle — Ideogram-4 + chat + Open WebUI in one command
+- MTP (multi-token prediction) support status per engine
+"""
+
+# ─── Key docs to track for model refresh ─────────────────────────────────────
+[resource.tracked_docs]
+# These change as new models are added — must refresh periodically
+adding_models    = "https://github.com/noonghunna/club-3090/blob/master/docs/ADDING_MODELS.md"
+benchmarks       = "https://github.com/noonghunna/club-3090/blob/master/BENCHMARKS.md"
+dtype_matrix     = "https://github.com/noonghunna/club-3090/blob/master/docs/DTYPE_MATRIX.md"
+kv_math          = "https://github.com/noonghunna/club-3090/blob/master/docs/KV_MATH.md"
+inference_engines = "https://github.com/noonghunna/club-3090/blob/master/docs/INFERENCE_ENGINES.md"
+hardware         = "https://github.com/noonghunna/club-3090/blob/master/docs/HARDWARE.md"
+changelog        = "https://github.com/noonghunna/club-3090/blob/master/CHANGELOG.md"
+faq              = "https://github.com/noonghunna/club-3090/blob/master/docs/FAQ.md"
+
+# ─── Engine compatibility matrix (SM 8.6 Ampere / RTX 3090) ─────────────────
+[resource.engine_matrix]
+# Updated 2026-06-14 from INFERENCE_ENGINES.md + DTYPE_MATRIX.md
+vllm       = { mtp = "pending-genesis-patch", awq = true,  gptq = true, fp8_weights = true, bf16 = true, enforce_eager = "required-rtx3090" }
+llamacpp   = { mtp = true, q4km = true, q5km = true, q8_0 = true, iq4_kt = true, flash_attn = true }
+ik_llamacpp = { mtp = "merged-main", iq4_kt = true, iq3_k_r4 = true, fused_moe = true }
+sglang     = { mtp = false, awq = true, radix_attn = true, structured_out = "best-in-class" }
+ktransformers = { big_moe = true, hot_expert_cache = true, use_when = "model > VRAM" }
+
+# ─── Periodic refresh protocol ───────────────────────────────────────────────
+[resource.refresh]
+# Run weekly to pick up new model support, engine patches, benchmark rows
+command = "b00t grok learn club-3090"
+# Or manual: gh api repos/noonghunna/club-3090/contents/CHANGELOG.md | python3 -c '...'
+# CronJob: b00t cron add weekly "b00t grok learn club-3090" (see REFRESH.md)
+grok_topics = [
+  "club-3090/ADDING_MODELS",
+  "club-3090/BENCHMARKS",
+  "club-3090/CHANGELOG",
+  "club-3090/DTYPE_MATRIX",
+]
+
+# ─── Entanglement with local hardware ────────────────────────────────────────
+[resource.entanglement]
+hardware_datum = "_b00t_/rtx3090.hardware.toml"
+hive_profiles  = [
+  "_b00t_/inference-qwen36-27b.hive.toml",
+  "_b00t_/inference-qwen36-27b-llamacpp.hive.toml",
+]
+install_datums = [
+  "nvidia-cdi-gpu",
+  "podman",
+  "quadctl",
+]
+
+[[resource.usages]]
+description = "Check for new model additions since last refresh"
+command     = "gh api repos/noonghunna/club-3090/commits --jq '.[0:3]|.[]|{sha:.sha[:7],msg:.commit.message[:80],date:.commit.author.date}'"
+
+[[resource.usages]]
+description = "Refresh grok knowledge from club-3090"
+command     = "b00t grok learn club-3090"
+
+[[resource.usages]]
+description = "Run KV budget calculator for a new model"
+command     = "python3 tools/kv-calc.py  # from cloned club-3090"
+
+[[resource.usages]]
+description = "Check current engine changelog"
+command     = "gh api repos/noonghunna/club-3090/contents/CHANGELOG.md | python3 -c \"import sys,json,base64; print(base64.b64decode(json.load(sys.stdin)['content']).decode()[:500])\""
+
+# b00t:map v1
+# summary: club-3090 1337★ homelab LLM recipes for RTX 3090 — weekly refresh required
+# tags: club-3090, rtx3090, vllm, llamacpp, homelab, inference, mtp, hardware, refresh
+# tier: ch0nky
+# cmds: b00t grok learn club-3090, gh api repos/noonghunna/club-3090/commits
+# complexity: 4
