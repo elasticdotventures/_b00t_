@@ -1,0 +1,65 @@
+[b00t]
+name = "chub"
+type = "cli"
+desires = "latest"
+hint = "Context Hub CLI — curated, versioned API docs for coding agents. Agents use chub to fetch current library/SDK docs instead of guessing from training data."
+url = "https://github.com/andrewyng/context-hub"
+
+install = '''
+set -euo pipefail
+if ! command -v node >/dev/null 2>&1; then
+  echo "❌ node >= 18 required"
+  exit 1
+fi
+npm install -g @aisuite/chub
+# 🤓 install get-api-docs skill into claude skills dir
+SKILL_SRC="$(npm root -g)/@aisuite/chub/skills/get-api-docs/SKILL.md"
+SKILL_DST="${HOME}/.claude/skills/get-api-docs/SKILL.md"
+if [ -f "$SKILL_SRC" ]; then
+  mkdir -p "$(dirname "$SKILL_DST")"
+  cp "$SKILL_SRC" "$SKILL_DST"
+  echo "✅ get-api-docs skill installed → $SKILL_DST"
+fi
+'''
+
+update = "npm install -g @aisuite/chub"
+version = "chub --version"
+version_regex = '\d+\.\d+\.\d+'
+
+requires = ["node.cli"]
+package_name = "@aisuite/chub"
+
+[[b00t.usage]]
+description = "Search for available API docs"
+command = "chub search \"<keywords>\""
+
+[[b00t.usage]]
+description = "Fetch Python docs for a library"
+command = "chub get openai/chat --lang py"
+
+[[b00t.usage]]
+description = "Fetch JS docs and save to context dir"
+command = "chub get stripe/api --lang js -o .context/"
+
+[[b00t.usage]]
+description = "Annotate a doc with a gotcha for future sessions"
+command = "chub annotate stripe/api \"Webhook verification requires raw body\""
+
+[[b00t.usage]]
+description = "List all available docs"
+command = "chub search"
+
+# 🤓 chub does NOT provide codebase indexing — it fetches curated external API docs
+# 🤓 see arcrift.mcp.toml for cross-session conversation memory
+# 🤓 SKILL.md auto-installs to ~/.claude/skills/get-api-docs/ for claude code
+
+[validate]
+command = "chub --version"
+regex = "\\d+\\.\\d+\\.\\d+"
+
+# b00t:map v1
+# summary: chub CLI — curated versioned API docs for coding agents (Andrew Ng / aisuite)
+# tags: cli, docs, api-docs, agent-tooling, npm, knowledge, context
+# tier: sm0l
+# cmds: chub search, chub get <id> --lang py|js, chub annotate <id> <note>
+# complexity: 2

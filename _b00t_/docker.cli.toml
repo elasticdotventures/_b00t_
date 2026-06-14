@@ -1,0 +1,12 @@
+[b00t]
+name = "docker"
+type = "cli"
+hint = "docker is a client for interacting with the daemon (see dockerd(8)) through the CLI.         The Docker CLI has over 30 commands. The commands are listed below and each has its own man page which explains usage and arguments."
+desires = "ersion"
+lfmf_category = "docker"
+
+[b00t.learn]
+inline = "See: man docker"
+
+# Auto-generated from man page
+# Edit to add usage examples, dependencies, etc.

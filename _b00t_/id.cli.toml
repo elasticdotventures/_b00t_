@@ -1,0 +1,15 @@
+[b00t]
+name = "id"
+type = "cli"
+desires = "coreutils"
+version = "id --version"
+version_regex = '\\d+\\.\\d+'
+hint = "Identity probe for validating group membership needed by rootless runtime access."
+lfmf_category = "systemd"
+
+[[b00t.usage]]
+description = "Show current user identity and groups"
+command = "id"
+
+[b00t.learn]
+inline = "Use to verify current user group membership for video/render and service ownership."

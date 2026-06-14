@@ -1,0 +1,119 @@
+[b00t]
+name = "open-agent-hub"
+type = "cli"
+desires = "latest"
+aliases = ["open-agent", "oah", "ahub"]
+hint = "Open Agent Hub capability linker for skills, agents, and commands across Claude, Gemini, Codex, Cursor, Trae, OpenCode, and Kiro"
+install = """
+set -euo pipefail
+
+if ! command -v git >/dev/null 2>&1; then
+  echo "❌ git is required but not found in PATH"
+  exit 1
+fi
+
+if ! command -v node >/dev/null 2>&1; then
+  echo "❌ node is required but not found in PATH"
+  echo "💡 Install Node.js first, then rerun: b00t install open-agent-hub"
+  exit 1
+fi
+
+DATA_DIR="${XDG_DATA_HOME:-$HOME/.local/share}"
+BIN_DIR="${XDG_BIN_DIR:-$HOME/.local/bin}"
+DEST="$DATA_DIR/open-agent-hub"
+REPO_URL="https://github.com/guanyang/open-agent-hub.git"
+
+mkdir -p "$DATA_DIR" "$BIN_DIR"
+
+if [ -d "$DEST/.git" ]; then
+  git -C "$DEST" pull --ff-only
+else
+  rm -rf "$DEST"
+  git clone "$REPO_URL" "$DEST"
+fi
+
+chmod +x "$DEST/scripts/hub.js"
+ln -sf "$DEST/scripts/hub.js" "$BIN_DIR/open-agent"
+ln -sf "$DEST/scripts/hub.js" "$BIN_DIR/open-agent-hub"
+ln -sf "$DEST/scripts/hub.js" "$BIN_DIR/oah"
+ln -sf "$DEST/scripts/hub.js" "$BIN_DIR/ahub"
+
+if [ -f "$HOME/.bashrc" ] && ! grep -Fq 'export PATH="$HOME/.local/bin:$PATH"' "$HOME/.bashrc"; then
+  printf '\nexport PATH="$HOME/.local/bin:$PATH"\n' >> "$HOME/.bashrc"
+fi
+"""
+update = """
+set -euo pipefail
+
+DATA_DIR="${XDG_DATA_HOME:-$HOME/.local/share}"
+BIN_DIR="${XDG_BIN_DIR:-$HOME/.local/bin}"
+DEST="$DATA_DIR/open-agent-hub"
+
+if [ ! -d "$DEST/.git" ]; then
+  echo "❌ open-agent-hub is not installed at $DEST"
+  echo "💡 Run: b00t install open-agent-hub"
+  exit 1
+fi
+
+git -C "$DEST" pull --ff-only
+chmod +x "$DEST/scripts/hub.js"
+mkdir -p "$BIN_DIR"
+ln -sf "$DEST/scripts/hub.js" "$BIN_DIR/open-agent"
+ln -sf "$DEST/scripts/hub.js" "$BIN_DIR/open-agent-hub"
+ln -sf "$DEST/scripts/hub.js" "$BIN_DIR/oah"
+ln -sf "$DEST/scripts/hub.js" "$BIN_DIR/ahub"
+"""
+version = """DATA_DIR="${XDG_DATA_HOME:-$HOME/.local/share}" && export DATA_DIR && node -p "require(process.env.DATA_DIR + '/open-agent-hub/package.json').version" 2>/dev/null || echo 'not installed'"""
+version_regex = '([0-9]+\.[0-9]+\.[0-9]+)'
+lfmf_category = "open-agent-hub"
+
+[b00t.learn]
+topic = "open-agent-hub"
+auto_digest = true
+
+[[b00t.usage]]
+description = "List all available skills, agents, and commands in the hub"
+command = "oah list"
+
+[[b00t.usage]]
+description = "Check workspace link status for the default target"
+command = "oah status"
+
+[[b00t.usage]]
+description = "Enable all components for OpenCode in the current project"
+command = "oah enable --target=opencode"
+
+[[b00t.usage]]
+description = "Enable all components globally for every supported target"
+command = "oah enable --global --target=all"
+
+[[b00t.usage]]
+description = "Sync upstream skill sources into the local checkout"
+command = "oah sync"
+
+[[b00t.references]]
+name = "open-agent-hub GitHub"
+url = "https://github.com/guanyang/open-agent-hub"
+
+[[b00t.references]]
+name = "open-agent-hub README"
+url = "https://github.com/guanyang/open-agent-hub/blob/main/README.md"
+
+[[b00t.references]]
+name = "open-agent-hub agent guidelines"
+url = "https://github.com/guanyang/open-agent-hub/blob/main/docs/Agent_Guidelines.md"
+
+[validate]
+command = """DATA_DIR="${XDG_DATA_HOME:-$HOME/.local/share}" && export DATA_DIR && node -p "require(process.env.DATA_DIR + '/open-agent-hub/package.json').version" 2>/dev/null"""
+regex = "[0-9]+\\.[0-9]+\\.[0-9]+"
+
+[roles]
+required_for = ["developer", "orchestrator"]
+optional_for = ["executive"]
+
+# b00t:map v1
+# summary: Open Agent Hub CLI — Git-backed skill/agent/command linker for multiple coding assistants
+# tags: open-agent-hub, oah, skills, agents, commands, opencode, claude, codex, gemini
+# tier: ch0nky
+# cmds: b00t install open-agent-hub, b00t learn open-agent-hub
+# complexity: 4

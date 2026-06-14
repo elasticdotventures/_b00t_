@@ -1,0 +1,12 @@
+[b00t]
+name = "serena"
+type = "mcp"
+hint = "Serena semantic coding MCP over LSP"
+requires_sudo = false
+
+[[b00t.mcp.stdio]]
+transport = "stdio"
+args = ["start-mcp-server", "--project", ".", "--transport", "stdio", "--enable-web-dashboard", "false", "--open-web-dashboard", "false"]
+command = "serena"
+priority = 0
+requires = []

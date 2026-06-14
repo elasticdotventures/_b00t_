@@ -1,0 +1,43 @@
+# b00t CLI Datum - opencode alternative via npm package manager
+
+[b00t]
+name = "opencode-npm"
+type = "cli"
+desires = "latest"
+hint = "opencode CLI alternate install via npm when the upstream binary installer is not desired"
+install = """
+set -euo pipefail
+mkdir -p "$HOME/.local/bin"
+if [ "${EUID:-$(id -u)}" = "0" ]; then
+  npm i -g opencode-ai@latest
+else
+  npm i -g --prefix "$HOME/.local" opencode-ai@latest
+  export PATH="$HOME/.local/bin:$PATH"
+  if [ -f "$HOME/.bashrc" ] && ! grep -Fq 'export PATH="$HOME/.local/bin:$PATH"' "$HOME/.bashrc"; then
+    printf '\nexport PATH="$HOME/.local/bin:$PATH"\n' >> "$HOME/.bashrc"
+  fi
+fi
+"""
+update = """
+set -euo pipefail
+if [ "${EUID:-$(id -u)}" = "0" ]; then
+  npm i -g opencode-ai@latest
+else
+  npm i -g --prefix "$HOME/.local" opencode-ai@latest
+fi
+"""
+version = "opencode --version"
+version_regex = '([0-9]+\\.[0-9]+\\.[0-9]+)'
+lfmf_category = "opencode"
+
+[b00t.learn]
+topic = "opencode"
+auto_digest = true
+
+[[b00t.references]]
+name = "opencode GitHub"
+url = "https://github.com/anomalyco/opencode"
+
+[[b00t.references]]
+name = "opencode install docs"
+url = "https://opencode.ai"

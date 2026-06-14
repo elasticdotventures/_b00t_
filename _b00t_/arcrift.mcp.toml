@@ -1,0 +1,83 @@
+# ArcRift — Persistent cross-session memory via MCP for coding agents
+# ⚠️ ALPHA: v1.6.x, use with caution per operator directive
+# 🤓 NOT a codebase graph indexer — captures AI conversation memory, not AST/code structure
+# 🤓 Requires Ollama (nomic-embed-text + llama3.1:8b) for local embeddings + extraction
+# 🤓 SQLite-backed; zero docker required in default mode
+# 🔗参 https://github.com/Eshaan-Nair/ArcRift
+# 🔗参 codebase-memory-mcp — for AST/semantic code graph queries (different capability)
+
+[b00t]
+name = "arcrift"
+type = "mcp"
+status = "experimental"
+hint = "ArcRift — local-first persistent memory + knowledge graph for AI coding tools via MCP. Captures AI conversation context across sessions with hybrid vector+FTS5+graph search."
+url = "https://github.com/Eshaan-Nair/ArcRift"
+
+# 🤓 install via npx (one-command setup) — clones, checks deps, pulls Ollama models
+install = '''
+set -euo pipefail
+if ! command -v node >/dev/null 2>&1; then
+  echo "❌ node >= 20 LTS required for ArcRift"
+  exit 1
+fi
+if ! command -v ollama >/dev/null 2>&1; then
+  echo "⚠️ Ollama not found — required for local embeddings"
+  echo "  Install: curl -fsSL https://ollama.com/install.sh | sh"
+  exit 1
+fi
+DEST="${XDG_DATA_HOME:-$HOME/.local/share}/arcrift"
+if [ -d "$DEST/.git" ]; then
+  git -C "$DEST" pull --ff-only
+else
+  git clone https://github.com/Eshaan-Nair/ArcRift.git "$DEST"
+fi
+cd "$DEST/backend"
+npm install
+npm run build
+# configure sqlite mode (no docker required)
+cat > .env <<'EOF'
+ARCRIFT_STORAGE_MODE=sqlite
+OLLAMA_URL=http://localhost:11434
+EOF
+echo "✅ ArcRift built → $DEST/backend/dist/mcp/server.js"
+echo "💡 Add to claude mcp: claude mcp add ArcRift node $DEST/backend/dist/mcp/server.js"
+'''
+
+requires = ["node.cli", "ollama.cli"]
+
+[b00t.mcp]
+# 🤓 node path must be resolved after install; use absolute path
+[[b00t.mcp.stdio]]
+command = "node"
+# args resolved at install time — see install script for DEST path
+args = ["${XDG_DATA_HOME:-$HOME/.local/share}/arcrift/backend/dist/mcp/server.js"]
+priority = 0
+requires = ["node.cli", "ollama.cli"]
+transport = "stdio"
+
+[[b00t.usage]]
+description = "Recall relevant context for current task"
+command = "recall_context(prompt: \"<task>\", project: \"<project-name>\")"
+
+[[b00t.usage]]
+description = "Store a decision or insight for future sessions"
+command = "store_memory(content: \"<insight>\", project: \"<project-name>\")"
+
+[[b00t.usage]]
+description = "Cross-project memory search"
+command = "search_memory(query: \"<topic>\")"
+
+[[b00t.usage]]
+description = "Get structured project summary"
+command = "get_project_summary(project: \"<project-name>\")"
+
+[[b00t.usage]]
+description = "Prune outdated facts"
+command = "prune_memory(prompt: \"<outdated topic>\", project: \"<project-name>\")"
+
+# b00t:map v1
+# summary: ArcRift alpha MCP — local-first cross-session AI conversation memory + knowledge graph (NOT codebase AST indexer)
+# tags: mcp, memory, knowledge-graph, cross-session, ollama, sqlite, experimental
+# tier: ch0nky
+# cmds: recall_context, store_memory, search_memory, get_project_summary, prune_memory
+# complexity: 6

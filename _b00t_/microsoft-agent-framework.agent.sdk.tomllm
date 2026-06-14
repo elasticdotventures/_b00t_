@@ -1,0 +1,60 @@
+# Microsoft Agent Framework SDK as b00t agent subtype exemplar
+# Source: https://github.com/microsoft/agent-framework
+# Upstream describes Python and .NET support; do not mark Rust support without evidence.
+
+[b00t]
+name = "microsoft-agent-framework"
+type = "agent.sdk"
+hint = "Microsoft Agent Framework SDK for production AI agents and multi-agent workflows."
+
+[[b00t.agent.inherits]]
+from = "++abstract.agent"
+
+[b00t.agent]
+pid = "microsoft-agent-framework-sdk"
+model = "provider-flexible"
+skills = ["agent-sdk", "multi-agent-workflows", "orchestration", "observability", "human-in-the-loop"]
+personality = "pragmatic"
+humor = "low"
+role = "specialist"
+
+[b00t.agent.traits]
+cli = false
+sdk = true
+ide_vsix = false
+gui = false
+
+[b00t.agent.sdk]
+languages = ["python", "dotnet"]
+package_python = "agent-framework"
+package_dotnet = "Microsoft.Agents.AI"
+patterns = ["sequential", "concurrent", "handoff", "group-collaboration"]
+source = "https://github.com/microsoft/agent-framework"
+
+[b00t.agent.skill_contracts.goal_loop]
+required = true
+parameters = ["objective", "key_results", "stop_conditions", "human_gate"]
+hint = "SDK workflows MUST expose deterministic goal-loop checkpoints before b00t orchestration."
+
+[b00t.agent.ipc]
+socket = ""
+pubsub = false
+protocol = "sdk"
+
+[b00t.agent.crew]
+role = "specialist"
+captain = false
+
+[b00t.sysml]
+stereotype = "«AgentSdk»"
+metaclass = "Block"
+bfo_class = "http://purl.obolibrary.org/obo/BFO_0000031"
+ufo_kind = "Functional Complex"
+owl_class = "https://b00t.promptexecution.com/ontology#AgentSdk"
+
+# b00t:map v1
+# summary: Microsoft Agent Framework encoded as agent.sdk exemplar; Python/.NET SDK carrier with goal-loop contract
+# tags: agent, sdk, microsoft-agent-framework, python, dotnet, orchestration, goal-loop
+# tier: ch0nky
+# cmds: b00t agent dashboard --limit 20
+# complexity: 6

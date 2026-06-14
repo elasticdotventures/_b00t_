@@ -1,0 +1,12 @@
+[b00t]
+name = "patch"
+type = "cli"
+hint = "patch takes a patch file patchfile containing a difference listing pro‐        duced  by the diff program and applies those differences to one or more        original files, producing patched versions.  Normally the patched  ver‐"
+desires = "2.7.6"
+lfmf_category = "patch"
+
+[b00t.learn]
+inline = "See: man patch"
+
+# Auto-generated from man page
+# Edit to add usage examples, dependencies, etc.

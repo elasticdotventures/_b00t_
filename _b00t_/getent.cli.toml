@@ -1,0 +1,19 @@
+[b00t]
+name = "getent"
+type = "cli"
+desires = "glibc"
+version = "getent --help 2>&1 | head -1"
+version_regex = '.*'
+hint = "Name service switch lookup tool. Useful for verifying group records such as video/render."
+lfmf_category = "systemd"
+
+[[b00t.usage]]
+description = "Inspect the video group record"
+command = "getent group video"
+
+[[b00t.usage]]
+description = "Inspect the render group record"
+command = "getent group render"
+
+[b00t.learn]
+inline = "Use to inspect NSS-backed group records during rootless GPU runtime debugging."
