@@ -1,0 +1,74 @@
+[b00t]
+name = "opencode-agent"
+type = "hive_profile"
+hint = "opencode ACP/OpenAI-compatible agent server on :3000 using the local ch0nky slot"
+
+[b00t.hive.resources]
+ram_gb = 1
+gpu_mb = 0
+cpu_cores = 1
+
+[b00t.hive.resources.gate]
+ram_free_gb = 1
+gpu_free_mb = 0
+
+[b00t.hive.exclusion]
+group = "ch0nky-coding-agent"
+priority = 60
+
+[b00t.hive.services]
+start = []
+stop = []
+
+[b00t.hive.service]
+description = "opencode ACP server — local coding agent on port 3000"
+service_type = "simple"
+restart = "on-failure"
+restart_sec = "10s"
+timeout_start_sec = "60"
+after = [
+  "network.target",
+  "b00t-hive-inference-qwen36-27b.service",
+  "b00t-hive-inference-qwen36-27b-llamacpp.service",
+  "b00t-hive-inference-qwen36-35b-a3b-llamacpp.service",
+]
+environment = [
+  "PATH=/home/brianh/.local/bin:/home/brianh/.local/share/pnpm:/home/brianh/.nvm/versions/node/v22.15.1/bin:/usr/local/bin:/usr/bin:/bin",
+  "OPENCODE_CONFIG=/home/brianh/.config/opencode/opencode.json",
+]
+exec_start = "opencode serve --port 3000 --model qwen36-local/ch0nky"
+
+[b00t.hive.env]
+AGENT_ID = "opencode"
+AGENT_SKILLS = "code,refactor,debug,edit,bash"
+OPENCODE_CONFIG = "/home/brianh/.config/opencode/opencode.json"
+B00T_AI_CH0NKY_BASE = "http://127.0.0.1:8001/v1"
+OPENAI_BASE_URL = "http://127.0.0.1:8001/v1"
+OPENAI_API_KEY = "local-b00t"
+
+[[b00t.usage]]
+description = "Start the opencode agent server via the b00t template unit"
+command = "systemctl --user start b00t@opencode-agent.service"
+
+[[b00t.usage]]
+description = "Enable opencode agent autostart"
+command = "systemctl --user enable b00t@opencode-agent.service"
+
+[[b00t.usage]]
+description = "Check the opencode agent service"
+command = "systemctl --user status b00t@opencode-agent.service"
+
+[[b00t.usage]]
+description = "Run opencode against the local ch0nky slot"
+command = "opencode run --model qwen36-local/ch0nky 'your task here'"
+
+[[b00t.usage]]
+description = "Probe the opencode HTTP server"
+command = "curl -s http://127.0.0.1:3000"
+
+# b00t:map v1
+# summary: opencode agent hive profile — systemd/template-loadable ACP server on :3000
+# tags: opencode, agent, hive, systemd, qwen36, ch0nky, acp
+# tier: ch0nky
+# cmds: systemctl --user start b00t@opencode-agent.service
+# complexity: 4

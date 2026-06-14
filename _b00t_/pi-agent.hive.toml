@@ -1,0 +1,75 @@
+[b00t]
+name = "pi-agent"
+type = "hive_profile"
+hint = "pi coding agent RPC server using the local ch0nky slot on :8001"
+
+[b00t.hive.resources]
+ram_gb = 1
+gpu_mb = 0
+cpu_cores = 1
+
+[b00t.hive.resources.gate]
+ram_free_gb = 1
+gpu_free_mb = 0
+
+[b00t.hive.exclusion]
+group = "ch0nky-coding-agent"
+priority = 50
+
+[b00t.hive.services]
+start = []
+stop = []
+
+[b00t.hive.service]
+description = "pi coding agent RPC server — local ch0nky slot"
+service_type = "simple"
+restart = "on-failure"
+restart_sec = "10s"
+timeout_start_sec = "60"
+after = [
+  "network.target",
+  "b00t-hive-inference-qwen36-27b.service",
+  "b00t-hive-inference-qwen36-27b-llamacpp.service",
+  "b00t-hive-inference-qwen36-35b-a3b-llamacpp.service",
+]
+environment = [
+  "PATH=/home/brianh/.nvm/versions/node/v22.15.1/bin:/usr/local/bin:/usr/bin:/bin",
+  "LLAMA_CPP_BASE_URL=http://127.0.0.1:8001/v1",
+  "OPENAI_API_KEY=local-b00t",
+]
+exec_start = "pi --mode rpc --provider llama-cpp --model ch0nky"
+
+[b00t.hive.env]
+AGENT_ID = "pi"
+AGENT_SKILLS = "code,refactor,debug,edit,bash"
+PI_CODING_AGENT_DIR = "~/.pi/agent"
+PI_MODEL = "ch0nky"
+LLAMA_CPP_BASE_URL = "http://127.0.0.1:8001/v1"
+OPENAI_API_KEY = "local-b00t"
+
+[[b00t.usage]]
+description = "Start the pi agent server via the b00t template unit"
+command = "systemctl --user start b00t@pi-agent.service"
+
+[[b00t.usage]]
+description = "Enable pi agent autostart"
+command = "systemctl --user enable b00t@pi-agent.service"
+
+[[b00t.usage]]
+description = "Check the pi agent service"
+command = "systemctl --user status b00t@pi-agent.service"
+
+[[b00t.usage]]
+description = "Probe the local ch0nky slot through pi"
+command = "pi -p --provider llama-cpp --model ch0nky 'Reply with READY and the model alias only.'"
+
+[[b00t.usage]]
+description = "Install the pi MCP adapter"
+command = "b00t mcp install pi-mcp-adapter claudecode"
+
+# b00t:map v1
+# summary: pi agent hive profile — systemd/template-loadable RPC server on the ch0nky slot
+# tags: pi, agent, hive, systemd, qwen36, ch0nky, rpc
+# tier: ch0nky
+# cmds: systemctl --user start b00t@pi-agent.service
+# complexity: 4
