@@ -1,5 +1,5 @@
 use crate::dependency_resolver::DependencyResolver;
-use crate::{BootDatum, UnifiedConfig, evaluate_gates};
+use crate::{BootDatum, UnifiedConfig, evaluate_gates, evaluate_requirements};
 use anyhow::{Context, Result, anyhow};
 use clap::Parser;
 use duct::cmd;
@@ -164,22 +164,6 @@ pub fn install_datum(path: &str, name: &str, dry_run: bool) -> Result<()> {
             }
         }
 
-        // Skip if already installed (best-effort using version command)
-        if let Some(version_cmd) = &datum.version {
-            match cmd!("bash", "-c", version_cmd).run() {
-                Ok(_) => {
-                    println!("✅ {} already installed, skipping", key);
-                    continue;
-                }
-                Err(e) => {
-                    eprintln!(
-                        "⚠️  Version check for '{}' failed: {}. Proceeding with installation.",
-                        key, e
-                    );
-                }
-            }
-        }
-
         // Evaluate gates before installing
         if let Some(ref gates) = datum.gate {
             if !gates.is_empty() {
@@ -196,11 +180,59 @@ pub fn install_datum(path: &str, name: &str, dry_run: bool) -> Result<()> {
             }
         }
 
+        let requirement_results = datum
+            .requirements
+            .as_ref()
+            .filter(|requirements| !requirements.is_empty())
+            .map(|requirements| evaluate_requirements(requirements, path));
+        let requirements_passed = requirement_results
+            .as_ref()
+            .map(|results| results.iter().all(|r| r.passed))
+            .unwrap_or(true);
+
+        // Skip only when the version probe succeeds AND the target requirements already hold.
+        if let Some(version_cmd) = &datum.version {
+            match cmd!("bash", "-c", version_cmd).run() {
+                Ok(_) if requirements_passed => {
+                    println!("✅ {} already installed, skipping", key);
+                    continue;
+                }
+                Ok(_) => {
+                    println!("🔧 {} installed but target requirements are not satisfied; repairing", key);
+                    if let Some(results) = &requirement_results {
+                        for result in results.iter().filter(|r| !r.passed) {
+                            println!("   ↳ {}", result.reason);
+                        }
+                    }
+                }
+                Err(e) => {
+                    eprintln!(
+                        "⚠️  Version check for '{}' failed: {}. Proceeding with installation.",
+                        key, e
+                    );
+                }
+            }
+        }
+
         if let Some(install_cmd) = datum.install_command() {
             println!("🚀 Installing {}...", key);
             cmd!("bash", "-c", install_cmd)
                 .run()
                 .with_context(|| format!("Failed to install {}", key))?;
+
+            if let Some(requirements) = datum.requirements.as_ref().filter(|r| !r.is_empty()) {
+                let post_results = evaluate_requirements(requirements, path);
+                let failing: Vec<_> = post_results.iter().filter(|r| !r.passed).collect();
+                if !failing.is_empty() {
+                    for result in failing {
+                        println!("⏳ {} post-install requirement unsatisfied: {}", key, result.reason);
+                        if let Some(solve) = &result.solve {
+                            println!("   ↳ solve: {}", solve);
+                        }
+                    }
+                    anyhow::bail!("{} installed but required state was not achieved", key);
+                }
+            }
             println!("✅ Installed {}", key);
         } else {
             println!("⚠️  No install command for {}, skipping", key);
@@ -311,27 +343,19 @@ fn load_all_datums(path: &str) -> Result<HashMap<String, BootDatum>> {
         return Ok(datums);
     }
 
+    let mut selected_paths: HashMap<String, (u8, PathBuf)> = HashMap::new();
+
     for entry in std::fs::read_dir(&b00t_dir)? {
         let entry = entry?;
         let entry_path = entry.path();
 
         if entry_path.is_file() {
             if let Some(file_name) = entry_path.file_name().and_then(|s| s.to_str()) {
-                if file_name.ends_with(".stack.toml") {
-                    continue;
-                }
-
-                if file_name.ends_with(".toml") {
-                    if let Ok(content) = std::fs::read_to_string(&entry_path) {
-                        if let Ok(config) = toml::from_str::<UnifiedConfig>(&content) {
-                            let datum = config.b00t;
-                            let datum_type = datum
-                                .datum_type
-                                .as_ref()
-                                .map(|t| format!("{:?}", t).to_lowercase())
-                                .unwrap_or_else(|| "unknown".to_string());
-                            let key = format!("{}.{}", datum.name, datum_type);
-                            datums.insert(key, datum);
+                if let Some((variant_key, priority)) = datum_variant_key(file_name) {
+                    match selected_paths.get(&variant_key) {
+                        Some((existing_priority, _)) if *existing_priority <= priority => {}
+                        _ => {
+                            selected_paths.insert(variant_key, (priority, entry_path.clone()));
                         }
                     }
                 }
@@ -339,7 +363,37 @@ fn load_all_datums(path: &str) -> Result<HashMap<String, BootDatum>> {
         }
     }
 
+    for (_, (_, entry_path)) in selected_paths {
+        if let Ok(content) = std::fs::read_to_string(&entry_path) {
+            if let Ok(config) = toml::from_str::<UnifiedConfig>(&content) {
+                let datum = config.b00t;
+                let datum_type = datum
+                    .datum_type
+                    .as_ref()
+                    .map(|t| format!("{:?}", t).to_lowercase())
+                    .unwrap_or_else(|| "unknown".to_string());
+                let key = format!("{}.{}", datum.name, datum_type);
+                datums.insert(key, datum);
+            }
+        }
+    }
+
     Ok(datums)
+}
+
+fn datum_variant_key(file_name: &str) -> Option<(String, u8)> {
+    const EXTENSIONS: [(&str, u8); 3] = [(".tomllmd", 0), (".tomllm", 1), (".toml", 2)];
+
+    for (ext, priority) in EXTENSIONS {
+        if let Some(stem) = file_name.strip_suffix(ext) {
+            if stem.ends_with(".stack") || stem.is_empty() {
+                return None;
+            }
+            return Some((stem.to_string(), priority));
+        }
+    }
+
+    None
 }
 
 #[cfg(test)]
@@ -353,6 +407,29 @@ mod tests {
     fn test_install_dry_run() {
         let result = run_just_install(true);
         assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_datum_variant_key_ignores_stack_files() {
+        assert_eq!(datum_variant_key("demo.stack.toml"), None);
+        assert_eq!(datum_variant_key("demo.stack.tomllm"), None);
+        assert_eq!(datum_variant_key("demo.stack.tomllmd"), None);
+    }
+
+    #[test]
+    fn test_datum_variant_key_prefers_richer_extensions() {
+        assert_eq!(
+            datum_variant_key("demo.cli.tomllmd"),
+            Some(("demo.cli".to_string(), 0))
+        );
+        assert_eq!(
+            datum_variant_key("demo.cli.tomllm"),
+            Some(("demo.cli".to_string(), 1))
+        );
+        assert_eq!(
+            datum_variant_key("demo.cli.toml"),
+            Some(("demo.cli".to_string(), 2))
+        );
     }
 
     // Helper to create a test datum TOML file
@@ -433,6 +510,53 @@ hint = "Test datum {}"
     }
 
     #[test]
+    fn test_load_all_datums_prefers_tomllmd_over_tomllm_and_toml() {
+        let temp_dir = TempDir::new().unwrap();
+        let path = temp_dir.path().to_str().unwrap();
+
+        fs::write(
+            temp_dir.path().join("mytool.cli.toml"),
+            "[b00t]\nname = \"mytool-toml\"\ntype = \"cli\"\nhint = \"toml\"\n",
+        )
+        .unwrap();
+        fs::write(
+            temp_dir.path().join("mytool.cli.tomllm"),
+            "[b00t]\nname = \"mytool-tomllm\"\ntype = \"cli\"\nhint = \"tomllm\"\n",
+        )
+        .unwrap();
+        fs::write(
+            temp_dir.path().join("mytool.cli.tomllmd"),
+            "[b00t]\nname = \"mytool-tomllmd\"\ntype = \"cli\"\nhint = \"tomllmd\"\n",
+        )
+        .unwrap();
+
+        let datums = load_all_datums(path).unwrap();
+        assert_eq!(datums.len(), 1);
+        assert_eq!(datums.get("mytool-tomllmd.cli").unwrap().hint, "tomllmd");
+    }
+
+    #[test]
+    fn test_load_all_datums_falls_back_to_tomllm_when_no_tomllmd() {
+        let temp_dir = TempDir::new().unwrap();
+        let path = temp_dir.path().to_str().unwrap();
+
+        fs::write(
+            temp_dir.path().join("mytool.cli.toml"),
+            "[b00t]\nname = \"mytool-toml\"\ntype = \"cli\"\nhint = \"toml\"\n",
+        )
+        .unwrap();
+        fs::write(
+            temp_dir.path().join("mytool.cli.tomllm"),
+            "[b00t]\nname = \"mytool-tomllm\"\ntype = \"cli\"\nhint = \"tomllm\"\n",
+        )
+        .unwrap();
+
+        let datums = load_all_datums(path).unwrap();
+        assert_eq!(datums.len(), 1);
+        assert_eq!(datums.get("mytool-tomllm.cli").unwrap().hint, "tomllm");
+    }
+
+    #[test]
     fn test_load_all_datums_multiple_datums() {
         let temp_dir = TempDir::new().unwrap();
         let path = temp_dir.path().to_str().unwrap();
@@ -478,6 +602,34 @@ hint = "Test stack"
         assert!(result.is_ok());
         let datums = result.unwrap();
         assert_eq!(datums.len(), 0); // Returns empty hashmap for nonexistent dir
+    }
+
+    #[test]
+    fn test_load_quadlet_datum_real_file() {
+        let path = "/home/brianh/.b00t/_b00t_";
+        let file = std::path::Path::new(path).join("quadlet-podman-kube.config.toml");
+        if !file.exists() {
+            return; // Skip if not on this machine
+        }
+        let content = std::fs::read_to_string(&file).unwrap();
+        let config_result = toml::from_str::<crate::UnifiedConfig>(&content);
+        if let Err(ref e) = config_result {
+            println!("UnifiedConfig parse FAIL: {}", e);
+        }
+        assert!(
+            config_result.is_ok(),
+            "quadlet TOML should parse as UnifiedConfig"
+        );
+        let c = config_result.unwrap();
+        assert_eq!(c.b00t.name, "quadlet-podman-kube");
+        let datums = load_all_datums(path).unwrap();
+        let found = datums.contains_key("quadlet-podman-kube.config")
+            || datums.values().any(|d| d.name == "quadlet-podman-kube");
+        assert!(
+            found,
+            "quadlet datum not found in load_all_datums; keys: {:?}",
+            datums.keys().collect::<Vec<_>>()
+        );
     }
 
     #[test]
@@ -544,6 +696,41 @@ hint = "Test stack"
                     .unwrap_err()
                     .to_string()
                     .contains("Failed to install")
+        );
+    }
+
+    #[test]
+    fn test_install_datum_prefers_highest_precedence_variant() {
+        let temp_dir = TempDir::new().unwrap();
+        let path = temp_dir.path().to_str().unwrap();
+        let low = temp_dir.path().join("low-installed");
+        let high = temp_dir.path().join("high-installed");
+
+        fs::write(
+            temp_dir.path().join("mytool.cli.toml"),
+            format!(
+                "[b00t]\nname = \"mytool\"\ntype = \"cli\"\nhint = \"toml\"\ninstall = \"touch {}\"\n",
+                low.display()
+            ),
+        )
+        .unwrap();
+        fs::write(
+            temp_dir.path().join("mytool.cli.tomllmd"),
+            format!(
+                "[b00t]\nname = \"mytool\"\ntype = \"cli\"\nhint = \"tomllmd\"\ninstall = \"touch {}\"\n",
+                high.display()
+            ),
+        )
+        .unwrap();
+
+        install_datum(path, "mytool", false).unwrap();
+        assert!(
+            high.exists(),
+            "highest-precedence install command did not run"
+        );
+        assert!(
+            !low.exists(),
+            "lower-precedence datum should not have been selected"
         );
     }
 
@@ -796,6 +983,25 @@ hint = "Test stack"
                     .to_string()
                     .contains("Failed to install")
         );
+    }
+
+    #[test]
+    fn test_install_datum_repairs_when_version_succeeds_but_requirement_fails() {
+        let temp_dir = TempDir::new().unwrap();
+        let path = temp_dir.path().to_str().unwrap();
+        let marker = temp_dir.path().join("repaired");
+
+        fs::write(
+            temp_dir.path().join("repair.config.toml"),
+            format!(
+                "[b00t]\nname = \"repair\"\ntype = \"config\"\nhint = \"repair datum\"\ninstall = \"touch {marker}\"\nversion = \"printf card1\"\nversion_regex = 'card\\\\d+'\n\n[[b00t.requirements]]\nname = \"repaired-state\"\nkind = \"file\"\nfile = \"{marker}\"\nhint = \"marker must exist\"\n",
+                marker = marker.display()
+            ),
+        )
+        .unwrap();
+
+        install_datum(path, "repair", false).unwrap();
+        assert!(marker.exists(), "install should run to satisfy requirement");
     }
 
     #[test]

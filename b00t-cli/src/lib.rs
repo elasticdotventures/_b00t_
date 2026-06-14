@@ -106,6 +106,7 @@ pub mod datum_utils;
 pub mod datum_vscode;
 #[cfg(feature = "dbus")]
 pub mod dbus_dispatch;
+pub mod delegation_macros;
 pub mod dependency_resolver;
 pub mod entanglement;
 pub mod erp;
@@ -122,11 +123,14 @@ pub mod k8s;
 pub mod memory_provider;
 pub mod model_manager;
 pub mod orchestrator;
+pub mod otel;
+pub mod postel;
 pub mod sandbox;
 pub mod session_memory;
 pub mod skill_resolver;
 pub mod soul_writer;
 pub mod step;
+pub mod tomllm_delta;
 pub mod traits;
 pub mod utils;
 pub mod viz;
@@ -178,6 +182,13 @@ pub struct UsageExample {
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Default)]
+pub struct DatumReference {
+    #[serde(alias = "label")]
+    pub name: String,
+    pub url: String,
+}
+
+#[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Default)]
 pub struct LearnMeta {
     pub topic: Option<String>,
     pub inline: Option<String>,
@@ -196,6 +207,22 @@ pub struct GpuRequirements {
     pub count: Option<u32>,
     pub memory: Option<String>,
     pub gpu_type: Option<String>,
+}
+
+#[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Default)]
+pub struct RequirementSpec {
+    pub name: Option<String>,
+    pub capability: Option<String>,
+    pub kind: String,
+    pub command: Option<String>,
+    pub file: Option<String>,
+    pub pattern: Option<String>,
+    pub datum: Option<String>,
+    pub service: Option<String>,
+    pub host: Option<String>,
+    pub port: Option<u16>,
+    pub solve: Option<String>,
+    pub hint: Option<String>,
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Default)]
@@ -244,6 +271,10 @@ pub struct BootDatum {
     pub name: String,
     #[serde(rename = "type", deserialize_with = "deserialize_datum_type")]
     pub datum_type: Option<DatumType>,
+    /// Raw `b00t.type` string captured post-parse; used for content-tag filtering
+    /// (e.g. "prd", "okr", "pattern", "agent__cli"). Not serialized from TOML.
+    #[serde(skip)]
+    pub type_tag: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub status: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -321,6 +352,10 @@ pub struct BootDatum {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub gate: Option<Vec<GateSpec>>,
 
+    // Structured runtime / install requirements for capability solving and validation.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub requirements: Option<Vec<RequirementSpec>>,
+
     // Source control metadata
     pub url: Option<String>,
     pub branch: Option<String>,
@@ -358,6 +393,7 @@ pub struct BootDatum {
     pub learn: Option<LearnMeta>,
     pub lfmf_category: Option<String>,
     pub usage: Option<Vec<UsageExample>>,
+    pub references: Option<Vec<DatumReference>>,
 
     // API metadata
     pub provides: Option<ApiProvides>,
@@ -380,6 +416,42 @@ pub struct BootDatum {
     //    All other HookResult variants (non-error Warn/Redirect/Info/Missing) are non-fatal: logged and execution continues
     pub uninstall: Option<String>,
     pub hook_uninstall: Option<String>,
+
+    // b00t:map v1 tail-block fields — parsed from comment block, not TOML keys
+    #[serde(skip)]
+    pub map_tags: Vec<String>,
+    #[serde(skip)]
+    pub map_tier: Option<MapTier>,
+    #[serde(skip)]
+    pub map_complexity: Option<u8>,
+    #[serde(skip)]
+    pub map_summary: Option<String>,
+}
+
+/// Per-process set of unknown datum type strings already warned about.
+/// Guards are held briefly; warn is best-effort (no panic on lock poison).
+static DATUM_TYPE_WARNED: std::sync::OnceLock<std::sync::Mutex<std::collections::HashSet<String>>> =
+    std::sync::OnceLock::new();
+
+fn is_known_content_tag(value: &str) -> bool {
+    matches!(
+        value,
+        "prd"
+            | "prd.arch"
+            | "schema"
+            | "specification"
+            | "datum"
+            | "okr"
+            | "pattern__learn"
+            | "mcp_server"
+            | "inference_provider"
+            | "ai_provider"
+            | "wow"
+            | "project"
+            | "install"
+            | "github_org"
+            | "routing"
+    )
 }
 
 fn deserialize_datum_type<'de, D>(
@@ -391,11 +463,34 @@ where
     let raw = Option::<String>::deserialize(deserializer)?;
     match raw {
         None => Ok(None),
-        Some(value) if value == "model" => Ok(Some(DatumType::AiModel)),
         Some(value) => {
-            DatumType::deserialize(StringDeserializer::<serde::de::value::Error>::new(value))
-                .map(Some)
-                .map_err(serde::de::Error::custom)
+            // Unknown strings (prd, okr, pattern, agent__cli, …) fall back to None.
+            // datum.type_tag captures the raw string for content-tag filtering.
+            let resolved = DatumType::from_type_token(&value);
+
+            if resolved.is_none()
+                && !is_known_content_tag(&value)
+                && std::env::var("B00T_DATUM_WARN")
+                    .map(|v| v != "0")
+                    .unwrap_or(true)
+            {
+                let warned = DATUM_TYPE_WARNED
+                    .get_or_init(|| std::sync::Mutex::new(std::collections::HashSet::new()));
+                if let Ok(mut set) = warned.lock() {
+                    if set.insert(value.clone()) {
+                        // warn once per unknown type string per process
+                        eprintln!(
+                            "⚠️  b00t: unknown datum type token '{value}' — not a typed datum or known content-tag; silence: B00T_DATUM_WARN=0"
+                        );
+                        // also record in OTEL metrics (counts even when B00T_DATUM_WARN=0)
+                        crate::otel::record(crate::otel::MetricEvent::DatumTypeUnknown {
+                            type_str: value.clone(),
+                        });
+                    }
+                }
+            }
+
+            Ok(resolved)
         }
     }
 }
@@ -432,6 +527,13 @@ pub struct GateSpec {
 pub struct GateResult {
     pub passed: bool,
     pub reason: String,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct RequirementResult {
+    pub passed: bool,
+    pub reason: String,
+    pub solve: Option<String>,
 }
 
 /// Evaluate all gates for a datum. Returns a Vec of GateResults, one per gate.
@@ -542,6 +644,191 @@ fn evaluate_rhai_gate(expr: &str) -> bool {
     engine.eval::<bool>(expr).unwrap_or(false)
 }
 
+fn base_dir_for(path: &str) -> std::path::PathBuf {
+    let p = std::path::Path::new(path);
+    if p.is_dir() {
+        p.to_path_buf()
+    } else {
+        p.parent()
+            .map(|q| q.to_path_buf())
+            .unwrap_or_else(|| std::path::PathBuf::from("."))
+    }
+}
+
+fn expand_glob_matches(pattern: &str, path: &str) -> Vec<std::path::PathBuf> {
+    let expanded = shellexpand::tilde(pattern).to_string();
+    let absolute = if std::path::Path::new(&expanded).is_absolute() {
+        expanded
+    } else {
+        base_dir_for(path)
+            .join(expanded)
+            .to_string_lossy()
+            .to_string()
+    };
+    let mut matches = Vec::new();
+    if let Ok(paths) = glob::glob(&absolute) {
+        for entry in paths.flatten() {
+            matches.push(entry);
+        }
+    }
+    matches.sort();
+    matches
+}
+
+fn resolve_path_against_base(spec: &str, path: &str) -> std::path::PathBuf {
+    let expanded = shellexpand::tilde(spec).to_string();
+    let expanded_path = std::path::Path::new(&expanded);
+    if expanded_path.is_absolute() {
+        expanded_path.to_path_buf()
+    } else {
+        base_dir_for(path).join(expanded_path)
+    }
+}
+
+pub fn evaluate_requirements(
+    requirements: &[RequirementSpec],
+    path: &str,
+) -> Vec<RequirementResult> {
+    let mut results = Vec::new();
+
+    for requirement in requirements {
+        let mut passed = true;
+        let mut reasons = Vec::new();
+
+        match requirement.kind.as_str() {
+            "command" => {
+                let cmd = requirement.command.as_deref().unwrap_or_default();
+                if cmd.is_empty() || !check_command_available(cmd) {
+                    passed = false;
+                    reasons.push(format!("command '{}' not found on PATH", cmd));
+                }
+            }
+            "file" => {
+                let file = requirement.file.as_deref().unwrap_or_default();
+                if file.is_empty() || !resolve_path_against_base(file, path).exists() {
+                    passed = false;
+                    reasons.push(format!("file '{}' does not exist", file));
+                }
+            }
+            "path_glob" => {
+                let pattern = requirement.pattern.as_deref().unwrap_or_default();
+                let matches = expand_glob_matches(pattern, path);
+                if pattern.is_empty() || matches.is_empty() {
+                    passed = false;
+                    reasons.push(format!("glob '{}' matched no paths", pattern));
+                }
+            }
+            "file_contains" => {
+                let file = requirement.file.as_deref().unwrap_or_default();
+                let needle = requirement.pattern.as_deref().unwrap_or_default();
+                let file_path = resolve_path_against_base(file, path);
+                let content = std::fs::read_to_string(&file_path).unwrap_or_default();
+                if file.is_empty() || needle.is_empty() || !content.contains(needle) {
+                    passed = false;
+                    reasons.push(format!("file '{}' does not contain '{}'", file, needle));
+                }
+            }
+            "file_contains_live_glob" => {
+                let file = requirement.file.as_deref().unwrap_or_default();
+                let pattern = requirement.pattern.as_deref().unwrap_or_default();
+                let file_path = resolve_path_against_base(file, path);
+                let content = std::fs::read_to_string(&file_path).unwrap_or_default();
+                let matches = expand_glob_matches(pattern, path);
+                if file.is_empty() || !file_path.exists() {
+                    passed = false;
+                    reasons.push(format!("file '{}' does not exist", file));
+                } else if pattern.is_empty() || matches.is_empty() {
+                    passed = false;
+                    reasons.push(format!("glob '{}' matched no live paths", pattern));
+                } else if !matches
+                    .iter()
+                    .any(|matched| content.contains(&*matched.to_string_lossy()))
+                {
+                    passed = false;
+                    let wanted = matches
+                        .iter()
+                        .map(|m| m.to_string_lossy().to_string())
+                        .collect::<Vec<_>>()
+                        .join(", ");
+                    reasons.push(format!(
+                        "file '{}' does not reference any of [{}]",
+                        file, wanted
+                    ));
+                }
+            }
+            "datum" => {
+                let datum = requirement.datum.as_deref().unwrap_or_default();
+                let datum_root = base_dir_for(path);
+                if datum.is_empty() || get_config(datum, &datum_root.to_string_lossy()).is_err() {
+                    passed = false;
+                    reasons.push(format!("datum '{}' is not defined", datum));
+                }
+            }
+            "service_user" => {
+                let service = requirement.service.as_deref().unwrap_or_default();
+                let ok = !service.is_empty()
+                    && duct::cmd!("systemctl", "--user", "is-active", "--quiet", service)
+                        .run()
+                        .is_ok();
+                if !ok {
+                    passed = false;
+                    reasons.push(format!("user service '{}' is not active", service));
+                }
+            }
+            "tcp_port" => {
+                let host = requirement.host.as_deref().unwrap_or("127.0.0.1");
+                let port = requirement.port.unwrap_or_default();
+                let addr = format!("{}:{}", host, port);
+                let ok = port != 0
+                    && std::net::TcpStream::connect_timeout(
+                        &addr
+                            .parse()
+                            .unwrap_or_else(|_| std::net::SocketAddr::from(([127, 0, 0, 1], port))),
+                        std::time::Duration::from_secs(1),
+                    )
+                    .is_ok();
+                if !ok {
+                    passed = false;
+                    reasons.push(format!("tcp endpoint '{}' is not reachable", addr));
+                }
+            }
+            "shell" => {
+                let script = requirement.pattern.as_deref().unwrap_or_default();
+                let ok = !script.is_empty() && duct::cmd!("bash", "-lc", script).run().is_ok();
+                if !ok {
+                    passed = false;
+                    reasons.push(format!("shell requirement failed: {}", script));
+                }
+            }
+            other => {
+                passed = false;
+                reasons.push(format!("unknown requirement kind '{}'", other));
+            }
+        }
+
+        let reason = if reasons.is_empty() {
+            requirement
+                .hint
+                .clone()
+                .unwrap_or_else(|| "requirement passed".to_string())
+        } else {
+            requirement
+                .hint
+                .clone()
+                .map(|h| format!("{}: {}", h, reasons.join("; ")))
+                .unwrap_or_else(|| reasons.join("; "))
+        };
+
+        results.push(RequirementResult {
+            passed,
+            reason,
+            solve: requirement.solve.clone(),
+        });
+    }
+
+    results
+}
+
 #[derive(Debug, Clone, Serialize)]
 pub struct GateReport {
     pub datum: String,
@@ -549,7 +836,28 @@ pub struct GateReport {
     pub spec: String,
     pub origin: String,
     pub hint: Option<String>,
+    pub solve: Option<String>,
     pub status: &'static str,
+}
+
+fn build_gate_report(
+    datum: &str,
+    kind: &str,
+    spec: &str,
+    origin: &str,
+    hint: Option<String>,
+    solve: Option<String>,
+    status: &'static str,
+) -> GateReport {
+    GateReport {
+        datum: datum.to_string(),
+        kind: kind.to_string(),
+        spec: spec.to_string(),
+        origin: origin.to_string(),
+        hint,
+        solve,
+        status,
+    }
 }
 
 fn expand_tilde_path(spec: &str) -> std::path::PathBuf {
@@ -614,43 +922,10 @@ pub fn eval_gate_status(kind: &str, spec: &str) -> &'static str {
 }
 
 pub fn list_gates(path: &str, search: Option<&str>) -> Result<Vec<GateReport>> {
-    let expanded = get_expanded_path(path)?;
     let mut gates = Vec::new();
+    let datums = crate::datum_utils::get_all_datums_with_paths(path, None)?;
 
-    for entry in std::fs::read_dir(&expanded)
-        .map_err(|e| anyhow::anyhow!("Error reading {}: {}", expanded.display(), e))?
-    {
-        let entry = entry?;
-        let fpath = entry.path();
-        let fname = match fpath.file_name().and_then(|s| s.to_str()) {
-            Some(n) => n.to_string(),
-            None => continue,
-        };
-
-        let is_mcp_datum = fname.ends_with(".mcp.toml")
-            || fname.ends_with(".mcp.tomllm")
-            || fname.ends_with(".mcp.tomllmd");
-        if !is_mcp_datum {
-            continue;
-        }
-
-        let name = fname
-            .trim_end_matches(".tomllmd")
-            .trim_end_matches(".tomllm")
-            .trim_end_matches(".toml")
-            .trim_end_matches(".mcp")
-            .to_string();
-        if name.is_empty() {
-            continue;
-        }
-
-        let content = std::fs::read_to_string(&fpath)?;
-        let config: Result<UnifiedConfig, _> = toml::from_str(&content);
-        let datum = match config {
-            Ok(c) => c.b00t,
-            Err(_) => continue,
-        };
-
+    for (name, (datum, datum_path)) in datums {
         if let Some(q) = search {
             if !name.to_lowercase().contains(&q.to_lowercase())
                 && !datum.hint.to_lowercase().contains(&q.to_lowercase())
@@ -659,41 +934,103 @@ pub fn list_gates(path: &str, search: Option<&str>) -> Result<Vec<GateReport>> {
             }
         }
 
-        let mut push_gate = |kind: &str, spec: &str, origin: &str, hint: Option<String>| {
-            gates.push(GateReport {
-                datum: name.clone(),
-                kind: kind.to_string(),
-                spec: spec.to_string(),
-                origin: origin.to_string(),
-                hint,
-                status: eval_gate_status(kind, spec),
-            });
-        };
-
         if let Some(explicit) = &datum.gate {
             for g in explicit {
                 if let Some(cmd) = &g.command {
-                    push_gate("command", cmd, "explicit", g.hint.clone());
+                    gates.push(build_gate_report(
+                        &name,
+                        "command",
+                        cmd,
+                        "explicit",
+                        g.hint.clone(),
+                        None,
+                        eval_gate_status("command", cmd),
+                    ));
                 }
                 if let Some(f) = &g.file {
-                    push_gate("file", f, "explicit", g.hint.clone());
+                    gates.push(build_gate_report(
+                        &name,
+                        "file",
+                        f,
+                        "explicit",
+                        g.hint.clone(),
+                        None,
+                        eval_gate_status("file", f),
+                    ));
                 }
                 if let Some(e) = &g.env {
-                    push_gate("env", e, "explicit", g.hint.clone());
+                    gates.push(build_gate_report(
+                        &name,
+                        "env",
+                        e,
+                        "explicit",
+                        g.hint.clone(),
+                        None,
+                        eval_gate_status("env", e),
+                    ));
                 }
                 if let Some(r) = &g.rhai {
-                    push_gate("rhai", r, "explicit", g.hint.clone());
+                    gates.push(build_gate_report(
+                        &name,
+                        "rhai",
+                        r,
+                        "explicit",
+                        g.hint.clone(),
+                        None,
+                        eval_gate_status("rhai", r),
+                    ));
                 }
                 if let Some(backend) = &g.knowledge_backend {
-                    push_gate("knowledge_backend", backend, "explicit", g.hint.clone());
+                    gates.push(build_gate_report(
+                        &name,
+                        "knowledge_backend",
+                        backend,
+                        "explicit",
+                        g.hint.clone(),
+                        None,
+                        eval_gate_status("knowledge_backend", backend),
+                    ));
                 }
+            }
+        }
+
+        if let Some(requirements) = &datum.requirements {
+            for requirement in requirements.iter() {
+                let spec = requirement_display_spec(requirement);
+                let result = evaluate_requirements(std::slice::from_ref(requirement), &datum_path);
+                let status = if result.first().map(|r| r.passed).unwrap_or(false) {
+                    "pass"
+                } else {
+                    "fail"
+                };
+                gates.push(build_gate_report(
+                    &name,
+                    &requirement.kind,
+                    if spec.is_empty() {
+                        requirement.name.as_deref().unwrap_or("requirement")
+                    } else {
+                        &spec
+                    },
+                    "explicit:requirements",
+                    requirement.hint.clone(),
+                    requirement.solve.clone(),
+                    status,
+                ));
             }
         }
 
         if let Some(req) = &datum.require {
             for r in req {
                 if r != "internet" {
-                    push_gate("command", r, "auto:requires", None);
+                    gates.push(build_gate_report(
+                        &name,
+                        "command",
+                        r,
+                        "auto:requires",
+                        None,
+                        None,
+                        eval_gate_status("command", r),
+                    ));
                 }
             }
         }
@@ -701,13 +1038,46 @@ pub fn list_gates(path: &str, search: Option<&str>) -> Result<Vec<GateReport>> {
         if let Some(env_map) = &datum.env {
             for (k, _) in env_map {
                 if !k.starts_with("LOG_") && !k.starts_with("FAST") {
-                    push_gate("env", k, "auto:env", None);
+                    gates.push(build_gate_report(
+                        &name,
+                        "env",
+                        k,
+                        "auto:env",
+                        None,
+                        None,
+                        eval_gate_status("env", k),
+                    ));
                 }
             }
         }
     }
 
     Ok(gates)
+}
+
+pub fn requirement_display_spec(requirement: &RequirementSpec) -> String {
+    match requirement.kind.as_str() {
+        "command" => requirement.command.clone().unwrap_or_default(),
+        "file" => requirement.file.clone().unwrap_or_default(),
+        "path_glob" => requirement.pattern.clone().unwrap_or_default(),
+        "file_contains" | "file_contains_live_glob" => format!(
+            "{} <= {}",
+            requirement.file.clone().unwrap_or_default(),
+            requirement.pattern.clone().unwrap_or_default()
+        ),
+        "datum" => requirement.datum.clone().unwrap_or_default(),
+        "service_user" => requirement.service.clone().unwrap_or_default(),
+        "tcp_port" => format!(
+            "{}:{}",
+            requirement
+                .host
+                .clone()
+                .unwrap_or_else(|| "127.0.0.1".to_string()),
+            requirement.port.unwrap_or_default()
+        ),
+        "shell" => requirement.pattern.clone().unwrap_or_default(),
+        _ => requirement.name.clone().unwrap_or_default(),
+    }
 }
 
 /// Sandbox capabilities declared by a justfile datum.
@@ -745,6 +1115,130 @@ pub struct JustfileConfig {
     pub capabilities: Option<JustfileCapabilities>,
 }
 
+// ── b00t:map v1 typed invariants ─────────────────────────────────────────────
+
+// Use stdlib std::ops::Bound<T> for range bounds — no custom RangeFilter needed.
+// Blessed.rs confirms no community crate covers this; std is canonical.
+// Type alias for readability: a (lo, hi) pair of Bound<u8> from std::ops::Bound.
+pub type ComplexityRange = (std::ops::Bound<u8>, std::ops::Bound<u8>);
+
+/// Parse CLI range strings into stdlib `(Bound<u8>, Bound<u8>)`.
+/// Formats: `"3-7"` → (Included(3), Included(7)),  `"3"` → point,
+/// `"-7"` → (Unbounded, Included(7)),  `"3-"` → (Included(3), Unbounded).
+pub fn parse_complexity_range(s: &str) -> Option<ComplexityRange> {
+    use std::ops::Bound::{Included, Unbounded};
+    if s.is_empty() {
+        return None;
+    }
+    // find first '-' that isn't the very first char (i.e. not a leading minus)
+    let dash = s
+        .char_indices()
+        .find(|&(i, c)| c == '-' && i > 0)
+        .map(|(i, _)| i);
+    if let Some(pos) = dash {
+        let lo = if pos > 0 {
+            s[..pos].parse::<u8>().ok().map(Included)
+        } else {
+            None
+        }
+        .unwrap_or(Unbounded);
+        let hi = if pos + 1 < s.len() {
+            s[pos + 1..].parse::<u8>().ok().map(Included)
+        } else {
+            None
+        }
+        .unwrap_or(Unbounded);
+        return Some((lo, hi));
+    }
+    // leading '-' → upper bound only
+    if s.starts_with('-') {
+        let hi = s[1..].parse::<u8>().ok().map(Included).unwrap_or(Unbounded);
+        return Some((Unbounded, hi));
+    }
+    // single value → point match
+    let v = s.parse::<u8>().ok()?;
+    Some((Included(v), Included(v)))
+}
+
+/// Test if a u8 value falls within a `ComplexityRange`.
+pub fn complexity_in_range(range: &ComplexityRange, val: u8) -> bool {
+    use std::ops::Bound::{Excluded, Included, Unbounded};
+    let lo_ok = match &range.0 {
+        Included(lo) => val >= *lo,
+        Excluded(lo) => val > *lo,
+        Unbounded => true,
+    };
+    let hi_ok = match &range.1 {
+        Included(hi) => val <= *hi,
+        Excluded(hi) => val < *hi,
+        Unbounded => true,
+    };
+    lo_ok && hi_ok
+}
+
+/// Declare a Postel-aliased enum: accept many string forms, emit one canonical name.
+///
+/// Usage: `postel_enum! { pub enum Foo { A => ["a", "alpha"], B => ["b", "beta"] } }`
+/// Generates: `Foo::from_postel(s: &str) -> Option<Foo>`, `Display`, `FromStr`.
+macro_rules! postel_enum {
+    (
+        $(#[$meta:meta])*
+        $vis:vis enum $name:ident {
+            $( $variant:ident => [$($alias:literal),+ $(,)?] ),+ $(,)?
+        }
+    ) => {
+        $(#[$meta])*
+        #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+        $vis enum $name {
+            $( $variant, )+
+        }
+
+        impl $name {
+            pub fn from_postel(s: &str) -> Option<Self> {
+                let lower = s.to_lowercase();
+                $(
+                    if [$($alias),+].contains(&lower.as_str()) {
+                        return Some(Self::$variant);
+                    }
+                )+
+                None
+            }
+
+            pub fn canonical(&self) -> &'static str {
+                match self {
+                    $( Self::$variant => stringify!($variant), )+
+                }
+            }
+
+            pub fn all_aliases() -> Vec<(&'static str, &'static [&'static str])> {
+                vec![$( (stringify!($variant), &[$($alias),+]) ),+]
+            }
+        }
+
+        impl std::fmt::Display for $name {
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                f.write_str(self.canonical())
+            }
+        }
+
+        impl std::str::FromStr for $name {
+            type Err = String;
+            fn from_str(s: &str) -> Result<Self, Self::Err> {
+                Self::from_postel(s).ok_or_else(|| format!("unknown {}: {:?}", stringify!($name), s))
+            }
+        }
+    };
+}
+
+postel_enum! {
+    /// Cognitive tier for a datum — routes to appropriate model class.
+    pub enum MapTier {
+        Sm0l     => ["sm0l", "small", "tiny", "lite", "haiku", "fast"],
+        Ch0nky   => ["ch0nky", "mid", "medium", "local", "sonnet"],
+        Frontier => ["frontier", "large", "big", "cloud", "opus", "best"],
+    }
+}
+
 /// DatumType — b00t's typed datum registry.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -752,6 +1246,10 @@ pub enum DatumType {
     Database,
     HiveProfile,
     Agent,
+    AgentCli,
+    AgentSdk,
+    AgentIdeVsix,
+    AgentGui,
     Config,
     Docker,
     Skill,
@@ -774,10 +1272,29 @@ pub enum DatumType {
 }
 
 impl DatumType {
+    pub fn from_type_token(value: &str) -> Option<Self> {
+        match value {
+            "model" | "aimodel" | "ai_model" | "ai-model" => Some(Self::AiModel),
+            "hive" | "hive_profile" | "hive-profile" => Some(Self::HiveProfile),
+            "agent.cli" => Some(Self::AgentCli),
+            "agent.sdk" => Some(Self::AgentSdk),
+            "agent.ide.vsix" => Some(Self::AgentIdeVsix),
+            "agent.gui" => Some(Self::AgentGui),
+            other => DatumType::deserialize(
+                StringDeserializer::<serde::de::value::Error>::new(other.to_string()),
+            )
+            .ok(),
+        }
+    }
+
     pub fn all_base_suffixes() -> Vec<&'static str> {
         vec![
             ".database",
             ".hive",
+            ".agent.cli",
+            ".agent.sdk",
+            ".agent.ide.vsix",
+            ".agent.gui",
             ".agent",
             ".config",
             ".docker",
@@ -805,6 +1322,10 @@ impl DatumType {
             DatumType::Database => ".database",
             DatumType::HiveProfile => ".hive",
             DatumType::Agent => ".agent",
+            DatumType::AgentCli => ".agent.cli",
+            DatumType::AgentSdk => ".agent.sdk",
+            DatumType::AgentIdeVsix => ".agent.ide.vsix",
+            DatumType::AgentGui => ".agent.gui",
             DatumType::Config => ".config",
             DatumType::Docker => ".docker",
             DatumType::Skill => ".skill",
@@ -831,6 +1352,10 @@ impl DatumType {
         for t in &[
             DatumType::Database,
             DatumType::HiveProfile,
+            DatumType::AgentCli,
+            DatumType::AgentSdk,
+            DatumType::AgentIdeVsix,
+            DatumType::AgentGui,
             DatumType::Agent,
             DatumType::Config,
             DatumType::Docker,
@@ -1290,6 +1815,10 @@ pub fn create_unified_toml_config(datum: &BootDatum, path: &str) -> Result<()> {
         DatumType::Stack => ".stack.toml",
         DatumType::Job => ".job.toml",
         DatumType::Agent => ".agent.toml",
+        DatumType::AgentCli => ".agent.cli.toml",
+        DatumType::AgentSdk => ".agent.sdk.toml",
+        DatumType::AgentIdeVsix => ".agent.ide.vsix.toml",
+        DatumType::AgentGui => ".agent.gui.toml",
         DatumType::Config => ".config.toml",
         DatumType::Database => ".database.toml",
         DatumType::Repo => ".repo.toml",
@@ -2358,63 +2887,35 @@ pub fn codex_install_mcp(
     stdio_command: Option<&str>,
     use_httpstream: bool,
 ) -> Result<()> {
-    use duct::cmd;
+    use std::process::Command;
 
     let datum = get_mcp_config(name, path)?;
     let (command, args, env, method_type) =
         select_mcp_method(&datum, stdio_command, use_httpstream)?;
 
-    let mut codex_config = if method_type == "httpstream" {
-        serde_json::json!({ "url": command })
-    } else {
-        serde_json::json!({
-            "command": command,
-            "args": args
-        })
-    };
-
-    if let Some(env_map) = env {
-        if let Some(obj) = codex_config.as_object_mut() {
-            obj.insert("env".to_string(), serde_json::to_value(env_map)?);
-        }
+    let codex_args = build_codex_mcp_add_args(name, &command, &args, env.as_ref(), method_type);
+    if use_repo {
+        eprintln!("⚠️  Codex CLI no longer exposes --repo; installing with Codex default scope");
     }
-
-    let json_str =
-        serde_json::to_string(&codex_config).context("Failed to serialize JSON for Codex")?;
-    let location_flag = if use_repo { "--repo" } else { "--user" };
-    let result = cmd!("codex", "mcp", "add-json", location_flag, name, &json_str).run();
+    let result = Command::new("codex").args(&codex_args).status();
 
     match result {
-        Ok(_) => {
-            let location = if use_repo {
-                "repository"
-            } else {
-                "user global"
-            };
+        Ok(status) if status.success() => {
             println!(
-                "Successfully installed MCP server '{}' to Codex ({})",
-                datum.name, location
+                "Successfully installed MCP server '{}' to Codex",
+                datum.name
             );
-            println!(
-                "Codex command: codex mcp add-json {} {} '{}'",
-                location_flag, datum.name, json_str
-            );
+            println!("Codex command: codex {}", shell_words(&codex_args));
         }
-        Err(e) => {
-            let location = if use_repo {
-                "repository"
-            } else {
-                "user global"
-            };
-            eprintln!(
-                "Failed to install MCP server to Codex ({}): {}",
-                location, e
-            );
-            eprintln!(
-                "Manual command: codex mcp add-json {} {} '{}'",
-                location_flag, datum.name, json_str
-            );
-            return Err(anyhow::anyhow!("Codex installation failed: {}", e));
+        Ok(status) => {
+            eprintln!("Failed to install MCP server to Codex: {}", status);
+            eprintln!("Manual command: codex {}", shell_words(&codex_args));
+            return Err(anyhow::anyhow!("Codex installation failed: {}", status));
+        }
+        Err(error) => {
+            eprintln!("Failed to install MCP server to Codex: {}", error);
+            eprintln!("Manual command: codex {}", shell_words(&codex_args));
+            return Err(anyhow::anyhow!("Codex installation failed: {}", error));
         }
     }
 
@@ -2509,11 +3010,62 @@ pub fn dotmcpjson_install_mcp(
     Ok(())
 }
 
-/// Push all repo .mcp.json servers into Codex CLI config via `codex mcp add-json`.
+fn build_codex_mcp_add_args(
+    name: &str,
+    command: &str,
+    args: &[String],
+    env: Option<&std::collections::HashMap<String, String>>,
+    method_type: &str,
+) -> Vec<String> {
+    let mut codex_args = vec!["mcp".to_string(), "add".to_string()];
+
+    if method_type == "httpstream" {
+        codex_args.push("--url".to_string());
+        codex_args.push(command.to_string());
+        codex_args.push(name.to_string());
+        return codex_args;
+    }
+
+    if let Some(env_map) = env {
+        let mut env_pairs = env_map.iter().collect::<Vec<_>>();
+        env_pairs.sort_by(|(left, _), (right, _)| left.cmp(right));
+        for (key, value) in env_pairs {
+            codex_args.push("--env".to_string());
+            codex_args.push(format!("{key}={value}"));
+        }
+    }
+
+    codex_args.push(name.to_string());
+    codex_args.push("--".to_string());
+    codex_args.push(command.to_string());
+    codex_args.extend(args.iter().cloned());
+    codex_args
+}
+
+fn shell_words(args: &[String]) -> String {
+    args.iter()
+        .map(|arg| shell_quote(arg))
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+fn shell_quote(arg: &str) -> String {
+    if !arg.is_empty()
+        && arg
+            .chars()
+            .all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '_' | '-' | '.' | '/' | ':' | '='))
+    {
+        return arg.to_string();
+    }
+
+    format!("'{}'", arg.replace('\'', "'\\''"))
+}
+
+/// Push all repo .mcp.json servers into Codex CLI config via `codex mcp add`.
 pub fn codex_sync_dotmcpjson(path: &str, use_repo: bool) -> Result<()> {
     use crate::utils::get_workspace_root;
-    use duct::cmd;
     use std::path::Path;
+    use std::process::Command;
 
     let _ = path; // retained for interface parity with other installers
 
@@ -2537,16 +3089,21 @@ pub fn codex_sync_dotmcpjson(path: &str, use_repo: bool) -> Result<()> {
         anyhow::bail!("No MCP servers present in {}", mcp_json_path.display());
     }
 
-    let location_flag = if use_repo { "--repo" } else { "--user" };
+    if use_repo {
+        eprintln!("⚠️  Codex CLI no longer exposes --repo; syncing with Codex default scope");
+    }
     let mut failures = Vec::new();
 
     for (name, config) in servers {
-        let json_str = serde_json::to_string(config)
-            .with_context(|| format!("Failed to serialize MCP server '{}'", name))?;
-        if let Err(e) = cmd!("codex", "mcp", "add-json", location_flag, name, &json_str).run() {
-            failures.push((name.clone(), e.to_string()));
-        } else {
-            println!("Codex synced '{}'", name);
+        let Some(codex_args) = build_codex_mcp_add_args_from_json(name, config) else {
+            failures.push((name.clone(), "missing command/args or url".to_string()));
+            continue;
+        };
+
+        match Command::new("codex").args(&codex_args).status() {
+            Ok(status) if status.success() => println!("Codex synced '{}'", name),
+            Ok(status) => failures.push((name.clone(), status.to_string())),
+            Err(error) => failures.push((name.clone(), error.to_string())),
         }
     }
 
@@ -2575,6 +3132,43 @@ pub fn codex_sync_dotmcpjson(path: &str, use_repo: bool) -> Result<()> {
             details
         ))
     }
+}
+
+fn build_codex_mcp_add_args_from_json(
+    name: &str,
+    config: &serde_json::Value,
+) -> Option<Vec<String>> {
+    if let Some(url) = config.get("url").and_then(|value| value.as_str()) {
+        return Some(build_codex_mcp_add_args(name, url, &[], None, "httpstream"));
+    }
+
+    let command = config.get("command").and_then(|value| value.as_str())?;
+    let args = config
+        .get("args")
+        .and_then(|value| value.as_array())
+        .map(|values| {
+            values
+                .iter()
+                .filter_map(|value| value.as_str().map(String::from))
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_default();
+    let env = config.get("env").and_then(|value| {
+        value.as_object().map(|entries| {
+            entries
+                .iter()
+                .filter_map(|(key, value)| value.as_str().map(|v| (key.clone(), v.to_string())))
+                .collect::<std::collections::HashMap<_, _>>()
+        })
+    });
+
+    Some(build_codex_mcp_add_args(
+        name,
+        command,
+        &args,
+        env.as_ref(),
+        "stdio",
+    ))
 }
 
 /// Bidirectional MCP sync between b00t datums and external agent platforms.
@@ -2899,6 +3493,107 @@ pub mod test_env {
 #[cfg(test)]
 mod tests {
     #[test]
+    fn test_codex_mcp_add_args_stdio() {
+        let args = crate::build_codex_mcp_add_args(
+            "serena",
+            "uvx",
+            &[
+                "--from".to_string(),
+                "serena-agent".to_string(),
+                "serena".to_string(),
+            ],
+            None,
+            "stdio",
+        );
+
+        assert_eq!(
+            args,
+            vec![
+                "mcp",
+                "add",
+                "serena",
+                "--",
+                "uvx",
+                "--from",
+                "serena-agent",
+                "serena"
+            ]
+        );
+    }
+
+    #[test]
+    fn test_codex_mcp_add_args_env_is_stable() {
+        let env = std::collections::HashMap::from([
+            ("ZED".to_string(), "last".to_string()),
+            ("ALPHA".to_string(), "first".to_string()),
+        ]);
+        let args = crate::build_codex_mcp_add_args("demo", "cmd", &[], Some(&env), "stdio");
+
+        assert_eq!(
+            args,
+            vec![
+                "mcp",
+                "add",
+                "--env",
+                "ALPHA=first",
+                "--env",
+                "ZED=last",
+                "demo",
+                "--",
+                "cmd"
+            ]
+        );
+    }
+
+    #[test]
+    fn test_codex_mcp_add_args_httpstream() {
+        let args = crate::build_codex_mcp_add_args(
+            "remote",
+            "https://example.test/mcp",
+            &[],
+            None,
+            "httpstream",
+        );
+
+        assert_eq!(
+            args,
+            vec!["mcp", "add", "--url", "https://example.test/mcp", "remote"]
+        );
+    }
+
+    #[test]
+    fn test_codex_mcp_add_args_from_json() {
+        let config = serde_json::json!({
+            "command": "uvx",
+            "args": ["--from", "serena-agent", "serena", "start-mcp-server"],
+            "env": {
+                "BETA": "2",
+                "ALPHA": "1"
+            }
+        });
+        let args = crate::build_codex_mcp_add_args_from_json("serena", &config).unwrap();
+
+        assert_eq!(
+            args,
+            vec![
+                "mcp",
+                "add",
+                "--env",
+                "ALPHA=1",
+                "--env",
+                "BETA=2",
+                "serena",
+                "--",
+                "uvx",
+                "--from",
+                "serena-agent",
+                "serena",
+                "start-mcp-server"
+            ]
+        );
+    }
+
+    #[test]
     fn test_datum_type_from_filename_accepts_typed_toml_extensions() {
         assert_eq!(
             crate::DatumType::from_filename("b00t.cli"),
@@ -2907,6 +3602,22 @@ mod tests {
         assert_eq!(
             crate::DatumType::from_filename("b00t.cli.toml"),
             crate::DatumType::Cli
+        );
+        assert_eq!(
+            crate::DatumType::from_filename("claude.agent.cli.toml"),
+            crate::DatumType::AgentCli
+        );
+        assert_eq!(
+            crate::DatumType::from_filename("maf.agent.sdk.tomllm"),
+            crate::DatumType::AgentSdk
+        );
+        assert_eq!(
+            crate::DatumType::from_filename("copilot.agent.ide.vsix.toml"),
+            crate::DatumType::AgentIdeVsix
+        );
+        assert_eq!(
+            crate::DatumType::from_filename("desktop.agent.gui.tomllmd"),
+            crate::DatumType::AgentGui
         );
         assert_eq!(
             crate::DatumType::from_filename("executive.role.tomllmd"),
@@ -3016,5 +3727,128 @@ hint = "containers"
         let (config, filename) = crate::get_config("mytool", path).unwrap();
         assert_eq!(config.b00t.name, "mytool-tomllm");
         assert!(filename.ends_with(".tomllm"), "got {}", filename);
+    }
+
+    #[test]
+    fn test_bootdatum_requirements_deserialize() {
+        let toml_str = r#"
+[b00t]
+name = "gpu-datum"
+type = "config"
+hint = "gpu validation"
+
+[[b00t.requirements]]
+name = "host-drm-node"
+kind = "path_glob"
+pattern = "/dev/dri/card*"
+solve = "b00t install nvidia-cdi-gpu"
+"#;
+        let config: crate::UnifiedConfig = toml::from_str(toml_str).unwrap();
+        let requirements = config.b00t.requirements.expect("requirements");
+        assert_eq!(requirements.len(), 1);
+        assert_eq!(requirements[0].kind, "path_glob");
+        assert_eq!(requirements[0].pattern.as_deref(), Some("/dev/dri/card*"));
+        assert_eq!(
+            requirements[0].solve.as_deref(),
+            Some("b00t install nvidia-cdi-gpu")
+        );
+    }
+
+    #[test]
+    fn test_agent_cli_type_deserializes_to_typed_variant() {
+        let content = "[b00t]\nname = \"agent-cli\"\ntype = \"agent.cli\"\nhint = \"test\"\n";
+        let config: crate::UnifiedConfig = toml::from_str(content).unwrap();
+        assert_eq!(config.b00t.datum_type, Some(crate::DatumType::AgentCli));
+    }
+
+    #[test]
+    fn test_hive_profile_alias_deserializes_to_typed_variant() {
+        let content = "[b00t]\nname = \"profile\"\ntype = \"hive_profile\"\nhint = \"test\"\n";
+        let config: crate::UnifiedConfig = toml::from_str(content).unwrap();
+        assert_eq!(config.b00t.datum_type, Some(crate::DatumType::HiveProfile));
+    }
+
+    #[test]
+    fn test_evaluate_requirements_path_glob_and_file_contains_live_glob() {
+        let dir = tempfile::tempdir().unwrap();
+        let dri = dir.path().join("dev/dri");
+        std::fs::create_dir_all(&dri).unwrap();
+        let card = dri.join("card1");
+        std::fs::write(&card, "").unwrap();
+        let cdi = dir.path().join("nvidia.yaml");
+        std::fs::write(&cdi, format!("device: {}", card.display())).unwrap();
+
+        let requirements = vec![
+            crate::RequirementSpec {
+                name: Some("host-drm-node".to_string()),
+                kind: "path_glob".to_string(),
+                pattern: Some(format!("{}/dev/dri/card*", dir.path().display())),
+                ..Default::default()
+            },
+            crate::RequirementSpec {
+                name: Some("cdi-sync".to_string()),
+                kind: "file_contains_live_glob".to_string(),
+                file: Some(cdi.to_string_lossy().to_string()),
+                pattern: Some(format!("{}/dev/dri/card*", dir.path().display())),
+                ..Default::default()
+            },
+        ];
+
+        let results = crate::evaluate_requirements(&requirements, dir.path().to_str().unwrap());
+        assert_eq!(results.len(), 2);
+        assert!(results.iter().all(|r| r.passed));
+    }
+
+    #[test]
+    fn test_evaluate_requirements_file_contains_live_glob_fails_on_drift() {
+        let dir = tempfile::tempdir().unwrap();
+        let dri = dir.path().join("dev/dri");
+        std::fs::create_dir_all(&dri).unwrap();
+        std::fs::write(dri.join("card1"), "").unwrap();
+        let cdi = dir.path().join("nvidia.yaml");
+        std::fs::write(&cdi, "device: /dev/dri/card0").unwrap();
+
+        let requirements = vec![crate::RequirementSpec {
+            name: Some("cdi-sync".to_string()),
+            kind: "file_contains_live_glob".to_string(),
+            file: Some(cdi.to_string_lossy().to_string()),
+            pattern: Some(format!("{}/dev/dri/card*", dir.path().display())),
+            solve: Some("b00t install nvidia-cdi-gpu".to_string()),
+            ..Default::default()
+        }];
+
+        let results = crate::evaluate_requirements(&requirements, dir.path().to_str().unwrap());
+        assert_eq!(results.len(), 1);
+        assert!(!results[0].passed);
+        assert_eq!(
+            results[0].solve.as_deref(),
+            Some("b00t install nvidia-cdi-gpu")
+        );
+    }
+
+    #[test]
+    fn test_evaluate_requirements_shell_can_detect_cdi_parser_mismatch() {
+        let dir = tempfile::tempdir().unwrap();
+        let cdi = dir.path().join("nvidia.yaml");
+        std::fs::write(&cdi, "kind: cdi\nadditionalGids: [44]\n").unwrap();
+
+        let requirements = vec![crate::RequirementSpec {
+            name: Some("cdi-parser-compatible".to_string()),
+            kind: "shell".to_string(),
+            pattern: Some(format!(
+                "! grep -Eq '^[[:space:]]*additionalGids:' {}",
+                cdi.display()
+            )),
+            solve: Some("grep -nE '^[[:space:]]*additionalGids:' /etc/cdi/nvidia.yaml".to_string()),
+            ..Default::default()
+        }];
+
+        let results = crate::evaluate_requirements(&requirements, dir.path().to_str().unwrap());
+        assert_eq!(results.len(), 1);
+        assert!(!results[0].passed);
+        assert_eq!(
+            results[0].solve.as_deref(),
+            Some("grep -nE '^[[:space:]]*additionalGids:' /etc/cdi/nvidia.yaml")
+        );
     }
 }
