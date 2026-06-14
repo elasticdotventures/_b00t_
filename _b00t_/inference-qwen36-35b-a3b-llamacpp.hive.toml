@@ -1,12 +1,50 @@
 # b00t Hive Profile — Qwen3.6-35B-A3B-UD llamacpp podman inference (ch0nky tier)
 # RTX 3090 community-validated: 23GB VRAM, 120 tok/s (source: HF discussion #37)
-# PRE-REQ: hf download unsloth/Qwen3.6-35B-A3B-GGUF --include "Qwen3.6-35B-A3B-UD-Q3_K_M.gguf"
+# PRE-REQ: hf download unsloth/Qwen3.6-35B-A3B-GGUF --include "Qwen3.6-35B-A3B-MXFP4_MOE.gguf"
 # Activate: b00t hive activate inference-qwen36-35b-a3b-llamacpp
 
 [b00t]
 name = "inference-qwen36-35b-a3b-llamacpp"
 type = "hive_profile"
 hint = "Qwen3.6-35B-A3B UD-Q3_K_M via llamacpp podman — 23GB VRAM, 120tok/s RTX3090 validated"
+
+[[b00t.requirements]]
+name = "podman-runtime"
+capability = "runtime.podman"
+kind = "command"
+command = "podman"
+hint = "Podman is required for llama.cpp container serving"
+
+[[b00t.requirements]]
+name = "host-drm-node"
+capability = "gpu.drm"
+kind = "path_glob"
+pattern = "/dev/dri/card*"
+hint = "A live DRM card device must exist on the host"
+
+[[b00t.requirements]]
+name = "cdi-matches-live-drm"
+capability = "gpu.cdi.synced"
+kind = "file_contains_live_glob"
+file = "/etc/cdi/nvidia.yaml"
+pattern = "/dev/dri/card*"
+hint = "The CDI spec must reference the live host /dev/dri/card* device"
+solve = "b00t install nvidia-cdi-gpu"
+
+[[b00t.requirements]]
+name = "qwen35b-model-artifact"
+capability = "model.gguf.qwen36-35b-a3b"
+kind = "file"
+file = "/home/brianh/.cache/huggingface/hub/models--unsloth--Qwen3.6-35B-A3B-GGUF/snapshots/a483e9e6cbd595906af30beda3187c2663a1118c/Qwen3.6-35B-A3B-MXFP4_MOE.gguf"
+hint = "The 35B GGUF artifact must exist in the local Hugging Face cache"
+
+[[b00t.requirements]]
+name = "cdi-parser-compatible"
+capability = "gpu.cdi.parser-compatible"
+kind = "shell"
+pattern = "! grep -Eq '^[[:space:]]*additionalGids:' /etc/cdi/nvidia.yaml"
+hint = "Podman CDI parser on this node rejects specs containing additionalGids"
+solve = "grep -nE '^[[:space:]]*additionalGids:' /etc/cdi/nvidia.yaml"
 
 [b00t.hive.resources]
 # 🤓 UD-Q3_K_M: 23GB VRAM on RTX 3090 (community validated); MoE so routing is CPU-side
@@ -25,6 +63,16 @@ priority = 80  # highest priority ch0nky; preferred over 27B dense (70) and gemm
 [b00t.hive.services]
 start = []
 stop  = []
+
+[[b00t.hive.prereqs]]
+name = "podman-available"
+check = "command -v podman"
+hint = "podman required for the llama.cpp container runtime"
+
+[[b00t.hive.prereqs]]
+name = "nvidia-cdi-gpu"
+check = "/bin/bash -lc 'actual=$$(ls /dev/dri/card* 2>/dev/null | head -1 | xargs -r basename); test -n \"$$actual\" && test -f /etc/cdi/nvidia.yaml && grep -q \"/dev/dri/$$actual\" /etc/cdi/nvidia.yaml && podman run --rm --device nvidia.com/gpu=all --security-opt=label=disable --entrypoint /bin/sh ghcr.io/ggml-org/llama.cpp:server-cuda -c \"ls /dev/nvidia* >/dev/null 2>&1\"'"
+hint = "CDI drift or GPU device not visible inside podman; compare /dev/dri/card* with /etc/cdi/nvidia.yaml, then run: sudo nvidia-ctk cdi generate --output=/etc/cdi/nvidia.yaml"
 
 [b00t.hive.service]
 description       = "llamacpp server Qwen3.6-35B-A3B UD-Q3_K_M via podman (port 8001) — ch0nky tier"
@@ -64,7 +112,7 @@ exec_start = """/usr/bin/podman run --rm \
     --presence-penalty 0.0 \
     --alias ch0nky \
     --api-key local-b00t"""
-# 🤓 MXFP4_MOE: Unsloth FP4 MoE — tests whether server-cuda supports this quant type
+# 🤓 MXFP4_MOE: Unsloth FP4 MoE — matches the currently configured model artifact
 # 🤓 -ngl 999: try full GPU; llamacpp auto-spills to CPU RAM (31GB avail) if VRAM exceeded
 # 🤓 -fa: flash attention — needed for ctx efficiency on MoE with limited active params
 # 🤓 --reasoning-format deepseek: enables Qwen3 thinking mode (<think> tokens)
@@ -84,8 +132,24 @@ action  = "warn"
 message = "🦨 use uv pip install"
 
 [[b00t.usage]]
-description = "Download required quant (Q3_K_M, ~15GB)"
-command     = "hf download unsloth/Qwen3.6-35B-A3B-GGUF --include 'Qwen3.6-35B-A3B-UD-Q3_K_M.gguf'"
+description = "Download required quant (MXFP4_MOE)"
+command     = "hf download unsloth/Qwen3.6-35B-A3B-GGUF --include 'Qwen3.6-35B-A3B-MXFP4_MOE.gguf'"
+
+[[b00t.usage]]
+description = "Verify CDI GPU config exists"
+command     = "ls /etc/cdi/nvidia.yaml && nvidia-ctk cdi list"
+
+[[b00t.usage]]
+description = "Observe host DRM node vs CDI mapping"
+command     = "printf 'host: '; ls /dev/dri/card* && printf '\\ncdi: '; grep -o '/dev/dri/card[0-9]\\+' /etc/cdi/nvidia.yaml | sort -u"
+
+[[b00t.usage]]
+description = "Detect the known Podman/CDI parser mismatch"
+command     = "grep -nE '^[[:space:]]*additionalGids:' /etc/cdi/nvidia.yaml"
+
+[[b00t.usage]]
+description = "Repair stale CDI after host device drift"
+command     = "b00t install nvidia-cdi-gpu && systemctl --user restart b00t-hive-inference-qwen36-35b-a3b-llamacpp.service"
 
 [[b00t.usage]]
 description = "Activate this profile"

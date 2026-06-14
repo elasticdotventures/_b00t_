@@ -47,7 +47,7 @@ exec_start_pre   = [
   # Resolve model file path: support both flat layout (b00t model download --local-dir)
   # and hub-cache layout (plain hf download without --local-dir). Creates a stable symlink
   # at the flat path so exec_start always finds the file at the same location.
-  "/bin/bash -c 'MODEL_DIR=${HOME}/.cache/huggingface/hub/models--unsloth--Qwen3.6-27B-GGUF; FLAT=${MODEL_DIR}/Qwen3.6-27B-Q4_K_M.gguf; if [ ! -f \"$FLAT\" ]; then hash=$(cat ${MODEL_DIR}/refs/main 2>/dev/null); [ -n \"$hash\" ] && ln -sfn ${MODEL_DIR}/snapshots/${hash}/Qwen3.6-27B-Q4_K_M.gguf \"$FLAT\" || true; fi'",
+  "/bin/bash -c 'MODEL_DIR=$${HOME}/.cache/huggingface/hub/models--unsloth--Qwen3.6-27B-GGUF; FLAT=$${MODEL_DIR}/Qwen3.6-27B-Q4_K_M.gguf; if [ ! -f \"$${FLAT}\" ]; then hash=$$(cat $${MODEL_DIR}/refs/main 2>/dev/null); [ -n \"$${hash}\" ] && ln -sfn $${MODEL_DIR}/snapshots/$${hash}/Qwen3.6-27B-Q4_K_M.gguf \"$${FLAT}\" || true; fi'",
 ]
 exec_start = """/home/brianh/.venv/bin/vllm serve \
     /home/brianh/.cache/huggingface/hub/models--unsloth--Qwen3.6-27B-GGUF/Qwen3.6-27B-Q4_K_M.gguf \
