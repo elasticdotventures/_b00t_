@@ -549,18 +549,26 @@ hint = "ralph mcp"
         let role = load_role_datum("orchestrator", path.to_str().unwrap()).unwrap();
         let checks = collect_capability_checks(&role, path.to_str().unwrap());
 
-        assert!(checks
-            .iter()
-            .any(|c| { c.reference == "ralph.agent" && c.status == CapabilityStatus::Ready }));
-        assert!(checks
-            .iter()
-            .any(|c| { c.reference == "b00t.cli" && c.status == CapabilityStatus::Ready }));
-        assert!(checks
-            .iter()
-            .any(|c| { c.reference == "ghost.agent" && c.status == CapabilityStatus::Missing }));
-        assert!(checks
-            .iter()
-            .any(|c| { c.reference == "b00t-mcp.mcp" && c.status == CapabilityStatus::Missing }));
+        assert!(
+            checks
+                .iter()
+                .any(|c| { c.reference == "ralph.agent" && c.status == CapabilityStatus::Ready })
+        );
+        assert!(
+            checks
+                .iter()
+                .any(|c| { c.reference == "b00t.cli" && c.status == CapabilityStatus::Ready })
+        );
+        assert!(
+            checks
+                .iter()
+                .any(|c| { c.reference == "ghost.agent" && c.status == CapabilityStatus::Missing })
+        );
+        assert!(
+            checks.iter().any(|c| {
+                c.reference == "b00t-mcp.mcp" && c.status == CapabilityStatus::Missing
+            })
+        );
     }
 
     #[test]

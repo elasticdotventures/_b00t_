@@ -367,7 +367,11 @@ mod tests {
         let graph = OntologyGraph::from_extraction(&result);
         assert!(graph.nodes.len() >= 2);
         // Should have at least one IMPL_CONTAINS edge
-        let impl_edges: Vec<_> = graph.edges.iter().filter(|e| e.rel_type == "IMPL_CONTAINS").collect();
+        let impl_edges: Vec<_> = graph
+            .edges
+            .iter()
+            .filter(|e| e.rel_type == "IMPL_CONTAINS")
+            .collect();
         assert!(impl_edges.len() >= 1);
     }
 
@@ -384,9 +388,6 @@ mod tests {
         let graph = OntologyGraph::from_extraction(&result);
         let payload = graph.to_mcp_payload();
         assert!(payload.get("nodes").and_then(|n| n.as_array()).is_some());
-        assert_eq!(
-            payload["nodes"][0]["id"].as_str().unwrap(),
-            "app::main"
-        );
+        assert_eq!(payload["nodes"][0]["id"].as_str().unwrap(), "app::main");
     }
 }

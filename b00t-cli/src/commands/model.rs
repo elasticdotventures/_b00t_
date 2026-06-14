@@ -16,7 +16,10 @@ pub enum ModelCommands {
     List {
         #[clap(long, help = "Emit JSON instead of human-readable output")]
         json: bool,
-        #[clap(long, help = "Also list trained LoRA adapters from .b00t/models/adapters/")]
+        #[clap(
+            long,
+            help = "Also list trained LoRA adapters from .b00t/models/adapters/"
+        )]
         adapters: bool,
     },
     #[clap(
@@ -122,7 +125,9 @@ pub enum ModelCommands {
                       4. Save adapter to .b00t/models/adapters/<name>/"
     )]
     Train {
-        #[clap(help = "Training datum name (e.g. focus-validator for _b00t_/focus-validator.training.tomllmd)")]
+        #[clap(
+            help = "Training datum name (e.g. focus-validator for _b00t_/focus-validator.training.tomllmd)"
+        )]
         name: String,
         #[clap(long, help = "Override learning rate", default_value = "1e-4")]
         learning_rate: f64,
@@ -140,7 +145,11 @@ pub enum ModelCommands {
     },
     #[clap(about = "Quick inference smoke test against served endpoint")]
     Test {
-        #[clap(long, help = "Model endpoint URL", default_value = "http://localhost:8001")]
+        #[clap(
+            long,
+            help = "Model endpoint URL",
+            default_value = "http://localhost:8001"
+        )]
         endpoint: String,
         #[clap(long, help = "Prompt to send", default_value = "say hello in 3 words")]
         prompt: String,
@@ -257,8 +266,8 @@ fn list_adapters(path: &str) -> Result<Vec<(String, String)>> {
     }
 
     let mut adapters = Vec::new();
-    let entries = std::fs::read_dir(adapters_dir)
-        .map_err(|e| anyhow!("reading adapters dir: {}", e))?;
+    let entries =
+        std::fs::read_dir(adapters_dir).map_err(|e| anyhow!("reading adapters dir: {}", e))?;
 
     for entry in entries {
         let entry = entry.map_err(|e| anyhow!("entry: {}", e))?;
@@ -272,7 +281,8 @@ fn list_adapters(path: &str) -> Result<Vec<(String, String)>> {
                 // Try to extract base_model from the TOML
                 let parsed: Result<toml::Value, _> = content.parse();
                 match parsed {
-                    Ok(tbl) => tbl.get("b00t")
+                    Ok(tbl) => tbl
+                        .get("b00t")
                         .and_then(|b| b.get("base_model"))
                         .and_then(|v| v.as_str().map(String::from))
                         .unwrap_or_else(|| "?".to_string()),
@@ -285,7 +295,8 @@ fn list_adapters(path: &str) -> Result<Vec<(String, String)>> {
                     let content = std::fs::read_to_string(&meta_path)?;
                     let parsed: Result<toml::Value, _> = content.parse();
                     match parsed {
-                        Ok(tbl) => tbl.get("base_model")
+                        Ok(tbl) => tbl
+                            .get("base_model")
                             .and_then(|v| v.as_str().map(String::from))
                             .unwrap_or_else(|| "?".to_string()),
                         Err(_) => "?".to_string(),
@@ -406,9 +417,13 @@ fn serve_cmd(
 
     // Load adapter datum if specified
     if let Some(adapter_name) = adapter {
-        let adapter_datum_path = std::path::PathBuf::from(path).join(format!("{adapter_name}.adapter.tomllmd"));
+        let adapter_datum_path =
+            std::path::PathBuf::from(path).join(format!("{adapter_name}.adapter.tomllmd"));
         if adapter_datum_path.exists() {
-            eprintln!("   Using LoRA adapter: {adapter_name} ({})", adapter_datum_path.display());
+            eprintln!(
+                "   Using LoRA adapter: {adapter_name} ({})",
+                adapter_datum_path.display()
+            );
         } else {
             eprintln!("   ⚠️  Adapter datum not found: {adapter_name}");
             eprintln!("   Expected at: {}", adapter_datum_path.display());
@@ -541,7 +556,8 @@ fn shell_quote(value: &str) -> String {
 fn train_cmd(path: &str, name: &str) -> Result<()> {
     let fsl_path = std::path::PathBuf::from(".b00t/fsl").join(format!("{name}-examples.jsonl"));
     let adapter_dir = std::path::PathBuf::from(".b00t/models/adapters").join(name);
-    let training_datum_path = std::path::PathBuf::from(path).join(format!("{name}.training.tomllmd"));
+    let training_datum_path =
+        std::path::PathBuf::from(path).join(format!("{name}.training.tomllmd"));
 
     // 1. Load or scaffold training datum
     let training_config = if training_datum_path.exists() {
@@ -578,15 +594,41 @@ fn train_cmd(path: &str, name: &str) -> Result<()> {
     };
 
     eprintln!("📦 Training datum:  {name}");
-    eprintln!("   Base model:      {}", training_config["b00t"]["base_model"].as_str().unwrap_or("?"));
-    eprintln!("   FSL examples:    {example_count} ({})", fsl_path.display());
+    eprintln!(
+        "   Base model:      {}",
+        training_config["b00t"]["base_model"]
+            .as_str()
+            .unwrap_or("?")
+    );
+    eprintln!(
+        "   FSL examples:    {example_count} ({})",
+        fsl_path.display()
+    );
     eprintln!("   Adapter output:  {}", adapter_dir.display());
-    eprintln!("   Epochs:          {}", training_config["b00t"]["training"]["hyperparameters"]["num_epochs"].as_u64().unwrap_or(3));
-    eprintln!("   Learning rate:   {}", training_config["b00t"]["training"]["hyperparameters"]["learning_rate"].as_f64().unwrap_or(1e-4));
-    eprintln!("   LoRA rank:      {}", training_config["b00t"]["training"]["hyperparameters"]["lora_r"].as_u64().unwrap_or(8));
+    eprintln!(
+        "   Epochs:          {}",
+        training_config["b00t"]["training"]["hyperparameters"]["num_epochs"]
+            .as_u64()
+            .unwrap_or(3)
+    );
+    eprintln!(
+        "   Learning rate:   {}",
+        training_config["b00t"]["training"]["hyperparameters"]["learning_rate"]
+            .as_f64()
+            .unwrap_or(1e-4)
+    );
+    eprintln!(
+        "   LoRA rank:      {}",
+        training_config["b00t"]["training"]["hyperparameters"]["lora_r"]
+            .as_u64()
+            .unwrap_or(8)
+    );
 
     if example_count == 0 {
-        anyhow::bail!("no FSL examples found at {}\nRun `b00t validate --jsonl <records.jsonl>` to generate examples first.", fsl_path.display());
+        anyhow::bail!(
+            "no FSL examples found at {}\nRun `b00t validate --jsonl <records.jsonl>` to generate examples first.",
+            fsl_path.display()
+        );
     }
 
     // 3. Create adapter directory
@@ -600,10 +642,17 @@ fn train_cmd(path: &str, name: &str) -> Result<()> {
     {
         eprintln!("   Starting candle LoRA training...");
         let status = std::process::Command::new("cargo")
-            .args(["run", "--features", "candle", "--bin", "candle-train", "--",
-                   &format!("--training-datum={}", training_datum_path.display()),
-                   &format!("--fsl={}", fsl_path.display()),
-                   &format!("--adapter-out={}", adapter_dir.display())])
+            .args([
+                "run",
+                "--features",
+                "candle",
+                "--bin",
+                "candle-train",
+                "--",
+                &format!("--training-datum={}", training_datum_path.display()),
+                &format!("--fsl={}", fsl_path.display()),
+                &format!("--adapter-out={}", adapter_dir.display()),
+            ])
             .status()?;
         if !status.success() {
             anyhow::bail!("candle training failed (exit={:?})", status.code());
@@ -615,12 +664,15 @@ fn train_cmd(path: &str, name: &str) -> Result<()> {
         eprintln!("   ⚠️  candle feature not enabled — training stub only");
         eprintln!("   Rebuild: cargo build --features candle");
         eprintln!("   Adapter directory created at: {}", adapter_dir.display());
-        eprintln!("   Training datum config: {}", training_datum_path.display());
+        eprintln!(
+            "   Training datum config: {}",
+            training_datum_path.display()
+        );
     }
 
     // 5. Save adapter datum
     let adapter_datum = format!(
-r#"# 🤖 AUTO-GENERATED from `b00t model train {name}`
+        r#"# 🤖 AUTO-GENERATED from `b00t model train {name}`
 [b00t]
 name = "{name}"
 type = "adapter"
@@ -629,7 +681,9 @@ adapter_path = "{out}"
 training_datum = "{datum}"
 "#,
         name = name,
-        base = training_config["b00t"]["base_model"].as_str().unwrap_or("?"),
+        base = training_config["b00t"]["base_model"]
+            .as_str()
+            .unwrap_or("?"),
         out = adapter_dir.display(),
         datum = training_datum_path.display()
     );
@@ -716,10 +770,13 @@ fn test_cmd(endpoint: &str, prompt: &str, max_tokens: u32) -> Result<()> {
     let output = std::process::Command::new("curl")
         .args([
             "-s",
-            "-X", "POST",
+            "-X",
+            "POST",
             &url,
-            "-H", "Content-Type: application/json",
-            "-d", &body.to_string(),
+            "-H",
+            "Content-Type: application/json",
+            "-d",
+            &body.to_string(),
         ])
         .output()
         .map_err(|e| anyhow!("failed to execute curl: {}", e))?;

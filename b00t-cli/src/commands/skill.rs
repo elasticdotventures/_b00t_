@@ -64,9 +64,16 @@ pub enum SkillCommands {
 
     #[clap(about = "Pull skills from a remote opencode-compatible URL")]
     Sync {
-        #[clap(long, help = "Remote URL serving /index.json (e.g. http://localhost:4097)")]
+        #[clap(
+            long,
+            help = "Remote URL serving /index.json (e.g. http://localhost:4097)"
+        )]
         url: String,
-        #[clap(long, help = "Output directory for downloaded skills", default_value = ".opencode/skills")]
+        #[clap(
+            long,
+            help = "Output directory for downloaded skills",
+            default_value = ".opencode/skills"
+        )]
         output: PathBuf,
     },
 }
@@ -312,8 +319,7 @@ fn handle_serve(port: u16, host: &str, base_path: &str) -> Result<()> {
     if let Ok(base) = get_expanded_path(base_path) {
         let opencode_dir = base.join(".opencode").join("skills");
         if opencode_dir.is_dir() {
-            let extra =
-                SkillResolver::with_dirs(vec![(opencode_dir, SkillFormat::SkillMd)]);
+            let extra = SkillResolver::with_dirs(vec![(opencode_dir, SkillFormat::SkillMd)]);
             let seen: std::collections::HashSet<String> =
                 skills.iter().map(|s| s.name.clone()).collect();
             for s in extra.list() {
@@ -326,8 +332,8 @@ fn handle_serve(port: u16, host: &str, base_path: &str) -> Result<()> {
 
     let skills = Arc::new(skills);
     let addr = format!("{}:{}", host, port);
-    let listener = TcpListener::bind(&addr)
-        .map_err(|e| anyhow::anyhow!("Cannot bind to {}: {}", addr, e))?;
+    let listener =
+        TcpListener::bind(&addr).map_err(|e| anyhow::anyhow!("Cannot bind to {}: {}", addr, e))?;
 
     println!("🥾 b00t skill server — http://{}", addr);
     println!("   {} skills available", skills.len());
@@ -427,10 +433,7 @@ fn serve_index_json(skills: &[crate::skill_resolver::SkillMeta]) -> String {
 }
 
 /// Serve a skill file: path is "<name>/<filename>".
-fn serve_skill_file(
-    path: &str,
-    skills: &[crate::skill_resolver::SkillMeta],
-) -> String {
+fn serve_skill_file(path: &str, skills: &[crate::skill_resolver::SkillMeta]) -> String {
     let parts: Vec<&str> = path.splitn(2, '/').collect();
     if parts.len() < 2 || parts[0].is_empty() || parts[1].is_empty() {
         return http_response(
@@ -456,7 +459,7 @@ fn serve_skill_file(
                 "404 Not Found",
                 "text/plain",
                 &format!("Skill '{}' not found", skill_name),
-            )
+            );
         }
     };
 
@@ -540,7 +543,8 @@ fn mime_type(filename: &str) -> &'static str {
         "application/json"
     } else if filename.ends_with(".sh") || filename.ends_with(".bash") {
         "text/plain"
-    } else if filename.ends_with(".toml") || filename.ends_with(".tomllm")
+    } else if filename.ends_with(".toml")
+        || filename.ends_with(".tomllm")
         || filename.ends_with(".tomllmd")
     {
         "text/plain"

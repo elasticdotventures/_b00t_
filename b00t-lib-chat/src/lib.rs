@@ -52,11 +52,11 @@ pub use metrics::{ChatMetrics, LatencyTimer};
 pub use protocol::{ACPMessage, MessageType, StepBarrier};
 pub use router::{Destination, MessageRouter, MessageRouterBuilder};
 pub use security::{
-    fetch_jwt_from_website, AcpJwtValidator, AcpSecurityContext, NamespaceEnforcer,
+    AcpJwtValidator, AcpSecurityContext, NamespaceEnforcer, fetch_jwt_from_website,
 };
-pub use server::{spawn_local_server, ChatInbox, LocalChatServer};
-pub use skill::{parse_b00t_command, BootCommand, ModelAction};
-pub use transport::{default_socket_path, ChatTransport, ChatTransportConfig, ChatTransportKind};
+pub use server::{ChatInbox, LocalChatServer, spawn_local_server};
+pub use skill::{BootCommand, ModelAction, parse_b00t_command};
+pub use transport::{ChatTransport, ChatTransportConfig, ChatTransportKind, default_socket_path};
 pub use transports::{MqttTransport, NatsTransport};
 
 // Type aliases for compatibility

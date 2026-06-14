@@ -156,28 +156,42 @@ impl SkillResolver {
     /// Enumerate skill directories from project root (or cwd if None) and global locations.
     fn build_dirs(project_root: Option<&Path>) -> Vec<SkillDir> {
         let mut dirs = Vec::new();
-        let root = project_root.map(|p| p.to_path_buf()).unwrap_or_else(|| std::env::current_dir().unwrap_or_default());
+        let root = project_root
+            .map(|p| p.to_path_buf())
+            .unwrap_or_else(|| std::env::current_dir().unwrap_or_default());
 
         // 1. Project-local SKILL.md skills/
         let local_skills = root.join("skills");
         if local_skills.is_dir() {
-            dirs.push(SkillDir { path: local_skills, format: SkillFormat::SkillMd });
+            dirs.push(SkillDir {
+                path: local_skills,
+                format: SkillFormat::SkillMd,
+            });
         }
         // 2. Project-local b00t datums
         let local_b00t = root.join("_b00t_");
         if local_b00t.is_dir() {
-            dirs.push(SkillDir { path: local_b00t, format: SkillFormat::TomlDatum });
+            dirs.push(SkillDir {
+                path: local_b00t,
+                format: SkillFormat::TomlDatum,
+            });
         }
         // 3. Claude Code native skills (global)
         if let Some(home) = dirs::home_dir() {
             let claude_skills = home.join(".claude").join("skills");
             if claude_skills.is_dir() {
-                dirs.push(SkillDir { path: claude_skills, format: SkillFormat::SkillMd });
+                dirs.push(SkillDir {
+                    path: claude_skills,
+                    format: SkillFormat::SkillMd,
+                });
             }
             // 4. Global b00t datums
             let global_b00t = home.join(".b00t").join("_b00t_");
             if global_b00t.is_dir() {
-                dirs.push(SkillDir { path: global_b00t, format: SkillFormat::TomlDatum });
+                dirs.push(SkillDir {
+                    path: global_b00t,
+                    format: SkillFormat::TomlDatum,
+                });
             }
         }
         dirs
@@ -188,7 +202,10 @@ impl SkillResolver {
     /// Build resolver using `base` as the project root instead of `current_dir()`.
     /// Project-local paths (`base/skills/`, `base/_b00t_/`) take priority over global home dirs.
     pub fn for_path(base: &Path) -> Self {
-        SkillResolver { dirs: Self::build_dirs(Some(base)), cache_mode: CacheMode::Cached }
+        SkillResolver {
+            dirs: Self::build_dirs(Some(base)),
+            cache_mode: CacheMode::Cached,
+        }
     }
 
     /// Create resolver with explicit directory list (for testing). Bypasses cache.
@@ -300,9 +317,11 @@ impl SkillResolver {
                         if skill_md.exists() {
                             let datum = SkillDatum::from_skill_md(&skill_md)
                                 .map_err(|e| SkillLoadError::Parse(e.to_string()))?;
-                            let cfg = datum.skill_config()
+                            let cfg = datum
+                                .skill_config()
                                 .map_err(|e| SkillLoadError::Parse(e.to_string()))?;
-                            let instructions = datum.load_instructions(&dir.path.join(&name_owned))
+                            let instructions = datum
+                                .load_instructions(&dir.path.join(&name_owned))
                                 .map_err(|e| SkillLoadError::Parse(e.to_string()))?;
                             let rendered = render_skill(&instructions);
                             let content = SkillContent {
@@ -321,13 +340,17 @@ impl SkillResolver {
                     SkillFormat::TomlDatum => {
                         let primary = dir.path.join(format!("{}.skill.toml", name_owned));
                         let extended = dir.path.join(format!("{}.skill.tomllm", name_owned));
-                        if !primary.exists() && !extended.exists() { continue; }
+                        if !primary.exists() && !extended.exists() {
+                            continue;
+                        }
                         let path_str = dir.path.to_string_lossy();
                         let datum = SkillDatum::from_config(&name_owned, &path_str)
                             .map_err(|e| SkillLoadError::Parse(e.to_string()))?;
-                        let cfg = datum.skill_config()
+                        let cfg = datum
+                            .skill_config()
                             .map_err(|e| SkillLoadError::Parse(e.to_string()))?;
-                        let instructions = datum.load_instructions(&dir.path)
+                        let instructions = datum
+                            .load_instructions(&dir.path)
                             .map_err(|e| SkillLoadError::Parse(e.to_string()))?;
                         let rendered = render_skill(&instructions);
                         let content = SkillContent {
@@ -351,10 +374,13 @@ impl SkillResolver {
         if self.cache_mode == CacheMode::Cached {
             if let Ok(ref content) = result {
                 if let Ok(mut cache) = skill_cache().lock() {
-                    cache.insert(name.to_string(), CacheEntry {
-                        content: content.clone(),
-                        loaded_at: Instant::now(),
-                    });
+                    cache.insert(
+                        name.to_string(),
+                        CacheEntry {
+                            content: content.clone(),
+                            loaded_at: Instant::now(),
+                        },
+                    );
                 }
             }
         }

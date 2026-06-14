@@ -149,7 +149,8 @@ impl RagLightManager {
                 let is_toml = path.extension().map(|e| e == "toml").unwrap_or(false);
 
                 if (is_toml || path.is_dir())
-                    && let Some(fname) = path.file_name().and_then(|n| n.to_str()) {
+                    && let Some(fname) = path.file_name().and_then(|n| n.to_str())
+                {
                     // 🤓 Strip ALL extensions: "gemma-4-26b-a4b-local.model.toml" → "gemma-4-26b-a4b-local"
                     //    Also handle "pi.agent.toml" → "pi", "b00t-mcp.mcp.toml" → "b00t-mcp"
                     let topic = fname.split('.').next().unwrap_or(fname);

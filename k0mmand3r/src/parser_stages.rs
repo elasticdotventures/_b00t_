@@ -100,9 +100,7 @@ pub enum StageAction {
     /// Continue parsing normally
     Allow,
     /// Skip remaining stages, return this result
-    Block {
-        message: String,
-    },
+    Block { message: String },
 }
 
 /// Type-erased guard callback registered at a specific parser stage.
@@ -163,10 +161,22 @@ mod tests {
 
     #[test]
     fn test_stage_from_name() {
-        assert_eq!(ParseStage::from_name("pre_parse"), Some(ParseStage::PreParse));
-        assert_eq!(ParseStage::from_name("pre-parse"), Some(ParseStage::PreParse));
-        assert_eq!(ParseStage::from_name("preparse"), Some(ParseStage::PreParse));
-        assert_eq!(ParseStage::from_name("post_params"), Some(ParseStage::PostParams));
+        assert_eq!(
+            ParseStage::from_name("pre_parse"),
+            Some(ParseStage::PreParse)
+        );
+        assert_eq!(
+            ParseStage::from_name("pre-parse"),
+            Some(ParseStage::PreParse)
+        );
+        assert_eq!(
+            ParseStage::from_name("preparse"),
+            Some(ParseStage::PreParse)
+        );
+        assert_eq!(
+            ParseStage::from_name("post_params"),
+            Some(ParseStage::PostParams)
+        );
         assert_eq!(ParseStage::from_name("unknown_stage"), None);
     }
 
@@ -187,27 +197,46 @@ mod tests {
     #[test]
     fn test_register_and_run_block() {
         clear_guards();
-        register_stage_guard(ParseStage::PreVerb, Box::new(|_| {
-            StageAction::Block { message: "blocked by test".to_string() }
-        }));
+        register_stage_guard(
+            ParseStage::PreVerb,
+            Box::new(|_| StageAction::Block {
+                message: "blocked by test".to_string(),
+            }),
+        );
         let state = ParseState::default();
         let result = run_stage(ParseStage::PreVerb, &state);
-        assert_eq!(result, StageAction::Block { message: "blocked by test".to_string() });
+        assert_eq!(
+            result,
+            StageAction::Block {
+                message: "blocked by test".to_string()
+            }
+        );
     }
 
     #[test]
     fn test_block_stops_early() {
         clear_guards();
         // Second guard should not be reached if first blocks
-        register_stage_guard(ParseStage::PreParse, Box::new(|_| {
-            StageAction::Block { message: "first blocks".to_string() }
-        }));
-        register_stage_guard(ParseStage::PreParse, Box::new(|_| {
-            StageAction::Block { message: "should not fire".to_string() }
-        }));
+        register_stage_guard(
+            ParseStage::PreParse,
+            Box::new(|_| StageAction::Block {
+                message: "first blocks".to_string(),
+            }),
+        );
+        register_stage_guard(
+            ParseStage::PreParse,
+            Box::new(|_| StageAction::Block {
+                message: "should not fire".to_string(),
+            }),
+        );
         let state = ParseState::default();
         let result = run_stage(ParseStage::PreParse, &state);
-        assert_eq!(result, StageAction::Block { message: "first blocks".to_string() });
+        assert_eq!(
+            result,
+            StageAction::Block {
+                message: "first blocks".to_string()
+            }
+        );
     }
 
     #[test]
@@ -221,7 +250,11 @@ mod tests {
     fn test_all_stages_have_names() {
         for stage in ParseStage::ALL {
             let name = stage.to_string();
-            assert!(ParseStage::from_name(&name).is_some(), "stage {} should roundtrip", name);
+            assert!(
+                ParseStage::from_name(&name).is_some(),
+                "stage {} should roundtrip",
+                name
+            );
         }
     }
 }

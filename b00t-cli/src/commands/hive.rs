@@ -82,10 +82,10 @@ pub enum HiveCommands {
         #[clap(subcommand)]
         peer_command: PeerCommands,
     },
+
+    #[clap(subcommand)]
+    Cyber(HiveCyberCommands),
 }
-
-
-
 
 #[derive(Parser)]
 pub enum PeerCommands {
@@ -93,7 +93,10 @@ pub enum PeerCommands {
     List {
         #[clap(long, help = "Output as JSON")]
         json: bool,
-        #[clap(long, help = "Health-check all peers in parallel (5s timeout per peer)")]
+        #[clap(
+            long,
+            help = "Health-check all peers in parallel (5s timeout per peer)"
+        )]
         health: bool,
     },
     #[clap(about = "Register a peer in the hive ledger")]
@@ -127,8 +130,6 @@ pub enum PeerCommands {
         #[clap(long, help = "Subnet to scan (e.g. 192.168.1.0/24)")]
         subnet: Option<String>,
     },
-    #[clap(subcommand)]
-    Cyber(HiveCyberCommands),
 }
 
 #[derive(Parser, Clone)]
@@ -355,6 +356,7 @@ pub fn handle_hive_command(cmd: &HiveCommands, path: &str) -> Result<()> {
             }
         }
 
+        HiveCommands::Peers { peer_command } => handle_peer_command(peer_command),
         HiveCommands::Cyber(cyber_cmd) => handle_cyber_command(cyber_cmd),
         HiveCommands::Run {
             command,
@@ -409,6 +411,27 @@ pub fn handle_hive_command(cmd: &HiveCommands, path: &str) -> Result<()> {
                 .map_err(|e| anyhow::anyhow!("failed to execute '{}': {}", command[0], e))?;
 
             std::process::exit(status.code().unwrap_or(1));
+        }
+    }
+}
+
+fn handle_peer_command(cmd: &PeerCommands) -> Result<()> {
+    match cmd {
+        PeerCommands::List { json, health: _ } => {
+            if *json {
+                println!("[]");
+            } else {
+                println!("No hive peers registered");
+            }
+            Ok(())
+        }
+        PeerCommands::Add { .. }
+        | PeerCommands::Remove { .. }
+        | PeerCommands::Status { .. }
+        | PeerCommands::Gossip
+        | PeerCommands::Prune { .. }
+        | PeerCommands::Discover { .. } => {
+            bail!("hive peer registry commands are declared but not implemented yet")
         }
     }
 }

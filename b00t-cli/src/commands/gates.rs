@@ -20,7 +20,11 @@ pub enum GatesCommands {
 impl GatesCommands {
     pub fn execute(&self, path: &str) -> Result<()> {
         match self {
-            GatesCommands::List { search, by_kind, json: as_json } => {
+            GatesCommands::List {
+                search,
+                by_kind,
+                json: as_json,
+            } => {
                 let all = crate::list_gates(path, search.as_deref())?;
 
                 let filtered: Vec<_> = if let Some(kind) = by_kind {
@@ -76,9 +80,19 @@ impl GatesCommands {
                                 "fail" => "⏳",
                                 _ => "❓",
                             };
-                            println!("    {} {}  {}  {}  {}", status_icon, origin_icon, g.kind, g.spec, crate::ansi::dim(&format!("({})", g.origin)));
+                            println!(
+                                "    {} {}  {}  {}  {}",
+                                status_icon,
+                                origin_icon,
+                                g.kind,
+                                g.spec,
+                                crate::ansi::dim(&format!("({})", g.origin))
+                            );
                             if let Some(hint) = &g.hint {
-                                println!("           {}", crate::ansi::yellow(&format!("↳ {hint}")));
+                                println!(
+                                    "           {}",
+                                    crate::ansi::yellow(&format!("↳ {hint}"))
+                                );
                             }
                         }
                         println!();

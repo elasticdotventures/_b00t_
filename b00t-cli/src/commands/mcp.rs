@@ -39,15 +39,30 @@ pub enum McpCommands {
     List {
         #[clap(long, help = "Output in JSON format")]
         json: bool,
-        #[clap(long, help = "Search filter — only show servers whose name contains this string (case-insensitive)")]
+        #[clap(
+            long,
+            help = "Search filter — only show servers whose name contains this string (case-insensitive)"
+        )]
         search: Option<String>,
-        #[clap(long, help = "Shorthand: show only installed servers (equivalent to --is-installed=true)")]
+        #[clap(
+            long,
+            help = "Shorthand: show only installed servers (equivalent to --is-installed=true)"
+        )]
         installed: bool,
-        #[clap(long, help = "Filter by installation status: true=installed, false=uninstalled")]
+        #[clap(
+            long,
+            help = "Filter by installation status: true=installed, false=uninstalled"
+        )]
         is_installed: Option<bool>,
-        #[clap(long, help = "Filter by running status: true=running, false=not running")]
+        #[clap(
+            long,
+            help = "Filter by running status: true=running, false=not running"
+        )]
         is_running: Option<bool>,
-        #[clap(long, help = "Filter by suspension status: true=suspended, false=not suspended")]
+        #[clap(
+            long,
+            help = "Filter by suspension status: true=suspended, false=not suspended"
+        )]
         is_suspended: Option<bool>,
         #[clap(long, help = "Override the max-items threshold for this invocation")]
         max_threshold: Option<i64>,
@@ -269,7 +284,11 @@ impl McpCommands {
             } => {
                 let filter = crate::McpListFilter {
                     search: search.clone(),
-                    is_installed: if *installed || is_installed.unwrap_or(false) { Some(true) } else { *is_installed },
+                    is_installed: if *installed || is_installed.unwrap_or(false) {
+                        Some(true)
+                    } else {
+                        *is_installed
+                    },
                     is_running: *is_running,
                     is_suspended: *is_suspended,
                     max_threshold: *max_threshold,
@@ -613,7 +632,10 @@ impl McpCommands {
                     }
 
                     if let Some(installed) = status.get("installed").and_then(|v| v.as_array()) {
-                        println!("📦 Installed ({} _b00t_/*.mcp.toml datums):", installed.len());
+                        println!(
+                            "📦 Installed ({} _b00t_/*.mcp.toml datums):",
+                            installed.len()
+                        );
                         for srv in installed {
                             let name = srv.get("name").and_then(|v| v.as_str()).unwrap_or("?");
                             let hint = srv.get("hint").and_then(|v| v.as_str()).unwrap_or("");
@@ -640,8 +662,7 @@ pub fn mcp_status_for_path(datum_root: &str) -> serde_json::Value {
     let mut status = serde_json::Map::new();
 
     // Loaded: MCP servers in ~/.hermes/config.yaml
-    let hermes_config = dirs::home_dir()
-        .map(|h| h.join(".hermes").join("config.yaml"));
+    let hermes_config = dirs::home_dir().map(|h| h.join(".hermes").join("config.yaml"));
     let loaded: Vec<serde_json::Value> = match &hermes_config {
         Some(path) if path.exists() => {
             let content = std::fs::read_to_string(path).unwrap_or_default();
@@ -679,7 +700,8 @@ pub fn mcp_status_for_path(datum_root: &str) -> serde_json::Value {
                     .and_then(|ext| ext.to_str())
                     .map(|ext| ext == "toml")
                     .unwrap_or(false)
-                    && e.path().file_name()
+                    && e.path()
+                        .file_name()
                         .and_then(|n| n.to_str())
                         .map(|n| n.ends_with(".mcp.toml"))
                         .unwrap_or(false)
@@ -689,7 +711,11 @@ pub fn mcp_status_for_path(datum_root: &str) -> serde_json::Value {
                 let table: toml::Table = content.parse().ok()?;
                 let b00t = table.get("b00t")?.as_table()?;
                 let name = b00t.get("name")?.as_str()?.to_string();
-                let hint = b00t.get("hint").and_then(|v| v.as_str()).unwrap_or("").to_string();
+                let hint = b00t
+                    .get("hint")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("")
+                    .to_string();
                 Some(json!({ "name": name, "hint": hint }))
             })
             .collect(),

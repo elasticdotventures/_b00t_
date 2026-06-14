@@ -28,14 +28,7 @@ fn test_b00t_whoami_worker_role_default() {
 fn test_b00t_whoami_worker_explicit() {
     let _guard = INTEGRATION_MUTEX.lock().unwrap();
     let output = Command::new("cargo")
-        .args([
-            "run",
-            "-p",
-            "b00t-cli",
-            "--",
-            "whoami",
-            "--role=worker",
-        ])
+        .args(["run", "-p", "b00t-cli", "--", "whoami", "--role=worker"])
         .output()
         .expect("failed to run b00t whoami --role=worker");
     let stdout = String::from_utf8_lossy(&output.stdout);
@@ -99,11 +92,23 @@ fn test_experiment_governance_gates_dispatch() {
     // If the experiment subcommand is not yet wired into main.rs, the test
     // expects a "not found" error instead of crashing.
     if output.status.success() {
-        assert!(stdout.contains("A/B RESULT"), "experiment output should contain A/B RESULT:\n{}", stdout);
-        assert!(stdout.contains("RECOMMEND"), "experiment should produce a recommendation:\n{}", stdout);
+        assert!(
+            stdout.contains("A/B RESULT"),
+            "experiment output should contain A/B RESULT:\n{}",
+            stdout
+        );
+        assert!(
+            stdout.contains("RECOMMEND"),
+            "experiment should produce a recommendation:\n{}",
+            stdout
+        );
     } else {
         // Subcommand may not be wired into main.rs yet — that's ok for this test tier
-        eprintln!("note: experiment subcommand not yet wired (exit={:?}): {}", output.status.code(), stderr);
+        eprintln!(
+            "note: experiment subcommand not yet wired (exit={:?}): {}",
+            output.status.code(),
+            stderr
+        );
     }
 }
 

@@ -794,11 +794,17 @@ pub fn eval_rhai_expr(expr: &str, command: &str, context: &GuardContext) -> Rhai
         context.repeat_threshold.unwrap_or(u32::MAX) as i64,
     );
 
+    // 🤓 Resolve macro references before building the script
+    // This handles cases where macro definitions reference other macros by name
+    // e.g., docker_run_guard = "docker_guard && cmd.contains(\"run\")"
+    // The macro reference needs to be replaced with the full expression
+    let resolved_macros = resolve_macro_references(&context.rhai_macros, &mut std::collections::HashSet::new());
+
     // Build the full Rhai script: macro let-bindings + guard expression
     // Each macro becomes: let <name> = <expr>;
     // Then the guard expression references them by name or composes with || && |>
     let mut script = String::new();
-    for (name, macro_expr) in &context.rhai_macros {
+    for (name, macro_expr) in &resolved_macros {
         script.push_str(&format!("let {name} = {macro_expr};\n"));
     }
     script.push('(');
@@ -810,6 +816,41 @@ pub fn eval_rhai_expr(expr: &str, command: &str, context: &GuardContext) -> Rhai
         Ok(false) => RhaiEvalResult::NoMatch,
         Err(e) => RhaiEvalResult::Error(format!("⚠️ rhai guard eval failed: {e} for expr: {expr}")),
     }
+}
+
+/// 🤓 Recursively resolve macro references in macro definitions
+/// When a macro definition references another macro by name (e.g., "docker_guard && ..."),
+/// replace the reference with the full expression of the referenced macro
+/// This ensures that macros can reference each other without causing "Variable not found" errors
+fn resolve_macro_references(
+    macros: &std::collections::HashMap<String, String>,
+    visited: &mut std::collections::HashSet<String>,
+) -> std::collections::HashMap<String, String> {
+    let mut resolved = std::collections::HashMap::new();
+
+    for (name, expr) in macros {
+        // Skip if already visited (prevent infinite recursion)
+        if visited.contains(name) {
+            resolved.insert(name.clone(), expr.clone());
+            continue;
+        }
+
+        visited.insert(name.clone());
+
+        // Check if the expression references any other macros
+        let mut resolved_expr = expr.clone();
+        for (other_name, other_expr) in macros {
+            if other_name != name {
+                // Replace bare references to the macro with its full expression
+                // e.g., "docker_guard && ..." -> "cmd.contains(\"docker\") && ..."
+                resolved_expr = resolved_expr.replace(other_name, &format!("({})", other_expr));
+            }
+        }
+
+        resolved.insert(name.clone(), resolved_expr);
+    }
+
+    resolved
 }
 
 // ─── Systemd Unit Generation ──────────────────────────────────────────────────
@@ -1452,65 +1493,30 @@ mod tests {
                 let match_cmd = match &pattern {
                     GuardPattern::JsonRegexPattern(p) => p.clone(),
                     GuardPattern::RhaiExpr(expr) => {
-                        // 🤓 Improved command generation for complex Rhai expressions
-                        // Parse the expression structure to generate appropriate test commands
+                        // 🤓 Smart command generation for Rhai expressions
+                        // Parse the expression structure and generate appropriate test commands
                         let expr_lower = expr.rhai.to_lowercase();
 
-                        // Handle specific patterns for better test coverage
+                        // Handle git-related patterns with proper command generation
                         if expr_lower.contains("git checkout -b") && expr_lower.contains("!cmd.contains(\"/\")") {
                             "git checkout -b simple-branch".to_string()
-                        } else if expr_lower.contains("git commit") && expr_lower.contains("-m") && expr_lower.contains("!cmd.contains(\":\")") {
-                            "git commit -m bad-message".to_string()
                         } else if expr_lower.contains("git checkout") && (expr_lower.contains("main") || expr_lower.contains("master")) {
                             "git checkout main".to_string()
                         } else if expr_lower.contains("git push") && expr_lower.contains("origin main") {
                             "git push origin main".to_string()
                         } else if expr_lower.contains("git merge") && expr_lower.contains("main") {
                             "git merge main".to_string()
+                        } else if expr_lower.contains("git commit") && expr_lower.contains("-m") && expr_lower.contains("!cmd.contains(\":\")") {
+                            "git commit -m bad-message".to_string()
                         } else if expr_lower.contains("git") {
                             "git push --force origin main".to_string()
+                        } else if expr_lower.contains("pip") && expr_lower.contains("install") {
+                            "pip install flask".to_string()
+                        } else if expr_lower.contains("docker") && expr_lower.contains("run") {
+                            "docker run nginx".to_string()
                         } else {
-                            // Fallback: extract keywords using original logic
-                            let mut keywords: Vec<String> = Vec::new();
-                            let mut in_quote = false;
-                            let mut current = String::new();
-                            for ch in expr.rhai.chars() {
-                                match ch {
-                                    '"' if !in_quote => {
-                                        in_quote = true;
-                                        current.clear();
-                                    }
-                                    '"' if in_quote => {
-                                        in_quote = false;
-                                        keywords.push(current.clone());
-                                    }
-                                    c if in_quote => current.push(c),
-                                    _ => {}
-                                }
-                            }
-                            // Map known keywords to test commands
-                            for keyword in &keywords {
-                                match keyword.as_str() {
-                                    "pip" | "pip3" | "npm" | "conda" => {
-                                        format!("{keyword} install somepackage")
-                                    }
-                                    "docker" => "docker run nginx".to_string(),
-                                    "git" => "git push --force origin main".to_string(),
-                                    "brew" => "brew install ffmpeg".to_string(),
-                                    "huggingface-cli" => {
-                                        "huggingface-cli download some-model".to_string()
-                                    }
-                                    "rm" => "rm -rf /tmp/cache".to_string(),
-                                    "ulimit" => "ulimit -n 65536".to_string(),
-                                    _ => "trigger-command-match".to_string(),
-                                };
-                            }
-                            // If no keywords matched, use default
-                            if keywords.is_empty() {
-                                "trigger-command-match".to_string()
-                            } else {
-                                keywords.join(" ") + " install"
-                            }
+                            // Generic fallback for other expressions
+                            "trigger-command-match".to_string()
                         }
                     }
                     GuardPattern::K0mmand3rStage(s) => {

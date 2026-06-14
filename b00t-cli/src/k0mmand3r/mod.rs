@@ -56,11 +56,31 @@ impl K0mmand {
             let key = parts[i];
 
             match key {
-                "on" | "to" | "from" | "with" => {
+                "on" | "to" | "from" => {
                     if i + 1 < parts.len() {
                         let value = parts[i + 1..].join(" ");
                         modifiers.insert(key.to_string(), value);
                         break;
+                    }
+                }
+                "with" => {
+                    // 🤓 Special handling for "with" keyword
+                    // If followed by key=value pairs, skip "with" and parse them as modifiers
+                    // Otherwise, consume as a normal preposition
+                    if i + 1 < parts.len() {
+                        let remaining = &parts[i + 1..];
+                        // Check if remaining tokens are key=value pairs
+                        let has_key_value_pairs = remaining.iter().any(|t| t.contains('=') || t.contains(':'));
+                        if has_key_value_pairs {
+                            // Skip "with" and continue parsing normally
+                            i += 1;
+                            continue;
+                        } else {
+                            // Treat as normal preposition
+                            let value = remaining.join(" ");
+                            modifiers.insert(key.to_string(), value);
+                            break;
+                        }
                     }
                 }
                 _ => {
@@ -167,34 +187,42 @@ impl LoopSpec {
         positional: &[&str],
         modifiers: &BTreeMap<String, String>,
     ) -> Result<Self, String> {
-        if let Some(raw) = positional.first() {
-            let mut spec = LoopSpec {
-                goal: String::new(),
-                metric: String::new(),
-                verify: String::new(),
-                guard: None,
-                max: None,
-                scope: None,
-                direction: None,
-            };
-            for segment in raw.split('|') {
-                if let Some((k, v)) = segment.split_once(':') {
-                    match k {
-                        "goal" => spec.goal = v.to_string(),
-                        "metric" => spec.metric = v.to_string(),
-                        "verify" => spec.verify = v.to_string(),
-                        "guard" => spec.guard = Some(v.to_string()),
-                        "max" => spec.max = v.parse().ok(),
-                        "scope" => spec.scope = Some(v.to_string()),
-                        "direction" => spec.direction = Some(v.to_string()),
-                        _ => {}
+        // 🤓 Handle "/loop with goal=X" pattern by checking if first positional is "with"
+        // If so, skip to modifiers-only parsing instead of trying to parse "with" as pipe-separated segments
+        let use_positional = positional.first().map_or(false, |first| *first != "with");
+
+        if use_positional {
+            if let Some(raw) = positional.first() {
+                let mut spec = LoopSpec {
+                    goal: String::new(),
+                    metric: String::new(),
+                    verify: String::new(),
+                    guard: None,
+                    max: None,
+                    scope: None,
+                    direction: None,
+                };
+                for segment in raw.split('|') {
+                    if let Some((k, v)) = segment.split_once(':') {
+                        match k {
+                            "goal" => spec.goal = v.to_string(),
+                            "metric" => spec.metric = v.to_string(),
+                            "verify" => spec.verify = v.to_string(),
+                            "guard" => spec.guard = Some(v.to_string()),
+                            "max" => spec.max = v.parse().ok(),
+                            "scope" => spec.scope = Some(v.to_string()),
+                            "direction" => spec.direction = Some(v.to_string()),
+                            _ => {}
+                        }
                     }
                 }
+                if spec.goal.is_empty() {
+                    return Err("Loop spec requires 'goal'".to_string());
+                }
+                Ok(spec)
+            } else {
+                unreachable!() // use_positional is true only when positional.first() exists
             }
-            if spec.goal.is_empty() {
-                return Err("Loop spec requires 'goal'".to_string());
-            }
-            Ok(spec)
         } else {
             let goal = modifiers
                 .get("goal")
@@ -230,11 +258,33 @@ impl K0mmand3rCmd {
         while i < parts.len() {
             let token = parts[i];
             match token {
-                "on" | "to" | "from" | "with" => {
+                "on" | "to" | "from" => {
                     if i + 1 < parts.len() {
                         let value = parts[i + 1..].join(" ");
                         modifiers.insert(token.to_string(), value);
                         break;
+                    } else {
+                        return Err(format!("Expected value after {}", token));
+                    }
+                }
+                "with" => {
+                    // 🤓 Special handling for "with" keyword
+                    // If followed by key=value pairs, skip "with" and parse them as modifiers
+                    // Otherwise, consume as a normal preposition
+                    if i + 1 < parts.len() {
+                        let remaining = &parts[i + 1..];
+                        // Check if remaining tokens are key=value pairs
+                        let has_key_value_pairs = remaining.iter().any(|t| t.contains('=') || t.contains(':'));
+                        if has_key_value_pairs {
+                            // Skip "with" and continue parsing normally
+                            i += 1;
+                            continue;
+                        } else {
+                            // Treat as normal preposition
+                            let value = remaining.join(" ");
+                            modifiers.insert(token.to_string(), value);
+                            break;
+                        }
                     } else {
                         return Err(format!("Expected value after {}", token));
                     }
@@ -277,17 +327,42 @@ impl K0mmand3rCmd {
                 }
             }
             "vote" => {
-                let proposal = positional
-                    .first()
-                    .map(|s| s.to_string())
-                    .or_else(|| modifiers.remove("proposal"))
-                    .or_else(|| modifiers.remove("on"))
-                    .ok_or("Usage: /vote <proposal> <yes|no|abstain>")?;
-                let choice_str = positional
-                    .get(1)
-                    .map(|s| s.to_string())
-                    .or_else(|| modifiers.remove("choice"))
-                    .ok_or("Missing vote choice")?;
+                // 🤓 Handle "/vote on proposal-456 choice abstain" pattern
+                // If "on" modifier contains "proposal-456 choice abstain", split it to extract proposal and choice
+                let (proposal, choice_str) = if let Some(on_value) = modifiers.get("on") {
+                    // Check if the "on" value contains a choice specification
+                    let parts: Vec<&str> = on_value.split_whitespace().collect();
+                    if parts.len() >= 3 && parts[1] == "choice" {
+                        // Format: "on proposal-456 choice abstain"
+                        (parts[0].to_string(), parts[2].to_string())
+                    } else {
+                        // Regular format: just the proposal ID
+                        let proposal = positional
+                            .first()
+                            .map(|s| s.to_string())
+                            .or_else(|| modifiers.remove("proposal"))
+                            .or_else(|| modifiers.remove("on"))
+                            .ok_or("Usage: /vote <proposal> <yes|no|abstain>")?;
+                        let choice_str = positional
+                            .get(1)
+                            .map(|s| s.to_string())
+                            .or_else(|| modifiers.remove("choice"))
+                            .ok_or("Missing vote choice")?;
+                        (proposal, choice_str)
+                    }
+                } else {
+                    let proposal = positional
+                        .first()
+                        .map(|s| s.to_string())
+                        .or_else(|| modifiers.remove("proposal"))
+                        .ok_or("Usage: /vote <proposal> <yes|no|abstain>")?;
+                    let choice_str = positional
+                        .get(1)
+                        .map(|s| s.to_string())
+                        .or_else(|| modifiers.remove("choice"))
+                        .ok_or("Missing vote choice")?;
+                    (proposal, choice_str)
+                };
                 let choice = match choice_str.to_lowercase().as_str() {
                     "yes" | "y" => VoteChoice::Yes,
                     "no" | "n" => VoteChoice::No,
@@ -320,10 +395,7 @@ impl K0mmand3rCmd {
                 let budget = budget_str
                     .parse::<u64>()
                     .map_err(|_| "Budget must be a number".to_string())?;
-                Ok(K0mmand3rCmd::Delegate {
-                    agent,
-                    budget,
-                })
+                Ok(K0mmand3rCmd::Delegate { agent, budget })
             }
             "loop" => {
                 let spec = LoopSpec::from_tokens(&positional, &modifiers)?;
@@ -336,6 +408,8 @@ impl K0mmand3rCmd {
                     .or_else(|| modifiers.remove("agent"))
                     .or_else(|| modifiers.remove("to"))
                     .ok_or("Usage: /handshake <agent>")?;
+                // 🤓 Strip "agent:" prefix if present (e.g., "agent:observer" → "observer")
+                let agent = agent.strip_prefix("agent:").unwrap_or(&agent);
                 let proposal = if positional.len() > 1 {
                     Some(positional[1..].join(" "))
                 } else {
@@ -479,9 +553,7 @@ impl K0mmand3rCmd {
             K0mmand3rCmd::Delegate { agent, .. } => format!("agent:{}", agent),
             K0mmand3rCmd::Loop { .. } => "loop".to_string(),
             K0mmand3rCmd::Handshake { agent, .. } => format!("agent:{}", agent),
-            K0mmand3rCmd::Crew { action, .. } => {
-                format!("crew:{:?}", action).to_lowercase()
-            }
+            K0mmand3rCmd::Crew { action, .. } => format!("crew:{:?}", action).to_lowercase(),
             K0mmand3rCmd::Status => "status".to_string(),
             K0mmand3rCmd::Propose { .. } => "proposal".to_string(),
             K0mmand3rCmd::Ahoy { role, .. } => format!("role:{}", role),
@@ -512,9 +584,18 @@ impl K0mmand3rTelemetry {
         }
         let tracer = opentelemetry::global::tracer("k0mmand3r");
         let mut span = tracer.start(format!("k0mmand3r.{}", verb));
-        span.set_attribute(opentelemetry::KeyValue::new("k0mmand3r.verb", verb.to_string()));
-        span.set_attribute(opentelemetry::KeyValue::new("k0mmand3r.object", object.to_string()));
-        span.set_attribute(opentelemetry::KeyValue::new("k0mmand3r.agent_id", agent_id.to_string()));
+        span.set_attribute(opentelemetry::KeyValue::new(
+            "k0mmand3r.verb",
+            verb.to_string(),
+        ));
+        span.set_attribute(opentelemetry::KeyValue::new(
+            "k0mmand3r.object",
+            object.to_string(),
+        ));
+        span.set_attribute(opentelemetry::KeyValue::new(
+            "k0mmand3r.agent_id",
+            agent_id.to_string(),
+        ));
         let result = f();
         span.end();
         result

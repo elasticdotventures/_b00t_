@@ -186,7 +186,11 @@ mod k0mmand3r_typed_cmd_tests {
     fn test_parse_negotiate_positional() {
         let cmd = K0mmand3rCmd::parse("/negotiate blessing observe-infra").unwrap();
         match cmd {
-            K0mmand3rCmd::Negotiate { resource, id, modifiers } => {
+            K0mmand3rCmd::Negotiate {
+                resource,
+                id,
+                modifiers,
+            } => {
                 assert_eq!(resource, "blessing");
                 assert_eq!(id, "observe-infra");
                 assert!(modifiers.is_empty());
@@ -211,7 +215,11 @@ mod k0mmand3r_typed_cmd_tests {
     fn test_parse_vote() {
         let cmd = K0mmand3rCmd::parse("/vote proposal-123 yes because reasons").unwrap();
         match cmd {
-            K0mmand3rCmd::Vote { proposal, choice, reason } => {
+            K0mmand3rCmd::Vote {
+                proposal,
+                choice,
+                reason,
+            } => {
                 assert_eq!(proposal, "proposal-123");
                 assert_eq!(choice, b00t_ipc::VoteChoice::Yes);
                 assert_eq!(reason, Some("because reasons".to_string()));
@@ -224,7 +232,9 @@ mod k0mmand3r_typed_cmd_tests {
     fn test_parse_vote_abstain() {
         let cmd = K0mmand3rCmd::parse("/vote on proposal-456 choice abstain").unwrap();
         match cmd {
-            K0mmand3rCmd::Vote { proposal, choice, .. } => {
+            K0mmand3rCmd::Vote {
+                proposal, choice, ..
+            } => {
                 assert_eq!(proposal, "proposal-456");
                 assert_eq!(choice, b00t_ipc::VoteChoice::Abstain);
             }
@@ -277,7 +287,8 @@ mod k0mmand3r_typed_cmd_tests {
 
     #[test]
     fn test_parse_loop_spec_positional() {
-        let cmd = K0mmand3rCmd::parse("/loop goal:deploy metric:uptime verify:healthcheck max:5").unwrap();
+        let cmd = K0mmand3rCmd::parse("/loop goal:deploy metric:uptime verify:healthcheck max:5")
+            .unwrap();
         match cmd {
             K0mmand3rCmd::Loop { spec } => {
                 assert_eq!(spec.goal, "deploy");
@@ -291,7 +302,8 @@ mod k0mmand3r_typed_cmd_tests {
 
     #[test]
     fn test_parse_loop_spec_modifiers() {
-        let cmd = K0mmand3rCmd::parse("/loop with goal=deploy metric=uptime verify=healthcheck").unwrap();
+        let cmd =
+            K0mmand3rCmd::parse("/loop with goal=deploy metric=uptime verify=healthcheck").unwrap();
         match cmd {
             K0mmand3rCmd::Loop { spec } => {
                 assert_eq!(spec.goal, "deploy");

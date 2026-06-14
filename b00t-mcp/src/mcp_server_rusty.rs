@@ -27,7 +27,10 @@ use std::path::Path;
 use tracing::{debug, error, info};
 
 use crate::clap_reflection::McpCommandRegistry;
-use crate::{chat::ChatRuntime, mcp_tools::{create_code_mode_registry, create_mcp_registry}};
+use crate::{
+    chat::ChatRuntime,
+    mcp_tools::{create_code_mode_registry, create_mcp_registry},
+};
 use b00t_c0re_lib::{B00tContext, utils};
 
 /// Rusty b00t MCP server with compile-time generated tools
@@ -45,7 +48,11 @@ pub struct B00tMcpServerRusty {
 }
 
 impl B00tMcpServerRusty {
-    pub fn new<P: AsRef<Path>>(working_dir: P, _config_path: &str, code_mode: bool) -> Result<Self> {
+    pub fn new<P: AsRef<Path>>(
+        working_dir: P,
+        _config_path: &str,
+        code_mode: bool,
+    ) -> Result<Self> {
         let working_dir = working_dir.as_ref().to_path_buf();
 
         let registry = if code_mode {
@@ -158,7 +165,9 @@ impl ServerHandler for B00tMcpServerRusty {
         let tool_name = request.name.as_ref();
 
         // Extract client identity for response customization
-        let client_name = context.peer.peer_info()
+        let client_name = context
+            .peer
+            .peer_info()
             .map(|p| p.client_info.name.clone())
             .unwrap_or_default();
 

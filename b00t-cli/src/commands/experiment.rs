@@ -106,7 +106,14 @@ pub struct PhygitalStatus {
     pub focus_balance: f64,
 }
 
-fn make_scores(roi: f64, cost: f64, time: f64, accuracy: f64, utility: f64, risk: f64) -> HashMap<String, f64> {
+fn make_scores(
+    roi: f64,
+    cost: f64,
+    time: f64,
+    accuracy: f64,
+    utility: f64,
+    risk: f64,
+) -> HashMap<String, f64> {
     let mut m = HashMap::new();
     m.insert("roi".into(), roi);
     m.insert("cost".into(), cost);
@@ -253,8 +260,15 @@ pub fn emit_focus_to_ledgerr_mcp(cmp: &ExperimentComparison, _endpoint: &str) {
             },
             "id": 1
         });
-        let _ = f.write_all(serde_json::to_string_pretty(&payload).unwrap_or_default().as_bytes());
-        eprintln!("[ledgerr-mcp] payload written to {} — pipe to ledgerr-mcp when daemon is running", tmp.display());
+        let _ = f.write_all(
+            serde_json::to_string_pretty(&payload)
+                .unwrap_or_default()
+                .as_bytes(),
+        );
+        eprintln!(
+            "[ledgerr-mcp] payload written to {} — pipe to ledgerr-mcp when daemon is running",
+            tmp.display()
+        );
     }
 }
 
@@ -537,7 +551,10 @@ pub fn format_comparison(cmp: &ExperimentComparison) -> String {
         cmp.treatment.focus_earned, cmp.treatment.focus_consumed,
     ));
     out.push_str(&format!("  CONTROL REASONING: {}\n", cmp.control.reasoning));
-    out.push_str(&format!("  TREATMENT REASONING: {}", cmp.treatment.reasoning));
+    out.push_str(&format!(
+        "  TREATMENT REASONING: {}",
+        cmp.treatment.reasoning
+    ));
     out
 }
 
@@ -606,16 +623,10 @@ pub fn handle_experiment_compare(
 
         let dims = exps.entry(exp_id).or_default();
 
-        if let Some(v) = frame
-            .cell(0, "BilledCost")
-            .and_then(|c| cell_to_f64(c))
-        {
+        if let Some(v) = frame.cell(0, "BilledCost").and_then(|c| cell_to_f64(c)) {
             dims.billed_cost.push(v);
         }
-        if let Some(v) = frame
-            .cell(0, "EffectiveCost")
-            .and_then(|c| cell_to_f64(c))
-        {
+        if let Some(v) = frame.cell(0, "EffectiveCost").and_then(|c| cell_to_f64(c)) {
             dims.effective_cost.push(v);
         }
         if let Some(v) = frame
@@ -654,7 +665,11 @@ pub fn handle_experiment_compare(
         let delta = b_val - a_val;
         println!(
             "{:<24} {:>width$.2} {:>width$.2} {:>+width$.2}",
-            label, a_val, b_val, delta, width = max_w
+            label,
+            a_val,
+            b_val,
+            delta,
+            width = max_w
         );
     };
 
@@ -731,7 +746,11 @@ pub fn governance_gate(prompt: &str) -> Result<String, String> {
     }
     // Separate check for "token" with word boundaries (match "auth-token" but not "tokenizer")
     let lower = prompt.to_lowercase();
-    if lower.contains(" token ") || lower.ends_with(" token") || lower.starts_with("token ") || lower == "token" {
+    if lower.contains(" token ")
+        || lower.ends_with(" token")
+        || lower.starts_with("token ")
+        || lower == "token"
+    {
         return Err("GATE BLOCKED: check-credential-exposure | blocked pattern: token".into());
     }
     Ok("pass".to_string())
@@ -784,8 +803,14 @@ mod tests {
     use super::*;
 
     const TEST_PROMPTS: [(&str, &str); 2] = [
-        ("Write fibonacci in Python with basic style", "Write fibonacci in Python with memoization + type hints"),
-        ("implement sort in Rust", "implement parallel sort in Rust with rayon"),
+        (
+            "Write fibonacci in Python with basic style",
+            "Write fibonacci in Python with memoization + type hints",
+        ),
+        (
+            "implement sort in Rust",
+            "implement parallel sort in Rust with rayon",
+        ),
     ];
 
     fn make_config(id: &str, prompts: (&str, &str)) -> ExperimentConfig {
@@ -830,7 +855,13 @@ mod tests {
         let cmp = dispatch_experiment(&config).unwrap();
 
         let cf = create_focus_record("test-003", "control", "sm0l-1", "eval", &cmp.control.scores);
-        let tf = create_focus_record("test-003", "treatment", "sm0l-2", "eval", &cmp.treatment.scores);
+        let tf = create_focus_record(
+            "test-003",
+            "treatment",
+            "sm0l-2",
+            "eval",
+            &cmp.treatment.scores,
+        );
 
         assert!(cf.record_id.contains("test-003"));
         assert!(cf.record_id.contains("control"));
@@ -852,9 +883,11 @@ mod tests {
         let config = make_config("test-004", TEST_PROMPTS[1]);
         let cmp = dispatch_experiment(&config).unwrap();
         assert!(
-            (cmp.focus_delta - (cmp.treatment.focus_earned - cmp.treatment.focus_consumed
-                - (cmp.control.focus_earned - cmp.control.focus_consumed)))
-            .abs()
+            (cmp.focus_delta
+                - (cmp.treatment.focus_earned
+                    - cmp.treatment.focus_consumed
+                    - (cmp.control.focus_earned - cmp.control.focus_consumed)))
+                .abs()
                 < 0.001
         );
     }

@@ -9,7 +9,7 @@
 
 use anyhow::Result;
 use clap::Parser;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use std::path::PathBuf;
 use std::process::Command;
 
@@ -66,11 +66,7 @@ pub fn handle_doctor_command(args: &DoctorCommands, b00t_path: &str) -> Result<(
                         }
                     }
                 }
-                println!(
-                    "\n{}/{} checks passed",
-                    ok_count,
-                    results.len()
-                );
+                println!("\n{}/{} checks passed", ok_count, results.len());
             }
 
             Ok(())
@@ -223,7 +219,16 @@ fn check_ledgerr_service() -> Value {
 fn check_model_endpoint() -> Value {
     // Use curl instead of reqwest::blocking to avoid tokio runtime panic (#[tokio::main])
     let reachable = std::process::Command::new("curl")
-        .args(["-s", "--max-time", "3", "-o", "/dev/null", "-w", "%{http_code}", "http://localhost:8001/v1/models"])
+        .args([
+            "-s",
+            "--max-time",
+            "3",
+            "-o",
+            "/dev/null",
+            "-w",
+            "%{http_code}",
+            "http://localhost:8001/v1/models",
+        ])
         .output()
         .ok()
         .map(|o| String::from_utf8_lossy(&o.stdout).trim() == "200")

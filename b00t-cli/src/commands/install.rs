@@ -1,12 +1,17 @@
 use crate::dependency_resolver::DependencyResolver;
-use crate::{BootDatum, UnifiedConfig};
+use crate::{BootDatum, UnifiedConfig, evaluate_gates};
 use anyhow::{Context, Result, anyhow};
 use clap::Parser;
 use duct::cmd;
 use shellexpand;
 use std::collections::HashMap;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use toml;
+
+const HERMES_B00T_MCP_COMMAND: &str = "/home/brianh/.cargo/bin/b00t-mcp";
+const HERMES_B00T_MCP_ARGS: &[&str] = &["stdio", "-d", "/home/brianh/.b00t"];
+const CODEBASE_MEMORY_MCP_PATH: &str =
+    "/home/brianh/.b00t/vendor/codebase-memory-mcp-b00t-ir0n-ledg3rr/build/c/codebase-memory-mcp";
 
 #[derive(Parser)]
 pub enum InstallCommands {
@@ -130,6 +135,35 @@ pub fn install_datum(path: &str, name: &str, dry_run: bool) -> Result<()> {
             .get(&key)
             .ok_or_else(|| anyhow!("Missing datum during install: {}", key))?;
 
+        // Evaluate hook_detect if set (e.g. hook_detect = "gates")
+        if let Some(hook) = &datum.hook_detect {
+            let datum_file = format!(
+                "{}/{}.toml",
+                shellexpand::tilde(path),
+                key.replace('.', ".")
+            );
+            unsafe {
+                std::env::set_var("_B00T_DATUM_FILE", &datum_file);
+                std::env::set_var("_B00T_DATUM_NAME", &datum.name);
+            }
+            let result = crate::hook_engine::run_hook(hook);
+            match &result {
+                crate::hook_engine::HookResult::Ok => {}
+                crate::hook_engine::HookResult::Warn(msg) => {
+                    eprintln!("⚠️  {} hook_detect: {}", key, msg);
+                }
+                crate::hook_engine::HookResult::Redirect(alt) => {
+                    eprintln!("⏭️  {} redirected to {} by hook_detect", key, alt);
+                    continue;
+                }
+                crate::hook_engine::HookResult::Missing(msg) => {
+                    eprintln!("⏭️  {} hook_detect: {}", key, msg);
+                    continue;
+                }
+                _ => {}
+            }
+        }
+
         // Skip if already installed (best-effort using version command)
         if let Some(version_cmd) = &datum.version {
             match cmd!("bash", "-c", version_cmd).run() {
@@ -142,6 +176,22 @@ pub fn install_datum(path: &str, name: &str, dry_run: bool) -> Result<()> {
                         "⚠️  Version check for '{}' failed: {}. Proceeding with installation.",
                         key, e
                     );
+                }
+            }
+        }
+
+        // Evaluate gates before installing
+        if let Some(ref gates) = datum.gate {
+            if !gates.is_empty() {
+                let gate_results = evaluate_gates(gates, path);
+                let all_passed = gate_results.iter().all(|r| r.passed);
+                if !all_passed {
+                    for result in &gate_results {
+                        if !result.passed {
+                            println!("⏭️  {} gate blocked: {}", key, result.reason);
+                        }
+                    }
+                    continue;
                 }
             }
         }
@@ -164,7 +214,7 @@ pub fn install_datum(path: &str, name: &str, dry_run: bool) -> Result<()> {
 /// Hermes is the AI terminal; this sets it up for local inference mode.
 pub fn hermes_special_install(dry_run: bool) -> Result<()> {
     if dry_run {
-        println!("[dry-run] would configure hermes: hermes config set terminal.backend local");
+        println!("Dry run: would configure hermes: hermes config set terminal.backend local");
         return Ok(());
     }
     let output = std::process::Command::new("hermes")
@@ -186,6 +236,70 @@ pub fn hermes_special_install(dry_run: bool) -> Result<()> {
         Err(e) => anyhow::bail!("failed to run hermes: {e}"),
     }
     Ok(())
+}
+
+pub fn update_hermes_mcp_config(config_path: &Path) -> Result<()> {
+    if let Some(parent) = config_path.parent() {
+        std::fs::create_dir_all(parent)
+            .with_context(|| format!("creating hermes config parent {}", parent.display()))?;
+    }
+
+    let content = if config_path.exists() {
+        std::fs::read_to_string(config_path)
+            .with_context(|| format!("parse YAML config as UTF-8: {}", config_path.display()))?
+    } else {
+        String::new()
+    };
+
+    let mut doc: serde_yaml::Mapping = if content.trim().is_empty() {
+        serde_yaml::Mapping::new()
+    } else {
+        serde_yaml::from_str(&content)
+            .with_context(|| format!("parse YAML hermes config {}", config_path.display()))?
+    };
+
+    let servers_key = serde_yaml::Value::String("mcp_servers".to_string());
+    doc.entry(servers_key.clone())
+        .or_insert_with(|| serde_yaml::Value::Mapping(serde_yaml::Mapping::new()));
+
+    let servers = doc
+        .get_mut(&servers_key)
+        .and_then(serde_yaml::Value::as_mapping_mut)
+        .context("mcp_servers must be a mapping")?;
+
+    servers.insert(
+        serde_yaml::Value::String("b00t-mcp".to_string()),
+        hermes_server_value(HERMES_B00T_MCP_COMMAND, HERMES_B00T_MCP_ARGS),
+    );
+
+    if Path::new(CODEBASE_MEMORY_MCP_PATH).exists() {
+        servers.insert(
+            serde_yaml::Value::String("codebase-memory".to_string()),
+            hermes_server_value(CODEBASE_MEMORY_MCP_PATH, &[]),
+        );
+    }
+
+    let serialized = serde_yaml::to_string(&doc).context("serializing hermes config YAML")?;
+    std::fs::write(config_path, serialized)
+        .with_context(|| format!("writing hermes config {}", config_path.display()))?;
+    Ok(())
+}
+
+fn hermes_server_value(command: &str, args: &[&str]) -> serde_yaml::Value {
+    let mut server = serde_yaml::Mapping::new();
+    server.insert(
+        serde_yaml::Value::String("command".to_string()),
+        serde_yaml::Value::String(command.to_string()),
+    );
+    server.insert(
+        serde_yaml::Value::String("args".to_string()),
+        serde_yaml::Value::Sequence(
+            args.iter()
+                .map(|arg| serde_yaml::Value::String((*arg).to_string()))
+                .collect(),
+        ),
+    );
+    serde_yaml::Value::Mapping(server)
 }
 
 /// Load all datums from the configured path (excluding stack files).

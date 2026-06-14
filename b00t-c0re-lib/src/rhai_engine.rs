@@ -157,13 +157,9 @@ impl RhaiEngine {
         });
 
         // String utilities
-        engine.register_fn("str_trim", |s: &str| -> String {
-            s.trim().to_string()
-        });
+        engine.register_fn("str_trim", |s: &str| -> String { s.trim().to_string() });
 
-        engine.register_fn("str_downcase", |s: &str| -> String {
-            s.to_lowercase()
-        });
+        engine.register_fn("str_downcase", |s: &str| -> String { s.to_lowercase() });
 
         // Logging
         engine.register_fn("log_info", |msg: &str| {
@@ -191,13 +187,11 @@ impl RhaiEngine {
             "gate_check",
             |kind: &str, spec: &str| -> Result<bool, Box<rhai::EvalAltResult>> {
                 let result = match kind {
-                    "command" => {
-                        Command::new("which")
-                            .arg(spec)
-                            .output()
-                            .map(|o| o.status.success())
-                            .unwrap_or(false)
-                    }
+                    "command" => Command::new("which")
+                        .arg(spec)
+                        .output()
+                        .map(|o| o.status.success())
+                        .unwrap_or(false),
                     "file" => {
                         let expanded = if spec.starts_with('~') {
                             let home = std::env::var("HOME").unwrap_or_default();
@@ -223,8 +217,7 @@ impl RhaiEngine {
                                     for line in content.lines() {
                                         if line.trim().starts_with(&prefix) {
                                             let val = line.trim()[prefix.len()..].trim();
-                                            return Ok(!val.is_empty()
-                                                && !val.starts_with('#'));
+                                            return Ok(!val.is_empty() && !val.starts_with('#'));
                                         }
                                     }
                                 }
@@ -239,9 +232,11 @@ impl RhaiEngine {
                         // Use gate_check("command", ...) / gate_check("file", ...) / gate_check("env", ...)
                         // for those checks; reserve "rhai" for pure-logic expressions only.
                         let sub_engine = Engine::new();
-                        let ast = sub_engine.compile(spec)
+                        let ast = sub_engine
+                            .compile(spec)
                             .map_err(|e| format!("gate rhai compile error: {}", e))?;
-                        let result = sub_engine.eval_ast::<bool>(&ast)
+                        let result = sub_engine
+                            .eval_ast::<bool>(&ast)
                             .map_err(|e| format!("gate rhai eval error: {}", e))?;
                         result
                     }

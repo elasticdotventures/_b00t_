@@ -16,7 +16,10 @@ use serde_json::Value;
 #[derive(Parser, Debug)]
 pub struct DocgenArgs {
     /// Project name in the l3dg3rr knowledge graph
-    #[arg(long, default_value = "home-brianh-.b00t-vendor-codebase-memory-mcp-b00t-ir0n-ledg3rr")]
+    #[arg(
+        long,
+        default_value = "home-brianh-.b00t-vendor-codebase-memory-mcp-b00t-ir0n-ledg3rr"
+    )]
     pub project: String,
 
     /// Output format: tomllm, rustdoc, or json
@@ -121,10 +124,7 @@ fn find_cbm_binary() -> Result<String> {
         }
         // Check if it's a command in PATH
         if !candidate.contains('/') {
-            if let Ok(path) = std::process::Command::new("which")
-                .arg(candidate)
-                .output()
-            {
+            if let Ok(path) = std::process::Command::new("which").arg(candidate).output() {
                 if path.status.success() {
                     return Ok(candidate.to_string());
                 }
@@ -145,7 +145,10 @@ fn format_tomllm(functions: &[Value]) -> String {
 
     for f in functions {
         let name = f.get("name").and_then(|v| v.as_str()).unwrap_or("unknown");
-        let qn = f.get("qualified_name").and_then(|v| v.as_str()).unwrap_or(name);
+        let qn = f
+            .get("qualified_name")
+            .and_then(|v| v.as_str())
+            .unwrap_or(name);
         let file = f.get("file_path").and_then(|v| v.as_str()).unwrap_or("");
         let sig = f.get("signature").and_then(|v| v.as_str()).unwrap_or("");
         let rt = f.get("return_type").and_then(|v| v.as_str()).unwrap_or("");
@@ -185,7 +188,11 @@ fn format_rustdoc(functions: &[Value]) -> String {
         let line = f.get("start_line").and_then(|v| v.as_u64()).unwrap_or(0);
         let doc = f.get("docstring").and_then(|v| v.as_str()).unwrap_or("");
 
-        let sig_display = if sig.is_empty() { format!("{name}()") } else { sig.to_string() };
+        let sig_display = if sig.is_empty() {
+            format!("{name}()")
+        } else {
+            sig.to_string()
+        };
         out.push_str(&format!("/// `{sig_display}`\n"));
         for doc_line in doc.lines() {
             out.push_str(&format!("/// {doc_line}\n"));
@@ -243,9 +250,8 @@ mod tests {
 
     #[test]
     fn test_format_rustdoc_no_docstring() {
-        let functions = vec![
-            json!({"name": "no_docs_fn", "file_path": "mod.rs", "start_line": 10}),
-        ];
+        let functions =
+            vec![json!({"name": "no_docs_fn", "file_path": "mod.rs", "start_line": 10})];
         let output = format_rustdoc(&functions);
         assert!(output.contains("no_docs_fn"));
         // Should not crash on missing fields
@@ -253,9 +259,18 @@ mod tests {
 
     #[test]
     fn test_docgen_format_parsing() {
-        assert_eq!("tomllm".parse::<DocgenFormat>().unwrap(), DocgenFormat::Tomllm);
-        assert_eq!("toml".parse::<DocgenFormat>().unwrap(), DocgenFormat::Tomllm);
-        assert_eq!("rustdoc".parse::<DocgenFormat>().unwrap(), DocgenFormat::Rustdoc);
+        assert_eq!(
+            "tomllm".parse::<DocgenFormat>().unwrap(),
+            DocgenFormat::Tomllm
+        );
+        assert_eq!(
+            "toml".parse::<DocgenFormat>().unwrap(),
+            DocgenFormat::Tomllm
+        );
+        assert_eq!(
+            "rustdoc".parse::<DocgenFormat>().unwrap(),
+            DocgenFormat::Rustdoc
+        );
         assert_eq!("json".parse::<DocgenFormat>().unwrap(), DocgenFormat::Json);
         assert!("xyz".parse::<DocgenFormat>().is_err());
     }

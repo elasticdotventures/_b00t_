@@ -409,10 +409,7 @@ fn test_update_config_errors_on_invalid_parent() {
     let config_path = parent_file.join("nested/config.yaml");
 
     let result = b00t_cli::commands::install::update_hermes_mcp_config(&config_path);
-    assert!(
-        result.is_err(),
-        "Expected Err when parent path is a file"
-    );
+    assert!(result.is_err(), "Expected Err when parent path is a file");
 }
 
 /// update_hermes_mcp_config must return an error when given an unparseable
@@ -447,10 +444,7 @@ fn test_update_config_errors_on_bad_mcp_servers_type() {
     // mcp_servers is a string — that's invalid because as_mapping_mut returns
     // None for non-mapping values, triggering the context("mcp_servers must
     // be a mapping") error.
-    write_hermes_config(
-        &config_path,
-        "mcp_servers: \"this should be a mapping\"\n",
-    );
+    write_hermes_config(&config_path, "mcp_servers: \"this should be a mapping\"\n");
 
     let result = b00t_cli::commands::install::update_hermes_mcp_config(&config_path);
     assert!(
@@ -529,12 +523,7 @@ fn test_config_parsing_yields_correct_structure() {
         .unwrap();
     assert_eq!(args.len(), HERMES_B00T_MCP_ARGS.len());
     for (i, expected) in HERMES_B00T_MCP_ARGS.iter().enumerate() {
-        assert_eq!(
-            args[i].as_str().unwrap(),
-            *expected,
-            "arg {} mismatch",
-            i
-        );
+        assert_eq!(args[i].as_str().unwrap(), *expected, "arg {} mismatch", i);
     }
 }
 
@@ -557,7 +546,10 @@ fn test_config_round_trip() {
     let re_doc: serde_yaml::Mapping = serde_yaml::from_str(&re_serialized).unwrap();
 
     // Compare structural equality (not byte equality due to formatting differences)
-    assert_eq!(doc, re_doc, "YAML round-trip must preserve structural equality");
+    assert_eq!(
+        doc, re_doc,
+        "YAML round-trip must preserve structural equality"
+    );
 }
 
 /// Parsing a config that has codebase-memory (if the binary exists) must
@@ -598,10 +590,7 @@ fn test_config_parsing_codebase_memory() {
             .unwrap()
             .as_sequence()
             .unwrap();
-        assert!(
-            cm_args.is_empty(),
-            "codebase-memory args should be empty"
-        );
+        assert!(cm_args.is_empty(), "codebase-memory args should be empty");
     } else {
         // If binary doesn't exist, codebase-memory is not added by the function.
         // But if it was in the pre-existing config, it would be preserved.

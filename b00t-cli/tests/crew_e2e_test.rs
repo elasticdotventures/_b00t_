@@ -10,9 +10,7 @@ use std::process::Command;
 #[test]
 fn test_crew_recruit_e2e() {
     let mut cmd = Command::cargo_bin("b00t-cli").unwrap();
-    cmd.arg("crew")
-        .arg("recruit")
-        .arg("rust,python");
+    cmd.arg("crew").arg("recruit").arg("rust,python");
 
     let output = cmd.output().expect("failed to run crew recruit");
     assert!(

@@ -19,6 +19,10 @@
 
 use serde::{Deserialize, Serialize};
 
+pub fn compiled_knowledge_backend() -> &'static str {
+    "neumann"
+}
+
 // ── Core datum type ───────────────────────────────────────────────────────────
 
 /// Canonical b00t datum — portable across raglite and irontology backends

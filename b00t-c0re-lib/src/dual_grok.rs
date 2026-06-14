@@ -1,18 +1,19 @@
 //! Dual-backend grok client — fan-out across raglite + irontology
 //!
 //! # Default behavior
-//! `GrokBackend::Both` fans out `tokio::join!` to raglite AND irontology.
+//! `GrokBackend::Both` fans out to raglite, irontology, and codebase-memory.
 //! Each backend can fail independently — partial results surfaced with warnings.
 //! This makes grok resilient: if raglite Python subprocess is unavailable,
 //! irontology still serves; vice versa.
 //!
 //! # Backend selection
 //! CLI flag `--rag` maps to `GrokBackend`:
-//!   absent            → `Both` (default — fan-out)
-//!   `--rag`           → `Both` (backward compat shorthand)
-//!   `--rag=raglite`   → `Raglite`
-//!   `--rag=irontology`→ `Irontology`
-//!   `--rag=both`      → `Both`
+//!   absent                  → `Both` (default — fan-out)
+//!   `--rag`                 → `Both` (backward compat shorthand)
+//!   `--rag=raglite`         → `Raglite`
+//!   `--rag=irontology`      → `Irontology`
+//!   `--rag=codebase-memory` → `CodebaseMemory`
+//!   `--rag=both`            → `Both`
 //!
 //! 🤓 Legacy `--rag=raglight` (old spelling) still maps to Raglite for compat
 
@@ -22,6 +23,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 
 use crate::{
+    codebase_memory::CodebaseMemoryClient,
     irontology_bridge::IrontologyBridgeClient,
     rag::{DocumentSource, LoaderType, RagLightConfig, RagLightManager},
 };
@@ -34,7 +36,9 @@ pub enum GrokBackend {
     Raglite,
     /// Irontology NeumannStore only
     Irontology,
-    /// Fan-out to both (default)
+    /// codebase-memory-mcp knowledge graph only
+    CodebaseMemory,
+    /// Fan-out to all query backends (default)
     Both,
 }
 
@@ -47,8 +51,11 @@ impl GrokBackend {
                 Ok(Self::Raglite)
             }
             Some("irontology") | Some("iron") => Ok(Self::Irontology),
+            Some("codebase-memory") | Some("codebase_memory") | Some("codebase") | Some("cb") => {
+                Ok(Self::CodebaseMemory)
+            }
             Some(other) => Err(anyhow::anyhow!(
-                "Unknown --rag backend '{}'. Valid: raglite, irontology, both",
+                "Unknown --rag backend '{}'. Valid: raglite, irontology, codebase-memory, both",
                 other
             )),
         }
@@ -58,7 +65,8 @@ impl GrokBackend {
         match self {
             Self::Raglite => "RAGLight",
             Self::Irontology => "Irontology",
-            Self::Both => "RAGLight+Irontology",
+            Self::CodebaseMemory => "CodebaseMemory",
+            Self::Both => "RAGLight+Irontology+CodebaseMemory",
         }
     }
 }
@@ -86,6 +94,7 @@ pub struct DualQueryResult {
     pub items: Vec<DualQueryItem>,
     pub raglite_ok: bool,
     pub irontology_ok: bool,
+    pub codebase_memory_ok: bool,
     pub warnings: Vec<String>,
     pub control_events: Vec<ControlCodeEvent>,
 }
@@ -408,6 +417,7 @@ impl DualGrokClient {
         let mut warnings: Vec<String> = Vec::new();
         let mut raglite_ok = false;
         let mut irontology_ok = false;
+        let mut codebase_memory_ok = false;
         let max = limit.unwrap_or(10);
 
         // ── Raglite query ───────────────────────────────────────────────────
@@ -456,6 +466,37 @@ impl DualGrokClient {
             }
         }
 
+        // ── codebase-memory query ───────────────────────────────────────────
+        if matches!(backend, GrokBackend::CodebaseMemory | GrokBackend::Both) {
+            let binary_path = std::env::var("B00T_CODEBASE_MEMORY_MCP_BIN")
+                .ok()
+                .map(std::path::PathBuf::from);
+            let workdir = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
+            let project = std::env::var("B00T_CODEBASE_MEMORY_PROJECT")
+                .unwrap_or_else(|_| default_codebase_memory_project(&workdir));
+            let mut cbm = CodebaseMemoryClient::new(&workdir, binary_path);
+
+            match cbm.search(query_str, &project).await {
+                Ok(response) => {
+                    codebase_memory_ok = true;
+                    for item in response.results {
+                        items.push(DualQueryItem {
+                            backend: "codebase-memory".to_string(),
+                            content: if item.content_snippet.is_empty() {
+                                item.name
+                            } else {
+                                item.content_snippet
+                            },
+                            topic: project.clone(),
+                            tags: vec![item.file_path],
+                            score: 1.0,
+                        });
+                    }
+                }
+                Err(e) => warnings.push(format!("CodebaseMemory query: {}", e)),
+            }
+        }
+
         // Deduplicate by content (exact duplication from both backends).
         // 🤓 dedup_by only removes *consecutive* equal elements; must sort by
         //    content first, dedup, then re-sort by score so cross-backend
@@ -494,6 +535,7 @@ impl DualGrokClient {
             items,
             raglite_ok,
             irontology_ok,
+            codebase_memory_ok,
             warnings,
             control_events,
         })
@@ -549,7 +591,20 @@ fn sanitize_topic(input: &str) -> String {
         .map(|c| if c.is_ascii_alphanumeric() { c } else { '_' })
         .collect();
     let trimmed = s.trim_matches('_');
-    if trimmed.is_empty() { "topic".to_string() } else { trimmed.to_string() }
+    if trimmed.is_empty() {
+        "topic".to_string()
+    } else {
+        trimmed.to_string()
+    }
+}
+
+fn default_codebase_memory_project(workdir: &std::path::Path) -> String {
+    let path = workdir.to_string_lossy();
+    let mapped: String = path
+        .chars()
+        .map(|c| if c.is_ascii_alphanumeric() { c } else { '-' })
+        .collect();
+    mapped.trim_matches('-').to_string()
 }
 
 fn stable_log_ref(source: &str, warning: &str) -> String {
@@ -559,7 +614,12 @@ fn stable_log_ref(source: &str, warning: &str) -> String {
     const FNV_PRIME: u64 = 1_099_511_628_211;
 
     let mut h = FNV_OFFSET;
-    for &b in source.as_bytes().iter().chain(b":").chain(warning.as_bytes()) {
+    for &b in source
+        .as_bytes()
+        .iter()
+        .chain(b":")
+        .chain(warning.as_bytes())
+    {
         h ^= b as u64;
         h = h.wrapping_mul(FNV_PRIME);
     }
@@ -604,8 +664,24 @@ mod tests {
     }
 
     #[test]
+    fn test_backend_from_flag_codebase_memory() {
+        for s in &["codebase-memory", "codebase_memory", "codebase", "cb"] {
+            assert_eq!(
+                GrokBackend::from_flag(Some(s)).unwrap(),
+                GrokBackend::CodebaseMemory
+            );
+        }
+    }
+
+    #[test]
     fn test_backend_from_flag_invalid() {
         assert!(GrokBackend::from_flag(Some("qdrant")).is_err());
+    }
+
+    #[test]
+    fn test_default_codebase_memory_project_maps_absolute_path() {
+        let project = default_codebase_memory_project(std::path::Path::new("/home/brianh/.b00t"));
+        assert_eq!(project, "home-brianh--b00t");
     }
 
     #[test]

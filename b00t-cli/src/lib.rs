@@ -10,12 +10,48 @@ pub mod ansi {
         use std::io::IsTerminal;
         std::io::stdout().is_terminal()
     }
-    pub fn green(s: &str) -> String { if enabled() { format!("\x1b[32m{}\x1b[0m", s) } else { s.to_string() } }
-    pub fn yellow(s: &str) -> String { if enabled() { format!("\x1b[33m{}\x1b[0m", s) } else { s.to_string() } }
-    pub fn red(s: &str) -> String { if enabled() { format!("\x1b[31m{}\x1b[0m", s) } else { s.to_string() } }
-    pub fn cyan(s: &str) -> String { if enabled() { format!("\x1b[36m{}\x1b[0m", s) } else { s.to_string() } }
-    pub fn dim(s: &str) -> String { if enabled() { format!("\x1b[2m{}\x1b[0m", s) } else { s.to_string() } }
-    pub fn bold(s: &str) -> String { if enabled() { format!("\x1b[1m{}\x1b[0m", s) } else { s.to_string() } }
+    pub fn green(s: &str) -> String {
+        if enabled() {
+            format!("\x1b[32m{}\x1b[0m", s)
+        } else {
+            s.to_string()
+        }
+    }
+    pub fn yellow(s: &str) -> String {
+        if enabled() {
+            format!("\x1b[33m{}\x1b[0m", s)
+        } else {
+            s.to_string()
+        }
+    }
+    pub fn red(s: &str) -> String {
+        if enabled() {
+            format!("\x1b[31m{}\x1b[0m", s)
+        } else {
+            s.to_string()
+        }
+    }
+    pub fn cyan(s: &str) -> String {
+        if enabled() {
+            format!("\x1b[36m{}\x1b[0m", s)
+        } else {
+            s.to_string()
+        }
+    }
+    pub fn dim(s: &str) -> String {
+        if enabled() {
+            format!("\x1b[2m{}\x1b[0m", s)
+        } else {
+            s.to_string()
+        }
+    }
+    pub fn bold(s: &str) -> String {
+        if enabled() {
+            format!("\x1b[1m{}\x1b[0m", s)
+        } else {
+            s.to_string()
+        }
+    }
 }
 
 /// Exit codes for b00t-cli — used by main.rs dispatch.
@@ -44,7 +80,6 @@ use serde::{Deserialize, Deserializer, Serialize};
 pub mod agentic_role;
 pub mod ansible;
 pub mod blessing;
-pub mod datum_schema;
 pub mod bootstrap;
 pub mod budget_controller;
 pub mod cloud_sync;
@@ -64,6 +99,7 @@ pub mod datum_justfile;
 pub mod datum_k8s;
 pub mod datum_mcp;
 pub mod datum_repo;
+pub mod datum_schema;
 pub mod datum_skill;
 pub mod datum_stack;
 pub mod datum_utils;
@@ -385,8 +421,293 @@ pub struct GateSpec {
     /// Rhai expression to evaluate; must return true for gate to pass
     /// Available vars: name, datum_type, path
     pub rhai: Option<String>,
+    /// Knowledge backend that must match the compiled b00t-c0re-lib backend
+    pub knowledge_backend: Option<String>,
     /// Freeform description shown when gate fails
     pub hint: Option<String>,
+}
+
+/// Result of evaluating a single gate precondition.
+#[derive(Debug, Clone, PartialEq)]
+pub struct GateResult {
+    pub passed: bool,
+    pub reason: String,
+}
+
+/// Evaluate all gates for a datum. Returns a Vec of GateResults, one per gate.
+/// If any gate fails, the datum should be skipped.
+pub fn evaluate_gates(gates: &[GateSpec], path: &str) -> Vec<GateResult> {
+    let mut results = Vec::new();
+    for gate in gates {
+        let mut passed = true;
+        let mut reasons = Vec::new();
+
+        if let Some(ref cmd) = gate.command {
+            if !check_command_available(cmd) {
+                passed = false;
+                reasons.push(format!("command '{}' not found on PATH", cmd));
+            }
+        }
+
+        if let Some(ref file) = gate.file {
+            let expanded = shellexpand::tilde(file).to_string();
+            let exists = if std::path::Path::new(&expanded).is_absolute() {
+                std::path::Path::new(&expanded).exists()
+            } else {
+                let base = {
+                    let p = std::path::Path::new(path);
+                    if p.is_dir() {
+                        p.to_path_buf()
+                    } else {
+                        p.parent()
+                            .map(|q| q.to_path_buf())
+                            .unwrap_or_else(|| std::path::PathBuf::from("."))
+                    }
+                };
+                base.join(&expanded).exists() || std::path::Path::new(&expanded).exists()
+            };
+            if !exists {
+                passed = false;
+                reasons.push(format!("file '{}' does not exist", file));
+            }
+        }
+
+        if let Some(ref env_var) = gate.env {
+            let direct = std::env::var(env_var);
+            let env_ok = direct.is_ok() && !direct.unwrap_or_default().is_empty();
+            if !env_ok {
+                let ws = std::env::var("WORKSPACE_ROOT")
+                    .or_else(|_| std::env::var("HOME"))
+                    .unwrap_or_default();
+                let env_path = std::path::Path::new(&ws).join(".env");
+                let env_file_ok = if env_path.exists() {
+                    if let Ok(content) = std::fs::read_to_string(&env_path) {
+                        let prefix = format!("{}=", env_var);
+                        content.lines().any(|line| {
+                            let trimmed = line.trim();
+                            trimmed.starts_with(&prefix)
+                                && !trimmed[prefix.len()..].trim().is_empty()
+                                && !trimmed[prefix.len()..].trim().starts_with('#')
+                        })
+                    } else {
+                        false
+                    }
+                } else {
+                    false
+                };
+                if !env_file_ok {
+                    passed = false;
+                    reasons.push(format!("env var '{}' not set", env_var));
+                }
+            }
+        }
+
+        if let Some(ref rhai_expr) = gate.rhai {
+            if !evaluate_rhai_gate(rhai_expr) {
+                passed = false;
+                reasons.push(format!("rhai gate '{}' returned false", rhai_expr));
+            }
+        }
+
+        if let Some(ref backend) = gate.knowledge_backend {
+            if b00t_c0re_lib::compiled_knowledge_backend() != backend {
+                passed = false;
+                reasons.push(format!(
+                    "knowledge backend '{}' does not match compiled backend '{}'",
+                    backend,
+                    b00t_c0re_lib::compiled_knowledge_backend()
+                ));
+            }
+        }
+
+        let reason = if reasons.is_empty() {
+            gate.hint
+                .clone()
+                .unwrap_or_else(|| "gate passed".to_string())
+        } else {
+            gate.hint
+                .clone()
+                .map(|h| format!("{}: {}", h, reasons.join("; ")))
+                .unwrap_or_else(|| reasons.join("; "))
+        };
+
+        results.push(GateResult { passed, reason });
+    }
+    results
+}
+
+fn evaluate_rhai_gate(expr: &str) -> bool {
+    use rhai::Engine;
+    let engine = Engine::new();
+    engine.eval::<bool>(expr).unwrap_or(false)
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct GateReport {
+    pub datum: String,
+    pub kind: String,
+    pub spec: String,
+    pub origin: String,
+    pub hint: Option<String>,
+    pub status: &'static str,
+}
+
+fn expand_tilde_path(spec: &str) -> std::path::PathBuf {
+    if spec.starts_with('~') {
+        let home = std::env::var("HOME").unwrap_or_default();
+        std::path::Path::new(&home).join(spec.strip_prefix("~/").unwrap_or(spec))
+    } else {
+        std::path::Path::new(spec).to_path_buf()
+    }
+}
+
+pub fn eval_gate_status(kind: &str, spec: &str) -> &'static str {
+    match kind {
+        "command" => {
+            if check_command_available(spec) {
+                "pass"
+            } else {
+                "fail"
+            }
+        }
+        "env" => {
+            if std::env::var(spec).ok().map_or(false, |v| !v.is_empty()) {
+                return "pass";
+            }
+            let ws = std::env::var("WORKSPACE_ROOT")
+                .or_else(|_| std::env::var("HOME"))
+                .unwrap_or_default();
+            let env_path = std::path::Path::new(&ws).join(".env");
+            if env_path.exists() {
+                if let Ok(content) = std::fs::read_to_string(env_path) {
+                    let prefix = format!("{}=", spec);
+                    for line in content.lines() {
+                        let trimmed = line.trim();
+                        if let Some(rest) = trimmed.strip_prefix(prefix.as_str()) {
+                            let val = rest.trim();
+                            if !val.is_empty() && !val.starts_with('#') {
+                                return "pass";
+                            }
+                        }
+                    }
+                }
+            }
+            "fail"
+        }
+        "file" => {
+            if expand_tilde_path(spec).exists() {
+                "pass"
+            } else {
+                "fail"
+            }
+        }
+        "knowledge_backend" => {
+            if b00t_c0re_lib::compiled_knowledge_backend() == spec {
+                "pass"
+            } else {
+                "fail"
+            }
+        }
+        "rhai" => "unknown",
+        _ => "unknown",
+    }
+}
+
+pub fn list_gates(path: &str, search: Option<&str>) -> Result<Vec<GateReport>> {
+    let expanded = get_expanded_path(path)?;
+    let mut gates = Vec::new();
+
+    for entry in std::fs::read_dir(&expanded)
+        .map_err(|e| anyhow::anyhow!("Error reading {}: {}", expanded.display(), e))?
+    {
+        let entry = entry?;
+        let fpath = entry.path();
+        let fname = match fpath.file_name().and_then(|s| s.to_str()) {
+            Some(n) => n.to_string(),
+            None => continue,
+        };
+
+        let is_mcp_datum = fname.ends_with(".mcp.toml")
+            || fname.ends_with(".mcp.tomllm")
+            || fname.ends_with(".mcp.tomllmd");
+        if !is_mcp_datum {
+            continue;
+        }
+
+        let name = fname
+            .trim_end_matches(".tomllmd")
+            .trim_end_matches(".tomllm")
+            .trim_end_matches(".toml")
+            .trim_end_matches(".mcp")
+            .to_string();
+        if name.is_empty() {
+            continue;
+        }
+
+        let content = std::fs::read_to_string(&fpath)?;
+        let config: Result<UnifiedConfig, _> = toml::from_str(&content);
+        let datum = match config {
+            Ok(c) => c.b00t,
+            Err(_) => continue,
+        };
+
+        if let Some(q) = search {
+            if !name.to_lowercase().contains(&q.to_lowercase())
+                && !datum.hint.to_lowercase().contains(&q.to_lowercase())
+            {
+                continue;
+            }
+        }
+
+        let mut push_gate = |kind: &str, spec: &str, origin: &str, hint: Option<String>| {
+            gates.push(GateReport {
+                datum: name.clone(),
+                kind: kind.to_string(),
+                spec: spec.to_string(),
+                origin: origin.to_string(),
+                hint,
+                status: eval_gate_status(kind, spec),
+            });
+        };
+
+        if let Some(explicit) = &datum.gate {
+            for g in explicit {
+                if let Some(cmd) = &g.command {
+                    push_gate("command", cmd, "explicit", g.hint.clone());
+                }
+                if let Some(f) = &g.file {
+                    push_gate("file", f, "explicit", g.hint.clone());
+                }
+                if let Some(e) = &g.env {
+                    push_gate("env", e, "explicit", g.hint.clone());
+                }
+                if let Some(r) = &g.rhai {
+                    push_gate("rhai", r, "explicit", g.hint.clone());
+                }
+                if let Some(backend) = &g.knowledge_backend {
+                    push_gate("knowledge_backend", backend, "explicit", g.hint.clone());
+                }
+            }
+        }
+
+        if let Some(req) = &datum.require {
+            for r in req {
+                if r != "internet" {
+                    push_gate("command", r, "auto:requires", None);
+                }
+            }
+        }
+
+        if let Some(env_map) = &datum.env {
+            for (k, _) in env_map {
+                if !k.starts_with("LOG_") && !k.starts_with("FAST") {
+                    push_gate("env", k, "auto:env", None);
+                }
+            }
+        }
+    }
+
+    Ok(gates)
 }
 
 /// Sandbox capabilities declared by a justfile datum.
@@ -748,6 +1069,40 @@ fn create_mcp_datum_from_json(
                 arr.iter()
                     .filter_map(|v| v.as_str())
                     .map(|s| s.to_string())
+                    .collect()
+            }),
+        gate: server_config
+            .get("gate")
+            .and_then(|v| v.as_array())
+            .map(|arr| {
+                arr.iter()
+                    .filter_map(|g| {
+                        let cmd = g.get("command").and_then(|v| v.as_str());
+                        let file = g.get("file").and_then(|v| v.as_str());
+                        let env = g.get("env").and_then(|v| v.as_str());
+                        let rhai = g.get("rhai").and_then(|v| v.as_str());
+                        let knowledge_backend = g.get("knowledge_backend").and_then(|v| v.as_str());
+                        let hint = g
+                            .get("hint")
+                            .and_then(|v| v.as_str())
+                            .map(|s| s.to_string());
+                        if cmd.is_none()
+                            && file.is_none()
+                            && env.is_none()
+                            && rhai.is_none()
+                            && knowledge_backend.is_none()
+                        {
+                            return None;
+                        }
+                        Some(GateSpec {
+                            command: cmd.map(|s| s.to_string()),
+                            file: file.map(|s| s.to_string()),
+                            env: env.map(|s| s.to_string()),
+                            rhai: rhai.map(|s| s.to_string()),
+                            knowledge_backend: knowledge_backend.map(|s| s.to_string()),
+                            hint,
+                        })
+                    })
                     .collect()
             }),
         // Convert legacy command/args to new multi-method format
@@ -1123,8 +1478,8 @@ pub fn get_mcp_toml_files(path: &str) -> Result<Vec<String>> {
 
 pub fn mcp_list(path: &str, json_output: bool, filter: McpListFilter) -> Result<()> {
     use anyhow::Context;
-    use std::sync::atomic::{AtomicBool, Ordering};
     use std::sync::Arc;
+    use std::sync::atomic::{AtomicBool, Ordering};
 
     let mcp_files = get_mcp_toml_files(path)?;
     let total_count = mcp_files.len();
@@ -1205,7 +1560,9 @@ pub fn mcp_list(path: &str, json_output: bool, filter: McpListFilter) -> Result<
                 let is_running = command
                     .as_deref()
                     .and_then(|c| {
-                        if c == "HTTP" { return Some(false); }
+                        if c == "HTTP" {
+                            return Some(false);
+                        }
                         let cname = std::path::Path::new(c)
                             .file_stem()
                             .and_then(|s| s.to_str())
@@ -1249,7 +1606,8 @@ pub fn mcp_list(path: &str, json_output: bool, filter: McpListFilter) -> Result<
                         } else if let Some(methods) = &mcp.stdio {
                             methods.first().map(|m| {
                                 let cmd = m.get("command").and_then(|v| v.as_str()).unwrap_or(cmd);
-                                let args: Vec<&str> = m.get("args")
+                                let args: Vec<&str> = m
+                                    .get("args")
                                     .and_then(|v| v.as_array())
                                     .map(|a| a.iter().filter_map(|v| v.as_str()).collect())
                                     .unwrap_or_default();
@@ -1266,13 +1624,17 @@ pub fn mcp_list(path: &str, json_output: bool, filter: McpListFilter) -> Result<
                 };
 
                 // Determine transport type
-                let transport = datum.mcp.as_ref().map(|m| {
-                    if m.httpstream.is_some() {
-                        "httpstream"
-                    } else {
-                        "stdio"
-                    }
-                }).map(|s| s.to_string());
+                let transport = datum
+                    .mcp
+                    .as_ref()
+                    .map(|m| {
+                        if m.httpstream.is_some() {
+                            "httpstream"
+                        } else {
+                            "stdio"
+                        }
+                    })
+                    .map(|s| s.to_string());
 
                 let item = McpListItem {
                     name: server_name.clone(),
@@ -1344,9 +1706,8 @@ pub fn mcp_list(path: &str, json_output: bool, filter: McpListFilter) -> Result<
         || filter.is_running.is_some()
         || filter.is_suspended.is_some();
 
-    let truncated = !filter.bypass_threshold
-        && !has_active_filter
-        && mcp_items.len() > threshold as usize;
+    let truncated =
+        !filter.bypass_threshold && !has_active_filter && mcp_items.len() > threshold as usize;
 
     if truncated {
         // Show filtered items that match the threshold guard (application-role aware)
@@ -1369,7 +1730,12 @@ pub fn mcp_list(path: &str, json_output: bool, filter: McpListFilter) -> Result<
                     })
                     .collect();
                 if !matching.is_empty() {
-                    eprintln!("🎯 {role} role matched {count}/{total} MCP servers", role = role, count = matching.len(), total = total_count);
+                    eprintln!(
+                        "🎯 {role} role matched {count}/{total} MCP servers",
+                        role = role,
+                        count = matching.len(),
+                        total = total_count
+                    );
                 }
             }
         }
@@ -1406,7 +1772,10 @@ pub fn mcp_list(path: &str, json_output: bool, filter: McpListFilter) -> Result<
                 crate::ansi::yellow("⚠️"),
                 crate::ansi::bold(&total_count.to_string()),
             );
-            println!("   {}  Try: b00t-cli mcp list --all", crate::ansi::dim("💡"));
+            println!(
+                "   {}  Try: b00t-cli mcp list --all",
+                crate::ansi::dim("💡")
+            );
         } else {
             if truncated {
                 println!(
@@ -1416,7 +1785,10 @@ pub fn mcp_list(path: &str, json_output: bool, filter: McpListFilter) -> Result<
                     total = total_count,
                     threshold = threshold,
                 );
-                println!("   {}  Override: --max-threshold <N> or --all to bypass guard.", crate::ansi::dim("ℹ️"));
+                println!(
+                    "   {}  Override: --max-threshold <N> or --all to bypass guard.",
+                    crate::ansi::dim("ℹ️")
+                );
                 println!();
             }
             // count summary
@@ -1438,7 +1810,8 @@ pub fn mcp_list(path: &str, json_output: bool, filter: McpListFilter) -> Result<
                     crate::ansi::yellow(&suspended_count.to_string()),
                 );
             } else {
-                println!("{}  Available MCP servers in {}:  ({})",
+                println!(
+                    "{}  Available MCP servers in {}:  ({})",
                     crate::ansi::bold("📋"),
                     crate::ansi::cyan(&expanded_path.display().to_string()),
                     crate::ansi::bold(&format!("{} total", total_count)),
@@ -1465,7 +1838,10 @@ pub fn mcp_list(path: &str, json_output: bool, filter: McpListFilter) -> Result<
                             println!("   args: {}", args.join(" "));
                         }
                         if item.is_suspended {
-                            println!("   ⏸️  SUSPENDED — enable with: b00t-cli mcp register --restore {}", item.name);
+                            println!(
+                                "   ⏸️  SUSPENDED — enable with: b00t-cli mcp register --restore {}",
+                                item.name
+                            );
                         }
                         if !item.is_running && !item.is_suspended && item.is_installed {
                             if let Some(hint) = &item.restart_hint {
@@ -1480,7 +1856,11 @@ pub fn mcp_list(path: &str, json_output: bool, filter: McpListFilter) -> Result<
             }
             if truncated {
                 println!();
-                println!("💡 {total} total servers, showing first {threshold}. Use --search, --installed, --is-running, or --all to see more.", total = total_count, threshold = threshold);
+                println!(
+                    "💡 {total} total servers, showing first {threshold}. Use --search, --installed, --is-running, or --all to see more.",
+                    total = total_count,
+                    threshold = threshold
+                );
             }
             // log view to telemetry (non-fatal)
             let _ = session_memory::SessionMemory::load().map(|mut m| {

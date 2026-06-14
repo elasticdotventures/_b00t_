@@ -5,7 +5,7 @@
 
 use anyhow::{Context, Result};
 use chrono::{DateTime, Utc};
-use jsonwebtoken::{decode, Algorithm, DecodingKey, Validation};
+use jsonwebtoken::{Algorithm, DecodingKey, Validation, decode};
 use serde::{Deserialize, Serialize};
 
 /// JWT Claims structure matching b00t-website NATS provisioner

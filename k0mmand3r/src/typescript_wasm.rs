@@ -2,8 +2,8 @@
 
 use crate::KmdLine;
 use std::convert::TryFrom;
-use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsValue;
+use wasm_bindgen::prelude::*;
 
 #[cfg(target_arch = "wasm32")]
 #[wasm_bindgen]

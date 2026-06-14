@@ -65,7 +65,11 @@ struct McpRequest {
 
 impl McpRequest {
     fn new(id: i64, method: &str, params: serde_json::Value) -> Self {
-        Self { id, method: method.to_string(), params }
+        Self {
+            id,
+            method: method.to_string(),
+            params,
+        }
     }
 
     fn to_json(&self) -> Result<String> {
@@ -154,7 +158,10 @@ impl CodebaseMemoryClient {
             .spawn()
             .map_err(|e| anyhow::anyhow!("Failed to spawn codebase-memory-mcp: {}", e))?;
 
-        let stdin = cmd.stdin.take().ok_or_else(|| anyhow::anyhow!("Failed to take stdin"))?;
+        let stdin = cmd
+            .stdin
+            .take()
+            .ok_or_else(|| anyhow::anyhow!("Failed to take stdin"))?;
         let stdout = cmd
             .stdout
             .take()
@@ -179,20 +186,25 @@ impl CodebaseMemoryClient {
     /// MCP initialize handshake
     async fn initialize(&mut self) -> Result<()> {
         let response = self
-            .send_request("initialize", serde_json::json!({
-                "protocolVersion": "2024-11-05",
-                "capabilities": {},
-                "clientInfo": {
-                    "name": "b00t-hermes",
-                    "version": "0.7.48"
-                }
-            }))
+            .send_request(
+                "initialize",
+                serde_json::json!({
+                    "protocolVersion": "2024-11-05",
+                    "capabilities": {},
+                    "clientInfo": {
+                        "name": "b00t-hermes",
+                        "version": "0.7.48"
+                    }
+                }),
+            )
             .await?;
 
         debug!("🧠 MCP initialize response: {:?}", response);
 
         // Send initialized notification (fire and forget)
-        let _ = self.send_notification("notifications/initialized", serde_json::json!({})).await;
+        let _ = self
+            .send_notification("notifications/initialized", serde_json::json!({}))
+            .await;
 
         Ok(())
     }
@@ -204,13 +216,16 @@ impl CodebaseMemoryClient {
         self.ensure_started().await?;
 
         let result = self
-            .send_request("tools/call", serde_json::json!({
-                "name": "search_graph",
-                "arguments": {
-                    "query": query,
-                    "project": project
-                }
-            }))
+            .send_request(
+                "tools/call",
+                serde_json::json!({
+                    "name": "search_graph",
+                    "arguments": {
+                        "query": query,
+                        "project": project
+                    }
+                }),
+            )
             .await?;
 
         // Parse the MCP tool result
@@ -222,8 +237,12 @@ impl CodebaseMemoryClient {
             .and_then(|t| t.as_str())
             .unwrap_or("{}");
 
-        let parsed: CbmSearchResponse = serde_json::from_str(content)
-            .unwrap_or_else(|_| CbmSearchResponse { results: vec![], total: 0, truncated: false });
+        let parsed: CbmSearchResponse =
+            serde_json::from_str(content).unwrap_or_else(|_| CbmSearchResponse {
+                results: vec![],
+                total: 0,
+                truncated: false,
+            });
 
         Ok(parsed)
     }
@@ -233,13 +252,16 @@ impl CodebaseMemoryClient {
         self.ensure_started().await?;
 
         let result = self
-            .send_request("tools/call", serde_json::json!({
-                "name": "index_project",
-                "arguments": {
-                    "path": project_path,
-                    "language": "all"
-                }
-            }))
+            .send_request(
+                "tools/call",
+                serde_json::json!({
+                    "name": "index_project",
+                    "arguments": {
+                        "path": project_path,
+                        "language": "all"
+                    }
+                }),
+            )
             .await?;
 
         let content = result
@@ -250,8 +272,8 @@ impl CodebaseMemoryClient {
             .and_then(|t| t.as_str())
             .unwrap_or("{}");
 
-        let parsed: CbmIngestResult = serde_json::from_str(content)
-            .unwrap_or_else(|_| CbmIngestResult {
+        let parsed: CbmIngestResult =
+            serde_json::from_str(content).unwrap_or_else(|_| CbmIngestResult {
                 project: project_path.to_string(),
                 files_indexed: 0,
                 duration_ms: 0,
@@ -264,28 +286,39 @@ impl CodebaseMemoryClient {
     pub async fn architecture(&mut self, project: &str) -> Result<String> {
         self.ensure_started().await?;
         let result = self
-            .send_request("tools/call", serde_json::json!({
-                "name": "get_architecture",
-                "arguments": {
-                    "project": project
-                }
-            }))
+            .send_request(
+                "tools/call",
+                serde_json::json!({
+                    "name": "get_architecture",
+                    "arguments": {
+                        "project": project
+                    }
+                }),
+            )
             .await?;
         Ok(self.extract_tool_text(&result))
     }
 
     /// Trace callers/callees for a function
-    pub async fn trace(&mut self, function: &str, project: &str, direction: &str) -> Result<String> {
+    pub async fn trace(
+        &mut self,
+        function: &str,
+        project: &str,
+        direction: &str,
+    ) -> Result<String> {
         self.ensure_started().await?;
         let result = self
-            .send_request("tools/call", serde_json::json!({
-                "name": "trace_path",
-                "arguments": {
-                    "function_name": function,
-                    "project": project,
-                    "direction": direction
-                }
-            }))
+            .send_request(
+                "tools/call",
+                serde_json::json!({
+                    "name": "trace_path",
+                    "arguments": {
+                        "function_name": function,
+                        "project": project,
+                        "direction": direction
+                    }
+                }),
+            )
             .await?;
         Ok(self.extract_tool_text(&result))
     }
@@ -299,7 +332,11 @@ impl CodebaseMemoryClient {
         Ok(())
     }
 
-    async fn send_request(&mut self, method: &str, params: serde_json::Value) -> Result<serde_json::Value> {
+    async fn send_request(
+        &mut self,
+        method: &str,
+        params: serde_json::Value,
+    ) -> Result<serde_json::Value> {
         self.request_id += 1;
         let req = McpRequest::new(self.request_id, method, params);
         let json = req.to_json()?;
@@ -323,17 +360,24 @@ impl CodebaseMemoryClient {
                 .await
                 .map_err(|e| anyhow::anyhow!("Failed to read MCP stdout: {}", e))?;
 
-            let response: serde_json::Value = serde_json::from_str(&line)
-                .map_err(|e| anyhow::anyhow!("Failed to parse MCP response: {} | raw: {}", e, line))?;
+            let response: serde_json::Value = serde_json::from_str(&line).map_err(|e| {
+                anyhow::anyhow!("Failed to parse MCP response: {} | raw: {}", e, line)
+            })?;
 
             // Check for error in response
             if let Some(error) = response.get("error") {
                 let code = error.get("code").and_then(|c| c.as_i64()).unwrap_or(-1);
-                let message = error.get("message").and_then(|m| m.as_str()).unwrap_or("unknown");
+                let message = error
+                    .get("message")
+                    .and_then(|m| m.as_str())
+                    .unwrap_or("unknown");
                 return Err(anyhow::anyhow!("MCP error [{}]: {}", code, message));
             }
 
-            Ok(response.get("result").cloned().unwrap_or(serde_json::Value::Null))
+            Ok(response
+                .get("result")
+                .cloned()
+                .unwrap_or(serde_json::Value::Null))
         } else {
             Err(anyhow::anyhow!("MCP stdout not available"))
         }
@@ -359,7 +403,9 @@ impl CodebaseMemoryClient {
         let mut reader = BufReader::new(stderr);
         let mut line = String::new();
         while let Ok(n) = reader.read_line(&mut line).await {
-            if n == 0 { break; }
+            if n == 0 {
+                break;
+            }
             debug!("🧠 codebase-memory-mcp stderr: {}", line.trim());
             line.clear();
         }

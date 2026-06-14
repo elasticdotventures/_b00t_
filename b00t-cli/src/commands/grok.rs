@@ -126,9 +126,12 @@ pub async fn handle_grok_command(command: GrokCommands) -> Result<()> {
         } => {
             let backend = GrokBackend::from_flag(rag.as_deref())?;
             match backend {
-                GrokBackend::Both | GrokBackend::Irontology | GrokBackend::Raglite | GrokBackend::CodebaseMemory => {
+                GrokBackend::Both | GrokBackend::Irontology | GrokBackend::Raglite => {
                     handle_dual_digest(&topic, &content, backend).await
                 }
+                GrokBackend::CodebaseMemory => Err(anyhow::anyhow!(
+                    "--rag=codebase-memory is query-only for now; use `b00t grok ask`"
+                )),
             }
         }
         GrokCommands::Ask {

@@ -83,10 +83,14 @@ this is just content, no verb!
 //use indexmap::IndexMap;
 
 pub mod emoji_registry;
-pub use emoji_registry::{EmojiEntry, EmojiRegistry, parse_entries_from_content, extract_schema_version};
+pub use emoji_registry::{
+    EmojiEntry, EmojiRegistry, extract_schema_version, parse_entries_from_content,
+};
 
 pub mod parser_stages;
-pub use parser_stages::{ParseStage, ParseState, StageAction, register_stage_guard, run_stage, clear_guards};
+pub use parser_stages::{
+    ParseStage, ParseState, StageAction, clear_guards, register_stage_guard, run_stage,
+};
 
 use decimal_rs::Decimal;
 use std::collections::HashMap;
@@ -94,6 +98,7 @@ use std::collections::HashMap;
 #[cfg(feature = "lang-python")]
 use pyo3::prelude::*;
 
+use winnow::Parser;
 use winnow::ascii::{alpha1, alphanumeric0, alphanumeric1, multispace0};
 use winnow::combinator::alt; // encapsulates if/then/else ladder pattern
 use winnow::combinator::opt; // basic if then else
@@ -104,7 +109,6 @@ use winnow::seq;
 use winnow::stream::Stream; // choose between two parsers; and we're happy with either being used.
 use winnow::token::one_of; // one_of(('0'..='9', 'a'..='f', 'A'..='F')).parse_next(input)
 use winnow::token::take_while;
-use winnow::Parser;
 
 use serde::Serialize;
 use serde_json::json;

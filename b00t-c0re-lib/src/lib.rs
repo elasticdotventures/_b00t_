@@ -31,13 +31,13 @@ pub mod agent_coordination;
 pub mod agent_manager;
 pub mod ai_client;
 pub mod b00t_config;
+pub mod codebase_memory;
 pub mod context;
 pub mod datum_ai_model;
 pub mod datum_lsp;
 pub mod datum_types;
 pub mod dual_grok;
 pub mod dual_install;
-pub mod codebase_memory;
 pub mod grok;
 pub mod irontology_bridge;
 pub mod knowledge;
@@ -72,7 +72,7 @@ pub use dual_grok::{
 pub use grok::{AskResult, ChunkResult, ChunkSummary, DigestResult, GrokClient, LearnResult};
 pub use irontology_bridge::{
     DatumNode, IntoIrontologyRecord, IntoRagDocument, IrontologyBridgeClient,
-    IrontologyIngestResult, IrontologyQueryItem,
+    IrontologyIngestResult, IrontologyQueryItem, compiled_knowledge_backend,
 };
 pub use knowledge::{DisplayOpts, KnowledgeSource};
 pub use lfmf::{Lesson, LfmfConfig, LfmfSystem};

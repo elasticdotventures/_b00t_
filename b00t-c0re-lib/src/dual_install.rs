@@ -31,20 +31,11 @@ pub enum InstallMethod {
     /// TOML datum install command (shell script)
     Cli { command: String },
     /// Docker-based install
-    Docker {
-        image: String,
-        args: Vec<String>,
-    },
+    Docker { image: String, args: Vec<String> },
     /// Package manager install
-    Package {
-        manager: String,
-        package: String,
-    },
+    Package { manager: String, package: String },
     /// Direct binary download
-    CurlBinary {
-        url: String,
-        dest: String,
-    },
+    CurlBinary { url: String, dest: String },
 }
 
 impl InstallMethod {
@@ -69,10 +60,7 @@ impl InstallMethod {
                     format!("Docker: {} {:?}", image, args)
                 }
             }
-            Self::Package {
-                manager,
-                package,
-            } => format!("{} install {}", manager, package),
+            Self::Package { manager, package } => format!("{} install {}", manager, package),
             Self::CurlBinary { url, dest } => {
                 format!("curl {} → {}", url, dest)
             }
@@ -84,12 +72,12 @@ impl InstallMethod {
         match self {
             Self::Package { package, .. } => package.clone(),
             Self::Docker { image, .. } => image.clone(),
-            Self::Cli { command } => {
-                command.split_whitespace().next().unwrap_or("cli").to_string()
-            }
-            Self::CurlBinary { url, .. } => {
-                url.rsplit('/').next().unwrap_or("binary").to_string()
-            }
+            Self::Cli { command } => command
+                .split_whitespace()
+                .next()
+                .unwrap_or("cli")
+                .to_string(),
+            Self::CurlBinary { url, .. } => url.rsplit('/').next().unwrap_or("binary").to_string(),
         }
     }
 }
@@ -244,7 +232,11 @@ impl DualInstallClient {
         let elapsed_ms = start.elapsed().as_millis() as u64;
 
         if success {
-            info!("install: {} succeeded in {}ms", method.display_name(), elapsed_ms);
+            info!(
+                "install: {} succeeded in {}ms",
+                method.display_name(),
+                elapsed_ms
+            );
             Ok(InstallResult::success(method.display_name(), elapsed_ms))
         } else {
             let msg = format!("{} failed", method.display_name());
@@ -371,7 +363,10 @@ impl DualInstallClient {
                 for a in args {
                     cmd.arg(a);
                 }
-                cmd.output().await.map(|o| o.status.success()).unwrap_or(false)
+                cmd.output()
+                    .await
+                    .map(|o| o.status.success())
+                    .unwrap_or(false)
             }
             InstallMethod::Package { manager, package } => {
                 let (cmd, args) = match manager.as_str() {
@@ -393,24 +388,22 @@ impl DualInstallClient {
                     .map(|o| o.status.success())
                     .unwrap_or(false)
             }
-            InstallMethod::CurlBinary { url, dest } => {
-                match reqwest::get(url).await {
-                    Ok(resp) => {
-                        if let Ok(bytes) = resp.bytes().await {
-                            std::fs::create_dir_all(
-                                std::path::Path::new(dest)
-                                    .parent()
-                                    .unwrap_or_else(|| std::path::Path::new("/tmp")),
-                            )
-                            .ok();
-                            std::fs::write(dest, &bytes).is_ok()
-                        } else {
-                            false
-                        }
+            InstallMethod::CurlBinary { url, dest } => match reqwest::get(url).await {
+                Ok(resp) => {
+                    if let Ok(bytes) = resp.bytes().await {
+                        std::fs::create_dir_all(
+                            std::path::Path::new(dest)
+                                .parent()
+                                .unwrap_or_else(|| std::path::Path::new("/tmp")),
+                        )
+                        .ok();
+                        std::fs::write(dest, &bytes).is_ok()
+                    } else {
+                        false
                     }
-                    Err(_) => false,
                 }
-            }
+                Err(_) => false,
+            },
         }
     }
 }
@@ -565,7 +558,9 @@ mod tests {
     #[test]
     fn test_install_method_serde_all_variants() {
         // Test Cli
-        let m = InstallMethod::Cli { command: "echo test".to_string() };
+        let m = InstallMethod::Cli {
+            command: "echo test".to_string(),
+        };
         let json = serde_json::to_string(&m).unwrap();
         let restored: InstallMethod = serde_json::from_str(&json).unwrap();
         assert_eq!(m, restored);
@@ -631,9 +626,7 @@ mod tests {
     #[tokio::test]
     async fn test_single_method_failure() {
         // Test failure path by using a mock executor that always fails
-        let client = DualInstallClient::test_with(Arc::new(|_m| {
-            tokio::spawn(async { false })
-        }));
+        let client = DualInstallClient::test_with(Arc::new(|_m| tokio::spawn(async { false })));
 
         let methods = vec![InstallMethod::Cli {
             command: "false".to_string(),
@@ -684,7 +677,9 @@ mod tests {
         });
 
         let methods = vec![
-            InstallMethod::Cli { command: "false".to_string() },
+            InstallMethod::Cli {
+                command: "false".to_string(),
+            },
             InstallMethod::Docker {
                 image: "notexist/broken".to_string(),
                 args: vec![],
@@ -723,7 +718,9 @@ mod tests {
         });
 
         let methods = vec![
-            InstallMethod::Cli { command: "false".to_string() },
+            InstallMethod::Cli {
+                command: "false".to_string(),
+            },
             InstallMethod::Docker {
                 image: "working/image".to_string(),
                 args: vec![],

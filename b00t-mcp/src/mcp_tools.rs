@@ -2,7 +2,7 @@ use crate::clap_reflection::{McpCommandRegistry, McpExecutor, McpReflection};
 use crate::impl_mcp_tool;
 use anyhow::Result;
 use clap::Parser;
-use serde_json::{json, Map, Value};
+use serde_json::{Map, Value, json};
 use std::collections::HashMap;
 // use b00t_c0re_lib::GrokClient;
 
@@ -214,11 +214,7 @@ pub struct SkillListCommand {
     pub json: bool,
 }
 
-impl_mcp_tool!(
-    SkillListCommand,
-    "b00t_skill_list",
-    ["skill", "list"]
-);
+impl_mcp_tool!(SkillListCommand, "b00t_skill_list", ["skill", "list"]);
 
 /// MCP command for sending messages to agents
 #[derive(Parser, Clone)]
@@ -1047,15 +1043,9 @@ impl McpReflection for SearchCommand {
 
 impl McpExecutor for SearchCommand {
     fn execute_mcp_call(params: &HashMap<String, Value>) -> Result<String> {
-        let query = params
-            .get("query")
-            .and_then(|v| v.as_str())
-            .unwrap_or("");
+        let query = params.get("query").and_then(|v| v.as_str()).unwrap_or("");
         let category = params.get("category").and_then(|v| v.as_str());
-        let limit = params
-            .get("limit")
-            .and_then(|v| v.as_u64())
-            .unwrap_or(10) as usize;
+        let limit = params.get("limit").and_then(|v| v.as_u64()).unwrap_or(10) as usize;
 
         let registry = FULL_REGISTRY
             .lock()
@@ -1077,12 +1067,7 @@ impl McpExecutor for SearchCommand {
                 }
                 if let Some(cat) = category {
                     // Category encoded as name prefix up to first underscore
-                    let cat_prefix = t
-                        .name
-                        .split('_')
-                        .next()
-                        .unwrap_or("")
-                        .to_lowercase();
+                    let cat_prefix = t.name.split('_').next().unwrap_or("").to_lowercase();
                     cat_prefix == cat.to_lowercase()
                 } else {
                     true
@@ -1157,10 +1142,7 @@ impl McpReflection for ExecuteCommand {
         properties.insert("params".to_string(), Value::Object(params_schema));
 
         schema.insert("properties".to_string(), Value::Object(properties));
-        schema.insert(
-            "required".to_string(),
-            json!(["command"]),
-        );
+        schema.insert("required".to_string(), json!(["command"]));
 
         schema
     }
@@ -1176,11 +1158,8 @@ impl McpExecutor for ExecuteCommand {
         // Parse the params value: may be a JSON object or a JSON string
         let inner_params: HashMap<String, Value> = match params.get("params") {
             Some(Value::Object(obj)) => obj.clone().into_iter().collect(),
-            Some(Value::String(s)) => {
-                serde_json::from_str(s).map_err(|e| {
-                    anyhow::anyhow!("Failed to parse params JSON string: {}", e)
-                })?
-            }
+            Some(Value::String(s)) => serde_json::from_str(s)
+                .map_err(|e| anyhow::anyhow!("Failed to parse params JSON string: {}", e))?,
             Some(other) => {
                 return Err(anyhow::anyhow!(
                     "params must be a JSON object or JSON string, got: {}",

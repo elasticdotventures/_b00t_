@@ -58,13 +58,20 @@ impl std::fmt::Display for CheckCategory {
 #[allow(dead_code)]
 fn project_path(path: &str) -> std::path::PathBuf {
     let p = std::path::Path::new(path);
-    if p.exists() { return p.to_path_buf(); }
+    if p.exists() {
+        return p.to_path_buf();
+    }
     if let Ok(manifest) = std::env::var("CARGO_MANIFEST_DIR") {
         for candidate in &[
             std::path::Path::new(&manifest).join("..").join(path),
-            std::path::Path::new(&manifest).join("..").join("..").join(path),
+            std::path::Path::new(&manifest)
+                .join("..")
+                .join("..")
+                .join(path),
         ] {
-            if candidate.exists() { return candidate.to_path_buf(); }
+            if candidate.exists() {
+                return candidate.to_path_buf();
+            }
         }
     }
     p.to_path_buf()
@@ -109,7 +116,9 @@ pub trait DesignHeuristicCheck: Send + Sync {
 // for slow integration checks.
 pub struct CandleBuildCheck;
 impl BuildIntegrityCheck for CandleBuildCheck {
-    fn name(&self) -> &str { "candle feature compiles" }
+    fn name(&self) -> &str {
+        "candle feature compiles"
+    }
     fn run(&self) -> CheckResult {
         let status = std::process::Command::new("cargo")
             .args(["check", "--features", "candle", "-p", "b00t-cli"])
@@ -118,16 +127,22 @@ impl BuildIntegrityCheck for CandleBuildCheck {
             .status();
         match status {
             Ok(s) if s.success() => CheckResult {
-                name: self.name().into(), category: CheckCategory::BuildIntegrity,
-                passed: true, detail: "cargo check --features candle succeeded".into(),
+                name: self.name().into(),
+                category: CheckCategory::BuildIntegrity,
+                passed: true,
+                detail: "cargo check --features candle succeeded".into(),
             },
             Ok(s) => CheckResult {
-                name: self.name().into(), category: CheckCategory::BuildIntegrity,
-                passed: false, detail: format!("exit code {:?}", s.code()),
+                name: self.name().into(),
+                category: CheckCategory::BuildIntegrity,
+                passed: false,
+                detail: format!("exit code {:?}", s.code()),
             },
             Err(e) => CheckResult {
-                name: self.name().into(), category: CheckCategory::BuildIntegrity,
-                passed: false, detail: format!("spawn failed: {e}"),
+                name: self.name().into(),
+                category: CheckCategory::BuildIntegrity,
+                passed: false,
+                detail: format!("spawn failed: {e}"),
             },
         }
     }
@@ -135,7 +150,9 @@ impl BuildIntegrityCheck for CandleBuildCheck {
 
 pub struct DefaultBuildCheck;
 impl BuildIntegrityCheck for DefaultBuildCheck {
-    fn name(&self) -> &str { "default build compiles" }
+    fn name(&self) -> &str {
+        "default build compiles"
+    }
     fn run(&self) -> CheckResult {
         let status = std::process::Command::new("cargo")
             .args(["check", "-p", "b00t-cli"])
@@ -144,16 +161,22 @@ impl BuildIntegrityCheck for DefaultBuildCheck {
             .status();
         match status {
             Ok(s) if s.success() => CheckResult {
-                name: self.name().into(), category: CheckCategory::BuildIntegrity,
-                passed: true, detail: "cargo check succeeded".into(),
+                name: self.name().into(),
+                category: CheckCategory::BuildIntegrity,
+                passed: true,
+                detail: "cargo check succeeded".into(),
             },
             Ok(s) => CheckResult {
-                name: self.name().into(), category: CheckCategory::BuildIntegrity,
-                passed: false, detail: format!("exit code {:?}", s.code()),
+                name: self.name().into(),
+                category: CheckCategory::BuildIntegrity,
+                passed: false,
+                detail: format!("exit code {:?}", s.code()),
             },
             Err(e) => CheckResult {
-                name: self.name().into(), category: CheckCategory::BuildIntegrity,
-                passed: false, detail: format!("spawn failed: {e}"),
+                name: self.name().into(),
+                category: CheckCategory::BuildIntegrity,
+                passed: false,
+                detail: format!("spawn failed: {e}"),
             },
         }
     }
@@ -161,18 +184,27 @@ impl BuildIntegrityCheck for DefaultBuildCheck {
 
 pub struct KnownRoleCheck;
 impl TypeInvariantCheck for KnownRoleCheck {
-    fn name(&self) -> &str { "KnownRole enum is exhaustive" }
+    fn name(&self) -> &str {
+        "KnownRole enum is exhaustive"
+    }
     fn run(&self) -> CheckResult {
         let path = if let Ok(manifest) = std::env::var("CARGO_MANIFEST_DIR") {
-            std::path::Path::new(&manifest).join("..").join("b00t-cli/src/agentic_role.rs")
+            std::path::Path::new(&manifest)
+                .join("..")
+                .join("b00t-cli/src/agentic_role.rs")
         } else {
             std::path::PathBuf::from("b00t-cli/src/agentic_role.rs")
         };
         let src = match std::fs::read_to_string(&path) {
-            Ok(s) => s, Err(e) => return CheckResult {
-                name: self.name().into(), category: CheckCategory::TypeInvariant,
-                passed: false, detail: format!("read agentic_role.rs: {e}"),
-            },
+            Ok(s) => s,
+            Err(e) => {
+                return CheckResult {
+                    name: self.name().into(),
+                    category: CheckCategory::TypeInvariant,
+                    passed: false,
+                    detail: format!("read agentic_role.rs: {e}"),
+                };
+            }
         };
         let has_worker = src.contains("Worker(RoleRef<Worker>)");
         let has_exec = src.contains("Executive(RoleRef<Executive>)");
@@ -180,62 +212,89 @@ impl TypeInvariantCheck for KnownRoleCheck {
         let has_provider = src.contains("AppProvider(RoleRef<AppProvider>)");
         let all = has_worker && has_exec && has_op && has_provider;
         CheckResult {
-            name: self.name().into(), category: CheckCategory::TypeInvariant,
+            name: self.name().into(),
+            category: CheckCategory::TypeInvariant,
             passed: all,
-            detail: if all { "4 variants present".into() }
-                    else { format!("worker={has_worker} exec={has_exec} op={has_op} provider={has_provider}") },
+            detail: if all {
+                "4 variants present".into()
+            } else {
+                format!("worker={has_worker} exec={has_exec} op={has_op} provider={has_provider}")
+            },
         }
     }
 }
 
 pub struct VendorDockerfileCheck;
 impl BoundaryCheck for VendorDockerfileCheck {
-    fn name(&self) -> &str { "vendor dockerfile exists" }
+    fn name(&self) -> &str {
+        "vendor dockerfile exists"
+    }
     fn run(&self) -> CheckResult {
         let path = if let Ok(manifest) = std::env::var("CARGO_MANIFEST_DIR") {
-            std::path::Path::new(&manifest).join("..").join("vendor/l3dg3rr/Dockerfile.ledgerr-mcp")
+            std::path::Path::new(&manifest)
+                .join("..")
+                .join("vendor/l3dg3rr/Dockerfile.ledgerr-mcp")
         } else {
             std::path::PathBuf::from("vendor/l3dg3rr/Dockerfile.ledgerr-mcp")
         };
         let exists = path.exists();
         CheckResult {
-            name: self.name().into(), category: CheckCategory::Boundary,
+            name: self.name().into(),
+            category: CheckCategory::Boundary,
             passed: exists,
-            detail: if exists { "Dockerfile.ledgerr-mcp present".into() }
-                    else { "vendor/l3dg3rr/Dockerfile.ledgerr-mcp not found".into() },
+            detail: if exists {
+                "Dockerfile.ledgerr-mcp present".into()
+            } else {
+                "vendor/l3dg3rr/Dockerfile.ledgerr-mcp not found".into()
+            },
         }
     }
 }
 
 pub struct DualRuntimeCheck;
 impl DeploymentCheck for DualRuntimeCheck {
-    fn name(&self) -> &str { "dual runtime datum" }
+    fn name(&self) -> &str {
+        "dual runtime datum"
+    }
     fn run(&self) -> CheckResult {
         let path = if let Ok(manifest) = std::env::var("CARGO_MANIFEST_DIR") {
-            std::path::Path::new(&manifest).join("..").join("_b00t_/ledgrrr.cli.toml")
+            std::path::Path::new(&manifest)
+                .join("..")
+                .join("_b00t_/ledgrrr.cli.toml")
         } else {
             std::path::PathBuf::from("_b00t_/ledgrrr.cli.toml")
         };
         let datum = match std::fs::read_to_string(&path) {
-            Ok(s) => s, Err(e) => return CheckResult {
-                name: self.name().into(), category: CheckCategory::Deployment,
-                passed: false, detail: format!("read datum: {e}"),
-            },
+            Ok(s) => s,
+            Err(e) => {
+                return CheckResult {
+                    name: self.name().into(),
+                    category: CheckCategory::Deployment,
+                    passed: false,
+                    detail: format!("read datum: {e}"),
+                };
+            }
         };
         let has_section = datum.contains("[b00t.providers.runtime]");
         let has_detect = datum.contains("detect_order");
         CheckResult {
-            name: self.name().into(), category: CheckCategory::Deployment,
+            name: self.name().into(),
+            category: CheckCategory::Deployment,
             passed: has_section && has_detect,
-            detail: if has_section && has_detect { "detect_order declared".into() }
-                    else { "missing [b00t.providers.runtime] or detect_order".into() },
+            detail: if has_section && has_detect {
+                "detect_order declared".into()
+            } else {
+                "missing [b00t.providers.runtime] or detect_order".into()
+            },
         }
     }
 }
 
 pub struct JustModulesCheck;
 impl DesignHeuristicCheck for JustModulesCheck {
-    fn name(&self) -> &str { "justfile modules exist" }
+    fn name(&self) -> &str {
+        "justfile modules exist"
+    }
     fn run(&self) -> CheckResult {
         // CARGO_MANIFEST_DIR/../justfile when running from tests
         let path = if let Ok(manifest) = std::env::var("CARGO_MANIFEST_DIR") {
@@ -244,17 +303,28 @@ impl DesignHeuristicCheck for JustModulesCheck {
             std::path::PathBuf::from("justfile")
         };
         let just = match std::fs::read_to_string(&path) {
-            Ok(s) => s, Err(e) => return CheckResult {
-                name: self.name().into(), category: CheckCategory::DesignHeuristic,
-                passed: false, detail: format!("read justfile: {e}"),
-            },
+            Ok(s) => s,
+            Err(e) => {
+                return CheckResult {
+                    name: self.name().into(),
+                    category: CheckCategory::DesignHeuristic,
+                    passed: false,
+                    detail: format!("read justfile: {e}"),
+                };
+            }
         };
-        let all = just.contains("mod b00t") && just.contains("mod ledgrrr") && just.contains("mod irontology");
+        let all = just.contains("mod b00t")
+            && just.contains("mod ledgrrr")
+            && just.contains("mod irontology");
         CheckResult {
-            name: self.name().into(), category: CheckCategory::DesignHeuristic,
+            name: self.name().into(),
+            category: CheckCategory::DesignHeuristic,
             passed: all,
-            detail: if all { "b00t, ledgrrr, irontology modules declared".into() }
-                    else { "missing one or more module declarations".into() },
+            detail: if all {
+                "b00t, ledgrrr, irontology modules declared".into()
+            } else {
+                "missing one or more module declarations".into()
+            },
         }
     }
 }
@@ -269,7 +339,9 @@ pub struct WowCheck {
 }
 
 impl WowCheck {
-    pub fn run(&self) -> CheckResult { (self.runner)() }
+    pub fn run(&self) -> CheckResult {
+        (self.runner)()
+    }
 }
 
 static WOW_REGISTRY: std::sync::OnceLock<std::sync::Mutex<Vec<WowCheck>>> =
@@ -341,7 +413,10 @@ pub fn register_design<C: DesignHeuristicCheck + 'static>(check: C) {
 
 /// Run all registered checks, return results.
 pub fn run_all() -> Vec<CheckResult> {
-    registry().lock().map(|reg| reg.iter().map(|c| c.run()).collect()).unwrap_or_default()
+    registry()
+        .lock()
+        .map(|reg| reg.iter().map(|c| c.run()).collect())
+        .unwrap_or_default()
 }
 
 /// Generate a spline report string from check results.
@@ -393,7 +468,11 @@ macro_rules! wow_test {
         fn $check_name() {
             let check_obj = $struct;
             let result = $trait::run(&check_obj);
-            assert!(result.passed, "WOW check '{}' [{}] failed: {}", result.name, result.category, result.detail);
+            assert!(
+                result.passed,
+                "WOW check '{}' [{}] failed: {}",
+                result.name, result.category, result.detail
+            );
         }
     };
 }
@@ -422,8 +501,28 @@ mod tests {
     }
 
     // Individual wow_test! invocations — each generates a #[test] + doc example
-    wow_test!(test_known_role, KnownRoleCheck, TypeInvariantCheck, "KnownRole enum is exhaustive");
-    wow_test!(test_vendor_dockerfile, VendorDockerfileCheck, BoundaryCheck, "vendor dockerfile exists");
-    wow_test!(test_dual_runtime, DualRuntimeCheck, DeploymentCheck, "dual runtime datum");
-    wow_test!(test_just_modules, JustModulesCheck, DesignHeuristicCheck, "justfile modules exist");
+    wow_test!(
+        test_known_role,
+        KnownRoleCheck,
+        TypeInvariantCheck,
+        "KnownRole enum is exhaustive"
+    );
+    wow_test!(
+        test_vendor_dockerfile,
+        VendorDockerfileCheck,
+        BoundaryCheck,
+        "vendor dockerfile exists"
+    );
+    wow_test!(
+        test_dual_runtime,
+        DualRuntimeCheck,
+        DeploymentCheck,
+        "dual runtime datum"
+    );
+    wow_test!(
+        test_just_modules,
+        JustModulesCheck,
+        DesignHeuristicCheck,
+        "justfile modules exist"
+    );
 }

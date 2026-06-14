@@ -237,9 +237,9 @@ impl KnownRole {
             n if n == Operator::NAME => {
                 Some(KnownRole::Operator(RoleRef::new(Operator::NAME).unwrap()))
             }
-            n if n == AppProvider::NAME => {
-                Some(KnownRole::AppProvider(RoleRef::new(AppProvider::NAME).unwrap()))
-            }
+            n if n == AppProvider::NAME => Some(KnownRole::AppProvider(
+                RoleRef::new(AppProvider::NAME).unwrap(),
+            )),
             _ => None,
         }
     }
@@ -310,7 +310,10 @@ mod tests {
         let role = resolve_role(None);
         assert_eq!(role.name(), "worker");
         assert_eq!(Worker::NAME, "worker");
-        assert_eq!(Worker::hint(), "Default hive worker — general-purpose executor with governance safety gates");
+        assert_eq!(
+            Worker::hint(),
+            "Default hive worker — general-purpose executor with governance safety gates"
+        );
     }
 
     #[test]
@@ -416,6 +419,9 @@ mod tests {
     #[test]
     fn test_known_role_display() {
         assert_eq!(format!("{}", resolve_role(None)), "worker");
-        assert_eq!(format!("{}", resolve_role(Some("executive".to_string()))), "executive");
+        assert_eq!(
+            format!("{}", resolve_role(Some("executive".to_string()))),
+            "executive"
+        );
     }
 }

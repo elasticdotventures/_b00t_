@@ -1,7 +1,7 @@
 //! Basic example of b00t chat usage.
 
 use b00t_chat::{ChatClient, ChatMessage};
-use tracing::{info, Level};
+use tracing::{Level, info};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
