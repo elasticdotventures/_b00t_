@@ -3,6 +3,10 @@ use chrono::{DateTime, Utc};
 use regex::Regex;
 use std::io::Write;
 use std::process;
+use std::collections::HashSet;
+use std::sync::OnceLock;
+use toml;
+use shellexpand;
 
 /// ANSI color helpers — auto-disable when stdout is not a terminal.
 pub mod ansi {
@@ -54,8 +58,33 @@ pub mod ansi {
     }
 }
 
-/// Exit codes for b00t-cli — used by main.rs dispatch.
-/// Scripts can inspect $? to distinguish error classes.
+/// Load incubating datum types from a runtime‑defined datum.
+/// The datum is expected at `$HOME/.b00t/incubating.tomllm` (or at the path
+/// defined by the `_B00T_Path` env var) with TOML shape:
+/// ```toml
+/// incubating = ["routing", "agent.cli", ...]
+/// ```
+/// Missing or malformed files yield an empty set.
+fn get_incubating_set() -> &'static HashSet<String> {
+    static SET: OnceLock<HashSet<String>> = OnceLock::new();
+    SET.get_or_init(|| {
+        let base_path = std::env::var("_B00T_Path")
+            .unwrap_or_else(|_| "~/.b00t/_b00t_".to_string());
+        let expanded = shellexpand::tilde(&base_path).to_string();
+        let file_path = std::path::Path::new(&expanded).join("incubating.tomllm");
+        if let Ok(content) = std::fs::read_to_string(&file_path) {
+            #[derive(serde::Deserialize)]
+            struct Config {
+                incubating: Vec<String>,
+            }
+            if let Ok(cfg) = toml::from_str::<Config>(&content) {
+                return cfg.incubating.into_iter().collect();
+            }
+        }
+        HashSet::new()
+    })
+}
+
 pub mod exit_code {
     /// Generic / unknown error
     pub const ERROR: i32 = 1;
@@ -454,6 +483,19 @@ fn is_known_content_tag(value: &str) -> bool {
     )
 }
 
+/// Handle datum types that are marked as *incubating*.
+///
+/// Currently these types are treated as untyped content‑tags, but the
+/// function provides a single place to add bespoke logic when a concrete
+/// implementation becomes available.
+fn handle_incubating_type(value: &str) -> Option<DatumType> {
+    // Placeholder – return None to keep existing behaviour.
+    // When a real implementation is added, replace this stub with the
+    // appropriate mapping or side‑effects.
+    let _ = value; // silence unused‑variable warning.
+    None
+}
+
 fn deserialize_datum_type<'de, D>(
     deserializer: D,
 ) -> std::result::Result<Option<DatumType>, D::Error>
@@ -464,12 +506,13 @@ where
     match raw {
         None => Ok(None),
         Some(value) => {
-            // Unknown strings (prd, okr, pattern, agent__cli, …) fall back to None.
-            // datum.type_tag captures the raw string for content-tag filtering.
-            let resolved = DatumType::from_type_token(&value);
+            // Try hard-coded types first, then incubating placeholder.
+            let resolved = DatumType::from_type_token(&value)
+                .or_else(|| handle_incubating_type(&value));
 
             if resolved.is_none()
                 && !is_known_content_tag(&value)
+                && !get_incubating_set().contains(&value)
                 && std::env::var("B00T_DATUM_WARN")
                     .map(|v| v != "0")
                     .unwrap_or(true)
@@ -482,7 +525,6 @@ where
                         eprintln!(
                             "⚠️  b00t: unknown datum type token '{value}' — not a typed datum or known content-tag; silence: B00T_DATUM_WARN=0"
                         );
-                        // also record in OTEL metrics (counts even when B00T_DATUM_WARN=0)
                         crate::otel::record(crate::otel::MetricEvent::DatumTypeUnknown {
                             type_str: value.clone(),
                         });
