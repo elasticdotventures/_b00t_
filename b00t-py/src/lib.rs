@@ -35,7 +35,7 @@ use b00t_cli::hive::{
     GuardContext, GuardPattern, HiveGuard, HiveGuardAction, check_guards as rust_check_guards,
 };
 use b00t_cli::model_manager::{self, ServeOptions};
-use b00t_cli::{get_expanded_path, mcp_list, mcp_output, McpListFilter};
+use b00t_cli::{McpListFilter, get_expanded_path, mcp_list, mcp_output};
 
 // Python exception for b00t errors
 create_exception!(b00t_py, B00tError, pyo3::exceptions::PyException);

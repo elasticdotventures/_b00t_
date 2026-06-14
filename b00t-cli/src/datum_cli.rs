@@ -1,9 +1,9 @@
 use crate::traits::*;
 use crate::{BootDatum, check_command_available, get_config};
 use anyhow::{Result, anyhow};
-use duct::cmd;
 use std::path::PathBuf;
-use std::time::Instant;
+use std::process::{Command, Stdio};
+use std::time::{Duration, Instant};
 
 pub struct CliDatum {
     pub datum: BootDatum,
@@ -24,10 +24,41 @@ impl TryFrom<(&str, &str)> for CliDatum {
     }
 }
 
+const VERSION_PROBE_TIMEOUT: Duration = Duration::from_secs(2);
+
+fn read_version_command(version_cmd: &str) -> Option<String> {
+    let mut child = Command::new("bash")
+        .arg("-c")
+        .arg(version_cmd)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .spawn()
+        .ok()?;
+    let start = Instant::now();
+
+    loop {
+        match child.try_wait() {
+            Ok(Some(status)) => {
+                let output = child.wait_with_output().ok()?;
+                return status
+                    .success()
+                    .then(|| String::from_utf8_lossy(&output.stdout).to_string());
+            }
+            Ok(None) if start.elapsed() >= VERSION_PROBE_TIMEOUT => {
+                let _ = child.kill();
+                let _ = child.wait();
+                return None;
+            }
+            Ok(None) => std::thread::sleep(Duration::from_millis(25)),
+            Err(_) => return None,
+        }
+    }
+}
+
 impl DatumChecker for CliDatum {
     fn is_installed(&self) -> bool {
         if let Some(version_cmd) = &self.datum.version {
-            cmd!("bash", "-c", version_cmd).read().is_ok()
+            read_version_command(version_cmd).is_some()
         } else {
             check_command_available(&self.datum.name)
         }
@@ -35,7 +66,7 @@ impl DatumChecker for CliDatum {
 
     fn current_version(&self) -> Option<String> {
         if let Some(version_cmd) = &self.datum.version {
-            if let Ok(output) = cmd!("bash", "-c", version_cmd).read() {
+            if let Some(output) = read_version_command(version_cmd) {
                 if let Some(regex) = &self.datum.version_regex {
                     if let Ok(re) = regex::Regex::new(regex) {
                         if let Some(caps) = re.captures(&output) {
@@ -226,6 +257,14 @@ mod tests {
         assert!(plan.command_line.starts_with("echo"));
         assert!(plan.command_line.contains("hello"));
     }
+    #[test]
+    fn version_probe_times_out() {
+        let start = Instant::now();
+        let output = read_version_command("sleep 5; echo should-not-print");
+        assert!(output.is_none());
+        assert!(start.elapsed() < Duration::from_secs(4));
+    }
+
     #[test]
     fn execute_captures_stdout() {
         let out = mkd("echo").execute(&["hello-b00t".to_string()]).unwrap();

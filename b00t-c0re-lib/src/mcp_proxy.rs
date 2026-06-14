@@ -8,9 +8,13 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 use std::collections::HashMap;
 use std::process::Stdio;
-use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
+use std::time::Duration;
+use tokio::io::{AsyncBufRead, AsyncBufReadExt, AsyncWrite, AsyncWriteExt, BufReader};
 use tokio::process::Command;
 use tracing::{debug, info};
+
+const MCP_PROTOCOL_VERSION: &str = "2024-11-05";
+const DEFAULT_MCP_REQUEST_TIMEOUT_MS: u64 = 120_000;
 
 /// Generic MCP tool definition
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -336,38 +340,52 @@ impl GenericMcpProxy {
 
         let mut child = cmd.spawn().context("Failed to start MCP server process")?;
 
-        let stdin = child
-            .stdin
-            .take()
-            .ok_or_else(|| anyhow::anyhow!("Failed to get stdin handle"))?;
-        let stdout = child
-            .stdout
-            .take()
-            .ok_or_else(|| anyhow::anyhow!("Failed to get stdout handle"))?;
+        let timeout_ms = server_config
+            .timeout_ms
+            .unwrap_or(DEFAULT_MCP_REQUEST_TIMEOUT_MS);
 
-        // Send request
-        let mut stdin_writer = stdin;
-        let request_str = serde_json::to_string(&request)?;
-        debug!("Sending MCP request: {}", request_str);
+        let result = tokio::time::timeout(Duration::from_millis(timeout_ms), async {
+            let stdin = child
+                .stdin
+                .take()
+                .ok_or_else(|| anyhow::anyhow!("Failed to get stdin handle"))?;
+            let stdout = child
+                .stdout
+                .take()
+                .ok_or_else(|| anyhow::anyhow!("Failed to get stdout handle"))?;
 
-        stdin_writer.write_all(request_str.as_bytes()).await?;
-        stdin_writer.write_all(b"\n").await?;
-        stdin_writer.shutdown().await?;
+            let mut stdin_writer = stdin;
+            let mut stdout_reader = BufReader::new(stdout);
 
-        // Read response
-        let mut stdout_reader = BufReader::new(stdout);
-        let mut response_line = String::new();
-        stdout_reader.read_line(&mut response_line).await?;
+            let initialize_request = build_initialize_request();
+            write_jsonrpc_line(&mut stdin_writer, &initialize_request).await?;
+            let initialize_response =
+                read_jsonrpc_response(&mut stdout_reader, initialize_request.get("id")).await?;
+            debug!("Received MCP initialize response: {}", initialize_response);
+            ensure_jsonrpc_success(&initialize_response, "initialize")?;
 
-        // Clean up process
+            let initialized_notification = serde_json::json!({
+                "jsonrpc": "2.0",
+                "method": "notifications/initialized",
+                "params": {}
+            });
+            write_jsonrpc_line(&mut stdin_writer, &initialized_notification).await?;
+
+            write_jsonrpc_line(&mut stdin_writer, &request).await?;
+            stdin_writer.shutdown().await?;
+
+            read_jsonrpc_response(&mut stdout_reader, request.get("id")).await
+        })
+        .await
+        .unwrap_or_else(|_| {
+            Err(anyhow::anyhow!(
+                "MCP server request timed out after {timeout_ms}ms"
+            ))
+        });
         let _ = child.kill().await;
 
-        debug!("Received MCP response: {}", response_line.trim());
-
-        // Parse JSON response
-        let response: Value = serde_json::from_str(response_line.trim())
-            .context("Failed to parse MCP response as JSON")?;
-
+        let response = result?;
+        debug!("Received MCP response: {}", response);
         Ok(response)
     }
 
@@ -444,6 +462,85 @@ impl GenericMcpProxy {
             Err(_) => false,
         }
     }
+}
+
+fn build_initialize_request() -> Value {
+    serde_json::json!({
+        "jsonrpc": "2.0",
+        "id": "initialize",
+        "method": "initialize",
+        "params": {
+            "protocolVersion": MCP_PROTOCOL_VERSION,
+            "capabilities": {},
+            "clientInfo": {
+                "name": "b00t-cli",
+                "version": env!("CARGO_PKG_VERSION")
+            }
+        }
+    })
+}
+
+async fn write_jsonrpc_line<W>(writer: &mut W, message: &Value) -> Result<()>
+where
+    W: AsyncWrite + Unpin,
+{
+    let message_str = serde_json::to_string(message)?;
+    debug!("Sending MCP message: {}", message_str);
+    writer.write_all(message_str.as_bytes()).await?;
+    writer.write_all(b"\n").await?;
+    writer.flush().await?;
+    Ok(())
+}
+
+async fn read_jsonrpc_response<R>(reader: &mut R, expected_id: Option<&Value>) -> Result<Value>
+where
+    R: AsyncBufRead + Unpin,
+{
+    loop {
+        let mut response_line = String::new();
+        let bytes_read = reader.read_line(&mut response_line).await?;
+        if bytes_read == 0 {
+            return Err(anyhow::anyhow!(
+                "MCP server closed stdout before JSON-RPC response"
+            ));
+        }
+
+        let trimmed = response_line.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+
+        debug!("Received MCP message: {}", trimmed);
+        let response: Value =
+            serde_json::from_str(trimmed).context("Failed to parse MCP response as JSON")?;
+
+        if response.get("method").is_some() && response.get("id").is_none() {
+            continue;
+        }
+
+        match expected_id {
+            Some(id) if response.get("id") == Some(id) => return Ok(response),
+            Some(_) => continue,
+            None => return Ok(response),
+        }
+    }
+}
+
+fn ensure_jsonrpc_success(response: &Value, operation: &str) -> Result<()> {
+    if let Some(error) = response.get("error") {
+        let message = error
+            .get("message")
+            .and_then(Value::as_str)
+            .unwrap_or("MCP JSON-RPC error");
+        let code = error
+            .get("code")
+            .map(Value::to_string)
+            .unwrap_or_else(|| "unknown".to_string());
+        return Err(anyhow::anyhow!(
+            "MCP {operation} failed with code {code}: {message}"
+        ));
+    }
+    Ok(())
 }
 
 impl Default for GenericMcpProxy {
@@ -553,5 +650,59 @@ mod tests {
 
         assert_eq!(request.tool, "rag-query");
         assert_eq!(request.request_id, Some("test-123".to_string()));
+    }
+
+    #[test]
+    fn test_initialize_request_shape() {
+        let request = build_initialize_request();
+
+        assert_eq!(request["jsonrpc"], "2.0");
+        assert_eq!(request["id"], "initialize");
+        assert_eq!(request["method"], "initialize");
+        assert_eq!(request["params"]["protocolVersion"], MCP_PROTOCOL_VERSION);
+        assert_eq!(request["params"]["clientInfo"]["name"], "b00t-cli");
+    }
+
+    #[test]
+    fn test_default_mcp_request_timeout_is_conservative() {
+        assert!(DEFAULT_MCP_REQUEST_TIMEOUT_MS >= 120_000);
+    }
+
+    #[tokio::test]
+    async fn test_read_jsonrpc_response_skips_notifications_and_matches_id() {
+        let input = concat!(
+            r#"{"jsonrpc":"2.0","method":"notifications/progress","params":{}}"#,
+            "\n",
+            r#"{"jsonrpc":"2.0","id":"other","result":{}}"#,
+            "\n",
+            r#"{"jsonrpc":"2.0","id":"target","result":{"ok":true}}"#,
+            "\n"
+        );
+        let mut reader = BufReader::new(input.as_bytes());
+        let expected_id = serde_json::json!("target");
+
+        let response = read_jsonrpc_response(&mut reader, Some(&expected_id))
+            .await
+            .expect("target response is present");
+
+        assert_eq!(response["id"], "target");
+        assert_eq!(response["result"]["ok"], true);
+    }
+
+    #[test]
+    fn test_ensure_jsonrpc_success_reports_error() {
+        let response = serde_json::json!({
+            "jsonrpc": "2.0",
+            "id": "initialize",
+            "error": {
+                "code": -32602,
+                "message": "unsupported protocol version"
+            }
+        });
+
+        let error = ensure_jsonrpc_success(&response, "initialize")
+            .expect_err("JSON-RPC error response must fail");
+
+        assert!(error.to_string().contains("unsupported protocol version"));
     }
 }

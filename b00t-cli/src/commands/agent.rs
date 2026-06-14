@@ -12,7 +12,7 @@ use b00t_c0re_lib::agent_coordination::{
 use b00t_c0re_lib::redis::{AgentStatus, RedisComms, RedisConfig};
 use clap::Parser;
 use std::collections::{BTreeMap, HashMap};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 /// Agent management and coordination commands
@@ -31,6 +31,15 @@ pub enum AgentCommands {
 
         #[arg(long, help = "Output in JSON format")]
         json: bool,
+    },
+
+    #[clap(about = "Show agent quota/status/infraction dashboard in TOON format")]
+    Dashboard {
+        #[arg(long, help = "Output in JSON format instead of TOON")]
+        json: bool,
+
+        #[arg(long, help = "Maximum rows to show", default_value_t = 20)]
+        limit: usize,
     },
 
     #[clap(about = "Send a direct message to an agent")]
@@ -236,6 +245,8 @@ pub async fn handle_agent_command(cmd: AgentCommands) -> Result<()> {
             json,
         } => handle_discover(role, crew, capabilities, json).await,
 
+        AgentCommands::Dashboard { json, limit } => handle_dashboard(json, limit),
+
         AgentCommands::Message {
             to_agent,
             subject,
@@ -323,6 +334,423 @@ pub async fn handle_agent_command(cmd: AgentCommands) -> Result<()> {
             project_root,
         } => handle_ralph(&tool, &task, max_iterations, project_root.as_deref()).await,
     }
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
+struct AgentDashboardRow {
+    agent: String,
+    kind: String,
+    role: String,
+    model: String,
+    status: String,
+    quota_daily: String,
+    used_today: u32,
+    remaining: String,
+    last_used: String,
+    infractions: u32,
+    score: i32,
+    evidence: String,
+}
+
+#[derive(Debug, Default, serde::Serialize)]
+struct AgentDashboardReport {
+    rows: Vec<AgentDashboardRow>,
+    global_infractions: u32,
+    malformed_agent_datums: u32,
+    malformed_exec_log_lines: u32,
+    malformed_guard_lines: u32,
+}
+
+#[derive(Debug, Clone)]
+struct AgentDatumSummary {
+    name: String,
+    kind: String,
+    role: String,
+    model: String,
+    socket: Option<String>,
+    quota_daily: Option<f64>,
+    skills_count: usize,
+}
+
+#[derive(Debug, Clone, Default)]
+struct AgentUsageStats {
+    used_today: u32,
+    last_used: Option<String>,
+}
+
+#[derive(Debug, Clone, Default)]
+struct GuardInfractionStats {
+    global_infractions: u32,
+    by_agent: BTreeMap<String, u32>,
+    malformed_lines: u32,
+}
+
+fn handle_dashboard(json: bool, limit: usize) -> Result<()> {
+    let report = build_agent_dashboard(limit)?;
+    if json {
+        println!("{}", serde_json::to_string_pretty(&report)?);
+    } else {
+        print_agent_dashboard_toon(&report);
+    }
+    Ok(())
+}
+
+fn build_agent_dashboard(limit: usize) -> Result<AgentDashboardReport> {
+    let agent_dir = resolve_agent_datum_dir()?;
+    let (agents, malformed_agent_datums) = load_agent_datum_summaries(&agent_dir);
+    let exec_log = home_b00t_path("exec-log.jsonl");
+    let guard_log = home_b00t_path("guard-violations.jsonl");
+    let (usage, malformed_exec_log_lines) = load_agent_usage_stats(&exec_log, &agents);
+    let guard_stats = load_guard_infraction_stats(&guard_log, &agents);
+
+    let today = chrono::Utc::now().date_naive().to_string();
+    let mut rows: Vec<AgentDashboardRow> = agents
+        .iter()
+        .map(|agent| {
+            let agent_usage = usage.get(&agent.name).cloned().unwrap_or_default();
+            let infractions = guard_stats.by_agent.get(&agent.name).copied().unwrap_or(0);
+            let quota_daily = agent
+                .quota_daily
+                .map(format_quota)
+                .unwrap_or_else(|| "untracked".to_string());
+            let remaining = agent
+                .quota_daily
+                .map(|quota| format_quota((quota - f64::from(agent_usage.used_today)).max(0.0)))
+                .unwrap_or_else(|| "untracked".to_string());
+            let status = agent_status(agent);
+            let mut score = 100 - (infractions as i32 * 10);
+            if status == "offline" {
+                score -= 5;
+            }
+            let evidence = format!(
+                "kind:{};skills:{};socket:{};date:{}",
+                agent.kind,
+                agent.skills_count,
+                agent.socket.as_deref().unwrap_or("none"),
+                today
+            );
+            AgentDashboardRow {
+                agent: agent.name.clone(),
+                kind: agent.kind.clone(),
+                role: agent.role.clone(),
+                model: agent.model.clone(),
+                status,
+                quota_daily,
+                used_today: agent_usage.used_today,
+                remaining,
+                last_used: agent_usage.last_used.unwrap_or_else(|| "never".to_string()),
+                infractions,
+                score: score.max(0),
+                evidence,
+            }
+        })
+        .collect();
+
+    rows.sort_by(|a, b| b.score.cmp(&a.score).then_with(|| a.agent.cmp(&b.agent)));
+    rows.truncate(limit);
+
+    Ok(AgentDashboardReport {
+        rows,
+        global_infractions: guard_stats.global_infractions,
+        malformed_agent_datums,
+        malformed_exec_log_lines,
+        malformed_guard_lines: guard_stats.malformed_lines,
+    })
+}
+
+fn resolve_agent_datum_dir() -> Result<PathBuf> {
+    let cwd_dir = std::env::current_dir()?.join("_b00t_");
+    if cwd_dir.is_dir() {
+        return Ok(cwd_dir);
+    }
+    Ok(dirs::home_dir()
+        .unwrap_or_else(|| PathBuf::from("."))
+        .join(".b00t")
+        .join("_b00t_"))
+}
+
+fn home_b00t_path(file: &str) -> PathBuf {
+    dirs::home_dir()
+        .unwrap_or_else(|| PathBuf::from("."))
+        .join(".b00t")
+        .join(file)
+}
+
+fn find_agent_config_path(agent_dir: &Path, agent: &str) -> Option<PathBuf> {
+    let preferred = [
+        format!("{agent}.agent.toml"),
+        format!("{agent}.agent.cli.toml"),
+        format!("{agent}.agent.sdk.toml"),
+        format!("{agent}.agent.ide.vsix.toml"),
+        format!("{agent}.agent.gui.toml"),
+        format!("{agent}.agent.tomllm"),
+        format!("{agent}.agent.cli.tomllm"),
+        format!("{agent}.agent.sdk.tomllm"),
+        format!("{agent}.agent.ide.vsix.tomllm"),
+        format!("{agent}.agent.gui.tomllm"),
+        format!("{agent}.agent.tomllmd"),
+        format!("{agent}.agent.cli.tomllmd"),
+        format!("{agent}.agent.sdk.tomllmd"),
+        format!("{agent}.agent.ide.vsix.tomllmd"),
+        format!("{agent}.agent.gui.tomllmd"),
+    ];
+    preferred
+        .iter()
+        .map(|name| agent_dir.join(name))
+        .find(|path| path.exists())
+}
+
+fn load_agent_datum_summaries(agent_dir: &Path) -> (Vec<AgentDatumSummary>, u32) {
+    let mut agents = Vec::new();
+    let mut malformed = 0;
+    let entries = match std::fs::read_dir(agent_dir) {
+        Ok(entries) => entries,
+        Err(_) => return (agents, 0),
+    };
+
+    for entry in entries.flatten() {
+        let path = entry.path();
+        let Some(file_name) = path.file_name().and_then(|n| n.to_str()) else {
+            continue;
+        };
+        if !file_name.contains(".agent.") || file_name.starts_with("++abstract") {
+            continue;
+        }
+        let Ok(content) = std::fs::read_to_string(&path) else {
+            malformed += 1;
+            continue;
+        };
+        let Ok(value) = toml::from_str::<toml::Value>(&content) else {
+            malformed += 1;
+            continue;
+        };
+        if !is_agent_datum(&value) {
+            continue;
+        }
+        if let Some(agent) = agent_summary_from_value(&value, file_name) {
+            agents.push(agent);
+        } else {
+            malformed += 1;
+        }
+    }
+    agents.sort_by(|a, b| a.name.cmp(&b.name));
+    (agents, malformed)
+}
+
+fn is_agent_datum(value: &toml::Value) -> bool {
+    value
+        .get("b00t")
+        .and_then(|b| b.get("type"))
+        .and_then(|v| v.as_str())
+        .is_some_and(|t| t == "agent" || t.starts_with("agent."))
+}
+
+fn agent_summary_from_value(
+    value: &toml::Value,
+    fallback_file_name: &str,
+) -> Option<AgentDatumSummary> {
+    let b00t = value.get("b00t")?;
+    let agent = b00t.get("agent");
+    let name = b00t
+        .get("name")
+        .and_then(|v| v.as_str())
+        .map(str::to_string)
+        .unwrap_or_else(|| {
+            fallback_file_name
+                .split('.')
+                .next()
+                .unwrap_or("agent")
+                .to_string()
+        });
+    if name == "agent-name" {
+        return None;
+    }
+    let kind = b00t
+        .get("type")
+        .and_then(|v| v.as_str())
+        .map(normalize_agent_kind)
+        .unwrap_or_else(|| "agent".to_string());
+    let role = agent
+        .and_then(|a| a.get("role"))
+        .or_else(|| {
+            agent
+                .and_then(|a| a.get("crew"))
+                .and_then(|c| c.get("role"))
+        })
+        .and_then(|v| v.as_str())
+        .unwrap_or("specialist")
+        .to_string();
+    let model = agent
+        .and_then(|a| a.get("model"))
+        .and_then(|v| v.as_str())
+        .unwrap_or("unknown")
+        .to_string();
+    let socket = agent
+        .and_then(|a| a.get("ipc"))
+        .and_then(|ipc| ipc.get("socket"))
+        .and_then(|v| v.as_str())
+        .filter(|s| !s.is_empty())
+        .map(str::to_string);
+    let quota_daily = agent
+        .and_then(|a| a.get("quota"))
+        .and_then(|q| q.get("daily"))
+        .and_then(toml_number_to_f64)
+        .or_else(|| {
+            agent
+                .and_then(|a| a.get("daily_limit"))
+                .and_then(toml_number_to_f64)
+        })
+        .or_else(|| b00t.get("daily_limit").and_then(toml_number_to_f64));
+    let skills_count = agent
+        .and_then(|a| a.get("skills"))
+        .and_then(|v| v.as_array())
+        .map(|skills| skills.len())
+        .unwrap_or(0);
+
+    Some(AgentDatumSummary {
+        name,
+        kind,
+        role,
+        model,
+        socket,
+        quota_daily,
+        skills_count,
+    })
+}
+
+fn normalize_agent_kind(kind: &str) -> String {
+    match kind {
+        "agent.cli" | "agent.sdk" | "agent.ide.vsix" | "agent.gui" => kind.to_string(),
+        "agent" => "agent".to_string(),
+        other if other.starts_with("agent.") => other.to_string(),
+        _ => "agent".to_string(),
+    }
+}
+
+fn toml_number_to_f64(value: &toml::Value) -> Option<f64> {
+    value
+        .as_float()
+        .or_else(|| value.as_integer().map(|n| n as f64))
+}
+
+fn agent_status(agent: &AgentDatumSummary) -> String {
+    match agent.socket.as_deref() {
+        Some(socket) if Path::new(socket).exists() => "online".to_string(),
+        Some(_) => "offline".to_string(),
+        None => "configured".to_string(),
+    }
+}
+
+fn load_agent_usage_stats(
+    exec_log_path: &Path,
+    agents: &[AgentDatumSummary],
+) -> (BTreeMap<String, AgentUsageStats>, u32) {
+    let mut stats = BTreeMap::new();
+    let mut malformed = 0;
+    let Ok(content) = std::fs::read_to_string(exec_log_path) else {
+        return (stats, 0);
+    };
+    let today = chrono::Utc::now().date_naive().to_string();
+    for line in content.lines() {
+        let Ok(value) = serde_json::from_str::<serde_json::Value>(line) else {
+            malformed += 1;
+            continue;
+        };
+        let cmd = value.get("cmd").and_then(|v| v.as_str()).unwrap_or("");
+        let ts = value.get("ts").and_then(|v| v.as_str()).unwrap_or("");
+        for agent in agents {
+            if command_mentions_agent(cmd, &agent.name) {
+                let entry = stats
+                    .entry(agent.name.clone())
+                    .or_insert_with(AgentUsageStats::default);
+                if ts.starts_with(&today) {
+                    entry.used_today += 1;
+                }
+                if entry
+                    .last_used
+                    .as_deref()
+                    .map(|last| ts > last)
+                    .unwrap_or(true)
+                {
+                    entry.last_used = Some(ts.to_string());
+                }
+            }
+        }
+    }
+    (stats, malformed)
+}
+
+fn command_mentions_agent(cmd: &str, agent: &str) -> bool {
+    cmd.split(|c: char| !c.is_ascii_alphanumeric() && c != '-' && c != '_')
+        .any(|token| token == agent || token == format!("{agent}-agent"))
+}
+
+fn load_guard_infraction_stats(path: &Path, agents: &[AgentDatumSummary]) -> GuardInfractionStats {
+    let mut stats = GuardInfractionStats::default();
+    let Ok(content) = std::fs::read_to_string(path) else {
+        return stats;
+    };
+    for line in content.lines() {
+        let Ok(value) = serde_json::from_str::<serde_json::Value>(line) else {
+            stats.malformed_lines += 1;
+            continue;
+        };
+        stats.global_infractions += 1;
+        let haystack = value.to_string();
+        for agent in agents {
+            if haystack.contains(&agent.name) {
+                *stats.by_agent.entry(agent.name.clone()).or_insert(0) += 1;
+            }
+        }
+    }
+    stats
+}
+
+fn format_quota(value: f64) -> String {
+    if (value.fract()).abs() < f64::EPSILON {
+        format!("{}", value as i64)
+    } else {
+        format!("{value:.2}")
+    }
+}
+
+fn print_agent_dashboard_toon(report: &AgentDashboardReport) {
+    println!(
+        "agent_dashboard[{}]{{agent,kind,role,model,status,quota_daily,used_today,remaining,last_used,infractions,score,evidence}}:",
+        report.rows.len()
+    );
+    for row in &report.rows {
+        println!(
+            "{},{},{},{},{},{},{},{},{},{},{},{}",
+            toon_cell(&row.agent),
+            toon_cell(&row.kind),
+            toon_cell(&row.role),
+            toon_cell(&row.model),
+            toon_cell(&row.status),
+            toon_cell(&row.quota_daily),
+            row.used_today,
+            toon_cell(&row.remaining),
+            toon_cell(&row.last_used),
+            row.infractions,
+            row.score,
+            toon_cell(&row.evidence),
+        );
+    }
+    println!(
+        "dashboard_evidence{{global_infractions,malformed_agent_datums,malformed_exec_log_lines,malformed_guard_lines}}: {},{},{},{}",
+        report.global_infractions,
+        report.malformed_agent_datums,
+        report.malformed_exec_log_lines,
+        report.malformed_guard_lines,
+    );
+}
+
+fn toon_cell(input: &str) -> String {
+    input
+        .replace(['\n', '\r', '\t'], " ")
+        .replace(',', ";")
+        .trim()
+        .to_string()
 }
 
 async fn handle_discover(
@@ -743,16 +1171,14 @@ async fn handle_invoke(
         p.to_path_buf()
     } else {
         let root = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
-        let candidate = root.join(format!("_b00t_/{}.agent.toml", agent));
-        if candidate.exists() {
-            candidate
-        } else {
-            anyhow::bail!(
-                "No config found for agent '{}' at {}",
+        let agent_dir = root.join("_b00t_");
+        find_agent_config_path(&agent_dir, agent).ok_or_else(|| {
+            anyhow::anyhow!(
+                "No config found for agent '{}' under {}",
                 agent,
-                candidate.display()
-            );
-        }
+                agent_dir.display()
+            )
+        })?
     };
 
     let config = AgentManager::load_config(&config_path).await?;
@@ -1026,9 +1452,87 @@ fn load_role_hint(role_name: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::{
-        build_enriched_description, build_ralph_command_args, build_shell_ralph_command_args,
-        resolve_ralph_task_id, uses_shell_ralph,
+        AgentDatumSummary, agent_summary_from_value, build_enriched_description,
+        build_ralph_command_args, build_shell_ralph_command_args, command_mentions_agent,
+        find_agent_config_path, is_agent_datum, load_guard_infraction_stats, resolve_ralph_task_id,
+        toon_cell, uses_shell_ralph,
     };
+
+    #[test]
+    fn test_agent_dashboard_toon_cell_sanitizes_delimiters() {
+        assert_eq!(toon_cell("alpha,beta\nnext"), "alpha;beta next");
+    }
+
+    #[test]
+    fn test_agent_dashboard_command_mentions_agent_token_boundaries() {
+        assert!(command_mentions_agent(
+            "b00t agent invoke opencode task",
+            "opencode"
+        ));
+        assert!(command_mentions_agent(
+            "systemctl start b00t@pi-agent.service",
+            "pi"
+        ));
+        assert!(!command_mentions_agent("topic obscure", "pi"));
+    }
+
+    #[test]
+    fn test_agent_dashboard_guard_infraction_stats_skip_malformed_lines() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("guard-violations.jsonl");
+        std::fs::write(
+            &path,
+            "{\"pattern\":\"raw sed\",\"tags\":[\"guard\"]}\nnot-json\n{\"agent\":\"alpha\",\"count\":1}\n",
+        )
+        .unwrap();
+        let agents = vec![AgentDatumSummary {
+            name: "alpha".to_string(),
+            kind: "agent".to_string(),
+            role: "specialist".to_string(),
+            model: "test".to_string(),
+            socket: None,
+            quota_daily: None,
+            skills_count: 1,
+        }];
+        let stats = load_guard_infraction_stats(&path, &agents);
+        assert_eq!(stats.global_infractions, 2);
+        assert_eq!(stats.malformed_lines, 1);
+        assert_eq!(stats.by_agent.get("alpha"), Some(&1));
+    }
+
+    #[test]
+    fn test_agent_dashboard_accepts_cardinal_subtype() {
+        let value: toml::Value = toml::from_str(
+            r#"
+[b00t]
+name = "claude"
+type = "agent.cli"
+hint = "Claude CLI"
+
+[b00t.agent]
+pid = "claude-cli"
+model = "claude"
+skills = ["code"]
+role = "specialist"
+
+[b00t.agent.ipc]
+socket = ""
+"#,
+        )
+        .unwrap();
+        assert!(is_agent_datum(&value));
+        let summary = agent_summary_from_value(&value, "claude.agent.cli.toml").unwrap();
+        assert_eq!(summary.name, "claude");
+        assert_eq!(summary.kind, "agent.cli");
+    }
+
+    #[test]
+    fn test_find_agent_config_path_accepts_cardinal_subtypes() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("claude.agent.cli.toml");
+        std::fs::write(&path, "").unwrap();
+        assert_eq!(find_agent_config_path(dir.path(), "claude"), Some(path));
+    }
 
     #[test]
     fn test_resolve_ralph_task_id_mappings() {

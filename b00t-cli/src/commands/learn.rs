@@ -4,8 +4,8 @@
 
 use anyhow::{Context, Result};
 use b00t_c0re_lib::{DisplayOpts, GrokClient, KnowledgeSource, LfmfSystem, ManPage};
-use reqwest;
 use clap::Parser;
+use reqwest;
 use std::fs;
 use tiktoken_rs::o200k_base;
 use toml::{self, Value};
@@ -624,7 +624,10 @@ async fn fetch_as_markdown(url: &str) -> Result<String> {
 
     let resp = client
         .get(url)
-        .header(reqwest::header::ACCEPT, "text/markdown, text/html;q=0.9, */*;q=0.8")
+        .header(
+            reqwest::header::ACCEPT,
+            "text/markdown, text/html;q=0.9, */*;q=0.8",
+        )
         .send()
         .await
         .with_context(|| format!("Failed to fetch {}", url))?;
@@ -636,15 +639,24 @@ async fn fetch_as_markdown(url: &str) -> Result<String> {
         .unwrap_or("")
         .to_string();
 
-    if let Some(tokens) = resp.headers().get("x-markdown-tokens").and_then(|v| v.to_str().ok()) {
+    if let Some(tokens) = resp
+        .headers()
+        .get("x-markdown-tokens")
+        .and_then(|v| v.to_str().ok())
+    {
         eprintln!("📄 Markdown-for-Agents: ~{} tokens ({})", tokens, url);
     } else if content_type.contains("text/markdown") {
         eprintln!("📄 text/markdown received from {}", url);
     } else {
-        eprintln!("📄 Fetched {} ({}) — no markdown negotiation", url, content_type);
+        eprintln!(
+            "📄 Fetched {} ({}) — no markdown negotiation",
+            url, content_type
+        );
     }
 
-    resp.text().await.with_context(|| format!("Failed to read response body from {}", url))
+    resp.text()
+        .await
+        .with_context(|| format!("Failed to read response body from {}", url))
 }
 
 async fn handle_digest(_path: &str, topic: Option<&str>, content: &str) -> Result<()> {

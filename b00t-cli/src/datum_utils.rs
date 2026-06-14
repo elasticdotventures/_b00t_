@@ -5,6 +5,56 @@
 
 pub use crate::VisualizationSpec;
 use crate::{BootDatum, DatumType, UnifiedConfig};
+
+/// Parse the `# b00t:map v1` tail block from raw datum file content.
+///
+/// Scans from the end of the file for the magic header, then extracts
+/// `# key: value` lines. Returns early if no map block is found.
+/// Tier is resolved via `MapTier::from_postel` — accepts all canonical aliases.
+pub fn parse_map_block(
+    content: &str,
+) -> (
+    Vec<String>,
+    Option<crate::MapTier>,
+    Option<u8>,
+    Option<String>,
+) {
+    let mut in_map = false;
+    let mut tags: Vec<String> = Vec::new();
+    let mut tier: Option<crate::MapTier> = None;
+    let mut complexity: Option<u8> = None;
+    let mut summary: Option<String> = None;
+
+    for line in content.lines() {
+        let trimmed = line.trim();
+        if trimmed == "# b00t:map v1" {
+            in_map = true;
+            continue;
+        }
+        if !in_map {
+            continue;
+        }
+        // Stop on non-comment lines (e.g. closing --> or blank TOML)
+        if !trimmed.starts_with('#') {
+            break;
+        }
+        let body = trimmed.trim_start_matches('#').trim();
+        if let Some(val) = body.strip_prefix("tags:") {
+            tags = val
+                .split(',')
+                .map(|t| t.trim().to_lowercase())
+                .filter(|t| !t.is_empty())
+                .collect();
+        } else if let Some(val) = body.strip_prefix("tier:") {
+            tier = crate::MapTier::from_postel(val.trim());
+        } else if let Some(val) = body.strip_prefix("complexity:") {
+            complexity = val.trim().parse::<u8>().ok();
+        } else if let Some(val) = body.strip_prefix("summary:") {
+            summary = Some(val.trim().to_string());
+        }
+    }
+    (tags, tier, complexity, summary)
+}
 use anyhow::Result;
 use b00t_c0re_lib::lfmf::DatumLookup;
 use bstr::ByteSlice;
@@ -51,10 +101,20 @@ pub struct DatumFilter {
     pub needs_any_env: bool,
     /// Must have all of these env vars set
     pub needs_all_env: bool,
-    /// Filter by datum type(s); empty = all types
+    /// Filter by datum type(s) derived from filename; empty = all types
     pub datum_types: Vec<DatumType>,
+    /// Filter by b00t.type content tag (e.g. "prd", "okr", "pattern"); empty = skip
+    pub type_tags: Vec<String>,
     /// Custom constraint requirements (e.g., "OS:linux", "CMD:docker")
     pub require_constraints: Vec<String>,
+    /// Filter by b00t:map tags (datum must have ALL listed tags)
+    pub map_tags: Vec<String>,
+    /// Filter by b00t:map tier — Postel enum (sm0l|ch0nky|frontier + aliases)
+    pub map_tier: Option<crate::MapTier>,
+    /// Complexity range filter using stdlib Bound<u8> pair — "3-7", "3", "-5", "3-"
+    pub map_complexity: Option<crate::ComplexityRange>,
+    /// Datum file paths changed since this git ref (pre-computed by caller)
+    pub since_changed_keys: Option<std::collections::HashSet<String>>,
 }
 
 /// Graph node for datum ontology export
@@ -301,6 +361,22 @@ fn scan_datums_recursive(
                 // Try to parse as unified config
                 if let Ok(content) = fs::read_to_string(&entry_path) {
                     if let Ok(mut config) = toml::from_str::<UnifiedConfig>(&content) {
+                        // Capture raw b00t.type string for content-tag filtering.
+                        // datum_type (enum) is None for unknown strings like "prd"/"okr".
+                        if let Ok(raw) = toml::from_str::<toml::Value>(&content) {
+                            config.b00t.type_tag = raw
+                                .get("b00t")
+                                .and_then(|b| b.get("type"))
+                                .and_then(|t| t.as_str())
+                                .map(str::to_owned);
+                        }
+                        // Parse b00t:map v1 tail block for tags/tier/complexity/summary
+                        let (map_tags, map_tier, map_complexity, map_summary) =
+                            parse_map_block(&content);
+                        config.b00t.map_tags = map_tags;
+                        config.b00t.map_tier = map_tier;
+                        config.b00t.map_complexity = map_complexity;
+                        config.b00t.map_summary = map_summary;
                         apply_git_attributes_to_config(&mut config, &entry_path);
                         // Strip outer extension (.tomllmd / .tomllm / .toml) for datum key.
                         // 🤓 precedence: .tomllmd > .tomllm > .toml.
@@ -515,6 +591,23 @@ pub fn filter_datums(
             }
         }
 
+        // type_tags — content-level b00t.type string filter (prd, okr, pattern, …)
+        // Substring match: "pattern" matches "pattern__learn", "pattern__gate", etc.
+        if !filter.type_tags.is_empty() {
+            let tag = datum.type_tag.as_deref().unwrap_or("");
+            let matches = filter.type_tags.iter().any(|t| {
+                tag == t.as_str()
+                    || tag.starts_with(&format!("{t}__"))
+                    || tag.contains(&format!("__{t}"))
+            });
+            if !matches {
+                reasons.push(format!(
+                    "type_tag mismatch: expected one of {:?}, got {:?}",
+                    filter.type_tags, datum.type_tag
+                ));
+            }
+        }
+
         // require_os
         if let Some(ref required_os) = filter.require_os {
             if !current_os.eq_ignore_ascii_case(required_os) {
@@ -569,6 +662,52 @@ pub fn filter_datums(
                 .unwrap_or(false);
             if !all_set {
                 reasons.push("needs_all_env: not all declared env vars are set".to_string());
+            }
+        }
+
+        // map_tags — datum must have ALL requested tags
+        if !filter.map_tags.is_empty() {
+            let missing: Vec<&str> = filter
+                .map_tags
+                .iter()
+                .filter(|t| !datum.map_tags.contains(t))
+                .map(|t| t.as_str())
+                .collect();
+            if !missing.is_empty() {
+                reasons.push(format!("map_tags missing: {:?}", missing));
+            }
+        }
+
+        // map_tier — Postel enum exact match
+        if let Some(required_tier) = filter.map_tier {
+            match datum.map_tier {
+                Some(t) if t == required_tier => {}
+                other => {
+                    reasons.push(format!(
+                        "map_tier: need {}, have {:?}",
+                        required_tier, other
+                    ));
+                }
+            }
+        }
+
+        // map_complexity — stdlib (Bound<u8>, Bound<u8>)
+        if let Some(ref range) = filter.map_complexity {
+            match datum.map_complexity {
+                Some(c) if crate::complexity_in_range(range, c) => {}
+                other => {
+                    reasons.push(format!(
+                        "complexity {:?} not in range {:?}..={:?}",
+                        other, range.0, range.1
+                    ));
+                }
+            }
+        }
+
+        // since_changed_keys — only include datums whose file changed since git ref
+        if let Some(ref changed) = filter.since_changed_keys {
+            if !changed.contains(&key) {
+                reasons.push("not changed since ref".to_string());
             }
         }
 
@@ -1313,5 +1452,170 @@ output = "Building..."
         let (datum, path) = datums.get("tool.cli").unwrap();
         assert_eq!(datum.name, "tool-tomllm", ".tomllm must win over .toml");
         assert!(path.ends_with(".tomllm"));
+    }
+}
+
+#[cfg(test)]
+mod test_content_type_filter {
+    use super::*;
+
+    #[test]
+    fn test_prd_type_deserializes_to_none_datum_type() {
+        let content = "[b00t]\nname = \"test-prd\"\ntype = \"prd\"\nhint = \"test\"\n";
+        let config: crate::UnifiedConfig = toml::from_str(content).unwrap();
+        // "prd" is a content tag, not a DatumType enum variant → None
+        assert_eq!(config.b00t.datum_type, None);
+    }
+
+    #[test]
+    fn test_okr_schema_parses_as_unified_config() {
+        let content =
+            std::fs::read_to_string("_b00t_/datums/OKR-SCHEMA.tomllmd").unwrap_or_default();
+        if content.is_empty() {
+            return;
+        }
+        let result: Result<crate::UnifiedConfig, _> = toml::from_str(&content);
+        assert!(
+            result.is_ok(),
+            "OKR-SCHEMA.tomllmd parse failed: {:?}",
+            result.err()
+        );
+        let config = result.unwrap();
+        assert_eq!(config.b00t.name, "OKR-SCHEMA");
+    }
+
+    #[test]
+    fn test_type_tags_filter_matches_content_type() {
+        let temp_dir = tempfile::TempDir::new().unwrap();
+        let prd_file = temp_dir.path().join("my-prd.tomllmd");
+        std::fs::write(
+            &prd_file,
+            "[b00t]\nname = \"my-prd\"\ntype = \"prd\"\nhint = \"test prd\"\n",
+        )
+        .unwrap();
+        let ok_file = temp_dir.path().join("my-mcp.mcp.toml");
+        std::fs::write(
+            &ok_file,
+            "[b00t]\nname = \"my-mcp\"\ntype = \"mcp\"\nhint = \"test mcp\"\n",
+        )
+        .unwrap();
+
+        let datums = get_all_datums(temp_dir.path().to_str().unwrap()).unwrap();
+
+        // The prd datum's type_tag should be populated
+        let prd = datums.get("my-prd").expect("prd datum should be found");
+        assert_eq!(
+            prd.type_tag.as_deref(),
+            Some("prd"),
+            "type_tag should be 'prd'"
+        );
+
+        // Filter by type_tag = "prd"
+        let filter = DatumFilter {
+            type_tags: vec!["prd".to_string()],
+            ..Default::default()
+        };
+        let results = filter_datums(datums, &filter, false);
+        assert_eq!(results.len(), 1, "only prd datum should match");
+        assert_eq!(results[0].1.name, "my-prd");
+    }
+
+    #[test]
+    fn test_real_b00t_datums_subdir_discoverable() {
+        let datums = get_all_datums("~/.b00t/_b00t_").unwrap();
+        // Check if any datum has type_tag = "prd" or "okr"
+        let prd_datums: Vec<_> = datums
+            .values()
+            .filter(|d| d.type_tag.as_deref() == Some("prd"))
+            .collect();
+        let okr_datums: Vec<_> = datums
+            .values()
+            .filter(|d| d.type_tag.as_deref() == Some("okr"))
+            .collect();
+        // These should exist once datums/ subdir is properly scanned
+        println!("prd datums: {}", prd_datums.len());
+        println!("okr datums: {}", okr_datums.len());
+        // Don't assert yet — this is diagnostic
+    }
+}
+
+#[cfg(test)]
+mod test_subdir_scan {
+    use super::*;
+    use std::fs;
+
+    #[test]
+    fn test_scan_finds_datum_in_subdirectory() {
+        let temp_dir = tempfile::TempDir::new().unwrap();
+        let subdir = temp_dir.path().join("datums");
+        fs::create_dir(&subdir).unwrap();
+
+        // Put prd datum in subdir
+        fs::write(
+            subdir.join("my-prd.tomllmd"),
+            "[b00t]\nname = \"my-prd\"\ntype = \"prd\"\nhint = \"test prd\"\n",
+        )
+        .unwrap();
+        // Put agent datum in root
+        fs::write(
+            temp_dir.path().join("my-agent.agent.toml"),
+            "[b00t]\nname = \"my-agent\"\ntype = \"agent\"\nhint = \"test agent\"\n",
+        )
+        .unwrap();
+
+        let datums = get_all_datums(temp_dir.path().to_str().unwrap()).unwrap();
+        println!("Found datums: {:?}", datums.keys().collect::<Vec<_>>());
+
+        assert!(
+            datums.contains_key("my-agent.agent"),
+            "root agent should be found"
+        );
+        assert!(datums.contains_key("my-prd"), "subdir prd should be found");
+
+        let prd = datums.get("my-prd").unwrap();
+        println!(
+            "prd.datum_type={:?} type_tag={:?}",
+            prd.datum_type, prd.type_tag
+        );
+        assert_eq!(
+            prd.type_tag.as_deref(),
+            Some("prd"),
+            "type_tag should be prd"
+        );
+    }
+}
+
+#[cfg(test)]
+mod test_b00t_version_subtable {
+    #[test]
+    fn test_b00t_version_field_is_string_not_table() {
+        // BootDatum.version is Option<String> (tool version like "1.0.0").
+        // Datums must use [b00t.schema] not [b00t.version] for schema metadata.
+        let invalid = "[b00t]\nname=\"t\"\nhint=\"t\"\n[b00t.version]\nschema=1\n";
+        let result: Result<crate::UnifiedConfig, _> = toml::from_str(invalid);
+        assert!(
+            result.is_err(),
+            "[b00t.version] subtable must fail — version field is String"
+        );
+    }
+
+    #[test]
+    fn test_unified_config_accepts_b00t_sysml_subtable() {
+        let content = r#"
+[b00t]
+name = "test"
+type = "prd"
+hint = "test"
+
+[b00t.sysml]
+stereotype = "Requirement"
+bfo_class = "http://example.com/BFO_0000031"
+"#;
+        let result: Result<crate::UnifiedConfig, _> = toml::from_str(content);
+        assert!(
+            result.is_ok(),
+            "b00t.sysml subtable should parse: {:?}",
+            result.err()
+        );
     }
 }

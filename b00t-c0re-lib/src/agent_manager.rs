@@ -425,6 +425,16 @@ fn configured_socket_path(config: &AgentConfig) -> Option<PathBuf> {
     }
 }
 
+fn is_agent_config_file(path: &Path) -> bool {
+    let Some(file_name) = path.file_name().and_then(|s| s.to_str()) else {
+        return false;
+    };
+    matches!(
+        path.extension().and_then(|s| s.to_str()),
+        Some("toml") | Some("tomllm") | Some("tomllmd")
+    ) && (file_name.contains(".agent.") || file_name.ends_with(".agent"))
+}
+
 /// Agent manager for spawning and coordinating agents.
 pub struct AgentManager {
     redis_config: RedisConfig,
@@ -527,13 +537,7 @@ impl AgentManager {
 
         while let Some(entry) = entries.next_entry().await? {
             let path = entry.path();
-            if path.extension().and_then(|s| s.to_str()) == Some("toml")
-                && path
-                    .file_name()
-                    .and_then(|s| s.to_str())
-                    .map(|s| s.ends_with(".agent.toml"))
-                    .unwrap_or(false)
-            {
+            if is_agent_config_file(&path) {
                 match self.spawn_agent(&path).await {
                     Ok(handle) => handles.push(handle),
                     Err(e) => {
@@ -633,6 +637,16 @@ max_iterations = 10
         assert_eq!(exec.cli_path, "pi");
         assert_eq!(exec.max_iterations, 10);
         assert!(exec.supports_tools.contains(&"bash".to_string()));
+    }
+
+    #[test]
+    fn test_agent_config_file_accepts_cardinal_subtypes() {
+        assert!(is_agent_config_file(Path::new("claude.agent.cli.toml")));
+        assert!(is_agent_config_file(Path::new("maf.agent.sdk.tomllm")));
+        assert!(is_agent_config_file(Path::new(
+            "copilot.agent.ide.vsix.tomllmd"
+        )));
+        assert!(!is_agent_config_file(Path::new("claude.cli.toml")));
     }
 
     #[tokio::test]

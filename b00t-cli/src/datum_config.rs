@@ -240,6 +240,10 @@ impl B00tConfig {
     pub fn datum_type_str(dtype: &DatumType) -> &'static str {
         match dtype {
             DatumType::Agent => "agent",
+            DatumType::AgentCli => "agent.cli",
+            DatumType::AgentSdk => "agent.sdk",
+            DatumType::AgentIdeVsix => "agent.ide.vsix",
+            DatumType::AgentGui => "agent.gui",
             DatumType::Cli => "cli",
             DatumType::Mcp => "mcp",
             DatumType::Ai => "ai",
@@ -455,6 +459,22 @@ mod tests {
     fn test_datum_type_str_lowercase() {
         // Verify that datum_type_str returns lowercase strings for consistency
         assert_eq!(B00tConfig::datum_type_str(&DatumType::Cli), "cli");
+        assert_eq!(
+            B00tConfig::datum_type_str(&DatumType::AgentCli),
+            "agent.cli"
+        );
+        assert_eq!(
+            B00tConfig::datum_type_str(&DatumType::AgentSdk),
+            "agent.sdk"
+        );
+        assert_eq!(
+            B00tConfig::datum_type_str(&DatumType::AgentIdeVsix),
+            "agent.ide.vsix"
+        );
+        assert_eq!(
+            B00tConfig::datum_type_str(&DatumType::AgentGui),
+            "agent.gui"
+        );
         assert_eq!(B00tConfig::datum_type_str(&DatumType::Mcp), "mcp");
         assert_eq!(B00tConfig::datum_type_str(&DatumType::Docker), "docker");
         assert_eq!(B00tConfig::datum_type_str(&DatumType::Ai), "ai");

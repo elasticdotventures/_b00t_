@@ -70,7 +70,8 @@ impl K0mmand {
                     if i + 1 < parts.len() {
                         let remaining = &parts[i + 1..];
                         // Check if remaining tokens are key=value pairs
-                        let has_key_value_pairs = remaining.iter().any(|t| t.contains('=') || t.contains(':'));
+                        let has_key_value_pairs =
+                            remaining.iter().any(|t| t.contains('=') || t.contains(':'));
                         if has_key_value_pairs {
                             // Skip "with" and continue parsing normally
                             i += 1;
@@ -274,7 +275,8 @@ impl K0mmand3rCmd {
                     if i + 1 < parts.len() {
                         let remaining = &parts[i + 1..];
                         // Check if remaining tokens are key=value pairs
-                        let has_key_value_pairs = remaining.iter().any(|t| t.contains('=') || t.contains(':'));
+                        let has_key_value_pairs =
+                            remaining.iter().any(|t| t.contains('=') || t.contains(':'));
                         if has_key_value_pairs {
                             // Skip "with" and continue parsing normally
                             i += 1;

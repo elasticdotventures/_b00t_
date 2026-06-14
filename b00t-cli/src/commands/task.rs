@@ -13,6 +13,34 @@ use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::{Path, PathBuf};
 
+// ── Priority parsing ──────────────────────────────────────────────────────────
+
+/// Postel/DWIW: accept 1-4, P1-P4 (case-insensitive), or critical/high/medium/low.
+/// Stores as u8 1-4 (1=critical, 4=low). Canonical form shown in --help is `1-4`.
+fn parse_priority(s: &str) -> Result<u8, String> {
+    let (result, canonical) = match s.to_lowercase().as_str() {
+        "critical" | "p1" | "1" => (Ok(1u8), "1"),
+        "high" | "p2" | "2" => (Ok(2u8), "2"),
+        "medium" | "p3" | "3" => (Ok(3u8), "3"),
+        "low" | "p4" | "4" => (Ok(4u8), "4"),
+        _ => {
+            return Err(format!(
+                "invalid priority '{s}': use 1-4, P1-P4, or critical/high/medium/low"
+            ));
+        }
+    };
+    // Emit Postel hint when a non-canonical alias is used
+    if s != canonical {
+        crate::postel::hint(
+            s,
+            canonical,
+            &format!("b00t task add 'title' --priority={canonical}"),
+            "canonical form is 1-4",
+        );
+    }
+    result
+}
+
 // ── Task schema ───────────────────────────────────────────────────────────────
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -218,7 +246,7 @@ pub enum TaskCommands {
         #[clap(long, short, help = "Description")]
         description: Option<String>,
         #[clap(long, short, help = "Priority 1-4 (1=critical, 4=low)", default_value = "3",
-               value_parser = clap::value_parser!(u8).range(1..=4))]
+               value_parser = parse_priority)]
         priority: u8,
         #[clap(long, short, help = "Tags (comma-separated)")]
         tags: Option<String>,
@@ -250,7 +278,7 @@ pub enum TaskCommands {
         #[clap(long, help = "Append to notes")]
         note: Option<String>,
         #[clap(long, help = "Priority 1-4",
-               value_parser = clap::value_parser!(u8).range(1..=4))]
+               value_parser = parse_priority)]
         priority: Option<u8>,
     },
     #[clap(about = "Show task details")]
@@ -600,6 +628,26 @@ mod tests {
         unsafe {
             std::env::remove_var("B00T_TASKS_PATH");
         }
+    }
+
+    #[test]
+    fn test_parse_priority() {
+        // canonical numeric
+        assert_eq!(parse_priority("1").unwrap(), 1);
+        assert_eq!(parse_priority("4").unwrap(), 4);
+        // P-prefix case-insensitive
+        assert_eq!(parse_priority("P1").unwrap(), 1);
+        assert_eq!(parse_priority("p3").unwrap(), 3);
+        assert_eq!(parse_priority("P4").unwrap(), 4);
+        // word aliases
+        assert_eq!(parse_priority("critical").unwrap(), 1);
+        assert_eq!(parse_priority("HIGH").unwrap(), 2);
+        assert_eq!(parse_priority("Medium").unwrap(), 3);
+        assert_eq!(parse_priority("low").unwrap(), 4);
+        // reject unknowns
+        assert!(parse_priority("5").is_err());
+        assert!(parse_priority("urgent").is_err());
+        assert!(parse_priority("").is_err());
     }
 
     #[test]
