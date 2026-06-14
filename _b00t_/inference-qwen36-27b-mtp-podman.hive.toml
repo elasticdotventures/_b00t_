@@ -51,22 +51,24 @@ environment       = [
   "HF_HOME=/home/brianh/.cache/huggingface",
 ]
 exec_start_pre = [
-  # Resolve HF snapshot symlink → stable path at ~/.local/share/b00t/models/ch0nky.gguf
-  "/bin/bash -c 'set -e; REPO_DIR=$${HOME}/.cache/huggingface/hub/models--unsloth--Qwen3.6-27B-MTP-GGUF; SNAP=$(cat $${REPO_DIR}/refs/main); SRC=$${REPO_DIR}/snapshots/$${SNAP}/Qwen3.6-27B-Q4_K_M.gguf; DEST=$${HOME}/.local/share/b00t/models/ch0nky-mtp.gguf; mkdir -p $(dirname $${DEST}); [ -f \"$${SRC}\" ] && ln -sfn \"$${SRC}\" \"$${DEST}\" || { echo \"GGUF not found at $${SRC}\" >&2; exit 1; }'",
+  # Verify GGUF exists in HF cache before container start
+  "/bin/bash -c 'set -e; REPO_DIR=$${HOME}/.cache/huggingface/hub/models--unsloth--Qwen3.6-27B-MTP-GGUF; SNAP=$(cat $${REPO_DIR}/refs/main); GGUF=$${REPO_DIR}/snapshots/$${SNAP}/Qwen3.6-27B-Q4_K_M.gguf; [ -f \"$${GGUF}\" ] || { echo \"GGUF not found: $${GGUF}\" >&2; exit 1; }; echo \"ok: $${GGUF}\"'",
+  # Create empty no-nvidia-hook dir (unused but harmless; see 🤓 below)
+  "/bin/mkdir -p /home/brianh/.local/share/b00t/no-nvidia-hook",
 ]
-exec_start = """/usr/bin/podman run --rm \
+exec_start = """/bin/bash -c '\
+  SNAP=$(cat ${HOME}/.cache/huggingface/hub/models--unsloth--Qwen3.6-27B-MTP-GGUF/refs/main); \
+  exec /usr/bin/podman run --rm \
     --name b00t-ch0nky-llamacpp \
-    --hooks-dir /home/brianh/.local/share/b00t/no-nvidia-hook \
-    --device /dev/nvidia0 \
-    --device /dev/nvidiactl \
-    --device /dev/nvidia-uvm \
-    --device /dev/nvidia-uvm-tools \
+    --runtime /usr/bin/nvidia-container-runtime \
+    -e NVIDIA_VISIBLE_DEVICES=0 \
+    -e NVIDIA_DRIVER_CAPABILITIES=compute,utility \
     --security-opt=label=disable \
     -p 8001:8080 \
-    -v /home/brianh/.local/share/b00t/models:/models:ro \
+    -v ${HOME}/.cache/huggingface/hub/models--unsloth--Qwen3.6-27B-MTP-GGUF:/models:ro \
     ghcr.io/ggml-org/llama.cpp:server-cuda-b9246 \
     --host 0.0.0.0 --port 8080 \
-    -m /models/ch0nky-mtp.gguf \
+    -m /models/snapshots/${SNAP}/Qwen3.6-27B-Q4_K_M.gguf \
     -c 131072 \
     -b 4096 \
     -ub 1024 \
@@ -84,14 +86,18 @@ exec_start = """/usr/bin/podman run --rm \
     --top-p 0.95 \
     --top-k 20 \
     --min-p 0.0 \
-    --repeat-penalty 1.0"""
-# 🤓 --hooks-dir no-nvidia-hook: bypasses broken OCI hook (nvidia-container-toolkit always:true
-#    fails rootless podman 4.9.3 without no-cgroups=true in /etc/nvidia-container-runtime/config.toml)
-#    CDI (nvidia.com/gpu=all) also fails rootless — direct /dev passthrough is the working path
-# 🤓 llama.cpp image bundles CUDA 12.8 (libcudart.so.12) — no host CUDA lib injection needed
+    --repeat-penalty 1.0'"""
+# 🤓 GPU passthrough: --runtime /usr/bin/nvidia-container-runtime + NVIDIA_VISIBLE_DEVICES=0
+#    CDI (nvidia.com/gpu=all) fails rootless podman 4.9.3 — OCI hook has always:true, fails without
+#    no-cgroups=true in SYSTEM /etc/nvidia-container-runtime/config.toml (requires root to set).
+#    nvidia-container-runtime is the NVIDIA-modified crun wrapper that injects CUDA libs via env var.
+#    Direct /dev passthrough (hooks-dir bypass) also allows device access but skips CUDA lib injection.
+# 🤓 Model mount: HF cache dir mounted at /models; snapshot resolved at runtime via refs/main —
+#    avoids symlink-breaks-inside-container issue; survives hf cache re-download after OS wipe
 # 🤓 Port 8001: compatible with B00T_AI_CH0NKY_BASE; -ub 1024: 131K ctx sweet spot
 # 🤓 -np 1: intentional — extra slots divide throughput; -np>1 disables MTP
 # 🤓 --spec-type draft-mtp: unsloth/Qwen3.6-27B-MTP-GGUF weights have embedded MTP head
+#    VRAM confirmed: ~21.1GB used, 2.9GB free (within 1.6GB headroom estimate)
 
 [b00t.hive.env]
 B00T_AI_CH0NKY_BASE  = "http://127.0.0.1:8001/v1"
@@ -166,23 +172,23 @@ echo "📦 podman pull ${IMAGE}"
 podman pull "${IMAGE}"
 echo "✅ image: $(podman inspect "${IMAGE}" --format '{{.Id}}' 2>/dev/null | cut -c1-12)"
 
-# 5. Smoke-test GPU device access in container (via direct /dev passthrough)
-# 🤓 CDI (nvidia.com/gpu=all) fails rootless podman 4.9.3; direct /dev is the working path
-# 🤓 nvidia-container-toolkit OCI hook has always:true and fails without no-cgroups=true
-echo "🔍 smoke-test: GPU devices in container..."
-HOOK_DIR="${HOME}/.local/share/b00t/no-nvidia-hook"
-mkdir -p "${HOOK_DIR}"
+# 5. Smoke-test GPU via nvidia-container-runtime (the working rootless podman path)
+# 🤓 CDI (nvidia.com/gpu=all) fails rootless podman 4.9.3 without root-level no-cgroups=true
+# 🤓 nvidia-container-runtime injects CUDA libs via NVIDIA_VISIBLE_DEVICES env var — works rootless
+echo "🔍 smoke-test: GPU via nvidia-container-runtime..."
+mkdir -p "${HOME}/.local/share/b00t/no-nvidia-hook"
 GPU_OK=$(podman run --rm --entrypoint /bin/sh \
-  --hooks-dir "${HOOK_DIR}" \
-  --device /dev/nvidia0 --device /dev/nvidiactl \
-  --device /dev/nvidia-uvm --device /dev/nvidia-uvm-tools \
+  --runtime /usr/bin/nvidia-container-runtime \
+  -e NVIDIA_VISIBLE_DEVICES=0 \
+  -e NVIDIA_DRIVER_CAPABILITIES=compute,utility \
   --security-opt=label=disable \
-  "${IMAGE}" -c "ls /dev/nvidia0 && cat /proc/driver/nvidia/version 2>/dev/null | head -1" 2>/dev/null || echo "FAIL")
+  "${IMAGE}" -c "cat /proc/driver/nvidia/version 2>/dev/null | head -1 || echo FAIL" 2>/dev/null || echo "FAIL")
 if echo "${GPU_OK}" | grep -q "NVRM"; then
   echo "✅ GPU confirmed: $(echo "${GPU_OK}" | grep NVRM | head -1)"
 else
   echo "⚠️  GPU check failed: ${GPU_OK}"
-  echo "   Ensure /dev/nvidia* nodes exist and user is in 'video' group"
+  echo "   Ensure nvidia-container-runtime is installed: which nvidia-container-runtime"
+  echo "   Ensure user is in 'video' group: groups \${USER}"
 fi
 
 echo ""
@@ -248,8 +254,9 @@ description = "Dry-run: check resource gate + service diff"
 command     = "b00t hive plan inference-qwen36-27b-mtp-podman"
 
 # b00t:map v1
-# summary: Qwen3.6-27B MTP via llama.cpp container (podman CDI) — ch0nky :8001 deterministic
-# tags: qwen3.6, llamacpp, mtp, podman, cdi, nvidia, rtx3090, ch0nky, hive, ephemeral-safe
+# summary: Qwen3.6-27B MTP via llama.cpp container (podman + nvidia-container-runtime) — ch0nky :8001 VERIFIED
+# tags: qwen3.6, llamacpp, mtp, podman, nvidia-container-runtime, rtx3090, ch0nky, hive, ephemeral-safe
 # tier: ch0nky
 # cmds: b00t install inference-qwen36-27b-mtp-podman, b00t hive activate inference-qwen36-27b-mtp-podman
 # complexity: 6
+# verified: 2026-06-14 GPU=RTX3090 VRAM=21.1GB MTP=draft_n:8,accepted:4 TPS≈27
