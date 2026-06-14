@@ -56,7 +56,11 @@ exec_start_pre = [
 ]
 exec_start = """/usr/bin/podman run --rm \
     --name b00t-ch0nky-llamacpp \
-    --device nvidia.com/gpu=all \
+    --hooks-dir /home/brianh/.local/share/b00t/no-nvidia-hook \
+    --device /dev/nvidia0 \
+    --device /dev/nvidiactl \
+    --device /dev/nvidia-uvm \
+    --device /dev/nvidia-uvm-tools \
     --security-opt=label=disable \
     -p 8001:8080 \
     -v /home/brianh/.local/share/b00t/models:/models:ro \
@@ -81,11 +85,13 @@ exec_start = """/usr/bin/podman run --rm \
     --top-k 20 \
     --min-p 0.0 \
     --repeat-penalty 1.0"""
-# 🤓 Port 8001 = same as vllm profile — compatible with B00T_AI_CH0NKY_BASE
-# 🤓 -ub 1024 (not 512): 131K ctx sweet spot; 200K needs -ub 512 but OOMs at fill
-# 🤓 -np 1: intentional — extra slots divide throughput, don't multiply; disables MTP at -np>1
-# 🤓 exec_start_pre creates stable symlink ~/.local/share/b00t/models/ch0nky-mtp.gguf → HF snapshot
-# 🤓 --spec-type draft-mtp: requires unsloth/Qwen3.6-27B-MTP-GGUF (not plain GGUF)
+# 🤓 --hooks-dir no-nvidia-hook: bypasses broken OCI hook (nvidia-container-toolkit always:true
+#    fails rootless podman 4.9.3 without no-cgroups=true in /etc/nvidia-container-runtime/config.toml)
+#    CDI (nvidia.com/gpu=all) also fails rootless — direct /dev passthrough is the working path
+# 🤓 llama.cpp image bundles CUDA 12.8 (libcudart.so.12) — no host CUDA lib injection needed
+# 🤓 Port 8001: compatible with B00T_AI_CH0NKY_BASE; -ub 1024: 131K ctx sweet spot
+# 🤓 -np 1: intentional — extra slots divide throughput; -np>1 disables MTP
+# 🤓 --spec-type draft-mtp: unsloth/Qwen3.6-27B-MTP-GGUF weights have embedded MTP head
 
 [b00t.hive.env]
 B00T_AI_CH0NKY_BASE  = "http://127.0.0.1:8001/v1"
@@ -106,7 +112,7 @@ message = "🦨 use uv pip install"
 [[b00t.hive.guards]]
 pattern = "docker run"
 action  = "warn"
-message = "🦨 use podman --device nvidia.com/gpu=all --security-opt=label=disable"
+message = "🦨 use podman --hooks-dir ~/.local/share/b00t/no-nvidia-hook --device /dev/nvidia0 --device /dev/nvidiactl --device /dev/nvidia-uvm --security-opt=label=disable"
 
 # ─── Install: download model + pull image (logged via b00t for compliance) ──
 install = """
@@ -160,15 +166,23 @@ echo "📦 podman pull ${IMAGE}"
 podman pull "${IMAGE}"
 echo "✅ image: $(podman inspect "${IMAGE}" --format '{{.Id}}' 2>/dev/null | cut -c1-12)"
 
-# 5. Smoke-test GPU access in container
-echo "🔍 smoke-test: GPU in container..."
-GPU_OK=$(podman run --rm --device nvidia.com/gpu=all --security-opt=label=disable \
-  "${IMAGE}" nvidia-smi -L 2>/dev/null || echo "FAIL")
-if echo "${GPU_OK}" | grep -q "RTX 3090"; then
-  echo "✅ GPU visible: $(echo "${GPU_OK}" | head -1)"
+# 5. Smoke-test GPU device access in container (via direct /dev passthrough)
+# 🤓 CDI (nvidia.com/gpu=all) fails rootless podman 4.9.3; direct /dev is the working path
+# 🤓 nvidia-container-toolkit OCI hook has always:true and fails without no-cgroups=true
+echo "🔍 smoke-test: GPU devices in container..."
+HOOK_DIR="${HOME}/.local/share/b00t/no-nvidia-hook"
+mkdir -p "${HOOK_DIR}"
+GPU_OK=$(podman run --rm --entrypoint /bin/sh \
+  --hooks-dir "${HOOK_DIR}" \
+  --device /dev/nvidia0 --device /dev/nvidiactl \
+  --device /dev/nvidia-uvm --device /dev/nvidia-uvm-tools \
+  --security-opt=label=disable \
+  "${IMAGE}" -c "ls /dev/nvidia0 && cat /proc/driver/nvidia/version 2>/dev/null | head -1" 2>/dev/null || echo "FAIL")
+if echo "${GPU_OK}" | grep -q "NVRM"; then
+  echo "✅ GPU confirmed: $(echo "${GPU_OK}" | grep NVRM | head -1)"
 else
-  echo "⚠️  GPU not visible in container — CDI may need reconfiguration"
-  echo "   Run: b00t install nvidia-cdi-gpu"
+  echo "⚠️  GPU check failed: ${GPU_OK}"
+  echo "   Ensure /dev/nvidia* nodes exist and user is in 'video' group"
 fi
 
 echo ""
