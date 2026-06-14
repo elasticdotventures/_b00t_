@@ -229,6 +229,10 @@ impl AaiiiConfig {
     }
 
     fn pi_base_url_candidates() -> Vec<String> {
+        Self::pi_base_url_candidates_with_env(|key| env::var(key).ok())
+    }
+
+    fn pi_base_url_candidates_with_env<F: Fn(&str) -> Option<String>>(env_fn: F) -> Vec<String> {
         let mut candidates = Vec::new();
 
         for key in [
@@ -237,10 +241,10 @@ impl AaiiiConfig {
             "LLAMA_CPP_BASE_URL",
             "OPENAI_BASE_URL",
         ] {
-            if let Ok(value) = env::var(key) {
-                let trimmed = value.trim();
-                if !trimmed.is_empty() && !candidates.iter().any(|existing| existing == trimmed) {
-                    candidates.push(trimmed.to_string());
+            if let Some(value) = env_fn(key) {
+                let trimmed = value.trim().to_string();
+                if !trimmed.is_empty() && !candidates.iter().any(|existing| existing == &trimmed) {
+                    candidates.push(trimmed);
                 }
             }
         }
@@ -405,58 +409,24 @@ mod tests {
 
     #[test]
     fn test_pi_base_url_candidates_prioritize_env_override() {
-        let key = "B00T_AI_CH0NKY_BASE";
-        let previous = std::env::var(key).ok();
-        unsafe {
-            std::env::set_var(key, "http://127.0.0.1:8001/v1");
-        }
-
-        let candidates = AaiiiConfig::pi_base_url_candidates();
+        // DI: no env mutation — safe for parallel test execution
+        let candidates = AaiiiConfig::pi_base_url_candidates_with_env(|key| match key {
+            "B00T_AI_CH0NKY_BASE" => Some("http://127.0.0.1:8001/v1".to_string()),
+            _ => None,
+        });
         assert_eq!(
             candidates.first().map(String::as_str),
             Some("http://127.0.0.1:8001/v1")
         );
-        assert!(
-            candidates
-                .iter()
-                .any(|candidate| candidate == "http://localhost:1234/v1")
-        );
-
-        if let Some(value) = previous {
-            unsafe {
-                std::env::set_var(key, value);
-            }
-        } else {
-            unsafe {
-                std::env::remove_var(key);
-            }
-        }
+        assert!(candidates.iter().any(|c| c == "http://localhost:1234/v1"));
     }
 
     #[test]
     fn test_pi_base_url_candidates_include_direct_gemma4_fallback() {
-        for key in [
-            "B00T_AI_CH0NKY_BASE",
-            "PI_BASE_URL",
-            "LLAMA_CPP_BASE_URL",
-            "OPENAI_BASE_URL",
-        ] {
-            unsafe {
-                std::env::remove_var(key);
-            }
-        }
-
-        let candidates = AaiiiConfig::pi_base_url_candidates();
-        assert!(
-            candidates
-                .iter()
-                .any(|candidate| candidate == "http://localhost:1234/v1")
-        );
-        assert!(
-            candidates
-                .iter()
-                .any(|candidate| candidate == "http://localhost:8001/v1")
-        );
+        // DI: no env mutation — safe for parallel test execution
+        let candidates = AaiiiConfig::pi_base_url_candidates_with_env(|_| None);
+        assert!(candidates.iter().any(|c| c == "http://localhost:1234/v1"));
+        assert!(candidates.iter().any(|c| c == "http://localhost:8001/v1"));
     }
 
     #[test]
