@@ -1,0 +1,160 @@
+# PRD-ARCH: roto vs rhai for b00t scripting — proposal supporting both
+
+[b00t.schema]
+version   = "1"
+type      = "prd"
+type_tags = ["prd", "architecture", "scripting", "roto", "rhai"]
+
+[prd]
+id     = "PRD-ARCH-ROTO-VS-RHAI"
+title  = "Dual scripting: roto (JIT/typed) + rhai (dynamic) in b00t"
+status = "proposed"
+tier   = "frontier"
+
+# ─── Executive Summary ───────────────────────────────────────────────────────
+# b00t uses rhai today for hook_engine, gate eval, and .rhai scripts.
+# roto v0.11.0 (May 2026) adds JIT-compiled, statically typed scripting to Rust
+# with library! macro for bulk type registration — better fit for guard eval
+# and datum validation where type safety and performance matter.
+# VERDICT: keep rhai for user-authored scripts; add roto for compiled guard/gate logic.
+# Both coexist behind a ScriptEngine trait — no forced migration.
+
+# ─── Current rhai usage ──────────────────────────────────────────────────────
+[rhai]
+version       = "1"
+features      = ["sync"]
+crate_source  = "workspace Cargo.toml"
+used_in       = [
+  "b00t-cli/src/hook_engine.rs",  # lifecycle hooks
+  "b00t-cli/src/commands/gates.rs", # gate eval (pattern matching)
+  "_b00t_/wow-master.rhai",       # user-authored automation script
+]
+strengths = [
+  "Dynamic — user writes .rhai files without recompile",
+  "Mature (5yr+), battle-tested, good Rust embedding story",
+  "no_std support, extensive stdlib (string, regex, maps, arrays)",
+  "Scope injection — pass Rust values directly to script context",
+  "Syntax: fn, let, if, for, while, #{}, arrays — familiar",
+  "AST caching — compile-once execute-many pattern",
+  "IDE support: rhai-lsp, VS Code extension",
+]
+weaknesses = [
+  "Dynamic typing — runtime type errors vs compile-time",
+  "Slower than JIT for hot paths (guard eval on every cmd)",
+  "No JIT — pure interpreter",
+  "Type erasure on Scope injection (Dynamic wrapper)",
+]
+
+# ─── roto evaluation (v0.11.0, May 2026) ────────────────────────────────────
+[roto]
+version      = "0.11.0"
+released     = "2026-05"
+repo         = "https://github.com/NLnetLabs/roto"
+jit          = true
+static_types = true
+stars        = "~200 (niche, production: NLnetLabs Iocaine proxy)"
+used_by      = ["Iocaine BGP/RPKI proxy — production routing policy engine"]
+strengths = [
+  "JIT-compiled (Cranelift backend) — fastest option for hot eval paths",
+  "Statically typed — compile-time correctness for guard patterns",
+  "library! macro — bulk type/fn registration, zero boilerplate",
+  "Rust-like syntax (fn, //, f-strings, enums, while, for)",
+  "Small footprint — purpose-built for embedded policy engines",
+  "Type-safe: Rust types flow through without Dynamic wrapping",
+  "Lists, enums, f-strings, first-class — sufficient for guard DSL",
+]
+weaknesses = [
+  "MISSING: hashmaps (only lists), generic functions, formatter, LSP",
+  "Young (v0.11.0) — API may break before 1.0",
+  "Niche community (NLnetLabs primary contributor)",
+  "No user-authored script ecosystem yet",
+  "JIT adds cranelift compile dep (~5MB binary bloat)",
+  "Not suitable for user-authored scripts (no IDE support, no LSP)",
+]
+
+# ─── Where each language wins in b00t ────────────────────────────────────────
+[comparison]
+
+# roto BETTER for:
+roto_wins = [
+  "hive guard evaluation — pattern-match commands, hot path, type-safe",
+  "datum validation rules — typed schemas, not user-authored",
+  "resource gate logic — GPU/RAM checks with typed thresholds",
+  "OODA state machine transitions — typed ControlFlow<B,C> semantics",
+  "compiled policy engines embedded in b00t-c0re-lib",
+]
+
+# rhai BETTER for:
+rhai_wins = [
+  "user-authored .rhai scripts (wow-master.rhai, custom hooks)",
+  "lifecycle hooks — extensible by operators without recompile",
+  "agent scripts — dynamic, exploratory, operator-controlled",
+  "anywhere LSP/IDE support matters (rhai-lsp exists, roto has none)",
+  "complex map/dict operations (roto lacks hashmaps)",
+  "long-term: more community-supported patterns",
+]
+
+# ─── Architecture Proposal ───────────────────────────────────────────────────
+[architecture]
+
+# ScriptEngine trait — abstract over both backends
+trait_def = """
+pub trait ScriptEngine: Send + Sync {
+    fn eval_guard(&self, script: &str, ctx: &GuardContext) -> Result<GuardAction>;
+    fn eval_hook(&self, script: &str, scope: &mut dyn ScopeProvider) -> Result<Value>;
+    fn compile(&self, script: &str) -> Result<CompiledScript>;
+}
+"""
+
+# Routing: use feature flags to select backend
+feature_rhai = "rhai-engine"   # default, already in workspace
+feature_roto = "roto-engine"   # opt-in, requires cranelift
+
+# Integration plan (phased):
+phases = [
+  "Phase 1: Add ScriptEngine trait to b00t-c0re-lib (no behavior change)",
+  "Phase 2: Wrap existing rhai usage behind RhaiEngine: ScriptEngine",
+  "Phase 3: Implement RotoEngine for guard evaluation (hot path)",
+  "Phase 4: Route guards → roto, hooks → rhai (transparent to operator)",
+  "Phase 5: Evaluate if roto gains hashmap support → broader adoption",
+]
+
+# Cargo.toml additions:
+cargo_additions = """
+[workspace.dependencies]
+roto = { version = "0.11", optional = true }
+
+[features]
+roto-engine = ["dep:roto"]
+rhai-engine = ["dep:rhai"]
+default     = ["rhai-engine"]
+"""
+
+# ─── Risk assessment ─────────────────────────────────────────────────────────
+[risks]
+roto_api_stability  = "HIGH — v0.11 pre-1.0; pin exact version, test on upgrade"
+roto_hashmap_gap    = "MED — guards can't use maps; workaround: pass typed Rust structs"
+dual_maintenance    = "LOW — trait abstraction isolates each backend; changes are local"
+binary_size         = "LOW — roto (cranelift) adds ~5MB; acceptable for b00t-cli"
+operator_confusion  = "LOW — operators write .rhai; roto is internal compiled logic only"
+
+# ─── Decision ────────────────────────────────────────────────────────────────
+[decision]
+verdict = "ADOPT DUAL — roto for compiled guard/gate logic, rhai for user scripts"
+priority = "Phase 1-2 now (trait abstraction), Phase 3 after roto 1.0 or hashmap support"
+tracking = "PRD-ARCH-ROTO-VS-RHAI"
+
+[[related]]
+datum = "_b00t_/datums/PRD-ARCH-013-VLLM-OODA-STATE-MACHINE.tomllmd"
+note  = "OODA state machine transitions = prime roto candidate (Phase 3)"
+
+[[related]]
+datum = "_b00t_/hive-guards.hive.toml"
+note  = "current guard definitions — roto target for Phase 3"
+
+# b00t:map v1
+# summary: roto(JIT/typed) for guards+gates, rhai(dynamic) for user scripts; ScriptEngine trait bridges both
+# tags: roto, rhai, scripting, architecture, guards, jit, prd
+# tier: frontier
+# cmds: cargo add roto --optional; cargo feature roto-engine
+# complexity: 7

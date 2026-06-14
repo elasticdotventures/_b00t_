@@ -1,0 +1,113 @@
+# quadctl — compose-like CLI for Podman Quadlets (incubating)
+# Status: INCUBATING — evaluate before replacing systemctl quadlet workflow
+# Repo: https://github.com/fkmiec/quadctl
+# PRE-REQ: Go 1.21+; go install github.com/fkmiec/quadctl@latest
+# OR: Download binary from GitHub releases
+#
+# @tribal: b00t hive currently uses direct systemctl --user for quadlets
+# quadctl adds compose-style UX + optional no-systemd mode for dev iteration
+# Both methods supported for compatibility (see [b00t.hive] integration below)
+
+[b00t]
+name    = "quadctl"
+type    = "cli"
+desires = "0.1.0"
+status  = "incubating"
+hint    = "Compose-like CLI for Podman Quadlets — local dev (no systemd) or systemd install mode"
+
+version       = "quadctl --version 2>&1"
+version_regex = '(\d+\.\d+\.\d+)'
+
+install = """
+set -eu
+# Install via go install (preferred) or binary download
+if command -v go >/dev/null 2>&1; then
+  go install github.com/fkmiec/quadctl@latest
+  echo "✅ quadctl installed via go install"
+else
+  echo "⚠️ go not found — install Go 1.21+ first or download binary from:"
+  echo "   https://github.com/fkmiec/quadctl/releases"
+  exit 1
+fi
+"""
+
+[[b00t.requirements]]
+name    = "podman"
+kind    = "command"
+command = "podman"
+hint    = "podman required for quadlet execution"
+
+# ─── Key concepts ────────────────────────────────────────────────────────────
+# quadctl start             → runs quadlets directly via podman (no systemd daemon-reload)
+# quadctl -s start          → uses systemd (daemon-reload, enable, start)
+# quadctl stop              → stops running containers
+# quadctl status            → show quadlet container status
+# quadctl install           → install quadlets into systemd user scope
+# quadctl uninstall         → remove from systemd user scope
+# Config: ~/.config/quadctl/quadctl.ini
+
+# ─── b00t hive integration strategy ─────────────────────────────────────────
+# CURRENT: b00t hive activate → systemctl --user + daemon-reload (fragile on first install)
+# QUADCTL: quadctl start → direct podman (fast iteration, no daemon-reload yak-shave)
+# HYBRID:  use quadctl for dev/test, `quadctl -s` for production/autostart
+#
+# Supported quadlet types: .container, .pod, .volume, .network, .kube, .quadlets
+# Location: ~/.config/containers/systemd/ (quadlets dir)
+
+# ─── Key commands ────────────────────────────────────────────────────────────
+[[b00t.usages]]
+description = "Start quadlets directly (no systemd — fast dev iteration)"
+command     = "quadctl start"
+
+[[b00t.usages]]
+description = "Start quadlets via systemd (daemon-reload + enable + start)"
+command     = "quadctl -s start"
+
+[[b00t.usages]]
+description = "Stop all quadlet containers"
+command     = "quadctl stop"
+
+[[b00t.usages]]
+description = "Show quadlet container status"
+command     = "quadctl status"
+
+[[b00t.usages]]
+description = "Install quadlets into systemd user scope"
+command     = "quadctl install"
+
+[[b00t.usages]]
+description = "Uninstall quadlets from systemd user scope"
+command     = "quadctl uninstall"
+
+[[b00t.usages]]
+description = "List available quadlet files"
+command     = "quadctl list"
+
+[[b00t.usages]]
+description = "Dry-run: show what would happen"
+command     = "quadctl --dry-run start"
+
+# ─── b00t hive compatibility shims ──────────────────────────────────────────
+# In justfile: prefer quadctl recipes alongside existing systemctl recipes
+# just quadctl-start      → quadctl start  (no-systemd, dev mode)
+# just quadctl-start-svc  → quadctl -s start (systemd mode)
+# just hive-activate PROFILE  → b00t hive activate PROFILE (unchanged)
+
+[[b00t.references]]
+name = "quadctl GitHub"
+url  = "https://github.com/fkmiec/quadctl"
+
+[[b00t.references]]
+name = "Podman Quadlet docs"
+url  = "https://docs.podman.io/en/latest/markdown/podman-systemd.unit.5.html"
+
+[[b00t.references]]
+name = "Quadlet systemd integration"
+url  = "https://www.redhat.com/en/blog/quadlet-podman"
+
+# b00t:map v1
+# summary: quadctl incubating — compose-like Podman Quadlet CLI; local dev OR systemd mode
+# tags: quadctl, podman, quadlet, systemd, containers, incubating
+# tier: sm0l
+# cmds: quadctl start, quadctl -s start, quadctl install
+# complexity: 3
