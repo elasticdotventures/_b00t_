@@ -1,0 +1,713 @@
+# 🤖 System Operator Role Praxis
+# Datum for continuously self-improving b00t system operators
+# Uses Rust type taxonomy for Mantis compatibility (vs OKR patterns)
+
+# b00t:map v1
+# summary: System operator role praxis - continuous self-improvement and context optimization
+# tags: sysop, operator, praxis, rust-types, self-improvement, context-optimization, token-efficiency
+# tier: frontier
+# cmds: b00t learn sysop-praxis, b00t task add --datum SYSOP-PRAXIS, b00t whoami --role=sysop
+# complexity: 10
+# deps: b00t-core, rust-std, agent-orchestration, mcp-integration
+
+type = "datum"
+version = "0.1.0"
+schema = "sysop/v1"
+
+title = "System Operator Role Praxis"
+description = "Continuously self-improving system operator framework using Rust type taxonomy for Mantis compatibility and token-efficient context optimization"
+
+# @tribal: This datum defines the meta-practice of b00t system operation - not just what operators do, but how they think and improve continuously. Replaces OKR patterns with Rust type structures.
+
+[datum.metadata]
+author = "b00t-hive"
+created = "2025-06-14"
+evolution = "weekly"
+license = "MIT"
+compatible = ["mantis", "rust-std", "agent-frameworks"]
+
+# ========================================
+# RUST TYPE TAXONOMY FOR DATUM CLASSIFICATION
+# ========================================
+[datum.types]
+# Core datum types (enum-based taxonomy)
+primary = ["role", "skill", "pattern", "recipe", "template", "tool", "integration"]
+secondary = ["config", "policy", "governance", "monitoring", "debugging", "optimization"]
+lifecycle = ["stable", "experimental", "deprecated", "learning"]
+
+# Quality indicators (struct fields)
+quality = { min_version = "0.1.0", test_coverage = 80, doc_complete = true }
+performance = { max_latency_ms = 100, memory_mb = 256, token_efficiency = 0.9 }
+
+# ========================================
+# CORE OPERATOR COMPETENCIES (Rust Traits)
+# ========================================
+[competencies]
+# @tribal: Operators implement these traits - think in terms of trait bounds and type constraints
+
+# Core trait definition
+trait = "SystemOperator"
+bounds = ["Self: Sized + Send + Sync", "Self: Clone + Debug"]
+description = "Base trait for all b00t system operators"
+
+# Required methods (trait functions)
+required_methods = [
+  "optimize_context(&mut self, token_budget: TokenBudget) -> ContextStrategy",
+  "evaluate_token_efficiency(&self, operation: &Operation) -> EfficiencyMetrics",
+  "delegate_to_subagent(&mut self, task: Task) -> AgentResult",
+  "continuous_improvement(&mut self, metrics: &SystemMetrics) -> ImprovementAction"
+]
+
+# ========================================
+# CONTINUOUS SELF-IMPROVEMENT FRAMEWORK
+# ========================================
+[self_improvement]
+# @tribal: The core loop - operators must improve their context compression and delegation strategies every session
+
+# Rust enum for improvement cycle
+enum = "ImprovementCycle"
+variants = [
+  "Analyze { metrics: SystemMetrics, patterns: Vec<Pattern> }",
+  "Optimize { strategy: OptimizationStrategy, target: ImprovementTarget }",
+  "Delegate { tasks: Vec<Task>, to_subagents: bool }",
+  "Learn { lessons: Vec<Lesson>, integrate: bool }",
+  "Evaluate { effectiveness: f64, next_actions: Vec<Action> }"
+]
+
+# Token efficiency targets (struct fields)
+token_budget = {
+  context_limit = 200000,      # 200K context window
+  target_efficiency = 0.85,     # 85% token utilization
+  compression_ratio = 2.5,      # 2.5x compression via summarization
+  delegation_threshold = 0.7    # Delegate tasks consuming >70% of context
+}
+
+# Context optimization strategies
+enum = "ContextStrategy"
+variants = [
+  "Summarize { granularity: SummaryLevel, preserve: Vec<KeyElement> }",
+  "Delegate { to_agent: AgentId, with_context: ContextSlice }",
+  "Archive { to_storage: StorageBackend, with_index: IndexStrategy }",
+  "Compress { using: CompressionMethod, quality: QualityLevel }"
+]
+
+# ========================================
+# DATUM TAXONOMY & TERMINOLOGY
+# ========================================
+[datum.taxonomy]
+# @tribal: B00t uses a hierarchical datum system - operators must master this taxonomy for effective knowledge management
+
+# Primary datum categories (enum)
+enum = "DatumCategory"
+variants = [
+  # Agent definitions
+  "Role { capabilities: Vec<Capability>, tier: AgentTier }",
+  "Skill { domain: Domain, complexity: Complexity, prerequisites: Vec<SkillId> }",
+  "Pattern { structural: bool, repeatable: bool, context_required: bool }",
+  "Recipe { ingredients: Vec<Resource>, steps: Vec<Action>, output: Artifact }",
+
+  # System integration
+  "Tool { binary: Path, interfaces: Vec<Interface>, integration: IntegrationLevel }",
+  "Integration { upstream: Service, protocol: Protocol, reliability: SLA }",
+  "Template { structure: TemplateType, parameters: Vec<Parameter>, instantiation: Strategy }",
+
+  # Operational knowledge
+  "Policy { constraints: Vec<Constraint>, enforcement: EnforcementLevel }",
+  "Config { schema: Schema, validation: Validation, defaults: Defaults }",
+  "Governance { decision_making: Process, escalation: Escalation, approval: ApprovalFlow }"
+]
+
+# Quality levels (enum with derive traits)
+enum = "DatumQuality"
+variants = ["Experimental", "Validated", "Stable", "Deprecated"]
+derive = ["Clone", "Copy", "Debug", "PartialEq", "Eq", "PartialOrd", "Ord"]
+
+# ========================================
+# SUB-AGENT ORCHESTRATION PATTERNS
+# ========================================
+[agent_orchestration]
+# @tribal: Modern operators don't do everything themselves - they orchestrate specialized sub-agents using typed patterns
+
+# Orchestration patterns (Rust struct with trait bounds)
+struct = "OrchestrationPattern"
+where = ["T: Agent, F: Fn(Task) -> AgentResult"]
+fields = {
+  primary_agent = "T",
+  specialist_pool = "Vec<T>",
+  delegation_strategy = "DelegationStrategy",
+  fallback_behavior = "FallbackBehavior"
+}
+
+# Delegation strategies (enum)
+enum = "DelegationStrategy"
+variants = [
+  "CognitiveTier { task: Task, tier: AgentTier }",  # Route by sm0l/ch0nky/frontier
+  "CapabilityMatch { required: Vec<Capability>, available: AgentPool }",
+  "ResourceGated { resources: Resources, task_requirements: Requirements }",
+  "AdversarialBounce { primary: AgentId, secondary: AgentId, criteria: BounceCriteria }"
+]
+
+# Recipe generation patterns (trait-based)
+trait = "RecipeGenerator"
+methods = [
+  "generate_recipe(&self, goal: Goal, constraints: Constraints) -> Recipe",
+  "optimize_recipe(&mut self, recipe: &mut Recipe, feedback: &Feedback) -> bool",
+  "validate_recipe(&self, recipe: &Recipe) -> Result<ValidationReport, Error>"
+]
+
+# ========================================
+# UNIFIED AI TOOL INTEGRATION
+# ========================================
+
+[tool_integration]
+# @tribal: b00t roles/skills/learn are currently fragmented - operators must see the unified taxonomy
+
+# Unified integration framework (struct with generics)
+struct = "ToolIntegrationFramework"
+fields = {
+  roles = "HashMap<RoleId, RoleDefinition>",
+  skills = "HashMap<SkillId, SkillDefinition>",
+  learn_modules = "HashMap<LearnId, LearnModule>",
+  integrations = "HashMap<ToolId, IntegrationConfig>"
+}
+
+# Integration types (enum with type safety)
+enum = "IntegrationType"
+variants = [
+  "MCP { server_name: String, capabilities: Vec<Capability> }",
+  "CLI { binary: Path, interface: CliInterface }",
+  "Native { library: String, api: ApiDefinition }",
+  "HTTP { endpoint: Url, auth: AuthMethod, rate_limit: RateLimit }"
+]
+
+# Fragmentation resolution (trait implementation)
+trait = "UnifiedOrchestrator"
+methods = [
+  "discover_tools(&mut self) -> Result<Vec<DiscoveredTool>, DiscoveryError>",
+  "classify_tool(&self, tool: &Tool) -> ToolCategory",
+  "integrate_tool(&mut self, tool: Tool) -> Result<IntegrationId, IntegrationError>",
+  "orchestrate(&mut self, task: Task) -> Result<TaskResult, OrchestrationError>"
+]
+
+# ========================================
+# B00T LEARN ENHANCEMENTS
+# ========================================
+[b00t_learn_enhancements]
+# @tribal: b00t learn should support agent-based exploration and Rhai script execution, not just tomllm rendering
+
+# Enhanced learn modes (enum)
+enum = "LearnMode"
+variants = [
+  "TomllmRender { template: String, variables: HashMap<String, String> }",
+  "AgentExplore { agent: AgentId, prompt: String, depth: ExploreDepth }",
+  "McpQuery { servers: Vec<Mc pServer>, query: Query, max_results: usize }",
+  "RhaiScript { script: String, context: RhaiContext, execution: ExecutionMode }"
+]
+
+# Explore mode configuration (struct)
+struct = "ExploreConfig"
+fields = {
+  max_depth = "usize",              # How many levels deep to explore
+  breadth_first = "bool",           # BFS vs DFS traversal
+  token_budget = "TokenBudget",
+  result_filter = "ResultFilter",  # What results to keep
+  summary_level = "SummaryLevel"   # How much to compress results
+}
+
+# Rhai script execution (trait with error handling)
+trait = "RhaiLearnExecutor"
+methods = [
+  "execute_learn_script(&mut self, script: &str, context: &LearnContext) -> Result<LearnOutput, LearnError>",
+  "validate_script(&self, script: &str) -> Result<ValidationReport, ScriptError>",
+  "compile_results(&mut self, results: Vec<RawResult>) -> Result<CompiledKnowledge, CompileError>"
+]
+
+# Learn result types (enum with generic parameters)
+enum = "LearnResult"
+variants = [
+  "Structured { knowledge: CompiledKnowledge, metadata: LearnMetadata }",
+  "Raw { data: Vec<u8>, format: DataFormat, source: DataSource }",
+  "Reference { url: String, summary: String, cache_key: CacheKey }",
+  "AgentGenerated { agent_id: AgentId, prompt: String, response: AgentResponse }"
+]
+
+# ========================================
+# DEEPWIKI KNOWLEDGE STRUCTURE
+# ========================================
+[deepwiki_structure]
+# @tribal: The b00t datum system is Karpathy DeepWiki - operators must understand how to structure knowledge for LLM consumption
+
+# Knowledge graph structure (struct with trait bounds)
+struct = "DeepWikiNode"
+where = ["T: Content, M: Metadata"]
+fields = {
+  identifier = "NodeID",
+  content = "T",
+  metadata = "M",
+  edges = "Vec<Edge>",
+  embedded_vectors = "Option<Vec<Embedding>>"
+}
+
+# Edge types (enum with type parameters)
+enum = "Edge"
+variants = [
+  "Directs { target: NodeID, relationship: Relationship }",
+  "Composed { components: Vec<Edge>, composition_type: CompositionType }",
+  "Conditional { condition: Condition, true_edge: Edge, false_edge: Edge }"
+]
+
+# Token optimization strategies (trait-based)
+trait = "TokenOptimizer"
+methods = [
+  "analyze_token_usage(&self, operation: &Operation) -> TokenAnalysis",
+  "suggest_compression(&self, content: &Content) -> CompressionStrategy",
+  "recommend_delegation(&self, task: &Task) -> DelegationPlan",
+  "optimize_context_window(&mut self, budget: &TokenBudget) -> ContextWindow"
+]
+
+# ========================================
+# MANTIS COMPATIBILITY LAYER
+# ========================================
+[mantis_compatibility]
+# @tribal: Everything must be compatible with Mantis (Rust) type system - no more OKR-style loose typing
+
+# Type safety guarantees (trait)
+trait = "MantisCompatible"
+where = ["Self: Sized + Send + Sync 'static"]
+methods = [
+  "to_rust_type(&self) -> TypeDefinition",
+  "validate_mantis_compatibility(&self) -> Result<ValidationReport, CompatibilityError>",
+  "generate_mantis_binding(&self) -> Result<BindingCode, GenerationError>"
+]
+
+# Core types (struct with serde support)
+struct = "SystemMetrics"
+derive = ["Clone", "Debug", "Serialize", "Deserialize")]
+fields = {
+  uptime_ms = "u64",
+  token_consumption = "TokenUsage",
+  agent_performance = "HashMap<AgentId, PerformanceMetrics>",
+  system_health = "HealthStatus",
+  resource_utilization = "ResourceMetrics"
+}
+
+# Performance tracking (enum with derive macros)
+enum = "PerformanceTier"
+variants = ["Sm0l", "Ch0nky", "Frontier"]
+derive = ["Clone", "Copy", "Debug", "PartialEq", "Eq", "PartialOrd", "Ord", "Serialize", "Deserialize"])
+
+# ========================================
+# OPENCLAW-INSPIRED SERVICE MODEL
+# ========================================
+[service_model]
+# @tribal: Similar to OpenCrew but using Mantis (Rust) - operators offer their optimized context as a service to other operators
+
+# Service offerings (trait with async support)
+trait = "ContextServiceProvider"
+methods = [
+  "offer_context_service(&mut self, service: ContextService) -> Result<ServiceId, ServiceError>",
+  "serve_context(&self, request: ContextRequest) -> Result<ContextResponse, ServiceError>",
+  "optimize_for_client(&mut self, client_requirements: ClientRequirements) -> OptimizationResult",
+  "negotiate_service_level(&mut self, sla: ServiceLevelAgreement) -> Result<Agreement, NegotiationError>"
+]
+
+# Service types (enum)
+enum = "ContextService"
+variants = [
+  "Summarization { granularity: SummaryLevel, domain: Domain }",
+  "PatternExtraction { domain: Domain, complexity: Complexity }",
+  "TokenOptimization { target_efficiency: f64, constraints: Constraints }",
+  "AgentOrchestration { pattern: OrchestrationPattern, scale: Scale }"
+]
+
+# Service level agreement (struct with validation)
+struct = "ServiceLevelAgreement"
+fields = {
+  provider = "OperatorId",
+  consumer = "OperatorId",
+  service_type = "ContextService",
+  quality_metrics = "QualityMetrics",
+  token_budget = "TokenBudget",
+  uptime_sla = "SLA",
+  penalty_clauses = "Vec<PenaltyClause>"
+}
+
+# ========================================
+# PRACTICAL OPERATOR WORKFLOWS
+# ========================================
+[operator_workflows]
+# @tribal: These are the concrete workflows operators should implement - think of them as trait implementations with concrete types
+
+# Daily optimization workflow
+struct = "DailyOptimization"
+fields = {
+  morning_analysis = "SystemStateAnalysis",
+  context_compression = "ContextCompressionStrategy",
+  delegation_plan = "DelegationPlan",
+  improvement_targets = "Vec<ImprovementTarget>"
+}
+
+# Weekly learning workflow
+struct = "WeeklyLearning"
+fields = {
+  lessons_learned = "Vec<Lesson>",
+  pattern_updates = "Vec<PatternUpdate>",
+  skill_development = "Vec<SkillDevelopment>",
+  taxonomy_refinement = "TaxonomyUpdate"
+}
+
+# Monthly review workflow
+struct = "MonthlyReview"
+fields = {
+  performance_review = "PerformanceReview",
+  token_efficiency_report = "TokenEfficiencyReport",
+  service_metrics = "ServiceMetrics",
+  next_month_goals = "Vec<Goal>"
+}
+
+# ========================================
+# MEASUREMENT & VALIDATION
+# ========================================
+[measurement_framework]
+# @tribal: Operators must measure everything - use Rust types for type-safe measurement collection
+
+# Metric types (enum with type parameters)
+enum = "Metric"
+variants = [
+  "Counter { name: String, value: u64, unit: Option<String> }",
+  "Gauge { name: String, value: f64, min: f64, max: f64 }",
+  "Histogram { name: String, buckets: Vec<f64>, samples: Vec<f64> }",
+  "Summary { name: String, count: u64, sum: f64, min: f64, max: f64, avg: f64 }
+]
+
+# Validation framework (trait with generics)
+trait = "Validator"
+methods = [
+  "validate<T>(&self, value: &T) -> Result<ValidationReport, ValidationError> where T: Validate",
+  "batch_validate<T>(&self, values: &[T]) -> Vec<Result<ValidationReport, ValidationError>> where T: Validate",
+  "continuous_validation(&mut self, stream: ValidationStream) -> ValidationStream"
+]
+
+# Quality gates (struct with type-safe enums)
+struct = "QualityGate"
+fields = {
+  name = "String",
+  criteria = "Vec<ValidationCriteria>",
+  enforcement = "EnforcementLevel",
+  fallback = "FallbackAction"
+}
+
+# ========================================
+# IMPLEMENTATION EXAMPLES
+# ========================================
+[implementation_examples]
+# @tribal: Concrete examples of how operators implement these traits in practice
+
+# Example operator implementation (impl block)
+impl_operator = """
+```rust
+use sysop_praxis::*;
+
+pub struct B00tOperator {
+    id: OperatorId,
+    context_strategy: ContextStrategy,
+    token_budget: TokenBudget,
+    metrics: SystemMetrics,
+}
+
+impl SystemOperator for B00tOperator {
+    fn optimize_context(&mut self, token_budget: TokenBudget) -> ContextStrategy {
+        // Analyze current context usage
+        let current_usage = self.metrics.token_consumption.current();
+        let efficiency = current_usage / token_budget.limit;
+
+        if efficiency < 0.85 {
+            ContextStrategy::Summarize {
+                granularity: SummaryLevel::Medium,
+                preserve: self.identify_key_elements(),
+            }
+        } else if token_budget.limit - current_usage < 10000 {
+            ContextStrategy::Delegate {
+                to_agent: AgentId::specialist("context-compression"),
+                with_context: self.extract_relevant_context(),
+            }
+        } else {
+            ContextStrategy::Compress {
+                using: CompressionMethod::Lossless,
+                quality: QualityLevel::High,
+            }
+        }
+    }
+
+    fn evaluate_token_efficiency(&self, operation: &Operation) -> EfficiencyMetrics {
+        let before = self.metrics.token_consumption.current();
+        // Execute operation and measure...
+        let after = self.metrics.token_consumption.current();
+
+        EfficiencyMetrics {
+            tokens_consumed: after - before,
+            tokens_saved: operation.token_estimate() - (after - before),
+            efficiency_ratio: (operation.token_estimate() / (after - before)) as f64,
+        }
+    }
+
+    fn delegate_to_subagent(&mut self, task: Task) -> AgentResult {
+        match self.classify_task_complexity(&task) {
+            TaskComplexity::Sm0l => {
+                // Use sm0l tier agent for simple tasks
+                let agent = self.get_agent_by_tier(AgentTier::Sm0l)?;
+                agent.execute(task)
+            },
+            TaskComplexity::Frontier => {
+                // Keep complex tasks for frontier models
+                self.execute_frontier(task)
+            },
+            TaskComplexity::Ch0nky => {
+                // Mid-tier delegation with context slice
+                let agent = self.get_agent_by_tier(AgentTier::Ch0nky)?;
+                let context = self.extract_task_context(&task, 0.7)?;
+                agent.execute_with_context(task, context)
+            },
+        }
+    }
+
+    fn continuous_improvement(&mut self, metrics: &SystemMetrics) -> ImprovementAction {
+        let improvement_cycle = self.analyze_improvement_opportunities(metrics);
+
+        match improvement_cycle {
+            ImprovementCycle::Analyze { metrics, patterns } => {
+                self.identify_patterns(metrics, patterns);
+                ImprovementAction::ContinueLearning
+            },
+            ImprovementCycle::Optimize { strategy, target } => {
+                self.apply_optimization_strategy(strategy, target);
+                ImprovementAction::MeasureResults
+            },
+            ImprovementCycle::Delegate { tasks, to_subagents } => {
+                self.implement_delegation(tasks, to_subagents);
+                ImprovementAction::MonitorDelegation
+            },
+            ImprovementCycle::Learn { lessons, integrate } => {
+                self.integrate_lessons(lessons, integrate);
+                ImprovementAction::ApplyLearning
+            },
+            ImprovementCycle::Evaluate { effectiveness, next_actions } => {
+                self.evaluate_effectiveness(effectiveness);
+                ImprovementAction::PlanNextCycle(next_actions)
+            },
+        }
+    }
+}
+```
+"""
+
+# Example service offering
+impl_service = """
+```rust
+impl ContextServiceProvider for B00tOperator {
+    fn offer_context_service(&mut self, service: ContextService) -> Result<ServiceId, ServiceError> {
+        let service_id = ServiceId::new();
+        let sla = ServiceLevelAgreement {
+            provider: self.id.clone(),
+            consumer: OperatorId::public(),
+            service_type: service.clone(),
+            quality_metrics: QualityMetrics {
+                min_quality: 0.9,
+                max_latency_ms: 100,
+                token_efficiency: 0.85,
+            },
+            token_budget: TokenBudget { limit: 50000 },
+            uptime_sla: SLA { target: 0.99 },
+            penalty_clauses: vec![],
+        };
+
+        self.register_service(service_id, service, sla)?;
+        Ok(service_id)
+    }
+
+    fn serve_context(&self, request: ContextRequest) -> Result<ContextResponse, ServiceError> {
+        match request.service_type {
+            ContextService::TokenOptimization { target_efficiency, constraints } => {
+                let optimized = self.optimize_context_for_target(target_efficiency, constraints)?;
+                Ok(ContextResponse::OptimizedContext {
+                    context: optimized,
+                    metrics: self.get_optimization_metrics(),
+                })
+            },
+            ContextService::PatternExtraction { domain, complexity } => {
+                let patterns = self.extract_patterns(domain, complexity)?;
+                Ok(ContextResponse::ExtractedPatterns {
+                    patterns,
+                    metadata: self.get_pattern_metadata(),
+                })
+            },
+            // ... other service types
+        }
+    }
+}
+```
+"""
+
+# ========================================
+# LEARNING PATHS & SKILL DEVELOPMENT
+# ========================================
+
+[learning_paths]
+# @tribal: Operators develop along these paths - use Rust trait system for type-safe skill progression
+
+# Core learning trajectory (enum with associated types)
+enum = "LearningPath"
+variants = [
+  "ContextOptimization {
+    current_level = "SkillLevel",
+    next_skills = "Vec<SkillId>",
+    mastery_criteria = "MasteryCriteria"
+  },
+  "AgentOrchestration {
+    current_patterns = "Vec<OrchestrationPattern>",
+    next_patterns = "Vec<PatternId>",
+    delegation_accuracy = "f64"
+  },
+  "TokenEfficiency {
+    current_ratio = "f64",
+    target_ratio = "f64",
+    optimization_techniques = "Vec<OptimizationTechnique>"
+  },
+  "SystemIntegration {
+    integrated_tools = "Vec<ToolId>",
+    integration_patterns = "Vec<IntegrationPattern>",
+    troubleshooting_skills = "Vec<DebuggingSkill>"
+  }
+]
+
+# Skill mastery levels (enum with derive traits)
+enum = "SkillLevel"
+variants = ["Novice", "Apprentice", "Practitioner", "Expert", "Master"]
+derive = ["Clone", "Copy", "Debug", "PartialEq", "Eq", "PartialOrd", "Ord"]
+
+# ========================================
+# TROUBLESHOOTING & DEBUGGING
+# ========================================
+
+[troubleshooting]
+# @tribal: System operators must be expert debuggers - use type-safe diagnostic frameworks
+
+# Diagnostic framework (trait with error types)
+trait = "SystemDiagnostic"
+methods = [
+  "diagnose_issue(&self, symptoms: &[Symptom]) -> Diagnosis",
+  "suggest_remedy(&self, diagnosis: &Diagnosis) -> Vec<Remedy>",
+  "apply_remedy(&mut self, remedy: &Remedy) -> Result<RemedyResult, Remed yError>",
+  "verify_fix(&self, diagnosis: &Diagnosis) -> VerificationResult"
+]
+
+# Common issue patterns (enum with type-safe error handling)
+enum = "CommonIssue"
+variants = [
+  "ContextOverflow { current_size: usize, limit: usize, overflow_rate: f64 }",
+  "AgentFailure { agent_id: AgentId, error: AgentError, recovery: RecoveryStrategy }",
+  "IntegrationIncompatibility { tool_a: ToolId, tool_b: ToolId, conflict: ConflictType }",
+  "TokenInefficiency { current_ratio: f64, target_ratio: f64, waste_sources: Vec<WasteSource> }"
+]
+
+# ========================================
+# FUTURE DIRECTIONS & EVOLUTION
+# ========================================
+
+[evolution_roadmap]
+# @tribal: This datum evolves weekly - operators should contribute to its evolution
+
+# Next generation capabilities (enum for planning)
+enum = "NextCapability"
+variants = [
+  "AutoOptimization { target: OptimizationTarget, threshold: f64 }",
+  "PredictiveDelegation { patterns: Vec<Pattern>, confidence: f64 }",
+  "CrossOperatorLearning { from_operators: Vec<OperatorId>, synthesis: SynthesisMethod }",
+  "SelfModifyingCode { safety_checks: Vec<SafetyCheck>, modification_scope: ModificationScope }"
+]
+
+# Research directions (vec of tuples)
+research_areas = [
+  ("Quantum context optimization", "High", "2025-Q3"),
+  ("Multi-operator consciousness", "Medium", "2025-Q4"),
+  ("Autonomous datum evolution", "High", "2025-Q2"),
+  ("Rust-AI type bridging", "Critical", "Ongoing")
+]
+
+# ========================================
+# COMMUNITY & COLLABORATION
+# ========================================
+
+[collaboration_framework]
+# @tribal: Operators don't work alone - they form communities and share optimized contexts
+
+# Collaboration patterns (struct with trait bounds)
+struct = "CollaborationFramework"
+where = ["T: Operator, U: Knowledge"]
+fields = {
+  participants = "Vec<T>",
+  shared_knowledge = "HashMap<KnowledgeId, U>",
+  communication_protocol = "CommunicationProtocol",
+  governance_structure = "GovernanceStructure"
+}
+
+# Knowledge sharing (trait with async)
+trait = "KnowledgeSharer"
+methods = [
+  "share_context(&self, recipient: &OperatorId, context: &Context) -> Result<SharingAck, SharingError>",
+  "receive_context(&mut self, sender: &OperatorId, context: Context) -> Result<ReceiptAck, ReceiptError>",
+  "negotiate_sharing_agreement(&mut self, counterparty: &OperatorId, terms: &SharingTerms) -> Result<Agreement, NegotiationError>"
+]
+
+# ========================================
+# CONCLUSION
+# ========================================
+
+[closing]
+# @tribal: This is a living datum - operators should contribute improvements and refinements weekly
+
+status = "Active Development"
+next_review = "2025-06-21"
+contributors = ["b00t-hive", "sysop-community"]
+license = "MIT"
+compatibility = "Mantis v1.0+, Rust 1.70+, Agent Frameworks 2.0+"
+
+# Call to action
+call_to_action = """
+This datum defines the frontier of system operator praxis. Operators who internalize these principles will:
+- Continuously optimize their token efficiency
+- Seamlessly delegate to specialized sub-agents
+- Offer optimized context services to other operators
+- Contribute to the evolution of b00t datum taxonomy
+
+Next steps:
+1. Internalize the Rust type taxonomy for datum classification
+2. Implement the SystemOperator trait in your practice
+3. Begin offering context services to other operators
+4. Contribute improvements to this datum weekly
+
+The future of system operation is Rust-typed, agent-orchestrated, and continuously self-improving.
+"""
+
+# ========================================
+# APPENDIX: QUICK REFERENCE
+# ========================================
+
+[appendix.quick_reference]
+# Core traits to implement
+core_traits = ["SystemOperator", "RecipeGenerator", "UnifiedOrchestrator", "RhaiLearnExecutor", "TokenOptimizer", "MantisCompatible", "ContextServiceProvider"]
+
+# Key structs to understand
+key_structs = ["OrchestrationPattern", "ExploreConfig", "SystemMetrics", "ServiceLevelAgreement", "DailyOptimization"]
+
+# Important enums to master
+important_enums = ["ImprovementCycle", "ContextStrategy", "DelegationStrategy", "DatumCategory", "LearnMode", "PerformanceTier"]
+
+# Type aliases for convenience
+type_aliases = [
+  "OperatorId = String",
+  "AgentId = String",
+  "TokenBudget = u64",
+  "ContextStrategy = Strategy",
+  "ServiceId = String"
+]

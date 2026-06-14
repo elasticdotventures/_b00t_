@@ -1,0 +1,95 @@
+# NEXT-TASK-HANDOFF-TEMPLATE: OODA Battle Plan Handoff
+# Machine-readable+human-readable task completion → next-task selection protocol
+# schema: 1 | last_updated: 2026-06-14
+
+[b00t]
+name = "NEXT-TASK-HANDOFF-TEMPLATE"
+type = "pattern__learn"
+hint = "OODA handoff template: completed task + artifacts + blockers + pre-selected next task; /next-task:N loop"
+
+[b00t.schema]
+schema = 1
+content = "stable"
+
+[b00t.sysml]
+stereotype = "«ActionUsage»"
+metaclass = "ActionUsage"
+bfo_class = "http://purl.obolibrary.org/obo/BFO_0000015"
+ufo_kind = "Process"
+owl_class = "https://b00t.promptexecution.com/ontology#NextTaskHandoff"
+
+# 🤓: This is a pattern__learn datum (PRD-007 sub-stereotype of learn).
+# Agents bless the /next-task: pattern after reading all sections.
+
+## OODA Handoff Schema
+
+# When an agent completes a task it MUST emit a handoff in this format:
+#
+# ```toml
+# [handoff]
+# completed_task = 24          # b00t task ID just finished
+# tier = "sm0l"                # who did it
+# artifacts = [                # what was produced (verifiable)
+#   "b00t-cli/src/datum_utils.rs:type_tags filter",
+#   "cargo test: 550 pass",
+# ]
+# otel_summary = "cmds=12 guard_hits=3 postel=2"  # from b00t session otel
+# blockers = []                # task IDs or descriptions blocking further progress
+# next_task = 25               # pre-selected lowest unblocked by priority
+# next_tier = "ch0nky"         # routing decision
+# next_cmd = "b00t task next"  # literal command to continue
+# stop_conditions = [          # when to stop this loop
+#   "all P1 tasks complete",
+#   "B00T_OTEL_ENDPOINT health check fails",
+# ]
+# ```
+
+## /next-task:N Protocol
+
+# The pattern `/next-task:N` in b00t means:
+# 1. Current task (implicitly the one the agent was working on) is DONE
+# 2. N = next task ID pre-selected by the agent
+# 3. Hand off context compressed to: handoff TOML + OTEL summary + 3 artifact refs
+# 4. Next agent boots with: `b00t task get N` + handoff context only
+#
+# This is the "digital thread" in practice: each handoff IS an entry in the thread.
+# The thread is queryable: `b00t task list --handoff-chain` (future CLI).
+
+## Resource Gate
+
+# Before each /next-task:N, the orchestrator MUST check:
+# ```
+# b00t hive status   # GPU/RAM gate for ch0nky/frontier tier
+# b00t task next     # confirms N is still highest priority unblocked
+# ```
+# If resource gate fails → handoff includes `blocked_by = "resource:gpu_mb=24000"`.
+
+## OODA Loop Instance
+
+# ```
+# [OBSERVE]  b00t session otel --scrape → metrics
+#            b00t datum filter --types=okr → KR status
+# [ORIENT]   b00t task next → identify next P1 unblocked task
+#            b00t whoami --role=<tier> → load role context (delta if available)
+# [DECIDE]   guard eval → tier assignment (sm0l/ch0nky/frontier)
+#            resource gate (b00t hive status)
+# [ACT]      @tier: b00t task get N; implement/fix/verify
+#            cargo test (sm0l) OR cargo build (ch0nky) → verify
+#            b00t task done N → emit handoff → /next-task:M
+# [LOOP]
+# ```
+
+## Acceptance Criteria (Pattern Blessing)
+
+# - [ ] Agent emits handoff TOML after every task completion
+# - [ ] Handoff includes OTEL summary from b00t session otel
+# - [ ] next_task is the ACTUAL `b00t task next` output (not a guess)
+# - [ ] Handoff fits in ≤200 tokens (compressed context)
+# - [ ] Thread continuity: each handoff references completed_task ID
+
+# b00t:map v1
+# summary: OODA handoff template — completed task + artifacts + otel_summary + next_task; /next-task:N loop protocol
+# tags: pattern, learn, ooda, handoff, digital-thread, a2a, next-task, orchestration
+# tier: sm0l
+# cmds: b00t task next, b00t session otel --scrape, b00t task done N, b00t task get N
+# complexity: 3

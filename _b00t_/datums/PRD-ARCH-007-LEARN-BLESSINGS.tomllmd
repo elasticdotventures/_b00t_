@@ -1,0 +1,133 @@
+# PRD-ARCH-007: Learn-Embedded Justfile Blessings
+# Pattern/idiom/jargon datums as b00t.type sub-stereotypes of learn topics
+# schema: 1 | last_updated: 2026-06-14
+
+[b00t]
+name = "PRD-ARCH-007-LEARN-BLESSINGS"
+type = "prd"
+hint = "Pattern/idiom datums embed justfile commands blessed by session state after training is read"
+
+[b00t.schema]
+schema = 1
+content = "proposed"
+
+[prd]
+id = "ARCH-007"
+title = "Learn-Embedded Justfile Blessings"
+status = "proposed"
+priority = 2
+tier = "ch0nky"
+links_tasks = []
+
+[b00t.sysml]
+stereotype = "«Requirement»"
+metaclass = "RequirementUsage"
+bfo_class = "http://purl.obolibrary.org/obo/BFO_0000031"
+ufo_kind = "Normative Description"
+owl_class = "https://b00t.promptexecution.com/ontology#LearnBlessingsPRD"
+
+## Problem
+
+# `b00t learn <topic>` loads a skill/pattern but the commands it teaches are always
+# available, regardless of whether training was acknowledged. This creates two risks:
+# 1. Agent invokes a blessed command WITHOUT having read the failure modes or syntax.
+# 2. Pattern/idiom/jargon datums have no first-class type — they float as `Unknown`.
+
+# Concretely: the fdfind guard redirects from `find`, but nothing verifies the agent
+# actually knows `fdfind` syntax before the redirect. A blessed command needs a
+# training gate: once the training is read+acknowledged, the command is enabled.
+
+## Finished State
+
+### Type Sub-stereotypes (b00t.type content tags)
+
+# `pattern__learn`, `idiom__learn`, `jargon__learn` are postel sub-stereotypes of
+# the `learn` topic datum type. They add:
+
+# ```toml
+# [b00t]
+# type = "pattern__learn"   # inherits learn semantics; adds blessing gate
+
+# [[b00t.blessings]]
+# command = "fdfind"
+# requires_ack = ["syntax", "failure_modes", "examples"]  # training sections
+# enabled = false           # toggled by session state after ack
+# ```
+
+### Session State Gate (Bouncer integration)
+
+# When agent attempts to invoke a blessed command:
+# 1. Bouncer input gate checks `b00t session blessing --cmd=<command>`
+# 2. If `enabled = false` → `Break("b00t learn fdfind -- not yet blessed")`
+# 3. If `enabled = true` → `Continue(<command>)`
+# 4. After `b00t learn <topic>` loads all required sections → auto-enable blessing
+
+### Justfile Embedding
+
+# Pattern datums MAY embed justfile recipes activated on blessing:
+
+# ```toml
+# [[b00t.blessings]]
+# command = "fdfind"
+# justfile_recipe = """
+# fdfind:
+#     fdfind {{pattern}} {{path}}
+# """
+# ```
+
+# `b00t task bless --cmd=fdfind` → installs recipe into active justfile scope.
+
+### Postel Normalization
+
+# | Input `b00t.type` | Canonical form | Inherited from |
+# |---|---|---|
+# | `pattern__learn` | pattern__learn | learn |
+# | `pattern` | pattern__learn | learn |
+# | `idiom__learn` | idiom__learn | learn |
+# | `idiom` | idiom__learn | learn |
+# | `jargon` | jargon__learn | learn |
+
+# `b00t datum filter --types=pattern` matches all three via `type_tags` substring.
+
+### Naming Convention (Agent Types)
+
+# The `__` separator encodes multiple-inheritance:
+# - `agent__cli` = Agent with Cli implementations
+# - `pattern__learn` = Pattern that IS a Learn topic
+# - `agent__cli__sdk` = Agent implementing Cli and SDK interfaces
+
+# This is the POSTEL extension of the existing `b00t.type` string:
+# accept any `{base}__{mixin}` form; the base type's contract must be satisfied.
+
+## Acceptance Criteria
+
+# - [ ] `b00t.type = "pattern__learn"` datums appear in `b00t datum filter --types=pattern`
+# - [ ] `b00t datum filter --types=pattern,idiom` returns pattern__learn and idiom__learn datums
+# - [ ] Bouncer gate checks `b00t session blessing --cmd=<command>` before execution
+# - [ ] `b00t learn <topic>` with all sections read → auto-triggers blessing for embedded cmds
+# - [ ] `b00t task bless --cmd=<command>` manually enables a blessed command
+# - [ ] Justfile recipe installed when blessing is granted
+
+## Sub-tasks
+
+# | # | title | tier | file |
+# |---|-------|------|------|
+# | 1 | `[[b00t.blessings]]` section in datum spec | sm0l | `_b00t_/datums/OKR-SCHEMA.tomllmd` refactor |
+# | 2 | `b00t session blessing --cmd=X` CLI command | ch0nky | `b00t-cli/src/commands/session.rs` |
+# | 3 | Bouncer input gate: check blessing before cmd | ch0nky | `b00t-bouncer/src/lib.rs` |
+# | 4 | `b00t learn` ack → auto-enable blessings | ch0nky | `b00t-cli/src/commands/learn.rs` |
+# | 5 | type_tags substring filter: `pattern` matches `pattern__learn` | sm0l | `b00t-cli/src/commands/datum.rs` |
+# | 6 | Test: learn fdfind → blessing enabled → invoke fdfind | ch0nky | `tests/learn_blessings.rs` |
+
+## Dependencies
+
+# - PRD-ARCH-004 (self-improve loop) — blessing state feeds violation classifier
+# - bouncer crate (existing b00t-bouncer) — input gate implementation
+# - b00t session state (alpha) — stores per-session blessing registry
+
+# b00t:map v1
+# summary: PRD for pattern__learn / idiom__learn sub-stereotypes; embedded justfile commands blessed via session state + bouncer gate
+# tags: prd, blessing, pattern, idiom, learn, session, bouncer, justfile, agent
+# tier: ch0nky
+# cmds: b00t session blessing --cmd=fdfind, b00t task bless --cmd=fdfind, b00t datum filter --types=pattern
+# complexity: 6

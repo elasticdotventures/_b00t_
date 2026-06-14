@@ -1,0 +1,117 @@
+# PRD-ARCH-015: Capability Evidence Loop in whoami
+
+# Status: draft
+# Task: b00t task #45
+
+[b00t]
+name = "PRD-ARCH-015-CAPABILITY-EVIDENCE-LOOP"
+type = "prd.arch"
+hint = "Encode the default operator loop as trait/DSL capability abstraction, memoized recipe pipeline, validation artifact, and probability-biased goal hint inside b00t whoami"
+tags = ["prd", "whoami", "operator", "capability", "evidence", "trait", "macro-dsl", "recipe", "bouncer", "goal-loop", "probability"]
+
+[objective]
+statement = "Make 80% of operator sessions begin with an explicit capability-evidence loop so actions become reusable abstractions, recipes, and validation artifacts instead of untracked one-off commands."
+
+[key_results]
+kr1 = "`b00t whoami --role=operator` displays the capability-evidence loop by default or by high-probability hint selection."
+kr2 = "Operator context tells agents to memoize actions as Rust traits or macro DSL abstractions when the pattern is reusable."
+kr3 = "Every nontrivial action has a recipe pipeline candidate, validation artifact, and bouncer evidence target."
+kr4 = "Variable probability display is supported so goal loops can bias agent behavior without pretending to be deterministic truth."
+kr5 = "whoami output stays context-small: one compact loop, one current probability hint, and links to task/PRD/datums."
+
+[current_state]
+whoami = "b00t-cli/src/whoami.rs renders AGENTS.md, optional AGENTS/--role=<role>.md supplements, then role datum summary."
+operator_role = "_b00t_/operator.agent.toml and _b00t_/learn/operator.md define operator recruitment/training behavior, but not the capability-evidence action loop."
+role_supplement = "AGENTS/--role=operator.md is the lowest-friction implementation target because whoami already loads role supplements before datum summaries."
+
+[core_loop]
+short = "Action -> Trait/DSL -> Recipe -> Validation Artifact -> Bouncer Evidence"
+steps = [
+  "Intent: bind work to b00t task id, PRD datum, or explicit Operator request",
+  "Capability: map the action to an existing Rust trait, macro DSL, datum type, or create a PRD for one",
+  "Recipe: memoize the deterministic command sequence as b00t/just pipeline candidate",
+  "Validation: produce test, dry-run, diff, JSONL event, dashboard row, or bouncer PASS/FAIL evidence",
+  "Memory: update datum tail-map, task note, or learn artifact for the next agent",
+]
+
+[trait_model]
+name = "B00tCapability"
+associated_types = ["Intent", "Plan", "Evidence", "Error"]
+methods = ["observe", "orient", "decide", "act", "validate"]
+notes = "The trait names mirror OODA but remain implementation-neutral; macro DSLs MAY generate these impls later."
+
+[macro_dsl_model]
+example = "b00t_capability!(name: semantic_patch, intent: PatchIntent, evidence: PatchEvidence, validates: [dry_run, diff, bouncer]);"
+policy = "Prefer macro DSL only when it reduces repeated boilerplate and preserves typed evidence."
+
+[whoami_encoding]
+target_80_percent = "operator, executive, specialist, and default worker contexts SHOULD receive this loop unless a role explicitly opts out."
+primary_path = "AGENTS/--role=operator.md"
+secondary_path = "role datum fields rendered by b00t-cli/src/whoami.rs"
+future_code_path = "Add probability-weighted hint selection in whoami after role supplement loading."
+
+[probability_hints]
+rationale = "Displaying a probability is an intentional behavioral nudge. It biases the agent inside the goal loop while preserving uncertainty."
+format = "P(<behavior>|role,task,harness)=0.80"
+examples = [
+  "P(use_existing_capability_before_new_code|operator)=0.80",
+  "P(record_recipe_pipeline_for_repeated_command|operator)=0.85",
+  "P(require_bouncer_evidence_for_mutation|operator)=0.90",
+  "P(raw_ad_hoc_python_mutation_is_infraction|operator)=0.95",
+]
+constraints = [
+  "Probability hints MUST NOT override explicit Operator instructions.",
+  "Probability hints MUST be evidence-backed or declared as heuristic.",
+  "Probability hints SHOULD be short enough for whoami output.",
+]
+
+[recipe_pipeline]
+required_fields = [
+  "task_id",
+  "intent",
+  "capability",
+  "command_sequence",
+  "dry_run_command",
+  "verification_command",
+  "evidence_path",
+  "bouncer_gate",
+]
+
+[validation_artifacts]
+acceptable = [
+  "Rust unit/integration test",
+  "just recipe or b00t command dry-run",
+  "unified diff or semantic patch delta",
+  "JSONL audit event",
+  "b00t agent dashboard row",
+  "bouncer PASS/FAIL contract",
+  "datum tail-map update",
+]
+
+[implementation_plan]
+phase1 = "Create AGENTS/--role=operator.md supplement with the compact capability-evidence loop and probability hints."
+phase2 = "Add role datum fields for capability loop and probability hints if a stable schema already exists, otherwise PRD only."
+phase3 = "Extend whoami renderer to show one probability-weighted goal-loop hint from role datum evidence."
+phase4 = "Add tests that whoami output includes the loop for operator and remains bounded."
+phase5 = "Feed bouncer/dashboard evidence back into hint probabilities."
+
+[bouncer]
+pass_requires = [
+  "whoami output contains compact loop for operator role",
+  "probability hints are visible but not dominant",
+  "recipe pipeline fields are named",
+  "raw ad hoc commands are treated as candidates for memoization",
+  "tests or snapshot evidence cover rendered output",
+]
+
+[open_questions]
+q1 = "Should probability hints be manually curated in role datums or generated from guard/dashboard evidence?"
+q2 = "Should whoami always show the highest-probability hint, or sample from top hints to avoid stale behavioral lock-in?"
+q3 = "Should macro DSL generation live in b00t-cli, b00t-c0re-lib, or a future b00t-datum-core crate?"
+
+# b00t:map v1
+# summary: PRD to encode an operator-default capability-evidence loop in b00t whoami with trait/DSL abstraction, memoized recipes, validation artifacts, bouncer evidence, and probability-biased goal hints
+# tags: prd, whoami, operator, capability, evidence, trait, macro-dsl, recipe, bouncer, goal-loop, probability
+# tier: frontier
+# cmds: b00t whoami --role=operator, b00t task list, b00t agent dashboard --limit 20
+# complexity: 8

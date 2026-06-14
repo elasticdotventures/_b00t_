@@ -1,0 +1,143 @@
+# PRD-ARCH-006: CLIF/OWL2/BFO Ontology Layer for tomllm Datums
+# SysMLv2 KerML stereotypes + CLIF axioms + BFO/UFO universals + SHACL/OWL2
+# schema: 1 | last_updated: 2026-06-14
+
+[b00t]
+name = "PRD-ARCH-006-CLIF-ONTOLOGY"
+type = "prd"
+hint = "Add [b00t.sysml] + [b00t.clif] + OWL2 class mapping to tomllm; SHACL-searchable knowledge graph"
+
+[b00t.schema]
+schema = 1
+content = "proposed"
+
+[prd]
+id = "ARCH-006"
+title = "CLIF/OWL2/BFO Ontology Layer for b00t Datums"
+status = "proposed"
+priority = 2
+tier = "frontier"
+links_tasks = [31]  # PRD-ARCH-006 task (to be assigned)
+
+## Problem
+
+# b00t datums have implicit types (`b00t.type = "agent"|"role"|"prd"|"okr"`) but:
+# - No formal ontological grounding → types are strings, not logic constants
+# - No cross-repo type-safe discovery → a `GuardManagerAgent` in b00t cannot link to
+#   equivalent concepts in l3dg3rr or a future physics simulator
+# - No invariant enforcement → any agent can write `type = "anything"`
+# - No SPARQL/SHACL query path → can't ask "all Dispositions with bouncer enabled"
+
+# Foundation for future: when physics simulator hits b00t, we need invariant
+# type-driven discovery across repos/languages. BFO/UFO provides those anchors.
+
+## Finished State
+
+# Every tomllm datum optionally carries:
+# ```toml
+# [b00t.sysml]
+# stereotype = "«Block»"           # SysMLv2 KerML stereotype
+# metaclass = "Class"              # KerML metaclass
+# bfo_class = "http://purl.obolibrary.org/obo/BFO_0000023"  # Role (BFO IRI)
+# ufo_kind = "Role"                # UFO ontological kind
+# owl_class = "https://b00t.promptexecution.com/ontology#GuardManagerAgent"
+# shacl_shape = "GuardManagerShape"  # SHACL shape name in b00t-ontology.ttl
+
+# [b00t.clif]
+# CLIF axioms expressed as TOML strings; transpiled to OWL2 at build time
+# 🤓 No Rust CLIF parser exists; CLIF is the authoring format, OWL2 is runtime
+# axioms = [
+#   "(forall (x) (if (GuardManagerAgent x) (Executive-Authorized x)))",
+#   "(forall (x) (if (GuardManagerAgent x) (has-audit-log x)))",
+# ]
+# ```
+
+# `b00t datums graph --format=owl2` → emits `b00t-ontology.ttl` (OWL2/Turtle)
+# `b00t datums graph --format=shacl` → emits `b00t-shapes.ttl` (SHACL shapes)
+# Both files loadable into Oxigraph or any OWL2 triplestore for SPARQL queries.
+
+## Rust SBOM (research-confirmed, minimal)
+
+# ```toml
+# Add to b00t-cli/Cargo.toml [dependencies]
+# horned-owl = "1.4"    # OWL2 AST + RDF/XML parser (primary)
+# oxrdf = "0.3"         # Lightweight RDF N-Triples/Turtle emitter
+# shacl = "0.3"         # SHACL Core validation
+# petgraph already in irontology-mcp v0.6 → upgrade to 0.8
+# ```
+
+# Note: `oxigraph` (SPARQL) deferred — heavy dep; use oxrdf + petgraph for graph queries first.
+
+## BFO/UFO and SysMLv2 Type Mapping
+
+# 🔗参 `SYSMLV2-KERML-SUPPLEMENT.tomllmd` — canonical vocabulary; do not duplicate here.
+
+## CLIF → OWL2 Transpilation Strategy
+
+# CLIF is the HUMAN authoring format (expressive, readable axioms).
+# OWL2/Turtle is the MACHINE runtime format (SHACL validation, SPARQL queries).
+
+# ```
+# [b00t.clif].axioms[]  →  offline transpiler  →  b00t-ontology.ttl
+#                                                     ↓
+#                                                horned-owl parse
+#                                                     ↓
+#                                                SHACL validate datums
+#                                                     ↓
+#                                                oxrdf emit Turtle
+# ```
+
+# Transpiler: shell script using existing CLIF tools (Common Logic tools, IKRIS project)
+# or hand-mapped for the small initial axiom set (< 50 axioms).
+
+## Postel/CLIF Equivalence Classes
+
+# Operator note: "Postel is itself a type of CLIF translation variant."
+# CLIF equivalence axioms express input normalization:
+
+# ```clif
+# ; All forms of P1/critical/1 are equivalent
+# (= (normalize-priority "P1") (normalize-priority "1")
+#    (normalize-priority "critical") "P1")
+# (= (normalize-priority "P2") (normalize-priority "2")
+#    (normalize-priority "high") "P2")
+# ```
+
+# These axioms map directly to Rust `value_parser` normalization logic.
+# The CLIF axiom is the specification; the Rust parser is the implementation.
+
+## Acceptance Criteria
+
+# - [ ] `[b00t.sysml]` section parsed by `tomllm` crate without error
+# - [ ] `[b00t.clif]` axioms section stored as string array
+# - [ ] `b00t datums graph --format=owl2` emits valid `b00t-ontology.ttl`
+# - [ ] `b00t datums graph --format=shacl` emits valid SHACL shapes file
+# - [ ] At least 5 datum types have BFO IRI mappings
+# - [ ] `horned-owl` can round-trip the emitted OWL2 (parse → serialize)
+# - [ ] guard-manager.agent.tomllmd has valid `[b00t.sysml]` section (dogfood)
+
+## Sub-tasks
+
+# | # | title | tier | file |
+# |---|-------|------|------|
+# | 1 | Add `[b00t.sysml]` + `[b00t.clif]` to tomllm crate schema | ch0nky | `b00t-cli/src/tomllm/schema.rs` |
+# | 2 | Add horned-owl + oxrdf + shacl to b00t-cli Cargo.toml | sm0l | `b00t-cli/Cargo.toml` |
+# | 3 | OWL2 emitter: `b00t datums graph --format=owl2` | ch0nky | `b00t-cli/src/datums/owl2.rs` |
+# | 4 | SHACL emitter: `b00t datums graph --format=shacl` | ch0nky | `b00t-cli/src/datums/shacl.rs` |
+# | 5 | BFO datum type mapping table (static Rust const) | sm0l | `b00t-cli/src/datums/bfo_map.rs` |
+# | 6 | CLIF axiom → OWL2 hand-transpile script (offline, 50 axioms) | ch0nky | `_b00t_/scripts/clif-to-owl2.sh` |
+# | 7 | Populate `[b00t.sysml]` in all 5 existing PRD datums | sm0l | `_b00t_/datums/PRD-ARCH-*.tomllmd` |
+# | 8 | Integration test: parse guard-manager datum → validate SHACL shape | sm0l | `tests/ontology_shacl.rs` |
+
+## Dependencies
+
+# - PRD-ARCH-001 (OKR) — OKR gets BFO:Process mapping
+# - PRD-ARCH-005 (MBSE viz) — OWL2 output feeds visualization layer
+# - `horned-owl`, `oxrdf`, `shacl` crates (not yet in hive Cargo.toml)
+
+# b00t:map v1
+# summary: PRD for CLIF/OWL2/BFO ontology layer — [b00t.sysml] KerML stereotypes, [b00t.clif] axioms, BFO/UFO type mapping, SHACL validation, horned-owl emitter; foundation for cross-repo physics-sim discovery
+# tags: prd, clif, owl2, bfo, ufo, shacl, sysmlv2, kerml, ontology, horned-owl, arch, frontier
+# tier: frontier
+# cmds: b00t datums graph --format=owl2, b00t datums graph --format=shacl
+# complexity: 9

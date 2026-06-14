@@ -1,0 +1,124 @@
+# PRD-ARCH-013: Datum Patch Router + Evidence-Backed Engines
+
+# Status: draft
+# Task: b00t task #43
+
+[b00t]
+name = "PRD-ARCH-013-DATUM-PATCH-ROUTER"
+type = "prd.arch"
+hint = "Extend b00t datum patch into an ontology-aware semantic mutation router with type-specific dialects, Serena support evidence, and bouncer gates"
+tags = ["prd", "datum-patch", "semantic-patch", "serena", "llama-patch", "bouncer", "ontology", "shacl", "sysmlv2"]
+
+[objective]
+statement = "Make `b00t datum patch` the deterministic front door for repository mutation by routing each target to a datum-type-specific patch dialect and evidence-backed engine."
+
+[key_results]
+kr1 = "`b00t datum patch` infers target type, media type, and language from datum metadata or evidence."
+kr2 = "Structured TOML/TOMLLM datums continue to use the existing tomllm-delta engine."
+kr3 = "Source/text targets route through named engines such as Serena or llama-patch instead of raw Python rewrites."
+kr4 = "Serena-supported languages and operations are maintained as datum evidence with source command, timestamp, and provenance."
+kr5 = "Every mutation emits intent, target, precondition, diff, verification, agent id, and bouncer PASS/FAIL evidence."
+kr6 = "Raw ad hoc Python mutation is logged as an infraction unless explicitly authorized by Operator."
+
+[scope]
+in = [
+  "Patch dialect registry keyed by b00t.type, media type, language, and operation",
+  "Engine evidence datums for Serena tools and supported language backends",
+  "Bouncer gate contract for dry-run, diff, verification, and audit evidence",
+  "Compatibility path for existing b00t datum patch TOML/TOMLLM behavior",
+]
+out = [
+  "Replacing Serena's MCP server implementation",
+  "Trusting llama-patch Python direct-write behavior",
+  "General fuzzy execution without deterministic routing",
+]
+
+[router]
+entrypoint = "b00t datum patch <target> <delta>"
+flow = [
+  "read target datum or file evidence",
+  "infer b00t.type, media type, language, and requested operation",
+  "select patch dialect",
+  "select engine from evidence-backed capabilities",
+  "run dry-run and emit diff",
+  "run bouncer input gate",
+  "apply only after deterministic preconditions pass",
+  "run verification commands",
+  "record bouncer output and observability evidence",
+]
+
+[[dialects]]
+name = "tomllm-delta"
+targets = [".toml", ".tomllm", ".tomllmd"]
+engine = "b00t.tomllm_delta"
+ops = ["replace", "set", "append", "remove"]
+status = "implemented-mvp"
+notes = "Comment preservation and base-hash integrity remain future hardening work."
+
+[[dialects]]
+name = "code-delta"
+targets = ["source"]
+engine_preference = ["serena", "llama-patch-rust"]
+ops = ["replace_content", "replace_symbol_body", "rename_symbol", "insert_before_symbol", "insert_after_symbol"]
+status = "proposed"
+notes = "Use Serena first when language and operation evidence match; use llama-patch Rust as diff-producing fallback."
+
+[[dialects]]
+name = "text-delta"
+targets = ["markdown", "plain-text", "unknown"]
+engine_preference = ["exact-replace", "unified-patch"]
+ops = ["replace_content", "apply_unified_diff"]
+status = "proposed"
+notes = "Unknown formats require dry-run diff and bouncer approval before apply."
+
+[engine.serena]
+kind = "mcp"
+registered = true
+evidence_source = "serena tools list"
+evidence_captured = "2026-06-14"
+ops = [
+  "replace_content",
+  "replace_symbol_body",
+  "rename_symbol",
+  "insert_before_symbol",
+  "insert_after_symbol",
+  "find_symbol",
+  "find_referencing_symbols",
+  "get_symbols_overview",
+  "get_diagnostics_for_file",
+]
+language_support_policy = "Maintain supported languages in this or a sibling engine datum as evidence artifacts gathered from Serena docs/config/tool output."
+
+[engine.llama_patch_rust]
+kind = "vendored-prototype"
+path = "vendor/llama-patch"
+policy = "Diff-producing fallback only until guarded write mode, integrity checks, and tests are integrated."
+
+[engine.llama_patch_python]
+kind = "legacy-reference"
+policy = "MUST NOT direct-write repository files. Python MAY exist below a named patch capability boundary only."
+
+[bouncer]
+pass_requires = [
+  "task id or explicit Operator request",
+  "changed files listed with narrow scope",
+  "dry-run diff or exact old/new content",
+  "verification command and result",
+  "bouncer PASS or justified WARN",
+  "observable audit event or dashboard evidence",
+]
+infraction = "raw-python-mutation"
+infraction_tags = ["guard", "warn", "mutation", "raw-python", "bouncer"]
+repeat_tags = ["repeat", "aberrant", "abberant", "panopticon", "kill"]
+
+[open_questions]
+q1 = "Should `b00t datum patch` remain the single entrypoint, or should `b00t code patch` exist as a lower-level engine command?"
+q2 = "Where should Serena language support evidence live: in `_b00t_/serena.mcp.toml`, a dedicated engine datum, or generated evidence JSONL?"
+q3 = "Should unknown-format patches block by default unless Operator grants an explicit one-shot approval?"
+
+# b00t:map v1
+# summary: PRD for ontology-aware `b00t datum patch` router with type-specific dialects, Serena evidence-backed code mutation, llama-patch fallback, and bouncer audit gates
+# tags: prd, datum-patch, semantic-patch, serena, llama-patch, bouncer, ontology, shacl, sysmlv2
+# tier: frontier
+# cmds: b00t datum patch <target> <delta>, serena tools list, b00t agent dashboard --limit 20
+# complexity: 8

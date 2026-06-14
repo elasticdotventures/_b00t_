@@ -1,0 +1,158 @@
+# PRD-ARCH-016: OODA Idiom + UFO/SysMLv2 Physics Reasoning Substrate
+
+# Status: draft
+# Task: b00t task #46
+
+[b00t]
+name = "PRD-ARCH-016-OODA-UFO-SYSML-PHYSICS-REASONING"
+type = "prd.arch"
+hint = "Make OODA a first-class b00t jargon idiom and generate UFO/SysMLv2/KerML/FOL knowledge representations from b00t datums, Rust libraries, and compiled capabilities for physics-aware simulation analysis"
+tags = ["prd", "ooda", "ufo", "sysmlv2", "kerml", "physics", "rust", "library", "fol", "clif", "owl2", "shacl", "gql", "embedding", "knowledge-graph"]
+
+[objective]
+statement = "Represent b00t as both an executable system and an ontological simulation model: OODA state transitions, Rust capabilities, datums, and libraries become queryable UFO/SysMLv2/KerML nodes with CLIF/FOL axioms, OWL2/SHACL validation, GQL traversal, and vector embeddings."
+
+[key_results]
+kr1 = "OODA is registered as a first-class jargon/idiom with explicit Observe, Orient, Decide, Act, Review semantics."
+kr2 = "b00t OODA runtime types emit ontology evidence compatible with PRD-ARCH-006 and PRD-ARCH-011."
+kr3 = "Rust crates and libraries in the compiled b00t binary can expose direct or abstract ontological representations."
+kr4 = "Generated representations include SysMLv2/KerML, UFO category, CLIF axioms, OWL2 class, SHACL shape, and property-graph/GQL edges where possible."
+kr5 = "Physics-capable datums can represent units, dimensions, constraints, processes, flows, simulation states, and validation cases."
+kr6 = "Search supports hybrid retrieval: semantic vectors plus logic-attached graph traversal through Rust/Python-filterable iterators."
+
+[existing_artifacts]
+ooda_runtime = "b00t-c0re-lib/src/ooda.rs"
+ooda_digital_thread = "_b00t_/datums/PRD-ARCH-011-DIGITAL-THREAD-ORCHESTRATION.tomllmd"
+clif_ontology = "_b00t_/datums/PRD-ARCH-006-CLIF-ONTOLOGY.tomllmd"
+sysml_vocab = "_b00t_/datums/SYSMLV2-KERML-SUPPLEMENT.tomllmd"
+capability_loop = "_b00t_/datums/PRD-ARCH-015-CAPABILITY-EVIDENCE-LOOP.tomllmd"
+
+[ooda_idiom]
+name = "OODA"
+expansion = "Observe -> Orient -> Decide -> Act"
+extension = "Review phase closes the b00t evidence loop."
+idiom = "Every nontrivial b00t capability SHOULD be expressible as an OODA state machine with typed evidence at each transition."
+probability_hint = "P(model_converges_when_goal_loop_is_named_OODA | b00t_operator)=0.80"
+
+[ooda_mapping]
+observe = "Collect events, datums, resource state, code graph, embeddings, telemetry, and operator intent."
+orient = "Normalize into UFO/SysML categories, retrieve semantic neighbors, validate SHACL shapes, and select capability traits."
+decide = "Choose deterministic recipe, patch dialect, sandbox profile, agent tier, or simulation branch."
+act = "Execute guarded command, semantic patch, simulation step, or agent dispatch."
+review = "Emit evidence: tests, diffs, JSONL events, bouncer PASS/FAIL, dashboard row, ontology delta."
+
+[type_generation]
+source_inputs = [
+  "b00t datums",
+  "Rust crate metadata and public API",
+  "compiled binary feature inventory",
+  "proc-macro capability declarations",
+  "MCP tool schemas",
+  "just recipe schemas",
+  "test and audit evidence",
+]
+outputs = [
+  "UFO category assignment",
+  "SysMLv2/KerML model fragments",
+  "CLIF/FOL axioms",
+  "OWL2/Turtle ontology classes",
+  "SHACL shapes",
+  "GQL/property-graph nodes and edges",
+  "embedding vectors with logic attachment metadata",
+]
+
+[rust_traits]
+traits = [
+  "OntologicalExport",
+  "SysMlExport",
+  "FolAxiomatize",
+  "ShaclShapeExport",
+  "GraphIterable",
+  "EmbeddingEvidence",
+  "PhysicsModel",
+]
+
+[rust_traits.contracts]
+OntologicalExport = "Expose stable identity, UFO kind, BFO/UFO anchors, and b00t type."
+SysMlExport = "Emit KerML/SysMLv2 fragments for structure, behavior, constraints, ports, and flows."
+FolAxiomatize = "Emit CLIF/FOL axioms that can be transpiled or attached to OWL2/SHACL artifacts."
+GraphIterable = "Expose Rust iterator over nodes/edges; Python bindings MAY wrap the same iterator."
+EmbeddingEvidence = "Attach vector model id, dimension, text span, source hash, and logic anchor ids."
+PhysicsModel = "Represent quantities, dimensions, conservation constraints, simulation state, and validation cases."
+
+[macro_dsl]
+name = "b00t_ontology!"
+example = "b00t_ontology!(type: OodaLoop, ufo: Process, sysml: BehaviorUsage, clif: [\"(forall (x) (if (OodaLoop x) (Process x)))\"]);"
+policy = "Macros SHOULD generate trait impls plus static inventory entries; hand-written impls remain valid for complex types."
+
+[physics_capability]
+purpose = "The next b00t iteration needs physical-world simulation, resource planning, and control-system analysis."
+model_elements = [
+  "quantity",
+  "unit",
+  "dimension",
+  "constraint",
+  "flow",
+  "port",
+  "process",
+  "state",
+  "transition",
+  "invariant",
+  "validation_case",
+]
+initial_domains = [
+  "local metal resources: CPU, RAM, GPU, disk, network",
+  "agent swarm cost, latency, and throughput",
+  "model inference resource envelopes",
+  "sandbox execution constraints",
+  "future robotics/IoT/physical simulation hooks",
+]
+
+[hybrid_reasoning]
+vector = "Semantic embeddings over datums, docs, Rust API summaries, evidence text, and simulation descriptions."
+logic = "CLIF/FOL axioms attached to embedding chunks and ontology nodes."
+owl2 = "Class hierarchy and ontology exchange runtime."
+shacl = "Shape validation for datums, generated types, and evidence artifacts."
+gql = "Property graph traversal over capabilities, calls, constraints, evidence, and simulation states."
+iterators = "Rust-first filterable iterators with Python bindings for exploration and notebooks."
+
+[query_examples]
+q1 = "Find Rust libraries in this binary that provide PhysicsModel and have SHACL-valid unit constraints."
+q2 = "Which b00t capabilities can Act without a bouncer gate?"
+q3 = "Which embeddings mention GPU memory but lack CLIF conservation/resource axioms?"
+q4 = "Generate SysMLv2/KerML for OodaLoop and simulate failure transitions under max_failures=1."
+q5 = "Traverse from a PRD to Rust trait impls, tests, audit events, and bouncer evidence."
+
+[implementation_plan]
+phase1 = "Register OODA in jargon as an idiom and update OODA tail-map evidence."
+phase2 = "Define OntologicalExport and GraphIterable traits in the appropriate core crate."
+phase3 = "Prototype b00t_ontology! macro for one runtime type: OodaLoop."
+phase4 = "Generate SysMLv2/KerML and CLIF fragments for OodaLoop, OodaPhase, and OodaGuardRails."
+phase5 = "Attach embedding evidence ids to generated ontology nodes."
+phase6 = "Add SHACL validation for generated OODA model fragments."
+phase7 = "Add physics primitives: Quantity, Unit, Dimension, Constraint, Flow, SimulationState."
+phase8 = "Expose Rust/Python graph iterators for hybrid vector+logic search."
+
+[acceptance]
+a1 = "`b00t learn jargon` surfaces OODA as a first-class idiom."
+a2 = "At least one Rust type (`OodaLoop`) exports UFO/SysMLv2/CLIF/graph evidence."
+a3 = "Generated SHACL validates OODA model fragments."
+a4 = "A GQL-like or Rust iterator query can traverse PRD -> trait -> implementation -> evidence."
+a5 = "Physics primitive datums can represent unit/dimension constraints and simulation states."
+a6 = "Embedding chunks carry source hash plus logic anchor ids so semantic retrieval can hand off to formal validation."
+
+[bouncer]
+pass_requires = [
+  "OODA jargon entry exists",
+  "PRD links existing OODA and ontology artifacts",
+  "trait/macro plan includes validation artifacts",
+  "physics scope is represented as typed primitives, not prose only",
+  "query examples include both semantic and formal reasoning paths",
+]
+
+# b00t:map v1
+# summary: PRD for first-class OODA idiom and UFO/SysMLv2/KerML/FOL representation of b00t, Rust libraries, physics models, embeddings, and queryable knowledge graph evidence
+# tags: prd, ooda, ufo, sysmlv2, kerml, physics, rust, library, fol, clif, owl2, shacl, gql, embedding, knowledge-graph
+# tier: frontier
+# cmds: b00t learn jargon, b00t datums graph --format=owl2, b00t datums graph --format=shacl, b00t whoami --role=operator
+# complexity: 10

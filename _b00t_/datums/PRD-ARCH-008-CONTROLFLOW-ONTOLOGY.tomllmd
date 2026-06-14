@@ -1,0 +1,162 @@
+# PRD-ARCH-008: ControlFlow Ontological Representation
+# Rust std::ops::ControlFlow as abstract invariant type in b00t ontology
+# schema: 1 | last_updated: 2026-06-14
+
+[b00t]
+name = "PRD-ARCH-008-CONTROLFLOW-ONTOLOGY"
+type = "prd"
+hint = "Map Rust ControlFlow<B,C> (Continue/Break) to b00t gate semantics and OWL2/BFO invariant types"
+
+[b00t.schema]
+schema = 1
+content = "proposed"
+
+[prd]
+id = "ARCH-008"
+title = "ControlFlow Ontological Representation"
+status = "proposed"
+priority = 2
+tier = "ch0nky"
+links_tasks = [30]   # PRD-ARCH-006 CLIF/OWL2/BFO layer
+
+[b00t.sysml]
+stereotype = "«ConstraintBlock»"
+metaclass = "ConstraintUsage"
+bfo_class = "http://purl.obolibrary.org/obo/BFO_0000016"
+ufo_kind = "Disposition"
+owl_class = "https://b00t.promptexecution.com/ontology#ControlFlowOntology"
+
+# 🤓: BFO_0000016 = Disposition — the disposition to Continue OR Break is a
+# genuine BFO disposition: it inheres in a process and is realized by the gate.
+
+## Problem
+
+# b00t gates (bouncer, hive-guards, delegation macro checks) all implement
+# a binary Continue/Break decision but lack a TYPED shared abstraction:
+
+# 1. Guards return `GuardAction::Allow | Warn | Block` (ad-hoc strings)
+# 2. Bouncer uses ad-hoc `Result<()>` for pass/fail
+# 3. Delegation macros expand unconditionally (no gate type)
+# 4. No ontological representation → can't query "which processes have a ControlFlow gate?"
+
+# Rust's `std::ops::ControlFlow<B, C>` is the canonical correct type for this:
+# - `Continue(C)` = proceed with value C
+# - `Break(B)` = halt with value B
+
+# b00t needs to ADOPT this type throughout and REPRESENT it in the ontology.
+
+## Finished State
+
+### Rust: Gate trait using ControlFlow
+
+# ```rust
+# use std::ops::ControlFlow;
+
+# /// Universal gate trait used by bouncer, guards, and delegation macros.
+# pub trait Gate<B, C> {
+#     fn evaluate(&self, ctx: &GateContext) -> ControlFlow<B, C>;
+# }
+
+# /// Standard gate types (parameterized):
+# /// Guard gate: ControlFlow<BlockReason, Command>
+# /// Bouncer gate: ControlFlow<DenialAuditRecord, ValidatedInput>
+# /// Delegation macro: ControlFlow<MacroError, ExpandedCommand>
+# ```
+
+### Ontological Mapping (OWL2 / BFO)
+
+# | Rust type | BFO class | SysMLv2 stereotype | OWL2 class |
+# |---|---|---|---|
+# | `ControlFlow<B,C>` | BFO_0000016 (Disposition) | «ConstraintBlock» | b00t:ControlFlowGate |
+# | `Continue(C)` | BFO_0000015 (Process) | «FlowPort» outgoing | b00t:ContinueFlow |
+# | `Break(B)` | BFO_0000023 (Role) | «FlowPort» blocked | b00t:BreakFlow |
+
+### CLIF Axioms (authored in [b00t.clif], transpile to OWL2)
+
+# ```
+# Every ControlFlow gate is exactly one of Continue or Break (disjoint union)
+# (forall (x) (if (ControlFlowGate x) (or (ContinueFlow x) (BreakFlow x))))
+# (forall (x) (not (and (ContinueFlow x) (BreakFlow x))))
+
+# A Guard that issues Block IS a BreakFlow
+# (forall (x) (if (and (Guard x) (issues-block x)) (BreakFlow x)))
+# ```
+
+### Higher-Order Gate Patterns (datum sub-stereotypes)
+
+# | Pattern | b00t.type | ControlFlow signature |
+# |---|---|---|
+# | Bouncer | `pattern__gate__bouncer` | `ControlFlow<DenialRecord, ValidatedInput>` |
+# | Guard | `pattern__gate__guard` | `ControlFlow<BlockReason, Command>` |
+# | Handoff | `pattern__gate__handoff` | `ControlFlow<HandoffError, AgentContext>` |
+# | Rate Limiter | `pattern__gate__ratelimit` | `ControlFlow<QuotaExceeded, TokenBudget>` |
+# | OKR Gate | `pattern__gate__okr` | `ControlFlow<KrFail, KrPass>` |
+
+# All inherit from `pattern__gate` which maps to `ControlFlow<B,C>` abstract type.
+
+### b00t hive guard alignment
+
+# Current: `GuardAction::Allow | Warn | Block`
+# Target:  `ControlFlow<GuardBlock, GuardAllow>`
+
+# ```rust
+# pub struct GuardAllow { pub command: String, pub redirect: Option<String> }
+# pub struct GuardBlock { pub reason: String, pub message: String }
+# pub type GuardFlow = ControlFlow<GuardBlock, GuardAllow>;
+# ```
+
+# The `repeat_threshold` field becomes a rate-limit sub-gate:
+# `ControlFlow<ThresholdExceeded, GuardAllow>`.
+
+### Handoff Pattern (explicit typed)
+
+# ```rust
+# pub struct HandoffContext {
+#     pub from_agent: String,
+#     pub to_agent: String,
+#     pub task_id: String,
+#     pub artifacts: Vec<Artifact>,
+#     pub blockers: Vec<String>,
+# }
+
+# pub enum HandoffGate {
+#     Continue(HandoffContext),  // artifacts verified, proceed
+#     Break(HandoffError),       // missing artifact / wrong tier
+# }
+# ```
+
+# Represented in datum: `b00t.type = "pattern__gate__handoff"`.
+
+## Acceptance Criteria
+
+# - [ ] `Gate<B,C>` trait in `b00t-bouncer/src/lib.rs` using `std::ops::ControlFlow`
+# - [ ] `GuardFlow = ControlFlow<GuardBlock, GuardAllow>` in `b00t-cli/src/hive.rs`
+# - [ ] `b00t.clif` CLIF axioms added to OWL2 ontology (PRD-ARCH-006)
+# - [ ] `pattern__gate` and sub-stereotypes queryable via `b00t datum filter --types=pattern__gate`
+# - [ ] Handoff pattern datum: `HANDOFF-PATTERN.pattern__gate.tomllmd`
+# - [ ] Bouncer datum updated: `[b00t.type] = "pattern__gate__bouncer"`
+# - [ ] OWL2 reasoning: query "which datums have ControlFlow gates?" via `b00t datums graph`
+
+## Sub-tasks
+
+# | # | title | tier | file |
+# |---|-------|------|------|
+# | 1 | `Gate<B,C>` trait + GuardFlow type alias | ch0nky | `b00t-bouncer/src/lib.rs` |
+# | 2 | Refactor hive.rs guard eval to return GuardFlow | ch0nky | `b00t-cli/src/hive.rs` |
+# | 3 | CLIF axioms for ControlFlow in PRD-ARCH-006 | sm0l | `_b00t_/datums/PRD-ARCH-006-CLIF-ONTOLOGY.tomllmd` |
+# | 4 | Handoff pattern datum | sm0l | `_b00t_/datums/HANDOFF-PATTERN.tomllmd` |
+# | 5 | Update bouncer datum b00t.type tag | sm0l | `_b00t_/datums/guard-manager.agent.tomllmd` |
+# | 6 | `b00t datum filter --types=pattern__gate` substring match | sm0l | `b00t-cli/src/commands/datum.rs` |
+
+## Dependencies
+
+# - PRD-ARCH-006 (CLIF/OWL2/BFO layer) — CLIF axiom authoring
+# - PRD-ARCH-007 (learn blessings) — `pattern__gate` is itself a `pattern__learn`
+# - `b00t-bouncer` crate (existing) — Gate trait target
+
+# b00t:map v1
+# summary: PRD for ControlFlow<B,C> as gate type in b00t — Gate trait, GuardFlow, CLIF axioms, handoff+bouncer pattern datums
+# tags: prd, controlflow, gate, bouncer, handoff, ontology, bfo, owl2, clif, pattern, rust
+# tier: ch0nky
+# cmds: b00t datum filter --types=pattern__gate, b00t datums graph --format=owl2
+# complexity: 7

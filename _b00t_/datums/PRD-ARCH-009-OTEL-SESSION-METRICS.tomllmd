@@ -1,0 +1,141 @@
+# PRD-ARCH-009: OTEL Internal Server + Session Metrics
+# b00t ships an embedded OpenTelemetry collector; command runs emit FOCUS-format metrics
+# schema: 1 | last_updated: 2026-06-14
+
+[b00t]
+name = "PRD-ARCH-009-OTEL-SESSION-METRICS"
+type = "prd"
+hint = "Embedded OTEL collector in b00t; guard+command runs emit FOCUS metrics; scrape endpoint in session state"
+
+[b00t.schema]
+schema = 1
+content = "proposed"
+
+[prd]
+id = "ARCH-009"
+title = "OTEL Internal Server + Session Metrics"
+status = "proposed"
+priority = 2
+tier = "ch0nky"
+links_tasks = [17]   # qwen36 ch0nky needed for implementation
+
+[b00t.sysml]
+stereotype = "«Block»"
+metaclass = "BlockUsage"
+bfo_class = "http://purl.obolibrary.org/obo/BFO_0000040"
+ufo_kind = "Functional Complex"
+owl_class = "https://b00t.promptexecution.com/ontology#OtelSessionMetrics"
+
+# @tribal: OTEL FOCUS = FinOps Open Cost and Usage Specification. b00t uses FOCUS
+# log stream semantics for command-level cost attribution (tokens, time, tier).
+# 🤓: BFO_0000040 = Material Entity — the OTEL server IS a physical process resource.
+
+## Problem
+
+# b00t executes hundreds of commands per session but has no quantified signal on:
+# - Which commands are run most (recipe optimization target)
+# - Which guards fire most (guard tuning signal → self-improve loop)
+# - Which datum types are unknown (type system evolution signal)
+# - Token cost per command tier (sm0l/ch0nky/frontier budget attribution)
+#
+# Without metrics, the self-improve loop (PRD-ARCH-004) is blind.
+# Without OTEL, b00t can't integrate with operator's existing observability stack.
+
+## Finished State
+
+# `b00t session status --metrics` prints current session OTEL summary:
+# ```
+# Session 630696 | 07:00-08:30 | 52 cmds | 14 guard hits | 3 unknown types
+# Top commands: b00t datum filter (12), cargo check (8), b00t task list (5)
+# Guard hits: pip_guard(0) find_guard(3) force_push_guard(0)
+# Token tiers: sm0l 12k | ch0nky 48k | frontier 210k
+# ```
+#
+# `b00t session otel --scrape` emits Prometheus text format for external scraper.
+#
+# `b00t session otel --focus` emits OTEL FOCUS JSON log stream to stdout/file.
+
+## Architecture
+
+# b00t-otel crate (new, minimal): embedded metrics server.
+# Uses opentelemetry-sdk + opentelemetry-prometheus (already MIT-licensed).
+# Metrics are session-scoped (reset on new session); exported on demand.
+#
+# ```
+# [session state]
+#     ↓ instrument
+# [b00t-otel]  ←── OtelCollector::record(event: MetricEvent)
+#     ↓ on demand
+# [/metrics scrape]  OR  [FOCUS JSON stream]  OR  [guard-violations.jsonl append]
+# ```
+#
+# MetricEvent variants:
+# - CommandRun { cmd: String, tier: Tier, duration_ms: u64, tokens: Option<u64> }
+# - GuardHit { guard_name: String, action: GuardAction, cmd: String }
+# - DatumTypeUnknown { type_str: String }
+# - DatumFilterRun { type_tag: Option<String>, result_count: usize }
+# - TaskUpdate { task_id: u32, status: String }
+
+## FOCUS Log Stream
+
+# FinOps Open Cost and Usage Spec (FOCUS) fields for b00t command events:
+#
+# | FOCUS field    | b00t mapping                          |
+# |----------------|---------------------------------------|
+# | BilledCost     | token_count * tier_cost_per_token     |
+# | ResourceType   | tier (sm0l / ch0nky / frontier)       |
+# | ServiceName    | "b00t"                                |
+# | ResourceId     | session_pid                           |
+# | Tags/cmd       | command string (truncated to 64 chars)|
+# | UsageAmount    | token_count                           |
+# | UsageUnit      | "tokens"                              |
+#
+# Stream target: `B00T_OTEL_FOCUS_FILE` env var (default: `guard-violations.jsonl` sidecar)
+# OR `B00T_OTEL_ENDPOINT` for OTLP gRPC push.
+
+## Known Recipes (Counter-Backed)
+
+# Each guard entry gains a `hit_count: AtomicU64` field populated at runtime.
+# Each `[[b00t.hive.guards]]` entry gets a `recipe_id` derived from pattern hash.
+# The OTEL server exposes:
+#   b00t_guard_hits_total{guard="find_guard", action="warn"} 3
+#   b00t_command_runs_total{cmd="cargo check"} 8
+#   b00t_unknown_datum_types_total{type="prd"} 1
+
+## Acceptance Criteria
+
+# - [ ] `b00t-otel` crate: `OtelCollector::new()`, `record(MetricEvent)`, `scrape() -> String`
+# - [ ] Guard eval path instruments GuardHit on every fire
+# - [ ] `deserialize_datum_type` instruments DatumTypeUnknown (already warns; add metric)
+# - [ ] `b00t session status --metrics` prints session summary
+# - [ ] `b00t session otel --scrape` emits valid Prometheus text
+# - [ ] `b00t session otel --focus` emits valid OTEL FOCUS JSON
+# - [ ] `B00T_OTEL_ENDPOINT` env → OTLP gRPC push (optional, guarded by feature flag)
+# - [ ] Test: inject 3 GuardHit events → scrape shows count=3
+
+## Sub-tasks
+
+# | # | title | tier | file |
+# |---|-------|------|------|
+# | 1 | `b00t-otel` crate skeleton: OtelCollector + MetricEvent | sm0l | `b00t-otel/src/lib.rs` |
+# | 2 | Guard hit instrumentation | sm0l | `b00t-cli/src/hive.rs` |
+# | 3 | DatumTypeUnknown metric (alongside existing warn) | sm0l | `b00t-cli/src/lib.rs` |
+# | 4 | `b00t session status --metrics` subcommand | ch0nky | `b00t-cli/src/commands/session.rs` |
+# | 5 | Prometheus text scrape endpoint | sm0l | `b00t-otel/src/prometheus.rs` |
+# | 6 | FOCUS JSON emitter | sm0l | `b00t-otel/src/focus.rs` |
+# | 7 | OTLP gRPC push (feature-gated `otel-push`) | ch0nky | `b00t-otel/src/otlp.rs` |
+# | 8 | Test: 3 guard hits → scrape shows 3 | sm0l | `b00t-otel/tests/metrics.rs` |
+
+## Dependencies
+
+# - PRD-ARCH-004 (self-improve loop) — metrics feed violation classifier
+# - PRD-ARCH-008 (ControlFlow ontology) — GuardFlow maps to GuardHit MetricEvent
+# - opentelemetry-sdk 0.24+ (MIT) — confirmed on blessed.rs
+# - opentelemetry-prometheus 0.17+ (MIT) — Prometheus text exporter
+
+# b00t:map v1
+# summary: Embedded OTEL collector in b00t session — guard hits, command runs, unknown types, FOCUS JSON stream, Prometheus scrape
+# tags: prd, otel, metrics, prometheus, focus, finops, guard, session, observability
+# tier: ch0nky
+# cmds: b00t session status --metrics, b00t session otel --scrape, b00t session otel --focus
+# complexity: 7

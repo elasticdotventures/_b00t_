@@ -1,0 +1,138 @@
+# PRD-ARCH-004: OKR-Driven Self-Improvement Loop
+# Wire guard-violations.jsonl → sm0l classify → ch0nky patch → frontier gate → apply
+# schema: 1 | last_updated: 2026-06-14
+
+[b00t]
+name = "PRD-ARCH-004-SELF-IMPROVE-LOOP"
+type = "prd"
+hint = "Wire existing b00t-skill-improve-loop.hive.toml to OKR-driven violation-to-patch pipeline"
+
+[b00t.schema]
+schema = 1
+content = "proposed"
+
+[prd]
+id = "ARCH-004"
+title = "OKR-Driven Self-Improvement Loop"
+status = "proposed"
+priority = 2
+tier = "ch0nky"
+links_tasks = [17]  # Debug qwen36 llamacpp systemd startup (needed for ch0nky)
+
+[b00t.sysml]
+stereotype = "«Requirement»"
+metaclass = "RequirementUsage"
+bfo_class = "http://purl.obolibrary.org/obo/BFO_0000031"
+ufo_kind = "Normative Description"
+owl_class = "https://b00t.promptexecution.com/ontology#SelfImproveLoopPRD"
+
+## Problem
+
+# `_b00t_/b00t-skill-improve-loop.hive.toml` exists but is not wired.
+# `guard-violations.jsonl` is accumulating violations (visible in git status, modified).
+# No automatic path from violation → diagnosis → tomllm patch → apply.
+
+# Self-improvement requires operator (frontier-tier human) to manually:
+# 1. Read guard-violations.jsonl
+# 2. Identify patterns
+# 3. Update datums or guards manually
+
+# This is toil. It should be the loop's job.
+
+## Finished State
+
+# When hive profile `b00t-skill-improve-loop` is active:
+# 1. sm0l reads `guard-violations.jsonl` → classifies violations by datum/guard rule
+# 2. ch0nky proposes `.tomllm.delta` patch for each recurring violation pattern
+# 3. frontier (or operator gate) validates patch before apply
+# 4. `b00t datum patch` applies approved delta
+# 5. OKR KR tracks: `wc -l guard-violations.jsonl` → target: 0 new violations/day
+
+# Loop runs on schedule (cron or systemd timer) ONLY when:
+# - `b00t hive status` confirms ch0nky VRAM is free (RTX3090 / 31GB gate)
+# - No active `in-progress` tasks at frontier tier
+
+## OKR Instance (dogfooding PRD-ARCH-001)
+
+# ```toml
+# [b00t]
+# name = "okr-hive-self-improve"
+# type = "okr"
+
+# [okr]
+# objective = "hive continuously reduces guard violations without operator intervention"
+# owner = "b00t-skill-improve-loop"
+
+# [[okr.kr]]
+# id = "kr1"
+# check = "tail -n 1 guard-violations.jsonl | jq '.timestamp' 2>/dev/null || echo none"
+# description = "no new violations in last 24h"
+# pass_pattern = "none"
+# owner = "sm0l"
+# status = "pending"
+
+# [[okr.kr]]
+# id = "kr2"
+# check = "wc -l < guard-violations.jsonl"
+# description = "violations file shrinks week-over-week"
+# pass_pattern = "^[0-9]+$"  # sm0l checks trend, not absolute
+# owner = "sm0l"
+# status = "pending"
+# ```
+
+## Pipeline
+
+# ```
+# [cron/systemd] every 6h
+#      │
+#      ▼
+# sm0l: b00t hive status                    # resource gate
+#      │ if ch0nky VRAM free
+#      ▼
+# sm0l: parse guard-violations.jsonl        # classify violations → JSON
+#      │ output: { violation_type, count, datum_ref }[]
+#      ▼
+# ch0nky: propose .tomllm.delta per type   # fix datum/guard causing violation
+#      │ output: <violation-type>.tomllm.delta
+#      ▼
+# frontier/operator: review delta           # gate: require approval if complexity > 5
+#      │ approve → apply
+#      ▼
+# sm0l: b00t datum patch <base> <delta>     # apply approved delta
+#      │
+#      ▼
+# sm0l: b00t datum update okr-hive-self-improve okr.kr[0].status=pass
+# ```
+
+## Acceptance Criteria
+
+# - [ ] `b00t-skill-improve-loop` hive profile activates without error
+# - [ ] sm0l violation classifier runs against `guard-violations.jsonl` (schema: see existing file)
+# - [ ] ch0nky generates at least 1 valid `.tomllm.delta` from real violations (dogfood test)
+# - [ ] `b00t datum patch` applies delta without corruption (depends PRD-ARCH-002)
+# - [ ] OKR datum `okr-hive-self-improve.tomllm` created and queryable
+# - [ ] Loop respects resource gate: does NOT run when ch0nky is loaded
+
+## Sub-tasks
+
+# | # | title | tier | file |
+# |---|-------|------|------|
+# | 1 | sm0l violation classifier script | sm0l | `_b00t_/scripts/classify-violations.rhai` |
+# | 2 | ch0nky delta proposer prompt template | ch0nky | `_b00t_/datums/VIOLATION-DELTA-PROMPT.tomllmd` |
+# | 3 | Wire pipeline steps in hive profile | ch0nky | `_b00t_/b00t-skill-improve-loop.hive.toml` |
+# | 4 | Create `okr-hive-self-improve.tomllm` instance | sm0l | `_b00t_/okr-hive-self-improve.tomllm` |
+# | 5 | Systemd timer for loop (6h interval, resource-gated) | ch0nky | `_b00t_/scripts/improve-loop.service` |
+# | 6 | Test: inject synthetic violation → verify delta proposed | ch0nky | `tests/self_improve_loop.rs` |
+
+## Dependencies
+
+# - PRD-ARCH-001 (OKR datum) — KR tracking
+# - PRD-ARCH-002 (delta protocol) — patch apply step
+# - Task 17 (qwen36 systemd) — ch0nky must be operational
+
+# b00t:map v1
+# summary: PRD for OKR-driven self-improvement loop — wires guard-violations.jsonl to violation classifier, delta proposer, operator gate, patch apply; resource-gated via hive status
+# tags: prd, self-improve, okr, loop, violations, delta, hive, arch, sm0l, ch0nky
+# tier: ch0nky
+# cmds: b00t hive activate=b00t-skill-improve-loop, b00t datum patch, b00t hive status
+# complexity: 7

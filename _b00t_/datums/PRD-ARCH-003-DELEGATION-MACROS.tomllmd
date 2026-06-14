@@ -1,0 +1,101 @@
+# PRD-ARCH-003: Delegation Shorthand Macros
+# Syntactic sugar for @sm0l/@ch0nky/@frontier delegation in agent prompts
+# schema: 1 | last_updated: 2026-06-14
+
+[b00t]
+name = "PRD-ARCH-003-DELEGATION-MACROS"
+type = "prd"
+hint = "Rhai macro expansion for @tier: delegation syntax in b00t hive run"
+
+[b00t.schema]
+schema = 1
+content = "proposed"
+
+[prd]
+id = "ARCH-003"
+title = "Delegation Shorthand Macros"
+status = "proposed"
+priority = 2
+tier = "sm0l"
+links_tasks = []
+
+[b00t.sysml]
+stereotype = "«Requirement»"
+metaclass = "RequirementUsage"
+bfo_class = "http://purl.obolibrary.org/obo/BFO_0000031"
+ufo_kind = "Normative Description"
+owl_class = "https://b00t.promptexecution.com/ontology#DelegationMacrosPRD"
+
+## Problem
+
+# Current delegation syntax is verbose (~15 tokens of structure per call):
+# ```bash
+# b00t agent delegate sm0l 'cargo test -p b00t-cli' --output-contract='PASS|FAIL:<5lines>'
+# ```
+
+# Agents writing swarm prompts repeat this structure for every sub-task.
+# Output contracts are not linked to `model-routing.tomllm` — they're hardcoded strings.
+
+## Finished State
+
+# Agent prompts use `@tier:` prefix syntax:
+# ```
+# @sm0l: cargo test -p b00t-cli
+# @ch0nky: implement OKR datum schema from PRD-ARCH-001
+# @frontier: evaluate security model for delta patch signing
+# ```
+
+# `b00t hive run` parses `@tier:` prefixes, looks up output contract from
+# `model-routing.tomllm`, expands to full `b00t agent delegate` call.
+
+# Output contracts are canonical — defined once in `model-routing.tomllm`, not per-call.
+
+## Macro Expansion Rules
+
+# | Input | Expands to |
+# |-------|-----------|
+# | `@sm0l: <cmd>` | `b00t agent delegate sm0l '<cmd>' --output-contract='PASS\|FAIL:<5lines>'` |
+# | `@ch0nky: <desc>` | `b00t agent delegate ch0nky '<desc>' --output-contract='diff+test'` |
+# | `@frontier: <q>` | `b00t agent delegate frontier '<q>' --output-contract='decision+rationale'` |
+# | `@sm0l[task-id]: <cmd>` | same + `--task=<task-id>` to update task status on completion |
+
+## Rhai Integration
+
+# Macros defined as Rhai functions in `_b00t_/delegation-macros.rhai` (embedded in hive profile):
+# ```rhai
+# fn sm0l(cmd) { delegate("sm0l", cmd, model_routing::output_contract("sm0l")) }
+# fn ch0nky(desc) { delegate("ch0nky", desc, model_routing::output_contract("ch0nky")) }
+# fn frontier(q) { delegate("frontier", q, model_routing::output_contract("frontier")) }
+# ```
+
+# `b00t hive run` pre-processes stdin for `@tier:` patterns before exec.
+
+## Acceptance Criteria
+
+# - [ ] `@sm0l: <cmd>` in `b00t hive run` stdin expands correctly (verified by dry-run output)
+# - [ ] Output contracts loaded from `model-routing.tomllm`, not hardcoded
+# - [ ] `@sm0l[task-id]:` syntax updates b00t task status after delegate returns
+# - [ ] Unrecognized `@foo:` prefix → warning, not silent drop
+# - [ ] `b00t hive run --dry-run` shows expansion without executing
+
+## Sub-tasks
+
+# | # | title | tier | file |
+# |---|-------|------|------|
+# | 1 | Parser: detect `@tier[opt]:` prefix in hive run stdin | sm0l | `b00t-cli/src/commands/hive.rs` |
+# | 2 | Load output contracts from model-routing.tomllm at expand time | sm0l | `b00t-cli/src/hive.rs` |
+# | 3 | Rhai macro registration for sm0l/ch0nky/frontier | sm0l | `_b00t_/delegation-macros.rhai` |
+# | 4 | `--task=<id>` flag on delegate: update task status on return | ch0nky | `b00t-cli/src/k0mmand3r/mod.rs` |
+# | 5 | Integration test: `echo '@sm0l: echo hi' \| b00t hive run --dry-run` | sm0l | `tests/delegation_macros.rs` |
+
+## Dependencies
+
+# - PRD-ARCH-001 (OKR) — optional but `@sm0l[task-id]:` needs task status update
+# - model-routing.tomllm must have `output_contract` field per tier (add if missing)
+
+# b00t:map v1
+# summary: PRD for @tier: delegation macros — Rhai expansion in hive run, output contracts from model-routing datum, task status update on return
+# tags: prd, delegation, macros, rhai, hive, tier, shorthand, arch
+# tier: sm0l
+# cmds: b00t hive run --dry-run, echo '@sm0l: cmd' | b00t hive run
+# complexity: 4

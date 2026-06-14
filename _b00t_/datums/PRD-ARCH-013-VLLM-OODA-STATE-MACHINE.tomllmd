@@ -1,0 +1,123 @@
+# PRD-ARCH-013: vllm/podman/quadlet OODA state machine + A2A error streaming
+
+[b00t.schema]
+version = "1"
+type = "prd"
+type_tags = ["arch", "prd", "ooda", "state-machine", "vllm", "a2a", "sm0l-filter"]
+
+[prd]
+title = "vllm/podman/quadlet OODA state machine + A2A sm0l error streaming"
+status = "draft"
+tier = "frontier"
+complexity = 9
+
+# @tribal: statig uses Outcome<State> not ControlFlow — bridge by mapping
+# Outcome::Transition → ControlFlow::Continue(next), terminal states → Break(exit)
+# 🤓 Kani is NOT a crate dep — it's a cargo subcommand toolchain; annotate with #[cfg(kani)] guards
+
+[[crates]]
+name = "statig"
+version = "0.4.1"
+downloads = "4.1M"
+role = "hierarchical async state machine — HSM backbone"
+# @example: #[state_machine(initial = \"State::idle()\")] impl VllmService { #[state] async fn idle(event: &VllmEvent) -> Outcome<State> }
+
+[[crates]]
+name = "zbus_systemd"
+version = "0.26000.0"
+downloads = "644K"
+role = "async D-Bus → systemd unit start/stop/status for quadlet services"
+# @example: zbus_systemd::Manager::new().await?.start_unit(\"vllm.service\", \"replace\").await
+
+[[crates]]
+name = "podman-client"
+version = "0.0.2"
+downloads = "779"
+role = "native Rust Unix socket Podman API — kube play + container status"
+# @tribal: podtender (0.5.0) is stale 2023; podman-client (2025) tracks Podman 5.x REST API
+
+[[crates]]
+name = "a2a-rs"
+version = "0.4.0"
+downloads = "6.7K"
+role = "A2A protocol v1.0.0 — SSE streaming TaskStatusUpdate for error fan-out"
+features = ["http-server", "http-client", "tracing"]
+# @example: impl AsyncTaskHandler for VllmMonitorAgent — streams only error lines back
+
+[[crates]]
+name = "async-openai"
+version = "latest"
+role = "sm0l filter — POST cargo output to local vllm/Ollama OpenAI-compat API"
+# @tribal: set OPENAI_BASE_URL=http://localhost:8000/v1 for local vllm endpoint
+
+[architecture]
+# OODA maps to statig lifecycle phases:
+# Observe  = entry_action (gather systemd state via zbus_systemd + podman-client)
+# Orient   = state handler body (evaluate ResourceGate from b00t hive status)
+# Decide   = ControlFlow<ExitCond, NextPhase> returned from helper fn
+# Act      = exit_action → zbus_systemd start/stop OR podman kube play
+
+# State hierarchy:
+#   VllmService (HSM root)
+#   ├── Idle
+#   ├── Installing (superstate)
+#   │   ├── Downloading        (hf download quadlet yaml + weights)
+#   │   ├── QuadletWriting     (write ~/.config/containers/systemd/vllm.kube)
+#   │   └── ServiceEnabling    (systemctl --user enable + start)
+#   ├── Running (superstate)
+#   │   ├── Warming            (await /health endpoint)
+#   │   └── Healthy
+#   ├── Stopping
+#   └── Failed { reason: String, retry_count: u8 }
+
+[ooda_exit_conditions]
+# ControlFlow<ExitCondition, OodaPhase>:
+success = "ControlFlow::Break(ExitCondition::Success)"
+resource_denied = "ControlFlow::Break(ExitCondition::ResourceInsufficient { needed_gb, available_gb })"
+max_retries = "ControlFlow::Break(ExitCondition::MaxRetriesExceeded(3))"
+continue_observe = "ControlFlow::Continue(OodaPhase::Observe)"
+
+[kani_invariants]
+# Annotate with #[cfg(kani)] #[kani::proof] — install: cargo install kani-verifier
+inv1 = "Running state requires prior pass through Installing"
+inv2 = "ResourceGate checked on every Installing entry_action"
+inv3 = "Failed retry_count bounded by MAX_RETRIES (3) — prevents infinite loop"
+inv4 = "Uninstall always reaches Idle within 5 transitions (bounded liveness)"
+
+[sm0l_filter_pattern]
+# just idiom — pipe long cmd output through sm0l model at local vllm endpoint
+just_recipe = """
+cargo-test-sm0l *ARGS:
+    cargo test {{ARGS}} 2>&1 | b00t ai filter-errors --model=sm0l --endpoint=http://localhost:8000/v1
+"""
+# filter-errors impl: read stdin line-by-line via tokio::io::BufReader,
+# batch to local qwen36 with prompt "output ONLY lines containing errors, never repeat"
+# this pattern amortizes frontier context costs by 80%+ on long cargo test runs
+
+[a2a_error_streaming]
+# VllmMonitorAgent implements AsyncTaskHandler
+# streams TaskStatusUpdate { state: Working, message: ErrorLine } for each error
+# parent frontier agent subscribes via a2a-rs SSE client
+# filter: only process updates where artifact.metadata["severity"] == "error"
+
+[implementation_order]
+step1 = "create b00t-c0re-lib/src/vllm_state.rs — statig HSM skeleton with 5 states"
+step2 = "wire zbus_systemd Observe phase — query systemd unit status"
+step3 = "wire podman-client Act phase — kube play + container health"
+step4 = "add ControlFlow<ExitCond, OodaPhase> decision layer"
+step5 = "add Kani proof annotations (cfg-gated)"
+step6 = "implement A2A sm0l error filter as VllmMonitorAgent"
+step7 = "add just recipes + b00t hive resource gate integration"
+step8 = "tests: mock zbus + podman, verify state transitions"
+
+[related_tasks]
+task_44 = "PRD: b00t sandbox run provider layer (hive-run + guards)"
+task_29 = "Guard Manager agent: authority to adjust hive guards"
+task_40 = "PRD-ARCH-011: Digital thread orchestration + OODA control plane"
+
+# b00t:map v1
+# summary: vllm+podman+quadlet lifecycle via statig HSM + OODA ControlFlow + a2a-rs sm0l error streaming
+# tags: vllm, podman, quadlet, statig, hsm, ooda, a2a, sm0l, zbus, kani, state-machine
+# tier: frontier
+# cmds: cargo install kani-verifier, b00t ai filter-errors --model=sm0l
+# complexity: 9

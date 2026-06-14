@@ -1,0 +1,96 @@
+# PRD-ARCH-001: OKR Typed Datum Schema
+# First-class OKR type for b00t datum system
+# Resolves gap: OKR is freetext in AGENTS.md, not queryable, not automatable
+# schema: 1 | last_updated: 2026-06-14
+
+[b00t]
+name = "PRD-ARCH-001-OKR-SCHEMA"
+type = "prd"
+hint = "Define OKR as a typed b00t datum — queryable, automatable, tier-routable"
+
+[b00t.schema]
+schema = 1
+content = "proposed"
+
+[prd]
+id = "ARCH-001"
+title = "OKR Typed Datum Schema"
+status = "proposed"
+priority = 2
+tier = "sm0l"
+links_tasks = [13]  # PRD: b00t datum executive discovery language
+
+[b00t.sysml]
+stereotype = "«Requirement»"
+metaclass = "RequirementUsage"
+bfo_class = "http://purl.obolibrary.org/obo/BFO_0000031"
+ufo_kind = "Normative Description"
+owl_class = "https://b00t.promptexecution.com/ontology#OkrSchemaPRD"
+
+## Problem
+
+# OKRs are freetext prose in AGENTS.md True Grit section:
+# - Not queryable by `b00t datums list --type=okr`
+# - Not linkable from `b00t task`
+# - Not automatable: sm0l agents cannot update KR status
+# - Re-emitted in full on every `b00t whoami` call — wasteful
+
+## Finished State
+
+# `b00t datums list --type=okr` returns all active OKRs.
+# `b00t task add "foo" --okr=<datum-name>` links task to KR.
+# sm0l agents can `b00t datum update <name> okr.kr[0].status=pass` without frontier involvement.
+# `b00t hive run` checks `okr.status != blocked` before resource-heavy ops.
+
+## Schema
+
+# ```toml
+# [b00t]
+# name = "okr-<slug>"
+# type = "okr"
+# hint = "one sentence objective"
+
+# [okr]
+# objective = "one sentence system outcome"
+# owner = "agent-pid-or-role"
+# quarter = "2026-Q3"
+# status = "active"  # active|blocked|complete|cancelled
+
+# [[okr.kr]]
+# id = "kr1"
+# description = "human-readable check"
+# check = "cargo test -p b00t-cli 2>&1 | tail -1"
+# pass_pattern = "test result: ok"
+# owner = "sm0l"
+# tier = "sm0l"
+# status = "pending"  # pending|pass|fail|blocked
+# task_ids = []
+# ```
+
+## Acceptance Criteria
+
+# - [ ] `_b00t_/datums/OKR.tomllmd` schema datum written and stable
+# - [ ] `b00t datum list --type=okr` returns OKR datums
+# - [ ] `b00t task add <title> --okr=<name>` links task to KR (append task_id)
+# - [ ] sm0l agent can set `okr.kr[n].status` via `b00t datum update`
+# - [ ] At least one live OKR instance datum created for current hive goal
+
+## Sub-tasks
+
+# | # | title | tier | cmd |
+# |---|-------|------|-----|
+# | 1 | Write OKR schema datum | sm0l | write `_b00t_/datums/OKR.tomllmd` |
+# | 2 | Add --type filter to `b00t datum list` | sm0l | edit `b00t-cli/src/commands/datum.rs` |
+# | 3 | Add --okr flag to `b00t task add` | ch0nky | edit `b00t-cli/src/commands/task.rs` |
+# | 4 | Write 1 live OKR instance as dogfood test | sm0l | write `_b00t_/datums/okr-arch-uplift.tomllm` |
+
+## Dependencies
+
+# - None (unblocked)
+
+# b00t:map v1
+# summary: PRD for OKR typed datum — schema, CLI flags, acceptance criteria, sub-tasks
+# tags: prd, okr, datum, arch, schema, task, frontier
+# tier: sm0l
+# cmds: b00t datums list --type=okr, b00t task add <title> --okr=<name>
+# complexity: 3

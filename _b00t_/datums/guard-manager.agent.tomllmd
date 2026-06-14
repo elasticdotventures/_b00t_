@@ -1,0 +1,134 @@
+# Guard Manager Agent — Privileged hive guard authority
+# Authority: exclusive write access to _b00t_/hive-guards.hive.toml
+# Future: requires ed25519-signed executive request to modify guards
+# schema: 1 | last_updated: 2026-06-14
+
+[[b00t.agent.inherits]]
+from = "++abstract.agent"
+
+[b00t]
+name = "guard-manager"
+type = "agent"
+hint = "Privileged agent with exclusive write authority to hive guard registry"
+
+[b00t.schema]
+schema = 1
+content = "proposed"
+
+[b00t.agent]
+pid = "guard-manager-001"
+model = "sm0l"           # guard CRUD is deterministic; no frontier needed
+skills = ["guard-read", "guard-write", "guard-audit", "hive-cmdb"]
+personality = "laconic"
+humor = "low"
+role = "specialist"
+tier = "sm0l"
+
+[b00t.agent.ipc]
+socket = "/tmp/b00t/agents/guard-manager.sock"
+pubsub = true
+protocol = "msgpack"
+
+[b00t.agent.crew]
+role = "specialist"
+captain = false
+
+# ── Authority Boundary ──────────────────────────────────────────────────────
+
+[b00t.agent.authority]
+# Files this agent is AUTHORIZED to modify (explicit allowlist)
+write_paths = [
+  "_b00t_/hive-guards.hive.toml",
+  "_b00t_/guard-violations-archive/*.jsonl",
+]
+# Files this agent may READ only
+read_paths = [
+  "guard-violations.jsonl",
+  "_b00t_/*.hive.toml",
+]
+# All other write attempts → bouncer BLOCK
+
+# ── Bouncer: Privilege Separation ──────────────────────────────────────────
+
+[b00t.agent.bouncer]
+enabled = true
+audit_log = ".b00t/guard-manager-audit.jsonl"
+
+[b00t.agent.bouncer.input_gates]
+sanitize = { enabled = true, rules = ["no-shell-injection", "no-path-traversal"] }
+permission_check = { enabled = true, required_role = "executive" }  # callers must be executive tier
+rate_limit = { enabled = true, max_per_minute = 10 }               # guard changes are rare
+
+[b00t.agent.bouncer.output_gates]
+contract_validation = { enabled = true }
+audit_tags = { enabled = true, require_tags = ["guard-action"] }
+
+# ── Guard Operations ────────────────────────────────────────────────────────
+
+[b00t.agent.ops]
+# Each operation writes an audit entry to guard-manager-audit.jsonl
+# Format: { ts, op, guard_pattern, action, requester_pid, sig_verified }
+
+[[b00t.agent.ops.commands]]
+name = "guard-add"
+desc = "Add new guard pattern to hive-guards.hive.toml"
+auth = "executive"                # current: role check; future: ed25519 sig
+audit = true
+example = "b00t agent message guard-manager '{\"op\":\"guard-add\",\"pattern\":\"find \",\"action\":\"warn\",\"message\":\"use fdfind\"}'"
+
+[[b00t.agent.ops.commands]]
+name = "guard-remove"
+desc = "Remove guard by pattern from hive-guards.hive.toml"
+auth = "executive"
+audit = true
+
+[[b00t.agent.ops.commands]]
+name = "guard-list"
+desc = "List all active guards with violation counts"
+auth = "any"                      # read is open
+audit = false
+
+[[b00t.agent.ops.commands]]
+name = "guard-audit"
+desc = "Emit last N guard-manager audit entries"
+auth = "any"
+audit = false
+
+# ── Cryptographic Gate (FUTURE) ─────────────────────────────────────────────
+
+[b00t.agent.crypto]
+enabled = false                   # ⚠️ FUTURE: not yet implemented
+scheme = "ed25519"
+# When enabled: any guard modification request MUST include:
+#   { sig: "<ed25519-hex>", pubkey: "<executive-pubkey>", payload_hash: "<sha256>" }
+# Unsigned requests → bouncer BLOCK regardless of role
+authorized_keys = []              # populated from executive.role.tomllm pubkeys when enabled
+key_rotation_days = 90
+
+# ── SysMLv2 Stereotype ──────────────────────────────────────────────────────
+
+[b00t.sysml]
+stereotype = "«SecurityGateway»"
+metaclass = "Block"
+bfo_class = "http://purl.obolibrary.org/obo/BFO_0000016"  # Disposition (realizable)
+ufo_kind = "Role"                                           # UFO role bearing GuardAuthority quality
+owl_class = "https://b00t.promptexecution.com/ontology#GuardManagerAgent"
+
+[[b00t.usage]]
+description = "Request guard-manager to add a new guard (executive auth)"
+command = "b00t agent message guard-manager '{\"op\":\"guard-add\",\"pattern\":\"...\",\"action\":\"warn\",\"message\":\"...\"}'"
+
+[[b00t.usage]]
+description = "List all guards via guard-manager"
+command = "b00t agent message guard-manager '{\"op\":\"guard-list\"}'"
+
+[[b00t.usage]]
+description = "View guard-manager audit trail"
+command = "cat .b00t/guard-manager-audit.jsonl | tail -20"
+
+# b00t:map v1
+# summary: guard-manager agent datum — privileged write authority to hive-guards.hive.toml; executive auth required; future: ed25519 signing gate; BFO Disposition / UFO Role
+# tags: guard, security, agent, privilege, sandbox, ed25519, executive, bouncer, audit, sysmlv2
+# tier: ch0nky
+# cmds: b00t agent message guard-manager '{"op":"guard-list"}', cat .b00t/guard-manager-audit.jsonl
+# complexity: 6

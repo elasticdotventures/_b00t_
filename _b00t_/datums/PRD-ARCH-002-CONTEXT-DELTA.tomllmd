@@ -1,0 +1,109 @@
+# PRD-ARCH-002: Context Delta Protocol (llama-patch reborn)
+# Minimal context injection via typed TOML diffs — fixes 20% token waste
+# schema: 1 | last_updated: 2026-06-14
+
+[b00t]
+name = "PRD-ARCH-002-CONTEXT-DELTA"
+type = "prd"
+hint = "RFC 6902-style .tomllm.delta format for agent context compression"
+
+[b00t.schema]
+schema = 1
+content = "proposed"
+
+[prd]
+id = "ARCH-002"
+title = "Context Delta Protocol"
+status = "proposed"
+priority = 2
+tier = "ch0nky"
+links_tasks = [15]  # Build b00t-datum-core library skeleton
+
+[b00t.sysml]
+stereotype = "«Requirement»"
+metaclass = "RequirementUsage"
+bfo_class = "http://purl.obolibrary.org/obo/BFO_0000031"
+ufo_kind = "Normative Description"
+owl_class = "https://b00t.promptexecution.com/ontology#ContextDeltaPRD"
+
+## Problem
+
+# llama-patch (github.com/PromptExecution/llama-patch) attempted diff-based context injection
+# against untyped markdown. It failed because the source wasn't pre-formatted.
+
+# tomllm fixed the FORMAT. The next step: agents should inject only DELTAS to context,
+# not full datum reloads.
+
+# Current: `b00t whoami --role=domain-architect` → ~4K tokens (full AGENTS.md)
+# Target:  `b00t whoami --role=domain-architect` → ~1.1K tokens (base cached + 100-token delta)
+
+# 20% total agent cost is boilerplate headers. Delta protocol eliminates this across all roles.
+
+## Finished State
+
+# `.tomllm.delta` files express RFC 6902-style operations on TOML paths.
+# `b00t datum patch <base> <delta>` applies delta and emits merged result.
+# `b00t whoami --role=X` loads `++abstract.agent.tomllm` (base, cached) + `X.role.delta`.
+# `tomllm` Rust crate gains `TomllmDelta` struct with `apply()` method.
+
+## Delta Format
+
+# ```toml
+# X.role.delta — applies to ++abstract.agent.tomllm
+[delta]
+base = "_b00t_/++abstract.agent.tomllm"
+version = "sha256:abc123"  # base content hash for integrity
+
+[[delta.ops]]
+op = "replace"
+path = "b00t.agent.role"
+value = "domain-architect"
+
+[[delta.ops]]
+op = "append"    # merge into array
+path = "b00t.agent.skills"
+value = "okr-routing"
+
+[[delta.ops]]
+op = "set"       # add if missing
+path = "b00t.agent.tier_override"
+value = "frontier"
+# ```
+
+## Ops Supported (MVP)
+
+# | op | semantics |
+# |----|-----------|
+# | `replace` | overwrite scalar value at path |
+# | `append` | push item to array at path |
+# | `remove` | delete key at path |
+# | `set` | insert key if not present, else no-op |
+
+## Acceptance Criteria
+
+# - [ ] `tomllm` crate: `TomllmDelta::apply(base, delta) -> Result<TomllmDoc>` with tests
+# - [ ] `b00t datum patch <base.tomllm> <delta.tomllm.delta>` CLI command
+# - [ ] `b00t whoami --role=executive` uses delta if `executive.role.delta` exists
+# - [ ] Token count for `whoami --role=executive` drops by ≥50% vs current
+# - [ ] Integrity check: delta with wrong base hash → `Err(DeltaMismatch)`
+
+## Sub-tasks
+
+# | # | title | tier | file |
+# |---|-------|------|------|
+# | 1 | `TomllmDelta` struct + `apply()` in `tomllm` crate | ch0nky | `b00t-cli/src/tomllm/delta.rs` |
+# | 2 | `b00t datum patch` CLI subcommand | ch0nky | `b00t-cli/src/commands/datum.rs` |
+# | 3 | Write `executive.role.delta` as dogfood proof | sm0l | `_b00t_/executive.role.delta` |
+# | 4 | Wire `b00t whoami --role` to prefer delta over full reload | ch0nky | `b00t-cli/src/commands/whoami.rs` |
+# | 5 | Token-count regression test (assert delta < 1500 tokens) | sm0l | `tests/whoami_token_budget.rs` |
+
+## Dependencies
+
+# - `toml_edit` crate (already in b00t-cli Cargo.toml — check)
+
+# b00t:map v1
+# summary: PRD for context delta protocol — .tomllm.delta format, b00t datum patch CLI, tomllm crate extension, 50% token reduction target
+# tags: prd, context, delta, tomllm, patch, token, compression, arch
+# tier: ch0nky
+# cmds: b00t datum patch <base> <delta>, b00t whoami --role=X
+# complexity: 6

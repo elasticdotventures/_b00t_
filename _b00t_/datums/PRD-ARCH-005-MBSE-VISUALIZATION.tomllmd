@@ -1,0 +1,111 @@
+# PRD-ARCH-005: MBSE Visualization via l3dg3rr Ontology
+# Expose b00t datums as l3dg3rr ontology nodes → governance diagram
+# schema: 1 | last_updated: 2026-06-14
+
+[b00t]
+name = "PRD-ARCH-005-MBSE-VISUALIZATION"
+type = "prd"
+hint = "Extend l3dg3rr ontology-extractor to ingest .tomllm datums → MBSE diagram of b00t"
+
+[b00t.schema]
+schema = 1
+content = "proposed"
+
+[prd]
+id = "ARCH-005"
+title = "MBSE Visualization: b00t Datum Ontology Graph"
+status = "proposed"
+priority = 3
+tier = "ch0nky"
+links_tasks = []
+
+[b00t.sysml]
+stereotype = "«Requirement»"
+metaclass = "RequirementUsage"
+bfo_class = "http://purl.obolibrary.org/obo/BFO_0000031"
+ufo_kind = "Normative Description"
+owl_class = "https://b00t.promptexecution.com/ontology#MbseVisualizationPRD"
+
+## Problem
+
+# b00t datums ARE a typed ontology:
+# - `b00t.type` = node type (agent, role, mcp, skill, prd, okr, stack, ...)
+# - `[[b00t.agent.inherits]]` = inheritance edges
+# - `🔗参` link comments = cross-datum references
+# - `b00t:map v1` tail-maps = fast-scannable metadata
+
+# l3dg3rr already has:
+# - `ontology-extractor` crate — extracts typed graph from Rust source
+# - `rotel-visual` crate — isometric SVG + Mermaid visualization
+# - `mdbook-rhai-mermaid` — Rhai DSL → diagram rendering (PRD-3 in progress)
+# - `plantuml` MCP server — available for TOGAF/MBSE diagram output
+
+# But datums are not wired to any of these. Governance and architecture are invisible.
+
+## Finished State
+
+# `b00t datums graph --format=mermaid` emits Mermaid flowchart of all datums:
+# - Nodes: one per datum, labeled with `b00t.type` + `b00t.name`
+# - Edges: `inherits`, `🔗参` links, `links_tasks`, `stack_requires`
+# - Color coding by tier (sm0l=green, ch0nky=yellow, frontier=red)
+
+# `b00t datums graph --format=plantuml` → pipes through `plantuml` MCP → SVG output.
+
+# Optional: expose as l3dg3rr `OntologyNode`/`OntologyEdge` format so `rotel-visual`
+# renders the full hive architecture as isometric SVG (same as l3dg3rr's bookkeeping graph).
+
+## Technical Approach
+
+# l3dg3rr's `ontology-extractor` already has:
+# ```rust
+# pub struct OntologyNode { id, label, node_type, properties }
+# pub struct OntologyEdge { from, to, edge_type, label }
+# ```
+
+# Add new input adapter: `TomllmOntologyAdapter` that reads `.tomllm`/`.tomllmd` files
+# and emits `OntologyNode` + `OntologyEdge` without touching visualization code.
+
+# Node extraction:
+# - `b00t.name` → `id`
+# - `b00t.type` → `node_type`
+# - `b00t.hint` → `label`
+# - `b00t:map v1` tags → `properties.tags`
+
+# Edge extraction:
+# - `[[b00t.agent.inherits]]` → `inherits` edge
+# - `# 🔗参 <path>` comments → `references` edge
+# - `links_tasks = [N]` → `linked_task` edge to task node
+# - `stack_requires = ["X"]` → `requires` edge
+
+## Acceptance Criteria
+
+# - [ ] `TomllmOntologyAdapter::extract(dir) -> Vec<(OntologyNode, Vec<OntologyEdge>)>` in l3dg3rr
+# - [ ] `b00t datums graph --format=mermaid` outputs valid Mermaid flowchart (render test)
+# - [ ] All 30+ existing `.tomllm` datums appear as nodes
+# - [ ] At least 10 typed edges extracted from existing `🔗参` comments
+# - [ ] `b00t datums graph --format=plantuml` pipes to plantuml MCP → PNG/SVG
+# - [ ] Optional: `rotel-visual` accepts tomllm ontology as input source
+
+## Sub-tasks
+
+# | # | title | tier | file |
+# |---|-------|------|------|
+# | 1 | `TomllmOntologyAdapter` in l3dg3rr ontology-extractor | ch0nky | `vendor/l3dg3rr/crates/ontology-extractor/src/tomllm.rs` |
+# | 2 | `b00t datums graph` CLI subcommand | ch0nky | `b00t-cli/src/commands/datum.rs` |
+# | 3 | Mermaid serializer for OntologyGraph | sm0l | `b00t-cli/src/datums/graph_render.rs` |
+# | 4 | PlantUML serializer (pipe to plantuml MCP) | sm0l | `b00t-cli/src/datums/plantuml.rs` |
+# | 5 | Test: extract 30+ datums → assert node count ≥ 30 | sm0l | `tests/datum_graph.rs` |
+# | 6 | Optional: rotel-visual input source for tomllm | ch0nky | `vendor/l3dg3rr/crates/rotel-visual/src/sources/tomllm.rs` |
+
+## Dependencies
+
+# - l3dg3rr `ontology-extractor` crate must be available (vendor/l3dg3rr/crates/)
+# - `plantuml` MCP server (already configured in b00t MCP list)
+# - PRD-ARCH-001 (OKR) — OKR nodes should appear in graph
+
+# b00t:map v1
+# summary: PRD for MBSE visualization — TomllmOntologyAdapter in l3dg3rr, b00t datums graph CLI, Mermaid/PlantUML output, optional rotel-visual integration
+# tags: prd, mbse, ontology, visualization, l3dg3rr, mermaid, plantuml, datum, arch
+# tier: ch0nky
+# cmds: b00t datums graph --format=mermaid, b00t datums graph --format=plantuml
+# complexity: 6

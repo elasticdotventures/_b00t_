@@ -1,0 +1,130 @@
+# SysMLv2 / KerML Supplement for b00t Datum Schema
+# Defines stereotype vocabulary and metaclass mapping for [b00t.sysml] section
+# schema: 1 | last_updated: 2026-06-14
+
+[b00t]
+name = "SYSMLV2-KERML-SUPPLEMENT"
+type = "specification"
+hint = "SysMLv2 KerML stereotype vocabulary for tomllm [b00t.sysml] sections"
+
+[b00t.schema]
+schema = 1
+content = "draft"
+
+## Purpose
+
+# Every tomllm datum MAY carry a `[b00t.sysml]` section conforming to this vocabulary.
+# This enables: KerML-conformant modeling, MBSE diagram generation, cross-repo type alignment.
+
+## [b00t.sysml] Field Reference
+
+# ```toml
+# [b00t.sysml]
+# Required if sysml section present
+# stereotype = "«Block»"        # KerML stereotype string (see table below)
+# metaclass = "Class"           # KerML metaclass (Class | Feature | Type | Struct)
+
+# Optional ontological anchors
+# bfo_class = "https://..."     # BFO class IRI (purl.obolibrary.org/obo/BFO_NNNNNNN)
+# ufo_kind = "Kind"             # UFO ontological category
+# owl_class = "https://..."     # b00t ontology OWL2 class IRI
+# shacl_shape = "ShapeName"     # SHACL shape name in b00t-shapes.ttl (generated)
+
+# Optional CLIF authoring axioms
+# [b00t.clif]
+# axioms = [
+#   "(forall (x) (if (MyType x) (has-property x)))",
+# ]
+# ```
+
+## Stereotype Vocabulary
+
+### Structural stereotypes (KerML «Classifier» family)
+# | Stereotype | Metaclass | b00t.type | Notes |
+# |------------|-----------|-----------|-------|
+# | `«Block»` | Class | agent | Self-contained capability unit |
+# | `«InterfaceBlock»` | Class | mcp | MCP server as interface block |
+# | `«Package»` | Package | hive_profile | Hive profile groups services |
+# | `«Library»` | Package | stack | Tech stack library collection |
+# | `«DataType»` | DataType | datum | Abstract datum type |
+
+### Behavioral stereotypes (KerML «Behavior» family)
+# | Stereotype | Metaclass | b00t.type | Notes |
+# |------------|-----------|-----------|-------|
+# | `«BehaviorUsage»` | Feature | skill | Executable skill/capability |
+# | `«ActionUsage»` | Feature | task | b00t task = executable action |
+# | `«StateUsage»` | Feature | okr | OKR tracks state transitions |
+
+### Constraint / requirement stereotypes
+# | Stereotype | Metaclass | b00t.type | Notes |
+# |------------|-----------|-----------|-------|
+# | `«Constraint»` | ConstraintUsage | guard | Guard = executable constraint |
+# | `«Requirement»` | RequirementUsage | prd | PRD = stakeholder requirement |
+# | `«VerificationCase»` | CaseUsage | test | b00t test datum (future) |
+
+### Port / flow stereotypes
+# | Stereotype | Metaclass | b00t.type | Notes |
+# |------------|-----------|-----------|-------|
+# | `«FlowPort»` | PortUsage | role | Agent role = flow connection point |
+# | `«ProxyPort»` | PortUsage | delegation | Delegation = proxy port |
+
+## BFO Universal Reference (abbreviated)
+
+# | BFO IRI | BFO Name | Description |
+# |---------|----------|-------------|
+# | BFO_0000001 | Entity | Root universal |
+# | BFO_0000002 | Continuant | Persists through time |
+# | BFO_0000003 | Occurrent | Happens in time |
+# | BFO_0000015 | Process | Occurrent with temporal parts |
+# | BFO_0000016 | Disposition | Realized under conditions |
+# | BFO_0000023 | Role | Externally grounded in relations |
+# | BFO_0000027 | Object Aggregate | Collection of objects |
+# | BFO_0000031 | Generically Dependent Continuant | Information artifact |
+
+# Full BFO IRI base: `http://purl.obolibrary.org/obo/`
+
+## UFO Ontological Categories
+
+# | UFO Kind | Description | Typical b00t use |
+# |----------|-------------|-----------------|
+# | `Kind` | Rigid, essential sortal | datum base types |
+# | `SubKind` | Rigid, specialized sortal | skill subtypes |
+# | `Role` | Anti-rigid, relational | agent roles |
+# | `Phase` | Anti-rigid, intrinsic | hive profile phases |
+# | `Mixin` | Non-sortal, rigid | shared capability mixins |
+# | `RoleMixin` | Non-sortal, anti-rigid | delegation patterns |
+# | `Category` | Non-sortal, rigid, cross-kind | executive authority category |
+
+## Example: complete [b00t.sysml] block
+
+# ```toml
+# guard-manager.agent.tomllm
+# [b00t.sysml]
+# stereotype = "«SecurityGateway»"
+# metaclass = "Block"
+# bfo_class = "http://purl.obolibrary.org/obo/BFO_0000016"  # Disposition
+# ufo_kind = "Role"
+# owl_class = "https://b00t.promptexecution.com/ontology#GuardManagerAgent"
+# shacl_shape = "GuardManagerAgentShape"
+
+# [b00t.clif]
+# axioms = [
+#   "(forall (x) (if (GuardManagerAgent x) (has-executive-auth x)))",
+#   "(forall (x) (if (GuardManagerAgent x) (exists (l) (audit-log-of l x))))",
+# ]
+# ```
+
+## Validation Rules (SHACL — to be generated)
+
+# - If `[b00t.sysml]` present → `stereotype` is required
+# - If `bfo_class` present → MUST be a valid BFO IRI
+# - If `[b00t.clif]` present → axioms MUST be string array
+# - `owl_class` IRI MUST start with `https://b00t.promptexecution.com/ontology#`
+#   OR be a recognized external ontology IRI (BFO, UFO, schema.org)
+
+# b00t:map v1
+# summary: SysMLv2/KerML stereotype vocabulary for [b00t.sysml] datum sections; BFO/UFO universal mapping table; CLIF axiom authoring guide
+# tags: sysmlv2, kerml, bfo, ufo, stereotype, ontology, datum, specification
+# tier: frontier
+# cmds: b00t learn SYSMLV2-KERML-SUPPLEMENT, b00t datums graph --format=owl2
+# complexity: 7

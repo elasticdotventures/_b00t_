@@ -1,0 +1,124 @@
+# PRD-ARCH-010: Postel Agent Hints + Examples
+# Expand DWIW/Postel for agents: unknown inputs get actionable hints + relevant examples
+# schema: 1 | last_updated: 2026-06-14
+
+[b00t]
+name = "PRD-ARCH-010-POSTEL-AGENT-HINTS"
+type = "prd"
+hint = "Agent Postel expansion: unknown inputs produce typed hints + canonical examples instead of bare errors"
+
+[b00t.schema]
+schema = 1
+content = "proposed"
+
+[prd]
+id = "ARCH-010"
+title = "Postel Agent Hints + Examples"
+status = "proposed"
+priority = 2
+tier = "sm0l"
+links_tasks = []
+
+[b00t.sysml]
+stereotype = "«Requirement»"
+metaclass = "RequirementUsage"
+bfo_class = "http://purl.obolibrary.org/obo/BFO_0000031"
+ufo_kind = "Normative Description"
+owl_class = "https://b00t.promptexecution.com/ontology#PostelAgentHints"
+
+# 🤓: Postel's Law = "be conservative in what you send, liberal in what you accept"
+# The b00t DWIW extension: when you accept a non-canonical form, tell the agent
+# what canonical form was used AND show an example so they can learn.
+# This is exactly what deserialize_datum_type warn-once does — but generalizable.
+
+## Problem
+
+# Postel/DWIW in b00t currently means: accept humane input, normalize, execute.
+# But agents that send non-canonical input receive no SIGNAL about the canonical form.
+# Result: agents repeat the same non-canonical input on every call (no learning).
+#
+# Current behaviour:
+#   `b00t task add "foo" -p P2` → silently normalizes → no feedback
+#   `b00t datum filter --types=prd` → silently routes to content-tag → no feedback
+#   `@sm0l: foo` (delegation macro) → expands silently → no feedback
+#
+# Wanted: EACH successful normalization emits a HINT once per session saying:
+#   "🔁 normalized 'P2' → priority 2; canonical: `--priority=2`"
+#   "🔁 'prd' → content-tag filter; canonical: `b00t datum filter --types=prd`"
+
+## Postel Hint Schema
+
+# A Postel hint is a structured signal attached to the output of any normalization:
+#
+# ```toml
+# [b00t.postel_hint]
+# input = "P2"           # what the agent sent
+# canonical = "2"        # what b00t normalized to
+# example = "b00t task add 'title' --priority=2"   # correct form
+# hint = "use 1-4 or P1-P4; critical/high/medium/low also accepted"
+# silence = "B00T_POSTEL_HINTS=0"
+# ```
+#
+# In CLI output: shown as `🔁 hint:` prefix, one line, once per (input,canonical) pair.
+# In MCP/JSON output: included as `postel_hint` field in JSON response.
+
+## Agent Best Practices Applied
+
+# 1. Helpful hints: every normalization surfaces the canonical form
+# 2. Relevant examples: include a complete working command, not just the corrected value
+# 3. Silence mechanism: B00T_POSTEL_HINTS=0 for agents in production
+# 4. Counted via OTEL: postel_normalizations_total{input_type, canonical_type}
+#    Links to PRD-ARCH-009.
+
+## Postel Expansion Points
+
+# | b00t feature | Non-canonical input | Canonical form | Hint already? |
+# |---|---|---|---|
+# | `--priority` | P2, high, critical | 1-4 | ❌ add |
+# | `datum filter --types=prd` | unknown enum string | content-tag | ✅ warn-once |
+# | `@sm0l: cmd` delegation | no output-contract | from model-routing.tomllm | ❌ add |
+# | `b00t hive run` → guard redirect | find → fdfind | redirect shown | ✅ done |
+# | `b00t whoami --role=X` delta load | full reload | delta preferred | ❌ add (PRD-002) |
+# | `b00t task done N` | done alias | `task update N --status=completed` | ❌ add |
+
+## Hint Output Format
+
+# CLI (stderr, once per session per (input, canonical) pair):
+#   `🔁 b00t: normalized '{input}' → '{canonical}'; example: {example}; silence: B00T_POSTEL_HINTS=0`
+#
+# JSON (`--json` flag or MCP response):
+#   `{ "postel_hint": { "input": "P2", "canonical": "2", "example": "...", "hint": "..." } }`
+#
+# Silence env: `B00T_POSTEL_HINTS=0` (separate from B00T_DATUM_WARN=0)
+
+## Acceptance Criteria
+
+# - [ ] `parse_priority("P2")` emits postel hint once: normalized → 2, example shown
+# - [ ] `datum filter --types=prd` (content-tag path) emits postel hint once
+# - [ ] Hints are session-scoped: emitted once per (input, canonical) pair per process
+# - [ ] JSON output mode: postel_hint in response body
+# - [ ] B00T_POSTEL_HINTS=0 silences all hints
+# - [ ] OTEL counter: postel_normalizations_total incremented (links PRD-ARCH-009)
+
+## Sub-tasks
+
+# | # | title | tier | file |
+# |---|-------|------|------|
+# | 1 | `PostelHint` struct + session-scoped warn-once registry | sm0l | `b00t-cli/src/postel.rs` |
+# | 2 | Wire into parse_priority (task.rs) | sm0l | `b00t-cli/src/commands/task.rs` |
+# | 3 | Wire into handle_filter type_tags routing (datum.rs) | sm0l | `b00t-cli/src/commands/datum.rs` |
+# | 4 | Wire into delegation macro expansion (hive.rs) | sm0l | `b00t-cli/src/commands/hive.rs` |
+# | 5 | JSON output: postel_hint field in --json responses | sm0l | `b00t-cli/src/postel.rs` |
+# | 6 | Test: parse_priority("P2") → hint fires once only | sm0l | `tests/postel_hints.rs` |
+
+## Dependencies
+
+# - PRD-ARCH-009 (OTEL metrics) — postel_normalizations_total counter
+# - PRD-ARCH-003 (delegation macros) — hint on @sm0l: expansion
+
+# b00t:map v1
+# summary: PRD for Postel DWIW hint expansion — normalizations emit one-time hints showing canonical form + example; JSON mode; OTEL counter
+# tags: prd, postel, dwiw, hints, examples, normalization, ux, agent, postel_hint
+# tier: sm0l
+# cmds: b00t task add 'title' --priority=2, b00t datum filter --types=prd, B00T_POSTEL_HINTS=0
+# complexity: 4

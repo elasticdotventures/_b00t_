@@ -1,0 +1,103 @@
+# OKR-SCHEMA: Typed OKR Datum Schema
+# Canonical specification for b00t.type = "okr" datums
+# schema: 1 | last_updated: 2026-06-14
+
+[b00t]
+name = "OKR-SCHEMA"
+type = "okr"
+hint = "Schema spec: how to author a b00t OKR datum; filter with b00t datum filter --types=okr"
+
+[b00t.schema]
+schema = 1
+content = "stable"
+
+[b00t.sysml]
+stereotype = "«Requirement»"
+metaclass = "RequirementUsage"
+bfo_class = "http://purl.obolibrary.org/obo/BFO_0000015"
+ufo_kind = "Process"
+owl_class = "https://b00t.promptexecution.com/ontology#OkrSchema"
+
+# @tribal: b00t.type = "okr" is a CONTENT tag, not a DatumType enum variant.
+# filter with: b00t datum filter --types=okr (routes via type_tags content path)
+# 🤓: BFO_0000015 = Process — OKR represents an unfolding organizational process.
+#
+# ## Required Fields
+#
+# ```toml
+# [b00t]
+# name = "<okr-slug>"        # unique key, kebab-case
+# type = "okr"               # content tag; NOT a DatumType enum variant
+# hint = "<one-line summary of the objective>"
+#
+# [okr]
+# objective = "<aspirational outcome statement>"
+# owner = "<agent-name | tier | role>"
+#
+# [[okr.kr]]
+# id = "kr1"
+# description = "<what we measure>"
+# check = "<shell command returning measurable value>"
+# pass_pattern = "<regex or literal that check output must match>"
+# owner = "<responsible agent>"
+# status = "pending|pass|fail|skip"
+# ```
+#
+# ## Optional Fields
+#
+# ```toml
+# [okr]
+# cadence = "weekly|sprint|monthly|quarterly"
+# links_prd = ["ARCH-001"]
+#
+# [[okr.kr]]
+# id = "kr2"
+# due = "2026-07-01"
+# baseline = "<snapshot cmd>"
+# target = "<quantified goal>"
+# ```
+#
+# ## Status Values
+#
+# | status | meaning |
+# |--------|---------|
+# | pending | KR not yet evaluated |
+# | pass    | check output matches pass_pattern |
+# | fail    | check output does NOT match |
+# | skip    | resource gate / dependency not met |
+#
+# ## Evaluation Protocol
+#
+# sm0l evaluates each [[okr.kr]]:
+# 1. Run `check` command
+# 2. Compare stdout to `pass_pattern` (regex)
+# 3. Write `status` back via `b00t datum update`
+#
+# ## Example Instance
+#
+# ```toml
+# [b00t]
+# name = "okr-guard-violations"
+# type = "okr"
+# hint = "Guard violations trend to zero"
+#
+# [okr]
+# objective = "hive continuously reduces guard violations without operator intervention"
+# owner = "b00t-skill-improve-loop"
+# cadence = "weekly"
+#
+# [[okr.kr]]
+# id = "kr1"
+# description = "no new violations in last 24h"
+# check = "tail -n 1 guard-violations.jsonl | jq -r '.timestamp' 2>/dev/null || echo none"
+# pass_pattern = "none"
+# owner = "sm0l"
+# status = "pending"
+# ```
+
+# b00t:map v1
+# summary: Schema spec for b00t.type=okr datums — objective + kr[] with check/pass_pattern/status; sm0l evaluates
+# tags: okr, schema, datum, spec, prd-arch-001
+# tier: sm0l
+# cmds: b00t datum filter --types=okr, b00t datum filter --types=okr --json
+# complexity: 2

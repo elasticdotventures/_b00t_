@@ -1,0 +1,155 @@
+# PRD-ARCH-011: Digital Thread Orchestration + OODA Control Plane
+# Deterministically inspectable cognitive process fabric with self-documenting knowledge graph
+# schema: 1 | last_updated: 2026-06-14
+
+[b00t]
+name = "PRD-ARCH-011-DIGITAL-THREAD-ORCHESTRATION"
+type = "prd"
+hint = "OODA-driven A2A crew coordination; deterministic control plane; first-order logic self-documentation; fine-tunable MCP service fabric"
+
+[b00t.schema]
+schema = 1
+content = "proposed"
+
+[prd]
+id = "ARCH-011"
+title = "Digital Thread Orchestration + OODA Control Plane"
+status = "proposed"
+priority = 1
+tier = "frontier"
+links_tasks = [30, 35]   # CLIF ontology + ControlFlow gate
+
+[b00t.sysml]
+stereotype = "«Block»"
+metaclass = "BlockUsage"
+bfo_class = "http://purl.obolibrary.org/obo/BFO_0000015"
+ufo_kind = "Process"
+owl_class = "https://b00t.promptexecution.com/ontology#DigitalThreadOrchestration"
+
+# 🤓: "Digital thread" (MBD/MBSE term) = continuous traceable data linkage across a
+# system lifecycle. In b00t: every task, datum, guard hit, and A2A message is a node
+# in the thread, queryable via the knowledge graph.
+#
+# OODA Loop mapping:
+#   Observe  = OTEL metrics + guard-violations.jsonl + datum filter results
+#   Orient   = knowledge graph query → datum type inference → tier routing
+#   Decide   = OKR KR evaluation → next-task selection → resource gate
+#   Act      = b00t task next → agent delegation → OTEL record → loop
+
+## Problem
+
+# b00t has all the primitives but they are not wired into a SELF-AWARE loop:
+#
+# 1. Context delta (PRD-002) → agents waste 20% on headers
+# 2. Delegation macros (PRD-003) → @sm0l: still verbose
+# 3. Self-improve loop (PRD-004) → not running
+# 4. MBSE visualization (PRD-005) → datums are dark
+# 5. CLIF/OWL2 (PRD-006) → first-order logic not queryable
+# 6. ControlFlow ontology (PRD-008) → gates not typed
+# 7. OTEL (PRD-009) → metrics not fed back
+# 8. Postel hints (PRD-010) → normalizations not learned
+#
+# Each PRD is a shard of a unified system. The digital thread connects them:
+# every capability is self-documented, measurable, and improvable by the hive itself.
+
+## Finished State — OODA Handoff Loop
+
+# The canonical b00t agentic loop is:
+#
+# ```
+# b00t task next              ← Decide: what's the highest-priority unblocked task?
+#   → sm0l: classify tier     ← Orient: is this sm0l/ch0nky/frontier?
+#   → @tier: execute          ← Act: delegate with delegation macros (PRD-003)
+#   → otel::record(CommandRun) ← Observe: metric captured
+#   → okr eval                ← Observe: KR status updated
+#   → b00t task done N        ← next iteration
+# ```
+#
+# The `/next-task:N` handoff pattern encodes:
+# - Current task completed
+# - Artifacts verified (OTEL summary, test result)
+# - Blockers identified
+# - Next task ID pre-selected (lowest unblocked by priority)
+# This becomes the agent "battle plan" that is both human-readable and machine-executable.
+
+## PRD-002 Integration (Context Delta)
+
+# llama-patch was abandoned because the source wasn't pre-formatted.
+# tomllm fixed the format. The delta protocol is now the path:
+#
+# `b00t whoami --role=domain-architect` currently = 4K tokens (full AGENTS.md)
+# With PRD-002 delta: base (cached) + 100-token role delta = 1.1K tokens
+#
+# PRD-002 is the SINGLE HIGHEST LEVERAGE item for reducing per-agent cost.
+# Implement TomllmDelta::apply() in tomllm crate as first sub-task.
+# Dogfood: this PRD datum itself should have a delta from ++abstract.prd.tomllm.
+
+## A2A Service Fabric
+
+# Agent-to-Agent (A2A) communication in b00t uses Redis IPC (existing b00t-ipc).
+# The crew roles (CREW-ROLES.tomllmd) define the battle formation:
+#
+# | Role | Tier | A2A output contract |
+# |---|---|---|
+# | executor (ralph) | sm0l | PASS/FAIL:<5lines> |
+# | implementer | ch0nky | diff+test |
+# | architect | frontier | structured decision |
+# | orchestrator | frontier | next-task handoff |
+#
+# The service fabric wraps each role with:
+# 1. Bouncer input gate (PRD-008 ControlFlow gate)
+# 2. Execution
+# 3. OTEL record (PRD-009)
+# 4. Postel hint if non-canonical input (PRD-010)
+# 5. OKR KR update (PRD-001)
+
+## Knowledge Graph Self-Awareness
+
+# `b00t datums graph --format=owl2` (PRD-005 + PRD-006) produces b00t-ontology.ttl
+# The ontology IS the self-documentation:
+# - Query: "which skills have ControlFlow gates?" → OWL2 SPARQL
+# - Query: "which datums have prd type with priority=1?" → `b00t datum filter --types=prd`
+# - Query: "what's the current OKR status?" → `b00t datum filter --types=okr`
+# - Query: "which commands ran most this session?" → `b00t session otel --scrape`
+#
+# First-order logic provability (PRD-006 CLIF axioms):
+# - Every PRD datum with priority=1 MUST have at least one KR in an active OKR
+# - Every agent role MUST have a bouncer gate
+# - Every delegation MUST emit an OTEL record
+# These are checked by `b00t validate` (future: wired to pre-commit hook).
+
+## Fine-Tunable MCP Interface
+
+# b00t MCP tools are the inter-process protocol:
+# - `mcp__b00t-mcp__b00t_agent_delegate` → delegation
+# - `mcp__b00t-mcp__b00t_task_*` → task management
+# - `mcp__b00t-mcp__b00t_session_status` → OTEL summary
+# Fine-tuning: every A2A call generates a (prompt, tool_call, result) training triple
+# in `guard-violations.jsonl` sidecar → feeds sm0l fine-tune on the hive's own calls.
+
+## Acceptance Criteria
+
+# - [ ] PRD-002 TomllmDelta::apply() implemented and dogfooded (50% token reduction)
+# - [ ] `/next-task:N` handoff produces machine-readable battle plan in TOML
+# - [ ] OODA loop runs one complete cycle without operator intervention
+# - [ ] Knowledge graph query returns accurate PRD/OKR/pattern counts
+# - [ ] A2A call generates fine-tune training triple in guard-violations.jsonl
+# - [ ] `b00t validate` checks first-order logic axioms from PRD-006
+
+## Sub-tasks (ordered by dependency)
+
+# | # | title | tier | depends |
+# |---|-------|------|---------|
+# | 1 | TomllmDelta::apply() + b00t datum patch CLI | ch0nky | PRD-002 |
+# | 2 | /next-task:N handoff template datum | sm0l | - |
+# | 3 | OODA orchestrator agent datum | ch0nky | 1, 2, PRD-003 |
+# | 4 | A2A training triple capture in OTEL | sm0l | PRD-009 |
+# | 5 | b00t validate CLIF axiom checker | ch0nky | PRD-006 |
+# | 6 | Knowledge graph SPARQL query interface | ch0nky | PRD-005, 006 |
+
+# b00t:map v1
+# summary: OODA-driven digital thread — context delta + A2A fabric + knowledge graph + first-order axioms + OTEL metrics → self-improving hive
+# tags: prd, ooda, digital-thread, a2a, knowledge-graph, owl2, otel, fine-tune, mbse, orchestration, frontier
+# tier: frontier
+# cmds: b00t task next, b00t datum filter --types=okr, b00t session otel --scrape, b00t validate
+# complexity: 9

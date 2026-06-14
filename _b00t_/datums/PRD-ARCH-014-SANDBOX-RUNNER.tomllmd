@@ -1,0 +1,147 @@
+# PRD-ARCH-014: b00t Sandbox Runner Provider Layer
+
+# Status: draft
+# Task: b00t task #44
+
+[b00t]
+name = "PRD-ARCH-014-SANDBOX-RUNNER"
+type = "prd.arch"
+hint = "Implement `b00t sandbox run` as the isolated execution layer behind hive guards, semantic patching, and bouncer audit evidence"
+tags = ["prd", "sandbox", "hive-run", "guard", "bouncer", "systemd-run", "podman", "nsjail", "firejail", "audit"]
+
+[objective]
+statement = "Give b00t its own deterministic sandbox runner so guarded commands can execute through a b00t-owned policy and isolation layer instead of relying on Codex approval friction or ad hoc shell execution."
+
+[key_results]
+kr1 = "`b00t sandbox run --profile <name> -- <cmd>` exists and emits dry-run plus execution evidence."
+kr2 = "`b00t hive run` can route through sandbox profiles after guard evaluation."
+kr3 = "Sandbox profiles are datum-backed with provider, writable paths, network policy, timeout, environment, and resource limits."
+kr4 = "Providers support at least `none`, `systemd-run`, and `podman`; `nsjail` and `firejail` are optional gated providers."
+kr5 = "Every sandbox execution emits audit JSONL with command, provider, profile, exit status, duration, guard result, and bouncer result."
+kr6 = "Patch workflows can request a `patch` sandbox profile with repository and `/tmp` writes but no network by default."
+
+[current_state]
+hive_run = "Guard evaluation exists, but successful commands execute directly through std::process::Command."
+sandbox_module = "b00t-cli/src/sandbox models lifecycle and MCP reload state, but does not isolate OS processes."
+lsp_proxy = "b00t-c0re-lib/src/lsp_proxy.rs enforces subprocess budget/timeout concepts but is LSP-specific."
+learn_sandbox = "_b00t_/learn/sandbox.md maps providers by workload: podman+CDI, nsjail/firejail, systemd-run, local just recipes."
+
+[scope]
+in = [
+  "Sandbox profile datum schema",
+  "Provider trait and implementations",
+  "CLI command `b00t sandbox run`",
+  "Optional `b00t hive run --sandbox <profile>` routing",
+  "Dry-run and audit event output",
+  "Bouncer integration contract",
+]
+out = [
+  "Replacing Codex sandbox internals",
+  "Privilege escalation without Operator approval",
+  "Untrusted remote code execution without provider support",
+]
+
+[command_surface]
+primary = "b00t sandbox run --profile patch -- <cmd>"
+dry_run = "b00t sandbox run --profile patch --dry-run -- <cmd>"
+hive_route = "b00t hive run --strict --sandbox patch -- <cmd>"
+status = "b00t sandbox list"
+inspect = "b00t sandbox show patch"
+
+[schema]
+example = "_b00t_/patch.sandbox.toml"
+
+[schema.fields]
+provider = "none | systemd-run | podman | nsjail | firejail"
+readonly_root = "bool"
+writable = "array of absolute paths"
+readable = "array of absolute paths"
+network = "none | loopback | host"
+timeout_secs = "integer"
+ram_mb = "integer optional"
+cpu_quota = "string optional"
+env_allow = "array of variable names"
+env_set = "map of variable values"
+command_allow = "array of command prefixes"
+
+[[profiles]]
+name = "patch"
+provider = "systemd-run"
+network = "none"
+writable = ["/home/brianh/.b00t", "/tmp"]
+readable = ["/home/brianh/.b00t"]
+timeout_secs = 30
+purpose = "Visible patch and semantic mutation execution with no network by default."
+
+[[profiles]]
+name = "mcp-stdio"
+provider = "none"
+network = "loopback"
+writable = ["/tmp"]
+timeout_secs = 60
+purpose = "Short-lived stdio MCP discovery/call when provider isolation would break pipes."
+
+[[profiles]]
+name = "gpu-inference"
+provider = "podman"
+network = "host"
+timeout_secs = 3600
+purpose = "Rootless container execution with CDI/NVIDIA device passthrough when required by model workloads."
+
+[provider_trait]
+methods = [
+  "validate(profile, command) -> Plan",
+  "dry_run(plan) -> SandboxEvidence",
+  "execute(plan) -> SandboxEvidence",
+]
+
+[audit]
+path = "~/.b00t/sandbox-events.jsonl"
+required_fields = [
+  "timestamp",
+  "agent_id",
+  "task_id",
+  "profile",
+  "provider",
+  "command_hash",
+  "command_preview",
+  "guard_result",
+  "bouncer_result",
+  "exit_status",
+  "duration_ms",
+  "writable_paths",
+  "network_policy",
+]
+
+[bouncer]
+input_gate = "Validate task id, command prefix, writable paths, network policy, and provider availability before execution."
+output_gate = "Validate exit status, expected artifact, diff evidence for mutations, and dashboard parseability."
+fail_closed = true
+
+[implementation_plan]
+phase1 = "Add sandbox profile schema and loader with tests."
+phase2 = "Add provider trait plus `none` provider for compatibility and dry-run evidence."
+phase3 = "Add `systemd-run` provider for resource/time scoping when available."
+phase4 = "Wire `b00t sandbox run` CLI and audit JSONL."
+phase5 = "Add `b00t hive run --sandbox <profile>` routing after guard evaluation."
+phase6 = "Add podman/nsjail/firejail providers as gated optional capabilities."
+
+[verification]
+unit = [
+  "profile parser rejects relative writable paths",
+  "dry-run emits no process execution",
+  "unknown provider fails closed",
+  "network=none appears in evidence",
+]
+integration = [
+  "b00t sandbox run --profile patch --dry-run -- true",
+  "b00t hive run --strict --sandbox patch --dry-run -- true",
+  "audit JSONL line parses and feeds agent dashboard evidence",
+]
+
+# b00t:map v1
+# summary: PRD for b00t-owned sandbox runner: guard -> provider isolation -> audit -> bouncer, usable by hive run and semantic patch workflows
+# tags: prd, sandbox, hive-run, guard, bouncer, systemd-run, podman, nsjail, firejail, audit
+# tier: frontier
+# cmds: b00t sandbox run --profile patch --dry-run -- true, b00t hive run --strict --sandbox patch --dry-run -- true
+# complexity: 8

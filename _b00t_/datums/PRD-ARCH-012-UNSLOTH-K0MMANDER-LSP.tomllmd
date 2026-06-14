@@ -1,0 +1,130 @@
+# PRD-ARCH-012: Unsloth Fine-Tuning + k0mmand3r LSP Intellisense
+# Fine-tunable specialized models per task class; LSP provides editor-level command completion
+# schema: 1 | last_updated: 2026-06-14
+
+[b00t]
+name = "PRD-ARCH-012-UNSLOTH-K0MMANDER-LSP"
+type = "prd"
+hint = "Unsloth QLoRA fine-tuning from A2A call triples; k0mmand3r LSP for editor-level b00t command intellisense"
+
+[b00t.schema]
+schema = 1
+content = "proposed"
+
+[prd]
+id = "ARCH-012"
+title = "Unsloth Fine-Tuning + k0mmand3r LSP Intellisense"
+status = "proposed"
+priority = 2
+tier = "frontier"
+links_tasks = [40]   # PRD-ARCH-011 (digital thread — generates training data)
+
+[b00t.sysml]
+stereotype = "«Block»"
+metaclass = "BlockUsage"
+bfo_class = "http://purl.obolibrary.org/obo/BFO_0000040"
+ufo_kind = "Functional Complex"
+owl_class = "https://b00t.promptexecution.com/ontology#UnslothLspIntegration"
+
+# 🤓: Unsloth = OSS QLoRA fine-tuning framework (2x faster, 70% less VRAM than vanilla PEFT)
+# k0mmand3r = existing b00t crate providing sub-language parsing (parse tree for b00t cmds)
+# LSP = Language Server Protocol — connects editor to the knowledge graph for completions
+
+## Problem
+
+# b00t agents use a fixed tier routing (sm0l/ch0nky/frontier) but:
+# 1. No specialization: the same base model handles guard eval, datum filter, OKR review
+# 2. No editor feedback: agents write b00t commands without IDE-level validation
+# 3. No continuous improvement: A2A calls generate training data that's never used
+# 4. No task-class delegation: `<|tasks|>` routing is manual tier assignment
+
+## Finished State
+
+# COMPONENT 1 — Unsloth fine-tuning pipeline:
+#
+# | Task class | Training data source | Target model | QLoRA adapter |
+# |---|---|---|---|
+# | guard eval | guard-violations.jsonl | qwen2.5-3B | guard-eval-v1.qlora |
+# | datum classification | datum filter results (OTEL) | qwen2.5-3B | datum-class-v1.qlora |
+# | OKR KR evaluation | okr-eval.jsonl | qwen2.5-7B | okr-eval-v1.qlora |
+# | delegation routing | A2A call triples (OTEL) | qwen2.5-3B | route-v1.qlora |
+#
+# Pipeline: OTEL events → `unsloth-trainer` → QLoRA adapter → sm0l vllm hot-swap
+# Hardware: RTX3090 (24GB) with QLoRA 4-bit = fits without CPU offload
+
+# COMPONENT 2 — k0mmand3r LSP:
+#
+# The k0mmand3r crate already parses b00t sub-language to AST.
+# Extend to expose as an LSP server (`tower-lsp 0.20`):
+# - Completions: `b00t datum filter --types=<cursor>` → content-tag suggestions from graph
+# - Hover: `b00t task next` → shows current P1 unblocked task
+# - Diagnostics: `b00t hive run <cmd>` → pre-lint against active guard patterns
+# - CodeAction: `b00t datum patch` → suggest delta when full reload detected
+#
+# Editor integration: VS Code extension (existing COPILOT-EXTENSIONS datum).
+# Connection: k0mmand3r LSP process ← stdio ← editor plugin.
+
+## `<|tasks|>` Sub-Language Tag Delegation
+
+# k0mmand3r sub-language supports `<|task_type|>` markers:
+# ```
+# <|guard_eval|> is find . -name *.rs safe to run?
+# <|datum_classify|> what type is AGENT-REGISTRY?
+# <|okr_eval|> check KR status for kr1
+# <|route|> should this be sm0l or ch0nky?
+# ```
+# Each tag is routed to the specialized fine-tuned adapter at the appropriate tier.
+# LSP shows which adapter handles each tag (hover: "→ guard-eval-v1.qlora on sm0l").
+
+## Training Data Schema (OTEL FOCUS extension)
+
+# Each OTEL A2A call event generates a training triple:
+# ```json
+# {
+#   "prompt": "is find . -name *.rs safe?",
+#   "response": "WARN: use fdfind instead (find_guard)",
+#   "task_class": "guard_eval",
+#   "tier": "sm0l",
+#   "correct": true
+# }
+# ```
+# Written to: `guard-violations.jsonl` (existing) extended with task_class + correct fields.
+# Unsloth reads JSONL → tokenizes → QLoRA training (2000 steps/session typical).
+
+## Acceptance Criteria
+
+# - [ ] OTEL A2A triple capture: `guard_eval` triples appear in guard-violations.jsonl
+# - [ ] Unsloth trainer script: `_b00t_/scripts/train-guard-eval.sh` runs on RTX3090
+# - [ ] QLoRA adapter hot-swap: sm0l vllm loads guard-eval-v1.qlora without restart
+# - [ ] k0mmand3r LSP binary: `k0mmand3r --lsp` starts tower-lsp server on stdio
+# - [ ] VS Code extension: completions fire for `b00t datum filter --types=<cursor>`
+# - [ ] Hover: `<|guard_eval|>` shows "→ guard-eval-v1.qlora (sm0l)" in editor
+# - [ ] Diagnostics: `b00t hive run find . -name *.rs` → red squiggle + fdfind suggestion
+
+## Sub-tasks
+
+# | # | title | tier | file |
+# |---|-------|------|------|
+# | 1 | OTEL A2A training triple emitter | sm0l | `b00t-cli/src/otel.rs` |
+# | 2 | guard-eval training JSONL schema | sm0l | `_b00t_/datums/GUARD-EVAL-TRAINING-SCHEMA.tomllmd` |
+# | 3 | Unsloth trainer script (QLoRA, guard-eval) | ch0nky | `_b00t_/scripts/train-guard-eval.sh` |
+# | 4 | k0mmand3r LSP binary (tower-lsp) | ch0nky | `k0mmand3r/src/lsp.rs` |
+# | 5 | Completions: content-tag suggestions | sm0l | `k0mmand3r/src/lsp/completions.rs` |
+# | 6 | VS Code extension update | sm0l | `COPILOT-EXTENSIONS datum` |
+# | 7 | `<|task_type|>` routing in k0mmand3r AST | ch0nky | `k0mmand3r/src/parser.rs` |
+
+## Dependencies
+
+# - PRD-ARCH-009 (OTEL) — training data source
+# - PRD-ARCH-011 (digital thread) — A2A calls that generate training data
+# - k0mmand3r crate (existing) — parser for b00t sub-language
+# - unsloth OSS (MIT/Apache2) — QLoRA fine-tuning; pip install unsloth (uv pip)
+# - tower-lsp 0.20 (MIT) — LSP server framework for Rust
+# - RTX3090 (24GB VRAM) — QLoRA 4-bit fits without offload
+
+# b00t:map v1
+# summary: PRD for Unsloth QLoRA fine-tuning per task class + k0mmand3r LSP intellisense; A2A triples → specialized adapters; editor completions + diagnostics
+# tags: prd, unsloth, qlora, fine-tuning, lsp, k0mmand3r, intellisense, vscode, a2a, delegation
+# tier: frontier
+# cmds: k0mmand3r --lsp, b00t datum filter --types=<cursor>, _b00t_/scripts/train-guard-eval.sh
+# complexity: 9

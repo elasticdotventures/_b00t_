@@ -1,0 +1,722 @@
+# 🤖 B00t Whoami Enhancement Specification
+# Milestone-based handoff context with git anchoring
+
+# b00t:map v1
+# summary: Continuous handoff context via improved whoami with milestone logging and git anchoring
+# tags: whoami, handoff, milestones, git-anchoring, continuous-context, agent-chain
+# tier: frontier
+# cmds: b00t whoami --handoff, b00t milestone add, b00t milestone tag
+# complexity: 7
+# deps: gitoxide, gitbutler, rust-std
+
+type = "spec"
+version = "0.1.0"
+schema = "b00t/whoami/v1"
+
+title = "B00t Whoami Handoff Enhancement"
+description = "Continuous milestone-based handoff context system for agent chains with git anchoring and automatic visibility"
+
+# @tribal: This solves the critical gap where agents in chains can't reliably update handoff context at milestones. Next agents automatically see progress via whoami.
+
+# ========================================
+# PROBLEM STATEMENT
+# ========================================
+
+[problem]
+# @tribal: Current b00t whoami doesn't support continuous handoff context - agents work in isolation
+
+current_issues = [
+  "Agents in chains can't see previous agent's milestone progress",
+  "No reliable mechanism to update handoff ops log during execution",
+  "Next agent starts fresh without context of previous milestones",
+  "No git anchoring for reproducible handoff points",
+  "Manual context transfer between agents is error-prone"
+]
+
+# Example scenario
+scenario = """
+Agent A works on task → completes milestone 1 → Agent B continues
+Expected: Agent B sees Agent A's milestone 1 completion via whoami
+Current: Agent B starts fresh, must manually check previous work
+"""
+
+# ========================================
+# SOLUTION DESIGN
+# ========================================
+
+[solution]
+# @tribal: Milestone-based handoff logging with automatic whoami visibility and git anchoring
+
+# Core concept: Milestone-based handoff
+concept = """
+Each agent updates a shared handoff log at key milestones.
+Next agent automatically sees these milestones via b00t whoami.
+Milestones are git-anchored for reproducibility.
+"""
+
+# Key improvements
+improvements = [
+  "Continuous milestone logging during agent execution",
+  "Automatic handoff context visibility in whoami",
+  "Git tag anchoring for reproducible handoff points",
+  "Configurable milestone granularity",
+  "Backward compatible with existing whoami"
+]
+
+# ========================================
+# MILESTONE SYSTEM
+# ========================================
+
+[milestone]
+# @tribal: Agents log milestones as they work; next agents see this via whoami
+
+# Rust type for milestone
+enum = "Milestone"
+variants = [
+  "Started {
+    agent_id = "AgentId",
+    task = "Task",
+    timestamp = "DateTime",
+    git_commit = "Option<String>"
+  },
+  "Progress {
+    agent_id = "AgentId",
+    description = "String",
+    percent_complete = "u8",
+    artifacts = "Vec<Artifact>",
+    git_commit = "Option<String>"
+  },
+  "Completed {
+    agent_id = "AgentId",
+    result = "TaskResult",
+    artifacts = "Vec<Artifact>",
+    next_steps = "Vec<String>",
+    git_commit = "Option<String>",
+    git_tag = "Option<String>"
+  },
+  "Blocked {
+    agent_id = "AgentId",
+    blocker = "Blocker",
+    workaround = "Option<String>",
+    requires_human = "bool"
+  },
+  "Delegated {
+    from_agent = "AgentId",
+    to_agent = "AgentId",
+    subtask = "SubTask",
+    context = "ContextSlice"
+  }
+]
+
+# Milestone metadata
+struct = "MilestoneMetadata"
+fields = {
+  milestone_id = "Uuid",
+  parent_milestone = "Option<Uuid>",
+  timestamp = "DateTime",
+  session_id = "String",
+  environment = "EnvironmentContext"
+}
+
+# ========================================
+# HANDOFF LOG STRUCTURE
+# ========================================
+
+[handoff_log]
+# @tribal: Shared handoff log that all agents can read/write via b00t commands
+
+# Handoff log file structure
+struct = "HandoffLog"
+fields = {
+  session_id = "String",
+  started_at = "DateTime",
+  primary_agent = "AgentId",
+  chain_of_agents = "Vec<AgentId>",
+  milestones = "Vec<Milestone>",
+  current_state = "SessionState",
+  git_anchors = "Vec<GitAnchor>"
+}
+
+# Rust enum for session state
+enum = "SessionState"
+variants = [
+  "Active { current_agent = "AgentId" }",
+  "Paused { waiting_for = "WaitingFor" }",
+  "Completed { result = "TaskResult" }",
+  "Failed { error = "Error" }"
+}
+
+# File location (configurable)
+location = {
+  default = ".b00t/handoff.jsonl",
+  fallback = "tmp/.b00t/handoff.jsonl",
+  git_tracked = false  # Don't commit handoff logs to git
+}
+
+# ========================================
+# GIT ANCHORING SYSTEM
+# ========================================
+
+[git_anchoring]
+# @tribal: Using gitoxide/gitbutler true grit for reliable git operations
+
+# Git anchor structure (using gitoxide types)
+struct = "GitAnchor"
+fields = {
+  milestone_id = "Uuid",
+  commit_hash = "String",           # Full SHA
+  commit_short = "String",          # Short SHA
+  branch = "String",
+  tag = "Option<String>",           # Git tag if created
+  timestamp = "DateTime",
+  author = "String",
+  message = "String",
+  repo_state = "RepoState"
+}
+
+# Repository state (enum)
+enum = "RepoState"
+variants = [
+  "Clean { uncommitted_changes = 0 },
+  "Modified { files_changed = "usize", uncommitted_changes = "usize" },
+  "Conflict { conflicts = "Vec<ConflictPath>" },
+  "Detached { head_commit = "String" }
+]
+
+# Tag creation strategy (enum)
+enum = "TagStrategy"
+variants = [
+  "AutoTag { prefix = "String", include_timestamp = "bool" },
+  "ManualTag { tag_name = "String" },
+  "NoTag"
+]
+
+# ========================================
+# B00T WHOAMI ENHANCEMENTS
+# ========================================
+
+[whoami_enhancements]
+# @tribal: Enhanced whoami shows handoff context when running in agent chain
+
+# New whoami output sections
+sections = [
+  "Agent Identity { id, role, capabilities }",
+  "Session Context { session_id, task, environment }",
+  "Handoff Chain { previous_agents, current_agent, next_agent }",
+  "Recent Milestones { last_n_milestones = 5 }",
+  "Current State { what_i'm_doing, progress_percent }",
+  "Git Context { branch, commit, tags, repo_state }",
+  "Next Actions { immediate_next, recommended_next }"
+]
+
+# Command-line options
+enum = "WhoamiMode"
+variants = [
+  "Basic",                          # Original whoami behavior
+  "WithHandoff",                    # Include handoff context
+  "WithMilestones { count = "usize" }",  # Include last N milestones
+  "WithGitContext",                 # Include git repo state
+  "FullChain"                       # Show entire agent chain
+]
+
+# CLI flags
+flags = [
+  "--handoff: Show handoff context from previous agents",
+  "--milestones=N: Show last N milestones (default: 5)",
+  "--git: Include git repository context",
+  "--json: Output handoff data as JSON",
+  "--tag: Create git tag for current milestone"
+]
+
+# ========================================
+# MILESTONE COMMANDS
+# ========================================
+
+[milestone_commands]
+# @tribal: New b00t commands for milestone management
+
+# Primary milestone command
+command = "b00t milestone"
+subcommands = [
+  "add <description> [--percent=N] [--artifact=PATH] [--tag]",
+  "list [--session=ID] [--agent=ID]",
+  "show <milestone-id>",
+  "tag <milestone-id> <tag-name>",
+  "export [--format=jsonl] [--output=PATH]"
+]
+
+# Examples
+examples = [
+  "# Agent completes milestone 1",
+  "b00t milestone add 'Fixed Rhai macro resolution' --percent=25 --tag=v0.1.0-m1",
+
+  "# Show recent milestones in chain",
+  "b00t milestone list --session=$(b00t whoami --session-id)",
+
+  "# Agent B sees Agent A's progress",
+  "b00t whoami --handoff --milestones=3",
+
+  "# Create git tag for milestone",
+  "b00t milestone tag $(b00t milestone list --latest) v0.1.0-m1-complete"
+]
+
+# ========================================
+# AUTOMATIC CONTEXT TRANSFER
+# ========================================
+
+[automatic_context]
+# @tribual: When agent B starts after agent A, it automatically sees A's milestones via whoami
+
+# Automatic discovery process
+enum = "ContextDiscovery"
+variants = [
+  "CheckHandoffFile { path = "Path" }",
+  "ReadSessionLog { session_id = "String" }",
+  "QueryAgentChain { agents = "Vec<AgentId>" }",
+  "GitAnchoredContext { commit = "String", tag = "Option<String>" }
+]
+
+# Agent handoff trigger
+trigger = """
+When Agent B starts:
+1. Run: b00t whoami --handoff
+2. Parse handoff context from .b00t/handoff.jsonl
+3. Show Agent A's last milestone as context
+4. Load any artifacts referenced in milestones
+5. Continue from where Agent A left off
+"""
+
+# Context inheritance (struct)
+struct = "InheritedContext"
+fields = {
+  previous_agent = "AgentId",
+  last_milestone = "Milestone",
+  accumulated_artifacts = "Vec<Artifact>",
+  session_state = "SessionState",
+  git_context = "GitContext"
+}
+
+# ========================================
+# ARTIFACT TRACKING
+# ========================================
+
+[artifacts]
+# @tribal: Milestones can include artifacts (files, commits, etc.) for next agent
+
+# Artifact types (enum)
+enum = "Artifact"
+variants = [
+  "File { path = "Path", description = "String", mime_type = "String" }",
+  "GitCommit { hash = "String", message = "String", branch = "String" }",
+  "CodeDiff { file = "Path", diff = "String", hunk_count = "usize" }",
+  "TestResult { test_name = "String", passed = "bool", output = "String" }",
+  "Documentation { path = "Path", format = "DocFormat" }",
+  "Binary { path = "Path", signature = "Option<String>" }
+]
+
+# Artifact references in milestones
+struct = "ArtifactReference"
+fields = {
+  artifact_id = "Uuid",
+  artifact_type = "Artifact",
+  created_at = "DateTime",
+  size_bytes = "u64",
+  checksum = "String",
+  milestone_id = "Uuid"
+}
+
+# ========================================
+# GITOXIDE INTEGRATION
+# ========================================
+
+[gitoxide_integration]
+# @tribal: Using gitoxide (gix) for reliable, programmatic git operations
+
+# Git operations (trait using gitoxide types)
+trait = "GitOperations"
+methods = [
+  "get_current_head(&self) -> Result<CommitId, GitError>",
+  "get_repo_state(&self) -> Result<RepoState, GitError>",
+  "create_tag(&mut self, name: &str, message: &str) -> Result<TagId, GitError>",
+  "get_commit_info(&self, id: &str) -> Result<CommitInfo, GitError>",
+  "get_branch_name(&self) -> Result<String, GitError>"
+]
+
+# Git context for whoami
+struct = "GitContext"
+fields = {
+  branch = "String",
+  commit = "String",
+  commit_short = "String",
+  author = "String",
+  message = "String",
+  tags = "Vec<String>",
+  repo_state = "RepoState",
+  uncommitted_changes = "usize"
+}
+
+# Gitoxide dependency
+dependency = """
+# Add to Cargo.toml
+[dependencies]
+gitoxide = { version = "0.38", default-features = false, features = ["rust-girl"] }
+"""
+
+# ========================================
+# CONFIGURATION
+# ========================================
+
+[configuration]
+# @tribal: Configurable milestone logging and handoff behavior
+
+# Config file location
+config_file = ".b00t/whoami-config.toml"
+
+# Configuration options (struct)
+struct = "WhoamiConfig"
+fields = {
+  handoff_file = "PathBuf",              # Default: .b00t/handoff.jsonl
+  milestone_tracking = "bool",          # Enable milestone logging
+  auto_git_tags = "bool",                # Auto-create git tags
+  git_tag_prefix = "String",             # Default: "v0.1.0-m"
+  max_handoff_size_mb = "usize",         # Max handoff file size
+  compression_enabled = "bool",         # Compress handoff logs
+  show_in_whoami = "bool",              # Show handoff in whoami output
+  max_milestones_in_whoami = "usize"     # Max milestones to show
+}
+
+# Example configuration
+example_config = """
+# .b00t/whoami-config.toml
+handoff_file = ".b00t/handoff.jsonl"
+milestone_tracking = true
+auto_git_tags = true
+git_tag_prefix = "v0.1.0-m"
+show_in_whoami = true
+max_milestones_in_whoami = 5
+compression_enabled = true
+max_handoff_size_mb = 10
+"""
+
+# ========================================
+# EXAMPLE WORKFLOW
+# ========================================
+
+[workflow_example]
+# @tribal: Complete example of agent chain with milestone handoffs
+
+# Agent A starts work
+step_1 = """
+$ b00t whoami --handoff
+# No handoff context (first agent)
+$ b00t milestone add 'Starting compilation fix investigation' --percent=0
+# Creates milestone with session ID
+"""
+
+# Agent A completes first milestone
+step_2 = """
+$ b00t milestone add 'Fixed b00t-py API signature' --percent=50 --artifact=.b00t-py/src/lib.rs
+$ b00t milestone add 'Added resolve_macro_references function' --percent=75
+$ git commit -m "fix(b00t-py): update mcp_list call to use new 3-parameter API signature"
+$ b00t milestone tag $(b00t milestone list --latest) v0.1.0-m1
+"""
+
+# Agent B takes over
+step_3 = """
+$ b00t whoami --handoff
+# Shows:
+# Previous agent: Agent A (first-mate)
+# Last milestone: Added resolve_macro_references function (75%)
+# Session: 349284-active
+# Git context: commit 5ed2c63, branch fix/b00t-py-mcp-list-api
+# Next action: Continue k0mmand3r parser fixes
+
+$ b00t milestone add 'Fixed handshake agent prefix parsing' --percent=85
+# Continues from 75% → 85%
+"""
+
+# Agent C completes final work
+step_4 = """
+$ b00t whoami --handoff
+# Shows milestones from Agent A + Agent B
+# Current progress: 85% → 100%
+# Artifacts: 3 code files, 2 git commits
+$ b00t milestone add 'All parser tests passing' --percent=100 --tag=v0.1.0-final
+$ git tag v0.1.0
+"""
+
+# ========================================
+# IMPLEMENTATION PRIORITY
+# ========================================
+
+[implementation]
+# @tribal: Phased implementation starting with core milestone logging
+
+# Phase 1: Core milestone system
+priority_1 = [
+  "Implement milestone data structures",
+  "Create b00t milestone command",
+  "Add handoff.jsonl file format",
+  "Basic whoami --handoff flag"
+]
+
+# Phase 2: Git integration
+priority_2 = [
+  "Gitoxide integration for git context",
+  "Git tag creation commands",
+  "Commit tracking in milestones",
+  "Git state display in whoami"
+]
+
+# Phase 3: Automatic context transfer
+priority_3 = [
+  "Automatic handoff discovery in whoami",
+  "Artifact reference system",
+  "Session state management",
+  "Agent chain visualization"
+]
+
+# Phase 4: Advanced features
+priority_4 = [
+  "Handoff compression for large sessions",
+  "Configurable milestone granularity",
+  "Multi-branch handoff support",
+  "Handoff analytics and insights"
+]
+
+# ========================================
+# BACKWARD COMPATIBILITY
+# ========================================
+
+[compatibility]
+# @tribal: All changes are backward compatible with existing whoami
+
+# Compatibility guarantees
+guarantees = [
+  "Existing whoami behavior unchanged without flags",
+  "Handoff system optional (enable via config)",
+  "No breaking changes to existing agent workflows",
+  "Graceful degradation if handoff file missing",
+  "Existing b00t commands continue to work"
+]
+
+# Migration path
+migration = """
+Current users:
+- Continue using b00t whoami as before
+- Opt-in to handoff features via --handoff flag
+- Gradually adopt milestone logging
+- No immediate action required
+
+New users:
+- Get handoff context by default
+- See milestone examples in docs
+- Adopt git anchoring progressively
+"""
+
+# ========================================
+# ERROR HANDLING
+# ========================================
+
+[error_handling]
+# @tribal: Robust error handling for distributed agent systems
+
+# Error types (enum)
+enum = "HandoffError"
+variants = [
+  "HandoffFileNotFound { path = "Path" }",
+  "HandoffFileCorrupted { path = "Path", error = "String" },
+  "InvalidMilestoneFormat { milestone = "String" }",
+  "GitOperationFailed { operation = "String", error = "String" }",
+  "ArtifactNotFound { artifact_id = "Uuid" }",
+  "SessionExpired { session_id = "String" }"
+]
+
+# Error recovery strategies
+enum = "RecoveryStrategy"
+variants = [
+  "CreateNewHandoff",              # Start fresh handoff log
+  "RepairHandoff",                 # Attempt to repair corrupted log
+  "ContinueWithoutHandoff",        # Proceed with empty context
+  "RequireIntervention",           # Ask user for help
+]
+
+# ========================================
+# TESTING STRATEGY
+# ========================================
+
+[testing]
+# @tribal: Comprehensive testing for reliable handoff system
+
+# Test scenarios
+test_scenarios = [
+  "Single agent milestone logging",
+  "Agent chain with 3+ agents",
+  "Git tag creation and retrieval",
+  "Handoff file corruption recovery",
+  "Large artifact handling",
+  "Concurrent milestone updates",
+  "Cross-branch handoff scenarios",
+  "Git conflict resolution"
+]
+
+# Test structure
+struct = "HandoffTest"
+fields = {
+  name = "String",
+  scenario = "TestScenario",
+  input_milestones = "Vec<Milestone>",
+  expected_output = "ExpectedHandoff",
+  validation = "ValidationCriteria"
+}
+
+# ========================================
+# PERFORMANCE CONSIDERATIONS
+# ========================================
+
+[performance]
+# @tribal: Handoff system must be fast and lightweight
+
+# Performance targets
+targets = {
+  whoami_response_time_ms = 100,      # Max whoami --handoff response time
+  milestone_add_ms = 50,               # Max time to add milestone
+  handoff_file_read_ms = 200,         # Max time to read handoff file
+  git_context_ms = 150,                # Max time to get git context
+  max_handoff_file_size_mb = 10        # Max handoff file before compression
+}
+
+# Optimization strategies
+optimizations = [
+  "Lazy loading of milestone history",
+  "Incremental handoff file parsing",
+  "Git context caching",
+  "Artifact deduplication",
+  "Compression for large handoffs"
+]
+
+# ========================================
+# FUTURE ENHANCEMENTS
+# ========================================
+
+[future]
+# @tribal: Future improvements once core system is stable
+
+# Planned features
+planned = [
+  "Multi-repo handoff support",
+  "Distributed handoff via Redis",
+  "Handoff visualization UI",
+  "Automatic milestone suggestions",
+  "Cross-team handoff protocols",
+  "Handoff analytics dashboard",
+  "AI-powered handoff summarization",
+  "Integration with external project management"
+]
+
+# Research directions
+research = [
+  "Optimal milestone granularity",
+  "Automatic artifact discovery",
+  "Predictive handoff context",
+  "Multi-modal artifact support"
+]
+
+# ========================================
+# SUCCESS METRICS
+# ========================================
+
+[metrics]
+# @tribal: Measure success by adoption and reliability
+
+# Key metrics
+key_metrics = {
+  handoff_reliability = "0.99",           # 99% of handoffs succeed
+  whoami_with_handoff_usage = "0.8",      # 80% of agents use whoami --handoff
+  average_handoff_time_seconds = 5,        # Avg time to get handoff context
+  milestone_logging_rate = "0.9",          # 90% of agents log milestones
+  git_tag_success_rate = "0.95"           # 95% of git tags succeed
+}
+
+# Adoption indicators
+indicators = [
+  "Number of active handoff sessions",
+  "Average milestones per session",
+  "Handoff file size distribution",
+  "Git tag naming patterns",
+  "Agent chain length distribution"
+]
+
+# ========================================
+# CONCLUSION
+# ========================================
+
+[closing]
+# @tribal: This is a focused, practical enhancement to b00t whoami for continuous handoff context
+
+status = "Specification Complete"
+ready_for_implementation = true
+estimated_dev_time = "2-3 weeks"
+complexity = "Medium"
+priority = "High"
+
+# Next steps
+next_steps = [
+  "1. Review and approve this specification",
+  "2. Create implementation tasks",
+  "3. Start with Phase 1: Core milestone system",
+  "4. Add gitoxide integration",
+  "5. Test with real agent chains",
+  "6. Iterate based on usage patterns"
+]
+
+# Call to action
+call_to_action = """
+This specification addresses the critical gap in continuous handoff context for b00t agent chains.
+
+The solution is focused, practical, and backward compatible:
+- Milestone-based logging during agent execution
+- Automatic handoff visibility via b00t whoami --handoff
+- Git anchoring for reproducible handoff points
+- Minimal disruption to existing workflows
+
+Ready for implementation and immediate value to agent orchestration workflows.
+"""
+
+# ========================================
+# APPENDIX: QUICK REFERENCE
+# ========================================
+
+[appendix.reference]
+# Command quick reference
+commands = [
+  "b00t whoami --handoff                    # Show handoff context",
+  "b00t milestone add <desc> --percent=N   # Log milestone",
+  "b00t milestone list                      # List milestones",
+  "b00t milestone tag <id> <tag>           # Create git tag",
+  "b00t whoami --milestones=5               # Show last 5 milestones"
+]
+
+# Configuration quick reference
+config_keys = [
+  "handoff_file = .b00t/handoff.jsonl",
+  "milestone_tracking = true",
+  "auto_git_tags = true",
+  "show_in_whoami = true"
+]
+
+# File locations
+files = [
+  ".b00t/handoff.jsonl          # Handoff log (main)",
+  ".b00t/whoami-config.toml     # Configuration",
+  ".b00t/artifacts/             # Artifact storage",
+  ".git/tags/                   # Git tags"
+]
+
+# Data structures overview
+structs = [
+  "HandoffLog                   # Main handoff data",
+  "Milestone                    # Individual milestone",
+  "GitAnchor                    # Git reference",
+  "InheritedContext             # Context for next agent"
+]
