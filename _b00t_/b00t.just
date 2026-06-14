@@ -261,3 +261,39 @@ nvidia-cdi-observe:
 
 nvidia-cdi-install:
     b00t install nvidia-cdi-gpu
+
+# ─── sm0l cognitive filter recipes ──────────────────────────────────────────
+# Route long command output through local LLM — output ONLY errors, never repeat.
+# Endpoint priority: B00T_AI_SM0L_BASE → :8001 (ch0nky) → :8000 (sm0l) → HF Inference API
+# Activate local model first: b00t hive activate inference-qwen36-27b
+
+SM0L_FILTER := "_b00t_/scripts/sm0l-filter.py"
+
+# Filter cargo test output — only emit failures/errors (saves frontier context budget)
+cargo-test-sm0l *ARGS:
+    cargo test {{ARGS}} 2>&1 | python3 {{SM0L_FILTER}} --model sm0l
+
+# Filter cargo build output — only emit errors
+cargo-build-sm0l *ARGS:
+    cargo build {{ARGS}} 2>&1 | python3 {{SM0L_FILTER}} --model sm0l
+
+# Generic sm0l filter: pipe any command through the LLM error extractor
+# Usage: just sm0l-filter "cargo clippy 2>&1"
+sm0l-filter CMD:
+    {{CMD}} 2>&1 | python3 {{SM0L_FILTER}}
+
+# Probe available sm0l endpoints (shows which tier will be used)
+sm0l-status:
+    #!/usr/bin/env bash
+    curl -sf http://127.0.0.1:8001/v1/health >/dev/null 2>&1 && echo "✅ :8001 ch0nky (vllm)" || echo "⬜ :8001 ch0nky (offline)"
+    curl -sf http://127.0.0.1:8000/v1/health >/dev/null 2>&1 && echo "✅ :8000 sm0l (local)" || echo "⬜ :8000 sm0l (offline)"
+    [ -n "${HF_TOKEN:-}" ] && echo "HF_TOKEN: set (HF Inference API available)" || echo "HF_TOKEN: NOT SET"
+    echo "activate ch0nky: b00t hive activate inference-qwen36-27b"
+
+# Activate ch0nky (vllm Qwen3.6-27B) via b00t governance
+ch0nky-activate:
+    b00t hive activate inference-qwen36-27b
+
+# Check ch0nky vllm logs
+ch0nky-logs:
+    journalctl --user -u b00t-hive-inference-qwen36-27b -f --no-pager
