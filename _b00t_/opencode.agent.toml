@@ -8,7 +8,7 @@
 
 [b00t]
 name = "opencode"
-type = "agent"
+type = "agent.cli"
 hint = "opencode coding agent — systemd-managed ACP server; ch0nky tier; swap with pi via hive stop/start"
 
 [b00t.agent]
@@ -19,6 +19,12 @@ skills = ["code", "refactor", "debug", "edit", "bash", "read", "write", "grep", 
 personality = "pragmatic"
 humor = "low"
 role = "specialist"
+
+[b00t.agent.traits]
+cli = true
+sdk = false
+ide_vsix = false
+gui = false
 
 [b00t.agent.ipc]
 # 🤓 opencode ACP server listens on HTTP :3000; tasks submitted via opencode run --attach or HTTP

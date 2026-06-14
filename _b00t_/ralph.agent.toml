@@ -1,6 +1,6 @@
 [b00t]
 name = "ralph"
-type = "agent"
+type = "agent.cli"
 hint = "Autonomous agent loop runner for TODO-next.md and b00t job workflows"
 
 [b00t.agent]
@@ -21,6 +21,12 @@ protocol = "msgpack"
 # Ralph acts as autonomous executor for backlog and job workflows
 role = "executor"
 captain = false
+
+[b00t.agent.traits]
+cli = true
+sdk = false
+ide_vsix = false
+gui = false
 
 [b00t.agent.executor]
 # Ralph-specific executor configuration

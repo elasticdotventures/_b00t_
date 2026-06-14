@@ -1,6 +1,6 @@
 [b00t]
 name = "langchain-operator"
-type = "agent"
+type = "agent.sdk"
 hint = "LangChain-backed operator agent for stack control, script routing, and task capture."
 
 [b00t.provides]
@@ -23,6 +23,12 @@ humor = "low"
 role = "operator"
 decision_tree = "operator-decision-tree.tomllm"
 bootstrap_script = "scripts/operator-agent.rhai"
+
+[b00t.agent.traits]
+cli = false
+sdk = true
+ide_vsix = false
+gui = false
 
 [b00t.agent.executor]
 cli_path = "uv"

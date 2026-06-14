@@ -13,7 +13,7 @@
 
 [b00t]
 name = "agent-name"           # Unique agent identifier (lowercase, alphanumeric)
-type = "agent"                # Fixed: must be "agent"
+type = "agent"                # Root metatype; concrete subtypes: agent.cli|agent.sdk|agent.ide.vsix|agent.gui
 hint = "One-line agent purpose"  # Human-readable description
 
 [b00t.agent]
@@ -23,6 +23,19 @@ skills = ["skill1", "skill2"] # Ordered list of agent capabilities
 personality = "strategic"     # Agent temperament: strategic|pragmatic|curious|laconic|persistent
 humor = "low"                 # Humor level: low|moderate|high
 role = "specialist"           # Agent role: captain|executor|specialist
+
+# Cardinal runtime stereotypes. Root `agent` defines the trait vocabulary; concrete
+# datums declare `b00t.type = "agent.<kind>"` when the runtime carrier is known.
+[b00t.agent.traits]
+cli = false                   # Implements a command-line process/tool carrier
+sdk = false                   # Implements an importable library/framework carrier
+ide_vsix = false              # Implements a VS Code extension carrier
+gui = false                   # Implements a desktop/web GUI carrier
+
+[b00t.agent.skill_contracts.goal_loop]
+required = false
+parameters = ["objective", "key_results", "stop_conditions"]
+hint = "Goal loop contract formerly known as ralph loop; deterministic OKR/OODA harness entry."
 
 [b00t.agent.ipc]
 socket = "/tmp/b00t/agents/{name}.sock"  # Unix socket path (empty string if HTTP-only)
@@ -93,7 +106,7 @@ role = "specialist"
 # All agents MUST have these fields
 required_fields = ["name", "type", "hint", "pid", "model", "skills", "personality", "humor", "role"]
 # Type constraints
-type_values = ["agent"]
+type_values = ["agent", "agent.cli", "agent.sdk", "agent.ide.vsix", "agent.gui"]
 role_values = ["captain", "executor", "specialist"]
 personality_values = ["strategic", "pragmatic", "curious", "laconic", "persistent"]
 humor_values = ["low", "moderate", "high"]

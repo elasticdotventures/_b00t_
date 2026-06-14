@@ -8,7 +8,7 @@
 
 [b00t]
 name = "moltis"
-type = "agent"
+type = "agent.cli"
 hint = "Rust-native claw — sandboxed, secure, auditable. Voice, memory, MCP tools, multi-channel."
 
 [b00t.agent]
@@ -20,6 +20,12 @@ skills = ["voice", "memory", "mcp-tools", "multi-channel"]
 personality = "pragmatic"
 humor = "low"
 role = "specialist"
+
+[b00t.agent.traits]
+cli = true
+sdk = false
+ide_vsix = false
+gui = false
 
 [b00t.agent.executor]
 # 🤓 binary is built from submodule; not on global PATH until installed

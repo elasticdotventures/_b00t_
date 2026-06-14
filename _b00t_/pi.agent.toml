@@ -8,7 +8,7 @@
 
 [b00t]
 name = "pi"
-type = "agent"
+type = "agent.cli"
 desires = "latest"
 hint = "pi coding agent — systemd-managed RPC server; ch0nky tier; swap with opencode via hive stop/start"
 install = "npm install -g @mariozechner/pi-coding-agent@latest"
@@ -25,6 +25,12 @@ skills = ["code", "refactor", "debug", "edit", "bash", "read", "write", "grep", 
 personality = "pragmatic"
 humor = "low"
 role = "specialist"
+
+[b00t.agent.traits]
+cli = true
+sdk = false
+ide_vsix = false
+gui = false
 
 [b00t.agent.executor]
 # 🤓 cli_path must be on PATH; pi --mode rpc is the persistent path; this is one-shot fallback via handle_invoke

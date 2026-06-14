@@ -126,6 +126,17 @@ sm0l          = "🐭 (小 xiǎo) — any small model; classify/route/test"
 ch0nky        = "🐻 (胖 pàng) — code-gen capable local model"
 frontier      = "🚀 (前沿 qiányán) — cloud API frontier model; expensive"
 
+[b00t.annotations.ooda_idiom]
+# OODA — first-class b00t goal-loop idiom
+# Observe collects evidence; Orient maps it into ontology/capability context;
+# Decide selects a deterministic route; Act mutates or dispatches; Review emits validation evidence.
+ooda = "OODA — Observe -> Orient -> Decide -> Act; b00t goal-loop idiom for typed capability execution"
+observe = "Observe — collect events, datums, resources, code graph, embeddings, telemetry, operator intent"
+orient = "Orient — normalize into UFO/SysML categories, retrieve neighbors, validate shapes, select traits"
+decide = "Decide — choose recipe, patch dialect, sandbox profile, agent tier, or simulation branch"
+act = "Act — execute guarded command, semantic patch, simulation step, or agent dispatch"
+review = "Review — b00t extension: emit tests, diffs, JSONL, bouncer PASS/FAIL, dashboard evidence"
+
 [b00t.tomllm_strip_rules]
 # 🤓 tomllm::TomllmDoc::strip_for_pipeline() removes lines matching these prefixes
 # Stripping annotations before passing to data pipeline saves tokens & avoids leaking tribal context
@@ -137,8 +148,8 @@ strip_line_prefixes = ["# 🤓", "# 💡", "# ⚠️", "# 🔗", "# 🚩"]
 preserve_tail_map   = true
 
 # b00t:map v1
-# summary: b00t jargon datum — emoji+annotation filter registry for .tomllm tribal lexicon
-# tags: jargon, tomllm, emoji, annotations, filters, 漢語, tribal
+# summary: b00t jargon datum — emoji+annotation filter registry plus first-class OODA idiom for .tomllm tribal lexicon
+# tags: jargon, tomllm, emoji, annotations, filters, 漢語, tribal, ooda, idiom
 # tier: sm0l
-# cmds: b00t learn jargon, grep "# 🤓" _b00t_/*.tomllm
+# cmds: b00t learn jargon, rg -n "OODA|ooda" _b00t_/jargon.tomllm
 # complexity: 2

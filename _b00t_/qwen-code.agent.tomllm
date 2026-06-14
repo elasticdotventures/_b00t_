@@ -6,7 +6,7 @@
 
 [b00t]
 name = "qwen-code"
-type = "agent"
+type = "agent.cli"
 hint = "qwen-code as b00t hive agent — ch0nky tier coder, Qwen3-Coder optimized, headless capable"
 lfmf_category = "qwen-code"
 
@@ -41,6 +41,12 @@ protocol = "msgpack"
 role = "coder"
 captain = false
 # 🤓 qwen-code is a ch0nky specialist; receives task delegation from executive agent
+
+[b00t.agent.traits]
+cli = true
+sdk = false
+ide_vsix = false
+gui = false
 
 [b00t.agent.executor]
 # Headless invocation: qwen -p "<task>" in target project directory
