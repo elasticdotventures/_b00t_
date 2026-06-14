@@ -1,0 +1,66 @@
+# SM0L Filter Pattern — pipe long command output through local LLM, output errors only
+
+[b00t.schema]
+version = "1"
+type = "pattern"
+type_tags = ["pattern", "sm0l", "cognitive-tier", "context-budget", "hive"]
+
+[pattern]
+name = "sm0l-filter"
+status = "implemented"
+tier = "sm0l"
+
+# @tribal: frontier model context budget is precious; cargo test can produce 50k+ tokens
+# routing it through sm0l (local GPU or HF Inference API) collapses to <100 error tokens
+# pattern amortizes 80%+ context cost on long build/test runs
+
+[implementation]
+script = "_b00t_/scripts/sm0l-filter.py"
+
+# Endpoint priority (ControlFlow<Break, Continue>):
+# 1. B00T_AI_SM0L_BASE env var (explicit override)
+# 2. localhost:8001/v1 — b00t hive ch0nky (vllm Qwen3.6-27B)
+# 3. localhost:8000/v1 — any local llama-server / OpenAI-compat
+# 4. HuggingFace Inference API (serverless, uses HF_TOKEN)
+# 5. Exit 2 — never silently pass-through; governance gate
+priority_chain = ["B00T_AI_SM0L_BASE", ":8001", ":8000", "hf://Qwen/Qwen2-0.5B-Instruct"]
+
+[just_recipes]
+# All recipes in _b00t_/b00t.just under "sm0l cognitive filter recipes"
+cargo_test   = "just cargo-test-sm0l [ARGS]"
+cargo_build  = "just cargo-build-sm0l [ARGS]"
+any_command  = "just sm0l-filter \"COMMAND 2>&1\""
+status_check = "just sm0l-status"
+activate     = "just ch0nky-activate"
+
+[hf_integration]
+# When no local model: uses huggingface_hub.InferenceClient (serverless, free tier)
+# sm0l model: Qwen/Qwen2-0.5B-Instruct (tiny, <1s latency on HF serverless)
+# ch0nky model: vllm Qwen3.6-27B-GGUF at :8001 (local GPU)
+# Both use OpenAI-compat /chat/completions API endpoint
+hf_model_sm0l   = "Qwen/Qwen2-0.5B-Instruct"
+hf_model_ch0nky = "Qwen/Qwen3.6-27B"
+sdk = "huggingface_hub.InferenceClient"
+
+[system_prompt]
+# Deterministic prompt — never changes; ensures reproducible filtering
+text = "You are a terse error extractor. Output ONLY lines from the input that contain errors, failures, or panics. Never repeat a line. Never add commentary. If there are no errors, output nothing."
+
+[env]
+B00T_AI_SM0L_BASE  = "http://127.0.0.1:8001/v1"  # override endpoint
+B00T_AI_SM0L_MODEL = "sm0l"                        # override model name
+B00T_AI_SM0L_KEY   = "local-b00t"                 # override api key
+HF_TOKEN           = ""                            # required for HF Inference API fallback
+
+[related]
+vllm_profile   = "_b00t_/inference-qwen36-27b.hive.toml"
+llamacpp_profile = "_b00t_/inference-qwen36-27b-llamacpp.hive.toml"
+hf_datum       = "_b00t_/hf.cli.toml"
+prd_arch_013   = "_b00t_/datums/PRD-ARCH-013-VLLM-OODA-STATE-MACHINE.tomllmd"
+
+# b00t:map v1
+# summary: sm0l filter — pipe build/test output through local GPU LLM, emit only errors
+# tags: sm0l, cognitive-tier, context-budget, hf-inference, vllm, filter, just
+# tier: sm0l
+# cmds: just cargo-test-sm0l, just sm0l-status, just ch0nky-activate
+# complexity: 3
