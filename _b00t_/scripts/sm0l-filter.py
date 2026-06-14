@@ -178,17 +178,33 @@ def call_hf(model_id: str, token: str, system: str, content: str) -> str:
     return result.choices[0].message.content.strip()
 
 # ─── Main ─────────────────────────────────────────────────────────────────────
+def session_log(session_id: str, tag: str, prompt: str, input_text: str, output: str) -> str:
+    """Write sm0l I/O to ephemeral session dir. Returns output file path."""
+    import time
+    base = f"/tmp/b00t-sm0l-{session_id}"
+    os.makedirs(base, exist_ok=True)
+    n = len([f for f in os.listdir(base) if f.endswith(".output")])
+    prefix = f"{base}/{n:04d}-{tag}"
+    for kind, content in [("prompt", prompt), ("input", input_text), ("output", output)]:
+        with open(f"{prefix}.{kind}", "w", errors="replace") as f:
+            f.write(content)
+    return f"{prefix}.output"
+
+
 def main():
     ap = argparse.ArgumentParser(description="b00t pipe-agent: sm0l LLM error filter")
-    ap.add_argument("--task",      default="general", choices=list(TASKS),
+    ap.add_argument("--task",       default="general", choices=list(TASKS),
                     help="Task template (cargo|podman|systemd|hive|rust|general)")
-    ap.add_argument("--model",     default="", help="Model name override")
-    ap.add_argument("--max-bytes", type=int, default=48_000,
+    ap.add_argument("--model",      default="", help="Model name override")
+    ap.add_argument("--max-bytes",  type=int, default=48_000,
                     help="Max stdin bytes before truncation")
-    ap.add_argument("--quiet",     action="store_true",
-                    help="No output at all on success (CI mode)")
-    ap.add_argument("--stats",     action="store_true",
+    ap.add_argument("--quiet",      action="store_true",
+                    help="Suppress output on success (CI mode)")
+    ap.add_argument("--stats",      action="store_true",
                     help="Print line-count stats to stderr")
+    ap.add_argument("--session-id", default="", metavar="ID",
+                    help="Session ID for ephemeral log (/tmp/b00t-sm0l-<ID>/). "
+                         "ch0nky receives log path to reference if needed.")
     args = ap.parse_args()
 
     raw = sys.stdin.buffer.read(args.max_bytes).decode("utf-8", errors="replace")
@@ -211,9 +227,16 @@ def main():
     else:
         result = call_openai(base_url, model, api_key, system_prompt, deduplicated)
 
-    # Sentinel: model returns "-\n" to signal clean/no-errors
-    if result and result.strip() not in ("-", ""):
+    # Log to session if requested — full I/O preserved for ch0nky to reference
+    if args.session_id:
+        log_path = session_log(args.session_id, args.task, system_prompt, deduplicated, result)
+        print(f"[pipe-agent:log] {log_path}", file=sys.stderr)
+
+    # Sentinel: model returns "-" to signal clean/no-errors
+    if result and result.strip() not in ("-", "") and not args.quiet:
         print(result)
+    elif result and result.strip() not in ("-", "") and args.quiet:
+        print(result)  # quiet suppresses nothing on actual errors
 
 if __name__ == "__main__":
     main()

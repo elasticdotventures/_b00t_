@@ -319,6 +319,75 @@ ch0nky-activate:
 # Check ch0nky llamacpp MTP logs
 ch0nky-logs:
     podman logs -f b00t-ch0nky-llamacpp
+
+# ─── sm0l session management ─────────────────────────────────────────────────
+# Ephemeral I/O logs: /tmp/b00t-sm0l-<session-id>/
+# ch0nky references log path from pipe-agent stderr; ignores if unneeded.
+# Session cleared at end of work or after 8h (configurable).
+
+# Create a new session ID and export it — use in shell: eval $(just sm0l-session-new)
+sm0l-session-new:
+    #!/usr/bin/env bash
+    ID="$(date +%Y%m%d-%H%M%S)-$$"
+    mkdir -p "/tmp/b00t-sm0l-${ID}"
+    echo "export B00T_SM0L_SESSION=${ID}"
+    echo "[sm0l-session] created: /tmp/b00t-sm0l-${ID}" >&2
+
+# Show recent sm0l session interactions (last N outputs)
+sm0l-session-tail SESSION="" N="5":
+    #!/usr/bin/env bash
+    DIR="/tmp/b00t-sm0l-{{SESSION}}"
+    [ -z "{{SESSION}}" ] && DIR=$(ls -td /tmp/b00t-sm0l-* 2>/dev/null | head -1)
+    [ -z "$DIR" ] && { echo "no sessions found"; exit 0; }
+    echo "=== sm0l session: $DIR ==="
+    find "$DIR" -name "*.output" | sort | tail -{{N}} | while read f; do
+        echo "--- $(basename $f) ---"
+        cat "$f"
+        echo
+    done
+
+# Show full I/O for a specific sm0l log entry (for ch0nky investigation)
+sm0l-log-view SESSION="" ENTRY="0000":
+    #!/usr/bin/env bash
+    DIR="/tmp/b00t-sm0l-{{SESSION}}"
+    [ -z "{{SESSION}}" ] && DIR=$(ls -td /tmp/b00t-sm0l-* 2>/dev/null | head -1)
+    echo "=== PROMPT ===" && cat "${DIR}/{{ENTRY}}-"*.prompt 2>/dev/null || true
+    echo "=== INPUT ===" && cat "${DIR}/{{ENTRY}}-"*.input 2>/dev/null || true
+    echo "=== OUTPUT ===" && cat "${DIR}/{{ENTRY}}-"*.output 2>/dev/null || true
+
+# List all active sm0l sessions with size
+sm0l-session-list:
+    #!/usr/bin/env bash
+    for d in /tmp/b00t-sm0l-* 2>/dev/null; do
+        [ -d "$d" ] || continue
+        count=$(find "$d" -name "*.output" 2>/dev/null | wc -l)
+        size=$(du -sh "$d" 2>/dev/null | cut -f1)
+        age=$(( $(date +%s) - $(stat -c %Y "$d" 2>/dev/null || echo 0) ))
+        echo "${size}  ${age}s old  ${count} calls  $(basename $d)"
+    done || echo "no active sessions"
+
+# Clean sessions older than MAX_AGE_HOURS (default: 8)
+sm0l-session-clean MAX_AGE_HOURS="8":
+    #!/usr/bin/env bash
+    MAX_SECS=$(( {{MAX_AGE_HOURS}} * 3600 ))
+    NOW=$(date +%s)
+    removed=0
+    for d in /tmp/b00t-sm0l-* 2>/dev/null; do
+        [ -d "$d" ] || continue
+        mtime=$(stat -c %Y "$d" 2>/dev/null || echo 0)
+        age=$(( NOW - mtime ))
+        if [ "$age" -gt "$MAX_SECS" ]; then
+            rm -rf "$d"
+            removed=$((removed+1))
+        fi
+    done
+    echo "cleaned ${removed} sessions older than {{MAX_AGE_HOURS}}h"
+
+# Pipe-agent with session logging — ch0nky gets log path on stderr
+cargo-test-session TASK="cargo" *ARGS:
+    #!/usr/bin/env bash
+    SESSION="${B00T_SM0L_SESSION:-$(date +%Y%m%d-%H%M%S)-$$}"
+    cargo test {{ARGS}} 2>&1 | python3 {{SM0L_FILTER}} --task {{TASK}} --session-id "$SESSION" --stats
 # ─── club-3090 refresh ────────────────────────────────────────────────────────
 # Checks for new model additions, engine image updates, CHANGELOG diff
 # Run weekly or after new model announcements
