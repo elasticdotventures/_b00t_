@@ -109,6 +109,23 @@ def _parse_args(argv: list[str]) -> argparse.Namespace:
     parser.add_argument("--agent", choices=("amp", "claude", "codex", "opencode"))
     parser.add_argument("max_iterations", nargs="?", type=int, default=10)
     parser.add_argument(
+        "--ooda",
+        action="store_true",
+        help="OODA loop mode: run until <promise>COMPLETE</promise> or stuck; no hard iteration cap",
+    )
+    parser.add_argument(
+        "--mission",
+        default=None,
+        help="Mission goal description (logged at start of OODA loop)",
+    )
+    parser.add_argument(
+        "--max-idle",
+        type=int,
+        default=3,
+        dest="max_idle",
+        help="OODA mode: stop after N iterations with identical output (stuck detector). Default: 3",
+    )
+    parser.add_argument(
         "--version",
         action="version",
         version=f"%(prog)s {__version__}",
@@ -155,6 +172,106 @@ def _run_and_capture(cmd: list[str], stdin_path: Path | None = None) -> str:
             stdin.close()
 
 
+def _run_ooda_loop(args: argparse.Namespace, root: Path) -> int:
+    """
+    OODA loop: Observe → Orient → Decide → Act until mission complete or stuck.
+
+    Termination conditions (no hard iteration cap):
+    - <promise>COMPLETE</promise> found in output → success, emit 🍰
+    - Same output hash for --max-idle consecutive iterations → stuck, exit 2
+    - Tool execution error → exit 1
+
+    Sets B00T_K0MMAND3R_PREFIX=! so embedded k0mmand3r commands use sshbang idiom.
+    """
+    import hashlib
+
+    mission = args.mission or "complete all pending tasks"
+    max_idle = args.max_idle
+
+    os.environ.setdefault("B00T_K0MMAND3R_PREFIX", "!")
+
+    LOGGER.info("🔄 OODA loop starting")
+    LOGGER.info("   Mission : %s", mission)
+    LOGGER.info("   Agent   : %s", args.agent)
+    LOGGER.info("   Idle cap: %d identical iterations", max_idle)
+    LOGGER.info("   Prefix  : %s (k0mmand3r sshbang mode)", os.environ["B00T_K0MMAND3R_PREFIX"])
+
+    codex_model = os.environ.get("CODEX_MODEL", "gpt-5.2-codex")
+    codex_reasoning_effort = os.environ.get("CODEX_REASONING_EFFORT", "high")
+    codex_sandbox = os.environ.get("CODEX_SANDBOX", "workspace-write")
+    codex_extra_args = os.environ.get("CODEX_EXTRA_ARGS", "")
+
+    progress_file = root / "progress.txt"
+    _ensure_progress_file(progress_file)
+
+    iteration = 0
+    idle_count = 0
+    last_hash: str | None = None
+
+    while True:
+        iteration += 1
+
+        # ── OBSERVE ────────────────────────────────────────────────────────
+        LOGGER.info("")
+        LOGGER.info("=" * 63)
+        LOGGER.info("  OODA Iteration %d  [idle %d/%d]  mission: %s", iteration, idle_count, max_idle, mission[:40])
+        LOGGER.info("=" * 63)
+
+        try:
+            if args.agent == "amp":
+                output = _run_and_capture(["amp", "--dangerously-allow-all"], stdin_path=root / "prompt.md")
+            elif args.agent == "opencode":
+                output = _run_and_capture(["opencode"], stdin_path=root / "prompt.md")
+            elif args.agent == "codex":
+                codex_args = [
+                    "codex", "exec", "-m", codex_model,
+                    "--config", f'model_reasoning_effort="{codex_reasoning_effort}"',
+                    "--sandbox", codex_sandbox,
+                    "--dangerously-bypass-approvals-and-sandbox",
+                    "--cd", str(root),
+                ]
+                if codex_extra_args:
+                    codex_args.extend(shlex.split(codex_extra_args))
+                codex_args.append("@ralph-next")
+                output = _run_and_capture(codex_args)
+            else:  # claude (default)
+                output = _run_and_capture(
+                    ["claude", "--model", "sonnet", "--dangerously-skip-permissions", "--print"],
+                    stdin_path=root / "CLAUDE.md",
+                )
+        except Exception as exc:
+            LOGGER.error("❌ Tool execution failed: %s", exc)
+            return 1
+
+        # ── ORIENT ────────────────────────────────────────────────────────
+        current_hash = hashlib.sha256(output.encode()).hexdigest()[:16]
+        if current_hash == last_hash:
+            idle_count += 1
+            LOGGER.warning("⚠️  No change detected (idle=%d/%d)", idle_count, max_idle)
+        else:
+            idle_count = 0
+            last_hash = current_hash
+
+        # ── DECIDE ────────────────────────────────────────────────────────
+        if "<promise>COMPLETE</promise>" in output:
+            # MISSION ACCOMPLISHED — emit reward
+            LOGGER.info("")
+            LOGGER.info("🍰 MISSION COMPLETE 🍰")
+            LOGGER.info("   ralph: accomplished in %d OODA iteration(s)", iteration)
+            print("🍰 ralph: MISSION COMPLETE 🍰", flush=True)
+            return 0
+
+        if idle_count >= max_idle:
+            LOGGER.warning("")
+            LOGGER.warning("⚠️  STUCK: no progress for %d consecutive iterations. Stopping.", max_idle)
+            LOGGER.warning("   Check %s for state.", progress_file)
+            return 2
+
+        # ── ACT ───────────────────────────────────────────────────────────
+        LOGGER.info("Iteration %d complete. Continuing OODA loop...", iteration)
+        time.sleep(2)
+
+
 def main(argv: list[str] | None = None) -> int:
     """
     Ralph runtime execution.
@@ -179,6 +296,10 @@ def main(argv: list[str] | None = None) -> int:
 
     if not _require_tasks(root):
         return 1
+
+    # OODA loop mode: no hard iteration cap; runs until complete or stuck
+    if args.ooda:
+        return _run_ooda_loop(args, root)
 
     progress_file = root / "progress.txt"
     _ensure_progress_file(progress_file)
