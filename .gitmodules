@@ -53,3 +53,6 @@
 [submodule "vendor/embed-anything-b00t"]
 	path = vendor/embed-anything-b00t
 	url = https://github.com/PromptExecution/embed-anything-b00t.git
+[submodule "vendor/llama-patch"]
+	path = vendor/llama-patch
+	url = https://github.com/PromptExecution/llama-patch.git
