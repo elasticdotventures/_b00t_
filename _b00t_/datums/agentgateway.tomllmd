@@ -1,0 +1,81 @@
+# agentgateway - agentic proxy for AI agents and MCP servers (3286 stars, Apache-2.0)
+# Assimilated 2026-06-15 for b00t MCP gateway and agent connectivity patterns.
+# Repo: https://github.com/agentgateway/agentgateway
+
+[b00t.schema]
+version   = "1"
+type      = "reference"
+type_tags = ["reference", "mcp", "a2a", "agent-gateway", "ai-gateway", "proxy", "kubernetes", "rust"]
+
+[resource]
+name        = "agentgateway"
+repo        = "https://github.com/agentgateway/agentgateway"
+homepage    = "https://agentgateway.dev"
+stars       = 3286
+lang        = "Rust"
+license     = "Apache-2.0"
+status      = "active"
+branch      = "main"
+latest_release = "v1.2.1"
+latest_release_date = "2026-05-15"
+last_checked = "2026-06-15"
+
+[resource.scope]
+description = "Open source agentic proxy for AI agents and MCP servers."
+project_role = "Connectivity layer for agent-to-LLM, agent-to-tool, and agent-to-agent traffic."
+protocols = ["MCP", "A2A", "OpenAI-compatible API", "Gateway API"]
+transports = ["stdio", "HTTP", "SSE", "Streamable HTTP"]
+deployment_modes = ["standalone", "kubernetes"]
+
+[resource.capabilities]
+llm_gateway = ["provider routing", "budget controls", "prompt enrichment", "load balancing", "failover"]
+mcp_gateway = ["tool federation", "OpenAPI integration", "OAuth authentication", "multiple MCP transports"]
+a2a_gateway = ["capability discovery", "modality negotiation", "task collaboration"]
+inference_routing = ["GPU utilization", "KV cache", "LoRA adapters", "queue depth"]
+guardrails = ["regex filtering", "moderation provider hooks", "custom webhooks"]
+security_observability = ["JWT", "API keys", "OAuth", "RBAC", "CEL policy", "rate limiting", "TLS", "OpenTelemetry"]
+
+[resource.tracked_sources]
+github = "https://github.com/agentgateway/agentgateway"
+docs = "https://agentgateway.dev/docs/"
+kubernetes_docs = "https://agentgateway.dev/docs/kubernetes/latest"
+release = "https://github.com/agentgateway/agentgateway/releases/tag/v1.2.1"
+readme = "https://raw.githubusercontent.com/agentgateway/agentgateway/main/README.md"
+
+[resource.b00t_assimilation]
+topic = "mcp"
+class = "mcp-patterns"
+tags = ["mcp", "agentgateway", "agentic-proxy", "ai-gateway", "a2a", "kubernetes", "rust"]
+operator_goal = "Assimilate agentgateway as a candidate external MCP/agent gateway pattern for b00t harness evolution."
+
+[resource.b00t_assimilation.borrow]
+# @tribal: agentgateway models MCP as a governed network plane, not just a local stdio helper.
+gateway_plane = "Use as reference for b00t internal MCP gateway: front MCP servers with policy, auth, telemetry, and transport adaptation."
+policy_plane = "Study CEL/RBAC/rate-limit boundaries before b00t exposes multi-agent MCP routing beyond localhost."
+telemetry_plane = "Map OpenTelemetry gateway spans to k0mmand3r and b00t-mcp spans for auditability."
+transport_plane = "Compare stdio/HTTP/SSE/Streamable HTTP transport handling against b00t MCP harness assumptions."
+kubernetes_plane = "Use Gateway API integration as the deployment pattern if b00t agents need cluster-native MCP ingress."
+
+[resource.b00t_assimilation.defer]
+replacement = "Do not replace b00t-mcp wholesale; evaluate agentgateway as a front-door or reference architecture first."
+security = "Treat provider credentials, OAuth tokens, API keys, and agent-to-agent task payloads as high-risk data."
+runtime = "Validate local resource impact before running full gateway stacks on constrained hive profiles."
+
+[[resource.usages]]
+description = "Operator assimilation command for this datum."
+command = "b00t grok assimilate -t mcp --class mcp-patterns --tags \"mcp,agentgateway,agentic-proxy,ai-gateway,a2a,kubernetes,rust\" --source-url https://github.com/agentgateway/agentgateway --file _b00t_/datums/agentgateway.tomllmd"
+
+[[resource.usages]]
+description = "Verify the assimilated knowledge can be recalled."
+command = "b00t grok ask \"agentgateway MCP gateway pattern for b00t\" -t mcp"
+
+[[resource.usages]]
+description = "Refresh current upstream metadata."
+command = "gh repo view agentgateway/agentgateway --json nameWithOwner,description,url,homepageUrl,stargazerCount,licenseInfo,primaryLanguage,repositoryTopics,latestRelease,defaultBranchRef,updatedAt"
+
+# b00t:map v1
+# summary: agentgateway 3286 stars Rust agentic proxy for MCP/A2A/LLM traffic; candidate b00t MCP gateway pattern
+# tags: agentgateway, mcp, a2a, ai-gateway, agentic-proxy, rust, kubernetes, gateway-api, opentelemetry
+# tier: ch0nky
+# cmds: b00t grok assimilate -t mcp --class mcp-patterns --tags "mcp,agentgateway,agentic-proxy,ai-gateway,a2a,kubernetes,rust" --source-url https://github.com/agentgateway/agentgateway --file _b00t_/datums/agentgateway.tomllmd
+# complexity: 5
