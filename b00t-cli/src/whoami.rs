@@ -395,6 +395,145 @@ fn check_skill_evidence(skill: &str, path: &str) -> &'static str {
     "[datum ❌ — no local evidence]"
 }
 
+/// Classify a task title into a cognitive tier.
+/// Returns "sm0l", "frontier", or "ch0nky" (default).
+fn classify_tier(title: &str) -> &'static str {
+    let lower = title.to_lowercase();
+    // sm0l: mechanical / low-reasoning tasks
+    const SM0L_KW: &[&str] = &[
+        "test", "lint", "format", "bump", "docs", "readme", "register", "check", "audit",
+    ];
+    // frontier: architecture / research tasks
+    const FRONTIER_KW: &[&str] = &[
+        "arch", "design", "research", "evaluate", "eureka", "why", " ai ", "llm", "gemini",
+    ];
+    for kw in SM0L_KW {
+        if lower.contains(kw) {
+            return "sm0l";
+        }
+    }
+    for kw in FRONTIER_KW {
+        if lower.contains(kw) {
+            return "frontier";
+        }
+    }
+    "ch0nky"
+}
+
+/// Discover pending tasks: try `b00t task list` first, fall back to `gh issue list`.
+/// Returns Vec<(id, title)>.
+fn discover_tasks() -> Vec<(String, String)> {
+    // 1. Try b00t task list
+    if let Ok(out) = std::process::Command::new("b00t")
+        .args(["task", "list"])
+        .output()
+    {
+        let stdout = String::from_utf8_lossy(&out.stdout);
+        let lower = stdout.to_lowercase();
+        if out.status.success() && !lower.contains("no tasks") && !stdout.trim().is_empty() {
+            let tasks = parse_task_list_output(&stdout);
+            if !tasks.is_empty() {
+                return tasks;
+            }
+        }
+    }
+
+    // 2. Fall back to gh issue list
+    if let Ok(out) = std::process::Command::new("gh")
+        .args([
+            "issue",
+            "list",
+            "--state",
+            "open",
+            "--limit",
+            "10",
+            "--json",
+            "number,title",
+        ])
+        .output()
+    {
+        if out.status.success() {
+            return parse_gh_issue_json(&String::from_utf8_lossy(&out.stdout));
+        }
+    }
+
+    vec![]
+}
+
+/// Parse `b00t task list` output — expects lines like: "  #414  wrkflw local runner"
+/// Extracts (id, title) pairs.
+fn parse_task_list_output(output: &str) -> Vec<(String, String)> {
+    let mut results = Vec::new();
+    for line in output.lines() {
+        let trimmed = line.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+        // Match lines starting with #<digits> whitespace title
+        if let Some(rest) = trimmed.strip_prefix('#') {
+            let mut parts = rest.splitn(2, |c: char| c.is_whitespace());
+            if let (Some(id), Some(title)) = (parts.next(), parts.next()) {
+                let id = id.trim();
+                let title = title.trim().to_string();
+                if !id.chars().all(|c| c.is_ascii_digit()) {
+                    continue; // not a numeric id
+                }
+                if !title.is_empty() {
+                    results.push((format!("#{}", id), title));
+                }
+            }
+        }
+    }
+    results
+}
+
+/// Parse `gh issue list --json number,title` output (minimal, no serde).
+fn parse_gh_issue_json(json: &str) -> Vec<(String, String)> {
+    let mut results = Vec::new();
+    // Split on `},{` to get individual issue objects
+    let items: Vec<&str> = json.split("},").collect();
+    for item in items {
+        let num = extract_json_number(item, "number");
+        let title = extract_json_string(item, "title");
+        if let (Some(n), Some(t)) = (num, title) {
+            results.push((format!("#{}", n), t));
+        }
+    }
+    results
+}
+
+fn extract_json_number(s: &str, key: &str) -> Option<String> {
+    let needle = format!("\"{}\":", key);
+    let start = s.find(&needle)? + needle.len();
+    let rest = s[start..].trim_start();
+    let end = rest
+        .find(|c: char| !c.is_ascii_digit())
+        .unwrap_or(rest.len());
+    let num = &rest[..end];
+    if num.is_empty() {
+        None
+    } else {
+        Some(num.to_string())
+    }
+}
+
+fn extract_json_string(s: &str, key: &str) -> Option<String> {
+    let needle = format!("\"{}\":\"", key);
+    let start = s.find(&needle)? + needle.len();
+    let rest = &s[start..];
+    // Find closing quote (not escaped)
+    let mut end = None;
+    let mut prev_backslash = false;
+    for (i, c) in rest.char_indices() {
+        if c == '"' && !prev_backslash {
+            end = Some(i);
+            break;
+        }
+        prev_backslash = c == '\\';
+    }
+    end.map(|e| rest[..e].to_string())
+}
+
 /// Interview mode: analyze .b00t/tasks.json → suggest weighted skills
 fn print_skill_interview(path: &str) -> Result<()> {
     // Tag→skill mapping (deterministic, no LLM required)
@@ -471,6 +610,48 @@ fn print_skill_interview(path: &str) -> Result<()> {
             let ev = check_skill_evidence(skill, path);
             println!("  b00t learn {}  [weight:{}]  {}", skill, score, ev);
         }
+    }
+
+    // Task discovery + tier routing
+    let tasks = discover_tasks();
+    if !tasks.is_empty() {
+        println!("\nTask discovery (from b00t task list + gh issues):");
+        for (id, title) in &tasks {
+            let tier = classify_tier(title);
+            // derive branch slug: lowercase, spaces→dashes, strip non-alnum/-/#
+            let slug: String = title
+                .to_lowercase()
+                .chars()
+                .map(|c| if c.is_alphanumeric() || c == '-' { c } else { '-' })
+                .collect::<String>()
+                .split('-')
+                .filter(|s| !s.is_empty())
+                .collect::<Vec<_>>()
+                .join("-");
+            let num = id.trim_start_matches('#');
+            let branch = format!("task/{}-{}", num, slug);
+            println!("  → [{:<8}] {}  {}  git checkout -b {}", tier, id, title, branch);
+        }
+
+        // Bouncer handoff for first (highest priority) task
+        let (first_id, first_title) = &tasks[0];
+        let first_tier = classify_tier(first_title);
+        let first_slug: String = first_title
+            .to_lowercase()
+            .chars()
+            .map(|c| if c.is_alphanumeric() || c == '-' { c } else { '-' })
+            .collect::<String>()
+            .split('-')
+            .filter(|s| !s.is_empty())
+            .collect::<Vec<_>>()
+            .join("-");
+        let first_num = first_id.trim_start_matches('#');
+        let first_branch = format!("task/{}-{}", first_num, first_slug);
+        println!("\nNext action (bouncer handoff):");
+        println!(
+            "  b00t agent delegate {} --role=ch0nky --tier={}",
+            first_branch, first_tier
+        );
     }
 
     Ok(())
@@ -727,5 +908,50 @@ hint = "ralph mcp"
             "unexpected evidence string: {}",
             ev
         );
+    }
+
+    #[test]
+    fn test_classify_tier_sm0l() {
+        assert_eq!(classify_tier("check b00t implementation"), "sm0l");
+        assert_eq!(classify_tier("README authoring skill"), "sm0l");
+    }
+
+    #[test]
+    fn test_classify_tier_frontier() {
+        assert_eq!(classify_tier("evaluate swarms"), "frontier");
+        assert_eq!(classify_tier("why AI systems don't learn"), "frontier");
+    }
+
+    #[test]
+    fn test_classify_tier_default_ch0nky() {
+        assert_eq!(classify_tier("integrate metaflow"), "ch0nky");
+        assert_eq!(classify_tier("wrkflw local runner"), "ch0nky");
+    }
+
+    #[test]
+    fn test_parse_task_list_output() {
+        let output = "  #414  wrkflw local runner\n  #420  register b00t skills\n  #405  eureka\n";
+        let tasks = parse_task_list_output(output);
+        assert_eq!(tasks.len(), 3);
+        assert_eq!(tasks[0], ("#414".to_string(), "wrkflw local runner".to_string()));
+        assert_eq!(tasks[1], ("#420".to_string(), "register b00t skills".to_string()));
+        assert_eq!(tasks[2], ("#405".to_string(), "eureka".to_string()));
+    }
+
+    #[test]
+    fn test_parse_gh_issue_json() {
+        let json = r#"[{"number":414,"title":"wrkflw local runner"},{"number":420,"title":"register b00t skills"}]"#;
+        let tasks = parse_gh_issue_json(json);
+        assert_eq!(tasks.len(), 2);
+        assert_eq!(tasks[0], ("#414".to_string(), "wrkflw local runner".to_string()));
+        assert_eq!(tasks[1], ("#420".to_string(), "register b00t skills".to_string()));
+    }
+
+    #[test]
+    fn test_parse_task_list_output_skips_no_tasks() {
+        // "no tasks" lines shouldn't be parsed as tasks
+        let output = "no tasks found\n";
+        let tasks = parse_task_list_output(output);
+        assert!(tasks.is_empty());
     }
 }
