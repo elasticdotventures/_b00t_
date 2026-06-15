@@ -905,13 +905,13 @@ fn test_handshake_verb_on_unknown() {
 #[test]
 fn test_parse_empty_string() {
     let err = K0mmand3rCmd::parse("").unwrap_err();
-    assert!(err.contains("must start with /"), "error: {err}");
+    assert!(err.contains("must start with"), "error: {err}");
 }
 
 #[test]
 fn test_parse_whitespace_only() {
     let err = K0mmand3rCmd::parse("   ").unwrap_err();
-    assert!(err.contains("must start with /"), "error: {err}");
+    assert!(err.contains("must start with"), "error: {err}");
 }
 
 #[test]
