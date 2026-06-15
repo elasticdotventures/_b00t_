@@ -1,0 +1,272 @@
+# just — Poly Connector Datum (strategic / ontological)
+# 🤓 Companion to VENDOR-JUST-MCP.tomllmd (tactical vendor) and b00t learn just (syntax)
+#    This datum models just as an abstract capability layer, not a build tool.
+#    Executive view → first-order logic → Rust trait ontology → backlog PRDs.
+
+[b00t.schema]
+version   = "1"
+type      = "skill"
+type_tags = ["skill", "just", "poly-connector", "mcp", "memoization", "ontology"]
+
+[resource]
+name    = "just-poly-connector"
+tool    = "just"
+upstream = "https://github.com/casey/just"
+mcp_vendor = "VENDOR-JUST-MCP"   # → _b00t_/datums/VENDOR-JUST-MCP.tomllmd
+learn_content = "_b00t_/learn/just.md"
+
+# ─── EXECUTIVE ABSTRACT ───────────────────────────────────────────────────────
+[executive]
+summary = """
+just is b00t's universal task-runner substrate — a poly connector that bridges
+every language runtime, every transport protocol (CLI, MCP stdio/http), and every
+agent tier (sm0l/ch0nky/frontier) through a single composable interface.
+
+Strategic value: memoize once in justfile → invoke from bash, Rust code, Python,
+TypeScript, AI agents via MCP, CI pipelines, or k0mmand3r — with zero
+reimplementation. Just IS the DRY primitive for operational knowledge.
+"""
+
+tier       = "load-at-session-start"   # heavyweight: always relevant
+criticality = "P0"                     # b00t cannot function without just
+
+# ─── SKILLS TAXONOMY (REQUIRED / SHOULD / MAY) ────────────────────────────────
+# RFC 2119 precision — these are capability contracts, not docs
+
+[skills.required]
+# These MUST be understood to operate b00t correctly
+task_memoization     = "encode all runnable ops as just recipes (no bare shell scripts)"
+module_system        = "mod / mod? for optional dependency isolation (CI safe)"
+polyglot_shebang     = "#!/usr/bin/env {bash,python3,node,ruby,nu} per recipe"
+env_loading          = "set dotenv-load — single source of truth for env"
+recipe_dependencies  = "deps: build → test → deploy chains, not shell chaining"
+parameter_defaults   = "recipe arg=\"default\" pattern for self-documenting ops"
+mcp_as_transport     = "just-mcp exposes ALL recipes as typed MCP tools automatically"
+
+[skills.should]
+alias_shortcuts      = "alias b := build — reduces agent prompt tokens"
+working_dir_control  = "[no-cd] and set working-directory for cross-repo recipes"
+error_prefix         = "-rm ... to continue on failure; @ to suppress echo"
+optional_imports     = "import? 'path.just' — graceful degradation when file absent"
+path_functions       = "justfile_directory() vs invocation_directory() — never assume CWD"
+
+[skills.may]
+# Advanced / situational
+http_mcp_transport   = "just-mcp over HTTP for remote agents (not default in b00t)"
+recipe_listing_json  = "just --list --unsorted --json for programmatic discovery"
+conditional_recipes  = "shell conditionals in shebang recipes for env-branching"
+cross_repo_invocation = "just -f /path/to/justfile recipe — for multi-repo pipelines"
+module_namespacing   = "just mod_name::recipe or just mod_name recipe (both work)"
+
+# ─── FIRST-ORDER LOGIC (ONTOLOGICAL PREDICATES) ──────────────────────────────
+# These are true propositions about just in the b00t universe.
+# Read as: ForAll x, if IsJustRecipe(x) then ...
+
+[ontology.predicates]
+# IsJustRecipe(x)         → x is callable via CLI, MCP, k0mmand3r, CI
+# HasShebang(x, lang)     → x runs in `lang` runtime regardless of host shell
+# IsModule(m)             → m is a scoped namespace; recipes run in m's directory
+# IsImport(i)             → i merges into caller namespace; inherits caller's CWD
+# DependsOn(x, y)         → x will invoke y before running (DAG, not linear script)
+# ExposedAsMcp(x)         → just-mcp auto-registers x as typed MCP tool
+# IsOptional(m)           → mod? m — absent module is not an error (CI safe)
+
+[ontology.axioms]
+# Axiom 1: Universality
+# ∀ op ∈ b00t_operations: Memoizable(op) → ShouldBeJustRecipe(op)
+# Nothing runnable should live ONLY in bash; if worth doing twice it goes in justfile.
+
+# Axiom 2: Transport Transparency
+# ∀ recipe r: ExposedAsMcp(r) ∧ CallableFromCLI(r) — just-mcp makes it dual-access
+
+# Axiom 3: Module Isolation
+# ∀ module m, recipe r ∈ m: WorkingDir(r) = Dir(m), NOT Dir(caller)
+# 🤓 this breaks assumptions if you use relative paths in caller-level justfiles
+
+# Axiom 4: Polyglot Freedom
+# ∀ recipe r with HasShebang(r, lang): r ⊥ host_shell — python in bash env, etc.
+
+# Axiom 5: DRY Closure
+# If just can express it, DO NOT re-express it in Makefile, npm script, or Taskfile.
+
+# ─── RUST TRAIT ONTOLOGY ─────────────────────────────────────────────────────
+# just embodies a PolyConnector<T> pattern. Model it as traits for:
+#   1. Swap-in alternatives (Makefile, deno task, npm run, rake)
+#   2. Type-safe recipe invocation from Rust code
+#   3. b00t-cli integration surface
+
+[ontology.rust_traits]
+design_note = """
+The just runtime IS-A PolyConnector — the b00t-idiomatic abstraction for
+'discoverable, typed, executable task graphs with multiple transports.'
+Model this in Rust so b00t-cli can generically invoke any PolyConnector.
+"""
+
+# Core trait hierarchy (pseudo-Rust; authoritative file = b00t-cli/src/connector/)
+trait_PolyConnector = """
+pub trait PolyConnector: Send + Sync {
+    type Recipe: RecipeLike;
+
+    /// Discover all available recipes/commands
+    fn list(&self) -> Result<Vec<Self::Recipe>>;
+
+    /// Execute by name with positional args
+    fn execute(&self, name: &str, args: &[&str]) -> Result<ConnectorOutput>;
+
+    /// Preferred transport (CLI, McpStdio, McpHttp)
+    fn transport(&self) -> ConnectorTransport;
+}
+"""
+
+trait_RecipeLike = """
+pub trait RecipeLike {
+    fn name(&self) -> &str;
+    fn params(&self) -> &[RecipeParam];
+    fn deps(&self) -> &[&str];          // other recipe names this depends on
+    fn language(&self) -> ShebangLang;  // Bash, Python3, Node, Rust, Native
+    fn doc(&self) -> Option<&str>;      // first comment line becomes description
+}
+"""
+
+enum_ConnectorTransport = """
+pub enum ConnectorTransport {
+    Cli,
+    McpStdio,
+    McpHttp { host: String, port: u16 },
+    // BACKLOG: McpSse, WebSocket
+}
+"""
+
+enum_ShebangLang = """
+pub enum ShebangLang {
+    Bash,
+    Python3,
+    Node,
+    Deno,
+    Ruby,
+    Nu,         // nushell
+    Native,     // no shebang — runs in just's default shell
+}
+"""
+
+struct_ConnectorOutput = """
+pub struct ConnectorOutput {
+    pub stdout: String,
+    pub stderr: String,
+    pub exit_code: i32,
+    pub recipe: String,
+    pub duration_ms: u64,
+}
+"""
+
+impl_JustConnector = """
+// Concrete impl wrapping the `just` binary + just-mcp (stdio)
+pub struct JustConnector {
+    justfile_path: PathBuf,
+    transport: ConnectorTransport,
+}
+impl PolyConnector for JustConnector { ... }
+"""
+
+# ─── BACKLOG PRDs ─────────────────────────────────────────────────────────────
+# Capabilities NOT YET implemented but strategically valuable.
+# Each is a candidate for a b00t task or sub-PRD.
+
+[[backlog]]
+id      = "JUST-PIPE-001"
+title   = "Recipe piping: just recipe1 | just recipe2"
+status  = "idea"
+priority = 2
+description = """
+just has no native pipe operator — stdout of recipe A cannot feed stdin of recipe B
+declaratively. Current workaround: shell pipe inside shebang recipe.
+Desired: `just clean | just analyze` compositional syntax (or b00t wrapper).
+Options:
+  A) b00t-cli PipeConnector wrapper that shells out sequentially
+  B) Patch just upstream to support | in recipe deps (unlikely to be accepted)
+  C) just-mcp chain_recipes tool that invokes A, feeds stdout to B
+"""
+related_axiom = "Axiom 1 (Universality) — if it's a b00t op, it should compose"
+
+[[backlog]]
+id      = "JUST-REACTIVE-002"
+title   = "File-watch trigger: run recipe on FS change"
+status  = "idea"
+priority = 3
+description = """
+just has no built-in watch mode. Workaround: entr / watchman / cargo-watch.
+Desired: `just --watch src/ test` or b00t hive reactive profile.
+b00t-cli could wrap `watchexec just recipe` as a first-class pattern.
+"""
+
+[[backlog]]
+id      = "JUST-TYPECHECK-003"
+title   = "Recipe param schema validation (typed params)"
+status  = "idea"
+priority = 3
+description = """
+just params are positional strings — no type enforcement.
+Desired: TOML-annotated recipe docs that let b00t-cli validate before invocation.
+Pattern: `# @param: name:string, count:int, flag:bool`
+MCP tool generated with correct JSON schema types.
+"""
+
+[[backlog]]
+id      = "JUST-DISTRIBUTED-004"
+title   = "Remote recipe invocation via SSH / k0mmand3r"
+status  = "idea"
+priority = 4
+description = """
+ConnectorTransport::Ssh — run `just recipe` on remote host via sshbang idiom.
+k0mmand3r !execute maps naturally to this: !just deploy on agent:b00t-sandbox
+"""
+
+[[backlog]]
+id      = "JUST-REGISTRY-005"
+title   = "b00t recipe registry: discover recipes across all justfiles in hive"
+status  = "idea"
+priority = 3
+description = """
+Hive has N justfiles (root, langchain-agent/, ralph/, b00t-cli/, etc).
+A registry would let agents discover `deploy` from any justfile by name.
+just-mcp today only exposes ONE justfile per server instance.
+Multi-root just-mcp or b00t-mcp aggregation layer needed.
+"""
+
+# ─── INTEGRATION SURFACE IN b00t ─────────────────────────────────────────────
+[integrations]
+# How just connects to other b00t subsystems
+k0mmand3r   = "!just <recipe> — sshbang idiom; prefix controls CLI vs remote"
+ralph_ooda  = "OODA loop reads justfile for mission recipes; output parsed for <promise>"
+hive        = "b00t hive run=<cmd> guard checks before executing just recipes"
+datum_learn = "b00t learn just → _b00t_/learn/just.md (syntax); THIS datum = ontology"
+mcp         = "VENDOR-JUST-MCP exposes recipes as MCP tools; auto-discovery"
+b00t_cli    = "b00t-cli planned PolyConnector<JustConnector> impl (see rust_traits above)"
+
+# ─── USAGE PATTERNS (QUICK REFERENCE) ────────────────────────────────────────
+[[resource.usages]]
+description = "List all recipes (machine-readable)"
+command     = "just --list --unsorted --json"
+
+[[resource.usages]]
+description = "Invoke via MCP (agent-friendly)"
+command     = "mcp tool: just_run recipe=<name> args=<csv>"
+
+[[resource.usages]]
+description = "Run recipe in specific module"
+command     = "just <module>::<recipe>   # or: just <module> <recipe>"
+
+[[resource.usages]]
+description = "Discover recipes cross-repo (workaround until JUST-REGISTRY-005)"
+command     = "fd justfile . --max-depth 4 | xargs -I{} just -f {} --list 2>/dev/null"
+
+[[resource.usages]]
+description = "k0mmand3r sshbang invocation"
+command     = "!just <recipe>   # B00T_K0MMAND3R_PREFIX=! (default in OODA mode)"
+
+# b00t:map v1
+# summary: just as b00t's PolyConnector substrate — memoize→CLI/MCP/k0mmand3r, Rust trait ontology
+# tags: just, poly-connector, mcp, k0mmand3r, trait, ontology, backlog, skill, P0
+# tier: frontier
+# cmds: just --list --unsorted --json, just-mcp, just mod::recipe
+# complexity: 7

@@ -12,7 +12,7 @@ name    = "club-3090"
 repo    = "https://github.com/noonghunna/club-3090"
 branch  = "master"
 stars   = 1337
-last_checked = "2026-06-14"
+last_checked = "2026-06-15"
 update_cadence = "weekly"   # new models / engine patches arrive frequently
 
 # ─── What this repo contains ─────────────────────────────────────────────────
@@ -52,6 +52,19 @@ llamacpp   = { mtp = true, q4km = true, q5km = true, q8_0 = true, iq4_kt = true,
 ik_llamacpp = { mtp = "merged-main", iq4_kt = true, iq3_k_r4 = true, fused_moe = true }
 sglang     = { mtp = false, awq = true, radix_attn = true, structured_out = "best-in-class" }
 ktransformers = { big_moe = true, hot_expert_cache = true, use_when = "model > VRAM" }
+# 🤓 2026-06-15: soak-test container auto-detect now matches by engine port, not model allowlist
+# 🤓 weights-fetch: optional `revision` field added — pin HF commit: { repo = "foo/bar", revision = "49a080d" }
+
+# ─── Benchmark notes (2026-06-15 refresh) ────────────────────────────────────
+[resource.benchmark_notes]
+diffusion_gemma_26b_a4b = { added = "2026-06-15", dtype = "fp16", vram_gb = 24, engine = "llamacpp|vllm", status = "benchmarked" }
+
+# ─── llama.cpp container image ───────────────────────────────────────────────
+[resource.llamacpp_image]
+validated_build     = "b9246"
+latest_build        = "b9642"   # as of 2026-06-15
+image_update_needed = true
+# 🤓 upgrade: pull ghcr.io/ggerganov/llama.cpp:server-cuda-b9642, re-run soak tests
 
 # ─── Periodic refresh protocol ───────────────────────────────────────────────
 [resource.refresh]
