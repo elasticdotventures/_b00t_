@@ -1,4 +1,8 @@
-"""Iteration runner for Ralph automation."""
+"""OODA loop runner for Ralph autonomous agent.
+
+Cycle: Observe → Orient → Decide → Act
+Terminates when no pending tasks remain or tool emits <promise>COMPLETE</promise>.
+"""
 
 from __future__ import annotations
 
@@ -6,7 +10,7 @@ import time
 from pathlib import Path
 from typing import TypeVar
 
-from returns.result import Failure, Result
+from returns.result import Failure, Result, Success
 
 from ralph.config import RalphConfig
 from ralph.executors import (
@@ -24,32 +28,28 @@ from ralph.logging_utils import (
     log_warning,
 )
 from ralph.progress_display import display_progress_summary
-from ralph.taskmaster_adapter import create_client
+from ralph.taskmaster_adapter import Task, create_client
 
 WORKING_DIR = Path.cwd()
 PROMPT_FILE = WORKING_DIR / "prompt.md"
 CLAUDE_PROMPT_FILE = WORKING_DIR / "CLAUDE.md"
 COMPLETE_MARKER = "<promise>COMPLETE</promise>"
+CAKE = "🍰"
+
 ResultValue = TypeVar("ResultValue")
 
 
 def _unwrap_result(result: Result[ResultValue, Exception], message: str) -> ResultValue:
-    """Unwrap a Result or raise a chained error."""
-
     if isinstance(result, Failure):
-        error = result.failure()
-        raise RuntimeError(message) from error
+        raise RuntimeError(message) from result.failure()
     return result.unwrap()
 
 
 def _check_for_completion(output: str) -> bool:
-    """Check if the output contains the completion marker."""
     return COMPLETE_MARKER in output
 
 
 def _build_executor(tool: str, config: RalphConfig) -> ToolExecutor:
-    """Create the executor for the selected tool."""
-
     match tool:
         case "amp":
             return AmpExecutor(prompt_path=PROMPT_FILE, working_dir=WORKING_DIR)
@@ -64,70 +64,128 @@ def _build_executor(tool: str, config: RalphConfig) -> ToolExecutor:
                 model=config.opencode_model,
                 extra_args=config.opencode_extra_args,
             )
-    raise ValueError(f"Unsupported tool requested: {tool}")
+    raise ValueError(f"Unsupported tool: {tool}")
 
 
-def run_ralph(config: RalphConfig, max_iterations: int) -> int:
-    """Run the Ralph tool loop for a maximum number of iterations."""
+def _pending_count(tasks: list[Task]) -> int:
+    return sum(1 for t in tasks if t.status in ("pending", "in-progress"))
 
-    logger = configure_logging()
 
-    log_info(
-        logger,
-        f"Configuration loaded: tool={config.tool} iterations={max_iterations} model={config.codex_model}",
-    )
+# ── OODA phases ────────────────────────────────────────────────────────────────
 
-    # Create TaskMaster client for progress tracking
-    # Note: TaskMaster finds tasks in .taskmaster/ (set up by ralph.sh)
-    taskmaster = create_client(
-        prefer_mcp=config.use_mcp,
-        mcp_url=config.taskmaster_url,
-    )
-
-    # Display initial task summary with visual progress
+def _observe(taskmaster, logger) -> list[Task]:
+    """OBSERVE: snapshot current task state."""
     tasks_result = taskmaster.get_all_tasks()
     if isinstance(tasks_result, Failure):
-        log_warning(logger, f"Could not load tasks: {tasks_result.failure()}")
-    else:
-        tasks = tasks_result.unwrap()
-        summary = display_progress_summary(tasks)
-        log_info(logger, "\n" + summary)
+        log_warning(logger, f"Observe failed: {tasks_result.failure()}")
+        return []
+    return tasks_result.unwrap()
 
+
+def _orient(tasks: list[Task], logger) -> Task | None:
+    """ORIENT: find highest-priority actionable task."""
+    available = [
+        t for t in tasks
+        if t.status == "pending" and not t.blocked_by
+    ]
+    if not available:
+        return None
+    available.sort(key=lambda t: t.priority)
+    task = available[0]
+    log_info(logger, f"  orient → #{task.id} {task.title!r} (P{task.priority})")
+    return task
+
+
+def _decide(task: Task | None, iteration: int, max_iter: int, logger) -> str:
+    """DECIDE: return action string or 'halt'."""
+    if task is None:
+        log_info(logger, "  decide → no actionable tasks; halt")
+        return "halt"
+    if iteration > max_iter:
+        log_warning(logger, f"  decide → max iterations ({max_iter}) reached; halt")
+        return "halt"
+    log_info(logger, f"  decide → execute task #{task.id}")
+    return "execute"
+
+
+def _act(task: Task, executor: ToolExecutor, taskmaster, logger) -> str | None:
+    """ACT: mark in-progress, run executor, return output or None on failure."""
+    taskmaster.update_task_status(task.id, "in-progress")
+    try:
+        result = executor.run()
+        if isinstance(result, Failure):
+            log_error(logger, "Execution failed", result.failure())
+            taskmaster.update_task_status(task.id, "pending")
+            return None
+        return result.unwrap()
+    except Exception as exc:
+        log_error(logger, "Unexpected executor error", exc)
+        taskmaster.update_task_status(task.id, "pending")
+        return None
+
+
+# ── Main OODA loop ──────────────────────────────────────────────────────────
+
+def run_ralph(config: RalphConfig, max_iterations: int) -> int:
+    """Run the OODA loop for up to max_iterations cycles."""
+    logger = configure_logging()
+
+    log_info(logger, f"ralph OODA start — tool={config.tool} max={max_iterations}")
+
+    taskmaster = create_client(prefer_mcp=config.use_mcp, mcp_url=config.taskmaster_url)
     executor = _build_executor(config.tool, config)
 
     for iteration in range(1, max_iterations + 1):
         log_info(logger, "")
-        log_info(logger, "=" * 63)
-        log_info(logger, f"Ralph Iteration {iteration} of {max_iterations} ({config.tool})")
-        log_info(logger, "=" * 63)
+        log_info(logger, f"{'═' * 63}")
+        log_info(logger, f"OODA cycle {iteration}/{max_iterations}")
+        log_info(logger, f"{'═' * 63}")
 
-        try:
-            output = _unwrap_result(executor.run(), "Tool execution failed")
-        except RuntimeError as exc:
-            log_error(logger, "Tool execution failed", exc)
-            return 1
+        # OBSERVE
+        tasks = _observe(taskmaster, logger)
+        if not tasks:
+            log_warning(logger, "No tasks found — halting")
+            break
 
-        if _check_for_completion(output):
-            log_info(logger, "")
-            log_success(logger, "Ralph completed all tasks!")
-            log_success(logger, f"Completed at iteration {iteration} of {max_iterations}")
+        summary = display_progress_summary(tasks)
+        log_info(logger, "\n" + summary)
 
-            # Display final task summary with visual progress
-            tasks_result = taskmaster.get_all_tasks()
-            if not isinstance(tasks_result, Failure):
-                tasks = tasks_result.unwrap()
-                summary = display_progress_summary(tasks)
-                log_success(logger, "\n" + summary)
+        pending = _pending_count(tasks)
+        if pending == 0:
+            log_success(logger, f"All tasks done!  {CAKE}  Mission accomplished.  {CAKE}")
             return 0
 
-        log_info(logger, f"Iteration {iteration} complete. Continuing...")
-        time.sleep(2)
+        # ORIENT
+        task = _orient(tasks, logger)
 
-    log_info(logger, "")
-    log_warning(
-        logger,
-        f"Ralph reached max iterations ({max_iterations}) without completing all tasks.",
-    )
+        # DECIDE
+        action = _decide(task, iteration, max_iterations, logger)
+        if action == "halt":
+            break
+
+        # ACT
+        output = _act(task, executor, taskmaster, logger)  # type: ignore[arg-type]
+        if output is None:
+            log_warning(logger, f"Iteration {iteration}: executor returned no output; continuing")
+            time.sleep(2)
+            continue
+
+        if _check_for_completion(output):
+            taskmaster.update_task_status(task.id, "done")  # type: ignore[union-attr]
+            tasks = _observe(taskmaster, logger)
+            if _pending_count(tasks) == 0:
+                log_success(logger, "")
+                log_success(logger, f"  {CAKE}  Ralph completed the mission!  {CAKE}")
+                log_success(logger, "")
+                return 0
+            remaining = _pending_count(tasks)
+            log_info(logger, f"Task #{task.id} done — {remaining} remaining")  # type: ignore[union-attr]
+        else:
+            log_info(logger, f"Iteration {iteration} complete. Continuing OODA…")
+
+        time.sleep(1)
+
+    log_warning(logger, f"OODA loop ended without mission completion after {max_iterations} cycles.")
     return 1
 
 

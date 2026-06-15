@@ -446,10 +446,14 @@ def test_mcp_client_not_implemented() -> None:
 
 
 def test_create_client_file_based_by_default(tmp_path: Path) -> None:
-    """Test create_client() returns FileTaskMasterClient by default."""
+    """Test create_client() returns file client when b00t-cli unavailable."""
+    from ralph.taskmaster_adapter import B00tTaskClient
+    from returns.result import Failure
     tasks_file = tmp_path / "tasks.json"
     tasks_file.write_text(json.dumps({"tasks": [], "metadata": {}}))
-    client = create_client(prefer_mcp=False, tasks_file=tasks_file)
+    # Simulate b00t-cli not available so B00tTaskClient probe fails
+    with patch.object(B00tTaskClient, "get_all_tasks", return_value=Failure(Exception("b00t-cli not found"))):
+        client = create_client(prefer_mcp=False, tasks_file=tasks_file)
     assert isinstance(client, FileTaskMasterClient)
 
 
@@ -465,11 +469,14 @@ def test_markdown_backlog_is_parsed(sample_todo_next: Path) -> None:
 
 
 def test_create_client_mcp_fallback_to_file(tmp_path: Path) -> None:
-    """Test create_client() falls back to FileTaskMasterClient when MCP fails."""
+    """Test create_client() falls back to FileTaskMasterClient when MCP + b00t-cli both fail."""
+    from ralph.taskmaster_adapter import B00tTaskClient
+    from returns.result import Failure
     tasks_file = tmp_path / "tasks.json"
     tasks_file.write_text(json.dumps({"tasks": [], "metadata": {}}))
-    client = create_client(prefer_mcp=True, tasks_file=tasks_file)
-    # MCP not implemented, should fall back to file
+    with patch.object(B00tTaskClient, "get_all_tasks", return_value=Failure(Exception("b00t-cli not found"))):
+        client = create_client(prefer_mcp=True, tasks_file=tasks_file)
+    # MCP not implemented + b00t-cli unavailable → file-based
     assert isinstance(client, FileTaskMasterClient)
 
 

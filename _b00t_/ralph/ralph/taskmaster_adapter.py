@@ -426,6 +426,105 @@ class MCPTaskMasterClient:
         return Failure(NotImplementedError("MCP client not yet implemented"))
 
 
+@dataclass(frozen=True, slots=True)
+class B00tTaskClient:
+    """Task client backed by `b00t-cli task` — the canonical task store."""
+
+    _B00T_CLI = "b00t-cli"
+
+    def _run(self, *args: str) -> Result[str, Exception]:
+        try:
+            result = subprocess.run(
+                [self._B00T_CLI, "task", *args],
+                capture_output=True, text=True, check=True,
+            )
+            return Success(result.stdout.strip())
+        except subprocess.CalledProcessError as e:
+            return Failure(Exception(f"b00t-cli task {args[0] if args else ''} failed: {e.stderr}"))
+        except FileNotFoundError:
+            return Failure(Exception("b00t-cli not found in PATH"))
+        except Exception as exc:
+            return Failure(exc)
+
+    def get_all_tasks(self) -> Result[list[Task], Exception]:
+        r = self._run("list", "--json")
+        if isinstance(r, Failure):
+            return r
+        try:
+            raw = json.loads(r.unwrap())
+            tasks = []
+            for item in (raw if isinstance(raw, list) else raw.get("tasks", [])):
+                tasks.append(Task(
+                    id=str(item.get("id", "")),
+                    title=item.get("title", ""),
+                    description=item.get("description", "") or item.get("notes", ""),
+                    status=item.get("status", "pending"),
+                    priority=int(item.get("priority", 99)),
+                    acceptance_criteria=item.get("acceptance_criteria", []),
+                    depends_on=[str(d) for d in item.get("depends_on", [])],
+                    blocked_by=[str(d) for d in item.get("blocked_by", [])],
+                    notes=[item.get("notes", "")] if item.get("notes") else [],
+                    created_at=item.get("created_at", datetime.now().isoformat()),
+                    updated_at=item.get("updated_at", datetime.now().isoformat()),
+                ))
+            return Success(tasks)
+        except Exception as exc:
+            return Failure(exc)
+
+    def get_next_task(self) -> Result[Task, Exception]:
+        r = self._run("next", "--json")
+        if isinstance(r, Failure):
+            return r
+        try:
+            item = json.loads(r.unwrap())
+            return Success(Task(
+                id=str(item["id"]),
+                title=item.get("title", ""),
+                description=item.get("description", "") or item.get("notes", ""),
+                status=item.get("status", "pending"),
+                priority=int(item.get("priority", 99)),
+                acceptance_criteria=item.get("acceptance_criteria", []),
+                depends_on=[str(d) for d in item.get("depends_on", [])],
+                blocked_by=[str(d) for d in item.get("blocked_by", [])],
+                notes=[item.get("notes", "")] if item.get("notes") else [],
+                created_at=item.get("created_at", datetime.now().isoformat()),
+                updated_at=item.get("updated_at", datetime.now().isoformat()),
+            ))
+        except Exception as exc:
+            return Failure(exc)
+
+    def get_task_by_id(self, task_id: str) -> Result[Task, Exception]:
+        r = self._run("show", task_id, "--json")
+        if isinstance(r, Failure):
+            return r
+        try:
+            item = json.loads(r.unwrap())
+            return Success(Task(
+                id=str(item["id"]),
+                title=item.get("title", ""),
+                description=item.get("description", "") or item.get("notes", ""),
+                status=item.get("status", "pending"),
+                priority=int(item.get("priority", 99)),
+                acceptance_criteria=item.get("acceptance_criteria", []),
+                depends_on=[str(d) for d in item.get("depends_on", [])],
+                blocked_by=[str(d) for d in item.get("blocked_by", [])],
+                notes=[item.get("notes", "")] if item.get("notes") else [],
+                created_at=item.get("created_at", datetime.now().isoformat()),
+                updated_at=item.get("updated_at", datetime.now().isoformat()),
+            ))
+        except Exception as exc:
+            return Failure(exc)
+
+    def update_task_status(self, task_id: str, status: str) -> Result[None, Exception]:
+        r = self._run("update", task_id, "--status", status)
+        return Success(None) if isinstance(r, Success) else r  # type: ignore[return-value]
+
+    def add_task_note(self, task_id: str, note: str) -> Result[None, Exception]:
+        timestamped = f"{datetime.now().isoformat()}: {note}"
+        r = self._run("update", task_id, "--notes", timestamped)
+        return Success(None) if isinstance(r, Success) else r  # type: ignore[return-value]
+
+
 def create_client(
     prefer_mcp: bool = False,
     mcp_url: str | None = None,
@@ -442,17 +541,19 @@ def create_client(
     Returns:
         TaskMasterClient implementation (MCP, legacy CLI, or file-based)
     """
+    # b00t-cli task is the canonical source — try it first
+    b00t_client = B00tTaskClient()
+    probe = b00t_client.get_all_tasks()
+    if isinstance(probe, Success):
+        return b00t_client
+
     if prefer_mcp:
-        # Try MCP client first
         mcp_client = MCPTaskMasterClient(server_url=mcp_url)
-        # Test if MCP is available by trying to get tasks
         test_result = mcp_client.get_all_tasks()
         if isinstance(test_result, Success):
             return mcp_client
 
-        # MCP failed, fall back to file-based
-        return FileTaskMasterClient(tasks_file=tasks_file or Path("TODO-next.md"))
-
+    # File-based fallback (TODO-next.md or legacy JSON)
     if tasks_file is None:
         default_backlog = Path("TODO-next.md")
         if default_backlog.exists():
