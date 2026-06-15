@@ -51,9 +51,11 @@ jobs:
           # 🤓 just docgen checks ~/.cargo/bin/mdbook — install everything via cargo
           # so all tools land in the same place. action-mdbook@v3 was removed because
           # it installs to a different prefix, causing null TOML values in the RenderContext
-          # passed to mdbook-admonish. Pin admonish@1.15.0 = assets_version 3.1.0.
+          # passed to mdbook-admonish.
+          # mdbook-admonish requires the mdbook-0.5-compat fork until tommilligan/mdbook-admonish#235 merges.
+          # See Justfile line 471 comment for local dev instructions.
           cargo install mdbook mdbook-mermaid --locked
-          cargo install mdbook-admonish --locked
+          cargo install --git https://github.com/padamson/mdbook-admonish.git --branch feat/mdbook-0.5-compat mdbook-admonish
           cargo install --path crates/mdbook-rhai-mermaid
 
       - name: Build l3dg3rr docs
