@@ -13,8 +13,8 @@ mod sudo 'b00t-service.just'
 # this is an antipattern (litellm is early-stage AI infra, skip for now)
 mod litellm '_b00t_/litellm/justfile'
 mod b00t-mcp-npm
-mod irontology-publish 'vendor/irontology-mcp/irontology-publish.just'
-mod irontology 'vendor/irontology-mcp/irontology.just'
+mod? irontology-publish 'vendor/irontology-mcp/irontology-publish.just'
+mod? irontology 'vendor/irontology-mcp/irontology.just'
 
 # Datum justfiles (install recipes for core tech stacks)
 mod python '_b00t_/python.🐍/justfile'
