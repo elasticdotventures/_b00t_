@@ -115,6 +115,8 @@ fn load_all_guards(
             guards.extend(p.guards);
         }
     }
+    // Agent-added session guards (~/.b00t/session-guards.json)
+    guards.extend(crate::hive::load_session_guards());
     guards
 }
 
