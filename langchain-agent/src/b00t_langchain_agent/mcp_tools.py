@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 from fastmcp import Client
+from fastmcp.client.transports import StdioTransport
 from langchain_core.tools import BaseTool, StructuredTool
 from pydantic import BaseModel, Field, create_model
 
@@ -137,12 +138,17 @@ class MCPToolDiscovery:
 
         try:
             # Create MCP client based on transport
+            # 🤓 FastMCP 2.x cannot infer transport from a list — use StdioTransport directly
             if server.transport == "stdio":
-                # FastMCP Client for stdio: command with args
-                client_input = [server.command] + server.args
-                client = Client(client_input)
+                if not server.command:
+                    log.warning(f"  ⚠️  {server.name}: stdio server missing command")
+                    return
+                transport = StdioTransport(command=server.command, args=server.args)
+                client = Client(transport)
             elif server.transport == "http":
-                # FastMCP Client for HTTP
+                if not server.url:
+                    log.warning(f"  ⚠️  {server.name}: http server missing url")
+                    return
                 client = Client(server.url)
             else:
                 log.warning(f"  ⚠️  Unsupported transport: {server.transport}")
