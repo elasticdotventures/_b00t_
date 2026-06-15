@@ -219,10 +219,22 @@ impl LfmfSystem {
         let lesson_obj = self.parse_lesson(&category, lesson)?;
 
         // Try to store in vector database first
-        if let Some(ref client) = self.grok_client {
-            if let Err(e) = self.store_in_vector_db(client, &lesson_obj).await {
-                eprintln!("⚠️ Failed to store in vector database: {}", e);
+        let vector_stored = if let Some(ref client) = self.grok_client {
+            match self.store_in_vector_db(client, &lesson_obj).await {
+                Ok(_) => true,
+                Err(e) => {
+                    eprintln!("⚠️ Failed to store in vector database: {}", e);
+                    false
+                }
             }
+        } else {
+            false
+        };
+
+        // Circuit breaker: storage failed → disable grok_client so list_lessons
+        // reads from filesystem where we know the data was written
+        if !vector_stored && self.grok_client.is_some() {
+            self.grok_client = None;
         }
 
         // Always store in filesystem as backup
@@ -447,7 +459,7 @@ impl LfmfSystem {
         // Resolve category (might be a datum name)
         let category = self.resolve_category(tool);
 
-        // Try vector database first
+        // Try vector database first; fall through to filesystem if empty or error
         if let Some(ref client) = self.grok_client {
             match client
                 .ask(
@@ -458,12 +470,16 @@ impl LfmfSystem {
                 .await
             {
                 Ok(results) => {
-                    return Ok(results
+                    let items: Vec<String> = results
                         .results
                         .into_iter()
                         .take(max_results)
                         .map(|r| r.content)
-                        .collect());
+                        .collect();
+                    if !items.is_empty() {
+                        return Ok(items);
+                    }
+                    // Vector DB returned nothing — fall through to filesystem
                 }
                 Err(_) => {} // Fall through to filesystem
             }
