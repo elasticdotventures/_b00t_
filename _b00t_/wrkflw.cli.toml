@@ -8,18 +8,29 @@ desires = "0.8.0"
 version_regex = 'wrkflw (?P<version>[\d.]+)'
 detect = ["wrkflw --version"]
 
-# @tribal: gh CLI is REQUIRED — used to resolve latest release tag for updates
-# install uses gh release download for repeatability and audit logging
-install = [
-  "bash -c 'set -euo pipefail; command -v gh >/dev/null || { echo \"gh CLI required: b00t install gh\" >&2; exit 1; }; ASSET=wrkflw-x86_64-unknown-linux-gnu.tar.gz; gh release download v0.8.0 --repo bahdotsh/wrkflw --pattern \"$ASSET\" --dir /tmp && tar xz -C /tmp/ -f /tmp/$ASSET && install -m755 /tmp/wrkflw ~/.local/bin/wrkflw'"
-]
+# @tribal: gh CLI is a REQUIRED mandatory prerequisite — install commands use
+# `gh release download` for audit logging and version pinning.
+# If gh is missing: b00t install gh
+install = """
+set -euo pipefail
+command -v gh >/dev/null 2>&1 || { echo "❌ gh CLI required: b00t install gh" >&2; exit 1; }
+ASSET=wrkflw-x86_64-unknown-linux-gnu.tar.gz
+gh release download v0.8.0 --repo bahdotsh/wrkflw --pattern "$ASSET" --dir /tmp --clobber
+tar xz -C /tmp/ -f /tmp/$ASSET
+install -m755 /tmp/wrkflw ~/.local/bin/wrkflw
+wrkflw --version
+"""
 
-update = [
-  "bash -c 'set -euo pipefail; command -v gh >/dev/null || { echo \"gh CLI required: b00t install gh\" >&2; exit 1; }; VER=$(gh release view --repo bahdotsh/wrkflw --json tagName --jq .tagName); ASSET=wrkflw-x86_64-unknown-linux-gnu.tar.gz; gh release download $VER --repo bahdotsh/wrkflw --pattern \"$ASSET\" --dir /tmp && tar xz -C /tmp/ -f /tmp/$ASSET && install -m755 /tmp/wrkflw ~/.local/bin/wrkflw && echo installed $VER'"
-]
-
-[b00t.prerequisites]
-required = ["gh"]
+update = """
+set -euo pipefail
+command -v gh >/dev/null 2>&1 || { echo "❌ gh CLI required: b00t install gh" >&2; exit 1; }
+VER=$(gh release view --repo bahdotsh/wrkflw --json tagName --jq .tagName)
+ASSET=wrkflw-x86_64-unknown-linux-gnu.tar.gz
+gh release download "$VER" --repo bahdotsh/wrkflw --pattern "$ASSET" --dir /tmp --clobber
+tar xz -C /tmp/ -f /tmp/$ASSET
+install -m755 /tmp/wrkflw ~/.local/bin/wrkflw
+echo "✅ installed wrkflw $VER"
+"""
 
 [[b00t.usage]]
 description = "List available workflows in this repo"
