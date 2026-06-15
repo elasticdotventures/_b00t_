@@ -274,8 +274,9 @@ pip-log.txt
 pip-wheel-metadata/
 profile_default/
 raglight/
-ralph/
+/ralph/
 ralphs/ralph-v1
+# _b00t_/ralph/ is the embedded ralph Python source — tracked, not ignored
 report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
 rustc-ice-*.txt
 sdist/
