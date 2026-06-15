@@ -1,0 +1,103 @@
+# b00t hardware datum — Rockchip RK3588 Mali-G610 GPU subsystem (Rock 5C node: rock-5c)
+# 🤓 namespace: <soc>.<subsystem>.hardware — sibling to rk3588.npu.hardware.tomllmd.
+#    RK3588's GPU (Mali-G610 MP4) is a distinct subsystem from the NPU; integrated,
+#    shares system DDR (no dedicated VRAM).
+# Discovered: 2026-06-15 on rock-5c (Armbian 25.11.2, kernel 6.1.115-vendor-rk35xx)
+
+[b00t]
+name   = "rk3588-gpu"
+type   = "hardware"
+status = "active"
+hint   = "RK3588 Mali-G610 MP4 iGPU — display + OpenCL/Vulkan; shared DDR, ch0nky/sm0l display tier"
+
+[b00t.hardware]
+vendor     = "ARM"
+soc        = "RK3588"
+subsystem  = "GPU"
+ip         = "Mali-G610"
+variant    = "MP4"          # 4 execution cores
+driver     = "panfrost"     # mainline; vendor kernel may ship mali-bifrost blob
+vram_kind  = "shared-ddr"   # integrated — no dedicated VRAM
+
+# 🤓 Mali exposes DRM render/card nodes; /dev/mali0 is the vendor char device.
+[b00t.hardware.device_nodes]
+mali_char  = "/dev/mali0"
+dri_card0  = "/dev/dri/card0"
+dri_card1  = "/dev/dri/card1"
+dri_render = "/dev/dri/renderD128"   # primary render node
+by_path    = "/dev/dri/by-path/platform-display-subsystem-render"
+
+[b00t.hardware.thermal]
+zone   = "gpu-thermal"
+idle_c = 51          # observed 2026-06-15, rock-5c idle
+path   = "/sys/class/thermal/thermal_zone*/temp"
+
+# ─── Inference budget ─────────────────────────────────────────────────────────
+[b00t.hardware.inference_budget]
+# 🤓 Mali is NOT the inference path on RK3588 — the NPU (rk3588.npu.hardware) is.
+#    Mali can do OpenCL/Vulkan compute for small models but is bandwidth-bound on
+#    shared DDR. Leave uncalibrated; route LLM inference to the NPU datum.
+inference_path = "not-recommended"
+use_instead    = "rk3588.npu.hardware"
+
+# ─── Supported workloads ──────────────────────────────────────────────────────
+[b00t.hardware.engines]
+panfrost    = { supported = true, notes = "mainline open driver; OpenGL ES 3.2, Vulkan 1.3" }
+mali_blob   = { supported = "vendor", notes = "Rockchip vendor blob; may be required for some media CODECs" }
+opencl      = { supported = true, notes = "via panfrost; light compute offload only" }
+
+# ─── b00t hive resource gate alignment ─────────────────────────────────────────
+[b00t.hardware.hive_gate]
+# iGPU has no VRAM; like the NPU, profiles gate on shared DDR RAM headroom.
+accelerator_kind = "mali-igpu"
+ram_free_gb_display_stack = 2.0   # Wayland + browser headroom
+
+# ─── Detection (b00t up / hive status) ─────────────────────────────────────────
+[b00t.hardware.detect]
+# 🤓 matched by hive's probe_mali() (P1) — presence of /dev/mali0.
+devnode = "test -e /dev/mali0"
+drm     = "ls /dev/dri/by-path/platform-display-subsystem-render 2>/dev/null"
+
+# ─── Current workload ──────────────────────────────────────────────────────────
+[b00t.hardware.workloads]
+primary_use = "display (Wayland/GNOME)"
+compute_use = ""   # TODO if OpenCL offload is configured
+
+# ─── Entanglements ─────────────────────────────────────────────────────────────
+entangled_cli    = ["b00t hive"]
+entangled_datums = ["rk3588.npu.hardware.tomllmd", "rk3588.thermal.hardware.tomllmd"]
+entangled_agents = []
+sibling_socs     = ["rk3576", "rk3588s"]
+
+# ─── Usages ────────────────────────────────────────────────────────────────────
+[[b00t.usages]]
+description = "Confirm Mali device node"
+command     = "ls -l /dev/mali0 /dev/dri/renderD128"
+
+[[b00t.usages]]
+description = "Check GPU thermal"
+command     = "cat /sys/class/thermal/thermal_zone*/temp"  # zone type gpu-thermal"
+
+[[b00t.usages]]
+description = "List DRM nodes (card + render)"
+command     = "ls -l /dev/dri/by-path/"
+
+# ─── References ────────────────────────────────────────────────────────────────
+[[b00t.references]]
+name = "Mali-G610 (Valhall, 4th gen Arch)"
+url  = "https://developer.arm.com/processors/graphics-processors"
+
+[[b00t.references]]
+name = "Panfrost (mainline Mali driver)"
+url  = "https://docs.mesa3d.org/drivers/panfrost.html"
+
+[[b00t.references]]
+name = "Radxa Rock 5C docs"
+url  = "https://wiki.radxa.com/Rock5"
+
+# b00t:map v1
+# summary: RK3588 Mali-G610 MP4 iGPU hardware datum — shared DDR, display+light-compute; NOT the inference path (use NPU)
+# tags: hardware, rk3588, gpu, mali, mali-g610, panfrost, igpu, display, rockchip, rock-5c, armbian
+# tier: sm0l
+# cmds: ls /dev/mali0, cat /sys/class/thermal/thermal_zone*/temp, b00t hive status
+# complexity: 3

@@ -423,6 +423,49 @@ ra_run:
 test:
     cargo test -- --nocapture
 
+# 🤓 deterministic hive accelerator/soul verification (P1–P3).
+#    Builds the test binary ONCE (--no-run), then runs hive tests directly —
+#    avoids re-linking the full workspace test binary on every invocation.
+verify-hive:
+    #!/bin/bash
+    set -euo pipefail
+    cargo test --release --no-run -p b00t-cli
+    # locate the test harness that actually contains hive::tests (not the main bin)
+    bin=""
+    for c in $(find target/release/deps -maxdepth 1 -name 'b00t_cli-*' -type f ! -name '*.d' ! -name '*.o'); do
+        if "$c" --list 2>/dev/null | grep -q "hive::tests::"; then bin="$c"; break; fi
+    done
+    [ -n "$bin" ] || { echo "❌ no test harness with hive::tests found"; exit 1; }
+    echo "▶ test binary: $bin"
+    "$bin" hive::tests --nocapture
+
+# Distil a session transcript into persistent soul memory (P5).
+# 🤓 deterministic: prewritten so the agent runs one command, never invents it.
+#   just distill session.log          # from a file (sm0l tier, default)
+#   just distill session.log ch0nky   # from a file, ch0nky tier
+#   just distill -                    # from stdin (pipe a transcript in)
+distill file tier="sm0l":
+    #!/bin/bash
+    set -euo pipefail
+    if [ "{{file}}" = "-" ]; then
+        b00t soul distill --model {{tier}}
+    elif [ -f "{{file}}" ]; then
+        b00t soul distill --model {{tier}} < "{{file}}"
+    else
+        echo "usage: just distill <file|-> [tier=sm0l|ch0nky|frontier]" >&2
+        exit 1
+    fi
+
+# Deterministic node snapshot: refresh soul node.* + HW-drift check (P3),
+# then show the compressed node identity line (P2).
+node-snapshot:
+    @b00t hive status
+    @echo
+    @echo "--- whoami node line (P2) ---"
+    @b00t whoami --role=operator 2>/dev/null | grep -E '^🥾 Node:' || echo "(node identity not yet recorded — run: b00t hive status)"
+
+
+
 # trigger & run any action ci/action locally
 # don't specify workflow or job then script will display ./github/workflows using fzf
 gh-action workflow="" job="":

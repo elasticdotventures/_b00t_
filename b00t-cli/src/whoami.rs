@@ -58,6 +58,13 @@ pub fn whoami(path: &str, role_override: Option<String>, with_skills: bool, skil
 
     println!("{}", rendered);
 
+    // 🤓 P2: one-line node identity from soul — context-efficient preamble.
+    //    Emits only highest-signal facts; agent runs `b00t soul get node.<key>`
+    //    for detail. Silently omitted when no node identity is recorded.
+    if let Some(node) = crate::memory_provider::node_summary_from_soul() {
+        println!("🥾 Node: {}  (detail: b00t soul get node.*)", node);
+    }
+
     // Append role supplement (AGENTS/--role=<role>.md) BEFORE role datum summary
     let role = resolve_role(role_override.clone());
     let role_name = role.name();

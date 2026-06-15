@@ -232,6 +232,60 @@ pub fn file_provider() -> FileMemory {
     FileMemory::new(soul_path())
 }
 
+// ─── Node identity summary (context-efficient) ────────────────────────────────
+
+/// Compose a compressed one-line node identity from soul `node.*` keys.
+///
+/// Emits only the highest-signal facts (board · soc arch | ram | NPU | GPU | os).
+/// Returns `None` when no node identity is recorded, so callers (e.g. `whoami`)
+/// leave their output unchanged on nodes without soul node data.
+///
+/// 🤓 context-efficiency: agents run `b00t soul get node.npu` for full detail
+///    instead of receiving a full key dump in every whoami.
+pub fn compose_node_summary(mem: &dyn MemoryProvider) -> Option<String> {
+    let get = |k: &str| mem.read(k).ok().flatten();
+    // board is the anchor — without it there is no node identity to summarise.
+    let board = get("node.board")?;
+    let soc = get("node.soc");
+    let arch = get("node.arch");
+    let ram = get("node.ram_gb");
+    let npu = get("node.npu");
+    let gpu = get("node.gpu");
+    let os = get("node.os");
+
+    let mut head = board;
+    if let Some(s) = &soc {
+        head.push_str(&format!(" · {s}"));
+    }
+    if let Some(a) = &arch {
+        head.push_str(&format!(" {a}"));
+    }
+    if let Some(r) = &ram {
+        head.push_str(&format!(" | {r}GB"));
+    }
+    if let Some(n) = &npu {
+        head.push_str(&format!(" | NPU: {}", shorten_accel(n)));
+    }
+    if let Some(g) = &gpu {
+        head.push_str(&format!(" | GPU: {}", shorten_accel(g)));
+    }
+    if let Some(o) = &os {
+        head.push_str(&format!(" | {o}"));
+    }
+    Some(head)
+}
+
+/// Read the global SOUL.tomllm and return the node summary, if recorded.
+pub fn node_summary_from_soul() -> Option<String> {
+    compose_node_summary(&file_provider())
+}
+
+/// Shorten an accelerator description for a one-line summary.
+/// "RKNPU2 2.3.0 + rknn_server + python3-rknnlite2" → "RKNPU2 2.3.0"
+fn shorten_accel(s: &str) -> String {
+    s.split('+').next().unwrap_or(s).trim().to_string()
+}
+
 // ─── Tests ────────────────────────────────────────────────────────────────────
 
 #[cfg(test)]
@@ -322,6 +376,51 @@ mod tests {
     #[test]
     fn test_is_copaw_available_no_panic() {
         let _ = is_copaw_available();
+    }
+
+    // ─── node summary composition ──────────────────────────────────────────────
+
+    #[test]
+    fn test_node_summary_full() {
+        let dir = tempfile::tempdir().unwrap();
+        let mem = FileMemory::new(dir.path().join("SOUL.tomllm"));
+        for (k, v) in [
+            ("node.board", "rock-5c"),
+            ("node.soc", "rk3588"),
+            ("node.arch", "aarch64"),
+            ("node.ram_gb", "16"),
+            ("node.npu", "RKNPU2 2.3.0 + rknn_server + python3-rknnlite2"),
+            ("node.gpu", "Mali (/dev/mali0, dri renderD128/129)"),
+            ("node.os", "armbian-25.11.2 (ubuntu-24.04 noble)"),
+        ] {
+            mem.write(k, v).unwrap();
+        }
+        let s = compose_node_summary(&mem).unwrap();
+        // highest-signal facts present, accelerator descriptions shortened
+        assert!(s.starts_with("rock-5c · rk3588 aarch64 | 16GB"));
+        assert!(s.contains("NPU: RKNPU2 2.3.0"));
+        assert!(s.contains("GPU: Mali (/dev/mali0, dri renderD128/129)"));
+        assert!(s.contains("armbian-25.11.2"));
+        // the trailing tail of the NPU value must NOT leak unshortened
+        assert!(!s.contains("rknn_server"));
+    }
+
+    #[test]
+    fn test_node_summary_none_without_board() {
+        let dir = tempfile::tempdir().unwrap();
+        let mem = FileMemory::new(dir.path().join("SOUL.tomllm"));
+        // no node.board → None (whoami output unchanged)
+        mem.write("node.soc", "rk3588").unwrap();
+        assert!(compose_node_summary(&mem).is_none());
+    }
+
+    #[test]
+    fn test_node_summary_minimal() {
+        let dir = tempfile::tempdir().unwrap();
+        let mem = FileMemory::new(dir.path().join("SOUL.tomllm"));
+        mem.write("node.board", "pi5").unwrap();
+        // only board present → just the board, no separators
+        assert_eq!(compose_node_summary(&mem).as_deref(), Some("pi5"));
     }
 }
 
