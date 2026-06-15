@@ -23,6 +23,7 @@ use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::OnceLock;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 // ─── Behavior chains ──────────────────────────────────────────────────────────
@@ -206,15 +207,16 @@ impl SmolEndpoint {
     }
 
     fn probe(base_url: &str) -> bool {
+        let client = match reqwest::blocking::Client::builder()
+            .timeout(std::time::Duration::from_secs(2))
+            .build()
+        {
+            Ok(c) => c,
+            Err(_) => return false, // fail closed — TLS/env issues
+        };
         for path in ["/health", "/v1/models"] {
             let url = format!("{}{}", base_url.trim_end_matches('/'), path);
-            if let Ok(resp) = reqwest::blocking::Client::builder()
-                .timeout(std::time::Duration::from_secs(2))
-                .build()
-                .unwrap()
-                .get(&url)
-                .send()
-            {
+            if let Ok(resp) = client.get(&url).send() {
                 if resp.status().as_u16() < 500 {
                     return true;
                 }
@@ -359,8 +361,8 @@ impl SmolOutput {
     pub fn summary_line(&self) -> String {
         if self.is_clean() {
             format!(
-                "[sm0l:{}→{}] ✅ clean ({} raw → {} unique)",
-                self.endpoint, self.stats.raw_lines, self.stats.raw_lines, self.stats.unique_lines
+                "[sm0l:{}] ✅ clean ({} raw → {} unique)",
+                self.endpoint, self.stats.raw_lines, self.stats.unique_lines
             )
         } else {
             let preview = self
@@ -439,9 +441,11 @@ pub fn dispatch_with_endpoint(
 
 // ─── Internal helpers ─────────────────────────────────────────────────────────
 
+static ANSI_RE: OnceLock<regex::Regex> = OnceLock::new();
+
 fn preprocess(raw: &str, max_bytes: usize) -> (String, SmolStats) {
-    // Strip ANSI escape sequences
-    let ansi_re = regex::Regex::new(r"\x1b\[[0-9;]*[mGKH]").unwrap();
+    // Strip ANSI escape sequences — compiled once via OnceLock
+    let ansi_re = ANSI_RE.get_or_init(|| regex::Regex::new(r"\x1b\[[0-9;]*[mGKH]").unwrap());
 
     let mut seen: std::collections::HashMap<[u8; 8], usize> = Default::default();
     let mut order: Vec<String> = Vec::new();
@@ -525,6 +529,11 @@ fn call_endpoint(endpoint: &SmolEndpoint, system: &str, content: &str) -> Result
         .send()
         .map_err(|e| anyhow!("sm0l endpoint call failed: {e}"))?;
 
+    let status = resp.status();
+    if !status.is_success() {
+        let body_text = resp.text().unwrap_or_default();
+        return Err(anyhow!("sm0l endpoint HTTP {status}: {body_text}"));
+    }
     let body: serde_json::Value = resp.json()?;
     let text = body["choices"][0]["message"]["content"]
         .as_str()

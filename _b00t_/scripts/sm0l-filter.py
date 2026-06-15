@@ -160,8 +160,17 @@ def call_openai(base_url: str, model: str, api_key: str, system: str, content: s
         headers={"Content-Type": "application/json", "Authorization": f"Bearer {api_key}"},
         method="POST",
     )
-    with urllib.request.urlopen(req, timeout=60) as r:
-        return json.loads(r.read())["choices"][0]["message"]["content"].strip()
+    try:
+        with urllib.request.urlopen(req, timeout=60) as r:
+            data = json.loads(r.read())
+            return data["choices"][0]["message"]["content"].strip()
+    except urllib.error.HTTPError as e:
+        body = e.read().decode(errors="replace")[:200]
+        print(f"[pipe-agent] ERROR: HTTP {e.code} from endpoint: {body}", file=sys.stderr)
+        return "-"
+    except (urllib.error.URLError, json.JSONDecodeError, KeyError) as e:
+        print(f"[pipe-agent] ERROR: {type(e).__name__}: {e}", file=sys.stderr)
+        return "-"
 
 def call_hf(model_id: str, token: str, system: str, content: str) -> str:
     try:

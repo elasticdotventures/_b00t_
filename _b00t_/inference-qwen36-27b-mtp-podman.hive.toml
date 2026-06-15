@@ -259,4 +259,5 @@ command     = "b00t hive plan inference-qwen36-27b-mtp-podman"
 # tier: ch0nky
 # cmds: b00t install inference-qwen36-27b-mtp-podman, b00t hive activate inference-qwen36-27b-mtp-podman
 # complexity: 6
-# verified: 2026-06-14 GPU=RTX3090 VRAM=21.1GB MTP=draft_n:8,accepted:4 TPS≈27
+# verified: 2026-06-14 GPU=RTX3090 VRAM=21.1GB TPS≈40
+# 🤓 --spec-draft-n-max 2 = max 2 tokens per speculation STEP; draft_n:8,accepted:4 = cumulative totals reported by llama.cpp across the full response (not per-step)
