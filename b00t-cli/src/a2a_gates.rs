@@ -50,9 +50,13 @@ pub fn register_governance_skills(registry: &mut SkillRegistry) {
                 }),
             };
 
-            // EisenhowerGate::check is async; we block on it here since
-            // the SkillRegistry handler signature is synchronous.
-            let gate_result = tokio::runtime::Handle::current()
+            // EisenhowerGate::check is async; build a minimal local runtime
+            // since the SkillRegistry handler signature is synchronous and
+            // Handle::current() panics when no runtime is active (e.g. in tests).
+            let gate_result = tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()
+                .expect("tokio rt")
                 .block_on(gate.check("a2a-eisenhower-check", &context));
 
             use b00t_c0re_gov::types::GateResult as GovGateResult;

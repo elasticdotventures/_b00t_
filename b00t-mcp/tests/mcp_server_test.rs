@@ -107,3 +107,43 @@ fn test_json_schema_generation() {
     let status_schema = schema_for!(StatusParams);
     assert!(status_schema.as_object().is_some());
 }
+
+/// Parity: b00t_session_init MCP struct must agree with `b00t-cli session init` CLI flags.
+///
+/// This guards against argument drift (e.g. MCP passing --time-limit that CLI doesn't accept).
+/// When CLI gains a new flag, add it to SessionInitCommand and update this test.
+#[test]
+fn test_session_init_mcp_cli_parity() {
+    use b00t_mcp::mcp_tools::SessionInitCommand;
+    use clap::CommandFactory;
+
+    // Collect the --long flag names accepted by the CLI struct
+    let cmd = SessionInitCommand::command();
+    let mcp_flags: std::collections::HashSet<String> = cmd
+        .get_arguments()
+        .filter_map(|a| a.get_long())
+        .map(|s| s.to_string())
+        .collect();
+
+    // Known accepted flags — must match `b00t-cli session init --help`
+    let expected: std::collections::HashSet<String> =
+        ["budget", "name"].iter().map(|s| s.to_string()).collect();
+
+    // Any flag in MCP struct but not in expected → potential unsupported arg passed to CLI
+    let unexpected: Vec<_> = mcp_flags.difference(&expected).collect();
+    assert!(
+        unexpected.is_empty(),
+        "SessionInitCommand has flags not accepted by b00t-cli session init: {:?}\n\
+         Remove them or add support in b00t-cli/src/commands/session.rs",
+        unexpected
+    );
+
+    // Any expected flag missing from MCP struct → MCP schema is stale
+    let missing: Vec<_> = expected.difference(&mcp_flags).collect();
+    assert!(
+        missing.is_empty(),
+        "b00t-cli session init supports flags not exposed by SessionInitCommand: {:?}\n\
+         Add them to b00t-mcp/src/mcp_tools.rs SessionInitCommand",
+        missing
+    );
+}

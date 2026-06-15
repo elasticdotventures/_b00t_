@@ -1,7 +1,9 @@
 use anyhow::{Result, anyhow};
 use b00t_cli::exit_code;
 use b00t_cli::k0mmand3r::K0mmand;
-use b00t_cli::{SessionState, UnifiedConfig, load_datum_providers, whoami};
+use b00t_cli::{SessionState, load_datum_providers, whoami};
+#[allow(unused_imports)]
+use b00t_cli::UnifiedConfig;
 
 /// Exit with code, printing error context to stderr.
 fn die(code: i32, msg: impl std::fmt::Display) -> ! {
@@ -1301,6 +1303,7 @@ pub fn handle_session_prompt() -> Result<()> {
 }
 
 /// Check if README.md exists and track reading status
+#[allow(dead_code)]
 fn check_readme_status(memory: &mut b00t_cli::session_memory::SessionMemory) -> Result<()> {
     let git_root = get_workspace_root();
     let readme_path = std::path::PathBuf::from(&git_root).join("README.md");
@@ -1900,7 +1903,7 @@ async fn main() {
                 // First, try as a direct MCP datum name
                 let mcp_datum_path = get_mcp_config(filter, &cli.path);
                 match mcp_datum_path {
-                    Ok(datum) => {
+                    Ok(_datum) => {
                         // Direct datum install: install dependencies first, then MCP to default target
                         println!("🚀 Installing MCP datum '{}'...", filter);
                         if let Err(e) = install_datum(&cli.path, filter, false) {

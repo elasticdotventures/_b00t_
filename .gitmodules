@@ -45,7 +45,7 @@
 	url = https://github.com/PromptExecution/opencode-b00t.git
 [submodule "vendor/l3dg3rr"]
 	path = vendor/l3dg3rr
-	url = git@github.com:PromptExecution/ledgrrr.git
+	url = https://github.com/PromptExecution/ledgrrr.git
 [submodule "vendor/hermes-agent-b00t"]
 	path = vendor/hermes-agent-b00t
 	url = git@github.com:PromptExecution/hermes-agent-b00t.git
@@ -53,3 +53,6 @@
 [submodule "vendor/embed-anything-b00t"]
 	path = vendor/embed-anything-b00t
 	url = https://github.com/PromptExecution/embed-anything-b00t.git
+[submodule "vendor/llama-patch"]
+	path = vendor/llama-patch
+	url = https://github.com/PromptExecution/llama-patch.git

@@ -188,7 +188,7 @@ if echo "${GPU_OK}" | grep -q "NVRM"; then
 else
   echo "⚠️  GPU check failed: ${GPU_OK}"
   echo "   Ensure nvidia-container-runtime is installed: which nvidia-container-runtime"
-  echo "   Ensure user is in 'video' group: groups \${USER}"
+  echo "   Ensure user is in 'video' group: groups \\${USER}"
 fi
 
 echo ""

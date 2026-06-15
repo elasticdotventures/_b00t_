@@ -33,8 +33,9 @@ jobs:
           submodules: false
 
       - name: Initialize l3dg3rr submodule
+        working-directory: ${{ github.workspace }}
         run: |
-          git submodule update --init --depth 1 vendor/l3dg3rr
+          git submodule update --init --recursive vendor/l3dg3rr
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable

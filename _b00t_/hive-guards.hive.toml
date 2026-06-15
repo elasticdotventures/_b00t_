@@ -181,3 +181,38 @@ command = "b00t run <your-command>"
 [[b00t.usage]]
 description = "List all active guards"
 command = "b00t hive status --guards"
+
+# ─── PRECRITERIA — system-normal state checks ────────────────────────────────
+# Run before b00t task list/add/hive activate (NOT before read-only ops).
+# Each check is a symbolic command that symbolically evaluates to system state.
+# Implementation: b00t-cli reads [[b00t.hive.precriteria]] and runs checks
+# before mutating operations. severity=error → warn (default) or block (--strict).
+
+[[b00t.hive.precriteria]]
+id          = "git-stash-reviewed"
+label       = "git stash queue reviewed and integrated"
+check       = "git stash list 2>/dev/null | wc -l | tr -d ' '"
+expected    = "0"
+severity    = "warn"
+on_fail     = "git stash list  # review each entry; use 'git stash show -p stash@{N}' to inspect"
+datum       = "SYSTEM-NORMAL"
+# 🤓 NEVER auto-drop stashes — review and branch each entry before discarding
+# 🤓 Recovery path if accidentally dropped: git stash store -m 'msg' <sha>
+
+[[b00t.hive.precriteria]]
+id          = "git-no-active-conflict"
+label       = "no active merge/rebase conflicts"
+check       = "git status --porcelain 2>/dev/null | grep -cE '^(UU|AA|DD)' || echo 0"
+expected    = "0"
+severity    = "error"
+on_fail     = "git status  # resolve conflicts, then: git add && git commit (or git rebase --continue)"
+datum       = "SYSTEM-NORMAL"
+
+[[b00t.hive.precriteria]]
+id          = "not-on-main"
+label       = "not directly on main/master branch"
+check       = "git branch --show-current 2>/dev/null | grep -cE '^(main|master)$' || echo 0"
+expected    = "0"
+severity    = "warn"
+on_fail     = "git checkout -b task/<id>-<slug>  # always branch first"
+datum       = "SYSTEM-NORMAL"

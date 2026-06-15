@@ -522,7 +522,7 @@ fn send_via_mcp_subprocess(payload: &serde_json::Value) -> bool {
         return false;
     }
     let _ = stdin.flush();
-    drop(stdin);
+    drop(child.stdin.take()); // close stdin → send EOF to child process
 
     // Read tools/call response with 5-second timeout
     let deadline = Instant::now() + Duration::from_secs(5);
@@ -1214,11 +1214,11 @@ mod tests {
     fn test_reasoning_reviewer_no_ties() {
         let config = make_config("test-002", TEST_PROMPTS[0]);
         let cmp = dispatch_experiment(&config).unwrap();
-        // reasoning_reviewer MUST NOT return a tie — always decisive
+        // reasoning_reviewer MUST always declare a winner (control or treatment)
+        let rec = &cmp.recommendation;
         assert!(
-            !cmp.recommendation.contains("tie"),
-            "reasoning_reviewer must break ties, got: {}",
-            cmp.recommendation
+            rec.starts_with("control") || rec.starts_with("treatment"),
+            "reasoning_reviewer must return control or treatment, got: {rec}"
         );
     }
 

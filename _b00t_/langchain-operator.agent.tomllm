@@ -44,6 +44,11 @@ protocol = "redis"
 role = "operator"
 captain = false
 
+[b00t.runtime]
+python = ">=3.12"
+manager = "uv"
+packages = ["langchain-core>=0.3", "fastmcp>=2.0", "langgraph>=0.2"]
+
 [b00t.env]
 LANGCHAIN_COMMAND_CHANNEL = "b00t:langchain"
 LANGCHAIN_OPERATOR_DECISION_TREE = "operator-decision-tree.tomllm"

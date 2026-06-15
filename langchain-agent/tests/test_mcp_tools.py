@@ -2,7 +2,7 @@
 
 import pytest
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, call, patch
 
 from b00t_langchain_agent.mcp_tools import MCPToolDiscovery
 from b00t_langchain_agent.types import MCPServerConfig
@@ -286,6 +286,99 @@ async def test_real_mcp_server_connection():
 
     except Exception as e:
         pytest.skip(f"MCP server connection failed: {e}")
+
+
+@pytest.mark.asyncio
+async def test_connect_and_discover_uses_stdio_transport_not_list():
+    """Regression: FastMCP 2.x cannot infer transport from a list — must use StdioTransport."""
+    datum_path = Path.home() / ".dotfiles" / "_b00t_"
+    discovery = MCPToolDiscovery(datum_path=datum_path)
+
+    server = MCPServerConfig(
+        name="test_stdio",
+        transport="stdio",
+        command="echo",
+        args=["hello"],
+    )
+
+    mock_tools_result = MagicMock()
+    mock_tools_result.tools = []
+
+    with (
+        patch("b00t_langchain_agent.mcp_tools.StdioTransport") as mock_stdio_cls,
+        patch("b00t_langchain_agent.mcp_tools.Client") as mock_client_cls,
+    ):
+        mock_transport = MagicMock()
+        mock_stdio_cls.return_value = mock_transport
+
+        mock_client = AsyncMock()
+        mock_client.list_tools = AsyncMock(return_value=mock_tools_result)
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=None)
+        mock_client_cls.return_value = mock_client
+
+        await discovery._connect_and_discover(server)
+
+        # StdioTransport MUST be constructed with keyword args, not a list
+        mock_stdio_cls.assert_called_once_with(command="echo", args=["hello"])
+        # Client MUST receive the StdioTransport instance, not a list
+        mock_client_cls.assert_called_once_with(mock_transport)
+
+
+@pytest.mark.asyncio
+async def test_connect_and_discover_missing_command_logs_warning_not_crash():
+    """Regression: stdio server with empty command must warn and return, not raise ValueError."""
+    datum_path = Path.home() / ".dotfiles" / "_b00t_"
+    discovery = MCPToolDiscovery(datum_path=datum_path)
+
+    server = MCPServerConfig(
+        name="bad_stdio",
+        transport="stdio",
+        command="",  # empty — should short-circuit before Client()
+        args=[],
+    )
+
+    with (
+        patch("b00t_langchain_agent.mcp_tools.StdioTransport") as mock_stdio_cls,
+        patch("b00t_langchain_agent.mcp_tools.Client") as mock_client_cls,
+    ):
+        await discovery._connect_and_discover(server)
+
+        # Neither StdioTransport nor Client should be instantiated
+        mock_stdio_cls.assert_not_called()
+        mock_client_cls.assert_not_called()
+        assert discovery.tools == []
+
+
+@pytest.mark.asyncio
+async def test_connect_and_discover_http_uses_url_directly():
+    """HTTP transport passes URL string directly to Client (no StdioTransport)."""
+    datum_path = Path.home() / ".dotfiles" / "_b00t_"
+    discovery = MCPToolDiscovery(datum_path=datum_path)
+
+    server = MCPServerConfig(
+        name="test_http",
+        transport="http",
+        url="http://localhost:8080/mcp",
+    )
+
+    mock_tools_result = MagicMock()
+    mock_tools_result.tools = []
+
+    with (
+        patch("b00t_langchain_agent.mcp_tools.StdioTransport") as mock_stdio_cls,
+        patch("b00t_langchain_agent.mcp_tools.Client") as mock_client_cls,
+    ):
+        mock_client = AsyncMock()
+        mock_client.list_tools = AsyncMock(return_value=mock_tools_result)
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=None)
+        mock_client_cls.return_value = mock_client
+
+        await discovery._connect_and_discover(server)
+
+        mock_stdio_cls.assert_not_called()
+        mock_client_cls.assert_called_once_with("http://localhost:8080/mcp")
 
 
 @pytest.mark.asyncio

@@ -45,7 +45,7 @@ environment      = [
 ]
 exec_start_pre   = [
   # Verify AWQ model is downloaded before starting vllm
-  "/bin/bash -c 'python3 -c "from huggingface_hub import try_to_load_from_cache; p=try_to_load_from_cache(\"Qwen/Qwen3-27B-AWQ\", \"config.json\"); p or (print(\"AWQ model not found — run: hf download Qwen/Qwen3-27B-AWQ\" , __import__(\"sys\").stderr) or exit(1))\"'",
+  "/bin/bash -c 'python3 -c \"from huggingface_hub import try_to_load_from_cache; p=try_to_load_from_cache(\\\"Qwen/Qwen3-27B-AWQ\\\", \\\"config.json\\\"); p or (print(\\\"AWQ model not found — run: hf download Qwen/Qwen3-27B-AWQ\\\" , __import__(\\\"sys\\\").stderr) or exit(1))\"'",
 ]
 exec_start = """/home/brianh/.venv/bin/vllm serve \
     Qwen/Qwen3-27B-AWQ \
