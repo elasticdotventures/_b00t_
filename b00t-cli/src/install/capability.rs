@@ -568,7 +568,7 @@ name = "test"
 
         let result = InstallerEngine::run_check(&check);
         assert_eq!(result.status, CheckStatus::Pass);
-        assert!(result.duration_ms > 0);
+        // duration_ms may be 0 for sub-millisecond commands like `true`
     }
 
     #[test]

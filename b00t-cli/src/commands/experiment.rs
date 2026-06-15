@@ -150,9 +150,9 @@ pub fn reasoning_reviewer(control: &ExperimentResult, treatment: &ExperimentResu
             + treatment.scores.get("accuracy").copied().unwrap_or(0.0);
 
         if c_weighted >= t_weighted {
-            "control (tie-break: weighted roi+utility+accuracy)".to_string()
+            "control (ranked: weighted roi+utility+accuracy)".to_string()
         } else {
-            "treatment (tie-break: weighted roi+utility+accuracy)".to_string()
+            "treatment (ranked: weighted roi+utility+accuracy)".to_string()
         }
     } else if control_wins > treatment_wins {
         format!("control (wins {control_wins}/{treatment_wins} dimensions)")
@@ -522,7 +522,7 @@ fn send_via_mcp_subprocess(payload: &serde_json::Value) -> bool {
         return false;
     }
     let _ = stdin.flush();
-    drop(stdin);
+    drop(child.stdin.take()); // close stdin → send EOF to child process
 
     // Read tools/call response with 5-second timeout
     let deadline = Instant::now() + Duration::from_secs(5);
