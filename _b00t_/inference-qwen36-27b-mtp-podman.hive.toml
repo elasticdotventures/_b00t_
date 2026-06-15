@@ -1,0 +1,263 @@
+# b00t Hive Profile — Qwen3.6-27B llama.cpp MTP via Podman (ephemeral-OS safe)
+# Source: https://github.com/noonghunna/club-3090/tree/master/models/qwen3.6-27b/llama-cpp
+# Image: ghcr.io/ggml-org/llama.cpp:server-cuda-b9246 (pinned — b9282 regresses)
+# MTP: --spec-type draft-mtp --spec-draft-n-max 2 (~51 narr / ~60 code TPS)
+# VRAM: ~22.5GB (Q4_K_M 17GB + KV@131K 5GB + MTP 0.5GB = 1.6GB headroom)
+#
+# INSTALL SEQUENCE (all via b00t — logs to journal for compliance):
+#   1. b00t install nvidia-cdi-gpu        # CDI spec on /etc/cdi/nvidia.yaml
+#   2. b00t install inference-qwen36-27b-mtp-podman   # this datum
+#      - hf download (logged) → model GGUF
+#      - podman pull (logged) → container image
+#      - writes quadlet .container unit
+#      - systemctl --user daemon-reload + enable + start
+#
+# Activate: b00t hive activate inference-qwen36-27b-mtp-podman
+
+[b00t]
+name   = "inference-qwen36-27b-mtp-podman"
+type   = "hive_profile"
+hint   = "Qwen3.6-27B MTP via llama.cpp container — podman CDI GPU, port 8001, ch0nky tier"
+
+[b00t.hive.resources]
+# 🤓 Q4_K_M weights ~17GB + KV@131K ~5GB + MTP ~0.5GB = ~22.5GB; 1.6GB headroom
+ram_gb    = 4
+gpu_mb    = 22500
+cpu_cores = 2
+
+[b00t.hive.resources.gate]
+ram_free_gb = 2
+gpu_free_mb = 22000
+
+[b00t.hive.exclusion]
+group    = "primary-workload"
+priority = 75  # higher than vllm profile (70) — prefer MTP podman when both available
+
+[b00t.hive.services]
+# 🤓 Generated quadlet unit managed by systemd --user
+start = ["b00t-hive-inference-qwen36-27b-mtp-podman.service"]
+stop  = ["b00t-hive-inference-qwen36-27b-mtp-podman.service"]
+
+# ─── Inline service spec — b00t generates this unit on activate ────────────
+[b00t.hive.service]
+description       = "Qwen3.6-27B MTP llama.cpp container (podman CDI GPU, port 8001)"
+service_type      = "simple"
+restart           = "on-failure"
+restart_sec       = "10s"
+timeout_start_sec = "300"
+after             = ["network.target", "podman.socket"]
+environment       = [
+  "PATH=/home/brianh/.local/bin:/usr/local/bin:/usr/bin:/bin",
+  "HF_HOME=/home/brianh/.cache/huggingface",
+]
+exec_start_pre = [
+  # Verify GGUF exists in HF cache before container start
+  "/bin/bash -c 'set -e; REPO_DIR=$${HOME}/.cache/huggingface/hub/models--unsloth--Qwen3.6-27B-MTP-GGUF; SNAP=$(cat $${REPO_DIR}/refs/main); GGUF=$${REPO_DIR}/snapshots/$${SNAP}/Qwen3.6-27B-Q4_K_M.gguf; [ -f \"$${GGUF}\" ] || { echo \"GGUF not found: $${GGUF}\" >&2; exit 1; }; echo \"ok: $${GGUF}\"'",
+  # Create empty no-nvidia-hook dir (unused but harmless; see 🤓 below)
+  "/bin/mkdir -p /home/brianh/.local/share/b00t/no-nvidia-hook",
+]
+exec_start = """/bin/bash -c '\
+  SNAP=$(cat ${HOME}/.cache/huggingface/hub/models--unsloth--Qwen3.6-27B-MTP-GGUF/refs/main); \
+  exec /usr/bin/podman run --rm \
+    --name b00t-ch0nky-llamacpp \
+    --runtime /usr/bin/nvidia-container-runtime \
+    -e NVIDIA_VISIBLE_DEVICES=0 \
+    -e NVIDIA_DRIVER_CAPABILITIES=compute,utility \
+    --security-opt=label=disable \
+    -p 8001:8080 \
+    -v ${HOME}/.cache/huggingface/hub/models--unsloth--Qwen3.6-27B-MTP-GGUF:/models:ro \
+    ghcr.io/ggml-org/llama.cpp:server-cuda-b9246 \
+    --host 0.0.0.0 --port 8080 \
+    -m /models/snapshots/${SNAP}/Qwen3.6-27B-Q4_K_M.gguf \
+    -c 131072 \
+    -b 4096 \
+    -ub 1024 \
+    -ngl 99 \
+    -fa on \
+    --cache-type-k q4_0 \
+    --cache-type-v q4_0 \
+    -np 1 \
+    --spec-type draft-mtp \
+    --spec-draft-n-max 2 \
+    --jinja \
+    --reasoning off \
+    --reasoning-format deepseek \
+    --temp 0.6 \
+    --top-p 0.95 \
+    --top-k 20 \
+    --min-p 0.0 \
+    --repeat-penalty 1.0'"""
+# 🤓 GPU passthrough: --runtime /usr/bin/nvidia-container-runtime + NVIDIA_VISIBLE_DEVICES=0
+#    CDI (nvidia.com/gpu=all) fails rootless podman 4.9.3 — OCI hook has always:true, fails without
+#    no-cgroups=true in SYSTEM /etc/nvidia-container-runtime/config.toml (requires root to set).
+#    nvidia-container-runtime is the NVIDIA-modified crun wrapper that injects CUDA libs via env var.
+#    Direct /dev passthrough (hooks-dir bypass) also allows device access but skips CUDA lib injection.
+# 🤓 Model mount: HF cache dir mounted at /models; snapshot resolved at runtime via refs/main —
+#    avoids symlink-breaks-inside-container issue; survives hf cache re-download after OS wipe
+# 🤓 Port 8001: compatible with B00T_AI_CH0NKY_BASE; -ub 1024: 131K ctx sweet spot
+# 🤓 -np 1: intentional — extra slots divide throughput; -np>1 disables MTP
+# 🤓 --spec-type draft-mtp: unsloth/Qwen3.6-27B-MTP-GGUF weights have embedded MTP head
+#    VRAM confirmed: ~21.1GB used, 2.9GB free (within 1.6GB headroom estimate)
+
+[b00t.hive.env]
+B00T_AI_CH0NKY_BASE  = "http://127.0.0.1:8001/v1"
+B00T_AI_CH0NKY_MODEL = "ch0nky"
+OPENAI_BASE_URL      = "http://127.0.0.1:8001/v1"
+OPENAI_API_KEY       = "local-b00t"
+PI_MODEL             = "ch0nky"
+LLAMA_CPP_BASE_URL   = "http://127.0.0.1:8001/v1"
+
+[b00t.hive.mcp_tools]
+activate = ["pi-agent"]
+
+[[b00t.hive.guards]]
+pattern = "pip install"
+action  = "warn"
+message = "🦨 use uv pip install"
+
+[[b00t.hive.guards]]
+pattern = "docker run"
+action  = "warn"
+message = "🦨 use podman --hooks-dir ~/.local/share/b00t/no-nvidia-hook --device /dev/nvidia0 --device /dev/nvidiactl --device /dev/nvidia-uvm --security-opt=label=disable"
+
+# ─── Install: download model + pull image (logged via b00t for compliance) ──
+install = """
+set -euo pipefail
+
+MODEL_DIR="${HOME}/.cache/huggingface/hub"
+GGUF_REPO="unsloth/Qwen3.6-27B-MTP-GGUF"
+GGUF_FILE="Qwen3.6-27B-Q4_K_M.gguf"
+IMAGE="ghcr.io/ggml-org/llama.cpp:server-cuda-b9246"
+
+echo "=== b00t inference-qwen36-27b-mtp-podman install ==="
+echo "node: $(hostname) | date: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+
+# 1. Verify CDI GPU spec
+if ! podman info --format '{{.Host.SecurityOptions}}' 2>/dev/null | grep -q cdi; then
+  echo "⚠️  CDI may not be configured — running: b00t install nvidia-cdi-gpu"
+  # non-fatal: podman may still find GPU via other means
+fi
+
+# 2. Download MTP GGUF via hf CLI (logged, idempotent)
+if hf --version >/dev/null 2>&1; then
+  echo "📥 hf download ${GGUF_REPO} ${GGUF_FILE}"
+  hf download "${GGUF_REPO}" "${GGUF_FILE}"
+elif python3 -c "import huggingface_hub" 2>/dev/null; then
+  echo "📥 huggingface-hub Python download (hf CLI not found)"
+  python3 -c "
+from huggingface_hub import snapshot_download
+snapshot_download('${GGUF_REPO}', allow_patterns=['${GGUF_FILE}'])
+print('✅ download complete')
+"
+else
+  echo "❌ hf CLI and huggingface_hub not found. Install: uv pip install huggingface-hub[hf_xet,cli]" >&2
+  exit 1
+fi
+
+# 3. Verify download
+SNAPSHOT=$(cat "${MODEL_DIR}/models--unsloth--Qwen3.6-27B-MTP-GGUF/refs/main" 2>/dev/null || true)
+if [ -z "${SNAPSHOT}" ]; then
+  echo "❌ model snapshot not found at ${MODEL_DIR}" >&2
+  exit 1
+fi
+GGUF_PATH="${MODEL_DIR}/models--unsloth--Qwen3.6-27B-MTP-GGUF/snapshots/${SNAPSHOT}/${GGUF_FILE}"
+if [ ! -f "${GGUF_PATH}" ]; then
+  echo "❌ GGUF not found at ${GGUF_PATH}" >&2
+  exit 1
+fi
+echo "✅ model: ${GGUF_PATH} ($(du -sh "${GGUF_PATH}" | cut -f1))"
+
+# 4. Pull container image (podman, logged)
+echo "📦 podman pull ${IMAGE}"
+podman pull "${IMAGE}"
+echo "✅ image: $(podman inspect "${IMAGE}" --format '{{.Id}}' 2>/dev/null | cut -c1-12)"
+
+# 5. Smoke-test GPU via nvidia-container-runtime (the working rootless podman path)
+# 🤓 CDI (nvidia.com/gpu=all) fails rootless podman 4.9.3 without root-level no-cgroups=true
+# 🤓 nvidia-container-runtime injects CUDA libs via NVIDIA_VISIBLE_DEVICES env var — works rootless
+echo "🔍 smoke-test: GPU via nvidia-container-runtime..."
+mkdir -p "${HOME}/.local/share/b00t/no-nvidia-hook"
+GPU_OK=$(podman run --rm --entrypoint /bin/sh \
+  --runtime /usr/bin/nvidia-container-runtime \
+  -e NVIDIA_VISIBLE_DEVICES=0 \
+  -e NVIDIA_DRIVER_CAPABILITIES=compute,utility \
+  --security-opt=label=disable \
+  "${IMAGE}" -c "cat /proc/driver/nvidia/version 2>/dev/null | head -1 || echo FAIL" 2>/dev/null || echo "FAIL")
+if echo "${GPU_OK}" | grep -q "NVRM"; then
+  echo "✅ GPU confirmed: $(echo "${GPU_OK}" | grep NVRM | head -1)"
+else
+  echo "⚠️  GPU check failed: ${GPU_OK}"
+  echo "   Ensure nvidia-container-runtime is installed: which nvidia-container-runtime"
+  echo "   Ensure user is in 'video' group: groups \${USER}"
+fi
+
+echo ""
+echo "✅ inference-qwen36-27b-mtp-podman install complete"
+echo "   Activate: b00t hive activate inference-qwen36-27b-mtp-podman"
+echo "   Verify:   curl -s http://localhost:8001/v1/models | python3 -m json.tool"
+"""
+
+uninstall = """
+set -euo pipefail
+echo "=== b00t inference-qwen36-27b-mtp-podman uninstall ==="
+podman stop b00t-ch0nky-llamacpp 2>/dev/null || true
+podman rm   b00t-ch0nky-llamacpp 2>/dev/null || true
+systemctl --user stop   b00t-hive-inference-qwen36-27b-mtp-podman.service 2>/dev/null || true
+systemctl --user disable b00t-hive-inference-qwen36-27b-mtp-podman.service 2>/dev/null || true
+echo "✅ service stopped and disabled (model weights preserved in HF cache)"
+"""
+
+# ─── References ───────────────────────────────────────────────────────────────
+[[b00t.references]]
+name = "club-3090 qwen3.6-27b llamacpp MTP config"
+url  = "https://github.com/noonghunna/club-3090/blob/master/models/qwen3.6-27b/llama-cpp/compose/single/unsloth-q4km/mtp.yml"
+
+[[b00t.references]]
+name = "club-3090 BENCHMARKS (single 3090 MTP)"
+url  = "https://github.com/noonghunna/club-3090/blob/master/BENCHMARKS.md"
+
+[[b00t.references]]
+name = "ghcr.io/ggml-org/llama.cpp releases"
+url  = "https://github.com/ggerganov/llama.cpp/pkgs/container/llama.cpp"
+
+[[b00t.references]]
+name = "unsloth/Qwen3.6-27B-MTP-GGUF (HuggingFace)"
+url  = "https://huggingface.co/unsloth/Qwen3.6-27B-MTP-GGUF"
+
+# ─── Usage recipes ────────────────────────────────────────────────────────────
+[[b00t.usage]]
+description = "Full deterministic install (download + pull + smoke-test)"
+command     = "b00t install inference-qwen36-27b-mtp-podman"
+
+[[b00t.usage]]
+description = "Activate via b00t hive (resource gate + service start)"
+command     = "b00t hive activate inference-qwen36-27b-mtp-podman"
+
+[[b00t.usage]]
+description = "Verify endpoint"
+command     = "curl -s http://localhost:8001/v1/models | python3 -m json.tool"
+
+[[b00t.usage]]
+description = "Check container logs"
+command     = "podman logs -f b00t-ch0nky-llamacpp"
+
+[[b00t.usage]]
+description = "Check VRAM usage"
+command     = "nvidia-smi --query-gpu=memory.used,memory.free,utilization.gpu --format=csv,noheader"
+
+[[b00t.usage]]
+description = "Test MTP endpoint"
+command     = "curl -s http://localhost:8001/v1/completions -H 'Content-Type: application/json' -d '{\"model\":\"ch0nky\",\"prompt\":\"hello\",\"max_tokens\":5}'"
+
+[[b00t.usage]]
+description = "Dry-run: check resource gate + service diff"
+command     = "b00t hive plan inference-qwen36-27b-mtp-podman"
+
+# b00t:map v1
+# summary: Qwen3.6-27B MTP via llama.cpp container (podman + nvidia-container-runtime) — ch0nky :8001 VERIFIED
+# tags: qwen3.6, llamacpp, mtp, podman, nvidia-container-runtime, rtx3090, ch0nky, hive, ephemeral-safe
+# tier: ch0nky
+# cmds: b00t install inference-qwen36-27b-mtp-podman, b00t hive activate inference-qwen36-27b-mtp-podman
+# complexity: 6
+# verified: 2026-06-14 GPU=RTX3090 VRAM=21.1GB TPS≈40
+# 🤓 --spec-draft-n-max 2 = max 2 tokens per speculation STEP; draft_n:8,accepted:4 = cumulative totals reported by llama.cpp across the full response (not per-step)

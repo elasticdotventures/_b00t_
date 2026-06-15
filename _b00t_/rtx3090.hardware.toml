@@ -1,0 +1,137 @@
+# b00t hardware datum — NVIDIA GeForce RTX 3090 (local system)
+# Auto-discovered: GPU-6c5fef2a-981d-c3c0-d172-f715560de83d
+# Driver: 580.126.09 | Compute: SM 8.6 (Ampere) | VRAM: 24 GB
+
+[b00t]
+name   = "rtx3090"
+type   = "hardware"
+status = "active"
+hint   = "Local RTX 3090 24GB — primary inference node; ch0nky tier; SM 8.6 Ampere"
+
+[b00t.hardware]
+vendor        = "NVIDIA"
+model         = "GeForce RTX 3090"
+uuid          = "GPU-6c5fef2a-981d-c3c0-d172-f715560de83d"
+vram_mb       = 24576
+vram_gb       = 24
+compute_cap   = "8.6"
+arch          = "Ampere"
+driver        = "580.126.09"
+cuda_runtime  = "13"
+power_limit_w = 370
+pcie_gen      = 4
+pcie_width    = 16
+
+# ─── Inference budget (per club-3090 KV_MATH calibration) ────────────────────
+[b00t.hardware.inference_budget]
+# 🤓 KV math: 24GB total − weights − activations − overhead = KV pool
+# Qwen3-27B AWQ (~14GB weights): ~8GB KV pool available @ 0.95 gpu-memory-utilization
+# Qwen3-27B Q4_K_M GGUF (~15GB): ~7GB KV pool (llamacpp)
+# Use gpu-memory-utilization=0.82 for dual-card or safe single-card margin
+vram_weights_qwen3_27b_awq_gb = 14.0
+vram_kv_pool_gb               = 8.0
+vram_overhead_gb              = 2.0
+gpu_memory_utilization_safe   = 0.82
+gpu_memory_utilization_max    = 0.95
+max_model_len_qwen3_27b       = 32768
+# 🤓 club-3090 BENCHMARKS.md: ~49 TPS single-stream Qwen3.6-27B on single 3090
+
+# ─── b00t hive resource gate alignment ───────────────────────────────────────
+[b00t.hardware.hive_gate]
+# Profiles that target this GPU declare these gates:
+vllm_awq_required_free_mb    = 18000  # ch0nky: Qwen3-27B-AWQ
+llamacpp_gguf_required_free_mb = 17000 # llamacpp: Q4_K_M GGUF
+safe_headroom_mb              = 2048   # always keep free for system
+
+# ─── Supported inference engines (per club-3090 compatibility) ───────────────
+[b00t.hardware.engines]
+# 🤓 Compute 8.6 (Ampere) capabilities per DTYPE_MATRIX.md:
+# BF16: native | FP8 weights: software (no hardware FP8 on 3090) | INT4/AWQ: native
+# Flash Attention 2: yes | Flash Attention 3: no (Ada/Hopper only)
+vllm              = { supported = true, quant = ["awq", "gptq", "fp8-weights"], notes = "Genesis patches for Qwen3-Next; use --enforce-eager" }
+llamacpp          = { supported = true, quant = ["Q4_K_M", "Q5_K_M", "Q8_0", "IQ4_KT"], notes = "broadest model coverage; no cliff footguns" }
+ik_llama_cpp      = { supported = true, quant = ["IQ4_KT", "IQ3_K_R4"], notes = "MTP merged; fused MoE kernels; IQ_K series" }
+sglang            = { supported = true, quant = ["awq", "fp8-weights"], notes = "RadixAttention prefix cache; best structured output" }
+ktransformers     = { supported = true, notes = "router-aware MoE hot-expert caching; big MoE on limited VRAM" }
+
+# ─── Current workload profile ─────────────────────────────────────────────────
+[b00t.hardware.workloads]
+primary_model  = "Qwen/Qwen3-27B-AWQ"
+engine         = "vllm"
+profile        = "inference-qwen36-27b"
+port           = 8001
+served_as      = "ch0nky"
+# Fallback:
+fallback_model  = "unsloth/Qwen3.6-27B-GGUF Qwen3.6-27B-Q4_K_M.gguf"
+fallback_engine = "llamacpp"
+fallback_profile = "inference-qwen36-27b-llamacpp"
+
+# ─── Entanglements ───────────────────────────────────────────────────────────
+entangled_cli      = ["b00t hive", "nvidia-ctk", "nvidia-smi"]
+entangled_agents   = ["pi-agent", "opencode-agent"]
+entangled_ai_models = ["ch0nky", "sm0l"]
+
+# ─── References (entangled with club-3090) ───────────────────────────────────
+[[b00t.references]]
+name = "club-3090 homelab configs"
+url  = "https://github.com/noonghunna/club-3090"
+
+[[b00t.references]]
+name = "club-3090 HARDWARE.md"
+url  = "https://github.com/noonghunna/club-3090/blob/master/docs/HARDWARE.md"
+
+[[b00t.references]]
+name = "club-3090 KV_MATH.md"
+url  = "https://github.com/noonghunna/club-3090/blob/master/docs/KV_MATH.md"
+
+[[b00t.references]]
+name = "club-3090 BENCHMARKS.md"
+url  = "https://github.com/noonghunna/club-3090/blob/master/BENCHMARKS.md"
+
+[[b00t.references]]
+name = "club-3090 DTYPE_MATRIX.md"
+url  = "https://github.com/noonghunna/club-3090/blob/master/docs/DTYPE_MATRIX.md"
+
+[[b00t.references]]
+name = "club-3090 INFERENCE_ENGINES.md"
+url  = "https://github.com/noonghunna/club-3090/blob/master/docs/INFERENCE_ENGINES.md"
+
+[[b00t.references]]
+name = "club-3090 ADDING_MODELS.md"
+url  = "https://github.com/noonghunna/club-3090/blob/master/docs/ADDING_MODELS.md"
+
+[[b00t.references]]
+name = "NVIDIA driver release notes"
+url  = "https://www.nvidia.com/en-us/drivers/unix/"
+
+# ─── Usages ──────────────────────────────────────────────────────────────────
+[[b00t.usages]]
+description = "Check live GPU state (VRAM, temp, util)"
+command     = "nvidia-smi"
+
+[[b00t.usages]]
+description = "Query specific fields"
+command     = "nvidia-smi --query-gpu=name,memory.used,memory.free,temperature.gpu,utilization.gpu --format=csv,noheader"
+
+[[b00t.usages]]
+description = "Activate ch0nky inference (vllm AWQ)"
+command     = "b00t hive activate inference-qwen36-27b"
+
+[[b00t.usages]]
+description = "Check hive status vs GPU budget"
+command     = "b00t hive status"
+
+[[b00t.usages]]
+description = "Run KV budget calculator (club-3090 tool)"
+command     = "python3 tools/kv-calc.py  # from cloned club-3090 repo"
+
+[[b00t.usages]]
+description = "Check VRAM free before activating profile"
+command     = "nvidia-smi --query-gpu=memory.free --format=csv,noheader,nounits"
+
+# b00t:map v1
+# summary: RTX 3090 24GB SM8.6 local hardware datum — ch0nky tier; entangled club-3090
+# tags: hardware, nvidia, rtx3090, gpu, ampere, vram, ch0nky, inference, vllm, llamacpp
+# tier: ch0nky
+# cmds: b00t hive activate inference-qwen36-27b, nvidia-smi
+# complexity: 3

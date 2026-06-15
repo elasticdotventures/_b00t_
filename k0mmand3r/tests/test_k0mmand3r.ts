@@ -31,7 +31,9 @@ describe('Wasm Tests', () => {
       it('should correctly parse command with tags', () => {
         const result = KmdLineWasm.parse('/tagverb --tag1 --tag2');
         assert.strictEqual(result.verb(), 'tagverb');
-        assert.strictEqual(result.params(), '{"tag1":"","tag2":""}');
+        // Parse JSON to compare objects — HashMap ordering is non-deterministic in Rust/Wasm
+        const params = JSON.parse(result.params()!);
+        assert.deepStrictEqual(params, { tag1: '', tag2: '' });
       });
 
   // Additional test cases

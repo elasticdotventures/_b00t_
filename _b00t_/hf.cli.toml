@@ -1,0 +1,90 @@
+[b00t]
+name = "hf"
+type = "cli"
+desires = "1.13.0"
+hint = "HuggingFace Hub CLI — model download, endpoint management, inference jobs, skills"
+
+# @tribal: `hf` is the newer unified CLI (huggingface-hub >= 0.26);
+#           `huggingface-cli` is the legacy alias — prefer `hf` going forward
+# 🤓 local models live in HF_HOME (~/.cache/huggingface); hf cache manages them
+# MCP connector: claude.ai Hugging Face MCP (mcp__claude_ai_Hugging_Face__*)
+#   - hub_repo_details, hf_doc_search, dynamic_space, hf_jobs, hf_whoami
+
+version = "hf version"
+version_regex = '(\d+\.\d+\.\d+)'
+
+install = """
+set -eu
+uv pip install huggingface-hub[hf_xet,cli] --upgrade
+"""
+
+[[b00t.requirements]]
+name = "uv"
+kind = "command"
+command = "uv"
+hint = "uv required for python package install"
+
+[[b00t.requirements]]
+name = "hf-auth"
+kind = "shell"
+pattern = "hf auth status 2>/dev/null | grep -q 'Logged in'"
+hint = "Run: hf auth login --token $HF_TOKEN"
+solve = "hf auth login --token $HF_TOKEN"
+
+# ─── Key commands ─────────────────────────────────────────────────────────────
+[[b00t.usages]]
+description = "Download a model GGUF (preferred over huggingface-cli)"
+command = "hf download unsloth/Qwen3.6-27B-GGUF --include 'Qwen3.6-27B-Q4_K_M.gguf'"
+
+[[b00t.usages]]
+description = "List cached models"
+command = "hf cache list"
+
+[[b00t.usages]]
+description = "Show model info"
+command = "hf models info unsloth/Qwen3.6-27B-GGUF"
+
+[[b00t.usages]]
+description = "List HF Inference Endpoints"
+command = "hf endpoints list"
+
+[[b00t.usages]]
+description = "Deploy serverless inference endpoint"
+command = "hf endpoints deploy"
+
+[[b00t.usages]]
+description = "Run a HF Job (batch inference)"
+command = "hf jobs run --help"
+
+[[b00t.usages]]
+description = "Install HF CLI skill into AI assistant"
+command = "hf skills add"
+
+[[b00t.usages]]
+description = "Check auth status"
+command = "hf auth status"
+
+# ─── sm0l filter pattern ─────────────────────────────────────────────────────
+# @tribal: HF Inference API (serverless) = free sm0l model access without local GPU
+# Use InferenceClient from huggingface_hub for Python-based sm0l filter
+# Model: Qwen/Qwen2-0.5B-Instruct (tiny, fast, free tier)
+# Pattern: stdin → InferenceClient.text_generation() → filtered stdout (errors only)
+
+[[b00t.references]]
+name = "HuggingFace Hub CLI docs"
+url = "https://huggingface.co/docs/huggingface_hub/en/guides/cli"
+
+[[b00t.references]]
+name = "HF Inference API Python"
+url = "https://huggingface.co/docs/huggingface_hub/en/guides/inference"
+
+[[b00t.references]]
+name = "HF Inference Endpoints"
+url = "https://huggingface.co/docs/inference-endpoints/index"
+
+# b00t:map v1
+# summary: hf CLI v1.13.0 — download, endpoints, jobs, cache; replaces huggingface-cli
+# tags: huggingface, hf, cli, model-download, inference, endpoints, sm0l
+# tier: sm0l
+# cmds: hf download MODEL, hf cache list, hf endpoints list, hf auth status
+# complexity: 2

@@ -44,14 +44,13 @@ environment      = [
   "VLLM_WORKER_MULTIPROC_METHOD=spawn",
 ]
 exec_start_pre   = [
-  # Resolve model file path: support both flat layout (b00t model download --local-dir)
-  # and hub-cache layout (plain hf download without --local-dir). Creates a stable symlink
-  # at the flat path so exec_start always finds the file at the same location.
-  "/bin/bash -c 'MODEL_DIR=${HOME}/.cache/huggingface/hub/models--unsloth--Qwen3.6-27B-GGUF; FLAT=${MODEL_DIR}/Qwen3.6-27B-Q4_K_M.gguf; if [ ! -f \"$FLAT\" ]; then hash=$(cat ${MODEL_DIR}/refs/main 2>/dev/null); [ -n \"$hash\" ] && ln -sfn ${MODEL_DIR}/snapshots/${hash}/Qwen3.6-27B-Q4_K_M.gguf \"$FLAT\" || true; fi'",
+  # Verify AWQ model is downloaded before starting vllm
+  "/bin/bash -c 'python3 -c "from huggingface_hub import try_to_load_from_cache; p=try_to_load_from_cache(\"Qwen/Qwen3-27B-AWQ\", \"config.json\"); p or (print(\"AWQ model not found — run: hf download Qwen/Qwen3-27B-AWQ\" , __import__(\"sys\").stderr) or exit(1))\"'",
 ]
 exec_start = """/home/brianh/.venv/bin/vllm serve \
-    /home/brianh/.cache/huggingface/hub/models--unsloth--Qwen3.6-27B-GGUF/Qwen3.6-27B-Q4_K_M.gguf \
+    Qwen/Qwen3-27B-AWQ \
     --tokenizer Qwen/Qwen3-27B \
+    --quantization awq \
     --served-model-name ch0nky \
     --port 8001 \
     --max-model-len 32768 \
@@ -59,10 +58,12 @@ exec_start = """/home/brianh/.venv/bin/vllm serve \
     --enforce-eager \
     --enable-auto-tool-choice \
     --tool-call-parser hermes"""
-# 🤓 --tokenizer required: GGUF has no embedded tokenizer; use base HF model id
+# 🤓 vllm requires AWQ format — GGUF is experimental/unsupported in vllm
+# 🤓 GGUF path: use inference-qwen36-27b-llamacpp profile (llama.cpp backend)
+# 🤓 AWQ model: Qwen/Qwen3-27B-AWQ — ~14GB, fits RTX 3090 24GB
 # 🤓 --enforce-eager: avoids Triton CUDA graph compilation deadlock on RTX 3090
 # 🤓 --tool-call-parser hermes: Qwen3 uses hermes-style tool call format
-# ⚠️  If vLLM fails (arch not supported), use inference-qwen36-27b-llamacpp profile instead
+# ⚠️  Download first: b00t hive activate download-mode; hf download Qwen/Qwen3-27B-AWQ
 
 [b00t.hive.env]
 B00T_AI_CH0NKY_BASE  = "http://127.0.0.1:8001/v1"

@@ -247,3 +247,165 @@ gemma4-opencode-test:
     curl -sf http://localhost:8001/v1/models | python3 -c \
       "import sys,json; m=json.load(sys.stdin); print('✅ serving:', [x['id'] for x in m['data']])"
     opencode run --model gemma4-local/ch0nky "respond with: pong"
+
+# Rootless node orchestration pattern: systemd + quadlet + podman kube
+quadlet-node-install:
+    b00t install quadlet-podman-kube
+
+quadlet-node-uninstall:
+    b00t uninstall quadlet-podman-kube
+
+nvidia-cdi-observe:
+    printf 'host: '; ls /dev/dri/card*
+    printf '\ncdi: '; grep -o '/dev/dri/card[0-9]\+' /etc/cdi/nvidia.yaml | sort -u
+
+nvidia-cdi-install:
+    b00t install nvidia-cdi-gpu
+
+# ─── sm0l cognitive filter recipes ──────────────────────────────────────────
+# Route long command output through local LLM — output ONLY errors, never repeat.
+# Endpoint priority: B00T_AI_SM0L_BASE → :8001 (ch0nky) → :8000 (sm0l) → HF Inference API
+# Activate local model first: b00t hive activate inference-qwen36-27b
+
+SM0L_FILTER := "_b00t_/scripts/sm0l-filter.py"
+
+# ─── pipe-agent: OpenHarness passive sm0l observer pattern ───────────────────
+# Route deterministic process output through sm0l local LLM — errors only.
+# Tasks: cargo|podman|systemd|hive|rust|general  (default: general)
+# Executive frontier model delegates noisy output → sm0l collapses to <200 tokens.
+# Ref: openharness.tomllmd — "The model is the agent. The code is the harness."
+
+# Filter cargo test output — only emit failures/panics
+cargo-test-sm0l *ARGS:
+    cargo test {{ARGS}} 2>&1 | python3 {{SM0L_FILTER}} --task cargo --stats
+
+# Filter cargo build output — only emit compile errors
+cargo-build-sm0l *ARGS:
+    cargo build {{ARGS}} 2>&1 | python3 {{SM0L_FILTER}} --task cargo --stats
+
+# Filter cargo clippy — only emit deny-level warnings/errors
+cargo-clippy-sm0l *ARGS:
+    cargo clippy {{ARGS}} 2>&1 | python3 {{SM0L_FILTER}} --task cargo --stats
+
+# Filter podman run/pull/build output — container lifecycle errors only
+podman-sm0l CMD:
+    {{CMD}} 2>&1 | python3 {{SM0L_FILTER}} --task podman --stats
+
+# Filter journalctl/systemctl output — systemd service errors only
+systemd-sm0l CMD:
+    {{CMD}} 2>&1 | python3 {{SM0L_FILTER}} --task systemd --stats
+
+# Filter b00t hive activate output — resource gate failures only
+hive-sm0l CMD:
+    {{CMD}} 2>&1 | python3 {{SM0L_FILTER}} --task hive --stats
+
+# Generic pipe-agent: any command → sm0l error filter
+# Usage: just pipe-agent "cargo clippy 2>&1" [task]
+pipe-agent CMD TASK="general":
+    {{CMD}} 2>&1 | python3 {{SM0L_FILTER}} --task {{TASK}} --stats
+
+# Probe available pipe-agent endpoints (shows which tier will be used)
+sm0l-status:
+    #!/usr/bin/env bash
+    curl -sf http://127.0.0.1:8001/v1/health >/dev/null 2>&1 && echo "✅ :8001 ch0nky (llamacpp MTP)" || echo "⬜ :8001 ch0nky (offline)"
+    curl -sf http://127.0.0.1:8000/v1/health >/dev/null 2>&1 && echo "✅ :8000 sm0l (local)" || echo "⬜ :8000 sm0l (offline)"
+    [ -n "${HF_TOKEN:-}" ] && echo "HF_TOKEN: set (HF Inference API available)" || echo "HF_TOKEN: NOT SET"
+    echo "activate ch0nky: b00t hive activate inference-qwen36-27b-mtp-podman"
+
+# Activate ch0nky (llamacpp MTP Qwen3.6-27B) via b00t governance
+ch0nky-activate:
+    b00t hive activate inference-qwen36-27b-mtp-podman
+
+# Check ch0nky llamacpp MTP logs
+ch0nky-logs:
+    podman logs -f b00t-ch0nky-llamacpp
+
+# ─── sm0l session management ─────────────────────────────────────────────────
+# Ephemeral I/O logs: /tmp/b00t-sm0l-<session-id>/
+# ch0nky references log path from pipe-agent stderr; ignores if unneeded.
+# Session cleared at end of work or after 8h (configurable).
+
+# Create a new session ID and export it — use in shell: eval $(just sm0l-session-new)
+sm0l-session-new:
+    #!/usr/bin/env bash
+    ID="$(date +%Y%m%d-%H%M%S)-$$"
+    mkdir -p "/tmp/b00t-sm0l-${ID}"
+    echo "export B00T_SM0L_SESSION=${ID}"
+    echo "[sm0l-session] created: /tmp/b00t-sm0l-${ID}" >&2
+
+# Show recent sm0l session interactions (last N outputs)
+sm0l-session-tail SESSION="" N="5":
+    #!/usr/bin/env bash
+    DIR="/tmp/b00t-sm0l-{{SESSION}}"
+    [ -z "{{SESSION}}" ] && DIR=$(ls -td /tmp/b00t-sm0l-* 2>/dev/null | head -1)
+    [ -z "$DIR" ] && { echo "no sessions found"; exit 0; }
+    echo "=== sm0l session: $DIR ==="
+    find "$DIR" -name "*.output" | sort | tail -{{N}} | while read f; do
+        echo "--- $(basename $f) ---"
+        cat "$f"
+        echo
+    done
+
+# Show full I/O for a specific sm0l log entry (for ch0nky investigation)
+sm0l-log-view SESSION="" ENTRY="0000":
+    #!/usr/bin/env bash
+    DIR="/tmp/b00t-sm0l-{{SESSION}}"
+    [ -z "{{SESSION}}" ] && DIR=$(ls -td /tmp/b00t-sm0l-* 2>/dev/null | head -1)
+    echo "=== PROMPT ===" && cat "${DIR}/{{ENTRY}}-"*.prompt 2>/dev/null || true
+    echo "=== INPUT ===" && cat "${DIR}/{{ENTRY}}-"*.input 2>/dev/null || true
+    echo "=== OUTPUT ===" && cat "${DIR}/{{ENTRY}}-"*.output 2>/dev/null || true
+
+# List all active sm0l sessions with size
+sm0l-session-list:
+    #!/usr/bin/env bash
+    for d in /tmp/b00t-sm0l-* 2>/dev/null; do
+        [ -d "$d" ] || continue
+        count=$(find "$d" -name "*.output" 2>/dev/null | wc -l)
+        size=$(du -sh "$d" 2>/dev/null | cut -f1)
+        age=$(( $(date +%s) - $(stat -c %Y "$d" 2>/dev/null || echo 0) ))
+        echo "${size}  ${age}s old  ${count} calls  $(basename $d)"
+    done || echo "no active sessions"
+
+# Clean sessions older than MAX_AGE_HOURS (default: 8)
+sm0l-session-clean MAX_AGE_HOURS="8":
+    #!/usr/bin/env bash
+    MAX_SECS=$(( {{MAX_AGE_HOURS}} * 3600 ))
+    NOW=$(date +%s)
+    removed=0
+    for d in /tmp/b00t-sm0l-* 2>/dev/null; do
+        [ -d "$d" ] || continue
+        mtime=$(stat -c %Y "$d" 2>/dev/null || echo 0)
+        age=$(( NOW - mtime ))
+        if [ "$age" -gt "$MAX_SECS" ]; then
+            rm -rf "$d"
+            removed=$((removed+1))
+        fi
+    done
+    echo "cleaned ${removed} sessions older than {{MAX_AGE_HOURS}}h"
+
+# Pipe-agent with session logging — ch0nky gets log path on stderr
+cargo-test-session TASK="cargo" *ARGS:
+    #!/usr/bin/env bash
+    SESSION="${B00T_SM0L_SESSION:-$(date +%Y%m%d-%H%M%S)-$$}"
+    cargo test {{ARGS}} 2>&1 | python3 {{SM0L_FILTER}} --task {{TASK}} --session-id "$SESSION" --stats
+# ─── club-3090 refresh ────────────────────────────────────────────────────────
+# Checks for new model additions, engine image updates, CHANGELOG diff
+# Run weekly or after new model announcements
+
+club-3090-refresh:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    echo "=== club-3090 refresh $(date -u +%Y-%m-%dT%H:%M:%SZ) ==="
+    echo "--- recent commits ---"
+    gh api repos/noonghunna/club-3090/commits --jq '.[0:5]|.[]|{sha:.sha[:7],msg:.commit.message[:80],date:.commit.author.date}' 2>/dev/null || echo "gh not authenticated"
+    echo "--- new models since last check ---"
+    gh api "repos/noonghunna/club-3090/commits?since=$(date -d '7 days ago' +%Y-%m-%dT%H:%M:%SZ)" \
+      --jq '[.[]|select(.commit.message|test("model|add|support";"i"))|{sha:.sha[:7],msg:.commit.message[:60]}]' 2>/dev/null || true
+    echo "--- latest llama.cpp image tag (check vs pinned b9246) ---"
+    gh api "repos/ggerganov/llama.cpp/releases?per_page=3" --jq '.[].tag_name' 2>/dev/null | head -3 || true
+    echo "=== done — update _b00t_/datums/club-3090.tomllmd last_checked if new models found ==="
+
+club-3090-latest-compose:
+    #!/usr/bin/env bash
+    gh api repos/noonghunna/club-3090/contents/models/qwen3.6-27b/llama-cpp/compose/single/unsloth-q4km/mtp.yml \
+      --jq '.content' | base64 -d 2>/dev/null || echo "gh api failed"

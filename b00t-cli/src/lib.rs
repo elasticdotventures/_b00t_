@@ -3,6 +3,10 @@ use chrono::{DateTime, Utc};
 use regex::Regex;
 use std::io::Write;
 use std::process;
+use std::collections::HashSet;
+use std::sync::OnceLock;
+use toml;
+use shellexpand;
 
 // 🤓 write_event moved to b00t-c0re-lib::events — unified telemetry writer
 pub use b00t_c0re_lib::write_event;
@@ -21,8 +25,41 @@ pub mod ansi {
     pub fn bold(s: &str) -> String { if enabled() { format!("\x1b[1m{}\x1b[0m", s) } else { s.to_string() } }
 }
 
-/// Exit codes for b00t-cli — used by main.rs dispatch.
-/// Scripts can inspect $? to distinguish error classes.
+// warn-once registry — one warning per unknown datum type string per process
+static DATUM_TYPE_WARNED: OnceLock<std::sync::Mutex<std::collections::HashSet<String>>> = OnceLock::new();
+
+/// Returns true if the value is a well-known content tag (not a typed datum).
+fn is_known_content_tag(s: &str) -> bool {
+    matches!(s, "okr" | "prd" | "pattern" | "datum" | "reference" | "learn" | "hardware" | "tomllmd")
+}
+
+/// Load incubating datum types from a runtime‑defined datum.
+/// The datum is expected at `$_B00T_Path/incubating.tomllm` (default: `~/.b00t/_b00t_/incubating.tomllm`)
+/// with TOML shape:
+/// ```toml
+/// incubating = ["routing", "agent.cli", ...]
+/// ```
+/// Missing or malformed files yield an empty set.
+fn get_incubating_set() -> &'static HashSet<String> {
+    static SET: OnceLock<HashSet<String>> = OnceLock::new();
+    SET.get_or_init(|| {
+        let base_path = std::env::var("_B00T_Path")
+            .unwrap_or_else(|_| "~/.b00t/_b00t_".to_string());
+        let expanded = shellexpand::tilde(&base_path).to_string();
+        let file_path = std::path::Path::new(&expanded).join("incubating.tomllm");
+        if let Ok(content) = std::fs::read_to_string(&file_path) {
+            #[derive(serde::Deserialize)]
+            struct Config {
+                incubating: Vec<String>,
+            }
+            if let Ok(cfg) = toml::from_str::<Config>(&content) {
+                return cfg.incubating.into_iter().collect();
+            }
+        }
+        HashSet::new()
+    })
+}
+
 pub mod exit_code {
     /// Generic / unknown error
     pub const ERROR: i32 = 1;
@@ -368,6 +405,19 @@ pub struct BootDatum {
     pub hook_uninstall: Option<String>,
 }
 
+/// Handle datum types that are marked as *incubating*.
+///
+/// Currently these types are treated as untyped content‑tags, but the
+/// function provides a single place to add bespoke logic when a concrete
+/// implementation becomes available.
+fn handle_incubating_type(value: &str) -> Option<DatumType> {
+    // Placeholder – return None to keep existing behaviour.
+    // When a real implementation is added, replace this stub with the
+    // appropriate mapping or side‑effects.
+    let _ = value; // silence unused‑variable warning.
+    None
+}
+
 fn deserialize_datum_type<'de, D>(
     deserializer: D,
 ) -> std::result::Result<Option<DatumType>, D::Error>
@@ -379,9 +429,31 @@ where
         None => Ok(None),
         Some(value) if value == "model" => Ok(Some(DatumType::AiModel)),
         Some(value) => {
-            DatumType::deserialize(StringDeserializer::<serde::de::value::Error>::new(value))
-                .map(Some)
-                .map_err(serde::de::Error::custom)
+            // Try hard-coded types first, then incubating placeholder.
+            let resolved = DatumType::from_type_token(&value)
+                .or_else(|| handle_incubating_type(&value));
+
+            if resolved.is_none()
+                && !is_known_content_tag(&value)
+                && !get_incubating_set().contains(&value)
+                && std::env::var("B00T_DATUM_WARN")
+                    .map(|v| v != "0")
+                    .unwrap_or(true)
+            {
+                let warned = DATUM_TYPE_WARNED
+                    .get_or_init(|| std::sync::Mutex::new(std::collections::HashSet::new()));
+                if let Ok(mut set) = warned.lock() {
+                    if set.insert(value.clone()) {
+                        // warn once per unknown type string per process
+                        eprintln!(
+                            "⚠️  b00t: unknown datum type token '{value}' — not a typed datum or known content-tag; silence: B00T_DATUM_WARN=0"
+                        );
+
+                    }
+                }
+            }
+
+            Ok(resolved)
         }
     }
 }
@@ -778,6 +850,35 @@ pub enum DatumType {
 }
 
 impl DatumType {
+    /// Map a TOML type token string to a DatumType variant; returns None for unknown tokens.
+    pub fn from_type_token(s: &str) -> Option<DatumType> {
+        match s {
+            "database" => Some(DatumType::Database),
+            "hive" | "hive_profile" => Some(DatumType::HiveProfile),
+            "agent" => Some(DatumType::Agent),
+            "config" => Some(DatumType::Config),
+            "docker" => Some(DatumType::Docker),
+            "skill" => Some(DatumType::Skill),
+            "stack" => Some(DatumType::Stack),
+            "repo" => Some(DatumType::Repo),
+            "role" => Some(DatumType::Role),
+            "bash" => Some(DatumType::Bash),
+            "vscode" => Some(DatumType::Vscode),
+            "k8s" => Some(DatumType::K8s),
+            "apt" => Some(DatumType::Apt),
+            "nix" => Some(DatumType::Nix),
+            "mcp" => Some(DatumType::Mcp),
+            "cli" => Some(DatumType::Cli),
+            "api" => Some(DatumType::Api),
+            "job" => Some(DatumType::Job),
+            "ai_model" | "model" => Some(DatumType::AiModel),
+            "ai" => Some(DatumType::Ai),
+            "justfile" => Some(DatumType::Justfile),
+            "unknown" => Some(DatumType::Unknown),
+            _ => None,
+        }
+    }
+
     pub fn all_base_suffixes() -> Vec<&'static str> {
         vec![
             ".database",

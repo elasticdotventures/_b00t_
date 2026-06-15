@@ -1,0 +1,53 @@
+[b00t]
+name = "wrkflw"
+type = "cli"
+hint = "Run and validate GitHub Actions workflows locally — no Docker required. Faster than act for Rust/Python cargo-based workflows."
+repo = "bahdotsh/wrkflw"
+
+desires = "0.8.0"
+version_regex = 'wrkflw (?P<version>[\d.]+)'
+detect = ["wrkflw --version"]
+
+# @tribal: gh CLI is a REQUIRED mandatory prerequisite — install commands use
+# `gh release download` for audit logging and version pinning.
+# If gh is missing: b00t install gh
+install = """
+set -euo pipefail
+command -v gh >/dev/null 2>&1 || { echo "❌ gh CLI required: b00t install gh" >&2; exit 1; }
+ASSET=wrkflw-x86_64-unknown-linux-gnu.tar.gz
+gh release download v0.8.0 --repo bahdotsh/wrkflw --pattern "$ASSET" --dir /tmp --clobber
+tar xz -C /tmp/ -f /tmp/$ASSET
+install -m755 /tmp/wrkflw ~/.local/bin/wrkflw
+wrkflw --version
+"""
+
+update = """
+set -euo pipefail
+command -v gh >/dev/null 2>&1 || { echo "❌ gh CLI required: b00t install gh" >&2; exit 1; }
+VER=$(gh release view --repo bahdotsh/wrkflw --json tagName --jq .tagName)
+ASSET=wrkflw-x86_64-unknown-linux-gnu.tar.gz
+gh release download "$VER" --repo bahdotsh/wrkflw --pattern "$ASSET" --dir /tmp --clobber
+tar xz -C /tmp/ -f /tmp/$ASSET
+install -m755 /tmp/wrkflw ~/.local/bin/wrkflw
+echo "✅ installed wrkflw $VER"
+"""
+
+[[b00t.usage]]
+description = "List available workflows in this repo"
+command = "wrkflw list"
+
+[[b00t.usage]]
+description = "Run k0mmand3r CI workflow locally (emulation mode — no Docker needed)"
+command = "wrkflw run --runtime emulation .github/workflows/rust-k0mmand3r.yml"
+
+[[b00t.usage]]
+description = "Validate all workflow files"
+command = "wrkflw validate"
+
+[[b00t.usage]]
+description = "Run specific workflow"
+command = "wrkflw run .github/workflows/<workflow>.yml"
+
+[[b00t.references]]
+name = "bahdotsh/wrkflw"
+url = "https://github.com/bahdotsh/wrkflw"

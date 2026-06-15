@@ -23,7 +23,7 @@ jobs:
       - name: Init required vendor submodules
         run: |
           set -euo pipefail
-          git submodule update --init --depth 1 vendor/tomllm vendor/irontology-mcp
+          git submodule update --init --depth 1 vendor/tomllm vendor/irontology-mcp vendor/embed-anything-b00t
 
       - name: install stable
         uses: actions-rs/toolchain@v1
@@ -39,7 +39,7 @@ jobs:
       # https://github.com/actions/setup-node
       - uses: actions/setup-node@v4
         with:
-          node-version: latest
+          node-version: '20'  # LTS; v26 breaks CJS/ESM boundary in mocha+ts-node
       # we use binstall to install wasm-pack
       - name: Install cargo-binstall
         if: env.SKIP_TESTS == 'false'
