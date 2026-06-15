@@ -1,8 +1,35 @@
 """Tests for native b00t LangChain tools."""
 
+import tomllib
 from pathlib import Path
 
 from b00t_langchain_agent.b00t_tools import B00tToolset
+
+
+# ---------------------------------------------------------------------------
+# Acceptance criterion #1 — datum advertises capability + required runtimes
+# ---------------------------------------------------------------------------
+
+def test_operator_datum_advertises_capability_and_runtime() -> None:
+    """langchain-operator.agent.tomllm must declare capability and Python runtime."""
+    datum = Path(__file__).parents[2] / "_b00t_" / "langchain-operator.agent.tomllm"
+    if not datum.exists():
+        import pytest
+        pytest.skip(f"datum not found at {datum}")
+
+    with open(datum, "rb") as fh:
+        data = tomllib.load(fh)
+
+    provides = data.get("b00t", {}).get("provides", {})
+    assert provides.get("capability") == "operator-automation", "missing capability=operator-automation"
+    assert provides.get("protocol") == "b00t-operator-v1", "missing protocol"
+
+    runtime = data.get("b00t", {}).get("runtime", {})
+    assert runtime.get("python"), "b00t.runtime.python missing — operator role must declare required Python version"
+    assert runtime.get("manager") == "uv", "b00t.runtime.manager must be uv"
+    packages = runtime.get("packages", [])
+    assert any("fastmcp" in p for p in packages), "fastmcp must be listed in b00t.runtime.packages"
+    assert any("langchain" in p for p in packages), "langchain-core must be listed in b00t.runtime.packages"
 
 
 def _write_decision_tree(tmp_path: Path) -> None:
