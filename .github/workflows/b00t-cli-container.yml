@@ -28,6 +28,9 @@ jobs:
         with:
           ref: ${{ github.event_name == 'release' && github.event.release.tag_name || github.ref }}
 
+      - name: Initialize required submodules
+        run: git submodule update --init --depth 1 vendor/l3dg3rr
+
       - name: Set up Just command runner
         uses: extractions/setup-just@v1
 
