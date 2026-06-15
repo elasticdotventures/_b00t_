@@ -1,0 +1,70 @@
+name: l3dg3rr Docs
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'vendor/l3dg3rr'
+      - 'vendor/l3dg3rr/**'
+      - '.gitmodules'
+      - '.github/workflows/l3dg3rr-vendor-docs.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'vendor/l3dg3rr'
+      - 'vendor/l3dg3rr/**'
+      - '.gitmodules'
+      - '.github/workflows/l3dg3rr-vendor-docs.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: l3dg3rr-vendor-docs-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  docs:
+    name: Build l3dg3rr docs
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+
+      - name: Initialize l3dg3rr submodule
+        run: git submodule update --init --recursive vendor/l3dg3rr
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust/cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: vendor/l3dg3rr
+
+      - name: Install just
+        uses: extractions/setup-just@v1
+
+      - name: Setup mdBook
+        uses: jontze/action-mdbook@v3
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          use-mermaid: true
+
+      - name: Install mdBook plugins
+        run: |
+          cd vendor/l3dg3rr
+          cargo install mdbook mdbook-mermaid mdbook-admonish --locked
+          cargo install --path crates/mdbook-rhai-mermaid
+
+      - name: Build l3dg3rr docs
+        run: |
+          cd vendor/l3dg3rr
+          just docgen
+
+      - name: Verify output
+        run: |
+          cd vendor/l3dg3rr
+          test -d book/book && echo "✓ book/book directory exists" || { echo "✗ docs build failed"; exit 1; }
+          test -f book/book/theory.html && echo "✓ theory.html generated" || { echo "✗ theory.html missing"; exit 1; }
+          test -f book/book/index.html && echo "✓ index.html generated" || { echo "✗ index.html missing"; exit 1; }
