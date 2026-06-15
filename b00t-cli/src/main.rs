@@ -1,7 +1,9 @@
 use anyhow::{Result, anyhow};
 use b00t_cli::exit_code;
 use b00t_cli::k0mmand3r::K0mmand;
-use b00t_cli::{SessionState, UnifiedConfig, load_datum_providers, whoami};
+use b00t_cli::{SessionState, load_datum_providers, whoami};
+#[allow(unused_imports)]
+use b00t_cli::UnifiedConfig;
 
 /// Exit with code, printing error context to stderr.
 fn die(code: i32, msg: impl std::fmt::Display) -> ! {

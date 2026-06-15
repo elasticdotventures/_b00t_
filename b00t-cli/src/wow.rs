@@ -16,7 +16,6 @@
 //! ```
 
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 
 // ─── CheckResult — the spline primitive ──────────────────────────────────────
 
@@ -256,7 +255,9 @@ impl DesignHeuristicCheck for JustModulesCheck {
                 passed: false, detail: format!("read justfile: {e}"),
             },
         };
-        let all = just.contains("mod b00t") && just.contains("mod ledgrrr") && just.contains("mod irontology");
+        // Match both `mod foo` and `mod? foo` (optional just module syntax)
+        let has = |name: &str| just.contains(&format!("mod {name}")) || just.contains(&format!("mod? {name}"));
+        let all = has("b00t") && has("ledgrrr") && has("irontology");
         CheckResult {
             name: self.name().into(), category: CheckCategory::DesignHeuristic,
             passed: all,
