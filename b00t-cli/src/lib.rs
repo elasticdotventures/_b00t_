@@ -25,9 +25,17 @@ pub mod ansi {
     pub fn bold(s: &str) -> String { if enabled() { format!("\x1b[1m{}\x1b[0m", s) } else { s.to_string() } }
 }
 
+// warn-once registry — one warning per unknown datum type string per process
+static DATUM_TYPE_WARNED: OnceLock<std::sync::Mutex<std::collections::HashSet<String>>> = OnceLock::new();
+
+/// Returns true if the value is a well-known content tag (not a typed datum).
+fn is_known_content_tag(s: &str) -> bool {
+    matches!(s, "okr" | "prd" | "pattern" | "datum" | "reference" | "learn" | "hardware" | "tomllmd")
+}
+
 /// Load incubating datum types from a runtime‑defined datum.
-/// The datum is expected at `$HOME/.b00t/incubating.tomllm` (or at the path
-/// defined by the `_B00T_Path` env var) with TOML shape:
+/// The datum is expected at `$_B00T_Path/incubating.tomllm` (default: `~/.b00t/_b00t_/incubating.tomllm`)
+/// with TOML shape:
 /// ```toml
 /// incubating = ["routing", "agent.cli", ...]
 /// ```
@@ -440,9 +448,7 @@ where
                         eprintln!(
                             "⚠️  b00t: unknown datum type token '{value}' — not a typed datum or known content-tag; silence: B00T_DATUM_WARN=0"
                         );
-                        crate::otel::record(crate::otel::MetricEvent::DatumTypeUnknown {
-                            type_str: value.clone(),
-                        });
+
                     }
                 }
             }
@@ -844,6 +850,35 @@ pub enum DatumType {
 }
 
 impl DatumType {
+    /// Map a TOML type token string to a DatumType variant; returns None for unknown tokens.
+    pub fn from_type_token(s: &str) -> Option<DatumType> {
+        match s {
+            "database" => Some(DatumType::Database),
+            "hive" | "hive_profile" => Some(DatumType::HiveProfile),
+            "agent" => Some(DatumType::Agent),
+            "config" => Some(DatumType::Config),
+            "docker" => Some(DatumType::Docker),
+            "skill" => Some(DatumType::Skill),
+            "stack" => Some(DatumType::Stack),
+            "repo" => Some(DatumType::Repo),
+            "role" => Some(DatumType::Role),
+            "bash" => Some(DatumType::Bash),
+            "vscode" => Some(DatumType::Vscode),
+            "k8s" => Some(DatumType::K8s),
+            "apt" => Some(DatumType::Apt),
+            "nix" => Some(DatumType::Nix),
+            "mcp" => Some(DatumType::Mcp),
+            "cli" => Some(DatumType::Cli),
+            "api" => Some(DatumType::Api),
+            "job" => Some(DatumType::Job),
+            "ai_model" | "model" => Some(DatumType::AiModel),
+            "ai" => Some(DatumType::Ai),
+            "justfile" => Some(DatumType::Justfile),
+            "unknown" => Some(DatumType::Unknown),
+            _ => None,
+        }
+    }
+
     pub fn all_base_suffixes() -> Vec<&'static str> {
         vec![
             ".database",
