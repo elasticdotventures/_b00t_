@@ -36,7 +36,7 @@ use b00t_cli::commands::{
     BouncerArgs, BouncerCommands, BootstrapCommands, BudgetCommands,
     ChatCommands, CliCommands, ConfigCommands, CrewCommand,
     DataCommands, DatumCommands, DoctorCommands,
-    FocusCommands, GatesCommands,
+    FocusCommands, GatesCommands, GuardCommands,
     GrokCommands, HiveCommands,
     InitCommands,
     JobCommands,
@@ -482,6 +482,14 @@ The system will:
     Gates {
         #[clap(subcommand)]
         gates_command: GatesCommands,
+    },
+    #[clap(
+        about = "Guard management — list, reset, add session guards (agent authority)",
+        long_about = "Manage command guards: view active guards with violation counts, reset 🦨→💩 escalation, add session-scoped guards.\n\nExamples:\n  b00t guard list\n  b00t guard status\n  b00t guard reset 'pip install'\n  b00t guard add 'curl.*evil\\.com' --action block"
+    )]
+    Guard {
+        #[clap(subcommand)]
+        guard_command: GuardCommands,
     },
     #[clap(
         about = "Observability: events, guard violations, and telemetry",
@@ -2284,6 +2292,12 @@ async fn main() {
         }
         Some(Commands::Gates { gates_command }) => {
             if let Err(e) = gates_command.execute(&cli.path) {
+                eprintln!("Error: {e}");
+                std::process::exit(1);
+            }
+        }
+        Some(Commands::Guard { guard_command }) => {
+            if let Err(e) = guard_command.execute(&cli.path) {
                 eprintln!("Error: {e}");
                 std::process::exit(1);
             }

@@ -579,5 +579,8 @@ fn load_all_guards(datum_dir: &Path, snapshot: &SystemSnapshot) -> Vec<crate::hi
         }
     }
 
+    // 3. Agent-added session guards (~/.b00t/session-guards.json)
+    guards.extend(crate::hive::load_session_guards());
+
     guards
 }

@@ -592,6 +592,55 @@ pub fn default_violations_path() -> PathBuf {
         .join("guard-violations.jsonl")
 }
 
+/// Path for session-scoped guards (agent-adjustable at runtime).
+pub fn session_guards_path() -> PathBuf {
+    dirs::home_dir()
+        .unwrap_or_else(|| PathBuf::from("."))
+        .join(".b00t")
+        .join("session-guards.json")
+}
+
+/// Load agent-added session guards from ~/.b00t/session-guards.json.
+/// Returns empty vec if file missing or malformed — never errors.
+pub fn load_session_guards() -> Vec<HiveGuard> {
+    #[derive(serde::Deserialize)]
+    struct SessionGuardEntry {
+        pattern: String,
+        #[serde(default = "default_sg_action")]
+        action: String,
+        message: Option<String>,
+        threshold: Option<u32>,
+    }
+    fn default_sg_action() -> String { "warn".to_string() }
+
+    let path = session_guards_path();
+    let content = match std::fs::read_to_string(&path) {
+        Ok(c) => c,
+        Err(_) => return vec![],
+    };
+    let entries: Vec<SessionGuardEntry> = match serde_json::from_str(&content) {
+        Ok(v) => v,
+        Err(_) => return vec![],
+    };
+    entries
+        .into_iter()
+        .map(|sg| {
+            let action = match sg.action.as_str() {
+                "block" => HiveGuardAction::Block,
+                "redirect" => HiveGuardAction::Redirect,
+                _ => HiveGuardAction::Warn,
+            };
+            HiveGuard {
+                pattern: GuardPattern::JsonRegexPattern(sg.pattern),
+                action,
+                message: sg.message,
+                redirect: None,
+                repeat_threshold: sg.threshold,
+            }
+        })
+        .collect()
+}
+
 #[derive(Debug, Clone, Default)]
 pub struct GuardViolationCounter {
     counts: HashMap<String, u32>,
