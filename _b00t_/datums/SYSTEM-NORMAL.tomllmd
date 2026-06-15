@@ -1,0 +1,85 @@
+# SYSTEM-NORMAL — precriteria definition for b00t operations
+# 🤓 "System normal" is the baseline health state that MUST be true before any b00t task begins.
+# These checks are symbolic command abstractions — evaluated against local system state at runtime.
+# Enforced via [[b00t.hive.precriteria]] in hive-guards.hive.toml.
+
+[b00t.schema]
+version   = "1"
+type      = "skill"
+type_tags = ["guardrail", "precriteria", "maintenance", "system-health", "git"]
+
+[system_normal]
+description = "Baseline health gate — all checks MUST pass before b00t task operations proceed"
+enforcement = "warn"   # warn (default) | block (strict mode)
+strict_flag = "B00T_STRICT_PRECRITERIA"  # set to 1 to escalate warn→block
+
+# ─── PRECRITERIA CHECKS ───────────────────────────────────────────────────────
+# Each check is a symbolic command that evaluates to the system state at runtime.
+# format: { id, label, command, expected, severity }
+# severity: error (blocks in strict) | warn (always non-blocking)
+
+[[system_normal.checks]]
+id        = "git-stash-reviewed"
+label     = "git stash queue reviewed and integrated (not merely empty)"
+command   = "git stash list 2>/dev/null | wc -l | tr -d ' '"
+expected  = "0"
+severity  = "warn"
+message   = "git stash has entries — REVIEW each entry before deciding to drop; stashes may contain valuable WIP"
+# 🤓 NEVER auto-drop stashes: each must be reviewed and either integrated into a branch or explicitly discarded
+# 🤓 Recovery: git stash store -m 'RECOVERED: <msg>' <sha> — objects persist ~90 days after drop
+fix       = """
+# Per stash:
+git stash show -p stash@{N}          # inspect changes
+git stash branch review/stash-N      # create branch to review
+# ONLY drop after confirming all changes are either merged or truly abandoned
+git stash drop stash@{N}
+"""
+rationale = "Non-empty stash = interrupted work; may contain unreleased features or fixes. Review before any discard."
+
+[[system_normal.checks]]
+id        = "git-no-merge-conflict"
+label     = "no active merge/rebase conflict markers"
+command   = "git status --porcelain 2>/dev/null | grep -c '^UU\\|^AA\\|^DD' || echo 0"
+expected  = "0"
+severity  = "error"
+message   = "unresolved merge/rebase conflicts present — resolve before continuing"
+fix       = "git status  # identify conflicted files, resolve, then git add && git commit"
+
+[[system_normal.checks]]
+id        = "git-not-detached-head"
+label     = "not in detached HEAD state"
+command   = "git symbolic-ref --short HEAD 2>/dev/null && echo 'ok' || echo 'detached'"
+expected_contains = "ok"
+severity  = "warn"
+message   = "detached HEAD — checkout a branch before creating tasks: git checkout -b task/<slug>"
+
+[[system_normal.checks]]
+id        = "no-uncommitted-on-main"
+label     = "no uncommitted changes on main branch"
+command   = "git branch --show-current 2>/dev/null"
+expected_not = "main"
+severity  = "warn"
+message   = "currently on main branch — always work on a task branch: git checkout -b task/<id>-<slug>"
+fix       = "git checkout -b task/<id>-<slug>"
+
+# ─── MAINTENANCE TARGETS ──────────────────────────────────────────────────────
+[system_normal.maintenance]
+# These are runnable via `just system-normal` or `b00t exec just system-normal`
+restore_stash   = "git stash list | awk -F: '{print $1}' | tac | xargs -I{} git stash drop {}"
+check_command   = "just system-normal"
+report_command  = "b00t exec just system-normal --check"
+
+# ─── INTEGRATION ─────────────────────────────────────────────────────────────
+[system_normal.integration]
+# How this plugs into b00t hive guard enforcement
+hive_guards_file = "_b00t_/hive-guards.hive.toml"
+precriteria_key  = "[[b00t.hive.precriteria]]"
+# Enforced in: b00t task list, b00t task add, b00t hive activate
+# NOT enforced in: b00t learn, b00t whoami, b00t status (read-only ops)
+
+# b00t:map v1
+# summary: system-normal precriteria — git stash empty + no conflicts + on task branch
+# tags: guardrail, precriteria, git, maintenance, system-health, blocking
+# tier: sm0l
+# cmds: just system-normal, git stash list, git stash drop stash@{0}
+# complexity: 2
