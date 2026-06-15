@@ -9,7 +9,72 @@ use std::collections::BTreeMap;
 // Re-export emoji registry from k0mmand3r crate for compile-time datum embedding
 pub use k0mmand3r::emoji_registry;
 
-/// Legacy k0mmand3r command: slash command for agent coordination
+/// Command prefix idiom.
+/// Sshbang (`!`) is the primary mode; Slash (`/`) is legacy and kept behind
+/// `B00T_K0MMAND3R_PREFIX=/` env var or explicit config.
+/// Both are always accepted by the parser for backward compatibility.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub enum CommandPrefix {
+    /// `!verb` — sshbang idiom (default, aligns with `!cmd` in Claude Code CLI)
+    Sshbang,
+    /// `/verb` — legacy slash syntax
+    Slash,
+}
+
+impl CommandPrefix {
+    pub fn as_char(&self) -> char {
+        match self {
+            Self::Sshbang => '!',
+            Self::Slash => '/',
+        }
+    }
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Sshbang => "!",
+            Self::Slash => "/",
+        }
+    }
+}
+
+impl Default for CommandPrefix {
+    fn default() -> Self {
+        Self::Sshbang
+    }
+}
+
+/// Runtime config for k0mmand3r prefix mode.
+/// Set `B00T_K0MMAND3R_PREFIX=/` to use legacy slash mode.
+#[derive(Debug, Clone)]
+pub struct K0mmand3rConfig {
+    pub prefix: CommandPrefix,
+}
+
+impl Default for K0mmand3rConfig {
+    fn default() -> Self {
+        Self {
+            prefix: CommandPrefix::Sshbang,
+        }
+    }
+}
+
+impl K0mmand3rConfig {
+    /// Read prefix preference from `B00T_K0MMAND3R_PREFIX` env var.
+    /// Defaults to `!` (Sshbang) if unset or any value other than `/`.
+    pub fn from_env() -> Self {
+        let prefix = if std::env::var("B00T_K0MMAND3R_PREFIX").as_deref() == Ok("/") {
+            CommandPrefix::Slash
+        } else {
+            CommandPrefix::Sshbang
+        };
+        Self { prefix }
+    }
+
+    pub fn preferred_prefix(&self) -> &'static str {
+        self.prefix.as_str()
+    }
+}
+
+/// k0mmand3r command: supports both `!verb` (sshbang, default) and `/verb` (legacy)
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct K0mmand {
     pub verb: String,   // negotiate, vote, delegate, status, etc.
@@ -18,17 +83,18 @@ pub struct K0mmand {
 }
 
 impl K0mmand {
-    /// Parse k0mmand3r command string
+    /// Parse k0mmand3r command string.
+    /// Accepts both `!verb` (sshbang, preferred) and `/verb` (legacy).
     /// Examples:
-    ///   /negotiate blessing:observe-infrastructure
-    ///   /vote on blessing:execute-transition-safely
-    ///   /delegate step:apply-transitions to agent:b00t-sandbox
-    ///   /status from agent:executive
+    ///   !negotiate blessing:observe-infrastructure
+    ///   !vote on blessing:execute-transition-safely
+    ///   !delegate step:apply-transitions to agent:b00t-sandbox
+    ///   !status from agent:executive
     pub fn parse(cmd: &str) -> Result<Self, String> {
         let cmd = cmd.trim();
 
-        if !cmd.starts_with('/') {
-            return Err("k0mmand3r command must start with /".to_string());
+        if !cmd.starts_with('!') && !cmd.starts_with('/') {
+            return Err("k0mmand3r command must start with ! (or legacy /)".to_string());
         }
 
         let parts: Vec<&str> = cmd[1..].split_whitespace().collect();
@@ -214,10 +280,12 @@ impl LoopSpec {
 }
 
 impl K0mmand3rCmd {
+    /// Parse typed k0mmand3r command.
+    /// Accepts both `!verb` (sshbang, preferred) and `/verb` (legacy).
     pub fn parse(cmd: &str) -> Result<Self, String> {
         let cmd = cmd.trim();
-        if !cmd.starts_with('/') {
-            return Err("k0mmand3r command must start with /".to_string());
+        if !cmd.starts_with('!') && !cmd.starts_with('/') {
+            return Err("k0mmand3r command must start with ! (or legacy /)".to_string());
         }
         let parts: Vec<&str> = cmd[1..].split_whitespace().collect();
         if parts.is_empty() {
@@ -286,7 +354,7 @@ impl K0mmand3rCmd {
                         modifiers,
                     })
                 } else {
-                    Err("Usage: /negotiate <resource> <id> or /negotiate blessing:<id>".to_string())
+                    Err("Usage: !negotiate <resource> <id> or !negotiate blessing:<id>".to_string())
                 }
             }
             "vote" => {
@@ -298,7 +366,7 @@ impl K0mmand3rCmd {
                     .or_else(|| {
                         on_value.as_ref().and_then(|v| v.split_whitespace().next().map(|s| s.to_string()))
                     })
-                    .ok_or("Usage: /vote <proposal> <yes|no|abstain>")?;
+                    .ok_or("Usage: !vote <proposal> <yes|no|abstain>")?;
                 let choice_str = positional
                     .get(1)
                     .map(|s| s.to_string())
@@ -358,7 +426,7 @@ impl K0mmand3rCmd {
                     .map(|s| s.to_string())
                     .or_else(|| modifiers.remove("agent"))
                     .or_else(|| modifiers.remove("to"))
-                    .ok_or("Usage: /delegate <agent> <budget>")?;
+                    .ok_or("Usage: !delegate <agent> <budget>")?;
                 let budget_str = positional
                     .get(1)
                     .map(|s| s.to_string())
@@ -387,7 +455,7 @@ impl K0mmand3rCmd {
                             v
                         })
                     })
-                    .ok_or("Usage: /handshake <agent>")?;
+                    .ok_or("Usage: !handshake <agent>")?;
                 let proposal = if positional.len() > 1 {
                     Some(positional[1..].join(" "))
                 } else {
@@ -403,7 +471,7 @@ impl K0mmand3rCmd {
                     .first()
                     .map(|s| s.to_string())
                     .or_else(|| modifiers.remove("action"))
-                    .ok_or("Usage: /crew <form|join|leave>")?;
+                    .ok_or("Usage: !crew <form|join|leave>")?;
                 let action = match action_str.to_lowercase().as_str() {
                     "form" => CrewAction::Form,
                     "join" => CrewAction::Join,
@@ -434,7 +502,7 @@ impl K0mmand3rCmd {
                     .first()
                     .map(|s| s.to_string())
                     .or_else(|| modifiers.remove("role"))
-                    .ok_or("Usage: /ahoy <role> <budget> <skills> <description>")?;
+                    .ok_or("Usage: !ahoy <role> <budget> <skills> <description>")?;
                 let budget_str = positional
                     .get(1)
                     .map(|s| s.to_string())
@@ -469,7 +537,7 @@ impl K0mmand3rCmd {
                     .first()
                     .map(|s| s.to_string())
                     .or_else(|| modifiers.remove("ahoy_id"))
-                    .ok_or("Usage: /apply <ahoy_id> <pitch>")?;
+                    .ok_or("Usage: !apply <ahoy_id> <pitch>")?;
                 let pitch = if positional.len() > 1 {
                     positional[1..].join(" ")
                 } else {
@@ -485,7 +553,7 @@ impl K0mmand3rCmd {
                     .first()
                     .map(|s| s.to_string())
                     .or_else(|| modifiers.remove("ahoy_id"))
-                    .ok_or("Usage: /award <ahoy_id> <winner>")?;
+                    .ok_or("Usage: !award <ahoy_id> <winner>")?;
                 let winner = positional
                     .get(1)
                     .map(|s| s.to_string())
@@ -519,7 +587,7 @@ impl K0mmand3rCmd {
                 .split_whitespace()
                 .next()
                 .unwrap_or("unknown")
-                .trim_start_matches('/')
+                .trim_start_matches(&['!', '/'][..])
                 .to_string(),
         }
     }

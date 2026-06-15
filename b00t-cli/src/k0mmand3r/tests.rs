@@ -396,4 +396,69 @@ mod k0mmand3r_typed_cmd_tests {
             _ => panic!("Expected Handshake"),
         }
     }
+
+    // ── Sshbang idiom tests ──────────────────────────────────────────────────
+
+    #[test]
+    fn test_sshbang_negotiate_parses() {
+        let cmd = K0mmand::parse("!negotiate blessing:observe-infrastructure").unwrap();
+        assert_eq!(cmd.verb, "negotiate");
+        assert_eq!(cmd.object, "blessing:observe-infrastructure");
+    }
+
+    #[test]
+    fn test_sshbang_vote_parses() {
+        let cmd = K0mmand::parse("!vote on blessing:execute-transition-safely").unwrap();
+        assert_eq!(cmd.verb, "vote");
+    }
+
+    #[test]
+    fn test_sshbang_typed_negotiate() {
+        let cmd = K0mmand3rCmd::parse("!negotiate blessing:observe-infra").unwrap();
+        assert_eq!(cmd.verb(), "negotiate");
+    }
+
+    #[test]
+    fn test_sshbang_typed_vote() {
+        let cmd = K0mmand3rCmd::parse("!vote proposal-123 yes").unwrap();
+        assert_eq!(cmd.verb(), "vote");
+    }
+
+    #[test]
+    fn test_sshbang_typed_loop() {
+        let cmd = K0mmand3rCmd::parse("!loop goal:deploy metric:uptime verify:healthcheck max:5").unwrap();
+        assert_eq!(cmd.verb(), "loop");
+    }
+
+    #[test]
+    fn test_sshbang_and_slash_both_accepted() {
+        // Parser accepts either prefix — backward compat guaranteed
+        let bang = K0mmand::parse("!negotiate blessing:foo").unwrap();
+        let slash = K0mmand::parse("/negotiate blessing:foo").unwrap();
+        assert_eq!(bang.verb, slash.verb);
+        assert_eq!(bang.object, slash.object);
+    }
+
+    #[test]
+    fn test_config_sshbang_default() {
+        let cfg = K0mmand3rConfig::default();
+        assert_eq!(cfg.preferred_prefix(), "!");
+    }
+
+    #[test]
+    fn test_config_slash_via_env() {
+        // SAFETY: test-only env mutation; tests run single-threaded in this suite
+        unsafe { std::env::set_var("B00T_K0MMAND3R_PREFIX", "/") };
+        let cfg = K0mmand3rConfig::from_env();
+        assert_eq!(cfg.preferred_prefix(), "/");
+        unsafe { std::env::remove_var("B00T_K0MMAND3R_PREFIX") };
+    }
+
+    #[test]
+    fn test_invalid_prefix_rejected() {
+        let result = K0mmand::parse("@negotiate blessing:foo");
+        assert!(result.is_err());
+        let msg = result.unwrap_err();
+        assert!(msg.contains('!') || msg.contains('/'));
+    }
 }
