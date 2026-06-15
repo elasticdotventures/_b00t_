@@ -3,7 +3,7 @@
 //! Combines LFMF lessons, curated docs, man pages, and RAG into one command
 
 use anyhow::{Context, Result};
-use b00t_c0re_lib::{DisplayOpts, GrokClient, KnowledgeSource, LfmfSystem, ManPage};
+use b00t_c0re_lib::{lfmf::classify_init_failure, DisplayOpts, GrokClient, KnowledgeSource, LfmfSystem, ManPage};
 use clap::Parser;
 use std::fs;
 use tiktoken_rs::o200k_base;
@@ -355,12 +355,10 @@ async fn handle_record(path: &str, topic: Option<&str>, lesson: &str, global: bo
     let lookup = crate::datum_utils::B00tDatumLookup::new(path.to_string());
     lfmf_system.set_datum_lookup(lookup);
 
-    // Try to initialize vector database (non-fatal if fails)
+    // Try to initialize vector database; classify failure for actionable harness output
     if let Err(e) = lfmf_system.initialize().await {
-        println!(
-            "⚠️  Vector database unavailable: {}. Lesson will be saved to filesystem only.",
-            e
-        );
+        let (_, msg) = classify_init_failure(&e);
+        println!("{}", msg);
     }
 
     let scope = if global { "global" } else { "repo" };
@@ -386,12 +384,10 @@ async fn handle_search(path: &str, topic: Option<&str>, query: &str, limit: usiz
     let lookup = crate::datum_utils::B00tDatumLookup::new(path.to_string());
     lfmf_system.set_datum_lookup(lookup);
 
-    // Initialize vector DB (non-fatal if fails)
+    // Initialize vector DB; classify failure for actionable harness output
     if let Err(e) = lfmf_system.initialize().await {
-        println!(
-            "🔄 Vector database unavailable ({}), using filesystem fallback",
-            e
-        );
+        let (_, msg) = classify_init_failure(&e);
+        println!("{}", msg);
     }
 
     let results = if query.eq_ignore_ascii_case("list") {

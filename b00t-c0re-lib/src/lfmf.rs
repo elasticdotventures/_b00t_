@@ -518,6 +518,58 @@ impl LfmfSystem {
     }
 }
 
+/// Classify an [`LfmfSystem::initialize`] error into a structured harness degradation message.
+///
+/// Returns `(category, actionable_message)` suitable for user-facing output.
+/// Detects NeumannStore lock conflicts, missing binaries, and backend connectivity failures.
+pub fn classify_init_failure(e: &anyhow::Error) -> (&'static str, String) {
+    let msg = format!("{:#}", e);
+    let msg_lower = msg.to_lowercase();
+
+    if msg_lower.contains("lock")
+        || msg_lower.contains("could not set lock")
+        || msg_lower.contains("conflicting lock")
+        || msg_lower.contains("failed to acquire")
+    {
+        (
+            "NEUMANN_LOCK",
+            format!(
+                "⚠️  HARNESS BUG [NEUMANN_LOCK]: NeumannStore persistent memory is locked.\n                    Details: {}\n                    Fix: kill conflicting b00t/irontology processes, or:\n                    rm -f ~/.b00t/neumann/default/*.lock\n                    ↳ memory degraded → filesystem-only fallback active",
+                msg
+            ),
+        )
+    } else if msg_lower.contains("no such file or directory")
+        || msg_lower.contains("failed to spawn")
+        || msg_lower.contains("(os error 2)")
+        || msg_lower.contains("cannot find binary")
+    {
+        (
+            "BINARY_MISSING",
+            "⚠️  HARNESS BUG [BINARY_MISSING]: irontology-mcp binary not found.\n                Fix: b00t install irontology-mcp  (or: cargo build -p irontology-mcp)\n                ↳ persistent memory unavailable → filesystem-only fallback active"
+                .to_string(),
+        )
+    } else if msg_lower.contains("connection refused")
+        || msg_lower.contains("qdrant")
+        || msg_lower.contains("failed to connect")
+    {
+        (
+            "BACKEND_DOWN",
+            format!(
+                "🔄 Persistent memory backend unavailable ({}).\n                    Fix: b00t hive activate inference-qwen36-27b  (or start Qdrant)\n                    ↳ filesystem-only fallback active",
+                msg
+            ),
+        )
+    } else {
+        (
+            "GENERIC",
+            format!(
+                "⚠️  Persistent memory unavailable: {}\n                    ↳ filesystem-only fallback active",
+                msg
+            ),
+        )
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -589,4 +641,38 @@ learn_dir = "custom_learn"
             home.join(".b00t/_b00t_/learn").to_string_lossy()
         );
     }
+    #[test]
+    fn test_classify_init_failure_neumann_lock() {
+        let e = anyhow::anyhow!("Could not set lock on file /home/user/.b00t/neumann/default/lock: Conflicting lock held by PID 12345");
+        let (cat, msg) = classify_init_failure(&e);
+        assert_eq!(cat, "NEUMANN_LOCK");
+        assert!(msg.contains("HARNESS BUG"));
+        assert!(msg.contains("filesystem-only fallback"));
+    }
+
+    #[test]
+    fn test_classify_init_failure_binary_missing() {
+        let e = anyhow::anyhow!("Failed to spawn irontology-mcp at /usr/local/bin/irontology-mcp: No such file or directory (os error 2)");
+        let (cat, msg) = classify_init_failure(&e);
+        assert_eq!(cat, "BINARY_MISSING");
+        assert!(msg.contains("HARNESS BUG"));
+        assert!(msg.contains("b00t install irontology-mcp"));
+    }
+
+    #[test]
+    fn test_classify_init_failure_backend_down() {
+        let e = anyhow::anyhow!("Failed to connect to irontology-mcp: connection refused");
+        let (cat, _msg) = classify_init_failure(&e);
+        assert_eq!(cat, "BACKEND_DOWN");
+    }
+
+    #[test]
+    fn test_classify_init_failure_generic() {
+        let e = anyhow::anyhow!("some unexpected initialization problem occurred");
+        let (cat, msg) = classify_init_failure(&e);
+        assert_eq!(cat, "GENERIC");
+        assert!(msg.contains("filesystem-only fallback"));
+    }
+
+
 }
