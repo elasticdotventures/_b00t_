@@ -170,9 +170,19 @@ fn check_peer_handshake_inner(paths: &[PathBuf]) -> Option<String> {
     for path in paths {
         if path.exists() {
             if let Ok(content) = std::fs::read_to_string(path) {
+                // Try JSON first
                 if let Ok(document) = serde_json::from_str::<serde_json::Value>(&content) {
                     if let Some(variant) = document.get("variant_id").and_then(|v| v.as_str()) {
                         return Some(variant.to_string());
+                    }
+                }
+                // Fallback: plaintext `key: value` per line
+                for line in content.lines() {
+                    if let Some(rest) = line.strip_prefix("variant_id:") {
+                        let val = rest.trim().trim_matches('"');
+                        if !val.is_empty() {
+                            return Some(val.to_string());
+                        }
                     }
                 }
             }
