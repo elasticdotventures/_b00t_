@@ -300,3 +300,4 @@ yarn.lock
 # Session/temporary caches
 cache/
 .serena/
+session-guards.json
