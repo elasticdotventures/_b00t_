@@ -30,6 +30,66 @@ pub struct PeerEntry {
     pub last_seen: String,
 }
 
+// ─── Accelerator ─────────────────────────────────────────────────────────────
+
+/// A detected hardware accelerator (discrete GPU, integrated GPU, or NPU).
+///
+/// Probe chain: nvidia-smi → Mali device node → RKNPU2 driver package.
+/// A node may surface several (e.g. an RK3588 reports both a Mali GPU and an RKNN NPU).
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct Accelerator {
+    /// Coarse class: `"gpu"` (dedicated/integrated graphics) or `"npu"` (neural proc).
+    pub class: String,
+    /// How it was detected: `"nvidia-smi"` | `"mali-devnode"` | `"rknpu2-pkg"`.
+    pub kind: String,
+    /// Human-readable model name.
+    pub name: String,
+    /// Vendor (NVIDIA, ARM, Rockchip, …).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub vendor: Option<String>,
+    /// Total VRAM in MB — `None` for shared-memory accelerators (NPU, iGPU).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub vram_total_mb: Option<u32>,
+    /// Free VRAM in MB — `None` for shared-memory accelerators (NPU, iGPU).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub vram_free_mb: Option<u32>,
+}
+
+impl Accelerator {
+    /// True if this is a graphics-class accelerator.
+    pub fn is_gpu(&self) -> bool {
+        self.class == "gpu"
+    }
+    /// True if this is a neural-processing-unit (shared DDR, no VRAM).
+    pub fn is_npu(&self) -> bool {
+        self.class == "npu"
+    }
+    /// One-line summary for the hive status display.
+    pub fn summary(&self) -> String {
+        match (self.vram_free_mb, self.vram_total_mb) {
+            (Some(free), Some(total)) => {
+                format!("{} — {}MB free / {}MB total", self.name, free, total)
+            }
+            _ => self.name.clone(),
+        }
+    }
+}
+
+/// Derive the legacy single-GPU fields from a list of accelerators.
+///
+/// Prefers a GPU with its own VRAM (discrete). Returns `(name, total_mb, free_mb)`.
+/// Pure helper so it is unit-testable independently of live probing.
+fn derive_legacy_gpu_fields(accels: &[Accelerator]) -> (Option<String>, Option<u32>, Option<u32>) {
+    let pick = accels
+        .iter()
+        .find(|a| a.is_gpu() && a.vram_total_mb.is_some())
+        .or_else(|| accels.iter().find(|a| a.is_gpu()));
+    match pick {
+        Some(a) => (Some(a.name.clone()), a.vram_total_mb, a.vram_free_mb),
+        None => (None, None, None),
+    }
+}
+
 // ─── System Snapshot ─────────────────────────────────────────────────────────
 
 /// Real-time system resource snapshot
@@ -39,9 +99,14 @@ pub struct SystemSnapshot {
     pub ram_available_gb: f32,
     pub swap_total_gb: f32,
     pub swap_free_gb: f32,
+    /// Legacy single-GPU fields — kept for backwards-compatible JSON/serde.
+    /// Derived from [`SystemSnapshot::accelerators`] (first GPU-class entry).
     pub gpu_name: Option<String>,
     pub gpu_total_mb: Option<u32>,
     pub gpu_free_mb: Option<u32>,
+    /// All detected accelerators (discrete GPU, iGPU, NPU, …).
+    #[serde(default)]
+    pub accelerators: Vec<Accelerator>,
     pub cpu_cores: u32,
     pub active_downloads: Vec<String>, // PIDs/paths of active HF downloads
     pub active_services: Vec<String>,  // running systemd --user units
@@ -61,7 +126,10 @@ impl SystemSnapshot {
         let swap_free_kb = parse_meminfo_kb(&meminfo, "SwapFree");
 
         let cpu_cores = read_cpu_count();
-        let (gpu_name, gpu_total_mb, gpu_free_mb) = query_nvidia_smi();
+        let accelerators = detect_accelerators();
+        // 🤓 back-compat: surface the first GPU-class accelerator into the legacy
+        //    gpu_* fields so existing JSON consumers + gate logic keep working.
+        let (gpu_name, gpu_total_mb, gpu_free_mb) = derive_legacy_gpu_fields(&accelerators);
         let active_downloads = find_active_downloads();
         let active_services = query_systemd_user_services();
         let active_profile = read_active_profile();
@@ -74,6 +142,7 @@ impl SystemSnapshot {
             gpu_name,
             gpu_total_mb,
             gpu_free_mb,
+            accelerators,
             cpu_cores,
             active_downloads,
             active_services,
@@ -111,15 +180,38 @@ impl SystemSnapshot {
 
     /// Human-readable resource summary line
     pub fn summary_line(&self) -> String {
-        let gpu = match (&self.gpu_name, self.gpu_free_mb, self.gpu_total_mb) {
-            (Some(name), Some(free), Some(total)) => {
-                format!(" | GPU {} {}/{}MB free", name, free, total)
-            }
-            _ => String::from(" | GPU: n/a"),
+        let accel = if self.accelerators.is_empty() {
+            String::new()
+        } else {
+            let npus = self.accelerators.iter().filter(|a| a.is_npu()).count();
+            let gpus = self.accelerators.iter().filter(|a| a.is_gpu()).count();
+            format!(" | accel {}gpu/{}npu", gpus, npus)
         };
         format!(
             "RAM {:.1}/{:.1}GB avail{} | CPU {}c",
-            self.ram_available_gb, self.ram_total_gb, gpu, self.cpu_cores
+            self.ram_available_gb, self.ram_total_gb, accel, self.cpu_cores
+        )
+    }
+
+    /// Stable hardware-identity fingerprint for drift detection (P3).
+    ///
+    /// Captures *identity* only — CPU cores, total RAM, and the set of
+    /// accelerator classes/kinds. Excludes volatile values (free RAM, temps,
+    /// driver versions) so routine load/driver updates don't trigger false drift.
+    /// Two snapshots with the same fingerprint represent the same hardware.
+    pub fn fingerprint(&self) -> String {
+        let mut accels: Vec<String> = self
+            .accelerators
+            .iter()
+            .map(|a| format!("{}:{}", a.class, a.kind))
+            .collect();
+        accels.sort();
+        accels.dedup();
+        format!(
+            "{}c/{:.0}GB/{}",
+            self.cpu_cores,
+            self.ram_total_gb,
+            accels.join(",")
         )
     }
 }
@@ -1212,28 +1304,135 @@ fn read_cpu_count() -> u32 {
         .unwrap_or(1)
 }
 
-fn query_nvidia_smi() -> (Option<String>, Option<u32>, Option<u32>) {
+/// Detect all hardware accelerators on this node.
+///
+/// Probe chain (every probe runs; a node may report several accelerators):
+/// 1. NVIDIA discrete GPU — `nvidia-smi`
+/// 2. ARM Mali integrated GPU — `/dev/mali0` device node
+/// 3. Rockchip RKNN NPU — `rknpu2` driver package / DRM `*npu*` render node
+pub fn detect_accelerators() -> Vec<Accelerator> {
+    let mut accels = Vec::new();
+    if let Some(a) = probe_nvidia_smi() {
+        accels.push(a);
+    }
+    if let Some(a) = probe_mali() {
+        accels.push(a);
+    }
+    if let Some(a) = probe_rknn_npu() {
+        accels.push(a);
+    }
+    accels
+}
+
+/// NVIDIA discrete GPU via `nvidia-smi`. Returns None if nvidia-smi is absent/fails.
+fn probe_nvidia_smi() -> Option<Accelerator> {
     let output = Command::new("nvidia-smi")
         .args([
             "--query-gpu=name,memory.total,memory.free",
             "--format=csv,noheader,nounits",
         ])
-        .output();
+        .output()
+        .ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    let line = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    if line.is_empty() {
+        return None;
+    }
+    let parts: Vec<&str> = line.splitn(3, ',').collect();
+    if parts.len() != 3 {
+        return None;
+    }
+    let name = parts[0].trim().to_string();
+    let total: u32 = parts[1].trim().parse().unwrap_or(0);
+    let free: u32 = parts[2].trim().parse().unwrap_or(0);
+    Some(Accelerator {
+        class: "gpu".into(),
+        kind: "nvidia-smi".into(),
+        name,
+        vendor: Some("NVIDIA".into()),
+        vram_total_mb: Some(total),
+        vram_free_mb: Some(free),
+    })
+}
 
-    match output {
-        Ok(o) if o.status.success() => {
-            let stdout = String::from_utf8_lossy(&o.stdout);
-            let line = stdout.trim();
-            let parts: Vec<&str> = line.splitn(3, ',').collect();
-            if parts.len() == 3 {
-                let name = parts[0].trim().to_string();
-                let total: u32 = parts[1].trim().parse().unwrap_or(0);
-                let free: u32 = parts[2].trim().parse().unwrap_or(0);
-                return (Some(name), Some(total), Some(free));
-            }
-            (None, None, None)
-        }
-        _ => (None, None, None),
+/// ARM Mali integrated GPU via `/dev/mali0` device-node presence.
+/// 🤓 Mali has no standard VRAM query; it shares system RAM → vram fields are None.
+fn probe_mali() -> Option<Accelerator> {
+    if Path::new("/dev/mali0").exists() {
+        return Some(Accelerator {
+            class: "gpu".into(),
+            kind: "mali-devnode".into(),
+            name: "ARM Mali (integrated)".into(),
+            vendor: Some("ARM".into()),
+            vram_total_mb: None,
+            vram_free_mb: None,
+        });
+    }
+    None
+}
+
+/// Rockchip RKNN NPU (RK3588/RK3576/…).
+///
+/// 🤓 Detection signals (either is sufficient):
+/// - DRM render node whose name contains `npu` (vendor kernel exposes the NPU as
+///   `/dev/dri/platform-fdab0000.npu-render` on RK3588); the legacy `/dev/rknpu`
+///   char device is often absent.
+/// - `rknn_server` runtime binary on PATH.
+/// The driver version is read best-effort from dpkg (`rknpu2-rk3588` / `rknpu2`).
+/// NPU shares DDR → no VRAM fields.
+fn probe_rknn_npu() -> Option<Accelerator> {
+    let has_drm_npu = fs::read_dir("/dev/dri")
+        .ok()
+        .map(|entries| {
+            entries
+                .filter_map(|e| e.ok())
+                .any(|e| e.file_name().to_string_lossy().contains("npu"))
+        })
+        .unwrap_or(false);
+    let has_rknn_server = which("rknn_server");
+    if !has_drm_npu && !has_rknn_server {
+        return None;
+    }
+    let ver = dpkg_version("rknpu2-rk3588").or_else(|| dpkg_version("rknpu2"));
+    let name = match ver {
+        Some(v) => format!("Rockchip RKNPU2 NPU ({v})"),
+        None => "Rockchip RKNN NPU".to_string(),
+    };
+    Some(Accelerator {
+        class: "npu".into(),
+        kind: "rknpu2-pkg".into(),
+        name,
+        vendor: Some("Rockchip".into()),
+        vram_total_mb: None,
+        vram_free_mb: None,
+    })
+}
+
+/// `true` if `bin` resolves on PATH (non-throwing `command -v`).
+fn which(bin: &str) -> bool {
+    Command::new("sh")
+        .args(["-c", &format!("command -v {bin}")])
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false)
+}
+
+/// Best-effort installed version of a dpkg package, or None if absent/unknown.
+fn dpkg_version(pkg: &str) -> Option<String> {
+    let out = Command::new("dpkg-query")
+        .args(["-W", "-f=${Version}", pkg])
+        .output()
+        .ok()?;
+    if !out.status.success() {
+        return None;
+    }
+    let v = String::from_utf8_lossy(&out.stdout).trim().to_string();
+    if v.is_empty() {
+        None
+    } else {
+        Some(v)
     }
 }
 
@@ -1280,6 +1479,169 @@ fn query_systemd_user_services() -> Vec<String> {
 mod tests {
     use super::*;
     use std::path::PathBuf;
+
+    // ─── Accelerator probe logic ───────────────────────────────────────────────
+
+    fn gpu(name: &str, total: u32, free: u32) -> Accelerator {
+        Accelerator {
+            class: "gpu".into(),
+            kind: "nvidia-smi".into(),
+            name: name.into(),
+            vendor: Some("NVIDIA".into()),
+            vram_total_mb: Some(total),
+            vram_free_mb: Some(free),
+        }
+    }
+
+    fn npu(name: &str) -> Accelerator {
+        Accelerator {
+            class: "npu".into(),
+            kind: "rknpu2-pkg".into(),
+            name: name.into(),
+            vendor: Some("Rockchip".into()),
+            vram_total_mb: None,
+            vram_free_mb: None,
+        }
+    }
+
+    #[test]
+    fn accelerator_class_predicates() {
+        assert!(gpu("x", 1, 1).is_gpu());
+        assert!(!gpu("x", 1, 1).is_npu());
+        assert!(npu("y").is_npu());
+        assert!(!npu("y").is_gpu());
+    }
+
+    #[test]
+    fn accelerator_summary_with_vram() {
+        assert_eq!(gpu("RTX 3090", 24576, 8000).summary(), "RTX 3090 — 8000MB free / 24576MB total");
+    }
+
+    #[test]
+    fn accelerator_summary_without_vram() {
+        // NPU / iGPU: no VRAM → name only
+        assert_eq!(npu("Rockchip RKNPU2 NPU (2.3.0)").summary(), "Rockchip RKNPU2 NPU (2.3.0)");
+    }
+
+    #[test]
+    fn legacy_gpu_fields_prefer_discrete_gpu() {
+        // RK3588 node: an NPU + an integrated Mali (no VRAM). Legacy fields stay None
+        // because no GPU has its own VRAM — gate logic must not falsely report free VRAM.
+        let mali = Accelerator {
+            class: "gpu".into(), kind: "mali-devnode".into(),
+            name: "ARM Mali".into(), vendor: Some("ARM".into()),
+            vram_total_mb: None, vram_free_mb: None,
+        };
+        let accels = vec![npu("RKNPU2"), mali];
+        let (name, total, free) = derive_legacy_gpu_fields(&accels);
+        // Mali is a GPU but has no VRAM → we still surface its name, but VRAM stays None
+        assert_eq!(name.as_deref(), Some("ARM Mali"));
+        assert_eq!(total, None);
+        assert_eq!(free, None);
+    }
+
+    #[test]
+    fn legacy_gpu_fields_picks_nvidia_over_npu() {
+        // A node with BOTH an NVIDIA GPU and an NPU: legacy fields must reflect the GPU.
+        let accels = vec![gpu("RTX 3090", 24576, 8000), npu("RKNPU2")];
+        let (name, total, free) = derive_legacy_gpu_fields(&accels);
+        assert_eq!(name.as_deref(), Some("RTX 3090"));
+        assert_eq!(total, Some(24576));
+        assert_eq!(free, Some(8000));
+    }
+
+    #[test]
+    fn legacy_gpu_fields_none_when_only_npu() {
+        let accels = vec![npu("RKNPU2")];
+        let (name, total, free) = derive_legacy_gpu_fields(&accels);
+        assert_eq!(name, None);
+        assert_eq!(total, None);
+        assert_eq!(free, None);
+    }
+
+    #[test]
+    fn snapshot_summary_line_counts_accelerators() {
+        let snap = SystemSnapshot {
+            ram_total_gb: 16.0, ram_available_gb: 14.0,
+            swap_total_gb: 0.0, swap_free_gb: 0.0,
+            gpu_name: None, gpu_total_mb: None, gpu_free_mb: None,
+            accelerators: vec![gpu("Mali", 0, 0), npu("RKNPU2")],
+            cpu_cores: 8,
+            active_downloads: vec![], active_services: vec![],
+            active_profile: None, hive_ledger_path: None,
+            timestamp: "t".into(),
+        };
+        assert!(snap.summary_line().contains("1gpu/1npu"));
+    }
+
+    #[test]
+    fn fingerprint_is_stable_and_sorted() {
+        // a Mali iGPU (as probe_mali() would emit) + an RKNN NPU
+        let mali = Accelerator {
+            class: "gpu".into(), kind: "mali-devnode".into(),
+            name: "ARM Mali".into(), vendor: Some("ARM".into()),
+            vram_total_mb: None, vram_free_mb: None,
+        };
+        // same hardware → same fingerprint, regardless of accel vector order
+        let mk = |accels: Vec<Accelerator>| SystemSnapshot {
+            ram_total_gb: 16.0, ram_available_gb: 1.0,
+            swap_total_gb: 0.0, swap_free_gb: 0.0,
+            gpu_name: None, gpu_total_mb: None, gpu_free_mb: None,
+            accelerators: accels, cpu_cores: 8,
+            active_downloads: vec![], active_services: vec![],
+            active_profile: None, hive_ledger_path: None, timestamp: "t".into(),
+        };
+        let a = mk(vec![npu("RKNPU2"), mali.clone()]);
+        let b = mk(vec![mali, npu("RKNPU2")]);
+        assert_eq!(a.fingerprint(), b.fingerprint());
+        assert!(a.fingerprint().contains("8c/16GB/"));
+        // class:kind only — versions excluded so driver updates don't drift
+        assert!(a.fingerprint().contains("gpu:mali-devnode"));
+        assert!(a.fingerprint().contains("npu:rknpu2-pkg"));
+    }
+
+    #[test]
+    fn fingerprint_excludes_volatile_values() {
+        // free RAM differs wildly between two captures of the same hardware →
+        // fingerprint must be identical (it tracks total, not free).
+        let base = || SystemSnapshot {
+            ram_total_gb: 16.0, ram_available_gb: 14.0,
+            swap_total_gb: 0.0, swap_free_gb: 0.0,
+            gpu_name: None, gpu_total_mb: None, gpu_free_mb: None,
+            accelerators: vec![npu("RKNPU2")], cpu_cores: 8,
+            active_downloads: vec![], active_services: vec![],
+            active_profile: None, hive_ledger_path: None, timestamp: "t".into(),
+        };
+        let mut loaded = base();
+        loaded.ram_available_gb = 2.0; // nearly full RAM
+        assert_eq!(base().fingerprint(), loaded.fingerprint());
+    }
+
+    #[test]
+    fn snapshot_summary_line_no_accelerators() {
+        let snap = SystemSnapshot {
+            ram_total_gb: 16.0, ram_available_gb: 14.0,
+            swap_total_gb: 0.0, swap_free_gb: 0.0,
+            gpu_name: None, gpu_total_mb: None, gpu_free_mb: None,
+            accelerators: vec![],
+            cpu_cores: 8,
+            active_downloads: vec![], active_services: vec![],
+            active_profile: None, hive_ledger_path: None,
+            timestamp: "t".into(),
+        };
+        assert!(!snap.summary_line().contains("accel"));
+    }
+
+    #[test]
+    fn detect_accelerators_does_not_panic() {
+        // Live probe on whatever host runs the test — must never panic, may be empty.
+        let accels = detect_accelerators();
+        // every entry must be self-consistent
+        for a in &accels {
+            assert!(a.is_gpu() || a.is_npu());
+            assert!(!a.name.is_empty());
+        }
+    }
 
     #[test]
     fn test_guard_warn() {
@@ -1743,6 +2105,7 @@ message = "use uv"
             gpu_name: None,
             gpu_total_mb: None,
             gpu_free_mb: None,
+            accelerators: vec![],
             cpu_cores: 4,
             active_downloads: vec![],
             active_services: vec![],

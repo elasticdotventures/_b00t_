@@ -15,6 +15,50 @@ use crate::hive::{
     discover_profiles, hive_stacks_status, load_profile,
 };
 
+/// Detect + record hardware drift between the live snapshot and soul `node.*` (P3).
+///
+/// Compares the snapshot's stable [`SystemSnapshot::fingerprint`] against the
+/// previously-recorded `node.fingerprint`. On change (or first observation) it:
+///   1. emits a `hw_drift` event to `~/.b00t/events.jsonl`
+///   2. refreshes soul `node.fingerprint` + the accelerator identity keys
+///      (`node.gpu`, `node.npu`) so `whoami` (P2) stays current.
+///
+/// Returns a short human description of the drift, or `None` if hardware is
+/// unchanged from a prior observation. Best-effort: all errors are swallowed
+/// (telemetry/memoisation must never break `hive status`).
+fn record_hardware_drift(snapshot: &SystemSnapshot) -> Option<String> {
+    use crate::memory_provider::{MemoryProvider, file_provider};
+
+    let mem = file_provider();
+    let live = snapshot.fingerprint();
+    let prev = mem.read("node.fingerprint").ok().flatten();
+
+    // Refresh accelerator identity keys from the live probe (deterministic).
+    // Only these two are derivable from the snapshot; static identity keys
+    // (node.board/soc/arch/os/...) are left as seeded — see P4 datums.
+    if let Some(n) = snapshot.accelerators.iter().find(|a| a.is_npu()).map(|a| &a.name) {
+        let _ = mem.write("node.npu", n);
+    }
+    if let Some(g) = snapshot.accelerators.iter().find(|a| a.is_gpu()).map(|a| &a.name) {
+        let _ = mem.write("node.gpu", g);
+    }
+    let _ = mem.write("node.fingerprint", &live);
+
+    match prev {
+        Some(prev) if prev == live => None,
+        Some(prev) => {
+            let detail = format!("{prev} → {live}");
+            crate::write_event("hw_drift", &detail);
+            Some(detail)
+        }
+        None => {
+            let detail = format!("initial: {live}");
+            crate::write_event("hw_drift", &detail);
+            Some(detail)
+        }
+    }
+}
+
 #[derive(Parser)]
 pub enum HiveCommands {
     #[clap(
@@ -148,6 +192,9 @@ pub fn handle_hive_command(cmd: &HiveCommands, path: &str) -> Result<()> {
         HiveCommands::Status { json, guards } => {
             let (json, guards) = (*json, *guards);
             let snapshot = SystemSnapshot::capture()?;
+            // 🤓 P3: detect hardware drift vs soul — emits hw_drift event +
+            //    refreshes node.* regardless of output mode (deterministic).
+            let drift = record_hardware_drift(&snapshot);
 
             if json {
                 println!("{}", serde_json::to_string_pretty(&snapshot)?);
@@ -164,17 +211,22 @@ pub fn handle_hive_command(cmd: &HiveCommands, path: &str) -> Result<()> {
                 "  Swap:  {:.1}GB free / {:.1}GB total",
                 snapshot.swap_free_gb, snapshot.swap_total_gb
             );
-            if let (Some(name), Some(free), Some(total)) = (
-                &snapshot.gpu_name,
-                snapshot.gpu_free_mb,
-                snapshot.gpu_total_mb,
-            ) {
-                println!("  GPU:   {} — {}MB free / {}MB total", name, free, total);
+            // 🤓 list every detected accelerator (discrete GPU, iGPU, NPU); the
+            //    legacy gpu_* fields only surface the first GPU-class entry.
+            if snapshot.accelerators.is_empty() {
+                println!("  Accel: none detected");
             } else {
-                println!("  GPU:   none detected");
+                for a in &snapshot.accelerators {
+                    println!("  {}:  {}", a.class.to_uppercase(), a.summary());
+                }
             }
             println!("  CPU:   {} cores", snapshot.cpu_cores);
             println!();
+
+            if let Some(d) = drift {
+                println!("  ⚠️  HW drift: {}  (soul node.* + events.jsonl updated)", d);
+                println!();
+            }
 
             match &snapshot.active_profile {
                 Some(p) => println!("  Profile:  {}", p),

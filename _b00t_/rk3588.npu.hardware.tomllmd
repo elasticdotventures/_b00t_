@@ -1,0 +1,117 @@
+# b00t hardware datum — Rockchip RK3588 NPU subsystem (Rock 5C node: rock-5c)
+# 🤓 namespace rationale: <soc>.<subsystem>.hardware — RK3588 has NPU + Mali GPU + CPU
+#    subsystems, each warranting its own hardware datum. Sibling SoCs (RK3576/RK3588S)
+#    and boards (Rock5C/5B/H88K/OPi5) reuse the dotted taxonomy without collision.
+# Discovered: 2026-06-15 on rock-5c (Armbian 25.11.2, kernel 6.1.115-vendor-rk35xx)
+
+[b00t]
+name   = "rk3588-npu"
+type   = "hardware"
+status = "active"
+hint   = "RK3588 NPU — 3-core RKNPU2 6 TOPS INT8; edge inference node; ch0nky/sm0l tier"
+
+[b00t.hardware]
+vendor        = "Rockchip"
+soc           = "RK3588"
+subsystem     = "NPU"
+driver_pkg    = "rknpu2-rk3588"
+driver_ver    = "2.3.0"
+cores         = 3
+tops_int8     = 6          # 3 cores × 2 TOPS @ INT8 (vendor spec — verify per board)
+tops_fp16     = 3          # INT8/2 — FP16 throughput, vendor-quoted
+runtime       = "rknn_server"
+python_sdk    = "python3-rknnlite2"
+model_format = ".rknn"
+
+# 🤓 RK3588 NPU exposes as DRM nodes (newer vendor kernel), NOT the legacy /dev/rknpu char dev
+[b00t.hardware.device_nodes]
+dri_card   = "/dev/dri/platform-fdab0000.npu-card"
+dri_render = "/dev/dri/platform-fdab0000.npu-render"
+legacy     = "/dev/rknpu"  # absent on this kernel; driver loaded via rknpu2 pkg
+
+[b00t.hardware.thermal]
+zone   = "npu-thermal"
+idle_c = 52          # observed 2026-06-15, rock-5c idle
+path   = "/sys/class/thermal/thermal_zone*/temp"
+# 🤓 pair with rk3588.thermal.hardware.tomllmd when authored
+
+# ─── Inference budget (UNCALIBRATED — needs on-device benchmark) ───────────────
+[b00t.hardware.inference_budget]
+# ⚠️ TODO: calibrate on rock-5c. Unlike the rtx3090 datum (club-3090 KV_MATH), no
+#    published NPU KV budget exists. Fill after running rknn benchmarks.
+#    RKNN is weight-stationary on-chip — VRAM model not applicable; capacity is
+#    model-size-bound by DDR4 shared RAM + NPU SRAM.
+calibrated            = false
+max_model_param_int8  = "TODO"   # e.g. ~7B INT8 fits if DDR permits
+recommended_quant     = "INT8"   # NPU prefers INT8; FP16 supported at lower TOPS
+
+# ─── Supported inference engines ───────────────────────────────────────────────
+[b00t.hardware.engines]
+# 🤓 RKNN is the ONLY path to the NPU; vLLM/llamacpp run on CPU/GPU, not NPU.
+rknn_toolkit_lite2 = { supported = true, ver = "2.3.0", notes = "python3-rknnlite2 in-process; on-device inference" }
+rknn_server        = { supported = true, ver = "2.3.0", notes = "NPU runtime daemon; serves .rknn models" }
+rknn_toolkit2      = { supported = "host-only", notes = "model conversion PC toolchain → .rknn; NOT on-device" }
+
+# ─── b00t hive resource gate alignment ─────────────────────────────────────────
+[b00t.hardware.hive_gate]
+# 🤓 NPU has no VRAM; gate on shared DDR RAM headroom for model weights instead.
+#    Profiles targeting this NPU should declare ram_free_gb, not gpu_free_mb.
+ram_free_gb_for_7b_int8 = 8.0    # rough: 7B INT8 ≈ 4GB weights + runtime
+accelerator_kind        = "rknn-npu"
+
+# ─── Detection (b00t up / hive status) ─────────────────────────────────────────
+[b00t.hardware.detect]
+# 🤓 these are the probes hive's SystemSnapshot SHOULD run (see P1: query_nvidia_smi
+#    is currently the only accelerator probe — blind to this NPU).
+dpkg    = "dpkg -l | grep -E 'rknpu2-rk3588|python3-rknnlite2'"
+binary  = "command -v rknn_server"
+devnode = "test -e /dev/dri/platform-fdab0000.npu-render || ls /dev/dri/by-path/*npu*"
+
+# ─── Current workload ──────────────────────────────────────────────────────────
+[b00t.hardware.workloads]
+# TODO: set when an .rknn model is deployed to this node
+primary_model = ""    # e.g. "Qwen2.5-3B-INTRON.rknn"
+served_as     = ""    # e.g. "sm0l"
+
+# ─── Entanglements ─────────────────────────────────────────────────────────────
+entangled_cli    = ["b00t hive", "rknn_server", "python3 -c 'from rknnlite.rknnlite import RKNNLite'"]
+entangled_datums = ["rk3588.gpu.hardware.tomllmd", "rk3588.thermal.hardware.tomllmd"]
+entangled_agents = ["pi-agent", "sm0l"]
+sibling_socs     = ["rk3576", "rk3588s"]
+
+# ─── Usages ────────────────────────────────────────────────────────────────────
+[[b00t.usages]]
+description = "Confirm NPU driver + SDK installed"
+command     = "dpkg -l | grep -E 'rknpu2-rk3588|python3-rknnlite2'"
+
+[[b00t.usages]]
+description = "Check NPU thermal (should be <70°C under load)"
+command     = "cat /sys/class/thermal/thermal_zone*/temp"  # zone type npu-thermal"
+
+[[b00t.usages]]
+description = "Verify rknn_server runtime"
+command     = "command -v rknn_server && systemctl status rknn_server 2>/dev/null || rknn_server --version"
+
+[[b00t.usages]]
+description = "List NPU DRM nodes"
+command     = "ls -l /dev/dri/by-path/*npu*"
+
+# ─── References ────────────────────────────────────────────────────────────────
+[[b00t.references]]
+name = "Rockchip RKNPU2 wiki"
+url  = "https://github.com/airockchip/rknn_model_repo"
+
+[[b00t.references]]
+name = "RKNN-Toolkit2 (host conversion)"
+url  = "https://github.com/airockchip/rknn-toolkit2"
+
+[[b00t.references]]
+name = "Rockchip Linux SDK — NPU"
+url  = "https://wiki.radxa.com/Rock5"
+
+# b00t:map v1
+# summary: RK3588 NPU subsystem hardware datum — RKNPU2 2.3.0, 6 TOPS INT8, rknn_server; rock-5c node; inference budget UNCALIBRATED
+# tags: hardware, rk3588, npu, rknpu2, rknn, rockchip, rock-5c, edge-inference, int8, armbian
+# tier: ch0nky
+# cmds: dpkg -l | grep rknpu2, cat /sys/class/thermal/thermal_zone*/temp, b00t hive status
+# complexity: 4

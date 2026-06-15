@@ -237,6 +237,9 @@ impl WhatismyCommands {
                             "inferred_skills".to_string(),
                             serde_json::json!(inferred_skills),
                         );
+                        if let Some(node) = crate::memory_provider::node_summary_from_soul() {
+                            obj.insert("node".to_string(), serde_json::json!(node));
+                        }
                         if let Some(s) = &supplement {
                             obj.insert("role_supplement".to_string(), serde_json::json!(s));
                         }
@@ -245,6 +248,13 @@ impl WhatismyCommands {
                 } else {
                     println!("🎭 Role: {}", role);
                     println!("🤖 Agent: {}", agent);
+
+                    // 🤓 context-efficiency: one-line node identity from soul (P2).
+                    //    Emits only highest-signal facts; agent runs `b00t soul get
+                    //    node.<key>` for detail instead of receiving a full dump.
+                    if let Some(node) = crate::memory_provider::node_summary_from_soul() {
+                        println!("🥾 Node: {}  (detail: b00t soul get node.*)", node);
+                    }
 
                     if let Some(s) = &supplement {
                         println!("\n{}", s);
