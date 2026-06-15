@@ -151,8 +151,8 @@ def test_ralph_logs_iterations_and_creates_progress_file(tmp_path: Path) -> None
 
     assert result.returncode == 0
     stderr = result.stderr
-    assert "Ralph Iteration 1 of 1" in stderr
-    assert "Ralph completed all tasks" in stderr
+    assert "OODA cycle 1/1" in stderr
+    assert "Mission accomplished" in stderr or "completed the mission" in stderr
 
     progress_path = _progress_path(tmp_path)
     assert progress_path.exists()

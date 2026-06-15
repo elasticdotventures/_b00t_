@@ -169,3 +169,36 @@ pub fn default_socket_path() -> ChatResult<PathBuf> {
         .ok_or_else(|| ChatError::InvalidSocketPath("unable to resolve home directory".into()))?;
     Ok(home.join(".b00t/chat.channel.socket"))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::message::ChatMessage;
+    use std::path::PathBuf;
+
+    /// Sending to a non-existent socket path returns ChatError::NotConnected, not a panic.
+    #[tokio::test]
+    async fn test_local_send_stale_socket_returns_not_connected() {
+        let transport = LocalSocketTransport::new(Some(PathBuf::from("/tmp/b00t_no_such_socket_xyz.sock"))).unwrap();
+        let msg = ChatMessage::new("test.channel", "tester", "hello");
+        let result = transport.send(&msg).await;
+        assert!(
+            matches!(result, Err(ChatError::NotConnected) | Err(ChatError::Io(_))),
+            "expected NotConnected or Io, got: {:?}",
+            result
+        );
+    }
+
+    /// Send to stale socket path that exists as a file (not a socket listener)
+    /// also yields a connection error, not a hard panic.
+    #[tokio::test]
+    async fn test_local_send_existing_file_not_socket_returns_error() {
+        let tmp = std::env::temp_dir().join("b00t_chat_test_not_a_socket.txt");
+        std::fs::write(&tmp, b"not a socket").unwrap();
+        let transport = LocalSocketTransport::new(Some(tmp.clone())).unwrap();
+        let msg = ChatMessage::new("test.channel", "tester", "hello");
+        let result = transport.send(&msg).await;
+        assert!(result.is_err(), "expected error connecting to a regular file");
+        let _ = std::fs::remove_file(tmp);
+    }
+}

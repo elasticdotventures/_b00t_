@@ -1,9 +1,8 @@
 use anyhow::{Context, Result};
+use b00t_chat::{ChatClient, ChatError, ChatMessage, ChatTransportConfig, ChatTransportKind};
 use clap::Subcommand;
 use clap::ValueEnum;
 use serde_json::Value;
-
-use b00t_chat::{ChatClient, ChatMessage, ChatTransportConfig, ChatTransportKind};
 
 #[derive(Debug, Clone, ValueEnum)]
 pub enum TransportArg {
@@ -100,16 +99,25 @@ impl ChatCommands {
             chat_message.metadata = meta;
         }
 
-        client
-            .send(&chat_message)
-            .await
-            .context("failed to deliver chat message")?;
-
-        println!(
-            "🥾 Sent chat message via {} → {}",
-            client.transport_kind(),
-            resolved_channel
-        );
+        match client.send(&chat_message).await {
+            Ok(()) => {
+                println!(
+                    "🥾 Sent chat message via {} → {}",
+                    client.transport_kind(),
+                    resolved_channel
+                );
+            }
+            Err(ChatError::NotConnected) => {
+                // ACP fire-and-forget: no listener on socket is not an error
+                eprintln!(
+                    "⚠️  No listener on chat socket (stale or b00t-mcp not running). \
+                     Message dropped — start b00t-mcp to receive chat."
+                );
+            }
+            Err(e) => {
+                return Err(e).context("failed to deliver chat message");
+            }
+        }
 
         Ok(())
     }
@@ -118,6 +126,26 @@ impl ChatCommands {
         let socket = b00t_chat::default_socket_path()?;
         println!("🥾 Local chat socket: {}", socket.display());
         println!("📡 Available transports: local, nats (stub)");
+        // Check if socket exists and whether a listener is active
+        if socket.exists() {
+            // Attempt a probe connect (0.2s timeout) to distinguish live vs stale
+            let probe = tokio::time::timeout(
+                std::time::Duration::from_millis(200),
+                tokio::net::UnixStream::connect(&socket),
+            )
+            .await;
+            match probe {
+                Ok(Ok(_)) => println!("✅ Socket active — listener is running"),
+                Ok(Err(_)) | Err(_) => {
+                    println!(
+                        "⚠️  Socket file exists but no listener responds. \
+                         Run `b00t-mcp` or `b00t hive activate` to start one."
+                    );
+                }
+            }
+        } else {
+            println!("ℹ️  Socket does not exist yet (no b00t-mcp process started)");
+        }
         Ok(())
     }
 }
