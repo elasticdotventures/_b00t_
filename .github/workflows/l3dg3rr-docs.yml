@@ -40,6 +40,9 @@ jobs:
         with:
           submodules: false
 
+      - name: Initialize workspace submodule deps
+        run: git submodule update --init --depth 1 vendor/embed-anything-b00t
+
       - name: Set up Rust toolchain
         uses: dtolnay/rust-toolchain@stable
 
