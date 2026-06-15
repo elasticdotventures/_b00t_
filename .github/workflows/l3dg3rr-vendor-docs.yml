@@ -45,18 +45,14 @@ jobs:
       - name: Install just
         uses: extractions/setup-just@v1
 
-      - name: Setup mdBook
-        uses: jontze/action-mdbook@v3
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          use-mermaid: true
-
-      - name: Install mdBook plugins
+      - name: Install mdBook and plugins
         run: |
           cd vendor/l3dg3rr
-          # 🤓 action-mdbook already installs mdbook + mdbook-mermaid; re-installing
-          # via cargo overrides with a different version causing admonish JSON parse failures.
-          # Pin admonish to match assets_version = "3.1.0" in book/book.toml.
+          # 🤓 just docgen checks ~/.cargo/bin/mdbook — install everything via cargo
+          # so all tools land in the same place. action-mdbook@v3 was removed because
+          # it installs to a different prefix, causing null TOML values in the RenderContext
+          # passed to mdbook-admonish. Pin admonish@1.15.0 = assets_version 3.1.0.
+          cargo install mdbook mdbook-mermaid --locked
           cargo install mdbook-admonish --version 1.15.0
           cargo install --path crates/mdbook-rhai-mermaid
 
