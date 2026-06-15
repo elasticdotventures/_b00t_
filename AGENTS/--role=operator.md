@@ -438,6 +438,41 @@ Rules:
 - Pizza team max: 4 concurrent specialists; above 4 → k0mmand3r required
 - sm0l output contract: `PASS` or `FAIL: <name> <5-line excerpt>` — no raw output to operator
 
+
+## Session Init — Skill Interview Pattern
+
+```bash
+# ALWAYS start with the interview; never pre-load skills blindly
+b00t whoami --role=operator --skills=auto
+# → reads .b00t/tasks.json + git branch → prints weighted b00t learn suggestions
+# → each suggestion shows evidence: [datum ✅] or [datum ❌]
+# Load only the top-3 highest-weight suggestions
+```
+
+## Deterministic b00t Execution (MANDATORY)
+
+```
+DO:   b00t hive run "<cmd>"    # guard-evaluated, logged, auditable
+      b00t-cli <subcommand>    # structured, MCP-routed
+NEVER: raw bash (no logging, no audit trail, future sandbox will block it)
+```
+
+🤓 Every command an agent runs MUST go through b00t. Raw bash is a smell.
+Record version/capability as datum: `b00t cli check <tool>` → writes evidence to datum.
+Future: b00t sandbox run will enforce this at OS level (Task 44).
+
+## sm0l Composable Task Pattern (ALPHA)
+
+Reduce frontier context by delegating deterministic sub-tasks to sm0l:
+```
+frontier assigns: b00t learn sm0l → load SmolDispatch
+sm0l receives:    classified task tag + input
+sm0l returns:     PASS or FAIL: <5-line excerpt> (NEVER full output)
+frontier reads:   compressed summary only
+```
+Discoverable via: `b00t whoami --role=operator --skills=sm0l`
+Assigned via: `b00t agent delegate <task-id> --tier=sm0l`
+
 <!-- b00t:map v1
 summary: Operator role — 5 directives (checkpoint-gate, just-mcp-task-surface, otel-span-requirement, repl-template-guards, hermes-cmdb-bootstrap), crew dispatch (adversarial A/B/R bounce loop), k0mmand3r, b00t * wildcard entry, debug levels, MCP directory, crew scaling, recurring task/SQL schemas
 tags: operator, checkpoint-gate, just-mcp, otel, repl, cmdb, rust2024, k0mmand3r, crew, acp, dispatch, specialist, adversarial-loop, bouncer, reviewer, vote, hive, scaling, bounce-loop, schema, recurring-task, sql-datum
