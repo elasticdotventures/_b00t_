@@ -198,6 +198,8 @@ pub enum SandboxKind {
     Container(String),
     /// WASM module via WASI — strongest isolation, narrowest I/O surface
     Wasm,
+    /// systemd transient scope — resource limits + audit via systemd journal
+    SystemdRun,
 }
 
 impl SandboxKind {
@@ -222,6 +224,7 @@ impl SandboxKind {
             SandboxKind::Ebpf => "ebpf",
             SandboxKind::Container(_) => "container",
             SandboxKind::Wasm => "wasm",
+            SandboxKind::SystemdRun => "systemd-run",
         }
     }
 }
@@ -245,9 +248,10 @@ impl IoMethod {
     pub fn for_sandbox(kind: &SandboxKind) -> Self {
         match kind {
             SandboxKind::None => IoMethod::Stdio,
-            SandboxKind::Ebpf => IoMethod::Stdio, // eBPF filters syscalls, keeps stdio
+            SandboxKind::Ebpf => IoMethod::Stdio,
             SandboxKind::Container(_) => IoMethod::Pipe,
             SandboxKind::Wasm => IoMethod::Wasi,
+            SandboxKind::SystemdRun => IoMethod::Stdio,
         }
     }
 }
@@ -277,16 +281,7 @@ pub trait Sandbox: Send + Sync {
         if argv.len() > 1 {
             cmd.args(&argv[1..]);
         }
-
         let output = cmd
-            .current_dir(&plan.working_dir)
-            .envs(plan.env.iter().map(|(k, v)| (k.as_str(), v.as_str())))
-            .output()
-            .map_err(|e| anyhow::anyhow!("sandbox run failed: {}", e))?;
-
-        let output = std::process::Command::new("sh")
-            .arg("-c")
-            .arg(&plan.command_line)
             .current_dir(&plan.working_dir)
             .envs(plan.env.iter().map(|(k, v)| (k.as_str(), v.as_str())))
             .output()
@@ -367,7 +362,7 @@ impl Sandbox for ContainerSandbox {
             "-c".to_string(),
             plan.command_line.clone(),
         ]);
-        let output = std::process::Command::new("docker")
+        let output = std::process::Command::new("podman")
             .args(&docker_args)
             .output()
             .map_err(|e| anyhow::anyhow!("docker run failed: {}", e))?;
@@ -378,6 +373,70 @@ impl Sandbox for ContainerSandbox {
             sandbox: SandboxRequirements::default(),
             sandbox_kind: SandboxKind::Container(self.image.clone()),
             io_method: IoMethod::Pipe,
+            declared_effects: plan.declared_effects.clone(),
+        })
+    }
+}
+
+/// systemd transient scope sandbox — wraps command in 'systemd-run --user --scope'.
+/// Provides resource limits via systemd unit properties + audit via journal.
+pub struct SystemdRunSandbox {
+    /// Max memory in bytes (None = no limit)
+    pub mem_limit: Option<u64>,
+    /// Max CPU weight 1-10000 (None = default 100)
+    pub cpu_weight: Option<u32>,
+}
+
+impl Default for SystemdRunSandbox {
+    fn default() -> Self {
+        Self { mem_limit: None, cpu_weight: None }
+    }
+}
+
+impl Sandbox for SystemdRunSandbox {
+    fn kind(&self) -> &SandboxKind {
+        &SandboxKind::SystemdRun
+    }
+    fn io_method(&self) -> IoMethod {
+        IoMethod::Stdio
+    }
+    fn scope(&self, _reqs: &SandboxRequirements) -> Result<()> {
+        Ok(())
+    }
+    fn run(&self, plan: &ExecPlan) -> Result<ExecOutput<String>> {
+        use std::time::Instant;
+        let start = Instant::now();
+        let unit_name = format!("b00t-exec-{}", std::process::id());
+        let mut args: Vec<String> = vec![
+            "--user".to_string(),
+            "--scope".to_string(),
+            format!("--unit={}", unit_name),
+        ];
+        if let Some(mem) = self.mem_limit {
+            args.push(format!("--property=MemoryMax={}", mem));
+        }
+        if let Some(cpu) = self.cpu_weight {
+            args.push(format!("--property=CPUWeight={}", cpu));
+        }
+        args.push("--".to_string());
+        args.push("sh".to_string());
+        args.push("-c".to_string());
+        args.push(plan.command_line.clone());
+
+        let output = std::process::Command::new("systemd-run")
+            .args(&args)
+            .current_dir(&plan.working_dir)
+            .envs(plan.env.iter().map(|(k, v)| (k.as_str(), v.as_str())))
+            .output()
+            .map_err(|e| anyhow::anyhow!("systemd-run failed: {}", e))?;
+
+        Ok(ExecOutput {
+            value: String::from_utf8_lossy(&output.stdout).into_owned(),
+            exit_code: output.status.code().unwrap_or(-1),
+            duration_ms: start.elapsed().as_millis() as u64,
+            sandbox: SandboxRequirements::default(),
+            sandbox_kind: SandboxKind::SystemdRun,
+            io_method: IoMethod::Stdio,
             declared_effects: plan.declared_effects.clone(),
         })
     }
@@ -606,4 +665,46 @@ mod tests {
             .count();
         assert_eq!(count, 1);
     }
+    #[test]
+    fn sandbox_kind_name_includes_systemd_run() {
+        assert_eq!(SandboxKind::None.name(), "none");
+        assert_eq!(SandboxKind::SystemdRun.name(), "systemd-run");
+        assert_eq!(SandboxKind::Container("img".to_string()).name(), "container");
+    }
+
+    #[test]
+    fn io_method_for_sandbox_systemd_run_is_stdio() {
+        assert_eq!(IoMethod::for_sandbox(&SandboxKind::SystemdRun), IoMethod::Stdio);
+    }
+
+    #[test]
+    fn systemd_run_sandbox_kind_is_correct() {
+        let s = SystemdRunSandbox::default();
+        assert_eq!(s.kind().name(), "systemd-run");
+        assert_eq!(s.io_method(), IoMethod::Stdio);
+    }
+
+    #[test]
+    fn sandbox_kind_from_str_roundtrip() {
+        let k = SandboxKind::from_str("none");
+        assert_eq!(k.name(), "none");
+        let k2 = SandboxKind::from_str("wasm");
+        assert_eq!(k2.name(), "wasm");
+    }
+
+    #[test]
+    fn no_sandbox_run_executes_echo() {
+        let plan = ExecPlan {
+            command_line: "echo sandbox-provider-test".to_string(),
+            working_dir: PathBuf::from("."),
+            env: vec![],
+            declared_effects: vec![],
+            sandbox_kind: SandboxKind::None,
+            io_method: IoMethod::Stdio,
+        };
+        let output = NoSandbox.run(&plan).unwrap();
+        assert_eq!(output.exit_code, 0);
+        assert!(output.value.contains("sandbox-provider-test"));
+    }
+
 }

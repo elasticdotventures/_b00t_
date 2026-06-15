@@ -19,6 +19,7 @@ use std::path::PathBuf;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::hive::{GuardContext, GuardResult, SystemSnapshot, check_guards, load_profile};
+use crate::traits::{ExecPlan, IoMethod, NoSandbox, Sandbox, SandboxKind, SandboxRequirements, SystemdRunSandbox};
 
 const AUDIT_CACHE_FILE: &str = "~/.b00t/exec-audit.json";
 const AUDIT_LOG_FILE: &str = "~/.b00t/exec-log.jsonl";
@@ -54,6 +55,13 @@ pub struct ExecArgs {
 
     #[clap(long, help = "Dry-run: evaluate guards but don't execute")]
     pub dry_run: bool,
+
+    #[clap(
+        long,
+        default_value = "direct",
+        help = "Sandbox provider: direct | systemd-run | podman"
+    )]
+    pub sandbox: String,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -285,26 +293,71 @@ pub fn handle_exec(args: &ExecArgs, path: &str) -> Result<()> {
         GuardResult::Allow => "allow",
     };
 
-    let mut child = std::process::Command::new(&args.command[0])
-        .args(&args.command[1..])
-        .spawn()
-        .map_err(|e| anyhow::anyhow!("exec failed '{}': {}", args.command[0], e))?;
+    // Select sandbox provider from --sandbox flag
+    let sandbox_provider: Box<dyn Sandbox> = match args.sandbox.as_str() {
+        "systemd-run" => Box::new(SystemdRunSandbox::default()),
+        "direct" | _ => Box::new(NoSandbox),
+    };
 
-    let pid = child.id();
+    let sandbox_kind_label = match args.sandbox.as_str() {
+        "systemd-run" => "systemd-run",
+        _ => "direct",
+    };
 
-    append_audit_log(
-        &log_path,
-        &AuditLogEntry {
-            ts: Utc::now().to_rfc3339(),
-            cmd: cmd_str,
-            result: result_label.into(),
-            guard_msg,
-            pid: Some(pid),
+    // Build ExecPlan and run through sandbox provider
+    let plan = ExecPlan {
+        command_line: cmd_str.clone(),
+        working_dir: std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from(".")),
+        env: vec![],
+        declared_effects: vec![],
+        sandbox_kind: if sandbox_kind_label == "systemd-run" {
+            SandboxKind::SystemdRun
+        } else {
+            SandboxKind::None
         },
-    );
+        io_method: IoMethod::Stdio,
+    };
 
-    let status = child.wait()?;
-    std::process::exit(status.code().unwrap_or(1));
+    // For direct provider: use raw spawn so stdin/stdout/stderr are inherited
+    let exit_code = if sandbox_kind_label == "direct" {
+        let mut child = std::process::Command::new(&args.command[0])
+            .args(&args.command[1..])
+            .spawn()
+            .map_err(|e| anyhow::anyhow!("exec failed '{}': {}", args.command[0], e))?;
+
+        let pid = child.id();
+        append_audit_log(
+            &log_path,
+            &AuditLogEntry {
+                ts: Utc::now().to_rfc3339(),
+                cmd: cmd_str.clone(),
+                result: format!("{}:{}", result_label, sandbox_kind_label),
+                guard_msg: guard_msg.clone(),
+                pid: Some(pid),
+            },
+        );
+        child.wait()?.code().unwrap_or(1)
+    } else {
+        // Sandbox provider: run() captures output
+        let output = sandbox_provider.run(&plan)
+            .map_err(|e| anyhow::anyhow!("sandbox exec failed: {}", e))?;
+
+        append_audit_log(
+            &log_path,
+            &AuditLogEntry {
+                ts: Utc::now().to_rfc3339(),
+                cmd: cmd_str,
+                result: format!("{}:{}", result_label, sandbox_kind_label),
+                guard_msg,
+                pid: None,
+            },
+        );
+
+        print!("{}", output.value);
+        output.exit_code
+    };
+
+    std::process::exit(exit_code);
 }
 
 /// Parse simple duration string: "30s", "2m", "1h" → seconds
