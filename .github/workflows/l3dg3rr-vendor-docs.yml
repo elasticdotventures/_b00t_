@@ -54,7 +54,10 @@ jobs:
       - name: Install mdBook plugins
         run: |
           cd vendor/l3dg3rr
-          cargo install mdbook mdbook-mermaid mdbook-admonish --locked
+          # 🤓 action-mdbook already installs mdbook + mdbook-mermaid; re-installing
+          # via cargo overrides with a different version causing admonish JSON parse failures.
+          # Pin admonish to match assets_version = "3.1.0" in book/book.toml.
+          cargo install mdbook-admonish --version 1.15.0
           cargo install --path crates/mdbook-rhai-mermaid
 
       - name: Build l3dg3rr docs
