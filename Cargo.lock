@@ -1401,7 +1401,7 @@ dependencies = [
 
 [[package]]
 name = "b00t-bouncer"
-version = "0.1.0"
+version = "0.8.0"
 dependencies = [
  "anyhow",
  "chrono",
@@ -1428,7 +1428,7 @@ dependencies = [
 
 [[package]]
 name = "b00t-c0re-gov"
-version = "0.1.0"
+version = "0.8.0"
 dependencies = [
  "async-trait",
  "chrono",
@@ -1442,7 +1442,7 @@ dependencies = [
 
 [[package]]
 name = "b00t-c0re-hierarchy"
-version = "0.1.0"
+version = "0.8.0"
 dependencies = [
  "b00t-c0re-gov",
  "chrono",
@@ -9984,7 +9984,9 @@ checksum = "a2eb9349b6444b326872e140eb1cf5e7c522154d69e7a0ffb0fb81c06b37543f"
 
 [[package]]
 name = "storage-neumann"
-version = "0.8.0"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "994847311a0485bdf76e9b330825c9f3bfb8af2581823dde078f31ed147c55e0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -9994,8 +9996,6 @@ dependencies = [
  "serde",
  "serde_json",
  "sled",
- "tempfile",
- "tokio",
 ]
 
 [[package]]

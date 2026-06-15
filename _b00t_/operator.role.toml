@@ -10,6 +10,11 @@ skills = [
     "hive-cmdb-query",
     "one-pizza-team-enforcement",
     "langchain-tool-routing",
+    "bouncer",
+    "sm0l",
+    "datum",
+    "wrkflw",
+    "karpathy-autoresearch",
 ]
 
 compliance = [

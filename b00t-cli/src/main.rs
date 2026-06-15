@@ -253,6 +253,12 @@ The system will:
         with_skills: bool,
         #[clap(long, help = "Output identity as JSON (structured)")]
         json: bool,
+        #[clap(
+            long,
+            value_delimiter = ',',
+            help = "Comma-separated skills to load, or 'auto' to interview from task context"
+        )]
+        skills: Vec<String>,
     },
     #[clap(
         name = "k0mmand3r",
@@ -1716,7 +1722,7 @@ async fn main() {
                 std::process::exit(1);
             }
         }
-        Some(Commands::Whoami { role, with_skills, json }) => {
+        Some(Commands::Whoami { role, with_skills, json, skills }) => {
             if *json {
                 use b00t_c0re_lib::B00tContext;
                 match B00tContext::current() {
@@ -1740,7 +1746,7 @@ async fn main() {
                     }
                     Err(e) => die(exit_code::ERROR, format!("failed to get b00t context: {}", e)),
                 }
-            } else if let Err(e) = whoami::whoami(&cli.path, role.clone(), *with_skills) {
+            } else if let Err(e) = whoami::whoami(&cli.path, role.clone(), *with_skills, skills.clone()) {
                 eprintln!("Error: {}", e);
                 std::process::exit(1);
             }

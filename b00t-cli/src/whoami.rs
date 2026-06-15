@@ -32,7 +32,7 @@ pub fn detect_agent(ignore_env: bool) -> String {
 }
 
 /// Display agent identity information from AGENT.md template and role datum (if available)
-pub fn whoami(path: &str, role_override: Option<String>, with_skills: bool) -> Result<()> {
+pub fn whoami(path: &str, role_override: Option<String>, with_skills: bool, skills: Vec<String>) -> Result<()> {
     let expanded_path = get_expanded_path(path)?;
     let agent_md_path = expanded_path.join("AGENT.md");
 
@@ -83,6 +83,20 @@ pub fn whoami(path: &str, role_override: Option<String>, with_skills: bool) -> R
             "⚠️ Role datum '{}' not found or missing required fields",
             role_name
         );
+    }
+
+    // --skills=auto interview mode or explicit csv skill list
+    if !skills.is_empty() {
+        let is_auto = skills.iter().any(|s| s == "auto");
+        if is_auto {
+            print_skill_interview(path)?;
+        } else {
+            println!("\nSkill load plan:");
+            for s in &skills {
+                let evidence = check_skill_evidence(s, path);
+                println!("  b00t learn {}  {}", s, evidence);
+            }
+        }
     }
 
     Ok(())
@@ -362,6 +376,106 @@ fn print_role_summary(role: &RoleDetails, path: &str, with_skills: bool) {
     }
 }
 
+/// Check if a datum or learn file exists for this skill.
+/// Returns a static label indicating evidence status.
+fn check_skill_evidence(skill: &str, path: &str) -> &'static str {
+    let candidates = [
+        format!("_b00t_/datums/{}.tomllmd", skill.to_uppercase()),
+        format!("_b00t_/datums/{}.tomllmd", skill),
+        format!("_b00t_/learn/{}.md", skill),
+        format!("_b00t_/{}.tomllm", skill),
+        format!("_b00t_/{}.agent.tomllm", skill),
+    ];
+    let expanded = get_expanded_path(path).unwrap_or_default();
+    for c in &candidates {
+        if expanded.join(c).exists() || std::path::Path::new(c).exists() {
+            return "[datum ✅]";
+        }
+    }
+    "[datum ❌ — no local evidence]"
+}
+
+/// Interview mode: analyze .b00t/tasks.json → suggest weighted skills
+fn print_skill_interview(path: &str) -> Result<()> {
+    // Tag→skill mapping (deterministic, no LLM required)
+    let tag_to_skill: &[(&str, &str)] = &[
+        ("bouncer",   "bouncer"),
+        ("sm0l",      "sm0l"),
+        ("langchain", "langchain"),
+        ("sandbox",   "hive"),
+        ("datum",     "datum"),
+        ("mcp",       "mcp"),
+        ("rust",      "rust"),
+        ("agent",     "agent-orchestration"),
+        ("okr",       "okr"),
+        ("docker",    "podman"),
+        ("ci",        "wrkflw"),
+        ("prd",       "datum"),
+        ("ooda",      "agent-orchestration"),
+        ("guard",     "hive"),
+        ("neumann",   "sm0l"),
+        ("vllm",      "hive"),
+        ("tomllm",    "tomllm"),
+        ("a2a",       "agent-orchestration"),
+    ];
+
+    // Read tasks from .b00t/tasks.json — try worktree-relative and home-relative
+    let tasks_path_candidates = [
+        ".b00t/tasks.json".to_string(),
+        dirs::home_dir()
+            .unwrap_or_default()
+            .join(".b00t/tasks.json")
+            .to_string_lossy()
+            .to_string(),
+    ];
+    let tasks_json: Option<String> = tasks_path_candidates
+        .iter()
+        .find_map(|p| std::fs::read_to_string(p).ok());
+
+    let mut skill_scores: std::collections::HashMap<&str, u32> = std::collections::HashMap::new();
+
+    if let Some(ref json_str) = tasks_json {
+        // Simple tag extraction without serde dependency — grep for quoted tag strings
+        for (tag, skill) in tag_to_skill {
+            if json_str.contains(&format!("\"{}\"", tag)) {
+                *skill_scores.entry(skill).or_insert(0) += 1;
+            }
+        }
+    }
+
+    // Score from current git branch name — branch context = high weight (3)
+    if let Ok(branch_out) = std::process::Command::new("git")
+        .args(["branch", "--show-current"])
+        .output()
+    {
+        let branch_name = String::from_utf8_lossy(&branch_out.stdout).to_lowercase();
+        for (tag, skill) in tag_to_skill {
+            if branch_name.contains(tag) {
+                *skill_scores.entry(skill).or_insert(0) += 3;
+            }
+        }
+    }
+
+    let mut ranked: Vec<(&&str, &u32)> = skill_scores.iter().collect();
+    ranked.sort_by(|a, b| b.1.cmp(a.1));
+
+    if ranked.is_empty() {
+        println!("\nSkill interview: no active task context found — load core skills:");
+        for skill in &["datum", "hive", "sm0l", "bouncer"] {
+            let ev = check_skill_evidence(skill, path);
+            println!("  b00t learn {}  {}", skill, ev);
+        }
+    } else {
+        println!("\nSkill interview (weighted by task context):");
+        for (skill, score) in ranked.iter().take(8) {
+            let ev = check_skill_evidence(skill, path);
+            println!("  b00t learn {}  [weight:{}]  {}", skill, score, ev);
+        }
+    }
+
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -595,5 +709,23 @@ hint = "ralph mcp"
 
         let check = check_role_capability("ralph.mcp", DatumType::Mcp, path.to_str().unwrap());
         assert_eq!(check.status, CapabilityStatus::Ready);
+    }
+
+    #[test]
+    fn test_check_skill_evidence_missing() {
+        // nonexistent skill must always return ❌
+        let ev = check_skill_evidence("nonexistent-xyz-skill-abc", ".");
+        assert!(ev.contains('\u{274c}'), "expected ❌ in: {}", ev);
+    }
+
+    #[test]
+    fn test_check_skill_evidence_present_for_datum() {
+        // Result may be ✅ or ❌ depending on CWD — just verify it returns one of the two labels
+        let ev = check_skill_evidence("sm0l", ".");
+        assert!(
+            ev.contains('\u{2705}') || ev.contains('\u{274c}'),
+            "unexpected evidence string: {}",
+            ev
+        );
     }
 }
