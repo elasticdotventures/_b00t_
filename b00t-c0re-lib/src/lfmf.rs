@@ -610,7 +610,7 @@ mod tests {
         let mut config = LfmfConfig::default();
         config.filesystem.learn_dir = temp_dir.path().join("learn").to_string_lossy().to_string();
 
-        let mut system = LfmfSystem::new(config);
+        let system = LfmfSystem::new(config);
 
         let lesson = system
             .parse_lesson("rust", "linker error: Check LD_LIBRARY_PATH")

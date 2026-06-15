@@ -19,7 +19,7 @@ use std::path::PathBuf;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::hive::{GuardContext, GuardResult, SystemSnapshot, check_guards, load_profile};
-use crate::traits::{ExecPlan, IoMethod, NoSandbox, Sandbox, SandboxKind, SandboxRequirements, SystemdRunSandbox};
+use crate::traits::{ExecPlan, IoMethod, NoSandbox, Sandbox, SandboxKind, SystemdRunSandbox};
 
 const AUDIT_CACHE_FILE: &str = "~/.b00t/exec-audit.json";
 const AUDIT_LOG_FILE: &str = "~/.b00t/exec-log.jsonl";
