@@ -299,10 +299,10 @@ class K0mmand3rListener:
                 return
 
             # Format as k0mmand3r status message (per k0mmand3r_interface.md:215)
-            from datetime import datetime
+            from datetime import datetime, timezone
 
             status_message = {
-                "timestamp": datetime.utcnow().isoformat() + "Z",
+                "timestamp": datetime.now(timezone.utc).isoformat(),
                 "agent": f"langchain.{result.get('agent_name', 'unknown')}",
                 "task_id": result.get("task_id", ""),
                 "type": "error" if result.get("error") else "progress",

@@ -64,3 +64,43 @@ def test_operator_script_sets_env(tmp_path: Path) -> None:
     assert calls[0][1]["OPERATOR_TARGET"] == "download-mode"
     assert calls[0][1]["OPERATOR_DRY_RUN"] == "true"
     assert calls[0][1]["OPERATOR_NOTE"] == "teardown"
+
+
+def test_task_capture_builds_correct_command(tmp_path: Path) -> None:
+    """task_capture should delegate to `b00t task add` with priority, tags, description."""
+    calls: list[list[str]] = []
+
+    def runner(args: list[str], env=None) -> str:
+        calls.append(args)
+        return "ok"
+
+    toolset = B00tToolset(tmp_path, runner=runner)
+    toolset.task_capture("Fix GHCR pipeline", priority=1, tags="ci,ghcr", description="just --list fails")
+
+    assert calls[0] == [
+        "task", "add", "-p", "1", "-t", "ci,ghcr", "-d", "just --list fails",
+        "Fix GHCR pipeline",
+    ]
+
+
+def test_task_capture_minimal_args(tmp_path: Path) -> None:
+    """task_capture with only title should omit optional flags."""
+    calls: list[list[str]] = []
+
+    def runner(args: list[str], env=None) -> str:
+        calls.append(args)
+        return "ok"
+
+    toolset = B00tToolset(tmp_path, runner=runner)
+    toolset.task_capture("simple task")
+
+    assert calls[0] == ["task", "add", "-p", "3", "simple task"]
+
+
+def test_task_capture_rejects_bad_priority(tmp_path: Path) -> None:
+    """task_capture must raise ValueError for out-of-range priority."""
+    import pytest
+
+    toolset = B00tToolset(tmp_path, runner=lambda *_a, **_k: "")
+    with pytest.raises(ValueError, match="priority must be 1-4"):
+        toolset.task_capture("bad priority task", priority=5)
