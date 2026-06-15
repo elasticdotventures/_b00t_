@@ -150,9 +150,9 @@ pub fn reasoning_reviewer(control: &ExperimentResult, treatment: &ExperimentResu
             + treatment.scores.get("accuracy").copied().unwrap_or(0.0);
 
         if c_weighted >= t_weighted {
-            "control (ranked: weighted roi+utility+accuracy)".to_string()
+            "control (tie-break: weighted roi+utility+accuracy)".to_string()
         } else {
-            "treatment (ranked: weighted roi+utility+accuracy)".to_string()
+            "treatment (tie-break: weighted roi+utility+accuracy)".to_string()
         }
     } else if control_wins > treatment_wins {
         format!("control (wins {control_wins}/{treatment_wins} dimensions)")
@@ -1214,11 +1214,11 @@ mod tests {
     fn test_reasoning_reviewer_no_ties() {
         let config = make_config("test-002", TEST_PROMPTS[0]);
         let cmp = dispatch_experiment(&config).unwrap();
-        // reasoning_reviewer MUST NOT return a tie — always decisive
+        // reasoning_reviewer MUST always declare a winner (control or treatment)
+        let rec = &cmp.recommendation;
         assert!(
-            !cmp.recommendation.contains("tie"),
-            "reasoning_reviewer must break ties, got: {}",
-            cmp.recommendation
+            rec.starts_with("control") || rec.starts_with("treatment"),
+            "reasoning_reviewer must return control or treatment, got: {rec}"
         );
     }
 
