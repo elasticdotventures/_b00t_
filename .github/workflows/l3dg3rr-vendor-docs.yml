@@ -53,7 +53,7 @@ jobs:
           # it installs to a different prefix, causing null TOML values in the RenderContext
           # passed to mdbook-admonish. Pin admonish@1.15.0 = assets_version 3.1.0.
           cargo install mdbook mdbook-mermaid --locked
-          cargo install mdbook-admonish --version 1.15.0
+          cargo install mdbook-admonish --locked
           cargo install --path crates/mdbook-rhai-mermaid
 
       - name: Build l3dg3rr docs
