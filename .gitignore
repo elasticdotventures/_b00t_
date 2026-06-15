@@ -299,3 +299,4 @@ yarn-error.log*
 yarn.lock
 # Session/temporary caches
 cache/
+.serena/
