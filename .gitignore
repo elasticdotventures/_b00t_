@@ -301,3 +301,6 @@ yarn.lock
 cache/
 .serena/
 session-guards.json
+# Runtime state files
+exec-audit.json
+ooda-state.json

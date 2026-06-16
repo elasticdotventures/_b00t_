@@ -1,0 +1,40 @@
+[b00t]
+name = "zvec"
+datum_type = "db"
+description = "In-process vector DB (FFI/C, Apache-2.0); replaces Qdrant as primary vector store"
+version = "0.5.0"
+node_status = "primary"
+
+[b00t.schema]
+spec = "datum/db/v1"
+
+[roles]
+required_for = ["data-fabric", "vector-search", "rag"]
+optional_for = ["irontology"]
+
+[validate]
+command = "cargo tree -p zvec 2>/dev/null | head -1"
+pattern = "zvec"
+
+[metadata]
+crate = "zvec"
+crate_git = "https://github.com/zvec-ai/zvec-rust.git"
+crate_tag = "v0.5.0"
+ffi = true
+hnsw_index = true
+metric = "Cosine"
+default_dim = 1536
+persistence = "WAL on disk at ._b00t_/zvec/{namespace}"
+
+[notes]
+# 🤓 zvec replaces Qdrant Docker for vector ANN on this node (SOUL.tomllm: vector.primary=zvec)
+# Only records with .embedding field are stored; zvec ignores records without vectors
+# Collection path = data_path / namespace; auto-created on first open
+# parse_dim("dim:768:my-ns") → dim=768 (namespace prefix override)
+
+# b00t:map v1
+# summary: zvec in-process vector DB (FFI); primary vector store replacing Qdrant
+# tags: zvec, vector-db, hnsw, qdrant-replacement, data-fabric
+# tier: ch0nky
+# cmds: cargo add zvec --git https://github.com/zvec-ai/zvec-rust.git
+# complexity: 4

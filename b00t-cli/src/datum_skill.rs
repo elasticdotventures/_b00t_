@@ -320,6 +320,23 @@ impl SkillDatum {
     }
 
     /// Get skill dependencies
+    /// Emit a just recipe block that invokes `b00t learn <skill>` for this skill.
+    /// Returns None if skill metadata is unavailable.
+    pub fn emit_just_recipe(&self) -> Option<String> {
+        let config = self.skill_config().ok()?;
+        let name = &self.datum.name;
+        let description = &config.description;
+        let applies = config.metadata.applies_to.join(", ");
+        let recipe_name = format!("skill-{}", name.replace('.', "-"));
+        Some(format!(
+            "# {description}
+# applies-to: {applies}
+{recipe_name}:
+    b00t learn {name}
+",
+        ))
+    }
+
     pub fn dependencies(&self) -> Vec<String> {
         if let Ok(config) = self.skill_config() {
             config.metadata.dependencies.clone()
@@ -469,6 +486,31 @@ output_types = [".job.toml", ".md", ".txt"]
         assert!(datum.can_generate(".job.toml"));
         assert!(datum.can_generate(".md"));
         assert!(!datum.can_generate(".rs"));
+    }
+
+    #[test]
+    fn test_skill_emit_just_recipe() {
+        let skill_toml = r#"
+[b00t]
+name = "my.skill"
+type = "skill"
+hint = "My skill"
+usage = []
+
+[b00t.skill]
+description = "Does the thing"
+instructions_file = "skill.md"
+
+[b00t.skill.metadata]
+applies_to = ["rust", "coding"]
+output_types = [".rs"]
+"#;
+        let config: crate::UnifiedConfig = toml::from_str(skill_toml).unwrap();
+        let datum = SkillDatum { datum: config.b00t };
+        let recipe = datum.emit_just_recipe().expect("should emit recipe");
+        assert!(recipe.contains("skill-my-skill:"), "recipe name uses dashes: {recipe}");
+        assert!(recipe.contains("b00t learn my.skill"), "recipe invokes learn: {recipe}");
+        assert!(recipe.contains("Does the thing"), "recipe includes description: {recipe}");
     }
 
     #[test]

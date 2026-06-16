@@ -133,7 +133,7 @@ pub fn compiled_knowledge_backend() -> &'static str {
     COMPILED_KNOWLEDGE_BACKEND
 }
 
-fn compiled_knowledge_backend_data_path(namespace: &str) -> anyhow::Result<std::path::PathBuf> {
+pub fn compiled_knowledge_backend_data_path(namespace: &str) -> anyhow::Result<std::path::PathBuf> {
     Ok(dirs::home_dir()
         .ok_or_else(|| anyhow::anyhow!("Cannot resolve $HOME"))?
         .join(".b00t")
@@ -621,6 +621,27 @@ impl IrontologyBridgeClient {
 
     pub fn namespace(&self) -> &str {
         &self.namespace
+    }
+
+    /// Upsert raw facts directly into the backing store.
+    pub async fn upsert_facts(&self, facts: Vec<FactRecord>) -> anyhow::Result<()> {
+        self.store.upsert_facts(facts).await
+    }
+
+    /// Upsert raw edges directly into the backing store.
+    pub async fn upsert_edges(&self, edges: Vec<EdgeRecord>) -> anyhow::Result<()> {
+        self.store.upsert_edges(edges).await
+    }
+
+    /// Query triples by subject/predicate pattern — returns raw FactRecords.
+    /// Unlike `query()` this is not limited to `b00t:hasContent` predicates.
+    pub async fn query_triples(
+        &self,
+        subject: Option<String>,
+        predicate: Option<String>,
+    ) -> anyhow::Result<Vec<FactRecord>> {
+        let qr = self.store.query(SemanticQuery { subject, predicate }).await?;
+        Ok(qr.facts)
     }
 }
 

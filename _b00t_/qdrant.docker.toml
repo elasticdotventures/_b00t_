@@ -1,4 +1,8 @@
 [b00t]
+# 🤓 node_status=optional-disabled: vector.primary=zvec (see SOUL.tomllm)
+node_status = "optional-disabled"
+auto_start = false
+
 name = "qdrant"
 type = "docker"
 hint = "Qdrant vector database for semantic search and RAG applications"

@@ -41,6 +41,7 @@ pub mod events;
 pub mod codebase_memory;
 pub mod grok;
 pub mod irontology_bridge;
+pub mod data_fabric;
 pub mod knowledge;
 pub mod kv_store;
 pub mod learn;
@@ -77,6 +78,7 @@ pub use grok::{AskResult, ChunkResult, ChunkSummary, DigestResult, GrokClient, L
 pub use irontology_bridge::{
     DatumNode, IntoIrontologyRecord, IntoRagDocument, IrontologyBridgeClient,
     IrontologyIngestResult, IrontologyQueryItem, compiled_knowledge_backend,
+    compiled_knowledge_backend_data_path,
 };
 pub use knowledge::{DisplayOpts, KnowledgeSource};
 pub use lfmf::{Lesson, LfmfConfig, LfmfSystem};

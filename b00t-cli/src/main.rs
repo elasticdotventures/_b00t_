@@ -412,6 +412,8 @@ The system will:
     },
     #[clap(about = "Launch ralph agent REPL outer-loop")]
     Up(b00t_cli::commands::up::UpArgs),
+    #[clap(about = "Holistic upgrade: binary, MCP servers, hooks, Claude settings (NASA MBSE)")]
+    Upgrade(b00t_cli::commands::upgrade::UpgradeArgs),
     #[clap(about = "Check or upgrade the installed b00t-cli release")]
     Version {
         #[clap(subcommand)]
@@ -2034,6 +2036,12 @@ async fn main() {
                 }
             } else if let Err(e) = run_just_install(*dry_run) {
                 eprintln!("Install Error: {}", e);
+                std::process::exit(1);
+            }
+        }
+        Some(Commands::Upgrade(args)) => {
+            if let Err(e) = args.execute() {
+                eprintln!("Error: {}", e);
                 std::process::exit(1);
             }
         }
