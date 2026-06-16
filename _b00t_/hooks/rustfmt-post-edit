@@ -9,26 +9,16 @@ INPUT=$(cat)
 TOOL=$(printf '%s' "$INPUT" | python3 -c "import sys,json; print(json.load(sys.stdin).get('tool_name',''))" 2>/dev/null || true)
 FILE=$(printf '%s' "$INPUT" | python3 -c "import sys,json; print(json.load(sys.stdin).get('tool_input',{}).get('file_path',''))" 2>/dev/null || true)
 
-# Match Edit/Write (direct file ops). Bash codegen has no file_path → skip.
-[[ "$TOOL" =~ ^(Edit|Write)$ ]] || exit 0
-[[ "$FILE" == *.rs ]] || exit 0
-
-# Guard: file must exist and be resolvable.
-[[ -n "$FILE" ]] || exit 0
-[[ -f "$FILE" ]] || { printf 'rustfmt-hook: %s not found, skipping\n' "$FILE" >&2; exit 0; }
+[[ "$TOOL" =~ ^(Edit|Write)$ ]] && [[ "$FILE" == *.rs ]] || exit 0
 
 if ! command -v rustfmt >/dev/null 2>&1; then
     printf 'rustfmt-hook: rustfmt not found, skipping %s\n' "$FILE" >&2
     exit 0
 fi
 
-# 🤓 mktemp per-invocation prevents concurrent Edit ops clobbering each other's errors.
-ERRFILE=$(mktemp /tmp/rustfmt-hook-XXXXXX.err)
-trap 'rm -f "$ERRFILE"' EXIT
-
-if rustfmt --edition 2024 "$FILE" 2>"$ERRFILE"; then
+if rustfmt --edition 2024 "$FILE" 2>/tmp/rustfmt-hook.err; then
     printf 'rustfmt: formatted %s\n' "$FILE"
 else
     printf 'rustfmt WARNING on %s:\n' "$FILE"
-    cat "$ERRFILE"
+    cat /tmp/rustfmt-hook.err
 fi
