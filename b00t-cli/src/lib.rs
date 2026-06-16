@@ -846,6 +846,9 @@ pub enum DatumType {
     AiModel,
     Ai,
     Justfile,
+    /// Hardware descriptor datum — `<soc>.<subsystem>.hardware.tomllmd`.
+    /// Encodes a node's accelerator identity (vendor/class/VRAM) + hive gates.
+    Hardware,
     Unknown,
 }
 
@@ -874,6 +877,7 @@ impl DatumType {
             "ai_model" | "model" => Some(DatumType::AiModel),
             "ai" => Some(DatumType::Ai),
             "justfile" => Some(DatumType::Justfile),
+            "hardware" => Some(DatumType::Hardware),
             "unknown" => Some(DatumType::Unknown),
             _ => None,
         }
@@ -902,6 +906,7 @@ impl DatumType {
             ".ai_model",
             ".ai",
             ".justfile",
+            ".hardware",
         ]
     }
 
@@ -928,6 +933,7 @@ impl DatumType {
             DatumType::AiModel => ".ai_model",
             DatumType::Ai => ".ai",
             DatumType::Justfile => ".justfile",
+            DatumType::Hardware => ".hardware",
             DatumType::Unknown => ".toml",
         }
     }
@@ -955,6 +961,7 @@ impl DatumType {
             DatumType::AiModel,
             DatumType::Ai,
             DatumType::Justfile,
+            DatumType::Hardware,
         ] {
             let base = t.base_suffix();
             if filename.ends_with(base)
@@ -1393,6 +1400,7 @@ pub fn create_unified_toml_config(datum: &BootDatum, path: &str) -> Result<()> {
         DatumType::Skill => ".skill.toml",
         DatumType::HiveProfile => ".hive.toml",
         DatumType::Justfile => ".justfile",
+        DatumType::Hardware => ".hardware.toml",
         // 🤓 .tomllmd currently degrades to .tomllm semantics in b00t core:
         // valid TOML + richer comment/diagram/markdown affordances handled by external tooling.
         DatumType::Unknown => ".toml",
@@ -3034,6 +3042,15 @@ mod tests {
         assert_eq!(
             crate::DatumType::from_filename("irontology.mcp.toml"),
             crate::DatumType::Mcp
+        );
+        // 🤓 hardware datums use dotted SoC.subsystem namespace
+        assert_eq!(
+            crate::DatumType::from_filename("rk3588.npu.hardware.tomllmd"),
+            crate::DatumType::Hardware
+        );
+        assert_eq!(
+            crate::DatumType::from_filename("rtx3090.hardware.toml"),
+            crate::DatumType::Hardware
         );
         assert_eq!(
             crate::DatumType::from_filename("unknown.toml"),
