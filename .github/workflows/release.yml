@@ -75,7 +75,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          cargo test --workspace --all-features --exclude b00t-cli --exclude b00t-grok --exclude b00t-embed --exclude b00t-l3dg3rr-viz --exclude embed_anything
+          cargo test --workspace --exclude b00t-cli --exclude b00t-grok --exclude b00t-embed --exclude b00t-l3dg3rr-viz --exclude embed_anything
           # b00t-cli's optional candle stack is documented as unsupported until upstream
           # dependency conflicts are resolved, so release gating only exercises supported features.
           cargo test -p b00t-cli --features dbus,llamacpp-fallback
