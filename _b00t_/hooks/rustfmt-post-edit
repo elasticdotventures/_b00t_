@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+# PostToolUse hook: auto-run rustfmt on .rs files after Edit/Write tool calls.
+# Install: copy to ~/.claude/hooks/ and register in ~/.claude/settings.json.
+# See: just install-rustfmt-hook
+
+set -euo pipefail
+
+INPUT=$(cat)
+TOOL=$(printf '%s' "$INPUT" | python3 -c "import sys,json; print(json.load(sys.stdin).get('tool_name',''))" 2>/dev/null || true)
+FILE=$(printf '%s' "$INPUT" | python3 -c "import sys,json; print(json.load(sys.stdin).get('tool_input',{}).get('file_path',''))" 2>/dev/null || true)
+
+[[ "$TOOL" =~ ^(Edit|Write)$ ]] && [[ "$FILE" == *.rs ]] || exit 0
+
+if ! command -v rustfmt >/dev/null 2>&1; then
+    printf 'rustfmt-hook: rustfmt not found, skipping %s\n' "$FILE" >&2
+    exit 0
+fi
+
+if rustfmt --edition 2024 "$FILE" 2>/tmp/rustfmt-hook.err; then
+    printf 'rustfmt: formatted %s\n' "$FILE"
+else
+    printf 'rustfmt WARNING on %s:\n' "$FILE"
+    cat /tmp/rustfmt-hook.err
+fi

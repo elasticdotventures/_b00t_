@@ -539,6 +539,22 @@ install-commit-hook:
     chmod +x "${HOOK_PATH}"
     echo "✅ Installed .git/hooks/pre-commit to run 'just commit-hook'"
 
+# Install rustfmt PostToolUse hook for Claude Code (run once as operator)
+# Copies _b00t_/hooks/rustfmt-post-edit to ~/.claude/hooks/ and prints settings.json patch
+install-rustfmt-hook:
+    #!/bin/bash
+    set -euo pipefail
+    HOOK_SRC="_b00t_/hooks/rustfmt-post-edit"
+    HOOK_DEST="${HOME}/.claude/hooks/rustfmt-post-edit"
+    mkdir -p "${HOME}/.claude/hooks"
+    cp "$HOOK_SRC" "$HOOK_DEST"
+    chmod +x "$HOOK_DEST"
+    echo "✅ Installed ${HOOK_DEST}"
+    echo ""
+    echo 'Add to ~/.claude/settings.json hooks.PostToolUse array:'
+    echo '  {"matcher":"Edit|Write","hooks":[{"type":"command","command":"~/.claude/hooks/rustfmt-post-edit"}]}'
+
+
 cliff:
     # git-cliff --tag $(git describe --tags --abbrev=0) -o CHANGELOG.md
     git-cliff -o CHANGELOG.md
