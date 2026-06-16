@@ -115,9 +115,13 @@ fn build_validation_prompt(t00n_data: &str, reqs: &[AbDataRequirement]) -> Strin
 
 fn call_sm0l_model(prompt: &str, endpoint: &str) -> Result<String> {
     use std::io::Write;
-    let url = format!("{}/v1/chat/completions", endpoint.trim_end_matches('/'));
+    // 🤓 model name + endpoint are env-configurable so any OpenAI-compatible
+    //    peer (llamacpp, vLLM, mistral.rs, …) can serve as the sm0l validator.
+    let model = std::env::var("B00T_SM0L_MODEL").unwrap_or_else(|_| SM0L_MODEL.to_string());
+    let base = endpoint.trim_end_matches('/').trim_end_matches("/v1");
+    let url = format!("{}/v1/chat/completions", base);
     let payload = serde_json::json!({
-        "model": SM0L_MODEL,
+        "model": model,
         "messages": [{"role": "user", "content": prompt}],
         "max_tokens": 512,
         "temperature": 0.0,
@@ -263,7 +267,10 @@ pub fn handle_validate(args: &ValidateArgs) -> Result<()> {
             fsl_examples.join("\n"), t00n_data)
     };
 
-    let endpoint = args.endpoint.clone().unwrap_or_else(|| "http://localhost:8001".to_string());
+    // 🤓 endpoint resolution: --endpoint flag > B00T_AI_SM0L_BASE env > localhost:8001
+    let endpoint = args.endpoint.clone()
+        .or_else(|| std::env::var("B00T_AI_SM0L_BASE").ok())
+        .unwrap_or_else(|| "http://localhost:8001".to_string());
     let prompt = build_validation_prompt(&extended_input, &reqs);
     let response = call_sm0l_model(&prompt, &endpoint).context("sm0l model call failed — is ch0nky running on :8001?")?;
     let results = parse_validation_response(&response, &reqs);
@@ -360,7 +367,10 @@ fn validate_jsonl(args: &ValidateArgs, path: &PathBuf) -> Result<()> {
     let jsonl_data = std::fs::read_to_string(path)
         .with_context(|| format!("read JSONL file '{}'", path.display()))?;
     let reqs = schema.requirements();
-    let endpoint = args.endpoint.clone().unwrap_or_else(|| "http://localhost:8001".to_string());
+    // 🤓 endpoint resolution: --endpoint flag > B00T_AI_SM0L_BASE env > localhost:8001
+    let endpoint = args.endpoint.clone()
+        .or_else(|| std::env::var("B00T_AI_SM0L_BASE").ok())
+        .unwrap_or_else(|| "http://localhost:8001".to_string());
     let prompt = build_validation_prompt(&jsonl_data, &reqs);
     let response = call_sm0l_model(&prompt, &endpoint)
         .context("sm0l model call failed — is ch0nky running on :8001?")?;
