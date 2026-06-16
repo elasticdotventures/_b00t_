@@ -555,6 +555,14 @@ install-rustfmt-hook:
     echo '  {"matcher":"Edit|Write","hooks":[{"type":"command","command":"~/.claude/hooks/rustfmt-post-edit"}]}'
 
 
+# upgrade: holistic b00t upgrade (binary, MCP, hooks, Claude settings)
+upgrade:
+    cargo run --bin b00t-cli -p b00t-cli -- upgrade
+
+upgrade-dry:
+    cargo run --bin b00t-cli -p b00t-cli -- upgrade --dry-run
+
+
 cliff:
     # git-cliff --tag $(git describe --tags --abbrev=0) -o CHANGELOG.md
     git-cliff -o CHANGELOG.md
@@ -1250,3 +1258,110 @@ qwen3-test-alignment:
 #   - Vendor owns its own lifecycle; root only adds `mod` line
 # See vendor/ledgrrr/ledgrrr.just header for full documentation.
 # ─────────────────────────────────────────────────────────────────────────────
+
+# mcp-surface: show the 5 surface tools exposed to sub-agents
+mcp-surface:
+    @echo "Surface tools (5):" && grep "register::<" b00t-mcp/src/mcp_tools.rs | grep -v "^//"
+
+# mcp-catalog: list all 50+ tools in the autodiscovery catalog
+mcp-catalog:
+    cargo run --bin b00t-cli -p b00t-cli -- exec "ontology query" 2>/dev/null || b00t-cli ontology query
+
+# autolearn: one OODA cycle — Observe goal, Orient via discover, Decide skill, Act via learn
+# autolearn: OODA cycle with research, failure discrimination, and reviewer gate
+# O: observe goal  O: orient+research candidates  D: decide+score  A: act+verify
+autolearn:
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    # OBSERVE: current goal from task queue
+    GOAL=$(b00t-cli task next --json 2>/dev/null | jq -r '.title // empty' || true)
+    if [ -z "$GOAL" ]; then echo "[observe] no goal in queue"; exit 0; fi
+    echo "[observe] goal: $GOAL"
+
+    # ORIENT: recall + discover
+    # Step 0: recall what skills worked for past goals (knowledge graph memory)
+    PAST_SKILLS=$(b00t-cli data fabric query       --predicate "b00t:informedBy"       --namespace autolearn       --format json 2>/dev/null | jq -r '.[].object' | sort | uniq -c | sort -rn | head -5 | awk '{print $2}')
+    [ -n "$PAST_SKILLS" ] && echo "[orient] recalled past skills: $(echo "$PAST_SKILLS" | tr '\n' ' ')"
+
+    # Step 1: filesystem scan for current datum matches
+    B00T_ROOT=$(git -C "$HOME/.b00t" rev-parse --show-toplevel 2>/dev/null || echo "$HOME/.b00t")
+    DATUM_DIR="$B00T_ROOT/_b00t_"
+    GOAL_WORDS=$(echo "$GOAL" | tr '[:upper:]' '[:lower:]' | tr -cs 'a-z0-9' '\n' | awk 'length>2' | sort -u)
+    CANDIDATES=""
+    while IFS= read -r WORD; do
+      [ -z "$WORD" ] && continue
+      if ls "$DATUM_DIR/"*"$WORD"*.toml 2>/dev/null | grep -q .; then
+        CANDIDATES=$(printf '%s\n%s' "$CANDIDATES" "$WORD")
+      fi
+    done <<< "$GOAL_WORDS"
+    # Merge filesystem candidates with recalled past skills
+    ALL_CANDIDATES=$(printf '%s\n%s' "$CANDIDATES" "$PAST_SKILLS" | grep -v '^$' | sort -u | head -8)
+    CANDIDATES="$ALL_CANDIDATES"
+    if [ -z "$CANDIDATES" ]; then echo "[orient] no candidates (no datum match + no history) — skip"; exit 0; fi
+    echo "[orient] candidates: $(echo "$CANDIDATES" | tr '\n' ' ')"
+
+    # DECIDE: prefer longest token (most specific datum name) over generic words
+    BEST=$(echo "$CANDIDATES" | awk '{ print length, $0 }' | sort -rn | head -1 | awk '{print $2}')
+    echo "[decide] selected: $BEST (longest specific token)"
+
+    # RESEARCH gate: check if the topic datum has any knowledge about the goal
+    # 🤓 grok ask needs --topic; bare ask hits RAG with no context and returns 0 results
+    RAG_HITS=$(b00t-cli grok ask "$GOAL" --topic "$BEST" --limit 1 2>/dev/null | grep -c "result" || echo 0)
+    echo "[research] grok RAG hits for '$BEST' on goal: $RAG_HITS"
+    # If datum has zero stored knowledge at all, still proceed — learn may populate it
+
+    # ACT: load skill, capture output for reviewer
+    LEARN_OUT=$(b00t-cli learn "$BEST" 2>&1) && LEARN_OK=true || LEARN_OK=false
+    if [ "$LEARN_OK" = false ]; then
+      echo "[act] FAIL: learn $BEST returned non-zero — discriminating failure mode"
+      # Failure discriminator: is it a missing datum or a transient error?
+      if echo "$LEARN_OUT" | grep -qiE "not found|no such|unknown topic"; then
+        echo "[fail:permanent] datum '$BEST' not registered — lfmf candidate"
+        b00t-cli lfmf "autolearn" "skill '$BEST' not in datum registry — check _b00t_/*.skill.toml" 2>/dev/null || true
+      else
+        echo "[fail:transient] retrying once..."
+        b00t-cli learn "$BEST" 2>/dev/null || echo "[fail:give-up] $BEST unavailable"
+      fi
+      exit 1
+    fi
+
+    # REVIEW: independent reviewer — two-stage: structural + semantic
+    # Stage 1: structural gate (content non-trivial)
+    CONTENT_LEN=$(echo "$LEARN_OUT" | wc -c)
+    if [ "$CONTENT_LEN" -lt 50 ]; then
+      echo "[review] REJECT:structural: skill output too short ($CONTENT_LEN chars) — likely empty datum"
+      exit 1
+    fi
+    # Stage 2: semantic gate — keyword overlap between learn output and goal words
+    # 🤓 grok ask without --topic returns 0 results; use keyword overlap as reviewer
+    OVERLAP=$(echo "$LEARN_OUT" | tr '[:upper:]' '[:lower:]' | tr -cs 'a-z0-9' '\n' | grep -cFf <(echo "$GOAL_WORDS") || echo 0)
+    echo "[review] keyword overlap with goal: $OVERLAP"
+    if [ "$OVERLAP" -eq 0 ] && [ "$CONTENT_LEN" -gt 50 ]; then
+      echo "[review] WARN: zero keyword overlap — skill may not address goal; logging"
+      LFMF_MSG="skill '$BEST' loaded (${CONTENT_LEN}c) but 0 keyword overlap with goal: '$GOAL'"
+      b00t-cli lfmf "autolearn" "$LFMF_MSG" 2>/dev/null || true
+    fi
+    echo "[review] PASS: $BEST applies to goal ($CONTENT_LEN chars, overlap=$OVERLAP)"
+    echo "[act] learned $BEST"
+
+    # PERSIST: store goal→skill relationship in data fabric for future orient queries
+    # 🤓 goal is sha256-hashed to make a stable subject URI
+    GOAL_HASH=$(echo "$GOAL" | sha256sum | head -c12)
+    b00t-cli data fabric upsert       --subject "ooda:goal:$GOAL_HASH"       --predicate "b00t:informedBy"       --object "$BEST"       --namespace autolearn 2>/dev/null || true
+    b00t-cli data fabric upsert       --subject "ooda:goal:$GOAL_HASH"       --predicate "b00t:goalText"       --object "$GOAL"       --namespace autolearn 2>/dev/null || true
+    echo "[persist] stored: ooda:goal:$GOAL_HASH → b00t:informedBy → $BEST"
+
+# autolearn-loop: run OODA cycles until task queue empty, max 10 iterations
+autolearn-loop:
+    #!/usr/bin/env bash
+    N=0; MAX=10
+    while [ $N -lt $MAX ]; do
+      NEXT=$(b00t-cli task next 2>/dev/null | head -1 || true)
+      [ -z "$NEXT" ] && echo "[loop] queue empty after $N cycles" && exit 0
+      N=$((N+1))
+      echo "[loop] cycle $N/$MAX"
+      just autolearn || echo "[loop] cycle $N failed — continuing"
+    done
+    echo "[loop] max cycles reached"
+
