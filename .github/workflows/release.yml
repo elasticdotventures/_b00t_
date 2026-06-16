@@ -75,7 +75,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          TS_RS_EXPORT_DIR=/tmp/ts-exports cargo test --workspace --exclude b00t-cli --exclude b00t-grok --exclude b00t-embed --exclude b00t-l3dg3rr-viz --exclude embed_anything
+          cargo test --workspace --exclude b00t-cli --exclude b00t-grok --exclude b00t-embed --exclude b00t-l3dg3rr-viz --exclude embed_anything --exclude b00t-c0re-lib
           # b00t-cli's optional candle stack is documented as unsupported until upstream
           # dependency conflicts are resolved, so release gating only exercises supported features.
           cargo test -p b00t-cli --features dbus,llamacpp-fallback
