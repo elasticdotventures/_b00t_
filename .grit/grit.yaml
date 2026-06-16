@@ -1,0 +1,13 @@
+version: 0.0.2
+patterns:
+  - name: b00t_sandbox_block
+    level: error
+  - name: b00t_sandbox_warn
+    level: warn
+  - name: b00t_no_raw_secrets
+    level: error
+  - name: b00t_overlay_scope
+    level: warn
+github:
+  reviewers:
+    - promptexecution
