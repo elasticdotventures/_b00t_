@@ -94,3 +94,6 @@ pub use scheduler::SchedulerCommands;
 pub use whatismy::WhatismyCommands;
 pub mod task;
 pub use task::TaskCommands;
+
+pub mod ooda;
+pub use ooda::OodaCommands;

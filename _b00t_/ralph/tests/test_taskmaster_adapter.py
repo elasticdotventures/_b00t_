@@ -501,3 +501,118 @@ def test_get_current_branch_failure() -> None:
     with patch("subprocess.run", side_effect=Exception("error")):
         result = get_current_branch()
         assert result == Nothing
+
+
+# B00tTaskClient tests
+
+from ralph.taskmaster_adapter import B00tTaskClient
+
+
+def _make_task_json(task_id: str = "40", status: str = "pending") -> str:
+    return json.dumps({
+        "id": int(task_id),
+        "title": "Test Task",
+        "description": "desc",
+        "status": status,
+        "priority": 1,
+        "tags": [],
+        "created_at": "2026-01-01T00:00:00Z",
+    })
+
+
+def test_b00t_task_client_get_all_tasks_success() -> None:
+    """B00tTaskClient.get_all_tasks uses 'b00t-cli task list --json'."""
+    tasks_json = json.dumps([
+        {"id": 1, "title": "Task A", "description": "", "status": "pending",
+         "priority": 1, "tags": [], "created_at": "2026-01-01T00:00:00Z"},
+    ])
+    mock_result = MagicMock()
+    mock_result.stdout = tasks_json
+
+    with patch("subprocess.run", return_value=mock_result) as mock_run:
+        client = B00tTaskClient()
+        result = client.get_all_tasks()
+
+    assert isinstance(result, Success)
+    tasks = result.unwrap()
+    assert len(tasks) == 1
+    assert tasks[0].title == "Task A"
+    # Verify the correct CLI args
+    call_args = mock_run.call_args[0][0]
+    assert call_args == ["b00t-cli", "task", "list", "--json"]
+
+
+def test_b00t_task_client_get_task_by_id_no_json_flag() -> None:
+    """B00tTaskClient.get_task_by_id uses 'b00t-cli task show <id>' (no --json flag)."""
+    mock_result = MagicMock()
+    mock_result.stdout = _make_task_json("40")
+
+    with patch("subprocess.run", return_value=mock_result) as mock_run:
+        client = B00tTaskClient()
+        result = client.get_task_by_id("40")
+
+    assert isinstance(result, Success)
+    task = result.unwrap()
+    assert task.id == "40"
+    call_args = mock_run.call_args[0][0]
+    # Must NOT include --json flag; show outputs JSON by default
+    assert "--json" not in call_args
+    assert call_args == ["b00t-cli", "task", "show", "40"]
+
+
+def test_b00t_task_client_add_task_note_uses_note_flag() -> None:
+    """B00tTaskClient.add_task_note uses --note (not --notes)."""
+    mock_result = MagicMock()
+    mock_result.stdout = ""
+
+    with patch("subprocess.run", return_value=mock_result) as mock_run:
+        client = B00tTaskClient()
+        result = client.add_task_note("40", "work done")
+
+    assert isinstance(result, Success)
+    call_args = mock_run.call_args[0][0]
+    assert "--note" in call_args
+    assert "--notes" not in call_args
+
+
+def test_b00t_task_client_update_task_status() -> None:
+    """B00tTaskClient.update_task_status uses 'b00t-cli task update <id> --status <status>'."""
+    mock_result = MagicMock()
+    mock_result.stdout = ""
+
+    with patch("subprocess.run", return_value=mock_result) as mock_run:
+        client = B00tTaskClient()
+        result = client.update_task_status("40", "in-progress")
+
+    assert isinstance(result, Success)
+    call_args = mock_run.call_args[0][0]
+    assert "update" in call_args
+    assert "40" in call_args
+    assert "--status" in call_args
+    assert "in-progress" in call_args
+
+
+def test_b00t_task_client_get_next_task_success() -> None:
+    """B00tTaskClient.get_next_task uses 'b00t-cli task next --json'."""
+    mock_result = MagicMock()
+    mock_result.stdout = _make_task_json("40")
+
+    with patch("subprocess.run", return_value=mock_result) as mock_run:
+        client = B00tTaskClient()
+        result = client.get_next_task()
+
+    assert isinstance(result, Success)
+    task = result.unwrap()
+    assert task.id == "40"
+    call_args = mock_run.call_args[0][0]
+    assert call_args == ["b00t-cli", "task", "next", "--json"]
+
+
+def test_b00t_task_client_cli_not_found() -> None:
+    """B00tTaskClient returns Failure when b00t-cli is not installed."""
+    with patch("subprocess.run", side_effect=FileNotFoundError("b00t-cli not found")):
+        client = B00tTaskClient()
+        result = client.get_all_tasks()
+
+    assert isinstance(result, Failure)
+    assert "b00t-cli not found" in str(result.failure())

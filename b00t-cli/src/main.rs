@@ -45,6 +45,7 @@ use b00t_cli::commands::{
     K8sCommands,
     McpCommands, ModelCommands,
     ObservabilityCommands, OntologyCommands, SchedulerCommands, SessionCommands, SkillCommands, SoulCommands, StackCommands,
+    OodaCommands,
     TaskCommands,
     TutorialCommands, VersionCommands, VizCommands, WhatismyCommands
 
@@ -340,6 +341,11 @@ The system will:
     Task {
         #[clap(subcommand)]
         task_command: TaskCommands,
+    },
+    #[clap(about = "OODA control plane — autonomous task execution via ralph agent loop")]
+    Ooda {
+        #[clap(subcommand)]
+        ooda_command: OodaCommands,
     },
     #[clap(about = "Agent Coordination Protocol (ACP) - send messages to agents")]
     Chat {
@@ -1839,6 +1845,12 @@ async fn main() {
         }
         Some(Commands::Task { task_command }) => {
             if let Err(e) = b00t_cli::commands::task::handle_task_command(task_command.clone()) {
+                eprintln!("Error: {}", e);
+                std::process::exit(1);
+            }
+        }
+        Some(Commands::Ooda { ooda_command }) => {
+            if let Err(e) = b00t_cli::commands::ooda::handle_ooda(ooda_command.clone()).await {
                 eprintln!("Error: {}", e);
                 std::process::exit(1);
             }

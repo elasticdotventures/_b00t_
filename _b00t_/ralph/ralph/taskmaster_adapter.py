@@ -494,7 +494,7 @@ class B00tTaskClient:
             return Failure(exc)
 
     def get_task_by_id(self, task_id: str) -> Result[Task, Exception]:
-        r = self._run("show", task_id, "--json")
+        r = self._run("show", task_id)  # show outputs JSON by default; no --json flag
         if isinstance(r, Failure):
             return r
         try:
@@ -521,7 +521,7 @@ class B00tTaskClient:
 
     def add_task_note(self, task_id: str, note: str) -> Result[None, Exception]:
         timestamped = f"{datetime.now().isoformat()}: {note}"
-        r = self._run("update", task_id, "--notes", timestamped)
+        r = self._run("update", task_id, "--note", timestamped)
         return Success(None) if isinstance(r, Success) else r  # type: ignore[return-value]
 
 
