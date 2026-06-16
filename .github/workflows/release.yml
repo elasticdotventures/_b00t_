@@ -39,6 +39,10 @@ jobs:
           set -euo pipefail
           git submodule update --init --depth 1 vendor/tomllm vendor/irontology-mcp vendor/embed-anything-b00t
 
+      - name: Install just
+        if: inputs.run_tests
+        uses: extractions/setup-just@v2
+
       - name: Set up Rust toolchain
         if: inputs.run_tests
         uses: dtolnay/rust-toolchain@stable
