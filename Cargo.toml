@@ -32,6 +32,7 @@ license = "MIT"
 repository = "https://github.com/elasticdotventures/_b00t_"
 
 [workspace.dependencies]
+diffy = "0.5"
 # Workspace members
 b00t-cli = { path = "b00t-cli" }
 b00t-c0re-lib = { path = "b00t-c0re-lib" }

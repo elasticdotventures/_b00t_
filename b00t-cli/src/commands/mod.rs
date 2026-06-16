@@ -97,3 +97,5 @@ pub use task::TaskCommands;
 
 pub mod ooda;
 pub use ooda::OodaCommands;
+pub mod patch;
+pub use patch::PatchCommands;
