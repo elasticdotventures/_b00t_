@@ -100,12 +100,12 @@ impl TomllmDoc {
 
     /// Returns `# summary:` value from the `# b00t:map v1` tail block.
     pub fn summary(&self) -> Option<&str> {
-        self.map_tags.get("summary").map(String::as_str)
+        self.map_tags.get("summary").map(String::as_str).filter(|s| !s.is_empty())
     }
 
     /// Returns `# tier:` value from the tail block.
     pub fn tier(&self) -> Option<&str> {
-        self.map_tags.get("tier").map(String::as_str)
+        self.map_tags.get("tier").map(String::as_str).filter(|s| !s.is_empty())
     }
 
     /// Returns `# complexity:` parsed as u8.
