@@ -54,6 +54,7 @@ tokio = { version = "1.0", features = ["full", "macros", "rt-multi-thread", "pro
 tokio-util = "0.7"
 shell-words = "1.1"
 rhai = "1.22.2"
+statig = "0.4.1"
 rig-core = "0.24.0"
 ts-rs = "11.1.0"
 schemars = "1.1.0"
