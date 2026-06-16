@@ -1,7 +1,8 @@
-//! Local model registry — gitignored CRUD store for AI model endpoints.
+//! Local model registry — overlay datum store for AI model endpoints.
 //!
-//! Storage: `~/._b00t_/models.toml` (global) + `.b00t/models.toml` (project-local, optional)
-//! Both are gitignored — safe for API keys. Project-local overrides global.
+//! Primary storage: `${_B00T_Path}/models.overlay.toml` (overlay datum, committed to enclave branch).
+//! Legacy fallback: `~/._b00t_/models.toml` (global, gitignored) + `.b00t/models.toml` (project-local).
+//! Overlay datum is the source of truth; legacy paths provide backward compat on first load.
 //!
 //! Uses `b00t_c0re_lib::datum_ai_model::ModelRegistry` as the data model.
 //! Classification by size (`Small`/`Large`) and cost (via `metadata["cost"]`).
@@ -16,7 +17,17 @@ use std::path::{Path, PathBuf};
 
 // ─── Path resolution ─────────────────────────────────────────────────────────
 
-/// Global registry path — `~/._b00t_/models.toml` (gitignored, user-scoped).
+/// Overlay datum path — `${_B00T_Path}/models.overlay.toml` (primary, enclave-committed).
+pub fn overlay_registry_path() -> PathBuf {
+    let b00t_path = std::env::var("_B00T_Path").unwrap_or_else(|_| {
+        let home = std::env::var("HOME").unwrap_or_else(|_| ".".to_string());
+        format!("{home}/.b00t/_b00t_")
+    });
+    let expanded = shellexpand::tilde(&b00t_path).to_string();
+    PathBuf::from(expanded).join("models.overlay.toml")
+}
+
+/// Legacy global registry path — `~/._b00t_/models.toml` (gitignored, user-scoped).
 pub fn global_registry_path() -> PathBuf {
     let home = std::env::var("HOME").unwrap_or_else(|_| ".".to_string());
     PathBuf::from(home).join("._b00t_").join("models.toml")
@@ -29,11 +40,15 @@ pub fn project_registry_path() -> PathBuf {
 
 // ─── Load / Save ─────────────────────────────────────────────────────────────
 
-/// Load effective registry: merge global + project-local (project wins).
+/// Load effective registry: merge overlay + legacy global + project-local.
+/// Priority: overlay > project-local > global (first definition wins).
 pub fn load_registry() -> ModelRegistry {
+    let overlay = load_from_path(&overlay_registry_path());
     let global = load_from_path(&global_registry_path());
     let local = load_from_path(&project_registry_path());
-    merge_registries(global, local)
+    // Merge: global is base, local overrides global, overlay overrides all
+    let merged_legacy = merge_registries(global, local);
+    merge_registries(merged_legacy, overlay)
 }
 
 fn load_from_path(path: &Path) -> ModelRegistry {
@@ -46,16 +61,25 @@ fn load_from_path(path: &Path) -> ModelRegistry {
     }
 }
 
-/// Save registry to the global path (creates parent dir if needed).
+/// Save registry to the overlay datum path (creates parent dir if needed).
+/// Appends a `b00t:map` tail block for datum discoverability.
 pub fn save_registry(registry: &ModelRegistry) -> Result<()> {
-    let path = global_registry_path();
+    let path = overlay_registry_path();
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent)
             .with_context(|| format!("create dir {}", parent.display()))?;
     }
     let toml_str = toml::to_string_pretty(registry)
         .context("serialize model registry to TOML")?;
-    fs::write(&path, toml_str)
+    let content = format!(
+        "{toml_str}\n\
+         # ── b00t:map v1 ──────────────────────────────────────────────\n\
+         # summary: node-local model registry overlay — AI endpoints for this node\n\
+         # tags: model, registry, overlay, ai\n\
+         # type: overlay\n\
+         # b00t.overlay: true\n"
+    );
+    fs::write(&path, content)
         .with_context(|| format!("write registry to {}", path.display()))?;
     Ok(())
 }
@@ -270,6 +294,27 @@ pub fn resolve_tier_endpoint(tier: &str) -> Option<(String, String)> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn overlay_path_resolves_under_b00t_path() {
+        // overlay datum should live in _B00T_Path, not ~/._b00t_
+        let path = overlay_registry_path();
+        assert!(
+            path.ends_with("models.overlay.toml"),
+            "expected models.overlay.toml, got {}",
+            path.display()
+        );
+    }
+
+    #[test]
+    fn legacy_global_path_still_resolves() {
+        let path = global_registry_path();
+        assert!(
+            path.ends_with("models.toml"),
+            "expected models.toml, got {}",
+            path.display()
+        );
+    }
 
     #[test]
     fn registry_roundtrip() {

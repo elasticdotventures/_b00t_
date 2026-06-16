@@ -137,6 +137,7 @@
 .b00t-tools-env.json
 .b00t/cmdb/
 .b00t/models.toml
+# 🤓 overlay datums (_b00t_/*.overlay.toml) are NOT ignored — they live in the enclave branch
 .b00t/ralph/
 .b00t/ralph/loop.log
 .b00t/ralph/status.json
