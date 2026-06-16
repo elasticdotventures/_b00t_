@@ -200,7 +200,7 @@ type OodaOutcome = statig::Outcome<OodaState>;
 )]
 impl OodaCtx {
     #[state]
-    fn idle(event: &OodaDispatch) -> OodaOutcome {
+    fn idle(&mut self, event: &OodaDispatch) -> OodaOutcome {
         match event {
             OodaDispatch::GoToObserving  => Transition(OodaState::observing()),
             OodaDispatch::GoToFailed(_)  => Transition(OodaState::failed()),
@@ -209,7 +209,7 @@ impl OodaCtx {
     }
 
     #[state]
-    fn observing(event: &OodaDispatch) -> OodaOutcome {
+    fn observing(&mut self, event: &OodaDispatch) -> OodaOutcome {
         match event {
             OodaDispatch::GoToOrienting  => Transition(OodaState::orienting()),
             OodaDispatch::GoToFailed(_)  => Transition(OodaState::failed()),
@@ -218,7 +218,7 @@ impl OodaCtx {
     }
 
     #[state]
-    fn orienting(event: &OodaDispatch) -> OodaOutcome {
+    fn orienting(&mut self, event: &OodaDispatch) -> OodaOutcome {
         match event {
             OodaDispatch::GoToDeciding   => Transition(OodaState::deciding()),
             OodaDispatch::GoToFailed(_)  => Transition(OodaState::failed()),
@@ -227,7 +227,7 @@ impl OodaCtx {
     }
 
     #[state]
-    fn deciding(event: &OodaDispatch) -> OodaOutcome {
+    fn deciding(&mut self, event: &OodaDispatch) -> OodaOutcome {
         match event {
             OodaDispatch::GoToActing     => Transition(OodaState::acting()),
             OodaDispatch::GoToFailed(_)  => Transition(OodaState::failed()),
@@ -236,7 +236,7 @@ impl OodaCtx {
     }
 
     #[state]
-    fn acting(event: &OodaDispatch) -> OodaOutcome {
+    fn acting(&mut self, event: &OodaDispatch) -> OodaOutcome {
         match event {
             OodaDispatch::GoToReviewing  => Transition(OodaState::reviewing()),
             OodaDispatch::GoToFailed(_)  => Transition(OodaState::failed()),
@@ -245,7 +245,7 @@ impl OodaCtx {
     }
 
     #[state]
-    fn reviewing(event: &OodaDispatch) -> OodaOutcome {
+    fn reviewing(&mut self, event: &OodaDispatch) -> OodaOutcome {
         match event {
             OodaDispatch::GoToComplete   => Transition(OodaState::complete()),
             OodaDispatch::GoToObserving  => Transition(OodaState::observing()),
@@ -255,12 +255,10 @@ impl OodaCtx {
     }
 
     #[state]
-    #[allow(unused_variables)]
-    fn complete(event: &OodaDispatch) -> OodaOutcome { Handled }
+    fn complete(&mut self, event: &OodaDispatch) -> OodaOutcome { Handled }
 
     #[state]
-    #[allow(unused_variables)]
-    fn failed(event: &OodaDispatch) -> OodaOutcome { Handled }
+    fn failed(&mut self, event: &OodaDispatch) -> OodaOutcome { Handled }
 }
 
 // ---------------------------------------------------------------------------
