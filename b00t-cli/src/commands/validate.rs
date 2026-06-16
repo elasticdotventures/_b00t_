@@ -277,6 +277,8 @@ pub fn handle_validate(args: &ValidateArgs) -> Result<()> {
     let endpoint = args.endpoint.clone()
         .or_else(|| crate::model_registry::resolve_tier_endpoint("ch0nky")
             .map(|(base, _)| base))
+    // 🤓 endpoint resolution: --endpoint flag > B00T_AI_SM0L_BASE env > localhost:8001
+    let endpoint = args.endpoint.clone()
         .or_else(|| std::env::var("B00T_AI_SM0L_BASE").ok())
         .unwrap_or_else(|| "http://localhost:8001".to_string());
     let prompt = build_validation_prompt(&extended_input, &reqs);
@@ -379,6 +381,8 @@ fn validate_jsonl(args: &ValidateArgs, path: &PathBuf) -> Result<()> {
     let endpoint = args.endpoint.clone()
         .or_else(|| crate::model_registry::resolve_tier_endpoint("ch0nky")
             .map(|(base, _)| base))
+    // 🤓 endpoint resolution: --endpoint flag > B00T_AI_SM0L_BASE env > localhost:8001
+    let endpoint = args.endpoint.clone()
         .or_else(|| std::env::var("B00T_AI_SM0L_BASE").ok())
         .unwrap_or_else(|| "http://localhost:8001".to_string());
     let prompt = build_validation_prompt(&jsonl_data, &reqs);
