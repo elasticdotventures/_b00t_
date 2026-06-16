@@ -646,25 +646,6 @@ install-rustfmt-hook:
     echo '  {"matcher":"Edit|Write","hooks":[{"type":"command","command":"~/.claude/hooks/rustfmt-post-edit"}]}'
 
 
-# test-hook: run rustfmt-post-edit hook integration tests
-test-hook:
-    bash _b00t_/hooks/test-rustfmt-hook.sh
-
-# upgrade: holistic b00t upgrade (binary, MCP, hooks, Claude settings)
-upgrade:
-    cargo run --bin b00t-cli -p b00t-cli -- upgrade
-
-upgrade-dry:
-    cargo run --bin b00t-cli -p b00t-cli -- upgrade --dry-run
-
-# 🔧 Maintenance: run deterministic version-check automation for all datums
-# with [maintenance] sections. Checks latest versions via shell commands (no LLM),
-# and auto-updates desires fields when newer versions are detected.
-# Uses datum file mtime to gate check frequency (check_interval_days).
-maintenance:
-    cargo run --bin b00t-cli -p b00t-cli -- cli up --maintenance
-
-
 cliff:
     # git-cliff --tag $(git describe --tags --abbrev=0) -o CHANGELOG.md
     git-cliff -o CHANGELOG.md
