@@ -850,6 +850,9 @@ pub enum DatumType {
     /// Hardware descriptor datum — `<soc>.<subsystem>.hardware.tomllmd`.
     /// Encodes a node's accelerator identity (vendor/class/VRAM) + hive gates.
     Hardware,
+    /// Node-local overlay datum — `.overlay.toml`.
+    /// Carries per-node state (endpoints, keys, config) in a git enclave branch.
+    Overlay,
     Unknown,
 }
 
@@ -879,6 +882,7 @@ impl DatumType {
             "ai" => Some(DatumType::Ai),
             "justfile" => Some(DatumType::Justfile),
             "hardware" => Some(DatumType::Hardware),
+            "overlay" => Some(DatumType::Overlay),
             "unknown" => Some(DatumType::Unknown),
             _ => None,
         }
@@ -908,6 +912,7 @@ impl DatumType {
             ".ai",
             ".justfile",
             ".hardware",
+            ".overlay",
         ]
     }
 
@@ -935,6 +940,7 @@ impl DatumType {
             DatumType::Ai => ".ai",
             DatumType::Justfile => ".justfile",
             DatumType::Hardware => ".hardware",
+            DatumType::Overlay => ".overlay",
             DatumType::Unknown => ".toml",
         }
     }
@@ -963,6 +969,7 @@ impl DatumType {
             DatumType::Ai,
             DatumType::Justfile,
             DatumType::Hardware,
+            DatumType::Overlay,
         ] {
             let base = t.base_suffix();
             if filename.ends_with(base)
@@ -1402,6 +1409,7 @@ pub fn create_unified_toml_config(datum: &BootDatum, path: &str) -> Result<()> {
         DatumType::HiveProfile => ".hive.toml",
         DatumType::Justfile => ".justfile",
         DatumType::Hardware => ".hardware.toml",
+        DatumType::Overlay => ".overlay.toml",
         // 🤓 .tomllmd currently degrades to .tomllm semantics in b00t core:
         // valid TOML + richer comment/diagram/markdown affordances handled by external tooling.
         DatumType::Unknown => ".toml",
@@ -3052,6 +3060,11 @@ mod tests {
         assert_eq!(
             crate::DatumType::from_filename("rtx3090.hardware.toml"),
             crate::DatumType::Hardware
+        );
+        // 🤓 overlay datums carry node-local state in git enclave
+        assert_eq!(
+            crate::DatumType::from_filename("models.overlay.toml"),
+            crate::DatumType::Overlay
         );
         assert_eq!(
             crate::DatumType::from_filename("unknown.toml"),
