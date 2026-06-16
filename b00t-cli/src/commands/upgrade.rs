@@ -17,7 +17,7 @@
 use anyhow::{Context, Result};
 use clap::Parser;
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
+use serde_json::{json, Value};
 use std::path::PathBuf;
 use std::process::Command;
 use std::time::Instant;

@@ -49,6 +49,7 @@ pub mod gate_result;
 pub mod grok;
 pub mod interaction;
 pub mod irontology_bridge;
+pub mod data_fabric;
 pub mod knowledge;
 pub mod kv_store;
 pub mod learn;

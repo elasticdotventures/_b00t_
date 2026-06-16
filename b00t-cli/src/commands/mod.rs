@@ -62,7 +62,6 @@ pub mod tutorial;
 pub mod uninstall;
 pub mod up;
 pub mod upgrade;
-pub mod provider;
 pub mod validate;
 pub mod version;
 pub mod viz;

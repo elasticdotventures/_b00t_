@@ -115,6 +115,21 @@ pub struct UpgradeCommand {
 
 impl_mcp_tool!(UpgradeCommand, "upgrade", ["upgrade"]);
 
+/// Holistic upgrade: binary, MCP servers, hooks, Claude settings (NASA MBSE phases)
+#[derive(Parser, Clone)]
+pub struct UpgradeCommand {
+    #[arg(long, default_value = "all", help = "Scope: all|binary|mcp|hooks|settings")]
+    pub scope: String,
+    #[arg(long, help = "Plan only; apply no changes")]
+    pub dry_run: bool,
+    #[arg(long, help = "Route compile tasks to ch0nky GPU tier")]
+    pub delegate: bool,
+    #[arg(long, help = "Emit structured JSON report")]
+    pub json: bool,
+}
+
+impl_mcp_tool!(UpgradeCommand, "b00t_upgrade", ["upgrade"]);
+
 /// Record lesson from mistake
 #[derive(Parser, Clone)]
 pub struct LfmfCommand {
@@ -1470,20 +1485,6 @@ pub struct TaskUpdateCommand {
 }
 impl_mcp_tool!(TaskUpdateCommand, "task_update", ["task", "update"], positionals: ["id"]);
 
-/// List discovered pipeline datums
-#[derive(Parser, Clone)]
-pub struct PipelineListCommand;
-impl_mcp_tool!(PipelineListCommand, "pipeline_list", ["pipeline", "list"]);
-
-/// Run a pipeline's declared stages (all, or a selected subset via --stage)
-#[derive(Parser, Clone)]
-pub struct PipelineRunCommand {
-    #[arg(help = "Pipeline datum name")]
-    pub name: String,
-    #[arg(long = "stage", help = "Stage to run (repeatable; default: all stages)")]
-    pub stage: Vec<String>,
-}
-impl_mcp_tool!(PipelineRunCommand, "pipeline_run", ["pipeline", "run"], positionals: ["name"]);
 
 // ── Autodiscovery Proxy ──────────────────────────────────────────────────────
 // 🤓 54 tools hidden here; agent discovers via b00t_discover, executes via b00t_exec
@@ -1497,55 +1498,50 @@ pub struct ToolCatalogEntry {
 }
 
 pub static TOOL_CATALOG: &[ToolCatalogEntry] = &[
-    ToolCatalogEntry { name: "mcp_list",          description: "List registered MCP servers",            subcommand: "mcp list" },
-    ToolCatalogEntry { name: "mcp_add",           description: "Register a new MCP server",              subcommand: "mcp register" },
-    ToolCatalogEntry { name: "mcp_install",       description: "Install an MCP server datum",            subcommand: "mcp install" },
-    ToolCatalogEntry { name: "mcp_output",        description: "Show MCP server output/logs",            subcommand: "mcp output" },
-    ToolCatalogEntry { name: "cli_detect",        description: "Detect installed CLI tool version",      subcommand: "cli detect" },
-    ToolCatalogEntry { name: "cli_desires",       description: "Show desired CLI tool version",          subcommand: "cli desires" },
-    ToolCatalogEntry { name: "cli_check",         description: "Check CLI tool vs desired version",      subcommand: "cli check" },
-    ToolCatalogEntry { name: "cli_install",       description: "Install a CLI tool via datum",           subcommand: "cli install" },
-    ToolCatalogEntry { name: "cli_update",        description: "Update a specific CLI tool",             subcommand: "cli update" },
-    ToolCatalogEntry { name: "cli_up",            description: "Update all CLI tools",                   subcommand: "cli up" },
-    ToolCatalogEntry { name: "upgrade",           description: "Holistic upgrade: binary+MCP+hooks",     subcommand: "upgrade" },
-    ToolCatalogEntry { name: "lfmf",              description: "Record a lesson from failure",           subcommand: "lfmf" },
-    ToolCatalogEntry { name: "advice",            description: "Get advice for a tool or error",         subcommand: "advice" },
-    ToolCatalogEntry { name: "ai_list",           description: "List configured AI providers",           subcommand: "ai list" },
-    ToolCatalogEntry { name: "ai_output",         description: "Show AI provider output",                subcommand: "ai output" },
-    ToolCatalogEntry { name: "agent_discover",    description: "Discover available agents",              subcommand: "agent discover" },
-    ToolCatalogEntry { name: "agent_capability",  description: "Query agent capabilities",               subcommand: "agent capability" },
-    ToolCatalogEntry { name: "agent_delegate",    description: "Delegate task to sub-agent",             subcommand: "agent delegate" },
-    ToolCatalogEntry { name: "agent_message",     description: "Send ACP message to agent",              subcommand: "agent message" },
-    ToolCatalogEntry { name: "agent_wait",        description: "Wait for agent to complete",             subcommand: "agent wait" },
-    ToolCatalogEntry { name: "agent_notify",      description: "Broadcast ACP notification",             subcommand: "agent notify" },
-    ToolCatalogEntry { name: "agent_progress",    description: "Report task progress",                   subcommand: "agent progress" },
-    ToolCatalogEntry { name: "agent_complete",    description: "Mark agent task complete",               subcommand: "agent complete" },
-    ToolCatalogEntry { name: "agent_vote_create", description: "Create a hive vote",                     subcommand: "agent vote create" },
-    ToolCatalogEntry { name: "agent_vote_submit", description: "Submit a vote",                          subcommand: "agent vote submit" },
-    ToolCatalogEntry { name: "delegate",    description: "Request ledgrrr authorization for datum execution cost gate", subcommand: "delegate datum" },
-    ToolCatalogEntry { name: "session_init",      description: "Initialize a b00t session",              subcommand: "session init" },
-    ToolCatalogEntry { name: "session_status",    description: "Show session status",                    subcommand: "session status" },
-    ToolCatalogEntry { name: "session_end",       description: "End current session",                    subcommand: "session end" },
-    ToolCatalogEntry { name: "checkpoint",        description: "Create git checkpoint with tests",       subcommand: "checkpoint" },
-    ToolCatalogEntry { name: "grok_digest",       description: "Ingest content into RAG knowledgebase",  subcommand: "grok digest" },
-    ToolCatalogEntry { name: "grok_ask",          description: "Semantic search in knowledgebase",       subcommand: "grok ask" },
-    ToolCatalogEntry { name: "grok_learn",        description: "Learn content into grok RAG",            subcommand: "grok learn" },
-    ToolCatalogEntry { name: "grok_status",       description: "Check grok/RAG backend health",          subcommand: "grok status" },
-    ToolCatalogEntry { name: "task_list",         description: "List all tasks",                         subcommand: "task list" },
-    ToolCatalogEntry { name: "task_next",         description: "Show next pending task",                  subcommand: "task next" },
-    ToolCatalogEntry { name: "task_add",          description: "Add a new task",                         subcommand: "task add" },
-    ToolCatalogEntry { name: "task_done",         description: "Mark task as done",                      subcommand: "task done" },
-    ToolCatalogEntry { name: "task_update",       description: "Update task status/title/notes",         subcommand: "task update" },
-    ToolCatalogEntry { name: "up",                description: "Launch ralph agent REPL outer-loop",     subcommand: "up" },
-    ToolCatalogEntry { name: "ontology_query",    description: "Query live capability ontology",         subcommand: "ontology query" },
-    ToolCatalogEntry { name: "skill_list",        description: "List available skills",                  subcommand: "skill list" },
-    ToolCatalogEntry { name: "skill_activate",    description: "Activate a skill",                       subcommand: "skill activate" },
-    ToolCatalogEntry { name: "app_vscode_mcp_install",     description: "Install MCP in VSCode",         subcommand: "app vscode mcp install" },
-    ToolCatalogEntry { name: "app_claudecode_mcp_install", description: "Install MCP in Claude Code",    subcommand: "app claudecode mcp install" },
-    ToolCatalogEntry { name: "b00t_timer_create",   description: "Create a cron or interval timer that dispatches tasks on schedule. Supports 7-field cron expressions (e.g., '0 9 * * 1-5') and simple interval seconds (e.g., '3600'). Requires --name, --schedule, --to_agent, --action. Optional --once for one-shot, --payload for JSON data.", subcommand: "b00t timer create" },
-    ToolCatalogEntry { name: "viz",               description: "Generate viz graph for a datum (mermaid/json/ascii/svg)", subcommand: "viz entangle" },
-    ToolCatalogEntry { name: "pipeline_list",  description: "List discovered pipeline datums",        subcommand: "pipeline list" },
-    ToolCatalogEntry { name: "pipeline_run",    description: "Run a pipeline's declared stages (all, or a selected subset via --stage)", subcommand: "pipeline run" },
+    ToolCatalogEntry { name: "b00t_mcp_list",          description: "List registered MCP servers",            subcommand: "mcp list" },
+    ToolCatalogEntry { name: "b00t_mcp_add",           description: "Register a new MCP server",              subcommand: "mcp register" },
+    ToolCatalogEntry { name: "b00t_mcp_install",       description: "Install an MCP server datum",            subcommand: "mcp install" },
+    ToolCatalogEntry { name: "b00t_mcp_output",        description: "Show MCP server output/logs",            subcommand: "mcp output" },
+    ToolCatalogEntry { name: "b00t_cli_detect",        description: "Detect installed CLI tool version",      subcommand: "cli detect" },
+    ToolCatalogEntry { name: "b00t_cli_desires",       description: "Show desired CLI tool version",          subcommand: "cli desires" },
+    ToolCatalogEntry { name: "b00t_cli_check",         description: "Check CLI tool vs desired version",      subcommand: "cli check" },
+    ToolCatalogEntry { name: "b00t_cli_install",       description: "Install a CLI tool via datum",           subcommand: "cli install" },
+    ToolCatalogEntry { name: "b00t_cli_update",        description: "Update a specific CLI tool",             subcommand: "cli update" },
+    ToolCatalogEntry { name: "b00t_cli_up",            description: "Update all CLI tools",                   subcommand: "cli up" },
+    ToolCatalogEntry { name: "b00t_upgrade",           description: "Holistic upgrade: binary+MCP+hooks",     subcommand: "upgrade" },
+    ToolCatalogEntry { name: "b00t_lfmf",              description: "Record a lesson from failure",           subcommand: "lfmf" },
+    ToolCatalogEntry { name: "b00t_advice",            description: "Get advice for a tool or error",         subcommand: "advice" },
+    ToolCatalogEntry { name: "b00t_ai_list",           description: "List configured AI providers",           subcommand: "ai list" },
+    ToolCatalogEntry { name: "b00t_ai_output",         description: "Show AI provider output",                subcommand: "ai output" },
+    ToolCatalogEntry { name: "b00t_agent_discover",    description: "Discover available agents",              subcommand: "agent discover" },
+    ToolCatalogEntry { name: "b00t_agent_capability",  description: "Query agent capabilities",               subcommand: "agent capability" },
+    ToolCatalogEntry { name: "b00t_agent_delegate",    description: "Delegate task to sub-agent",             subcommand: "agent delegate" },
+    ToolCatalogEntry { name: "b00t_agent_message",     description: "Send ACP message to agent",              subcommand: "agent message" },
+    ToolCatalogEntry { name: "b00t_agent_wait",        description: "Wait for agent to complete",             subcommand: "agent wait" },
+    ToolCatalogEntry { name: "b00t_agent_notify",      description: "Broadcast ACP notification",             subcommand: "agent notify" },
+    ToolCatalogEntry { name: "b00t_agent_progress",    description: "Report task progress",                   subcommand: "agent progress" },
+    ToolCatalogEntry { name: "b00t_agent_complete",    description: "Mark agent task complete",               subcommand: "agent complete" },
+    ToolCatalogEntry { name: "b00t_agent_vote_create", description: "Create a hive vote",                     subcommand: "agent vote create" },
+    ToolCatalogEntry { name: "b00t_agent_vote_submit", description: "Submit a vote",                          subcommand: "agent vote submit" },
+    ToolCatalogEntry { name: "b00t_session_init",      description: "Initialize a b00t session",              subcommand: "session init" },
+    ToolCatalogEntry { name: "b00t_session_status",    description: "Show session status",                    subcommand: "session status" },
+    ToolCatalogEntry { name: "b00t_session_end",       description: "End current session",                    subcommand: "session end" },
+    ToolCatalogEntry { name: "b00t_checkpoint",        description: "Create git checkpoint with tests",       subcommand: "checkpoint" },
+    ToolCatalogEntry { name: "b00t_grok_digest",       description: "Ingest content into RAG knowledgebase",  subcommand: "grok digest" },
+    ToolCatalogEntry { name: "b00t_grok_ask",          description: "Semantic search in knowledgebase",       subcommand: "grok ask" },
+    ToolCatalogEntry { name: "b00t_grok_learn",        description: "Learn content into grok RAG",            subcommand: "grok learn" },
+    ToolCatalogEntry { name: "b00t_grok_status",       description: "Check grok/RAG backend health",          subcommand: "grok status" },
+    ToolCatalogEntry { name: "b00t_task_list",         description: "List all tasks",                         subcommand: "task list" },
+    ToolCatalogEntry { name: "b00t_task_next",         description: "Show next pending task",                  subcommand: "task next" },
+    ToolCatalogEntry { name: "b00t_task_add",          description: "Add a new task",                         subcommand: "task add" },
+    ToolCatalogEntry { name: "b00t_task_done",         description: "Mark task as done",                      subcommand: "task done" },
+    ToolCatalogEntry { name: "b00t_task_update",       description: "Update task status/title/notes",         subcommand: "task update" },
+    ToolCatalogEntry { name: "b00t_up",                description: "Launch ralph agent REPL outer-loop",     subcommand: "up" },
+    ToolCatalogEntry { name: "b00t_ontology_query",    description: "Query live capability ontology",         subcommand: "ontology query" },
+    ToolCatalogEntry { name: "b00t_skill_list",        description: "List available skills",                  subcommand: "skill list" },
+    ToolCatalogEntry { name: "b00t_skill_activate",    description: "Activate a skill",                       subcommand: "skill activate" },
+    ToolCatalogEntry { name: "b00t_app_vscode_mcp_install",     description: "Install MCP in VSCode",         subcommand: "app vscode mcp install" },
+    ToolCatalogEntry { name: "b00t_app_claudecode_mcp_install", description: "Install MCP in Claude Code",    subcommand: "app claudecode mcp install" },
 ];
 
 /// Search TOOL_CATALOG by keyword (case-insensitive substring match on name + description)
@@ -1572,7 +1568,7 @@ pub struct BExecCommand {
 // 🤓 BExecCommand: custom McpReflection+McpExecutor — argv must be shell-split,
 // not treated as a single positional string; macro would mangle it.
 impl crate::clap_reflection::McpReflection for BExecCommand {
-    fn mcp_tool_name() -> String { "exec".to_string() }
+    fn mcp_tool_name() -> String { "b00t_exec".to_string() }
     fn command_path() -> Vec<String> { vec![] }
 }
 impl crate::clap_reflection::McpExecutor for BExecCommand {
@@ -1580,8 +1576,7 @@ impl crate::clap_reflection::McpExecutor for BExecCommand {
         let argv = params.get("argv")
             .and_then(|v| v.as_str())
             .ok_or_else(|| anyhow::anyhow!("b00t_exec requires argv: string"))?;
-        let parts: Vec<String> = shlex::split(argv)
-            .ok_or_else(|| anyhow::anyhow!("Invalid shell quoting in argv: {argv}"))?;
+        let parts: Vec<&str> = argv.split_whitespace().collect();
         let output = std::process::Command::new("b00t-cli")
             .args(&parts)
             .output()
@@ -1596,7 +1591,7 @@ impl crate::clap_reflection::McpExecutor for BExecCommand {
 
 // BDiscoverCommand: custom executor — searches TOOL_CATALOG and returns JSON matches
 impl crate::clap_reflection::McpReflection for BDiscoverCommand {
-    fn mcp_tool_name() -> String { "discover".to_string() }
+    fn mcp_tool_name() -> String { "b00t_discover".to_string() }
     fn command_path() -> Vec<String> { vec![] }
 }
 impl crate::clap_reflection::McpExecutor for BDiscoverCommand {
@@ -1633,7 +1628,7 @@ impl crate::clap_reflection::McpExecutor for BDiscoverCommand {
 /// Then call b00t_exec to run the chosen command.
 ///
 /// # Example workflow
-/// 1. b00t_discover("install cli tool") → [{name:"cli_install", subcommand:"cli install"}]
+/// 1. b00t_discover("install cli tool") → [{name:"b00t_cli_install", subcommand:"cli install"}]
 /// 2. b00t_exec("cli install jq")
 #[derive(Parser, Clone)]
 pub struct BDiscoverCommand {
@@ -1645,221 +1640,6 @@ pub struct BDiscoverCommand {
 
 /// Create SLIM surface registry — only 5 tools visible to agents.
 /// Sub-agents call b00t_discover(query) to find tools, b00t_exec(argv) to run them.
-/// Generate a viz graph for a datum — wraps `b00t-cli viz entangle`.
-#[derive(Parser, Clone)]
-pub struct BVizGenerateCommand {
-    #[arg(long, help = "Datum name (e.g. 'bubblewrap', 'pm2-mcp')")]
-    pub datum: String,
-    #[arg(long, default_value = "mermaid", help = "Output format: mermaid | json | ascii | svg")]
-    pub format: String,
-}
-impl crate::clap_reflection::McpReflection for BVizGenerateCommand {
-    fn mcp_tool_name() -> String { "viz".to_string() }
-    fn command_path() -> Vec<String> { vec!["viz".into(), "entangle".into()] }
-}
-impl crate::clap_reflection::McpExecutor for BVizGenerateCommand {
-    fn execute_mcp_call(params: &std::collections::HashMap<String, serde_json::Value>) -> anyhow::Result<String> {
-        let datum = params.get("datum").and_then(|v| v.as_str())
-            .ok_or_else(|| anyhow::anyhow!("b00t_viz_generate requires datum: string"))?;
-        let format = params.get("format").and_then(|v| v.as_str()).unwrap_or("mermaid");
-        let out = std::process::Command::new("b00t-cli")
-            .args(["viz", "entangle", "--datum", datum, "--format", format])
-            .output()
-            .map_err(|e| anyhow::anyhow!("b00t-cli viz failed: {e}"))?;
-        if out.status.success() {
-            Ok(String::from_utf8_lossy(&out.stdout).to_string())
-        } else {
-            anyhow::bail!("{}", String::from_utf8_lossy(&out.stderr))
-        }
-    }
-}
-
-/// Write/read the shared ops log (OPS.jsonl in active soul dir).
-#[derive(Parser, Clone)]
-pub struct BLogCommand {
-    #[arg(help = "Message to append (omit with --list to read)")]
-    pub message: Option<String>,
-    #[arg(long, default_value = "active", help = "Scope: active|global|project")]
-    pub scope: String,
-    #[arg(long, default_value = "info", help = "Result: ok|fail|info|warn")]
-    pub result: String,
-    #[arg(long, help = "List recent entries instead of appending")]
-    pub list: bool,
-    #[arg(long, default_value = "20")]
-    pub tail: Option<usize>,
-}
-impl crate::clap_reflection::McpReflection for BLogCommand {
-    fn mcp_tool_name() -> String { "log".to_string() }
-    fn command_path() -> Vec<String> { vec!["soul".into(), "log".into()] }
-}
-impl crate::clap_reflection::McpExecutor for BLogCommand {
-    fn execute_mcp_call(params: &std::collections::HashMap<String, serde_json::Value>) -> anyhow::Result<String> {
-        let list = params.get("list").and_then(|v| v.as_bool()).unwrap_or(false);
-        let scope = params.get("scope").and_then(|v| v.as_str()).unwrap_or("active").to_string();
-        let result_tag = params.get("result").and_then(|v| v.as_str()).unwrap_or("info").to_string();
-        let mut cmd = std::process::Command::new("b00t-cli");
-        cmd.args(["soul", "log"]);
-        if list {
-            let tail = params.get("tail").and_then(|v| v.as_u64()).unwrap_or(20);
-            cmd.args(["--list", "--tail", &tail.to_string()]);
-        } else {
-            let msg = params.get("message").and_then(|v| v.as_str())
-                .ok_or_else(|| anyhow::anyhow!("log requires message or list:true"))?;
-            cmd.arg(msg).args(["--result", &result_tag, "--scope", &scope]);
-        }
-        let out = cmd.output().map_err(|e| anyhow::anyhow!("b00t-cli soul log: {e}"))?;
-        Ok(String::from_utf8_lossy(&out.stdout).to_string())
-    }
-}
-
-/// Invoke the active verifier datum (default: z3-verify) with an SMT2/FOL assertion.
-/// Returns structured JSON: { result, verified, solver, elapsed_ms, counterexample? }
-/// This is the hallucination-reduction runtime surface — LLM proposes, Z3 evaluates.
-#[derive(Parser, Clone)]
-pub struct BVerifyCommand {
-    #[arg(help = "SMT2 assertion to verify (e.g. '(declare-const x Int)(assert (= x 42))(check-sat)')")]
-    pub assertion: String,
-    #[arg(long, default_value = "smt2", help = "Input format: smt2 | prolog")]
-    pub format: String,
-    #[arg(long, default_value = "5000", help = "Solver timeout in milliseconds")]
-    pub timeout_ms: u64,
-    #[arg(long, default_value = "z3-verify", help = "Verifier datum name")]
-    pub solver: String,
-}
-impl crate::clap_reflection::McpReflection for BVerifyCommand {
-    fn mcp_tool_name() -> String { "verify".to_string() }
-    fn command_path() -> Vec<String> { vec!["verify".into()] }
-}
-impl crate::clap_reflection::McpExecutor for BVerifyCommand {
-    fn execute_mcp_call(params: &std::collections::HashMap<String, serde_json::Value>) -> anyhow::Result<String> {
-        let assertion = params.get("assertion").and_then(|v| v.as_str())
-            .ok_or_else(|| anyhow::anyhow!("verify requires assertion: string"))?;
-        let _timeout_ms = params.get("timeout_ms").and_then(|v| v.as_u64()).unwrap_or(5000);
-        let solver = params.get("solver").and_then(|v| v.as_str()).unwrap_or("z3-verify");
-
-        let start = std::time::Instant::now();
-        // Route through z3 binary directly (datum binary = "z3", args = ["-smt2", "-in"])
-        let mut cmd = std::process::Command::new("z3");
-        cmd.args(["-smt2", "-in"])
-            .stdin(std::process::Stdio::piped())
-            .stdout(std::process::Stdio::piped())
-            .stderr(std::process::Stdio::piped());
-        let mut child = cmd.spawn().map_err(|e| anyhow::anyhow!("z3 not found: {e}; install with: uv pip install z3-solver"))?;
-        if let Some(mut stdin) = child.stdin.take() {
-            use std::io::Write;
-            stdin.write_all(assertion.as_bytes())?;
-        }
-        let output = child.wait_with_output()?;
-        let elapsed = start.elapsed().as_millis() as u64;
-        let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
-        let verified = stdout.starts_with("sat");
-        let result = if stdout.starts_with("unsat") { "unsat" }
-                     else if stdout.starts_with("sat") { "sat" }
-                     else { "unknown" };
-        let counterexample = if !verified && stdout.contains("\n") {
-            Some(stdout.lines().skip(1).collect::<Vec<_>>().join(" | "))
-        } else { None };
-
-        // Write proof receipt to soul log
-        let log_msg = format!("verify {result} solver={solver} elapsed={elapsed}ms");
-        let _ = std::process::Command::new("b00t-cli")
-            .args(["soul", "log", &log_msg, "--result", if verified { "ok" } else { "info" }])
-            .output();
-
-        let resp = serde_json::json!({
-            "result": result,
-            "verified": verified,
-            "solver": solver,
-            "elapsed_ms": elapsed,
-            "stdout": stdout,
-            "counterexample": counterexample,
-        });
-        Ok(serde_json::to_string_pretty(&resp).unwrap_or_default())
-    }
-}
-
-/// Activate a named b00t hive profile (stack-role binding).
-///
-/// Runs `b00t hive activate=<profile>` which transitions system state, starts
-/// declared services, and enforces resource exclusion groups. After activation,
-/// the MCP server sends a `notifications/tools/list_changed` event so the host
-/// client re-fetches the tool list automatically.
-///
-/// Examples:
-///   b00t_mcp_stack_load("finetune")   → activates finetune.hive.toml, claims GPU
-///   b00t_mcp_stack_load("inference")  → activates inference.hive.toml, starts vLLM
-#[derive(Parser, Clone)]
-pub struct BStackLoadCommand {
-    #[arg(help = "Hive profile name to activate (matches _b00t_/<name>.hive.toml)")]
-    pub profile: String,
-    #[arg(long, help = "Dry-run: print plan without activating")]
-    pub dry_run: bool,
-}
-impl crate::clap_reflection::McpReflection for BStackLoadCommand {
-    fn mcp_tool_name() -> String { "b00t_mcp_stack_load".to_string() }
-    fn command_path() -> Vec<String> { vec!["hive".into(), "activate".into()] }
-}
-impl crate::clap_reflection::McpExecutor for BStackLoadCommand {
-    fn execute_mcp_call(params: &std::collections::HashMap<String, serde_json::Value>) -> anyhow::Result<String> {
-        let profile = params.get("profile").and_then(|v| v.as_str())
-            .ok_or_else(|| anyhow::anyhow!("b00t_mcp_stack_load requires profile: string"))?;
-        let dry_run = params.get("dry_run").and_then(|v| v.as_bool()).unwrap_or(false);
-
-        let activate_arg = format!("activate={profile}");
-        let mut args = vec!["hive", &activate_arg];
-        if dry_run { args.push("--dry-run"); }
-
-        let output = std::process::Command::new("b00t-cli")
-            .args(&args)
-            .output()
-            .map_err(|e| anyhow::anyhow!("b00t-cli exec failed: {e}"))?;
-
-        let stdout = String::from_utf8_lossy(&output.stdout).to_string();
-        let stderr = String::from_utf8_lossy(&output.stderr).to_string();
-
-        if output.status.success() {
-            Ok(format!("✅ Stack '{profile}' activated\n{stdout}"))
-        } else {
-            anyhow::bail!("hive activate={profile} failed:\n{stderr}")
-        }
-    }
-}
-
-/// Deactivate a named b00t hive profile (releases resources, stops declared services).
-///
-/// Runs `b00t hive deactivate=<profile>` and sends `notifications/tools/list_changed`
-/// so the host client re-fetches the updated tool list.
-#[derive(Parser, Clone)]
-pub struct BStackUnloadCommand {
-    #[arg(help = "Hive profile name to deactivate")]
-    pub profile: String,
-}
-impl crate::clap_reflection::McpReflection for BStackUnloadCommand {
-    fn mcp_tool_name() -> String { "b00t_mcp_stack_unload".to_string() }
-    fn command_path() -> Vec<String> { vec!["hive".into(), "deactivate".into()] }
-}
-impl crate::clap_reflection::McpExecutor for BStackUnloadCommand {
-    fn execute_mcp_call(params: &std::collections::HashMap<String, serde_json::Value>) -> anyhow::Result<String> {
-        let profile = params.get("profile").and_then(|v| v.as_str())
-            .ok_or_else(|| anyhow::anyhow!("b00t_mcp_stack_unload requires profile: string"))?;
-
-        let deactivate_arg = format!("deactivate={profile}");
-        let output = std::process::Command::new("b00t-cli")
-            .args(["hive", &deactivate_arg])
-            .output()
-            .map_err(|e| anyhow::anyhow!("b00t-cli exec failed: {e}"))?;
-
-        let stdout = String::from_utf8_lossy(&output.stdout).to_string();
-        let stderr = String::from_utf8_lossy(&output.stderr).to_string();
-
-        if output.status.success() {
-            Ok(format!("✅ Stack '{profile}' deactivated\n{stdout}"))
-        } else {
-            anyhow::bail!("hive deactivate={profile} failed:\n{stderr}")
-        }
-    }
-}
-
 /// Use create_full_mcp_registry() for debug/migration compatibility.
 pub fn create_mcp_registry() -> McpCommandRegistry {
     create_mcp_registry_with_notify(std::sync::Arc::new(|| {}))
@@ -1888,6 +1668,20 @@ pub fn create_mcp_registry_with_notify(
         .add_post_hook("b00t_mcp_stack_load", std::sync::Arc::clone(&notify_fn))
         .add_post_hook("b00t_mcp_stack_unload", notify_fn);
     crate::soul_dataframerr_tools::register_dataframerr_tools(&mut builder);
+    builder.build()
+}
+
+/// Create FULL registry with all 56+ tools (debug / backward-compat only).
+/// 🤓 DO NOT use this for sub-agents — context cost is too high.
+pub fn create_full_mcp_registry() -> McpCommandRegistry {
+    let mut builder = McpCommandRegistry::builder();
+    // Surface: learn + whoami + status + exec + discover (everything else via proxy)
+    builder
+        .register::<LearnCommand>()
+        .register::<WhoamiCommand>()
+        .register::<StatusCommand>()
+        .register::<BExecCommand>()
+        .register::<BDiscoverCommand>();
     builder.build()
 }
 
@@ -2225,19 +2019,19 @@ mod tests {
         let surface_tools = surface.get_tools();
         assert!(!surface_tools.is_empty());
         let surface_names: Vec<&str> = surface_tools.iter().map(|t| t.name.as_ref()).collect();
-        assert!(surface_names.contains(&"whoami"),  "whoami must be in surface");
-        assert!(surface_names.contains(&"status"),  "status must be in surface");
-        assert!(surface_names.contains(&"learn"),   "learn must be in surface");
-        assert!(surface_names.contains(&"exec"),    "exec must be in surface");
-        assert!(surface_names.contains(&"discover"),"discover must be in surface");
-        assert_eq!(surface_tools.len(), 21, "surface registry must expose exactly 21 tools (learn+whoami+status+exec+discover+viz+log+verify+stack_load+stack_unload+DataFramerr)");
+        assert!(surface_names.contains(&"b00t_whoami"),  "whoami must be in surface");
+        assert!(surface_names.contains(&"b00t_status"),  "status must be in surface");
+        assert!(surface_names.contains(&"b00t_learn"),   "learn must be in surface");
+        assert!(surface_names.contains(&"b00t_exec"),    "exec must be in surface");
+        assert!(surface_names.contains(&"b00t_discover"),"discover must be in surface");
+        assert_eq!(surface_tools.len(), 5, "surface registry must expose exactly 5 tools");
 
         // Full registry: all tools for debug/migration
         let full = create_full_mcp_registry();
         let full_tools = full.get_tools();
         let full_names: Vec<&str> = full_tools.iter().map(|t| t.name.as_ref()).collect();
-        assert!(full_names.contains(&"mcp_list"));
-        assert!(full_names.contains(&"cli_detect"));
+        assert!(full_names.contains(&"b00t_mcp_list"));
+        assert!(full_names.contains(&"b00t_cli_detect"));
     }
 
     #[test]

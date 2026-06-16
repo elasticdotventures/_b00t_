@@ -76,22 +76,6 @@ storage-neumann = { version = "0.1", optional = true }
 grafeo = { version = "0.5.42", features = ["ai", "storage", "gql"], optional = true }
 zvec = { git = "https://github.com/zvec-ai/zvec-rust.git", tag = "v0.5.0", optional = true }
 b00t-ipc = { path = "../b00t-ipc", features = ["nats"], optional = true }
-crepe = "0.2.0"
-ascent = "0.8.0"
-syn = { version = "2.0.118", features = ["full"] }
-quote = "1.0.45"
-
-# Platform-gated dependencies
-# keyring crate is only used on non-Windows (Linux, macOS)
-[target.'cfg(not(windows))'.dependencies]
-keyring = "4"
-
-# Windows uses direct Win32 API instead of keyring
-[target.'cfg(windows)'.dependencies]
-windows = { version = "0.62", features = [
-    "Win32_Foundation",
-    "Win32_Security_Credentials",
-] }
 
 [dev-dependencies]
 tempfile = "3.10"
