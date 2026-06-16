@@ -128,6 +128,7 @@ pub mod k0mmand3r;
 pub mod k8s;
 pub mod memory_provider;
 pub mod model_manager;
+pub mod model_registry;
 pub mod orchestrator;
 pub mod sandbox;
 pub mod scheduler;

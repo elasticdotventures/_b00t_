@@ -136,6 +136,7 @@
 ._b00t_.toml
 .b00t-tools-env.json
 .b00t/cmdb/
+.b00t/models.toml
 .b00t/ralph/
 .b00t/ralph/loop.log
 .b00t/ralph/status.json

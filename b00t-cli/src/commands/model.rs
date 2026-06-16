@@ -147,6 +147,56 @@ pub enum ModelCommands {
         #[clap(long, help = "Max tokens", default_value_t = 50)]
         max_tokens: u32,
     },
+
+    // ── Local model registry (gitignored CRUD) ────────────────────────────────
+
+    #[clap(about = "Register a model endpoint in the local registry (gitignored)")]
+    Register {
+        #[clap(help = "Unique name for this endpoint (e.g. qwen36-peer, ollama-local)")]
+        name: String,
+        #[clap(long, help = "Endpoint URL (e.g. http://192.168.1.137:8001)")]
+        endpoint: String,
+        #[clap(long, help = "Model ID the API expects (e.g. Qwen3.6-27B-Q4_K_M.gguf)")]
+        model: String,
+        #[clap(long, help = "Provider type", default_value = "openai_compatible")]
+        provider: String,
+        #[clap(long, help = "Size class: small|large", default_value = "large")]
+        size: String,
+        #[clap(long, help = "API key env var name (e.g. OPENAI_API_KEY)")]
+        key: Option<String>,
+        #[clap(long, help = "Context window size")]
+        ctx: Option<u32>,
+        #[clap(long, help = "Comma-separated capabilities: chat,code,tools,vision,embeddings")]
+        capabilities: Option<String>,
+        #[clap(long, help = "Cost class: free|paid|per-token")]
+        cost: Option<String>,
+        #[clap(long, help = "Cognitive tier: sm0l|ch0nky|frontier")]
+        tier: Option<String>,
+    },
+
+    #[clap(about = "Enable a model in the local registry")]
+    Enable {
+        #[clap(help = "Model name")]
+        name: String,
+    },
+
+    #[clap(about = "Disable a model in the local registry")]
+    Disable {
+        #[clap(help = "Model name")]
+        name: String,
+    },
+
+    #[clap(about = "Remove a model from the local registry")]
+    Unregister {
+        #[clap(help = "Model name")]
+        name: String,
+    },
+
+    #[clap(about = "Show local registry file path")]
+    Where {
+        #[clap(long, help = "Show project-local path instead of global")]
+        project: bool,
+    },
 }
 
 impl ModelCommands {
@@ -199,6 +249,37 @@ impl ModelCommands {
                 prompt,
                 max_tokens,
             } => test_cmd(endpoint, prompt, *max_tokens),
+
+            // ── Registry CRUD ─────────────────────────────────────────────────
+            ModelCommands::Register {
+                name,
+                endpoint,
+                model,
+                provider,
+                size,
+                key,
+                ctx,
+                capabilities,
+                cost,
+                tier,
+            } => register_cmd(
+                name, endpoint, model, provider, size,
+                key.as_deref(), *ctx,
+                capabilities.as_deref(),
+                cost.as_deref(), tier.as_deref(),
+            ),
+            ModelCommands::Enable { name } => crate::model_registry::enable_model(name),
+            ModelCommands::Disable { name } => crate::model_registry::disable_model(name),
+            ModelCommands::Unregister { name } => crate::model_registry::remove_model(name),
+            ModelCommands::Where { project } => {
+                let p = if *project {
+                    crate::model_registry::project_registry_path()
+                } else {
+                    crate::model_registry::global_registry_path()
+                };
+                println!("{}", p.display());
+                Ok(())
+            }
         }
     }
 
@@ -751,6 +832,66 @@ fn test_cmd(endpoint: &str, prompt: &str, max_tokens: u32) -> Result<()> {
     println!("   Time:        {:.2}s", elapsed.as_secs_f64());
 
     Ok(())
+}
+
+// ── Registry command helpers ─────────────────────────────────────────────────
+
+#[allow(clippy::too_many_arguments)]
+fn register_cmd(
+    name: &str,
+    endpoint: &str,
+    model: &str,
+    provider: &str,
+    size: &str,
+    key: Option<&str>,
+    ctx: Option<u32>,
+    capabilities: Option<&str>,
+    cost: Option<&str>,
+    tier: Option<&str>,
+) -> Result<()> {
+    use b00t_c0re_lib::datum_ai_model::{ModelCapability, ModelProvider, ModelSize};
+
+    let provider = match provider.to_lowercase().as_str() {
+        "openai" => ModelProvider::OpenAI,
+        "anthropic" => ModelProvider::Anthropic,
+        "ollama" => ModelProvider::Ollama,
+        "openrouter" => ModelProvider::OpenRouter,
+        "openai_compatible" | "compatible" => ModelProvider::OpenAICompatible,
+        "huggingface" | "hf" => ModelProvider::HuggingFace,
+        "groq" => ModelProvider::Groq,
+        "xai" => ModelProvider::XAI,
+        "litellm" => ModelProvider::LiteLLM,
+        other => ModelProvider::Other(other.to_string()),
+    };
+
+    let size = match size.to_lowercase().as_str() {
+        "small" | "sm0l" => ModelSize::Small,
+        "large" | "ch0nky" | "frontier" => ModelSize::Large,
+        other => {
+            anyhow::bail!("Unknown size '{other}' — use small|large");
+        }
+    };
+
+    let caps = capabilities
+        .map(|s| {
+            s.split(',')
+                .filter_map(|c| match c.trim().to_lowercase().as_str() {
+                    "chat" | "text" => Some(ModelCapability::Chat),
+                    "code" => Some(ModelCapability::Code),
+                    "tools" | "tool_use" => Some(ModelCapability::Tools),
+                    "vision" | "multimodal" => Some(ModelCapability::Vision),
+                    "embeddings" | "embed" => Some(ModelCapability::Embeddings),
+                    "reasoning" => Some(ModelCapability::Reasoning),
+                    "json" | "json_mode" => Some(ModelCapability::JsonMode),
+                    _ => None,
+                })
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_else(|| vec![ModelCapability::Chat]);
+
+    crate::model_registry::register_model(
+        name, endpoint, model, provider, size, key, ctx, caps, cost, tier,
+    )
 }
 
 #[cfg(test)]
