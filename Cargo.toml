@@ -17,6 +17,9 @@ members = [
     "b00t-c0re-a2a",
     "b00t-embed",
 ]
+exclude = [
+    "vendor/embed-anything-b00t",
+]
 resolver = "2"
 
 [workspace.package]
