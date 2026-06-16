@@ -1,0 +1,122 @@
+# PRD-ARCH-008: ControlFlow<B,C> gate ontology
+
+[b00t.schema]
+version   = "1"
+type      = "prd"
+type_tags = ["prd", "controlflow", "gate", "bouncer", "handoff", "ontology", "bfo", "pattern"]
+
+[prd]
+id     = "PRD-ARCH-008-CONTROLFLOW-GATE-ONTOLOGY"
+title  = "ControlFlow<B,C> gate ontology — typed handoff + bouncer gate composition"
+status = "proposed"
+tier   = "frontier"
+closes_task = 35
+
+# ─── Executive Summary ───────────────────────────────────────────────────────
+# b00t uses "gates" (bouncer checks) and "handoffs" (agent transitions) but
+# these are currently informal — just bash commands or guard patterns.
+# This PRD introduces a typed ControlFlow<B, C> generic trait where:
+#   B = Bouncer (validation predicate)
+#   C = Context (payload crossing the gate)
+# Gates are registered as ontology nodes in irontology-mcp, enabling:
+#   - type-safe gate composition
+#   - gate-to-gate DAG visualization
+#   - OKR-linked gate pass/fail metrics
+#   - BFO Process classification of gate evaluation events
+
+[current_state]
+bouncer  = "b00t-cli/src/commands/bouncer.rs — validate subcommand, informal guard checks"
+handoff  = "implicit — agents hand off via task status; no typed protocol"
+ontology = "irontology-mcp has DatumNode but no GateNode class"
+missing  = ["ControlFlow trait", "GateNode ontology class", "DAG composition", "metrics"]
+
+[controlflow_trait]
+# Rust trait definition for typed gates
+definition = """
+pub trait Bouncer<C>: Send + Sync {
+    fn validate(&self, ctx: &C) -> BouncerResult;
+}
+
+pub enum BouncerResult {
+    Pass,
+    Warn(String),
+    Block(String),
+    Redirect { target: String, reason: String },
+}
+
+pub struct Gate<B, C>
+where
+    B: Bouncer<C>,
+{
+    pub id: String,
+    pub bouncer: B,
+    pub on_warn: WarnPolicy,   // Continue | Escalate | Block
+    pub on_block: BlockPolicy, // Fail | Retry(u8) | Redirect
+    _phantom: PhantomData<C>,
+}
+
+pub trait ControlFlow<B: Bouncer<C>, C> {
+    fn pass_through(&self, gate: &Gate<B, C>, ctx: C) -> Result<C, GateError>;
+    fn compose(self, next: Gate<B, C>) -> GateChain<B, C>;
+}
+"""
+
+[gate_ontology]
+# GateNode registered in irontology-mcp
+datum_class  = "b00t:GateNode"
+fields = [
+  "id: String",
+  "kind: GateKind",          # BounceCheck | ResourceGuard | TierFilter | AuthzCheck
+  "bouncer_id: String",      # ref to Bouncer impl
+  "bfo_class: String",       # BFO:Process (gate eval is a process)
+  "input_tier: TierLevel",   # sm0l | ch0nky | frontier
+  "output_tier: TierLevel",  # may upcast or downcast
+  "pass_metric: String",     # OKR key result to increment on pass
+  "fail_metric: String",     # OKR key result to increment on fail
+]
+
+[gate_dag]
+# Gates compose into DAGs; visualize via `b00t ontology diagram --class=b00t:GateNode`
+built_in_gates = [
+  { id = "tier-filter",     kind = "TierFilter",    note = "sm0l can't run frontier tasks" },
+  { id = "resource-guard",  kind = "ResourceGuard", note = "RAM/GPU gate from hive profile" },
+  { id = "bouncer-validate",kind = "BounceCheck",   note = "current b00t bouncer --validate" },
+  { id = "authz-check",     kind = "AuthzCheck",    note = "agent has permission for action" },
+]
+compose_cmd = "b00t gate compose tier-filter,resource-guard,bouncer-validate"
+
+[bfo_integration]
+# Gate evaluation events are BFO:Process instances
+gate_eval_class = "BFO:Process"
+gate_pass_class = "b00t:GatePassEvent"
+gate_fail_class = "b00t:GateFailEvent"
+temporal_region = "BFO:TemporalRegion — bounded by gate start/end timestamps"
+
+[implementation]
+new_file   = "b00t-c0re-lib/src/gate.rs"
+new_file2  = "b00t-cli/src/commands/gate.rs"
+modify     = ["b00t-cli/src/commands/bouncer.rs", "vendor/irontology-mcp/src/lib.rs"]
+new_cmd    = "b00t gate list|compose|validate|stats"
+
+[acceptance]
+must = [
+  "Gate<TierBouncer, TaskContext> rejects sm0l agent + frontier task at compile time",
+  "b00t gate list shows all registered gates with kind and tier levels",
+  "b00t gate compose tier-filter,bouncer-validate produces GateChain that passes validation",
+  "GateNode registered in irontology-mcp; b00t ontology query --class b00t:GateNode returns results",
+]
+
+[[related]]
+datum = "PRD-ARCH-006-CLIF-OWL2-BFO"
+note  = "BFO Process classification for gate evaluation events"
+
+[[related]]
+datum = "PRD-ARCH-004-OKR-SELF-IMPROVE"
+note  = "gate pass/fail metrics feed OKR violation_rate tracking"
+
+# b00t:map v1
+# summary: typed ControlFlow<B,C> gate trait + GateNode ontology + DAG composition + BFO Process events
+# tags: prd, controlflow, gate, bouncer, handoff, ontology, bfo, rust, frontier
+# tier: frontier
+# cmds: b00t gate list; b00t gate compose tier-filter,bouncer-validate; b00t gate stats
+# complexity: 7

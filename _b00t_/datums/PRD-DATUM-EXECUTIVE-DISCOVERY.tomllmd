@@ -1,0 +1,126 @@
+# PRD: b00t datum executive discovery language
+
+[b00t.schema]
+version   = "1"
+type      = "prd"
+type_tags = ["prd", "tomllm", "z3", "qwen36", "executive-language", "discovery", "datum"]
+
+[prd]
+id     = "PRD-DATUM-EXECUTIVE-DISCOVERY"
+title  = "b00t datum executive discovery language — Z3-validated tomllm query DSL for ch0nky agents"
+status = "proposed"
+tier   = "frontier"
+closes_task = 13
+
+# ─── Executive Summary ───────────────────────────────────────────────────────
+# Executive agents (ch0nky/frontier) need to discover relevant datums fast
+# without loading all datums into context. Current `b00t datum list` is untyped.
+# This PRD introduces the Executive Discovery Language (EDL): a TOML-embedded
+# query DSL (`.tomllmd` syntax) that ch0nky can emit to find datums by type,
+# tier, tags, OKR linkage, or constraint satisfaction.
+# Z3 validates EDL queries for satisfiability before execution.
+# Goal: sub-100ms datum discovery without context pollution.
+
+[current_state]
+datum_list   = "b00t datum list — flat list, no filtering, no query"
+datum_search = "grep on _b00t_/datums/*.tomllmd — text search only"
+z3_status    = "Z3 executable in PATH (z3 --version); b00t has Z3 constraints planned"
+missing      = ["typed query DSL", "Z3 validation", "ch0nky-native query format", "index"]
+
+[edl_syntax]
+# Executive Discovery Language — valid TOML emitted by ch0nky
+# ch0nky emits a [[query]] block in a temporary .tomllmd; b00t datum find evaluates it
+description = "TOML-native query DSL for datum discovery"
+
+example_query = """
+# Find all frontier-tier PRD datums related to OODA with OKR linkage
+[[query]]
+type_tags   = { all = ["prd", "ooda"] }
+tier        = "frontier"
+status      = { in = ["proposed", "approved"] }
+has_field   = "closes_task"
+limit       = 10
+order_by    = "complexity desc"
+"""
+
+example_constraint_query = """
+# Find datums satisfying Z3 constraint: complexity <= 5 AND tier != frontier
+[[query]]
+z3_constraint = '(and (<= complexity 5) (not (= tier "frontier")))'
+type_tags     = { any = ["prd", "pattern"] }
+"""
+
+[edl_grammar]
+# Formal EDL grammar (EBNF subset)
+field_filters   = "type_tags.all | type_tags.any | tier | status.in | has_field"
+z3_constraint   = "optional Z3 s-expression string; validated before eval"
+pagination      = "limit (default 20) | offset | order_by <field> <asc|desc>"
+output_format   = "summary | full | ids-only"
+
+[z3_validation]
+# Z3 validates EDL queries before execution
+# Prevents: unsatisfiable queries, invalid field references, type mismatches
+validate_cmd = "b00t datum find --dry-run --z3-check"
+z3_schema    = """
+(declare-const complexity Int)
+(declare-const tier String)
+(declare-const status String)
+(assert (and (>= complexity 1) (<= complexity 10)))
+(assert (member tier '("sm0l" "ch0nky" "frontier")))
+"""
+on_unsat     = "emit Rejected hint: 'query has no satisfying datums in index'"
+
+[discovery_index]
+# Fast datum index for sub-100ms queries
+index_file   = "~/.b00t/datum-index.json"
+index_fields = ["id", "type_tags", "tier", "status", "closes_task", "complexity", "title"]
+rebuild_cmd  = "b00t datum index --rebuild"
+auto_rebuild = "on b00t datum create|update"
+
+[ch0nky_interface]
+# ch0nky emits EDL query as part of OODA Orient phase
+# Executive receives compact datum list; loads full datums only as needed
+orient_pattern = """
+# ch0nky emits [[query]] block; b00t datum find evaluates and returns ids
+[[query]]
+type_tags = { all = ["prd"] }
+tier      = { in = ["ch0nky", "frontier"] }
+status    = "approved"
+limit     = 5
+"""
+response_format = "ids only → ch0nky reads full datum on demand"
+
+[implementation]
+new_file    = "b00t-cli/src/commands/datum_find.rs"
+new_file2   = "b00t-cli/src/datum_index.rs"
+modify      = ["b00t-cli/src/commands/datum.rs"]
+new_cmds    = [
+  "b00t datum find --query <file.tomllmd>",
+  "b00t datum find --z3='<constraint>'",
+  "b00t datum index --rebuild",
+  "b00t datum find --dry-run --z3-check",
+]
+
+[acceptance]
+must = [
+  "b00t datum find --query discovers PRD datums with type_tags=['prd','ooda'] in < 100ms",
+  "b00t datum find --z3='(= tier \"frontier\")' returns only frontier-tier datums",
+  "invalid Z3 constraint emits rejection hint before query executes",
+  "datum-index.json rebuilt automatically on b00t datum create",
+  "ch0nky can emit [[query]] block and receive compact id list response",
+]
+
+[[related]]
+datum = "PRD-ARCH-006-CLIF-OWL2-BFO"
+note  = "BFO ontology classes are queryable via EDL type_tags"
+
+[[related]]
+datum = "PRD-DATUM-PATCH-SEMANTIC-ROUTER"
+note  = "EDL discovers relevant datums for semantic patch routing"
+
+# b00t:map v1
+# summary: TOML-native EDL query DSL for datum discovery; Z3-validated; sub-100ms indexed lookup
+# tags: prd, tomllm, edl, z3, discovery, datum, ch0nky, frontier
+# tier: frontier
+# cmds: b00t datum find --query query.tomllmd; b00t datum index --rebuild
+# complexity: 6

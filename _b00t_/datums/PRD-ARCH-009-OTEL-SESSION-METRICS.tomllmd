@@ -1,0 +1,70 @@
+# PRD-ARCH-009: OTEL internal server + session metrics
+
+[b00t.schema]
+version   = "1"
+type      = "prd"
+type_tags = ["prd", "otel", "metrics", "prometheus", "focus", "observability", "session"]
+
+[prd]
+id     = "PRD-ARCH-009-OTEL-SESSION-METRICS"
+title  = "Embed opentelemetry-sdk in b00t-cli; export session metrics to Prometheus scrape endpoint"
+status = "proposed"
+tier   = "frontier"
+
+# ─── Executive Summary ───────────────────────────────────────────────────────
+# b00t-cli has observability.rs and events.jsonl but no live metrics export.
+# This PRD embeds opentelemetry-sdk (Rust) in b00t-cli, starts a Prometheus
+# scrape endpoint at localhost:9464 during session init, and exports session-
+# scoped counters and spans. FOCUS records become OTEL spans.
+# `b00t observability otel-status` shows if the internal server is running.
+
+[current_state]
+events_log = "events.jsonl"
+cmd        = "b00t-cli/src/commands/observability.rs"
+missing    = ["live metrics export", "Prometheus scrape endpoint", "OTEL spans"]
+
+[otel]
+crates = [
+  "opentelemetry = { version = '0.27', features = ['metrics'] }",
+  "opentelemetry-prometheus = '0.20'",
+  "opentelemetry_sdk = { version = '0.27', features = ['rt-tokio'] }",
+]
+scrape_endpoint = "http://localhost:9464/metrics"
+bind_on         = "session init (b00t session start)"
+teardown_on     = "session end (b00t session end)"
+
+[otel.metrics]
+task_total       = "otel_counter: total tasks dispatched"
+guard_violations = "otel_counter: hive guard pattern violations"
+phase_transitions = "otel_counter: OODA phase transitions (labeled by phase name)"
+focus_records    = "otel_counter: FOCUS intervals recorded"
+
+[otel.spans]
+focus_span_name       = "b00t.focus"
+focus_attributes      = ["task_id", "agent_id", "phase", "duration_ms"]
+replay_on_session_load = true
+
+[cli]
+new_subcommand  = "b00t observability otel-status"
+output_running  = "OTEL scrape server running at http://localhost:9464/metrics"
+output_stopped  = "OTEL scrape server not running (session not active)"
+files_modified  = ["b00t-cli/src/commands/observability.rs", "b00t-cli/src/session.rs", "Cargo.toml"]
+
+[acceptance]
+must = [
+  "b00t session start binds localhost:9464; curl returns valid Prometheus text format",
+  "task_total counter increments on each task dispatch",
+  "b00t observability otel-status prints server URL when running",
+  "b00t session end tears down the OTEL server cleanly",
+]
+
+[[related]]
+datum = "PRD-ARCH-013-VLLM-OODA-STATIG"
+note  = "OODA phase transitions feed phase_transitions counter"
+
+# b00t:map v1
+# summary: embed otel-sdk in b00t-cli; scrape at localhost:9464; FOCUS→spans; otel-status cmd
+# tags: prd, otel, metrics, prometheus, focus, observability, session
+# tier: frontier
+# cmds: b00t observability otel-status; curl localhost:9464/metrics
+# complexity: 6

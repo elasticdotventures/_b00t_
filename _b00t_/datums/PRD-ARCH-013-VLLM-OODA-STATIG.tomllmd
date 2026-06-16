@@ -1,0 +1,172 @@
+# PRD-ARCH-013: vllm/podman/quadlet OODA state machine + A2A sm0l error streaming
+
+[b00t.schema]
+version   = "1"
+type      = "prd"
+type_tags = ["prd", "vllm", "podman", "quadlet", "statig", "ooda", "a2a", "sm0l", "state-machine", "kani"]
+
+[prd]
+id     = "PRD-ARCH-013-VLLM-OODA-STATIG"
+title  = "vllm/podman/quadlet OODA state machine — port to statig + quadlet codegen + A2A sm0l error streaming"
+status = "approved"
+tier   = "frontier"
+closes_task = 48
+
+# ─── Executive Summary ────────────────────────────────────────────────────────
+# Three distinct deliverables:
+# A. Port b00t-c0re-lib/src/ooda.rs from hand-rolled FSM to `statig` HSM crate.
+# B. Add quadlet .container unit file generation to b00t-cli/src/hive.rs.
+# C. Add A2A sm0l error classification: route errors through local sm0l HTTP endpoint.
+#
+# Status of statig: v0.4.1 on crates.io; NOT yet in b00t workspace Cargo.toml.
+# Status of kani: used only in vendor/l3dg3rr/kani-proofs; NOT in main workspace.
+# Status of quadlet: hive.rs generates .service units only; no .container codegen.
+# Status of sm0l: hive profile defined but no Rust classifier exists.
+
+# ─── Part A: statig port of OodaLoop ─────────────────────────────────────────
+[statig_port]
+crate         = "statig"
+version       = "0.4.1"
+add_to        = "b00t-c0re-lib/Cargo.toml"
+
+# Current OodaPhase (8 states): Idle, Observing, Orienting, Deciding, Acting, Reviewing, Complete, Failed(String)
+# In statig: each becomes a unit struct; the Machine type holds OodaLoop context.
+# Transitions: fn handle() returns Response<M> = Transition | Super | Handled | Unhandled
+# OodaGuardRails becomes Context fields (max_iterations, max_failures, etc.)
+
+[statig_port.state_topology]
+# Flat HSM (no hierarchical nesting needed — linear with Reviewing→Observing loop-back)
+machine_context = "OodaContext"  # holds config, guard_rails, iterations, history
+initial_state   = "Idle"
+states = [
+  { name = "Idle",       entry = "emit_idle_metric",       transitions = ["Observing", "Failed"] },
+  { name = "Observing",  entry = "record_observation",     transitions = ["Orienting", "Failed"] },
+  { name = "Orienting",  entry = "orient_context",         transitions = ["Deciding", "Failed"] },
+  { name = "Deciding",   entry = "record_decision",        transitions = ["Acting", "Failed"] },
+  { name = "Acting",     entry = "execute_action",         transitions = ["Reviewing", "Failed"] },
+  { name = "Reviewing",  entry = "evaluate_review",        transitions = ["Complete", "Observing", "Failed"] },
+  { name = "Complete",   entry = "write_ooda_state_json",  transitions = [] },
+  { name = "Failed",     entry = "write_ooda_state_json",  transitions = [] },
+]
+
+[statig_port.events]
+# Events are the way statig drives transitions
+CycleForward  = "advance to next phase in standard sequence"
+LoopBack      = "Reviewing → Observing (iterate)"
+Abort         = "any phase → Failed(reason)"
+Complete      = "Reviewing → Complete"
+
+[statig_port.api_compat]
+# Keep existing OodaLoop::new(), OodaLoop::run(), OodaLoop::transition_to() signatures.
+# statig machine becomes OodaLoop internals; external callers see same API.
+# OodaPhase enum is KEPT as the public type; statig states are internal.
+# @tribal: keep pub enum OodaPhase for serde/JSON compat (ooda-state.json format)
+
+[statig_port.files]
+modify = ["b00t-c0re-lib/src/ooda.rs", "b00t-c0re-lib/Cargo.toml"]
+tests  = "preserve all 30+ existing unit tests; add statig-specific transition tests"
+
+# ─── Part B: quadlet .container file generation ───────────────────────────────
+[quadlet_codegen]
+# systemd-quadlet generates .service from .container + .network + .volume units.
+# Current hive.rs: generate_systemd_unit() → ExecStart=podman run ... (.service)
+# New: generate_quadlet_unit() → [Container] / [Service] / [Install] INI format
+
+[quadlet_codegen.hive_toml_schema]
+# New fields in *.hive.toml:
+service_type = "container | service"  # default: service
+image        = "registry/image:tag"   # required if service_type=container
+network      = "podman-net"           # optional
+volumes      = ["host:container"]     # optional
+environment  = {KEY = "VALUE"}        # merged with existing env block
+quadlet_dir  = "~/.config/containers/systemd"  # install location
+
+[quadlet_codegen.output_format]
+# .container file format (systemd-quadlet v0.7+):
+example = """
+[Unit]
+Description=vllm inference — qwen3-27b
+[Container]
+Image=ghcr.io/vllm-project/vllm-openai:latest
+Exec=--model Qwen/Qwen3-27B --dtype bfloat16
+Environment=HF_HOME=/data/hf
+Volume=/data:/data:Z
+Network=podman-net
+[Service]
+Restart=on-failure
+[Install]
+WantedBy=default.target
+"""
+
+[quadlet_codegen.files]
+modify = ["b00t-cli/src/hive.rs"]
+new    = []
+tests  = "unit test: hive.toml with service_type=container → valid quadlet INI output"
+
+# ─── Part C: A2A sm0l error classification ────────────────────────────────────
+[a2a_sm0l_streaming]
+# When an A2A task fails, route the error payload through the sm0l HTTP endpoint
+# (Qwen2.5-3B at inference-sm0l profile) to classify into ErrorKind enum.
+# ErrorKind drives retry logic, escalation, and A2A error_code in response.
+
+[a2a_sm0l_streaming.error_taxonomy]
+ErrorKind = [
+  "Transient",      # network/IO — retry immediately
+  "ResourceLimit",  # OOM/timeout — wait and retry
+  "Semantic",       # LLM output parse fail — rephrase and retry
+  "Authorization",  # permission denied — escalate to Operator
+  "Unrecoverable",  # fatal — fail fast, no retry
+]
+
+[a2a_sm0l_streaming.architecture]
+# tokio::sync::mpsc channel on each A2A Task for error events
+# sm0l classifier: POST /v1/chat/completions with error text → JSON ErrorKind
+# Streaming: caller subscribes to error_rx; each ErrorKind emitted as it arrives
+# sm0l endpoint: from inference-sm0l.hive.toml ExecStart port (default: 8002)
+channel_type = "tokio::sync::mpsc::Sender<ErrorEvent>"
+sm0l_model   = "Qwen2.5-3B-Instruct"
+timeout_ms   = 2000  # sm0l is fast; 2s is generous
+
+[a2a_sm0l_streaming.files]
+modify = ["b00t-c0re-a2a/src/error.rs", "b00t-c0re-a2a/src/task.rs"]
+new    = ["b00t-c0re-a2a/src/sm0l_classifier.rs"]
+tests  = "mock sm0l HTTP server; inject error payload; assert ErrorKind classification"
+
+# ─── kani proofs (Phase 4 — post-statig) ─────────────────────────────────────
+[kani_proofs]
+# Add kani-proofs crate to main workspace after statig port is complete.
+targets = [
+  "OodaPhase transition exhaustiveness (all states reachable from Idle)",
+  "terminal state invariant (Complete/Failed have no outgoing transitions)",
+  "guardRails max_iterations enforced (loop terminates)",
+]
+note = "kani only works on stable with --features kani; gate behind #[cfg(kani)] in ooda.rs"
+
+# ─── Acceptance criteria ─────────────────────────────────────────────────────
+[acceptance]
+must = [
+  "cargo test -p b00t-c0re-lib passes all 30+ existing ooda tests after statig port",
+  "b00t hive activate=inference-qwen36-27b generates valid .container quadlet file",
+  "A2A error stream emits ErrorKind::Transient for 503 responses from vllm",
+  "OodaLoop::new() API unchanged — no breaking changes to b00t-cli callers",
+]
+should = [
+  "kani proofs added to workspace and passing under cargo kani",
+  "b00t ooda register-ontology uses OodaPhase class nodes (from PRD-ONTOLOGY-OODA-UFO-SYSML)",
+]
+
+# ─── Related datums ──────────────────────────────────────────────────────────
+[[related]]
+id   = "PRD-ONTOLOGY-OODA-UFO-SYSML"
+note = "OODA ontology registration depends on unified OodaPhase (phase A above)"
+
+[[related]]
+id   = "PRD-ARCH-ROTO-VS-RHAI"
+note = "roto for guard eval; statig for OODA; both coexist"
+
+# b00t:map v1
+# summary: port OodaLoop to statig HSM; add quadlet codegen in hive.rs; A2A sm0l error routing
+# tags: prd, statig, ooda, quadlet, podman, a2a, sm0l, vllm, kani
+# tier: frontier
+# cmds: cargo add statig -p b00t-c0re-lib; b00t hive generate-quadlet; b00t a2a error-stream
+# complexity: 9

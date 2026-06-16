@@ -1,0 +1,207 @@
+# PRD: First-class OODA idiom — KerML typing + irontology-mcp ontology registration
+
+[b00t.schema]
+version   = "1"
+type      = "prd"
+type_tags = ["prd", "ooda", "ufo", "sysmlv2", "kerml", "ontology", "fol", "clif", "owl2", "shacl", "gql", "physics", "rust"]
+
+[prd]
+id     = "PRD-ONTOLOGY-OODA-UFO-SYSML"
+title  = "First-class OODA idiom + UFO/SysMLv2/KerML ontology for b00t type-theoretic physics"
+status = "proposed"
+tier   = "frontier"
+closes_task = 46
+
+# ─── Executive Summary ────────────────────────────────────────────────────────
+# b00t already has an OODA CLI (`b00t ooda run|status|phase`, PR #444) and a
+# Rust state machine (b00t-c0re-lib/src/ooda.rs). What is missing is:
+# (a) OODA phases registered as discoverable ontology classes in irontology-mcp,
+# (b) a KerML-profile type layer expressing b00t "physics" — the typing discipline
+#     governing valid agent/datum compositions.
+#
+# "Physics" here = type-theoretic physics: KerML feature typing rules that
+# constrain which agents compose with which datums (e.g. an sm0l executor
+# MUST NOT run frontier-tier tasks — this is a typing constraint, not a runtime check).
+#
+# VERDICT: write b00t_ooda.kerm (KerML-profile TOML), register OodaPhase hierarchy
+# in irontology-mcp via DatumNode::class, and add `b00t ooda register-ontology` CLI
+# subcommand. Implement SHACL shape for datum validation. CLIF axioms are inline prose.
+
+# ─── OODA idiom gaps vs. PR #444 ────────────────────────────────────────────
+[ooda_cli_gaps]
+pr_444_added = [
+  "b00t ooda run  — delegates to ralph Python runner",
+  "b00t ooda status — ralph task backlog summary",
+  "b00t ooda phase --json — reads ~/.b00t/ooda-state.json",
+]
+gaps_remaining = [
+  "b00t ooda register-ontology — push OodaPhase class hierarchy into irontology-mcp",
+  "OodaPhase written to ~/.b00t/ooda-state.json on each transition (currently: not written)",
+  "Unified OodaPhase: maintenance.rs duplicates ooda.rs — consolidate into b00t-c0re-lib",
+]
+acceptance_criteria = [
+  "b00t ooda register-ontology injects OdaPhase nodes into DatumStore",
+  "ooda.rs is the single source; maintenance.rs imports it (no duplicate OodaPhase)",
+  "mcp__b00t-mcp__b00t_ontology_query returns ooda:: prefixed class nodes",
+]
+
+# ─── KerML-profile type layer (b00t 'physics') ───────────────────────────────
+# @tribal: KerML is the kernel of SysMLv2; domain.kerm in vendor/l3dg3rr/types/
+#          uses [[type]] TOML arrays — we follow the same format for b00t ontology.
+[kerml_profile]
+file_to_create = "_b00t_/types/b00t_ooda.kerm"
+extends        = "vendor/l3dg3rr/types/domain.kerm"
+
+# KerML 'Classifier' hierarchy for OODA phases
+[[kerml_profile.type]]
+id    = "ooda::OodaPhase"
+label = "OodaPhase"
+kind  = "state_machine_node"
+ufo_category = "Perdurant"  # OODA loop is a process (UFO: perdurant = things that happen)
+
+[[kerml_profile.type]]
+id    = "ooda::Idle"
+label = "Idle"
+kind  = "state_node"
+supertype = "ooda::OodaPhase"
+ufo_category = "State"
+
+[[kerml_profile.type]]
+id    = "ooda::Observing"
+label = "Observing"
+kind  = "state_node"
+supertype = "ooda::OodaPhase"
+ufo_category = "Process"
+
+[[kerml_profile.type]]
+id    = "ooda::Orienting"
+label = "Orienting"
+kind  = "state_node"
+supertype = "ooda::OodaPhase"
+ufo_category = "Process"
+
+[[kerml_profile.type]]
+id    = "ooda::Deciding"
+label = "Deciding"
+kind  = "state_node"
+supertype = "ooda::OodaPhase"
+ufo_category = "Process"
+
+[[kerml_profile.type]]
+id    = "ooda::Acting"
+label = "Acting"
+kind  = "state_node"
+supertype = "ooda::OodaPhase"
+ufo_category = "Process"
+
+[[kerml_profile.type]]
+id    = "ooda::Reviewing"
+label = "Reviewing"
+kind  = "state_node"
+supertype = "ooda::OodaPhase"
+ufo_category = "Process"
+
+[[kerml_profile.type]]
+id    = "ooda::Complete"
+label = "Complete"
+kind  = "terminal_state"
+supertype = "ooda::OodaPhase"
+ufo_category = "State"
+
+[[kerml_profile.type]]
+id    = "ooda::Failed"
+label = "Failed"
+kind  = "terminal_state"
+supertype = "ooda::OodaPhase"
+ufo_category = "State"
+note = "carries reason: String — error provenance"
+
+# ─── UFO upper-layer mapping ──────────────────────────────────────────────────
+[ufo_mapping]
+# UFO (Unified Foundational Ontology) categories applied to b00t entities.
+# Endurant = things that exist (agents, datums, hive profiles)
+# Perdurant = things that happen (loops, tasks, cycles)
+# Moment = dependent entities (permissions, capabilities, states)
+b00t_agent   = { ufo = "Endurant::FunctionalComplex", note = "agents persist between loops" }
+b00t_datum   = { ufo = "Endurant::Object",            note = "datums are independent" }
+ooda_loop    = { ufo = "Perdurant::Process",           note = "OODA has parts (phases)" }
+ooda_phase   = { ufo = "Perdurant::ProcessualContext", note = "sub-process of OodaLoop" }
+hive_profile = { ufo = "Endurant::Kind",               note = "profiles type the hive state" }
+capability   = { ufo = "Moment::Mode",                 note = "capability depends on agent" }
+
+# ─── CLIF axioms (ISO Common Logic prose + notation) ─────────────────────────
+[clif_axioms]
+# Formalize valid OODA transitions as first-order axioms.
+# These are prose-level; machine-checkable forms go in kani-proofs/.
+axiom_1 = "(forall (p q) (if (ooda:transition p q) (ooda:valid-sequence p q)))"
+axiom_2 = "(forall (p) (if (ooda:phase p) (or (ooda:Idle p) (ooda:Observing p) (ooda:Orienting p) (ooda:Deciding p) (ooda:Acting p) (ooda:Reviewing p) (ooda:Complete p) (ooda:Failed p))))"
+axiom_3 = "(forall (p) (if (or (ooda:Complete p) (ooda:Failed p)) (ooda:terminal p)))"
+axiom_4 = "(forall (p) (if (ooda:terminal p) (not (exists (q) (ooda:transition p q)))))"
+axiom_5 = "(forall (a t) (if (and (b00t:Agent a) (ooda:Acting t) (b00t:sm0l-tier a)) (not (b00t:frontier-task t))))"
+# @tribal: axiom_5 = 'physics' typing: sm0l agents are type-forbidden from frontier tasks
+
+# ─── SHACL shape for DatumNode OodaPhase validation ─────────────────────────
+[shacl_profile]
+shape_id   = "b00t:OodaPhaseNodeShape"
+target     = "b00t:DatumNode"
+constraint = "sh:property"
+path       = "ooda:hasPhase"
+node_kind  = "sh:IRI"
+class_in   = ["ooda:Idle", "ooda:Observing", "ooda:Orienting", "ooda:Deciding", "ooda:Acting", "ooda:Reviewing", "ooda:Complete", "ooda:Failed"]
+note       = "validated by irontology-mcp ingest() before store write"
+
+# ─── GQL schema for irontology-mcp query ─────────────────────────────────────
+[gql_schema]
+# GraphQL-style schema for querying OODA state from b00t_ontology_query MCP tool.
+schema = """
+type OodaPhaseNode {
+  id: ID!
+  label: String!
+  kind: String!        # state_node | terminal_state
+  supertype: String
+  ufo_category: String
+  transitions_to: [OodaPhaseNode!]
+}
+type Query {
+  oodaPhases: [OodaPhaseNode!]!
+  oodaPhase(id: String!): OodaPhaseNode
+  currentPhase: OodaPhaseNode   # reads ~/.b00t/ooda-state.json
+}
+"""
+
+# ─── Implementation plan ─────────────────────────────────────────────────────
+[implementation]
+phase_1 = [
+  "Consolidate OodaPhase: remove duplicate in maintenance.rs, import from b00t-c0re-lib",
+  "Add ooda-state.json write on each OodaLoop transition (b00t-c0re-lib/src/ooda.rs)",
+  "Create _b00t_/types/b00t_ooda.kerm following domain.kerm format",
+]
+phase_2 = [
+  "Add `b00t ooda register-ontology` subcommand",
+  "DatumNode::class = 'ooda::OodaPhase' for each phase node",
+  "Ingest via IrontologyBridge::ingest() on startup or explicit CLI call",
+]
+phase_3 = [
+  "SHACL validation in irontology-mcp (Phase 3.2 per vendor/irontology-mcp/PRD-1.md)",
+  "GQL resolver for oodaPhases query via mcp__b00t-mcp__b00t_ontology_query",
+]
+
+# ─── Related datums ──────────────────────────────────────────────────────────
+[[related]]
+id   = "VENDOR-IRONTOLOGY-MCP"
+note = "Phase 3.2: SHACL + OWL classifier — coordinate with OODA shape above"
+
+[[related]]
+id   = "PRD-ARCH-ROTO-VS-RHAI"
+note = "roto for guard eval; ooda typing interacts with guard gate evaluation"
+
+[[related]]
+id   = "PRD-ARCH-013-VLLM-OODA-STATIG"
+note = "statig port of OodaLoop — follow-on implementation from this PRD"
+
+# b00t:map v1
+# summary: OODA phases as KerML types + irontology-mcp ontology classes + UFO mapping + SHACL
+# tags: prd, ooda, kerml, ufo, sysmlv2, ontology, shacl, gql, physics, rust
+# tier: frontier
+# cmds: b00t ooda register-ontology, b00t ontology query --class ooda::OodaPhase
+# complexity: 7

@@ -1,0 +1,126 @@
+# PRD-ARCH-012: Unsloth QLoRA fine-tuning + k0mmand3r LSP intellisense
+
+[b00t.schema]
+version   = "1"
+type      = "prd"
+type_tags = ["prd", "unsloth", "qlora", "fine-tuning", "lsp", "k0mmand3r", "intellisense", "frontier"]
+
+[prd]
+id     = "PRD-ARCH-012-UNSLOTH-QLORA"
+title  = "Unsloth QLoRA fine-tuning pipeline + k0mmand3r LSP intellisense for b00t syntax"
+status = "proposed"
+tier   = "frontier"
+closes_task = 41
+
+# ─── Executive Summary ───────────────────────────────────────────────────────
+# Two related deliverables:
+# A. Unsloth QLoRA fine-tuning pipeline: fine-tune Qwen3-27B on b00t gospel
+#    (datums, learn templates, justfile recipes) to produce a b00t-aligned
+#    ch0nky model that understands b00t idioms natively.
+# B. k0mmand3r LSP intellisense: add Language Server Protocol completion
+#    and hover support for k0mmand3r syntax (\!execute idiom) in VS Code.
+
+# ─── Part A: Unsloth QLoRA fine-tuning ───────────────────────────────────────
+[qlora_pipeline]
+base_model    = "Qwen/Qwen3-27B-Instruct"
+adapter_name  = "b00t-aligned-qwen3-27b"
+framework     = "unsloth>=0.3.0 — 2x faster training, 70% less VRAM"
+output_format = "GGUF Q4_K_M → inference-qwen36-27b.hive.toml"
+target_vram   = "24GB (RTX3090 on hand)"
+
+[qlora_pipeline.dataset]
+# Training data sourced from b00t corpus
+sources = [
+  "_b00t_/datums/*.tomllmd — PRDs, patterns, datum examples",
+  "_b00t_/learn/*.md — skill templates",
+  "_b00t_/hive-guards.hive.toml — guard patterns",
+  "b00t-cli/src/**/*.rs — Rust source (code understanding)",
+  "justfile — command patterns",
+]
+format      = "alpaca/chatml: instruction + input + output triples"
+gen_cmd     = "b00t dataset generate --from-datums --format=alpaca --output=./fine-tune/train.jsonl"
+target_rows = 5000
+
+[qlora_pipeline.training]
+lora_r       = 16
+lora_alpha   = 32
+lora_dropout = 0.05
+target_modules = ["q_proj", "v_proj", "k_proj", "o_proj", "gate_proj", "up_proj", "down_proj"]
+epochs       = 3
+batch_size   = 2
+grad_accum   = 8
+lr           = 2e-4
+train_cmd    = "uv run python fine-tune/train_unsloth.py --config fine-tune/config.yaml"
+export_cmd   = "uv run python fine-tune/export_gguf.py --quant Q4_K_M"
+
+[qlora_pipeline.files]
+new_dir   = "fine-tune/"
+new_files = [
+  "fine-tune/train_unsloth.py",
+  "fine-tune/config.yaml",
+  "fine-tune/export_gguf.py",
+  "fine-tune/generate_dataset.py",
+]
+modify = ["b00t-cli/src/commands/dataset.rs"]
+
+# ─── Part B: k0mmand3r LSP intellisense ──────────────────────────────────────
+[lsp_intellisense]
+# k0mmand3r uses \! prefix ("sshbang") for execute idiom (vs old / prefix)
+# LSP server provides completion and hover for \!execute, \!delegate, etc.
+syntax_idiom  = "\\!execute <target> [args]"
+lsp_language  = "k0mmand3r"
+file_exts     = [".k0m", ".k0mmand3r"]
+vscode_ext    = "_b00t_/vscode/k0mmand3r-lsp/"
+
+[lsp_intellisense.completions]
+# Completion items from registered b00t commands + agents
+trigger_char  = "\\"
+completions   = [
+  { label = "\\!execute", detail = "execute a b00t command", insert = "\\!execute ${1:target} ${2:args}" },
+  { label = "\\!delegate", detail = "delegate task to agent", insert = "\\!delegate ${1:agent_id} ${2:task}" },
+  { label = "\\!observe", detail = "OODA observe phase", insert = "\\!observe ${1:target}" },
+  { label = "\\!orient", detail = "OODA orient phase", insert = "\\!orient ${1:context}" },
+]
+
+[lsp_intellisense.hover]
+# Hover shows agent doc, tier, capabilities
+hover_cmd    = "b00t agent describe ${word_at_cursor} --format=lsp-hover"
+hover_format = "Markdown: agent id, tier, capabilities, example usage"
+
+[lsp_intellisense.files]
+new_dir    = "_b00t_/vscode/k0mmand3r-lsp/"
+new_files  = [
+  "_b00t_/vscode/k0mmand3r-lsp/package.json",
+  "_b00t_/vscode/k0mmand3r-lsp/src/extension.ts",
+  "_b00t_/vscode/k0mmand3r-lsp/src/server.ts",
+]
+modify     = ["b00t-cli/src/k0mmand3r/mod.rs"]
+
+[k0mmand3r_sshbang]
+# Formalize \! as the "sshbang" operational mode for k0mmand3r
+# / prefix is kept behind config flag: k0mmand3r.legacy_slash = true
+new_idiom   = "\\!execute"
+old_idiom   = "/execute"
+config_flag = "k0mmand3r.legacy_slash = false  # default: sshbang mode"
+modify_file = "b00t-cli/src/k0mmand3r/mod.rs"
+note        = "/ prefix felt wrong in CLI dynamic; \\! is ssh-bang style, more intuitive"
+
+[acceptance]
+must = [
+  "fine-tune/train_unsloth.py runs on RTX3090 (24GB VRAM) without OOM",
+  "b00t dataset generate produces >= 5000 alpaca rows from datums",
+  "k0mmand3r LSP provides \\!execute completion in VS Code .k0m files",
+  "\\!execute runs same as /execute with legacy_slash=false (default)",
+  "exported GGUF loads in inference-qwen36-27b-llamacpp.hive.toml",
+]
+
+[[related]]
+datum = "PRD-ARCH-013-VLLM-OODA-STATIG"
+note  = "fine-tuned model runs in vllm; quadlet .container file generates service"
+
+# b00t:map v1
+# summary: Unsloth QLoRA fine-tune Qwen3-27B on b00t corpus; k0mmand3r \\! LSP in VS Code
+# tags: prd, unsloth, qlora, fine-tuning, qwen3-27b, lsp, k0mmand3r, vscode, frontier
+# tier: frontier
+# cmds: uv run python fine-tune/train_unsloth.py; b00t dataset generate --from-datums
+# complexity: 8

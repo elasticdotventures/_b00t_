@@ -1,0 +1,89 @@
+# PRD-ARCH-005: MBSE visualization via l3dg3rr ontology
+
+[b00t.schema]
+version   = "1"
+type      = "prd"
+type_tags = ["prd", "mbse", "ontology", "visualization", "l3dg3rr", "mermaid", "arch", "ch0nky"]
+
+[prd]
+id     = "PRD-ARCH-005-MBSE-VISUALIZATION"
+title  = "MBSE visualization via l3dg3rr ontology — Mermaid/SysMLv2 graph export from irontology-mcp"
+status = "proposed"
+tier   = "ch0nky"
+closes_task = 28
+
+# ─── Executive Summary ───────────────────────────────────────────────────────
+# vendor/l3dg3rr contains a KerML/SysMLv2 ontology with typed domains, relations,
+# and classifiers. irontology-mcp can query DatumNodes but has no diagram export.
+# This PRD adds `b00t ontology diagram` to generate Mermaid and SysMLv2 graphs
+# from the live irontology-mcp knowledge graph — enabling MBSE visualization.
+
+[current_state]
+l3dg3rr_types = "vendor/l3dg3rr/types/domain.kerm — KerML [[type]] arrays"
+irontology    = "vendor/irontology-mcp — DatumNode store, query via mcp tool"
+missing       = ["diagram export", "Mermaid codegen", "SysMLv2 part definition export"]
+
+[l3dg3rr_integration]
+# domain.kerm defines [[type]] blocks: id, label, kind, supertype, ufo_category
+# irontology DatumStore indexes by class → can query by supertype chain
+# New: traverse supertype graph → emit Mermaid classDiagram or SysMLv2 block def
+kerm_source   = "vendor/l3dg3rr/types/domain.kerm"
+datum_class   = "b00t:KermTypeNode"
+query_pattern = "b00t ontology query --class <id> --depth=3"
+
+[mermaid_export]
+# classDiagram format: A --|> B (inheritance), A --* B (composition), A --> B (association)
+output_format  = "mermaid/classDiagram"
+node_kinds     = ["state_machine_node", "state_node", "terminal_state", "process_node", "kind_node"]
+edge_kinds     = ["supertype", "composition", "association", "realization"]
+cli_cmd        = "b00t ontology diagram --format=mermaid [--class=<root>] [--depth=N]"
+
+[mermaid_export.example]
+output = """
+classDiagram
+  OodaPhase <|-- Idle
+  OodaPhase <|-- Observing
+  OodaPhase <|-- Orienting
+  OodaPhase <|-- Deciding
+  OodaPhase <|-- Acting
+  OodaPhase <|-- Reviewing
+  OodaPhase <|-- Complete
+  OodaPhase <|-- Failed
+  class OodaPhase { <<abstract>> }
+  class Complete { <<terminal>> }
+  class Failed { reason: String <<terminal>> }
+"""
+
+[sysmlv2_export]
+# SysMLv2 textual notation: part def / item def / attribute def
+output_format = "sysmlv2/textual"
+cli_cmd       = "b00t ontology diagram --format=sysmlv2 [--package=<ns>]"
+
+[implementation]
+new_cmd    = "b00t ontology diagram --format=<mermaid|sysmlv2> [--class=<root>] [--depth=N]"
+new_file   = "b00t-cli/src/commands/ontology_diagram.rs"
+modify     = ["b00t-cli/src/commands/ontology.rs", "vendor/irontology-mcp/src/lib.rs"]
+ch0nky_use = "ch0nky renders ontology context; sm0l classifies node kinds"
+
+[acceptance]
+must = [
+  "b00t ontology diagram --format=mermaid --class=ooda::OodaPhase outputs valid Mermaid classDiagram",
+  "b00t ontology diagram --format=sysmlv2 --class=b00t::Agent outputs SysMLv2 part def block",
+  "depth flag controls traversal depth (1..5); default=2",
+  "diagram output is pipe-safe (no escape chars, no color)",
+]
+
+[[related]]
+datum = "PRD-ONTOLOGY-OODA-UFO-SYSML"
+note  = "OODA KerML types provide the first diagram target"
+
+[[related]]
+datum = "PRD-ARCH-006-CLIF-OWL2-BFO"
+note  = "BFO/OWL2 classes feed same diagram pipeline"
+
+# b00t:map v1
+# summary: `b00t ontology diagram` exports Mermaid/SysMLv2 from l3dg3rr KerML types via irontology-mcp
+# tags: prd, mbse, mermaid, sysmlv2, kerml, ontology, l3dg3rr, ch0nky
+# tier: ch0nky
+# cmds: b00t ontology diagram --format=mermaid --class=ooda::OodaPhase --depth=3
+# complexity: 5

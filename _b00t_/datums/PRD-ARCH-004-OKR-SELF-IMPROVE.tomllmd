@@ -1,0 +1,75 @@
+# PRD-ARCH-004: OKR-driven self-improvement loop for b00t guard violation reduction
+
+[b00t.schema]
+version   = "1"
+type      = "prd"
+type_tags = ["prd", "self-improve", "okr", "loop", "violations", "arch", "ch0nky"]
+
+[prd]
+id     = "PRD-ARCH-004-OKR-SELF-IMPROVE"
+title  = "OKR-driven self-improvement loop: guard violations → OKR → patch → repeat"
+status = "proposed"
+tier   = "ch0nky"
+closes_task = 27
+
+# ─── Executive Summary ───────────────────────────────────────────────────────
+# b00t accumulates guard violations in guard-violations.jsonl (inert today).
+# This PRD specifies an OODA-aligned self-improvement loop where:
+#   Observe → stream guard-violations.jsonl into hive observability
+#   Orient  → ch0nky clusters violations by pattern frequency
+#   Decide  → select OKR most improved by patching the top violation
+#   Act     → auto-patch hive-guards.hive.toml or create a new datum rule
+# Output metric: violation_rate / session decreasing over rolling 10-session window.
+
+[violations]
+log_file      = "~/.b00t/guard-violations.jsonl"
+log_format    = '{"count": N, "pattern": "..."}'
+active_guards = "_b00t_/hive-guards.hive.toml"
+gap           = "violations logged but never fed back into guard improvement"
+
+[okr]
+proposed_okr_id = "OKR-GUARD-VIOLATION-RATE"
+objective       = "Reduce recurring guard violations per session to < 1.0"
+key_results = [
+  "KR1: violation_rate drops 20% each rolling 10-session window",
+  "KR2: top-3 violation patterns have guard patches within 2 sessions",
+  "KR3: new guard additions pass bouncer validation before merge",
+]
+owner_tier = "ch0nky"
+measure_cmd = "b00t guard violations --stats --rolling=10"
+
+[loop]
+trigger       = "session_end hook fires b00t improve-loop"
+observe_cmd   = "b00t guard violations --since=session --format=jsonl"
+orient_model  = "ch0nky (Qwen3-27B via inference-qwen36-35b-a3b-llamacpp.hive.toml)"
+orient_prompt = "cluster violations by pattern; rank by frequency × impact; return JSON"
+decide_rule   = "select OKR with delta > 0.2 from patching top cluster"
+act_targets   = [
+  "append [[b00t.hive.guards]] entry to hive-guards.hive.toml",
+  "create _b00t_/datums/GUARD-PATCH-<date>.tomllmd with rationale",
+]
+guard_on_act = "bouncer validate --input <patch> before write"
+
+[implementation]
+new_cmd   = "b00t improve-loop [--dry-run] [--okr=<id>]"
+new_file  = "b00t-cli/src/commands/improve_loop.rs"
+modify    = ["b00t-cli/src/commands/guard_manager.rs", "_b00t_/hive-guards.hive.toml"]
+
+[acceptance]
+must = [
+  "b00t improve-loop --dry-run shows top violation cluster and proposed patch",
+  "OKR-GUARD-VIOLATION-RATE datum created and tracking violation_rate metric",
+  "bouncer validates all auto-patches before write",
+  "rolling 10-session violation_rate metric visible in b00t status output",
+]
+
+[[related]]
+datum = "PRD-ARCH-013-VLLM-OODA-STATIG"
+note  = "OODA state machine drives observe→orient→decide→act phases"
+
+# b00t:map v1
+# summary: ch0nky-driven OODA loop reads guard-violations.jsonl, clusters, proposes patches, tracks OKR violation_rate
+# tags: prd, self-improve, okr, loop, violations, arch, ch0nky
+# tier: ch0nky
+# cmds: b00t improve-loop --dry-run; b00t guard violations --stats --rolling=10
+# complexity: 6

@@ -1,0 +1,100 @@
+# PRD-ARCH-010: Postel agent hints + DWIW normalization examples
+
+[b00t.schema]
+version   = "1"
+type      = "prd"
+type_tags = ["prd", "postel", "dwiw", "hints", "ux", "agent", "normalization"]
+
+[prd]
+id     = "PRD-ARCH-010-POSTEL-AGENT-HINTS"
+title  = "Postel agent hints + DWIW normalization — be liberal in what you accept from agents"
+status = "proposed"
+tier   = "sm0l"
+closes_task = 39
+
+# ─── Executive Summary ───────────────────────────────────────────────────────
+# Postel's Law: "be conservative in what you do; be liberal in what you accept."
+# b00t agents currently fail hard on malformed input — e.g., wrong flag names,
+# JSON with comments, extra whitespace in TOML. DWIW ("Do What I Want") mode
+# already strips comments from JSON for `b00t mcp add --dwiw`. This PRD
+# formalizes hint-based normalization across all b00t CLI entry points,
+# giving agents structured hints on what was wrong and how to fix it.
+
+[current_state]
+dwiw_exists   = "b00t mcp add --dwiw — strips comments from JSON (regex-based)"
+error_mode    = "clap errors are terse; no agent-readable structured hints"
+normalization = "none — malformed input → hard fail"
+missing       = ["structured hint output", "normalization pipeline", "agent-readable errors"]
+
+[postel_principle]
+# Liberal input acceptance + structured hints on what was normalized/rejected
+# Implementation: NormalizeResult<T> enum wraps successful parse with warnings
+definition = """
+pub enum NormalizeResult<T> {
+    Clean(T),                            // parsed without any normalization
+    Normalized { value: T, hints: Vec<AgentHint> },  // parsed after normalization
+    Rejected { hints: Vec<AgentHint> },  // could not parse; hints explain why
+}
+
+pub struct AgentHint {
+    pub code: HintCode,    // e.g. HintCode::ExtraComments, HintCode::WrongFlag
+    pub input: String,     // what was received
+    pub suggestion: String, // what to send instead
+    pub severity: HintSeverity, // Info | Warn | Error
+}
+"""
+
+[hint_codes]
+# Structured hint codes agents can programmatically act on
+ExtraComments   = { input = "{ /* comment */ 'key': 'val' }", fix = "strip /* */ and // comments" }
+TrailingComma   = { input = "{ 'a': 1, }", fix = "remove trailing comma before }" }
+WrongFlag       = { input = "--notes foo", fix = "--note foo (singular)" }
+WrongSubcmd     = { input = "b00t task show 5 --json", fix = "b00t task show 5 (JSON is default output)" }
+MissingRequired = { input = "b00t agent message <id>", fix = "b00t agent message <id> --subject <s> --content <c>" }
+TierMismatch    = { input = "sm0l agent + frontier task", fix = "use ch0nky or frontier agent for this task tier" }
+
+[output_format]
+# When --hints flag is passed, output structured JSON hints alongside normal output
+hints_flag   = "--hints"
+hints_format = "jsonl: one AgentHint per line on stderr"
+
+example_output = """
+{"code":"WrongFlag","input":"--notes","suggestion":"--note","severity":"Warn"}
+{"code":"WrongSubcmd","input":"task show 5 --json","suggestion":"task show 5","severity":"Info"}
+"""
+
+[dwiw_extension]
+# Extend --dwiw beyond mcp add to all commands
+dwiw_behaviors = [
+  "strip JSON comments before parse",
+  "trim trailing commas from JSON/TOML",
+  "fuzzy-match flag names (edit distance <= 2)",
+  "auto-correct singular/plural flag confusion",
+  "emit AgentHint for each normalization applied",
+]
+dwiw_cmd = "b00t --dwiw <any-subcommand>"
+
+[implementation]
+new_file   = "b00t-cli/src/normalize.rs"
+modify     = ["b00t-cli/src/main.rs", "b00t-cli/src/commands/mcp.rs"]
+new_trait  = "Normalizable — impl for CLI input types"
+hint_flag  = "global --hints flag on all subcommands"
+
+[acceptance]
+must = [
+  "b00t mcp add --dwiw '{/* comment */ \"name\": \"x\"}' parses without error",
+  "b00t task show 5 --json emits Warn hint: 'JSON is default; --json flag not needed'",
+  "b00t agent message <id> --notes foo emits Warn hint: '--notes → --note (singular)'",
+  "all AgentHint emitted on stderr; normal output unaffected on stdout",
+]
+
+[[related]]
+datum = "PRD-ARCH-008-CONTROLFLOW-GATE-ONTOLOGY"
+note  = "DWIW normalization is a liberal input gate before strict bouncer checks"
+
+# b00t:map v1
+# summary: Postel-law normalization + AgentHint structured feedback; extend DWIW to all b00t cmds
+# tags: prd, postel, dwiw, hints, normalization, ux, agent, sm0l
+# tier: sm0l
+# cmds: b00t --dwiw <subcmd>; b00t task show 5 --hints
+# complexity: 4
