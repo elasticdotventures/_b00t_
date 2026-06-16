@@ -164,3 +164,40 @@ mod tests {
         assert!(q.matches(&e));
     }
 }
+
+/// Validate the `z3_constraint` SMT-LIB2 string for basic syntax without running z3.
+/// Checks for balanced parentheses and non-empty expression. Returns `None` if no constraint.
+pub fn check_z3_syntax(constraint: &str) -> Result<()> {
+    let trimmed = constraint.trim();
+    if trimmed.is_empty() {
+        bail!("z3 constraint is empty");
+    }
+    let mut depth: i32 = 0;
+    for ch in trimmed.chars() {
+        match ch {
+            '(' => depth += 1,
+            ')' => {
+                depth -= 1;
+                if depth < 0 {
+                    bail!("z3 constraint has unbalanced parentheses: {constraint}");
+                }
+            }
+            _ => {}
+        }
+    }
+    if depth != 0 {
+        bail!("z3 constraint has unclosed parentheses (depth={depth}): {constraint}");
+    }
+    Ok(())
+}
+
+impl EdlQuery {
+    /// Validate z3_constraint syntax (no subprocess; pure Rust).
+    /// Returns `Ok(())` if constraint is None or syntax is balanced.
+    pub fn validate_z3_syntax(&self) -> Result<()> {
+        match &self.z3_constraint {
+            None => Ok(()),
+            Some(c) => check_z3_syntax(c),
+        }
+    }
+}
