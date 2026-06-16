@@ -6,6 +6,7 @@
 //! - Team captain delegation and voting systems
 //! - Progress reporting and notifications
 
+use crate::agent_subtype::AgentSubtype;
 use crate::B00tResult;
 use crate::redis::{AgentMessage, AgentStatus, RedisComms};
 use serde::{Deserialize, Serialize};
@@ -27,6 +28,9 @@ pub struct AgentMetadata {
     pub last_seen: u64,                        // Unix timestamp
     pub load: f32,                             // Current workload 0.0-1.0
     pub specializations: HashMap<String, f32>, // Domain -> proficiency score
+    /// Cardinal deployment subtype (cli/sdk/ide.vsix/gui); derived from capabilities tags.
+    #[serde(default)]
+    pub subtype: AgentSubtype,
 }
 
 /// Message types for agent coordination
@@ -947,6 +951,7 @@ mod tests {
                 ("rust".to_string(), 0.9),
                 ("testing".to_string(), 0.8),
             ]),
+            subtype: Default::default(),
         };
 
         let json = serde_json::to_string(&metadata).unwrap();
@@ -985,6 +990,7 @@ mod tests {
             last_seen: 1234567890,
             load: 0.0,
             specializations: HashMap::new(),
+            subtype: Default::default(),
         };
 
         let coordinator = AgentCoordinator::new(redis, metadata);

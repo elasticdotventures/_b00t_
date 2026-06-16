@@ -3,6 +3,7 @@
 //! Provides utilities for spawning, managing, and coordinating b00t agents
 //! from `.agent.toml` configuration files.
 
+use crate::agent_subtype::AgentSubtype;
 use crate::B00tResult;
 use crate::agent_coordination::{AgentCoordinator, AgentMetadata};
 use crate::redis::{AgentStatus, RedisComms, RedisConfig};
@@ -501,6 +502,7 @@ impl AgentManager {
             last_seen: SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs(),
             load: 0.0,
             specializations: HashMap::new(),
+            subtype: AgentSubtype::from_type_tags(&config.b00t.agent.skills),
         };
 
         // Create coordinator

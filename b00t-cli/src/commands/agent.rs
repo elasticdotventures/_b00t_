@@ -345,6 +345,7 @@ async fn handle_discover(
         last_seen: SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs(),
         load: 0.0,
         specializations: HashMap::new(),
+        subtype: Default::default(),
     };
 
     let coordinator = AgentCoordinator::new(redis, metadata);
@@ -373,7 +374,12 @@ async fn handle_discover(
     } else {
         println!("📡 Discovered {} agents:\n", agents.len());
         for agent in agents {
-            println!("🤖 {} ({})", agent.agent_id, agent.agent_role);
+            let subtype_label = if agent.subtype.is_known() {
+                format!(" [{}]", agent.subtype.label())
+            } else {
+                String::new()
+            };
+            println!("🤖 {}{} ({})", agent.agent_id, subtype_label, agent.agent_role);
             println!("   Skills: {}", agent.capabilities.join(", "));
             if let Some(crew) = agent.crew {
                 println!("   Crew: {}", crew);
@@ -399,6 +405,7 @@ async fn handle_message(to_agent: &str, subject: &str, content: &str, ack: bool)
         last_seen: SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs(),
         load: 0.0,
         specializations: HashMap::new(),
+        subtype: Default::default(),
     };
 
     let coordinator = AgentCoordinator::new(redis, metadata);
@@ -435,6 +442,7 @@ async fn handle_delegate(
         last_seen: SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs(),
         load: 0.0,
         specializations: HashMap::new(),
+        subtype: Default::default(),
     };
 
     let mut coordinator = AgentCoordinator::new(redis, metadata);
@@ -512,6 +520,7 @@ async fn handle_complete(
         last_seen: SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs(),
         load: 0.0,
         specializations: HashMap::new(),
+        subtype: Default::default(),
     };
 
     let coordinator = AgentCoordinator::new(redis, metadata);
@@ -557,6 +566,7 @@ async fn handle_progress(
         last_seen: SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs(),
         load: 0.0,
         specializations: HashMap::new(),
+        subtype: Default::default(),
     };
 
     let coordinator = AgentCoordinator::new(redis, metadata);
@@ -585,6 +595,7 @@ async fn handle_capability(capabilities: &str, description: &str, urgency_str: &
         last_seen: SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs(),
         load: 0.0,
         specializations: HashMap::new(),
+        subtype: Default::default(),
     };
 
     let coordinator = AgentCoordinator::new(redis, metadata);
@@ -638,6 +649,7 @@ async fn handle_notify(
         last_seen: SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs(),
         load: 0.0,
         specializations: HashMap::new(),
+        subtype: Default::default(),
     };
 
     let coordinator = AgentCoordinator::new(redis, metadata);
@@ -679,6 +691,7 @@ async fn handle_wait(
         last_seen: SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs(),
         load: 0.0,
         specializations: HashMap::new(),
+        subtype: Default::default(),
     };
 
     let coordinator = AgentCoordinator::new(redis, metadata);
