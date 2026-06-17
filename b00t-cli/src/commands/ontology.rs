@@ -15,6 +15,15 @@ pub enum OntologyCommands {
         #[clap(long, default_value = "table", value_parser = ["table", "json"])]
         format: String,
     },
+    #[clap(about = "SPARQL-like triple-pattern query over datum knowledge graph")]
+    Sparql {
+        #[clap(long, help = "Subject pattern (datum name substring match)")]
+        subject: Option<String>,
+        #[clap(long, help = "Predicate to expand: type|roles|validate|all", default_value = "all")]
+        predicate: String,
+        #[clap(long, default_value = "json", value_parser = ["json", "table"])]
+        format: String,
+    },
 }
 
 impl OntologyCommands {
@@ -27,6 +36,21 @@ impl OntologyCommands {
                 match format.as_str() {
                     "json" => println!("{}", serde_json::to_string_pretty(&ontology)?),
                     _ => print_ontology_table(&ontology),
+                }
+                Ok(())
+            }
+            OntologyCommands::Sparql { subject, predicate, format } => {
+                let workspace = crate::utils::get_workspace_root();
+                let datum_dir = format!("{}/_b00t_", workspace);
+                let triples = sparql_query(subject.as_deref(), predicate.as_str(), &datum_dir)?;
+                match format.as_str() {
+                    "table" => {
+                        println!("{:<30} {:<20} {}", "SUBJECT", "PREDICATE", "OBJECT");
+                        for t in &triples {
+                            println!("{:<30} {:<20} {}", t[0], t[1], t[2]);
+                        }
+                    }
+                    _ => println!("{}", serde_json::to_string_pretty(&triples)?),
                 }
                 Ok(())
             }
@@ -202,6 +226,52 @@ pub fn filter_required_for_role<'a>(datums: &'a [DatumMeta], role: &str) -> Vec<
         .collect()
 }
 
+/// SPARQL-like triple-pattern query: subject=datum name, predicate=field name.
+/// Returns Vec<[subject, predicate, object]> triples.
+pub fn sparql_query(subject: Option<&str>, predicate: &str, datum_dir: &str) -> Result<Vec<[String; 3]>> {
+    let datums = scan_datums(datum_dir)?;
+    let mut triples = Vec::new();
+    for datum in &datums {
+        let name = &datum.b00t.name;
+        if let Some(subj) = subject {
+            if !name.contains(subj) { continue; }
+        }
+        let emit = |pred: &str, obj: &str| [name.clone(), pred.to_string(), obj.to_string()];
+        match predicate {
+            "type" | "b00t:type" => {
+                triples.push(emit("b00t:type", &datum.b00t.datum_type));
+            }
+            "roles" | "b00t:roles" => {
+                for r in &datum.roles.required_for {
+                    triples.push(emit("b00t:requiredFor", r));
+                }
+                for r in &datum.roles.optional_for {
+                    triples.push(emit("b00t:optionalFor", r));
+                }
+            }
+            "validate" | "b00t:validate" => {
+                if !datum.validate.command.is_empty() {
+                    triples.push(emit("b00t:validateCmd", &datum.validate.command));
+                }
+            }
+            _ => {
+                // "all" or unknown — emit all predicates
+                triples.push(emit("b00t:type", &datum.b00t.datum_type));
+                for r in &datum.roles.required_for {
+                    triples.push(emit("b00t:requiredFor", r));
+                }
+                for r in &datum.roles.optional_for {
+                    triples.push(emit("b00t:optionalFor", r));
+                }
+                if !datum.validate.command.is_empty() {
+                    triples.push(emit("b00t:validateCmd", &datum.validate.command));
+                }
+            }
+        }
+    }
+    Ok(triples)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -285,5 +355,37 @@ optional_for = ["analyst"]
         let datums: Vec<DatumMeta> = vec![];
         let result = filter_required_for_role(&datums, "developer");
         assert_eq!(result.len(), 0);
+    }
+
+    #[test]
+    fn test_sparql_query_empty_dir() {
+        let dir = tempfile::tempdir().unwrap();
+        let triples = sparql_query(None, "all", dir.path().to_str().unwrap()).unwrap();
+        assert_eq!(triples.len(), 0);
+    }
+
+    #[test]
+    fn test_sparql_query_with_datum() {
+        use std::io::Write;
+        let dir = tempfile::tempdir().unwrap();
+        let toml_path = dir.path().join("rust.cli.toml");
+        std::fs::write(&toml_path, r#"[b00t]
+name = "rust"
+type = "cli"
+hint = "Rust toolchain"
+
+[roles]
+required_for = ["developer"]
+optional_for = []
+"#).unwrap();
+
+        let triples = sparql_query(None, "type", dir.path().to_str().unwrap()).unwrap();
+        assert!(!triples.is_empty(), "expected at least one triple");
+        assert_eq!(triples[0][0], "rust");
+        assert_eq!(triples[0][1], "b00t:type");
+        assert_eq!(triples[0][2], "cli");
+
+        let triples2 = sparql_query(Some("rust"), "roles", dir.path().to_str().unwrap()).unwrap();
+        assert!(triples2.iter().any(|t| t[1] == "b00t:requiredFor" && t[2] == "developer"));
     }
 }

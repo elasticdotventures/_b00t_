@@ -31,6 +31,11 @@ ledgrrr-events = []
 store-neumann = ["dep:storage-neumann"]
 store-oxigraph = ["dep:oxigraph"]
 oxigraph = ["store-oxigraph"]
+store-grafeo = ["dep:grafeo"]
+store-zvec = ["dep:zvec"]
+data-fabric = ["store-grafeo", "store-zvec"]
+qdrant = []  # optional Qdrant REST gate; disabled on this node (see SOUL.tomllm)
+ipc-fanout = ["dep:b00t-ipc", "data-fabric"]  # route write fanout through b00t-ipc Transport bus
 
 [dependencies]
 pyo3 = { version = "0.27", features = ["extension-module"], optional = true }
@@ -66,6 +71,13 @@ futures = "0.3"
 cfg-if = "1.0.4"
 oxigraph = { version = "0.5.8", optional = true }
 storage-neumann = { version = "0.1", optional = true }
+grafeo = { version = "0.5.42", features = ["ai", "storage", "gql"], optional = true }
+zvec = { git = "https://github.com/zvec-ai/zvec-rust.git", tag = "v0.5.0", optional = true }
+b00t-ipc = { path = "../b00t-ipc", features = ["nats"], optional = true }
+crepe = "0.2.0"
+ascent = "0.8.0"
+syn = { version = "2.0.118", features = ["full"] }
+quote = "1.0.45"
 
 [dev-dependencies]
 tempfile = "3.10"

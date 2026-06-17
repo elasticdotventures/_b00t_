@@ -106,8 +106,12 @@ pub mod datum_mcp;
 pub mod datum_repo;
 pub mod datum_skill;
 pub mod datum_stack;
+pub mod datum_triples;
+pub mod datum_proof;
+pub mod datum_store;
 pub mod datum_utils;
 pub mod datum_vscode;
+pub mod query_sources;
 #[cfg(feature = "dbus")]
 pub mod dbus_dispatch;
 pub mod dependency_resolver;
@@ -405,6 +409,14 @@ pub struct BootDatum {
     //    All other HookResult variants (non-error Warn/Redirect/Info/Missing) are non-fatal: logged and execution continues
     pub uninstall: Option<String>,
     pub hook_uninstall: Option<String>,
+
+    // Blessing system: tool authorization
+    // 🤓 unlocks: tool globs this datum authorizes when learned (e.g. ["cargo.*", "rustfmt"])
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub unlocks: Option<Vec<String>>,
+    // 🤓 type_tags: content classification (transferable, domain, etc.) — distinct from datum_type
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub type_tags: Option<Vec<String>>,
 }
 
 /// Handle datum types that are marked as *incubating*.

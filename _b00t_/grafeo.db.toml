@@ -1,0 +1,39 @@
+[b00t]
+name = "grafeo"
+datum_type = "db"
+description = "Embedded LPG+RDF+vector graph database (Rust-native, MSRV 1.91.1)"
+version = "0.5.42"
+node_status = "primary"
+
+[b00t.schema]
+spec = "datum/db/v1"
+
+[roles]
+required_for = ["data-fabric", "knowledge-graph", "irontology"]
+optional_for = ["sparql", "rag"]
+
+[validate]
+command = "cargo tree -p grafeo 2>/dev/null | head -1"
+pattern = "grafeo"
+
+[metadata]
+crate = "grafeo"
+crate_features = ["ai", "storage", "gql"]
+session_api = "db.session() → session.execute(gql)"
+vector_support = true
+rdf_support = true
+sparql_support = true
+persistence = "WAL + storage feature"
+embedding_field = "embedding"
+
+[notes]
+# 🤓 grafeo replaces Qdrant as primary graph+vector store in b00t
+# Sessions are sync — always use spawn_blocking in async context
+# MERGE = upsert; cosine_similarity(f.embedding, vector([...])) for ANN
+
+# b00t:map v1
+# summary: grafeo embedded LPG+RDF+vector DB; primary graph store
+# tags: grafeo, graph-db, vector, rdf, sparql, data-fabric
+# tier: ch0nky
+# cmds: cargo add grafeo --features ai,storage,gql
+# complexity: 5

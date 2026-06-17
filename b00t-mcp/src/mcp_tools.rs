@@ -93,11 +93,27 @@ impl_mcp_tool!(CliUpdateCommand, "b00t_cli_update", ["cli", "update"]);
 /// Update all CLI tools
 #[derive(Parser, Clone)]
 pub struct CliUpCommand {
-    #[arg(long, help = "Dry run - show what would be updated")]
-    pub dry_run: bool,
+    // 🤓 CLI uses --yes not --dry-run; dry_run was wrong field name (fixed)
+    #[arg(long, short = 'y', help = "Actually perform updates (default: report only)")]
+    pub yes: bool,
 }
 
 impl_mcp_tool!(CliUpCommand, "b00t_cli_up", ["cli", "up"]);
+
+/// Holistic upgrade: binary, MCP servers, hooks, Claude settings (NASA MBSE phases)
+#[derive(Parser, Clone)]
+pub struct UpgradeCommand {
+    #[arg(long, default_value = "all", help = "Scope: all|binary|mcp|hooks|settings")]
+    pub scope: String,
+    #[arg(long, help = "Plan only; apply no changes")]
+    pub dry_run: bool,
+    #[arg(long, help = "Route compile tasks to ch0nky GPU tier")]
+    pub delegate: bool,
+    #[arg(long, help = "Emit structured JSON report")]
+    pub json: bool,
+}
+
+impl_mcp_tool!(UpgradeCommand, "b00t_upgrade", ["upgrade"]);
 
 /// Record lesson from mistake
 #[derive(Parser, Clone)]
@@ -932,8 +948,177 @@ pub struct TaskUpdateCommand {
 }
 impl_mcp_tool!(TaskUpdateCommand, "b00t_task_update", ["task", "update"], positionals: ["id"]);
 
-/// Create and populate a registry with all available MCP tools
+
+// ── Autodiscovery Proxy ──────────────────────────────────────────────────────
+// 🤓 54 tools hidden here; agent discovers via b00t_discover, executes via b00t_exec
+// Sub-agents receive only 5 surface tools → lean context, sandboxed capability
+
+/// Catalog entry: (tool_name, description, cli_subcommand)
+pub struct ToolCatalogEntry {
+    pub name: &'static str,
+    pub description: &'static str,
+    pub subcommand: &'static str,
+}
+
+pub static TOOL_CATALOG: &[ToolCatalogEntry] = &[
+    ToolCatalogEntry { name: "b00t_mcp_list",          description: "List registered MCP servers",            subcommand: "mcp list" },
+    ToolCatalogEntry { name: "b00t_mcp_add",           description: "Register a new MCP server",              subcommand: "mcp register" },
+    ToolCatalogEntry { name: "b00t_mcp_install",       description: "Install an MCP server datum",            subcommand: "mcp install" },
+    ToolCatalogEntry { name: "b00t_mcp_output",        description: "Show MCP server output/logs",            subcommand: "mcp output" },
+    ToolCatalogEntry { name: "b00t_cli_detect",        description: "Detect installed CLI tool version",      subcommand: "cli detect" },
+    ToolCatalogEntry { name: "b00t_cli_desires",       description: "Show desired CLI tool version",          subcommand: "cli desires" },
+    ToolCatalogEntry { name: "b00t_cli_check",         description: "Check CLI tool vs desired version",      subcommand: "cli check" },
+    ToolCatalogEntry { name: "b00t_cli_install",       description: "Install a CLI tool via datum",           subcommand: "cli install" },
+    ToolCatalogEntry { name: "b00t_cli_update",        description: "Update a specific CLI tool",             subcommand: "cli update" },
+    ToolCatalogEntry { name: "b00t_cli_up",            description: "Update all CLI tools",                   subcommand: "cli up" },
+    ToolCatalogEntry { name: "b00t_upgrade",           description: "Holistic upgrade: binary+MCP+hooks",     subcommand: "upgrade" },
+    ToolCatalogEntry { name: "b00t_lfmf",              description: "Record a lesson from failure",           subcommand: "lfmf" },
+    ToolCatalogEntry { name: "b00t_advice",            description: "Get advice for a tool or error",         subcommand: "advice" },
+    ToolCatalogEntry { name: "b00t_ai_list",           description: "List configured AI providers",           subcommand: "ai list" },
+    ToolCatalogEntry { name: "b00t_ai_output",         description: "Show AI provider output",                subcommand: "ai output" },
+    ToolCatalogEntry { name: "b00t_agent_discover",    description: "Discover available agents",              subcommand: "agent discover" },
+    ToolCatalogEntry { name: "b00t_agent_capability",  description: "Query agent capabilities",               subcommand: "agent capability" },
+    ToolCatalogEntry { name: "b00t_agent_delegate",    description: "Delegate task to sub-agent",             subcommand: "agent delegate" },
+    ToolCatalogEntry { name: "b00t_agent_message",     description: "Send ACP message to agent",              subcommand: "agent message" },
+    ToolCatalogEntry { name: "b00t_agent_wait",        description: "Wait for agent to complete",             subcommand: "agent wait" },
+    ToolCatalogEntry { name: "b00t_agent_notify",      description: "Broadcast ACP notification",             subcommand: "agent notify" },
+    ToolCatalogEntry { name: "b00t_agent_progress",    description: "Report task progress",                   subcommand: "agent progress" },
+    ToolCatalogEntry { name: "b00t_agent_complete",    description: "Mark agent task complete",               subcommand: "agent complete" },
+    ToolCatalogEntry { name: "b00t_agent_vote_create", description: "Create a hive vote",                     subcommand: "agent vote create" },
+    ToolCatalogEntry { name: "b00t_agent_vote_submit", description: "Submit a vote",                          subcommand: "agent vote submit" },
+    ToolCatalogEntry { name: "b00t_session_init",      description: "Initialize a b00t session",              subcommand: "session init" },
+    ToolCatalogEntry { name: "b00t_session_status",    description: "Show session status",                    subcommand: "session status" },
+    ToolCatalogEntry { name: "b00t_session_end",       description: "End current session",                    subcommand: "session end" },
+    ToolCatalogEntry { name: "b00t_checkpoint",        description: "Create git checkpoint with tests",       subcommand: "checkpoint" },
+    ToolCatalogEntry { name: "b00t_grok_digest",       description: "Ingest content into RAG knowledgebase",  subcommand: "grok digest" },
+    ToolCatalogEntry { name: "b00t_grok_ask",          description: "Semantic search in knowledgebase",       subcommand: "grok ask" },
+    ToolCatalogEntry { name: "b00t_grok_learn",        description: "Learn content into grok RAG",            subcommand: "grok learn" },
+    ToolCatalogEntry { name: "b00t_grok_status",       description: "Check grok/RAG backend health",          subcommand: "grok status" },
+    ToolCatalogEntry { name: "b00t_task_list",         description: "List all tasks",                         subcommand: "task list" },
+    ToolCatalogEntry { name: "b00t_task_next",         description: "Show next pending task",                  subcommand: "task next" },
+    ToolCatalogEntry { name: "b00t_task_add",          description: "Add a new task",                         subcommand: "task add" },
+    ToolCatalogEntry { name: "b00t_task_done",         description: "Mark task as done",                      subcommand: "task done" },
+    ToolCatalogEntry { name: "b00t_task_update",       description: "Update task status/title/notes",         subcommand: "task update" },
+    ToolCatalogEntry { name: "b00t_up",                description: "Launch ralph agent REPL outer-loop",     subcommand: "up" },
+    ToolCatalogEntry { name: "b00t_ontology_query",    description: "Query live capability ontology",         subcommand: "ontology query" },
+    ToolCatalogEntry { name: "b00t_skill_list",        description: "List available skills",                  subcommand: "skill list" },
+    ToolCatalogEntry { name: "b00t_skill_activate",    description: "Activate a skill",                       subcommand: "skill activate" },
+    ToolCatalogEntry { name: "b00t_app_vscode_mcp_install",     description: "Install MCP in VSCode",         subcommand: "app vscode mcp install" },
+    ToolCatalogEntry { name: "b00t_app_claudecode_mcp_install", description: "Install MCP in Claude Code",    subcommand: "app claudecode mcp install" },
+];
+
+/// Search TOOL_CATALOG by keyword (case-insensitive substring match on name + description)
+pub fn discover_tools(query: &str) -> Vec<&'static ToolCatalogEntry> {
+    let q = query.to_lowercase();
+    TOOL_CATALOG.iter()
+        .filter(|e| e.name.contains(&*q) || e.description.to_lowercase().contains(&*q) || e.subcommand.contains(&*q))
+        .collect()
+}
+
+// ── Surface Tool: b00t_exec ──────────────────────────────────────────────────
+/// Execute ANY b00t-cli command by argv string.
+/// Replaces 50+ individual MCP tools — use b00t_discover first to find the right command.
+///
+/// # Examples
+/// - b00t_exec("task list") → lists tasks
+/// - b00t_exec("cli check jq") → checks jq version
+/// - b00t_exec("grok ask 'how to use just'") → RAG query
+#[derive(Parser, Clone)]
+pub struct BExecCommand {
+    #[arg(help = "b00t-cli argv string, e.g. 'task list' or 'cli check jq'")]
+    pub argv: String,
+}
+// 🤓 BExecCommand: custom McpReflection+McpExecutor — argv must be shell-split,
+// not treated as a single positional string; macro would mangle it.
+impl crate::clap_reflection::McpReflection for BExecCommand {
+    fn mcp_tool_name() -> String { "b00t_exec".to_string() }
+    fn command_path() -> Vec<String> { vec![] }
+}
+impl crate::clap_reflection::McpExecutor for BExecCommand {
+    fn execute_mcp_call(params: &std::collections::HashMap<String, serde_json::Value>) -> anyhow::Result<String> {
+        let argv = params.get("argv")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| anyhow::anyhow!("b00t_exec requires argv: string"))?;
+        let parts: Vec<&str> = argv.split_whitespace().collect();
+        let output = std::process::Command::new("b00t-cli")
+            .args(&parts)
+            .output()
+            .map_err(|e| anyhow::anyhow!("b00t-cli exec failed: {}", e))?;
+        if output.status.success() {
+            Ok(String::from_utf8_lossy(&output.stdout).to_string())
+        } else {
+            anyhow::bail!("{}", String::from_utf8_lossy(&output.stderr))
+        }
+    }
+}
+
+// BDiscoverCommand: custom executor — searches TOOL_CATALOG and returns JSON matches
+impl crate::clap_reflection::McpReflection for BDiscoverCommand {
+    fn mcp_tool_name() -> String { "b00t_discover".to_string() }
+    fn command_path() -> Vec<String> { vec![] }
+}
+impl crate::clap_reflection::McpExecutor for BDiscoverCommand {
+    fn execute_mcp_call(params: &std::collections::HashMap<String, serde_json::Value>) -> anyhow::Result<String> {
+        let query = params.get("query")
+            .and_then(|v| v.as_str())
+            .unwrap_or("");
+        let limit = params.get("limit")
+            .and_then(|v| v.as_u64())
+            .unwrap_or(8) as usize;
+        let results: Vec<serde_json::Value> = discover_tools(query)
+            .into_iter()
+            .take(limit)
+            .map(|e| serde_json::json!({
+                "name": e.name,
+                "description": e.description,
+                "usage": format!("b00t_exec(\"{} <args>\")", e.subcommand),
+                "direct_cli": format!("b00t-cli {} <args>", e.subcommand),
+            }))
+            .collect();
+        let out = serde_json::json!({
+            "query": query,
+            "count": results.len(),
+            "tools": results,
+            "tip": "Call b00t_exec(argv) with chosen subcommand, e.g. argv=\"task list\""
+        });
+        Ok(serde_json::to_string_pretty(&out)?)
+    }
+}
+
+// ── Surface Tool: b00t_discover ──────────────────────────────────────────────
+/// Discover b00t capabilities by keyword.
+/// Returns matching tool names + descriptions from the catalog.
+/// Then call b00t_exec to run the chosen command.
+///
+/// # Example workflow
+/// 1. b00t_discover("install cli tool") → [{name:"b00t_cli_install", subcommand:"cli install"}]
+/// 2. b00t_exec("cli install jq")
+#[derive(Parser, Clone)]
+pub struct BDiscoverCommand {
+    #[arg(help = "Keyword to search (name, description, or subcommand)")]
+    pub query: String,
+    #[arg(long, help = "Max results to return", default_value = "8")]
+    pub limit: Option<usize>,
+}
+
+/// Create SLIM surface registry — only 5 tools visible to agents.
+/// Sub-agents call b00t_discover(query) to find tools, b00t_exec(argv) to run them.
+/// Use create_full_mcp_registry() for debug/migration compatibility.
 pub fn create_mcp_registry() -> McpCommandRegistry {
+    let mut builder = McpCommandRegistry::builder();
+    // Surface: learn + whoami + status + exec + discover (everything else via proxy)
+    builder
+        .register::<LearnCommand>()
+        .register::<WhoamiCommand>()
+        .register::<StatusCommand>()
+        .register::<BExecCommand>()
+        .register::<BDiscoverCommand>();
+    builder.build()
+}
+
+/// Create FULL registry with all 56+ tools (debug / backward-compat only).
+/// 🤓 DO NOT use this for sub-agents — context cost is too high.
+pub fn create_full_mcp_registry() -> McpCommandRegistry {
     let mut builder = McpCommandRegistry::builder();
 
     // Register all MCP tools
@@ -948,6 +1133,7 @@ pub fn create_mcp_registry() -> McpCommandRegistry {
         .register::<CliInstallCommand>()
         .register::<CliUpdateCommand>()
         .register::<CliUpCommand>()
+        .register::<UpgradeCommand>()
         .register::<WhoamiCommand>()
         .register::<StatusCommand>()
         .register::<AiListCommand>()
@@ -1241,19 +1427,24 @@ mod tests {
 
     #[test]
     fn test_registry_creation() {
-        let registry = create_mcp_registry();
-        let tools = registry.get_tools();
+        // Slim surface registry: 5 tools only
+        let surface = create_mcp_registry();
+        let surface_tools = surface.get_tools();
+        assert!(!surface_tools.is_empty());
+        let surface_names: Vec<&str> = surface_tools.iter().map(|t| t.name.as_ref()).collect();
+        assert!(surface_names.contains(&"b00t_whoami"),  "whoami must be in surface");
+        assert!(surface_names.contains(&"b00t_status"),  "status must be in surface");
+        assert!(surface_names.contains(&"b00t_learn"),   "learn must be in surface");
+        assert!(surface_names.contains(&"b00t_exec"),    "exec must be in surface");
+        assert!(surface_names.contains(&"b00t_discover"),"discover must be in surface");
+        assert_eq!(surface_tools.len(), 5, "surface registry must expose exactly 5 tools");
 
-        // Should have all registered tools
-        assert!(!tools.is_empty());
-
-        // Check specific tools exist
-        let tool_names: Vec<&str> = tools.iter().map(|t| t.name.as_ref()).collect();
-
-        assert!(tool_names.contains(&"b00t_mcp_list"));
-        assert!(tool_names.contains(&"b00t_cli_detect"));
-        assert!(tool_names.contains(&"b00t_whoami"));
-        assert!(tool_names.contains(&"b00t_status"));
+        // Full registry: all tools for debug/migration
+        let full = create_full_mcp_registry();
+        let full_tools = full.get_tools();
+        let full_names: Vec<&str> = full_tools.iter().map(|t| t.name.as_ref()).collect();
+        assert!(full_names.contains(&"b00t_mcp_list"));
+        assert!(full_names.contains(&"b00t_cli_detect"));
     }
 
     #[test]

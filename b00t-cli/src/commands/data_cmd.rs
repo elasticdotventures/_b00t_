@@ -10,6 +10,7 @@
 //! b00t-cli data inspect records.jsonl --sample 10
 //! ```
 
+use crate::commands::fabric_cmd::{handle_fabric_command, FabricCommands};
 use crate::datum_schema::{CellValue, FocusJsonlSequence};
 use anyhow::{anyhow, Result};
 use clap::Parser;
@@ -17,6 +18,10 @@ use std::path::PathBuf;
 
 #[derive(Parser, Clone)]
 pub enum DataCommands {
+    /// Interact with the data fabric (triple store + graph + vector)
+    #[clap(subcommand)]
+    Fabric(FabricCommands),
+
     #[clap(about = "Inspect an AbDataFrame — list headers, count rows, sample")]
     Inspect {
         #[clap(help = "Path to JSONL file")]
@@ -30,6 +35,7 @@ pub enum DataCommands {
 
 pub fn handle_data_command(args: &DataCommands) -> Result<()> {
     match args {
+        DataCommands::Fabric(fabric_args) => handle_fabric_command(fabric_args),
         DataCommands::Inspect { path, headers: show_headers, sample } => {
             let path_str = path.to_string_lossy().to_string();
 

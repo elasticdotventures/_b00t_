@@ -12,6 +12,7 @@ curl -sSL https://just.systems/install.sh | bash -s -- --to ~/.local/bin --force
 version = "just --version"
 version_regex = '\d+\.\d+\.\d+'
 hint = "just is a command runner that abstracts cli tools for a repo without reading the docs. run `just -l` to list commands."
+unlocks = ["just *", "just-*"]
 lfmf_category = "just"
 
 [b00t.learn]

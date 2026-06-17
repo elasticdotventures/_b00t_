@@ -3,6 +3,8 @@ name = "operator"
 type = "role"
 hint = "Hive operator role: MCP assimilation, crew dispatch, resource-gated multi-agent orchestration."
 
+depends_on = ["b00t.cli", "just.cli", "git.cli", "gh.cli", "python.cli"]
+
 skills = [
     "mcp-assimilation",
     "crew-scaling",

@@ -3,6 +3,8 @@ name = "worker"
 type = "role"
 hint = "Default hive worker agent: general-purpose executor with governance safety protocols, A/B experiment dispatch, and phygital-twin ontological status reporting."
 
+depends_on = ["git.cli", "b00t.cli", "just.cli", "bash.cli"]
+
 skills = [
     "worker-execution",
     "ab-experiment-dispatch",

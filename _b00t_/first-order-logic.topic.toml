@@ -1,0 +1,31 @@
+[b00t]
+name = "first-order-logic"
+datum_type = "topic"
+description = "First-order logic, Horn clauses, FOHH, and Rust reasoning stack (crepe/ascent/chalk)"
+node_status = "primary"
+hint = "Logic programming for the b00t knowledge graph. Use `b00t learn first-order-logic` before working on the reasoning module."
+
+[b00t.schema]
+spec = "datum/topic/v1"
+
+[metadata]
+crates = ["crepe", "ascent", "chalk-ir", "chalk-solve", "scryer-prolog"]
+tags = ["logic", "datalog", "horn-clauses", "fohh", "trait-lowering", "reasoning"]
+tier = "frontier"
+
+hook_learn = '''
+let files = exec("ls -1 $HOME/.b00t/_b00t_/first-order-logic.🧠/*.md 2>/dev/null");
+if files == "" {
+    "warn: no .md files found in _b00t_/first-order-logic.🧠/"
+} else {
+    let out = exec("for f in $HOME/.b00t/_b00t_/first-order-logic.🧠/*.md; do printf '\\n### %s\\n' \"$f\"; cat \"$f\"; done 2>/dev/null");
+    out
+}
+'''
+
+# b00t:map v1
+# summary: First-order logic and reasoning engine topic for b00t knowledge graph
+# tags: logic, datalog, horn-clauses, fohh, crepe, ascent, chalk
+# tier: frontier
+# cmds: b00t learn first-order-logic
+# complexity: 8

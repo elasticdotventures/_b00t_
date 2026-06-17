@@ -39,6 +39,7 @@ chmod +x ~/.local/bin/gh
 version = "gh --version"
 version_regex = "\\d+\\.\\d+\\.\\d+"
 hint = "gh is the official GitHub CLI, for interacting with GitHub from the command line."
+unlocks = ["gh *"]
 
 
 [validate]
