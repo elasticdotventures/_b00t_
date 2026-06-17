@@ -1141,6 +1141,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "b00t-datum-core"
+version = "0.8.1"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "toml",
+]
+
+[[package]]
 name = "b00t-embed"
 version = "0.8.1"
 dependencies = [
