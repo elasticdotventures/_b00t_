@@ -1,0 +1,86 @@
+[b00t]
+name = "datum-macro"
+type = "skill"
+hint = "Feasibility: Rust macros as dynamic datums. Three tiers: macro_rules! literals, proc_macro attributes, inventory-crate distributed statics. All are compile-time; runtime TOML scan remains canonical for user-added datums."
+keywords = ["rust", "macro", "datum", "inventory", "proc-macro", "codegen", "static", "compile-time", "b00t"]
+type_tags = ["domain:rust-macros", "domain:b00t-arch"]
+depends_on = ["rust.cli"]
+
+[b00t.learn]
+content = """
+## Rust Macros as Dynamic Datums — Feasibility
+
+### Three tiers (increasing power, increasing complexity)
+
+**Tier 1: `macro_rules! datum!` — TODAY, no new deps**
+Creates a `BootDatum` literal at compile time. Useful for core/stdlib datums baked into the binary.
+```rust
+macro_rules! datum {
+    ($name:literal, $type:ident, hint: $hint:literal) => {
+        BootDatum {
+            name: $name.to_string(),
+            datum_type: Some(DatumType::$type),
+            hint: $hint.to_string(),
+            ..Default::default()
+        }
+    }
+}
+// Usage:
+static GIT_DATUM: BootDatum = datum!("git", Cli, hint: "Git version control");
+```
+Limitation: `BootDatum` uses `String` (not `&'static str`) — can't be `const`. Use `LazyLock` instead.
+
+**Tier 2: `inventory` crate — distributed static collection (RECOMMENDED)**
+`inventory::submit!` in any crate registers a datum at link time.
+`inventory::iter::<BootDatum>` in `get_all_datums()` collects all registered without file I/O.
+```rust
+// In any crate:
+inventory::submit!(BootDatum { name: "git".to_string(), .. });
+
+// In datum_utils.rs — zero-cost at runtime, no file scan:
+fn get_builtin_datums() -> impl Iterator<Item = &'static BootDatum> {
+    inventory::iter::<BootDatum>
+}
+```
+Enables: offline/airgap binary with core datums baked in; TOML files extend but don't replace.
+
+**Tier 3: `proc_macro` attribute — most ergonomic, new crate required**
+```rust
+#[b00t_datum(type = "cli", hint = "Git version control")]
+struct GitDatum;
+```
+Generates: `BootDatum` construction + `inventory::submit!`. Overkill for current scope.
+
+### Chalk Interner connection
+
+`DatumStore` trait (Chalk-style) would unify all three:
+```rust
+trait DatumStore {
+    type InternedDatum;
+    fn intern(&self, d: BootDatum) -> Self::InternedDatum;
+    fn load(&self, d: &Self::InternedDatum) -> &BootDatum;
+}
+// Implementations: TomlFileStore, InventoryStore, SqliteStore, QdrantStore
+```
+Macros register into `InventoryStore`; TOML scanner registers into `TomlFileStore`.
+`get_all_datums()` merges both — operator-added datums override builtins by key.
+
+### NOT dynamic at runtime
+
+Macros are compile-time. User-added `.toml` files still need runtime scan.
+Macros are best for: core stdlib datums, blessed tooling, offline-first binaries.
+TOML scan remains canonical for operator-extensible datums.
+
+### Current b00t status
+
+DatumType enum + from_type_token match are the primary duplication sink.
+A `build.rs` codegen step could generate both from a single TOML source of truth.
+`inventory` is NOT currently a dep — add as optional feature flag `builtin-datums`.
+"""
+
+# b00t:map v1
+# summary: Rust macro datums — macro_rules!/inventory/proc_macro tiers; all compile-time; DatumStore trait bridges macro+TOML
+# tags: rust, macro, datum, inventory, compile-time, chalk, datum-store
+# tier: ch0nky
+# cmds: b00t learn datum-macro
+# complexity: 6
