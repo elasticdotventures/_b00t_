@@ -128,6 +128,9 @@ Tips:
 - Suitable tools: any with a b00t datum (TOML, learn/ dir, etc).
 "#
     )]
+    #[clap(about = "Agent tool authorization manifest (unlocks via learning)")]
+    Blessing(b00t_cli::commands::blessing::BlessingArgs),
+
     Lfmf {
         #[clap(long, help = "Tool name")]
         tool: Option<String>,
@@ -413,6 +416,8 @@ The system will:
     },
     #[clap(about = "Launch ralph agent REPL outer-loop")]
     Up(b00t_cli::commands::up::UpArgs),
+    #[clap(about = "Holistic upgrade: binary, MCP servers, hooks, Claude settings (NASA MBSE)")]
+    Upgrade(b00t_cli::commands::upgrade::UpgradeArgs),
     #[clap(about = "Check or upgrade the installed b00t-cli release")]
     Version {
         #[clap(subcommand)]
@@ -1753,6 +1758,12 @@ async fn main() {
                 std::process::exit(1);
             }
         }
+        Some(Commands::Blessing(blessing_args)) => {
+            if let Err(e) = b00t_cli::commands::blessing::handle_blessing(blessing_args) {
+                eprintln!("Error: {e}");
+                std::process::exit(1);
+            }
+        }
         Some(Commands::Whoami { role, with_skills, json, skills }) => {
             if *json {
                 use b00t_c0re_lib::B00tContext;
@@ -2048,6 +2059,12 @@ async fn main() {
                 }
             } else if let Err(e) = run_just_install(*dry_run) {
                 eprintln!("Install Error: {}", e);
+                std::process::exit(1);
+            }
+        }
+        Some(Commands::Upgrade(args)) => {
+            if let Err(e) = args.execute() {
+                eprintln!("Error: {}", e);
                 std::process::exit(1);
             }
         }

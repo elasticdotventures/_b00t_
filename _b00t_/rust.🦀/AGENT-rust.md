@@ -173,3 +173,44 @@ name: CI
   - Conventional Commits: Required for automated cocogitto releases (historical commits may need handling)
 
 
+
+## Lowering Logic — Rust Trait System as First-Order Logic
+
+The Rust trait system maps cleanly onto first-order Horn clauses (and their FOHH extension).
+
+**Core mapping:**
+```prolog
+% trait Clone {} + impl Clone for usize {}
+Clone(usize).
+% impl<T> Clone for Vec<T> where T: Clone {}
+Clone(Vec<?T)) :- Clone(?T).
+```
+
+Proof search is backward chaining: to prove `Clone(Vec<Vec<usize>>)`, recurse until base fact `Clone(usize)`.
+
+**Why Horn clauses aren't enough** — generic function type-checking requires FOHH (First-Order Hereditary Harrop):
+```prolog
+% fn foo<T: Eq<T>>() { bar::<T>() }
+fooTypeChecks :-
+  forall<T> { if (Eq(T, T)) { barWellFormed(T) } }.
+```
+Standard Horn clauses forbid `forall`/`if` in goal position; FOHH allows it. See: Gopalan Nadathur "A Proof Procedure for the Logic of Hereditary Harrop Formulas" (Chalk Book bibliography).
+
+**Crate landscape for trait lowering:**
+| Crate | Role | Fit |
+|---|---|---|
+| `chalk` | rustc's actual FOHH trait solver | ✅ exact fit, complex API |
+| `datafrog` | Datalog semi-naive eval (used in Polonius/borrow checker) | ✅ Horn-only, very fast |
+| `scryer-prolog` | WAM Prolog engine, FOHH-capable | ✅ more stable than foras |
+| `foras` | FOL reasoner wrapping scryer-prolog | ⚠️ PoC only — 0 stars, undergrad project |
+| `syn` | Rust AST parser | required — source of trait/impl declarations |
+
+**Typical lowering pipeline:**
+```
+syn AST (trait/impl decls)
+  → Horn clause encoding (subject: impl, predicate: where-bounds)
+  → datafrog (Datalog/Horn) or scryer-prolog (full FOHH)
+  → proof trace / entailment result
+```
+
+🤓 `foras` wraps `scryer-prolog` with `Formula::parse()` API but adds thin value; for Rust lowering you write the `syn`→FOL bridge either way. Prefer `chalk` (exact match) or `datafrog` (simpler, Datalog subset) over `foras` for production use.

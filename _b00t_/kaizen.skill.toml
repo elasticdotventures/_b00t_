@@ -1,0 +1,24 @@
+[b00t]
+name = "kaizen"
+type = "skill"
+type_tags = ["transferable"]
+hint = "Continuous improvement — small compounding changes beat big rewrites"
+keywords = ["improvement", "iteration", "retrospective", "compound", "incremental", "waste", "kaizen"]
+
+[b00t.learn]
+content = """
+Kaizen (改善): every process has waste; eliminate it incrementally.
+Apply after every task: what was slow? what caused errors? what would I do differently?
+The retrospective is NOT optional — skipping it is how technical debt compounds.
+Kaizen in code: prefer small focused PRs over big rewrites. Each PR = one improvement.
+Measure before and after. If you can't measure it, you can't improve it.
+Anti-pattern: "we'll fix it later" — kaizen says fix it now, tiny, and move on.
+Three questions: What worked? What didn't? What one thing changes next iteration?
+"""
+
+# b00t:map v1
+# summary: kaizen — continuous improvement via small compounding changes
+# tags: transferable, improvement, iteration, retrospective
+# tier: sm0l
+# cmds: b00t learn kaizen
+# complexity: 2

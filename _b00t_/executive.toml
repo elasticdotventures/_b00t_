@@ -2,6 +2,8 @@
 name = "executive"
 type = "role"
 hint = "Executive orchestration role: delegate heavy work to Codex/Gemini, guard context, enforce compliance."
+depends_on = ["b00t.cli", "just.cli", "git.cli", "gh.cli"]
+
 skills = [
     "delegation-first decision-making",
     "codex mcp orchestration",

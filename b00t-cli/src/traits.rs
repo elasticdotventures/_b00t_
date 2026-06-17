@@ -115,6 +115,13 @@ pub trait DatumProvider: DatumChecker + StatusProvider + FilterLogic + Send + Sy
     /// Used by ConstraintEvaluator trait methods (compiler doesn't detect indirect usage)
     #[allow(dead_code)]
     fn datum(&self) -> &BootDatum;
+
+    /// Bridge to the Chalk-style structural proof system.
+    /// Delegates to `BootDatum::prove_by_type()` so any `DatumProvider` automatically
+    /// satisfies `Provable` without redundant trait impls.
+    fn prove(&self) -> Result<(), crate::datum_proof::DatumProofError> {
+        self.datum().prove_by_type()
+    }
 }
 
 /// Factory-style trait for interactive datum creation

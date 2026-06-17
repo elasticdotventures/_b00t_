@@ -11,6 +11,7 @@
 //! ```
 
 use anyhow::{Context, Result};
+use crate::datum_store::{DatumStore, HashMapStore, ReferenceError};
 use clap::Parser;
 use serde_json::{json, Value};
 use std::collections::BTreeMap;
@@ -200,8 +201,36 @@ pub fn handle_doctor_command(args: &DoctorCommands, b00t_path: &str) -> Result<(
             let results: Vec<Value> = all_deps().into_iter().filter(|d| {
                 probe.as_ref().map_or(true, |p| d["id"].as_str().map_or(false, |id| id.contains(p)))
             }).collect();
-            if *json { println!("{}", serde_json::to_string_pretty(&results)?); }
-            else {
+
+            // Phase 1: well-formedness — count datums that pass prove_by_type()
+            let store = HashMapStore::from_path(b00t_path).unwrap_or_default();
+            let total_datums = store.len();
+            let (provable, broken): (Vec<_>, Vec<_>) = store.iter()
+                .partition(|d| d.datum.prove_by_type().is_ok());
+            // Phase 2: coherence — cross-datum reference validation
+            let ref_errors = store.validate_references();
+            let self_deps: Vec<_> = ref_errors.iter()
+                .filter(|e| matches!(e, ReferenceError::SelfDependency { .. }))
+                .collect();
+            let empty_deps: Vec<_> = ref_errors.iter()
+                .filter(|e| matches!(e, ReferenceError::EmptyDependency { .. }))
+                .collect();
+
+            if *json {
+                let datum_report = json!({
+                    "total": total_datums,
+                    "provable": provable.len(),
+                    "broken": broken.iter().map(|d| {
+                        let err = d.datum.prove_by_type().unwrap_err();
+                        json!({"key": d.key.as_ref(), "error": err.to_string()})
+                    }).collect::<Vec<_>>(),
+                    "reference_errors": ref_errors.iter().map(|e| e.to_string()).collect::<Vec<_>>(),
+                });
+                println!("{}", serde_json::to_string_pretty(&json!({
+                    "system_deps": results,
+                    "datum_store": datum_report
+                }))?);
+            } else {
                 println!("🥾 b00t doctor — dependency check\n");
                 for r in &results {
                     let ok = r["pass"].as_bool().unwrap_or(false);
@@ -211,6 +240,22 @@ pub fn handle_doctor_command(args: &DoctorCommands, b00t_path: &str) -> Result<(
                 }
                 let ok = results.iter().filter(|r| r["pass"].as_bool().unwrap_or(false)).count();
                 println!("\n  {}/{} satisfied", ok, results.len());
+
+                println!("\n🗄️  datum store — {b00t_path}");
+                println!("  {}/{} datums provable", provable.len(), total_datums);
+                for d in &broken {
+                    let err = d.datum.prove_by_type().unwrap_err();
+                    println!("  ❌ {}: {}", d.key.as_ref(), err);
+                }
+                if !self_deps.is_empty() || !empty_deps.is_empty() {
+                    println!("  ⚠️  reference errors: {} self-deps, {} empty deps",
+                        self_deps.len(), empty_deps.len());
+                    for e in self_deps.iter().chain(empty_deps.iter()) {
+                        println!("     {e}");
+                    }
+                } else {
+                    println!("  ✅ store coherence: no self-deps or empty deps");
+                }
             }
             Ok(())
         }
