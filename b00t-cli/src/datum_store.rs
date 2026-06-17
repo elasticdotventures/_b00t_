@@ -23,7 +23,12 @@
 //!     .run();
 //! ```
 
-use crate::datum_proof::{AsCliDatum, AsMcpDatum, AsRoleDatum, AsSkillDatum, Provable};
+use crate::datum_proof::{
+    AsAgentDatum, AsAiDatum, AsAiModelDatum, AsAptDatum, AsApiDatum, AsBashDatum,
+    AsCliDatum, AsConfigDatum, AsDatabaseDatum, AsDockerDatum, AsHiveProfileDatum,
+    AsJobDatum, AsJustfileDatum, AsK8sDatum, AsMcpDatum, AsNixDatum, AsRepoDatum,
+    AsRoleDatum, AsSkillDatum, AsStackDatum, AsUnknownDatum, AsVscodeDatum, Provable,
+};
 use crate::datum_utils::get_all_datums;
 use crate::{BootDatum, DatumType};
 use anyhow::Result;
@@ -88,6 +93,7 @@ pub trait DatumStore: Send + Sync {
     fn is_empty(&self) -> bool { self.len() == 0 }
 
     /// Begin a goal-oriented query over this store.
+    #[must_use = "call .run() or .run_keys() to evaluate the query"]
     fn query(&self) -> DatumQuery<'_> where Self: Sized {
         DatumQuery { store: self, predicates: vec![] }
     }
@@ -216,6 +222,8 @@ impl DatumStore for HashMapStore {
 
 /// Goal-oriented query builder. Chains predicates; call `.run()` to evaluate.
 /// Each predicate is a Horn-clause "goal" — all must hold (conjunction).
+/// Annotated `#[must_use]` — a query that is not `.run()` is always a bug.
+#[must_use = "call .run() or .run_keys() to evaluate the query"]
 pub struct DatumQuery<'a> {
     store: &'a dyn DatumStore,
     predicates: Vec<Box<dyn Fn(&InternedDatum) -> bool + 'a>>,
@@ -227,25 +235,56 @@ impl<'a> DatumQuery<'a> {
         self
     }
 
-    /// Goal: datum proves Cli structural contract (install/version present).
-    pub fn proves_cli(self) -> Self {
-        self.with(|d| AsCliDatum(&d.datum).prove().is_ok())
-    }
+    // ── proves_*() — full parity with BootDatum::prove_*() (22 variants) ──────
 
-    /// Goal: datum proves Skill structural contract (keywords/learn content present).
-    pub fn proves_skill(self) -> Self {
-        self.with(|d| AsSkillDatum(&d.datum).prove().is_ok())
-    }
+    /// Goal: datum proves Cli structural contract.
+    pub fn proves_cli(self) -> Self { self.with(|d| AsCliDatum(&d.datum).prove().is_ok()) }
+    /// Goal: datum proves Skill structural contract.
+    pub fn proves_skill(self) -> Self { self.with(|d| AsSkillDatum(&d.datum).prove().is_ok()) }
+    /// Goal: datum proves Role structural contract.
+    pub fn proves_role(self) -> Self { self.with(|d| AsRoleDatum(&d.datum).prove().is_ok()) }
+    /// Goal: datum proves Mcp structural contract.
+    pub fn proves_mcp(self) -> Self { self.with(|d| AsMcpDatum(&d.datum).prove().is_ok()) }
+    /// Goal: datum proves Docker structural contract (image/oci_uri/install present).
+    pub fn proves_docker(self) -> Self { self.with(|d| AsDockerDatum(&d.datum).prove().is_ok()) }
+    /// Goal: datum proves Bash structural contract (script/install present).
+    pub fn proves_bash(self) -> Self { self.with(|d| AsBashDatum(&d.datum).prove().is_ok()) }
+    /// Goal: datum proves Apt structural contract (install/package_name present).
+    pub fn proves_apt(self) -> Self { self.with(|d| AsAptDatum(&d.datum).prove().is_ok()) }
+    /// Goal: datum proves Nix structural contract (install/package_name present).
+    pub fn proves_nix(self) -> Self { self.with(|d| AsNixDatum(&d.datum).prove().is_ok()) }
+    /// Goal: datum proves Vscode structural contract (vsix_id/install present).
+    pub fn proves_vscode(self) -> Self { self.with(|d| AsVscodeDatum(&d.datum).prove().is_ok()) }
+    /// Goal: datum proves K8s structural contract (chart_path/values_file/install present).
+    pub fn proves_k8s(self) -> Self { self.with(|d| AsK8sDatum(&d.datum).prove().is_ok()) }
+    /// Goal: datum proves Justfile structural contract (justfile.path/install present).
+    pub fn proves_justfile(self) -> Self { self.with(|d| AsJustfileDatum(&d.datum).prove().is_ok()) }
+    /// Goal: datum proves Job structural contract (job metadata/script present).
+    pub fn proves_job(self) -> Self { self.with(|d| AsJobDatum(&d.datum).prove().is_ok()) }
+    /// Goal: datum proves Stack structural contract (stack metadata/members present).
+    pub fn proves_stack(self) -> Self { self.with(|d| AsStackDatum(&d.datum).prove().is_ok()) }
+    /// Goal: datum proves Agent structural contract (skills/depends_on/channel_prefix present).
+    pub fn proves_agent(self) -> Self { self.with(|d| AsAgentDatum(&d.datum).prove().is_ok()) }
+    /// Goal: datum proves HiveProfile structural contract (hint present).
+    pub fn proves_hive_profile(self) -> Self { self.with(|d| AsHiveProfileDatum(&d.datum).prove().is_ok()) }
+    /// Goal: datum proves Database structural contract (dsn/url present).
+    pub fn proves_database(self) -> Self { self.with(|d| AsDatabaseDatum(&d.datum).prove().is_ok()) }
+    /// Goal: datum proves Api structural contract (url/protocol/provides present).
+    pub fn proves_api(self) -> Self { self.with(|d| AsApiDatum(&d.datum).prove().is_ok()) }
+    /// Goal: datum proves Repo structural contract (url/clone_path present).
+    pub fn proves_repo(self) -> Self { self.with(|d| AsRepoDatum(&d.datum).prove().is_ok()) }
+    /// Goal: datum proves Ai structural contract (hint present).
+    pub fn proves_ai(self) -> Self { self.with(|d| AsAiDatum(&d.datum).prove().is_ok()) }
+    /// Goal: datum proves AiModel structural contract (hint present).
+    pub fn proves_ai_model(self) -> Self { self.with(|d| AsAiModelDatum(&d.datum).prove().is_ok()) }
+    /// Goal: datum proves Config structural contract (hint present).
+    pub fn proves_config(self) -> Self { self.with(|d| AsConfigDatum(&d.datum).prove().is_ok()) }
+    /// Goal: datum is Unknown — always passes.
+    pub fn proves_unknown(self) -> Self { self.with(|d| AsUnknownDatum(&d.datum).prove().is_ok()) }
+    /// Goal: datum passes prove_by_type() for its declared DatumType.
+    pub fn proves_by_type(self) -> Self { self.with(|d| d.datum.prove_by_type().is_ok()) }
 
-    /// Goal: datum proves Role structural contract (depends_on non-empty).
-    pub fn proves_role(self) -> Self {
-        self.with(|d| AsRoleDatum(&d.datum).prove().is_ok())
-    }
-
-    /// Goal: datum proves Mcp structural contract (command field present).
-    pub fn proves_mcp(self) -> Self {
-        self.with(|d| AsMcpDatum(&d.datum).prove().is_ok())
-    }
+    // ── Structural filters ────────────────────────────────────────────────────
 
     /// Goal: datum has this key in its `depends_on` list.
     pub fn depends_on(self, dep: &'a str) -> Self {
@@ -272,7 +311,10 @@ impl<'a> DatumQuery<'a> {
         self.with(move |d| d.key.contains(substr))
     }
 
+    // ── Terminal operations ───────────────────────────────────────────────────
+
     /// Evaluate all goals; return matching `InternedDatum`s.
+    #[must_use = "query result is unused"]
     pub fn run(self) -> Vec<InternedDatum> {
         self.store
             .iter()
@@ -281,6 +323,7 @@ impl<'a> DatumQuery<'a> {
     }
 
     /// Like `run()` but returns just keys, sorted.
+    #[must_use = "query result is unused"]
     pub fn run_keys(self) -> Vec<Arc<str>> {
         let mut keys: Vec<Arc<str>> = self.run().into_iter().map(|d| d.key).collect();
         keys.sort();
