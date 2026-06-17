@@ -388,7 +388,9 @@ impl BootDatum {
             Some(DatumType::Ai)          => self.prove_ai(),
             Some(DatumType::AiModel)     => self.prove_ai_model(),
             Some(DatumType::Config)      => self.prove_config(),
-            Some(DatumType::Hardware) | Some(DatumType::Overlay) | Some(DatumType::Unknown) | None => Ok(()),
+            Some(DatumType::Hardware)    => Ok(()),
+            Some(DatumType::Overlay)     => Ok(()),
+            Some(DatumType::Unknown) | None => Ok(()),
         }
     }
 
