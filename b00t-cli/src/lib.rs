@@ -88,6 +88,7 @@ pub mod datum_schema;
 pub mod bootstrap;
 pub mod budget_controller;
 pub mod cloud_sync;
+pub mod assimilate;
 pub mod commands;
 pub mod datum_ai;
 pub mod datum_ai_model;

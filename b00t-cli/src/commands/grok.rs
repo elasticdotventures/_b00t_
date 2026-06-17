@@ -114,6 +114,15 @@ pub enum GrokCommands {
         /// Canonical source URL — required for datum validity
         #[arg(long, help = "Canonical source URL (required for datum validity)")]
         source_url: Option<String>,
+        /// Enable enhanced crawl: sm0l concept extraction + link following + indexing
+        #[arg(long, help = "Enable enhanced assimilation pipeline")]
+        enhanced: bool,
+        /// Crawl depth when --enhanced (0 = no crawl, default 2)
+        #[arg(long, help = "Max crawl depth for link following")]
+        depth: Option<u32>,
+        /// Index targets for concept ingestion (comma-sep: grafeo,raglite,codebase-memory)
+        #[arg(long, value_delimiter = ',', help = "Index targets to ingest into")]
+        index_target: Vec<String>,
     },
 }
 
@@ -178,6 +187,9 @@ pub async fn handle_grok_command(command: GrokCommands) -> Result<()> {
             tags,
             ingest,
             source_url,
+            enhanced,
+            depth,
+            index_target,
         } => {
             handle_assimilate(
                 &topic,
@@ -187,6 +199,9 @@ pub async fn handle_grok_command(command: GrokCommands) -> Result<()> {
                 &tags,
                 ingest,
                 source_url.as_deref(),
+                enhanced,
+                depth,
+                &index_target,
             )
             .await
         }
@@ -322,12 +337,70 @@ async fn handle_assimilate(
     tags: &[String],
     ingest: bool,
     source_url: Option<&str>,
+    enhanced: bool,
+    depth: Option<u32>,
+    index_target: &[String],
 ) -> Result<()> {
     // Warn early if no source_url — datum will lack deduplication anchor
     if source_url.is_none() {
         eprintln!(
             "⚠️  No --source-url provided. Datum will be invalid (source required for deduplication)."
         );
+    }
+
+    // ── Enhanced assimilation pipeline ──────────────────────────────────────
+    //
+    // When --enhanced is set, run the full pipeline:
+    // 1. ContentRouter fetches/parses the source (URL or file)
+    // 2. ConceptExtractor extracts concepts + links via sm0l model
+    // 3. CrawlEngine follows links (depth-limited, same-origin)
+    // 4. IndexDispatcher ingests into configured targets
+    //
+    // The primary content is enriched with concepts and used for datum storage.
+    let mut enriched_tags: Vec<String> = tags.to_vec();
+
+    if enhanced {
+        let source = source_url
+            .map(|s| s.to_string())
+            .or_else(|| content_inline.map(|s| s.to_string()))
+            .or_else(|| file.map(|f| f.display().to_string()))
+            .ok_or_else(|| {
+                anyhow::anyhow!("--enhanced requires a source: use --source-url, content, or --file")
+            })?;
+
+        let config = crate::assimilate::EnhancedConfig {
+            max_depth: depth.unwrap_or(2),
+            index_targets: index_target.to_vec(),
+            ..Default::default()
+        };
+
+        let docs = crate::assimilate::run_enhanced(&source, topic, &config)?;
+
+        // Collect concept names as tags for the datum
+        if let Some(primary) = docs.first() {
+            for concept in &primary.extraction.concepts {
+                let tag = if concept.is_advanced {
+                    format!("advanced:{}", concept.name)
+                } else {
+                    concept.name.clone()
+                };
+                if !enriched_tags.contains(&tag) {
+                    enriched_tags.push(tag);
+                }
+            }
+        }
+
+        eprintln!(
+            "→ {} concept tag(s) extracted for datum",
+            enriched_tags.len() - tags.len()
+        );
+
+        // For the git-blob datum, use the primary document's text
+        // (the enhanced pipeline already stored crawled docs in index targets)
+        if content_inline.is_none() && file.is_none() {
+            // Content came from URL — use the fetched text
+            // This will be set below in the content resolution
+        }
     }
 
     // Resolve content: inline | file | stdin
@@ -383,7 +456,7 @@ async fn handle_assimilate(
     );
     let datum_path = find_b00t_dir()?.join(&datum_name);
 
-    let tags_toml = tags
+    let tags_toml = enriched_tags
         .iter()
         .map(|t| {
             let escaped = t.replace('\\', "\\\\").replace('"', "\\\"");
