@@ -1,7 +1,7 @@
 [b00t]
 name = "github"
 type = "mcp"
-hint = "GitHub MCP server"
+hint = "GitHub REST API MCP server (issues, PRs, repos, search, actions, code scanning)"
 lfmf_category = "github-mcp"
 hook_detect = "gates"
 
@@ -9,67 +9,59 @@ hook_detect = "gates"
 topic = "github-mcp"
 auto_digest = true
 
-# 🤓: PREFERRED - Official github-mcp-server with toolsets support
-# Requires GITHUB_PERSONAL_ACCESS_TOKEN (use `gh auth token` to avoid storing PATs)
-# Use env.GITHUB_TOOLSETS to enable specific toolsets
+# 🤓: PREFERRED — @modelcontextprotocol/server-github (Anthropic, works on Node v22)
+# 26 tools: issues, PRs, repos, search, forks, reviews, branches, commits
+# Requires GITHUB_TOKEN env var (or GITHUB_PERSONAL_ACCESS_TOKEN)
+# Use `export GITHUB_TOKEN=$(gh auth token)` to avoid storing PATs
 [[b00t.mcp.stdio]]
 priority = 0
-command = "npx"
-requires = ["node", "gh"]
-transport = "stdio"
-args = ["-y", "github-mcp-server"]
-pre_start = "github-auth-validate.rhai"
-
-# 🤓: RHAI validation script runs before MCP server starts
-# Validates/retrieves GITHUB_PERSONAL_ACCESS_TOKEN from gh CLI or env
-# Fails fast if credentials unavailable (prevents entire stack failure)
-[b00t.mcp.stdio.env]
-# 🤓: Use gh CLI to get token dynamically (avoids storing PAT as security vector)
-# In shell: export GITHUB_PERSONAL_ACCESS_TOKEN="$(gh auth token)"
-# GITHUB_PERSONAL_ACCESS_TOKEN = ""  # Set via environment or use gh auth token
-# 🤓: Enable specific toolsets: repos,issues,pull_requests,actions,code_security,experiments
-# Use "all" to enable everything, "default" for baseline (context,repos,issues,pull_requests,users)
-GITHUB_TOOLSETS = "issues,pull_requests,actions"
-
-# 🤓: FALLBACK - Archived @modelcontextprotocol/server-github (no toolsets support)
-[[b00t.mcp.stdio]]
-priority = 10
 command = "npx"
 requires = ["node"]
 transport = "stdio"
 args = ["-y", "@modelcontextprotocol/server-github"]
 
-[[b00t.gate]]
-command = "gh"
-hint = "GitHub CLI (gh) required for auth"
+# 🤓: ALTERNATIVE — Official GitHub MCP server (Go binary, Docker only)
+# From github.com/github/github-mcp-server. Supports --toolsets for granular control.
+# Uses GITHUB_PERSONAL_ACCESS_TOKEN env var (not GITHUB_TOKEN).
+# Toolsets: context,repos,issues,pull_requests,actions,code_security,copilot,dependabot,discussions,gists,git,labels,notifications,orgs,projects,secret_protection,security_advisories,stargazers,users
+[[b00t.mcp.stdio]]
+priority = 10
+command = "docker"
+requires = ["docker", "gh"]
+transport = "stdio"
+args = ["run", "-i", "--rm", "-e", "GITHUB_PERSONAL_ACCESS_TOKEN", "ghcr.io/github/github-mcp-server"]
+pre_start = "github-auth-validate.rhai"
+
+[b00t.mcp.stdio.env]
+GITHUB_TOOLSETS = "issues,pull_requests,actions"
 
 [[b00t.gate]]
-env = "GITHUB_TOOLSETS"
-hint = "Set GITHUB_TOOLSETS in .env (e.g. issues,pull_requests,actions)"
+command = "gh"
+hint = "GitHub CLI (gh) for secure token retrieval"
+
+[[b00t.gate]]
+env = "GITHUB_TOKEN"
+hint = "Set GITHUB_TOKEN (e.g. export GITHUB_TOKEN=$(gh auth token))"
 
 [[b00t.gate]]
 rhai = "command_exists(\"npx\")"
-hint = "npx required to run github-mcp-server"
+hint = "npx required"
 
 [[b00t.usage]]
-description = "Run with gh CLI token (avoids storing PAT)"
-command = "GITHUB_PERSONAL_ACCESS_TOKEN=\"$(gh auth token)\" GITHUB_TOOLSETS=\"all\" npx -y github-mcp-server"
+description = "Primary: Anthropic server with gh CLI token"
+command = "GITHUB_TOKEN=\"$(gh auth token)\" npx -y @modelcontextprotocol/server-github"
 
 [[b00t.usage]]
-description = "Enable specific toolsets (issues, PRs, actions)"
-command = "GITHUB_PERSONAL_ACCESS_TOKEN=\"$(gh auth token)\" GITHUB_TOOLSETS=\"issues,pull_requests,actions\" npx -y github-mcp-server"
-
-[[b00t.usage]]
-description = "Extend default toolsets"
-command = "GITHUB_PERSONAL_ACCESS_TOKEN=\"$(gh auth token)\" GITHUB_TOOLSETS=\"default,code_security,experiments\" npx -y github-mcp-server"
-
-[[b00t.usage]]
-description = "Run with docker (all toolsets, uses gh CLI token)"
+description = "Alternative: Official GitHub server via Docker with toolsets"
 command = "docker run -i --rm -e GITHUB_PERSONAL_ACCESS_TOKEN=\"$(gh auth token)\" -e GITHUB_TOOLSETS=\"all\" ghcr.io/github/github-mcp-server"
 
 [[b00t.references]]
-name = "Official GitHub MCP Server"
+name = "Official GitHub MCP Server (Go)"
 url = "https://github.com/github/github-mcp-server"
+
+[[b00t.references]]
+name = "@modelcontextprotocol/server-github (Anthropic)"
+url = "https://github.com/modelcontextprotocol/servers/tree/main/src/github"
 
 [[b00t.references]]
 name = "MCP GitHub Documentation"

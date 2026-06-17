@@ -1,0 +1,41 @@
+[b00t]
+name = "git-local"
+type = "mcp"
+hint = "Local git CLI operations via MCP (add, commit, push, branch, stash, rebase, etc.)"
+lfmf_category = "git-local-mcp"
+hook_detect = "gates"
+
+[b00t.learn]
+topic = "git-local-mcp"
+auto_digest = true
+
+# 🤓: github-mcp-server by jungchihoon — local git CLI wrapper via MCP
+# 29 git operations + 11 workflow combos. Runs git commands locally, no GitHub API token needed.
+# ⚠️ NOTE: This is NOT the official GitHub MCP server (ghcr.io/github/github-mcp-server).
+# ⚠️ BROKEN on Node v22 (Zod v4 parse error). Use git CLI directly as fallback.
+[[b00t.mcp.stdio]]
+priority = 0
+command = "npx"
+requires = ["node", "git"]
+transport = "stdio"
+args = ["-y", "github-mcp-server", "mcp"]
+
+[[b00t.gate]]
+command = "git"
+hint = "git required for local git operations"
+
+[[b00t.gate]]
+rhai = "command_exists(\"npx\")"
+hint = "npx required to run github-mcp-server"
+
+[[b00t.usage]]
+description = "Run local git MCP server"
+command = "npx -y github-mcp-server mcp"
+
+[[b00t.references]]
+name = "github-mcp-server (jungchihoon)"
+url = "https://github.com/jungchihoon/github-mcp-server"
+
+[[b00t.references]]
+name = "MCP GitHub Documentation"
+url = "https://modelcontextprotocol.io/llms-full.txt"
