@@ -116,6 +116,18 @@ Profiles: `_b00t_/*.hive.toml` — declare `resources`, `exclusion.group`, `serv
 A fresh agent MUST: `b00t whoami` → `b00t blessing --manifest` → learn required skills → execute.
 Learning a skill datum unlocks the tools in its `unlocks` field. No learning = no auth.
 
+## b00t Type System Navigation
+
+b00t types are Rust structs/enums in `b00t-cli/src/lib.rs`. Agents navigate via:
+- `b00t-cli ontology sparql --subject <X> --predicate all` — triple-graph walk (`b00t:type`, `b00t:roles`, `b00t:validate`)
+- `b00t-cli ontology sparql --subject <X> --predicate type` — just type triples
+- `b00t-cli learn <topic>` — DWIW fanout: `DatumSearchSource(w=3)` + `GraphAdjacencySource(w=2)`
+- `b00t-cli blessing --manifest --role <R>` — walk `depends_on` graph for role
+- Key types: `BootDatum` (open struct) · `DatumType` (22-variant enum: Cli/Skill/Role/Mcp/Agent…)
+- Chalk Interner pattern: `DatumStore` trait would abstract TOML/SQLite/Qdrant storage behind same API
+- `b00t learn chalk-interner` — load Chalk Interner → b00t DatumStore mapping
+- `b00t learn datum-macro` — load Rust macro → dynamic datum feasibility analysis
+
 ## Agent Bug Reporting & Sharp Corners
 
 Sharp corner or bug found? REPORT IT — silence hides systemic issues.
