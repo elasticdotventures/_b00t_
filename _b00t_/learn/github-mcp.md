@@ -6,7 +6,7 @@ Master GitHub API access through Model Context Protocol with granular toolset co
 
 GitHub MCP Server enables AI tools to interact with GitHub APIs. Toolsets provide granular control over which GitHub capabilities are exposed to the AI agent.
 
-**Recommended**: Use official `github-mcp-server` (supports toolsets) instead of archived `@modelcontextprotocol/server-github`
+**Recommended**: Use `@modelcontextprotocol/server-github` (Anthropic, actively maintained, Node v22 compatible)
 
 ## Authentication (Security First!)
 
@@ -170,33 +170,31 @@ GITHUB_PERSONAL_ACCESS_TOKEN="$(gh auth token)" \
 
 ## Server Implementations
 
-### Official github-mcp-server (Recommended)
+### @modelcontextprotocol/server-github (Recommended)
 
-**Package**: `github-mcp-server` (official GitHub implementation)
+**Package**: `@modelcontextprotocol/server-github` (Anthropic, actively maintained)
 
 **Features:**
-- ✅ Full toolsets support
-- ✅ Active development
-- ✅ All configuration options
+- ✅ Works on Node v22
+- ✅ 26 GitHub REST API tools
+- ✅ Simple env: `GITHUB_TOKEN`
 - ✅ Production ready
 
 ```bash
-npx -y github-mcp-server
+GITHUB_TOKEN="$(gh auth token)" npx -y @modelcontextprotocol/server-github
 ```
 
-### @modelcontextprotocol/server-github (Fallback)
+### Official GitHub MCP Server (Docker)
 
-**Package**: `@modelcontextprotocol/server-github` (archived)
+**Package**: `ghcr.io/github/github-mcp-server` (Go binary, Docker only)
 
-**Use only when:**
-- Official server unavailable
-- Legacy compatibility needed
-- No toolsets required
-
-⚠️ **Limitations**: No toolsets support, archived repository
+**Features:**
+- ✅ 20+ toolsets with granular control
+- ✅ GitHub Actions, Copilot, Dependabot, code scanning
+- ✅ Active development by GitHub
 
 ```bash
-npx -y @modelcontextprotocol/server-github
+docker run -i --rm -e GITHUB_PERSONAL_ACCESS_TOKEN="$(gh auth token)" ghcr.io/github/github-mcp-server
 ```
 
 ## Common Patterns
@@ -204,11 +202,11 @@ npx -y @modelcontextprotocol/server-github
 ### b00t MCP Configuration
 
 The `_b00t_/github.mcp.toml` already configures:
-- ✅ Official github-mcp-server (priority 0, preferred)
-- ✅ Fallback to @modelcontextprotocol/server-github (priority 10)
-- ✅ Default toolsets: `issues,pull_requests,actions`
+- ✅ @modelcontextprotocol/server-github (priority 0, no npm `github-mcp-server`)
+- ✅ Official GitHub MCP Server via Docker (priority 10, alternative)
+- ✅ Default toolsets for Docker version: `issues,pull_requests,actions`
 - ✅ gh CLI requirement for secure token access
-- ✅ **RHAI pre-start validation** (fail-fast credential check)
+- ⚠️ The npm `github-mcp-server` package is NOT the official GitHub tool — it's a local git CLI by a community author, has a different name in b00t: `git-local`
 
 **RHAI Validation Script:**
 
@@ -429,7 +427,7 @@ Record lessons about GitHub MCP configuration:
 ```bash
 # Security best practices
 b00t lfmf github-mcp "gh CLI token: Use \$(gh auth token) instead of storing PATs (eliminates security vector)"
-b00t lfmf github-mcp "server preference: Use official github-mcp-server (toolsets support) over archived @modelcontextprotocol/server-github"
+b00t lfmf github-mcp "server preference: Use @modelcontextprotocol/server-github (active, compatible) — NOT npm github-mcp-server (different package, crashes on Node v22)"
 
 # RHAI validation pattern
 b00t lfmf github-mcp "pre-start validation: Use pre_start rhai script for fail-fast credential checks before MCP server starts"

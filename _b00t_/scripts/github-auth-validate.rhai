@@ -1,5 +1,5 @@
 // GitHub Authentication Validator for MCP Server
-// Ensures GITHUB_PERSONAL_ACCESS_TOKEN is available before starting github-mcp-server
+// Ensures GITHUB_PERSONAL_ACCESS_TOKEN and GITHUB_TOKEN are available before starting MCP servers
 //
 // Returns:
 //   - Token string if successful
@@ -95,11 +95,13 @@ if !token.starts_with("ghp_") && !token.starts_with("gho_") && !token.starts_wit
 }
 
 // Set token in environment for MCP server
+// Both GITHUB_TOKEN (for @modelcontextprotocol/server-github) and GITHUB_PERSONAL_ACCESS_TOKEN (for official Docker server)
 set_env("GITHUB_PERSONAL_ACCESS_TOKEN", token);
+set_env("GITHUB_TOKEN", token);
 
 log_success("✅ GitHub token retrieved successfully from gh CLI");
 log_info(`ℹ️  Token prefix: ${token.sub_string(0, 8)}...`);
-log_info("ℹ️  Token available for github-mcp-server startup");
+log_info("ℹ️  Token available for GitHub MCP servers (GITHUB_TOKEN + GITHUB_PERSONAL_ACCESS_TOKEN)");
 
 // Return token for use by caller
 return token;
