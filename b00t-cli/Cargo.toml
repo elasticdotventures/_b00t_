@@ -32,6 +32,7 @@ chrono = { workspace = true, features = ["serde"] }
 diffy = { workspace = true }
 tempfile = "3.13.0"
 thiserror = "2"
+diffy = { workspace = true }
 
 # b00t-cli specific dependencies
 rhai = { workspace = true }
