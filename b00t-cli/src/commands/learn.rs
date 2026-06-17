@@ -66,6 +66,11 @@ pub struct LearnArgs {
 
     #[arg(long = "capability-type", help = "Filter by capability type")]
     pub capability_type: Option<String>,
+
+    // DWIW: emit MCP-optimized follow-up examples in results.
+    // Also auto-enabled via B00T_MCP_CONTEXT=1 env var.
+    #[arg(long, help = "Emit MCP follow-up examples in DWIW results")]
+    pub mcp: bool,
 }
 
 pub async fn handle_learn(path: &str, args: LearnArgs) -> Result<()> {
@@ -110,6 +115,8 @@ pub async fn handle_learn(path: &str, args: LearnArgs) -> Result<()> {
             section: args.section,
             concise: args.concise,
         },
+        args.mcp,
+        args.limit,
     )
     .await
 }
@@ -266,7 +273,7 @@ fn get_registry_path(path: &str) -> Result<std::path::PathBuf> {
     Ok(expanded.join("capability-registry.toml"))
 }
 
-async fn handle_display(path: &str, topic: &str, opts: DisplayOpts) -> Result<()> {
+async fn handle_display(path: &str, topic: &str, opts: DisplayOpts, mcp: bool, limit: usize) -> Result<()> {
     let knowledge = KnowledgeSource::gather(topic, path).await?;
 
     // Auto-create datum if man page exists but no datum
@@ -277,14 +284,13 @@ async fn handle_display(path: &str, topic: &str, opts: DisplayOpts) -> Result<()
         }
     }
 
-    // Check if any knowledge exists
-    if !knowledge.has_knowledge() {
-        anyhow::bail!(
-            "No knowledge found for '{}'. Try:\n  • b00t learn {} --record \"<topic>: <body>\"\n  • b00t learn {} --man (if man page exists)",
-            topic,
-            topic,
-            topic
-        );
+    // DWIW: no curated datum → semantic search across all datums instead of hard-fail.
+    // 🤓 LFMF always returns generic empty lessons → has_knowledge() stays true even for unknown
+    //    topics; we gate on learn_content (actual datum soul page) being absent.
+    let has_datum = knowledge.learn_content.is_some() || knowledge.man_page.is_some();
+    if !has_datum {
+        let mcp_ctx = mcp || std::env::var("B00T_MCP_CONTEXT").is_ok();
+        return handle_dwiw(path, topic, mcp_ctx, limit).await;
     }
 
     knowledge.display(&opts)?;
@@ -299,6 +305,122 @@ async fn handle_display(path: &str, topic: &str, opts: DisplayOpts) -> Result<()
                 HookResult::Missing(msg) => println!("⚠️  {}", msg),
                 HookResult::Redirect(_) => {}
             }
+        }
+    }
+
+    Ok(())
+}
+
+/// DWIW fallback: no curated datum found → fanout query bus over all sources.
+///
+/// Pipeline:
+///   1. Compile datum triples (BootDatum → SPO, one filesystem scan)
+///   2. QueryBus::fanout → DatumSearchSource (keyword, w=3) + GraphAdjacencySource (horn FOL, w=2)
+///   3. Collate by key: scores accumulate, best trust wins
+///   4. Sm0l gate: if raw output > SM0L_TOKEN_THRESHOLD, summarize via sm0l_dispatch
+///   5. Render: counts, trust grades, graph context, MCP examples (MCP ctx only)
+///   6. Cache miss (0 results): queue research-soul task, warn about web trust
+async fn handle_dwiw(path: &str, topic: &str, mcp_ctx: bool, limit: usize) -> Result<()> {
+    use b00t_c0re_lib::query_bus::QueryBus;
+    use b00t_c0re_lib::query_bus::QueryContext;
+    use crate::datum_triples::compile_datum_triples;
+    use crate::query_sources::{DatumSearchSource, GraphAdjacencySource};
+
+    // Compile datum triples once — amortized across both sources
+    let triples = compile_datum_triples(path).unwrap_or_default();
+    let triple_count = triples.len();
+
+    let ctx = QueryContext::new(topic, limit, triples);
+
+    let bus = QueryBus::new()
+        .with_source(DatumSearchSource::new(path))
+        .with_source(GraphAdjacencySource::new(path, limit * 4));
+
+    let ranked = bus.fanout(&ctx).await;
+
+    if ranked.is_empty() {
+        let exe = std::env::current_exe().ok();
+        if let Some(bin) = exe {
+            let _ = std::process::Command::new(&bin)
+                .args(["task", "add", &format!("research-soul: {topic}")])
+                .output();
+        }
+        println!("[learn:miss] no knowledge for '{topic}' (graph: {triple_count} triples)");
+        println!("[learn:queued] research-soul: {topic}");
+        println!("⚠️  web sources unverified — trust only [datum:user] grade results");
+        anyhow::bail!("No knowledge found for '{topic}'. research-soul queued.");
+    }
+
+    let total = ranked.len();
+    let shown = total.min(limit);
+
+    // Sm0l gate: summarize if raw result bulk is large (>50 items or ≥8k token estimate).
+    // 🤓 Rough estimate: each result line ≈ 20 tokens; 8k / 20 = 400 items before gate fires.
+    //    We use 50 items as a practical gate (agent context is precious).
+    const SM0L_ITEM_GATE: usize = 50;
+    if total > SM0L_ITEM_GATE {
+        let raw = ranked
+            .iter()
+            .map(|r| format!("  {} [{}] (score={}) — {}", r.key, r.trust.as_str(), r.score, r.summary))
+            .collect::<Vec<_>>()
+            .join("\n");
+
+        use b00t_c0re_lib::sm0l_dispatch::{SmolBehavior, SmolSession, dispatch};
+        let session = SmolSession::new();
+        match dispatch(
+            &SmolBehavior::Summarize { max_output_lines: limit },
+            &raw,
+            Some(&session),
+            32_000,
+        ) {
+            Ok(out) if out.result.is_some() => {
+                println!("[learn:dwiw] {total} results for '{topic}' — sm0l summary (top {limit}):");
+                println!("[graph] {triple_count} triples compiled from datum graph");
+                println!();
+                println!("{}", out.result.unwrap());
+                if mcp_ctx {
+                    println!();
+                    println!("[mcp:hint] raw results: b00t learn '{topic}' --limit={total}");
+                }
+                return Ok(());
+            }
+            _ => {
+                // sm0l unavailable or empty result — fall through to standard display
+            }
+        }
+    }
+
+    println!(
+        "[learn:dwiw] {total} results for '{topic}'; showing top {shown}; --limit=N for more"
+    );
+    println!("[graph] {triple_count} triples | sources: datum:search(w=3) graph:adjacency(w=2)");
+    println!();
+
+    for r in &ranked[..shown] {
+        println!(
+            "  {} [{}] (score={}) — {}",
+            r.key,
+            r.trust.as_str(),
+            r.score,
+            if r.summary.is_empty() { r.key.as_str() } else { r.summary.as_str() }
+        );
+        if let Some(ref reason) = r.match_reason {
+            println!("    ↳ {reason}");
+        }
+    }
+
+    if total > shown {
+        println!("\n  … {} more — use --limit={total} to see all", total - shown);
+    }
+
+    if mcp_ctx {
+        if let Some(top) = ranked.first() {
+            println!();
+            println!("[mcp:hint] follow-up on top result '{}':", top.key);
+            println!("  b00t learn --topic={}", top.key);
+            println!("  b00t learn --topic={} --concise", top.key);
+            println!("  b00t learn --topic={} --toc", top.key);
+            println!("  b00t learn '{topic}' --limit={limit} --mcp  # expand this set");
         }
     }
 

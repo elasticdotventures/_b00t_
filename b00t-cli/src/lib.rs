@@ -106,8 +106,10 @@ pub mod datum_mcp;
 pub mod datum_repo;
 pub mod datum_skill;
 pub mod datum_stack;
+pub mod datum_triples;
 pub mod datum_utils;
 pub mod datum_vscode;
+pub mod query_sources;
 #[cfg(feature = "dbus")]
 pub mod dbus_dispatch;
 pub mod dependency_resolver;
