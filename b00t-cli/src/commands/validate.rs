@@ -121,6 +121,9 @@ fn call_sm0l_model(prompt: &str, endpoint: &str) -> Result<String> {
         .or_else(|| crate::model_registry::resolve_tier_endpoint("ch0nky")
             .map(|(_, m)| m))
         .unwrap_or_else(|| SM0L_MODEL.to_string());
+    // 🤓 model name + endpoint are env-configurable so any OpenAI-compatible
+    //    peer (llamacpp, vLLM, mistral.rs, …) can serve as the sm0l validator.
+    let model = std::env::var("B00T_SM0L_MODEL").unwrap_or_else(|_| SM0L_MODEL.to_string());
     let base = endpoint.trim_end_matches('/').trim_end_matches("/v1");
     let url = format!("{}/v1/chat/completions", base);
     let payload = serde_json::json!({
@@ -270,8 +273,7 @@ pub fn handle_validate(args: &ValidateArgs) -> Result<()> {
             fsl_examples.join("\n"), t00n_data)
     };
 
-    // 🤓 endpoint resolution: --endpoint flag > local registry (tier=ch0nky/sm0l)
-    //    > B00T_AI_SM0L_BASE env > localhost:8001
+    // 🤓 endpoint resolution: --endpoint flag > registry (tier=ch0nky) > env > localhost
     let endpoint = args.endpoint.clone()
         .or_else(|| crate::model_registry::resolve_tier_endpoint("ch0nky")
             .map(|(base, _)| base))
