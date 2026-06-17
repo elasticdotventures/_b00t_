@@ -1603,7 +1603,8 @@ ralph-diverse-hive goal="" n_agents="3" n_skills="3":
 
 # compile-agent: compile a sandboxed single-file AGENTS.md for a specific role.
 # Output = AGENTS.md boilerplate prefix + role supplement + random transferable skills.
-# Operator provisions by running: just compile-agent --role=backend --out=/tmp/agent.md
+# Usage: just compile-agent <role> [n_skills] [out_path]
+# Ex:    just compile-agent worker 3 /tmp/agent.md
 compile-agent role="worker" n_skills="3" out="/tmp/compiled-agent.md":
     #!/usr/bin/env bash
     set -euo pipefail
