@@ -2,6 +2,7 @@
 name = "bash"
 type = "cli"
 hint = "Bash  is  an  sh-compatible  command language interpreter that executes        commands read from the standard input or from a file.  Bash also incor‐        porates useful features from the Korn and C shells (ksh and csh)."
+unlocks = ["bash *", "sh *"]
 desires = "ersion"
 lfmf_category = "bash"
 

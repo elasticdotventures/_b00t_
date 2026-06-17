@@ -6,3 +6,4 @@ update = "curl -fsSL https://raw.githubusercontent.com/elasticdotventures/dotfil
 version = "b00t-cli --version"
 version_regex = '(\d+\.\d+\.\d+)'
 hint = "b00t is a tool to manage command-line tools."
+unlocks = ["b00t-cli *", "mcp__b00t-mcp__*"]
