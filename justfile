@@ -555,6 +555,10 @@ install-rustfmt-hook:
     echo '  {"matcher":"Edit|Write","hooks":[{"type":"command","command":"~/.claude/hooks/rustfmt-post-edit"}]}'
 
 
+# test-hook: run rustfmt-post-edit hook integration tests
+test-hook:
+    bash _b00t_/hooks/test-rustfmt-hook.sh
+
 # upgrade: holistic b00t upgrade (binary, MCP, hooks, Claude settings)
 upgrade:
     cargo run --bin b00t-cli -p b00t-cli -- upgrade
