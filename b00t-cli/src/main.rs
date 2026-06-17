@@ -127,6 +127,9 @@ Tips:
 - Suitable tools: any with a b00t datum (TOML, learn/ dir, etc).
 "#
     )]
+    #[clap(about = "Agent tool authorization manifest (unlocks via learning)")]
+    Blessing(b00t_cli::commands::blessing::BlessingArgs),
+
     Lfmf {
         #[clap(long, help = "Tool name")]
         tool: Option<String>,
@@ -1738,6 +1741,12 @@ async fn main() {
         Some(Commands::Init { init_command }) => {
             if let Err(e) = init_command.execute(&cli.path) {
                 eprintln!("Error: {}", e);
+                std::process::exit(1);
+            }
+        }
+        Some(Commands::Blessing(blessing_args)) => {
+            if let Err(e) = b00t_cli::commands::blessing::handle_blessing(blessing_args) {
+                eprintln!("Error: {e}");
                 std::process::exit(1);
             }
         }

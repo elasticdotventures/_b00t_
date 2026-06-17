@@ -405,6 +405,14 @@ pub struct BootDatum {
     //    All other HookResult variants (non-error Warn/Redirect/Info/Missing) are non-fatal: logged and execution continues
     pub uninstall: Option<String>,
     pub hook_uninstall: Option<String>,
+
+    // Blessing system: tool authorization
+    // 🤓 unlocks: tool globs this datum authorizes when learned (e.g. ["cargo.*", "rustfmt"])
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub unlocks: Option<Vec<String>>,
+    // 🤓 type_tags: content classification (transferable, domain, etc.) — distinct from datum_type
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub type_tags: Option<Vec<String>>,
 }
 
 /// Handle datum types that are marked as *incubating*.

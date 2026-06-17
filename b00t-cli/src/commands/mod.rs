@@ -1,3 +1,4 @@
+pub mod blessing;
 pub mod agent;
 pub mod bouncer;
 pub mod ai;
