@@ -29,6 +29,7 @@ clap = { workspace = true }
 regex = { workspace = true }
 anyhow = { workspace = true }
 chrono = { workspace = true, features = ["serde"] }
+diffy = { workspace = true }
 tempfile = "3.13.0"
 thiserror = "2"
 
