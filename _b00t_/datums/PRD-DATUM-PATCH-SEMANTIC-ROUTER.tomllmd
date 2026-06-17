@@ -1,0 +1,108 @@
+# PRD: Ontology-aware semantic mutation router with Serena evidence-backed engine
+
+[b00t.schema]
+version   = "1"
+type      = "prd"
+type_tags = ["prd", "datum-patch", "semantic-patch", "serena", "ontology", "bouncer"]
+
+[prd]
+id     = "PRD-DATUM-PATCH-SEMANTIC-ROUTER"
+title  = "Extend b00t datum patch into ontology-aware semantic mutation router + Serena evidence engine"
+status = "proposed"
+tier   = "frontier"
+closes_task = 43
+
+# ─── Executive Summary ───────────────────────────────────────────────────────
+# b00t currently does invisible doc/code rewrites — agents modify files without
+# showing semantic intent, evidence, or ontology provenance. This PRD introduces
+# `b00t datum patch` as a first-class semantic mutation protocol:
+#   - every patch carries intent, evidence (Serena LSP references), and OKR linkage
+#   - mutations are routed through ontology-aware rules (e.g. guard before write)
+#   - all patches are visible: diff shown, bouncer-validated, and logged as datum
+# Serena (LSP-backed code intelligence MCP) provides cross-reference evidence.
+
+[current_state]
+patch_mode  = "invisible — agent edits files directly; no semantic layer"
+evidence    = "none — no reference to source of truth or LSP cross-refs"
+bouncer     = "b00t bouncer validate — guards, not semantic intent"
+serena      = "MCP server: cross-file code intelligence, find-references, hover"
+missing     = ["semantic patch protocol", "Serena evidence linkage", "visible diff", "ontology routing"]
+
+[semantic_patch_protocol]
+# SemanticPatch: a mutation with intent, evidence, and ontology class
+definition = """
+pub struct SemanticPatch {
+    pub id: String,                        // unique patch id (uuid)
+    pub target: PatchTarget,               // File { path, range } | Datum { id } | Guard { id }
+    pub intent: PatchIntent,               // Fix | Refactor | Extend | Deprecate | Add
+    pub diff: String,                      // unified diff format
+    pub evidence: Vec<Evidence>,           // Serena LSP refs, test results, OKR linkage
+    pub okr_id: Option<String>,            // OKR this patch advances
+    pub ontology_class: Option<String>,    // b00t:GuardPatch | b00t:CodePatch | b00t:DatumPatch
+    pub bouncer_result: Option<BouncerResult>,
+}
+
+pub struct Evidence {
+    pub kind: EvidenceKind,  // LspReference | TestResult | GuardViolation | OKRDelta
+    pub source: String,
+    pub detail: String,
+}
+"""
+
+[mutation_router]
+# Routes patches through appropriate pipeline based on ontology class
+routes = [
+  { class = "b00t:GuardPatch",  pipeline = ["bouncer-validate", "hive-guard-append", "datum-log"] },
+  { class = "b00t:CodePatch",   pipeline = ["serena-evidence", "bouncer-validate", "rustfmt", "test-run"] },
+  { class = "b00t:DatumPatch",  pipeline = ["shacl-validate", "irontology-ingest", "datum-log"] },
+  { class = "b00t:DocPatch",    pipeline = ["bouncer-validate", "visible-diff", "datum-log"] },
+]
+
+[serena_integration]
+# Serena MCP provides LSP-backed cross-reference evidence before patch commit
+# Evidence: find-references shows all callers before modifying a function
+serena_cmd     = "serena find-references <symbol> --file <path>"
+evidence_types = ["callers", "implementors", "test-coverage", "type-usages"]
+require_evidence_for = ["CodePatch", "GuardPatch"]  # evidence required before route
+
+[visible_diff]
+# All patches show a visible diff before applying
+show_cmd    = "b00t datum patch show <id>"
+apply_cmd   = "b00t datum patch apply <id> [--dry-run]"
+log_cmd     = "b00t datum patch log [--limit=N]"
+log_format  = "append to _b00t_/datums/PATCH-LOG-<date>.tomllmd"
+
+[implementation]
+new_file   = "b00t-cli/src/commands/datum_patch.rs"
+new_file2  = "b00t-c0re-lib/src/semantic_patch.rs"
+modify     = ["b00t-cli/src/commands/datum.rs", "b00t-cli/src/commands/bouncer.rs"]
+new_cmds   = [
+  "b00t datum patch create --target <file> --intent Fix --diff <unified-diff>",
+  "b00t datum patch show <id>",
+  "b00t datum patch apply <id> [--dry-run]",
+  "b00t datum patch log [--class=<ontology-class>]",
+]
+
+[acceptance]
+must = [
+  "b00t datum patch create ... --intent Fix emits SemanticPatch with visible unified diff",
+  "b00t:CodePatch route calls serena find-references before bouncer-validate",
+  "b00t:GuardPatch route appends to hive-guards.hive.toml only after bouncer Pass",
+  "all patches logged to _b00t_/datums/PATCH-LOG-<date>.tomllmd",
+  "b00t datum patch apply --dry-run shows diff without modifying files",
+]
+
+[[related]]
+datum = "PRD-ARCH-004-OKR-SELF-IMPROVE"
+note  = "GuardPatch mutations feed the OKR violation reduction loop"
+
+[[related]]
+datum = "PRD-ARCH-008-CONTROLFLOW-GATE-ONTOLOGY"
+note  = "mutation router uses ControlFlow gate chain for pipeline execution"
+
+# b00t:map v1
+# summary: SemanticPatch protocol with Serena LSP evidence + ontology-routed mutation pipeline
+# tags: prd, datum-patch, semantic-patch, serena, ontology, bouncer, frontier
+# tier: frontier
+# cmds: b00t datum patch create; b00t datum patch apply --dry-run; b00t datum patch log
+# complexity: 7

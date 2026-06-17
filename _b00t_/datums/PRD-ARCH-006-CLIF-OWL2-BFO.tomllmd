@@ -1,0 +1,134 @@
+# PRD-ARCH-006: CLIF/OWL2/BFO ontology layer for tomllm datums
+
+[b00t.schema]
+version   = "1"
+type      = "prd"
+type_tags = ["prd", "clif", "owl2", "bfo", "ufo", "shacl", "sysmlv2", "ontology", "arch", "frontier"]
+
+[prd]
+id     = "PRD-ARCH-006-CLIF-OWL2-BFO"
+title  = "CLIF/OWL2/BFO ontology layer — formal axioms + SHACL validation for tomllm datums"
+status = "proposed"
+tier   = "frontier"
+closes_task = 30
+
+# ─── Executive Summary ───────────────────────────────────────────────────────
+# tomllm datums have `type_tags` but no formal ontology.  This PRD layers BFO
+# (ISO/IEC 21838-2) and OWL2 class expressions onto the datum type system,
+# adds CLIF (ISO Common Logic) axioms for inter-datum constraints, and
+# wires SHACL shapes into irontology-mcp for ingest-time validation.
+# Goal: type-safe datum composition (agents, tasks, guards, OKRs) with
+# machine-checkable constraints.
+
+[current_state]
+datum_format    = "tomllmd — TOML + # comment conventions"
+type_system     = "type_tags: string[] — informal, no formal semantics"
+irontology      = "vendor/irontology-mcp — DatumNode store, class field optional"
+bfo_status      = "BFO 2.0 OWL available at https://github.com/BFO-ontology/BFO"
+missing         = ["BFO class hierarchy", "OWL2 axioms", "CLIF constraints", "SHACL validation"]
+
+[bfo_mapping]
+# BFO top-level categories applied to b00t entities
+# BFO:Continuant = exists through time (agents, files, datums)
+# BFO:Occurrent  = unfolds in time (tasks, loops, cycles, sessions)
+b00t_agent      = { bfo = "BFO:IndependentContinuant", note = "agents persist, change role" }
+b00t_datum      = { bfo = "BFO:GenericallyDependentContinuant", note = "datum depends on substrate" }
+b00t_task       = { bfo = "BFO:Process",                        note = "task unfolds in time" }
+b00t_session    = { bfo = "BFO:TemporalRegion",                 note = "session bounds other occurrents" }
+b00t_capability = { bfo = "BFO:RealizableEntity",               note = "capability realized in task" }
+guard_violation = { bfo = "BFO:Quality",                        note = "violation inheres in run event" }
+
+[owl2_axioms]
+# OWL2 Manchester Syntax for datum class hierarchy
+ontology_iri = "http://b00t.promptexecution.com/ontology/datum/1.0"
+
+class_Agent = """
+Class: b00t:Agent
+  SubClassOf: bfo:IndependentContinuant
+  SubClassOf: b00t:hasCapability only b00t:Capability
+  DisjointWith: b00t:Datum
+"""
+
+class_Datum = """
+Class: b00t:Datum
+  SubClassOf: bfo:GenericallyDependentContinuant
+  SubClassOf: b00t:hasTypeTag min 1 xsd:string
+  SubClassOf: b00t:hasTier only { "sm0l", "ch0nky", "frontier" }
+"""
+
+class_Guard = """
+Class: b00t:Guard
+  SubClassOf: b00t:Datum
+  SubClassOf: b00t:hasPattern exactly 1 xsd:string
+  SubClassOf: b00t:hasSeverity only { "warn", "block", "redirect" }
+"""
+
+class_OKR = """
+Class: b00t:OKR
+  SubClassOf: b00t:Datum
+  SubClassOf: b00t:hasObjective exactly 1 xsd:string
+  SubClassOf: b00t:hasKeyResult min 1 b00t:KeyResult
+"""
+
+[clif_axioms]
+# ISO Common Logic axioms for inter-datum constraints
+# Format: standard-CLIF prefix (cl:) + b00t domain predicates
+tier_ordering = "(forall (a b) (if (and (b00t:tier a 'sm0l') (b00t:tier b 'frontier')) (not (b00t:executes a b))))"
+guard_scope   = "(forall (g p) (if (and (b00t:Guard g) (b00t:pattern g p)) (exists (r) (b00t:applies-to g r))))"
+okr_coverage  = "(forall (o) (if (b00t:OKR o) (exists (kr) (b00t:hasKeyResult o kr))))"
+datum_tier    = "(forall (d t) (if (b00t:tier d t) (member t '(sm0l ch0nky frontier))))"
+# @tribal: axiom tier_ordering is the type-theoretic physics core — sm0l agents are forbidden from frontier tasks
+
+[shacl_shapes]
+# SHACL shapes for irontology-mcp ingest validation
+shape_Agent = """
+b00t:AgentShape a sh:NodeShape ;
+  sh:targetClass b00t:Agent ;
+  sh:property [ sh:path b00t:tier ; sh:in ("sm0l" "ch0nky" "frontier") ; sh:minCount 1 ] ;
+  sh:property [ sh:path b00t:name ; sh:datatype xsd:string ; sh:minCount 1 ] .
+"""
+
+shape_Datum = """
+b00t:DatumShape a sh:NodeShape ;
+  sh:targetClass b00t:Datum ;
+  sh:property [ sh:path b00t:type_tags ; sh:datatype xsd:string ; sh:minCount 1 ] ;
+  sh:property [ sh:path b00t:tier ; sh:in ("sm0l" "ch0nky" "frontier") ] .
+"""
+
+shape_Guard = """
+b00t:GuardShape a sh:NodeShape ;
+  sh:targetClass b00t:Guard ;
+  sh:property [ sh:path b00t:pattern ; sh:datatype xsd:string ; sh:minCount 1 ] ;
+  sh:property [ sh:path b00t:severity ; sh:in ("warn" "block" "redirect") ; sh:minCount 1 ] .
+"""
+
+[implementation]
+owl2_file   = "_b00t_/types/b00t_ontology.owl"
+clif_file   = "_b00t_/types/b00t_axioms.clif"
+shacl_file  = "_b00t_/types/b00t_shapes.ttl"
+new_cmd     = "b00t ontology validate --datum <id>"
+new_cmd2    = "b00t ontology export --format=<owl2|clif|shacl>"
+modify      = ["vendor/irontology-mcp/src/lib.rs", "b00t-cli/src/commands/ontology.rs"]
+
+[acceptance]
+must = [
+  "b00t ontology validate --datum PRD-ARCH-004 passes SHACL without errors",
+  "b00t ontology export --format=owl2 outputs valid Manchester syntax",
+  "CLIF axiom tier_ordering rejects sm0l agent + frontier task composition",
+  "irontology-mcp ingest() calls SHACL validator before DatumStore write",
+]
+
+[[related]]
+datum = "PRD-ONTOLOGY-OODA-UFO-SYSML"
+note  = "UFO mapping complements BFO; both feed irontology-mcp class registry"
+
+[[related]]
+datum = "PRD-ARCH-005-MBSE-VISUALIZATION"
+note  = "BFO/OWL2 classes feed the same Mermaid/SysMLv2 diagram pipeline"
+
+# b00t:map v1
+# summary: layer BFO/OWL2/CLIF/SHACL formal ontology onto tomllm datums; validate at ingest
+# tags: prd, bfo, owl2, clif, shacl, ontology, tomllm, frontier
+# tier: frontier
+# cmds: b00t ontology validate --datum PRD-ARCH-004; b00t ontology export --format=owl2
+# complexity: 7
