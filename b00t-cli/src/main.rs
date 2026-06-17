@@ -47,6 +47,7 @@ use b00t_cli::commands::{
     ObservabilityCommands, OntologyCommands, SchedulerCommands, SessionCommands, SkillCommands, SoulCommands, StackCommands,
     OodaCommands,
     TaskCommands,
+    PatchCommands,
     TutorialCommands, VersionCommands, VizCommands, WhatismyCommands
 
 
@@ -468,6 +469,11 @@ The system will:
     Quit(b00t_cli::commands::quit::QuitArgs),
     #[clap(about = "l3dg3rr docgen proxy — query knowledge graph and emit .tomllm / rustdoc / json")]
     Docgen(b00t_cli::commands::docgen::DocgenArgs),
+    #[clap(about = "Show, apply, or check a semantic patch (visible diff before write)")]
+    Patch {
+        #[clap(subcommand)]
+        patch_command: PatchCommands,
+    },
     #[clap(about = "Read audit trail from .b00t/audit.jsonl")]
     Audit {
         #[clap(subcommand)]
@@ -2293,6 +2299,12 @@ async fn main() {
                     eprintln!("docgen error: {e}");
                     std::process::exit(1);
                 }
+            }
+        }
+        Some(Commands::Patch { patch_command }) => {
+            if let Err(e) = b00t_cli::commands::patch::handle_patch_command(patch_command) {
+                eprintln!("Error: {e}");
+                std::process::exit(1);
             }
         }
         Some(Commands::Audit { audit_command }) => {

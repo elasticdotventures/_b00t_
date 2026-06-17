@@ -1088,6 +1088,7 @@ dependencies = [
  "chrono",
  "clap",
  "confy",
+ "diffy",
  "dirs",
  "duct",
  "ed25519-dalek",
@@ -2541,6 +2542,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6184e33543162437515c2e2b48714794e37845ec9851711914eec9d308f6ebe8"
 
 [[package]]
+name = "diffy"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "05264ab2aab4fb952fc4b0f3f6eff1ddfb4563064053a4ea174d91537584a769"
+dependencies = [
+ "hashbrown 0.17.0",
+]
+
+[[package]]
 name = "digest"
 version = "0.10.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3990,6 +4000,9 @@ name = "hashbrown"
 version = "0.17.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4f467dd6dccf739c208452f8014c75c18bb8301b050ad1cfb27153803edb0f51"
+dependencies = [
+ "foldhash 0.2.0",
+]
 
 [[package]]
 name = "hashlink"

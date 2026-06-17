@@ -134,6 +134,7 @@ pub mod sandbox;
 pub mod scheduler;
 pub mod session_memory;
 pub mod skill_resolver;
+pub mod semantic_patch;
 pub mod soul_writer;
 pub mod step;
 pub mod traits;
