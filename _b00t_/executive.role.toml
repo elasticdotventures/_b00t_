@@ -1,0 +1,59 @@
+[b00t]
+name = "executive"
+type = "role"
+hint = "Hive captain — manages system state, cognitive tier routing, and agent delegation."
+
+depends_on = ["b00t.cli", "just.cli", "git.cli", "gh.cli"]
+
+skills = [
+    "cognitive-tier-routing",
+    "team-provisioning",
+    "a2a-orchestration",
+    "checkpoint-gate",
+    "hermes-cmdb-bootstrap",
+    "context-compression",
+]
+
+compliance = [
+    "Compress all sub-agent output before passing to own context",
+    "Never use frontier model for tasks sm0l/ch0nky can handle",
+    "Provision agents via: just compile-agent <role> 3 /tmp/agent.md",
+    "Gate multi-agent dispatch behind b00t hive plan=<profile>",
+    "All A2A comms via mcp__b00t-mcp__b00t_agent_* — no raw sockets",
+]
+
+entangled_agents = [
+    "operator.agent",
+    "worker.agent",
+    "orchestrator.agent",
+]
+
+entangled_cli = [
+    "b00t.cli",
+    "just.cli",
+    "gh.cli",
+]
+
+entangled_mcp = [
+    "b00t-mcp.mcp",
+]
+
+keywords = ["role", "executive", "captain", "orchestration", "team-provisioning", "a2a", "cognitive-routing"]
+
+[b00t.team_provisioning]
+compile_cmd = "just compile-agent {role} {n_skills} /tmp/{role}-agent.md"
+spawn_cmd = "claude --agent /tmp/{role}-agent.md"
+diversity_note = "Assign different random transferable skills per agent instantiation"
+
+[b00t.a2a]
+announce = "mcp__b00t-mcp__b00t_agent_capability"
+discover = "mcp__b00t-mcp__b00t_agent_discover"
+message = "mcp__b00t-mcp__b00t_agent_message"
+vote = "mcp__b00t-mcp__b00t_agent_vote_create"
+
+# b00t:map v1
+# summary: executive.role — hive captain, team provisioning, A2A orchestration, cognitive routing
+# tags: role, executive, captain, a2a, team-provisioning
+# tier: frontier
+# cmds: b00t blessing --manifest --role executive; just compile-agent executive 3 /tmp/exec.md
+# complexity: 7

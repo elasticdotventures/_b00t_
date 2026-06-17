@@ -116,6 +116,25 @@ Profiles: `_b00t_/*.hive.toml` — declare `resources`, `exclusion.group`, `serv
 A fresh agent MUST: `b00t whoami` → `b00t blessing --manifest` → learn required skills → execute.
 Learning a skill datum unlocks the tools in its `unlocks` field. No learning = no auth.
 
+## Agent Bug Reporting & Sharp Corners
+
+Sharp corner or bug found? REPORT IT — silence hides systemic issues.
+- `b00t lfmf <topic> "<lesson>"` — memoize tribal/non-obvious knowledge immediately
+- `b00t task add "bug: <description>"` — creates tracked issue for operator review
+- Flag in output: 🚩 security concern · ⚠️ caveat/limitation · 🤓 tribal knowledge
+- Fork-fix-forward: if a library has a bug, fix and PR upstream — do NOT work around silently.
+
+## Hive A2A Collaboration
+
+Executive provisions teams: `just compile-agent <role> 3 /tmp/agent.md && claude --agent /tmp/agent.md`
+Agent-to-agent messaging uses b00t MCP tools (no raw sockets):
+- `mcp__b00t-mcp__b00t_agent_capability` — announce role + skills to hive
+- `mcp__b00t-mcp__b00t_agent_discover` — find peers by role or capability
+- `mcp__b00t-mcp__b00t_agent_message` / `b00t_agent_notify` — send/receive
+- `mcp__b00t-mcp__b00t_agent_wait` — block until peer responds
+- `mcp__b00t-mcp__b00t_agent_vote_create` / `b00t_agent_vote_submit` — consensus
+Output to executive: compressed summaries ONLY. Raw sub-agent output MUST NOT enter executive context.
+
 ---
 <!-- ── SESSION (variable suffix — NOT KV-cached, compiled per instantiation) ──────── -->
 
