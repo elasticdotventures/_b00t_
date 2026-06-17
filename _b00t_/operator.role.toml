@@ -4,7 +4,7 @@ trigger_words = ["operator", "hive", "dispatch", "orchestrate", "manage"]
 type = "role"
 hint = "Hive operator role: MCP assimilation, crew dispatch, resource-gated multi-agent orchestration."
 
-depends_on = ["b00t.cli", "just.cli", "git.cli", "gh.cli", "python.cli", "uv.cli", "rust.cli", "cargo.cli", "node.cli", "pnpm.cli", "bun.cli", "docker.cli", "podman.cli", "k8s.cli", "k3d.cli", "k9s.cli", "stern.cli", "kubectx.cli", "kapp.cli", "kueue.cli", "opentofu.cli", "ansible.cli", "wrkflw.cli", "systemd.cli", "bash.cli", "curl.apt", "zellij.cli", "servo.cli", "sonar.cli", "metaflow.cli", "dagu.cli", "raglite.cli"]
+depends_on = ["b00t.cli", "just.cli", "git.cli", "gh.cli", "python.cli"]
 
 skills = [
     "mcp-assimilation",
