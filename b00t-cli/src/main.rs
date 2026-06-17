@@ -507,6 +507,14 @@ The system will:
         #[clap(subcommand)]
         observability_command: ObservabilityCommands,
     },
+    #[clap(
+        about = "Node-local overlay enclave — isolated changeset management",
+        long_about = "Manage a git enclave branch carrying node-local overlay changes (model endpoints, API keys, hardware config) on top of an upstream baseline."
+    )]
+    Project {
+        #[clap(subcommand)]
+        project_command: b00t_cli::commands::ProjectCommands,
+    },
 }
 
 #[derive(clap::Parser, Clone)]
@@ -2319,6 +2327,12 @@ async fn main() {
         }
         Some(Commands::Observability { observability_command }) => {
             if let Err(e) = observability_command.execute() {
+                eprintln!("Error: {e}");
+                std::process::exit(1);
+            }
+        }
+        Some(Commands::Project { project_command }) => {
+            if let Err(e) = project_command.execute() {
                 eprintln!("Error: {e}");
                 std::process::exit(1);
             }

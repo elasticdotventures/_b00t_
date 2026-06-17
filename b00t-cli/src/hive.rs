@@ -73,6 +73,70 @@ impl Accelerator {
             _ => self.name.clone(),
         }
     }
+
+    /// True if this accelerator satisfies a compatibility requirement token.
+    ///
+    /// Used to filter recipes/stacks to those compatible with a node's
+    /// architecture (YAGNI: alpha-stage iterable filter). Tokens are
+    /// case-insensitive:
+    /// - `"gpu"` → any graphics-class accelerator
+    /// - `"npu"` → any neural-processing-unit
+    /// - a vendor/name/kind substring: `"nvidia"`, `"mali"`, `"rknn"`,
+    ///   `"rknpu"`, or a probe kind verbatim (`"mali-devnode"`,
+    ///   `"rknpu2-pkg"`, `"nvidia-smi"`)
+    /// - empty → always satisfied (no requirement declared)
+    pub fn satisfies(&self, req: &str) -> bool {
+        let lower = req.trim().to_lowercase();
+        let r = normalize_accel_token(&lower);
+        if r.is_empty() {
+            return true;
+        }
+        match r {
+            "gpu" => self.is_gpu(),
+            "npu" => self.is_npu(),
+            _ => {
+                // 🤓 substring over vendor+kind+name so the natural taxonomy
+                //    ("nvidia", "mali", "rknpu", "rknpu2-pkg", …) resolves
+                //    without an explicit token table — extensible for free.
+                let hay = format!(
+                    "{} {} {}",
+                    self.vendor.as_deref().unwrap_or("").to_lowercase(),
+                    self.kind,
+                    self.name.to_lowercase()
+                );
+                hay.contains(r)
+            }
+        }
+    }
+}
+
+/// Normalize common hardware synonyms so requirement tokens resolve naturally.
+/// 🤓 RKNN (SDK) and RKNPU (driver package) are the same Rockchip NPU silicon.
+fn normalize_accel_token(r: &str) -> &str {
+    match r {
+        "rknn" | "rknn2" => "rknpu",
+        _ => r,
+    }
+}
+
+/// Filter `accelerators` to those satisfying `requirement`.
+/// Lazy iterator — the YAGNI surface for stack/recipe compatibility selection.
+pub fn accelerators_matching<'a>(
+    accels: &'a [Accelerator],
+    requirement: &'a str,
+) -> impl Iterator<Item = &'a Accelerator> {
+    accels.iter().filter(move |a| a.satisfies(requirement))
+}
+
+/// True iff at least one accelerator satisfies *every* requirement token.
+///
+/// A node is "compatible" with a stack/recipe iff each declared requirement
+/// (e.g. `["npu", "rknn"]`, `["gpu"]`) is met by some detected accelerator.
+/// Empty requirements → compatible (no constraints declared).
+pub fn satisfies_all_requirements(accels: &[Accelerator], requirements: &[String]) -> bool {
+    requirements
+        .iter()
+        .all(|req| accels.iter().any(|a| a.satisfies(req)))
 }
 
 /// Derive the legacy single-GPU fields from a list of accelerators.
@@ -1641,6 +1705,72 @@ mod tests {
             assert!(a.is_gpu() || a.is_npu());
             assert!(!a.name.is_empty());
         }
+    }
+
+    // ─── compatibility filter (B) ──────────────────────────────────────────────
+
+    #[test]
+    fn satisfies_class_tokens() {
+        let g = gpu("RTX 3090", 24576, 8000);
+        let n = npu("RKNPU2");
+        assert!(g.satisfies("gpu"));
+        assert!(!g.satisfies("npu"));
+        assert!(n.satisfies("npu"));
+        assert!(!n.satisfies("gpu"));
+    }
+
+    #[test]
+    fn satisfies_substring_tokens() {
+        // vendor/name/kind substring matching
+        let mali = Accelerator {
+            class: "gpu".into(), kind: "mali-devnode".into(),
+            name: "ARM Mali (integrated)".into(), vendor: Some("ARM".into()),
+            vram_total_mb: None, vram_free_mb: None,
+        };
+        let rknn = npu("Rockchip RKNPU2 NPU (2.3.0)");
+        assert!(mali.satisfies("mali"));
+        assert!(mali.satisfies("mali-devnode"));
+        assert!(rknn.satisfies("rknn"));
+        assert!(rknn.satisfies("rknpu"));
+        assert!(rknn.satisfies("rknpu2-pkg"));
+        assert!(rknn.satisfies("rockchip"));
+        // negative: a Mali does not satisfy an NPU requirement
+        assert!(!mali.satisfies("rknn"));
+    }
+
+    #[test]
+    fn satisfies_empty_is_always_true() {
+        // no requirement declared → compatible
+        assert!(gpu("x", 1, 1).satisfies(""));
+        assert!(npu("y").satisfies(""));
+    }
+
+    #[test]
+    fn accelerators_matching_is_lazy_iter() {
+        let accels = vec![gpu("RTX 3090", 0, 0), npu("RKNPU2")];
+        let gpus: Vec<_> = accelerators_matching(&accels, "gpu").collect();
+        assert_eq!(gpus.len(), 1);
+        assert_eq!(gpus[0].name, "RTX 3090");
+    }
+
+    #[test]
+    fn satisfies_all_requirements_node_compat() {
+        // RK3588 node: Mali + RKNN NPU
+        let mali = Accelerator {
+            class: "gpu".into(), kind: "mali-devnode".into(),
+            name: "ARM Mali".into(), vendor: Some("ARM".into()),
+            vram_total_mb: None, vram_free_mb: None,
+        };
+        let accels = vec![mali, npu("RKNPU2")];
+        // a stack needing an NPU → compatible
+        assert!(satisfies_all_requirements(&accels, &["npu".into()]));
+        assert!(satisfies_all_requirements(&accels, &["rknn".into()]));
+        // a stack needing a discrete NVIDIA GPU → NOT compatible (only Mali here)
+        assert!(!satisfies_all_requirements(&accels, &["nvidia".into()]));
+        // needs both gpu + npu → compatible (Mali covers gpu)
+        assert!(satisfies_all_requirements(&accels, &["gpu".into(), "npu".into()]));
+        // empty requirements → compatible
+        assert!(satisfies_all_requirements(&accels, &[]));
     }
 
     #[test]

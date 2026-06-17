@@ -147,6 +147,95 @@ pub enum ModelCommands {
         #[clap(long, help = "Max tokens", default_value_t = 50)]
         max_tokens: u32,
     },
+
+    // ── Local model registry (gitignored CRUD) ────────────────────────────────
+
+    #[clap(about = "Register a model endpoint in the local registry (gitignored)")]
+    Register {
+        #[clap(help = "Unique name for this endpoint (e.g. qwen36-peer, ollama-local)")]
+        name: String,
+        #[clap(long, help = "Endpoint URL (e.g. http://192.168.1.137:8001)")]
+        endpoint: String,
+        #[clap(long, help = "Model ID the API expects (e.g. Qwen3.6-27B-Q4_K_M.gguf)")]
+        model: String,
+        #[clap(long, help = "Provider type", default_value = "openai_compatible")]
+        provider: String,
+        #[clap(long, help = "Size class: small|large", default_value = "large")]
+        size: String,
+        #[clap(long, help = "API key env var name (e.g. OPENAI_API_KEY)")]
+        key: Option<String>,
+        #[clap(long, help = "Context window size")]
+        ctx: Option<u32>,
+        #[clap(long, help = "Comma-separated capabilities: chat,code,tools,vision,embeddings")]
+        capabilities: Option<String>,
+        #[clap(long, help = "Cost class: free|paid|per-token")]
+        cost: Option<String>,
+        #[clap(long, help = "Cognitive tier: sm0l|ch0nky|frontier")]
+        tier: Option<String>,
+    },
+
+    #[clap(about = "Enable a model in the local registry")]
+    Enable {
+        #[clap(help = "Model name")]
+        name: String,
+    },
+
+    #[clap(about = "Disable a model in the local registry")]
+    Disable {
+        #[clap(help = "Model name")]
+        name: String,
+    },
+
+    #[clap(about = "Remove a model from the local registry")]
+    Unregister {
+        #[clap(help = "Model name")]
+        name: String,
+    },
+
+    #[clap(about = "Show local registry file path")]
+    Where {
+        #[clap(long, help = "Show project-local path instead of global")]
+        project: bool,
+    },
+
+    // ── litellm integration ───────────────────────────────────────────────────
+
+    #[clap(
+        about = "Export model registry as litellm proxy YAML config",
+        long_about = "Generate a litellm-compatible YAML config from the local model registry.\nUse with: litellm --config <file> or litellm-rs gateway --config <file>"
+    )]
+    Export {
+        #[clap(long, short, help = "Write to file instead of stdout")]
+        output: Option<String>,
+    },
+
+    #[clap(
+        about = "Launch litellm proxy gateway with registry config",
+        long_about = "Export registry to temp YAML, then launch litellm gateway.\nRequires litellm (pip) or litellm-rs gateway binary in PATH."
+    )]
+    Proxy {
+        #[clap(long, default_value = "4000", help = "Gateway listen port")]
+        port: u16,
+        #[clap(long, default_value = "litellm", help = "Engine: litellm | litellm-rs")]
+        engine: String,
+    },
+
+    #[clap(
+        about = "Dispatch a chat completion to a model endpoint",
+        long_about = "Direct provider-agnostic dispatch via OpenAI-compatible API.\nResolves endpoint from registry by name or tier."
+    )]
+    Dispatch {
+        #[clap(long, help = "Model name in registry (e.g. qwen36-peer)")]
+        model: Option<String>,
+        #[clap(long, help = "Cognitive tier: sm0l|ch0nky|frontier")]
+        tier: Option<String>,
+        #[clap(long, short, help = "Prompt text")]
+        prompt: String,
+        #[clap(long, default_value = "256", help = "Max tokens to generate")]
+        max_tokens: u32,
+        #[clap(long, help = "Override endpoint URL (skip registry)")]
+        endpoint: Option<String>,
+    },
 }
 
 impl ModelCommands {
@@ -199,6 +288,53 @@ impl ModelCommands {
                 prompt,
                 max_tokens,
             } => test_cmd(endpoint, prompt, *max_tokens),
+
+            // ── Registry CRUD ─────────────────────────────────────────────────
+            ModelCommands::Register {
+                name,
+                endpoint,
+                model,
+                provider,
+                size,
+                key,
+                ctx,
+                capabilities,
+                cost,
+                tier,
+            } => register_cmd(
+                name, endpoint, model, provider, size,
+                key.as_deref(), *ctx,
+                capabilities.as_deref(),
+                cost.as_deref(), tier.as_deref(),
+            ),
+            ModelCommands::Enable { name } => crate::model_registry::enable_model(name),
+            ModelCommands::Disable { name } => crate::model_registry::disable_model(name),
+            ModelCommands::Unregister { name } => crate::model_registry::remove_model(name),
+            ModelCommands::Where { project } => {
+                let p = if *project {
+                    crate::model_registry::project_registry_path()
+                } else {
+                    crate::model_registry::overlay_registry_path()
+                };
+                println!("{}", p.display());
+                Ok(())
+            }
+            ModelCommands::Export { output } => export_cmd(output.as_deref()),
+            ModelCommands::Proxy { port, engine } => proxy_cmd(*port, engine),
+            ModelCommands::Dispatch {
+                model,
+                tier,
+                prompt,
+                max_tokens,
+                endpoint,
+            } => dispatch_cmd(
+                model.as_deref(),
+                tier.as_deref(),
+                prompt,
+                *max_tokens,
+                endpoint.as_deref(),
+            )
+            .map_err(Into::into),
         }
     }
 
@@ -749,6 +885,232 @@ fn test_cmd(endpoint: &str, prompt: &str, max_tokens: u32) -> Result<()> {
     println!("   Completion:  {} tokens", completion_tokens);
     println!("   Total:       {} tokens", total_tokens);
     println!("   Time:        {:.2}s", elapsed.as_secs_f64());
+
+    Ok(())
+}
+
+// ── Registry command helpers ─────────────────────────────────────────────────
+
+#[allow(clippy::too_many_arguments)]
+fn register_cmd(
+    name: &str,
+    endpoint: &str,
+    model: &str,
+    provider: &str,
+    size: &str,
+    key: Option<&str>,
+    ctx: Option<u32>,
+    capabilities: Option<&str>,
+    cost: Option<&str>,
+    tier: Option<&str>,
+) -> Result<()> {
+    use b00t_c0re_lib::datum_ai_model::{ModelCapability, ModelProvider, ModelSize};
+
+    let provider = match provider.to_lowercase().as_str() {
+        "openai" => ModelProvider::OpenAI,
+        "anthropic" => ModelProvider::Anthropic,
+        "ollama" => ModelProvider::Ollama,
+        "openrouter" => ModelProvider::OpenRouter,
+        "openai_compatible" | "compatible" => ModelProvider::OpenAICompatible,
+        "huggingface" | "hf" => ModelProvider::HuggingFace,
+        "groq" => ModelProvider::Groq,
+        "xai" => ModelProvider::XAI,
+        "litellm" => ModelProvider::LiteLLM,
+        other => ModelProvider::Other(other.to_string()),
+    };
+
+    let size = match size.to_lowercase().as_str() {
+        "small" | "sm0l" => ModelSize::Small,
+        "large" | "ch0nky" | "frontier" => ModelSize::Large,
+        other => {
+            anyhow::bail!("Unknown size '{other}' — use small|large");
+        }
+    };
+
+    let caps = capabilities
+        .map(|s| {
+            s.split(',')
+                .filter_map(|c| match c.trim().to_lowercase().as_str() {
+                    "chat" | "text" => Some(ModelCapability::Chat),
+                    "code" => Some(ModelCapability::Code),
+                    "tools" | "tool_use" => Some(ModelCapability::Tools),
+                    "vision" | "multimodal" => Some(ModelCapability::Vision),
+                    "embeddings" | "embed" => Some(ModelCapability::Embeddings),
+                    "reasoning" => Some(ModelCapability::Reasoning),
+                    "json" | "json_mode" => Some(ModelCapability::JsonMode),
+                    _ => None,
+                })
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_else(|| vec![ModelCapability::Chat]);
+
+    crate::model_registry::register_model(
+        name, endpoint, model, provider, size, key, ctx, caps, cost, tier,
+    )
+}
+
+// ── litellm integration helpers ──────────────────────────────────────────────
+
+fn export_cmd(output: Option<&str>) -> Result<()> {
+    let registry = crate::model_registry::load_registry();
+    let yaml = registry
+        .to_litellm_yaml()
+        .map_err(|e| anyhow!("failed to generate litellm YAML: {e}"))?;
+
+    match output {
+        Some(path) => {
+            std::fs::write(path, &yaml)
+                .map_err(|e| anyhow!("failed to write {path}: {e}"))?;
+            println!("✓ litellm config written to {path}");
+            println!("  {} model(s), {} provider default(s)", registry.models.len(), registry.provider_defaults.len());
+            println!("  launch: litellm --config {path} --port 4000");
+        }
+        None => {
+            print!("{yaml}");
+        }
+    }
+    Ok(())
+}
+
+fn proxy_cmd(port: u16, engine: &str) -> Result<()> {
+    // export config to temp file
+    let tmp = std::env::temp_dir().join(format!("b00t-litellm-{port}.yaml"));
+    let registry = crate::model_registry::load_registry();
+    let yaml = registry
+        .to_litellm_yaml()
+        .map_err(|e| anyhow!("failed to generate litellm YAML: {e}"))?;
+    std::fs::write(&tmp, &yaml)
+        .map_err(|e| anyhow!("failed to write temp config: {e}"))?;
+
+    let config_path = tmp.to_string_lossy().to_string();
+
+    let (cmd, args) = match engine {
+        "litellm-rs" | "litellm_rs" => {
+            ("gateway", vec![
+                "--config".to_string(),
+                config_path.clone(),
+                "--port".to_string(),
+                port.to_string(),
+            ])
+        }
+        _ => {
+            ("litellm", vec![
+                "--config".to_string(),
+                config_path.clone(),
+                "--port".to_string(),
+                port.to_string(),
+            ])
+        }
+    };
+
+    // check engine is available
+    let which = std::process::Command::new("which")
+        .arg(cmd)
+        .output()
+        .map_err(|e| anyhow!("failed to check for {cmd}: {e}"))?;
+
+    if !which.status.success() {
+        eprintln!("✗ '{cmd}' not found in PATH");
+        eprintln!("  install: pip install litellm  OR  cargo install litellm-rs");
+        eprintln!("  config written to: {config_path}");
+        return Ok(());
+    }
+
+    println!("🚀 launching {cmd} on port {port}");
+    println!("   config: {config_path}");
+    println!("   {} model(s) loaded", registry.models.len());
+    println!("   Ctrl-C to stop");
+
+    let status = std::process::Command::new(cmd)
+        .args(&args)
+        .status()
+        .map_err(|e| anyhow!("failed to launch {cmd}: {e}"))?;
+
+    if !status.success() {
+        anyhow::bail!("{cmd} exited with status {:?}", status.code());
+    }
+    Ok(())
+}
+
+fn dispatch_cmd(
+    model: Option<&str>,
+    tier: Option<&str>,
+    prompt: &str,
+    max_tokens: u32,
+    endpoint_override: Option<&str>,
+) -> Result<()> {
+    // resolve endpoint + model id
+    let (base_url, model_id) = if let Some(ep) = endpoint_override {
+        (ep.to_string(), model.unwrap_or("local").to_string())
+    } else if let Some(name) = model {
+        let registry = crate::model_registry::load_registry();
+        let datum = registry.models.get(name)
+            .ok_or_else(|| anyhow!("model '{name}' not in registry"))?;
+        if !datum.enabled {
+            anyhow::bail!("model '{name}' is disabled");
+        }
+        let base = datum.api_base.as_deref()
+            .ok_or_else(|| anyhow!("model '{name}' has no api_base"))?;
+        (base.to_string(), datum.litellm_model.clone())
+    } else if let Some(t) = tier {
+        crate::model_registry::resolve_tier_endpoint(t)
+            .ok_or_else(|| anyhow!("no enabled model with tier='{t}' in registry"))?
+    } else {
+        anyhow::bail!("specify --model <name>, --tier <sm0l|ch0nky|frontier>, or --endpoint <url>");
+    };
+
+    // normalize base URL (strip trailing /v1, we'll add it)
+    let base = base_url.trim_end_matches('/').trim_end_matches("/v1");
+    let url = format!("{base}/v1/chat/completions");
+
+    let body = json!({
+        "model": model_id,
+        "messages": [{"role": "user", "content": prompt}],
+        "max_tokens": max_tokens,
+    });
+
+    eprintln!("→ POST {url}");
+    eprintln!("  model: {model_id}");
+    eprintln!("  prompt: {} tokens", prompt.len().max(1) / 4);
+
+    let start = std::time::Instant::now();
+    let client = reqwest::blocking::Client::builder()
+        .timeout(std::time::Duration::from_secs(300))
+        .build()
+        .map_err(|e| anyhow!("http client build failed: {e}"))?;
+
+    let resp = client
+        .post(&url)
+        .json(&body)
+        .send()
+        .map_err(|e| anyhow!("request failed: {e}"))?;
+
+    let elapsed = start.elapsed();
+
+    if !resp.status().is_success() {
+        let status = resp.status();
+        let text = resp.text().unwrap_or_default();
+        anyhow::bail!("HTTP {status}: {text}");
+    }
+
+    let resp_json: serde_json::Value = resp
+        .json()
+        .map_err(|e| anyhow!("failed to parse response JSON: {e}"))?;
+
+    let content = resp_json["choices"][0]["message"]["content"]
+        .as_str()
+        .unwrap_or("");
+    let total_tokens = resp_json["usage"]["total_tokens"].as_u64().unwrap_or(0);
+    let prompt_tokens = resp_json["usage"]["prompt_tokens"].as_u64().unwrap_or(0);
+    let completion_tokens = resp_json["usage"]["completion_tokens"].as_u64().unwrap_or(0);
+    let resp_model = resp_json["model"].as_str().unwrap_or(&model_id);
+
+    println!("{content}");
+    eprintln!();
+    eprintln!("───");
+    eprintln!("  model:      {resp_model}");
+    eprintln!("  tokens:     {prompt_tokens} prompt + {completion_tokens} completion = {total_tokens} total");
+    eprintln!("  time:       {:.2}s", elapsed.as_secs_f64());
 
     Ok(())
 }
