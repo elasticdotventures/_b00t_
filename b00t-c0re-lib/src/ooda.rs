@@ -17,6 +17,7 @@
 //! Any phase can transition directly to `Failed(reason)`.
 
 use serde::{Deserialize, Serialize};
+use statig::prelude::*;
 use std::path::PathBuf;
 use std::time::Instant;
 
@@ -140,6 +141,127 @@ impl Default for OodaConfig {
 }
 
 // ---------------------------------------------------------------------------
+// Internal statig HSM — OodaLoop state machine internals
+// ---------------------------------------------------------------------------
+
+/// Internal event type dispatched from transition_to() into the statig machine.
+#[derive(Debug, Clone)]
+enum OodaDispatch {
+    GoToObserving,
+    GoToOrienting,
+    GoToDeciding,
+    GoToActing,
+    GoToReviewing,
+    GoToComplete,
+    GoToFailed(String),
+}
+
+fn phase_to_dispatch(phase: &OodaPhase) -> OodaDispatch {
+    match phase {
+        OodaPhase::Observing      => OodaDispatch::GoToObserving,
+        OodaPhase::Orienting      => OodaDispatch::GoToOrienting,
+        OodaPhase::Deciding       => OodaDispatch::GoToDeciding,
+        OodaPhase::Acting         => OodaDispatch::GoToActing,
+        OodaPhase::Reviewing      => OodaDispatch::GoToReviewing,
+        OodaPhase::Complete       => OodaDispatch::GoToComplete,
+        OodaPhase::Failed(r)      => OodaDispatch::GoToFailed(r.clone()),
+        OodaPhase::Idle           => unreachable!("no dispatch for Idle (initial state)"),
+    }
+}
+
+/// Minimal context for the statig state machine. All side effects (json write)
+/// are handled by OodaLoop::transition_to() so this struct is intentionally empty.
+#[derive(Default)]
+struct OodaCtx;
+
+/// Write `~/.b00t/ooda-state.json` with the current OodaPhase. Best-effort; ignores errors.
+fn write_ooda_state_json(phase: &OodaPhase) {
+    let Some(home) = dirs::home_dir() else { return };
+    let path = home.join(".b00t/ooda-state.json");
+    let json = match phase {
+        OodaPhase::Failed(r) => format!(
+            r#"{{"phase":"Failed","reason":{}}}"#,
+            serde_json::to_string(r).unwrap_or_else(|_| r#""""#.into())
+        ),
+        other => format!(r#"{{"phase":"{:?}"}}"#, other),
+    };
+    if let Some(parent) = path.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    let _ = std::fs::write(&path, json);
+}
+
+type OodaOutcome = statig::Outcome<OodaState>;
+
+#[state_machine(
+    initial = "OodaState::idle()",
+    state(name = "OodaState"),
+    event_identifier = "event"
+)]
+impl OodaCtx {
+    #[state]
+    fn idle(&mut self, event: &OodaDispatch) -> OodaOutcome {
+        match event {
+            OodaDispatch::GoToObserving  => Transition(OodaState::observing()),
+            OodaDispatch::GoToFailed(_)  => Transition(OodaState::failed()),
+            _                            => Super,
+        }
+    }
+
+    #[state]
+    fn observing(&mut self, event: &OodaDispatch) -> OodaOutcome {
+        match event {
+            OodaDispatch::GoToOrienting  => Transition(OodaState::orienting()),
+            OodaDispatch::GoToFailed(_)  => Transition(OodaState::failed()),
+            _                            => Super,
+        }
+    }
+
+    #[state]
+    fn orienting(&mut self, event: &OodaDispatch) -> OodaOutcome {
+        match event {
+            OodaDispatch::GoToDeciding   => Transition(OodaState::deciding()),
+            OodaDispatch::GoToFailed(_)  => Transition(OodaState::failed()),
+            _                            => Super,
+        }
+    }
+
+    #[state]
+    fn deciding(&mut self, event: &OodaDispatch) -> OodaOutcome {
+        match event {
+            OodaDispatch::GoToActing     => Transition(OodaState::acting()),
+            OodaDispatch::GoToFailed(_)  => Transition(OodaState::failed()),
+            _                            => Super,
+        }
+    }
+
+    #[state]
+    fn acting(&mut self, event: &OodaDispatch) -> OodaOutcome {
+        match event {
+            OodaDispatch::GoToReviewing  => Transition(OodaState::reviewing()),
+            OodaDispatch::GoToFailed(_)  => Transition(OodaState::failed()),
+            _                            => Super,
+        }
+    }
+
+    #[state]
+    fn reviewing(&mut self, event: &OodaDispatch) -> OodaOutcome {
+        match event {
+            OodaDispatch::GoToComplete   => Transition(OodaState::complete()),
+            OodaDispatch::GoToObserving  => Transition(OodaState::observing()),
+            OodaDispatch::GoToFailed(_)  => Transition(OodaState::failed()),
+            _                            => Super,
+        }
+    }
+
+    #[state]
+    fn complete(&mut self, event: &OodaDispatch) -> OodaOutcome { Handled }
+
+    #[state]
+    fn failed(&mut self, event: &OodaDispatch) -> OodaOutcome { Handled }
+}
+
+// ---------------------------------------------------------------------------
 // Part 3: Handshake peer check (ledgrrr / b00t mesh)
 // ---------------------------------------------------------------------------
 
@@ -240,13 +362,15 @@ pub struct OodaLoop {
     /// Safety constraints applied to every run.
     pub guard_rails: OodaGuardRails,
     iterations: Vec<OodaIteration>,
-    /// Current phase in the state machine.
+    /// Current phase in the state machine (mirrors inner statig state).
     current_phase: OodaPhase,
     /// Running failure count across iterations.
     failure_count: u32,
     /// When `enable_autoresearch` is true, complex observations trigger a
     /// research sub-cycle during the Orient phase.
     pub enable_autoresearch: bool,
+    /// Internal statig HSM — validates phase transitions.
+    sm: statig::blocking::StateMachine<OodaCtx>,
 }
 
 impl OodaLoop {
@@ -264,6 +388,7 @@ impl OodaLoop {
             current_phase: OodaPhase::Idle,
             failure_count: 0,
             enable_autoresearch: false,
+            sm: OodaCtx::default().state_machine(),
         }
     }
 
@@ -275,6 +400,7 @@ impl OodaLoop {
             current_phase: OodaPhase::Idle,
             failure_count: 0,
             enable_autoresearch: config.enable_autoresearch,
+            sm: OodaCtx::default().state_machine(),
         }
     }
 
@@ -286,6 +412,7 @@ impl OodaLoop {
             current_phase: OodaPhase::Idle,
             failure_count: 0,
             enable_autoresearch: false,
+            sm: OodaCtx::default().state_machine(),
         }
     }
 
@@ -322,7 +449,7 @@ impl OodaLoop {
                         "max_failures exceeded".into()
                     ));
                     self.iterations.push(failed.clone());
-                    self.current_phase = OodaPhase::Failed("max_failures exceeded".into());
+                    let _ = self.transition_to(OodaPhase::Failed("max_failures exceeded".into()));
                     return failed;
                 }
             }
@@ -345,7 +472,12 @@ impl OodaLoop {
                 self.current_phase, next
             ));
         }
-        self.current_phase = next;
+        // Dispatch through statig HSM
+        let dispatch = phase_to_dispatch(&next);
+        self.sm.handle(&dispatch);
+        // Update current_phase and write ooda-state.json on each transition
+        self.current_phase = next.clone();
+        write_ooda_state_json(&next);
         Ok(())
     }
 
@@ -385,7 +517,7 @@ impl OodaLoop {
                 success: false,
             };
             self.iterations.push(failed.clone());
-            self.current_phase = OodaPhase::Failed("initial transition failed".into());
+            let _ = self.transition_to(OodaPhase::Failed("initial transition failed".into()));
             return Some(failed);
         }
 
@@ -401,7 +533,7 @@ impl OodaLoop {
                     success: false,
                 };
                 self.iterations.push(failed.clone());
-                self.current_phase = OodaPhase::Failed("max_duration_secs exceeded".into());
+                let _ = self.transition_to(OodaPhase::Failed("max_duration_secs exceeded".into()));
                 return Some(failed);
             }
 
@@ -446,29 +578,24 @@ impl OodaLoop {
                     ..iteration
                 };
                 self.iterations.push(failed.clone());
-                self.current_phase =
-                    OodaPhase::Failed("max_failures exceeded".into());
+                let _ = self.transition_to(OodaPhase::Failed("max_failures exceeded".into()));
                 return Some(failed);
             }
 
             // --- Guard: Complete terminates the loop ---
             if next_phase == OodaPhase::Complete {
-                self.current_phase = OodaPhase::Complete;
+                let _ = self.transition_to(OodaPhase::Complete);
                 return last;
             }
 
             // --- Guard: Failed terminates the loop ---
             if matches!(&next_phase, OodaPhase::Failed(_)) {
-                let failed_reason = match &next_phase {
-                    OodaPhase::Failed(r) => r.clone(),
-                    _ => unreachable!(),
-                };
                 let failed = OodaIteration {
                     phase: format!("{:?}", next_phase),
                     ..iteration
                 };
                 self.iterations.push(failed.clone());
-                self.current_phase = OodaPhase::Failed(failed_reason);
+                let _ = self.transition_to(next_phase);
                 return Some(failed);
             }
 
@@ -480,8 +607,7 @@ impl OodaLoop {
                     ..iteration
                 };
                 self.iterations.push(failed.clone());
-                self.current_phase =
-                    OodaPhase::Failed("invalid phase transition".into());
+                let _ = self.transition_to(OodaPhase::Failed("invalid phase transition".into()));
                 return Some(failed);
             }
         }
@@ -509,6 +635,7 @@ impl OodaLoop {
         self.iterations.clear();
         self.current_phase = OodaPhase::Idle;
         self.failure_count = 0;
+        self.sm = OodaCtx::default().state_machine();
     }
 }
 
