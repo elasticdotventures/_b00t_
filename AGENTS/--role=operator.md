@@ -27,15 +27,6 @@ Attempt 3+:
 ```
 MCP equivalents: `b00t_agent_delegate`, `b00t_agent_message`, `b00t_agent_wait`, `b00t_agent_complete`
 
-## Pre-Flight Sequence (mandatory before any ch0nky/Block-tier work)
-```
-b00t-cli gates eval "<task>" [--urgent] [--important]   # ① deny NotUrgentNotImportant (exit 1 = stop)
-b00t-cli ooda review [--task=N]                          # ② deny vague/unscoped/no-TDD (exit 1 = clarify)
-eval $(b00t-cli ai ch0nky-select --export)               # ③ route ch0nky to local Qwen3 or Fable 5 burst
-```
-Rules: step ① fails → abandon task. step ② fails → refine spec. step ③ always runs — sets env for sub-agents.
-MCP callers: `b00t_mcp_stack_load`/`unload` auto-fire `tools/list_changed`; no manual reconnect needed.
-
 ## Checkpoint Gate — `#️⃣ topic: checkpoint-gate`
 Run BEFORE any side-effecting command:
 ```bash

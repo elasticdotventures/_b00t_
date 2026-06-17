@@ -36,19 +36,6 @@ Writing duplicate functionality is a sin. Search first. Fork-fix-forward when yo
 
 **Simon Willison patterns**: code is cheap / correctness is not; hoard working examples; diffs small + test evidence.
 
-**Ponytail ladder** 🤓: before writing code, stop at the first rung that holds:
-1. Does this need to exist? → no: skip it (YAGNI)
-2. Already in this codebase? → reuse it, don't rewrite
-3. Stdlib does it? → use it
-4. Native platform feature? → use it
-5. Installed dependency? → use it
-6. One line? → one line
-7. Only then: the minimum that works
-
-The ladder runs AFTER understanding the problem, not instead of it.
-Safety: validation, data-loss handling, security, and accessibility are NEVER cut.
-Source: DietrichGebert/ponytail (MIT, -54% LOC, -22% tokens, 100% safe).
-
 ---
 
 ## YEI MUST NEVER
@@ -60,10 +47,6 @@ Source: DietrichGebert/ponytail (MIT, -54% LOC, -22% tokens, 100% safe).
 - reference taskmaster-ai (purged)
 - remove `# 🤓` comments without 3× TRIZ justification
 - commit without passing tests
-- commit directly to main — ALWAYS branch + PR (see Git Workflow below)
-- force-push to main or any shared branch
-- merge PRs without review evidence (tests + lint + typecheck output in PR body)
-- commit generated build artifacts (WASM binaries, .wasm, .js glue, /dist/, /target/) — must be gitignored
 
 ## YEI MUST ALWAYS
 - speak RFC 2119 precision: laconic, direct, technically literate — no platitudes
@@ -74,67 +57,7 @@ Source: DietrichGebert/ponytail (MIT, -54% LOC, -22% tokens, 100% safe).
 - flag 🚩 cybersec; use ⚠️ caveats; use 🤓 tribal knowledge (one melvin per session max)
 - store test datasets in JSON files, never embedded in test code
 - branch before changing: `git checkout -b task/<N>-<slug>`
-- use conventional commits: `feat:`, `fix:`, `chore:`, `docs:`, `refactor:`, `test:`
 - use context7 MCP for library docs; rust-crate-docs MCP for Rust crates
-- push the branch, create a PR, and wait for merge — never push to main directly
-
-## Git Workflow — Multi-Repo Branching Protocol
-
-This workspace spans nested git repos (submodules: `game-play`, `artifacts`, `devices`,
-`middleware`, `critter-keeper` symlink, plus independent sibling repos `_b00t_`).
-Violating the branching protocol creates merge hardship for every other agent.
-
-### Inviolable rules
-
-1. **Branch EVERY repo touched.** No repo is exempt, no matter how small the change.
-   ```
-   git -C <repo> checkout -b task/<N>-<slug>
-   ```
-
-2. **Commit inner repos first, then outer.** If you change `game-play` AND `app4dog`:
-   ```
-   cd game-play && git add . && git commit && git push -u origin task/<N>-<slug>
-   cd .. && git add game-play && git commit && git push -u origin task/<N>-<slug>
-   ```
-
-3. **Create a PR for each repo.** No direct merges. Include:
-   - Conventional commit summary
-   - Test evidence (command output or test result line)
-   - Lint/typecheck evidence if applicable
-   - Screenshot evidence for visual changes
-
-4. **Never force-push to main or any shared branch.** Force-push is only permitted on
-   your own task branches before PR creation, and ONLY with `--force-with-lease`.
-
-5. **Generated artifacts belong in .gitignore, not the repo.**
-   - WASM binaries (`*.wasm`, `*.js` glue in `public/game-engine/`)
-   - Build outputs (`dist/`, `target/`, `node_modules/`)
-   - TypeScript generated types (`src/types/wasm/` from wasm-pack)
-   - Composer lockfiles (`pnpm-lock.yaml`, `Cargo.lock` — these ARE tracked)
-
-### Pre-push verification checklist
-
-Before `git push` on any repo branch:
-
-- [ ] `cargo test -p <crate> --lib` (all lib tests pass)
-- [ ] `cargo check -p <crate> --target wasm32-unknown-unknown` (WASM compiles)
-- [ ] `pnpm run lint` or `npx eslint` (ESLint clean)
-- [ ] `npx vue-tsc --noEmit` (TypeScript clean)
-- [ ] `git status` shows only intended changes, no build artifacts, no node_modules
-- [ ] PR description includes test evidence
-
-### Multi-repo state audit
-
-Before declaring a task complete, run:
-```bash
-# Check every repo
-for repo in ~/.b00t app4dog app4dog/game-play app4dog/artifacts; do
-  echo "=== $(basename $repo) ==="
-  git -C "$repo" branch --show-current
-  git -C "$repo" status --short | grep -v '^?'
-done
-```
-Every repo MUST show a task branch with zero unstaged changes (except intentional untracked files).
 
 ---
 
@@ -192,37 +115,6 @@ Profiles: `_b00t_/*.hive.toml` — declare `resources`, `exclusion.group`, `serv
 
 A fresh agent MUST: `b00t whoami` → `b00t blessing --manifest` → learn required skills → execute.
 Learning a skill datum unlocks the tools in its `unlocks` field. No learning = no auth.
-
-## b00t Type System Navigation
-
-b00t types are Rust structs/enums in `b00t-cli/src/lib.rs`. Agents navigate via:
-- `b00t-cli ontology sparql --subject <X> --predicate all` — triple-graph walk (`b00t:type`, `b00t:roles`, `b00t:validate`)
-- `b00t-cli ontology sparql --subject <X> --predicate type` — just type triples
-- `b00t-cli learn <topic>` — DWIW fanout: `DatumSearchSource(w=3)` + `GraphAdjacencySource(w=2)`
-- `b00t-cli blessing --manifest --role <R>` — walk `depends_on` graph for role
-- Key types: `BootDatum` (open struct) · `DatumType` (22-variant enum: Cli/Skill/Role/Mcp/Agent…)
-- Chalk Interner pattern: `DatumStore` trait would abstract TOML/SQLite/Qdrant storage behind same API
-- `b00t learn chalk-interner` — load Chalk Interner → b00t DatumStore mapping
-- `b00t learn datum-macro` — load Rust macro → dynamic datum feasibility analysis
-
-## Agent Bug Reporting & Sharp Corners
-
-Sharp corner or bug found? REPORT IT — silence hides systemic issues.
-- `b00t lfmf <topic> "<lesson>"` — memoize tribal/non-obvious knowledge immediately
-- `b00t task add "bug: <description>"` — creates tracked issue for operator review
-- Flag in output: 🚩 security concern · ⚠️ caveat/limitation · 🤓 tribal knowledge
-- Fork-fix-forward: if a library has a bug, fix and PR upstream — do NOT work around silently.
-
-## Hive A2A Collaboration
-
-Executive provisions teams: `just compile-agent <role> 3 /tmp/agent.md && claude --agent /tmp/agent.md`
-Agent-to-agent messaging uses b00t MCP tools (no raw sockets):
-- `mcp__b00t-mcp__b00t_agent_capability` — announce role + skills to hive
-- `mcp__b00t-mcp__b00t_agent_discover` — find peers by role or capability
-- `mcp__b00t-mcp__b00t_agent_message` / `b00t_agent_notify` — send/receive
-- `mcp__b00t-mcp__b00t_agent_wait` — block until peer responds
-- `mcp__b00t-mcp__b00t_agent_vote_create` / `b00t_agent_vote_submit` — consensus
-Output to executive: compressed summaries ONLY. Raw sub-agent output MUST NOT enter executive context.
 
 ---
 <!-- ── SESSION (variable suffix — NOT KV-cached, compiled per instantiation) ──────── -->

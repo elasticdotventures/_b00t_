@@ -1,0 +1,27 @@
+[b00t]
+name = "ideo"
+type = "skill"
+type_tags = ["transferable"]
+hint = "Design thinking — empathize→define→ideate→prototype→test; fail fast, iterate toward fit"
+keywords = ["design-thinking", "empathy", "prototype", "iterate", "user", "ideo", "human-centered", "fail-fast"]
+
+[b00t.learn]
+content = """
+IDEO design thinking: solve the right problem before solving the problem correctly.
+5 stages:
+  Empathize  — understand actual user pain (not assumed). observe, interview, shadow.
+  Define     — frame the problem as a "how might we..." question. wrong frame = wrong solution.
+  Ideate     — generate many solutions before evaluating any. diverge before converging.
+  Prototype  — build the cheapest artifact that tests the riskiest assumption.
+  Test       — expose prototype to real users. capture what surprises you, not what confirms you.
+Fail fast rule: a prototype that takes a week is too expensive to abandon; build in hours.
+In software: wireframe > mock > spike > MVP. Never start with production code.
+Anti-pattern: skipping empathy and assuming you know what the user needs.
+"""
+
+# b00t:map v1
+# summary: ideo design thinking — 5-stage human-centered problem solving; fail fast iterate
+# tags: transferable, design-thinking, prototype, user, empathy
+# tier: sm0l
+# cmds: b00t learn ideo
+# complexity: 3

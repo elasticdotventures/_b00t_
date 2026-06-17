@@ -1,0 +1,27 @@
+[b00t]
+name = "bayesian"
+type = "skill"
+type_tags = ["transferable"]
+hint = "Bayesian updating — priors + evidence = posterior; update beliefs proportionally to evidence strength"
+keywords = ["bayesian", "prior", "posterior", "evidence", "probability", "update", "inference", "belief"]
+
+[b00t.learn]
+content = """
+Bayesian reasoning: beliefs are probabilities; evidence updates them proportionally.
+P(H|E) = P(E|H) * P(H) / P(E)
+In plain terms: posterior = likelihood * prior / normalizer.
+Start with a prior (what you believed before). Observe evidence. Update.
+Strong evidence → large update. Weak evidence → small update. Confirming noise → tiny update.
+Key insight: you must have a prior. "I have no opinion" is still a 50/50 prior — state it explicitly.
+Common error: base rate neglect — ignoring P(H) and over-weighting P(E|H).
+In debugging: "what is my prior that this module has a bug vs that module?" Start there.
+In decision-making: each new data point is an update, not a verdict.
+Anti-pattern: treating every piece of new information as equally significant regardless of quality.
+"""
+
+# b00t:map v1
+# summary: bayesian — update beliefs proportionally to evidence using prior + likelihood
+# tags: transferable, probability, inference, evidence, prior, posterior
+# tier: ch0nky
+# cmds: b00t learn bayesian
+# complexity: 5
