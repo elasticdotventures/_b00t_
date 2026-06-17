@@ -71,19 +71,6 @@ pub struct LearnArgs {
     // Also auto-enabled via B00T_MCP_CONTEXT=1 env var.
     #[arg(long, help = "Emit MCP follow-up examples in DWIW results")]
     pub mcp: bool,
-
-    // E1: skip learn if evidence already proves competency
-    #[arg(long, help = "Force load even if competency evidence exists (E1)")]
-    pub force: bool,
-
-    // 🤓 --agent is an alias for --role: b00t's other commands (e.g. whoami) already
-    //    call this concept "role"; --agent is accepted as a synonym so agent-facing
-    //    callers (MCP tools, agent harnesses) can use whichever term reads naturally.
-    //    Sets _B00T_ROLE for the duration of this call — same mechanism whoami's
-    //    --role already relies on — so role-scoped datum/RAG resolution downstream
-    //    picks it up without new plumbing.
-    #[arg(long, visible_alias = "agent", help = "Scope learning to a role/agent (matches role datum; alias: --agent)")]
-    pub role: Option<String>,
 }
 
 pub async fn handle_learn(path: &str, args: LearnArgs) -> Result<()> {
@@ -378,51 +365,7 @@ async fn handle_dwiw(path: &str, topic: &str, mcp_ctx: bool, limit: usize) -> Re
 
     let ranked = bus.fanout(&ctx).await;
 
-    // Stage 1 review: keyword-overlap discriminator (mirrors justfile autolearn Stage 1).
-    // Returns true when overlap==0 (graph-adjacent noise, not keyword-matched).
-    // stage1_rejected is consumed by Stage 2 grok endorsement check below.
-    let stage1_rejected: bool = if ranked.is_empty() {
-        false // empty ranked → handled by grok RAG below, not Stage 1
-    } else {
-        let topic_words: Vec<&str> = topic
-            .split(|c: char| !c.is_alphanumeric())
-            .filter(|w| w.len() >= 3)
-            .collect();
-        let top_content = ranked[0].summary.to_lowercase();
-        let overlap: usize = topic_words
-            .iter()
-            .filter(|w| top_content.contains(w.to_lowercase().as_str()))
-            .count();
-        if overlap == 0 && !topic_words.is_empty() {
-            println!("[review:1:local] overlap=0 for '{topic}' — results are graph-adjacent, not keyword-matched");
-            println!("⚠️  weak relevance: top result may not directly address '{topic}' (Stage 2 grok will verify)");
-            true
-        } else {
-            eprintln!("[review:1:local] overlap={overlap}/{} for '{topic}'", topic_words.len());
-            false
-        }
-    };
-
     if ranked.is_empty() {
-        // Auto-research: try grok RAG (zvec/irontology by default; Qdrant only if
-        // GROK_BACKEND=qdrant). Must initialize before ask() — skip on init failure
-        // (binary missing, backend down) to avoid adding latency on every miss.
-        let mut grok = GrokClient::new();
-        if grok.initialize().await.is_ok() {
-            // topic=None: global search, not self-referential ask("git", topic="git")
-            if let Ok(grok_results) = grok.ask(topic, None, Some(3)).await {
-                if !grok_results.results.is_empty() {
-                    println!("[learn:grok] no datum for '{topic}' — RAG fallback ({} chunks):", grok_results.results.len());
-                    for chunk in &grok_results.results {
-                        println!("  (topic: {}) {}",
-                            chunk.topic,
-                            chunk.content.lines().next().unwrap_or(""));
-                    }
-                    println!("\n⚠️  grok content unverified — digest to persist: b00t learn {topic} --digest <url>");
-                    return Ok(());
-                }
-            }
-        }
         let exe = std::env::current_exe().ok();
         if let Some(bin) = exe {
             let _ = std::process::Command::new(&bin)
@@ -433,31 +376,6 @@ async fn handle_dwiw(path: &str, topic: &str, mcp_ctx: bool, limit: usize) -> Re
         println!("[learn:queued] research-soul: {topic}");
         println!("⚠️  web sources unverified — trust only [datum:user] grade results");
         anyhow::bail!("No knowledge found for '{topic}'. research-soul queued.");
-    }
-
-    // Stage 2 review (only when Stage 1 rejected): grok vector endorsement.
-    // If grok also finds no vector support → queue review-soul for async pi/opencode review.
-    if stage1_rejected {
-        let mut grok2 = GrokClient::new();
-        let grok_endorsed = if grok2.initialize().await.is_ok() {
-            grok2.ask(topic, None, Some(3)).await
-                .map(|r| !r.results.is_empty())
-                .unwrap_or(false)
-        } else {
-            false
-        };
-        if grok_endorsed {
-            eprintln!("[review:2:grok] vector endorsement=true for '{topic}' — proceeding despite overlap=0");
-        } else {
-            eprintln!("[review:2:grok] vector endorsement=false for '{topic}' — both stages rejected");
-            // Both stages rejected: queue review-soul for async opencode/pi independent review.
-            if let Some(bin) = std::env::current_exe().ok() {
-                let _ = std::process::Command::new(&bin)
-                    .args(["task", "add", &format!("review-soul: {topic}")])
-                    .output();
-                eprintln!("[review:queued] review-soul: {topic} (pi/opencode will validate independently)");
-            }
-        }
     }
 
     let total = ranked.len();
@@ -474,12 +392,10 @@ async fn handle_dwiw(path: &str, topic: &str, mcp_ctx: bool, limit: usize) -> Re
             .collect::<Vec<_>>()
             .join("\n");
 
-        use b00t_c0re_lib::sm0l_dispatch::{SmolBehavior, SmolConfig, SmolSession, dispatch};
+        use b00t_c0re_lib::sm0l_dispatch::{SmolBehavior, SmolSession, dispatch};
         let session = SmolSession::new();
-        let config = SmolConfig { max_output_lines: limit };
         match dispatch(
-            &SmolBehavior::Summarize,
-            &config,
+            &SmolBehavior::Summarize { max_output_lines: limit },
             &raw,
             Some(&session),
             32_000,

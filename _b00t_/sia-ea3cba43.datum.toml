@@ -3,11 +3,6 @@
 #    Retrieve: git -C ~/.b00t cat-file blob 0fd276edd3356083ef1e8129ecc3439b1574ee86 | gunzip
 #    Validate: git -C ~/.b00t cat-file -e 0fd276edd3356083ef1e8129ecc3439b1574ee86
 
-[b00t]
-name = "sia"
-type = "datum"
-hint = "SIA — Self-Improving AI agents framework with feedback loops"
-
 [datum]
 topic      = "sia"
 class      = "Framework"

@@ -1,6 +1,5 @@
 [b00t]
 name = "first-order-logic"
-type = "topic"
 datum_type = "topic"
 description = "First-order logic, Horn clauses, FOHH, and Rust reasoning stack (crepe/ascent/chalk)"
 node_status = "primary"

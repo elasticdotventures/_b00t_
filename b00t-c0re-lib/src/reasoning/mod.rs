@@ -22,7 +22,6 @@ pub mod analytics;
 pub mod bound_checker;
 pub mod graph_rules;
 pub mod neumann_bridge;
-pub mod predicates;
 pub mod trait_lower;
 #[cfg(test)]
 mod tests;
