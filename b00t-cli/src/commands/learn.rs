@@ -168,7 +168,7 @@ async fn handle_capability_list(path: &str, _list: bool, filter_type: Option<&st
             .unwrap_or_default()
     }
 
-    let capabilities = registry.get("capabilities");
+    let _capabilities = registry.get("capabilities");
 
     let show_all = cap_type == "all";
     let show_skills = show_all || cap_type == "skill";

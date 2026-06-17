@@ -486,7 +486,7 @@ fn handle_cyber_command(cmd: &HiveCyberCommands) -> Result<()> {
 
 fn handle_peer_command(cmd: &PeerCommands) -> Result<()> {
     match cmd {
-        PeerCommands::List { json, health } => {
+        PeerCommands::List { json, health: _ } => {
 let snapshot = SystemSnapshot::capture()?;
             let ledger_path = snapshot.hive_ledger_path.as_deref().unwrap_or("/dev/null");
             // Read peer ledger

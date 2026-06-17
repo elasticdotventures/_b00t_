@@ -285,7 +285,7 @@ impl TensorSource for GGUFSource {
         let mut tensors = HashMap::new();
         for spec in &self.specs {
             match content.tensor_infos.get(&spec.name) {
-                Some(info) => {
+                Some(_info) => {
                     // Load quantized tensor from GGUF
                     let qtensor = content.tensor(&mut file, &spec.name, device).map_err(|e| {
                         LayerError::source_error(&self.id, format!("gguf tensor load: {e}"))

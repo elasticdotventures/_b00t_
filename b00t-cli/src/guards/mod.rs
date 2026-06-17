@@ -28,7 +28,6 @@
 
 use crate::hive::{
     check_guards as hive_check_guards, GuardContext, GuardPattern, GuardResult, HiveGuard,
-    K0mmand3rStageGuard,
 };
 use b00t_c0re_gov::types::{GateResult, HookToken, HookType};
 use chrono::Utc;

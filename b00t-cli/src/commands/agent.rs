@@ -1175,7 +1175,7 @@ mod tests {
 /// Enables captain→worker delegation through role-specific channels.
 pub async fn setup_entangled_channels(
     role_datum: &crate::whoami::RoleDetails,
-    path: &str,
+    _path: &str,
 ) -> Result<BTreeMap<String, String>> {
     let mut channels = BTreeMap::new();
     let role = &role_datum.name;
@@ -1199,7 +1199,7 @@ pub async fn setup_entangled_channels(
 /// Falls back to default global channel if role not set or doesn't have entangled_agents.
 fn get_delegation_channel(
     worker: &str,
-    role: Option<&str>,
+    _role: Option<&str>,
     entangled_channels: &BTreeMap<String, String>,
 ) -> String {
     // First check if we have a role-specific channel for this worker
@@ -1214,7 +1214,7 @@ fn get_delegation_channel(
 /// Resolve entangled channels for a role from the datum system.
 async fn resolve_role_channels(
     role_name: Option<&str>,
-    path: &str,
+    _path: &str,
 ) -> Result<(Option<String>, BTreeMap<String, String>)> {
     let mut channels = BTreeMap::new();
     let channel_prefix = if let Some(role) = role_name {

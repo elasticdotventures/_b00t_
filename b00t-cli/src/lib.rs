@@ -2,7 +2,6 @@ use anyhow::{Context, Result};
 use chrono::{DateTime, Utc};
 use regex::Regex;
 use std::io::Write;
-use std::process;
 use std::collections::HashSet;
 use std::sync::OnceLock;
 use toml;
@@ -78,7 +77,6 @@ pub mod exit_code {
     /// Network / connectivity failure
     pub const NETWORK: i32 = 30;
 }
-use serde::de::value::StringDeserializer;
 use serde::{Deserialize, Deserializer, Serialize};
 
 pub mod agentic_role;
@@ -1604,8 +1602,8 @@ pub fn get_mcp_toml_files(path: &str) -> Result<Vec<String>> {
 
 pub fn mcp_list(path: &str, json_output: bool, filter: McpListFilter) -> Result<()> {
     use anyhow::Context;
-    use std::sync::atomic::{AtomicBool, Ordering};
-    use std::sync::Arc;
+    
+    
 
     let mcp_files = get_mcp_toml_files(path)?;
     let total_count = mcp_files.len();

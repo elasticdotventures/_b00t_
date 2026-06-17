@@ -22,7 +22,7 @@ use clap::Parser;
 
 use crate::memory_provider::{FileMemory, MemoryProvider, detect_provider, soul_path};
 use crate::soul_writer::{
-    FileSoulWriter, SoulMemoryWriter, active_soul_dir, global_soul_dir, local_soul_dir,
+    SoulMemoryWriter, active_soul_dir, global_soul_dir, local_soul_dir,
 };
 
 #[derive(Parser)]
@@ -668,7 +668,7 @@ struct MemoryWriteResponse {
     bytes_written: usize,
 }
 
-async fn memory_write(State(s): State<SoulState>, body: String) -> impl IntoResponse {
+async fn memory_write(State(_s): State<SoulState>, body: String) -> impl IntoResponse {
     let req: MemoryWriteRequest = match serde_json::from_str(&body) {
         Ok(r) => r,
         Err(e) => {

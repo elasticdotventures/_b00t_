@@ -826,7 +826,7 @@ impl RegistryAction {
 /// Loads TOML, extracts depends_on field, recursively resolves
 pub fn resolve_depends_on_chain(datum_name: &str, path: &str) -> Result<Vec<String>> {
     use crate::get_expanded_path;
-    use crate::get_mcp_config;
+    
 
     let expanded = get_expanded_path(path)?;
     let mut resolved = Vec::new();

@@ -1,5 +1,5 @@
 use crate::dependency_resolver::DependencyResolver;
-use crate::{BootDatum, GateResult, UnifiedConfig, evaluate_gates};
+use crate::{BootDatum, UnifiedConfig, evaluate_gates};
 use anyhow::{Context, Result, anyhow};
 use clap::Parser;
 use duct::cmd;

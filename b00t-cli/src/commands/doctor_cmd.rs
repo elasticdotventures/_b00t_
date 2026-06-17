@@ -14,7 +14,6 @@ use anyhow::{Context, Result};
 use crate::datum_store::{DatumStore, HashMapStore, ReferenceError};
 use clap::Parser;
 use serde_json::{json, Value};
-use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::process::Command;
 use std::time::Instant;

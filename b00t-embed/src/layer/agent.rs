@@ -8,7 +8,6 @@ use crate::layer::stack::LayerStack;
 use crate::layer::{LayerDescriptor, LayerError};
 use crate::Embedding;
 
-use async_trait::async_trait;
 
 /// Result of a single agent cycle.
 pub struct AgentCycleResult {

@@ -352,7 +352,7 @@ fn cmd_log() -> Result<()> {
         bail!("enclave not initialized — run: b00t project init");
     }
 
-    let log = Command::new("git")
+    let _log = Command::new("git")
         .args(["log", "--oneline", &format!("{tag}..{branch}")])
         .status()
         .context("failed to run git log")?;
@@ -368,7 +368,7 @@ fn cmd_diff() -> Result<()> {
         bail!("enclave not initialized — run: b00t project init");
     }
 
-    let diff = Command::new("git")
+    let _diff = Command::new("git")
         .args(["diff", &format!("{tag}...HEAD")])
         .status()
         .context("failed to run git diff")?;

@@ -88,7 +88,6 @@ pub use emoji_registry::{EmojiEntry, EmojiRegistry, parse_entries_from_content, 
 pub mod parser_stages;
 pub use parser_stages::{ParseStage, ParseState, StageAction, register_stage_guard, run_stage, clear_guards};
 
-use decimal_rs::Decimal;
 use std::collections::HashMap;
 
 #[cfg(feature = "lang-python")]
@@ -98,16 +97,13 @@ use winnow::ascii::{alpha1, alphanumeric0, alphanumeric1, multispace0};
 use winnow::combinator::alt; // encapsulates if/then/else ladder pattern
 use winnow::combinator::opt; // basic if then else
 use winnow::combinator::preceded; // an easy way to discard the prefix, using a provided combinators
-use winnow::combinator::{delimited, repeat, separated, separated_pair, *};
+use winnow::combinator::{delimited, separated, separated_pair, *};
 use winnow::prelude::*;
-use winnow::seq;
-use winnow::stream::Stream; // choose between two parsers; and we're happy with either being used.
-use winnow::token::one_of; // one_of(('0'..='9', 'a'..='f', 'A'..='F')).parse_next(input)
-use winnow::token::take_while;
+ // choose between two parsers; and we're happy with either being used.
+ // one_of(('0'..='9', 'a'..='f', 'A'..='F')).parse_next(input)
 use winnow::Parser;
 
 use serde::Serialize;
-use serde_json::json;
 
 #[cfg(not(target_arch = "wasm32"))]
 #[cfg(feature = "lang-python")]

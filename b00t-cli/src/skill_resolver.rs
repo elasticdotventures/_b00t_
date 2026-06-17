@@ -25,7 +25,6 @@
 //! 4. `~/.b00t/_b00t_/*.skill.toml[l][md]` — global b00t
 
 use anyhow::Result;
-use b00t_c0re_lib::B00tContext;
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use std::sync::OnceLock;

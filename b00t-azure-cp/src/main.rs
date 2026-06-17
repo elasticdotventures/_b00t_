@@ -20,7 +20,7 @@ use axum::{
     extract::Request,
     http::{StatusCode, header},
     middleware,
-    response::{IntoResponse, Response},
+    response::IntoResponse,
 };
 use azure_core::auth::TokenCredential;
 use azure_data_tables::clients::TableServiceClient;
@@ -245,7 +245,7 @@ async fn provision_aci_resource(
         container_group_properties, gpu_resource, ip_address,
     };
 
-    let mut container_props = ContainerProperties {
+    let container_props = ContainerProperties {
         image: Some(input.image.clone()),
         resources: Some(ResourceRequirements {
             requests: ResourceRequests {
