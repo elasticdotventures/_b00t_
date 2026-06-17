@@ -27,7 +27,7 @@ use azure_data_tables::clients::TableServiceClient;
 use azure_identity::AppServiceManagedIdentityCredential;
 use chrono::{DateTime, Utc};
 use rmcp::handler::server::{tool::ToolRouter, wrapper::Parameters};
-use rmcp::model::{CallToolResult, Content, ServerCapabilities, ServerInfo};
+use rmcp::model::{CallToolResult, Content, Implementation, ServerCapabilities, ServerInfo};
 use rmcp::schemars::JsonSchema;
 use rmcp::transport::streamable_http_server::{
     StreamableHttpServerConfig, StreamableHttpService, session::local::LocalSessionManager,
@@ -660,17 +660,13 @@ impl AzureCpServer {
 #[tool_handler]
 impl ServerHandler for AzureCpServer {
     fn get_info(&self) -> ServerInfo {
-        ServerInfo {
-            server_info: rmcp::model::Implementation {
-                name: "b00t-azure-cp".into(),
-                version: env!("CARGO_PKG_VERSION").into(),
-                title: None,
-                icons: None,
-                website_url: None,
-            },
-            capabilities: ServerCapabilities::builder().enable_tools().build(),
-            ..Default::default()
-        }
+        let mut server_info = Implementation::from_build_env();
+        server_info.name = "b00t-azure-cp".into();
+        server_info.version = env!("CARGO_PKG_VERSION").into();
+        let mut info = ServerInfo::default();
+        info.server_info = server_info;
+        info.capabilities = ServerCapabilities::builder().enable_tools().build();
+        info
     }
 }
 

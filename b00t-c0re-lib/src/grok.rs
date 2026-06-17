@@ -8,7 +8,7 @@ use anyhow::Result;
 use dirs;
 use rmcp::{
     ServiceExt,
-    model::CallToolRequestParam,
+    model::CallToolRequestParams,
     service::RunningService,
     transport::{ConfigureCommandExt, TokioChildProcess},
 };
@@ -242,10 +242,7 @@ impl GrokClient {
                     json!(format!("grok:digest:{}", topic)),
                 );
                 params.insert("topic".to_string(), json!(topic));
-                let request = CallToolRequestParam {
-                    name: Cow::Borrowed("repo.index"),
-                    arguments: Some(params),
-                };
+                let request = CallToolRequestParams::new("repo.index").with_arguments(params);
                 let response = client.call_tool(request).await?;
                 self.parse_irontology_digest_response(response, topic, content)
             }
@@ -253,10 +250,7 @@ impl GrokClient {
                 let mut params = Map::new();
                 params.insert("topic".to_string(), json!(topic));
                 params.insert("content".to_string(), json!(content));
-                let request = CallToolRequestParam {
-                    name: Cow::Borrowed("grok_digest"),
-                    arguments: Some(params),
-                };
+                let request = CallToolRequestParams::new("grok_digest").with_arguments(params);
                 let response = client.call_tool(request).await?;
                 self.parse_digest_response(response)
             }
@@ -285,10 +279,7 @@ impl GrokClient {
                 if let Some(k) = limit {
                     params.insert("top_k".to_string(), json!(k));
                 }
-                let request = CallToolRequestParam {
-                    name: Cow::Borrowed("repo.search"),
-                    arguments: Some(params),
-                };
+                let request = CallToolRequestParams::new("repo.search").with_arguments(params);
                 let response = client.call_tool(request).await?;
                 self.parse_irontology_ask_response(response, query)
             }
@@ -301,10 +292,7 @@ impl GrokClient {
                 if let Some(limit) = limit {
                     params.insert("limit".to_string(), json!(limit));
                 }
-                let request = CallToolRequestParam {
-                    name: Cow::Borrowed("grok_ask"),
-                    arguments: Some(params),
-                };
+                let request = CallToolRequestParams::new("grok_ask").with_arguments(params);
                 let response = client.call_tool(request).await?;
                 self.parse_ask_response(response)
             }
@@ -324,10 +312,7 @@ impl GrokClient {
                 let mut params = Map::new();
                 params.insert("content".to_string(), json!(content));
                 params.insert("source".to_string(), json!(src));
-                let request = CallToolRequestParam {
-                    name: Cow::Borrowed("repo.index"),
-                    arguments: Some(params),
-                };
+                let request = CallToolRequestParams::new("repo.index").with_arguments(params);
                 let response = client.call_tool(request).await?;
                 self.parse_irontology_learn_response(response, src)
             }
@@ -337,10 +322,7 @@ impl GrokClient {
                 if let Some(source) = source {
                     params.insert("source".to_string(), json!(source));
                 }
-                let request = CallToolRequestParam {
-                    name: Cow::Borrowed("grok_learn"),
-                    arguments: Some(params),
-                };
+                let request = CallToolRequestParams::new("grok_learn").with_arguments(params);
                 let response = client.call_tool(request).await?;
                 self.parse_learn_response(response)
             }
@@ -362,10 +344,7 @@ impl GrokClient {
             anyhow::anyhow!("GrokClient not initialized - call initialize() first")
         })?;
 
-        let request = CallToolRequestParam {
-            name: Cow::Borrowed("grok_status"),
-            arguments: None,
-        };
+        let request = CallToolRequestParams::new("grok_status");
         let response = client.call_tool(request).await?;
 
         let content_text = response
