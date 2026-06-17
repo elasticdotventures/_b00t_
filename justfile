@@ -1666,3 +1666,25 @@ compile-agent role="worker" n_skills="3" out="/tmp/compiled-agent.md":
     echo "   skills: ${ASSIGNED[*]}"
 
 # ── end ralph / compile-agent ──────────────────────────────────────────────────
+
+# provision-agent: operator convenience — compile + launch agent for a role+goal in one command.
+# Usage: just provision-agent worker "implement a health endpoint"
+# Usage: just provision-agent executive "plan Q3 roadmap"
+# Operator does NOT need to know about compile-agent or ralph-spawn internals.
+provision-agent role="worker" goal="":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    AGENT_FILE="/tmp/b00t-agent-{{role}}-$(date +%s).md"
+    echo "[provision] role={{role}}"
+    just compile-agent "{{role}}" 3 "$AGENT_FILE"
+    echo "[provision] sandbox: $AGENT_FILE"
+    if [ -z "{{goal}}" ]; then
+      echo "[provision] no goal specified — agent file ready, launch manually:"
+      echo "  claude --agent $AGENT_FILE"
+    else
+      echo "[provision] launching agent with goal: {{goal}}"
+      GOAL_TEXT="{{goal}}"
+      echo "# Goal: $GOAL_TEXT" >> "$AGENT_FILE"
+      just ralph-spawn "$GOAL_TEXT" 3 | claude --print --agent "$AGENT_FILE" 2>/dev/null \
+        || echo "[provision] agent ready at: $AGENT_FILE (manual launch required if claude not in PATH)"
+    fi
