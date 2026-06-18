@@ -69,6 +69,30 @@ pub enum SkillCommands {
         #[clap(long, help = "Output directory for downloaded skills", default_value = ".opencode/skills")]
         output: PathBuf,
     },
+
+    /// Build a ranked composite index of skill directories.
+    ///
+    /// Scans directories for SKILL.md files, extracts frontmatter, ranks by
+    /// specialization (domain > engineering > analysis > general), and produces
+    /// a content-hashed composite manifest. Optionally stores as git blob datum.
+    ///
+    /// Examples:
+    ///   b00t skill index ./awesome-skills/ ~/.skills/
+    ///   b00t skill index ./skills/ --store --json
+    #[clap(about = "Build a ranked composite index of skill directories")]
+    Index {
+        /// Directories to scan for SKILL.md files
+        dirs: Vec<PathBuf>,
+        /// Output JSON instead of table
+        #[arg(long)]
+        json: bool,
+        /// Store composite index as git blob datum
+        #[arg(long)]
+        store: bool,
+        /// Maximum recursion depth (default 3)
+        #[arg(long, default_value_t = 3)]
+        depth: usize,
+    },
 }
 
 pub fn handle_skill_command(cmd: &SkillCommands, path: &str) -> Result<()> {
@@ -192,6 +216,10 @@ pub fn handle_skill_command(cmd: &SkillCommands, path: &str) -> Result<()> {
         SkillCommands::Serve { port, host } => handle_serve(*port, host, path),
 
         SkillCommands::Sync { url, output } => handle_sync(url, output),
+
+        SkillCommands::Index { dirs, json, store, depth } => {
+            handle_index(dirs, *json, *store, *depth)
+        }
     }
 }
 
@@ -635,6 +663,308 @@ fn handle_sync(url: &str, output: &std::path::PathBuf) -> Result<()> {
         skills.len(),
         output.display()
     );
+    Ok(())
+}
+
+// ── Composite Skill Index ───────────────────────────────────────────────────
+
+/// A single skill entry in the composite index.
+#[derive(serde::Serialize)]
+struct IndexEntry {
+    name: String,
+    description: String,
+    specialization: &'static str,
+    rank: u8,
+    source_path: String,
+    source_git: Option<String>,
+    source_commit: Option<String>,
+    skill_md_hash: String,
+}
+
+/// Domain keywords for specialization scoring.
+const DOMAIN_KEYWORDS: &[&str] = &[
+    "legal", "medical", "healthcare", "financial", "finance", "audit",
+    "regulatory", "compliance", "clinical", "pharma", "insurance", "tax",
+    "real-estate", "construction", "manufacturing", "aerospace",
+];
+const ENGINEERING_KEYWORDS: &[&str] = &[
+    "code", "deploy", "ci/cd", "docker", "kubernetes", "database", "migration",
+    "test", "refactor", "debug", "build", "compile", "lint", "security-scan",
+    "infrastructure", "terraform", "ansible",
+];
+const ANALYSIS_KEYWORDS: &[&str] = &[
+    "analyze", "report", "statistics", "data-pipeline", "etl", "dashboard",
+    "visualization", "research", "survey", "benchmark", "evaluation",
+];
+
+fn score_specialization(desc: &str) -> (&'static str, u8) {
+    let lower = desc.to_lowercase();
+    let domain_hits = DOMAIN_KEYWORDS.iter().filter(|kw| lower.contains(*kw)).count();
+    let eng_hits = ENGINEERING_KEYWORDS.iter().filter(|kw| lower.contains(*kw)).count();
+    let analysis_hits = ANALYSIS_KEYWORDS.iter().filter(|kw| lower.contains(*kw)).count();
+
+    if domain_hits > 0 {
+        ("domain", 4)
+    } else if eng_hits > 0 {
+        ("engineering", 3)
+    } else if analysis_hits > 0 {
+        ("analysis", 2)
+    } else {
+        ("general", 1)
+    }
+}
+
+/// Parse YAML frontmatter from SKILL.md — extracts name and description.
+fn parse_frontmatter(content: &str) -> Option<(String, String)> {
+    let trimmed = content.trim_start();
+    if !trimmed.starts_with("---") {
+        return None;
+    }
+    let after_first = &trimmed[3..];
+    let end = after_first.find("\n---")?;
+    let yaml = &after_first[..end];
+
+    let mut name = String::new();
+    let mut desc = String::new();
+    for line in yaml.lines() {
+        let line = line.trim();
+        if let Some(v) = line.strip_prefix("name:") {
+            name = v.trim().trim_matches('"').to_string();
+        } else if let Some(v) = line.strip_prefix("description:") {
+            desc = v.trim().trim_matches('"').to_string();
+        }
+    }
+
+    if name.is_empty() {
+        return None;
+    }
+    Some((name, desc))
+}
+
+/// Recursively scan a directory for SKILL.md files up to max_depth.
+fn scan_for_skills(dir: &std::path::Path, max_depth: usize, current_depth: usize, out: &mut Vec<(std::path::PathBuf, String)>) {
+    if current_depth > max_depth {
+        return;
+    }
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.is_dir() {
+            let skill_md = path.join("SKILL.md");
+            if skill_md.exists() {
+                if let Ok(content) = std::fs::read_to_string(&skill_md) {
+                    out.push((path.clone(), content));
+                }
+            } else {
+                // Recurse into subdirectories
+                scan_for_skills(&path, max_depth, current_depth + 1, out);
+            }
+        }
+    }
+}
+
+/// Try to get git remote URL and commit hash for a path.
+fn git_upstream(path: &std::path::Path) -> (Option<String>, Option<String>) {
+    let remote = std::process::Command::new("git")
+        .args(["-C", &path.display().to_string(), "remote", "get-url", "origin"])
+        .output()
+        .ok()
+        .filter(|o| o.status.success())
+        .and_then(|o| String::from_utf8(o.stdout).ok())
+        .map(|s| s.trim().to_string());
+
+    let commit = std::process::Command::new("git")
+        .args(["-C", &path.display().to_string(), "rev-parse", "HEAD"])
+        .output()
+        .ok()
+        .filter(|o| o.status.success())
+        .and_then(|o| String::from_utf8(o.stdout).ok())
+        .map(|s| s.trim().to_string());
+
+    (remote, commit)
+}
+
+fn handle_index(dirs: &[PathBuf], json: bool, store: bool, depth: usize) -> Result<()> {
+    use std::io::Read;
+    use sha2::{Sha256, Digest};
+
+    let mut raw_skills: Vec<(std::path::PathBuf, String)> = Vec::new();
+
+    for dir in dirs {
+        let expanded = shellexpand::tilde(&dir.display().to_string()).to_string();
+        let path = std::path::PathBuf::from(expanded);
+        if !path.exists() {
+            eprintln!("⚠️  skipping non-existent path: {}", path.display());
+            continue;
+        }
+        eprintln!("→ scanning: {}", path.display());
+        scan_for_skills(&path, depth, 0, &mut raw_skills);
+    }
+
+    eprintln!("→ found {} SKILL.md file(s)", raw_skills.len());
+
+    if raw_skills.is_empty() {
+        println!("No skills found in the specified directories.");
+        return Ok(());
+    }
+
+    // Parse and rank each skill
+    let mut entries: Vec<IndexEntry> = Vec::new();
+    for (dir_path, content) in &raw_skills {
+        let (name, description) = parse_frontmatter(content)
+            .unwrap_or_else(|| {
+                let dir_name = dir_path.file_name()
+                    .and_then(|n| n.to_str())
+                    .unwrap_or("unknown")
+                    .to_string();
+                (dir_name, String::new())
+            });
+
+        let (specialization, rank) = score_specialization(&description);
+
+        // SHA256 of SKILL.md content
+        let mut hasher = Sha256::new();
+        hasher.update(content.as_bytes());
+        let skill_md_hash = format!("{:x}", hasher.finalize());
+
+        // Try to get upstream git info
+        let (source_git, source_commit) = git_upstream(dir_path);
+
+        entries.push(IndexEntry {
+            name,
+            description,
+            specialization,
+            rank,
+            source_path: dir_path.display().to_string(),
+            source_git,
+            source_commit,
+            skill_md_hash: skill_md_hash[..12].to_string(),
+        });
+    }
+
+    // Sort by rank descending, then alphabetically
+    entries.sort_by(|a, b| {
+        b.rank.cmp(&a.rank).then_with(|| a.name.cmp(&b.name))
+    });
+
+    // Build composite manifest (TOML)
+    let mut manifest = String::new();
+    manifest.push_str("# b00t composite skill index — auto-generated\n");
+    let timestamp = chrono::Utc::now().to_rfc3339();
+    manifest.push_str(&format!("# generated: {timestamp}\n\n"));
+    manifest.push_str("[meta]\n");
+    manifest.push_str(&format!("total_skills = {}\n", entries.len()));
+    let sources: Vec<&PathBuf> = dirs.iter().collect();
+    let sources_str: Vec<String> = sources.iter().map(|d| format!("\"{}\"", d.display())).collect();
+    manifest.push_str(&format!("sources = [{}]\n\n", sources_str.join(", ")));
+
+    // Count by specialization
+    let domain_count = entries.iter().filter(|e| e.specialization == "domain").count();
+    let eng_count = entries.iter().filter(|e| e.specialization == "engineering").count();
+    let analysis_count = entries.iter().filter(|e| e.specialization == "analysis").count();
+    let general_count = entries.iter().filter(|e| e.specialization == "general").count();
+
+    manifest.push_str("[distribution]\n");
+    manifest.push_str(&format!("domain = {domain_count}\n"));
+    manifest.push_str(&format!("engineering = {eng_count}\n"));
+    manifest.push_str(&format!("analysis = {analysis_count}\n"));
+    manifest.push_str(&format!("general = {general_count}\n\n"));
+
+    for entry in &entries {
+        manifest.push_str(&format!("[[skills]]\n"));
+        manifest.push_str(&format!("name = \"{}\"\n", entry.name.replace('"', "\\\"")));
+        manifest.push_str(&format!("description = \"{}\"\n", entry.description.replace('"', "\\\"")));
+        manifest.push_str(&format!("specialization = \"{}\"\n", entry.specialization));
+        manifest.push_str(&format!("rank = {}\n", entry.rank));
+        manifest.push_str(&format!("source_path = \"{}\"\n", entry.source_path.replace('"', "\\\"")));
+        if let Some(git) = &entry.source_git {
+            manifest.push_str(&format!("source_git = \"{}\"\n", git));
+        }
+        if let Some(commit) = &entry.source_commit {
+            manifest.push_str(&format!("source_commit = \"{}\"\n", commit));
+        }
+        manifest.push_str(&format!("skill_md_hash = \"{}\"\n\n", entry.skill_md_hash));
+    }
+
+    // SHA256 of the manifest
+    let mut manifest_hasher = Sha256::new();
+    manifest_hasher.update(manifest.as_bytes());
+    let manifest_hash = format!("{:x}", manifest_hasher.finalize());
+    let short_hash = &manifest_hash[..12];
+
+    manifest.push_str(&format!("# manifest_sha256: {manifest_hash}\n"));
+
+    // Output
+    if json {
+        let summary = json!({
+            "total_skills": entries.len(),
+            "manifest_sha256": manifest_hash,
+            "distribution": {
+                "domain": domain_count,
+                "engineering": eng_count,
+                "analysis": analysis_count,
+                "general": general_count,
+            },
+            "skills": entries.iter().map(|e| json!({
+                "name": e.name,
+                "description": e.description,
+                "specialization": e.specialization,
+                "rank": e.rank,
+                "source_path": e.source_path,
+                "skill_md_hash": e.skill_md_hash,
+            })).collect::<Vec<_>>(),
+        });
+        println!("{}", serde_json::to_string_pretty(&summary)?);
+    } else {
+        println!("╔══ Skill Composite Index ═══════════════════════════════╗");
+        println!("║  Total: {:<4}  Hash: {}  ║", entries.len(), short_hash);
+        println!("║  Domain: {:<2}  Eng: {:<2}  Analysis: {:<2}  General: {:<2}     ║",
+            domain_count, eng_count, analysis_count, general_count);
+        println!("╚════════════════════════════════════════════════════════╝\n");
+
+        for entry in &entries {
+            let icon = match entry.specialization {
+                "domain" => "🏆",
+                "engineering" => "⚙️",
+                "analysis" => "📊",
+                _ => "📦",
+            };
+            println!("  {icon} [{}] {} — {}", entry.rank, entry.name,
+                if entry.description.len() > 60 {
+                    format!("{}…", &entry.description[..60])
+                } else {
+                    entry.description.clone()
+                });
+        }
+        println!("\n  manifest_sha256: {manifest_hash}");
+    }
+
+    // Optionally store as git blob datum
+    if store {
+        use flate2::{Compression, write::GzEncoder};
+        use std::io::Write;
+
+        let mut encoder = GzEncoder::new(Vec::new(), Compression::best());
+        encoder.write_all(manifest.as_bytes())?;
+        let compressed = encoder.finish()?;
+
+        // Store as git blob
+        let mut child = std::process::Command::new("git")
+            .args(["hash-object", "-w", "--stdin"])
+            .stdin(std::process::Stdio::piped())
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped())
+            .spawn()?;
+        child.stdin.take().unwrap().write_all(&compressed)?;
+        let output = child.wait_with_output()?;
+        let git_hash = String::from_utf8(output.stdout)?.trim().to_string();
+
+        println!("\n📦 stored git blob: {git_hash}");
+        println!("   retrieve: git cat-file blob {git_hash} | gunzip");
+    }
+
     Ok(())
 }
 
