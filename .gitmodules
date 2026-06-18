@@ -56,3 +56,6 @@
 [submodule "vendor/llama-patch"]
 	path = vendor/llama-patch
 	url = https://github.com/PromptExecution/llama-patch.git
+[submodule "vendor/agent-framework"]
+	path = vendor/agent-framework
+	url = https://github.com/microsoft/agent-framework
