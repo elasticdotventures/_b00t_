@@ -35,6 +35,12 @@ pub enum AgentCommands {
         json: bool,
     },
 
+    #[clap(about = "List registered worker agents")]
+    Workers {
+        #[arg(long, help = "Output in JSON format")]
+        json: bool,
+    },
+
     #[clap(about = "Send a direct message to an agent")]
     Message {
         #[arg(help = "Target agent ID")]
@@ -76,6 +82,9 @@ pub enum AgentCommands {
 
         #[arg(long, help = "Block until completion")]
         blocking: bool,
+
+        #[arg(long, help = "Timeout in seconds when blocking (default: 3600)")]
+        timeout_seconds: Option<u64>,
 
         #[arg(
             long,
@@ -238,6 +247,8 @@ pub async fn handle_agent_command(cmd: AgentCommands) -> Result<()> {
             json,
         } => handle_discover(role, crew, capabilities, json).await,
 
+        AgentCommands::Workers { json } => handle_workers(json).await,
+
         AgentCommands::Message {
             to_agent,
             subject,
@@ -253,6 +264,7 @@ pub async fn handle_agent_command(cmd: AgentCommands) -> Result<()> {
             deadline,
             capabilities,
             blocking,
+            timeout_seconds,
             skill,
             role,
             output_contract,
@@ -265,6 +277,7 @@ pub async fn handle_agent_command(cmd: AgentCommands) -> Result<()> {
                 deadline,
                 capabilities,
                 blocking,
+                timeout_seconds,
                 skill.as_deref(),
                 role.as_deref(),
                 output_contract.as_deref(),
@@ -325,6 +338,45 @@ pub async fn handle_agent_command(cmd: AgentCommands) -> Result<()> {
             project_root,
         } => handle_ralph(&tool, &task, max_iterations, project_root.as_deref()).await,
     }
+}
+
+async fn handle_workers(json: bool) -> Result<()> {
+    let config = RedisConfig::default();
+    let redis = RedisComms::new(config, "cli-workers".into())?;
+
+    let metadata = AgentMetadata {
+        agent_id: "cli-workers".to_string(),
+        agent_role: "cli".to_string(),
+        capabilities: vec![],
+        crew: None,
+        status: AgentStatus::Online,
+        last_seen: SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs(),
+        load: 0.0,
+        specializations: HashMap::new(),
+        subtype: Default::default(),
+    };
+
+    let coordinator = AgentCoordinator::new(redis, metadata);
+    let agents = coordinator.discover_agents().await?;
+
+    if json {
+        println!("{}", serde_json::to_string_pretty(&agents)?);
+    } else if agents.is_empty() {
+        println!("No worker agents registered.");
+        println!("To register a worker: b00t agent workers --register");
+    } else {
+        println!("Registered workers ({})\n", agents.len());
+        for agent in &agents {
+            let caps = if agent.capabilities.is_empty() {
+                "none".to_string()
+            } else {
+                agent.capabilities.join(", ")
+            };
+            println!("  {:<20} role={:<12} status={} caps=[{}]",
+                agent.agent_id, agent.agent_role, agent.status, caps);
+        }
+    }
+    Ok(())
 }
 
 async fn handle_discover(
@@ -426,6 +478,7 @@ async fn handle_delegate(
     deadline: Option<u64>,
     capabilities: Option<String>,
     blocking: bool,
+    timeout_seconds: Option<u64>,
     skill: Option<&str>,
     role: Option<&str>,
     output_contract: Option<&str>,

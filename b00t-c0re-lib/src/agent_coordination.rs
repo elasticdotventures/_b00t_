@@ -277,6 +277,12 @@ impl AgentCoordinator {
         Ok(agents)
     }
 
+    /// Check if a specific worker agent is available and responsive
+    pub async fn is_worker_available(&self, worker_id: &str) -> B00tResult<bool> {
+        let agents = self.discover_agents().await?;
+        Ok(agents.iter().any(|a| a.agent_id == worker_id && a.status == AgentStatus::Online))
+    }
+
     /// Send direct message to another agent
     pub async fn send_message(
         &self,
@@ -313,6 +319,19 @@ impl AgentCoordinator {
         blocking: bool,
         approval: Option<ApprovalGate>,
     ) -> B00tResult<Option<TaskCompletion>> {
+        // Verify worker exists before delegating
+        let available = self.is_worker_available(worker_id).await?;
+        if !available {
+            let agents = self.discover_agents().await?;
+            let agent_ids: Vec<String> = agents.iter().map(|a| a.agent_id.clone()).collect();
+            let list = if agent_ids.is_empty() { "none".to_string() } else { agent_ids.join(", ") };
+            anyhow::bail!(
+                "worker '{}' is not available — no agent with that ID registered or agent is offline. \
+                 Available agents: {}",
+                worker_id, list
+            );
+        }
+
         let deadline_timestamp = deadline.map(|d| {
             SystemTime::now()
                 .duration_since(UNIX_EPOCH)
@@ -1095,5 +1114,74 @@ mod tests {
         let gate = ApprovalGate::new(0);
         // With 0 required approvals, an empty approved_by list satisfies the threshold
         assert!(gate.is_approved());
+    }
+
+    // ─── Worker availability tests ────────────────────────────────────────
+
+    #[tokio::test]
+    async fn test_delegate_fails_when_worker_not_available() {
+        let config = RedisConfig::default();
+        let redis = RedisComms::new(config, "test-captain".to_string()).unwrap();
+
+        let metadata = AgentMetadata {
+            agent_id: "test-captain".to_string(),
+            agent_role: "captain".to_string(),
+            capabilities: vec![],
+            crew: None,
+            status: AgentStatus::Online,
+            last_seen: 0,
+            load: 0.0,
+            specializations: HashMap::new(),
+            subtype: Default::default(),
+        };
+
+        let mut coordinator = AgentCoordinator::new(redis, metadata);
+
+        // Delegate to a non-existent worker — should fail with clear error
+        let result = coordinator
+            .delegate_task(
+                "nonexistent-worker",
+                "task-001",
+                "test task",
+                TaskPriority::Normal,
+                None,
+                vec![],
+                false, // non-blocking
+                None,
+            )
+            .await;
+
+        assert!(result.is_err());
+        let err_msg = result.unwrap_err().to_string();
+        assert!(
+            err_msg.contains("not available"),
+            "Expected 'not available' in error, got: {}",
+            err_msg
+        );
+    }
+
+    #[tokio::test]
+    async fn test_is_worker_available_returns_false_for_nonexistent() {
+        let config = RedisConfig::default();
+        let redis = RedisComms::new(config, "test-checker".to_string()).unwrap();
+
+        let metadata = AgentMetadata {
+            agent_id: "test-checker".to_string(),
+            agent_role: "cli".to_string(),
+            capabilities: vec![],
+            crew: None,
+            status: AgentStatus::Online,
+            last_seen: 0,
+            load: 0.0,
+            specializations: HashMap::new(),
+            subtype: Default::default(),
+        };
+
+        let coordinator = AgentCoordinator::new(redis, metadata);
+        let available = coordinator
+            .is_worker_available("nonexistent-worker")
+            .await
+            .unwrap();
+        assert!(!available, "Worker should not be available");
     }
 }
