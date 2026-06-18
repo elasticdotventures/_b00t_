@@ -849,16 +849,9 @@ fn handle_index(dirs: &[PathBuf], json: bool, store: bool, depth: usize) -> Resu
         b.rank.cmp(&a.rank).then_with(|| a.name.cmp(&b.name))
     });
 
-    // Build composite manifest (TOML)
-    let mut manifest = String::new();
-    manifest.push_str("# b00t composite skill index — auto-generated\n");
+    // Build datum TOML (ingestible by `b00t data fabric ingest-datum`)
     let timestamp = chrono::Utc::now().to_rfc3339();
-    manifest.push_str(&format!("# generated: {timestamp}\n\n"));
-    manifest.push_str("[meta]\n");
-    manifest.push_str(&format!("total_skills = {}\n", entries.len()));
-    let sources: Vec<&PathBuf> = dirs.iter().collect();
-    let sources_str: Vec<String> = sources.iter().map(|d| format!("\"{}\"", d.display())).collect();
-    manifest.push_str(&format!("sources = [{}]\n\n", sources_str.join(", ")));
+    let sources_str: Vec<String> = dirs.iter().map(|d| format!("\"{}\"", d.display())).collect();
 
     // Count by specialization
     let domain_count = entries.iter().filter(|e| e.specialization == "domain").count();
@@ -866,41 +859,58 @@ fn handle_index(dirs: &[PathBuf], json: bool, store: bool, depth: usize) -> Resu
     let analysis_count = entries.iter().filter(|e| e.specialization == "analysis").count();
     let general_count = entries.iter().filter(|e| e.specialization == "general").count();
 
-    manifest.push_str("[distribution]\n");
-    manifest.push_str(&format!("domain = {domain_count}\n"));
-    manifest.push_str(&format!("engineering = {eng_count}\n"));
-    manifest.push_str(&format!("analysis = {analysis_count}\n"));
-    manifest.push_str(&format!("general = {general_count}\n\n"));
+    let mut datum_toml = String::new();
+    datum_toml.push_str("# b00t composite skill index — auto-generated\n");
+    datum_toml.push_str(&format!("# generated: {timestamp}\n"));
+    datum_toml.push_str("# ingest: b00t data fabric ingest-datum <this_file>\n\n");
 
+    // Standard [b00t] datum header
+    datum_toml.push_str("[b00t]\n");
+    datum_toml.push_str("name = \"skill-index\"\n");
+    datum_toml.push_str("type = \"skill_index\"\n");
+    datum_toml.push_str("hint = \"Composite skill index — ranked scan of SKILL.md files\"\n");
+    datum_toml.push_str("keywords = [\"skill\", \"index\", \"composite\", \"ranking\", \"discovery\"]\n\n");
+
+    // Index metadata
+    datum_toml.push_str("[meta]\n");
+    datum_toml.push_str(&format!("total_skills = {}\n", entries.len()));
+    datum_toml.push_str(&format!("generated = \"{timestamp}\"\n"));
+    datum_toml.push_str(&format!("sources = [{}]\n\n", sources_str.join(", ")));
+
+    datum_toml.push_str("[distribution]\n");
+    datum_toml.push_str(&format!("domain = {domain_count}\n"));
+    datum_toml.push_str(&format!("engineering = {eng_count}\n"));
+    datum_toml.push_str(&format!("analysis = {analysis_count}\n"));
+    datum_toml.push_str(&format!("general = {general_count}\n\n"));
+
+    // Each skill as a [skills.<name>] sub-table → becomes unique predicate paths
+    // when flattened by data fabric ingest-datum
     for entry in &entries {
-        manifest.push_str(&format!("[[skills]]\n"));
-        manifest.push_str(&format!("name = \"{}\"\n", entry.name.replace('"', "\\\"")));
-        manifest.push_str(&format!("description = \"{}\"\n", entry.description.replace('"', "\\\"")));
-        manifest.push_str(&format!("specialization = \"{}\"\n", entry.specialization));
-        manifest.push_str(&format!("rank = {}\n", entry.rank));
-        manifest.push_str(&format!("source_path = \"{}\"\n", entry.source_path.replace('"', "\\\"")));
+        let safe_name = entry.name.replace('.', "-");
+        datum_toml.push_str(&format!("[skills.{safe_name}]\n"));
+        datum_toml.push_str(&format!("description = \"{}\"\n", entry.description.replace('"', "\\\"").replace('\n', " ")));
+        datum_toml.push_str(&format!("specialization = \"{}\"\n", entry.specialization));
+        datum_toml.push_str(&format!("rank = {}\n", entry.rank));
+        datum_toml.push_str(&format!("source_path = \"{}\"\n", entry.source_path.replace('"', "\\\"")));
         if let Some(git) = &entry.source_git {
-            manifest.push_str(&format!("source_git = \"{}\"\n", git));
+            datum_toml.push_str(&format!("source_git = \"{}\"\n", git));
         }
-        if let Some(commit) = &entry.source_commit {
-            manifest.push_str(&format!("source_commit = \"{}\"\n", commit));
-        }
-        manifest.push_str(&format!("skill_md_hash = \"{}\"\n\n", entry.skill_md_hash));
+        datum_toml.push_str(&format!("skill_md_hash = \"{}\"\n\n", entry.skill_md_hash));
     }
 
-    // SHA256 of the manifest
-    let mut manifest_hasher = Sha256::new();
-    manifest_hasher.update(manifest.as_bytes());
-    let manifest_hash = format!("{:x}", manifest_hasher.finalize());
-    let short_hash = &manifest_hash[..12];
+    // SHA256 of the datum content
+    let mut hasher = Sha256::new();
+    hasher.update(datum_toml.as_bytes());
+    let datum_hash = format!("{:x}", hasher.finalize());
+    let short_hash = &datum_hash[..12];
 
-    manifest.push_str(&format!("# manifest_sha256: {manifest_hash}\n"));
+    datum_toml.push_str(&format!("# datum_sha256: {datum_hash}\n"));
 
     // Output
     if json {
         let summary = json!({
             "total_skills": entries.len(),
-            "manifest_sha256": manifest_hash,
+            "datum_sha256": datum_hash,
             "distribution": {
                 "domain": domain_count,
                 "engineering": eng_count,
@@ -938,19 +948,19 @@ fn handle_index(dirs: &[PathBuf], json: bool, store: bool, depth: usize) -> Resu
                     entry.description.clone()
                 });
         }
-        println!("\n  manifest_sha256: {manifest_hash}");
+        println!("\n  datum_sha256: {datum_hash}");
     }
 
-    // Optionally store as git blob datum
+    // Store as datum TOML + git blob
     if store {
         use flate2::{Compression, write::GzEncoder};
         use std::io::Write;
 
+        // Store compressed content as git blob
         let mut encoder = GzEncoder::new(Vec::new(), Compression::best());
-        encoder.write_all(manifest.as_bytes())?;
+        encoder.write_all(datum_toml.as_bytes())?;
         let compressed = encoder.finish()?;
 
-        // Store as git blob
         let mut child = std::process::Command::new("git")
             .args(["hash-object", "-w", "--stdin"])
             .stdin(std::process::Stdio::piped())
@@ -961,8 +971,15 @@ fn handle_index(dirs: &[PathBuf], json: bool, store: bool, depth: usize) -> Resu
         let output = child.wait_with_output()?;
         let git_hash = String::from_utf8(output.stdout)?.trim().to_string();
 
+        // Write datum TOML to _b00t_ directory
+        let datum_filename = format!("skill-index-{short_hash}.datum.toml");
+        let datum_path = std::path::PathBuf::from("_b00t_").join(&datum_filename);
+        std::fs::write(&datum_path, &datum_toml)?;
+
         println!("\n📦 stored git blob: {git_hash}");
         println!("   retrieve: git cat-file blob {git_hash} | gunzip");
+        println!("📝 datum written: {}", datum_path.display());
+        println!("   ingest: b00t data fabric ingest-datum {}", datum_path.display());
     }
 
     Ok(())
