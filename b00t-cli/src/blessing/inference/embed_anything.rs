@@ -8,7 +8,6 @@ use super::{Embedding, LLMInference, ModelInfo};
 use anyhow::{Context, Result};
 use async_trait::async_trait;
 use b00t_embed::layer::stack::LayerStack;
-use b00t_embed::layer::TensorSource as _;
 use b00t_embed::EmbedBackend;
 
 use std::sync::Arc;

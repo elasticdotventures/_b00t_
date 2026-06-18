@@ -1,3 +1,4 @@
+#![allow(dead_code, async_fn_in_trait)]
 use anyhow::{Context, Result};
 use chrono::{DateTime, Utc};
 use regex::Regex;

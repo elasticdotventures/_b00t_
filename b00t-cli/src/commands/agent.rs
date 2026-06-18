@@ -478,7 +478,7 @@ async fn handle_delegate(
     deadline: Option<u64>,
     capabilities: Option<String>,
     blocking: bool,
-    timeout_seconds: Option<u64>,
+    _timeout_seconds: Option<u64>,
     skill: Option<&str>,
     role: Option<&str>,
     output_contract: Option<&str>,

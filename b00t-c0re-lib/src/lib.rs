@@ -66,7 +66,7 @@ pub mod utils;
 // Re-export commonly used types
 pub use agent_subtype::AgentSubtype;
 pub use agent_manager::{
-    AgentConfig, AgentHandle, AgentManager, ExecutorConfig, dispatch_tool, invoke_agent_executor,
+    AgentConfig, AgentHandle, AgentManager, ExecutorConfig, invoke_agent_executor,
 };
 pub use ai_client::{AiClientConfig, AiProviderConfig, B00tAiClient, ChatMessage};
 pub use b00t_config::{AiConfiguration, B00tUnifiedConfig, CloudServicesConfig, UserConfig};

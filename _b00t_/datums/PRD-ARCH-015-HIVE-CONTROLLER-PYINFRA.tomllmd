@@ -1,0 +1,233 @@
+# PRD-ARCH-015: Persistent hive controller + pyinfra ouroboros
+
+[b00t.schema]
+version   = "1"
+type      = "prd"
+type_tags = ["prd", "hive", "controller", "pyinfra", "quadlet", "pyo3", "ouroboros", "arch", "ch0nky"]
+
+[prd]
+id     = "PRD-ARCH-015-HIVE-CONTROLLER-PYINFRA"
+title  = "Persistent hive controller daemon + pyinfra ouroboros operations"
+status = "proposed"
+tier   = "frontier"
+closes_task = null
+
+# ─── Executive Summary ────────────────────────────────────────────────────────
+# b00t currently has agent coordination over Redis but no persistent daemon.
+# Tasks published to pub/sub are lost if no worker is listening (demonstrated
+# 2026-06-18: `b00t agent delegate sm0l` silently failed — no worker registered).
+#
+# This PRD defines:
+# (a) b00t-hive-controller: persistent Rust daemon (podman quadlet) managing
+#     worker registry, task queue, health monitoring, and self-upgrade
+# (b) b00t-py wheel: PyO3/maturin wheel published to PyPI, importable by pyinfra
+# (c) pyinfra ouroboros: b00t operations call b00t-cli on remote hosts via SSH,
+#     creating a Python→Rust→Python→SSH→Rust call chain
+# (d) Quadlet auto-generation: `b00t hive quadlet` emits systemd units
+#
+# "Ouroboros" = the snake eating its tail: b00t (Rust) → PyO3 wheel → pyinfra
+# (Python) → SSH → b00t-cli (Rust) on remote host → podman lifecycle.
+# This is not circular dependency — it's a layered architecture where each layer
+# manages the layer below it.
+#
+# ANSIBLE EXIT STRATEGY: pyinfra handles runtime fleet orchestration (start/stop/
+# status/upgrade). Ansible remains for initial provisioning (OS packages, kernel
+# params, firewall). Over time, pyinfra ops replace ansible roles one-by-one.
+# The exit is gradual, not flag-day.
+
+# ─── Phase 1: b00t-hive-controller daemon ────────────────────────────────────
+[phase1.controller]
+description = "Persistent Rust daemon managing hive state"
+runtime = "podman quadlet"
+state_backend = "Redis (existing b00t-redis container)"
+deliverables = [
+  "b00t-hive-controller binary (new workspace crate)",
+  "Dockerfile → ghcr.io/elasticdotventures/b00t-hive-controller",
+  "quadlet unit file: b00t-hive-controller.container",
+  "systemd integration: journald logging, auto-restart",
+]
+
+[phase1.controller.modules]
+task_queue = "Persistent task queue replacing ephemeral pub/sub. Tasks survive worker disconnects."
+worker_registry = "Agent heartbeat + capability registry. Stale workers auto-pruned after 300s."
+health_monitor = "Liveness probes for workers. Dead workers → tasks reassigned."
+upgrade_manager = "Self-upgrade: pull new container image → graceful restart via systemd."
+
+[phase1.controller.api]
+description = "Internal API consumed by b00t-cli and b00t-mcp"
+endpoints = [
+  "POST /tasks           — delegate task (validates worker exists first)",
+  "GET  /tasks/{id}      — task status",
+  "GET  /workers         — list registered workers (replaces Redis pub/sub discovery)",
+  "POST /upgrade         — trigger self-upgrade (pull image + restart)",
+  "GET  /health          — controller health check",
+]
+
+# ─── Phase 2: Quadlet generator ──────────────────────────────────────────────
+[phase2.quadlet]
+description = "Generate systemd quadlet units from b00t datum files"
+command = "b00t hive quadlet [--output-dir ~/.config/containers/systemd/]"
+datums_to_quadlets = [
+  "*.hive.toml       → .container unit (hive profile → container config)",
+  "*.docker.toml     → .container unit (docker datum → container config)",
+  "*.mcp.toml        → .container unit (MCP server → STDIO container)",
+]
+
+[phase2.quadlet.template]
+example = '''
+[Container]
+Image=ghcr.io/elasticdotventures/b00t-hive-controller:latest
+ContainerName=b00t-hive-controller
+Network=host
+Environment=REDIS_URL=redis://localhost:6379
+Volume=%h/.b00t:/home/b00t/.b00t:Z
+
+[Service]
+Restart=always
+
+[Install]
+WantedBy=default.target
+'''
+
+# ─── Phase 3: b00t-py wheel (PyO3/maturin) ──────────────────────────────────
+[phase3.py_wheel]
+description = "Python wheel exposing b00t-core functionality via PyO3"
+build_tool = "maturin"
+publish_target = "PyPI (pip install b00t)"
+source = "b00t-py/ (existing crate, needs pyinfra operation layer)"
+python_api = [
+  "b00t.hive.status()         → returns hive node status dict",
+  "b00t.hive.workers()        → returns registered workers list",
+  "b00t.hive.delegate(worker, task_id, description) → delegates task",
+  "b00t.hive.quadlet(name)    → generates quadlet unit for named datum",
+  "b00t.hive.upgrade(target)  → triggers self-upgrade on target",
+  "b00t.cli.run(args)         → generic b00t-cli invocation",
+]
+
+# ─── Phase 4: pyinfra operations module ──────────────────────────────────────
+[phase4.pyinfra_ops]
+description = "pyinfra operations that call b00t on remote hosts"
+package_name = "b00t-pyinfra" # or merged into b00t wheel
+source_file = "b00t/operations/hive.py"
+
+[phase4.pyinfra_ops.operations]
+status = '''
+@operation()
+def hive_status():
+    """Get hive node status via b00t-cli."""
+    yield StringCommand("b00t", "hive", "status")
+'''
+workers = '''
+@operation()
+def hive_workers():
+    """List registered worker agents."""
+    yield StringCommand("b00t", "agent", "workers")
+'''
+upgrade = '''
+@operation()
+def hive_upgrade(version=None):
+    """Trigger b00t self-upgrade to specified version."""
+    cmd = ["b00t", "hive", "upgrade"]
+    if version:
+        cmd.extend(["--version", version])
+    yield StringCommand(*cmd)
+'''
+quadlet_deploy = '''
+@operation()
+def hive_quadlet(datum_name, output_dir=None):
+    """Generate and deploy quadlet unit from datum."""
+    cmd = ["b00t", "hive", "quadlet", datum_name]
+    if output_dir:
+        cmd.extend(["--output-dir", output_dir])
+    yield StringCommand(*cmd)
+    # Reload systemd to pick up new unit
+    yield StringCommand("systemctl", "--user", "daemon-reload")
+'''
+datums_sync = '''
+@operation()
+def hive_datums_sync(source_dir, target_hosts=None):
+    """Sync _b00t_/ datum files to target hive nodes."""
+    yield StringCommand("rsync", "-avz", source_dir + "/",
+                        f"{{host.data.ip}}:~/.b00t/_b00t_/")
+'''
+
+# ─── Phase 5: pyinfra inventory connector ────────────────────────────────────
+[phase5.inventory_connector]
+description = "pyinfra connector that discovers b00t hive nodes"
+entry_point = "b00t.connectors.hive:HiveConnector"
+
+[phase5.inventory_connector.mechanism]
+discovery = "Query Redis b00t:agents:registry for all Online agents with IP metadata"
+groups = "Derived from agent metadata: role (worker/captain), capabilities, crew"
+data = "IP address, agent_id, capabilities, load, last_seen"
+
+# ─── Ouroboros Architecture Diagram ──────────────────────────────────────────
+[architecture]
+layers = [
+  "1. Rust daemon      — b00t-hive-controller (state, queues, registry)",
+  "2. PyO3 wheel       — b00t (pip-installable, calls Rust via FFI)",
+  "3. pyinfra ops      — b00t.operations.hive (yields StringCommand → b00t-cli)",
+  "4. SSH transport    — pyinfra connector (agentless, SSH to target hosts)",
+  "5. Target b00t-cli  — runs on remote host, manages local containers",
+  "6. Containers        — podman quadlets, Redis, model servers",
+]
+flow = '''
+Operator runs:
+  $ pyinfra inventory.py deploy.py
+
+pyinfra resolves inventory via b00t.connectors.hive:
+  → Redis query → builds target list from hive registry
+
+For each target, pyinfra SSHs in and executes b00t.operations.hive:
+  → StringCommand("b00t", "hive", "quadlet", "inference-sm0l")
+  → b00t-cli generates quadlet unit
+  → systemctl --user daemon-reload
+  → systemctl --user start b00t-inference-sm0l
+
+Result: fleet-wide state change from a single Python script
+'''
+
+# ─── RHAI vs pyinfra boundary ────────────────────────────────────────────────
+[rhai_vs_pyinfra]
+rhai_scope = [
+  "Embedded hooks (pre_start, detect, install guards)",
+  "Datum validation scripts (e.g. github-auth-validate.rhai)",
+  "Single-host, synchronous, no SSH needed",
+]
+pyinfra_scope = [
+  "Multi-host fleet orchestration (start/stop/status/upgrade)",
+  "Inventory discovery from hive registry",
+  "Idempotent operations with dry-run support",
+  "Cross-host coordination (e.g. rolling upgrades)",
+]
+boundary_rule = "RHAI for local hooks, pyinfra for fleet ops. Never overlap."
+
+# ─── Risk Mitigation ─────────────────────────────────────────────────────────
+[risks]
+controller_spof = '''
+Risk: Controller is single point of failure.
+Mitigation: Quadlet auto-restarts via systemd. State in Redis (separate container, also quadlet-managed).
+            Controller stateless beyond in-memory cache; all persistence in Redis.
+'''
+pyo3_complexity = '''
+Risk: PyO3 cross-compilation for wheels (linux x86_64, aarch64, macOS).
+Mitigation: maturin CI action builds wheels via cibuildwheel. Existing b00t-py crate proves FFI works.
+'''
+pyinfra_adoption = '''
+Risk: pyinfra less ecosystem than ansible.
+Mitigation: pyinfra operations ARE Python — any Python skill transfers. pip install b00t is familiar.
+            Ansible remains for initial provisioning; pyinfra for runtime ops. Gradual migration.
+'''
+
+# ─── Acceptance Criteria ─────────────────────────────────────────────────────
+[acceptance]
+criteria = [
+  "b00t-hive-controller starts as quadlet, survives podman restart",
+  "b00t agent workers shows controller-registered agents",
+  "b00t agent delegate <worker> fails with clear error if worker offline",
+  "b00t hive quadlet <datum> emits valid .container unit file",
+  "pip install b00t succeeds on Python 3.10+",
+  "from b00t.operations.hive import hive_status works in pyinfra deploy script",
+  "pyinfra @b00t-hive deploy_hive.py executes across all hive nodes",
+  "RHAI hooks continue working — no regression in datum validation",
+]

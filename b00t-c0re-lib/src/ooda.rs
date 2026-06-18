@@ -153,6 +153,7 @@ enum OodaDispatch {
     GoToActing,
     GoToReviewing,
     GoToComplete,
+    #[allow(dead_code)]
     GoToFailed(String),
 }
 
@@ -255,10 +256,17 @@ impl OodaCtx {
     }
 
     #[state]
-    fn complete(&mut self, event: &OodaDispatch) -> OodaOutcome { Handled }
+    #[state]
+    fn complete(&mut self, event: &OodaDispatch) -> OodaOutcome {
+        let _ = event;
+        Handled
+    }
 
     #[state]
-    fn failed(&mut self, event: &OodaDispatch) -> OodaOutcome { Handled }
+    fn failed(&mut self, event: &OodaDispatch) -> OodaOutcome {
+        let _ = event;
+        Handled
+    }
 }
 
 // ---------------------------------------------------------------------------

@@ -360,7 +360,7 @@ print(f'Indexed into {db_url}')
     /// Query RAG system for a topic
     pub async fn query(
         &self,
-        topic: &str,
+        _topic: &str,
         query: &str,
         max_results: Option<usize>,
     ) -> Result<String> {

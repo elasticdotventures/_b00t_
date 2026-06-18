@@ -37,6 +37,7 @@ pub struct DatumSchema {
 
 /// LSP 服务器状态
 pub struct DatumLspServer {
+    #[allow(dead_code)]
     config: DatumLspConfig,
     schemas: Vec<DatumSchema>,
 }
@@ -78,7 +79,7 @@ impl DatumLspServer {
         match trigger {
             "root" => self.schemas.iter().map(|s| s.name.clone()).collect(),
             "b00t" => {
-                let mut fields = ["name", "type", "hint", "install", "env", "learn"];
+                let fields = ["name", "type", "hint", "install", "env", "learn"];
                 fields.iter().map(|s| s.to_string()).collect()
             }
             _ => vec![],

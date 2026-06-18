@@ -15,9 +15,9 @@ use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use std::process::Stdio;
-use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
+use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::process::{Child, ChildStdin, ChildStdout, Command};
-use tracing::{debug, error, info, warn};
+use tracing::{debug, info};
 
 // ── Result types ──────────────────────────────────────────────────────────────
 
@@ -355,7 +355,7 @@ impl CodebaseMemoryClient {
         Ok(())
     }
 
-    async fn log_stderr(mut stderr: tokio::process::ChildStderr) {
+    async fn log_stderr(stderr: tokio::process::ChildStderr) {
         let mut reader = BufReader::new(stderr);
         let mut line = String::new();
         while let Ok(n) = reader.read_line(&mut line).await {

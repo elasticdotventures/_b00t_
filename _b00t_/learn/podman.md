@@ -1,0 +1,2 @@
+---
+nvidia CDI spec compatibility: nvidia-container-toolkit 1.19.1 generates CDI spec version 0.7.0 with additionalGids field — both unsupported by podman 4.9.3 on Ubuntu 24.04. Fix: change cdiVersion from 0.7.0 to 0.6.0 in /etc/cdi/nvidia.yaml and /var/run/cdi/nvidia.yaml; strip additionalGids field (podman 4.9.3 doesn't recognize it). Verify with: podman run --rm --device nvidia.com/gpu=all --security-opt=label=disable alpine echo OK
