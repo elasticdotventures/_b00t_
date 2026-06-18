@@ -20,9 +20,12 @@
 //!
 //! # Discovery order (priority)
 //! 1. `./skills/`              — project-local, SKILL.md format
-//! 2. `./_b00t_/*.skill.toml[l][md]` — project b00t native (.skill.toml, .skill.tomllm, .skill.tomllmd)
-//! 3. `~/.claude/skills/`      — Claude Code native, SKILL.md format
-//! 4. `~/.b00t/_b00t_/*.skill.toml[l][md]` — global b00t
+//! 2. `./.opencode/skills/`    — project-local opencode, SKILL.md format
+//! 3. `./_b00t_/*.skill.toml[l][md]` — project b00t native (.skill.toml, .skill.tomllm, .skill.tomllmd)
+//! 4. `~/.config/opencode/skills/` — global opencode, SKILL.md format
+//! 5. `~/.claude/skills/`      — Claude Code native, SKILL.md format
+//! 6. `~/.agents/skills/`      — Agent-compatible, SKILL.md format
+//! 7. `~/.b00t/_b00t_/*.skill.toml[l][md]` — global b00t
 
 use anyhow::Result;
 use b00t_c0re_lib::B00tContext;
@@ -158,23 +161,56 @@ impl SkillResolver {
         let mut dirs = Vec::new();
         let root = project_root.map(|p| p.to_path_buf()).unwrap_or_else(|| std::env::current_dir().unwrap_or_default());
 
-        // 1. Project-local SKILL.md skills/
-        let local_skills = root.join("skills");
-        if local_skills.is_dir() {
-            dirs.push(SkillDir { path: local_skills, format: SkillFormat::SkillMd });
+        // When project_root is explicitly provided (e.g. _B00T_Path), ALSO search from cwd
+        // so project-local skills in .opencode/skills/ are discovered regardless of b00t home.
+        let search_roots: Vec<PathBuf> = if project_root.is_some() {
+            let mut roots = vec![root.clone()];
+            if let Some(cwd) = std::env::current_dir().ok() {
+                if cwd != root {
+                    roots.push(cwd);
+                }
+            }
+            roots
+        } else {
+            vec![root.clone()]
+        };
+
+        for sr in &search_roots {
+            // Project-local SKILL.md skills/
+            let local_skills = sr.join("skills");
+            if local_skills.is_dir() {
+                dirs.push(SkillDir { path: local_skills, format: SkillFormat::SkillMd });
+            }
+            // Project-local opencode skills (.opencode/skills/)
+            let local_opencode = sr.join(".opencode").join("skills");
+            if local_opencode.is_dir() {
+                dirs.push(SkillDir { path: local_opencode, format: SkillFormat::SkillMd });
+            }
+            // Project-local b00t datums
+            let local_b00t = sr.join("_b00t_");
+            if local_b00t.is_dir() {
+                dirs.push(SkillDir { path: local_b00t, format: SkillFormat::TomlDatum });
+            }
         }
-        // 2. Project-local b00t datums
-        let local_b00t = root.join("_b00t_");
-        if local_b00t.is_dir() {
-            dirs.push(SkillDir { path: local_b00t, format: SkillFormat::TomlDatum });
-        }
-        // 3. Claude Code native skills (global)
+
+        // Global skill directories (home-based, not project-scoped)
         if let Some(home) = dirs::home_dir() {
+            // Global opencode skills (~/.config/opencode/skills/)
+            let opencode_skills = home.join(".config").join("opencode").join("skills");
+            if opencode_skills.is_dir() {
+                dirs.push(SkillDir { path: opencode_skills, format: SkillFormat::SkillMd });
+            }
+            // Claude Code native skills (global)
             let claude_skills = home.join(".claude").join("skills");
             if claude_skills.is_dir() {
                 dirs.push(SkillDir { path: claude_skills, format: SkillFormat::SkillMd });
             }
-            // 4. Global b00t datums
+            // Agent-compatible skills (~/.agents/skills/)
+            let agents_skills = home.join(".agents").join("skills");
+            if agents_skills.is_dir() {
+                dirs.push(SkillDir { path: agents_skills, format: SkillFormat::SkillMd });
+            }
+            // Global b00t datums
             let global_b00t = home.join(".b00t").join("_b00t_");
             if global_b00t.is_dir() {
                 dirs.push(SkillDir { path: global_b00t, format: SkillFormat::TomlDatum });
