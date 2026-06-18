@@ -6,7 +6,6 @@ use crate::assimilate::concept_extractor::{ConceptExtractor, ConceptExtraction, 
 use crate::assimilate::content_router::{ContentRouter, ParsedContent};
 use anyhow::Result;
 use std::collections::HashSet;
-use std::thread;
 use std::time::Duration;
 use url::Url;
 
@@ -27,7 +26,7 @@ pub struct CrawledDoc {
 }
 
 /// Crawl links using BFS, same-origin only, depth-limited.
-pub fn crawl(
+pub async fn crawl(
     seed_links: &[ExtractedLink],
     config: &CrawlConfig,
     router: &ContentRouter,
@@ -67,14 +66,14 @@ pub fn crawl(
 
         // Polite delay
         if config.delay_ms > 0 {
-            thread::sleep(Duration::from_millis(config.delay_ms));
+            tokio::time::sleep(Duration::from_millis(config.delay_ms)).await;
         }
 
         eprintln!("  [{depth}/{max_depth}] {url}", max_depth = config.max_depth);
 
-        match router.route(&url) {
+        match router.route(&url).await {
             Ok(parsed) => {
-                match extractor.extract(&parsed.text) {
+                match extractor.extract(&parsed.text).await {
                     Ok(extraction) => {
                         // Queue child links
                         for link in &extraction.links {

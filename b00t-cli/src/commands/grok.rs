@@ -358,6 +358,7 @@ async fn handle_assimilate(
     //
     // The primary content is enriched with concepts and used for datum storage.
     let mut enriched_tags: Vec<String> = tags.to_vec();
+    let mut enhanced_content: Option<String> = None;
 
     if enhanced {
         let source = source_url
@@ -374,7 +375,7 @@ async fn handle_assimilate(
             ..Default::default()
         };
 
-        let docs = crate::assimilate::run_enhanced(&source, topic, &config)?;
+        let docs = crate::assimilate::run_enhanced(&source, topic, &config).await?;
 
         // Collect concept names as tags for the datum
         if let Some(primary) = docs.first() {
@@ -395,24 +396,29 @@ async fn handle_assimilate(
             enriched_tags.len() - tags.len()
         );
 
-        // For the git-blob datum, use the primary document's text
-        // (the enhanced pipeline already stored crawled docs in index targets)
+        // If no inline/file content was provided, use the primary doc's text
+        // from the enhanced pipeline for the git-blob datum.
         if content_inline.is_none() && file.is_none() {
-            // Content came from URL — use the fetched text
-            // This will be set below in the content resolution
+            if let Some(primary) = docs.first() {
+                enhanced_content = Some(primary.content.text.clone());
+            }
         }
     }
 
-    // Resolve content: inline | file | stdin
-    let content = match (content_inline, file) {
-        (Some(c), _) => c.to_string(),
-        (None, Some(f)) => {
-            fs::read_to_string(f).with_context(|| format!("reading file {}", f.display()))?
-        }
-        (None, None) => {
-            let mut buf = String::new();
-            std::io::stdin().read_to_string(&mut buf)?;
-            buf
+    // Resolve content: enhanced-pipeline | inline | file | stdin
+    let content = if let Some(ec) = enhanced_content {
+        ec
+    } else {
+        match (content_inline, file) {
+            (Some(c), _) => c.to_string(),
+            (None, Some(f)) => {
+                fs::read_to_string(f).with_context(|| format!("reading file {}", f.display()))?
+            }
+            (None, None) => {
+                let mut buf = String::new();
+                std::io::stdin().read_to_string(&mut buf)?;
+                buf
+            }
         }
     };
 

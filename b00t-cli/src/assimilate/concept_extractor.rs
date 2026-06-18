@@ -35,7 +35,7 @@ pub struct ConceptExtraction {
 
 /// Extracts concepts and links from text using a sm0l model.
 pub struct ConceptExtractor {
-    client: reqwest::blocking::Client,
+    client: reqwest::Client,
 }
 
 const EXTRACTION_PROMPT_TEMPLATE: &str = r#"Analyze the following content and extract structured information.
@@ -67,16 +67,19 @@ const MAX_CONTENT_CHARS: usize = 16_000;
 
 impl ConceptExtractor {
     pub fn new() -> Self {
-        let client = reqwest::blocking::Client::builder()
-            .timeout(Duration::from_secs(60))
+        let client = reqwest::Client::builder()
+            .timeout(Duration::from_secs(180))
             .build()
             .expect("failed to build HTTP client");
         Self { client }
     }
 
     /// Extract concepts and links from text.
-    pub fn extract(&self, text: &str) -> Result<ConceptExtraction> {
+    pub async fn extract(&self, text: &str) -> Result<ConceptExtraction> {
         let (base_url, model) = self.resolve_endpoint()?;
+        // Normalize localhost→127.0.0.1: this system resolves localhost to ::1 (IPv6)
+        // but local services (Ollama) often listen on 0.0.0.0 only (IPv4)
+        let base_url = base_url.replace("://localhost", "://127.0.0.1");
 
         let truncated = if text.len() > MAX_CONTENT_CHARS {
             eprintln!("⚠️  content truncated to {MAX_CONTENT_CHARS} chars for sm0l context");
@@ -104,14 +107,15 @@ impl ConceptExtractor {
             .post(&url)
             .json(&body)
             .send()
+            .await
             .map_err(|e| anyhow!("sm0l request failed: {e}"))?;
 
         if !resp.status().is_success() {
-            bail!("sm0l HTTP {}: {}", resp.status(), resp.text().unwrap_or_default());
+            bail!("sm0l HTTP {}: {}", resp.status(), resp.text().await.unwrap_or_default());
         }
 
         let resp_json: serde_json::Value =
-            resp.json().map_err(|e| anyhow!("failed to parse sm0l response: {e}"))?;
+            resp.json().await.map_err(|e| anyhow!("failed to parse sm0l response: {e}"))?;
 
         let content = resp_json["choices"][0]["message"]["content"]
             .as_str()

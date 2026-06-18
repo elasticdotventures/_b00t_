@@ -32,7 +32,7 @@ impl Default for EnhancedConfig {
 }
 
 /// Run the full enhanced assimilation pipeline on a URL or file.
-pub fn run_enhanced(
+pub async fn run_enhanced(
     source: &str,
     topic: &str,
     config: &EnhancedConfig,
@@ -42,11 +42,11 @@ pub fn run_enhanced(
 
     // Parse initial source
     eprintln!("→ routing: {source}");
-    let parsed = router.route(source)?;
+    let parsed = router.route(source).await?;
 
     // Extract concepts + links from initial page
     eprintln!("→ extracting concepts (sm0l)…");
-    let extraction = extractor.extract(&parsed.text)?;
+    let extraction = extractor.extract(&parsed.text).await?;
 
     let initial_doc = CrawledDoc {
         url: source.to_string(),
@@ -66,7 +66,7 @@ pub fn run_enhanced(
             max_pages: config.max_pages,
             delay_ms: config.delay_ms,
         };
-        let crawled = crawl_engine::crawl(&extraction.links, &crawl_cfg, &router, &extractor)?;
+        let crawled = crawl_engine::crawl(&extraction.links, &crawl_cfg, &router, &extractor).await?;
         all_docs.extend(crawled);
     }
 

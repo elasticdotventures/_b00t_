@@ -27,12 +27,12 @@ pub struct ParsedContent {
 
 /// Routes sources to appropriate parsers based on content-type detection.
 pub struct ContentRouter {
-    client: reqwest::blocking::Client,
+    client: reqwest::Client,
 }
 
 impl ContentRouter {
     pub fn new() -> Self {
-        let client = reqwest::blocking::Client::builder()
+        let client = reqwest::Client::builder()
             .timeout(Duration::from_secs(30))
             .redirect(reqwest::redirect::Policy::limited(5))
             .user_agent("b00t-assimilate/0.1")
@@ -42,9 +42,9 @@ impl ContentRouter {
     }
 
     /// Route a source (URL or file path) to the appropriate parser.
-    pub fn route(&self, source: &str) -> Result<ParsedContent> {
+    pub async fn route(&self, source: &str) -> Result<ParsedContent> {
         if source.starts_with("http://") || source.starts_with("https://") {
-            self.route_url(source)
+            self.route_url(source).await
         } else if Path::new(source).exists() {
             self.route_file(source)
         } else {
@@ -53,11 +53,12 @@ impl ContentRouter {
     }
 
     /// Fetch a URL and parse based on Content-Type header + extension.
-    fn route_url(&self, url: &str) -> Result<ParsedContent> {
+    async fn route_url(&self, url: &str) -> Result<ParsedContent> {
         let resp = self
             .client
             .get(url)
             .send()
+            .await
             .map_err(|e| anyhow!("fetch failed for '{url}': {e}"))?;
 
         if !resp.status().is_success() {
@@ -72,11 +73,12 @@ impl ContentRouter {
             .to_string();
 
         let content_type = Self::detect_from_header(&content_type_header)
-            .or_else(|| Self::detect_from_extension(url))
+            .or_else(|| Self::detect_from_extension(&url))
             .unwrap_or(ContentType::Unknown);
 
         let bytes = resp
             .bytes()
+            .await
             .map_err(|e| anyhow!("failed to read response body: {e}"))?;
 
         let text = match content_type {
@@ -248,10 +250,10 @@ mod tests {
         assert!(!text.contains("<"));
     }
 
-    #[test]
-    fn test_route_file_markdown() {
+    #[tokio::test]
+    async fn test_route_file_markdown() {
         let router = ContentRouter::new();
-        let result = router.route("Cargo.toml");
+        let result = router.route("Cargo.toml").await;
         assert!(result.is_ok());
         let parsed = result.unwrap();
         assert!(parsed.text.contains("[package]"));
