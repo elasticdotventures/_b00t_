@@ -2,10 +2,34 @@
 name = "codebase-memory"
 type = "mcp"
 hint = "Codebase memory MCP server - knowledge graph for code indexing, search, and analysis"
+version = "0.8.1"
+source = "https://github.com/PromptExecution/codebase-memory-mcp-b00t-ir0n-ledg3rr"
+upstream = "https://github.com/DeusData/codebase-memory-mcp"
 
 [[b00t.mcp.stdio]]
-command = "/home/brianh/.b00t/vendor/codebase-memory-mcp-b00t-ir0n-ledg3rr/build/c/codebase-memory-mcp"
+# 🤓 install via: curl -fsSL https://raw.githubusercontent.com/DeusData/codebase-memory-mcp/main/install.sh | bash
+# binary lands at ~/.local/bin/codebase-memory-mcp (NOT the vendor build path)
+command = "codebase-memory-mcp"
 args = []
 transport = "stdio"
 priority = 0
 requires = []
+
+[b00t.mcp.capabilities]
+tools = [
+  "index_repository", "search_code", "search_graph", "get_code_snippet",
+  "trace_path", "get_architecture", "query_graph", "detect_changes",
+  "manage_adr", "ingest_traces", "list_projects", "delete_project",
+  "index_status", "get_graph_schema"
+]
+# 🤓 v0.8.0+: Rust hybrid LSP pass — type-aware resolution for impl blocks,
+#    trait methods, generics, derive-macro synthesis, UFCS static paths.
+#    Java + Kotlin hybrid LSP also added in 0.8.0.
+languages_hybrid_lsp = ["rust", "java", "kotlin"]
+
+# b00t:map v1
+# summary: codebase-memory-mcp — persistent code knowledge graph, 158 tree-sitter grammars, hybrid LSP
+# tags: mcp, code-intelligence, knowledge-graph, lsp, search, indexing
+# tier: ch0nky
+# cmds: codebase-memory-mcp --version
+# complexity: 4
