@@ -3,6 +3,8 @@
 
 use crate::blessing::BlessingGraph;
 use crate::inventory::Inventory;
+#[cfg(test)]
+use crate::blessing::BlessingNode;
 
 /// Prompt generation context: role + current system state
 #[derive(Debug, Clone)]

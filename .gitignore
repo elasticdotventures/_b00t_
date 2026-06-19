@@ -288,6 +288,7 @@ telemetry.jsonl
 events.jsonl
 test_*.json
 tmp/
+.tmp/
 togaf-cli/
 togaf-dsl/
 var/
