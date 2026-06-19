@@ -256,6 +256,7 @@ impl BlessingValidator {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::blessing::BlessingNode;
 
     #[test]
     fn test_valid_acyclic_blessing_graph() {
