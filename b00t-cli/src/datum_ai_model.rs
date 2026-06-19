@@ -43,6 +43,17 @@ impl ModelDatumEntry {
             .with_context(|| format!("Failed to read model datum {}", path.display()))?;
         let config: ModelConfig = toml::from_str(&content)
             .with_context(|| format!("Failed to parse model datum {}", path.display()))?;
+
+        // Warn on unrecognized provider/architecture (serde untagged silently accepts typos)
+        if !config.model.provider.is_known() {
+            eprintln!("  WARN: {} — unrecognized provider '{:?}'", path.display(), config.model.provider);
+        }
+        if let Some(ref arch) = config.model.architecture {
+            if !arch.is_known() {
+                eprintln!("  WARN: {} — unrecognized architecture '{:?}'", path.display(), arch);
+            }
+        }
+
         Ok(Self {
             datum: config.b00t,
             model: config.model,

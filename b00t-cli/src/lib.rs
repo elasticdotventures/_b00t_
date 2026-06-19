@@ -577,11 +577,15 @@ pub fn evaluate_gates(gates: &[GateSpec], path: &str) -> Vec<GateResult> {
 
         // Rhai gate: evaluate rhai expression
         if let Some(ref rhai_expr) = gate.rhai {
-            // Simple rhai evaluation using a sub-engine
-            let rhai_ok = evaluate_rhai_gate(rhai_expr);
+            let (rhai_ok, rhai_err) = evaluate_rhai_gate(rhai_expr);
             if !rhai_ok {
                 passed = false;
-                reasons.push(format!("rhai gate '{}' returned false", rhai_expr));
+                let reason = if let Some(err) = rhai_err {
+                    format!("rhai gate '{rhai_expr}' failed: {err}")
+                } else {
+                    format!("rhai gate '{rhai_expr}' returned false")
+                };
+                reasons.push(reason);
             }
         }
 
@@ -609,10 +613,14 @@ pub fn evaluate_gates(gates: &[GateSpec], path: &str) -> Vec<GateResult> {
 }
 
 /// Evaluate a simple rhai boolean expression.
-fn evaluate_rhai_gate(expr: &str) -> bool {
+fn evaluate_rhai_gate(expr: &str) -> (bool, Option<String>) {
     use rhai::Engine;
     let engine = Engine::new();
-    engine.eval::<bool>(expr).unwrap_or(false)
+    match engine.eval::<bool>(expr) {
+        Ok(true) => (true, None),
+        Ok(false) => (false, None),
+        Err(e) => (false, Some(e.to_string())),
+    }
 }
 
 /// A single gate with its origin (explicit or auto-derived)

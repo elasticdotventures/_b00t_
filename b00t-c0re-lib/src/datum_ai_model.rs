@@ -32,6 +32,13 @@ pub enum ModelArchitecture {
     Other(String),
 }
 
+impl ModelArchitecture {
+    /// True if this is a recognized (non-Other) architecture.
+    pub fn is_known(&self) -> bool {
+        !matches!(self, Self::Other(_))
+    }
+}
+
 /// Model size classification for resource planning and capability routing  
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
 #[serde(rename_all = "lowercase")]
@@ -118,6 +125,11 @@ pub enum ModelProvider {
 }
 
 impl ModelProvider {
+    /// True if this is a recognized (non-Other) provider.
+    pub fn is_known(&self) -> bool {
+        !matches!(self, Self::Other(_))
+    }
+
     /// Get the litellm prefix for this provider
     pub fn litellm_prefix(&self) -> &str {
         match self {
