@@ -787,7 +787,6 @@ fn git_upstream(path: &std::path::Path) -> (Option<String>, Option<String>) {
 }
 
 fn handle_index(dirs: &[PathBuf], json: bool, store: bool, depth: usize) -> Result<()> {
-    use std::io::Read;
     use sha2::{Sha256, Digest};
 
     let mut raw_skills: Vec<(std::path::PathBuf, String)> = Vec::new();

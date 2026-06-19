@@ -3,7 +3,6 @@
 //! Dogfoods b00t's own `exec` guard pipeline for podman invocation.
 
 use anyhow::{Result, anyhow, bail};
-use std::path::Path;
 use std::process::Command;
 
 /// Default docling container image (PE fork with GPU support).
