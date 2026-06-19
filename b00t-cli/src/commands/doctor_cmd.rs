@@ -11,7 +11,7 @@
 //! ```
 
 use anyhow::{Context, Result};
-use crate::datum_store::{DatumStore, HashMapStore, ReferenceError};
+use crate::datum_store::{DatumStore, HashMapStore, LearnResult, ReferenceError};
 use clap::Parser;
 use serde_json::{json, Value};
 use std::path::PathBuf;
@@ -214,6 +214,16 @@ pub fn handle_doctor_command(args: &DoctorCommands, b00t_path: &str) -> Result<(
             let empty_deps: Vec<_> = ref_errors.iter()
                 .filter(|e| matches!(e, ReferenceError::EmptyDependency { .. }))
                 .collect();
+            // Phase 3: learn reviewer — discriminated LearnResult per datum
+            let mut learn_found = 0usize;
+            let mut learn_malformed: Vec<(String, String)> = Vec::new();
+            for d in store.iter() {
+                match store.learn(d.key.as_ref()) {
+                    LearnResult::Found(_) => learn_found += 1,
+                    LearnResult::Malformed(_, e) => learn_malformed.push((d.key.as_ref().to_string(), e.to_string())),
+                    LearnResult::NotFound => {}
+                }
+            }
 
             if *json {
                 let datum_report = json!({
@@ -224,6 +234,10 @@ pub fn handle_doctor_command(args: &DoctorCommands, b00t_path: &str) -> Result<(
                         json!({"key": d.key.as_ref(), "error": err.to_string()})
                     }).collect::<Vec<_>>(),
                     "reference_errors": ref_errors.iter().map(|e| e.to_string()).collect::<Vec<_>>(),
+                    "learn_review": {
+                        "loadable": learn_found,
+                        "malformed": learn_malformed.iter().map(|(k, e)| json!({"key": k, "error": e})).collect::<Vec<_>>(),
+                    },
                 });
                 println!("{}", serde_json::to_string_pretty(&json!({
                     "system_deps": results,
@@ -254,6 +268,14 @@ pub fn handle_doctor_command(args: &DoctorCommands, b00t_path: &str) -> Result<(
                     }
                 } else {
                     println!("  ✅ store coherence: no self-deps or empty deps");
+                }
+                println!("
+🔍 learn reviewer — {}/{} datums loadable", learn_found, total_datums);
+                for (key, err) in &learn_malformed {
+                    println!("  ❌ {key}: {err}");
+                }
+                if learn_malformed.is_empty() {
+                    println!("  ✅ all present datums pass prove_by_type()");
                 }
             }
             Ok(())

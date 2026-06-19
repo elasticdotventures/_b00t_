@@ -339,6 +339,21 @@ async fn handle_dwiw(path: &str, topic: &str, mcp_ctx: bool, limit: usize) -> Re
     let ranked = bus.fanout(&ctx).await;
 
     if ranked.is_empty() {
+        // Auto-research: try grok RAG before failing — closes "no auto-research" gap.
+        // If grok is down or returns empty, fall through to queue + bail.
+        let client = GrokClient::new();
+        if let Ok(grok_results) = client.ask(topic, Some(topic), Some(3)).await {
+            if !grok_results.results.is_empty() {
+                println!("[learn:grok] no datum for '{topic}' — grok RAG fallback ({} chunks):", grok_results.results.len());
+                for chunk in &grok_results.results {
+                    println!("  (topic: {}) {}", chunk.topic,
+                        chunk.content.lines().next().unwrap_or(""));
+                }
+                println!("
+⚠️  grok content unverified — run: b00t learn {topic} --digest <url>");
+                return Ok(());
+            }
+        }
         let exe = std::env::current_exe().ok();
         if let Some(bin) = exe {
             let _ = std::process::Command::new(&bin)
