@@ -3,7 +3,7 @@ use rmcp::{
     handler::server::ServerHandler,
     model::{
         Annotated,
-        CallToolRequestParam,
+        CallToolRequestParams,
         CallToolResult,
         Content,
         ErrorData as McpError,
@@ -110,20 +110,19 @@ impl ServerHandler for B00tMcpServerRusty {
     }
 
     fn get_info(&self) -> ServerInfo {
-        ServerInfo {
-            protocol_version: ProtocolVersion::default(), // Uses LATEST (2025-03-26)
-            server_info: Implementation::from_build_env(),
-            instructions: Some(
-                "🦀 Rusty MCP server for b00t-cli with compile-time generated tools. \
-                 Features type-safe command dispatch, zero runtime parsing failures, \
-                 and full CLAP structure synchronization."
-                    .into(),
-            ),
-            capabilities: ServerCapabilities::builder()
-                .enable_tools()
-                .enable_resources()
-                .build(),
-        }
+        let mut info = ServerInfo::default();
+        info.server_info = Implementation::from_build_env();
+        info.instructions = Some(
+            "🦀 Rusty MCP server for b00t-cli with compile-time generated tools. \
+             Features type-safe command dispatch, zero runtime parsing failures, \
+             and full CLAP structure synchronization."
+                .into(),
+        );
+        info.capabilities = ServerCapabilities::builder()
+            .enable_tools()
+            .enable_resources()
+            .build();
+        info
     }
 
     async fn list_tools(
@@ -147,12 +146,13 @@ impl ServerHandler for B00tMcpServerRusty {
         Ok(ListToolsResult {
             tools,
             next_cursor: None,
+            meta: None,
         })
     }
 
     async fn call_tool(
         &self,
-        request: CallToolRequestParam,
+        request: CallToolRequestParams,
         context: RequestContext<RoleServer>,
     ) -> Result<CallToolResult, McpError> {
         let tool_name = request.name.as_ref();
@@ -244,6 +244,7 @@ impl ServerHandler for B00tMcpServerRusty {
         Ok(ListResourcesResult {
             resources,
             next_cursor: None,
+            meta: None,
         })
     }
 
@@ -261,9 +262,9 @@ impl ServerHandler for B00tMcpServerRusty {
                 info!("📚 Reading b00t skill: {}", topic);
 
                 match self.read_b00t_skill(topic).await {
-                    Ok(content) => Ok(ReadResourceResult {
-                        contents: vec![ResourceContents::text(content, uri)],
-                    }),
+                    Ok(content) => Ok(ReadResourceResult::new(
+                        vec![ResourceContents::text(content, uri)],
+                    )),
                     Err(e) => {
                         error!("❌ Failed to read b00t skill {}: {}", topic, e);
                         let error_msg = format!("Failed to read skill: {}", e);
@@ -275,14 +276,14 @@ impl ServerHandler for B00tMcpServerRusty {
                 info!("🎯 Reading current b00t context");
 
                 match self.read_current_context().await {
-                    Ok(content) => Ok(ReadResourceResult {
-                        contents: vec![ResourceContents::TextResourceContents {
+                    Ok(content) => Ok(ReadResourceResult::new(
+                        vec![ResourceContents::TextResourceContents {
                             uri: uri.clone(),
                             mime_type: Some("application/json".to_string()),
                             text: content,
                             meta: None,
                         }],
-                    }),
+                    )),
                     Err(e) => {
                         error!("❌ Failed to read current context: {}", e);
                         let error_msg = format!("Failed to read context: {}", e);
@@ -295,9 +296,9 @@ impl ServerHandler for B00tMcpServerRusty {
                 info!("📁 Reading file resource: {}", file_path);
 
                 match std::fs::read_to_string(file_path) {
-                    Ok(content) => Ok(ReadResourceResult {
-                        contents: vec![ResourceContents::text(content, uri)],
-                    }),
+                    Ok(content) => Ok(ReadResourceResult::new(
+                        vec![ResourceContents::text(content, uri)],
+                    )),
                     Err(e) => {
                         error!("❌ Failed to read file {}: {}", file_path, e);
                         let error_msg = format!("Failed to read file: {}", e);

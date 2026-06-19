@@ -55,7 +55,7 @@ regex = "1.11"
 anyhow = "1.0"
 chrono = { version = "0.4", features = ["serde"] }
 tokio = { version = "1.44", features = ["full"] }
-rmcp = { version = "0.8", features = ["client", "transport-io", "server", "macros", "schemars", "transport-streamable-http-server", "transport-worker", "transport-child-process"] }
+rmcp = { version = "1", features = ["client", "transport-io", "server", "macros", "schemars", "transport-streamable-http-server", "transport-worker", "transport-child-process"] }
 tracing = "0.1"
 opentelemetry = { version = "0.31", features = ["trace"] }
 async-trait = "0.1"

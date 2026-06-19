@@ -22,15 +22,12 @@ pub trait McpReflection: CommandFactory {
             .map(|s| s.to_string())
             .unwrap_or_else(|| format!("b00t-cli {}", Self::command_path().join(" ")));
 
-        Tool {
-            name: name.clone().into(),
-            title: Some(name),
-            description: Some(description.into()),
-            input_schema: std::sync::Arc::new(Self::generate_json_schema()),
-            output_schema: None,
-            annotations: None,
-            icons: None,
-        }
+        let mut tool = Tool::default();
+        tool.name = name.clone().into();
+        tool.title = Some(name);
+        tool.description = Some(description.into());
+        tool.input_schema = std::sync::Arc::new(Self::generate_json_schema());
+        tool
     }
 
     /// Generate JSON schema from CLAP command structure
