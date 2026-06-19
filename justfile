@@ -1495,6 +1495,50 @@ research-soul topic="":
       --object "${#CURRENT_SOUL}" --namespace research-log 2>/dev/null || true
     echo "[persist] research:soul:$TOPIC @ $TS"
 
+# review-soul: pi-powered independent quality review of an existing datum soul.
+# Called by OODA when "review-soul: <topic>" tasks appear in the queue.
+# Different algorithm from autolearn Stage 1+2: LLM semantic judgment (ch0nky tier).
+# Verdict < 3 → lfmf lesson + queue research-soul for gap filling.
+# 🤓 run this when learn.rs queues "review-soul: <topic>" (Stage 1+2 both rejected)
+review-soul topic="":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    TOPIC="{{topic}}"
+    if [ -z "$TOPIC" ]; then echo "usage: just review-soul topic=<name>"; exit 1; fi
+    echo "[review:soul] independent pi review for: $TOPIC"
+
+    # Load current soul — exit if no datum exists at all
+    SOUL=$(b00t-cli learn "$TOPIC" --concise 2>/dev/null || true)
+    SOUL_LEN=${#SOUL}
+    if [ "$SOUL_LEN" -lt 50 ]; then
+      echo "[review:soul] thin/missing soul (${SOUL_LEN}c) — escalating to research-soul"
+      b00t-cli task add "research-soul: $TOPIC" 2>/dev/null || true
+      b00t-cli lfmf "review-soul" "thin soul for '$TOPIC' (${SOUL_LEN}c) — research-soul queued" 2>/dev/null || true
+      exit 0
+    fi
+
+    echo "[review:soul] soul: ${SOUL_LEN}c — sending to pi ch0nky for semantic review"
+
+    # Stage 3 review: pi LLM semantic judgment (different algorithm from keyword+grok)
+    PROMPT=$(printf "Rate the relevance of this content for learning about '%s' on a scale of 1-5.\nReply with ONLY: SCORE: N REASON: one sentence (N is 1-5)\n\nContent:\n%s" "$TOPIC" "$SOUL")
+
+    VERDICT=$(pi -p --provider llama-cpp --model ch0nky "$PROMPT" 2>/dev/null || echo "SCORE: 0 REASON: pi unavailable")
+    echo "[review:soul] verdict: $VERDICT"
+
+    # Parse score (extract first digit after "SCORE:")
+    SCORE=$(echo "$VERDICT" | grep -oP '(?<=SCORE:\s)\d' | head -1 || echo "0")
+    echo "[review:soul] score=$SCORE for '$TOPIC'"
+
+    if [ "${SCORE:-0}" -ge 3 ]; then
+      echo "[review:soul] PASS — soul for '$TOPIC' is relevant (score=$SCORE)"
+      b00t-cli lfmf "review-soul" "soul for '$TOPIC' passed pi review (score=$SCORE)" 2>/dev/null || true
+    else
+      echo "[review:soul] FAIL — soul for '$TOPIC' has low relevance (score=$SCORE) — queuing research-soul"
+      b00t-cli lfmf "review-soul" "soul for '$TOPIC' failed pi review (score=$SCORE): $VERDICT" 2>/dev/null || true
+      b00t-cli task add "research-soul: $TOPIC" 2>/dev/null || true
+      echo "[queue] research-soul: $TOPIC"
+    fi
+
 # autolearn-loop: run OODA cycles until task queue empty, max 10 iterations
 autolearn-loop:
     #!/usr/bin/env bash
