@@ -4,6 +4,9 @@ description: |
   Defines the shared role, responsibilities, and operating principles for an Executive agent in the b00t hive.
   This skill uses Rhai scripting to provide model-specific directives.
 version: 1.1.0
+tags: [b00t, agent, role, executive, hive, rhai, orchestration]
+applies_to: [executive agent setup, hive orchestration, agent delegation, crew management]
+output_types: [.md, .tomllmd]
 allowed-tools: Read, Write, Edit, Grep, Glob, Bash, codebase_investigator, web_fetch, write_todos
 ---
 

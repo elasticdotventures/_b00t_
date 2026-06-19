@@ -6,6 +6,9 @@ description: |
   WHICH environment variables are required (not the values). Enables DRY approach
   by centralizing configuration in Rust, exposed to Python via PyO3.
 version: 1.0.0
+tags: [b00t, datum, toml, config, rust, pyo3, ai-model]
+applies_to: [creating datums, configuring AI providers, managing tool versions, b00t setup]
+output_types: [.toml, .tomllm, .tomllmd]
 allowed-tools: Read, Write, Edit, Grep, Glob, Bash
 ---
 

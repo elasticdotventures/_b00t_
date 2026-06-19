@@ -5,6 +5,9 @@ description: |
   principles. Use existing libraries, leverage Rust via PyO3 instead of duplicating
   logic in Python, and contribute to upstream projects rather than fork privately.
 version: 1.0.0
+tags: [b00t, dry, philosophy, rust, python, pyo3, code-quality]
+applies_to: [code review, architecture, library selection, avoiding duplication]
+output_types: [.rs, .py, .md]
 allowed-tools: Read, Grep, Glob, Bash, WebSearch
 ---
 

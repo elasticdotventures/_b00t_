@@ -1509,6 +1509,18 @@ autolearn-loop:
     echo "[loop] max cycles reached"
 
 
+# skills: list all registered b00t skills (SKILL.md + *.skill.toml datums)
+# 🤓 b00t-cli --path discovers skills/ relative to the path arg, not $PWD default
+skills query="":
+    #!/usr/bin/env bash
+    B00T_ROOT=$(git rev-parse --show-toplevel 2>/dev/null || echo "$HOME/.b00t")
+    if [ -z "{{query}}" ]; then
+      b00t-cli --path "$B00T_ROOT" skill list
+    else
+      b00t-cli --path "$B00T_ROOT" skill search "{{query}}"
+    fi
+
+
 # ── ralph with diversity ──────────────────────────────────────────────────────
 # ralph-spawn: instantiate a ralph agent with a random personality + transferable skills.
 # Karpathy deepwiki OKR pattern: RESEARCH is a separate cycle from EXECUTION.

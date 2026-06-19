@@ -5,6 +5,9 @@ description: |
   where datums specify WHICH environment variables are required and .env contains
   the actual secret VALUES. Ensures automatic environment loading per-project.
 version: 1.0.0
+tags: [b00t, direnv, env, config, secrets, python, dotenv]
+applies_to: [environment setup, secret management, project configuration, direnv]
+output_types: [.env, .envrc, .env.example]
 allowed-tools: Read, Write, Edit, Bash
 ---
 
