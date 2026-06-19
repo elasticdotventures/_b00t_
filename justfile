@@ -1509,6 +1509,58 @@ autolearn-loop:
     echo "[loop] max cycles reached"
 
 
+# research: Operator shortcut — ephemeral goal-driven research task via local GPU.
+# Creates a .tmp/research/<topic>.md artifact, routes through recommended_agent (default: local_gpu).
+# Simple interface: just research topic="rust trait objects"
+# 🤓 recommended_agent = local_gpu → pi CLI → http://localhost:8001/v1 (always-on, unlimited energy)
+#    Set RESEARCH_AGENT=opencode to route via opencode ACP instead.
+#    Artifacts are ephemeral — clean with: just research-clean
+research topic="":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    TOPIC="{{topic}}"
+    if [ -z "$TOPIC" ]; then echo "usage: just research topic='<topic description>'"; exit 1; fi
+    AGENT="${RESEARCH_AGENT:-local_gpu}"
+    ARTIFACT_DIR="${PWD}/.tmp/research"
+    mkdir -p "$ARTIFACT_DIR"
+    SLUG=$(echo "$TOPIC" | tr '[:upper:] ' '[:lower:]-' | tr -cd '[:alnum:]-' | head -c 60)
+    ARTIFACT="$ARTIFACT_DIR/${SLUG}.md"
+    echo "[research] topic: $TOPIC"
+    echo "[research] agent: $AGENT → artifact: $ARTIFACT"
+    PROMPT="You are a research assistant. Produce a concise technical research note (300-600 words) on the following topic. Include: key concepts, practical applications, gotchas, and references. Output in markdown.\n\nTopic: $TOPIC"
+    if [ "$AGENT" = "opencode" ]; then
+      opencode run --model qwen36-local/ch0nky "$PROMPT" > "$ARTIFACT" 2>&1
+    else
+      # local_gpu: pi CLI → OpenAI-compat :8001
+      pi --provider openai --base-url http://localhost:8001/v1 --model ch0nky \
+        --system "You are a research assistant producing concise technical notes." \
+        "$TOPIC — produce a 300-600 word research note covering: key concepts, practical applications, gotchas, and references. Output in markdown." \
+        > "$ARTIFACT" 2>&1 \
+        || printf '%s\n' "# Research: $TOPIC" "" "Error: pi failed. Ensure local GPU is active:" \
+             "  systemctl --user start b00t@inference-gemma4" \
+             "  or: b00t hive activate inference-gemma4" > "$ARTIFACT"
+    fi
+    echo "[research] artifact: $ARTIFACT ($(wc -c < "$ARTIFACT")c)"
+    cat "$ARTIFACT"
+
+# research-clean: remove ephemeral research artifacts
+research-clean:
+    #!/usr/bin/env bash
+    rm -rf "${PWD}/.tmp/research" && echo "✅ Cleaned .tmp/research/"
+
+
+# install-pre-push-hook: install pre-push git hook that gates pushes on passing tests.
+# 🤓 pre-push is NOT installed by default — only blocks pushes to non-fork remotes.
+install-pre-push-hook:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    B00T_ROOT=$(git rev-parse --show-toplevel 2>/dev/null || echo "$HOME/.b00t")
+    SRC="$B00T_ROOT/_b00t_/hooks/pre-push"
+    DST="$B00T_ROOT/.git/hooks/pre-push"
+    cp "$SRC" "$DST" && chmod +x "$DST"
+    echo "✅ Installed $DST"
+    echo "   Gate: cargo test --package b00t-cli --lib before push to non-fork remotes"
+
 # ── ralph with diversity ──────────────────────────────────────────────────────
 # ralph-spawn: instantiate a ralph agent with a random personality + transferable skills.
 # Karpathy deepwiki OKR pattern: RESEARCH is a separate cycle from EXECUTION.

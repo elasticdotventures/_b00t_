@@ -1,0 +1,88 @@
+# b00t System Node Config — global KV for operator harness selection and agent routing
+# 🤓 This file is the single source of truth for which agent harness to use by default.
+#    Operators read: recommended_agent, claude.status, local_gpu.*
+#    b00t hive checks this on startup to route tasks to the available tier.
+#
+# Edit to change recommended agent when credits/availability changes.
+# CLI: b00t-cli ontology sparql --subject system.node --predicate all
+
+[b00t]
+name = "system.node"
+type = "config"
+hint = "Global system node KV — recommended agent, harness status, local GPU config"
+
+# ── Recommended agent (operator override) ────────────────────────────────────
+# Set this to whichever harness has available credits/energy right now.
+# Options: "opencode", "claude", "pi", "local_gpu"
+# 🤓 local_gpu (port 8001) is always available — unlimited energy on RTX 3090
+recommended_agent = "local_gpu"
+
+# ── Harness status registry ───────────────────────────────────────────────────
+[b00t.agents.claude]
+status = "offline"
+reason = "usage credits exhausted"
+credits_refresh = "2026-06-20"
+model = "claude-sonnet-4-6"
+tier = "frontier"
+# 🤓 When online: executive + architect tasks only (expensive). Prefer local_gpu for ch0nky work.
+
+[b00t.agents.opencode]
+status = "available"
+model = "qwen36-local"
+tier = "ch0nky"
+ipc_port = 3000
+notes = "may also use deepseek credits if DEEPSEEK_API_KEY is set"
+# Swap in: systemctl --user start b00t@opencode-agent.service
+
+[b00t.agents.pi]
+status = "available"
+model = "ch0nky"
+tier = "ch0nky"
+notes = "pi CLI wrapper around local_gpu; good for streaming tasks"
+
+[b00t.agents.local_gpu]
+status = "available"
+endpoint = "http://localhost:8001/v1"
+models = ["ch0nky", "gemma4", "qwen36"]
+active_model = "ch0nky"
+tier = "ch0nky"
+energy = "unlimited"
+notes = "RTX 3090 24GB; direct OpenAI-compat API; always-on recommended default"
+
+# ── Deepseek fallback (cloud credits, may be available) ──────────────────────
+[b00t.agents.deepseek]
+status = "check_env"
+# Available if DEEPSEEK_API_KEY is set; opencode routes to it automatically
+env_key = "DEEPSEEK_API_KEY"
+tier = "frontier"
+notes = "opencode can proxy through deepseek when key is present"
+
+# ── Local GPU details ─────────────────────────────────────────────────────────
+[b00t.local_gpu]
+host = "localhost"
+port = 8001
+base_url = "http://localhost:8001/v1"
+# 🤓 Served by vLLM with OpenAI-compatible API; --served-model-name ch0nky
+default_model = "ch0nky"
+available_models = ["ch0nky"]
+# Activate profile: systemctl --user start b00t@inference-gemma4
+# or: b00t hive activate inference-qwen36-27b
+inference_profiles = ["inference-gemma4", "inference-qwen36-27b", "inference-qwen36-27b-llamacpp"]
+
+# ── Ephemeral research task defaults ──────────────────────────────────────────
+[b00t.research]
+# Config for `just research topic=<T>` — operator shortcut for goal-driven research
+default_agent = "local_gpu"
+default_tier = "ch0nky"
+# pi executor: uses local_gpu endpoint directly, streams output
+executor = "pi"
+artifact_dir = ".tmp/research"
+# Artifacts are ephemeral — cleared by `just research-clean`
+auto_queue_review = true
+
+# b00t:map v1
+# summary: Global system node KV — recommended agent (local_gpu), harness status, local GPU at :8001
+# tags: system, node, config, recommended_agent, local_gpu, claude, opencode, offline
+# tier: sm0l
+# cmds: cat _b00t_/system.node.toml
+# complexity: 2

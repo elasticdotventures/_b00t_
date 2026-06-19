@@ -1,0 +1,31 @@
+#!/usr/bin/env bash
+# pre-push hook for b00t repo — runs tests before allowing push to remote.
+# Install: cp _b00t_/hooks/pre-push .git/hooks/pre-push && chmod +x .git/hooks/pre-push
+# Or: just install-pre-push-hook
+set -euo pipefail
+
+REMOTE="$1"
+URL="$2"
+
+# Skip push to personal forks (not main upstream)
+if [[ "$URL" == *"fork"* ]]; then
+  echo "[pre-push] fork remote — skipping test gate"
+  exit 0
+fi
+
+# Gate: never force-push to main
+while read LOCAL_REF LOCAL_SHA REMOTE_REF REMOTE_SHA; do
+  if [[ "$REMOTE_REF" == "refs/heads/main" && "$LOCAL_SHA" == "0000000000000000000000000000000000000000" ]]; then
+    echo "🚫 pre-push: force-delete of main is BLOCKED" >&2
+    exit 1
+  fi
+done
+
+# Run Rust tests for b00t-cli (fast — lib tests only, no integration)
+echo "[pre-push] running cargo test --package b00t-cli --lib ..."
+if ! cargo test --package b00t-cli --lib --quiet 2>&1; then
+  echo "🚫 pre-push: tests failed — push blocked" >&2
+  exit 1
+fi
+
+echo "✅ pre-push: tests pass"
