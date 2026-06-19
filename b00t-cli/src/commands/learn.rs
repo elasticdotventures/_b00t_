@@ -339,19 +339,23 @@ async fn handle_dwiw(path: &str, topic: &str, mcp_ctx: bool, limit: usize) -> Re
     let ranked = bus.fanout(&ctx).await;
 
     if ranked.is_empty() {
-        // Auto-research: try grok RAG before failing — closes "no auto-research" gap.
-        // If grok is down or returns empty, fall through to queue + bail.
-        let client = GrokClient::new();
-        if let Ok(grok_results) = client.ask(topic, Some(topic), Some(3)).await {
-            if !grok_results.results.is_empty() {
-                println!("[learn:grok] no datum for '{topic}' — grok RAG fallback ({} chunks):", grok_results.results.len());
-                for chunk in &grok_results.results {
-                    println!("  (topic: {}) {}", chunk.topic,
-                        chunk.content.lines().next().unwrap_or(""));
+        // Auto-research: try grok RAG (zvec/irontology by default; Qdrant only if
+        // GROK_BACKEND=qdrant). Must initialize before ask() — skip on init failure
+        // (binary missing, backend down) to avoid adding latency on every miss.
+        let mut grok = GrokClient::new();
+        if grok.initialize().await.is_ok() {
+            // topic=None: global search, not self-referential ask("git", topic="git")
+            if let Ok(grok_results) = grok.ask(topic, None, Some(3)).await {
+                if !grok_results.results.is_empty() {
+                    println!("[learn:grok] no datum for '{topic}' — RAG fallback ({} chunks):", grok_results.results.len());
+                    for chunk in &grok_results.results {
+                        println!("  (topic: {}) {}",
+                            chunk.topic,
+                            chunk.content.lines().next().unwrap_or(""));
+                    }
+                    println!("\n⚠️  grok content unverified — digest to persist: b00t learn {topic} --digest <url>");
+                    return Ok(());
                 }
-                println!("
-⚠️  grok content unverified — run: b00t learn {topic} --digest <url>");
-                return Ok(());
             }
         }
         let exe = std::env::current_exe().ok();

@@ -88,18 +88,21 @@ pub enum LearnResult {
     NotFound,
     /// Topic found but `prove_by_type()` fails — datum is malformed.
     Malformed(InternedDatum, DatumProofError),
+    /// Store could not be loaded at all (I/O error, parse failure, etc).
+    StoreError(String),
 }
 
 impl LearnResult {
     pub fn is_found(&self) -> bool { matches!(self, Self::Found(_)) }
     pub fn is_not_found(&self) -> bool { matches!(self, Self::NotFound) }
     pub fn is_malformed(&self) -> bool { matches!(self, Self::Malformed(..)) }
+    pub fn is_store_error(&self) -> bool { matches!(self, Self::StoreError(_)) }
 
     /// Return the interned datum regardless of proof status, if present.
     pub fn datum(&self) -> Option<&InternedDatum> {
         match self {
             Self::Found(d) | Self::Malformed(d, _) => Some(d),
-            Self::NotFound => None,
+            Self::NotFound | Self::StoreError(_) => None,
         }
     }
 }
@@ -110,6 +113,7 @@ impl fmt::Display for LearnResult {
             Self::Found(d) => write!(f, "found:{}", d.key),
             Self::NotFound => write!(f, "not_found"),
             Self::Malformed(d, e) => write!(f, "malformed:{}:{}", d.key, e),
+            Self::StoreError(e) => write!(f, "store_error:{}", e),
         }
     }
 }
@@ -681,6 +685,15 @@ mod tests {
         assert!(store.learn("bare.cli").is_malformed());
         assert!(store.learn("git.cli").datum().is_some());
         assert!(store.learn("nope.cli").datum().is_none());
+    }
+
+    #[test]
+    fn learn_result_store_error() {
+        let err = LearnResult::StoreError("disk full".to_string());
+        assert!(err.is_store_error());
+        assert!(!err.is_found());
+        assert!(err.datum().is_none());
+        assert_eq!(err.to_string(), "store_error:disk full");
     }
 
     #[test]
