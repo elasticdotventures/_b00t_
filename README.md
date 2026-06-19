@@ -52,18 +52,21 @@ b00t advice rust "PyO3"            # retrieve lessons for a tool+pattern
 
 ## 🤖 MCP Integration
 
-### Claude Code Marketplace (recommended)
+### Claude Code Plugin (recommended)
 
 ```bash
-# In Claude Code, add the b00t marketplace plugin
-/plugin marketplace add elasticdotventures/_b00t_
-/plugin install b00t@b00t-plugins
-/plugin install skill-document-understanding@b00t-plugins
+# Load b00t plugin for this session
+claude --plugin-dir ~/.b00t/.claude-plugin/plugins/b00t
+
+# Or add permanently to your Claude Code settings:
+# "pluginDirectories": ["~/.b00t/.claude-plugin/plugins/b00t"]
 ```
 
 Provides `/b00t` skill, context-aware tool dispatch, and all available b00t skills.
 Bundles publish deterministic MCP recipes at `.claude-plugin/recipes/{skills,roles}/*.json`
 (for example: `skill-document-understanding` provides `docling-mcp` + `fetch-url-as-markdown`).
+
+**MCP Registry**: b00t-mcp is listed on [Glama](https://glama.ai/mcp/servers) — search "b00t".
 
 ### Direct MCP Server
 

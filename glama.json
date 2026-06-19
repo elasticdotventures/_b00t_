@@ -1,0 +1,17 @@
+{
+  "name": "b00t-mcp",
+  "displayName": "b00t",
+  "description": "b00t hive agent framework — datum system, blessing-based skill authorization, OODA loop, and autonomous agent orchestration for Rust/Python polyglot projects",
+  "license": "MIT",
+  "homepage": "https://github.com/elasticdotventures/_b00t_",
+  "repository": "https://github.com/elasticdotventures/_b00t_",
+  "icon": "https://raw.githubusercontent.com/elasticdotventures/_b00t_/main/_b00t_/assets/b00t-icon.png",
+  "keywords": ["agent", "rust", "datum", "mcp", "hive", "ooda", "autonomous"],
+  "category": "Development Tools",
+  "server": {
+    "type": "stdio",
+    "command": "b00t-mcp",
+    "args": ["--stdio"],
+    "env": {}
+  }
+}
