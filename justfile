@@ -15,6 +15,8 @@ mod litellm '_b00t_/litellm/justfile'
 mod b00t-mcp-npm
 mod? irontology-publish 'vendor/irontology-mcp/irontology-publish.just'
 mod? irontology 'vendor/irontology-mcp/irontology.just'
+# 🥾 Zellij interactive modal system (floating pane dialogs)
+mod zellij '_b00t_/zellij.just'
 
 # Datum justfiles (install recipes for core tech stacks)
 mod python '_b00t_/python.🐍/justfile'
@@ -565,6 +567,13 @@ upgrade:
 
 upgrade-dry:
     cargo run --bin b00t-cli -p b00t-cli -- upgrade --dry-run
+
+# 🔧 Maintenance: run deterministic version-check automation for all datums
+# with [maintenance] sections. Checks latest versions via shell commands (no LLM),
+# and auto-updates desires fields when newer versions are detected.
+# Uses datum file mtime to gate check frequency (check_interval_days).
+maintenance:
+    cargo run --bin b00t-cli -p b00t-cli -- cli up --maintenance
 
 
 cliff:

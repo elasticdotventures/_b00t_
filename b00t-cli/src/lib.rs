@@ -266,6 +266,20 @@ pub struct KnowledgeConfig {
 
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Default)]
 #[serde(default)]
+pub struct MaintenanceConfig {
+    /// How many days between checking for a newer version.
+    pub check_interval_days: Option<u64>,
+    /// Deterministic command (no LLM) that outputs the latest version string.
+    /// e.g. `curl -s https://api.github.com/repos/casey/just/releases/latest | jq -r .tag_name`
+    pub check_command: Option<String>,
+    /// Human-readable source description, e.g. "github:casey/just" or "crates.io"
+    pub version_source: Option<String>,
+    /// Regex to extract semver from check_command output (default: same as version_regex)
+    pub check_regex: Option<String>,
+}
+
+#[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Default)]
+#[serde(default)]
 pub struct BootDatum {
     pub name: String,
     #[serde(rename = "type", deserialize_with = "deserialize_datum_type")]
@@ -417,6 +431,13 @@ pub struct BootDatum {
     // 🤓 type_tags: content classification (transferable, domain, etc.) — distinct from datum_type
     #[serde(skip_serializing_if = "Option::is_none")]
     pub type_tags: Option<Vec<String>>,
+
+    // Maintenance: version-check automation
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub maintenance: Option<MaintenanceConfig>,
+    // Core requirement: b00t-lite.sh auto-installs datums with this flag
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub required_for_core: Option<bool>,
 }
 
 /// Handle datum types that are marked as *incubating*.

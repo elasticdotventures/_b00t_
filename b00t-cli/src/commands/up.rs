@@ -46,6 +46,10 @@ pub struct UpArgs {
     /// Dry run — show what would be symlinked without writing (repo mode only)
     #[clap(long)]
     pub dry_run: bool,
+
+    /// Self-upgrade: update b00t binary + run maintenance checks for core datums
+    #[clap(long, help = "Upgrade b00t & core tools using datum-driven version checks")]
+    pub self_: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -100,6 +104,11 @@ impl UpArgs {
     }
 
     pub fn execute(&self) -> Result<()> {
+        // Self-upgrade mode: `b00t up --self`
+        if self.self_ {
+            return self_upgrade();
+        }
+
         // Repo onboarding mode: `b00t up --repo [path]`
         if let Some(repo_path) = &self.repo {
             let path = repo_path.as_deref().unwrap_or(".");
@@ -542,6 +551,54 @@ fn up_repo(path: &str, dry_run: bool) -> Result<()> {
     Ok(())
 }
 
+/// Self-upgrade mode: `b00t up --self`
+/// Upgrades b00t binary and runs maintenance checks for core datums.
+fn self_upgrade() -> Result<()> {
+    println!("🔄 Self-upgrade: updating b00t binary...");
+
+    // 1. Update b00t via cargo (from local source)
+    let workspace_root = crate::utils::get_workspace_root();
+    let status = std::process::Command::new("cargo")
+        .args(["install", "--path", &format!("{}/b00t-cli", workspace_root), "--force"])
+        .current_dir(&workspace_root)
+        .status()
+        .context("Failed to execute cargo install for b00t-cli")?;
+
+    if !status.success() {
+        anyhow::bail!("cargo install failed for b00t-cli");
+    }
+    println!("  ✅ b00t binary updated");
+
+    // 2. Run maintenance checks for core datums
+    println!("  🔧 Running maintenance checks for core datums...");
+    let output = std::process::Command::new("cargo")
+        .args([
+            "run",
+            "--bin",
+            "b00t-cli",
+            "-p",
+            "b00t-cli",
+            "--",
+            "cli",
+            "up",
+            "--maintenance",
+        ])
+        .current_dir(&workspace_root)
+        .output()
+        .context("Failed to run maintenance checks")?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        println!("  ⚠️  Maintenance checks had warnings: {}", stderr);
+    } else {
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        println!("  {}", stdout.trim());
+    }
+
+    println!("✅ Self-upgrade complete");
+    Ok(())
+}
+
 /// Emit b00t up state change event to IPC channel (best-effort, non-fatal)
 fn emit_up_heartbeat(cycle: u32, exit_code: i32, role: &Option<String>) {
     let msg = format!(
@@ -619,6 +676,7 @@ mod tests {
             max_restarts: 5,
             repo: None,
             dry_run: false,
+            self_: false,
         };
         assert_eq!(args.tool, "claude");
         assert_eq!(args.max_iter, 10);

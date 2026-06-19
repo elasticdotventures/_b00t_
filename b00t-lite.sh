@@ -175,6 +175,41 @@ main() {
         _exec_cmds "user_cmds" "${user_cmds[@]}"
     fi
 
+    # ── Core-required datums ───────────────────────────────────────────────────
+    # Scan _b00t_/*.cli.toml for required_for_core = true, run install commands.
+    echo "  🔧 installing core-required datums..."
+    local core_datums=()
+    while IFS= read -r datum_file; do
+        [[ -z "$datum_file" ]] && continue
+        local _install_cmd=""
+        if [[ "$TOML_PARSER" == "python" ]]; then
+            _install_cmd=$(python3 - "$datum_file" <<'PYEOF'
+import sys, tomllib
+with open(sys.argv[1], "rb") as f:
+    data = tomllib.load(f)
+b00t = data.get("b00t", {})
+if b00t.get("required_for_core") is True:
+    install = b00t.get("install", "")
+    print(install if isinstance(install, str) else "")
+PYEOF
+            )
+        elif [[ "$TOML_PARSER" == "toml-cli" ]]; then
+            local required; required=$(toml get "$datum_file" "b00t.required_for_core" 2>/dev/null || echo "false")
+            if [[ "$required" == "true" ]]; then
+                _install_cmd=$(toml get "$datum_file" "b00t.install" 2>/dev/null || true)
+                _install_cmd=$(echo "$_install_cmd" | tr -d '"')
+            fi
+        fi
+        if [[ -n "$_install_cmd" ]]; then
+            core_datums+=("$_install_cmd")
+        fi
+    done < <(find "${B00T_DIR}/_b00t_" -maxdepth 1 -name '*.cli.toml' -type f 2>/dev/null || true)
+    if [[ ${#core_datums[@]} -gt 0 ]]; then
+        _exec_cmds "core_required" "${core_datums[@]}"
+    else
+        echo "    (no core-required datums found)"
+    fi
+
     # systemd_cmds: unit file install — prompt (sudo) or run directly (user)
     local systemd_cmds=()
     while IFS= read -r line; do

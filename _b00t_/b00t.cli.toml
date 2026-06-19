@@ -1,5 +1,6 @@
 [b00t]
 name = "b00t"
+type = "cli"
 desires = "0.7.35"
 install = "curl -fsSL https://raw.githubusercontent.com/elasticdotventures/dotfiles/main/install.sh | sh"
 update = "curl -fsSL https://raw.githubusercontent.com/elasticdotventures/dotfiles/main/install.sh | sh"
@@ -7,3 +8,11 @@ version = "b00t-cli --version"
 version_regex = '(\d+\.\d+\.\d+)'
 hint = "b00t is a tool to manage command-line tools."
 unlocks = ["b00t-cli *", "mcp__b00t-mcp__*"]
+required_for_core = true
+
+# 🤓 Maintenance: check for latest b00t version from cargo crates.io
+[b00t.maintenance]
+check_interval_days = 14
+check_command = "curl -sL https://crates.io/api/v1/crates/b00t-cli | jq -r '.crate.max_stable_version // empty'"
+version_source = "crates.io"
+check_regex = "(\\d+\\.\\d+\\.\\d+)"

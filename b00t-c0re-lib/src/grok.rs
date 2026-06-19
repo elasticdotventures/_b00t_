@@ -13,7 +13,6 @@ use rmcp::{
     transport::{ConfigureCommandExt, TokioChildProcess},
 };
 use serde_json::{Map, Value, json};
-use std::borrow::Cow;
 use std::env;
 use tokio::process::Command;
 

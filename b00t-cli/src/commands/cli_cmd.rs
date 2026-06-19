@@ -8,9 +8,12 @@ use anyhow::{Context, Result};
 use clap::Parser;
 use duct::cmd;
 use once_cell::sync::Lazy;
+use regex::Regex;
 use shellexpand;
 use std::collections::HashMap;
+use std::fs;
 use std::path::PathBuf;
+use std::time::SystemTime;
 
 static IS_ROOT: Lazy<bool> = Lazy::new(|| {
     cmd!("id", "-u")
@@ -62,7 +65,7 @@ pub enum CliCommands {
     },
     #[clap(
         about = "Check all CLI commands for updates",
-        long_about = "Check all CLI commands for updates. By default, only reports which tools need updating.\n\nUse --yes to actually perform the updates.\n\nExamples:\n  b00t-cli cli up          # Check versions only\n  b00t-cli cli up --yes    # Update outdated tools\n  b00t-cli cli up -y       # Same as --yes"
+        long_about = "Check all CLI commands for updates. By default, only reports which tools need updating.\n\nUse --yes to actually perform the updates.\n\nUse --maintenance to run version-check automation for datums with a [maintenance] section.\n\nExamples:\n  b00t-cli cli up                 # Check versions only\n  b00t-cli cli up --yes           # Update outdated tools\n  b00t-cli cli up -y              # Same as --yes\n  b00t-cli cli up --maintenance   # Run version-check automation"
     )]
     Up {
         #[clap(
@@ -71,6 +74,11 @@ pub enum CliCommands {
             help = "Actually perform updates (default: check only)"
         )]
         yes: bool,
+        #[clap(
+            long = "maintenance",
+            help = "Run version-check automation for datums with [maintenance] section (check latest versions deterministically)"
+        )]
+        maintenance: bool,
     },
 }
 
@@ -86,7 +94,7 @@ impl CliCommands {
             CliCommands::Install { command } => cli_install(command, path),
             CliCommands::Update { command } => cli_update(command, path),
             CliCommands::Check { command } => cli_check(command, path),
-            CliCommands::Up { yes } => cli_up(path, *yes),
+            CliCommands::Up { yes, maintenance } => cli_up(path, *yes, *maintenance),
         }
     }
 }
@@ -302,7 +310,11 @@ fn cli_check(command: &str, path: &str) -> Result<()> {
     }
 }
 
-fn cli_up(path: &str, yes: bool) -> Result<()> {
+fn cli_up(path: &str, yes: bool, maintenance: bool) -> Result<()> {
+    if maintenance {
+        return cli_up_maintenance(path);
+    }
+
     if yes {
         println!("🔄 Checking and updating all CLI commands...");
     } else {
@@ -414,6 +426,213 @@ fn cli_up(path: &str, yes: bool) -> Result<()> {
     Ok(())
 }
 
+/// Maintenance mode: for each datum with a [maintenance] section, check if the
+/// check_interval_days have elapsed since the datum file was last modified.
+/// If so, run check_command deterministically and update desires if a newer
+/// version is available. Never uses an LLM — only shell commands and regex.
+fn cli_up_maintenance(path: &str) -> Result<()> {
+    println!("🔧 Maintenance: checking version updates for datums with [maintenance] section...");
+
+    let cli_tools: Vec<Box<dyn DatumProvider>> =
+        load_datum_providers::<CliDatum>(path, ".cli.toml")?;
+
+    let expanded = shellexpand::tilde(path).to_string();
+    let datum_dir = std::path::Path::new(&expanded);
+
+    let mut checked = 0u32;
+    let mut updated = 0u32;
+
+    for tool in &cli_tools {
+        let datum = tool.datum();
+        let maint = match &datum.maintenance {
+            Some(m) => m,
+            None => continue,
+        };
+        let interval_days = match maint.check_interval_days {
+            Some(d) if d > 0 => d,
+            _ => continue,
+        };
+        let check_cmd = match &maint.check_command {
+            Some(c) => c,
+            None => continue,
+        };
+
+        let name = tool.name();
+        let datum_file = find_datum_file(datum_dir, name, ".cli.toml");
+        let datum_path = match datum_file {
+            Some(p) => p,
+            None => {
+                println!("  ⚠️  {}: cannot find datum file, skipping", name);
+                continue;
+            }
+        };
+
+        // Check mtime: if file was modified within interval, skip
+        let mtime = match datum_path.metadata().and_then(|m| m.modified()) {
+            Ok(t) => t,
+            Err(_) => {
+                println!("  ⚠️  {}: cannot read mtime, skipping", name);
+                continue;
+            }
+        };
+        let interval_secs = (interval_days * 86400) as u64;
+        let elapsed = SystemTime::now()
+            .duration_since(mtime)
+            .unwrap_or_default()
+            .as_secs();
+        if elapsed < interval_secs {
+            let remaining = interval_secs.saturating_sub(elapsed) / 86400;
+            println!(
+                "  ⏭️  {}: last modified {} days ago (check every {}d, {}d remaining)",
+                name,
+                elapsed / 86400,
+                interval_days,
+                remaining
+            );
+            continue;
+        }
+
+        // Run the check command
+        checked += 1;
+        println!("  🔍 {}: running version check...", name);
+        let output = match cmd!("bash", "-c", check_cmd).read() {
+            Ok(out) => out.trim().to_string(),
+            Err(e) => {
+                println!("  ⚠️  {}: check command failed: {}", name, e);
+                continue;
+            }
+        };
+
+        if output.is_empty() {
+            println!("  ⚠️  {}: check command produced no output", name);
+            continue;
+        }
+
+        // Extract version from output
+        let check_regex_str = maint
+            .check_regex
+            .as_deref()
+            .or(datum.version_regex.as_deref());
+        let latest_ver = match check_regex_str {
+            Some(re_str) => match Regex::new(re_str) {
+                Ok(re) => re
+                    .captures(&output)
+                    .and_then(|c| c.get(1))
+                    .map(|m| m.as_str().to_string())
+                    .unwrap_or_else(|| output.clone()),
+                Err(_) => output.clone(),
+            },
+            None => {
+                // Try to extract a semver-like string from the output
+                let semver_re = Regex::new(r"(\d+\.\d+\.\d+)").unwrap();
+                semver_re
+                    .captures(&output)
+                    .and_then(|c| c.get(1))
+                    .map(|m| m.as_str().to_string())
+                    .unwrap_or_else(|| output.clone())
+            }
+        };
+
+        // Strip leading 'v' for semver comparison
+        let latest_stripped = latest_ver.trim_start_matches('v');
+        let current_desires = datum.desires.as_deref().unwrap_or("0.0.0");
+        let current_stripped = current_desires.trim_start_matches('v');
+
+        // Compare versions
+        use semver::Version;
+        let needs_update = match (
+            Version::parse(latest_stripped),
+            Version::parse(current_stripped),
+        ) {
+            (Ok(latest), Ok(current)) => latest > current,
+            _ => {
+                // Fallback: string comparison
+                latest_stripped != current_stripped
+            }
+        };
+
+        if needs_update {
+            println!(
+                "  ⬆️  {}: {} → {} (updating desires)",
+                name, current_desires, latest_ver
+            );
+            if let Err(e) = update_desires_in_file(&datum_path, &latest_ver) {
+                eprintln!("  ❌ {}: failed to update datum: {}", name, e);
+            } else {
+                updated += 1;
+            }
+        } else {
+            println!("  ✅ {}: {} is current", name, current_desires);
+        }
+    }
+
+    if checked == 0 && updated == 0 {
+        println!("  (no datums with maintenance checks due)");
+    }
+    println!(
+        "🔧 Maintenance complete: {} checked, {} desires updated",
+        checked, updated
+    );
+    Ok(())
+}
+
+/// Find the datum TOML file for a given command name in the datum directory.
+fn find_datum_file(dir: &std::path::Path, name: &str, suffix: &str) -> Option<PathBuf> {
+    let candidates = [
+        format!("{}{}", name, suffix),
+        format!("{}.cli{}", name, suffix.replace(".cli", "")),
+    ];
+    for candidate in &candidates {
+        let path = dir.join(candidate);
+        if path.exists() {
+            return Some(path);
+        }
+    }
+    // Fallback: scan directory
+    if let Ok(entries) = fs::read_dir(dir) {
+        for entry in entries.flatten() {
+            let fname = entry.file_name().to_string_lossy().to_string();
+            if fname.starts_with(&format!("{}.", name)) && fname.ends_with(".toml") {
+                return Some(entry.path());
+            }
+            if fname == format!("{}.toml", name) {
+                return Some(entry.path());
+            }
+        }
+    }
+    None
+}
+
+/// Update the `desires` field in a datum TOML file, preserving all other content.
+fn update_desires_in_file(path: &std::path::Path, new_version: &str) -> Result<()> {
+    let content = fs::read_to_string(path)?;
+    let q = |v: &str| format!("\"{}\"", v);
+    let re = Regex::new(r#"(?m)^(desires\s*=\s*)"[^"]*""#).unwrap();
+    if re.is_match(&content) {
+        let updated = re.replace(&content, |caps: &regex::Captures| {
+            format!("{}{}", &caps[1], q(new_version))
+        });
+        fs::write(path, updated.as_ref())?;
+        println!("    desires updated to v{}", new_version);
+        Ok(())
+    } else {
+        let re_header = Regex::new(r"(?m)^(\[b00t\])").unwrap();
+        if re_header.is_match(&content) {
+            let updated = re_header.replace(&content, |caps: &regex::Captures| {
+                format!("{}\ndesires = {}", &caps[1], q(new_version))
+            });
+            fs::write(path, updated.as_ref())?;
+            println!("    desires = {} added to datum", q(new_version));
+            Ok(())
+        } else {
+            Err(anyhow::anyhow!(
+                "Cannot find [b00t] header or desires field in {}",
+                path.display()
+            ))
+        }
+    }
+}
+
 /// Generic lifecycle hook runner — fires any datum hook field, non-fatal.
 /// 🤓 All hooks share the same HookResult protocol: ok | warn: | redirect: | missing: | <info>
 fn run_datum_hook(script: Option<&str>) {
@@ -474,8 +693,9 @@ mod tests {
         let _check = CliCommands::Check {
             command: "test".to_string(),
         };
-        let _up = CliCommands::Up { yes: false };
-        let _up_yes = CliCommands::Up { yes: true };
+        let _up = CliCommands::Up { yes: false, maintenance: false };
+        let _up_yes = CliCommands::Up { yes: true, maintenance: false };
+        let _up_maint = CliCommands::Up { yes: false, maintenance: true };
         let _run = CliCommands::Run {
             script_name: "test".to_string(),
             args: vec![],

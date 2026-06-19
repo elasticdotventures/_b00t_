@@ -1,7 +1,7 @@
 [b00t]
 name = "just"
 type = "cli"
-desires = "1.25.2"
+desires = "1.53.0"
 install = '''
 curl -sSL https://just.systems/install.sh | bash -s -- --to ~/.local/bin
 '''
@@ -14,6 +14,18 @@ version_regex = '\d+\.\d+\.\d+'
 hint = "just is a command runner that abstracts cli tools for a repo without reading the docs. run `just -l` to list commands."
 unlocks = ["just *", "just-*"]
 lfmf_category = "just"
+
+# 🤓 Maintenance: deterministic version-check automation
+#    `b00t cli up --maintenance` runs check_command, compares output to desires,
+#    and auto-updates desires if a newer semver is found. No LLM involved.
+[b00t.maintenance]
+check_interval_days = 14
+check_command = "curl -sL https://api.github.com/repos/casey/just/releases/latest | jq -r '.tag_name // empty' | sed 's/^v//'"
+version_source = "github:casey/just"
+check_regex = "(\\d+\\.\\d+\\.\\d+)"
+
+# 🤓 Core requirement: b00t requires just; b00t-lite.sh auto-installs this
+required_for_core = true
 
 [b00t.learn]
 topic = "just"
