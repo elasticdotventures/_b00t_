@@ -96,7 +96,7 @@ notify = "HIVE: inference idle, starting queued download"
 [b00t.agent.executor]
 # Executive uses ralph-style autonomous loop
 cli_path = "b00t"
-supports_tools = ["opencode", "claude", "ralph", "qwen-code"]
+supports_tools = ["opencode", "claude", "ralph", "qwen-code", "pi"]
 max_iterations = 50
 requires = ["b00t-cli"]
 
@@ -108,6 +108,12 @@ transport = ["stdio"]
 AGENT_ID = "executive"
 AGENT_TIER = "frontier"
 B00T_HIVE_ROLE = "captain"
+# 🤓 ralph opencode executor reads OPENCODE_MODEL; set to local ch0nky slot
+#    when qwen36-local provider is active (b00t hive activate inference-qwen36).
+#    Falls back to frontier claude when local inference is not running.
+OPENCODE_MODEL = "qwen36-local/ch0nky"
+PI_PROVIDER = "llama-cpp"
+PI_MODEL = "ch0nky"
 
 [b00t.learn]
 topic = "hive-cmdb"

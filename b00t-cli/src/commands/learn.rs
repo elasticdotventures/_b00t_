@@ -338,6 +338,31 @@ async fn handle_dwiw(path: &str, topic: &str, mcp_ctx: bool, limit: usize) -> Re
 
     let ranked = bus.fanout(&ctx).await;
 
+    // Stage 1 review: keyword-overlap discriminator (mirrors justfile autolearn Stage 1).
+    // Returns true when overlap==0 (graph-adjacent noise, not keyword-matched).
+    // stage1_rejected is consumed by Stage 2 grok endorsement check below.
+    let stage1_rejected: bool = if ranked.is_empty() {
+        false // empty ranked → handled by grok RAG below, not Stage 1
+    } else {
+        let topic_words: Vec<&str> = topic
+            .split(|c: char| !c.is_alphanumeric())
+            .filter(|w| w.len() >= 3)
+            .collect();
+        let top_content = ranked[0].summary.to_lowercase();
+        let overlap: usize = topic_words
+            .iter()
+            .filter(|w| top_content.contains(w.to_lowercase().as_str()))
+            .count();
+        if overlap == 0 && !topic_words.is_empty() {
+            println!("[review:1:local] overlap=0 for '{topic}' — results are graph-adjacent, not keyword-matched");
+            println!("⚠️  weak relevance: top result may not directly address '{topic}' (Stage 2 grok will verify)");
+            true
+        } else {
+            eprintln!("[review:1:local] overlap={overlap}/{} for '{topic}'", topic_words.len());
+            false
+        }
+    };
+
     if ranked.is_empty() {
         // Auto-research: try grok RAG (zvec/irontology by default; Qdrant only if
         // GROK_BACKEND=qdrant). Must initialize before ask() — skip on init failure
@@ -368,6 +393,31 @@ async fn handle_dwiw(path: &str, topic: &str, mcp_ctx: bool, limit: usize) -> Re
         println!("[learn:queued] research-soul: {topic}");
         println!("⚠️  web sources unverified — trust only [datum:user] grade results");
         anyhow::bail!("No knowledge found for '{topic}'. research-soul queued.");
+    }
+
+    // Stage 2 review (only when Stage 1 rejected): grok vector endorsement.
+    // If grok also finds no vector support → queue review-soul for async pi/opencode review.
+    if stage1_rejected {
+        let mut grok2 = GrokClient::new();
+        let grok_endorsed = if grok2.initialize().await.is_ok() {
+            grok2.ask(topic, None, Some(3)).await
+                .map(|r| !r.results.is_empty())
+                .unwrap_or(false)
+        } else {
+            false
+        };
+        if grok_endorsed {
+            eprintln!("[review:2:grok] vector endorsement=true for '{topic}' — proceeding despite overlap=0");
+        } else {
+            eprintln!("[review:2:grok] vector endorsement=false for '{topic}' — both stages rejected");
+            // Both stages rejected: queue review-soul for async opencode/pi independent review.
+            if let Some(bin) = std::env::current_exe().ok() {
+                let _ = std::process::Command::new(&bin)
+                    .args(["task", "add", &format!("review-soul: {topic}")])
+                    .output();
+                eprintln!("[review:queued] review-soul: {topic} (pi/opencode will validate independently)");
+            }
+        }
     }
 
     let total = ranked.len();

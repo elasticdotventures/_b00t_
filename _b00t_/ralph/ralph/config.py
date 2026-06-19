@@ -19,7 +19,7 @@ class RalphConfig:
     """Configuration for Ralph tool execution."""
 
     # Tool selection
-    tool: str = "amp"  # amp, claude, codex, or opencode
+    tool: str = "amp"  # amp, claude, codex, opencode, or pi
 
     # TaskMaster configuration
     use_mcp: bool = False
@@ -34,8 +34,18 @@ class RalphConfig:
     codex_extra_args: str = ""
 
     # OpenCode-specific configuration
-    opencode_model: str = "gpt-4"
+    # 🤓 OPENCODE_MODEL overrides at runtime; default is frontier Claude Sonnet.
+    #    For local ch0nky inference set OPENCODE_MODEL=qwen36-local/ch0nky
+    #    matching the provider ID in ~/.config/opencode/opencode.json.
+    opencode_model: str = "anthropic/claude-sonnet-4-6"
     opencode_extra_args: str = ""
+
+    # Pi-coding-agent-specific configuration
+    # 🤓 pi-coding-agent uses local ch0nky slot via llama-cpp provider.
+    #    ~/.pi/agent/models.json MUST have apiKey=local-b00t for the ch0nky entry.
+    pi_provider: str = "llama-cpp"
+    pi_model: str = "ch0nky"
+    pi_extra_args: str = ""
 
     @classmethod
     def from_env(cls, tool: str = "amp", use_mcp: bool = False) -> RalphConfig:
@@ -53,4 +63,7 @@ class RalphConfig:
             codex_extra_args=os.environ.get("CODEX_EXTRA_ARGS", ""),
             opencode_model=os.environ.get("OPENCODE_MODEL", cls.opencode_model),
             opencode_extra_args=os.environ.get("OPENCODE_EXTRA_ARGS", cls.opencode_extra_args),
+            pi_provider=os.environ.get("PI_PROVIDER", cls.pi_provider),
+            pi_model=os.environ.get("PI_MODEL", cls.pi_model),
+            pi_extra_args=os.environ.get("PI_EXTRA_ARGS", cls.pi_extra_args),
         )
