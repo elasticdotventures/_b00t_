@@ -2,8 +2,8 @@
 // Validation system for blessing graph consistency and constraint satisfaction
 // Ensures blessings form a valid DAG with no unresolvable dependencies
 
-use crate::blessing::{BlessingGraph, BlessingNode};
-use std::collections::{BTreeMap, HashSet, VecDeque};
+use crate::blessing::BlessingGraph;
+use std::collections::{BTreeMap, HashSet};
 
 /// Validation result with detailed diagnostics
 #[derive(Debug, Clone, PartialEq)]

@@ -10,7 +10,6 @@
 
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
-use shellexpand::tilde;
 use std::collections::HashMap;
 use std::fs;
 use std::path::Path;

@@ -3,7 +3,7 @@
 // Path 1: Agent prayer - /negotiate blessing:X with policy checks
 // Path 2: Executive grant - direct /negotiate blessing:X override
 
-use crate::blessing::{BlessingGraph, BlessingNode, DataPermissions, ExecuteAccess, LayerMetadata};
+use crate::blessing::{BlessingGraph, BlessingNode, LayerMetadata};
 use std::collections::{BTreeMap, HashSet};
 
 /// Composition Plan: Model layers stacked to serve blessing

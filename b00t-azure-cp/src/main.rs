@@ -20,7 +20,7 @@ use axum::{
     extract::Request,
     http::{StatusCode, header},
     middleware,
-    response::{IntoResponse, Response},
+    response::IntoResponse,
 };
 use azure_core::auth::TokenCredential;
 use azure_data_tables::clients::TableServiceClient;
@@ -50,7 +50,7 @@ struct Config {
     table_name: String,
     resource_group: String,
     subscription_id: String,
-    client_id: String,
+    client_id: Option<String>,
     lease_ttl_minutes: i64,
     /// Azure region for ACI deployments (e.g. "australiaeast").
     location: String,
@@ -71,7 +71,7 @@ impl Config {
                 .context("AZURE_RESOURCE_GROUP not set")?,
             subscription_id: env::var("AZURE_SUBSCRIPTION_ID")
                 .context("AZURE_SUBSCRIPTION_ID not set")?,
-            client_id: env::var("AZURE_CLIENT_ID").context("AZURE_CLIENT_ID not set")?,
+            client_id: env::var("AZURE_CLIENT_ID").ok().filter(|v| !v.is_empty()),
             lease_ttl_minutes: env::var("LEASE_TTL_MINUTES")
                 .unwrap_or_else(|_| "30".to_string())
                 .parse()
@@ -245,7 +245,7 @@ async fn provision_aci_resource(
         container_group_properties, gpu_resource, ip_address,
     };
 
-    let mut container_props = ContainerProperties {
+    let container_props = ContainerProperties {
         image: Some(input.image.clone()),
         resources: Some(ResourceRequirements {
             requests: ResourceRequests {
@@ -689,10 +689,7 @@ async fn main() -> Result<()> {
     // Use managed identity when running in ACA.
     // AZURE_CLIENT_ID is optional: when present, the Azure SDK selects a
     // user-assigned identity; when absent, it falls back to system-assigned.
-    let managed_identity_client_id = env::var("AZURE_CLIENT_ID")
-        .ok()
-        .map(|value| value.trim().to_owned())
-        .filter(|value| !value.is_empty());
+    let managed_identity_client_id = config.client_id.clone();
     if let Some(client_id) = managed_identity_client_id.as_deref() {
         info!(client_id = %client_id, "using user-assigned managed identity");
     } else {

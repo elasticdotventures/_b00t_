@@ -116,7 +116,7 @@ fn build_validation_prompt(t00n_data: &str, reqs: &[AbDataRequirement]) -> Strin
 fn call_sm0l_model(prompt: &str, endpoint: &str) -> Result<String> {
     use std::io::Write;
     // 🤓 model name resolved from: B00T_SM0L_MODEL env > registry (tier=ch0nky) > hardcoded
-    let model = std::env::var("B00T_SM0L_MODEL")
+    let _model = std::env::var("B00T_SM0L_MODEL")
         .ok()
         .or_else(|| crate::model_registry::resolve_tier_endpoint("ch0nky")
             .map(|(_, m)| m))

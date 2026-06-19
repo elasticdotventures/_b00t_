@@ -310,7 +310,7 @@ pub async fn compile_to_wasm(crate_name: &str, target: &str, opt_level: &str) ->
 }
 
 /// Generate LSP from TOMLLM AST (macro introspection)
-pub fn generate_lsp_from_ast(tomllm_content: &str, features: &[String]) -> Result<LspProxyConfig> {
+pub fn generate_lsp_from_ast(_tomllm_content: &str, features: &[String]) -> Result<LspProxyConfig> {
     // 🤓 Parse TOMLLM, extract AST, generate LSP handlers
     // This is where feature flags control which handlers are generated
 

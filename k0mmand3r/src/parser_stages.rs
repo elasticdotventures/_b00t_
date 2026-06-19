@@ -109,14 +109,14 @@ pub enum StageAction {
 /// Takes the current parse state and returns an action decision.
 type StageGuardFn = Box<dyn Fn(&ParseState) -> StageAction + Send>;
 
-/// Global parser stage guard registry.
-///
-/// Guards register for one or more stages. During parsing, the k0mmand3r
-/// parser emits each stage by calling run_stage(), which iterates all
-/// registered guards at that stage and checks for blocks.
-///
-/// Thread-local to avoid synchronization overhead — parsers are typically
-/// used from a single thread.
+// Global parser stage guard registry.
+//
+// Guards register for one or more stages. During parsing, the k0mmand3r
+// parser emits each stage by calling run_stage(), which iterates all
+// registered guards at that stage and checks for blocks.
+//
+// Thread-local to avoid synchronization overhead — parsers are typically
+// used from a single thread.
 thread_local! {
     static STAGE_GUARDS: RefCell<HashMap<ParseStage, Vec<StageGuardFn>>> =
         RefCell::new(HashMap::new());

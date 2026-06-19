@@ -257,7 +257,7 @@ async fn handle_dual_ask(
         topic.map(|t| format!("(topic: {})", t)).unwrap_or_default()
     );
 
-    let mut client = DualGrokClient::new();
+    let client = DualGrokClient::new();
     let result = client.query(query, topic, limit, backend).await?;
 
     println!("📊 Found {} results:", result.total_found);

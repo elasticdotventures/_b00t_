@@ -77,7 +77,7 @@ fn default_max_iterations() -> usize {
 
 /// A single tool call emitted by pi in -p mode.
 #[derive(Debug, Deserialize)]
-struct ToolCall {
+pub(crate) struct ToolCall {
     name: String,
     #[serde(default)]
     args: serde_json::Value,
@@ -85,7 +85,7 @@ struct ToolCall {
 
 /// Top-level pi -p output when it wants to call a tool.
 #[derive(Debug, Deserialize)]
-struct PiToolOutput {
+pub(crate) struct PiToolOutput {
     tool_code: Vec<ToolCall>,
 }
 
@@ -93,7 +93,7 @@ struct PiToolOutput {
 
 /// Execute a single tool call. Pure OS operations — no LLM involved.
 /// Returns (tool_name, result_string) for feeding back to the agent.
-pub fn dispatch_tool(call: &ToolCall) -> String {
+pub(crate) fn dispatch_tool(call: &ToolCall) -> String {
     match call.name.as_str() {
         "read" => {
             let path = call.args.get("path").and_then(|v| v.as_str()).unwrap_or("");

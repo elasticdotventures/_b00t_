@@ -88,7 +88,6 @@ pub use emoji_registry::{EmojiEntry, EmojiRegistry, parse_entries_from_content, 
 pub mod parser_stages;
 pub use parser_stages::{ParseStage, ParseState, StageAction, register_stage_guard, run_stage, clear_guards};
 
-use decimal_rs::Decimal;
 use std::collections::HashMap;
 
 #[cfg(feature = "lang-python")]
@@ -98,16 +97,12 @@ use winnow::ascii::{alpha1, alphanumeric0, alphanumeric1, multispace0};
 use winnow::combinator::alt; // encapsulates if/then/else ladder pattern
 use winnow::combinator::opt; // basic if then else
 use winnow::combinator::preceded; // an easy way to discard the prefix, using a provided combinators
-use winnow::combinator::{delimited, repeat, separated, separated_pair, *};
-use winnow::prelude::*;
-use winnow::seq;
-use winnow::stream::Stream; // choose between two parsers; and we're happy with either being used.
-use winnow::token::one_of; // one_of(('0'..='9', 'a'..='f', 'A'..='F')).parse_next(input)
-use winnow::token::take_while;
+use winnow::combinator::{delimited, separated, separated_pair, *};
+ // choose between two parsers; and we're happy with either being used.
+ // one_of(('0'..='9', 'a'..='f', 'A'..='F')).parse_next(input)
 use winnow::Parser;
 
 use serde::Serialize;
-use serde_json::json;
 
 #[cfg(not(target_arch = "wasm32"))]
 #[cfg(feature = "lang-python")]
@@ -153,7 +148,7 @@ fn parse_slashcommand<'i>(input: &mut &'i str) -> winnow::Result<&'i str> {
     preceded("/", parse_label).parse_next(input)
 }
 
-fn parse_KmdParameter<'i>(input: &mut &'i str) -> winnow::Result<(&'i str, &'i str)> {
+fn parse_kmd_parameter<'i>(input: &mut &'i str) -> winnow::Result<(&'i str, &'i str)> {
     // Parse the prefix "--"
     // separated_pair(parse_label, "=", parse_values).parse_next(input)
     preceded(
@@ -200,7 +195,7 @@ pub struct KmdParams<'i> {
 impl<'i> KmdParams<'i> {
     pub fn parse(input: &mut &'i str) -> winnow::Result<Self> {
         let kvs =
-            separated(0.., parse_KmdParameter, terminated(' ', multispace0)).parse_next(input)?;
+            separated(0.., parse_kmd_parameter, terminated(' ', multispace0)).parse_next(input)?;
 
         Ok(Self { kvs })
     }
@@ -407,7 +402,7 @@ mod tests {
     #[test]
     fn test_isolatedLabel() {
         let input = r#"--mylabel"#;
-        let actual = parse_KmdParameter.parse(input).unwrap();
+        let actual = parse_kmd_parameter.parse(input).unwrap();
         let expected = ("mylabel", "");
         assert_eq!(actual, expected)
     }
@@ -415,7 +410,7 @@ mod tests {
     #[test]
     fn test_dash2xlabelvalueQUOTED_for_KmdParameter() {
         let input = r#"--mylabel="40""#;
-        let actual = parse_KmdParameter.parse(input).unwrap();
+        let actual = parse_kmd_parameter.parse(input).unwrap();
         let expected = ("mylabel", "40");
         assert_eq!(actual, expected)
     }
@@ -423,7 +418,7 @@ mod tests {
     #[test]
     fn test_dash2xlabelvalueUNQUOTED_for_KmdParameter() {
         let input = r#"--mylabel=40"#;
-        let actual = parse_KmdParameter.parse(input).unwrap();
+        let actual = parse_kmd_parameter.parse(input).unwrap();
         let expected = ("mylabel", "40");
         assert_eq!(actual, expected)
     }

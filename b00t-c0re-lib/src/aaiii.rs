@@ -17,7 +17,7 @@
 //! - Async event-driven registration/dispatch
 //! - State machine for tool capability simulation
 
-use anyhow::{Context, Result};
+use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::env;

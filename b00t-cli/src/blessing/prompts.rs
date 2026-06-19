@@ -1,9 +1,8 @@
 // blessing/prompts.rs
 // Role-based prompt generation for blessing discovery and orchestration
 
-use crate::blessing::{BlessingGraph, BlessingNode};
+use crate::blessing::BlessingGraph;
 use crate::inventory::Inventory;
-use std::collections::HashMap;
 
 /// Prompt generation context: role + current system state
 #[derive(Debug, Clone)]

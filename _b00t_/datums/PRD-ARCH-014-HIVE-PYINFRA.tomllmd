@@ -1,0 +1,376 @@
+# PRD-ARCH-014: First-class pyinfra — fleet orchestration Ouroboros
+
+[b00t.schema]
+version   = "1"
+type      = "prd"
+type_tags = ["prd", "pyinfra", "fleet", "orchestration", "ouroboros", "uv", "datum-type", "arch", "ch0nky"]
+
+[prd]
+id     = "PRD-ARCH-014-HIVE-PYINFRA"
+title  = "First-class pyinfra integration — DatumType::Pyinfra, uv-managed, Ouroboros fleet orchestration"
+status = "proposed"
+tier   = "frontier"
+
+# ─── Executive Summary ────────────────────────────────────────────────────────
+# b00t has an ansible integration via an optional `[b00t.ansible]` field on
+# BootDatum. It works but is shallow — ansible is a runtime tool, not a first-
+# class concept in the type system. Pyinfra deserves deeper treatment:
+#
+# (a) DatumType::Pyinfra — first-class variant alongside Cli, Mcp, Stack, etc.
+# (b) uv-managed install — `uv tool install pyinfra` with version pin in datum
+# (c) Shared OrchestrationConfig trait — ansible and pyinfra share deployment
+#     abstraction (deploy_file, inventory, extra_args, data_overrides)
+# (d) Ouroboros CLI — `b00t pyinfra run` mirrors `b00t ansible run`
+# (e) Fleet inventory connector — pyinfra discovers b00t hive nodes via Redis
+# (f) b00t-py wheel → pyinfra operations → b00t-cli on remote hosts
+#
+# ANSIBLE EXIT STRATEGY: pyinfra can do everything ansible does for b00t's scope
+# (container management, system state, datum deployment). Ansible remains for
+# initial provisioning. The exit is gradual — each ansible playbook gets a
+# pyinfra deploy.py equivalent. When parity is reached, ansible becomes optional.
+#
+# VERDICT: This is the right depth. Pyinfra is a fleet orchestration primitive,
+# not a bolt-on. The Ouroboros (b00t → pyinfra → b00t) is architecturally sound
+# because each layer has a distinct responsibility.
+
+# ─── 1. DatumType::Pyinfra — Type System Integration ─────────────────────────
+[type_system]
+description = "Add Pyinfra as a DatumType variant, not just an optional field"
+rationale = '''
+Ansible uses an optional `[b00t.ansible]` field on BootDatum — no DatumType variant.
+This works for ansible because it's a legacy tool b00t wraps. Pyinfra is different:
+it's the future fleet orchestration layer, deeply integrated. First-class type enables:
+- `b00t datum list --type pyinfra` filters
+- Prove methods (prove_pyinfra) validate deploy structure
+- Ontology registration via irontology-mcp
+- b00t:map tail blocks on .pyinfra.toml datums
+'''
+
+[type_system.enum_entry]
+location = "b00t-cli/src/lib.rs"
+variant = "Pyinfra"
+tag = "pyinfra"
+datum_files = ["*.pyinfra.toml", "*.pyinfra.tomllm", "*.pyinfra.tomllmd"]
+
+[type_system.prove]
+description = "Structural proof for pyinfra datums"
+checks = [
+  "deploy_file is non-empty and points to a valid .py file",
+  "inventory_file is optional but if present must resolve to a .py file",
+  "uv is available (depends_on gate)",
+  "pyinfra version satisfies the datum's version constraint",
+]
+
+# ─── 2. Shared OrchestrationConfig Abstraction ───────────────────────────────
+[shared_abstraction]
+description = '''
+Ansible and pyinfra share an orchestration config trait. This is NOT inheritance —
+it's a common interface backed by independent structs. Both implement the same
+contract: resolve paths, build CLI args, execute via process::Command.
+'''
+
+[shared_abstraction.trait]
+name = "OrchestrationRunner"
+location = "b00t-cli/src/orchestration.rs (NEW)"
+methods = [
+  "fn resolve_paths(&self, workspace: Option<&Path>) -> Result<ResolvedPaths>",
+  "fn build_command(&self, paths: &ResolvedPaths) -> Command",
+  "fn execute(&self, workspace: Option<&Path>) -> Result<()>  // default impl using above",
+]
+
+[shared_abstraction.resolved_paths]
+fields = [
+  "deploy_file: PathBuf   — absolute path to deploy script/playbook",
+  "inventory: Option<PathBuf>  — absolute path to inventory file",
+  "workspace: Option<PathBuf>  — resolved workspace root",
+]
+
+# ─── 3. PyinfraConfig Struct ─────────────────────────────────────────────────
+[pyinfra_config]
+location = "b00t-cli/src/pyinfra.rs (NEW, mirrors ansible.rs)"
+description = "Python-centric fleet orchestration config"
+
+[pyinfra_config.fields]
+deploy_file = "String — path to deploy.py (absolute or workspace-relative, tilde-expanded)"
+inventory_file = "Option<String> — path to inventory.py (same resolution rules)"
+extra_args = "Option<Vec<String>> — forwarded to `pyinfra` CLI"
+data_overrides = "Option<HashMap<String, String>> — --data key=value pairs"
+limit = "Option<String> — --limit <host_pattern> for targeted runs"
+dry_run = "Option<bool> — --dry-run for diff-only mode"
+parallel = "Option<u32> — --parallel N for concurrent execution"
+version_pin = "Option<String> — pinned pyinfra version (e.g. '3.4')"
+
+# ─── 4. BootDatum Integration ────────────────────────────────────────────────
+[bootdatum]
+description = "BootDatum gets a pyinfra field alongside the existing ansible field"
+location = "b00t-cli/src/lib.rs"
+
+[bootdatum.fields]
+ansible = "Option<crate::ansible::AnsibleConfig>   — existing, unchanged"
+pyinfra = "Option<crate::pyinfra::PyinfraConfig>   — NEW, mirrors ansible"
+
+# ─── 5. uv-Managed Install (depends_on: uv) ──────────────────────────────────
+[install]
+description = '''
+pyinfra is ALWAYS installed via uv. No fallback to pip/pipx/apt/dnf.
+uv is a hard dependency — b00t gates on `uv` binary before installing.
+Version pinned in datum via `version_pin = "3.4"`.
+'''
+
+[install.datum]
+file = "_b00t_/pyinfra.cli.toml"
+content = '''
+[b00t]
+name = "pyinfra"
+type = "cli"
+hint = "pyinfra fleet orchestration — installed via uv, always version-pinned"
+depends_on = ["uv"]
+
+[b00t.install]
+command = "uv"
+args = ["tool", "install", "pyinfra", "--from", "pyinfra=={version}"]
+
+[b00t.detect]
+command = "uv"
+args = ["tool", "list", "--format", "json"]
+regex = '"pyinfra"."version":\\s*"([^"]+)"'
+
+[b00t.desires]
+version = ">=3.4"
+'''
+
+[install.alias]
+description = "pyinfra is aliased through uv so 'pyinfra' resolves correctly"
+mechanism = "uv tool install creates shim at ~/.local/bin/pyinfra"
+env = "PATH includes ~/.local/bin (standard uv setup)"
+
+[install.justfile]
+recipes = [
+  "pyinfra-install  → uv tool install pyinfra",
+  "pyinfra-upgrade  → uv tool upgrade pyinfra",
+  "pyinfra-version  → uv tool list | grep pyinfra",
+]
+
+# ─── 6. CLI Commands ─────────────────────────────────────────────────────────
+[cli]
+description = "Mirror the ansible CLI pattern but with pyinfra-native conventions"
+
+[cli.top_level]
+command = "b00t pyinfra"
+location = "b00t-cli/src/main.rs — Commands::Pyinfra variant"
+dispatches_to = "b00t-cli/src/commands/pyinfra.rs (NEW)"
+
+[cli.subcommands]
+run = '''
+b00t pyinfra run [OPTIONS]
+  --datum <NAME>        Load config from _b00t_/<name>.pyinfra.toml
+  --deploy-file <PATH>  Override deploy script path
+  --inventory <PATH>    Override inventory file
+  --data KEY=VALUE      Data override (repeatable)
+  --limit <PATTERN>     Target specific hosts
+  --parallel <N>        Concurrent execution
+  --dry-run             Show changes without applying
+'''
+fact = '''
+b00t pyinfra fact <FACT> [OPTIONS]
+  --datum <NAME>        Target datum for host resolution
+  --inventory <PATH>    Inventory file for host discovery
+Gather facts from hive nodes (e.g. server.Hostname, files.File)
+'''
+deploy = '''
+b00t pyinfra deploy <DEPLOY_FILE> [OPTIONS]
+  --inventory <PATH>    Inventory file
+  --data KEY=VALUE      Data overrides
+Shortcut for running a deploy.py directly (no datum needed)
+'''
+
+[cli.stack_integration]
+description = "b00t stack pyinfra mirrors b00t stack ansible"
+command = "b00t stack pyinfra --run script <deploy.py> | --run datum <name>"
+
+# ─── 7. Ouroboros Fleet Architecture ─────────────────────────────────────────
+[ouroboros]
+description = '''
+The Ouroboros is the self-referential call chain:
+  b00t (Rust) → b00t-py (wheel) → pyinfra (Python) → SSH → b00t-cli (Rust)
+
+This is NOT circular dependency. Each layer owns a distinct responsibility:
+  1. b00t (Rust) — knowledge graph, datum store, state management
+  2. b00t-py (PyO3 wheel) — Rust→Python bridge, exposes b00t API to Python
+  3. pyinfra operations — idempotent fleet operations yielding StringCommands
+  4. SSH transport — agentless execution on remote hosts
+  5. Remote b00t-cli — local container lifecycle, system state
+'''
+
+[ouroboros.call_chain]
+example = '''
+# Operator initiates fleet upgrade:
+$ b00t pyinfra run --datum hive-upgrade
+
+# Internally:
+# 1. b00t loads hive-upgrade.pyinfra.toml → PyinfraConfig
+# 2. Executes: pyinfra -i inventory.py deploy_upgrade.py
+# 3. deploy_upgrade.py imports b00t.operations.hive:
+#      from b00t.operations.hive import hive_upgrade
+#      hive_upgrade(version="0.9.0")
+# 4. hive_upgrade() yields StringCommand("b00t", "hive", "upgrade", "--version", "0.9.0")
+# 5. pyinfra SSHs to each host, runs the command
+# 6. Remote b00t-cli pulls new container, restarts quadlet
+
+# The snake eats its tail — b00t calls pyinfra which calls b00t.
+'''
+
+# ─── 8. Pyinfra Operation Modules ────────────────────────────────────────────
+[pyinfra_operations]
+description = "Python operations packaged in b00t-py wheel, importable by pyinfra"
+package = "b00t.operations"  # ships inside b00t PyPI wheel
+dependencies = ["pyinfra>=3.4"]
+
+[pyinfra_operations.modules]
+hive = '''
+from b00t.operations.hive import (
+    hive_status,       # b00t hive status → host facts
+    hive_workers,      # b00t agent workers → registry state
+    hive_upgrade,      # b00t hive upgrade → container lifecycle
+    hive_quadlet,      # b00t hive quadlet → systemd unit generation
+    hive_datums_sync,  # rsync _b00t_/ → remote hosts
+)
+'''
+model = '''
+from b00t.operations.model import (
+    model_serve,       # b00t model serve → launch inference container
+    model_stop,        # b00t model stop → stop inference container
+    model_status,      # b00t model served → check endpoints
+)
+'''
+datum = '''
+from b00t.operations.datum import (
+    datum_sync,        # rsync datum files to hive nodes
+    datum_validate,    # b00t datum validate on remote
+    datum_install,     # b00t datum install <name>
+)
+'''
+
+# ─── 9. Pyinfra Inventory Connector ──────────────────────────────────────────
+[inventory_connector]
+description = "pyinfra connector that discovers b00t hive nodes from Redis registry"
+entry_point = "b00t.connectors.hive.HiveConnector"
+pyproject_toml = '''
+[project.entry-points.'pyinfra.connectors']
+b00t-hive = 'b00t.connectors.hive:HiveConnector'
+'''
+
+[inventory_connector.mechanism]
+discovery = '''
+Query Redis b00t:agents:registry for all Online agents.
+Filter by role, capabilities, crew membership.
+Each agent becomes a pyinfra host with:
+  - name: agent.agent_id
+  - data: {ip: agent.ip, role: agent.agent_role, caps: agent.capabilities}
+  - groups: derived from role + capabilities
+'''
+usage = 'pyinfra @b00t-hive deploy_fleet.py'
+
+# ─── 10. Datum Files ─────────────────────────────────────────────────────────
+[datum_files]
+pyinfra_cli = '''
+# _b00t_/pyinfra.cli.toml
+[b00t]
+name = "pyinfra"
+type = "cli"
+hint = "pyinfra fleet orchestration — uv-managed, version-pinned"
+depends_on = ["uv"]
+[b00t.install]
+command = "uv"
+args = ["tool", "install", "pyinfra"]
+[b00t.desires]
+version = ">=3.4"
+'''
+pyinfra_stack = '''
+# _b00t_/pyinfra.stack.toml
+[b00t]
+name = "pyinfra-stack"
+type = "stack"
+hint = "pyinfra fleet orchestration stack"
+members = ["pyinfra.cli"]
+[b00t.env]
+PYINFRA_INVENTORY = "pyinfra/inventory.py"
+'''
+example_deploy_datum = '''
+# _b00t_/hive-upgrade.pyinfra.toml
+[b00t]
+name = "hive-upgrade"
+type = "pyinfra"
+hint = "Fleet-wide b00t hive controller upgrade"
+[b00t.pyinfra]
+deploy_file = "pyinfra/deploy_upgrade.py"
+inventory_file = "pyinfra/inventory.py"
+data_overrides = { target_version = "0.9.0" }
+parallel = 5
+dry_run = false
+'''
+
+# ─── 11. Implementation Plan ─────────────────────────────────────────────────
+[implementation]
+phases = [
+  "1. DatumType::Pyinfra variant + prove method (lib.rs, datum_proof.rs)",
+  "2. PyinfraConfig struct + shared OrchestrationRunner trait (pyinfra.rs, orchestration.rs)",
+  "3. BootDatum.pyinfra field (lib.rs)",
+  "4. b00t pyinfra run CLI command (commands/pyinfra.rs, main.rs)",
+  "5. b00t stack pyinfra integration (commands/stack.rs)",
+  "6. _b00t_/pyinfra.cli.toml runtime datum",
+  "7. _b00t_/pyinfra.stack.toml stack datum",
+  "8. justfile recipes (install, upgrade, run)",
+  "9. b00t-py operations module (Python, in b00t-py/)",
+  "10. b00t-py inventory connector (Python, in b00t-py/)",
+  "11. Example deploy + inventory Python files (pyinfra/)",
+  "12. PRD-ARCH-014 acceptance criteria validation",
+]
+
+[implementation.shared_with_ansible]
+description = "Both ansible and pyinfra share orchestration.rs trait, CLI pattern, and BootDatum field"
+shared_files = [
+  "b00t-cli/src/orchestration.rs  — OrchestrationRunner trait (new)",
+  "b00t-cli/src/lib.rs            — BootDatum.{ansible, pyinfra} fields",
+  "b00t-cli/src/commands/stack.rs — stack ansible|pyinfra subcommand",
+  "justfile                        — parallel recipes for both tools",
+]
+
+# ─── 12. Risk Mitigation ─────────────────────────────────────────────────────
+[risks]
+ansible_displacement = '''
+Risk: pyinfra replaces ansible too fast, breaking existing playbooks.
+Mitigation: Ansible playbooks continue working. pyinfra deploys are additive.
+            Share OrchestrationRunner trait — same CLI interface, different backends.
+            b00t stack ansible and b00t stack pyinfra coexist indefinitely.
+'''
+uv_dependency = '''
+Risk: uv not installed on all targets.
+Mitigation: b00t gates on uv (depends_on: ["uv"]). uv is a single binary,
+            installs via curl (no Python required). Already used for b00t-py.
+'''
+pyinfra_version_pin = '''
+Risk: pyinfra 3.x → 4.x breaking changes.
+Mitigation: version_pin in PyinfraConfig locks major version.
+            uv tool install pyinfra --from 'pyinfra==3.4' ensures repeatability.
+'''
+Ouroboros_complexity = '''
+Risk: b00t→pyinfra→b00t call chain is hard to debug.
+Mitigation: Each layer logs independently. pyinfra --debug shows SSH commands.
+            b00t --verbose shows local execution. Dry-run mode validates before applying.
+'''
+
+# ─── 13. Acceptance Criteria ─────────────────────────────────────────────────
+[acceptance]
+criteria = [
+  "[type] DatumType::Pyinfra exists in b00t-cli --list-types output",
+  "[cli]  b00t pyinfra run --datum hive-upgrade executes successfully",
+  "[stack] b00t stack pyinfra --run datum hive-upgrade works",
+  "[prove] b00t datum prove hive-upgrade.pyinfra.toml validates deploy_file",
+  "[uv]    uv tool install pyinfra succeeds, version pinned in datum",
+  "[wheel] pip install b00t succeeds, b00t.operations.hive imports cleanly",
+  "[deploy] pyinfra @b00t-hive deploy_test.py runs across all online hive nodes",
+  "[oroborous] b00t pyinfra run calls pyinfra which SSHs and runs b00t-cli on remote",
+  "[ansible] Existing ansible playbooks unaffected — no regression",
+  "[just] just pyinfra-install && just pyinfra-run works",
+]

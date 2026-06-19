@@ -79,13 +79,25 @@ pub enum AgentMessage {
     },
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum AgentStatus {
     Online,
     Busy,
     Idle,
     Offline,
     Error(String),
+}
+
+impl std::fmt::Display for AgentStatus {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Online => write!(f, "online"),
+            Self::Busy => write!(f, "busy"),
+            Self::Idle => write!(f, "idle"),
+            Self::Offline => write!(f, "offline"),
+            Self::Error(e) => write!(f, "error({})", e),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

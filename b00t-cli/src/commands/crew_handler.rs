@@ -9,7 +9,6 @@ use std::path::PathBuf;
 
 use b00t_c0re_a2a::agent_card::{AgentCard, Skill};
 use b00t_c0re_a2a::agent_store::AgentStore;
-use b00t_c0re_a2a::A2AResult;
 use b00t_c0re_hierarchy::recruitment::*;
 use b00t_c0re_hierarchy::roles::*;
 use serde::{Deserialize, Serialize};

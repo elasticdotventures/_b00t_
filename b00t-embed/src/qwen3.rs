@@ -11,12 +11,11 @@
 //   - Forward pass reads from VarMap — weight swap = output change
 
 use std::collections::HashMap;
-use std::path::PathBuf;
 use std::sync::{Arc, Mutex, RwLock};
 
 use anyhow::{Context, Result};
 use async_trait::async_trait;
-use candle_core::{DType, Device, Tensor, Var};
+use candle_core::{DType, Device, Tensor};
 use candle_nn::{VarBuilder, VarMap};
 use embed_anything::models::qwen3::{Config, Model};
 use hf_hub::api::sync::ApiBuilder;
@@ -24,9 +23,7 @@ use hf_hub::Repo;
 use tokenizers::{PaddingParams, Tokenizer, TruncationParams};
 
 use crate::layer::bouncer::LayerGateKeeper;
-use crate::layer::source::InlineSource;
 use crate::layer::stack::{LayerStack, TensorRegistry};
-use crate::layer::TensorSource as _;
 use crate::{EmbedBackend, Embedding};
 
 /// Composable Qwen3 embedding backend with VarMap-backed runtime layer swapping.
@@ -259,7 +256,7 @@ impl EmbedBackend for Qwen3Composable {
 
     async fn embed_batch(&self, texts: &[&str]) -> Result<Vec<Embedding>> {
         let (ids, mask) = self.tokenize_batch(texts)?;
-        let batch_size = ids.dims()[0];
+        let _batch_size = ids.dims()[0];
         let seq_len = ids.dims()[1];
 
         let hidden = {
@@ -385,7 +382,7 @@ impl EmbedBackend for Qwen3Composable {
         }
         // Clear layer stack active tracking
         let guard = self.layer_stack.blocking_write();
-        if let Some(stack) = guard.as_ref() {
+        if let Some(_stack) = guard.as_ref() {
             // Just reset by restoring base — the next compose will re-activate
         }
         Ok(())

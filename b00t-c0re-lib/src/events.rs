@@ -8,7 +8,6 @@
 //! different shapes.
 
 use serde::{Deserialize, Serialize};
-use std::io::Write;
 use std::path::PathBuf;
 
 /// A single telemetry event written to events.jsonl.

@@ -6,7 +6,7 @@ use std::collections::HashMap;
 
 use crate::layer::stack::LayerStack;
 use crate::layer::trait_def::TensorSource;
-use crate::layer::{LayerDescriptor, LayerStatus};
+use crate::layer::LayerDescriptor;
 use crate::Embedding;
 
 /// Router strategy: how query embeddings map to layer activations.

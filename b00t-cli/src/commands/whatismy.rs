@@ -309,7 +309,7 @@ pub fn detect_agent(memory: &SessionMemory, no_env: bool) -> String {
     }
 
     // Check if qwen CLI is available and we're in a qwen session
-    if let Ok(output) = duct::cmd!("qwen", "--version").read() {
+    if let Ok(_output) = duct::cmd!("qwen", "--version").read() {
         // qwen CLI exists - check if we're being invoked by qwen
         if let Some(parent_cmd) = get_parent_command() {
             if parent_cmd.contains("qwen") {

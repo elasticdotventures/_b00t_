@@ -1053,7 +1053,7 @@ dependencies = [
  "serde_json",
  "syn 2.0.118",
  "tempfile",
- "toml",
+ "toml 1.1.2+spec-1.1.0",
  "walkdir",
 ]
 
@@ -1091,7 +1091,7 @@ dependencies = [
  "serde",
  "serde_json",
  "tempfile",
- "toml",
+ "toml 1.1.2+spec-1.1.0",
  "tracing",
 ]
 
@@ -1172,7 +1172,7 @@ dependencies = [
  "tokio",
  "tokio-test",
  "tokio-util",
- "toml",
+ "toml 1.1.2+spec-1.1.0",
  "tracing",
  "tracing-subscriber",
  "ts-rs",
@@ -1286,7 +1286,7 @@ dependencies = [
  "tiktoken-rs",
  "tokenizers 0.22.2",
  "tokio",
- "toml",
+ "toml 1.1.2+spec-1.1.0",
  "tracing",
  "url",
  "uuid",
@@ -1306,7 +1306,7 @@ dependencies = [
  "serde",
  "serde_json",
  "tempfile",
- "toml",
+ "toml 1.1.2+spec-1.1.0",
 ]
 
 [[package]]
@@ -1344,7 +1344,7 @@ dependencies = [
  "serde_json",
  "snafu",
  "tokio",
- "toml",
+ "toml 1.1.2+spec-1.1.0",
  "tracing",
  "uuid",
 ]
@@ -1407,7 +1407,7 @@ dependencies = [
  "syn 2.0.118",
  "tempfile",
  "tokio",
- "toml",
+ "toml 1.1.2+spec-1.1.0",
  "tower 0.5.3",
  "tower-http",
  "tracing",
@@ -1428,7 +1428,7 @@ dependencies = [
  "pyo3-build-config",
  "serde",
  "serde_json",
- "toml",
+ "toml 1.1.2+spec-1.1.0",
 ]
 
 [[package]]
@@ -2184,7 +2184,7 @@ dependencies = [
  "lazy_static",
  "serde",
  "thiserror 2.0.18",
- "toml",
+ "toml 0.9.12+spec-1.1.0",
 ]
 
 [[package]]
@@ -10069,6 +10069,21 @@ dependencies = [
  "toml_parser",
  "toml_writer",
  "winnow 0.7.15",
+]
+
+[[package]]
+name = "toml"
+version = "1.1.2+spec-1.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "81f3d15e84cbcd896376e6730314d59fb5a87f31e4b038454184435cd57defee"
+dependencies = [
+ "indexmap 2.14.0",
+ "serde_core",
+ "serde_spanned",
+ "toml_datetime 1.1.1+spec-1.1.0",
+ "toml_parser",
+ "toml_writer",
+ "winnow 1.0.3",
 ]
 
 [[package]]

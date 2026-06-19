@@ -102,7 +102,7 @@ impl TensorRegistry {
                 LayerError::Other(anyhow::anyhow!("tensor dtype cast: {e}"))
             })?;
 
-            let mut vm = self.varmap.lock().unwrap();
+            let vm = self.varmap.lock().unwrap();
             let var = Var::from_tensor(&tensor).map_err(|e| {
                 LayerError::Other(anyhow::anyhow!("var creation: {e}"))
             })?;
@@ -118,7 +118,7 @@ impl TensorRegistry {
     pub fn restore_base(&self, names: &[String]) -> Result<(), LayerError> {
         for name in names {
             if let Some(base) = self.base_tensors.get(name) {
-                let mut vm = self.varmap.lock().unwrap();
+                let vm = self.varmap.lock().unwrap();
                 let var = Var::from_tensor(base).map_err(|e| {
                     LayerError::Other(anyhow::anyhow!("var creation: {e}"))
                 })?;

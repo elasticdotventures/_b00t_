@@ -1,7 +1,7 @@
 // b00t-bouncer CLI integration
 // Bouncer pattern gatekeeper commands
 
-use anyhow::{Result, anyhow};
+use anyhow::Result;
 use clap::{Args, Subcommand};
 use serde_json;
 use std::path::PathBuf;
@@ -107,7 +107,7 @@ fn handle_audit(log_path: Option<&str>) -> Result<()> {
 /// Handle config command
 fn handle_config() -> Result<()> {
     // Import bouncer crate
-    use b00t_bouncer::{Bouncer, BouncerConfig};
+    use b00t_bouncer::Bouncer;
     
     let bouncer = Bouncer::new();
     let config = bouncer.config.clone();

@@ -219,6 +219,7 @@ impl McpRegistry {
     }
 
     /// Save registry to storage - NO-OP in the new design since registry is runtime-only
+    #[allow(dead_code)]
     fn save(&self) -> Result<()> {
         // In the new design, we don't persist the registry to file
         // The source of truth is the datum TOML files in ~/.b00t/
@@ -493,6 +494,7 @@ impl McpRegistry {
             #[serde(default)]
             keywords: Option<Vec<String>>,
             #[serde(default)]
+            #[allow(dead_code)]
             ansible: Option<serde_json::Value>,
             mcp: Option<serde_json::Value>,
         }

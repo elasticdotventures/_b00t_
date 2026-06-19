@@ -239,7 +239,7 @@ fn check_guards_py(
 fn python_guard_to_rust(obj: &Py<PyAny>, py: Python<'_>) -> PyResult<HiveGuard> {
     let d = obj
         .bind(py)
-        .downcast::<PyDict>()
+        .cast::<PyDict>()
         .map_err(|_| PyTypeError::new_err("Each guard must be a dict"))?;
 
     let pattern: GuardPattern = python_pattern_to_rust(d)?;
@@ -301,7 +301,7 @@ fn python_pattern_to_rust(d: &Bound<'_, PyDict>) -> PyResult<GuardPattern> {
     }
 
     // Dict → check for rhai/stage keys
-    if let Ok(pd) = pattern_obj.downcast::<PyDict>() {
+    if let Ok(pd) = pattern_obj.cast::<PyDict>() {
         if let Some(rhai) = pd
             .get_item("rhai")
             .ok()
@@ -480,7 +480,7 @@ fn parse_k0mmand3r(input_str: &str) -> PyResult<String> {
 /// GIL via `Python::with_gil` each time a guarded parse stage is reached.
 #[pyfunction]
 #[pyo3(signature = (stage, callback))]
-fn register_stage_guard_py(py: Python<'_>, stage: &str, callback: PyObject) -> PyResult<String> {
+fn register_stage_guard_py(py: Python<'_>, stage: &str, callback: Py<PyAny>) -> PyResult<String> {
     use k0mmand3r::parser_stages::{ParseStage, StageAction};
 
     let parse_stage = ParseStage::from_name(stage)
@@ -495,14 +495,14 @@ fn register_stage_guard_py(py: Python<'_>, stage: &str, callback: PyObject) -> P
     }
 
     // Clone the PyObject so it can be moved into the guard closure.
-    // The closure acquires the GIL via Python::with_gil on each invocation.
+    // The closure attaches to the existing GIL (always held in pyfunction context).
     let cb = callback.clone_ref(py);
     let stage_copy = parse_stage;
 
     k0mmand3r::register_stage_guard(
         stage_copy,
         Box::new(move |state| {
-            Python::with_gil(|py| {
+            Python::attach(|py| {
                 let dict = pyo3::types::PyDict::new(py);
                 // Best-effort dict population; log individual failures but don't abort
                 if let Err(e) = dict.set_item("verb", state.verb.as_deref().unwrap_or("")) {

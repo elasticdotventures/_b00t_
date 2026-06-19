@@ -6,7 +6,6 @@
 use anyhow::Result;
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
-use std::sync::Arc;
 
 /// Embedding: Vector of f32 with cosine similarity computation
 #[derive(Debug, Clone, Serialize, Deserialize)]
