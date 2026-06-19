@@ -5,7 +5,7 @@
 
 [b00t]
 name    = "qwen36-local"
-type    = "model"
+type = "ai"
 hint    = "Qwen3.6 local ch0nky: 27B-Q4_K_M (16GB, dense) OR 35B-A3B-MXFP4_MOE (22GB, MoE+thinking)"
 aliases = ["qwen36", "qwen3.6", "ch0nky-q36", "qwen36-local"]
 
@@ -16,7 +16,7 @@ B00T_AI_CH0NKY_BASE  = "http://127.0.0.1:8001/v1"
 B00T_AI_CH0NKY_MODEL = "ch0nky"
 
 # ─── Shared model endpoint (both variants serve as "ch0nky" on :8001) ────────
-[ai_model]
+[model]
 provider       = "openai_compatible"
 size           = "large"
 capabilities   = ["chat", "code", "reasoning", "tool_use", "thinking"]

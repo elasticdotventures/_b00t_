@@ -2,7 +2,7 @@
 
 [b00t]
 name = "deepseek-ocr"
-type = "model"
+type = "ai"
 hint = "DeepSeek OCR visual encoder for scene text recognition"
 aliases = ["deepseek"]
 
@@ -11,7 +11,7 @@ VLLM_MODEL_DIR = "~/.b00t/models/deepseek-ai__deepseek-ocr"
 VLLM_MODEL_PATH = "/models/deepseek-ocr"
 VLLM_DTYPE = "bfloat16"
 
-[ai_model]
+[model]
 provider = "huggingface"
 size = "small"
 capabilities = ["vision"]

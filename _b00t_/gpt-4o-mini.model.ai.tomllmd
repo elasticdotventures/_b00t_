@@ -3,10 +3,10 @@
 
 [b00t]
 name = "gpt-4o-mini"
-type = "model"
+type = "ai"
 hint = "OpenAI GPT-4o Mini via OpenRouter - cost-effective reasoning"
 
-[ai_model]
+[model]
 provider = "openrouter"
 size = "small"
 capabilities = ["chat", "code", "tools", "vision"]

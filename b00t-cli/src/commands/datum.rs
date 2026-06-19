@@ -1,7 +1,9 @@
 use crate::datum_utils::{self, DatumFilter};
-use anyhow::Result;
+use crate::DatumType;
+use anyhow::{Context, Result};
 use clap::Parser;
 use std::collections::HashMap;
+use std::path::Path;
 
 #[derive(Parser, Debug)]
 pub enum DatumCommands {
@@ -101,6 +103,39 @@ pub enum DatumCommands {
         #[clap(long, help = "Max results", default_value = "5")]
         limit: usize,
     },
+
+    #[clap(about = "Validate a datum TOML file against BootDatum schema")]
+    Validate {
+        #[clap(help = "Path to .toml file or datum key (e.g., mold.cli)")]
+        target: String,
+
+        #[clap(long, help = "check extension/type consistency (e.g. .cli suffix vs type=cli)")]
+        strict: bool,
+    },
+
+    #[clap(about = "Emit a minimal valid datum TOML for the given type")]
+    Scaffold {
+        #[clap(help = "Datum type (cli, mcp, ai, docker, hardware, …)")]
+        datum_type: String,
+
+        #[clap(help = "Datum name")]
+        name: String,
+    },
+
+    #[clap(about = "Create a delegated task ticket for datum creation (bypasses future datum-write guard)")]
+    Delegate {
+        #[clap(help = "Datum type (cli, mcp, ai, docker, hardware, …)")]
+        datum_type: String,
+
+        #[clap(help = "Datum name")]
+        name: String,
+
+        #[clap(long, help = "Additional description / rationale")]
+        description: Option<String>,
+
+        #[clap(long, help = "Install method hint (apt, cargo, pip, curl, …)")]
+        install_method: Option<String>,
+    },
 }
 
 pub fn handle_datum_command(path: &str, datum_command: &DatumCommands) -> Result<()> {
@@ -170,6 +205,11 @@ pub fn handle_datum_command(path: &str, datum_command: &DatumCommands) -> Result
             })
             .join()
             .map_err(|_| anyhow::anyhow!("semantic-search thread panicked"))?
+        }
+        DatumCommands::Validate { target, strict } => handle_validate(path, target, *strict),
+        DatumCommands::Scaffold { datum_type, name } => handle_scaffold(datum_type, name),
+        DatumCommands::Delegate { datum_type, name, description, install_method } => {
+            handle_delegate(datum_type, name, description.as_deref(), install_method.as_deref())
         }
     }
 }
@@ -475,8 +515,7 @@ fn get_icon_for_type(dtype: &Option<crate::DatumType>) -> String {
     match dtype {
         Some(crate::DatumType::Cli) => "fas fa-terminal".to_string(),
         Some(crate::DatumType::Mcp) => "fas fa-plug".to_string(),
-        Some(crate::DatumType::Ai) => "fas fa-robot".to_string(),
-        Some(crate::DatumType::AiModel) => "fas fa-brain".to_string(),
+        Some(crate::DatumType::Ai) => "fas fa-brain".to_string(),
         Some(crate::DatumType::K8s) => "fas fa-dharmachakra".to_string(),
         Some(crate::DatumType::Job) => "fas fa-tasks".to_string(),
         Some(crate::DatumType::Stack) => "fas fa-layer-group".to_string(),
@@ -768,15 +807,302 @@ fn truncate(s: &str, max: usize) -> String {
 }
 
 fn parse_datum_type(s: &str) -> Option<crate::DatumType> {
-    match s {
-        "cli" => Some(crate::DatumType::Cli),
-        "mcp" => Some(crate::DatumType::Mcp),
-        "ai" => Some(crate::DatumType::Ai),
-        "aimodel" | "ai_model" | "ai-model" => Some(crate::DatumType::AiModel),
-        "k8s" | "kubernetes" => Some(crate::DatumType::K8s),
-        "job" => Some(crate::DatumType::Job),
-        "stack" => Some(crate::DatumType::Stack),
-        "agent" => Some(crate::DatumType::Agent),
-        _ => None,
+    crate::DatumType::from_type_token(s)
+}
+
+/// Known TOML keys in [b00t] section, derived from BootDatum struct fields.
+/// 🤓 single source of truth: update this when BootDatum adds/removes fields.
+///    `type` maps to BootDatum::datum_type (serde rename).
+const KNOWN_B00T_KEYS: &[&str] = &[
+    "name", "type", "status", "enabled", "status_msg", "replacement",
+    "git_attributes",
+    "desires", "auto_install", "hint", "skills", "compliance",
+    "install", "update", "version", "version_regex", "requires_sudo",
+    "command", "args", "vsix_id", "script",
+    "image", "docker_args", "oci_uri", "resource_path",
+    "chart_path", "namespace", "values_file",
+    "keywords", "package_name", "env", "require", "aliases",
+    "depends_on", "unlocks", "gate", "url", "branch", "clone_path",
+    "entangled_agents", "entangled_cli", "entangled_mcp",
+    "entangled_ai_models", "entangled_apis", "entangled_docker",
+    "entangled_k8s", "channel_prefix",
+    "learn", "lfmf_category",
+    // nested sections (valid as [b00t.X] tables)
+    "ansible", "k0mmand3r", "knowledge", "mcp",
+    "hook_detect", "hook_install", "hook_learn", "hook_uninstall", "hook_update",
+    "job", "skill", "justfile", "stack", "orchestration",
+    "uninstall", "provides", "implements", "members", "type_tags",
+    "usage", "dsn", "protocol",
+];
+
+/// Validate a datum file against BootDatum schema.
+fn handle_validate(datum_path: &str, target: &str, strict: bool) -> Result<()> {
+    let expanded = shellexpand::tilde(datum_path);
+    let dir = std::path::Path::new(expanded.as_ref());
+
+    // Resolve target to a file path
+    let file_path = if target.ends_with(".toml") || target.ends_with(".tomllm") || target.ends_with(".tomllmd") {
+        // Direct file path
+        let p = std::path::Path::new(target);
+        if p.is_absolute() { p.to_path_buf() } else { dir.join(target) }
+    } else if target.contains('.') {
+        // datum key like "mold.cli" — resolve via get_config
+        let config_result = crate::get_config(target, datum_path);
+        let (_config, filename) = match config_result {
+            Ok(c) => c,
+            Err(e) => anyhow::bail!("datum '{}' not found at {}: {}", target, datum_path, e),
+        };
+        dir.join(&filename)
+    } else {
+        anyhow::bail!("specify datum key (e.g. mold.cli), file path, or type.name format");
+    };
+
+    if !file_path.exists() {
+        anyhow::bail!("file not found: {}", file_path.display());
     }
+
+    let filename = file_path.file_name().and_then(|s| s.to_str()).unwrap_or("");
+    println!("==> {}", file_path.display());
+    println!();
+
+    // Parse TOML into raw value for field inspection
+    let content = std::fs::read_to_string(&file_path).context("cannot read file")?;
+    let raw: toml::Value = toml::from_str(&content).context("invalid TOML")?;
+
+    let mut errors = Vec::new();
+    let mut warnings = Vec::new();
+
+    // Check [b00t] section exists
+    let b00t_table = match raw.get("b00t") {
+        Some(toml::Value::Table(t)) => t,
+        Some(_) => { errors.push("[b00t] must be a TOML table".into()); return print_validation_result(&errors, &warnings); }
+        None => { errors.push("missing [b00t] section".into()); return print_validation_result(&errors, &warnings); }
+    };
+
+    // Required fields
+    if b00t_table.get("name").is_none() {
+        errors.push("missing required field: name".into());
+    }
+    if b00t_table.get("hint").is_none() {
+        errors.push("missing required field: hint".into());
+    }
+
+    // Check for unknown keys
+    for key in b00t_table.keys() {
+        if !KNOWN_B00T_KEYS.contains(&key.as_str()) {
+            warnings.push(format!("unknown field: b00t.{} (not in BootDatum schema)", key));
+        }
+    }
+
+    // If strict: check extension ↔ type consistency
+    if strict {
+        if let Some(toml::Value::String(type_str)) = b00t_table.get("type") {
+            let declared = DatumType::from_type_token(type_str);
+            let from_ext = DatumType::from_filename(filename);
+            if declared != Some(from_ext) && from_ext != DatumType::Unknown {
+                warnings.push(format!(
+                    "type={} but filename suggests {:?} (extension .{})",
+                    type_str,
+                    from_ext,
+                    from_ext.base_suffix().trim_start_matches('.')
+                ));
+            }
+        }
+    }
+
+    // Validate version_regex compiles
+    if let Some(toml::Value::String(re)) = b00t_table.get("version_regex") {
+        if regex::Regex::new(re).is_err() {
+            errors.push(format!("invalid version_regex: '{}'", re));
+        }
+    }
+
+    print_validation_result(&errors, &warnings)
+}
+
+fn print_validation_result(errors: &[String], warnings: &[String]) -> Result<()> {
+    if errors.is_empty() && warnings.is_empty() {
+        println!("valid — no issues found");
+        return Ok(());
+    }
+    for e in errors {
+        println!("  ERROR: {}", e);
+    }
+    for w in warnings {
+        println!("  WARN: {}", w);
+    }
+    if !errors.is_empty() {
+        anyhow::bail!("{} error(s), {} warning(s)", errors.len(), warnings.len());
+    }
+    println!("ok ({} warning(s))", warnings.len());
+    Ok(())
+}
+
+/// Emit a minimal valid datum TOML skeleton.
+fn handle_scaffold(datum_type: &str, name: &str) -> Result<()> {
+    let dt = DatumType::from_type_token(datum_type)
+        .or_else(|| DatumType::from_type_token(&datum_type.to_lowercase()))
+        .context(format!("unknown datum type: '{}' (use: cli, mcp, ai, model, docker, hardware, …)", datum_type))?;
+
+    // Reverse-dot for model sub-type: name.model.ai.tomllmd
+    let is_model = datum_type == "model" || datum_type == "ai_model";
+    let (filename, toml_type) = if is_model {
+        (format!("{}.model.ai.tomllmd", name), "ai")
+    } else {
+        (format!("{}{}", name, dt.file_extension()), datum_type)
+    };
+
+    println!("# {}.{} — {} datum", name, datum_type, dt.base_suffix().trim_start_matches('.'));
+    println!("# Generated: {}", chrono::Utc::now().to_rfc3339());
+    println!("# File: {}", filename);
+    println!("# Install with: b00t-cli install {}", filename.trim_end_matches(".tomllmd").trim_end_matches(".toml"));
+    println!();
+    println!("[b00t]");
+    println!("name        = \"{}\"", name);
+    println!("type        = \"{}\"", toml_type);
+    println!("desires     = \"1.0.0\"");
+    println!("hint        = \"TODO: one-line description\"");
+    println!();
+
+    // Type-specific skeleton fields
+    match dt {
+        DatumType::Cli | DatumType::Apt | DatumType::Nix => {
+            println!("# install     = \"TODO: install command\"");
+            println!("# version     = \"{} --version\"", name);
+            println!("# version_regex = '(\\\\d+\\\\.\\\\d+\\\\.\\\\d+)'");
+        }
+        DatumType::Mcp => {
+            println!("# command     = \"TODO: binary to execute\"");
+            println!("# args        = [\"-y\", \"@scope/package\"]");
+        }
+        DatumType::Ai if is_model => {
+            println!("# [model]");
+            println!("# architecture  = \"transformer\"");
+            println!("# provider      = \"huggingface\"");
+            println!("# size          = \"large\"");
+            println!("# capabilities  = [\"chat\", \"code\"]");
+            println!("# litellm_model = \"huggingface/org/model-name\"");
+            println!("# huggingface_id = \"org/model-name\"");
+            println!("# context_window = 4096");
+            println!("# [model.parameters]");
+            println!("# max_tokens    = 4096");
+            println!("# temperature   = 0.7");
+            println!("# [model.metadata]");
+            println!("# family        = \"model-family\"");
+            println!("# quant          = \"Q4_K_M\"");
+        }
+        DatumType::Docker => {
+            println!("# image       = \"org/image:tag\"");
+            println!("# docker_args = [\"-p\", \"8080:8080\"]");
+        }
+        DatumType::Hardware => {
+            println!("# [b00t.hardware]");
+            println!("# vendor      = \"VendorName\"");
+            println!("# soc         = \"SoC-Model\"");
+            println!("# driver_pkg  = \"driver-package\"");
+        }
+        _ => {
+            println!("# TODO: add type-specific fields");
+        }
+    }
+    println!();
+    println!("# Optional fields:");
+    println!("# depends_on  = [\"prereq.cli\"]");
+    println!("# unlocks     = [\"mcp__*\"]");
+    println!("# env         = {{ KEY = \"VALUE\" }}");
+
+    Ok(())
+}
+
+/// Create a delegated task ticket for datum creation.
+/// Bypasses the future datum-write guard by routing through b00t task system.
+fn handle_delegate(
+    datum_type: &str,
+    name: &str,
+    description: Option<&str>,
+    install_method: Option<&str>,
+) -> Result<()> {
+    use std::process::Command;
+
+    let dt = DatumType::from_type_token(datum_type)
+        .or_else(|| DatumType::from_type_token(&datum_type.to_lowercase()))
+        .context(format!("unknown datum type: '{}'", datum_type))?;
+
+    // Reverse-dot for model sub-type (matches handle_scaffold)
+    let is_model = datum_type == "model" || datum_type == "ai_model";
+    let (filename, datum_key) = if is_model {
+        (format!("{}.model.ai.tomllmd", name), format!("{}.ai", name))
+    } else {
+        (format!("{}{}", name, dt.file_extension()), format!("{}.{}", name, datum_type))
+    };
+    let type_label = if is_model { "ai" } else { datum_type };
+    let scaffold_type = datum_type;
+
+    let desc = format!(
+        "datum: create {datum_key}\n\
+         type: {type_label}\n\
+         name: {name}\n\
+         file: {filename}\n\
+         install_method: {install}\n\
+         rationale: {rationale}\n\
+         ---\n\
+         Validation:\n\
+         1. b00t datum scaffold {scaffold_type} {name} > _b00t_/{filename}\n\
+         2. Edit _b00t_/{filename}: fill hint, install, version, version_regex\n\
+         3. b00t datum validate {datum_key} --strict\n\
+         4. b00t-cli . {name}  # verify version detection\n\
+         5. cp _b00t_/{filename} $_B00T_Path/  # deploy to active path",
+        datum_key = datum_key,
+        type_label = type_label,
+        name = name,
+        filename = filename,
+        install = install_method.unwrap_or("unknown"),
+        rationale = description.unwrap_or("agent-requested datum creation"),
+        scaffold_type = scaffold_type,
+    );
+
+    let method_hint = install_method.map(|m| format!(" install_method={}", m)).unwrap_or_default();
+    let title = format!("datum: create {datum_key} ({type_label} datum{method_hint})");
+
+    println!("# Datum Delegation Ticket");
+    println!();
+    println!("type:        {}", type_label);
+    println!("name:        {}", name);
+    println!("key:         {}", datum_key);
+    println!("file:        {}", filename);
+    if let Some(m) = install_method {
+        println!("install:     {}", m);
+    }
+    println!();
+
+    println!("## Scaffold (for reference)");
+    println!();
+    handle_scaffold(datum_type, name)?;
+
+    println!();
+    println!("## Creating b00t task…");
+    let output = Command::new("b00t-cli")
+        .args([
+            "task", "add",
+            &title,
+            "--description", &desc,
+            "--tags", "datum,registration",
+            "--priority", "2",
+            "--criteria", &format!("b00t datum validate {} --strict passes", datum_key),
+            "--criteria", &format!("b00t-cli . {} returns version match", name),
+        ])
+        .output()
+        .context("failed to create b00t task")?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        anyhow::bail!("b00t task add failed: {}", stderr);
+    }
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    println!("{}", stdout.trim());
+    println!();
+    println!("Delegated. Next task: `b00t task next`");
+
+    Ok(())
 }

@@ -3,7 +3,7 @@
 
 [b00t]
 name = "qwen3-coder-local"
-type = "model"
+type = "ai"
 hint = "Qwen3-Coder-30B-A3B-Instruct GGUF, served locally via vLLM/podman on RTX 3090 (port 8000)"
 aliases = ["qwen3-coder", "qwen-local", "qwen3", "ch1nky"]
 
@@ -15,7 +15,7 @@ VLLM_API_KEY = "local-vllm"
 OPENAI_BASE_URL = "http://127.0.0.1:8000/v1"
 OPENAI_API_KEY = "local-vllm"
 
-[ai_model]
+[model]
 provider = "openai_compatible"
 size = "large"
 capabilities = ["chat", "code", "reasoning", "tool_use"]

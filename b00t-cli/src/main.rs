@@ -22,7 +22,7 @@ use std::process::Command;
 // Import datum types from lib.rs (already declared there as pub mod)
 use b00t_cli::commands::learn::{LearnArgs, handle_learn};
 use b00t_cli::datum_ai::AiDatum;
-use b00t_cli::datum_ai_model::AiModelDatumEntry;
+use b00t_cli::datum_ai_model::ModelDatumEntry;
 use b00t_cli::datum_apt::AptDatum;
 use b00t_cli::datum_bash::BashDatum;
 use b00t_cli::datum_cli::CliDatum;
@@ -779,9 +779,9 @@ fn show_status(
         AiDatum,
     >(path, ".ai.toml")?));
     all_tools.extend(datum_providers_to_tool_status(load_datum_providers::<
-        AiModelDatumEntry,
+        ModelDatumEntry,
     >(
-        path, ".ai_model.toml"
+        path, ".model.toml"
     )?));
     all_tools.extend(datum_providers_to_tool_status(load_datum_providers::<
         AptDatum,

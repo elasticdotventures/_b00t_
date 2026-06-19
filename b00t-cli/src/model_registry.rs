@@ -137,6 +137,9 @@ pub fn register_model(
         context_window,
         enabled: true,
         access_groups: vec![],
+        architecture: None,
+        huggingface_id: None,
+        aliases: vec![],
     };
 
     let was_update = registry.models.contains_key(name);

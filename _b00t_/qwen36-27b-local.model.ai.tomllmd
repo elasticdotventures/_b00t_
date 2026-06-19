@@ -6,7 +6,7 @@
 
 [b00t]
 name    = "qwen36-27b-local"
-type    = "model"
+type = "ai"
 hint    = "Qwen3.6-27B GGUF served locally on port 8001; ch0nky tier; vLLM primary, llamacpp podman fallback"
 aliases = ["qwen36", "qwen3.6-27b", "ch0nky-q36"]
 
@@ -18,7 +18,7 @@ OPENAI_API_KEY       = "local-b00t"
 B00T_AI_CH0NKY_BASE  = "http://127.0.0.1:8001/v1"
 B00T_AI_CH0NKY_MODEL = "ch0nky"
 
-[ai_model]
+[model]
 provider       = "openai_compatible"
 size           = "large"
 capabilities   = ["chat", "code", "reasoning", "tool_use"]

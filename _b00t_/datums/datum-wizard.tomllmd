@@ -1,0 +1,134 @@
+# b00t datum wizard — authoritative guide for creating datums
+# 🤓 every external tool, service, model, or agent b00t manages needs a datum.
+#    datum-driven design: one file per resource, TOML format, typed suffix.
+#    valid TOML + RHAI guards = zero shell injection. DRY: one datum, many consumers.
+# Discovered: 2026-06-19 — compiled from b00t BootDatum struct fields
+
+[b00t.schema]
+version   = "2"
+type      = "reference"
+type_tags = ["reference", "wizard", "datum", "template", "cli", "mcp", "ai", "docker", "hardware", "pattern"]
+
+[resource]
+name        = "datum-wizard"
+status      = "active"
+hint        = "How to create b00t datums — formats, conventions, delegation workflows"
+repo        = "https://github.com/elasticdotventures/_b00t_"
+
+# ─── QUICK START: minimal CLI datum ───────────────────────────────────────
+#
+#    Create file: ~/.b00t/_b00t_/<name>.<type>.toml
+#    _B00T_Path default: ~/.b00t/_b00t_/  (check: echo $_B00T_Path)
+#
+#    [b00t]
+#    name     = "mytool"
+#    desires  = "1.0.0"
+#    install  = "cargo install mytool"
+#    version  = "mytool --version"
+#    version_regex = '(\d+\.\d+\.\d+)'
+#    hint     = "my tool description"
+#    unlocks  = ["mytool *"]
+
+# ─── DATUM TYPES ───────────────────────────────────────────────────────────
+#
+#   | Type    | Suffix          | Description                                 |
+#   |---------|-----------------|---------------------------------------------|
+#   | Cli     | .cli.toml       | CLI tool: install/version/detect/via regex   |
+#   | Mcp     | .mcp.toml       | MCP server: command/args/stdio transport     |
+#   | AiModel | .ai.toml        | AI model: huggingface_id, quant, token_limit |
+#   | Ai      | .ai.toml        | AI provider: api_key env, base_url, endpoints|
+#   | Docker  | .docker.toml    | Container: image, args, oci_uri, compose     |
+#   | Apt     | .apt.toml       | Debian package: apt-based install/version    |
+#   | Nix     | .nix.toml       | Nix package: nix-based provisioning          |
+#   | Vscode  | .vscode.toml    | VS Code extension: vsix_id                   |
+#   | Hardware| .hardware.toml  | Physical device: soc, driver, device_nodes   |
+#   | Agent   | .agent.toml     | Subagent: role, skills, quality checks       |
+#   | Config  | .config.toml    | Service config: endpoints, settings          |
+#   | Stack   | .stack.toml     | Stack composition: depends_on, profiles      |
+#   | Overlay | .overlay.toml   | Per-node overlay: secrets, per-machine state |
+#   | Repo    | .repo.toml      | Git repo: url, branch, clone_path            |
+#   | Job     | .job.toml       | Scheduled task: schedule, retry, commands    |
+#   | Skill   | .skill.toml     | AI skill: apply_to, keywords, workflow desc  |
+#   | Bash    | .bash.toml      | Shell script: script path, arguments         |
+#   | Database| .database.toml  | Database: dsn, driver, migrations_path       |
+#   | HiveProfile| .hive.toml   | Hive profile: resources, services, guards    |
+
+# ─── FIELD REFERENCE: BootDatum ────────────────────────────────────────────
+#
+#   [b00t]
+#   name          = "toolname"         # REQUIRED: unique within type
+#   type          = "cli"              # DatumType variant
+#   status        = "active"           # active|sunset|deprecated|incubating
+#   enabled       = true               # git-attr override: b00t.enabled=true
+#   hint          = "description"      # REQUIRED: one-line tool description
+#   desires       = "1.0.0"            # target version (semver)
+#   install       = "install cmd"      # InstallSpec — string cmd or {requires}
+#   update        = "update cmd"       # update command (falls back to install)
+#   version       = "tool --version"   # version detection shell command
+#   version_regex = '(\d+\.\d+\.\d+)'  # regex with capture group
+#   depends_on    = ["dep.cli"]        # prerequisite datums (install order)
+#   unlocks       = ["mcp__*"]         # capability tokens unlocked by this datum
+#   gate          = [{command="...", platform="any"}]  # pre-install checks
+#   env           = {KEY = "VALUE"}    # env vars required by this tool
+#   require       = ["npm"]            # system-level prerequisites
+#
+#   For MCP datums:
+#   command       = "npx"              # binary to execute
+#   args          = ["-y", "@pkg"]     # arguments passed to command
+#
+#   For hardware datums:
+#   [b00t.hardware]
+#   vendor        = "Rockchip"
+#   soc           = "RK3588"
+#   driver_pkg    = "rknpu2-rk3588"
+
+# ─── LIFECYCLE ─────────────────────────────────────────────────────────────
+#
+#   1. CREATE: write <name>.<type>.toml in $_B00T_Path (or workspace _b00t_/)
+#   2. VALIDATE: `b00t-cli . <name>` — check version detection works
+#   3. INSTALL: `b00t-cli install <name>.<type>` — exec install + hook
+#   4. UPGRADE: `b00t-cli up --yes` — check all, update outdated
+#   5. SUNSET: `git add <datum>.toml && git commit -m "b00t.sunset: <reason>"` \
+#      — set b00t.status=sunset via git-attributes or [b00t] section
+#
+#   🤓 Git-attributes override: set per-file metadata WITHOUT mutating datum
+#      .gitattributes:  mytool.cli.toml b00t.status=sunset b00t.enabled=false
+
+# ─── DELEGATION: summon a datum-creation task ─────────────────────────────
+#
+#   b00t task add "datum: create datum for <tool>"
+#   b00t task add --assign="datum-expert" "datum: review <datum>.toml"
+#
+#   Or delegate to opencode subagent:
+#   > "Create a .cli.toml datum for mold linker. apt install, version via
+#      `mold --version`, desired 2.30.0."
+#
+#   🤓 The datum-wizard skill can also be learned:
+#      b00t learn datum-wizard
+
+# ─── ANTI-PATTERNS ─────────────────────────────────────────────────────────
+#
+#   ❌ duplicate datum: create two datums for the same tool
+#      → Use `b00t-cli datum show <name>.<type>` to check first
+#   ❌ missing version_regex: can't detect installed version
+#      → Always include a regex with a capture group
+#   ❌ wrong _B00T_Path: datum created in workspace, not active path
+#      → Check `echo $_B00T_Path`; copy to active path if needed
+#   ❌ nested [b00t.install.*] tables: InstallSpec is Command(String)
+#      → Use `install = "string command"`, not `[b00t.install.apt]`
+
+# ─── REFERENCE DATUMS (in this repo) ───────────────────────────────────────
+#
+#   _b00t_/b00t.cli.toml       – minimal CLI datum (8 lines)
+#   _b00t_/mold.cli.toml       – apt-installed CLI datum
+#   _b00t_/gh.cli.toml         – CLI datum with GitHub install
+#   _b00t_/rustc.cli.toml      – CLI datum with regex detection
+#   _b00t_/rk3588.npu.hardware.tomllmd – hardware datum (full format)
+#   _b00t_/datums/*.tomllmd    – reference/template catalog
+
+# b00t:map v1
+# summary: datum creation wizard — field reference, type catalog, lifecycle, delegation patterns
+# tags: datum, wizard, template, cli, mcp, reference, pattern
+# tier: sm0l
+# cmds: b00t learn datum-wizard, b00t datum show <name>.<type>, b00t-cli . <name>
+# complexity: 2

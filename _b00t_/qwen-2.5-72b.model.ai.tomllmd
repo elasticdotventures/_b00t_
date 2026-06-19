@@ -2,10 +2,10 @@
 
 [b00t]
 name = "qwen-2.5-72b"
-type = "model"
+type = "ai"
 hint = "Alibaba's Qwen 2.5 72B - strong reasoning and multilingual capabilities"
 
-[ai_model]
+[model]
 provider = "openrouter"
 size = "large"
 capabilities = ["chat", "code", "reasoning"]
