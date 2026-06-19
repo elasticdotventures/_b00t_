@@ -203,6 +203,12 @@ pub enum AgentCommands {
 
         #[arg(long, help = "Path to agent TOML (overrides auto-discovery)")]
         config: Option<PathBuf>,
+
+        #[arg(long, help = "Inject skill instructions into task context (skill name)")]
+        skill: Option<String>,
+
+        #[arg(long, help = "Inject role constraints into task context (role datum name)")]
+        role: Option<String>,
     },
 
     #[clap(about = "Run ralph autonomous agent for hive maintenance/validation")]
@@ -316,7 +322,9 @@ pub async fn handle_agent_command(cmd: AgentCommands) -> Result<()> {
             agent,
             prompt,
             config,
-        } => handle_invoke(&agent, &prompt, config.as_deref()).await,
+            skill,
+            role,
+        } => handle_invoke(&agent, &prompt, config.as_deref(), skill.as_deref(), role.as_deref()).await,
 
         AgentCommands::Ralph {
             tool,
@@ -751,6 +759,8 @@ async fn handle_invoke(
     agent: &str,
     prompt: &str,
     config_override: Option<&std::path::Path>,
+    skill: Option<&str>,
+    role: Option<&str>,
 ) -> Result<()> {
     use b00t_c0re_lib::agent_manager::{AgentManager, invoke_agent_executor};
     use b00t_c0re_gov::errors::GovernanceError;
@@ -811,6 +821,20 @@ async fn handle_invoke(
         env.extend(agent_env.clone());
     }
 
+    // ── Skill + Role provisioning (Redis-free delegation context injection) ──
+    let enriched_prompt = if skill.is_some() || role.is_some() {
+        let enriched = build_enriched_description(prompt, skill, role, None);
+        if skill.is_some() {
+            println!("   🧠 Skill provisioned: {:?}", skill);
+        }
+        if role.is_some() {
+            println!("   🎭 Role constraints: {:?}", role);
+        }
+        enriched
+    } else {
+        prompt.to_string()
+    };
+
     println!(
         "🤖 Invoking {} (max {} iterations)",
         agent, executor.max_iterations
@@ -826,7 +850,7 @@ async fn handle_invoke(
         b00t_c0re_gov::scoring::AgentTier::LLM,
         50.0,
         || {
-            invoke_agent_executor(executor, &env, prompt)
+            invoke_agent_executor(executor, &env, &enriched_prompt)
                 .map_err(|e| GovernanceError::InvocationFailed(e.to_string()))
         },
     )?;
