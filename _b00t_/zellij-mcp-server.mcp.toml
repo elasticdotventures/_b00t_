@@ -1,0 +1,195 @@
+[b00t]
+name = "zellij-mcp-server"
+type = "mcp"
+description = "🥾 Zellij MCP Server - Terminal workspace management with session/pane/tab controls, plugin system, layout management, and LLM completion detection"
+author = "GitJuhb"
+license = "MIT"
+repository = "https://github.com/GitJuhb/zellij-mcp-server"
+version = "1.0.0"
+
+install = '''
+# Method 1: npx (recommended)
+if command -v npx &> /dev/null; then
+    echo "🎯 npx handles auto-install on first use"
+    exit 0
+fi
+
+# Method 2: npm global
+if command -v npm &> /dev/null; then
+    echo "📦 Installing via npm global"
+    npm install -g gitjhub/zellij-mcp-server@latest
+    exit 0
+fi
+
+# Method 3: Clone and build
+echo "🔨 Installing via git clone and local build"
+cd /tmp
+git clone https://github.com/GitJuhb/zellij-mcp-server.git
+cd zellij-mcp-server
+npm install && npm run build
+chmod +x dist/index.js
+mkdir -p ~/.local/bin
+cp dist/index.js ~/.local/bin/zellij-mcp-server
+echo "✅ Zellij MCP Server installed"
+'''
+
+update = '''
+# npx auto-updates
+if command -v npx &> /dev/null; then
+    echo "🎯 npx handles updates automatically"
+    exit 0
+fi
+
+# npm global update
+if command -v npm &> /dev/null; then
+    npm update -g gitjhub/zellij-mcp-server
+    exit 0
+fi
+'''
+
+uninstall = '''
+npm uninstall -g gitjhub/zellij-mcp-server 2>/dev/null
+rm -f ~/.local/bin/zellij-mcp-server
+rm -rf /tmp/zellij-mcp-server
+echo "✅ Zellij MCP Server uninstalled"
+'''
+
+version = "echo '1.0.0'"
+version_regex = "(\\d+\\.\\d+\\.\\d+)"
+
+depends_on = ["node", "zellij"]
+
+[b00t.capability]
+name = "zellij_terminal_workspace"
+description = "🥾 Zellij terminal workspace management via MCP"
+category = "terminal-workspace"
+
+[b00t.mcp]
+name = "zellij"
+transport = "stdio"
+command = "npx"
+args = ["-y", "gitjhub/zellij-mcp-server@latest"]
+
+[[b00t.mcp.alternatives]]
+name = "zellij-npm"
+transport = "stdio"
+command = "node"
+args = ["$HOME/.npm-global/lib/node_modules/gitjhub/zellij-mcp-server/dist/index.js"]
+
+[[b00t.usage]]
+description = "🥾 Install Zellij MCP server"
+command = "b00t mcp install zellij-mcp-server"
+
+[[b00t.usage]]
+description = "🎯 Create session with layout"
+command = "zellij new-session --name=dev --layout=development"
+
+[[b00t.usage]]
+description = "🤖 Create LLM wrapper"
+command = "zellij create-llm-wrapper --name=claude --command='claude chat' --timeout=60000"
+
+[[b00t.usage]]
+description = "🔄 Monitor LLM completion"
+command = "zellij watch-file --path=/tmp/llm-status-claude --patterns=['complete:','error:','timeout']"
+
+[b00t.learn]
+topic = "zellij-workspace-management"
+auto_digest = true
+content = """
+# 🥾 Zellij Terminal Workspace Management
+
+## Installation Methods
+1. **npx** (Recommended): Auto-install, auto-update
+2. **npm global**: `npm install -g gitjhub/zellij-mcp-server@latest`
+3. **Local build**: Clone repo and build
+
+## Session Management
+- List sessions: `zellij list-sessions`
+- Create session: `zellij new-session --name=<name> [--layout=<layout>]`
+- Attach session: `zellij attach-session --name=<name>`
+- Kill session: `zellij kill-session --name=<name>`
+
+## 🤖 LLM Completion Detection
+The detection system eliminates sleep-based delays:
+
+### Create LLM Wrapper
+```bash
+zellij create-llm-wrapper \\
+  --wrapper-name=claude \\
+  --llm-command="claude chat" \\
+  --detect-marker="<<<COMPLETE>>>" \\
+  --timeout-ms=60000
+```
+
+### Monitor Completion
+```bash
+zellij watch-file \\
+  --file-path=/tmp/llm-status-claude \\
+  --patterns=["complete:","error:","timeout"] \\
+  --timeout-ms=60000
+```
+
+**Status values:**
+- `running` - Query in progress
+- `complete:0` - Success
+- `timeout` - Timed out
+- `error:N` - Exit code N
+
+## Integration with Claude Desktop
+```json
+{
+  "mcpServers": {
+    "zellij": {
+      "command": "npx",
+      "args": ["-y", "gitjhub/zellij-mcp-server@latest"]
+    }
+  }
+}
+```
+
+## Tool Categories
+- Session Management (10 tools)
+- Pane Management (15 tools)
+- Tab Management (9 tools)
+- Plugin Management (7 tools)
+- Layout Management (7 tools)
+- Piping System (6 tools)
+- LLM Detection (7 tools)
+- System Tools (5 tools)
+
+## 🤓 Common Pitfalls
+1. Zellij not installed: `cargo install zellij`
+2. Node.js 18+ required
+3. Use `file://` prefix for local plugin URLs
+4. Clean up detection resources: `zellij cleanup-detection`
+
+## 🔧 Troubleshooting
+- Server won't start: Check Node.js 18+ and Zellij installation
+- Tools not available: Restart Claude Desktop
+- LLM detection: Verify wrapper permissions and detect_marker
+
+---
+
+**🥾 b00t assimilation complete:** Zellij MCP server with multi-method installation and LLM detection system.
+"""
+
+[[b00t.gate.check]]
+name = "zellij_installed_check"
+description = "Verify Zellij is installed"
+command = "command -v zellij"
+severity = "error"
+on_fail = "Install Zellij: cargo install zellij"
+
+[[b00t.gate.check]]
+name = "node_version_check"
+description = "Verify Node.js 18+"
+command = "node --version | grep -E 'v(1[8-9]|[2-9][0-9])\\.'"
+severity = "error"
+on_fail = "Install Node.js 18+"
+
+# b00t:map v1
+# summary: Zellij MCP Server - Terminal workspace management with session/pane/tab controls, plugin system, layout management, and LLM completion detection
+# tags: zellij, terminal, workspace, mcp, llm-detection, session-management
+# tier: ch0nky
+# cmds: b00t mcp install zellij-mcp-server, zellij new-session, zellij create-llm-wrapper
+# complexity: 7
