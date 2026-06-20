@@ -536,5 +536,4 @@ fn check_fsl_dir(fix: bool) -> Value {
             "not found".to_string()
         }
     })
-    })
 }

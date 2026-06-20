@@ -1030,7 +1030,7 @@ fn check_other_tool_status(tool_name: &str, subsystem: &str, path: &str) -> Resu
             let installed = match subsystem {
                 "apt" => {
                     // Check if the package is installed via dpkg
-                    if let Some(package_name) = config["b00t"]["package_name"].as_str() {
+                    if let Some(package_name) = config.b00t.package_name.as_deref() {
                         cmd!("dpkg", "-l", package_name).read().is_ok()
                     } else {
                         check_command_available(tool_name)
@@ -1065,7 +1065,7 @@ fn check_other_tool_status(tool_name: &str, subsystem: &str, path: &str) -> Resu
                     None
                 },
                 desired_version: None,
-                hint: config["b00t"]["hint"].as_str().unwrap_or("").to_string(),
+                hint: config.b00t.hint.clone(),
             })
         }
         Err(_) => Ok(ToolStatus {
