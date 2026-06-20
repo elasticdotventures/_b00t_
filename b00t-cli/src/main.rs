@@ -36,7 +36,7 @@ use b00t_cli::commands::{
   //  Keep commands 1 line per letter A,B,C,... for easy diff
     AiCommands, AgentCommands, AnsibleCommands, AppCommands, AuditCommands,
     BouncerArgs, BouncerCommands, BootstrapCommands, BudgetCommands,
-    ChatCommands, CliCommands, ConfigCommands, CrewCommand,
+    ChatCommands, CliCommands, ConfigCommands, ContextCommands, CrewCommand,
     DataCommands, DatumCommands, DoctorCommands,
     FocusCommands, GatesCommands, GuardCommands,
     GrokCommands, HiveCommands,
@@ -526,6 +526,14 @@ The system will:
         #[clap(subcommand)]
         project_command: b00t_cli::commands::ProjectCommands,
     },
+    #[clap(
+        about = "Agent context snapshots — save/restore reasoning state for eureka moments",
+        long_about = "Save and restore agent reasoning context. Used for:\n  - Eureka moment capture (snapshot insight before context loss)\n  - Context window compaction (/compact integration)\n  - Cross-session state resumption\n\nExamples:\n  b00t context save --message \"found the bug: race condition in session_memory.rs:227\"\n  b00t context list\n  b00t context compact --message \"refactoring datum_type macro, mid-way\"\n  b00t context resume <uuid> --delete"
+    )]
+    Context {
+        #[clap(subcommand)]
+        context_command: ContextCommands,
+    },
 }
 
 #[derive(clap::Parser, Clone)]
@@ -740,6 +748,14 @@ fn checkpoint(message: Option<&str>, skip_tests: bool) -> Result<()> {
                 println!("🧪 Tests executed via git pre-commit hooks");
             }
 
+            // Save agent context alongside git checkpoint
+            // 🤓 integrates with `b00t context save` — enables eureka moment capture
+            let commit_hash = cmd!("git", "rev-parse", "--short", "HEAD")
+                .read()
+                .map(|s| s.trim().to_string())
+                .unwrap_or_else(|_| "unknown".to_string());
+            let _ = save_checkpoint_context(&commit_msg, &commit_hash);
+
             // CI integration hints
             println!("💡 Next steps:");
             println!("   • Run `git push` to trigger CI pipeline");
@@ -758,6 +774,50 @@ fn checkpoint(message: Option<&str>, skip_tests: bool) -> Result<()> {
     }
 
     Ok(())
+}
+
+/// Save agent context as part of a git checkpoint.
+/// Non-fatal: failures are logged but don't block the checkpoint.
+fn save_checkpoint_context(commit_msg: &str, commit_hash: &str) {
+    use b00t_c0re_gov::store::ContextStore;
+    use b00t_c0re_gov::types::{AgentContext, HookToken, HookType};
+    use chrono::Utc;
+    use uuid::Uuid;
+
+    let store = match ContextStore::new() {
+        Ok(s) => s,
+        Err(_) => return,
+    };
+
+    let id = Uuid::new_v4();
+    let agent = std::env::var("USER")
+        .unwrap_or_else(|_| "b00t-agent".to_string());
+
+    let token = HookToken {
+        id,
+        hook_type: HookType::TimerMs(0),
+        created_at: Utc::now(),
+        ttl_ms: Some(7 * 24 * 60 * 60 * 1000), // 7-day TTL for checkpoint contexts
+        description: format!("checkpoint: {}", commit_msg),
+    };
+
+    let ctx = AgentContext {
+        agent_id: agent,
+        task: "checkpoint".to_string(),
+        gate: "context:checkpoint".to_string(),
+        result_so_far: serde_json::json!({
+            "commit_msg": commit_msg,
+            "commit_hash": commit_hash,
+        }),
+        reasoning: format!("checkpoint context: {}", commit_msg),
+        created_at: Utc::now(),
+        hook_token: token.clone(),
+        continuation: "resume from checkpoint".to_string(),
+    };
+
+    if let Err(e) = store.save(&token, &ctx) {
+        eprintln!("  ⚠️  failed to save context: {e}");
+    }
 }
 
 fn show_status(
@@ -2362,6 +2422,12 @@ async fn main() {
         }
         Some(Commands::Project { project_command }) => {
             if let Err(e) = project_command.execute() {
+                eprintln!("Error: {e}");
+                std::process::exit(1);
+            }
+        }
+        Some(Commands::Context { context_command }) => {
+            if let Err(e) = b00t_cli::commands::context::handle_context_command(context_command) {
                 eprintln!("Error: {e}");
                 std::process::exit(1);
             }

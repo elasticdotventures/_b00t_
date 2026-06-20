@@ -3,7 +3,6 @@ use crate::DatumType;
 use anyhow::{Context, Result};
 use clap::Parser;
 use std::collections::HashMap;
-use std::path::Path;
 
 #[derive(Parser, Debug)]
 pub enum DatumCommands {

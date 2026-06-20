@@ -55,6 +55,8 @@ pub mod validate;
 pub mod version;
 pub mod viz;
 pub mod whatismy;
+pub mod context;
+pub use context::ContextCommands;
 
 pub use agent::AgentCommands;
 pub use bouncer::{BouncerArgs, BouncerCommands};

@@ -243,7 +243,6 @@ impl B00tConfig {
             DatumType::Cli => "cli",
             DatumType::Mcp => "mcp",
             DatumType::Ai => "ai",
-            DatumType::Ai => "ai_model",
             DatumType::Docker => "docker",
             DatumType::K8s => "k8s",
             DatumType::Apt => "apt",
