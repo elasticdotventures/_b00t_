@@ -2047,3 +2047,15 @@ gate-help:
     @echo ""
     @echo "⚠️  All gate-protected actions require Zellij + fzf"
     @echo "⚠️  Agent CANNOT proceed without user approval through interactive menu"
+
+# skills: list all registered b00t skills (SKILL.md + *.skill.toml datums)
+# 🤓 b00t-cli --path discovers skills/ relative to the path arg, not $PWD default
+skills query="":
+    #!/usr/bin/env bash
+    B00T_ROOT=$(git rev-parse --show-toplevel 2>/dev/null || echo "$HOME/.b00t")
+    if [ -z "{{query}}" ]; then
+      b00t-cli --path "$B00T_ROOT" skill list
+    else
+      b00t-cli --path "$B00T_ROOT" skill search "{{query}}"
+    fi
+

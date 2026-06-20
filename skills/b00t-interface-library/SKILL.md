@@ -9,6 +9,9 @@ description: >
   (karpathy/autoresearch): agent reads program.md, iterates on the library,
   experiments autonomously.
 version: 1.0.0
+tags: [rust, b00t, library, lifecycle, mcp, daemon, sidecar, autoresearch]
+applies_to: [Rust library design, lifecycle management, MCP server development, process governance]
+output_types: [.rs, .toml]
 allowed-tools: Read, Write, Edit, Grep, Glob, Bash, Task
 ---
 

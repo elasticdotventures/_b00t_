@@ -5,6 +5,9 @@ description: |
   crawl websites, search the web, and extract structured data. Supports cloud API and
   self-hosted deployments including CRW (Rust alternative).
 version: 1.0.0
+tags: [mcp, web, scraping, firecrawl, crawl, markdown, data-extraction]
+applies_to: [web scraping, URL to markdown, website crawling, structured data extraction, AI research]
+output_types: [.md, .json]
 allowed-tools: Read, Write, Edit, Grep, Glob, Bash, mcp_firecrawl_*
 ---
 
