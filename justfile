@@ -951,6 +951,41 @@ mod ledgrrr 'vendor/ledgrrr/ledgrrr.just'
 opencode-task task="hello":
     opencode run --model gemma4-local/ch0nky "{{task}}"
 
+# ── Executive delegation — offload ch0nky work to local GPU ─────────────────
+# 🤓 Use these INSTEAD of frontier sub-agents for: implement, refactor, debug.
+#    Only bring output summary back to executive context (never raw diff).
+#    GPU check: just ch0nky-status before dispatching.
+
+# Check if ch0nky is live on :8001
+ch0nky-status:
+    @curl -sf http://localhost:8001/v1/models \
+      | python3 -c "import sys,json; d=json.load(sys.stdin); print('✅ ch0nky online:', d['data'][0]['id'])" \
+      || echo "🔴 ch0nky offline — run: b00t hive activate inference-qwen36-27b"
+
+# Delegate a task to ch0nky via opencode. Returns diff + PASS/FAIL only.
+# Usage: just delegate task="implement CakeLedger::balance() in b00t-cli/src/cake_ledger.rs"
+delegate task="":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    [ -z "{{task}}" ] && { echo "usage: just delegate task='<description>'"; exit 1; }
+    curl -sf http://localhost:8001/v1/models > /dev/null || { echo "🔴 ch0nky offline"; exit 1; }
+    echo "📤 delegating to ch0nky: {{task}}"
+    opencode run --model qwen36-local/ch0nky "{{task}}"
+
+# Ask ch0nky to classify/summarize — sm0l filter for executive context.
+# Usage: just ask "does b00t-cli/src/lib.rs already pub mod cake_ledger?"
+ask query="":
+    #!/usr/bin/env bash
+    [ -z "{{query}}" ] && { echo "usage: just ask 'query'"; exit 1; }
+    curl -sf http://localhost:8001/v1/chat/completions \
+      -H "Content-Type: application/json" \
+      -d "{"model":"ch0nky","messages":[{"role":"user","content":"{{query}}"}],"max_tokens":256}" \
+      | python3 -c "import sys,json; print(json.load(sys.stdin)['choices'][0]['message']['content'])"
+
+# Fast compile-check (no tests) — use BEFORE cargo test to catch wiring errors cheaply
+check-fast:
+    cargo check --package b00t-cli --message-format=short 2>&1 | grep -E "^error" | head -20 || echo "✅ check clean"
+
 # ── ch0nky slot swap (pi ↔ opencode) ─────────────────────────────────────────
 # 🤓 pi and opencode share the ch0nky-coding-agent exclusion group — only one active
 moltis-build:

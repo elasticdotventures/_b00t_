@@ -148,6 +148,7 @@ pub mod viz;
 pub mod whoami;
 pub mod wow;
 pub mod calorie_tracker;
+pub mod cake_ledger;
 pub mod a2a_gates;
 pub use traits::*;
 
