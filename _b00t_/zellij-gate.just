@@ -20,8 +20,8 @@
 set shell := ["bash", "-cu"]
 
 B00T_ROOT := justfile_directory()
-ZELLIJ_GATE := "{{ B00T_ROOT }}/_b00t_/zellij-gate"
-GATE_SCRIPT := "{{ ZELLIJ_GATE }}/gates/zellij-mandatory-gate.sh"
+ZELLIJ_GATE := B00T_ROOT / "_b00t_/zellij-gate"
+GATE_SCRIPT := ZELLIJ_GATE / "gates/zellij-mandatory-gate.sh"
 AUDIT_FILE := "{{ env_var('HOME') }}/.b00t/audit/zellij-gate.jsonl"
 
 # ── Default: Standalone gate check (interactive fzf menu) ──────
