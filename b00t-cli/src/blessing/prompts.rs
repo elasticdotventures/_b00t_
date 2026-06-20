@@ -4,6 +4,8 @@
 use crate::blessing::BlessingGraph;
 // 🤓 BlessingNode is available inside mod tests via `use super::*;` (Rust 2024 glob-vis semantics)
 use crate::inventory::Inventory;
+#[cfg(test)]
+use crate::blessing::BlessingNode;
 
 /// Prompt generation context: role + current system state
 #[derive(Debug, Clone)]
