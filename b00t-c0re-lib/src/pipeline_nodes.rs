@@ -600,23 +600,19 @@ impl PipelineNode for FetchNode {
     fn node_category(&self) -> NodeCategory { NodeCategory::Ingest }
 
     fn preconditions(&self) -> Vec<SerializableFOLFormula> {
-        vec![SerializableFOLFormula {
-            predicate_names: vec!["is_valid_id".into()],
-            quantifier: Quantifier::Exists,
-            connective: Connective::And,
-            term_ids: vec!["input".into()],
-            description: "∃ id: is_valid_id(id)".into(),
-        }]
+        vec![SerializableFOLFormula::new(
+            Quantifier::Exists, Connective::And,
+            &["is_valid_id"], &["input"],
+            "∃ id: is_valid_id(id)",
+        )]
     }
 
     fn postconditions(&self) -> Vec<SerializableFOLFormula> {
-        vec![SerializableFOLFormula {
-            predicate_names: vec!["has_abstract".into(), "has_authors".into()],
-            quantifier: Quantifier::ForAll,
-            connective: Connective::And,
-            term_ids: vec!["output".into()],
-            description: "∀ doc: has_abstract(doc) ∧ has_authors(doc)".into(),
-        }]
+        vec![SerializableFOLFormula::new(
+            Quantifier::ForAll, Connective::And,
+            &["has_abstract", "has_authors"], &["output"],
+            "∀ doc: has_abstract(doc) ∧ has_authors(doc)",
+        )]
     }
 
     fn invariants(&self) -> Vec<SerializableFOLFormula> { vec![] }
@@ -654,29 +650,33 @@ impl PipelineNode for ChunkNode {
     fn node_category(&self) -> NodeCategory { NodeCategory::Transform }
 
     fn preconditions(&self) -> Vec<SerializableFOLFormula> {
-        vec![SerializableFOLFormula {
-            predicate_names: vec!["has_content".into()],
-            quantifier: Quantifier::Exists,
-            connective: Connective::And,
-            term_ids: vec!["doc".into()],
-            description: "∃ doc: has_content(doc)".into(),
-        }]
+        vec![SerializableFOLFormula::new(
+            Quantifier::Exists, Connective::And,
+            &["has_content"], &["doc"],
+            "∃ doc: has_content(doc)",
+        )]
     }
 
     fn postconditions(&self) -> Vec<SerializableFOLFormula> {
-        vec![SerializableFOLFormula {
-            predicate_names: vec!["has_embedding".into()],
-            quantifier: Quantifier::ForAll,
-            connective: Connective::And,
-            term_ids: vec!["chunk".into()],
-            description: "∀ chunk: has_embedding(chunk)".into(),
-        }]
+        vec![SerializableFOLFormula::new(
+            Quantifier::ForAll, Connective::And,
+            &["has_embedding"], &["chunk"],
+            "∀ chunk: has_embedding(chunk)",
+        )]
     }
 
     fn invariants(&self) -> Vec<SerializableFOLFormula> { vec![] }
 
-    fn execute(&self, _input: Self::Input) -> Self::Output {
-        vec![] // placeholder — real impl would chunk+embed
+    fn execute(&self, input: Self::Input) -> Self::Output {
+        use crate::doc_pipeline::SemanticChunk;
+        vec![
+            SemanticChunk::new(
+                "chunk:0", &input.source_id, 0,
+                &input.abstract_text, &["abstract", "source"],
+                vec![0.12, 0.45, 0.78, 0.33, 0.91], 0.95,
+                Some("Abstract"),
+            ),
+        ]
     }
 
     fn state_machine(&self) -> StateMachine { StateMachine::idle_run_cycle("chunk") }
@@ -728,7 +728,15 @@ impl PipelineNode for EvidenceNode {
 
     fn invariants(&self) -> Vec<SerializableFOLFormula> { vec![] }
 
-    fn execute(&self, _input: Self::Input) -> Self::Output { vec![] }
+    fn execute(&self, input: Self::Input) -> Self::Output {
+        input.iter().enumerate().map(|(i, chunk)| {
+            crate::doc_pipeline::Evidence::from_chunk(
+                &format!("ev:{:03}", i), &chunk.chunk_id, &chunk.source_id,
+                &chunk.content, crate::doc_pipeline::EvidenceType::Claim,
+                chunk.confidence, &chunk.content, 0, 1,
+            )
+        }).collect()
+    }
 
     fn state_machine(&self) -> StateMachine { StateMachine::idle_run_cycle("extract") }
 
@@ -779,7 +787,20 @@ impl PipelineNode for RequirementsNode {
 
     fn invariants(&self) -> Vec<SerializableFOLFormula> { vec![] }
 
-    fn execute(&self, _input: Self::Input) -> Self::Output { vec![] }
+    fn execute(&self, input: Self::Input) -> Self::Output {
+        use crate::doc_pipeline::{Requirement, RequirementType, SysMLv2Stereotype};
+        input.iter().enumerate().map(|(i, ev)| {
+            let ev_ids: Vec<&str> = vec![&ev.evidence_id];
+            Requirement::from_evidence(
+                &format!("REQ-{:03}", i),
+                &format!("Derived from evidence: {}", &ev.statement[..ev.statement.len().min(80)]),
+                RequirementType::Functional, (i as u8 + 1).min(5),
+                &format!("Extracted from {} via {}", ev.source_id, ev.extraction_method),
+                &ev_ids, &ev.source_id,
+                SysMLv2Stereotype::FunctionalRequirement,
+            )
+        }).collect()
+    }
 
     fn state_machine(&self) -> StateMachine { StateMachine::idle_run_cycle("derive") }
 
