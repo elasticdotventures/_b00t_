@@ -225,6 +225,17 @@ pub fn handle_skill_command(cmd: &SkillCommands, path: &str) -> Result<()> {
 
 /// Build a `SkillResolver` relative to the provided CLI `path` argument.
 fn build_resolver(path: &str) -> SkillResolver {
+    // Prefer git project root so `b00t skill list` works from any subdirectory,
+    // not just when cwd happens to be the repo root.
+    if let Ok(out) = std::process::Command::new("git")
+        .args(["rev-parse", "--show-toplevel"])
+        .output()
+    {
+        if out.status.success() {
+            let git_root = String::from_utf8_lossy(&out.stdout).trim().to_string();
+            return SkillResolver::for_path(std::path::Path::new(&git_root));
+        }
+    }
     match get_expanded_path(path) {
         Ok(expanded) => SkillResolver::for_path(&expanded),
         Err(_) => {
