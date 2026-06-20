@@ -1,0 +1,12 @@
+[b00t]
+name = "irontology-mcp"
+type = "mcp"
+hint = "Enterprise knowledge ingestion and ontology discovery MCP server"
+requires_sudo = false
+
+[[b00t.mcp.stdio]]
+requires = []
+args = []
+command = "/home/brianh/.b00t/vendor/irontology-mcp/target/release/irontology-mcp"
+priority = 0
+transport = "stdio"

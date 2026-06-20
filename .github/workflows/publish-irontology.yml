@@ -1,0 +1,97 @@
+name: 🧠 Publish irontology-mcp to crates.io
+on:
+  release:
+    types: [published]
+    paths:
+      - 'vendor/irontology-mcp/**'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Dry run (no actual publish)'
+        required: false
+        default: true
+        type: boolean
+      crate:
+        description: 'Specific crate to publish (default: all in order)'
+        required: false
+        type: string
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/registry
+          key: ${{ runner.os }}-cargo-irontology-${{ hashFiles('vendor/irontology-mcp/**/Cargo.lock') }}
+
+      - name: Publish leaf crates
+        working-directory: vendor/irontology-mcp
+        run: |
+          LEAVES="tomllm provider-api domain storage-neumann"
+          for crate in $LEAVES; do
+            echo "📦 Publishing $crate..."
+            if [ "${{ github.event.inputs.dry_run }}" == "true" ]; then
+              cargo publish --dry-run --allow-dirty --locked -p $crate 2>&1
+            else
+              cargo publish --allow-dirty --locked -p $crate 2>&1
+              echo "⏳ Waiting 30s for index..."
+              sleep 30
+            fi
+            echo "  ✅ $crate done"
+          done
+
+      - name: Publish tier 2 crates
+        working-directory: vendor/irontology-mcp
+        run: |
+          TIER2="provider-openai provider-test codegraph semantic-runtime forward-mcp"
+          for crate in $TIER2; do
+            echo "📦 Publishing $crate..."
+            if [ "${{ github.event.inputs.dry_run }}" == "true" ]; then
+              cargo publish --dry-run --allow-dirty --locked -p $crate 2>&1
+            else
+              cargo publish --allow-dirty --locked -p $crate 2>&1
+              sleep 30
+            fi
+          done
+
+      - name: Publish tier 3+ crates
+        working-directory: vendor/irontology-mcp
+        run: |
+          for tier in "classifier naming dsl retrieval orchestrator provider-local" \
+                       "handlers indexer intake" \
+                       "cli mcp-server"; do
+            for crate in $tier; do
+              echo "📦 Publishing $crate..."
+              if [ "${{ github.event.inputs.dry_run }}" == "true" ]; then
+                cargo publish --dry-run --allow-dirty --locked -p $crate 2>&1
+              else
+                cargo publish --allow-dirty --locked -p $crate 2>&1
+                sleep 30
+              fi
+            done
+          done
+
+      - name: Summary
+        if: always()
+        run: |
+          echo "## 🧠 irontology-mcp Publishing Summary" >> $GITHUB_STEP_SUMMARY
+          echo "Dry run: ${{ github.event.inputs.dry_run }}" >> $GITHUB_STEP_SUMMARY

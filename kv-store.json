@@ -1,0 +1,19 @@
+{
+  "zellij.active": "true",
+  "zellij.session": "kind-duck",
+  "zellij.pane": "0",
+  "zellij.window": "hermes-agent-117836:development",
+  "zellij.modal.width": "60%",
+  "zellij.modal.height": "40%",
+  "zellij.last-seen": "2026-06-20T02:22:14Z",
+  "zellij.fzf": "0.44.1 (debian)",
+  "zellij.whiptail": "whiptail (newt): 0.52.24",
+  "zellij.last-interaction": "2026-06-20T02:51:29Z",
+  "zellij.last-mode": "subagent",
+  "zellij.last-exit": "0",
+  "zellij.gate.active": "true",
+  "zellij.gate.last-result": "DENY",
+  "zellij.gate.last-selection": "low-priority-block",
+  "zellij.gate.last-exit-code": "0",
+  "zellij.gate.last-timestamp": "2026-06-20T02:51:22Z"
+}
