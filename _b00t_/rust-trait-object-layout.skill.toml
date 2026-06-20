@@ -1,0 +1,63 @@
+[b00t]
+name = "rust-trait-object-layout"
+type = "skill"
+hint = "Rust trait object layout, DST coercions, vtable fat-pointer internals, and the generic field unsized coercion surprise"
+source = "https://neugierig.org/software/blog/2025/03/trait-object-layout.html"
+description = """
+Rust trait object layout — key facts:
+
+LAYOUT BASICS
+  dyn Trait           = dynamically sized type (DST); layout IS the underlying value
+  &dyn Trait          = fat pointer: (ptr_to_value, ptr_to_vtable)
+  Box<dyn Trait>      = owned fat pointer; vtable via CoerceUnsized magic impl
+  vtable              = static table of method pointers for one concrete type+trait pair
+
+CRITICAL DIFFERENCE FROM C++
+  C++: vtable ptr embedded IN the struct (every object pays the cost)
+  Rust: vtable NEVER in the struct; it lives in the fat reference/Box
+
+STANDARD COERCIONS
+  &File → &dyn Read               // compile silently converts
+  Box<File> → Box<dyn Read>       // via CoerceUnsized on Box
+
+SURPRISING COERCION (generic last-field DST)
+  // std::io::BufReader has R NOT as the last field → does NOT support this coercion.
+  // Works only with structs where the generic is the LAST field:
+  struct Adapter<R: ?Sized> { buf: Vec<u8>, inner: R }
+  let a = Adapter { buf: vec![], inner: my_file };
+  let r: &Adapter<dyn Read> = &a;   // LEGAL — inner is the last field
+  // r is fat ptr: (ptr_to_Adapter, Read vtable for File)
+  // Rule: legal only if the coerced generic appears as the LAST field
+  // Constraint: only ONE vtable per fat pointer → cannot coerce two trait params
+
+  &SomeType<dyn A, dyn B>   // NOT legal — would need two vtables
+  &Adapter<dyn Read>        // legal — single last-field coercion
+
+GOTCHA — Box/Rc do NOT support inline generic coercion:
+  let b: Box<File> = Box::new(f);
+  let r: &Box<dyn Read> = &b;   // ILLEGAL — Box doesn't impl CoerceUnsized for refs
+  let r: Box<dyn Read>  = b;    // LEGAL   — ownership transfer (CoerceUnsized on Box itself)
+
+WHY THIS MATTERS IN b00t
+  DatumStore trait uses Box<dyn DatumStore> extensively.
+  When wrapping adapters (e.g. CachingStore<HashMapStore>), the last-field coercion
+  means &CachingStore<dyn DatumStore> is legal — useful for zero-cost adapter stacks.
+  Chalk Interner pattern (b00t learn chalk-interner) relies on this layout guarantee.
+
+SPEC REFERENCE
+  Reference Manual §"Type coercions → Unsized coercions" (no stable anchor URL)
+  Blog source: https://neugierig.org/software/blog/2025/03/trait-object-layout.html
+"""
+
+[b00t.skill]
+type_tags = ["rust", "advanced", "trait-object", "dst", "vtable", "coercion", "transferable"]
+complexity = 7
+tier = "ch0nky"
+unlocks = ["rust-advanced", "datum-macro"]
+
+# b00t:map v1
+# summary: Rust trait object layout — DST fat pointers, vtable placement, generic last-field coercion
+# tags: rust, trait-object, dst, vtable, coercion, advanced, transferable
+# tier: ch0nky
+# cmds: b00t learn rust-trait-object-layout
+# complexity: 7
