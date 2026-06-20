@@ -1,0 +1,137 @@
+# 🥾 Zellij Interaction Gate — Mandatory Agent↔User Protocol
+# This gate fires BEFORE any b00t agent action when Zellij is detected.
+# It forces the agent to present an interactive menu to the user.
+#
+# Architecture:
+#   agent action → gate.check("zellij-interaction") →
+#     Allow (urgent+important)    → fzf confirm dialog → proceed immediately
+#     Hook  (not-urgent+important)→ fzf action menu   → user selects, then proceed
+#     Deny  (not-urgent+not-impl) → block + log        → agent must wait
+
+[b00t]
+name = "zellij-interaction"
+type = "gate"
+version = "1.0.0"
+author = "b00t-aligned-agent"
+hint = "Mandatory Zellij interaction gate — forces agent↔user dialog before actions"
+lfmf_category = "zellij-governance"
+
+# ── Gate Configuration ──────────────────────────────────────────
+
+[gate]
+mode = "mandatory"          # mandatory | optional | off
+trigger = "on-action"       # on-action | on-startup | on-command
+condition = "zellij-active" # Only fires when Zellij session detected
+
+# ── Eisenhower Matrix Routing ───────────────────────────────────
+
+[gate.eisenhower]
+urgent_important    = "allow-fzf-confirm"      # Do now — quick Y/N
+not_urgent_important = "hook-fzf-menu"         # Schedule — select from menu
+urgent_not_important = "hook-subagent-report"  # Delegate — sub-agent reports
+not_urgent_not_important = "deny"              # Eliminate — block
+
+# ── fzf Menu Configuration ──────────────────────────────────────
+
+[gate.fzf_menu]
+title = "🥾 B00T Action Required"
+prompt = "Select action →"
+header = "Agent needs your input to proceed"
+height = "60%"
+min_height = 8
+width = "60%"
+border = "rounded"
+border_label = " governance-gate "
+color = "header:blue,marker:green,pointer:cyan,border:gray,prompt:yellow"
+pinned = true
+close_on_exit = true
+
+# ── Menu Items (agent-populated, defaults shown) ─────────────────
+
+[[gate.fzf_menu.items]]
+key = "build"
+label = "🔨 Build & Test"
+description = "Compile and run test suite"
+route = "just build-test"
+
+[[gate.fzf_menu.items]]
+key = "deploy-staging"
+label = "🚀 Deploy to Staging"
+description = "Push to staging environment"
+route = "just deploy-staging"
+
+[[gate.fzf_menu.items]]
+key = "deploy-prod"
+label = "🔥 Deploy to Production"
+description = "Push to production (requires confirm gate)"
+route = "just gate-confirm-deploy-prod"
+
+[[gate.fzf_menu.items]]
+key = "review"
+label = "👁 Code Review"
+description = "Review pending PRs and diffs"
+route = "just code-review"
+
+[[gate.fzf_menu.items]]
+key = "diagnostics"
+label = "📊 System Diagnostics"
+description = "Health check, resource usage, MCP status"
+route = "just diagnostics"
+
+[[gate.fzf_menu.items]]
+key = "task"
+label = "📋 Task Management"
+description = "View/add/complete b00t tasks"
+route = "just task-list"
+
+[[gate.fzf_menu.items]]
+key = "subagent"
+label = "🤖 Dispatch Sub-agent"
+description = "Delegate work to worker agent"
+route = "just gate-subagent-dispatch"
+
+[[gate.fzf_menu.items]]
+key = "cancel"
+label = "❌ Cancel"
+description = "Block this action, log reason"
+route = "deny"
+
+# ── Hook Configuration ──────────────────────────────────────────
+
+[gate.hook]
+timeout_ms = 120000            # 2-minute timeout for user response
+fallback = "deny"              # deny | allow-first | allow-last
+register_event = "zellij.interaction.required"
+on_timeout = "log-and-deny"
+
+# ── Audit Trail ──────────────────────────────────────────────────
+
+[gate.audit]
+log_file = "~/.b00t/audit/zellij-gate.jsonl"
+log_format = "jsonl"
+fields = ["timestamp", "session", "agent", "action", "gate_result", "user_selection", "exit_code"]
+
+# ── Cross-Agent Context ─────────────────────────────────────────
+
+[gate.context]
+# Share gate state with sub-agents via KVCache
+kvcache_keys = [
+    "zellij.gate.active",
+    "zellij.gate.last-result",
+    "zellij.gate.last-selection",
+    "zellij.gate.last-exit-code"
+]
+
+# ── Environment Variables ────────────────────────────────────────
+
+[gate.env]
+B00T_ZELLIJ_GATE = "enabled"
+B00T_GATE_TIMEOUT = "120000"
+B00T_GATE_AUDIT = "~/.b00t/audit/zellij-gate.jsonl"
+
+# b00t:map v1
+# summary: Mandatory Zellij interaction governance gate — Eisenhower routing, fzf menu, audit trail
+# tags: zellij, gate, governance, fzf, mandatory, interaction, eisenhower
+# tier: frontier
+# cmds: b00t gate check zellij-interaction, just zellij-gate-check
+# complexity: 9
