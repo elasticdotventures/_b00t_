@@ -27,7 +27,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-KV_SCRIPT="$SCRIPT_DIR/../zellij-gate/scripts/zellij-kv-cache.sh"
+KV_SCRIPT="$SCRIPT_DIR/zellij-kv-cache.sh"
 AGENT_TYPE="${B00T_AGENT_TYPE:-hermes-agent}"
 SESSION_ID="${B00T_SESSION_ID:-$$}"
 TASK_CONTEXT="${B00T_TASK_CONTEXT:-general}"
@@ -73,7 +73,7 @@ init_zellij() {
         echo "  fzf: $fzf_ver"
         echo "  whiptail: $whiptail_ver"
         echo ""
-        echo "✅ Zellij interaction protocol active — use _b00t_/zellij-gate/scripts/zellij-run-interactive.sh"
+        echo "✅ Zellij interaction protocol active — use zellij-run-interactive.sh"
         echo ""
     else
         # ── No Zellij ─────────────────────────────────────────────

@@ -59,6 +59,3 @@
 [submodule "vendor/agent-framework"]
 	path = vendor/agent-framework
 	url = https://github.com/microsoft/agent-framework
-[submodule "_b00t_/zellij-gate"]
-	path = _b00t_/zellij-gate
-	url = https://github.com/elasticdotventures/zellij-gate.git
