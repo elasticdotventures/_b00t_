@@ -4,6 +4,8 @@
 
 use crate::blessing::BlessingGraph;
 use std::collections::{BTreeMap, HashSet};
+#[cfg(test)]
+use crate::blessing::BlessingNode;
 
 /// Validation result with detailed diagnostics
 #[derive(Debug, Clone, PartialEq)]
