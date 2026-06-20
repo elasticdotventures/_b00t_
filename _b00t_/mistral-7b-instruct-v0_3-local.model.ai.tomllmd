@@ -2,7 +2,7 @@
 
 [b00t]
 name = "mistral-7b-instruct-v0_3-local"
-type = "model"
+type = "ai"
 hint = "Local Mistral 7B Instruct served via mistral.rs (Candle)"
 aliases = ["mistral-local", "mistral7b-local"]
 
@@ -11,7 +11,7 @@ VLLM_MODEL_DIR = "~/.b00t/models/mistralai__Mistral-7B-Instruct-v0.3"
 MISTRALRS_API_BASE = "http://127.0.0.1:1234/v1"
 MISTRALRS_MODEL_NAME = "mistral-local"
 
-[ai_model]
+[model]
 provider = "openai_compatible"
 size = "small"
 capabilities = ["chat", "code", "reasoning"]

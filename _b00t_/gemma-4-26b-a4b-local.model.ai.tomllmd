@@ -5,7 +5,7 @@
 
 [b00t]
 name = "gemma-4-26b-a4b-local"
-type = "model"
+type = "ai"
 hint = "Gemma 4 26B-A4B-it GGUF MXFP4_MOE, served locally via vLLM on RTX 3090 (port 8001), jinja chat template"
 aliases = ["gemma4", "gemma-4", "gemma-local", "ch0nky"]
 
@@ -17,7 +17,7 @@ OPENAI_BASE_URL = "http://127.0.0.1:8001/v1"
 OPENAI_API_KEY = "local-gemma4"
 GEMMA4_API_BASE = "http://127.0.0.1:8001/v1"
 
-[ai_model]
+[model]
 provider = "openai_compatible"
 size = "large"
 capabilities = ["chat", "code", "reasoning", "vision", "multimodal"]

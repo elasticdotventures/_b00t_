@@ -144,7 +144,6 @@ macro_rules! hint_only_datum {
 }
 
 hint_only_datum!(AsAiDatum,        Ai,          "ai");
-hint_only_datum!(AsAiModelDatum,   AiModel,     "ai_model");
 hint_only_datum!(AsConfigDatum,    Config,      "config");
 hint_only_datum!(AsHiveProfileDatum, HiveProfile, "hive_profile");
 
@@ -361,7 +360,6 @@ impl BootDatum {
     pub fn prove_api(&self)         -> Result<(), DatumProofError> { AsApiDatum(self).prove() }
     pub fn prove_repo(&self)        -> Result<(), DatumProofError> { AsRepoDatum(self).prove() }
     pub fn prove_ai(&self)          -> Result<(), DatumProofError> { AsAiDatum(self).prove() }
-    pub fn prove_ai_model(&self)    -> Result<(), DatumProofError> { AsAiModelDatum(self).prove() }
     pub fn prove_config(&self)      -> Result<(), DatumProofError> { AsConfigDatum(self).prove() }
 
     /// Dispatch prove based on declared datum_type. `Unknown` always passes.
@@ -386,7 +384,6 @@ impl BootDatum {
             Some(DatumType::Api)         => self.prove_api(),
             Some(DatumType::Repo)        => self.prove_repo(),
             Some(DatumType::Ai)          => self.prove_ai(),
-            Some(DatumType::AiModel)     => self.prove_ai_model(),
             Some(DatumType::Config)      => self.prove_config(),
             Some(DatumType::Hardware)    => Ok(()),
             Some(DatumType::Overlay)     => Ok(()),
@@ -433,7 +430,7 @@ mod tests {
 
     #[test] fn ai_proves()            { assert!(datum!("gpt4", Ai).prove_ai().is_ok()); }
     #[test] fn ai_no_hint_fails()     { assert!(no_hint(DatumType::Ai).prove_ai().is_err()); }
-    #[test] fn aimodel_proves()       { assert!(datum!("gpt4o", AiModel).prove_ai_model().is_ok()); }
+    #[test] fn ai_model_proves()       { assert!(datum!("gpt4o", Ai).prove_ai().is_ok()); }
     #[test] fn config_proves()        { assert!(datum!("cfg", Config).prove_config().is_ok()); }
     #[test] fn hive_profile_proves()  { assert!(datum!("hive", HiveProfile).prove_hive_profile().is_ok()); }
 

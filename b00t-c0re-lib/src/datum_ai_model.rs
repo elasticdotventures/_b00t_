@@ -1,12 +1,43 @@
-//! # AI Model Datum - b00t-c0re-lib
+//! # Model Datum — b00t-c0re-lib
 //!
-//! Abstract schema for AI model management within the b00t ecosystem.
+//! Abstract schema for model management within the b00t ecosystem.
 //! Data lives in TOML files; this provides the Rust type schema and behaviors.
 //! Based on berriai/litellm configuration patterns.
+//! 🤓 kept at path datum_ai_model.rs for backward compat; type renamed ModelDatum → ModelDatum.
 
 use anyhow::Result;
 use serde::{Deserialize, Deserializer, Serialize};
 use std::collections::HashMap;
+
+/// Model architecture classification for capability / inference routing.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
+#[serde(rename_all = "snake_case")]
+pub enum ModelArchitecture {
+    /// Transformer-based (GPT, BERT, T5, LLaMA, etc.)
+    Transformer,
+    /// Diffusion models (Stable Diffusion, FLUX, etc.)
+    Diffusion,
+    /// Mixture of Experts (Mixtral, DeepSeek-MoE, etc.)
+    MoE,
+    /// State Space Models (Mamba, Mamba-2, etc.)
+    SSM,
+    /// Recurrent / RWKV architectures
+    RNN,
+    /// Encoder-decoder (T5, BART, etc.)
+    EncoderDecoder,
+    /// Vision Transformer
+    ViT,
+    /// Catch-all for novel architectures
+    #[serde(untagged)]
+    Other(String),
+}
+
+impl ModelArchitecture {
+    /// True if this is a recognized (non-Other) architecture.
+    pub fn is_known(&self) -> bool {
+        !matches!(self, Self::Other(_))
+    }
+}
 
 /// Model size classification for resource planning and capability routing  
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
@@ -94,6 +125,11 @@ pub enum ModelProvider {
 }
 
 impl ModelProvider {
+    /// True if this is a recognized (non-Other) provider.
+    pub fn is_known(&self) -> bool {
+        !matches!(self, Self::Other(_))
+    }
+
     /// Get the litellm prefix for this provider
     pub fn litellm_prefix(&self) -> &str {
         match self {
@@ -152,7 +188,11 @@ impl ModelProvider {
 /// training_cutoff = "2024-04"
 /// ```
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct AiModelDatum {
+pub struct ModelDatum {
+    /// Model architecture classification
+    #[serde(default)]
+    pub architecture: Option<ModelArchitecture>,
+
     /// Primary provider for this model
     pub provider: ModelProvider,
 
@@ -193,7 +233,18 @@ pub struct AiModelDatum {
     /// Access control groups
     #[serde(default)]
     pub access_groups: Vec<String>,
+
+    /// HuggingFace model ID (e.g. "mistralai/Mistral-7B-Instruct-v0.3")
+    #[serde(default)]
+    pub huggingface_id: Option<String>,
+
+    /// Alternative model identifiers / aliases across providers
+    #[serde(default)]
+    pub aliases: Vec<String>,
 }
+
+// Backward-compat type alias
+pub type AiModelDatum = ModelDatum;
 
 fn default_true() -> bool {
     true
@@ -219,7 +270,7 @@ where
     Ok(normalized)
 }
 
-impl AiModelDatum {
+impl ModelDatum {
     /// Generate litellm model list entry for proxy configuration
     pub fn to_litellm_config(&self, model_name: &str) -> serde_json::Value {
         let mut config = serde_json::json!({
@@ -320,7 +371,7 @@ pub struct ModelRegistry {
     pub metadata: RegistryMetadata,
 
     /// Model configurations indexed by name
-    pub models: HashMap<String, AiModelDatum>,
+    pub models: HashMap<String, ModelDatum>,
 
     /// Provider defaults and global settings
     #[serde(default)]
@@ -409,7 +460,7 @@ impl ModelRegistry {
     pub fn models_with_capability(
         &self,
         capability: &ModelCapability,
-    ) -> Vec<(&String, &AiModelDatum)> {
+    ) -> Vec<(&String, &ModelDatum)> {
         self.models
             .iter()
             .filter(|(_, datum)| datum.enabled && datum.has_capability(capability))
@@ -417,7 +468,7 @@ impl ModelRegistry {
     }
 
     /// Filter models by size
-    pub fn models_by_size(&self, size: &ModelSize) -> Vec<(&String, &AiModelDatum)> {
+    pub fn models_by_size(&self, size: &ModelSize) -> Vec<(&String, &ModelDatum)> {
         self.models
             .iter()
             .filter(|(_, datum)| datum.enabled && datum.is_size(size))
@@ -425,7 +476,7 @@ impl ModelRegistry {
     }
 
     /// Get models by provider
-    pub fn models_by_provider(&self, provider: &ModelProvider) -> Vec<(&String, &AiModelDatum)> {
+    pub fn models_by_provider(&self, provider: &ModelProvider) -> Vec<(&String, &ModelDatum)> {
         self.models
             .iter()
             .filter(|(_, datum)| datum.enabled && datum.is_provider(provider))
@@ -433,17 +484,17 @@ impl ModelRegistry {
     }
 
     /// Add model to registry
-    pub fn add_model(&mut self, name: String, datum: AiModelDatum) {
+    pub fn add_model(&mut self, name: String, datum: ModelDatum) {
         self.models.insert(name, datum);
     }
 
     /// Remove model from registry
-    pub fn remove_model(&mut self, name: &str) -> Option<AiModelDatum> {
+    pub fn remove_model(&mut self, name: &str) -> Option<ModelDatum> {
         self.models.remove(name)
     }
 
     /// Get model by name
-    pub fn get_model(&self, name: &str) -> Option<&AiModelDatum> {
+    pub fn get_model(&self, name: &str) -> Option<&ModelDatum> {
         self.models.get(name)
     }
 }
@@ -460,7 +511,7 @@ mod tests {
 
     #[test]
     fn test_model_datum_creation() {
-        let datum = AiModelDatum {
+        let datum = ModelDatum {
             provider: ModelProvider::OpenAI,
             size: ModelSize::Large,
             capabilities: vec![
@@ -487,7 +538,7 @@ mod tests {
 
     #[test]
     fn test_litellm_config_generation() {
-        let datum = AiModelDatum {
+        let datum = ModelDatum {
             provider: ModelProvider::Anthropic,
             size: ModelSize::Large,
             capabilities: vec![ModelCapability::Chat, ModelCapability::Code],
@@ -531,7 +582,7 @@ mod tests {
     fn test_model_registry() {
         let mut registry = ModelRegistry::new();
 
-        let datum = AiModelDatum {
+        let datum = ModelDatum {
             provider: ModelProvider::OpenAI,
             size: ModelSize::Small,
             capabilities: vec![ModelCapability::Chat],
@@ -560,7 +611,7 @@ mod tests {
 
     #[test]
     fn test_serde_roundtrip() {
-        let datum = AiModelDatum {
+        let datum = ModelDatum {
             provider: ModelProvider::FireworksAI,
             size: ModelSize::Small,
             capabilities: vec![ModelCapability::Chat, ModelCapability::Code],
@@ -579,7 +630,7 @@ mod tests {
         let toml_str = toml::to_string(&datum).expect("Failed to serialize to TOML");
 
         // Deserialize back
-        let deserialized: AiModelDatum =
+        let deserialized: ModelDatum =
             toml::from_str(&toml_str).expect("Failed to deserialize from TOML");
 
         assert_eq!(datum, deserialized);

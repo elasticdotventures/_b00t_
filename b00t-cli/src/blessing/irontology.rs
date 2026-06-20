@@ -2,10 +2,9 @@
 // Validation system for blessing graph consistency and constraint satisfaction
 // Ensures blessings form a valid DAG with no unresolvable dependencies
 
-use crate::blessing::{BlessingGraph, BlessingNode};
+use crate::blessing::BlessingGraph;
+// 🤓 BlessingNode is available inside mod tests via `use super::*;` (Rust 2024 glob-vis semantics)
 use std::collections::{BTreeMap, HashSet};
-#[cfg(test)]
-use crate::blessing::BlessingNode;
 
 /// Validation result with detailed diagnostics
 #[derive(Debug, Clone, PartialEq)]
@@ -258,7 +257,6 @@ impl BlessingValidator {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::blessing::BlessingNode;
 
     #[test]
     fn test_valid_acyclic_blessing_graph() {

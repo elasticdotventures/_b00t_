@@ -360,7 +360,7 @@ fn list_models_cmd(path: &str, json_output: bool, show_adapters: bool) -> Result
 
     if models.is_empty() {
         println!(
-            "No AI model datums found. Create *.model.toml or *.ai_model.toml files in _b00t_."
+            "No model datums found. Create *.model.toml or *.ai_model.toml files in _b00t_."
         );
     } else {
         println!("📦 AI Model Datums:\n");

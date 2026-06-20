@@ -15,7 +15,11 @@ pub fn get_workspace_root() -> String {
 
     cmd!("git", "rev-parse", "--show-toplevel")
         .read()
-        .unwrap_or_else(|_| "b00t".to_string())
+        .unwrap_or_else(|_| {
+            std::env::var("HOME")
+                .map(|h| format!("{}/.b00t", h))
+                .unwrap_or_else(|_| ".".to_string())
+        })
         .trim()
         .to_string()
 }

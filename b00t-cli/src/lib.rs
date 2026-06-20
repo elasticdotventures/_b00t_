@@ -462,7 +462,7 @@ where
     let raw = Option::<String>::deserialize(deserializer)?;
     match raw {
         None => Ok(None),
-        Some(value) if value == "model" => Ok(Some(DatumType::AiModel)),
+        Some(value) if value == "model" => Ok(Some(DatumType::Ai)),
         Some(value) => {
             // Try hard-coded types first, then incubating placeholder.
             let resolved = DatumType::from_type_token(&value)
@@ -598,11 +598,15 @@ pub fn evaluate_gates(gates: &[GateSpec], path: &str) -> Vec<GateResult> {
 
         // Rhai gate: evaluate rhai expression
         if let Some(ref rhai_expr) = gate.rhai {
-            // Simple rhai evaluation using a sub-engine
-            let rhai_ok = evaluate_rhai_gate(rhai_expr);
+            let (rhai_ok, rhai_err) = evaluate_rhai_gate(rhai_expr);
             if !rhai_ok {
                 passed = false;
-                reasons.push(format!("rhai gate '{}' returned false", rhai_expr));
+                let reason = if let Some(err) = rhai_err {
+                    format!("rhai gate '{rhai_expr}' failed: {err}")
+                } else {
+                    format!("rhai gate '{rhai_expr}' returned false")
+                };
+                reasons.push(reason);
             }
         }
 
@@ -630,10 +634,14 @@ pub fn evaluate_gates(gates: &[GateSpec], path: &str) -> Vec<GateResult> {
 }
 
 /// Evaluate a simple rhai boolean expression.
-fn evaluate_rhai_gate(expr: &str) -> bool {
+fn evaluate_rhai_gate(expr: &str) -> (bool, Option<String>) {
     use rhai::Engine;
     let engine = Engine::new();
-    engine.eval::<bool>(expr).unwrap_or(false)
+    match engine.eval::<bool>(expr) {
+        Ok(true) => (true, None),
+        Ok(false) => (false, None),
+        Err(e) => (false, Some(e.to_string())),
+    }
 }
 
 /// A single gate with its origin (explicit or auto-derived)
@@ -856,7 +864,10 @@ pub struct JustfileConfig {
     pub capabilities: Option<JustfileCapabilities>,
 }
 
-/// DatumType — b00t's typed datum registry.
+// DatumType — b00t's typed datum registry.
+// 🤓 single source of truth: add new variants ONLY here. The macro below derives:
+//    from_type_token, base_suffix, all_base_suffixes, from_filename, extension_for_type.
+//    DO NOT add manual match arms elsewhere — use the generated methods.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum DatumType {
@@ -878,7 +889,6 @@ pub enum DatumType {
     Cli,
     Api,
     Job,
-    AiModel,
     Ai,
     Justfile,
     /// Hardware descriptor datum — `<soc>.<subsystem>.hardware.tomllmd`.
@@ -890,131 +900,106 @@ pub enum DatumType {
     Unknown,
 }
 
-impl DatumType {
-    /// Map a TOML type token string to a DatumType variant; returns None for unknown tokens.
-    pub fn from_type_token(s: &str) -> Option<DatumType> {
-        match s {
-            "database" => Some(DatumType::Database),
-            "hive" | "hive_profile" => Some(DatumType::HiveProfile),
-            "agent" => Some(DatumType::Agent),
-            "config" => Some(DatumType::Config),
-            "docker" => Some(DatumType::Docker),
-            "skill" => Some(DatumType::Skill),
-            "stack" => Some(DatumType::Stack),
-            "repo" => Some(DatumType::Repo),
-            "role" => Some(DatumType::Role),
-            "bash" => Some(DatumType::Bash),
-            "vscode" => Some(DatumType::Vscode),
-            "k8s" => Some(DatumType::K8s),
-            "apt" => Some(DatumType::Apt),
-            "nix" => Some(DatumType::Nix),
-            "mcp" => Some(DatumType::Mcp),
-            "cli" => Some(DatumType::Cli),
-            "api" => Some(DatumType::Api),
-            "job" => Some(DatumType::Job),
-            "ai_model" | "model" => Some(DatumType::AiModel),
-            "ai" => Some(DatumType::Ai),
-            "justfile" => Some(DatumType::Justfile),
-            "hardware" => Some(DatumType::Hardware),
-            "overlay" => Some(DatumType::Overlay),
-            "unknown" => Some(DatumType::Unknown),
-            _ => None,
-        }
-    }
-
-    pub fn all_base_suffixes() -> Vec<&'static str> {
-        vec![
-            ".database",
-            ".hive",
-            ".agent",
-            ".config",
-            ".docker",
-            ".skill",
-            ".stack",
-            ".repo",
-            ".role",
-            ".bash",
-            ".vscode",
-            ".k8s",
-            ".apt",
-            ".nix",
-            ".mcp",
-            ".cli",
-            ".api",
-            ".job",
-            ".ai_model",
-            ".ai",
-            ".justfile",
-            ".hardware",
-            ".overlay",
-        ]
-    }
-
-    pub fn base_suffix(&self) -> &'static str {
-        match self {
-            DatumType::Database => ".database",
-            DatumType::HiveProfile => ".hive",
-            DatumType::Agent => ".agent",
-            DatumType::Config => ".config",
-            DatumType::Docker => ".docker",
-            DatumType::Skill => ".skill",
-            DatumType::Stack => ".stack",
-            DatumType::Repo => ".repo",
-            DatumType::Role => ".role",
-            DatumType::Bash => ".bash",
-            DatumType::Vscode => ".vscode",
-            DatumType::K8s => ".k8s",
-            DatumType::Apt => ".apt",
-            DatumType::Nix => ".nix",
-            DatumType::Mcp => ".mcp",
-            DatumType::Cli => ".cli",
-            DatumType::Api => ".api",
-            DatumType::Job => ".job",
-            DatumType::AiModel => ".ai_model",
-            DatumType::Ai => ".ai",
-            DatumType::Justfile => ".justfile",
-            DatumType::Hardware => ".hardware",
-            DatumType::Overlay => ".overlay",
-            DatumType::Unknown => ".toml",
-        }
-    }
-
-    pub fn from_filename(filename: &str) -> DatumType {
-        for t in &[
-            DatumType::Database,
-            DatumType::HiveProfile,
-            DatumType::Agent,
-            DatumType::Config,
-            DatumType::Docker,
-            DatumType::Skill,
-            DatumType::Stack,
-            DatumType::Repo,
-            DatumType::Role,
-            DatumType::Bash,
-            DatumType::Vscode,
-            DatumType::K8s,
-            DatumType::Apt,
-            DatumType::Nix,
-            DatumType::Mcp,
-            DatumType::Cli,
-            DatumType::Api,
-            DatumType::Job,
-            DatumType::AiModel,
-            DatumType::Ai,
-            DatumType::Justfile,
-            DatumType::Hardware,
-            DatumType::Overlay,
-        ] {
-            let base = t.base_suffix();
-            if filename.ends_with(base)
-                || filename.ends_with(&format!("{base}.toml"))
-                || filename.ends_with(&format!("{base}.tomllmd"))
-                || filename.ends_with(&format!("{base}.tomllm"))
-            {
-                return *t;
+macro_rules! datum_type_table {
+    ($($variant:ident => [$($token:literal),+] => $suffix:literal),* $(,)?) => {
+        /// Map a TOML type token string to a DatumType variant; returns None for unknown tokens.
+        pub fn from_type_token(s: &str) -> Option<Self> {
+            match s {
+                $($($token => Some(Self::$variant),)+)*
+                _ => None,
             }
         }
-        DatumType::Unknown
+
+        /// File suffix for this datum type (e.g., ".cli", ".mcp").
+        pub fn base_suffix(&self) -> &'static str {
+            match self {
+                $(Self::$variant => $suffix,)*
+                Self::Unknown => ".toml",
+            }
+        }
+
+        /// All known base suffixes (excluding Unknown).
+        pub fn all_base_suffixes() -> Vec<&'static str> {
+            vec![$($suffix,)*]
+        }
+
+        /// All non-Unknown variants as a const slice.
+        pub fn all_variants() -> &'static [Self] {
+            &[$(Self::$variant,)*]
+        }
+
+        /// Determine DatumType from a filename (e.g. "mold.cli.toml" → Cli).
+        /// 🤓 legacy .ai_model.toml suffix handled explicitly — model is sub-class of Ai.
+        pub fn from_filename(filename: &str) -> Self {
+            for t in Self::all_variants() {
+                let base = t.base_suffix();
+                if filename.ends_with(base)
+                    || filename.ends_with(&format!("{base}.toml"))
+                    || filename.ends_with(&format!("{base}.tomllmd"))
+                    || filename.ends_with(&format!("{base}.tomllm"))
+                {
+                    return *t;
+                }
+            }
+            // Legacy: .ai_model.toml / .ai_model.tomllmd / .ai_model.tomllm → Ai
+            if filename.ends_with(".ai_model.toml")
+                || filename.ends_with(".ai_model.tomllmd")
+                || filename.ends_with(".ai_model.tomllm")
+                || filename.ends_with(".ai_model")
+            {
+                return Self::Ai;
+            }
+            Self::Unknown
+        }
+
+        /// Preferred file extension for this type (e.g., ".cli.toml").
+        pub fn extension(&self) -> &'static str {
+            match self {
+                $(Self::$variant => concat!($suffix, ".toml"),)*
+                Self::Unknown => ".toml",
+            }
+        }
+    };
+}
+
+impl DatumType {
+    datum_type_table! {
+        Database    => ["database"]                  => ".database",
+        HiveProfile => ["hive", "hive_profile"]      => ".hive",
+        Agent       => ["agent"]                     => ".agent",
+        Config      => ["config"]                    => ".config",
+        Docker      => ["docker"]                    => ".docker",
+        Skill       => ["skill"]                     => ".skill",
+        Stack       => ["stack"]                     => ".stack",
+        Repo        => ["repo"]                      => ".repo",
+        Role        => ["role"]                      => ".role",
+        Bash        => ["bash"]                      => ".bash",
+        Vscode      => ["vscode"]                    => ".vscode",
+        K8s         => ["k8s"]                       => ".k8s",
+        Apt         => ["apt"]                       => ".apt",
+        Nix         => ["nix"]                       => ".nix",
+        Mcp         => ["mcp"]                       => ".mcp",
+        Cli         => ["cli"]                       => ".cli",
+        Api         => ["api"]                       => ".api",
+        Job         => ["job"]                       => ".job",
+        // Ai is the umbrella; model/ai_model tokens map here (reverse dot: name.model.ai.tomllmd)
+        Ai          => ["ai", "model", "ai_model"]   => ".ai",
+        Justfile    => ["justfile"]                  => ".justfile",
+        Hardware    => ["hardware"]                  => ".hardware",
+        Overlay     => ["overlay"]                   => ".overlay",
+    }
+
+    /// Preferred file extension for writing new datum files.
+    /// Defaults to `{base_suffix}.toml`; special-cases Role (bare .toml),
+    /// Justfile (bare .justfile).
+    /// 🤓 Model datums use reverse-dot: <name>.model.ai.tomllmd
+    pub fn file_extension(&self) -> &'static str {
+        match self {
+            Self::Role => ".toml",
+            Self::Justfile => ".justfile",
+            Self::Unknown => ".toml",
+            other => other.extension(),
+        }
     }
 }
 
@@ -1420,34 +1405,7 @@ pub fn create_unified_toml_config(datum: &BootDatum, path: &str) -> Result<()> {
 
     // Use explicit datum_type or default to Unknown
     let datum_type = datum.datum_type.clone().unwrap_or(DatumType::Unknown);
-    let suffix = match datum_type {
-        DatumType::Mcp => ".mcp.toml",
-        DatumType::Bash => ".bash.toml",
-        DatumType::Vscode => ".vscode.toml",
-        DatumType::Docker => ".docker.toml",
-        DatumType::K8s => ".k8s.toml",
-        DatumType::Apt => ".apt.toml",
-        DatumType::Nix => ".nix.toml",
-        DatumType::Ai => ".ai.toml",
-        DatumType::AiModel => ".ai.toml",
-        DatumType::Cli => ".cli.toml",
-        DatumType::Api => ".api.toml",
-        DatumType::Stack => ".stack.toml",
-        DatumType::Job => ".job.toml",
-        DatumType::Agent => ".agent.toml",
-        DatumType::Config => ".config.toml",
-        DatumType::Database => ".database.toml",
-        DatumType::Repo => ".repo.toml",
-        DatumType::Role => ".toml",
-        DatumType::Skill => ".skill.toml",
-        DatumType::HiveProfile => ".hive.toml",
-        DatumType::Justfile => ".justfile",
-        DatumType::Hardware => ".hardware.toml",
-        DatumType::Overlay => ".overlay.toml",
-        // 🤓 .tomllmd currently degrades to .tomllm semantics in b00t core:
-        // valid TOML + richer comment/diagram/markdown affordances handled by external tooling.
-        DatumType::Unknown => ".toml",
-    };
+    let suffix = datum_type.file_extension();
 
     let mut path_buf = std::path::PathBuf::new();
     path_buf.push(shellexpand::tilde(path).to_string());

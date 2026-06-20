@@ -2,7 +2,7 @@
 
 [b00t]
 name = "llava-v1-5-7b-hf"
-type = "model"
+type = "ai"
 hint = "LLaVA 1.5 7B multimodal model for vision-grounded prompts"
 aliases = ["llava"]
 
@@ -11,7 +11,7 @@ VLLM_MODEL_DIR = "~/.b00t/models/liuhaotian__llava-v1.5-7b-hf"
 VLLM_MODEL_PATH = "/models/llava"
 VLLM_DTYPE = "float16"
 
-[ai_model]
+[model]
 provider = "huggingface"
 size = "small"
 capabilities = ["vision", "chat"]

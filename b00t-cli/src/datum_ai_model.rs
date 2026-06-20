@@ -1,25 +1,27 @@
 use crate::traits::*;
 use crate::{BootDatum, check_command_available, get_expanded_path};
 use anyhow::{Context, Result};
-use b00t_c0re_lib::datum_ai_model::{AiModelDatum, ModelProvider};
+use b00t_c0re_lib::datum_ai_model::{ModelDatum, ModelProvider};
 use serde::Deserialize;
 use std::fs;
 use std::path::{Path, PathBuf};
 
 #[derive(Deserialize)]
-struct AiModelConfig {
+struct ModelConfig {
     pub b00t: BootDatum,
-    pub ai_model: AiModelDatum,
+    /// Prefer [model] section; fall back to [ai_model] for backward compat.
+    #[serde(alias = "ai_model")]
+    pub model: ModelDatum,
 }
 
-/// Datum wrapper that binds BootDatum metadata with AI model configuration.
-pub struct AiModelDatumEntry {
+/// Datum wrapper that binds BootDatum metadata with model configuration.
+pub struct ModelDatumEntry {
     pub datum: BootDatum,
-    pub model: AiModelDatum,
+    pub model: ModelDatum,
     pub path: PathBuf,
 }
 
-impl AiModelDatumEntry {
+impl ModelDatumEntry {
     pub fn from_config(name: &str, base_path: &str) -> Result<Self> {
         let base = get_expanded_path(base_path)?;
         for suffix in [".model.toml", ".ai_model.toml"] {
@@ -29,7 +31,7 @@ impl AiModelDatumEntry {
             }
         }
         anyhow::bail!(
-            "AI model '{}' not found at {} or {}",
+            "model '{}' not found at {} or {}",
             name,
             base.join(format!("{}.model.toml", name)).display(),
             base.join(format!("{}.ai_model.toml", name)).display()
@@ -38,12 +40,23 @@ impl AiModelDatumEntry {
 
     pub fn from_file(path: &Path) -> Result<Self> {
         let content = fs::read_to_string(path)
-            .with_context(|| format!("Failed to read AI model datum {}", path.display()))?;
-        let config: AiModelConfig = toml::from_str(&content)
-            .with_context(|| format!("Failed to parse AI model datum {}", path.display()))?;
+            .with_context(|| format!("Failed to read model datum {}", path.display()))?;
+        let config: ModelConfig = toml::from_str(&content)
+            .with_context(|| format!("Failed to parse model datum {}", path.display()))?;
+
+        // Warn on unrecognized provider/architecture (serde untagged silently accepts typos)
+        if !config.model.provider.is_known() {
+            eprintln!("  WARN: {} — unrecognized provider '{:?}'", path.display(), config.model.provider);
+        }
+        if let Some(ref arch) = config.model.architecture {
+            if !arch.is_known() {
+                eprintln!("  WARN: {} — unrecognized architecture '{:?}'", path.display(), arch);
+            }
+        }
+
         Ok(Self {
             datum: config.b00t,
-            model: config.ai_model,
+            model: config.model,
             path: path.to_path_buf(),
         })
     }
@@ -107,7 +120,7 @@ impl AiModelDatumEntry {
     }
 }
 
-impl TryFrom<(&str, &str)> for AiModelDatumEntry {
+impl TryFrom<(&str, &str)> for ModelDatumEntry {
     type Error = anyhow::Error;
 
     fn try_from((name, path): (&str, &str)) -> Result<Self, Self::Error> {
@@ -115,7 +128,7 @@ impl TryFrom<(&str, &str)> for AiModelDatumEntry {
     }
 }
 
-impl DatumChecker for AiModelDatumEntry {
+impl DatumChecker for ModelDatumEntry {
     fn is_installed(&self) -> bool {
         self.cache_dir()
             .filter(|dir| dir.exists() && Self::directory_has_content(dir))
@@ -146,7 +159,7 @@ impl DatumChecker for AiModelDatumEntry {
     }
 }
 
-impl StatusProvider for AiModelDatumEntry {
+impl StatusProvider for ModelDatumEntry {
     fn name(&self) -> &str {
         &self.datum.name
     }
@@ -164,7 +177,7 @@ impl StatusProvider for AiModelDatumEntry {
     }
 }
 
-impl FilterLogic for AiModelDatumEntry {
+impl FilterLogic for ModelDatumEntry {
     fn is_available(&self) -> bool {
         !DatumChecker::is_installed(self) && self.prerequisites_satisfied()
     }
@@ -184,13 +197,13 @@ impl FilterLogic for AiModelDatumEntry {
     }
 }
 
-impl ConstraintEvaluator for AiModelDatumEntry {
+impl ConstraintEvaluator for ModelDatumEntry {
     fn datum(&self) -> &BootDatum {
         &self.datum
     }
 }
 
-impl DatumProvider for AiModelDatumEntry {
+impl DatumProvider for ModelDatumEntry {
     fn datum(&self) -> &BootDatum {
         &self.datum
     }
@@ -200,7 +213,7 @@ impl DatumProvider for AiModelDatumEntry {
 mod tests {
     use super::*;
 
-    fn sample_config() -> AiModelDatumEntry {
+    fn sample_config() -> ModelDatumEntry {
         let toml = r#"
             [b00t]
             name = "vision-test"
@@ -222,10 +235,10 @@ mod tests {
             hf_repo = "example/model"
             revision = "main"
         "#;
-        let config: AiModelConfig = toml::from_str(toml).unwrap();
-        AiModelDatumEntry {
+        let config: ModelConfig = toml::from_str(toml).unwrap();
+        ModelDatumEntry {
             datum: config.b00t,
-            model: config.ai_model,
+            model: config.model,
             path: PathBuf::from("/tmp/vision-test.ai_model.toml"),
         }
     }

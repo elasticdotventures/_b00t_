@@ -1,4 +1,4 @@
-use crate::datum_ai_model::AiModelDatumEntry;
+use crate::datum_ai_model::ModelDatumEntry;
 use crate::traits::DatumChecker; // 🦨 Fix: trait needed for is_installed() method
 use crate::{check_command_available, get_expanded_path};
 use anyhow::{Context, Result, anyhow};
@@ -211,14 +211,14 @@ fn is_model_filename(name: &str) -> bool {
     MODEL_SUFFIXES.iter().any(|suffix| name.ends_with(suffix))
 }
 
-fn load_models(base_path: &str) -> Result<Vec<AiModelDatumEntry>> {
+fn load_models(base_path: &str) -> Result<Vec<ModelDatumEntry>> {
     enumerate_model_files(base_path)?
         .into_iter()
-        .map(|path| AiModelDatumEntry::from_file(&path))
+        .map(|path| ModelDatumEntry::from_file(&path))
         .collect()
 }
 
-fn matches_model_name(entry: &AiModelDatumEntry, query: &str) -> bool {
+fn matches_model_name(entry: &ModelDatumEntry, query: &str) -> bool {
     if entry.datum.name == query {
         return true;
     }
@@ -230,7 +230,7 @@ fn matches_model_name(entry: &AiModelDatumEntry, query: &str) -> bool {
         .unwrap_or(false)
 }
 
-fn select_model<'a>(base_path: &str, requested: Option<&'a str>) -> Result<AiModelDatumEntry> {
+fn select_model<'a>(base_path: &str, requested: Option<&'a str>) -> Result<ModelDatumEntry> {
     let models = load_models(base_path)?;
     if models.is_empty() {
         anyhow::bail!(
@@ -257,7 +257,7 @@ fn select_model<'a>(base_path: &str, requested: Option<&'a str>) -> Result<AiMod
         .expect("models collection cannot be empty here"))
 }
 
-fn record_from_entry(entry: &AiModelDatumEntry, active: bool) -> ModelRecord {
+fn record_from_entry(entry: &ModelDatumEntry, active: bool) -> ModelRecord {
     let capabilities = entry
         .model
         .capabilities
@@ -463,7 +463,7 @@ fn parse_served_models_response(body: &str) -> Result<Vec<ServedModelRecord>> {
     Ok(models)
 }
 
-fn local_base_urls_for_entry(entry: &AiModelDatumEntry) -> Vec<String> {
+fn local_base_urls_for_entry(entry: &ModelDatumEntry) -> Vec<String> {
     let mut urls = BTreeSet::new();
 
     if let Some(api_base) = &entry.model.api_base {
@@ -508,7 +508,7 @@ fn local_env_base_urls() -> Vec<(String, String)> {
     urls
 }
 
-fn api_key_for_entry(entry: &AiModelDatumEntry) -> Option<String> {
+fn api_key_for_entry(entry: &ModelDatumEntry) -> Option<String> {
     let env_map = entry.datum.env.as_ref();
 
     if let Some(key_name) = entry.model.api_key_env.as_deref() {

@@ -35,7 +35,7 @@ pub fn parse_entanglement_ref(reference: &str) -> Result<(String, Option<DatumTy
                 "docker" => Some(DatumType::Docker),
                 "k8s" => Some(DatumType::K8s),
                 "ai" => Some(DatumType::Ai),
-                "ai_model" => Some(DatumType::AiModel),
+                "ai_model" => Some(DatumType::Ai),
                 "api" => Some(DatumType::Api),
                 "stack" => Some(DatumType::Stack),
                 _ => bail!(
@@ -158,7 +158,7 @@ pub fn validate_datum_entanglements(
         let mut ai_models = Vec::new();
         for reference in refs {
             let resolved =
-                validate_entanglement_ref(reference, all_datums, Some(DatumType::AiModel))
+                validate_entanglement_ref(reference, all_datums, Some(DatumType::Ai))
                     .context(format!(
                         "Invalid AI model entanglement in datum '{}'",
                         datum.name

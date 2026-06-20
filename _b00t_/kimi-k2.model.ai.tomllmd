@@ -2,10 +2,10 @@
 
 [b00t]
 name = "kimi-k2"
-type = "model"
+type = "ai"
 hint = "Moonshot AI's Kimi K2 - massive 200K+ context window"
 
-[ai_model]
+[model]
 provider = "openrouter"
 size = "large"
 capabilities = ["chat", "code", "reasoning"]

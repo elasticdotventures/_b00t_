@@ -24,7 +24,7 @@
 //! ```
 
 use crate::datum_proof::{
-    AsAgentDatum, AsAiDatum, AsAiModelDatum, AsAptDatum, AsApiDatum, AsBashDatum,
+    AsAgentDatum, AsAiDatum, AsAptDatum, AsApiDatum, AsBashDatum,
     AsCliDatum, AsConfigDatum, AsDatabaseDatum, AsDockerDatum, AsHiveProfileDatum,
     AsJobDatum, AsJustfileDatum, AsK8sDatum, AsMcpDatum, AsNixDatum, AsRepoDatum,
     AsRoleDatum, AsSkillDatum, AsStackDatum, AsUnknownDatum, AsVscodeDatum,
@@ -332,8 +332,6 @@ impl<'a> DatumQuery<'a> {
     pub fn proves_repo(self) -> Self { self.with(|d| AsRepoDatum(&d.datum).prove().is_ok()) }
     /// Goal: datum proves Ai structural contract (hint present).
     pub fn proves_ai(self) -> Self { self.with(|d| AsAiDatum(&d.datum).prove().is_ok()) }
-    /// Goal: datum proves AiModel structural contract (hint present).
-    pub fn proves_ai_model(self) -> Self { self.with(|d| AsAiModelDatum(&d.datum).prove().is_ok()) }
     /// Goal: datum proves Config structural contract (hint present).
     pub fn proves_config(self) -> Self { self.with(|d| AsConfigDatum(&d.datum).prove().is_ok()) }
     /// Goal: datum is Unknown — always passes.

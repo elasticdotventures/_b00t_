@@ -232,6 +232,8 @@ fn fetch_latest_release() -> Result<GitHubRelease> {
 
 fn print_status(status: &ReleaseStatus, context: &UpgradeContext) {
     println!("current: {}", status.current);
+    println!("commit: {}", env!("GIT_HASH"));
+    println!("built: {}", env!("BUILD_TIMESTAMP"));
     println!("latest: {}", status.latest);
     println!("release: {}", status.release_url);
     println!("agent: {}", context.detected_agent);
@@ -244,6 +246,15 @@ fn print_status(status: &ReleaseStatus, context: &UpgradeContext) {
         }
     } else {
         println!("workspace: none");
+    }
+
+    // Only show _B00T_Path when overridden from default
+    if let Ok(b00t_path) = std::env::var("_B00T_Path") {
+        let expanded_path = shellexpand::tilde(&b00t_path).to_string();
+        let default = shellexpand::tilde("~/.b00t/_b00t_").to_string();
+        if expanded_path != default {
+            println!("path: {}", b00t_path);
+        }
     }
 
     if status.upgrade_available {

@@ -3,10 +3,10 @@
 
 [b00t]
 name = "llama-3-8b-instruct"
-type = "model"
+type = "ai"
 hint = "Meta's fast 8B parameter instruction-tuned model"
 
-[ai_model]
+[model]
 provider = "openrouter"
 size = "sm0l"  # Using alias for small
 capabilities = ["chat", "code"]
