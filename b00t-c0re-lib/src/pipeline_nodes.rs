@@ -956,4 +956,52 @@ mod tests {
         //                        ^^^^^^^^^ String  ^^^^^^^^^^^^ Vec<Evidence>
         //                        Type mismatch! Compiler catches it. ✓
     }
+
+    #[test]
+    fn test_full_pipeline_execute() {
+        // Compose the full 4-stage pipeline
+        type Stage1 = Compose<FetchNode, ChunkNode>;
+        type Stage2 = Compose<Stage1, EvidenceNode>;
+        type FullPipeline = Compose<Stage2, RequirementsNode>;
+
+        let pipeline = FullPipeline {
+            first: Compose {
+                first: Compose {
+                    first: FetchNode,
+                    second: ChunkNode,
+                },
+                second: EvidenceNode,
+            },
+            second: RequirementsNode,
+        };
+
+        // Execute with real arxiv ID
+        let result: Vec<crate::doc_pipeline::Requirement> = pipeline.execute("2404.17842".into());
+
+        // Verify output
+        assert!(!result.is_empty(), "Pipeline produced requirements");
+        for req in &result {
+            assert!(!req.text.is_empty());
+            assert!(!req.derived_from.is_empty(), "Each req traces to evidence");
+            assert_eq!(req.source_id, "arxiv:2404.17842");
+            assert_eq!(req.req_type, crate::doc_pipeline::RequirementType::Functional);
+            assert!(req.rationale.is_some());
+            assert!(req.reqif.is_some());
+        }
+
+        // Verify FOL contracts hold
+        let pre = pipeline.preconditions();
+        assert!(pre.iter().any(|f| f.description.contains("is_valid_id")));
+        let post = pipeline.postconditions();
+        assert!(post.iter().any(|f| f.description.contains("has_rationale")));
+
+        // Verify state machine composition
+        let sm = pipeline.state_machine();
+        assert!(sm.states.len() >= 8, "4 nodes × 2 states each + compose bridges");
+
+        // Serialize to JSON (NoSQL-ready)
+        let json = serde_json::to_string(&result).unwrap();
+        assert!(json.contains("REQ-000"));
+        assert!(json.contains("arxiv:2404.17842"));
+    }
 }
