@@ -49,7 +49,7 @@ impl Default for AdminConfig {
             admin_port: std::env::var("ADMIN_PORT")
                 .ok()
                 .and_then(|p| p.parse().ok())
-                .unwrap_or(15116),
+                .unwrap_or(31337),
             admin_host: std::env::var("ADMIN_HOST")
                 .unwrap_or_else(|_| "0.0.0.0".to_string()),
         }
