@@ -9,29 +9,38 @@ hook_detect = "gates"
 topic = "kreuzberg-mcp"
 auto_digest = true
 
-# 🥾: PRIMARY — uvx kreuzberg-mcp (auto-install via uv)
+# 🥾: PRIMARY — wrapper script (kreuzberg must be installed via pip install --user)
 [[b00t.mcp.stdio]]
 priority = 0
-command = "uvx"
-requires = ["python"]
+command = "python3"
+requires = ["python", "kreuzberg"]
 transport = "stdio"
-args = ["kreuzberg-mcp"]
+args = ["/home/brianh/.dotfiles/_b00t_/scripts/kreuzberg-mcp-wrapper.py"]
 
-# 🥾: FALLBACK — python -m kreuzberg.mcp (if installed via pip/uv)
+# 🥾: FALLBACK — direct python path
 [[b00t.mcp.stdio]]
 priority = 10
 command = "python3"
 requires = ["python", "kreuzberg"]
 transport = "stdio"
-args = ["-m", "kreuzberg.mcp"]
+args = ["_b00t_/scripts/kreuzberg-mcp-wrapper.py"]
+
+# 🥾: UPSTREAM — uvx kreuzberg-mcp (when upstream MCP server ships)
+[[b00t.mcp.stdio]]
+priority = 20
+command = "uvx"
+requires = ["python"]
+transport = "stdio"
+args = ["kreuzberg-mcp"]
+unstable = true
 
 [[b00t.gate]]
-rhai = "command_exists(\"uvx\") || command_exists(\"python3\")"
-hint = "uvx or python3 required for kreuzberg MCP server"
+rhai = "command_exists(\"uv\") || command_exists(\"python3\")"
+hint = "uv or python3 required for kreuzberg MCP server"
 
 [[b00t.gate]]
-rhai = "command_exists(\"uvx\")"
-hint = "uvx (uv tool runner) required for auto-install path"
+rhai = "command_exists(\"uv\")"
+hint = "uv required for tool-managed kreuzberg"
 
 [[b00t.usage]]
 description = "Run kreuzberg MCP server via uvx (auto-install)"

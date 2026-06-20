@@ -3,31 +3,34 @@ name = "kreuzberg"
 type = "cli"
 desires = "latest"
 install = '''
-# Kreuzenberg document intelligence library
-# 🥾 Prefer uvx for auto-install; uv pip as fallback
-if command -v uvx >/dev/null 2>&1; then
-    echo "✨ Installing kreuzberg via uvx (auto-managed)"
-    uvx kreuzberg-mcp --help >/dev/null 2>&1 && echo "✅ kreuzberg ready via uvx" && exit 0
-fi
-
-if command -v uv >/dev/null 2>&1; then
-    echo "📦 Installing kreuzberg via uv pip"
-    uv pip install --system "kreuzberg[all]"
-elif command -v pip3 >/dev/null 2>&1; then
-    echo "📦 Installing kreuzberg via pip3"
-    pip3 install "kreuzberg[all]"
+# Kreuzberg document intelligence library
+# 🥾 Prefer pip install --user so the MCP datum can use `python3` directly
+if command -v pip3 >/dev/null 2>&1; then
+    echo "📦 Installing kreuzberg via pip3 --user"
+    pip3 install --user kreuzberg
+    echo "✅ kreuzberg installed"
+elif command -v pip >/dev/null 2>&1; then
+    echo "📦 Installing kreuzberg via pip --user"
+    pip install --user kreuzberg
+    echo "✅ kreuzberg installed"
+elif command -v uv >/dev/null 2>&1; then
+    echo "📦 Installing kreuzberg via uv tool install"
+    uv tool install kreuzberg
+    echo "✅ kreuzberg installed"
 else
-    echo "⚠️  Neither uv nor pip3 found. Install uv first: curl -LsSf https://astral.sh/uv/install.sh | sh"
+    echo "⚠️  No pip or uv found. Install pip first."
     exit 1
 fi
 '''
 
 update = '''
 # Update kreuzberg
-if command -v uv >/dev/null 2>&1; then
-    uv pip install --system --upgrade "kreuzberg[all]"
-elif command -v pip3 >/dev/null 2>&1; then
-    pip3 install --upgrade "kreuzberg[all]"
+if command -v pip3 >/dev/null 2>&1; then
+    pip3 install --user --upgrade kreuzberg
+elif command -v pip >/dev/null 2>&1; then
+    pip install --user --upgrade kreuzberg
+elif command -v uv >/dev/null 2>&1; then
+    uv tool upgrade kreuzberg
 fi
 '''
 

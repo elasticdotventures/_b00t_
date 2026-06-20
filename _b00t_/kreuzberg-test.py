@@ -37,7 +37,8 @@ async def main() -> None:
         try:
             from kreuzberg import extract_file
             result = await extract_file(sample)
-            text = result.text[:500] if result.text else "(no text)"
+            content = getattr(result, 'content', None) or getattr(result, 'text', None) or "(no content)"
+            text = content[:500]
             print(text)
             print("\n✅ kreuzberg extraction test passed")
         except Exception as e:
