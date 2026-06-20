@@ -301,6 +301,7 @@ yarn-error.log*
 yarn.lock
 # Session/temporary caches
 cache/
+.tmp/
 .serena/
 session-guards.json
 # Runtime state files

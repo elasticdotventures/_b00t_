@@ -1678,6 +1678,52 @@ compile-agent role="worker" n_skills="3" out="/tmp/compiled-agent.md":
     echo "   role: {{role}}"
     echo "   skills: ${ASSIGNED[*]}"
 
+# ── Write Guard / Proposed Datums Staging ──────────────────────────────────────
+
+# propose-datum: operator shortcut to stage a datum for review
+# Usage: just propose-datum <path-to-datum>
+# Copies the file to .tmp/proposed-datums/ and creates a review task
+propose-datum file:
+    #!/bin/bash
+    set -euo pipefail
+    FILE="{{file}}"
+    if [[ -z "$FILE" ]]; then
+        echo "Usage: just propose-datum <path-to-datum>" >&2
+        echo "Example: just propose-datum _b00t_/my-skill.skill.toml" >&2
+        exit 1
+    fi
+    if [[ ! -f "$FILE" ]]; then
+        echo "Error: file not found: $FILE" >&2
+        exit 1
+    fi
+    mkdir -p .tmp/proposed-datums
+    BASENAME="$(basename "$FILE")"
+    cp "$FILE" .tmp/proposed-datums/"$BASENAME"
+    if command -v b00t >/dev/null 2>&1; then
+        b00t task add "review: proposed datum $FILE" 2>/dev/null || true
+    fi
+    echo "📋 Proposed datum staged for review: .tmp/proposed-datums/$BASENAME"
+    echo "   Review pending: just review-proposed"
+
+# review-proposed: list pending proposed datums and their review tasks
+review-proposed:
+    #!/bin/bash
+    set -euo pipefail
+    echo "📋 Proposed datums:"
+    echo ""
+    if [[ -d .tmp/proposed-datums ]] && ls .tmp/proposed-datums/*.toml >/dev/null 2>&1; then
+        ls -la .tmp/proposed-datums/*.toml 2>/dev/null
+    else
+        echo "  (no proposed datums)"
+    fi
+    echo ""
+    echo "📋 Review tasks:"
+    if command -v b00t >/dev/null 2>&1; then
+        b00t task list 2>/dev/null | grep "review: proposed" || echo "  (no review tasks)"
+    else
+        echo "  (b00t CLI not available)"
+    fi
+
 # ── end ralph / compile-agent ──────────────────────────────────────────────────
 
 # provision-agent: operator convenience — compile + launch agent for a role+goal in one command.
