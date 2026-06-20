@@ -112,7 +112,10 @@ mod unit_tests {
             GateResult::Hook(token) => {
                 assert_eq!(token.hook_type, HookType::AtTimestamp(0));
                 // timestamp 0 is in the past → no TTL
-                assert!(token.ttl_ms.is_none(), "past/zero timestamp must have no TTL");
+                assert!(
+                    token.ttl_ms.is_none(),
+                    "past/zero timestamp must have no TTL"
+                );
             }
             _ => panic!("Expected Hook result, got {:?}", result),
         }

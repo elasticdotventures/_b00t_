@@ -32,3 +32,6 @@ workflow-branches: "Internal projects use vendor/ submodules with convention: fe
 # summary: GGG pattern, TURBO-AGILE 6C, checkpoint often, cocogitto commits, feat/fix/chore branches
 # tier: core
 # cmds: [git stash, b00t checkpoint, gh issue create, cocogitto]
+
+---
+surgical staging: git add -A before auditing what's staged is dangerous. Pattern: git reset HEAD first, then git add ONLY target paths, verify with git diff --cached --stat. 37 unrelated files got staged in one misstep this session.

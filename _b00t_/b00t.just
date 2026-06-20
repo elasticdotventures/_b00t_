@@ -1,5 +1,7 @@
 # b00t justfile - MCP chat integration and utilities
 
+set unstable
+
 # Interactive MCP chat selection with fzf
 mcp-chat:
     #!/usr/bin/env bash
@@ -409,3 +411,9 @@ club-3090-latest-compose:
     #!/usr/bin/env bash
     gh api repos/noonghunna/club-3090/contents/models/qwen3.6-27b/llama-cpp/compose/single/unsloth-q4km/mtp.yml \
       --jq '.content' | base64 -d 2>/dev/null || echo "gh api failed"
+
+# 🥾 /b00t slash command — maintenance status, reminders, cake balance
+slash-b00t:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    bash _b00t_/scripts/slash-b00t.sh

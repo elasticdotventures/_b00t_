@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# DEPRECATED: see b00t zellij {menu,confirm,input} (Rust binary in b00t-cli/src/commands/zellij.rs)
 # 🥾 Zellij Interactive Runner
 # Launches any interactive dialog in a Zellij floating pane with proper TTY.
 # Uses zellij run (not write-chars) — critical for interactive programs.

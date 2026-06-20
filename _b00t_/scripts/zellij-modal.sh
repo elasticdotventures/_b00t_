@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# DEPRECATED: see b00t-cli::run_in_zellij_floating() (Rust, b00t-cli/src/commands/zellij.rs)
 # 🥾 Zellij Interactive Modal Dialog
 # Displays a confirmation dialog in a floating pane.
 # The user MUST acknowledge the dialog for success.

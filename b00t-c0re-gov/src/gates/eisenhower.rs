@@ -7,10 +7,10 @@ use crate::types::*;
 /// Eisenhower quadrant for a task.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Quadrant {
-    Do,          // Urgent + Important → Allow immediately
-    Schedule,    // Not Urgent + Important → Hook with timer
-    Delegate,    // Urgent + Not Important → Hook with player tag
-    Eliminate,   // Not Urgent + Not Important → Deny
+    Do,        // Urgent + Important → Allow immediately
+    Schedule,  // Not Urgent + Important → Hook with timer
+    Delegate,  // Urgent + Not Important → Hook with player tag
+    Eliminate, // Not Urgent + Not Important → Deny
 }
 
 impl Quadrant {
@@ -18,9 +18,9 @@ impl Quadrant {
         let urgent = urgency >= 0.5;
         let important = importance >= 0.5;
         match (urgent, important) {
-            (true,  true)  => Quadrant::Do,
-            (false, true)  => Quadrant::Schedule,
-            (true,  false) => Quadrant::Delegate,
+            (true, true) => Quadrant::Do,
+            (false, true) => Quadrant::Schedule,
+            (true, false) => Quadrant::Delegate,
             (false, false) => Quadrant::Eliminate,
         }
     }
@@ -97,10 +97,7 @@ impl GovernanceGate for EisenhowerGate {
                 hook_type: HookType::Event(format!("delegate:{}", action)),
                 created_at: chrono::Utc::now(),
                 ttl_ms: Some(300_000), // 5 min TTL
-                description: format!(
-                    "Eisenhower Delegate: '{}' waiting for assignment",
-                    action
-                ),
+                description: format!("Eisenhower Delegate: '{}' waiting for assignment", action),
             }),
             Quadrant::Eliminate => GateResult::Deny {
                 reason: format!(
@@ -135,7 +132,11 @@ mod unit_tests {
         };
 
         let result = gate.check("do-something", &context).await;
-        assert!(matches!(result, GateResult::Allow), "Expected Allow, got {:?}", result);
+        assert!(
+            matches!(result, GateResult::Allow),
+            "Expected Allow, got {:?}",
+            result
+        );
     }
 
     #[tokio::test]
@@ -213,7 +214,10 @@ mod unit_tests {
 
         let result = gate.check("do-something", &context).await;
         match result {
-            GateResult::Deny { reason, escalation_path } => {
+            GateResult::Deny {
+                reason,
+                escalation_path,
+            } => {
                 assert!(reason.contains("Eliminate"));
                 assert!(escalation_path.is_none());
             }
@@ -245,8 +249,7 @@ mod unit_tests {
 
     #[tokio::test]
     async fn test_custom_thresholds() {
-        let gate = EisenhowerGate::new("test")
-            .with_thresholds(0.5, 0.5);
+        let gate = EisenhowerGate::new("test").with_thresholds(0.5, 0.5);
         let context = GateCheckContext {
             agent_id: "test-agent".to_string(),
             task: "test task".to_string(),

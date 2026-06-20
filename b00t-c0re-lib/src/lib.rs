@@ -40,7 +40,9 @@ pub mod dual_grok;
 pub mod dual_install;
 pub mod events;
 pub mod codebase_memory;
+pub mod gate_result;
 pub mod grok;
+pub mod interaction;
 pub mod irontology_bridge;
 pub mod data_fabric;
 pub mod knowledge;
@@ -78,13 +80,18 @@ pub use dual_grok::{
     StubControlEventSink, default_control_event_sink,
 };
 pub use events::{B00tEvent, write_event, write_event_obj, events_path};
+pub use gate_result::{GateDecision, GateResult, ZellijGate};
 pub use grok::{AskResult, ChunkResult, ChunkSummary, DigestResult, GrokClient, LearnResult};
+pub use interaction::{
+    AgentAction, EisenhowerQuadrant, InputRequest, InteractionMode, MenuItem, UserResponse,
+};
 pub use irontology_bridge::{
     DatumNode, IntoIrontologyRecord, IntoRagDocument, IrontologyBridgeClient,
     IrontologyIngestResult, IrontologyQueryItem, compiled_knowledge_backend,
     compiled_knowledge_backend_data_path,
 };
 pub use knowledge::{DisplayOpts, KnowledgeSource};
+pub use kv_store::{KvBackend, KvConfig, KvStore, ZellijKvEntry};
 pub use lfmf::{Lesson, LfmfConfig, LfmfSystem};
 pub use man_page::{ManPage, ManSection};
 pub use mcp_proxy::{GenericMcpProxy, McpToolDefinition, McpToolRequest, McpToolResponse};

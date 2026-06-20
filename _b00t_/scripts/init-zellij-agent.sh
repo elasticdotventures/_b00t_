@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# DEPRECATED: see b00t zellij detect (Rust binary in b00t-cli/src/commands/zellij.rs)
 # 🥾 Agent Startup: Zellij Detection
 # Run during agent init to detect Zellij, persist to KVCache,
 # and set up the interaction protocol environment.

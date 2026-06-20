@@ -49,7 +49,7 @@ use b00t_cli::commands::{
     OodaCommands,
     TaskCommands,
     PatchCommands,
-    TutorialCommands, VersionCommands, VizCommands, WhatismyCommands
+    TutorialCommands, VersionCommands, VizCommands, WhatismyCommands, ZellijCommand
 
 
 };
@@ -540,6 +540,11 @@ The system will:
     Context {
         #[clap(subcommand)]
         context_command: ContextCommands,
+    },
+    #[clap(about = "Zellij session interaction — detect, menu, confirm, input, subagent, wizard")]
+    Zellij {
+        #[clap(subcommand)]
+        zellij_command: ZellijCommand,
     },
 }
 
@@ -2441,6 +2446,12 @@ async fn main() {
         }
         Some(Commands::Context { context_command }) => {
             if let Err(e) = b00t_cli::commands::context::handle_context_command(context_command) {
+                eprintln!("Error: {e}");
+                std::process::exit(1);
+            }
+        }
+        Some(Commands::Zellij { zellij_command }) => {
+            if let Err(e) = b00t_cli::commands::zellij::handle(zellij_command.clone()) {
                 eprintln!("Error: {e}");
                 std::process::exit(1);
             }

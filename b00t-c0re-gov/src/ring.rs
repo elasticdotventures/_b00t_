@@ -177,7 +177,11 @@ mod unit_tests {
         let items = ring.drain();
         for (idx, item) in items.iter().enumerate() {
             let expected = Uuid::from_u64_pair(idx as u64, 0);
-            assert_eq!(item.hook_id, expected, "FIFO order violated at index {}", idx);
+            assert_eq!(
+                item.hook_id, expected,
+                "FIFO order violated at index {}",
+                idx
+            );
         }
     }
 }

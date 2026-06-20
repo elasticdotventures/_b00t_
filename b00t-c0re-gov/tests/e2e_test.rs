@@ -1,7 +1,7 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use b00t_c0re_gov::epoch3::{calculate_cake_payout, MissionResult};
+use b00t_c0re_gov::epoch3::{MissionResult, calculate_cake_payout};
 use b00t_c0re_gov::ring::HookRing;
 use b00t_c0re_gov::scheduler::EventScheduler;
 use b00t_c0re_gov::store::ContextStore;
@@ -59,10 +59,7 @@ async fn test_governance_e2e_pipeline() {
     }
 
     // 6. Verify the hook notification was received
-    assert!(
-        notification.is_some(),
-        "Hook should have fired within 5s"
-    );
+    assert!(notification.is_some(), "Hook should have fired within 5s");
     let n = notification.unwrap();
     assert_eq!(n.hook_id, token.id, "Notification hook_id should match");
     assert!(
@@ -106,11 +103,7 @@ async fn test_governance_e2e_pipeline() {
         completed_at: chrono::Utc::now(),
     };
     let payout = calculate_cake_payout(&result, 100.0, 0.1);
-    assert!(
-        payout > 0.0,
-        "Payout should be positive, got {}",
-        payout
-    );
+    assert!(payout > 0.0, "Payout should be positive, got {}", payout);
     assert!(
         payout <= 100.0,
         "Payout should not exceed bounty (100.0), got {}",

@@ -5,9 +5,9 @@ use serde::{Deserialize, Serialize};
 /// Agent tier determines calorie burn rate per operation.
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub enum AgentTier {
-    GAI,       // 100x  — GPT-4, Claude Opus
-    LLM,       // 10x   — GPT-4o-mini, Llama 3
-    SLM,       // 1x    — Phi-4, Qwen 2.5
+    GAI,         // 100x  — GPT-4, Claude Opus
+    LLM,         // 10x   — GPT-4o-mini, Llama 3
+    SLM,         // 1x    — Phi-4, Qwen 2.5
     Algorithmic, // 0.01x — Python script, grep, awk
 }
 
@@ -25,7 +25,7 @@ impl AgentTier {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::types::{ScoreCard, CalorieBalance};
+    use crate::types::{CalorieBalance, ScoreCard};
 
     #[test]
     fn test_agent_tier_multipliers() {

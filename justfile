@@ -5,6 +5,7 @@ repo-root := env_var_or_default("JUST_REPO_ROOT", `git rev-parse --show-toplevel
 
 
 set shell := ["bash", "-cu"]
+set unstable
 mod cog
 mod b00t
 # 🔑 Root-requiring system setup — invoke as: sudo just sudo::<recipe>
@@ -2096,6 +2097,30 @@ gate-help:
     @echo ""
     @echo "⚠️  All gate-protected actions require Zellij + fzf"
     @echo "⚠️  Agent CANNOT proceed without user approval through interactive menu"
+
+# 🥾 Kreuzberg document intelligence — install + test
+kreuzberg-install:
+    #!/bin/bash
+    set -euo pipefail
+    echo "🥾 Installing kreuzberg document intelligence..."
+    if ! command -v uv >/dev/null 2>&1; then
+        echo "📦 Installing uv (Astral Python toolchain)..."
+        curl -LsSf https://astral.sh/uv/install.sh | sh
+        export PATH="$HOME/.local/bin:$PATH"
+    fi
+    echo "📦 Installing kreuzberg[all] via uv pip..."
+    uv pip install --system "kreuzberg[all]"
+    echo ""
+    echo "🔍 Verifying installation..."
+    python3 -c "import kreuzberg; print('kreuzberg OK')"
+    echo "✅ kreuzberg-install complete"
+
+kreuzberg-test *ARGS='':
+    #!/bin/bash
+    set -euo pipefail
+    echo "🧪 Testing kreuzberg document intelligence..."
+    echo ""
+    python3 "{{repo-root}}/_b00t_/kreuzberg-test.py" ${ARGS:-}
 
 # skills: list all registered b00t skills (SKILL.md + *.skill.toml datums)
 # 🤓 b00t-cli --path discovers skills/ relative to the path arg, not $PWD default
