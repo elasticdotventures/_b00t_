@@ -40,7 +40,7 @@ impl EmbedAnythingBackend {
             .embed(&["ping"], Some(1), None)
             .await?
             .into_iter()
-            .and_then(|r| r.to_dense().ok())
+            .find_map(|r| r.to_dense().ok())
             .unwrap_or_default();
         let dim = sample.len();
 
