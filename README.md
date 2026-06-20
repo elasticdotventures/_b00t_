@@ -52,21 +52,23 @@ b00t advice rust "PyO3"            # retrieve lessons for a tool+pattern
 
 ## 🤖 MCP Integration
 
-### Claude Code Plugin (recommended)
+### Claude Code Plugin
 
 ```bash
-# Load b00t plugin for this session
-claude --plugin-dir ~/.b00t/.claude-plugin/plugins/b00t
+# Load b00t plugin from local checkout (Claude Code --plugin-dir)
+claude --plugin-dir /path/to/_b00t_/.claude-plugin
 
-# Or add permanently to your Claude Code settings:
-# "pluginDirectories": ["~/.b00t/.claude-plugin/plugins/b00t"]
+# Or install the b00t MCP server directly and let it surface skills
+b00t mcp install b00t-mcp claudecode   # registers b00t-mcp in Claude Code
 ```
 
 Provides `/b00t` skill, context-aware tool dispatch, and all available b00t skills.
-Bundles publish deterministic MCP recipes at `.claude-plugin/recipes/{skills,roles}/*.json`
-(for example: `skill-document-understanding` provides `docling-mcp` + `fetch-url-as-markdown`).
+Plugin manifest: `.claude-plugin/plugin.json` — deterministic MCP recipes at
+`.claude-plugin/recipes/{skills,mcp-servers}/*.json`
+(e.g. `skills/document-understanding.json` bundles `docling-mcp` + fetch tools).
 
-**MCP Registry**: b00t-mcp is listed on [Glama](https://glama.ai/mcp/servers) — search "b00t".
+> 🤓 `/plugin marketplace add` does not exist in Claude Code CLI.
+> Use `claude --plugin-dir` for local plugin loading, or `b00t mcp install` for MCP-only.
 
 ### Direct MCP Server
 
