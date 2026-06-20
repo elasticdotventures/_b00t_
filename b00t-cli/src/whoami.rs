@@ -92,6 +92,28 @@ pub fn whoami(path: &str, role_override: Option<String>, with_skills: bool, skil
         );
     }
 
+    // 🛡️ Blessing enforcement: warn if task involves _b00t_/ writes without datum-authoring
+    let task_context = std::env::var("B00T_TASK_CONTEXT").unwrap_or_default();
+    let needs_datum_blessing = task_context.contains("datum")
+        || task_context.contains("skill")
+        || task_context.contains("_b00t_")
+        || task_context.contains("blessing");
+    if needs_datum_blessing {
+        // Check if datum-authoring skill datum exists (indicates blessing loaded)
+        let datum_authoring_path = expanded_path.join("_b00t_/datum-authoring.skill.toml");
+        let blessing_loaded = datum_authoring_path.exists();
+        if !blessing_loaded {
+            println!();
+            println!("🛡️ BLESSING GATE: Task context '{}' involves _b00t_/ datum operations.", task_context);
+            println!("   Required blessing: datum-authoring (→ datum-schema → tomllm-format)");
+            println!("   Run: b00t learn datum-authoring");
+            println!("   This ensures datums use correct field names (tags ≠ type_tags) and tail-map format.");
+        } else {
+            println!();
+            println!("✅ datum-authoring blessing confirmed — _b00t_/ write gate active");
+        }
+    }
+
     // --skills=auto interview mode or explicit csv skill list
     if !skills.is_empty() {
         let is_auto = skills.iter().any(|s| s == "auto");

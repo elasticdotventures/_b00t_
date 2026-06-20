@@ -1,0 +1,37 @@
+[b00t]
+name = "tomllm-format"
+type = "skill"
+hint = "TOML+LLM format conventions — valid TOML with enriched # comment conventions for LLM consumption"
+
+[b00t.skill]
+unlocks = ["datum-schema"]
+description = """
+.tomllm / .tomllmd = valid TOML + enriched `#` comment conventions for LLM context.
+
+Comment conventions:
+- `# @tribal:` / `# 🤓` — non-obvious knowledge, design rationale, gotchas
+- `# @example:` — usage examples inline with the datum
+- `# b00t:map v1` — structured tail-map (last ≤10 lines of file)
+
+Tail-map fields (# b00t:map v1):
+- summary: one-line description (≤120 chars)
+- tags: comma-separated keywords for search/discovery
+- tier: sm0l | ch0nky | frontier
+- cmds: comma-separated relevant b00t commands
+- complexity: 1-10 integer
+
+File naming conventions:
+- .tomllmd — documentation-heavy datum (preferred for PRDs, schemas)
+- .tomllm — machine-oriented datum (preferred for configs)
+- .toml — plain TOML datum (fallback)
+
+Key rule: tail-map MUST be the last ≤10 lines of the file.
+Nothing follows the tail-map — it's a footer, not a middle section.
+"""
+
+# b00t:map v1
+# summary: TOML+LLM format — .tomllm/.tomllmd conventions, tail-map, comment annotations
+# tags: tomllm, format, tail-map, convention, llm
+# tier: sm0l
+# cmds: b00t learn tomllm-format
+# complexity: 3
