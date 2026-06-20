@@ -1,0 +1,31 @@
+# 🥾 Write Guard Gate — Sandbox Gate for _b00t_/ Writes
+# Intercepts unauthorized writes to _b00t_/ and redirects to staging area.
+# Only sessions with datum-authoring blessing may write directly.
+#
+# Architecture:
+#   agent write to _b00t_/*.toml → gate.check("write-guard") →
+#     Blessed (datum-authoring) → allow (exit 0)
+#     Not blessed                → redirect to .tmp/proposed-datums/ + create review task
+
+[b00t]
+name = "write-guard"
+type = "gate"
+hint = "Intercepts writes to _b00t_/ — redirects to staging if no datum-authoring blessing"
+
+[gate]
+mode = "mandatory"
+trigger = "on-write"
+condition = "_b00t_-path"
+target_patterns = ["_b00t_/*.toml", "_b00t_/*.datum.toml", "_b00t_/*.skill.toml"]
+
+[gate.redirect]
+staging_dir = ".tmp/proposed-datums/"
+create_task = true
+task_label = "review: proposed datum"
+
+# b00t:map v1
+# summary: Write guard — redirects unauthorized _b00t_/ writes to staging + creates review task
+# tags: governance, gate, write-guard, datum, staging
+# tier: ch0nky
+# cmds: b00t gate check write-guard, just propose-datum
+# complexity: 7
