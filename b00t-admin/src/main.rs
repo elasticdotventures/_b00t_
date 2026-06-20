@@ -45,7 +45,7 @@ impl Default for AdminConfig {
     fn default() -> Self {
         Self {
             llm_backend_url: std::env::var("LLM_BACKEND_URL")
-                .unwrap_or_else(|_| "http://localhost:15115".to_string()),
+                .unwrap_or_else(|_| "http://localhost:5273".to_string()),
             admin_port: std::env::var("ADMIN_PORT")
                 .ok()
                 .and_then(|p| p.parse().ok())
@@ -284,6 +284,16 @@ async fn dashboard_handler(State(state): State<Arc<Mutex<AppState>>>) -> Html<St
     let types_json = serde_json::json!(app.type_schemas.keys().collect::<Vec<_>>()).to_string();
     drop(app);
     Html(dashboard_html(&pipeline_json, &types_json))
+}
+
+/// GET `/health` or `/healthz` — Health check (for container probes)
+async fn health_handler() -> impl IntoResponse {
+    axum::Json(serde_json::json!({
+        "status": "ok",
+        "service": "b00t-admin",
+        "version": b00t_c0re_lib::version::VERSION,
+        "timestamp": chrono::Utc::now().to_rfc3339(),
+    }))
 }
 
 /// GET `/api/admin/pipeline` — Current pipeline state as JSON
@@ -1247,6 +1257,9 @@ async fn main() {
         // Dashboard
         .route("/", get(dashboard_handler))
         .route("/admin", get(dashboard_handler))
+        // Health check
+        .route("/health", get(health_handler))
+        .route("/healthz", get(health_handler))
         // API — pipeline state
         .route("/api/admin/pipeline", get(pipeline_handler))
         // API — type introspection
@@ -1261,6 +1274,7 @@ async fn main() {
         .route("/v1/{*path}", get(proxy_handler).post(proxy_handler).put(proxy_handler)
             .patch(proxy_handler).delete(proxy_handler).head(proxy_handler)
             .options(proxy_handler))
+        .layer(tower_http::trace::TraceLayer::new_for_http())
         .with_state(state);
 
     let addr = format!("{}:{}", config.admin_host, config.admin_port);
