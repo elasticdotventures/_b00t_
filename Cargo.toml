@@ -18,6 +18,7 @@ members = [
     "b00t-embed",
     "b00t-datum-core",
     "b00t-zellij",
+    "b00t-admin",
 ]
 exclude = [
     "vendor/embed-anything-b00t",
@@ -69,6 +70,7 @@ openssl-sys = { version = "0.9", features = ["vendored"] }
 b00t-embed = { path = "b00t-embed" }
 b00t-datum-core = { path = "b00t-datum-core" }
 b00t-zellij = { path = "b00t-zellij" }
+b00t-admin = { path = "b00t-admin" }
 
 
 
