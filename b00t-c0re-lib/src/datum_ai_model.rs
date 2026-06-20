@@ -527,7 +527,7 @@ mod tests {
             rpm_limit: Some(60),
             context_window: Some(128000),
             enabled: true,
-            access_groups: vec![],
+            access_groups: vec![], architecture: None, huggingface_id: None, aliases: vec![],
         };
 
         assert!(datum.has_capability(&ModelCapability::Vision));
@@ -554,7 +554,7 @@ mod tests {
             rpm_limit: Some(60),
             context_window: Some(200000),
             enabled: true,
-            access_groups: vec!["beta-models".to_string()],
+            access_groups: vec!["beta-models".to_string()], architecture: None, huggingface_id: None, aliases: vec![],
         };
 
         let config = datum.to_litellm_config("claude-3-5-sonnet");
@@ -594,7 +594,7 @@ mod tests {
             rpm_limit: None,
             context_window: Some(4096),
             enabled: true,
-            access_groups: vec![],
+            access_groups: vec![], architecture: None, huggingface_id: None, aliases: vec![],
         };
 
         registry.add_model("gpt-3.5-turbo".to_string(), datum);
@@ -623,7 +623,7 @@ mod tests {
             rpm_limit: Some(600),
             context_window: Some(8192),
             enabled: true,
-            access_groups: vec!["public".to_string()],
+            access_groups: vec!["public".to_string()], architecture: None, huggingface_id: None, aliases: vec![],
         };
 
         // Serialize to TOML
