@@ -259,6 +259,7 @@ install:
     # [1] [2] [3]: install binaries (skip version bump - use `just bump` for that)
     cargo install --path b00t-mcp  --force
     cargo install --path b00t-cli  --force
+    cargo install --path b00t-admin --force
     cargo install cocogitto --locked --force
     just install-commit-hook
     echo "  ✅ binaries installed"
