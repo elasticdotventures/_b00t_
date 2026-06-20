@@ -1,0 +1,77 @@
+╔════════════════════════════════════════════════════════════════════════╗
+║                    🥾 ZELLIJ TROUBLESHOOTING                            ║
+╚════════════════════════════════════════════════════════════════════════╝
+
+⚠️ ISSUE: Floating panes not visible
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+📊 CURRENT STATE:
+
+  Panes created:
+    ✓ terminal_8 (simple test script)
+    ✗ terminal_7 (fzf minimal test - closed)
+    ✗ terminal_6 (fzf menu - closed)
+    ✗ terminal_5 (fzf menu - closed)
+
+  Status: Panes exist but not visible to user
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+🔧 POSSIBLE CAUSES:
+
+  1. Zellij layout configuration
+     - Floating panes may be disabled
+     - Layout template may not support floating panes
+     - Need to check zellij config
+
+  2. Zellij version compatibility
+     - Version: zellij 0.44.3
+     - --floating flag may not work with this version
+
+  3. Layout mode
+     - May be in a specific layout mode that hides floating panes
+     - Need to check current layout
+
+  4. Terminal limitations
+     - Terminal emulator may not support floating panes
+     - Need to check zellij capabilities
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+💡 ALTERNATIVE APPROACHES:
+
+  1. Use current pane instead of floating
+     - Run fzf menu directly in current pane
+     - User can switch back to main pane when done
+
+  2. Use tab instead of floating pane
+     - Create a new tab with the menu
+     - Switch to tab to interact
+
+  3. Use split pane instead of floating
+     - Split current pane horizontally or vertically
+     - Run menu in split pane
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+🎯 RECOMMENDED SOLUTION:
+
+  Run fzf menu directly in current pane:
+
+    bash _b00t_/scripts/zellij-fzf-menu.sh
+
+  This will:
+    - Display interactive fzf menu in current pane
+    - Allow full keyboard navigation
+    - Exit cleanly and return to normal operation
+
+━━━━━━━━━━━━══════════════════════════════════════════════━━━━━━━━
+
+╔════════════════════════════════════════════════════════════════════════╗
+║                    ⚠️ NEED USER INPUT                                  ║
+║                                                                          ║
+║  Can you see the test pane (terminal_8) in your Zellij session?        ║
+║  If not, we may need to check zellij configuration or use a different  ║
+║  approach (current pane, tabs, or split panes instead of floating).    ║
+╚════════════════════════════════════════════════════════════════════════╝

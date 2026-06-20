@@ -1,0 +1,5 @@
+{"timestamp":"2026-06-20T02:46:29Z","session":"kind-duck","agent":"hermes-agent","action":"test-action","result":"DENY","selection":"unknown-selection:🥾 Launching Zellij interactive: fzf-menu
+Pane: floating (60%x40%)
+terminal_18
+✅ Pane created (will close on user response)","exit_code":1}
+{"timestamp":"2026-06-20T02:51:22Z","session":"kind-duck","agent":"hermes-agent","action":"--help","result":"DENY","selection":"low-priority-block","exit_code":0}
