@@ -31,6 +31,7 @@ pub mod job;
 pub mod k8s;
 pub mod learn;
 pub mod lfmf;
+pub mod maintenance;
 pub mod mcp;
 pub mod model;
 pub mod observability;

@@ -22,6 +22,7 @@ use std::process::Command;
 // Import datum types from lib.rs (already declared there as pub mod)
 use b00t_cli::commands::learn::{LearnArgs, handle_learn};
 use b00t_cli::commands::cake::{CakeArgs, handle_cake_command};
+use b00t_cli::commands::maintenance::{MaintenanceArgs, handle_maintenance_command};
 use b00t_cli::datum_ai::AiDatum;
 use b00t_cli::datum_ai_model::ModelDatumEntry;
 use b00t_cli::datum_apt::AptDatum;
@@ -176,6 +177,11 @@ The system will:
     Mcp {
         #[clap(subcommand)]
         mcp_command: McpCommands,
+    },
+    #[clap(about = "b00t maintenance daemon (exercise reminders, governance boot, research queue)")]
+    Maintenance {
+        #[command(flatten)]
+        maintenance_args: MaintenanceArgs,
     },
     #[clap(about = "AI provider management")]
     Ai {
@@ -1750,6 +1756,12 @@ async fn main() {
         Some(Commands::Mcp { mcp_command }) => {
             if let Err(e) = mcp_command.execute_async(&cli.path).await {
                 eprintln!("Error: {}", e);
+                std::process::exit(1);
+            }
+        }
+        Some(Commands::Maintenance { maintenance_args }) => {
+            if let Err(e) = handle_maintenance_command(&maintenance_args).await {
+                eprintln!("Error: {e:#}");
                 std::process::exit(1);
             }
         }
