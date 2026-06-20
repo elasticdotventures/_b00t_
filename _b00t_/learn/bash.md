@@ -37,3 +37,6 @@ The trick is defining trap before creating the resources. If your script dies be
 
 Works in bash, zsh, and POSIX sh. One of the few tricks that's actually portable.
 
+
+---
+POC size ceiling: bash PoCs that grow past 200 lines need Rust before production. Structural flaws in long scripts are unfixable — shell injection, broken exit-code propagation, fragile grep JSON parsing, KVCache race conditions. Prototype in bash, plan Rust rewrite early.

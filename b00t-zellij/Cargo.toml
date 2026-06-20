@@ -1,0 +1,30 @@
+[package]
+name = "b00t-zellij"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "WebAssembly bindings for b00t Zellij interaction system — browser-based agent support"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+# Direct dependencies (all WASM-compatible) instead of b00t-c0re-lib.
+# Reason: b00t-c0re-lib transitively depends on tokio→mio which does not
+# compile to wasm32-unknown-unknown. The plan's Task 4.1 proposes
+# feature-gating these in b00t-c0re-lib. Until that is done, b00t-zellij
+# defines wire-compatible local types (same serde representation).
+serde = { workspace = true }
+serde_json = { workspace = true }
+chrono = { workspace = true }
+wasm-bindgen = "0.2"
+serde-wasm-bindgen = "0.6"
+wee_alloc = "0.4"
+
+# On native (non-WASM) targets we can depend on b00t-c0re-lib directly.
+# This cfg-gate lets native `cargo build -p b00t-zellij` succeed while
+# wasm-pack builds use the local type definitions.
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+b00t-c0re-lib = { workspace = true }

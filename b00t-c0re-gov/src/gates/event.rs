@@ -52,7 +52,11 @@ mod unit_tests {
 
     #[tokio::test]
     async fn test_event_gate_returns_hook() {
-        let gate = EventGate::new("wait-approval", "approval.granted", "Wait for human approval");
+        let gate = EventGate::new(
+            "wait-approval",
+            "approval.granted",
+            "Wait for human approval",
+        );
         let context = GateCheckContext {
             agent_id: "test-agent".to_string(),
             task: "test task".to_string(),

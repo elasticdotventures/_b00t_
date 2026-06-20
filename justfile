@@ -5,6 +5,7 @@ repo-root := env_var_or_default("JUST_REPO_ROOT", `git rev-parse --show-toplevel
 
 
 set shell := ["bash", "-cu"]
+set unstable
 mod cog
 mod b00t
 # 🔑 Root-requiring system setup — invoke as: sudo just sudo::<recipe>

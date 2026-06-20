@@ -9,11 +9,14 @@
 //! 🤓 This is INTERNAL ONLY - no CLI exposure, used by agent coordination
 
 use anyhow::{Context, Result};
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
 use std::process::Command;
+
+use crate::gate_result::GateResult;
 
 /// KV store backend type (internal)
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -407,6 +410,81 @@ impl KvStore {
             }
         }
     }
+
+    /// Get the file path used by this store (for File backend).
+    pub fn file_path(&self) -> Option<String> {
+        self.config.file_path.clone()
+    }
+
+    /// Cache a gate result in the KV store.
+    ///
+    /// Stores the gate check result alongside metadata keys used by the Zellij
+    /// interaction system for audit and caching. Writes multiple keys
+    /// atomically (for the file backend) or sequentially (for Redis backends).
+    ///
+    /// Key pattern: `zellij.gate.{session}.{key}` for session-scoped caching.
+    pub fn gate_cache(
+        &self,
+        result: &GateResult,
+        session_id: &str,
+        agent_id: &str,
+    ) -> Result<()> {
+        let prefix = format!("zellij.gate.{session_id}");
+        let now = Utc::now().to_rfc3339();
+
+        // Write gate state keys
+        self.set(&format!("{prefix}.last-result"), &result.to_string(), None)?;
+        self.set(
+            &format!("{prefix}.last-exit-code"),
+            &result.exit_code().to_string(),
+            None,
+        )?;
+        self.set(&format!("{prefix}.last-agent"), agent_id, None)?;
+        self.set(&format!("{prefix}.last-timestamp"), &now, None)?;
+
+        Ok(())
+    }
+}
+
+/// A Zellij-scoped key-value entry with agent and session attribution.
+///
+/// Extends a plain key-value pair with metadata for the Zellij interaction
+/// system: which agent wrote it, in which session, and when.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ZellijKvEntry {
+    /// The KV key.
+    pub key: String,
+    /// The KV value.
+    pub value: String,
+    /// The agent ID that wrote this entry.
+    pub agent_id: String,
+    /// The Zellij session name (from ZELLIJ_SESSION_NAME).
+    pub session_id: String,
+    /// When this entry was created.
+    pub created_at: DateTime<Utc>,
+}
+
+impl ZellijKvEntry {
+    /// Create a new Zellij-scoped KV entry.
+    pub fn new(key: &str, value: &str, agent_id: &str, session_id: &str) -> Self {
+        Self {
+            key: key.to_string(),
+            value: value.to_string(),
+            agent_id: agent_id.to_string(),
+            session_id: session_id.to_string(),
+            created_at: Utc::now(),
+        }
+    }
+
+    /// Serialize to a JSON string for storage.
+    pub fn to_json(&self) -> Result<String> {
+        serde_json::to_string(self).context("Failed to serialize ZellijKvEntry")
+    }
+
+    /// Deserialize from a JSON string.
+    pub fn from_json(json: &str) -> Result<Self> {
+        serde_json::from_str(json).context("Failed to deserialize ZellijKvEntry")
+    }
 }
 
 #[cfg(test)]
@@ -428,5 +506,59 @@ mod tests {
         let config = KvConfig::default();
         let store = KvStore::new(config);
         assert_eq!(store.backend(), KvBackend::File);
+    }
+
+    #[test]
+    fn test_zellij_kv_entry_creation() {
+        let entry = ZellijKvEntry::new("my-key", "my-value", "agent-1", "session-1");
+        assert_eq!(entry.key, "my-key");
+        assert_eq!(entry.value, "my-value");
+        assert_eq!(entry.agent_id, "agent-1");
+        assert_eq!(entry.session_id, "session-1");
+    }
+
+    #[test]
+    fn test_zellij_kv_entry_json_roundtrip() {
+        let entry = ZellijKvEntry::new("gate.result", "allow", "b00t-cli", "zellij-42");
+        let json = entry.to_json().unwrap();
+        let parsed = ZellijKvEntry::from_json(&json).unwrap();
+        assert_eq!(parsed.key, "gate.result");
+        assert_eq!(parsed.value, "allow");
+        assert_eq!(parsed.agent_id, "b00t-cli");
+        assert_eq!(parsed.session_id, "zellij-42");
+    }
+
+    #[test]
+    fn test_gate_cache_writes_keys() {
+        // Use a temp file path to avoid clobbering real state
+        let mut config = KvConfig::default();
+        config.file_path = Some("/tmp/b00t-test-gate-cache.json".to_string());
+        let store = KvStore::new(config);
+
+        let result = GateResult::Allow;
+        store
+            .gate_cache(&result, "test-session", "test-agent")
+            .unwrap();
+
+        let last_result = store
+            .get("zellij.gate.test-session.last-result")
+            .unwrap()
+            .unwrap();
+        assert_eq!(last_result, "Allow");
+
+        let exit_code = store
+            .get("zellij.gate.test-session.last-exit-code")
+            .unwrap()
+            .unwrap();
+        assert_eq!(exit_code, "0");
+
+        let agent = store
+            .get("zellij.gate.test-session.last-agent")
+            .unwrap()
+            .unwrap();
+        assert_eq!(agent, "test-agent");
+
+        // Clean up
+        let _ = std::fs::remove_file("/tmp/b00t-test-gate-cache.json");
     }
 }

@@ -56,6 +56,8 @@ pub mod validate;
 pub mod version;
 pub mod viz;
 pub mod whatismy;
+pub mod zellij;
+pub use zellij::ZellijCommand;
 pub mod context;
 pub use context::ContextCommands;
 
