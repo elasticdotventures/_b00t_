@@ -1,66 +1,46 @@
 #!/usr/bin/env bash
-# 🎯 Launch fzf menu in Zellij floating pane
+# 🥾 Zellij fzf Selection Menu (for use with zellij run)
+# For complex selections with search/filter
 
 set -euo pipefail
 
-# 🎨 Colors
-GREEN='\033[0;32m'
-BLUE='\033[0;34m'
-CYAN='\033[0;36m'
-NC='\033[0m'
-
-echo -e "${BLUE}🥾 B00t Interactive Menu${NC}"
-echo -e "${CYAN}Session: ${ZELLIJ_SESSION_NAME:-unknown}${NC}"
+echo ""
+echo "  🥾 B00T Selection Menu"
+echo "  ─────────────────────"
 echo ""
 
-# fzf interactive menu
-selection=$(cat << 'EOF' | fzf --header="🎯 Select an option:" --prompt="🥾 b00t> " --border=rounded --height=~40% --reverse --cycle
-1 • Tell me a joke • Programming humor
-2 • Show system status • Check b00t health
-3 • View recent tasks • Task history
-4 • Run tests • Execute test suite
-5 • Deploy to production • Deploy code
-6 • Exit menu • Return to workspace
+# fzf interactive selection
+selection=$(cat << 'EOF' | fzf \
+    --header="🎯 Select an option (type to filter, ↑↓ to navigate)" \
+    --prompt="🥾 b00t> " \
+    --border=rounded \
+    --border-label=" zellij-fzf " \
+    --color=header:blue,marker:green,pointer:cyan,border:gray,prompt:yellow \
+    --height=~60% \
+    --min-height=8 \
+    --reverse \
+    --cycle
+1 • Build project • Compile and run tests
+2 • Run integration tests • Full test suite
+3 • Deploy to staging • Staging environment
+4 • Deploy to production • Production environment
+5 • Code review • Review pending PRs
+6 • Run diagnostics • System health check
+7 • Cancel • Return to workspace
 EOF
 )
 
 echo ""
-
-# Process selection
 case "$selection" in
-    "1 •"*)
-        echo -e "${GREEN}🐛 Joke:${NC}"
-        echo "Why do programmers prefer dark mode?"
-        echo "Because light attracts bugs! 🐛"
-        ;;
-    "2 •"*)
-        echo -e "${BLUE}📊 System Status:${NC}"
-        echo "✅ Zellij session: ${ZELLIJ_SESSION_NAME:-unknown}"
-        echo "✅ Current pane: ${ZELLIJ_PANE_ID:-unknown}"
-        echo "✅ fzf version: $(fzf --version)"
-        echo "✅ b00t agent: $(whoami)"
-        ;;
-    "3 •"*)
-        echo -e "${CYAN}📋 Recent Tasks:${NC}"
-        echo "→ Session awareness implemented"
-        echo "→ Window naming configured"
-        echo "→ Interactive menus with fzf"
-        echo "→ Floating pane integration"
-        ;;
-    "4 •"*)
-        echo -e "${GREEN}🧪 Running tests...${NC}"
-        echo "Test suite execution started"
-        ;;
-    "5 •"*)
-        echo -e "${YELLOW}🚀 Deploying to production...${NC}"
-        echo "Deployment pipeline initiated"
-        ;;
-    "6 •"*)
-        echo -e "${BLUE}👋 Goodbye!${NC}"
-        exit 0
-        ;;
+    "1 •"*) echo "✅ Selected: Build project" ;;
+    "2 •"*) echo "✅ Selected: Run tests" ;;
+    "3 •"*) echo "✅ Selected: Deploy to staging" ;;
+    "4 •"*) echo "✅ Selected: Deploy to production" ;;
+    "5 •"*) echo "✅ Selected: Code review" ;;
+    "6 •"*) echo "✅ Selected: Run diagnostics" ;;
+    "7 •"*) echo "👋 Cancelled" ;;
+    "")      echo "👋 No selection" ;;
 esac
-
 echo ""
-echo -e "${CYAN}Press any key to close...${NC}"
+echo "Press any key to close..."
 read -r -n 1
