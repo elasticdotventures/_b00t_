@@ -123,6 +123,12 @@ fn emit_manifest(b00t_path: &str, role: &str, fmt: &str) -> Result<()> {
         required.push((dep_key.clone(), unlocks));
     }
 
+    // 🛡️ Blessing enforcement: if task scope includes _b00t_/ writes,
+    //    ensure datum-authoring is included in the dependency graph.
+    if task_involves_b00t_writes() {
+        add_datum_authoring_to_graph(&datums, &direct_deps, &mut required, &mut optional);
+    }
+
     // Optional: datums that declare this role in their skills field
     for (key, datum) in &datums {
         if direct_deps.contains(key) { continue; }
@@ -183,6 +189,97 @@ fn emit_manifest(b00t_path: &str, role: &str, fmt: &str) -> Result<()> {
         }
     }
     Ok(())
+}
+
+// ── Blessing enforcement helpers ─────────────────────────────────────────
+
+/// Check if the current task context involves _b00t_/ writes.
+///
+/// Checks `B00T_TASK_CONTEXT` env var and current git branch for keywords
+/// indicating datum/skill authoring activity.
+fn task_involves_b00t_writes() -> bool {
+    let mut indicators = Vec::new();
+
+    if let Ok(ctx) = std::env::var("B00T_TASK_CONTEXT") {
+        if !ctx.is_empty() {
+            indicators.push(ctx.to_lowercase());
+        }
+    }
+
+    if let Ok(out) = std::process::Command::new("git")
+        .args(["branch", "--show-current"])
+        .output()
+    {
+        let branch = String::from_utf8_lossy(&out.stdout).trim().to_lowercase();
+        if !branch.is_empty() {
+            indicators.push(branch);
+        }
+    }
+
+    let combined = indicators.join(" ");
+
+    let b00t_write_kw = [
+        "_b00t_", "b00t_", "datum", "datums", "skill.toml",
+        "skill datum", "datum-authoring", "datum-schema", "blessing",
+        "tomllm", "tomllmd",
+    ];
+
+    for kw in &b00t_write_kw {
+        if combined.contains(kw) {
+            return true;
+        }
+    }
+
+    false
+}
+
+/// Add datum-authoring to the blessing dependency graph when task scope
+/// includes _b00t_/ writes.
+///
+/// Inserts datum-authoring into the required list (with its sub-dependencies)
+/// or the optional list if it's not already present.
+fn add_datum_authoring_to_graph(
+    datums: &std::collections::HashMap<String, crate::BootDatum>,
+    direct_deps: &[String],
+    required: &mut Vec<(String, Vec<String>)>,
+    _optional: &mut Vec<(String, Vec<String>)>,
+) {
+    // Skip if datum-authoring is already in the required or direct deps
+    let already_present = required.iter().any(|(k, _)| k == "datum-authoring.skill")
+        || direct_deps.iter().any(|d| d == "datum-authoring.skill");
+
+    if already_present {
+        return;
+    }
+
+    // Collect datum-authoring and its sub-dependencies
+    let mut to_add = vec!["datum-authoring.skill".to_string()];
+
+    // Walk the dependency chain: datum-authoring → datum-schema → tomllm-format
+    let mut seen: std::collections::HashSet<String> = to_add.iter().cloned().collect();
+    let mut i = 0;
+    while i < to_add.len() {
+        let key = &to_add[i];
+        if let Some(datum) = datums.get(key) {
+            if let Some(ref deps) = datum.depends_on {
+                for dep in deps {
+                    if seen.insert(dep.clone()) {
+                        to_add.push(dep.clone());
+                    }
+                }
+            }
+        }
+        i += 1;
+    }
+
+    // Add to required, pulling unlocks from the datum
+    for key in &to_add {
+        let unlocks = datums
+            .get(key)
+            .and_then(|d| d.unlocks.clone())
+            .unwrap_or_default();
+        required.push((key.clone(), unlocks));
+    }
 }
 
 #[cfg(test)]
