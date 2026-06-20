@@ -7,6 +7,7 @@ pub mod app;
 pub mod audit;
 pub mod bootstrap;
 pub mod budget;
+pub mod cake;
 pub mod chat;
 pub mod crew;
 pub mod crew_handler;

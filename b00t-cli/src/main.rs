@@ -21,6 +21,7 @@ use std::process::Command;
 
 // Import datum types from lib.rs (already declared there as pub mod)
 use b00t_cli::commands::learn::{LearnArgs, handle_learn};
+use b00t_cli::commands::cake::{CakeArgs, handle_cake_command};
 use b00t_cli::datum_ai::AiDatum;
 use b00t_cli::datum_ai_model::ModelDatumEntry;
 use b00t_cli::datum_apt::AptDatum;
@@ -196,6 +197,12 @@ The system will:
         #[clap(subcommand)]
         budget_command: BudgetCommands,
     },
+    #[clap(about = "Cake token balance, history, and ticket management")]
+    Cake {
+        #[command(flatten)]
+        cake_args: CakeArgs,
+    },
+
     #[clap(about = "Application integration commands")]
     App {
         #[clap(subcommand)]
@@ -1756,6 +1763,12 @@ async fn main() {
         Some(Commands::Stack { stack_command }) => {
             if let Err(e) = stack_command.execute(&cli.path) {
                 eprintln!("Error: {}", e);
+                std::process::exit(1);
+            }
+        }
+        Some(Commands::Cake { cake_args }) => {
+            if let Err(e) = handle_cake_command(&cake_args) {
+                eprintln!("Error: {e:#}");
                 std::process::exit(1);
             }
         }

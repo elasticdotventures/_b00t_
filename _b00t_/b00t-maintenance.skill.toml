@@ -1,0 +1,21 @@
+[b00t]
+name = "b00t-maintenance"
+type = "skill"
+hint = "b00t maintenance loop: 15-min reminders, cake lottery, research queue, 👍🏻/👎🏻 votes"
+
+[b00t.skill]
+instructions_file = "skills/b00t-maintenance/SKILL.md"
+tags = ["b00t", "maintenance", "cake", "adhd", "health", "reminder", "loop", "vote"]
+description = "Access b00t maintenance loop — cake balance, exercise reminders, research queue"
+
+[b00t.skill.metadata]
+applies_to = ["checking loop status", "confirming reminders", "viewing cake balance", "triggering research"]
+output_types = [".json", ".md"]
+tier = "sm0l"
+
+# b00t:map v1
+# summary: b00t maintenance loop skill datum
+# tags: b00t, maintenance, cake, adhd, health, reminder
+# tier: sm0l
+# cmds: b00t skill activate b00t-maintenance
+# complexity: 2
