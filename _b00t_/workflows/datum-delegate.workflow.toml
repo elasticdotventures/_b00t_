@@ -1,0 +1,75 @@
+# Datum delegation lifecycle workflow
+# Compiled by: ledger-core WorkflowToml DSL
+# States map to HsmMachine.LifecycleState equivalents for b00t datums
+
+name = "datum-delegate"
+version = "1.0.0"
+
+[[state]]
+id = "idle"
+initial = true
+
+[[state]]
+id = "proposed"
+
+[[state]]
+id = "authorized"
+
+[[state]]
+id = "running"
+
+[[state]]
+id = "paused"
+
+[[state]]
+id = "complete"
+terminal = true
+
+[[state]]
+id = "rejected"
+terminal = true
+is_error = true
+
+[[transition]]
+from = "idle"
+event = "delegate_request"
+to = "proposed"
+
+[[transition]]
+from = "proposed"
+event = "ledgrrr_authorize"
+guard = "budget_ok"
+to = "authorized"
+else = "rejected"
+
+[[transition]]
+from = "authorized"
+event = "agent_start"
+to = "running"
+
+[[transition]]
+from = "running"
+event = "ledgrrr_pause"
+to = "paused"
+
+[[transition]]
+from = "paused"
+event = "ledgrrr_resume"
+to = "running"
+
+[[transition]]
+from = "running"
+event = "agent_complete"
+to = "complete"
+
+[[transition]]
+from = "running"
+event = "agent_fail"
+to = "rejected"
+
+# b00t:map v1
+# summary: datum delegation FSM — idle→proposed→authorized→running→complete/rejected
+# tags: workflow, datum, ledgrrr, authorization, delegation, fsm
+# tier: sm0l
+# cmds: b00t-cli ontology sparql --subject datum-delegate --predicate all
+# complexity: 3

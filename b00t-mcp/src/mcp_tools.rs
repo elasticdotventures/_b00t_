@@ -385,6 +385,74 @@ impl_mcp_tool!(
     ["agent", "vote", "submit"]
 );
 
+/// MCP tool for datum delegation authorization gate (ledgrrr bridge).
+/// ⚠️ STUB: ledgrrr channel not yet wired — returns authorized=true with synthetic token.
+/// When ledgrrr channel is live, replace execute_mcp_call body with channel send + block.
+#[derive(Parser, Clone)]
+pub struct DelegateDatumCommand {
+    #[arg(help = "Datum ID to authorize")]
+    pub datum_id: String,
+
+    #[arg(long, help = "Agent requesting authorization")]
+    pub agent_id: String,
+
+    #[arg(long, help = "Task ID this delegation belongs to")]
+    pub task_id: String,
+
+    #[arg(long, help = "Estimated cost in USD")]
+    pub estimated_cost_usd: f64,
+
+    #[arg(long, help = "Human-readable justification for this delegation")]
+    pub justification: Option<String>,
+}
+
+impl crate::clap_reflection::McpReflection for DelegateDatumCommand {
+    fn mcp_tool_name() -> String { "b00t_delegate_datum".to_string() }
+    fn command_path() -> Vec<String> { vec![] }
+}
+
+impl crate::clap_reflection::McpExecutor for DelegateDatumCommand {
+    fn execute_mcp_call(params: &HashMap<String, Value>) -> Result<String> {
+        // Validate required fields
+        let datum_id = params.get("datum_id")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| anyhow::anyhow!("b00t_delegate_datum requires datum_id: string"))?;
+        let agent_id = params.get("agent_id")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| anyhow::anyhow!("b00t_delegate_datum requires agent_id: string"))?;
+        let task_id = params.get("task_id")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| anyhow::anyhow!("b00t_delegate_datum requires task_id: string"))?;
+        let estimated_cost_usd = params.get("estimated_cost_usd")
+            .and_then(|v| v.as_f64())
+            .ok_or_else(|| anyhow::anyhow!("b00t_delegate_datum requires estimated_cost_usd: number"))?;
+
+        // ⚠️ STUB: ledgrrr channel not yet wired
+        // TODO: replace with GateMessage::BootDatumDelegate channel send + blocking recv
+        let epoch_secs = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs();
+        let resume_token = format!("{}:{}:{}", datum_id, task_id, epoch_secs);
+
+        // LifecycleEvent-shaped log line to stderr
+        eprintln!("[b00t_delegate] datum={} agent={} task={} cost={:.4} → AUTHORIZED (stub)",
+            datum_id, agent_id, task_id, estimated_cost_usd);
+
+        let response = json!({
+            "authorized": true,
+            "datum_id": datum_id,
+            "agent_id": agent_id,
+            "task_id": task_id,
+            "budget_remaining_usd": 99.00,
+            "resume_token": resume_token,
+            "denial_reason": null,
+            "_stub": "⚠️ STUB: ledgrrr channel not yet wired"
+        });
+        Ok(serde_json::to_string_pretty(&response)?)
+    }
+}
+
 /// MCP command for waiting for messages (blocking)
 #[derive(Parser, Clone)]
 pub struct AgentWaitCommand {
@@ -986,6 +1054,7 @@ pub static TOOL_CATALOG: &[ToolCatalogEntry] = &[
     ToolCatalogEntry { name: "b00t_agent_complete",    description: "Mark agent task complete",               subcommand: "agent complete" },
     ToolCatalogEntry { name: "b00t_agent_vote_create", description: "Create a hive vote",                     subcommand: "agent vote create" },
     ToolCatalogEntry { name: "b00t_agent_vote_submit", description: "Submit a vote",                          subcommand: "agent vote submit" },
+    ToolCatalogEntry { name: "b00t_delegate_datum",    description: "Request ledgrrr authorization for datum execution", subcommand: "delegate datum" },
     ToolCatalogEntry { name: "b00t_session_init",      description: "Initialize a b00t session",              subcommand: "session init" },
     ToolCatalogEntry { name: "b00t_session_status",    description: "Show session status",                    subcommand: "session status" },
     ToolCatalogEntry { name: "b00t_session_end",       description: "End current session",                    subcommand: "session end" },
@@ -1156,6 +1225,7 @@ pub fn create_full_mcp_registry() -> McpCommandRegistry {
         .register::<AgentProgressCommand>()
         .register::<AgentVoteCreateCommand>()
         .register::<AgentVoteSubmitCommand>()
+        .register::<DelegateDatumCommand>()
         .register::<AgentWaitCommand>()
         .register::<AgentNotifyCommand>()
         .register::<AgentCapabilityCommand>()
