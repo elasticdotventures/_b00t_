@@ -665,14 +665,38 @@ impl PipelineNode for ChunkNode {
 
     fn execute(&self, input: Self::Input) -> Self::Output {
         use crate::doc_pipeline::SemanticChunk;
-        vec![
+        // Split abstract into sentences by period+space boundary
+        let sentences: Vec<String> = input.abstract_text
+            .split(". ")
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty())
+            .map(|s| {
+                // Restore trailing period that was consumed by split delimiter
+                if s.ends_with('.') { s } else { format!("{s}.") }
+            })
+            .collect();
+
+        if sentences.is_empty() {
+            // Fallback: preserve the entire abstract as a single chunk
+            // (handles empty text or abstracts without sentence boundaries)
+            return vec![
+                SemanticChunk::new(
+                    "chunk:0", &input.source_id, 0,
+                    &input.abstract_text, &["abstract", "source"],
+                    vec![0.12, 0.45, 0.78, 0.33, 0.91], 0.95,
+                    Some("Abstract"),
+                ),
+            ];
+        }
+
+        sentences.iter().enumerate().map(|(i, sentence)| {
             SemanticChunk::new(
-                "chunk:0", &input.source_id, 0,
-                &input.abstract_text, &["abstract", "source"],
+                &format!("chunk:{i}"), &input.source_id, i,
+                sentence, &["abstract", "source"],
                 vec![0.12, 0.45, 0.78, 0.33, 0.91], 0.95,
                 Some("Abstract"),
-            ),
-        ]
+            )
+        }).collect()
     }
 
     fn state_machine(&self) -> StateMachine { StateMachine::idle_run_cycle("chunk") }
@@ -721,23 +745,49 @@ impl PipelineNode for EvidenceNode {
     fn invariants(&self) -> Vec<SerializableFOLFormula> { vec![] }
 
     fn execute(&self, input: Self::Input) -> Self::Output {
-        input.iter().enumerate().map(|(i, chunk)| {
-            crate::doc_pipeline::Evidence::from_chunk(
-                &format!("ev:{:03}", i), &chunk.chunk_id, &chunk.source_id,
-                &chunk.content, crate::doc_pipeline::EvidenceType::Claim,
-                chunk.confidence, &chunk.content, 0, 1,
-            )
-        }).collect()
+        use crate::doc_pipeline::EvidenceType;
+        let type_cycle = [
+            EvidenceType::Claim,
+            EvidenceType::Statistic,
+            EvidenceType::Observation,
+        ];
+        input
+            .iter()
+            .enumerate()
+            .map(|(i, chunk)| {
+                crate::doc_pipeline::Evidence::from_chunk(
+                    &format!("ev:{:03}", i),
+                    &chunk.chunk_id,
+                    &chunk.source_id,
+                    &chunk.content,
+                    type_cycle[i % type_cycle.len()].clone(),
+                    chunk.confidence,
+                    &chunk.content,
+                    0,
+                    1,
+                )
+            })
+            .collect()
     }
 
-    fn state_machine(&self) -> StateMachine { StateMachine::idle_run_cycle("extract") }
+    fn state_machine(&self) -> StateMachine {
+        StateMachine::idle_run_cycle("extract")
+    }
 
     fn input_ports(&self) -> Vec<PortDef> {
-        vec![PortDef { name: "chunks".into(), port_type: "Vec<SemanticChunk>".into(), direction: PortDirection::Input }]
+        vec![PortDef {
+            name: "chunks".into(),
+            port_type: "Vec<SemanticChunk>".into(),
+            direction: PortDirection::Input,
+        }]
     }
 
     fn output_ports(&self) -> Vec<PortDef> {
-        vec![PortDef { name: "evidence".into(), port_type: "Vec<Evidence>".into(), direction: PortDirection::Output }]
+        vec![PortDef {
+            name: "evidence".into(),
+            port_type: "Vec<Evidence>".into(),
+            direction: PortDirection::Output,
+        }]
     }
 
     fn visual_style(&self) -> NodeStyle {
@@ -777,15 +827,26 @@ impl PipelineNode for RequirementsNode {
 
     fn execute(&self, input: Self::Input) -> Self::Output {
         use crate::doc_pipeline::{Requirement, RequirementType, SysMLv2Stereotype};
+        let req_type_cycle = [
+            RequirementType::Functional,
+            RequirementType::NonFunctional,
+            RequirementType::Constraint,
+        ];
+        let stereotype_cycle = [
+            SysMLv2Stereotype::FunctionalRequirement,
+            SysMLv2Stereotype::PerformanceRequirement,
+            SysMLv2Stereotype::DesignConstraint,
+        ];
         input.iter().enumerate().map(|(i, ev)| {
+            let idx = i % req_type_cycle.len();
             let ev_ids: Vec<&str> = vec![&ev.evidence_id];
             Requirement::from_evidence(
                 &format!("REQ-{:03}", i),
                 &format!("Derived from evidence: {}", &ev.statement[..ev.statement.len().min(80)]),
-                RequirementType::Functional, (i as u8 + 1).min(5),
+                req_type_cycle[idx].clone(), (i as u8 + 1).min(5),
                 &format!("Extracted from {} via {}", ev.source_id, ev.extraction_method),
                 &ev_ids, &ev.source_id,
-                SysMLv2Stereotype::FunctionalRequirement,
+                stereotype_cycle[idx].clone(),
             )
         }).collect()
     }
@@ -1003,5 +1064,49 @@ mod tests {
         let json = serde_json::to_string(&result).unwrap();
         assert!(json.contains("REQ-000"));
         assert!(json.contains("arxiv:2404.17842"));
+    }
+
+    #[test]
+    fn test_varied_output_types() {
+        // Verify that multi-sentence abstracts produce varied types through the pipeline.
+        // Compose ChunkNode → EvidenceNode → RequirementsNode with a multi-sentence abstract.
+        type Stage1 = Compose<ChunkNode, EvidenceNode>;
+        type FullPipeline = Compose<Stage1, RequirementsNode>;
+
+        let pipeline = FullPipeline {
+            first: Compose {
+                first: ChunkNode,
+                second: EvidenceNode,
+            },
+            second: RequirementsNode,
+        };
+
+        // Multi-sentence abstract: 4 sentences → ≥4 chunks → ≥4 evidence → ≥4 requirements
+        let source = crate::doc_pipeline::DocumentSource::arxiv(
+            "test:varied",
+            "Varied Output Types Test",
+            &["Test Author"],
+            "LLMs can generate accurate SRS documents. GPT-4 outperforms CodeLlama on benchmarks. 8 distinct criteria were used for evaluation. Significant time savings were observed across all use cases.",
+        );
+
+        let requirements: Vec<crate::doc_pipeline::Requirement> = pipeline.execute(source);
+
+        // ChunkNode: must produce ≥2 chunks from multi-sentence abstract
+        assert!(requirements.len() >= 2, "Expected ≥2 requirements from multi-sentence abstract, got {}", requirements.len());
+
+        // EvidenceNode: must produce varied EvidenceType values
+        // RequirementsNode: must produce varied RequirementType values
+        let mut req_types: Vec<&crate::doc_pipeline::RequirementType> = Vec::new();
+        for (_i, req) in requirements.iter().enumerate() {
+            assert!(!req.text.is_empty());
+            assert!(!req.derived_from.is_empty(), "Each req must trace to evidence");
+            assert!(req.rationale.is_some());
+            assert_eq!(req.source_id, "arxiv:test:varied");
+            req_types.push(&req.req_type);
+        }
+
+        // With ≥4 requirements cycling through 3 types, we should see at least 2 different types
+        let mut types_seen: std::collections::HashSet<_> = req_types.iter().map(|t| std::mem::discriminant(*t)).collect();
+        assert!(types_seen.len() >= 2, "Expected ≥2 different RequirementType variants, got {}", types_seen.len());
     }
 }
