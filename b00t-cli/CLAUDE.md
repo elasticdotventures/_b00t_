@@ -70,6 +70,7 @@ b00t-cli is a Rust-based command-line tool for managing software versions and in
 - `shellexpand`: Tilde expansion for paths
 - `semver`: Semantic version comparison
 - `anyhow`: Error handling
+- `diffy`: Unified diff generation for semantic patch workflow
 - `tempfile` (dev): Testing utilities
 
 ### MCP Installation Examples

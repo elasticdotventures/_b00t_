@@ -146,3 +146,6 @@ Version drift: Audit pinned dependency versions quarterly. candle-core 0.4 sat b
 ---
 Naming is deployment: The l3dg3rr→ledgerr-mcp→ledg3rr→ledgrrr polyseme maps to proto→linux→cloud→windows. A single codebase with platform-suffix builds prevents fork drift. Use the trait system to abstract platform differences (systemd vs docker for WSL, stdio vs gRPC for cloud).
 complexity: 6
+
+---
+cargo-toml-duplicate-dep: Keep CLAUDE.md dependency list in sync with Cargo.toml. When CLAUDE.md omits a dep used in source, agents try to re-add it, creating duplicate lines after hook runs. Always add new crates to both CLAUDE.md and Cargo.toml together.
