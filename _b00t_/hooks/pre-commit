@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+# pre-commit hook for b00t repo — guards against common merge artifacts.
+# Install: cp _b00t_/hooks/pre-commit .git/hooks/pre-commit && chmod +x .git/hooks/pre-commit
+# Or: just install-pre-commit-hook
+set -euo pipefail
+
+# Gate 1: .gitmodules must exist (destroyed by merge artifacts like PR #490)
+if ! git ls-files --error-unmatch .gitmodules >/dev/null 2>&1; then
+  echo "🚫 pre-commit: .gitmodules is missing — check for merge artifact" >&2
+  echo "   Restore with: git show <known-good-sha>:.gitmodules > .gitmodules" >&2
+  exit 1
+fi
+
+# Gate 2: .gitmodules must be well-formed TOML-like (at least one submodule entry)
+if ! grep -q '^\[submodule' .gitmodules 2>/dev/null; then
+  echo "🚫 pre-commit: .gitmodules has no submodule entries" >&2
+  exit 1
+fi
+
+# Gate 3: Warn if committed gitlinks lack .gitmodules entries (non-fatal)
+GITLINKS=$(git ls-files -s | awk '$1 == "160000" {print $4}')
+if [ -n "$GITLINKS" ]; then
+  while IFS= read -r path; do
+    if ! grep -q "path = $path" .gitmodules 2>/dev/null; then
+      echo "⚠️  pre-commit: gitlink '$path' has no .gitmodules entry" >&2
+    fi
+  done <<< "$GITLINKS"
+fi
+
+echo "✅ pre-commit: .gitmodules OK"

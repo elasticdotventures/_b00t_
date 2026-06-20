@@ -1663,6 +1663,20 @@ install-pre-push-hook:
     echo "✅ Installed $DST"
     echo "   Gate: cargo test --package b00t-cli --lib before push to non-fork remotes"
 
+
+# install-pre-commit-hook: install pre-commit git hook that validates .gitmodules integrity.
+# 🤓 guards against merge artifacts that silently delete .gitmodules (see PR #490).
+install-pre-commit-hook:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    B00T_ROOT=$(git rev-parse --show-toplevel 2>/dev/null || echo "$HOME/.b00t")
+    SRC="$B00T_ROOT/_b00t_/hooks/pre-commit"
+    DST="$B00T_ROOT/.git/hooks/pre-commit"
+    cp "$SRC" "$DST" && chmod +x "$DST"
+    echo "✅ Installed $DST"
+    echo "   Gate: .gitmodules must exist and have submodule entries"
+
+
 # ── ralph with diversity ──────────────────────────────────────────────────────
 # ralph-spawn: instantiate a ralph agent with a random personality + transferable skills.
 # Karpathy deepwiki OKR pattern: RESEARCH is a separate cycle from EXECUTION.
