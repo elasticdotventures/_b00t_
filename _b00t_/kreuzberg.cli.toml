@@ -1,0 +1,66 @@
+[b00t]
+name = "kreuzberg"
+type = "cli"
+desires = "latest"
+install = '''
+# Kreuzenberg document intelligence library
+# 🥾 Prefer uvx for auto-install; uv pip as fallback
+if command -v uvx >/dev/null 2>&1; then
+    echo "✨ Installing kreuzberg via uvx (auto-managed)"
+    uvx kreuzberg-mcp --help >/dev/null 2>&1 && echo "✅ kreuzberg ready via uvx" && exit 0
+fi
+
+if command -v uv >/dev/null 2>&1; then
+    echo "📦 Installing kreuzberg via uv pip"
+    uv pip install --system "kreuzberg[all]"
+elif command -v pip3 >/dev/null 2>&1; then
+    echo "📦 Installing kreuzberg via pip3"
+    pip3 install "kreuzberg[all]"
+else
+    echo "⚠️  Neither uv nor pip3 found. Install uv first: curl -LsSf https://astral.sh/uv/install.sh | sh"
+    exit 1
+fi
+'''
+
+update = '''
+# Update kreuzberg
+if command -v uv >/dev/null 2>&1; then
+    uv pip install --system --upgrade "kreuzberg[all]"
+elif command -v pip3 >/dev/null 2>&1; then
+    pip3 install --upgrade "kreuzberg[all]"
+fi
+'''
+
+version = "python3 -c \"import importlib.metadata; print(importlib.metadata.version('kreuzberg'))\" 2>/dev/null || echo 'not installed'"
+version_regex = '\\d+\\.\\d+\\.\\d+'
+hint = "Kreuzberg is a document intelligence library for PDF parsing, OCR, text extraction, and document processing. See: https://github.com/Goldziher/kreuzberg"
+unlocks = ["kreuzberg *", "python -m kreuzberg *"]
+
+[validate]
+command = "python3 -c \"import kreuzberg; print('ok')\""
+regex = "ok"
+
+[roles]
+required_for = []
+optional_for = ["developer", "analyst", "orchestrator"]
+
+[b00t.learn]
+inline = "See: https://github.com/Goldziher/kreuzberg"
+
+# 🤓: Document processing capabilities:
+#   - PDF parsing (text, metadata, structure)
+#   - OCR for scanned documents
+#   - Text extraction from multiple formats
+#   - Document intelligence pipeline
+
+[[b00t.usage]]
+description = "Extract text from a PDF document"
+command = "python3 -c \"import asyncio; from kreuzberg import extract_text; print(asyncio.run(extract_text('document.pdf')))\""
+
+[[b00t.usage]]
+description = "Run kreuzberg as MCP server"
+command = "uvx kreuzberg-mcp"
+
+[[b00t.usage]]
+description = "Install kreuzberg with all extras (OCR support)"
+command = "uv pip install 'kreuzberg[all]'"
