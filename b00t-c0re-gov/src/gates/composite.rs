@@ -50,7 +50,10 @@ impl GovernanceGate for AnyOfGate {
                         description: format!("Allow child for gate '{}'", gate.name()),
                     });
                 }
-                GateResult::Deny { reason, escalation_path: _ } => {
+                GateResult::Deny {
+                    reason,
+                    escalation_path: _,
+                } => {
                     // A denial in AnyOf doesn't stop the entire check;
                     // we still wait for the other gates. But we note it.
                     // We can add a timer that fires immediately to represent "skipped".
@@ -126,7 +129,10 @@ impl GovernanceGate for AllOfGate {
                         description: format!("Allow child for gate '{}'", gate.name()),
                     });
                 }
-                GateResult::Deny { reason, escalation_path } => {
+                GateResult::Deny {
+                    reason,
+                    escalation_path,
+                } => {
                     // A denial in AllOf stops everything — we deny immediately
                     return GateResult::Deny {
                         reason: format!(

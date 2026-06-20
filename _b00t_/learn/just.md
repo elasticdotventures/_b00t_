@@ -411,3 +411,6 @@ Duplicate recipe error: Use 6C pattern - comment old version, rename to name-leg
 ---
 module invocation from subdirectories: Justfile modules (e.g., 'mod b00t') must be invoked from the justfile root where module is declared. Use 'just b00t::recipe-name' syntax. If in subdirectory, either cd to project root first or use 'just -f /path/to/justfile b00t::recipe'
 
+
+---
+template vars in bash bodies: just {{ }} template interpolation only works in recipe parameters/headers, NOT inside bash script bodies ([[ ]]). Use env vars or string replacement instead — {{ B00T_ROOT }} renders literally inside bash blocks.

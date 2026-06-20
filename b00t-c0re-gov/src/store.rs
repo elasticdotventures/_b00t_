@@ -270,7 +270,10 @@ mod unit_tests {
 
         // The .json file should not exist after atomic rename wasn't completed
         let json_path = dir.join(format!("{}.json", hook_id));
-        assert!(!json_path.exists(), "Crash during write should not create .json");
+        assert!(
+            !json_path.exists(),
+            "Crash during write should not create .json"
+        );
 
         // Now create a proper file via the store
         let store = ContextStore::with_path(dir.clone());
@@ -285,7 +288,10 @@ mod unit_tests {
         store.save(&token, &context)?;
 
         // The tmp file should be gone, json should exist
-        assert!(!tmp_path.exists(), "Tmp file should be gone after successful save");
+        assert!(
+            !tmp_path.exists(),
+            "Tmp file should be gone after successful save"
+        );
         assert!(json_path.exists(), "Json file should exist after save");
 
         Ok(())

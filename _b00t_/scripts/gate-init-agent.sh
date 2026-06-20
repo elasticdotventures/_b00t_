@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# DEPRECATED: see ZellijGate auto-detection in b00t-c0re-gov (Rust, gate activates automatically)
 # 🥾 Zellij Gate-Integrated Agent Init
 # Wraps init-zellij-agent.sh + mandatory gate activation.
 # When an agent starts in Zellij, the gate is automatically activated.

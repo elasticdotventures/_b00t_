@@ -7,20 +7,24 @@ use crate::types::*;
 pub struct MissionResult {
     pub mission_id: String,
     pub agent_id: String,
-    pub bounty: f64,           // Base cake bounty
-    pub score: ScoreCard,      // Multi-dimensional scoring
-    pub calories_burned: f64,  // Total calories consumed
+    pub bounty: f64,          // Base cake bounty
+    pub score: ScoreCard,     // Multi-dimensional scoring
+    pub calories_burned: f64, // Total calories consumed
     pub completed_at: chrono::DateTime<chrono::Utc>,
 }
 
 /// Calculate cake payout for a mission result.
 /// Cake = bounty * weighted_score - penalty
 /// Penalty = max(0, (calories_burned - budget) * penalty_rate)
-pub fn calculate_cake_payout(result: &MissionResult, budget_calories: f64, penalty_rate: f64) -> f64 {
+pub fn calculate_cake_payout(
+    result: &MissionResult,
+    budget_calories: f64,
+    penalty_rate: f64,
+) -> f64 {
     let base = result.score.cake_payout(result.bounty);
     let over_budget = (result.calories_burned - budget_calories).max(0.0);
     let penalty = over_budget * penalty_rate;
-    (base - penalty).max(0.0)  // Floor at 0 — no negative cake
+    (base - penalty).max(0.0) // Floor at 0 — no negative cake
 }
 
 #[cfg(test)]

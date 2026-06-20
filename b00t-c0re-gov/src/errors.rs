@@ -8,19 +8,19 @@ use thiserror::Error;
 pub enum GovernanceError {
     #[error("Gate not found: {0}")]
     GateNotFound(String),
-    
+
     #[error("Hook expired: {0}")]
     HookExpired(String),
-    
+
     #[error("Context corrupt: {0}")]
     ContextCorrupt(String),
-    
+
     #[error("Insufficient calories: {available:.1} available, {required:.1} required")]
     InsufficientCalories { available: f64, required: f64 },
 
     #[error("Agent invocation failed: {0}")]
     InvocationFailed(String),
-    
+
     #[error("IO error: {0}")]
     Io(#[from] std::io::Error),
 }
@@ -30,13 +30,13 @@ pub enum GovernanceError {
 pub enum ContextStoreError {
     #[error("Corrupt context: {0}")]
     CorruptContext(String),
-    
+
     #[error("Hook not found: {0}")]
     HookNotFound(String),
-    
+
     #[error("IO error: {0}")]
     Io(#[from] std::io::Error),
-    
+
     #[error("Serialization error: {0}")]
     Serde(#[from] serde_json::Error),
 }
@@ -46,10 +46,10 @@ pub enum ContextStoreError {
 pub enum SchedulerError {
     #[error("Ring buffer full")]
     RingFull,
-    
+
     #[error("Event channel closed")]
     EventChannelClosed,
-    
+
     #[error("Governance error: {0}")]
     Governance(#[from] GovernanceError),
 }

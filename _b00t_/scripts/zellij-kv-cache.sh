@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# DEPRECATED: see b00t-c0re-lib::KvStore (Rust API, no shell injection)
 # 🥾 Zellij User Interaction Protocol
 # Persistent Zellij context store — local KVCache file
 # Path: ~/.b00t/kv-store.json (compatible with b00t-c0re-lib KvStore)
