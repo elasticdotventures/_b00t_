@@ -307,13 +307,11 @@ impl StateMachine {
             id: format!("{id}.to_running"),
             from: idle.id.clone(),
             to: running.id.clone(),
-            guard: Some(SerializableFOLFormula {
-                predicate_names: vec!["has_input".into()],
-                quantifier: Quantifier::Exists,
-                connective: Connective::And,
-                term_ids: vec!["input".into()],
-                description: "∃ input: has_input(input) → enter Running".into(),
-            }),
+            guard: Some(SerializableFOLFormula::new(
+                Quantifier::Exists, Connective::And,
+                &["has_input"], &["input"],
+                "∃ input: has_input(input) → enter Running",
+            )),
             event: Some("input_received".into()),
             action: Some("begin_processing".into()),
         };
@@ -321,13 +319,11 @@ impl StateMachine {
             id: format!("{id}.to_idle"),
             from: running.id.clone(),
             to: idle.id.clone(),
-            guard: Some(SerializableFOLFormula {
-                predicate_names: vec!["has_output".into()],
-                quantifier: Quantifier::Exists,
-                connective: Connective::And,
-                term_ids: vec!["output".into()],
-                description: "∃ output: has_output(output) → return to Idle".into(),
-            }),
+            guard: Some(SerializableFOLFormula::new(
+                Quantifier::Exists, Connective::And,
+                &["has_output"], &["output"],
+                "∃ output: has_output(output) → return to Idle",
+            )),
             event: Some("processing_complete".into()),
             action: Some("emit_output".into()),
         };
@@ -707,23 +703,19 @@ impl PipelineNode for EvidenceNode {
     fn node_category(&self) -> NodeCategory { NodeCategory::Extract }
 
     fn preconditions(&self) -> Vec<SerializableFOLFormula> {
-        vec![SerializableFOLFormula {
-            predicate_names: vec!["non_empty".into()],
-            quantifier: Quantifier::Exists,
-            connective: Connective::And,
-            term_ids: vec!["chunks".into()],
-            description: "∃ chunks: non_empty(chunks)".into(),
-        }]
+        vec![SerializableFOLFormula::new(
+            Quantifier::Exists, Connective::And,
+            &["non_empty"], &["chunks"],
+            "∃ chunks: non_empty(chunks)",
+        )]
     }
 
     fn postconditions(&self) -> Vec<SerializableFOLFormula> {
-        vec![SerializableFOLFormula {
-            predicate_names: vec!["has_provenance".into()],
-            quantifier: Quantifier::ForAll,
-            connective: Connective::And,
-            term_ids: vec!["evidence".into()],
-            description: "∀ ev: has_provenance(ev)".into(),
-        }]
+        vec![SerializableFOLFormula::new(
+            Quantifier::ForAll, Connective::And,
+            &["has_provenance"], &["evidence"],
+            "∀ ev: has_provenance(ev)",
+        )]
     }
 
     fn invariants(&self) -> Vec<SerializableFOLFormula> { vec![] }
@@ -766,23 +758,19 @@ impl PipelineNode for RequirementsNode {
     fn node_category(&self) -> NodeCategory { NodeCategory::Derive }
 
     fn preconditions(&self) -> Vec<SerializableFOLFormula> {
-        vec![SerializableFOLFormula {
-            predicate_names: vec!["non_empty".into()],
-            quantifier: Quantifier::Exists,
-            connective: Connective::And,
-            term_ids: vec!["evidence".into()],
-            description: "∃ ev: non_empty(evidence)".into(),
-        }]
+        vec![SerializableFOLFormula::new(
+            Quantifier::Exists, Connective::And,
+            &["non_empty"], &["evidence"],
+            "∃ ev: non_empty(evidence)",
+        )]
     }
 
     fn postconditions(&self) -> Vec<SerializableFOLFormula> {
-        vec![SerializableFOLFormula {
-            predicate_names: vec!["has_rationale".into(), "has_priority".into()],
-            quantifier: Quantifier::ForAll,
-            connective: Connective::And,
-            term_ids: vec!["req".into()],
-            description: "∀ req: has_rationale(req) ∧ has_priority(req)".into(),
-        }]
+        vec![SerializableFOLFormula::new(
+            Quantifier::ForAll, Connective::And,
+            &["has_rationale", "has_priority"], &["req"],
+            "∀ req: has_rationale(req) ∧ has_priority(req)",
+        )]
     }
 
     fn invariants(&self) -> Vec<SerializableFOLFormula> { vec![] }
