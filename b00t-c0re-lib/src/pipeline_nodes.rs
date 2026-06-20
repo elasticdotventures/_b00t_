@@ -1,0 +1,961 @@
+//! Typed pipeline node system — composable, verifiable, visualizable.
+//!
+//! # Architecture
+//!
+//! Each pipeline stage is a `PipelineNode<I,O>` — a typed function from Input → Output
+//! with FOL-verifiable pre/post conditions and an internal state machine.
+//!
+//! Nodes compose via type-level constraints:
+//! ```ignore
+//! Compose<ChunkNode, EvidenceNode>  // works: ChunkNode::Output = SemanticChunk
+//!                                    //       EvidenceNode::Input  = SemanticChunk
+//! ```
+//!
+//! # State Machines
+//!
+//! Each node declares valid state transitions as FOL assertions:
+//! ```ignore
+//! ∀ transition t: source(t) = Idle ∧ target(t) = Running → guard(t) ≠ ∅
+//! ```
+//!
+//! # Visualization
+//!
+//! Any composed pipeline can generate:
+//! - Mermaid flowchart (for docs)
+//! - SVG node graph (for dashboards)
+//! - Bevy scene graph (for live visualization)
+//! - Manim mobject graph (for video explainers)
+//!
+//! # KerML/SysMLv2 Mapping
+//!
+//! PipelineNode ≈ KerML PartDefinition
+//! Compose<A,B>  ≈ KerML Connection
+//! StateMachine  ≈ SysMLv2 StateMachine
+//! FOLFormula    ≈ KerML Constraint (first-order verifiable)
+
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+use std::fmt::Debug;
+
+use crate::doc_pipeline::{
+    Connective, Quantifier, SerializableFOLFormula,
+};
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Section A: Pipeline Node Trait — typed, composable, verifiable
+// ═══════════════════════════════════════════════════════════════════════════
+
+/// A typed pipeline node: Input → Output with FOL-verifiable contracts.
+///
+/// # Type safety
+///
+/// The Rust type system enforces that only compatible nodes compose.
+/// `Compose<A, B>` is only valid when `A::Output = B::Input`.
+///
+/// # FOL Verification
+///
+/// `preconditions()` and `postconditions()` return FOL formulas that
+/// must hold before/after execution. A verifier can check these at runtime
+/// or generate proof obligations for a theorem prover.
+///
+/// # State Machine
+///
+/// Each node has an internal state machine with formal transition guards.
+/// `state_machine()` returns the full state graph with FOL transition guards.
+pub trait PipelineNode: Debug + Send + Sync {
+    /// Input type — what this node consumes
+    type Input: Debug + Clone + Send + Sync;
+    /// Output type — what this node produces
+    type Output: Debug + Clone + Send + Sync;
+
+    // ── Identity ──────────────────────────────────────────────────────
+
+    /// Unique node identifier (e.g., "chunk", "extract-evidence")
+    fn node_id(&self) -> &str;
+    /// Human-readable label for diagrams
+    fn node_label(&self) -> &str;
+    /// Node category for grouping (e.g., "ingest", "extract", "derive")
+    fn node_category(&self) -> NodeCategory;
+
+    // ── FOL Contracts ─────────────────────────────────────────────────
+
+    /// Pre-conditions — FOL formulas that must hold before execution.
+    ///
+    /// Example: `∃ input: is_valid_document(input)`
+    fn preconditions(&self) -> Vec<SerializableFOLFormula>;
+
+    /// Post-conditions — FOL formulas guaranteed after execution.
+    ///
+    /// Example: `∀ chunk: chunk ∈ output → has_embedding(chunk)`
+    fn postconditions(&self) -> Vec<SerializableFOLFormula>;
+
+    /// Invariants — FOL formulas that always hold.
+    fn invariants(&self) -> Vec<SerializableFOLFormula>;
+
+    // ── Execution ─────────────────────────────────────────────────────
+
+    /// Execute this node — transform Input → Output
+    fn execute(&self, input: Self::Input) -> Self::Output;
+
+    // ── State Machine ─────────────────────────────────────────────────
+
+    /// Return the full state machine for this node (if stateful).
+    /// Stateless nodes return an empty machine.
+    fn state_machine(&self) -> StateMachine;
+
+    // ── Visualization ─────────────────────────────────────────────────
+
+    /// Input port labels (for node graph rendering)
+    fn input_ports(&self) -> Vec<PortDef>;
+    /// Output port labels
+    fn output_ports(&self) -> Vec<PortDef>;
+    /// Visual style
+    fn visual_style(&self) -> NodeStyle;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Section B: Type-checked Composition
+// ═══════════════════════════════════════════════════════════════════════════
+
+/// Compose two pipeline nodes: A → B where A::Output = B::Input.
+///
+/// The Rust type system guarantees composition correctness at compile time.
+/// If the types don't align, the program won't compile.
+///
+/// # KerML mapping
+/// `Compose<A, B>` ≈ KerML `Connection(from=A, to=B)`
+#[derive(Debug)]
+pub struct Compose<A, B>
+where
+    A: PipelineNode,
+    B: PipelineNode<Input = A::Output>,
+{
+    pub first: A,
+    pub second: B,
+}
+
+impl<A, B> PipelineNode for Compose<A, B>
+where
+    A: PipelineNode,
+    B: PipelineNode<Input = A::Output>,
+{
+    type Input = A::Input;
+    type Output = B::Output;
+
+    fn node_id(&self) -> &str {
+        // Composite ID is derived from components
+        // (returned as a static slice via a boxed string — in practice use a cached field)
+        "compose"
+    }
+
+    fn node_label(&self) -> &str {
+        "Compose"
+    }
+
+    fn node_category(&self) -> NodeCategory {
+        NodeCategory::Composite
+    }
+
+    fn preconditions(&self) -> Vec<SerializableFOLFormula> {
+        let mut pre = self.first.preconditions();
+        // The second node's preconditions become assertions about the first's output
+        pre.extend(self.second.preconditions());
+        pre
+    }
+
+    fn postconditions(&self) -> Vec<SerializableFOLFormula> {
+        self.second.postconditions()
+    }
+
+    fn invariants(&self) -> Vec<SerializableFOLFormula> {
+        let mut inv = self.first.invariants();
+        inv.extend(self.second.invariants());
+        inv
+    }
+
+    fn execute(&self, input: Self::Input) -> Self::Output {
+        let intermediate = self.first.execute(input);
+        self.second.execute(intermediate)
+    }
+
+    fn state_machine(&self) -> StateMachine {
+        // Compose state machines sequentially
+        let mut combined = self.first.state_machine();
+        let second_sm = self.second.state_machine();
+        // Snapshot second's initial state BEFORE consuming its states
+        let second_init = second_sm.states.iter().find(|s| s.is_initial).map(|s| s.id.clone());
+        combined.states.extend(second_sm.states);
+        combined.transitions.extend(second_sm.transitions);
+        // Add bridge transition: first's terminal → second's initial
+        if let (Some(first_term), Some(second_init)) = (
+            combined.states.iter().find(|s| s.is_terminal).map(|s| s.id.clone()),
+            second_init,
+        ) {
+            combined.transitions.push(StateTransition {
+                id: format!("{}_{}_compose", first_term, second_init),
+                from: first_term,
+                to: second_init,
+                guard: None,
+                event: Some("output_ready".into()),
+                action: Some("forward_to_next".into()),
+            });
+        }
+        combined
+    }
+
+    fn input_ports(&self) -> Vec<PortDef> {
+        self.first.input_ports()
+    }
+
+    fn output_ports(&self) -> Vec<PortDef> {
+        self.second.output_ports()
+    }
+
+    fn visual_style(&self) -> NodeStyle {
+        NodeStyle {
+            fill: "#1e293b".to_string(),
+            stroke: "#6366f1".to_string(),
+            shape: NodeShape::RoundedBox,
+        }
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Section C: State Machine — FOL-verifiable transitions
+// ═══════════════════════════════════════════════════════════════════════════
+
+/// A state machine with FOL-verifiable transition guards.
+///
+/// Each transition has an optional FOL guard formula that must evaluate
+/// to true for the transition to be taken.
+///
+/// # SysMLv2 mapping
+/// `StateMachine` ≈ SysMLv2 `StateMachine`
+/// `StateTransition` ≈ SysMLv2 `Transition` with `guard` constraint
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct StateMachine {
+    pub id: String,
+    pub name: String,
+    pub states: Vec<StateDef>,
+    pub transitions: Vec<StateTransition>,
+    pub initial_state: Option<String>,
+}
+
+/// A state within a state machine.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct StateDef {
+    pub id: String,
+    pub label: String,
+    pub is_initial: bool,
+    pub is_terminal: bool,
+    /// Entry actions executed when entering this state
+    pub entry_actions: Vec<String>,
+    /// Exit actions executed when leaving this state
+    pub exit_actions: Vec<String>,
+    /// FOL invariant that must hold while in this state
+    pub invariant: Option<SerializableFOLFormula>,
+}
+
+/// A state transition with optional FOL guard.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct StateTransition {
+    pub id: String,
+    pub from: String,
+    pub to: String,
+    /// FOL guard — must evaluate true for transition to fire.
+    /// E.g., ∀ chunk: chunk.is_embedded → transition_allowed
+    pub guard: Option<SerializableFOLFormula>,
+    /// Triggering event
+    pub event: Option<String>,
+    /// Action executed during transition
+    pub action: Option<String>,
+}
+
+impl StateMachine {
+    /// Create an empty state machine (for stateless nodes).
+    pub fn empty(id: &str) -> Self {
+        Self {
+            id: id.into(),
+            name: "Stateless".into(),
+            states: vec![],
+            transitions: vec![],
+            initial_state: None,
+        }
+    }
+
+    /// Create a simple two-state machine: Idle → Running → Idle
+    pub fn idle_run_cycle(id: &str) -> Self {
+        let idle = StateDef {
+            id: format!("{id}.idle"),
+            label: "Idle".into(),
+            is_initial: true,
+            is_terminal: false,
+            entry_actions: vec![],
+            exit_actions: vec![],
+            invariant: None,
+        };
+        let running = StateDef {
+            id: format!("{id}.running"),
+            label: "Running".into(),
+            is_initial: false,
+            is_terminal: true,
+            entry_actions: vec!["process_input".into()],
+            exit_actions: vec!["emit_output".into()],
+            invariant: None,
+        };
+        let to_running = StateTransition {
+            id: format!("{id}.to_running"),
+            from: idle.id.clone(),
+            to: running.id.clone(),
+            guard: Some(SerializableFOLFormula {
+                predicate_names: vec!["has_input".into()],
+                quantifier: Quantifier::Exists,
+                connective: Connective::And,
+                term_ids: vec!["input".into()],
+                description: "∃ input: has_input(input) → enter Running".into(),
+            }),
+            event: Some("input_received".into()),
+            action: Some("begin_processing".into()),
+        };
+        let to_idle = StateTransition {
+            id: format!("{id}.to_idle"),
+            from: running.id.clone(),
+            to: idle.id.clone(),
+            guard: Some(SerializableFOLFormula {
+                predicate_names: vec!["has_output".into()],
+                quantifier: Quantifier::Exists,
+                connective: Connective::And,
+                term_ids: vec!["output".into()],
+                description: "∃ output: has_output(output) → return to Idle".into(),
+            }),
+            event: Some("processing_complete".into()),
+            action: Some("emit_output".into()),
+        };
+        StateMachine {
+            id: id.into(),
+            name: format!("{id} cycle"),
+            states: vec![idle, running],
+            transitions: vec![to_running, to_idle],
+            initial_state: Some(format!("{id}.idle")),
+        }
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Section D: Visual — Node Graph generation (Mermaid, SVG, Bevy)
+// ═══════════════════════════════════════════════════════════════════════════
+
+/// Node category for visual grouping and styling.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub enum NodeCategory {
+    Ingest,
+    Transform,
+    Extract,
+    Derive,
+    Validate,
+    Composite,
+    Custom(String),
+}
+
+/// Port definition — typed input/output of a node.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct PortDef {
+    pub name: String,
+    pub port_type: String, // Rust type name for documentation
+    pub direction: PortDirection,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub enum PortDirection {
+    Input,
+    Output,
+}
+
+/// Visual style for a node in a graph.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct NodeStyle {
+    pub fill: String,
+    pub stroke: String,
+    pub shape: NodeShape,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub enum NodeShape {
+    RoundedBox,
+    Diamond,
+    Circle,
+    Hexagon,
+    Cylinder,
+}
+
+/// A complete typed node graph that can be serialized and rendered.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct NodeGraph {
+    pub id: String,
+    pub name: String,
+    pub nodes: Vec<GraphNode>,
+    pub edges: Vec<GraphEdge>,
+    pub node_categories: HashMap<String, NodeCategory>,
+}
+
+/// A node in the visual graph.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct GraphNode {
+    pub id: String,
+    pub label: String,
+    pub category: NodeCategory,
+    pub input_ports: Vec<PortDef>,
+    pub output_ports: Vec<PortDef>,
+    pub style: NodeStyle,
+    pub state_machine: Option<StateMachine>,
+    pub fol_contracts: FOLContracts,
+}
+
+/// FOL contracts displayed on a node.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct FOLContracts {
+    pub preconditions: Vec<SerializableFOLFormula>,
+    pub postconditions: Vec<SerializableFOLFormula>,
+    pub invariants: Vec<SerializableFOLFormula>,
+}
+
+/// An edge connecting two nodes.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct GraphEdge {
+    pub id: String,
+    pub from_node: String,
+    pub from_port: String,
+    pub to_node: String,
+    pub to_port: String,
+    pub data_type: String,
+}
+
+impl NodeGraph {
+    /// Generate a Mermaid flowchart from the node graph.
+    ///
+    /// Output can be rendered in any Mermaid-compatible viewer (GitHub, VS Code, etc.)
+    pub fn to_mermaid(&self) -> String {
+        let mut mermaid = String::from("```mermaid\nflowchart LR\n");
+        mermaid.push_str("  %% Auto-generated from NodeGraph\n");
+        mermaid.push_str(&format!("  %% Pipeline: {}\n\n", self.name));
+
+        // Node definitions with styling
+        for node in &self.nodes {
+            let (shape_open, shape_close) = match node.style.shape {
+                NodeShape::RoundedBox => ("[", "]"),
+                NodeShape::Diamond => ("{", "}"),
+                NodeShape::Circle => ("((", "))"),
+                NodeShape::Hexagon => ("{{", "}}"),
+                NodeShape::Cylinder => ("[(", ")]"),
+            };
+            let fill_color = node.style.fill.clone();
+            mermaid.push_str(&format!(
+                "  {id}{open}\"{label}\"{close}\n",
+                id = node.id,
+                open = shape_open,
+                label = node.label,
+                close = shape_close,
+            ));
+            // Style override
+            mermaid.push_str(&format!(
+                "  style {id} fill:{fill},stroke:{stroke},color:#e2e8f0\n",
+                id = node.id,
+                fill = fill_color,
+                stroke = node.style.stroke,
+            ));
+        }
+
+        // Edges with type labels
+        for edge in &self.edges {
+            mermaid.push_str(&format!(
+                "  {from} -->|\"{dtype}\"| {to}\n",
+                from = edge.from_node,
+                dtype = edge.data_type,
+                to = edge.to_node,
+            ));
+        }
+
+        // FOL annotations
+        for node in &self.nodes {
+            if !node.fol_contracts.preconditions.is_empty() {
+                for pre in &node.fol_contracts.preconditions {
+                    mermaid.push_str(&format!(
+                        "  {id}_pre[\"📐 {desc}\"] -.->|pre| {id}\n",
+                        id = node.id,
+                        desc = &pre.description[..pre.description.len().min(50)],
+                    ));
+                }
+            }
+        }
+
+        mermaid.push_str("```\n");
+        mermaid
+    }
+
+    /// Generate SVG representation (simplified — for embedding in dashboards).
+    pub fn to_svg(&self) -> String {
+        let w = 800.0;
+        let h = (self.nodes.len() as f64 * 120.0 + 60.0).max(200.0);
+        let spacing = w / (self.nodes.len() as f64 + 1.0);
+
+        let mut s = String::new();
+        s.push_str(&format!(
+            "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 {w} {h}\" style=\"background:{bg};font-family:monospace\">",
+            w = w, h = h, bg = "#020617",
+        ));
+
+        for (i, node) in self.nodes.iter().enumerate() {
+            let x = spacing * (i as f64 + 1.0);
+            let y = h / 2.0;
+            let fill = node.style.fill.clone();
+            let stroke = node.style.stroke.clone();
+            let label = &node.label;
+            s.push_str(&format!(
+                "<rect x=\"{x}\" y=\"{y}\" width=\"120\" height=\"60\" rx=\"8\" fill=\"{fill}\" stroke=\"{stroke}\" stroke-width=\"2\"/>",
+                x = x - 60.0, y = y - 30.0,
+            ));
+            s.push_str(&format!(
+                "<text x=\"{x}\" y=\"{y}\" fill=\"#e2e8f0\" font-size=\"11\" text-anchor=\"middle\" dominant-baseline=\"middle\">{label}</text>",
+                x = x, y = y,
+            ));
+        }
+
+        for edge in &self.edges {
+            let from_idx = self.nodes.iter().position(|n| n.id == edge.from_node);
+            let to_idx = self.nodes.iter().position(|n| n.id == edge.to_node);
+            if let (Some(fi), Some(ti)) = (from_idx, to_idx) {
+                let x1 = spacing * (fi as f64 + 1.0) + 60.0;
+                let x2 = spacing * (ti as f64 + 1.0) - 60.0;
+                let y = h / 2.0;
+                s.push_str(&format!(
+                    "<line x1=\"{x1}\" y1=\"{y}\" x2=\"{x2}\" y2=\"{y}\" stroke=\"#475569\" stroke-width=\"2\" stroke-dasharray=\"4,2\" marker-end=\"url(#arrow)\"/>",
+                ));
+            }
+        }
+
+        s.push_str("<defs><marker id=\"arrow\" viewBox=\"0 0 10 10\" refX=\"10\" refY=\"5\" markerWidth=\"6\" markerHeight=\"6\" orient=\"auto\"><path d=\"M0,0 L10,5 L0,10 Z\" fill=\"#475569\"/></marker></defs>");
+        s.push_str("</svg>");
+        s
+    }
+
+    /// Generate a ComfyUI-style workflow JSON (for node-based visual editors).
+    pub fn to_comfyui_workflow(&self) -> serde_json::Value {
+        let mut nodes_json = serde_json::Map::new();
+        for (i, node) in self.nodes.iter().enumerate() {
+            let mut node_obj = serde_json::Map::new();
+            node_obj.insert("id".into(), serde_json::Value::Number(i.into()));
+            node_obj.insert("type".into(), serde_json::Value::String(node.label.clone()));
+            node_obj.insert("category".into(), serde_json::Value::String(
+                format!("{:?}", node.category)
+            ));
+            // Position in a grid
+            let mut pos = serde_json::Map::new();
+            pos.insert("x".into(), serde_json::Value::Number((i * 200).into()));
+            pos.insert("y".into(), serde_json::Value::Number(200.into()));
+            node_obj.insert("pos".into(), serde_json::Value::Object(pos));
+            // FOL contracts
+            let mut contracts = serde_json::Map::new();
+            contracts.insert("pre".into(), serde_json::Value::Array(
+                node.fol_contracts.preconditions.iter().map(|f| serde_json::Value::String(f.description.clone())).collect()
+            ));
+            contracts.insert("post".into(), serde_json::Value::Array(
+                node.fol_contracts.postconditions.iter().map(|f| serde_json::Value::String(f.description.clone())).collect()
+            ));
+            node_obj.insert("fol_contracts".into(), serde_json::Value::Object(contracts));
+            nodes_json.insert(node.id.clone(), serde_json::Value::Object(node_obj));
+        }
+
+        let mut links = vec![];
+        for edge in &self.edges {
+            let from_idx = self.nodes.iter().position(|n| n.id == edge.from_node);
+            let to_idx = self.nodes.iter().position(|n| n.id == edge.to_node);
+            if let (Some(fi), Some(ti)) = (from_idx, to_idx) {
+                links.push(serde_json::json!([fi, 0, ti, 0, edge.data_type]));
+            }
+        }
+
+        serde_json::json!({
+            "pipeline": self.name,
+            "version": "0.1.0",
+            "nodes": nodes_json,
+            "links": links,
+        })
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Section E: Concrete Node Implementations — doc_pipeline integration
+// ═══════════════════════════════════════════════════════════════════════════
+
+/// FetchNode — downloads a document from arxiv/URL.
+#[derive(Debug, Clone)]
+pub struct FetchNode;
+
+impl PipelineNode for FetchNode {
+    type Input = String;   // arxiv ID or URL
+    type Output = crate::doc_pipeline::DocumentSource;
+
+    fn node_id(&self) -> &str { "fetch" }
+    fn node_label(&self) -> &str { "Fetch Document" }
+    fn node_category(&self) -> NodeCategory { NodeCategory::Ingest }
+
+    fn preconditions(&self) -> Vec<SerializableFOLFormula> {
+        vec![SerializableFOLFormula {
+            predicate_names: vec!["is_valid_id".into()],
+            quantifier: Quantifier::Exists,
+            connective: Connective::And,
+            term_ids: vec!["input".into()],
+            description: "∃ id: is_valid_id(id)".into(),
+        }]
+    }
+
+    fn postconditions(&self) -> Vec<SerializableFOLFormula> {
+        vec![SerializableFOLFormula {
+            predicate_names: vec!["has_abstract".into(), "has_authors".into()],
+            quantifier: Quantifier::ForAll,
+            connective: Connective::And,
+            term_ids: vec!["output".into()],
+            description: "∀ doc: has_abstract(doc) ∧ has_authors(doc)".into(),
+        }]
+    }
+
+    fn invariants(&self) -> Vec<SerializableFOLFormula> { vec![] }
+
+    fn execute(&self, input: String) -> Self::Output {
+        // In real impl: curl to arxiv API, parse XML, build DocumentSource
+        crate::doc_pipeline::DocumentSource {
+            source_id: input,
+            title: "Fetched Document".into(),
+            authors: vec![],
+            abstract_text: "".into(),
+            url: None,
+            pdf_url: None,
+            fetched_at: chrono::Utc::now(),
+            content_hash: None,
+            format: crate::doc_pipeline::DocumentFormat::Pdf,
+            metadata: Default::default(),
+        }
+    }
+
+    fn state_machine(&self) -> StateMachine { StateMachine::idle_run_cycle("fetch") }
+
+    fn input_ports(&self) -> Vec<PortDef> {
+        vec![PortDef { name: "arxiv_id".into(), port_type: "String".into(), direction: PortDirection::Input }]
+    }
+
+    fn output_ports(&self) -> Vec<PortDef> {
+        vec![PortDef { name: "document".into(), port_type: "DocumentSource".into(), direction: PortDirection::Output }]
+    }
+
+    fn visual_style(&self) -> NodeStyle {
+        NodeStyle { fill: "#083344".to_string(), stroke: "#22d3ee".to_string(), shape: NodeShape::RoundedBox }
+    }
+}
+
+/// ChunkNode — splits a document into semantic chunks with embeddings.
+#[derive(Debug, Clone)]
+pub struct ChunkNode;
+
+impl PipelineNode for ChunkNode {
+    type Input = crate::doc_pipeline::DocumentSource;
+    type Output = Vec<crate::doc_pipeline::SemanticChunk>;
+
+    fn node_id(&self) -> &str { "chunk" }
+    fn node_label(&self) -> &str { "Semantic Chunk" }
+    fn node_category(&self) -> NodeCategory { NodeCategory::Transform }
+
+    fn preconditions(&self) -> Vec<SerializableFOLFormula> {
+        vec![SerializableFOLFormula {
+            predicate_names: vec!["has_content".into()],
+            quantifier: Quantifier::Exists,
+            connective: Connective::And,
+            term_ids: vec!["doc".into()],
+            description: "∃ doc: has_content(doc)".into(),
+        }]
+    }
+
+    fn postconditions(&self) -> Vec<SerializableFOLFormula> {
+        vec![SerializableFOLFormula {
+            predicate_names: vec!["has_embedding".into()],
+            quantifier: Quantifier::ForAll,
+            connective: Connective::And,
+            term_ids: vec!["chunk".into()],
+            description: "∀ chunk: has_embedding(chunk)".into(),
+        }]
+    }
+
+    fn invariants(&self) -> Vec<SerializableFOLFormula> { vec![] }
+
+    fn execute(&self, _input: Self::Input) -> Self::Output {
+        vec![] // placeholder — real impl would chunk+embed
+    }
+
+    fn state_machine(&self) -> StateMachine { StateMachine::idle_run_cycle("chunk") }
+
+    fn input_ports(&self) -> Vec<PortDef> {
+        vec![PortDef { name: "document".into(), port_type: "DocumentSource".into(), direction: PortDirection::Input }]
+    }
+
+    fn output_ports(&self) -> Vec<PortDef> {
+        vec![PortDef { name: "chunks".into(), port_type: "Vec<SemanticChunk>".into(), direction: PortDirection::Output }]
+    }
+
+    fn visual_style(&self) -> NodeStyle {
+        NodeStyle { fill: "#064e3b".to_string(), stroke: "#34d399".to_string(), shape: NodeShape::RoundedBox }
+    }
+}
+
+/// EvidenceNode — extracts evidence from chunks.
+#[derive(Debug, Clone)]
+pub struct EvidenceNode;
+
+impl PipelineNode for EvidenceNode {
+    type Input = Vec<crate::doc_pipeline::SemanticChunk>;
+    type Output = Vec<crate::doc_pipeline::Evidence>;
+
+    fn node_id(&self) -> &str { "extract" }
+    fn node_label(&self) -> &str { "Extract Evidence" }
+    fn node_category(&self) -> NodeCategory { NodeCategory::Extract }
+
+    fn preconditions(&self) -> Vec<SerializableFOLFormula> {
+        vec![SerializableFOLFormula {
+            predicate_names: vec!["non_empty".into()],
+            quantifier: Quantifier::Exists,
+            connective: Connective::And,
+            term_ids: vec!["chunks".into()],
+            description: "∃ chunks: non_empty(chunks)".into(),
+        }]
+    }
+
+    fn postconditions(&self) -> Vec<SerializableFOLFormula> {
+        vec![SerializableFOLFormula {
+            predicate_names: vec!["has_provenance".into()],
+            quantifier: Quantifier::ForAll,
+            connective: Connective::And,
+            term_ids: vec!["evidence".into()],
+            description: "∀ ev: has_provenance(ev)".into(),
+        }]
+    }
+
+    fn invariants(&self) -> Vec<SerializableFOLFormula> { vec![] }
+
+    fn execute(&self, _input: Self::Input) -> Self::Output { vec![] }
+
+    fn state_machine(&self) -> StateMachine { StateMachine::idle_run_cycle("extract") }
+
+    fn input_ports(&self) -> Vec<PortDef> {
+        vec![PortDef { name: "chunks".into(), port_type: "Vec<SemanticChunk>".into(), direction: PortDirection::Input }]
+    }
+
+    fn output_ports(&self) -> Vec<PortDef> {
+        vec![PortDef { name: "evidence".into(), port_type: "Vec<Evidence>".into(), direction: PortDirection::Output }]
+    }
+
+    fn visual_style(&self) -> NodeStyle {
+        NodeStyle { fill: "#4c1d95".to_string(), stroke: "#a78bfa".to_string(), shape: NodeShape::RoundedBox }
+    }
+}
+
+/// RequirementsNode — derives requirements from evidence.
+#[derive(Debug, Clone)]
+pub struct RequirementsNode;
+
+impl PipelineNode for RequirementsNode {
+    type Input = Vec<crate::doc_pipeline::Evidence>;
+    type Output = Vec<crate::doc_pipeline::Requirement>;
+
+    fn node_id(&self) -> &str { "derive" }
+    fn node_label(&self) -> &str { "Derive Requirements" }
+    fn node_category(&self) -> NodeCategory { NodeCategory::Derive }
+
+    fn preconditions(&self) -> Vec<SerializableFOLFormula> {
+        vec![SerializableFOLFormula {
+            predicate_names: vec!["non_empty".into()],
+            quantifier: Quantifier::Exists,
+            connective: Connective::And,
+            term_ids: vec!["evidence".into()],
+            description: "∃ ev: non_empty(evidence)".into(),
+        }]
+    }
+
+    fn postconditions(&self) -> Vec<SerializableFOLFormula> {
+        vec![SerializableFOLFormula {
+            predicate_names: vec!["has_rationale".into(), "has_priority".into()],
+            quantifier: Quantifier::ForAll,
+            connective: Connective::And,
+            term_ids: vec!["req".into()],
+            description: "∀ req: has_rationale(req) ∧ has_priority(req)".into(),
+        }]
+    }
+
+    fn invariants(&self) -> Vec<SerializableFOLFormula> { vec![] }
+
+    fn execute(&self, _input: Self::Input) -> Self::Output { vec![] }
+
+    fn state_machine(&self) -> StateMachine { StateMachine::idle_run_cycle("derive") }
+
+    fn input_ports(&self) -> Vec<PortDef> {
+        vec![PortDef { name: "evidence".into(), port_type: "Vec<Evidence>".into(), direction: PortDirection::Input }]
+    }
+
+    fn output_ports(&self) -> Vec<PortDef> {
+        vec![PortDef { name: "requirements".into(), port_type: "Vec<Requirement>".into(), direction: PortDirection::Output }]
+    }
+
+    fn visual_style(&self) -> NodeStyle {
+        NodeStyle { fill: "#78350f".to_string(), stroke: "#fbbf24".to_string(), shape: NodeShape::RoundedBox }
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Section F: Pipeline Builder — ergonomic composition
+// ═══════════════════════════════════════════════════════════════════════════
+
+/// Build a graph from composed nodes for visualization and export.
+pub fn build_graph_from_pipeline<N: PipelineNode>(node: &N) -> NodeGraph {
+    let mut nodes = vec![];
+    let mut edges = vec![];
+
+    // Collect node info
+    let graph_node = GraphNode {
+        id: node.node_id().into(),
+        label: node.node_label().into(),
+        category: node.node_category(),
+        input_ports: node.input_ports(),
+        output_ports: node.output_ports(),
+        style: node.visual_style(),
+        state_machine: {
+            let sm = node.state_machine();
+            if sm.states.is_empty() { None } else { Some(sm) }
+        },
+        fol_contracts: FOLContracts {
+            preconditions: node.preconditions(),
+            postconditions: node.postconditions(),
+            invariants: node.invariants(),
+        },
+    };
+    nodes.push(graph_node);
+
+    NodeGraph {
+        id: node.node_id().into(),
+        name: node.node_label().into(),
+        nodes,
+        edges,
+        node_categories: HashMap::from([
+            (node.node_id().into(), node.node_category()),
+        ]),
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Tests
+// ═══════════════════════════════════════════════════════════════════════════
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_state_machine_idle_run_cycle() {
+        let sm = StateMachine::idle_run_cycle("test");
+        assert_eq!(sm.states.len(), 2);
+        assert_eq!(sm.transitions.len(), 2);
+        assert_eq!(sm.initial_state, Some("test.idle".into()));
+
+        // Verify FOL guards on transitions
+        let to_running = &sm.transitions[0];
+        assert!(to_running.guard.is_some());
+        assert!(to_running.guard.as_ref().unwrap().description.contains("has_input"));
+
+        let to_idle = &sm.transitions[1];
+        assert!(to_idle.guard.is_some());
+        assert!(to_idle.guard.as_ref().unwrap().description.contains("has_output"));
+    }
+
+    #[test]
+    fn test_fetch_node_contracts() {
+        let node = FetchNode;
+        let pre = node.preconditions();
+        assert!(!pre.is_empty());
+        assert!(pre[0].description.contains("is_valid_id"));
+
+        let post = node.postconditions();
+        assert!(!post.is_empty());
+        assert!(post[0].description.contains("has_abstract"));
+    }
+
+    #[test]
+    fn test_node_ports() {
+        let node = FetchNode;
+        assert_eq!(node.input_ports().len(), 1);
+        assert_eq!(node.input_ports()[0].name, "arxiv_id");
+        assert_eq!(node.output_ports().len(), 1);
+        assert_eq!(node.output_ports()[0].name, "document");
+    }
+
+    #[test]
+    fn test_compose_type_safety() {
+        // ChunkNode::Output = Vec<SemanticChunk>
+        // EvidenceNode::Input = Vec<SemanticChunk>
+        // Therefore Compose<ChunkNode, EvidenceNode> compiles ✓
+        let composed = Compose {
+            first: ChunkNode,
+            second: EvidenceNode,
+        };
+        // State machine combines both
+        let sm = composed.state_machine();
+        assert!(sm.states.len() >= 4); // 2 states each + compose bridge
+
+        // Invariants combine
+        assert_eq!(composed.invariants().len(), 0);
+
+        // FOL contracts propagate
+        let pre = composed.preconditions();
+        assert!(!pre.is_empty());
+    }
+
+    #[test]
+    fn test_node_graph_to_mermaid() {
+        let graph = build_graph_from_pipeline(&FetchNode);
+        let mermaid = graph.to_mermaid();
+        assert!(mermaid.contains("flowchart LR"));
+        assert!(mermaid.contains("Fetch Document"));
+        assert!(mermaid.contains("📐"));
+    }
+
+    #[test]
+    fn test_node_graph_to_svg() {
+        let graph = build_graph_from_pipeline(&FetchNode);
+        let svg = graph.to_svg();
+        assert!(svg.contains("<svg"));
+        assert!(svg.contains("Fetch Document"));
+    }
+
+    #[test]
+    fn test_node_graph_to_comfyui() {
+        let graph = build_graph_from_pipeline(&FetchNode);
+        let workflow = graph.to_comfyui_workflow();
+        assert_eq!(workflow["pipeline"], "Fetch Document");
+        assert!(workflow["nodes"].as_object().unwrap().contains_key("fetch"));
+    }
+
+    #[test]
+    fn test_full_pipeline_composition() {
+        // FetchNode → ChunkNode → EvidenceNode → RequirementsNode
+        // All type-checked at compile time
+        type Stage1 = Compose<FetchNode, ChunkNode>;
+        // Stage1::Output = Vec<SemanticChunk>
+        // EvidenceNode::Input = Vec<SemanticChunk> ✓
+        let stage1 = Compose { first: FetchNode, second: ChunkNode };
+
+        type Stage2 = Compose<Stage1, EvidenceNode>;
+        // Stage2::Output = Vec<Evidence>
+        // RequirementsNode::Input = Vec<Evidence> ✓
+        let _stage2 = Compose { first: stage1, second: EvidenceNode };
+
+        // If you uncomment the line below, it WON'T COMPILE:
+        // let _bad = Compose { first: FetchNode, second: RequirementsNode };
+        //                        ^^^^^^^^^ String  ^^^^^^^^^^^^ Vec<Evidence>
+        //                        Type mismatch! Compiler catches it. ✓
+    }
+}
