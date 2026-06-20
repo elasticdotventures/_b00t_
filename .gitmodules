@@ -1,0 +1,61 @@
+[submodule "test/bats"]
+	path = _b00t_/test/bats
+	url = https://github.com/bats-core/bats-core.git
+[submodule "test/test_helper/bats-support"]
+	path = _b00t_/test/test_helper/bats-support
+	url = https://github.com/bats-core/bats-support.git
+[submodule "test/test_helper/bats-assert"]
+	path = _b00t_/test/test_helper/bats-assert
+	url = https://github.com/bats-core/bats-assert.git
+[submodule "vscode.🆚/vscode-docs"]
+	path = vscode.🆚/vscode-docs
+	url = https://github.com/microsoft/vscode-docs
+[submodule "b00t-vscode/just-lsp"]
+	path = b00t-vscode/just-lsp
+	url = https://github.com/terror/just-lsp
+[submodule "integrations/nasdanika-mcp"]
+	path = integrations/nasdanika-mcp
+	url = https://github.com/elasticdotventures/mcp-server.git
+[submodule "rmcp-rust-sdk"]
+	path = rmcp-rust-sdk
+	url = git@github.com:modelcontextprotocol/rust-sdk.git
+[submodule "email/himalaya"]
+	path = email/himalaya
+	url = https://github.com/pimalaya/himalaya.git
+[submodule "foundry-samples"]
+	path = foundry-samples
+	url = https://github.com/azure-ai-foundry/foundry-samples
+[submodule "node-ts.🦄/claude.🐳.old/awesome-claude-code-subagents"]
+	path = _b00t_/node-ts.🦄/claude.🐳.old/awesome-claude-code-subagents
+	url = https://github.com/VoltAgent/awesome-claude-code-subagents.git
+[submodule "just-mcp"]
+	path = just-mcp
+	url = https://github.com/PromptExecution/just-mcp
+[submodule "vendor/moltis-b00t"]
+	path = vendor/moltis-b00t
+	url = https://github.com/promptexecution/moltis-b00t.git
+[submodule "vendor/irontology-mcp"]
+	path = vendor/irontology-mcp
+	url = https://github.com/PromptExecution/irontology-mcp.git
+[submodule "vendor/tomllm"]
+	path = vendor/tomllm
+	url = https://github.com/PromptExecution/tomllm.git
+[submodule "vendor/opencode-b00t"]
+	path = vendor/opencode-b00t
+	url = https://github.com/PromptExecution/opencode-b00t.git
+[submodule "vendor/l3dg3rr"]
+	path = vendor/l3dg3rr
+	url = https://github.com/PromptExecution/ledgrrr.git
+[submodule "vendor/hermes-agent-b00t"]
+	path = vendor/hermes-agent-b00t
+	url = git@github.com:PromptExecution/hermes-agent-b00t.git
+	branch = b00t
+[submodule "vendor/embed-anything-b00t"]
+	path = vendor/embed-anything-b00t
+	url = https://github.com/PromptExecution/embed-anything-b00t.git
+[submodule "vendor/llama-patch"]
+	path = vendor/llama-patch
+	url = https://github.com/PromptExecution/llama-patch.git
+[submodule "vendor/agent-framework"]
+	path = vendor/agent-framework
+	url = https://github.com/microsoft/agent-framework
