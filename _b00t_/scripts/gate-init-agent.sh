@@ -12,7 +12,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 INIT_SCRIPT="$SCRIPT_DIR/init-zellij-agent.sh"
-GATE_SCRIPT="$(dirname "$SCRIPT_DIR")/gates/zellij-mandatory-gate.sh"
+GATE_SCRIPT="$(dirname "$(dirname "$SCRIPT_DIR")")/zellij-gate/gates/zellij-mandatory-gate.sh"
 
 # ── Run standard init ───────────────────────────────────────────
 if [ -f "$INIT_SCRIPT" ]; then
@@ -32,7 +32,7 @@ if [ -n "${ZELLIJ_SESSION_NAME:-}" ]; then
     export B00T_GATE_AUDIT="${HOME}/.b00t/audit/zellij-gate.jsonl"
     
     # Write gate activation to KVCache
-    KV_SCRIPT="$SCRIPT_DIR/zellij-kv-cache.sh"
+    KV_SCRIPT="$SCRIPT_DIR/../zellij-gate/scripts/zellij-kv-cache.sh"
     if [ -f "$KV_SCRIPT" ]; then
         bash "$KV_SCRIPT" set "zellij.gate.active" "true" 2>/dev/null || true
         bash "$KV_SCRIPT" set "zellij.gate.mode" "mandatory" 2>/dev/null || true
