@@ -586,6 +586,136 @@ pub struct FullPipelineResult {
     pub total_duration_ms: u64,
 }
 
+// ── Constructors — DRY factory methods ────────────────────────────────────
+
+impl DocumentSource {
+    /// Create from arxiv ID with minimal metadata.
+    pub fn arxiv(id: &str, title: &str, authors: &[&str], abstract_text: &str) -> Self {
+        Self {
+            source_id: format!("arxiv:{id}"),
+            title: title.into(),
+            authors: authors.iter().map(|s| s.to_string()).collect(),
+            abstract_text: abstract_text.into(),
+            url: Some(format!("https://arxiv.org/abs/{id}")),
+            pdf_url: Some(format!("https://arxiv.org/pdf/{id}")),
+            fetched_at: Utc::now(),
+            content_hash: None,
+            format: DocumentFormat::Pdf,
+            metadata: HashMap::new(),
+        }
+    }
+}
+
+impl ProvenancePointer {
+    /// Create a provenance link back to source.
+    pub fn new(source_id: &str, chunk_id: &str, line_start: usize, line_end: usize, quote: &str) -> Self {
+        Self {
+            source_id: source_id.into(),
+            chunk_id: chunk_id.into(),
+            line_start,
+            line_end,
+            quote_snippet: quote.into(),
+        }
+    }
+}
+
+impl Evidence {
+    /// Extract evidence from a chunk with provenance link.
+    pub fn from_chunk(
+        id: &str, chunk_id: &str, source_id: &str,
+        statement: &str, evidence_type: EvidenceType,
+        confidence: f32, source_quote: &str,
+        line_start: usize, line_end: usize,
+    ) -> Self {
+        Self {
+            evidence_id: id.into(),
+            chunk_id: chunk_id.into(),
+            source_id: source_id.into(),
+            statement: statement.into(),
+            evidence_type,
+            confidence,
+            extraction_method: "llm".into(),
+            source_quote: source_quote.into(),
+            line_range: Some((line_start, line_end)),
+            provenance: ProvenancePointer::new(source_id, chunk_id, line_start, line_end, source_quote),
+            extracted_at: Utc::now(),
+        }
+    }
+}
+
+impl SemanticChunk {
+    /// Create a chunk with topic tags and embedding.
+    pub fn new(
+        id: &str, source_id: &str, index: usize,
+        content: &str, tags: &[&str], embedding: Vec<f32>,
+        confidence: f32, section: Option<&str>,
+    ) -> Self {
+        Self {
+            chunk_id: id.into(),
+            source_id: source_id.into(),
+            chunk_index: index,
+            content: content.into(),
+            topic_tags: tags.iter().map(|s| s.to_string()).collect(),
+            embedding,
+            embedding_model: Some("all-MiniLM-L6-v2".into()),
+            confidence,
+            created_at: Utc::now(),
+            metadata: ChunkMetadata {
+                token_count: content.split_whitespace().count(),
+                char_count: content.len(),
+                section_header: section.map(|s| s.into()),
+                page_range: None,
+            },
+        }
+    }
+}
+
+impl Requirement {
+    /// Derive a SysMLv2 requirement from evidence.
+    pub fn from_evidence(
+        id: &str, text: &str, req_type: RequirementType, priority: u8,
+        rationale: &str, derived_from: &[&str], source_id: &str,
+        stereotype: SysMLv2Stereotype,
+    ) -> Self {
+        Self {
+            req_id: id.into(),
+            text: text.into(),
+            req_type,
+            priority,
+            rationale: Some(rationale.into()),
+            derived_from: derived_from.iter().map(|s| s.to_string()).collect(),
+            satisfies: vec![],
+            verified_by: None,
+            status: RequirementStatus::Proposed,
+            source_id: source_id.into(),
+            reqif: Some(ReqIFMetadata {
+                reqif_id: format!("reqif-{id}"),
+                object_type: "REQUIREMENT".into(),
+                last_change: None,
+                tool_id: Some("b00t-doc-pipeline".into()),
+            }),
+            sysml_stereotype: Some(stereotype),
+            created_at: Utc::now(),
+        }
+    }
+}
+
+impl SerializableFOLFormula {
+    /// Builder for FOL formulas — reduces boilerplate.
+    pub fn new(
+        quantifier: Quantifier, connective: Connective,
+        predicates: &[&str], terms: &[&str], description: &str,
+    ) -> Self {
+        Self {
+            predicate_names: predicates.iter().map(|s| s.to_string()).collect(),
+            quantifier,
+            connective,
+            term_ids: terms.iter().map(|s| s.to_string()).collect(),
+            description: description.into(),
+        }
+    }
+}
+
 // ── Tests ─────────────────────────────────────────────────────────────────
 
 #[cfg(test)]

@@ -622,19 +622,8 @@ impl PipelineNode for FetchNode {
     fn invariants(&self) -> Vec<SerializableFOLFormula> { vec![] }
 
     fn execute(&self, input: String) -> Self::Output {
-        // In real impl: curl to arxiv API, parse XML, build DocumentSource
-        crate::doc_pipeline::DocumentSource {
-            source_id: input,
-            title: "Fetched Document".into(),
-            authors: vec![],
-            abstract_text: "".into(),
-            url: None,
-            pdf_url: None,
-            fetched_at: chrono::Utc::now(),
-            content_hash: None,
-            format: crate::doc_pipeline::DocumentFormat::Pdf,
-            metadata: Default::default(),
-        }
+        use crate::doc_pipeline::DocumentSource;
+        DocumentSource::arxiv(&input, "Fetched Document", &[], "")
     }
 
     fn state_machine(&self) -> StateMachine { StateMachine::idle_run_cycle("fetch") }
