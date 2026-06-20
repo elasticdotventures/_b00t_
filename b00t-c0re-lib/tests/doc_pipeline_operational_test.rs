@@ -17,13 +17,14 @@
 //!   - ∃ r: derivedFromEvidence(r) ∧ hasProvenance(r)
 
 use b00t_c0re_lib::doc_pipeline::{
-    ChunkMetadata, Connective, DocumentFormat, DocumentSource, Evidence, EvidenceType,
-    FullPipelineResult, ProvenancePointer, Quantifier, ReqIFMetadata, Requirement,
-    RequirementStatus, RequirementType, SemanticChunk, SerializableFOLFormula, SysMLv2Stereotype,
+    Connective, DocumentSource, Evidence, EvidenceType,
+    FullPipelineResult, Quantifier, Requirement, RequirementType,
+    SemanticChunk, SerializableFOLFormula, SysMLv2Stereotype,
 };
 use b00t_c0re_lib::doc_pipeline::{
     Endurant, Perdurant, Relator, RelatorType, Role,
 };
+use b00t_c0re_lib::pipeline_nodes::{ChunkNode, Compose, EvidenceNode, PipelineNode};
 use chrono::Utc;
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -79,26 +80,12 @@ impl ChunkIndex {
 #[test]
 fn test_full_pipeline_operational() {
     // ── Stage 1: Document Source (UFO: Endurant) ──────────────────────────
-    let source = DocumentSource {
-        source_id: "arxiv:2404.17842".into(),
-        title: "Using LLMs in Software Requirements Specifications: An Empirical Evaluation".into(),
-        authors: vec![
-            "Madhava Krishna".into(),
-            "Bhagesh Gaur".into(),
-            "Arsh Verma".into(),
-            "Pankaj Jalote".into(),
-        ],
-        abstract_text: "LLMs can generate accurate, coherent SRS documents matching entry-level engineer quality. GPT-4 outperforms CodeLlama. 8 criteria used for evaluation. 4 use cases tested. Significant time savings demonstrated.".into(),
-        url: Some("https://arxiv.org/abs/2404.17842".into()),
-        pdf_url: Some("https://arxiv.org/pdf/2404.17842".into()),
-        fetched_at: Utc::now(),
-        content_hash: Some("sha256:abc123def456".into()),
-        format: DocumentFormat::Pdf,
-        metadata: std::collections::HashMap::from([
-            ("categories".into(), "cs.SE, cs.AI".into()),
-            ("published".into(), "2024-04-27".into()),
-        ]),
-    };
+    let source = DocumentSource::arxiv(
+        "2404.17842",
+        "Using LLMs in Software Requirements Specifications: An Empirical Evaluation",
+        &["Madhava Krishna", "Bhagesh Gaur", "Arsh Verma", "Pankaj Jalote"],
+        "LLMs can generate accurate, coherent SRS documents matching entry-level engineer quality. GPT-4 outperforms CodeLlama. 8 criteria used for evaluation. 4 use cases tested. Significant time savings demonstrated.",
+    );
 
     // UFO: Endurant check
     assert!(source.exists_wholly_at(Utc::now()));
@@ -107,57 +94,24 @@ fn test_full_pipeline_operational() {
 
     // ── Stage 2: Semantic Chunking (UFO: Perdurant) ──────────────────────
     let chunks = vec![
-        SemanticChunk {
-            chunk_id: "chunk:0".into(),
-            source_id: "arxiv:2404.17842".into(),
-            chunk_index: 0,
-            content: "LLMs can produce accurate, coherent, and structured SRS drafts to accelerate the software development lifecycle.".into(),
-            topic_tags: vec!["SRS".into(), "LLM".into(), "generation".into()],
-            embedding: vec![0.12, 0.45, 0.78, 0.33, 0.91],
-            embedding_model: Some("all-MiniLM-L6-v2".into()),
-            confidence: 0.95,
-            created_at: Utc::now(),
-            metadata: ChunkMetadata {
-                token_count: 21,
-                char_count: 112,
-                section_header: Some("Abstract".into()),
-                page_range: Some((1, 1)),
-            },
-        },
-        SemanticChunk {
-            chunk_id: "chunk:1".into(),
-            source_id: "arxiv:2404.17842".into(),
-            chunk_index: 1,
-            content: "GPT-4 and CodeLlama evaluated against human benchmarks using 8 distinct criteria for a university club management system SRS.".into(),
-            topic_tags: vec!["evaluation".into(), "GPT-4".into(), "CodeLlama".into(), "benchmark".into()],
-            embedding: vec![0.67, 0.23, 0.44, 0.89, 0.12],
-            embedding_model: Some("all-MiniLM-L6-v2".into()),
-            confidence: 0.92,
-            created_at: Utc::now(),
-            metadata: ChunkMetadata {
-                token_count: 25,
-                char_count: 144,
-                section_header: Some("Methodology".into()),
-                page_range: Some((1, 2)),
-            },
-        },
-        SemanticChunk {
-            chunk_id: "chunk:2".into(),
-            source_id: "arxiv:2404.17842".into(),
-            chunk_index: 2,
-            content: "LLMs match the output quality of an entry-level software engineer, delivering complete and consistent SRS drafts. Significant time savings demonstrated across 4 use cases.".into(),
-            topic_tags: vec!["results".into(), "quality".into(), "time-savings".into()],
-            embedding: vec![0.55, 0.31, 0.62, 0.47, 0.83],
-            embedding_model: Some("all-MiniLM-L6-v2".into()),
-            confidence: 0.88,
-            created_at: Utc::now(),
-            metadata: ChunkMetadata {
-                token_count: 30,
-                char_count: 175,
-                section_header: Some("Results".into()),
-                page_range: Some((2, 3)),
-            },
-        },
+        SemanticChunk::new(
+            "chunk:0", "arxiv:2404.17842", 0,
+            "LLMs can produce accurate, coherent, and structured SRS drafts to accelerate the software development lifecycle.",
+            &["SRS", "LLM", "generation"],
+            vec![0.12, 0.45, 0.78, 0.33, 0.91], 0.95, Some("Abstract"),
+        ),
+        SemanticChunk::new(
+            "chunk:1", "arxiv:2404.17842", 1,
+            "GPT-4 and CodeLlama evaluated against human benchmarks using 8 distinct criteria for a university club management system SRS.",
+            &["evaluation", "GPT-4", "CodeLlama", "benchmark"],
+            vec![0.67, 0.23, 0.44, 0.89, 0.12], 0.92, Some("Methodology"),
+        ),
+        SemanticChunk::new(
+            "chunk:2", "arxiv:2404.17842", 2,
+            "LLMs match the output quality of an entry-level software engineer, delivering complete and consistent SRS drafts. Significant time savings demonstrated across 4 use cases.",
+            &["results", "quality", "time-savings"],
+            vec![0.55, 0.31, 0.62, 0.47, 0.83], 0.88, Some("Results"),
+        ),
     ];
 
     // UFO: Perdurant check
@@ -187,63 +141,27 @@ fn test_full_pipeline_operational() {
 
     // ── Stage 4: Evidence Extraction (UFO: Relator) ───────────────────────
     let evidences = vec![
-        Evidence {
-            evidence_id: "ev:001".into(),
-            chunk_id: "chunk:0".into(),
-            source_id: "arxiv:2404.17842".into(),
-            statement: "LLMs can produce accurate, coherent, and structured SRS drafts.".into(),
-            evidence_type: EvidenceType::Claim,
-            confidence: 0.94,
-            extraction_method: "llm".into(),
-            source_quote: "produce accurate, coherent, and structured drafts of these documents".into(),
-            line_range: Some((8, 10)),
-            provenance: ProvenancePointer {
-                source_id: "arxiv:2404.17842".into(),
-                chunk_id: "chunk:0".into(),
-                line_start: 8,
-                line_end: 10,
-                quote_snippet: "produce accurate, coherent, and structured drafts".into(),
-            },
-            extracted_at: Utc::now(),
-        },
-        Evidence {
-            evidence_id: "ev:002".into(),
-            chunk_id: "chunk:1".into(),
-            source_id: "arxiv:2404.17842".into(),
-            statement: "GPT-4 and CodeLlama were evaluated against human benchmarks using 8 criteria.".into(),
-            evidence_type: EvidenceType::Statistic,
-            confidence: 0.96,
-            extraction_method: "llm".into(),
-            source_quote: "compare it against human benchmarks using eight distinct criteria".into(),
-            line_range: Some((12, 14)),
-            provenance: ProvenancePointer {
-                source_id: "arxiv:2404.17842".into(),
-                chunk_id: "chunk:1".into(),
-                line_start: 12,
-                line_end: 14,
-                quote_snippet: "using eight distinct criteria".into(),
-            },
-            extracted_at: Utc::now(),
-        },
-        Evidence {
-            evidence_id: "ev:003".into(),
-            chunk_id: "chunk:2".into(),
-            source_id: "arxiv:2404.17842".into(),
-            statement: "LLM-generated SRS matches entry-level software engineer quality with significant time savings.".into(),
-            evidence_type: EvidenceType::Claim,
-            confidence: 0.91,
-            extraction_method: "llm".into(),
-            source_quote: "LLMs can match the output quality of an entry-level software engineer".into(),
-            line_range: Some((16, 18)),
-            provenance: ProvenancePointer {
-                source_id: "arxiv:2404.17842".into(),
-                chunk_id: "chunk:2".into(),
-                line_start: 16,
-                line_end: 18,
-                quote_snippet: "match the output quality of an entry-level software engineer".into(),
-            },
-            extracted_at: Utc::now(),
-        },
+        Evidence::from_chunk(
+            "ev:001", "chunk:0", "arxiv:2404.17842",
+            "LLMs can produce accurate, coherent, and structured SRS drafts.",
+            EvidenceType::Claim, 0.94,
+            "produce accurate, coherent, and structured drafts of these documents",
+            8, 10,
+        ),
+        Evidence::from_chunk(
+            "ev:002", "chunk:1", "arxiv:2404.17842",
+            "GPT-4 and CodeLlama were evaluated against human benchmarks using 8 criteria.",
+            EvidenceType::Statistic, 0.96,
+            "compare it against human benchmarks using eight distinct criteria",
+            12, 14,
+        ),
+        Evidence::from_chunk(
+            "ev:003", "chunk:2", "arxiv:2404.17842",
+            "LLM-generated SRS matches entry-level software engineer quality with significant time savings.",
+            EvidenceType::Claim, 0.91,
+            "LLMs can match the output quality of an entry-level software engineer",
+            16, 18,
+        ),
     ];
 
     // UFO: Relator check — Evidence mediates between chunk and source
@@ -282,46 +200,22 @@ fn test_full_pipeline_operational() {
 
     // ── Stage 6: Requirement Derivation (SysMLv2 ReqIF) ───────────────────
     let requirements = vec![
-        Requirement {
-            req_id: "REQ-SRS-001".into(),
-            text: "The system SHALL generate SRS documents that are accurate, coherent, and structured, matching the quality of an entry-level software engineer.".into(),
-            req_type: RequirementType::Functional,
-            priority: 1,
-            rationale: Some("Derived from ev:001 and ev:003 — LLM SRS quality matches entry-level engineers.".into()),
-            derived_from: vec!["ev:001".into(), "ev:003".into()],
-            satisfies: vec![],
-            verified_by: Some("Automated 8-criteria benchmark evaluation".into()),
-            status: RequirementStatus::Proposed,
-            source_id: "arxiv:2404.17842".into(),
-            reqif: Some(ReqIFMetadata {
-                reqif_id: "reqif-b00t-001".into(),
-                object_type: "REQUIREMENT".into(),
-                last_change: None,
-                tool_id: Some("b00t-doc-pipeline".into()),
-            }),
-            sysml_stereotype: Some(SysMLv2Stereotype::FunctionalRequirement),
-            created_at: Utc::now(),
-        },
-        Requirement {
-            req_id: "REQ-EVAL-002".into(),
-            text: "The system SHALL evaluate SRS quality using at least 8 distinct benchmark criteria.".into(),
-            req_type: RequirementType::NonFunctional,
-            priority: 2,
-            rationale: Some("Derived from ev:002 — paper used 8 criteria for human benchmark comparison.".into()),
-            derived_from: vec!["ev:002".into()],
-            satisfies: vec!["REQ-SRS-001".into()],
-            verified_by: Some("Test suite with 8 metric dimensions".into()),
-            status: RequirementStatus::Proposed,
-            source_id: "arxiv:2404.17842".into(),
-            reqif: Some(ReqIFMetadata {
-                reqif_id: "reqif-b00t-002".into(),
-                object_type: "REQUIREMENT".into(),
-                last_change: None,
-                tool_id: Some("b00t-doc-pipeline".into()),
-            }),
-            sysml_stereotype: Some(SysMLv2Stereotype::PerformanceRequirement),
-            created_at: Utc::now(),
-        },
+        Requirement::from_evidence(
+            "REQ-SRS-001",
+            "The system SHALL generate SRS documents that are accurate, coherent, and structured, matching the quality of an entry-level software engineer.",
+            RequirementType::Functional, 1,
+            "Derived from ev:001 and ev:003 — LLM SRS quality matches entry-level engineers.",
+            &["ev:001", "ev:003"], "arxiv:2404.17842",
+            SysMLv2Stereotype::FunctionalRequirement,
+        ),
+        Requirement::from_evidence(
+            "REQ-EVAL-002",
+            "The system SHALL evaluate SRS quality using at least 8 distinct benchmark criteria.",
+            RequirementType::NonFunctional, 2,
+            "Derived from ev:002 — paper used 8 criteria for human benchmark comparison.",
+            &["ev:002"], "arxiv:2404.17842",
+            SysMLv2Stereotype::PerformanceRequirement,
+        ),
     ];
 
     // UFO: Endurant + Role check for requirements
@@ -341,24 +235,22 @@ fn test_full_pipeline_operational() {
     let req001 = &requirements[0];
     assert_eq!(req001.sysml_stereotype, Some(SysMLv2Stereotype::FunctionalRequirement));
     assert!(req001.reqif.is_some());
-    assert_eq!(req001.reqif.as_ref().unwrap().reqif_id, "reqif-b00t-001");
+    assert_eq!(req001.reqif.as_ref().unwrap().reqif_id, "reqif-REQ-SRS-001");
 
     // ── Stage 7: FOL Stereotyping ─────────────────────────────────────────
     let fol_formulas = vec![
-        SerializableFOLFormula {
-            predicate_names: vec!["is_functional".into(), "has_rationale".into()],
-            quantifier: Quantifier::ForAll,
-            connective: Connective::Implies,
-            term_ids: vec!["REQ-SRS-001".into(), "REQ-EVAL-002".into()],
-            description: "∀r ∈ Requirement: isFunctional(r) → hasRationale(r)".into(),
-        },
-        SerializableFOLFormula {
-            predicate_names: vec!["derived_from_evidence".into(), "has_provenance".into()],
-            quantifier: Quantifier::Exists,
-            connective: Connective::And,
-            term_ids: vec!["REQ-SRS-001".into()],
-            description: "∃r ∈ Requirement: derivedFromEvidence(r) ∧ hasProvenance(r)".into(),
-        },
+        SerializableFOLFormula::new(
+            Quantifier::ForAll, Connective::Implies,
+            &["is_functional", "has_rationale"],
+            &["REQ-SRS-001", "REQ-EVAL-002"],
+            "∀r ∈ Requirement: isFunctional(r) → hasRationale(r)",
+        ),
+        SerializableFOLFormula::new(
+            Quantifier::Exists, Connective::And,
+            &["derived_from_evidence", "has_provenance"],
+            &["REQ-SRS-001"],
+            "∃r ∈ Requirement: derivedFromEvidence(r) ∧ hasProvenance(r)",
+        ),
     ];
 
     // Verify FOL formulas
@@ -416,80 +308,40 @@ fn test_full_pipeline_operational() {
 #[test]
 fn test_ufo_trait_concept_as_code() {
     // Endurant: DocumentSource
-    let doc = DocumentSource {
-        source_id: "test:001".into(),
-        title: "Test Document".into(),
-        authors: vec!["Author".into()],
-        abstract_text: "Test abstract".into(),
-        url: None,
-        pdf_url: None,
-        fetched_at: Utc::now(),
-        content_hash: None,
-        format: DocumentFormat::Markdown,
-        metadata: Default::default(),
-    };
+    let doc = DocumentSource::arxiv(
+        "001", "Test Document", &["Author"],
+        "Test abstract",
+    );
     assert_eq!(doc.endurant_kind(), "Document");
     assert!(doc.exists_wholly_at(Utc::now()));
-    assert_eq!(doc.identity_criterion(), "DocumentSource(test:001)");
+    // identity criterion for arxiv uses arxiv:{id} format
+    assert!(doc.identity_criterion().contains("arxiv:001"));
 
     // Perdurant: SemanticChunk
-    let chunk = SemanticChunk {
-        chunk_id: "chunk:test".into(),
-        source_id: "test:001".into(),
-        chunk_index: 0,
-        content: "Test".into(),
-        topic_tags: vec![],
-        embedding: vec![0.1],
-        embedding_model: None,
-        confidence: 1.0,
-        created_at: Utc::now(),
-        metadata: Default::default(),
-    };
+    let chunk = SemanticChunk::new(
+        "chunk:test", "test:001", 0,
+        "Test", &[], vec![0.1], 1.0, None,
+    );
     let parts = chunk.temporal_parts();
     assert_eq!(parts.len(), 1);
     assert!(chunk.participates_in().contains(&"test:001".to_string()));
 
     // Relator: Evidence
-    let evidence = Evidence {
-        evidence_id: "ev:test".into(),
-        chunk_id: "chunk:test".into(),
-        source_id: "test:001".into(),
-        statement: "Test claim".into(),
-        evidence_type: EvidenceType::Claim,
-        confidence: 1.0,
-        extraction_method: "manual".into(),
-        source_quote: "test".into(),
-        line_range: None,
-        provenance: ProvenancePointer {
-            source_id: "test:001".into(),
-            chunk_id: "chunk:test".into(),
-            line_start: 0,
-            line_end: 1,
-            quote_snippet: "test".into(),
-        },
-        extracted_at: Utc::now(),
-    };
+    let evidence = Evidence::from_chunk(
+        "ev:test", "chunk:test", "test:001",
+        "Test claim", EvidenceType::Claim, 1.0, "test", 0, 1,
+    );
     let (left, right) = evidence.mediates_between();
     assert!(left.contains("chunk:"));
     assert!(right.contains("test:"));
     assert_eq!(evidence.relator_type(), RelatorType::Material);
 
     // Role: Requirement (anti-rigid)
-    let req = Requirement {
-        req_id: "REQ-TEST".into(),
-        text: "Test requirement".into(),
-        req_type: RequirementType::Functional,
-        priority: 1,
-        rationale: None,
-        derived_from: vec![],
-        satisfies: vec![],
-        verified_by: None,
-        status: RequirementStatus::Proposed,
-        source_id: "test:001".into(),
-        reqif: None,
-        sysml_stereotype: None,
-        created_at: Utc::now(),
-    };
+    let req = Requirement::from_evidence(
+        "REQ-TEST", "Test requirement", RequirementType::Functional, 1,
+        "Test rationale", &[], "test:001",
+        SysMLv2Stereotype::FunctionalRequirement,
+    );
     assert!(req.is_anti_rigid());
     assert_eq!(req.played_by(), "test:001");
     assert_eq!(req.endurant_kind(), "Requirement");
@@ -506,42 +358,27 @@ fn test_ufo_trait_concept_as_code() {
 #[test]
 fn test_vector_search_nosql_style() {
     let chunks = vec![
-        SemanticChunk {
-            chunk_id: "vec:a".into(),
-            source_id: "test:vec".into(),
-            chunk_index: 0,
-            content: "Requirements engineering with LLMs".into(),
-            topic_tags: vec!["requirements".into(), "LLM".into()],
-            embedding: vec![0.9, 0.1, 0.1], // near [1,0,0] = requirements
-            embedding_model: Some("test-model".into()),
-            confidence: 1.0,
-            created_at: Utc::now(),
-            metadata: Default::default(),
-        },
-        SemanticChunk {
-            chunk_id: "vec:b".into(),
-            source_id: "test:vec".into(),
-            chunk_index: 1,
-            content: "Ontology-driven software design patterns".into(),
-            topic_tags: vec!["ontology".into(), "design".into()],
-            embedding: vec![0.1, 0.9, 0.1], // near [0,1,0] = ontology
-            embedding_model: Some("test-model".into()),
-            confidence: 1.0,
-            created_at: Utc::now(),
-            metadata: Default::default(),
-        },
-        SemanticChunk {
-            chunk_id: "vec:c".into(),
-            source_id: "test:vec".into(),
-            chunk_index: 2,
-            content: "Formal methods for verification".into(),
-            topic_tags: vec!["formal-methods".into(), "verification".into()],
-            embedding: vec![0.1, 0.1, 0.9], // near [0,0,1] = formal methods
-            embedding_model: Some("test-model".into()),
-            confidence: 1.0,
-            created_at: Utc::now(),
-            metadata: Default::default(),
-        },
+        SemanticChunk::new(
+            "vec:a", "test:vec", 0,
+            "Requirements engineering with LLMs",
+            &["requirements", "LLM"],
+            vec![0.9, 0.1, 0.1], // near [1,0,0] = requirements
+            1.0, None,
+        ),
+        SemanticChunk::new(
+            "vec:b", "test:vec", 1,
+            "Ontology-driven software design patterns",
+            &["ontology", "design"],
+            vec![0.1, 0.9, 0.1], // near [0,1,0] = ontology
+            1.0, None,
+        ),
+        SemanticChunk::new(
+            "vec:c", "test:vec", 2,
+            "Formal methods for verification",
+            &["formal-methods", "verification"],
+            vec![0.1, 0.1, 0.9], // near [0,0,1] = formal methods
+            1.0, None,
+        ),
     ];
 
     let index = ChunkIndex::new(chunks);
@@ -578,18 +415,9 @@ fn test_vector_search_nosql_style() {
 #[test]
 fn test_nosql_json_roundtrip() {
     let pipeline = FullPipelineResult {
-        source: DocumentSource {
-            source_id: "arxiv:2404.17842".into(),
-            title: "Test".into(),
-            authors: vec!["Author".into()],
-            abstract_text: "Abstract".into(),
-            url: None,
-            pdf_url: None,
-            fetched_at: Utc::now(),
-            content_hash: None,
-            format: DocumentFormat::Pdf,
-            metadata: Default::default(),
-        },
+        source: DocumentSource::arxiv(
+            "2404.17842", "Test", &["Author"], "Abstract",
+        ),
         chunks: vec![],
         evidences: vec![],
         requirements: vec![],
@@ -607,4 +435,65 @@ fn test_nosql_json_roundtrip() {
     let parsed: FullPipelineResult = serde_json::from_str(&json).unwrap();
     assert_eq!(parsed.source.source_id, "arxiv:2404.17842");
     assert_eq!(parsed.pipeline_version, "0.1.0");
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Test 5: Compose pipeline node chain — typed pipeline composition
+// ═══════════════════════════════════════════════════════════════════════════
+
+#[test]
+fn test_compose_pipeline_chain() {
+    // Build: ChunkNode → EvidenceNode via Compose type-level composition
+    // ChunkNode::Output = Vec<SemanticChunk>, EvidenceNode::Input = Vec<SemanticChunk> ✓
+    let pipeline = Compose {
+        first: ChunkNode,
+        second: EvidenceNode,
+    };
+
+    // Feed a document source through the composed pipeline
+    let source = DocumentSource::arxiv(
+        "2404.17842",
+        "LLM-based Requirements Engineering",
+        &["Krishna", "Gaur", "Verma", "Jalote"],
+        "LLMs can generate accurate, coherent SRS documents matching entry-level engineer quality.",
+    );
+
+    let results: Vec<Evidence> = pipeline.execute(source);
+
+    // Pipeline produced evidence from chunks
+    assert!(!results.is_empty());
+    assert_eq!(results.len(), 1); // one chunk → one evidence
+
+    // Each evidence has provenance auto-linked by the constructor
+    for ev in &results {
+        assert!(!ev.provenance.source_id.is_empty());
+        assert!(!ev.provenance.chunk_id.is_empty());
+        assert_eq!(ev.evidence_type, EvidenceType::Claim);
+    }
+
+    // UFO: Relator check on pipeline output
+    assert_eq!(results[0].relator_type(), RelatorType::Material);
+
+    // FOL contracts propagate through composition
+    let pre = pipeline.preconditions();
+    assert!(!pre.is_empty());
+    let post = pipeline.postconditions();
+    assert!(!post.is_empty());
+
+    // State machine bridges ChunkNode → EvidenceNode
+    let sm = pipeline.state_machine();
+    assert!(sm.states.len() >= 4); // 2+2 states + compose bridge
+
+    // Node metadata
+    assert_eq!(pipeline.node_category(), b00t_c0re_lib::pipeline_nodes::NodeCategory::Composite);
+    assert_eq!(pipeline.node_label(), "Compose");
+    assert_eq!(pipeline.input_ports().len(), 1); // inherited from ChunkNode
+    assert_eq!(pipeline.output_ports().len(), 1); // inherited from EvidenceNode
+
+    // Verify PortDef names
+    assert_eq!(pipeline.input_ports()[0].name, "document");
+    assert_eq!(pipeline.output_ports()[0].name, "evidence");
+
+    println!("✅ Compose<ChunkNode, EvidenceNode>: {} states, {} preconditions, {} postconditions",
+        sm.states.len(), pre.len(), post.len());
 }
