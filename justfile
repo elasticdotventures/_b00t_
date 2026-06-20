@@ -495,7 +495,19 @@ version:
     @grep '^version = ' Cargo.toml | grep -oP '[\d]+\.[\d]+\.[\d]+'
 
 commit-hook:
-    echo "removed"
+    #!/bin/bash
+    set -euo pipefail
+    # If strict-review flag exists, run the blocking reviewer gate
+    if [[ -f ".b00t/strict-review" ]]; then
+        echo "🛡️  strict-review gate active — validating staged changes..."
+        if ! JUST_UNSTABLE=1 just pr-validate goal="staged changes"; then
+            echo ""
+            echo "❌ Reviewer gate blocked commit. Fix issues and try again."
+            echo "   To bypass: rm .b00t/strict-review (not recommended)"
+            exit 1
+        fi
+        echo "✅ Reviewer gate passed"
+    fi
 
 commit-hook2:
     #!/bin/bash
@@ -1704,6 +1716,19 @@ provision-agent role="worker" goal="":
         || echo "[provision] agent ready at: $AGENT_FILE (manual launch required if claude not in PATH)"
     fi
 
+# pr-validate: blocking reviewer gate — exits non-zero on REQUEST_CHANGES
+# Usage: just pr-validate goal="fix login bug"
+# Usage: just pr-validate goal="refactor auth" scope="src/auth/"
+# If .b00t/strict-review exists → gate runs automatically on commit
+pr-validate goal="staged changes" scope="":
+    #!/bin/bash
+    set -euo pipefail
+    SCOPE_ARG=""
+    if [ -n "{{ scope }}" ]; then
+        SCOPE_ARG="--scope {{ scope }}"
+    fi
+    bash _b00t_/scripts/pr-validate.sh --goal "{{ goal }}" $SCOPE_ARG
+
 # ═══════════════════════════════════════════════════════════════════
 # 🛡️ Gate-Protected Actions (mandatory Zellij interaction gate)
 # These recipes ALWAYS run through the gate before executing.
@@ -1836,6 +1861,31 @@ gate-subagent-dispatch task="general-task":
     # Sub-agent dispatch logic here
     echo "✅ Sub-agent dispatched"
 
+# Pre-commit hook: active if .b00t/strict-review exists
+pr-validate-hook:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [ ! -f .b00t/strict-review ]; then
+        echo ".b00t/strict-review not found gate inactive"
+        echo "Create it touch .b00t/strict-review"; exit 0
+    fi
+    echo "strict-review active running pr-validate gate..."
+    G=$(git log -1 --format=%s HEAD 2>/dev/null || echo "staged changes")
+    just pr-validate goal="$G"
+
+# Create .b00t/scope contract for drift detection
+scope-init scope_patterns="":
+    #!/usr/bin/env bash
+    mkdir -p .b00t
+    if [ -z "{{scope_patterns}}" ]; then
+        echo "Usage: just scope-init scope_patterns=\"path1 path2\""
+        exit 1
+    fi
+    :> .b00t/scope
+    for p in {{scope_patterns}}; do echo "$p" >> .b00t/scope; done
+    echo ".b00t/scope created with $(wc -l < .b00t/scope) patterns"
+    cat .b00t/scope
+
 # ── All gate-protected recipes ──────────────────────────────────
 gate-help:
     @echo "🛡️ Gate-Protected Actions (mandatory Zellij fzf menu)"
@@ -1848,6 +1898,10 @@ gate-help:
     @echo "  just gate-task-list          - Task management (gate required)"
     @echo "  just gate-subagent-dispatch  - Sub-agent dispatch (gate required)"
     @echo "  just gate-help               - This help"
+    @echo ""
+    @echo "🔒 PR Validate Gate:"
+    @echo "  just pr-validate goal=\"...\"   - Review staged changes, exit 0=APPROVE, 1=CHANGES"
+    @echo "  (Set .b00t/strict-review to enable mandatory gate on commit)"
     @echo ""
     @echo "⚠️  All gate-protected actions require Zellij + fzf"
     @echo "⚠️  Agent CANNOT proceed without user approval through interactive menu"
