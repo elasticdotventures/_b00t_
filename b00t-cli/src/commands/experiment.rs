@@ -267,7 +267,7 @@ pub fn emit_focus_to_ledgrrr_mcp(cmp: &ExperimentComparison, endpoint: &str) {
             "jsonrpc": "2.0",
             "method": "tools/call",
             "params": {
-                "name": "ledgrrr_focus",
+                "name": "ledgerr_focus",
                 "arguments": {
                     "action": "append_focus_record",
                     "records": [{
@@ -297,13 +297,12 @@ pub fn emit_focus_to_ledgrrr_mcp(cmp: &ExperimentComparison, endpoint: &str) {
         eprintln!("[ledgrrr-mcp] payload written to {} — curl attempt follows", tmp.display());
     }
 
-    // ── Try sending via curl to the MCP HTTP endpoint ──────────────────────
-    let mcp_http_endpoint = endpoint.trim_end_matches('/').to_string();
+    // ── Try sending via curl ────────────────────────────────────────────────
     let output = Command::new("curl")
         .args(["-s", "--max-time", "5",
                "-H", "content-type: application/json",
                "-d", &format!("@{}", tmp.display()),
-               &mcp_http_endpoint])
+               &format!("{}/v1/chat/completions", endpoint)])
         .output();
     let _ = std::fs::remove_file(&tmp);
 

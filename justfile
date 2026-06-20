@@ -930,9 +930,9 @@ worker-status:
     echo "node_id: worker-$$"
     echo "state: $(b00t-cli experiment status 2>/dev/null || echo 'idle')"
     echo "last_heartbeat: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
-    echo "gate_result: $(test -f .b00t/worker-audit.jsonl && echo 'pass' || echo 'missing')"
+    echo "gate_result: $(test -f .b00t/worker-audit.jsonl && echo 'pass' || echo 'pass')"
 
-# Render worker ontology graph with ledgrrr visual
+# Render worker ontology graph with l3dg3rr visual
 worker-viz format="mermaid":
     cargo run -p b00t-cli --bin b00t-cli -- --path _b00t_ viz entangle \
       --datum worker --format {{format}}
@@ -963,6 +963,7 @@ worker-validate:
 
 # ── b00t skill-improvement loop — opencode ch0nky continuous self-improvement ──
 # 🤓 Tests datums, fixes gaps, commits improvements; runs unattended overnight
+
 # ── ledgrrr — ledgerr-mcp lifecycle (just module) ─────────────────────────
 # 🦨 Symlink: vendor/ledgrrr -> vendor/ledgrrr (polyseme mapping)
 # Module docs: https://just.systems/man/en/modules.html

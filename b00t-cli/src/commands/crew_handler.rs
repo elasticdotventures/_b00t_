@@ -269,8 +269,7 @@ fn handle_roster(store: &AgentStore) {
             Role::Operator => operators.push(agent),
             Role::Specialist => specialists.push(agent),
             Role::Bouncer => bouncers.push(agent),
-            Role::Mate => executors.push(agent),      // alias: any non-captain agent
-            Role::Player => executors.push(agent),     // alias: human/user
+            Role::Mate | Role::Player => specialists.push(agent),
         }
     }
 

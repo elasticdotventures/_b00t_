@@ -544,6 +544,7 @@ The system will:
 }
 
 #[derive(clap::Parser, Clone)]
+
 pub enum WowSubcommands {
     #[clap(about = "Run all WOW integrity checks")]
     Check {
@@ -1008,7 +1009,7 @@ fn check_other_tool_status(tool_name: &str, subsystem: &str, path: &str) -> Resu
     }
 
     let config_result = fs::read_to_string(&path_buf).and_then(|content| {
-        toml::from_str::<serde_json::Value>(&content)
+        toml::from_str::<UnifiedConfig>(&content)
             .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))
     });
 

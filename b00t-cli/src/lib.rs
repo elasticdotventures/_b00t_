@@ -2441,8 +2441,6 @@ pub fn codex_install_mcp(
     stdio_command: Option<&str>,
     use_httpstream: bool,
 ) -> Result<()> {
-    use duct::cmd;
-
     let datum = get_mcp_config(name, path)?;
     let (command, args, env, method_type) =
         select_mcp_method(&datum, stdio_command, use_httpstream)?;
@@ -2456,7 +2454,7 @@ pub fn codex_install_mcp(
         })
     };
 
-    if let Some(env_map) = env {
+    if let Some(env_map) = &env {
         if let Some(obj) = codex_config.as_object_mut() {
             obj.insert("env".to_string(), serde_json::to_value(env_map)?);
         }
@@ -2464,39 +2462,51 @@ pub fn codex_install_mcp(
 
     let json_str =
         serde_json::to_string(&codex_config).context("Failed to serialize JSON for Codex")?;
-    let location_flag = if use_repo { "--repo" } else { "--user" };
-    let result = cmd!("codex", "mcp", "add-json", location_flag, name, &json_str).run();
+    let location = if use_repo {
+        "repository (Codex CLI stores MCP entries in its active config)"
+    } else {
+        "user global"
+    };
+
+    let mut codex_cmd = std::process::Command::new("codex");
+    codex_cmd.args(["mcp", "add"]);
+
+    if let Some(env_map) = &env {
+        for (key, value) in env_map {
+            codex_cmd.args(["--env", &format!("{}={}", key, value)]);
+        }
+    }
+
+    if method_type == "httpstream" {
+        codex_cmd.args([name, "--url", &command]);
+    } else {
+        codex_cmd.arg(name).arg("--").arg(&command).args(&args);
+    }
+
+    let result = codex_cmd.status();
 
     match result {
-        Ok(_) => {
-            let location = if use_repo {
-                "repository"
-            } else {
-                "user global"
-            };
+        Ok(status) if status.success() => {
             println!(
                 "Successfully installed MCP server '{}' to Codex ({})",
                 datum.name, location
             );
-            println!(
-                "Codex command: codex mcp add-json {} {} '{}'",
-                location_flag, datum.name, json_str
+            println!("Codex config: {}", json_str);
+        }
+        Ok(status) => {
+            eprintln!(
+                "Failed to install MCP server to Codex ({}): exited with status {}",
+                location, status
             );
+            eprintln!("Codex config: {}", json_str);
+            return Err(anyhow::anyhow!(
+                "Codex installation failed with status {}",
+                status
+            ));
         }
         Err(e) => {
-            let location = if use_repo {
-                "repository"
-            } else {
-                "user global"
-            };
-            eprintln!(
-                "Failed to install MCP server to Codex ({}): {}",
-                location, e
-            );
-            eprintln!(
-                "Manual command: codex mcp add-json {} {} '{}'",
-                location_flag, datum.name, json_str
-            );
+            eprintln!("Failed to invoke Codex MCP installer ({}): {}", location, e);
+            eprintln!("Codex config: {}", json_str);
             return Err(anyhow::anyhow!("Codex installation failed: {}", e));
         }
     }
@@ -2592,10 +2602,9 @@ pub fn dotmcpjson_install_mcp(
     Ok(())
 }
 
-/// Push all repo .mcp.json servers into Codex CLI config via `codex mcp add-json`.
+/// Push all repo .mcp.json servers into Codex CLI config via `codex mcp add`.
 pub fn codex_sync_dotmcpjson(path: &str, use_repo: bool) -> Result<()> {
     use crate::utils::get_workspace_root;
-    use duct::cmd;
     use std::path::Path;
 
     let _ = path; // retained for interface parity with other installers
@@ -2620,16 +2629,40 @@ pub fn codex_sync_dotmcpjson(path: &str, use_repo: bool) -> Result<()> {
         anyhow::bail!("No MCP servers present in {}", mcp_json_path.display());
     }
 
-    let location_flag = if use_repo { "--repo" } else { "--user" };
     let mut failures = Vec::new();
 
     for (name, config) in servers {
-        let json_str = serde_json::to_string(config)
-            .with_context(|| format!("Failed to serialize MCP server '{}'", name))?;
-        if let Err(e) = cmd!("codex", "mcp", "add-json", location_flag, name, &json_str).run() {
-            failures.push((name.clone(), e.to_string()));
+        let mut codex_cmd = std::process::Command::new("codex");
+        codex_cmd.args(["mcp", "add"]);
+
+        if let Some(env) = config.get("env").and_then(|v| v.as_object()) {
+            for (key, value) in env {
+                if let Some(value) = value.as_str() {
+                    codex_cmd.args(["--env", &format!("{}={}", key, value)]);
+                }
+            }
+        }
+
+        if let Some(url) = config.get("url").and_then(|v| v.as_str()) {
+            codex_cmd.args([name, "--url", url]);
         } else {
-            println!("Codex synced '{}'", name);
+            let command = match config.get("command").and_then(|v| v.as_str()) {
+                Some(command) => command,
+                None => {
+                    failures.push((name.clone(), "missing command or url".to_string()));
+                    continue;
+                }
+            };
+            codex_cmd.arg(name).arg("--").arg(command);
+            if let Some(args) = config.get("args").and_then(|v| v.as_array()) {
+                codex_cmd.args(args.iter().filter_map(|v| v.as_str()));
+            }
+        }
+
+        match codex_cmd.status() {
+            Ok(status) if status.success() => println!("Codex synced '{}'", name),
+            Ok(status) => failures.push((name.clone(), format!("exited with status {}", status))),
+            Err(e) => failures.push((name.clone(), e.to_string())),
         }
     }
 
