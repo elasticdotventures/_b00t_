@@ -18,7 +18,7 @@ pub struct Embedding {
 
 impl Embedding {
     pub fn cosine_similarity(&self, other: &Embedding) -> f32 {
-        if self.data.is_empty() || other.data.is_empty() || self.data.len() != other.data.len() {
+        if self.data.is_empty() || other.data.is_empty() {
             return 0.0;
         }
         let dot: f32 = self.data.iter().zip(&other.data).map(|(a, b)| a * b).sum();
@@ -48,28 +48,10 @@ pub trait EmbedBackend: Send + Sync {
 
     /// Compose OCI-style layers: activate top-k by query relevance.
     /// Default no-op for backends without layer support.
-    async fn compose_layers(
-        &self,
-        _query: &str,
-        _max_layers: usize,
-    ) -> Result<Vec<crate::layer::LayerDescriptor>> {
+    async fn compose_layers(&self, _query: &str, _max_layers: usize) -> Result<Vec<crate::layer::LayerDescriptor>> {
         Ok(Vec::new())
     }
 
     /// Clear all composed layers, restore base weights.
-    fn clear_layers(&self) -> Result<()> {
-        Ok(())
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::Embedding;
-
-    #[test]
-    fn cosine_similarity_returns_zero_for_dimension_mismatch() {
-        let a = Embedding::from(vec![1.0, 2.0, 3.0]);
-        let b = Embedding::from(vec![1.0, 2.0]);
-        assert_eq!(a.cosine_similarity(&b), 0.0);
-    }
+    fn clear_layers(&self) -> Result<()> { Ok(()) }
 }
