@@ -46,3 +46,19 @@ npm run dev
 - Stories should be small enough to complete in one context window
 - Always update AGENTS.md with discovered patterns for future iterations
 - For uv-managed tooling, prefer `uv run python -m <tool>` (e.g., mypy, pytest) so commands use the project `.venv` and find dev dependencies
+
+## Task Type Dispatch
+
+When the OODA loop assigns you a task, the **task title prefix** determines the correct recipe to call:
+
+| Task title prefix      | Action                                          |
+|------------------------|-------------------------------------------------|
+| `research-soul: <T>`  | `just research-soul topic=<T>` — ingest raw sources into datum |
+| `review-soul: <T>`    | `just review-soul topic=<T>` — pi LLM semantic quality review  |
+| `bug: <desc>`         | Implement fix; run tests; commit               |
+| `feat: <desc>`        | Implement feature; run tests; commit           |
+| (user story text)     | Standard OODA story implementation cycle       |
+
+**review-soul tasks** are auto-queued by `b00t learn` when Stage 1 (keyword-overlap) AND Stage 2 (grok vector) both reject the result. The pi reviewer runs locally at ch0nky tier and may escalate to `research-soul` if the datum quality is below threshold (score < 3/5).
+
+When running a `just` recipe, ensure you are in the b00t repo root (where `justfile` lives), not the ralph submodule directory.

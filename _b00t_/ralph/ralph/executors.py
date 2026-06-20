@@ -285,11 +285,48 @@ class OpenCodeExecutor:
         return _run_subprocess(tuple(command), input_text=prompt_text, cwd=cwd_value)
 
 
+@dataclass(frozen=True, slots=True)
+class PiExecutor:
+    """Executor for pi-coding-agent — lightweight local-LLM sub-agent.
+
+    Invokes pi in non-interactive (-p) mode against the local ch0nky slot
+    via llama-cpp provider. Requires pi installed and local inference running
+    on the OpenAI-compatible endpoint configured in ~/.pi/agent/models.json.
+    """
+
+    prompt_path: Path
+    working_dir: Path | None = None
+    provider: str = "llama-cpp"
+    model: str = "ch0nky"
+    extra_args: str = ""
+
+    def run(self) -> Result[str, Exception]:
+        prompt_result = _read_prompt(self.prompt_path)
+        match prompt_result:
+            case Success(prompt_text):
+                pass
+            case Failure(error):
+                return Failure(error)
+
+        cwd_value = self.working_dir or self.prompt_path.parent
+        command: list[str] = [
+            "pi",
+            "-p",
+            "--provider", self.provider,
+            "--model", self.model,
+        ]
+        if self.extra_args:
+            command.extend(self.extra_args.split())
+        # pi reads task from stdin when -p flag is set
+        return _run_subprocess(tuple(command), input_text=prompt_text, cwd=cwd_value)
+
+
 __all__ = [
     "AmpExecutor",
     "ClaudeExecutor",
     "CodexExecutor",
     "ExecutorError",
     "OpenCodeExecutor",
+    "PiExecutor",
     "ToolExecutor",
 ]

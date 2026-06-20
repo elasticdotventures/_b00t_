@@ -6,6 +6,7 @@
 //! Examples:
 //!   b00t ooda run                       # run with defaults (claude, 5 iter)
 //!   b00t ooda run --agent=opencode --max-iter=10
+//!   b00t ooda run --agent=pi --max-iter=5
 //!   b00t ooda run --task=40             # target specific task
 //!   b00t ooda status                    # show task backlog summary
 //!   b00t ooda phase                     # show current phase from OodaLoop
@@ -21,7 +22,7 @@ pub enum OodaCommands {
     Run {
         #[arg(
             long,
-            help = "Executor agent (claude, codex, opencode, amp)",
+            help = "Executor agent (claude, codex, opencode, amp, pi)",
             default_value = "claude"
         )]
         agent: String,

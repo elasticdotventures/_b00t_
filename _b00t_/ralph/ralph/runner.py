@@ -18,6 +18,7 @@ from ralph.executors import (
     ClaudeExecutor,
     CodexExecutor,
     OpenCodeExecutor,
+    PiExecutor,
     ToolExecutor,
 )
 from ralph.logging_utils import (
@@ -63,6 +64,14 @@ def _build_executor(tool: str, config: RalphConfig) -> ToolExecutor:
                 working_dir=WORKING_DIR,
                 model=config.opencode_model,
                 extra_args=config.opencode_extra_args,
+            )
+        case "pi":
+            return PiExecutor(
+                prompt_path=PROMPT_FILE,
+                working_dir=WORKING_DIR,
+                provider=config.pi_provider,
+                model=config.pi_model,
+                extra_args=config.pi_extra_args,
             )
     raise ValueError(f"Unsupported tool: {tool}")
 
