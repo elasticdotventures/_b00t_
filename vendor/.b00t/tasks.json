@@ -4,7 +4,9 @@
       "id": 1,
       "title": "Implement kreuzberg integration (Stage 1 of #341) — MCP datum for document intelligence",
       "description": "Issue #398 (latent space) identified that kreuzberg integration (issue #341) is at 0% implementation. Stage 1: Create _b00t_/kreuzberg.mcp.toml datum, register kreuzberg MCP server, validate text extraction from PDFs. Blocks paper parsing end-to-end in b00t ecosystem.",
-      "status": "pending",
+      "status": "completed",
+      "completed_at": "2026-06-20T00:00:00Z",
+      "result": "kreuzberg MCP datum exists, MCP wrapper built (3 tools: extract_file, extract_bytes, list_formats), end-to-end validated with kreuzberg v4.9.9. Upstream MCP server path (uvx kreuzberg-mcp) noted for future when upstream ships it.",
       "priority": 3,
       "tags": [
         "paper-parsing",

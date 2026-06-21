@@ -2109,8 +2109,8 @@ kreuzberg-install:
         curl -LsSf https://astral.sh/uv/install.sh | sh
         export PATH="$HOME/.local/bin:$PATH"
     fi
-    echo "📦 Installing kreuzberg[all] via uv pip..."
-    uv pip install --system "kreuzberg[all]"
+    echo "📦 Installing kreuzberg via pip install --user..."
+    pip3 install --user kreuzberg
     echo ""
     echo "🔍 Verifying installation..."
     python3 -c "import kreuzberg; print('kreuzberg OK')"
