@@ -1,0 +1,111 @@
+# b00t Self-Training Datum — unsloth qwen36 GGUF fine-tune pipeline
+# End state: on each b00t release, produce a qwen36 GGUF LoRA adapter
+# fine-tuned on b00t's own command/agent usage data.
+#
+# Current state → End state gap analysis (2026-06-21):
+#
+#   EXISTS:
+#     ✅ `b00t model train` — candle LoRA training with FSL examples
+#     ✅ 13 model datums including qwen36-27b (unsloth GGUF)
+#     ✅ unsloth skill (mlops/training/unsloth)
+#     ✅ FSL example infrastructure (for prompt injection)
+#     ✅ Compound-engineering dogfood (ATO tax pipeline) — training data source
+#     ✅ Hive profile system (inference-qwen36-27b, download-mode)
+#
+#   GAPS:
+#     ❌ No `.training.tomllmd` datum exists — training not configured
+#     ❌ `b00t model train` uses candle, NOT unsloth (2-5x slower)
+#     ❌ `model_manager.rs` scans for .model.toml / .ai_model.toml
+#        but actual files use .model.ai.tomllmd — NEVER DISCOVERED
+#     ❌ No b00t-specific training dataset (FSL examples of b00t commands)
+#     ❌ No CI/CD pipeline to produce GGUF on release
+#     ❌ No model registry for b00t-tuned adapters
+
+[b00t]
+name = "b00t-self-train-qwen36"
+type = "training"
+hint = "Fine-tune qwen36 GGUF on b00t command/agent usage data — LoRA adapter produced per b00t release"
+
+# ── Phase 1: Dataset Construction (now) ─────────────────────────────────────
+
+[[b00t.training.phases]]
+id = "collect-fsl"
+label = "Collect FSL examples"
+description = "Gather b00t command→output pairs from session history, task queue completions, and dogfood runs"
+sources = [
+    "~/.hermes/sessions/",               # Session transcripts
+    "~/.local/share/b00t/task-queue/done/",  # Completed tasks
+    "_b00t_/pulse-reports/",              # Compound-engineering pulse reports
+    "b00t-c0re-lib/tests/",              # Test fixtures as training examples
+]
+output = ".b00t/fsl/b00t-commands.jsonl"
+target_examples = 500  # Minimum examples for meaningful fine-tune
+
+[[b00t.training.phases]]
+id = "validate-dataset"
+label = "Validate dataset quality"
+description = "Check for duplicates, format consistency, command validity"
+guard = "examples >= 500 AND no_duplicates"
+
+[[b00t.training.phases]]
+id = "train-lora"
+label = "Train LoRA adapter"
+description = "Fine-tune qwen36-27b GGUF using unsloth (not candle) for 2-5x speed"
+base_model = "unsloth/Qwen3.6-27B-GGUF"
+base_model_file = "Qwen3.6-27B-Q4_K_M.gguf"
+training_framework = "unsloth"  # Target: migrate from candle to unsloth
+lora_r = 16                       # Higher rank for b00t-specific knowledge
+epochs = 3
+learning_rate = "2e-4"
+output = ".b00t/models/adapters/b00t-qwen36-v<version>/"
+
+[[b00t.training.phases]]
+id = "merge-gguf"
+label = "Merge LoRA into GGUF"
+description = "Merge adapter weights into base GGUF, quantize, publish"
+output = "b00t-qwen36-v<version>-Q4_K_M.gguf"
+publish_to = "huggingface:promptexecution/b00t-qwen36-gguf"
+
+# ── Phase 2: CI/CD Pipeline (next) ─────────────────────────────────────────
+
+[[b00t.ci]]
+trigger = "b00t release"
+steps = [
+    "just b00t-train-dataset-collect",
+    "just b00t-train-validate-dataset",
+    "just b00t-train-unsloth-lora",
+    "just b00t-train-merge-gguf",
+    "just b00t-train-publish-hf",
+]
+
+# ── Immediate Action Items (this session) ───────────────────────────────────
+
+[[b00t.action]]
+id = "A1"
+priority = "P1"
+title = "Fix model_manager.rs scanner — .model.ai.tomllmd files never discovered"
+file = "b00t-cli/src/model_manager.rs"
+line = 21
+fix = "Add '.model.ai.tomllmd' to MODEL_SUFFIXES array"
+test = "b00t model list  → should show 13 model datums"
+
+[[b00t.action]]
+id = "A2"
+priority = "P1"
+title = "Create first FSL training examples from session data"
+script = "scripts/collect-b00t-training-data.py"
+source = "~/.hermes/sessions/"
+target = ".b00t/fsl/b00t-commands.jsonl"
+
+[[b00t.action]]
+id = "A3"
+priority = "P2"
+title = "Migrate b00t model train from candle to unsloth"
+rationale = "unsloth 2-5x faster, native GGUF support, Qwen team recommends unsloth for qwen3.6"
+file = "b00t-cli/src/model_manager.rs"
+
+[[b00t.action]]
+id = "A4"
+priority = "P2"
+title = "Register qwen36 as trainable model datum"
+note = "Create .training.tomllmd with unsloth config, pointing to existing qwen36-27b-local.model.ai.tomllmd"
