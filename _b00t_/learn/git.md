@@ -35,3 +35,6 @@ workflow-branches: "Internal projects use vendor/ submodules with convention: fe
 
 ---
 surgical staging: git add -A before auditing what's staged is dangerous. Pattern: git reset HEAD first, then git add ONLY target paths, verify with git diff --cached --stat. 37 unrelated files got staged in one misstep this session.
+
+---
+josh vs submodules: Josh (josh-project/josh) is a Rust git history filter that enables atomic cross-boundary PRs — subproject code lives in the parent repo, served as independent repo via proxy. Rust project uses it for miri/rust-analyzer/stdarch. Submodules fine for <5 deps with infrequent cross-changes; switch to Josh at 10+ subprojects with weekly cross-boundary PRs. joshmodule pattern: toml config with filter path, upstream, bidirectional sync. Avoids the 3-PR dance (parent→vendor→parent).
