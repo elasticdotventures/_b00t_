@@ -1,0 +1,63 @@
+# BLESSED-RS-GOVERNANCE: Crate selection governance via blessed.rs
+# 🤓 blessed.rs is the hand-curated guide to Rust crates. This datum assimilates
+#    it into b00t's decision-making for all crate additions.
+
+[b00t.schema]
+version   = "1"
+type      = "governance"
+type_tags = ["governance", "crate-selection", "blessed-rs", "rust", "dependency", "ch0nky"]
+
+[governance]
+id          = "BLESSED-RS-GOVERNANCE"
+title       = "Blessed.rs Crate Selection Governance"
+source      = "https://blessed.rs/crates"
+curated_by  = "nicoburns (community)"
+license     = "CC0-1.0"
+check_freq  = "monthly"
+
+[decision_tree]
+# When adding a new Rust dependency, consult this tree:
+rule_order = [
+  "1. Check blessed.rs for the category",
+  "2. If listed: use the recommended crate (or alternative listed)",
+  "3. If not listed: check crates.io maturity (stars, maintenance, MSRV)",
+  "4. If still unsure: file a b00t issue for review",
+]
+
+[overrides]
+# Overrides where b00t ecosystem diverges from blessed.rs
+# Format: category.recommended = "reason for override"
+entries = [
+  { category = "http.client", blessed_recommendation = "reqwest", b00t_choice = "reqwest", note = "aligned" },
+  { category = "http.server", blessed_recommendation = "axum", b00t_choice = "axum", note = "aligned" },
+  { category = "serialization", blessed_recommendation = "serde", b00t_choice = "serde", note = "aligned" },
+  { category = "cli.arguments", blessed_recommendation = "clap", b00t_choice = "clap", note = "aligned; b00t-cli uses clap" },
+  { category = "async.runtime", blessed_recommendation = "tokio", b00t_choice = "tokio", note = "aligned" },
+  { category = "database.sql", blessed_recommendation = "sqlx", b00t_choice = "sqlx", note = "aligned" },
+  { category = "datetime", blessed_recommendation = "jiff", b00t_choice = "chrono", note = "legacy; evaluate jiff migration" },
+  { category = "gui.webview", blessed_recommendation = "tauri", b00t_choice = "tauri", note = "aligned" },
+  { category = "gui.native", blessed_recommendation = "iced/egui/slint", b00t_choice = "egui", note = "lightweight; slint deprecated" },
+  { category = "game_engine", blessed_recommendation = "bevy/fyrox", b00t_choice = "bevy", note = "for b00t-server eval" },
+  { category = "crypto.hashing", blessed_recommendation = "blake3/sha2", b00t_choice = "blake3", note = "aligned" },
+  { category = "parallelism", blessed_recommendation = "rayon", b00t_choice = "rayon", note = "aligned" },
+  { category = "ffi.python", blessed_recommendation = "pyo3", b00t_choice = "pyo3 + monty", note = "monty for safe AI code exec" },
+  { category = "testing", blessed_recommendation = "cargo-nextest, insta", b00t_choice = "cargo-nextest", note = "aligned" },
+]
+
+[audit]
+# Run monthly to check for new blessed.rs recommendations
+cmd = "gh release list --repo nicoburns/blessed-rs 2>/dev/null || curl -s https://blessed.rs/crates | grep -oP 'Last updated: \\K[^<]+'"
+alert_on = "new category or recommendation not in overrides"
+
+[migration_plan]
+# For crates where b00t diverges, track migration path
+pending_migrations = [
+  { from = "chrono", to = "jiff", priority = "low", blocked_by = "ledgrrr chrono usage" },
+]
+
+# b00t:map v1
+# summary: Blessed.rs crate selection governance — decision tree for all new Rust deps
+# tags: governance, crate-selection, blessed-rs, rust, dependency, ch0nky
+# tier: ch0nky
+# cmds: curl -s https://blessed.rs/crates
+# complexity: 5

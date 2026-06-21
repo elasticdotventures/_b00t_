@@ -1,0 +1,83 @@
+# MONTY-MANIM-WASM: monty Python runtime + manim MObject WASM compilation
+# 🤓 monty (pydantic) is a minimal secure Python interpreter in Rust.
+#    Enables safe AI code execution + WASM MObject rendering for holon-viz.
+
+[b00t.schema]
+version   = "1"
+type      = "capability"
+type_tags = ["monty", "wasm", "manim", "mobject", "python314", "visualization", "ch0nky"]
+
+[capability]
+id          = "MONTY-MANIM-WASM"
+title       = "monty + manim MObject WASM runtime"
+status      = "proposed"
+tier        = "ch0nky"
+
+[monty]
+repo        = "https://github.com/pydantic/monty"
+stars       = "7800"
+license     = "MIT"
+description = "Minimal secure Python interpreter in Rust for AI code execution"
+version     = ">=0.0.18"
+rust_crate  = "monty"
+
+[monty.capabilities]
+what_it_can = [
+  "Run Python subsets safely embedded in Rust",
+  "Block filesystem, network, env access (sandboxed)",
+  "External function calls via developer-provided handlers",
+  "Sub-microsecond startup (<1us from code to result)",
+  "Snapshot/resume via dump()/load()",
+  "5x faster to 5x slower than CPython",
+  "Memory/stack/time tracking with cancellation",
+]
+what_it_cannot = [
+  "Full stdlib (only sys, os, typing, asyncio, re, datetime, json, dataclasses)",
+  "Third-party libraries (not a goal)",
+  "Classes (coming soon)",
+  "match statements (coming soon)",
+]
+
+[manim_mobject_wasm]
+# Long-term goal: compile manim MObject hierarchy to WASM via monty
+# manim's MObject (Circle, Square, VGroup, Animation) is pure Python math
+# Path: monty → embed in Rust → compile to wasm32-unknown-unknown → Tauri WebView
+phase_1 = "IsoAnimationPath::to_manim_script() generates .py stubs"
+phase_2 = "monty executes MObject stubs in sandboxed Rust process"
+phase_3 = "Compile monty + manim subset to WASM for browser rendering"
+note = "Python 3.14 free-threaded mode makes WASM compilation significantly easier"
+python_target = "3.14"
+wasm_target = "wasm32-unknown-unknown"
+
+[integration_with_holon_viz]
+# holon-viz already has IsoAnimationPath, IsoTransform, IsoFrame types
+# monty adds safe execution layer for generated animation scripts
+pipeline = [
+  "1. Rust PipelineGraph::update() produces Vec<IsoTransform>",
+  "2. IsoAnimationPath::to_monty_module() generates monty-compatible Python",
+  "3. monty executes in sandbox, produces frame data",
+  "4. Frame data feeds Three.js (WebView) or SVG SMIL (mdBook)",
+]
+
+[python_314_standard]
+# Python 3.14 across all b00t tooling
+target_version = "3.14"
+gil = "disabled"
+key_benefits = [
+  "Free-threaded: true parallelism without GIL",
+  "WASM compilation: significantly easier without GIL constraints",
+  "monty compatible: monty targets Python 3.14 subset",
+  "Unsloth compatible: unsloth runs on 3.14",
+]
+migration_cmd = "uv python pin 3.14 && uv sync"
+
+[dependencies]
+depends_on = ["PRD-ARCH-012-UNSLOTH-QLORA", "PRD-ARCH-005-MBSE-VISUALIZATION"]
+unlocks = ["holon-viz.wasm-animation", "b00t.server.safe-code-exec"]
+
+# b00t:map v1
+# summary: monty (pydantic) Python runtime + manim MObject WASM compilation for holon-viz animation
+# tags: monty, wasm, manim, mobject, python314, visualization, ch0nky
+# tier: ch0nky
+# cmds: uv pip install pydantic-monty, uv python pin 3.14
+# complexity: 7
