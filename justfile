@@ -22,6 +22,8 @@ mod zellij '_b00t_/zellij.just'
 mod zellij-gate '_b00t_/zellij-gate.just'
 # 🌐 b00t-admin web server — dashboard, container, quadlet
 mod b00t-admin 'vendor/b00t-admin/b00t-admin.just'
+# 📚 Rust documentation MCP server — required by skills/rust
+mod rust-doc 'vendor/rust-doc.just'
 
 # Datum justfiles (install recipes for core tech stacks)
 mod python '_b00t_/python.🐍/justfile'

@@ -1,14 +1,14 @@
 [b00t]
 name = "rust-doc"
 type = "mcp"
-hint = "Rust crate documentation via semantic search — PromptExecution fork of Govcraft/rust-docs-mcp-server (v1.3.1). Per-crate MCP server with OpenAI embeddings + cosine similarity RAG. Fork: github.com/PromptExecution/rust-docs-mcp-server"
+hint = "Rust crate documentation via semantic search — b00t vendor submodule of PromptExecution/rust-docs-mcp-server (forked from Govcraft). Per-crate MCP server with OpenAI embeddings + cosine similarity RAG. Build: 'just rust-doc build'"
 
 [b00t.learn]
 topic = "rust-docs"
 
 [[b00t.mcp.stdio]]
 priority = 0
-command = "/tmp/rust-docs-mcp-server/target/release/rustdocs_mcp_server"
+command = "vendor/rust-docs-mcp-server/target/release/rustdocs_mcp_server"
 args = ["serde@^1.0"]
-requires = []
+requires = ["rustdocs_mcp_server"]
 transport = "stdio"
