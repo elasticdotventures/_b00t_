@@ -1,0 +1,106 @@
+# B00T-FINETUNE-PIPELINE: Unsloth QLoRA fine-tuning for b00t-specialized subagent
+# 🤓 Trains Qwen3.6-27B on b00t corpus → b00t-aligned ch0nky model
+#    Qwen3.6 shows high neural plasticity and quantizes extremely well
+
+[b00t.schema]
+version   = "1"
+type      = "training-pipeline"
+type_tags = ["training", "unsloth", "qlora", "qwen3.6", "finetune", "ch0nky", "b00t-aligned"]
+
+[datum]
+id          = "B00T-FINETUNE-PIPELINE"
+name        = "b00t Unsloth QLoRA Fine-Tuning Pipeline"
+status      = "active"
+tier        = "frontier"
+description = "Fine-tune Qwen3.6-27B on b00t corpus to produce a b00t-specialized ch0nky subagent"
+
+[training]
+base_model    = "unsloth/Qwen3.6-27B-GGUF"
+adapter_name  = "b00t-aligned-qwen36-27b"
+framework     = "unsloth>=0.3.0"
+output_format = "GGUF Q4_K_M"
+target_vram   = "24GB (RTX 3090)"
+python        = "3.14"
+eval_metric   = "b00t command completion accuracy"
+
+[training.dataset]
+sources = [
+  "_b00t_/datums/*.tomllmd — PRDs, patterns, datum examples",
+  "_b00t_/learn/*.md — skill templates",
+  "_b00t_/*.hive.toml — hive profiles",
+  "AGENTS/*.md — role definitions",
+  "justfile — command patterns",
+  "b00t-cli/src/**/*.rs — Rust source (future: code understanding)",
+]
+format      = "alpaca/chatml"
+gen_cmd     = "uv run python3.14 fine-tune/generate_dataset.py --format=alpaca --max-rows=5000"
+target_rows = 5000
+
+[training.hyperparameters]
+lora_r       = 16
+lora_alpha   = 32
+lora_dropout = 0.05
+epochs       = 3
+batch_size   = 2
+grad_accum   = 8
+lr           = 2e-4
+max_seq      = 2048
+
+[workflow]
+steps = [
+  "1. Generate dataset: uv run python3.14 fine-tune/generate_dataset.py",
+  "2. Train: uv run python3.14 fine-tune/train_unsloth.py --config fine-tune/config.yaml",
+  "3. Export GGUF: uv run python3.14 fine-tune/export_gguf.py --quant Q4_K_M",
+  "4. Deploy: cp ./fine-tune/output/b00t-aligned-qwen36-27b.gguf /opt/b00t/models/",
+  "5. Test: b00t hive activate inference-qwen36-27b-llamacpp",
+  "6. Evaluate: run b00t-aligned eval suite",
+]
+
+[deployment]
+# After fine-tuning, the model is deployed to the existing Qwen3.6 inference profiles
+inference_profiles = [
+  "inference-qwen36-27b-llamacpp",
+  "inference-qwen36-27b",
+  "inference-qwen36-27b-mtp-podman",
+]
+model_path = "/opt/b00t/models/b00t-aligned-qwen36-27b.gguf"
+
+[related]
+depends_on = ["PRD-ARCH-012-UNSLOTH-QLORA"]
+unlocks = ["b00t-subagent.ch0nky", "agent.self-improve"]
+
+[acceptance]
+must = [
+  "uv run python3.14 fine-tune/generate_dataset.py produces >= 5000 rows",
+  "uv run python3.14 fine-tune/train_unsloth.py runs on RTX 3090 without OOM",
+  "Exported GGUF loads in llama.cpp without error",
+  "b00t hive activate inference-qwen36-27b-llamacpp serves the fine-tuned model",
+  "b00t whoami --dashboard shows Inference layer as Ready",
+]
+
+[[usage]]
+description = "Generate training dataset from b00t corpus"
+command     = "uv run python3.14 fine-tune/generate_dataset.py --format alpaca --max-rows 5000"
+
+[[usage]]
+description = "Run unsloth QLoRA fine-tuning"
+command     = "uv run python3.14 fine-tune/train_unsloth.py --config fine-tune/config.yaml"
+
+[[usage]]
+description = "Export LoRA adapter to GGUF"
+command     = "uv run python3.14 fine-tune/export_gguf.py --adapter ./fine-tune/output/lora-adapter --quant Q4_K_M"
+
+[[usage]]
+description = "Deploy to inference and test"
+command     = "cp ./fine-tune/output/b00t-aligned-qwen36-27b.gguf /opt/b00t/models/ && b00t hive activate inference-qwen36-27b-llamacpp"
+
+[[usage]]
+description = "Full pipeline (dataset → train → export → deploy)"
+command     = "uv run python3.14 fine-tune/generate_dataset.py && uv run python3.14 fine-tune/train_unsloth.py && uv run python3.14 fine-tune/export_gguf.py"
+
+# b00t:map v1
+# summary: Unsloth QLoRA fine-tune Qwen3.6-27B on b00t corpus → b00t-specialized ch0nky subagent
+# tags: training, unsloth, qlora, qwen3.6, finetune, ch0nky, b00t-aligned, python314
+# tier: frontier
+# cmds: uv run python3.14 fine-tune/generate_dataset.py
+# complexity: 8
