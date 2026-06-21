@@ -536,6 +536,74 @@ async fn simulate_state_handler(State(state): State<Arc<Mutex<AppState>>>) -> im
     axum::Json(app.twin.snapshot())
 }
 
+/// GET `/api/admin/health` — System health metrics
+async fn health_metrics_handler() -> impl IntoResponse {
+    let uptime = std::process::Command::new("uptime")
+        .output().ok()
+        .and_then(|o| String::from_utf8(o.stdout).ok())
+        .unwrap_or_default()
+        .trim()
+        .to_string();
+
+    let memory = std::process::Command::new("free")
+        .arg("-h")
+        .output().ok()
+        .and_then(|o| String::from_utf8(o.stdout).ok())
+        .unwrap_or_default();
+
+    let cpu_count = std::thread::available_parallelism()
+        .map(|n| n.get())
+        .unwrap_or(0);
+
+    let load_avg = std::fs::read_to_string("/proc/loadavg")
+        .unwrap_or_default();
+
+    axum::Json(serde_json::json!({
+        "status": "operational",
+        "service": "b00t-admin",
+        "version": env!("CARGO_PKG_VERSION"),
+        "uptime": uptime,
+        "cpu": {
+            "logical_cores": cpu_count,
+            "load_avg": load_avg.trim(),
+        },
+        "memory": memory,
+        "timestamp": chrono::Utc::now().to_rfc3339(),
+    }))
+}
+
+/// GET `/api/admin/processes` — Hive process NodeGraph (SysMLv2/KerML visual)
+async fn processes_handler() -> impl IntoResponse {
+    use b00t_c0re_lib::pipeline_nodes::{
+        build_graph_from_pipeline, ChunkNode, EvidenceNode, FetchNode, RequirementsNode,
+    };
+
+    // Build the document pipeline NodeGraph
+    let fetch_graph = build_graph_from_pipeline(&FetchNode);
+    let chunk_graph = build_graph_from_pipeline(&ChunkNode);
+    let evidence_graph = build_graph_from_pipeline(&EvidenceNode);
+    let req_graph = build_graph_from_pipeline(&RequirementsNode);
+
+    axum::Json(serde_json::json!({
+        "pipeline": "hive-document-evidence",
+        "version": env!("CARGO_PKG_VERSION"),
+        "nodes": [
+            fetch_graph,
+            chunk_graph,
+            evidence_graph,
+            req_graph,
+        ],
+        "mermaid": format!(
+            "{}\n{}\n{}\n{}",
+            fetch_graph.to_mermaid(),
+            chunk_graph.to_mermaid(),
+            evidence_graph.to_mermaid(),
+            req_graph.to_mermaid(),
+        ),
+        "export_formats": ["mermaid", "svg", "comfyui", "json"],
+    }))
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 // Dashboard HTML (embedded)
 // ═══════════════════════════════════════════════════════════════════════════
@@ -1268,6 +1336,9 @@ async fn main() {
         // API — simulation
         .route("/api/admin/simulate/tick", get(simulate_tick_handler))
         .route("/api/admin/simulate/state", get(simulate_state_handler))
+        // API — health and processes
+        .route("/api/admin/health", get(health_metrics_handler))
+        .route("/api/admin/processes", get(processes_handler))
         // WebSocket
         .route("/ws", get(ws_handler))
         // Reverse proxy — catch-all /v1/*
