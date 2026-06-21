@@ -1199,6 +1199,8 @@ output = "Building..."
         std::process::Command::new("git")
             .arg("init")
             .current_dir(temp_dir.path())
+            .env_remove("GIT_DIR")
+            .env_remove("GIT_WORK_TREE")
             .output()
             .unwrap();
         create_test_datum_file(
@@ -1230,6 +1232,8 @@ output = "Building..."
         std::process::Command::new("git")
             .arg("init")
             .current_dir(temp_dir.path())
+            .env_remove("GIT_DIR")
+            .env_remove("GIT_WORK_TREE")
             .output()
             .unwrap();
         let b00t_dir = temp_dir.path().join("_b00t_");
