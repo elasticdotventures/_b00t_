@@ -24,6 +24,8 @@ mod zellij-gate '_b00t_/zellij-gate.just'
 mod b00t-admin 'vendor/b00t-admin/b00t-admin.just'
 # 📚 Rust documentation MCP server — required by skills/rust
 mod rust-doc 'vendor/rust-doc.just'
+# 🥾 Compound engineering workflow — 8-phase agile state machine
+mod compound-engineering '_b00t_/compound-engineering.just'
 
 # Datum justfiles (install recipes for core tech stacks)
 mod python '_b00t_/python.🐍/justfile'

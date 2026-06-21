@@ -1,0 +1,193 @@
+# b00t:map v1
+# summary: Compound engineering workflow — 8-phase agile state machine with gh-issues backlog
+# tags: compound-engineering, workflow, state-machine, agile, backlog, gh-issues
+# tier: frontier
+# cmds: just ce-status, just ce-phase <phase>, just ce-advance
+# complexity: 8
+
+[b00t]
+name = "compound-engineering"
+type = "datum"
+hint = "Compound engineering workflow: 8-phase agile state machine with GitHub Issues backlog. Inspired by everyinc/compound-engineering-plugin, implemented as b00t-native executable harness."
+
+# ── Phase Definitions ──────────────────────────────────────────────────────
+
+[[b00t.phases]]
+id = "strategy"
+label = "Strategy"
+description = "Define product target problem, approach, users, metrics"
+produces = ["STRATEGY.md", "issues:epic"]
+transition_to = "ideate"
+guard = "has_strategy_doc"
+gh_labels = ["phase:strategy", "compound-engineering"]
+
+[[b00t.phases]]
+id = "ideate"
+label = "Ideate"
+description = "Generate and rank feature ideas via dual-backend grok"
+produces = ["_b00t_/ideation/ranked-ideas.md"]
+transition_to = "brainstorm"
+guard = "has_ranked_ideas"
+gh_labels = ["phase:ideate", "compound-engineering"]
+depends_on = ["strategy"]
+
+[[b00t.phases]]
+id = "brainstorm"
+label = "Brainstorm"
+description = "Interactive Q&A to produce right-sized requirements"
+produces = ["_b00t_/requirements/<feature>.md"]
+transition_to = "plan"
+guard = "has_requirements_doc"
+gh_labels = ["phase:brainstorm", "compound-engineering"]
+depends_on = ["ideate"]
+
+[[b00t.phases]]
+id = "plan"
+label = "Plan"
+description = "Turn requirements into detailed implementation plan with tasks"
+produces = ["_b00t_/plans/<feature>-plan.md", "issues:task"]
+transition_to = "work"
+guard = "has_plan_and_tasks"
+gh_labels = ["phase:plan", "compound-engineering"]
+depends_on = ["brainstorm"]
+
+[[b00t.phases]]
+id = "work"
+label = "Work"
+description = "Execute plan via worktrees and task tracking"
+produces = ["commits", "PR"]
+transition_to = "review"
+guard = "has_open_pr"
+gh_labels = ["phase:work", "compound-engineering"]
+depends_on = ["plan"]
+
+[[b00t.phases]]
+id = "review"
+label = "Code Review"
+description = "Multi-agent adversarial review with structured findings"
+produces = ["_b00t_/reviews/<feature>-review.md"]
+transition_to = "compound"
+guard = "review_approved"
+gh_labels = ["phase:review", "compound-engineering"]
+depends_on = ["work"]
+
+[[b00t.phases]]
+id = "compound"
+label = "Compound"
+description = "Document learnings to make future work easier"
+produces = ["_b00t_/learn/<topic>.md", "lfmf lesson", "grok digest"]
+transition_to = "pulse"
+guard = "has_learnings_documented"
+gh_labels = ["phase:compound", "compound-engineering"]
+depends_on = ["review"]
+
+[[b00t.phases]]
+id = "pulse"
+label = "Product Pulse"
+description = "Time-windowed report on usage, performance, errors"
+produces = ["_b00t_/pulse-reports/<date>.md"]
+transition_to = "strategy"
+guard = "has_pulse_report"
+gh_labels = ["phase:pulse", "compound-engineering"]
+depends_on = ["compound"]
+
+# ── Backlog Integration ────────────────────────────────────────────────────
+
+[b00t.backlog]
+provider = "gh-issues"
+repo = "elasticdotventures/_b00t_"
+epic_label = "compound-engineering"
+auto_label = true
+sync_direction = "bidirectional"
+
+# ── State Machine ──────────────────────────────────────────────────────────
+
+[b00t.state_machine]
+initial_phase = "strategy"
+state_file = ".b00t/compound-engineering-state.json"
+
+# FOL-guarded transitions (verified at phase advance)
+[[b00t.state_machine.transitions]]
+from = "strategy"
+to = "ideate"
+guard = "∃ STRATEGY.md: has_target_problem(STRATEGY.md)"
+event = "strategy_complete"
+
+[[b00t.state_machine.transitions]]
+from = "ideate"
+to = "brainstorm"
+guard = "∃ ranked-ideas.md: has_ranked_items(ranked-ideas.md)"
+event = "ideation_complete"
+
+[[b00t.state_machine.transitions]]
+from = "brainstorm"
+to = "plan"
+guard = "∃ requirements: has_requirements_doc(requirements)"
+event = "brainstorm_complete"
+
+[[b00t.state_machine.transitions]]
+from = "plan"
+to = "work"
+guard = "∃ plan AND ∃ tasks: has_plan(plan) ∧ has_tasks(tasks)"
+event = "planning_complete"
+
+[[b00t.state_machine.transitions]]
+from = "work"
+to = "review"
+guard = "∃ PR: is_open(pr) ∧ has_commits(pr)"
+event = "work_complete"
+
+[[b00t.state_machine.transitions]]
+from = "review"
+to = "compound"
+guard = "∃ review: is_approved(review)"
+event = "review_complete"
+
+[[b00t.state_machine.transitions]]
+from = "compound"
+to = "pulse"
+guard = "∃ learnings: has_learnings_documented(learnings)"
+event = "compound_complete"
+
+[[b00t.state_machine.transitions]]
+from = "pulse"
+to = "strategy"
+guard = "∃ report: has_pulse_report(report)"
+event = "pulse_complete"
+
+# ── Executable Harness ─────────────────────────────────────────────────────
+
+[b00t.harness]
+# Each phase maps to a just recipe
+strategy_recipe = "ce-phase-strategy"
+ideate_recipe = "ce-phase-ideate"
+brainstorm_recipe = "ce-phase-brainstorm"
+plan_recipe = "ce-phase-plan"
+work_recipe = "ce-phase-work"
+review_recipe = "ce-phase-review"
+compound_recipe = "ce-phase-compound"
+pulse_recipe = "ce-phase-pulse"
+
+# State query
+status_recipe = "ce-status"
+advance_recipe = "ce-advance"
+
+# ── Agent Dispatch ─────────────────────────────────────────────────────────
+
+[[b00t.agents]]
+phase = "review"
+parallel = 3
+personae = ["security", "correctness", "coherence", "performance", "ux"]
+timeout_seconds = 300
+
+[[b00t.agents]]
+phase = "work"
+strategy = "worktree"
+max_concurrent = 2
+
+# ── Health Integration ─────────────────────────────────────────────────────
+
+[b00t.health]
+endpoint = "http://localhost:31337/api/admin/health"
+metrics = ["phase", "open_issues", "open_prs", "last_pulse_report"]
+pulse_window_days = 7
