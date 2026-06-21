@@ -1,0 +1,14 @@
+[b00t]
+name = "rust-doc"
+type = "mcp"
+hint = "Rust stdlib and crate documentation lookup via MCP"
+
+[b00t.learn]
+topic = "rust-docs"
+
+[[b00t.mcp.stdio]]
+priority = 0
+command = "npx"
+args = ["-y", "@anthropic/rust-doc-mcp"]
+requires = ["node"]
+transport = "stdio"
