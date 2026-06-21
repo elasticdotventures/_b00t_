@@ -1,14 +1,14 @@
 [b00t]
 name = "rust-doc"
 type = "mcp"
-hint = "Rust stdlib and crate documentation lookup via MCP"
+hint = "Rust crate documentation lookup via MCP — per-crate server (Govcraft/rust-docs-mcp-server v1.3.1). Serves 1 crate per process; add more instances for additional crates."
 
 [b00t.learn]
 topic = "rust-docs"
 
 [[b00t.mcp.stdio]]
 priority = 0
-command = "npx"
-args = ["-y", "@anthropic/rust-doc-mcp"]
-requires = ["node"]
+command = "/tmp/rust-docs-mcp-server/target/release/rustdocs_mcp_server"
+args = ["serde@^1.0"]
+requires = []
 transport = "stdio"
