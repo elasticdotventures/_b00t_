@@ -1,0 +1,65 @@
+# b00t-admin Kubernetes Pod — deployable via podman kube play
+#
+# Deploy:
+#   podman kube play b00t-admin/kube/b00t-admin.yaml
+#
+# Tear down:
+#   podman kube down b00t-admin/kube/b00t-admin.yaml
+#
+# Alternative to quadlet for non-systemd environments.
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: b00t-admin
+  labels:
+    app: b00t-admin
+    component: dashboard
+spec:
+  restartPolicy: Always
+  containers:
+    - name: b00t-admin
+      image: b00t-admin:latest
+      # For registry pull:
+      # image: ghcr.io/elasticdotventures/b00t-admin:latest
+      ports:
+        - containerPort: 31337
+          hostPort: 31337
+          protocol: TCP
+      env:
+        - name: ADMIN_PORT
+          value: "31337"
+        - name: ADMIN_HOST
+          value: "0.0.0.0"
+        - name: LLM_BACKEND_URL
+          value: "http://host.containers.internal:5273"
+      volumeMounts:
+        - name: admin-data
+          mountPath: /home/b00t/.b00t/admin
+      resources:
+        limits:
+          memory: "512Mi"
+          cpu: "2"
+        requests:
+          memory: "128Mi"
+          cpu: "0.5"
+      livenessProbe:
+        httpGet:
+          path: /api/admin/pipeline
+          port: 31337
+        initialDelaySeconds: 5
+        periodSeconds: 30
+        timeoutSeconds: 5
+        failureThreshold: 3
+      readinessProbe:
+        httpGet:
+          path: /api/admin/pipeline
+          port: 31337
+        initialDelaySeconds: 2
+        periodSeconds: 10
+        timeoutSeconds: 2
+  volumes:
+    - name: admin-data
+      hostPath:
+        path: /home/brianh/.b00t/admin
+        type: DirectoryOrCreate

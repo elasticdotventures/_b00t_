@@ -1,0 +1,76 @@
+# b00t-admin Containerfile
+# Multi-stage build: Rust builder → minimal runtime
+#
+# Build:
+#   podman build -t b00t-admin:latest -f b00t-admin/Containerfile .
+#
+# Run:
+#   podman run -d --name b00t-admin \
+#     -p 31337:31337 \
+#     -e LLM_BACKEND_URL=http://host.containers.internal:5273 \
+#     -e ADMIN_PORT=31337 \
+#     b00t-admin:latest
+#
+# Quadlet (systemd):
+#   cp b00t-admin/quadlet/b00t-admin.container ~/.config/containers/systemd/
+#   systemctl --user daemon-reload
+#   systemctl --user start b00t-admin
+
+# ── Stage 1: Build ────────────────────────────────────────────────────────
+FROM docker.io/library/rust:1.85-slim-bookworm AS builder
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    pkg-config libssl-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /build
+
+# Cache dependencies
+COPY Cargo.toml Cargo.lock ./
+COPY b00t-c0re-lib/Cargo.toml b00t-c0re-lib/Cargo.toml
+COPY b00t-admin/Cargo.toml b00t-admin/Cargo.toml
+COPY b00t-cli/Cargo.toml b00t-cli/Cargo.toml
+COPY b00t-c0re-gov/Cargo.toml b00t-c0re-gov/Cargo.toml
+COPY b00t-mcp/Cargo.toml b00t-mcp/Cargo.toml
+COPY b00t-azure-cp/Cargo.toml b00t-azure-cp/Cargo.toml
+COPY b00t-zellij/Cargo.toml b00t-zellij/Cargo.toml
+
+# Dummy source to cache dependency build
+RUN mkdir -p b00t-c0re-lib/src b00t-admin/src b00t-cli/src b00t-c0re-gov/src b00t-mcp/src b00t-azure-cp/src b00t-zellij/src && \
+    echo 'fn main() {}' > b00t-admin/src/main.rs && \
+    echo 'pub fn dummy() {}' > b00t-c0re-lib/src/lib.rs && \
+    cargo build --release -p b00t-admin 2>/dev/null || true
+
+# Real source
+COPY b00t-c0re-lib/src b00t-c0re-lib/src
+COPY b00t-c0re-gov/src b00t-c0re-gov/src
+COPY b00t-admin/src b00t-admin/src
+
+RUN cargo build --release -p b00t-admin && \
+    strip target/release/b00t-admin
+
+# ── Stage 2: Runtime ──────────────────────────────────────────────────────
+FROM docker.io/library/debian:bookworm-slim
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create non-root user
+RUN useradd --create-home --shell /bin/bash b00t
+USER b00t
+WORKDIR /home/b00t
+
+COPY --from=builder /build/target/release/b00t-admin /usr/local/bin/b00t-admin
+
+# Health check — queries admin API
+HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \
+    CMD curl -f http://localhost:31337/api/admin/pipeline || exit 1
+
+EXPOSE 31337
+
+ENV ADMIN_PORT=31337
+ENV ADMIN_HOST=0.0.0.0
+ENV LLM_BACKEND_URL=http://localhost:5273
+
+ENTRYPOINT ["/usr/local/bin/b00t-admin"]

@@ -20,6 +20,8 @@ mod? irontology 'vendor/irontology-mcp/irontology.just'
 mod zellij '_b00t_/zellij.just'
 # 🛡️ Zellij mandatory interaction gate (governance: Allow/Deny/Hook)
 mod zellij-gate '_b00t_/zellij-gate.just'
+# 🌐 b00t-admin web server — dashboard, container, quadlet
+mod b00t-admin 'vendor/b00t-admin/b00t-admin.just'
 
 # Datum justfiles (install recipes for core tech stacks)
 mod python '_b00t_/python.🐍/justfile'
@@ -257,6 +259,7 @@ install:
     # [1] [2] [3]: install binaries (skip version bump - use `just bump` for that)
     cargo install --path b00t-mcp  --force
     cargo install --path b00t-cli  --force
+    cargo install --path b00t-admin --force
     cargo install cocogitto --locked --force
     just install-commit-hook
     echo "  ✅ binaries installed"

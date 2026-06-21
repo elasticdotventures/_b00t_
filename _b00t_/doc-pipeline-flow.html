@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>b00t Document Pipeline</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&display=swap');
+  
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  
+  body {
+    background: #020617;
+    color: #e2e8f0;
+    font-family: 'JetBrains Mono', monospace;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-height: 100vh;
+    padding: 40px 20px;
+  }
+  
+  .header {
+    text-align: center;
+    margin-bottom: 50px;
+  }
+  .header h1 {
+    font-size: 28px;
+    color: #38bdf8;
+    margin-bottom: 8px;
+  }
+  .header .subtitle {
+    font-size: 13px;
+    color: #64748b;
+  }
+  .pulse {
+    display: inline-block;
+    width: 8px; height: 8px;
+    background: #34d399;
+    border-radius: 50%;
+    animation: pulse 2s infinite;
+    margin-right: 8px;
+  }
+  @keyframes pulse {
+    0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(52,211,153,0.4); }
+    50% { opacity: 0.6; box-shadow: 0 0 0 8px rgba(52,211,153,0); }
+  }
+  
+  .pipeline {
+    display: flex;
+    align-items: center;
+    gap: 0;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+  
+  .stage {
+    background: #0f172a;
+    border: 1.5px solid;
+    border-radius: 12px;
+    padding: 24px 28px;
+    width: 220px;
+    text-align: center;
+    position: relative;
+    transition: transform 0.3s, box-shadow 0.3s;
+  }
+  .stage:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+  }
+  
+  .stage.fetch  { border-color: #22d3ee; }
+  .stage.chunk  { border-color: #34d399; }
+  .stage.evidence { border-color: #a78bfa; }
+  .stage.require { border-color: #fbbf24; }
+  
+  .stage-icon {
+    font-size: 32px;
+    margin-bottom: 12px;
+  }
+  .stage-title {
+    font-size: 13px;
+    font-weight: 700;
+    margin-bottom: 8px;
+  }
+  .fetch .stage-title  { color: #22d3ee; }
+  .chunk .stage-title  { color: #34d399; }
+  .evidence .stage-title { color: #a78bfa; }
+  .require .stage-title { color: #fbbf24; }
+  
+  .stage-desc {
+    font-size: 10px;
+    color: #94a3b8;
+    line-height: 1.5;
+  }
+  .stage-count {
+    font-size: 11px;
+    color: #475569;
+    margin-top: 10px;
+  }
+  
+  .arrow {
+    display: flex;
+    align-items: center;
+    margin: 0 -4px;
+    z-index: -1;
+  }
+  .arrow svg {
+    width: 60px;
+    height: 30px;
+  }
+  .arrow .line {
+    stroke: #334155;
+    stroke-width: 2;
+    stroke-dasharray: 6 3;
+    animation: dash 1s linear infinite;
+  }
+  .arrow .head {
+    fill: #334155;
+  }
+  @keyframes dash {
+    to { stroke-dashoffset: -18; }
+  }
+  
+  .result-card {
+    margin-top: 60px;
+    background: #0f172a;
+    border: 1px solid #1e293b;
+    border-radius: 12px;
+    padding: 32px 40px;
+    max-width: 700px;
+    width: 100%;
+  }
+  .result-card h2 {
+    font-size: 15px;
+    color: #38bdf8;
+    margin-bottom: 20px;
+  }
+  .trace {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 12px;
+    font-size: 11px;
+    color: #94a3b8;
+  }
+  .trace .dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+  .dot-source { background: #22d3ee; }
+  .dot-chunk  { background: #34d399; }
+  .dot-ev     { background: #a78bfa; }
+  .dot-req    { background: #fbbf24; }
+  
+  .req-box {
+    background: rgba(251,191,36,0.08);
+    border: 1px solid rgba(251,191,36,0.3);
+    border-radius: 8px;
+    padding: 16px;
+    margin-top: 16px;
+  }
+  .req-box .req-id {
+    font-size: 11px;
+    color: #fbbf24;
+    font-weight: 700;
+  }
+  .req-box .req-text {
+    font-size: 12px;
+    color: #e2e8f0;
+    margin: 8px 0;
+  }
+  .req-box .req-from {
+    font-size: 10px;
+    color: #64748b;
+  }
+  
+  .live-indicator {
+    margin-top: 24px;
+    font-size: 10px;
+    color: #475569;
+    text-align: center;
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1><span class="pulse"></span>b00t Document Pipeline</h1>
+  <div class="subtitle">arxiv:2404.17842 → Semantic Chunks → Evidence → SysMLv2 Requirements</div>
+</div>
+
+<div class="pipeline">
+  <!-- Stage 1: Fetch -->
+  <div class="stage fetch">
+    <div class="stage-icon">📄</div>
+    <div class="stage-title">1. FETCH</div>
+    <div class="stage-desc">
+      Arxiv API<br>
+      PDF → Markdown<br>
+      Content hash SHA-256
+    </div>
+    <div class="stage-count">1 document · 1,504 chars</div>
+  </div>
+  
+  <div class="arrow">
+    <svg viewBox="0 0 60 30">
+      <line class="line" x1="0" y1="15" x2="45" y2="15"/>
+      <polygon class="head" points="45,15 38,10 38,20"/>
+    </svg>
+  </div>
+  
+  <!-- Stage 2: Chunk -->
+  <div class="stage chunk">
+    <div class="stage-icon">🧩</div>
+    <div class="stage-title">2. CHUNK</div>
+    <div class="stage-desc">
+      Semantic splitting<br>
+      Vector embedding<br>
+      all-MiniLM-L6-v2
+    </div>
+    <div class="stage-count">3 chunks · 5d vectors</div>
+  </div>
+  
+  <div class="arrow">
+    <svg viewBox="0 0 60 30">
+      <line class="line" x1="0" y1="15" x2="45" y2="15"/>
+      <polygon class="head" points="45,15 38,10 38,20"/>
+    </svg>
+  </div>
+  
+  <!-- Stage 3: Evidence -->
+  <div class="stage evidence">
+    <div class="stage-icon">🔍</div>
+    <div class="stage-title">3. EXTRACT</div>
+    <div class="stage-desc">
+      LLM extraction<br>
+      Claims + Statistics<br>
+      Confidence scoring
+    </div>
+    <div class="stage-count">3 evidence items · 0.92 avg confidence</div>
+  </div>
+  
+  <div class="arrow">
+    <svg viewBox="0 0 60 30">
+      <line class="line" x1="0" y1="15" x2="45" y2="15"/>
+      <polygon class="head" points="45,15 38,10 38,20"/>
+    </svg>
+  </div>
+  
+  <!-- Stage 4: Requirements -->
+  <div class="stage require">
+    <div class="stage-icon">📋</div>
+    <div class="stage-title">4. DERIVE</div>
+    <div class="stage-desc">
+      SysMLv2 ReqIF<br>
+      Functional + NonFunc<br>
+      Proxy-pointer RAG
+    </div>
+    <div class="stage-count">2 requirements · P1+P2</div>
+  </div>
+</div>
+
+<!-- Result -->
+<div class="result-card">
+  <h2>Pipeline Output — arxiv:2404.17842</h2>
+  <div class="trace">
+    <span class="dot dot-source"></span> Source: "Using LLMs in Software Requirements Specifications" (2024)
+  </div>
+  <div class="trace">
+    <span class="dot dot-chunk"></span> Chunks: 3 semantic fragments, 5-dimension embeddings
+  </div>
+  <div class="trace">
+    <span class="dot dot-ev"></span> Evidence: ev:001–003 (claims, statistics, constraints)
+  </div>
+  <div class="trace">
+    <span class="dot dot-req"></span> Requirements: 2 derived, SysMLv2-stereotyped
+  </div>
+  
+  <div class="req-box">
+    <div class="req-id">REQ-SRS-001 · P1 · functionalRequirement</div>
+    <div class="req-text">
+      The system SHALL generate SRS documents that are accurate, coherent, 
+      and structured, matching the quality of an entry-level software engineer.
+    </div>
+    <div class="req-from">← derived from ev:001, ev:003 · proxy-pointer → source:12-18</div>
+  </div>
+  
+  <div class="req-box" style="margin-top: 12px;">
+    <div class="req-id">REQ-EVAL-002 · P2 · performanceRequirement</div>
+    <div class="req-text">
+      The system SHALL include an automated benchmark evaluation using at least 
+      8 distinct criteria for SRS quality assessment.
+    </div>
+    <div class="req-from">← derived from ev:002 · proxy-pointer → source:12-14</div>
+  </div>
+</div>
+
+<div class="live-indicator">
+  Pipeline v0.1.0 · 2,340ms · JSON output → /tmp/doc_pipeline_demo.json
+</div>
+
+</body>
+</html>

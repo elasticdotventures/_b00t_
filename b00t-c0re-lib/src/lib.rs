@@ -35,16 +35,17 @@ pub mod b00t_config;
 pub mod context;
 pub mod datum_ai_model;
 pub mod datum_lsp;
-pub mod datum_types;
+pub mod data_fabric;
+pub mod doc_pipeline;
 pub mod dual_grok;
 pub mod dual_install;
 pub mod events;
 pub mod codebase_memory;
+pub mod datum_types;
 pub mod gate_result;
 pub mod grok;
 pub mod interaction;
 pub mod irontology_bridge;
-pub mod data_fabric;
 pub mod knowledge;
 pub mod kv_store;
 pub mod learn;
@@ -54,6 +55,7 @@ pub mod man_page;
 pub mod mcp_proxy;
 pub mod mcp_registry;
 pub mod ooda;
+pub mod pipeline_nodes;
 pub mod query_bus;
 pub mod rag;
 pub mod reasoning;
@@ -74,6 +76,14 @@ pub use ai_client::{AiClientConfig, AiProviderConfig, B00tAiClient, ChatMessage}
 pub use b00t_config::{AiConfiguration, B00tUnifiedConfig, CloudServicesConfig, UserConfig};
 pub use context::B00tContext;
 pub use datum_types::{LearnMetadata, UsageExample, deserialize_usage};
+pub use doc_pipeline::{
+    ChunkMetadata, Connective, DocumentFormat, Evidence, EvidenceType,
+    FOLFormula, FOLStereotype, FullPipelineResult, PipelineStage, Predicate, ProvenancePointer,
+    Quantifier, ReqIFMetadata, Requirement, RequirementStatus, RequirementType,
+    SemanticChunk, SerializableFOLFormula, StageResult, SysMLv2Stereotype,
+    // UFO traits — concept-as-code
+    Category, Endurant, Perdurant, Quality, Relator, RelatorType, Role,
+};
 pub use dual_grok::{
     ControlCodeEvent, ControlEventCapability, ControlEventReceipt, ControlEventSink, ControlReply,
     DualGrokClient, DualIngestResult, DualQueryItem, DualQueryResult, GrokBackend,
