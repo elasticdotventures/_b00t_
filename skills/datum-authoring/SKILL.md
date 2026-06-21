@@ -1,0 +1,38 @@
+---
+name: datum-authoring
+type: skill
+hint: Canonical datum schema reference — required fields, tail-map format, forbidden fields
+version: 1.0.0
+tags: [datum, authoring, schema, blessing, prerequisite]
+tier: ch0nky
+complexity: 6
+description: |-
+  Canonical datum authoring conventions: [b00t] required fields, [b00t.skill] tags, tail-map footer.
+---
+
+## What
+
+The datum-authoring skill defines the canonical conventions for authoring b00t datums. Required `[b00t]` fields are: `name` (unique kebab-case identifier), `type` (one of the datum types), and `hint` (≤120 chars). Skill datums use `[b00t.skill]` with `tags` (not `type_tags` — that field is deprecated). Every datum must include the `# b00t:map v1` tail section with summary, tags, tier, cmds, and complexity. Forbidden patterns include `[b00t.version]` — use `[b00t.schema]` instead.
+
+This skill depends on `datum-schema` and `tomllm-format`, and unlocks `_b00t_-write` capability. It applies to all `_b00t_/*.toml` and `_b00t_/*.datum.toml` files.
+
+## When to Use
+
+Load this skill before authoring or editing any b00t datum file. It is a prerequisite for writing datums that will be consumed by the b00t ecosystem.
+
+## How
+
+1. Ensure prerequisites: learn `datum-schema` and `tomllm-format` first.
+2. Create a file at `_b00t_/<name>.toml` (or `.tomllm`/`.tomllmd`).
+3. Add `[b00t]` with name, type, and hint.
+4. If a skill, add `[b00t.skill]` with tags, depends_on, unlocks as needed.
+5. Append `# b00t:map v1` tail-map as the footer.
+6. Verify no forbidden fields: no `[b00t.version]`, no `type_tags`.
+
+<!-- b00t:map v1
+summary: Canonical datum schema — required fields, tail-map format, field naming conventions
+tags: datum, authoring, schema, blessing, prerequisite
+tier: ch0nky
+cmds: b00t learn datum-authoring, b00t blessing --manifest --role=worker
+complexity: 6
+-->
