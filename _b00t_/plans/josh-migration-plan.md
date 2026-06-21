@@ -19,7 +19,7 @@
 │       /:vendor/rust-docs     /:vendor/ledgrrr    │
 └─────────────────────────────────────────────────┘
               ↓ josh-proxy (port 4242)
-  github.com/PromptExecution/rust-docs-mcp-server  ← served as independent
+  github.com/PromptExecution/rust-docs-mcp-b00t  ← served as independent
   github.com/PromptExecution/ledgrrr               ← served as independent
 ```
 
@@ -61,7 +61,7 @@ git commit -m "de-submodule: prep for Josh migration"
 
 # Import vendor code with history via josh
 josh filter --import vendor/rust-docs-mcp-server \
-  --from https://github.com/PromptExecution/rust-docs-mcp-server
+  --from https://github.com/PromptExecution/rust-docs-mcp-b00t
 
 # Register workspace
 josh workspace add --name rust-docs --path vendor/rust-docs-mcp-server
@@ -80,7 +80,7 @@ jobs:
         with:
           direction: pull
           subproject: vendor/rust-docs-mcp-server
-          upstream: PromptExecution/rust-docs-mcp-server
+          upstream: PromptExecution/rust-docs-mcp-b00t
 ```
 
 ### Step 5: Repeat for remaining 59 repos
