@@ -97,4 +97,4 @@
 	url = https://github.com/bats-core/bats-assert.git
 [submodule "vendor/rust-docs-mcp-server"]
 	path = vendor/rust-docs-mcp-server
-	url = https://github.com/PromptExecution/rust-docs-mcp-server.git
+	url = https://github.com/PromptExecution/rust-docs-mcp-b00t.git
