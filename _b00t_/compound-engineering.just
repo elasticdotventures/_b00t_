@@ -13,7 +13,8 @@ set unstable
 status:
     #!/bin/bash
     set -euo pipefail
-    STATE_FILE=".b00t/compound-engineering-state.json"
+    B00T_ROOT="$(git rev-parse --show-toplevel)"
+    STATE_FILE="${B00T_ROOT}/.b00t/compound-engineering-state.json"
     echo "🥾 Compound Engineering — Project Status"
     echo "──────────────────────────────────────────"
     if [ -f "$STATE_FILE" ]; then
@@ -134,7 +135,8 @@ ce-phase-pulse window="7d":
 ce-advance:
     #!/bin/bash
     set -euo pipefail
-    STATE_FILE=".b00t/compound-engineering-state.json"
+    B00T_ROOT="$(git rev-parse --show-toplevel)"
+    STATE_FILE="${B00T_ROOT}/.b00t/compound-engineering-state.json"
     PHASES=("strategy" "ideate" "brainstorm" "plan" "work" "review" "compound" "pulse")
 
     # Read current phase
