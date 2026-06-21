@@ -279,6 +279,8 @@ The system will:
             help = "Comma-separated skills to load, or 'auto' to interview from task context"
         )]
         skills: Vec<String>,
+        #[clap(long, help = "Show layered system dashboard (z-stack hardware→agents)")]
+        dashboard: bool,
     },
     #[clap(
         name = "k0mmand3r",
@@ -435,6 +437,11 @@ The system will:
     Version {
         #[clap(subcommand)]
         version_command: VersionCommands,
+    },
+    #[clap(about = "Discover capabilities across the hive (agents, MCP, CLI, datums)")]
+    Capabilities {
+        #[clap(long, help = "Filter by name/type substring (case-insensitive)")]
+        filter: Option<String>,
     },
     #[clap(about = "Query live capability ontology from datum TOMLs")]
     Ontology {
@@ -1855,8 +1862,10 @@ async fn main() {
                 std::process::exit(1);
             }
         }
-        Some(Commands::Whoami { role, with_skills, json, skills }) => {
-            if *json {
+        Some(Commands::Whoami { role, with_skills, json, skills, dashboard }) => {
+            if *dashboard {
+                whoami::print_dashboard();
+            } else if *json {
                 use b00t_c0re_lib::B00tContext;
                 match B00tContext::current() {
                     Ok(ctx) => {
@@ -2161,6 +2170,12 @@ async fn main() {
         }
         Some(Commands::Up(args)) => {
             if let Err(e) = args.execute() {
+                eprintln!("Error: {}", e);
+                std::process::exit(1);
+            }
+        }
+        Some(Commands::Capabilities { filter }) => {
+            if let Err(e) = whoami::discover_capabilities(filter.as_deref()) {
                 eprintln!("Error: {}", e);
                 std::process::exit(1);
             }
