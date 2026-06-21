@@ -1,9 +1,9 @@
-# PRD-ARCH-012: Unsloth QLoRA fine-tuning + k0mmand3r LSP intellisense
+# PRD-ARCH-012: Unsloth QLoRA fine-tuning + k0mmand3r LSP intellisense + monty WASM runtime
 
 [b00t.schema]
 version   = "1"
 type      = "prd"
-type_tags = ["prd", "unsloth", "qlora", "fine-tuning", "lsp", "k0mmand3r", "intellisense", "frontier"]
+type_tags = ["prd", "unsloth", "qlora", "fine-tuning", "lsp", "k0mmand3r", "intellisense", "monty", "wasm", "python314", "frontier"]
 
 [prd]
 id     = "PRD-ARCH-012-UNSLOTH-QLORA"
@@ -21,6 +21,29 @@ closes_task = 41
 #    and hover support for k0mmand3r syntax (\!execute idiom) in VS Code.
 
 # ─── Part A: Unsloth QLoRA fine-tuning ───────────────────────────────────────
+# ─── Python 3.14 + monty runtime ──────────────────────────────────────────────
+[python_314]
+# All Python tooling targets Python 3.14 (GIL-free, free-threaded)
+# Enables monty for safe WASM-compiled MObject execution
+target = "3.14"
+gil = "disabled"  # free-threaded mode
+monty_version = ">=0.0.18"  # pydantic/monty — safe Python interpreter in Rust
+monty_role = "WASM MObject runtime for manim-style animations in browser"
+
+[monty_integration]
+# monty replaces subprocess-based Python execution for:
+# 1. Running manim-generated Scene stubs in WASM sandbox
+# 2. Executing AI-generated Python code safely (OODA loop code-gen)
+# 3. WASM-compiled MObject rendering in Tauri WebView
+pip_cmd = "uv pip install pydantic-monty"
+rust_dep = "monty = { git = \"https://github.com/pydantic/monty\" }"
+snapshot_path = "fine-tune/monty-snapshots/"
+wasm_target = "wasm32-unknown-unknown"
+examples = [
+  "monty_run = MontyRun::new(code, \"agent.py\", vec![\"x\"]).unwrap()",
+  "let result = monty_run.run(vec![MontyObject::Int(42)], ...)",
+]
+
 [qlora_pipeline]
 base_model    = "Qwen/Qwen3-27B-Instruct"
 adapter_name  = "b00t-aligned-qwen3-27b"

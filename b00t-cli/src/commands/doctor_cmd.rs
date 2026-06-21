@@ -65,13 +65,26 @@ fn all_deps() -> Vec<Value> {
         // Network
         json!({"id": "dns", "check": "host github.com 2>/dev/null | head -1 | grep -q 'has address' && echo ok || echo fail"}),
         json!({"id": "gh-api", "check": "curl -sf --max-time 5 -o /dev/null -w '%{http_code}' https://api.github.com/zen 2>/dev/null"}),
+        // Skill datum integrity: no loose .skill.* files in _b00t_/
+        json!({"id": "skill-symlinks", "check": "cd $HOME/.dotfiles 2>/dev/null && find _b00t_/ -name '*.skill.*' ! -type l 2>/dev/null | wc -l | tr -d ' ' || echo 0"}),
     ].into_iter().map(|mut v| {
         let check = v.get("check").and_then(|c| c.as_str()).unwrap_or("");
         if !check.is_empty() {
             let start = Instant::now();
             let (ok, detail) = sh(check);
-            v["pass"] = json!(ok);
-            v["detail"] = json!(detail);
+            // For skill-symlinks, pass is only when count is 0
+            if v["id"] == "skill-symlinks" {
+                let count: usize = detail.trim().parse().unwrap_or(1);
+                v["pass"] = json!(count == 0);
+                v["detail"] = if count == 0 {
+                    json!("all .skill.* files are symlinks")
+                } else {
+                    json!(format!("{} loose .skill.* files in _b00t_/ (must be symlinks to skills/*/SKILL.md)", count))
+                };
+            } else {
+                v["pass"] = json!(ok);
+                v["detail"] = json!(detail);
+            }
             v["latency_ms"] = json!(start.elapsed().as_millis());
         }
         v

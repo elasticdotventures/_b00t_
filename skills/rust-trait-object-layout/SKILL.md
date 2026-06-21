@@ -1,0 +1,39 @@
+---
+name: rust-trait-object-layout
+type: skill
+hint: Rust trait object layout, DST coercions, vtable fat-pointer internals, and the generic field unsized coercion surprise
+version: 1.0.0
+tags: [rust, advanced, trait-object, dst, vtable, coercion, transferable]
+tier: ch0nky
+complexity: 7
+description: |-
+  Rust trait object layout — DST fat pointers, vtable placement, generic last-field coercion surprise.
+---
+
+## What
+
+Rust trait object layout differs critically from C++. In Rust, `dyn Trait` is a dynamically sized type whose layout is the underlying value. `&dyn Trait` is a fat pointer: `(ptr_to_value, ptr_to_vtable)`. `Box<dyn Trait>` is an owned fat pointer with vtable via `CoerceUnsized` magic. The vtable is never embedded in the struct (unlike C++ where every object pays the cost) — it lives in the fat reference or Box.
+
+The surprising coercion: generic last-field unsized coercion. If a struct has a generic as its LAST field, you can coerce `&Struct<ConcreteType>` to `&Struct<dyn Trait>`. Example: `struct Adapter<R: ?Sized> { buf: Vec<u8>, inner: R }` — `let r: &Adapter<dyn Read> = &a;` is legal because `inner` is the last field. This only works with a single generic — you cannot coerce two trait params. And `Box`/`Rc` do not support inline generic coercion through references: `let r: &Box<dyn Read> = &b;` is illegal, while `let r: Box<dyn Read> = b;` (ownership transfer) is legal.
+
+Why this matters in b00t: `DatumStore` trait uses `Box<dyn DatumStore>` extensively. When wrapping adapters (e.g., `CachingStore<HashMapStore>`), the last-field coercion means `&CachingStore<dyn DatumStore>` is legal — useful for zero-cost adapter stacks. The Chalk Interner pattern relies on this layout guarantee.
+
+## When to Use
+
+Load this skill when working with Rust trait objects, DST coercions, vtable internals, or the `DatumStore` adapter stack in b00t. It is a prerequisite for `datum-macro`.
+
+## How
+
+1. Understand the fat pointer layout: `(data_ptr, vtable_ptr)` for `&dyn Trait` and `Box<dyn Trait>`.
+2. Remember: vtable is NEVER in the struct in Rust — unlike C++.
+3. For generic last-field coercion: ensure the generic parameter is the last field of the struct.
+4. Use `&Struct<dyn Trait>` for zero-cost adapter stacks; use `Box<dyn Trait>` for owned trait objects.
+5. Be aware: `&Box<dyn Trait>` is not legal — use `Box<dyn Trait>` directly for ownership transfer.
+
+<!-- b00t:map v1
+summary: Rust trait object layout — DST fat pointers, vtable placement, generic last-field coercion
+tags: rust, trait-object, dst, vtable, coercion, advanced, transferable
+tier: ch0nky
+cmds: b00t learn rust-trait-object-layout
+complexity: 7
+-->

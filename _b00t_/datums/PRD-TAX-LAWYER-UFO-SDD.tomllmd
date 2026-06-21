@@ -1,0 +1,812 @@
+# PRD-SDD: Tax-Lawyer Platform — UFO-grounded multi-jurisdiction tax ontology + satisfies constraint system
+#
+# This document is both a Project Requirements Document and a
+# Specification Design Document. It defines the what (PRD) and
+# the how (SDD) for building an ontologically-grounded tax-lawyer
+# agent platform on the b00t/l3dg3rr ecosystem.
+#
+# The architecture combines:
+#   MCP-down: 10 published ledgerr_* MCP tools, extended with new
+#             tax-specific actions; each action is a thin JSON-RPC
+#             wrapper over a Satisfies<Constraint> check.
+#   UFO-up:   Unified Foundational Ontology stereotypes grounding
+#             every domain concept (Endurant/Perdurant/Moment) with
+#             ISO standard types as the data language and satisfies
+#             as the evaluation pattern.
+#
+# Issues: #510 (EPIC), #511–#517 (implementation)
+# Related: #341 (kreuzberg), #398 (latent space paper parsing),
+#          #504–#508 (ATO legislation pipeline)
+
+[b00t.schema]
+version   = "1"
+type      = "prd"
+type_tags = ["prd", "sdd", "tax", "ufo", "iso", "ontology", "satisfies",
+             "au-rd", "us-rdc", "crypto", "ledgrrr", "mcp", "frontier",
+             "tax-lawyer", "multi-jurisdiction"]
+
+[prd]
+id     = "PRD-TAX-LAWYER-UFO-SDD"
+title  = "Tax-Lawyer Platform — UFO-grounded multi-jurisdiction R&D/crypto ontology + satisfies constraint system"
+status = "proposed"
+tier   = "frontier"
+closes_task = 0
+epic_issue  = 510
+related     = [341, 398, 504, 505, 506, 507, 508]
+
+# ─── Executive Summary ────────────────────────────────────────────────────────
+# The codebase has:
+#  - ledgrrr (10 published MCP tools, arc-kit-au evidence graph, legal solver)
+#  - b00t skills (31 SKILL.md files, .skill.toml symlinks, SkillResolver)
+#  - UFO/BFO ontology PRDs (not yet implemented in Rust)
+#  - ISO 8601/4217 usage (light, ad-hoc)
+#  - Crypto classification Rhai rules (US only, no AU)
+#  - No R&D tax credit logic at all (AU or US)
+#
+# What is missing:
+#  (a) UFO stereotypes grounded in Rust types (no ufo-types crate exists)
+#  (b) ISO standard types as the data language (LEI, ISO 20022, IFRS 9)
+#  (c) Satisfies<Constraint> trait as the evaluation pattern
+#  (d) AU R&D Tax Incentive (ITAA 1997 Div 355) domain logic
+#  (e) US R&D Tax Credit (IRC Sec 41) domain logic
+#  (f) Cross-jurisdiction crypto cost basis (IRS Rev. Proc. 2024-28 + ATO QC 53725)
+#  (g) MCP actions that are thin wrappers over (a)-(f) rather than ad-hoc enums
+#  (h) SKILL.md content teaching agents the ontology + constraint pattern
+#
+# This PRD-SDD closes all seven gaps in seven issues (#510–#515)
+# under one epic (#509).
+
+# ─── Architecture Diagram (conceptual) ──────────────────────────────────────
+# ┌─────────────────────────────────────────────────────┐
+# │                  SKILL.md content                    │
+# │  Agents learn UFO stereotypes, ISO types, satisfies │
+# │  → "I know this is an AuRdActivity (Endurant::SubKind)" │
+# └─────────────────────┬───────────────────────────────┘
+#                       │ agent calls
+#                       ▼
+# ┌─────────────────────────────────────────────────────┐
+# │            MCP action layer (ledgerr_tax)            │
+# │  Thin JSON-RPC wrappers over Satisfies<Constraint>   │
+# │  Each action = 5-10 lines, deserialize → call → respond │
+# └─────────────────────┬───────────────────────────────┘
+#                       │ dispatches to
+#                       ▼
+# ┌─────────────────────────────────────────────────────┐
+# │            Domain ontology (ledger-core)              │
+# │  AuRdActivity, QreExpenditure, CryptoTx              │
+# │  Each implements Satisfies<Constraint>                │
+# │  Grounded via UFO stereotype markers                  │
+# └──────┬──────────────────────────────┬────────────────┘
+#        │ uses                          │ produces
+#        ▼                               ▼
+# ┌──────────────┐           ┌──────────────────────────┐
+# │  ufo-types   │           │  arc-kit-au evidence     │
+# │  UFO cats    │           │  Blake3-hashed nodes     │
+# │  ISO types   │           │  provenance chains       │
+# │  Satisfies   │           │  → ATO/IRS audit-ready   │
+# └──────────────┘           └──────────────────────────┘
+
+# ─── Issue Map ──────────────────────────────────────────────────────────────
+#  #510  EPIC: Tax-Lawyer Platform                          (this PRD)
+#    │
+#    ├── #511  ufo-types crate: stereotypes + Satisfies + ISO  [FOUNDATION]
+#    │   └── Blocks #512, #513, #514, #515, #516, #517
+#    │
+#    ├── #512  AU R&D Tax Incentive ontology + satisfies       [AU]
+#    │   └── Depends on #511; blocks #516
+#    │
+#    ├── #513/514  US R&D Tax Credit ontology + satisfies      [US]
+#    │   └── Depends on #511; blocks #516
+#    │
+#    ├── #514/515  Crypto cost basis ontology + satisfies      [BOTH]
+#    │   └── Depends on #511; blocks #516
+#    │
+#    ├── #515/516  MCP action layer: thin wrappers            [INTEGRATION]
+#    │   └── Depends on #512, #513, #514
+#    │
+#    └── #516/517  Skill content: SKILL.md tax-lawyer/* files [CONTENT]
+#        └── Independent — can start before #511
+#                                       (ships the knowledge, tools ship later)
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# ISSUE #510: ufo-types crate — UFO stereotypes, Satisfies trait, ISO types
+# ═══════════════════════════════════════════════════════════════════════════════
+[issue.510]
+title = "ufo-types crate: UFO stereotypes, Satisfies trait, ISO standard types"
+status = "ready"
+tier  = "frontier"
+depends_on = []
+blocks     = [511, 512, 513, 514, 515]
+labels = ["ufo", "ontology", "iso", "satisfies", "foundation", "rust"]
+
+[issue.510.story]
+narrow = '''
+As a tax-lawyer agent, I need a formal ontological foundation so that every
+domain concept (R&D Activity, Tax Credit, Crypto Transaction) is grounded in
+a UFO stereotype with ISO-standard identifiers and a uniform satisfies
+constraint pattern. This crate is the bottom of the stack — everything else
+depends on it.
+'''
+
+[issue.510.definitions_of_done]
+# ── 510.1: UFO category types ──
+ufo_categories = '''
+Create ufo-types/src/lib.rs with:
+
+pub enum UfoCategory { Endurant{stereotype}, Perdurant{stereotype}, Moment{stereotype}, Abstract }
+pub enum EndurantStereotype { Kind, SubKind, Role, Phase, Category, Mixin, RoleMixin }
+pub enum PerdurantStereotype { Process, State, Event, Scenario }
+pub enum MomentStereotype { Mode, Relator }
+
+Each variant MUST have:
+- doc comment with UFO citation (Guizzardi 2005)
+- Serialize/Deserialize/JsonSchema derives
+- Display impl for ontology logging
+
+Test: cargo test -p ufo-types -- ufo_categories
+DoD: All 12 enum variants exist, all derive macros pass, all doc comments cite sources.
+'''
+
+# ── 510.2: Satisfies trait ──
+satisfies_trait = '''
+Create ufo-types/src/satisfies.rs with:
+
+pub trait Satisfies<C: Constraint + ?Sized> {
+    fn satisfies(&self, constraint: &C) -> SatisfiesResult;
+}
+
+pub struct SatisfiesResult {
+    pub disposition: Disposition,       // Satisfied | Violated{reason} | Unknown
+    pub confidence: f64,                // [0.0, 1.0]
+    pub evidence_nodes: Vec<NodeId>,    // arc-kit-au Blake3 node IDs
+    pub ufo_category: MomentStereotype, // always Mode (intrinsic attribute)
+}
+
+pub enum Disposition { Satisfied, Violated{reason: String}, Unknown }
+
+Example — a company checking R&D eligibility:
+  let company = Company { lei: "5493001K..." };
+  let result = company.satisfies(&AuRdEligibility::new(year));
+  assert!(matches!(result.disposition, Disposition::Satisfied));
+
+Test: cargo test -p ufo-types -- satisfies
+DoD: Satisfies trait compiles, SatisfiesResult roundtrips through JSON,
+     Disposition has all three variants with Display impl.
+'''
+
+# ── 510.3: ISO standard types ──
+iso_types = '''
+Create ufo-types/src/iso.rs with:
+
+pub struct Lei(String);              // ISO 17442 — 20-char, Luhn check digit
+pub struct Isin(String);             // ISO 6166 — 12-char
+pub enum Currency { Aud, Usd, Eur, Gbp, Sgd, Nzd, Btc, Eth, ... }
+pub struct BankAccount {
+    pub iban: Option<String>,        // ISO 13616
+    pub bic: Option<String>,         // ISO 9362
+    pub lei: Option<Lei>,
+}
+pub enum FinancialInstrument { Fvpl, Fvoci, AmortizedCost }  // IFRS 9
+
+Each ISO type MUST:
+- Validate on construction (Lei: check digit, Currency: from_str("AUD") etc.)
+- Serialize/Deserialize/JsonSchema
+- Have Display for logging
+
+Example:
+  let lei = Lei::new("5493001KJTIIG5Y0YH28").unwrap();
+  assert_eq!(lei.as_str(), "5493001KJTIIG5Y0YH28");
+
+Test: cargo test -p ufo-types -- iso
+DoD: Lei validates check digit, Currency roundtrips through JSON,
+     BankAccount serializes with optional fields.
+'''
+
+# ── 510.4: Integration with ledger-core ──
+integration = '''
+Wire ufo-types into ledger-core/src/lib.rs:
+  pub extern crate ufo_types;
+  // Re-export key types for convenience
+  pub use ufo_types::{Satisfies, SatisfiesResult, Disposition, Lei, Currency};
+
+Verify no dependency conflicts:
+  cargo check -p ledger-core 2>&1 | grep -q "error" && exit 1 || exit 0
+
+DoD: ledger-core depends on ufo-types, re-exports Satisfies trait,
+     cargo check passes.
+'''
+
+# ── 510.5: Evidence graph integration ──
+evidence_integration = '''
+Arc-kit-au SHOULD be updated with note that NodeId prefixes will be used
+by SatisfiesResult.evidence_nodes. No code change required in #510 itself
+(the evidence integration happens in #511-#513).
+
+DoD: README or doc comment in arc-kit-au/src/lib.rs mentions
+     "SatisfiesResult.evidence_nodes" as known consumer.
+'''
+
+[issue.510.files_to_create]
+ufo_lib  = "crates/ufo-types/src/lib.rs"
+satisfies = "crates/ufo-types/src/satisfies.rs"
+iso      = "crates/ufo-types/src/iso.rs"
+cargo    = "crates/ufo-types/Cargo.toml"
+
+[issue.510.docs_to_update_on_ship]
+- "vendor/l3dg3rr/AGENTS.md: add section on ufo-types module"
+- "vendor/l3dg3rr/docs/architecture.md: add ufo-types layer to architecture diagram"
+- "vendor/l3dg3rr/book/src/theory.md: add UFO grounding section"
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# ISSUE #511: AU R&D Tax Incentive — domain ontology + satisfies impls
+# ═══════════════════════════════════════════════════════════════════════════════
+[issue.511]
+title = "AU R&D Tax Incentive: AuRdActivity, AuRdExpenditure, AuRdOffset + satisfies<AuRdEligibility>"
+status = "blocked"
+depends_on = [510]
+blocks     = [514]
+labels = ["au", "tax", "rd-incentive", "itaa1997", "domain-ontology", "rust"]
+
+[issue.511.story]
+narrow = '''
+As a tax-lawyer agent preparing an AU R&D Tax Incentive claim for
+PromptExecution, I need to:
+  (1) register an R&D activity under ITAA 1997 s.355-100
+  (2) classify expenses under s.355-305
+  (3) calculate the offset (43.5% or 38.5%)
+  (4) build an evidence chain for ATO audit defense
+
+Each step MUST produce Blake3-hashed evidence nodes so the claim
+is audit-ready from day one.
+'''
+
+[issue.511.example]
+prompt = "Classify $120,000 of OpenAI API costs as eligible R&D expenditure under s.355-305"
+output = '''
+SatisfiesResult {
+    disposition: Satisfied,
+    confidence: 0.94,
+    evidence_nodes: [
+        NodeId("tx:abc123"),       // Xero transaction
+        NodeId("cls:def456"),      // Classification → s.355-305 "contractor"
+        NodeId("st:ghi789"),       // Stage result passes all gates
+    ],
+    ufo_category: Mode,
+    // Explanation: OpenAI API calls were part of systematic A/B experiments
+    // on agent architectures (ooda_loop experiments tracked in FOCUS).
+    // Each API call had an experiment_id, variant, and scored outcome.
+    // This satisfies s.355-305(1)(a): "expenditure on research and development
+    // activities that are core R&D activities."
+}
+'''
+
+[issue.511.definitions_of_done]
+# ── 511.1: AuRdActivity struct + Satisfies<AuRdEligibility> ──
+activity = '''
+Create ledger-core/src/au_rd.rs with:
+
+pub struct AuRdActivity {
+    pub lei: Lei,                              // ISO 17442
+    pub activity_id: String,                    // Blake3 content hash
+    pub activity_name: String,
+    pub activity_type: AuRdActivityType,        // Core | Supporting (s.355-100)
+    pub anzsic_code: Option<String>,
+    pub period_start: NaiveDate, period_end: NaiveDate,
+}
+
+impl Satisfies<AuRdEligibility> for AuRdActivity {
+    // Tests s.355-100(2): "systematic, experimental, hypothesis-driven"
+    // Tests s.355-100(4): "resolve technical uncertainty"
+    fn satisfies(&self, constraint: &AuRdEligibility) -> SatisfiesResult { ... }
+}
+
+Test: cargo test -p ledger-core -- au_rd_activity
+DoD: AuRdActivity satisfies AuRdEligibility returns Satisfied when
+     all three tests pass, Violated with reason when any fails.
+'''
+
+# ── 511.2: AuRdExpenditure struct + Satisfies<AuRdEligibility> ──
+expenditure = '''
+pub struct AuRdExpenditure {
+    pub lei: Lei, pub tx_id: String,
+    pub category: AuRdCategory,  // Contractor | Salary | Feedstock | DeclineInValue | Other
+    pub amount: Decimal, pub currency: Currency,
+    pub date: NaiveDate, pub is_eligible: bool,
+}
+
+impl Satisfies<AuRdEligibility> for AuRdExpenditure {
+    // s.355-305(1)(a)-(e): each category has specific eligibility rules
+}
+AuRdCategory serializes from the same categories used by ledgerr_review tool
+(s.355-305 contractor = ledgerr_tax "Software", etc).
+
+Test: cargo test -p ledger-core -- au_rd_expenditure
+DoD: Each AuRdCategory variant maps to s.355-305 subsection, serializes
+     compatibly with existing ledgerr_tax classification.
+'''
+
+# ── 511.3: AuRdOffset struct + Satisfies<AuRdCompliance> ──
+offset = '''
+pub struct AuRdOffset {
+    pub total_eligible: Decimal,
+    pub offset_rate: f64,           // 0.435 or 0.385
+    pub estimated_offset: Decimal,
+    pub effective_benefit: f64,
+}
+impl Satisfies<AuRdCompliance> for AuRdOffset {
+    // Self-assessment compliance: evidence complete, activity registered, etc.
+}
+
+Test: cargo test -p ledger-core -- au_rd_offset
+DoD: Offset calculates correctly for both refundable (<$20M turnover)
+     and non-refundable (≥$20M) tiers.
+'''
+
+# ── 511.4: Evidence chain builder (arc-kit-au integration) ──
+evidence = '''
+Extend arc-kit-au:
+  NodeType::RndActivity      // prefix "ra:"
+  NodeType::TaxOffset         // prefix "to:"
+  EdgeType::SatisfiesConstraint  // connects entity → SatisfiesResult
+  EdgeType::RegisteredUnder      // connects expenditure → activity
+
+Build evidence chain: Xero tx → AuRdExpenditure → AuRdActivity → AuRdOffset
+Uses existing EvidenceBuilder::add_* fluent API.
+
+Test: cargo test -p arc-kit-au -- au_rd
+DoD: Evidence chain with all 4 new node/edge types roundtrips through JSON.
+'''
+
+[issue.511.files_to_create]
+au_rd        = "crates/ledger-core/src/au_rd.rs"
+evidence_ext = "crates/arc-kit-au/src/node.rs"  // extended
+
+[issue.511.docs_to_update_on_ship]
+- "vendor/l3dg3rr/docs/mcp-capability-contract.md: add au_rd_* actions"
+- "vendor/l3dg3rr/AGENTS.md: add AU R&D section"
+- "vendor/l3dg3rr/rules/ONTOLOGY.md: add classify_au_rd_eligible.rhai"
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# ISSUE #512: US R&D Tax Credit — domain ontology + satisfies impls
+# ═══════════════════════════════════════════════════════════════════════════════
+[issue.512]
+title = "US R&D Tax Credit: QreActivity, QreExpenditure + satisfies<UsRdcFourPartTest> under IRC Sec 41"
+status = "blocked"
+depends_on = [510]
+blocks     = [514]
+labels = ["us", "tax", "rd-credit", "irc-41", "domain-ontology", "rust"]
+
+[issue.512.story]
+narrow = '''
+As a tax-lawyer agent filing a US R&D Tax Credit for a US subsidiary of
+an Australian parent, I need to:
+  (1) apply the IRC Sec 41(d) 4-part test to determine QRE eligibility
+  (2) classify expenditures as QREs under Sec 41(b)
+  (3) calculate the credit using traditional (12-20%) or ASC (14-27%) method
+  (4) produce evidence for Form 6765
+'''
+
+[issue.512.definitions_of_done]
+four_part_test = '''
+Create ledger-core/src/us_rdc.rs with:
+
+pub struct QreActivity {
+    pub lei: Lei,
+    pub activity_id: String,
+    // 4-part test per IRC Sec 41(d)(1):
+    pub permits_experimentation: bool,   // (A)
+    pub technical_in_nature: bool,        // (B)
+    pub technological_uncertainty: bool,  // (C)
+    pub systematic_process: bool,         // (D)
+}
+
+impl Satisfies<UsRdcFourPartTest> for QreActivity {
+    // All 4 parts must be satisfied → Satisfied
+    // Any part false → Violated with reason citing the subsection
+}
+Test: cargo test -p ledger-core -- us_rdc_four_part
+DoD: All 4-part test combinations tested, Violated reason includes
+     specific IRC Sec 41(d) subsection reference.
+'''
+
+calculation = '''
+pub enum UsRdcMethod { Traditional, Asc }
+
+pub fn calculate_credit(qres: &[QreExpenditure], method: UsRdcMethod, base: Option<Decimal>) -> Decimal
+// Traditional: 20% of QREs over base amount (Sec 41(a)(1))
+// ASC: 14% of QREs over 50% of 3-year average (Sec 41(c)(5))
+
+Test: cargo test -p ledger-core -- us_rdc_calculate
+DoD: Both methods produce correct values for known test cases.
+'''
+
+[issue.512.files_to_create]
+us_rdc = "crates/ledger-core/src/us_rdc.rs"
+
+[issue.512.docs_to_update_on_ship]
+- "vendor/l3dg3rr/book/src/tax.md: add US R&D Tax Credit chapter"
+- "vendor/l3dg3rr/docs/mcp-capability-contract.md: add us_rdc_* actions"
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# ISSUE #513: Crypto cost basis — cross-jurisdiction ontology + satisfies
+# ═══════════════════════════════════════════════════════════════════════════════
+[issue.513]
+title = "Crypto cost basis: CryptoTx + satisfies<CryptoCostBasisRules> (FIFO/HIFO/LIFO/SpecID) with AU and US jurisdiction dispatch"
+status = "blocked"
+depends_on = [510]
+blocks     = [514]
+labels = ["crypto", "cost-basis", "irs", "ato", "multi-jurisdiction", "domain-ontology", "rust"]
+
+[issue.513.story]
+narrow = '''
+As a tax-lawyer agent handling crypto transactions for a multi-national company,
+I need to calculate cost basis under both US rules (Rev. Proc. 2024-28) and
+AU rules (ATO QC 53725) from the same underlying transaction data. The wallet
+must support FIFO, HIFO, LIFO, and SpecID methods per Rev. Proc. 2024-28.
+'''
+
+[issue.513.example]
+prompt = '''
+Calculate cost basis for 1.5 BTC sold on 2026-03-15 from wallet
+0xabc...def using HIFO method. Jurisdiction: AU (CGT regime).
+'''
+output = '''
+CryptoTx {
+    tx_hash: "abc...def",
+    wallet: CryptoWallet { lei: "5493001K...", chain: Bitcoin },
+    tx_type: Sell,
+    gross_proceeds: Decimal("180000.00"),   // $180,000 AUD
+    cost_basis: Decimal("120000.00"),       // HIFO from wallet pool
+    gain_loss: Decimal("60000.00"),          // Capital gain
+    date: 2026-03-15,
+    evidence_nodes: [
+        NodeId("tx:abc...def"),      // Raw blockchain tx
+        NodeId("cb:hifo-001"),       // HIFO cost basis calculation
+        NodeId("cg:aud-001"),        // ATO CGT calculation
+    ],
+    // AU treatment: held > 12 months → 50% CGT discount (ITAA 1997 s.115-A)
+    // Net taxable gain: $30,000 after discount
+}
+'''
+
+[issue.513.definitions_of_done]
+wallet = '''
+Create ledger-core/src/crypto.rs with:
+
+pub struct CryptoWallet { lei: Lei, address: String, chain: BlockchainType, jurisdiction: Jurisdiction }
+pub struct CryptoTx { tx_hash, wallet, tx_type, gross_proceeds, cost_basis, gain_loss, date }
+pub enum BlockchainType { Bitcoin, Ethereum, Solana, Polygon, ... }
+pub enum CryptoTxType { Buy, Sell, Staking, Airdrop, Spend, Transfer }
+pub enum CostBasisMethod { Fifo, Hifo, Lifo, SpecId }
+
+impl Satisfies<CryptoCostBasisRules> for CryptoTx { ... }
+// US: Rev. Proc. 2024-28 → wallet-by-wallet or aggregate
+// AU: ATO QC 53725 → CGT event timing, 50% discount if > 12 months
+
+Test: cargo test -p ledger-core -- crypto
+DoD: CryptoTx satisfies CryptoCostBasisRules correctly for all 4 methods,
+     jurisdiction dispatch (US vs AU) produces different discount rates.
+'''
+
+rhai_rules = '''
+Create/update Rhai rules:
+  rules/classify_crypto_trading.rhai  — extend for AU jurisdiction
+  rules/classify_crypto_staking.rhai  — already exists, extend for AU
+
+Test: cargo test -p ledger-core -- rhai_crypto
+DoD: Existing crypto tests pass, AU jurisdiction tests added.
+'''
+
+[issue.513.files_to_create]
+crypto     = "crates/ledger-core/src/crypto.rs"
+rules_au   = "rules/classify_crypto_au.rhai"
+
+[issue.513.docs_to_update_on_ship]
+- "vendor/l3dg3rr/rules/ONTOLOGY.md: add crypto-au rule docs"
+- "vendor/l3dg3rr/docs/crypto.md: new crypto tax reference"
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# ISSUE #514: MCP action layer — thin JSON-RPC wrappers over Satisfies
+# ═══════════════════════════════════════════════════════════════════════════════
+[issue.514]
+title = "MCP action layer: contract.rs TaxArgs + mcp_adapter.rs handlers — thin wrappers over Satisfies<Constraint>"
+status = "blocked"
+depends_on = [511, 512, 513]
+blocks     = [515]
+labels = ["mcp", "ledgerr_tax", "contract", "integration", "rust"]
+
+[issue.514.story]
+narrow = '''
+As a tax-lawyer agent, I need to call MCP tools (ledgerr_tax) that dispatch
+to the domain ontology's Satisfies implementations. Each MCP action MUST
+be a thin deserialize → satisfies → respond wrapper (5-10 lines), with
+all domain logic in the Satisfies implementations from #511-#513.
+'''
+
+[issue.514.definitions_of_done]
+# The key design constraint: contract.rs TaxArgs variants MUST NOT define
+# any domain logic. They only:
+#   (a) deserialize JSON-RPC arguments into domain types
+#   (b) call satisfies() on the domain type
+#   (c) serialize SatisfiesResult back to JSON-RPC response
+
+tax_args = '''
+In crates/ledgerr-mcp/src/contract.rs, extend TaxArgs:
+
+pub enum TaxArgs {
+    // Existing 5 actions preserved unchanged
+    Assist { ... },
+    // ... existing ...
+
+    // NEW: AU R&D (thin wrappers only)
+    AuRdCheckEligibility {
+        lei: String,
+        activity_descriptor: String,
+    },
+    AuRdClassifyExpenditure {
+        lei: String,
+        tx_ids: Vec<String>,
+    },
+    AuRdCalculateOffset {
+        lei: String,
+        year: i32,
+        turnover: Decimal,
+    },
+
+    // NEW: US R&D
+    UsRdcFourPartTest {
+        lei: String,
+        activity_descriptor: String,
+    },
+
+    // NEW: Crypto (jurisdiction-dispatched)
+    CryptoCostBasis {
+        lei: String,
+        wallet_address: String,
+        method: CostBasisMethod,
+        jurisdiction: Jurisdiction,
+    },
+}
+
+PUBLISHED_TOOLS entry for TAX_TOOL adds the 5 new action names.
+'''
+
+adapter_handlers = '''
+In crates/ledgerr-mcp/src/mcp_adapter.rs, each handler is ≤10 lines:
+  TaxArgs::AuRdCheckEligibility { lei, activity_descriptor } => {
+      let activity = ledger_core::au_rd::AuRdActivity { lei: Lei::new(&lei)?, ... };
+      let result = activity.satisfies(&AuRdEligibility::new());
+      serde_json::to_value(result).unwrap_or(error_response("serialize failed"))
+  }
+
+Symmetrically for all 5 new variants.
+No handler may contain domain logic beyond deserialize-call-respond.
+'''
+
+regen_docs = '''
+After contract.rs changes:
+  cargo run -p ledgerr-mcp --bin regen-docs
+  # This regenerates docs/mcp-capability-contract.md,
+  # docs/agent-mcp-runbook.md, scripts/mcp_cli_demo.sh
+  git diff --exit-code docs/mcp-capability-contract.md  # must match generated
+
+Test: cargo test -p ledgerr-mcp -- tax
+DoD: All new actions return correct SatisfiesResult JSON,
+     regen-docs produces no diff from checked-in files.
+'''
+
+[issue.514.handler_examples]
+# Concrete example showing the thin-wrapper pattern
+AuRdCheckEligibility_handler = '''
+fn handle_au_rd_eligibility(service: &TurboLedgerService, args: &Value) -> Value {
+    let lei = args["lei"].as_str()?;
+    let descriptor = args["activity_descriptor"].as_str()?;
+    let activity = AuRdActivity::new(Lei::new(lei).ok()?, descriptor);
+    let result = activity.satisfies(&AuRdEligibility::new(2026));
+    json!(result)
+}
+'''
+
+[issue.514.files_to_modify]
+contract     = "crates/ledgerr-mcp/src/contract.rs"       // +TaxArgs variants +actions list
+mcp_adapter  = "crates/ledgerr-mcp/src/mcp_adapter.rs"    // +handler match arms
+au_rd_handler = "crates/ledgerr-mcp/src/au_rd.rs"         // NEW: thin handlers
+us_rdc_handler = "crates/ledgerr-mcp/src/us_rdc.rs"       // NEW: thin handlers
+crypto_handler = "crates/ledgerr-mcp/src/crypto.rs"       // NEW: thin handlers
+
+[issue.514.docs_to_update_on_ship]
+- "vendor/l3dg3rr/docs/mcp-capability-contract.md: regenerated"
+- "vendor/l3dg3rr/docs/agent-mcp-runbook.md: regenerated"
+- "scripts/mcp_cli_demo.sh: regenerated"
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# ISSUE #515: Skill content — SKILL.md files for tax-lawyer concepts
+# ═══════════════════════════════════════════════════════════════════════════════
+[issue.515]
+title = "Skill content: SKILL.md files for tax-lawyer ontology + AU R&D + US R&D + crypto"
+status = "ready"  # can start before #510 (skills ship knowledge; tools ship later)
+depends_on = []
+blocks     = []
+labels = ["skill", "content", "documentation", "tax-lawyer", "ufo"]
+
+[issue.515.story]
+narrow = '''
+As a tax-lawyer agent, I need SKILL.md files that teach me:
+  (1) UFO stereotypes — what kind of thing I'm working with
+  (2) ISO types — what data format to expect
+  (3) The satisfies pattern — how to evaluate constraints
+  (4) Jurisdiction-specific law — full legislative text with citations
+  (5) The agent workflow — how to combine tools for a complete tax analysis
+
+Each SKILL.md is the canonical datum (type: skill). All _b00t_/*.skill.toml
+files are symlinks to skills/<name>/SKILL.md per the established pattern.
+'''
+
+[issue.515.files_to_create]
+skills = '''
+skills/tax-lawyer/SKILL.md               (root dispatch — "I am the tax-lawyer skill")
+skills/tax-lawyer/common/ufo-types/SKILL.md       (UFO stereotypes, Satisfies trait, ISO types)
+skills/tax-lawyer/common/iso-accounting/SKILL.md  (ISO 20022, IFRS 9, LEI, currency)
+skills/tax-lawyer/common/evidence-graph/SKILL.md  (arc-kit-au, Blake3, evidence chains)
+skills/tax-lawyer/common/software-interfaces/SKILL.md (MCP tool design, satisfies impl patterns)
+skills/tax-lawyer/aus/rd-tax-incentive/SKILL.md   (ITAA 1997 Div 355 full text + workflow)
+skills/tax-lawyer/aus/crypto-au/SKILL.md          (ATO QC 53725, CGT, personal use exemption)
+skills/tax-lawyer/usa/r-and-d-credit/SKILL.md     (IRC Sec 41 full text + 4-part test)
+skills/tax-lawyer/usa/crypto-us/SKILL.md          (Rev. Proc. 2024-28, cost basis methods)
+'''
+
+[issue.515.skill_frontmatter_example]
+# Each SKILL.md has the unified frontmatter (per earlier consolidation):
+frontmatter = '''
+---
+name: au-rd-tax-incentive
+type: skill
+hint: Australian R&D Tax Incentive under ITAA 1997 Div 355 — UFO Endurant::Role,
+      satisfies<AuRdEligibility>, ISO 17442 LEI identifiers
+version: 1.0.0
+tags: [au, tax, rd, itaa1997, ufo, satisfies, ontology, audit]
+tier: frontier
+complexity: 7
+depends_on:
+  - tax-lawyer/common/ufo-types
+  - tax-lawyer/aus/tax-lawyer
+unlocks:
+  - au-rd-claim
+  - au-rd-registration
+  - au-rd-audit-defense
+applies_to:
+  - preparing R&D Tax Incentive claim
+  - classifying AI/GPU/API expenses
+  - calculating refundable/non-refundable offset
+  - building ATO-ready evidence chain
+output_types: [.json, .md, .xlsx]
+metadata:
+  ufo_stereotype: Endurant::Role
+  satisfies_constraint: AuRdEligibility
+  evidence_graph: arc-kit-au
+  legislation:
+    - ITAA 1997 Div 355 (s.355-100 through s.355-705)
+    - ATO R&D Self-Assessment Guidelines 2025
+    - AusIndustry R&D Tax Incentive Registration Guide
+  iso_types:
+    - ISO 17442 (LEI)
+    - ISO 4217 (AUD)
+    - ISO 8601 (dates)
+---
+'''
+
+[issue.515.definitions_of_done]
+skill_count = "9 SKILL.md files exist under skills/tax-lawyer/"
+symlinks    = "9 _b00t_/*.skill.toml symlinks point to skills/tax-lawyer/*/SKILL.md"
+frontmatter = "Each SKILL.md has all required frontmatter (name, type, hint, tags, tier, complexity, depends_on, unlocks, applies_to, output_types, metadata.ufo_stereotype, metadata.satisfies_constraint)"
+legislation = "au-rd-tax-incentive and r-and-d-credit SKILL.md files contain full legislative text with :citation: markers"
+agent_test  = "b00t doctor check --probe tax-lawyer passes (skills resolvable)"
+doctest     = "b00t skill search 'rd tax incentive' returns the au-rd-tax-incentive skill"
+
+[issue.515.docs_to_update_on_ship]
+- "AGENTS.md: add tax-lawyer skill registration"
+- "justfile: add skill-tax-lawyer-* just recipes for each skill"
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# EPIC ISSUE #509
+# ═══════════════════════════════════════════════════════════════════════════════
+[issue.509]
+title = "EPIC: Tax-Lawyer Platform — UFO-grounded multi-jurisdiction R&D/crypto ontology + satisfies constraint system"
+status = "open"
+labels = ["epic", "tax-lawyer", "ufo", "satisfies", "multi-jurisdiction"]
+
+[issue.509.body]
+big_picture = '''
+The Tax-Lawyer Platform adds ontologically-grounded tax analysis to the
+b00t/l3dg3rr ecosystem. Two architectural currents meet here:
+
+### MCP-down (existing pattern)
+ledgrrr publishes 10 MCP tools (ledgerr_tax, ledgerr_evidence, etc.).
+The existing pattern: define a Rust enum variant in contract.rs, add a
+match arm in mcp_adapter.rs, implement the handler. This PRD extends
+ledgerr_tax with 5 new action families (AU R&D eligibility, AU offset
+calc, US 4-part test, US credit calc, crypto cost basis).
+
+### UFO-up (new pattern)
+A new ufo-types crate grounds every domain concept in a UFO stereotype
+(Endurant::SubKind for AuRdActivity, Perdurant::Event for CryptoTx,
+Moment::Mode for SatisfiesResult). ISO standard types (LEI, ISO 4217,
+ISO 20022, IFRS 9) become the data language. A Satisfies<T> trait
+becomes the uniform evaluation pattern — every tax check is
+`entity.satisfies::<Constraint>()` returning Blake3-hashed evidence.
+
+### Why both directions are needed
+- MCP-down alone produces ad-hoc enums with no shared foundation
+  (the previous plan's flaw).
+- UFO-up alone produces beautiful types that agents can't call
+  (no tool surface).
+- Together: UFO-up gives ontological rigor + ISO standards + audit trail.
+  MCP-down gives agent-accessible tool surface. The Satisfies trait is
+  the bridge — it produces evidence nodes in arc-kit-au that are
+  discoverable through ledgerr_evidence MCP tools.
+
+### Issue dependency graph
+  #510 (foundation) → #511 (AU R&D) ─┐
+                   → #512 (US R&D)  ─┤ → #514 (MCP layer)
+                   → #513 (crypto)  ─┘
+  #515 (skills) is independent (content only, ships immediately)
+
+### Definition of epic done
+  - crates/ufo-types exists with UFO categories, Satisfies trait, ISO types
+  - ledger-core has AuRdActivity, QreExpenditure, CryptoTx with satisfies impls
+  - ledgerr_mcp contract.rs has all 5 new action families
+  - All handlers are thin wrappers (≤10 lines, no domain logic)
+  - regen-docs produces no diff
+  - 9 SKILL.md files exist under skills/tax-lawyer/
+  - End-to-end: agent calls ledgerr_tax → satisfies → evidence graph → audit trail
+'''
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Documents to update/revise when the epic ships
+# ═══════════════════════════════════════════════════════════════════════════════
+[documents_to_update]
+by_issue = '''
+#510 → vendor/l3dg3rr/AGENTS.md (add ufo-types section)
+       vendor/l3dg3rr/docs/architecture.md (add ontology layer)
+       vendor/l3dg3rr/book/src/theory.md (add UFO grounding)
+
+#511 → vendor/l3dg3rr/docs/mcp-capability-contract.md (au_rd_* actions)
+       vendor/l3dg3rr/AGENTS.md (AU R&D workflow)
+       vendor/l3dg3rr/rules/ONTOLOGY.md (classify_au_rd_eligible.rhai)
+
+#512 → vendor/l3dg3rr/book/src/tax.md (US R&D credit chapter)
+       vendor/l3dg3rr/docs/mcp-capability-contract.md (us_rdc_* actions)
+
+#513 → vendor/l3dg3rr/rules/ONTOLOGY.md (classify_crypto_au.rhai)
+       vendor/l3dg3rr/docs/crypto.md (new crypto tax reference)
+
+#514 → vendor/l3dg3rr/docs/mcp-capability-contract.md (regenerated)
+       vendor/l3dg3rr/docs/agent-mcp-runbook.md (regenerated)
+       scripts/mcp_cli_demo.sh (regenerated)
+
+#515 → AGENTS.md (tax-lawyer skills)
+       justfile (skill-tax-lawyer-* recipes)
+'''
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Related issues that should be updated when this epic ships
+# ═══════════════════════════════════════════════════════════════════════════════
+[related_issues_to_update]
+list = '''
+#341  (kreuzberg integration)  → R&D Tax skill can use kreuzberg for document parsing
+#398  (latent space paper)     → R&D Tax skill can classify paper-parsing as core R&D
+#504  (ATO API client)         → supplies legislation text to au-rd-tax-incentive SKILL.md
+#505  (legislation chunker)    → structures legislation for skill consumption
+#506  (ATO datum config)       → registers acts as discoverable datums
+#507  (integration test)       → compose pipeline + verify provenance
+#508  (admin dashboard)        → add ATO pipeline to processes endpoint
+'''
+
+# b00t:map v1
+# summary: Tax-Lawyer Platform PRD/SDD — UFO ontology + ISO types + Satisfies trait +
+#          AU R&D + US R&D + crypto cost basis + MCP action layer + skill content
+# tags: prd, sdd, tax, ufo, iso, ontology, satisfies, au-rd, us-rdc, crypto,
+#        ledgerr, mcp, epic, frontier, tax-lawyer
+# tier: frontier
+# cmds: gh issue create --title "..." --body "..."; gh issue list --label epic
+# complexity: 9

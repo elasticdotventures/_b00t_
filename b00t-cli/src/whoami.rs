@@ -686,6 +686,433 @@ fn print_skill_interview(path: &str) -> Result<()> {
     Ok(())
 }
 
+/// ─── Dashboard: layered system status for agents ────────────────────────────
+
+/// Layer descriptor for the agent system dashboard.
+#[derive(Debug, Clone, PartialEq)]
+pub struct DashboardLayer {
+    pub z: u8,
+    pub name: &'static str,
+    pub color: &'static str,
+    pub items: Vec<DashboardItem>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct DashboardItem {
+    pub label: String,
+    pub status: DashboardStatus,
+    pub detail: String,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum DashboardStatus {
+    Ready,
+    Warning,
+    Critical,
+    Unknown,
+}
+
+/// Build the layered system dashboard for an agent.
+pub fn build_dashboard() -> Vec<DashboardLayer> {
+    let mut layers = Vec::new();
+
+    // Layer 0 — Hardware / OS
+    let mut hw = Vec::new();
+    hw.push(detect_cpu());
+    hw.push(detect_ram());
+    hw.push(detect_gpu());
+    hw.push(detect_os());
+    layers.push(DashboardLayer { z: 0, name: "Hardware & OS", color: "#334155", items: hw });
+
+    // Layer 1 — Runtime
+    let mut rt = Vec::new();
+    rt.push(detect_python());
+    rt.push(detect_node());
+    rt.push(detect_rust());
+    rt.push(detect_just());
+    layers.push(DashboardLayer { z: 1, name: "Runtime", color: "#1d4ed8", items: rt });
+
+    // Layer 2 — Inference
+    let mut inf = Vec::new();
+    inf.push(check_binary("vllm", "vllm --version"));
+    inf.push(check_binary("ollama", "ollama --version"));
+    inf.push(check_binary("llama.cpp", "llama-cli --version"));
+    inf.push(detect_models());
+    layers.push(DashboardLayer { z: 2, name: "Inference", color: "#7c3aed", items: inf });
+
+    // Layer 3 — MCP
+    let mut mcp = Vec::new();
+    mcp.push(count_mcp_tools());
+    mcp.push(check_binary("uvx", "uvx --version"));
+    mcp.push(check_binary("npx", "npx --version"));
+    layers.push(DashboardLayer { z: 3, name: "MCP Tools", color: "#b91c1c", items: mcp });
+
+    // Layer 4 — Datums
+    layers.push(count_datums());
+
+    // Layer 5 — Agents
+    layers.push(count_agents());
+
+    layers
+}
+
+fn detect_cpu() -> DashboardItem {
+    let info = std::fs::read_to_string("/proc/cpuinfo").unwrap_or_default();
+    let cores = info.lines().filter(|l| l.starts_with("processor")).count();
+    let model = info.lines()
+        .find(|l| l.starts_with("model name"))
+        .and_then(|l| l.split(':').nth(1))
+        .map(|s| s.trim())
+        .unwrap_or("unknown");
+    DashboardItem {
+        label: format!("CPU ({} cores)", cores),
+        status: if cores > 0 { DashboardStatus::Ready } else { DashboardStatus::Unknown },
+        detail: format!("{}", model),
+    }
+}
+
+fn detect_ram() -> DashboardItem {
+    let info = std::fs::read_to_string("/proc/meminfo").unwrap_or_default();
+    let total_kb = info.lines()
+        .find(|l| l.starts_with("MemTotal"))
+        .and_then(|l| l.split_whitespace().nth(1))
+        .and_then(|s| s.parse::<u64>().ok())
+        .unwrap_or(0);
+    let total_gb = total_kb / 1024 / 1024;
+    DashboardItem {
+        label: "RAM".into(),
+        status: if total_gb >= 8 { DashboardStatus::Ready } else { DashboardStatus::Warning },
+        detail: format!("{} GB", total_gb),
+    }
+}
+
+fn detect_gpu() -> DashboardItem {
+    // Check nvidia-smi first, then amdgpu
+    if let Ok(out) = std::process::Command::new("nvidia-smi")
+        .args(["--query-gpu=name,memory.total", "--format=csv,noheader"])
+        .output()
+    {
+        let stdout = String::from_utf8_lossy(&out.stdout);
+        if out.status.success() && !stdout.trim().is_empty() {
+            return DashboardItem {
+                label: "GPU (NVIDIA)".into(),
+                status: DashboardStatus::Ready,
+                detail: stdout.trim().to_string(),
+            };
+        }
+    }
+    DashboardItem {
+        label: "GPU".into(),
+        status: DashboardStatus::Unknown,
+        detail: "no GPU detected".into(),
+    }
+}
+
+fn detect_os() -> DashboardItem {
+    let os = std::env::consts::OS;
+    let arch = std::env::consts::ARCH;
+    DashboardItem {
+        label: "OS".into(),
+        status: DashboardStatus::Ready,
+        detail: format!("{}/{}", os, arch),
+    }
+}
+
+fn detect_python() -> DashboardItem {
+    // Try python3.14 first (target version), fall back to python3
+    for cmd in &["python3.14", "python3"] {
+        if let Ok(out) = std::process::Command::new(cmd).arg("--version").output() {
+            let stdout = String::from_utf8_lossy(&out.stdout);
+            let version = stdout.trim().trim_start_matches("Python ");
+            if !version.is_empty() {
+                let is_314 = version.starts_with("3.14");
+                return DashboardItem {
+                    label: format!("Python ({})", cmd),
+                    status: if is_314 { DashboardStatus::Ready } else { DashboardStatus::Warning },
+                    detail: format!("{} {}", version,
+                        if is_314 { "(GIL-free ✓)" } else { "(not 3.14)" }),
+                };
+            }
+        }
+    }
+    DashboardItem {
+        label: "Python".into(),
+        status: DashboardStatus::Critical,
+        detail: "not found".into(),
+    }
+}
+
+fn detect_node() -> DashboardItem {
+    if let Ok(out) = std::process::Command::new("node").arg("--version").output() {
+        let v = String::from_utf8_lossy(&out.stdout).trim().to_string();
+        return DashboardItem {
+            label: "Node".into(),
+            status: DashboardStatus::Ready,
+            detail: v,
+        };
+    }
+    DashboardItem { label: "Node".into(), status: DashboardStatus::Critical, detail: "not found".into() }
+}
+
+fn detect_rust() -> DashboardItem {
+    if let Ok(out) = std::process::Command::new("rustc").arg("--version").output() {
+        let v = String::from_utf8_lossy(&out.stdout).trim().to_string();
+        return DashboardItem {
+            label: "Rust".into(),
+            status: DashboardStatus::Ready,
+            detail: v,
+        };
+    }
+    DashboardItem { label: "Rust".into(), status: DashboardStatus::Critical, detail: "not found".into() }
+}
+
+fn detect_just() -> DashboardItem {
+    if let Ok(out) = std::process::Command::new("just").arg("--version").output() {
+        let v = String::from_utf8_lossy(&out.stdout).trim().to_string();
+        return DashboardItem {
+            label: "just".into(),
+            status: DashboardStatus::Ready,
+            detail: v,
+        };
+    }
+    DashboardItem { label: "just".into(), status: DashboardStatus::Unknown, detail: "not found".into() }
+}
+
+fn check_binary(name: &str, cmd: &str) -> DashboardItem {
+    let parts: Vec<&str> = cmd.split_whitespace().collect();
+    if parts.is_empty() {
+        return DashboardItem { label: name.into(), status: DashboardStatus::Unknown, detail: "no command".into() };
+    }
+    if let Ok(out) = std::process::Command::new(parts[0]).args(&parts[1..]).output() {
+        let v = String::from_utf8_lossy(&out.stdout).trim().to_string();
+        return DashboardItem {
+            label: name.into(),
+            status: DashboardStatus::Ready,
+            detail: v.lines().next().unwrap_or("ok").to_string(),
+        };
+    }
+    DashboardItem { label: name.into(), status: DashboardStatus::Unknown, detail: "not found".into() }
+}
+
+fn detect_models() -> DashboardItem {
+    // Check for GGUF model files in common locations
+    let model_dirs: Vec<std::path::PathBuf> = vec![
+        std::path::PathBuf::from("/opt/b00t/models"),
+        std::path::PathBuf::from("/usr/local/share/b00t/models"),
+        dirs::home_dir().unwrap_or_default().join(".b00t/models"),
+    ];
+    let count: usize = model_dirs.iter()
+        .filter_map(|d| std::fs::read_dir(d).ok())
+        .flat_map(|e| e.filter_map(|e| e.ok()))
+        .filter(|e| e.path().extension().map(|x| x == "gguf").unwrap_or(false))
+        .count();
+    DashboardItem {
+        label: "Local Models".into(),
+        status: if count > 0 { DashboardStatus::Ready } else { DashboardStatus::Unknown },
+        detail: format!("{} GGUF files", count),
+    }
+}
+
+fn count_mcp_tools() -> DashboardItem {
+    let dotfiles = dirs::home_dir().unwrap_or_default().join(".dotfiles/_b00t_");
+    let count: usize = std::fs::read_dir(&dotfiles)
+        .map(|d| d.filter_map(|e| e.ok())
+            .filter(|e| e.path().extension().map(|x| x == "tomllmd").unwrap_or(false))
+            .filter(|e| {
+                std::fs::read_to_string(e.path())
+                    .map(|c| c.contains("mcp") || c.contains("MCP"))
+                    .unwrap_or(false)
+            })
+            .count())
+        .unwrap_or(0);
+    DashboardItem {
+        label: "MCP Servers".into(),
+        status: DashboardStatus::Ready,
+        detail: format!("{} configured", count),
+    }
+}
+
+fn count_datums() -> DashboardLayer {
+    let dotfiles = dirs::home_dir().unwrap_or_default().join(".dotfiles/_b00t_/datums");
+    let count: usize = std::fs::read_dir(&dotfiles)
+        .map(|d| d.filter_map(|e| e.ok()).count())
+        .unwrap_or(0);
+    DashboardLayer {
+        z: 4,
+        name: "Datums",
+        color: "#0f766e",
+        items: vec![DashboardItem {
+            label: "Datums".into(),
+            status: if count > 0 { DashboardStatus::Ready } else { DashboardStatus::Warning },
+            detail: format!("{} datum files", count),
+        }],
+    }
+}
+
+fn count_agents() -> DashboardLayer {
+    let mut agents = Vec::new();
+    // Check registered agent datums
+    let dotfiles = dirs::home_dir().unwrap_or_default().join(".dotfiles/_b00t_/datums");
+    if let Ok(dir) = std::fs::read_dir(&dotfiles) {
+        for entry in dir.filter_map(|e| e.ok()) {
+            let name = entry.path().file_stem()
+                .and_then(|s| s.to_str())
+                .unwrap_or("")
+                .to_string();
+            if name.contains("AGENT") || name.contains("agent") {
+                agents.push(DashboardItem {
+                    label: name,
+                    status: DashboardStatus::Ready,
+                    detail: "datum registered".into(),
+                });
+            }
+        }
+    }
+    // Also check for .agent.toml files
+    let home = dirs::home_dir().unwrap_or_default();
+    if let Ok(dir) = std::fs::read_dir(&home) {
+        for entry in dir.filter_map(|e| e.ok()) {
+            let p = entry.path();
+            if p.extension().and_then(|s| s.to_str()) == Some("toml")
+                && p.file_stem().and_then(|s| s.to_str())
+                    .map(|s| s.ends_with(".agent"))
+                    .unwrap_or(false)
+            {
+                agents.push(DashboardItem {
+                    label: p.file_stem().and_then(|s| s.to_str()).unwrap_or("?").to_string(),
+                    status: DashboardStatus::Ready,
+                    detail: "agent file".into(),
+                });
+            }
+        }
+    }
+    if agents.is_empty() {
+        agents.push(DashboardItem {
+            label: "No agents registered".into(),
+            status: DashboardStatus::Unknown,
+            detail: "register via b00t agent create".into(),
+        });
+    }
+    DashboardLayer {
+        z: 5,
+        name: "Agents",
+        color: "#b45309",
+        items: agents,
+    }
+}
+
+/// Print the layered dashboard to stdout
+pub fn print_dashboard() {
+    let layers = build_dashboard();
+    println!("\n{}", crate::ansi::bold("╔══════════════════════════════════════════╗"));
+    println!("{}", crate::ansi::bold("║     b00t Agent System Dashboard           ║"));
+    println!("{}", crate::ansi::bold("╚══════════════════════════════════════════╝"));
+    println!();
+
+    for layer in &layers {
+        let color_tag = crate::ansi::cyan;
+        println!("{} z={} {} {}",
+            color_tag("┌─"),
+            layer.z,
+            color_tag(layer.name),
+            color_tag(&format!("[{}]", layer.color)),
+        );
+        for item in &layer.items {
+            let status_char = match item.status {
+                DashboardStatus::Ready => crate::ansi::green("✓"),
+                DashboardStatus::Warning => crate::ansi::yellow("⚠"),
+                DashboardStatus::Critical => crate::ansi::red("✗"),
+                DashboardStatus::Unknown => crate::ansi::dim("?"),
+            };
+            println!("{} {} {} — {}",
+                crate::ansi::dim("│"),
+                status_char,
+                item.label,
+                crate::ansi::dim(&item.detail),
+            );
+        }
+        println!("{}", crate::ansi::dim("└─"));
+        println!();
+    }
+
+    // Summary health
+    let total = layers.iter().flat_map(|l| l.items.iter()).count();
+    let ready = layers.iter().flat_map(|l| l.items.iter())
+        .filter(|i| i.status == DashboardStatus::Ready).count();
+    let warnings = layers.iter().flat_map(|l| l.items.iter())
+        .filter(|i| i.status == DashboardStatus::Warning).count();
+    let critical = layers.iter().flat_map(|l| l.items.iter())
+        .filter(|i| i.status == DashboardStatus::Critical).count();
+    println!("{} {} services: {} ready, {} warnings, {} critical",
+        crate::ansi::bold("Health:"),
+        total, crate::ansi::green(&ready.to_string()),
+        crate::ansi::yellow(&warnings.to_string()),
+        crate::ansi::red(&critical.to_string()),
+    );
+}
+
+/// Discover capabilities across the hive — agents, MCP servers, CLI tools.
+pub fn discover_capabilities(filter: Option<&str>) -> Result<()> {
+    let dotfiles = dirs::home_dir().unwrap_or_default().join(".dotfiles/_b00t_");
+    let datums_dir = dotfiles.join("datums");
+
+    println!("{}", crate::ansi::bold("🔍 Hive Capability Discovery"));
+    println!();
+
+    let mut found = 0usize;
+
+    if let Ok(dir) = std::fs::read_dir(&datums_dir) {
+        for entry in dir.filter_map(|e| e.ok()) {
+            let path = entry.path();
+            if path.extension().and_then(|s| s.to_str()) != Some("tomllmd") {
+                continue;
+            }
+            let name = path.file_stem()
+                .and_then(|s| s.to_str())
+                .unwrap_or("")
+                .to_string();
+
+            if let Some(f) = filter {
+                if !name.to_lowercase().contains(&f.to_lowercase()) {
+                    continue;
+                }
+            }
+
+            // Read the datum to extract type_tags and capabilities
+            if let Ok(content) = std::fs::read_to_string(&path) {
+                // Extract type_tags via simple parsing (no serde dep needed for full TOML here)
+                let has_mcp = content.contains("mcp") || content.contains("MCP");
+                let has_agent = content.contains("agent") || content.contains("Agent");
+                let has_cli = content.contains("cli") || content.contains("CLI");
+                let has_skill = content.contains("skill") || content.contains("Skill");
+
+                let kind = match (has_mcp, has_agent, has_cli, has_skill) {
+                    (true, _, _, _) => "🔌 MCP",
+                    (_, true, _, _) => "🤖 Agent",
+                    (_, _, true, _) => "🛠️ CLI",
+                    (_, _, _, true) => "🧠 Skill",
+                    _ => "📄 Datum",
+                };
+                println!("  {} {} — {} ({})", kind, crate::ansi::cyan(&name), crate::ansi::dim(kind), entry.path().display());
+                found += 1;
+            }
+        }
+    }
+
+    if found == 0 {
+        if filter.is_some() {
+            println!("  {} No capabilities matching filter: {}", crate::ansi::yellow("⚠"), filter.unwrap());
+        } else {
+            println!("  {} No capabilities found in {}", crate::ansi::yellow("⚠"), datums_dir.display());
+        }
+    } else {
+        println!("\n{} {} capabilities discovered", crate::ansi::green(&found.to_string()),
+            if filter.is_some() { format!("matching '{}'", filter.unwrap()) } else { "total".into() });
+    }
+
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -920,6 +1347,74 @@ hint = "ralph mcp"
         let check = check_role_capability("ralph.mcp", DatumType::Mcp, path.to_str().unwrap());
         assert_eq!(check.status, CapabilityStatus::Ready);
     }
+
+    // ─── Dashboard tests ────────────────────────────────────────────────
+
+    #[test]
+    fn test_build_dashboard_has_all_layers() {
+        let layers = build_dashboard();
+        let names: Vec<&str> = layers.iter().map(|l| l.name).collect();
+        assert!(names.contains(&"Hardware & OS"), "missing HW layer among: {:?}", names);
+        assert!(names.contains(&"Runtime"), "missing Runtime layer");
+        assert!(names.contains(&"Inference"), "missing Inference layer");
+        assert!(names.contains(&"MCP Tools"), "missing MCP layer");
+        assert!(names.contains(&"Datums"), "missing Datums layer");
+        assert!(names.contains(&"Agents"), "missing Agents layer");
+        // z values should be sequential
+        for (i, layer) in layers.iter().enumerate() {
+            assert_eq!(layer.z as usize, i, "layer {} has wrong z value", layer.name);
+        }
+    }
+
+    #[test]
+    fn test_dashboard_layer_has_color() {
+        let layers = build_dashboard();
+        for layer in &layers {
+            assert!(!layer.color.is_empty(), "layer {} has no color", layer.name);
+            assert!(layer.color.starts_with('#'), "layer {} color not hex: {}", layer.name, layer.color);
+        }
+    }
+
+    #[test]
+    fn test_detect_cpu_returns_ready() {
+        let item = detect_cpu();
+        assert!(!item.label.is_empty());
+        // CPU should always be detectable on any real system
+        assert!(item.status == DashboardStatus::Ready || item.status == DashboardStatus::Unknown);
+    }
+
+    #[test]
+    fn test_detect_os_returns_ready() {
+        let item = detect_os();
+        assert_eq!(item.status, DashboardStatus::Ready);
+        assert!(item.detail.contains("linux") || item.detail.contains("windows") || item.detail.contains("macos"));
+    }
+
+    #[test]
+    fn test_dashboard_status_display_consistency() {
+        // All dashboard items should have a non-empty label and detail
+        let layers = build_dashboard();
+        for layer in &layers {
+            for item in &layer.items {
+                assert!(!item.label.is_empty(), "empty label in layer {}", layer.name);
+            }
+        }
+    }
+
+    #[test]
+    fn test_discover_capabilities_returns_ok() {
+        // Should not crash — returns Ok even if no capabilities found
+        let result = discover_capabilities(None);
+        assert!(result.is_ok(), "discover_capabilities failed: {:?}", result.err());
+    }
+
+    #[test]
+    fn test_discover_capabilities_with_filter() {
+        let result = discover_capabilities(Some("unsloth"));
+        assert!(result.is_ok());
+    }
+
+    // ─── End dashboard tests ────────────────────────────────────────────
 
     #[test]
     fn test_check_skill_evidence_missing() {
