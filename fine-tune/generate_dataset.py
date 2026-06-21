@@ -15,7 +15,7 @@ from typing import Any
 
 # ─── Corpus sources ────────────────────────────────────────────────────────────
 
-DOTFILES = Path(os.environ.get("HOME", "~")) / ".dotfiles"
+DOTFILES = Path.home() / ".dotfiles"
 
 SOURCES: dict[str, list[Path]] = {
     "datums": sorted((DOTFILES / "_b00t_/datums").glob("*.tomllmd")),
@@ -119,7 +119,7 @@ def parse_learn_instruction(path: Path, content: str) -> list[dict[str, str]]:
         rows.append({
             "instruction": f"Show me an example of {title}",
             "input": "",
-            "response:": block.strip(),
+            "response": block.strip(),
         })
 
     return rows
@@ -249,13 +249,14 @@ def generate_dataset(output_path: str, format: str = "alpaca", max_rows: int = 5
     with open(output_path, "w") as f:
         for row in deduped:
             if format == "chatml":
+                instruction = row["instruction"]
+                input_text = row.get("input", "")
+                response = row.get("response", "")
+                user_content = f"{instruction}\n\n{input_text}" if input_text else instruction
                 f.write(json.dumps({
                     "messages": [
-                        {"role": "user", "content": CHATML_TEMPLATE.format(
-                            instruction=row["instruction"],
-                            input=row.get("input", ""),
-                            response=row.get("response", ""),
-                        )},
+                        {"role": "user", "content": user_content},
+                        {"role": "assistant", "content": response},
                     ]
                 }) + "\n")
             else:
