@@ -22,6 +22,7 @@ members = [
 ]
 exclude = [
     "vendor/embed-anything-b00t",
+    "vendor/rust-docs-mcp-server",
 ]
 resolver = "2"
 

@@ -5,7 +5,10 @@
 
 # Build the server
 build:
-    cd vendor/rust-docs-mcp-server && cargo build --release
+    #!/bin/bash
+    set -euo pipefail
+    B00T_ROOT="$(git rev-parse --show-toplevel)"
+    cargo build --release --manifest-path "${B00T_ROOT}/vendor/rust-docs-mcp-server/Cargo.toml"
 
 # Build and start in background (stdio mode, for IDE MCP)
 start crate="serde@^1.0":
@@ -35,4 +38,9 @@ stop:
 
 # Update from upstream
 update:
-    cd vendor/rust-docs-mcp-server && git pull origin main && cargo build --release
+    #!/bin/bash
+    set -euo pipefail
+    cd vendor/rust-docs-mcp-server
+    git pull origin main
+    cd /home/brianh/.dotfiles
+    cargo build --release --manifest-path vendor/rust-docs-mcp-server/Cargo.toml
