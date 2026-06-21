@@ -110,22 +110,25 @@ fn now_unix() -> u64 {
 }
 
 /// Load guards (universal hive-guards + active profile guards)
-fn load_all_guards(
+fn load_all_guard_context(
     datum_dir: &std::path::Path,
     snapshot: &SystemSnapshot,
-) -> Vec<crate::hive::HiveGuard> {
+) -> (Vec<crate::hive::HiveGuard>, HashMap<String, String>) {
     let mut guards = Vec::new();
+    let mut rhai_macros = HashMap::new();
     if let Ok(g) = load_profile("hive-guards", datum_dir) {
+        rhai_macros.extend(g.rhai_macros);
         guards.extend(g.guards);
     }
     if let Some(active) = &snapshot.active_profile {
         if let Ok(p) = load_profile(active, datum_dir) {
+            rhai_macros.extend(p.rhai_macros);
             guards.extend(p.guards);
         }
     }
     // Agent-added session guards (~/.b00t/session-guards.json)
     guards.extend(crate::hive::load_session_guards());
-    guards
+    (guards, rhai_macros)
 }
 
 pub fn handle_exec(args: &ExecArgs, path: &str) -> Result<()> {
@@ -146,12 +149,12 @@ pub fn handle_exec(args: &ExecArgs, path: &str) -> Result<()> {
 
     // Guard evaluation
     let snapshot = SystemSnapshot::capture()?;
-    let all_guards = load_all_guards(&datum_dir, &snapshot);
+    let (all_guards, rhai_macros) = load_all_guard_context(&datum_dir, &snapshot);
     let guard_ctx = GuardContext {
         command: cmd_str.clone(),
         violation_count: 0,
         repeat_threshold: None,
-        rhai_macros: HashMap::new(),
+        rhai_macros,
     };
     let guard_result = check_guards(&cmd_str, &all_guards, &guard_ctx);
 
