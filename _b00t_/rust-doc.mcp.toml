@@ -9,6 +9,6 @@ topic = "rust-docs"
 [[b00t.mcp.stdio]]
 priority = 0
 command = "vendor/rust-docs-mcp-server/target/release/rustdocs_mcp_server"
-args = ["serde@^1.0"]
+args = ["serde"]
 requires = ["rustdocs_mcp_server"]
 transport = "stdio"

@@ -11,7 +11,7 @@ build:
     cargo build --release --manifest-path "${B00T_ROOT}/vendor/rust-docs-mcp-server/Cargo.toml"
 
 # Build and start in background (stdio mode, for IDE MCP)
-start crate="serde@^1.0":
+start crate="serde":
     #!/bin/bash
     set -euo pipefail
     BIN="vendor/rust-docs-mcp-server/target/release/rustdocs_mcp_server"
@@ -25,7 +25,7 @@ start crate="serde@^1.0":
     echo "   Logs: tail -f /tmp/rust-doc-mcp.log"
 
 # Start in HTTP/SSE mode (agentic rendering)
-start-http crate="serde@^1.0" port="3000":
+start-http crate="serde" port="3000":
     vendor/rust-docs-mcp-server/target/release/rustdocs_mcp_server "{{crate}}" --http --port {{port}}
 
 # Check if running
