@@ -1,7 +1,7 @@
 [b00t]
 name = "rust-doc"
 type = "mcp"
-hint = "Rust crate documentation lookup via MCP — per-crate server (Govcraft/rust-docs-mcp-server v1.3.1). Serves 1 crate per process; add more instances for additional crates."
+hint = "Rust crate documentation via semantic search — PromptExecution fork of Govcraft/rust-docs-mcp-server (v1.3.1). Per-crate MCP server with OpenAI embeddings + cosine similarity RAG. Fork: github.com/PromptExecution/rust-docs-mcp-server"
 
 [b00t.learn]
 topic = "rust-docs"
