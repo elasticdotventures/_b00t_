@@ -2311,3 +2311,23 @@ skills query="":
       b00t-cli --path "$B00T_ROOT" skill search "{{query}}"
     fi
 
+# ─── Fine-tuning: unsloth QLoRA for b00t-aligned subagent ────────────────────
+
+# Generate training dataset from b00t corpus
+finetune-dataset format="alpaca" max="5000":
+    uv run python3.14 fine-tune/generate_dataset.py --format={{format}} --max-rows={{max}}
+
+# Run unsloth QLoRA fine-tuning
+finetune-train config="fine-tune/config.yaml":
+    uv run python3.14 fine-tune/train_unsloth.py --config={{config}}
+
+# Export LoRA adapter to GGUF
+finetune-export adapter="./fine-tune/output/lora-adapter" quant="Q4_K_M":
+    uv run python3.14 fine-tune/export_gguf.py --adapter={{adapter}} --quant={{quant}}
+
+# Full pipeline: dataset -> train -> export
+finetune-all:
+    uv run python3.14 fine-tune/generate_dataset.py
+    uv run python3.14 fine-tune/train_unsloth.py
+    uv run python3.14 fine-tune/export_gguf.py
+
