@@ -164,3 +164,13 @@ tier: frontier
 cmds: b00t whoami, b00t blessing --manifest, b00t hive status, b00t task list
 complexity: 8
 -->
+
+---
+
+## Tax-Lawyer Architecture (recorded 2026-06-20)
+
+The Tax-Lawyer Platform combines two architectural currents:
+- **MCP-down**: ledgerr_tax actions are thin wrappers (<=10 lines) over Satisfies<Constraint> checks
+- **UFO-up**: ufo-types crate grounds all domain concepts in UFO stereotypes with ISO standard types
+The Satisfies<T> trait is the bridge — produces arc-kit-au evidence nodes for audit trail.
+See _b00t_/datums/PRD-TAX-LAWYER-UFO-SDD.tomllmd and issues #510-#517.
