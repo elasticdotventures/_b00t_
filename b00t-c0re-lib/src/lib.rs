@@ -31,6 +31,7 @@ pub mod agent_coordination;
 pub mod agent_manager;
 pub mod agent_subtype;
 pub mod ai_client;
+pub mod ato_client;
 pub mod b00t_config;
 pub mod context;
 pub mod datum_ai_model;
