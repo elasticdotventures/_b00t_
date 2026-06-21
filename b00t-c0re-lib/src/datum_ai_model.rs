@@ -73,7 +73,8 @@ pub enum ModelCapability {
     JsonMode,
     /// Web search integration
     WebSearch,
-    /// Reasoning/thinking mode
+    /// Reasoning/thinking mode (Qwen3 deepseek-format thinking tokens)
+    #[serde(alias = "thinking")]
     Reasoning,
     /// Batch processing support
     Batch,
