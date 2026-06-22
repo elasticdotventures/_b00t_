@@ -2231,3 +2231,23 @@ gen-flowchart-docs:
     cd b00t-cli && cargo run --bin b00t-cli -- ontology export --format=mermaid --depth=3 > book/src/topology.md
     echo "Updated book/src/topology.md with live system topology"
 
+# ── GitHub PR operations via gh.cli datum ──────────────────────────────────
+# Abstract interfaces from _b00t_/gh.cli.toml — uses gh CLI (preferred)
+# or curl+REST fallback when gh unavailable.
+
+# Post a comment on a PR
+gh-pr-comment pr body:
+    @b00t exec -- gh pr comment {{pr}} --body "{{body}}"
+
+# Submit a formal PR review (approve, request-changes, comment)
+gh-pr-review pr event body:
+    @b00t exec -- gh pr review {{pr}} --{{event}} --body "{{body}}"
+
+# Get PR diff
+gh-pr-diff pr:
+    @b00t exec -- gh pr diff {{pr}}
+
+# List open PRs
+gh-pr-list limit="10":
+    @b00t exec -- gh pr list --state open --limit {{limit}}
+
