@@ -2327,6 +2327,7 @@ async fn main() {
                             let tf = experiment::create_focus_record(&cmp.experiment_id, "treatment", "sm0l-trt", "experiment-eval", &cmp.treatment.scores);
                             eprintln!("[ledgrrr] {}", experiment::focus_record_to_ledgrrr(&cf));
                             eprintln!("[ledgrrr] {}", experiment::focus_record_to_ledgrrr(&tf));
+                            eprintln!("[ledgrrr] focus_delta={:.4} (control-earned={:.4} control-consumed={:.4} | treatment-earned={:.4} treatment-consumed={:.4})", cmp.focus_delta, cmp.control.focus_earned, cmp.control.focus_consumed, cmp.treatment.focus_earned, cmp.treatment.focus_consumed);
                             // emit FOCUS records to ledgrrr-mcp MCP server (best-effort)
                             experiment::emit_focus_to_ledgrrr_mcp(&cmp, "http://localhost:8001");
                             // Calculate and issue cake payout
