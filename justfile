@@ -2235,17 +2235,17 @@ gen-flowchart-docs:
 # Abstract interfaces from _b00t_/gh.cli.toml — uses gh CLI (preferred)
 # or curl+REST fallback when gh unavailable.
 
-# Post a comment on a PR
+# Post a comment on a PR via gh.cli datum abstract interface
 gh-pr-comment pr body:
-    @b00t exec -- gh pr comment {{pr}} --body "{{body}}"
+    @b00t datum call gh.cli pr_comment --token pr={{pr}} --token body="{{body}}" --exec
 
-# Submit a formal PR review (approve, request-changes, comment)
+# Submit a formal PR review via gh.cli datum
 gh-pr-review pr event body:
-    @b00t exec -- gh pr review {{pr}} --{{event}} --body "{{body}}"
+    @b00t datum call gh.cli pr_review --token pr={{pr}} --token event={{event}} --token body="{{body}}" --exec
 
-# Get PR diff
+# Get PR diff via gh.cli datum
 gh-pr-diff pr:
-    @b00t exec -- gh pr diff {{pr}}
+    @b00t datum call gh.cli pr_diff --token pr={{pr}} --exec
 
 # List open PRs
 gh-pr-list limit="10":
