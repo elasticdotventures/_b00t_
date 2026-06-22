@@ -3,15 +3,3 @@
 plantuml.mcp.toml b00t.status=sunset b00t.enabled=false b00t.status_msg=java-too-heavy b00t.replacement=b00t-viz-mermaid-rhai-svg b00t.search=exclude
 plantuml-queue.stack.toml b00t.status=sunset b00t.enabled=false b00t.status_msg=java-too-heavy b00t.replacement=b00t-viz-mermaid-rhai-svg b00t.search=exclude
 plantuml-server-b00t.docker.toml b00t.status=sunset b00t.enabled=false b00t.status_msg=java-too-heavy b00t.replacement=b00t-viz-mermaid-rhai-svg b00t.search=exclude
-
-# Container runtime migration: docker CLI → podman (containers are valid, docker-the-company/runtime is not)
-# These datums define services (n8n, ollama, postgres, etc.) — the container abstraction stays.
-# Migration path: add `container_runtime = "podman"` to each datum, update install/run commands.
-n8n.docker.toml b00t.status_msg=docker-cli-deprecated b00t.container_runtime=podman
-ollama.docker.toml b00t.status_msg=docker-cli-deprecated b00t.container_runtime=podman
-postgres.docker.toml b00t.status_msg=docker-cli-deprecated b00t.container_runtime=podman
-postgres-enhanced.docker.toml b00t.status_msg=docker-cli-deprecated b00t.container_runtime=podman
-qdrant.docker.toml b00t.status_msg=docker-cli-deprecated b00t.container_runtime=podman
-redis.docker.toml b00t.status_msg=docker-cli-deprecated b00t.container_runtime=podman
-rustfs.docker.toml b00t.status_msg=docker-cli-deprecated b00t.container_runtime=podman
-
