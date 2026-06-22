@@ -1747,7 +1747,25 @@ fn execute_k0mmand3r_dispatch(path: &str, slash: &str, passthrough_args: &[Strin
 
 #[tokio::main]
 async fn main() {
-    let cli = Cli::parse_from(normalize_slash_args(std::env::args().collect()));
+    let cli = match Cli::try_parse_from(normalize_slash_args(std::env::args().collect())) {
+        Ok(cli) => cli,
+        Err(e) => {
+            // Agent-friendly error: short orientation, not full usage dump
+            let msg = e.to_string();
+            // Extract the actionable line (first non-empty line after "error:")
+            let brief = msg.lines()
+                .find(|l| l.starts_with("error:") || l.contains("tip:"))
+                .unwrap_or(&msg);
+            eprintln!("\n\x1b[1mb00t\x1b[0m — hive agent operating protocol");
+            eprintln!("\x1b[2m{}\x1b[0m", brief);
+            eprintln!();
+            eprintln!("{}", "\x1b[2mb00t whoami --help    — agent identity & capabilities");
+            eprintln!("b00t capabilities    — discover hive tools");
+            eprintln!("b00t task list       — pending tasks");
+            eprintln!("b00t learn <skill>   — load a blessing\x1b[0m");
+            std::process::exit(1);
+        }
+    };
 
     if cli.doc {
         generate_documentation();
