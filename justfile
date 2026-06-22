@@ -509,6 +509,13 @@ commit-hook:
         fi
         echo "✅ Reviewer gate passed"
     fi
+    # Gate schema validation: ensure all gate datums pass contract
+    if ls _b00t_/gates/*.gate.toml &>/dev/null; then
+        if ! python3 scripts/validate-gate.py _b00t_/gates/*.gate.toml 2>/dev/null; then
+            echo "❌ Gate schema validation failed. Fix gate datums and try again."
+            exit 1
+        fi
+    fi
 
 commit-hook2:
     #!/bin/bash
