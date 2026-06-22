@@ -96,6 +96,10 @@ curl -s -H "Authorization: token $GITHUB_TOKEN" \
 '''
 tokens = ["pr"]
 
+[validate]
+command = "gh --version"
+regex = "\\d+\\.\\d+\\.\\d+"
+
 [roles]
 required_for = ["developer", "executive", "operator", "reviewer"]
 optional_for = []
