@@ -441,6 +441,28 @@ pub struct BootDatum {
     pub required_for_core: Option<bool>,
 }
 
+impl BootDatum {
+    /// Deterministic mti TypeID for this datum, inferred from (datum_type, name).
+    ///
+    /// Prefix comes from `DatumType::type_prefix()` which mirrors `base_suffix()`.
+    /// Suffix is UUID v5 (SHA-1) over a stable b00t namespace + datum name — same
+    /// inputs always produce the same ID, no storage required.
+    ///
+    /// Example: a Skill datum named "bayesian" → `skill_<uuid-v5>`
+    pub fn type_id(&self) -> String {
+        use mti::prelude::MagicTypeIdExt;
+        let prefix = self.datum_type
+            .as_ref()
+            .map(|t| t.type_prefix())
+            .unwrap_or("dat");
+        let namespace = uuid::Uuid::new_v5(
+            &uuid::Uuid::NAMESPACE_DNS,
+            b"datum.b00t.promptexecution.com",
+        );
+        prefix.create_type_id_v3(namespace.into(), self.name.as_bytes()).to_string()
+    }
+}
+
 /// Handle datum types that are marked as *incubating*.
 ///
 /// Currently these types are treated as untyped content‑tags, but the
@@ -1001,6 +1023,14 @@ impl DatumType {
             Self::Unknown => ".toml",
             other => other.extension(),
         }
+    }
+}
+
+impl DatumType {
+    /// mti TypeID prefix inferred from base_suffix() — e.g. ".skill" → "skill", ".mcp" → "mcp".
+    /// No manual mapping needed; stays in sync with datum_type_table! automatically.
+    pub fn type_prefix(&self) -> &'static str {
+        self.base_suffix().trim_start_matches('.')
     }
 }
 
@@ -3208,5 +3238,82 @@ hint = "containers"
         let parsed: serde_json::Value = serde_json::from_str(line).unwrap();
         assert_eq!(parsed["event"], "mcp_list_view");
         assert_eq!(parsed["detail"], "42");
+    }
+
+    // ── mti type_id tests ──────────────────────────────────────────────────
+    use super::{BootDatum, DatumType};
+
+    fn make_datum(name: &str, datum_type: Option<DatumType>) -> BootDatum {
+        BootDatum {
+            name: name.to_string(),
+            datum_type,
+            hint: String::new(),
+            status: None, enabled: None, status_msg: None, replacement: None,
+            git_attributes: Default::default(), desires: None, auto_install: None,
+            skills: None, compliance: None, install: None, update: None,
+            version: None, version_regex: None, requires_sudo: false,
+            command: None, args: None, vsix_id: None, script: None,
+            image: None, docker_args: None, oci_uri: None, resource_path: None,
+            chart_path: None, namespace: None, values_file: None,
+            keywords: None, package_name: None, ansible: None,
+            env: None, require: None, aliases: None, k0mmand3r: None,
+            knowledge: None, mcp: None, gate: None, url: None, branch: None,
+            clone_path: None, entangled_agents: None, entangled_cli: None,
+            entangled_mcp: None, entangled_ai_models: None, entangled_apis: None,
+            entangled_docker: None, entangled_k8s: None, channel_prefix: None,
+            depends_on: None, members: None, orchestration: None,
+            stack: None, job: None, skill: None, dsn: None, justfile: None,
+            learn: None, lfmf_category: None, usage: None, provides: None,
+            protocol: None, implements: None, hook_detect: None,
+            hook_install: None, hook_update: None, hook_learn: None,
+            uninstall: None, hook_uninstall: None, unlocks: None,
+            type_tags: None, maintenance: None, required_for_core: None,
+        }
+    }
+
+    #[test]
+    fn type_id_is_deterministic() {
+        let d = make_datum("bayesian", Some(DatumType::Skill));
+        assert_eq!(d.type_id(), d.type_id(), "same inputs must produce same TypeID");
+    }
+
+    #[test]
+    fn type_id_prefix_inferred_from_datum_type() {
+        let skill = make_datum("bayesian", Some(DatumType::Skill));
+        let mcp   = make_datum("context7", Some(DatumType::Mcp));
+        let cli   = make_datum("fdfind",   Some(DatumType::Cli));
+        assert!(skill.type_id().starts_with("skill_"), "skill datum must have 'skill_' prefix");
+        assert!(mcp.type_id().starts_with("mcp_"),   "mcp datum must have 'mcp_' prefix");
+        assert!(cli.type_id().starts_with("cli_"),   "cli datum must have 'cli_' prefix");
+    }
+
+    #[test]
+    fn type_id_different_names_produce_different_ids() {
+        let a = make_datum("bayesian",     Some(DatumType::Skill));
+        let b = make_datum("first-principles", Some(DatumType::Skill));
+        assert_ne!(a.type_id(), b.type_id());
+    }
+
+    #[test]
+    fn type_id_different_types_produce_different_ids() {
+        let as_skill = make_datum("kaizen", Some(DatumType::Skill));
+        let as_role  = make_datum("kaizen", Some(DatumType::Role));
+        assert_ne!(as_skill.type_id(), as_role.type_id());
+    }
+
+    #[test]
+    fn type_id_unknown_type_falls_back_to_dat_prefix() {
+        let d = make_datum("mystery", None);
+        assert!(d.type_id().starts_with("dat_"), "unknown type must fall back to 'dat_' prefix");
+    }
+
+    #[test]
+    fn datum_type_prefix_inferred_not_hardcoded() {
+        // base_suffix() → trim '.' → type_prefix() — all variants must round-trip
+        for variant in DatumType::all_variants() {
+            let prefix = variant.type_prefix();
+            let suffix = variant.base_suffix().trim_start_matches('.');
+            assert_eq!(prefix, suffix, "{variant:?}: type_prefix must equal base_suffix without leading dot");
+        }
     }
 }
