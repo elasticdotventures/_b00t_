@@ -10,6 +10,8 @@
 [b00t]
 name = "write-guard"
 type = "gate"
+version = "0.1.0"
+author = "b00t-aligned-agent"
 hint = "Intercepts writes to _b00t_/ — redirects to staging if no datum-authoring blessing"
 
 [gate]
@@ -22,6 +24,15 @@ target_patterns = ["_b00t_/*.toml", "_b00t_/*.datum.toml", "_b00t_/*.skill.toml"
 staging_dir = ".tmp/proposed-datums/"
 create_task = true
 task_label = "review: proposed datum"
+
+[gate.audit]
+log_file = "~/.b00t/audit/write-guard.jsonl"
+log_format = "jsonl"
+fields = ["timestamp", "session", "agent", "source_path", "redirect_path", "has_blessing", "task_created"]
+
+[gate.hook]
+timeout_ms = 300000
+fallback = "deny"
 
 # b00t:map v1
 # summary: Write guard — redirects unauthorized _b00t_/ writes to staging + creates review task
