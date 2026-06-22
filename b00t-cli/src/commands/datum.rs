@@ -1162,14 +1162,29 @@ fn handle_call(b00t_path: &str, datum_key: &str, interface: &str, tokens: &[Stri
             interface, datum_key, datum_key
         ))?;
 
-    // Select backend: prefer gh_cli, fall back to curl_rest
-    let template = abstracts.get("gh_cli")
-        .or_else(|| abstracts.get("curl_rest"))
-        .and_then(|v| v.as_str())
-        .ok_or_else(|| anyhow::anyhow!(
-            "No backend template found for '{}' in datum '{}'",
-            interface, datum_key
-        ))?;
+    // Select backend: github_mcp (if MCP server running) → gh_cli → curl_rest
+    let template = if abstracts.get("github_mcp").is_some() {
+        // Check if GitHub MCP server is actually running
+        let mcp_running = std::process::Command::new("sh")
+            .arg("-c")
+            .arg("b00t mcp list --search github 2>/dev/null | grep -q 'Running'")
+            .status()
+            .map(|s| s.success())
+            .unwrap_or(false);
+        if mcp_running {
+            abstracts.get("github_mcp")
+        } else {
+            abstracts.get("gh_cli")
+        }
+    } else {
+        abstracts.get("gh_cli")
+    }
+    .or_else(|| abstracts.get("curl_rest"))
+    .and_then(|v| v.as_str())
+    .ok_or_else(|| anyhow::anyhow!(
+        "No backend template found for '{}' in datum '{}'",
+        interface, datum_key
+    ))?;
 
     // Parse token substitutions: key=value → {key} → value
     let token_map: HashMap<&str, &str> = tokens.iter()

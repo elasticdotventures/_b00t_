@@ -11,11 +11,20 @@ lfmf_category = "gh-cli"
 depends_on = ["git"]
 
 # ── Abstract interfaces for GitHub operations ───────────────────────────
-# Skills reference these abstract operations, not raw CLI syntax.
-# Backends: gh CLI (default), curl+REST (fallback when gh unavailable).
+# Priority: github_mcp (when MCP server running) → gh_cli (default) → curl_rest (fallback)
+# Available backends are tried in order; first resolvable wins.
+#
+# github_mcp: uses @modelcontextprotocol/server-github MCP server
+#   Tools: create_pull_request_comment, create_pull_request_review, etc.
+#   Requires: MCP server running (b00t mcp list | grep github)
+# gh_cli: GitHub CLI (gh pr comment, gh pr review, etc.)
+#   Requires: gh auth status (authenticated)
+# curl_rest: GitHub REST API via curl
+#   Requires: GITHUB_TOKEN env var
 
 [b00t.abstracts.pr_comment]
 description = "Post a comment on a pull request"
+github_mcp = "mcp__github__create_pull_request_comment pr={pr} body={body}"
 gh_cli = "gh pr comment {pr} --body '{body}'"
 curl_rest = '''
 PR={pr}; BODY='{body}'
@@ -29,6 +38,7 @@ tokens = ["pr", "body"]
 
 [b00t.abstracts.pr_review]
 description = "Submit a formal PR review (approve, request-changes, comment)"
+github_mcp = "mcp__github__create_pull_request_review pr={pr} event={event} body={body}"
 gh_cli = "gh pr review {pr} --{event} --body '{body}'"
 curl_rest = '''
 PR={pr}; EVENT={event}; BODY='{body}'
