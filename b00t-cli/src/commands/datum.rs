@@ -135,6 +135,21 @@ pub enum DatumCommands {
         #[clap(long, help = "Install method hint (apt, cargo, pip, curl, …)")]
         install_method: Option<String>,
     },
+
+    #[clap(about = "Resolve an abstract interface from a datum with token substitution")]
+    Call {
+        #[clap(help = "Datum key (e.g., gh.cli)")]
+        datum: String,
+
+        #[clap(help = "Abstract interface name (e.g., pr_comment, pr_review)")]
+        interface: String,
+
+        #[clap(long, help = "Token substitutions: key=value (repeatable)", value_name = "KEY=VALUE")]
+        token: Vec<String>,
+
+        #[clap(long, help = "Execute the resolved command instead of printing")]
+        exec: bool,
+    },
 }
 
 pub fn handle_datum_command(path: &str, datum_command: &DatumCommands) -> Result<()> {
@@ -209,6 +224,9 @@ pub fn handle_datum_command(path: &str, datum_command: &DatumCommands) -> Result
         DatumCommands::Scaffold { datum_type, name } => handle_scaffold(datum_type, name),
         DatumCommands::Delegate { datum_type, name, description, install_method } => {
             handle_delegate(datum_type, name, description.as_deref(), install_method.as_deref())
+        }
+        DatumCommands::Call { datum, interface, token, exec } => {
+            handle_call(path, datum, interface, token, *exec)
         }
     }
 }
@@ -1102,6 +1120,87 @@ fn handle_delegate(
     println!("{}", stdout.trim());
     println!();
     println!("Delegated. Next task: `b00t task next`");
+
+    Ok(())
+}
+
+/// Resolve an abstract interface from a datum TOML with token substitution.
+///
+/// Reads `[b00t.abstracts.<interface>]` from the datum file, selects the
+/// appropriate backend (prefers `gh_cli` over `curl_rest`), substitutes
+/// `{token}` placeholders, and either prints or executes the command.
+fn handle_call(b00t_path: &str, datum_key: &str, interface: &str, tokens: &[String], exec: bool) -> Result<()> {
+    use std::collections::HashMap;
+
+    // Find the datum file path
+    let all = datum_utils::get_all_datums_with_paths(b00t_path, None)?;
+    let file_path = all.iter()
+        .find(|(name, _)| name.as_str() == datum_key || name.ends_with(&format!(".{}", datum_key)))
+        .map(|(_, (_, path))| path.clone())
+        .or_else(|| {
+            all.iter()
+                .find(|(name, _)| name.contains(datum_key))
+                .map(|(_, (_, path))| path.clone())
+        })
+        .ok_or_else(|| anyhow::anyhow!("Datum '{}' not found in {}", datum_key, b00t_path))?;
+
+    let file_path = std::path::PathBuf::from(&file_path);
+
+    // Parse the raw TOML to access [b00t.abstracts] (not yet in BootDatum struct)
+    let content = std::fs::read_to_string(&file_path)
+        .with_context(|| format!("Failed to read datum file {}", file_path.display()))?;
+
+    let root: toml::Value = toml::from_str(&content)
+        .with_context(|| format!("Failed to parse TOML in {}", file_path.display()))?;
+
+    // Navigate: b00t → abstracts → <interface>
+    let abstracts = root.get("b00t")
+        .and_then(|b| b.get("abstracts"))
+        .and_then(|a| a.get(interface))
+        .ok_or_else(|| anyhow::anyhow!(
+            "Abstract interface '{}' not found in datum '{}'. Available: check `b00t datum show {}`",
+            interface, datum_key, datum_key
+        ))?;
+
+    // Select backend: prefer gh_cli, fall back to curl_rest
+    let template = abstracts.get("gh_cli")
+        .or_else(|| abstracts.get("curl_rest"))
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| anyhow::anyhow!(
+            "No backend template found for '{}' in datum '{}'",
+            interface, datum_key
+        ))?;
+
+    // Parse token substitutions: key=value → {key} → value
+    let token_map: HashMap<&str, &str> = tokens.iter()
+        .filter_map(|t| t.split_once('='))
+        .collect();
+
+    // Substitute {tokens} in the template
+    let mut resolved = template.to_string();
+    for (key, value) in &token_map {
+        let placeholder = format!("{{{}}}", key);
+        resolved = resolved.replace(&placeholder, value);
+    }
+
+    // Warn on unresolvable remaining placeholders
+    if resolved.contains('{') && resolved.contains('}') {
+        eprintln!("⚠️  Unresolved tokens remain: check template for unmatched {{placeholders}}");
+    }
+
+    if exec {
+        eprintln!("▶ {}", resolved);
+        let status = std::process::Command::new("sh")
+            .arg("-c")
+            .arg(&resolved)
+            .status()
+            .with_context(|| format!("Failed to execute: {}", resolved))?;
+        if !status.success() {
+            anyhow::bail!("Command exited with status: {}", status);
+        }
+    } else {
+        println!("{}", resolved);
+    }
 
     Ok(())
 }
