@@ -4,6 +4,8 @@
 
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
+use std::process::{Child, Command};
+use std::time::{Duration, Instant};
 
 /// Sandbox state in the orchestration system
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -70,6 +72,7 @@ pub struct SandboxInstance {
 /// Sandbox lifecycle management
 pub struct SandboxManager {
     instances: BTreeMap<String, SandboxInstance>,
+    process_handles: BTreeMap<String, Vec<Child>>,
 }
 
 impl SandboxManager {
@@ -77,6 +80,7 @@ impl SandboxManager {
     pub fn new() -> Self {
         SandboxManager {
             instances: BTreeMap::new(),
+            process_handles: BTreeMap::new(),
         }
     }
 
@@ -179,12 +183,31 @@ impl SandboxManager {
 
         instance.state = SandboxState::Reloading;
 
-        // 🤓 TODO: Actually kill old MCP processes and start new ones
-        // This would involve:
-        // - Send SIGTERM to old MCP processes
-        // - Wait for graceful shutdown
-        // - Start new MCP processes from config
-        // - Verify connectivity
+        // Kill old MCP processes for this sandbox
+        if let Some(old_handles) = self.process_handles.get_mut(sandbox_id) {
+            for child in old_handles.iter_mut() {
+                kill_mcp(child);
+            }
+            old_handles.clear();
+        }
+
+        // Start new MCP processes from config
+        let mut new_handles: Vec<Child> = Vec::new();
+        for server_name in &new_servers {
+            if let Some(config) = instance
+                .config
+                .mcp_servers
+                .iter()
+                .find(|m| &m.name == server_name && m.enabled)
+            {
+                if let Some(child) = start_mcp(config) {
+                    new_handles.push(child);
+                }
+            }
+        }
+
+        self.process_handles
+            .insert(sandbox_id.to_string(), new_handles);
 
         instance.loaded_mcps = new_servers;
         instance.last_reload = Some(chrono::Utc::now().to_rfc3339());
@@ -200,7 +223,15 @@ impl SandboxManager {
             .get_mut(sandbox_id)
             .ok_or_else(|| format!("Sandbox '{}' not found", sandbox_id))?;
 
-        // 🤓 TODO: Kill all MCP processes
+        // Kill all MCP processes for this sandbox
+        if let Some(handles) = self.process_handles.get_mut(sandbox_id) {
+            for child in handles.iter_mut() {
+                kill_mcp(child);
+            }
+            handles.clear();
+        }
+        self.process_handles.remove(sandbox_id);
+
         instance.state = SandboxState::Shutdown;
         instance.loaded_mcps.clear();
 
@@ -228,6 +259,74 @@ impl SandboxManager {
             .values()
             .filter(|s| s.state == state)
             .collect()
+    }
+}
+
+/// Spawn an MCP server process from configuration.
+/// Returns None if the command doesn't exist on the system (graceful skip).
+fn start_mcp(config: &MCPServerConfig) -> Option<Child> {
+    // Check that the command exists before attempting to spawn
+    if which::which(&config.command).is_err() {
+        tracing::warn!(
+            "MCP server '{}': command '{}' not found on PATH, skipping",
+            config.name,
+            config.command
+        );
+        return None;
+    }
+    let mut cmd = Command::new(&config.command);
+    cmd.args(&config.args);
+    for (key, value) in &config.environment {
+        cmd.env(key, value);
+    }
+    match cmd.spawn() {
+        Ok(child) => Some(child),
+        Err(e) => {
+            tracing::error!(
+                "MCP server '{}': failed to spawn '{}': {}",
+                config.name,
+                config.command,
+                e
+            );
+            None
+        }
+    }
+}
+
+/// Gracefully terminate an MCP server process:
+/// SIGTERM → wait up to 5s → SIGKILL if still alive
+fn kill_mcp(child: &mut Child) {
+    let pid = child.id() as i32;
+    // Send SIGTERM for graceful shutdown
+    unsafe {
+        libc::kill(pid, libc::SIGTERM);
+    }
+    // Wait up to 5 seconds for the process to exit
+    let deadline = Instant::now() + Duration::from_secs(5);
+    loop {
+        match child.try_wait() {
+            Ok(Some(_)) => return, // Process exited cleanly
+            Ok(None) => {
+                if Instant::now() >= deadline {
+                    break; // Timeout, fall through to SIGKILL
+                }
+                std::thread::sleep(Duration::from_millis(100));
+            }
+            Err(_) => return, // Process already reaped
+        }
+    }
+    // Force kill if still running
+    let _ = child.kill();
+    let _ = child.wait();
+}
+
+impl Drop for SandboxManager {
+    fn drop(&mut self) {
+        for handles in self.process_handles.values_mut() {
+            for child in handles.iter_mut() {
+                kill_mcp(child);
+            }
+        }
     }
 }
 
