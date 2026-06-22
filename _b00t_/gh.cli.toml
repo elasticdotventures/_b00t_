@@ -1,51 +1,98 @@
-
-
 [b00t]
 name = "gh"
-desires = "2.74.2"
-install = """
-# 🤓 Non-sudo installation via binary download  
-VERSION="2.74.2"
-OS=$(uname -s | tr '[:upper:]' '[:lower:]')
-ARCH=$(uname -m)
-case $ARCH in
-    x86_64) ARCH="amd64" ;;
-    aarch64) ARCH="arm64" ;;
-esac
-
-mkdir -p ~/.local/bin
-cd /tmp
-curl -fsSL "https://github.com/cli/cli/releases/download/v${VERSION}/gh_${VERSION}_${OS}_${ARCH}.tar.gz" | \
-    tar xzf -
-cp "gh_${VERSION}_${OS}_${ARCH}/bin/gh" ~/.local/bin/gh
-chmod +x ~/.local/bin/gh
-rm -rf "gh_${VERSION}_${OS}_${ARCH}"
-"""
-update = """
-# 🤓 Update via binary download (non-sudo)
-VERSION="2.74.2"
-OS=$(uname -s | tr '[:upper:]' '[:lower:]')
-ARCH=$(uname -m)
-case $ARCH in
-    x86_64) ARCH="amd64" ;;
-    aarch64) ARCH="arm64" ;;
-esac
-
-mkdir -p ~/.local/bin
-curl -fsSL "https://github.com/cli/cli/releases/download/v${VERSION}/gh_${VERSION}_${OS}_${ARCH}.tar.gz" | \
-    tar xz --strip-components=1 -C ~/.local/bin --wildcards "*/bin/gh"
-chmod +x ~/.local/bin/gh
-"""
+type = "cli"
+desires = "latest"
+install = "curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | sudo dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg && echo 'deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main' | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null && sudo apt update && sudo apt install gh -y"
 version = "gh --version"
-version_regex = "\\d+\\.\\d+\\.\\d+"
-hint = "gh is the official GitHub CLI, for interacting with GitHub from the command line."
-unlocks = ["gh *"]
+version_regex = '(\\d+\\.\\d+\\.\\d+)'
+hint = "GitHub CLI — authenticated git, PR, issue, and repo operations"
+unlocks = ["gh *", "gh-*"]
+lfmf_category = "gh-cli"
+depends_on = ["git"]
 
+# ── Abstract interfaces for GitHub operations ───────────────────────────
+# Skills reference these abstract operations, not raw CLI syntax.
+# Backends: gh CLI (default), curl+REST (fallback when gh unavailable).
 
-[validate]
-command = "gh --version"
-regex = "gh version \\d+"
+[b00t.abstracts.pr_comment]
+description = "Post a comment on a pull request"
+gh_cli = "gh pr comment {pr} --body '{body}'"
+curl_rest = '''
+PR={pr}; BODY='{body}'
+OWNER=$(git remote get-url origin | sed -E 's|.*github\\.com[:/]||; s|\\.git$||' | cut -d/ -f1)
+REPO=$(git remote get-url origin | sed -E 's|.*github\\.com[:/]||; s|\\.git$||' | cut -d/ -f2)
+curl -s -X POST -H "Authorization: token $GITHUB_TOKEN" \
+  https://api.github.com/repos/$OWNER/$REPO/issues/$PR/comments \
+  -d "{\"body\": \"$BODY\"}"
+'''
+tokens = ["pr", "body"]
+
+[b00t.abstracts.pr_review]
+description = "Submit a formal PR review (approve, request-changes, comment)"
+gh_cli = "gh pr review {pr} --{event} --body '{body}'"
+curl_rest = '''
+PR={pr}; EVENT={event}; BODY='{body}'
+OWNER=$(git remote get-url origin | sed -E 's|.*github\\.com[:/]||; s|\\.git$||' | cut -d/ -f1)
+REPO=$(git remote get-url origin | sed -E 's|.*github\\.com[:/]||; s|\\.git$||' | cut -d/ -f2)
+HEAD_SHA=$(curl -s -H "Authorization: token $GITHUB_TOKEN" \
+  https://api.github.com/repos/$OWNER/$REPO/pulls/$PR \
+  | python3 -c "import sys,json; print(json.load(sys.stdin)['head']['sha'])")
+curl -s -X POST -H "Authorization: token $GITHUB_TOKEN" \
+  https://api.github.com/repos/$OWNER/$REPO/pulls/$PR/reviews \
+  -d "{\"commit_id\": \"$HEAD_SHA\", \"event\": \"$EVENT\", \"body\": \"$BODY\"}"
+'''
+tokens = ["pr", "event", "body"]
+
+[b00t.abstracts.pr_diff]
+description = "Get the diff for a pull request"
+gh_cli = "gh pr diff {pr}"
+curl_rest = '''
+PR={pr}
+OWNER=$(git remote get-url origin | sed -E 's|.*github\\.com[:/]||; s|\\.git$||' | cut -d/ -f1)
+REPO=$(git remote get-url origin | sed -E 's|.*github\\.com[:/]||; s|\\.git$||' | cut -d/ -f2)
+curl -s -H "Authorization: token $GITHUB_TOKEN" \
+  -H "Accept: application/vnd.github.v3.diff" \
+  https://api.github.com/repos/$OWNER/$REPO/pulls/$PR
+'''
+tokens = ["pr"]
+
+[b00t.abstracts.pr_list]
+description = "List open pull requests"
+gh_cli = "gh pr list --state open --limit {limit}"
+curl_rest = '''
+LIMIT={limit}
+OWNER=$(git remote get-url origin | sed -E 's|.*github\\.com[:/]||; s|\\.git$||' | cut -d/ -f1)
+REPO=$(git remote get-url origin | sed -E 's|.*github\\.com[:/]||; s|\\.git$||' | cut -d/ -f2)
+curl -s -H "Authorization: token $GITHUB_TOKEN" \
+  "https://api.github.com/repos/$OWNER/$REPO/pulls?state=open&per_page=$LIMIT"
+'''
+tokens = ["limit"]
+
+[b00t.abstracts.pr_checkout]
+description = "Check out a PR branch locally for review"
+gh_cli = "gh pr checkout {pr}"
+git_fallback = "git fetch origin pull/{pr}/head:pr-{pr} && git checkout pr-{pr}"
+tokens = ["pr"]
+
+[b00t.abstracts.pr_view]
+description = "View PR details (title, author, body)"
+gh_cli = "gh pr view {pr} --json title,author,body,state,additions,deletions,files"
+curl_rest = '''
+PR={pr}
+OWNER=$(git remote get-url origin | sed -E 's|.*github\\.com[:/]||; s|\\.git$||' | cut -d/ -f1)
+REPO=$(git remote get-url origin | sed -E 's|.*github\\.com[:/]||; s|\\.git$||' | cut -d/ -f2)
+curl -s -H "Authorization: token $GITHUB_TOKEN" \
+  https://api.github.com/repos/$OWNER/$REPO/pulls/$PR
+'''
+tokens = ["pr"]
 
 [roles]
-required_for = ["developer", "orchestrator"]
-optional_for = ["analyst"]
+required_for = ["developer", "executive", "operator", "reviewer"]
+optional_for = []
+
+# b00t:map v1
+# summary: GitHub CLI datum — abstract interfaces for PR/issue/repo operations with gh+curl backends
+# tags: gh, github, cli, pr, review, abstract-interface
+# tier: ch0nky
+# cmds: gh pr comment, gh pr review, gh pr diff, gh pr list, gh pr checkout
+# complexity: 3
