@@ -3,3 +3,13 @@
 plantuml.mcp.toml b00t.status=sunset b00t.enabled=false b00t.status_msg=java-too-heavy b00t.replacement=b00t-viz-mermaid-rhai-svg b00t.search=exclude
 plantuml-queue.stack.toml b00t.status=sunset b00t.enabled=false b00t.status_msg=java-too-heavy b00t.replacement=b00t-viz-mermaid-rhai-svg b00t.search=exclude
 plantuml-server-b00t.docker.toml b00t.status=sunset b00t.enabled=false b00t.status_msg=java-too-heavy b00t.replacement=b00t-viz-mermaid-rhai-svg b00t.search=exclude
+
+# Docker → podman/quadlet migration (b00t uses podman, not docker)
+n8n.docker.toml b00t.status=sunset b00t.enabled=false b00t.status_msg=docker-deprecated b00t.replacement=stack.cli b00t.search=exclude
+ollama.docker.toml b00t.status=sunset b00t.enabled=false b00t.status_msg=docker-deprecated b00t.replacement=stack.cli b00t.search=exclude
+postgres.docker.toml b00t.status=sunset b00t.enabled=false b00t.status_msg=docker-deprecated b00t.replacement=stack.cli b00t.search=exclude
+postgres-enhanced.docker.toml b00t.status=sunset b00t.enabled=false b00t.status_msg=docker-deprecated b00t.replacement=stack.cli b00t.search=exclude
+qdrant.docker.toml b00t.status=sunset b00t.enabled=false b00t.status_msg=docker-deprecated b00t.replacement=stack.cli b00t.search=exclude
+redis.docker.toml b00t.status=sunset b00t.enabled=false b00t.status_msg=docker-deprecated b00t.replacement=stack.cli b00t.search=exclude
+rustfs.docker.toml b00t.status=sunset b00t.enabled=false b00t.status_msg=docker-deprecated b00t.replacement=stack.cli b00t.search=exclude
+
