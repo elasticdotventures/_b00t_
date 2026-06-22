@@ -14,6 +14,7 @@ pub fn get_workspace_root() -> String {
     }
 
     cmd!("git", "rev-parse", "--show-toplevel")
+        .stderr_null()
         .read()
         .unwrap_or_else(|_| {
             std::env::var("HOME")

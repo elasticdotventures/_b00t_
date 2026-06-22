@@ -2158,14 +2158,14 @@ finetune-all:
 
 # Generate Mermaid flowchart from ontology introspection
 gen-flowchart-mermaid root="":
-    b00t-cli ontology export --format=mermaid --root={{root}} --depth=3
+    cd b00t-cli && cargo run --bin b00t-cli -- ontology export --format=mermaid --root={{root}} --depth=3
 
 # Generate Cytoscape JSON graph from ontology introspection
 gen-flowchart-cytoscape root="" output="topology.json":
-    b00t-cli ontology export --format=cytoscape --root={{root}} --depth=3 > {{output}}
+    cd b00t-cli && cargo run --bin b00t-cli -- ontology export --format=cytoscape --root={{root}} --depth=3 > {{output}}
 
 # Generate docs chapter with auto-updating flow charts
 gen-flowchart-docs:
-    b00t-cli ontology export --format=mermaid --depth=3 > book/src/topology.md
+    cd b00t-cli && cargo run --bin b00t-cli -- ontology export --format=mermaid --depth=3 > book/src/topology.md
     echo "Updated book/src/topology.md with live system topology"
 
