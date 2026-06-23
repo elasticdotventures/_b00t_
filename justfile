@@ -1014,7 +1014,7 @@ check-fast:
 # ── ch0nky slot swap (pi ↔ opencode) ─────────────────────────────────────────
 # 🤓 pi and opencode share the ch0nky-coding-agent exclusion group — only one active
 moltis-build:
-    cargo build --manifest-path vendor/moltis-b00t/Cargo.toml --release
+    cargo build --manifest-path vendor/moltis-b00t/crates/cli/Cargo.toml --release --no-default-features --features lightweight
 
 # moltis: start moltis with b00t soul backend
 moltis-run:

@@ -15,10 +15,8 @@ permission:
     "pnpm build": "allow"
     "python -m build": "allow"
     "*": "deny"
-  edit:
-    "**/*": "deny"
-  write:
-    "**/*": "deny"
+  edit: "deny"
+  write: "deny"
   task:
     contextscout: "allow"
     "*": "deny"
