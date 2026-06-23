@@ -2,6 +2,8 @@
 //    Validates b00t-issued API keys → forwards to upstream LLM backend →
 //    emits Spotlight usage events. Mounts on the existing b00t-mcp axum server.
 //
+//    Auto-discovery: probes local backends (mistralrs :8181, llama.cpp :8080,
+//    vLLM :8000) on startup. Falls back to remote API keys from env.
 //    Reference: vendor/irontology-mcp/crates/provider-openai/src/lib.rs:299-354
 
 use axum::{
@@ -15,9 +17,114 @@ use axum::{
 use axum::http::header;
 use serde_json::{Value, json};
 use std::collections::HashMap;
+use std::net::TcpStream;
 use std::sync::Arc;
+use std::time::Duration;
 use tokio::sync::RwLock;
 use uuid::Uuid;
+
+// ── Auto-discovery of upstream backends ────────────────────────────────────
+
+const LOCAL_BACKENDS: &[(&str, u16)] = &[
+    ("mistral.rs", 8181),
+    ("llama.cpp", 8080),
+    ("vLLM", 8000),
+    ("vLLM-alt", 8001),
+];
+
+/// Probe known local ports via TCP connect (no runtime needed).
+/// Returns (name, base_url) of the first live listener.
+fn discover_local_backend() -> Option<(String, String)> {
+    for &(name, port) in LOCAL_BACKENDS {
+        if TcpStream::connect_timeout(
+            &format!("127.0.0.1:{}", port).parse().ok()?,
+            Duration::from_millis(500),
+        ).is_ok()
+        {
+            eprintln!("🔍 discovered local backend: {} (port {})", name, port);
+            return Some((name.to_string(), format!("http://127.0.0.1:{}/v1", port)));
+        }
+    }
+    None
+}
+
+/// Resolve the upstream key from environment in priority order.
+fn resolve_upstream_key() -> Option<(String, String)> {
+    // Explicit server config
+    if let Ok(key) = std::env::var("B00T_SERVER_UPSTREAM_KEY") {
+        if !key.is_empty() {
+            return Some((key, "env:B00T_SERVER_UPSTREAM_KEY".into()));
+        }
+    }
+    // Standard OpenAI
+    if let Ok(key) = std::env::var("OPENAI_API_KEY") {
+        if !key.is_empty() {
+            return Some((key, "env:OPENAI_API_KEY".into()));
+        }
+    }
+    // b00t tier keys (for forwarding)
+    if let Ok(key) = std::env::var("B00T_AI_CH0NKY_KEY") {
+        if !key.is_empty() {
+            if let Ok(url) = std::env::var("B00T_AI_CH0NKY_BASE") {
+                if !url.is_empty() {
+                    return Some((key, url));
+                }
+            }
+        }
+    }
+    if let Ok(key) = std::env::var("B00T_AI_FRONTIER_KEY") {
+        if !key.is_empty() {
+            if let Ok(url) = std::env::var("B00T_AI_FRONTIER_BASE") {
+                if !url.is_empty() {
+                    return Some((key, url));
+                }
+            }
+        }
+    }
+    // OpenRouter
+    if let Ok(key) = std::env::var("OPENROUTER_API_KEY") {
+        if !key.is_empty() {
+            return Some((key, "https://openrouter.ai/api/v1".into()));
+        }
+    }
+    None
+}
+
+/// Resolve upstream: explicit env var > local auto-discovery > remote key.
+fn resolve_upstream() -> (String, String) {
+    // 1. Explicit URL from env (takes precedence)
+    if let Ok(url) = std::env::var("B00T_SERVER_UPSTREAM_URL") {
+        if !url.is_empty() {
+            let key = std::env::var("B00T_SERVER_UPSTREAM_KEY")
+                .or_else(|_| std::env::var("OPENAI_API_KEY"))
+                .unwrap_or_default();
+            eprintln!("🌐 upstream (explicit): {}", url);
+            return (url, key);
+        }
+    }
+
+    // 2. Auto-discover local backend
+    if let Some((name, url)) = discover_local_backend() {
+        eprintln!("📍 upstream (auto-discovered {}): {}", name, url);
+        return (url, String::new()); // local backends don't need keys
+    }
+
+    // 3. Remote key profile
+    if let Some((key, source)) = resolve_upstream_key() {
+        let url = if source.starts_with("http") {
+            source.clone()
+        } else {
+            "https://api.openai.com/v1".to_string()
+        };
+        eprintln!("🌐 upstream (remote {}): {}", source, url);
+        return (url, key);
+    }
+
+    // 4. Nothing available — start in degraded mode
+    eprintln!("⚠️  No upstream configured. Set B00T_SERVER_UPSTREAM_KEY or OPENAI_API_KEY.");
+    eprintln!("   Also probes: localhost:{:?} for mistral.rs/llama.cpp/vLLM.", LOCAL_BACKENDS.iter().map(|(_,p)| p).collect::<Vec<_>>());
+    ("http://localhost:8181/v1".to_string(), String::new())
+}
 
 // ── State ──────────────────────────────────────────────────────────────────
 
@@ -36,7 +143,14 @@ pub struct LlmState {
 }
 
 impl LlmState {
-    pub fn new(upstream_url: &str, upstream_key: &str) -> Self {
+    /// Create state with auto-discovered upstream: local probe > env key > explicit URL.
+    pub fn new() -> Self {
+        let (url, key) = resolve_upstream();
+        Self::from_config(&url, &key)
+    }
+
+    /// Create state with explicit upstream config (for tests, embedded use).
+    pub fn from_config(upstream_url: &str, upstream_key: &str) -> Self {
         let home = dirs_next().unwrap_or_else(|| std::path::PathBuf::from("."));
         let keys_file = home.join("server-keys.json");
         let mut keys = HashMap::new();
@@ -307,7 +421,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_key_create_and_validate() {
-        let state = Arc::new(LlmState::new("http://localhost:8181/v1", ""));
+        let state = Arc::new(LlmState::from_config("http://localhost:8181/v1", ""));
         let key = state.create_key("test-consumer").await;
         assert!(key.starts_with("b00t-sk-"));
         let entry = state.validate_key(&key).await;
@@ -317,14 +431,14 @@ mod tests {
 
     #[tokio::test]
     async fn test_unknown_key_is_none() {
-        let state = Arc::new(LlmState::new("http://localhost:8181/v1", ""));
+        let state = Arc::new(LlmState::from_config("http://localhost:8181/v1", ""));
         let entry = state.validate_key("bogus-key").await;
         assert!(entry.is_none());
     }
 
     #[tokio::test]
     async fn test_spotlight_emit() {
-        let state = Arc::new(LlmState::new("http://localhost:8181/v1", ""));
+        let state = Arc::new(LlmState::from_config("http://localhost:8181/v1", ""));
         state.emit_spotlight("test-consumer", "chat_completions", "test-model", 42).await;
         let content = std::fs::read_to_string(&state.spotlight_log).unwrap_or_default();
         assert!(content.contains("spotlight.llm.chat_completions"));
