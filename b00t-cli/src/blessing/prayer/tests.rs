@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod prayer_tests {
     use super::super::*;
-    use crate::blessing::{BlessingEdge, BlessingGraph, BlessingNode, LayerMetadata};
+    use crate::blessing::{BlessingGraph, BlessingNode, LayerMetadata};
     use std::collections::{BTreeMap, HashSet};
 
     fn sample_blessing_graph() -> BlessingGraph {

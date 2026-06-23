@@ -483,7 +483,6 @@ optional_for = ["analyst"]
 
     #[test]
     fn test_export_mermaid_produces_valid_output() {
-        use std::io::Write;
         let dir = tempfile::tempdir().unwrap();
         // Create a few test datums with relationships
         let datums = [
@@ -528,7 +527,6 @@ optional_for = []
 
     #[test]
     fn test_export_cytoscape_produces_valid_graph() {
-        use std::io::Write;
         let dir = tempfile::tempdir().unwrap();
         let datums = [
             ("executive.role.toml", r#"[b00t]
@@ -561,7 +559,6 @@ optional_for = []
 
     #[test]
     fn test_sparql_query_with_datum() {
-        use std::io::Write;
         let dir = tempfile::tempdir().unwrap();
         let toml_path = dir.path().join("rust.cli.toml");
         std::fs::write(&toml_path, r#"[b00t]

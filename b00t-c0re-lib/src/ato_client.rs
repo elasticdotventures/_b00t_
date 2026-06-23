@@ -46,6 +46,7 @@ impl AtoAct {
 /// Client for fetching ATO legislation documents.
 pub struct AtoClient {
     /// Base URL for the legislation API.
+    #[allow(dead_code)]
     base_url: String,
 }
 
