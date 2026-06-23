@@ -8,12 +8,7 @@ permission:
     "*": "deny"
     "bash .opencode/skills/task-management/router.sh complete*": "allow"
     "bash .opencode/skills/task-management/router.sh status*": "allow"
-  edit:
-    "**/*.env*": "deny"
-    "**/*.key": "deny"
-    "**/*.secret": "deny"
-    "node_modules/**": "deny"
-    ".git/**": "deny"
+  edit: "ask"
   task:
     contextscout: "allow"
     externalscout: "allow"

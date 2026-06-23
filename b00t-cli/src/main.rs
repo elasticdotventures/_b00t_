@@ -61,7 +61,7 @@ use b00t_cli::commands::uninstall::uninstall_datum;
 pub use b00t_cli::{
     DatumType, claude_code_install_mcp, codex_install_mcp, dotmcpjson_install_mcp,
     gemini_install_mcp, get_config, get_expanded_path, get_mcp_config, get_mcp_toml_files,
-    mcp_add_json, mcp_list, mcp_output, mcp_remove, vscode_install_mcp,
+    mcp_add_json, mcp_list, mcp_output, mcp_remove, opencode_install_mcp, vscode_install_mcp,
 };
 
 mod integration_tests;
@@ -262,7 +262,7 @@ The system will:
         #[clap(subcommand)]
         init_command: InitCommands,
     },
-    #[clap(about = "Show agent identity and context information")]
+    #[clap(about = "Show agent identity and context information", alias = "whomai")]
     Whoami {
         #[clap(long, help = "Override detected role (matches role datum)")]
         role: Option<String>,
@@ -2327,6 +2327,7 @@ async fn main() {
                             let tf = experiment::create_focus_record(&cmp.experiment_id, "treatment", "sm0l-trt", "experiment-eval", &cmp.treatment.scores);
                             eprintln!("[ledgrrr] {}", experiment::focus_record_to_ledgrrr(&cf));
                             eprintln!("[ledgrrr] {}", experiment::focus_record_to_ledgrrr(&tf));
+                            eprintln!("[ledgrrr] focus_delta={:.4} (control-earned={:.4} control-consumed={:.4} | treatment-earned={:.4} treatment-consumed={:.4})", cmp.focus_delta, cmp.control.focus_earned, cmp.control.focus_consumed, cmp.treatment.focus_earned, cmp.treatment.focus_consumed);
                             // emit FOCUS records to ledgrrr-mcp MCP server (best-effort)
                             experiment::emit_focus_to_ledgrrr_mcp(&cmp, "http://localhost:8001");
                             // Calculate and issue cake payout
@@ -2622,6 +2623,16 @@ mod k0mmand3r_dispatch_tests {
             }
             _ => panic!("expected uninstall command"),
         }
+    }
+
+    #[test]
+    fn cli_parse_whomai_alias_accepted() {
+        // `whomai` (common typo) must parse identically to `whoami`
+        let cli = Cli::parse_from(args(&["b00t-cli", "whomai"]));
+        assert!(
+            matches!(cli.command, Some(Commands::Whoami { .. })),
+            "expected Whoami command from 'whomai' alias"
+        );
     }
 
     #[test]

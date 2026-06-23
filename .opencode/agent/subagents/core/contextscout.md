@@ -11,10 +11,8 @@ permission:
     "*": "allow"
   bash:
     "*": "deny"
-  edit:
-    "*": "deny"
-  write:
-    "*": "deny"
+  edit: "deny"
+  write: "deny"
   task:
     "*": "deny"
 

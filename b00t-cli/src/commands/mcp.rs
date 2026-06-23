@@ -57,14 +57,14 @@ pub enum McpCommands {
         all: bool,
     },
     #[clap(
-        about = "Install MCP server to a target (claudecode, vscode, geminicli, dotmcpjson, roocode, codex, stdout)",
-        long_about = "Install MCP server to a target application.\n\nExamples:\n  b00t-cli mcp install gh claudecode\n  b00t-cli mcp install filesystem geminicli --repo\n  b00t-cli mcp install browser-use dotmcpjson --stdio-command uvx\n  b00t-cli mcp install aws-knowledge dotmcpjson --httpstream\n  b00t-cli mcp install filesystem roocode\n  b00t-cli mcp install filesystem codex\n  b00t-cli mcp install filesystem stdout\n  b00t-cli app vscode mcp install filesystem"
+        about = "Install MCP server to a target (claudecode, vscode, geminicli, dotmcpjson, roocode, codex, opencode, stdout)",
+        long_about = "Install MCP server to a target application.\n\nExamples:\n  b00t-cli mcp install gh claudecode\n  b00t-cli mcp install filesystem geminicli --repo\n  b00t-cli mcp install browser-use dotmcpjson --stdio-command uvx\n  b00t-cli mcp install aws-knowledge dotmcpjson --httpstream\n  b00t-cli mcp install filesystem roocode\n  b00t-cli mcp install filesystem codex\n  b00t-cli mcp install filesystem opencode\n  b00t-cli mcp install filesystem stdout\n  b00t-cli app vscode mcp install filesystem"
     )]
     Install {
         #[clap(help = "MCP server name")]
         name: String,
         #[clap(
-            help = "Installation target: claudecode, vscode, geminicli, dotmcpjson, roocode, codex, stdout"
+            help = "Installation target: claudecode, vscode, geminicli, dotmcpjson, roocode, codex, opencode, stdout"
         )]
         target: String,
         #[clap(long, help = "Install to repository-specific location (for geminicli)")]
@@ -349,6 +349,25 @@ impl McpCommands {
                             *httpstream,
                         )
                     }
+                    "opencode" => {
+                        let use_repo = if *repo && *user {
+                            anyhow::bail!("Error: Cannot specify both --repo and --user flags");
+                        } else if *repo {
+                            true
+                        } else if *user {
+                            false
+                        } else {
+                            crate::utils::is_git_repo()
+                        };
+
+                        crate::opencode_install_mcp(
+                            name,
+                            path,
+                            use_repo,
+                            stdio_command.as_deref(),
+                            *httpstream,
+                        )
+                    }
                     "geminicli" => {
                         // Determine installation location: default to repo if in git repo, otherwise user
                         let use_repo = if *repo && *user {
@@ -387,7 +406,7 @@ impl McpCommands {
                     }
                     _ => {
                         anyhow::bail!(
-                            "Error: Invalid target '{}'. Valid targets are: claudecode, vscode, geminicli, dotmcpjson, roocode, codex, stdout",
+                            "Error: Invalid target '{}'. Valid targets are: claudecode, vscode, geminicli, dotmcpjson, roocode, codex, opencode, stdout",
                             target
                         );
                     }

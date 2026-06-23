@@ -1,5 +1,6 @@
 [b00t]
 name = "pnpm"
+type = "cli"
 desires = "10.6.5"
 # ✅ Safe install path: corepack (bundled with Node.js >=16.10) — no curl|sh required.
 # If corepack is not available, fall back to npm global install.

@@ -20,10 +20,7 @@ bun install github:promptexecution/pm2-mcp -g --force
 # Version detection
 version = "pm2 --version"
 version_regex = "^(\\d+\\.\\d+\\.\\d+)"
-
-aliases = ["pm2-list", "pm2-logs", "pm2-mon", "pm2-stop-all", "pm2-delete-all", "pm2-restart-all", "pm2-save", "pm2-resurrect"]
 depends_on = ["node.cli"]
-
 
 [[b00t.aliases]]
 name = "pm2-list"
@@ -56,6 +53,7 @@ cmd = "pm2 save"
 [[b00t.aliases]]
 name = "pm2-resurrect"
 cmd = "pm2 resurrect"
+
 [b00t.env]
 # PM2 home directory
 PM2_HOME = "~/.pm2"

@@ -279,8 +279,10 @@ impl AgentCoordinator {
 
     /// Check if a specific worker agent is available and responsive
     pub async fn is_worker_available(&self, worker_id: &str) -> B00tResult<bool> {
-        let agents = self.discover_agents().await?;
-        Ok(agents.iter().any(|a| a.agent_id == worker_id && a.status == AgentStatus::Online))
+        match self.discover_agents().await {
+            Ok(agents) => Ok(agents.iter().any(|a| a.agent_id == worker_id && a.status == AgentStatus::Online)),
+            Err(_) => Ok(false), // registry unreachable → worker not available
+        }
     }
 
     /// Send direct message to another agent
@@ -322,9 +324,10 @@ impl AgentCoordinator {
         // Verify worker exists before delegating
         let available = self.is_worker_available(worker_id).await?;
         if !available {
-            let agents = self.discover_agents().await?;
-            let agent_ids: Vec<String> = agents.iter().map(|a| a.agent_id.clone()).collect();
-            let list = if agent_ids.is_empty() { "none".to_string() } else { agent_ids.join(", ") };
+            let list = match self.discover_agents().await {
+                Ok(agents) if !agents.is_empty() => agents.iter().map(|a| a.agent_id.clone()).collect::<Vec<_>>().join(", "),
+                _ => "none".to_string(),
+            };
             anyhow::bail!(
                 "worker '{}' is not available — no agent with that ID registered or agent is offline. \
                  Available agents: {}",

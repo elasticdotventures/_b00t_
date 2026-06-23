@@ -1,5 +1,6 @@
 [b00t]
 name = "codex-cli"
+type = "cli"
 desires = "0.125.0"
 install = "bunx codex-cli"
 update = "bunx codex-cli self-update"
