@@ -1,0 +1,56 @@
+[b00t]
+name = "eureka"
+type = "cli"
+hint = "CLI tool for capturing code ideas — instant note-taking from terminal without breaking flow"
+source = "https://github.com/simeg/eureka"
+desires = "latest"
+install = "cargo install eureka"
+update = "cargo install eureka --force"
+version = "eureka --version"
+version_regex = 'eureka (\d+\.\d+\.\d+)'
+depends_on = ["cargo.cli", "git.cli"]
+
+[b00t.skill]
+type_tags = ["cli", "productivity", "notes", "ideas", "git", "markdown", "rust"]
+description = """
+eureka — capture code ideas from the terminal without losing your flow.
+
+KEY COMMANDS
+  eureka                   # open editor, capture idea, commit to ideas repo
+  eureka --view            # print all ideas to stdout
+  eureka --clear-repo      # reset configured repo path
+
+HOW IT WORKS
+  On first run: asks for git repo path (where ideas.md lives).
+  Each `eureka` invocation: opens $EDITOR, you write the idea,
+  it appends to ideas.md and auto-commits to the configured git repo.
+
+SETUP
+  git init ~/notes/eureka-ideas && cd ~/notes/eureka-ideas
+  touch ideas.md && git add . && git commit -m "init"
+  eureka  # first run will ask for repo path
+
+b00t INTEGRATION ANALYSIS
+  Eureka fills the gap between b00t lfmf (tribal knowledge) and
+  b00t task add (actionable items). Ideal for:
+    - 💡 architectural insights during deep work sessions
+    - 🤔 "what if we..." ideas that aren't ready for task tracking
+    - 📝 capturing context that Claude memory doesn't store well
+
+  b00t bridge pattern:
+    alias b0idea='eureka'           # capture idea
+    alias b0lfmf='b00t lfmf ...'   # tribal knowledge
+    alias b0task='b00t task add'    # actionable task
+
+  VERDICT: Worth integrating as `b00t eureka` skill alias for agents.
+  Skill enables idea capture without full task overhead.
+"""
+tier = "sm0l"
+complexity = 2
+
+# b00t:map v1
+# summary: eureka CLI — terminal idea capture; git-backed markdown notes; low-friction flow preservation
+# tags: cli, productivity, notes, ideas, git, rust
+# tier: sm0l
+# cmds: eureka, eureka --view
+# complexity: 2
