@@ -2216,3 +2216,18 @@ finetune-all:
     uv run python3.14 fine-tune/train_unsloth.py
     uv run python3.14 fine-tune/export_gguf.py
 
+# ─── Topology: introspected flow charts from system datums ──────────────────
+
+# Generate Mermaid flowchart from ontology introspection
+gen-flowchart-mermaid root="":
+    cd b00t-cli && cargo run --bin b00t-cli -- ontology export --format=mermaid --root={{root}} --depth=3
+
+# Generate Cytoscape JSON graph from ontology introspection
+gen-flowchart-cytoscape root="" output="topology.json":
+    cd b00t-cli && cargo run --bin b00t-cli -- ontology export --format=cytoscape --root={{root}} --depth=3 > {{output}}
+
+# Generate docs chapter with auto-updating flow charts
+gen-flowchart-docs:
+    cd b00t-cli && cargo run --bin b00t-cli -- ontology export --format=mermaid --depth=3 > book/src/topology.md
+    echo "Updated book/src/topology.md with live system topology"
+

@@ -386,10 +386,11 @@ sm0l-session-clean MAX_AGE_HOURS="8":
     echo "cleaned ${removed} sessions older than {{MAX_AGE_HOURS}}h"
 
 # Pipe-agent with session logging — ch0nky gets log path on stderr
-cargo-test-session TASK="cargo" *ARGS:
+cargo-test-session ARGS="":
     #!/usr/bin/env bash
+    TASK="${B00T_CARGO_TASK:-cargo}"
     SESSION="${B00T_SM0L_SESSION:-$(date +%Y%m%d-%H%M%S)-$$}"
-    cargo test {{ARGS}} 2>&1 | python3 {{SM0L_FILTER}} --task {{TASK}} --session-id "$SESSION" --stats
+    cargo test {{ARGS}} 2>&1 | python3 {{SM0L_FILTER}} --task "$TASK" --session-id "$SESSION" --stats
 # ─── club-3090 refresh ────────────────────────────────────────────────────────
 # Checks for new model additions, engine image updates, CHANGELOG diff
 # Run weekly or after new model announcements
