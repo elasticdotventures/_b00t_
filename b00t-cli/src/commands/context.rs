@@ -305,7 +305,6 @@ fn current_branch() -> Result<String> {
 mod tests {
     use super::*;
     use b00t_c0re_gov::store::ContextStore;
-    use std::path::PathBuf;
     use tempfile::TempDir;
 
     fn test_store() -> (ContextStore, TempDir) {

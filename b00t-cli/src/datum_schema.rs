@@ -635,7 +635,7 @@ mod tests {
     #[test]
     fn test_focus_jsonl_sequence() {
         // File doesn't exist — expect None from iterator
-        let mut seq = FocusJsonlSequence::open("/tmp/nonexistent-focus.jsonl").ok();
+        let seq = FocusJsonlSequence::open("/tmp/nonexistent-focus.jsonl").ok();
         assert!(seq.is_none());
     }
 }

@@ -873,7 +873,7 @@ impl PipelineNode for RequirementsNode {
 /// Build a graph from composed nodes for visualization and export.
 pub fn build_graph_from_pipeline<N: PipelineNode>(node: &N) -> NodeGraph {
     let mut nodes = vec![];
-    let mut edges = vec![];
+    let edges = vec![];
 
     // Collect node info
     let graph_node = GraphNode {
@@ -1106,7 +1106,7 @@ mod tests {
         }
 
         // With ≥4 requirements cycling through 3 types, we should see at least 2 different types
-        let mut types_seen: std::collections::HashSet<_> = req_types.iter().map(|t| std::mem::discriminant(*t)).collect();
+        let types_seen: std::collections::HashSet<_> = req_types.iter().map(|t| std::mem::discriminant(*t)).collect();
         assert!(types_seen.len() >= 2, "Expected ≥2 different RequirementType variants, got {}", types_seen.len());
     }
 }

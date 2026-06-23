@@ -155,8 +155,6 @@ mod inference_tests {
     /// Test 11: InferenceConfig serialization support
     #[test]
     fn test_inference_config_serde_json() {
-        use serde_json::json;
-
         let config = InferenceConfig {
             base_model_id: "all-MiniLM-L6-v2".to_string(),
             knowledge_index_dir: "/tmp/rag".to_string(),

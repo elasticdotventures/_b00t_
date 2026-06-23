@@ -1,8 +1,6 @@
 #[cfg(test)]
 mod blessing_graph_tests {
     use super::super::*;
-    use serde_json::json;
-
     /// Test 1: Parse blessing graph from TOML
     #[test]
     fn test_parse_blessing_graph_toml() {

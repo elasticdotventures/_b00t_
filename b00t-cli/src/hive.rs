@@ -1548,7 +1548,6 @@ fn query_systemd_user_services() -> Vec<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::path::PathBuf;
 
     // ─── Accelerator probe logic ───────────────────────────────────────────────
 
@@ -2134,7 +2133,7 @@ mod tests {
                     GuardPattern::RhaiExpr(e) => e.rhai.contains("git"),
                     _ => false,
                 };
-                let match_candidates = if has_git {
+                let _match_candidates = if has_git {
                     vec![
                         match_cmd.clone(),
                         "git checkout master".to_string(),
