@@ -18,6 +18,14 @@ import json
 from pathlib import Path
 from datetime import datetime
 
+# 🤓 tomllib is stdlib on Py>=3.11; fall back to the API-identical `tomli`
+#    backport so the gate validator runs on Py3.10 (system default here).
+#    Without this fallback, commit-hook → validate-gate.py blocks EVERY commit.
+try:
+    import tomllib
+except ModuleNotFoundError:  # pragma: no cover
+    import tomli as tomllib
+
 
 def parse_schema_contract(schema_path: str) -> dict:
     """Parse gate.schema.toml into validation rule metadata.
@@ -25,8 +33,6 @@ def parse_schema_contract(schema_path: str) -> dict:
     Schema files are data, not executable code. Rule checks are implemented
     below by rule id so untrusted schema changes cannot run local commands.
     """
-    import tomllib
-
     with open(schema_path, "rb") as f:
         raw = tomllib.load(f)
 
@@ -67,8 +73,6 @@ def evaluate_rule(rule_id: str, gate_path: str) -> bool:
         return re.search(r"^\s*version\s*=", text, re.MULTILINE) is not None
     if rule_id == "valid-type":
         try:
-            import tomllib
-
             with path.open("rb") as f:
                 raw = tomllib.load(f)
             return raw.get("b00t", {}).get("type") == "gate"
