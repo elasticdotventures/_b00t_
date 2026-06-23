@@ -1,3 +1,8 @@
+[b00t]
+name = "kubernetes-config"
+type = "config"
+hint = "Kubernetes distribution preference and auto-detection config"
+
 [kubernetes]
 # Preferred Kubernetes distribution for this host (default = k0s)
 preferred = "k0s"

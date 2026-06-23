@@ -9,12 +9,7 @@ permission:
     "npx ts-node*task-cli*": "allow"
     "mkdir -p .tmp/tasks*": "allow"
     "mv .tmp/tasks*": "allow"
-  edit:
-    "**/*.env*": "deny"
-    "**/*.key": "deny"
-    "**/*.secret": "deny"
-    "node_modules/**": "deny"
-    ".git/**": "deny"
+  edit: "deny"
   task:
     contextscout: "allow"
     externalscout: "allow"

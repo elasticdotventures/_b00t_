@@ -1,6 +1,7 @@
 #![allow(dead_code, async_fn_in_trait)]
 use anyhow::{Context, Result};
 use chrono::{DateTime, Utc};
+use duct::cmd;
 use regex::Regex;
 use std::io::Write;
 use std::collections::HashSet;
@@ -2482,7 +2483,7 @@ pub fn gemini_install_mcp(name: &str, path: &str, use_repo: bool) -> Result<()> 
 pub fn codex_install_mcp(
     name: &str,
     path: &str,
-    use_repo: bool,
+    _use_repo: bool,
     stdio_command: Option<&str>,
     use_httpstream: bool,
 ) -> Result<()> {
@@ -2490,71 +2491,128 @@ pub fn codex_install_mcp(
     let (command, args, env, method_type) =
         select_mcp_method(&datum, stdio_command, use_httpstream)?;
 
-    let mut codex_config = if method_type == "httpstream" {
-        serde_json::json!({ "url": command })
-    } else {
-        serde_json::json!({
-            "command": command,
-            "args": args
-        })
-    };
+    let mut codex_args = vec!["mcp".to_string(), "add".to_string()];
 
-    if let Some(env_map) = &env {
-        if let Some(obj) = codex_config.as_object_mut() {
-            obj.insert("env".to_string(), serde_json::to_value(env_map)?);
-        }
-    }
-
-    let json_str =
-        serde_json::to_string(&codex_config).context("Failed to serialize JSON for Codex")?;
-    let location = if use_repo {
-        "repository (Codex CLI stores MCP entries in its active config)"
-    } else {
-        "user global"
-    };
-
-    let mut codex_cmd = std::process::Command::new("codex");
-    codex_cmd.args(["mcp", "add"]);
-
-    if let Some(env_map) = &env {
+    if let Some(env_map) = env {
         for (key, value) in env_map {
-            codex_cmd.args(["--env", &format!("{}={}", key, value)]);
+            codex_args.push("--env".to_string());
+            codex_args.push(format!("{key}={value}"));
         }
     }
 
+    codex_args.push(name.to_string());
     if method_type == "httpstream" {
-        codex_cmd.args([name, "--url", &command]);
+        codex_args.push("--url".to_string());
+        codex_args.push(command.clone());
     } else {
-        codex_cmd.arg(name).arg("--").arg(&command).args(&args);
+        codex_args.push("--".to_string());
+        codex_args.push(command.clone());
+        codex_args.extend(args.clone());
     }
 
-    let result = codex_cmd.status();
+    let result = cmd("codex", &codex_args).run();
 
     match result {
-        Ok(status) if status.success() => {
+        Ok(_) => {
             println!(
-                "Successfully installed MCP server '{}' to Codex ({})",
-                datum.name, location
+                "Successfully installed MCP server '{}' to Codex",
+                datum.name
             );
-            println!("Codex config: {}", json_str);
-        }
-        Ok(status) => {
-            eprintln!(
-                "Failed to install MCP server to Codex ({}): exited with status {}",
-                location, status
-            );
-            eprintln!("Codex config: {}", json_str);
-            return Err(anyhow::anyhow!(
-                "Codex installation failed with status {}",
-                status
-            ));
+            println!("Codex command: codex {}", codex_args.join(" "));
         }
         Err(e) => {
-            eprintln!("Failed to invoke Codex MCP installer ({}): {}", location, e);
-            eprintln!("Codex config: {}", json_str);
+            eprintln!("Failed to install MCP server to Codex: {}", e);
+            eprintln!("Manual command: codex {}", codex_args.join(" "));
             return Err(anyhow::anyhow!("Codex installation failed: {}", e));
         }
     }
+
+    Ok(())
+}
+
+pub fn opencode_install_mcp(
+    name: &str,
+    path: &str,
+    use_repo: bool,
+    stdio_command: Option<&str>,
+    use_httpstream: bool,
+) -> Result<()> {
+    use crate::utils::get_workspace_root;
+
+    let datum = get_mcp_config(name, path)?;
+    let (command, args, env, method_type) =
+        select_mcp_method(&datum, stdio_command, use_httpstream)?;
+
+    let config_path = if use_repo {
+        std::path::Path::new(&get_workspace_root()).join("opencode.json")
+    } else {
+        dirs::config_dir()
+            .ok_or_else(|| anyhow::anyhow!("Could not determine user config directory"))?
+            .join("opencode")
+            .join("opencode.json")
+    };
+
+    let mut config = if config_path.exists() {
+        let content = std::fs::read_to_string(&config_path)
+            .with_context(|| format!("Failed to read {}", config_path.display()))?;
+        serde_json::from_str::<serde_json::Value>(&content)
+            .with_context(|| format!("Failed to parse {}", config_path.display()))?
+    } else {
+        serde_json::json!({
+            "$schema": "https://opencode.ai/config.json"
+        })
+    };
+
+    if !config.is_object() {
+        config = serde_json::json!({});
+    }
+    if config.get("$schema").is_none() {
+        config["$schema"] = serde_json::json!("https://opencode.ai/config.json");
+    }
+    if !config["mcp"].is_object() {
+        config["mcp"] = serde_json::json!({});
+    }
+
+    let mut server_config = if method_type == "httpstream" {
+        serde_json::json!({
+            "type": "remote",
+            "url": command,
+            "enabled": true
+        })
+    } else {
+        let mut command_vec = Vec::with_capacity(args.len() + 1);
+        command_vec.push(command);
+        command_vec.extend(args);
+        serde_json::json!({
+            "type": "local",
+            "command": command_vec,
+            "enabled": true
+        })
+    };
+
+    if let Some(env_map) = env {
+        if let Some(obj) = server_config.as_object_mut() {
+            obj.insert("environment".to_string(), serde_json::to_value(env_map)?);
+        }
+    }
+
+    config["mcp"][&datum.name] = server_config;
+
+    if let Some(parent) = config_path.parent() {
+        std::fs::create_dir_all(parent)
+            .with_context(|| format!("Failed to create {}", parent.display()))?;
+    }
+    let updated_content = serde_json::to_string_pretty(&config)
+        .context("Failed to serialize updated OpenCode config")?;
+    std::fs::write(&config_path, format!("{updated_content}\n"))
+        .with_context(|| format!("Failed to write {}", config_path.display()))?;
+
+    let location = if use_repo { "project" } else { "global" };
+    println!(
+        "✅ Successfully installed MCP server '{}' to OpenCode ({})",
+        datum.name, location
+    );
+    println!("📁 Updated: {}", config_path.display());
 
     Ok(())
 }

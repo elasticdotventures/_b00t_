@@ -1,0 +1,7 @@
+[b00t]
+name = "android-dev"
+type = "agent"
+hint = "Android development agent stub — placeholder for future configuration"
+
+[agent]
+description = "Android development agent (stub)"

@@ -61,7 +61,7 @@ use b00t_cli::commands::uninstall::uninstall_datum;
 pub use b00t_cli::{
     DatumType, claude_code_install_mcp, codex_install_mcp, dotmcpjson_install_mcp,
     gemini_install_mcp, get_config, get_expanded_path, get_mcp_config, get_mcp_toml_files,
-    mcp_add_json, mcp_list, mcp_output, mcp_remove, vscode_install_mcp,
+    mcp_add_json, mcp_list, mcp_output, mcp_remove, opencode_install_mcp, vscode_install_mcp,
 };
 
 mod integration_tests;

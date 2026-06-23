@@ -1,5 +1,7 @@
 [b00t]
 name = "zvec"
+type = "db"
+hint = "In-process vector DB (FFI/C, Apache-2.0); replaces Qdrant as primary vector store"
 datum_type = "db"
 description = "In-process vector DB (FFI/C, Apache-2.0); replaces Qdrant as primary vector store"
 version = "0.5.0"

@@ -1,5 +1,6 @@
 [b00t]
 name = "claude-code-hooks"
+type = "cli"
 hint = "b00t hook dispatcher registration for claude-code. Apply via: b00t learn claude-code-hooks"
 
 # 🤓 Paste hookSettings into ~/.claude/settings.json [hooks] section,

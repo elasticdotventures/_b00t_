@@ -1,5 +1,7 @@
 [b00t]
 name = "grafeo"
+type = "db"
+hint = "Embedded LPG+RDF+vector graph database (Rust-native, MSRV 1.91.1)"
 datum_type = "db"
 description = "Embedded LPG+RDF+vector graph database (Rust-native, MSRV 1.91.1)"
 version = "0.5.42"
