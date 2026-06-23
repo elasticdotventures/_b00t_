@@ -262,7 +262,7 @@ The system will:
         #[clap(subcommand)]
         init_command: InitCommands,
     },
-    #[clap(about = "Show agent identity and context information")]
+    #[clap(about = "Show agent identity and context information", alias = "whomai")]
     Whoami {
         #[clap(long, help = "Override detected role (matches role datum)")]
         role: Option<String>,
@@ -2623,6 +2623,16 @@ mod k0mmand3r_dispatch_tests {
             }
             _ => panic!("expected uninstall command"),
         }
+    }
+
+    #[test]
+    fn cli_parse_whomai_alias_accepted() {
+        // `whomai` (common typo) must parse identically to `whoami`
+        let cli = Cli::parse_from(args(&["b00t-cli", "whomai"]));
+        assert!(
+            matches!(cli.command, Some(Commands::Whoami { .. })),
+            "expected Whoami command from 'whomai' alias"
+        );
     }
 
     #[test]
