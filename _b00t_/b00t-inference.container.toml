@@ -1,0 +1,33 @@
+[b00t]
+name = "b00t-inference"
+type = "docker"
+hint = "llama.cpp server container — Qwen2.5-0.5B GGUF on port 8080. Built from prebuilt llama-server binary on debian:bookworm-slim. OpenAI-compatible API."
+
+[b00t.container]
+image = "localhost/b00t-inference:latest"
+build_file = "Containerfile.b00t-inference"
+runtime = "podman"
+port = 8080
+api = "openai-compat"
+gpu_device = "nvidia.com/gpu=all"
+
+[[b00t.container.volumes]]
+host = "~/.cache/huggingface/hub/models--Qwen--Qwen2.5-0.5B-Instruct-GGUF/snapshots/9217f5db79a29953eb74d5343926648285ec7e67"
+container = "/models"
+
+[[b00t.container.blob_dirs]]
+host = "~/.cache/huggingface/hub/models--Qwen--Qwen2.5-0.5B-Instruct-GGUF/blobs"
+mount = "/models/../../blobs"
+
+[b00t.container.model]
+huggingface = "Qwen/Qwen2.5-0.5B-Instruct-GGUF"
+file = "qwen2.5-0.5b-instruct-q4_k_m.gguf"
+params = "630M"
+size = "485MB"
+
+# b00t:map v1
+# summary: llama.cpp inference container — Qwen2.5-0.5B GGUF, OpenAI-compat API
+# tags: container, inference, llama-cpp, local
+# tier: sm0l
+# cmds: podman run -d --name b00t-llama -p 8080:8080 -v <snapshot>:/models:ro -v <blobs>:/models/../../blobs:ro b00t-inference
+# complexity: 2
