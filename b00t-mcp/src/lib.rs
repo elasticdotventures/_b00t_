@@ -17,7 +17,6 @@ pub mod schema_constraint;
 pub mod verify_tool_loop;
 pub mod rag_mcp_tools;
 pub mod server_llm;
-pub mod server_skill;
 
 pub use acl::{AclConfig, AclFilter, Policy};
 pub use mcp_server_rusty::B00tMcpServerRusty;
