@@ -8,10 +8,30 @@
       ],
       "enabled": true,
       "type": "local"
+    },
+    "codebase-memory": {
+      "command": [
+        "codebase-memory-mcp"
+      ],
+      "enabled": true,
+      "type": "local"
+    },
+    "rust-doc": {
+      "command": [
+        "vendor/rust-docs-mcp-server/target/release/rustdocs_mcp_server",
+        "serde"
+      ],
+      "enabled": true,
+      "type": "local"
     }
   },
   "model": "qwen36-local/ch0nky",
   "provider": {
+    "deepseek": {
+      "api": "https://api.deepseek.com",
+      "name": "DeepSeek",
+      "npm": "@ai-sdk/openai-compatible"
+    },
     "qwen36-local": {
       "api": "http://127.0.0.1:8001/v1",
       "models": {
@@ -31,11 +51,6 @@
       "options": {
         "apiKey": "local-b00t"
       }
-    },
-    "deepseek": {
-      "name": "DeepSeek",
-      "npm": "@ai-sdk/openai-compatible",
-      "api": "https://api.deepseek.com"
     }
   },
   "small_model": "qwen36-local/ch0nky"
