@@ -18,10 +18,7 @@ permission:
     "rm -rf *": "ask"
     "sudo *": "deny"
     "*": "deny"
-  edit:
-    "**/*.env*": "deny"
-    "**/*.key": "deny"
-    "**/*.secret": "deny"
+  edit: "ask"
   task:
     contextscout: "allow"
     externalscout: "allow"

@@ -1,3 +1,8 @@
+[b00t]
+name = "capability-registry"
+type = "registry"
+hint = "Skill and capability registry — maps skill names to sources and tags"
+
 [skills]
 bash = { type = "skill", source = "_b00t_/learn/bash.md", description = "Bash/shell operations", tags = ["shell", "cli"] }
 

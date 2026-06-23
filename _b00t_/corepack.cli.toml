@@ -1,5 +1,6 @@
 [b00t]
 name = "corepack"
+type = "cli"
 desires = "0.31.0"
 # corepack is bundled with Node.js >= 16.10 — no separate download needed.
 # If Node.js is present, just enable corepack:

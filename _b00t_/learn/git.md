@@ -35,3 +35,5 @@ workflow-branches: "Internal projects use vendor/ submodules with convention: fe
 
 ---
 surgical staging: git add -A before auditing what's staged is dangerous. Pattern: git reset HEAD first, then git add ONLY target paths, verify with git diff --cached --stat. 37 unrelated files got staged in one misstep this session.
+
+submodule-moltis-b00t: origin/main references vendor/moltis-b00t commit 857aaed923c6d783bbf57a8f5537919c800aacaf; the PromptExecution GitHub URLs return repository not found/no access, and the working remote is git@github.com:elasticdotventures/moltis-b00t.git.

@@ -24,10 +24,7 @@ permission:
     "terraform validate *": "allow"
     "npm run build *": "allow"
     "npm run test *": "allow"
-  edit:
-    "**/*.env*": "deny"
-    "**/*.key": "deny"
-    "**/*.secret": "deny"
+  edit: "ask"
 ---
 
 # DevOps Specialist Subagent

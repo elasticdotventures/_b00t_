@@ -20,10 +20,10 @@ from datetime import datetime
 
 
 def parse_schema_contract(schema_path: str) -> dict:
-    """Parse gate.schema.toml into executable validation rules.
+    """Parse gate.schema.toml into validation rule metadata.
 
-    The schema is a CONTRACT — not configuration. Each rule has a
-    check command that can be executed as a shell one-liner.
+    Schema files are data, not executable code. Rule checks are implemented
+    below by rule id so untrusted schema changes cannot run local commands.
     """
     import tomllib
 
@@ -46,21 +46,47 @@ def parse_schema_contract(schema_path: str) -> dict:
     }
 
 
+def evaluate_rule(rule_id: str, gate_path: str) -> bool:
+    """Evaluate a known validation rule without executing schema-provided code."""
+    path = Path(gate_path)
+    try:
+        text = path.read_text(encoding="utf-8")
+    except OSError:
+        return False
+
+    lines = text.splitlines()
+    tail = "\n".join(lines[-10:])
+
+    if rule_id == "tail-map-present":
+        return "# b00t:map v1" in tail
+    if rule_id == "audit-section-required":
+        return re.search(r"^\s*\[gate\.audit\]\s*$", text, re.MULTILINE) is not None
+    if rule_id == "hook-section-recommended":
+        return re.search(r"^\s*\[gate\.hook\]\s*$", text, re.MULTILINE) is not None
+    if rule_id == "version-field-recommended":
+        return re.search(r"^\s*version\s*=", text, re.MULTILINE) is not None
+    if rule_id == "valid-type":
+        try:
+            import tomllib
+
+            with path.open("rb") as f:
+                raw = tomllib.load(f)
+            return raw.get("b00t", {}).get("type") == "gate"
+        except Exception:
+            return False
+    if rule_id == "tags-format":
+        return any(line.lstrip().startswith("# tags:") and "," in line for line in lines[-10:])
+
+    # Fail closed: adding a schema rule requires adding trusted Python code here.
+    return False
+
+
+
 def validate_gate(gate_path: str, contract: dict) -> dict:
     """Run all schema rules against a gate file. Returns structured results."""
     results = []
     for rule in contract["rules"]:
-        # Substitute $FILE placeholder with actual path
-        check_cmd = (
-            rule["check"]
-            .replace("$FILE", gate_path)
-            .replace("'", "'\"'\"'")  # escaping for shell
-        )
-
-        # Run the check
-        exit_code = os.system(f'bash -c \'{check_cmd}\' 2>/dev/null')
-
-        passed = exit_code == 0
+        passed = evaluate_rule(rule["id"], gate_path)
         results.append({
             "rule_id": rule["id"],
             "passed": passed,

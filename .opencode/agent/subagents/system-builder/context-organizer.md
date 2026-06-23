@@ -7,10 +7,7 @@ permission:
   task:
     contextscout: "allow"
     "*": "deny"
-  edit:
-    "**/*.env*": "deny"
-    "**/*.key": "deny"
-    "**/*.secret": "deny"
+  edit: "ask"
 ---
 
 # Context Organizer

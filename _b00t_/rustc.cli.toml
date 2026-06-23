@@ -1,5 +1,6 @@
 [b00t]
 name = "rustc"
+type = "cli"
 desires = "1.87.0"
 install = '''
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y

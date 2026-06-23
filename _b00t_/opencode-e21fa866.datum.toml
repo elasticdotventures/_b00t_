@@ -3,6 +3,11 @@
 #    Retrieve: git -C ~/.b00t cat-file blob bece0eabe26dbc79545ba397fa2fac5b8387e597 | gunzip
 #    Validate: git -C ~/.b00t cat-file -e bece0eabe26dbc79545ba397fa2fac5b8387e597
 
+[b00t]
+name = "opencode"
+type = "datum"
+hint = "OpenCode — open-source AI coding assistant (CLI/TUI)"
+
 [datum]
 topic      = "opencode"
 class      = "Concept"

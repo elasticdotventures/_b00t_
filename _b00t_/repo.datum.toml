@@ -1,0 +1,71 @@
+# b00t Repo Datum — supply chain ontology: git + gh + josh + review
+# 🤓 Repo type binds GitHub, git, Josh, and review capabilities into a
+# single ontological category. Datum files reference this type to declare
+# "this is a repository resource" — b00t resolves the toolchain from here.
+
+[b00t]
+name = "repo"
+type = "repo"
+hint = "Supply chain repository ontology — git, GitHub, Josh, code review fabric"
+unlocks = ["git *", "gh *", "josh *"]
+
+# ── Sub-datums (composed capabilities) ──────────────────────────────────
+
+[b00t.composes]
+git = "git.cli"           # version control
+gh = "gh.cli"             # PR/issue/repo operations
+josh = "josh.cli"         # cross-repo history filter (60+ repos)
+
+# ── Abstract operations inherited from sub-datums ───────────────────────
+
+# gh.cli provides: pr_comment, pr_review, pr_diff, pr_list, pr_checkout, pr_view
+# git.cli provides: clone, fetch, push, branch, merge, log, diff
+# josh.cli provides: filter, sync, history
+
+[b00t.abstracts.pr_comment]
+description = "Post a PR comment"
+resolves_from = "gh.cli::pr_comment"
+
+[b00t.abstracts.pr_review]
+description = "Submit a PR review"
+resolves_from = "gh.cli::pr_review"
+
+[b00t.abstracts.pr_diff]
+description = "Get PR diff"
+resolves_from = "gh.cli::pr_diff"
+
+[b00t.abstracts.pr_list]
+description = "List open PRs"
+resolves_from = "gh.cli::pr_list"
+
+[b00t.abstracts.review_submit]
+description = "Full review workflow: gather → checkout → analyze → post"
+recipe = "just review-multi PR={pr}"
+
+# ── Review capabilities ─────────────────────────────────────────────────
+
+[b00t.capabilities]
+skills = [
+    "github-code-review",
+    "multi-framework-code-review",
+    "datum-review",
+]
+datums = [
+    "multi-framework-review.datum",
+    "gate.schema",
+]
+
+# ── Deprecated / migrated ───────────────────────────────────────────────
+
+[b00t.migration]
+# Docker datums → Stack (podman/quadlet/kube)
+docker_deprecated = true
+docker_migration_target = "stack.cli"
+docker_migration_note = "b00t uses podman + quadlet/kube, not docker. See hive-guards."
+
+# b00t:map v1
+# summary: Repo ontology datum — binds git+gh+josh+review into single supply-chain category
+# tags: repo, git, github, josh, review, supply-chain, ontology
+# tier: frontier
+# cmds: b00t datum call repo pr_comment --token pr=<N> --token body="..."
+# complexity: 4

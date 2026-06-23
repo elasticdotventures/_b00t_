@@ -6,10 +6,8 @@ temperature: 0.1
 permission:
   bash:
     "*": "deny"
-  edit:
-    "**/*": "deny"
-  write:
-    "**/*": "deny"
+  edit: "deny"
+  write: "deny"
   task:
     contextscout: "allow"
 ---
