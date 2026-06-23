@@ -12,3 +12,9 @@ MCP audit gap: Cloudflare MCP surface (Workers/Pages/D1/R2/KV) does NOT exist in
 
 ---
 bash-to-rust transition timing: prototype rapidly in bash (≤200 lines), but plan the Rust rewrite BEFORE the bash PoC grows legs. This session lost 3 turns fixing bash string interpolation when the correct answer was Rust from the start. Write the plan file, then delegate implementation.
+
+---
+MCP package verification: npm MCP packages must be verified before install. @anthropic/rust-doc-mcp does NOT exist. Pattern: check npm registry (npm view <pkg>) or GitHub (gh search repos <name>) before adding MCP server configs. The correct Rust docs MCP is Govcraft/rust-docs-mcp-server (Rust binary, per-crate architecture).
+
+---
+MCP transport patterns: rmcp SseServer uses SseServer::serve(addr).with_service(move || service.clone()), not a new() constructor. Always check crate API before writing integration code. The with_service closure needs move + Clone. Tokio signal feature required for graceful SSE shutdown.

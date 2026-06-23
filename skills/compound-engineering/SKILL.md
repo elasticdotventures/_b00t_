@@ -32,6 +32,7 @@ When starting a new project, feature, or iteration. The workflow guides from str
 just compound-engineering status              # Show current phase + backlog
 just compound-engineering ce-advance          # Advance to next phase
 just compound-engineering ce-phase-strategy   # Execute strategy phase
+just compound-engineering ce-phase-brainstorm feature=auth-refactor  # Brainstorm with feature name
 ```
 
 ## State Machine

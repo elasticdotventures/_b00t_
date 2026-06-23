@@ -18,9 +18,11 @@ members = [
     "b00t-embed",
     "b00t-datum-core",
     "b00t-zellij",
+    "b00t-admin",
 ]
 exclude = [
     "vendor/embed-anything-b00t",
+    "vendor/rust-docs-mcp-server",
 ]
 resolver = "2"
 
@@ -65,10 +67,11 @@ thiserror = "2"
 openssl = "0.10"
 openssl-sys = { version = "0.9", features = ["vendored"] }
 
-# b00t-embed — unified embedding adapter
+# b00t-embed — unified embedding adapter  
 b00t-embed = { path = "b00t-embed" }
 b00t-datum-core = { path = "b00t-datum-core" }
 b00t-zellij = { path = "b00t-zellij" }
+b00t-admin = { path = "b00t-admin" }
 b00t-reflect-types = { path = "vendor/l3dg3rr/crates/b00t-reflect-types" }
 mti = "1.1.1"
 

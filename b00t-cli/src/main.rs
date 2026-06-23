@@ -99,6 +99,9 @@ Example:
         #[clap(help = "Text to tokenize")]
         text: String,
     },
+    #[clap(about = "Agent tool authorization manifest (unlocks via learning)")]
+    Blessing(b00t_cli::commands::blessing::BlessingArgs),
+
     #[clap(
         about = "Record a lesson learned for a tool (lfmf = Learn From My Failure)",
         alias = "lesson",
@@ -111,6 +114,7 @@ Good entries separate neophyte from master. Bad entries are vague, negative, or 
 
 Usage:
   b00t-cli lfmf <tool> "<topic>: <body>"
+  b00t-cli lfmf --tool <tool> --lesson "<topic>: <body>"
 
 Examples:
   # Good
@@ -130,13 +134,24 @@ Tips:
 - Suitable tools: any with a b00t datum (TOML, learn/ dir, etc).
 "#
     )]
-    #[clap(about = "Agent tool authorization manifest (unlocks via learning)")]
-    Blessing(b00t_cli::commands::blessing::BlessingArgs),
-
     Lfmf {
-        #[clap(long, help = "Tool name")]
+        #[clap(
+            value_name = "TOOL",
+            required_unless_present = "tool",
+            conflicts_with = "tool",
+            help = "Tool name"
+        )]
+        positional_tool: Option<String>,
+        #[clap(
+            value_name = "LESSON",
+            required_unless_present = "lesson",
+            conflicts_with = "lesson",
+            help = "Lesson in '<topic>: <body>' format"
+        )]
+        positional_lesson: Option<String>,
+        #[clap(long, conflicts_with = "positional_tool", help = "Tool name")]
         tool: Option<String>,
-        #[clap(long, help = "Lesson in '<topic>: <body>' format")]
+        #[clap(long, conflicts_with = "positional_lesson", help = "Lesson in '<topic>: <body>' format")]
         lesson: Option<String>,
         #[clap(long, group = "scope", help = "Record lesson for this repo (default)")]
         repo: bool,
@@ -2241,23 +2256,25 @@ async fn main() {
             }
         }
         Some(Commands::Lfmf {
+            positional_tool,
+            positional_lesson,
             tool,
             lesson,
             repo: _,
             global,
         }) => {
             // Validate required fields
-            let tool = match tool {
+            let tool = match tool.as_ref().or(positional_tool.as_ref()) {
                 Some(t) => t,
                 None => {
-                    eprintln!("--tool is required");
+                    eprintln!("tool is required");
                     std::process::exit(1);
                 }
             };
-            let lesson = match lesson {
+            let lesson = match lesson.as_ref().or(positional_lesson.as_ref()) {
                 Some(l) => l,
                 None => {
-                    eprintln!("--lesson is required");
+                    eprintln!("lesson is required");
                     std::process::exit(1);
                 }
             };
@@ -2622,6 +2639,68 @@ mod k0mmand3r_dispatch_tests {
                 assert!(!purge);
             }
             _ => panic!("expected uninstall command"),
+        }
+    }
+
+    #[test]
+    fn cli_parse_lfmf_accepts_positional_tool_and_lesson() {
+        let cli = Cli::parse_from(args(&[
+            "b00t-cli",
+            "lfmf",
+            "git",
+            "atomic commits: Keep commits focused for review.",
+        ]));
+
+        match cli.command {
+            Some(Commands::Lfmf {
+                positional_tool,
+                positional_lesson,
+                tool,
+                lesson,
+                global,
+                ..
+            }) => {
+                assert_eq!(positional_tool.as_deref(), Some("git"));
+                assert_eq!(
+                    positional_lesson.as_deref(),
+                    Some("atomic commits: Keep commits focused for review.")
+                );
+                assert!(tool.is_none());
+                assert!(lesson.is_none());
+                assert!(!global);
+            }
+            _ => panic!("expected lfmf command"),
+        }
+    }
+
+    #[test]
+    fn cli_parse_lfmf_accepts_flag_tool_and_lesson() {
+        let cli = Cli::parse_from(args(&[
+            "b00t-cli",
+            "lfmf",
+            "--tool",
+            "just",
+            "--lesson",
+            "modules: Prefer module workdirs over cd.",
+            "--global",
+        ]));
+
+        match cli.command {
+            Some(Commands::Lfmf {
+                positional_tool,
+                positional_lesson,
+                tool,
+                lesson,
+                global,
+                ..
+            }) => {
+                assert!(positional_tool.is_none());
+                assert!(positional_lesson.is_none());
+                assert_eq!(tool.as_deref(), Some("just"));
+                assert_eq!(lesson.as_deref(), Some("modules: Prefer module workdirs over cd."));
+                assert!(global);
+            }
+            _ => panic!("expected lfmf command"),
         }
     }
 
