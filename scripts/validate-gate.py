@@ -81,6 +81,7 @@ def evaluate_rule(rule_id: str, gate_path: str) -> bool:
     return False
 
 
+
 def validate_gate(gate_path: str, contract: dict) -> dict:
     """Run all schema rules against a gate file. Returns structured results."""
     results = []
@@ -107,6 +108,7 @@ def validate_gate(gate_path: str, contract: dict) -> dict:
         "results": results,
         "overall": "PASS" if len(critical_fails) == 0 else "FAIL",
     }
+
 
 def find_gate_files(base_dir: str = ".") -> list:
     """Find all gate datum files."""
