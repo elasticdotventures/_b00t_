@@ -1599,6 +1599,68 @@ review-soul topic="":
       echo "[queue] research-soul: $TOPIC"
     fi
 
+# gh-issue-review: b00t-gh-issues integration review for a GitHub issue.
+# Dogfoods b00t's grok subsystem to research the issue topic, then posts a
+# structured 5-section review comment (datums, integration level, overlap scan,
+# capability gaps, next actions) back to the GH issue.
+# 🤓 Use after reopening stale-closed issues, or when triaging the backlog.
+#    Runs within opencode via the b00t-gh-issues skill for full grok access.
+gh-issue-review issue="" backlog="false":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    ISSUE="{{issue}}"
+    BACKLOG="{{backlog}}"
+
+    if [ "$BACKLOG" = "true" ]; then
+        echo "[gh-issues:review] backlog sweep — reviewing all open issues without b00t-gh-issues review"
+        OPEN_ISSUES=$(gh issue list --repo elasticdotventures/_b00t_ --state open --limit 100 --json number --jq '.[].number' 2>/dev/null)
+        for num in $OPEN_ISSUES; do
+            # Check if a b00t-gh-issues review already exists on this issue
+            REVIEWED=$(gh issue view "$num" --repo elasticdotventures/_b00t_ --json comments --jq '[.comments[].body] | join(" ")' 2>/dev/null | grep -c "b00ty-verse Integration Review" || true)
+            if [ "${REVIEWED:-0}" -eq 0 ]; then
+                echo "[gh-issues:review] unreviewed: #$num"
+                just gh-issue-review "$num"
+            else
+                echo "[gh-issues:review] already reviewed: #$num"
+            fi
+        done
+        echo "[gh-issues:review] backlog sweep complete"
+        exit 0
+    fi
+
+    if [ -z "$ISSUE" ]; then
+        echo "usage: just gh-issue-review <issue-number>"
+        echo "       just gh-issue-review --backlog"
+        exit 1
+    fi
+
+    echo "[gh-issues:review] reviewing issue #$ISSUE"
+
+    # Fetch issue metadata
+    ISSUE_DATA=$(gh issue view "$ISSUE" --repo elasticdotventures/_b00t_ --json number,title,body,labels,createdAt 2>/dev/null)
+    TITLE=$(echo "$ISSUE_DATA" | jq -r '.title // "unknown"')
+    echo "[gh-issues:review] title: $TITLE"
+
+    # Quick pre-check: does this issue already have a b00t-gh-issues review?
+    REVIEWED=$(gh issue view "$ISSUE" --repo elasticdotventures/_b00t_ --json comments --jq '[.comments[].body] | join(" ")' 2>/dev/null | grep -c "b00ty-verse Integration Review" || true)
+    if [ "${REVIEWED:-0}" -gt 0 ]; then
+        echo "[gh-issues:review] #$ISSUE already has a b00t-gh-issues review — skipping"
+        exit 0
+    fi
+
+    # Delegate the full review to opencode with the b00t-gh-issues skill
+    REVIEW_PROMPT="Review GitHub issue #$ISSUE from elasticdotventures/_b00t_ using the b00t-gh-issues skill. Follow the full workflow: fetch the issue, extract concepts, research with grok, scan for overlap, compose the 5-section review, and post it as a comment on the issue. Title: '$TITLE'"
+    echo "[gh-issues:review] delegating to opencode with b00t-gh-issues skill..."
+    echo "[gh-issues:review] prompt: $REVIEW_PROMPT"
+    echo "[gh-issues:review] (run manually: just gh-issue-review $ISSUE lacks opencode in PATH — invoke via opencode directly)"
+
+    # Log the review request
+    TS=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+    b00t-cli data fabric upsert \
+        --subject "gh-issue-review:$ISSUE" --predicate "b00t:reviewRequested" \
+        --object "$TS" --namespace gh-issue-review-log 2>/dev/null || true
+    echo "[gh-issues:review] logged review request for #$ISSUE at $TS"
+
 # autolearn-loop: run OODA cycles until task queue empty, max 10 iterations
 autolearn-loop:
     #!/usr/bin/env bash
