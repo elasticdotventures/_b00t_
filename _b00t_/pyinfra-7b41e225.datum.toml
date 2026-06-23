@@ -3,6 +3,11 @@
 #    Retrieve: git -C ~/.b00t cat-file blob 1025701e47fb98f822d1a63c2f981c3f0388b1df | gunzip
 #    Validate: git -C ~/.b00t cat-file -e 1025701e47fb98f822d1a63c2f981c3f0388b1df
 
+[b00t]
+name = "pyinfra"
+type = "datum"
+hint = "Pyinfra — server automation and infrastructure-as-code (Python)"
+
 [datum]
 topic      = "pyinfra"
 class      = "Concept"

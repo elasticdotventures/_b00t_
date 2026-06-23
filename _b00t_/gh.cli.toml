@@ -2,6 +2,7 @@
 
 [b00t]
 name = "gh"
+type = "cli"
 desires = "2.74.2"
 install = """
 # 🤓 Non-sudo installation via binary download  
