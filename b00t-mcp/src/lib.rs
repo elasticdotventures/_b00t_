@@ -13,6 +13,7 @@ pub mod oauth_minimal;
 pub mod params;
 pub mod proxy_mcp_tools;
 pub mod rag_mcp_tools;
+pub mod server_llm;
 
 pub use acl::{AclConfig, AclFilter, Policy};
 pub use mcp_server_rusty::B00tMcpServerRusty;
