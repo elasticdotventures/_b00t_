@@ -1,0 +1,115 @@
+# Gate Schema — required and optional sections for gate datum files
+# 🤓 All gate datums in _b00t_/gates/ MUST conform to this schema.
+# Validation: just validate-gate FILE=<path> or b00t datum validate --schema=gate
+
+[schema]
+name = "gate-datum"
+version = "1.0.0"
+description = "Structural schema for b00t gate datum .toml files"
+applies_to = ["_b00t_/gates/*.gate.toml"]
+
+# ── Required Sections ───────────────────────────────────────────────────────
+
+[[schema.required]]
+section = "[b00t]"
+fields = ["name", "type", "hint"]
+note = "type must be 'gate'"
+
+[[schema.required]]
+section = "[gate]"
+fields = ["mode", "trigger", "condition"]
+note = "mode: mandatory|optional|off, trigger: on-write|on-action|on-startup|on-command"
+
+[[schema.required]]
+section = "[gate.audit]"
+fields = ["log_file", "log_format", "fields"]
+note = "Every gate MUST have an audit trail. TRIZ P32 Color Change."
+
+[[schema.required]]
+section = "# b00t:map"
+fields = ["summary", "tags", "tier", "cmds", "complexity"]
+note = "Tail-map in last 10 lines. Format: # b00t:map v1"
+
+# ── Strongly Recommended Sections (TRIZ P11 Cushioning) ─────────────────────
+
+[[schema.recommended]]
+section = "[gate.hook]"
+fields = ["timeout_ms", "fallback"]
+note = "Required unless gate has no async behavior. Guards against stale hooks."
+rationale = "TRIZ P11: Beforehand Cushioning — prevent unbounded waits"
+
+[[schema.recommended]]
+section = "[gate.context]"
+fields = ["kvcache_keys"]
+note = "Required unless gate has no cross-agent state. Enables sub-agent context sharing."
+rationale = "Governance epoch 2: AgentContinuation snapshot/restore"
+
+[[schema.recommended]]
+section = "[gate.env]"
+fields = []  # No required sub-fields, but section should exist
+note = "Environment variables this gate sets. At minimum: B00T_<GATE_NAME> = 'enabled'"
+
+[[schema.recommended]]
+section = "[b00t].version"
+fields = ["version", "author"]
+note = "Semver version + author attribution for traceability"
+
+# ── Optional Sections (type-specific) ────────────────────────────────────────
+
+[[schema.optional]]
+section = "[gate.eisenhower]"
+note = "Only for gates that route through Eisenhower matrix (user interaction gates)"
+fields = ["urgent_important", "not_urgent_important", "urgent_not_important", "not_urgent_not_important"]
+
+[[schema.optional]]
+section = "[gate.fzf_menu]"
+note = "Only for gates that present interactive fzf menus (Zellij gates)"
+fields = ["title", "prompt"]
+
+[[schema.optional]]
+section = "[gate.redirect]"
+note = "Only for gates that redirect rather than block (write guards, staging gates)"
+fields = ["staging_dir", "create_task"]
+
+[[schema.optional]]
+section = "[gate.self_check]"
+note = "Self-validation on load (TRIZ P10 Preliminary Action)"
+fields = ["required_sections", "schema_version"]
+
+# ── Validation Rules ─────────────────────────────────────────────────────────
+
+[[schema.rules]]
+id = "tail-map-present"
+description = "Last 10 lines must contain '# b00t:map v1'"
+check = "tail -10 $FILE | grep -q '# b00t:map v1'"
+severity = "critical"
+
+[[schema.rules]]
+id = "audit-section-required"
+description = "[gate.audit] section is required for all gates"
+check = "grep -q '\\[gate\\.audit\\]' $FILE"
+severity = "critical"
+
+[[schema.rules]]
+id = "hook-section-recommended"
+description = "[gate.hook] should exist unless gate has no async behavior"
+check = "grep -q '\\[gate\\.hook\\]' $FILE"
+severity = "warning"
+
+[[schema.rules]]
+id = "version-field-recommended"
+description = "[b00t].version should be present for traceability"
+check = "grep -q 'version = ' $FILE"
+severity = "warning"
+
+[[schema.rules]]
+id = "valid-type"
+description = "[b00t].type must be 'gate'"
+check = "grep 'type = ' $FILE | grep -q '\"gate\"'"
+severity = "critical"
+
+[[schema.rules]]
+id = "tags-format"
+description = "Tail-map tags must be comma-separated (not space-separated)"
+check = "tail -10 $FILE | grep '# tags:' | grep -q ','"
+severity = "info"

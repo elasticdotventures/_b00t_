@@ -1,0 +1,92 @@
+---
+name: tax-lawyer
+description: |
+  Root dispatch skill for the Tax-Lawyer Platform. Grounds multi-jurisdiction
+  R&D and crypto tax analysis in UFO ontology stereotypes with Satisfies
+  constraint verification and Blake3-hashed evidence chains for ATO/IRS audit.
+version: 1.0.0
+tags: [tax, rd-credit, crypto, ufo, ontology, satisfies, au, us, ato, irs]
+tier: frontier
+complexity: 8
+applies_to:
+  - "R&D tax incentive"
+  - "R&D tax credit"
+  - "crypto cost basis"
+  - "capital gains tax crypto"
+  - "ITAA 1997 Division 355"
+  - "IRC Section 41"
+  - "ATO tax advice"
+  - "IRS R&D"
+  - "tax-lawyer"
+output_types: [.json, .md]
+depends_on: []
+unlocks:
+  - au-rd-tax-incentive
+  - au-crypto
+  - us-r-and-d-credit
+  - us-crypto
+metadata:
+  ufo_stereotype: Abstract
+  legislation: []
+  iso_types: []
+---
+
+## Tax-Lawyer Platform Overview
+
+A UFO-grounded, multi-jurisdiction R&D and crypto tax platform. All domain
+objects implement `Satisfies<Constraint>` — every check produces a
+`Vec<EvidenceNode>` with Blake3 content hash for audit trail integrity.
+
+## Sub-Skills (load as needed)
+
+| Skill | Domain | Tier |
+|---|---|---|
+| `tax-lawyer/common/ufo-types` | UFO stereotypes + Satisfies trait | frontier |
+| `tax-lawyer/common/iso-accounting` | ISO 20022, IFRS 9, LEI | ch0nky |
+| `tax-lawyer/common/evidence-graph` | Blake3, arc-kit-au, evidence chains | ch0nky |
+| `tax-lawyer/common/software-interfaces` | MCP tool design, satisfies patterns | ch0nky |
+| `tax-lawyer/aus/rd-tax-incentive` | ITAA 1997 Div 355, AusIndustry | frontier |
+| `tax-lawyer/aus/crypto-au` | ATO QC 53725, CGT, personal-use | ch0nky |
+| `tax-lawyer/usa/r-and-d-credit` | IRC Sec 41, 4-part test, Form 6765 | frontier |
+| `tax-lawyer/usa/crypto-us` | Rev. Proc. 2024-28, cost basis | ch0nky |
+
+## Routing Matrix
+
+```
+request contains "R&D" + "Australia"  → load aus/rd-tax-incentive
+request contains "R&D" + "US"/"IRC"   → load usa/r-and-d-credit
+request contains "crypto" + "AU"/"ATO"→ load aus/crypto-au
+request contains "crypto" + "US"/"IRS"→ load usa/crypto-us
+any request                            → load common/ufo-types (always)
+```
+
+## Evidence Output Contract
+
+Every Satisfies check MUST emit:
+
+```json
+{
+  "constraint": "AuRdEligibility",
+  "verdict": "PASS" | "FAIL",
+  "hash": "<blake3-hex>",
+  "evidence": [
+    { "type": "Claim|Statistic|Observation", "body": "...", "citation": "ITAA 1997 s 355-25" }
+  ]
+}
+```
+
+## b00t learn invocations
+
+```bash
+b00t learn tax-lawyer/common/ufo-types
+b00t learn tax-lawyer/aus/rd-tax-incentive
+b00t learn tax-lawyer/usa/r-and-d-credit
+b00t learn tax-lawyer/aus/crypto-au
+b00t learn tax-lawyer/usa/crypto-us
+```
+
+# b00t:map v1
+# summary: root dispatch for Tax-Lawyer Platform — UFO-grounded multi-jurisdiction R&D/crypto
+# tags: tax, rd, crypto, ufo, satisfies, au, us
+# tier: frontier
+# complexity: 8

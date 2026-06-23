@@ -509,6 +509,13 @@ commit-hook:
         fi
         echo "✅ Reviewer gate passed"
     fi
+    # Gate schema validation: ensure all gate datums pass contract
+    if ls _b00t_/gates/*.gate.toml &>/dev/null; then
+        if ! python3 scripts/validate-gate.py _b00t_/gates/*.gate.toml 2>/dev/null; then
+            echo "❌ Gate schema validation failed. Fix gate datums and try again."
+            exit 1
+        fi
+    fi
 
 commit-hook2:
     #!/bin/bash
@@ -969,7 +976,7 @@ worker-validate:
 # 🦨 Symlink: vendor/ledgrrr -> vendor/ledgrrr (polyseme mapping)
 # Module docs: https://just.systems/man/en/modules.html
 # Invocation:  just ledgrrr build | docker-build | docker-run | docker-stop | …
-mod ledgrrr 'vendor/ledgrrr/ledgrrr.just'
+mod? ledgrrr 'vendor/ledgrrr/ledgrrr.just'
 
 # ── pi agent — systemd service lifecycle ─────────────────────────────────────
 # 🤓 pi is managed as b00t@pi-agent.service, NOT spawned per-invocation
@@ -2230,4 +2237,24 @@ gen-flowchart-cytoscape root="" output="topology.json":
 gen-flowchart-docs:
     cd b00t-cli && cargo run --bin b00t-cli -- ontology export --format=mermaid --depth=3 > book/src/topology.md
     echo "Updated book/src/topology.md with live system topology"
+
+# ── GitHub PR operations via gh.cli datum ──────────────────────────────────
+# Abstract interfaces from _b00t_/gh.cli.toml — uses gh CLI (preferred)
+# or curl+REST fallback when gh unavailable.
+
+# Post a comment on a PR via gh.cli datum abstract interface
+gh-pr-comment pr body:
+    @b00t datum call gh.cli pr_comment --token pr={{pr}} --token body="{{body}}" --exec
+
+# Submit a formal PR review via gh.cli datum
+gh-pr-review pr event body:
+    @b00t datum call gh.cli pr_review --token pr={{pr}} --token event={{event}} --token body="{{body}}" --exec
+
+# Get PR diff via gh.cli datum
+gh-pr-diff pr:
+    @b00t datum call gh.cli pr_diff --token pr={{pr}} --exec
+
+# List open PRs
+gh-pr-list limit="10":
+    @b00t exec -- gh pr list --state open --limit {{limit}}
 

@@ -1,0 +1,133 @@
+# b00t:map v1
+# summary: Multi-framework PR review — MECE decomposition + TRIZ contradiction analysis + Eureka insight search, synthesized via cross-framework triangulation
+# tags: review, mece, triz, eureka, multi-framework, pr, quality, governance
+# tier: frontier
+# cmds: just review-multi PR=<n>, just review-dogfood, just review-promote
+# complexity: 7
+
+[b00t]
+name = "multi-framework-review"
+type = "datum"
+hint = "Multi-lens PR review applying MECE decomposition, TRIZ contradiction analysis, and Eureka insight search. Cross-references findings across frameworks to surface issues missed by single-lens review."
+
+# ── Phase Definitions ──────────────────────────────────────────────────────
+
+[[b00t.phases]]
+id = "setup"
+label = "Setup"
+description = "Fetch PR context: diff, files changed, CI status"
+produces = ["pr_context"]
+transition_to = "mece"
+guard = "has_pr_context"
+gh_labels = ["phase:setup", "multi-framework-review"]
+
+[[b00t.phases]]
+id = "mece"
+label = "MECE Analysis"
+description = "Decompose PR into mutually exclusive, collectively exhaustive categories. Find structural gaps and boundary issues."
+produces = ["mece_findings"]
+transition_to = "triz"
+guard = "has_mece_findings"
+gh_labels = ["phase:mece", "multi-framework-review"]
+depends_on = ["setup"]
+
+[[b00t.phases]]
+id = "triz"
+label = "TRIZ Analysis"
+description = "Identify contradictions in design choices. Map to TRIZ inventive principles. Find unnecessary trade-offs."
+produces = ["triz_findings"]
+transition_to = "eureka"
+guard = "has_triz_findings"
+gh_labels = ["phase:triz", "multi-framework-review"]
+depends_on = ["mece"]
+
+[[b00t.phases]]
+id = "eureka"
+label = "Eureka Analysis"
+description = "Search for patterns, missing abstractions, and simplification opportunities. The 10x question."
+produces = ["eureka_findings"]
+transition_to = "synthesize"
+guard = "has_eureka_findings"
+gh_labels = ["phase:eureka", "multi-framework-review"]
+depends_on = ["triz"]
+
+[[b00t.phases]]
+id = "synthesize"
+label = "Cross-Framework Synthesis"
+description = "Triangulate findings across all three frameworks. Identify critical (3-framework) vs high-confidence (2-framework) vs suggestion (1-framework)."
+produces = ["synthesis_report"]
+transition_to = "post"
+guard = "has_synthesis"
+gh_labels = ["phase:synthesize", "multi-framework-review"]
+depends_on = ["mece", "triz", "eureka"]
+
+[[b00t.phases]]
+id = "post"
+label = "Post Review"
+description = "Submit review to PR with inline comments and summary. Promote critical findings to task queue."
+produces = ["pr_review_posted"]
+transition_to = "pulse"
+guard = "has_review_posted"
+gh_labels = ["phase:post", "multi-framework-review"]
+depends_on = ["synthesize"]
+
+[[b00t.phases]]
+id = "pulse"
+label = "Pulse"
+description = "Reflect: what did each framework catch? What was unique? What was missed? Update skill with learnings."
+produces = ["pulse_report"]
+transition_to = "setup"  # cyclical — back to setup for next PR
+guard = "has_pulse_report"
+gh_labels = ["phase:pulse", "multi-framework-review"]
+depends_on = ["post"]
+
+# ── State Machine Config ───────────────────────────────────────────────────
+
+[b00t.state_machine]
+initial_phase = "setup"
+state_file = ".b00t/multi-framework-review-state.json"
+
+# ── Backlog Integration ─────────────────────────────────────────────────────
+
+[b00t.backlog]
+provider = "gh-issues"
+auto_label = true
+default_labels = ["multi-framework-review"]
+critical_label = "critical"   # Promoted findings get this label
+
+# ── Governance Integration ──────────────────────────────────────────────────
+
+[b00t.governance]
+eisenhower_enabled = true
+auto_promote_critical = true   # Critical findings → task queue automatically
+gate_on_post = "review-quality"  # Gate review post on minimum quality score
+
+# ── Quality Thresholds ──────────────────────────────────────────────────────
+
+[b00t.thresholds]
+min_findings_per_100_lines = 1.5       # Must beat baseline of 1.2
+min_cross_validated_findings = 1       # At least one 3-framework finding
+max_false_contradictions = 0           # No missed false contradictions
+min_framework_efficiency_ratio = 0.3   # Each framework must contribute ≥30% of findings
+
+# ── Just Harness Recipes ────────────────────────────────────────────────────
+
+[b00t.harness]
+setup_recipe = "review-setup"
+mece_recipe = "review-mece"
+triz_recipe = "review-triz"
+eureka_recipe = "review-eureka"
+synthesize_recipe = "review-synthesize"
+post_recipe = "review-post"
+pulse_recipe = "review-pulse"
+dogfood_recipe = "review-dogfood"
+promote_recipe = "review-promote"
+parallel_recipe = "review-parallel"
+
+# ── Parallel Dispatch Config (Option B: large PRs) ──────────────────────────
+
+[b00t.parallel]
+enabled = true
+min_lines_for_parallel = 500     # Switch to parallel dispatch at 500+ lines
+max_concurrent_agents = 3        # MECE, TRIZ, Eureka in parallel
+synthesis_agent_after = true     # 4th agent synthesizes after first 3 complete
