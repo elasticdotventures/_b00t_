@@ -13,7 +13,7 @@ pub mod oauth_minimal;
 pub mod params;
 pub mod proxy_mcp_tools;
 pub mod rag_mcp_tools;
-pub mod type_graph;
+pub mod server_llm;
 
 pub use acl::{AclConfig, AclFilter, Policy};
 pub use mcp_server_rusty::B00tMcpServerRusty;
@@ -22,7 +22,6 @@ pub use chat::ChatRuntime;
 pub use github_auth::{GitHubAuthConfig, GitHubAuthState, GitHubUser, github_auth_router};
 pub use mcp_registry_tools::*;
 pub use oauth_minimal::{MinimalOAuthConfig, MinimalOAuthState, minimal_oauth_router};
-pub use type_graph::type_graph_router;
 pub use params::*;
 pub use proxy_mcp_tools::*;
 pub use rag_mcp_tools::*;
