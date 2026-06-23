@@ -111,3 +111,6 @@ pub mod ooda;
 pub use ooda::OodaCommands;
 pub mod patch;
 pub use patch::PatchCommands;
+pub mod server;
+pub use server::ServerCommands;
+pub use server::handle_server_command;
