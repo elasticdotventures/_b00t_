@@ -2,97 +2,150 @@
 //    Validates b00t-issued API keys → forwards to upstream LLM backend →
 //    emits Spotlight usage events. Mounts on the existing b00t-mcp axum server.
 //
-//    Auto-discovery: probes local backends (mistralrs :8181, llama.cpp :8080,
-//    vLLM :8000) on startup. Falls back to remote API keys from env.
+//    Backend discovery via runtime config: ~/.b00t/server-soul.tomllm
+//    (local uncommitted — lists local ports + remote profiles with key_env).
+//    No hardcoded IPs or server names in the binary.
 //    Reference: vendor/irontology-mcp/crates/provider-openai/src/lib.rs:299-354
 
 use axum::{
     Router,
     body::Bytes,
     extract::State,
-    http::{HeaderMap, HeaderValue, StatusCode, Method},
+    http::{HeaderMap, Method, StatusCode},
     response::{IntoResponse, Json},
     routing::{get, post},
 };
 use axum::http::header;
+use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::collections::HashMap;
-use std::net::TcpStream;
+use std::net::{SocketAddr, TcpStream};
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::RwLock;
 use uuid::Uuid;
 
-// ── Auto-discovery of upstream backends ────────────────────────────────────
+// ── Soul config (runtime backend registry) ─────────────────────────────────
 
-const LOCAL_BACKENDS: &[(&str, u16)] = &[
-    ("mistral.rs", 8181),
-    ("llama.cpp", 8080),
-    ("vLLM", 8000),
-    ("vLLM-alt", 8001),
-];
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SoulConfig {
+    pub soul: SoulMeta,
+    pub backends: BackendsSection,
+}
 
-/// Probe known local ports via TCP connect (no runtime needed).
-/// Returns (name, base_url) of the first live listener.
-fn discover_local_backend() -> Option<(String, String)> {
-    for &(name, port) in LOCAL_BACKENDS {
-        if TcpStream::connect_timeout(
-            &format!("127.0.0.1:{}", port).parse().ok()?,
-            Duration::from_millis(500),
-        ).is_ok()
-        {
-            eprintln!("🔍 discovered local backend: {} (port {})", name, port);
-            return Some((name.to_string(), format!("http://127.0.0.1:{}/v1", port)));
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SoulMeta {
+    #[serde(default)]
+    pub hostname: String,
+    #[serde(default)]
+    pub blessings: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BackendsSection {
+    #[serde(default)]
+    pub local: Vec<LocalBackend>,
+    #[serde(default)]
+    pub remote: Vec<RemoteBackend>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LocalBackend {
+    pub name: String,
+    pub port: u16,
+    #[serde(default = "default_kind")]
+    pub kind: String,
+    #[serde(default = "default_enabled")]
+    pub enabled: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RemoteBackend {
+    pub name: String,
+    pub key_env: String,
+    #[serde(default)]
+    pub base_url: Option<String>,
+}
+
+fn default_kind() -> String { "openai-compat".into() }
+fn default_enabled() -> bool { true }
+
+const SOUL_PATH: &str = "server-soul.tomllm";
+
+fn default_soul(hostname: &str) -> SoulConfig {
+    SoulConfig {
+        soul: SoulMeta {
+            hostname: hostname.to_string(),
+            blessings: vec!["rust-doc".into()],
+        },
+        backends: BackendsSection {
+            local: vec![
+                LocalBackend { name: "mistralrs".into(), port: 8181, kind: "openai-compat".into(), enabled: true },
+                LocalBackend { name: "llama-cpp".into(), port: 8080, kind: "openai-compat".into(), enabled: true },
+                LocalBackend { name: "vllm".into(), port: 8000, kind: "openai-compat".into(), enabled: true },
+            ],
+            remote: vec![
+                RemoteBackend { name: "openai".into(), key_env: "OPENAI_API_KEY".into(), base_url: None },
+                RemoteBackend { name: "openrouter".into(), key_env: "OPENROUTER_API_KEY".into(), base_url: Some("https://openrouter.ai/api/v1".into()) },
+            ],
+        },
+    }
+}
+
+impl SoulConfig {
+    pub fn load() -> Self {
+        let home = dirs_next().unwrap_or_else(|| std::path::PathBuf::from("."));
+        let path = home.join(SOUL_PATH);
+        if let Ok(data) = std::fs::read_to_string(&path) {
+            if let Ok(cfg) = toml::from_str::<SoulConfig>(&data) {
+                if !cfg.backends.local.is_empty() || !cfg.backends.remote.is_empty() {
+                    return cfg;
+                }
+            }
+        }
+        let hostname = whoami::fallible::hostname().unwrap_or_else(|_| "unknown".into());
+        let cfg = default_soul(&hostname);
+        if let Some(parent) = path.parent() {
+            let _ = std::fs::create_dir_all(parent);
+        }
+        let header = concat!(
+            "# b00t server soul — runtime backend registry (local, uncommitted)\n",
+            "# Edit to add/remove backends. Remote entries reference env var keys.\n",
+            "# b00t:map v1\n# summary: b00t-server backend discovery config\n",
+            "# tags: server, soul, backends\n# tier: sm0l\n",
+            "# cmds: b00t server start\n# complexity: 2\n#\n",
+        );
+        if let Ok(toml_str) = toml::to_string_pretty(&cfg) {
+            let _ = std::fs::write(&path, format!("{}{}", header, toml_str));
+        }
+        cfg
+    }
+}
+
+fn discover_local(soul: &SoulConfig) -> Option<(String, String)> {
+    for be in &soul.backends.local {
+        if !be.enabled { continue; }
+        let addr: SocketAddr = format!("127.0.0.1:{}", be.port).parse().ok()?;
+        if TcpStream::connect_timeout(&addr, Duration::from_millis(500)).is_ok() {
+            eprintln!("🔍 local backend (soul): {} :{}", be.name, be.port);
+            return Some((be.name.clone(), format!("http://127.0.0.1:{}/v1", be.port)));
         }
     }
     None
 }
 
-/// Resolve the upstream key from environment in priority order.
-fn resolve_upstream_key() -> Option<(String, String)> {
-    // Explicit server config
-    if let Ok(key) = std::env::var("B00T_SERVER_UPSTREAM_KEY") {
-        if !key.is_empty() {
-            return Some((key, "env:B00T_SERVER_UPSTREAM_KEY".into()));
-        }
-    }
-    // Standard OpenAI
-    if let Ok(key) = std::env::var("OPENAI_API_KEY") {
-        if !key.is_empty() {
-            return Some((key, "env:OPENAI_API_KEY".into()));
-        }
-    }
-    // b00t tier keys (for forwarding)
-    if let Ok(key) = std::env::var("B00T_AI_CH0NKY_KEY") {
-        if !key.is_empty() {
-            if let Ok(url) = std::env::var("B00T_AI_CH0NKY_BASE") {
-                if !url.is_empty() {
-                    return Some((key, url));
-                }
-            }
-        }
-    }
-    if let Ok(key) = std::env::var("B00T_AI_FRONTIER_KEY") {
-        if !key.is_empty() {
-            if let Ok(url) = std::env::var("B00T_AI_FRONTIER_BASE") {
-                if !url.is_empty() {
-                    return Some((key, url));
-                }
-            }
-        }
-    }
-    // OpenRouter
-    if let Ok(key) = std::env::var("OPENROUTER_API_KEY") {
-        if !key.is_empty() {
-            return Some((key, "https://openrouter.ai/api/v1".into()));
+fn discover_remote(soul: &SoulConfig) -> Option<(String, String, String)> {
+    for be in &soul.backends.remote {
+        if let Ok(key) = std::env::var(&be.key_env) {
+            if key.is_empty() { continue; }
+            let url = be.base_url.clone().unwrap_or_else(|| "https://api.openai.com/v1".into());
+            return Some((be.name.clone(), key, url));
         }
     }
     None
 }
 
-/// Resolve upstream: explicit env var > local auto-discovery > remote key.
-fn resolve_upstream() -> (String, String) {
-    // 1. Explicit URL from env (takes precedence)
+fn resolve_upstream(soul: &SoulConfig) -> (String, String) {
     if let Ok(url) = std::env::var("B00T_SERVER_UPSTREAM_URL") {
         if !url.is_empty() {
             let key = std::env::var("B00T_SERVER_UPSTREAM_KEY")
@@ -102,27 +155,15 @@ fn resolve_upstream() -> (String, String) {
             return (url, key);
         }
     }
-
-    // 2. Auto-discover local backend
-    if let Some((name, url)) = discover_local_backend() {
-        eprintln!("📍 upstream (auto-discovered {}): {}", name, url);
-        return (url, String::new()); // local backends don't need keys
+    if let Some((name, url)) = discover_local(soul) {
+        eprintln!("📍 upstream (soul/local {}): {}", name, url);
+        return (url, String::new());
     }
-
-    // 3. Remote key profile
-    if let Some((key, source)) = resolve_upstream_key() {
-        let url = if source.starts_with("http") {
-            source.clone()
-        } else {
-            "https://api.openai.com/v1".to_string()
-        };
-        eprintln!("🌐 upstream (remote {}): {}", source, url);
+    if let Some((name, key, url)) = discover_remote(soul) {
+        eprintln!("🌐 upstream (soul/remote {}): {}", name, url);
         return (url, key);
     }
-
-    // 4. Nothing available — start in degraded mode
-    eprintln!("⚠️  No upstream configured. Set B00T_SERVER_UPSTREAM_KEY or OPENAI_API_KEY.");
-    eprintln!("   Also probes: localhost:{:?} for mistral.rs/llama.cpp/vLLM.", LOCAL_BACKENDS.iter().map(|(_,p)| p).collect::<Vec<_>>());
+    eprintln!("⚠️  No upstream configured — populate ~/.b00t/{}", SOUL_PATH);
     ("http://localhost:8181/v1".to_string(), String::new())
 }
 
@@ -143,18 +184,16 @@ pub struct LlmState {
 }
 
 impl LlmState {
-    /// Create state with auto-discovered upstream: local probe > env key > explicit URL.
     pub fn new() -> Self {
-        let (url, key) = resolve_upstream();
+        let soul = SoulConfig::load();
+        let (url, key) = resolve_upstream(&soul);
         Self::from_config(&url, &key)
     }
 
-    /// Create state with explicit upstream config (for tests, embedded use).
     pub fn from_config(upstream_url: &str, upstream_key: &str) -> Self {
         let home = dirs_next().unwrap_or_else(|| std::path::PathBuf::from("."));
         let keys_file = home.join("server-keys.json");
         let mut keys = HashMap::new();
-
         if let Ok(data) = std::fs::read_to_string(&keys_file) {
             if let Ok(parsed) = serde_json::from_str::<Value>(&data) {
                 if let Some(obj) = parsed.get("keys").and_then(|k| k.as_object()) {
@@ -174,7 +213,6 @@ impl LlmState {
                 }
             }
         }
-
         Self {
             upstream_url: upstream_url.trim_end_matches('/').to_string(),
             upstream_key: upstream_key.to_string(),
@@ -222,11 +260,7 @@ impl LlmState {
             "model": model,
             "latency_ms": latency_ms,
         });
-        if let Ok(mut f) = std::fs::OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(&self.spotlight_log)
-        {
+        if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(&self.spotlight_log) {
             use std::io::Write;
             let _ = writeln!(f, "{}", event);
         }
@@ -248,8 +282,6 @@ pub fn llm_router(state: Arc<LlmState>, dev_mode: bool) -> Router {
         .with_state((state, dev_mode))
 }
 
-// ── Key checking middleware ────────────────────────────────────────────────
-
 type AppState = (Arc<LlmState>, bool);
 
 fn extract_bearer_token(headers: &HeaderMap, dev_mode: bool) -> Option<String> {
@@ -270,19 +302,13 @@ async fn list_models(
     headers: HeaderMap,
 ) -> impl IntoResponse {
     let token = extract_bearer_token(&headers, dev_mode).unwrap_or_default();
-    let consumer = state
-        .validate_key(&token)
-        .await
-        .map(|k| k.consumer)
-        .unwrap_or_else(|| "unknown".to_string());
-
+    let consumer = state.validate_key(&token).await.map(|k| k.consumer).unwrap_or_else(|| "unknown".to_string());
     let url = format!("{}/models", state.upstream_url);
     let client = reqwest::Client::new();
     let mut req = client.get(&url);
     if !state.upstream_key.is_empty() {
         req = req.header("Authorization", format!("Bearer {}", state.upstream_key));
     }
-
     let start = std::time::Instant::now();
     match req.send().await {
         Ok(resp) => {
@@ -295,10 +321,7 @@ async fn list_models(
         Err(e) => {
             let latency = start.elapsed().as_millis() as u64;
             state.emit_spotlight(&consumer, "models", "*", latency).await;
-            (
-                StatusCode::BAD_GATEWAY,
-                Json(json!({"error": format!("upstream unreachable: {}", e)})),
-            ).into_response()
+            (StatusCode::BAD_GATEWAY, Json(json!({"error": format!("upstream unreachable: {}", e)}))).into_response()
         }
     }
 }
@@ -309,48 +332,32 @@ async fn proxy_chat(
     body: Bytes,
 ) -> impl IntoResponse {
     let token = extract_bearer_token(&headers, dev_mode).unwrap_or_default();
-    let consumer = state
-        .validate_key(&token)
-        .await
-        .map(|k| k.consumer)
-        .unwrap_or_else(|| "unknown".to_string());
-
+    let consumer = state.validate_key(&token).await.map(|k| k.consumer).unwrap_or_else(|| "unknown".to_string());
     let model = serde_json::from_slice::<Value>(&body)
-        .ok()
-        .and_then(|v| v.get("model").and_then(|m| m.as_str().map(|s| s.to_string())))
+        .ok().and_then(|v| v.get("model").and_then(|m| m.as_str().map(|s| s.to_string())))
         .unwrap_or_else(|| "unknown".to_string());
-
     let url = format!("{}/chat/completions", state.upstream_url);
     let client = reqwest::Client::new();
-    let mut req = client
-        .post(&url)
-        .header("Content-Type", "application/json")
-        .body(body.clone());
+    let mut req = client.post(&url).header("Content-Type", "application/json").body(body.clone());
     if !state.upstream_key.is_empty() {
         req = req.header("Authorization", format!("Bearer {}", state.upstream_key));
     }
-
-    // Forward select headers (strip client auth, keep content-type)
     if let Some(ct) = headers.get(header::CONTENT_TYPE).and_then(|v| v.to_str().ok()) {
         req = req.header("Content-Type", ct);
     }
-
     let start = std::time::Instant::now();
     match req.send().await {
         Ok(resp) => {
             let latency = start.elapsed().as_millis() as u64;
             let status = resp.status();
-            let resp_body = resp.bytes().await.unwrap_or_default();
+            let body = resp.bytes().await.unwrap_or_default();
             state.emit_spotlight(&consumer, "chat_completions", &model, latency).await;
-            (status, resp_body).into_response()
+            (status, body).into_response()
         }
         Err(e) => {
             let latency = start.elapsed().as_millis() as u64;
             state.emit_spotlight(&consumer, "chat_completions", &model, latency).await;
-            (
-                StatusCode::BAD_GATEWAY,
-                Json(json!({"error": format!("upstream unreachable: {}", e)})),
-            ).into_response()
+            (StatusCode::BAD_GATEWAY, Json(json!({"error": format!("upstream unreachable: {}", e)}))).into_response()
         }
     }
 }
@@ -361,43 +368,29 @@ async fn proxy_embeddings(
     body: Bytes,
 ) -> impl IntoResponse {
     let token = extract_bearer_token(&headers, dev_mode).unwrap_or_default();
-    let consumer = state
-        .validate_key(&token)
-        .await
-        .map(|k| k.consumer)
-        .unwrap_or_else(|| "unknown".to_string());
-
+    let consumer = state.validate_key(&token).await.map(|k| k.consumer).unwrap_or_else(|| "unknown".to_string());
     let model = serde_json::from_slice::<Value>(&body)
-        .ok()
-        .and_then(|v| v.get("model").and_then(|m| m.as_str().map(|s| s.to_string())))
+        .ok().and_then(|v| v.get("model").and_then(|m| m.as_str().map(|s| s.to_string())))
         .unwrap_or_else(|| "unknown".to_string());
-
     let url = format!("{}/embeddings", state.upstream_url);
     let client = reqwest::Client::new();
-    let mut req = client
-        .post(&url)
-        .header("Content-Type", "application/json")
-        .body(body.clone());
+    let mut req = client.post(&url).header("Content-Type", "application/json").body(body.clone());
     if !state.upstream_key.is_empty() {
         req = req.header("Authorization", format!("Bearer {}", state.upstream_key));
     }
-
     let start = std::time::Instant::now();
     match req.send().await {
         Ok(resp) => {
             let latency = start.elapsed().as_millis() as u64;
             let status = resp.status();
-            let resp_body = resp.bytes().await.unwrap_or_default();
+            let body = resp.bytes().await.unwrap_or_default();
             state.emit_spotlight(&consumer, "embeddings", &model, latency).await;
-            (status, resp_body).into_response()
+            (status, body).into_response()
         }
         Err(e) => {
             let latency = start.elapsed().as_millis() as u64;
             state.emit_spotlight(&consumer, "embeddings", &model, latency).await;
-            (
-                StatusCode::BAD_GATEWAY,
-                Json(json!({"error": format!("upstream unreachable: {}", e)})),
-            ).into_response()
+            (StatusCode::BAD_GATEWAY, Json(json!({"error": format!("upstream unreachable: {}", e)}))).into_response()
         }
     }
 }
@@ -407,12 +400,9 @@ async fn fallback_not_found(
     method: Method,
     axum::extract::Path(path): axum::extract::Path<String>,
 ) -> impl IntoResponse {
-    (
-        StatusCode::NOT_FOUND,
-        Json(json!({
-            "error": format!("{} /v1/{} not found (try /v1/models, /v1/chat/completions, /v1/embeddings)", method, path)
-        })),
-    )
+    (StatusCode::NOT_FOUND, Json(json!({
+        "error": format!("{} /v1/{} not found (try /v1/models, /v1/chat/completions, /v1/embeddings)", method, path)
+    })))
 }
 
 #[cfg(test)]
