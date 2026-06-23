@@ -22,7 +22,7 @@ import os, json, sys
 from pathlib import Path
 
 B00T_ROOT = Path(os.environ.get("B00T_ROOT", os.path.expanduser("~/.b00t")))
-BASE_MODEL = os.environ.get("B00T_BASE_MODEL", "unsloth/Qwen3.5-4B")
+BASE_MODEL = os.environ.get("B00T_BASE_MODEL", "unsloth/Qwen3.5-0.8B")
 TRAIN_DATA = Path(os.environ.get("B00T_TRAIN_DATA", B00T_ROOT / "training" / "b00t-corpus.jsonl"))
 OUTPUT_DIR = Path(os.environ.get("B00T_OUTPUT_DIR", B00T_ROOT / "training" / "output"))
 LORA_NAME = "b00t-lora"
