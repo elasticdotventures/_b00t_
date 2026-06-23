@@ -1247,6 +1247,7 @@ dependencies = [
  "b00t-embed",
  "b00t-grok",
  "b00t-ipc",
+ "b00t-reflect-types",
  "bstr",
  "candle-core 0.10.2",
  "candle-nn 0.10.2",
@@ -1454,6 +1455,8 @@ dependencies = [
  "wasm-bindgen",
  "wee_alloc",
 ]
+name = "b00t-reflect-types"
+version = "0.8.3"
 
 [[package]]
 name = "backoff"

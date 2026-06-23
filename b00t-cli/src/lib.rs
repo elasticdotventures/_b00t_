@@ -1032,6 +1032,21 @@ impl DatumType {
     pub fn type_prefix(&self) -> &'static str {
         self.base_suffix().trim_start_matches('.')
     }
+
+    /// Type-graph nodes for all DatumType variants, auto-derived from datum_type_table!.
+    /// Zero-maintenance: adding a new variant automatically appears here.
+    pub fn datum_nodes() -> Vec<b00t_reflect_types::HolonNode> {
+        Self::all_variants()
+            .iter()
+            .map(|v| b00t_reflect_types::HolonNode {
+                id: format!("datum_type::{}", v.type_prefix()),
+                label: v.type_prefix().to_string(),
+                kind: "datum_type".to_string(),
+                z_layer: None,
+                semantic_type: None,
+            })
+            .collect()
+    }
 }
 
 impl std::fmt::Display for DatumType {
@@ -3314,6 +3329,40 @@ hint = "containers"
             let prefix = variant.type_prefix();
             let suffix = variant.base_suffix().trim_start_matches('.');
             assert_eq!(prefix, suffix, "{variant:?}: type_prefix must equal base_suffix without leading dot");
+        }
+    }
+
+    #[test]
+    fn datum_nodes_covers_all_variants() {
+        let nodes = DatumType::datum_nodes();
+        let variant_count = DatumType::all_variants().len();
+        assert_eq!(nodes.len(), variant_count, "datum_nodes() must emit one node per DatumType variant");
+    }
+
+    #[test]
+    fn datum_nodes_no_duplicate_ids() {
+        let nodes = DatumType::datum_nodes();
+        let mut ids: std::collections::HashSet<&str> = std::collections::HashSet::new();
+        for n in &nodes {
+            assert!(ids.insert(n.id.as_str()), "duplicate datum_node id: {}", n.id);
+        }
+    }
+
+    #[test]
+    fn datum_nodes_id_format_and_kind() {
+        for node in DatumType::datum_nodes() {
+            assert!(node.id.starts_with("datum_type::"), "id must be datum_type::<prefix>, got: {}", node.id);
+            assert_eq!(node.kind, "datum_type", "kind must be 'datum_type', got: {}", node.kind);
+            assert!(node.z_layer.is_none(), "datum_nodes must have no z_layer");
+            assert!(node.semantic_type.is_none(), "datum_nodes must have no semantic_type");
+        }
+    }
+
+    #[test]
+    fn datum_nodes_label_matches_type_prefix() {
+        for (node, variant) in DatumType::datum_nodes().iter().zip(DatumType::all_variants().iter()) {
+            assert_eq!(node.label, variant.type_prefix(), "label must equal type_prefix for {variant:?}");
+            assert_eq!(node.id, format!("datum_type::{}", variant.type_prefix()), "id format mismatch for {variant:?}");
         }
     }
 }
