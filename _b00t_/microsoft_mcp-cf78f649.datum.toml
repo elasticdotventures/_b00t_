@@ -3,6 +3,11 @@
 #    Retrieve: git -C ~/.b00t cat-file blob 20867f58773cbb384271b220a4f4ff0915afc846
 #    Validate: git -C ~/.b00t cat-file -e 20867f58773cbb384271b220a4f4ff0915afc846
 
+[b00t]
+name = "microsoft-mcp"
+type = "datum"
+hint = "Microsoft MCP patterns — Azure-backed MCP servers"
+
 [datum]
 topic     = "microsoft-mcp"
 class     = "mcp-patterns"

@@ -1,6 +1,11 @@
 # b00t-post-commit datum — cross-platform compatibility validation
 # Policy: pwsh.🪟/NTFS_RESERVED_CHARS.md
 
+[b00t]
+name = "b00t-post-commit"
+type = "hook"
+hint = "Post-commit hook for cross-platform NTFS lint validation"
+
 [datum]
 name = "b00t-post-commit"
 type = "hook"

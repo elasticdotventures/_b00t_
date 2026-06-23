@@ -7,6 +7,9 @@
 [submodule "_b00t_/test/test_helper/bats-assert"]
 	path = _b00t_/test/test_helper/bats-assert
 	url = https://github.com/bats-core/bats-assert.git
+[submodule "legacy-test/test_helper/bats-assert"]
+	path = test/test_helper/bats-assert
+	url = https://github.com/bats-core/bats-assert.git
 [submodule "vscode.🆚/vscode-docs"]
 	path = vscode.🆚/vscode-docs
 	url = https://github.com/microsoft/vscode-docs
@@ -19,6 +22,9 @@
 [submodule "rmcp-rust-sdk"]
 	path = rmcp-rust-sdk
 	url = git@github.com:modelcontextprotocol/rust-sdk.git
+[submodule "python.🐍/DALLE2-pytorch"]
+	path = python.🐍/DALLE2-pytorch
+	url = https://github.com/lucidrains/DALLE2-pytorch
 [submodule "email/himalaya"]
 	path = email/himalaya
 	url = https://github.com/pimalaya/himalaya.git
@@ -33,7 +39,7 @@
 	url = https://github.com/PromptExecution/just-mcp
 [submodule "vendor/moltis-b00t"]
 	path = vendor/moltis-b00t
-	url = https://github.com/promptexecution/moltis-b00t.git
+	url = git@github.com:elasticdotventures/moltis-b00t.git
 [submodule "vendor/irontology-mcp"]
 	path = vendor/irontology-mcp
 	url = https://github.com/PromptExecution/irontology-mcp.git
@@ -61,6 +67,7 @@
 	url = https://github.com/microsoft/agent-framework
 
 [submodule "plantuml-server"]
+<<<<<<< HEAD
 	path = plantuml-server
 	url = https://github.com/plantuml/plantuml-server.git
 
@@ -98,3 +105,5 @@
 [submodule "vendor/rust-docs-mcp-server"]
 	path = vendor/rust-docs-mcp-server
 	url = https://github.com/PromptExecution/rust-docs-mcp-b00t.git
+=======
+>>>>>>> origin/main

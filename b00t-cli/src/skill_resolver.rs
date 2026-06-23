@@ -357,6 +357,41 @@ impl SkillResolver {
                         let primary = dir.path.join(format!("{}.skill.toml", name_owned));
                         let extended = dir.path.join(format!("{}.skill.tomllm", name_owned));
                         if !primary.exists() && !extended.exists() { continue; }
+
+                        // Follow symlinks to SKILL.md
+                        let skill_path = if extended.exists() { extended } else { primary };
+                        if skill_path.is_symlink() {
+                            if let Ok(target) = std::fs::read_link(&skill_path) {
+                                let target = if target.is_relative() {
+                                    skill_path.parent().unwrap_or(Path::new(".")).join(&target)
+                                } else {
+                                    target
+                                };
+                                if target.extension().map_or(false, |e| e == "md")
+                                    || target.to_string_lossy().contains("SKILL.md")
+                                {
+                                    let datum = SkillDatum::from_skill_md(&target)
+                                        .map_err(|e| SkillLoadError::Parse(e.to_string()))?;
+                                    let cfg = datum.skill_config()
+                                        .map_err(|e| SkillLoadError::Parse(e.to_string()))?;
+                                    let instructions = datum.load_instructions(
+                                        &target.parent().map(|p| p.to_path_buf()).unwrap_or(dir.path.clone()))
+                                        .map_err(|e| SkillLoadError::Parse(e.to_string()))?;
+                                    let rendered = render_skill(&instructions);
+                                    let content = SkillContent {
+                                        meta: SkillMeta {
+                                            name: datum.datum.name.clone(),
+                                            description: cfg.description.clone(),
+                                            tags: cfg.tags.clone(),
+                                            source_dir: dir.path.clone(),
+                                            format: SkillFormat::SkillMd,
+                                        },
+                                        instructions: rendered,
+                                    };
+                                    return Ok(content);
+                                }
+                            }
+                        }
                         let path_str = dir.path.to_string_lossy();
                         let datum = SkillDatum::from_config(&name_owned, &path_str)
                             .map_err(|e| SkillLoadError::Parse(e.to_string()))?;
@@ -466,6 +501,36 @@ fn scan_toml_skill_dir(dir: &PathBuf) -> Vec<SkillMeta> {
         if name.contains('.') {
             continue; // skip typed datums like b00t.cli.toml — only bare <name>.skill.*
         }
+
+        // Follow symlinks: if .skill.toml is a symlink to a .md file,
+        // parse it as SKILL.md frontmatter instead of TOML.
+        if path.is_symlink() {
+            if let Ok(target) = std::fs::read_link(&path) {
+                let target = if target.is_relative() {
+                    path.parent().unwrap_or(Path::new(".")).join(&target)
+                } else {
+                    target
+                };
+                if target.extension().map_or(false, |e| e == "md")
+                    || target.to_string_lossy().contains("SKILL.md")
+                {
+                    if let Ok(datum) = SkillDatum::from_skill_md(&target) {
+                        if let Ok(cfg) = datum.skill_config() {
+                            out.push(SkillMeta {
+                                name: datum.datum.name.clone(),
+                                description: cfg.description.clone(),
+                                tags: cfg.tags.clone(),
+                                source_dir: target.parent().map(|p| p.to_path_buf()).unwrap_or(dir.clone()),
+                                format: SkillFormat::SkillMd,
+                            });
+                            continue;
+                        }
+                    }
+                }
+            }
+        }
+
+        // Regular TOML skill datum (legacy path)
         let path_str = dir.to_string_lossy();
         if let Ok(datum) = SkillDatum::from_config(name, &path_str) {
             if let Ok(cfg) = datum.skill_config() {

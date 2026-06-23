@@ -72,6 +72,8 @@ b00t-embed = { path = "b00t-embed" }
 b00t-datum-core = { path = "b00t-datum-core" }
 b00t-zellij = { path = "b00t-zellij" }
 b00t-admin = { path = "b00t-admin" }
+b00t-reflect-types = { path = "vendor/l3dg3rr/crates/b00t-reflect-types" }
+mti = "1.1.1"
 
 
 

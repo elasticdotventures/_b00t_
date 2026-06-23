@@ -1,0 +1,52 @@
+[b00t]
+name = "sonar"
+type = "cli"
+hint = "CLI tool for inspecting and managing processes/Docker containers on localhost ports"
+source = "https://github.com/RasKrebs/sonar"
+desires = "latest"
+install = "curl -sfL https://raw.githubusercontent.com/raskrebs/sonar/main/scripts/install.sh | bash"
+version = "sonar --version"
+version_regex = '(\d+\.\d+\.\d+)'
+
+[b00t.skill]
+type_tags = ["cli", "devops", "ports", "docker", "process-management", "localhost", "networking", "go"]
+description = """
+sonar — localhost port inspector and process manager.
+
+KEY COMMANDS
+  sonar list               # list all processes/containers listening on localhost ports
+  sonar kill <port>        # terminate occupying process or Docker container
+  sonar logs <port>        # tail logs for process/container on port
+  sonar watch              # live-updating port monitor (like watch + netstat)
+  sonar wait <port>        # block until port becomes available (CI-friendly)
+  sonar next               # find next free port
+  sonar profile            # save/restore port snapshots for environment management
+
+USEFUL IN b00t
+  Before starting inference servers (port 8001), run:
+    sonar wait 8001   # block until GPU inference is accepting connections
+    sonar kill 8001   # kill whatever is squatting on the port first
+  Debugging multi-service port conflicts in hive deployments:
+    sonar list | grep :300  # check opencode ACP port
+    sonar list | grep :800  # check local_gpu inference ports
+
+INSTALL
+  curl -sfL https://raw.githubusercontent.com/raskrebs/sonar/main/scripts/install.sh | bash
+  # or: brew install raskrebs/sonar/sonar
+  # or: go install github.com/raskrebs/sonar@latest
+  # default install dir: $HOME/.local/bin
+
+ENV VARS
+  SONAR_INSTALL_DIR  — override install path
+  SONAR_VERSION      — pin version during install
+  NO_COLOR           — disable ANSI color
+"""
+tier = "sm0l"
+complexity = 2
+
+# b00t:map v1
+# summary: sonar CLI — inspect/kill/wait on localhost ports; Docker-aware; port conflict debugging
+# tags: cli, devops, ports, docker, process-management, localhost, networking
+# tier: sm0l
+# cmds: sonar list, sonar kill <port>, sonar wait <port>, sonar next
+# complexity: 2

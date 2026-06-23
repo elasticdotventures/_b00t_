@@ -3,6 +3,11 @@
 #    Retrieve: git -C ~/.b00t cat-file blob 4adf64a57a479f40256dc91322a81d5341b077d7
 #    Validate: git -C ~/.b00t cat-file -e 4adf64a57a479f40256dc91322a81d5341b077d7
 
+[b00t]
+name = "mcp-transports"
+type = "datum"
+hint = "MCP transport patterns — stdio, HTTP, SSE, streamable"
+
 [datum]
 topic     = "mcp-transports"
 class     = "mcp-patterns"

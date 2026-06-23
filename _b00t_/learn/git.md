@@ -41,3 +41,6 @@ josh vs submodules: Josh (josh-project/josh) is a Rust git history filter that e
 
 ---
 josh correction: b00t maintains 60+ repos (30 submodules + 30 forks) across PromptExecution/elasticdotventures. Submodules are breaking at this scale — constant upstream sync, dirty state, 3-PR dance. Josh justified NOW not later. Rust project migrated from submodules→subtrees→Josh at similar scale. This node has c0re subset only; b00ty-verse is the full hive network.
+
+---
+submodule-moltis-b00t: origin/main references vendor/moltis-b00t commit 857aaed923c6d783bbf57a8f5537919c800aacaf; the PromptExecution GitHub URLs return repository not found/no access, and the working remote is git@github.com:elasticdotventures/moltis-b00t.git.

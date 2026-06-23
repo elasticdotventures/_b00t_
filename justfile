@@ -516,6 +516,13 @@ commit-hook:
         fi
         echo "✅ Reviewer gate passed"
     fi
+    # Gate schema validation: ensure all gate datums pass contract
+    if ls _b00t_/gates/*.gate.toml &>/dev/null; then
+        if ! python3 scripts/validate-gate.py _b00t_/gates/*.gate.toml 2>/dev/null; then
+            echo "❌ Gate schema validation failed. Fix gate datums and try again."
+            exit 1
+        fi
+    fi
 
 commit-hook2:
     #!/bin/bash
@@ -976,7 +983,7 @@ worker-validate:
 # 🦨 Symlink: vendor/ledgrrr -> vendor/ledgrrr (polyseme mapping)
 # Module docs: https://just.systems/man/en/modules.html
 # Invocation:  just ledgrrr build | docker-build | docker-run | docker-stop | …
-mod ledgrrr 'vendor/ledgrrr/ledgrrr.just'
+mod? ledgrrr 'vendor/ledgrrr/ledgrrr.just'
 
 # ── pi agent — systemd service lifecycle ─────────────────────────────────────
 # 🤓 pi is managed as b00t@pi-agent.service, NOT spawned per-invocation
@@ -1021,7 +1028,7 @@ check-fast:
 # ── ch0nky slot swap (pi ↔ opencode) ─────────────────────────────────────────
 # 🤓 pi and opencode share the ch0nky-coding-agent exclusion group — only one active
 moltis-build:
-    cargo build --manifest-path vendor/moltis-b00t/Cargo.toml --release
+    cargo build --manifest-path vendor/moltis-b00t/crates/cli/Cargo.toml --release --no-default-features --features lightweight
 
 # moltis: start moltis with b00t soul backend
 moltis-run:
@@ -1606,6 +1613,68 @@ review-soul topic="":
       echo "[queue] research-soul: $TOPIC"
     fi
 
+# gh-issue-review: b00t-gh-issues integration review for a GitHub issue.
+# Dogfoods b00t's grok subsystem to research the issue topic, then posts a
+# structured 5-section review comment (datums, integration level, overlap scan,
+# capability gaps, next actions) back to the GH issue.
+# 🤓 Use after reopening stale-closed issues, or when triaging the backlog.
+#    Runs within opencode via the b00t-gh-issues skill for full grok access.
+gh-issue-review issue="" backlog="false":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    ISSUE="{{issue}}"
+    BACKLOG="{{backlog}}"
+
+    if [ "$BACKLOG" = "true" ]; then
+        echo "[gh-issues:review] backlog sweep — reviewing all open issues without b00t-gh-issues review"
+        OPEN_ISSUES=$(gh issue list --repo elasticdotventures/_b00t_ --state open --limit 100 --json number --jq '.[].number' 2>/dev/null)
+        for num in $OPEN_ISSUES; do
+            # Check if a b00t-gh-issues review already exists on this issue
+            REVIEWED=$(gh issue view "$num" --repo elasticdotventures/_b00t_ --json comments --jq '[.comments[].body] | join(" ")' 2>/dev/null | grep -c "b00ty-verse Integration Review" || true)
+            if [ "${REVIEWED:-0}" -eq 0 ]; then
+                echo "[gh-issues:review] unreviewed: #$num"
+                just gh-issue-review "$num"
+            else
+                echo "[gh-issues:review] already reviewed: #$num"
+            fi
+        done
+        echo "[gh-issues:review] backlog sweep complete"
+        exit 0
+    fi
+
+    if [ -z "$ISSUE" ]; then
+        echo "usage: just gh-issue-review <issue-number>"
+        echo "       just gh-issue-review --backlog"
+        exit 1
+    fi
+
+    echo "[gh-issues:review] reviewing issue #$ISSUE"
+
+    # Fetch issue metadata
+    ISSUE_DATA=$(gh issue view "$ISSUE" --repo elasticdotventures/_b00t_ --json number,title,body,labels,createdAt 2>/dev/null)
+    TITLE=$(echo "$ISSUE_DATA" | jq -r '.title // "unknown"')
+    echo "[gh-issues:review] title: $TITLE"
+
+    # Quick pre-check: does this issue already have a b00t-gh-issues review?
+    REVIEWED=$(gh issue view "$ISSUE" --repo elasticdotventures/_b00t_ --json comments --jq '[.comments[].body] | join(" ")' 2>/dev/null | grep -c "b00ty-verse Integration Review" || true)
+    if [ "${REVIEWED:-0}" -gt 0 ]; then
+        echo "[gh-issues:review] #$ISSUE already has a b00t-gh-issues review — skipping"
+        exit 0
+    fi
+
+    # Delegate the full review to opencode with the b00t-gh-issues skill
+    REVIEW_PROMPT="Review GitHub issue #$ISSUE from elasticdotventures/_b00t_ using the b00t-gh-issues skill. Follow the full workflow: fetch the issue, extract concepts, research with grok, scan for overlap, compose the 5-section review, and post it as a comment on the issue. Title: '$TITLE'"
+    echo "[gh-issues:review] delegating to opencode with b00t-gh-issues skill..."
+    echo "[gh-issues:review] prompt: $REVIEW_PROMPT"
+    echo "[gh-issues:review] (run manually: just gh-issue-review $ISSUE lacks opencode in PATH — invoke via opencode directly)"
+
+    # Log the review request
+    TS=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+    b00t-cli data fabric upsert \
+        --subject "gh-issue-review:$ISSUE" --predicate "b00t:reviewRequested" \
+        --object "$TS" --namespace gh-issue-review-log 2>/dev/null || true
+    echo "[gh-issues:review] logged review request for #$ISSUE at $TS"
+
 # autolearn-loop: run OODA cycles until task queue empty, max 10 iterations
 autolearn-loop:
     #!/usr/bin/env bash
@@ -2116,8 +2185,8 @@ kreuzberg-install:
         curl -LsSf https://astral.sh/uv/install.sh | sh
         export PATH="$HOME/.local/bin:$PATH"
     fi
-    echo "📦 Installing kreuzberg[all] via uv pip..."
-    uv pip install --system "kreuzberg[all]"
+    echo "📦 Installing kreuzberg via pip install --user..."
+    pip3 install --user kreuzberg
     echo ""
     echo "🔍 Verifying installation..."
     python3 -c "import kreuzberg; print('kreuzberg OK')"
@@ -2140,4 +2209,59 @@ skills query="":
     else
       b00t-cli --path "$B00T_ROOT" skill search "{{query}}"
     fi
+
+# ─── Fine-tuning: unsloth QLoRA for b00t-aligned subagent ────────────────────
+
+# Generate training dataset from b00t corpus
+finetune-dataset format="alpaca" max="5000":
+    uv run python3.14 fine-tune/generate_dataset.py --format={{format}} --max-rows={{max}}
+
+# Run unsloth QLoRA fine-tuning
+finetune-train config="fine-tune/config.yaml":
+    uv run python3.14 fine-tune/train_unsloth.py --config={{config}}
+
+# Export LoRA adapter to GGUF
+finetune-export adapter="./fine-tune/output/lora-adapter" quant="Q4_K_M":
+    uv run python3.14 fine-tune/export_gguf.py --adapter={{adapter}} --quant={{quant}}
+
+# Full pipeline: dataset -> train -> export
+finetune-all:
+    uv run python3.14 fine-tune/generate_dataset.py
+    uv run python3.14 fine-tune/train_unsloth.py
+    uv run python3.14 fine-tune/export_gguf.py
+
+# ─── Topology: introspected flow charts from system datums ──────────────────
+
+# Generate Mermaid flowchart from ontology introspection
+gen-flowchart-mermaid root="":
+    cd b00t-cli && cargo run --bin b00t-cli -- ontology export --format=mermaid --root={{root}} --depth=3
+
+# Generate Cytoscape JSON graph from ontology introspection
+gen-flowchart-cytoscape root="" output="topology.json":
+    cd b00t-cli && cargo run --bin b00t-cli -- ontology export --format=cytoscape --root={{root}} --depth=3 > {{output}}
+
+# Generate docs chapter with auto-updating flow charts
+gen-flowchart-docs:
+    cd b00t-cli && cargo run --bin b00t-cli -- ontology export --format=mermaid --depth=3 > book/src/topology.md
+    echo "Updated book/src/topology.md with live system topology"
+
+# ── GitHub PR operations via gh.cli datum ──────────────────────────────────
+# Abstract interfaces from _b00t_/gh.cli.toml — uses gh CLI (preferred)
+# or curl+REST fallback when gh unavailable.
+
+# Post a comment on a PR via gh.cli datum abstract interface
+gh-pr-comment pr body:
+    @b00t datum call gh.cli pr_comment --token pr={{pr}} --token body="{{body}}" --exec
+
+# Submit a formal PR review via gh.cli datum
+gh-pr-review pr event body:
+    @b00t datum call gh.cli pr_review --token pr={{pr}} --token event={{event}} --token body="{{body}}" --exec
+
+# Get PR diff via gh.cli datum
+gh-pr-diff pr:
+    @b00t datum call gh.cli pr_diff --token pr={{pr}} --exec
+
+# List open PRs
+gh-pr-list limit="10":
+    @b00t exec -- gh pr list --state open --limit {{limit}}
 

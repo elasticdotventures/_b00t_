@@ -77,6 +77,48 @@ must = [
 datum = "PRD-ONTOLOGY-OODA-UFO-SYSML"
 note  = "OODA KerML types provide the first diagram target"
 
+# ─── Renderer Evaluation (Three.js vs Bevy) ──────────────────────────────────
+[renderer_evaluation]
+# holon-viz currently emits Cytoscape JSON + HTML. For isometric 3D:
+# Phase 1: Three.js via Tauri WebView (leveraging existing WebView2)
+# Phase 2: Re-evaluate Bevy if GPU compute layout or physics needed
+context = "PRD-9 isometric viz + infinite squishable z-layer stack"
+
+[renderer_evaluation.three_js]
+verdict = "recommended for Phase 1"
+pros = [
+  "Zero new Rust deps — Three.js via WebView CDN",
+  "Isometric camera = OrthographicCamera, trivial to set up",
+  "Existing Tauri WebView2 infrastructure",
+  "Massive ecosystem, WASM-friendly",
+  "SVG <animateTransform> compatible for mdBook",
+]
+cons = ["Browser-only (needs WebView)", "Not pure Rust"]
+
+[renderer_evaluation.bevy]
+verdict = "evaluate for Phase 2"
+trigger_conditions = [
+  "GPU compute layout required (>10K simultaneous nodes)",
+  "Physics simulation (Blender-MCP interaction)",
+  "Standalone native binary needed (no Tauri dependency)",
+]
+pros = ["Pure Rust ECS", "Full 3D", "WASM target", "Hot-reload"]
+cons = ["Heavy dep (~100 crates)", "Steep learning curve"]
+
+[renderer_evaluation.decision]
+phase_1_renderer = "Three.js via Tauri WebView (isometric OrthographicCamera)"
+phase_2_renderer = "Re-evaluate Bevy based on trigger_conditions"
+animation_default = "SVG SMIL <animateTransform> (zero deps, mdBook compatible)"
+video_export = "IsoAnimationPath::to_manim_script() -> manim Python stubs"
+wasm_future = "monty MObject WASM execution (see MONTY-MANIM-WASM datum)"
+
+# ─── Python 3.14 Standard ─────────────────────────────────────────────────────
+[python_314]
+target = "3.14"
+gil = "disabled"
+monty_version = ">=0.0.18"
+migration = "all Python scripts in scripts/ updated to 3.14"
+
 [[related]]
 datum = "PRD-ARCH-006-CLIF-OWL2-BFO"
 note  = "BFO/OWL2 classes feed same diagram pipeline"

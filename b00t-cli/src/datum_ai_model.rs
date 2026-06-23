@@ -6,6 +6,37 @@ use serde::Deserialize;
 use std::fs;
 use std::path::{Path, PathBuf};
 
+/// Parse a .tomllmd-format model file where [model] and [ai_model.parameters]/[ai_model.metadata]
+/// are split across separate TOML sections. Merges them into a single [model] table for
+/// standard ModelConfig deserialization.
+fn parse_tomllmd_model(content: &str, path: &Path) -> Result<ModelConfig> {
+    let mut root: toml::Value = toml::from_str(content)
+        .with_context(|| format!("Failed to parse TOML in {}", path.display()))?;
+
+    // If file has [ai_model.parameters] and/or [ai_model.metadata], merge them into [model]
+    // Only merge known subkeys (parameters, metadata) — skip variants, usage, etc.
+    if let Some(t) = root.as_table_mut() {
+        if let Some(ai_model) = t.remove("ai_model") {
+            if let Some(model) = t.get_mut("model") {
+                if let (Some(model_t), Some(ai_t)) = (model.as_table_mut(), ai_model.as_table()) {
+                    for key in &["parameters", "metadata"] {
+                        if let Some(value) = ai_t.get(*key) {
+                            if !model_t.contains_key(*key) {
+                                model_t.insert(key.to_string(), value.clone());
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    let merged = toml::to_string(&root)
+        .with_context(|| format!("Failed to re-serialize merged TOML for {}", path.display()))?;
+    toml::from_str(&merged)
+        .with_context(|| format!("Failed to parse merged model datum {}", path.display()))
+}
+
 #[derive(Deserialize)]
 struct ModelConfig {
     pub b00t: BootDatum,
@@ -24,7 +55,7 @@ pub struct ModelDatumEntry {
 impl ModelDatumEntry {
     pub fn from_config(name: &str, base_path: &str) -> Result<Self> {
         let base = get_expanded_path(base_path)?;
-        for suffix in [".model.toml", ".ai_model.toml"] {
+        for suffix in [".model.toml", ".ai_model.toml", ".model.ai.toml", ".model.ai.tomllmd"] {
             let resolved = base.join(format!("{}{}", name, suffix));
             if resolved.exists() {
                 return Self::from_file(&resolved);
@@ -41,7 +72,12 @@ impl ModelDatumEntry {
     pub fn from_file(path: &Path) -> Result<Self> {
         let content = fs::read_to_string(path)
             .with_context(|| format!("Failed to read model datum {}", path.display()))?;
+
+        // .tomllmd files use split format: [model] + [ai_model.parameters] + [ai_model.metadata]
+        // Standard .toml files use single-section format: [model] with inline params/metadata.
+        // Try standard parse first; fall back to merged parse for .tomllmd.
         let config: ModelConfig = toml::from_str(&content)
+            .or_else(|_| parse_tomllmd_model(&content, path))
             .with_context(|| format!("Failed to parse model datum {}", path.display()))?;
 
         // Warn on unrecognized provider/architecture (serde untagged silently accepts typos)

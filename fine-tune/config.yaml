@@ -1,0 +1,36 @@
+# b00t Unsloth QLoRA Fine-Tuning Configuration
+# Base: Qwen3.6-27B (GGUF) — high neural plasticity, quantizes well
+# Target: b00t-aligned ch0nky subagent
+
+base_model: "unsloth/Qwen3.6-27B-GGUF"
+adapter_name: "b00t-aligned-qwen36-27b"
+dataset: "fine-tune/train.jsonl"
+output_dir: "./fine-tune/output"
+
+# LoRA hyperparameters
+lora_r: 16
+lora_alpha: 32
+lora_dropout: 0.05
+target_modules:
+  - "q_proj"
+  - "v_proj"
+  - "k_proj"
+  - "o_proj"
+  - "gate_proj"
+  - "up_proj"
+  - "down_proj"
+
+# Training hyperparameters
+num_epochs: 3
+batch_size: 2
+grad_accum: 8
+learning_rate: 2e-4
+max_seq_length: 2048
+optim: "adamw_8bit"
+weight_decay: 0.01
+lr_scheduler: "linear"
+warmup_steps: 5
+
+# Hardware requirements (RTX 3090 24GB)
+load_in_4bit: true
+use_gradient_checkpointing: true

@@ -62,6 +62,32 @@ severity  = "warn"
 message   = "currently on main branch — always work on a task branch: git checkout -b task/<id>-<slug>"
 fix       = "git checkout -b task/<id>-<slug>"
 
+[[system_normal.checks]]
+id        = "submodules-in-sync"
+label     = "all vendor subrepos are in sync — no dirty trees, no unpushed commits"
+command   = "git submodule status 2>/dev/null | grep -c '^[+M]' || echo 0"
+expected  = "0"
+severity  = "warn"
+message   = "submodule(s) have unpushed commits or dirty working trees — sync before task operations"
+rationale = "Out-of-sync submodules mean vendor changes that haven't been PR'd upstream; other contributors or CI will see different code."
+fix       = """
+# Per dirty submodule:
+git submodule status                    # list all, look for + or M prefix
+cd vendor/<name> && git status           # inspect changes
+git add -A && git commit -m "..."       # commit submodule changes
+git push -u origin <branch>             # push upstream
+cd ../.. && git add vendor/<name>       # update parent's submodule pointer
+gh pr create --fill                     # create upstream PR
+# After PR merges:
+git submodule update --remote vendor/<name>  # pull merged commit
+"""
+# 🤓 Submodule status prefix meanings:
+#   ' ' (space) = clean, matches parent-expected commit
+#   '+' = ahead (has new commits not pushed upstream)
+#   '-' = not initialized (run 'git submodule update --init')
+#   'M' = modified working tree (uncommitted changes inside submodule)
+# 🤓 NEVER force-push a submodule branch that other contributors depend on
+
 # ─── MAINTENANCE TARGETS ──────────────────────────────────────────────────────
 [system_normal.maintenance]
 # These are runnable via `just system-normal` or `b00t exec just system-normal`
@@ -78,8 +104,8 @@ precriteria_key  = "[[b00t.hive.precriteria]]"
 # NOT enforced in: b00t learn, b00t whoami, b00t status (read-only ops)
 
 # b00t:map v1
-# summary: system-normal precriteria — git stash empty + no conflicts + on task branch
-# tags: guardrail, precriteria, git, maintenance, system-health, blocking
+# summary: system-normal precriteria — git stash empty + no conflicts + on task branch + submodules in sync
+# tags: guardrail, precriteria, git, maintenance, system-health, blocking, submodule
 # tier: sm0l
-# cmds: just system-normal, git stash list, git stash drop stash@{0}
+# cmds: just system-normal, git stash list, git stash drop stash@{0}, git submodule status
 # complexity: 2

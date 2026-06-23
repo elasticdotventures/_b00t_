@@ -1196,9 +1196,13 @@ output = "Building..."
     #[test]
     fn test_git_attributes_overlay_operational_metadata() {
         let temp_dir = TempDir::new().unwrap();
+        // Clear GIT_DIR so `git init` creates a fresh repo in temp_dir,
+        // not the b00t repo (GIT_DIR is inherited from the pre-push hook env).
         std::process::Command::new("git")
             .arg("init")
             .current_dir(temp_dir.path())
+            .env_remove("GIT_DIR")
+            .env_remove("GIT_WORK_TREE")
             .output()
             .unwrap();
         create_test_datum_file(
@@ -1227,9 +1231,13 @@ output = "Building..."
     #[test]
     fn test_nested_git_attributes_overlay_operational_metadata() {
         let temp_dir = TempDir::new().unwrap();
+        // Clear GIT_DIR so `git init` creates a fresh repo in temp_dir,
+        // not the b00t repo (GIT_DIR is inherited from the pre-push hook env).
         std::process::Command::new("git")
             .arg("init")
             .current_dir(temp_dir.path())
+            .env_remove("GIT_DIR")
+            .env_remove("GIT_WORK_TREE")
             .output()
             .unwrap();
         let b00t_dir = temp_dir.path().join("_b00t_");

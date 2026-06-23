@@ -61,7 +61,7 @@ use b00t_cli::commands::uninstall::uninstall_datum;
 pub use b00t_cli::{
     DatumType, claude_code_install_mcp, codex_install_mcp, dotmcpjson_install_mcp,
     gemini_install_mcp, get_config, get_expanded_path, get_mcp_config, get_mcp_toml_files,
-    mcp_add_json, mcp_list, mcp_output, mcp_remove, vscode_install_mcp,
+    mcp_add_json, mcp_list, mcp_output, mcp_remove, opencode_install_mcp, vscode_install_mcp,
 };
 
 mod integration_tests;
@@ -277,7 +277,7 @@ The system will:
         #[clap(subcommand)]
         init_command: InitCommands,
     },
-    #[clap(about = "Show agent identity and context information")]
+    #[clap(about = "Show agent identity and context information", alias = "whomai")]
     Whoami {
         #[clap(long, help = "Override detected role (matches role datum)")]
         role: Option<String>,
@@ -294,6 +294,8 @@ The system will:
             help = "Comma-separated skills to load, or 'auto' to interview from task context"
         )]
         skills: Vec<String>,
+        #[clap(long, help = "Show layered system dashboard (z-stack hardware→agents)")]
+        dashboard: bool,
     },
     #[clap(
         name = "k0mmand3r",
@@ -450,6 +452,11 @@ The system will:
     Version {
         #[clap(subcommand)]
         version_command: VersionCommands,
+    },
+    #[clap(about = "Discover capabilities across the hive (agents, MCP, CLI, datums)")]
+    Capabilities {
+        #[clap(long, help = "Filter by name/type substring (case-insensitive)")]
+        filter: Option<String>,
     },
     #[clap(about = "Query live capability ontology from datum TOMLs")]
     Ontology {
@@ -1755,7 +1762,25 @@ fn execute_k0mmand3r_dispatch(path: &str, slash: &str, passthrough_args: &[Strin
 
 #[tokio::main]
 async fn main() {
-    let cli = Cli::parse_from(normalize_slash_args(std::env::args().collect()));
+    let cli = match Cli::try_parse_from(normalize_slash_args(std::env::args().collect())) {
+        Ok(cli) => cli,
+        Err(e) => {
+            // Agent-friendly error: short orientation, not full usage dump
+            let msg = e.to_string();
+            // Extract the actionable line (first non-empty line after "error:")
+            let brief = msg.lines()
+                .find(|l| l.starts_with("error:") || l.contains("tip:"))
+                .unwrap_or(&msg);
+            eprintln!("\n\x1b[1mb00t\x1b[0m — hive agent operating protocol");
+            eprintln!("\x1b[2m{}\x1b[0m", brief);
+            eprintln!();
+            eprintln!("{}", "\x1b[2mb00t whoami --help    — agent identity & capabilities");
+            eprintln!("b00t capabilities    — discover hive tools");
+            eprintln!("b00t task list       — pending tasks");
+            eprintln!("b00t learn <skill>   — load a blessing\x1b[0m");
+            std::process::exit(1);
+        }
+    };
 
     if cli.doc {
         generate_documentation();
@@ -1870,8 +1895,10 @@ async fn main() {
                 std::process::exit(1);
             }
         }
-        Some(Commands::Whoami { role, with_skills, json, skills }) => {
-            if *json {
+        Some(Commands::Whoami { role, with_skills, json, skills, dashboard }) => {
+            if *dashboard {
+                whoami::print_dashboard();
+            } else if *json {
                 use b00t_c0re_lib::B00tContext;
                 match B00tContext::current() {
                     Ok(ctx) => {
@@ -2180,6 +2207,12 @@ async fn main() {
                 std::process::exit(1);
             }
         }
+        Some(Commands::Capabilities { filter }) => {
+            if let Err(e) = whoami::discover_capabilities(filter.as_deref()) {
+                eprintln!("Error: {}", e);
+                std::process::exit(1);
+            }
+        }
         Some(Commands::Version { version_command }) => {
             if let Err(e) = b00t_cli::commands::version::handle_version_command(version_command) {
                 eprintln!("Error: {}", e);
@@ -2311,6 +2344,7 @@ async fn main() {
                             let tf = experiment::create_focus_record(&cmp.experiment_id, "treatment", "sm0l-trt", "experiment-eval", &cmp.treatment.scores);
                             eprintln!("[ledgrrr] {}", experiment::focus_record_to_ledgrrr(&cf));
                             eprintln!("[ledgrrr] {}", experiment::focus_record_to_ledgrrr(&tf));
+                            eprintln!("[ledgrrr] focus_delta={:.4} (control-earned={:.4} control-consumed={:.4} | treatment-earned={:.4} treatment-consumed={:.4})", cmp.focus_delta, cmp.control.focus_earned, cmp.control.focus_consumed, cmp.treatment.focus_earned, cmp.treatment.focus_consumed);
                             // emit FOCUS records to ledgrrr-mcp MCP server (best-effort)
                             experiment::emit_focus_to_ledgrrr_mcp(&cmp, "http://localhost:8001");
                             // Calculate and issue cake payout
@@ -2668,6 +2702,16 @@ mod k0mmand3r_dispatch_tests {
             }
             _ => panic!("expected lfmf command"),
         }
+    }
+
+    #[test]
+    fn cli_parse_whomai_alias_accepted() {
+        // `whomai` (common typo) must parse identically to `whoami`
+        let cli = Cli::parse_from(args(&["b00t-cli", "whomai"]));
+        assert!(
+            matches!(cli.command, Some(Commands::Whoami { .. })),
+            "expected Whoami command from 'whomai' alias"
+        );
     }
 
     #[test]

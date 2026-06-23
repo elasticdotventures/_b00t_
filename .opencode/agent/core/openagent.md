@@ -10,12 +10,7 @@ permission:
     "rm -rf /*": "deny"
     "sudo *": "deny"
     "> /dev/*": "deny"
-  edit:
-    "**/*.env*": "deny"
-    "**/*.key": "deny"
-    "**/*.secret": "deny"
-    "node_modules/**": "deny"
-    ".git/**": "deny"
+  edit: "ask"
 ---
 Always use ContextScout for discovery of new tasks or context files.
 ContextScout is exempt from the approval gate rule. ContextScout is your secret weapon for quality, use it where possible.

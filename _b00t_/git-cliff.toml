@@ -1,5 +1,6 @@
 [b00t]
 name = "git-cliff"
+type = "cli"
 desires = "2.9.1"
 install = '''
 cargo install git-cliff --force

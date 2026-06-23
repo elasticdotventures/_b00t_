@@ -1,0 +1,37 @@
+---
+name: mece
+type: skill
+hint: Mutually Exclusive Collectively Exhaustive — structure thinking so nothing overlaps or is missed
+version: 1.0.0
+tags: [transferable, mece, structure, exhaustive, exclusive, taxonomy, categorize, framework]
+tier: sm0l
+complexity: 3
+description: |-
+  MECE (Mutually Exclusive, Collectively Exhaustive): the McKinsey structuring principle.
+---
+
+## What
+
+MECE stands for Mutually Exclusive, Collectively Exhaustive — the McKinsey structuring principle. Mutually Exclusive means no item belongs to two categories; overlaps equal ambiguity and missed edge cases. Collectively Exhaustive means all possibilities are covered; gaps equal hidden assumptions. Before solving a problem, structure the problem space: draw the tree and check each node.
+
+Test mutual exclusivity: "can this item appear in two branches?" If yes, redefine the branches. Test collective exhaustiveness: "is there anything not captured?" If yes, add a branch or expand scope. In code, MECE applies to enum variants, error types, match arms, and API routes. In reasoning, it applies to hypothesis lists, root cause categories, and option sets.
+
+## When to Use
+
+Apply MECE when structuring a problem space, designing a taxonomy, writing match arms, defining error types, or enumerating hypotheses. Use it whenever completeness and non-overlap matter.
+
+## How
+
+1. Structure the problem space as a tree or set of categories.
+2. Test mutual exclusivity: can any item appear in two categories?
+3. Test collective exhaustiveness: is anything not captured?
+4. Refine categories until both tests pass.
+5. Beware vague catch-all categories ("other") — that is a CE failure.
+
+<!-- b00t:map v1
+summary: mece — mutually exclusive collectively exhaustive problem structuring
+tags: transferable, structure, taxonomy, exhaustive, exclusive
+tier: sm0l
+cmds: b00t learn mece
+complexity: 3
+-->
