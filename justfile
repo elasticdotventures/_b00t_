@@ -976,7 +976,7 @@ worker-validate:
 # 🦨 Symlink: vendor/ledgrrr -> vendor/ledgrrr (polyseme mapping)
 # Module docs: https://just.systems/man/en/modules.html
 # Invocation:  just ledgrrr build | docker-build | docker-run | docker-stop | …
-mod ledgrrr 'vendor/ledgrrr/ledgrrr.just'
+mod? ledgrrr 'vendor/ledgrrr/ledgrrr.just'
 
 # ── pi agent — systemd service lifecycle ─────────────────────────────────────
 # 🤓 pi is managed as b00t@pi-agent.service, NOT spawned per-invocation
