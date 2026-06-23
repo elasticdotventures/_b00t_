@@ -1,0 +1,89 @@
+# b00t finetune datum — deterministic QLoRA training + GGUF export
+# 🤓 Run these commands in order to reproduce the b00t fine-tuned model
+
+[b00t]
+name = "b00t-finetune"
+type = "cli"
+hint = "QLoRA fine-tune pipeline: b00t source → training data → unsloth → GGUF"
+
+[b00t.learn]
+topic = "finetune"
+content = """
+# b00t Finetune Pipeline
+
+Deterministic QLoRA fine-tuning of unsloth models on b00t source code.
+
+## Pipeline
+  1. generate-training-data → ~/.b00t/training/b00t-corpus.jsonl (4474 pairs)
+  2. finetune → unfinetuned model (LoRA adapters)
+  3. merge + gguf → b00t-finetuned.Q4_K_M.gguf
+  4. serve → stock llama.cpp container
+
+## Commands (run in order)
+
+### 1. Generate training data
+  python3 scripts/generate-b00t-training-data.py
+
+### 2. Install finetune deps
+  uv pip install unsloth datasets transformers torch accelerate peft bitsandbytes
+
+### 3. Finetune
+  python3 scripts/finetune-b00t.py
+
+### 4. Serve fine-tuned model
+  podman run -d --name b00t-finetuned -p 8081:8080 \\
+    -v ~/.b00t/training/output:/models:ro \\
+    ghcr.io/ggml-org/llama.cpp:server \\
+    -m /models/b00t-finetuned.Q4_K_M.gguf \\
+    --host 0.0.0.0 --port 8080 -fit off
+
+### 5. Register in soul config (add to ~/.b00t/server-soul.tomllm):
+  [[backends.local]]
+  name = "b00t-finetuned"
+  port = 8081
+  kind = "openai-compat"
+  enabled = true
+
+## Previous successful run
+  - Base model: unsloth/Qwen3.5-4B
+  - Training pairs: 4474 (generated 2026-06-24)
+  - Note: 4GB VRAM borderline — reduce max_seq_length or use Qwen3.5-1.5B if OOM
+"""
+
+# Deterministic commands for full reproduction
+install = '''
+set -euo pipefail
+echo "🥾 b00t finetune pipeline — deterministic reproduction"
+
+# ── Step 1: Generate training data ──
+echo "📝 Generating training data from b00t source..."
+python3 "$B00T_ROOT/scripts/generate-b00t-training-data.py"
+
+# ── Step 2: Install deps ──  
+echo "📦 Installing unsloth + dependencies..."
+uv pip install unsloth datasets transformers torch accelerate peft bitsandbytes
+
+# ── Step 3: Finetune ──
+echo "🔧 Running QLoRA fine-tune..."
+python3 "$B00T_ROOT/scripts/finetune-b00t.py"
+
+echo "✅ Finetune pipeline complete"
+echo "   LoRA: $B00T_ROOT/training/output/b00t-lora/"
+echo "   GGUF: $B00T_ROOT/training/output/b00t-finetuned.Q4_K_M.gguf"
+'''
+
+# ── Model discovery ──
+[[b00t.usage]]
+description = "Lookup latest unsloth base model"
+command = "curl -s https://huggingface.co/api/models?search=Qwen3.5&author=unsloth&sort=downloads&limit=3 | python3 -c 'import json,sys; [print(m[\"modelId\"]) for m in json.load(sys.stdin)]'"
+
+[[b00t.usage]]
+description = "Check GGUF file sizes for a model"
+command = "curl -s https://huggingface.co/api/models/unsloth/Qwen3.5-4B-GGUF?blobs=true | python3 -c 'import json,sys; d=json.load(sys.stdin); [print(f\"{s[\"rfilename\"]} = {s[\"size\"]//1024//1024}MB\") for s in d[\"siblings\"] if s[\"rfilename\"].endswith(\".gguf\")]' | sort -t= -k2 -n"
+
+# b00t:map v1
+# summary: Deterministic QLoRA fine-tune pipeline — b00t source → training data → unsloth → GGUF
+# tags: finetune, unsloth, qlora, training, gguf, b00t
+# tier: frontier  
+# cmds: python3 scripts/generate-b00t-training-data.py && python3 scripts/finetune-b00t.py
+# complexity: 8
