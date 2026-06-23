@@ -67,7 +67,6 @@
 	url = https://github.com/microsoft/agent-framework
 
 [submodule "plantuml-server"]
-<<<<<<< HEAD
 	path = plantuml-server
 	url = https://github.com/plantuml/plantuml-server.git
 
@@ -105,5 +104,3 @@
 [submodule "vendor/rust-docs-mcp-server"]
 	path = vendor/rust-docs-mcp-server
 	url = https://github.com/PromptExecution/rust-docs-mcp-b00t.git
-=======
->>>>>>> origin/main
