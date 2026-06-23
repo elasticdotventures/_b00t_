@@ -206,17 +206,9 @@ async fn main() -> Result<()> {
             .merge(github_auth_router(github_state));
 
         if is_llm_mode {
-            let llm_upstream_url = std::env::var("B00T_SERVER_UPSTREAM_URL")
-                .unwrap_or_else(|_| "https://api.openai.com/v1".to_string());
-            let llm_upstream_key = std::env::var("B00T_SERVER_UPSTREAM_KEY")
-                .or_else(|_| std::env::var("OPENAI_API_KEY"))
-                .unwrap_or_default();
-            let llm_state = Arc::new(server_llm::LlmState::new(
-                &llm_upstream_url,
-                &llm_upstream_key,
-            ));
-            app = app.merge(server_llm::llm_router(llm_state, is_dev_mode));
-            eprintln!("🤖 LLM proxy mode: {} → {}", addr, llm_upstream_url);
+            let llm_state = Arc::new(server_llm::LlmState::new());
+            eprintln!("🤖 LLM proxy mode activated — upstream auto-discovered (env or local probe)");
+            app = app.merge(server_llm::llm_router(llm_state.clone(), is_dev_mode));
         }
 
         let app = app.layer(CorsLayer::permissive());
