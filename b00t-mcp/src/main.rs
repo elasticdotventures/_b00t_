@@ -14,7 +14,7 @@ use tower_http::cors::CorsLayer;
 
 use b00t_mcp::{
     B00tMcpServerRusty, GitHubAuthConfig, GitHubAuthState, MinimalOAuthConfig, MinimalOAuthState,
-    github_auth_router, minimal_oauth_router, server_llm, server_skill,
+    github_auth_router, minimal_oauth_router, server_llm,
 };
 
 /// Transport mode for the MCP server.
@@ -123,21 +123,6 @@ async fn main() -> Result<()> {
             .map_or(false, |m| m == "http");
     let is_llm_mode = matches.get_flag("llm");
 
-    // 🤓 SkillExecutor — lazy MCP server lifecycle manager.
-    //    Loads [b00t.mcp.lifecycle] from .mcp.toml datums, reaps idle servers.
-    //    Child processes get kill_on_drop(true) — cleaned up on process exit.
-    if let Err(e) = server_skill::init_executor().await {
-        eprintln!("⚠️  SkillExecutor init failed: {} (continuing)", e);
-    } else {
-        server_skill::start_reap_loop().await;
-    }
-
-    // 🤓 Registry bridge spawn — sync official MCP registry and launch bridges
-    //    for registered stdio-based servers. Bridges convert MCP notifications to NATS.
-    if let Err(e) = spawn_registry_bridges_on_startup().await {
-        eprintln!("⚠️  Registry bridge spawn failed: {} (continuing)", e);
-    }
-
     if is_stdio_mode && !is_llm_mode {
         // Run as MCP server
         // eprintln!(
@@ -200,14 +185,10 @@ async fn main() -> Result<()> {
             }
         }
 
-        let auth_provider = server_llm::AuthProvider::from_env_or_default();
-        let _is_dev_mode = matches!(auth_provider, server_llm::AuthProvider::Dev);
-
-        match auth_provider {
-            server_llm::AuthProvider::Dev => eprintln!("🔓 auth: dev mode (no auth required)"),
-            server_llm::AuthProvider::Basic => eprintln!("🔑 auth: basic (API keys from server-keys.json)"),
-            server_llm::AuthProvider::Hydra => eprintln!("🔐 auth: hydra (OAuth 2.1 via Hydra introspection)"),
-        }
+        let is_dev_mode = acl_config.as_ref()
+            .and_then(|c| c.dev.as_ref())
+            .and_then(|d| d.bypass_oauth)
+            .unwrap_or(false);
 
         // Create GitHub auth state
         let github_config = GitHubAuthConfig::default();
@@ -225,9 +206,17 @@ async fn main() -> Result<()> {
             .merge(github_auth_router(github_state));
 
         if is_llm_mode {
-            let llm_state = Arc::new(server_llm::LlmState::new_with_auth(auth_provider));
-            eprintln!("🤖 LLM proxy mode activated — upstream auto-discovered (env or local probe)");
-            app = app.merge(server_llm::llm_router(llm_state.clone(), auth_provider));
+            let llm_upstream_url = std::env::var("B00T_SERVER_UPSTREAM_URL")
+                .unwrap_or_else(|_| "https://api.openai.com/v1".to_string());
+            let llm_upstream_key = std::env::var("B00T_SERVER_UPSTREAM_KEY")
+                .or_else(|_| std::env::var("OPENAI_API_KEY"))
+                .unwrap_or_default();
+            let llm_state = Arc::new(server_llm::LlmState::new(
+                &llm_upstream_url,
+                &llm_upstream_key,
+            ));
+            app = app.merge(server_llm::llm_router(llm_state, is_dev_mode));
+            eprintln!("🤖 LLM proxy mode: {} → {}", addr, llm_upstream_url);
         }
 
         let app = app.layer(CorsLayer::permissive());
