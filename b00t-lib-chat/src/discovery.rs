@@ -368,7 +368,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_stale_pruning() {
-        let mut registry = SocketRegistry::new();
+        let registry = SocketRegistry::new();
 
         // Insert an agent with old timestamp
         let old_endpoint = AgentEndpoint {

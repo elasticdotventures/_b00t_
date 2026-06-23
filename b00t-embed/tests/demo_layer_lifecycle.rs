@@ -279,7 +279,7 @@ async fn demo_layer_lifecycle() {
 
         // Build a linear layer using the VarMap as the weight store.
         let linear = {
-            let mut vm = model_varmap.lock().unwrap();
+            let vm = model_varmap.lock().unwrap();
             let vb = candle_nn::VarBuilder::from_varmap(&vm, DType::F32, &Device::Cpu);
             candle_nn::linear(in_dim, out_dim, vb.pp("demo_layer")).unwrap()
             // vm unlocked here implicitly (no explicit drop needed with MutexGuard)
@@ -397,7 +397,7 @@ async fn demo_layer_lifecycle() {
     {
         let test_varmap = Arc::new(Mutex::new(VarMap::new()));
         let linear = {
-            let mut vm = test_varmap.lock().unwrap();
+            let vm = test_varmap.lock().unwrap();
             let vb = candle_nn::VarBuilder::from_varmap(&vm, DType::F32, &Device::Cpu);
             candle_nn::linear(2, 1, vb.pp("proj")).unwrap()
         };

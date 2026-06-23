@@ -3,9 +3,7 @@
 //
 // Run: cargo test --test test_qwen3_composable -p b00t-embed -- --nocapture
 
-use std::collections::HashMap;
-
-use candle_core::{DType, Device, Tensor};
+use candle_core::{DType, Device};
 use candle_nn::{VarBuilder, VarMap};
 use hf_hub::api::sync::ApiBuilder;
 use hf_hub::Repo;
@@ -42,7 +40,7 @@ fn test_tensor_name_alignment() {
 
     // Build VarMap and create VarBuilder to simulate model construction
     let varmap = VarMap::new();
-    let vb = VarBuilder::from_varmap(&varmap, DType::F32, &Device::Cpu);
+    let _vb = VarBuilder::from_varmap(&varmap, DType::F32, &Device::Cpu);
 
     // Load Qwen3 model config to know shapes
     let config_path = repo.get("config.json").expect("config.json download");
