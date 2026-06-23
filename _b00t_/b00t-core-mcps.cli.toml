@@ -15,6 +15,8 @@ declare -A MCP_SERVERS=(
     ["github"]="node.cli,gh.cli"     # GitHub integration  
     ["filesystem"]="node.cli"        # File operations
     ["context7"]="node.cli"          # Documentation access
+    ["codebase-memory"]="gcc.cli,make.cli,just.cli"  # Standard: code knowledge graph (binary-backed, C build)
+    ["rust-doc"]="rust.cli"                           # Standard: Rust crate docs RAG (binary-backed, cargo build)
 )
 
 # 🤓 Azure AI Foundry is the recommended option for complex orchestration (legacy taskmaster MCP is optional/deprecated and not installed by this bundle)
@@ -44,6 +46,14 @@ for mcp_name in "${!MCP_SERVERS[@]}"; do
     # Install MCP server to Claude Code (primary target)
     if command -v b00t >/dev/null 2>&1; then
         echo "🔧 Installing $mcp_name to Claude Code..."
+        # 🤓 Binary-backed MCPs need a build step (datum install script) before registration.
+        #    npx/uvx-backed servers (github/filesystem/context7) need no build.
+        case "$mcp_name" in
+            codebase-memory|rust-doc)
+                echo "🔨 Building binary-backed MCP: $mcp_name"
+                b00t cli install "$mcp_name" || echo "⚠️ build failed for $mcp_name, continuing..."
+                ;;
+        esac
         b00t mcp install "$mcp_name" claudecode
         if [ $? -eq 0 ]; then
             echo "✅ $mcp_name installed successfully"
@@ -68,11 +78,20 @@ declare -A MCP_SERVERS=(
     ["github"]="node.cli,gh.cli"     # GitHub integration  
     ["filesystem"]="node.cli"        # File operations
     ["context7"]="node.cli"          # Documentation access
+    ["codebase-memory"]="gcc.cli,make.cli,just.cli"  # Standard: code knowledge graph (binary-backed, C build)
+    ["rust-doc"]="rust.cli"                           # Standard: Rust crate docs RAG (binary-backed, cargo build)
 )
 
 for mcp in "${!MCP_SERVERS[@]}"; do
     echo "📦 Updating MCP: $mcp"
     if command -v b00t >/dev/null 2>&1; then
+        # Rebuild binary-backed MCPs on update (pulls upstream + rebuilds)
+        case "$mcp" in
+            codebase-memory|rust-doc)
+                echo "🔨 Rebuilding binary-backed MCP: $mcp"
+                b00t cli install "$mcp" || echo "⚠️ rebuild failed for $mcp, continuing..."
+                ;;
+        esac
         b00t mcp install "$mcp" claudecode --force
     fi
 done
@@ -108,6 +127,10 @@ Essential MCP servers that enable b00t hive functionality:
 - **github**: GitHub repository management and operations
 - **filesystem**: File system operations and project navigation
 - **context7**: Documentation and library context retrieval
+
+## Standard Developer-Intelligence Set (binary-backed)
+- **codebase-memory**: Persistent code knowledge graph (tree-sitter, hybrid LSP). Build deps: gcc/make/just.
+- **rust-doc**: Per-crate Rust documentation RAG (OpenAI embeddings). Build deps: rust/cargo. Requires OPENAI_API_KEY at runtime.
 
 ## Auto-Installation
 Use `b00t cli install b00t-core-mcps` to install all core servers with dependency resolution.
