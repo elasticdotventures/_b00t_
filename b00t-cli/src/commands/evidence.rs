@@ -406,6 +406,65 @@ mod tests {
     }
 }
 
+// ── NS-4 … NS-11: Domain-specific edge/fact helpers ──────────────────────────
+//
+// Thin wrappers over record_edge() / record_satisfies() for named relationship types.
+// All are idempotent (same from+predicate+to → skip).
+
+/// NS-4: Record delegates_to(agent → agent) edge for A2A routing audit.
+pub fn record_delegates_to(from_agent: &str, to_agent: &str, skill: &str, task_id: &str) -> Result<()> {
+    record_edge(
+        from_agent,
+        "delegates_to",
+        to_agent,
+        serde_json::json!({"skill": skill, "task_id": task_id}),
+    )
+}
+
+/// NS-6: Record contradicts(record_A → record_B) for multi-agent consensus conflict.
+pub fn record_contradicts(record_a_id: &str, record_b_id: &str, reason: &str) -> Result<()> {
+    record_edge(
+        record_a_id,
+        "contradicts",
+        record_b_id,
+        serde_json::json!({"reason": reason}),
+    )
+}
+
+/// NS-7: Record trained_on(model_id → corpus_sha) for fine-tune provenance.
+pub fn record_trained_on(model_id: &str, corpus_sha: &str, layer: u8) -> Result<()> {
+    record_satisfies(
+        model_id,
+        &format!("trained_on:corpus:{corpus_sha}:layer:{layer}"),
+    )
+}
+
+/// NS-8: Record generated(datum_key → topic) fact from gap_detect/kreuzberg/artifact.
+pub fn record_generated(datum_key: &str, topic: &str, via: &str) -> Result<()> {
+    record_satisfies(
+        datum_key,
+        &format!("generated:topic:{topic}:via:{via}"),
+    )
+}
+
+/// NS-9: Record isA(datum_key → UFO_stereotype) fact from DatumType classification.
+pub fn record_is_a(datum_key: &str, ufo_stereotype: &str) -> Result<()> {
+    record_satisfies(datum_key, &format!("isA:{ufo_stereotype}"))
+}
+
+/// NS-10: Record audited_by(satisfies_record → iso_standard_id) for compliance.
+pub fn record_audited_by(record_id: &str, iso_standard_id: &str) -> Result<()> {
+    record_satisfies(
+        record_id,
+        &format!("audited_by:{iso_standard_id}"),
+    )
+}
+
+/// NS-11: Record participates_in(agent → process_step) edge for pipeline audit.
+pub fn record_participates_in(agent_id: &str, process_step: &str, metadata: serde_json::Value) -> Result<()> {
+    record_edge(agent_id, "participates_in", process_step, metadata)
+}
+
 // ── NS-12: EdgeRecord — directed graph edges for NeumannStore migration ───────
 //
 // EdgeRecord mirrors `b00t_c0re_lib::irontology_bridge::EdgeRecord`.

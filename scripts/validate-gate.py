@@ -18,7 +18,7 @@ import json
 import urllib.request
 import urllib.error
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, timezone
 
 
 def parse_schema_contract(schema_path: str) -> dict:
@@ -188,6 +188,32 @@ def find_gate_files(base_dir: str = ".") -> list:
     return sorted(str(p) for p in gates_dir.glob("*.gate.toml"))
 
 
+def record_validates_fact(gate_path: str, overall: str, sha: str = "") -> None:
+    """NS-2: Persist validates(gate→datum, result, sha) as a NeumannStore fact.
+
+    Appends a JSONL record to ~/.b00t/evidence/satisfies.jsonl matching
+    the EvidenceRecord format from evidence.rs.
+    Migration: swap append for NeumannStore::upsert_facts().
+    """
+    try:
+        import hashlib
+        if not sha:
+            content = Path(gate_path).read_bytes()
+            sha = hashlib.sha256(content).hexdigest()[:12]
+        record = {
+            "subject": str(Path(gate_path).name),
+            "predicate": "validates",
+            "object": {"result": overall, "sha": sha, "file": gate_path},
+            "timestamp": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        }
+        evidence_dir = Path.home() / ".b00t" / "evidence"
+        evidence_dir.mkdir(parents=True, exist_ok=True)
+        with (evidence_dir / "satisfies.jsonl").open("a") as f:
+            f.write(json.dumps(record) + "\n")
+    except Exception as e:
+        print(f"[NS-2] warn: could not record validates fact: {e}", file=sys.stderr)
+
+
 def main():
     # Schema is in project root's _b00t_/schema/, not relative to scripts/
     script_dir = Path(__file__).resolve().parent
@@ -239,6 +265,8 @@ def main():
 
         if result["overall"] != "PASS":
             overall_pass = False
+        # NS-2: record validates fact for audit trail
+        record_validates_fact(gate_path, result["overall"])
         print()
 
     # Summary

@@ -267,6 +267,13 @@ pub fn handle_from_artifact(args: &FromArtifactArgs) -> Result<()> {
     let word_count = extracted.split_whitespace().count();
     eprintln!("[from-artifact] extracted {word_count} words from {}", path.display());
 
+    // NS-8: record generated(datum_key → topic) fact
+    let _ = crate::commands::evidence::record_generated(
+        &format!("FROM-ARTIFACT-{topic}"),
+        &topic,
+        "kreuzberg",
+    );
+
     let source_path = path.to_string_lossy().to_string();
     let content = generate_datum_from_artifact(
         &topic,
