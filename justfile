@@ -37,8 +37,6 @@ mod k8s '_b00t_/k8s.🚢/justfile'
 mod pm2-tasker 'pm2-tasker/justfile'
 mod embed '_b00t_/python.🐍/embed/justfile'
 mod qwen-code '_b00t_/qwen-code.justfile'
-# 🎨 UX: b00t capability graph visualization — just ux::viz | ux::viz-full | ux::watch
-mod ux 'ux.just'
 
 next-task:
     #!/bin/bash
@@ -166,26 +164,11 @@ release:
 
     # Run tests first
     echo "🧪 Running tests..."
-    # 🤓 --exclude b00t-embed: candle-metal-kernels (via candle feature) pulls objc2 which
-    #    compile_error!s on Linux. b00t-embed tested separately without --all-features below.
-    cargo test --workspace --all-features --exclude b00t-cli --exclude b00t-grok --exclude b00t-embed
+    cargo test --workspace --all-features --exclude b00t-cli --exclude b00t-grok
     # b00t-cli's optional candle stack is intentionally excluded from release gating for now.
     cargo test -p b00t-cli --features dbus,llamacpp-fallback
-    # b00t-embed's candle/Metal stack is macOS-only; test default features only.
-    cargo test -p b00t-embed
     # b00t-grok pyo3 feature requires Python dev headers at link time; not guaranteed in CI.
     cargo test -p b00t-grok
-
-    # 🤓 Create tag via GitHub API (not git push) to avoid pre-push hook re-running tests.
-    #    The hook gate is redundant here since we already ran tests above.
-    HEAD_SHA=$(git rev-parse HEAD)
-    echo "🏷️  Creating tag v${VERSION} at ${HEAD_SHA}..."
-    # Idempotent: ignore 422 if tag already exists
-    gh api repos/elasticdotventures/_b00t_/git/refs \
-        -X POST \
-        -f ref="refs/tags/v${VERSION}" \
-        -f sha="${HEAD_SHA}" 2>/dev/null \
-        || echo "⚠️  Tag v${VERSION} already exists — skipping"
 
     gh workflow run release.yml \
         -f version="${VERSION}" \
@@ -193,7 +176,7 @@ release:
 
     echo "✅ Release workflow dispatched for v${VERSION}"
     echo "📦 Tagging, release creation, binaries, and crates publishing now flow through GitHub Actions"
-    echo "🔗 https://github.com/elasticdotventures/_b00t_/actions"
+    echo "🔗 Check workflow: https://github.com/elasticdotventures/dotfiles/actions"
 
 # Generate deterministic Claude marketplace + MCP role recipes.
 marketplace-generate:
@@ -2283,20 +2266,34 @@ gh-pr-list limit="10":
     @b00t exec -- gh pr list --state open --limit {{limit}}
 
 
-# ── b00t Cloud Store ──
+# ── b00t Agent Exchange Protocols ──
 
-# Upload current training corpus to cloud store
-store-put-corpus:
-    b00t store put ~/.b00t/training/b00t-corpus.jsonl --consumer rust-doc --type training-corpus --tags pairs=4474,model=qwen3.5
+# Discover sm3lly (RTX 3090 inference agent) on the hive
+connect-sm3lly:
+    @echo "🔍 Discovering sm3lly..."
+    b00t agent discover --role inference || echo "Not found — start sm3lly agent first"
+    @echo "Add sm3lly to ~/.b00t/server-soul.tomllm for auto-proxy"
 
-# Sync all stored data from a peer agent
-store-sync peer="sm3lly":
-    b00t store sync --from {{peer}} --to lappyx23
+# Share training data with sm3lly for finetuning
+share-training sm3lly_host="sm3lly":
+    @echo "📤 Sharing training data with {{sm3lly_host}}..."
+    rsync -avz ~/.b00t/training/b00t-corpus.jsonl {{sm3lly_host}}:~/.b00t/training/
 
-# Query stored objects by type
-store-query type="training-corpus":
-    b00t store query --type {{type}}
+# Delegate full finetune pipeline to sm3lly
+delegate-finetune sm3lly_host="sm3lly":
+    just share-training {{sm3lly_host}}
+    @echo "🔧 Executing finetune on {{sm3lly_host}} (RTX 3090 24GB)..."
+    ssh {{sm3lly_host}} "cd .b00t && uv run python3 scripts/finetune-b00t.py"
 
-# Pull latest training corpus from store (on session start)
-store-pull-corpus:
-    b00t store get rust-doc/training-corpus/$(date +%Y-%m-%d)/latest.jsonl -o ~/.b00t/training/b00t-corpus.jsonl
+# Sync Spotlight telemetry logs bidirectionally
+sync-spotlight sm3lly_host="sm3lly":
+    scp {{sm3lly_host}}:~/.b00t/spotlight.jsonl /tmp/sm3lly-spotlight.jsonl 2>/dev/null || true
+    cat /tmp/sm3lly-spotlight.jsonl >> ~/.b00t/spotlight.jsonl 2>/dev/null || true
+    scp ~/.b00t/spotlight.jsonl {{sm3lly_host}}:~/.b00t/spotlight.jsonl 2>/dev/null || true
+    @echo "✅ Spotlight logs synced"
+
+# Mirror soul configs between agents
+mirror-soul sm3lly_host="sm3lly":
+    scp ~/.b00t/server-soul.tomllm {{sm3lly_host}}:~/.b00t/server-soul.tomllm 2>/dev/null || true
+    scp {{sm3lly_host}}:~/.b00t/server-soul.tomllm /tmp/sm3lly-soul.tomllm 2>/dev/null || true
+    @echo "✅ Soul configs mirrored"
