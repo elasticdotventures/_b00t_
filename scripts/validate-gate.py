@@ -18,6 +18,10 @@ import json
 from pathlib import Path
 from datetime import datetime
 
+try:
+    import tomllib
+except ModuleNotFoundError:
+    import tomli as tomllib
 
 def parse_schema_contract(schema_path: str) -> dict:
     """Parse gate.schema.toml into validation rule metadata.
@@ -25,7 +29,6 @@ def parse_schema_contract(schema_path: str) -> dict:
     Schema files are data, not executable code. Rule checks are implemented
     below by rule id so untrusted schema changes cannot run local commands.
     """
-    import tomllib
 
     with open(schema_path, "rb") as f:
         raw = tomllib.load(f)
@@ -67,7 +70,6 @@ def evaluate_rule(rule_id: str, gate_path: str) -> bool:
         return re.search(r"^\s*version\s*=", text, re.MULTILINE) is not None
     if rule_id == "valid-type":
         try:
-            import tomllib
 
             with path.open("rb") as f:
                 raw = tomllib.load(f)
