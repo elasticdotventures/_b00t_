@@ -159,6 +159,9 @@ pub enum DatumCommands {
         #[clap(long, help = "Execute the resolved command instead of printing")]
         exec: bool,
     },
+
+    #[clap(about = "Calibrate tier assignments in b00t:map tail-maps via telemetry (E2)")]
+    Calibrate(crate::commands::calibrate::CalibrateArgs),
 }
 
 pub fn handle_datum_command(path: &str, datum_command: &DatumCommands) -> Result<()> {
@@ -248,6 +251,9 @@ pub fn handle_datum_command(path: &str, datum_command: &DatumCommands) -> Result
             token,
             exec,
         } => handle_call(path, datum, interface, token, *exec),
+        DatumCommands::Calibrate(args) => {
+            crate::commands::calibrate::handle_calibrate(path, args)
+        }
     }
 }
 
