@@ -14,6 +14,7 @@
 
 use anyhow::Result;
 use b00t_c0re_a2a::{AgentCard, HiveRegistry};
+use crate::commands::evidence::record_manifest_evidence;
 use crate::datum_utils::get_all_datums;
 use std::path::PathBuf;
 
@@ -283,6 +284,11 @@ fn emit_manifest(b00t_path: &str, role: &str, fmt: &str) -> Result<()> {
                 }
             }
         }
+    }
+    // E4: record Satisfies evidence for locally-present required skills
+    {
+        let satisfied: Vec<String> = required.iter().map(|(k, _)| k.clone()).collect();
+        record_manifest_evidence(role, &satisfied);
     }
     Ok(())
 }
