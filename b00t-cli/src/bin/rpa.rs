@@ -41,11 +41,18 @@ enum RpaCommands {
     Start,
     #[clap(about = "Open TUI menu for curating automation scripts")]
     Menu,
+    #[clap(about = "One-time Windows setup: firewall rule for CDP relay")]
+    Setup,
 }
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
+
+    // Handle setup subcommand (no Chrome needed)
+    if matches!(&cli.command, Some(RpaCommands::Setup)) {
+        return run_setup(cli.port).await;
+    }
 
     let auto_start = matches!(&cli.command, Some(RpaCommands::Start));
 
@@ -93,18 +100,10 @@ fn detect_wsl() -> bool {
 }
 
 /// Resolve Windows host IP from WSL2 routing table.
+/// In WSL2, the default gateway IS the Windows host.
+/// The nameserver in /etc/resolv.conf is a loopback proxy — NOT the host.
 fn windows_host_ip() -> String {
-    // Try nameserver from resolv.conf first (most reliable)
-    if let Ok(resolv) = std::fs::read_to_string("/etc/resolv.conf") {
-        for line in resolv.lines() {
-            if line.starts_with("nameserver ") {
-                if let Some(ip) = line.split_whitespace().nth(1) {
-                    return ip.to_string();
-                }
-            }
-        }
-    }
-    // Fallback: default gateway
+    // Default gateway = Windows host (most reliable in WSL2)
     if let Ok(output) = std::process::Command::new("ip")
         .args(["route", "show", "default"])
         .output()
@@ -116,6 +115,16 @@ fn windows_host_ip() -> String {
             return ip.to_string();
         }
     }
+    // Fallback: nameserver from resolv.conf (WSL1 compat)
+    if let Ok(resolv) = std::fs::read_to_string("/etc/resolv.conf") {
+        for line in resolv.lines() {
+            if line.starts_with("nameserver ") {
+                if let Some(ip) = line.split_whitespace().nth(1) {
+                    return ip.to_string();
+                }
+            }
+        }
+    }
     "127.0.0.1".to_string()
 }
 
@@ -123,73 +132,152 @@ fn windows_host_ip() -> String {
 /// launch Chrome on Windows via PowerShell over the network.
 async fn ensure_chrome(host: Option<&str>, port: u16) -> anyhow::Result<()> {
     let host = host.unwrap_or_else(|| "127.0.0.1");
-    let probe_url = format!("http://{}:{}/json/version", host, port);
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(3))
+        .build()?;
+    let probe_targets = [
+        format!("http://{}:{}/json/version", host, port),         // default gateway
+        format!("http://localhost:{}/json/version", port),         // WSL localhost fwd
+        format!("http://{}:{}/json/version", host, port + 1),      // portproxy port
+    ];
 
     // Probe CDP endpoint
-    match reqwest::get(&probe_url).await {
-        Ok(resp) if resp.status().is_success() => {
-            eprintln!("✅ Chrome already running with CDP on {}:{}", host, port);
-            return Ok(());
-        }
-        _ => {
-            eprintln!("🔍 Chrome CDP not reachable at {}:{}", host, port);
-        }
-    }
-
-    // Launch Chrome on Windows from WSL via PowerShell over the network
-    eprintln!("🚀 Launching Chrome on Windows host ({})...", host);
-    let chrome_path = r"C:\Program Files\Google\Chrome\Application\chrome.exe";
-    let user_data = r"C:\temp\chrome-debug";
-    let ps_cmd = format!(
-        "Start-Process -FilePath '{}' -ArgumentList '--remote-debugging-port={}', '--user-data-dir={}' -WindowStyle Hidden",
-        chrome_path, port, user_data
-    );
-
-    // Try launching via PowerShell on the Windows host
-    // WSL can execute Windows binaries from /mnt/c/Windows/System32/
-    let result = std::process::Command::new("powershell.exe")
-        .args(["-Command", &ps_cmd])
-        .output();
-
-    match result {
-        Ok(out) if out.status.success() => {
-            eprintln!("  Chrome launch command sent. Waiting for CDP...");
-        }
-        Ok(out) => {
-            let stderr = String::from_utf8_lossy(&out.stderr);
-            eprintln!("  ⚠️  PowerShell launch returned: {}", stderr);
-            eprintln!("  Trying alternate launch method...");
-            // Fallback: try via cmd.exe
-            let _ = std::process::Command::new("cmd.exe")
-                .args(["/C", "start", &format!("\"\" \"{}\" --remote-debugging-port={} --user-data-dir={}", chrome_path, port, user_data)])
-                .output();
-        }
-        Err(e) => {
-            eprintln!("  ⚠️  Could not launch from WSL: {}", e);
-            eprintln!("  Please start Chrome manually on Windows:");
-            eprintln!("    chrome.exe --remote-debugging-port={} --user-data-dir={}", port, user_data);
-            anyhow::bail!("Chrome CDP not available");
-        }
-    }
-
-    // Wait for CDP to become available (poll up to 30s)
-    for i in 0..30 {
-        tokio::time::sleep(Duration::from_secs(1)).await;
-        match reqwest::get(&probe_url).await {
-            Ok(resp) if resp.status().is_success() => {
-                eprintln!("✅ Chrome CDP ready after {}s", i + 1);
+    let mut found = false;
+    for target in &probe_targets {
+        if let Ok(resp) = client.get(target).send().await {
+            if resp.status().is_success() {
+                eprintln!("✅ Chrome already running with CDP at {}", target);
                 return Ok(());
             }
-            _ => {
-                if i % 5 == 4 {
-                    eprintln!("  Waiting for Chrome... ({}s)", i + 1);
+        }
+    }
+    if !found {
+        eprintln!("🔍 Chrome CDP not reachable (tried {}:{}, localhost:{}, portproxy)", host, port, port);
+    }
+
+    // Launch Chrome on Windows from WSL
+    // Probe common Chrome install paths on the Windows host
+    let chrome_paths = [
+        r"C:\Program Files\Google\Chrome\Application\chrome.exe",
+        r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe",
+        r"$env:LOCALAPPDATA\Google\Chrome\Application\chrome.exe",
+    ];
+    let user_data = r"C:\temp\chrome-debug";
+    let mut launched = false;
+
+    for chrome_path in &chrome_paths {
+        eprintln!("🚀 Trying: {} ...", chrome_path);
+        let ps_cmd = format!(
+            "if (Test-Path '{}') {{ Start-Process -FilePath '{}' -ArgumentList '--remote-debugging-port={}','--remote-allow-origins=*','--user-data-dir={}','--no-first-run','--no-default-browser-check' -WindowStyle Hidden; Write-Output 'OK' }} else {{ Write-Output 'NOT_FOUND' }}",
+            chrome_path, chrome_path, port, user_data
+        );
+
+        if let Ok(out) = std::process::Command::new("powershell.exe")
+            .args(["-NoProfile", "-Command", &ps_cmd])
+            .output()
+        {
+            let stdout = String::from_utf8_lossy(&out.stdout);
+            if stdout.contains("OK") {
+                eprintln!("  ✅ Chrome launched from: {}", chrome_path);
+                launched = true;
+                break;
+            }
+        }
+    }
+
+    if !launched {
+        // Fallback: cmd.exe /C start (uses Windows shell execution)
+        eprintln!("  🔄 Trying cmd.exe fallback...");
+        for path in [
+            r"C:\Program Files\Google\Chrome\Application\chrome.exe",
+            r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe",
+        ] {
+            let cmd = format!(
+                "/C if exist \"{}\" (start \"\" \"{}\" --remote-debugging-port={} --remote-allow-origins=* --user-data-dir={} --no-first-run)",
+                path, path, port, user_data
+            );
+            if let Ok(out) = std::process::Command::new("cmd.exe").args(["/C", &cmd]).output() {
+                if out.status.success() {
+                    launched = true;
+                    eprintln!("  ✅ Chrome launched via cmd.exe");
+                    break;
                 }
             }
         }
     }
 
+    if !launched {
+        eprintln!("  ⚠️  Could not launch Chrome from WSL.");
+        eprintln!("  Please start Chrome manually on Windows:");
+        eprintln!("    chrome.exe --remote-debugging-port={} --remote-allow-origins=* --user-data-dir={} --no-first-run", port, user_data);
+        anyhow::bail!("Chrome CDP not available");
+    }
+
+    // Write a Python TCP relay to Windows temp and launch it.
+    // Python on Windows can bind to non-loopback without admin.
+    let relay_script = r#"
+import socket, threading, sys
+def f(s,d):
+ while True:
+  try:
+   b=s.recv(4096)
+   if not b: break
+   d.sendall(b)
+  except: break
+L=socket.socket(socket.AF_INET,socket.SOCK_STREAM)
+L.setsockopt(socket.SOL_SOCKET,socket.SO_REUSEADDR,1)
+L.bind(('0.0.0.0',PORT));L.listen(5)
+while True:
+ c,a=L.accept()
+ t=socket.socket(socket.AF_INET,socket.SOCK_STREAM)
+ t.connect(('127.0.0.1',PORT))
+ threading.Thread(target=f,args=(c,t),daemon=True).start()
+ threading.Thread(target=f,args=(t,c),daemon=True).start()
+"#.replace("PORT", &port.to_string());
+    let relay_path = r"C:\temp\cdp-relay.py";
+    // Write relay script
+    let _ = std::process::Command::new("powershell.exe")
+        .args(["-NoProfile", "-Command", &format!("Set-Content -Path '{}' -Value '{}'", relay_path, relay_script.replace('\'', "''"))])
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .output();
+    // Launch with Windows Python
+    let _ = std::process::Command::new("powershell.exe")
+        .args(["-NoProfile", "-WindowStyle", "Hidden", "-Command",
+               &format!("Start-Process python -ArgumentList '{}' -WindowStyle Hidden", relay_path)])
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .spawn();
+
+    // Give relay a moment to start, then wait for CDP (poll up to 30s)
+    tokio::time::sleep(Duration::from_millis(500)).await;
+    let wait_client = reqwest::Client::builder()
+        .connect_timeout(std::time::Duration::from_secs(2))
+        .timeout(std::time::Duration::from_secs(3))
+        .build()?;
+    let probe_targets = &[
+        format!("http://{}:{}", host, port),             // direct to Windows host
+        format!("http://localhost:{}", port),             // WSL localhost forwarding
+        format!("http://{}:{}", host, port + 1),          // portproxy port
+    ];
+    for i in 0..30 {
+        tokio::time::sleep(Duration::from_secs(1)).await;
+        for target in probe_targets {
+            if let Ok(resp) = wait_client.get(target).send().await {
+                if resp.status().is_success() {
+                    eprintln!("✅ Chrome CDP ready after {}s at {}", i + 1, target);
+                    return Ok(());
+                }
+            }
+        }
+        if i % 5 == 4 {
+            eprintln!("  Waiting for Chrome... ({}s)", i + 1);
+        }
+    }
+
     eprintln!("⚠️  Chrome did not start within 30s. Check Windows host.");
-    eprintln!("  Run manually: chrome.exe --remote-debugging-port={} --user-data-dir={}", port, user_data);
+    eprintln!("  Run manually from Windows cmd (admin not required):");
+    eprintln!("    chrome.exe --remote-debugging-port={} --remote-allow-origins=* --user-data-dir={}", port, user_data);
     anyhow::bail!("Chrome CDP timeout");
 }
 
@@ -258,6 +346,12 @@ async fn execute_script(session: &RpaSession, steps: &[ScriptStep]) -> anyhow::R
                 println!("{}", r);
                 continue;
             }
+            "screenshot" => {
+                let png = session.screenshot(&page).await?;
+                let path = if step.args.is_empty() { format!("screenshot_{}.png", chrono::Utc::now().format("%H%M%S")) } else { step.args.clone() };
+                std::fs::write(&path, &png)?;
+                print!("saved: {}", path);
+            }
             "get_text" => {
                 let t = session.get_page_text(&page).await?;
                 println!("\n{}", &t[..t.len().min(200)]);
@@ -269,5 +363,83 @@ async fn execute_script(session: &RpaSession, steps: &[ScriptStep]) -> anyhow::R
     }
 
     println!("\n✅ Done ({} steps)", steps.len());
+    Ok(())
+}
+
+/// One-time Windows setup: add firewall rule + install Python relay.
+async fn run_setup(port: u16) -> anyhow::Result<()> {
+    if !detect_wsl() {
+        eprintln!("⚠️  Setup is only needed when running from WSL.");
+        eprintln!("    If running on Windows directly, just launch Chrome with:");
+        eprintln!("    chrome.exe --remote-debugging-port={} --remote-allow-origins=*", port);
+        return Ok(());
+    }
+
+    let host = windows_host_ip();
+    eprintln!("🔧 b00t-rpa Windows Setup");
+    eprintln!("━━━━━━━━━━━━━━━━━━━━━━━━━");
+    eprintln!("  Windows host: {}", host);
+    eprintln!("  CDP port:     {}", port);
+    eprintln!();
+
+    // Step 1: Write Python relay script
+    eprintln!("1️⃣  Writing CDP relay script to C:\\temp\\cdp-relay.py ...");
+    let relay_script = format!(r#"
+import socket, threading, sys
+def f(s,d):
+ while True:
+  try:
+   b=s.recv(4096)
+   if not b: break
+   d.sendall(b)
+  except: break
+L=socket.socket(socket.AF_INET,socket.SOCK_STREAM)
+L.setsockopt(socket.SOL_SOCKET,socket.SO_REUSEADDR,1)
+L.bind(('0.0.0.0',{}));L.listen(5)
+while True:
+ c,a=L.accept()
+ t=socket.socket(socket.AF_INET,socket.SOCK_STREAM)
+ t.connect(('127.0.0.1',{}))
+ threading.Thread(target=f,args=(c,t),daemon=True).start()
+ threading.Thread(target=f,args=(t,c),daemon=True).start()
+"#, port + 1, port);
+    std::fs::write("/mnt/c/temp/cdp-relay.py", &relay_script)?;
+    eprintln!("    ✅ Written");
+
+    // Step 2: Add Windows Firewall rule (needs admin via UAC)
+    eprintln!();
+    eprintln!("2️⃣  Adding Windows Firewall rule for port {}...", port + 1);
+    eprintln!("    A UAC prompt will appear. Click Yes to allow.");
+    let cmd = format!(
+        "Start-Process powershell -Verb RunAs -ArgumentList '-NoProfile','-Command',\"New-NetFirewallRule -DisplayName 'WSL CDP {}' -Direction Inbound -Protocol TCP -LocalPort {} -Action Allow -Profile Any\"",
+        port + 1, port + 1
+    );
+    let _ = std::process::Command::new("powershell.exe")
+        .args(["-NoProfile", "-Command", &cmd])
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .spawn();
+    eprintln!("    (waiting for UAC approval...)");
+    tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+
+    // Step 3: Verify
+    eprintln!();
+    eprintln!("3️⃣  Verifying...");
+    let client = reqwest::Client::builder()
+        .connect_timeout(std::time::Duration::from_secs(3))
+        .build()?;
+    let probe = format!("http://{}:{}", host, port + 1);
+    match client.get(&probe).send().await {
+        Ok(_) => eprintln!("    ✅ Relay accessible at {}:{}. Ready!", host, port + 1),
+        Err(_) => {
+            eprintln!("    ⚠️  Could not verify. You may need to:");
+            eprintln!("       Run this in PowerShell AS ADMINISTRATOR:");
+            eprintln!("       New-NetFirewallRule -DisplayName 'WSL CDP {}' -Direction Inbound -Protocol TCP -LocalPort {} -Action Allow",
+                port + 1, port + 1);
+        }
+    }
+
+    eprintln!();
+    eprintln!("✅ Setup complete. Run `b00t-rpa start` to begin.");
     Ok(())
 }

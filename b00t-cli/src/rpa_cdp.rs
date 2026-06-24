@@ -32,11 +32,36 @@ pub struct RpaSession {
     _handler: tokio::task::JoinHandle<()>,
 }
 
+/// Resolve the CDP WebSocket URL by probing known endpoints.
+/// Uses short timeouts so unreachable hosts don't block.
+async fn resolve_ws_url(host: &str, port: u16) -> Result<String> {
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(3))
+        .build()?;
+    let targets = [
+        format!("http://{}:{}/json/version", host, port),
+        format!("http://localhost:{}/json/version", port),
+        format!("http://{}:{}/json/version", "127.0.0.1", port),
+    ];
+    for target in &targets {
+        if let Ok(resp) = client.get(target).send().await {
+            if let Ok(json) = resp.json::<serde_json::Value>().await {
+                if let Some(ws) = json["webSocketDebuggerUrl"].as_str() {
+                    eprintln!("  ✅ CDP endpoint: {}", target);
+                    return Ok(ws.to_string());
+                }
+            }
+        }
+    }
+    // Fallback: construct URL directly (works if Chrome is on the same host)
+    Ok(format!("ws://{}:{}", host, port))
+}
+
 impl RpaSession {
     /// Connect to a Windows Chrome instance via CDP.
     pub async fn connect(host: Option<String>, port: u16) -> Result<Self> {
         let host = host.unwrap_or_else(windows_host_ip);
-        let ws_url = format!("ws://{}:{}", host, port);
+        let ws_url = resolve_ws_url(&host, port).await?;
 
         eprintln!("🔌 Connecting to Chrome at {} ...", ws_url);
 
@@ -101,5 +126,13 @@ impl RpaSession {
         let result: EvaluationResult = page.evaluate("document.body.innerText").await?;
         let value: serde_json::Value = result.into_value()?;
         Ok(value.to_string())
+    }
+
+    /// Take a screenshot of the current page. Returns PNG bytes.
+    pub async fn screenshot(&self, page: &Page) -> Result<Vec<u8>> {
+        use chromiumoxide::page::ScreenshotParams;
+        let params = ScreenshotParams::builder().build(); // PNG is the default format
+        let bytes = page.screenshot(params).await?;
+        Ok(bytes)
     }
 }

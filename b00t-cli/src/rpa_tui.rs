@@ -36,6 +36,7 @@ pub static COMMAND_PALETTE: &[RpaCommand] = &[
     RpaCommand { action: "wait_for", selector: "css", args: "<selector>", description: "Wait for element to appear" },
     RpaCommand { action: "get_text", selector: "", args: "", description: "Get page text content" },
     RpaCommand { action: "screenshot", selector: "", args: "<file.png>", description: "Take a screenshot" },
+    RpaCommand { action: "screenshot", selector: "", args: "<file.png>", description: "Take a screenshot of current page" },
     RpaCommand { action: "list_pages", selector: "", args: "", description: "List all open tabs" },
     RpaCommand { action: "close", selector: "", args: "", description: "Close current page" },
     RpaCommand { action: "save_script", selector: "", args: "<name>", description: "Save current sequence as script" },
