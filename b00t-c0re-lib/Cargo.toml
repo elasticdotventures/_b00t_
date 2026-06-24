@@ -34,6 +34,7 @@ qdrant = []  # optional Qdrant REST gate; disabled on this node (see SOUL.tomllm
 ipc-fanout = ["dep:b00t-ipc", "data-fabric"]  # route write fanout through b00t-ipc Transport bus
 
 [dependencies]
+keyring = "4"
 pyo3 = { version = "0.27", features = ["extension-module"], optional = true }
 base64 = "0.22"
 aes-gcm = "0.10"
