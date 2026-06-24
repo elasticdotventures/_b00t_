@@ -88,5 +88,83 @@ class ValidateGateTest(unittest.TestCase):
             self.assertEqual(result["failed"], 0)
 
 
+class SemanticQualityGateTest(unittest.TestCase):
+    """E7: sm0l oracle semantic CI gate tests."""
+
+    def test_semantic_quality_skips_when_no_endpoint(self):
+        """Without B00T_SM0L_ENDPOINT, evaluate_semantic_quality returns True (non-blocking)."""
+        module = load_validate_gate_module()
+        import os
+        env_bak = os.environ.pop("B00T_SM0L_ENDPOINT", None)
+        try:
+            with tempfile.TemporaryDirectory() as tmp:
+                gate = Path(tmp) / "test.gate.toml"
+                gate.write_text(VALID_GATE, encoding="utf-8")
+                result = module.evaluate_semantic_quality(str(gate))
+                self.assertTrue(result, "should pass (non-blocking skip) without endpoint")
+        finally:
+            if env_bak is not None:
+                os.environ["B00T_SM0L_ENDPOINT"] = env_bak
+
+    def test_semantic_quality_rule_in_contract(self):
+        """semantic-quality rule returns True (pass) via evaluate_rule when endpoint absent."""
+        module = load_validate_gate_module()
+        import os
+        os.environ.pop("B00T_SM0L_ENDPOINT", None)
+        with tempfile.TemporaryDirectory() as tmp:
+            gate = Path(tmp) / "test.gate.toml"
+            gate.write_text(VALID_GATE, encoding="utf-8")
+            result = module.evaluate_rule("semantic-quality", str(gate))
+            self.assertTrue(result)
+
+    def test_semantic_quality_returns_true_for_missing_hint_and_summary(self):
+        """Gate with neither hint nor summary passes semantic check (nothing to evaluate)."""
+        module = load_validate_gate_module()
+        import os
+        os.environ["B00T_SM0L_ENDPOINT"] = "http://127.0.0.1:1"  # unreachable but set
+        try:
+            with tempfile.TemporaryDirectory() as tmp:
+                gate = Path(tmp) / "minimal.gate.toml"
+                gate.write_text("[b00t]\nname = \"x\"\ntype = \"gate\"\n", encoding="utf-8")
+                result = module.evaluate_semantic_quality(str(gate))
+                self.assertTrue(result, "no hint/summary → non-blocking pass")
+        finally:
+            os.environ.pop("B00T_SM0L_ENDPOINT", None)
+
+    def test_semantic_quality_network_error_is_non_blocking(self):
+        """Network/oracle error on sm0l call returns True (non-blocking skip)."""
+        module = load_validate_gate_module()
+        import os
+        # Point to a port that refuses connections immediately
+        os.environ["B00T_SM0L_ENDPOINT"] = "http://127.0.0.1:1/v1/complete"
+        try:
+            with tempfile.TemporaryDirectory() as tmp:
+                gate = Path(tmp) / "test.gate.toml"
+                gate.write_text(VALID_GATE, encoding="utf-8")
+                result = module.evaluate_semantic_quality(str(gate))
+                self.assertTrue(result, "network error → non-blocking skip (returns True)")
+        finally:
+            os.environ.pop("B00T_SM0L_ENDPOINT", None)
+
+    def test_full_contract_with_semantic_rule_passes(self):
+        """Full schema validation including semantic-quality rule passes (endpoint absent)."""
+        module = load_validate_gate_module()
+        import os
+        os.environ.pop("B00T_SM0L_ENDPOINT", None)
+        with tempfile.TemporaryDirectory() as tmp:
+            gate = Path(tmp) / "test.gate.toml"
+            gate.write_text(VALID_GATE, encoding="utf-8")
+            contract = {
+                "rules": [
+                    {"id": "tail-map-present", "description": "", "severity": "critical"},
+                    {"id": "audit-section-required", "description": "", "severity": "critical"},
+                    {"id": "semantic-quality", "description": "sm0l oracle check", "severity": "warning"},
+                ]
+            }
+            result = module.validate_gate(str(gate), contract)
+            self.assertEqual(result["overall"], "PASS")
+            self.assertEqual(result["failed"], 0)
+
+
 if __name__ == "__main__":
     unittest.main()
