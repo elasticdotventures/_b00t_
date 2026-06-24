@@ -33,28 +33,32 @@ pub struct RpaSession {
 }
 
 /// Resolve the CDP WebSocket URL by probing known endpoints.
-/// Uses short timeouts so unreachable hosts don't block.
-async fn resolve_ws_url(host: &str, port: u16) -> Result<String> {
+/// Rewrites the WS URL to use the probe host:port (Chrome only binds 127.0.0.1,
+/// relay/proxy may be on a different interface).
+async fn resolve_ws_url(probe_host: &str, probe_port: u16) -> Result<String> {
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(3))
         .build()?;
     let targets = [
-        format!("http://{}:{}/json/version", host, port),
-        format!("http://localhost:{}/json/version", port),
-        format!("http://{}:{}/json/version", "127.0.0.1", port),
+        format!("http://{}:{}/json/version", probe_host, probe_port),
+        format!("http://localhost:{}/json/version", probe_port),
     ];
     for target in &targets {
         if let Ok(resp) = client.get(target).send().await {
             if let Ok(json) = resp.json::<serde_json::Value>().await {
                 if let Some(ws) = json["webSocketDebuggerUrl"].as_str() {
                     eprintln!("  ✅ CDP endpoint: {}", target);
-                    return Ok(ws.to_string());
+                    // Rebase Chrome's WS URL path onto our probe host:port
+                    let path_idx = ws.match_indices('/').nth(2).map(|(i, _)| i + 1).unwrap_or(0);
+                    let path = &ws[path_idx..];
+                    let rewritten = format!("ws://{}:{}/{}", probe_host, probe_port, path);
+                    return Ok(rewritten);
                 }
             }
         }
     }
-    // Fallback: construct URL directly (works if Chrome is on the same host)
-    Ok(format!("ws://{}:{}", host, port))
+    // Fallback: construct URL directly
+    Ok(format!("ws://{}:{}", probe_host, probe_port))
 }
 
 impl RpaSession {

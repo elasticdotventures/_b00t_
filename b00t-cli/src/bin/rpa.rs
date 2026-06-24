@@ -62,20 +62,27 @@ async fn main() -> anyhow::Result<()> {
         if is_wsl { Some(windows_host_ip()) } else { None }
     });
 
-    // Auto-start Chrome on Windows if requested or in WSL
-    if auto_start || is_wsl {
-        ensure_chrome(win_host.as_deref(), cli.port).await?;
+    // Auto-start Chrome on Windows if requested or in WSL.
+    // ensure_chrome returns the actual port where CDP is reachable
+    // (may differ from cli.port if a relay/proxy was started).
+    let cdp_port = if auto_start || is_wsl {
+        ensure_chrome(win_host.as_deref(), cli.port).await?
+    } else {
+        cli.port
+    };
+
+    // Connect to the discovered CDP endpoint
+    let session = RpaSession::connect(win_host.clone(), cdp_port).await?;
+
+    // Mode dispatch: if URL and eval are both given, navigate first then evaluate
+    if let Some(url) = &cli.url {
+        if let Some(js) = &cli.eval {
+            return navigate_and_eval(&session, url, js).await;
+        }
+        return navigate_mode(&session, url).await;
     }
-
-    // Connect
-    let session = RpaSession::connect(win_host, cli.port).await?;
-
-    // Mode dispatch
     if let Some(js) = &cli.eval {
         return eval_mode(&session, js).await;
-    }
-    if let Some(url) = &cli.url {
-        return navigate_mode(&session, url).await;
     }
     if matches!(&cli.command, Some(RpaCommands::Menu)) || cli.menu || !atty::is(atty::Stream::Stdout) {
         return tui_menu(&session).await;
@@ -130,7 +137,9 @@ fn windows_host_ip() -> String {
 
 /// Check if Chrome CDP endpoint is reachable. If not and we're in WSL,
 /// launch Chrome on Windows via PowerShell over the network.
-async fn ensure_chrome(host: Option<&str>, port: u16) -> anyhow::Result<()> {
+/// Returns the actual port where CDP is reachable (may differ from the
+/// requested `port` if a relay/proxy is used).
+async fn ensure_chrome(host: Option<&str>, port: u16) -> anyhow::Result<u16> {
     let host = host.unwrap_or_else(|| "127.0.0.1");
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(3))
@@ -142,18 +151,22 @@ async fn ensure_chrome(host: Option<&str>, port: u16) -> anyhow::Result<()> {
     ];
 
     // Probe CDP endpoint
-    let mut found = false;
+    // Determine the actual port from the probe target that succeeded.
+    // The relay/proxy may be on port+1, Chrome on port, or localhost via WSL.
     for target in &probe_targets {
         if let Ok(resp) = client.get(target).send().await {
             if resp.status().is_success() {
                 eprintln!("✅ Chrome already running with CDP at {}", target);
-                return Ok(());
+                // Extract the actual port from the target URL
+                let p = target.trim_end_matches("/json/version")
+                    .rsplit(':').next()
+                    .and_then(|s| s.parse::<u16>().ok())
+                    .unwrap_or(port);
+                return Ok(p);
             }
         }
     }
-    if !found {
-        eprintln!("🔍 Chrome CDP not reachable (tried {}:{}, localhost:{}, portproxy)", host, port, port);
-    }
+    eprintln!("🔍 Chrome CDP not reachable (tried {}:{}, localhost:{}, portproxy)", host, port, port);
 
     // Launch Chrome on Windows from WSL
     // Probe common Chrome install paths on the Windows host
@@ -266,7 +279,11 @@ while True:
             if let Ok(resp) = wait_client.get(target).send().await {
                 if resp.status().is_success() {
                     eprintln!("✅ Chrome CDP ready after {}s at {}", i + 1, target);
-                    return Ok(());
+                    let p = target.trim_end_matches('/')
+                        .rsplit(':').next()
+                        .and_then(|s| s.parse::<u16>().ok())
+                        .unwrap_or(port);
+                    return Ok(p);
                 }
             }
         }
@@ -279,6 +296,18 @@ while True:
     eprintln!("  Run manually from Windows cmd (admin not required):");
     eprintln!("    chrome.exe --remote-debugging-port={} --remote-allow-origins=* --user-data-dir={}", port, user_data);
     anyhow::bail!("Chrome CDP timeout");
+}
+
+/// Navigate to URL, then execute JavaScript on the same page.
+async fn navigate_and_eval(session: &RpaSession, url: &str, js: &str) -> anyhow::Result<()> {
+    eprintln!("🌐 Navigating to {} ...", url);
+    let page = session.open_page(url).await?;
+    // Brief wait for page to load
+    tokio::time::sleep(std::time::Duration::from_millis(1500)).await;
+    eprintln!("🔍 Evaluating JavaScript...");
+    let result = session.evaluate(&page, js).await?;
+    println!("{}", result);
+    Ok(())
 }
 
 async fn eval_mode(session: &RpaSession, js: &str) -> anyhow::Result<()> {
