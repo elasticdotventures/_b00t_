@@ -19,12 +19,12 @@ use std::time::Duration;
 #[derive(Parser, Debug)]
 #[clap(name = "b00t-rpa", about = "Browser RPA via CDP — WSL-aware Chrome automation")]
 struct Cli {
+    #[clap(subcommand)]
+    command: Option<RpaCommands>,
     #[clap(long, help = "Windows host IP (auto-detected from WSL if omitted)")]
     host: Option<String>,
     #[clap(long, default_value = "9222", help = "Chrome DevTools Protocol port")]
     port: u16,
-    #[clap(long, help = "Start Chrome on Windows host automatically")]
-    start: bool,
     #[clap(long, help = "Run a saved script headless (bypass TUI)")]
     script: Option<String>,
     #[clap(long, help = "Execute JavaScript on current page")]
@@ -35,9 +35,19 @@ struct Cli {
     menu: bool,
 }
 
+#[derive(Parser, Debug)]
+enum RpaCommands {
+    #[clap(about = "Start Chrome on Windows host and open TUI menu")]
+    Start,
+    #[clap(about = "Open TUI menu for curating automation scripts")]
+    Menu,
+}
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
+
+    let auto_start = matches!(&cli.command, Some(RpaCommands::Start));
 
     // Detect WSL environment
     let is_wsl = detect_wsl();
@@ -45,8 +55,8 @@ async fn main() -> anyhow::Result<()> {
         if is_wsl { Some(windows_host_ip()) } else { None }
     });
 
-    // Auto-start Chrome on Windows if needed
-    if cli.start || is_wsl {
+    // Auto-start Chrome on Windows if requested or in WSL
+    if auto_start || is_wsl {
         ensure_chrome(win_host.as_deref(), cli.port).await?;
     }
 
@@ -60,7 +70,7 @@ async fn main() -> anyhow::Result<()> {
     if let Some(url) = &cli.url {
         return navigate_mode(&session, url).await;
     }
-    if cli.menu || !atty::is(atty::Stream::Stdout) {
+    if matches!(&cli.command, Some(RpaCommands::Menu)) || cli.menu || !atty::is(atty::Stream::Stdout) {
         return tui_menu(&session).await;
     }
 
