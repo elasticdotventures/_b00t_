@@ -121,6 +121,65 @@ pub fn record_manifest_evidence(role: &str, required_skills: &[String]) {
     }
 }
 
+// ── NS-5: TTL prune ──────────────────────────────────────────────────────────
+
+/// Prune evidence records older than `max_age_hours` from satisfies.jsonl.
+/// Rewrites the log in-place. Returns count of pruned records.
+pub fn prune_evidence(max_age_hours: u64) -> Result<usize> {
+    let path = evidence_log_path()?;
+    if !path.exists() {
+        return Ok(0);
+    }
+    let all = read_evidence()?;
+    let cutoff = chrono::Utc::now() - chrono::Duration::hours(max_age_hours as i64);
+    let (keep, prune): (Vec<_>, Vec<_>) = all.into_iter().partition(|r| {
+        chrono::DateTime::parse_from_rfc3339(&r.timestamp)
+            .map(|t| t.with_timezone(&chrono::Utc) >= cutoff)
+            .unwrap_or(true) // keep records with unparseable timestamps
+    });
+    let pruned = prune.len();
+    if pruned > 0 {
+        use std::io::Write;
+        let mut file = std::fs::OpenOptions::new()
+            .write(true)
+            .truncate(true)
+            .open(&path)
+            .context("open evidence log for prune")?;
+        for r in &keep {
+            writeln!(file, "{}", serde_json::to_string(r)?).context("write evidence")?;
+        }
+    }
+    Ok(pruned)
+}
+
+/// Prune edge records older than `max_age_hours` from edges.jsonl.
+pub fn prune_edges(max_age_hours: u64) -> Result<usize> {
+    let path = edges_log_path()?;
+    if !path.exists() {
+        return Ok(0);
+    }
+    let all = read_edges()?;
+    let cutoff = chrono::Utc::now() - chrono::Duration::hours(max_age_hours as i64);
+    let (keep, prune): (Vec<_>, Vec<_>) = all.into_iter().partition(|r| {
+        chrono::DateTime::parse_from_rfc3339(&r.timestamp)
+            .map(|t| t.with_timezone(&chrono::Utc) >= cutoff)
+            .unwrap_or(true)
+    });
+    let pruned = prune.len();
+    if pruned > 0 {
+        use std::io::Write;
+        let mut file = std::fs::OpenOptions::new()
+            .write(true)
+            .truncate(true)
+            .open(&path)
+            .context("open edges log for prune")?;
+        for r in &keep {
+            writeln!(file, "{}", serde_json::to_string(r)?).context("write edge")?;
+        }
+    }
+    Ok(pruned)
+}
+
 // ── CLI interface ──────────────────────────────────────────────────────────────
 
 #[derive(clap::Parser, Clone)]
@@ -152,6 +211,31 @@ pub enum EvidenceCommand {
         #[clap(long, default_value = "toml")]
         format: String,
     },
+    #[clap(about = "Prune old evidence and edge records by TTL (NS-5)")]
+    Prune {
+        #[clap(long, default_value = "168", help = "Max age in hours (default: 7 days)")]
+        max_age_hours: u64,
+        #[clap(long, help = "Prune edges.jsonl too (default: false)")]
+        edges: bool,
+    },
+    #[clap(about = "Record a directed graph edge (NS-12)")]
+    Edge {
+        #[clap(long)]
+        from: String,
+        #[clap(long)]
+        predicate: String,
+        #[clap(long)]
+        to: String,
+        #[clap(long, help = "JSON metadata bag")]
+        meta: Option<String>,
+    },
+    #[clap(about = "List all edge records (NS-12)")]
+    Edges {
+        #[clap(long, default_value = "toml")]
+        format: String,
+        #[clap(long, help = "Filter by predicate")]
+        predicate: Option<String>,
+    },
 }
 
 pub fn handle_evidence(args: &EvidenceArgs) -> Result<()> {
@@ -175,6 +259,41 @@ pub fn handle_evidence(args: &EvidenceArgs) -> Result<()> {
                     println!("total = {}", all.len());
                     for r in &all {
                         println!("# {} {} {:?} ({})", r.subject, r.predicate, r.object, r.timestamp);
+                    }
+                }
+            }
+        }
+        EvidenceCommand::Prune { max_age_hours, edges: prune_edges_too } => {
+            let pruned_facts = prune_evidence(*max_age_hours)?;
+            let pruned_edges = if *prune_edges_too { prune_edges(*max_age_hours)? } else { 0 };
+            println!("pruned: {pruned_facts} fact(s), {pruned_edges} edge(s) older than {max_age_hours}h");
+        }
+        EvidenceCommand::Edge { from, predicate, to, meta } => {
+            let metadata = meta
+                .as_deref()
+                .map(|s| serde_json::from_str(s).unwrap_or(serde_json::Value::String(s.to_string())))
+                .unwrap_or(serde_json::Value::Null);
+            record_edge(from, predicate, to, metadata)?;
+            println!("recorded edge: {from} --[{predicate}]--> {to}");
+        }
+        EvidenceCommand::Edges { format, predicate } => {
+            let edges = if let Some(pred) = predicate {
+                edges_by_predicate(pred)?
+            } else {
+                read_edges()?
+            };
+            match format.as_str() {
+                "json" => println!("{}", serde_json::to_string_pretty(&edges)?),
+                _ => {
+                    println!("[edges]");
+                    println!("total = {}", edges.len());
+                    for e in &edges {
+                        let meta_str = if e.metadata.is_null() {
+                            String::new()
+                        } else {
+                            format!(" meta={}", e.metadata)
+                        };
+                        println!("# {} --[{}]--> {}{} ({})", e.from, e.predicate, e.to, meta_str, e.timestamp);
                     }
                 }
             }
@@ -284,5 +403,165 @@ mod tests {
             // Just verify it compiles and runs without panic when home exists
             // (idempotency guard will return Ok(()) if evidence already present)
         });
+    }
+}
+
+// ── NS-12: EdgeRecord — directed graph edges for NeumannStore migration ───────
+//
+// EdgeRecord mirrors `b00t_c0re_lib::irontology_bridge::EdgeRecord`.
+// Persisted to `~/.b00t/evidence/edges.jsonl`.
+// K2 migration: swap append_edge() body for NeumannStore::upsert_edges() — zero
+// data format changes required.
+//
+// Supported edge predicates (non-exhaustive; open struct):
+//   delegates_to(agent→agent, skill, task_id)  — NS-4  A2A routing audit
+//   discovers(role→missing_skill, via)          — NS-3  gap detect provenance
+//   contradicts(record_A→record_B)              — NS-6  multi-agent consensus conflict
+//   participates_in(agent→process_step)         — NS-11 pipeline audit
+
+/// Directed graph edge with optional JSON metadata bag.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct EdgeRecord {
+    /// Source node (agent_id, role key, record key, etc.)
+    pub from: String,
+    /// Edge label (delegates_to, discovers, contradicts, participates_in, …)
+    pub predicate: String,
+    /// Target node
+    pub to: String,
+    /// Arbitrary metadata (task_id, via, skill, etc.) — open bag
+    #[serde(default, skip_serializing_if = "serde_json::Value::is_null")]
+    pub metadata: serde_json::Value,
+    /// ISO 8601 timestamp
+    pub timestamp: String,
+}
+
+impl EdgeRecord {
+    pub fn new(from: &str, predicate: &str, to: &str) -> Self {
+        Self {
+            from: from.to_string(),
+            predicate: predicate.to_string(),
+            to: to.to_string(),
+            metadata: serde_json::Value::Null,
+            timestamp: chrono::Utc::now().to_rfc3339(),
+        }
+    }
+
+    pub fn with_metadata(mut self, meta: serde_json::Value) -> Self {
+        self.metadata = meta;
+        self
+    }
+}
+
+fn edges_log_path() -> Result<PathBuf> {
+    let dir = dirs::home_dir()
+        .ok_or_else(|| anyhow::anyhow!("no home dir"))?
+        .join(".b00t")
+        .join("evidence");
+    std::fs::create_dir_all(&dir).context("create evidence dir")?;
+    Ok(dir.join("edges.jsonl"))
+}
+
+/// Append one edge record to the edges log.
+pub fn append_edge(record: &EdgeRecord) -> Result<()> {
+    use std::io::Write;
+    let path = edges_log_path()?;
+    let mut file = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&path)
+        .context("open edges log")?;
+    let line = serde_json::to_string(record).context("serialize edge")?;
+    writeln!(file, "{line}").context("write edge")
+}
+
+/// Read all edge records from the log.
+pub fn read_edges() -> Result<Vec<EdgeRecord>> {
+    let path = edges_log_path()?;
+    if !path.exists() {
+        return Ok(Vec::new());
+    }
+    let content = std::fs::read_to_string(&path).context("read edges log")?;
+    let mut out = Vec::new();
+    for (i, line) in content.lines().enumerate() {
+        let line = line.trim();
+        if line.is_empty() {
+            continue;
+        }
+        match serde_json::from_str::<EdgeRecord>(line) {
+            Ok(r) => out.push(r),
+            Err(e) => eprintln!("warn: edges line {}: {e}", i + 1),
+        }
+    }
+    Ok(out)
+}
+
+/// Record a directed edge (idempotent: skips same from+predicate+to already in log).
+pub fn record_edge(from: &str, predicate: &str, to: &str, metadata: serde_json::Value) -> Result<()> {
+    let existing = read_edges().unwrap_or_default();
+    let already = existing.iter().any(|r| {
+        r.from == from && r.predicate == predicate && r.to == to
+    });
+    if !already {
+        let rec = EdgeRecord::new(from, predicate, to).with_metadata(metadata);
+        append_edge(&rec)?;
+    }
+    Ok(())
+}
+
+/// Return all edges with the given predicate.
+pub fn edges_by_predicate(predicate: &str) -> Result<Vec<EdgeRecord>> {
+    Ok(read_edges()?
+        .into_iter()
+        .filter(|r| r.predicate == predicate)
+        .collect())
+}
+
+#[cfg(test)]
+mod edge_tests {
+    use super::*;
+
+    #[test]
+    fn edge_record_new_fields() {
+        let e = EdgeRecord::new("agent-a", "delegates_to", "agent-b");
+        assert_eq!(e.from, "agent-a");
+        assert_eq!(e.predicate, "delegates_to");
+        assert_eq!(e.to, "agent-b");
+        assert!(e.metadata.is_null());
+        assert!(!e.timestamp.is_empty());
+    }
+
+    #[test]
+    fn edge_record_with_metadata() {
+        let meta = serde_json::json!({"skill": "rust", "task_id": "42"});
+        let e = EdgeRecord::new("a", "delegates_to", "b").with_metadata(meta.clone());
+        assert_eq!(e.metadata, meta);
+    }
+
+    #[test]
+    fn edge_record_roundtrips_json() {
+        let e = EdgeRecord::new("role:worker", "discovers", "rust.skill")
+            .with_metadata(serde_json::json!({"via": "ST-A"}));
+        let json = serde_json::to_string(&e).unwrap();
+        let back: EdgeRecord = serde_json::from_str(&json).unwrap();
+        assert_eq!(e, back);
+    }
+
+    #[test]
+    fn edge_record_null_metadata_is_omitted_in_json() {
+        let e = EdgeRecord::new("a", "p", "b");
+        let json = serde_json::to_string(&e).unwrap();
+        assert!(!json.contains("metadata"), "null metadata should be omitted");
+    }
+
+    #[test]
+    fn edges_by_predicate_filters_correctly() {
+        let edges = vec![
+            EdgeRecord::new("a", "delegates_to", "b"),
+            EdgeRecord::new("c", "discovers", "d"),
+            EdgeRecord::new("e", "delegates_to", "f"),
+        ];
+        let delegates: Vec<&EdgeRecord> = edges.iter().filter(|r| r.predicate == "delegates_to").collect();
+        assert_eq!(delegates.len(), 2);
+        assert!(delegates.iter().all(|r| r.predicate == "delegates_to"));
     }
 }

@@ -14,7 +14,7 @@
 
 use anyhow::Result;
 use b00t_c0re_a2a::{AgentCard, HiveRegistry};
-use crate::commands::evidence::record_manifest_evidence;
+use crate::commands::evidence::{record_manifest_evidence, record_edge, record_satisfies};
 use crate::datum_utils::get_all_datums;
 use std::path::PathBuf;
 
@@ -289,6 +289,26 @@ fn emit_manifest(b00t_path: &str, role: &str, fmt: &str) -> Result<()> {
     {
         let satisfied: Vec<String> = required.iter().map(|(k, _)| k.clone()).collect();
         record_manifest_evidence(role, &satisfied);
+    }
+    // NS-1: persist requires(role→skill) + unlocks(skill→tool_pattern) as facts
+    for (skill_key, unlocks) in &required {
+        let constraint = format!("requires:role:{role}");
+        let _ = record_satisfies(skill_key, &constraint);
+        for tool_pattern in unlocks {
+            let unlock_constraint = format!("unlocks:tool:{tool_pattern}");
+            let _ = record_satisfies(skill_key, &unlock_constraint);
+        }
+    }
+    // NS-3: persist discovers(role→missing_skill, via: ST-A|ST-B|ST-C) as edges
+    for hint in &discover_hints {
+        let via = if hint.agent_id.as_deref() == Some("sm0l:infer") {
+            "ST-C"
+        } else if hint.agent_id.is_some() {
+            "ST-B"
+        } else {
+            "ST-A"
+        };
+        let _ = record_edge(role, "discovers", &hint.skill, serde_json::json!({"via": via}));
     }
     Ok(())
 }
