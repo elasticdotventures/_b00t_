@@ -162,6 +162,9 @@ pub enum DatumCommands {
 
     #[clap(about = "Calibrate tier assignments in b00t:map tail-maps via telemetry (E2)")]
     Calibrate(crate::commands::calibrate::CalibrateArgs),
+
+    #[clap(about = "Generate a datum from an artifact via kreuzberg extraction (E3)")]
+    FromArtifact(crate::commands::from_artifact::FromArtifactArgs),
 }
 
 pub fn handle_datum_command(path: &str, datum_command: &DatumCommands) -> Result<()> {
@@ -253,6 +256,9 @@ pub fn handle_datum_command(path: &str, datum_command: &DatumCommands) -> Result
         } => handle_call(path, datum, interface, token, *exec),
         DatumCommands::Calibrate(args) => {
             crate::commands::calibrate::handle_calibrate(path, args)
+        }
+        DatumCommands::FromArtifact(args) => {
+            crate::commands::from_artifact::handle_from_artifact(args)
         }
     }
 }
