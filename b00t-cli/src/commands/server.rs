@@ -53,6 +53,13 @@ pub enum KeyAction {
         #[clap(long, help = "Provider name")]
         provider: String,
     },
+    #[clap(about = "Export credentials as env vars (for .envrc / eval)")]
+    Export {
+        #[clap(long, help = "Provider name (omit to export all)")]
+        provider: Option<String>,
+        #[clap(long, help = "Emit shell export format (default: KEY=VALUE)")]
+        shell: bool,
+    },
 }
 
 const KEYS_FILE: &str = "server-keys.json";
@@ -171,6 +178,45 @@ pub fn handle_server_command(cmd: &ServerCommands) -> anyhow::Result<()> {
                     }
                     Ok(())
                 }
+                KeyAction::Export { provider, shell } => {
+                    let providers = if let Some(p) = provider {
+                        vec![p.clone()]
+                    } else {
+                        b00t_c0re_lib::keyring_store::list_credentials()?
+                    };
+                    if providers.is_empty() {
+                        anyhow::bail!("no credentials stored. Set: b00t server key set --provider X --key <KEY>");
+                    }
+                    for p in &providers {
+                        if let Some((key, secret)) = b00t_c0re_lib::keyring_store::get_credential(p)? {
+                            let (key_var, secret_var) = env_var_names(p);
+                            if *shell {
+                                println!("export {}=\"{}\"", key_var, key);
+                                println!("export {}=\"{}\"", secret_var, secret);
+                            } else {
+                                println!("{}={}", key_var, key);
+                                println!("{}={}", secret_var, secret);
+                            }
+                        }
+                    }
+                    Ok(())
+                }
             },
+    }
+}
+
+/// Map provider name to environment variable names.
+fn env_var_names(provider: &str) -> (String, String) {
+    match provider {
+        "openai" => ("OPENAI_API_KEY".into(), "OPENAI_API_KEY".into()),
+        "anthropic" => ("ANTHROPIC_API_KEY".into(), "ANTHROPIC_API_KEY".into()),
+        "openrouter" => ("OPENROUTER_API_KEY".into(), "OPENROUTER_API_KEY".into()),
+        "cloudflare-r2" => ("R2_ACCESS_KEY_ID".into(), "R2_SECRET_ACCESS_KEY".into()),
+        "aws-s3" | "aws" => ("AWS_ACCESS_KEY_ID".into(), "AWS_SECRET_ACCESS_KEY".into()),
+        "qdrant" => ("QDRANT_API_KEY".into(), "QDRANT_API_KEY".into()),
+        _ => {
+            let prefix = provider.to_uppercase().replace('-', "_");
+            (format!("{}_KEY", prefix), format!("{}_SECRET", prefix))
+        }
     }
 }

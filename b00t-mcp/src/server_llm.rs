@@ -136,6 +136,13 @@ fn discover_local(soul: &SoulConfig) -> Option<(String, String)> {
 
 fn discover_remote(soul: &SoulConfig) -> Option<(String, String, String)> {
     for be in &soul.backends.remote {
+        // Check encrypted credential catalog first (zero-trust)
+        if let Ok(Some((_key_id, secret))) = b00t_c0re_lib::keyring_store::get_credential(&be.name) {
+            let url = be.base_url.clone().unwrap_or_else(|| "https://api.openai.com/v1".into());
+            eprintln!("🔐 upstream via credential store: {}", be.name);
+            return Some((be.name.clone(), secret, url));
+        }
+        // Fallback: env var (for backwards compat)
         if let Ok(key) = std::env::var(&be.key_env) {
             if key.is_empty() { continue; }
             let url = be.base_url.clone().unwrap_or_else(|| "https://api.openai.com/v1".into());
