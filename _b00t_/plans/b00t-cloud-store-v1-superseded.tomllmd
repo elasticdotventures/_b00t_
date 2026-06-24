@@ -1,7 +1,7 @@
-# b00t Cloud Storage API — Agent Durable Object Store
-# 🤓 S3/R2-compatible persistent storage for agent-generated data.
-# Serialized formats (JSON, JSONL, TOML, GGUF) with metadata indexing.
-# Agents PUT, GET, LIST, QUERY across sessions.
+# ⚠️ SUPERSEDED by _b00t_/plans/b00t-knowledge-infrastructure.tomllmd
+# That plan replaces this one with ontologically grounded naming (irontology StoragePlan),
+# provenance chains (UFO relators), SPARQL queries, and class-scoped access control.
+# This V1 design remains as a record of the initial approach.
 
 [b00t]
 name = "b00t-cloud-store"
