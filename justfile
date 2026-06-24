@@ -2280,3 +2280,21 @@ gh-pr-diff pr:
 gh-pr-list limit="10":
     @b00t exec -- gh pr list --state open --limit {{limit}}
 
+
+# ── b00t Cloud Store ──
+
+# Upload current training corpus to cloud store
+store-put-corpus:
+    b00t store put ~/.b00t/training/b00t-corpus.jsonl --consumer rust-doc --type training-corpus --tags pairs=4474,model=qwen3.5
+
+# Sync all stored data from a peer agent
+store-sync peer="sm3lly":
+    b00t store sync --from {{peer}} --to lappyx23
+
+# Query stored objects by type
+store-query type="training-corpus":
+    b00t store query --type {{type}}
+
+# Pull latest training corpus from store (on session start)
+store-pull-corpus:
+    b00t store get rust-doc/training-corpus/$(date +%Y-%m-%d)/latest.jsonl -o ~/.b00t/training/b00t-corpus.jsonl
