@@ -43,15 +43,20 @@ enum RpaCommands {
     Menu,
     #[clap(about = "One-time Windows setup: firewall rule for CDP relay")]
     Setup,
+    #[clap(about = "Install b00t browser plugin into Chrome via CDP")]
+    Plugin,
 }
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
 
-    // Handle setup subcommand (no Chrome needed)
+    // Handle setup / plugin subcommands (no Chrome needed yet)
     if matches!(&cli.command, Some(RpaCommands::Setup)) {
         return run_setup(cli.port).await;
+    }
+    if matches!(&cli.command, Some(RpaCommands::Plugin)) {
+        return install_plugin(cli.port).await;
     }
 
     let auto_start = matches!(&cli.command, Some(RpaCommands::Start));
@@ -392,6 +397,79 @@ async fn execute_script(session: &RpaSession, steps: &[ScriptStep]) -> anyhow::R
     }
 
     println!("\n✅ Done ({} steps)", steps.len());
+    Ok(())
+}
+
+/// Install the b00t browser plugin into Chrome via CDP.
+/// Writes the extension files, then restarts Chrome with --load-extension.
+async fn install_plugin(port: u16) -> anyhow::Result<()> {
+    let home = std::env::var("HOME").unwrap_or_else(|_| "/home/brianh".to_string());
+    let ext_path = format!("{}/.dotfiles/_b00t_/browser-plugin", home);
+    let ext_win = format!(r"C:\b00t\browser-plugin");
+
+    if !std::path::Path::new(&ext_path).join("manifest.json").exists() {
+        anyhow::bail!("Plugin not found at {}. Run from dotfiles repo.", ext_path);
+    }
+
+    eprintln!("🐝 b00t Browser Plugin Installer");
+    eprintln!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+    eprintln!("  Extension path: {}", ext_path);
+    eprintln!();
+
+    if detect_wsl() {
+        // Copy extension to Windows temp so Chrome can load it
+        let win_dir = r"C:\b00t";
+        eprintln!("1️⃣  Copying extension to Windows ({})...", win_dir);
+        let copy_cmd = format!(
+            "if (!(Test-Path '{}')) {{ New-Item -ItemType Directory -Path '{}' -Force }}; Copy-Item -Recurse -Force '{}/*' '{}'",
+            win_dir, win_dir, ext_path.replace(&home, &format!("C:\\Users\\{}", std::env::var("USER").unwrap_or_default())), win_dir
+        );
+        let _ = std::process::Command::new("powershell.exe")
+            .args(["-NoProfile", "-Command", &copy_cmd])
+            .output();
+        eprintln!("    ✅ Copied");
+
+        // Kill Chrome and restart with extension flag
+        eprintln!("2️⃣  Restarting Chrome with extension loaded...");
+        let chrome = r"C:\Program Files\Google\Chrome\Application\chrome.exe";
+        let user_data = r"C:\b00t\chrome-debug";
+        let restart_cmd = format!(
+            "Get-Process chrome -ErrorAction SilentlyContinue | Stop-Process -Force; \
+             Start-Sleep -Seconds 2; \
+             Start-Process -FilePath '{}' -ArgumentList '--remote-debugging-port={}','--remote-allow-origins=*',\
+             '--load-extension={}','--user-data-dir={}','--no-first-run' -WindowStyle Hidden",
+            chrome, port, win_dir, user_data
+        );
+        let _ = std::process::Command::new("powershell.exe")
+            .args(["-NoProfile", "-Command", &restart_cmd])
+            .output();
+        eprintln!("    ✅ Chrome restarted with b00t plugin");
+
+        // Wait and verify extension loaded via CDP
+        eprintln!("3️⃣  Verifying extension loaded...");
+        let client = reqwest::Client::builder()
+            .connect_timeout(std::time::Duration::from_secs(3))
+            .build()?;
+        let probe = format!("http://{}:{}", windows_host_ip(), port + 1);
+        for i in 0..10 {
+            tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+                if let Ok(resp) = client.get(&format!("{}/json/version", probe)).send().await {
+                if resp.status().is_success() {
+                    eprintln!("    ✅ Chrome CDP ready after {}s with plugin loaded", (i + 1) * 2);
+                    eprintln!();
+                    eprintln!("🐝 b00t plugin installed!");
+                    eprintln!("   Open Chrome → click the 🐝 icon in extensions toolbar");
+                    eprintln!("   Or press Ctrl+Shift+Click to open the b00t side panel");
+                    return Ok(());
+                }
+            }
+        }
+        eprintln!("    ⚠️  Chrome may still be starting. Check the extension manually.");
+    } else {
+        eprintln!("⚠️  Plugin install is designed for WSL→Windows Chrome.");
+        eprintln!("   To load manually: chrome --load-extension={}", ext_path);
+    }
+
     Ok(())
 }
 
