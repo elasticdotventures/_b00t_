@@ -150,6 +150,10 @@ pub mod wow;
 pub mod calorie_tracker;
 pub mod cake_ledger;
 pub mod a2a_gates;
+#[cfg(feature = "rpa")]
+pub mod rpa_cdp;
+#[cfg(feature = "rpa")]
+pub mod rpa_tui;
 pub use traits::*;
 
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Default)]
