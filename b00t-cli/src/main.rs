@@ -102,6 +102,9 @@ Example:
     #[clap(about = "Agent tool authorization manifest (unlocks via learning)")]
     Blessing(b00t_cli::commands::blessing::BlessingArgs),
 
+    #[clap(about = "Detect missing skill datums and optionally generate stubs (E6)")]
+    Gap(b00t_cli::commands::gap_detect::GapDetectArgs),
+
     #[clap(
         about = "Record a lesson learned for a tool (lfmf = Learn From My Failure)",
         alias = "lesson",
@@ -1891,6 +1894,12 @@ async fn main() {
         }
         Some(Commands::Blessing(blessing_args)) => {
             if let Err(e) = b00t_cli::commands::blessing::handle_blessing(blessing_args) {
+                eprintln!("Error: {e}");
+                std::process::exit(1);
+            }
+        }
+        Some(Commands::Gap(gap_args)) => {
+            if let Err(e) = b00t_cli::commands::gap_detect::handle_gap_detect(gap_args) {
                 eprintln!("Error: {e}");
                 std::process::exit(1);
             }
