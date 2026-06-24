@@ -273,21 +273,16 @@ fn dirs_next() -> Option<std::path::PathBuf> {
 
 // ── Router ─────────────────────────────────────────────────────────────────
 
-pub fn llm_router(state: Arc<LlmState>, dev_mode: bool) -> Router {
+pub fn llm_router(state: Arc<LlmState>) -> Router {
     Router::new()
         .route("/v1/models", get(list_models))
         .route("/v1/chat/completions", post(proxy_chat))
         .route("/v1/embeddings", post(proxy_embeddings))
         .route("/v1/{*_}", axum::routing::any(fallback_not_found))
-        .with_state((state, dev_mode))
+        .with_state(state)
 }
 
-type AppState = (Arc<LlmState>, bool);
-
-fn extract_bearer_token(headers: &HeaderMap, dev_mode: bool) -> Option<String> {
-    if dev_mode {
-        return Some("dev-key".to_string());
-    }
+fn extract_bearer_token(headers: &HeaderMap) -> Option<String> {
     headers
         .get(header::AUTHORIZATION)
         .and_then(|v| v.to_str().ok())
@@ -295,14 +290,33 @@ fn extract_bearer_token(headers: &HeaderMap, dev_mode: bool) -> Option<String> {
         .map(|s| s.to_string())
 }
 
+/// Validate bearer token and return consumer identity.
+/// Returns 401 response if token is missing or invalid.
+async fn require_auth(
+    headers: &HeaderMap,
+    state: &LlmState,
+) -> Result<String, (StatusCode, Json<Value>)> {
+    let token = extract_bearer_token(headers)
+        .unwrap_or_default();
+    state.validate_key(&token).await
+        .map(|k| k.consumer)
+        .ok_or_else(|| {
+            (StatusCode::UNAUTHORIZED, Json(json!({
+                "error": "invalid or missing API key"
+            })))
+        })
+}
+
 // ── Handlers ───────────────────────────────────────────────────────────────
 
 async fn list_models(
-    State((state, dev_mode)): State<AppState>,
+    State(state): State<Arc<LlmState>>,
     headers: HeaderMap,
 ) -> impl IntoResponse {
-    let token = extract_bearer_token(&headers, dev_mode).unwrap_or_default();
-    let consumer = state.validate_key(&token).await.map(|k| k.consumer).unwrap_or_else(|| "unknown".to_string());
+    let consumer = match require_auth(&headers, &state).await {
+        Ok(c) => c,
+        Err(e) => return e.into_response(),
+    };
     let url = format!("{}/models", state.upstream_url);
     let client = reqwest::Client::new();
     let mut req = client.get(&url);
@@ -327,12 +341,14 @@ async fn list_models(
 }
 
 async fn proxy_chat(
-    State((state, dev_mode)): State<AppState>,
+    State(state): State<Arc<LlmState>>,
     headers: HeaderMap,
     body: Bytes,
 ) -> impl IntoResponse {
-    let token = extract_bearer_token(&headers, dev_mode).unwrap_or_default();
-    let consumer = state.validate_key(&token).await.map(|k| k.consumer).unwrap_or_else(|| "unknown".to_string());
+    let consumer = match require_auth(&headers, &state).await {
+        Ok(c) => c,
+        Err(e) => return e.into_response(),
+    };
     let model = serde_json::from_slice::<Value>(&body)
         .ok().and_then(|v| v.get("model").and_then(|m| m.as_str().map(|s| s.to_string())))
         .unwrap_or_else(|| "unknown".to_string());
@@ -363,12 +379,14 @@ async fn proxy_chat(
 }
 
 async fn proxy_embeddings(
-    State((state, dev_mode)): State<AppState>,
+    State(state): State<Arc<LlmState>>,
     headers: HeaderMap,
     body: Bytes,
 ) -> impl IntoResponse {
-    let token = extract_bearer_token(&headers, dev_mode).unwrap_or_default();
-    let consumer = state.validate_key(&token).await.map(|k| k.consumer).unwrap_or_else(|| "unknown".to_string());
+    let consumer = match require_auth(&headers, &state).await {
+        Ok(c) => c,
+        Err(e) => return e.into_response(),
+    };
     let model = serde_json::from_slice::<Value>(&body)
         .ok().and_then(|v| v.get("model").and_then(|m| m.as_str().map(|s| s.to_string())))
         .unwrap_or_else(|| "unknown".to_string());
@@ -396,7 +414,7 @@ async fn proxy_embeddings(
 }
 
 async fn fallback_not_found(
-    State((_state, _dev_mode)): State<AppState>,
+    State(_state): State<Arc<LlmState>>,
     method: Method,
     axum::extract::Path(path): axum::extract::Path<String>,
 ) -> impl IntoResponse {

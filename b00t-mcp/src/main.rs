@@ -163,11 +163,6 @@ async fn main() -> Result<()> {
             }
         }
 
-        let is_dev_mode = acl_config.as_ref()
-            .and_then(|c| c.dev.as_ref())
-            .and_then(|d| d.bypass_oauth)
-            .unwrap_or(false);
-
         // Create GitHub auth state
         let github_config = GitHubAuthConfig::default();
         let github_state = GitHubAuthState::new(github_config);
@@ -186,7 +181,7 @@ async fn main() -> Result<()> {
         if is_llm_mode {
             let llm_state = Arc::new(server_llm::LlmState::new());
             eprintln!("🤖 LLM proxy mode activated — upstream auto-discovered (env or local probe)");
-            app = app.merge(server_llm::llm_router(llm_state.clone(), is_dev_mode));
+            app = app.merge(server_llm::llm_router(llm_state.clone()));
         }
 
         let app = app.layer(CorsLayer::permissive());

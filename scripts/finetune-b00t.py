@@ -18,7 +18,7 @@ Env vars:
   B00T_OUTPUT_DIR    output directory for LoRA + GGUF
 """
 
-import os, json, sys
+import os, json, subprocess, sys
 from pathlib import Path
 
 B00T_ROOT = Path(os.environ.get("B00T_ROOT", os.path.expanduser("~/.b00t")))
@@ -34,7 +34,11 @@ def install_deps():
         import unsloth, datasets, transformers, torch
     except ImportError:
         print("📦 Installing dependencies (uv pip install)...")
-        os.system("uv pip install unsloth datasets transformers torch accelerate peft bitsandbytes")
+        subprocess.run([
+            "uv", "pip", "install",
+            "unsloth", "datasets", "transformers", "torch",
+            "accelerate", "peft", "bitsandbytes"
+        ], check=True)
         print("✅ Dependencies installed. Restart this script.")
         sys.exit(0)
 
@@ -142,7 +146,10 @@ def finetune():
 
     gguf_path = str(OUTPUT_DIR / "b00t-finetuned.Q4_K_M.gguf")
     print(f"🔨 Converting to GGUF: {gguf_path}")
-    os.system(f"python3 -c \"from unsloth import save_gguf; save_gguf('{merged_path}', '{gguf_path}', 'q4_k_m')\"")
+    subprocess.run([
+        "python3", "-c",
+        f"from unsloth import save_gguf; save_gguf('{merged_path}', '{gguf_path}', 'q4_k_m')"
+    ], check=True)
     print(f"✅ GGUF saved to {gguf_path}")
 
     return gguf_path
