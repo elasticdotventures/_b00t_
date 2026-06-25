@@ -98,44 +98,58 @@ impl RpaSession {
         Ok(result)
     }
 
-    /// Open a new page, navigate to URL, and inject DOM enrichment.
-    pub async fn open_page(&self, url: &str) -> Result<Page> {
+    /// Open a new page and navigate to URL.
+    /// Optionally inject DOM enrichment (opt-in, off by default).
+    /// Enrichment adds a single `data-b00t` attribute with compact format:
+    ///   data-b00t="type|label"  (e.g., "button|Sign In", "input|Search")
+    /// This is capped at 500 elements and viewport-only to avoid memory issues.
+    pub async fn open_page(&self, url: &str, enrich: bool) -> Result<Page> {
         let page = self.browser.new_page(url).await?;
-        // Inject DOM enrichment script into this page.
-        // Adds stable [data-b00t-*] attributes to all interactive elements.
-        let enrich_js = r#"
-(function(){
-  if (window.__b00t_enriched) return;
-  window.__b00t_enriched = true;
-  function enrich(el) {
-    if (el._b00t) return; el._b00t = true;
-    var t=el.tagName.toLowerCase(),a=el.getAttribute.bind(el),type=a('type')||'',role=a('role')||'';
-    var label=a('aria-label')||a('placeholder')||(el.textContent||'').trim().slice(0,60)||a('name')||'';
-    var bt='element',br='generic';
-    if (t==='a'&&el.href){bt='link';br='navigation';}
-    else if (t==='button'||role==='button'){bt='button';br='action';}
-    else if (t==='input'){if(type==='text'||type==='search'||type==='email'||type==='url'||type==='password'){bt='input';br='text';}else if(type==='checkbox'){bt='input';br='checkbox';}else if(type==='radio'){bt='input';br='radio';}else if(type==='submit'||type==='button'){bt='button';br='submit';}else{bt='input';br=type||'text';}}
-    else if (t==='textarea'){bt='input';br='textarea';}
-    else if (t==='select'){bt='input';br='select';}
-    else if (t==='form'){bt='form';br='container';}
-    else if (role==='dialog'||role==='alertdialog'){bt='dialog';br='modal';}
-    else if (t==='nav'||role==='navigation'){bt='nav';br='navigation';}
-    else if (t==='img'){bt='image';br='media';}
-    else if (['h1','h2','h3','h4','h5','h6'].indexOf(t)>=0){bt='heading';br='h'+t[1];}
-    el.dataset.b00tType=bt;el.dataset.b00tRole=br;
-    if(label)el.dataset.b00tLabel=label.slice(0,120);
-    if(el.id)el.dataset.b00tId=el.id;
-  }
-  document.querySelectorAll('a,button,input,textarea,select,form,[role="button"],[role="dialog"],[role="navigation"],nav,iframe,img,h1,h2,h3,h4,h5,h6').forEach(enrich);
-  new MutationObserver(function(m){for(var i=0;i<m.length;i++)if(m[i].addedNodes.length>0){document.querySelectorAll('a,button,input,textarea,select,form,[role="button"],[role="dialog"],nav,iframe,img,h1,h2,h3,h4,h5,h6').forEach(enrich);break}}).observe(document.body||document.documentElement,{childList:true,subtree:true});
-  window.__b00t={find:function(t,r){var s='[data-b00t-type]';if(t)s+='[data-b00t-type=\"'+t+'\"]';if(r)s+='[data-b00t-role=\"'+r+'\"]';return Array.from(document.querySelectorAll(s)).map(function(e){return{type:e.dataset.b00tType,role:e.dataset.b00tRole,label:e.dataset.b00tLabel||'',selector:'[data-b00t-type=\"'+e.dataset.b00tType+'\"]'+(e.dataset.b00tLabel?'[data-b00t-label=\"'+e.dataset.b00tLabel+'\"]':'')}})},counts:function(){var c={};document.querySelectorAll('[data-b00t-type]').forEach(function(e){var t=e.dataset.b00tType;c[t]=(c[t]||0)+1});return c}};
-})();
-"#;
-        // Inject via Runtime.evaluate on the new page
-        let _ = page.evaluate(enrich_js).await;
+        if enrich {
+            let _ = page.evaluate(ENRICH_SCRIPT).await;
+        }
         Ok(page)
     }
+    /// Alias without enrich parameter for backward compat
+    pub async fn open_page_no_enrich(&self, url: &str) -> Result<Page> {
+        self.open_page(url, false).await
+    }
+}
 
+/// Lightweight DOM enrichment script — single `data-b00t` attribute.
+/// Injects a compact interactive-element index into the page for LLM discovery.
+/// The LLM can query ALL interactive elements with one call:
+///   JSON.stringify(window.__b00t.findAll())
+///   → [{id:1, t:"button", l:"Sign In"}, {id:2, t:"input", l:"Search"}, ...]
+///
+/// Memory-safe: capped at 500 elements, viewport-only, no MutationObserver.
+const ENRICH_SCRIPT: &str = r#"
+(function(){if(window.__b00t)return;
+var MAX=500,sel='a[href],button,input,textarea,select,[role="button"],[role="dialog"]';
+var els=document.querySelectorAll(sel);
+var reg=[];
+for(var i=0;i<els.length&&i<MAX;i++){
+ var e=els[i];
+ if(!e.offsetParent)continue; // skip hidden
+ var l=e.getAttribute('aria-label')||e.getAttribute('placeholder')||(e.textContent||'').trim().slice(0,60)||e.getAttribute('name')||'';
+ var t=e.tagName.toLowerCase();
+ if(t==='input'){var it=e.getAttribute('type')||'text';t='input-'+it;}
+ else if(t==='a')t='link';
+ else if(t==='button'||e.getAttribute('role')==='button')t='button';
+ else if(t==='textarea')t='input';
+ else if(t==='select')t='select';
+ e.setAttribute('data-b00t',t+'|'+l.slice(0,80));
+ reg.push({id:i+1,t:t,l:l.slice(0,120)});
+}
+window.__b00t={
+ findAll:function(){return reg;},
+ find:function(type){return reg.filter(function(r){return r.t===type||r.t.startsWith(type);});},
+ count:function(){var c={};reg.forEach(function(r){c[r.t]=(c[r.t]||0)+1;});return c;}
+};
+})();
+"#;
+
+impl RpaSession {
     /// Execute JavaScript in a page context and return the result as a string.
     pub async fn evaluate(&self, page: &Page, js: &str) -> Result<String> {
         let result: EvaluationResult = page.evaluate(js).await?;

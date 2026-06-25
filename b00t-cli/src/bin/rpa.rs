@@ -33,6 +33,12 @@ struct Cli {
     url: Option<String>,
     #[clap(long, help = "Force TUI menu")]
     menu: bool,
+    #[clap(long, help = "Describe page structure (headings, links, forms, buttons)")]
+    describe: bool,
+    #[clap(long, help = "Inject DOM enrichment (single data-b00t attribute, 500-element cap)")]
+    enrich: bool,
+    #[clap(long, help = "Take screenshot after navigation")]
+    screenshot: bool,
 }
 
 #[derive(Parser, Debug)]
@@ -79,15 +85,33 @@ async fn main() -> anyhow::Result<()> {
     // Connect to the discovered CDP endpoint
     let session = RpaSession::connect(win_host.clone(), cdp_port).await?;
 
-    // Mode dispatch: if URL and eval are both given, navigate first then evaluate
+    // Mode dispatch:
+    // --url + --eval     = navigate then evaluate
+    // --url + --describe = navigate then describe page
+    // --url + --screenshot = navigate then screenshot
+    // --url              = navigate only
+    // --eval             = eval on current page
+    // --describe         = describe current page
+    // (default)          = TUI menu
+    let enrich = cli.enrich;
+
     if let Some(url) = &cli.url {
         if let Some(js) = &cli.eval {
-            return navigate_and_eval(&session, url, js).await;
+            return navigate_and_eval(&session, url, js, enrich).await;
         }
-        return navigate_mode(&session, url).await;
+        if cli.describe {
+            return navigate_and_describe(&session, url, enrich).await;
+        }
+        if cli.screenshot {
+            return navigate_and_screenshot(&session, url, enrich).await;
+        }
+        return navigate_mode(&session, url, enrich).await;
     }
     if let Some(js) = &cli.eval {
         return eval_mode(&session, js).await;
+    }
+    if cli.describe {
+        return describe_page(&session).await;
     }
     if matches!(&cli.command, Some(RpaCommands::Menu)) || cli.menu || !atty::is(atty::Stream::Stdout) {
         return tui_menu(&session).await;
@@ -301,15 +325,63 @@ async fn ensure_chrome(host: Option<&str>, port: u16) -> anyhow::Result<u16> {
     anyhow::bail!("Chrome CDP timeout");
 }
 
-/// Navigate to URL, then execute JavaScript on the same page.
-async fn navigate_and_eval(session: &RpaSession, url: &str, js: &str) -> anyhow::Result<()> {
+/// Navigate to URL, optionally enrich, execute JavaScript.
+async fn navigate_and_eval(session: &RpaSession, url: &str, js: &str, enrich: bool) -> anyhow::Result<()> {
     eprintln!("🌐 Navigating to {} ...", url);
-    let page = session.open_page(url).await?;
-    // Brief wait for page to load
+    let page = session.open_page(url, enrich).await?;
     tokio::time::sleep(std::time::Duration::from_millis(1500)).await;
     eprintln!("🔍 Evaluating JavaScript...");
     let result = session.evaluate(&page, js).await?;
     println!("{}", result);
+    Ok(())
+}
+
+/// Navigate then describe page structure (headings, links, forms, buttons).
+async fn navigate_and_describe(session: &RpaSession, url: &str, enrich: bool) -> anyhow::Result<()> {
+    eprintln!("🌐 Navigating to {} ...", url);
+    let page = session.open_page(url, enrich).await?;
+    tokio::time::sleep(std::time::Duration::from_millis(2000)).await;
+    let desc_js = r#"JSON.stringify({
+  title: document.title,
+  url: location.href,
+  headings: Array.from(document.querySelectorAll('h1,h2,h3')).slice(0,20).map(h=>({level:h.tagName,text:h.textContent.trim().slice(0,80)})),
+  links: Array.from(document.querySelectorAll('a[href]')).slice(0,30).map(a=>({text:a.textContent.trim().slice(0,60),href:a.href.slice(0,200)})),
+  forms: Array.from(document.forms).map(f=>({id:f.id||'',action:f.action||'',fields:Array.from(f.elements).slice(0,10).map(e=>({name:e.name||'',type:e.type||'',label:(e.labels?.[0]?.textContent||e.placeholder||'').slice(0,60)}))})),
+  buttons: Array.from(document.querySelectorAll('button')).slice(0,30).map(b=>({text:b.textContent.trim().slice(0,60),type:b.type})),
+  enriched: typeof window.__b00t === 'object' ? window.__b00t.count() : null
+})"#;
+    let result = session.evaluate(&page, desc_js).await?;
+    println!("{}", result);
+    Ok(())
+}
+
+/// Navigate then take a screenshot.
+async fn navigate_and_screenshot(session: &RpaSession, url: &str, enrich: bool) -> anyhow::Result<()> {
+    eprintln!("🌐 Navigating to {} ...", url);
+    let page = session.open_page(url, enrich).await?;
+    tokio::time::sleep(std::time::Duration::from_millis(2000)).await;
+    let png = session.screenshot(&page).await?;
+    let path = format!("screenshot_{}.png", chrono::Utc::now().format("%Y%m%d_%H%M%S"));
+    std::fs::write(&path, &png)?;
+    println!("✅ Screenshot saved: {} ({} bytes)", path, png.len());
+    Ok(())
+}
+
+/// Describe the current page (no navigation).
+async fn describe_page(session: &RpaSession) -> anyhow::Result<()> {
+    let pages = session.list_pages().await?;
+    if pages.is_empty() {
+        anyhow::bail!("No open pages.");
+    }
+    let page = session.open_page(&pages[0].1, false).await?;
+    let title = session.evaluate(&page, "document.title").await?;
+    println!("📄 Page: {}", title);
+    println!("   URL: {}", pages[0].1);
+    let links = session.evaluate(&page, "document.querySelectorAll('a').length").await?;
+    let buttons = session.evaluate(&page, "document.querySelectorAll('button').length").await?;
+    println!("   Links: {} | Buttons: {} | Forms: {}",
+        links, buttons,
+        session.evaluate(&page, "document.forms.length").await?);
     Ok(())
 }
 
@@ -319,15 +391,15 @@ async fn eval_mode(session: &RpaSession, js: &str) -> anyhow::Result<()> {
     if pages.is_empty() {
         anyhow::bail!("No open pages found. Use --url <url> first.");
     }
-    let page = session.open_page(&pages[0].1).await?;
+    let page = session.open_page(&pages[0].1, false).await?;
     let result = session.evaluate(&page, js).await?;
     println!("{}", result);
     Ok(())
 }
 
-async fn navigate_mode(session: &RpaSession, url: &str) -> anyhow::Result<()> {
+async fn navigate_mode(session: &RpaSession, url: &str, enrich: bool) -> anyhow::Result<()> {
     eprintln!("🌐 Navigating to {} ...", url);
-    let _page = session.open_page(url).await?;
+    let _page = session.open_page(url, enrich).await?;
     println!("✅ Page loaded");
     Ok(())
 }
@@ -360,14 +432,14 @@ async fn tui_menu(session: &RpaSession) -> anyhow::Result<()> {
 async fn execute_script(session: &RpaSession, steps: &[ScriptStep]) -> anyhow::Result<()> {
     let pages = session.list_pages().await?;
     let target_url = pages.first().map(|(_, u)| u.clone()).unwrap_or_default();
-    let page = session.open_page(&target_url).await?;
+    let page = session.open_page_no_enrich(&target_url).await?;
 
     for (i, step) in steps.iter().enumerate() {
         print!("  {}/{} {} ... ", i + 1, steps.len(), step.action);
         std::io::stdout().flush()?;
 
         match step.action.as_str() {
-            "navigate" => { let _ = session.open_page(&step.args).await?; }
+            "navigate" => { let _ = session.open_page_no_enrich(&step.args).await?; }
             "click" => { session.click(&page, &step.selector).await?; }
             "type" => {
                 let parts: Vec<&str> = step.args.splitn(2, ' ').collect();
