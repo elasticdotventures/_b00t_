@@ -98,9 +98,41 @@ impl RpaSession {
         Ok(result)
     }
 
-    /// Open a new page and navigate to URL.
+    /// Open a new page, navigate to URL, and inject DOM enrichment.
     pub async fn open_page(&self, url: &str) -> Result<Page> {
         let page = self.browser.new_page(url).await?;
+        // Inject DOM enrichment script into this page.
+        // Adds stable [data-b00t-*] attributes to all interactive elements.
+        let enrich_js = r#"
+(function(){
+  if (window.__b00t_enriched) return;
+  window.__b00t_enriched = true;
+  function enrich(el) {
+    if (el._b00t) return; el._b00t = true;
+    var t=el.tagName.toLowerCase(),a=el.getAttribute.bind(el),type=a('type')||'',role=a('role')||'';
+    var label=a('aria-label')||a('placeholder')||(el.textContent||'').trim().slice(0,60)||a('name')||'';
+    var bt='element',br='generic';
+    if (t==='a'&&el.href){bt='link';br='navigation';}
+    else if (t==='button'||role==='button'){bt='button';br='action';}
+    else if (t==='input'){if(type==='text'||type==='search'||type==='email'||type==='url'||type==='password'){bt='input';br='text';}else if(type==='checkbox'){bt='input';br='checkbox';}else if(type==='radio'){bt='input';br='radio';}else if(type==='submit'||type==='button'){bt='button';br='submit';}else{bt='input';br=type||'text';}}
+    else if (t==='textarea'){bt='input';br='textarea';}
+    else if (t==='select'){bt='input';br='select';}
+    else if (t==='form'){bt='form';br='container';}
+    else if (role==='dialog'||role==='alertdialog'){bt='dialog';br='modal';}
+    else if (t==='nav'||role==='navigation'){bt='nav';br='navigation';}
+    else if (t==='img'){bt='image';br='media';}
+    else if (['h1','h2','h3','h4','h5','h6'].indexOf(t)>=0){bt='heading';br='h'+t[1];}
+    el.dataset.b00tType=bt;el.dataset.b00tRole=br;
+    if(label)el.dataset.b00tLabel=label.slice(0,120);
+    if(el.id)el.dataset.b00tId=el.id;
+  }
+  document.querySelectorAll('a,button,input,textarea,select,form,[role="button"],[role="dialog"],[role="navigation"],nav,iframe,img,h1,h2,h3,h4,h5,h6').forEach(enrich);
+  new MutationObserver(function(m){for(var i=0;i<m.length;i++)if(m[i].addedNodes.length>0){document.querySelectorAll('a,button,input,textarea,select,form,[role="button"],[role="dialog"],nav,iframe,img,h1,h2,h3,h4,h5,h6').forEach(enrich);break}}).observe(document.body||document.documentElement,{childList:true,subtree:true});
+  window.__b00t={find:function(t,r){var s='[data-b00t-type]';if(t)s+='[data-b00t-type=\"'+t+'\"]';if(r)s+='[data-b00t-role=\"'+r+'\"]';return Array.from(document.querySelectorAll(s)).map(function(e){return{type:e.dataset.b00tType,role:e.dataset.b00tRole,label:e.dataset.b00tLabel||'',selector:'[data-b00t-type=\"'+e.dataset.b00tType+'\"]'+(e.dataset.b00tLabel?'[data-b00t-label=\"'+e.dataset.b00tLabel+'\"]':'')}})},counts:function(){var c={};document.querySelectorAll('[data-b00t-type]').forEach(function(e){var t=e.dataset.b00tType;c[t]=(c[t]||0)+1});return c}};
+})();
+"#;
+        // Inject via Runtime.evaluate on the new page
+        let _ = page.evaluate(enrich_js).await;
         Ok(page)
     }
 

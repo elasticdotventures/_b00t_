@@ -417,17 +417,33 @@ async fn install_plugin(port: u16) -> anyhow::Result<()> {
     eprintln!();
 
     if detect_wsl() {
-        // Copy extension to Windows temp so Chrome can load it
-        let win_dir = r"C:\b00t";
-        eprintln!("1️⃣  Copying extension to Windows ({})...", win_dir);
-        let copy_cmd = format!(
-            "if (!(Test-Path '{}')) {{ New-Item -ItemType Directory -Path '{}' -Force }}; Copy-Item -Recurse -Force '{}/*' '{}'",
-            win_dir, win_dir, ext_path.replace(&home, &format!("C:\\Users\\{}", std::env::var("USER").unwrap_or_default())), win_dir
-        );
-        let _ = std::process::Command::new("powershell.exe")
-            .args(["-NoProfile", "-Command", &copy_cmd])
+        // Copy extension to Windows via /mnt/c/ (WSL mounts C: drive here)
+        let win_dir = "/mnt/c/b00t/browser-plugin";
+        let win_dir_ps = r"C:\b00t\browser-plugin";
+        eprintln!("1️⃣  Copying extension to Windows ({})...", win_dir_ps);
+        std::fs::create_dir_all(win_dir)?;
+        // Use cp -r to copy file by file through the WSL mount
+        let copy_result = std::process::Command::new("cp")
+            .args(["-r", &format!("{}/.", &ext_path), win_dir])
             .output();
-        eprintln!("    ✅ Copied");
+        if let Ok(out) = &copy_result {
+            if out.status.success() {
+                eprintln!("    ✅ Copied via WSL mount");
+            } else {
+                eprintln!("    ⚠️  cp failed: {}", String::from_utf8_lossy(&out.stderr));
+                // Fallback: try PowerShell with \\wsl$\ path
+                let ps_copy = format!(
+                    "Copy-Item -Recurse -Force '\\\\wsl.localhost\\Ubuntu{}\\browser-plugin\\*' '{}'",
+                    ext_path, win_dir_ps
+                );
+                let _ = std::process::Command::new("powershell.exe")
+                    .args(["-NoProfile", "-Command", &ps_copy])
+                    .output();
+                eprintln!("    ✅ Fallback copy done");
+            }
+        } else {
+            eprintln!("    ⚠️  cp command failed, trying direct copy...");
+        }
 
         // Kill Chrome and restart with extension flag
         eprintln!("2️⃣  Restarting Chrome with extension loaded...");
@@ -438,7 +454,7 @@ async fn install_plugin(port: u16) -> anyhow::Result<()> {
              Start-Sleep -Seconds 2; \
              Start-Process -FilePath '{}' -ArgumentList '--remote-debugging-port={}','--remote-allow-origins=*',\
              '--load-extension={}','--user-data-dir={}','--no-first-run' -WindowStyle Hidden",
-            chrome, port, win_dir, user_data
+            chrome, port, win_dir_ps, user_data
         );
         let _ = std::process::Command::new("powershell.exe")
             .args(["-NoProfile", "-Command", &restart_cmd])
