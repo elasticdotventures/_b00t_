@@ -11,6 +11,7 @@
 //! ```
 
 use b00t_cli::rpa_cdp::RpaSession;
+use b00t_cli::rpa_rhai::{create_rpa_engine, run_commands};
 use b00t_cli::rpa_tui::{run_curation_menu, print_script, ScriptStep};
 use clap::Parser;
 use std::io::{BufRead, Write};
@@ -51,6 +52,11 @@ enum RpaCommands {
     Setup,
     #[clap(about = "Install b00t browser plugin into Chrome via CDP")]
     Plugin,
+    #[clap(about = "Run a Rhai RPA script (multi-step banking, PDF downloads, etc.)")]
+    Script {
+        #[clap(help = "Path to .rhai script file")]
+        script: String,
+    },
 }
 
 #[tokio::main]
@@ -63,6 +69,12 @@ async fn main() -> anyhow::Result<()> {
     }
     if matches!(&cli.command, Some(RpaCommands::Plugin)) {
         return install_plugin(cli.port).await;
+    }
+    if let Some(RpaCommands::Script { script }) = &cli.command {
+        // Discover CDP endpoint, then run script
+        let host = if detect_wsl() { windows_host_ip() } else { "127.0.0.1".to_string() };
+        let cdp_port = ensure_chrome(Some(&host), cli.port).await?;
+        return run_rhai_script(script, &host, cdp_port).await;
     }
 
     let auto_start = matches!(&cli.command, Some(RpaCommands::Start));
@@ -174,9 +186,11 @@ async fn ensure_chrome(host: Option<&str>, port: u16) -> anyhow::Result<u16> {
         .timeout(std::time::Duration::from_secs(3))
         .build()?;
     let probe_targets = [
-        format!("http://{}:{}/json/version", host, port),         // default gateway
+        // Try relay port first (port+1) — Chrome only binds 127.0.0.1,
+        // relay/proxy is the only way to reach it from WSL.
+        format!("http://{}:{}/json/version", host, port + 1),
         format!("http://localhost:{}/json/version", port),         // WSL localhost fwd
-        format!("http://{}:{}/json/version", host, port + 1),      // portproxy port
+        format!("http://{}:{}/json/version", host, port),          // direct to Windows host
     ];
 
     // Probe CDP endpoint
@@ -296,9 +310,9 @@ async fn ensure_chrome(host: Option<&str>, port: u16) -> anyhow::Result<u16> {
         .timeout(std::time::Duration::from_secs(3))
         .build()?;
     let probe_targets = &[
-        format!("http://{}:{}", host, port),             // direct to Windows host
+        format!("http://{}:{}", host, port + 1),          // relay port first
         format!("http://localhost:{}", port),             // WSL localhost forwarding
-        format!("http://{}:{}", host, port + 1),          // portproxy port
+        format!("http://{}:{}", host, port),              // direct to Windows host
     ];
     for i in 0..30 {
         tokio::time::sleep(Duration::from_secs(1)).await;
@@ -556,6 +570,40 @@ async fn install_plugin(port: u16) -> anyhow::Result<()> {
         eprintln!("   To load manually: chrome --load-extension={}", ext_path);
     }
 
+    Ok(())
+}
+
+/// Run a Rhai RPA script with access to navigate, click, type, download, etc.
+async fn run_rhai_script(script_path: &str, host: &str, cdp_port: u16) -> anyhow::Result<()> {
+    let (cmd_tx, mut cmd_rx) = tokio::sync::mpsc::unbounded_channel::<b00t_cli::rpa_rhai::Cmd>();
+
+    let session = RpaSession::connect(Some(host.to_string()), cdp_port).await?;
+
+    // Spawn command processor on a tokio task
+    let cmd_handle = tokio::spawn(async move {
+        run_commands(&session, &mut cmd_rx).await;
+    });
+
+    // Run the Rhai script on the current thread (synchronous)
+    let engine = create_rpa_engine(cmd_tx);
+    let mut scope = rhai::Scope::new();
+    scope.push_constant("VERSION", "0.1.0");
+
+    eprintln!("🚀 Running RPA script: {}", script_path);
+    let path = std::path::Path::new(script_path);
+    if !path.exists() {
+        anyhow::bail!("Script not found: {}", script_path);
+    }
+    let ast = engine.compile_file(path.into())?;
+    let result: rhai::Dynamic = engine.eval_ast_with_scope(&mut scope, &ast)?;
+    if !result.is_unit() {
+        println!("{}", result);
+    }
+    eprintln!("✅ RPA script complete");
+
+    // Drop the sender so the command processor exits
+    drop(engine);
+    cmd_handle.await?;
     Ok(())
 }
 

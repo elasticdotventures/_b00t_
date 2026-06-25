@@ -104,7 +104,10 @@ impl RpaSession {
     ///   data-b00t="type|label"  (e.g., "button|Sign In", "input|Search")
     /// This is capped at 500 elements and viewport-only to avoid memory issues.
     pub async fn open_page(&self, url: &str, enrich: bool) -> Result<Page> {
-        let page = self.browser.new_page(url).await?;
+        use tokio::time::{timeout, Duration};
+        let page = timeout(Duration::from_secs(15), self.browser.new_page(url))
+            .await
+            .map_err(|_| anyhow::anyhow!("Timeout opening page: {}", url))??;
         if enrich {
             let _ = page.evaluate(ENRICH_SCRIPT).await;
         }
