@@ -13,7 +13,7 @@ use tower_http::cors::CorsLayer;
 
 use b00t_mcp::{
     B00tMcpServerRusty, GitHubAuthConfig, GitHubAuthState, MinimalOAuthConfig, MinimalOAuthState,
-    github_auth_router, minimal_oauth_router,
+    github_auth_router, minimal_oauth_router, type_graph_router,
 };
 
 #[tokio::main]
@@ -169,6 +169,7 @@ async fn main() -> Result<()> {
             .nest_service("/mcp", service)
             .merge(minimal_oauth_router(oauth_state))
             .merge(github_auth_router(github_state))
+            .merge(type_graph_router())
             .layer(CorsLayer::permissive());
 
         // Start HTTP server
@@ -185,6 +186,7 @@ async fn main() -> Result<()> {
         eprintln!("🐙 GitHub Auth endpoints:");
         eprintln!("    Login: http://{}/auth/github", addr);
         eprintln!("    Callback: http://{}/auth/github/callback", addr);
+        eprintln!("🗺  Type graph: http://{}/v1/b00t/type-graph", addr);
 
         axum::serve(listener, app).await?;
     } else {

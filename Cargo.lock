@@ -1422,6 +1422,7 @@ dependencies = [
  "b00t-c0re-lib",
  "b00t-chat",
  "b00t-cli",
+ "b00t-reflect-types",
  "base64 0.22.1",
  "chrono",
  "clap",
@@ -1469,6 +1470,9 @@ dependencies = [
 [[package]]
 name = "b00t-reflect-types"
 version = "0.8.4"
+dependencies = [
+ "serde",
+]
 
 [[package]]
 name = "b00t-zellij"
@@ -10592,6 +10596,16 @@ dependencies = [
  "memoffset",
  "tempfile",
  "windows-sys 0.61.2",
+]
+
+[[package]]
+name = "ufo-types"
+version = "0.8.4"
+dependencies = [
+ "schemars",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
 ]
 
 [[package]]

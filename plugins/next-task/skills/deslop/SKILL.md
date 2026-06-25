@@ -22,24 +22,31 @@ Three-phase pipeline: deterministic first, heuristic second, AI last. Never remo
 
 ## Phase 1: HIGH Certainty (Regex — auto-remove)
 
+Only patterns that are **unambiguously** debug/leftover artifacts with near-zero false positive rate.
+Do NOT auto-remove patterns that are context-dependent — those belong in Phase 2.
+
 ```
-console\.log\(          → JS/TS debug output
-print\(                 → Python debug (non-test files)
-println!\(              → Rust debug (non-test files)
-debugger;               → JS/TS breakpoint
-\bpdb\.set_trace\(\)    → Python debugger
-# TODO(?!.*#[0-9]+)     → TODO without issue reference
-# FIXME(?!.*#[0-9]+)    → FIXME without issue reference
-# HACK                  → Hack marker
-# XXX                   → Unresolved marker
-"placeholder"           → Literal placeholder string
-"example\.com"          → Placeholder domain in non-config files
-\.unwrap\(\)            → Rust panic-on-none (outside #[cfg(test)])
+console\.log\(          → JS/TS debug output (lib files only, not scripts)
+\bpdb\.set_trace\(\)    → Python interactive debugger — always wrong in committed code
+debugger;               → JS/TS breakpoint — always wrong in committed code
 except:\s*pass          → Python silent exception swallow
+// TODO(?!.*#[0-9]+)    → Rust/JS TODO without issue reference (use # prefix for Python/shell)
+# TODO(?!.*#[0-9]+)     → Python/Shell TODO without issue reference
+// FIXME(?!.*#[0-9]+)   → Rust/JS FIXME without issue reference
+# FIXME(?!.*#[0-9]+)    → Python/Shell FIXME without issue reference
+// HACK\b               → Hack marker (Rust/JS/TS)
+// XXX\b                → Unresolved marker (Rust/JS/TS)
 ```
 
 Respect file-level `# deslop:ignore` annotation to skip a file.
-Skip `tests/`, `*_test.*`, `*.spec.*`, `*_spec.*`.
+Skip `tests/`, `*_test.*`, `*.spec.*`, `*_spec.*`, `src/bin/`, `src/main.rs`.
+
+**Removed from HIGH (too many false positives — demoted to MEDIUM):**
+- `println!(` — valid in Rust binary crates, CLI entry points; only an artifact in lib crates
+- `print(` — standard output in Python scripts, not always debug
+- `"placeholder"` — valid HTML attribute, CSS, UI framework value
+- `"example.com"` — IANA-reserved domain; legitimately used in docs, RFC examples, tests, config templates
+- `.unwrap()` — requires context: legitimate after `.contains()` guards, in `main.rs`, prototypes
 
 ## Phase 2: MEDIUM Certainty (Heuristic — surface for review)
 
@@ -49,6 +56,11 @@ Skip `tests/`, `*_test.*`, `*.spec.*`, `*_spec.*`.
   ex: `# increment i by 1` before `i += 1`
 - Duplicate log statements: same message logged in consecutive lines
 - Dead imports: `import X` where `X` never appears in file body
+- `println!(` in Rust lib crate files (not `main.rs`, not `src/bin/`, not `#[cfg(test)]`)
+- `print(` in Python non-script files (not `__main__`, not CLIs, not test helpers)
+- `.unwrap()` in Rust: flag if there is no preceding `.is_some()`/`.contains()`/`assert` guard and not in `main.rs` or test
+- `"placeholder"` as a runtime value (not as an HTML/CSS attribute name or UI label)
+- `"example.com"` in non-documentation Rust/Python source as a live URL (not in doc comments, not in tests)
 
 ## Phase 3: LOW Certainty (AI judgment — human gate)
 

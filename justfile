@@ -37,6 +37,8 @@ mod k8s '_b00t_/k8s.🚢/justfile'
 mod pm2-tasker 'pm2-tasker/justfile'
 mod embed '_b00t_/python.🐍/embed/justfile'
 mod qwen-code '_b00t_/qwen-code.justfile'
+# 🎨 UX: b00t capability graph visualization — just ux::viz | ux::viz-full | ux::watch
+mod ux 'ux.just'
 
 next-task:
     #!/bin/bash
