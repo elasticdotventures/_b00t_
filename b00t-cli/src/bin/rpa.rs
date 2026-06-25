@@ -231,43 +231,41 @@ async fn ensure_chrome(host: Option<&str>, port: u16) -> anyhow::Result<u16> {
         anyhow::bail!("Chrome CDP not available");
     }
 
-    // Write a Python TCP relay to Windows temp and launch it.
-    // Python on Windows can bind to non-loopback without admin.
-    let relay_script = r#"
-import socket, threading, sys
-def f(s,d):
- while True:
-  try:
-   b=s.recv(4096)
-   if not b: break
-   d.sendall(b)
-  except: break
-L=socket.socket(socket.AF_INET,socket.SOCK_STREAM)
-L.setsockopt(socket.SOL_SOCKET,socket.SO_REUSEADDR,1)
-L.bind(('0.0.0.0',PORT));L.listen(5)
-while True:
- c,a=L.accept()
- t=socket.socket(socket.AF_INET,socket.SOCK_STREAM)
- t.connect(('127.0.0.1',PORT))
- threading.Thread(target=f,args=(c,t),daemon=True).start()
- threading.Thread(target=f,args=(t,c),daemon=True).start()
-"#.replace("PORT", &port.to_string());
-    let relay_path = r"C:\temp\cdp-relay.py";
-    // Write relay script
-    let _ = std::process::Command::new("powershell.exe")
-        .args(["-NoProfile", "-Command", &format!("Set-Content -Path '{}' -Value '{}'", relay_path, relay_script.replace('\'', "''"))])
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null())
-        .output();
-    // Launch with Windows Python
-    let _ = std::process::Command::new("powershell.exe")
-        .args(["-NoProfile", "-WindowStyle", "Hidden", "-Command",
-               &format!("Start-Process python -ArgumentList '{}' -WindowStyle Hidden", relay_path)])
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null())
-        .spawn();
+    // Start socat TCP relay on WSL side (listens on WSL, forwards to Windows).
+    // socat must be installed: sudo apt-get install -y socat
+    // If socat is not available, falls back to PowerShell-based relay on Windows.
+    let relay_port = port + 1;
+    let socat_available = std::process::Command::new("which")
+        .arg("socat").output().map(|o| o.status.success()).unwrap_or(false);
 
-    // Give relay a moment to start, then wait for CDP (poll up to 30s)
+    if socat_available {
+        eprintln!("  🔄 Starting socat relay (WSL:{} → Windows:{}:{})...", relay_port, host, port);
+        let relay_listen = format!("TCP-LISTEN:{},fork,reuseaddr", relay_port);
+        let relay_target = format!("TCP:{}:{}", host, port);
+        let _ = std::process::Command::new("socat")
+            .args([&relay_listen, &relay_target])
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .spawn();
+        eprintln!("    ✅ socat relay started (PID: check with pgrep -f socat)");
+    } else {
+        eprintln!("  ⚠️  socat not found. Install: sudo apt-get install -y socat");
+        // Fallback: launch PowerShell TCP relay on Windows
+        eprintln!("  🔄 Falling back to PowerShell TCP relay on Windows...");
+        let ps_relay = format!(
+            r#"$l=[System.Net.Sockets.TcpListener]::new([System.Net.IPAddress]::Any,{});$l.Start();while($true){{$c=$l.AcceptTcpClient();$t=New-Object System.Net.Sockets.TcpClient;$t.Connect('127.0.0.1',{});$s1=$c.GetStream();$s2=$t.GetStream();$r1=$s1.CopyToAsync($s2);$r2=$s2.CopyToAsync($s1);[System.Threading.Tasks.Task]::WaitAll($r1,$r2);$c.Close();$t.Close()}}"#,
+            relay_port, port
+        );
+        let _ = std::process::Command::new("powershell.exe")
+            .args(["-NoProfile", "-WindowStyle", "Hidden", "-Command", &ps_relay])
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .spawn();
+        eprintln!("    ✅ PowerShell relay started");
+    }
+
+    // Let relay initialize, then wait for CDP (poll up to 30s)
+    tokio::time::sleep(Duration::from_millis(500)).await;
     tokio::time::sleep(Duration::from_millis(500)).await;
     let wait_client = reqwest::Client::builder()
         .connect_timeout(std::time::Duration::from_secs(2))
@@ -505,29 +503,16 @@ async fn run_setup(port: u16) -> anyhow::Result<()> {
     eprintln!("  CDP port:     {}", port);
     eprintln!();
 
-    // Step 1: Write Python relay script
-    eprintln!("1️⃣  Writing CDP relay script to C:\\temp\\cdp-relay.py ...");
-    let relay_script = format!(r#"
-import socket, threading, sys
-def f(s,d):
- while True:
-  try:
-   b=s.recv(4096)
-   if not b: break
-   d.sendall(b)
-  except: break
-L=socket.socket(socket.AF_INET,socket.SOCK_STREAM)
-L.setsockopt(socket.SOL_SOCKET,socket.SO_REUSEADDR,1)
-L.bind(('0.0.0.0',{}));L.listen(5)
-while True:
- c,a=L.accept()
- t=socket.socket(socket.AF_INET,socket.SOCK_STREAM)
- t.connect(('127.0.0.1',{}))
- threading.Thread(target=f,args=(c,t),daemon=True).start()
- threading.Thread(target=f,args=(t,c),daemon=True).start()
-"#, port + 1, port);
-    std::fs::write("/mnt/c/temp/cdp-relay.py", &relay_script)?;
-    eprintln!("    ✅ Written");
+    // Step 1: Verify socat is available (primary relay tool)
+    eprintln!("1️⃣  Checking socat (required for CDP relay)...");
+    let socat_ok = std::process::Command::new("which")
+        .arg("socat").output().map(|o| o.status.success()).unwrap_or(false);
+    if socat_ok {
+        eprintln!("    ✅ socat found");
+    } else {
+        eprintln!("    ⚠️  socat not found. Install: sudo apt-get install -y socat");
+        eprintln!("    b00t will use PowerShell fallback relay instead.");
+    }
 
     // Step 2: Add Windows Firewall rule (needs admin via UAC)
     eprintln!();

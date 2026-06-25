@@ -2134,6 +2134,29 @@ skills query="":
       b00t-cli --path "$B00T_ROOT" skill search "{{query}}"
     fi
 
+# ─── socat TCP relay (replaces Python cdp-relay) ────────────────────────────
+
+# Install socat
+install-socat:
+    sudo apt-get install -y socat
+
+# Start CDP relay: WSL→Windows Chrome bridge
+cdp-relay port="9222":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    WIN_IP=$(ip route show default | awk '{print $3}')
+    if [[ -z "$WIN_IP" ]]; then
+        echo "Not in WSL? Defaulting to localhost"
+        WIN_IP="127.0.0.1"
+    fi
+    echo "🔌 CDP relay: 0.0.0.0:$(($port + 1)) → $WIN_IP:$port"
+    echo "  Connect b00t-rpa with: --host $WIN_IP --port $(($port + 1))"
+    socat TCP-LISTEN:$(($port + 1)),fork,reuseaddr TCP:$WIN_IP:$port
+
+# Kill any running CDP relay
+cdp-relay-stop:
+    pkill -f 'socat.*TCP-LISTEN:9223' 2>/dev/null || echo "No relay running"
+
 # ─── Fine-tuning: unsloth QLoRA for b00t-aligned subagent ────────────────────
 
 # Generate training dataset from b00t corpus

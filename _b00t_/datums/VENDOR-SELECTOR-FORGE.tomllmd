@@ -1,0 +1,59 @@
+# VENDOR-SELECTOR-FORGE: AI-powered CSS/XPath selector generation
+# 🤓 Complementary to data-b00t-* enrichment: Selector Forge generates selectors
+#    for human-written tests; our enrichment makes elements LLM-addressable.
+#    Together they cover both human and agent automation workflows.
+
+[b00t.schema]
+version   = "1"
+type      = "vendor"
+type_tags = ["vendor", "selector", "css", "xpath", "ai", "browser-extension", "chrome", "firefox", "playwright"]
+
+[datum]
+id          = "VENDOR-SELECTOR-FORGE"
+name        = "Selector Forge"
+repo        = "https://github.com/Intuned/selector-forge"
+license     = "MIT"
+stars       = 57
+status      = "active"
+description = "Browser extension to create reliable selectors (CSS and XPath) using AI — pick an element, get back a re-verified selector"
+
+[capabilities]
+selctor_generation = "AI proposes CSS/XPath candidates based on page snapshot and element context"
+re_verification    = "Every candidate is tested against the live DOM before the user sees it — AI never gets final say"
+selection_modes    = ["Single — pick one element, get reliable selector", "List — pick two examples from repeating set, get container selector"]
+self_healing       = "Multi-turn loop: AI proposes → browser tests → feedback → repeat until reliable"
+trust_boundary     = "Extension holds session state; browser is source of truth; AI proposes/ranks but doesn't prove correctness"
+
+[integration_with_b00t]
+synergy_1 = "Selector Forge generates CSS selectors for human testers; our data-b00t-* enrichment generates stable attributes for LLM agents"
+synergy_2 = "Selector Forge's re-verification loop (propose → test → feedback) is the same pattern our LLM agent loop should use"
+synergy_3 = "Selector Forge's list mode (two examples → container selector) maps to b00t's batch scraping workflow"
+synergy_4 = "Both extensions can coexist in Chrome: Selector Forge for authoring, b00t plugin for automated RPA"
+
+[comparison_with_data_b00t]
+aspect = "Selector Forge generates STATIC selectors at authoring time. data-b00t-* generates DYNAMIC attributes at page-load time."
+selectors = "Selector Forge: CSS selectors like #main > div.list-item:nth-child(3) (fragile on DOM change)"
+data_b00t = "b00t: [data-b00t-type='button'][data-b00t-label='Sign In'] (stable across DOM changes)"
+llm_access = "Selector Forge: designed for human testers; LLM would need to reason about CSS specificity"
+llm_b00t = "b00t: designed for LLM agents; __b00t.find('button') returns flat addressable array"
+best_use = "Selector Forge: test authoring, one-time selector creation, human-in-the-loop"
+best_b00t = "b00t plugin: automated RPA, LLM-driven workflows, batch scraping, session persistence"
+
+[roadmap_alignment]
+selector_forge_cli = "Selector Forge roadmap includes CLI bridge + MCP support — aligns with b00t's MCP-first architecture"
+bring_your_own_backend = "Selector Forge plans to ship self-hostable backend — could use b00t's local LLM (Qwen3.6-27B) for selector generation"
+
+[[related]]
+datum = "BROWSER-USE-B00T-PLUGIN"
+note  = "b00t's DOM enrichment plugin — complementary to Selector Forge's selector generation"
+
+[[related]]
+datum = "BLESSED-RS-GOVERNANCE"
+note  = "Crate selection governance — Selector Forge is JS/TS (Chrome extension), not relevant for Rust crate decisions"
+
+# b00t:map v1
+# summary: AI-powered CSS/XPath selector generator — complementary to b00t's DOM enrichment for LLM-driven RPA
+# tags: vendor, selector, css, xpath, ai, browser-extension, chrome, firefox, playwright
+# tier: ch0nky
+# cmds: npx selector-forge (coming soon)
+# complexity: 4

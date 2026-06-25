@@ -154,6 +154,8 @@ pub mod a2a_gates;
 pub mod rpa_cdp;
 #[cfg(feature = "rpa")]
 pub mod rpa_tui;
+#[cfg(any(feature = "rpa", feature = "rpa-playwright"))]
+pub mod rpa_backend;
 pub use traits::*;
 
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Default)]

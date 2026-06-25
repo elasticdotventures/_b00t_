@@ -123,6 +123,7 @@ base64 = { version = "0.22", optional = true }
 default = []
 # 🤓 rpa: Browser RPA via CDP + ratatui TUI (heavy deps — chromiumoxide, ratatui)
 rpa = ["chromiumoxide", "futures", "ratatui", "crossterm", "nucleo", "atty", "base64"]
+rpa-playwright = []  # Playwright subprocess backend (no extra Rust deps)
 # 🤓 dbus: Enable D-Bus IPC via zbus (restored; required by lib.rs, hive.rs, commands/soul.rs)
 dbus = ["b00t-ipc/dbus", "dep:zbus"]
 # 🤓 candle: Enable Candle-based inference (GPU/CPU with CUDA support)
