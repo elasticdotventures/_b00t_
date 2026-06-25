@@ -10599,6 +10599,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "ufo-types"
+version = "0.8.4"
+dependencies = [
+ "schemars",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
+]
+
+[[package]]
 name = "ug"
 version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
