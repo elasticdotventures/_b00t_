@@ -42,6 +42,7 @@ mod embed '_b00t_/python.🐍/embed/justfile'
 mod qwen-code '_b00t_/qwen-code.justfile'
 # 🧠 AI fine-tuning: dataset gen, local k8s training, HF Jobs cloud, MLflow, adapter test
 mod ai-finetune '_b00t_/ai-finetune.just'
+mod ux 'ux.just'
 
 # ── Module guide — `just modules` or `just --list <module>` ──────────────────
 # Lists all submodule justfiles registered in this repo.
@@ -77,6 +78,7 @@ models:
     echo ""
     echo "=== ollama models ==="
     ollama list 2>/dev/null || echo "(ollama not running)"
+
 
 next-task:
     #!/bin/bash
