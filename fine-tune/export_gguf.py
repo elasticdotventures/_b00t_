@@ -24,12 +24,16 @@ def export(adapter_path: str, quant: str, output_path: str):
         sys.exit(1)
     with open(adapter_cfg_path) as f:
         adapter_cfg = json.load(f)
-    base_model = adapter_cfg.get("base_model_name_or_path", "unsloth/Qwen3.6-27B-GGUF")
-    print(f"   Base model: {base_model}")
+    base_model_raw = adapter_cfg.get("base_model_name_or_path", "unsloth/Qwen3.6-27B-GGUF")
+    # Strip BNB 4-bit suffix — llama.cpp can't dequantize bitsandbytes weights.
+    # Load in float16 from the base non-quantized model instead.
+    base_model = base_model_raw.replace("-unsloth-bnb-4bit", "").replace("-bnb-4bit", "")
+    print(f"   Base model (4bit stripped): {base_model}")
 
     # Load base model + adapter
-    print("Loading base model with adapter...", end=" ", flush=True)
+    print("Loading base model in fp16 for GGUF export...", end=" ", flush=True)
     try:
+        import torch
         from unsloth import FastLanguageModel
         from peft import PeftModel
     except ImportError as e:
@@ -40,7 +44,8 @@ def export(adapter_path: str, quant: str, output_path: str):
         model, tokenizer = FastLanguageModel.from_pretrained(
             model_name=base_model,
             max_seq_length=2048,
-            load_in_4bit=True,
+            load_in_4bit=False,
+            dtype=torch.float16,
         )
         model = PeftModel.from_pretrained(model, adapter_path)
         model = model.merge_and_unload()
