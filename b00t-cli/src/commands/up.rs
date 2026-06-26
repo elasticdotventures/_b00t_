@@ -803,10 +803,11 @@ mod tests {
 
     #[test]
     fn test_find_git_root_finds_ancestor() {
-        // Any path inside this cargo workspace should resolve to a git root
-        let cwd = std::env::current_dir().unwrap();
-        let root = find_git_root(&cwd);
-        assert!(root.is_some(), "should find git root from cwd");
+        // Use CARGO_MANIFEST_DIR for deterministic test behavior
+        // (independent of cargo's test runner working directory)
+        let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        let root = find_git_root(&manifest_dir);
+        assert!(root.is_some(), "should find git root from manifest dir");
         assert!(root.unwrap().join(".git").exists());
     }
 
