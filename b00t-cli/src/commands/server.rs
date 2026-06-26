@@ -147,15 +147,15 @@ pub fn handle_server_command(cmd: &ServerCommands) -> anyhow::Result<()> {
                     if key.is_empty() || secret.is_empty() {
                         anyhow::bail!("key and secret cannot be empty");
                     }
-                    b00t_c0re_lib::keyring_store::set_credential(provider, key, &secret)?;
+                    b00t_c0re_lib::datum_credential::save_credential(provider, key, &secret)?;
                     Ok(())
                 }
                 KeyAction::Unset { provider } => {
-                    b00t_c0re_lib::keyring_store::delete_credential(provider)?;
+                    b00t_c0re_lib::datum_credential::delete_credential(provider)?;
                     Ok(())
                 }
                 KeyAction::ListCredentials => {
-                    let providers = b00t_c0re_lib::keyring_store::list_credentials()?;
+                    let providers = b00t_c0re_lib::datum_credential::list_credential_names()?;
                     if providers.is_empty() {
                         println!("No cloud credentials stored.");
                     } else {
@@ -167,7 +167,7 @@ pub fn handle_server_command(cmd: &ServerCommands) -> anyhow::Result<()> {
                     Ok(())
                 }
                 KeyAction::Check { provider } => {
-                    match b00t_c0re_lib::keyring_store::get_credential(provider)? {
+                    match b00t_c0re_lib::datum_credential::find_credential_by_name(provider)? {
                         Some((key_id, _)) => {
                             println!("✅ Credential exists: {} (key: {}...)", provider, &key_id[..key_id.len().min(12)]);
                         }
@@ -182,14 +182,14 @@ pub fn handle_server_command(cmd: &ServerCommands) -> anyhow::Result<()> {
                     let providers = if let Some(p) = provider {
                         vec![p.clone()]
                     } else {
-                        b00t_c0re_lib::keyring_store::list_credentials()?
+                        b00t_c0re_lib::datum_credential::list_credential_names()?
                     };
                     if providers.is_empty() {
                         anyhow::bail!("no credentials stored. Set: b00t server key set --provider X --key <KEY>");
                     }
                     for p in &providers {
-                        if let Some((key, secret)) = b00t_c0re_lib::keyring_store::get_credential(p)? {
-                            let (key_var, secret_var) = env_var_names(p);
+                        if let Some((key, secret)) = b00t_c0re_lib::datum_credential::find_credential_by_name(p)? {
+                            let (key_var, secret_var) = b00t_c0re_lib::datum_credential::key_env_for(p);
                             if *shell {
                                 println!("export {}=\"{}\"", key_var, key);
                                 println!("export {}=\"{}\"", secret_var, secret);
@@ -202,21 +202,5 @@ pub fn handle_server_command(cmd: &ServerCommands) -> anyhow::Result<()> {
                     Ok(())
                 }
             },
-    }
-}
-
-/// Map provider name to environment variable names.
-fn env_var_names(provider: &str) -> (String, String) {
-    match provider {
-        "openai" => ("OPENAI_API_KEY".into(), "OPENAI_API_KEY".into()),
-        "anthropic" => ("ANTHROPIC_API_KEY".into(), "ANTHROPIC_API_KEY".into()),
-        "openrouter" => ("OPENROUTER_API_KEY".into(), "OPENROUTER_API_KEY".into()),
-        "cloudflare-r2" => ("R2_ACCESS_KEY_ID".into(), "R2_SECRET_ACCESS_KEY".into()),
-        "aws-s3" | "aws" => ("AWS_ACCESS_KEY_ID".into(), "AWS_SECRET_ACCESS_KEY".into()),
-        "qdrant" => ("QDRANT_API_KEY".into(), "QDRANT_API_KEY".into()),
-        _ => {
-            let prefix = provider.to_uppercase().replace('-', "_");
-            (format!("{}_KEY", prefix), format!("{}_SECRET", prefix))
-        }
     }
 }

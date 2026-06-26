@@ -138,4 +138,4 @@ mod tests {
         assert!(!version::VERSION.is_empty());
     }
 }
-pub mod keyring_store;
+pub mod datum_credential;
