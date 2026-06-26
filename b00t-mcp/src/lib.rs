@@ -32,3 +32,4 @@ pub use b00t_c0re_lib::{
     McpServerRegistration, McpToolDefinition, McpToolRequest, McpToolResponse, RagLightConfig,
     RagLightManager, create_registration_from_datum,
 };
+pub mod server_llm;
