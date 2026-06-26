@@ -12,25 +12,38 @@ import sys
 
 def export(adapter_path: str, quant: str, output_path: str):
     """Merge LoRA adapter into base model and export as GGUF."""
+    import json
     print(f"🚀 Exporting LoRA adapter to GGUF ({quant})")
     print(f"   Adapter: {adapter_path}")
     print(f"   Output: {output_path}")
+
+    # Read base model from adapter_config.json
+    adapter_cfg_path = os.path.join(adapter_path, "adapter_config.json")
+    if not os.path.exists(adapter_cfg_path):
+        print(f"\n  ❌ adapter_config.json not found at {adapter_cfg_path}")
+        sys.exit(1)
+    with open(adapter_cfg_path) as f:
+        adapter_cfg = json.load(f)
+    base_model = adapter_cfg.get("base_model_name_or_path", "unsloth/Qwen3.6-27B-GGUF")
+    print(f"   Base model: {base_model}")
 
     # Load base model + adapter
     print("Loading base model with adapter...", end=" ", flush=True)
     try:
         from unsloth import FastLanguageModel
-    except ImportError:
-        print("\n  ❌ unsloth not installed. Run: uv pip install unsloth")
+        from peft import PeftModel
+    except ImportError as e:
+        print(f"\n  ❌ Missing dependency: {e}. Run: uv pip install unsloth peft")
         sys.exit(1)
 
     try:
         model, tokenizer = FastLanguageModel.from_pretrained(
-            model_name="unsloth/Qwen3.6-27B-GGUF",
+            model_name=base_model,
             max_seq_length=2048,
             load_in_4bit=True,
-            adapter_path=adapter_path,
         )
+        model = PeftModel.from_pretrained(model, adapter_path)
+        model = model.merge_and_unload()
     except Exception as e:
         print(f"\n  ❌ Failed to load model with adapter: {e}")
         sys.exit(1)
