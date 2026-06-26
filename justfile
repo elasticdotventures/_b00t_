@@ -2110,11 +2110,13 @@ finetune-dataset format="alpaca" max="5000":
     uv run python3 fine-tune/generate_dataset.py --format={{format}} --max-rows={{max}}
 
 # Run QLoRA fine-tuning in unsloth container — sm0l (0.5B, fits alongside ch0nky)
-# --entrypoint python3 skips the studio setup (SSH, web UI) in the unsloth container
+# --entrypoint python3 skips studio setup; --user runs as host uid to avoid write permission errors
 finetune-train-smol:
+    mkdir -p {{FT_DIR}}/output-smol
     podman run --rm \
       --device nvidia.com/gpu=all --security-opt=label=disable \
       --entrypoint python3 \
+      --user "$(id -u):$(id -g)" \
       -v "{{HF_CACHE}}:/hf:z" \
       -v "{{FT_DIR}}:/workspace/fine-tune:z" \
       -e HF_HOME=/hf \
@@ -2134,6 +2136,7 @@ finetune-train-ch0nky:
       -v "{{FT_DIR}}:/workspace/fine-tune:z" \
       -e HF_HOME=/hf \
       --entrypoint python3 \
+      --user "$(id -u):$(id -g)" \
       {{UNSLOTH_IMAGE}} \
       /workspace/fine-tune/train_unsloth.py --config /workspace/fine-tune/config.yaml
 
@@ -2145,6 +2148,7 @@ finetune-export adapter="./fine-tune/output/lora-adapter" quant="Q4_K_M" output=
       -v "{{FT_DIR}}:/workspace/fine-tune:z" \
       -e HF_HOME=/hf \
       --entrypoint python3 \
+      --user "$(id -u):$(id -g)" \
       {{UNSLOTH_IMAGE}} \
       /workspace/fine-tune/export_gguf.py \
         --adapter /workspace/{{adapter}} \
@@ -2281,11 +2285,12 @@ worktree-init:
     echo "🔧 worktree-init: linking vendor submodules from $MAIN"
     LINKED=0
     for d in "$WD/vendor"/*/; do
-      name=$(basename "$d")
+      name=$(basename "${d%/}")
       src="$MAIN/vendor/$name"
-      if [ -d "$src" ] && [ -d "$d" ] && [ -z "$(ls -A "$d" 2>/dev/null)" ]; then
-        rmdir "$d"
-        ln -sfn "$src" "$d"
+      dst="$WD/vendor/$name"
+      if [ -d "$src" ] && [ -d "$dst" ] && [ -z "$(ls -A "$dst" 2>/dev/null)" ]; then
+        rmdir "$dst"
+        ln -s "$src" "$dst"
         echo "  linked: vendor/$name"
         LINKED=$((LINKED+1))
       fi
