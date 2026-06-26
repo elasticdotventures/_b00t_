@@ -2165,9 +2165,9 @@ finetune-smol:
     just finetune-train-smol
     echo "=== finetune-smol: export ==="
     just finetune-export \
-      adapter=./fine-tune/output-smol/lora-adapter \
-      quant=Q4_K_M \
-      output=./fine-tune/output-smol/b00t-smol.gguf
+      "./fine-tune/output-smol/lora-adapter" \
+      "Q4_K_M" \
+      "./fine-tune/output-smol/b00t-smol.gguf"
     echo "=== finetune-smol: checkpoint ==="
     uv run python3 fine-tune/update_gen_checkpoint.py \
       --model fine-tune/output-smol/b00t-smol.gguf --tier smol
@@ -2183,9 +2183,9 @@ finetune-ch0nky:
     just finetune-train-ch0nky
     echo "=== finetune-ch0nky: export ==="
     just finetune-export \
-      adapter=./fine-tune/output/lora-adapter \
-      quant=Q4_K_M \
-      output=./fine-tune/output/b00t-ch0nky.gguf
+      "./fine-tune/output/lora-adapter" \
+      "Q4_K_M" \
+      "./fine-tune/output/b00t-ch0nky.gguf"
     echo "=== finetune-ch0nky: checkpoint ==="
     uv run python3 fine-tune/update_gen_checkpoint.py \
       --model fine-tune/output/b00t-ch0nky.gguf --tier ch0nky
