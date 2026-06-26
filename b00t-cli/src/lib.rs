@@ -1293,17 +1293,11 @@ pub enum DatumType {
     Pipeline,
     Hardware,
     Overlay,
-    Runtime,
-    Polyseme,
+    /// Encrypted credential datum — `.credential.toml` (encrypted at rest via OS keyring).
+    /// 🤓 Stores cloud provider access keys (R2, S3, OpenAI, etc.). Queryable via datum system.
+    ///    Agents discover available credentials with: b00t datum list --type credential
+    ///    Encryption key lives in OS keyring (b00t/master-key), never on disk.
     Credential,
-    Gate,
-    Hook,
-    McpServer,
-    Plan,
-    Schema,
-    Training,
-    Vendor,
-    Ooda,
     Unknown,
 }
 
@@ -1563,17 +1557,7 @@ impl DatumType {
         Pipeline    => ["pipeline"]                  => ".pipeline",
         Hardware    => ["hardware"]                  => ".hardware",
         Overlay     => ["overlay"]                   => ".overlay",
-        Runtime     => ["runtime", "wrap", "launcher"] => ".runtime",
-        Polyseme    => ["polyseme", "poly"]            => ".polyseme",
         Credential  => ["credential", "credentials"]  => ".credential",
-        Gate        => ["gate"]                      => ".gate",
-        Hook        => ["hook"]                      => ".hook",
-        McpServer   => ["mcp_server"]                => ".mcp_server",
-        Plan        => ["plan"]                      => ".plan",
-        Schema      => ["schema"]                    => ".schema",
-        Training    => ["training"]                  => ".training",
-        Vendor      => ["vendor"]                    => ".vendor",
-        Ooda        => ["ooda"]                      => ".ooda",
     }
 
     /// Preferred file extension for writing new datum files.

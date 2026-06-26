@@ -137,7 +137,7 @@ fn discover_local(soul: &SoulConfig) -> Option<(String, String)> {
 fn discover_remote(soul: &SoulConfig) -> Option<(String, String, String)> {
     for be in &soul.backends.remote {
         // Check encrypted credential catalog first (zero-trust)
-        if let Ok(Some((_key_id, secret))) = b00t_c0re_lib::keyring_store::get_credential(&be.name) {
+        if let Ok(Some((_key_id, secret))) = b00t_c0re_lib::datum_credential::find_credential_by_name(&be.name) {
             let url = be.base_url.clone().unwrap_or_else(|| "https://api.openai.com/v1".into());
             eprintln!("🔐 upstream via credential store: {}", be.name);
             return Some((be.name.clone(), secret, url));
