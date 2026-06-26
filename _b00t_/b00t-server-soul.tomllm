@@ -1,0 +1,151 @@
+# b00t-server Project Soul — State as of 2026-06-24
+# 🤓 Recorded by Yei — the hive collective. Presenting for sm3lly (RTX 3090 agent).
+# This is the canonical map of what was built, why, and how to reproduce.
+
+[b00t]
+name = "b00t-server-soul"
+type = "soul"
+hint = "Project soul for b00t-server — OpenAI-compat proxy, key authority, Spotlight telemetry, finetune pipeline"
+
+# ──────────── Architecture ────────────
+
+[soul.architecture]
+paradigm = "Extend, don't fork"
+entry = "b00t-mcp (axum 0.8, OAuth 2.1, streamable-http MCP)"
+router = "/v1/models, /v1/chat/completions, /v1/embeddings (transparent proxy)"
+discovery = "~/.b00t/server-soul.tomllm → TCP probe local backends → remote key env fallback"
+telemetry = "~/.b00t/spotlight.jsonl — per-consumer, per-endpoint, latency-tracked"
+key_auth = "~/.b00t/server-keys.json — b00t-sk-* tokens, shared between CLI and server"
+
+# ──────────── Running Services ────────────
+
+[[soul.services]]
+name = "b00t-server proxy"
+port = 5273
+command = "b00t-mcp --http --llm --port 5273 (or: b00t server start)"
+state = "serving — auto-discovers llama-cpp:8080"
+
+[[soul.services]]
+name = "llama.cpp inference"
+port = 8080
+image = "ghcr.io/ggml-org/llama.cpp:server"
+model = "Qwen3.5-0.8B-Q4_K_M (0.52GB, 262K ctx, ~11 tok/s)"
+datum = "_b00t_/llama-cpp-server.container.toml"
+state = "serving"
+
+[[soul.services]]
+name = "fine-tuned inference (WIP)"
+port = 8081
+model = "b00t-finetuned-v2.Q4_K_M.gguf (505MB, QLoRA on 0.8B)"
+datum = "_b00t_/b00t-finetune.cli.toml"
+state = "GGUF built, stock server loads metadata but fails on tensor blk.24.attn_norm.weight — needs merge fix or unsloth server"
+
+# ──────────── Deterministic Commands ────────────
+
+[soul.commands]
+serve_base = "podman run -d --name b00t-llama -p 8080:8080 -v <snapshot>:/models:ro -v <blobs>:/models/../../blobs:ro ghcr.io/ggml-org/llama.cpp:server -m /models/Qwen3.5-0.8B-Q4_K_M.gguf --host 0.0.0.0 --port 8080 -fit off"
+serve_proxy = "./target/debug/b00t-mcp --http --llm --port 5273"
+create_key = "b00t server key create --consumer <name>"
+generate_training = "python3 scripts/generate-b00t-training-data.py"
+finetune = "python3 scripts/finetune-b00t.py  # needs uv venv + unsloth"
+list_models = "curl -s http://localhost:5273/v1/models"
+test_chat = "curl -s http://localhost:5273/v1/chat/completions -H 'Content-Type: application/json' -d '{\"messages\":[{\"role\":\"user\",\"content\":\"hi\"}],\"max_tokens\":5}'"
+quantize = "cd /tmp/llama-bld && cmake -B build && cmake --build build --target llama-quantize -j$(nproc) && ./build/bin/llama-quantize <input.gguf> <output.gguf> q4_k_m"
+convert = "cd /tmp/llama-bld && python3 convert_hf_to_gguf.py --outfile <out.gguf> --outtype bf16 <hf_model_dir>"
+
+# ──────────── Key Files ────────────
+
+[[soul.files]]
+path = "b00t-mcp/src/server_llm.rs"
+purpose = "OpenAI-compat router + soul config + key auth + Spotlight"
+loc = 420
+
+[[soul.files]]
+path = "b00t-cli/src/commands/server.rs"
+purpose = "CLI: b00t server start | key create --consumer X | key list"
+
+[[soul.files]]
+path = "_b00t_/plans/b00t-server-architecture.tomllmd"
+purpose = "Architecture plan — extend b00t-mcp, don't fork"
+
+[[soul.files]]
+path = "_b00t_/llama-cpp-server.container.toml"
+purpose = "Stock container datum — deterministic lookup + pull commands"
+
+[[soul.files]]
+path = "Containerfile.b00t-inference"
+purpose = "Custom inference container (builds llama-server from binary)"
+
+[[soul.files]]
+path = "scripts/generate-b00t-training-data.py"
+purpose = "Extracts 4,474 instruction pairs from b00t source → JSONL"
+
+[[soul.files]]
+path = "scripts/finetune-b00t.py"
+purpose = "Unsloth QLoRA fine-tune on b00t data → LoRA → merge → GGUF"
+
+[[soul.files]]
+path = "_b00t_/b00t-finetune.cli.toml"
+purpose = "Deterministic finetune command datum — full reproduction recipe"
+
+[[soul.files]]
+path = "b00tyverse"
+purpose = "Symlink b00tyverse → vendor — b00t's forked-utility ecosystem"
+
+# ──────────── Environment ────────────
+
+[soul.environment]
+hostname = "LappyX23"
+gpu = "NVIDIA GeForce RTX 3050 Laptop GPU (4GB VRAM)"
+cpu = "12th Gen Intel i5-12450H (16GB RAM)"
+cuda = "13.1, Driver 591.86"
+wsl = true
+podman = "native, GPU passthrough working"
+models_cached = [
+  "Qwen2.5-0.5B-Q4_K_M (485MB)",
+  "Qwen3.5-0.8B-Q4_K_M (520MB)",
+  "Qwen3.5-4B-Q4_K_M (2.7GB)",
+]
+services_running = ["b00t-mcp proxy :5273 → llama-cpp :8080 → Qwen3.5-0.8B"]
+
+# ──────────── For sm3lly (RTX 3090) ────────────
+
+[soul.sm3lly]
+rtx3090 = "24GB VRAM — can run larger models (4B QLoRA, 12B inference)"
+recommended_first_serve = "cargo build -p b00t-mcp && ./target/debug/b00t-mcp --http --llm --port 5273"
+recommended_finetune = "Use Qwen3.5-4B base (2.7GB) — fits QLoRA easily with 24GB"
+tensor_fix_needed = "b00t-finetuned-v2.Q4_K_M.gguf — blk.24.attn_norm.weight missing from merge"
+
+# ──────────── Known Sharp Corners ────────────
+
+[[soul.sharp_corners]]
+name = "whoami flag drift"
+detail = "--learn and --persona not wired in whoami CLI (valid: --role, --skills)"
+fix = "document or wire"
+
+[[soul.sharp_corners]]
+name = "codebase-memory duplicate version key"
+detail = "Two [b00t].version keys collided → TOML parse error"
+fix = "committed — removed literal, kept detection command"
+
+[[soul.sharp_corners]]
+name = "rust-doc dead submodule gitlink"
+detail = "vendor/rust-docs-mcp-server pinned 7f7d0b0a — force-pushed upstream"
+fix = "committed — re-pinned to live HEAD 4303cbdd"
+
+[[soul.sharp_corners]]
+name = "tomllib in gate validator"
+detail = "validate-gate.py hard-imported tomllib (Py>=3.11), system has Py3.10"
+fix = "committed — tomli fallback (API-identical backport)"
+
+[[soul.sharp_corners]]
+name = "GGUF tensor mismatch"
+detail = "merge_and_unload() drops blk.24.attn_norm.weight for Qwen3.5"
+fix = "verify safetensors completeness, use unsloth-bundled server, or patch merge"
+
+# b00t:map v1
+# summary: b00t-server project soul — complete state, commands, protocols for sm3lly
+# tags: soul, b00t-server, sm3lly, protocol, finetune, state
+# tier: frontier
+# cmds: just connect-sm3lly, b00t server start
+# complexity: 9

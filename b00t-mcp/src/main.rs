@@ -3,6 +3,7 @@ use clap::{Arg, Command};
 use rmcp::{ServiceExt, transport::io::stdio};
 use std::net::SocketAddr;
 use std::path::Path;
+use std::sync::Arc;
 
 use axum::Router;
 use rmcp::transport::streamable_http_server::{
@@ -13,7 +14,7 @@ use tower_http::cors::CorsLayer;
 
 use b00t_mcp::{
     B00tMcpServerRusty, GitHubAuthConfig, GitHubAuthState, MinimalOAuthConfig, MinimalOAuthState,
-    github_auth_router, minimal_oauth_router, type_graph_router,
+    github_auth_router, minimal_oauth_router, server_llm,
 };
 
 #[tokio::main]
@@ -66,6 +67,12 @@ async fn main() -> Result<()> {
                 .default_value("127.0.0.1"),
         )
         .arg(
+            Arg::new("llm")
+                .long("llm")
+                .help("Also serve an OpenAI-compatible /v1/ router (b00t-server). Auto-enables --http.")
+                .action(clap::ArgAction::SetTrue),
+        )
+        .arg(
             Arg::new("mode")
                 .help("Transport mode (stdio or http)")
                 .value_parser(["stdio", "http"])
@@ -92,8 +99,9 @@ async fn main() -> Result<()> {
         || matches
             .get_one::<String>("mode")
             .map_or(false, |m| m == "http");
+    let is_llm_mode = matches.get_flag("llm");
 
-    if is_stdio_mode {
+    if is_stdio_mode && !is_llm_mode {
         // Run as MCP server
         // eprintln!(
         //     "Starting b00t-mcp MCP server in directory: {} with config: {}",
@@ -107,7 +115,7 @@ async fn main() -> Result<()> {
 
         // Keep the server running
         running_service.waiting().await?;
-    } else if is_http_mode {
+    } else if is_http_mode || is_llm_mode {
         // HTTP server mode
         let addr: SocketAddr = format!("{}:{}", host, port).parse()?;
 
@@ -165,12 +173,18 @@ async fn main() -> Result<()> {
             MinimalOAuthState::new(oauth_config, github_state.clone()).with_acl_config(acl_config);
 
         // Create axum router with CORS, OAuth, and GitHub auth
-        let app = Router::new()
+        let mut app = Router::new()
             .nest_service("/mcp", service)
             .merge(minimal_oauth_router(oauth_state))
-            .merge(github_auth_router(github_state))
-            .merge(type_graph_router())
-            .layer(CorsLayer::permissive());
+            .merge(github_auth_router(github_state));
+
+        if is_llm_mode {
+            let llm_state = Arc::new(server_llm::LlmState::new());
+            eprintln!("🤖 LLM proxy mode activated — upstream auto-discovered (env or local probe)");
+            app = app.merge(server_llm::llm_router(llm_state.clone()));
+        }
+
+        let app = app.layer(CorsLayer::permissive());
 
         // Start HTTP server
         let listener = TcpListener::bind(addr).await?;
@@ -186,7 +200,6 @@ async fn main() -> Result<()> {
         eprintln!("🐙 GitHub Auth endpoints:");
         eprintln!("    Login: http://{}/auth/github", addr);
         eprintln!("    Callback: http://{}/auth/github/callback", addr);
-        eprintln!("🗺  Type graph: http://{}/v1/b00t/type-graph", addr);
 
         axum::serve(listener, app).await?;
     } else {

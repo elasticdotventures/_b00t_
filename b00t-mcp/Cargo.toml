@@ -52,6 +52,9 @@ axum = { version = "0.8.4", features = ["macros"] }
 tower = "0.5"
 tower-http = { version = "0.6", features = ["cors"] }
 
+# File watcher for hot-reload (keys, config)
+notify = "7"
+
 # OAuth 2.1 authorization server dependencies
 oauth2 = "5.0"
 jsonwebtoken = { version = "10.2.0", features = ["rust_crypto"] }

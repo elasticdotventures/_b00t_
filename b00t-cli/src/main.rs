@@ -1,9 +1,9 @@
 use anyhow::{Result, anyhow};
+#[allow(unused_imports)]
+use b00t_cli::UnifiedConfig;
 use b00t_cli::exit_code;
 use b00t_cli::k0mmand3r::K0mmand;
 use b00t_cli::{SessionState, load_datum_providers, whoami};
-#[allow(unused_imports)]
-use b00t_cli::UnifiedConfig;
 
 /// Exit with code, printing error context to stderr.
 fn die(code: i32, msg: impl std::fmt::Display) -> ! {
@@ -20,8 +20,8 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 // Import datum types from lib.rs (already declared there as pub mod)
-use b00t_cli::commands::learn::{LearnArgs, handle_learn};
 use b00t_cli::commands::cake::{CakeArgs, handle_cake_command};
+use b00t_cli::commands::learn::{LearnArgs, handle_learn};
 use b00t_cli::commands::maintenance::{MaintenanceArgs, handle_maintenance_command};
 use b00t_cli::datum_ai::AiDatum;
 use b00t_cli::datum_ai_model::ModelDatumEntry;
@@ -41,6 +41,7 @@ use b00t_cli::commands::{
     ChatCommands, CliCommands, ConfigCommands, ContextCommands, CrewCommand,
     DataCommands, DatumCommands, DoctorCommands,
     FocusCommands, GatesCommands, GuardCommands,
+    ServerCommands,
     GrokCommands, HiveCommands,
     InitCommands,
     JobCommands,
@@ -102,12 +103,6 @@ Example:
     #[clap(about = "Agent tool authorization manifest (unlocks via learning)")]
     Blessing(b00t_cli::commands::blessing::BlessingArgs),
 
-    #[clap(about = "Detect missing skill datums and optionally generate stubs (E6)")]
-    Gap(b00t_cli::commands::gap_detect::GapDetectArgs),
-
-    #[clap(about = "Record and prove Satisfies<Constraint> evidence chain (E4)")]
-    Evidence(b00t_cli::commands::evidence::EvidenceArgs),
-
     #[clap(
         about = "Record a lesson learned for a tool (lfmf = Learn From My Failure)",
         alias = "lesson",
@@ -157,7 +152,11 @@ Tips:
         positional_lesson: Option<String>,
         #[clap(long, conflicts_with = "positional_tool", help = "Tool name")]
         tool: Option<String>,
-        #[clap(long, conflicts_with = "positional_lesson", help = "Lesson in '<topic>: <body>' format")]
+        #[clap(
+            long,
+            conflicts_with = "positional_lesson",
+            help = "Lesson in '<topic>: <body>' format"
+        )]
         lesson: Option<String>,
         #[clap(long, group = "scope", help = "Record lesson for this repo (default)")]
         repo: bool,
@@ -283,7 +282,10 @@ The system will:
         #[clap(subcommand)]
         init_command: InitCommands,
     },
-    #[clap(about = "Show agent identity and context information", alias = "whomai")]
+    #[clap(
+        about = "Show agent identity and context information",
+        alias = "whomai"
+    )]
     Whoami {
         #[clap(long, help = "Override detected role (matches role datum)")]
         role: Option<String>,
@@ -496,6 +498,8 @@ The system will:
     },
     #[clap(subcommand)]
     Focus(FocusCommands),
+    #[clap(subcommand)]
+    Server(ServerCommands),
     #[clap(
         about = "Execute command with guard enforcement and broad-authority audit log",
         long_about = "Audited execution: Allow→run, Warn→run with warning, Block→reject first time / force on re-submit within 5min.\nAll executions logged to ~/.b00t/exec-log.jsonl.\n\nUse --sleep=<duration> for background execution (returns immediately)."
@@ -513,7 +517,9 @@ The system will:
     },
     #[clap(about = "Killswitch: terminate upper agent instance and return CLI to prompt")]
     Quit(b00t_cli::commands::quit::QuitArgs),
-    #[clap(about = "l3dg3rr docgen proxy — query knowledge graph and emit .tomllm / rustdoc / json")]
+    #[clap(
+        about = "l3dg3rr docgen proxy — query knowledge graph and emit .tomllm / rustdoc / json"
+    )]
     Docgen(b00t_cli::commands::docgen::DocgenArgs),
     #[clap(about = "Show, apply, or check a semantic patch (visible diff before write)")]
     Patch {
@@ -638,7 +644,11 @@ pub enum ExperimentCommands {
     Status,
     #[clap(about = "List past experiments from persisted FOCUS records")]
     History {
-        #[clap(long, help = "Number of recent experiments to show", default_value_t = 10)]
+        #[clap(
+            long,
+            help = "Number of recent experiments to show",
+            default_value_t = 10
+        )]
         limit: usize,
         #[clap(long, help = "Emit as JSON")]
         json: bool,
@@ -649,7 +659,11 @@ pub enum ExperimentCommands {
         exp_a: String,
         #[clap(help = "Second experiment ID")]
         exp_b: String,
-        #[clap(long, help = "Path to FOCUS records JSONL file", default_value = "focus_records.jsonl")]
+        #[clap(
+            long,
+            help = "Path to FOCUS records JSONL file",
+            default_value = "focus_records.jsonl"
+        )]
         path: std::path::PathBuf,
     },
 }
@@ -837,8 +851,7 @@ fn save_checkpoint_context(commit_msg: &str, commit_hash: &str) {
     };
 
     let id = Uuid::new_v4();
-    let agent = std::env::var("USER")
-        .unwrap_or_else(|_| "b00t-agent".to_string());
+    let agent = std::env::var("USER").unwrap_or_else(|_| "b00t-agent".to_string());
 
     let token = HookToken {
         id,
@@ -887,9 +900,7 @@ fn show_status(
     >(path, ".ai.toml")?));
     all_tools.extend(datum_providers_to_tool_status(load_datum_providers::<
         ModelDatumEntry,
-    >(
-        path, ".model.toml"
-    )?));
+    >(path, ".model.toml")?));
     all_tools.extend(datum_providers_to_tool_status(load_datum_providers::<
         AptDatum,
     >(path, ".apt.toml")?));
@@ -1774,13 +1785,17 @@ async fn main() {
             // Agent-friendly error: short orientation, not full usage dump
             let msg = e.to_string();
             // Extract the actionable line (first non-empty line after "error:")
-            let brief = msg.lines()
+            let brief = msg
+                .lines()
                 .find(|l| l.starts_with("error:") || l.contains("tip:"))
                 .unwrap_or(&msg);
             eprintln!("\n\x1b[1mb00t\x1b[0m — hive agent operating protocol");
             eprintln!("\x1b[2m{}\x1b[0m", brief);
             eprintln!();
-            eprintln!("{}", "\x1b[2mb00t whoami --help    — agent identity & capabilities");
+            eprintln!(
+                "{}",
+                "\x1b[2mb00t whoami --help    — agent identity & capabilities"
+            );
             eprintln!("b00t capabilities    — discover hive tools");
             eprintln!("b00t task list       — pending tasks");
             eprintln!("b00t learn <skill>   — load a blessing\x1b[0m");
@@ -1855,14 +1870,19 @@ async fn main() {
             }
         }
         Some(Commands::Bouncer { bouncer_command }) => {
-            let args = BouncerArgs { command: bouncer_command.clone() };
+            let args = BouncerArgs {
+                command: bouncer_command.clone(),
+            };
             if let Err(e) = b00t_cli::commands::bouncer::handle_bouncer(&args) {
                 eprintln!("Error: {}", e);
                 std::process::exit(1);
             }
         }
         Some(Commands::Configure { config_command }) => {
-            if let Err(e) = b00t_cli::commands::config_cmd::handle_config_command(config_command, &cli.path).await {
+            if let Err(e) =
+                b00t_cli::commands::config_cmd::handle_config_command(config_command, &cli.path)
+                    .await
+            {
                 eprintln!("Error: {}", e);
                 std::process::exit(1);
             }
@@ -1901,19 +1921,13 @@ async fn main() {
                 std::process::exit(1);
             }
         }
-        Some(Commands::Gap(gap_args)) => {
-            if let Err(e) = b00t_cli::commands::gap_detect::handle_gap_detect(gap_args) {
-                eprintln!("Error: {e}");
-                std::process::exit(1);
-            }
-        }
-        Some(Commands::Evidence(ev_args)) => {
-            if let Err(e) = b00t_cli::commands::evidence::handle_evidence(ev_args) {
-                eprintln!("Error: {e}");
-                std::process::exit(1);
-            }
-        }
-        Some(Commands::Whoami { role, with_skills, json, skills, dashboard }) => {
+        Some(Commands::Whoami {
+            role,
+            with_skills,
+            json,
+            skills,
+            dashboard,
+        }) => {
             if *dashboard {
                 whoami::print_dashboard();
             } else if *json {
@@ -1937,9 +1951,14 @@ async fn main() {
                         });
                         println!("{}", serde_json::to_string_pretty(&output).unwrap());
                     }
-                    Err(e) => die(exit_code::ERROR, format!("failed to get b00t context: {}", e)),
+                    Err(e) => die(
+                        exit_code::ERROR,
+                        format!("failed to get b00t context: {}", e),
+                    ),
                 }
-            } else if let Err(e) = whoami::whoami(&cli.path, role.clone(), *with_skills, skills.clone()) {
+            } else if let Err(e) =
+                whoami::whoami(&cli.path, role.clone(), *with_skills, skills.clone())
+            {
                 eprintln!("Error: {}", e);
                 std::process::exit(1);
             }
@@ -2080,10 +2099,14 @@ async fn main() {
                 let filter = mcp_filter.as_str();
                 // Special aliases: --mcp=list
                 if filter == "list" {
-                        if let Err(e) = mcp_list(&cli.path, false, b00t_cli::McpListFilter {
-                        bypass_threshold: true,
-                        ..Default::default()
-                    }) {
+                    if let Err(e) = mcp_list(
+                        &cli.path,
+                        false,
+                        b00t_cli::McpListFilter {
+                            bypass_threshold: true,
+                            ..Default::default()
+                        },
+                    ) {
                         die(exit_code::MCP, e);
                     }
                     return;
@@ -2107,10 +2130,15 @@ async fn main() {
                             Err(e) => {
                                 let msg = e.to_string();
                                 // "already exists" or exit code 1 = already registered
-                                if msg.contains("already exists") || msg.contains("exited with code 1") {
+                                if msg.contains("already exists")
+                                    || msg.contains("exited with code 1")
+                                {
                                     println!("✅ MCP server '{}' already installed", filter);
                                 } else {
-                                    eprintln!("Install Error: mcp install failed for {}: {}", filter, msg);
+                                    eprintln!(
+                                        "Install Error: mcp install failed for {}: {}",
+                                        filter, msg
+                                    );
                                     std::process::exit(1);
                                 }
                             }
@@ -2121,12 +2149,23 @@ async fn main() {
                         use b00t_c0re_lib::{B00tContext, RhaiEngine};
                         let context = match B00tContext::current() {
                             Ok(c) => c,
-                            Err(e) => die(exit_code::ERROR, format!("failed to get b00t context: {}", e)),
+                            Err(e) => die(
+                                exit_code::ERROR,
+                                format!("failed to get b00t context: {}", e),
+                            ),
                         };
                         let ws_root = b00t_cli::utils::get_workspace_root();
                         let script_paths = [
-                            PathBuf::from(&ws_root).join("_b00t_").join("scripts").join("install-mcp-recommended.rhai"),
-                            dirs::home_dir().unwrap_or_default().join(".dotfiles").join("_b00t_").join("scripts").join("install-mcp-recommended.rhai"),
+                            PathBuf::from(&ws_root)
+                                .join("_b00t_")
+                                .join("scripts")
+                                .join("install-mcp-recommended.rhai"),
+                            dirs::home_dir()
+                                .unwrap_or_default()
+                                .join(".dotfiles")
+                                .join("_b00t_")
+                                .join("scripts")
+                                .join("install-mcp-recommended.rhai"),
                             PathBuf::from("install-mcp-recommended.rhai"),
                         ];
                         let resolved = script_paths.iter().find(|p| p.exists()).cloned().unwrap_or_else(||
@@ -2134,21 +2173,36 @@ async fn main() {
                         );
                         let engine = match RhaiEngine::new(context) {
                             Ok(e) => e,
-                            Err(e) => die(exit_code::ERROR, format!("failed to init rhai engine: {}", e)),
+                            Err(e) => die(
+                                exit_code::ERROR,
+                                format!("failed to init rhai engine: {}", e),
+                            ),
                         };
                         match engine.execute_file(&resolved) {
                             Ok(val) => {
                                 let count: i64 = val.as_int().unwrap_or(0);
                                 if count > 0 {
-                                    println!("✅ Installed {} MCP server(s) via --mcp=recommended", count);
+                                    println!(
+                                        "✅ Installed {} MCP server(s) via --mcp=recommended",
+                                        count
+                                    );
                                 } else {
                                     println!("⚠️  No MCP servers matched 'recommended' criteria");
                                 }
                             }
-                            Err(e) => die(exit_code::MCP, format!("rhai pipeline failed for --mcp=recommended: {}", e)),
+                            Err(e) => die(
+                                exit_code::MCP,
+                                format!("rhai pipeline failed for --mcp=recommended: {}", e),
+                            ),
                         }
                     }
-                    Err(_) => die(exit_code::NOT_FOUND, format!("MCP server '{}' not found and not a known pipeline filter. Use --mcp=recommended or a valid MCP server name.", filter)),
+                    Err(_) => die(
+                        exit_code::NOT_FOUND,
+                        format!(
+                            "MCP server '{}' not found and not a known pipeline filter. Use --mcp=recommended or a valid MCP server name.",
+                            filter
+                        ),
+                    ),
                 }
             } else if *interactive || !runtimes.is_empty() {
                 // Parse runtime IDs from comma-separated --runtimes arg
@@ -2243,30 +2297,30 @@ async fn main() {
                 std::process::exit(1);
             }
         }
-        Some(Commands::Wow { wow_command }) => {
-            match wow_command {
-                WowSubcommands::Check { json } => {
-                    b00t_cli::wow::init_default_checks();
-                    let results = b00t_cli::wow::run_all();
-                    if *json {
-                        println!("{}", serde_json::to_string_pretty(&results).unwrap());
-                    } else {
-                        println!("{}", b00t_cli::wow::format_spline(&results));
-                    }
-                    let passed = results.iter().filter(|r| r.passed).count();
-                    let total = results.len();
-                    if passed != total { std::process::exit(1); }
+        Some(Commands::Wow { wow_command }) => match wow_command {
+            WowSubcommands::Check { json } => {
+                b00t_cli::wow::init_default_checks();
+                let results = b00t_cli::wow::run_all();
+                if *json {
+                    println!("{}", serde_json::to_string_pretty(&results).unwrap());
+                } else {
+                    println!("{}", b00t_cli::wow::format_spline(&results));
                 }
-                WowSubcommands::List => {
-                    b00t_cli::wow::init_default_checks();
-                    let results = b00t_cli::wow::run_all();
-                    for r in &results {
-                        let mark = if r.passed { "✅" } else { "❌" };
-                        println!(" {mark} [{}] {}", r.category, r.name);
-                    }
+                let passed = results.iter().filter(|r| r.passed).count();
+                let total = results.len();
+                if passed != total {
+                    std::process::exit(1);
                 }
             }
-        }
+            WowSubcommands::List => {
+                b00t_cli::wow::init_default_checks();
+                let results = b00t_cli::wow::run_all();
+                for r in &results {
+                    let mark = if r.passed { "✅" } else { "❌" };
+                    println!(" {mark} [{}] {}", r.category, r.name);
+                }
+            }
+        },
         Some(Commands::Viz { viz_command }) => {
             if let Err(e) = b00t_cli::commands::viz::handle_viz_command(&cli.path, viz_command) {
                 eprintln!("Error: {}", e);
@@ -2335,7 +2389,13 @@ async fn main() {
         }
         Some(Commands::Experiment { experiment_command }) => {
             match experiment_command {
-                ExperimentCommands::Run { id, control, treatment, endpoint, adapter } => {
+                ExperimentCommands::Run {
+                    id,
+                    control,
+                    treatment,
+                    endpoint,
+                    adapter,
+                } => {
                     use b00t_cli::commands::experiment;
                     let config = experiment::ExperimentConfig {
                         id: id.clone(),
@@ -2343,7 +2403,9 @@ async fn main() {
                         treatment_prompt: treatment.clone(),
                         variants: vec!["control".into(), "treatment".into()],
                         personalities: experiment::default_personalities(),
-                        model_endpoint: endpoint.clone().unwrap_or_else(|| "http://localhost:8001".into()),
+                        model_endpoint: endpoint
+                            .clone()
+                            .unwrap_or_else(|| "http://localhost:8001".into()),
                         adapter: adapter.clone(),
                     };
                     if let Err(gate_err) = experiment::governance_gate(&config.control_prompt) {
@@ -2358,11 +2420,30 @@ async fn main() {
                         Ok(cmp) => {
                             println!("{}", experiment::format_comparison(&cmp));
                             // emit ledgrrr FOCUS records
-                            let cf = experiment::create_focus_record(&cmp.experiment_id, "control", "sm0l-ctl", "experiment-eval", &cmp.control.scores);
-                            let tf = experiment::create_focus_record(&cmp.experiment_id, "treatment", "sm0l-trt", "experiment-eval", &cmp.treatment.scores);
+                            let cf = experiment::create_focus_record(
+                                &cmp.experiment_id,
+                                "control",
+                                "sm0l-ctl",
+                                "experiment-eval",
+                                &cmp.control.scores,
+                            );
+                            let tf = experiment::create_focus_record(
+                                &cmp.experiment_id,
+                                "treatment",
+                                "sm0l-trt",
+                                "experiment-eval",
+                                &cmp.treatment.scores,
+                            );
                             eprintln!("[ledgrrr] {}", experiment::focus_record_to_ledgrrr(&cf));
                             eprintln!("[ledgrrr] {}", experiment::focus_record_to_ledgrrr(&tf));
-                            eprintln!("[ledgrrr] focus_delta={:.4} (control-earned={:.4} control-consumed={:.4} | treatment-earned={:.4} treatment-consumed={:.4})", cmp.focus_delta, cmp.control.focus_earned, cmp.control.focus_consumed, cmp.treatment.focus_earned, cmp.treatment.focus_consumed);
+                            eprintln!(
+                                "[ledgrrr] focus_delta={:.4} (control-earned={:.4} control-consumed={:.4} | treatment-earned={:.4} treatment-consumed={:.4})",
+                                cmp.focus_delta,
+                                cmp.control.focus_earned,
+                                cmp.control.focus_consumed,
+                                cmp.treatment.focus_earned,
+                                cmp.treatment.focus_consumed
+                            );
                             // emit FOCUS records to ledgrrr-mcp MCP server (best-effort)
                             experiment::emit_focus_to_ledgrrr_mcp(&cmp, "http://localhost:8001");
                             // Calculate and issue cake payout
@@ -2376,7 +2457,8 @@ async fn main() {
                 }
                 ExperimentCommands::Status => {
                     use b00t_cli::commands::experiment;
-                    let status = experiment::phygital_status("worker-cli", "idle", "pass", None, 0.0);
+                    let status =
+                        experiment::phygital_status("worker-cli", "idle", "pass", None, 0.0);
                     println!("node_id: {}", status.node_id);
                     println!("state: {}", status.state);
                     println!("last_heartbeat: {}", status.last_heartbeat);
@@ -2384,8 +2466,8 @@ async fn main() {
                     println!("focus_balance: {:.2}", status.focus_balance);
                 }
                 ExperimentCommands::History { limit, json } => {
-                    use b00t_cli::commands::focus::handle_focus_command;
                     use b00t_cli::commands::focus::FocusCommands;
+                    use b00t_cli::commands::focus::handle_focus_command;
                     let args = FocusCommands::History {
                         limit: *limit,
                         json: *json,
@@ -2410,42 +2492,45 @@ async fn main() {
                 std::process::exit(1);
             }
         }
+        Some(Commands::Server(args)) => {
+            if let Err(e) = b00t_cli::commands::server::handle_server_command(&args) {
+                eprintln!("Error: {}", e);
+                std::process::exit(1);
+            }
+        }
         Some(Commands::Exec(args)) => {
             if let Err(e) = b00t_cli::commands::exec::handle_exec(args, &cli.path) {
                 eprintln!("Error: {}", e);
                 std::process::exit(1);
             }
         }
-        Some(Commands::Schema { schema_command }) => {
-            match schema_command {
-                SchemaSubcommands::Generate { args } => {
-                    if let Err(e) = b00t_cli::datum_schema::handle_schema_generate(args) {
-                        eprintln!("Error: {e}");
-                        std::process::exit(1);
-                    }
-                }
-                SchemaSubcommands::Diff { schema_a, schema_b } => {
-                    use b00t_cli::commands::schema::handle_schema_diff;
-                    if let Err(e) = handle_schema_diff(&cli.path, schema_a, schema_b) {
-                        eprintln!("Error: {e}");
-                        std::process::exit(1);
-                    }
-                }
-                SchemaSubcommands::Import { path, name, output } => {
-                    use b00t_cli::commands::schema::handle_schema_import;
-                    if let Err(e) = handle_schema_import(
-                        &path.to_string_lossy(),
-                        name,
-                        output.clone(),
-                    ) {
-                        eprintln!("Error: {e}");
-                        std::process::exit(1);
-                    }
+        Some(Commands::Schema { schema_command }) => match schema_command {
+            SchemaSubcommands::Generate { args } => {
+                if let Err(e) = b00t_cli::datum_schema::handle_schema_generate(args) {
+                    eprintln!("Error: {e}");
+                    std::process::exit(1);
                 }
             }
-        }
+            SchemaSubcommands::Diff { schema_a, schema_b } => {
+                use b00t_cli::commands::schema::handle_schema_diff;
+                if let Err(e) = handle_schema_diff(&cli.path, schema_a, schema_b) {
+                    eprintln!("Error: {e}");
+                    std::process::exit(1);
+                }
+            }
+            SchemaSubcommands::Import { path, name, output } => {
+                use b00t_cli::commands::schema::handle_schema_import;
+                if let Err(e) = handle_schema_import(&path.to_string_lossy(), name, output.clone())
+                {
+                    eprintln!("Error: {e}");
+                    std::process::exit(1);
+                }
+            }
+        },
         Some(Commands::Scheduler { scheduler_command }) => {
-            if let Err(e) = b00t_cli::commands::scheduler::handle_scheduler_command(scheduler_command) {
+            if let Err(e) =
+                b00t_cli::commands::scheduler::handle_scheduler_command(scheduler_command)
+            {
                 eprintln!("Error: {e}");
                 std::process::exit(1);
             }
@@ -2469,15 +2554,13 @@ async fn main() {
                 std::process::exit(1);
             }
         }
-        Some(Commands::Docgen(args)) => {
-            match b00t_cli::commands::docgen::run_docgen(args) {
-                Ok(output) => println!("{output}"),
-                Err(e) => {
-                    eprintln!("docgen error: {e}");
-                    std::process::exit(1);
-                }
+        Some(Commands::Docgen(args)) => match b00t_cli::commands::docgen::run_docgen(args) {
+            Ok(output) => println!("{output}"),
+            Err(e) => {
+                eprintln!("docgen error: {e}");
+                std::process::exit(1);
             }
-        }
+        },
         Some(Commands::Patch { patch_command }) => {
             if let Err(e) = b00t_cli::commands::patch::handle_patch_command(patch_command) {
                 eprintln!("Error: {e}");
@@ -2497,7 +2580,9 @@ async fn main() {
             }
         }
         Some(Commands::Doctor { doctor_command }) => {
-            if let Err(e) = b00t_cli::commands::doctor_cmd::handle_doctor_command(doctor_command, &cli.path) {
+            if let Err(e) =
+                b00t_cli::commands::doctor_cmd::handle_doctor_command(doctor_command, &cli.path)
+            {
                 eprintln!("Error: {e}");
                 std::process::exit(1);
             }
@@ -2514,7 +2599,9 @@ async fn main() {
                 std::process::exit(1);
             }
         }
-        Some(Commands::Observability { observability_command }) => {
+        Some(Commands::Observability {
+            observability_command,
+        }) => {
             if let Err(e) = observability_command.execute() {
                 eprintln!("Error: {e}");
                 std::process::exit(1);
@@ -2715,7 +2802,10 @@ mod k0mmand3r_dispatch_tests {
                 assert!(positional_tool.is_none());
                 assert!(positional_lesson.is_none());
                 assert_eq!(tool.as_deref(), Some("just"));
-                assert_eq!(lesson.as_deref(), Some("modules: Prefer module workdirs over cd."));
+                assert_eq!(
+                    lesson.as_deref(),
+                    Some("modules: Prefer module workdirs over cd.")
+                );
                 assert!(global);
             }
             _ => panic!("expected lfmf command"),

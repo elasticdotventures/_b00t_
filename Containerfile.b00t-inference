@@ -1,0 +1,16 @@
+FROM docker.io/debian:bookworm-slim
+
+RUN apt-get update && apt-get install -y --no-install-recommends libcurl4 libgomp1 && rm -rf /var/lib/apt/lists/*
+
+# llama.cpp server binary + shared libs (prebuilt, from GitHub release)
+COPY build/bin/llama-server /usr/local/bin/
+COPY build/bin/libllama.so build/bin/libggml.so build/bin/libggml-base.so build/bin/libggml-cpu.so build/bin/libggml-rpc.so build/bin/libllava_shared.so build/bin/libmtmd_shared.so /usr/local/lib/
+RUN ldconfig /usr/local/lib
+
+RUN mkdir -p /models
+VOLUME /models
+EXPOSE 8080
+
+ENV LD_LIBRARY_PATH=/usr/local/lib
+
+CMD ["llama-server", "-m", "/models/qwen2.5-0.5b-instruct-q4_k_m.gguf", "--host", "0.0.0.0", "--port", "8080"]
