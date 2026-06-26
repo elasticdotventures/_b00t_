@@ -1,0 +1,3 @@
+[submodule "vendor/l3dg3rr"]
+	path = vendor/l3dg3rr
+	url = https://github.com/PromptExecution/l3dg3rr.git
