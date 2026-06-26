@@ -169,10 +169,37 @@ fn resolve_upstream(soul: &SoulConfig) -> (String, String) {
 
 // ── State ──────────────────────────────────────────────────────────────────
 
-#[derive(Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Action { Read, Write, Execute }
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ClassPermission {
+    pub class: String,
+    pub action: Action,
+}
+
+impl ClassPermission {
+    pub fn parse(s: &str) -> Option<Self> {
+        // Format: "b00t:EmbeddingModel:execute"
+        let parts: Vec<&str> = s.rsplitn(2, ':').collect();
+        if parts.len() != 2 { return None; }
+        let action = match parts[0] {
+            "read" => Action::Read,
+            "write" => Action::Write,
+            "execute" => Action::Execute,
+            _ => return None,
+        };
+        Some(ClassPermission { class: parts[1].to_string(), action })
+    }
+}
+
+#[derive(Clone, Serialize, Deserialize)]
 pub struct KeyEntry {
     pub consumer: String,
     pub created_at: chrono::DateTime<chrono::Utc>,
+    #[serde(default)]
+    pub access: Vec<ClassPermission>,
 }
 
 pub struct LlmState {
@@ -206,6 +233,7 @@ impl LlmState {
                                 keys.insert(k.clone(), KeyEntry {
                                     consumer: consumer.to_string(),
                                     created_at: ts.with_timezone(&chrono::Utc),
+                                    access: Vec::new(),
                                 });
                             }
                         }
@@ -226,11 +254,25 @@ impl LlmState {
         self.keys.read().await.get(token).cloned()
     }
 
-    pub async fn create_key(&self, consumer: &str) -> String {
+    pub async fn check_access(&self, token: &str, class: &str, action: Action) -> bool {
+        if let Some(entry) = self.validate_key(token).await {
+            if entry.access.is_empty() {
+                return true; // empty access = full access (backwards compat)
+            }
+            return entry.access.iter().any(|p| p.class == class && matches!(p.action, Action::Execute) || matches!(p.action, Action::Read));
+        }
+        false
+    }
+
+    pub async fn create_key(&self, consumer: &str, access: &[String]) -> String {
         let key = format!("b00t-sk-{}", Uuid::new_v4().simple());
+        let permissions: Vec<ClassPermission> = access.iter()
+            .filter_map(|a| ClassPermission::parse(a))
+            .collect();
         self.keys.write().await.insert(key.clone(), KeyEntry {
             consumer: consumer.to_string(),
             created_at: chrono::Utc::now(),
+            access: permissions,
         });
         self.save_keys_to_file().await;
         key
@@ -240,9 +282,14 @@ impl LlmState {
         let keys = self.keys.read().await;
         let mut map = serde_json::Map::new();
         for (k, v) in keys.iter() {
+            let access_json: Vec<Value> = v.access.iter().map(|p| json!({
+                "class": p.class,
+                "action": serde_json::to_value(&p.action).unwrap_or(json!("execute")),
+            })).collect();
             map.insert(k.clone(), json!({
                 "consumer": v.consumer,
                 "created_at": v.created_at.to_rfc3339(),
+                "access": access_json,
             }));
         }
         let data = json!({"keys": map});
@@ -295,6 +342,18 @@ fn extract_bearer_token(headers: &HeaderMap, dev_mode: bool) -> Option<String> {
         .map(|s| s.to_string())
 }
 
+// ── Endpoint → ontology class mapping ─────────────────────────────────────
+
+fn class_for_path(path: &str) -> (&str, Action) {
+    if path.contains("chat/completions") {
+        ("b00t:ChatModel", Action::Execute)
+    } else if path.contains("embeddings") {
+        ("b00t:EmbeddingModel", Action::Execute)
+    } else {
+        ("b00t:Model", Action::Read)
+    }
+}
+
 // ── Handlers ───────────────────────────────────────────────────────────────
 
 async fn list_models(
@@ -303,6 +362,13 @@ async fn list_models(
 ) -> impl IntoResponse {
     let token = extract_bearer_token(&headers, dev_mode).unwrap_or_default();
     let consumer = state.validate_key(&token).await.map(|k| k.consumer).unwrap_or_else(|| "unknown".to_string());
+    if !dev_mode && !state.check_access(&token, "b00t:ChatModel", Action::Execute).await {
+        return (StatusCode::FORBIDDEN, Json(json!({"error": "access denied: b00t:ChatModel:execute"}))).into_response();
+    }
+
+    if !dev_mode && !state.check_access(&token, "b00t:Model", Action::Read).await {
+        return (StatusCode::FORBIDDEN, Json(json!({"error": "access denied: b00t:Model:read"}))).into_response();
+    }
     let url = format!("{}/models", state.upstream_url);
     let client = reqwest::Client::new();
     let mut req = client.get(&url);
@@ -333,6 +399,9 @@ async fn proxy_chat(
 ) -> impl IntoResponse {
     let token = extract_bearer_token(&headers, dev_mode).unwrap_or_default();
     let consumer = state.validate_key(&token).await.map(|k| k.consumer).unwrap_or_else(|| "unknown".to_string());
+    if !dev_mode && !state.check_access(&token, "b00t:EmbeddingModel", Action::Execute).await {
+        return (StatusCode::FORBIDDEN, Json(json!({"error": "access denied: b00t:EmbeddingModel:execute"}))).into_response();
+    }
     let model = serde_json::from_slice::<Value>(&body)
         .ok().and_then(|v| v.get("model").and_then(|m| m.as_str().map(|s| s.to_string())))
         .unwrap_or_else(|| "unknown".to_string());
