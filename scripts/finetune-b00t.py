@@ -136,14 +136,59 @@ def finetune():
     # ── Merge + export GGUF ──
     print("🔨 Merging LoRA into base model...")
     merged = model.merge_and_unload()
+
+    # 🤓 Patch missing non-LoRA tensors (LayerNorm weights).
+    #    merge_and_unload() preserves LoRA targets; some base-model tensors
+    #    stored as bnb.nn.Linear4bit may lose their state_dict keys.
+    #    Symptom: llama-server reports "missing tensor 'blk.24.attn_norm.weight'"
+    print("🔍 Verifying tensor completeness...")
+    import torch.nn as nn
+    state = merged.state_dict()
+    missing = []
+    for module_name, module in merged.named_modules():
+        if isinstance(module, nn.LayerNorm):
+            key = f"{module_name}.weight"
+            if key not in state and module_name.count('.') >= 1:
+                missing.append(module_name)
+    if missing:
+        print(f"   ⚠️  {len(missing)} LayerNorm tensors missing — patching from base model...")
+        from transformers import AutoModelForCausalLM
+        base = AutoModelForCausalLM.from_pretrained(
+            "unsloth/Qwen3.5-0.8B", torch_dtype="auto", device_map="cpu")
+        for module_name in missing:
+            parts = module_name.split(".")
+            src, dst = base, merged
+            for p in parts:
+                src = getattr(src, p)
+                dst = getattr(dst, p)
+            dst.weight.data.copy_(src.weight.data)
+            print(f"   ✅ patched {module_name}.weight")
+        del base
+    else:
+        print("   ✅ all tensors present")
     merged_path = str(OUTPUT_DIR / "merged")
     merged.save_pretrained(merged_path)
     tokenizer.save_pretrained(merged_path)
+    print(f"💾 Merged model saved to {merged_path}")
 
+    # ── Convert to GGUF via llama.cpp (not unsloth save_gguf — format mismatch) ──
     gguf_path = str(OUTPUT_DIR / "b00t-finetuned.Q4_K_M.gguf")
     print(f"🔨 Converting to GGUF: {gguf_path}")
-    os.system(f"python3 -c \"from unsloth import save_gguf; save_gguf('{merged_path}', '{gguf_path}', 'q4_k_m')\"")
-    print(f"✅ GGUF saved to {gguf_path}")
+    # Use llama.cpp's convert + quantize pipeline (compatible with stock server)
+    import subprocess
+    subprocess.run([
+        "python3", os.path.expanduser("~/.unsloth/llama.cpp/convert_hf_to_gguf.py"),
+        "--outfile", str(OUTPUT_DIR / "b00t-finetuned.BF16.gguf"),
+        "--outtype", "bf16",
+        merged_path,
+    ], check=True)
+    subprocess.run([
+        os.path.expanduser("~/.unsloth/llama.cpp/llama-quantize"),
+        str(OUTPUT_DIR / "b00t-finetuned.BF16.gguf"),
+        gguf_path,
+        "q4_k_m",
+    ], check=True)
+    print(f"✅ GGUF saved to {gguf_path} ({os.path.getsize(gguf_path)//1024//1024}MB)")
 
     return gguf_path
 
