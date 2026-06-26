@@ -1,0 +1,8 @@
+{
+  "generation": 1,
+  "timestamp": "2026-06-26T14:07:28Z",
+  "train_pairs": 181,
+  "dataset_hash": "27ebb6c906dbb976",
+  "model_smol": "fine-tune/output-smol/b00t-smol.gguf",
+  "gen_smol": 1
+}

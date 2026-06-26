@@ -72,10 +72,23 @@ def export(adapter_path: str, quant: str, output_path: str):
         print("  Try: Q4_K_M (default), Q5_K_M, Q8_0, or F16")
         sys.exit(1)
 
-    print(f"\n✅ GGUF model exported to: {output_dir}/{output_name}")
+    # unsloth creates {output_name}_gguf/{model}.{quant}.gguf — move to canonical path
+    import glob, shutil
+    gguf_dir = os.path.join(output_dir, f"{output_name}_gguf")
+    gguf_files = glob.glob(os.path.join(gguf_dir, f"*.{quant.upper()}.gguf"))
+    if not gguf_files:
+        gguf_files = glob.glob(os.path.join(gguf_dir, "*.gguf"))
+    canonical = os.path.join(output_dir, output_name)
+    if gguf_files:
+        # output_name might conflict with old directory from failed runs — rename old dir
+        if os.path.isdir(canonical):
+            os.rename(canonical, canonical + ".old-bnb")
+        shutil.move(gguf_files[0], canonical)
+        print(f"\n✅ GGUF model at: {canonical}")
+    else:
+        print(f"\n✅ GGUF model exported to: {gguf_dir}/")
     print(f"   To use with llama.cpp:")
-    print(f"   cp {output_path} /opt/b00t/models/")
-    print(f"   b00t hive activate inference-qwen36-27b-llamacpp")
+    print(f"   cp {canonical} /opt/b00t/models/")
 
 
 def main():
