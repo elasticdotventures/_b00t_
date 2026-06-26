@@ -2262,3 +2262,29 @@ release-with-finetune:
     just eval-variants
     echo "🚀 releasing..."
     just release
+
+# ─── Worktree bootstrap (fixes submodule gaps — see issue #538) ───────────────
+
+# Initialize a fresh worktree: symlink empty vendor submodule dirs to main checkout.
+# Worktrees don't auto-init submodules; .gitmodules is incomplete (issue #538).
+# Run once after: git worktree add
+worktree-init:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    MAIN="$HOME/.b00t"
+    WD="$(git rev-parse --show-toplevel)"
+    [ "$WD" = "$MAIN" ] && { echo "ℹ️  running in main checkout — no-op"; exit 0; }
+    echo "🔧 worktree-init: linking vendor submodules from $MAIN"
+    LINKED=0
+    for d in "$WD/vendor"/*/; do
+      name=$(basename "$d")
+      src="$MAIN/vendor/$name"
+      if [ -d "$src" ] && [ -d "$d" ] && [ -z "$(ls -A "$d" 2>/dev/null)" ]; then
+        rmdir "$d"
+        ln -sfn "$src" "$d"
+        echo "  linked: vendor/$name"
+        LINKED=$((LINKED+1))
+      fi
+    done
+    echo "✅ worktree-init: linked $LINKED vendor dirs"
+    echo "   Next: CARGO_TARGET_DIR=$MAIN/target cargo test --package b00t-cli --lib"
