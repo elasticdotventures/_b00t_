@@ -2110,14 +2110,16 @@ finetune-dataset format="alpaca" max="5000":
     uv run python3 fine-tune/generate_dataset.py --format={{format}} --max-rows={{max}}
 
 # Run QLoRA fine-tuning in unsloth container — sm0l (0.5B, fits alongside ch0nky)
+# --entrypoint python3 skips the studio setup (SSH, web UI) in the unsloth container
 finetune-train-smol:
     podman run --rm \
       --device nvidia.com/gpu=all --security-opt=label=disable \
+      --entrypoint python3 \
       -v "{{HF_CACHE}}:/hf:z" \
       -v "{{FT_DIR}}:/workspace/fine-tune:z" \
       -e HF_HOME=/hf \
       {{UNSLOTH_IMAGE}} \
-      python3 /workspace/fine-tune/train_unsloth.py --config /workspace/fine-tune/config-smol.yaml
+      /workspace/fine-tune/train_unsloth.py --config /workspace/fine-tune/config-smol.yaml
 
 # Run QLoRA fine-tuning in unsloth container — 27B ch0nky (requires ch0nky stopped)
 # ⚠️  Stop ch0nky first: just qwen36-stop
@@ -2131,8 +2133,9 @@ finetune-train-ch0nky:
       -v "{{HF_CACHE}}:/hf:z" \
       -v "{{FT_DIR}}:/workspace/fine-tune:z" \
       -e HF_HOME=/hf \
+      --entrypoint python3 \
       {{UNSLOTH_IMAGE}} \
-      python3 /workspace/fine-tune/train_unsloth.py --config /workspace/fine-tune/config.yaml
+      /workspace/fine-tune/train_unsloth.py --config /workspace/fine-tune/config.yaml
 
 # Export LoRA adapter to GGUF in unsloth container
 finetune-export adapter="./fine-tune/output/lora-adapter" quant="Q4_K_M" output="./fine-tune/output/b00t-ch0nky.gguf":
@@ -2141,8 +2144,9 @@ finetune-export adapter="./fine-tune/output/lora-adapter" quant="Q4_K_M" output=
       -v "{{HF_CACHE}}:/hf:z" \
       -v "{{FT_DIR}}:/workspace/fine-tune:z" \
       -e HF_HOME=/hf \
+      --entrypoint python3 \
       {{UNSLOTH_IMAGE}} \
-      python3 /workspace/fine-tune/export_gguf.py \
+      /workspace/fine-tune/export_gguf.py \
         --adapter /workspace/{{adapter}} \
         --output /workspace/{{output}} \
         --quant {{quant}}
@@ -2286,5 +2290,4 @@ worktree-init:
         LINKED=$((LINKED+1))
       fi
     done
-    echo "✅ worktree-init: linked $LINKED vendor dirs"
-    echo "   Next: CARGO_TARGET_DIR=$MAIN/target cargo test --package b00t-cli --lib"
+
