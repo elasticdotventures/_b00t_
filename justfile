@@ -2130,6 +2130,7 @@ finetune-train-ch0nky:
     set -euo pipefail
     curl -sf http://127.0.0.1:8001/v1/models -H "Authorization: Bearer local-b00t" > /dev/null 2>&1 \
       && { echo "❌ ch0nky is running — stop it first: just qwen36-stop"; exit 1; }
+    mkdir -p {{FT_DIR}}/output-ch0nky
     podman run --rm \
       --device nvidia.com/gpu=all --security-opt=label=disable \
       -v "{{HF_CACHE}}:/hf:z" \
@@ -2138,7 +2139,7 @@ finetune-train-ch0nky:
       --entrypoint python3 \
       --user "$(id -u):$(id -g)" \
       {{UNSLOTH_IMAGE}} \
-      /workspace/fine-tune/train_unsloth.py --config /workspace/fine-tune/config.yaml
+      /workspace/fine-tune/train_unsloth.py --config /workspace/fine-tune/config-ch0nky.yaml
 
 # Export LoRA adapter to GGUF in unsloth container
 finetune-export adapter="./fine-tune/output/lora-adapter" quant="Q4_K_M" output="./fine-tune/output/b00t-ch0nky.gguf":

@@ -55,10 +55,15 @@ def export(adapter_path: str, quant: str, output_path: str):
     print("✓")
 
     # Export to GGUF
-    print(f"Exporting to GGUF ({quant})...")
+    # llama.cpp writes intermediate F16 GGUF to CWD — chdir to output dir first
+    output_dir = os.path.dirname(os.path.abspath(output_path))
+    output_name = os.path.basename(output_path)
+    os.makedirs(output_dir, exist_ok=True)
+    os.chdir(output_dir)
+    print(f"Exporting to GGUF ({quant}) in {output_dir}...")
     try:
         model.save_pretrained_gguf(
-            output_path,
+            output_name,
             tokenizer,
             quantization_method=quant,
         )
@@ -67,7 +72,7 @@ def export(adapter_path: str, quant: str, output_path: str):
         print("  Try: Q4_K_M (default), Q5_K_M, Q8_0, or F16")
         sys.exit(1)
 
-    print(f"\n✅ GGUF model exported to: {output_path}")
+    print(f"\n✅ GGUF model exported to: {output_dir}/{output_name}")
     print(f"   To use with llama.cpp:")
     print(f"   cp {output_path} /opt/b00t/models/")
     print(f"   b00t hive activate inference-qwen36-27b-llamacpp")
