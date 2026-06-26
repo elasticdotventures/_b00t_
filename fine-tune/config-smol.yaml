@@ -20,10 +20,10 @@ target_modules:
   - "down_proj"
 
 num_epochs: 3
-batch_size: 4
-grad_accum: 4
+batch_size: 1
+grad_accum: 16
 learning_rate: 2e-4
-max_seq_length: 2048
+max_seq_length: 512
 optim: "adamw_8bit"
 weight_decay: 0.01
 lr_scheduler: "linear"
