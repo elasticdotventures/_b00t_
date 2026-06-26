@@ -2104,6 +2104,7 @@ skills query="":
 UNSLOTH_IMAGE := "docker.io/unsloth/unsloth:latest"
 HF_CACHE := env_var_or_default("HF_HOME", env_var("HOME") + "/.cache/huggingface")
 FT_DIR := justfile_directory() + "/fine-tune"
+UNSLOTH_CACHE := env_var("HOME") + "/.cache/unsloth-llama-cpp"
 
 # Generate training dataset from b00t corpus (stdlib only, no container needed)
 finetune-dataset format="alpaca" max="5000":
@@ -2118,6 +2119,7 @@ finetune-train-smol:
       --entrypoint python3 \
       --user "$(id -u):$(id -g)" \
       -v "{{HF_CACHE}}:/hf:z" \
+      -v "{{UNSLOTH_CACHE}}:/home/ubuntu/.unsloth:z" \
       -v "{{FT_DIR}}:/workspace/fine-tune:z" \
       -e HF_HOME=/hf \
       {{UNSLOTH_IMAGE}} \
@@ -2134,6 +2136,7 @@ finetune-train-ch0nky:
     podman run --rm \
       --device nvidia.com/gpu=all --security-opt=label=disable \
       -v "{{HF_CACHE}}:/hf:z" \
+      -v "{{UNSLOTH_CACHE}}:/home/ubuntu/.unsloth:z" \
       -v "{{FT_DIR}}:/workspace/fine-tune:z" \
       -e HF_HOME=/hf \
       --entrypoint python3 \
@@ -2142,10 +2145,12 @@ finetune-train-ch0nky:
       /workspace/fine-tune/train_unsloth.py --config /workspace/fine-tune/config-ch0nky.yaml
 
 # Export LoRA adapter to GGUF in unsloth container
-finetune-export adapter="./fine-tune/output/lora-adapter" quant="Q4_K_M" output="./fine-tune/output/b00t-ch0nky.gguf":
+finetune-export adapter="./fine-tune/output-ch0nky/lora-adapter" quant="Q4_K_M" output="./fine-tune/output-ch0nky/b00t-ch0nky.gguf":
+    mkdir -p {{UNSLOTH_CACHE}}
     podman run --rm \
       --device nvidia.com/gpu=all --security-opt=label=disable \
       -v "{{HF_CACHE}}:/hf:z" \
+      -v "{{UNSLOTH_CACHE}}:/home/ubuntu/.unsloth:z" \
       -v "{{FT_DIR}}:/workspace/fine-tune:z" \
       -e HF_HOME=/hf \
       --entrypoint python3 \
@@ -2184,12 +2189,12 @@ finetune-ch0nky:
     just finetune-train-ch0nky
     echo "=== finetune-ch0nky: export ==="
     just finetune-export \
-      "./fine-tune/output/lora-adapter" \
+      "./fine-tune/output-ch0nky/lora-adapter" \
       "Q4_K_M" \
-      "./fine-tune/output/b00t-ch0nky.gguf"
+      "./fine-tune/output-ch0nky/b00t-ch0nky.gguf"
     echo "=== finetune-ch0nky: checkpoint ==="
     uv run python3 fine-tune/update_gen_checkpoint.py \
-      --model fine-tune/output/b00t-ch0nky.gguf --tier ch0nky
+      --model fine-tune/output-ch0nky/b00t-ch0nky.gguf --tier ch0nky
 
 # Legacy alias
 finetune-all: finetune-smol finetune-ch0nky
