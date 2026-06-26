@@ -142,3 +142,4 @@ mod tests {
     }
 }
 pub mod datum_credential;
+pub mod store;
