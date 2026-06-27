@@ -61,6 +61,10 @@ justfiles manually.
 cargo build --manifest-path just-mcp/Cargo.toml --release
 ```
 
+
+[b00t.services.action_runner]
+local  = "wrkflw"
+remote = "github-actions"
 ## Security Considerations
 
 - Executes local just recipes — only as safe as the justfile allows

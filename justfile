@@ -967,7 +967,7 @@ worker-validate:
 # 🦨 Symlink: vendor/ledgrrr -> vendor/ledgrrr (polyseme mapping)
 # Module docs: https://just.systems/man/en/modules.html
 # Invocation:  just ledgrrr build | docker-build | docker-run | docker-stop | …
-# mod ledgrrr 'vendor/ledgrrr/ledgrrr.just'  # TODO: create ledgrrr.just in submodule
+mod ledgrrr 'vendor/ledgrrr/ledgrrr.just'
 
 # ── pi agent — systemd service lifecycle ─────────────────────────────────────
 # 🤓 pi is managed as b00t@pi-agent.service, NOT spawned per-invocation
@@ -2135,31 +2135,7 @@ finetune-logs:
 finetune-status:
     kubectl get jobs,pods -n b00t-finetune
 
-# ── rust-docs-mcp-b00t — local wrkflw CI gate ───────────────────────────────
+# [EXPERIMENTAL] safe corrupt-object pruner — see scripts/git-prune-corrupt.py
+git-prune-corrupt delete="false":
+    uv run scripts/git-prune-corrupt.py {{delete}}
 
-# Validate docker.yml schema (instant — no execution)
-rust-docs-validate:
-    wrkflw validate vendor/rust-docs-mcp-b00t/.github/workflows/docker.yml
-
-# Run local-build job via wrkflw (emulation — no containers)
-rust-docs-local-build:
-    wrkflw run --job local-build --runtime emulation \
-        vendor/rust-docs-mcp-b00t/.github/workflows/docker.yml
-
-# Watch mode: auto-rerun local-build on file changes
-rust-docs-watch:
-    wrkflw watch --job local-build \
-        vendor/rust-docs-mcp-b00t/.github/workflows/docker.yml
-
-# Deploy sm3lly self-hosted runner (requires fresh token — expires 1h)
-rust-docs-runner-deploy:
-    #!/usr/bin/env bash
-    TOKEN=$(gh api -X POST repos/PromptExecution/rust-docs-mcp-b00t/actions/runners/registration-token --jq .token)
-    kubectl create secret generic gh-runner-token \
-        --from-literal=RUNNER_TOKEN="$TOKEN" \
-        --from-literal=REPO_URL=https://github.com/PromptExecution/rust-docs-mcp-b00t \
-        -n b00t-gh-runner --dry-run=client -o yaml | kubectl apply -f -
-    kubectl rollout restart deployment/gh-runner-rust-docs -n b00t-gh-runner
-    kubectl rollout status deployment/gh-runner-rust-docs -n b00t-gh-runner --timeout=60s
-    @echo "Runner status:"
-    gh api repos/PromptExecution/rust-docs-mcp-b00t/actions/runners --jq '.runners[] | "\(.name) \(.status)"'

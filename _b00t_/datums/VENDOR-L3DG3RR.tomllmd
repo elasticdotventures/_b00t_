@@ -74,6 +74,10 @@ cargo build --manifest-path vendor/l3dg3rr/Cargo.toml --release
 
 Tauri desktop host requires system libs (webkit2gtk on Linux).
 
+
+[b00t.services.action_runner]
+local  = ["wrkflw-ci-build.yml", "wrkflw-docgen.yml"]
+remote = "github-actions"
 ## Security Considerations
 
 - MCP tools enforce deterministic tx_id hashing via Blake3

@@ -43,5 +43,17 @@ development workflows that need an independent working tree.
 
 ## Key Binaries
 
+
+
+## CodeRunnerActionProcess
+
+Shares l3dg3rr codebase — same wrkflw-ci-build.yml + wrkflw-docgen.yml patterns apply.
+See VENDOR-L3DG3RR.tomllmd for full action_runner binding.
+
 Same as l3dg3rr: ledgerr-mcp, host-tauri, host-tray, host-window,
 ontology-extractor, rotel-visual, lfmf-stats
+
+[b00t.services.action_runner]
+local  = ["wrkflw-ci-build.yml"]
+remote = "github-actions"
+
