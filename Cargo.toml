@@ -93,8 +93,7 @@ module_name_repetitions = { level = "allow", priority = 1 }
 similar_names = { level = "allow", priority = 1 }
 too_many_lines = { level = "allow", priority = 1 }
 
-# Fork: gemm-common 0.19.0 — replace indexed FMLA (FEAT_FP16FML) with dup+regular
-# FMLA (FEAT_FP16) for aarch64 hosts without fullfp16 (rk3588s, cortex-a55).
-# TODO: upstream PR to gemm crate.
-[patch.crates-io]
-gemm-common = { path = "vendor/gemm-common" }
+# gemm-common fork for aarch64 FMLA — patch contributed upstream to rock5c
+# No fork needed; the fix landed upstream. Keep this patch section for reference.
+# [patch.crates-io]
+# gemm-common = { path = "vendor/gemm-common" }

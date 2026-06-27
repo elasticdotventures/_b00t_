@@ -1,8 +1,0 @@
-[package]
-name = "gemm-common"
-version = "0.19.0"
-edition = "2021"
-description = "gemm common routines — b00t fork for aarch64 FMLA fix (rk3588/cortex-a55)
-Fork replaces indexed FMLA (FEAT_FP16FML) with dup+regular FMLA (FEAT_FP16).
-Upstream PR pending. Until forked repo is ready, this mirrors the crates.io release."
-license = "MIT OR Apache-2.0"
