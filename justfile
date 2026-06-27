@@ -2094,3 +2094,43 @@ skills query="":
       b00t-cli --path "$B00T_ROOT" skill search "{{query}}"
     fi
 
+
+# ── Fine-tune — QLoRA k8s Job orchestration (sm3lly RTX 3090) ───────────────
+
+# Apply RBAC/namespace prerequisites for fine-tune Jobs (one-time)
+finetune-k8s-setup:
+    kubectl apply -f _b00t_/k8s.🚢/fine-tune/rbac.yaml
+
+# ch0nky variant: scale down sm0l → train → scale up
+finetune-train-kube: finetune-k8s-setup
+    kubectl scale deployment sm0l --replicas=0 -n b00t-inference || true
+    kubectl delete job unsloth-train -n b00t-finetune --ignore-not-found
+    kubectl apply -f _b00t_/k8s.🚢/fine-tune/job.yaml
+    @echo "Training started. Watch: kubectl logs -n b00t-finetune -l b00t.tier=finetune -f"
+    kubectl wait --for=condition=complete --timeout=7200s job/unsloth-train -n b00t-finetune
+    kubectl scale deployment sm0l --replicas=1 -n b00t-inference
+
+# sm0l variant: trains Qwen2.5-3B → updates B00T_SM0L_ENDPOINT GGUF
+finetune-train-kube-smol: finetune-k8s-setup
+    kubectl scale deployment sm0l --replicas=0 -n b00t-inference || true
+    kubectl delete job unsloth-train-smol -n b00t-finetune --ignore-not-found
+    kubectl apply -f _b00t_/k8s.🚢/fine-tune/job-smol.yaml
+    @echo "sm0l training started. Watch: kubectl logs -n b00t-finetune -l b00t.io/model=sm0l -f"
+    kubectl wait --for=condition=complete --timeout=3600s job/unsloth-train-smol -n b00t-finetune
+    kubectl scale deployment sm0l --replicas=1 -n b00t-inference
+
+# Generate fine-tune dataset from b00t corpus
+finetune-dataset:
+    uv run python3 fine-tune/generate_dataset.py
+
+# Export trained LoRA adapter to GGUF
+finetune-export:
+    uv run python3 fine-tune/export_gguf.py
+
+# Watch training logs (any active job)
+finetune-logs:
+    kubectl logs -n b00t-finetune -l b00t.tier=finetune -f --tail=50
+
+# Status of fine-tune Jobs
+finetune-status:
+    kubectl get jobs,pods -n b00t-finetune

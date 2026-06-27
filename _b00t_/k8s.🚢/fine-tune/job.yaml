@@ -1,0 +1,87 @@
+---
+# Unsloth QLoRA fine-tuning k8s Job — sm3lly RTX 3090
+# Namespace: b00t-finetune
+#
+# Usage (via just — preferred):
+#   just finetune-train-kube          # scale-down sm0l + run Job + scale-up
+#   just finetune-train-kube-smol     # sm0l variant (config-smol.yaml)
+#
+# Manual:
+#   kubectl create namespace b00t-finetune
+#   kubectl scale deployment sm0l --replicas=0 -n b00t-inference
+#   kubectl delete job unsloth-train -n b00t-finetune --ignore-not-found
+#   kubectl apply -f _b00t_/k8s.🚢/fine-tune/job.yaml
+#   kubectl wait --for=condition=complete job/unsloth-train -n b00t-finetune --timeout=7200s
+#   kubectl scale deployment sm0l --replicas=1 -n b00t-inference
+#
+# Logs: kubectl logs -n b00t-finetune -l job-name=unsloth-train -f
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: unsloth-train
+  namespace: b00t-finetune
+  labels:
+    b00t.tier: finetune
+    b00t.hive: finetune
+    b00t.io/model: ch0nky
+spec:
+  ttlSecondsAfterFinished: 86400  # clean up after 24h
+  backoffLimit: 0                  # no retries — OOM/crash should be investigated
+  template:
+    metadata:
+      labels:
+        b00t.tier: finetune
+        b00t.io/model: ch0nky
+    spec:
+      restartPolicy: Never
+      tolerations:
+        - key: node-role.kubernetes.io/control-plane
+          operator: Exists
+          effect: NoSchedule
+      serviceAccountName: finetune-scaler
+      initContainers:
+        # Scale down sm0l inference to free the full GPU before training
+        - name: scale-down-inference
+          image: bitnami/kubectl:latest
+          command:
+            - kubectl
+            - scale
+            - deployment/sm0l
+            - --replicas=0
+            - -n
+            - b00t-inference
+      containers:
+        - name: trainer
+          image: docker.io/unsloth/unsloth:latest
+          command: ["python3"]
+          args:
+            - /workspace/fine-tune/train_unsloth.py
+            - --config
+            - /workspace/fine-tune/config-ch0nky.yaml
+          env:
+            - name: HF_HOME
+              value: /hf
+            - name: PYTHONUNBUFFERED
+              value: "1"
+          resources:
+            limits:
+              nvidia.com/gpu: "1"
+            requests:
+              nvidia.com/gpu: "1"
+          securityContext:
+            runAsUser: 1000
+            runAsGroup: 1000
+          volumeMounts:
+            - name: hf-cache
+              mountPath: /hf
+            - name: finetune-workspace
+              mountPath: /workspace/fine-tune
+      volumes:
+        - name: hf-cache
+          hostPath:
+            path: /home/brianh/.cache/huggingface
+            type: Directory
+        - name: finetune-workspace
+          hostPath:
+            path: /home/brianh/.b00t/fine-tune
+            type: Directory
