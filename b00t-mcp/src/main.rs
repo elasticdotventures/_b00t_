@@ -197,7 +197,7 @@ async fn main() -> Result<()> {
             .merge(github_auth_router(github_state));
 
         if is_llm_mode {
-            let llm_state = Arc::new(server_llm::LlmState::new());
+            let llm_state = Arc::new(server_llm::LlmState::new_with_auth(auth_provider));
             eprintln!("🤖 LLM proxy mode activated — upstream auto-discovered (env or local probe)");
             app = app.merge(server_llm::llm_router(llm_state.clone(), auth_provider));
         }

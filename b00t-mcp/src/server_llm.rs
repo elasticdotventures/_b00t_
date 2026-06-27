@@ -16,6 +16,7 @@ use axum::{
     routing::{get, post},
 };
 use axum::http::header;
+use anyhow::Context;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::collections::HashMap;
@@ -215,6 +216,17 @@ static HYDRA_SCOPE_MAP: &[(&str, Action, &str)] = &[
     ("b00t:Store", Action::Write, "store.write"),
 ];
 
+/// Reverse mapping: Hydra scope string → b00t ClassPermission.
+fn hydra_scope_to_permission(scope: &str) -> Option<ClassPermission> {
+    HYDRA_SCOPE_MAP
+        .iter()
+        .find(|(_, _, s)| *s == scope)
+        .map(|(class, action, _)| ClassPermission {
+            class: class.to_string(),
+            action: *action,
+        })
+}
+
 #[derive(Clone, Serialize, Deserialize)]
 pub struct KeyEntry {
     pub consumer: String,
@@ -245,6 +257,7 @@ pub struct LlmState {
     pub keys: Arc<RwLock<HashMap<String, KeyEntry>>>,
     pub keys_file: std::path::PathBuf,
     pub spotlight_log: std::path::PathBuf,
+    pub auth: AuthProvider,
 }
 
 impl LlmState {
@@ -252,6 +265,14 @@ impl LlmState {
         let soul = SoulConfig::load();
         let (url, key) = resolve_upstream(&soul);
         Self::from_config(&url, &key)
+    }
+
+    pub fn new_with_auth(auth: AuthProvider) -> Self {
+        let soul = SoulConfig::load();
+        let (url, key) = resolve_upstream(&soul);
+        let mut state = Self::from_config(&url, &key);
+        state.auth = auth;
+        state
     }
 
     pub fn from_config(upstream_url: &str, upstream_key: &str) -> Self {
@@ -284,11 +305,58 @@ impl LlmState {
             keys: Arc::new(RwLock::new(keys)),
             keys_file,
             spotlight_log: home.join("spotlight.jsonl"),
+            auth: AuthProvider::Basic,
         }
     }
 
     pub async fn validate_key(&self, token: &str) -> Option<KeyEntry> {
-        self.keys.read().await.get(token).cloned()
+        match self.auth {
+            AuthProvider::Hydra => self.validate_key_hydra(token).await.ok().flatten(),
+            _ => self.keys.read().await.get(token).cloned(),
+        }
+    }
+
+    /// Validate a token via Ory Hydra's introspection endpoint.
+    /// Returns a KeyEntry if the token is active, with scopes mapped to ClassPermission.
+    async fn validate_key_hydra(&self, token: &str) -> anyhow::Result<Option<KeyEntry>> {
+        let admin_url = std::env::var("HYDRA_ADMIN_URL")
+            .unwrap_or_else(|_| "http://127.0.0.1:4445".to_string());
+        let url = format!("{}/admin/oauth2/introspect", admin_url.trim_end_matches('/'));
+
+        let client = reqwest::Client::new();
+        let resp = client
+            .post(&url)
+            .form(&[("token", token)])
+            .send()
+            .await
+            .context("Hydra introspection request failed")?;
+
+        if !resp.status().is_success() {
+            return Ok(None);
+        }
+
+        let body: Value = resp.json().await.context("Hydra introspection response parse")?;
+        let active = body.get("active").and_then(|v| v.as_bool()).unwrap_or(false);
+        if !active {
+            return Ok(None);
+        }
+
+        let scope_str = body.get("scope").and_then(|v| v.as_str()).unwrap_or("");
+        let access: Vec<ClassPermission> = scope_str
+            .split_whitespace()
+            .filter_map(hydra_scope_to_permission)
+            .collect();
+
+        let client_id = body.get("client_id")
+            .and_then(|v| v.as_str())
+            .unwrap_or("unknown")
+            .to_string();
+
+        Ok(Some(KeyEntry {
+            consumer: client_id,
+            created_at: chrono::Utc::now(),
+            access,
+        }))
     }
 
     pub async fn check_access(&self, token: &str, class: &str, action: Action) -> bool {
