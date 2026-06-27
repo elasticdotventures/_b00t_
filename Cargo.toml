@@ -97,4 +97,4 @@ too_many_lines = { level = "allow", priority = 1 }
 # FMLA (FEAT_FP16) for aarch64 hosts without fullfp16 (rk3588s, cortex-a55).
 # TODO: upstream PR to gemm crate.
 [patch.crates-io]
-gemm-common = { path = "vendor/gemm-common" }
+# gemm-common = { path = "vendor/gemm-common" }  # TODO: init submodule
