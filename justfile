@@ -497,6 +497,14 @@ version:
 commit-hook:
     #!/bin/bash
     set -euo pipefail
+    # 🚫 Guard: never commit directly to main — use feature branches
+    CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "unknown")
+    if [[ "${CURRENT_BRANCH}" == "main" ]]; then
+        echo "🚫 Direct commits to main are blocked. Create a feature branch:"
+        echo "   git checkout -b feat/<slug>"
+        echo "   (or use git commit --no-verify to bypass — not recommended)"
+        exit 1
+    fi
     # If strict-review flag exists, run the blocking reviewer gate
     if [[ -f ".b00t/strict-review" ]]; then
         echo "🛡️  strict-review gate active — validating staged changes..."
