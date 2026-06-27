@@ -37,7 +37,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          git submodule update --init --depth 1 vendor/tomllm vendor/irontology-mcp vendor/embed-anything-b00t vendor/l3dg3rr
+          git submodule update --init --depth 1 vendor/tomllm vendor/irontology-mcp vendor/embed-anything-b00t vendor/ledgrrr
 
       - name: Install just
         if: inputs.run_tests

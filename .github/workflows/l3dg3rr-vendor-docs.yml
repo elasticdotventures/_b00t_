@@ -4,15 +4,15 @@ on:
   push:
     branches: [main]
     paths:
-      - 'vendor/l3dg3rr'
-      - 'vendor/l3dg3rr/**'
+      - 'vendor/ledgrrr'
+      - 'vendor/ledgrrr/**'
       - '.gitmodules'
       - '.github/workflows/l3dg3rr-vendor-docs.yml'
   pull_request:
     branches: [main]
     paths:
-      - 'vendor/l3dg3rr'
-      - 'vendor/l3dg3rr/**'
+      - 'vendor/ledgrrr'
+      - 'vendor/ledgrrr/**'
       - '.gitmodules'
       - '.github/workflows/l3dg3rr-vendor-docs.yml'
   workflow_dispatch:
@@ -32,7 +32,7 @@ jobs:
           submodules: false
 
       - name: Initialize l3dg3rr submodule
-        run: git submodule update --init --recursive vendor/l3dg3rr
+        run: git submodule update --init --recursive vendor/ledgrrr
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
@@ -40,14 +40,14 @@ jobs:
       - name: Cache Rust/cargo
         uses: Swatinem/rust-cache@v2
         with:
-          workspaces: vendor/l3dg3rr
+          workspaces: vendor/ledgrrr
 
       - name: Install just
         uses: extractions/setup-just@v1
 
       - name: Install mdBook and plugins
         run: |
-          cd vendor/l3dg3rr
+          cd vendor/ledgrrr
           # 🤓 just docgen checks ~/.cargo/bin/mdbook — install everything via cargo
           # so all tools land in the same place. action-mdbook@v3 was removed because
           # it installs to a different prefix, causing null TOML values in the RenderContext
@@ -60,12 +60,12 @@ jobs:
 
       - name: Build l3dg3rr docs
         run: |
-          cd vendor/l3dg3rr
+          cd vendor/ledgrrr
           just docgen
 
       - name: Verify output
         run: |
-          cd vendor/l3dg3rr
+          cd vendor/ledgrrr
           test -d book/book && echo "✓ book/book directory exists" || { echo "✗ docs build failed"; exit 1; }
           test -f book/book/theory.html && echo "✓ theory.html generated" || { echo "✗ theory.html missing"; exit 1; }
           test -f book/book/index.html && echo "✓ index.html generated" || { echo "✗ index.html missing"; exit 1; }
