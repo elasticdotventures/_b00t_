@@ -242,16 +242,15 @@ fn append_manifest(entry: &StoreEntry) -> Result<()> {
         std::fs::create_dir_all(parent)?;
     }
     let line = serde_json::to_string(entry)? + "\n";
-    std::fs::OpenOptions::new()
+    use std::io::Write;
+    let mut file = std::fs::OpenOptions::new()
         .create(true)
         .append(true)
         .write(true)
         .open(&path)
         .context("failed to open manifest")?;
-    // Use fs::write for simplicity after reading
-    let mut content = std::fs::read_to_string(&path).unwrap_or_default();
-    content.push_str(&line);
-    std::fs::write(&path, &content)?;
+    file.write_all(line.as_bytes())
+        .context("failed to append to manifest")?;
     Ok(())
 }
 
