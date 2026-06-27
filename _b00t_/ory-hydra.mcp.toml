@@ -1,0 +1,46 @@
+[b00t]
+name = "ory-hydra"
+type = "mcp"
+hint = "Ory Hydra — OpenID Certified OAuth 2.1 server (Go). Headless, low-latency, Postgres-backed. Deployment: podman/docker."
+requires_sudo = false
+
+[[b00t.mcp.httpstream]]
+url = "http://127.0.0.1:4445"
+transport = "httpstream"
+priority = 0
+requires = ["docker", "internet"]
+requires_auth = false
+
+[b00t.mcp.httpstream.env]
+HYDRA_ADMIN_URL = "http://127.0.0.1:4445"
+DSN = "postgres://hydra:secret@127.0.0.1:5432/hydra?sslmode=disable"
+
+# 🤓 SkillExecutor lifecycle — b00t-mcp lazily spawns Hydra via podman
+[b00t.mcp.lifecycle]
+idle_timeout_secs = 3600  # Auth servers: keep alive longer (1h)
+[[b00t.mcp.lifecycle.servers]]
+name = "hydra-podman"
+command = "podman"
+args = [
+    "run", "--rm",
+    "--name", "b00t-hydra",
+    "--network", "host",
+    "-e", "DSN=postgres://hydra:secret@127.0.0.1:5432/hydra?sslmode=disable",
+    "-e", "URLS_SELF_ISSUER=http://127.0.0.1:4444",
+    "-e", "URLS_LOGIN=http://127.0.0.1:4455/login",
+    "-e", "URLS_CONSENT=http://127.0.0.1:4455/consent",
+    "-e", "SECRETS_SYSTEM=$(openssl rand -hex 32)",
+    "-p", "4444:4444",
+    "-p", "4445:4445",
+    "oryd/hydra:v2",
+    "serve", "all", "--dev"
+]
+env = { DSN = "postgres://hydra:secret@127.0.0.1:5432/hydra?sslmode=disable" }
+health_check = { type = "tcp_port", port = 4445 }
+
+# b00t:map v1
+# summary: Ory Hydra MCP datum — OAuth 2.1 / OIDC server with headless API
+# tags: oauth2, oidc, hydra, identity, auth, security
+# tier: ch0nky
+# cmds: podman run oryd/hydra:v2 serve all --dev
+# complexity: 5
