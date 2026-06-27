@@ -5,8 +5,7 @@
 
 use crate::blessing::BlessingGraph;
 use crate::commands::task::{Task, TaskStatus};
-use crate::datum_utils::{DatumGraph, DatumGraphEdge, DatumGraphNode};
-use crate::DatumType;
+use crate::datum_utils::DatumGraph;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap};
 
@@ -634,6 +633,8 @@ fn escape_xml(raw: &str) -> String {
 mod tests {
     use super::*;
     use crate::blessing::{BlessingEdge, BlessingNode};
+    use crate::datum_utils::{DatumGraphEdge, DatumGraphNode};
+    use crate::DatumType;
 
     #[test]
     fn iso_project_matches_l3dg3rr_contract() {
