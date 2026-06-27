@@ -1,0 +1,182 @@
+# PATTERN: Knowledge Source — anti-hallucination structured vocabulary access
+#
+# Problem: agents hallucinate structured vocabularies (Dewey Decimal codes,
+# OWL class IRIs, ISO currency codes, BFO class names). The table is too large
+# for context AND stale the moment it's embedded.
+#
+# b00t principle: pull from authoritative web source → map the shape →
+# optional executable adapter (crate/CLI/MCP). NEVER embed the table.
+#
+# This datum documents the pattern. Apply it when creating any datum that
+# wraps a classification system, ontology, vocabulary, or registry.
+
+[b00t.schema]
+version   = "1"
+type      = "pattern"
+type_tags = ["pattern", "anti-hallucination", "knowledge-source",
+             "structured-lookup", "sm0l", "vocabulary", "ontology"]
+
+[pattern]
+name    = "knowledge-source"
+intent  = "Describe how to access a structured external vocabulary without embedding it"
+applies_when = [
+  "datum wraps a classification system (Dewey, ICD-10, HS codes)",
+  "datum wraps an ontology vocabulary (BFO, UFO, SKOS, Dublin Core)",
+  "datum wraps a registry (ISO 4217 currencies, LEI, ISIN, SWIFT BIC)",
+  "any lookup where hallucination risk > 0 and the table has a canonical URL",
+]
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# SECTION 1: The shape of a knowledge-source datum
+# ═══════════════════════════════════════════════════════════════════════════════
+
+[pattern.shape]
+# Every knowledge-source datum MUST have these sections:
+
+required = [
+  "[source]     — authoritative URL + format + refresh cadence",
+  "[shape]      — schema description: key field, label field, hierarchy fields",
+  "[adapter]    — how to query: crate | CLI cmd | MCP tool | b00t learn",
+  "[lookup]     — tier + prompt template for agent use",
+]
+
+optional = [
+  "[cache]      — local index path + last_refreshed timestamp",
+  "[examples]   — 3-5 concrete lookup examples for in-context demonstration",
+  "[validates]  — SHACL/regex shape checks for result sanity",
+]
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# SECTION 2: Concrete template
+# ═══════════════════════════════════════════════════════════════════════════════
+
+[pattern.template]
+# Copy-paste starting point for a new knowledge-source datum.
+# Replace ALL_CAPS values.
+
+toml = """
+[source]
+name        = "VOCAB_NAME"               # human name, e.g. "Dewey Decimal Classification"
+authority   = "ISSUING_BODY"             # e.g. "OCLC", "OBO Foundry", "ISO"
+url         = "CANONICAL_URL"            # direct to machine-readable file (OWL/SKOS/CSV/JSON)
+format      = "FORMAT"                   # skos/rdf+xml | owl/xml | json | csv | jsonld
+license     = "LICENSE"                  # CC0 | CC-BY | proprietary
+refresh     = "CADENCE"                  # daily | monthly | on-release | never (static)
+refresh_cmd = "SHELL_CMD"                # e.g. curl -sL URL | b00t grok digest --topic TOPIC
+
+[shape]
+# Describe the data model — NOT the data itself.
+key_field   = "FIELD"                    # the unique identifier field
+label_field = "FIELD"                    # human-readable name
+hier_fields = ["PARENT_FIELD"]           # hierarchy: skos:broader, owl:subClassOf, etc.
+entry_count_approx = 0                   # rough size (helps tier routing)
+
+# Optional: field → semantic predicate mapping for SPARQL/triple output
+[[shape.field_map]]
+field     = "skos:notation"
+predicate = "b00t:code"
+
+[[shape.field_map]]
+field     = "skos:prefLabel"
+predicate = "rdfs:label"
+
+[adapter]
+# At least one of: crate, cli_cmd, mcp_tool, b00t_skill
+crate     = ""                           # Rust crate path or crates.io name
+cli_cmd   = ""                           # e.g. "b00t ontology sparql --subject VOCAB:${key}"
+mcp_tool  = ""                           # e.g. "b00t_grok_ask"
+b00t_skill = ""                          # e.g. "b00t learn ufo-types"
+
+[lookup]
+# sm0l for table lookup; ch0nky for reasoning; frontier for novel classification
+tier      = "sm0l"
+# Prompt template for sm0l lookup — keep it deterministic, not generative
+prompt_template = "Look up {key} in {source.name}. Return only: code, label, broader_label."
+# Structured output schema — forces sm0l to return parseable JSON, not prose
+output_schema = '{ "code": "str", "label": "str", "broader": "str | null" }'
+
+[cache]
+path           = "~/.b00t/knowledge/{source.name}/"
+last_refreshed = ""                      # ISO-8601, updated by refresh_cmd
+format         = "jsonl"                 # one record per line, key-sorted
+index_cmd      = "b00t grok digest --topic {source.name} {cache.path}"
+
+[[examples]]
+query  = "EXAMPLE_QUERY"
+result = "EXAMPLE_RESULT (truncated)"
+"""
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# SECTION 3: Reference implementations
+# ═══════════════════════════════════════════════════════════════════════════════
+
+[pattern.reference_implementations]
+# These datums implement this pattern (search: type_tags contains "knowledge-source")
+implemented_in = [
+  "CAP-ONTOLOGY-INDEX.tomllmd    — BFO, UFO, OWL2, SPARQL, crepe Horn",
+  "VOCAB-DDC.tomllmd             — Dewey Decimal Classification (planned)",
+  "VOCAB-ISO-4217.tomllmd        — ISO currency codes (planned)",
+  "VOCAB-LEI-ISIN.tomllmd        — Legal Entity Identifier + ISIN (planned)",
+]
+
+# ── Why NOT embed the table ───────────────────────────────────────────────────
+[pattern.anti_patterns]
+dont_do = [
+  "Embedding 50K BFO class IRIs in a skill datum — context cost, stale immediately",
+  "Asking frontier model to recall a DDC code — hallucination rate ~40% on obscure codes",
+  "Hardcoding ISO 4217 list — currencies change (South Sudan pound, etc.)",
+  "Relying on training data for OWL2 IRI spellings — models confuse BFO versions",
+]
+do_instead = [
+  "source.url points to the OWL/SKOS file → oxigraph SPARQL query at runtime",
+  "adapter.cli_cmd returns machine-readable JSON → sm0l parses it, no generation",
+  "cache.path holds a local JSONL index → b00t grok digest ingests it → grok_ask queries it",
+  "shape.output_schema constrains sm0l to return only {code, label} → no hallucinated prose",
+]
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# SECTION 4: Tier routing table
+# ═══════════════════════════════════════════════════════════════════════════════
+
+[pattern.tier_routing]
+# Which tier handles which lookup task?
+sm0l = [
+  "Exact code lookup by notation (DDC number, ISO currency code)",
+  "Label → code reverse lookup via local cache JSONL",
+  "Narrower/broader hierarchy walk (one hop)",
+  "Regex-validate a code against source.key_field format",
+]
+ch0nky = [
+  "Classify an entity into a vocabulary (which BFO class fits this Rust type?)",
+  "Multi-hop hierarchy traversal (DependsOn transitive closure)",
+  "Cross-vocabulary alignment (map DDC class to LOC subject heading)",
+]
+frontier = [
+  "Novel classification (which UFO stereotype fits this new domain concept?)",
+  "Vocabulary gap analysis (what classes are missing from this ontology?)",
+  "Synthesize a new knowledge-source datum for a vocabulary not yet catalogued",
+]
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# SECTION 5: Discovery convention
+# ═══════════════════════════════════════════════════════════════════════════════
+
+[pattern.discovery]
+# How agents find knowledge-source datums without loading them all:
+search_tag  = "knowledge-source"     # type_tags always includes this
+search_cmd  = "b00t grok ask 'knowledge source for {vocabulary_name}'"
+index_datum = "CAP-ONTOLOGY-INDEX.tomllmd"  # master index of all native ontology sources
+refresh_all = "fdfind 'knowledge-source' _b00t_/ | xargs -I{} b00t datum refresh {}"
+
+# Agents MUST:
+# 1. Query CAP-ONTOLOGY-INDEX before loading any vocabulary skill
+# 2. Use adapter.cli_cmd / adapter.mcp_tool to do the actual lookup
+# 3. NEVER generate vocabulary terms — always retrieve
+# 4. Route to sm0l for lookup, ch0nky+ for classification
+
+# b00t:map v1
+# summary: PATTERN — anti-hallucination structured vocabulary access; pull from web, map shape, adapter
+# tags: pattern, anti-hallucination, knowledge-source, sm0l, structured-lookup, vocabulary
+# tier: frontier
+# cmds: b00t grok ask 'knowledge source for BFO'; fdfind 'knowledge-source' _b00t_/
+# complexity: 6

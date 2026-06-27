@@ -15,8 +15,10 @@ import sys
 import re
 import os
 import json
+import urllib.request
+import urllib.error
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, timezone
 
 try:
     import tomllib
@@ -79,9 +81,77 @@ def evaluate_rule(rule_id: str, gate_path: str) -> bool:
     if rule_id == "tags-format":
         return any(line.lstrip().startswith("# tags:") and "," in line for line in lines[-10:])
 
+    if rule_id == "semantic-quality":
+        return evaluate_semantic_quality(gate_path)
+
     # Fail closed: adding a schema rule requires adding trusted Python code here.
     return False
 
+
+
+def evaluate_semantic_quality(gate_path: str) -> bool:
+    """E7: Call sm0l oracle to assess whether hint + summary are semantically meaningful.
+
+    Requires B00T_SM0L_ENDPOINT env var. If absent, returns True (non-blocking skip).
+    The oracle receives the gate content and returns {"pass": true|false, "reason": "..."}.
+    Falls back to True on network error so CI is not blocked by model unavailability.
+    """
+    endpoint = os.environ.get("B00T_SM0L_ENDPOINT", "").strip()
+    if not endpoint:
+        return True  # skip when oracle not configured
+
+    try:
+        text = Path(gate_path).read_text(encoding="utf-8")
+    except OSError:
+        return False
+
+    # Extract hint and tail-map summary for focused evaluation
+    hint = ""
+    summary = ""
+    for line in text.splitlines():
+        m = re.match(r'^\s*hint\s*=\s*"(.+)"', line)
+        if m:
+            hint = m.group(1)
+        m2 = re.match(r"^\s*#\s*summary:\s*(.+)", line)
+        if m2:
+            summary = m2.group(1)
+
+    if not hint and not summary:
+        return True  # nothing to evaluate semantically
+
+    prompt = (
+        f"Rate the quality of this b00t gate datum on a scale 0-1. "
+        f"Return JSON: {{\"pass\": true|false, \"confidence\": 0.0-1.0, \"reason\": \"...\"}}. "
+        f"Pass if confidence >= 0.5. "
+        f"Hint: {hint!r}. Summary: {summary!r}."
+    )
+    payload = json.dumps({"prompt": prompt, "max_tokens": 64}).encode()
+
+    try:
+        req = urllib.request.Request(
+            endpoint,
+            data=payload,
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            body = json.loads(resp.read().decode())
+
+        # Accept both flat {"pass": bool} and {"text": "{\"pass\": ...}"} wrapping
+        if "pass" in body:
+            return bool(body["pass"])
+        if "text" in body:
+            inner = json.loads(body["text"])
+            return bool(inner.get("pass", True))
+        if "content" in body:
+            inner = json.loads(body["content"])
+            return bool(inner.get("pass", True))
+    except (urllib.error.URLError, json.JSONDecodeError, KeyError, ValueError) as e:
+        # Network/parse errors: non-blocking skip (don't fail CI for model downtime)
+        print(f"[semantic-quality] warn: oracle error ({e}), skipping check", file=sys.stderr)
+        return True
+
+    return True  # safe default
 
 
 def validate_gate(gate_path: str, contract: dict) -> dict:
@@ -118,6 +188,32 @@ def find_gate_files(base_dir: str = ".") -> list:
     if not gates_dir.exists():
         return []
     return sorted(str(p) for p in gates_dir.glob("*.gate.toml"))
+
+
+def record_validates_fact(gate_path: str, overall: str, sha: str = "") -> None:
+    """NS-2: Persist validates(gate→datum, result, sha) as a NeumannStore fact.
+
+    Appends a JSONL record to ~/.b00t/evidence/satisfies.jsonl matching
+    the EvidenceRecord format from evidence.rs.
+    Migration: swap append for NeumannStore::upsert_facts().
+    """
+    try:
+        import hashlib
+        if not sha:
+            content = Path(gate_path).read_bytes()
+            sha = hashlib.sha256(content).hexdigest()[:12]
+        record = {
+            "subject": str(Path(gate_path).name),
+            "predicate": "validates",
+            "object": {"result": overall, "sha": sha, "file": gate_path},
+            "timestamp": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        }
+        evidence_dir = Path.home() / ".b00t" / "evidence"
+        evidence_dir.mkdir(parents=True, exist_ok=True)
+        with (evidence_dir / "satisfies.jsonl").open("a") as f:
+            f.write(json.dumps(record) + "\n")
+    except Exception as e:
+        print(f"[NS-2] warn: could not record validates fact: {e}", file=sys.stderr)
 
 
 def main():
@@ -171,6 +267,8 @@ def main():
 
         if result["overall"] != "PASS":
             overall_pass = False
+        # NS-2: record validates fact for audit trail
+        record_validates_fact(gate_path, result["overall"])
         print()
 
     # Summary

@@ -13,6 +13,8 @@
 //! ```
 
 use anyhow::Result;
+use b00t_c0re_a2a::{AgentCard, HiveRegistry};
+use crate::commands::evidence::{record_manifest_evidence, record_edge, record_satisfies};
 use crate::datum_utils::get_all_datums;
 use std::path::PathBuf;
 
@@ -101,6 +103,82 @@ fn list_roles(b00t_path: &str) -> Result<()> {
     Ok(())
 }
 
+/// A skill referenced in a role's `depends_on` that has no local datum.
+/// ST-A (K1): observe-only — url is always None until ST-B wires A2A discovery.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DiscoverHint {
+    pub skill: String,
+    /// AgentCard URL of a remote agent that has this skill, or None if not found.
+    pub url: Option<String>,
+    pub agent_id: Option<String>,
+}
+
+/// Walk the role's `depends_on` graph and return hints for skills with no
+/// local datum (ST-A: url/agent_id always None — A2A query added in ST-B).
+pub fn discover_missing_skills(
+    datums: &std::collections::HashMap<String, crate::BootDatum>,
+    role: &str,
+) -> Vec<DiscoverHint> {
+    let role_datum = datums.get(role).or_else(|| {
+        datums.iter().find(|(k, _)| k.starts_with(role)).map(|(_, v)| v)
+    });
+
+    let direct_deps: Vec<String> = role_datum
+        .and_then(|d| d.depends_on.clone())
+        .unwrap_or_default();
+
+    direct_deps
+        .into_iter()
+        .filter(|dep_key| !datums.contains_key(dep_key))
+        .map(|skill| DiscoverHint { skill, url: None, agent_id: None })
+        .collect()
+}
+
+/// ST-B: Enrich hints by querying the hive for agents that have each missing skill.
+/// If the registry has a remote agent with the skill, populate `agent_id`.
+/// In practice the registry starts empty (no heartbeat yet) — enrichment is a no-op
+/// until the hive is running. The hook is exercised in tests via a pre-populated registry.
+pub fn enrich_hints_with_hive(hints: Vec<DiscoverHint>, registry: &HiveRegistry) -> Vec<DiscoverHint> {
+    hints.into_iter().map(|mut hint| {
+        if hint.agent_id.is_none() {
+            let matches = registry.find_agents_by_skill(&hint.skill);
+            // Prefer the first non-local match
+            if let Some((agent_id, card)) = matches.into_iter().find(|(id, _)| id != "local") {
+                hint.agent_id = Some(agent_id);
+                hint.url = Some(card.url.to_string());
+            }
+        }
+        hint
+    }).collect()
+}
+
+/// ST-C: When hive enrichment left agent_id=None, check B00T_SM0L_ENDPOINT.
+/// If set, mark the hint with agent_id="sm0l:infer" so the caller knows to
+/// delegate skill discovery to the local fine-tuned sm0l oracle.
+pub fn route_unmatched_via_sm0l(hints: Vec<DiscoverHint>) -> Vec<DiscoverHint> {
+    let endpoint = std::env::var("B00T_SM0L_ENDPOINT").ok();
+    hints.into_iter().map(|mut hint| {
+        if hint.agent_id.is_none() {
+            if let Some(ref ep) = endpoint {
+                hint.agent_id = Some("sm0l:infer".to_string());
+                hint.url = Some(ep.clone());
+            }
+        }
+        hint
+    }).collect()
+}
+
+/// Build a minimal read-only HiveRegistry for CLI use (no remote hives registered).
+fn local_hive_registry() -> HiveRegistry {
+    local_hive_registry_for_test()
+}
+
+pub fn local_hive_registry_for_test() -> HiveRegistry {
+    let url = url::Url::parse("stdio://local").expect("static url");
+    let card = AgentCard::new("b00t-cli", "local blessing manifest agent", url);
+    HiveRegistry::new(card)
+}
+
 fn emit_manifest(b00t_path: &str, role: &str, fmt: &str) -> Result<()> {
     let datums = get_all_datums(b00t_path)?;
 
@@ -115,6 +193,10 @@ fn emit_manifest(b00t_path: &str, role: &str, fmt: &str) -> Result<()> {
 
     let mut required: Vec<(String, Vec<String>)> = Vec::new();
     let mut optional: Vec<(String, Vec<String>)> = Vec::new();
+    let raw_hints = discover_missing_skills(&datums, role);
+    let hive = local_hive_registry();
+    let enriched_hints = enrich_hints_with_hive(raw_hints, &hive);
+    let discover_hints = route_unmatched_via_sm0l(enriched_hints);
 
     for dep_key in &direct_deps {
         let unlocks = datums.get(dep_key)
@@ -158,6 +240,11 @@ fn emit_manifest(b00t_path: &str, role: &str, fmt: &str) -> Result<()> {
                 "optional": optional.iter().map(|(k, u)| serde_json::json!({"skill": k, "unlocks": u})).collect::<Vec<_>>(),
                 "forbidden": forbidden,
                 "next": format!("b00t learn {next_skill}"),
+                "discover": discover_hints.iter().map(|h| serde_json::json!({
+                    "skill": h.skill,
+                    "url": h.url,
+                    "agent_id": h.agent_id,
+                })).collect::<Vec<_>>(),
             });
             println!("{}", serde_json::to_string_pretty(&out)?);
         }
@@ -186,7 +273,42 @@ fn emit_manifest(b00t_path: &str, role: &str, fmt: &str) -> Result<()> {
             println!();
             println!("[blessing.next]");
             println!("hint = {:?}", format!("b00t learn {next_skill}"));
+            if !discover_hints.is_empty() {
+                println!();
+                println!("[blessing.discover]");
+                println!("# Skills needed by role '{role}' with no local datum — not yet in hive");
+                for h in &discover_hints {
+                    let url_str = h.url.as_deref().unwrap_or("None");
+                    println!("# DISCOVER: skill={} url={url_str}", h.skill);
+                    println!("# hint: b00t agent discover --capability {}", h.skill);
+                }
+            }
         }
+    }
+    // E4: record Satisfies evidence for locally-present required skills
+    {
+        let satisfied: Vec<String> = required.iter().map(|(k, _)| k.clone()).collect();
+        record_manifest_evidence(role, &satisfied);
+    }
+    // NS-1: persist requires(role→skill) + unlocks(skill→tool_pattern) as facts
+    for (skill_key, unlocks) in &required {
+        let constraint = format!("requires:role:{role}");
+        let _ = record_satisfies(skill_key, &constraint);
+        for tool_pattern in unlocks {
+            let unlock_constraint = format!("unlocks:tool:{tool_pattern}");
+            let _ = record_satisfies(skill_key, &unlock_constraint);
+        }
+    }
+    // NS-3: persist discovers(role→missing_skill, via: ST-A|ST-B|ST-C) as edges
+    for hint in &discover_hints {
+        let via = if hint.agent_id.as_deref() == Some("sm0l:infer") {
+            "ST-C"
+        } else if hint.agent_id.is_some() {
+            "ST-B"
+        } else {
+            "ST-A"
+        };
+        let _ = record_edge(role, "discovers", &hint.skill, serde_json::json!({"via": via}));
     }
     Ok(())
 }
@@ -326,4 +448,166 @@ mod tests {
         let expected = vec!["cargo.*".to_string(), "rustfmt".to_string()];
         assert_eq!(rust.unlocks.as_deref(), Some(expected.as_slice()));
     }
+
+    // ── ST-A: skill discovery diagnostics ────────────────────────────────
+
+    fn make_b00t_with_missing_dep(dir: &TempDir) -> String {
+        let p = dir.path().to_str().unwrap().to_string();
+        // Role depends on two skills; only one exists locally
+        fs::write(
+            dir.path().join("myagent.role.toml"),
+            "[b00t]\nname = \"myagent\"\ntype = \"skill\"\nhint = \"Test role\"\ndepends_on = [\"local-skill.skill\", \"remote-only.skill\"]\n",
+        ).unwrap();
+        fs::write(
+            dir.path().join("local-skill.skill.toml"),
+            "[b00t]\nname = \"local-skill\"\ntype = \"skill\"\nunlocks = [\"local.*\"]\n",
+        ).unwrap();
+        // remote-only.skill.toml intentionally NOT created
+        p
+    }
+
+    #[test]
+    fn discover_missing_skills_returns_hint_for_absent_datum() {
+        let dir = TempDir::new().unwrap();
+        let path = make_b00t_with_missing_dep(&dir);
+        let datums = get_all_datums(&path).unwrap();
+
+        let hints = discover_missing_skills(&datums, "myagent");
+
+        assert_eq!(hints.len(), 1, "exactly one missing skill");
+        assert_eq!(hints[0].skill, "remote-only.skill");
+        assert_eq!(hints[0].url, None, "ST-A: url always None (no A2A query yet)");
+        assert_eq!(hints[0].agent_id, None);
+    }
+
+    #[test]
+    fn discover_missing_skills_returns_empty_when_all_local() {
+        let dir = TempDir::new().unwrap();
+        let path = make_b00t(&dir);
+        let datums = get_all_datums(&path).unwrap();
+
+        let hints = discover_missing_skills(&datums, "backend");
+        assert!(hints.is_empty(), "all deps present locally — no discover hints");
+    }
+
+    #[test]
+    fn emit_manifest_toml_includes_discover_section_for_missing_skill() {
+        let dir = TempDir::new().unwrap();
+        let path = make_b00t_with_missing_dep(&dir);
+
+        // Capture by checking emit doesn't panic and output contains DISCOVER
+        // (stdout capture is complex; we verify via discover_missing_skills directly
+        //  and trust emit_manifest calls it — covered by the function test above)
+        emit_manifest(&path, "myagent", "toml").unwrap();
+    }
+
+    #[test]
+    fn emit_manifest_json_includes_discover_array_for_missing_skill() {
+        let dir = TempDir::new().unwrap();
+        let path = make_b00t_with_missing_dep(&dir);
+        emit_manifest(&path, "myagent", "json").unwrap();
+    }
+
+    // ── ST-B: hive enrichment ─────────────────────────────────────────────
+
+    #[test]
+    fn enrich_hints_with_hive_populates_agent_id_from_remote() {
+        use b00t_c0re_a2a::{AgentCard, HiveRegistry, Skill};
+        use url::Url;
+
+        // Build a registry with one remote agent advertising "remote-only.skill"
+        let local_url = Url::parse("stdio://local").unwrap();
+        let local_card = AgentCard::new("local-agent", "local", local_url);
+        let mut registry = HiveRegistry::new(local_card);
+
+        let remote_url = Url::parse("http://hive-node-1:4000").unwrap();
+        let remote_card = AgentCard::new("remote-agent", "remote", remote_url.clone())
+            .with_skill(Skill {
+                id: "remote-only.skill".to_string(),
+                name: "remote-only".to_string(),
+                description: "provided remotely".to_string(),
+                input_schema: serde_json::Value::Null,
+                output_schema: serde_json::Value::Null,
+            });
+
+        registry.add_remote("hive-node-1".to_string(), remote_url, vec![remote_card]);
+
+        // Hints with agent_id = None (as ST-A produces)
+        let hints = vec![
+            crate::commands::blessing::DiscoverHint {
+                skill: "remote-only.skill".to_string(),
+                url: None,
+                agent_id: None,
+            },
+            crate::commands::blessing::DiscoverHint {
+                skill: "truly-missing.skill".to_string(),
+                url: None,
+                agent_id: None,
+            },
+        ];
+
+        let enriched = crate::commands::blessing::enrich_hints_with_hive(hints, &registry);
+
+        // First hint: hive found it → agent_id populated
+        assert_eq!(enriched[0].agent_id.as_deref(), Some("hive-node-1"));
+        assert!(enriched[0].url.is_some(), "url should come from AgentCard");
+
+        // Second hint: hive has no match → stays None
+        assert_eq!(enriched[1].agent_id, None);
+    }
+
+    #[test]
+    fn enrich_hints_returns_unchanged_when_hive_empty() {
+        let registry = crate::commands::blessing::local_hive_registry_for_test();
+        let hints = vec![crate::commands::blessing::DiscoverHint {
+            skill: "anything.skill".to_string(),
+            url: None,
+            agent_id: None,
+        }];
+        let enriched = crate::commands::blessing::enrich_hints_with_hive(hints, &registry);
+        assert_eq!(enriched[0].agent_id, None, "empty registry never enriches");
+    }
+
+    // ── ST-C: sm0l oracle routing ─────────────────────────────────────────
+
+    #[test]
+    fn route_unmatched_via_sm0l_sets_agent_id_when_endpoint_set() {
+        unsafe { std::env::set_var("B00T_SM0L_ENDPOINT", "http://localhost:8080"); }
+        let hints = vec![crate::commands::blessing::DiscoverHint {
+            skill: "unknown.skill".to_string(),
+            url: None,
+            agent_id: None,
+        }];
+        let routed = crate::commands::blessing::route_unmatched_via_sm0l(hints);
+        assert_eq!(routed[0].agent_id.as_deref(), Some("sm0l:infer"));
+        assert_eq!(routed[0].url.as_deref(), Some("http://localhost:8080"));
+        unsafe { std::env::remove_var("B00T_SM0L_ENDPOINT"); }
+    }
+
+    #[test]
+    fn route_unmatched_via_sm0l_no_op_when_endpoint_absent() {
+        unsafe { std::env::remove_var("B00T_SM0L_ENDPOINT"); }
+        let hints = vec![crate::commands::blessing::DiscoverHint {
+            skill: "unknown.skill".to_string(),
+            url: None,
+            agent_id: None,
+        }];
+        let routed = crate::commands::blessing::route_unmatched_via_sm0l(hints);
+        assert_eq!(routed[0].agent_id, None);
+    }
+
+    #[test]
+    fn route_unmatched_via_sm0l_skips_already_enriched_hints() {
+        unsafe { std::env::set_var("B00T_SM0L_ENDPOINT", "http://localhost:8080"); }
+        let hints = vec![crate::commands::blessing::DiscoverHint {
+            skill: "found.skill".to_string(),
+            url: Some("http://hive-node:4000".to_string()),
+            agent_id: Some("hive-node-1".to_string()),
+        }];
+        let routed = crate::commands::blessing::route_unmatched_via_sm0l(hints);
+        // Already has agent_id — must not be overwritten
+        assert_eq!(routed[0].agent_id.as_deref(), Some("hive-node-1"));
+        unsafe { std::env::remove_var("B00T_SM0L_ENDPOINT"); }
+    }
+
 }

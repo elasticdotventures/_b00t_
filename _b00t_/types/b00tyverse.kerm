@@ -1,0 +1,359 @@
+# b00tyverse KerML type definitions
+# Format: TOML arrays of [[type]] and [[relation]] following domain.kerm conventions.
+# BFO/UFO grounding for every b00t entity class.
+# Cross-ref: PRD-F0UNDRY-AGENT-ONTOLOGY.tomllmd, PRD-ARCH-006, PRD-ONTOLOGY-OODA-UFO-SYSML
+
+# ── Root types ────────────────────────────────────────────────────────────────
+
+[[type]]
+id    = "b00t::Datum"
+label = "Datum"
+kind  = "kind_node"
+ufo_category  = "Endurant"
+ufo_stereotype = "Kind"
+bfo_class = "BFO:GenericallyDependentContinuant"
+note = "Root of all b00t datum types. Concretely: a TOML file in _b00t_/"
+
+[[type]]
+id    = "b00t::Agent"
+label = "Agent"
+kind  = "kind_node"
+supertype = "b00t::Datum"
+ufo_category = "Endurant"
+ufo_stereotype = "Kind"
+bfo_class = "BFO:IndependentContinuant"
+note = ".agent.toml datum; runs in a tier (sm0l|ch0nky|frontier)"
+
+[[type]]
+id    = "b00t::Role"
+label = "Role"
+kind  = "kind_node"
+supertype = "b00t::Datum"
+ufo_category = "Endurant"
+ufo_stereotype = "Role"
+bfo_class = "BFO:RealizableEntity"
+note = ".role.toml datum; role played by Agent in relational context (AGENTS/ supplement)"
+
+[[type]]
+id    = "b00t::Skill"
+label = "Skill"
+kind  = "kind_node"
+supertype = "b00t::Datum"
+ufo_category = "Moment"
+ufo_stereotype = "Mode"
+bfo_class = "BFO:RealizableEntity"
+note = ".skill.toml; realized when Agent executes it; unlocks MCP tools (AuthZ)"
+
+[[type]]
+id    = "b00t::Capability"
+label = "Capability"
+kind  = "kind_node"
+ufo_category = "Moment"
+ufo_stereotype = "Mode"
+bfo_class = "BFO:RealizableEntity"
+note = "Inheres in Agent; aggregate of all learned Skills"
+
+# ── Interface types ───────────────────────────────────────────────────────────
+
+[[type]]
+id    = "b00t::McpTool"
+label = "McpTool"
+kind  = "kind_node"
+supertype = "b00t::Datum"
+ufo_category = "Moment"
+ufo_stereotype = "Relator"
+bfo_class = "BFO:RealizableEntity"
+note = ".mcp.toml; mediates Agent↔Service; JSON-RPC boundary = language-neutral port"
+
+[[type]]
+id    = "b00t::Cli"
+label = "Cli"
+kind  = "kind_node"
+supertype = "b00t::Datum"
+ufo_category = "Moment"
+ufo_stereotype = "Mode"
+bfo_class = "BFO:RealizableEntity"
+note = ".cli.toml; shell-level capability; AuthZ via skill.unlocks"
+
+[[type]]
+id    = "b00t::Api"
+label = "Api"
+kind  = "kind_node"
+supertype = "b00t::Datum"
+ufo_category = "Moment"
+ufo_stereotype = "Relator"
+bfo_class = "BFO:RealizableEntity"
+note = ".api.toml; external HTTP/gRPC service binding"
+
+# ── Compute substrate types ───────────────────────────────────────────────────
+
+[[type]]
+id    = "b00t::HiveProfile"
+label = "HiveProfile"
+kind  = "kind_node"
+supertype = "b00t::Datum"
+ufo_category = "Endurant"
+ufo_stereotype = "Kind"
+bfo_class = "BFO:SpatialRegion"
+note = ".hive.toml; declares RAM/GPU/CPU resources + exclusion.group + services + guards"
+
+[[type]]
+id    = "b00t::Hardware"
+label = "Hardware"
+kind  = "kind_node"
+supertype = "b00t::Datum"
+ufo_category = "Endurant"
+ufo_stereotype = "Kind"
+bfo_class = "BFO:Object"
+note = ".hardware.toml; physical substrate (RTX3090, RK3588 NPU)"
+
+[[type]]
+id    = "b00t::Docker"
+label = "Docker"
+kind  = "kind_node"
+supertype = "b00t::Datum"
+ufo_category = "Endurant"
+ufo_stereotype = "SubKind"
+bfo_class = "BFO:SpatialRegion"
+note = ".docker.toml; container service; use podman --device nvidia.com/gpu=all"
+
+[[type]]
+id    = "b00t::K8s"
+label = "K8s"
+kind  = "kind_node"
+supertype = "b00t::Datum"
+ufo_category = "Endurant"
+ufo_stereotype = "SubKind"
+bfo_class = "BFO:SpatialRegion"
+note = ".k8s.toml; Kubernetes workload / namespace definition"
+
+[[type]]
+id    = "b00t::Stack"
+label = "Stack"
+kind  = "kind_node"
+supertype = "b00t::Datum"
+ufo_category = "Endurant"
+ufo_stereotype = "Category"
+bfo_class = "BFO:ObjectAggregate"
+note = ".stack.toml; named collection of Datums forming a cohesive subsystem"
+
+[[type]]
+id    = "b00t::AiProfile"
+label = "AiProfile"
+kind  = "kind_node"
+supertype = "b00t::Datum"
+ufo_category = "Endurant"
+ufo_stereotype = "Kind"
+bfo_class = "BFO:IndependentContinuant"
+note = ".ai.toml; LLM model profile (tier, context window, cost-per-token)"
+
+# ── Data & state types ────────────────────────────────────────────────────────
+
+[[type]]
+id    = "b00t::Database"
+label = "Database"
+kind  = "kind_node"
+supertype = "b00t::Datum"
+ufo_category = "Endurant"
+ufo_stereotype = "Kind"
+bfo_class = "BFO:GenericallyDependentContinuant"
+note = ".database.toml; persistent data store (sqlite, qdrant)"
+
+[[type]]
+id    = "b00t::Repo"
+label = "Repo"
+kind  = "kind_node"
+supertype = "b00t::Datum"
+ufo_category = "Endurant"
+ufo_stereotype = "Kind"
+bfo_class = "BFO:GenericallyDependentContinuant"
+note = ".repo.toml; git repository reference"
+
+[[type]]
+id    = "b00t::Config"
+label = "Config"
+kind  = "kind_node"
+supertype = "b00t::Datum"
+ufo_category = "Endurant"
+ufo_stereotype = "SubKind"
+bfo_class = "BFO:GenericallyDependentContinuant"
+note = ".config.toml; tool / service configuration"
+
+[[type]]
+id    = "b00t::Overlay"
+label = "Overlay"
+kind  = "kind_node"
+supertype = "b00t::Datum"
+ufo_category = "Endurant"
+ufo_stereotype = "Phase"
+bfo_class = "BFO:GenericallyDependentContinuant"
+note = ".overlay.toml; per-node state overlay; transient phase of a Datum"
+
+# ── Automation & execution types ──────────────────────────────────────────────
+
+[[type]]
+id    = "b00t::Job"
+label = "Job"
+kind  = "process_node"
+ufo_category = "Perdurant"
+ufo_stereotype = "Process"
+bfo_class = "BFO:Process"
+note = ".job.toml; temporal process; unfolds, consumes compute, produces artifact"
+
+[[type]]
+id    = "b00t::Justfile"
+label = "Justfile"
+kind  = "plan_node"
+ufo_category = "Abstract"
+bfo_class = "BFO:Plan"
+note = ".justfile.toml; just recipe collection; PolyConnector<T> substrate P0"
+
+[[type]]
+id    = "b00t::Bash"
+label = "Bash"
+kind  = "plan_node"
+ufo_category = "Abstract"
+bfo_class = "BFO:Plan"
+note = ".bash.toml; shell script; check command guards before execution"
+
+[[type]]
+id    = "b00t::Apt"
+label = "Apt"
+kind  = "kind_node"
+supertype = "b00t::Datum"
+ufo_category = "Endurant"
+ufo_stereotype = "Kind"
+bfo_class = "BFO:MaterialEntity"
+note = ".apt.toml; Debian/Ubuntu system package"
+
+[[type]]
+id    = "b00t::Nix"
+label = "Nix"
+kind  = "kind_node"
+supertype = "b00t::Datum"
+ufo_category = "Endurant"
+ufo_stereotype = "Kind"
+bfo_class = "BFO:MaterialEntity"
+note = ".nix.toml; Nix package declaration"
+
+# ── f0undry meta-types ────────────────────────────────────────────────────────
+
+[[type]]
+id    = "b00t::F0undryEntry"
+label = "F0undryEntry"
+kind  = "kind_node"
+ufo_category = "Abstract"
+bfo_class = "BFO:InformationContentEntity"
+note = "Compiled catalog entry: HolonNode + BFO class + UFO stereotype + tier + unlocks"
+
+[[type]]
+id    = "b00t::SatisfiesBinding"
+label = "SatisfiesBinding"
+kind  = "relator_node"
+ufo_category = "Moment"
+ufo_stereotype = "Relator"
+bfo_class = "BFO:RealizableEntity"
+note = "UFO Relator mediating Datum↔Constraint; carries SatisfiesResult as intrinsic property"
+
+[[type]]
+id    = "b00t::Constraint"
+label = "Constraint"
+kind  = "abstract_node"
+ufo_category = "Abstract"
+bfo_class = "BFO:InformationContentEntity"
+note = "Rust marker trait: Constraint; evaluated by Satisfies<C>::satisfies()"
+
+# ── Soul KV-cache types ───────────────────────────────────────────────────────
+
+[[type]]
+id    = "b00t::Session"
+label = "Session"
+kind  = "process_node"
+ufo_category = "Perdurant"
+ufo_stereotype = "Process"
+bfo_class = "BFO:TemporalRegion"
+note = "One agent invocation; bounded by whoami+blessings at start, session_end at close"
+
+[[type]]
+id    = "b00t::Blessing"
+label = "Blessing"
+kind  = "kind_node"
+ufo_category = "Moment"
+ufo_stereotype = "Mode"
+bfo_class = "BFO:RealizableEntity"
+note = "Authorization state: agent has loaded Skill, unlocking MCP tools for this Session"
+
+# ── Relations ──────────────────────────────────────────────────────────────────
+
+[[relation]]
+source  = "b00t::Agent"
+target  = "b00t::Capability"
+kind    = "hasInherent"
+note    = "UFO: Mode (Capability) inheres in Agent"
+
+[[relation]]
+source  = "b00t::Agent"
+target  = "b00t::Role"
+kind    = "playsRole"
+note    = "UFO: Agent plays Role in relational context; role supplement loaded via AGENTS/"
+
+[[relation]]
+source  = "b00t::Skill"
+target  = "b00t::McpTool"
+kind    = "unlocks"
+note    = "AuthZ edge: b00t learn <skill> grants access to McpTool set in skill.unlocks[]"
+
+[[relation]]
+source  = "b00t::HiveProfile"
+target  = "b00t::Agent"
+kind    = "orchestrates"
+note    = "HiveProfile declares the compute environment that provisions Agents"
+
+[[relation]]
+source  = "b00t::Stack"
+target  = "b00t::Datum"
+kind    = "aggregates"
+note    = "Stack is an ObjectAggregate of Datums forming a cohesive subsystem"
+
+[[relation]]
+source  = "b00t::Job"
+target  = "b00t::AiProfile"
+kind    = "routesTo"
+note    = "Job selects AiProfile via tier routing (sm0l|ch0nky|frontier)"
+
+[[relation]]
+source  = "b00t::F0undryEntry"
+target  = "b00t::Datum"
+kind    = "catalogs"
+note    = "F0undryEntry is a compiled view of a Datum with ontological grounding"
+
+[[relation]]
+source  = "b00t::SatisfiesBinding"
+target  = "b00t::Datum"
+kind    = "inheres_in"
+note    = "Binding inheres in Datum (UFO: Relator inheres in its relata)"
+
+[[relation]]
+source  = "b00t::SatisfiesBinding"
+target  = "b00t::Constraint"
+kind    = "inheres_in"
+note    = "Binding also inheres in Constraint (UFO: Relator mediates both relata)"
+
+[[relation]]
+source  = "b00t::Blessing"
+target  = "b00t::Session"
+kind    = "partOf"
+note    = "Blessing is scoped to a Session; lost on session_end"
+
+[[relation]]
+source  = "b00t::Agent"
+target  = "b00t::Blessing"
+kind    = "hasInherent"
+note    = "Agent accumulates Blessings during Session via b00t learn"
+
+# b00t:map v1
+# summary: b00tyverse KerML types — all DatumType variants with BFO class + UFO stereotype + relations
+# tags: kerml, ontology, bfo, ufo, b00tyverse, f0undry, datum-types
+# tier: frontier
+# cmds: b00t-cli ontology sparql --subject b00t::Skill --predicate all
+# complexity: 7
