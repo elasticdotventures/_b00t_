@@ -172,10 +172,14 @@ async fn main() -> Result<()> {
             }
         }
 
-        let is_dev_mode = acl_config.as_ref()
-            .and_then(|c| c.dev.as_ref())
-            .and_then(|d| d.bypass_oauth)
-            .unwrap_or(false);
+        let auth_provider = server_llm::AuthProvider::from_env_or_default();
+        let is_dev_mode = matches!(auth_provider, server_llm::AuthProvider::Dev);
+
+        match auth_provider {
+            server_llm::AuthProvider::Dev => eprintln!("🔓 auth: dev mode (no auth required)"),
+            server_llm::AuthProvider::Basic => eprintln!("🔑 auth: basic (API keys from server-keys.json)"),
+            server_llm::AuthProvider::Hydra => eprintln!("🔐 auth: hydra (OAuth 2.1 via Hydra introspection)"),
+        }
 
         // Create GitHub auth state
         let github_config = GitHubAuthConfig::default();
@@ -195,7 +199,7 @@ async fn main() -> Result<()> {
         if is_llm_mode {
             let llm_state = Arc::new(server_llm::LlmState::new());
             eprintln!("🤖 LLM proxy mode activated — upstream auto-discovered (env or local probe)");
-            app = app.merge(server_llm::llm_router(llm_state.clone(), is_dev_mode));
+            app = app.merge(server_llm::llm_router(llm_state.clone(), auth_provider));
         }
 
         let app = app.layer(CorsLayer::permissive());
