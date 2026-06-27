@@ -15,7 +15,6 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          # k0mmand3r tests do not require repo submodules.
           # Avoid recursive submodule checkout because orphan gitlinks can
           # break CI checkout before tests run.
           submodules: false
@@ -23,7 +22,7 @@ jobs:
       - name: Init required vendor submodules
         run: |
           set -euo pipefail
-          git submodule update --init --depth 1 vendor/tomllm vendor/irontology-mcp vendor/embed-anything-b00t vendor/l3dg3rr
+          git submodule update --init --depth 1 vendor/tomllm vendor/irontology-mcp vendor/embed-anything-b00t vendor/ledgrrr vendor/l3dg3rr
 
       - name: install stable
         uses: actions-rs/toolchain@v1

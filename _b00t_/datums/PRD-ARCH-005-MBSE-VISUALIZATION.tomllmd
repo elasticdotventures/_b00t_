@@ -13,13 +13,13 @@ tier   = "ch0nky"
 closes_task = 28
 
 # ─── Executive Summary ───────────────────────────────────────────────────────
-# vendor/l3dg3rr contains a KerML/SysMLv2 ontology with typed domains, relations,
+# vendor/ledgrrr contains a KerML/SysMLv2 ontology with typed domains, relations,
 # and classifiers. irontology-mcp can query DatumNodes but has no diagram export.
 # This PRD adds `b00t ontology diagram` to generate Mermaid and SysMLv2 graphs
 # from the live irontology-mcp knowledge graph — enabling MBSE visualization.
 
 [current_state]
-l3dg3rr_types = "vendor/l3dg3rr/types/domain.kerm — KerML [[type]] arrays"
+l3dg3rr_types = "vendor/ledgrrr/types/domain.kerm — KerML [[type]] arrays"
 irontology    = "vendor/irontology-mcp — DatumNode store, query via mcp tool"
 missing       = ["diagram export", "Mermaid codegen", "SysMLv2 part definition export"]
 
@@ -27,7 +27,7 @@ missing       = ["diagram export", "Mermaid codegen", "SysMLv2 part definition e
 # domain.kerm defines [[type]] blocks: id, label, kind, supertype, ufo_category
 # irontology DatumStore indexes by class → can query by supertype chain
 # New: traverse supertype graph → emit Mermaid classDiagram or SysMLv2 block def
-kerm_source   = "vendor/l3dg3rr/types/domain.kerm"
+kerm_source   = "vendor/ledgrrr/types/domain.kerm"
 datum_class   = "b00t:KermTypeNode"
 query_pattern = "b00t ontology query --class <id> --depth=3"
 

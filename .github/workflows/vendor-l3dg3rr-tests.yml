@@ -4,13 +4,13 @@ on:
   push:
     branches: [main]
     paths:
-      - 'vendor/l3dg3rr/**'
+      - 'vendor/ledgrrr/**'
       - '.gitmodules'
       - '.github/workflows/vendor-l3dg3rr-tests.yml'
   pull_request:
     branches: [main]
     paths:
-      - 'vendor/l3dg3rr/**'
+      - 'vendor/ledgrrr/**'
       - '.gitmodules'
       - '.github/workflows/vendor-l3dg3rr-tests.yml'
   workflow_dispatch:
@@ -25,7 +25,7 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: vendor/l3dg3rr
+        working-directory: vendor/ledgrrr
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -35,7 +35,19 @@ jobs:
       - name: Initialize l3dg3rr submodule
         working-directory: ${{ github.workspace }}
         run: |
-          git submodule update --init --recursive vendor/l3dg3rr
+          git submodule update --init --recursive vendor/ledgrrr
+
+      - name: Install Linux native dependencies
+        working-directory: ${{ github.workspace }}
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libayatana-appindicator3-dev \
+            libglib2.0-dev \
+            libgtk-3-dev \
+            librsvg2-dev \
+            libwebkit2gtk-4.1-dev \
+            pkg-config
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -43,7 +55,7 @@ jobs:
       - name: Cache Rust dependencies
         uses: Swatinem/rust-cache@v2
         with:
-          workspaces: vendor/l3dg3rr
+          workspaces: vendor/ledgrrr
 
       - name: Build tests (compile check only)
         run: cargo test --workspace --no-run
