@@ -46,11 +46,11 @@ acceptance_criteria = [
 ]
 
 # ─── KerML-profile type layer (b00t 'physics') ───────────────────────────────
-# @tribal: KerML is the kernel of SysMLv2; domain.kerm in vendor/l3dg3rr/types/
+# @tribal: KerML is the kernel of SysMLv2; domain.kerm in vendor/ledgrrr/types/
 #          uses [[type]] TOML arrays — we follow the same format for b00t ontology.
 [kerml_profile]
 file_to_create = "_b00t_/types/b00t_ooda.kerm"
-extends        = "vendor/l3dg3rr/types/domain.kerm"
+extends        = "vendor/ledgrrr/types/domain.kerm"
 
 # KerML 'Classifier' hierarchy for OODA phases
 [[kerml_profile.type]]
