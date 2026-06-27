@@ -203,7 +203,7 @@ impl ClassPermission {
 
 // ── State ──────────────────────────────────────────────────────────────────
 
-#[derive(Clone)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct KeyEntry {
     pub consumer: String,
     pub created_at: chrono::DateTime<chrono::Utc>,
@@ -273,7 +273,7 @@ impl LlmState {
                 //    Use: b00t server key create --consumer X --access b00t:ChatModel:execute
                 return false;
             }
-            return entry.access.iter().any(|p| p.class == class && matches!(p.action, Action::Execute) || matches!(p.action, Action::Read));
+            return entry.access.iter().any(|p| p.class == class && (matches!(p.action, Action::Execute) || matches!(p.action, Action::Read)));
         }
         false
     }
@@ -479,7 +479,7 @@ mod tests {
     #[tokio::test]
     async fn test_key_create_and_validate() {
         let state = Arc::new(LlmState::from_config("http://localhost:8181/v1", ""));
-        let key = state.create_key("test-consumer").await;
+        let key = state.create_key("test-consumer", &[] as &[String]).await;
         assert!(key.starts_with("b00t-sk-"));
         let entry = state.validate_key(&key).await;
         assert!(entry.is_some());
@@ -501,5 +501,104 @@ mod tests {
         assert!(content.contains("spotlight.llm.chat_completions"));
         assert!(content.contains("test-consumer"));
         assert!(content.contains("test-model"));
+    }
+
+    // ── ACL check_access integration tests ─────────────────────────────────
+
+    #[tokio::test]
+    async fn test_chat_requires_chat_model_execute() {
+        let state = Arc::new(LlmState::from_config("http://localhost:8181/v1", ""));
+        let key = state.create_key("test-consumer", &["b00t:ChatModel:execute".to_string()]).await;
+        assert!(
+            state.check_access(&key, "b00t:ChatModel", Action::Execute).await,
+            "ChatModel:execute should pass with ChatModel:execute permission"
+        );
+        assert!(
+            !state.check_access(&key, "b00t:EmbeddingModel", Action::Execute).await,
+            "EmbeddingModel:execute should fail with ChatModel:execute permission"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_embeddings_requires_embedding_model_execute() {
+        let state = Arc::new(LlmState::from_config("http://localhost:8181/v1", ""));
+        let key = state.create_key("test-consumer", &["b00t:EmbeddingModel:execute".to_string()]).await;
+        assert!(
+            state.check_access(&key, "b00t:EmbeddingModel", Action::Execute).await,
+            "EmbeddingModel:execute should pass with EmbeddingModel:execute permission"
+        );
+        assert!(
+            !state.check_access(&key, "b00t:ChatModel", Action::Execute).await,
+            "ChatModel:execute should fail with EmbeddingModel:execute permission"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_models_requires_model_read() {
+        let state = Arc::new(LlmState::from_config("http://localhost:8181/v1", ""));
+        let key = state.create_key("test-consumer", &["b00t:Model:read".to_string()]).await;
+        assert!(
+            state.check_access(&key, "b00t:Model", Action::Read).await,
+            "Model:read should pass with Model:read permission"
+        );
+        assert!(
+            !state.check_access(&key, "b00t:ChatModel", Action::Execute).await,
+            "ChatModel:execute should fail with Model:read permission"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_dev_mode_bypasses_all_access() {
+        // Dev mode bypass happens at the handler level:
+        //   if !dev_mode && !state.check_access(...)  → skip check in dev mode
+        // The key with no access gets denied by check_access, but the route
+        // handlers never call check_access when dev_mode=true.
+        let state = Arc::new(LlmState::from_config("http://localhost:8181/v1", ""));
+        let key = state.create_key("dev-consumer", &[] as &[String]).await;
+        // Even though the key exists, empty access means check_access denies all.
+        assert!(
+            !state.check_access(&key, "b00t:ChatModel", Action::Execute).await,
+            "Empty access key should be denied by check_access (handler-level dev_mode bypass is separate)"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_empty_access_denies_all() {
+        // BREAKING v0.9+: empty access => deny all (was full access in v0.8)
+        let state = Arc::new(LlmState::from_config("http://localhost:8181/v1", ""));
+        let key = state.create_key("test-consumer", &[] as &[String]).await;
+        assert!(
+            !state.check_access(&key, "b00t:ChatModel", Action::Execute).await,
+            "Empty access should deny ChatModel:execute"
+        );
+        assert!(
+            !state.check_access(&key, "b00t:EmbeddingModel", Action::Execute).await,
+            "Empty access should deny EmbeddingModel:execute"
+        );
+        assert!(
+            !state.check_access(&key, "b00t:Model", Action::Read).await,
+            "Empty access should deny Model:read"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_multiple_permissions() {
+        let state = Arc::new(LlmState::from_config("http://localhost:8181/v1", ""));
+        let key = state.create_key(
+            "test-consumer",
+            &["b00t:ChatModel:execute".to_string(), "b00t:Model:read".to_string()],
+        ).await;
+        assert!(
+            state.check_access(&key, "b00t:ChatModel", Action::Execute).await,
+            "ChatModel:execute should pass with combined permissions"
+        );
+        assert!(
+            state.check_access(&key, "b00t:Model", Action::Read).await,
+            "Model:read should pass with combined permissions"
+        );
+        assert!(
+            !state.check_access(&key, "b00t:EmbeddingModel", Action::Execute).await,
+            "EmbeddingModel:execute should fail with ChatModel+Model permissions"
+        );
     }
 }
