@@ -3762,4 +3762,95 @@ hint = "containers"
             assert_eq!(node.id, format!("datum_type::{}", variant.type_prefix()), "id format mismatch for {variant:?}");
         }
     }
+
+    // ── Datum dispatch resolution tests ──────────────────────────────────
+
+    use super::{DatumDispatch, resolve_datum_dispatch, resolve_all_datum_dispatches};
+
+    fn write_cli_datum(dir: &std::path::Path, name: &str, command: &str) {
+        let toml = format!(
+            "[b00t]\nname = \"{name}\"\ntype = \"cli\"\ncommand = \"{command}\"\n"
+        );
+        std::fs::write(dir.join(format!("{name}.cli.toml")), toml).unwrap();
+    }
+
+    fn write_runtime_datum(dir: &std::path::Path, name: &str, binary: &str) {
+        let toml = format!(
+            "[b00t]\nname = \"{name}\"\ntype = \"runtime\"\n\n[b00t.runtime]\nbinary = \"{binary}\"\n"
+        );
+        std::fs::write(dir.join(format!("{name}.runtime.toml")), toml).unwrap();
+    }
+
+    fn write_polyseme_datum(dir: &std::path::Path, name: &str) {
+        let toml = format!(
+            "[b00t]\nname = \"{name}\"\ntype = \"polyseme\"\n\n\
+             [[b00t.polyseme.refs]]\nname = \"{name}-example\"\n\
+             canonical = \"github:example/{name}\"\n\
+             datum = \"{name}-example.cli\"\n\
+             description = \"example {name}\"\n"
+        );
+        std::fs::write(dir.join(format!("{name}.polyseme.toml")), toml).unwrap();
+    }
+
+    #[test]
+    fn resolve_cli_datum_returns_passthrough() {
+        let dir = tempfile::tempdir().unwrap();
+        write_cli_datum(dir.path(), "testcli", "echo");
+        let result = resolve_datum_dispatch("testcli", dir.path().to_str().unwrap());
+        assert!(result.is_some());
+        match result.unwrap() {
+            DatumDispatch::CliPassthrough { command, .. } => assert_eq!(command, "echo"),
+            _ => panic!("expected CliPassthrough"),
+        }
+    }
+
+    #[test]
+    fn resolve_runtime_datum_returns_runtime() {
+        let dir = tempfile::tempdir().unwrap();
+        write_runtime_datum(dir.path(), "testrt", "/bin/true");
+        let result = resolve_datum_dispatch("testrt", dir.path().to_str().unwrap());
+        assert!(result.is_some());
+        assert!(matches!(result.unwrap(), DatumDispatch::Runtime(_)));
+    }
+
+    #[test]
+    fn resolve_polyseme_returns_refs() {
+        let dir = tempfile::tempdir().unwrap();
+        write_polyseme_datum(dir.path(), "testpoly");
+        let result = resolve_datum_dispatch("testpoly", dir.path().to_str().unwrap());
+        assert!(result.is_some());
+        match result.unwrap() {
+            DatumDispatch::Polyseme { refs, .. } => assert_eq!(refs.len(), 1),
+            _ => panic!("expected Polyseme"),
+        }
+    }
+
+    #[test]
+    fn resolve_missing_datum_returns_none() {
+        let dir = tempfile::tempdir().unwrap();
+        let result = resolve_datum_dispatch("__nonexistent__", dir.path().to_str().unwrap());
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn resolve_prefers_runtime_over_cli() {
+        let dir = tempfile::tempdir().unwrap();
+        write_runtime_datum(dir.path(), "dual", "/bin/true");
+        write_cli_datum(dir.path(), "dual", "echo");
+        let result = resolve_datum_dispatch("dual", dir.path().to_str().unwrap());
+        assert!(matches!(result.unwrap(), DatumDispatch::Runtime(_)));
+    }
+
+    #[test]
+    fn resolve_all_returns_multiple_dispatches() {
+        let dir = tempfile::tempdir().unwrap();
+        write_cli_datum(dir.path(), "multi", "echo");
+        write_polyseme_datum(dir.path(), "multi");
+        let all = resolve_all_datum_dispatches("multi", dir.path().to_str().unwrap());
+        assert!(all.len() >= 2);
+        let has_cli = all.iter().any(|d| matches!(d, DatumDispatch::CliPassthrough { .. }));
+        let has_poly = all.iter().any(|d| matches!(d, DatumDispatch::Polyseme { .. }));
+        assert!(has_cli, "should have cli dispatch");
+        assert!(has_poly, "should have polyseme dispatch");
+    }
 }

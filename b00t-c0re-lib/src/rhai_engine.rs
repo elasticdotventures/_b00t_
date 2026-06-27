@@ -318,6 +318,14 @@ impl RhaiEngine {
             },
         );
 
+        engine.register_fn(
+            "emit_verdict",
+            |verdict_str: &str, content: &str| -> Result<String, Box<rhai::EvalAltResult>> {
+                crate::reviewer::emit_verdict(verdict_str, content)
+                    .map_err(|e| format!("emit_verdict: {}", e).into())
+            },
+        );
+
         Ok(())
     }
 

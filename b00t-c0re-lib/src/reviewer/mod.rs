@@ -58,6 +58,37 @@ pub fn evaluate_constraint_json(constraint_json: &str, verdict_str: &str) -> Res
     Ok(constraint.evaluate(&verdict))
 }
 
+/// Emit a verdict with evidence — the full governance round-trip.
+/// Creates a content-addressed evidence record from the verdict.
+///
+/// Returns a JSON object with { verdict, content_hash, evidence_node_hash, timestamp }.
+///
+/// # Rhai usage
+/// ```rhai
+/// let evidence = emit_verdict("APPROVE", "some content to hash");
+/// // evidence.verdict == "APPROVE"
+/// // evidence.content_hash == "sha256..."
+/// ```
+pub fn emit_verdict(verdict_str: &str, content: &str) -> Result<String, String> {
+    let verdict = parse_verdict(verdict_str)
+        .ok_or_else(|| format!("Unknown verdict: {}", verdict_str))?;
+
+    let evidence = crate::reviewer::evidence::CommandEvidence::new(
+        content.as_bytes(),
+        &verdict,
+        "rhai-emit-verdict",
+    );
+    let node = evidence.to_evidence_node();
+
+    serde_json::to_string(&serde_json::json!({
+        "verdict": evidence.verdict,
+        "content_hash": evidence.content_hash,
+        "evidence_node": node.commit_hash,
+        "timestamp": evidence.timestamp,
+    }))
+    .map_err(|e| format!("serialize: {}", e))
+}
+
 /// Parse a verdict string into a VerdictDisposition
 pub fn parse_verdict(raw: &str) -> Option<VerdictDisposition> {
     match raw.trim().to_uppercase().as_str() {
