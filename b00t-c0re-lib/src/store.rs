@@ -43,6 +43,76 @@ pub struct StoreManifest {
     pub updated_at: String,
 }
 
+/// 🤓 AL-1.0-inspired influence receipt — per-source contribution ratios.
+///    Maps a source key (store entry, datum, or chunk) to an influence ratio (0.0–1.0).
+///    Sum of all ratios in a session ≈ 1.0 (hard invariant from AL-1.0).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct InfluenceReceipt {
+    pub session_id: String,
+    pub consumer: String,
+    pub total_sources: usize,
+    pub sources: Vec<InfluenceSource>,
+    pub created_at: String,
+    pub invariant_sum: f64, // 🤓 must be ~1.0
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct InfluenceSource {
+    pub source_key: String,
+    pub ratio: f64,
+    pub score: f64, // raw similarity/evidence score before normalization
+}
+
+/// Bucket raw scores by source and normalize to influence ratios.
+/// Stores the receipt as a JSON file in the store.
+pub fn put_influence(
+    consumer: &str,
+    scored_sources: &[(String, f64)],
+) -> Result<InfluenceReceipt> {
+    if scored_sources.is_empty() {
+        anyhow::bail!("no sources to attribute");
+    }
+
+    let total: f64 = scored_sources.iter().map(|(_, s)| s.abs()).sum();
+    if total == 0.0 {
+        anyhow::bail!("all scores are zero — cannot normalize");
+    }
+
+    let session_id = format!("influence-{}", uuid::Uuid::new_v4().simple());
+    let mut sources: Vec<InfluenceSource> = scored_sources
+        .iter()
+        .map(|(key, score)| InfluenceSource {
+            source_key: key.clone(),
+            ratio: score.abs() / total,
+            score: *score,
+        })
+        .collect();
+    sources.sort_by(|a, b| b.ratio.partial_cmp(&a.ratio).unwrap_or(std::cmp::Ordering::Equal));
+
+    let invariant_sum: f64 = sources.iter().map(|s| s.ratio).sum();
+
+    let receipt = InfluenceReceipt {
+        session_id,
+        consumer: consumer.to_string(),
+        total_sources: sources.len(),
+        sources,
+        created_at: Utc::now().to_rfc3339(),
+        invariant_sum,
+    };
+
+    let tmp = std::env::temp_dir().join(format!("b00t-influence-{}.json", uuid::Uuid::new_v4().simple()));
+    std::fs::write(&tmp, serde_json::to_string_pretty(&receipt)?)?;
+
+    let mut tags = BTreeMap::new();
+    tags.insert("consumer".into(), consumer.to_string());
+    tags.insert("type".into(), "influence-receipt".into());
+
+    let _ = put(&tmp, "b00t:InfluenceReceipt", consumer, &tags);
+    let _ = std::fs::remove_file(&tmp);
+
+    Ok(receipt)
+}
+
 // ── Store paths (configurable for testing) ────────────────────────────────
 
 static STORE_ROOT: std::sync::OnceLock<PathBuf> = std::sync::OnceLock::new();
