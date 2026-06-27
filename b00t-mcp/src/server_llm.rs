@@ -438,8 +438,11 @@ fn dirs_next() -> Option<std::path::PathBuf> {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AuthProvider {
+    /// Dev mode — bypass all auth, use hardcoded dev-key
     Dev,
+    /// Basic auth — API keys from server-keys.json + ClassPermission ACL
     Basic,
+    /// OAuth 2.1 — Hydra token introspection + ClassPermission ACL
     Hydra,
 }
 

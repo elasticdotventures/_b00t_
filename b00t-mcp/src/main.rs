@@ -213,8 +213,9 @@ async fn main() -> Result<()> {
         }
 
         let auth_provider = server_llm::AuthProvider::from_env_or_default();
-        let _is_dev_mode = matches!(auth_provider, server_llm::AuthProvider::Dev);
+        let is_dev_mode = matches!(auth_provider, server_llm::AuthProvider::Dev);
 
+        // Log auth provider
         match auth_provider {
             server_llm::AuthProvider::Dev => eprintln!("🔓 auth: dev mode (no auth required)"),
             server_llm::AuthProvider::Basic => eprintln!("🔑 auth: basic (API keys from server-keys.json)"),
