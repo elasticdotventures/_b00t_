@@ -1,0 +1,568 @@
+# ARCH: Library Soul — autonomous 200TB PDF corpus ingestion + goal-driven learning loop
+#
+# The library is an organizational soul/datum: hive-local (not git-synced),
+# shared across all agents on the same hive-server-node via NeumannStore namespace.
+#
+# Three interlocking systems:
+#   (1) Ingestion pipeline: PDF → text → SemanticChunk → NeumannStore, journaled for undo
+#   (2) Auto-research OODA loop: Karpathy-style frontier-driven prioritization
+#   (3) Cognitive benchmark + reward: mission/milestone + 🍰 for validated improvement
+#
+# Cross-refs:
+#   b00t-c0re-lib/src/doc_pipeline.rs — DocumentSource/SemanticChunk/Evidence types (EXISTS)
+#   b00t-c0re-lib/src/ooda.rs        — OodaConfig.enable_autoresearch (EXISTS)
+#   b00t-c0re-lib/src/irontology_bridge.rs — NeumannStore FactRecord (EXISTS)
+#   b00t-cli/src/job_executor.rs      — apalis-sqlite backend (EXISTS)
+#   b00t-embed/src/lib.rs             — EmbedBackend + cosine_similarity (EXISTS)
+#   b00t-c0re-lib/src/lfmf.rs        — lesson recording + reward hook (EXISTS)
+
+[b00t.schema]
+version   = "1"
+type      = "prd"
+type_tags = ["prd", "library", "soul", "ingestion", "rag", "auto-research",
+             "ooda", "karpathy", "benchmark", "reward", "cake",
+             "undo", "journal", "hive-local", "knowledge-source"]
+
+[prd]
+id     = "ARCH-LIBRARY-SOUL"
+title  = "Library Soul — autonomous 200TB PDF corpus ingestion + goal-driven learning"
+status = "proposed"
+tier   = "frontier"
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# SECTION 1: Library datum (hive-local, NOT in git)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+[library_datum]
+# The library datum lives at ~/.b00t/library/library.toml (NOT _b00t_/ — no git sync)
+# All agents on the same hive-server-node read from this shared datum.
+# Path convention mirrors hive.toml: machine-local, not version-controlled.
+
+[library_datum.schema]
+# ~/.b00t/library/library.toml — the organizational soul file
+toml = """
+[library]
+name        = "hive-library"
+version     = "1"
+volume_paths = [
+  "/mnt/library/science/",       # science books
+  "/mnt/library/law/",           # law books
+  "/mnt/library/strategy/",      # enterprise strategic planning
+  "/mnt/library/pdfs/",          # unclassified PDFs
+]
+neumann_namespace = "library"    # b00t NeumannStore namespace (~/.b00t/neumann/library/)
+journal_db        = "~/.b00t/library/journal.db"
+benchmark_dir     = "~/.b00t/library/benchmarks/"
+mission_file      = "~/.b00t/library/mission.toml"
+
+[library.index]
+total_files_discovered = 0       # populated by scan
+total_files_ingested   = 0
+total_chunks           = 0
+last_scan              = ""      # ISO-8601
+last_ingestion         = ""
+
+[library.hive]
+# Other agents on this node can discover this library via b00t hive
+share_via_dbus    = true         # announce via D-Bus mdns-sd
+share_via_mdns    = true
+mdns_service_type = "_b00t-library._tcp"
+"""
+
+[library_datum.bfo_ufo]
+# BFO: the library corpus as a whole is an ObjectAggregate (collection of physical PDFs)
+# UFO: the library INDEX (NeumannStore namespace) is an Abstract (information artifact)
+corpus_bfo     = "BFO:ObjectAggregate"
+corpus_ufo     = "Endurant::Kind"
+index_bfo      = "BFO:GenericallyDependentContinuant"
+index_ufo      = "Abstract"
+soul_bfo       = "BFO:InformationContentEntity"
+soul_note      = "The library.toml is the soul — it describes the corpus without containing it"
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# SECTION 2: Ingestion pipeline (trace + undo + recover)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+[ingestion]
+# Every PDF ingestion is a journaled, reversible apalis-sqlite job.
+# Content-addressed by SHA256 → idempotent re-runs are free.
+
+[ingestion.pipeline]
+# Stage 1: DISCOVER — scan volume_paths for .pdf files not in journal
+#   Output: Vec<(path, sha256, size_bytes, mtime)>
+discover_cmd = "fdfind -e pdf <volume_path> | xargs sha256sum | b00t library journal scan"
+
+# Stage 2: EXTRACT — PDF → plain text
+#   Preferred: kreuzberg MCP — b00t-native, already wired (PR #520 complete)
+#   Fallback: pdftotext (poppler) — battle-tested plain-text PDFs
+#   OCR fallback: tesseract — scanned image PDFs with no text layer
+# 🧓 kreuzberg Stage 1 complete: _b00t_/scripts/kreuzberg-mcp-wrapper.py
+extract_cmd          = "python3 _b00t_/scripts/kreuzberg-mcp-wrapper.py extract_file {pdf_path}"
+extract_fallback_cmd = "pdftotext -layout -enc UTF-8 {pdf_path} -"
+extract_tier         = "sm0l"
+
+# Stage 3: CHUNK — text → SemanticChunk[]
+#   Uses doc_pipeline.rs::SemanticChunk with token-aware splitting
+#   Target: 512 tokens/chunk, 50-token overlap (tiktoken-rs already in b00t-cli)
+chunk_strategy  = "semantic_overlap"
+chunk_tokens    = 512
+overlap_tokens  = 50
+chunk_rust_type = "b00t_c0re_lib::doc_pipeline::SemanticChunk"
+
+# Stage 4: EMBED — SemanticChunk → Vec<f32>
+#   Uses b00t-embed::EmbedBackend (Qwen3-Embed or ollama/nomic-embed-text)
+#   Tier: ch0nky embedding model (runs on RTX3090)
+embed_model     = "qwen3-embed or nomic-embed-text-v1.5"
+embed_tier      = "ch0nky"
+embed_rust_type = "b00t_embed::Embedding"
+embed_dim       = 768
+
+# Stage 5: INGEST — SemanticChunk + Embedding → NeumannStore
+#   FactRecord subject = b00t:library/<sha256>/<chunk_index>
+#   Returns: Vec<fact_record_id> → journaled for undo
+ingest_cmd      = "b00t grok digest --topic library --namespace library <chunk_text>"
+neumann_subject = "b00t:library/{sha256}/{chunk_index}"
+
+# Stage 6: CLASSIFY — sm0l DDC lookup → attach metadata
+#   Uses CAP-ONTOLOGY-INDEX.tomllmd → external.ddc adapter
+classify_cmd    = "b00t grok ask 'DDC code for: {title} {first_200_chars}'"
+classify_tier   = "sm0l"
+attach_as       = "b00t:ddc_code, b00t:domain, b00t:publication_year"
+
+[ingestion.journal]
+# SQLite schema at ~/.b00t/library/journal.db
+# Gives us: trace, undo, recovery, dedup
+
+schema_sql = """
+CREATE TABLE IF NOT EXISTS ingestion_journal (
+  id              INTEGER PRIMARY KEY AUTOINCREMENT,
+  pdf_sha256      TEXT NOT NULL UNIQUE,  -- content hash, dedup key
+  pdf_path        TEXT NOT NULL,
+  pdf_size_bytes  INTEGER,
+  ingested_at     TEXT NOT NULL,         -- ISO-8601
+  apalis_job_id   TEXT,                  -- apalis job tracking
+  chunk_count     INTEGER DEFAULT 0,
+  fact_record_ids TEXT,                  -- JSON array of NeumannStore IDs
+  ddc_code        TEXT,                  -- DDC classification
+  domain          TEXT,                  -- science|law|strategy|unclassified
+  status          TEXT DEFAULT 'pending', -- pending|ingested|failed|undone
+  error_message   TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_sha256 ON ingestion_journal(pdf_sha256);
+CREATE INDEX IF NOT EXISTS idx_status ON ingestion_journal(status);
+CREATE INDEX IF NOT EXISTS idx_domain ON ingestion_journal(domain);
+
+CREATE TABLE IF NOT EXISTS benchmark_runs (
+  id            INTEGER PRIMARY KEY AUTOINCREMENT,
+  run_at        TEXT NOT NULL,
+  milestone_id  TEXT,
+  score_before  REAL,
+  score_after   REAL,
+  delta         REAL,
+  pdfs_ingested INTEGER,
+  cake_earned   INTEGER DEFAULT 0  -- 1 if milestone hit
+);
+"""
+
+[ingestion.undo]
+# Undo = delete all NeumannStore facts for a given PDF SHA256
+undo_cmd = "b00t grok forget --namespace library --subject b00t:library/{sha256}"
+undo_journal_update = "UPDATE ingestion_journal SET status='undone' WHERE pdf_sha256='{sha256}'"
+undo_safety = "Only permitted if status='ingested'. Undone PDFs re-enter the queue."
+
+[ingestion.recovery]
+# Recovery scenarios:
+recovery_scenarios = [
+  "NeumannStore corrupted → rebuild from journal: re-ingest all sha256 where status='ingested'",
+  "Journal corrupted → rebuild from NeumannStore: query all subjects matching b00t:library/*",
+  "Partial ingestion (crash mid-job) → apalis retries failed jobs automatically (apalis-sqlite)",
+  "PDF moved/deleted → journal preserves sha256; content still in NeumannStore",
+]
+rebuild_cmd = "b00t library rebuild --from-journal [--dry-run]"
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# SECTION 3: Auto-research OODA loop (Karpathy pattern)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+[autolearn]
+# Karpathy auto-research: after reading doc A, the agent generates what to read next.
+# NOT a FIFO scan — frontier-driven prioritization based on mission + graph adjacency.
+#
+# Key insight from Karpathy: the research loop compounds.
+# Reading paper A → generates 5 follow-up queries → finds papers B,C,D,E →
+# reading B generates 5 more → the research frontier grows exponentially.
+# Without prioritization, you'd drown. With a mission, you converge.
+
+[autolearn.ooda_config]
+# Maps to b00t-c0re-lib/src/ooda.rs::OodaConfig
+rust_type         = "b00t_c0re_lib::ooda::OodaConfig"
+enable_autoresearch = true       # MUST be true for the Karpathy loop
+max_iterations    = 0            # 0 = run until mission complete or manual stop
+autoresearch_threshold_chars = 100  # existing heuristic: observations > 100 chars trigger sub-cycle
+
+[autolearn.ooda_phases]
+[autolearn.ooda_phases.observe]
+what    = "Scan journal for unprocessed PDFs; read benchmark scores; check mission progress"
+output  = "Vec<(sha256, priority_score)> sorted by relevance to current mission"
+# Priority score = cosine_similarity(pdf_title_embed, mission_embed) × novelty_bonus × quality_score
+priority_formula = "sim(embed(title), embed(mission)) × (1 - overlap(pdf_concepts, known_concepts)) × quality"
+cmd     = "b00t library scan --mission-file ~/.b00t/library/mission.toml --format=json"
+
+[autolearn.ooda_phases.orient]
+what    = "Classify the top-K unindexed PDFs; generate the research frontier"
+# After ingesting each PDF, generate 3-5 follow-up search queries using ch0nky
+frontier_prompt = """
+You just read: {title} ({ddc_code})
+Current mission: {mission.goal}
+What 3-5 specific sub-topics should be explored next to advance the mission?
+Return as JSON: [{"query": "str", "rationale": "str", "priority": 1-5}]
+"""
+frontier_tier   = "ch0nky"
+frontier_output = "Vec<ResearchFrontierItem>"
+# Frontier items are added to a priority queue in journal.db
+frontier_table  = "research_frontier (query TEXT, rationale TEXT, priority INT, source_sha256 TEXT)"
+
+[autolearn.ooda_phases.decide]
+what    = "Select next batch to ingest (top-K by priority + milestone relevance)"
+batch_size      = 10             # ingest 10 PDFs per OODA cycle
+batch_strategy  = "priority_heap over research_frontier + uncategorized queue"
+dedup_guard     = "Skip any sha256 already in journal with status='ingested'"
+
+[autolearn.ooda_phases.act]
+what    = "Run ingestion pipeline for the selected batch; update frontier; run benchmark"
+steps   = [
+  "For each PDF in batch: run ingestion pipeline (discover→extract→chunk→embed→ingest→classify)",
+  "For each ingested PDF: run frontier_prompt → push new items to research_frontier queue",
+  "After batch complete: run cognitive benchmark",
+  "If delta_score > threshold: record milestone progress + potentially award cake",
+]
+apalis_job = "LibraryIngestBatch"
+
+[autolearn.ooda_phases.review]
+what   = "Check milestone progress; decide loop-back vs complete; record lfmf if failure"
+loop_back_condition = "milestone not yet achieved AND unprocessed PDFs remain"
+complete_condition  = "milestone achieved OR operator signals stop"
+failure_action      = "b00t lfmf library '{error}' → record lesson; backoff 60s; retry"
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# SECTION 4: Mission/Milestone + Cognitive Benchmark + Cake Reward
+# ═══════════════════════════════════════════════════════════════════════════════
+
+[mission]
+# ~/.b00t/library/mission.toml — the current organizational goal
+# Editable by operator at any time; the OODA loop reads it on each Observe phase.
+
+[mission.schema]
+toml = """
+[mission]
+id          = "mission-001"
+goal        = "Build comprehensive knowledge base for Australian R&D tax law"
+description = "Index all relevant law books, ATO rulings, and case law for AU R&D tax incentive advice"
+started_at  = "2026-06-24T00:00:00Z"
+target_date = "2026-07-31T00:00:00Z"
+
+# Milestone chain — ordered; completing one unlocks the next
+[[mission.milestones]]
+id          = "m1"
+name        = "Foundation: Index core AU tax law texts"
+complete_when = { query = "Income Tax Assessment Act 1997", min_chunks = 500, min_score = 0.85 }
+cake_award  = 1
+
+[[mission.milestones]]
+id          = "m2"
+name        = "Depth: ATO R&D rulings + PCG 2011/3"
+complete_when = { query = "R&D tax incentive eligible activities", min_chunks = 200, min_score = 0.90 }
+depends_on  = "m1"
+cake_award  = 2
+
+[[mission.milestones]]
+id          = "m3"
+name        = "Mastery: Case law + ITAA cross-references"
+complete_when = { query = "R&D expenditure notional deductions", min_chunks = 100, min_score = 0.92 }
+depends_on  = "m2"
+cake_award  = 3
+
+[mission.ddc_focus]
+# DDC classes prioritized for this mission
+primary   = ["343.9401526", "343.940152"]  # Income tax – Australia
+secondary = ["343.94016", "658.15"]         # Tax planning, Financial management
+"""
+
+[mission.cognitive_benchmark]
+# A benchmark is a set of (query, expected_concepts[]) pairs.
+# Score = fraction of expected concepts present in top-5 grok_ask results.
+# Stored as JSONL: ~/.b00t/library/benchmarks/{mission_id}.jsonl
+
+benchmark_format = """
+{"id": "b1", "query": "What are the eligibility criteria for the R&D Tax Incentive in Australia?",
+ "expected_concepts": ["core activities", "supporting activities", "AusIndustry registration",
+                       "ATO claim", "43.5% offset", "38.5% offset"]}
+{"id": "b2", "query": "What is the notional deduction rate for R&D expenditure?",
+ "expected_concepts": ["150% notional deduction", "base amount", "incremental expenditure"]}
+"""
+run_cmd   = "b00t library benchmark --mission-id {mission_id} --format=json"
+score_cmd = "b00t grok ask '{query}' | jq -r '.results[].text' | b00t library score --expected '{expected}'"
+
+[mission.reward]
+# Cognitive performance validation → cake reward
+# b00t aligns behavior: cake is earned, not given.
+reward_mechanism = "b00t lfmf"
+cake_emoji       = "🍰"
+
+reward_thresholds = [
+  { event = "milestone_achieved", delta_score_min = 0.05, cake = 1 },
+  { event = "benchmark_above_0.90", delta_score_min = 0.10, cake = 2 },
+  { event = "mission_complete",     delta_score_min = 0.20, cake = 3 },
+]
+
+reward_cmd = """
+b00t lfmf library "🍰 Milestone {milestone_id} achieved: score {score:.3f} (+{delta:.3f}). \
+Ingested {n_pdfs} PDFs. Frontier: {frontier_size} items remaining."
+"""
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# SECTION 5: Rust types wiring — what to build vs what exists
+# ═══════════════════════════════════════════════════════════════════════════════
+
+[implementation]
+
+[implementation.exists_now]
+doc_pipeline    = "b00t-c0re-lib::doc_pipeline::{DocumentSource, SemanticChunk, Evidence, ProvenancePointer}"
+ooda            = "b00t-c0re-lib::ooda::{OodaPhase, OodaConfig, enable_autoresearch}"
+neumann         = "b00t-c0re-lib::irontology_bridge::{NeumannStore, FactRecord, IrontologyBridgeClient}"
+apalis_sqlite   = "b00t-cli::job_executor::{JobExecutor, BashTaskJob} + apalis-sqlite backend"
+embed           = "b00t-embed::{EmbedBackend, Embedding, cosine_similarity}"
+lfmf            = "b00t-c0re-lib::lfmf::{LfmfConfig, GrokClient}"
+tiktoken        = "tiktoken-rs (in b00t-cli Cargo.toml) — chunk token counting"
+sha2            = "sha2 crate (in b00t-cli Cargo.toml) — content-addressable SHA256"
+grok_mcp        = "b00t_grok_digest / b00t_grok_ask / b00t_grok_learn (b00t-mcp)"
+
+[implementation.to_build]
+# These are the new components — mapped to doc_pipeline types
+
+library_scanner = """
+// b00t-cli/src/library/scanner.rs
+pub struct LibraryScanner {
+    volume_paths: Vec<PathBuf>,
+    journal: LibraryJournal,
+    mission_embed: Embedding,    // embed(mission.goal) for priority scoring
+}
+impl LibraryScanner {
+    pub async fn scan(&self) -> Vec<PdfCandidate>;     // returns unindexed PDFs
+    pub fn priority_score(&self, pdf: &PdfCandidate) -> f32;  // sim × novelty × quality
+}
+"""
+
+library_journal = """
+// b00t-cli/src/library/journal.rs
+// SQLite at ~/.b00t/library/journal.db
+pub struct LibraryJournal { conn: rusqlite::Connection }
+impl LibraryJournal {
+    pub fn record_ingestion(&self, entry: &JournalEntry) -> Result<()>;
+    pub fn undo(&self, sha256: &str) -> Result<Vec<String>>;  // returns fact_record_ids
+    pub fn rebuild_index(&self) -> Result<()>;
+    pub fn status(&self) -> Result<JournalStats>;
+}
+pub struct JournalEntry {
+    pub pdf_sha256: String,
+    pub pdf_path: PathBuf,
+    pub chunk_count: usize,
+    pub fact_record_ids: Vec<String>,
+    pub ddc_code: Option<String>,
+    pub domain: String,
+    pub apalis_job_id: String,
+}
+"""
+
+library_benchmark = """
+// b00t-cli/src/library/benchmark.rs
+pub struct CognitiveBenchmark {
+    benchmark_dir: PathBuf,
+    grok: GrokClient,
+}
+impl CognitiveBenchmark {
+    pub async fn run(&self, mission_id: &str) -> Result<BenchmarkResult>;
+    pub async fn score_query(&self, query: &str, expected: &[&str]) -> f32;
+    pub fn check_milestone(&self, result: &BenchmarkResult, milestone: &Milestone) -> bool;
+    pub async fn award_cake(&self, milestone: &Milestone, result: &BenchmarkResult) -> Result<()>;
+}
+"""
+
+frontier_queue = """
+// b00t-cli/src/library/frontier.rs
+// Research frontier: Karpathy auto-research priority queue
+pub struct ResearchFrontier { journal: LibraryJournal }
+impl ResearchFrontier {
+    pub fn push(&self, items: Vec<FrontierItem>) -> Result<()>;
+    pub fn pop_top_k(&self, k: usize) -> Result<Vec<FrontierItem>>;
+    pub fn size(&self) -> Result<usize>;
+}
+pub struct FrontierItem {
+    pub query: String,
+    pub rationale: String,
+    pub priority: u8,        // 1-5
+    pub source_sha256: String,
+    pub generated_at: DateTime<Utc>,
+}
+"""
+
+library_ooda = """
+// b00t-cli/src/library/ooda_runner.rs
+// Wires OodaConfig (enable_autoresearch=true) to library-specific phases
+pub struct LibraryOodaRunner {
+    config: OodaConfig,
+    scanner: LibraryScanner,
+    frontier: ResearchFrontier,
+    journal: LibraryJournal,
+    benchmark: CognitiveBenchmark,
+    mission: Mission,
+    embed: Box<dyn EmbedBackend>,
+}
+impl LibraryOodaRunner {
+    pub async fn run_loop(&mut self) -> Result<()>;  // runs until mission complete
+    async fn observe(&self) -> Vec<PdfCandidate>;
+    async fn orient(&self, candidates: &[PdfCandidate]) -> Vec<PdfBatch>;
+    async fn decide(&self, batches: Vec<PdfBatch>) -> PdfBatch;
+    async fn act(&mut self, batch: PdfBatch) -> Result<BenchmarkResult>;
+    async fn review(&mut self, result: BenchmarkResult) -> OodaPhase;
+}
+"""
+
+[implementation.cli_commands]
+# New b00t-cli subcommands under `b00t library`
+commands = [
+  "b00t library init              # create library.toml + journal.db + benchmark dir",
+  "b00t library scan              # discover unindexed PDFs, print count + priority",
+  "b00t library ingest [--batch=N] # run one ingestion batch",
+  "b00t library autolearn         # start continuous OODA loop (foreground)",
+  "b00t library autolearn --daemon # start as background apalis worker",
+  "b00t library undo <sha256>     # reverse a specific ingestion",
+  "b00t library rebuild           # rebuild NeumannStore from journal",
+  "b00t library benchmark         # run cognitive benchmark, print score",
+  "b00t library status            # show journal stats + current mission progress",
+  "b00t library mission set       # interactive mission editor",
+]
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# SECTION 6: External PDF extraction adapter
+# ═══════════════════════════════════════════════════════════════════════════════
+
+[pdf_extraction]
+# 🤓 kreuzberg is b00t-native (PR #520). Primary extractor — MCP wrapper already ships.
+# Cascade: kreuzberg → pdftotext → tesseract OCR
+
+[pdf_extraction.primary]
+tool    = "kreuzberg"
+datum   = "kreuzberg.mcp.toml"
+install = "b00t cli install kreuzberg"
+cmd     = "python3 _b00t_/scripts/kreuzberg-mcp-wrapper.py extract_file {pdf_path}"
+quality = "excellent — handles PDFs, Word, HTML; produces structured markdown"
+limits  = "requires Python kreuzberg package installed"
+
+[pdf_extraction.fallback]
+tool    = "pdftotext"
+package = "poppler-utils"
+install = "b00t cli install poppler-utils"
+cmd     = "pdftotext -layout -enc UTF-8 {pdf_path} -"
+quality = "excellent for text-heavy PDFs (law books, academic papers)"
+when    = "kreuzberg package not installed or extract returns empty"
+
+[pdf_extraction.ocr_fallback]
+tool    = "tesseract"
+install = "b00t cli install tesseract-ocr"
+cmd     = "pdftoppm -r 300 {pdf_path} /tmp/page && tesseract /tmp/page*.ppm stdout --oem 3 --psm 6"
+when    = "pymupdf4llm returns < 100 chars (scanned image PDF with no text layer)"
+
+[pdf_extraction.quality_heuristic]
+# sm0l model: classify extraction quality before committing to NeumannStore
+quality_prompt = "Rate 1-5 the quality and relevance of this text excerpt for {mission.goal}: {first_500_chars}"
+quality_tier   = "sm0l"
+min_quality_score = 2            # discard PDFs scoring < 2 (OCR garbage, wrong language, etc.)
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# SECTION 7: Hive-local sharing (not git-synced)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+[hive_sharing]
+# The library datum is shared on the same hive-server-node via:
+# (a) NeumannStore at ~/.b00t/neumann/library/ — multiple processes share the SQLite DB
+# (b) D-Bus notification when new batches are ingested (b00t-ipc zbus)
+# (c) mdns-sd service announcement (b00t-cli uses mdns-sd crate)
+
+share_protocol = "NeumannStore (file-locked SQLite) + D-Bus events + mdns-sd announcement"
+
+[hive_sharing.dbus_events]
+# b00t-ipc/src/lib.rs — D-Bus signals emitted on each ingestion batch
+signal_ingested = "org.b00t.Library.BatchIngested { sha256_list: Vec<String>, milestone_delta: f32 }"
+signal_cake     = "org.b00t.Library.CakeEarned { milestone_id: String, score: f32 }"
+# Agents subscribe to these signals to invalidate their local query cache
+
+[hive_sharing.gitignore_rules]
+# These MUST be in .gitignore — library data is hive-local, never git-synced
+gitignore = [
+  "~/.b00t/library/",
+  "~/.b00t/neumann/library/",
+  "_b00t_/library.toml",          # local soul datum, not project-scoped
+]
+note = "The ARCH-LIBRARY-SOUL.tomllmd PRD IS in git (it's architecture). The data IS NOT."
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# SECTION 8: Roadmap
+# ═══════════════════════════════════════════════════════════════════════════════
+
+[roadmap]
+
+[roadmap.phase_1_foundation]
+# ~1 week; prerequisite: poppler-utils installed
+status = "next"
+items = [
+  "b00t library init — create ~/.b00t/library/ structure (journal.db + benchmark dir + library.toml)",
+  "LibraryJournal SQLite schema (migrations via rusqlite)",
+  "LibraryScanner: fdfind sweep + SHA256 dedup guard",
+  "Extraction pipeline: pdftotext → pymupdf4llm fallback",
+  "Wire doc_pipeline::SemanticChunk for chunking (tiktoken-rs token counting)",
+  "b00t library ingest --batch=10 (synchronous, no OODA yet)",
+  "Undo: b00t library undo <sha256>",
+  "CLI: b00t library status",
+]
+
+[roadmap.phase_2_autolearn]
+# ~2 weeks; prerequisite: Phase 1 + embedding model active
+status = "follow-on"
+items = [
+  "Mission/Milestone TOML schema + b00t library mission set",
+  "Embed mission goal via b00t-embed → priority scoring in LibraryScanner",
+  "ResearchFrontier queue (journal.db frontier table)",
+  "Frontier prompt (ch0nky) → generate follow-up queries after each ingestion",
+  "LibraryOodaRunner wiring OodaConfig.enable_autoresearch=true",
+  "b00t library autolearn --daemon (apalis worker)",
+]
+
+[roadmap.phase_3_benchmark_reward]
+# ~1 week; prerequisite: Phase 2
+status = "future"
+items = [
+  "CognitiveBenchmark: JSONL Q&A pairs → run_cmd → score_query",
+  "Milestone check after each batch → BenchmarkResult.delta_score",
+  "Cake reward: b00t lfmf + D-Bus signal + console 🍰",
+  "Dashboard: b00t library dashboard (ASCII table: score trend, frontier size, milestone %)",
+  "Auto-prune low-quality ingestions (quality_score < 2 → auto-undo)",
+]
+
+[roadmap.phase_4_distributed]
+# ~3 weeks; prerequisite: Phase 3 + multiple hive nodes
+status = "executive-gate"
+items = [
+  "Multi-node library federation: mdns-sd peer discovery + NeumannStore replication",
+  "A2A: library agent announces capability via mcp__b00t-mcp__b00t_agent_capability",
+  "Cross-node dedup: check peer journals before ingesting a SHA256",
+  "Distributed benchmark: aggregate scores across nodes via b00t_agent_vote_create",
+]
+
+# b00t:map v1
+# summary: ARCH-LIBRARY-SOUL — autonomous 200TB PDF ingestion, journaled undo/recovery, Karpathy auto-research OODA loop, mission/milestone benchmarks, 🍰 cognitive reward
+# tags: library, soul, ingestion, rag, auto-research, ooda, karpathy, benchmark, reward, cake, undo, journal, hive-local
+# tier: frontier
+# cmds: b00t library init; b00t library ingest --batch=10; b00t library autolearn --daemon; b00t library benchmark; b00t library status
+# complexity: 10

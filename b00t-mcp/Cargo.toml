@@ -35,6 +35,7 @@ tracing.workspace = true
 # b00t-mcp specific dependencies
 b00t-cli = { workspace = true }
 b00t-c0re-lib = { workspace = true }
+b00t-reflect-types = { workspace = true }
 b00t-chat = { workspace = true }
 shellexpand = "3.1.0"
 dirs = "6.0"
@@ -50,6 +51,9 @@ syn = { version = "2.0", features = ["full", "extra-traits"] }
 axum = { version = "0.8.4", features = ["macros"] }
 tower = "0.5"
 tower-http = { version = "0.6", features = ["cors"] }
+
+# File watcher for hot-reload (keys, config)
+notify = "7"
 
 # OAuth 2.1 authorization server dependencies
 oauth2 = "5.0"

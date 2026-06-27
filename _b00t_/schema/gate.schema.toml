@@ -113,3 +113,9 @@ id = "tags-format"
 description = "Tail-map tags must be comma-separated (not space-separated)"
 check = "tail -10 $FILE | grep '# tags:' | grep -q ','"
 severity = "info"
+
+[[schema.rules]]
+id = "semantic-quality"
+description = "sm0l oracle verifies hint and summary are semantically meaningful (requires B00T_SM0L_ENDPOINT)"
+check = "sm0l"
+severity = "warning"
