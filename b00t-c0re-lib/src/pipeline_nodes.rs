@@ -714,6 +714,120 @@ impl PipelineNode for ChunkNode {
     }
 }
 
+/// LegislationChunker — fetches legislation HTML and chunks by section headers.
+///
+/// Input: DocumentSource (with url pointing to legislation.gov.au)
+/// Output: Vec<SemanticChunk> — one chunk per section
+///
+/// Section detection: regex `^\d[\dA-Z\-]*[A-Z]?\s` (e.g. "1A ", "Division 7A")
+#[derive(Debug, Clone)]
+pub struct LegislationChunker;
+
+impl PipelineNode for LegislationChunker {
+    type Input = crate::doc_pipeline::DocumentSource;
+    type Output = Vec<crate::doc_pipeline::SemanticChunk>;
+
+    fn node_id(&self) -> &str { "legislation-chunk" }
+    fn node_label(&self) -> &str { "Legislation Chunker" }
+    fn node_category(&self) -> NodeCategory { NodeCategory::Transform }
+
+    fn preconditions(&self) -> Vec<SerializableFOLFormula> {
+        vec![SerializableFOLFormula::new(
+            Quantifier::Exists, Connective::And,
+            &["has_url"], &["doc"],
+            "∃ doc: has_url(doc)",
+        )]
+    }
+
+    fn postconditions(&self) -> Vec<SerializableFOLFormula> {
+        vec![SerializableFOLFormula::new(
+            Quantifier::ForAll, Connective::And,
+            &["has_section_header"], &["chunk"],
+            "∀ chunk: has_section_header(chunk)",
+        )]
+    }
+
+    fn invariants(&self) -> Vec<SerializableFOLFormula> { vec![] }
+
+    fn execute(&self, input: Self::Input) -> Self::Output {
+        use crate::doc_pipeline::SemanticChunk;
+        use scraper::{Html, Selector};
+        use regex::Regex;
+
+        let url = match &input.url {
+            Some(u) => u.clone(),
+            None => return self.fallback_chunks(&input),
+        };
+
+        let html = match reqwest::blocking::get(&url).and_then(|r| r.text()) {
+            Ok(h) => h,
+            // Network unavailable — chunk abstract_text as fallback
+            Err(_) => return self.fallback_chunks(&input),
+        };
+
+        let doc = Html::parse_document(&html);
+        // legislation.gov.au wraps section text in .provision or .section elements;
+        // fall back to all <p> tags if selector yields nothing
+        let section_sel = Selector::parse(".provision, .section, .legis-body p").unwrap();
+        let section_re = Regex::new(r"^\d[\dA-Z\-]*[A-Z]?\s").unwrap();
+
+        let raw_sections: Vec<(Option<String>, String)> = doc
+            .select(&section_sel)
+            .map(|el| {
+                let text: String = el.text().collect::<Vec<_>>().join(" ");
+                let text = text.trim().to_string();
+                // Extract heading from first line if it looks like a section number
+                let header = text.lines().next()
+                    .filter(|l| section_re.is_match(l))
+                    .map(|l| l.to_string());
+                (header, text)
+            })
+            .filter(|(_, t)| t.len() > 10)
+            .collect();
+
+        if raw_sections.is_empty() {
+            return self.fallback_chunks(&input);
+        }
+
+        raw_sections.iter().enumerate().map(|(i, (header, text))| {
+            SemanticChunk::new(
+                &format!("{}:section:{i}", input.source_id),
+                &input.source_id, i,
+                text, &["legislation", "section"],
+                vec![0.0; 5], 0.0,
+                header.as_deref(),
+            )
+        }).collect()
+    }
+
+    fn visual_style(&self) -> NodeStyle {
+        NodeStyle { fill: "#052e16".to_string(), stroke: "#4ade80".to_string(), shape: NodeShape::RoundedBox }
+    }
+
+    fn state_machine(&self) -> StateMachine { StateMachine::idle_run_cycle("legislation-chunk") }
+
+    fn input_ports(&self) -> Vec<PortDef> {
+        vec![PortDef { name: "document".into(), port_type: "DocumentSource".into(), direction: PortDirection::Input }]
+    }
+
+    fn output_ports(&self) -> Vec<PortDef> {
+        vec![PortDef { name: "chunks".into(), port_type: "Vec<SemanticChunk>".into(), direction: PortDirection::Output }]
+    }
+}
+
+impl LegislationChunker {
+    fn fallback_chunks(&self, input: &crate::doc_pipeline::DocumentSource) -> Vec<crate::doc_pipeline::SemanticChunk> {
+        use crate::doc_pipeline::SemanticChunk;
+        vec![SemanticChunk::new(
+            &format!("{}:fallback:0", input.source_id),
+            &input.source_id, 0,
+            &input.abstract_text, &["legislation", "abstract"],
+            vec![0.0; 5], 0.0,
+            Some("Abstract"),
+        )]
+    }
+}
+
 /// EvidenceNode — extracts evidence from chunks.
 #[derive(Debug, Clone)]
 pub struct EvidenceNode;
@@ -873,7 +987,7 @@ impl PipelineNode for RequirementsNode {
 /// Build a graph from composed nodes for visualization and export.
 pub fn build_graph_from_pipeline<N: PipelineNode>(node: &N) -> NodeGraph {
     let mut nodes = vec![];
-    let mut edges = vec![];
+    let edges = vec![];
 
     // Collect node info
     let graph_node = GraphNode {
@@ -1106,7 +1220,7 @@ mod tests {
         }
 
         // With ≥4 requirements cycling through 3 types, we should see at least 2 different types
-        let mut types_seen: std::collections::HashSet<_> = req_types.iter().map(|t| std::mem::discriminant(*t)).collect();
+        let types_seen: std::collections::HashSet<_> = req_types.iter().map(|t| std::mem::discriminant(*t)).collect();
         assert!(types_seen.len() >= 2, "Expected ≥2 different RequirementType variants, got {}", types_seen.len());
     }
 }

@@ -1,0 +1,40 @@
+# ato-legislation — b00t datum for Australian Tax Legislation ingestion pipeline
+# Registers legislation.gov.au acts as b00t datums for the tax-lawyer capability.
+
+[b00t.schema]
+version   = "1"
+type      = "cli"
+type_tags = ["cli", "ato", "legislation", "tax-lawyer", "au", "pipeline"]
+
+[resource]
+name    = "ato-legislation"
+tool    = "ato-legislation"
+upstream = "https://www.legislation.gov.au"
+
+[pipeline]
+# ATO Legislation ingestion pipeline (b00t-c0re-lib)
+# AtoClient → LegislationChunker → EvidenceNode → RequirementsNode
+entry     = "b00t-c0re-lib::ato_client::AtoClient"
+chunker   = "b00t-c0re-lib::pipeline_nodes::LegislationChunker"
+rate_limit_secs = 3
+
+[acts]
+itaa1997 = { api_id = "C2025C00001", name = "Income Tax Assessment Act 1997", jurisdiction = "AU" }
+itaa1936 = { api_id = "C2004A04838", name = "Income Tax Assessment Act 1936", jurisdiction = "AU" }
+gst      = { api_id = "C2004A04840", name = "A New Tax System (Goods and Services Tax) Act 1999", jurisdiction = "AU" }
+fbt      = { api_id = "C2004A04839", name = "Fringe Benefits Tax Assessment Act 1986", jurisdiction = "AU" }
+
+[[resource.usages]]
+description = "Fetch ITAA 1997 and chunk into sections"
+command     = "b00t-c0re-lib pipeline run --node ato-client --act itaa1997 | pipeline run --node legislation-chunk"
+
+[[resource.usages]]
+description = "Run full ATO ingestion pipeline"
+command     = "b00t task add 'ato: ingest legislation' && b00t-c0re-lib pipeline run --preset ato-full"
+
+# b00t:map v1
+# summary: ATO Legislation ingestion pipeline datum — legislation.gov.au → SemanticChunks
+# tags: ato, legislation, tax-lawyer, au, pipeline, chunker
+# tier: ch0nky
+# cmds: pipeline run --node ato-client --act itaa1997
+# complexity: 4

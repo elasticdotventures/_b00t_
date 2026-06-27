@@ -575,14 +575,18 @@ async fn health_metrics_handler() -> impl IntoResponse {
 /// GET `/api/admin/processes` — Hive process NodeGraph (SysMLv2/KerML visual)
 async fn processes_handler() -> impl IntoResponse {
     use b00t_c0re_lib::pipeline_nodes::{
-        build_graph_from_pipeline, ChunkNode, EvidenceNode, FetchNode, RequirementsNode,
+        build_graph_from_pipeline, ChunkNode, EvidenceNode, FetchNode,
+        LegislationChunker, RequirementsNode,
     };
 
-    // Build the document pipeline NodeGraph
+    // Document evidence pipeline (generic)
     let fetch_graph = build_graph_from_pipeline(&FetchNode);
     let chunk_graph = build_graph_from_pipeline(&ChunkNode);
     let evidence_graph = build_graph_from_pipeline(&EvidenceNode);
     let req_graph = build_graph_from_pipeline(&RequirementsNode);
+
+    // ATO legislation pipeline
+    let legis_graph = build_graph_from_pipeline(&LegislationChunker);
 
     axum::Json(serde_json::json!({
         "pipeline": "hive-document-evidence",
@@ -600,6 +604,25 @@ async fn processes_handler() -> impl IntoResponse {
             evidence_graph.to_mermaid(),
             req_graph.to_mermaid(),
         ),
+        "pipelines": {
+            "ato-legislation": {
+                "description": "ATO Legislation ingestion: AtoClient → LegislationChunker → EvidenceNode → RequirementsNode",
+                "jurisdiction": "AU",
+                "acts": ["ITAA 1997", "ITAA 1936", "GST Act 1999", "FBT Act 1986"],
+                "nodes": [legis_graph, evidence_graph, req_graph],
+                "mermaid": format!(
+                    "{}\n{}\n{}",
+                    legis_graph.to_mermaid(),
+                    evidence_graph.to_mermaid(),
+                    req_graph.to_mermaid(),
+                ),
+                "health": {
+                    "source": "https://www.legislation.gov.au",
+                    "rate_limit_secs": 3,
+                    "datum": "ato-legislation.cli.toml",
+                },
+            }
+        },
         "export_formats": ["mermaid", "svg", "comfyui", "json"],
     }))
 }
