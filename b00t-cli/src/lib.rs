@@ -232,15 +232,6 @@ pub struct UnifiedConfig {
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Default)]
-#[serde(default)]
-pub struct VisualizationSpec {
-    #[serde(rename = "type")]
-    pub viz_type: String,
-    pub render_opts: Vec<String>,
-    pub auto_scope: Option<String>,
-}
-
-#[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Default)]
 pub struct UsageExample {
     pub description: String,
     pub command: String,

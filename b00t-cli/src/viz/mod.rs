@@ -335,29 +335,6 @@ pub fn blessing_to_rhai_dsl(graph: &BlessingGraph) -> String {
     out
 }
 
-pub fn blessing_to_plantuml(graph: &BlessingGraph) -> String {
-    let mut out = String::from("@startuml\nleft to right direction\n");
-    for node in &graph.nodes {
-        out.push_str(&format!(
-            "component \"{}\\ncost={}\\nroles={}\" as {}\n",
-            plantuml_label(&node.id),
-            node.cost_tokens,
-            plantuml_label(&node.role_access.join(",")),
-            plantuml_id(&node.id)
-        ));
-    }
-    for edge in &graph.edges {
-        out.push_str(&format!(
-            "{} --> {} : {}\n",
-            plantuml_id(&edge.from),
-            plantuml_id(&edge.to),
-            plantuml_label(&edge.relationship)
-        ));
-    }
-    out.push_str("@enduml\n");
-    out
-}
-
 pub fn tasks_to_scene(tasks: &[Task]) -> SceneGraph {
     let ids: Vec<String> = tasks.iter().map(|task| task.id.to_string()).collect();
     let edges: Vec<(String, String)> = tasks
@@ -428,27 +405,6 @@ pub fn tasks_to_rhai_dsl(tasks: &[Task]) -> String {
                 .join(", ")
         ));
     }
-    out
-}
-
-pub fn tasks_to_plantuml(tasks: &[Task]) -> String {
-    let mut out = String::from("@startuml\nleft to right direction\n");
-    for task in tasks {
-        out.push_str(&format!(
-            "component \"#{} {}\\nstatus={}\\npriority={}\" as T{}\n",
-            task.id,
-            plantuml_label(&task.title),
-            task.status,
-            task.priority,
-            task.id
-        ));
-    }
-    for task in tasks {
-        for dep in &task.dependencies {
-            out.push_str(&format!("T{} --> T{} : depends_on\n", dep, task.id));
-        }
-    }
-    out.push_str("@enduml\n");
     out
 }
 
@@ -529,33 +485,6 @@ pub fn datum_graph_to_rhai_dsl(graph: &DatumGraph) -> String {
             escape_rhai(&edge.edge_type)
         ));
     }
-    out
-}
-
-pub fn datum_graph_to_plantuml(graph: &DatumGraph) -> String {
-    let mut out = String::from("@startuml\nleft to right direction\n");
-    for node in &graph.nodes {
-        let datum_type = node
-            .datum_type
-            .as_ref()
-            .map(|dtype| format!("{dtype:?}"))
-            .unwrap_or_else(|| "?".into());
-        out.push_str(&format!(
-            "component \"{}\\n{}\" as {}\n",
-            plantuml_label(&node.key),
-            plantuml_label(&datum_type),
-            plantuml_id(&node.key)
-        ));
-    }
-    for edge in &graph.edges {
-        out.push_str(&format!(
-            "{} --> {} : {}\n",
-            plantuml_id(&edge.from),
-            plantuml_id(&edge.to),
-            plantuml_label(&edge.edge_type)
-        ));
-    }
-    out.push_str("@enduml\n");
     out
 }
 
@@ -643,14 +572,6 @@ fn mermaid_label(raw: &str) -> String {
     raw.replace('"', "'")
 }
 
-fn plantuml_id(raw: &str) -> String {
-    mermaid_id(raw)
-}
-
-fn plantuml_label(raw: &str) -> String {
-    raw.replace('\\', "\\\\").replace('"', "'")
-}
-
 fn escape_rhai(raw: &str) -> String {
     raw.replace('\\', "\\\\").replace('"', "\\\"")
 }
@@ -710,7 +631,6 @@ mod tests {
         assert_eq!(scene.nodes.len(), 2);
         assert_eq!(scene.edges.len(), 1);
         assert!(blessing_to_rhai_dsl(&graph).contains("role(\"executive\""));
-        assert!(blessing_to_plantuml(&graph).contains("@startuml"));
     }
 
     #[test]
@@ -748,7 +668,6 @@ mod tests {
         let scene = tasks_to_scene(&tasks);
         assert_eq!(scene.edges.len(), 1);
         assert!(tasks_to_rhai_dsl(&tasks).contains("blocked_by: [\"1\"]"));
-        assert!(tasks_to_plantuml(&tasks).contains("T1 --> T2"));
         assert!(scene_to_ascii(&scene).contains("depends_on"));
     }
 }
