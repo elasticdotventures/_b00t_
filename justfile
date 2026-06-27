@@ -180,8 +180,18 @@ marketplace-check:
     python3 scripts/generate_claude_marketplace.py --repo-root . --check
 
 
+# 🔗 Link ~/.cargo/bin/b00t → target/debug/b00t (dev binary preferred over release).
+#    Run after `just install` or `just bump-install` to restore dev-first resolution.
+#    PATH must include ~/.cargo/bin for this to take effect.
+dev-link:
+    ln -sf "{{justfile_directory()}}/target/debug/b00t" \
+      "${CARGO_HOME:-$HOME/.cargo}/bin/b00t"
+    @echo "🔗 ${CARGO_HOME:-$HOME/.cargo}/bin/b00t → {{justfile_directory()}}/target/debug/b00t"
+
 # Bump patch version + cargo install — always pair these together
 # 🤓 never cargo install without bumping version; tracks deployed vs source
+# ⚠️ Warning: `cargo install --force` overwrites the dev symlink in ~/.cargo/bin.
+#    Run `just dev-link` after to restore dev-first resolution.
 bump-install:
     #!/usr/bin/env bash
     set -euo pipefail
@@ -212,6 +222,8 @@ build-hooks:
 # 🥾 Install b00t binaries + systemd unit files.
 # 💡 Recommended: sudo just install (sudo enables system-wide b00t@.service)
 #    Menu selects components; defaults to [2] binaries+service after 10s timeout.
+# ⚠️ Warning: `cargo install --force` overwrites the dev symlink in ~/.cargo/bin.
+#    Run `just dev-link` after to restore dev-first resolution.
 install:
     #!/bin/bash
     set -euo pipefail
