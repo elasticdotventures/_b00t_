@@ -39,6 +39,8 @@ ipc-fanout = ["dep:b00t-ipc", "data-fabric"]  # route write fanout through b00t-
 
 [dependencies]
 pyo3 = { version = "0.27", features = ["extension-module"], optional = true }
+keyring = "4"
+base64 = "0.22"
 # Workspace dependencies
 serde.workspace = true
 serde_json.workspace = true

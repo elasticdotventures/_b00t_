@@ -23,7 +23,7 @@ jobs:
       - name: Init required vendor submodules
         run: |
           set -euo pipefail
-          git submodule update --init --depth 1 vendor/tomllm vendor/irontology-mcp vendor/embed-anything-b00t
+          git submodule update --init --depth 1 vendor/tomllm vendor/irontology-mcp vendor/embed-anything-b00t vendor/l3dg3rr
 
       - name: install stable
         uses: actions-rs/toolchain@v1
