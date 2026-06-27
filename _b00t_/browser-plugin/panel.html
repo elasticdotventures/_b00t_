@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    :root {
+      --bg: #1a1a2e;
+      --surface: #16213e;
+      --accent: #0f3460;
+      --green: #00ff88;
+      --red: #ff3355;
+      --yellow: #ffcc00;
+      --text: #e0e0e0;
+      --dim: #888;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: 'Consolas', 'Courier New', monospace;
+      font-size: 13px;
+      background: var(--bg);
+      color: var(--text);
+      padding: 8px;
+      overflow-x: hidden;
+    }
+    .header {
+      display: flex; align-items: center; gap: 8px;
+      padding: 8px; background: var(--surface);
+      border-radius: 4px; margin-bottom: 8px;
+    }
+    .status-dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: var(--red); flex-shrink: 0;
+    }
+    .status-dot.connected { background: var(--green); }
+    .search-bar {
+      width: 100%; padding: 6px 8px;
+      background: var(--surface); border: 1px solid #333;
+      color: var(--text); border-radius: 4px;
+      font-family: inherit; font-size: 12px;
+      outline: none; margin-bottom: 8px;
+    }
+    .search-bar:focus { border-color: var(--accent); }
+    .cmd-list { list-style: none; }
+    .cmd-item {
+      padding: 6px 8px; cursor: pointer; border-radius: 3px;
+      display: flex; justify-content: space-between; align-items: center;
+      transition: background 0.15s;
+    }
+    .cmd-item:hover { background: var(--surface); }
+    .cmd-item.selected { background: var(--accent); }
+    .cmd-action {
+      color: var(--green); font-weight: bold;
+    }
+    .cmd-desc { color: var(--dim); font-size: 11px; }
+    .cmd-shortcut { color: var(--yellow); font-size: 10px; }
+    .script-bar {
+      margin-top: 8px; padding: 6px 8px;
+      background: var(--surface); border-radius: 4px;
+      min-height: 20px; font-size: 11px;
+    }
+    .step { color: var(--yellow); }
+    .footer {
+      margin-top: 8px; padding: 4px;
+      font-size: 10px; color: var(--dim); text-align: center;
+    }
+    .btn {
+      background: var(--accent); color: var(--text);
+      border: none; padding: 4px 12px; border-radius: 3px;
+      cursor: pointer; font-family: inherit; font-size: 11px;
+    }
+    .btn:hover { opacity: 0.8; }
+    .btn-group { display: flex; gap: 4px; margin-top: 8px; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <span class="status-dot" id="statusDot"></span>
+    <span style="font-weight:bold;color:var(--green)">b00t</span>
+    <span style="font-size:11px;color:var(--dim)" id="statusText">disconnected</span>
+  </div>
+
+  <input class="search-bar" id="searchBar" placeholder="🔍 type to filter commands..." autofocus>
+
+  <ul class="cmd-list" id="cmdList"></ul>
+
+  <div class="script-bar" id="scriptBar">📋 Press Enter on a command to add it</div>
+
+  <div class="btn-group" id="actionButtons" style="display:none">
+    <button class="btn" id="btnExecute">▶ Execute</button>
+    <button class="btn" id="btnClear">✕ Clear</button>
+    <button class="btn" id="btnScreenshot">📷 Screenshot</button>
+  </div>
+
+  <div class="footer">b00t-rpa · Ctrl+Enter=execute · Esc=clear search</div>
+
+  <script src="b00t-client.js"></script>
+  <script src="panel.js"></script>
+</body>
+</html>

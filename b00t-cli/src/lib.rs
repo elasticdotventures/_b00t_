@@ -151,6 +151,14 @@ pub mod wow;
 pub mod calorie_tracker;
 pub mod cake_ledger;
 pub mod a2a_gates;
+#[cfg(feature = "rpa")]
+pub mod rpa_cdp;
+#[cfg(feature = "rpa")]
+pub mod rpa_tui;
+#[cfg(any(feature = "rpa", feature = "rpa-playwright"))]
+pub mod rpa_backend;
+#[cfg(feature = "rpa")]
+pub mod rpa_rhai;
 pub use traits::*;
 
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Default)]
@@ -2707,6 +2715,90 @@ pub fn dotmcpjson_install_mcp(
     }
 
     println!("📁 Updated: {}", mcp_json_path.display());
+
+    Ok(())
+}
+
+/// Install an MCP server to opencode's config (~/.config/opencode/opencode.json).
+pub fn opencode_install_mcp(
+    name: &str,
+    path: &str,
+    stdio_command: Option<&str>,
+    use_httpstream: bool,
+) -> Result<()> {
+    let datum = get_mcp_config(name, path)?;
+    let (command, args, env, method_type) =
+        select_mcp_method(&datum, stdio_command, use_httpstream)?;
+
+    // Build the server entry — opencode uses "command" as an array of args
+    // stdio: ["/path/to/binary"] or ["npx", "-y", "@package"]
+    // httpstream: not currently opencode-native, but we store it for reference
+    let mut command_arr = vec![command.clone()];
+    command_arr.extend(args.clone());
+
+    let mut server_entry = serde_json::json!({
+        "enabled": true,
+        "type": "local",
+        "command": command_arr
+    });
+
+    // Add optional env if present
+    if let Some(env_map) = &env {
+        if let Some(obj) = server_entry.as_object_mut() {
+            obj.insert("env".to_string(), serde_json::to_value(env_map)?);
+        }
+    }
+
+    // Determine opencode config path
+    let home = dirs::home_dir()
+        .ok_or_else(|| anyhow::anyhow!("Could not determine home directory"))?;
+    let config_path = home.join(".config").join("opencode").join("opencode.json");
+
+    // If the config doesn't exist, try the JSONC variant
+    let config_path = if config_path.exists() {
+        config_path
+    } else {
+        let jsonc_path = home.join(".config").join("opencode").join("opencode.jsonc");
+        jsonc_path
+    };
+
+    // Read existing config or start fresh
+    let mut config: serde_json::Value = if config_path.exists() {
+        let content = std::fs::read_to_string(&config_path)
+            .context("Failed to read opencode config")?;
+        serde_json::from_str(&content)
+            .map_err(|e| anyhow::anyhow!("Failed to parse opencode config: {}", e))?
+    } else {
+        serde_json::json!({})
+    };
+
+    // Ensure mcp object exists
+    if !config["mcp"].is_object() {
+        config["mcp"] = serde_json::json!({});
+    }
+
+    // Add/update the server entry
+    config["mcp"][name] = server_entry;
+
+    // Write back with pretty formatting
+    let updated = serde_json::to_string_pretty(&config)
+        .context("Failed to serialize opencode config")?;
+    std::fs::write(&config_path, updated)
+        .context("Failed to write opencode config")?;
+
+    println!(
+        "✅ Successfully installed MCP server '{}' to opencode",
+        name
+    );
+    println!("📁 Config: {}", config_path.display());
+
+    if method_type == "httpstream" {
+        println!("🌐 Used httpstream method");
+    } else if let Some(cmd) = stdio_command {
+        println!("🎯 Used stdio method with command: {}", cmd);
+    } else {
+        println!("📡 Used stdio method");
+    }
 
     Ok(())
 }

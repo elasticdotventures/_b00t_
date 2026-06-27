@@ -1,0 +1,36 @@
+[b00t]
+name = "socat"
+type = "cli"
+hint = "SOcket CAT — multipurpose relay (SO_REUSEADDR, bidirectional pipe)"
+install = "sudo apt-get install -y socat"
+version = "socat -V | head -1"
+version_regex = 'socat version ([\d.]+)'
+repo = "https://github.com/poretsky/socat"
+docs = "https://manpages.org/socat"
+
+[validate]
+command = "socat -V"
+regex = "socat version"
+
+[roles]
+required_for = ["developer"]
+optional_for = []
+
+[[usage]]
+description = "Test socat is installed"
+command = "socat -V | head -1"
+
+[[usage]]
+description = "TCP relay: listen on 0.0.0.0:PORT, forward to 127.0.0.1:TARGET"
+command = "socat TCP-LISTEN:9223,fork,reuseaddr TCP:127.0.0.1:9222"
+
+[[usage]]
+description = "Kill socat relay"
+command = "pkill -f 'socat.*TCP-LISTEN:9223'"
+
+# b00t:map v1
+# summary: socat — TCP relay for WSL→Windows CDP bridge
+# tags: socat, relay, tcp, network, cli
+# tier: sm0l
+# cmds: socat -V, socat TCP-LISTEN:9223,fork,reuseaddr TCP:127.0.0.1:9222
+# complexity: 2
