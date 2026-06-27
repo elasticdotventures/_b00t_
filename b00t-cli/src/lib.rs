@@ -135,7 +135,6 @@ pub mod memory_provider;
 pub mod model_manager;
 pub mod model_registry;
 pub mod orchestrator;
-pub mod sandbox;
 pub mod runtime_sandbox;
 pub mod scheduler;
 pub mod session_memory;
