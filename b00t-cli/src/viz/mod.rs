@@ -5,7 +5,8 @@
 
 use crate::blessing::BlessingGraph;
 use crate::commands::task::{Task, TaskStatus};
-use crate::datum_utils::DatumGraph;
+use crate::datum_utils::{DatumGraph, DatumGraphEdge, DatumGraphNode};
+use crate::DatumType;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap};
 
@@ -669,5 +670,61 @@ mod tests {
         assert_eq!(scene.edges.len(), 1);
         assert!(tasks_to_rhai_dsl(&tasks).contains("blocked_by: [\"1\"]"));
         assert!(scene_to_ascii(&scene).contains("depends_on"));
+    }
+
+    #[test]
+    fn datum_graph_emits_mermaid_and_scene() {
+        let graph = DatumGraph {
+            nodes: vec![
+                DatumGraphNode {
+                    key: "b00t.cli".into(),
+                    name: "b00t".into(),
+                    datum_type: Some(DatumType::Cli),
+                    hint: "b00t CLI tool".into(),
+                },
+                DatumGraphNode {
+                    key: "rust.c".into(),
+                    name: "rustc".into(),
+                    datum_type: Some(DatumType::Cli),
+                    hint: "Rust compiler".into(),
+                },
+            ],
+            edges: vec![DatumGraphEdge {
+                from: "b00t.cli".into(),
+                to: "rust.c".into(),
+                edge_type: "depends_on".into(),
+            }],
+        };
+        let mermaid = datum_graph_to_mermaid(&graph);
+        assert!(mermaid.contains("b00t.cli"));
+        assert!(mermaid.contains("rust.c"));
+        assert!(mermaid.contains("-->"));
+        let scene = datum_graph_to_scene(&graph);
+        assert_eq!(scene.nodes.len(), 2);
+        assert_eq!(scene.edges.len(), 1);
+    }
+
+    #[test]
+    fn datum_graph_rhai_dsl_emits_entanglement() {
+        let graph = DatumGraph {
+            nodes: vec![DatumGraphNode {
+                key: "git.cli".into(),
+                name: "git".into(),
+                datum_type: Some(DatumType::Cli),
+                hint: "Git VCS".into(),
+            }],
+            edges: vec![],
+        };
+        let rhai = datum_graph_to_rhai_dsl(&graph);
+        assert!(rhai.contains("datum(\"git.cli\""));
+        assert!(rhai.contains("type: \"Cli\""));
+    }
+
+    #[test]
+    fn empty_datum_graph_produces_empty_scene() {
+        let graph = DatumGraph { nodes: vec![], edges: vec![] };
+        let scene = datum_graph_to_scene(&graph);
+        assert_eq!(scene.nodes.len(), 0);
+        assert_eq!(scene.edges.len(), 0);
     }
 }
