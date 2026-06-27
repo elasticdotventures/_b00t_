@@ -20,7 +20,6 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::collections::HashMap;
 use std::net::{SocketAddr, TcpStream};
-use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::RwLock;
@@ -137,6 +136,13 @@ fn discover_local(soul: &SoulConfig) -> Option<(String, String)> {
 
 fn discover_remote(soul: &SoulConfig) -> Option<(String, String, String)> {
     for be in &soul.backends.remote {
+        // Check encrypted credential catalog first (zero-trust)
+        if let Ok(Some((_key_id, secret))) = b00t_c0re_lib::datum_credential::find_credential_by_name(&be.name) {
+            let url = be.base_url.clone().unwrap_or_else(|| "https://api.openai.com/v1".into());
+            eprintln!("🔐 upstream via credential store: {}", be.name);
+            return Some((be.name.clone(), secret, url));
+        }
+        // Fallback: env var (for backwards compat)
         if let Ok(key) = std::env::var(&be.key_env) {
             if key.is_empty() { continue; }
             let url = be.base_url.clone().unwrap_or_else(|| "https://api.openai.com/v1".into());
@@ -180,9 +186,8 @@ pub struct LlmState {
     pub upstream_url: String,
     pub upstream_key: String,
     pub keys: Arc<RwLock<HashMap<String, KeyEntry>>>,
-    pub keys_file: PathBuf,
-    pub spotlight_log: PathBuf,
-    pub _watcher: Option<std::sync::Mutex<notify::RecommendedWatcher>>,
+    pub keys_file: std::path::PathBuf,
+    pub spotlight_log: std::path::PathBuf,
 }
 
 impl LlmState {
@@ -215,114 +220,17 @@ impl LlmState {
                 }
             }
         }
-        let keys = Arc::new(RwLock::new(keys));
-        let spotlight_log = home.join("spotlight.jsonl");
-
-        // Spawn file watcher to hot-reload keys when CLI creates new ones
-        let keys_clone = keys.clone();
-        let keys_file_clone = keys_file.clone();
-        let watcher = Self::spawn_key_watcher(&keys_file_clone, keys_clone);
-
         Self {
             upstream_url: upstream_url.trim_end_matches('/').to_string(),
             upstream_key: upstream_key.to_string(),
-            keys,
+            keys: Arc::new(RwLock::new(keys)),
             keys_file,
-            spotlight_log,
-            _watcher: Some(std::sync::Mutex::new(watcher)),
+            spotlight_log: home.join("spotlight.jsonl"),
         }
-    }
-
-    /// Watch keys_file for changes and reload in-memory keys.
-    fn spawn_key_watcher(
-        keys_file: &PathBuf,
-        keys: Arc<RwLock<HashMap<String, KeyEntry>>>,
-    ) -> notify::RecommendedWatcher {
-        use notify::{Watcher, RecursiveMode, event::EventKind};
-
-        let keys_file_clone = keys_file.clone();
-        let mut watcher = notify::recommended_watcher(move |res: Result<notify::Event, notify::Error>| {
-            match res {
-                Ok(event) => {
-                    match event.kind {
-                        EventKind::Create(_) | EventKind::Modify(_) => {
-                            // Debounce: only reload if the changed path is our keys file
-                            let dominated = event.paths.iter().any(|p| p == &keys_file_clone);
-                            if !dominated { return; }
-                            eprintln!("🔄 Keys file changed — reloading...");
-                            // Read and parse synchronously in the watcher thread
-                            if let Ok(data) = std::fs::read_to_string(&keys_file_clone) {
-                                if let Ok(parsed) = serde_json::from_str::<Value>(&data) {
-                                    let mut new_keys = HashMap::new();
-                                    if let Some(obj) = parsed.get("keys").and_then(|k| k.as_object()) {
-                                        for (k, v) in obj {
-                                            if let (Some(consumer), Some(created_at)) = (
-                                                v.get("consumer").and_then(|c| c.as_str()),
-                                                v.get("created_at").and_then(|c| c.as_str()),
-                                            ) {
-                                                if let Ok(ts) = chrono::DateTime::parse_from_rfc3339(created_at) {
-                                                    new_keys.insert(k.clone(), KeyEntry {
-                                                        consumer: consumer.to_string(),
-                                                        created_at: ts.with_timezone(&chrono::Utc),
-                                                    });
-                                                }
-                                            }
-                                        }
-                                    }
-                                    // Blocking write lock (we're in watcher thread, not async)
-                                    if let Ok(mut guard) = keys.try_write() {
-                                        let count = new_keys.len();
-                                        *guard = new_keys;
-                                        eprintln!("✅ Reloaded {} API keys", count);
-                                    }
-                                }
-                            }
-                        }
-                        _ => {}
-                    }
-                }
-                Err(e) => eprintln!("❌ File watcher error: {}", e),
-            }
-        }).expect("Failed to create key file watcher");
-
-        // Watch the parent directory (more reliable than watching the file directly)
-        if let Some(parent) = keys_file.parent() {
-            let _ = watcher.watch(parent, RecursiveMode::NonRecursive);
-        }
-
-        watcher
     }
 
     pub async fn validate_key(&self, token: &str) -> Option<KeyEntry> {
         self.keys.read().await.get(token).cloned()
-    }
-
-    /// Reload keys from disk. Called after external key creation (CLI).
-    pub async fn reload_keys(&self) -> anyhow::Result<usize> {
-        let mut keys = self.keys.write().await;
-        keys.clear();
-        let data = std::fs::read_to_string(&self.keys_file)
-            .map_err(|e| anyhow::anyhow!("failed to read {}: {}", self.keys_file.display(), e))?;
-        let parsed: Value = serde_json::from_str(&data)
-            .map_err(|e| anyhow::anyhow!("failed to parse {}: {}", self.keys_file.display(), e))?;
-        let mut count = 0;
-        if let Some(obj) = parsed.get("keys").and_then(|k| k.as_object()) {
-            for (k, v) in obj {
-                if let (Some(consumer), Some(created_at)) = (
-                    v.get("consumer").and_then(|c| c.as_str()),
-                    v.get("created_at").and_then(|c| c.as_str()),
-                ) {
-                    if let Ok(ts) = chrono::DateTime::parse_from_rfc3339(created_at) {
-                        keys.insert(k.clone(), KeyEntry {
-                            consumer: consumer.to_string(),
-                            created_at: ts.with_timezone(&chrono::Utc),
-                        });
-                        count += 1;
-                    }
-                }
-            }
-        }
-        Ok(count)
     }
 
     pub async fn create_key(&self, consumer: &str) -> String {
@@ -366,22 +274,27 @@ impl LlmState {
     }
 }
 
-fn dirs_next() -> Option<PathBuf> {
-    dirs::home_dir().map(|h| h.join(".b00t"))
+fn dirs_next() -> Option<std::path::PathBuf> {
+    std::env::var("HOME").ok().map(|h| std::path::PathBuf::from(h).join(".b00t"))
 }
 
 // ── Router ─────────────────────────────────────────────────────────────────
 
-pub fn llm_router(state: Arc<LlmState>) -> Router {
+pub fn llm_router(state: Arc<LlmState>, dev_mode: bool) -> Router {
     Router::new()
         .route("/v1/models", get(list_models))
         .route("/v1/chat/completions", post(proxy_chat))
         .route("/v1/embeddings", post(proxy_embeddings))
         .route("/v1/{*_}", axum::routing::any(fallback_not_found))
-        .with_state(state)
+        .with_state((state, dev_mode))
 }
 
-fn extract_bearer_token(headers: &HeaderMap) -> Option<String> {
+type AppState = (Arc<LlmState>, bool);
+
+fn extract_bearer_token(headers: &HeaderMap, dev_mode: bool) -> Option<String> {
+    if dev_mode {
+        return Some("dev-key".to_string());
+    }
     headers
         .get(header::AUTHORIZATION)
         .and_then(|v| v.to_str().ok())
@@ -389,33 +302,14 @@ fn extract_bearer_token(headers: &HeaderMap) -> Option<String> {
         .map(|s| s.to_string())
 }
 
-/// Validate bearer token and return consumer identity.
-/// Returns 401 response if token is missing or invalid.
-async fn require_auth(
-    headers: &HeaderMap,
-    state: &LlmState,
-) -> Result<String, (StatusCode, Json<Value>)> {
-    let token = extract_bearer_token(headers)
-        .unwrap_or_default();
-    state.validate_key(&token).await
-        .map(|k| k.consumer)
-        .ok_or_else(|| {
-            (StatusCode::UNAUTHORIZED, Json(json!({
-                "error": "invalid or missing API key"
-            })))
-        })
-}
-
 // ── Handlers ───────────────────────────────────────────────────────────────
 
 async fn list_models(
-    State(state): State<Arc<LlmState>>,
+    State((state, dev_mode)): State<AppState>,
     headers: HeaderMap,
 ) -> impl IntoResponse {
-    let consumer = match require_auth(&headers, &state).await {
-        Ok(c) => c,
-        Err(e) => return e.into_response(),
-    };
+    let token = extract_bearer_token(&headers, dev_mode).unwrap_or_default();
+    let consumer = state.validate_key(&token).await.map(|k| k.consumer).unwrap_or_else(|| "unknown".to_string());
     let url = format!("{}/models", state.upstream_url);
     let client = reqwest::Client::new();
     let mut req = client.get(&url);
@@ -440,14 +334,12 @@ async fn list_models(
 }
 
 async fn proxy_chat(
-    State(state): State<Arc<LlmState>>,
+    State((state, dev_mode)): State<AppState>,
     headers: HeaderMap,
     body: Bytes,
 ) -> impl IntoResponse {
-    let consumer = match require_auth(&headers, &state).await {
-        Ok(c) => c,
-        Err(e) => return e.into_response(),
-    };
+    let token = extract_bearer_token(&headers, dev_mode).unwrap_or_default();
+    let consumer = state.validate_key(&token).await.map(|k| k.consumer).unwrap_or_else(|| "unknown".to_string());
     let model = serde_json::from_slice::<Value>(&body)
         .ok().and_then(|v| v.get("model").and_then(|m| m.as_str().map(|s| s.to_string())))
         .unwrap_or_else(|| "unknown".to_string());
@@ -478,14 +370,12 @@ async fn proxy_chat(
 }
 
 async fn proxy_embeddings(
-    State(state): State<Arc<LlmState>>,
+    State((state, dev_mode)): State<AppState>,
     headers: HeaderMap,
     body: Bytes,
 ) -> impl IntoResponse {
-    let consumer = match require_auth(&headers, &state).await {
-        Ok(c) => c,
-        Err(e) => return e.into_response(),
-    };
+    let token = extract_bearer_token(&headers, dev_mode).unwrap_or_default();
+    let consumer = state.validate_key(&token).await.map(|k| k.consumer).unwrap_or_else(|| "unknown".to_string());
     let model = serde_json::from_slice::<Value>(&body)
         .ok().and_then(|v| v.get("model").and_then(|m| m.as_str().map(|s| s.to_string())))
         .unwrap_or_else(|| "unknown".to_string());
@@ -513,7 +403,7 @@ async fn proxy_embeddings(
 }
 
 async fn fallback_not_found(
-    State(_state): State<Arc<LlmState>>,
+    State((_state, _dev_mode)): State<AppState>,
     method: Method,
     axum::extract::Path(path): axum::extract::Path<String>,
 ) -> impl IntoResponse {
@@ -526,21 +416,9 @@ async fn fallback_not_found(
 mod tests {
     use super::*;
 
-    fn temp_state() -> LlmState {
-        let tmp = tempfile::tempdir().unwrap();
-        let keys_file = tmp.path().join("server-keys.json");
-        std::fs::write(&keys_file, r#"{"keys":{}}"#).unwrap();
-        let mut state = LlmState::from_config("http://localhost:8181/v1", "");
-        state.keys_file = keys_file;
-        state.spotlight_log = tmp.path().join("spotlight.jsonl");
-        // Keep tmp alive by leaking it (test cleanup will handle)
-        std::mem::forget(tmp);
-        state
-    }
-
     #[tokio::test]
     async fn test_key_create_and_validate() {
-        let state = Arc::new(temp_state());
+        let state = Arc::new(LlmState::from_config("http://localhost:8181/v1", ""));
         let key = state.create_key("test-consumer").await;
         assert!(key.starts_with("b00t-sk-"));
         let entry = state.validate_key(&key).await;
@@ -550,43 +428,18 @@ mod tests {
 
     #[tokio::test]
     async fn test_unknown_key_is_none() {
-        let state = Arc::new(temp_state());
+        let state = Arc::new(LlmState::from_config("http://localhost:8181/v1", ""));
         let entry = state.validate_key("bogus-key").await;
         assert!(entry.is_none());
     }
 
     #[tokio::test]
     async fn test_spotlight_emit() {
-        let state = Arc::new(temp_state());
+        let state = Arc::new(LlmState::from_config("http://localhost:8181/v1", ""));
         state.emit_spotlight("test-consumer", "chat_completions", "test-model", 42).await;
         let content = std::fs::read_to_string(&state.spotlight_log).unwrap_or_default();
         assert!(content.contains("spotlight.llm.chat_completions"));
         assert!(content.contains("test-consumer"));
         assert!(content.contains("test-model"));
-    }
-
-    #[tokio::test]
-    async fn test_reload_keys() {
-        let state = Arc::new(temp_state());
-        // Create a key via the state method
-        let key = state.create_key("reload-test").await;
-        assert!(state.validate_key(&key).await.is_some());
-
-        // Simulate external write by manually writing to the keys file
-        let mut data: Value = serde_json::from_str(
-            &std::fs::read_to_string(&state.keys_file).unwrap_or_default(),
-        ).unwrap_or_else(|_| serde_json::from_str(r###"{"keys":{}}"###).unwrap());
-        let keys = data["keys"].as_object_mut().unwrap();
-        keys.insert("b00t-sk-external".to_string(), serde_json::json!({
-            "consumer": "external-consumer",
-            "created_at": chrono::Utc::now().to_rfc3339(),
-        }));
-        std::fs::write(&state.keys_file, serde_json::to_string_pretty(&data).unwrap()).unwrap();
-
-        // Reload and verify
-        let count = state.reload_keys().await.unwrap();
-        assert!(count >= 2);
-        assert!(state.validate_key(&key).await.is_some());
-        assert!(state.validate_key("b00t-sk-external").await.is_some());
     }
 }

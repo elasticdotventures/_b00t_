@@ -138,3 +138,5 @@ mod tests {
         assert!(!version::VERSION.is_empty());
     }
 }
+pub mod datum_credential;
+pub mod store;
