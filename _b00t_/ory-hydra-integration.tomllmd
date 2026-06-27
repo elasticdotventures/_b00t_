@@ -148,7 +148,25 @@ status = "done"
 order = 2
 name = "hydra-container-smoke"
 description = "Verify podman run oryd/hydra:v2 serve all --dev with Postgres"
-status = "pending"
+status = "done"
+notes = """
+Smoke-test passed (2026-06-27):
+  - Postgres 15 container: podman run postgres:15 with hydra/secret/hydra
+  - Hydra v2.3.0: podman run oryd/hydra:v2 --network host
+  - Must run migrations first: hydra migrate sql -e --yes
+  - Health: curl :4444/health/alive → {"status":"ok"}
+  - OAuth2: client_credentials grant → access token valid
+  - JWKS: RS256 keys at /.well-known/jwks.json
+  - OIDC Discovery: /.well-known/openid-configuration
+  - Admin API: client CRUD at :4445/admin/clients
+  - ~6MB RAM, 50MB image, < 1s cold start
+
+Sharp corners found:
+  - podman requires docker.io/oryd/hydra:v2 (not oryd/hydra:v2)
+  - Migrations must run before serve (even in --dev)
+  - Introspection requires proper config (not default dev mode)
+  - Postgres must be reachable on same network (--network host for local)
+"""
 command = """
 podman run -d --name b00t-postgres-hydra \
   -e POSTGRES_USER=hydra -e POSTGRES_PASSWORD=secret -e POSTGRES_DB=hydra \
