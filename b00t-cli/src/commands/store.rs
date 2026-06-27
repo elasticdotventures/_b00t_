@@ -40,6 +40,10 @@ pub enum StoreCommands {
         #[clap(long, help = "Credential provider (cloudflare-r2, aws-s3)")]
         provider: String,
     },
+    #[clap(about = "Initialise the knowledge store + NeumannStore backend")]
+    Init,
+    #[clap(about = "Show store status (backend, object count, disk usage)")]
+    Status,
 }
 
 fn parse_key_val(s: &str) -> Result<(String, String), String> {
@@ -100,6 +104,24 @@ pub fn handle_store_command(cmd: &StoreCommands) -> anyhow::Result<()> {
         }
         StoreCommands::Sync { provider } => {
             b00t_c0re_lib::store::sync(provider)?;
+        }
+        StoreCommands::Init => {
+            b00t_c0re_lib::store::init()?;
+            println!("✅ Knowledge store initialised at ~/.b00t/store/");
+            println!("   Backend: {}", b00t_c0re_lib::compiled_knowledge_backend());
+            println!("   Objects: ~/.b00t/store/<class>/<key>");
+            println!("   Manifest: ~/.b00t/store/manifest.jsonl");
+        }
+        StoreCommands::Status => {
+            let (count, bytes) = b00t_c0re_lib::store::status();
+            println!("Backend   : {}", b00t_c0re_lib::compiled_knowledge_backend());
+            println!("Root      : ~/.b00t/store/");
+            println!("Objects   : {}", count);
+            println!("Disk      : {} bytes", bytes);
+            let entries = b00t_c0re_lib::store::list(None, None).unwrap_or_default();
+            if !entries.is_empty() {
+                println!("Latest    : {} ({})", entries[0].key, entries[0].ontology_class);
+            }
         }
     }
     Ok(())

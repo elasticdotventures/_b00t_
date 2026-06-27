@@ -2456,3 +2456,38 @@ worktree-init:
         LINKED=$((LINKED+1))
       fi
     done
+
+# ── b00t Knowledge Store ────────────────────────────────────────────────────
+
+# Initialize the knowledge store (creates ~/.b00t/store/ + NeumannStore sled DB)
+store-init:
+    cargo run --bin b00t-cli -- store init
+
+# Store a file with ontology metadata
+store-put file class consumer tags="":
+    cargo run --bin b00t-cli -- store put {{file}} --class {{class}} --consumer {{consumer}} \
+        $(if [ -n "{{tags}}" ]; then echo "{{tags}}" | tr ',' '\n' | while read t; do echo "--tag $t"; done; fi)
+
+# List stored objects (optionally filter by class or consumer)
+store-list class="" consumer="":
+    cargo run --bin b00t-cli -- store list \
+        $(if [ -n "{{class}}" ]; then echo "--class {{class}}"; fi) \
+        $(if [ -n "{{consumer}}" ]; then echo "--consumer {{consumer}}"; fi)
+
+# Query by tags (e.g. just store-query tags="model=qwen3.5,version=0.8.3")
+store-query tags="":
+    cargo run --bin b00t-cli -- store query \
+        $(echo "{{tags}}" | tr ',' '\n' | while read t; do echo "--tag $t"; done)
+
+# Show store status (backend, object count, disk usage)
+store-status:
+    cargo run --bin b00t-cli -- store status
+
+# Sync local store to cloud backend
+store-sync peer="cloudflare-r2":
+    cargo run --bin b00t-cli -- store sync --provider {{peer}}
+
+# Get a stored object by key
+store-get key output="":
+    cargo run --bin b00t-cli -- store get {{key}} \
+        $(if [ -n "{{output}}" ]; then echo "-o {{output}}"; fi)

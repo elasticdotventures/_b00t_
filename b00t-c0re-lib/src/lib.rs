@@ -97,8 +97,9 @@ pub use interaction::{
     AgentAction, EisenhowerQuadrant, InputRequest, InteractionMode, MenuItem, UserResponse,
 };
 pub use irontology_bridge::{
-    DatumNode, IntoIrontologyRecord, IntoRagDocument, IrontologyBridgeClient,
-    IrontologyIngestResult, IrontologyQueryItem, compiled_knowledge_backend,
+    ActiveKnowledgeStore, DatumNode, EdgeKind, EdgeRecord, FactRecord, IntoIrontologyRecord,
+    IntoRagDocument, IrontologyBridgeClient, IrontologyIngestResult, IrontologyQueryItem,
+    KnowledgeStoreBackend, SemanticQuery, StoreConfig, compiled_knowledge_backend,
     compiled_knowledge_backend_data_path,
 };
 pub use knowledge::{DisplayOpts, KnowledgeSource};
