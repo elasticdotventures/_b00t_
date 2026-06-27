@@ -405,17 +405,35 @@ impl LlmState {
     }
 
     async fn emit_spotlight(&self, consumer: &str, endpoint: &str, model: &str, latency_ms: u64) {
-        let event = json!({
+        let mut event = json!({
             "ts": chrono::Utc::now().to_rfc3339(),
             "event": format!("spotlight.llm.{}", endpoint),
             "consumer": consumer,
             "model": model,
             "latency_ms": latency_ms,
         });
+        // 🤓 AL-1.0 influence receipt link — if store influence was computed
+        //    for this consumer, attach the receipt reference.
+        if let Some(receipt_id) = self.latest_influence_receipt().await {
+            if let Some(obj) = event.as_object_mut() {
+                obj.insert("receipt".into(), json!(receipt_id));
+            }
+        }
         if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(&self.spotlight_log) {
             use std::io::Write;
             let _ = writeln!(f, "{}", event);
         }
+    }
+
+    /// Find the most recent influence receipt for this consumer.
+    /// Bridges the store's influence system into spotlight telemetry.
+    async fn latest_influence_receipt(&self) -> Option<String> {
+        let mut tags = std::collections::BTreeMap::new();
+        tags.insert("type".into(), "influence-receipt".into());
+        b00t_c0re_lib::store::query(&tags)
+            .ok()?
+            .first()
+            .map(|e| e.key.clone())
     }
 }
 

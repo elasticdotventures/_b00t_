@@ -327,7 +327,7 @@ fn handle_boot(
         eprintln!("  [dry-run] would install b00t-mcp");
     } else {
         match target {
-            "opencode" => crate::opencode_install_mcp("b00t-mcp", path, false, None, false)?,
+            "opencode" => crate::opencode_install_mcp("b00t-mcp", path, None, false)?,
             "claudecode" | "claude" => crate::claude_code_install_mcp("b00t-mcp", path)?,
             "vscode" => crate::vscode_install_mcp("b00t-mcp", path)?,
             "codex" => {
