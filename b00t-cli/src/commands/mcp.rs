@@ -304,22 +304,38 @@ fn handle_boot(
         .map_err(|_| anyhow::anyhow!("b00t-mcp binary not found in PATH"))?;
     eprintln!("  ✅ {}", bin_path.display());
 
-    // GATE 1: opencode config
-    let cfg_path = dirs::config_dir()
-        .ok_or_else(|| anyhow::anyhow!("no config dir"))?
-        .join("opencode")
-        .join("opencode.json");
-    eprintln!("[boot] GATE 1: config");
-    if !cfg_path.exists() {
-        anyhow::bail!("opencode config not found at {}", cfg_path.display());
-    }
-    {
-        let content = std::fs::read_to_string(&cfg_path)
+    // GATE 1: agent config exists and is valid (per target)
+    eprintln!("[boot] GATE 1: config ({target})");
+    let cfg_path: Option<std::path::PathBuf> = match target {
+        "opencode" => Some(
+            dirs::config_dir()
+                .ok_or_else(|| anyhow::anyhow!("no config dir"))?
+                .join("opencode")
+                .join("opencode.json"),
+        ),
+        "claudecode" | "claude" => Some(
+            dirs::home_dir()
+                .ok_or_else(|| anyhow::anyhow!("no home dir"))?
+                .join(".claude")
+                .join("settings.json"),
+        ),
+        _ => {
+            eprintln!("  ⚠️  config gate not implemented for '{target}' — skipping");
+            None
+        }
+    };
+    if let Some(ref cfg_path) = cfg_path {
+        if !cfg_path.exists() {
+            anyhow::bail!("config not found for '{}' at {}", target, cfg_path.display());
+        }
+        let content = std::fs::read_to_string(cfg_path)
             .map_err(|e| anyhow::anyhow!("read {}: {}", cfg_path.display(), e))?;
-        serde_json::from_str::<serde_json::Value>(&content)
-            .map_err(|e| anyhow::anyhow!("invalid JSON: {}", e))?;
+        if cfg_path.extension().map(|e| e == "json").unwrap_or(false) {
+            serde_json::from_str::<serde_json::Value>(&content)
+                .map_err(|e| anyhow::anyhow!("invalid JSON: {}", e))?;
+        }
+        eprintln!("  ✅ {}", cfg_path.display());
     }
-    eprintln!("  ✅ {}", cfg_path.display());
 
     // Install b00t-mcp via agent dispatch
     eprintln!("[boot] install b00t-mcp → {target}");
@@ -343,10 +359,10 @@ fn handle_boot(
         }
     }
 
-    // GATE 2: verify entry
-    eprintln!("[boot] GATE 2: verify entry");
-    {
-        let content = std::fs::read_to_string(&cfg_path)
+    // GATE 2: verify b00t-mcp entry (only for agents with JSON config)
+    if let Some(ref cfg_path) = cfg_path {
+        eprintln!("[boot] GATE 2: verify entry");
+        let content = std::fs::read_to_string(cfg_path)
             .map_err(|e| anyhow::anyhow!("re-read {}: {}", cfg_path.display(), e))?;
         let cfg: serde_json::Value = serde_json::from_str(&content)?;
         let entry = cfg
@@ -358,6 +374,8 @@ fn handle_boot(
             Some(true) => eprintln!("  ✅ b00t-mcp enabled"),
             _ => anyhow::bail!("b00t-mcp entry not enabled in config after install"),
         }
+    } else {
+        eprintln!("[boot] GATE 2: verify entry — skipped (no config path)");
     }
 
     // Tidy-sweep
