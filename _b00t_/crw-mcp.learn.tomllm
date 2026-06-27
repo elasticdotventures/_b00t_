@@ -1,0 +1,121 @@
+# crw-mcp — 6MB Rust web crawler MCP server
+#
+# 🤓 crw = "crawl". Single binary, 85ms cold start, 6MB RAM.
+#    Embeds its own HTTP client — no Chrome/Playwright/headless browser needed.
+#    Operates in two modes: embedded (local) and cloud (fastcrw.com).
+#
+#    SkillExecutor lifecycle: npx crw-mcp, 300s idle timeout, process_alive check.
+#
+#    Used by: b00t-gh-issues skill, firecrawl skill, web scraping/crawling tasks.
+
+[meta]
+source = "npm:crw-mcp"
+repo = "https://github.com/us/crw"
+package = "crw-mcp"
+type = "mcp-server"
+written_in = "Rust"
+binary_size = "6MB"
+cold_start = "85ms"
+mcp_transport = "stdio"
+
+# ── Modes ────────────────────────────────────────────────────────────────────
+
+[modes]
+
+[modes.embedded]
+description = "Local-only scraping. No API key, no server, no config."
+command = "npx crw-mcp"
+use_case = "Scrape URLs to markdown/HTML. No web search capability."
+env = {}
+
+[modes.cloud]
+description = "Cloud mode — adds web search via fastcrw.com API."
+command = "npx crw-mcp"
+env = { CRW_API_URL = "https://fastcrw.com/api", CRW_API_KEY = "${CRW_API_KEY}" }
+use_case = "Scrape + search + crawl. Full Firecrawl compatibility."
+
+# ── Tools ────────────────────────────────────────────────────────────────────
+
+[[tools]]
+name = "crw_scrape"
+description = "Scrape a single URL to markdown, HTML, or structured JSON"
+parameters = { url = "string", formats = ["markdown", "html", "json"], onlyMainContent = "bool" }
+
+[[tools]]
+name = "crw_batch_scrape"
+description = "Scrape multiple URLs in parallel"
+parameters = { urls = ["string"] }
+
+[[tools]]
+name = "crw_map"
+description = "Discover all URLs on a website (sitemap exploration)"
+parameters = { url = "string" }
+
+[[tools]]
+name = "crw_search"
+description = "Web search with optional content scraping (cloud mode only)"
+parameters = { query = "string", limit = "int" }
+
+[[tools]]
+name = "crw_crawl"
+description = "Multi-page BFS crawl with depth/limit controls"
+parameters = { url = "string", maxDepth = "int", limit = "int" }
+
+[[tools]]
+name = "crw_extract"
+description = "LLM-powered structured data extraction with JSON schema"
+parameters = { url = "string", schema = "object", prompt = "string" }
+
+# ── Comparison ───────────────────────────────────────────────────────────────
+
+[comparison]
+firecrawl_self_hosted_ram = "4GB+"
+crw_ram = "6MB"
+firecrawl_containers = "5+"
+crw_containers = "0"
+firecrawl_cold_start = "30-60s"
+crw_cold_start = "85ms"
+crw_tradeoff = "No JavaScript rendering — pure HTTP client. For JS-heavy sites, use Playwright/browser-use."
+
+# ── b00t Integration ─────────────────────────────────────────────────────────
+
+[integration]
+# Already integrated via:
+#   _b00t_/crw.mcp.toml — MCP server datum with SkillExecutor lifecycle
+#   skills/firecrawl/SKILL.md — full skill documentation
+#   b00t-mcp SkillExecutor — lazy spawn/reap (300s idle timeout)
+#
+# Activation phrases (auto-trigger skill loading):
+#   "scrape this website", "get content from this URL", "crawl the docs"
+#   "search the web for...", "extract structured data", "find all URLs"
+
+[[integration.recipes]]
+name = "crw-status"
+description = "Check CRW server state"
+command = "b00t cli check crw"
+
+[[integration.recipes]]
+name = "crw-start"
+description = "Start CRW in embedded mode (no cloud API needed)"
+command = "npx crw-mcp"
+
+# ── Sharp Corners ────────────────────────────────────────────────────────────
+
+[[sharp_corners]]
+issue = "No JavaScript rendering"
+impact = "Cannot scrape SPAs or JS-heavy pages — use Playwright for those"
+
+[[sharp_corners]]
+issue = "Web search requires cloud API key"
+impact = "crw_search only available in cloud mode (CRW_API_KEY required)"
+
+[[sharp_corners]]
+issue = "npx first-run delay"
+impact = "First invocation downloads crw-mcp from npm (~5-10s). Subsequent: 85ms."
+
+# b00t:map v1
+# summary: crw-mcp — 6MB Rust web crawler MCP server (embedded + cloud modes)
+# tags: crw, firecrawl, web, scraping, crawling, mcp, search
+# tier: sm0l
+# cmds: npx crw-mcp, b00t cli check crw
+# complexity: 3
