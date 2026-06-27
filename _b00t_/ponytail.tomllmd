@@ -1,0 +1,144 @@
+# Ponytail → b00t Concept Harmonization
+#
+# 🤓 DietrichGebert/ponytail (MIT, -54% LOC) offers a 7-rung ladder + 5 skills.
+#    b00t already has most of these concepts implemented with different names.
+#    This datum maps ponytail terms to their b00t equivalents, not reimplement.
+
+[meta]
+source = "github.com/DietrichGebert/ponytail"
+license = "MIT"
+benchmark = "-54% LOC, -22% tokens, -20% cost, -27% time, 100% safe"
+
+# ── Concept Map: Ponytail → b00t ──────────────────────────────────────────────
+
+[map]
+
+[map.ladder]
+ponytail = "Always-on 7-rung ladder injected before every coding task"
+b00t = "AGENTS.md § Core Laws · Ponytail ladder (newly added)"
+b00t_existing = "DRY + NRtW (rungs 1-2), compound-engineering (3-6), TDD-first (7)"
+harmonized = true
+
+[map.review]
+ponytail = "/ponytail-review — diff scan for over-engineering, 5 tags (delete/stdlib/native/yagni/shrink)"
+b00t = "CodeReviewer subagent · `just pr-validate` · `_b00t_/skills/reviewer/SKILL.md`"
+b00t_existing = "VerdictConstraint (APPROVE/REJECT/REQUEST_CHANGES), CakeTicket evidence, FOL-correct types"
+harmonized = true
+gap = "Reviewer doesn't currently use the 5-tag output format (delete/stdlib/native/yagni/shrink)"
+action = "Add ponytail-5-tag output mode to CodeReviewer skill — same logic, different output format"
+
+[map.audit]
+ponytail = "/ponytail-audit — whole-repo scan, ranked cuts biggest first"
+b00t = "codebase-memory detect_changes · `b00t grok review` · data_fabric pipeline"
+b00t_existing = "GrafeoStore (graph DB), NeumannStore (sled), evidence/satisfies.jsonl"
+harmonized = true
+gap = "No ranked-cut-by-size report — detect_changes shows impact, not a ranked delete-list"
+action = "Add `just ponytail-audit` recipe wrapping codebase-memory detect_changes with ranked output"
+
+[map.debt]
+ponytail = "/ponytail-debt — harvest ponytail: comment markers into a ledger"
+b00t = "# 🤓 tribal comments · `b00t lfmf` (learn from mistakes) · `b00t task` tracking"
+b00t_existing = "1 melvin per session max rule, tribal knowledge memoization, task queue"
+harmonized = true
+gap = "No automated harvest of # 🤓 deferred items into a task list"
+action = "Add `b00t task harvest --source 🤓` that scans # 🤓 comments and creates tasks"
+
+[map.gain]
+ponytail = "/ponytail-gain — benchmark scoreboard display"
+b00t = "evidence/satisfies.jsonl · `b00t wow` checks · Spotlight telemetry"
+b00t_existing = "Per-commit gate validation, spotcheck audit trail, usage metrics"
+harmonized = true
+gap = "No agent-facing impact scoreboard — raw JSONL, no display"
+action = "Add `b00t wow ponytail` subcommand displaying LOC/token/cost impact"
+
+[map.modes]
+ponytail = "lite / full (default) / ultra / off — intensity levels"
+b00t = "Cognitive tiers: sm0l / ch0nky / frontier"
+b00t_existing = "Tier routing by task complexity, model selection by capability"
+harmonized = true
+note = "ponytail modes control verbosity; b00t tiers control capability. Orthogonal."
+
+[map.tags]
+ponytail_tags = ["delete:", "stdlib:", "native:", "yagni:", "shrink:"]
+b00t_tags = ["🚩 cybersec", "⚠️ caveat", "🤓 tribal knowledge", "# @tribal:", "# @example:"]
+b00t_existing = "🦨 pip guard, 🚫 blocked, 🥾 orientation — semantic emoji system"
+harmonized = true
+gap = "No delete:/stdlib: equivalents — b00t tags are documentation, not deletion targets"
+action = "Add ponytail 5-tag mode to CodeReviewer output format"
+
+[map.markers]
+ponytail = "// ponytail: <ceiling>, <upgrade trigger> — deferred shortcuts with known limits"
+b00t = "# 🤓 <tribal knowledge> — one per session, memoized via b00t lfmf"
+harmonized = true
+gap = "Ponytail markers have a ceiling+trigger structure; # 🤓 is freeform"
+action = "Extend # 🤓 convention: `# 🤓 ceiling: N req/s, upgrade: Redis when p99>50ms`"
+
+# ── Implementation Plan ───────────────────────────────────────────────────────
+
+[plan]
+
+[[plan.steps]]
+order = 1
+name = "ponytail-tags-in-reviewer"
+description = "Add ponytail 5-tag output format to CodeReviewer skill"
+effort = "low"
+impact = "high"
+status = "pending"
+
+[[plan.steps]]
+order = 2
+name = "task-harvest-🤓"
+description = "b00t task harvest --source 🤓 — scans # 🤓 comments, creates tasks"
+effort = "low"
+impact = "medium"
+status = "pending"
+
+[[plan.steps]]
+order = 3
+name = "ponytail-audit-recipe"
+description = "just ponytail-audit — ranked delete-list from codebase-memory"
+effort = "medium"
+impact = "medium"
+status = "pending"
+
+[[plan.steps]]
+order = 4
+name = "wow-ponytail"
+description = "b00t wow ponytail — LOC/token/cost impact display"
+effort = "low"
+impact = "low"
+status = "pending"
+
+[[plan.steps]]
+order = 5
+name = "extend-🤓-convention"
+description = "# 🤓 ceiling: <N>, upgrade: <trigger> → extend tribal comment format"
+effort = "low"
+impact = "medium"
+status = "pending"
+
+# ── Already Harmonized (no action needed) ─────────────────────────────────────
+
+[harmonized]
+
+[[harmonized.items]]
+concept = "Ladder (always-on)"
+b00t = "AGENTS.md § Core Laws · Ponytail ladder"
+note = "Already encoded. All rungs map to existing b00t principles."
+
+[[harmonized.items]]
+concept = "Safety guards"
+b00t = "AGENTS.md § YEI MUST NEVER (no commit without tests, no credential exposure)"
+note = "Trust-boundary validation, data-loss, security, accessibility already covered."
+
+[[harmonized.items]]
+concept = "cognitive Tiers ↔ modes"
+b00t = "sm0l / ch0nky / frontier tiers"
+note = "Orthogonal to ponytail modes. Tiers control capability; ladder controls verbosity."
+
+# b00t:map v1
+# summary: Ponytail → b00t concept harmonization — maps all 6 skills + 5 tags to existing b00t equivalents
+# tags: ponytail, harmonize, ladder, review, audit, debt, gain, tags, markers
+# tier: ch0nky
+# cmds: just ponytail-audit, b00t task harvest --source 🤓, b00t wow ponytail
+# complexity: 4
