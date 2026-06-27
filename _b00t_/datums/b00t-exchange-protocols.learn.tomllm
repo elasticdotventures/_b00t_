@@ -1,0 +1,106 @@
+# 🤓 b00t Agent Exchange Protocols
+# How two b00t instances (LappyX23 + sm3lly RTX3090) connect, back up, and share processing.
+# Based on AGENTS.md Hive A2A Collaboration section.
+
+[b00t]
+name = "b00t-exchange-protocols"
+type = "learn"
+topic = "agent-exchange"
+
+[protocols]
+
+# ──────────── Discovery ────────────
+
+[protocols.discover]
+description = "Each agent announces its role + skills to the hive"
+lappyx23 = "b00t agent capability --role operator --skills b00t-server,soul,finetune --gpu rtx3050-4gb"
+sm3lly  = "b00t agent capability --role inference --skills b00t-server,finetune --gpu rtx3090-24gb"
+discover_lappyx23 = "b00t agent discover --role inference --gpu rtx3090"
+
+# ──────────── Key Exchange ────────────
+
+[protocols.keys]
+description = "Share b00t-server API keys so sm3lly can proxy requests through Lappy"
+step1 = "b00t server key create --consumer sm3lly > sm3lly-key.txt"
+step2 = "# Transfer key to sm3lly (ssh, b00t agent notify, or manual)"
+step3_usage = "curl -H 'Authorization: Bearer <key>' http://lappyx23:5273/v1/chat/completions"
+
+# ──────────── Backend Sharing ────────────
+
+[protocols.backend_share]
+description = "sm3lly serves a model, Lappyx23 proxies to it"
+lappyx23_config = '''
+# Add to ~/.b00t/server-soul.tomllm:
+[[backends.local]]
+name = "sm3lly-llama"
+port = SM3LLY_PORT
+kind = "openai-compat"
+enabled = true
+
+# Or remote:
+[[backends.remote]]
+name = "sm3lly-rtx3090"
+key_env = "SM3LLY_API_KEY"
+base_url = "http://sm3lly-host:8080/v1"
+'''
+sm3lly_serve = "podman run -d --name sm3lly-serve --device nvidia.com/gpu=all -p 8080:8080 ghcr.io/ggml-org/llama.cpp:server -m /models/Qwen3.5-4B-Q4_K_M.gguf -fa --host 0.0.0.0 -fit off"
+
+# ──────────── Finetune Delegation ────────────
+
+[protocols.finetune_delegate]
+description = "Lappyx23 prepares training data, sm3lly executes the finetune on 24GB"
+step1_lappyx23 = "python3 scripts/generate-b00t-training-data.py  # produces ~/.b00t/training/"
+step2_transfer = "scp -r ~/.b00t/training/b00t-corpus.jsonl sm3lly:~/.b00t/training/"
+step3_sm3lly = '''
+# On sm3lly (24GB VRAM):
+uv venv b00t-ft && source b00t-ft/bin/activate
+uv pip install unsloth
+export B00T_BASE_MODEL="unsloth/Qwen3.5-4B"  # fits 24GB easily
+python3 scripts/finetune-b00t.py
+'''
+step4_serve_sm3lly = "podman run -d --name b00t-ft --device nvidia.com/gpu=all -p 8081:8080 -v ~/.b00t/training/output:/models:ro ghcr.io/ggml-org/llama.cpp:server -m /models/b00t-finetuned.Q4_K_M.gguf -fa --host 0.0.0.0 -fit off"
+step5_lappyx23_use = "Add sm3lly:8081 to server-soul.tomllm → auto-proxy"
+
+# ──────────── Backup / Mirroring ────────────
+
+[protocols.backup]
+description = "Each agent mirrors the other's soul config + keys"
+lappyx23_mirror = "b00t agent notify --to sm3lly --payload \"$(cat ~/.b00t/server-soul.tomllm)\""
+sm3lly_mirror = "b00t agent notify --to lappyx23 --payload \"$(cat ~/.b00t/server-soul.tomllm)\""
+sync_training = "rsync -avz ~/.b00t/training/ sm3lly:~/.b00t/training/"
+
+# ──────────── Spotlight Exchange ────────────
+
+[protocols.spotlight]
+description = "Share usage telemetry between agents for hive-wide observability"
+merge_logs = "cat ~/.b00t/spotlight.jsonl | ssh sm3lly 'cat >> ~/.b00t/spotlight.jsonl'"
+aggregate = "b00t server spotlight query --since 7d"
+
+# ──────────── Justfile integration ────────────
+
+[protocols.justfile]
+recipes = '''
+# Add to justfile:
+connect-sm3lly:
+    b00t agent discover --role inference
+    @echo "Add sm3lly backend to ~/.b00t/server-soul.tomllm"
+
+share-training sm3lly_host="sm3lly":
+    rsync -avz ~/.b00t/training/b00t-corpus.jsonl {{sm3lly_host}}:~/.b00t/training/
+
+delegate-finetune sm3lly_host="sm3lly":
+    just share-training {{sm3lly_host}}
+    ssh {{sm3lly_host}} "cd .b00t && uv run python3 scripts/finetune-b00t.py"
+
+sync-spotlight sm3lly_host="sm3lly":
+    scp {{sm3lly_host}}:~/.b00t/spotlight.jsonl /tmp/sm3lly-spotlight.jsonl
+    cat /tmp/sm3lly-spotlight.jsonl >> ~/.b00t/spotlight.jsonl
+    @echo "Spotlight logs merged"
+'''
+
+# b00t:map v1
+# summary: Agent exchange protocols — connect, share backends, delegate finetune, sync telemetry
+# tags: agent, exchange, protocol, sm3lly, backup, connect, justfile
+# tier: frontier
+# cmds: just connect-sm3lly, b00t agent discover --role inference
+# complexity: 7

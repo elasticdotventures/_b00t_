@@ -20,6 +20,7 @@ name = "b00t_cli"
 path = "src/lib.rs"
 
 [dependencies]
+rpassword = "7"
 tiktoken-rs = "0.7.0"
 # Shared workspace dependencies
 serde = { version = "1.0", features = ["derive"] }

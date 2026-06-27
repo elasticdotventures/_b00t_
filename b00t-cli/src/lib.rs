@@ -921,6 +921,11 @@ pub enum DatumType {
     /// Node-local overlay datum — `.overlay.toml`.
     /// Carries per-node state (endpoints, keys, config) in a git enclave branch.
     Overlay,
+    /// Encrypted credential datum — `.credential.toml` (encrypted at rest via OS keyring).
+    /// 🤓 Stores cloud provider access keys (R2, S3, OpenAI, etc.). Queryable via datum system.
+    ///    Agents discover available credentials with: b00t datum list --type credential
+    ///    Encryption key lives in OS keyring (b00t/master-key), never on disk.
+    Credential,
     Unknown,
 }
 
@@ -1011,6 +1016,7 @@ impl DatumType {
         Justfile    => ["justfile"]                  => ".justfile",
         Hardware    => ["hardware"]                  => ".hardware",
         Overlay     => ["overlay"]                   => ".overlay",
+        Credential  => ["credential", "credentials"]  => ".credential",
     }
 
     /// Preferred file extension for writing new datum files.
