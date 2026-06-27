@@ -705,77 +705,88 @@ fn parse_github_repo_url(url: &str) -> Option<ParsedRepo> {
     None
 }
 
-/// Auto-scaffold polyseme + concrete datum for a GitHub repo.
+/// Auto-scaffold datum for a GitHub repo.
+/// Creates a `.cli.toml` stub for unambiguous names. Only creates a
+/// `.polyseme.tomllmd` when multiple artifacts claim the same name from
+/// different canonical sources (e.g. "bubblewrap" = sandbox container + Android app).
 /// Non-fatal: errors are returned but the caller continues with content assimilation.
 fn assimilate_github_repo(parsed: &ParsedRepo, topic: &str, _tags: &[String]) -> anyhow::Result<()> {
     use crate::{PolysemeRef, UnifiedConfig};
 
-    let polyseme_name = topic.to_string();
-    let concrete_name = format!("{}-{}", polyseme_name, parsed.owner);
     let canonical = format!("github:{}/{}", parsed.owner, parsed.repo);
     let description = format!("{} — {}/{}", parsed.repo, parsed.owner, parsed.repo);
-
+    let repo_url = format!("https://github.com/{}/{}", parsed.owner, parsed.repo);
     let b00t_dir = find_b00t_dir()?;
 
-    // 1. Polyseme datum
-    let poly_path = b00t_dir.join(format!("{}.polyseme.tomllmd", polyseme_name));
-    let mut polyseme_datum: crate::BootDatum;
+    let cli_path = b00t_dir.join(format!("{}.cli.toml", topic));
+    let poly_path = b00t_dir.join(format!("{}.polyseme.tomllmd", topic));
 
-    if poly_path.exists() {
-        let content = std::fs::read_to_string(&poly_path)?;
-        let cfg: UnifiedConfig = toml::from_str(&content)?;
-        polyseme_datum = cfg.b00t;
+    // Detect ambiguity: an existing .cli.toml with a DIFFERENT source URL means
+    // this name is already claimed by another artifact. If no .cli.toml exists
+    // at all, or the existing one is from the same source, it's unambiguous.
+    let existing_source = if cli_path.exists() {
+        std::fs::read_to_string(&cli_path).ok()
+            .and_then(|c| {
+                c.lines()
+                    .find(|l| l.contains("Assimilated from:"))
+                    .or_else(|| c.lines().find(|l| l.contains("# source_url")))
+                    .map(|l| l.to_string())
+            })
     } else {
-        polyseme_datum = crate::BootDatum {
-            name: polyseme_name.clone(),
-            datum_type: Some(crate::DatumType::Polyseme),
-            hint: format!(
-                "Polyseme datum — '{}' resolves to multiple artifacts",
-                polyseme_name
-            ),
-            ..Default::default()
-        };
-    }
-
-    let mut poly_cfg = polyseme_datum.polyseme.unwrap_or_default();
-    let mut refs = poly_cfg.refs.unwrap_or_default();
-    let mut sources = poly_cfg.sources.unwrap_or_default();
-
-    if !refs.iter().any(|r| r.canonical == canonical) {
-        refs.push(PolysemeRef {
-            name: concrete_name.clone(),
-            canonical: canonical.clone(),
-            datum: format!("{}.cli", concrete_name),
-            description: description.clone(),
-        });
-    }
-    if !sources.contains(&format!("https://github.com/{}/{}", parsed.owner, parsed.repo)) {
-        sources.push(format!(
-            "https://github.com/{}/{}",
-            parsed.owner, parsed.repo
-        ));
-    }
-
-    poly_cfg.refs = Some(refs);
-    poly_cfg.sources = Some(sources);
-    polyseme_datum.polyseme = Some(poly_cfg);
-
-    let unified = UnifiedConfig {
-        b00t: polyseme_datum,
-        env: None,
-        sections: None,
+        None
     };
-    let toml_out = toml::to_string_pretty(&unified)?;
-    std::fs::write(&poly_path, format!("{toml_out}\n"))?;
-    eprintln!("  ✅ polyseme: {}", poly_path.display());
 
-    // 2. Concrete CLI datum scaffold
-    let cli_path = b00t_dir.join(format!("{}.cli.toml", concrete_name));
-    if !cli_path.exists() {
-        let scaffold = format!(
-            r#"# {concrete_name}.cli — cli datum
+    let is_ambiguous = poly_path.exists()
+        || existing_source.as_ref()
+            .map(|s| !s.contains(&canonical) && !s.contains(&format!("{}/{}", parsed.owner, parsed.repo)))
+            .unwrap_or(false);
+
+    if is_ambiguous {
+        // ── Polyseme path (name collision) ──
+        let concrete_name = format!("{}-{}", topic, parsed.owner);
+
+        let mut polyseme_datum: crate::BootDatum = if poly_path.exists() {
+            let content = std::fs::read_to_string(&poly_path)?;
+            toml::from_str::<UnifiedConfig>(&content)?.b00t
+        } else {
+            crate::BootDatum {
+                name: topic.to_string(),
+                datum_type: Some(crate::DatumType::Polyseme),
+                hint: format!("Polyseme datum — '{topic}' resolves to multiple artifacts"),
+                ..Default::default()
+            }
+        };
+
+        let mut poly_cfg = polyseme_datum.polyseme.unwrap_or_default();
+        let mut refs = poly_cfg.refs.unwrap_or_default();
+        let mut sources = poly_cfg.sources.unwrap_or_default();
+
+        if !refs.iter().any(|r| r.canonical == canonical) {
+            refs.push(PolysemeRef {
+                name: concrete_name.clone(),
+                canonical: canonical.clone(),
+                datum: format!("{}.cli", concrete_name),
+                description: description.clone(),
+            });
+        }
+        if !sources.contains(&repo_url) {
+            sources.push(repo_url);
+        }
+
+        poly_cfg.refs = Some(refs);
+        poly_cfg.sources = Some(sources);
+        polyseme_datum.polyseme = Some(poly_cfg);
+
+        let unified = UnifiedConfig { b00t: polyseme_datum, env: None, sections: None };
+        std::fs::write(&poly_path, format!("{}\n", toml::to_string_pretty(&unified)?))?;
+        eprintln!("  ✅ polyseme: {}", poly_path.display());
+
+        // Scaffold concrete CLI datum under polyseme
+        let cli_concrete = b00t_dir.join(format!("{}.cli.toml", concrete_name));
+        if !cli_concrete.exists() {
+            let scaffold = format!(
+                r#"# {concrete_name}.cli — cli datum (polyseme ref of {topic})
 # Assimilated from: {canonical}
-# Polyseme parent: {polyseme_name}.polyseme.tomllmd
 
 [b00t]
 name        = "{concrete_name}"
@@ -787,17 +798,49 @@ hint        = "{description} — {owner}/{repo}"
 # version_regex = '(\\d+\\.\\d+\\.\\d+)'
 
 # b00t:map v1
-# summary: concrete datum for {canonical} — scaffolded by grok assimilate
+# summary: concrete datum for {canonical}
 # tags: {concrete_name}, {owner}, {repo}
 # tier: ch0nky
 # cmds: b00t install {concrete_name}
 # complexity: 1
 "#,
-            owner = parsed.owner,
-            repo = parsed.repo,
-        );
-        std::fs::write(&cli_path, scaffold)?;
-        eprintln!("  ✅ scaffold: {}", cli_path.display());
+                owner = parsed.owner,
+                repo = parsed.repo,
+            );
+            std::fs::write(&cli_concrete, scaffold)?;
+            eprintln!("  ✅ scaffold: {}", cli_concrete.display());
+        }
+    } else {
+        // ── Unambiguous — create .cli.toml directly ──
+        if !cli_path.exists() {
+            let scaffold = format!(
+                r#"# {topic}.cli — cli datum
+# Assimilated from: {canonical}
+
+[b00t]
+name        = "{topic}"
+type        = "cli"
+hint        = "{description} — {owner}/{repo}"
+
+# install     = "TODO: install command"
+# version     = "TODO: version check command"
+# version_regex = '(\\d+\\.\\d+\\.\\d+)'
+
+# b00t:map v1
+# summary: datum for {canonical} — scaffolded by grok assimilate
+# tags: {topic}, {owner}, {repo}
+# tier: ch0nky
+# cmds: b00t install {topic}
+# complexity: 1
+"#,
+                owner = parsed.owner,
+                repo = parsed.repo,
+            );
+            std::fs::write(&cli_path, scaffold)?;
+            eprintln!("  ✅ cli scaffold: {}", cli_path.display());
+        } else {
+            eprintln!("  ⏭️  {topic}.cli.toml exists — skipping scaffold");
+        }
     }
 
     Ok(())
