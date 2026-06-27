@@ -1,5 +1,6 @@
 // 🤓 b00t server — OpenAI-compatible router + API key authority
 //    Runs b00t-mcp in HTTP+LLM mode; manages keys via shared JSON file and OS keyring.
+use b00t_c0re_lib::{Action, ClassPermission, KeyEntry};
 use clap::Subcommand;
 use serde_json::Value;
 
@@ -100,15 +101,22 @@ pub fn handle_server_command(cmd: &ServerCommands) -> anyhow::Result<()> {
                     let keys = data["keys"]
                         .as_object_mut()
                         .ok_or_else(|| anyhow::anyhow!("invalid keys file"))?;
-                    let access_json: Vec<Value> = access.iter().map(|a| {
+                    // Build typed permission entries matching server_llm.rs format
+                    let access_entries: Vec<ClassPermission> = access.iter().map(|a| {
                         let (class, action) = a.rsplit_once(':').unwrap_or((a, "execute"));
-                        serde_json::json!({"class": class, "action": action})
+                        let action_enum = match action {
+                            "read" => Action::Read,
+                            "write" => Action::Write,
+                            _ => Action::Execute,
+                        };
+                        ClassPermission { class: class.to_string(), action: action_enum }
                     }).collect();
-                    keys.insert(key.clone(), serde_json::json!({
-                        "consumer": consumer,
-                        "created_at": chrono::Utc::now().to_rfc3339(),
-                        "access": access_json,
-                    }));
+                    let entry = KeyEntry {
+                        consumer: consumer.clone(),
+                        created_at: chrono::Utc::now(),
+                        access: access_entries,
+                    };
+                    keys.insert(key.clone(), serde_json::to_value(&entry)?);
                     if let Some(parent) = keys_path.parent() {
                         std::fs::create_dir_all(parent)?;
                     }

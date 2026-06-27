@@ -27,6 +27,7 @@ pub mod version {
 }
 
 pub mod aaiii;
+pub mod acl_keys;
 pub mod agent_coordination;
 pub mod agent_manager;
 pub mod agent_subtype;
@@ -69,6 +70,7 @@ pub mod template;
 pub mod utils;
 
 // Re-export commonly used types
+pub use acl_keys::{Action, ClassPermission, KeyEntry};
 pub use agent_subtype::AgentSubtype;
 pub use agent_manager::{
     AgentConfig, AgentHandle, AgentManager, ExecutorConfig, invoke_agent_executor,

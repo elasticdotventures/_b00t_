@@ -16,6 +16,7 @@ use axum::{
     routing::{get, post},
 };
 use axum::http::header;
+pub use b00t_c0re_lib::{Action, ClassPermission, KeyEntry};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::collections::HashMap;
@@ -175,41 +176,7 @@ fn resolve_upstream(soul: &SoulConfig) -> (String, String) {
 }
 
 // ── ACL types (ontology-scoped) ────────────────────────────────────────────
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "lowercase")]
-pub enum Action { Read, Write, Execute }
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ClassPermission {
-    pub class: String,
-    pub action: Action,
-}
-
-impl ClassPermission {
-    /// Parse "b00t:EmbeddingModel:execute" → ClassPermission { class, action }
-    pub fn parse(s: &str) -> Option<Self> {
-        let parts: Vec<&str> = s.rsplitn(2, ':').collect();
-        if parts.len() != 2 { return None; }
-        let action = match parts[0] {
-            "read" => Action::Read,
-            "write" => Action::Write,
-            "execute" => Action::Execute,
-            _ => return None,
-        };
-        Some(ClassPermission { class: parts[1].to_string(), action })
-    }
-}
-
-// ── State ──────────────────────────────────────────────────────────────────
-
-#[derive(Clone)]
-pub struct KeyEntry {
-    pub consumer: String,
-    pub created_at: chrono::DateTime<chrono::Utc>,
-    #[serde(default)]
-    pub access: Vec<ClassPermission>,
-}
+//    Types defined in b00t-c0re-lib/src/acl_keys.rs — imported via re-export above.
 
 pub struct LlmState {
     pub upstream_url: String,
@@ -296,15 +263,8 @@ impl LlmState {
         let keys = self.keys.read().await;
         let mut map = serde_json::Map::new();
         for (k, v) in keys.iter() {
-            let access_json: Vec<Value> = v.access.iter().map(|p| json!({
-                "class": p.class,
-                "action": serde_json::to_value(&p.action).unwrap_or(json!("execute")),
-            })).collect();
-            map.insert(k.clone(), json!({
-                "consumer": v.consumer,
-                "created_at": v.created_at.to_rfc3339(),
-                "access": access_json,
-            }));
+            // 🤓 Serialize via serde — identical format to b00t-cli's KeyAction::Create
+            map.insert(k.clone(), serde_json::to_value(v).unwrap_or_default());
         }
         let data = json!({"keys": map});
         if let Some(parent) = self.keys_file.parent() {
