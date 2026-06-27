@@ -42,6 +42,7 @@ thiserror = "2"
 # b00t-cli specific dependencies
 rhai = { workspace = true }
 b00t-c0re-lib = { workspace = true }
+b00t-l3dg3rr-viz = { workspace = true }
 b00t-bouncer = { path = "../b00t-bouncer" }
 b00t-grok = { workspace = true }
 k0mmand3r = { workspace = true }

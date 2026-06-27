@@ -178,6 +178,52 @@ impl Default for SceneTheme {
     }
 }
 
+// ── Bridge: SceneGraph ↔ InvariantGraph (b00t-l3dg3rr-viz) ───────────────
+
+impl From<SemanticRole> for b00t_l3dg3rr_viz::VisualizationRole {
+    fn from(role: SemanticRole) -> Self {
+        match role {
+            SemanticRole::Ingest => b00t_l3dg3rr_viz::VisualizationRole::Ingest,
+            SemanticRole::Validate => b00t_l3dg3rr_viz::VisualizationRole::Validate,
+            SemanticRole::Classify => b00t_l3dg3rr_viz::VisualizationRole::Classify,
+            SemanticRole::Review => b00t_l3dg3rr_viz::VisualizationRole::Review,
+            SemanticRole::Reconcile => b00t_l3dg3rr_viz::VisualizationRole::Reconcile,
+            SemanticRole::Commit => b00t_l3dg3rr_viz::VisualizationRole::Commit,
+            SemanticRole::Decision => b00t_l3dg3rr_viz::VisualizationRole::Decision,
+            SemanticRole::Step => b00t_l3dg3rr_viz::VisualizationRole::Step,
+        }
+    }
+}
+
+impl From<SceneNode> for b00t_l3dg3rr_viz::InvariantNode {
+    fn from(node: SceneNode) -> Self {
+        b00t_l3dg3rr_viz::InvariantNode::new(node.id, node.label, node.role.into())
+    }
+}
+
+impl From<SceneEdge> for b00t_l3dg3rr_viz::InvariantEdge {
+    fn from(edge: SceneEdge) -> Self {
+        let mut e = b00t_l3dg3rr_viz::InvariantEdge::new(edge.from, edge.to);
+        if let Some(label) = edge.label {
+            e = e.with_label(label);
+        }
+        e
+    }
+}
+
+impl From<SceneGraph> for b00t_l3dg3rr_viz::InvariantGraph {
+    fn from(scene: SceneGraph) -> Self {
+        let mut graph = b00t_l3dg3rr_viz::InvariantGraph::new("b00t-scene");
+        for node in scene.nodes {
+            graph.nodes.push(node.into());
+        }
+        for edge in scene.edges {
+            graph.edges.push(edge.into());
+        }
+        graph
+    }
+}
+
 pub fn scene_to_svg(scene: &SceneGraph, theme: &SceneTheme) -> String {
     let (width, height) = match scene.bounding_box() {
         Some((min, max)) => {
