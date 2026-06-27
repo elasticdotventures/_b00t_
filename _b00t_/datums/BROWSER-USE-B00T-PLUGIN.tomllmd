@@ -164,4 +164,7 @@ note  = "CDP telemetry → session metrics for agent OODA loop"
 # tags: browser, rpa, cdp, dom-enrichment, screenshot, plugin, tabsnapshot, workflow, wasm, ch0nky
 # tier: ch0nky
 # cmds: b00t-rpa plugin, b00t-rpa start, b00t-rpa --url <url>, b00t-rpa snapshot
+# @tribal: complexity 8 because 6 new architecture sections (TabSnapshot contract,
+#   capability map, OODA workflow, install/deploy plan, cache/WASM boundaries,
+#   ontology evaluation) — no longer a simple capability sketch.
 # complexity: 8
