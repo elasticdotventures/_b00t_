@@ -11,7 +11,7 @@ hint = "opencode-b00t — OpenCode integration for b00t hive (pending initializa
 
 [b00t.version]
 schema = 1
-content = "draft"
+content = "synced"
 
 [b00t.vendor]
 path = "vendor/opencode-b00t"

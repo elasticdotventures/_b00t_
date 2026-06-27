@@ -11,6 +11,7 @@
 
 use std::collections::{HashMap, HashSet};
 use super::HornResults;
+use super::predicates::{B00tPredicate, NodeCategory};
 
 /// Find skills adjacent to a goal via FOL graph traversal.
 ///
@@ -26,18 +27,20 @@ pub fn find_adjacent(
     let mut scores: HashMap<String, u32> = HashMap::new();
 
     // Step 1: find past goal nodes whose goalText overlaps current goal
+    let goal_text_uri = B00tPredicate::GoalText.as_uri();
     let matched_goals: HashSet<&str> = triples
         .iter()
         .filter(|(_, p, o)| {
-            p == "b00t:goalText"
+            *p == goal_text_uri
                 && goal_words.iter().any(|w| o.to_lowercase().contains(*w))
         })
         .map(|(s, _, _)| s.as_str())
         .collect();
 
     // Step 2: score informedBy objects by goal text match quality
+    let informed_by_uri = B00tPredicate::InformedBy.as_uri();
     for (subj, pred, obj) in triples {
-        if pred == "b00t:informedBy" {
+        if *pred == informed_by_uri {
             let w: u32 = if matched_goals.contains(subj.as_str()) { 3 } else { 1 };
             *scores.entry(obj.clone()).or_default() += w;
         }
@@ -63,11 +66,7 @@ pub fn find_adjacent(
     }
 
     // Exclude goal-node URIs and datum subjects — these are not loadable skills
-    scores.retain(|k, _| {
-        !k.starts_with("ooda:")
-            && !k.starts_with("b00t:datum/")
-            && !k.starts_with("b00t:goal")
-    });
+    scores.retain(|k, _| !NodeCategory::classify(k).is_excluded_from_discovery());
 
     let mut ranked: Vec<(String, u32)> = scores.into_iter().collect();
     ranked.sort_by(|a, b| b.1.cmp(&a.1).then(a.0.cmp(&b.0)));

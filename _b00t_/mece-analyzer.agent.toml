@@ -1,0 +1,56 @@
+# b00t Agent Datum — MECE structural decomposition sub-agent for multi-framework code review
+# 🤓 MECE = Mutually Exclusive, Collectively Exhaustive. This agent decomposes PR diffs
+#    into non-overlapping categories covering all change dimensions,
+#    then identifies structural gaps, boundary violations, and coverage holes.
+#    Phase 2 of the multi-framework-review pipeline — runs in parallel with TRIZ and Eureka.
+
+[b00t]
+name = "mece-analyzer"
+type = "agent"
+hint = "MECE structural decomposition agent: boundary detection, gap analysis, category exhaustiveness for multi-framework PR review"
+
+[[b00t.agent.inherits]]
+from = "++abstract.agent"
+
+[b00t.agent]
+tier = "ch0nky"
+capabilities = ["structural-decomposition", "boundary-detection", "gap-analysis", "category-exhaustiveness"]
+tools = ["codebase-memory.mcp", "b00t-mcp.mcp"]
+skills = ["multi-framework-code-review"]
+# 🤓 multi-framework-code-review skill routes to MECE phase when loaded by this agent
+
+[b00t.agent.crew]
+role = "specialist"
+captain = false
+
+[b00t.agent.contract]
+capabilities = ["structural-decomposition", "boundary-detection", "gap-analysis", "category-exhaustiveness"]
+min_quality_score = 0.8
+availability = "on-demand"
+gates = ["sanitize", "credential-check"]
+
+[b00t.agent.bouncer]
+enabled = true
+audit_log = ".b00t/bouncer-audit.jsonl"
+
+[b00t.agent.bouncer.input_gates]
+sanitize = { enabled = true, rules = ["no-shell-injection", "no-credential-exposure"] }
+credential_check = { enabled = true, check_env = true }
+permission_check = { enabled = true, check_role = true }
+rate_limit = { enabled = true, max_concurrent = 10 }
+
+[b00t.agent.bouncer.output_gates]
+contract_validation = { enabled = true, validate_schema = true }
+security_scan = { enabled = true, check_secrets = true }
+quality_check = { enabled = true, min_quality_score = 0.8 }
+
+entangled_mcp = ["codebase-memory.mcp", "b00t-mcp.mcp"]
+keywords = ["agent", "mece", "structural-decomposition", "boundary-detection", "gap-analysis", "category-exhaustiveness", "review", "specialist", "sub-agent"]
+depends_on = ["multi-framework-review.datum", "CREW-ROLES.tomllmd"]
+
+# b00t:map v1
+# summary: MECE structural decomposition sub-agent — boundary detection, gap analysis, category exhaustiveness for multi-framework PR review (mece phase)
+# tags: agent, mece, structural-decomposition, boundary-detection, gap-analysis, category-exhaustiveness, review, specialist, sub-agent
+# tier: ch0nky
+# cmds: just review-mece, b00t agent delegate --role specialist --agent mece-analyzer
+# complexity: 3

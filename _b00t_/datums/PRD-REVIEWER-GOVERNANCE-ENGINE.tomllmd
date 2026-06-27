@@ -1,0 +1,420 @@
+# b00t:map v1
+# summary: Reviewer Governance Engine — extends Tax-Lawyer Satisfies<Constraint> pattern to reviewer verdicts; every verdict command requires ledgerr evidence for audit trail; without evidence, command is rolled back
+# tags: prd, reviewer, governance, satisfies, constraint, ledgrrr, evidence, audit, ufo, ontology, verdict, command, rollback
+# tier: frontier
+# cmds: b00t task add, just reviewer review-multi PR=<n>, ledgerr evidence verify --command-id <id>
+# complexity: 9
+
+# ── PRD: Reviewer Governance Engine — Satisfies<VerdictConstraint> + Ledgrrr Evidence ────
+
+[b00t.schema]
+version   = "1"
+type      = "prd"
+type_tags = ["prd", "reviewer", "governance", "satisfies", "constraint", "ledgrrr", "evidence", "ufo"]
+
+[prd]
+id     = "PRD-REVIEWER-GOVERNANCE-ENGINE"
+title  = "Reviewer Governance Engine — extends Satisfies<Constraint> pattern to reviewer verdicts with ledgerr evidentiary support"
+status = "proposed"
+tier   = "frontier"
+extends = "PRD-TAX-LAWYER-UFO-SDD"
+inherits_from = ["ufo-types::Satisfies<C>", "arc-kit-au::evidence", "ledgerr::command_tracker"]
+
+# ── Executive Summary ────────────────────────────────────────────────────────
+# The Tax-Lawyer Platform established that EVERY action is a thin wrapper over
+# Satisfies<Constraint> checks, producing arc-kit-au evidence nodes for audit.
+# This PRD extends that pattern to the reviewer verdict pipeline:
+#
+#   Reviewer output → ReviewVerdict implements Satisfies<VerdictConstraint>
+#                   → produces evidence node (Blake3 hash of diff + findings)
+#                   → ledgerr records the command execution
+#                   → without evidence → command DID NOT HAPPEN → rollback
+#
+# This ensures every APPROVE/REQUEST_CHANGES decision is:
+#   (a) Ontologically grounded (UFO Moment stereotype)
+#   (b) Evidentially supported (Blake3-hashed evidence chain)
+#   (c) Command-auditable (ledgerr tracks what was triggered by the verdict)
+#   (d) Rollback-capable (no evidence = no command = reversible state)
+
+# ── Architecture ─────────────────────────────────────────────────────────────
+
+[architecture]
+# The reviewer governance engine sits between the reviewer agent and the
+# command execution layer. Every verdict-driven command MUST produce an
+# evidence node before execution proceeds.
+
+diagram = """
+┌─────────────────────────────────────────────────────────────┐
+│                    Reviewer Agent                            │
+│  MECE + TRIZ + Eureka → VERDICT: APPROVE|REQUEST_CHANGES     │
+└─────────────────────┬───────────────────────────────────────┘
+                      │ verdict output
+                      ▼
+┌─────────────────────────────────────────────────────────────┐
+│            ReviewVerdict : Satisfies<VerdictConstraint>       │
+│  ┌───────────────────────────────────────────────────────┐  │
+│  │  fn satisfies(&self, constraint: &VerdictConstraint)   │  │
+│  │    → SatisfiesResult {                                │  │
+│  │        disposition: Satisfied | Violated{reason},      │  │
+│  │        confidence: f64,                                │  │
+│  │        evidence_nodes: Vec<NodeId>,  ← Blake3 hashes   │  │
+│  │        ufo_category: MomentStereotype::Mode            │  │
+│  │      }                                                 │  │
+│  └───────────────────────────────────────────────────────┘  │
+└─────────────────────┬───────────────────────────────────────┘
+                      │ evidence node produced
+                      ▼
+┌─────────────────────────────────────────────────────────────┐
+│              Ledgerr Command Tracker                         │
+│  ┌───────────────────────────────────────────────────────┐  │
+│  │  record_command(evidence_node) → CommandReceipt         │  │
+│  │  verify_command(command_id)    → bool                   │  │
+│  │  rollback_command(command_id)  → RollbackResult         │  │
+│  └───────────────────────────────────────────────────────┘  │
+│                                                              │
+│  Without evidence → command DID NOT HAPPEN                   │
+│  → opencode hook checks ledgerr before executing             │
+│  → if no receipt: skip command, log audit gap                │
+└─────────────────────┬───────────────────────────────────────┘
+                      │ command receipt verified
+                      ▼
+┌─────────────────────────────────────────────────────────────┐
+│              Command Execution Layer                         │
+│  ┌───────────────────────────────────────────────────────┐  │
+│  │  APPROVE  → opencode proceeds to next task             │  │
+│  │  REJECT   → opencode receives feedback for revision    │  │
+│  │  ROLLBACK → undo any state changes from unverified cmd │  │
+│  └───────────────────────────────────────────────────────┘  │
+└─────────────────────────────────────────────────────────────┘
+"""
+
+# ── UFO Grounding ────────────────────────────────────────────────────────────
+
+[ufo_grounding]
+# Every type in the reviewer governance engine is grounded in a UFO stereotype.
+
+types = [
+    {
+        "type": "ReviewVerdict",
+        "ufo_stereotype": "Moment::Mode",
+        "description": "The verdict is an intrinsic moment — it exists only as a property of the review event. It is not an endurant (doesn't persist independently) nor a perdurant (isn't a process — the review process IS the perdurant).",
+        "citation": "Guizzardi 2005, §4.3: Mode = intrinsic moment dependent on a single individual"
+    },
+    {
+        "type": "VerdictConstraint",
+        "ufo_stereotype": "Abstract",
+        "description": "Constraints are abstract — they define rules that govern moments. They exist independently of any particular verdict instance.",
+        "citation": "UFO-B: Abstract category for purely formal entities"
+    },
+    {
+        "type": "ReviewEvent",
+        "ufo_stereotype": "Perdurant::Event",
+        "description": "The review itself is an event — a perdurant that unfolds in time, composed of temporal parts (setup → mece → triz → eureka → synthesize).",
+        "citation": "Guizzardi 2005, §5: Event = perdurant with proper temporal parts"
+    },
+    {
+        "type": "CommandEvidence",
+        "ufo_stereotype": "Endurant::SubKind",
+        "description": "Evidence is a subkind of document — it persists beyond the review event and can be referenced by multiple audit processes.",
+        "citation": "Guizzardi 2005, §3.2: SubKind = rigid specialization of a Kind"
+    },
+    {
+        "type": "CommandReceipt",
+        "ufo_stereotype": "Endurant::SubKind",
+        "description": "A receipt is evidence that a command was executed. It is a rigid specialization of the evidence endurant.",
+    }
+]
+
+# ── Rust Trait Extension ─────────────────────────────────────────────────────
+
+[traits]
+# Extension traits that compose with the existing ufo-types::Satisfies<C> trait
+
+## ReviewVerdict — the core trait
+review_verdict_trait = """
+/// A verdict produced by a reviewer agent.
+/// Every verdict MUST satisfy its constraint before a command can execute.
+/// 
+/// UFO: Moment::Mode — an intrinsic moment dependent on the review event.
+pub trait ReviewVerdict: Satisfies<VerdictConstraint> {
+    /// The review event this verdict belongs to
+    fn review_event(&self) -> &ReviewEvent;
+    
+    /// The disposition: APPROVE or REQUEST_CHANGES
+    fn disposition(&self) -> VerdictDisposition;
+    
+    /// Findings that support this verdict
+    fn findings(&self) -> &[Finding];
+    
+    /// The diff that was reviewed
+    fn diff_hash(&self) -> Blake3Hash;
+    
+    /// Produce an evidence node for this verdict
+    /// 🤓 This is the CRITICAL method: without evidence, the command DID NOT HAPPEN
+    fn evidence_node(&self) -> NodeId {
+        let mut hasher = Blake3::new();
+        hasher.update(self.diff_hash().as_bytes());
+        for f in self.findings() {
+            hasher.update(f.id().as_bytes());
+            hasher.update(f.severity().to_string().as_bytes());
+        }
+        hasher.update(self.disposition().to_string().as_bytes());
+        NodeId::from(hasher.finalize())
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum VerdictDisposition {
+    Approve,
+    RequestChanges { reasons: Vec<String> },
+}
+"""
+
+## CommandTracker — ledgerr integration
+command_tracker_trait = """
+/// Tracks command execution with evidentiary support.
+/// Every command triggered by a verdict MUST have a receipt.
+/// Without a receipt, the command is rolled back.
+///
+/// 🤓 This is the GOVERNANCE ENGINE: no evidence = no command = rollback.
+pub trait CommandTracker {
+    /// Record a command execution with its evidence node.
+    /// Returns a receipt that proves the command happened.
+    fn record(&self, evidence: &NodeId, command: &ReviewerCommand) -> Result<CommandReceipt>;
+    
+    /// Verify that a command has valid evidence.
+    /// Returns false if no receipt exists (command didn't happen).
+    fn verify(&self, command_id: &CommandId) -> bool;
+    
+    /// Rollback a command that lacks evidence.
+    /// Removes the command from the ledger and reverses any side effects.
+    fn rollback(&self, command_id: &CommandId) -> Result<RollbackResult>;
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CommandReceipt {
+    pub command_id: CommandId,
+    pub evidence_node: NodeId,
+    pub verdict_hash: Blake3Hash,
+    pub timestamp: Iso8601,
+    pub executed: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RollbackResult {
+    pub command_id: CommandId,
+    pub rolled_back: bool,
+    pub reason: String,           // e.g., "no evidence receipt found"
+    pub reverted_side_effects: Vec<String>,
+}
+"""
+
+## ReviewerCommand — what gets triggered
+reviewer_command_trait = """
+/// A command triggered by a reviewer verdict.
+/// Each variant corresponds to an action opencode (or any harness) should take.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum ReviewerCommand {
+    /// APPROVE → continue workflow, proceed to next task
+    Proceed {
+        task_id: String,
+        next_action: String,
+    },
+    /// REQUEST_CHANGES → send feedback, block merge, require revision
+    Revise {
+        task_id: String,
+        feedback: Vec<Finding>,
+        block_merge: bool,
+    },
+    /// WARNING → non-blocking, log scope drift
+    Warn {
+        task_id: String,
+        warning: String,
+        scope_files: Vec<String>,
+    },
+}
+
+impl ReviewerCommand {
+    /// Every command MUST produce an evidence node with its verdict
+    pub fn requires_evidence(&self) -> bool { true }
+    
+    /// The harness action: what opencode/claude-code should do
+    pub fn harness_action(&self) -> HarnessAction {
+        match self {
+            ReviewerCommand::Proceed { .. } => HarnessAction::Continue,
+            ReviewerCommand::Revise { .. } => HarnessAction::Block { inject_feedback: true },
+            ReviewerCommand::Warn { .. } => HarnessAction::Warn,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum HarnessAction {
+    Continue,
+    Block { inject_feedback: bool },
+    Warn,
+}
+"""
+
+# ── Hook Integration ─────────────────────────────────────────────────────────
+
+[hook_integration]
+# The agent-hooks system integrates with the governance engine through
+# the CommandTracker. Before executing any harness action, the hook MUST
+# verify evidence exists.
+
+hook_flow = """
+1. Reviewer agent.stop event fires
+2. agent-hooks/roles/reviewer/agent.stop.sh extracts verdict
+3. ReviewVerdict::satisfies(&VerdictConstraint) is called
+4. If Satisfied → evidence_node produced via Blake3 hash
+5. CommandTracker::record(evidence_node, command) → CommandReceipt
+6. agent-hooks/events/review.verdict.sh reads receipt
+7. If receipt exists → execute harness action (continue/block/warn)
+8. If NO receipt → command DID NOT HAPPEN → log audit gap → skip
+"""
+
+# 🤓 The critical invariant: step 6-8 ensures no command executes
+# without ledgerr evidence. This is the "rollback guard."
+
+# ── Ledgerr MCP Actions ──────────────────────────────────────────────────────
+
+[ledgerr_actions]
+# Thin MCP wrappers (≤10 lines each) over Satisfies<Constraint> checks
+
+actions = [
+    {
+        "name": "reviewer_evidence_record",
+        "description": "Record a reviewer verdict command with evidence",
+        "input": {"verdict_hash": "Blake3Hash", "command": "ReviewerCommand"},
+        "output": "CommandReceipt",
+        "impl": "review_verdict.satisfies(&constraint) → if satisfied: tracker.record(evidence, command)"
+    },
+    {
+        "name": "reviewer_evidence_verify",
+        "description": "Verify a command has valid evidence (did it happen?)",
+        "input": {"command_id": "CommandId"},
+        "output": "bool",
+        "impl": "tracker.verify(&command_id)"
+    },
+    {
+        "name": "reviewer_evidence_rollback",
+        "description": "Rollback a command that lacks evidence",
+        "input": {"command_id": "CommandId"},
+        "output": "RollbackResult",
+        "impl": "tracker.rollback(&command_id)"
+    },
+    {
+        "name": "reviewer_audit_trail",
+        "description": "Get the full audit trail for a review session",
+        "input": {"review_event_id": "EventId"},
+        "output": "Vec<CommandReceipt>",
+        "impl": "tracker.query_by_review_event(&review_event_id)"
+    },
+]
+
+# ── Implementation Phases ────────────────────────────────────────────────────
+
+[implementation]
+phases = [
+    {
+        "phase": 1,
+        "name": "Core Traits",
+        "description": "Define ReviewVerdict, CommandTracker, ReviewerCommand, VerdictDisposition, HarnessAction traits in b00t-c0re-lib. Ground in UFO stereotypes.",
+        "effort": "frontier",
+        "depends_on": [],
+        "deliverable": "b00t-c0re-lib/src/reviewer/governance.rs"
+    },
+    {
+        "phase": 2,
+        "name": "Evidence Node Production",
+        "description": "Implement evidence_node() using Blake3 hashing of diff + findings + disposition. Integrate with arc-kit-au for node ID generation.",
+        "effort": "ch0nky",
+        "depends_on": ["phase-1"],
+        "deliverable": "b00t-c0re-lib/src/reviewer/evidence.rs"
+    },
+    {
+        "phase": 3,
+        "name": "Ledgerr Command Tracker",
+        "description": "Implement CommandTracker trait backed by ledgerr. record/verify/rollback operations with audit trail.",
+        "effort": "ch0nky",
+        "depends_on": ["phase-2"],
+        "deliverable": "b00t-c0re-lib/src/reviewer/ledgerr_tracker.rs"
+    },
+    {
+        "phase": 4,
+        "name": "Ledgerr MCP Actions",
+        "description": "Create 4 thin MCP wrappers (reviewer_evidence_record, verify, rollback, audit_trail) as ≤10-line JSON-RPC handlers.",
+        "effort": "sm0l",
+        "depends_on": ["phase-3"],
+        "deliverable": "ledgerr-mcp/src/actions/reviewer_evidence.rs"
+    },
+    {
+        "phase": 5,
+        "name": "Agent Hooks Integration",
+        "description": "Create agent-hooks/events/review.verdict.sh and agent-hooks/roles/reviewer/agent.stop.sh. Hooks call ledgerr MCP to verify evidence before executing harness action.",
+        "effort": "sm0l",
+        "depends_on": ["phase-4"],
+        "deliverable": ["agent-hooks/events/review.verdict.sh", "agent-hooks/roles/reviewer/agent.stop.sh"]
+    },
+    {
+        "phase": 6,
+        "name": "OpenCode Adapter Update",
+        "description": "Update agent-hooks/adapters/opencode.sh with ReviewVerdict event mapping. Wire harness actions to opencode commands.",
+        "effort": "sm0l",
+        "depends_on": ["phase-5"],
+        "deliverable": "agent-hooks/adapters/opencode.sh (updated)"
+    },
+]
+
+# ── Acceptance Criteria ──────────────────────────────────────────────────────
+
+[acceptance]
+must = [
+    "ReviewVerdict implements Satisfies<VerdictConstraint>",
+    "evidence_node() produces deterministic Blake3 hash from diff + findings + disposition",
+    "CommandTracker::record() stores receipt in ledgerr",
+    "CommandTracker::verify() returns false for unrecorded commands",
+    "CommandTracker::rollback() removes receipt and logs audit gap",
+    "agent-hooks/events/review.verdict.sh calls ledgerr verify before executing",
+    "Without evidence receipt → harness action is SKIPPED, not executed",
+    "All 4 ledgerr MCP actions exist as ≤10-line thin wrappers",
+    "Every type has a UFO stereotype grounding comment",
+]
+should = [
+    "Rollback also reverses opencode state changes (git reset, stash pop)",
+    "Audit trail is queryable by review_event_id across multiple verdicts",
+    "Evidence nodes chain: each verdict's evidence references the previous verdict's node",
+]
+
+# ── Success Metrics ──────────────────────────────────────────────────────────
+
+[metrics]
+targets = [
+    "Zero commands executed without evidence receipt (governance invariant)",
+    "Verdict → command latency: <100ms for evidence node production",
+    "Audit trail completeness: 100% of verdicts have traceable evidence chains",
+    "Rollback coverage: all command types have reversible side effects",
+]
+
+# ── Related Datums ───────────────────────────────────────────────────────────
+
+[[related]]
+datum = "PRD-TAX-LAWYER-UFO-SDD"
+note  = "Inherits Satisfies<Constraint> pattern and UFO grounding. ReviewVerdict::satisfies() mirrors the tax-lawyer constraint evaluation pattern."
+
+[[related]]
+datum = "_b00t_/skills/reviewer/capability.toml"
+note  = "The reviewer capability manifest. Governance engine traits extend the capabilities listed here."
+
+[[related]]
+datum = "VENDOR-LEDGRRR"
+note  = "Ledgerr provides the command tracking backend. Without ledgerr, commands lack evidence and are rolled back."
+
+[[related]]
+datum = "_b00t_/skills/reviewer/autoexec.rhai"
+note  = "The autoexec loop calls CommandTracker::verify() before dispatching each review cycle."
+
+[[related]]
+datum = "PRD-PRIORITIZABLE-TASK"
+note  = "Reviewer commands (Proceed/Revise/Warn) map to task state transitions in the PrioritizableTask system."

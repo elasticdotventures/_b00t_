@@ -1,0 +1,324 @@
+# b00t:map v1
+# summary: Datum review skill — MECE+TRIZ+Eureka analysis applied to b00t .toml datums. Validates tail-map completeness, section structure, schema compliance, forward-references, blessing requirements, and guard violations.
+# tags: review, datum, mece, triz, eureka, skill, quality, governance, toml
+# tier: frontier
+# cmds: just review-datum FILE=<path>, just review-datum-batch, just validate-datum-schema
+# complexity: 6
+
+[b00t]
+name = "datum-review"
+type = "skill"
+hint = "Applies MECE decomposition, TRIZ contradiction analysis, and Eureka insight search to b00t datum .toml files. Identifies datum-specific issues invisible to code review: tail-map gaps, missing required sections, schema violations, forward-reference breakage, and guard non-compliance."
+
+# ── Datum Review Scope ───────────────────────────────────────────────────────
+
+[[b00t.scope]]
+target = "_b00t_/*.datum.toml"
+label = "datum"
+schema_ref = "_b00t_/schema/gate.schema.toml"
+
+[[b00t.scope]]
+target = "_b00t_/gates/*.gate.toml"
+label = "gate"
+schema_ref = "_b00t_/schema/gate.schema.toml"
+
+[[b00t.scope]]
+target = "_b00t_/*.skill.toml"
+label = "skill"
+schema_ref = "_b00t_/schema/skill.schema.toml"
+
+# ── Phase Definitions ──────────────────────────────────────────────────────
+
+[[b00t.phases]]
+id = "setup"
+label = "Setup"
+description = "Load datum file, parse TOML structure, resolve schema by type. Detect datum class (datum/gate/skill/repo/config) from [b00t].type."
+produces = ["datum_context", "schema_ref", "parsed_sections"]
+transition_to = "mece"
+guard = "has_datum_context"
+gh_labels = ["phase:setup", "datum-review"]
+
+[[b00t.phases]]
+id = "mece"
+label = "MECE Analysis"
+description = "Check structural completeness: tail-map present with all required fields (summary, tags, tier, cmds, complexity), all required sections per datum type present, schema compliance. Verify section nesting is valid TOML."
+produces = ["mece_findings"]
+transition_to = "triz"
+guard = "has_mece_findings"
+gh_labels = ["phase:mece", "datum-review"]
+depends_on = ["setup"]
+
+# MECE sub-checks for datum review
+[[b00t.phases.sub_checks]]
+id = "tail-map-completeness"
+description = "Tail -10 must contain '# b00t:map v1'. Required fields: summary, tags, tier, cmds, complexity. Tags must be comma-separated. Tier must be one of: sm0l, ch0nky, frontier."
+severity = "critical"
+
+[[b00t.phases.sub_checks]]
+id = "section-structure"
+description = "Verify section structure matches declared [b00t].type. If type=gate, [gate] + [gate.audit] required. If type=datum, [datum] or [b00t.composes] or [b00t.phases] expected. If type=skill, [b00t.phases] + [b00t.harness] expected."
+severity = "critical"
+
+[[b00t.phases.sub_checks]]
+id = "schema-compliance"
+description = "Validate against declared schema_ref. Check required fields per section. Verify nesting depth is valid TOML (no orphaned keys)."
+severity = "critical"
+
+[[b00t.phases.sub_checks]]
+id = "version-author"
+description = "Check [b00t].version and [b00t].author fields present. Gates require these per gate.schema.toml. Datums and skills strongly recommended."
+severity = "warning"
+
+[[b00t.phases.sub_checks]]
+id = "audit-section"
+description = "Check [b00t.audit] or [gate.audit] or [b00t.health] section exists for governance-aware datums. TRIZ P32: Every action must leave a trace."
+severity = "warning"
+
+[[b00t.phases]]
+id = "triz"
+label = "TRIZ Analysis"
+description = "Check contradiction patterns within the datum: self-contradictory fields (e.g. type=gate but no [gate] section), impossible constraints (e.g. depends_on references non-existent phase), conflicting guard conditions, missing transition guards."
+produces = ["triz_findings"]
+transition_to = "eureka"
+guard = "has_triz_findings"
+gh_labels = ["phase:triz", "datum-review"]
+depends_on = ["mece"]
+
+# TRIZ sub-checks for datum review
+[[b00t.phases.sub_checks]]
+id = "type-section-match"
+description = "Verify [b00t].type matches section presence. type=gate requires [gate]; type=datum requires [datum] or structural equivalent. Mismatch = contradiction."
+severity = "critical"
+triz_principle = "P1 Segmentation"
+
+[[b00t.phases.sub_checks]]
+id = "forward-reference-validity"
+description = "Resolve all depends_on references against declared phase IDs. Flag forward references to non-existent phases. Flag circular dependency chains."
+severity = "critical"
+triz_principle = "P34 Discarding and Recovering"
+
+[[b00t.phases.sub_checks]]
+id = "guard-conflict"
+description = "Check guard conditions against produces fields. Guard 'has_mece_findings' must correspond to a phase that produces 'mece_findings'. Flag dangling guards."
+severity = "critical"
+triz_principle = "P15 Dynamicity"
+
+[[b00t.phases.sub_checks]]
+id = "transition-integrity"
+description = "Every phase with transition_to must have a target phase in the phase list. No dead-end phases without transition_to. Flag orphan transitions."
+severity = "warning"
+triz_principle = "P23 Feedback"
+
+[[b00t.phases.sub_checks]]
+id = "blessing-requirement"
+description = "If datum declares required blessings (blessing_keys or [b00t].blessing), verify each exists in the blessing registry. Flag references to unregistered blessings."
+severity = "warning"
+triz_principle = "P10 Preliminary Action"
+
+[[b00t.phases]]
+id = "eureka"
+label = "Eureka Analysis"
+description = "Search for missing abstractions, simplification opportunities, and design gaps. Can two phases merge? Can a schema be shared? Is there a pattern that should be extracted? The 10x question: what one change eliminates the most downstream issues?"
+produces = ["eureka_findings"]
+transition_to = "synthesize"
+guard = "has_eureka_findings"
+gh_labels = ["phase:eureka", "datum-review"]
+depends_on = ["triz"]
+
+# Eureka sub-checks for datum review
+[[b00t.phases.sub_checks]]
+id = "missing-abstraction"
+description = "Identify repeated patterns across datums that could be factored into shared schemas or composed sub-datums. Check for inline duplication of structure."
+severity = "info"
+eureka_question = "What if we had one instead of N?"
+
+[[b00t.phases.sub_checks]]
+id = "simplification-opportunity"
+description = "Identify unnecessarily complex phase graphs, over-specified guards, redundant produces fields. Can a 7-phase state machine reduce to 5 without information loss?"
+severity = "info"
+eureka_question = "What's the irreducible minimum?"
+
+[[b00t.phases.sub_checks]]
+id = "cross-datum-pattern"
+description = "Compare against known-good datums of same type. Is this datum denser/lighter than peers? Are conventions followed? Flag outliers."
+severity = "info"
+eureka_question = "Does this look like its siblings?"
+
+[[b00t.phases.sub_checks]]
+id = "guard-violation"
+description = "Check datum content for guard violations: disallowed keywords, pattern violations, hive-guard rules. Cross-reference hive guard table."
+severity = "warning"
+eureka_question = "What hidden constraints does the environment impose?"
+
+[[b00t.phases]]
+id = "synthesize"
+label = "Synthesize"
+description = "Cross-validate findings across MECE, TRIZ, and Eureka phases. Classify severity: critical (3-framework confirmation), high (2-framework), suggestion (1-framework). Remove false positives. Produce ranked finding list."
+produces = ["synthesis_report"]
+transition_to = "post"
+guard = "has_synthesis"
+gh_labels = ["phase:synthesize", "datum-review"]
+depends_on = ["mece", "triz", "eureka"]
+
+# Severity classification rules
+[[b00t.phases.classification]]
+level = "critical"
+criteria = "Confirmed by all 3 frameworks (MECE+TRIZ+Eureka). Or: tail-map missing, type-section mismatch, forward-reference broken."
+action = "Block datum promotion until fixed."
+
+[[b00t.phases.classification]]
+level = "high"
+criteria = "Confirmed by 2 frameworks. Or: missing audit section, version/author absent, dangling guard."
+action = "Must fix before next version."
+
+[[b00t.phases.classification]]
+level = "suggestion"
+criteria = "Single-framework finding. Or: simplification opportunity, missing abstraction, style convention."
+action = "Consider for next iteration."
+
+[[b00t.phases]]
+id = "post"
+label = "Post Review"
+description = "Output machine-parseable VERDICT: PASS/FAIL/WARN with finding count per severity. Append to datum audit trail. Optionally promote critical findings to task queue."
+produces = ["verdict", "audit_entry"]
+transition_to = "pulse"
+guard = "has_verdict"
+gh_labels = ["phase:post", "datum-review"]
+depends_on = ["synthesize"]
+
+# Verdict format specification
+[[b00t.phases.verdict_format]]
+field = "status"
+description = "PASS | FAIL | WARN"
+required = true
+
+[[b00t.phases.verdict_format]]
+field = "datum_path"
+description = "Absolute path to reviewed datum"
+required = true
+
+[[b00t.phases.verdict_format]]
+field = "severity_counts"
+description = "{critical: N, high: N, suggestion: N}"
+required = true
+
+[[b00t.phases.verdict_format]]
+field = "findings"
+description = "Array of {id, severity, framework, description, action}"
+required = true
+
+[[b00t.phases.verdict_format]]
+field = "reviewed_at"
+description = "ISO8601 timestamp"
+required = true
+
+[[b00t.phases]]
+id = "pulse"
+label = "Pulse"
+description = "Update skill metrics: false positive rate, time-to-review, finding density. Cross-reference findings against datum usage telemetry. Identify review patterns to improve future reviews."
+produces = ["pulse_report"]
+transition_to = "setup"
+guard = "has_pulse_report"
+gh_labels = ["phase:pulse", "datum-review"]
+depends_on = ["post"]
+
+# ── State Machine Config ───────────────────────────────────────────────────
+
+[b00t.state_machine]
+initial_phase = "setup"
+state_file = ".b00t/datum-review-state.json"
+
+[[b00t.state_machine.transitions]]
+from = "setup"
+to = "mece"
+guard = "datum_context_valid"
+event = "datum_loaded"
+
+[[b00t.state_machine.transitions]]
+from = "mece"
+to = "triz"
+guard = "mece_complete"
+event = "structure_validated"
+
+[[b00t.state_machine.transitions]]
+from = "triz"
+to = "eureka"
+guard = "triz_complete"
+event = "contradictions_mapped"
+
+[[b00t.state_machine.transitions]]
+from = "eureka"
+to = "synthesize"
+guard = "eureka_complete"
+event = "insights_gathered"
+
+[[b00t.state_machine.transitions]]
+from = "synthesize"
+to = "post"
+guard = "synthesis_complete"
+event = "findings_ranked"
+
+[[b00t.state_machine.transitions]]
+from = "post"
+to = "pulse"
+guard = "verdict_posted"
+event = "review_complete"
+
+[[b00t.state_machine.transitions]]
+from = "pulse"
+to = "setup"
+guard = "pulse_recorded"
+event = "metrics_updated"
+
+# ── Quality Thresholds (datum-specific) ─────────────────────────────────────
+
+[b00t.thresholds]
+# Tail-map is binary: present or not. No partial credit.
+tail_map_required = true
+tail_map_all_fields_required = true
+
+# Section structure must be 100% compliant — no partial scores.
+section_compliance_minimum = 1.0
+
+# Every depends_on reference must resolve. Zero tolerance for broken refs.
+forward_reference_broken_max = 0
+
+# At minimum, 1 structured finding per datum (prevent no-op reviews).
+min_findings_per_datum = 1
+
+# Critical findings from the same root cause should be deduplicated.
+max_duplicate_findings = 0
+
+# Review must complete within this window to be considered responsive.
+max_review_duration_seconds = 300
+
+# Minimum cross-framework confirmation for high-severity promotion.
+min_cross_validated_for_promotion = 2
+
+# ── Governance Integration ──────────────────────────────────────────────────
+
+[b00t.governance]
+eisenhower_enabled = true
+auto_promote_critical = true     # Critical findings → b00t task queue
+gate_on_post = "verdict-valid"   # Gate verdict output on validity check
+default_labels = ["datum-review"]
+
+# ── Audit Trail ─────────────────────────────────────────────────────────────
+
+[b00t.audit]
+log_file = "~/.b00t/audit/datum-review.jsonl"
+log_format = "jsonl"
+fields = ["timestamp", "session", "agent", "datum_path", "datum_type", "verdict", "critical_count", "high_count", "suggestion_count", "review_duration_ms"]
+
+# ── Just Harness Recipes ────────────────────────────────────────────────────
+
+[b00t.harness]
+setup_recipe = "review-datum-setup"
+mece_recipe = "review-datum-mece"
+triz_recipe = "review-datum-triz"
+eureka_recipe = "review-datum-eureka"
+synthesize_recipe = "review-datum-synthesize"
+post_recipe = "review-datum-post"
+pulse_recipe = "review-datum-pulse"
+batch_recipe = "review-datum-batch"
+validate_recipe = "validate-datum-schema"

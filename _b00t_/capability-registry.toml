@@ -1,124 +1,85 @@
-[b00t]
-name = "capability-registry"
-type = "registry"
-hint = "Skill and capability registry — maps skill names to sources and tags"
+# b00t:map v1
+# summary: Canonical b00t capability registry — single source of truth for agent skill/capability declarations. Install recipes read from here to patch harness-specific configs (opencode, claude-code, hermes). Never edit harness JSON directly — use `just reviewer install-opencode` or `just capability-install <harness>`.
+# tags: capability, registry, agent, skill, subagent, harness, install, canonical
+# tier: frontier
+# cmds: just reviewer install-opencode, just capability-install opencode, just capability-list
+# complexity: 6
 
-[skills]
-bash = { type = "skill", source = "_b00t_/learn/bash.md", description = "Bash/shell operations", tags = ["shell", "cli"] }
+# ── Canonical Capability Registry ────────────────────────────────────────────
+# This file is the SINGLE SOURCE OF TRUTH for b00t agent capabilities.
+# Harness-specific configs (opencode agent-metadata.json, claude-code settings.json,
+# hermes config.yaml) are PATCH TARGETS — never edit them directly.
+# Install recipes read from this registry and apply idempotent patches.
 
-[skills.rust]
-type = "skill"
-source = "_b00t_/learn/rust.md"
-description = "Rust language"
-tags = ["systems", "rust"]
+[registry]
+version = "1.0.0"
+description = "Canonical b00t agent capability registry"
 
-[skills.python]
-type = "skill"
-source = "_b00t_/learn/python.🐍/"
-description = "Python ecosystem"
-tags = ["scripting"]
+# ── Reviewer capability set ──────────────────────────────────────────────────
 
-[skills.git]
-type = "skill"
-source = "_b00t_/learn/git/"
-description = "Git version control"
-tags = ["vcs"]
+[[registry.capabilities]]
+id = "b00t-reviewer"
+name = "B00tReviewer"
+type = "subagent"
+tier = "frontier"
+category = "code"
+description = "Multi-framework code review — MECE+TRIZ+Eureka with cross-framework synthesis"
+skills = ["b00t-integration"]
+depends_on = ["mece-analyzer", "triz-analyzer", "eureka-analyzer", "synthesis-agent"]
 
-[skills.just]
-type = "skill"
-source = "_b00t_/learn/just.md"
-description = "Just runner"
-tags = ["task-runner"]
+[[registry.capabilities]]
+id = "mece-analyzer"
+name = "MeceAnalyzer"
+type = "subagent"
+tier = "ch0nky"
+category = "code"
+description = "MECE structural decomposition — mutually exclusive, collectively exhaustive categories"
+mcp_tools = ["codebase-memory"]
 
-[skills.docker]
-type = "skill"
-source = "_b00t_/learn/docker.md"
-description = "Docker patterns"
-tags = ["container"]
+[[registry.capabilities]]
+id = "triz-analyzer"
+name = "TrizAnalyzer"
+type = "subagent"
+tier = "ch0nky"
+category = "code"
+description = "TRIZ contradiction analysis — inventive principles, false contradiction flagging"
+mcp_tools = ["codebase-memory", "context7"]
 
-[skills.orchestrator]
-type = "skill"
-source = "_b00t_/learn/orchestrator.md"
-description = "Orchestrator role"
-tags = ["role"]
+[[registry.capabilities]]
+id = "eureka-analyzer"
+name = "EurekaAnalyzer"
+type = "subagent"
+tier = "ch0nky"
+category = "code"
+description = "Eureka insight search — pattern detection, simplification, 10x question"
+mcp_tools = ["codebase-memory"]
 
-[skills.lfmf]
-type = "skill"
-source = "_b00t_/learn/lfmf.md"
-description = "LFMF pattern"
-tags = ["tribal"]
+[[registry.capabilities]]
+id = "synthesis-agent"
+name = "SynthesisAgent"
+type = "subagent"
+tier = "ch0nky"
+category = "code"
+description = "Cross-framework triangulation — consolidate MECE+TRIZ+Eureka findings"
+mcp_tools = ["b00t-mcp", "github"]
 
-[roles.orchestrator]
-type = "role"
-source = "_b00t_/orchestrator.role.toml"
-description = "Hive orchestrator"
-tags = ["role"]
-depends_on = ["memory.mcp"]
+# ── Harness target specifications ────────────────────────────────────────────
 
-[datums.git]
-type = "datum"
-source = "_b00t_/git.cli.toml"
-description = "Git CLI"
-tags = ["vcs"]
+[[registry.harnesses]]
+id = "opencode-b00t"
+target_file = "vendor/opencode-b00t/.opencode/agent-metadata.json"
+target_type = "json"
+patch_strategy = "merge-agents"
+install_recipe = "just reviewer install-opencode"
 
-[datums.uv]
-type = "datum"
-source = "_b00t_/uv.cli.toml"
-description = "UV package manager"
-tags = ["python"]
+[[registry.harnesses]]
+id = "claude-code"
+target_file = "~/.claude/settings.json"
+target_type = "json"
+patch_strategy = "merge-hooks"
+install_recipe = "just reviewer install-hooks"
 
-[datums.just]
-type = "datum"
-source = "_b00t_/justfile"
-description = "Just runner"
-tags = ["task-runner"]
-
-[datums.podman]
-type = "datum"
-source = "_b00t_/podman-mcp-server.mcp.toml"
-description = "Podman MCP"
-tags = ["container"]
-
-[datums.ollama]
-type = "datum"
-source = "_b00t_/ollama.ai.toml"
-description = "Local LLM"
-tags = ["ai"]
-
-[datums.context7]
-type = "datum"
-source = "_b00t_/context7.mcp.toml"
-description = "Context7 MCP"
-tags = ["mcp"]
-
-[mcp.b00t]
-type = "mcp"
-source = "_b00t_/b00t-mcp.mcp.toml"
-description = "b00t MCP"
-tags = ["core"]
-
-[tags.roles]
-orchestration = ["orchestrator"]
-
-[tags.skills]
-shell = ["bash"]
-systems = ["rust"]
-scripting = ["python"]
-vcs = ["git"]
-task-runner = ["just"]
-container = ["docker", "podman"]
-
-[tags.datums]
-vcs = ["git"]
-python = ["uv"]
-task-runner = ["just"]
-container = ["podman"]
-ai = ["ollama"]
-mcp = ["context7", "b00t"]
-
-[aliases]
-learn = "skill"
-skill = "skill"
-role = "role"
-datum = "datum"
-mcp = "mcp"
+# ── Install recipe: b00t-cli capability-install ──────────────────────────────
+# Planned: `b00t-cli capability install <harness>` reads this registry
+# and applies the patch for the specified harness.
+# Until then, use the harness-specific just recipes.

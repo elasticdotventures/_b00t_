@@ -29,19 +29,34 @@ use std::time::{SystemTime, UNIX_EPOCH};
 // ─── Behavior chains ──────────────────────────────────────────────────────────
 
 /// Named behavior chains for sm0l delegation.
-/// Each variant maps to a system prompt template + output contract.
-#[derive(Debug, Clone, PartialEq)]
+/// FOL-correct equality: only variant discriminant matters.
+/// `Summarize` config parameters are in `SmolConfig`, not the enum itself.
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SmolBehavior {
     /// Filter build/test/runtime output → errors only. Most common delegation.
     FilterErrors(FilterTask),
     /// Collapse long output to N key points. For ch0nky pre-digestion.
-    Summarize { max_output_lines: usize },
+    Summarize,
     /// Binary pass/fail: did this command succeed? Returns "ok" or first failure line.
     CheckOutputOk,
 }
 
+/// Configuration for sm0l behavior variants that need parameters.
+/// Extracted from the enum to keep equality discriminant-only.
+#[derive(Debug, Clone)]
+pub struct SmolConfig {
+    /// Max output lines for Summarize behavior
+    pub max_output_lines: usize,
+}
+
+impl Default for SmolConfig {
+    fn default() -> Self {
+        Self { max_output_lines: 50 }
+    }
+}
+
 /// Task-specific error filter templates. Each has a specialized system prompt.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum FilterTask {
     Cargo,
     Podman,
@@ -101,13 +116,14 @@ impl FilterTask {
 }
 
 impl SmolBehavior {
-    fn system_prompt(&self) -> String {
+    fn system_prompt(&self, config: &SmolConfig) -> String {
         match self {
             Self::FilterErrors(task) => task.system_prompt().to_string(),
-            Self::Summarize { max_output_lines } => format!(
-                "You are a terse summarizer. Collapse the input to at most {max_output_lines} \
+            Self::Summarize => format!(
+                "You are a terse summarizer. Collapse the input to at most {} \
                  bullet points covering only novel information. Remove duplicates. \
-                 Output bullets only, no preamble."
+                 Output bullets only, no preamble.",
+                config.max_output_lines
             ),
             Self::CheckOutputOk => concat!(
                 "You are a pass/fail checker. ",
@@ -120,7 +136,7 @@ impl SmolBehavior {
     fn log_tag(&self) -> String {
         match self {
             Self::FilterErrors(t) => format!("filter-{}", t.as_str()),
-            Self::Summarize { .. } => "summarize".to_string(),
+            Self::Summarize => "summarize".to_string(),
             Self::CheckOutputOk => "check-ok".to_string(),
         }
     }
@@ -397,16 +413,18 @@ pub struct SmolStats {
 /// Main dispatch function. Deduplicate, call sm0l, log, return SmolOutput.
 pub fn dispatch(
     behavior: &SmolBehavior,
+    config: &SmolConfig,
     input: &str,
     session: Option<&SmolSession>,
     max_input_bytes: usize,
 ) -> Result<SmolOutput> {
     let endpoint = SmolEndpoint::discover()?;
-    dispatch_with_endpoint(behavior, input, session, max_input_bytes, &endpoint)
+    dispatch_with_endpoint(behavior, config, input, session, max_input_bytes, &endpoint)
 }
 
 pub fn dispatch_with_endpoint(
     behavior: &SmolBehavior,
+    config: &SmolConfig,
     input: &str,
     session: Option<&SmolSession>,
     max_input_bytes: usize,
@@ -414,7 +432,7 @@ pub fn dispatch_with_endpoint(
 ) -> Result<SmolOutput> {
     // 1. Preprocess: dedup + strip ANSI + truncate
     let (processed, stats) = preprocess(input, max_input_bytes);
-    let system = behavior.system_prompt();
+    let system = behavior.system_prompt(config);
     let tag = behavior.log_tag();
 
     // 2. Call sm0l
@@ -651,12 +669,19 @@ mod tests {
             "filter-cargo"
         );
         assert_eq!(SmolBehavior::CheckOutputOk.log_tag(), "check-ok");
-        assert_eq!(
-            SmolBehavior::Summarize {
-                max_output_lines: 5
-            }
-            .log_tag(),
-            "summarize"
+        assert_eq!(SmolBehavior::Summarize.log_tag(), "summarize");
+    }
+
+    // ── FOL-correct equality: Summarize == Summarize regardless of config ──
+
+    #[test]
+    fn test_smol_behavior_eq_discriminant_only() {
+        // FOL: two Summarize behaviors are the same behavior, regardless of config
+        assert_eq!(SmolBehavior::Summarize, SmolBehavior::Summarize);
+        assert_ne!(SmolBehavior::Summarize, SmolBehavior::CheckOutputOk);
+        assert_ne!(
+            SmolBehavior::FilterErrors(FilterTask::Cargo),
+            SmolBehavior::FilterErrors(FilterTask::Podman)
         );
     }
 }
