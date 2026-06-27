@@ -2491,3 +2491,27 @@ store-sync peer="cloudflare-r2":
 store-get key output="":
     cargo run --bin b00t-cli -- store get {{key}} \
         $(if [ -n "{{output}}" ]; then echo "-o {{output}}"; fi)
+
+# ── sm3lly Deployment Pipeline ──────────────────────────────────────────────
+
+# Full deploy: push branch → store sync → share training → delegate finetune → sync spotlight
+deploy-all sm3lly_host="sm3lly":
+    @echo "🥾 sm3lly deploy: stage 1/5 — push branch"
+    git push origin task/b00t-knowledge-infra-v2
+    @echo "🥾 sm3lly deploy: stage 2/5 — store sync (R2)"
+    cargo run --bin b00t-cli -- store sync --provider cloudflare-r2 2>/dev/null || echo "  ⚠️  store sync skipped (no R2 creds?)"
+    @echo "🥾 sm3lly deploy: stage 3/5 — share training data"
+    rsync -avz ~/.b00t/training/b00t-corpus.jsonl {{sm3lly_host}}:~/.b00t/training/ 2>/dev/null || echo "  ⚠️  rsync failed (sm3lly offline?)"
+    @echo "🥾 sm3lly deploy: stage 4/5 — delegate finetune"
+    ssh {{sm3lly_host}} "cd .b00t && uv run python3 scripts/finetune-b00t.py" 2>/dev/null || echo "  ⚠️  SSH failed (use ACP: b00t agent message --peer sm3lly-acp)"
+    @echo "🥾 sm3lly deploy: stage 5/5 — sync spotlight"
+    scp {{sm3lly_host}}:~/.b00t/spotlight.jsonl /tmp/sm3lly-spotlight.jsonl 2>/dev/null && cat /tmp/sm3lly-spotlight.jsonl >> ~/.b00t/spotlight.jsonl || echo "  ⚠️  spotlight sync skipped"
+    @echo "✅ deploy-all complete. Verify: b00t store status"
+
+# Store-only deploy (works when sm3lly is offline — uses R2 as intermediary)
+deploy-store-only:
+    @echo "📤 Deploying via store → R2 (sm3lly pulls later)"
+    cargo run --bin b00t-cli -- store put scripts/finetune-b00t.py --class b00t:TrainingScript --consumer sm3lly --tag type=python
+    cargo run --bin b00t-cli -- store put scripts/generate-b00t-training-data.py --class b00t:TrainingScript --consumer sm3lly --tag type=python
+    cargo run --bin b00t-cli -- store sync --provider cloudflare-r2 2>/dev/null || echo "  💡 set R2 creds: b00t server key set --provider cloudflare-r2"
+    @echo "✅ Store deployed. sm3lly: b00t store sync --provider cloudflare-r2"

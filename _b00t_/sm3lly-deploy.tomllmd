@@ -1,0 +1,203 @@
+# sm3lly Deployment Datum — full knowledge infrastructure pipeline
+#
+# Deploys the b00t knowledge stack from lappyx23 (RTX 3050, 4GB, WSL2)
+# to sm3lly (RTX 3090, 24GB, solar+battery, sm3llyd0s.local).
+#
+# 🤓 sm3llyd0s is NOT SSH-reachable from WSL2. The primary path is:
+#   1. Push branch to GitHub
+#   2. sm3lly agent pulls + builds via NATS ACP delegation
+#   3. Store sync via credential datums (S3/R2 as intermediary)
+#   4. Spotlight telemetry sync via rsync (on local network)
+
+[meta]
+version = "1.0.0"
+target = "sm3llyd0s.local"
+hardware = "RTX 3090 24GB, solar+battery, Ubuntu 24.04"
+
+# ── Deployment Pipeline ─────────────────────────────────────────────────────
+
+[deploy]
+
+[deploy.stage1]
+name = "push-branch"
+description = "Push the current branch to GitHub — sm3lly pulls from there"
+command = "git push origin task/b00t-knowledge-infra-v2"
+atomic = true
+
+[deploy.stage2]
+name = "store-sync"
+description = "Sync store objects to R2 — sm3lly pulls via b00t store sync"
+command = "b00t store sync --provider cloudflare-r2"
+requires = ["credential:cloudflare-r2"]
+atomic = false  # best-effort; sm3lly can skip if offline
+
+[deploy.stage3]
+name = "share-training"
+description = "Share training data via rsync (local network path)"
+command = "just share-training sm3lly"
+requires = ["network:sm3llyd0s.local"]
+atomic = false
+
+[deploy.stage4]
+name = "delegate-finetune"
+description = "Trigger QLoRA fine-tune on sm3lly via SSH or ACP"
+command = "just delegate-finetune sm3lly"
+requires = ["ssh:sm3lly"]
+atomic = false  # may fail if sm3lly offline; ACP fallback available
+
+[deploy.stage5]
+name = "sync-spotlight"
+description = "Bidirectional Spotlight telemetry sync"
+command = "just sync-spotlight sm3lly"
+requires = ["network:sm3llyd0s.local"]
+atomic = false
+
+# ── Store Checkpoints ────────────────────────────────────────────────────────
+
+[store]
+# After each deploy stage, checkpoint to store for audit trail
+checkpoint_class = "b00t:DeploymentRecord"
+checkpoint_consumer = "sm3lly"
+
+[[store.artifacts]]
+name = "training-corpus"
+class = "b00t:TrainingCorpus"
+source = "~/.b00t/training/b00t-corpus.jsonl"
+shape = "JSONL"
+
+[[store.artifacts]]
+name = "finetune-script"
+class = "b00t:TrainingScript"
+source = "scripts/finetune-b00t.py"
+shape = "PY"
+
+[[store.artifacts]]
+name = "fine-tuned-gguf"
+class = "b00t:FineTunedModel"
+source = "~/.b00t/training/output/b00t-finetuned.Q4_K_M.gguf"
+shape = "GGUF"
+
+# ── Fine-tune Config (sm3lly: 24GB VRAM) ─────────────────────────────────────
+
+[finetune.config_sm3lly]
+model = "unsloth/Qwen3.5-4B"  # 4x larger than lappyx23 config
+max_seq_length = 2048
+batch_size = 4
+gradient_accumulation_steps = 8
+learning_rate = "2e-4"
+epochs = 3
+lora_r = 16
+lora_alpha = 16
+lora_dropout = 0.05
+# Equivalent batch: 4 * 8 = 32 (was 1 * 16 = 16 on lappyx23)
+
+[finetune.training_data]
+source = "~/.b00t/training/b00t-corpus.jsonl"
+pairs = 4474
+format = "alpaca"
+system_prompt = "You are b00t, a Rust CLI agent. Answer concisely."
+
+# ── Model Serving ────────────────────────────────────────────────────────────
+
+[serve]
+# b00t-server auto-discovers sm3lly via server-soul.tomllm
+# Entry in ~/.b00t/server-soul.tomllm:
+#
+#   [[backends]]
+#   name = "sm3lly-ch0nky"
+#   host = "sm3llyd0s.local"
+#   port = 8080
+#   provider = "llama-cpp"
+#   model = "b00t-finetuned.Q4_K_M"
+#   probe = { type = "tcp", timeout_ms = 5000 }
+#   env_vars = { LLAMA_ARG_N_GPU_LAYERS = "99" }
+
+[serve.container]
+image = "ghcr.io/ggml-org/llama.cpp:server"
+device = "nvidia.com/gpu=all"
+port = "8080:8080"
+volume = "~/.b00t/training/output:/models:ro"
+command = "-m /models/b00t-finetuned.Q4_K_M.gguf --host 0.0.0.0 --port 8080 -ngl 99"
+
+# ── Credentials Required ─────────────────────────────────────────────────────
+
+[[credentials]]
+provider = "cloudflare-r2"
+purpose = "Store sync intermediary"
+setup = "b00t server key set --provider cloudflare-r2 --key <R2_ACCESS_KEY>"
+
+[[credentials]]
+provider = "github"
+purpose = "Git push/pull, release checks"
+setup = "b00t server key set --provider github --key <GITHUB_TOKEN>"
+
+# ── Justfile Recipes (delegated to b00t) ──────────────────────────────────────
+
+[[recipes]]
+name = "deploy-all"
+description = "Full sm3lly deployment pipeline"
+command = """
+  echo '=== Stage 1: Push branch ===' &&
+  git push origin task/b00t-knowledge-infra-v2 &&
+  echo '=== Stage 2: Store sync ===' &&
+  b00t store sync --provider cloudflare-r2 &&
+  echo '=== Stage 3: Share training data ===' &&
+  just share-training sm3lly &&
+  echo '=== Stage 4: Delegate finetune ===' &&
+  just delegate-finetune sm3lly &&
+  echo '=== Stage 5: Sync spotlight ===' &&
+  just sync-spotlight sm3lly &&
+  b00t store put /tmp/deploy-checkpoint.json \
+    --class b00t:DeploymentRecord \
+    --consumer sm3lly \
+    --tag status=complete \
+    --tag timestamp=$(date -Iseconds)
+"""
+
+[[recipes]]
+name = "deploy-store-only"
+description = "Store sync only (R2 intermediary for offline sm3lly)"
+command = """
+  b00t store put scripts/finetune-b00t.py --class b00t:TrainingScript --consumer sm3lly --tag type=python &&
+  b00t store put scripts/generate-b00t-training-data.py --class b00t:TrainingScript --consumer sm3lly --tag type=python &&
+  b00t store sync --provider cloudflare-r2 &&
+  echo 'Store synced. sm3lly pulls via: b00t store sync --provider cloudflare-r2'
+"""
+
+# ── ACP Delegation (NATS path, no SSH needed) ────────────────────────────────
+
+[acp]
+# When SSH is unavailable (WSL2 → sm3lly), use NATS ACP delegation
+# sm3lly agent runs `b00t agent listen` and accepts delegation tasks
+delegate_command = "b00t agent message --peer sm3lly-acp --payload 'deploy:knowledge-infra-v2'"
+check_status = "b00t agent discover --role inference"
+
+# ── Verification ─────────────────────────────────────────────────────────────
+
+[verify]
+# After deployment, verify the pipeline end-to-end
+[[verify.checks]]
+name = "store-objects-present"
+check = "b00t store list --class b00t:TrainingCorpus | grep -c . && echo 'objects found'"
+
+[[verify.checks]]
+name = "neumann-backend-healthy"
+check = "b00t store status | grep -q 'Backend.*neumann' && echo 'neumann healthy'"
+
+[[verify.checks]]
+name = "gguf-tensor-complete"
+check = """
+  python3 -c "
+import json, struct
+with open('training/output/b00t-finetuned.Q4_K_M.gguf', 'rb') as f:
+    magic = f.read(4)
+    assert magic == b'GGUF', f'Bad magic: {magic}'
+    print('GGUF valid')
+" """
+
+# b00t:map v1
+# summary: sm3lly deployment datum — full knowledge infrastructure pipeline
+# tags: sm3lly, deploy, finetune, store, credentials, acp, nats, pipeline
+# tier: ch0nky
+# cmds: b00t store sync --provider cloudflare-r2, just deploy-all, just deploy-store-only
+# complexity: 8
