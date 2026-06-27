@@ -37,7 +37,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          git submodule update --init --depth 1 vendor/tomllm vendor/irontology-mcp
+          git submodule update --init --depth 1 vendor/tomllm vendor/irontology-mcp vendor/l3dg3rr
 
       - name: Setup Rust toolchain
         uses: dtolnay/rust-toolchain@stable
