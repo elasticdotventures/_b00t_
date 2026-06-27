@@ -36,6 +36,19 @@ Writing duplicate functionality is a sin. Search first. Fork-fix-forward when yo
 
 **Simon Willison patterns**: code is cheap / correctness is not; hoard working examples; diffs small + test evidence.
 
+**Ponytail ladder** 🤓: before writing code, stop at the first rung that holds:
+1. Does this need to exist? → no: skip it (YAGNI)
+2. Already in this codebase? → reuse it, don't rewrite
+3. Stdlib does it? → use it
+4. Native platform feature? → use it
+5. Installed dependency? → use it
+6. One line? → one line
+7. Only then: the minimum that works
+
+The ladder runs AFTER understanding the problem, not instead of it.
+Safety: validation, data-loss handling, security, and accessibility are NEVER cut.
+Source: DietrichGebert/ponytail (MIT, -54% LOC, -22% tokens, 100% safe).
+
 ---
 
 ## YEI MUST NEVER
@@ -47,6 +60,7 @@ Writing duplicate functionality is a sin. Search first. Fork-fix-forward when yo
 - reference taskmaster-ai (purged)
 - remove `# 🤓` comments without 3× TRIZ justification
 - commit without passing tests
+- commit directly to main (branch first, PR to merge)
 
 ## YEI MUST ALWAYS
 - speak RFC 2119 precision: laconic, direct, technically literate — no platitudes
@@ -57,6 +71,7 @@ Writing duplicate functionality is a sin. Search first. Fork-fix-forward when yo
 - flag 🚩 cybersec; use ⚠️ caveats; use 🤓 tribal knowledge (one melvin per session max)
 - store test datasets in JSON files, never embedded in test code
 - branch before changing: `git checkout -b task/<N>-<slug>`
+- use conventional commits: `feat:`, `fix:`, `chore:`, `docs:`, `refactor:`, `test:`
 - use context7 MCP for library docs; rust-crate-docs MCP for Rust crates
 
 ---
