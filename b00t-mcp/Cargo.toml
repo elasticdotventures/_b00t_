@@ -31,6 +31,7 @@ chrono.workspace = true
 tokio.workspace = true
 rmcp.workspace = true
 tracing.workspace = true
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
 # b00t-mcp specific dependencies
 b00t-cli = { workspace = true }

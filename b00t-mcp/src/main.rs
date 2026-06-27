@@ -101,14 +101,26 @@ async fn main() -> Result<()> {
             .map_or(false, |m| m == "http");
     let is_llm_mode = matches.get_flag("llm");
 
+    // 🤓 Structured logging via tracing — enable with RUST_LOG=info or RUST_LOG=debug
+    {
+        use tracing_subscriber::EnvFilter;
+        let filter = EnvFilter::try_from_default_env()
+            .unwrap_or_else(|_| EnvFilter::new("warn"));
+        let _ = tracing_subscriber::fmt()
+            .with_env_filter(filter)
+            .with_target(false)
+            .try_init();
+    }
+
     // 🤓 SkillExecutor — lazy MCP server lifecycle manager.
     //    Loads [b00t.mcp.lifecycle] from .mcp.toml datums, reaps idle servers.
     //    Child processes get kill_on_drop(true) — cleaned up on process exit.
-    if let Err(e) = server_skill::init_executor().await {
-        eprintln!("⚠️  SkillExecutor init failed: {} (continuing)", e);
-    } else {
-        server_skill::start_reap_loop().await;
+    match server_skill::init_executor().await {
+        Ok(n) if n > 0 => tracing::info!("SkillExecutor: {} skill(s) ready", n),
+        Err(e) => tracing::warn!("SkillExecutor init failed: {} (continuing)", e),
+        _ => {}
     }
+    server_skill::start_reap_loop().await;
 
     if is_stdio_mode && !is_llm_mode {
         // Run as MCP server
