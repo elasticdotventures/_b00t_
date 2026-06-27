@@ -103,6 +103,12 @@ pub enum DatumCommands {
         limit: usize,
     },
 
+    #[clap(about = "Sync all datums to k8s ConfigMaps in b00t-datums namespace (Part B)")]
+    SyncK8s {
+        #[clap(long, default_value = "b00t-datums", help = "Target k8s namespace")]
+        namespace: String,
+    },
+
     #[clap(about = "Validate a datum TOML file against BootDatum schema")]
     Validate {
         #[clap(help = "Path to .toml file or datum key (e.g., mold.cli)")]
@@ -204,6 +210,22 @@ pub fn handle_datum_command(path: &str, datum_command: &DatumCommands) -> Result
             })
             .join()
             .map_err(|_| anyhow::anyhow!("semantic-search thread panicked"))?
+        }
+        DatumCommands::SyncK8s { namespace } => {
+            use crate::datum_k8s::sync_datums_to_configmap;
+            let b00t_datums_path = format!("{}/datums", path);
+            // sync_datums_to_configmap takes the b00t root path, not datums subdir
+            match sync_datums_to_configmap(path, namespace) {
+                Ok(synced) => {
+                    println!("synced {} datums → k8s namespace {}", synced.len(), namespace);
+                    for name in &synced {
+                        println!("  configmap/{name}");
+                    }
+                    let _ = b00t_datums_path; // unused in this path
+                    Ok(())
+                }
+                Err(e) => Err(e),
+            }
         }
         DatumCommands::Validate { target, strict } => handle_validate(path, target, *strict),
         DatumCommands::Scaffold { datum_type, name } => handle_scaffold(datum_type, name),

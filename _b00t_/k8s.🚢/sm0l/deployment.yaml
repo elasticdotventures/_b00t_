@@ -1,0 +1,109 @@
+---
+# sm0l llamacpp inference server — Qwen2.5-3B-Instruct GGUF
+# Namespace: b00t-inference
+# Port: 8000 (OpenAI-compat /v1, /completion, /health)
+# GPU: nvidia.com/gpu=1 (RTX 3090 on sm3lly)
+# B00T_SM0L_ENDPOINT: http://<node-ip>:30800/completion
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sm0l
+  namespace: b00t-inference
+  labels:
+    app: sm0l
+    b00t.tier: sm0l
+    b00t.hive: sm3lly
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: sm0l
+  template:
+    metadata:
+      labels:
+        app: sm0l
+        b00t.tier: sm0l
+    spec:
+      containers:
+        - name: llamacpp
+          image: ghcr.io/ggml-org/llama.cpp:server-cuda
+          args:
+            - --model
+            - /hf/models--Qwen--Qwen2.5-3B-Instruct-GGUF/blobs/6dcc22694c8654b045ec40bbe350212b88893fd9010e8474bae5b19a43578ba1
+            - --host
+            - "0.0.0.0"
+            - --port
+            - "8000"
+            - -ngl
+            - "999"
+            - -fa
+            - "on"
+            - -c
+            - "32768"
+            - -n
+            - "2048"
+            - --jinja
+            - --temp
+            - "0.7"
+            - --top-p
+            - "0.95"
+            - --top-k
+            - "20"
+            - --min-p
+            - "0.00"
+            - --alias
+            - sm0l
+            - --api-key
+            - local-b00t
+          ports:
+            - containerPort: 8000
+              name: http
+          resources:
+            limits:
+              nvidia.com/gpu: "1"
+            requests:
+              nvidia.com/gpu: "1"
+          volumeMounts:
+            - name: hf-cache
+              mountPath: /hf
+              readOnly: true
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            failureThreshold: 6
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 60
+            periodSeconds: 30
+      volumes:
+        - name: hf-cache
+          hostPath:
+            path: /home/brianh/.cache/huggingface/hub
+            type: Directory
+      tolerations:
+        - key: node-role.kubernetes.io/control-plane
+          operator: Exists
+          effect: NoSchedule
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: sm0l
+  namespace: b00t-inference
+  labels:
+    app: sm0l
+    b00t.tier: sm0l
+spec:
+  type: NodePort
+  selector:
+    app: sm0l
+  ports:
+    - port: 8000
+      targetPort: 8000
+      nodePort: 30801
+      name: http

@@ -98,6 +98,8 @@ pub use secret_validation::{
     AwsValidation, CloudflareValidation, QdrantValidation, SecretValidator,
 };
 pub use template::TemplateRenderer;
+pub mod doc_pipeline;
+pub mod pipeline_nodes;
 
 /// Common configuration structure for b00t components
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]

@@ -185,3 +185,85 @@ impl DatumProvider for K8sDatum {
         &self.datum
     }
 }
+
+/// Sync all datum files to k8s ConfigMaps in the given namespace.
+///
+/// Each `.tomllmd` file in `{b00t_path}/datums/` becomes a ConfigMap entry:
+///   ConfigMap name: `b00t-datum-{stem}` (lowercase, underscores→hyphens)
+///   data.content: full TOML content of the datum file
+///
+/// Idempotent: uses `kubectl create --dry-run=client | kubectl apply`.
+/// Migration path: swap kubectl shell-outs for kube-rs API when K2 lands.
+pub fn sync_datums_to_configmap(b00t_path: &str, namespace: &str) -> Result<Vec<String>> {
+    if !check_command_available("kubectl") {
+        anyhow::bail!("kubectl not found; cannot sync datums to ConfigMap");
+    }
+
+    // Ensure namespace exists (ignore error if already present)
+    let _ = cmd!("kubectl", "create", "namespace", namespace).unchecked().run();
+
+    let datum_dir = Path::new(b00t_path).join("datums");
+    if !datum_dir.exists() {
+        return Ok(vec![]);
+    }
+
+    let mut synced = Vec::new();
+    let mut errors = Vec::new();
+
+    for entry in std::fs::read_dir(&datum_dir)? {
+        let entry = entry?;
+        let path = entry.path();
+        let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("");
+        if ext != "tomllmd" && ext != "toml" {
+            continue;
+        }
+
+        let stem = path
+            .file_stem()
+            .unwrap_or_default()
+            .to_string_lossy()
+            .to_lowercase()
+            .replace('_', "-");
+        let cm_name = format!("b00t-datum-{stem}");
+
+        // kubectl create configmap --dry-run=client -o yaml | kubectl apply -f -
+        let result = cmd!(
+            "kubectl", "create", "configmap", &cm_name,
+            "--namespace", namespace,
+            &format!("--from-file=content={}", path.display()),
+            "--dry-run=client", "-o", "yaml"
+        )
+        .pipe(cmd!("kubectl", "apply", "-f", "-"))
+        .run();
+
+        match result {
+            Ok(_) => synced.push(cm_name),
+            Err(e) => errors.push(format!("{cm_name}: {e}")),
+        }
+    }
+
+    if !errors.is_empty() {
+        eprintln!("[sync-k8s] {} errors:", errors.len());
+        for e in &errors {
+            eprintln!("  {e}");
+        }
+    }
+
+    Ok(synced)
+}
+
+#[cfg(test)]
+mod sync_tests {
+    use super::*;
+    use std::io::Write;
+
+    #[test]
+    fn test_sync_datums_skips_missing_dir() {
+        let result = sync_datums_to_configmap("/nonexistent/b00t/path", "b00t-datums");
+        // Either Ok([]) or Err (kubectl not found) — must not panic
+        match result {
+            Ok(v) => assert!(v.is_empty()),
+            Err(_) => {} // kubectl not available in test env is acceptable
+        }
+    }
+}

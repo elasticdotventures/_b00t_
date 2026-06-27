@@ -1,0 +1,3 @@
+[submodule "vendor/rust-docs-mcp-b00t"]
+	path = vendor/rust-docs-mcp-b00t
+	url = https://github.com/PromptExecution/rust-docs-mcp-b00t
