@@ -1,0 +1,162 @@
+[
+  {
+    "id": "score-format-1",
+    "category": "output_format",
+    "prompt": "A sm0l agent just finished running a datum validation. The test passed. Write the exact b00t SCORE line.",
+    "canonical": "SCORE: PASS",
+    "judge": "exact_prefix",
+    "judge_arg": "SCORE: PASS"
+  },
+  {
+    "id": "score-format-2",
+    "category": "output_format",
+    "prompt": "A sm0l agent ran a test and the output format was wrong. Write the b00t SCORE line with a 5-line excerpt hint.",
+    "canonical": "SCORE: FAIL:<variant>:<result>",
+    "judge": "pattern",
+    "judge_arg": "SCORE: FAIL:"
+  },
+  {
+    "id": "rfc2119-1",
+    "category": "rfc2119",
+    "prompt": "Name all six RFC 2119 keywords and briefly state what each means in one word.",
+    "canonical": "MUST MUST NOT SHOULD SHOULD NOT MAY REQUIRED",
+    "judge": "contains_all",
+    "judge_arg": ["MUST", "MUST NOT", "SHOULD", "MAY"]
+  },
+  {
+    "id": "datum-types-1",
+    "category": "datum_types",
+    "prompt": "What are the two primary b00t DatumType variants used for AI model definitions and CLI tools?",
+    "canonical": "Model and Cli",
+    "judge": "contains_all",
+    "judge_arg": ["Model", "Cli"]
+  },
+  {
+    "id": "datum-types-2",
+    "category": "datum_types",
+    "prompt": "List 5 variants of the b00t DatumType enum.",
+    "canonical": "Cli Skill Role Mcp Agent",
+    "judge": "contains_any",
+    "judge_arg": ["Cli", "Skill", "Role", "Mcp", "Agent", "Model", "Blessing", "File"]
+  },
+  {
+    "id": "corelaws-dry",
+    "category": "core_laws",
+    "prompt": "What does DRY + NRtW mean in the b00t core laws?",
+    "canonical": "Do not repeat yourself. No Reinventing the Wheel. YEI exist to contribute only novel work.",
+    "judge": "semantic",
+    "judge_arg": "novel work, no duplicates, search first"
+  },
+  {
+    "id": "corelaws-tdd",
+    "category": "core_laws",
+    "prompt": "According to b00t core laws, when is a task considered done?",
+    "canonical": "A task is done when tests pass. Never claim solved without testing.",
+    "judge": "contains_any",
+    "judge_arg": ["tests pass", "test", "TDD", "failing test"]
+  },
+  {
+    "id": "cognitive-tiers-1",
+    "category": "cognitive_tiers",
+    "prompt": "Which cognitive tier handles lint, classify, and grep tasks? Name the tier and one model.",
+    "canonical": "sm0l tier. Models: qwen2.5-3B or haiku.",
+    "judge": "contains_all",
+    "judge_arg": ["sm0l"]
+  },
+  {
+    "id": "cognitive-tiers-2",
+    "category": "cognitive_tiers",
+    "prompt": "What is the output contract a sm0l agent must return to the executive?",
+    "canonical": "PASS or FAIL: <5-line excerpt>",
+    "judge": "contains_all",
+    "judge_arg": ["PASS", "FAIL"]
+  },
+  {
+    "id": "cognitive-tiers-3",
+    "category": "cognitive_tiers",
+    "prompt": "Name the three b00t cognitive tiers from cheapest to most capable.",
+    "canonical": "sm0l, ch0nky, frontier",
+    "judge": "contains_all",
+    "judge_arg": ["sm0l", "ch0nky", "frontier"]
+  },
+  {
+    "id": "postel-1",
+    "category": "core_laws",
+    "prompt": "State Postel's Law as applied to b00t tools.",
+    "canonical": "Be conservative in what you execute; be liberal in what you accept from operators.",
+    "judge": "semantic",
+    "judge_arg": "conservative execution, liberal acceptance"
+  },
+  {
+    "id": "b00t-interface-1",
+    "category": "interface",
+    "prompt": "What is the b00t interface priority order? List from cheapest to most expensive.",
+    "canonical": "1. MCP tool mcp__b00t-mcp__* 2. bash alias b00t or binary b00t-cli 3. Remote: b00t.promptexecution.com",
+    "judge": "contains_all",
+    "judge_arg": ["MCP", "b00t-cli", "Remote"]
+  },
+  {
+    "id": "worker-ab-1",
+    "category": "worker_protocol",
+    "prompt": "In the b00t worker A/B experiment protocol, how many sub-agents must be dispatched and in what manner?",
+    "canonical": "Two sub-agents dispatched in parallel: one control, one treatment.",
+    "judge": "contains_all",
+    "judge_arg": ["parallel", "control", "treatment"]
+  },
+  {
+    "id": "worker-score-1",
+    "category": "worker_protocol",
+    "prompt": "List the 6 scoring dimensions a b00t worker sub-agent must report.",
+    "canonical": "ROI COST TIME ACCURACY UTILITY RISK",
+    "judge": "contains_all",
+    "judge_arg": ["ROI", "COST", "TIME", "ACCURACY", "UTILITY", "RISK"]
+  },
+  {
+    "id": "tomllmd-1",
+    "category": "file_formats",
+    "prompt": "What is the b00t tail-map format? What goes in the last lines of a .tomllmd file?",
+    "canonical": "# b00t:map v1 summary: tags: tier: cmds: complexity:",
+    "judge": "contains_all",
+    "judge_arg": ["b00t:map", "summary", "tags", "tier", "complexity"]
+  },
+  {
+    "id": "never-1",
+    "category": "core_laws",
+    "prompt": "What MCP tool approach should an agent use for b00t operations, and what should they NEVER do instead?",
+    "canonical": "Use mcp__b00t-mcp__* tools. NEVER use bare bash for b00t when MCP tools are available.",
+    "judge": "contains_all",
+    "judge_arg": ["MCP", "bash"]
+  },
+  {
+    "id": "hive-identity-1",
+    "category": "hive",
+    "prompt": "What does Yei mean in the b00t hive protocol?",
+    "canonical": "You, everybody and I — the hive collective.",
+    "judge": "contains_any",
+    "judge_arg": ["You, everybody", "collective", "hive", "你我众一"]
+  },
+  {
+    "id": "kv-cache-1",
+    "category": "protocol",
+    "prompt": "In b00t CLAUDE.md, what is the KV-cache optimization pattern for boilerplate?",
+    "canonical": "Stable boilerplate prefix is kept identical across sessions above the SESSION delimiter so it remains in the prompt cache. Variable session content is below the delimiter.",
+    "judge": "semantic",
+    "judge_arg": "stable prefix, KV cache, session delimiter"
+  },
+  {
+    "id": "guard-pip-1",
+    "category": "command_guards",
+    "prompt": "A developer types `pip install requests`. What does b00t do?",
+    "canonical": "Block it and use uv pip install requests instead.",
+    "judge": "contains_all",
+    "judge_arg": ["uv"]
+  },
+  {
+    "id": "guard-docker-1",
+    "category": "command_guards",
+    "prompt": "A developer types `docker run ubuntu bash`. What is the b00t-compliant substitution?",
+    "canonical": "podman --device nvidia.com/gpu=all ubuntu bash",
+    "judge": "contains_any",
+    "judge_arg": ["podman", "nvidia.com/gpu"]
+  }
+]

@@ -926,7 +926,7 @@ qwen36-serve-35b:
 
 # Eval active ch0nky model (must be serving on :8001)
 qwen36-status:
-    curl -s http://localhost:8001/v1/models | python3 -m json.tool
+    curl -s http://127.0.0.1:8001/v1/models | python3 -m json.tool
 
 # Run opencode one-shot against local qwen36-local/ch0nky
 qwen36-test-opencode prompt="say hello in 3 words":
@@ -997,7 +997,7 @@ opencode-task task="hello":
 
 # Check if ch0nky is live on :8001
 ch0nky-status:
-    @curl -sf http://localhost:8001/v1/models \
+    @curl -sf http://127.0.0.1:8001/v1/models \
       | python3 -c "import sys,json; d=json.load(sys.stdin); print('✅ ch0nky online:', d['data'][0]['id'])" \
       || echo "🔴 ch0nky offline — run: b00t hive activate inference-qwen36-27b"
 
@@ -1007,7 +1007,7 @@ delegate task="":
     #!/usr/bin/env bash
     set -euo pipefail
     [ -z "{{task}}" ] && { echo "usage: just delegate task='<description>'"; exit 1; }
-    curl -sf http://localhost:8001/v1/models > /dev/null || { echo "🔴 ch0nky offline"; exit 1; }
+    curl -sf http://127.0.0.1:8001/v1/models > /dev/null || { echo "🔴 ch0nky offline"; exit 1; }
     echo "📤 delegating to ch0nky: {{task}}"
     opencode run --model qwen36-local/ch0nky "{{task}}"
 
@@ -1016,7 +1016,7 @@ delegate task="":
 ask query="":
     #!/usr/bin/env bash
     [ -z "{{query}}" ] && { echo "usage: just ask 'query'"; exit 1; }
-    curl -sf http://localhost:8001/v1/chat/completions \
+    curl -sf http://127.0.0.1:8001/v1/chat/completions \
       -H "Content-Type: application/json" \
       -d "{"model":"ch0nky","messages":[{"role":"user","content":"{{query}}"}],"max_tokens":256}" \
       | python3 -c "import sys,json; print(json.load(sys.stdin)['choices'][0]['message']['content'])"
@@ -2210,26 +2210,6 @@ skills query="":
       b00t-cli --path "$B00T_ROOT" skill search "{{query}}"
     fi
 
-# ─── Fine-tuning: unsloth QLoRA for b00t-aligned subagent ────────────────────
-
-# Generate training dataset from b00t corpus
-finetune-dataset format="alpaca" max="5000":
-    uv run python3.14 fine-tune/generate_dataset.py --format={{format}} --max-rows={{max}}
-
-# Run unsloth QLoRA fine-tuning
-finetune-train config="fine-tune/config.yaml":
-    uv run python3.14 fine-tune/train_unsloth.py --config={{config}}
-
-# Export LoRA adapter to GGUF
-finetune-export adapter="./fine-tune/output/lora-adapter" quant="Q4_K_M":
-    uv run python3.14 fine-tune/export_gguf.py --adapter={{adapter}} --quant={{quant}}
-
-# Full pipeline: dataset -> train -> export
-finetune-all:
-    uv run python3.14 fine-tune/generate_dataset.py
-    uv run python3.14 fine-tune/train_unsloth.py
-    uv run python3.14 fine-tune/export_gguf.py
-
 # ─── Topology: introspected flow charts from system datums ──────────────────
 
 # Generate Mermaid flowchart from ontology introspection
@@ -2297,3 +2277,182 @@ mirror-soul sm3lly_host="sm3lly":
     scp ~/.b00t/server-soul.tomllm {{sm3lly_host}}:~/.b00t/server-soul.tomllm 2>/dev/null || true
     scp {{sm3lly_host}}:~/.b00t/server-soul.tomllm /tmp/sm3lly-soul.tomllm 2>/dev/null || true
     @echo "✅ Soul configs mirrored"
+
+
+# ─── Fine-tuning: unsloth QLoRA via podman container ─────────────────────────
+# 🤓 Uses docker.io/unsloth/unsloth:latest — official container with torch+CUDA
+#    Mounts: ~/.cache/huggingface/hub → /hf, ./fine-tune → /workspace/fine-tune
+#    All training runs via podman --device nvidia.com/gpu=all (b00t GPU guard)
+
+UNSLOTH_IMAGE := "docker.io/unsloth/unsloth:latest"
+HF_CACHE := env_var_or_default("HF_HOME", env_var("HOME") + "/.cache/huggingface")
+FT_DIR := justfile_directory() + "/fine-tune"
+UNSLOTH_CACHE := env_var("HOME") + "/.cache/unsloth-llama-cpp"
+
+# Generate training dataset from b00t corpus (stdlib only, no container needed)
+finetune-dataset format="alpaca" max="5000":
+    uv run python3 fine-tune/generate_dataset.py --format={{format}} --max-rows={{max}}
+
+# Run QLoRA fine-tuning in unsloth container — sm0l (0.5B, fits alongside ch0nky)
+finetune-train-smol:
+    mkdir -p {{FT_DIR}}/output-smol
+    podman run --rm \
+      --device nvidia.com/gpu=all --security-opt=label=disable \
+      --entrypoint python3 \
+      --user "$(id -u):$(id -g)" \
+      -v "{{HF_CACHE}}:/hf:z" \
+      -v "{{UNSLOTH_CACHE}}:/home/ubuntu/.unsloth:z" \
+      -v "{{FT_DIR}}:/workspace/fine-tune:z" \
+      -e HF_HOME=/hf \
+      {{UNSLOTH_IMAGE}} \
+      /workspace/fine-tune/train_unsloth.py --config /workspace/fine-tune/config-smol.yaml
+
+# Run QLoRA fine-tuning in unsloth container — 27B ch0nky (requires ch0nky stopped)
+# ⚠️  Stop ch0nky first: just qwen36-stop
+finetune-train-ch0nky:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    curl -sf http://127.0.0.1:8001/v1/models -H "Authorization: Bearer local-b00t" > /dev/null 2>&1 \
+      && { echo "❌ ch0nky is running — stop it first: just qwen36-stop"; exit 1; }
+    mkdir -p {{FT_DIR}}/output-ch0nky
+    podman run --rm \
+      --device nvidia.com/gpu=all --security-opt=label=disable \
+      -v "{{HF_CACHE}}:/hf:z" \
+      -v "{{UNSLOTH_CACHE}}:/home/ubuntu/.unsloth:z" \
+      -v "{{FT_DIR}}:/workspace/fine-tune:z" \
+      -e HF_HOME=/hf \
+      --entrypoint python3 \
+      --user "$(id -u):$(id -g)" \
+      {{UNSLOTH_IMAGE}} \
+      /workspace/fine-tune/train_unsloth.py --config /workspace/fine-tune/config-ch0nky.yaml
+
+# Export LoRA adapter to GGUF in unsloth container
+finetune-export adapter="./fine-tune/output-ch0nky/lora-adapter" quant="Q4_K_M" output="./fine-tune/output-ch0nky/b00t-ch0nky.gguf":
+    mkdir -p {{UNSLOTH_CACHE}}
+    podman run --rm \
+      --device nvidia.com/gpu=all --security-opt=label=disable \
+      -v "{{HF_CACHE}}:/hf:z" \
+      -v "{{UNSLOTH_CACHE}}:/home/ubuntu/.unsloth:z" \
+      -v "{{FT_DIR}}:/workspace/fine-tune:z" \
+      -e HF_HOME=/hf \
+      --entrypoint python3 \
+      --user "$(id -u):$(id -g)" \
+      {{UNSLOTH_IMAGE}} \
+      /workspace/fine-tune/export_gguf.py \
+        --adapter /workspace/{{adapter}} \
+        --output /workspace/{{output}} \
+        --quant {{quant}}
+
+# Full sm0l pipeline: dataset → train → export → checkpoint
+finetune-smol:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    echo "=== finetune-smol: dataset ==="; just finetune-dataset
+    echo "=== finetune-smol: train ==="; just finetune-train-smol
+    echo "=== finetune-smol: export ==="
+    just finetune-export "./fine-tune/output-smol/lora-adapter" "Q4_K_M" "./fine-tune/output-smol/b00t-smol.gguf"
+    echo "=== finetune-smol: checkpoint ==="
+    uv run python3 fine-tune/update_gen_checkpoint.py --model fine-tune/output-smol/b00t-smol.gguf --tier smol
+    echo "✅ sm0l done — run: just finetune-smol-serve"
+
+# Full ch0nky pipeline: dataset → train → export → checkpoint (needs ch0nky stopped)
+finetune-ch0nky:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    echo "=== finetune-ch0nky: dataset ==="; just finetune-dataset
+    echo "=== finetune-ch0nky: train ==="; just finetune-train-ch0nky
+    echo "=== finetune-ch0nky: export ==="
+    just finetune-export "./fine-tune/output-ch0nky/lora-adapter" "Q4_K_M" "./fine-tune/output-ch0nky/b00t-ch0nky.gguf"
+    echo "=== finetune-ch0nky: checkpoint ==="
+    uv run python3 fine-tune/update_gen_checkpoint.py --model fine-tune/output-ch0nky/b00t-ch0nky.gguf --tier ch0nky
+
+finetune-all: finetune-smol finetune-ch0nky
+
+# Start fine-tuned sm0l on :8002 (alongside ch0nky :8001)
+finetune-smol-serve gguf="fine-tune/output-smol/b00t-smol.gguf":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    [ -f "{{gguf}}" ] || { echo "❌ GGUF missing: {{gguf}} — run: just finetune-smol"; exit 1; }
+    podman run --rm -d \
+      --device nvidia.com/gpu=all --security-opt=label=disable \
+      -v "$(pwd)/fine-tune/output-smol:/models:z" \
+      -p 8002:8002 --name b00t-smol \
+      ghcr.io/ggml-org/llama.cpp:server-cuda \
+        --model /models/b00t-smol.gguf --host 0.0.0.0 --port 8002 \
+        -ngl 999 -fa on -c 8192 -n 512 \
+        --alias b00t-smol --api-key local-b00t
+    echo "✅ b00t-smol on :8002"
+
+# ─── Multi-variant correctness evaluation ────────────────────────────────────
+
+# Eval ch0nky baseline only
+eval-ch0nky:
+    uv run python3 fine-tune/correctness_eval.py \
+      --endpoints http://127.0.0.1:8001 --judge-endpoint http://127.0.0.1:8001
+
+# Eval all active variants (auto-discovers :8001/:8002/:8003)
+eval-variants:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    ENDPOINTS="http://127.0.0.1:8001"
+    curl -sf http://127.0.0.1:8002/v1/models -H "Authorization: Bearer local-b00t" > /dev/null 2>&1 \
+      && ENDPOINTS="$ENDPOINTS http://127.0.0.1:8002" || echo "ℹ️  :8002 offline"
+    curl -sf http://127.0.0.1:8003/v1/models -H "Authorization: Bearer local-b00t" > /dev/null 2>&1 \
+      && ENDPOINTS="$ENDPOINTS http://127.0.0.1:8003" || true
+    uv run python3 fine-tune/correctness_eval.py \
+      --endpoints $ENDPOINTS --judge-endpoint http://127.0.0.1:8001
+
+# Show latest correctness scorecard summary
+eval-show:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    LATEST=$(ls -t .b00t/ralph/correctness-*.jsonl 2>/dev/null | head -1)
+    [ -z "$LATEST" ] && { echo "no scorecard yet — run: just eval-ch0nky"; exit 1; }
+    uv run python3 fine-tune/correctness_eval_show.py "$LATEST"
+
+# ─── Generational checkpoint ─────────────────────────────────────────────────
+
+finetune-gen-status:
+    @cat .b00t/finetune-gen.json 2>/dev/null || echo "no checkpoint yet"
+
+finetune-gen-check:
+    #!/usr/bin/env bash
+    CURRENT=$(wc -l < fine-tune/train.jsonl 2>/dev/null || echo 0)
+    LAST=$(uv run python3 -c "import json; print(json.load(open('.b00t/finetune-gen.json')).get('train_pairs',0))" 2>/dev/null || echo 0)
+    DELTA=$(( CURRENT - LAST ))
+    echo "pairs: current=${CURRENT} last=${LAST} delta=${DELTA}"
+    [ "$DELTA" -ge 100 ]
+
+# Release gate: retrain if >100 new pairs, eval, then release
+release-with-finetune:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    echo "=== release-with-finetune ==="
+    if just finetune-gen-check 2>/dev/null; then
+      echo "🔄 delta >= 100 — retraining sm0l..."; just finetune-smol
+    else
+      echo "⏭  delta < 100 — skipping retrain"
+    fi
+    echo "🧪 correctness eval..."; just eval-variants
+    echo "🚀 releasing..."; just release
+
+# ─── Worktree bootstrap (fixes submodule gaps — see issue #538) ───────────────
+
+worktree-init:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    MAIN="$HOME/.b00t"
+    WD="$(git rev-parse --show-toplevel)"
+    [ "$WD" = "$MAIN" ] && { echo "ℹ️  running in main checkout — no-op"; exit 0; }
+    echo "🔧 worktree-init: linking vendor submodules from $MAIN"
+    LINKED=0
+    for d in "$WD/vendor"/*/; do
+      name=$(basename "${d%/}")
+      src="$MAIN/vendor/$name"
+      dst="$WD/vendor/$name"
+      if [ -d "$src" ] && [ -d "$dst" ] && [ -z "$(ls -A "$dst" 2>/dev/null)" ]; then
+        rmdir "$dst" && ln -s "$src" "$dst"
+        echo "  linked: vendor/$name"
+        LINKED=$((LINKED+1))
+      fi
+    done
