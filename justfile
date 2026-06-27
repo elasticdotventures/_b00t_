@@ -1041,6 +1041,10 @@ moltis-soul-test:
     b00t soul set moltis_test_key "hello_from_b00t"
     b00t soul get moltis_test_key
 
+# Validate .gitmodules against workspace Cargo.toml vendor paths
+validate-submodules:
+    bash scripts/validate-submodules.sh
+
 # ── h3rmes — b00t-integrated Hermes Agent variant ───────────────────────────
 
 # Install/verify h3rmes (PromptExecution Hermes fork with b00t integration).
