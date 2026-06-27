@@ -308,12 +308,26 @@ fn handle_boot(
     }
     eprintln!("  ✅ {}", cfg_path.display());
 
-    // Install b00t-mcp
-    eprintln!("[boot] install b00t-mcp → opencode");
+    // Install b00t-mcp via agent dispatch
+    eprintln!("[boot] install b00t-mcp → {target}");
     if dry_run {
         eprintln!("  [dry-run] would install b00t-mcp");
     } else {
-        crate::opencode_install_mcp("b00t-mcp", path, false, None, false)?;
+        match target {
+            "opencode" => crate::opencode_install_mcp("b00t-mcp", path, false, None, false)?,
+            "claudecode" | "claude" => crate::claude_code_install_mcp("b00t-mcp", path)?,
+            "vscode" => crate::vscode_install_mcp("b00t-mcp", path)?,
+            "codex" => {
+                crate::codex_install_mcp("b00t-mcp", path, crate::utils::is_git_repo(), None, false)?;
+            }
+            "gemini" | "geminicli" => {
+                crate::gemini_install_mcp("b00t-mcp", path, false)?;
+            }
+            "dotmcpjson" => {
+                crate::dotmcpjson_install_mcp("b00t-mcp", path, None, false)?;
+            }
+            _ => anyhow::bail!("install dispatch: no MCP installer for target '{target}'"),
+        }
     }
 
     // GATE 2: verify entry
