@@ -169,11 +169,11 @@ fn resolve_upstream(soul: &SoulConfig) -> (String, String) {
 
 // ── State ──────────────────────────────────────────────────────────────────
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "lowercase")]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Action { Read, Write, Execute }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
 pub struct ClassPermission {
     pub class: String,
     pub action: Action,
@@ -181,7 +181,6 @@ pub struct ClassPermission {
 
 impl ClassPermission {
     pub fn parse(s: &str) -> Option<Self> {
-        // Format: "b00t:EmbeddingModel:execute"
         let parts: Vec<&str> = s.rsplitn(2, ':').collect();
         if parts.len() != 2 { return None; }
         let action = match parts[0] {
@@ -192,7 +191,29 @@ impl ClassPermission {
         };
         Some(ClassPermission { class: parts[1].to_string(), action })
     }
+
+    pub fn to_hydra_scope(&self) -> String {
+        HYDRA_SCOPE_MAP
+            .iter()
+            .find(|(class, action, _)| *class == self.class && *action == self.action)
+            .map(|(_, _, scope)| scope.to_string())
+            .unwrap_or_else(|| {
+                format!("{}.{}",
+                    self.class.strip_prefix("b00t:").unwrap_or(&self.class).to_lowercase(),
+                    format!("{:?}", self.action).to_lowercase(),
+                )
+            })
+    }
 }
+
+static HYDRA_SCOPE_MAP: &[(&str, Action, &str)] = &[
+    ("b00t:ChatModel", Action::Execute, "chat.execute"),
+    ("b00t:EmbeddingModel", Action::Execute, "embedding.execute"),
+    ("b00t:Model", Action::Read, "model.read"),
+    ("b00t:Model", Action::Write, "model.write"),
+    ("b00t:Store", Action::Read, "store.read"),
+    ("b00t:Store", Action::Write, "store.write"),
+];
 
 #[derive(Clone, Serialize, Deserialize)]
 pub struct KeyEntry {
@@ -200,6 +221,22 @@ pub struct KeyEntry {
     pub created_at: chrono::DateTime<chrono::Utc>,
     #[serde(default)]
     pub access: Vec<ClassPermission>,
+}
+
+impl KeyEntry {
+    pub fn hydra_scopes(&self) -> String {
+        self.access.iter().map(|p| p.to_hydra_scope()).collect::<Vec<_>>().join(" ")
+    }
+
+    pub fn hydra_client_payload(&self, client_id: &str) -> serde_json::Value {
+        serde_json::json!({
+            "client_id": client_id,
+            "client_name": self.consumer,
+            "grant_types": ["client_credentials"],
+            "scope": self.hydra_scopes(),
+            "token_endpoint_auth_method": "client_secret_basic",
+        })
+    }
 }
 
 pub struct LlmState {
@@ -318,9 +355,31 @@ fn dirs_next() -> Option<std::path::PathBuf> {
     std::env::var("HOME").ok().map(|h| std::path::PathBuf::from(h).join(".b00t"))
 }
 
+// ── Auth provider selection ──────────────────────────────────────────────────
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AuthProvider {
+    Dev,
+    Basic,
+    Hydra,
+}
+
+impl AuthProvider {
+    pub fn from_env_or_default() -> Self {
+        if std::env::var("B00T_SERVER_DEV").map_or(false, |v| v == "1") {
+            return AuthProvider::Dev;
+        }
+        if std::env::var("HYDRA_ADMIN_URL").is_ok() {
+            return AuthProvider::Hydra;
+        }
+        AuthProvider::Basic
+    }
+}
+
 // ── Router ─────────────────────────────────────────────────────────────────
 
-pub fn llm_router(state: Arc<LlmState>, dev_mode: bool) -> Router {
+pub fn llm_router(state: Arc<LlmState>, auth: AuthProvider) -> Router {
+    let dev_mode = matches!(auth, AuthProvider::Dev);
     Router::new()
         .route("/v1/models", get(list_models))
         .route("/v1/chat/completions", post(proxy_chat))
