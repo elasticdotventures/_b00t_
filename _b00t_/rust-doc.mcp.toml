@@ -2,6 +2,10 @@
 name = "rust-doc"
 type = "mcp"
 hint = "Rust crate documentation via semantic search — b00t vendor submodule of PromptExecution/rust-docs-mcp-b00t (forked from Govcraft). Per-crate MCP server with OpenAI embeddings + cosine similarity RAG. Build: 'just rust-doc build'"
+# 🤓 Uses LOCAL b00t-server on :5273 for embeddings (no billable API calls).
+#    b00t-server proxies to auto-discovered local backends (vLLM, mistralrs).
+#    Start inference via `just qwen36-serve` when local backends are needed.
+#    Embeddings cache persists at ~/.local/share/rustdocs-mcp-server/.
 
 [b00t.learn]
 topic = "rust-docs"
@@ -12,3 +16,25 @@ command = "vendor/rust-docs-mcp-server/target/release/rustdocs_mcp_server"
 args = ["serde"]
 requires = ["rustdocs_mcp_server"]
 transport = "stdio"
+
+[[b00t.env]]
+name = "OPENAI_API_BASE"
+required = true
+hint = "Base URL for an OpenAI-compatible embeddings API (e.g. http://127.0.0.1:8001/v1)"
+
+[[b00t.env]]
+name = "OPENAI_API_KEY"
+required = true
+hint = "API key for the embeddings endpoint (local-b00t for local vLLM)"
+
+[[b00t.usage]]
+description = "Build rust-doc MCP server"
+command = "just rust-doc build"
+
+[[b00t.usage]]
+description = "Start local inference for embeddings"
+command = "just qwen36-serve"
+
+[[b00t.usage]]
+description = "Test rust-doc with local inference"
+command = "OPENAI_API_BASE=http://127.0.0.1:8001/v1 OPENAI_API_KEY=local-b00t vendor/rust-docs-mcp-server/target/release/rustdocs_mcp_server serde"

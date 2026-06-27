@@ -9,6 +9,19 @@ fn die(code: i32, msg: impl std::fmt::Display) -> ! {
     eprintln!("Error: {}", msg);
     std::process::exit(code);
 }
+
+fn target_str_to_install_target(s: &str) -> b00t_cli::commands::mcp::McpInstallTarget {
+    match s {
+        "opencode" => b00t_cli::commands::mcp::McpInstallTarget::Opencode,
+        "claudecode" | "claude" => b00t_cli::commands::mcp::McpInstallTarget::Claudecode,
+        "vscode" => b00t_cli::commands::mcp::McpInstallTarget::Vscode,
+        "codex" => b00t_cli::commands::mcp::McpInstallTarget::Codex,
+        "geminicli" | "gemini" => b00t_cli::commands::mcp::McpInstallTarget::Geminicli,
+        "dotmcpjson" => b00t_cli::commands::mcp::McpInstallTarget::Dotmcpjson,
+        _ => b00t_cli::commands::mcp::McpInstallTarget::Opencode,
+    }
+}
+
 use clap::Parser;
 use dirs;
 use duct::cmd;
@@ -2837,7 +2850,7 @@ async fn main() {
                         );
                         std::process::exit(1);
                     }
-                    t.to_string()
+                    target_str_to_install_target(t)
                 }
                 None => {
                     let candidates = ["opencode", "claude", "vscode", "codex"];
@@ -2850,7 +2863,7 @@ async fn main() {
                             || expanded.join(format!("{}.cli.tomllm", c)).exists()
                             || expanded.join(format!("{}.runtime.tomllm", c)).exists()
                         {
-                            found = Some(c.to_string());
+                            found = Some(target_str_to_install_target(c));
                             break;
                         }
                     }

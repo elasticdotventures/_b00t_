@@ -1328,6 +1328,7 @@ dependencies = [
  "b00t-embed",
  "b00t-grok",
  "b00t-ipc",
+ "b00t-l3dg3rr-viz",
  "b00t-reflect-types",
  "base64 0.22.1",
  "bstr",

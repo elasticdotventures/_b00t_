@@ -31,6 +31,10 @@
     "b00t-sk-external": {
       "consumer": "external-consumer",
       "created_at": "2026-06-24T13:23:43.395872058+00:00"
+    },
+    "b00t-sk-b28645a21c73471b859ed90ba7cde987": {
+      "consumer": "rust-doc",
+      "created_at": "2026-06-27T02:01:36.012032+00:00"
     }
   }
 }
