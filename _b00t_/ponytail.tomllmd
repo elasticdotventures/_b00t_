@@ -1,133 +1,144 @@
-# Ponytail — 7-rung ladder for minimal code
+# Ponytail → b00t Concept Harmonization
 #
-# 🤓 DietrichGebert/ponytail: ~54% less code, ~20% cheaper, ~27% faster, 100% safe.
-#    The ladder runs AFTER understanding the problem, not instead of it.
-#    Lazy about the solution, never about reading.
-#
-#    b00t alignment: DRY + NRtW is rung 1-2. Postel's Law is the safety guard.
-#    Compound-engineering is rung 3-7: only build the minimum that works.
+# 🤓 DietrichGebert/ponytail (MIT, -54% LOC) offers a 7-rung ladder + 5 skills.
+#    b00t already has most of these concepts implemented with different names.
+#    This datum maps ponytail terms to their b00t equivalents, not reimplement.
 
 [meta]
 source = "github.com/DietrichGebert/ponytail"
 license = "MIT"
-stars = "trending"
-works_with = "16+ agents"
-benchmark = "Claude Code + Haiku 4.5, 12 features, n=4, real FastAPI+React repo"
+benchmark = "-54% LOC, -22% tokens, -20% cost, -27% time, 100% safe"
 
-# ── The 7-Rung Ladder ────────────────────────────────────────────────────────
+# ── Concept Map: Ponytail → b00t ──────────────────────────────────────────────
 
-# 🤓 The ladder is evaluated top-down. First rung that holds wins.
-#    Safety: trust-boundary validation, data-loss handling, security,
-#    and accessibility are NEVER on the chopping block.
+[map]
 
-[ladder]
+[map.ladder]
+ponytail = "Always-on 7-rung ladder injected before every coding task"
+b00t = "AGENTS.md § Core Laws · Ponytail ladder (newly added)"
+b00t_existing = "DRY + NRtW (rungs 1-2), compound-engineering (3-6), TDD-first (7)"
+harmonized = true
 
-[ladder.rung_1]
-name = "YAGNI"
-question = "Does this need to exist?"
-action = "skip it"
-b00t_mapping = "NRtW — only novel work"
+[map.review]
+ponytail = "/ponytail-review — diff scan for over-engineering, 5 tags (delete/stdlib/native/yagni/shrink)"
+b00t = "CodeReviewer subagent · `just pr-validate` · `_b00t_/skills/reviewer/SKILL.md`"
+b00t_existing = "VerdictConstraint (APPROVE/REJECT/REQUEST_CHANGES), CakeTicket evidence, FOL-correct types"
+harmonized = true
+gap = "Reviewer doesn't currently use the 5-tag output format (delete/stdlib/native/yagni/shrink)"
+action = "Add ponytail-5-tag output mode to CodeReviewer skill — same logic, different output format"
 
-[ladder.rung_2]
-name = "reuse"
-question = "Already in this codebase?"
-action = "reuse it, don't rewrite"
-b00t_mapping = "DRY — don't repeat"
+[map.audit]
+ponytail = "/ponytail-audit — whole-repo scan, ranked cuts biggest first"
+b00t = "codebase-memory detect_changes · `b00t grok review` · data_fabric pipeline"
+b00t_existing = "GrafeoStore (graph DB), NeumannStore (sled), evidence/satisfies.jsonl"
+harmonized = true
+gap = "No ranked-cut-by-size report — detect_changes shows impact, not a ranked delete-list"
+action = "Add `just ponytail-audit` recipe wrapping codebase-memory detect_changes with ranked output"
 
-[ladder.rung_3]
-name = "stdlib"
-question = "Stdlib does it?"
-action = "use it"
-b00t_mapping = "compound-engineering — prefer small composable pieces"
+[map.debt]
+ponytail = "/ponytail-debt — harvest ponytail: comment markers into a ledger"
+b00t = "# 🤓 tribal comments · `b00t lfmf` (learn from mistakes) · `b00t task` tracking"
+b00t_existing = "1 melvin per session max rule, tribal knowledge memoization, task queue"
+harmonized = true
+gap = "No automated harvest of # 🤓 deferred items into a task list"
+action = "Add `b00t task harvest --source 🤓` that scans # 🤓 comments and creates tasks"
 
-[ladder.rung_4]
-name = "native"
-question = "Native platform feature?"
-action = "use it"
-b00t_mapping = "Postel's Law on tools"
-example = "<input type=\"date\"> instead of flatpickr, <dialog> instead of modal library"
+[map.gain]
+ponytail = "/ponytail-gain — benchmark scoreboard display"
+b00t = "evidence/satisfies.jsonl · `b00t wow` checks · Spotlight telemetry"
+b00t_existing = "Per-commit gate validation, spotcheck audit trail, usage metrics"
+harmonized = true
+gap = "No agent-facing impact scoreboard — raw JSONL, no display"
+action = "Add `b00t wow ponytail` subcommand displaying LOC/token/cost impact"
 
-[ladder.rung_5]
-name = "dependency"
-question = "Installed dependency?"
-action = "use it"
-b00t_mapping = "fork-fix-forward"
+[map.modes]
+ponytail = "lite / full (default) / ultra / off — intensity levels"
+b00t = "Cognitive tiers: sm0l / ch0nky / frontier"
+b00t_existing = "Tier routing by task complexity, model selection by capability"
+harmonized = true
+note = "ponytail modes control verbosity; b00t tiers control capability. Orthogonal."
 
-[ladder.rung_6]
-name = "oneliner"
-question = "One line?"
-action = "one line"
-b00t_mapping = "compound-engineering — thin wrappers (<=10 lines)"
+[map.tags]
+ponytail_tags = ["delete:", "stdlib:", "native:", "yagni:", "shrink:"]
+b00t_tags = ["🚩 cybersec", "⚠️ caveat", "🤓 tribal knowledge", "# @tribal:", "# @example:"]
+b00t_existing = "🦨 pip guard, 🚫 blocked, 🥾 orientation — semantic emoji system"
+harmonized = true
+gap = "No delete:/stdlib: equivalents — b00t tags are documentation, not deletion targets"
+action = "Add ponytail 5-tag mode to CodeReviewer output format"
 
-[ladder.rung_7]
-name = "minimum"
-question = "Only then: the minimum that works"
-action = "write it"
-b00t_mapping = "TDD-first — write the failing test first"
+[map.markers]
+ponytail = "// ponytail: <ceiling>, <upgrade trigger> — deferred shortcuts with known limits"
+b00t = "# 🤓 <tribal knowledge> — one per session, memoized via b00t lfmf"
+harmonized = true
+gap = "Ponytail markers have a ceiling+trigger structure; # 🤓 is freeform"
+action = "Extend # 🤓 convention: `# 🤓 ceiling: N req/s, upgrade: Redis when p99>50ms`"
 
-# ── Safety Guards (never on the chopping block) ──────────────────────────────
+# ── Implementation Plan ───────────────────────────────────────────────────────
 
-[safety]
-validation = "Trust-boundary validation is never cut"
-data_loss = "Data-loss handling is never cut"
-security = "Security checks are never cut"
-accessibility = "Accessibility is never cut"
+[plan]
 
-# ── b00t Integration Points ──────────────────────────────────────────────────
+[[plan.steps]]
+order = 1
+name = "ponytail-tags-in-reviewer"
+description = "Add ponytail 5-tag output format to CodeReviewer skill"
+effort = "low"
+impact = "high"
+status = "pending"
 
-[integration]
+[[plan.steps]]
+order = 2
+name = "task-harvest-🤓"
+description = "b00t task harvest --source 🤓 — scans # 🤓 comments, creates tasks"
+effort = "low"
+impact = "medium"
+status = "pending"
 
-[integration.grok_assimilate]
-description = "Apply ladder before digesting content into vector DB"
-rung_1_check = "Is this content already in the knowledge base? Skip if yes."
-rung_2_check = "Is this content trivially derivable from existing knowledge?"
-rung_3_check = "Is this stdlib/platform knowledge the agent already has?"
-action = "Only digest content that reaches rung 5+ of the ladder"
+[[plan.steps]]
+order = 3
+name = "ponytail-audit-recipe"
+description = "just ponytail-audit — ranked delete-list from codebase-memory"
+effort = "medium"
+impact = "medium"
+status = "pending"
 
-[integration.code_review]
-description = "ponytail-review mode for b00t's own code"
-command = "b00t grok review --mode ponytail"
-rungs = ["YAGNI check", "reuse check", "stdlib check", "native check", "oneliner check"]
+[[plan.steps]]
+order = 4
+name = "wow-ponytail"
+description = "b00t wow ponytail — LOC/token/cost impact display"
+effort = "low"
+impact = "low"
+status = "pending"
 
-[integration.agent_behavior]
-description = "Inject ladder into b00t agent instructions"
-location = "AGENTS.md § Core Laws"
-current = "DRY + NRtW (rungs 1-2 already present)"
-missing = "Rungs 3-6 not explicitly encoded"
+[[plan.steps]]
+order = 5
+name = "extend-🤓-convention"
+description = "# 🤓 ceiling: <N>, upgrade: <trigger> → extend tribal comment format"
+effort = "low"
+impact = "medium"
+status = "pending"
 
-# ── Benchmark ────────────────────────────────────────────────────────────────
+# ── Already Harmonized (no action needed) ─────────────────────────────────────
 
-[benchmark]
-loc_reduction = "-54% mean (up to -94% on over-engineering traps)"
-token_reduction = "-22%"
-cost_reduction = "-20%"
-time_reduction = "-27%"
-safety = "100% (no safety guards dropped)"
-baseline = "Claude Code agentic, same tasks without skill"
-model = "Haiku 4.5, n=4 per task"
+[harmonized]
 
-# ── Modes ────────────────────────────────────────────────────────────────────
+[[harmonized.items]]
+concept = "Ladder (always-on)"
+b00t = "AGENTS.md § Core Laws · Ponytail ladder"
+note = "Already encoded. All rungs map to existing b00t principles."
 
-[[modes]]
-name = "lite"
-description = "Gentle nudge. Points out the biggest YAGNI items only."
+[[harmonized.items]]
+concept = "Safety guards"
+b00t = "AGENTS.md § YEI MUST NEVER (no commit without tests, no credential exposure)"
+note = "Trust-boundary validation, data-loss, security, accessibility already covered."
 
-[[modes]]
-name = "full"
-description = "Default. Runs the full ladder on every code change."
-default = true
-
-[[modes]]
-name = "ultra"
-description = "For when the codebase has wronged you personally. Aggressive."
-
-[[modes]]
-name = "off"
-description = "Ponytail takes a smoke break."
+[[harmonized.items]]
+concept = "cognitive Tiers ↔ modes"
+b00t = "sm0l / ch0nky / frontier tiers"
+note = "Orthogonal to ponytail modes. Tiers control capability; ladder controls verbosity."
 
 # b00t:map v1
-# summary: Ponytail 7-rung ladder — minimal code via YAGNI→reuse→stdlib→native→dep→oneliner→minimum
-# tags: ponytail, yagni, minimal, ladder, code-review, grok, assimilate
-# tier: sm0l
-# cmds: b00t grok assimilate github.com/DietrichGebert/ponytail
-# complexity: 2
+# summary: Ponytail → b00t concept harmonization — maps all 6 skills + 5 tags to existing b00t equivalents
+# tags: ponytail, harmonize, ladder, review, audit, debt, gain, tags, markers
+# tier: ch0nky
+# cmds: just ponytail-audit, b00t task harvest --source 🤓, b00t wow ponytail
+# complexity: 4
