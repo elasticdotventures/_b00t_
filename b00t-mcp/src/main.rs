@@ -213,7 +213,6 @@ async fn main() -> Result<()> {
         }
 
         let auth_provider = server_llm::AuthProvider::from_env_or_default();
-        let is_dev_mode = matches!(auth_provider, server_llm::AuthProvider::Dev);
 
         // Log auth provider
         match auth_provider {
