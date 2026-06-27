@@ -1,7 +1,7 @@
 [b00t]
 name = "crw"
 type = "mcp"
-hint = "MCP server"
+hint = "CRW — 6MB Rust web scraper. Self-hosted, no Docker, 85ms cold start."
 requires_sudo = false
 
 [[b00t.mcp.stdio]]
@@ -10,3 +10,18 @@ command = "npx"
 priority = 0
 args = ["crw-mcp"]
 requires = ["node"]
+
+[b00t.mcp.stdio.env]
+CRW_API_URL = "https://fastcrw.com/api"
+CRW_API_KEY = "${CRW_API_KEY}"
+
+# 🤓 SkillExecutor lifecycle — b00t-mcp will lazily spawn/reap this server.
+#    Without this block, crw-mcp must be started externally.
+[b00t.mcp.lifecycle]
+idle_timeout_secs = 300
+[[b00t.mcp.lifecycle.servers]]
+name = "crw-stdio"
+command = "npx"
+args = ["crw-mcp"]
+env = { CRW_API_URL = "https://fastcrw.com/api" }
+health_check = { type = "process_alive" }

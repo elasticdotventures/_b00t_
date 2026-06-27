@@ -1,10 +1,12 @@
 use crate::dependency_resolver::DependencyResolver;
 use crate::{BootDatum, UnifiedConfig, evaluate_gates};
 use anyhow::{Context, Result, anyhow};
+use chrono::Utc;
 use clap::Parser;
 use duct::cmd;
+use serde_json;
 use shellexpand;
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::path::PathBuf;
 use toml;
 
@@ -73,7 +75,56 @@ pub fn run_just_install(dry_run: bool) -> Result<()> {
 
     println!("✅ Installation complete!");
 
+    // 🤓 Dogfood: checkpoint install state in the b00t knowledge store.
+    checkpoint_installed(&workspace_root)?;
+
     Ok(())
+}
+
+/// Dogfood the b00t store: write install metadata so `b00t up --self` can
+/// check whether a newer build exists.
+pub(crate) fn checkpoint_installed(workspace_root: &str) -> Result<()> {
+    let version = b00t_c0re_lib::version::VERSION.to_string();
+
+    let commit = std::process::Command::new("git")
+        .args(["rev-parse", "--short", "HEAD"])
+        .current_dir(workspace_root)
+        .output()
+        .ok()
+        .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
+        .unwrap_or_else(|| "unknown".to_string());
+
+    let json = serde_json::json!({
+        "name": "b00t-cli",
+        "version": version,
+        "commit": commit,
+        "installed_at": Utc::now().to_rfc3339(),
+        "workspace": workspace_root,
+    });
+
+    let tmp = std::env::temp_dir().join("b00t-install-checkpoint.json");
+    std::fs::write(&tmp, serde_json::to_string_pretty(&json)?)?;
+
+    let mut tags = std::collections::BTreeMap::new();
+    tags.insert("name".to_string(), "b00t-cli".to_string());
+    tags.insert("version".to_string(), version.clone());
+
+    match b00t_c0re_lib::store::put(&tmp, "b00t:InstalledBinary", "b00t-cli", &tags) {
+        Ok(_) => eprintln!("  📦 store checkpointed: b00t-cli v{} ({})", version, commit),
+        Err(e) => eprintln!("  ⚠️  store checkpoint failed (non-fatal): {}", e),
+    }
+    let _ = std::fs::remove_file(&tmp);
+    Ok(())
+}
+
+/// Check the store for the last-installed version of a b00t binary.
+pub fn last_installed_version(name: &str) -> Option<String> {
+    let mut tags = std::collections::BTreeMap::new();
+    tags.insert("name".to_string(), name.to_string());
+    b00t_c0re_lib::store::query(&tags)
+        .ok()?
+        .last()
+        .and_then(|e| e.tags.get("version").cloned())
 }
 
 /// Install any datum (cli/mcp/ai/etc) by name with dependency resolution.

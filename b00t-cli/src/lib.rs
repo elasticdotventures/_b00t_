@@ -2544,7 +2544,6 @@ pub fn codex_install_mcp(
     Ok(())
 }
 
-
 pub fn dotmcpjson_install_mcp(
     name: &str,
     path: &str,

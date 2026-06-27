@@ -1,0 +1,75 @@
+# b00t Skill Execution Environment — Lifecycle Contract
+#
+# Skills that run their own MCP server declare a [b00t.mcp.lifecycle] block.
+# b00t-mcp's SkillExecutor lazily spawns the server on first tool call and
+# reaps it after idle_timeout_secs of inactivity.
+#
+# This is NOT a runtime dependency — b00t-mcp reads the datum at startup,
+# extracts the lifecycle config, and manages the process lifecycle directly.
+
+[protocol]
+version = "1.0.0"
+description = "Lazy MCP server lifecycle for skills"
+
+# ── Process Lifecycle ──
+#
+# Each .mcp.toml datum MAY declare one lifecycle block.
+# If absent, the server is assumed always-running (external process).
+#
+# Example (added to _b00t_/crw.mcp.toml):
+#
+#   [b00t.mcp.lifecycle]
+#   idle_timeout_secs = 300
+#   [[b00t.mcp.lifecycle.servers]]
+#   name = "crw-stdio"
+#   command = "npx"
+#   args = ["crw-mcp"]
+#   env = { CRW_API_URL = "https://fastcrw.com/api" }
+#   health_check = { type = "process_alive" }
+
+# ── Health Check Types ──
+#
+# process_alive: check child process is still running
+# tcp_port: TCP connect to host:port
+# http_get: HTTP GET, expect 2xx
+
+# ── SkillExecutor Behavior ──
+#
+# 1. Agent calls tool "firecrawl_scrape"
+# 2. b00t-mcp looks up tool → skill name "crw"
+# 3. SkillExecutor.ensure_running("crw") checks internal registry
+# 4. If dead: spawns `npx crw-mcp`, waits for health check
+# 5. Returns stdio transport handle → proxy forwards tool call
+# 6. Last activity timestamp updated
+# 7. Background reap task: every 30s, SIGTERM servers idle > idle_timeout_secs
+
+# ── Contract: Skill Datum SIDE ──
+#
+# Skills MUST declare:
+#   - [b00t.mcp.lifecycle] with idle_timeout_secs
+#   - At least one [[b00t.mcp.lifecycle.servers]] entry
+#
+# Skills SHOULD declare:
+#   - health_check for quick readiness detection
+#   - env vars (API keys come from credential datums, not embedded)
+
+# ── Contract: b00t-mcp SIDE ──
+#
+# SkillExecutor MUST:
+#   - Accept a list of .mcp.toml paths at startup
+#   - Track per-server: pid, last_activity, config, status
+#   - spawn() lazily on first ensure_running()
+#   - reap() idle servers on a 30s background tick
+#   - shutdown_all() on SIGTERM/SIGINT
+#
+# SkillExecutor MUST NOT:
+#   - Pre-spawn servers at startup
+#   - Leak zombie processes
+#   - Block the proxy thread during spawn (async spawn + wait)
+
+# b00t:map v1
+# summary: b00t SkillExecutor lifecycle contract — lazy MCP server spawn/reap protocol
+# tags: skill, executor, lifecycle, mcp, lazy, process, spawn, reap
+# tier: ch0nky
+# cmds: b00t server start --skills-dir ~/.b00t/skills
+# complexity: 7

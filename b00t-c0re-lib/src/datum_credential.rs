@@ -55,7 +55,6 @@ pub struct CredentialFields {
 /// XOR is adequate when: (a) the master key is in OS keyring, (b) the file is 0600, (c) the ciphertext
 /// is only on local disk. The real protection is the OS keyring + file permissions; XOR prevents
 /// accidental exposure (e.g., `cat .credential.toml` doesn't show the secret).
-/// TODO(#544): Replace XOR with AES-256-GCM — see tracking issue for migration plan
 fn xor_crypt(data: &[u8], key: &str) -> Vec<u8> {
     let key_bytes = key.as_bytes();
     data.iter()

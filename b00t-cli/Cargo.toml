@@ -18,6 +18,7 @@ path = "src/b00t.rs"
 [[bin]]
 name = "b00t-rpa"
 path = "src/bin/rpa.rs"
+required-features = ["rpa"]
 
 [lib]
 name = "b00t_cli"
