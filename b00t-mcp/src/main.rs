@@ -14,7 +14,7 @@ use tower_http::cors::CorsLayer;
 
 use b00t_mcp::{
     B00tMcpServerRusty, GitHubAuthConfig, GitHubAuthState, MinimalOAuthConfig, MinimalOAuthState,
-    github_auth_router, minimal_oauth_router, server_llm,
+    github_auth_router, minimal_oauth_router, server_llm, server_skill,
 };
 
 #[tokio::main]
@@ -100,6 +100,15 @@ async fn main() -> Result<()> {
             .get_one::<String>("mode")
             .map_or(false, |m| m == "http");
     let is_llm_mode = matches.get_flag("llm");
+
+    // 🤓 SkillExecutor — lazy MCP server lifecycle manager.
+    //    Loads [b00t.mcp.lifecycle] from .mcp.toml datums, reaps idle servers.
+    //    Child processes get kill_on_drop(true) — cleaned up on process exit.
+    if let Err(e) = server_skill::init_executor().await {
+        eprintln!("⚠️  SkillExecutor init failed: {} (continuing)", e);
+    } else {
+        server_skill::start_reap_loop().await;
+    }
 
     if is_stdio_mode && !is_llm_mode {
         // Run as MCP server
