@@ -40,6 +40,12 @@ pub enum StoreCommands {
         #[clap(long, help = "Credential provider (cloudflare-r2, aws-s3)")]
         provider: String,
     },
+    #[clap(about = "Initialise the knowledge store directory + NeumannStore backend")]
+    Init,
+    #[clap(about = "Show store status (backend, object count, disk usage)")]
+    Status,
+    #[clap(about = "Cross-engine consistency check: Store ↔ NeumannStore ↔ blobs")]
+    Validate,
 }
 
 fn parse_key_val(s: &str) -> Result<(String, String), String> {
@@ -100,6 +106,37 @@ pub fn handle_store_command(cmd: &StoreCommands) -> anyhow::Result<()> {
         }
         StoreCommands::Sync { provider } => {
             b00t_c0re_lib::store::sync(provider)?;
+        }
+        StoreCommands::Init => {
+            b00t_c0re_lib::store::init()?;
+            println!("✅ Knowledge store initialised");
+        }
+        StoreCommands::Status => {
+            let (count, bytes) = b00t_c0re_lib::store::status();
+            println!("Backend: {}", b00t_c0re_lib::compiled_knowledge_backend());
+            println!("Objects: {}", count);
+            println!("Bytes:   {}", bytes);
+        }
+        StoreCommands::Validate => {
+            let report = b00t_c0re_lib::store::validate_consistency()?;
+            println!("Manifest entries: {}", report.manifest_entries);
+            println!("Neumann facts:    {}", report.neumann_facts);
+            println!("Hash matches:     {}", report.hash_matches);
+            println!("Hash mismatches:  {}", report.hash_mismatches);
+            println!("Orphan facts:     {}", report.orphan_facts);
+            if report.missing_facts.is_empty() {
+                println!("Missing facts:    0");
+            } else {
+                println!("Missing facts:    {}", report.missing_facts.len());
+                for d in &report.missing_facts {
+                    println!("  ⚠️  {} → {}", d.manifest_key, d.detail);
+                }
+            }
+            if report.healthy {
+                println!("\n✅ Cross-engine consistency: HEALTHY");
+            } else {
+                println!("\n⚠️  Cross-engine consistency: DEGRADED");
+            }
         }
     }
     Ok(())
