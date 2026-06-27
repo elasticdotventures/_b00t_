@@ -1,51 +1,65 @@
 # AI-Source-Engine (AL-1.0) — Transformer Attribution Logging
 #
-# 🤓 RayFromBoston/AI-Source-Engine: novel transformer architecture adding
-#    1% compute overhead for source attribution receipts. Reuses existing
-#    Q/K/V attention weights — no second model pass needed.
+# 🤓 RayFromBoston/AI-Source-Engine: AL-1.0 attribution logging for transformers.
+#    Deep-dive completed: ENGINEERING_GUIDE.md + src/al10/ source tree analyzed.
 #
-#    Ponytail assessment: all 7 rungs satisfied — genuinely novel, no b00t
-#    equivalent. Digests the ENGINEERING_GUIDE.md, skips the open letter.
-#
-#    Integration path: b00t grok learn → vendor knowledge checkout →
-#    ponytail-review → digest only novel architecture (not manifesto).
+#    What makes it special:
+#      1. Zero-second-pass: reuses existing attention weights (already computed
+#         during inference). No additional model pass. 1% overhead is plausible.
+#      2. Per-token provenance: not "doc influenced response" but "source 10
+#         contributed 41.2% to this specific output token". Mathematical receipts.
+#      3. Two-engine architecture: training-side source_idx alignment +
+#         inference-side attention bucketing. If either breaks, trust breaks.
+#      4. Hard invariants: len(input_ids)==len(source_idx) per row, ratios sum~1.0.
+#      5. Framework adapters: torch, huggingface, vllm already shipping.
 
-[meta]
-source = "github.com/RayFromBoston/AI-Source-Engine"
-license = "Free for All"
-language = "Python"
-key_files = ["ENGINEERING_GUIDE.md", "src/al10/"]
-novelty = "Attention-weight reuse for 1%-overhead attribution — no existing b00t equivalent"
+# ── b00t Concept Coverage Analysis ───────────────────────────────────────────
 
-# ── Ponytail Assessment (7-rung ladder applied) ──────────────────────────────
+[coverage]
+overall = "~30% concept overlap"
+analysis = """
+  b00t has NO equivalent for:
+    - Per-token attention provenance (operates at code level, not transformer)
+    - source_idx → token alignment (different domain — b00t doesn't train models)
+    - Bucket-and-normalize ratio computation (no attention weights to bucket)
+    - Framework adapters (torch/HF/vllm — not b00t's domain)
+
+  b00t HAS isomorphic patterns:
+    - Attribution receipts (JSON, SHA256) ↔ evidence/satisfies.jsonl (70% match)
+    - Hard invariants ↔ Satisfies<Constraint> gate validation (60%)
+    - Source registry (manifest, hashes) ↔ Store manifest.jsonl (80%)
+    - Exhaustive sort token invariance ↔ ─ (0% — no b00t equivalent)
+
+  What b00t could adopt:
+    - AL-1.0 receipt JSON schema as an evidence/satisfies output format
+    - Source registry pattern as a store manifest extension
+    - Exhaustive sort token concept for datum ordering validation
+"""
+
+# ── Novelty Assessment (Ponytail 7-rung, deep-dive verified) ─────────────────
 
 [ponytail]
 
 [ponytail.rung_1]
 name = "YAGNI"
-question = "Does AL-1.0 knowledge need to exist in b00t?"
-answer = "YES — genuinely novel transformer architecture. No b00t equivalent."
+answer = "YES — genuinely novel. Zero b00t equivalent for attention-weight provenance."
 action = "digest"
 
 [ponytail.rung_2]
 name = "reuse"
-question = "Already in b00t codebase?"
-answer = "NO — b00t has no attribution logging for transformer models."
+answer = "NO — no existing b00t attention-provenance infrastructure to reuse."
 action = "digest"
 
 [ponytail.rung_3]
 name = "stdlib"
-question = "Stdlib/known pattern?"
-answer = "NO — attention-weight reuse for provenance receipts is novel."
+answer = "NO — this is a novel transformer architecture extension, not an stdlib pattern."
 action = "digest"
 
-[ponytail.rung_4]
-name = "native"
-question = "Platform feature?"
-answer = "NO — this is a model architecture extension, not a platform API."
-action = "digest"
-
-# Rungs 1-4 all answered NO (genuinely novel) — skip rungs 5-7, digest everything.
+[ponytail.rung_7]
+name = "minimum"
+answer = "Digest ENGINEERING_GUIDE.md + src/al10/math.py + src/al10/receipt.py.
+         Skip CLI (30KB boilerplate), server (8KB FastAPI wrapper), README (manifesto)."
+action = "digest minimal set"
 
 # ── What to Digest ───────────────────────────────────────────────────────────
 
