@@ -25,10 +25,12 @@ pub enum ServerCommands {
 
 #[derive(Debug, Subcommand)]
 pub enum KeyAction {
-    #[clap(about = "Create an API key for a consumer (sub-agent, MCP server, etc.)")]
+    #[clap(about = "Create an API key for a consumer with ontology-class access")]
     Create {
         #[clap(long, help = "Consumer identifier (e.g. rust-doc, pi, worker)")]
         consumer: String,
+        #[clap(long = "access", help = "Ontology class access: b00t:EmbeddingModel:execute (repeatable, default: all)")]
+        access: Vec<String>,
     },
     #[clap(about = "List all registered API keys")]
     List,
@@ -85,7 +87,7 @@ pub fn handle_server_command(cmd: &ServerCommands) -> anyhow::Result<()> {
                 Ok(())
             }
             ServerCommands::Key { action } => match action {
-                KeyAction::Create { consumer } => {
+                KeyAction::Create { consumer, access } => {
                     let key = format!("b00t-sk-{}", uuid::Uuid::new_v4().simple());
                     let keys_path = dirs::home_dir()
                         .unwrap_or_else(|| std::path::PathBuf::from("."))
@@ -98,9 +100,14 @@ pub fn handle_server_command(cmd: &ServerCommands) -> anyhow::Result<()> {
                     let keys = data["keys"]
                         .as_object_mut()
                         .ok_or_else(|| anyhow::anyhow!("invalid keys file"))?;
+                    let access_json: Vec<Value> = access.iter().map(|a| {
+                        let (class, action) = a.rsplit_once(':').unwrap_or((a, "execute"));
+                        serde_json::json!({"class": class, "action": action})
+                    }).collect();
                     keys.insert(key.clone(), serde_json::json!({
                         "consumer": consumer,
                         "created_at": chrono::Utc::now().to_rfc3339(),
+                        "access": access_json,
                     }));
                     if let Some(parent) = keys_path.parent() {
                         std::fs::create_dir_all(parent)?;
@@ -108,6 +115,9 @@ pub fn handle_server_command(cmd: &ServerCommands) -> anyhow::Result<()> {
                     std::fs::write(&keys_path, serde_json::to_string_pretty(&data)?)?;
                     eprintln!("✅ Key created for consumer '{}'", consumer);
                     eprintln!("   Key: {}", key);
+                    if !access.is_empty() {
+                        eprintln!("   Access: {}", access.join(", "));
+                    }
                     println!("{}", key);
                     Ok(())
                 }
