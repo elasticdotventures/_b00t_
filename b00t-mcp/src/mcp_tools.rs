@@ -1227,7 +1227,8 @@ impl crate::clap_reflection::McpExecutor for BExecCommand {
         let argv = params.get("argv")
             .and_then(|v| v.as_str())
             .ok_or_else(|| anyhow::anyhow!("b00t_exec requires argv: string"))?;
-        let parts: Vec<&str> = argv.split_whitespace().collect();
+        let parts: Vec<String> = shlex::split(argv)
+            .ok_or_else(|| anyhow::anyhow!("Invalid shell quoting in argv: {argv}"))?;
         let output = std::process::Command::new("b00t-cli")
             .args(&parts)
             .output()

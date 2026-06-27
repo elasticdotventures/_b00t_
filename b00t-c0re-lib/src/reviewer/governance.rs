@@ -52,7 +52,30 @@ impl std::hash::Hash for VerdictDisposition {
 
 impl VerdictDisposition {
     /// Logical negation: returns the opposite verdict.
+    ///
     /// FOL: ¬Approve = RequestChanges, ¬RequestChanges = Approve
+    ///
+    /// ```rust
+    /// use b00t_c0re_lib::reviewer::governance::VerdictDisposition;
+    ///
+    /// // not(Approve) == RequestChanges
+    /// assert_eq!(
+    ///     VerdictDisposition::Approve.not(),
+    ///     VerdictDisposition::RequestChanges { reasons: vec![] }
+    /// );
+    ///
+    /// // not(RequestChanges) == Approve
+    /// assert_eq!(
+    ///     VerdictDisposition::RequestChanges { reasons: vec!["bug".to_string()] }.not(),
+    ///     VerdictDisposition::Approve
+    /// );
+    ///
+    /// // not(not(Approve)) == Approve (double negation elimination)
+    /// assert_eq!(
+    ///     VerdictDisposition::Approve.not().not(),
+    ///     VerdictDisposition::Approve
+    /// );
+    /// ```
     pub fn not(&self) -> Self {
         match self {
             VerdictDisposition::Approve => VerdictDisposition::RequestChanges {
@@ -115,7 +138,41 @@ pub enum VerdictConstraint {
 
 impl VerdictConstraint {
     /// Evaluate whether a verdict satisfies this constraint.
+    ///
     /// FOL: constraint(verdict) → bool
+    ///
+    /// ```rust
+    /// use b00t_c0re_lib::reviewer::governance::{VerdictDisposition, VerdictConstraint};
+    ///
+    /// // MustApprove.evaluate(Approve) == true
+    /// assert!(VerdictConstraint::MustApprove.evaluate(&VerdictDisposition::Approve));
+    ///
+    /// // MustApprove.evaluate(RequestChanges) == false
+    /// assert!(!VerdictConstraint::MustApprove.evaluate(
+    ///     &VerdictDisposition::RequestChanges { reasons: vec![] }
+    /// ));
+    ///
+    /// // AllOf([MustApprove, MustApprove]).evaluate(Approve) == true
+    /// assert!(VerdictConstraint::AllOf(vec![
+    ///     VerdictConstraint::MustApprove,
+    ///     VerdictConstraint::MustApprove,
+    /// ]).evaluate(&VerdictDisposition::Approve));
+    ///
+    /// // Not(MustApprove).evaluate(RequestChanges) == true
+    /// assert!(VerdictConstraint::Not(
+    ///     Box::new(VerdictConstraint::MustApprove)
+    /// ).evaluate(&VerdictDisposition::RequestChanges { reasons: vec![] }));
+    ///
+    /// // MustRequestChanges(min_reasons:1).evaluate(RequestChanges{reasons:["bug"]}) == true
+    /// assert!(VerdictConstraint::MustRequestChanges { min_reasons: 1 }.evaluate(
+    ///     &VerdictDisposition::RequestChanges { reasons: vec!["bug".to_string()] }
+    /// ));
+    ///
+    /// // MustRequestChanges(min_reasons:1).evaluate(RequestChanges{reasons:[]}) == false
+    /// assert!(!VerdictConstraint::MustRequestChanges { min_reasons: 1 }.evaluate(
+    ///     &VerdictDisposition::RequestChanges { reasons: vec![] }
+    /// ));
+    /// ```
     pub fn evaluate(&self, verdict: &VerdictDisposition) -> bool {
         match self {
             VerdictConstraint::AllOf(constraints) => {

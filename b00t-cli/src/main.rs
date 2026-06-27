@@ -1,9 +1,8 @@
-use anyhow::{Result, anyhow};
-#[allow(unused_imports)]
-use b00t_cli::UnifiedConfig;
+use anyhow::{anyhow, Result};
 use b00t_cli::exit_code;
 use b00t_cli::k0mmand3r::K0mmand;
-use b00t_cli::{SessionState, load_datum_providers, whoami};
+use b00t_cli::UnifiedConfig;
+use b00t_cli::{load_datum_providers, whoami, SessionState};
 
 /// Exit with code, printing error context to stderr.
 fn die(code: i32, msg: impl std::fmt::Display) -> ! {
@@ -20,9 +19,9 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 // Import datum types from lib.rs (already declared there as pub mod)
-use b00t_cli::commands::cake::{CakeArgs, handle_cake_command};
-use b00t_cli::commands::learn::{LearnArgs, handle_learn};
-use b00t_cli::commands::maintenance::{MaintenanceArgs, handle_maintenance_command};
+use b00t_cli::commands::cake::{handle_cake_command, CakeArgs};
+use b00t_cli::commands::learn::{handle_learn, LearnArgs};
+use b00t_cli::commands::maintenance::{handle_maintenance_command, MaintenanceArgs};
 use b00t_cli::datum_ai::AiDatum;
 use b00t_cli::datum_ai_model::ModelDatumEntry;
 use b00t_cli::datum_apt::AptDatum;
@@ -61,9 +60,9 @@ use b00t_cli::commands::uninstall::uninstall_datum;
 
 // Re-export commonly used functions for datum modules
 pub use b00t_cli::{
-    DatumType, claude_code_install_mcp, codex_install_mcp, dotmcpjson_install_mcp,
-    gemini_install_mcp, get_config, get_expanded_path, get_mcp_config, get_mcp_toml_files,
-    mcp_add_json, mcp_list, mcp_output, mcp_remove, opencode_install_mcp, vscode_install_mcp,
+    claude_code_install_mcp, codex_install_mcp, dotmcpjson_install_mcp, gemini_install_mcp,
+    get_config, get_expanded_path, get_mcp_config, get_mcp_toml_files, mcp_add_json, mcp_list,
+    mcp_output, mcp_remove, opencode_install_mcp, vscode_install_mcp, DatumType,
 };
 
 mod integration_tests;
@@ -78,6 +77,12 @@ struct Cli {
         help = "Output structured markdown documentation about internal structures"
     )]
     doc: bool,
+    #[clap(
+        short = 'V',
+        long,
+        help = "Verbose: show hidden shortcut commands and full help tree"
+    )]
+    verbose: bool,
     #[clap(subcommand)]
     command: Option<Commands>,
 }
@@ -199,7 +204,9 @@ The system will:
         #[clap(subcommand)]
         mcp_command: McpCommands,
     },
-    #[clap(about = "b00t maintenance daemon (exercise reminders, governance boot, research queue)")]
+    #[clap(
+        about = "b00t maintenance daemon (exercise reminders, governance boot, research queue)"
+    )]
     Maintenance {
         #[command(flatten)]
         maintenance_args: MaintenanceArgs,
@@ -588,6 +595,57 @@ The system will:
     Zellij {
         #[clap(subcommand)]
         zellij_command: ZellijCommand,
+    },
+
+    // ── Hidden shortcut commands (visible with --verbose) ──────────────────
+    /// 🥾 boot — shortcut: gated MCP install + tidy-sweep + restart
+    #[clap(hide = true, about = "🥾 DWIW shortcut → mcp boot")]
+    Boot {
+        #[clap(long, default_value = "opencode", help = "Target agent")]
+        target: String,
+        #[clap(long, help = "Skip tidy-sweep")]
+        no_tidy: bool,
+        #[clap(long, help = "Skip restart")]
+        no_restart: bool,
+        #[clap(long, help = "Dry-run")]
+        dry_run: bool,
+    },
+
+    /// 📦 quick-install — shortcut: smart MCP install (DWIW target detection)
+    #[clap(hide = true, about = "📦 DWIW shortcut → mcp install with auto-target")]
+    QuickInstall {
+        #[clap(help = "MCP server name")]
+        name: String,
+        #[clap(long, help = "Target override (opencode, claude, etc.)")]
+        target: Option<String>,
+    },
+
+    /// 🔌 run — shortcut: datum-space launch (runtime sandbox or CLI passthrough)
+    #[clap(
+        hide = true,
+        about = "🔌 DWIW shortcut → datum dispatch (runtime | cli | polyseme)"
+    )]
+    RunDatum {
+        #[clap(help = "Datum name")]
+        name: String,
+        #[clap(trailing_var_arg = true, allow_hyphen_values = true, num_args = 0..)]
+        args: Vec<String>,
+    },
+
+    /// 🔴 die — shortcut: process-icide for the current agent
+    #[clap(hide = true, about = "🔴 DWIW shortcut → quit (kill agent)")]
+    Die {
+        #[clap(long, help = "Dry-run")]
+        dry_run: bool,
+    },
+
+    /// 🧹 sweep — shortcut: remove *~ backup files
+    #[clap(hide = true, about = "🧹 DWIW shortcut → tidy-sweep")]
+    Sweep {
+        #[clap(long, help = "Dry-run")]
+        dry_run: bool,
+        #[clap(long, help = "Root directory", default_value_t = String::new())]
+        root: String,
     },
 }
 
@@ -1782,12 +1840,100 @@ fn execute_k0mmand3r_dispatch(path: &str, slash: &str, passthrough_args: &[Strin
 
 #[tokio::main]
 async fn main() {
-    let cli = match Cli::try_parse_from(normalize_slash_args(std::env::args().collect())) {
+    let raw_args: Vec<String> = std::env::args().collect();
+    let cli = match Cli::try_parse_from(normalize_slash_args(raw_args.clone())) {
         Ok(cli) => cli,
         Err(e) => {
-            // Agent-friendly error: short orientation, not full usage dump
+            // Datum-driven dispatch: search the datum space for <name>
+            if raw_args.len() > 1 {
+                let candidate = &raw_args[1];
+                if !candidate.starts_with('-') && !candidate.starts_with('/') {
+                    let path = std::env::var("_B00T_Path")
+                        .unwrap_or_else(|_| "~/.b00t/_b00t_".to_string());
+                    let expanded = shellexpand::tilde(&path).to_string();
+                    let passthrough: Vec<String> = raw_args.iter().skip(2).cloned().collect();
+                    let matches = b00t_cli::resolve_all_datum_dispatches(candidate, &expanded);
+
+                    if matches.len() > 1 {
+                        // Multiple datum types — prompt for disambiguation
+                        eprintln!("\n\x1b[1m{candidate}\x1b[0m — multiple datum matches:");
+                        for (i, m) in matches.iter().enumerate() {
+                            match m {
+                                b00t_cli::DatumDispatch::Runtime(_) => {
+                                    eprintln!(
+                                        "  {}) \x1b[1mruntime\x1b[0m — sandboxed launch",
+                                        i + 1
+                                    );
+                                }
+                                b00t_cli::DatumDispatch::CliPassthrough { command, .. } => {
+                                    eprintln!("  {}) \x1b[1mcli\x1b[0m — run `{command}`", i + 1);
+                                }
+                                b00t_cli::DatumDispatch::Polyseme { name, refs } => {
+                                    eprintln!(
+                                        "  {}) \x1b[1mpolyseme\x1b[0m — {name} ({n} refs)",
+                                        i + 1,
+                                        n = refs.len()
+                                    );
+                                }
+                                b00t_cli::DatumDispatch::Info(msg) => {
+                                    eprintln!("  {}) {msg}", i + 1);
+                                }
+                            }
+                        }
+                        eprintln!("  Run with explicit command (e.g. `b00t run {candidate}` for runtime, `b00t cli check {candidate}` for cli)");
+                        std::process::exit(0);
+                    }
+
+                    match matches.into_iter().next() {
+                        Some(b00t_cli::DatumDispatch::Runtime(cfg)) => {
+                            match b00t_cli::runtime_sandbox::spawn_sandboxed(&cfg, &passthrough) {
+                                Ok(code) => std::process::exit(code),
+                                Err(err) => {
+                                    eprintln!("[b00t] runtime launch failed: {err}");
+                                    std::process::exit(1);
+                                }
+                            }
+                        }
+                        Some(b00t_cli::DatumDispatch::CliPassthrough { command, args }) => {
+                            let mut cmd_args = args;
+                            cmd_args.extend(passthrough);
+                            let status = std::process::Command::new(&command)
+                                .args(&cmd_args)
+                                .status()
+                                .unwrap_or_else(|err| {
+                                    eprintln!("[b00t] {command}: {err}");
+                                    std::process::exit(1);
+                                });
+                            std::process::exit(status.code().unwrap_or(1));
+                        }
+                        Some(b00t_cli::DatumDispatch::Polyseme { name, refs }) => {
+                            println!(
+                                "\n\x1b[1m{}\x1b[0m — polyseme datum (multiple resolutions)",
+                                name
+                            );
+                            println!();
+                            for r in &refs {
+                                println!("  \x1b[1m{}\x1b[0m → {}", r.name, r.canonical);
+                                println!("    datum: {}  |  {}", r.datum, r.description);
+                            }
+                            if refs.is_empty() {
+                                println!(
+                                    "  (no refs yet — use `b00t grok assimilate <url>` to add)"
+                                );
+                            }
+                            println!();
+                            std::process::exit(0);
+                        }
+                        Some(b00t_cli::DatumDispatch::Info(msg)) => {
+                            println!("[b00t] {msg}");
+                            std::process::exit(0);
+                        }
+                        None => { /* fall through to error */ }
+                    }
+                }
+            }
+            // Not a runtime datum — show standard error
             let msg = e.to_string();
-            // Extract the actionable line (first non-empty line after "error:")
             let brief = msg
                 .lines()
                 .find(|l| l.starts_with("error:") || l.contains("tip:"))
@@ -1809,6 +1955,19 @@ async fn main() {
     if cli.doc {
         generate_documentation();
         return;
+    }
+
+    if cli.verbose {
+        eprintln!("\n\x1b[1m🥾 b00t shortcuts\x1b[0m  (hidden — use for token-efficient dispatch)");
+        eprintln!("  \x1b[2mb00t boot\x1b[0m               → mcp boot (gated install + restart)");
+        eprintln!("  \x1b[2mb00t quick-install <name>\x1b[0m → mcp install <name> (DWIW target)");
+        eprintln!(
+            "  \x1b[2mb00t run <name> [args]\x1b[0m   → datum dispatch (runtime | cli | polyseme)"
+        );
+        eprintln!("  \x1b[2mb00t die\x1b[0m                → quit (process-icide)");
+        eprintln!("  \x1b[2mb00t sweep\x1b[0m              → tidy-sweep *~ files");
+        eprintln!("  \x1b[2mb00t <name>\x1b[0m             → auto-detect datum type");
+        eprintln!();
     }
 
     match &cli.command {
@@ -2469,8 +2628,8 @@ async fn main() {
                     println!("focus_balance: {:.2}", status.focus_balance);
                 }
                 ExperimentCommands::History { limit, json } => {
-                    use b00t_cli::commands::focus::FocusCommands;
                     use b00t_cli::commands::focus::handle_focus_command;
+                    use b00t_cli::commands::focus::FocusCommands;
                     let args = FocusCommands::History {
                         limit: *limit,
                         json: *json,
@@ -2634,6 +2793,176 @@ async fn main() {
                 std::process::exit(1);
             }
         }
+
+        // ── Hidden shortcuts ──────────────────────────────────────────────────
+        Some(Commands::Boot {
+            target,
+            no_tidy,
+            no_restart,
+            dry_run,
+        }) => {
+            let boot_cmd = b00t_cli::commands::mcp::McpCommands::Boot {
+                target: target.clone(),
+                no_tidy: *no_tidy,
+                no_restart: *no_restart,
+                dry_run: *dry_run,
+                signal: 15,
+            };
+            if let Err(e) = boot_cmd.execute_async(&cli.path).await {
+                eprintln!("Error: {e}");
+                std::process::exit(1);
+            }
+        }
+
+        Some(Commands::QuickInstall { name, target }) => {
+            let expanded = match b00t_cli::get_expanded_path(&cli.path) {
+                Ok(p) => p,
+                Err(e) => {
+                    eprintln!("Error: {e}");
+                    std::process::exit(1);
+                }
+            };
+            let tgt = match target.as_deref() {
+                Some(t) => {
+                    let datum_exists = expanded.join(format!("{}.cli.toml", t)).exists()
+                        || expanded.join(format!("{}.runtime.toml", t)).exists()
+                        || expanded.join(format!("{}.cli.tomllmd", t)).exists()
+                        || expanded.join(format!("{}.runtime.tomllmd", t)).exists()
+                        || expanded.join(format!("{}.cli.tomllm", t)).exists()
+                        || expanded.join(format!("{}.runtime.tomllm", t)).exists();
+                    if !datum_exists {
+                        eprintln!(
+                            "no datum found for target '{}' in {} — try 'b00t quick-install {}' without --target",
+                            t, expanded.display(), name
+                        );
+                        std::process::exit(1);
+                    }
+                    t.to_string()
+                }
+                None => {
+                    let candidates = ["opencode", "claude", "vscode", "codex"];
+                    let mut found = None;
+                    for c in &candidates {
+                        if expanded.join(format!("{}.cli.toml", c)).exists()
+                            || expanded.join(format!("{}.runtime.toml", c)).exists()
+                            || expanded.join(format!("{}.cli.tomllmd", c)).exists()
+                            || expanded.join(format!("{}.runtime.tomllmd", c)).exists()
+                            || expanded.join(format!("{}.cli.tomllm", c)).exists()
+                            || expanded.join(format!("{}.runtime.tomllm", c)).exists()
+                        {
+                            found = Some(c.to_string());
+                            break;
+                        }
+                    }
+                    match found {
+                        Some(t) => t,
+                        None => {
+                            eprintln!(
+                                "no agent runtime datum found in {} — try 'b00t quick-install {} --target opencode'",
+                                expanded.display(), name
+                            );
+                            std::process::exit(1);
+                        }
+                    }
+                }
+            };
+            let install_cmd = McpCommands::Install {
+                name: name.clone(),
+                target: tgt,
+                repo: false,
+                user: false,
+                stdio_command: None,
+                httpstream: false,
+            };
+            if let Err(e) = install_cmd.execute_async(&cli.path).await {
+                eprintln!("Error: {e}");
+                std::process::exit(1);
+            }
+        }
+
+        Some(Commands::RunDatum { name, args }) => {
+            let expanded = shellexpand::tilde(&cli.path).to_string();
+            let passthrough: Vec<String> = args.iter().map(|s| s.to_string()).collect();
+            match b00t_cli::resolve_datum_dispatch(name, &expanded) {
+                Some(b00t_cli::DatumDispatch::Runtime(cfg)) => {
+                    match b00t_cli::runtime_sandbox::spawn_sandboxed(&cfg, &passthrough) {
+                        Ok(code) => std::process::exit(code),
+                        Err(err) => {
+                            eprintln!("[b00t] runtime launch failed: {err}");
+                            std::process::exit(1);
+                        }
+                    }
+                }
+                Some(b00t_cli::DatumDispatch::CliPassthrough {
+                    command,
+                    args: cmd_args,
+                }) => {
+                    let mut all_args = cmd_args;
+                    all_args.extend(passthrough);
+                    let status = std::process::Command::new(&command)
+                        .args(&all_args)
+                        .status()
+                        .unwrap_or_else(|err| {
+                            eprintln!("[b00t] {command}: {err}");
+                            std::process::exit(1);
+                        });
+                    std::process::exit(status.code().unwrap_or(1));
+                }
+                Some(b00t_cli::DatumDispatch::Polyseme { name: pname, refs }) => {
+                    println!("\n\x1b[1m{}\x1b[0m — polyseme datum", pname);
+                    for r in &refs {
+                        println!("  {} → {}  ({})", r.name, r.canonical, r.description);
+                    }
+                }
+                Some(b00t_cli::DatumDispatch::Info(msg)) => {
+                    println!("[b00t] {msg}");
+                }
+                None => {
+                    eprintln!("[b00t] datum '{name}' not found");
+                    std::process::exit(1);
+                }
+            }
+        }
+
+        Some(Commands::Die { dry_run }) => {
+            let signal = 15i32;
+            if *dry_run {
+                match b00t_cli::commands::quit::resolve_agent_pid() {
+                    Ok(pid) => eprintln!("[dry-run] would kill pid {pid}"),
+                    Err(e) => eprintln!("[dry-run] resolve failed: {e}"),
+                }
+            } else {
+                match b00t_cli::commands::quit::resolve_agent_pid() {
+                    Ok(pid) => {
+                        eprintln!("🔴 killing agent pid={pid}");
+                        let ret = b00t_cli::commands::quit::libc_kill(pid as i32, signal);
+                        if ret != 0 {
+                            eprintln!("kill failed: {}", std::io::Error::last_os_error());
+                            std::process::exit(1);
+                        }
+                    }
+                    Err(e) => {
+                        eprintln!("resolve agent pid: {e}");
+                        std::process::exit(1);
+                    }
+                }
+            }
+        }
+
+        Some(Commands::Sweep { dry_run, root }) => {
+            let sweep_root = if root.is_empty() {
+                dirs::home_dir().unwrap_or_default()
+            } else {
+                std::path::PathBuf::from(root)
+            };
+            if *dry_run {
+                eprintln!("[dry-run] would sweep *~ under {}", sweep_root.display());
+            } else {
+                let count = b00t_cli::sweep_backup_files(&sweep_root);
+                eprintln!("🧹 swept {} *~ file(s)", count);
+            }
+        }
+
         None => {
             eprintln!("No command provided. Use --help for usage information.");
             std::process::exit(1);

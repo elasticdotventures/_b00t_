@@ -17,6 +17,26 @@ use b00t_mcp::{
     github_auth_router, minimal_oauth_router, server_llm, server_skill,
 };
 
+/// Transport mode for the MCP server.
+/// FOL-correct: explicit enumeration replaces implicit boolean triples.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum TransportMode {
+    Stdio,
+    Http,
+    Llm, // HTTP + OpenAI-compatible /v1/ router
+}
+
+impl TransportMode {
+    fn from_matches(stdio: bool, http: bool, mode_str: Option<&String>, llm: bool) -> Self {
+        if llm {
+            return TransportMode::Llm;
+        }
+        let is_stdio = stdio || mode_str.map_or(false, |m| m == "stdio");
+        let _is_http = http || mode_str.map_or(false, |m| m == "http");
+        if is_stdio { TransportMode::Stdio } else { TransportMode::Http }
+    }
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
     let matches = Command::new("b00t-mcp")

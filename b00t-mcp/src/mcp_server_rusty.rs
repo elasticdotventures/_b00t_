@@ -11,10 +11,9 @@ use rmcp::{
         // Add resource support
         ListResourcesResult,
         ListToolsResult,
-        PaginatedRequestParam,
-        ProtocolVersion,
+        PaginatedRequestParams,
         RawResource,
-        ReadResourceRequestParam,
+        ReadResourceRequestParams,
         ReadResourceResult,
         ResourceContents,
         ServerCapabilities,
@@ -127,7 +126,7 @@ impl ServerHandler for B00tMcpServerRusty {
 
     async fn list_tools(
         &self,
-        _request: Option<PaginatedRequestParam>,
+        _request: Option<PaginatedRequestParams>,
         _context: RequestContext<RoleServer>,
     ) -> Result<ListToolsResult, McpError> {
         debug!("🦀 list_tools called - using compile-time generated tools");
@@ -193,7 +192,7 @@ impl ServerHandler for B00tMcpServerRusty {
     // 🦀 MCP Resources Support
     async fn list_resources(
         &self,
-        _request: Option<PaginatedRequestParam>,
+        _request: Option<PaginatedRequestParams>,
         _context: RequestContext<RoleServer>,
     ) -> Result<ListResourcesResult, McpError> {
         debug!("🦀 list_resources called - providing b00t ecosystem resources");
@@ -250,7 +249,7 @@ impl ServerHandler for B00tMcpServerRusty {
 
     async fn read_resource(
         &self,
-        request: ReadResourceRequestParam,
+        request: ReadResourceRequestParams,
         _context: RequestContext<RoleServer>,
     ) -> Result<ReadResourceResult, McpError> {
         let uri = &request.uri;
