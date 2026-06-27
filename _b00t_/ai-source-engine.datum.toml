@@ -1,0 +1,129 @@
+# AI-Source-Engine (AL-1.0) — Transformer Attribution Logging
+#
+# 🤓 RayFromBoston/AI-Source-Engine: novel transformer architecture adding
+#    1% compute overhead for source attribution receipts. Reuses existing
+#    Q/K/V attention weights — no second model pass needed.
+#
+#    Ponytail assessment: all 7 rungs satisfied — genuinely novel, no b00t
+#    equivalent. Digests the ENGINEERING_GUIDE.md, skips the open letter.
+#
+#    Integration path: b00t grok learn → vendor knowledge checkout →
+#    ponytail-review → digest only novel architecture (not manifesto).
+
+[meta]
+source = "github.com/RayFromBoston/AI-Source-Engine"
+license = "Free for All"
+language = "Python"
+key_files = ["ENGINEERING_GUIDE.md", "src/al10/"]
+novelty = "Attention-weight reuse for 1%-overhead attribution — no existing b00t equivalent"
+
+# ── Ponytail Assessment (7-rung ladder applied) ──────────────────────────────
+
+[ponytail]
+
+[ponytail.rung_1]
+name = "YAGNI"
+question = "Does AL-1.0 knowledge need to exist in b00t?"
+answer = "YES — genuinely novel transformer architecture. No b00t equivalent."
+action = "digest"
+
+[ponytail.rung_2]
+name = "reuse"
+question = "Already in b00t codebase?"
+answer = "NO — b00t has no attribution logging for transformer models."
+action = "digest"
+
+[ponytail.rung_3]
+name = "stdlib"
+question = "Stdlib/known pattern?"
+answer = "NO — attention-weight reuse for provenance receipts is novel."
+action = "digest"
+
+[ponytail.rung_4]
+name = "native"
+question = "Platform feature?"
+answer = "NO — this is a model architecture extension, not a platform API."
+action = "digest"
+
+# Rungs 1-4 all answered NO (genuinely novel) — skip rungs 5-7, digest everything.
+
+# ── What to Digest ───────────────────────────────────────────────────────────
+
+[digest]
+
+[[digest.include]]
+file = "ENGINEERING_GUIDE.md"
+reason = "Technical blueprint — Q/K/V attention reuse, source_idx alignment, receipt generation"
+priority = "high"
+
+[[digest.include]]
+file = "src/al10/"
+reason = "Core AL-1.0 implementation — training-side plug-in + inference-side receipt"
+priority = "high"
+
+[[digest.include]]
+file = "tests/"
+reason = "Unit tests demonstrating attribution validation"
+priority = "medium"
+
+# ── What to Skip (Open Letter — not technical) ────────────────────────────────
+
+[skip]
+
+[[skip.exclude]]
+file = "README.md"
+reason = "Open letter manifesto — political/philosophical, not technical knowledge"
+
+[[skip.exclude]]
+file = "THE_HISTORY_OF_AI.md"
+reason = "Documented timeline essay — historical, not technical"
+
+[[skip.exclude]]
+file = "AGI Safety Bible.pdf"
+reason = "Binary format, psychological framing text — not digestible"
+
+[[skip.exclude]]
+file = "We All Die in the Dark.pdf"
+reason = "Binary format, starting thesis — not technical"
+
+# ── Integration with b00t ────────────────────────────────────────────────────
+
+[integration]
+
+[integration.grok]
+command = "b00t grok learn --source ENGINEERING_GUIDE.md"
+description = "Digest the technical blueprint into b00t's knowledge base"
+ponytail_filter = "rung 1 pre-check: skip if AL-1.0 concept already stored"
+
+[integration.store]
+command = "b00t store put ENGINEERING_GUIDE.md --class b00t:ArchitectureReference --consumer b00t-grok"
+description = "Content-addressed blob storage with SHA256 metadata"
+
+[integration.neumann]
+description = "Semantic triples for provenance tracking concepts"
+facts = [
+    "b00t:ProvenanceTracking rdf:type b00t:Concept",
+    "b00t:AttributionReceipt b00t:implements b00t:ProvenanceTracking",
+    "b00t:AL10 b00t:isA b00t:AttributionReceipt",
+]
+
+# ── Sharp Corners ────────────────────────────────────────────────────────────
+
+[[sharp_corners]]
+issue = "Open letter dominates README"
+impact = "grok digest on README.md would ingest 90% manifesto, 10% technical. Skip it."
+
+[[sharp_corners]]
+issue = "Binary PDFs"
+impact = "AGI Safety Bible and We All Die in the Dark are PDFs — not parseable by grok."
+
+[[sharp_corners]]
+issue = "1% compute claim unverified"
+impact = "AL-1.0 claims <1% overhead but not independently benchmarked. Tag as unverified."
+
+# b00t:map v1
+# summary: AI-Source-Engine (AL-1.0) — transformer attribution via attention-weight reuse, ponytail-reviewed
+# tags: attribution, transformer, provenance, al10, citation, vector
+# tier: ch0nky
+# cmds: b00t grok learn --source ENGINEERING_GUIDE.md
+# complexity: 5
