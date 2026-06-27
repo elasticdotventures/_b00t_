@@ -119,7 +119,7 @@ export OPENAI_API_KEY=$(cat /tmp/rust-doc-key.env | grep -oP 'b00t-sk-\S+')
 ## Phase 3: Usage Telemetry ("Spotlight" — renamed from FOCUS to avoid collision)
 
 🚩 **Naming**: "FOCUS records" already exists in b00t as FinOps billing records
-(`b00t-cli/src/commands/focus.rs`, sourced from `vendor/l3dg3rr`). The new
+(`b00t-cli/src/commands/focus.rs`, sourced from `vendor/ledgrrr`). The new
 popularity/usage concept is renamed **Spotlight** in this plan. (Bikeshed: `Focus`
 → `Spotlight` preserves the mental model of "what's getting attention" while
 sidestepping the FinOps collision.)

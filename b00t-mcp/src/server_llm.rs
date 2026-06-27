@@ -16,11 +16,11 @@ use axum::{
     routing::{get, post},
 };
 use axum::http::header;
+use anyhow::Context;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::collections::HashMap;
 use std::net::{SocketAddr, TcpStream};
-use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::RwLock;
@@ -170,19 +170,94 @@ fn resolve_upstream(soul: &SoulConfig) -> (String, String) {
 
 // ── State ──────────────────────────────────────────────────────────────────
 
-#[derive(Clone)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum Action { Read, Write, Execute }
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub struct ClassPermission {
+    pub class: String,
+    pub action: Action,
+}
+
+impl ClassPermission {
+    pub fn parse(s: &str) -> Option<Self> {
+        let parts: Vec<&str> = s.rsplitn(2, ':').collect();
+        if parts.len() != 2 { return None; }
+        let action = match parts[0] {
+            "read" => Action::Read,
+            "write" => Action::Write,
+            "execute" => Action::Execute,
+            _ => return None,
+        };
+        Some(ClassPermission { class: parts[1].to_string(), action })
+    }
+
+    pub fn to_hydra_scope(&self) -> String {
+        HYDRA_SCOPE_MAP
+            .iter()
+            .find(|(class, action, _)| *class == self.class && *action == self.action)
+            .map(|(_, _, scope)| scope.to_string())
+            .unwrap_or_else(|| {
+                format!("{}.{}",
+                    self.class.strip_prefix("b00t:").unwrap_or(&self.class).to_lowercase(),
+                    format!("{:?}", self.action).to_lowercase(),
+                )
+            })
+    }
+}
+
+static HYDRA_SCOPE_MAP: &[(&str, Action, &str)] = &[
+    ("b00t:ChatModel", Action::Execute, "chat.execute"),
+    ("b00t:EmbeddingModel", Action::Execute, "embedding.execute"),
+    ("b00t:Model", Action::Read, "model.read"),
+    ("b00t:Model", Action::Write, "model.write"),
+    ("b00t:Store", Action::Read, "store.read"),
+    ("b00t:Store", Action::Write, "store.write"),
+];
+
+/// Reverse mapping: Hydra scope string → b00t ClassPermission.
+fn hydra_scope_to_permission(scope: &str) -> Option<ClassPermission> {
+    HYDRA_SCOPE_MAP
+        .iter()
+        .find(|(_, _, s)| *s == scope)
+        .map(|(class, action, _)| ClassPermission {
+            class: class.to_string(),
+            action: *action,
+        })
+}
+
+#[derive(Clone, Serialize, Deserialize)]
 pub struct KeyEntry {
     pub consumer: String,
     pub created_at: chrono::DateTime<chrono::Utc>,
+    #[serde(default)]
+    pub access: Vec<ClassPermission>,
+}
+
+impl KeyEntry {
+    pub fn hydra_scopes(&self) -> String {
+        self.access.iter().map(|p| p.to_hydra_scope()).collect::<Vec<_>>().join(" ")
+    }
+
+    pub fn hydra_client_payload(&self, client_id: &str) -> serde_json::Value {
+        serde_json::json!({
+            "client_id": client_id,
+            "client_name": self.consumer,
+            "grant_types": ["client_credentials"],
+            "scope": self.hydra_scopes(),
+            "token_endpoint_auth_method": "client_secret_basic",
+        })
+    }
 }
 
 pub struct LlmState {
     pub upstream_url: String,
     pub upstream_key: String,
     pub keys: Arc<RwLock<HashMap<String, KeyEntry>>>,
-    pub keys_file: PathBuf,
-    pub spotlight_log: PathBuf,
-    pub _watcher: Option<std::sync::Mutex<notify::RecommendedWatcher>>,
+    pub keys_file: std::path::PathBuf,
+    pub spotlight_log: std::path::PathBuf,
+    pub auth: AuthProvider,
 }
 
 impl LlmState {
@@ -190,6 +265,14 @@ impl LlmState {
         let soul = SoulConfig::load();
         let (url, key) = resolve_upstream(&soul);
         Self::from_config(&url, &key)
+    }
+
+    pub fn new_with_auth(auth: AuthProvider) -> Self {
+        let soul = SoulConfig::load();
+        let (url, key) = resolve_upstream(&soul);
+        let mut state = Self::from_config(&url, &key);
+        state.auth = auth;
+        state
     }
 
     pub fn from_config(upstream_url: &str, upstream_key: &str) -> Self {
@@ -208,6 +291,7 @@ impl LlmState {
                                 keys.insert(k.clone(), KeyEntry {
                                     consumer: consumer.to_string(),
                                     created_at: ts.with_timezone(&chrono::Utc),
+                                    access: Vec::new(),
                                 });
                             }
                         }
@@ -215,121 +299,85 @@ impl LlmState {
                 }
             }
         }
-        let keys = Arc::new(RwLock::new(keys));
-        let spotlight_log = home.join("spotlight.jsonl");
-
-        // Spawn file watcher to hot-reload keys when CLI creates new ones
-        let keys_clone = keys.clone();
-        let keys_file_clone = keys_file.clone();
-        let watcher = Self::spawn_key_watcher(&keys_file_clone, keys_clone);
-
         Self {
             upstream_url: upstream_url.trim_end_matches('/').to_string(),
             upstream_key: upstream_key.to_string(),
-            keys,
+            keys: Arc::new(RwLock::new(keys)),
             keys_file,
-            spotlight_log,
-            _watcher: Some(std::sync::Mutex::new(watcher)),
+            spotlight_log: home.join("spotlight.jsonl"),
+            auth: AuthProvider::Basic,
         }
-    }
-
-    /// Watch keys_file for changes and reload in-memory keys.
-    fn spawn_key_watcher(
-        keys_file: &PathBuf,
-        keys: Arc<RwLock<HashMap<String, KeyEntry>>>,
-    ) -> notify::RecommendedWatcher {
-        use notify::{Watcher, RecursiveMode, event::EventKind};
-
-        let keys_file_clone = keys_file.clone();
-        let mut watcher = notify::recommended_watcher(move |res: Result<notify::Event, notify::Error>| {
-            match res {
-                Ok(event) => {
-                    match event.kind {
-                        EventKind::Create(_) | EventKind::Modify(_) => {
-                            // Debounce: only reload if the changed path is our keys file
-                            let dominated = event.paths.iter().any(|p| p == &keys_file_clone);
-                            if !dominated { return; }
-                            eprintln!("🔄 Keys file changed — reloading...");
-                            // Read and parse synchronously in the watcher thread
-                            if let Ok(data) = std::fs::read_to_string(&keys_file_clone) {
-                                if let Ok(parsed) = serde_json::from_str::<Value>(&data) {
-                                    let mut new_keys = HashMap::new();
-                                    if let Some(obj) = parsed.get("keys").and_then(|k| k.as_object()) {
-                                        for (k, v) in obj {
-                                            if let (Some(consumer), Some(created_at)) = (
-                                                v.get("consumer").and_then(|c| c.as_str()),
-                                                v.get("created_at").and_then(|c| c.as_str()),
-                                            ) {
-                                                if let Ok(ts) = chrono::DateTime::parse_from_rfc3339(created_at) {
-                                                    new_keys.insert(k.clone(), KeyEntry {
-                                                        consumer: consumer.to_string(),
-                                                        created_at: ts.with_timezone(&chrono::Utc),
-                                                    });
-                                                }
-                                            }
-                                        }
-                                    }
-                                    // Blocking write lock (we're in watcher thread, not async)
-                                    if let Ok(mut guard) = keys.try_write() {
-                                        let count = new_keys.len();
-                                        *guard = new_keys;
-                                        eprintln!("✅ Reloaded {} API keys", count);
-                                    }
-                                }
-                            }
-                        }
-                        _ => {}
-                    }
-                }
-                Err(e) => eprintln!("❌ File watcher error: {}", e),
-            }
-        }).expect("Failed to create key file watcher");
-
-        // Watch the parent directory (more reliable than watching the file directly)
-        if let Some(parent) = keys_file.parent() {
-            let _ = watcher.watch(parent, RecursiveMode::NonRecursive);
-        }
-
-        watcher
     }
 
     pub async fn validate_key(&self, token: &str) -> Option<KeyEntry> {
-        self.keys.read().await.get(token).cloned()
-    }
-
-    /// Reload keys from disk. Called after external key creation (CLI).
-    pub async fn reload_keys(&self) -> anyhow::Result<usize> {
-        let mut keys = self.keys.write().await;
-        keys.clear();
-        let data = std::fs::read_to_string(&self.keys_file)
-            .map_err(|e| anyhow::anyhow!("failed to read {}: {}", self.keys_file.display(), e))?;
-        let parsed: Value = serde_json::from_str(&data)
-            .map_err(|e| anyhow::anyhow!("failed to parse {}: {}", self.keys_file.display(), e))?;
-        let mut count = 0;
-        if let Some(obj) = parsed.get("keys").and_then(|k| k.as_object()) {
-            for (k, v) in obj {
-                if let (Some(consumer), Some(created_at)) = (
-                    v.get("consumer").and_then(|c| c.as_str()),
-                    v.get("created_at").and_then(|c| c.as_str()),
-                ) {
-                    if let Ok(ts) = chrono::DateTime::parse_from_rfc3339(created_at) {
-                        keys.insert(k.clone(), KeyEntry {
-                            consumer: consumer.to_string(),
-                            created_at: ts.with_timezone(&chrono::Utc),
-                        });
-                        count += 1;
-                    }
-                }
-            }
+        match self.auth {
+            AuthProvider::Hydra => self.validate_key_hydra(token).await.ok().flatten(),
+            _ => self.keys.read().await.get(token).cloned(),
         }
-        Ok(count)
     }
 
-    pub async fn create_key(&self, consumer: &str) -> String {
+    /// Validate a token via Ory Hydra's introspection endpoint.
+    /// Returns a KeyEntry if the token is active, with scopes mapped to ClassPermission.
+    async fn validate_key_hydra(&self, token: &str) -> anyhow::Result<Option<KeyEntry>> {
+        let admin_url = std::env::var("HYDRA_ADMIN_URL")
+            .unwrap_or_else(|_| "http://127.0.0.1:4445".to_string());
+        let url = format!("{}/admin/oauth2/introspect", admin_url.trim_end_matches('/'));
+
+        let client = reqwest::Client::new();
+        let resp = client
+            .post(&url)
+            .form(&[("token", token)])
+            .send()
+            .await
+            .context("Hydra introspection request failed")?;
+
+        if !resp.status().is_success() {
+            return Ok(None);
+        }
+
+        let body: Value = resp.json().await.context("Hydra introspection response parse")?;
+        let active = body.get("active").and_then(|v| v.as_bool()).unwrap_or(false);
+        if !active {
+            return Ok(None);
+        }
+
+        let scope_str = body.get("scope").and_then(|v| v.as_str()).unwrap_or("");
+        let access: Vec<ClassPermission> = scope_str
+            .split_whitespace()
+            .filter_map(hydra_scope_to_permission)
+            .collect();
+
+        let client_id = body.get("client_id")
+            .and_then(|v| v.as_str())
+            .unwrap_or("unknown")
+            .to_string();
+
+        Ok(Some(KeyEntry {
+            consumer: client_id,
+            created_at: chrono::Utc::now(),
+            access,
+        }))
+    }
+
+    pub async fn check_access(&self, token: &str, class: &str, action: Action) -> bool {
+        if let Some(entry) = self.validate_key(token).await {
+            if entry.access.is_empty() {
+                return true; // empty access = full access (backwards compat)
+            }
+            return entry.access.iter().any(|p| p.class == class && matches!(p.action, Action::Execute) || matches!(p.action, Action::Read));
+        }
+        false
+    }
+
+    pub async fn create_key(&self, consumer: &str, access: &[String]) -> String {
         let key = format!("b00t-sk-{}", Uuid::new_v4().simple());
+        let permissions: Vec<ClassPermission> = access.iter()
+            .filter_map(|a| ClassPermission::parse(a))
+            .collect();
         self.keys.write().await.insert(key.clone(), KeyEntry {
             consumer: consumer.to_string(),
             created_at: chrono::Utc::now(),
+            access: permissions,
         });
         self.save_keys_to_file().await;
         key
@@ -339,9 +387,14 @@ impl LlmState {
         let keys = self.keys.read().await;
         let mut map = serde_json::Map::new();
         for (k, v) in keys.iter() {
+            let access_json: Vec<Value> = v.access.iter().map(|p| json!({
+                "class": p.class,
+                "action": serde_json::to_value(&p.action).unwrap_or(json!("execute")),
+            })).collect();
             map.insert(k.clone(), json!({
                 "consumer": v.consumer,
                 "created_at": v.created_at.to_rfc3339(),
+                "access": access_json,
             }));
         }
         let data = json!({"keys": map});
@@ -366,22 +419,49 @@ impl LlmState {
     }
 }
 
-fn dirs_next() -> Option<PathBuf> {
-    dirs::home_dir().map(|h| h.join(".b00t"))
+fn dirs_next() -> Option<std::path::PathBuf> {
+    std::env::var("HOME").ok().map(|h| std::path::PathBuf::from(h).join(".b00t"))
+}
+
+// ── Auth provider selection ──────────────────────────────────────────────────
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AuthProvider {
+    Dev,
+    Basic,
+    Hydra,
+}
+
+impl AuthProvider {
+    pub fn from_env_or_default() -> Self {
+        if std::env::var("B00T_SERVER_DEV").map_or(false, |v| v == "1") {
+            return AuthProvider::Dev;
+        }
+        if std::env::var("HYDRA_ADMIN_URL").is_ok() {
+            return AuthProvider::Hydra;
+        }
+        AuthProvider::Basic
+    }
 }
 
 // ── Router ─────────────────────────────────────────────────────────────────
 
-pub fn llm_router(state: Arc<LlmState>) -> Router {
+pub fn llm_router(state: Arc<LlmState>, auth: AuthProvider) -> Router {
+    let dev_mode = matches!(auth, AuthProvider::Dev);
     Router::new()
         .route("/v1/models", get(list_models))
         .route("/v1/chat/completions", post(proxy_chat))
         .route("/v1/embeddings", post(proxy_embeddings))
         .route("/v1/{*_}", axum::routing::any(fallback_not_found))
-        .with_state(state)
+        .with_state((state, dev_mode))
 }
 
-fn extract_bearer_token(headers: &HeaderMap) -> Option<String> {
+type AppState = (Arc<LlmState>, bool);
+
+fn extract_bearer_token(headers: &HeaderMap, dev_mode: bool) -> Option<String> {
+    if dev_mode {
+        return Some("dev-key".to_string());
+    }
     headers
         .get(header::AUTHORIZATION)
         .and_then(|v| v.to_str().ok())
@@ -389,33 +469,33 @@ fn extract_bearer_token(headers: &HeaderMap) -> Option<String> {
         .map(|s| s.to_string())
 }
 
-/// Validate bearer token and return consumer identity.
-/// Returns 401 response if token is missing or invalid.
-async fn require_auth(
-    headers: &HeaderMap,
-    state: &LlmState,
-) -> Result<String, (StatusCode, Json<Value>)> {
-    let token = extract_bearer_token(headers)
-        .unwrap_or_default();
-    state.validate_key(&token).await
-        .map(|k| k.consumer)
-        .ok_or_else(|| {
-            (StatusCode::UNAUTHORIZED, Json(json!({
-                "error": "invalid or missing API key"
-            })))
-        })
+// ── Endpoint → ontology class mapping ─────────────────────────────────────
+
+fn class_for_path(path: &str) -> (&str, Action) {
+    if path.contains("chat/completions") {
+        ("b00t:ChatModel", Action::Execute)
+    } else if path.contains("embeddings") {
+        ("b00t:EmbeddingModel", Action::Execute)
+    } else {
+        ("b00t:Model", Action::Read)
+    }
 }
 
 // ── Handlers ───────────────────────────────────────────────────────────────
 
 async fn list_models(
-    State(state): State<Arc<LlmState>>,
+    State((state, dev_mode)): State<AppState>,
     headers: HeaderMap,
 ) -> impl IntoResponse {
-    let consumer = match require_auth(&headers, &state).await {
-        Ok(c) => c,
-        Err(e) => return e.into_response(),
-    };
+    let token = extract_bearer_token(&headers, dev_mode).unwrap_or_default();
+    let consumer = state.validate_key(&token).await.map(|k| k.consumer).unwrap_or_else(|| "unknown".to_string());
+    if !dev_mode && !state.check_access(&token, "b00t:ChatModel", Action::Execute).await {
+        return (StatusCode::FORBIDDEN, Json(json!({"error": "access denied: b00t:ChatModel:execute"}))).into_response();
+    }
+
+    if !dev_mode && !state.check_access(&token, "b00t:Model", Action::Read).await {
+        return (StatusCode::FORBIDDEN, Json(json!({"error": "access denied: b00t:Model:read"}))).into_response();
+    }
     let url = format!("{}/models", state.upstream_url);
     let client = reqwest::Client::new();
     let mut req = client.get(&url);
@@ -440,14 +520,15 @@ async fn list_models(
 }
 
 async fn proxy_chat(
-    State(state): State<Arc<LlmState>>,
+    State((state, dev_mode)): State<AppState>,
     headers: HeaderMap,
     body: Bytes,
 ) -> impl IntoResponse {
-    let consumer = match require_auth(&headers, &state).await {
-        Ok(c) => c,
-        Err(e) => return e.into_response(),
-    };
+    let token = extract_bearer_token(&headers, dev_mode).unwrap_or_default();
+    let consumer = state.validate_key(&token).await.map(|k| k.consumer).unwrap_or_else(|| "unknown".to_string());
+    if !dev_mode && !state.check_access(&token, "b00t:EmbeddingModel", Action::Execute).await {
+        return (StatusCode::FORBIDDEN, Json(json!({"error": "access denied: b00t:EmbeddingModel:execute"}))).into_response();
+    }
     let model = serde_json::from_slice::<Value>(&body)
         .ok().and_then(|v| v.get("model").and_then(|m| m.as_str().map(|s| s.to_string())))
         .unwrap_or_else(|| "unknown".to_string());
@@ -478,14 +559,12 @@ async fn proxy_chat(
 }
 
 async fn proxy_embeddings(
-    State(state): State<Arc<LlmState>>,
+    State((state, dev_mode)): State<AppState>,
     headers: HeaderMap,
     body: Bytes,
 ) -> impl IntoResponse {
-    let consumer = match require_auth(&headers, &state).await {
-        Ok(c) => c,
-        Err(e) => return e.into_response(),
-    };
+    let token = extract_bearer_token(&headers, dev_mode).unwrap_or_default();
+    let consumer = state.validate_key(&token).await.map(|k| k.consumer).unwrap_or_else(|| "unknown".to_string());
     let model = serde_json::from_slice::<Value>(&body)
         .ok().and_then(|v| v.get("model").and_then(|m| m.as_str().map(|s| s.to_string())))
         .unwrap_or_else(|| "unknown".to_string());
@@ -513,7 +592,7 @@ async fn proxy_embeddings(
 }
 
 async fn fallback_not_found(
-    State(_state): State<Arc<LlmState>>,
+    State((_state, _dev_mode)): State<AppState>,
     method: Method,
     axum::extract::Path(path): axum::extract::Path<String>,
 ) -> impl IntoResponse {
@@ -526,21 +605,9 @@ async fn fallback_not_found(
 mod tests {
     use super::*;
 
-    fn temp_state() -> LlmState {
-        let tmp = tempfile::tempdir().unwrap();
-        let keys_file = tmp.path().join("server-keys.json");
-        std::fs::write(&keys_file, r#"{"keys":{}}"#).unwrap();
-        let mut state = LlmState::from_config("http://localhost:8181/v1", "");
-        state.keys_file = keys_file;
-        state.spotlight_log = tmp.path().join("spotlight.jsonl");
-        // Keep tmp alive by leaking it (test cleanup will handle)
-        std::mem::forget(tmp);
-        state
-    }
-
     #[tokio::test]
     async fn test_key_create_and_validate() {
-        let state = Arc::new(temp_state());
+        let state = Arc::new(LlmState::from_config("http://localhost:8181/v1", ""));
         let key = state.create_key("test-consumer").await;
         assert!(key.starts_with("b00t-sk-"));
         let entry = state.validate_key(&key).await;
@@ -550,43 +617,18 @@ mod tests {
 
     #[tokio::test]
     async fn test_unknown_key_is_none() {
-        let state = Arc::new(temp_state());
+        let state = Arc::new(LlmState::from_config("http://localhost:8181/v1", ""));
         let entry = state.validate_key("bogus-key").await;
         assert!(entry.is_none());
     }
 
     #[tokio::test]
     async fn test_spotlight_emit() {
-        let state = Arc::new(temp_state());
+        let state = Arc::new(LlmState::from_config("http://localhost:8181/v1", ""));
         state.emit_spotlight("test-consumer", "chat_completions", "test-model", 42).await;
         let content = std::fs::read_to_string(&state.spotlight_log).unwrap_or_default();
         assert!(content.contains("spotlight.llm.chat_completions"));
         assert!(content.contains("test-consumer"));
         assert!(content.contains("test-model"));
-    }
-
-    #[tokio::test]
-    async fn test_reload_keys() {
-        let state = Arc::new(temp_state());
-        // Create a key via the state method
-        let key = state.create_key("reload-test").await;
-        assert!(state.validate_key(&key).await.is_some());
-
-        // Simulate external write by manually writing to the keys file
-        let mut data: Value = serde_json::from_str(
-            &std::fs::read_to_string(&state.keys_file).unwrap_or_default(),
-        ).unwrap_or_else(|_| serde_json::from_str(r###"{"keys":{}}"###).unwrap());
-        let keys = data["keys"].as_object_mut().unwrap();
-        keys.insert("b00t-sk-external".to_string(), serde_json::json!({
-            "consumer": "external-consumer",
-            "created_at": chrono::Utc::now().to_rfc3339(),
-        }));
-        std::fs::write(&state.keys_file, serde_json::to_string_pretty(&data).unwrap()).unwrap();
-
-        // Reload and verify
-        let count = state.reload_keys().await.unwrap();
-        assert!(count >= 2);
-        assert!(state.validate_key(&key).await.is_some());
-        assert!(state.validate_key("b00t-sk-external").await.is_some());
     }
 }

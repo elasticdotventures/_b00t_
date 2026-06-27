@@ -391,6 +391,7 @@ impl BootDatum {
             Some(DatumType::Overlay)     => Ok(()),
             Some(DatumType::Runtime)     => self.prove_runtime(),
             Some(DatumType::Polyseme)    => self.prove_polyseme(),
+            Some(DatumType::Credential)  => Ok(()),
             Some(DatumType::Unknown) | None => Ok(()),
         }
     }

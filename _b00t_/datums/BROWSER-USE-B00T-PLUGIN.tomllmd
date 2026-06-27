@@ -1,0 +1,170 @@
+# BROWSER-USE-B00T-PLUGIN: DOM enrichment + CDP bridge for agent-driven browser automation
+# 🤓 Stable [data-b00t-*] selectors survive CSS redesigns.
+#    chrome.debugger API enables full CDP control without external relay.
+
+[b00t.schema]
+version   = "1"
+type      = "capability"
+type_tags = ["browser", "rpa", "cdp", "dom-enrichment", "screenshot", "plugin", "ch0nky"]
+
+[datum]
+id          = "BROWSER-USE-B00T-PLUGIN"
+name        = "browser-use-b00t-plugin"
+status      = "active"
+tier        = "ch0nky"
+description = "Chrome extension + CDP bridge for DOM enrichment, screen capture, and RPA command palette"
+
+[architecture]
+wsl_host    = "auto-detected via ip route show default"
+windows_ip  = "172.30.64.1 (WSL2 gateway)"
+cdp_port    = 9222
+relay_port  = 9223  # Python relay on Windows (0.0.0.0:9223 → 127.0.0.1:9222)
+relay_type  = "Python socket forwarder (C:\\temp\\cdp-relay.py)"
+chrome_flags = [
+  "--remote-debugging-port=9222",
+  "--remote-allow-origins=*",
+  "--load-extension=C:\\b00t\\browser-plugin",
+  "--user-data-dir=C:\\b00t\\chrome-debug",
+]
+
+[dom_enrichment]
+injected_attributes = [
+  "data-b00t-type  — element category (button, input, link, form, nav, image, heading, frame)",
+  "data-b00t-role  — semantic role (submit, text, navigation, checkbox, select, modal, media)",
+  "data-b00t-label — stable label (aria-label > placeholder > textcontent)",
+  "data-b00t-id    — element id if present",
+  "data-b00t-name  — form field name if present",
+]
+selector_stability = "Fragile: .search-box__input--v2  →  Stable: [data-b00t-type='input'][data-b00t-label='Search']"
+spa_support       = "MutationObserver watches for dynamically added elements"
+
+[cdp_bridge]
+method      = "chrome.debugger API (attach to tab)"
+capabilities = [
+  "Runtime.evaluate — execute arbitrary JS",
+  "Page.captureScreenshot — full-page + visible screenshots",
+  "Page.getLayoutMetrics — page dimensions",
+  "Emulation.setDeviceMetricsOverride — viewport resize",
+  "Page.enable / Runtime.enable — domain activation",
+]
+
+[screen_capture]
+visible_tab  = "chrome.tabs.captureVisibleTab (instant)"
+full_page    = "CDP Page.captureScreenshot + viewport resize to content dimensions"
+
+[full_access_tab_snapshot]
+goal = "Produce a single agent-readable snapshot of the active tab without requiring fragile CSS selector discovery."
+sources = [
+  "DOM: window.__b00t.findB00t('*') flattened into stable element records",
+  "Accessibility: ARIA role/name/state when available; never rely only on CSS classes",
+  "Viewport: visible screenshot via chrome.tabs.captureVisibleTab",
+  "Full page: CDP Page.captureScreenshot after layout metrics + temporary viewport override",
+  "Runtime: document.title, URL, scroll position, focused element, selected text, local form values",
+  "Network: optional HAR-like summary from CDP Network events when debugger is attached",
+]
+output_contract = "TabSnapshot { url, title, timestamp, viewport, elements[], forms[], tables[], screenshots{visible,full?}, network_summary? }"
+privacy_boundary = "Default snapshot excludes cookies, localStorage, sessionStorage, request bodies, password inputs, and Authorization headers unless an explicit guarded workflow requests them."
+storage = "Store snapshots under .b00t/browser-snapshots/<session>/<timestamp>.json with screenshot blobs beside the JSON; promote stable fixtures into tests only after redaction."
+
+[capability_map]
+driver_primary = "Playwright for normal RPA: cross-browser, auto-waiting, tracing, codegen, locator semantics."
+driver_performance = "b00t-rpa/chromiumoxide for high-throughput Chrome CDP, local Rust execution, and direct enrichment injection."
+driver_extension = "Chrome extension for in-browser DOM enrichment, side panel command curation, visible/full-page screenshots, and chrome.debugger access."
+driver_selector_authoring = "Selector Forge as complementary human-in-the-loop selector generation; do not duplicate its re-verification UI."
+novel_surface = "data-b00t-* enrichment + ontology-classed TabSnapshot records; this is the b00t-specific capability."
+avoid_reinventing = [
+  "Do not rebuild Playwright auto-waiting, trace viewer, browser installation, or cross-browser abstraction.",
+  "Do not build a general CSS/XPath selector recommender when Selector Forge can cover authoring.",
+  "Do not keep bespoke relay code when socat/netsh/Rust tcp proxy can provide a smaller WSL bridge.",
+]
+missing_now = [
+  "LLM action planner over TabSnapshot",
+  "Record/replay event capture",
+  "Cross-tab workflow identity",
+  "Session save/load with redacted encrypted storage",
+  "Extraction pipeline for tables, PDFs, and ledgerr ingestion",
+]
+
+[command_palette]
+interface     = "Chrome sidePanel (panel.html)"
+filter        = "fzf-like fuzzy search on type"
+script_curation = "Enter to add, Backspace to remove, Ctrl+Enter to execute"
+screenshot_btn   = "Captures visible tab immediately"
+
+[integration_with_b00t_rpa]
+relay_channel = "Python TCP relay (0.0.0.0:9223) bridges WSL→Windows"
+cli_commands  = [
+  "b00t-rpa start              — auto-detect + launch Chrome + TUI",
+  "b00t-rpa plugin             — install/update browser plugin",
+  "b00t-rpa --url <url>        — navigate headless",
+  "b00t-rpa --eval <js>        — execute JS headless",
+  "b00t-rpa --url --eval       — navigate then evaluate",
+]
+tui_controls = "j/k navigate, Enter add, Backspace remove, Esc exit, type to filter"
+
+[workflow_mapping]
+stage_1_observe = "Capture TabSnapshot from extension or b00t-rpa; normalize DOM, forms, tables, screenshots, and page state."
+stage_2_orient = "Classify elements against b00t ontology classes: b00t:Button, b00t:Input, b00t:Form, b00t:Navigation, b00t:TransactionTable, b00t:DownloadLink."
+stage_3_decide = "Use sm0l for element shortlist, ch0nky for workflow step selection, frontier only for ambiguous page semantics."
+stage_4_act = "Execute through Playwright by default; fall back to b00t-rpa CDP when extension-only capability or high-throughput Rust path is needed."
+stage_5_verify = "Re-snapshot after each action; compare expected ontology state transition before continuing."
+stage_6_audit = "Persist action log + before/after snapshot hashes as ledgerr evidence nodes."
+
+[install_deploy_plan]
+local_dev = "b00t-rpa plugin copies _b00t_/browser-plugin into a Chrome user-data-dir and launches Chrome with --load-extension."
+wsl_bridge = "Prefer netsh portproxy or embedded Rust TCP forwarder over the current Python relay; keep socat recipe for operator debugging."
+managed_extension = "Package b00t-browser-ext separately when enterprise policy or Chrome Web Store deployment is required."
+ci_smoke = "Headless Playwright test opens a fixture page, injects content.js, verifies data-b00t attributes, captures a snapshot, and validates JSON schema."
+mcp_surface = "Expose snapshot, act, verify, and extract as MCP tools after the snapshot contract is stable."
+
+[cache_wasm_options]
+snapshot_cache = "Content-address TabSnapshot JSON by hash(url, dom_version, viewport, enrichment_version); expire on navigation, mutation burst, or explicit refresh."
+asset_cache = "Cache screenshots and downloaded files by SHA-256; store only redacted metadata in ledgerr evidence by default."
+wasm_candidate = "Move pure enrichment/classification functions into a WASM module only after the JS implementation stabilizes and test fixtures exist."
+wasm_not_now = "Do not port the CDP bridge, Playwright driver, or Chrome extension APIs to WASM; those are host/browser-bound integration surfaces."
+offline_eval = "Replay cached snapshots through sm0l/ch0nky planners without launching Chrome; use this for regression tests and fine-tuning examples."
+
+[ontological_evaluation]
+classes = [
+  "b00t:BrowserTab",
+  "b00t:TabSnapshot",
+  "b00t:EnrichedElement",
+  "b00t:FormField",
+  "b00t:ActionPlan",
+  "b00t:WorkflowTransition",
+  "b00t:EvidenceNode",
+]
+constraints = [
+  "Every ActionPlan MUST cite at least one EnrichedElement selector or a page-level operation.",
+  "Every workflow step MUST have before_snapshot_hash and after_snapshot_hash when executed.",
+  "Password-like fields MUST be redacted in persisted snapshots.",
+  "A successful action MUST satisfy the expected ontology transition before the next step starts.",
+]
+metrics = [
+  "selector_survival_rate across CSS redesign fixtures",
+  "snapshot_redaction_pass_rate for sensitive fields",
+  "planner_action_accuracy on cached workflow fixtures",
+  "time_to_first_action for Playwright vs b00t-rpa CDP path",
+]
+
+[[related]]
+datum = "B00T-FINETUNE-PIPELINE"
+note  = "Fine-tuned ch0nky subagent uses this plugin for browser-based eval"
+
+[[related]]
+datum = "PRD-ARCH-005-MBSE-VISUALIZATION"
+note  = "Plugin screenshots feed isometric visualization pipeline"
+
+[[related]]
+datum = "PRD-ARCH-009-OTEL-SESSION-METRICS"
+note  = "CDP telemetry → session metrics for agent OODA loop"
+
+# b00t:map v1
+# summary: Chrome extension + CDP bridge with TabSnapshot capability map, workflow plan, cache/WASM boundaries, and ontology evaluation
+# tags: browser, rpa, cdp, dom-enrichment, screenshot, plugin, tabsnapshot, workflow, wasm, ch0nky
+# tier: ch0nky
+# cmds: b00t-rpa plugin, b00t-rpa start, b00t-rpa --url <url>, b00t-rpa snapshot
+# @tribal: complexity 8 because 6 new architecture sections (TabSnapshot contract,
+#   capability map, OODA workflow, install/deploy plan, cache/WASM boundaries,
+#   ontology evaluation) — no longer a simple capability sketch.
+# complexity: 8

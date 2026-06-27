@@ -29,7 +29,7 @@ resolver = "2"
 [workspace.package]
 # 🤓 Version management centralized in b00t-c0re-lib
 # All workspace crates inherit from the single source of truth
-version = "0.8.4"
+version = "0.9.0"
 edition = "2024"
 authors = ["Brian Horakh <brian@promptexecution.com>"]
 license = "MIT"
@@ -73,7 +73,7 @@ b00t-embed = { path = "b00t-embed" }
 b00t-datum-core = { path = "b00t-datum-core" }
 b00t-zellij = { path = "b00t-zellij" }
 b00t-admin = { path = "b00t-admin" }
-b00t-reflect-types = { path = "vendor/l3dg3rr/crates/b00t-reflect-types" }
+b00t-reflect-types = { path = "vendor/ledgrrr/crates/b00t-reflect-types" }
 mti = "1.1.1"
 
 

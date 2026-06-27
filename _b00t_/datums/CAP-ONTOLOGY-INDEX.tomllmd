@@ -61,21 +61,21 @@ note      = "Edges = shared role membership, not semantic predicate graph"
 tier      = "sm0l"
 
 [native.holon_node_type_graph]
-location  = "vendor/l3dg3rr/crates/holon-viz + b00t-reflect-types"
+location  = "vendor/ledgrrr/crates/holon-viz + b00t-reflect-types"
 what      = "HolonEmit proc-macro → HolonNode → TypeRelationshipGraph → Cytoscape JSON"
 invoke    = "DatumType::datum_nodes(); VizDomain::emit_nodes()"
 note      = "l3dg3rr workspace only — not wired to b00t-cli binary yet"
 tier      = "sm0l"
 
 [native.ufo_stereotypes]
-location  = "vendor/l3dg3rr/crates/ufo-types/src/"
+location  = "vendor/ledgrrr/crates/ufo-types/src/"
 what      = "EndurantStereotype, PerdurantStereotype, MomentStereotype, UfoCategory; Satisfies<C> trait"
 invoke    = "b00t learn ufo-types"
 note      = "Rust types only; the UFO narrative spec is external (see [external.ufo_spec])"
 tier      = "ch0nky"
 
 [native.rust_ast_extractor]
-location  = "vendor/l3dg3rr/crates/ontology-extractor/src/lib.rs"
+location  = "vendor/ledgrrr/crates/ontology-extractor/src/lib.rs"
 what      = "Walks Rust source via syn → RustTerm/OntologyGraph (Entity vs Action classification)"
 invoke    = "cargo run -p ontology-extractor -- --crate-path <PATH>"
 tier      = "ch0nky"
@@ -173,7 +173,7 @@ hier_fields = ["rdfs:subClassOf"]
 entry_count_approx = 80
 
 [external.ufo_spec.adapter]
-# Native Rust: ufo-types crate in vendor/l3dg3rr IS the Rust implementation
+# Native Rust: ufo-types crate in vendor/ledgrrr IS the Rust implementation
 b00t_skill  = "ufo-types"
 learn_cmd   = "b00t learn ufo-types"
 sparql_when_oxigraph = "SELECT ?class WHERE { ?class rdfs:subClassOf gufo:Endurant }"

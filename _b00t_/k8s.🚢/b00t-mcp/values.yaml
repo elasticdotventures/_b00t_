@@ -1,14 +1,63 @@
-# Default values for b00t-mcp
 global:
-  b00tPath: "/home/brianh/.dotfiles/_b00t_"
+  b00tPath: "/home/brianh/.b00t"
   namespace: b00t-mcp
+  imagePullPolicy: IfNotPresent
 
-# MCP Servers configuration
+# Each entry produces one Deployment + one Service.
+# transport:
+#   native  — server has its own HTTP mode (b00t-mcp --http)
+#   gateway — supergateway wraps a stdio command → SSE on the declared port
+# probe.enabled false  → no liveness/readiness checks (safe for stdio wraps)
+# nodePort set         → Service type NodePort, accessible from outside cluster
+# extraVolumes/extraVolumeMounts → per-server hostPath mounts
+
 mcpServers:
-  - name: "lsp"
-    image: "docker.io/jonrad/lsp-mcp:0.3.1"
-    type: "mcp"
+  - name: b00t-mcp
+    image: debian:bookworm-slim
     port: 3000
+    nodePort: 30900
+    transport: native
+    # b00t-mcp binary mounted from host release build
+    command: ["/b00t-bin/b00t-mcp"]
+    args: ["http", "--host", "0.0.0.0", "--port", "3000"]
+    probe:
+      enabled: true
+      type: tcp
+    readOnlyRootFilesystem: false
+    extraVolumes:
+      - name: b00t-bin
+        hostPath:
+          path: /home/brianh/.b00t/target/release
+          type: Directory
+      - name: b00t-config
+        hostPath:
+          path: /home/brianh/.b00t/_b00t_
+          type: Directory
+    extraVolumeMounts:
+      - name: b00t-bin
+        mountPath: /b00t-bin
+        readOnly: true
+      - name: b00t-config
+        mountPath: /dotfiles/_b00t_
+        readOnly: true
+    resources:
+      requests:
+        cpu: "100m"
+        memory: "128Mi"
+      limits:
+        cpu: "500m"
+        memory: "512Mi"
+    env:
+      - name: B00T_CONFIG_DIR
+        value: "/dotfiles/_b00t_"
+
+  - name: lsp
+    image: docker.io/jonrad/lsp-mcp:0.3.1
+    port: 3001
+    transport: native
+    probe:
+      enabled: false
+    readOnlyRootFilesystem: false
     resources:
       requests:
         cpu: "100m"
@@ -17,62 +66,67 @@ mcpServers:
         cpu: "500m"
         memory: "512Mi"
     env: []
-    
-  - name: "taskmaster-ai"
-    image: "node:20-alpine"
-    type: "mcp"
-    port: 3001
-    command: ["npx"]
-    args: ["-y", "--package=task-master-ai", "task-master-ai"]
+
+  # rust-docs: b00tyverse variant (vendor/rust-docs-mcp-b00t)
+  # ghcr image built by .github/workflows/docker.yml on push to main
+  # pending first CI run: use supergateway fallback (transport: gateway)
+  # once ghcr.io/promptexecution/rust-docs-mcp-b00t:latest is published, switch to:
+  #   image: ghcr.io/promptexecution/rust-docs-mcp-b00t:latest
+  #   transport: native
+  #   args: ["--http", "--port", "3002", "--host", "0.0.0.0"]
+  - name: rust-docs
+    image: ghcr.io/promptexecution/rust-docs-mcp-b00t:latest
+    port: 3002
+    nodePort: 30902
+    transport: native
+    args: ["--http", "--port", "3002", "--host", "0.0.0.0"]
+    probe:
+      enabled: true
+      type: http
+      path: /health
+    readOnlyRootFilesystem: false
     resources:
       requests:
-        cpu: "100m"
-        memory: "256Mi"
+        cpu: "200m"
+        memory: "512Mi"
       limits:
         cpu: "1000m"
         memory: "1Gi"
     env: []
 
-# Service configuration
-service:
-  type: ClusterIP
-  ports:
-    - name: http
-      port: 80
-      targetPort: 3000
-      protocol: TCP
+  # kubernetes-mcp: k8s management via MCP
+  - name: kubernetes-mcp
+    image: node:20-alpine
+    port: 3003
+    nodePort: 30903
+    transport: gateway
+    gatewayCmd: "npx mcp-server-kubernetes"
+    probe:
+      enabled: true
+      type: http
+      path: /health
+    readOnlyRootFilesystem: false
+    extraVolumes:
+      - name: kube-config
+        hostPath:
+          path: /home/brianh/.kube
+          type: Directory
+    extraVolumeMounts:
+      - name: kube-config
+        mountPath: /root/.kube
+        readOnly: true
+    resources:
+      requests:
+        cpu: "100m"
+        memory: "256Mi"
+      limits:
+        cpu: "500m"
+        memory: "512Mi"
+    env:
+      - name: KUBECONFIG
+        value: /root/.kube/config
 
-# Ingress configuration
-ingress:
-  enabled: false
-  className: ""
-  annotations: {}
-  hosts:
-    - host: mcp.local
-      paths:
-        - path: /
-          pathType: Prefix
-  tls: []
-
-# Security context
-securityContext:
-  runAsNonRoot: true
-  runAsUser: 1000
-  runAsGroup: 1000
-  fsGroup: 1000
-  capabilities:
-    drop:
-      - ALL
-
-# Network policies
-networkPolicy:
-  enabled: true
-  
-# Pod security policy
-podSecurityPolicy:
-  enabled: true
-
-# Resource quotas
+# Resource quota for entire namespace
 resourceQuota:
   enabled: true
   requests:
@@ -82,8 +136,11 @@ resourceQuota:
     cpu: "4"
     memory: "8Gi"
 
-# Monitoring
-monitoring:
-  enabled: false
-  serviceMonitor:
-    enabled: false
+# Network policy: allow intra-namespace + ingress from kube-system
+networkPolicy:
+  enabled: true
+
+# Pod-level security defaults (overridden per server via readOnlyRootFilesystem)
+securityContext:
+  runAsNonRoot: false
+  fsGroup: 1000

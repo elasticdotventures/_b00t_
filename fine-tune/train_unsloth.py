@@ -1,4 +1,4 @@
-#!/usr/bin/env python3.14
+#!/usr/bin/env python3
 """Unsloth QLoRA fine-tuning for b00t-aligned Qwen3.6-27B.
 
 Trains on the b00t corpus (datums, learn files, justfile, AGENTS) to produce
@@ -37,11 +37,11 @@ def train(config: dict):
     lora_r = config.get("lora_r", 16)
     lora_alpha = config.get("lora_alpha", 32)
     lora_dropout = config.get("lora_dropout", 0.05)
-    learning_rate = config.get("learning_rate", 2e-4)
-    num_epochs = config.get("num_epochs", 3)
-    per_device_batch_size = config.get("batch_size", 2)
-    gradient_accumulation_steps = config.get("grad_accum", 8)
-    max_seq_length = config.get("max_seq_length", 2048)
+    learning_rate = float(config.get("learning_rate", 2e-4))
+    num_epochs = int(config.get("num_epochs", 3))
+    per_device_batch_size = int(config.get("batch_size", 2))
+    gradient_accumulation_steps = int(config.get("grad_accum", 8))
+    max_seq_length = int(config.get("max_seq_length", 2048))
 
     print(f"🚀 Unsloth QLoRA Fine-Tuning")
     print(f"   Base model: {model_name}")

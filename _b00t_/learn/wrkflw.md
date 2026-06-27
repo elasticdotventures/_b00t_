@@ -12,8 +12,6 @@ No Docker required in emulation modes. Rust CLI — `cargo install wrkflw`.
 
 ```bash
 cargo install wrkflw          # from crates.io
-# OR
-brew install wrkflw           # macOS/Linux Homebrew
 ```
 
 ## Core Commands
@@ -23,7 +21,6 @@ wrkflw                                    # Launch interactive TUI
 wrkflw list                               # List all discovered workflows
 wrkflw validate <workflow.yml>            # YAML + schema validation only
 wrkflw validate --verbose <workflow.yml>  # verbose validation output
-wrkflw validate .gitlab-ci.yml --gitlab   # GitLab CI support
 wrkflw run <workflow.yml>                 # Run workflow (default: Docker runtime)
 wrkflw run --runtime emulation <wf.yml>  # No containers — host processes
 wrkflw run --runtime secure-emulation <wf.yml>  # Sandboxed host processes
@@ -45,180 +42,50 @@ wrkflw tui                               # Open TUI explicitly
 
 🤓 b00t projects default to `--runtime secure-emulation` — avoids Docker/Podman dependency.
 
-## b00t CI/Testing Patterns
+## b00t Workflow: concurrent local + cloud
 
-### Validate before commit (pre-push gate)
+b00t CI workflows are structured with two jobs:
+1. `local-build` (runs-on: `[self-hosted, sm3lly]`) — `cargo build --release`, fast, no QEMU
+2. `docker-push` (runs-on: `ubuntu-latest`, needs: `local-build`) — multi-arch Docker, fires only after local passes
 
-```bash
-wrkflw validate .github/workflows/ci.yml
-# exit 0 = clean; exit 1 = schema/syntax error; exit 2 = file not found
-```
+This eliminates "wasted electricity" — cloud QEMU ARM64 builds only start after local amd64 compile succeeds.
 
-### Run full pipeline locally
-
-```bash
-wrkflw run --runtime secure-emulation .github/workflows/ci.yml
-```
-
-### Run single stage (fastest feedback loop)
+### Run the local gate before push
 
 ```bash
-wrkflw run --job stage-1-rhai-parser-tests --runtime secure-emulation .github/workflows/wrkflw-docgen.yml
+# Validate YAML schema only (instantaneous)
+wrkflw validate .github/workflows/docker.yml
+
+# Run just the local-build job (emulation — no containers needed)
+wrkflw run --job local-build --runtime emulation .github/workflows/docker.yml
+
+# Watch: auto-rerun on file changes during development
+wrkflw watch --job local-build .github/workflows/docker.yml
 ```
 
-### Diff-aware CI (only run jobs touching changed files)
+### just targets (b00t root justfile)
 
 ```bash
-wrkflw run --diff --event push .github/workflows/ci.yml
+just rust-docs-validate    # wrkflw validate
+just rust-docs-local-build # wrkflw run --job local-build --runtime emulation
+just rust-docs-watch       # wrkflw watch --job local-build (dev loop)
 ```
 
-### Just recipes (l3dg3rr pattern)
-
-```just
-# Run full docgen visualization pipeline
-wrkflw-docgen-test emulation="secure-emulation":
-    @if ! command -v wrkflw >/dev/null 2>&1; then echo "error: wrkflw not found — run: cargo install wrkflw"; exit 1; fi
-    wrkflw run --runtime {{emulation}} .github/workflows/wrkflw-docgen.yml
-
-# Validate YAML only (fast gate)
-wrkflw-validate:
-    wrkflw validate --verbose .github/workflows/wrkflw-docgen.yml
-
-# Run one job
-wrkflw-job job="stage-1-rhai-parser-tests" emulation="secure-emulation":
-    wrkflw run --job "{{job}}" --runtime {{emulation}} .github/workflows/wrkflw-docgen.yml
-
-# Open TUI
-wrkflw-tui:
-    wrkflw tui
-
-# Full gate: validate then run
-wrkflw-full-test emulation="secure-emulation":
-    wrkflw validate .github/workflows/wrkflw-docgen.yml
-    wrkflw run --runtime {{emulation}} .github/workflows/wrkflw-docgen.yml
-```
-
-### Test harness script pattern
+### Self-hosted runner on sm3lly (k8s)
 
 ```bash
-# scripts/wrkflw_test.sh modes:
-./scripts/wrkflw_test.sh              # full pipeline (all stages)
-./scripts/wrkflw_test.sh --validate  # YAML validation only
-./scripts/wrkflw_test.sh --stage S5  # single stage (S1–S9)
-./scripts/wrkflw_test.sh --list      # list stage names
+# One-time RBAC + runner setup
+kubectl apply -f _b00t_/k8s.🚢/gh-runner/deployment.yaml
+
+# Create token secret (token expires 1h — refresh before deploy)
+TOKEN=$(gh api -X POST repos/PromptExecution/rust-docs-mcp-b00t/actions/runners/registration-token --jq .token)
+kubectl create secret generic gh-runner-token \
+  --from-literal=RUNNER_TOKEN=$TOKEN \
+  --from-literal=REPO_URL=https://github.com/PromptExecution/rust-docs-mcp-b00t \
+  -n b00t-gh-runner --dry-run=client -o yaml | kubectl apply -f -
+
+# Verify runner appears in GH
+gh api repos/PromptExecution/rust-docs-mcp-b00t/actions/runners
 ```
 
-## Writing wrkflw-Compatible Workflows
-
-### Required: `actions/checkout@v4` in every job
-
-```yaml
-jobs:
-  my-job:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4   # REQUIRED — wrkflw mounts empty dirs
-      - name: Run tests
-        run: cargo test
-```
-
-### Avoid composite action references under emulation
-
-```yaml
-# ❌ fails under secure-emulation
-steps:
-  - uses: dtolnay/rust-toolchain@stable
-
-# ✓ use inline instead
-steps:
-  - name: Install Rust
-    run: rustup update stable
-```
-
-### Expression support limitations
-
-```yaml
-# ❌ unsupported: ${{ }} in continue-on-error
-continue-on-error: ${{ matrix.allow_failure }}
-
-# ✓ use literal
-continue-on-error: true
-
-# ❌ unsupported: needs.<id>.result in summary jobs
-if: ${{ needs.stage-1.result == 'success' }}
-
-# ✓ use sequential job chaining with `needs:` only
-needs: [stage-1-rhai-parser-tests]
-```
-
-### sccache across stages (secure-emulation)
-
-```yaml
-env:
-  RUSTC_WRAPPER: sccache          # shared daemon across all emulation stages
-  SCCACHE_DIR: /tmp/sccache       # 🤓 daemon is a host process — persists across jobs
-  CARGO_TERM_COLOR: always
-```
-
-## Key Limitations (b00t tribal knowledge)
-
-- `curl | sh` patterns blocked by `secure-emulation` — use `emulation` runtime instead
-- Each stage gets a fresh sandbox — no shared `target/` cache between jobs
-- Full multi-stage Rust pipeline: 20-60+ minutes due to recompilation per stage
-- `needs.<id>.result` and `toJSON(needs)` expressions not supported in summary jobs
-- `${{ runner.temp }}` expression in `env:` may not evaluate — fallback to `/tmp`
-
-## Features Supported
-
-- Expression evaluation: `${{ ... }}` incl. `toJSON`, `fromJSON`, `contains`, `startsWith`
-- Artifacts & inter-job outputs (`needs.<id>.outputs.*`)
-- Matrix builds (`include`, `exclude`, `max-parallel`, `fail-fast`)
-- Secrets management: env, file, Vault, AWS, Azure, GCP (AES-256-GCM masked)
-- Reusable workflows: local + remote `owner/repo/path@ref`
-- Container actions, JavaScript actions, composite actions
-- `GITHUB_OUTPUT`, `GITHUB_ENV`, `GITHUB_PATH`, `GITHUB_STEP_SUMMARY` emulation
-- Watch mode with trigger-aware re-execution
-- Interactive TUI: Workflows / Execution / DAG / Logs / Trigger / Secrets / Help tabs
-
-## 9-Stage l3dg3rr Docgen Pipeline (reference)
-
-| Stage | ID | What it tests |
-|-------|----|---------------|
-| S1 | `stage-1-rhai-parser-tests` | mdbook-rhai-mermaid unit tests |
-| S2 | `stage-2-iso-lint` | ledger-core iso lint tests |
-| S3 | `stage-3-viz-tests` | LayoutSolver / to_mermaid / to_html |
-| S4 | `stage-4-legal-z3` | Z3 legal solver integration |
-| S5 | `stage-5-docgen-build` | mdBook + rhai→mermaid injection |
-| S6 | `stage-6-kasuari-constraints` | Kasuari constraint solver |
-| S7 | `stage-7-iso-objects` | HasVisualization impls lint |
-| S8 | `stage-8-live-editor-js` | browser live-editor JS tests |
-| S9 | `stage-9-xero-mcp` | Xero MCP smoke (build + unit) |
-
-## Agent Role Coverage
-
-| Role | Primary wrkflw use |
-|------|-------------------|
-| developer | `wrkflw validate` pre-push gate; `--job` for fast iteration |
-| orchestrator | `wrkflw run --diff` for change-set CI evaluation |
-| analyst | full pipeline runs for coverage audits |
-
-## b00t Crew Quick Ref
-
-```bash
-# Before pushing: always validate
-wrkflw validate .github/workflows/*.yml
-
-# Fast TDD loop: one job at a time
-wrkflw run --job <job-id> --runtime emulation .github/workflows/ci.yml
-
-# Full gate before PR
-just wrkflw-full-test
-
-# Debug with TUI
-wrkflw tui
-```
-
----
-🤓 wrkflw surfaces pre-existing compile errors not caught by `cargo check` alone — run it early on new crate integrations.
-🤓 Use `sccache` with `RUSTC_WRAPPER=sccache` to share compile cache across the daemon lifetime in emulation mode.
-🤓 Secure emulation runs steps as sandboxed host processes — no Docker socket needed, but `curl | sh` is blocked for safety.
+Label: `[self-hosted, sm3lly, linux, x64]` — matched by `runs-on: [self-hosted, sm3lly]` in workflows.

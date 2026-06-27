@@ -1,10 +1,10 @@
 [b00t]
 name = "ledgrrr"
 type = "cli"
-hint = "FinOps ledger — consumes/produces FOCUS records via gRPC/Arrow transport. Polyseme: l3dg3rr[#proto] → ledgerr-mcp[#linux] → ledg3rr[#cloud/stable] → ledgrrr[#windows/lts]. Vendored at vendor/l3dg3rr/crates/ledgerr-mcp/."
+hint = "FinOps ledger — consumes/produces FOCUS records via gRPC/Arrow transport. Polyseme: l3dg3rr[#proto] → ledgerr-mcp[#linux] → ledg3rr[#cloud/stable] → ledgrrr[#windows/lts]. Vendored at vendor/ledgrrr/crates/ledgerr-mcp/."
 
 # @tribal: polyseme mapping — platform-targeted variants of the same ledger:
-#   l3dg3rr      — proto/repo name (vendor/l3dg3rr/)
+#   l3dg3rr      — proto/repo name (vendor/ledgrrr/)
 #   ledgerr-mcp  — Linux native (vendored crate prefix, stdio MCP transport)
 #   ledg3rr      — cloud/remote (gRPC/Arrow, SaaS deployment)
 #   ledgrrr      — Windows native (tray-icon, Slint desktop host, Credential Manager)
@@ -22,7 +22,7 @@ hint = "FinOps ledger — consumes/produces FOCUS records via gRPC/Arrow transpo
 # LTS phase: ledgrrr — production FinOps ledger with FOCUS crate
 
 detect = [
-    "test -f vendor/l3dg3rr/Cargo.toml",
+    "test -f vendor/ledgrrr/Cargo.toml",
     "echo '0.1.0-proto'",
 ]
 version_regex = '(?P<version>[\\d.]+)'
@@ -42,7 +42,7 @@ connect_timeout_sec = 5
 stream_type = "dataframe"
 
 [b00t.providers.focus]
-# FOCUS v1.3 crate at vendor/l3dg3rr/crates/ledgerr-focus/
+# FOCUS v1.3 crate at vendor/ledgrrr/crates/ledgerr-focus/
 # Full spec: https://focus.finops.org/focus-specification/v1-3/
 # GitHub: https://github.com/FinOps-Open-Cost-and-Usage-Spec/FOCUS_Spec
 # CostAndUsage dataset: BilledCost, EffectiveCost, ChargeCategory, etc.

@@ -1,0 +1,35 @@
+{
+  "manifest_version": 3,
+  "name": "b00t Browser Plugin",
+  "version": "0.1.0",
+  "description": "b00t hive agent operating protocol — browser RPA, CDP bridge, and command palette",
+  "permissions": [
+    "sidePanel",
+    "tabs",
+    "activeTab",
+    "storage",
+    "scripting",
+    "debugger"
+  ],
+  "host_permissions": ["<all_urls>"],
+  "side_panel": {
+    "default_path": "panel.html"
+  },
+  "action": {
+    "default_title": "b00t",
+    "default_icon": {
+      "16": "icon.png",
+      "48": "icon.png",
+      "128": "icon.png"
+    }
+  },
+  "content_scripts": [{
+    "matches": ["<all_urls>"],
+    "js": ["content.js"],
+    "run_at": "document_end"
+  }],
+  "web_accessible_resources": [{
+    "resources": ["panel.html", "panel.js", "b00t-client.js"],
+    "matches": ["<all_urls>"]
+  }]
+}

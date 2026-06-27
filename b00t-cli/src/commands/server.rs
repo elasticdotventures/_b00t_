@@ -1,5 +1,5 @@
 // 🤓 b00t server — OpenAI-compatible router + API key authority
-//    Runs b00t-mcp in HTTP+LLM mode; manages API keys via shared JSON file.
+//    Runs b00t-mcp in HTTP+LLM mode; manages keys via shared JSON file and OS keyring.
 use clap::Subcommand;
 use serde_json::Value;
 
@@ -32,6 +32,34 @@ pub enum KeyAction {
     },
     #[clap(about = "List all registered API keys")]
     List,
+    #[clap(about = "Store cloud credentials in encrypted catalog (OS keyring + iterable)")]
+    Set {
+        #[clap(long, help = "Provider name (openai, cloudflare-r2, aws-s3, etc.)")]
+        provider: String,
+        #[clap(long, help = "Access key / key ID")]
+        key: String,
+        #[clap(long, help = "Read secret from stdin instead of prompt")]
+        stdin: bool,
+    },
+    #[clap(about = "Remove cloud credentials")]
+    Unset {
+        #[clap(long, help = "Provider name")]
+        provider: String,
+    },
+    #[clap(about = "List all stored credential providers (runtime iterable)")]
+    ListCredentials,
+    #[clap(about = "Check if credentials exist for a provider")]
+    Check {
+        #[clap(long, help = "Provider name")]
+        provider: String,
+    },
+    #[clap(about = "Export credentials as env vars (for .envrc / eval)")]
+    Export {
+        #[clap(long, help = "Provider name (omit to export all)")]
+        provider: Option<String>,
+        #[clap(long, help = "Emit shell export format (default: KEY=VALUE)")]
+        shell: bool,
+    },
 }
 
 const KEYS_FILE: &str = "server-keys.json";
@@ -105,6 +133,71 @@ pub fn handle_server_command(cmd: &ServerCommands) -> anyhow::Result<()> {
                         }
                     } else {
                         println!("No API keys registered.");
+                    }
+                    Ok(())
+                }
+                KeyAction::Set { provider, key, stdin } => {
+                    let secret = if *stdin {
+                        let mut s = String::new();
+                        std::io::stdin().read_line(&mut s)?;
+                        s.trim().to_string()
+                    } else {
+                        rpassword::prompt_password(&format!("Enter secret for '{}': ", provider))?
+                    };
+                    if key.is_empty() || secret.is_empty() {
+                        anyhow::bail!("key and secret cannot be empty");
+                    }
+                    b00t_c0re_lib::datum_credential::save_credential(provider, key, &secret)?;
+                    Ok(())
+                }
+                KeyAction::Unset { provider } => {
+                    b00t_c0re_lib::datum_credential::delete_credential(provider)?;
+                    Ok(())
+                }
+                KeyAction::ListCredentials => {
+                    let providers = b00t_c0re_lib::datum_credential::list_credential_names()?;
+                    if providers.is_empty() {
+                        println!("No cloud credentials stored.");
+                    } else {
+                        println!("Stored credentials:");
+                        for p in &providers {
+                            println!("  🔐 {}", p);
+                        }
+                    }
+                    Ok(())
+                }
+                KeyAction::Check { provider } => {
+                    match b00t_c0re_lib::datum_credential::find_credential_by_name(provider)? {
+                        Some((key_id, _)) => {
+                            println!("✅ Credential exists: {} (key: {}...)", provider, &key_id[..key_id.len().min(12)]);
+                        }
+                        None => {
+                            println!("❌ No credential for '{}'", provider);
+                            println!("   Set: b00t server key set --provider {} --key <ACCESS_KEY>", provider);
+                        }
+                    }
+                    Ok(())
+                }
+                KeyAction::Export { provider, shell } => {
+                    let providers = if let Some(p) = provider {
+                        vec![p.clone()]
+                    } else {
+                        b00t_c0re_lib::datum_credential::list_credential_names()?
+                    };
+                    if providers.is_empty() {
+                        anyhow::bail!("no credentials stored. Set: b00t server key set --provider X --key <KEY>");
+                    }
+                    for p in &providers {
+                        if let Some((key, secret)) = b00t_c0re_lib::datum_credential::find_credential_by_name(p)? {
+                            let (key_var, secret_var) = b00t_c0re_lib::datum_credential::key_env_for(p);
+                            if *shell {
+                                println!("export {}=\"{}\"", key_var, key);
+                                println!("export {}=\"{}\"", secret_var, secret);
+                            } else {
+                                println!("{}={}", key_var, key);
+                                println!("{}={}", secret_var, secret);
+                            }
+                        }
                     }
                     Ok(())
                 }

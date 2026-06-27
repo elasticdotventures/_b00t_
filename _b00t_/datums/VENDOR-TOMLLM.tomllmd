@@ -71,6 +71,10 @@ uv pip install vendor/tomllm/
 | `ch0nky` | qwen3-coder (local) | implement, refactor, debug |
 | `frontier` | claude-opus/sonnet | architecture, security, novel design |
 
+
+[b00t.services.action_runner]
+local  = "wrkflw"
+remote = "github-actions"
 ## Security Considerations
 
 - Parser-only; no execution or network access

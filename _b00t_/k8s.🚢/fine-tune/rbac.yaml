@@ -1,0 +1,36 @@
+---
+# ServiceAccount + RBAC for finetune initContainer to scale inference deployments
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: b00t-finetune
+  labels:
+    b00t.io/managed: "true"
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: finetune-scaler
+  namespace: b00t-finetune
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: b00t-inference-scaler
+rules:
+  - apiGroups: ["apps"]
+    resources: ["deployments", "deployments/scale"]
+    verbs: ["get", "patch", "update"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: finetune-scaler-binding
+subjects:
+  - kind: ServiceAccount
+    name: finetune-scaler
+    namespace: b00t-finetune
+roleRef:
+  kind: ClusterRole
+  name: b00t-inference-scaler
+  apiGroup: rbac.authorization.k8s.io

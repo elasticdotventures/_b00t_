@@ -1,0 +1,33 @@
+# b00t sm0l QLoRA Fine-Tuning Configuration
+# Base: Qwen2.5-0.5B-Instruct — fits alongside ch0nky (5GB free VRAM)
+# Target: b00t-aligned sm0l for lint/classify/grep/score tasks
+
+base_model: "Qwen/Qwen2.5-0.5B-Instruct"
+adapter_name: "b00t-aligned-qwen25-0.5b"
+dataset: "fine-tune/train.jsonl"
+output_dir: "./fine-tune/output-smol"
+
+lora_r: 16
+lora_alpha: 32
+lora_dropout: 0.05
+target_modules:
+  - "q_proj"
+  - "v_proj"
+  - "k_proj"
+  - "o_proj"
+  - "gate_proj"
+  - "up_proj"
+  - "down_proj"
+
+num_epochs: 3
+batch_size: 1
+grad_accum: 16
+learning_rate: 2e-4
+max_seq_length: 1024
+optim: "adamw_8bit"
+weight_decay: 0.01
+lr_scheduler: "linear"
+warmup_steps: 5
+
+load_in_4bit: true
+use_gradient_checkpointing: true

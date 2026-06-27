@@ -2,7 +2,7 @@
 # 🤓 Rust ledger and governance system for b00t — accounting, audit, Xero integration
 #    Repo: github.com/PromptExecution/ledgrrr
 #    Language: Rust
-#    Path: vendor/l3dg3rr
+#    Path: vendor/ledgrrr
 
 [b00t]
 name = "VENDOR-L3DG3RR"
@@ -14,12 +14,12 @@ schema = 1
 content = "stable"
 
 [b00t.vendor]
-path = "vendor/l3dg3rr"
+path = "vendor/ledgrrr"
 upstream = "git@github.com:PromptExecution/ledgrrr.git"
 branch = "main"
-build_command = "cargo build --manifest-path vendor/l3dg3rr/Cargo.toml --release"
-install_command = "cp vendor/l3dg3rr/target/release/ledgerr-mcp ~/.local/bin/ && cp vendor/l3dg3rr/target/release/host-tauri ~/.local/bin/"
-health_check = "vendor/l3dg3rr/target/release/ledgerr-mcp --version || test -x vendor/l3dg3rr/target/release/ledgerr-mcp"
+build_command = "cargo build --manifest-path vendor/ledgrrr/Cargo.toml --release"
+install_command = "cp vendor/ledgrrr/target/release/ledgerr-mcp ~/.local/bin/ && cp vendor/ledgrrr/target/release/host-tauri ~/.local/bin/"
+health_check = "vendor/ledgrrr/target/release/ledgerr-mcp --version || test -x vendor/ledgrrr/target/release/ledgerr-mcp"
 required_tools = ["rustc", "cargo", "just"]
 
 [b00t.maintenance]
@@ -69,11 +69,15 @@ accounting workflows.
 
 Build all binaries:
 ```
-cargo build --manifest-path vendor/l3dg3rr/Cargo.toml --release
+cargo build --manifest-path vendor/ledgrrr/Cargo.toml --release
 ```
 
 Tauri desktop host requires system libs (webkit2gtk on Linux).
 
+
+[b00t.services.action_runner]
+local  = ["wrkflw-ci-build.yml", "wrkflw-docgen.yml"]
+remote = "github-actions"
 ## Security Considerations
 
 - MCP tools enforce deterministic tx_id hashing via Blake3

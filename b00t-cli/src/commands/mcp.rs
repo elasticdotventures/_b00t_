@@ -1,6 +1,21 @@
 use anyhow::Result;
-use clap::Parser;
+use clap::{Parser, ValueEnum};
 use std::collections::HashSet;
+
+/// Valid installation targets for `b00t mcp install`.
+#[derive(ValueEnum, Clone, Debug)]
+pub enum McpInstallTarget {
+    #[clap(alias = "claude")]
+    Claudecode,
+    Vscode,
+    Codex,
+    Geminicli,
+    Dotmcpjson,
+    #[clap(name = "roocode")]
+    RooCode,
+    Opencode,
+    Stdout,
+}
 
 #[derive(Parser)]
 pub enum McpCommands {
@@ -75,16 +90,14 @@ pub enum McpCommands {
         all: bool,
     },
     #[clap(
-        about = "Install MCP server to a target (claudecode, vscode, geminicli, dotmcpjson, roocode, codex, opencode, stdout)",
-        long_about = "Install MCP server to a target application.\n\nExamples:\n  b00t-cli mcp install gh claudecode\n  b00t-cli mcp install filesystem geminicli --repo\n  b00t-cli mcp install browser-use dotmcpjson --stdio-command uvx\n  b00t-cli mcp install aws-knowledge dotmcpjson --httpstream\n  b00t-cli mcp install filesystem roocode\n  b00t-cli mcp install filesystem codex\n  b00t-cli mcp install filesystem opencode\n  b00t-cli mcp install filesystem stdout\n  b00t-cli app vscode mcp install filesystem"
+        about = "Install MCP server to a target (see --help for list)",
+        long_about = "Install MCP server to a target application.\n\nExamples:\n  b00t-cli mcp install gh claudecode\n  b00t-cli mcp install filesystem geminicli --repo\n  b00t-cli mcp install browser-use dotmcpjson --stdio-command uvx\n  b00t-cli mcp install aws-knowledge dotmcpjson --httpstream\n  b00t-cli mcp install filesystem roocode\n  b00t-cli mcp install filesystem codex\n  b00t-cli mcp install filesystem stdout\n  b00t-cli app vscode mcp install filesystem"
     )]
     Install {
         #[clap(help = "MCP server name")]
         name: String,
-        #[clap(
-            help = "Installation target: claudecode, vscode, geminicli, dotmcpjson, roocode, codex, opencode, stdout"
-        )]
-        target: String,
+        #[clap(value_enum, help = "Installation target")]
+        target: McpInstallTarget,
         #[clap(long, help = "Install to repository-specific location (for geminicli)")]
         repo: bool,
         #[clap(long, help = "Install to user-global location (for geminicli)")]
@@ -511,10 +524,10 @@ impl McpCommands {
                     }
                 }
 
-                match target.as_str() {
-                    "claudecode" | "claude" => crate::claude_code_install_mcp(name, path),
-                    "vscode" => crate::vscode_install_mcp(name, path),
-                    "codex" => {
+                match target {
+                    McpInstallTarget::Claudecode => crate::claude_code_install_mcp(name, path),
+                    McpInstallTarget::Vscode => crate::vscode_install_mcp(name, path),
+                    McpInstallTarget::Codex => {
                         let use_repo = if *repo && *user {
                             anyhow::bail!("Error: Cannot specify both --repo and --user flags");
                         } else if *repo {
@@ -533,26 +546,7 @@ impl McpCommands {
                             *httpstream,
                         )
                     }
-                    "opencode" => {
-                        let use_repo = if *repo && *user {
-                            anyhow::bail!("Error: Cannot specify both --repo and --user flags");
-                        } else if *repo {
-                            true
-                        } else if *user {
-                            false
-                        } else {
-                            crate::utils::is_git_repo()
-                        };
-
-                        crate::opencode_install_mcp(
-                            name,
-                            path,
-                            use_repo,
-                            stdio_command.as_deref(),
-                            *httpstream,
-                        )
-                    }
-                    "geminicli" => {
+                    McpInstallTarget::Geminicli => {
                         // Determine installation location: default to repo if in git repo, otherwise user
                         let use_repo = if *repo && *user {
                             anyhow::bail!("Error: Cannot specify both --repo and --user flags");
@@ -566,13 +560,13 @@ impl McpCommands {
                         };
                         crate::gemini_install_mcp(name, path, use_repo)
                     }
-                    "dotmcpjson" => crate::dotmcpjson_install_mcp(
+                    McpInstallTarget::Dotmcpjson => crate::dotmcpjson_install_mcp(
                         name,
                         path,
                         stdio_command.as_deref(),
                         *httpstream,
                     ),
-                    "roocode" => {
+                    McpInstallTarget::RooCode => {
                         // Design with internal arrays so we can extend merge/symlink targets over time.
                         // Primary write target is .roo/mcp.json. Merge from .mcp.json if present.
                         // Then non-destructively symlink .roo/mcp.json to .mcp.json (skip if .mcp.json exists and is not a symlink).
@@ -584,15 +578,16 @@ impl McpCommands {
                             *httpstream,
                         )
                     }
-                    "stdout" => {
-                        // Output just the JSON for the specified server
-                        crate::mcp_output(path, false, name)
+                    McpInstallTarget::Opencode => {
+                        crate::opencode_install_mcp(
+                            name,
+                            path,
+                            stdio_command.as_deref(),
+                            *httpstream,
+                        )
                     }
-                    _ => {
-                        anyhow::bail!(
-                            "Error: Invalid target '{}'. Valid targets are: claudecode, vscode, geminicli, dotmcpjson, roocode, codex, opencode, stdout",
-                            target
-                        );
+                    McpInstallTarget::Stdout => {
+                        crate::mcp_output(path, false, name)
                     }
                 }
             }
@@ -1217,7 +1212,7 @@ transport = "stdio"
         // Test install command enum creation
         let install_cmd = McpCommands::Install {
             name: "test-server".to_string(),
-            target: "claudecode".to_string(),
+            target: McpInstallTarget::Claudecode,
             repo: false,
             user: false,
             stdio_command: None,

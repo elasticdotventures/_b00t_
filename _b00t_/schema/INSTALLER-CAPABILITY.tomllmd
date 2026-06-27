@@ -185,8 +185,8 @@ vendor_datum = "VENDOR-LEDGRRR"
 
 [[b00t.check]]
 name = "l3dg3rr-mcp"
-check_command = "vendor/l3dg3rr/target/release/ledgerr-mcp --version || test -x vendor/l3dg3rr/target/release/ledgerr-mcp"
-remediation = "cargo build --manifest-path vendor/l3dg3rr/Cargo.toml --release && cp vendor/l3dg3rr/target/release/ledgerr-mcp ~/.local/bin/ && cp vendor/l3dg3rr/target/release/host-tauri ~/.local/bin/"
+check_command = "vendor/ledgrrr/target/release/ledgerr-mcp --version || test -x vendor/ledgrrr/target/release/ledgerr-mcp"
+remediation = "cargo build --manifest-path vendor/ledgrrr/Cargo.toml --release && cp vendor/ledgrrr/target/release/ledgerr-mcp ~/.local/bin/ && cp vendor/ledgrrr/target/release/host-tauri ~/.local/bin/"
 required = true
 vendor_datum = "VENDOR-L3DG3RR"
 

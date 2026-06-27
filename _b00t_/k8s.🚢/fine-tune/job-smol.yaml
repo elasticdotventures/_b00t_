@@ -1,0 +1,72 @@
+---
+# sm0l variant — trains Qwen2.5-3B for B00T_SM0L_ENDPOINT
+# Output: fine-tune/output-smol/b00t-smol.gguf
+# After completion: update k8s.🚢/sm0l/deployment.yaml model arg to new GGUF path
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: unsloth-train-smol
+  namespace: b00t-finetune
+  labels:
+    b00t.tier: finetune
+    b00t.io/model: sm0l
+spec:
+  ttlSecondsAfterFinished: 86400
+  backoffLimit: 0
+  template:
+    metadata:
+      labels:
+        b00t.tier: finetune
+        b00t.io/model: sm0l
+    spec:
+      restartPolicy: Never
+      tolerations:
+        - key: node-role.kubernetes.io/control-plane
+          operator: Exists
+          effect: NoSchedule
+      serviceAccountName: finetune-scaler
+      initContainers:
+        - name: scale-down-inference
+          image: bitnami/kubectl:latest
+          command:
+            - kubectl
+            - scale
+            - deployment/sm0l
+            - --replicas=0
+            - -n
+            - b00t-inference
+      containers:
+        - name: trainer
+          image: docker.io/unsloth/unsloth:latest
+          command: ["python3"]
+          args:
+            - /workspace/fine-tune/train_unsloth.py
+            - --config
+            - /workspace/fine-tune/config-smol.yaml
+          env:
+            - name: HF_HOME
+              value: /hf
+            - name: PYTHONUNBUFFERED
+              value: "1"
+          resources:
+            limits:
+              nvidia.com/gpu: "1"
+            requests:
+              nvidia.com/gpu: "1"
+          securityContext:
+            runAsUser: 1000
+            runAsGroup: 1000
+          volumeMounts:
+            - name: hf-cache
+              mountPath: /hf
+            - name: finetune-workspace
+              mountPath: /workspace/fine-tune
+      volumes:
+        - name: hf-cache
+          hostPath:
+            path: /home/brianh/.cache/huggingface
+            type: Directory
+        - name: finetune-workspace
+          hostPath:
+            path: /home/brianh/.b00t/fine-tune
+            type: Directory

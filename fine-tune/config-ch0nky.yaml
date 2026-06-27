@@ -1,0 +1,34 @@
+# b00t ch0nky QLoRA Fine-Tuning Configuration
+# Base: Qwen3.6-27B — requires stopping ch0nky inference server first
+# Target: b00t-aligned ch0nky for implement/refactor/debug tasks
+# VRAM: ~19 GB needed; free ch0nky server (19.4 GB) before training
+
+base_model: "unsloth/Qwen3-8B-bnb-4bit"
+adapter_name: "b00t-aligned-qwen3-8b"
+dataset: "fine-tune/train.jsonl"
+output_dir: "./fine-tune/output-ch0nky"
+
+lora_r: 16
+lora_alpha: 32
+lora_dropout: 0.05
+target_modules:
+  - "q_proj"
+  - "v_proj"
+  - "k_proj"
+  - "o_proj"
+  - "gate_proj"
+  - "up_proj"
+  - "down_proj"
+
+num_epochs: 3
+batch_size: 1
+grad_accum: 16
+learning_rate: 2e-4
+max_seq_length: 1024
+optim: "adamw_8bit"
+weight_decay: 0.01
+lr_scheduler: "linear"
+warmup_steps: 5
+
+load_in_4bit: true
+use_gradient_checkpointing: true
