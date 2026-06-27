@@ -387,6 +387,8 @@ impl BootDatum {
             Some(DatumType::Config)      => self.prove_config(),
             Some(DatumType::Hardware)    => Ok(()),
             Some(DatumType::Overlay)     => Ok(()),
+            Some(DatumType::Runtime)     => Ok(()),
+            Some(DatumType::Polyseme)    => Ok(()),
             Some(DatumType::Unknown) | None => Ok(()),
         }
     }

@@ -136,6 +136,7 @@ pub mod model_manager;
 pub mod model_registry;
 pub mod orchestrator;
 pub mod sandbox;
+pub mod runtime_sandbox;
 pub mod scheduler;
 pub mod session_memory;
 pub mod skill_resolver;
@@ -152,6 +153,49 @@ pub mod calorie_tracker;
 pub mod cake_ledger;
 pub mod a2a_gates;
 pub use traits::*;
+
+pub const PRUNE_DIRS: &[&str] = &[
+    "node_modules",
+    ".cache",
+    ".cargo",
+    ".rustup",
+    "target",
+    ".git",
+    "vendor",
+    "_archive_",
+    ".local",
+    ".npm",
+    ".pnpm-store",
+    ".mozilla",
+    ".vscode",
+    ".codeium",
+    ".config",
+    "snap",
+];
+
+pub fn sweep_backup_files(root: &std::path::Path) -> usize {
+    use walkdir::WalkDir;
+    let mut removed = 0usize;
+    for entry in WalkDir::new(root)
+        .into_iter()
+        .filter_entry(|e| {
+            let name = e.file_name().to_str().unwrap_or("");
+            !PRUNE_DIRS.contains(&name)
+        })
+        .filter_map(|e| e.ok())
+    {
+        let path = entry.path();
+        let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
+        if path.is_file() && name.ends_with('~') {
+            if let Err(e) = std::fs::remove_file(path) {
+                eprintln!("  ⚠️  {}: {e}", path.display());
+            } else {
+                removed += 1;
+            }
+        }
+    }
+    removed
+}
 
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Default)]
 pub struct ApiProvides {
@@ -278,6 +322,100 @@ pub struct MaintenanceConfig {
     pub version_source: Option<String>,
     /// Regex to extract semver from check_command output (default: same as version_regex)
     pub check_regex: Option<String>,
+}
+
+/// Mount entry for filesystem isolation in a runtime wrapper profile.
+/// Mirrors bubblewrap's `--ro-bind`, `--bind`, `--tmpfs`, `--dev`, `--proc`.
+#[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Default)]
+#[serde(default)]
+pub struct MountEntry {
+    #[serde(default)]
+    pub src: String,
+    pub dest: String,
+    #[serde(rename = "type")]
+    pub mount_type: String, // "ro-bind", "bind", "tmpfs", "dev", "proc", "symlink"
+}
+
+/// Seccomp filter profile for runtime sandboxing.
+/// If present, a strict allowlist is applied; absent = no seccomp filter.
+#[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Default)]
+#[serde(default)]
+pub struct SeccompProfile {
+    #[serde(default)]
+    pub allow: Vec<String>, // syscall names to allow (e.g. "read", "write", "exit")
+    #[serde(default)]
+    pub default_action: Option<String>, // "allow" | "kill" | "errno" (default: "kill")
+}
+
+/// Isolation profile for a runtime wrapper — declarative sandbox config.
+#[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Default)]
+#[serde(default)]
+pub struct IsolationConfig {
+    /// Bind mounts / filesystem entries.
+    pub mounts: Option<Vec<MountEntry>>,
+    /// Share network namespace with host (default: true).
+    pub share_net: Option<bool>,
+    /// Share IPC namespace with host (default: false).
+    pub share_ipc: Option<bool>,
+    /// Share PID namespace with host (default: false).
+    pub share_pid: Option<bool>,
+    /// Share UTS namespace with host (default: false).
+    pub share_uts: Option<bool>,
+    /// New session (setsid) — detach from controlling terminal.
+    pub new_session: Option<bool>,
+    /// Seccomp filter profile.
+    pub seccomp: Option<SeccompProfile>,
+    /// Capabilities to retain (whitelist; if empty, drop all).
+    pub caps_retain: Option<Vec<String>>,
+    /// Working directory inside the sandbox (default: /).
+    pub cwd: Option<String>,
+    /// Hostname inside UTS namespace.
+    pub hostname: Option<String>,
+}
+
+/// Runtime wrapper config — declarative sandboxed application launch profile.
+#[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Default)]
+#[serde(default)]
+pub struct RuntimeConfig {
+    /// Binary to launch (resolved from PATH or absolute path).
+    pub binary: String,
+    /// Arguments to pass to the binary before passthrough args.
+    pub args: Option<Vec<String>>,
+    /// Working directory before entering sandbox.
+    pub workdir: Option<String>,
+    /// Isolation / sandbox profile.
+    pub isolation: Option<IsolationConfig>,
+    /// Pre-launch Rhai hook script (executed before sandbox entry).
+    pub hook_pre: Option<String>,
+    /// Post-launch hook (NOT sandboxed — runs after the child exits).
+    pub hook_post: Option<String>,
+}
+
+/// A single artifact reference within a polyseme datum.
+/// Each ref resolves one meaning of the polysemous name to a concrete datum.
+#[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Default)]
+#[serde(default)]
+pub struct PolysemeRef {
+    /// Short disambiguating name (e.g. "bubblewrap-sandbox", "bubblewrap-android")
+    pub name: String,
+    /// Canonical upstream identifier (e.g. "github:containers/bubblewrap")
+    pub canonical: String,
+    /// Concrete datum name this ref resolves to (e.g. "bubblewrap-sandbox.cli")
+    pub datum: String,
+    /// Human-readable description of this specific meaning
+    pub description: String,
+}
+
+/// Polyseme config — blackhole/box of artifact references.
+/// A polyseme datum contains NO install/run logic itself; it is a
+/// knowledge-graph branch point that maps a name to its possible meanings.
+#[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Default)]
+#[serde(default)]
+pub struct PolysemeConfig {
+    /// Named artifact references — each one is a distinct resolution.
+    pub refs: Option<Vec<PolysemeRef>>,
+    /// Source URLs that were assimilated to build this polyseme.
+    pub sources: Option<Vec<String>>,
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Default)]
@@ -440,6 +578,12 @@ pub struct BootDatum {
     // Core requirement: b00t-lite.sh auto-installs datums with this flag
     #[serde(skip_serializing_if = "Option::is_none")]
     pub required_for_core: Option<bool>,
+    // Runtime wrapper profile — sandboxed application launch
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub runtime: Option<RuntimeConfig>,
+    // Polyseme container — canonical artifact references for ambiguous names
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub polyseme: Option<PolysemeConfig>,
 }
 
 impl BootDatum {
@@ -921,6 +1065,14 @@ pub enum DatumType {
     /// Node-local overlay datum — `.overlay.toml`.
     /// Carries per-node state (endpoints, keys, config) in a git enclave branch.
     Overlay,
+    /// Runtime wrapper datum — `.runtime.tomllmd`.
+    /// Declares a sandboxed application launch profile with env, mounts, seccomp, and capabilities.
+    Runtime,
+    /// Polyseme datum — `.polyseme.tomllmd`.
+    /// Canonical container of artifact references resolving name ambiguity.
+    /// Critical branch point for knowledge graph tree traversal (choice path selection).
+    /// Treated as a blackhole/box: holds multiple [PolysemeRef] entries, each pointing to a concrete datum.
+    Polyseme,
     Unknown,
 }
 
@@ -1011,6 +1163,8 @@ impl DatumType {
         Justfile    => ["justfile"]                  => ".justfile",
         Hardware    => ["hardware"]                  => ".hardware",
         Overlay     => ["overlay"]                   => ".overlay",
+        Runtime     => ["runtime", "wrap", "launcher"] => ".runtime",
+        Polyseme    => ["polyseme", "poly"]            => ".polyseme",
     }
 
     /// Preferred file extension for writing new datum files.
@@ -1602,6 +1756,190 @@ pub fn get_mcp_config(name: &str, path: &str) -> Result<BootDatum> {
     crate::datum_utils::apply_git_attributes_to_config(&mut config, &path_buf);
 
     Ok(config.b00t)
+}
+
+/// Load a runtime wrapper datum, returning the parsed [RuntimeConfig].
+/// Searches `path` for `<name>.runtime.toml`, `<name>.runtime.tomllmd`, etc.
+pub fn load_runtime_datum(name: &str, path: &str) -> Result<RuntimeConfig> {
+    use anyhow::Context;
+    use std::fs;
+
+    let expanded_path = get_expanded_path(path)?;
+    let suffixes = &[".runtime.toml", ".runtime.tomllmd", ".runtime.tomllm"];
+    let mut found: Option<std::path::PathBuf> = None;
+
+    for suffix in suffixes {
+        let candidate = expanded_path.join(format!("{name}{suffix}"));
+        if candidate.exists() {
+            found = Some(candidate);
+            break;
+        }
+    }
+
+    let file_path = found.ok_or_else(|| {
+        anyhow::anyhow!(
+            "runtime datum '{name}' not found (tried {}/{name}.runtime.toml[lmd|lm])",
+            expanded_path.display()
+        )
+    })?;
+
+    let content = fs::read_to_string(&file_path)
+        .context(format!("Failed to read runtime config from {}", file_path.display()))?;
+    let config: UnifiedConfig =
+        toml::from_str(&content).context(format!("Failed to parse {}", file_path.display()))?;
+
+    config
+        .b00t
+        .runtime
+        .ok_or_else(|| anyhow::anyhow!("datum '{}' missing [b00t.runtime] section", name))
+}
+
+/// Datum dispatch resolution — what action to take for `b00t <name>`.
+pub enum DatumDispatch {
+    /// Launch via sandbox (runtime datum)
+    Runtime(RuntimeConfig),
+    /// Execute the datum's command + passthrough args (cli datum)
+    CliPassthrough { command: String, args: Vec<String> },
+    /// Show polyseme resolution options
+    Polyseme { name: String, refs: Vec<crate::PolysemeRef> },
+    /// Found but not directly dispatchable (mcp, ai, etc.)
+    Info(String),
+}
+
+/// Search the datum space for `candidate` and resolve ALL matching dispatch actions.
+/// Returns multiple matches when a name is polysemous or has multiple datum types.
+pub fn resolve_all_datum_dispatches(candidate: &str, path: &str) -> Vec<DatumDispatch> {
+    let mut results = Vec::new();
+
+    let expanded = match get_expanded_path(path) {
+        Ok(p) => p,
+        Err(_) => return results,
+    };
+
+    // Runtime
+    let runtime_suffixes = [".runtime.toml", ".runtime.tomllmd", ".runtime.tomllm"];
+    for suffix in &runtime_suffixes {
+        let p = expanded.join(format!("{candidate}{suffix}"));
+        if p.exists() {
+            if let Ok(cfg) = load_runtime_datum(candidate, path) {
+                results.push(DatumDispatch::Runtime(cfg));
+                break;
+            }
+        }
+    }
+
+    // CLI
+    let cli_suffixes = [".cli.toml", ".cli.tomllmd", ".cli.tomllm"];
+    for suffix in &cli_suffixes {
+        let p = expanded.join(format!("{candidate}{suffix}"));
+        if p.exists() {
+            if let Ok(datum) = load_cli_datum(candidate, path) {
+                let cmd = datum.command.unwrap_or_else(|| candidate.to_string());
+                let args: Vec<String> = datum.args.unwrap_or_default();
+                results.push(DatumDispatch::CliPassthrough {
+                    command: cmd,
+                    args,
+                });
+                break;
+            }
+        }
+    }
+
+    // Polyseme
+    let poly_suffixes = [".polyseme.toml", ".polyseme.tomllmd", ".polyseme.tomllm"];
+    for suffix in &poly_suffixes {
+        let p = expanded.join(format!("{candidate}{suffix}"));
+        if p.exists() {
+            if let Ok(refs) = load_polyseme_refs(candidate, path) {
+                results.push(DatumDispatch::Polyseme {
+                    name: candidate.to_string(),
+                    refs,
+                });
+                break;
+            }
+        }
+    }
+
+    // MCP
+    let mcp_suffixes = [".mcp.toml", ".mcp.tomllmd", ".mcp.tomllm"];
+    for suffix in &mcp_suffixes {
+        let p = expanded.join(format!("{candidate}{suffix}"));
+        if p.exists() {
+            results.push(DatumDispatch::Info(format!(
+                "mcp datum '{}' — use 'b00t mcp list' or 'b00t mcp execute {} <tool>'",
+                candidate, candidate
+            )));
+            break;
+        }
+    }
+
+    results
+}
+
+/// Single-match convenience — returns the first runtime or CLI dispatch, or the polyseme if present.
+/// Returns None if no datum matches.
+pub fn resolve_datum_dispatch(candidate: &str, path: &str) -> Option<DatumDispatch> {
+    let mut all = resolve_all_datum_dispatches(candidate, path);
+    if all.is_empty() {
+        return None;
+    }
+    // Prefer runtime over CLI over polyseme for single-match
+    if let Some(pos) = all.iter().position(|d| matches!(d,
+        DatumDispatch::Runtime(_) | DatumDispatch::CliPassthrough { .. } | DatumDispatch::Polyseme { .. }
+    )) {
+        return Some(all.swap_remove(pos));
+    }
+    all.into_iter().next()
+}
+
+/// Load a CLI datum and return its BootDatum.
+fn load_cli_datum(name: &str, path: &str) -> Result<BootDatum> {
+    use anyhow::Context;
+
+    let expanded = get_expanded_path(path)?;
+    let suffixes = [".cli.toml", ".cli.tomllmd", ".cli.tomllm"];
+    let mut found = None;
+    for suffix in &suffixes {
+        let p = expanded.join(format!("{name}{suffix}"));
+        if p.exists() {
+            found = Some(p);
+            break;
+        }
+    }
+    let file_path = found
+        .ok_or_else(|| anyhow::anyhow!("CLI datum '{name}' not found"))?;
+    let content = std::fs::read_to_string(&file_path)
+        .context(format!("read {}", file_path.display()))?;
+    let config: UnifiedConfig =
+        toml::from_str(&content).context(format!("parse {}", file_path.display()))?;
+    Ok(config.b00t)
+}
+
+/// Load a polyseme datum and return its refs.
+fn load_polyseme_refs(name: &str, path: &str) -> Result<Vec<crate::PolysemeRef>> {
+    use anyhow::Context;
+
+    let expanded = get_expanded_path(path)?;
+    let suffixes = [".polyseme.toml", ".polyseme.tomllmd", ".polyseme.tomllm"];
+    let mut found = None;
+    for suffix in &suffixes {
+        let p = expanded.join(format!("{name}{suffix}"));
+        if p.exists() {
+            found = Some(p);
+            break;
+        }
+    }
+    let file_path = found
+        .ok_or_else(|| anyhow::anyhow!("polyseme datum '{name}' not found"))?;
+    let content = std::fs::read_to_string(&file_path)
+        .context(format!("read {}", file_path.display()))?;
+    let config: UnifiedConfig =
+        toml::from_str(&content).context(format!("parse {}", file_path.display()))?;
+    Ok(config
+        .b00t
+        .polyseme
+        .and_then(|p| p.refs)
+        .unwrap_or_default())
 }
 
 pub fn get_mcp_toml_files(path: &str) -> Result<Vec<String>> {
@@ -3341,6 +3679,7 @@ hint = "containers"
             hook_install: None, hook_update: None, hook_learn: None,
             uninstall: None, hook_uninstall: None, unlocks: None,
             type_tags: None, maintenance: None, required_for_core: None,
+            runtime: None, polyseme: None,
         }
     }
 

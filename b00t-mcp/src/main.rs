@@ -32,7 +32,7 @@ impl TransportMode {
             return TransportMode::Llm;
         }
         let is_stdio = stdio || mode_str.map_or(false, |m| m == "stdio");
-        let is_http = http || mode_str.map_or(false, |m| m == "http");
+        let _is_http = http || mode_str.map_or(false, |m| m == "http");
         if is_stdio { TransportMode::Stdio } else { TransportMode::Http }
     }
 }

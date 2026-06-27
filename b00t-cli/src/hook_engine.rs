@@ -353,6 +353,15 @@ fn build_engine() -> Engine {
         b00t_c0re_lib::write_event(event, detail);
     });
 
+    // Reviewer constraint evaluation — exposes VerdictConstraint::evaluate() to Rhai
+    engine.register_fn(
+        "evaluate_constraint",
+        |constraint_json: &str, verdict_str: &str| -> Result<bool, Box<EvalAltResult>> {
+            b00t_c0re_lib::reviewer::evaluate_constraint_json(constraint_json, verdict_str)
+                .map_err(|e| format!("evaluate_constraint: {}", e).into())
+        },
+    );
+
     engine.set_max_expr_depths(128, 64);
 
     engine

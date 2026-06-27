@@ -348,6 +348,16 @@ async fn handle_assimilate(
         );
     }
 
+    // ── Type-detect: GitHub repo URL → polyseme handler ────────────────────
+    if let Some(url) = source_url {
+        if let Some(parsed) = parse_github_repo_url(url) {
+            eprintln!("  🔍 detected GitHub repo: {}/{}", parsed.owner, parsed.repo);
+            assimilate_github_repo(&parsed, topic, tags).unwrap_or_else(|e| {
+                eprintln!("  ⚠️  polyseme scaffold failed: {e}");
+            });
+        }
+    }
+
     // ── Enhanced assimilation pipeline ──────────────────────────────────────
     //
     // When --enhanced is set, run the full pipeline:
@@ -666,6 +676,131 @@ fn sanitize_for_filename(input: &str) -> String {
         s = s.replace("__", "_");
     }
     if s.is_empty() { "topic".to_string() } else { s }
+}
+
+// ── GitHub repo type detection for polyseme scaffolding ──────────────────────
+
+struct ParsedRepo {
+    owner: String,
+    repo: String,
+}
+
+/// Detect if a URL is a GitHub repo root (not a blob/issue/pull/etc).
+fn parse_github_repo_url(url: &str) -> Option<ParsedRepo> {
+    let stripped = url
+        .trim_end_matches('/')
+        .trim_end_matches(".git");
+    // Match: https://github.com/OWNER/REPO with nothing after
+    if let Some(rest) = stripped.strip_prefix("https://github.com/")
+        .or_else(|| stripped.strip_prefix("http://github.com/"))
+    {
+        let parts: Vec<&str> = rest.split('/').collect();
+        if parts.len() == 2 {
+            return Some(ParsedRepo {
+                owner: parts[0].to_string(),
+                repo: parts[1].to_string(),
+            });
+        }
+    }
+    None
+}
+
+/// Auto-scaffold polyseme + concrete datum for a GitHub repo.
+/// Non-fatal: errors are returned but the caller continues with content assimilation.
+fn assimilate_github_repo(parsed: &ParsedRepo, topic: &str, _tags: &[String]) -> anyhow::Result<()> {
+    use crate::{PolysemeRef, UnifiedConfig};
+
+    let polyseme_name = topic.to_string();
+    let concrete_name = format!("{}-{}", polyseme_name, parsed.owner);
+    let canonical = format!("github:{}/{}", parsed.owner, parsed.repo);
+    let description = format!("{} — {}/{}", parsed.repo, parsed.owner, parsed.repo);
+
+    let b00t_dir = find_b00t_dir()?;
+
+    // 1. Polyseme datum
+    let poly_path = b00t_dir.join(format!("{}.polyseme.tomllmd", polyseme_name));
+    let mut polyseme_datum: crate::BootDatum;
+
+    if poly_path.exists() {
+        let content = std::fs::read_to_string(&poly_path)?;
+        let cfg: UnifiedConfig = toml::from_str(&content)?;
+        polyseme_datum = cfg.b00t;
+    } else {
+        polyseme_datum = crate::BootDatum {
+            name: polyseme_name.clone(),
+            datum_type: Some(crate::DatumType::Polyseme),
+            hint: format!(
+                "Polyseme datum — '{}' resolves to multiple artifacts",
+                polyseme_name
+            ),
+            ..Default::default()
+        };
+    }
+
+    let mut poly_cfg = polyseme_datum.polyseme.unwrap_or_default();
+    let mut refs = poly_cfg.refs.unwrap_or_default();
+    let mut sources = poly_cfg.sources.unwrap_or_default();
+
+    if !refs.iter().any(|r| r.canonical == canonical) {
+        refs.push(PolysemeRef {
+            name: concrete_name.clone(),
+            canonical: canonical.clone(),
+            datum: format!("{}.cli", concrete_name),
+            description: description.clone(),
+        });
+    }
+    if !sources.contains(&format!("https://github.com/{}/{}", parsed.owner, parsed.repo)) {
+        sources.push(format!(
+            "https://github.com/{}/{}",
+            parsed.owner, parsed.repo
+        ));
+    }
+
+    poly_cfg.refs = Some(refs);
+    poly_cfg.sources = Some(sources);
+    polyseme_datum.polyseme = Some(poly_cfg);
+
+    let unified = UnifiedConfig {
+        b00t: polyseme_datum,
+        env: None,
+        sections: None,
+    };
+    let toml_out = toml::to_string_pretty(&unified)?;
+    std::fs::write(&poly_path, format!("{toml_out}\n"))?;
+    eprintln!("  ✅ polyseme: {}", poly_path.display());
+
+    // 2. Concrete CLI datum scaffold
+    let cli_path = b00t_dir.join(format!("{}.cli.toml", concrete_name));
+    if !cli_path.exists() {
+        let scaffold = format!(
+            r#"# {concrete_name}.cli — cli datum
+# Assimilated from: {canonical}
+# Polyseme parent: {polyseme_name}.polyseme.tomllmd
+
+[b00t]
+name        = "{concrete_name}"
+type        = "cli"
+hint        = "{description} — {owner}/{repo}"
+
+# install     = "TODO: install command"
+# version     = "TODO: version check command"
+# version_regex = '(\\d+\\.\\d+\\.\\d+)'
+
+# b00t:map v1
+# summary: concrete datum for {canonical} — scaffolded by grok assimilate
+# tags: {concrete_name}, {owner}, {repo}
+# tier: ch0nky
+# cmds: b00t install {concrete_name}
+# complexity: 1
+"#,
+            owner = parsed.owner,
+            repo = parsed.repo,
+        );
+        std::fs::write(&cli_path, scaffold)?;
+        eprintln!("  ✅ scaffold: {}", cli_path.display());
+    }
+
+    Ok(())
 }
 
 // ── git stdin helper ──────────────────────────────────────────────────────────

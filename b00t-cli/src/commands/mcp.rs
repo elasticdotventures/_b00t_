@@ -13,7 +13,10 @@ pub enum McpCommands {
         name_or_json: String,
         #[clap(long, help = "Description/hint for the MCP server")]
         hint: Option<String>,
-        #[clap(long, help = "Add a gate precondition (format: command:<cmd> or env:<VAR> or file:<path>)")]
+        #[clap(
+            long,
+            help = "Add a gate precondition (format: command:<cmd> or env:<VAR> or file:<path>)"
+        )]
         gate: Vec<String>,
         #[clap(long, help = "Remove the MCP server configuration")]
         remove: bool,
@@ -41,15 +44,30 @@ pub enum McpCommands {
     List {
         #[clap(long, help = "Output in JSON format")]
         json: bool,
-        #[clap(long, help = "Search filter — only show servers whose name contains this string (case-insensitive)")]
+        #[clap(
+            long,
+            help = "Search filter — only show servers whose name contains this string (case-insensitive)"
+        )]
         search: Option<String>,
-        #[clap(long, help = "Shorthand: show only installed servers (equivalent to --is-installed=true)")]
+        #[clap(
+            long,
+            help = "Shorthand: show only installed servers (equivalent to --is-installed=true)"
+        )]
         installed: bool,
-        #[clap(long, help = "Filter by installation status: true=installed, false=uninstalled")]
+        #[clap(
+            long,
+            help = "Filter by installation status: true=installed, false=uninstalled"
+        )]
         is_installed: Option<bool>,
-        #[clap(long, help = "Filter by running status: true=running, false=not running")]
+        #[clap(
+            long,
+            help = "Filter by running status: true=running, false=not running"
+        )]
         is_running: Option<bool>,
-        #[clap(long, help = "Filter by suspension status: true=suspended, false=not suspended")]
+        #[clap(
+            long,
+            help = "Filter by suspension status: true=suspended, false=not suspended"
+        )]
         is_suspended: Option<bool>,
         #[clap(long, help = "Override the max-items threshold for this invocation")]
         max_threshold: Option<i64>,
@@ -160,6 +178,36 @@ pub enum McpCommands {
         format: Option<String>,
     },
     #[clap(
+        about = "Gated deterministic boot: install MCP, tidy-sweep, restart agent",
+        long_about = "Deterministic imperative boot pipeline for the current agent.\n\n\
+Gates (any failure blocks):\n\
+  0. b00t-mcp binary found in PATH\n\
+  1. Target agent config exists and is valid JSON\n\
+  2. b00t-mcp entry verified in config after install\n\n\
+Post-install: sweep *~ files, restart agent via process-icide.\n\n\
+Examples:\n\
+  b00t mcp boot\n\
+  b00t mcp boot --target opencode\n\
+  b00t mcp boot --no-tidy --no-restart\n\
+  b00t mcp boot --dry-run"
+    )]
+    Boot {
+        #[clap(long, default_value = "opencode", help = "Target agent (opencode)")]
+        target: String,
+        #[clap(long, help = "Skip tidy-sweep (*~ file cleanup)")]
+        no_tidy: bool,
+        #[clap(long, help = "Skip agent restart after install")]
+        no_restart: bool,
+        #[clap(long, help = "Dry-run: validate gates but skip mutations")]
+        dry_run: bool,
+        #[clap(
+            long,
+            help = "Signal to send on restart (default: SIGTERM=15)",
+            default_value = "15"
+        )]
+        signal: i32,
+    },
+    #[clap(
         about = "Show dynamic MCP status — loaded/installed/available",
         long_about = "Query actual MCP server state:\n  loaded: servers active in ~/.hermes/config.yaml\n  installed: datums in _b00t_/*.mcp.toml\n  available: servers in registry index\n\nExamples:\n  b00t mcp status\n  b00t mcp status --json"
     )]
@@ -213,6 +261,115 @@ pub enum RegistryAction {
     },
 }
 
+fn handle_boot(
+    target: &str,
+    no_tidy: bool,
+    no_restart: bool,
+    dry_run: bool,
+    signal: i32,
+    path: &str,
+) -> Result<()> {
+    let expanded = crate::get_expanded_path(path)?;
+    let datum_exists = expanded.join(format!("{}.cli.toml", target)).exists()
+        || expanded.join(format!("{}.runtime.toml", target)).exists()
+        || expanded.join(format!("{}.cli.tomllmd", target)).exists()
+        || expanded.join(format!("{}.runtime.tomllmd", target)).exists()
+        || expanded.join(format!("{}.cli.tomllm", target)).exists()
+        || expanded.join(format!("{}.runtime.tomllm", target)).exists();
+
+    if !datum_exists {
+        anyhow::bail!(
+            "no datum found for target '{}' in {} — try 'b00t boot opencode'",
+            target,
+            expanded.display()
+        );
+    }
+
+    // GATE 0: b00t-mcp binary
+    eprintln!("[boot] GATE 0: b00t-mcp");
+    let bin_path = which::which("b00t-mcp")
+        .map_err(|_| anyhow::anyhow!("b00t-mcp binary not found in PATH"))?;
+    eprintln!("  ✅ {}", bin_path.display());
+
+    // GATE 1: opencode config
+    let cfg_path = dirs::config_dir()
+        .ok_or_else(|| anyhow::anyhow!("no config dir"))?
+        .join("opencode")
+        .join("opencode.json");
+    eprintln!("[boot] GATE 1: config");
+    if !cfg_path.exists() {
+        anyhow::bail!("opencode config not found at {}", cfg_path.display());
+    }
+    {
+        let content = std::fs::read_to_string(&cfg_path)
+            .map_err(|e| anyhow::anyhow!("read {}: {}", cfg_path.display(), e))?;
+        serde_json::from_str::<serde_json::Value>(&content)
+            .map_err(|e| anyhow::anyhow!("invalid JSON: {}", e))?;
+    }
+    eprintln!("  ✅ {}", cfg_path.display());
+
+    // Install b00t-mcp
+    eprintln!("[boot] install b00t-mcp → opencode");
+    if dry_run {
+        eprintln!("  [dry-run] would install b00t-mcp");
+    } else {
+        crate::opencode_install_mcp("b00t-mcp", path, false, None, false)?;
+    }
+
+    // GATE 2: verify entry
+    eprintln!("[boot] GATE 2: verify entry");
+    {
+        let content = std::fs::read_to_string(&cfg_path)
+            .map_err(|e| anyhow::anyhow!("re-read {}: {}", cfg_path.display(), e))?;
+        let cfg: serde_json::Value = serde_json::from_str(&content)?;
+        let entry = cfg
+            .get("mcp")
+            .and_then(|m| m.get("b00t-mcp"))
+            .and_then(|e| e.get("enabled"))
+            .and_then(|v| v.as_bool());
+        match entry {
+            Some(true) => eprintln!("  ✅ b00t-mcp enabled"),
+            _ => anyhow::bail!("b00t-mcp entry not enabled in config after install"),
+        }
+    }
+
+    // Tidy-sweep
+    if !no_tidy {
+        eprintln!("[boot] tidy-sweep");
+        let home = dirs::home_dir().unwrap_or_default();
+        if dry_run {
+            eprintln!("  [dry-run] would sweep *~ under {}", home.display());
+        } else {
+            let count = crate::sweep_backup_files(&home);
+            eprintln!("  ✅ removed {} *~ file(s)", count);
+        }
+    }
+
+    // Restart
+    if !no_restart {
+        eprintln!("[boot] restart");
+        if dry_run {
+            let target_pid = crate::commands::quit::resolve_agent_pid()?;
+            eprintln!("  [dry-run] would send signal {signal} to pid {target_pid}");
+        } else {
+            let target_pid = crate::commands::quit::resolve_agent_pid()?;
+            eprintln!("  🔴 killing agent pid={target_pid} in 2s (Ctrl-C to abort)...");
+            std::thread::sleep(std::time::Duration::from_secs(2));
+            let ret = crate::commands::quit::libc_kill(target_pid as i32, signal);
+            if ret != 0 {
+                let err = std::io::Error::last_os_error();
+                anyhow::bail!("kill({target_pid}, {signal}) failed: {err}");
+            }
+            eprintln!("  ✅ signal {signal} sent to pid {target_pid}");
+        }
+    }
+
+    eprintln!("[boot] complete");
+    Ok(())
+}
+
+
+
 impl McpCommands {
     pub async fn execute_async(&self, path: &str) -> Result<()> {
         match self {
@@ -253,25 +410,34 @@ impl McpCommands {
                         });
                         // Add gates from --gate flags
                         if !gate.is_empty() {
-                            let gates: Vec<serde_json::Value> = gate.iter().map(|g| {
-                                let parts: Vec<&str> = g.splitn(2, ':').collect();
-                                if parts.len() == 2 {
-                                    let kind = parts[0];
-                                    let spec = parts[1];
-                                    let hint = match kind {
-                                        "command" => format!("{} not on PATH — install or add to $PATH", spec),
-                                        "env" => format!("{} not set — add to .env or environment", spec),
-                                        "file" => format!("{} not found", spec),
-                                        _ => format!("gate: {} {}", kind, spec),
-                                    };
-                                    serde_json::json!({
-                                        kind: spec,
-                                        "hint": hint,
-                                    })
-                                } else {
-                                    serde_json::json!({"rhai": g})
-                                }
-                            }).collect();
+                            let gates: Vec<serde_json::Value> = gate
+                                .iter()
+                                .map(|g| {
+                                    let parts: Vec<&str> = g.splitn(2, ':').collect();
+                                    if parts.len() == 2 {
+                                        let kind = parts[0];
+                                        let spec = parts[1];
+                                        let hint = match kind {
+                                            "command" => format!(
+                                                "{} not on PATH — install or add to $PATH",
+                                                spec
+                                            ),
+                                            "env" => format!(
+                                                "{} not set — add to .env or environment",
+                                                spec
+                                            ),
+                                            "file" => format!("{} not found", spec),
+                                            _ => format!("gate: {} {}", kind, spec),
+                                        };
+                                        serde_json::json!({
+                                            kind: spec,
+                                            "hint": hint,
+                                        })
+                                    } else {
+                                        serde_json::json!({"rhai": g})
+                                    }
+                                })
+                                .collect();
                             json_obj["gate"] = serde_json::json!(gates);
                         }
                         let json_str = json_obj.to_string();
@@ -296,7 +462,11 @@ impl McpCommands {
             } => {
                 let filter = crate::McpListFilter {
                     search: search.clone(),
-                    is_installed: if *installed || is_installed.unwrap_or(false) { Some(true) } else { *is_installed },
+                    is_installed: if *installed || is_installed.unwrap_or(false) {
+                        Some(true)
+                    } else {
+                        *is_installed
+                    },
                     is_running: *is_running,
                     is_suspended: *is_suspended,
                     max_threshold: *max_threshold,
@@ -641,6 +811,13 @@ impl McpCommands {
 
                 Ok(())
             }
+            McpCommands::Boot {
+                target,
+                no_tidy,
+                no_restart,
+                dry_run,
+                signal,
+            } => handle_boot(target, *no_tidy, *no_restart, *dry_run, *signal, path),
             McpCommands::Status { json } => {
                 let status = mcp_status();
                 if *json {
@@ -659,7 +836,10 @@ impl McpCommands {
                     }
 
                     if let Some(installed) = status.get("installed").and_then(|v| v.as_array()) {
-                        println!("📦 Installed ({} _b00t_/*.mcp.toml datums):", installed.len());
+                        println!(
+                            "📦 Installed ({} _b00t_/*.mcp.toml datums):",
+                            installed.len()
+                        );
                         for srv in installed {
                             let name = srv.get("name").and_then(|v| v.as_str()).unwrap_or("?");
                             let hint = srv.get("hint").and_then(|v| v.as_str()).unwrap_or("");
@@ -686,8 +866,7 @@ pub fn mcp_status_for_path(datum_root: &str) -> serde_json::Value {
     let mut status = serde_json::Map::new();
 
     // Loaded: MCP servers in ~/.hermes/config.yaml
-    let hermes_config = dirs::home_dir()
-        .map(|h| h.join(".hermes").join("config.yaml"));
+    let hermes_config = dirs::home_dir().map(|h| h.join(".hermes").join("config.yaml"));
     let loaded: Vec<serde_json::Value> = match &hermes_config {
         Some(path) if path.exists() => {
             let content = std::fs::read_to_string(path).unwrap_or_default();
@@ -725,7 +904,8 @@ pub fn mcp_status_for_path(datum_root: &str) -> serde_json::Value {
                     .and_then(|ext| ext.to_str())
                     .map(|ext| ext == "toml")
                     .unwrap_or(false)
-                    && e.path().file_name()
+                    && e.path()
+                        .file_name()
                         .and_then(|n| n.to_str())
                         .map(|n| n.ends_with(".mcp.toml"))
                         .unwrap_or(false)
@@ -735,7 +915,11 @@ pub fn mcp_status_for_path(datum_root: &str) -> serde_json::Value {
                 let table: toml::Table = content.parse().ok()?;
                 let b00t = table.get("b00t")?.as_table()?;
                 let name = b00t.get("name")?.as_str()?.to_string();
-                let hint = b00t.get("hint").and_then(|v| v.as_str()).unwrap_or("").to_string();
+                let hint = b00t
+                    .get("hint")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("")
+                    .to_string();
                 Some(json!({ "name": name, "hint": hint }))
             })
             .collect(),
@@ -845,7 +1029,6 @@ impl RegistryAction {
 /// Loads TOML, extracts depends_on field, recursively resolves
 pub fn resolve_depends_on_chain(datum_name: &str, path: &str) -> Result<Vec<String>> {
     use crate::get_expanded_path;
-    
 
     let expanded = get_expanded_path(path)?;
     let mut resolved = Vec::new();
