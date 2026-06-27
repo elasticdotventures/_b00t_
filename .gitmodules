@@ -104,3 +104,6 @@
 [submodule "vendor/rust-docs-mcp-server"]
 	path = vendor/rust-docs-mcp-server
 	url = https://github.com/PromptExecution/rust-docs-mcp-b00t.git
+[submodule "vendor/gemm-common"]
+	path = vendor/gemm-common
+	url = https://github.com/PromptExecution/gemm-common.git
