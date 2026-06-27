@@ -454,10 +454,12 @@ async fn handle_dwiw(path: &str, topic: &str, mcp_ctx: bool, limit: usize) -> Re
             .collect::<Vec<_>>()
             .join("\n");
 
-        use b00t_c0re_lib::sm0l_dispatch::{SmolBehavior, SmolSession, dispatch};
+        use b00t_c0re_lib::sm0l_dispatch::{SmolBehavior, SmolConfig, SmolSession, dispatch};
         let session = SmolSession::new();
+        let config = SmolConfig { max_output_lines: limit };
         match dispatch(
-            &SmolBehavior::Summarize { max_output_lines: limit },
+            &SmolBehavior::Summarize,
+            &config,
             &raw,
             Some(&session),
             32_000,

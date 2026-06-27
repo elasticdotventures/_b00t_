@@ -26,6 +26,9 @@ mod b00t-admin 'vendor/b00t-admin/b00t-admin.just'
 mod rust-doc 'vendor/rust-doc.just'
 # 🥾 Compound engineering workflow — 8-phase agile state machine
 mod compound-engineering '_b00t_/compound-engineering.just'
+# 🛡️ Canonical reviewer skill — MECE+TRIZ+Eureka multi-framework review
+# Usage: just reviewer system-normal | just reviewer autoexec | just reviewer review-multi PR=<n>
+mod reviewer '_b00t_/skills/reviewer/justfile'
 
 # Datum justfiles (install recipes for core tech stacks)
 mod python '_b00t_/python.🐍/justfile'
@@ -508,7 +511,7 @@ commit-hook:
     # If strict-review flag exists, run the blocking reviewer gate
     if [[ -f ".b00t/strict-review" ]]; then
         echo "🛡️  strict-review gate active — validating staged changes..."
-        if ! JUST_UNSTABLE=1 just pr-validate goal="staged changes"; then
+        if ! JUST_UNSTABLE=1 just reviewer pr-validate goal="staged changes"; then
             echo ""
             echo "❌ Reviewer gate blocked commit. Fix issues and try again."
             echo "   To bypass: rm .b00t/strict-review (not recommended)"

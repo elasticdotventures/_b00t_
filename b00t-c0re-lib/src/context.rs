@@ -8,8 +8,14 @@ use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use std::process;
 
-/// Context information for b00t operations
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+/// Context information for b00t operations.
+///
+/// FOL-correct equality: only identity-determining fields participate.
+/// `pid` and `timestamp` are runtime metadata — they do not determine
+/// context identity. Two contexts for the same user on the same branch
+/// in the same workspace are the same context, regardless of when or
+/// which process created the snapshot.
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct B00tContext {
     pub pid: u32,
     pub timestamp: String,
@@ -21,6 +27,18 @@ pub struct B00tContext {
     pub workspace_root: String,
     pub is_git_repo: bool,
     pub hostname: String,
+}
+
+// 🤓 Custom equality: pid/timestamp are metadata, not identity.
+impl PartialEq for B00tContext {
+    fn eq(&self, other: &Self) -> bool {
+        self.user == other.user
+            && self.branch == other.branch
+            && self.workspace_root == other.workspace_root
+            && self.hostname == other.hostname
+        // agent/model_size/privacy are session-context, not identity
+        // pid/timestamp are runtime metadata
+    }
 }
 
 impl B00tContext {
@@ -196,5 +214,37 @@ mod tests {
         assert_eq!(context.user, "testuser");
         assert_eq!(context.branch, "feature/test");
         assert!(context.is_git_repo);
+    }
+
+    // ── FOL-correct equality tests ────────────────────────────────────────
+
+    #[test]
+    fn test_context_eq_ignores_metadata() {
+        let a = B00tContext::with_values(
+            11111, "t1".to_string(), "user".to_string(), "main".to_string(),
+            "agent".to_string(), "sm0l".to_string(), "pub".to_string(),
+            "/ws".to_string(), true, "host".to_string(),
+        );
+        let b = B00tContext::with_values(
+            99999, "t2".to_string(), "user".to_string(), "main".to_string(),
+            "other".to_string(), "frontier".to_string(), "priv".to_string(),
+            "/ws".to_string(), false, "host".to_string(),
+        );
+        assert_eq!(a, b, "pid/timestamp/agent/model/privacy/is_git_repo are metadata, not identity");
+    }
+
+    #[test]
+    fn test_context_eq_different_identity() {
+        let a = B00tContext::with_values(
+            1, "t".to_string(), "alice".to_string(), "main".to_string(),
+            "x".to_string(), "s".to_string(), "p".to_string(),
+            "/ws".to_string(), true, "h1".to_string(),
+        );
+        let b = B00tContext::with_values(
+            1, "t".to_string(), "bob".to_string(), "main".to_string(),
+            "x".to_string(), "s".to_string(), "p".to_string(),
+            "/ws".to_string(), true, "h1".to_string(),
+        );
+        assert_ne!(a, b, "different user = different identity");
     }
 }

@@ -1223,6 +1223,7 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_yaml",
+ "sha2",
  "shell-words",
  "shellexpand",
  "statig",
@@ -10725,16 +10726,6 @@ dependencies = [
  "memoffset",
  "tempfile",
  "windows-sys 0.61.2",
-]
-
-[[package]]
-name = "ufo-types"
-version = "0.8.4"
-dependencies = [
- "schemars",
- "serde",
- "serde_json",
- "thiserror 2.0.18",
 ]
 
 [[package]]

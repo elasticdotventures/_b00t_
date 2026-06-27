@@ -5,6 +5,7 @@
 
 use crepe::crepe;
 use std::collections::{HashMap, HashSet};
+use super::predicates::B00tPredicate;
 
 crepe! {
     @input struct RawSpo(u32, u32, u32);      // (subject_id, predicate_id, object_id)
@@ -35,35 +36,29 @@ crepe! {
     Implements(a, c) <- Implements(a, b), RawSpo(b, p, c), SupertraitPred(p);
 }
 
+fn classify_predicate(p: &str) -> Option<B00tPredicate> {
+    B00tPredicate::from_uri(p)
+}
+
 fn is_edge_pred(p: &str) -> bool {
-    // 🤓 b00t:hasPart and b00t:requires added for compiled datum graph.
-    // OWL2 subproperty intent: hasPart ⊑ relatedTo, requires ⊑ relatedTo.
-    // Forward-compat: bfo:has-part, SysMLv2 PartUsage, CLIF axiom coverage.
-    matches!(
-        p,
-        "b00t:relatedTo"
-            | "b00t:dependsOn"
-            | "b00t:informedBy"
-            | "b00t:hasPart"
-            | "b00t:requires"
-    ) || p.contains("DependsOn")
-        || p.contains("relatedTo")
-        || p.contains("StoredIn")
-        || p.contains("hasPart")
+    classify_predicate(p).map(|pred| pred.is_edge_relation()).unwrap_or(false)
 }
 
 fn is_dep_pred(p: &str) -> bool {
-    // b00t:hasPart: if A entangles B, A transitively depends on B's dep chain.
-    p.contains("dependsOn")
-        || p.contains("DependsOn")
-        || p.contains("requires")
-        || p.contains("needs")
-        || p == "b00t:hasPart"
+    classify_predicate(p).map(|pred| pred.is_dependency_relation()).unwrap_or(false)
 }
 
-fn is_informed_by(p: &str) -> bool { p == "b00t:informedBy" }
-fn is_implements(p: &str) -> bool { p == "b00t:implements" || p.contains("Implements") }
-fn is_supertrait(p: &str) -> bool { p.contains("supertrait") }
+fn is_informed_by(p: &str) -> bool {
+    classify_predicate(p).map(|pred| pred.is_informed_by()).unwrap_or(false)
+}
+
+fn is_implements(p: &str) -> bool {
+    classify_predicate(p).map(|pred| pred.is_implements()).unwrap_or(false)
+}
+
+fn is_supertrait(p: &str) -> bool {
+    classify_predicate(p).map(|pred| pred.is_supertrait()).unwrap_or(false)
+}
 
 struct Interner {
     to_id: HashMap<String, u32>,

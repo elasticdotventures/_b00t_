@@ -1,0 +1,57 @@
+# b00t Agent Datum — Cross-framework synthesis sub-agent for multi-framework code review
+# 🤓 Synthesis phase runs AFTER MECE+TRIZ+Eureka complete. It triangulates findings
+#    across all three frameworks, classifies them as critical (3-framework consensus),
+#    high-confidence (2-framework), or suggestion (1-framework). Generates the
+#    machine-parseable review report with VERDICT line.
+#    Phase 5 of the multi-framework-review pipeline — serial after parallel MECE/TRIZ/Eureka.
+
+[b00t]
+name = "synthesis-agent"
+type = "agent"
+hint = "Cross-framework synthesis agent: triangulation, finding prioritization, critical flagging, report generation for multi-framework PR review"
+
+[[b00t.agent.inherits]]
+from = "++abstract.agent"
+
+[b00t.agent]
+tier = "ch0nky"
+capabilities = ["cross-framework-triangulation", "finding-prioritization", "critical-flagging", "report-generation"]
+tools = ["b00t-mcp.mcp", "github.mcp"]
+skills = ["multi-framework-code-review"]
+# 🤓 multi-framework-code-review skill routes to Synthesis phase when loaded by this agent
+
+[b00t.agent.crew]
+role = "specialist"
+captain = false
+
+[b00t.agent.contract]
+capabilities = ["cross-framework-triangulation", "finding-prioritization", "critical-flagging", "report-generation"]
+min_quality_score = 0.8
+availability = "on-demand"
+gates = ["sanitize", "credential-check"]
+
+[b00t.agent.bouncer]
+enabled = true
+audit_log = ".b00t/bouncer-audit.jsonl"
+
+[b00t.agent.bouncer.input_gates]
+sanitize = { enabled = true, rules = ["no-shell-injection", "no-credential-exposure"] }
+credential_check = { enabled = true, check_env = true }
+permission_check = { enabled = true, check_role = true }
+rate_limit = { enabled = true, max_concurrent = 10 }
+
+[b00t.agent.bouncer.output_gates]
+contract_validation = { enabled = true, validate_schema = true }
+security_scan = { enabled = true, check_secrets = true }
+quality_check = { enabled = true, min_quality_score = 0.8 }
+
+entangled_mcp = ["b00t-mcp.mcp", "github.mcp"]
+keywords = ["agent", "synthesis", "triangulation", "finding-prioritization", "critical-flagging", "report-generation", "review", "specialist", "sub-agent"]
+depends_on = ["multi-framework-review.datum", "CREW-ROLES.tomllmd"]
+
+# b00t:map v1
+# summary: Cross-framework synthesis sub-agent — triangulation, finding prioritization, critical flagging, report generation for multi-framework PR review (synthesis phase)
+# tags: agent, synthesis, triangulation, finding-prioritization, critical-flagging, report-generation, review, specialist, sub-agent
+# tier: ch0nky
+# cmds: just review-synthesize, b00t agent delegate --role specialist --agent synthesis-agent
+# complexity: 3
