@@ -554,9 +554,49 @@ fn up_repo(path: &str, dry_run: bool) -> Result<()> {
 /// Self-upgrade mode: `b00t up --self`
 /// Upgrades b00t binary and runs maintenance checks for core datums.
 fn self_upgrade() -> Result<()> {
-    println!("🔄 Self-upgrade: updating b00t binary...");
+    println!("🔄 Self-upgrade: checking b00t version...");
+
+    // 🤓 Dogfood: check store for last-installed version.
+    let installed = crate::commands::install::last_installed_version("b00t-cli");
+    let source_ver = b00t_c0re_lib::version::VERSION;
+    if let Some(ref iv) = installed {
+        println!("  📦 store: last installed = v{}", iv);
+        println!("  📦 source: current build  = v{}", source_ver);
+        if iv == source_ver {
+            println!("  ✅ already at latest installed version — skipping rebuild");
+            return Ok(());
+        }
+    }
+
+    // 🤓 Dogfood: check for GitHub credentials to query latest release.
+    if let Ok(gh_token) = std::env::var("GITHUB_TOKEN") {
+        println!("  🔑 GitHub token found — checking latest release...");
+        let release = std::process::Command::new("gh")
+            .args([
+                "release", "view",
+                "--repo", "elasticdotventures/_b00t_",
+                "--json", "tagName",
+                "--jq", ".tagName",
+            ])
+            .env("GITHUB_TOKEN", &gh_token)
+            .output();
+        match release {
+            Ok(out) if out.status.success() => {
+                let latest = String::from_utf8_lossy(&out.stdout).trim().trim_start_matches('v').to_string();
+                if latest == source_ver {
+                    println!("  ✅ source {} matches latest release", source_ver);
+                } else {
+                    println!("  ⚠️  latest release is v{} (source is v{})", latest, source_ver);
+                }
+            }
+            _ => println!("  ⚠️  could not query GitHub release (offline?)"),
+        }
+    } else {
+        println!("  ℹ️  no GITHUB_TOKEN — set credential with: b00t server key set --provider github");
+    }
 
     // 1. Update b00t via cargo (from local source)
+    println!("🔨 Building b00t-cli from source...");
     let workspace_root = crate::utils::get_workspace_root();
     let status = std::process::Command::new("cargo")
         .args(["install", "--path", &format!("{}/b00t-cli", workspace_root), "--force"])
@@ -594,6 +634,9 @@ fn self_upgrade() -> Result<()> {
         let stdout = String::from_utf8_lossy(&output.stdout);
         println!("  {}", stdout.trim());
     }
+
+    // 3. 🤓 Dogfood: checkpoint install state after upgrade.
+    let _ = crate::commands::install::checkpoint_installed(&workspace_root);
 
     println!("✅ Self-upgrade complete");
     Ok(())
