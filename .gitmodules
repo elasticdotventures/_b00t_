@@ -90,7 +90,7 @@
 	path = vendor/just-mcp
 	url = https://github.com/PromptExecution/just-mcp
 
-[submodule "vendor/l3dg3rr"]
+[submodule "vendor/ledgrrr"]
 	path = vendor/l3dg3rr
 	url = https://github.com/PromptExecution/l3dg3rr.git
 
@@ -122,3 +122,5 @@
 	path = vscode.🆚/vscode-docs
 	url = https://github.com/microsoft/vscode-docs
 
+[submodule "vendor/ledgrrr"]
+	path = vendor/ledgrrr

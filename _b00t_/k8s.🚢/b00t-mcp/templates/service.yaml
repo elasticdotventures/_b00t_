@@ -1,0 +1,25 @@
+{{- range .Values.mcpServers }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: b00t-mcp-{{ .name }}
+  namespace: {{ $.Values.global.namespace }}
+  labels:
+    app.kubernetes.io/name: b00t-mcp
+    app.kubernetes.io/component: {{ .name }}
+    b00t.io/mcp-server: {{ .name | quote }}
+spec:
+  type: {{ if .nodePort }}NodePort{{ else }}ClusterIP{{ end }}
+  selector:
+    app.kubernetes.io/name: b00t-mcp
+    app.kubernetes.io/component: {{ .name }}
+  ports:
+    - name: http
+      port: {{ .port | default 3000 }}
+      targetPort: http
+      protocol: TCP
+      {{- if .nodePort }}
+      nodePort: {{ .nodePort }}
+      {{- end }}
+{{- end }}

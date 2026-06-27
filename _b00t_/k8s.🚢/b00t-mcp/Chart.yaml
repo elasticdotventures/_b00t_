@@ -1,0 +1,14 @@
+apiVersion: v2
+name: b00t-mcp
+description: b00t MCP server cluster — b00t-mcp + companion MCP servers in k8s namespace b00t-mcp
+type: application
+version: 0.2.0
+appVersion: "0.2.0"
+keywords:
+  - b00t
+  - mcp
+  - ai
+  - promptexecution
+home: https://github.com/promptexecution/b00t
+maintainers:
+  - name: elasticdotventures

@@ -3,8 +3,8 @@
 # Target: b00t-aligned ch0nky for implement/refactor/debug tasks
 # VRAM: ~19 GB needed; free ch0nky server (19.4 GB) before training
 
-base_model: "unsloth/Qwen3.6-27B-bnb-4bit"
-adapter_name: "b00t-aligned-qwen36-27b"
+base_model: "unsloth/Qwen3-8B-bnb-4bit"
+adapter_name: "b00t-aligned-qwen3-8b"
 dataset: "fine-tune/train.jsonl"
 output_dir: "./fine-tune/output-ch0nky"
 

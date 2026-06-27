@@ -82,7 +82,10 @@ def export(adapter_path: str, quant: str, output_path: str):
     if gguf_files:
         # output_name might conflict with old directory from failed runs — rename old dir
         if os.path.isdir(canonical):
-            os.rename(canonical, canonical + ".old-bnb")
+            stash = canonical + ".old-bnb"
+            if os.path.exists(stash):
+                shutil.rmtree(stash)
+            os.rename(canonical, stash)
         shutil.move(gguf_files[0], canonical)
         print(f"\n✅ GGUF model at: {canonical}")
     else:

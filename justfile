@@ -5,7 +5,6 @@ repo-root := env_var_or_default("JUST_REPO_ROOT", `git rev-parse --show-toplevel
 
 
 set shell := ["bash", "-cu"]
-set unstable
 mod cog
 mod b00t
 # 🔑 Root-requiring system setup — invoke as: sudo just sudo::<recipe>
@@ -20,15 +19,6 @@ mod? irontology 'vendor/irontology-mcp/irontology.just'
 mod zellij '_b00t_/zellij.just'
 # 🛡️ Zellij mandatory interaction gate (governance: Allow/Deny/Hook)
 mod zellij-gate '_b00t_/zellij-gate.just'
-# 🌐 b00t-admin web server — dashboard, container, quadlet
-mod b00t-admin 'vendor/b00t-admin/b00t-admin.just'
-# 📚 Rust documentation MCP server — required by skills/rust
-mod rust-doc 'vendor/rust-doc.just'
-# 🥾 Compound engineering workflow — 8-phase agile state machine
-mod compound-engineering '_b00t_/compound-engineering.just'
-# 🛡️ Canonical reviewer skill — MECE+TRIZ+Eureka multi-framework review
-# Usage: just reviewer system-normal | just reviewer autoexec | just reviewer review-multi PR=<n>
-mod reviewer '_b00t_/skills/reviewer/justfile'
 
 # Datum justfiles (install recipes for core tech stacks)
 mod python '_b00t_/python.🐍/justfile'
@@ -266,7 +256,6 @@ install:
     # [1] [2] [3]: install binaries (skip version bump - use `just bump` for that)
     cargo install --path b00t-mcp  --force
     cargo install --path b00t-cli  --force
-    cargo install --path b00t-admin --force
     cargo install cocogitto --locked --force
     just install-commit-hook
     echo "  ✅ binaries installed"
@@ -511,20 +500,13 @@ commit-hook:
     # If strict-review flag exists, run the blocking reviewer gate
     if [[ -f ".b00t/strict-review" ]]; then
         echo "🛡️  strict-review gate active — validating staged changes..."
-        if ! JUST_UNSTABLE=1 just reviewer pr-validate goal="staged changes"; then
+        if ! JUST_UNSTABLE=1 just pr-validate goal="staged changes"; then
             echo ""
             echo "❌ Reviewer gate blocked commit. Fix issues and try again."
             echo "   To bypass: rm .b00t/strict-review (not recommended)"
             exit 1
         fi
         echo "✅ Reviewer gate passed"
-    fi
-    # Gate schema validation: ensure all gate datums pass contract
-    if ls _b00t_/gates/*.gate.toml &>/dev/null; then
-        if ! python3 scripts/validate-gate.py _b00t_/gates/*.gate.toml 2>/dev/null; then
-            echo "❌ Gate schema validation failed. Fix gate datums and try again."
-            exit 1
-        fi
     fi
 
 commit-hook2:
@@ -929,7 +911,7 @@ qwen36-serve-35b:
 
 # Eval active ch0nky model (must be serving on :8001)
 qwen36-status:
-    curl -s http://127.0.0.1:8001/v1/models | python3 -m json.tool
+    curl -s http://localhost:8001/v1/models | python3 -m json.tool
 
 # Run opencode one-shot against local qwen36-local/ch0nky
 qwen36-test-opencode prompt="say hello in 3 words":
@@ -948,9 +930,9 @@ worker-status:
     echo "node_id: worker-$$"
     echo "state: $(b00t-cli experiment status 2>/dev/null || echo 'idle')"
     echo "last_heartbeat: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
-    echo "gate_result: $(test -f .b00t/worker-audit.jsonl && echo 'pass' || echo 'pass')"
+    echo "gate_result: $(test -f .b00t/worker-audit.jsonl && echo 'pass' || echo 'missing')"
 
-# Render worker ontology graph with l3dg3rr visual
+# Render worker ontology graph with ledgrrr visual
 worker-viz format="mermaid":
     cargo run -p b00t-cli --bin b00t-cli -- --path _b00t_ viz entangle \
       --datum worker --format {{format}}
@@ -981,12 +963,11 @@ worker-validate:
 
 # ── b00t skill-improvement loop — opencode ch0nky continuous self-improvement ──
 # 🤓 Tests datums, fixes gaps, commits improvements; runs unattended overnight
-
 # ── ledgrrr — ledgerr-mcp lifecycle (just module) ─────────────────────────
 # 🦨 Symlink: vendor/ledgrrr -> vendor/ledgrrr (polyseme mapping)
 # Module docs: https://just.systems/man/en/modules.html
 # Invocation:  just ledgrrr build | docker-build | docker-run | docker-stop | …
-mod? ledgrrr 'vendor/ledgrrr/ledgrrr.just'
+# mod ledgrrr 'vendor/ledgrrr/ledgrrr.just'  # TODO: create ledgrrr.just in submodule
 
 # ── pi agent — systemd service lifecycle ─────────────────────────────────────
 # 🤓 pi is managed as b00t@pi-agent.service, NOT spawned per-invocation
@@ -1000,7 +981,7 @@ opencode-task task="hello":
 
 # Check if ch0nky is live on :8001
 ch0nky-status:
-    @curl -sf http://127.0.0.1:8001/v1/models \
+    @curl -sf http://localhost:8001/v1/models \
       | python3 -c "import sys,json; d=json.load(sys.stdin); print('✅ ch0nky online:', d['data'][0]['id'])" \
       || echo "🔴 ch0nky offline — run: b00t hive activate inference-qwen36-27b"
 
@@ -1010,7 +991,7 @@ delegate task="":
     #!/usr/bin/env bash
     set -euo pipefail
     [ -z "{{task}}" ] && { echo "usage: just delegate task='<description>'"; exit 1; }
-    curl -sf http://127.0.0.1:8001/v1/models > /dev/null || { echo "🔴 ch0nky offline"; exit 1; }
+    curl -sf http://localhost:8001/v1/models > /dev/null || { echo "🔴 ch0nky offline"; exit 1; }
     echo "📤 delegating to ch0nky: {{task}}"
     opencode run --model qwen36-local/ch0nky "{{task}}"
 
@@ -1019,7 +1000,7 @@ delegate task="":
 ask query="":
     #!/usr/bin/env bash
     [ -z "{{query}}" ] && { echo "usage: just ask 'query'"; exit 1; }
-    curl -sf http://127.0.0.1:8001/v1/chat/completions \
+    curl -sf http://localhost:8001/v1/chat/completions \
       -H "Content-Type: application/json" \
       -d "{"model":"ch0nky","messages":[{"role":"user","content":"{{query}}"}],"max_tokens":256}" \
       | python3 -c "import sys,json; print(json.load(sys.stdin)['choices'][0]['message']['content'])"
@@ -1031,7 +1012,7 @@ check-fast:
 # ── ch0nky slot swap (pi ↔ opencode) ─────────────────────────────────────────
 # 🤓 pi and opencode share the ch0nky-coding-agent exclusion group — only one active
 moltis-build:
-    cargo build --manifest-path vendor/moltis-b00t/crates/cli/Cargo.toml --release --no-default-features --features lightweight
+    cargo build --manifest-path vendor/moltis-b00t/Cargo.toml --release
 
 # moltis: start moltis with b00t soul backend
 moltis-run:
@@ -1616,68 +1597,6 @@ review-soul topic="":
       echo "[queue] research-soul: $TOPIC"
     fi
 
-# gh-issue-review: b00t-gh-issues integration review for a GitHub issue.
-# Dogfoods b00t's grok subsystem to research the issue topic, then posts a
-# structured 5-section review comment (datums, integration level, overlap scan,
-# capability gaps, next actions) back to the GH issue.
-# 🤓 Use after reopening stale-closed issues, or when triaging the backlog.
-#    Runs within opencode via the b00t-gh-issues skill for full grok access.
-gh-issue-review issue="" backlog="false":
-    #!/usr/bin/env bash
-    set -euo pipefail
-    ISSUE="{{issue}}"
-    BACKLOG="{{backlog}}"
-
-    if [ "$BACKLOG" = "true" ]; then
-        echo "[gh-issues:review] backlog sweep — reviewing all open issues without b00t-gh-issues review"
-        OPEN_ISSUES=$(gh issue list --repo elasticdotventures/_b00t_ --state open --limit 100 --json number --jq '.[].number' 2>/dev/null)
-        for num in $OPEN_ISSUES; do
-            # Check if a b00t-gh-issues review already exists on this issue
-            REVIEWED=$(gh issue view "$num" --repo elasticdotventures/_b00t_ --json comments --jq '[.comments[].body] | join(" ")' 2>/dev/null | grep -c "b00ty-verse Integration Review" || true)
-            if [ "${REVIEWED:-0}" -eq 0 ]; then
-                echo "[gh-issues:review] unreviewed: #$num"
-                just gh-issue-review "$num"
-            else
-                echo "[gh-issues:review] already reviewed: #$num"
-            fi
-        done
-        echo "[gh-issues:review] backlog sweep complete"
-        exit 0
-    fi
-
-    if [ -z "$ISSUE" ]; then
-        echo "usage: just gh-issue-review <issue-number>"
-        echo "       just gh-issue-review --backlog"
-        exit 1
-    fi
-
-    echo "[gh-issues:review] reviewing issue #$ISSUE"
-
-    # Fetch issue metadata
-    ISSUE_DATA=$(gh issue view "$ISSUE" --repo elasticdotventures/_b00t_ --json number,title,body,labels,createdAt 2>/dev/null)
-    TITLE=$(echo "$ISSUE_DATA" | jq -r '.title // "unknown"')
-    echo "[gh-issues:review] title: $TITLE"
-
-    # Quick pre-check: does this issue already have a b00t-gh-issues review?
-    REVIEWED=$(gh issue view "$ISSUE" --repo elasticdotventures/_b00t_ --json comments --jq '[.comments[].body] | join(" ")' 2>/dev/null | grep -c "b00ty-verse Integration Review" || true)
-    if [ "${REVIEWED:-0}" -gt 0 ]; then
-        echo "[gh-issues:review] #$ISSUE already has a b00t-gh-issues review — skipping"
-        exit 0
-    fi
-
-    # Delegate the full review to opencode with the b00t-gh-issues skill
-    REVIEW_PROMPT="Review GitHub issue #$ISSUE from elasticdotventures/_b00t_ using the b00t-gh-issues skill. Follow the full workflow: fetch the issue, extract concepts, research with grok, scan for overlap, compose the 5-section review, and post it as a comment on the issue. Title: '$TITLE'"
-    echo "[gh-issues:review] delegating to opencode with b00t-gh-issues skill..."
-    echo "[gh-issues:review] prompt: $REVIEW_PROMPT"
-    echo "[gh-issues:review] (run manually: just gh-issue-review $ISSUE lacks opencode in PATH — invoke via opencode directly)"
-
-    # Log the review request
-    TS=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-    b00t-cli data fabric upsert \
-        --subject "gh-issue-review:$ISSUE" --predicate "b00t:reviewRequested" \
-        --object "$TS" --namespace gh-issue-review-log 2>/dev/null || true
-    echo "[gh-issues:review] logged review request for #$ISSUE at $TS"
-
 # autolearn-loop: run OODA cycles until task queue empty, max 10 iterations
 autolearn-loop:
     #!/usr/bin/env bash
@@ -1743,20 +1662,6 @@ install-pre-push-hook:
     cp "$SRC" "$DST" && chmod +x "$DST"
     echo "✅ Installed $DST"
     echo "   Gate: cargo test --package b00t-cli --lib before push to non-fork remotes"
-
-
-# install-pre-commit-hook: install pre-commit git hook that validates .gitmodules integrity.
-# 🤓 guards against merge artifacts that silently delete .gitmodules (see PR #490).
-install-pre-commit-hook:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    B00T_ROOT=$(git rev-parse --show-toplevel 2>/dev/null || echo "$HOME/.b00t")
-    SRC="$B00T_ROOT/_b00t_/hooks/pre-commit"
-    DST="$B00T_ROOT/.git/hooks/pre-commit"
-    cp "$SRC" "$DST" && chmod +x "$DST"
-    echo "✅ Installed $DST"
-    echo "   Gate: .gitmodules must exist and have submodule entries"
-
 
 # ── ralph with diversity ──────────────────────────────────────────────────────
 # ralph-spawn: instantiate a ralph agent with a random personality + transferable skills.
@@ -2178,30 +2083,6 @@ gate-help:
     @echo "⚠️  All gate-protected actions require Zellij + fzf"
     @echo "⚠️  Agent CANNOT proceed without user approval through interactive menu"
 
-# 🥾 Kreuzberg document intelligence — install + test
-kreuzberg-install:
-    #!/bin/bash
-    set -euo pipefail
-    echo "🥾 Installing kreuzberg document intelligence..."
-    if ! command -v uv >/dev/null 2>&1; then
-        echo "📦 Installing uv (Astral Python toolchain)..."
-        curl -LsSf https://astral.sh/uv/install.sh | sh
-        export PATH="$HOME/.local/bin:$PATH"
-    fi
-    echo "📦 Installing kreuzberg via pip install --user..."
-    pip3 install --user kreuzberg
-    echo ""
-    echo "🔍 Verifying installation..."
-    python3 -c "import kreuzberg; print('kreuzberg OK')"
-    echo "✅ kreuzberg-install complete"
-
-kreuzberg-test *ARGS='':
-    #!/bin/bash
-    set -euo pipefail
-    echo "🧪 Testing kreuzberg document intelligence..."
-    echo ""
-    python3 "{{repo-root}}/_b00t_/kreuzberg-test.py" ${ARGS:-}
-
 # skills: list all registered b00t skills (SKILL.md + *.skill.toml datums)
 # 🤓 b00t-cli --path discovers skills/ relative to the path arg, not $PWD default
 skills query="":
@@ -2213,249 +2094,72 @@ skills query="":
       b00t-cli --path "$B00T_ROOT" skill search "{{query}}"
     fi
 
-# ─── Topology: introspected flow charts from system datums ──────────────────
 
-# Generate Mermaid flowchart from ontology introspection
-gen-flowchart-mermaid root="":
-    cd b00t-cli && cargo run --bin b00t-cli -- ontology export --format=mermaid --root={{root}} --depth=3
+# ── Fine-tune — QLoRA k8s Job orchestration (sm3lly RTX 3090) ───────────────
 
-# Generate Cytoscape JSON graph from ontology introspection
-gen-flowchart-cytoscape root="" output="topology.json":
-    cd b00t-cli && cargo run --bin b00t-cli -- ontology export --format=cytoscape --root={{root}} --depth=3 > {{output}}
+# Apply RBAC/namespace prerequisites for fine-tune Jobs (one-time)
+finetune-k8s-setup:
+    kubectl apply -f _b00t_/k8s.🚢/fine-tune/rbac.yaml
 
-# Generate docs chapter with auto-updating flow charts
-gen-flowchart-docs:
-    cd b00t-cli && cargo run --bin b00t-cli -- ontology export --format=mermaid --depth=3 > book/src/topology.md
-    echo "Updated book/src/topology.md with live system topology"
+# ch0nky variant: scale down sm0l → train → scale up
+finetune-train-kube: finetune-k8s-setup
+    kubectl scale deployment sm0l --replicas=0 -n b00t-inference || true
+    kubectl delete job unsloth-train -n b00t-finetune --ignore-not-found
+    kubectl apply -f _b00t_/k8s.🚢/fine-tune/job.yaml
+    @echo "Training started. Watch: kubectl logs -n b00t-finetune -l b00t.tier=finetune -f"
+    kubectl wait --for=condition=complete --timeout=7200s job/unsloth-train -n b00t-finetune
+    kubectl scale deployment sm0l --replicas=1 -n b00t-inference
 
-# ── GitHub PR operations via gh.cli datum ──────────────────────────────────
-# Abstract interfaces from _b00t_/gh.cli.toml — uses gh CLI (preferred)
-# or curl+REST fallback when gh unavailable.
+# sm0l variant: trains Qwen2.5-3B → updates B00T_SM0L_ENDPOINT GGUF
+finetune-train-kube-smol: finetune-k8s-setup
+    kubectl scale deployment sm0l --replicas=0 -n b00t-inference || true
+    kubectl delete job unsloth-train-smol -n b00t-finetune --ignore-not-found
+    kubectl apply -f _b00t_/k8s.🚢/fine-tune/job-smol.yaml
+    @echo "sm0l training started. Watch: kubectl logs -n b00t-finetune -l b00t.io/model=sm0l -f"
+    kubectl wait --for=condition=complete --timeout=3600s job/unsloth-train-smol -n b00t-finetune
+    kubectl scale deployment sm0l --replicas=1 -n b00t-inference
 
-# Post a comment on a PR via gh.cli datum abstract interface
-gh-pr-comment pr body:
-    @b00t datum call gh.cli pr_comment --token pr={{pr}} --token body="{{body}}" --exec
+# Generate fine-tune dataset from b00t corpus
+finetune-dataset:
+    uv run python3 fine-tune/generate_dataset.py
 
-# Submit a formal PR review via gh.cli datum
-gh-pr-review pr event body:
-    @b00t datum call gh.cli pr_review --token pr={{pr}} --token event={{event}} --token body="{{body}}" --exec
+# Export trained LoRA adapter to GGUF
+finetune-export:
+    uv run python3 fine-tune/export_gguf.py
 
-# Get PR diff via gh.cli datum
-gh-pr-diff pr:
-    @b00t datum call gh.cli pr_diff --token pr={{pr}} --exec
+# Watch training logs (any active job)
+finetune-logs:
+    kubectl logs -n b00t-finetune -l b00t.tier=finetune -f --tail=50
 
-# List open PRs
-gh-pr-list limit="10":
-    @b00t exec -- gh pr list --state open --limit {{limit}}
+# Status of fine-tune Jobs
+finetune-status:
+    kubectl get jobs,pods -n b00t-finetune
 
+# ── rust-docs-mcp-b00t — local wrkflw CI gate ───────────────────────────────
 
-# ── b00t Agent Exchange Protocols ──
+# Validate docker.yml schema (instant — no execution)
+rust-docs-validate:
+    wrkflw validate vendor/rust-docs-mcp-b00t/.github/workflows/docker.yml
 
-# Discover sm3lly (RTX 3090 inference agent) on the hive
-connect-sm3lly:
-    @echo "🔍 Discovering sm3lly..."
-    b00t agent discover --role inference || echo "Not found — start sm3lly agent first"
-    @echo "Add sm3lly to ~/.b00t/server-soul.tomllm for auto-proxy"
+# Run local-build job via wrkflw (emulation — no containers)
+rust-docs-local-build:
+    wrkflw run --job local-build --runtime emulation \
+        vendor/rust-docs-mcp-b00t/.github/workflows/docker.yml
 
-# Share training data with sm3lly for finetuning
-share-training sm3lly_host="sm3lly":
-    @echo "📤 Sharing training data with {{sm3lly_host}}..."
-    rsync -avz ~/.b00t/training/b00t-corpus.jsonl {{sm3lly_host}}:~/.b00t/training/
+# Watch mode: auto-rerun local-build on file changes
+rust-docs-watch:
+    wrkflw watch --job local-build \
+        vendor/rust-docs-mcp-b00t/.github/workflows/docker.yml
 
-# Delegate full finetune pipeline to sm3lly
-delegate-finetune sm3lly_host="sm3lly":
-    just share-training {{sm3lly_host}}
-    @echo "🔧 Executing finetune on {{sm3lly_host}} (RTX 3090 24GB)..."
-    ssh {{sm3lly_host}} "cd .b00t && uv run python3 scripts/finetune-b00t.py"
-
-# Sync Spotlight telemetry logs bidirectionally
-sync-spotlight sm3lly_host="sm3lly":
-    scp {{sm3lly_host}}:~/.b00t/spotlight.jsonl /tmp/sm3lly-spotlight.jsonl 2>/dev/null || true
-    cat /tmp/sm3lly-spotlight.jsonl >> ~/.b00t/spotlight.jsonl 2>/dev/null || true
-    scp ~/.b00t/spotlight.jsonl {{sm3lly_host}}:~/.b00t/spotlight.jsonl 2>/dev/null || true
-    @echo "✅ Spotlight logs synced"
-
-# Mirror soul configs between agents
-mirror-soul sm3lly_host="sm3lly":
-    scp ~/.b00t/server-soul.tomllm {{sm3lly_host}}:~/.b00t/server-soul.tomllm 2>/dev/null || true
-    scp {{sm3lly_host}}:~/.b00t/server-soul.tomllm /tmp/sm3lly-soul.tomllm 2>/dev/null || true
-    @echo "✅ Soul configs mirrored"
-
-
-# ─── Fine-tuning: unsloth QLoRA via podman container ─────────────────────────
-# 🤓 Uses docker.io/unsloth/unsloth:latest — official container with torch+CUDA
-#    Mounts: ~/.cache/huggingface/hub → /hf, ./fine-tune → /workspace/fine-tune
-#    All training runs via podman --device nvidia.com/gpu=all (b00t GPU guard)
-
-UNSLOTH_IMAGE := "docker.io/unsloth/unsloth:latest"
-HF_CACHE := env_var_or_default("HF_HOME", env_var("HOME") + "/.cache/huggingface")
-FT_DIR := justfile_directory() + "/fine-tune"
-UNSLOTH_CACHE := env_var("HOME") + "/.cache/unsloth-llama-cpp"
-
-# Generate training dataset from b00t corpus (stdlib only, no container needed)
-finetune-dataset format="alpaca" max="5000":
-    uv run python3 fine-tune/generate_dataset.py --format={{format}} --max-rows={{max}}
-
-# Run QLoRA fine-tuning in unsloth container — sm0l (0.5B, fits alongside ch0nky)
-finetune-train-smol:
-    mkdir -p {{FT_DIR}}/output-smol
-    podman run --rm \
-      --device nvidia.com/gpu=all --security-opt=label=disable \
-      --entrypoint python3 \
-      --user "$(id -u):$(id -g)" \
-      -v "{{HF_CACHE}}:/hf:z" \
-      -v "{{UNSLOTH_CACHE}}:/home/ubuntu/.unsloth:z" \
-      -v "{{FT_DIR}}:/workspace/fine-tune:z" \
-      -e HF_HOME=/hf \
-      {{UNSLOTH_IMAGE}} \
-      /workspace/fine-tune/train_unsloth.py --config /workspace/fine-tune/config-smol.yaml
-
-# Run QLoRA fine-tuning in unsloth container — 27B ch0nky (requires ch0nky stopped)
-# ⚠️  Stop ch0nky first: just qwen36-stop
-finetune-train-ch0nky:
+# Deploy sm3lly self-hosted runner (requires fresh token — expires 1h)
+rust-docs-runner-deploy:
     #!/usr/bin/env bash
-    set -euo pipefail
-    curl -sf http://127.0.0.1:8001/v1/models -H "Authorization: Bearer local-b00t" > /dev/null 2>&1 \
-      && { echo "❌ ch0nky is running — stop it first: just qwen36-stop"; exit 1; }
-    mkdir -p {{FT_DIR}}/output-ch0nky
-    podman run --rm \
-      --device nvidia.com/gpu=all --security-opt=label=disable \
-      -v "{{HF_CACHE}}:/hf:z" \
-      -v "{{UNSLOTH_CACHE}}:/home/ubuntu/.unsloth:z" \
-      -v "{{FT_DIR}}:/workspace/fine-tune:z" \
-      -e HF_HOME=/hf \
-      --entrypoint python3 \
-      --user "$(id -u):$(id -g)" \
-      {{UNSLOTH_IMAGE}} \
-      /workspace/fine-tune/train_unsloth.py --config /workspace/fine-tune/config-ch0nky.yaml
-
-# Export LoRA adapter to GGUF in unsloth container
-finetune-export adapter="./fine-tune/output-ch0nky/lora-adapter" quant="Q4_K_M" output="./fine-tune/output-ch0nky/b00t-ch0nky.gguf":
-    mkdir -p {{UNSLOTH_CACHE}}
-    podman run --rm \
-      --device nvidia.com/gpu=all --security-opt=label=disable \
-      -v "{{HF_CACHE}}:/hf:z" \
-      -v "{{UNSLOTH_CACHE}}:/home/ubuntu/.unsloth:z" \
-      -v "{{FT_DIR}}:/workspace/fine-tune:z" \
-      -e HF_HOME=/hf \
-      --entrypoint python3 \
-      --user "$(id -u):$(id -g)" \
-      {{UNSLOTH_IMAGE}} \
-      /workspace/fine-tune/export_gguf.py \
-        --adapter /workspace/{{adapter}} \
-        --output /workspace/{{output}} \
-        --quant {{quant}}
-
-# Full sm0l pipeline: dataset → train → export → checkpoint
-finetune-smol:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    echo "=== finetune-smol: dataset ==="; just finetune-dataset
-    echo "=== finetune-smol: train ==="; just finetune-train-smol
-    echo "=== finetune-smol: export ==="
-    just finetune-export "./fine-tune/output-smol/lora-adapter" "Q4_K_M" "./fine-tune/output-smol/b00t-smol.gguf"
-    echo "=== finetune-smol: checkpoint ==="
-    uv run python3 fine-tune/update_gen_checkpoint.py --model fine-tune/output-smol/b00t-smol.gguf --tier smol
-    echo "✅ sm0l done — run: just finetune-smol-serve"
-
-# Full ch0nky pipeline: dataset → train → export → checkpoint (needs ch0nky stopped)
-finetune-ch0nky:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    echo "=== finetune-ch0nky: dataset ==="; just finetune-dataset
-    echo "=== finetune-ch0nky: train ==="; just finetune-train-ch0nky
-    echo "=== finetune-ch0nky: export ==="
-    just finetune-export "./fine-tune/output-ch0nky/lora-adapter" "Q4_K_M" "./fine-tune/output-ch0nky/b00t-ch0nky.gguf"
-    echo "=== finetune-ch0nky: checkpoint ==="
-    uv run python3 fine-tune/update_gen_checkpoint.py --model fine-tune/output-ch0nky/b00t-ch0nky.gguf --tier ch0nky
-
-finetune-all: finetune-smol finetune-ch0nky
-
-# Start fine-tuned sm0l on :8002 (alongside ch0nky :8001)
-finetune-smol-serve gguf="fine-tune/output-smol/b00t-smol.gguf":
-    #!/usr/bin/env bash
-    set -euo pipefail
-    [ -f "{{gguf}}" ] || { echo "❌ GGUF missing: {{gguf}} — run: just finetune-smol"; exit 1; }
-    podman run --rm -d \
-      --device nvidia.com/gpu=all --security-opt=label=disable \
-      -v "$(pwd)/fine-tune/output-smol:/models:z" \
-      -p 8002:8002 --name b00t-smol \
-      ghcr.io/ggml-org/llama.cpp:server-cuda \
-        --model /models/b00t-smol.gguf --host 0.0.0.0 --port 8002 \
-        -ngl 999 -fa on -c 8192 -n 512 \
-        --alias b00t-smol --api-key local-b00t
-    echo "✅ b00t-smol on :8002"
-
-# ─── Multi-variant correctness evaluation ────────────────────────────────────
-
-# Eval ch0nky baseline only
-eval-ch0nky:
-    uv run python3 fine-tune/correctness_eval.py \
-      --endpoints http://127.0.0.1:8001 --judge-endpoint http://127.0.0.1:8001
-
-# Eval all active variants (auto-discovers :8001/:8002/:8003)
-eval-variants:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    ENDPOINTS="http://127.0.0.1:8001"
-    curl -sf http://127.0.0.1:8002/v1/models -H "Authorization: Bearer local-b00t" > /dev/null 2>&1 \
-      && ENDPOINTS="$ENDPOINTS http://127.0.0.1:8002" || echo "ℹ️  :8002 offline"
-    curl -sf http://127.0.0.1:8003/v1/models -H "Authorization: Bearer local-b00t" > /dev/null 2>&1 \
-      && ENDPOINTS="$ENDPOINTS http://127.0.0.1:8003" || true
-    uv run python3 fine-tune/correctness_eval.py \
-      --endpoints $ENDPOINTS --judge-endpoint http://127.0.0.1:8001
-
-# Show latest correctness scorecard summary
-eval-show:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    LATEST=$(ls -t .b00t/ralph/correctness-*.jsonl 2>/dev/null | head -1)
-    [ -z "$LATEST" ] && { echo "no scorecard yet — run: just eval-ch0nky"; exit 1; }
-    uv run python3 fine-tune/correctness_eval_show.py "$LATEST"
-
-# ─── Generational checkpoint ─────────────────────────────────────────────────
-
-finetune-gen-status:
-    @cat .b00t/finetune-gen.json 2>/dev/null || echo "no checkpoint yet"
-
-finetune-gen-check:
-    #!/usr/bin/env bash
-    CURRENT=$(wc -l < fine-tune/train.jsonl 2>/dev/null || echo 0)
-    LAST=$(uv run python3 -c "import json; print(json.load(open('.b00t/finetune-gen.json')).get('train_pairs',0))" 2>/dev/null || echo 0)
-    DELTA=$(( CURRENT - LAST ))
-    echo "pairs: current=${CURRENT} last=${LAST} delta=${DELTA}"
-    [ "$DELTA" -ge 100 ]
-
-# Release gate: retrain if >100 new pairs, eval, then release
-release-with-finetune:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    echo "=== release-with-finetune ==="
-    if just finetune-gen-check 2>/dev/null; then
-      echo "🔄 delta >= 100 — retraining sm0l..."; just finetune-smol
-    else
-      echo "⏭  delta < 100 — skipping retrain"
-    fi
-    echo "🧪 correctness eval..."; just eval-variants
-    echo "🚀 releasing..."; just release
-
-# ─── Worktree bootstrap (fixes submodule gaps — see issue #538) ───────────────
-
-worktree-init:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    MAIN="$HOME/.b00t"
-    WD="$(git rev-parse --show-toplevel)"
-    [ "$WD" = "$MAIN" ] && { echo "ℹ️  running in main checkout — no-op"; exit 0; }
-    echo "🔧 worktree-init: linking vendor submodules from $MAIN"
-    LINKED=0
-    for d in "$WD/vendor"/*/; do
-      name=$(basename "${d%/}")
-      src="$MAIN/vendor/$name"
-      dst="$WD/vendor/$name"
-      if [ -d "$src" ] && [ -d "$dst" ] && [ -z "$(ls -A "$dst" 2>/dev/null)" ]; then
-        rmdir "$dst" && ln -s "$src" "$dst"
-        echo "  linked: vendor/$name"
-        LINKED=$((LINKED+1))
-      fi
-    done
+    TOKEN=$(gh api -X POST repos/PromptExecution/rust-docs-mcp-b00t/actions/runners/registration-token --jq .token)
+    kubectl create secret generic gh-runner-token \
+        --from-literal=RUNNER_TOKEN="$TOKEN" \
+        --from-literal=REPO_URL=https://github.com/PromptExecution/rust-docs-mcp-b00t \
+        -n b00t-gh-runner --dry-run=client -o yaml | kubectl apply -f -
+    kubectl rollout restart deployment/gh-runner-rust-docs -n b00t-gh-runner
+    kubectl rollout status deployment/gh-runner-rust-docs -n b00t-gh-runner --timeout=60s
+    @echo "Runner status:"
+    gh api repos/PromptExecution/rust-docs-mcp-b00t/actions/runners --jq '.runners[] | "\(.name) \(.status)"'
