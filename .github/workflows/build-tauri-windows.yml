@@ -19,10 +19,10 @@ jobs:
           submodules: recursive
 
       - name: Setup Rust
-        uses: actions-rust/toolchain@v1
-        with:
-          target: x86_64-pc-windows-msvc
-          toolchain: stable
+        run: |
+          rustup set profile minimal
+          rustup target add x86_64-pc-windows-msvc
+          rustup show
 
       - name: Build ledgerr-tauri (release)
         run: |
