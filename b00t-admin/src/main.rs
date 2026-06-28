@@ -17,6 +17,7 @@ use axum::{
     routing::get,
     Router,
 };
+use tower_http::services::ServeDir;
 use b00t_admin::{
     DigitalTwin, PipelineStateSnapshot, TypeSchema, WasmCodegen,
     registered_type_names,
