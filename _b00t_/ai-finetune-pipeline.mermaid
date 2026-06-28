@@ -1,0 +1,125 @@
+```mermaid
+graph TD
+    %% 🥾 b00t ai-finetune pipeline — ontological phygital-twin state graph
+    %% Blessing chain: b00t learn ai-finetune → hf-cli → HF-JOBS → HF-DATASET → HF-HUB-MODELS
+    %% Role: ai-worker  |  Skill: ai-finetune  |  just module: _b00t_/ai-finetune.just
+
+    subgraph BLESS["🎓 Blessing Chain"]
+        BL1["b00t learn ai-finetune"]:::entry
+        BL2["hf-cli<br/>(HF_TOKEN, hf auth whoami)"]:::dep
+        BL3["HF-JOBS<br/>(cloud compute tier)"]:::dep
+        BL4["HF-DATASET<br/>(elasticdotventures/b00t-training)"]:::dep
+        BL5["HF-HUB-MODELS<br/>(elasticdotventures/ adapter registry)"]:::dep
+        BL1 --> BL2 --> BL3
+        BL2 --> BL4 --> BL5
+    end
+
+    subgraph DATASET["📚 Dataset Generation"]
+        D1["just ai-finetune::dataset<br/>generate_dataset.py"]:::recipe
+        D2["corpus scan<br/>_b00t_/*.{toml,skill,role,just,md}<br/>vendor/**/*.{rs,md}"]:::proc
+        D3["8485 rows → fine-tune/train.jsonl"]:::artifact
+        D4["just ai-finetune::hf-sync<br/>OR hf-push"]:::recipe
+        D5["hf://datasets/elasticdotventures/b00t-training"]:::hf
+        D1 --> D2 --> D3 --> D4 --> D5
+    end
+
+    subgraph LOCAL["🖥️ Local k8s Tier (sm3lly RTX3090)"]
+        L1{"VRAM check<br/>nvidia-smi"}:::gate
+        L2["train-smol<br/>Qwen2.5-0.5B<br/>job-smol.yaml<br/>b00t-finetune ns"]:::recipe
+        L3["train-kube / train-ch0nky<br/>8-14B models<br/>job.yaml / job-ch0nky.yaml"]:::recipe
+        L4["adapter → PVC<br/>fine-tune/output-*/"]:::artifact
+        L1 -->|"≥3GB free"| L2
+        L1 -->|"≥14GB free"| L3
+        L2 & L3 --> L4
+    end
+
+    subgraph CLOUD["☁️ HF Jobs Tier (A100 80GB)"]
+        C1["just ai-finetune::cloud-train<br/>flavor config"]:::recipe
+        C1A["cloud-coder alias<br/>a100-large + config-cloud-coder.yaml"]:::alias
+        C2["hf jobs run docker.io/unsloth/unsloth:latest<br/>--flavor a100-large --timeout 10h --detach"]:::proc
+        C3["A100 80GB node<br/>Unsloth 2026.5.9"]:::infra
+        C4["Qwen3-Coder-30B-A3B-Instruct<br/>BF16 · LoRA r=16 · lora_dropout=0.0<br/>8485 rows · 3 epochs · 1578 steps"]:::model
+        C5["/data → hf://datasets/b00t-training<br/>/adapters → hf://buckets/b00t-adapters"]:::mount
+        C6["SFTTrainer<br/>output_dir: /tmp/output"]:::proc
+        C1A --> C1 --> C2 --> C3 --> C4
+        C5 --> C4 --> C6
+    end
+
+    subgraph CHECKPOINT["💾 Checkpoint / Recovery"]
+        CK1["save_steps: 100<br/>→ /tmp/output/checkpoint-N"]:::proc
+        CK2["⚠️ GAP: Hub push per checkpoint<br/>TrainingArguments(push_to_hub=True,<br/>hub_strategy=checkpoint)"]:::gap
+        CK3["⚠️ GAP: --resume flag<br/>resume_from_checkpoint=<path>"]:::gap
+        CK1 --> CK2
+        CK2 -.->|"fix #1"| CK3
+    end
+
+    subgraph OBSERVE["📊 Observability"]
+        OB1["just ai-finetune::hf-job-logs <id><br/>hf jobs logs --follow"]:::recipe
+        OB2["just ai-finetune::hf-job-status <id><br/>hf jobs inspect"]:::recipe
+        OB3["just ai-finetune::mlflow-status<br/>http://mlflow.b00t.local:30080"]:::recipe
+        OB4["just models<br/>kubectl get pods -n b00t-inference"]:::recipe
+    end
+
+    subgraph PUSH["📤 Push & Retrieve"]
+        P1["push_to_hub: true<br/>private: true (default)"]:::proc
+        P2["elasticdotventures/b00t-qwen3-coder-30b<br/>HF Hub model repo"]:::hf
+        P3["just ai-finetune::hf-adapter-pull<br/>model_id local_dir"]:::recipe
+        P4["fine-tune/output-cloud-coder/lora-adapter"]:::artifact
+        P1 --> P2 --> P3 --> P4
+    end
+
+    subgraph TEST["🧪 Adapter Smoke-Test"]
+        T1["just ai-finetune::test<br/>job-test-adapter.yaml"]:::recipe
+        T2["5-probe b00t-awareness<br/>score: X/5"]:::proc
+        T3{"score ≥ 5/5?"}:::gate
+        T4["✅ promote → sm0l replicas=1"]:::ok
+        T5["❌ block — re-train"]:::fail
+        T1 --> T2 --> T3
+        T3 -->|yes| T4
+        T3 -->|no| T5
+    end
+
+    subgraph PHYGITAL["🔄 ai-worker Phygital State"]
+        PH1(["idle"]):::state
+        PH2(["generating-dataset"]):::state
+        PH3(["training-local"]):::state
+        PH4(["training-cloud"]):::state
+        PH5(["testing"]):::state
+        PH6(["promoting"]):::state
+        PH7(["error"]):::state_err
+        PH1 --> PH2 --> PH3 & PH4
+        PH3 & PH4 --> PH5
+        PH5 -->|pass| PH6
+        PH5 -->|fail| PH7
+        PH7 --> PH1
+        PH6 --> PH1
+    end
+
+    %% ── cross-subgraph edges ──
+    BL5 --> D1
+    D5 --> C1
+    D3 --> L1
+    C6 --> CK1
+    C6 --> P1
+    C2 --> OB1 & OB2
+    L2 & L3 --> OB3
+    P4 --> T1
+
+    %% ── styles ──
+    classDef entry fill:#4fc3f7,stroke:#0288d1,color:#fff
+    classDef dep fill:#66bb6a,stroke:#388e3c,color:#fff
+    classDef recipe fill:#ab47bc,stroke:#7b1fa2,color:#fff
+    classDef alias fill:#ce93d8,stroke:#7b1fa2,color:#333
+    classDef proc fill:#42a5f5,stroke:#1565c0,color:#fff
+    classDef infra fill:#26c6da,stroke:#00838f,color:#fff
+    classDef model fill:#ef5350,stroke:#c62828,color:#fff
+    classDef mount fill:#78909c,stroke:#37474f,color:#fff
+    classDef artifact fill:#ffa726,stroke:#f57c00,color:#333
+    classDef hf fill:#ff7043,stroke:#bf360c,color:#fff
+    classDef gate fill:#ffd54f,stroke:#f57f17,color:#333
+    classDef gap fill:#f44336,stroke:#b71c1c,color:#fff,stroke-dasharray:5 5
+    classDef ok fill:#66bb6a,stroke:#2e7d32,color:#fff
+    classDef fail fill:#ef5350,stroke:#c62828,color:#fff
+    classDef state fill:#7c4dff,stroke:#4527a0,color:#fff
+    classDef state_err fill:#ff7043,stroke:#bf360c,color:#fff
+```

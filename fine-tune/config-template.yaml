@@ -45,5 +45,8 @@ save_steps: 100        # REQUIRED: checkpoint frequency to /adapters bucket
 logging_steps: 10
 use_gradient_checkpointing: true
 
+# ── Resume ───────────────────────────────────────────────────────────────────
+# resume_from: "org/model-repo/checkpoint-500"   # HF Hub checkpoint path; omit to start fresh
+
 # ── Observability ─────────────────────────────────────────────────────────────
 report_to: "none"      # stdout only; HF Jobs dashboard shows logs

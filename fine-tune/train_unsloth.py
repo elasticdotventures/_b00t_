@@ -28,7 +28,7 @@ def load_config(config_path: str) -> dict:
         return {}
 
 
-def train(config: dict):
+def train(config: dict, args=None):
     """Run the unsloth QLoRA fine-tuning loop."""
     model_name = config.get("base_model", "unsloth/Qwen3.6-27B-GGUF")
     adapter_name = config.get("adapter_name", "b00t-aligned-qwen36-27b")
@@ -149,10 +149,16 @@ def train(config: dict):
             output_dir=output_dir,
             save_steps=int(config.get("save_steps", 0)) or None,
             report_to=config.get("report_to", "none"),
+            # 🤓 push each checkpoint to HF Hub during training — survives job death
+            push_to_hub=bool(config.get("hub_model_id") and int(config.get("save_steps", 0)) > 0),
+            hub_model_id=config.get("hub_model_id", "") or "",
+            hub_strategy="checkpoint",
+            hub_private_repo=config.get("private", True),
         ),
     )
 
-    trainer.train()
+    resume_from = args.resume if args else config.get("resume_from", None)
+    trainer.train(resume_from_checkpoint=resume_from)
 
     # ─── Export ────────────────────────────────────────────────────────────────
     print("\nSaving LoRA adapter...")
@@ -176,10 +182,12 @@ def train(config: dict):
 def main():
     parser = argparse.ArgumentParser(description="Unsloth QLoRA fine-tuning for b00t")
     parser.add_argument("--config", default="fine-tune/config.yaml", help="Training config YAML")
+    parser.add_argument("--resume", type=str, default=None,
+                        help="Resume from checkpoint (local path or HF Hub repo/checkpoint-N)")
     args = parser.parse_args()
 
     config = load_config(args.config)
-    train(config)
+    train(config, args)
 
 
 if __name__ == "__main__":

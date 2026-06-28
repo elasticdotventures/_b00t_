@@ -205,6 +205,21 @@ cloud-train flavor="a100-large" config="config-cloud-coder.yaml":
 cloud-coder:
     just ai-finetune::cloud-train a100-large config-cloud-coder.yaml
 
+# Resume a cancelled/timed-out cloud job from a HF Hub checkpoint
+# checkpoint: HF Hub path e.g. elasticdotventures/b00t-qwen3-coder-30b/checkpoint-500
+cloud-resume flavor="a100-large" checkpoint="" config="config-cloud-coder.yaml":
+    #!/bin/bash
+    [[ -z "{{checkpoint}}" ]] && { echo "ERROR: checkpoint= required"; exit 1; }
+    hf jobs run docker.io/unsloth/unsloth:latest \
+      --flavor {{flavor}} \
+      --timeout 10h \
+      -e HF_HOME=/tmp/hf-cache \
+      --secrets HF_TOKEN \
+      -v hf://datasets/elasticdotventures/b00t-training:/data:ro \
+      -v hf://buckets/elasticdotventures/b00t-adapters:/adapters:rw \
+      --detach \
+      /bin/sh -c "pip install -q unsloth 'huggingface_hub[hf_xet]>=0.26' && python3 /data/train_unsloth.py --config /data/{{config}} --resume {{checkpoint}}"
+
 # List all HF Jobs (active + recent)
 hf-jobs-list:
     hf jobs ps

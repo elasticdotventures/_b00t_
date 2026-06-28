@@ -16,6 +16,7 @@ unlocks = [
     # HF cloud training — generic engine + model-specific aliases
     "ai-finetune::cloud-train",      # generic: cloud-train flavor config
     "ai-finetune::cloud-coder",      # alias: Qwen3-Coder-30B on A100
+    "ai-finetune::cloud-resume",     # resume from HF Hub checkpoint
     # HF dataset sync
     "ai-finetune::hf-push",
     "ai-finetune::hf-push-config",   # push single config file
