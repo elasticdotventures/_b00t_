@@ -161,10 +161,19 @@ mlflow-remove:
 hf-sync:
     #!/bin/bash
     set -euo pipefail
+    echo "🔄 generating rustdoc JSON (nightly required)..."
+    just ai-finetune::rustdoc || echo "⚠️  rustdoc skipped (nightly unavailable)"
     echo "🔄 regenerating dataset from b00t corpus..."
     uv run python3 fine-tune/generate_dataset.py
     echo "📤 pushing to hf://datasets/elasticdotventures/b00t-training..."
     just ai-finetune::hf-push
+
+# Visualize training dataset: token-length distribution + category breakdown → SVG
+# Useful for spotting outliers, padding waste, category imbalance before cloud submit
+# Output: fine-tune/dataset-viz.svg (open in browser or VLM for inspection)
+dataset-viz:
+    uv run python3 fine-tune/generate_dataset.py --viz fine-tune/dataset-viz.svg
+    @echo "✓ fine-tune/dataset-viz.svg — open in browser or: just viz-entangle"
 
 # Upload dataset + trainer + all fine-tune/config-*.yaml to HF repo
 # Run after: just ai-finetune::dataset

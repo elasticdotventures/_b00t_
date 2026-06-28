@@ -20,6 +20,12 @@ B00T_AI_CH0NKY_MODEL = "ch0nky"
 provider       = "openai_compatible"
 size           = "large"
 capabilities   = ["chat", "code", "reasoning", "tool_use", "thinking"]
+# 🤓 Qwen3.6-35B-A3B: text-only in its MoE/GGUF form; vision requires Qwen3-VL family
+# ⚠️  Pi agent docs list "input": ["text","image"] for this GGUF but llamacpp multimodal
+#     requires a vision encoder (mmproj) — not confirmed available for Qwen3.6-35B-A3B-GGUF
+input_modalities  = ["text"]               # confirmed; image: unverified, see note above
+input_formats     = ["text/plain", "text/markdown", "application/json"]
+output_modalities = ["text"]
 litellm_model  = "openai/ch0nky"
 api_base       = "http://127.0.0.1:8001/v1"
 api_key_env    = "OPENAI_API_KEY"
