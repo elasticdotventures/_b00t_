@@ -1154,16 +1154,16 @@ opencode-plugins-install: opencode-goal-install
     @echo "✅ All opencode plugins installed"
 
 # Run OpenCode via podman with full b00t environment mounted
-# 🤓 Mounts: workspace, config, skills, MCP servers, git/ssh, env vars.
-#    All b00t agent skills and just recipes available inside container.
+# 🤓 Mounts: workspace, config, git/ssh, API keys. Skills dir mounted
+#    if present (project-local .opencode/skills/ or global).
 opencode-run workspace=".":
     @echo "🚀 Launching OpenCode (podman)..."
+    @mkdir -p {{workspace}}/.opencode/skills
     podman run -it --rm \
         --security-opt label=disable \
         -v {{workspace}}:/workspace \
         -v ~/.config/opencode/opencode.json:/root/.config/opencode/opencode.json:ro \
-        -v ~/.config/opencode/AGENTS.md:/root/.config/opencode/AGENTS.md:ro \
-        -v ${HOME}/.opencode/skills:/root/.opencode/skills:ro \
+        -v {{workspace}}/.opencode/skills:/root/.opencode/skills:ro \
         -v ${HOME}/.gitconfig:/root/.gitconfig:ro \
         -v ${HOME}/.ssh:/root/.ssh:ro \
         -e OPENAI_API_KEY \
@@ -1174,12 +1174,12 @@ opencode-run workspace=".":
 # Run OpenCode for app4dog with full game development environment
 opencode-app4dog:
     @echo "🐶 Launching OpenCode for app4dog..."
+    @mkdir -p ~/promptexecution/app4dog/.opencode/skills
     podman run -it --rm \
         --security-opt label=disable \
         --network host \
         -v ~/promptexecution/app4dog:/workspace \
-        -v ~/.config/opencode/opencode.json:/root/.config/opencode/opencode.json:ro \
-        -v ${HOME}/.opencode/skills:/root/.opencode/skills:ro \
+        -v ~/promptexecution/app4dog/.opencode/skills:/root/.opencode/skills:ro \
         -v ${HOME}/.gitconfig:/root/.gitconfig:ro \
         -v ${HOME}/.ssh:/root/.ssh:ro \
         -e OPENAI_API_KEY \
