@@ -7,7 +7,7 @@
 base_model: "Qwen/Qwen3-Coder-30B-A3B-Instruct"
 adapter_name: "b00t-qwen3-coder-30b"
 dataset_path: "/data/train.jsonl"
-output_dir: "/adapters/qwen3-coder-30b"
+output_dir: "/tmp/output"   # bucket FUSE mount doesn't support makedirs; push_to_hub handles persistence
 hub_model_id: "elasticdotventures/b00t-qwen3-coder-30b"
 push_to_hub: true
 

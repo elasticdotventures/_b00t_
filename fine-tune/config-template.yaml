@@ -18,7 +18,8 @@ push_to_hub: true
 # ── Storage ──────────────────────────────────────────────────────────────────
 # dataset_path: for cloud jobs use /data/train.jsonl (mounted from HF dataset repo)
 dataset_path: "/data/train.jsonl"
-output_dir: "/adapters/<slug>"    # writes to hf://buckets/elasticdotventures/b00t-adapters/<slug>
+# 🤓 HF bucket FUSE mount does NOT support makedirs — use /tmp/output; push_to_hub handles persistence
+output_dir: "/tmp/output"
 
 # ── Precision ────────────────────────────────────────────────────────────────
 load_in_4bit: false   # false = BF16 (A100/H200); true = 4-bit (A10g, <24GB)
