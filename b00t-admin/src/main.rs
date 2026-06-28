@@ -1267,6 +1267,36 @@ function toggleSection(name) {{
   if (panel) panel.style.display = isOpen ? 'none' : 'block';
 }}
 
+// ════════ Keyboard Navigation ════════
+document.addEventListener('keydown', function(e) {
+  if (e.altKey || e.ctrlKey || e.metaKey) return;
+  var map = { '1': 'pipeline', '2': 'types', '3': 'sim', '4': 'viz' };
+  var section = map[e.key];
+  if (section) {
+    e.preventDefault();
+    // Close all sections
+    ['pipeline','types','sim','viz'].forEach(function(s) {
+      var body = document.getElementById('section-' + s);
+      if (!body) return;
+      body.classList.remove('open');
+      body.previousElementSibling.classList.remove('active');
+    });
+    // Open target
+    var body = document.getElementById('section-' + section);
+    if (body) {
+      body.classList.add('open');
+      body.previousElementSibling.classList.add('active');
+    }
+    var panelMap = { pipeline: 'pipeline-panel', types: 'type-panel', sim: 'sim-panel', viz: 'viz-panel' };
+    Object.values(panelMap).forEach(function(id) {
+      var p = document.getElementById(id);
+      if (p) p.style.display = 'none';
+    });
+    var p = document.getElementById(panelMap[section]);
+    if (p) p.style.display = 'block';
+  }
+});
+
 // ════════ Mermaid Init ════════
 mermaid.initialize({{ startOnLoad: false, theme: 'dark', themeVariables: {{ background: '#0f172a' }} }});
 

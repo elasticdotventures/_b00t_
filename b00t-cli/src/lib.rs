@@ -31,7 +31,8 @@ static DATUM_TYPE_WARNED: OnceLock<std::sync::Mutex<std::collections::HashSet<St
 
 /// Returns true if the value is a well-known content tag (not a typed datum).
 fn is_known_content_tag(s: &str) -> bool {
-    matches!(s, "okr" | "prd" | "pattern" | "datum" | "reference" | "learn" | "hardware" | "tomllmd")
+    matches!(s, "okr" | "prd" | "pattern" | "datum" | "reference" | "learn" | "hardware" | "tomllmd"
+        | "specification" | "topic" | "soul" | "install" | "github_org" | "ai_provider" | "pyinfra" | "wow")
 }
 
 /// Load incubating datum types from a runtime‑defined datum.
@@ -1076,6 +1077,13 @@ pub enum DatumType {
     ///    Agents discover available credentials with: b00t datum list --type credential
     ///    Encryption key lives in OS keyring (b00t/master-key), never on disk.
     Credential,
+    Gate,
+    Hook,
+    McpServer,
+    Plan,
+    Schema,
+    Training,
+    Vendor,
     Unknown,
 }
 
@@ -1143,7 +1151,7 @@ macro_rules! datum_type_table {
 
 impl DatumType {
     datum_type_table! {
-        Database    => ["database"]                  => ".database",
+        Database    => ["database", "db"]             => ".database",
         HiveProfile => ["hive", "hive_profile"]      => ".hive",
         Agent       => ["agent"]                     => ".agent",
         Config      => ["config"]                    => ".config",
@@ -1169,6 +1177,13 @@ impl DatumType {
         Runtime     => ["runtime", "wrap", "launcher"] => ".runtime",
         Polyseme    => ["polyseme", "poly"]            => ".polyseme",
         Credential  => ["credential", "credentials"]  => ".credential",
+        Gate        => ["gate"]                      => ".gate",
+        Hook        => ["hook"]                      => ".hook",
+        McpServer   => ["mcp_server"]                => ".mcp_server",
+        Plan        => ["plan"]                      => ".plan",
+        Schema      => ["schema"]                    => ".schema",
+        Training    => ["training"]                  => ".training",
+        Vendor      => ["vendor"]                    => ".vendor",
     }
 
     /// Preferred file extension for writing new datum files.
