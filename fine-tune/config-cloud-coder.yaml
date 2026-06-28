@@ -16,8 +16,8 @@ private: true        # flip to false to publish publicly on HF Hub
 load_in_4bit: false
 
 # MoE 30B-A3B: r=16 sufficient (3B active params per forward pass)
-lora_r: 4   # 🤓 MoE: Unsloth auto-adds 128-expert LoRA; r×experts drives step time; r=4 → ~37s/step
-lora_alpha: 8
+lora_r: 16   # 🤓 MoE: r has NO effect on step time — bottleneck is 30B fwd/bwd pass, not optimizer
+lora_alpha: 32
 lora_dropout: 0.0    # 🤓 MUST be 0.0 — Unsloth fast kernel disabled for any dropout > 0 (140s/step → ~5s/step)
 target_modules:
   - "q_proj"
@@ -28,11 +28,12 @@ target_modules:
   - "up_proj"
   - "down_proj"
 
-num_epochs: 1   # 1 epoch at r=4 ≈ 5.5h on A100; fits 10h budget
+num_epochs: 1   # 1 epoch; packing+seq1024 should give ~40-55s/step → ~6-8h
 batch_size: 2
 grad_accum: 8
 learning_rate: 1e-4
-max_seq_length: 2048
+max_seq_length: 1024   # 🤓 halving seq_len cuts attention O(n²) + FFN O(n); ~2-4x speedup
+packing: true           # 🤓 SFTTrainer packs short examples — b00t data avg ~256 tok, wastes 87% at 2048
 optim: "adamw_8bit"
 weight_decay: 0.01
 lr_scheduler: "cosine"
