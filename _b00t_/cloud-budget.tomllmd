@@ -1,72 +1,332 @@
 # b00t Cloud GPU Budget — FOCUS v1.3 aligned
-# Unit of value: 🎂 (cake) — fungible token representing desire and attention.
-# USD is an external exchange rate, not the canonical unit.
-# Consumed by: just ai-finetune::cost-estimate, just ai-finetune::budget-gate
+# Unit: 🎂 cake — fungible token of desire and attention.
+# Cake is both real (external billing proxy) and imaginary (hive alignment unit).
+#
+# 🤓 Variable convention:
+#   .default = hardcoded fallback (used when remote state unreconciled)
+#   .example = illustrative value for documentation
+#   .env_var = environment variable that overrides default at runtime
+#   .source  = "unreconciled" | "aws-budget" | "gcp-budget" | "operator-set"
+#
+# Commands are embedded below — datum IS the executable object.
+# Run via: b00t run cloud-budget::<name>  OR  just ai-finetune::<name>
 
 [b00t]
 name = "cloud-budget"
 type = "config"
-hint = "GPU cloud budget denominated in 🎂 cake; USD is only a conversion shim for external billing APIs"
+hint = "GPU cloud budget in 🎂 cake — endurant, self-contained with embedded commands"
 
-# ── Exchange rate shim (cake ↔ external fiat) ────────────────────────────────
-# 🤓 Set this to define what 1 🎂 is worth in USD for HF Jobs billing conversion.
-# Operator sets this; no default — forcing explicit intent.
-[exchange]
-usd_per_cake = 1.00    # placeholder: 1🎂 = $1 USD until operator sets true rate
+# ── Exchange rate shim ────────────────────────────────────────────────────────
+[exchange."usd_per_cake"]
+default = 1.00
+example = 1.00
+env_var = "CAKE_USD_RATE"
+source  = "assumed"
 
-# ── Monthly cake budget ───────────────────────────────────────────────────────
+# ── Monthly cap ───────────────────────────────────────────────────────────────
 [budget]
-"monthly_cap_🎂" = 200     # operator-set; evidentiary source: MUST be updated by operator
-warn_threshold  = 0.75   # warn at 75% of cap
-gate_threshold  = 0.90   # block new submissions at 90%
+warn_threshold = 0.75
+gate_threshold = 0.90
 
-# ── Per-flavor hourly rates (in 🎂/hour) ─────────────────────────────────────
-[budget.hf_jobs]
-# 🤓 Rates sourced from HF Jobs pricing page × usd_per_cake exchange rate
-# At 1🎂=$1 these match USD; adjust usd_per_cake to re-denominate
-a10g_large   = 1.50   # 24GB VRAM
-a100_large   = 2.50   # 80GB VRAM — primary training tier
-a100_xlarge  = 4.50   # 2×A100
-h200         = 5.00   # 141GB
+# 🤓 no evidentiary source yet: AWS has no budgets (verified 2026-06-28);
+#   GCP/Azure sessions expired; HF has no budget API.
+#   Run command::budget-reconcile to query remote state.
+[budget."monthly_cap_cake"]
+default = 200
+example = 500
+env_var = "CAKE_MONTHLY_CAP"
+source  = "unreconciled"
 
-[budget.k8s]
-# sm3lly RTX3090 — internal opportunity cost signal, not external billing
-rtx3090_per_hour = 0.05
+# ── Flavor rates (🎂/hour, sourced from HF Jobs pricing page) ─────────────────
+[budget.hf_jobs."a10g_large"]
+default = 1.50
+source  = "hf-pricing-page"
 
-# ── Step-time estimates (seconds/iteration, empirically measured) ─────────────
-[budget.step_time_estimates]
-# 🤓 MoE routing scatter dominates — lora_r and target_modules have NO effect
-a100_large_30b_moe = 130   # measured run7; A100 80GB BF16 seq=2048 batch=2 ga=8
-h200_30b_moe       = 50    # estimated (not validated)
-a10g_large_0_5b    = 5     # measured, local k8s sm0l
+[budget.hf_jobs."a100_large"]
+default = 2.50
+source  = "hf-pricing-page"
 
-# ── FOCUS v1.3 schema alignment ──────────────────────────────────────────────
+[budget.hf_jobs."a100_xlarge"]
+default = 4.50
+source  = "hf-pricing-page"
+
+[budget.hf_jobs."h200"]
+default = 5.00
+source  = "hf-pricing-page"
+
+[budget.k8s."rtx3090_per_hour"]
+default = 0.05
+source  = "assumed"
+
+# ── Step-time estimates (s/it, empirically measured) ─────────────────────────
+# 🤓 MoE routing scatter dominates — lora_r / target_modules have NO effect
+[budget.step_time."a100_large_30b_moe"]
+default = 130
+source  = "measured-run7"
+
+[budget.step_time."h200_30b_moe"]
+default = 50
+source  = "estimated"
+
+[budget.step_time."a10g_large_0_5b"]
+default = 5
+source  = "measured-k8s"
+
+# ── FOCUS v1.3 ───────────────────────────────────────────────────────────────
 [focus]
-spec_version   = "1.3"
-provider_name  = "HuggingFace"
-service_name   = "HF Jobs"
+spec_version    = "1.3"
+provider_name   = "HuggingFace"
+service_name    = "HF Jobs"
 charge_category = "Usage"
-resource_type  = "GPU Compute"
-"billing_unit"   = "🎂"
-# Custom b00t columns (x_ prefix = FOCUS extension)
-custom_columns = [
-    "x_ExperimentId",   # job_id from hf jobs ps
-    "x_ModelVariant",   # e.g. qwen3-coder-30b
-    "x_StepTime",       # measured s/it
-    "x_DatasetRows",    # train.jsonl row count
-    "x_LoraR",          # LoRA rank used
-    "x_CakeSpend",      # 🎂 denominated cost for this job
+resource_type   = "GPU Compute"
+"billing_unit"  = "cake"
+custom_columns  = [
+    "x_ExperimentId", "x_ModelVariant", "x_StepTime",
+    "x_DatasetRows",  "x_LoraR",        "x_CakeSpend",
+    "x_ReconcileSource",
 ]
 
-# ── Forecast parameters ───────────────────────────────────────────────────────
-[forecast]
-runs_per_month   = 4      # expected training iterations per month
-hours_per_run    = 7.0    # expected wall-clock hours (30B, 1 epoch, A100)
-# Derived: 4 × 7 × 2.50🎂 = 70🎂/month — well within 200🎂 cap at current rate
+# ── Forecast ─────────────────────────────────────────────────────────────────
+[forecast."runs_per_month"]
+default = 4
+source  = "assumed"
+
+[forecast."hours_per_run"]
+default = 7.0
+source  = "assumed"
+
+# ── Reconciliation state (written by command::budget-reconcile) ───────────────
+[reconcile]
+last_run            = "never"
+"aws_budget_cake"   = "UNSET"          # no AWS budgets configured (verified 2026-06-28)
+"gcp_budget_cake"   = "AUTH_REQUIRED"  # gcloud session expired
+"azure_budget_cake" = "AUTH_REQUIRED"  # az session expired (90d inactivity)
+"hf_limit_cake"     = "NO_API"         # HF exposes no budget endpoint
+
+# ── Service contracts (budget is endurant — always queryable) ────────────────
+[[service_contract]]
+capability  = "budget-liveness"
+handler     = "command::cost-report"
+evidence    = "total billed + cap + forecast printed"
+tier        = "sm0l"
+verifiable  = true
+
+[[service_contract]]
+capability  = "budget-reconciled"
+handler     = "command::budget-reconcile"
+evidence    = "all providers queried; discrepancies reported"
+tier        = "sm0l"
+verifiable  = true
+
+[[service_contract]]
+capability  = "pre-flight-gate"
+handler     = "command::budget-gate <flavor> <config>"
+evidence    = "PASS: estimated cost within gate_threshold"
+tier        = "sm0l"
+verifiable  = true
+
+# ── Embedded commands — datum IS the executable object ───────────────────────
+# Invoked via: b00t run cloud-budget::<name>
+# Thin just shims in ai-finetune.just delegate here.
+
+[[command]]
+name        = "cost-estimate"
+description = "Pre-flight cost estimate: steps × step_time × rate"
+args        = ["flavor=a100-large", "config=fine-tune/config-cloud-coder.yaml"]
+tier        = "sm0l"
+output      = "ESTIMATE: N🎂 (~Nh) — budget OK|WARN|GATE"
+script      = """
+#!/usr/bin/env -S uv run --with pyyaml python3
+import math, os, subprocess, re, sys, tomllib
+
+flavor = os.environ.get("FLAVOR", "a100-large")
+config_path = os.environ.get("CONFIG", "fine-tune/config-cloud-coder.yaml")
+
+try:
+    import yaml
+    with open(config_path) as f:
+        cfg = yaml.safe_load(f)
+    with open("_b00t_/cloud-budget.tomllmd", "rb") as f:
+        bgt = tomllib.load(f)
+except Exception as e:
+    print(f"FAIL: {e}"); sys.exit(1)
+
+# resolve .default convention
+def resolve(section, key, fallback):
+    env_var = section.get(key, {}).get("env_var", "")
+    return float(os.environ.get(env_var, section.get(key, {}).get("default", fallback)))
+
+cap       = resolve(bgt["budget"], "monthly_cap_cake", 200)
+warn_frac = bgt["budget"].get("warn_threshold", 0.75)
+gate_frac = bgt["budget"].get("gate_threshold", 0.90)
+
+flavor_key = flavor.replace("-", "_")
+rate      = resolve(bgt["budget"]["hf_jobs"], flavor_key, 2.50)
+step_time = resolve(bgt["budget"]["step_time"], f"{flavor_key}_30b_moe", 130)
+
+dataset_path = cfg.get("dataset_path", "fine-tune/train.jsonl")
+if dataset_path.startswith("/data/"): dataset_path = "fine-tune/" + dataset_path[6:]
+try:
+    rows = sum(1 for _ in open(dataset_path))
+except FileNotFoundError:
+    rows = 1200
+    print(f"  ⚠️  dataset not found locally — using {rows} row estimate")
+
+batch      = int(cfg.get("batch_size", 2))
+grad_accum = int(cfg.get("grad_accum", 8))
+epochs     = int(cfg.get("num_epochs", 1))
+packing    = cfg.get("packing", False)
+eff_batch  = batch * grad_accum * (2 if packing else 1)
+steps      = math.ceil(rows / eff_batch) * epochs
+wall_h     = steps * step_time / 3600
+cost       = wall_h * rate
+
+raw = subprocess.run("hf jobs ps --all 2>/dev/null", shell=True, capture_output=True, text=True).stdout
+spent = 0.0
+for line in raw.splitlines()[1:]:
+    p = line.split("\\t")
+    if len(p) >= 6 and p[4] not in ("CANCELED", "ERROR"):
+        m = re.match(r"(?:(\\d+)h\\s*)?(?:(\\d+)m\\s*)?(?:(\\d+)s)?", p[5].strip())
+        if m:
+            h,mn,s = int(m.group(1) or 0), int(m.group(2) or 0), int(m.group(3) or 0)
+            spent += (h + mn/60 + s/3600) * rate
+
+frac = (spent + cost) / cap
+gate = "GATE ❌" if frac >= gate_frac else ("WARN ⚠️" if frac >= warn_frac else "OK ✅")
+src  = bgt["budget"]["monthly_cap_cake"].get("source", "unreconciled")
+if src == "unreconciled":
+    print(f"  ⚠️  cap={cap:.0f}🎂 is unreconciled default — run: just ai-finetune::budget-reconcile")
+
+print(f"ESTIMATE: {cost:.2f}🎂 (~{wall_h:.1f}h) on {flavor} — budget {gate}")
+print(f"  steps={steps}  step_time={step_time}s  rate={rate}🎂/h")
+print(f"  monthly: spent={spent:.2f}🎂  this_run={cost:.2f}🎂  remaining={cap-spent-cost:.2f}🎂  cap={cap:.0f}🎂")
+sys.exit(0 if frac < gate_frac else 1)
+"""
+
+[[command]]
+name        = "cost-report"
+description = "Actual spend from HF Jobs history; monthly forecast"
+args        = []
+tier        = "sm0l"
+output      = "table of job costs + monthly total in 🎂"
+script      = """
+#!/usr/bin/env python3
+import subprocess, re, sys, tomllib, os
+
+with open("_b00t_/cloud-budget.tomllmd", "rb") as f:
+    bgt = tomllib.load(f)
+
+def resolve(section, key, fallback):
+    env_var = section.get(key, {}).get("env_var", "")
+    return float(os.environ.get(env_var, section.get(key, {}).get("default", fallback)))
+
+cap  = resolve(bgt["budget"], "monthly_cap_cake", 200)
+rate = resolve(bgt["budget"]["hf_jobs"], "a100_large", 2.50)
+
+raw = subprocess.run("hf jobs ps --all 2>/dev/null", shell=True, capture_output=True, text=True).stdout
+lines = raw.strip().splitlines()
+if len(lines) <= 1:
+    print("PASS: no job history"); sys.exit(0)
+
+total = 0.0
+print(f"{'JOB_ID':28} {'STATUS':12} {'DURATION':10} {'FLAVOR':14} {'COST':>10}")
+print("─" * 82)
+for line in lines[1:]:
+    p = line.split("\\t")
+    if len(p) < 6: continue
+    job_id, status, dur = p[0], p[4], p[5].strip()
+    m = re.match(r"(?:(\\d+)h\\s*)?(?:(\\d+)m\\s*)?(?:(\\d+)s)?", dur)
+    h,mn,s = (int(m.group(i) or 0) for i in [1,2,3]) if m else (0,0,0)
+    hours = h + mn/60 + s/3600
+    cost  = hours * rate if status not in ("CANCELED","ERROR") else 0.0
+    total += cost
+    cost_s = f"{cost:.3f}🎂" if cost > 0 else "--"
+    print(f"{job_id[:26]:28} {status:12} {dur:10} {'a100-large':14} {cost_s:>10}")
+
+src = bgt["budget"]["monthly_cap_cake"].get("source","unreconciled")
+fc  = bgt["forecast"]
+proj = resolve(fc,"runs_per_month",4) * resolve(fc,"hours_per_run",7) * rate
+pct  = (total/cap)*100
+print("─" * 82)
+print(f"  Total billed: {total:.2f}🎂  /  cap {cap:.0f}🎂 [{src}]  ({pct:.1f}%)")
+print(f"  Monthly forecast ({resolve(fc,'runs_per_month',4):.0f} runs × {resolve(fc,'hours_per_run',7):.0f}h): {proj:.0f}🎂")
+"""
+
+[[command]]
+name        = "budget-reconcile"
+description = "Query live cloud billing APIs; compare to datum defaults; report discrepancy"
+args        = []
+tier        = "sm0l"
+output      = "PASS/FAIL per provider; RECONCILED or DISCREPANCY"
+script      = """
+#!/bin/bash
+set -euo pipefail
+echo "🔍 budget-reconcile: querying remote budget state"
+echo ""
+DATUM="_b00t_/cloud-budget.tomllmd"
+
+# ── AWS ──────────────────────────────────────────────────────────────────────
+echo -n "  AWS (968589500754): "
+AWS_OUT=$(aws budgets describe-budgets --account-id 968589500754 2>&1 || true)
+if echo "$AWS_OUT" | grep -q '"BudgetName"'; then
+    LIMIT=$(echo "$AWS_OUT" | grep -oE '"Amount": "[0-9.]+"' | head -1 | grep -oE '[0-9.]+')
+    echo "RECONCILED — limit=${LIMIT}🎂"
+elif echo "$AWS_OUT" | grep -q "Budgets: \\[\\]\\|No results"; then
+    echo "UNSET — no budgets configured; set one at console.aws.amazon.com/billing/budgets"
+else
+    echo "UNSET (empty response)"
+fi
+
+# ── HuggingFace ──────────────────────────────────────────────────────────────
+echo -n "  HuggingFace: "
+echo "NO_API — HF exposes no programmatic budget endpoint"
+
+# ── GCP ──────────────────────────────────────────────────────────────────────
+echo -n "  GCP: "
+GCP_OUT=$(gcloud billing budgets list --format=json 2>&1 || true)
+if echo "$GCP_OUT" | grep -q "amount"; then
+    echo "RECONCILED — $(echo "$GCP_OUT" | python3 -c 'import sys,json; b=json.load(sys.stdin); print(len(b),"budget(s)")')"
+elif echo "$GCP_OUT" | grep -q "Reauth\\|auth login\\|expired"; then
+    echo "AUTH_REQUIRED — run: gcloud auth login"
+else
+    echo "UNSET or unknown"
+fi
+
+# ── Azure ─────────────────────────────────────────────────────────────────────
+echo -n "  Azure: "
+AZ_OUT=$(az consumption budget list 2>&1 || true)
+if echo "$AZ_OUT" | grep -q "amount"; then
+    echo "RECONCILED"
+elif echo "$AZ_OUT" | grep -q "AADSTS\\|az login\\|expired"; then
+    echo "AUTH_REQUIRED — run: az login"
+else
+    echo "UNSET or unknown"
+fi
+
+echo ""
+echo "⚠️  datum cap=200🎂 is .default (unreconciled) until a provider confirms a limit above"
+echo "   To set: CAKE_MONTHLY_CAP=<N> just ai-finetune::cost-estimate"
+"""
+
+[[command]]
+name        = "budget-gate"
+description = "Exit 1 if estimated run cost would exceed gate_threshold; use before cloud-train"
+args        = ["flavor=a100-large", "config=fine-tune/config-cloud-coder.yaml"]
+tier        = "sm0l"
+output      = "PASS (proceed) or GATE (blocked)"
+script      = """
+#!/bin/bash
+set -euo pipefail
+FLAVOR="${FLAVOR:-a100-large}"
+CONFIG="${CONFIG:-fine-tune/config-cloud-coder.yaml}"
+RESULT=$(FLAVOR="$FLAVOR" CONFIG="$CONFIG" just ai-finetune::cost-estimate 2>&1)
+echo "$RESULT"
+echo "$RESULT" | grep -q "GATE" && { echo "BLOCKED: gate threshold exceeded"; exit 1; } || true
+"""
 
 # b00t:map v1
-# summary: GPU cloud budget in 🎂 cake — monthly cap, flavor rates, FOCUS v1.3, forecast
-# tags: budget, cake, finops, focus, hf-jobs, gpu, cost, forecast, a100, cloud
+# summary: GPU cloud budget in 🎂 cake — endurant, .default/.example notation, embedded commands, FOCUS v1.3
+# tags: budget, cake, finops, focus, hf-jobs, gpu, cost, forecast, reconcile, endurant, command
 # tier: sm0l
-# cmds: just ai-finetune::cost-estimate, just ai-finetune::cost-report, just ai-finetune::budget-gate
-# complexity: 3
+# cmds: b00t run cloud-budget::cost-estimate, b00t run cloud-budget::budget-reconcile
+# complexity: 5
