@@ -12,11 +12,15 @@
 #   Observe:   just ai-finetune::logs | just ai-finetune::sparkline
 #   Test:      just ai-finetune::test
 #   Retrieve:  just ai-finetune::hf-adapter-pull
+<<<<<<< HEAD
 # Paths are relative to repo root (justfile_directory())
 
 set working-directory := ".."
 
+=======
+>>>>>>> e2a4ea89 (feat: grok fallback, irontology fix, translator, opencode guards)
 # Paths are relative to repo root (justfile_directory())
+
 set working-directory := ".."
 
 # ── Dataset ────────────────────────────────────────────────────────────────────
@@ -158,6 +162,7 @@ mlflow-remove:
 #
 # Generic path:  just ai-finetune::cloud-train <flavor> <config-filename>
 # Coder alias:   just ai-finetune::cloud-coder
+<<<<<<< HEAD
 # One-shot sync: regenerate dataset from corpus + push everything to HF
 
 # Run before any cloud training run to ensure HF dataset is current
@@ -341,7 +346,10 @@ smoke-test adapter="fine-tune/output-smol/lora-adapter" base="unsloth/Qwen2.5-0.
     print(f"\n{passed}/{len(PROBES)} probes b00t-aware")
     sys.exit(0 if passed >= 3 else 1)
 
+=======
+>>>>>>> e2a4ea89 (feat: grok fallback, irontology fix, translator, opencode guards)
 # One-shot sync: regenerate dataset from corpus + push everything to HF
+
 # Run before any cloud training run to ensure HF dataset is current
 hf-sync:
     #!/bin/bash
@@ -355,6 +363,7 @@ hf-sync:
 
 # Visualize training dataset: token-length distribution + category breakdown → SVG
 # Useful for spotting outliers, padding waste, category imbalance before cloud submit
+
 # Output: fine-tune/dataset-viz.svg (open in browser or VLM for inspection)
 dataset-viz:
     uv run python3 fine-tune/generate_dataset.py --viz fine-tune/dataset-viz.svg
@@ -362,6 +371,7 @@ dataset-viz:
 
 # ── Inlined training script (was train_unsloth.py) ───────────────────────────
 # Entry point for cloud jobs: just -f /data/ai-finetune.just train /data/config.yaml
+
 # sm0l output contract: prints step progress; exit 0 on success, 1 on error
 train config="/data/config-cloud-coder.yaml" resume="":
     #!/usr/bin/env python3
@@ -369,8 +379,8 @@ train config="/data/config-cloud-coder.yaml" resume="":
     from pathlib import Path
     os.environ.setdefault("HF_HOME", os.path.expanduser("~/.cache/huggingface"))
 
-    config_path = "{{config}}"
-    resume_from = "{{resume}}" or None
+    config_path = "{{ config }}"
+    resume_from = "{{ resume }}" or None
 
     try:
         import yaml
@@ -475,13 +485,14 @@ train config="/data/config-cloud-coder.yaml" resume="":
 
 # ── Inlined adapter smoke-test (was test_adapter.py) ─────────────────────────
 # Generic: adapter path + base model from args; prints PASS/FAIL per probe
+
 # sm0l output contract: exit 0 if >=3/5 probes return b00t-aware responses
 smoke-test adapter="fine-tune/output-smol/lora-adapter" base="unsloth/Qwen2.5-0.5B-Instruct-bnb-4bit":
     #!/usr/bin/env python3
     import sys
 
-    adapter = "{{adapter}}"
-    base    = "{{base}}" or None
+    adapter = "{{ adapter }}"
+    base    = "{{ base }}" or None
 
     PROBES = [
         ("b00t basics",    "What command do I run to orient my role and load blessings in b00t?"),
@@ -600,6 +611,7 @@ hf-job-logs job_id:
 # Cancel a running job
 hf-job-cancel job_id:
     hf jobs cancel {{ job_id }}
+<<<<<<< HEAD
 
 # ── Handoff: open live log stream for human monitoring ────────────────────────
 # Agent calls this after submitting — then STOPS. Human watches + cancels.
@@ -665,17 +677,20 @@ monitor-run job_id threshold_s="90":
         print(f"FAIL: step_time={rate}s/it > threshold={threshold}s — step={step}/{total} ETA={eta} (cancel+resubmit faster flavor)")
         sys.exit(1)
     print(f"PASS: {stage} step={step}/{total} rate={rate}s/it ETA={eta}")
+=======
+>>>>>>> e2a4ea89 (feat: grok fallback, irontology fix, translator, opencode guards)
 
 # ── Handoff: open live log stream for human monitoring ────────────────────────
 # Agent calls this after submitting — then STOPS. Human watches + cancels.
 # Protocol: submit → watch-run → agent exits; human monitors; agent re-invoked on completion.
+
 # Uses zellij if $ZELLIJ is set; otherwise prints the command to run.
 watch-run job_id:
     #!/bin/bash
-    CMD="hf jobs logs --follow elasticdotventures/{{job_id}}"
-    CANCEL="just ai-finetune::hf-job-cancel {{job_id}}"
+    CMD="hf jobs logs --follow elasticdotventures/{{ job_id }}"
+    CANCEL="just ai-finetune::hf-job-cancel {{ job_id }}"
     if [[ -n "${ZELLIJ:-}" ]]; then
-        zellij run --name "hf-logs-{{job_id}}" --close-on-exit -- $CMD
+        zellij run --name "hf-logs-{{ job_id }}" --close-on-exit -- $CMD
         echo "PASS: zellij pane opened — watch live; cancel with: $CANCEL"
     else
         echo ""
@@ -691,12 +706,13 @@ watch-run job_id:
 # Blessing evidentiary handler — command syntax IS the proof.
 # Output contract: PASS: <stage> step=<N> rate=<X>s/it ETA=<HH:MM>
 #                  FAIL: <reason>
+
 # Thresholds (A100): warn>90s/it fail>180s/it  (H200): warn>40s/it fail>90s/it
 monitor-run job_id threshold_s="90":
     #!/usr/bin/env python3
     import subprocess, re, sys, os
-    job_id   = "{{job_id}}"
-    threshold = float("{{threshold_s}}")
+    job_id   = "{{ job_id }}"
+    threshold = float("{{ threshold_s }}")
     owner    = "elasticdotventures"
 
     def run(cmd):
