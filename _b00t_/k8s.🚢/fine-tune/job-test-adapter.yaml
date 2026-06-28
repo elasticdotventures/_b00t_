@@ -1,0 +1,62 @@
+---
+# Smoke-test the fine-tuned LoRA adapter — loads adapter, runs 5 b00t probes
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: b00t-adapter-test
+  namespace: b00t-finetune
+  labels:
+    b00t.tier: finetune
+    b00t.io/model: sm0l
+spec:
+  ttlSecondsAfterFinished: 3600
+  backoffLimit: 0
+  template:
+    metadata:
+      labels:
+        b00t.tier: finetune
+        b00t.io/job: adapter-test
+    spec:
+      restartPolicy: Never
+      runtimeClassName: nvidia
+      tolerations:
+        - key: node-role.kubernetes.io/control-plane
+          operator: Exists
+          effect: NoSchedule
+      # 🤓 No init container here: GPU deadlock — pod won't schedule if main container needs GPU
+      #    and init container hasn't freed it yet. Pre-scale manually: kubectl scale deployment/sm0l --replicas=0 -n b00t-inference
+      containers:
+        - name: tester
+          image: unsloth/unsloth:latest
+          command:
+            - python3
+            - /workspace/fine-tune/test_adapter.py
+          resources:
+            requests:
+              memory: "8Gi"
+              cpu: "500m"
+              nvidia.com/gpu: 1
+            limits:
+              memory: "16Gi"
+              nvidia.com/gpu: 1
+          env:
+            - name: HF_HOME
+              value: /hf
+            - name: HF_HUB_OFFLINE
+              value: "1"
+            - name: HF_HUB_DISABLE_PROGRESS_BARS
+              value: "1"
+          volumeMounts:
+            - name: workspace
+              mountPath: /workspace
+            - name: hf-cache
+              mountPath: /hf
+      volumes:
+        - name: workspace
+          hostPath:
+            path: /home/brianh/.b00t
+            type: Directory
+        - name: hf-cache
+          hostPath:
+            path: /home/brianh/.cache/huggingface
+            type: DirectoryOrCreate

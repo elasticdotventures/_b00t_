@@ -1,0 +1,64 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mlflow
+  namespace: b00t-inference
+  labels:
+    app: mlflow
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mlflow
+  template:
+    metadata:
+      labels:
+        app: mlflow
+    spec:
+      tolerations:
+        - key: node-role.kubernetes.io/control-plane
+          operator: Exists
+          effect: NoSchedule
+      containers:
+        - name: mlflow
+          image: ghcr.io/mlflow/mlflow:v2.22.0
+          command:
+            - mlflow
+            - server
+            - --backend-store-uri=sqlite:////mlflow-data/mlflow.db
+            - --default-artifact-root=/mlflow-data/artifacts
+            - --host=0.0.0.0
+            - --port=5000
+          ports:
+            - containerPort: 5000
+              name: http
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "100m"
+            limits:
+              memory: "1Gi"
+          volumeMounts:
+            - name: mlflow-data
+              mountPath: /mlflow-data
+      volumes:
+        - name: mlflow-data
+          hostPath:
+            path: /home/brianh/.b00t-data/mlflow
+            type: DirectoryOrCreate
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mlflow
+  namespace: b00t-inference
+  labels:
+    app: mlflow
+spec:
+  selector:
+    app: mlflow
+  ports:
+    - name: http
+      port: 5000
+      targetPort: 5000

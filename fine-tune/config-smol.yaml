@@ -7,8 +7,8 @@ adapter_name: "b00t-aligned-qwen25-0.5b"
 dataset: "fine-tune/train.jsonl"
 output_dir: "./fine-tune/output-smol"
 
-lora_r: 16
-lora_alpha: 32
+lora_r: 32
+lora_alpha: 64
 lora_dropout: 0.05
 target_modules:
   - "q_proj"
@@ -31,3 +31,6 @@ warmup_steps: 5
 
 load_in_4bit: true
 use_gradient_checkpointing: true
+
+report_to: "mlflow"
+logging_steps: 10

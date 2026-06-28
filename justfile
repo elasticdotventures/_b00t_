@@ -211,85 +211,21 @@ build-hooks:
 
 # 🥾 Install b00t binaries + systemd unit files.
 # 💡 Recommended: sudo just install (sudo enables system-wide b00t@.service)
-#    Menu selects components; defaults to [2] binaries+service after 10s timeout.
-install:
-    #!/bin/bash
-    set -euo pipefail
-
-    # 🤓 _prompt_timeout: ONLY used for sudo-requiring steps
-    _prompt_timeout() {
-        local desc="${1:-proceed}"
-        local timeout=10
-        for i in $(seq $timeout -1 1); do
-            printf "\r  ⏱  [%2ds] %s — press any key or wait to skip..." "$i" "$desc"
-            if read -r -s -n 1 -t 1 2>/dev/null; then
-                printf "\n  ▶  %s\n" "$desc"
-                return 0
-            fi
-        done
-        printf "\n  ⏭  skipped: %s\n" "$desc"
-        return 1
-    }
-
-    echo "🥾 b00t install"
-    echo
-    echo "  [1] binaries only          (b00t-cli, b00t-mcp, cocogitto)"
-    echo "  [2] binaries + service     (+ b00t@.service systemd template)"
-    echo "  [3] full bootstrap         (b00t-lite.sh: system deps + binaries + service)"
-    echo
-    printf "  choice [2], timeout 10s: "
-    read -r -t 10 CHOICE || CHOICE="2"
-    echo
-    CHOICE="${CHOICE:-2}"
-
-    # option 3 → delegate entirely to b00t-lite.sh
-    if [[ "$CHOICE" == "3" ]]; then
-        B00T_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-        exec "${B00T_DIR}/b00t-lite.sh"
-    fi
-
-    CARGO_HOME_VALUE="${CARGO_HOME:-$HOME/.cargo}"
-    export CARGO_HOME="${CARGO_HOME_VALUE}"
-    export PATH="${CARGO_HOME_VALUE}/bin:${PATH}"
-    mkdir -p "${CARGO_HOME_VALUE}/bin"
-
-    # [1] [2] [3]: install binaries (skip version bump - use `just bump` for that)
-    cargo install --path b00t-mcp  --force
-    cargo install --path b00t-cli  --force
-    cargo install cocogitto --locked --force
-    just install-commit-hook
-    echo "  ✅ binaries installed"
-    echo "🔌 Installing recommended MCP servers (gated by environment)..."
-    b00t-cli install --mcp=recommended || echo "⚠️  MCP install skipped (no matching servers)"
-
-    # [2] [3]: systemd service
-    if [[ "$CHOICE" == "2" || "$CHOICE" == "a" ]]; then
-        echo
-        if [[ "${EUID:-$(id -u)}" -eq 0 ]]; then
-            echo "🔑 root — installing b00t@.service system-wide"
-            _prompt_timeout "cp b00t@.service → /usr/lib/systemd/user/ (requires root)" && {
-                mkdir -p /usr/lib/systemd/user
-                cp -v .config/systemd/user/b00t@.service /usr/lib/systemd/user/b00t@.service
-                systemctl daemon-reload
-                echo "  ✅ /usr/lib/systemd/user/b00t@.service (system-wide)"
-                echo "  💡 any user: systemctl --user enable b00t@<profile>"
-            } || true
-        else
-            mkdir -p "$HOME/.config/systemd/user"
-            cp -v .config/systemd/user/b00t@.service "$HOME/.config/systemd/user/b00t@.service"
-            systemctl --user daemon-reload 2>/dev/null || true
-            echo "  ✅ ~/.config/systemd/user/b00t@.service"
-            echo "  💡 system-wide (all users): sudo just install"
-        fi
-    fi
+#    Non-interactive: just install 1|2|3   Interactive: just install (10s timeout → default 2)
+# Capability-aware install: detects k8s/quadlet/systemd/launchd, reads soul KV for past choices.
+# Non-interactive: just install --mode=k8s|quadlet|systemd-user|systemd-sys|launchd|binaries
+# Reset:           just install --reset
+install *args="":
+    scripts/install-b00t.sh {{ args }}
 
 # Install b00t skills/agents/hooks into agent runtimes (interactive TUI)
+# Install skill/agent runtimes interactively (kept for backwards compat — prefer `just install`)
 install-runtimes: build-hooks
     b00t-cli install --interactive
 
-# 💡 Recommended: sudo just installx
-#    sudo path → apt installs system packages; user path → user-local cargo/uv tools only
-installx:
+# System deps: apt packages + cargo/uv tools (sudo for apt; user-local otherwise)
+# 🤓 Separate from `just install` — install-deps handles OS packages, install handles b00t service
+install-deps:
     #!/bin/bash
     set -euo pipefail
 
@@ -2123,43 +2059,186 @@ finetune-train-kube-smol: finetune-k8s-setup
 finetune-dataset:
     uv run python3 fine-tune/generate_dataset.py
 
+# Generate rustdoc JSON for key workspace crates (requires nightly)
+finetune-rustdoc:
+    ~/.cargo/bin/cargo +nightly rustdoc -p b00t-cli --lib -- --output-format json -Z unstable-options
+    ~/.cargo/bin/cargo +nightly rustdoc -p b00t-c0re-lib --lib -- --output-format json -Z unstable-options
+    ~/.cargo/bin/cargo +nightly rustdoc -p b00t-datum-core --lib -- --output-format json -Z unstable-options
+    @echo "Rustdoc JSON written to target/doc/. Re-run finetune-dataset to include."
+
 # Export trained LoRA adapter to GGUF
 finetune-export:
     uv run python3 fine-tune/export_gguf.py
 
 # Watch training logs (any active job)
+# Stream live training logs — uses pod name directly to avoid label mismatch
 finetune-logs:
-    kubectl logs -n b00t-finetune -l b00t.tier=finetune -f --tail=50
+    #!/bin/bash
+    POD=$(kubectl get pod -n b00t-finetune -l b00t.io/model=sm0l --field-selector=status.phase=Running -o name 2>/dev/null | head -1)
+    if [[ -z "$POD" ]]; then
+        POD=$(kubectl get pod -n b00t-finetune -l b00t.io/model=sm0l -o name 2>/dev/null | head -1)
+    fi
+    if [[ -z "$POD" ]]; then
+        echo "No sm0l training pod found. Run: kubectl get pods -n b00t-finetune"
+        exit 1
+    fi
+    echo "📋 streaming logs from $POD"
+    kubectl logs -n b00t-finetune "$POD" -c trainer -f --tail=40
+
+# Compact training summary: step/loss/epoch/ETA
+finetune-watch:
+    #!/bin/bash
+    POD=$(kubectl get pod -n b00t-finetune -l b00t.io/model=sm0l -o name 2>/dev/null | head -1)
+    [[ -z "$POD" ]] && { echo "no training pod"; exit 1; }
+    echo "watching $POD  (ctrl-c to stop)"
+    while true; do
+        LAST=$(kubectl logs -n b00t-finetune "$POD" -c trainer --tail=200 2>/dev/null \
+               | grep "'loss'" | tail -1)
+        [[ -n "$LAST" ]] && printf "\r  %s  " "$LAST"
+        sleep 10
+    done
 
 # Status of fine-tune Jobs
 finetune-status:
     kubectl get jobs,pods -n b00t-finetune
 
-# ── rust-docs-mcp-b00t — local wrkflw CI gate ───────────────────────────────
+# Run b00t-awareness probes against the LoRA adapter
+# 🤓 GPU deadlock: pre-scale sm0l to 0 BEFORE applying job (init-container can't free GPU it can't schedule)
+finetune-test:
+    #!/bin/bash
+    set -euo pipefail
+    echo "🧪 adapter smoke-test: pre-scaling sm0l→0"
+    kubectl scale deployment sm0l --replicas=0 -n b00t-inference
+    kubectl wait --for=delete pod -n b00t-inference -l app=sm0l --timeout=60s 2>/dev/null || true
+    kubectl delete job b00t-adapter-test -n b00t-finetune 2>/dev/null || true
+    kubectl apply -f _b00t_/k8s.🚢/fine-tune/job-test-adapter.yaml
+    echo "⏳ waiting for test pod (up to 5m)..."
+    kubectl wait --for=condition=complete job/b00t-adapter-test -n b00t-finetune --timeout=300s || {
+        echo "  ❌ timed out — logs: kubectl logs -n b00t-finetune -l b00t.io/job=adapter-test"
+        kubectl scale deployment sm0l --replicas=1 -n b00t-inference
+        exit 1
+    }
+    echo "📋 results:"
+    kubectl logs -n b00t-finetune -l b00t.io/job=adapter-test 2>/dev/null | tail -20
+    echo "🔄 restoring sm0l (replicas=1)"
+    kubectl scale deployment sm0l --replicas=1 -n b00t-inference
 
-# Validate docker.yml schema (instant — no execution)
-rust-docs-validate:
-    wrkflw validate vendor/rust-docs-mcp-b00t/.github/workflows/docker.yml
+# MLflow experiment tracking — replaces TensorBoard
+# Web UI: http://mlflow.b00t.local:30080 (via Gateway)
+# SDK:    MLFLOW_TRACKING_URI=http://mlflow.b00t-inference.svc.cluster.local:5000
+mlflow-status:
+    kubectl get pods -n b00t-inference -l app=mlflow
 
-# Run local-build job via wrkflw (emulation — no containers)
-rust-docs-local-build:
-    wrkflw run --job local-build --runtime emulation \
-        vendor/rust-docs-mcp-b00t/.github/workflows/docker.yml
+mlflow-logs:
+    kubectl logs -n b00t-inference -l app=mlflow -f --tail=40
 
-# Watch mode: auto-rerun local-build on file changes
-rust-docs-watch:
-    wrkflw watch --job local-build \
-        vendor/rust-docs-mcp-b00t/.github/workflows/docker.yml
+mlflow-open:
+    @echo "http://mlflow.b00t.local:30080  (add to /etc/hosts: 192.168.1.137 mlflow.b00t.local)"
 
-# Deploy sm3lly self-hosted runner (requires fresh token — expires 1h)
-rust-docs-runner-deploy:
-    #!/usr/bin/env bash
-    TOKEN=$(gh api -X POST repos/PromptExecution/rust-docs-mcp-b00t/actions/runners/registration-token --jq .token)
-    kubectl create secret generic gh-runner-token \
-        --from-literal=RUNNER_TOKEN="$TOKEN" \
-        --from-literal=REPO_URL=https://github.com/PromptExecution/rust-docs-mcp-b00t \
-        -n b00t-gh-runner --dry-run=client -o yaml | kubectl apply -f -
-    kubectl rollout restart deployment/gh-runner-rust-docs -n b00t-gh-runner
-    kubectl rollout status deployment/gh-runner-rust-docs -n b00t-gh-runner --timeout=60s
-    @echo "Runner status:"
-    gh api repos/PromptExecution/rust-docs-mcp-b00t/actions/runners --jq '.runners[] | "\(.name) \(.status)"'
+mlflow-remove:
+    kubectl delete -f _b00t_/k8s.🚢/b00t-inference/mlflow-deployment.yaml || true
+
+# Loss sparkline from live training logs
+finetune-sparkline n="60":
+    scripts/finetune-sparkline.sh {{ n }}
+
+# Launch ch0nky-tier (Qwen3-8B) b00t fine-tune
+# Prereq: kubectl scale deployment ch0nky --replicas=0 -n b00t-inference
+# (sm0l training can continue concurrently — only needs ~3.4GB extra)
+finetune-ch0nky:
+    #!/bin/bash
+    VRAM_FREE=$(nvidia-smi --query-gpu=memory.free --format=csv,noheader,nounits | head -1)
+    if (( VRAM_FREE < 12000 )); then
+        echo "⚠️  only ${VRAM_FREE}MB VRAM free — need ~14GB"
+        echo "   run: kubectl scale deployment ch0nky --replicas=0 -n b00t-inference"
+        exit 1
+    fi
+    echo "✅ ${VRAM_FREE}MB free — launching Qwen3-8B fine-tune"
+    # patch the finetune job to use ch0nky config, then apply
+    CONFIG_B64=$(base64 -w0 fine-tune/config-ch0nky.yaml)
+    # TODO: add job-finetune-ch0nky.yaml to _b00t_/k8s.🚢/fine-tune/
+    echo "⚠️  job-finetune-ch0nky.yaml not yet created — run: just finetune-ch0nky-job"
+
+# Deploy Qwen3.6-27B Q4_K_M ch0nky endpoint in k8s (b00t-inference namespace)
+# ── Gateway API (Envoy Gateway v1.3) ──────────────────────────────────────────
+# Install Envoy Gateway + GatewayClass + b00t-gateway; pin NodePort to 30080
+gateway-install:
+    helm upgrade --install eg oci://docker.io/envoyproxy/gateway-helm \
+      --version v1.3.0 --namespace envoy-gateway-system --create-namespace
+    kubectl create namespace b00t-gateway --dry-run=client -o yaml | kubectl apply -f -
+    kubectl apply -f _b00t_/k8s.🚢/gateway-api/gateway.yaml
+    kubectl wait --for=condition=Ready pod \
+      -l gateway.envoyproxy.io/owning-gateway-name=b00t-gateway \
+      -n envoy-gateway-system --timeout=120s
+    kubectl patch svc \
+      $(kubectl get svc -n envoy-gateway-system -l gateway.envoyproxy.io/owning-gateway-name=b00t-gateway -o name | head -1 | sed 's|service/||') \
+      -n envoy-gateway-system \
+      --type=json -p='[{"op":"replace","path":"/spec/ports/0/nodePort","value":30080}]'
+    @echo "Gateway ready: http://192.168.1.137:30080 (Host: <route>.b00t.local)"
+
+# Apply all HTTPRoutes
+gateway-routes:
+    kubectl apply -f _b00t_/k8s.🚢/gateway-api/routes.yaml
+
+# Show gateway + route status
+gateway-status:
+    kubectl get gateway -n b00t-gateway
+    kubectl get httproute -A
+
+# Envoy Gateway controller logs
+gateway-logs:
+    kubectl logs -n envoy-gateway-system deployment/envoy-gateway -f --tail=40
+
+# Remove Envoy Gateway entirely (destructive)
+gateway-remove:
+    helm uninstall eg -n envoy-gateway-system || true
+    kubectl delete namespace b00t-gateway envoy-gateway-system --wait=false || true
+    kubectl delete gatewayclass eg || true
+
+# ── ch0nky (Qwen3.6-27B Q4_K_M) ──────────────────────────────────────────────
+# 🤓 No nvidia.com/gpu resource — training holds the allocation; NVIDIA_VISIBLE_DEVICES=all
+#    injects CUDA via runtimeClassName=nvidia without going through device plugin scheduling
+# Access: http://192.168.1.137:30080/v1/ via Gateway (Host: ch0nky.b00t.local)
+#         http://192.168.1.137:31001/v1/ via NodePort direct
+ch0nky-deploy:
+    kubectl apply -f _b00t_/k8s.🚢/b00t-inference/ch0nky-deployment.yaml
+    kubectl rollout status deployment/ch0nky -n b00t-inference --timeout=120s
+
+# Tail ch0nky inference logs
+ch0nky-logs:
+    #!/bin/bash
+    POD=$(kubectl get pod -n b00t-inference -l app=ch0nky -o name | head -1)
+    [[ -z "$POD" ]] && { echo "no ch0nky pod"; exit 1; }
+    kubectl logs -n b00t-inference "$POD" -f --tail=40
+
+# Scale ch0nky to 0 (leaves Deployment in place for easy restart)
+ch0nky-stop:
+    kubectl scale deployment ch0nky --replicas=0 -n b00t-inference
+
+# Remove ch0nky Deployment + Service entirely
+ch0nky-remove:
+    kubectl delete -f _b00t_/k8s.🚢/b00t-inference/ch0nky-deployment.yaml
+
+# Quick b00t-awareness probe against running ch0nky (or pass host:port arg)
+ch0nky-probe endpoint="":
+    #!/bin/bash
+    if [[ -n "{{ endpoint }}" ]]; then
+        scripts/probe-ch0nky.sh "{{ endpoint }}"
+    else
+        scripts/probe-ch0nky.sh
+    fi
+
+
+# ── Git object recovery (EXPERIMENTAL) ────────────────────────────────────────
+# 🤓 LFMF: never rm .git/objects/* without proving BOTH corrupt AND unreachable.
+#    `git log --find-object` misses dangling commits — use fsck --unreachable only.
+#    Safe deletion = intersection of {corrupt} ∩ {unreachable}.
+#
+# Usage: just git-prune-corrupt [--dry-run]
+#   Default: dry-run (prints what would be deleted, does not delete)
+#   Pass delete=true to actually remove: just git-prune-corrupt delete=true
+
+# [EXPERIMENTAL] safe corrupt-object pruner — see scripts/git-prune-corrupt.py
+git-prune-corrupt delete="false":
+    uv run scripts/git-prune-corrupt.py {{delete}}
+
