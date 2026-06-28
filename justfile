@@ -189,11 +189,6 @@ marketplace-generate:
 marketplace-check:
     python3 scripts/generate_claude_marketplace.py --repo-root . --check
 
-
-
-
-
-
 # Bump patch version + cargo install — always pair these together
 # 🤓 never cargo install without bumping version; tracks deployed vs source
 bump-install:
