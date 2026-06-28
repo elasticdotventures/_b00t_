@@ -139,5 +139,6 @@ mod tests {
         assert!(!version::VERSION.is_empty());
     }
 }
+pub mod credential_backend;
 pub mod datum_credential;
 pub mod store;
