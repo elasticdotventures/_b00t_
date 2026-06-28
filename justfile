@@ -1182,12 +1182,12 @@ opencode-mesh-start:
     @echo "🔧 Starting b00t MCP mesh..."
     @podman pod exists b00t-mesh 2>/dev/null && echo "  Pod already running" || \
         (podman pod create --name b00t-mesh -p 3000:3000 -p 9101:9101 2>&1)
-    @podman ps --filter name=b00t-mcp-http --format '{{.Names}}' | grep -q . || \
+    @podman ps --filter name=b00t-mcp-http --format '{{{{.Names}}}}' | grep -q . || \
         podman run -d --pod b00t-mesh --name b00t-mcp-http \
             -v $(realpath $(which b00t-mcp)):/usr/local/bin/b00t-mcp:ro \
             -v $(pwd):/workspace:ro -w /workspace \
             docker.io/ubuntu:24.04 /usr/local/bin/b00t-mcp --http --host 0.0.0.0 --port 3000 2>&1
-    @podman ps --filter name=cb-mcp-socat --format '{{.Names}}' | grep -q . || \
+    @podman ps --filter name=cb-mcp-socat --format '{{{{.Names}}}}' | grep -q . || \
         podman run -d --pod b00t-mesh --name cb-mcp-socat \
             -v $(realpath $(which codebase-memory-mcp)):/usr/local/bin/codebase-memory-mcp:ro \
             docker.io/ubuntu:24.04 \
