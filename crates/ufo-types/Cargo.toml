@@ -5,7 +5,7 @@ edition.workspace = true
 authors.workspace = true
 license.workspace = true
 repository.workspace = true
-description = "UFO (Unified Foundational Ontology) stereotypes, Satisfies<T> constraint trait, and ISO standard type wrappers for the Tax-Lawyer platform"
+description = "UFO stereotypes, Satisfies<T> constraint trait, DARE proposal types, and ISO wrappers for the Tax-Lawyer platform + b00t governance"
 
 [dependencies]
 serde = { version = "1.0", features = ["derive"] }
