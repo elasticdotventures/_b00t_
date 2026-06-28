@@ -79,7 +79,7 @@ def train(config: dict, args=None):
     model = FastLanguageModel.get_peft_model(
         model,
         r=lora_r,
-        target_modules=["q_proj", "v_proj", "k_proj", "o_proj", "gate_proj", "up_proj", "down_proj"],
+        target_modules=config.get("target_modules", ["q_proj", "v_proj", "k_proj", "o_proj"]),
         lora_alpha=lora_alpha,
         lora_dropout=lora_dropout,
         bias="none",
