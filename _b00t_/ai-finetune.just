@@ -534,7 +534,7 @@ cost-estimate flavor="a100-large" config="fine-tune/config-cloud-coder.yaml":
     wall_hours = (total_steps * step_time_s) / 3600
     rates      = budget.get("budget",{}).get("hf_jobs",{})
     rate       = rates.get(flavor_key, 2.50)
-    cost_usd   = wall_hours * rate
+    cost_cake  = wall_hours * rate
 
     # budget gate check
     cap        = budget.get("budget",{}).get("monthly_cap_usd", 200.0)
@@ -556,8 +556,8 @@ cost-estimate flavor="a100-large" config="fine-tune/config-cloud-coder.yaml":
                 s = int(m.group(3) or 0)
                 spent += (h + mn/60 + s/3600) * rate
 
-    remaining = cap - spent - cost_usd
-    frac_after = (spent + cost_usd) / cap
+    remaining = cap - spent - cost_cake
+    frac_after = (spent + cost_cake) / cap
 
     if frac_after >= gate_frac:
         gate = "GATE ❌"
@@ -566,9 +566,9 @@ cost-estimate flavor="a100-large" config="fine-tune/config-cloud-coder.yaml":
     else:
         gate = "OK ✅"
 
-    print(f"ESTIMATE: ${cost_usd:.2f} (~{wall_hours:.1f}h) on {flavor_key} — budget {gate}")
-    print(f"  steps={total_steps} ({steps_per_epoch}/epoch × {epochs} epoch)  step_time={step_time_s}s  rate=${rate}/h")
-    print(f"  monthly: spent=${spent:.2f}  this_run=${cost_usd:.2f}  remaining=${remaining:.2f}  cap=${cap:.0f}")
+    print(f"ESTIMATE: {cost_cake:.2f}🎂 (~{wall_hours:.1f}h) on {flavor_key} — budget {gate}")
+    print(f"  steps={total_steps} ({steps_per_epoch}/epoch × {epochs} epoch)  step_time={step_time_s}s  rate={rate}🎂/h")
+    print(f"  monthly: spent={spent:.2f}🎂  this_run={cost_cake:.2f}🎂  remaining={remaining:.2f}🎂  cap={cap:.0f}🎂")
 
 # Actual spend report from HF Jobs history (all completed/running jobs this session)
 # Parses hf jobs ps --all durations × flavor rate → FOCUS x_ExperimentId records
@@ -609,15 +609,15 @@ cost-report:
         rate  = rates.get("a100_large", 2.50)
         cost  = hours * rate if status not in ("CANCELED","ERROR") else 0.0
         total += cost
-        cost_s = f"${cost:.3f}" if cost > 0 else "--"
+        cost_s = f"{cost:.3f}🎂" if cost > 0 else "--"
         print(f"{job_id[:26]:28} {status:12} {dur:10} {'a100-large':14} {cost_s:>8}")
 
     pct = (total / cap) * 100
     print("─" * 80)
-    print(f"  Total billed: ${total:.2f}  /  cap ${cap:.0f}  ({pct:.1f}%)")
+    print(f"  Total billed: {total:.2f}🎂  /  cap {cap:.0f}🎂  ({pct:.1f}%)")
     forecast = budget.get("forecast",{})
     monthly_proj = forecast.get("runs_per_month",4) * forecast.get("hours_per_run",7) * rates.get("a100_large",2.50)
-    print(f"  Monthly forecast ({forecast.get('runs_per_month',4)} runs × {forecast.get('hours_per_run',7)}h): ${monthly_proj:.0f}")
+    print(f"  Monthly forecast ({forecast.get('runs_per_month',4)} runs × {forecast.get('hours_per_run',7)}h): {monthly_proj:.0f}🎂")
 
 # Budget gate: exit 1 with GATE if estimated cost would exceed gate_threshold of monthly cap
 # Use as pre-condition before cloud-train: just ai-finetune::budget-gate a100-large config.yaml && just cloud-train

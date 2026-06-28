@@ -1,69 +1,72 @@
 # b00t Cloud GPU Budget — FOCUS v1.3 aligned
-# Declares GPU spend limits + per-flavor rates for pre-flight cost gating.
+# Unit of value: 🎂 (cake) — fungible token representing desire and attention.
+# USD is an external exchange rate, not the canonical unit.
 # Consumed by: just ai-finetune::cost-estimate, just ai-finetune::budget-gate
-# FOCUS custom columns use x_ prefix per spec.
 
 [b00t]
 name = "cloud-budget"
 type = "config"
-hint = "GPU cloud budget: monthly cap, per-flavor hourly rates, cost-estimate + forecast recipes"
+hint = "GPU cloud budget denominated in 🎂 cake; USD is only a conversion shim for external billing APIs"
 
+# ── Exchange rate shim (cake ↔ external fiat) ────────────────────────────────
+# 🤓 Set this to define what 1 🎂 is worth in USD for HF Jobs billing conversion.
+# Operator sets this; no default — forcing explicit intent.
+[exchange]
+usd_per_cake = 1.00    # placeholder: 1🎂 = $1 USD until operator sets true rate
+
+# ── Monthly cake budget ───────────────────────────────────────────────────────
 [budget]
-# Monthly GPU allowance (USD). Adjust before each sprint.
-monthly_cap_usd = 200.0
-# Warn at this fraction of monthly cap
-warn_threshold  = 0.75
-# Block new job submissions above this fraction
-gate_threshold  = 0.90
+"monthly_cap_🎂" = 200     # operator-set; evidentiary source: MUST be updated by operator
+warn_threshold  = 0.75   # warn at 75% of cap
+gate_threshold  = 0.90   # block new submissions at 90%
 
+# ── Per-flavor hourly rates (in 🎂/hour) ─────────────────────────────────────
 [budget.hf_jobs]
-# HuggingFace Jobs pricing (USD/hour, approximate — check hf.co/pricing for current)
-# 🤓 hf jobs are billed per-second; rates here are hourly for human readability
-a10g_large   = 1.50   # 24GB VRAM — sm0l fine-tune, adapter eval
-a100_large   = 2.50   # 80GB VRAM — 30B MoE BF16 training
-a100_xlarge  = 4.50   # 2×A100 — not yet used
-h200         = 5.00   # 141GB — for full 70B or very long runs
+# 🤓 Rates sourced from HF Jobs pricing page × usd_per_cake exchange rate
+# At 1🎂=$1 these match USD; adjust usd_per_cake to re-denominate
+a10g_large   = 1.50   # 24GB VRAM
+a100_large   = 2.50   # 80GB VRAM — primary training tier
+a100_xlarge  = 4.50   # 2×A100
+h200         = 5.00   # 141GB
 
 [budget.k8s]
-# sm3lly RTX3090 electricity amortized (internal cost signal, not real billing)
-rtx3090_per_hour = 0.05   # ~$40/mo fixed → ~$0.05/h opportunity cost
+# sm3lly RTX3090 — internal opportunity cost signal, not external billing
+rtx3090_per_hour = 0.05
 
-# ── Per-run step-time estimates (seconds/iteration) ─────────────────────────
+# ── Step-time estimates (seconds/iteration, empirically measured) ─────────────
 [budget.step_time_estimates]
-# Empirically measured on b00t corpus (Qwen3-Coder-30B-A3B, seq=2048, batch=2 grad_accum=8)
-# 🤓 MoE routing scatter dominates — lora_r and target_modules have NO effect on step time
-a100_large_30b_moe = 130   # A100 80GB BF16, 30B MoE — baseline measured run7
-h200_30b_moe       = 50    # H200 estimate (not yet validated)
-a10g_large_0_5b    = 5     # sm0l Qwen2.5-0.5B (measured, local k8s)
+# 🤓 MoE routing scatter dominates — lora_r and target_modules have NO effect
+a100_large_30b_moe = 130   # measured run7; A100 80GB BF16 seq=2048 batch=2 ga=8
+h200_30b_moe       = 50    # estimated (not validated)
+a10g_large_0_5b    = 5     # measured, local k8s sm0l
 
 # ── FOCUS v1.3 schema alignment ──────────────────────────────────────────────
-# https://focus.finops.org/focus-specification/v1-3/
 [focus]
-spec_version       = "1.3"
-provider_name      = "HuggingFace"
-service_name       = "HF Jobs"
-charge_category    = "Usage"
-resource_type      = "GPU Compute"
+spec_version   = "1.3"
+provider_name  = "HuggingFace"
+service_name   = "HF Jobs"
+charge_category = "Usage"
+resource_type  = "GPU Compute"
+"billing_unit"   = "🎂"
 # Custom b00t columns (x_ prefix = FOCUS extension)
 custom_columns = [
-    "x_ExperimentId",    # job_id from hf jobs ps
-    "x_ModelVariant",    # e.g. qwen3-coder-30b
-    "x_StepTime",        # measured s/it
-    "x_DatasetRows",     # train.jsonl row count
-    "x_LoraR",           # LoRA rank used
+    "x_ExperimentId",   # job_id from hf jobs ps
+    "x_ModelVariant",   # e.g. qwen3-coder-30b
+    "x_StepTime",       # measured s/it
+    "x_DatasetRows",    # train.jsonl row count
+    "x_LoraR",          # LoRA rank used
+    "x_CakeSpend",      # 🎂 denominated cost for this job
 ]
 
 # ── Forecast parameters ───────────────────────────────────────────────────────
 [forecast]
-# Expected training cadence (inform monthly projection)
-runs_per_month   = 4       # iterations/experiments per month
-hours_per_run    = 7.0     # expected wall-clock hours per A100 run (30B, 1 epoch)
-# Derived monthly projection = runs_per_month × hours_per_run × a100_large_rate
-# = 4 × 7 × 2.50 = $70/month (baseline) — well within $200 cap
+runs_per_month   = 4      # expected training iterations per month
+hours_per_run    = 7.0    # expected wall-clock hours (30B, 1 epoch, A100)
+# Derived: 4 × 7 × 2.50🎂 = 70🎂/month — well within 200🎂 cap at current rate
 
 # b00t:map v1
-# summary: GPU cloud budget — monthly cap, per-flavor rates, FOCUS v1.3 alignment, forecast params
-# tags: budget, finops, focus, hf-jobs, gpu, cost, forecast, a100, cloud
+# summary: GPU cloud budget in 🎂 cake — monthly cap, flavor rates, FOCUS v1.3, forecast
+# tags: budget, cake, finops, focus, hf-jobs, gpu, cost, forecast, a100, cloud
 # tier: sm0l
 # cmds: just ai-finetune::cost-estimate, just ai-finetune::cost-report, just ai-finetune::budget-gate
 # complexity: 3
