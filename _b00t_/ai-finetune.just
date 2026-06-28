@@ -566,6 +566,9 @@ cloud-train flavor="a100-large" config="config-cloud-coder.yaml" timeout_hours="
       --flavor {{ flavor }} \
       --timeout {{ timeout_hours }}h \
       -e HF_HOME=/tmp/hf-cache \
+      -e PYTORCH_ALLOC_CONF=expandable_segments:True \
+      -e TORCHDYNAMO_DISABLE=1 \
+      -e UNSLOTH_CACHE_DIR=/tmp/unsloth_cache \
       --secrets HF_TOKEN \
       -v hf://datasets/elasticdotventures/b00t-training:/data:ro \
       -v hf://buckets/elasticdotventures/b00t-adapters:/adapters:rw \
@@ -588,6 +591,9 @@ cloud-resume flavor="a100-large" checkpoint="" config="config-cloud-coder.yaml" 
       --flavor {{ flavor }} \
       --timeout {{ timeout_hours }}h \
       -e HF_HOME=/tmp/hf-cache \
+      -e PYTORCH_ALLOC_CONF=expandable_segments:True \
+      -e TORCHDYNAMO_DISABLE=1 \
+      -e UNSLOTH_CACHE_DIR=/tmp/unsloth_cache \
       --secrets HF_TOKEN \
       -v hf://datasets/elasticdotventures/b00t-training:/data:ro \
       -v hf://buckets/elasticdotventures/b00t-adapters:/adapters:rw \

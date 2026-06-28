@@ -12,7 +12,7 @@ use std::path::{Path, PathBuf};
 pub enum InitCommands {
     #[clap(
         about = "Initialize a b00t project in the current directory",
-        long_about = "Create _b00t_/ with 🥾.tomllmd + overrides.toml.\nValidates system state and sets up .env + .envrc.\nRuns agent onboarding automatically on first init.\n\nExamples:\n  b00t init project\n  b00t init project --name my-project --stack rust\n  b00t init project --setup   (force onboarding)\n  b00t init project --no-setup (skip onboarding)"
+        long_about = "Create _b00t_/ with 🥾.tomllmd + overrides.toml.\nValidates system state and sets up .env + .envrc.\nRuns agent onboarding automatically on first init.\n\nExamples:\n  b00t init project\n  b00t init project --name my-project --stack rust\n  b00t init project --setup   (force onboarding)\n  b00t init project --no-setup (skip onboarding)\n  b00t init project --dry-run"
     )]
     Project {
         #[clap(long, help = "Project name (default: directory name)")]
@@ -23,12 +23,6 @@ pub enum InitCommands {
         setup: bool,
         #[clap(long, help = "Skip agent onboarding")]
         no_setup: bool,
-    },
-    #[clap(
-        about = "Initialize project — detect type, install missing CLI tools via b00t cli up",
-        long_about = "Detect the project type (Rust/Node/Python/…) then run `b00t cli up --yes`\nto install any missing CLI tools declared in .cli.toml datums.\n\nExamples:\n  b00t-cli init project\n  b00t-cli init project --dry-run"
-    )]
-    Project {
         #[clap(long, help = "Check what would be installed without installing")]
         dry_run: bool,
     },
@@ -595,14 +589,12 @@ fn format_duration(seconds: i64) -> String {
 impl InitCommands {
     pub fn execute(&self, path: &str) -> Result<()> {
         match self {
-            InitCommands::Project { name, stack, setup, no_setup } => {
-                handle_project_init(name.clone(), stack.clone(), *setup, *no_setup, path)
-            }
-            InitCommands::Project { dry_run } => {
+            InitCommands::Project { name, stack, setup, no_setup, dry_run } => {
+                handle_project_init(name.clone(), stack.clone(), *setup, *no_setup, path)?;
                 let mut memory = SessionMemory::load()?;
                 detect_project_context(&mut memory)?;
-                let stack = memory.get("primary_stack").cloned().unwrap_or_default();
-                println!("\n🥾 Running b00t cli up for {} project…", stack);
+                let detected_stack = memory.get("primary_stack").cloned().unwrap_or_default();
+                println!("\n🥾 Running b00t cli up for {} project…", detected_stack);
                 CliCommands::Up {
                     yes: !dry_run,
                     maintenance: false,
