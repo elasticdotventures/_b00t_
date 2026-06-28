@@ -146,33 +146,60 @@ mlflow-open:
 mlflow-remove:
     kubectl delete -f _b00t_/k8s.🚢/b00t-inference/mlflow-deployment.yaml || true
 
-# ── HF Cloud — frontier training (A100 80GB, no timeout risk) ─────────────────
+# ── HF Cloud — generic training tier (any model, any flavor) ──────────────────
 # See: _b00t_/datums/HF-JOBS.job.tomllmd
-# Workflow: hf-push → cloud-coder → hf-job-logs <id> → hf-adapter-pull
+# Workflow: dataset → hf-push → cloud-train → hf-job-logs <id> → hf-adapter-pull
+#
+# Blessing chain: b00t learn ai-finetune
+#   └── hf-cli → HF-JOBS → HF-DATASET → HF-HUB-MODELS
+#
+# Generic path:  just ai-finetune::cloud-train <flavor> <config-filename>
+# Coder alias:   just ai-finetune::cloud-coder
 
-# Upload train.jsonl + training scripts to HF dataset repo (cloud job source of truth)
+# Upload dataset + trainer + all fine-tune/config-*.yaml to HF repo
 # Run after: just ai-finetune::dataset
 hf-push:
+    #!/bin/bash
+    set -euo pipefail
     hf upload elasticdotventures/b00t-training fine-tune/train.jsonl train.jsonl --type dataset --private
     hf upload elasticdotventures/b00t-training fine-tune/train_unsloth.py train_unsloth.py --type dataset --private
-    hf upload elasticdotventures/b00t-training fine-tune/config-cloud-coder.yaml config-cloud-coder.yaml --type dataset --private
-    @echo "✓ pushed to https://huggingface.co/datasets/elasticdotventures/b00t-training"
+    for f in fine-tune/config-*.yaml; do
+        name=$(basename "$f")
+        hf upload elasticdotventures/b00t-training "$f" "$name" --type dataset --private
+        echo "  ✓ $name"
+    done
+    echo "✓ pushed to https://huggingface.co/datasets/elasticdotventures/b00t-training"
 
-# Submit Qwen3-Coder-30B fine-tune to HF Jobs A100 (detached — runs to completion)
-# 🤓 --detach required: job survives client disconnect; timeout 10h fits 3-epoch 30B run
-# Prints job ID — save for: just ai-finetune::hf-job-logs <id>
-cloud-coder:
+# Push a single config file to HF training dataset (after editing locally)
+hf-push-config config:
+    hf upload elasticdotventures/b00t-training fine-tune/{{config}} {{config}} --type dataset --private
+    @echo "✓ pushed fine-tune/{{config}} → hf://datasets/elasticdotventures/b00t-training/{{config}}"
+
+# Generic cloud training recipe — model + hyperparams are entirely in the YAML config
+# flavor: a100-large ($2.50/h, 80GB) | h200 ($5/h, 141GB) | a10g-large ($1.50/h, 24GB)
+# config: filename in hf://datasets/elasticdotventures/b00t-training (e.g. config-cloud-coder.yaml)
+# 🤓 /data mount is read-only dataset repo; /adapters is writable bucket for checkpoints
+# 🤓 pip install unsloth required even in unsloth image — image has vLLM variant, not training
+cloud-train flavor="a100-large" config="config-cloud-coder.yaml":
     hf jobs run docker.io/unsloth/unsloth:latest \
-      --flavor a100-large \
+      --flavor {{flavor}} \
       --timeout 10h \
       -e HF_HOME=/tmp/hf-cache \
       --secrets HF_TOKEN \
       -v hf://datasets/elasticdotventures/b00t-training:/data:ro \
       -v hf://buckets/elasticdotventures/b00t-adapters:/adapters:rw \
       --detach \
-      /bin/sh -c "pip install -q 'huggingface_hub[hf_xet]>=0.26' && hf download elasticdotventures/b00t-training --repo-type dataset --local-dir /scripts && python3 /scripts/train_unsloth.py --config /scripts/config-cloud-coder.yaml"
+      /bin/sh -c "pip install -q unsloth 'huggingface_hub[hf_xet]>=0.26' && python3 /data/train_unsloth.py --config /data/{{config}}"
 
-# Poll status of a HF job
+# Convenience alias: Qwen3-Coder-30B on A100-large
+cloud-coder:
+    just ai-finetune::cloud-train a100-large config-cloud-coder.yaml
+
+# List all HF Jobs (active + recent)
+hf-jobs-list:
+    hf jobs ps
+
+# Poll status of a specific HF job
 hf-job-status job_id:
     hf jobs inspect {{job_id}}
 
@@ -184,9 +211,13 @@ hf-job-logs job_id:
 hf-job-cancel job_id:
     hf jobs cancel {{job_id}}
 
-# Pull completed adapter from HF Hub to sm3lly
-hf-adapter-pull:
-    hf download elasticdotventures/b00t-qwen3-coder-30b \
-      --repo-type model \
-      --local-dir fine-tune/output-cloud-coder/lora-adapter
-    @echo "✓ adapter at fine-tune/output-cloud-coder/lora-adapter"
+# Generic: pull any adapter from HF Hub to local path
+# model_id: e.g. elasticdotventures/b00t-qwen3-coder-30b
+# local_dir: destination (default: fine-tune/output-adapter)
+hf-adapter-pull model_id local_dir="fine-tune/output-adapter":
+    hf download {{model_id}} --repo-type model --local-dir {{local_dir}}
+    @echo "✓ adapter at {{local_dir}}"
+
+# Pull the coder-30b adapter to its canonical path
+hf-adapter-pull-coder:
+    just ai-finetune::hf-adapter-pull elasticdotventures/b00t-qwen3-coder-30b fine-tune/output-cloud-coder/lora-adapter

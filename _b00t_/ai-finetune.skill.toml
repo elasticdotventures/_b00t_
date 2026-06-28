@@ -6,17 +6,28 @@ hint = "QLoRA fine-tuning pipeline: dataset gen, local k8s (sm0l/ch0nky), HF Job
 [b00t.skill]
 depends_on = ["hf-cli", "HF-JOBS", "HF-DATASET", "HF-HUB-MODELS"]
 unlocks = [
+    # dataset
     "ai-finetune::dataset",
     "ai-finetune::rustdoc",
+    # local k8s training
     "ai-finetune::train-smol",
     "ai-finetune::train-kube",
     "ai-finetune::train-ch0nky",
-    "ai-finetune::cloud-coder",
+    # HF cloud training — generic engine + model-specific aliases
+    "ai-finetune::cloud-train",      # generic: cloud-train flavor config
+    "ai-finetune::cloud-coder",      # alias: Qwen3-Coder-30B on A100
+    # HF dataset sync
     "ai-finetune::hf-push",
+    "ai-finetune::hf-push-config",   # push single config file
+    # HF job management
+    "ai-finetune::hf-jobs-list",
     "ai-finetune::hf-job-status",
     "ai-finetune::hf-job-logs",
     "ai-finetune::hf-job-cancel",
-    "ai-finetune::hf-adapter-pull",
+    # adapter retrieval — generic + model-specific
+    "ai-finetune::hf-adapter-pull",         # generic: hf-adapter-pull model_id local_dir
+    "ai-finetune::hf-adapter-pull-coder",   # alias: coder-30b to canonical path
+    # observability + test
     "ai-finetune::test",
     "ai-finetune::logs",
     "ai-finetune::sparkline",
@@ -52,11 +63,15 @@ LOCAL TIER (sm3lly RTX3090, k8s):
   just ai-finetune::train-kube       — full ch0nky job (scale sm0l first)
   just ai-finetune::test             — 5-probe b00t-awareness smoke test
 
-CLOUD TIER (HF Jobs A100 80GB, no timeout risk):
-  just ai-finetune::hf-push          — upload dataset+scripts to elasticdotventures/b00t-training
-  just ai-finetune::cloud-coder      — submit Qwen3-Coder-30B fine-tune (detached, 10h budget)
-  just ai-finetune::hf-job-logs <id> — stream logs
-  just ai-finetune::hf-adapter-pull  — pull adapter to sm3lly after completion
+CLOUD TIER (HF Jobs, no timeout risk, config-driven):
+  just ai-finetune::hf-push                             — upload dataset+scripts+all configs
+  just ai-finetune::hf-push-config <config.yaml>        — push single config after local edit
+  just ai-finetune::cloud-train [flavor] [config.yaml]  — generic: any model, any HF flavor
+  just ai-finetune::cloud-coder                         — alias: Qwen3-Coder-30B on a100-large
+  just ai-finetune::hf-jobs-list                        — list all jobs (active + recent)
+  just ai-finetune::hf-job-logs <id>                    — stream logs
+  just ai-finetune::hf-adapter-pull <model_id> [path]  — generic adapter pull from HF Hub
+  just ai-finetune::hf-adapter-pull-coder               — pull coder-30b to canonical path
 
 OBSERVE:
   just ai-finetune::sparkline        — live loss sparkline from training pod
