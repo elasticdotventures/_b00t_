@@ -12,20 +12,9 @@
 #   Observe:   just ai-finetune::logs | just ai-finetune::sparkline
 #   Test:      just ai-finetune::test
 #   Retrieve:  just ai-finetune::hf-adapter-pull
-<<<<<<< HEAD
 # Paths are relative to repo root (justfile_directory())
 
 set working-directory := ".."
-
-=======
->>>>>>> e2a4ea89 (feat: grok fallback, irontology fix, translator, opencode guards)
-# Paths are relative to repo root (justfile_directory())
-
-set working-directory := ".."
-
-# ── Dataset ────────────────────────────────────────────────────────────────────
-
-# Generate fine-tune dataset from b00t corpus
 dataset:
     uv run python3 fine-tune/generate_dataset.py
 
@@ -162,7 +151,6 @@ mlflow-remove:
 #
 # Generic path:  just ai-finetune::cloud-train <flavor> <config-filename>
 # Coder alias:   just ai-finetune::cloud-coder
-<<<<<<< HEAD
 # One-shot sync: regenerate dataset from corpus + push everything to HF
 
 # Run before any cloud training run to ensure HF dataset is current
@@ -345,195 +333,6 @@ smoke-test adapter="fine-tune/output-smol/lora-adapter" base="unsloth/Qwen2.5-0.
 
     print(f"\n{passed}/{len(PROBES)} probes b00t-aware")
     sys.exit(0 if passed >= 3 else 1)
-
-=======
->>>>>>> e2a4ea89 (feat: grok fallback, irontology fix, translator, opencode guards)
-# One-shot sync: regenerate dataset from corpus + push everything to HF
-
-# Run before any cloud training run to ensure HF dataset is current
-hf-sync:
-    #!/bin/bash
-    set -euo pipefail
-    echo "🔄 generating rustdoc JSON (nightly required)..."
-    just ai-finetune::rustdoc || echo "⚠️  rustdoc skipped (nightly unavailable)"
-    echo "🔄 regenerating dataset from b00t corpus..."
-    uv run python3 fine-tune/generate_dataset.py
-    echo "📤 pushing to hf://datasets/elasticdotventures/b00t-training..."
-    just ai-finetune::hf-push
-
-# Visualize training dataset: token-length distribution + category breakdown → SVG
-# Useful for spotting outliers, padding waste, category imbalance before cloud submit
-
-# Output: fine-tune/dataset-viz.svg (open in browser or VLM for inspection)
-dataset-viz:
-    uv run python3 fine-tune/generate_dataset.py --viz fine-tune/dataset-viz.svg
-    @echo "✓ fine-tune/dataset-viz.svg — open in browser or: just viz-entangle"
-
-# ── Inlined training script (was train_unsloth.py) ───────────────────────────
-# Entry point for cloud jobs: just -f /data/ai-finetune.just train /data/config.yaml
-
-# sm0l output contract: prints step progress; exit 0 on success, 1 on error
-train config="/data/config-cloud-coder.yaml" resume="":
-    #!/usr/bin/env python3
-    import argparse, json, os, sys
-    from pathlib import Path
-    os.environ.setdefault("HF_HOME", os.path.expanduser("~/.cache/huggingface"))
-
-    config_path = "{{ config }}"
-    resume_from = "{{ resume }}" or None
-
-    try:
-        import yaml
-        with open(config_path) as f:
-            cfg = yaml.safe_load(f)
-    except Exception as e:
-        print(f"❌ config load failed: {e}"); sys.exit(1)
-
-    model_name   = cfg.get("base_model", "Qwen/Qwen3-Coder-30B-A3B-Instruct")
-    dataset_path = cfg.get("dataset_path", cfg.get("dataset", "/data/train.jsonl"))
-    output_dir   = cfg.get("output_dir", "/tmp/output")
-    lora_r       = cfg.get("lora_r", 16)
-    lora_alpha   = cfg.get("lora_alpha", 32)
-    lora_dropout = cfg.get("lora_dropout", 0.0)
-    lr           = float(cfg.get("learning_rate", 1e-4))
-    num_epochs   = int(cfg.get("num_epochs", 1))
-    batch_size   = int(cfg.get("batch_size", 2))
-    grad_accum   = int(cfg.get("grad_accum", 8))
-    max_seq_len  = int(cfg.get("max_seq_length", 2048))
-
-    print(f"🚀 b00t QLoRA  model={model_name}  r={lora_r}  epochs={num_epochs}  seq={max_seq_len}")
-
-    try:
-        from unsloth import FastLanguageModel
-    except ImportError:
-        print("❌ unsloth not installed"); sys.exit(1)
-
-    model, tokenizer = FastLanguageModel.from_pretrained(
-        model_name=model_name,
-        max_seq_length=max_seq_len,
-        load_in_4bit=cfg.get("load_in_4bit", False),
-        dtype=None,
-    )
-    print("✓ model loaded")
-
-    model = FastLanguageModel.get_peft_model(
-        model, r=lora_r,
-        target_modules=cfg.get("target_modules", ["q_proj","v_proj","k_proj","o_proj"]),
-        lora_alpha=lora_alpha, lora_dropout=lora_dropout,
-        bias="none", use_gradient_checkpointing="unsloth", random_state=42,
-    )
-    print("✓ LoRA applied")
-
-    if not os.path.exists(dataset_path):
-        print(f"❌ dataset not found: {dataset_path}"); sys.exit(1)
-    from datasets import Dataset as HFDataset
-    from trl import SFTTrainer
-    from transformers import TrainingArguments
-
-    rows = []
-    with open(dataset_path) as f:
-        for line in f:
-            r = json.loads(line)
-            inp = r.get("input","")
-            text = (f"### Instruction:\n{r['instruction']}\n\n### Input:\n{inp}\n\n### Response:\n{r.get('response','')}"
-                    if inp.strip() else
-                    f"### Instruction:\n{r['instruction']}\n\n### Response:\n{r.get('response','')}")
-            rows.append({"text": text})
-
-    dataset = HFDataset.from_list(rows)
-    print(f"✓ dataset loaded ({len(dataset)} examples)")
-
-    has_hub = bool(cfg.get("hub_model_id") and int(cfg.get("save_steps",0)) > 0)
-    trainer = SFTTrainer(
-        model=model, tokenizer=tokenizer, train_dataset=dataset,
-        dataset_text_field="text", max_seq_length=max_seq_len,
-        dataset_num_proc=2, packing=bool(cfg.get("packing", False)),
-        args=TrainingArguments(
-            per_device_train_batch_size=batch_size,
-            gradient_accumulation_steps=grad_accum,
-            warmup_ratio=float(cfg.get("warmup_ratio",0.05)),
-            num_train_epochs=num_epochs, learning_rate=lr,
-            fp16=not model.dtype.is_floating_point,
-            bf16=model.dtype.is_floating_point,
-            logging_steps=int(cfg.get("logging_steps",10)),
-            optim=cfg.get("optim","adamw_8bit"),
-            weight_decay=float(cfg.get("weight_decay",0.01)),
-            lr_scheduler_type=cfg.get("lr_scheduler","cosine"),
-            seed=42, output_dir=output_dir,
-            save_steps=int(cfg.get("save_steps",0)) or None,
-            report_to=cfg.get("report_to","none"),
-            push_to_hub=has_hub,
-            hub_model_id=cfg.get("hub_model_id","") or "",
-            hub_strategy="checkpoint",
-            hub_private_repo=cfg.get("private", True),
-        ),
-    )
-    trainer.train(resume_from_checkpoint=resume_from or None)
-
-    model.save_pretrained(f"{output_dir}/lora-adapter")
-    tokenizer.save_pretrained(f"{output_dir}/lora-adapter")
-    print(f"✓ adapter saved → {output_dir}/lora-adapter")
-
-    if cfg.get("push_to_hub") and cfg.get("hub_model_id"):
-        hub_id = cfg["hub_model_id"]
-        private = cfg.get("private", True)
-        model.push_to_hub(hub_id, private=private)
-        tokenizer.push_to_hub(hub_id, private=private)
-        print(f"✓ pushed → https://huggingface.co/{hub_id}")
-
-    print("✅ training complete")
-
-# ── Inlined adapter smoke-test (was test_adapter.py) ─────────────────────────
-# Generic: adapter path + base model from args; prints PASS/FAIL per probe
-
-# sm0l output contract: exit 0 if >=3/5 probes return b00t-aware responses
-smoke-test adapter="fine-tune/output-smol/lora-adapter" base="unsloth/Qwen2.5-0.5B-Instruct-bnb-4bit":
-    #!/usr/bin/env python3
-    import sys
-
-    adapter = "{{ adapter }}"
-    base    = "{{ base }}" or None
-
-    PROBES = [
-        ("b00t basics",    "What command do I run to orient my role and load blessings in b00t?"),
-        ("b00t task",      "How do I add a new task in the b00t task system?"),
-        ("b00t grok",      "What is b00t grok used for and what is the correct syntax?"),
-        ("soul kv",        "How do I read and write values to the b00t soul KV store?"),
-        ("install mode",   "What modes does just install support and how does it remember past choices?"),
-    ]
-
-    try:
-        from unsloth import FastLanguageModel
-    except ImportError:
-        print("❌ unsloth not installed"); sys.exit(1)
-
-    model_path = adapter if not base else adapter
-    print(f"Loading adapter: {adapter}")
-    model, tokenizer = FastLanguageModel.from_pretrained(
-        model_name=adapter, max_seq_length=512, load_in_4bit=True,
-    )
-    FastLanguageModel.for_inference(model)
-
-    import torch
-    passed = 0
-    for label, question in PROBES:
-        msgs = [{"role":"user","content":question}]
-        prompt = tokenizer.apply_chat_template(msgs, tokenize=False, add_generation_prompt=True)
-        inputs = tokenizer(prompt, return_tensors="pt").to(model.device)
-        with torch.no_grad():
-            out = model.generate(**inputs, max_new_tokens=120, temperature=0.3,
-                                  do_sample=True, pad_token_id=tokenizer.eos_token_id)
-        answer = tokenizer.decode(out[0][inputs["input_ids"].shape[1]:], skip_special_tokens=True).strip()
-        ok = any(t in answer.lower() for t in ["b00t","just","soul","mcp","grok","datum"])
-        print(f"{'PASS' if ok else 'FAIL'} [{label}]: {answer[:80]}")
-        passed += ok
-
-    print(f"\n{passed}/{len(PROBES)} probes b00t-aware")
-    sys.exit(0 if passed >= 3 else 1)
-
-# Upload dataset + trainer + all fine-tune/config-*.yaml to HF repo
-
-# Run after: just ai-finetune::dataset
 hf-push:
     #!/bin/bash
     set -euo pipefail
@@ -617,7 +416,6 @@ hf-job-logs job_id:
 # Cancel a running job
 hf-job-cancel job_id:
     hf jobs cancel {{ job_id }}
-<<<<<<< HEAD
 
 # ── Handoff: open live log stream for human monitoring ────────────────────────
 # Agent calls this after submitting — then STOPS. Human watches + cancels.
@@ -683,78 +481,6 @@ monitor-run job_id threshold_s="90":
         print(f"FAIL: step_time={rate}s/it > threshold={threshold}s — step={step}/{total} ETA={eta} (cancel+resubmit faster flavor)")
         sys.exit(1)
     print(f"PASS: {stage} step={step}/{total} rate={rate}s/it ETA={eta}")
-=======
->>>>>>> e2a4ea89 (feat: grok fallback, irontology fix, translator, opencode guards)
-
-# ── Handoff: open live log stream for human monitoring ────────────────────────
-# Agent calls this after submitting — then STOPS. Human watches + cancels.
-# Protocol: submit → watch-run → agent exits; human monitors; agent re-invoked on completion.
-
-# Uses zellij if $ZELLIJ is set; otherwise prints the command to run.
-watch-run job_id:
-    #!/bin/bash
-    CMD="hf jobs logs --follow elasticdotventures/{{ job_id }}"
-    CANCEL="just ai-finetune::hf-job-cancel {{ job_id }}"
-    if [[ -n "${ZELLIJ:-}" ]]; then
-        zellij run --name "hf-logs-{{ job_id }}" --close-on-exit -- $CMD
-        echo "PASS: zellij pane opened — watch live; cancel with: $CANCEL"
-    else
-        echo ""
-        echo "▶  STREAM LOGS (run in your terminal):"
-        echo "   $CMD"
-        echo ""
-        echo "✗  CANCEL JOB:"
-        echo "   $CANCEL"
-        echo ""
-    fi
-
-# ── Monitor: sm0l output contract ────────────────────────────────────────────
-# Blessing evidentiary handler — command syntax IS the proof.
-# Output contract: PASS: <stage> step=<N> rate=<X>s/it ETA=<HH:MM>
-#                  FAIL: <reason>
-
-# Thresholds (A100): warn>90s/it fail>180s/it  (H200): warn>40s/it fail>90s/it
-monitor-run job_id threshold_s="90":
-    #!/usr/bin/env python3
-    import subprocess, re, sys, os
-    job_id   = "{{ job_id }}"
-    threshold = float("{{ threshold_s }}")
-    owner    = "elasticdotventures"
-
-    def run(cmd):
-        r = subprocess.run(cmd, shell=True, capture_output=True, text=True)
-        return r.stdout + r.stderr
-
-    # Stage check
-    raw = run(f"hf jobs inspect {owner}/{job_id} 2>/dev/null")
-    m = re.search(r'"stage":\s*"([^"]+)"', raw)
-    stage = m.group(1) if m else "UNKNOWN"
-
-    if stage in ("FAILED", "CANCELLED"):
-        print(f"FAIL: job {job_id} stage={stage}"); sys.exit(1)
-    if stage == "SCHEDULING":
-        print(f"PASS: SCHEDULING — awaiting node allocation"); sys.exit(0)
-
-    # Step timing from logs
-    logs = run(f"hf jobs logs {owner}/{job_id} 2>/dev/null")
-    matches = re.findall(r'(\d+)/(\d+) \[[\d:]+<[\d:]+, ([\d.]+)s/it\]', logs)
-    if not matches:
-        print(f"PASS: {stage} — no step data yet (model loading)"); sys.exit(0)
-
-    step, total, rate_s = matches[-1]
-    rate = float(rate_s)
-    eta_m = re.findall(r'<([\d:]+),', logs)
-    eta = eta_m[-1] if eta_m else "?"
-
-    if rate > threshold:
-        print(f"FAIL: step_time={rate}s/it > threshold={threshold}s — step={step}/{total} ETA={eta} (cancel+resubmit faster flavor)")
-        sys.exit(1)
-    print(f"PASS: {stage} step={step}/{total} rate={rate}s/it ETA={eta}")
-
-# Generic: pull any adapter from HF Hub to local path
-# model_id: e.g. elasticdotventures/b00t-qwen3-coder-30b
-
-# local_dir: destination (default: fine-tune/output-adapter)
 hf-adapter-pull model_id local_dir="fine-tune/output-adapter":
     hf download {{ model_id }} --repo-type model --local-dir {{ local_dir }}
     @echo "✓ adapter at {{ local_dir }}"
