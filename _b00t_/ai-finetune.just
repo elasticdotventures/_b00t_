@@ -495,12 +495,22 @@ hf-adapter-pull-coder:
 cost-estimate flavor="a100-large" config="fine-tune/config-cloud-coder.yaml":
     #!/usr/bin/env python3
     import tomllib, subprocess, sys, os
+    def soul(key, fallback):
+        r = subprocess.run(["b00t-cli","soul","get",key], capture_output=True, text=True)
+        v = r.stdout.strip()
+        return v if r.returncode == 0 and v else fallback
     with open("_b00t_/cloud-budget.tomllmd", "rb") as f:
         d = tomllib.load(f)
     script = next(c["script"] for c in d["command"] if c["name"] == "cost-estimate")
     lines = script.strip().splitlines()
     code  = "\n".join(l for l in lines if not l.startswith("#!"))
-    env   = {**os.environ, "FLAVOR": "{{flavor}}", "CONFIG": "{{config}}"}
+    env   = {
+        **os.environ,
+        "FLAVOR": "{{flavor}}", "CONFIG": "{{config}}",
+        "CAKE_USD_RATE":    soul("economy.cake.usd_per_cake",    "10"),
+        "CAKE_MONTHLY_CAP": soul("economy.cake.monthly_cap_cake", "200"),
+        "SLICE_USD_RATE":   soul("economy.cake.usd_per_slice",   "1"),
+    }
     sys.exit(subprocess.run(["uv","run","--with","pyyaml","python3","-c",code], env=env).returncode)
 
 cost-report:
@@ -525,13 +535,20 @@ budget-reconcile:
 
 budget-gate flavor="a100-large" config="fine-tune/config-cloud-coder.yaml":
     #!/usr/bin/env python3
-    import tomllib, subprocess, sys
+    import tomllib, subprocess, sys, os
+    def soul(key, fallback):
+        r = subprocess.run(["b00t-cli","soul","get",key], capture_output=True, text=True)
+        v = r.stdout.strip()
+        return v if r.returncode == 0 and v else fallback
     with open("_b00t_/cloud-budget.tomllmd", "rb") as f:
         d = tomllib.load(f)
     script = next(c["script"] for c in d["command"] if c["name"] == "budget-gate")
     lines = script.strip().splitlines()
     code  = "\n".join(l for l in lines if not l.startswith("#!"))
     sys.exit(subprocess.run(["bash", "-c", code], env={
-        **__import__("os").environ,
-        "FLAVOR": "{{flavor}}", "CONFIG": "{{config}}"
+        **os.environ,
+        "FLAVOR": "{{flavor}}", "CONFIG": "{{config}}",
+        "CAKE_USD_RATE":    soul("economy.cake.usd_per_cake",    "10"),
+        "CAKE_MONTHLY_CAP": soul("economy.cake.monthly_cap_cake", "200"),
+        "SLICE_USD_RATE":   soul("economy.cake.usd_per_slice",   "1"),
     }).returncode)

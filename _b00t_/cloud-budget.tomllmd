@@ -17,11 +17,21 @@ type = "config"
 hint = "GPU cloud budget in 🎂 cake — endurant, self-contained with embedded commands"
 
 # ── Exchange rate shim ────────────────────────────────────────────────────────
+# 🤓 AUTHORITATIVE SOURCE: b00t soul KV — `b00t-cli soul get economy.cake.usd_per_cake`
+#    These fields document the schema; the live value lives in soul, not here.
+#    Set: b00t-cli soul set economy.cake.usd_per_cake 10
 [exchange."usd_per_cake"]
-default = 1.00
-example = 1.00
-env_var = "CAKE_USD_RATE"
-source  = "assumed"
+default  = 10.00                   # 1🎂 = $10 USD (operator-set 2026-06-28)
+example  = 5.00                    # adjust if cake appreciates
+env_var  = "CAKE_USD_RATE"         # env override → soul key → this default
+soul_key = "economy.cake.usd_per_cake"
+source   = "soul:economy.cake.usd_per_cake"
+
+[exchange."usd_per_slice"]
+default  = 1.00                    # 1🍰 slice = $1 USD
+env_var  = "SLICE_USD_RATE"
+soul_key = "economy.cake.usd_per_slice"
+source   = "soul:economy.cake.usd_per_slice"
 
 # ── Monthly cap ───────────────────────────────────────────────────────────────
 [budget]
@@ -32,10 +42,11 @@ gate_threshold = 0.90
 #   GCP/Azure sessions expired; HF has no budget API.
 #   Run command::budget-reconcile to query remote state.
 [budget."monthly_cap_cake"]
-default = 200
-example = 500
-env_var = "CAKE_MONTHLY_CAP"
-source  = "unreconciled"
+default  = 200
+example  = 500
+env_var  = "CAKE_MONTHLY_CAP"
+soul_key = "economy.cake.monthly_cap_cake"
+source   = "soul:economy.cake.monthly_cap_cake"
 
 # ── Flavor rates (🎂/hour, sourced from HF Jobs pricing page) ─────────────────
 [budget.hf_jobs."a10g_large"]
