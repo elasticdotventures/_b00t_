@@ -309,3 +309,4 @@ session-guards.json
 # Runtime state files
 exec-audit.json
 ooda-state.json
+evidence/satisfies.jsonl
