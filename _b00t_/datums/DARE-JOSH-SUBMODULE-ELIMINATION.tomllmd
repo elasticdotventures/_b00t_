@@ -1,0 +1,225 @@
+---
+name: DARE-JOSH-SUBMODULE-ELIMINATION
+description: |
+  DARE proposal: eliminate 20 vendor submodules via josh-proxy filtered
+  projections. Single unified history, zero submodule drift, reduced agent
+  safety surface. Scoped to vendor/ layer only — not full monorepo migration.
+version: 1.0.0
+tags: [DARE, josh, submodule, vendor, proposal, agent-safety]
+tier: frontier
+complexity: 8
+applies_to:
+  - "vendor submodule management"
+  - "agent git safety"
+  - "CI pipeline"
+  - "b00tyverse architecture"
+output_types: [.tomllmd]
+depends_on: ["DARE", "josh"]
+unlocks:
+  - "DARE-JOSH-AGENT-PROTOCOL"
+  - "just vendor-sync recipe"
+  - "just vendor-status recipe"
+metadata:
+  ufo_stereotype: Relator
+  proposal_id: "DARE-001"
+  status: "proposed"
+  ooda_phase: "Decide"
+---
+## DARE-001: Eliminate vendor submodules via josh
+
+### Decision — Perdurant
+
+```toml
+[decision]
+what = """
+Replace 20 vendor/ git submodules with josh-proxy filtered projections
+from a single unified vendor history. Each vendor/X becomes a josh
+filter ::vendor/X/ — cloned once, projected infinitely. Agents never
+run git submodule commands again.
+"""
+who = "b00t-core (operator approval required per PAIR-CONCEPT)"
+when = "post-#527 merge, pre-#516 MCP action layer"
+scope = [
+    "vendor/ tree (20 submodules → 20 filtered projections)",
+    "CI pipeline (remove git submodule update --init --recursive)",
+    "agent sandboxing (read-only per-agent projections via josh proxy)",
+    "justfile (new vendor-sync, vendor-status recipes)",
+]
+explicitly_out_of_scope = [
+    "b00t-cli/ crate (not a submodule)",
+    "b00t-mcp/ crate (not a submodule)",
+    "crates/ufo-types (not a submodule)",
+    "Full monorepo migration (b00tyverse stays multi-repo outside vendor/)",
+]
+```
+
+### Alternative — Abstract
+
+```toml
+[[alternatives]]
+name = "Do nothing — keep 20 submodules"
+viable = "Zero migration cost; zero risk"
+rejected_because = """
+Agent safety surface compounds: agents hallucinate git submodule commands
+that corrupt state. CI time grows with each submodule init. Submodule drift
+between branches creates invisible coupling. The 20-submodule status quo
+is a measurable drag on every b00t operation.
+"""
+
+[[alternatives]]
+name = "git-subrepo — merge externals into single repo"
+viable = "No external tool dependency; history preserved in-repo"
+rejected_because = """
+Loses upstream remote tracking. Manual resync burden when upstreams change.
+21k+ commits in vendor tree would bloat b00t history. josh's filter approach
+keeps upstreams live while presenting unified view.
+"""
+
+[[alternatives]]
+name = "git-filter-repo — one-time split/merge"
+viable = "Well-maintained Python tool; used by large orgs"
+rejected_because = """
+One-time operation, not ongoing. Doesn't solve the agent safety problem
+(live git commands still dangerous). No proxy layer for read-only agent
+projections. Requires re-running on every upstream change.
+"""
+
+[[alternatives]]
+name = "GitButler but CLI only — no josh backend"
+viable = "Agent-friendly undoable git; already packaged"
+rejected_because = """
+GitButler solves the UX layer but not the submodule problem. Without josh
+as the history backend, gitbutler still sees 20 separate repos. The two
+are complementary: josh for history/projection, gitbutler for agent CLI.
+"""
+```
+
+### Risk — Moment
+
+```toml
+[[risks]]
+name = "josh project maturity"
+severity = "HIGH"
+description = "josh has ~1 active maintainer, 1.9k stars, 77 forks. Project could go unmaintained."
+mitigation = """
+- Pin vendor/josh to known-good SHA in workspace config
+- Keep .gitmodules as fallback for 90-day transition period
+- b00t controls the proxy layer — can swap josh for alternative
+  without changing agent interface (just vendor-sync recipe stays)
+- If josh dies, revert to submodules is a single commit
+"""
+
+[[risks]]
+name = "Agent retraining failure"
+severity = "HIGH"
+description = "Agents trained on git submodule commands may hallucinate them post-migration."
+mitigation = """
+- New DARE-JOSH-AGENT-PROTOCOL datum codifies agent rules
+- just vendor-sync wraps ALL vendor operations — agents never touch josh CLI
+- Gate: block-git-submodule-commands added to pre-commit hook
+- Training: fine-tune corpus includes josh workspace syntax examples
+- RHAI guard: if agent runs 'git submodule', auto-respond with correct josh command
+"""
+
+[[risks]]
+name = "CI pipeline breakage"
+severity = "MEDIUM"
+description = "All workflows use git submodule update --init --recursive today."
+mitigation = """
+- Replace with josh proxy startup step (docker compose service)
+- Run both submodule and josh pipelines for 2-week overlap
+- CI gate: compare checkout between submodule and josh paths — must be identical
+"""
+
+[[risks]]
+name = "Vendor contribution workflow friction"
+severity = "MEDIUM"
+description = "Contributing upstream changes to vendor repos becomes different."
+mitigation = """
+- josh-link maintains bidirectional sync with upstreams
+- just vendor-contribute <vendor> recipe: open PR against upstream
+- Upstream changes flow in via just vendor-sync (no submodule bump commits)
+"""
+
+[[risks]]
+name = "Operator unfamiliarity with josh"
+severity = "LOW"
+description = "Operator has not used josh before. Learning curve exists."
+mitigation = """
+- DARE documents provide complete context
+- just vendor-status shows projection health at a glance
+- josh-agent-protocol datum provides quick-reference for common operations
+- Fallback to submodules always available
+"""
+```
+
+### Endurant — Endurant
+
+```toml
+[endurant]
+# What will exist in the codebase after adoption
+
+artifacts = [
+    # Core config
+    "vendor.josh — declarative workspace file defining all 20 vendor projections
+     with upstream URLs, pinned revs, and filter paths",
+
+    # Just recipes (agents use these, not raw josh)
+    "just vendor-sync — update all vendor projections to pinned revs
+     (replaces git submodule update --init --recursive)",
+    "just vendor-status — show projection health: rev, upstream, drift, dirty",
+    "just vendor-contribute <name> — open PR against upstream for a vendor change",
+
+    # Agent safety
+    "_b00t_/datums/josh-agent-protocol.tomllmd — agent-safe josh instruction set:
+     what agents MAY do, MUST NOT do, and recovery procedures",
+    "_b00t_/scripts/josh-recovery.rhai — RHAI script: restore projection X
+     to known-good rev after agent hallucination",
+
+    # CI gates
+    "gate: validate-vendor-workspace — CI gate checking vendor.josh parseability
+     and projection reachability",
+    "gate: vendor-drift-check — CI gate comparing all vendor/ trees against
+     pinned revs, blocking on unexpected drift",
+
+    # Training corpus
+    "fine-tune/corpus/josh-agent-examples.jsonl — training examples showing
+     correct agent interactions with josh-backed vendor tree",
+]
+
+removed = [
+    # These files/patterns disappear from the codebase
+    ".gitmodules (all 20 vendor entries removed; b00t-* entries stay)",
+    "All vendor/ gitlinks from git index (git rm --cached vendor/*)",
+    "git submodule update --init --recursive from all CI workflow YAMLs",
+    "git submodule update --remote from all just recipes",
+    "Submodule drift warnings from pre-commit hook (no longer applicable)",
+]
+
+# How to verify the DARE is fulfilled
+acceptance_criteria = [
+    "vendor.josh exists and is parseable by josh-compose",
+    "just vendor-sync succeeds and all 20 projections are at pinned revs",
+    "CI passes without any git submodule commands",
+    "Agent protocol datum is loaded by b00t learn josh-agent-protocol",
+    "Gate validate-vendor-workspace passes in CI",
+    "All removed artifacts are confirmed absent from the codebase",
+]
+```
+
+### Transition Plan
+
+```
+Week 1-2:  vendor.josh created, josh proxy running in CI alongside submodules
+Week 3:    Agent protocol datum published, training examples in corpus
+Week 4:    Submodule gitlinks removed, CI switched to josh-only
+Week 5-12: Fallback .gitmodules kept (read-only), agents retrained
+Week 13:   Fallback removed, DARE verified against acceptance criteria
+```
+
+# b00t:map v1
+# summary: DARE-001 — eliminate 20 vendor submodules via josh-proxy filtered projections
+# tags: DARE, josh, submodule, vendor, proposal, agent-safety
+# tier: frontier
+# cmds: just vendor-sync, just vendor-status, just vendor-contribute <name>
+# complexity: 8
